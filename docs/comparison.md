@@ -37,7 +37,7 @@ The same assistant can be available from CLI, TUI, browser, desktop, mobile, Tel
 
 ### 5. Automations and workflows as first-class product behavior
 
-xopc supports scheduled runs, reminders, summaries, workflow runs, multi-agent routing, and deterministic workflow scripts. This is where the "loop" becomes practical: important work can resurface without waiting for you to open a chat.
+xopc supports scheduled runs, reminders, summaries, visual workflow runs, and multi-agent routing. This is where the "loop" becomes practical: important work can resurface without waiting for you to open a chat.
 
 ## Choose xopc if
 

@@ -1,7 +1,6 @@
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -37,6 +36,7 @@ import type {
 import { fileToZipUpload } from '@/features/skills/skill-upload-zip';
 import {
   BUILTIN_SKILL_CATEGORY_ORDER,
+  CATALOG_STATUS_FILTER_SET,
   MAIN_TAB_SET,
   MARKETPLACE_PROVIDER_PARAM,
   SOURCE_FILTER_SET,
@@ -73,11 +73,19 @@ export function useSkillsPage() {
   const initialSearch = searchParams.get('q') ?? '';
   const initialTabRaw = searchParams.get('tab');
   const initialSourceRaw = searchParams.get('source');
+  const initialStatusRaw = searchParams.get('status');
   const initialTab: MainTab = MAIN_TAB_SET.has(initialTabRaw as MainTab)
     ? (initialTabRaw as MainTab)
-    : 'marketplace';
+    : 'installed';
+  const legacySourceFilter: SourceFilter | null =
+    initialTabRaw === 'builtin' ? 'builtin' : initialTabRaw === 'user' ? 'installed' : null;
   const initialSourceFilter: SourceFilter = SOURCE_FILTER_SET.has(initialSourceRaw as SourceFilter)
     ? (initialSourceRaw as SourceFilter)
+    : legacySourceFilter ?? 'all';
+  const initialStatusFilter: CatalogStatusFilter = CATALOG_STATUS_FILTER_SET.has(
+    initialStatusRaw as CatalogStatusFilter,
+  )
+    ? (initialStatusRaw as CatalogStatusFilter)
     : 'all';
 
   const [searchQuery, setSearchQuery] = useState(initialSearch);
@@ -96,7 +104,7 @@ export function useSkillsPage() {
   const [mainTab, setMainTab] = useState<MainTab>(initialTab);
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>(initialSourceFilter);
   const [builtinCategoryFilter, setBuiltinCategoryFilter] = useState('');
-  const [catalogStatusFilter, setCatalogStatusFilter] = useState<CatalogStatusFilter>('all');
+  const [catalogStatusFilter, setCatalogStatusFilter] = useState<CatalogStatusFilter>(initialStatusFilter);
 
   const [installOpen, setInstallOpen] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
@@ -217,15 +225,24 @@ export function useSkillsPage() {
     const nextQ = searchParams.get('q') ?? '';
     const nextTabRaw = searchParams.get('tab');
     const nextSourceRaw = searchParams.get('source');
+    const nextStatusRaw = searchParams.get('status');
     const nextTab: MainTab = MAIN_TAB_SET.has(nextTabRaw as MainTab)
       ? (nextTabRaw as MainTab)
-      : 'marketplace';
+      : 'installed';
+    const legacyNextSource: SourceFilter | null =
+      nextTabRaw === 'builtin' ? 'builtin' : nextTabRaw === 'user' ? 'installed' : null;
     const nextSource: SourceFilter = SOURCE_FILTER_SET.has(nextSourceRaw as SourceFilter)
       ? (nextSourceRaw as SourceFilter)
+      : legacyNextSource ?? 'all';
+    const nextStatus: CatalogStatusFilter = CATALOG_STATUS_FILTER_SET.has(
+      nextStatusRaw as CatalogStatusFilter,
+    )
+      ? (nextStatusRaw as CatalogStatusFilter)
       : 'all';
     setSearchQuery((prev) => (prev === nextQ ? prev : nextQ));
     setMainTab((prev) => (prev === nextTab ? prev : nextTab));
     setSourceFilter((prev) => (prev === nextSource ? prev : nextSource));
+    setCatalogStatusFilter((prev) => (prev === nextStatus ? prev : nextStatus));
     const nextMcat = searchParams.get('mcat') ?? '';
     if (nextTab === 'marketplace') {
       setMarketCategoryId((prev) => (prev === nextMcat ? prev : nextMcat));
@@ -302,13 +319,6 @@ export function useSkillsPage() {
       errorData: null,
     },
   );
-
-  // Marketplace fan-out only runs on the marketplace tab; switch as soon as the user types
-  // so 内置/用户安装 does not show an empty local filter while debounce catches up.
-  useLayoutEffect(() => {
-    if (!hasToken || !searchInputActive) return;
-    setMainTab((tab) => (tab === 'marketplace' ? tab : 'marketplace'));
-  }, [hasToken, searchInputActive]);
 
   useEffect(() => {
     if (!hasToken || !searchActive || mainTab !== 'marketplace') return;
@@ -577,10 +587,15 @@ export function useSkillsPage() {
         const params = new URLSearchParams(prev);
         if (debouncedSearchQuery) params.set('q', debouncedSearchQuery);
         else params.delete('q');
-        if (mainTab !== 'marketplace') params.set('tab', mainTab);
+        if (mainTab === 'marketplace') params.set('tab', mainTab);
         else params.delete('tab');
         if (sourceFilter !== 'all') params.set('source', sourceFilter);
         else params.delete('source');
+        if (mainTab === 'installed' && catalogStatusFilter !== 'all') {
+          params.set('status', catalogStatusFilter);
+        } else {
+          params.delete('status');
+        }
         if (mainTab === 'marketplace' && marketCategoryId.trim()) {
           params.set('mcat', marketCategoryId.trim());
         } else {
@@ -603,6 +618,7 @@ export function useSkillsPage() {
     marketCategoryId,
     marketBrowseProvider,
     debouncedSearchQuery,
+    catalogStatusFilter,
     setSearchParams,
     sourceFilter,
   ]);
@@ -773,20 +789,20 @@ export function useSkillsPage() {
   }, [catalog, searchQuery]);
 
   const builtinTabStats = useMemo(() => {
-    const rows = catalogMatchingSearch.filter((r) => r.source === 'builtin');
+    const rows = catalog.filter((r) => r.source === 'builtin');
     return {
       total: rows.length,
       enabled: rows.filter((r) => enabledOverride[r.name] ?? r.enabled).length,
     };
-  }, [catalogMatchingSearch, enabledOverride]);
+  }, [catalog, enabledOverride]);
 
   const userTabStats = useMemo(() => {
-    const rows = catalogMatchingSearch.filter((r) => r.source !== 'builtin');
+    const rows = catalog.filter((r) => r.source !== 'builtin');
     return {
       total: rows.length,
       enabled: rows.filter((r) => enabledOverride[r.name] ?? r.enabled).length,
     };
-  }, [catalogMatchingSearch, enabledOverride]);
+  }, [catalog, enabledOverride]);
 
   const detailFromCatalog = useMemo(
     () => (detailTitle ? catalog.find((r) => r.name === detailTitle) : undefined),
@@ -807,13 +823,10 @@ export function useSkillsPage() {
   const filteredCatalog = useMemo(() => {
     let rows = catalogMatchingSearch;
 
-    if (mainTab === 'builtin') {
-      rows = rows.filter((r) => r.source === 'builtin');
-    } else if (mainTab === 'user') {
-      rows = rows.filter((r) => r.source !== 'builtin');
-      if (sourceFilter !== 'all') {
-        rows = rows.filter((r) => r.source === sourceFilter);
-      }
+    if (mainTab === 'installed' && sourceFilter !== 'all') {
+      rows = sourceFilter === 'installed'
+        ? rows.filter((r) => r.source !== 'builtin')
+        : rows.filter((r) => r.source === sourceFilter);
     }
 
     return rows;
@@ -852,8 +865,8 @@ export function useSkillsPage() {
   }, [filteredCatalog, builtinCategoryFilter]);
 
   useEffect(() => {
-    setCatalogStatusFilter('all');
-  }, [mainTab]);
+    setBuiltinCategoryFilter('');
+  }, [sourceFilter]);
 
   const resolveSkillEnabled = useCallback(
     (row: SkillCatalogEntry) => enabledOverride[row.name] ?? row.enabled,
@@ -867,9 +880,8 @@ export function useSkillsPage() {
 
   const catalogDisplayRows = useMemo(() => {
     let rows = categoryFilteredCatalog;
-    if (catalogStatusFilter === 'disabled') {
-      rows = rows.filter((r) => !resolveSkillEnabled(r));
-    }
+    if (catalogStatusFilter === 'disabled') rows = rows.filter((r) => !resolveSkillEnabled(r));
+    if (catalogStatusFilter === 'enabled') rows = rows.filter((r) => resolveSkillEnabled(r));
     return [...rows].toSorted((a, b) => {
       const ae = resolveSkillEnabled(a);
       const be = resolveSkillEnabled(b);
@@ -897,7 +909,8 @@ export function useSkillsPage() {
       showFeedback('success', installFeedbackMessage(result));
       setInstallOpen(false);
       setPendingFile(null);
-      setMainTab('user');
+      setMainTab('installed');
+      setSourceFilter('installed');
       await openSkillDetailByName(result.availability?.skillName || result.skillId);
     } catch (err) {
       setError(err instanceof Error ? err.message : sk.uploadFailed);
@@ -1064,7 +1077,8 @@ export function useSkillsPage() {
         skipNextSkillsReloadRef.current = true;
         await load({ silent: true });
         showFeedback('success', installFeedbackMessage(result));
-        setMainTab('user');
+        setMainTab('installed');
+        setSourceFilter('installed');
         await openSkillDetailByName(result.availability?.skillName || result.skillId || name);
       } catch (e) {
         showFeedback('error', e instanceof Error ? e.message : sk.uploadFailed);
@@ -1083,15 +1097,6 @@ export function useSkillsPage() {
       sk.uploadFailed,
     ],
   );
-
-  const filterLabel =
-    sourceFilter === 'all'
-      ? sk.filterAll
-      : sourceFilter === 'global'
-        ? sk.filterGlobal
-        : sourceFilter === 'workspace'
-          ? sk.filterWorkspace
-          : sk.filterExtra;
 
   const { pathname } = useLocation();
   const inSettingsShell = pathname.startsWith('/settings/');
@@ -1177,7 +1182,6 @@ export function useSkillsPage() {
     catalogStatusFilter,
     setCatalogStatusFilter,
     resolveSkillEnabled,
-    filterLabel,
     inSettingsShell,
     categoryLabel,
     onReloadClick,

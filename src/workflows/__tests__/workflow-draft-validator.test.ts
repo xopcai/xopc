@@ -6,26 +6,22 @@ import {
   parseGeneratedWorkflowDraft,
 } from '../draft/workflow-draft-validator.js';
 
-const script = `export const meta = {
-  name: 'weekly_audit',
-  description: 'Audit weekly changes.',
-  phases: [{ title: 'Inspect' }, { title: 'Summarize' }],
-  tags: ['audit'],
-  estimatedAgents: { min: 2, max: 2 },
-}
-
-phase('Inspect')
-const findings = await agent('Inspect ' + args.goal, { label: 'inspector', toolset: ['file_read'], maxIterations: 2 })
-phase('Summarize')
-return { summary: String(findings), sections: [{ kind: 'text', title: 'Summary', content: String(findings) }] }
-`;
+const graph = {
+  schemaVersion: 1 as const,
+  nodes: [
+    { id: 'input', kind: 'input' as const, title: 'Input', position: { x: 0, y: 0 }, config: {} },
+    { id: 'inspect', kind: 'agent' as const, title: 'Inspect', position: { x: 300, y: 0 }, config: { prompt: 'Inspect {{input.goal}}', toolset: ['file_read'] } },
+    { id: 'output', kind: 'output' as const, title: 'Output', position: { x: 600, y: 0 }, config: {} },
+  ],
+  edges: [{ id: 'a', source: 'input', target: 'inspect' }, { id: 'b', source: 'inspect', target: 'output' }],
+};
 
 describe('workflow draft validator', () => {
   it('parses fenced model JSON and normalizes the workflow name', () => {
     const draft = parseGeneratedWorkflowDraft(`\`\`\`json
 {
   "name": "Weekly Audit!",
-  "script": ${JSON.stringify(script)},
+  "graph": ${JSON.stringify(graph)},
   "manifest": { "title": "Weekly Audit" },
   "explanation": "Checks weekly changes.",
   "assumptions": ["repo exists"],
@@ -41,7 +37,7 @@ describe('workflow draft validator', () => {
   it('builds a validated draft response', () => {
     const response = buildWorkflowDraftResponse({
       name: 'weekly_audit',
-      script,
+      graph,
       manifest: {
         title: 'Weekly Audit',
         inputSchema: { type: 'object', properties: { goal: { type: 'string', description: 'Scope' } } },
@@ -60,7 +56,7 @@ describe('workflow draft validator', () => {
     const issues = lintWorkflowDraft(
       {
         name: 'weekly_audit',
-        script,
+        graph,
         manifest: { permissions: { network: true, fileSystem: 'write' } },
         explanation: '',
         assumptions: [],

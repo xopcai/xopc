@@ -289,6 +289,14 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     },
   },
   {
+    id: 'you',
+    match: (path) => startsWithAny(path, ['/api/you']),
+    load: async () => {
+      const { registerYouRoutes } = await import('./you.js');
+      return { register: registerYouRoutes };
+    },
+  },
+  {
     id: 'connectors',
     match: (path) => startsWithAny(path, ['/api/connectors']),
     load: async () => {

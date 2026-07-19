@@ -5,6 +5,11 @@
  */
 
 import type { Config } from '../../config/schema.js';
+import { getUserTrustPolicy, isXopcDatabaseOpen } from '../../storage/sqlite/index.js';
+import {
+  buildActionTrustPrompt,
+  DEFAULT_USER_TRUST_LEVEL,
+} from '../../user-context/trust-policy.js';
 import type { EmbeddedContextFile } from '../bootstrap/types.js';
 import type { SkillManager } from '../skills/skill-manager.js';
 import { buildSystemPrompt as buildBaseSystemPrompt } from './system-prompt.js';
@@ -56,6 +61,9 @@ export class SystemPromptBuilder {
 
   build(contextFiles: EmbeddedContextFile[], options: SystemPromptBuildOptions): string {
     const ws = options.workspaceOverride ?? this.workspace;
+    const actionTrustLevel = isXopcDatabaseOpen()
+      ? getUserTrustPolicy().defaultActionLevel
+      : DEFAULT_USER_TRUST_LEVEL;
     if (options.systemPromptOverride?.trim()) {
       const skillPrompt =
         options.skillPromptText !== undefined
@@ -78,6 +86,7 @@ export class SystemPromptBuilder {
       if (ttsHint?.trim()) {
         fullPrompt = `${fullPrompt}\n\n## Voice (TTS)\n\n${ttsHint.trim()}`;
       }
+      fullPrompt = `${fullPrompt}\n\n${buildActionTrustPrompt(actionTrustLevel)}`;
       log.debug({ baseLength: trimmed.length, skillLength: skillPrompt.length, totalLength: fullPrompt.length }, 'System prompt built (override)');
       return fullPrompt;
     }
@@ -135,6 +144,7 @@ export class SystemPromptBuilder {
       promptContribution: resolved.promptContribution,
       includeProblemSolving: resolved.includeProblemSolving,
       includeToneSection: resolved.includeToneSection,
+      actionTrustLevel,
     });
 
     const skillPrompt =

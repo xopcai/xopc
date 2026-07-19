@@ -1,359 +1,121 @@
-# 动态工作流（Workflow）
+# 可视化工作流
 
-xopc 工作流让一次提示可以扇出到多个隔离的子 Agent，再合并结果。适合**可分解**的任务——仓库审计、多视角评审、并行调研、大型重构——若只靠一轮大对话，容易丢上下文或被中间工具输出污染会话。
+xopc 工作流把可重复的多步骤工作变成可视化任务方案。用户在画布上编排步骤、用自然语言描述修改、实时查看每一步，并直接使用最终结果，不需要阅读代码。
 
-工作流是一段小型、确定性的 JavaScript 脚本。模型编写脚本，`workflow` 工具在沙箱中执行，你会看到实时进度树，直到合成结果落地。
+工作流定义是带版本的有向无环图。系统不再提供脚本格式和脚本执行路径。
 
-每次工作流**运行**都会获得独立的 Chat 会话（`sessionType: workflow`）。进度、转录与最终结果都在该会话中，不会混进触发它的那条对话。
+## 产品模型
 
-## 如何运行
+- **模板**：描述一类任务如何完成。
+- **草稿**：尚未发布的可视化修改，会自动保存。
+- **版本**：一次不可变的已发布定义。
+- **运行**：执行启动时锁定的图和版本。
+- **自动化**：决定已发布工作流何时运行。
 
-通常不必手写脚本——用自然语言描述目标，由模型判断是否适合工作流。常见触发方式：
+因此，工作流只负责“怎么做”，自动化只负责“什么时候做”。
 
-| 触发方式 | 行为 |
+## 创建与编辑
+
+打开 `#/workflows`，选择“创建任务模板”，然后可以：
+
+1. 用自然语言描述想要的结果，由 xopc 生成可视化草稿；
+2. 在画布上直接添加、连接和调整步骤。
+
+| 步骤 | 用途 |
 |---|---|
-| **Chat（隐式）** | 例如「全面审计这个仓库」「从多个角度调研 X」。助手调用 `workflow` 工具，在**独立会话**中异步启动运行，并链接回当前 Chat。 |
-| **Chat（按名称）** | 「运行 audit_repo 工作流」；TUI 中输入 `/audit_repo`（会重写为对应提示）。 |
-| **网关 Workflows 页** | 打开 `#/workflows`，选择模板并启动；控制台会跳转到 `#/chat/<sessionKey>` 查看实时进度。 |
-| **自动化** | 在 `#/automations` 中直接计划工作流运行，无需助手轮次。 |
-| **REST API** | `POST /api/workflows/runs`，传入 `definitionId`（返回 `{ runId, sessionKey }`）。 |
+| 输入 | 接收目标和结构化输入；每个流程必须且只能有一个。 |
+| AI 任务 | 让独立 Agent 完成一个聚焦任务；互不依赖的任务会并行执行。 |
+| 判断 | 用简单规则选择“是”或“否”分支。 |
+| 合并 | 汇总所有实际执行分支的结果。 |
+| 结果 | 生成最终摘要和结构化结果；每个流程必须且只能有一个。 |
 
-高级用户也可通过 `workflow` 工具的 `script` 参数传入内联脚本。
+选择步骤后可编辑名称、用途和自然语言指令。模型、工具、结构化输出和迭代次数属于高级设置，不应干扰普通用户。
 
-启动后，TUI 与网关 Chat 会话会显示随子 Agent 扇出而增长的进度树：
+草稿自动保存。发布时服务端会校验完整流程并创建新版本。如果其他编辑者已先发布，旧编辑器的保存会被拒绝，不会静默覆盖。
 
-```
-◆ workflow: audit_repo (7/12 done, 3 running)
-  ✓ Inventory 1/1
-    #1 ✓ repo inventory
-  ▶ Review 4/6 · 2 running
-    #2 ✓ bugs review
-    #3 ✓ perf review
-    #4 ✓ security review
-    #5 ✓ tests review
-    #6 ● style review
-    #7 ● docs review
-  ▶ Synthesize 0/1
-    #8 ● report synthesis
-```
+## 校验规则
 
-按 `Esc`（TUI）或执行 `/abort` 可取消；进行中的子 Agent 会被中止并标记为 `skipped`。
+服务端会一次返回所有已发现问题。可发布的流程必须满足：
 
-## 网关控制台
+- 恰好一个输入和一个结果；
+- 节点、连线 ID 唯一；
+- 连线有效，不允许自连和环路；
+- 所有步骤都能从输入到达；
+- 所有步骤最终都能到达结果；
+- 每个判断都有“是”和“否”两条分支；
+- 每个 AI 任务都有明确指令。
 
-### Workflows 看板（`#/workflows`）
+编辑过程可以暂时不完整，因为拖拽时出现断开的节点很正常；但无效流程不能发布或运行。
 
-Workflows 页以看板形式展示**运行记录**（不是模板列表）：
+## 运行与排障
 
-| 列 | 运行状态 |
+启动工作流后，系统会创建独立工作流会话，并保存所执行图和版本的快照。以后修改模板不会改变历史运行。
+
+运行页会在同一张图上显示每个节点的状态：等待、执行中、已完成、因未选择该分支而跳过、失败。
+
+点击节点可查看输入、输出、耗时、模型/工具详情和错误。运行失败时，“修复这个工作流”会打开同一张图，并自动填入针对失败节点的修改要求。
+
+所有已就绪且互不依赖的节点会并行运行。判断只激活选中的分支；合并等待实际激活的前置步骤并忽略跳过分支。活动 AI 节点失败或图无法继续推进时，本次运行失败。
+
+## 使用入口
+
+| 入口 | 行为 |
 |---|---|
-| **排队中** | `queued` |
-| **进行中** | `running` |
-| **已完成** | `succeeded` — 最近 7 天、最多 20 条（默认折叠） |
-| **需关注** | `failed`、`timeout`、`cancelled` |
+| 工作流中心 | 选择模板、填写目标、查看实时流程图。 |
+| Chat | `workflow` 工具按名称启动已发布模板。 |
+| 自动化 | 定时、Webhook 或手动触发器直接启动模板。 |
+| REST API | 不经过 Assistant turn，直接创建和监控运行。 |
+| TUI / 消息渠道 | 接收精简进度和最终结果。 |
 
-可用 `?wf=<definitionId>` 按工作流模板筛选。启动、重试或点击运行卡片会进入对应的 Chat 会话。
+工作流工具只接受模板名称和运行输入，不接受内联可执行定义。
 
-### 运行专用 Chat 会话
+## 内置模板与自动化
 
-每次运行打开（或重新打开）`#/chat/<sessionKey>`：
+内置模板覆盖仓库审计、调研、规划、决策、会议准备、周复盘、内容创作和竞品分析等常见场景。内置与自定义模板使用完全相同的图模型和运行时。复制内置模板后可以独立编辑，不会修改原模板。
 
-- **工作流横幅**与实时 **WorkflowCard** 通过 SSE 推送进度。
-- 会话转录包含目标说明、子 Agent 树更新与最终结果。
-- 若从其他 Chat 启动，**父会话**链接卡片可跳回来源对话。
+周期性任务应创建自动化并选择一个已发布工作流。自动化保存触发条件和可靠性策略，工作流保存任务逻辑；自动化历史会链接到对应运行，以便查看准确版本、流程和结果。
 
-在看板或 WorkflowCard 上可取消、重试（在支持的情况下）。
+只有在模型需要临时决定是否运行工作流时，才使用 Agent 指令型自动化。固定周期任务优先直接运行工作流，更简单也更易审计。详见 [自动化](automations.md)。
 
-## `/workflows` 命令
+## 存储
 
-| 命令 | 作用 |
-|---|---|
-| `/workflows` | 列出内置与用户工作流及描述。 |
-| `/workflow list` | 同 `/workflows`。 |
-| `/workflow view <name>` | 查看工作流源码（超过 200 行会截断）。 |
-| `/workflow save <name>` | 将本会话最近一次成功运行的工作流脚本保存到 `~/.xopc/workflows/<name>.js`。 |
-| `/<name>` | TUI 快捷方式，重写为「运行 `<name>` 工作流」并发送给助手。 |
+自定义定义以 JSON 保存到 `~/.xopc/workflows/`。版本快照和草稿位于同一工作流存储下的私有子目录。写入采用临时文件加原子重命名。
 
-列表与查看为只读。实际执行需助手调用 `workflow` 工具——上述重写与 Chat 触发会自动完成。
+删除自定义工作流会同时删除当前定义、版本历史和相关草稿。内置模板不能删除。
 
-## 内置工作流
+## REST API
 
-| 名称 | 说明 | 参数 |
+所有路由使用网关控制台相同的 Bearer token。
+
+| 方法 | 路径 | 用途 |
 |---|---|---|
-| `audit_repo` | 仓库扇出审计（bugs / perf / security / tests / style），再合成报告。 | 无 |
-| `multi_perspective_review` | 从 User / Operator / Skeptic / Maintainer 四视角评审目标，再由对抗性 judge 汇总。 | `{ target: string }` |
-| `research` | 多角度调研并给出带引用的 synthesis。 | `{ question: string }` |
+| `GET` | `/api/workflows/definitions` | 列出模板。 |
+| `GET` | `/api/workflows/definitions/:id` | 读取当前流程图。 |
+| `POST` | `/api/workflows/definitions/validate` | 不发布，仅校验流程图。 |
+| `POST` | `/api/workflows/definitions/generate` | 根据自然语言生成或修改流程图。 |
+| `POST` | `/api/workflows/definitions` | 携带 `expectedRevision` 发布。 |
+| `DELETE` | `/api/workflows/definitions/:id` | 删除自定义模板及历史。 |
+| `GET` | `/api/workflows/definitions/:id/revisions` | 列出已发布版本。 |
+| `GET` | `/api/workflows/definitions/:id/revisions/:revision` | 读取指定版本。 |
+| `POST` | `/api/workflows/definitions/:id/revisions/:revision/restore` | 将旧版恢复为一个新版本。 |
+| `GET` | `/api/workflows/drafts` | 列出可视化草稿。 |
+| `GET` | `/api/workflows/drafts/:draftId` | 读取草稿。 |
+| `POST` | `/api/workflows/drafts` | 用乐观并发创建或更新草稿。 |
+| `DELETE` | `/api/workflows/drafts/:draftId` | 丢弃草稿。 |
+| `POST` | `/api/workflows/runs` | 启动运行并返回运行/会话 ID。 |
+| `GET` | `/api/workflows/runs` | 列出运行。 |
+| `GET` | `/api/workflows/runs/:runId` | 获取实时投影后的运行视图。 |
+| `POST` | `/api/workflows/runs/:runId/cancel` | 停止活动运行。 |
+| `POST` | `/api/workflows/runs/:runId/retry` | 启动一次全新重试。 |
+| `POST` | `/api/workflows/runs/:runId/replay` | 重放失败检查项或阶段。 |
 
-用 `/workflow view <name>` 查看源码。
+## 配置与边界
 
-## 保存的工作流
+工作流是否可用及运行限制由所选 Agent 的能力清单决定。AI 节点可以选择 `small`、`large` 等模型用途；无法解析的用途会明确失败，不会静默改变行为。
 
-两种保存方式：
+当前边界：
 
-- **`/workflow save <name>`** — 捕获本会话最近一次成功运行的脚本。若名称与原 `meta.name` 不同，会改写 meta 以便以 `/<name>` 寻址。记忆为进程内状态，重启后清空，请及时保存。
-- **手动** — 将 `.js` 文件放到 `~/.xopc/workflows/<name>.js`。文件名须与 `meta.name` 一致（如 `audit_repo.js` → `meta.name: 'audit_repo'`）。
-
-两者目录相同；`/workflows` 会立即反映新文件。用户工作流与内置同名时**用户优先**，可覆盖内置 `audit_repo`。
-
-## 编写自定义工作流
-
-工作流为普通 JavaScript，但文件头有严格约定。第一条语句必须是字面量 `export const meta = { ... }`，以便目录在不执行脚本的情况下索引。
-
-```js
-export const meta = {
-  name: 'release_notes',
-  description: 'Draft release notes from the last N commits.',
-  whenToUse: 'User asks for release notes, changelog, or "what changed since".',
-  phases: [{ title: 'Collect' }, { title: 'Draft' }],
-}
-
-const since = args && typeof args === 'object' && args.since ? String(args.since) : 'origin/main'
-
-phase('Collect')
-const log = await agent(
-  `Run \`git log ${since}..HEAD --oneline\` and return the raw output.`,
-  { label: 'git log' },
-)
-
-phase('Draft')
-return await agent(
-  'Draft release notes from this git log. Group by feat/fix/chore. Keep it short.\n\n' + log,
-  {
-    label: 'draft notes',
-    schema: {
-      type: 'object',
-      properties: {
-        summary: { type: 'string' },
-        sections: {
-          type: 'object',
-          properties: {
-            feat: { type: 'array', items: { type: 'string' } },
-            fix:  { type: 'array', items: { type: 'string' } },
-            chore: { type: 'array', items: { type: 'string' } },
-          },
-        },
-      },
-      required: ['summary'],
-    },
-  },
-)
-```
-
-### 可用全局变量
-
-| 全局 | 说明 |
-|---|---|
-| `agent(prompt, opts?)` | 启动一个全新子 Agent。返回最终 assistant 文本；若提供 `opts.schema` 则返回校验后的对象。失败解析为 `null`，工作流继续。 |
-| `parallel(thunks)` | 并发执行 `() => agent(...)` 数组。结果顺序与输入一致。必须是 thunk，不能是已创建的 Promise。 |
-| `pipeline(items, ...stages)` | 每项顺序经过各 stage，不同 item 可并行。stage 签名为 `(prev, original, index)`；抛错则该项为 `null`。 |
-| `phase(title)` | 标记当前进度分组。后续 `agent()` 归入该 phase。可在循环/条件中创建；空 phase 不渲染。 |
-| `log(message)` | 追加工作流级日志，显示在进度树下。 |
-| `args` | 传给 `workflow` 工具 `args` 的 JSON。 |
-| `cwd` / `process.cwd()` | 子 Agent 可见的工作目录。 |
-| `budget` | `{ total, spent(), remaining() }`。未配置 token 预算时 `total` 为 `null`。 |
-
-### `agent()` 选项
-
-```ts
-agent(prompt, {
-  label?: string,            // 进度树中的短标签
-  phase?: string,            // 覆盖当前 phase()
-  schema?: JsonSchema,       // 设置则返回值按 schema 校验
-  toolset?: string[],        // 子 Agent 工具白名单
-  maxIterations?: number,    // 子 Agent 工具迭代上限（默认 30）
-  model?: string,            // provider/model 或配置的角色 id（如 small、@large）
-})
-```
-
-### 确定性规则
-
-沙箱拒绝部分 API，以保证可复现（并为未来 resume / 日志留空间）：
-
-- `Date.now()`、`new Date()`、`Math.random()`
-- `require`、`import`、动态 `eval`
-- `fs`、网络 API 及全局表外的能力
-
-需要时间戳时通过 `args` 传入，在工作流返回后再写入结果。需要随机性时用 index 等方式变化 prompt。
-
-### 失败处理
-
-`agent()`、`parallel()` 项、`pipeline()` 项抛错时解析为 `null`（失败会记录）。合成前务必过滤或检查：
-
-```js
-const live = findings.filter(Boolean)
-if (!live.length) return { ok: false, reason: 'no findings' }
-```
-
-## 与自动化结合
-
-两种模式：
-
-1. **直接工作流运行（推荐）** — 在 `#/automations` 创建工作流自动化，选择模板，填写结构化输入或目标，并选择计划、手动或 webhook 触发。执行器直接调用 `WorkflowRunService`，无需助手轮次。
-2. **Agent 指令** — 自动化可以运行一条 Agent 指令，让 Agent 按名称调用工作流；助手会像普通 Chat 一样调用 `workflow` 工具。需要模型在轮次中自行决定如何调用工作流时使用此路径。
-
-**运维：** 自动化运行历史会记录关联的工作流运行 id。工作流看板可按触发来源筛选，包括自动化触发的运行。失败的工作流自动化遵循自动化的可靠性设置。
-
-详见 [自动化](automations.md)。
-
-## 与 todo 结合
-
-工作流结果可转为 `todo` 清单。最简单是在后续一轮让模型把结果变成 todos：
-
-> 「对这份计划运行 multi_perspective_review 工作流，再把确认的风险写成 todo。」
-
-若希望工作流直接产出 todo 形状，可在 synthesis 阶段返回结构化对象（如 `topRisks` 数组），供 `todo({ merge: true, todos: [...] })` 使用。
-
-## 各端进度可见性
-
-| 端 | 运行中可见内容 |
-|---|---|
-| TUI（`xopc` 或 `xopc tui`） | 实时进度树，快照变化即更新。 |
-| 网关控制台 | 独立工作流 Chat 会话 — WorkflowCard 经 SSE 推送；`#/workflows` 看板显示运行状态；卡片或看板可取消/重试。 |
-| Telegram | **实时原地编辑**。开始时发一条消息，默认每 5 s 编辑一次；阶段变化、新错误、完成等关键事件会绕过节流。 |
-| 飞书 / Lark | **实时原地编辑**。与 Telegram 相同（`im.v1.message.update`）；默认 5 s 节流。 |
-| 微信 | **仅最终结果**。个人/ilink 机器人无 editMessage，中间快照被丢弃，完成时发一条摘要。 |
-
-### 各频道配置
-
-各频道有合理默认值；可在 `channels.<id>.workflowProgress` 覆盖：
-
-```jsonc
-{
-  "channels": {
-    "telegram": {
-      "workflowProgress": {
-        "enabled": true,
-        "throttleMs": 5000,
-        "mode": "edit"
-      }
-    },
-    "feishu": {
-      "workflowProgress": {
-        "enabled": true,
-        "throttleMs": 5000,
-        "mode": "edit"
-      }
-    },
-    "weixin": {
-      "workflowProgress": {
-        "enabled": true,
-        "throttleMs": 60000,
-        "mode": "final-only"
-      }
-    }
-  }
-}
-```
-
-字段均可选；缺省使用各频道能力默认值。
-
-### 实验性 — 微信 `append` 模式
-
-微信默认 `final-only`，因平台不支持 bot 消息编辑；否则每次 tick 都会是新消息。
-
-若希望里程碑以多条微信消息出现（例如 5 分钟审计），可改为 `append` 并加大节流：
-
-```jsonc
-{
-  "channels": {
-    "weixin": {
-      "workflowProgress": {
-        "enabled": true,
-        "mode": "append",
-        "throttleMs": 60000
-      }
-    }
-  }
-}
-```
-
-效果简述：
-
-- 运行中消息带 `▾ 工作流进展` 标题，便于与闲聊区分。
-- 最终消息带 `✓ 工作流完成` 与结果摘要。
-- 关键事件绕过 `throttleMs`；普通更新按节流间隔。
-- 约 3 分钟、3 阶段的工作流通常共 **3–6 条**消息；节流低于 60 s 可能触发反垃圾策略。
-
-此为实验能力；默认不变，除非实际使用验证节奏可接受。
-
-## 配置
-
-工作流可用性和运行限制由所选 agent manifest 及其 `capabilityPresets` 控制。`agents.list[].models.roles` 下的类型化模型角色让脚本引用 `small` / `large`，而不必硬编码 `provider/model`。
-
-```jsonc
-{
-  "agents": {
-    "default": "research",
-    "capabilityPresets": {},
-    "list": [
-      {
-        "id": "research",
-        "identity": { "name": "Research", "role": "研究助手", "language": "zh-CN" },
-        "responsibilities": { "primary": ["运行研究工作流"] },
-        "workspace": { "root": "~/.xopc/workspace/research" },
-        "models": {
-          "defaultRole": "large",
-          "roles": {
-            "small": { "model": "deepseek/deepseek-v4-flash", "description": "快速扇出子任务" },
-            "large": { "model": "anthropic/claude-sonnet-4", "description": "高质量综合" }
-          }
-        },
-        "tools": { "builtin": {} },
-        "skills": { "mode": "all" },
-        "memory": { "mode": "off", "sources": ["session"] },
-        "workflows": { "enabled": true },
-        "boundaries": { "requiresConfirmation": [], "forbidden": [], "escalation": [] },
-        "runtime": { "timeoutMs": 1800000 }
-      }
-    ]
-  }
-}
-```
-
-未指定 override 时，子 Agent 继承父 Agent 主模型。单次 `agent({ model: '...' })` 与 `meta.phases[].model` 在运行时解析为：
-
-- **`provider/model`** — 如 `openai/gpt-4o-mini`
-- **角色 id** — 如 `small` 或 `@large`，映射自上述配置
-
-示例：
-
-```js
-export const meta = {
-  name: 'audit_repo',
-  phases: [
-    { title: 'Review', model: 'small' },
-    { title: 'Synthesize', model: 'large' },
-  ],
-}
-
-phase('Review')
-await agent('Review for bugs…', { model: 'small', label: 'bugs' })
-```
-
-## REST API（网关）
-
-需认证的 `/api/workflows/` 路由（Bearer token 与其他网关 API 相同）：
-
-| 方法 | 路径 | 说明 |
-|---|---|---|
-| `GET` | `/definitions` | 列出内置与用户工作流定义 |
-| `GET` | `/definitions/:id` | 加载单个定义（脚本 + meta） |
-| `POST` | `/definitions` | 保存用户工作流脚本 |
-| `POST` | `/definitions/validate` | 校验脚本但不保存 |
-| `DELETE` | `/definitions/:id` | 删除用户工作流（不可删内置） |
-| `GET` | `/stats` | 运行统计 |
-| `POST` | `/runs` | 启动运行 → `{ runId, sessionKey }`（202） |
-| `GET` | `/runs` | 最近运行摘要列表 |
-| `GET` | `/runs/:runId` | 完整运行视图（树、状态、指标） |
-| `POST` | `/runs/:runId/cancel` | 取消进行中的运行 |
-| `POST` | `/runs/:runId/retry` | 重试失败/已取消运行 → 新 `{ runId, sessionKey }` |
-
-可选查询参数 `agentId` 将运行限定到 `agents.list` 中的某个 Agent。
-
-## 限制与 v1 未包含项
-
-- 无日志 / 断点续跑 — 中途中止需重新开始（可用 **重试** 发起新运行）。
-- 无嵌套工作流 — `agent()` 内无法调用 `workflow()`。
-- 微信 IM 默认**仅最终结果**（见上表）；Telegram 与飞书支持实时编辑。
-
-运行时保持确定性（禁用 `Date.now`/`Math.random`），以便未来干净地加入 journaling。
+- 工作流必须无环；
+- AI 节点内部不能嵌套启动工作流；
+- 已取消运行重试时从头开始；
+- 各消息渠道的进度展示受渠道能力限制，网关始终提供完整节点图。

@@ -8,6 +8,7 @@ export const loadGoalDetailPage = () => import('@/pages/goal-detail-page');
 export const loadNotesPage = () => import('@/pages/notes-page');
 export const loadWorkflowsPage = () => import('@/pages/workflows-page');
 export const loadSkillsPage = () => import('@/pages/skills-page');
+export const loadUserContextPage = () => import('@/features/user-context/user-context-page');
 export const loadConnectorsPage = () => import('@/pages/connectors-page');
 export const loadLogsPage = () => import('@/pages/logs-page');
 export const loadSettingsPage = () => import('@/pages/settings-page');
@@ -81,6 +82,7 @@ export function preloadRouteForPath(to: string) {
   const path = pathWithoutSearch(to);
 
   if (path === '/skills') return preload(loadSkillsPage);
+  if (path === '/you') return preload(loadUserContextPage);
   if (path === '/connectors') return preload(loadConnectorsPage);
   if (path === '/automations') return preload(loadAutomationsPage);
   if (path === '/projects') return preload(loadProjectsPage);

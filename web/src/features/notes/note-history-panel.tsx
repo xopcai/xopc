@@ -58,7 +58,6 @@ export function NoteHistoryPanel({ noteId, activeTimestamp, onSelect, onClose, o
       setRestoring(true);
       try {
         await restoreNoteSnapshot(noteId, timestamp);
-        showToast({ type: 'success', title: n.restoreSuccess });
         setConfirmTimestamp(null);
         onRestored();
       } catch {

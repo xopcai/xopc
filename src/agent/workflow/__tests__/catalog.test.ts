@@ -1,141 +1,63 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { createWorkflowCatalog } from '../catalog.js';
+import { createWorkflowCatalog, WorkflowRevisionConflictError } from '../catalog.js';
 
-const VALID_HEADER = `export const meta = { name: 'demo', description: 'd' }\nawait agent('hi', { label: 'hi' })\n`;
+const graph = {
+  schemaVersion: 1 as const,
+  nodes: [
+    { id: 'input', kind: 'input' as const, title: 'Input', position: { x: 0, y: 0 }, config: {} },
+    { id: 'output', kind: 'output' as const, title: 'Output', position: { x: 300, y: 0 }, config: {} },
+  ],
+  edges: [{ id: 'edge', source: 'input', target: 'output' }],
+};
 
-describe('createWorkflowCatalog', () => {
+describe('visual workflow catalog', () => {
   let dir: string;
 
-  beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'xopc-wf-catalog-'));
+  beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'xopc-wf-catalog-')); });
+  afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
+
+  it('lists and loads graph-based built-ins', () => {
+    const catalog = createWorkflowCatalog({ userDir: dir });
+    expect(catalog.list().map((entry) => entry.name)).toContain('research');
+    expect(catalog.load('research').graph.nodes.length).toBeGreaterThan(3);
   });
 
-  afterEach(() => {
-    rmSync(dir, { recursive: true, force: true });
+  it('saves JSON definitions and increments revisions', () => {
+    const catalog = createWorkflowCatalog({ userDir: dir });
+    const first = catalog.save({ name: 'my_workflow', graph, manifest: { title: 'My workflow' }, expectedRevision: 0 });
+    expect(first.path).toBe(join(dir, 'my_workflow.json'));
+    expect(first.definition.revision).toBe(1);
+    const second = catalog.save({ name: 'my_workflow', graph, expectedRevision: 1 });
+    expect(second.definition.revision).toBe(2);
+    expect(catalog.load('my_workflow').metadata.source).toBe('user');
   });
 
-  it('lists built-ins when user dir is empty', () => {
-    const cat = createWorkflowCatalog({ userDir: dir });
-    const entries = cat.list();
-    expect(entries.length).toBeGreaterThanOrEqual(7);
-    const names = entries.map((e) => e.name);
-    expect(names).toContain('audit_repo');
-    expect(names).toContain('multi_perspective_review');
-    expect(names).toContain('research');
-    expect(names).toContain('pr_review');
-    expect(names).toContain('debug_incident');
-    expect(names).toContain('implementation_plan');
-    expect(names).toContain('release_check');
-    for (const e of entries) {
-      expect(e.source).toBe('builtin');
-    }
+  it('rejects stale saves', () => {
+    const catalog = createWorkflowCatalog({ userDir: dir });
+    catalog.save({ name: 'my_workflow', graph, expectedRevision: 0 });
+    expect(() => catalog.save({ name: 'my_workflow', graph, expectedRevision: 0 })).toThrow(WorkflowRevisionConflictError);
   });
 
-  it('loads a built-in workflow by name', () => {
-    const cat = createWorkflowCatalog({ userDir: dir });
-    const loaded = cat.load('audit_repo');
-    expect(loaded.source).toBe('builtin');
-    expect(loaded.meta.name).toBe('audit_repo');
-    expect(loaded.meta.tags).toContain('code-review');
-    expect(loaded.script.length).toBeGreaterThan(100);
+  it('keeps revision history and restores a snapshot as a new revision', () => {
+    const catalog = createWorkflowCatalog({ userDir: dir });
+    catalog.save({ name: 'my_workflow', graph, manifest: { title: 'First' }, expectedRevision: 0 });
+    catalog.save({ name: 'my_workflow', graph, manifest: { title: 'Second' }, expectedRevision: 1 });
+    expect(catalog.listRevisions('my_workflow').map((item) => item.revision)).toEqual([2, 1]);
+    expect(catalog.loadRevision('my_workflow', 1).title).toBe('First');
+    const restored = catalog.restore('my_workflow', 1, 2);
+    expect(restored.definition).toMatchObject({ revision: 3, title: 'First' });
   });
 
-  it('throws when loading an unknown name with a hint', () => {
-    const cat = createWorkflowCatalog({ userDir: dir });
-    expect(() => cat.load('does_not_exist')).toThrow(/not found.*audit_repo/);
-  });
-
-  it('saves a user workflow and lists it', () => {
-    const cat = createWorkflowCatalog({ userDir: dir });
-    const script = `export const meta = { name: 'my_wf', description: 'mine' }\nawait agent('go', { label: 'go' })\n`;
-    const { path } = cat.save('my_wf', script);
-    expect(path).toBe(join(dir, 'my_wf.js'));
-    const entries = cat.list();
-    const mine = entries.find((e) => e.name === 'my_wf');
-    expect(mine).toBeDefined();
-    expect(mine?.source).toBe('user');
-  });
-
-  it('refuses to save when meta.name disagrees with save name', () => {
-    const cat = createWorkflowCatalog({ userDir: dir });
-    expect(() => cat.save('my_wf', VALID_HEADER)).toThrow(/disagrees|does not match/);
-  });
-
-  it('loads a directory workflow with manifest metadata', () => {
-    const wfDir = join(dir, 'packaged_wf');
-    mkdirSync(wfDir, { recursive: true });
-    writeFileSync(
-      join(wfDir, 'workflow.js'),
-      `export const meta = { name: 'packaged_wf', description: 'meta description' }\nawait agent('x', { label: 'x' })\n`,
-      'utf-8',
-    );
-    writeFileSync(
-      join(wfDir, 'manifest.json'),
-      JSON.stringify({ title: 'Packaged Workflow', description: 'manifest description', tags: ['packaged'] }),
-      'utf-8',
-    );
-
-    const cat = createWorkflowCatalog({ userDir: dir });
-    const listed = cat.list().find((e) => e.name === 'packaged_wf');
-    expect(listed).toMatchObject({
-      source: 'user',
-      title: 'Packaged Workflow',
-      description: 'manifest description',
-      tags: ['packaged'],
-    });
-    expect(cat.load('packaged_wf').manifest).toMatchObject({ title: 'Packaged Workflow' });
-  });
-
-  it('user workflow wins on name collision with a built-in', () => {
-    writeFileSync(
-      join(dir, 'audit_repo.js'),
-      `export const meta = { name: 'audit_repo', description: 'user override' }\nawait agent('x', { label: 'x' })\n`,
-      'utf-8',
-    );
-    const cat = createWorkflowCatalog({ userDir: dir });
-    const loaded = cat.load('audit_repo');
-    expect(loaded.source).toBe('user');
-    expect(loaded.meta.description).toBe('user override');
-  });
-
-  it('remove deletes a user workflow but never a built-in', () => {
-    writeFileSync(
-      join(dir, 'my_wf.js'),
-      `export const meta = { name: 'my_wf', description: 'mine' }\nawait agent('x', { label: 'x' })\n`,
-      'utf-8',
-    );
-    const cat = createWorkflowCatalog({ userDir: dir });
-    expect(cat.remove('my_wf')).toBe(true);
-    expect(cat.remove('audit_repo')).toBe(false);
-    expect(cat.list().find((e) => e.name === 'audit_repo')?.source).toBe('builtin');
-  });
-
-  it('rejects invalid workflow names', () => {
-    const cat = createWorkflowCatalog({ userDir: dir });
-    expect(() => cat.load('NotSnake')).toThrow(/snake_case/);
-    expect(() => cat.save('NotSnake', VALID_HEADER)).toThrow(/snake_case/);
-  });
-
-  it('rejects loading a file whose meta.name disagrees with filename', () => {
-    writeFileSync(
-      join(dir, 'mismatch.js'),
-      `export const meta = { name: 'other_name', description: 'd' }\nawait agent('x', { label: 'x' })\n`,
-      'utf-8',
-    );
-    const cat = createWorkflowCatalog({ userDir: dir });
-    expect(() => cat.load('mismatch')).toThrow(/disagrees/);
-  });
-
-  it('parses every shipped built-in successfully', () => {
-    const cat = createWorkflowCatalog({ userDir: dir });
-    for (const entry of cat.list().filter((e) => e.source === 'builtin')) {
-      // Should not throw — parseWorkflowScript runs inside .load
-      expect(() => cat.load(entry.name)).not.toThrow();
-    }
+  it('lets a user definition override a builtin without mutating the builtin', () => {
+    const catalog = createWorkflowCatalog({ userDir: dir });
+    catalog.save({ name: 'research', graph, manifest: { title: 'Custom research' } });
+    expect(catalog.load('research').title).toBe('Custom research');
+    expect(catalog.remove('research')).toBe(true);
+    expect(catalog.load('research').metadata.source).toBe('builtin');
   });
 });

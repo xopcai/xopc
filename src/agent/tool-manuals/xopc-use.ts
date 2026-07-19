@@ -42,7 +42,7 @@ Projects group sessions, work items, goals, workflows, files, and project instru
 
 ### Create a project
 
-Use when the user asks to start or formalize a project. Include \`workspaceRoot\` when the project maps to a local repository or directory. Include \`brief\` for the concise product idea and \`instructions\` for agent-operating guidance.
+Use when the user asks to keep an outcome moving across conversations, or explicitly accepts an offer to do so. The user does not need to say “project”. Do not create one merely because a task is complex: continuity across sessions, files, decisions, or dependencies is the key signal. Include \`workspaceRoot\` when the work maps to a local repository or directory. Include \`brief\` for the desired outcome and \`instructions\` only for durable operating guidance.
 
 \`\`\`json
 {

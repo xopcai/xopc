@@ -1,6 +1,6 @@
 # xopc 工作站 · 产品设计系统 (Design System)
 
-> **版本**: v1.3 · **建立时间**: 2026-03 · **修订**: 2026-06-08（§9.3 Toast 规范：顶栏堆叠、banner 联动、不透明面板；此前 2026-03-29：§9.2.1 列表/网格刷新反馈等）
+> **版本**: v1.4 · **建立时间**: 2026-03 · **修订**: 2026-07-19（§9.3 全局反馈体系：就地反馈、单条瞬时提示、活动中心；此前 2026-06-08：Toast 顶栏与 banner 联动）
 > 本文档是 xopc 所有产品的设计宪法，所有 UI 决策应以此为准。
 >
 > **工程实现：** 网关 Web 应用中的 **`globals.css`**（Tailwind v4 `@theme`）为语义 token 的单一来源；本文数值与其保持一致。
@@ -553,25 +553,28 @@ focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-
 
 **参考实现**：技能列表页（网关 Web）（刷新时网格骨架 + 无成功 Toast）。
 
-### 9.3 Toast 通知（Gateway Web）
+### 9.3 全局反馈体系（Gateway Web）
 
-Toast 用于**跨页面、短时、非阻塞**的操作结果反馈（保存失败、扩展通知、更新结果等）。与 §9.2.1 的「列表刷新成功」不同——Toast **不**替代内容区就地反馈。
+反馈遵循“**先就地、后留痕、少打断**”。不要把所有异步结果都做成 Toast；用户应该在动作发生的位置看到结果，需要稍后处理或跨页面追踪的事件则进入活动中心。
 
 #### 何时使用
 
 | 场景 | 做法 |
 |------|------|
-| ✅ 用户触发的**单次操作**结果（复制、导入、重启失败、npm 更新） | Toast（必要时带 `message` 副文案） |
-| ✅ 扩展 iframe 通过 `ui.notification` 推送 | Toast |
-| ❌ 列表/网格**刷新成功** | 由新数据替换内容即可，见 §9.2.1 |
-| ❌ 表单字段校验 | 字段旁内联错误（`role="alert"`） |
-| ❌ 当前页面上下文内的失败 | 页面内错误条 / banner，优先于 Toast |
+| 表单保存、连接测试、文件上传 | 控件内 loading + 原位置状态或字段错误；成功时优先静默更新界面 |
+| 聊天输入、语音、附件上下文错误 | Composer 上方就地提示，可关闭，并在需要时提供设置入口 |
+| 复制、已加入队列等轻量确认 | 单条瞬时提示（Snackbar），默认 2.5 秒 |
+| 跨页面任务、后台更新、目标状态、扩展通知 | 写入活动中心，支持未读、去重、来源、时间与相关页面跳转 |
+| 警告、错误、需要持续关注的结果 | 写入活动中心；当前页面可恢复时，同时提供内联错误或恢复动作 |
+| 删除等可撤销操作 | Snackbar 可带“撤销”动作；不可逆操作仍须二次确认 |
+| 列表/网格刷新成功 | 由新数据替换内容即可，见 §9.2.1，不额外提示 |
 
-#### 位置与堆叠
+#### 瞬时提示
 
-- **位置**：视口**顶栏居中**（`fixed` + `inset-x-0` + 水平居中），**不要**放在右下角——避免与聊天「回到底部」FAB、右侧工作区栏重叠。
-- **与顶栏 banner 联动**：当 `UpdateReminderBar`、`GatewayRestartBanner`、`ElectronGatewayExitBanner` 等可见时，Toast 整体下移；工程上由 `TopBannerStack` 测量高度并写入 CSS 变量 `--toast-top-inset`，`ToastHost` 使用 `top: max(var(--toast-top-inset, 0.75rem), env(safe-area-inset-top))`。
-- **堆叠**：快速连续触发时最多同时显示 **3** 条；新消息在**上方**，超出时丢弃最旧的一条。每条独立计时、可单独关闭。
+- **位置**：视口顶栏居中，并随 `TopBannerStack` 自动下移，避免遮挡系统 banner。
+- **数量**：任何时刻只显示 **1** 条；连续触发时替换上一条，不制造消息瀑布。
+- **时长**：默认 **2.5 秒**；不得通过 `duration: 0` 制造永久悬浮 Toast，持久内容必须进入活动中心。
+- **范围**：仅 `success` / `info` 轻量确认。`warning` / `error` 自动进入活动中心。
 
 #### 视觉规范
 
@@ -592,14 +595,22 @@ Toast 用于**跨页面、短时、非阻塞**的操作结果反馈（保存失�
 | `info` | `accent` | 中性提示 |
 
 - **动效**：入场 `toast-enter`（200ms 轻微下移 + 淡入）；`prefers-reduced-motion: reduce` 时关闭动画。
-- **无障碍**：容器 `role="status"` + `aria-live="polite"`；关闭按钮需 `aria-label`（中/英随 locale）。
+- **无障碍**：轻量确认使用 `role="status"` + `aria-live="polite"`；错误区域使用 `role="alert"`；关闭按钮需本地化 `aria-label`。
+
+#### 活动中心
+
+- 入口位于主标题栏，显示未读关注项数量；有运行任务时展示运行态。
+- 面板从右侧进入，固定头尾、内容区独立滚动，不改变当前工作上下文。
+- 每条记录包含状态、标题、可选详情、来源、时间和发生次数；相同 `dedupeKey` 更新原记录而不是重复堆叠。
+- `running`、`attention`、`failed`、`done` 是任务状态；颜色只辅助表达，不能代替图标和文案。
+- 点击“查看相关”返回事件发生页或任务详情；完成记录可清理，关注项默认保留。
 
 #### 工程 API
 
-- 触发：`showToast({ type, title, message?, duration? })`（`web/src/lib/toast.ts`）
-- 渲染：`ToastHost`（`web/src/components/ui/toast-host.tsx`），挂载于 `AppShell`
-- 默认自动关闭：**5s**；`duration: 0` 表示仅手动关闭
-- 扩展桥接：仍监听 `extension-notification` 事件（与 `TOAST_EVENT` 同名）
+- 轻量瞬时反馈：`showToast({ type: 'success' | 'info', ... })`（`web/src/lib/toast.ts`）
+- 活动记录：`showActivity({ tone, status, title, message?, source?, href?, dedupeKey? })`（`web/src/stores/activity-center-store.ts`）
+- `showToast` 收到 `warning`、`error` 或 `duration: 0` 时自动转入活动中心，作为旧调用点的安全迁移层。
+- 扩展 iframe 的 `ui.notification` 进入活动中心，并记录扩展来源。
 
 ---
 

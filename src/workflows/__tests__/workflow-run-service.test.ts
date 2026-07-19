@@ -29,11 +29,25 @@ function createDefinition(): WorkflowDefinition {
     title: 'Release Check',
     description: 'Check a release',
     version: '1.2.3',
+    revision: 3,
     phases: [
       { id: 'inspect', title: 'Inspect' },
       { id: 'summarize', title: 'Summarize' },
     ],
-    runtime: { kind: 'script', source: 'return true' },
+    graph: {
+      schemaVersion: 1,
+      nodes: [
+        { id: 'input', kind: 'input', title: 'Input', position: { x: 0, y: 0 }, config: {} },
+        { id: 'inspect', kind: 'agent', title: 'Inspect', phaseId: 'inspect', position: { x: 240, y: 0 }, config: { prompt: 'Inspect {{input}}' } },
+        { id: 'summarize', kind: 'agent', title: 'Summarize', phaseId: 'summarize', position: { x: 480, y: 0 }, config: { prompt: 'Summarize {{predecessors}}' } },
+        { id: 'output', kind: 'output', title: 'Result', position: { x: 720, y: 0 }, config: {} },
+      ],
+      edges: [
+        { id: 'input-inspect', source: 'input', target: 'inspect' },
+        { id: 'inspect-summarize', source: 'inspect', target: 'summarize' },
+        { id: 'summarize-output', source: 'summarize', target: 'output' },
+      ],
+    },
     defaults: {
       concurrency: 2,
       timeoutSec: 60,
@@ -94,6 +108,8 @@ describe('WorkflowRunService helpers', () => {
       name: 'release-check',
       title: 'Release Check',
       version: '1.2.3',
+      revision: 3,
+      graph: expect.objectContaining({ schemaVersion: 1 }),
       source: 'builtin',
       tags: ['release'],
       phaseCount: 2,
@@ -499,6 +515,7 @@ function createReplayView(): import('../domain/index.js').WorkflowRunView {
         steps: [],
       },
     ],
+    nodes: [],
     logs: [],
     artifacts: [],
     timeline: [],

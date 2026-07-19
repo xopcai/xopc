@@ -79,6 +79,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 
 type TabId = 'overview' | 'work-items' | 'workflows' | 'automations' | 'notes' | 'files' | 'activity' | 'sessions' | 'goals' | 'settings';
+type SurfaceTabId = 'overview' | 'work' | 'context';
 
 const TABS: Array<{ id: TabId; icon: LucideIcon }> = [
   { id: 'overview', icon: LayoutDashboard },
@@ -93,9 +94,7 @@ const TABS: Array<{ id: TabId; icon: LucideIcon }> = [
   { id: 'settings', icon: Settings },
 ];
 
-const DEFAULT_PROJECT_TAB_ORDER = TABS.map((tab) => tab.id);
 const PROJECT_TAB_IDS = new Set<TabId>(TABS.map((tab) => tab.id));
-const PROJECT_TAB_STORAGE_PREFIX = 'xopc.projectTabs.';
 const PROJECT_FILES_PANEL_WIDTH_STORAGE_KEY = 'xopc.projectFiles.panelWidthPx';
 const PROJECT_FILES_PANEL_WIDTH_DEFAULT = 320;
 const PROJECT_FILES_PANEL_WIDTH_MIN = 220;
@@ -129,33 +128,16 @@ function isProjectTabId(value: string | undefined): value is TabId {
   return Boolean(value && PROJECT_TAB_IDS.has(value as TabId));
 }
 
-function projectTabStorageKey(projectId: string): string {
-  return `${PROJECT_TAB_STORAGE_PREFIX}${projectId}`;
+function surfaceTabFor(tab: TabId): SurfaceTabId {
+  if (tab === 'overview') return 'overview';
+  if (tab === 'work-items' || tab === 'goals' || tab === 'workflows' || tab === 'automations') return 'work';
+  return 'context';
 }
 
-function normalizeProjectTabOrder(value: unknown): TabId[] {
-  const input = Array.isArray(value) ? value : [];
-  const seen = new Set<TabId>();
-  const order: TabId[] = [];
-  for (const item of input) {
-    if (!isProjectTabId(item) || seen.has(item)) continue;
-    seen.add(item);
-    order.push(item);
-  }
-  for (const item of DEFAULT_PROJECT_TAB_ORDER) {
-    if (!seen.has(item)) order.push(item);
-  }
-  return order;
-}
-
-function loadProjectTabOrder(projectId: string): TabId[] {
-  if (!projectId) return DEFAULT_PROJECT_TAB_ORDER;
-  try {
-    const stored = window.localStorage.getItem(projectTabStorageKey(projectId));
-    return normalizeProjectTabOrder(stored ? JSON.parse(stored) : null);
-  } catch {
-    return DEFAULT_PROJECT_TAB_ORDER;
-  }
+function surfaceTabTarget(tab: SurfaceTabId): TabId {
+  if (tab === 'work') return 'work-items';
+  if (tab === 'context') return 'files';
+  return 'overview';
 }
 
 function interpolate(template: string, values: Record<string, string | number>): string {
@@ -738,7 +720,6 @@ export function ProjectDetailPage() {
     checklistDecomposePolicy: 'empty_only',
   });
   const [blockerDraft, setBlockerDraft] = useState({ title: '', reason: '' });
-  const [tabOrder, setTabOrder] = useState<TabId[]>(() => loadProjectTabOrder(projectId));
   const [draft, setDraft] = useState({
     name: '',
     description: '',
@@ -748,7 +729,7 @@ export function ProjectDetailPage() {
     brief: '',
     instructions: '',
   });
-  const defaultTab = tabOrder[0] ?? DEFAULT_PROJECT_TAB_ORDER[0];
+  const defaultTab: TabId = 'overview';
   const tab = noteId ? 'notes' : isProjectTabId(tabId) ? tabId : defaultTab;
 
   const navigateProjectTab = useCallback((nextTab: TabId) => {
@@ -794,28 +775,6 @@ export function ProjectDetailPage() {
     if (!projectId || !tabId || isProjectTabId(tabId)) return;
     navigate(`/projects/${encodeURIComponent(projectId)}/${defaultTab}`, { replace: true });
   }, [defaultTab, navigate, projectId, tabId]);
-
-  useEffect(() => {
-    setTabOrder(loadProjectTabOrder(projectId));
-  }, [projectId]);
-
-  const reorderProjectTabs = useCallback((draggedId: TabId, targetId: TabId, position: 'before' | 'after' = 'before') => {
-    if (draggedId === targetId) return;
-    setTabOrder((current) => {
-      const next = normalizeProjectTabOrder(current);
-      const from = next.indexOf(draggedId);
-      const to = next.indexOf(targetId);
-      if (from < 0 || to < 0) return next;
-      const [moved] = next.splice(from, 1);
-      const targetIndex = next.indexOf(targetId);
-      if (targetIndex < 0) return normalizeProjectTabOrder(current);
-      next.splice(position === 'after' ? targetIndex + 1 : targetIndex, 0, moved);
-      if (projectId) {
-        window.localStorage.setItem(projectTabStorageKey(projectId), JSON.stringify(next));
-      }
-      return next;
-    });
-  }, [projectId]);
 
   useEffect(() => {
     if (!projectId) return;
@@ -1571,10 +1530,12 @@ export function ProjectDetailPage() {
   const workspaceMigrationValue = workspaceMigrationMode === 'fixed' ? workspaceMigrationRoot.trim() : '';
   const workspaceMigrationChanged = workspaceMigrationValue !== fixedProjectWorkspace;
   const workspaceMigrationCanSubmit = workspaceMigrationChanged && (workspaceMigrationMode === 'follow' || Boolean(workspaceMigrationRoot.trim()));
-  const tabItems = tabOrder.map((id) => {
-    const item = TABS.find((candidate) => candidate.id === id)!;
-    return { ...item, label: item.id === 'work-items' ? pm.workItems.tab : pm.tabs[item.id] };
-  });
+  const surfaceTabItems: Array<{ id: SurfaceTabId; icon: LucideIcon; label: string }> = [
+    { id: 'overview', icon: LayoutDashboard, label: pm.surfaceTabs.overview },
+    { id: 'work', icon: ListChecks, label: pm.surfaceTabs.work },
+    { id: 'context', icon: Folder, label: pm.surfaceTabs.context },
+  ];
+  const detailTabs = TABS.filter((item) => item.id !== 'overview' && item.id !== 'work-items' && item.id !== 'files');
 
   async function copyProjectWorkspacePath() {
     if (!workspaceRootLabel) return;
@@ -1589,16 +1550,51 @@ export function ProjectDetailPage() {
 
   return (
     <main className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden px-3 py-3 sm:px-5 sm:py-4 xl:px-6">
-      <PageTabs
-        items={tabItems}
-        activeTab={tab}
-        onChange={navigateProjectTab}
-        onReorder={reorderProjectTabs}
-        ariaLabel={pm.navAria}
-        tabIdPrefix="project-tab"
-        panelIdPrefix="project-panel"
-        className="shrink-0"
-      />
+      <div className="flex shrink-0 items-start justify-between gap-3">
+        <PageTabs
+          items={surfaceTabItems}
+          activeTab={surfaceTabFor(tab)}
+          onChange={(nextTab) => navigateProjectTab(surfaceTabTarget(nextTab))}
+          ariaLabel={pm.navAria}
+          tabIdPrefix="project-surface-tab"
+          className="min-w-0 flex-1"
+        />
+        <Popover.Root>
+          <Popover.Trigger asChild>
+            <Button
+              type="button"
+              variant={detailTabs.some((item) => item.id === tab) ? 'secondary' : 'ghost'}
+              className="h-9 shrink-0 rounded-lg px-3"
+            >
+              {pm.surfaceTabs.details}
+              <ChevronDown className="size-3.5" aria-hidden />
+            </Button>
+          </Popover.Trigger>
+          <Popover.Portal>
+            <Popover.Content align="end" sideOffset={6} className="z-[70] w-48 rounded-xl border border-edge bg-surface-panel p-1.5 shadow-float">
+              {detailTabs.map((item) => {
+                const Icon = item.icon;
+                const label = item.id === 'work-items' ? pm.workItems.tab : pm.tabs[item.id];
+                return (
+                  <Popover.Close asChild key={item.id}>
+                    <button
+                      type="button"
+                      className={cn(
+                        'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-surface-hover',
+                        tab === item.id ? 'bg-accent-soft text-accent-fg' : 'text-fg-muted',
+                      )}
+                      onClick={() => navigateProjectTab(item.id)}
+                    >
+                      <Icon className="size-4" aria-hidden />
+                      <span>{label}</span>
+                    </button>
+                  </Popover.Close>
+                );
+              })}
+            </Popover.Content>
+          </Popover.Portal>
+        </Popover.Root>
+      </div>
 
       {error ? <p className="mt-3 shrink-0 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">{error}</p> : null}
 
@@ -1613,7 +1609,7 @@ export function ProjectDetailPage() {
         )}
       >
       {tab === 'overview' ? (
-        <section id="project-panel-overview" role="tabpanel" aria-labelledby="project-tab-overview" className="grid min-h-full gap-4 xl:h-full xl:min-h-0 xl:grid-cols-[minmax(0,1fr)_20rem] xl:overflow-hidden">
+        <section id="project-panel-overview" role="tabpanel" aria-labelledby="project-surface-tab-overview" className="grid min-h-full gap-4 xl:h-full xl:min-h-0 xl:grid-cols-[minmax(0,1fr)_20rem] xl:overflow-hidden">
           <div className="grid min-w-0 content-start gap-4 xl:min-h-0 xl:overflow-y-auto xl:pr-1 xl:[scrollbar-gutter:stable]">
             <div className="min-w-0 rounded-lg bg-surface-panel p-4 shadow-surface">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1749,11 +1745,25 @@ export function ProjectDetailPage() {
       ) : null}
 
       {tab === 'work-items' ? (
-        <WorkItemsPanel projectId={project.id} createRequestKey={createWorkItemRequestKey} />
+        <section className="flex h-full min-h-0 flex-col" role="tabpanel" aria-labelledby="project-surface-tab-work">
+          <div className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-xl border border-edge-subtle bg-surface-panel px-3 py-2">
+            <p className="text-xs text-fg-muted">{pm.surfaceTabs.workHint}</p>
+            <div className="flex flex-wrap gap-1">
+              {(['goals', 'workflows', 'automations'] as const).map((detailTab) => (
+                <Button key={detailTab} type="button" variant="ghost" className="h-7 rounded-md px-2 text-xs" onClick={() => navigateProjectTab(detailTab)}>
+                  {pm.tabs[detailTab]}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <div className="min-h-0 flex-1 overflow-hidden">
+            <WorkItemsPanel projectId={project.id} createRequestKey={createWorkItemRequestKey} />
+          </div>
+        </section>
       ) : null}
 
       {tab === 'workflows' ? (
-        <section id="project-panel-workflows" role="tabpanel" aria-labelledby="project-tab-workflows" className="grid h-full min-h-[28rem] gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+        <section id="project-panel-workflows" role="tabpanel" aria-labelledby="project-surface-tab-work" className="grid h-full min-h-[28rem] gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
           <div className="min-h-0">
             <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg bg-surface-panel shadow-surface">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-edge px-4 py-3">
@@ -1879,7 +1889,7 @@ export function ProjectDetailPage() {
       ) : null}
 
       {tab === 'automations' ? (
-        <section id="project-panel-automations" role="tabpanel" aria-labelledby="project-tab-automations" className="grid h-full min-h-[28rem] overflow-hidden gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+        <section id="project-panel-automations" role="tabpanel" aria-labelledby="project-surface-tab-work" className="grid h-full min-h-[28rem] overflow-hidden gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
           <div className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg bg-surface-panel shadow-surface">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-edge px-4 py-3">
               <div>
@@ -1994,7 +2004,7 @@ export function ProjectDetailPage() {
       ) : null}
 
       {tab === 'notes' ? (
-        <section id="project-panel-notes" role="tabpanel" aria-labelledby="project-tab-notes" className="flex h-full min-h-[28rem] overflow-hidden rounded-lg bg-surface-panel shadow-surface">
+        <section id="project-panel-notes" role="tabpanel" aria-labelledby="project-surface-tab-context" className="flex h-full min-h-[28rem] overflow-hidden rounded-lg bg-surface-panel shadow-surface">
           <NotesWorkbench
             selectedNoteId={noteId}
             basePath={`/projects/${encodeURIComponent(project.id)}/notes`}
@@ -2012,8 +2022,23 @@ export function ProjectDetailPage() {
       ) : null}
 
       {tab === 'files' ? (
-        <section id="project-panel-files" role="tabpanel" aria-labelledby="project-tab-files" className="h-full min-h-[28rem]">
-          <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg bg-surface-panel shadow-surface">
+        <section id="project-panel-files" role="tabpanel" aria-labelledby="project-surface-tab-context" className="flex h-full min-h-[28rem] flex-col gap-3">
+          <div className="flex shrink-0 flex-wrap items-start justify-between gap-3 rounded-xl border border-edge-subtle bg-surface-panel px-4 py-3">
+            <div className="min-w-0 max-w-3xl">
+              <h2 className="text-sm font-semibold text-fg">{pm.surfaceTabs.contextTitle}</h2>
+              <p className="mt-1 line-clamp-2 text-xs leading-5 text-fg-muted">
+                {project.brief || project.instructions || project.description || pm.surfaceTabs.contextFallback}
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-wrap gap-1">
+              {(['sessions', 'notes', 'settings'] as const).map((detailTab) => (
+                <Button key={detailTab} type="button" variant="ghost" className="h-7 rounded-md px-2 text-xs" onClick={() => navigateProjectTab(detailTab)}>
+                  {pm.tabs[detailTab]}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg bg-surface-panel shadow-surface">
             {project.effectiveWorkspaceRoot ? (
               <div
                 data-project-files-grid
@@ -2188,7 +2213,7 @@ export function ProjectDetailPage() {
       ) : null}
 
       {tab === 'sessions' ? (
-        <section id="project-panel-sessions" role="tabpanel" aria-labelledby="project-tab-sessions" className="grid min-h-full content-start gap-3">
+        <section id="project-panel-sessions" role="tabpanel" aria-labelledby="project-surface-tab-context" className="grid min-h-full content-start gap-3">
           {sessions.length ? (
             <label className="relative flex min-h-9 w-full max-w-lg cursor-text items-center rounded-lg bg-surface-panel py-1.5 pl-9 pr-9 shadow-surface">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-disabled" aria-hidden />
@@ -2276,7 +2301,7 @@ export function ProjectDetailPage() {
       ) : null}
 
       {tab === 'goals' ? (
-        <section id="project-panel-goals" role="tabpanel" aria-labelledby="project-tab-goals" className="grid min-h-full content-start gap-3">
+        <section id="project-panel-goals" role="tabpanel" aria-labelledby="project-surface-tab-work" className="grid min-h-full content-start gap-3">
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="text-sm font-semibold text-fg">{pm.goals.title}</h2>
@@ -2314,7 +2339,7 @@ export function ProjectDetailPage() {
       ) : null}
 
       {tab === 'activity' ? (
-        <section id="project-panel-activity" role="tabpanel" aria-labelledby="project-tab-activity" className="grid min-h-full content-start gap-3">
+        <section id="project-panel-activity" role="tabpanel" aria-labelledby="project-surface-tab-context" className="grid min-h-full content-start gap-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-sm font-semibold text-fg">{pm.activity.title}</h2>
@@ -2393,7 +2418,7 @@ export function ProjectDetailPage() {
       ) : null}
 
       {tab === 'settings' ? (
-        <form id="project-panel-settings" role="tabpanel" aria-labelledby="project-tab-settings" onSubmit={saveProject} className="grid min-h-full content-start gap-4">
+        <form id="project-panel-settings" role="tabpanel" aria-labelledby="project-surface-tab-context" onSubmit={saveProject} className="grid min-h-full content-start gap-4">
           <section className="grid gap-3 rounded-lg bg-surface-panel p-4 shadow-surface">
             <div className="flex min-w-0 items-start justify-between gap-3">
               <div className="min-w-0">

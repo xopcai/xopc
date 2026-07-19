@@ -3,6 +3,7 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
+  CalendarClock,
   ChevronDown,
   CheckCircle2,
   ExternalLink,
@@ -11,6 +12,7 @@ import {
   Play,
   Plus,
   RefreshCw,
+  ShieldCheck,
   Sparkles,
   Trash2,
   X,
@@ -25,7 +27,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { AiTextAssistButton } from '@/features/ai-assist/ai-text-assist-button';
 import { fetchChatAgents, type ChatAgentOption } from '@/features/chat/agent-selection/chat-agents-api';
 import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
-import { formatCronExpressionLabel } from '@/features/scheduling/cron/format-cron-label';
 import { messages, type MessageBundle } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import type { StoredLanguage } from '@/lib/storage';
@@ -51,6 +52,18 @@ import {
   type AutomationTrigger,
 } from './automation-api';
 import { Select, SelectOption } from '@/components/ui/popover-select';
+import {
+  automationIntervalMs,
+  automationLastRunLabel,
+  automationNextRunLabel,
+  automationTriggerLabel,
+  convertAutomationIntervalValue,
+  formatAutomationDateTime,
+  formatAutomationDuration,
+  formatAutomationInterval,
+  formatAutomationRelativeDateTime,
+  type AutomationIntervalUnit,
+} from './automation-display';
 
 type CreateMode = 'blank' | 'draft' | 'template';
 type ViewTab = 'activity' | 'automations' | 'system';
@@ -76,7 +89,8 @@ interface FormState {
   triggerMode: TriggerMode;
   time: string;
   weekday: string;
-  intervalMinutes: string;
+  intervalValue: string;
+  intervalUnit: AutomationIntervalUnit;
   cronExpr: string;
   webhookSecretId: string;
   actionMode: ActionMode;
@@ -99,7 +113,8 @@ const initialForm: FormState = {
   triggerMode: 'daily',
   time: '09:00',
   weekday: '1',
-  intervalMinutes: '60',
+  intervalValue: '1',
+  intervalUnit: 'hour',
   cronExpr: '0 9 * * *',
   webhookSecretId: '',
   actionMode: 'agent',
@@ -116,30 +131,17 @@ const initialForm: FormState = {
   disableAfterFailures: '3',
 };
 
-function automationLocale(language: StoredLanguage): string {
-  return language === 'zh' ? 'zh-CN' : 'en-US';
-}
+const INTERVAL_PRESETS: Array<{ value: string; unit: AutomationIntervalUnit }> = [
+  { value: '15', unit: 'minute' },
+  { value: '30', unit: 'minute' },
+  { value: '1', unit: 'hour' },
+  { value: '6', unit: 'hour' },
+  { value: '24', unit: 'hour' },
+];
 
 function formatDate(ms: number | undefined, labels: AutomationsMessages, language: StoredLanguage): string {
   if (!ms) return labels.never;
-  return new Intl.DateTimeFormat(automationLocale(language), {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(ms));
-}
-
-function triggerLabel(trigger: AutomationTrigger, labels: AutomationsMessages, cronLabels: CronMessages, language: StoredLanguage): string {
-  if (trigger.kind === 'manual') return labels.trigger.manual;
-  if (trigger.kind === 'webhook') return labels.trigger.webhook;
-  if (trigger.kind === 'event') return labels.trigger.eventWithType.replace('{type}', trigger.eventType);
-  const schedule = trigger.schedule;
-  if (schedule.kind === 'once') return labels.trigger.onceAt.replace('{time}', formatDate(Date.parse(schedule.at), labels, language));
-  if (schedule.kind === 'interval') return labels.trigger.everyMinutes.replace('{minutes}', String(Math.round(schedule.everyMs / 60000)));
-  return formatCronExpressionLabel(schedule.expr, automationLocale(language), cronLabels.scheduleBadge, {
-    timezone: schedule.tz,
-  });
+  return formatAutomationDateTime(ms, language);
 }
 
 function actionLabel(action: AutomationAction, labels: AutomationsMessages): string {
@@ -297,7 +299,7 @@ export function buildInput(form: FormState, selectedWorkflow: WorkflowDefinition
       kind: 'schedule',
       schedule: {
         kind: 'interval',
-        everyMs: Math.max(1, Number.parseInt(form.intervalMinutes, 10) || 60) * 60_000,
+        everyMs: automationIntervalMs(form.intervalValue, form.intervalUnit),
       },
     };
   } else if (form.triggerMode === 'weekly') {
@@ -618,7 +620,6 @@ export function AutomationsPage() {
       setForm(initialForm);
       setCreateOpen(false);
       await reload();
-      showToast({ type: 'success', title: labels.dashboard.created });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setError(message);
@@ -626,13 +627,12 @@ export function AutomationsPage() {
     }
   }
 
-  async function mutateAutomation(actionKey: string, action: () => Promise<unknown>, successTitle?: string): Promise<boolean> {
+  async function mutateAutomation(actionKey: string, action: () => Promise<unknown>): Promise<boolean> {
     setError(null);
     setBusyAction(actionKey);
     try {
       await action();
       await reload();
-      if (successTitle) showToast({ type: 'success', title: successTitle });
       return true;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -671,7 +671,7 @@ export function AutomationsPage() {
       setDraftPrompt('');
       setDraftApproved(false);
       setCreateOpen(false);
-    }, labels.dashboard.created);
+    });
   }
 
   async function generateRepairDraft(run: AutomationRun) {
@@ -695,7 +695,7 @@ export function AutomationsPage() {
       await automationApi.update(run.automationId, repairDraft.patch);
       setRepairDraft(null);
       setRepairApproved(false);
-    }, labels.feedback.repairApplied);
+    });
   }
 
   const headerEnd = useMemo(
@@ -1184,7 +1184,7 @@ function AutomationList({
             <div className="mt-3 space-y-2 text-sm">
               <div className="flex min-w-0 items-center gap-2 text-fg">
                 <span className="shrink-0 text-xs font-medium uppercase text-fg-muted">{labels.info.when}</span>
-                <span className="truncate">{triggerLabel(automation.trigger, labels, cronLabels, language)}</span>
+                <span className="truncate">{automationTriggerLabel(automation.trigger, labels, cronLabels, language)}</span>
               </div>
               <div className="flex min-w-0 items-center gap-2 text-fg-muted">
                 <span className="shrink-0 text-xs font-medium uppercase">{labels.info.run}</span>
@@ -1316,7 +1316,7 @@ function RunsList({
             </div>
             <div className="mt-1 text-sm text-fg-muted">{run.error || run.summary || actionLabel(run.actionSnapshot, labels)}</div>
             <div className="mt-2 text-xs text-fg-muted">
-              {formatDate(run.createdAtMs, labels, language)} · {run.manual ? labels.trigger.manual : triggerLabel(run.triggerSnapshot, labels, cronLabels, language)}
+              {formatDate(run.createdAtMs, labels, language)} · {run.manual ? labels.trigger.manual : automationTriggerLabel(run.triggerSnapshot, labels, cronLabels, language)}
             </div>
           </div>
           {run.status === 'running' || run.status === 'queued' ? (
@@ -1477,7 +1477,7 @@ function RunDetailPanel({
             {run.error || run.summary || actionLabel(run.actionSnapshot, labels)}
           </p>
           <div className="mt-3 grid gap-2 text-xs text-fg-muted">
-            <DetailLine label={labels.explain.whyRan} value={run.manual ? labels.trigger.manual : triggerLabel(run.triggerSnapshot, labels, cronLabels, language)} />
+            <DetailLine label={labels.explain.whyRan} value={run.manual ? labels.trigger.manual : automationTriggerLabel(run.triggerSnapshot, labels, cronLabels, language)} />
             {run.sessionKey ? (
               <Button asChild variant="secondary" className="h-8 justify-start rounded-md px-2 text-xs">
                 <Link to={`/chat/${encodeURIComponent(run.sessionKey)}`}>
@@ -1588,7 +1588,6 @@ function AutomationDetailDialog({
   onSelectRun: (runId: string) => void;
   onAction: (actionKey: string, action: () => Promise<unknown>, successTitle?: string) => Promise<boolean>;
 }) {
-  const mode = automation ? safetyMode(automation) : 'suggest_only';
   const runBusy = automation ? busyAction === `automation:${automation.id}:run` : false;
   const toggleBusy = automation ? busyAction === `automation:${automation.id}:toggle` : false;
   const deleteBusy = automation ? busyAction === `automation:${automation.id}:delete` : false;
@@ -1623,20 +1622,13 @@ function AutomationDetailDialog({
               </div>
 
               <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-                <div className="grid gap-4 lg:grid-cols-[18rem_1fr]">
-                  <aside className="grid h-fit gap-3 rounded-lg bg-surface-base p-4">
-                    <Info label={labels.info.when} value={triggerLabel(automation.trigger, labels, cronLabels, language)} />
-                    <Info label={labels.info.run} value={actionLabel(automation.action, labels)} />
-                    <Info label={labels.info.safety} value={labels.safety[mode]} />
-                    <DetailLine label={labels.last} value={formatDate(automation.state.lastRunAtMs, labels, language)} />
-                    <DetailLine label={labels.next} value={formatDate(automation.state.nextRunAtMs, labels, language)} />
-                    {automation.state.consecutiveFailures ? (
-                      <DetailLine label={labels.dashboard.failures} value={String(automation.state.consecutiveFailures)} />
-                    ) : null}
-                    {automation.state.lastError ? (
-                      <p className="break-words text-sm text-red-700 dark:text-red-300">{automation.state.lastError}</p>
-                    ) : null}
-                  </aside>
+                <div className="grid gap-4 lg:grid-cols-[20rem_1fr]">
+                  <AutomationOverview
+                    automation={automation}
+                    labels={labels}
+                    cronLabels={cronLabels}
+                    language={language}
+                  />
 
                   <section className="min-w-0">
                     <div className="mb-3 flex items-center justify-between gap-3">
@@ -1751,6 +1743,159 @@ function AutomationDetailDialog({
   );
 }
 
+function safetyDescription(mode: AutomationSafetyMode, labels: AutomationsMessages): string {
+  if (mode === 'suggest_only') return labels.safety.suggestOnlyDescription;
+  if (mode === 'ask_before_apply') return labels.safety.askBeforeApplyDescription;
+  return labels.safety.autoApplyDescription;
+}
+
+function AutomationOverview({
+  automation,
+  labels,
+  cronLabels,
+  language,
+}: {
+  automation: Automation;
+  labels: AutomationsMessages;
+  cronLabels: CronMessages;
+  language: StoredLanguage;
+}) {
+  const mode = safetyMode(automation);
+  const nextRun = automationNextRunLabel(automation, labels, language);
+  const nextRunExact = automation.state.nextRunAtMs
+    ? formatAutomationDateTime(automation.state.nextRunAtMs, language)
+    : undefined;
+  const technicalRows: Array<{ label: string; value: string }> = [];
+
+  if (automation.trigger.kind === 'schedule') {
+    const schedule = automation.trigger.schedule;
+    technicalRows.push({
+      label: labels.info.scheduleType,
+      value: schedule.kind === 'interval'
+        ? labels.info.fixedInterval
+        : schedule.kind === 'cron'
+          ? labels.info.calendarSchedule
+          : labels.info.oneTimeSchedule,
+    });
+    if (schedule.kind === 'interval') {
+      technicalRows.push({ label: labels.info.rawInterval, value: `${schedule.everyMs} ms` });
+      if (schedule.anchorMs) {
+        technicalRows.push({ label: labels.info.anchor, value: formatAutomationDateTime(schedule.anchorMs, language) });
+      }
+    } else if (schedule.kind === 'cron') {
+      technicalRows.push({ label: labels.info.expression, value: schedule.expr });
+      if (schedule.tz) technicalRows.push({ label: labels.info.timezone, value: schedule.tz });
+    } else {
+      technicalRows.push({ label: labels.info.oneTimeSchedule, value: schedule.at });
+    }
+  } else if (automation.trigger.kind === 'event') {
+    technicalRows.push({ label: labels.info.eventType, value: automation.trigger.eventType });
+    if (automation.trigger.source) {
+      technicalRows.push({ label: labels.info.eventSource, value: automation.trigger.source });
+    }
+  } else if (automation.trigger.kind === 'webhook' && automation.trigger.secretId) {
+    technicalRows.push({ label: labels.info.webhookSecret, value: automation.trigger.secretId });
+  }
+
+  return (
+    <aside className="h-fit overflow-hidden rounded-xl border border-edge-subtle bg-surface-base shadow-surface">
+      <div className="border-b border-edge-subtle px-4 py-3">
+        <h3 className="text-sm font-semibold text-fg">{labels.info.overview}</h3>
+      </div>
+      <div className="grid gap-4 p-4">
+        <OverviewItem
+          icon={<CalendarClock className="size-4" aria-hidden />}
+          label={labels.info.schedule}
+          value={automationTriggerLabel(automation.trigger, labels, cronLabels, language)}
+          description={automation.enabled ? `${labels.info.nextRun}：${nextRun}` : nextRun}
+          descriptionTitle={nextRunExact}
+        />
+        <OverviewItem
+          icon={automation.action.kind === 'workflow'
+            ? <GitBranch className="size-4" aria-hidden />
+            : <Zap className="size-4" aria-hidden />}
+          label={labels.info.action}
+          value={actionLabel(automation.action, labels)}
+        />
+        <OverviewItem
+          icon={<ShieldCheck className="size-4" aria-hidden />}
+          label={labels.info.permission}
+          value={labels.safety[mode]}
+          description={safetyDescription(mode, labels)}
+        />
+        <OverviewItem
+          icon={<Activity className="size-4" aria-hidden />}
+          label={labels.info.lastRun}
+          value={automationLastRunLabel(automation, labels, language)}
+          valueTone={automation.state.lastRunStatus === 'failed' || automation.state.lastRunStatus === 'timeout'
+            ? 'danger'
+            : 'default'}
+        />
+
+        {automation.state.consecutiveFailures ? (
+          <div className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">
+            {labels.dashboard.failures}：{automation.state.consecutiveFailures}
+            {automation.state.lastError ? <p className="mt-1 break-words text-xs">{automation.state.lastError}</p> : null}
+          </div>
+        ) : automation.state.lastError ? (
+          <p className="break-words text-sm text-red-700 dark:text-red-300">{automation.state.lastError}</p>
+        ) : null}
+
+        {technicalRows.length > 0 ? (
+          <details className="group border-t border-edge-subtle pt-3">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-sm text-fg-muted outline-none hover:text-fg focus-visible:ring-2 focus-visible:ring-accent">
+              <span>{labels.info.technicalDetails}</span>
+              <ChevronDown className="size-4 transition-transform group-open:rotate-180" aria-hidden />
+            </summary>
+            <div className="mt-3 grid gap-2">
+              {technicalRows.map((row) => (
+                <div key={`${row.label}:${row.value}`} className="grid gap-0.5">
+                  <span className="text-xs text-fg-subtle">{row.label}</span>
+                  <span className="break-all font-mono text-xs text-fg-muted">{row.value}</span>
+                </div>
+              ))}
+            </div>
+          </details>
+        ) : null}
+      </div>
+    </aside>
+  );
+}
+
+function OverviewItem({
+  icon,
+  label,
+  value,
+  description,
+  descriptionTitle,
+  valueTone = 'default',
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  description?: string;
+  descriptionTitle?: string;
+  valueTone?: 'default' | 'danger';
+}) {
+  return (
+    <div className="grid grid-cols-[1.25rem_1fr] gap-2.5">
+      <span className="mt-0.5 text-fg-subtle">{icon}</span>
+      <div className="min-w-0">
+        <div className="text-xs font-medium text-fg-muted">{label}</div>
+        <div className={cn(
+          'mt-1 text-sm font-medium leading-5',
+          valueTone === 'danger' ? 'text-red-700 dark:text-red-300' : 'text-fg',
+        )}>
+          {value}
+        </div>
+        {description ? (
+          <div className="mt-1 text-xs leading-5 text-fg-subtle" title={descriptionTitle}>{description}</div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function DetailLine({ label, value }: { label: string; value: string }) {
   return (
     <div className="grid grid-cols-[5rem_1fr] gap-2">
@@ -1808,6 +1953,11 @@ function AutomationForm({
 }) {
   const agentsMessages = messages(language).agentsSettings;
   const update = (patch: Partial<FormState>) => setForm((prev) => ({ ...prev, ...patch }));
+  const intervalMs = automationIntervalMs(form.intervalValue, form.intervalUnit);
+  const intervalPreviewNow = Date.now();
+  const intervalPreviewTimes = [1, 2, 3].map((step) => (
+    formatAutomationRelativeDateTime(intervalPreviewNow + intervalMs * step, language, intervalPreviewNow)
+  ));
 
   useEffect(() => {
     if (form.actionMode !== 'workflow') return;
@@ -1864,9 +2014,69 @@ function AutomationForm({
           </div>
         ) : null}
         {form.triggerMode === 'interval' ? (
-          <Field label={labels.form.everyMinutes}>
-            <input className={inputClass} inputMode="numeric" value={form.intervalMinutes} onChange={(e) => update({ intervalMinutes: e.target.value })} />
-          </Field>
+          <div className="grid gap-3 rounded-lg border border-edge-subtle bg-surface-base p-3">
+            <Field label={labels.form.intervalEvery}>
+              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_10rem]">
+                <input
+                  className={inputClass}
+                  type="number"
+                  min={60_000 / automationIntervalMs(1, form.intervalUnit)}
+                  step="any"
+                  inputMode="decimal"
+                  value={form.intervalValue}
+                  onChange={(event) => update({ intervalValue: event.target.value })}
+                />
+                <Select
+                  className={inputClass}
+                  value={form.intervalUnit}
+                  onChange={(event) => {
+                    const intervalUnit = event.target.value as AutomationIntervalUnit;
+                    update({
+                      intervalValue: convertAutomationIntervalValue(form.intervalValue, form.intervalUnit, intervalUnit),
+                      intervalUnit,
+                    });
+                  }}
+                >
+                  <SelectOption value="minute">{labels.form.intervalUnits.minute}</SelectOption>
+                  <SelectOption value="hour">{labels.form.intervalUnits.hour}</SelectOption>
+                  <SelectOption value="day">{labels.form.intervalUnits.day}</SelectOption>
+                  <SelectOption value="week">{labels.form.intervalUnits.week}</SelectOption>
+                </Select>
+              </div>
+            </Field>
+            <div>
+              <div className="text-xs font-medium text-fg-muted">{labels.form.commonIntervals}</div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {INTERVAL_PRESETS.map((preset) => {
+                  const presetMs = automationIntervalMs(preset.value, preset.unit);
+                  const selected = presetMs === intervalMs;
+                  return (
+                    <button
+                      key={`${preset.value}:${preset.unit}`}
+                      type="button"
+                      aria-pressed={selected}
+                      className={cn(
+                        'rounded-full border px-2.5 py-1 text-xs transition-colors',
+                        selected
+                          ? 'border-accent bg-accent/10 text-accent'
+                          : 'border-edge-subtle text-fg-muted hover:border-edge hover:bg-surface-hover hover:text-fg',
+                      )}
+                      onClick={() => update({ intervalValue: preset.value, intervalUnit: preset.unit })}
+                    >
+                      {formatAutomationDuration(presetMs, language)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="rounded-lg bg-surface-panel px-3 py-2.5">
+              <div className="text-sm font-medium text-fg">{formatAutomationInterval(intervalMs, language)}</div>
+              <div className="mt-1 text-xs leading-5 text-fg-muted">
+                {labels.form.nextThreeRuns}：{intervalPreviewTimes.join(language === 'zh' ? '、' : ', ')}
+              </div>
+              <div className="mt-1 text-xs leading-5 text-fg-subtle">{labels.form.fixedIntervalHint}</div>
+            </div>
+          </div>
         ) : null}
         {form.triggerMode === 'cron' ? (
           <Field label={labels.form.expression}>

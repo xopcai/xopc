@@ -1,5 +1,4 @@
 import { createWorkflowCatalog, type WorkflowCatalog } from '../../agent/workflow/catalog.js';
-import { buildWorkflowDefinition } from '../domain/definition-utils.js';
 import type { WorkflowDefinition } from '../domain/definition.js';
 import type { WorkflowDefinitionRegistry, WorkflowDefinitionSummary } from './workflow-definition-registry.js';
 
@@ -20,14 +19,7 @@ export class CatalogWorkflowDefinitionRegistry implements WorkflowDefinitionRegi
 
   async get(id: string): Promise<WorkflowDefinition | null> {
     try {
-      const loaded = this.catalog.load(id);
-      return buildWorkflowDefinition({
-        name: loaded.name,
-        source: loaded.source,
-        script: loaded.script,
-        meta: loaded.meta,
-        manifest: loaded.manifest,
-      });
+      return this.catalog.load(id);
     } catch {
       return null;
     }

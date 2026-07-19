@@ -23,6 +23,7 @@ import { useComposerEditor } from '@/features/chat/composer/use-composer-editor'
 import { useComposerPickers } from '@/features/chat/composer/use-composer-pickers';
 import { appendTranscriptToDraft } from '@/features/chat/composer/append-transcript-to-draft';
 import { ComposerVoiceInputBar } from '@/features/chat/composer/composer-voice-input-bar';
+import { ComposerContextNotice } from '@/features/chat/composer/composer-context-notice';
 import { useComposerVoiceInput } from '@/features/chat/composer/use-composer-voice-input';
 import { ReviewLauncherDialog } from '@/features/chat/review/review-launcher-dialog';
 import { messages } from '@/i18n/messages';
@@ -350,6 +351,8 @@ export const ChatComposer = memo(function ChatComposer({
           {m.chat.dropFiles}
         </div>
       ) : null}
+
+      <ComposerContextNotice />
 
       {pendingFollowUps.length > 0 ? (
         <div className="max-h-[min(30vh,11rem)] shrink-0 overflow-y-auto overflow-x-hidden border-b border-edge-subtle/80 [scrollbar-gutter:stable] dark:border-edge-subtle/70">

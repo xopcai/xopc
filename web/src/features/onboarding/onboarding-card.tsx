@@ -9,20 +9,11 @@ import type { ConfiguredModel } from '@/features/chat/api/registry-api';
 import { fetchConfiguredModelsCached, invalidateConfiguredModelsCache } from '@/features/chat/api/registry-api';
 import { dispatchConfigReload } from '@/features/gateway/dispatch-config-reload';
 import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
-import { OnboardingModelSelect } from '@/features/onboarding/onboarding-model-select';
 import { OnboardingProviderGrid } from '@/features/onboarding/onboarding-provider-grid';
 import { buildProviderConfigFromPresetProviderId } from '@/features/settings/models/models-settings-lib';
 import { fetchModelsJson, saveModelsJson } from '@/features/settings/models-json-api';
-import {
-  parseUserMarkdown,
-  detectBrowserTimezone,
-  serializeUserMarkdown,
-  type UserFields,
-} from '@/features/settings/agents/agent-profile-markdown';
-import {
-  fetchUserProfileContent,
-  saveUserProfileContent,
-} from '@/features/settings/agents-admin-api';
+import { detectBrowserTimezone } from '@/features/settings/agents/agent-profile-markdown';
+import { fetchUserProfile, updateUserProfile } from '@/features/user-context/user-context-api';
 import { fetchGlobalDefaults, updateGlobalDefaultModels } from '@/features/settings/global-defaults-api';
 import { PROVIDER_ENRICHMENT } from '@/features/settings/provider-enrichment';
 import { patchProviderApiKeys } from '@/features/settings/providers-api';
@@ -36,7 +27,7 @@ interface OnboardingCardProps {
   canDismiss?: boolean;
 }
 
-type OnboardingStep = 'callName' | 'provider' | 'apiKey' | 'model';
+type OnboardingStep = 'callName' | 'provider' | 'apiKey';
 
 type OnboardingState = {
   step: OnboardingStep;
@@ -44,15 +35,11 @@ type OnboardingState = {
   apiKey: string;
   busy: boolean;
   error: string | null;
-  models: ConfiguredModel[];
-  selectedModelId: string | null;
-  modelsLoading: boolean;
   callName: string;
 };
 
 type OnboardingAction =
-  | { type: 'patch'; patch: Partial<OnboardingState> }
-  | { type: 'reset-models' };
+  { type: 'patch'; patch: Partial<OnboardingState> };
 
 const initialOnboarding: OnboardingState = {
   step: 'callName',
@@ -60,9 +47,6 @@ const initialOnboarding: OnboardingState = {
   apiKey: '',
   busy: false,
   error: null,
-  models: [],
-  selectedModelId: null,
-  modelsLoading: false,
   callName: '',
 };
 
@@ -70,12 +54,10 @@ function onboardingReducer(state: OnboardingState, action: OnboardingAction): On
   switch (action.type) {
     case 'patch':
       return { ...state, ...action.patch };
-    case 'reset-models':
-      return { ...state, models: [], selectedModelId: null };
   }
 }
 
-const STEP_ORDER: OnboardingStep[] = ['callName', 'provider', 'apiKey', 'model'];
+const STEP_ORDER: OnboardingStep[] = ['callName', 'provider', 'apiKey'];
 
 const stepNumber = (step: OnboardingStep): number => STEP_ORDER.indexOf(step) + 1;
 
@@ -84,15 +66,15 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
   const o = messages(language).onboarding;
 
   const [state, dispatch] = useReducer(onboardingReducer, initialOnboarding);
-  const { step, selectedProvider, apiKey, busy, error, models, selectedModelId, modelsLoading, callName } = state;
+  const { step, selectedProvider, apiKey, busy, error, callName } = state;
 
   const stepLabel = useMemo(
-    () => o.stepOf.replace('{{current}}', String(stepNumber(step))).replace('{{total}}', '4'),
+    () => o.stepOf.replace('{{current}}', String(stepNumber(step))).replace('{{total}}', '3'),
     [o.stepOf, step],
   );
 
-  const loadModels = useCallback(async (providerId: string) => {
-    dispatch({ type: 'patch', patch: { modelsLoading: true, error: null } });
+  const resolveRecommendedModel = useCallback(async (providerId: string): Promise<ConfiguredModel | null> => {
+    dispatch({ type: 'patch', patch: { error: null } });
     try {
       const list = await fetchConfiguredModelsCached(true);
       const filtered = list
@@ -101,21 +83,15 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
           if (a.recommended !== b.recommended) return a.recommended ? -1 : 1;
           return (a.name || a.id).localeCompare(b.name || b.id, undefined, { sensitivity: 'base' });
         });
-      dispatch({
-        type: 'patch',
-        patch: { models: filtered, selectedModelId: filtered[0]?.id ?? null },
-      });
+      return filtered[0] ?? null;
     } catch (cause) {
       dispatch({
         type: 'patch',
         patch: {
           error: cause instanceof Error ? cause.message : String(cause),
-          models: [],
-          selectedModelId: null,
         },
       });
-    } finally {
-      dispatch({ type: 'patch', patch: { modelsLoading: false } });
+      return null;
     }
   }, []);
 
@@ -137,14 +113,60 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
     };
   }, []);
 
-  const continueFromCallName = () => {
-    if (!selectedProvider) {
-      dispatch({ type: 'patch', patch: { step: 'provider' } });
+  useEffect(() => {
+    let cancelled = false;
+    void fetchUserProfile()
+      .then(({ profile }) => {
+        if (!cancelled && profile.callName) {
+          dispatch({ type: 'patch', patch: { callName: profile.callName } });
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const continueFromCallName = async () => {
+    const normalizedCallName = callName.trim();
+    if (!normalizedCallName) {
+      dispatch({ type: 'patch', patch: { step: 'provider', error: null } });
       return;
     }
-    dispatch({ type: 'patch', patch: { step: 'model' } });
-    void loadModels(selectedProvider);
+    dispatch({ type: 'patch', patch: { busy: true, error: null } });
+    try {
+      await updateUserProfile({
+        callName: normalizedCallName,
+        timezone: detectBrowserTimezone(),
+      });
+      dispatch({ type: 'patch', patch: { step: 'provider' } });
+    } catch (cause) {
+      dispatch({
+        type: 'patch',
+        patch: { error: cause instanceof Error ? cause.message : String(cause) },
+      });
+    } finally {
+      dispatch({ type: 'patch', patch: { busy: false } });
+    }
   };
+
+  const finishSetup = useCallback(async (modelRef: string) => {
+    await updateGlobalDefaultModels({
+      defaultRole: 'deep',
+      roles: {
+        deep: { model: modelRef },
+      },
+    });
+    void revalidateGatewayConfig();
+    void invalidateConfiguredModelsCache();
+    dispatchConfigReload();
+
+    await updateUserProfile({
+      ...(callName.trim() ? { callName: callName.trim() } : {}),
+      timezone: detectBrowserTimezone(),
+    });
+    await onComplete();
+  }, [callName, onComplete]);
 
   const onContinueApiKey = async () => {
     if (!selectedProvider || !apiKey.trim()) return;
@@ -167,49 +189,13 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
       } else {
         await patchProviderApiKeys({ [selectedProvider]: apiKey.trim() });
       }
-      await loadModels(selectedProvider);
-      dispatch({ type: 'patch', patch: { step: 'model' } });
-    } catch (cause) {
-      dispatch({ type: 'patch', patch: { error: cause instanceof Error ? cause.message : String(cause) } });
-    } finally {
-      dispatch({ type: 'patch', patch: { busy: false } });
-    }
-  };
-
-  const onFinish = async () => {
-    if (!selectedModelId) return;
-    dispatch({ type: 'patch', patch: { busy: true, error: null } });
-    try {
-      const modelRef = models.find((model) => model.id === selectedModelId)?.id ?? selectedModelId;
-      await updateGlobalDefaultModels({
-        defaultRole: 'deep',
-        roles: {
-          deep: { model: modelRef },
-        },
-      });
-      void revalidateGatewayConfig();
-      void invalidateConfiguredModelsCache();
-      dispatchConfigReload();
-
-      const detectedTimezone = detectBrowserTimezone();
-      let profile: UserFields = {
-        callName,
-        pronouns: '',
-        timezone: detectedTimezone,
-        notes: '',
-      };
-      try {
-        const existingProfile = parseUserMarkdown(await fetchUserProfileContent());
-        profile = {
-          ...existingProfile,
-          callName: callName.trim() || existingProfile.callName,
-          timezone: existingProfile.timezone || detectedTimezone,
-        };
-      } catch {
-        // A profile has not been created yet; use the onboarding values.
+      const recommendedModel = await resolveRecommendedModel(selectedProvider);
+      if (!recommendedModel) {
+        throw new Error(language === 'zh'
+          ? '没有找到可用模型，请检查密钥或前往“模型与能力”进行高级配置。'
+          : 'No available model was found. Check the key or open Models & capabilities for advanced setup.');
       }
-      await saveUserProfileContent(serializeUserMarkdown(profile));
-      await onComplete();
+      await finishSetup(recommendedModel.id);
     } catch (cause) {
       dispatch({ type: 'patch', patch: { error: cause instanceof Error ? cause.message : String(cause) } });
     } finally {
@@ -257,18 +243,21 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
               <button
                 type="button"
                 className="text-xs font-medium text-fg-muted hover:text-fg hover:underline"
-                onClick={continueFromCallName}
+                disabled={busy}
+                onClick={() => void continueFromCallName()}
               >
                 {o.skipCallName}
               </button>
               <Button
                 type="button"
                 className="bg-accent text-white hover:bg-accent/90"
-                onClick={continueFromCallName}
+                disabled={busy}
+                onClick={() => void continueFromCallName()}
               >
-                {o.continue}
+                {busy ? o.savingProfile : o.continue}
               </Button>
             </div>
+            {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
           </div>
         ) : null}
 
@@ -362,54 +351,12 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
                 disabled={busy || !apiKey.trim()}
                 onClick={() => void onContinueApiKey()}
               >
-                {o.continue}
+                {busy ? o.continue : o.startChatting}
               </Button>
             </div>
           </div>
         ) : null}
 
-        {step === 'model' ? (
-          <div className="flex flex-col gap-4">
-            <div>
-              <h3 className="text-base font-medium text-fg">{o.step3Title}</h3>
-              <p className="mt-1 text-sm text-fg-muted">{o.step3Subtitle}</p>
-            </div>
-            {modelsLoading ? (
-              <p className="text-sm text-fg-muted">{language === 'zh' ? '加载模型…' : 'Loading models…'}</p>
-            ) : error && models.length === 0 ? (
-              <div className="flex flex-col gap-2">
-                <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-                <button
-                  type="button"
-                  className="text-left text-sm font-medium text-accent-fg hover:underline"
-                  onClick={() => selectedProvider && void loadModels(selectedProvider)}
-                >
-                  {language === 'zh' ? '重试' : 'Retry'}
-                </button>
-              </div>
-            ) : (
-              <OnboardingModelSelect
-                models={models}
-                selectedId={selectedModelId}
-                onSelectedChange={(id) => dispatch({ type: 'patch', patch: { selectedModelId: id } })}
-              />
-            )}
-            {error && models.length > 0 ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
-            <div className="flex flex-wrap justify-between gap-2">
-              <Button type="button" variant="secondary" disabled={busy} onClick={() => dispatch({ type: 'patch', patch: { step: 'apiKey' } })}>
-                {o.back}
-              </Button>
-              <Button
-                type="button"
-                className="bg-accent text-white hover:bg-accent/90"
-                disabled={busy || !selectedModelId || modelsLoading}
-                onClick={() => void onFinish()}
-              >
-                {o.startChatting}
-              </Button>
-            </div>
-          </div>
-        ) : null}
       </div>
     </div>
   );

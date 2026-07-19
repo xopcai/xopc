@@ -18,7 +18,6 @@ import { selectFieldMaxWidthClass, selectTriggerClass, settingsInputFocusClass }
 import { cn } from '@/lib/cn';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
-import { showToast } from '@/lib/toast';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -168,7 +167,6 @@ function ExtensionSttProviderSettingsBody({
       dirtyRef.current = false;
       setLocalDraft(null);
       setSavedFlash(true);
-      showToast({ type: 'success', title: v.saved });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {

@@ -71,28 +71,13 @@ export interface WorkflowSnapshot {
   result?: unknown;
 }
 
-/** Mirror of `src/agent/workflow/types.ts::WorkflowMeta`, optional fields included. */
-export interface WorkflowMeta {
-  name: string;
-  description: string;
-  whenToUse?: string;
-  tags?: string[];
-  estimatedAgents?: { min: number; max: number };
-  examplePrompts?: Array<{ field: string; text: string }>;
-  i18n?: Record<string, {
-    description?: string;
-    whenToUse?: string;
-    examplePrompts?: Array<{ field: string; text: string }>;
-  }>;
-}
-
 /**
  * What the WorkflowCard renders. The card distinguishes:
  *   - `running`: tool_use is still mid-flight; result is undefined. We show a
  *     skeletal "running" header with elapsed time. No tree yet.
  *   - `completed`: tool_use finished without error; the snapshot is filled.
- *   - `failed`: tool_use finished with `isError: true` — could be a parse
- *     error, an abort, a timeout, or a runtime crash. We render the error
+ *   - `failed`: tool_use finished with `isError: true` — could be a graph
+ *     validation error, an abort, a timeout, or a runtime crash. We render the error
  *     card instead of the tree.
  *
  * `failureKind` lets the failure card pick a friendlier title without parsing
@@ -100,4 +85,4 @@ export interface WorkflowMeta {
  */
 export type WorkflowCardStatus = 'running' | 'completed' | 'failed';
 
-export type WorkflowFailureKind = 'parse_error' | 'aborted' | 'timeout' | 'runtime_error';
+export type WorkflowFailureKind = 'validation_error' | 'aborted' | 'timeout' | 'runtime_error';

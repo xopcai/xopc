@@ -5,6 +5,7 @@ import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { BuildChildToolsOptions } from '../../agent/child-agent-factory.js';
 import { publishAutomationProductEvent } from '../../automations/product-events.js';
 import { extractProfileAgentId } from '../../config/agent-profile.js';
+import { preflightWorkflowConnectors } from '../../connectors/workflow-preflight.js';
 import { resolveModelRef } from '../../config/agent-typed-models.js';
 import type { GatewayWorkflowHost } from '../../gateway/gateway-workflow-host.types.js';
 import { GoalService } from '../../goals/index.js';
@@ -74,6 +75,21 @@ export class WorkflowRunService {
         code: 'definition_not_found',
         message: 'Workflow definition not found',
         httpStatus: 404,
+      };
+    }
+
+    const connectorPreflight = preflightWorkflowConnectors({
+      definition,
+      config: this.options.service.currentConfig,
+      agentId: params.agentId,
+    });
+    if (!connectorPreflight.ok) {
+      return {
+        ok: false,
+        code: 'connector_preflight_failed',
+        message: connectorPreflight.issues.map((entry) => entry.message).join(' '),
+        httpStatus: 409,
+        details: connectorPreflight,
       };
     }
 
@@ -637,6 +653,8 @@ export function buildWorkflowRunDefinitionSnapshot(definition: WorkflowDefinitio
     name: definition.name,
     title: definition.title,
     version: definition.version,
+    revision: definition.revision,
+    graph: structuredClone(definition.graph),
     source: definition.metadata.source,
     tags: [...definition.metadata.tags],
     phaseCount: definition.phases.length,
@@ -644,7 +662,6 @@ export function buildWorkflowRunDefinitionSnapshot(definition: WorkflowDefinitio
     estimatedAgents: definition.metadata.estimatedAgents,
   };
   if (definition.contentHash) snapshot.contentHash = definition.contentHash;
-  if (definition.runtimeHash) snapshot.runtimeHash = definition.runtimeHash;
   if (definition.permissions) snapshot.permissions = structuredClone(definition.permissions);
   if (definition.resources) snapshot.resources = structuredClone(definition.resources);
   return snapshot;

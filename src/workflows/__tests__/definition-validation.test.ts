@@ -1,81 +1,51 @@
 import { describe, expect, it } from 'vitest';
 
-import { validateWorkflowDefinitionInput } from '../domain/validation.js';
+import type { WorkflowGraph } from '../domain/definition.js';
+import { validateWorkflowDefinitionInput, validateWorkflowGraph } from '../domain/validation.js';
 
-const validScript = `export const meta = {
-  name: 'demo_workflow',
-  description: 'Demo workflow',
-  whenToUse: 'When validating workflow definitions.',
-  phases: [{ title: 'Collect' }, { title: 'Synthesize', detail: 'Merge findings' }],
-  tags: ['custom'],
-  estimatedAgents: { min: 2, max: 4 },
-}
+const validGraph: WorkflowGraph = {
+  schemaVersion: 1,
+  nodes: [
+    { id: 'input', kind: 'input', title: 'Input', position: { x: 0, y: 0 }, config: {} },
+    { id: 'agent', kind: 'agent', title: 'Analyze', phaseId: 'work', position: { x: 300, y: 0 }, config: { prompt: 'Analyze {{input}}' } },
+    { id: 'output', kind: 'output', title: 'Output', position: { x: 600, y: 0 }, config: {} },
+  ],
+  edges: [
+    { id: 'input-agent', source: 'input', target: 'agent' },
+    { id: 'agent-output', source: 'agent', target: 'output' },
+  ],
+};
 
-phase('Collect')
-const first = await agent('Collect context', { label: 'collect' })
-
-phase('Synthesize')
-return await agent('Summarize:\\n\\n' + first, { label: 'synthesis' })
-`;
-
-describe('validateWorkflowDefinitionInput', () => {
-  it('returns a definition preview for a valid workflow script', () => {
-    const result = validateWorkflowDefinitionInput({
-      name: 'demo_workflow',
-      script: validScript,
-    });
-
+describe('workflow graph validation', () => {
+  it('builds a definition preview from a valid graph', () => {
+    const result = validateWorkflowDefinitionInput({ name: 'demo_workflow', graph: validGraph });
     expect(result.valid).toBe(true);
-    expect(result.errors).toEqual([]);
-    expect(result.definition?.name).toBe('demo_workflow');
-    expect(result.definition?.phases.map((phase) => phase.title)).toEqual(['Collect', 'Synthesize']);
-    expect(result.definition?.defaults.maxSubagents).toBe(4);
-    expect(result.definition?.metadata.source).toBe('user');
+    expect(result.definition?.graph).toEqual(validGraph);
+    expect(result.definition?.phases[0]?.id).toBe('work');
   });
 
-  it('rejects an empty name', () => {
-    const result = validateWorkflowDefinitionInput({ name: '', script: validScript });
-
-    expect(result.valid).toBe(false);
-    expect(result.errors[0]?.code).toBe('name_required');
+  it('requires a name and graph', () => {
+    expect(validateWorkflowDefinitionInput({ name: '', graph: validGraph }).errors[0]?.code).toBe('name_required');
+    expect(validateWorkflowDefinitionInput({ name: 'demo' }).errors[0]?.code).toBe('graph_required');
   });
 
-  it('rejects an empty script', () => {
-    const result = validateWorkflowDefinitionInput({ name: 'demo_workflow', script: '' });
-
+  it('reports multiple structural problems at once', () => {
+    const graph: WorkflowGraph = {
+      schemaVersion: 1,
+      nodes: [
+        { id: 'input', kind: 'input', title: 'Input', position: { x: 0, y: 0 }, config: {} },
+        { id: 'orphan', kind: 'agent', title: 'Orphan', position: { x: 0, y: 0 }, config: { prompt: '' } },
+      ],
+      edges: [{ id: 'bad', source: 'missing', target: 'orphan' }],
+    };
+    const result = validateWorkflowGraph(graph);
     expect(result.valid).toBe(false);
-    expect(result.errors[0]?.code).toBe('script_required');
+    expect(result.errors.map((issue) => issue.code)).toEqual(expect.arrayContaining(['missing_output', 'unknown_edge_node', 'unreachable_node', 'missing_prompt']));
   });
 
-  it('rejects malformed workflow script', () => {
-    const result = validateWorkflowDefinitionInput({
-      name: 'demo_workflow',
-      script: 'export const meta = ',
-    });
-
-    expect(result.valid).toBe(false);
-    expect(result.errors[0]?.code).toBe('parse_failed');
-    expect(result.errors[0]?.message).toContain('Workflow script parse error');
-  });
-
-  it('rejects meta name mismatch', () => {
-    const result = validateWorkflowDefinitionInput({
-      name: 'other_workflow',
-      script: validScript,
-    });
-
-    expect(result.valid).toBe(false);
-    expect(result.errors[0]?.code).toBe('meta_name_mismatch');
-  });
-
-  it('rejects invalid workflow names before parsing', () => {
-    const result = validateWorkflowDefinitionInput({
-      name: 'DemoWorkflow',
-      script: validScript,
-    });
-
-    expect(result.valid).toBe(false);
-    expect(result.errors[0]?.code).toBe('parse_failed');
-    expect(result.errors[0]?.message).toContain('lowercase snake_case');
+  it('rejects cycles', () => {
+    const graph = structuredClone(validGraph);
+    graph.edges.push({ id: 'cycle', source: 'agent', target: 'input' });
+    expect(validateWorkflowGraph(graph).errors.some((issue) => issue.code === 'cycle_detected')).toBe(true);
   });
 });

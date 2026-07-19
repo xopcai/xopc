@@ -1,5 +1,6 @@
 import { dispatchConfigReload } from '@/features/gateway/dispatch-config-reload';
-import { showToast } from '@/lib/toast';
+import { useLocaleStore } from '@/stores/locale-store';
+import { showActivity } from '@/stores/activity-center-store';
 
 type GoalQueueEventDetail = {
   item?: {
@@ -15,36 +16,50 @@ function maybeNotifyGoalQueue(eventName: string, detail: unknown): void {
   if (eventName !== 'goal.queue.updated' || !detail || typeof detail !== 'object') return;
   const item = (detail as GoalQueueEventDetail).item;
   if (!item || typeof item.status !== 'string') return;
+  const zh = useLocaleStore.getState().language === 'zh';
+  const goalId = item.goalId?.trim();
+  const common = {
+    source: zh ? '目标运行' : 'Goal run',
+    href: goalId ? `/goals/${encodeURIComponent(goalId)}` : undefined,
+    dedupeKey: goalId ? `goal-queue:${goalId}` : undefined,
+  };
   if (item.status === 'failed') {
-    showToast({
-      type: 'error',
-      title: 'Goal run failed',
+    showActivity({
+      tone: 'error',
+      status: 'failed',
+      title: zh ? '目标运行失败' : 'Goal run failed',
       message: item.error || item.goalId,
-      duration: 0,
+      ...common,
     });
     return;
   }
   if (item.status === 'retry_waiting') {
-    showToast({
-      type: 'warning',
-      title: 'Goal run retry scheduled',
+    showActivity({
+      tone: 'warning',
+      status: 'running',
+      title: zh ? '目标将在稍后重试' : 'Goal retry scheduled',
       message: item.error || item.goalId,
+      ...common,
     });
     return;
   }
   if (item.status === 'succeeded') {
-    showToast({
-      type: 'success',
-      title: 'Goal run finished',
+    showActivity({
+      tone: 'success',
+      status: 'done',
+      title: zh ? '目标运行完成' : 'Goal run finished',
       message: item.goalId,
+      ...common,
     });
     return;
   }
   if (item.status === 'skipped') {
-    showToast({
-      type: 'info',
-      title: 'Goal run skipped',
+    showActivity({
+      tone: 'info',
+      status: 'done',
+      title: zh ? '目标运行已跳过' : 'Goal run skipped',
       message: item.error || item.goalId,
+      ...common,
     });
   }
 }

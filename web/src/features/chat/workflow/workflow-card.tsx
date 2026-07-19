@@ -5,7 +5,7 @@
  *   running   →  spinner + name + elapsed time + cancel
  *   completed →  result summary (priority) + collapsed progress tree (default)
  *                + save / copy / collapse actions
- *   failed    →  WorkflowErrorCard with reason + script preview
+ *   failed    →  WorkflowErrorCard with reason and recovery guidance
  *
  * The component is intentionally a single file at the top (state + layout +
  * data plumbing); child pieces (Header, PhaseRow, AgentRow, ResultSummary,
@@ -196,7 +196,6 @@ export const WorkflowCard = memo(function WorkflowCard({
   if (isWorkflowFailureOutcome(block) || (status === 'completed' && !snapshot)) {
     const kind = failureKind ?? classifyFailure(block);
     const failureCtx = buildWorkflowFailureContext(block);
-    const scriptPreview = extractScriptPreview(block);
     const failureSnapshot = failureCtx.snapshot;
     const failureSelectedAgent =
       selectedAgentId == null || !failureSnapshot
@@ -212,7 +211,6 @@ export const WorkflowCard = memo(function WorkflowCard({
           logs={failureCtx.logs}
           failedAgents={failureCtx.failedAgents}
           snapshot={failureSnapshot}
-          scriptPreview={scriptPreview}
           selectedAgentId={selectedAgentId}
           onSelectAgent={handleSelectAgent}
           labels={labels.error}
@@ -427,13 +425,3 @@ export const WorkflowCard = memo(function WorkflowCard({
     </>
   );
 });
-
-function extractScriptPreview(block: ToolUseContent): string | undefined {
-  if (!block.input || typeof block.input !== 'object') return undefined;
-  const input = block.input as Record<string, unknown>;
-  if (typeof input.script === 'string' && input.script.trim()) {
-    const lines = input.script.split('\n').slice(0, 80);
-    return lines.join('\n');
-  }
-  return undefined;
-}

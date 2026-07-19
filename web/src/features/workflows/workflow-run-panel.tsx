@@ -29,10 +29,10 @@ import { messages } from '@/i18n/messages';
 import type { StoredLanguage } from '@/lib/storage';
 
 import { runViewToSnapshot } from './run-view-to-snapshot';
+import { WorkflowRunGraph } from './workflow-run-graph';
 import {
   downloadWorkflowArtifact,
   type WorkflowArtifactRef,
-  type WorkflowDefinition,
   type WorkflowFollowUp,
   type WorkflowResultEnvelope,
   type WorkflowRunComparison,
@@ -107,11 +107,11 @@ export function WorkflowRunPanel({
   onReplay,
   onOpenRunId,
   ownerAgentId,
+  onRepairWorkflow,
   onClose,
 }: {
   view: WorkflowRunView | undefined;
   comparison?: WorkflowRunComparison;
-  currentDefinition?: WorkflowDefinition;
   loading: boolean;
   language: StoredLanguage;
   localeTag: string;
@@ -122,6 +122,7 @@ export function WorkflowRunPanel({
   onReplay: (scope: WorkflowRunReplayScope) => void;
   onOpenRunId?: (runId: string) => void;
   ownerAgentId?: string;
+  onRepairWorkflow?: () => void;
   onClose: () => void;
 }) {
   const labels = messages(language).workflows;
@@ -458,6 +459,14 @@ export function WorkflowRunPanel({
 
               {visibleActiveTab === 'process' ? (
                 <>
+                  {view.run.metadata?.definition.graph ? (
+                    <WorkflowRunGraph
+                      graph={view.run.metadata.definition.graph}
+                      view={view}
+                      language={language}
+                      onRepair={onRepairWorkflow}
+                    />
+                  ) : null}
                   {hasDiagnostics ? (
                     <WorkflowDiagnosticsPanel
                       diagnostics={diagnostics}

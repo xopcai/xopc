@@ -113,7 +113,7 @@ export function useComposerVoiceInput(options: UseComposerVoiceInputOptions): Us
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         if (msg.includes('STT is not configured') || msg.includes('503')) {
-          showComposerNotification('error', m.voiceSttNotConfigured);
+          showComposerNotification('error', m.voiceSttNotConfigured, undefined, { href: '/settings/voice' });
         } else {
           showComposerNotification('error', m.voiceTranscribeFailed);
         }
@@ -138,7 +138,7 @@ export function useComposerVoiceInput(options: UseComposerVoiceInputOptions): Us
 
     const sttOk = await fetchVoiceSttAvailable();
     if (!sttOk) {
-      showComposerNotification('error', m.voiceSttNotConfigured);
+      showComposerNotification('error', m.voiceSttNotConfigured, undefined, { href: '/settings/voice' });
       return;
     }
 

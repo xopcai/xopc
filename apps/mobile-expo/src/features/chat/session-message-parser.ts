@@ -154,10 +154,25 @@ export function mergeLatestSessionHistoryPage(
   }
 
   const oldPages = oldData.pages;
-  const shouldReplaceHead = wirePageStartsWithSameMessage(latestPage, oldPages[0])
-    || wirePagesOverlap(latestPage, oldPages[0]);
-  const preservedPages = shouldReplaceHead ? oldPages.slice(1) : oldPages;
-  const preservedPageParams = shouldReplaceHead ? oldData.pageParams.slice(1) : oldData.pageParams;
+  const oldSessionId = oldPages.find((page) => page?.session.sessionId)?.session.sessionId;
+  const latestSessionId = latestPage.session.sessionId;
+
+  // A complete head page is the server's full snapshot. Likewise, a changed
+  // session id means the key was reset and no pages from the previous
+  // transcript may survive.
+  if (!latestPage.pagination.hasMore || (
+    oldSessionId && latestSessionId && oldSessionId !== latestSessionId
+  )) {
+    return { pages: [latestPage], pageParams: [undefined] };
+  }
+
+  const overlapIndex = oldPages.findIndex((page) => (
+    wirePageStartsWithSameMessage(latestPage, page) || wirePagesOverlap(latestPage, page)
+  ));
+  const preservedPages = overlapIndex >= 0 ? oldPages.slice(overlapIndex + 1) : oldPages;
+  const preservedPageParams = overlapIndex >= 0
+    ? oldData.pageParams.slice(overlapIndex + 1)
+    : oldData.pageParams;
 
   return {
     pages: [latestPage, ...preservedPages],

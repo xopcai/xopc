@@ -36,6 +36,7 @@ export type WorkflowRunServiceErrorCode =
   | 'definition_not_found'
   | 'run_not_found'
   | 'invalid_input'
+  | 'connector_preflight_failed'
   | 'invalid_state';
 
 export interface WorkflowRunServiceErrorResult {
@@ -43,6 +44,7 @@ export interface WorkflowRunServiceErrorResult {
   code: WorkflowRunServiceErrorCode;
   message: string;
   httpStatus: 400 | 404 | 409;
+  details?: unknown;
 }
 
 export type WorkflowRunServiceResult = StartWorkflowRunServiceResult | WorkflowRunServiceErrorResult;

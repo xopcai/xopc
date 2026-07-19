@@ -66,6 +66,38 @@ describe('buildSystemPrompt prompt modes', () => {
     expect(prompt).not.toContain('## Memory Recall');
     expect(prompt).not.toContain('## Silent Replies');
     expect(prompt).not.toContain('## Messaging');
+    expect(prompt).not.toContain('## Human Collaboration');
+  });
+
+  it('includes emotional attunement and a verification-backed task contract in full mode', () => {
+    const prompt = buildSystemPrompt('/ws', { toolNames: ['read_file'] });
+    expect(prompt).toContain('## Human Collaboration');
+    expect(prompt).toContain('action, clarity, reassurance, or space to think');
+    expect(prompt).toContain('### Task Contract');
+    expect(prompt).toContain('Do not claim completion from fluent output alone');
+  });
+
+  it('recognizes work continuity without exposing product machinery', () => {
+    const prompt = buildSystemPrompt('/ws', { toolNames: ['xopc_use', 'automation'] });
+    expect(prompt).toContain('## Work Continuity');
+    expect(prompt).toContain('one-off, a continuation of existing work');
+    expect(prompt).toContain('Do not ask the user to choose a product object');
+    expect(prompt).toContain('Create an automation only after explicit confirmation');
+    expect(prompt).toContain('keep this moving');
+  });
+
+  it('places the action trust boundary in the stable safety prefix', () => {
+    const prompt = buildSystemPrompt('/workspace/main', {
+      toolNames: BASE_TOOLS,
+      actionTrustLevel: 'auto',
+      runtime: { version: '1.0.0', model: 'openai/gpt-4o' },
+    });
+    const boundaryIndex = prompt.indexOf(PROMPT_CACHE_BOUNDARY);
+    const trustIndex = prompt.indexOf('## Action Trust Boundary');
+    expect(trustIndex).toBeGreaterThan(-1);
+    expect(trustIndex).toBeLessThan(boundaryIndex);
+    expect(prompt).toContain('Current default: auto.');
+    expect(prompt).toContain('still require explicit confirmation');
   });
 });
 

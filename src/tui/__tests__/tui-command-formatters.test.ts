@@ -400,7 +400,7 @@ it('exposes native usage and context commands', () => {
 
     const detail = formatTuiWorkflowDetail('audit_repo');
     expect(detail).toContain('Workflow: audit_repo');
-    expect(detail).toContain('Script:');
+    expect(detail).toContain('Flow:');
   });
 
   it('formats a compact session list with the current session marked', () => {

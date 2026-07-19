@@ -7,14 +7,17 @@
  */
 
 import type { EmbeddedContextFile } from '../bootstrap/types.js';
+import { buildActionTrustPrompt, type UserTrustLevel } from '../../user-context/trust-policy.js';
 import { PROMPT_CACHE_BOUNDARY, splitPromptCacheBoundary } from './cache-boundary.js';
 import type { ProviderSystemPromptContribution } from './contribution.js';
 import {
   buildAestheticSection,
   buildExecutionBiasSection,
+  buildHumanCollaborationSection,
   buildProblemSolvingSection,
   buildSafetySection,
   buildToolCallStyleSection,
+  buildWorkContinuitySection,
 } from './sections/behavior.js';
 import {
   buildExternalMemorySection,
@@ -75,6 +78,7 @@ export interface SystemPromptOptions {
   promptContribution?: ProviderSystemPromptContribution;
   includeProblemSolving?: boolean;
   includeToneSection?: boolean;
+  actionTrustLevel?: UserTrustLevel;
 }
 
 function joinSections(sections: Array<string | undefined>): string {
@@ -107,6 +111,7 @@ export function buildSystemPrompt(workspaceDir: string, options: SystemPromptOpt
     promptContribution,
     includeProblemSolving = true,
     includeToneSection = true,
+    actionTrustLevel,
   } = options;
 
   if (promptMode === 'none') {
@@ -156,6 +161,10 @@ export function buildSystemPrompt(workspaceDir: string, options: SystemPromptOpt
 
   stableSections.push(buildSafetySection());
 
+  if (actionTrustLevel) {
+    stableSections.push(buildActionTrustPrompt(actionTrustLevel));
+  }
+
   if (effectiveAgentId?.toLowerCase() === 'coder') {
     stableSections.push(buildCoderHarnessSection());
   }
@@ -178,8 +187,9 @@ export function buildSystemPrompt(workspaceDir: string, options: SystemPromptOpt
       stableSections.push(buildProblemSolvingSection());
     }
     if (includeToneSection) {
-      stableSections.push(buildAestheticSection());
+      stableSections.push(buildAestheticSection(), buildHumanCollaborationSection());
     }
+    stableSections.push(buildWorkContinuitySection());
     stableSections.push(buildTimeSection(userTimezone));
   }
 

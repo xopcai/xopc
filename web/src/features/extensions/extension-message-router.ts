@@ -2,7 +2,8 @@ import { ExtensionErrorCode, type ThemeInfo } from '@xopcai/extension-ui-sdk';
 
 import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
-import { showToast, type ToastDetail } from '@/lib/toast';
+import type { ToastDetail } from '@/lib/toast';
+import { showActivity } from '@/stores/activity-center-store';
 import { useThemeStore } from '@/stores/theme-store';
 
 import { buildThemeInfo } from './theme-bridge';
@@ -358,7 +359,7 @@ export function registerBuiltinMethods(router: ExtensionMessageRouter): void {
     }
   });
 
-  router.registerMethod('ui.notification', async (_extensionId, params) => {
+  router.registerMethod('ui.notification', async (extensionId, params) => {
     if (!params || typeof params !== 'object') return;
     const raw = params as Record<string, unknown>;
     const title = typeof raw.title === 'string' ? raw.title.trim() : '';
@@ -373,7 +374,13 @@ export function registerBuiltinMethods(router: ExtensionMessageRouter): void {
       message: typeof raw.message === 'string' ? raw.message : undefined,
       duration: typeof raw.duration === 'number' ? raw.duration : undefined,
     };
-    showToast(detail);
+    showActivity({
+      tone: detail.type,
+      title: detail.title,
+      message: detail.message,
+      source: extensionId,
+      dedupeKey: `extension:${extensionId}:${detail.title}`,
+    });
   });
 
   router.registerMethod('session.navigate', async (_extensionId, params) => {

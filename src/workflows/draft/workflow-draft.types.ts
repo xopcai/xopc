@@ -1,4 +1,4 @@
-import type { WorkflowDefinitionManifest } from '../domain/definition.js';
+import type { WorkflowDefinitionManifest, WorkflowGraph } from '../domain/definition.js';
 import type { WorkflowDefinitionValidationResult } from '../domain/validation.js';
 
 export type WorkflowDraftMode = 'create' | 'improve';
@@ -17,7 +17,7 @@ export interface CreateWorkflowDraftRequest {
   agentId: string;
   language?: 'en' | 'zh';
   mode?: WorkflowDraftMode;
-  existingScript?: string;
+  existingGraph?: WorkflowGraph;
   constraints?: WorkflowDraftConstraints;
 }
 
@@ -29,14 +29,13 @@ export interface WorkflowDraftLintIssue {
     | 'unsafe_permission'
     | 'too_many_agents'
     | 'unknown_tool'
-    | 'weak_phase_names'
-    | 'unbounded_parallelism';
+    | 'weak_phase_names';
   message: string;
 }
 
 export interface GeneratedWorkflowDraft {
   name: string;
-  script: string;
+  graph: WorkflowGraph;
   manifest: WorkflowDefinitionManifest;
   explanation: string;
   assumptions: string[];

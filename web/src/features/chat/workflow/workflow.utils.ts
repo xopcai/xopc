@@ -72,8 +72,7 @@ export function isWorkflowFailureOutcome(block: ToolUseContent): boolean {
   if (block.status === 'error') return true;
   const text = readErrorText(block).toLowerCase().trim();
   if (text.startsWith('workflow failed')) return true;
-  if (text.startsWith('workflow:')) return true;
-  if (text.includes('parse error') || text.includes('snake_case')) return true;
+  if (text.includes('workflow graph validation failed')) return true;
   if (text.includes('workflow aborted') || text.includes('timed out')) return true;
   if (readStructuredError(block)) return true;
   return false;
@@ -157,9 +156,8 @@ export function classifyFailure(block: ToolUseContent): WorkflowFailureKind {
   const text = readErrorText(block);
   if (!text) return 'runtime_error';
   const lower = text.toLowerCase();
-  if (lower.includes('parse error') || lower.includes('snake_case') || lower.includes('first statement'))
-    return 'parse_error';
-  if (lower.startsWith('workflow:')) return 'parse_error';
+  if (lower.includes('workflow graph') || lower.includes('workflow definition') || lower.includes('validation'))
+    return 'validation_error';
   if (lower.includes('abort')) return 'aborted';
   if (lower.includes('timed out') || lower.includes('timeout')) return 'timeout';
   return 'runtime_error';

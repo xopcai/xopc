@@ -1,18 +1,42 @@
 import type { Hono } from 'hono';
 
 import type { Config } from '../../../config/schema.js';
+import {
+  getConnectorAuthorizationStatus,
+  startConnectorAuthorization,
+} from '../../../connectors/auth-provider-registry.js';
 import { getConnectorDefinition, listConnectorCatalog, listConnectorProviders } from '../../../connectors/catalog.js';
-import { executeComposioTool, getComposioToolkitScope, listComposioConnections, listComposioTools, setComposioToolkitScope, startComposioAuthorize, type ComposioScope } from '../../../connectors/composio.js';
+import { listComposioConnectorCatalog } from '../../../connectors/composio-catalog.js';
+import { composioLogoResponse } from '../../../connectors/composio-logo.js';
+import { syncComposioResultToMemory } from '../../../connectors/connector-memory-sync.js';
+import {
+  executeComposioTool,
+  getComposioInstallationPolicy,
+  getComposioToolkitScope,
+  listComposioConnections,
+  inspectComposioConnectorHealth,
+  listComposioTools,
+  refreshComposioConnection,
+  revokeComposioConnection,
+  setComposioToolkitScope,
+  updateComposioConnection,
+  updateComposioInstallationPolicy,
+  type ComposioScope,
+} from '../../../connectors/composio.js';
 import { appendComposioTriggerEvent, listComposioTriggerEvents } from '../../../connectors/composio-triggers.js';
 import { previewConnectorDefinition, testConnectorInstance } from '../../../connectors/health.js';
 import { installConnector, installConnectorDefinition, uninstallConnector, updateConnectorConfig } from '../../../connectors/install.js';
 import { getConnectorInstance, listConnectorInstances } from '../../../connectors/instances.js';
 import { setConnectorEnabled } from '../../../connectors/lifecycle.js';
-import { startConnectorOAuth, completeConnectorOAuth } from '../../../connectors/oauth.js';
 import { isConnectorRegistrySource, listConnectorRegistries, searchConnectorRegistries } from '../../../connectors/registries/search.js';
 import { createConnectorSetupSecretRequest, submitConnectorSetupSecret } from '../../../connectors/setup-secrets.js';
 import { recordConnectorHealthUsage } from '../../../connectors/usage.js';
 import type { ConnectorDefinition, ConnectorInstallInput } from '../../../connectors/types.js';
+import {
+  decideConnectorApproval,
+  getConnectorApproval,
+  listConnectorApprovals,
+} from '../../../storage/sqlite/index.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 function errorMessage(error: unknown): string {
@@ -86,12 +110,52 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     }
   });
 
-  authenticated.post('/api/connectors/composio/:toolkit/authorize', strictRateLimitMiddleware, async (c) => {
+  authenticated.patch('/api/connectors/composio/connections/:id', strictRateLimitMiddleware, async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const row = body && typeof body === 'object' && !Array.isArray(body) ? body as Record<string, unknown> : {};
     try {
-      const toolkit = c.req.param('toolkit');
-      return c.json({ ok: true, payload: { oauth: await startComposioAuthorize(toolkit) } });
+      const connection = updateComposioConnection(c.req.param('id'), {
+        alias: typeof row.alias === 'string' ? row.alias : undefined,
+        isDefault: typeof row.isDefault === 'boolean' ? row.isDefault : undefined,
+      });
+      return c.json({ ok: true, payload: { connection } });
+    } catch (error) {
+      return c.json({ ok: false, error: errorMessage(error) }, 404);
+    }
+  });
+
+  authenticated.post('/api/connectors/composio/connections/:id/refresh', strictRateLimitMiddleware, async (c) => {
+    try {
+      await refreshComposioConnection(c.req.param('id'));
+      return c.json({ ok: true, payload: { refreshed: true } });
     } catch (error) {
       return c.json({ ok: false, error: errorMessage(error) }, 400);
+    }
+  });
+
+  authenticated.delete('/api/connectors/composio/connections/:id', strictRateLimitMiddleware, async (c) => {
+    try {
+      await revokeComposioConnection(c.req.param('id'));
+      return c.json({ ok: true, payload: { revoked: true } });
+    } catch (error) {
+      return c.json({ ok: false, error: errorMessage(error) }, 400);
+    }
+  });
+
+  authenticated.get('/api/connectors/composio/catalog', async (c) => {
+    try {
+      const refresh = c.req.query('refresh') === '1' || c.req.query('refresh') === 'true';
+      return c.json({ ok: true, payload: await listComposioConnectorCatalog({ refresh }) });
+    } catch (error) {
+      return c.json({ ok: false, error: errorMessage(error) }, 400);
+    }
+  });
+
+  authenticated.get('/api/connectors/composio/:toolkit/logo', async (c) => {
+    try {
+      return await composioLogoResponse(c.req.param('toolkit'));
+    } catch {
+      return c.json({ ok: false, error: 'Connector logo is unavailable.' }, 404);
     }
   });
 
@@ -188,38 +252,133 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     }
   });
 
-  authenticated.post('/api/connectors/approvals/respond', async (c) => {
-    const body = await c.req.json().catch(() => ({}));
-    return c.json({ ok: true, payload: { acknowledged: true, body } });
+  authenticated.get('/api/connectors/composio/:toolkit/health', async (c) => {
+    const health = await inspectComposioConnectorHealth(c.req.param('toolkit'));
+    return c.json({ ok: health.status !== 'degraded', payload: { health } });
   });
 
-  authenticated.post('/api/connectors/:id/oauth/start', strictRateLimitMiddleware, async (c) => {
-    const connectorId = c.req.param('id');
-    const connector = getConnectorDefinition(connectorId);
-    if (!connector) {
-      return c.json({ ok: false, error: `Unknown connector: ${connectorId}` }, 404);
-    }
+  authenticated.post('/api/connectors/:id/memory-sync', strictRateLimitMiddleware, async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const row = body && typeof body === 'object' && !Array.isArray(body) ? body as Record<string, unknown> : {};
+    const actionId = typeof row.actionId === 'string' ? row.actionId.trim() : '';
+    const agentId = typeof row.agentId === 'string' ? row.agentId.trim() : '';
+    if (!actionId || !agentId) return c.json({ ok: false, error: 'actionId and agentId are required.' }, 400);
     try {
-      const oauth = await startConnectorOAuth(connector);
-      return c.json({ ok: true, payload: { oauth } });
+      const result = await syncComposioResultToMemory({
+        config: service.currentConfig as Config,
+        connectorId: c.req.param('id'),
+        actionId,
+        agentId,
+        connectionId: typeof row.connectionId === 'string' ? row.connectionId : undefined,
+        arguments: row.arguments && typeof row.arguments === 'object' && !Array.isArray(row.arguments)
+          ? row.arguments as Record<string, unknown>
+          : {},
+      });
+      return c.json({ ok: true, payload: result });
     } catch (error) {
       return c.json({ ok: false, error: errorMessage(error) }, 400);
     }
   });
 
-  authenticated.post('/api/connectors/:id/oauth/complete', strictRateLimitMiddleware, async (c) => {
+  authenticated.get('/api/connectors/composio/:toolkit/policy', (c) => {
+    const config = service.currentConfig as Config;
+    try {
+      const policy = getComposioInstallationPolicy(config, c.req.param('toolkit'));
+      const agents = config.agents.list.filter((agent) => agent.enabled).map((agent) => ({
+        id: agent.id,
+        name: agent.identity?.name ?? agent.id,
+      }));
+      return c.json({ ok: true, payload: { policy, agents } });
+    } catch (error) {
+      return c.json({ ok: false, error: errorMessage(error) }, 400);
+    }
+  });
+
+  authenticated.patch('/api/connectors/composio/:toolkit/policy', strictRateLimitMiddleware, async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const row = body && typeof body === 'object' && !Array.isArray(body) ? body as Record<string, unknown> : {};
+    const rawConfirmationPolicy = row.confirmationPolicy;
+    if (rawConfirmationPolicy !== undefined && rawConfirmationPolicy !== 'never' && rawConfirmationPolicy !== 'writes' && rawConfirmationPolicy !== 'always') {
+      return c.json({ ok: false, error: 'Invalid confirmation policy.' }, 400);
+    }
+    const confirmationPolicy = rawConfirmationPolicy === 'never' || rawConfirmationPolicy === 'writes' || rawConfirmationPolicy === 'always'
+      ? rawConfirmationPolicy
+      : undefined;
+    const allowedAgentIds = Array.isArray(row.allowedAgentIds)
+      ? [...new Set(row.allowedAgentIds.filter((value): value is string => typeof value === 'string').map((value) => value.trim()).filter(Boolean))]
+      : undefined;
+    const selectedConnectionIds = Array.isArray(row.selectedConnectionIds)
+      ? [...new Set(row.selectedConnectionIds.filter((value): value is string => typeof value === 'string').map((value) => value.trim()).filter(Boolean))]
+      : undefined;
+    try {
+      const policy = updateComposioInstallationPolicy(service.currentConfig as Config, c.req.param('toolkit'), {
+        allowedAgentIds,
+        selectedConnectionIds,
+        confirmationPolicy,
+      });
+      return c.json({ ok: true, payload: { policy } });
+    } catch (error) {
+      return c.json({ ok: false, error: errorMessage(error) }, 400);
+    }
+  });
+
+  authenticated.get('/api/connectors/approvals', (c) => {
+    const status = c.req.query('status');
+    const allowedStatuses = new Set(['pending', 'approved', 'denied', 'expired', 'consumed']);
+    if (status && !allowedStatuses.has(status)) {
+      return c.json({ ok: false, error: 'Invalid approval status.' }, 400);
+    }
+    const principalId = c.req.query('principalId')?.trim() || 'local-owner';
+    const sessionKey = c.req.query('sessionKey')?.trim() || undefined;
+    const approvals = listConnectorApprovals({
+      principalId,
+      sessionKey,
+      status: status as 'pending' | 'approved' | 'denied' | 'expired' | 'consumed' | undefined,
+      limit: Number(c.req.query('limit') ?? '100'),
+    });
+    return c.json({ ok: true, payload: { approvals } });
+  });
+
+  authenticated.post('/api/connectors/approvals/respond', strictRateLimitMiddleware, async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const record = body && typeof body === 'object' && !Array.isArray(body) ? body as Record<string, unknown> : {};
+    const id = typeof record.id === 'string' ? record.id.trim() : '';
+    const decision = record.decision;
+    if (!id || (decision !== 'approved' && decision !== 'denied')) {
+      return c.json({ ok: false, error: 'Approval id and an approved or denied decision are required.' }, 400);
+    }
+    const current = getConnectorApproval(id);
+    if (!current) return c.json({ ok: false, error: 'Connector approval not found.' }, 404);
+    const approval = decideConnectorApproval(id, decision);
+    if (!approval || approval.status !== decision) {
+      return c.json({ ok: false, error: `Connector approval is ${approval?.status ?? 'unavailable'}.`, payload: { approval } }, 409);
+    }
+    return c.json({ ok: true, payload: { approval } });
+  });
+
+  authenticated.post('/api/connectors/:id/auth/start', strictRateLimitMiddleware, async (c) => {
     const connectorId = c.req.param('id');
     const connector = getConnectorDefinition(connectorId);
     if (!connector) {
       return c.json({ ok: false, error: `Unknown connector: ${connectorId}` }, 404);
     }
-    const body = await c.req.json().catch(() => ({}));
-    const deviceCode = body && typeof body === 'object' && !Array.isArray(body) && typeof body.deviceCode === 'string'
-      ? body.deviceCode
-      : '';
     try {
-      const oauth = await completeConnectorOAuth(connector, { deviceCode });
-      return c.json({ ok: true, payload: { oauth } });
+      const authorization = await startConnectorAuthorization(connector);
+      return c.json({ ok: true, payload: { authorization } });
+    } catch (error) {
+      return c.json({ ok: false, error: errorMessage(error) }, 400);
+    }
+  });
+
+  authenticated.get('/api/connectors/:id/auth/status/:flowId', async (c) => {
+    const connectorId = c.req.param('id');
+    const connector = getConnectorDefinition(connectorId);
+    if (!connector) {
+      return c.json({ ok: false, error: `Unknown connector: ${connectorId}` }, 404);
+    }
+    try {
+      const authorization = await getConnectorAuthorizationStatus(connector, c.req.param('flowId'));
+      return c.json({ ok: true, payload: { authorization } });
     } catch (error) {
       return c.json({ ok: false, error: errorMessage(error) }, 400);
     }

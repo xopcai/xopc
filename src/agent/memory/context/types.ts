@@ -5,6 +5,7 @@ export type UserContextRejectionReason =
   | 'not_yet_valid'
   | 'sensitive'
   | 'requires_consent'
+  | 'needs_review'
   | 'low_score'
   | 'budget';
 
@@ -14,6 +15,8 @@ export interface PlannedUserContextItem {
   score: number;
   section: 'task' | 'interaction' | 'safety';
   citation: string;
+  origin: 'told_by_user' | 'observed' | 'inferred' | 'connected_source';
+  stability: number;
 }
 
 export interface UserContextPlan {

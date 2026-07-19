@@ -5,6 +5,7 @@ import {
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { FetchLike, Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { fetch as undiciFetch } from "undici";
+import { getConnectorAuthAccessToken } from "../../connectors/auth-provider-registry.js";
 import { createLogger } from "../../utils/logger.js";
 const log = createLogger("Mcp:Transport");
 import { normalizeOptionalString } from "../../utils/string-coerce.js";
@@ -54,6 +55,36 @@ type SseEventSourceFetch = NonNullable<
 const fetchWithUndici: FetchLike = async (url, init) =>
   (await undiciFetch(url, init as unknown as Parameters<typeof undiciFetch>[1])) as unknown as Response;
 
+function headersToRecord(headers: RequestInit['headers']): Record<string, string> {
+  const output: Record<string, string> = {};
+  if (!headers) return output;
+  new Headers(headers).forEach((value, key) => {
+    output[key] = value;
+  });
+  return output;
+}
+
+function createConnectorAuthFetch(
+  providerId: string,
+  fetchImpl: FetchLike = fetchWithUndici,
+  accessToken: typeof getConnectorAuthAccessToken = getConnectorAuthAccessToken,
+): FetchLike {
+  return async (url, init) => {
+    const request = async (forceRefresh: boolean) => {
+      const token = await accessToken(providerId, { forceRefresh });
+      return await fetchImpl(url, {
+        ...(init as RequestInit),
+        headers: {
+          ...headersToRecord(init?.headers),
+          Authorization: `Bearer ${token}`,
+        },
+      });
+    };
+    const response = await request(false);
+    return response.status === 401 ? await request(true) : response;
+  };
+}
+
 function buildSseEventSourceFetch(headers: Record<string, string>): SseEventSourceFetch {
   return (url: string | URL, init?: RequestInit) => {
     const sdkHeaders: Record<string, string> = {};
@@ -101,6 +132,9 @@ export function resolveMcpTransport(
     return {
       transport: new StreamableHTTPClientTransport(new URL(resolved.url), {
         requestInit: resolved.headers ? { headers: resolved.headers } : undefined,
+        fetch: resolved.authProvider
+          ? createConnectorAuthFetch(resolved.authProvider)
+          : fetchWithUndici,
       }),
       description: resolved.description,
       transportType: "streamable-http",
@@ -122,3 +156,5 @@ export function resolveMcpTransport(
     connectionTimeoutMs: resolved.connectionTimeoutMs,
   };
 }
+
+export const __testing = { createConnectorAuthFetch };

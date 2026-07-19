@@ -694,6 +694,14 @@ export class AgentService {
     this.agentManager.refreshSkillsAfterSkillConfigChange();
   }
 
+  refreshActionTrustPolicy(): void {
+    this.agentManager.refreshActionTrustPolicy();
+  }
+
+  refreshUserProfileContext(): void {
+    this.agentManager.refreshUserProfileContext();
+  }
+
   getModelForSession(sessionKey: string): string {
     return this.modelManager.getModelForSession(sessionKey);
   }

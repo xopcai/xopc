@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { CheckCircle2, Loader2, PackagePlus, PlugZap, X } from 'lucide-react';
-import { useCallback } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { SecretInput } from '@/components/ui/secret-input';
@@ -11,17 +11,19 @@ import { interaction } from '@/lib/interaction';
 
 import { formatConnectorMessage } from '../utils/connector-i18n';
 import {
-  completeConnectorOAuth,
+  getConnectorAuthorizationStatus,
   installConnector,
   installStoreConnector,
-  startConnectorOAuth,
+  startConnectorAuthorization,
   testConnector,
   type ConnectorDefinition,
   type ConnectorHealthResult,
   type ConnectorInstance,
-  type ConnectorOAuthStartResult,
+  type ConnectorAuthorizationStartResult,
+  type ConnectorAuthorizationStatusResult,
   type StoreConnectorPermissions,
 } from '../connectors-api';
+import { ConnectorLogo } from './connector-logo';
 
 const inputClass = cn(
   'w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg',
@@ -45,8 +47,9 @@ export type InstallDraft = {
   result: ConnectorInstance | null;
   health: ConnectorHealthResult | null;
   oauth: {
-    flow: ConnectorOAuthStartResult | null;
+    flow: DeviceAuthorizationFlow | null;
     connected: boolean;
+    status: ConnectorAuthorizationStatusResult['status'] | 'idle';
   };
   store?: {
     packageName: string;
@@ -54,6 +57,17 @@ export type InstallDraft = {
     permissions: StoreConnectorPermissions;
   };
 };
+
+type DeviceAuthorizationFlow = ConnectorAuthorizationStartResult & {
+  flowId: string;
+  userCode: string;
+  verificationUri: string;
+  intervalSeconds: number;
+};
+
+function requiresPreInstallAuthorization(connector: ConnectorDefinition): boolean {
+  return connector.auth.mode === 'oauth' && connector.auth.installPhase === 'before_install';
+}
 
 function parseConfigValue(type: string, raw: string): unknown {
   const trimmed = raw.trim();
@@ -94,7 +108,11 @@ export function buildInitialDraft(
     error: null,
     result: null,
     health: null,
-    oauth: { flow: null, connected: connector.auth.mode !== 'oauth' },
+    oauth: {
+      flow: null,
+      connected: !requiresPreInstallAuthorization(connector),
+      status: requiresPreInstallAuthorization(connector) ? 'idle' : 'connected',
+    },
     ...(store ? { store } : {}),
   };
 }
@@ -135,27 +153,42 @@ export function InstallConnectorDialog({
   draft: InstallDraft;
   onChange: (draft: InstallDraft) => void;
   onClose: () => void;
-  onInstalled: () => Promise<void>;
+  onInstalled: (instance: ConnectorInstance) => Promise<void>;
   t: ConnectorsSettingsMessages;
 }) {
   const { connector } = draft;
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
   const wizardStep = draft.result ? 'complete' : draft.installing ? 'health' : 'configure';
   const stepItems = [
-    { id: 'configure', label: t.installStepConfigure },
-    { id: 'health', label: t.installStepHealth },
-    { id: 'complete', label: t.installStepComplete },
+    { id: 'configure', label: t.connectStepConfigure },
+    { id: 'health', label: t.connectStepVerify },
+    { id: 'complete', label: t.connectStepReady },
   ] as const;
 
   const startOAuthFlow = useCallback(async () => {
     onChange({ ...draft, installing: true, error: null });
     try {
-      const flow = await startConnectorOAuth(connector.id);
+      const authorization = await startConnectorAuthorization(connector.id);
+      if (
+        !authorization.flowId ||
+        !authorization.userCode ||
+        !authorization.verificationUri ||
+        !authorization.intervalSeconds
+      ) throw new Error('This connector authorization provider does not support a device flow.');
+      const flow: DeviceAuthorizationFlow = {
+        ...authorization,
+        flowId: authorization.flowId,
+        userCode: authorization.userCode,
+        verificationUri: authorization.verificationUri,
+        intervalSeconds: authorization.intervalSeconds,
+      };
       window.open(flow.verificationUri, '_blank', 'noopener,noreferrer');
       onChange({
         ...draft,
         installing: false,
         error: null,
-        oauth: { flow, connected: false },
+        oauth: { flow, connected: false, status: 'pending' },
       });
     } catch (error) {
       onChange({
@@ -166,33 +199,47 @@ export function InstallConnectorDialog({
     }
   }, [connector.id, draft, onChange]);
 
-  const completeOAuthFlow = useCallback(async () => {
-    if (!draft.oauth.flow) {
-      return;
+  useEffect(() => {
+    const flow = draft.oauth.flow;
+    if (!flow || draft.oauth.connected || draft.oauth.status === 'error' || draft.oauth.status === 'expired') {
+      return undefined;
     }
-    onChange({ ...draft, installing: true, error: null });
-    try {
-      await completeConnectorOAuth(connector.id, draft.oauth.flow.deviceCode);
-      onChange({
-        ...draft,
-        installing: false,
-        error: null,
-        oauth: { ...draft.oauth, connected: true },
-      });
-    } catch (error) {
-      onChange({
-        ...draft,
-        installing: false,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }, [connector.id, draft, onChange]);
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const result = await getConnectorAuthorizationStatus(connector.id, flow.flowId);
+        if (cancelled) return;
+        onChange({
+          ...draftRef.current,
+          error: result.error ?? null,
+          oauth: {
+            flow,
+            connected: result.status === 'connected',
+            status: result.status,
+          },
+        });
+      } catch (error) {
+        if (!cancelled) {
+          onChange({
+            ...draftRef.current,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+    };
+    void poll();
+    const timer = window.setInterval(() => void poll(), Math.max(1, flow.intervalSeconds) * 1000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [connector.id, draft.oauth.connected, draft.oauth.flow, draft.oauth.status, onChange]);
 
   const submit = useCallback(async () => {
     onChange({ ...draft, installing: true, error: null, result: null, health: null });
     try {
-      if (connector.auth.mode === 'oauth' && !draft.oauth.connected) {
-        throw new Error(t.oauthRequiredBeforeInstall);
+      if (requiresPreInstallAuthorization(connector) && !draft.oauth.connected) {
+        throw new Error(t.oauthRequiredBeforeConnect);
       }
       const config: Record<string, unknown> = {};
       for (const field of connector.setup.config ?? []) {
@@ -211,7 +258,7 @@ export function InstallConnectorDialog({
         health = null;
       }
       onChange({ ...draft, installing: false, result: instance, health });
-      await onInstalled();
+      await onInstalled(instance);
     } catch (error) {
       onChange({
         ...draft,
@@ -219,7 +266,7 @@ export function InstallConnectorDialog({
         error: error instanceof Error ? error.message : String(error),
       });
     }
-  }, [connector, draft, onChange, onInstalled, t.oauthRequiredBeforeInstall]);
+  }, [connector, draft, onChange, onInstalled, t.oauthRequiredBeforeConnect]);
 
   return (
     <Dialog.Root open onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -232,13 +279,16 @@ export function InstallConnectorDialog({
           )}
         >
           <div className="flex shrink-0 items-start justify-between gap-3 border-b border-edge-subtle px-6 py-5">
-            <div className="min-w-0">
-              <Dialog.Title className="text-base font-semibold text-fg">
-                {formatConnectorMessage(t.installDialogTitle, { name: connector.displayName })}
-              </Dialog.Title>
-              <Dialog.Description className="mt-1 line-clamp-3 text-sm text-fg-muted">
-                {connector.description}
-              </Dialog.Description>
+            <div className="flex min-w-0 items-start gap-3">
+              <ConnectorLogo connector={connector} size="lg" />
+              <div className="min-w-0">
+                <Dialog.Title className="text-base font-semibold text-fg">
+                  {formatConnectorMessage(t.connectDialogTitle, { name: connector.displayName })}
+                </Dialog.Title>
+                <Dialog.Description className="mt-1 line-clamp-3 text-sm text-fg-muted">
+                  {connector.description}
+                </Dialog.Description>
+              </div>
             </div>
             <Dialog.Close asChild>
               <button
@@ -256,7 +306,7 @@ export function InstallConnectorDialog({
           </div>
 
           <div className="min-h-0 overflow-y-auto px-6 py-5">
-            <div className="mb-5 grid grid-cols-3 gap-2" aria-label={t.installProgressAria}>
+            <div className="mb-5 grid grid-cols-3 gap-2" aria-label={t.connectProgressAria}>
               {stepItems.map((step, index) => {
                 const activeIndex = stepItems.findIndex((item) => item.id === wizardStep);
                 const active = index === activeIndex;
@@ -280,7 +330,7 @@ export function InstallConnectorDialog({
               })}
             </div>
             <div className="flex flex-col gap-4">
-          {connector.auth.mode === 'oauth' ? (
+          {requiresPreInstallAuthorization(connector) ? (
             <div className="rounded-2xl border border-edge bg-surface-panel p-4">
               <p className="text-sm font-semibold text-fg">{t.oauthTitle}</p>
               <p className="mt-1 text-sm text-fg-muted">
@@ -301,15 +351,31 @@ export function InstallConnectorDialog({
                   {t.oauthConnected}
                 </p>
               ) : null}
+              {draft.oauth.status === 'pending' ? (
+                <p className="mt-3 text-sm text-fg-muted">{t.oauthWaiting}</p>
+              ) : null}
+              {draft.oauth.status === 'installation_required' ? (
+                <p className="mt-3 rounded-xl bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
+                  {t.oauthInstallRequired}
+                </p>
+              ) : null}
+              {draft.oauth.status === 'expired' ? (
+                <p className="mt-3 rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-600">{t.oauthExpired}</p>
+              ) : null}
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button variant="secondary" disabled={draft.installing} onClick={() => void startOAuthFlow()}>
                   {draft.installing && !draft.oauth.flow ? <Loader2 className="size-4 animate-spin" /> : <PlugZap className="size-4" />}
                   {t.oauthConnectButton}
                 </Button>
-                <Button variant="primary" disabled={draft.installing || !draft.oauth.flow} onClick={() => void completeOAuthFlow()}>
-                  {draft.installing && draft.oauth.flow ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
-                  {t.oauthAuthorizedButton}
-                </Button>
+                {draft.oauth.status === 'installation_required' && draft.oauth.flow?.installUrl ? (
+                  <Button
+                    variant="primary"
+                    onClick={() => window.open(draft.oauth.flow!.installUrl, '_blank', 'noopener,noreferrer')}
+                  >
+                    <PlugZap className="size-4" />
+                    {t.oauthInstallButton}
+                  </Button>
+                ) : null}
               </div>
             </div>
           ) : null}
@@ -391,10 +457,10 @@ export function InstallConnectorDialog({
             <div className="rounded-2xl border border-edge bg-surface-base p-4 text-sm text-fg-muted">
               <div className="flex items-center gap-2 font-medium text-fg">
                 <Loader2 className="size-4 animate-spin text-accent" aria-hidden />
-                {t.installingTitle}
+                {t.connectingTitle}
               </div>
               <p className="mt-1 text-xs text-fg-subtle">
-                {t.installingHint}
+                {t.connectingHint}
               </p>
             </div>
           ) : null}
@@ -405,7 +471,7 @@ export function InstallConnectorDialog({
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="font-medium text-fg">
-                    {formatConnectorMessage(t.installedAs, {
+                    {formatConnectorMessage(t.connectedAs, {
                       target: draft.result.materialized.type === 'mcp' ? draft.result.materialized.serverId : draft.result.instanceId,
                     })}
                   </p>
@@ -479,9 +545,9 @@ export function InstallConnectorDialog({
           </div>
 
           <div className="flex shrink-0 justify-end gap-2 border-t border-edge-subtle px-6 py-4">
-            <Button variant="primary" disabled={Boolean(draft.result) || draft.installing || (connector.auth.mode === 'oauth' && !draft.oauth.connected)} onClick={() => void submit()}>
+            <Button variant="primary" disabled={Boolean(draft.result) || draft.installing || (requiresPreInstallAuthorization(connector) && !draft.oauth.connected)} onClick={() => void submit()}>
               {draft.installing ? <Loader2 className="size-4 animate-spin" /> : draft.result ? <CheckCircle2 className="size-4" /> : <PackagePlus className="size-4" />}
-              {draft.result ? t.installedBadge : t.install}
+              {draft.result ? t.connectedBadge : t.connect}
             </Button>
           </div>
         </Dialog.Content>

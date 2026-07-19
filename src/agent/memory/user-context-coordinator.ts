@@ -51,6 +51,7 @@ export class UserContextCoordinator {
     if (!this.options.isEnabledForSession(sessionKey)) return empty();
     const query = extractAgentUserPlainText(userMessage);
     this.correctionTargets.delete(sessionKey);
+    let excludedRecordIds: string[] | undefined;
     if (isExplicitUnderstandingCorrection(query)) {
       try {
         const trace = setLatestMemoryInjectFeedback({
@@ -64,6 +65,7 @@ export class UserContextCoordinator {
         });
         if (trace?.selectedRecordIds.length) {
           this.correctionTargets.set(sessionKey, trace.selectedRecordIds);
+          excludedRecordIds = trace.selectedRecordIds;
         }
       } catch (err) {
         log.debug({ err, sessionKey }, 'Understanding correction feedback was not persisted');
@@ -78,6 +80,7 @@ export class UserContextCoordinator {
       sessionKey,
       query,
       userMessage,
+      excludedRecordIds,
     });
   }
 

@@ -300,6 +300,14 @@ export class GatewayService {
     return this.ensureAgentService();
   }
 
+  refreshActionTrustPolicy(): void {
+    this._agentService?.refreshActionTrustPolicy();
+  }
+
+  refreshUserProfileContext(): void {
+    this._agentService?.refreshUserProfileContext();
+  }
+
   private ensureAgentService(): AgentService {
     if (this._agentService) {
       return this._agentService;

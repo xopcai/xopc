@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { ActivityService } from '../../../activity/index.js';
 import { resolveEffectiveAgentProfile } from '../../../config/agent-profile.js';
 import type { GoalWithDetails } from '../../../goals/index.js';
-import { GoalService } from '../../../goals/index.js';
+import { draftGoalContract, GoalService, normalizeGoalUiLocale } from '../../../goals/index.js';
 import {
   buildProjectLoopOverview,
   inferProjectKind,
@@ -25,6 +25,7 @@ import {
   getSessionMetadata,
   listMemoryRecords,
   loadTranscriptRowsForSession,
+  runSqliteWriteTransaction,
   type SessionMetadataSeed,
   upsertMemoryRecord,
 } from '../../../storage/sqlite/index.js';
@@ -42,6 +43,20 @@ import type { AuthenticatedRouteDeps } from './deps.js';
 import { FILE_SEARCH_MAX_LIMIT, fuzzySearchWorkspaceFiles } from '../../workspace-file-search.js';
 
 const log = createGatewayRouteLogger('Projects');
+
+const DELEGATED_OUTCOME_MAX_LENGTH = 12_000;
+
+function inferDelegatedWorkName(outcome: string): string {
+  const firstLine = outcome
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean) ?? outcome.trim();
+  const normalized = firstLine
+    .replace(/^[#*\-\s]+/, '')
+    .replace(/[。.!！?？]+$/, '')
+    .trim();
+  return normalized.slice(0, 72) || 'Untitled work';
+}
 
 function parseProjectStatus(raw: unknown): ProjectStatus | undefined {
   return raw === 'active' || raw === 'paused' || raw === 'archived' ? raw : undefined;
@@ -470,6 +485,92 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
   const activity = new ActivityService();
   const goals = new GoalService();
   const workItems = new WorkItemService();
+
+  authenticated.post('/api/projects/delegate', async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+    const outcome = textField(body, 'outcome')?.trim() ?? '';
+    if (!outcome) return c.json({ ok: false, error: 'Missing outcome' }, 400);
+    if (outcome.length > DELEGATED_OUTCOME_MAX_LENGTH) {
+      return c.json({ ok: false, error: `Outcome exceeds ${DELEGATED_OUTCOME_MAX_LENGTH} characters` }, 400);
+    }
+
+    const name = textField(body, 'name')?.trim().slice(0, 72) || inferDelegatedWorkName(outcome);
+    const uiLocale = normalizeGoalUiLocale(body.uiLocale);
+    const defaultAgentId = inferSuggestedProjectDefaultAgentId({
+      config: service.currentConfig,
+      name,
+      description: outcome,
+      projectKind: 'auto',
+    });
+    if (!isValidProjectAgentId(service.currentConfig, defaultAgentId)) {
+      return c.json({ ok: false, error: 'Default agent not found' }, 400);
+    }
+
+    const contractDraft = await draftGoalContract({
+      title: name,
+      context: outcome,
+      uiLocale,
+      modelRef: service.currentConfig.goals?.judgeModelRef,
+    });
+
+    let created: { project: Project; goal: GoalWithDetails };
+    try {
+      created = runSqliteWriteTransaction(() => {
+        const project = service.projects.create({
+          name,
+          description: outcome,
+          defaultAgentId,
+          projectKind: 'auto',
+          brief: outcome,
+        });
+        const goal = goals.create({
+          title: name,
+          description: outcome,
+          agentId: defaultAgentId,
+          priority: 'normal',
+          uiLocale,
+          source: 'api',
+          projectId: project.id,
+          contract: contractDraft.contract,
+          config: service.currentConfig,
+        });
+        const detailedGoal = goals.setContextMessage({ goalId: goal.id, text: outcome });
+        if (!detailedGoal) throw new Error('Goal context could not be saved');
+        return { project, goal: detailedGoal };
+      });
+    } catch (error) {
+      log.warn(
+        { err: error, phase: 'delegate_create' },
+        `Delegated work could not be created: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400);
+    }
+
+    let queued: ReturnType<typeof service.enqueueGoalRun> | undefined;
+    let executionWarning: string | undefined;
+    try {
+      queued = service.enqueueGoalRun(created.goal.id, { source: 'api' });
+    } catch (error) {
+      executionWarning = error instanceof Error ? error.message : String(error);
+      log.warn(
+        { err: error, projectId: created.project.id, goalId: created.goal.id, phase: 'delegate_enqueue' },
+        `Delegated work was saved but could not be queued: ${executionWarning}`,
+      );
+    }
+
+    return c.json({
+      ok: true,
+      project: enrichProjectWorkspace(service, created.project),
+      goal: created.goal,
+      contractGenerated: contractDraft.generated,
+      contractWarning: contractDraft.warning,
+      execution: {
+        status: queued ? 'queued' : 'saved',
+        queueItem: queued,
+        warning: executionWarning,
+      },
+    }, 201);
+  });
 
   authenticated.post('/api/projects', async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;

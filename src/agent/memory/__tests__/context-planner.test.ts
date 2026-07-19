@@ -50,6 +50,7 @@ describe('UserContextPlanner', () => {
     ];
     const memoryManager = {
       search: vi.fn().mockResolvedValue(searchResults),
+      list: vi.fn().mockResolvedValue([]),
     } as unknown as MemoryManager;
     const userMessage = { role: 'user', content: 'How should you answer me?' } as AgentMessage;
 
@@ -72,5 +73,52 @@ describe('UserContextPlanner', () => {
     expect(memoryManager.search).toHaveBeenCalledWith(expect.objectContaining({
       scope: { agentId: 'research', sessionKey: 'session-1' },
     }));
+  });
+
+  it('adds stable collaboration context and excludes a correction target immediately', async () => {
+    const stablePreference = result({ id: 'stable', content: 'Prefer decisions with a short rationale.' }).record;
+    const wrongPreference = result({ id: 'wrong', content: 'Prefer terse answers.' }).record;
+    const memoryManager = {
+      search: vi.fn().mockResolvedValue([result(wrongPreference)]),
+      list: vi.fn().mockImplementation(({ kind }: { kind?: string }) => (
+        kind === 'preference' ? Promise.resolve([stablePreference]) : Promise.resolve([])
+      )),
+    } as unknown as MemoryManager;
+
+    const plan = await new UserContextPlanner().plan({
+      memoryManager,
+      agentId: 'main',
+      sessionKey: 'session-1',
+      query: 'Draft the launch plan.',
+      userMessage: { role: 'user', content: 'Draft the launch plan.' } as AgentMessage,
+      excludedRecordIds: ['wrong'],
+    });
+
+    expect(plan.items.map((item) => item.recordId)).toContain('stable');
+    expect(plan.items.map((item) => item.recordId)).not.toContain('wrong');
+    expect(String(plan.modelMessage.content)).toContain('The user explicitly shared this');
+    expect(String(plan.modelMessage.content)).not.toContain('local:');
+  });
+
+  it('does not inject understanding whose periodic review is due', async () => {
+    const due = result({
+      id: 'due',
+      reviewAfter: new Date(Date.now() - 1_000).toISOString(),
+    });
+    const memoryManager = {
+      search: vi.fn().mockResolvedValue([due]),
+      list: vi.fn().mockResolvedValue([]),
+    } as unknown as MemoryManager;
+
+    const plan = await new UserContextPlanner().plan({
+      memoryManager,
+      agentId: 'main',
+      sessionKey: 'session-1',
+      query: 'How should you write?',
+      userMessage: { role: 'user', content: 'How should you write?' } as AgentMessage,
+    });
+
+    expect(plan.items).toHaveLength(0);
+    expect(plan.rejected).toContainEqual({ recordId: 'due', reason: 'needs_review' });
   });
 });

@@ -16,9 +16,6 @@ import {
 import Animated, { Extrapolation, interpolate, useAnimatedStyle } from 'react-native-reanimated';
 import { Icon } from 'react-native-paper';
 
-import { AppToast } from '../../components/AppToast';
-
-import { TOAST_BOTTOM_LIFT_ABOVE_BAR, TOAST_DURATION_LONG } from '../../constants/toast';
 import { useMessages } from '../../i18n/messages';
 import { motion } from '../../motion';
 import { transcribeVoice } from '../../api/agent-client';
@@ -796,6 +793,12 @@ export const ChatComposer = memo(function ChatComposer({
     onBlur: () => setIsFocused(false),
   };
 
+  const contextNotice = att.snack || snack;
+  const dismissContextNotice = () => {
+    if (att.snack) att.dismissSnack();
+    if (snack) setSnack('');
+  };
+
   return (
     <View style={[styles.wrap, { borderTopColor: 'transparent' }]}>
       {pendingFollowUps.length > 0 ? (
@@ -838,6 +841,32 @@ export const ChatComposer = memo(function ChatComposer({
           onRemove={att.removeAttachment}
           removeLabel={cm.removeAttachment}
         />
+      ) : null}
+
+      {contextNotice ? (
+        <View
+          style={[
+            styles.contextNotice,
+            {
+              backgroundColor: colors.surface.input,
+              borderColor: colors.semantic.warning,
+            },
+          ]}
+          accessibilityRole="alert"
+        >
+          <Icon source="alert-circle-outline" size={16} color={colors.semantic.warning} />
+          <Text style={[styles.contextNoticeText, { color: colors.text.secondary }]}>
+            {contextNotice}
+          </Text>
+          <Pressable
+            onPress={dismissContextNotice}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={m.common.close}
+          >
+            <Icon source="close" size={16} color={colors.text.tertiary} />
+          </Pressable>
+        </View>
       ) : null}
 
       {renderCaptureRail()}
@@ -961,12 +990,6 @@ export const ChatComposer = memo(function ChatComposer({
         onPick={(source) => void handleAttachmentPick(source)}
       />
 
-      <AppToast visible={Boolean(snack)} onDismiss={() => setSnack('')} duration={TOAST_DURATION_LONG} bottomLift={TOAST_BOTTOM_LIFT_ABOVE_BAR}>
-        {snack}
-      </AppToast>
-      <AppToast visible={Boolean(att.snack)} onDismiss={att.dismissSnack} duration={TOAST_DURATION_LONG} bottomLift={TOAST_BOTTOM_LIFT_ABOVE_BAR}>
-        {att.snack}
-      </AppToast>
     </View>
   );
 });
@@ -981,6 +1004,21 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radii.xxl,
     overflow: 'hidden',
+  },
+  contextNotice: {
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radii.lg,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  contextNoticeText: {
+    ...typography.caption,
+    flex: 1,
+    lineHeight: 18,
   },
   shellRaisedNative: {
     shadowColor: '#000',

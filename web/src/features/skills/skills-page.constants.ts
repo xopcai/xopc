@@ -1,11 +1,18 @@
-export type MainTab = 'builtin' | 'user' | 'marketplace';
-export type SourceFilter = 'all' | 'global' | 'workspace' | 'extra';
-/** Built-in / user catalog list: all skills or only user-disabled entries. */
-export type CatalogStatusFilter = 'all' | 'disabled';
+export type MainTab = 'installed' | 'marketplace';
+export type SourceFilter = 'all' | 'builtin' | 'installed' | 'global' | 'workspace' | 'extra';
+/** Installed catalog list: all skills, ready skills, or skills that need attention. */
+export type CatalogStatusFilter = 'all' | 'enabled' | 'disabled';
 
-export const MAIN_TAB_SET = new Set<MainTab>(['builtin', 'user', 'marketplace']);
-export const SOURCE_FILTER_SET = new Set<SourceFilter>(['all', 'global', 'workspace', 'extra']);
-export const CATALOG_STATUS_FILTER_SET = new Set<CatalogStatusFilter>(['all', 'disabled']);
+export const MAIN_TAB_SET = new Set<MainTab>(['installed', 'marketplace']);
+export const SOURCE_FILTER_SET = new Set<SourceFilter>([
+  'all',
+  'builtin',
+  'installed',
+  'global',
+  'workspace',
+  'extra',
+]);
+export const CATALOG_STATUS_FILTER_SET = new Set<CatalogStatusFilter>(['all', 'enabled', 'disabled']);
 
 /** Hash query: which skills marketplace to browse (`store` | `skillhub`). */
 export const MARKETPLACE_PROVIDER_PARAM = 'mprov';

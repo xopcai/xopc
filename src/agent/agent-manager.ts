@@ -869,6 +869,20 @@ export class AgentManager implements AgentInstanceGateway {
     this.scheduleSkillsUpdated('config');
   }
 
+  refreshActionTrustPolicy(): void {
+    for (const instance of this.agents.values()) {
+      instance.agent.state.systemPrompt = this.buildSystemPromptForInstance(instance);
+    }
+    log.info({ agents: this.agents.size }, 'Action trust policy applied to active agents');
+  }
+
+  refreshUserProfileContext(): void {
+    for (const instance of this.agents.values()) {
+      instance.agent.state.systemPrompt = this.buildSystemPromptForInstance(instance);
+    }
+    log.info({ agents: this.agents.size }, 'User profile applied to active agents');
+  }
+
   /**
    * Reload skills from disk and refresh system prompt on all active Agent instances.
    */

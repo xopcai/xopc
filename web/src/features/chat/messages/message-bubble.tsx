@@ -1,5 +1,5 @@
 import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, ChevronUp, Copy, FileCode2, FileText, ListTodo, Pencil, RefreshCw, SquarePen, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, CircleHelp, Copy, FileCode2, FileText, ListTodo, Pencil, RefreshCw, SquarePen, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react';
 
 import type {
   ImageContent,
@@ -44,6 +44,24 @@ const messageActionIconButton = cn(
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
   interaction.disabled,
 );
+
+const RESPONSE_FEEDBACK_REASONS = [
+  'misunderstood_intent',
+  'incorrect',
+  'did_not_act',
+  'tone_mismatch',
+  'too_verbose',
+  'other',
+] as const;
+
+type ResponseFeedbackReason = (typeof RESPONSE_FEEDBACK_REASONS)[number];
+
+type ResponsePersonalContext = {
+  id: string;
+  statement: string;
+  origin: 'told_by_you' | 'observed' | 'inferred' | 'connected_source';
+  sourceName: string;
+};
 
 const userMessageFooterAction = cn(
   'inline-flex h-8 shrink-0 items-center justify-center gap-1 rounded-md px-2 text-xs text-fg-muted transition-colors',
@@ -248,6 +266,10 @@ export const MessageBubble = memo(function MessageBubble({
   const [responseFeedbackBusy, setResponseFeedbackBusy] = useState(false);
   const [responseFeedbackError, setResponseFeedbackError] = useState(false);
   const [responseFeedbackRemediated, setResponseFeedbackRemediated] = useState(false);
+  const [responseFeedbackPromptOpen, setResponseFeedbackPromptOpen] = useState(false);
+  const [responseFeedbackReason, setResponseFeedbackReason] = useState<ResponseFeedbackReason | null>(null);
+  const [responsePersonalContext, setResponsePersonalContext] = useState<ResponsePersonalContext[]>([]);
+  const [responseContextOpen, setResponseContextOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [inlineImagePreview, setInlineImagePreview] = useState<MessageAttachment | null>(null);
   const [userMessageExpanded, setUserMessageExpanded] = useState(false);
@@ -332,7 +354,10 @@ export const MessageBubble = memo(function MessageBubble({
     });
   }, [userCopyText]);
 
-  const handleResponseFeedback = useCallback((outcome: 'helpful' | 'not_helpful') => {
+  const handleResponseFeedback = useCallback((
+    outcome: 'helpful' | 'not_helpful',
+    reason?: ResponseFeedbackReason,
+  ) => {
     if (!sessionKey || !message.timestamp || responseFeedbackBusy) return;
     setResponseFeedbackBusy(true);
     setResponseFeedbackLoaded(true);
@@ -342,12 +367,14 @@ export const MessageBubble = memo(function MessageBubble({
       attributedRecordCount: number;
       feedback: { outcome?: string } | null;
       remediation: { needsReviewRecordIds: string[] } | null;
+      personalContext: ResponsePersonalContext[];
     }>(apiUrl('/api/memory/understanding/response-feedback'), {
       method: 'PATCH',
       body: JSON.stringify({
         sessionKey,
         assistantTimestamp: message.timestamp,
         outcome,
+        reason: reason ? `assistant_response_feedback:${reason}` : undefined,
       }),
     })
       .then((result) => {
@@ -356,6 +383,9 @@ export const MessageBubble = memo(function MessageBubble({
           return;
         }
         setResponseFeedback(outcome);
+        setResponseFeedbackReason(reason ?? null);
+        setResponsePersonalContext(result.personalContext ?? []);
+        setResponseFeedbackPromptOpen(false);
         if (result.remediation?.needsReviewRecordIds.length) {
           setResponseFeedbackRemediated(true);
         }
@@ -363,6 +393,11 @@ export const MessageBubble = memo(function MessageBubble({
       .catch(() => setResponseFeedbackError(true))
       .finally(() => setResponseFeedbackBusy(false));
   }, [message.timestamp, responseFeedbackBusy, sessionKey]);
+
+  const repairResponseFeedback = useCallback(() => {
+    if (!responseFeedbackReason) return;
+    dispatchFillChatComposer(m.chat.messageFeedbackRepairPrompts[responseFeedbackReason]);
+  }, [m.chat.messageFeedbackRepairPrompts, responseFeedbackReason]);
 
   const loadResponseFeedback = useCallback(() => {
     if (!sessionKey || !message.timestamp || responseFeedbackLoaded || responseFeedbackBusy) return;
@@ -374,8 +409,10 @@ export const MessageBubble = memo(function MessageBubble({
     void fetchJson<{
       matched: boolean;
       feedback: { outcome?: string } | null;
+      personalContext: ResponsePersonalContext[];
     }>(apiUrl(`/api/memory/understanding/response-feedback?${query.toString()}`))
       .then((result) => {
+        setResponsePersonalContext(result.personalContext ?? []);
         const outcome = result.feedback?.outcome;
         if (outcome === 'helpful' || outcome === 'not_helpful') {
           setResponseFeedback(outcome);
@@ -728,7 +765,7 @@ export const MessageBubble = memo(function MessageBubble({
                     messageActionIconButton,
                     responseFeedback === 'not_helpful' && 'bg-surface-active text-fg',
                   )}
-                  onClick={() => handleResponseFeedback('not_helpful')}
+                  onClick={() => setResponseFeedbackPromptOpen((open) => !open)}
                   disabled={responseFeedbackBusy}
                   title={m.chat.messageNotHelpful}
                   aria-label={m.chat.messageNotHelpful}
@@ -736,6 +773,18 @@ export const MessageBubble = memo(function MessageBubble({
                 >
                   <ThumbsDown className="size-4" strokeWidth={1.75} aria-hidden />
                 </button>
+                {responsePersonalContext.length > 0 ? (
+                  <button
+                    type="button"
+                    className={cn(messageActionIconButton, responseContextOpen && 'bg-surface-active text-fg')}
+                    onClick={() => setResponseContextOpen((open) => !open)}
+                    title={m.chat.messageWhyThisAnswer}
+                    aria-label={m.chat.messageWhyThisAnswer}
+                    aria-expanded={responseContextOpen}
+                  >
+                    <CircleHelp className="size-4" strokeWidth={1.75} aria-hidden />
+                  </button>
+                ) : null}
                 {responseFeedbackError ? (
                   <span className="text-xs text-danger" role="status">{m.chat.messageFeedbackUnavailable}</span>
                 ) : null}
@@ -793,6 +842,56 @@ export const MessageBubble = memo(function MessageBubble({
               </button>
             ) : null}
           </div>
+        ) : null}
+
+        {assistantActionsVisible && responseContextOpen && responsePersonalContext.length > 0 ? (
+          <div className="mt-2 w-full max-w-xl rounded-xl border border-edge-subtle bg-surface-elevated p-3">
+            <p className="text-sm font-medium text-fg">{m.chat.messageWhyThisAnswer}</p>
+            <p className="mt-0.5 text-xs text-fg-muted">{m.chat.messageWhyThisAnswerHint}</p>
+            <div className="mt-2 space-y-2">
+              {responsePersonalContext.map((context) => (
+                <div key={context.id} className="rounded-lg bg-surface-panel px-3 py-2">
+                  <p className="text-xs leading-5 text-fg">{context.statement}</p>
+                  <p className="mt-1 text-[11px] text-fg-subtle">
+                    {context.origin === 'connected_source'
+                      ? m.chat.messageContextOrigins.connected_source.replace('{{source}}', context.sourceName)
+                      : m.chat.messageContextOrigins[context.origin]}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {assistantActionsVisible && responseFeedbackPromptOpen ? (
+          <div className="mt-2 w-full max-w-xl rounded-xl border border-edge-subtle bg-surface-elevated p-3">
+            <p className="text-sm font-medium text-fg">{m.chat.messageFeedbackReasonTitle}</p>
+            <p className="mt-0.5 text-xs text-fg-muted">{m.chat.messageFeedbackReasonHint}</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {RESPONSE_FEEDBACK_REASONS.map((reason) => (
+                <button
+                  key={reason}
+                  type="button"
+                  className="rounded-lg border border-edge bg-surface-panel px-2.5 py-1.5 text-xs font-medium text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
+                  disabled={responseFeedbackBusy}
+                  onClick={() => handleResponseFeedback('not_helpful', reason)}
+                >
+                  {m.chat.messageFeedbackReasons[reason]}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {assistantActionsVisible && responseFeedback === 'not_helpful' && responseFeedbackReason ? (
+          <button
+            type="button"
+            className="mt-2 inline-flex w-fit items-center gap-1.5 rounded-lg bg-accent-soft px-3 py-1.5 text-xs font-medium text-accent-fg hover:bg-accent-soft/80"
+            onClick={repairResponseFeedback}
+          >
+            <RefreshCw className="size-3.5" strokeWidth={1.75} aria-hidden />
+            {m.chat.messageFeedbackRepair}
+          </button>
         ) : null}
 
       </div>

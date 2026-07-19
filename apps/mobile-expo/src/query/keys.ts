@@ -4,8 +4,16 @@ export const queryKeys = {
   sessionsAll: ['sessions'] as const,
   session: (key: string) => ['session', key] as const,
   sessionAgentConfig: (key: string) => ['session', key, 'agent-config'] as const,
-  sessionHistory: (key: string) => ['session', key, 'history'] as const,
-  sessionHistoryOlderPreview: (key: string, before: string) => ['session', key, 'history', 'olderPreview', before] as const,
+  sessionHistory: (key: string, profileId?: string | null) => (
+    profileId
+      ? ['session', key, 'history', 'gateway', profileId] as const
+      : ['session', key, 'history'] as const
+  ),
+  sessionHistoryOlderPreview: (key: string, before: string, profileId?: string | null) => (
+    profileId
+      ? ['session', key, 'history', 'olderPreview', before, 'gateway', profileId] as const
+      : ['session', key, 'history', 'olderPreview', before] as const
+  ),
   agents: ['agents'] as const,
   models: (agentId?: string) => ['models', agentId ?? ''] as const,
   cronJobs: ['cron', 'jobs'] as const,

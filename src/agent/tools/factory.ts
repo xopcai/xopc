@@ -24,7 +24,7 @@ import {
   createWebFetchTool,
   createWebExtractTool,
   createMessageTool,
-  createComposioExecuteTool,
+  createComposioTools,
   createSendMediaTool,
   createReadMediaTool,
   createCreateShareTool,
@@ -286,8 +286,12 @@ export class AgentToolsFactory {
         })
       : [];
 
-    const composioTool = createComposioExecuteTool(() => this.deps.getConfig?.());
-    const optionalTools = [imageTool, imageGenerateTool, composioTool].filter((t) => t != null) as any[];
+    const composioTools = createComposioTools({
+      getConfig: () => this.deps.getConfig?.(),
+      getCurrentContext: this.deps.getCurrentContext,
+      agentId,
+    });
+    const optionalTools = [imageTool, imageGenerateTool, ...composioTools].filter((t) => t != null) as any[];
 
     const readTool = createReadFileTool(workspace, {
       profileMarkdownRoot: options?.profileMarkdownRoot,

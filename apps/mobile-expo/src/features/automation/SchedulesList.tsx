@@ -43,8 +43,7 @@ export function SchedulesList() {
 
   const toggleMutation = useMutation({
     mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) => toggleCronJob(id, enabled),
-    onSuccess: async (_data, variables) => {
-      setSnackbarMessage(variables.enabled ? pm.enabledToast : pm.disabledToast);
+    onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.cronJobs });
     },
     onError: (error) => {
@@ -55,7 +54,6 @@ export function SchedulesList() {
   const runMutation = useMutation({
     mutationFn: (id: string) => runCronJobNow(id),
     onSuccess: async () => {
-      setSnackbarMessage(pm.runStartedToast);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.cronJobs }),
         queryClient.invalidateQueries({ queryKey: queryKeys.cronRunsHistory(RUNS_HISTORY_LIMIT) }),

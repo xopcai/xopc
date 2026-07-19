@@ -143,6 +143,31 @@ describe('SQLite migrations', () => {
     }
   });
 
+  it('upgrades v33 trust policies to allow a global auto default', () => {
+    const db = openEmptyDb();
+    ensureSchemaMetaTable(db);
+    db.exec(`
+      CREATE TABLE user_trust_policies (
+        principal_id TEXT PRIMARY KEY,
+        default_action_level TEXT NOT NULL DEFAULT 'confirm'
+          CHECK (default_action_level IN ('observe', 'suggest', 'confirm')),
+        updated_at TEXT NOT NULL
+      );
+      INSERT INTO user_trust_policies VALUES ('local-owner', 'confirm', '2026-07-19T00:00:00.000Z');
+    `);
+    setSchemaVersion(db, 33);
+
+    expect(applyPendingMigrations(db)).toBe(XOPC_DB_SCHEMA_VERSION);
+    expect(() => db.prepare(`
+      UPDATE user_trust_policies
+      SET default_action_level = 'auto'
+      WHERE principal_id = 'local-owner'
+    `).run()).not.toThrow();
+    expect(db.prepare(`
+      SELECT default_action_level FROM user_trust_policies WHERE principal_id = 'local-owner'
+    `).get()).toEqual({ default_action_level: 'auto' });
+  });
+
   it('upgrades v21 databases with first-class work item tables', () => {
     const db = openEmptyDb();
     ensureSchemaMetaTable(db);

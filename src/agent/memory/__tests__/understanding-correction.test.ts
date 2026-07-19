@@ -87,6 +87,7 @@ describe('understanding correction attribution', () => {
     const captureTurnUnderstanding = vi.fn().mockResolvedValue(undefined);
     const memoryManager = {
       search: async () => [],
+      list: async () => [],
       captureTurnUnderstanding,
       syncProvidersForTurn: vi.fn().mockResolvedValue(undefined),
       queuePrefetchAll: vi.fn(),

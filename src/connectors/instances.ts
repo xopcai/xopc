@@ -41,7 +41,17 @@ function connectorInstanceFromRecord(instanceId: string, record: Record<string, 
   const runtime = record.runtime && typeof record.runtime === 'object' && !Array.isArray(record.runtime)
     ? record.runtime as Record<string, unknown>
     : {};
-  const runtimeType = typeof runtime.type === 'string' ? runtime.type : 'composio';
+  const runtimeType = runtime.type;
+  if (
+    runtimeType !== 'composio' &&
+    runtimeType !== 'channel' &&
+    runtimeType !== 'nativeTool' &&
+    runtimeType !== 'memorySource'
+  ) return [];
+  if (
+    runtimeType === 'composio' &&
+    (typeof runtime.toolkit !== 'string' || (runtime.role !== 'credential' && runtime.role !== 'toolkit'))
+  ) return [];
   const enabled = markerRecord.enabled !== false;
   return [{
     instanceId,
@@ -56,7 +66,12 @@ function connectorInstanceFromRecord(instanceId: string, record: Record<string, 
     secretStatus: {},
     config: readMarkerConfig(markerRecord),
     materialized: runtimeType === 'composio'
-      ? { type: 'composio', id: instanceId }
+      ? {
+          type: 'composio',
+          id: instanceId,
+          toolkit: runtime.toolkit as string,
+          role: runtime.role as 'credential' | 'toolkit',
+        }
       : runtimeType === 'channel'
         ? { type: 'channel', id: instanceId }
         : runtimeType === 'nativeTool'

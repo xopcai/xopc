@@ -93,7 +93,6 @@ export function WorkspaceFilePreviewPanel({
     if (ok) {
       setPathCopied(true);
       window.setTimeout(() => setPathCopied(false), 2000);
-      showComposerNotification('success', m.workspace.pathCopied, undefined, { duration: 2000 });
       return;
     }
     showComposerNotification('warning', m.clipboard.copyFailed, undefined, { duration: 4000 });

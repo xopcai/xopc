@@ -155,3 +155,37 @@ export {
   listProjectActivityRecords,
   recordActivityEvent,
 } from './activity-repository.js';
+export {
+  appendConnectorExecutionAudit,
+  claimConnectorWebhookDelivery,
+  completeConnectorWebhookDelivery,
+  consumeConnectorApproval,
+  createConnectorApproval,
+  decideConnectorApproval,
+  deleteConnectorConnection,
+  deleteConnectorInstallation,
+  getConnectorConnection,
+  getConnectorApproval,
+  getConnectorInstallation,
+  getCachedConnectorCatalogEntry,
+  listCachedConnectorCatalogEntries,
+  listConnectorActionMetadata,
+  listConnectorApprovals,
+  listConnectorConnections,
+  listConnectorExecutionAudit,
+  listConnectorInstallations,
+  releaseConnectorWebhookDelivery,
+  upsertConnectorActionMetadata,
+  upsertConnectorCatalogEntry,
+  upsertConnectorConnection,
+  upsertConnectorInstallation,
+  type CachedConnectorCatalogEntry,
+} from './connector-repository.js';
+export {
+  getUserTrustPolicy,
+  setUserTrustPolicy,
+} from './user-trust-repository.js';
+export {
+  getUserProfilePromptState,
+  setUserProfilePromptState,
+} from './user-profile-setup-repository.js';

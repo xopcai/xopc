@@ -31,6 +31,7 @@ import {
   loadSharePreviewPage,
   loadSessionsPage,
   loadSkillsPage,
+  loadUserContextPage,
   loadWorkflowsPage,
 } from '@/lib/route-preload';
 import { SwrProvider } from '@/providers/swr-provider';
@@ -48,6 +49,7 @@ const GoalDetailPage = lazy(() => loadGoalDetailPage().then((m) => ({ default: m
 const NotesPage = lazy(() => loadNotesPage().then((m) => ({ default: m.NotesPage })));
 const WorkflowsPage = lazy(() => loadWorkflowsPage().then((m) => ({ default: m.WorkflowsPage })));
 const SkillsPage = lazy(() => loadSkillsPage().then((m) => ({ default: m.SkillsPage })));
+const UserContextPage = lazy(() => loadUserContextPage().then((m) => ({ default: m.UserContextPage })));
 const ConnectorsPage = lazy(() => loadConnectorsPage().then((m) => ({ default: m.ConnectorsPage })));
 const LogsPage = lazy(() => loadLogsPage().then((m) => ({ default: m.LogsPage })));
 const SettingsPage = lazy(() => loadSettingsPage().then((m) => ({ default: m.SettingsPage })));
@@ -148,6 +150,14 @@ const router = createHashRouter([
         element: (
           <Suspense fallback={<SecondaryRouteFallback />}>
             <AutomationsPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'you',
+        element: (
+          <Suspense fallback={<SecondaryRouteFallback />}>
+            <UserContextPage />
           </Suspense>
         ),
       },

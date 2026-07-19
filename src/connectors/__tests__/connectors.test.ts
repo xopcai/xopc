@@ -1,9 +1,12 @@
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { CredentialResolver } from '../../auth/credentials.js';
 import * as bundleMcpMaterialize from '../../agent/mcp/bundle-mcp-materialize.js';
 import type { Config } from '../../config/schema.js';
 import { getConnectorDefinition, listConnectorCatalog } from '../catalog.js';
+import { BUILTIN_CONNECTORS } from '../builtin-catalog.js';
 import { installConnector, uninstallConnector, updateConnectorConfig } from '../install.js';
 import { previewConnectorDefinition } from '../health.js';
 import { setConnectorEnabled } from '../lifecycle.js';
@@ -11,12 +14,19 @@ import { listConnectorInstances } from '../instances.js';
 import { materializeConnectorMcpServer } from '../materialize.js';
 import { createConnectorSetupSecretRequest, submitConnectorSetupSecret } from '../setup-secrets.js';
 import { canUseComposioAction, getComposioToolkitScope, setComposioToolkitScope } from '../composio.js';
-import { completeConnectorOAuth, startConnectorOAuth } from '../oauth.js';
+import {
+  __testing as githubOAuthTesting,
+  getGitHubAccessToken,
+  getGitHubDeviceFlowStatus,
+  startGitHubDeviceFlow,
+} from '../github-app-oauth.js';
+import type { GitHubTokenVault } from '../github-token-vault.js';
 import { searchConnectorRegistries } from '../registries/search.js';
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
-  delete process.env.XOPC_GITHUB_OAUTH_CLIENT_ID;
+  githubOAuthTesting.clearFlows();
   delete process.env.XOPC_SMITHERY_API_KEY;
   delete process.env.SMITHERY_API_KEY;
 });
@@ -30,21 +40,43 @@ describe('connectors catalog', () => {
       'fetch',
       'filesystem',
       'github',
-      'google-drive',
-      'linear',
       'memory',
-      'notion',
       'playwright',
       'sequential-thinking',
-      'slack',
       'time',
     ]));
+    expect(ids).toEqual(expect.arrayContaining([
+      'composio-gmail',
+      'composio-googlecalendar',
+      'composio-googledrive',
+      'composio-notion',
+    ]));
     expect(JSON.stringify(listConnectorCatalog())).not.toContain('ghp_');
+  });
+
+  it('exposes one product entry per application', () => {
+    const connectors = listConnectorCatalog();
+    const notion = connectors.filter((connector) => connector.displayName === 'Notion');
+    const googleDrive = connectors.filter((connector) => connector.displayName === 'Google Drive');
+
+    expect(notion.map((connector) => connector.id)).toEqual(['composio-notion']);
+    expect(googleDrive.map((connector) => connector.id)).toEqual(['composio-googledrive']);
+  });
+
+  it('ships a local logo for every core built-in connector', () => {
+    for (const connector of BUILTIN_CONNECTORS) {
+      expect(connector.branding).toMatchObject({
+        logoUrl: `/connector-icons/${connector.id}.svg`,
+        source: 'builtin',
+      });
+      const logoPath = resolve(process.cwd(), 'web/public', connector.branding!.logoUrl!.slice(1));
+      expect(existsSync(logoPath), `missing logo asset for ${connector.id}: ${logoPath}`).toBe(true);
+    }
   });
 });
 
 describe('materializeConnectorMcpServer', () => {
-  it('materializes GitHub OAuth to a managed MCP server with secret references only', () => {
+  it('materializes GitHub App auth to the official remote MCP server', () => {
     const github = getConnectorDefinition('github');
     expect(github).toBeDefined();
     expect(github?.auth.mode).toBe('oauth');
@@ -53,20 +85,13 @@ describe('materializeConnectorMcpServer', () => {
 
     expect(result.serverId).toBe('github');
     expect(result.server).toMatchObject({
-      command: 'npx',
-      args: ['-y', '@modelcontextprotocol/server-github'],
-      env: {
-        GITHUB_PERSONAL_ACCESS_TOKEN: {
-          xopcSecretRef: {
-            provider: 'connector-github-github_personal_access_token',
-            fieldKey: 'GITHUB_PERSONAL_ACCESS_TOKEN',
-          },
-        },
-      },
+      url: 'https://api.githubcopilot.com/mcp/',
+      transport: 'streamable-http',
+      xopcAuth: { provider: 'github-app' },
       xopcConnector: {
         managed: true,
         connectorId: 'github',
-        version: '1.0.0',
+        version: '2.0.0',
       },
     });
     expect(JSON.stringify(result.server)).not.toContain('ghp_demo');
@@ -250,31 +275,33 @@ describe('connector registry search', () => {
 });
 
 describe('connector OAuth', () => {
-  it('starts GitHub device OAuth with connector scopes', async () => {
-    process.env.XOPC_GITHUB_OAUTH_CLIENT_ID = 'github-client-id';
+  it('starts a server-polled GitHub App device flow without OAuth App scopes', async () => {
     const github = getConnectorDefinition('github');
     expect(github).toBeDefined();
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-      ok: true,
-      json: async () => ({
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
         device_code: 'device-code',
         user_code: 'ABCD-1234',
         verification_uri: 'https://github.com/login/device',
         expires_in: 900,
         interval: 7,
-      }),
-    } as Response);
+      }), { status: 200 }));
 
-    const result = await startConnectorOAuth(github!);
+    const vault = { assertAvailable: vi.fn() } as unknown as GitHubTokenVault;
+    const result = await startGitHubDeviceFlow(github!, {
+      registration: { clientId: 'github-client-id', slug: 'xopc-test' },
+      vault,
+    });
 
     expect(result).toMatchObject({
       connectorId: 'github',
-      provider: 'github',
-      deviceCode: 'device-code',
+      provider: 'github-app',
+      flowId: expect.any(String),
       userCode: 'ABCD-1234',
       verificationUri: 'https://github.com/login/device',
       expiresInSeconds: 900,
       intervalSeconds: 7,
+      status: 'pending',
+      installUrl: 'https://github.com/apps/xopc-test/installations/new',
     });
     expect(globalThis.fetch).toHaveBeenCalledWith(
       'https://github.com/login/device/code',
@@ -282,40 +309,79 @@ describe('connector OAuth', () => {
         method: 'POST',
         body: JSON.stringify({
           client_id: 'github-client-id',
-          scope: 'repo read:user read:org',
         }),
       }),
     );
   });
 
-  it('stores completed GitHub OAuth as the connector secret credential', async () => {
-    process.env.XOPC_GITHUB_OAUTH_CLIENT_ID = 'github-client-id';
+  it('polls GitHub automatically and stores rotating expiring tokens', async () => {
+    vi.useFakeTimers();
     const github = getConnectorDefinition('github');
     expect(github).toBeDefined();
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        access_token: 'gho_oauth_token',
-        scope: 'repo read:user',
-      }),
-    } as Response);
-    const saveOAuthToken = vi.fn();
-    const resolver = { saveOAuthToken } as unknown as CredentialResolver;
-
-    await expect(completeConnectorOAuth(github!, { deviceCode: 'device-code' }, resolver)).resolves.toMatchObject({
-      connectorId: 'github',
-      provider: 'github',
-      connected: true,
+    const responses = [
+      { device_code: 'device-code', user_code: 'ABCD-1234', verification_uri: 'https://github.com/login/device', expires_in: 900, interval: 1 },
+      { access_token: 'ghu_access', expires_in: 28_800, refresh_token: 'ghr_refresh', refresh_token_expires_in: 15_552_000, token_type: 'bearer', scope: '' },
+      { installations: [{ app_slug: 'xopc-test' }] },
+    ];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      const body = responses.shift();
+      return new Response(JSON.stringify(body), { status: 200 });
     });
+    const save = vi.fn();
+    const vault = { assertAvailable: vi.fn(), save, load: vi.fn() } as unknown as GitHubTokenVault;
+    const registration = { clientId: 'github-client-id', slug: 'xopc-test' };
+    const flow = await startGitHubDeviceFlow(github!, { registration, vault });
+    await vi.advanceTimersByTimeAsync(1_000);
+    await expect(getGitHubDeviceFlowStatus(github!, flow.flowId, { registration, vault })).resolves.toMatchObject({
+      status: 'connected',
+    });
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({
+      accessToken: 'ghu_access',
+      refreshToken: 'ghr_refresh',
+      expiresAt: expect.any(Number),
+      refreshTokenExpiresAt: expect.any(Number),
+    }));
+    vi.useRealTimers();
+  });
 
-    expect(saveOAuthToken).toHaveBeenCalledWith(
-      'connector-github-github_personal_access_token',
-      expect.objectContaining({
-        access: 'gho_oauth_token',
-        refresh: '',
-        scope: ['repo', 'read:user'],
-      }),
-    );
+  it('refreshes an expiring GitHub App user token without a client secret', async () => {
+    const existing = {
+      accessToken: 'ghu_old',
+      refreshToken: 'ghr_old',
+      expiresAt: Date.now() + 1_000,
+      refreshTokenExpiresAt: Date.now() + 60_000,
+      tokenType: 'bearer',
+      scope: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    const save = vi.fn();
+    const vault = { load: vi.fn().mockResolvedValue(existing), save } as unknown as GitHubTokenVault;
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      access_token: 'ghu_new',
+      expires_in: 28_800,
+      refresh_token: 'ghr_new',
+      refresh_token_expires_in: 15_552_000,
+      token_type: 'bearer',
+      scope: '',
+    }), { status: 200 }));
+
+    await expect(getGitHubAccessToken({
+      registration: { clientId: 'github-client-id', slug: 'xopc-test' },
+      vault,
+    })).resolves.toBe('ghu_new');
+
+    const request = vi.mocked(globalThis.fetch).mock.calls[0]?.[1];
+    expect(request?.body).toBe(JSON.stringify({
+      client_id: 'github-client-id',
+      grant_type: 'refresh_token',
+      refresh_token: 'ghr_old',
+    }));
+    expect(String(request?.body)).not.toContain('client_secret');
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({
+      accessToken: 'ghu_new',
+      refreshToken: 'ghr_new',
+    }));
   });
 });
 
@@ -420,14 +486,6 @@ describe('connector install and instances', () => {
     expect(listConnectorInstances(config)).toEqual([]);
   });
 
-  it('blocks GitHub install until OAuth token is connected', async () => {
-    const config = { mcp: { servers: {} } } as Config;
-    const resolver = { loadOAuthToken: vi.fn().mockResolvedValue(null) } as unknown as CredentialResolver;
-
-    await expect(installConnector(config, 'github', {}, resolver)).rejects.toThrow(/Connect GitHub with OAuth/);
-    expect(config.mcp?.servers?.github).toBeUndefined();
-  });
-
   it('stores connector setup secret refs without exposing raw values to config', async () => {
     const request = createConnectorSetupSecretRequest({ key: 'BRAVE_API_KEY' });
     expect(request.ref).toMatch(/^secret:\/\//);
@@ -449,10 +507,10 @@ describe('connector install and instances', () => {
     expect(instance).toMatchObject({
       instanceId: 'composio-gmail',
       connectorId: 'composio-gmail',
-      materialized: { type: 'composio', id: 'composio-gmail' },
+      materialized: { type: 'composio', id: 'composio-gmail', toolkit: 'gmail', role: 'toolkit' },
     });
     expect(config.connectors?.instances?.['composio-gmail']).toMatchObject({
-      runtime: { type: 'composio', toolkit: 'gmail' },
+      runtime: { type: 'composio', toolkit: 'gmail', role: 'toolkit' },
       scope: 'read',
       xopcConnector: { managed: true, connectorId: 'composio-gmail' },
     });
@@ -463,28 +521,4 @@ describe('connector install and instances', () => {
     expect(canUseComposioAction(config, 'GMAIL_SEND_EMAIL').ok).toBe(true);
   });
 
-  it('installs GitHub with OAuth token references and no plaintext token in config', async () => {
-    const config = { mcp: { servers: {} } } as Config;
-    const resolver = {
-      loadOAuthToken: vi.fn().mockResolvedValue({ access: 'gho_oauth_token' }),
-      saveApiKey: vi.fn(),
-    } as unknown as CredentialResolver;
-
-    await installConnector(config, 'github', {}, resolver);
-
-    const [instance] = listConnectorInstances(config);
-    expect(instance?.connectorId).toBe('github');
-    expect(config.mcp?.servers?.github).toMatchObject({
-      env: {
-        GITHUB_PERSONAL_ACCESS_TOKEN: {
-          xopcSecretRef: {
-            provider: 'connector-github-github_personal_access_token',
-            fieldKey: 'GITHUB_PERSONAL_ACCESS_TOKEN',
-          },
-        },
-      },
-    });
-    expect(JSON.stringify(instance)).not.toContain('ghp_secret');
-    expect(JSON.stringify(config)).not.toContain('ghp_secret');
-  });
 });

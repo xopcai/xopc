@@ -1,74 +1,51 @@
-/**
- * Catalog for named workflows.
- *
- * Resolution order (built-ins are starting points, user workflows win):
- *   1. `~/.xopc/workflows/<name>/workflow.js` (+ optional `manifest.json`)
- *   2. `~/.xopc/workflows/<name>.js` (or `<name>.workflow.js`)
- *   3. {@link BUILTIN_WORKFLOWS}
- *
- * The user dir is discovered via {@link resolveStateDir}, so `XOPC_STATE_DIR`
- * overrides apply automatically (matches how skills / extensions are wired).
- *
- * Listing is filesystem-cheap (single `readdir`) and runs synchronously — the
- * `/workflows` slash command is interactive and should return immediately.
- *
- * Validation: on load we re-parse the script to make sure `meta.name` matches
- * the filename. This prevents copy-pasted scripts from being silently
- * mis-addressed when invoked by name.
- */
-
-import {
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  statSync,
-  unlinkSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 
-import type { WorkflowDefinitionManifest } from '../../workflows/domain/definition.js';
-
+import type { WorkflowDefinition, WorkflowDefinitionManifest, WorkflowGraph } from '../../workflows/domain/definition.js';
+import { buildWorkflowDefinition } from '../../workflows/domain/definition-utils.js';
+import { validateWorkflowGraph } from '../../workflows/domain/validation.js';
 import { resolveStateDir } from '../../config/paths-state.js';
 
 import { BUILTIN_WORKFLOWS } from './builtins/index.js';
-import { parseWorkflowScript } from './parser.js';
-import type { WorkflowMeta } from './types.js';
 
 export type WorkflowSource = 'user' | 'builtin';
 
 export interface CatalogEntry {
   name: string;
   source: WorkflowSource;
-  /** Absolute path for user entries; null for built-ins (in-memory). */
   path: string | null;
   description: string;
-  title?: string;
-  version?: string;
+  title: string;
+  version: string;
+  revision: number;
   whenToUse?: string;
   tags?: string[];
   estimatedAgents?: { min: number; max: number };
 }
 
-export interface LoadedWorkflow {
+export interface SaveWorkflowInput {
   name: string;
-  source: WorkflowSource;
-  script: string;
-  meta: WorkflowMeta;
-  path: string | null;
+  graph: WorkflowGraph;
   manifest?: WorkflowDefinitionManifest;
+  expectedRevision?: number;
+}
+
+export interface WorkflowRevisionSummary {
+  revision: number;
+  title: string;
+  contentHash?: string;
+  createdAtMs: number;
 }
 
 export interface WorkflowCatalog {
   list(): CatalogEntry[];
-  /** Load a named workflow. Throws if missing or meta.name disagrees with filename. */
-  load(name: string): LoadedWorkflow;
-  /** Save a script as a user workflow. Throws if the script fails to parse. */
-  save(name: string, script: string): { path: string };
-  /** Remove a user workflow. No-op if absent. Built-ins are never removed. */
+  load(name: string): WorkflowDefinition;
+  save(input: SaveWorkflowInput): { path: string; definition: WorkflowDefinition };
+  listRevisions(name: string): WorkflowRevisionSummary[];
+  loadRevision(name: string, revision: number): WorkflowDefinition;
+  restore(name: string, revision: number, expectedRevision: number): { path: string; definition: WorkflowDefinition };
   remove(name: string): boolean;
-  /** Absolute path to the user workflows directory (created lazily on save). */
   userDir: string;
 }
 
@@ -77,192 +54,183 @@ const NAME_RE = /^[a-z][a-z0-9_-]*$/;
 export function createWorkflowCatalog(opts: { userDir?: string } = {}): WorkflowCatalog {
   const userDir = opts.userDir ?? defaultUserDir();
 
+  const loadUser = (name: string): WorkflowDefinition | null => {
+    const path = join(userDir, `${name}.json`);
+    if (!existsSync(path)) return null;
+    const parsed = JSON.parse(readFileSync(path, 'utf-8')) as WorkflowDefinition;
+    assertStoredDefinition(parsed, name, path);
+    return parsed;
+  };
+
   const list = (): CatalogEntry[] => {
-    const entries = new Map<string, CatalogEntry>();
-    for (const b of BUILTIN_WORKFLOWS) {
-      const meta = safeMeta(b.script);
-      entries.set(b.name, {
-        name: b.name,
-        source: 'builtin',
-        path: null,
-        description: meta?.description ?? '(unparseable)',
-        whenToUse: meta?.whenToUse,
-        tags: meta?.tags,
-        estimatedAgents: meta?.estimatedAgents,
-      });
+    const definitions = new Map<string, { definition: WorkflowDefinition; path: string | null }>();
+    for (const definition of BUILTIN_WORKFLOWS) definitions.set(definition.name, { definition, path: null });
+    for (const name of listUserNames(userDir)) {
+      try {
+        const definition = loadUser(name);
+        if (definition) definitions.set(name, { definition, path: join(userDir, `${name}.json`) });
+      } catch {
+        // Invalid files are not addressable workflows.
+      }
     }
-    for (const entry of safeListUserEntries(userDir)) {
-      const meta = safeMeta(readScript(entry.path));
-      const manifest = readManifest(entry.manifestPath);
-      // User wins on collision.
-      entries.set(entry.name, {
-        name: entry.name,
-        source: 'user',
-        path: entry.path,
-        description: manifest?.description ?? meta?.description ?? '(unparseable)',
-        title: manifest?.title,
-        version: manifest?.version,
-        whenToUse: manifest?.whenToUse ?? meta?.whenToUse,
-        tags: manifest?.tags ?? meta?.tags,
-        estimatedAgents: meta?.estimatedAgents,
-      });
-    }
-    return [...entries.values()].sort((a, b) => a.name.localeCompare(b.name));
+    return [...definitions.values()]
+      .map(({ definition, path }) => toCatalogEntry(definition, path))
+      .sort((left, right) => left.name.localeCompare(right.name));
   };
 
-  const load = (name: string): LoadedWorkflow => {
+  const load = (name: string): WorkflowDefinition => {
     requireValidName(name);
-    const userEntry = findUserEntry(userDir, name);
-    if (userEntry) {
-      const script = readScript(userEntry.path);
-      const { meta } = parseWorkflowScript(script);
-      ensureMetaNameMatches(meta, name, userEntry.path);
-      return {
-        name,
-        source: 'user',
-        script,
-        meta,
-        path: userEntry.path,
-        manifest: readManifest(userEntry.manifestPath),
-      };
-    }
-    const builtin = BUILTIN_WORKFLOWS.find((b) => b.name === name);
-    if (builtin) {
-      const { meta } = parseWorkflowScript(builtin.script);
-      ensureMetaNameMatches(meta, name, '<builtin>');
-      return { name, source: 'builtin', script: builtin.script, meta, path: null };
-    }
-    throw new Error(
-      `workflow not found: ${name}. Drop a script at ${join(userDir, `${name}.js`)} or pick one of: ${list()
-        .map((e) => e.name)
-        .join(', ')}`,
-    );
+    const user = loadUser(name);
+    if (user) return structuredClone(user);
+    const builtin = BUILTIN_WORKFLOWS.find((definition) => definition.name === name);
+    if (builtin) return structuredClone(builtin);
+    throw new Error(`workflow not found: ${name}`);
   };
 
-  const save = (name: string, script: string): { path: string } => {
+  const save = (input: SaveWorkflowInput): { path: string; definition: WorkflowDefinition } => {
+    const name = input.name.trim();
     requireValidName(name);
-    const { meta } = parseWorkflowScript(script);
-    if (meta.name !== name) {
-      throw new Error(
-        `meta.name "${meta.name}" does not match save name "${name}". Adjust one to match the other.`,
-      );
+    const validation = validateWorkflowGraph(input.graph);
+    if (!validation.valid) throw new Error(validation.errors.map((issue) => issue.message).join(' '));
+    const existing = loadUser(name);
+    if (input.expectedRevision !== undefined && input.expectedRevision !== (existing?.revision ?? 0)) {
+      throw new WorkflowRevisionConflictError(existing?.revision ?? 0);
     }
-    if (!existsSync(userDir)) {
-      mkdirSync(userDir, { recursive: true });
-    }
-    const path = join(userDir, `${name}.js`);
-    writeFileSync(path, normalizeNewlines(script), 'utf-8');
-    return { path };
+    const definition = buildWorkflowDefinition({
+      name,
+      source: 'user',
+      graph: input.graph,
+      manifest: input.manifest,
+      revision: (existing?.revision ?? 0) + 1,
+      createdAtMs: existing?.metadata.createdAtMs,
+    });
+    if (!existsSync(userDir)) mkdirSync(userDir, { recursive: true });
+    const path = join(userDir, `${name}.json`);
+    const revisionsDir = join(userDir, '.revisions', name);
+    mkdirSync(revisionsDir, { recursive: true });
+    writeJsonAtomic(join(revisionsDir, `${definition.revision}.json`), definition);
+    writeJsonAtomic(path, definition);
+    return { path, definition };
+  };
+
+  const listRevisions = (name: string): WorkflowRevisionSummary[] => {
+    requireValidName(name);
+    const dir = join(userDir, '.revisions', name);
+    if (!existsSync(dir)) return [];
+    return readdirSync(dir)
+      .filter((file) => /^\d+\.json$/.test(file))
+      .map((file): WorkflowRevisionSummary | null => {
+        try {
+          const definition = JSON.parse(readFileSync(join(dir, file), 'utf-8')) as WorkflowDefinition;
+          assertStoredDefinition(definition, name, join(dir, file));
+          return { revision: definition.revision, title: definition.title, contentHash: definition.contentHash, createdAtMs: definition.metadata.updatedAtMs };
+        } catch {
+          return null;
+        }
+      })
+      .filter((item): item is WorkflowRevisionSummary => item !== null)
+      .sort((left, right) => right.revision - left.revision);
+  };
+
+  const loadRevision = (name: string, revision: number): WorkflowDefinition => {
+    requireValidName(name);
+    if (!Number.isSafeInteger(revision) || revision < 1) throw new Error('invalid workflow revision');
+    const path = join(userDir, '.revisions', name, `${revision}.json`);
+    if (!existsSync(path)) throw new Error(`workflow revision not found: ${name}@${revision}`);
+    const definition = JSON.parse(readFileSync(path, 'utf-8')) as WorkflowDefinition;
+    assertStoredDefinition(definition, name, path);
+    return structuredClone(definition);
+  };
+
+  const restore = (name: string, revision: number, expectedRevision: number) => {
+    const selected = loadRevision(name, revision);
+    return save({ name, graph: selected.graph, manifest: definitionToManifest(selected), expectedRevision });
   };
 
   const remove = (name: string): boolean => {
     requireValidName(name);
-    const userEntry = findUserEntry(userDir, name);
-    if (!userEntry) return false;
-    unlinkSync(userEntry.path);
+    const path = join(userDir, `${name}.json`);
+    if (!existsSync(path)) return false;
+    unlinkSync(path);
+    const revisionsDir = join(userDir, '.revisions', name);
+    if (existsSync(revisionsDir)) rmSync(revisionsDir, { recursive: true, force: true });
     return true;
   };
 
-  return { list, load, save, remove, userDir };
+  return { list, load, save, listRevisions, loadRevision, restore, remove, userDir };
 }
 
-// ---------------------------------------------------------------------------
+export class WorkflowRevisionConflictError extends Error {
+  constructor(readonly currentRevision: number) {
+    super(`workflow revision conflict; current revision is ${currentRevision}`);
+    this.name = 'WorkflowRevisionConflictError';
+  }
+}
 
 export function defaultUserDir(): string {
   return join(resolveStateDir(), 'workflows');
 }
 
-interface UserWorkflowEntry {
-  name: string;
-  path: string;
-  manifestPath?: string;
-}
-
-function safeListUserEntries(dir: string): UserWorkflowEntry[] {
+function listUserNames(dir: string): string[] {
   try {
-    if (!existsSync(dir)) return [];
-    const st = statSync(dir);
-    if (!st.isDirectory()) return [];
-    const entries: UserWorkflowEntry[] = [];
-    for (const file of readdirSync(dir)) {
-      const full = join(dir, file);
-      const fileStat = statSync(full);
-      if (fileStat.isDirectory()) {
-        const workflowPath = join(full, 'workflow.js');
-        if (existsSync(workflowPath) && isValidName(file)) {
-          entries.push({ name: file, path: workflowPath, manifestPath: join(full, 'manifest.json') });
-        }
-        continue;
-      }
-      if (!/\.(js|workflow\.js)$/i.test(file)) continue;
-      const name = stripExt(file);
-      if (!isValidName(name)) continue;
-      entries.push({ name, path: full });
-    }
-    return entries;
+    if (!existsSync(dir) || !statSync(dir).isDirectory()) return [];
+    return readdirSync(dir)
+      .filter((file) => file.endsWith('.json'))
+      .map((file) => file.slice(0, -5))
+      .filter((name) => NAME_RE.test(name));
   } catch {
     return [];
   }
 }
 
-function findUserEntry(dir: string, name: string): UserWorkflowEntry | null {
-  const dirWorkflowPath = join(dir, name, 'workflow.js');
-  if (existsSync(dirWorkflowPath)) {
-    return { name, path: dirWorkflowPath, manifestPath: join(dir, name, 'manifest.json') };
+function assertStoredDefinition(value: WorkflowDefinition, name: string, path: string): void {
+  if (!value || typeof value !== 'object' || value.name !== name || value.metadata?.source !== 'user') {
+    throw new Error(`invalid workflow definition: ${path}`);
   }
-  for (const candidate of [`${name}.js`, `${name}.workflow.js`]) {
-    const full = join(dir, candidate);
-    if (existsSync(full)) return { name, path: full };
-  }
-  return null;
+  const validation = validateWorkflowGraph(value.graph);
+  if (!validation.valid) throw new Error(`invalid workflow graph: ${path}`);
 }
 
-function readScript(path: string): string {
-  return readFileSync(path, 'utf-8');
-}
-
-function readManifest(path: string | undefined): WorkflowDefinitionManifest | undefined {
-  if (!path || !existsSync(path)) return undefined;
-  try {
-    const value = JSON.parse(readFileSync(path, 'utf-8')) as WorkflowDefinitionManifest;
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
-    return value;
-  } catch {
-    return undefined;
-  }
-}
-
-function safeMeta(script: string): WorkflowMeta | null {
-  try {
-    return parseWorkflowScript(script).meta;
-  } catch {
-    return null;
-  }
-}
-
-function stripExt(filename: string): string {
-  return filename.replace(/\.workflow\.js$/i, '').replace(/\.js$/i, '');
-}
-
-function isValidName(name: string): boolean {
-  return NAME_RE.test(name);
+function toCatalogEntry(definition: WorkflowDefinition, path: string | null): CatalogEntry {
+  return {
+    name: definition.name,
+    source: definition.metadata.source,
+    path,
+    description: definition.description,
+    title: definition.title,
+    version: definition.version,
+    revision: definition.revision,
+    whenToUse: definition.metadata.whenToUse,
+    tags: definition.metadata.tags,
+    estimatedAgents: definition.metadata.estimatedAgents,
+  };
 }
 
 function requireValidName(name: string): void {
-  if (!isValidName(name)) {
-    throw new Error(`invalid workflow name "${name}". Use lowercase snake_case, e.g. "audit_repo".`);
-  }
+  if (!NAME_RE.test(name)) throw new Error(`invalid workflow name "${name}"; use lowercase letters, numbers, underscores, or hyphens`);
 }
 
-function ensureMetaNameMatches(meta: WorkflowMeta, name: string, locator: string): void {
-  if (meta.name !== name) {
-    throw new Error(
-      `workflow ${locator}: meta.name "${meta.name}" disagrees with addressable name "${name}". ` +
-        'Rename the file or the meta.name to match.',
-    );
-  }
+function writeJsonAtomic(path: string, value: unknown): void {
+  const temporaryPath = `${path}.${randomUUID()}.tmp`;
+  writeFileSync(temporaryPath, `${JSON.stringify(value, null, 2)}\n`, 'utf-8');
+  renameSync(temporaryPath, path);
 }
 
-function normalizeNewlines(s: string): string {
-  return s.endsWith('\n') ? s : `${s}\n`;
+function definitionToManifest(definition: WorkflowDefinition): WorkflowDefinitionManifest {
+  return {
+    title: definition.title,
+    description: definition.description,
+    version: definition.version,
+    inputSchema: definition.inputSchema,
+    outputSchema: definition.outputSchema,
+    defaults: definition.defaults,
+    tags: definition.metadata.tags,
+    whenToUse: definition.metadata.whenToUse,
+    estimatedAgents: definition.metadata.estimatedAgents,
+    examplePrompts: definition.metadata.examplePrompts,
+    i18n: definition.metadata.i18n,
+    permissions: definition.permissions,
+    resources: definition.resources,
+    connectors: definition.connectors,
+  };
 }
