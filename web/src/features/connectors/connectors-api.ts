@@ -61,7 +61,7 @@ export type ConnectorDefinition = {
   auth:
     | { mode: 'none' }
     | { mode: 'apiKey' }
-    | { mode: 'oauth'; provider: string; installPhase: 'before_install' | 'after_install' };
+    | { mode: 'oauth'; provider: string };
   setup: {
     secrets?: ConnectorSecretField[];
     config?: ConnectorConfigField[];
@@ -118,7 +118,6 @@ export type StoreConnectorInstallPlan = {
   definition: ConnectorDefinition;
   permissions: StoreConnectorPermissions;
   requiresRestart: false;
-  requiresOAuth: boolean;
 };
 
 export type ConnectorHealthStatus =
@@ -224,24 +223,9 @@ export type ConnectorInstallInput = {
 export type ConnectorAuthorizationStartResult = {
   connectorId: string;
   provider: string;
-  flowId?: string;
-  userCode?: string;
-  verificationUri?: string;
   authorizationUrl?: string;
-  expiresInSeconds?: number;
-  intervalSeconds?: number;
   status: string;
-  installUrl?: string;
   connectionId?: string;
-};
-
-export type ConnectorAuthorizationStatusResult = {
-  connectorId: string;
-  provider: string;
-  flowId: string;
-  status: 'pending' | 'installation_required' | 'connected' | 'expired' | 'error';
-  installUrl?: string;
-  error?: string;
 };
 
 export type ComposioConnection = {
@@ -463,16 +447,6 @@ export async function startConnectorAuthorization(connectorId: string): Promise<
     { method: 'POST' },
   );
   return requirePayload(response, 'Could not start connector authorization.').authorization;
-}
-
-export async function getConnectorAuthorizationStatus(
-  connectorId: string,
-  flowId: string,
-): Promise<ConnectorAuthorizationStatusResult> {
-  const response = await fetchJson<ApiEnvelope<{ authorization: ConnectorAuthorizationStatusResult }>>(
-    apiUrl(`/api/connectors/${encodeURIComponent(connectorId)}/auth/status/${encodeURIComponent(flowId)}`),
-  );
-  return requirePayload(response, 'Could not read connector authorization status.').authorization;
 }
 
 export async function installConnector(

@@ -1,10 +1,7 @@
 import type { Hono } from 'hono';
 
 import type { Config } from '../../../config/schema.js';
-import {
-  getConnectorAuthorizationStatus,
-  startConnectorAuthorization,
-} from '../../../connectors/auth-provider-registry.js';
+import { startConnectorAuthorization } from '../../../connectors/auth-provider-registry.js';
 import { getConnectorDefinition, listConnectorCatalog, listConnectorProviders } from '../../../connectors/catalog.js';
 import { listComposioConnectorCatalog } from '../../../connectors/composio-catalog.js';
 import { composioLogoResponse } from '../../../connectors/composio-logo.js';
@@ -364,20 +361,6 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     }
     try {
       const authorization = await startConnectorAuthorization(connector);
-      return c.json({ ok: true, payload: { authorization } });
-    } catch (error) {
-      return c.json({ ok: false, error: errorMessage(error) }, 400);
-    }
-  });
-
-  authenticated.get('/api/connectors/:id/auth/status/:flowId', async (c) => {
-    const connectorId = c.req.param('id');
-    const connector = getConnectorDefinition(connectorId);
-    if (!connector) {
-      return c.json({ ok: false, error: `Unknown connector: ${connectorId}` }, 404);
-    }
-    try {
-      const authorization = await getConnectorAuthorizationStatus(connector, c.req.param('flowId'));
       return c.json({ ok: true, payload: { authorization } });
     } catch (error) {
       return c.json({ ok: false, error: errorMessage(error) }, 400);

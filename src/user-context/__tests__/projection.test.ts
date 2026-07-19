@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
 import type { MemoryRecord } from '../../agent/memory/types.js';
-import type { ConnectorDefinition } from '../../connectors/types.js';
+import type { ConnectorDefinition, ConnectorInstance } from '../../connectors/types.js';
 import {
   facetForMemoryKind,
   isPersonalContextConnector,
   isUserContextRecord,
   originForMemoryRecord,
+  projectPersonalContextSources,
   projectUserContextRecord,
+  recordsDerivedFromPersonalContextSource,
 } from '../projection.js';
 
 function record(patch: Partial<MemoryRecord> = {}): MemoryRecord {
@@ -70,5 +72,65 @@ describe('user context projection', () => {
     expect(isPersonalContextConnector(connector(['memory_source']))).toBe(true);
     expect(isPersonalContextConnector(connector(['context', 'tools']))).toBe(true);
     expect(isPersonalContextConnector(connector(['tools']))).toBe(false);
+  });
+
+  it('projects context, memory, read, and explicit write access separately', () => {
+    const definitions = [{
+      id: 'calendar',
+      displayName: 'Calendar',
+      description: 'Calendar access',
+      category: 'data',
+      capabilities: ['context', 'memory_source', 'tools'],
+      permissions: { data: ['events:read', 'events:create'] },
+    }] as ConnectorDefinition[];
+
+    const [source] = projectPersonalContextSources(definitions, []);
+
+    expect(source?.access).toEqual({ context: true, memory: true, read: true, write: true });
+    expect(source?.permissionDetails).toEqual(['events:read', 'events:create']);
+  });
+
+  it('selects source-derived understanding by exact connector and agent scope', () => {
+    const exact = record({ source: { provider: 'calendar' } });
+    const similarSource = record({ id: 'memory-2', source: { provider: 'calendar-archive' } });
+    const otherAgent = record({ id: 'memory-3', source: { provider: 'calendar' }, scope: { agentId: 'other' } });
+    const operational = record({ id: 'memory-4', kind: 'agent_note', source: { provider: 'calendar' } });
+
+    expect(recordsDerivedFromPersonalContextSource(
+      [exact, similarSource, otherAgent, operational],
+      'main',
+      'calendar',
+    )).toEqual([exact]);
+  });
+
+  it('projects the latest source health, activity, and derived understanding count', () => {
+    const definitions = [{
+      id: 'calendar',
+      displayName: 'Calendar',
+      description: 'Calendar access',
+      category: 'data',
+      capabilities: ['context'],
+    }] as ConnectorDefinition[];
+    const instances = [{
+      instanceId: 'calendar-1',
+      connectorId: 'calendar',
+      displayName: 'Calendar',
+      enabled: true,
+      status: 'connected',
+      usage: { lastHealthCheckAt: '2026-07-20T08:00:00.000Z', lastHealthStatus: 'ok' },
+      audit: [{ at: '2026-07-20T09:00:00.000Z', action: 'health_check' }],
+    }] as ConnectorInstance[];
+
+    const [source] = projectPersonalContextSources(definitions, instances, [
+      record({ source: { provider: 'calendar' } }),
+      record({ id: 'memory-2', source: { provider: 'mail' } }),
+    ]);
+
+    expect(source).toMatchObject({
+      lastHealthCheckAt: '2026-07-20T08:00:00.000Z',
+      lastHealthStatus: 'ok',
+      lastActivityAt: '2026-07-20T09:00:00.000Z',
+      derivedUnderstandingCount: 1,
+    });
   });
 });

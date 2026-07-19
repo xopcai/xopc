@@ -29,6 +29,7 @@ export interface SaveWorkflowInput {
   graph: WorkflowGraph;
   manifest?: WorkflowDefinitionManifest;
   expectedRevision?: number;
+  intent?: 'create' | 'update';
 }
 
 export interface WorkflowRevisionSummary {
@@ -93,6 +94,10 @@ export function createWorkflowCatalog(opts: { userDir?: string } = {}): Workflow
     const validation = validateWorkflowGraph(input.graph);
     if (!validation.valid) throw new Error(validation.errors.map((issue) => issue.message).join(' '));
     const existing = loadUser(name);
+    const builtin = BUILTIN_WORKFLOWS.find((definition) => definition.name === name);
+    if (input.intent === 'create' && (existing || builtin)) {
+      throw new WorkflowNameConflictError(name, existing?.revision ?? builtin?.revision ?? 0);
+    }
     if (input.expectedRevision !== undefined && input.expectedRevision !== (existing?.revision ?? 0)) {
       throw new WorkflowRevisionConflictError(existing?.revision ?? 0);
     }
@@ -164,6 +169,13 @@ export class WorkflowRevisionConflictError extends Error {
   constructor(readonly currentRevision: number) {
     super(`workflow revision conflict; current revision is ${currentRevision}`);
     this.name = 'WorkflowRevisionConflictError';
+  }
+}
+
+export class WorkflowNameConflictError extends Error {
+  constructor(readonly workflowName: string, readonly currentRevision: number) {
+    super(`workflow name already exists: ${workflowName}`);
+    this.name = 'WorkflowNameConflictError';
   }
 }
 

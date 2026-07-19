@@ -1,5 +1,5 @@
 import { Info, Save, UserCircle } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import {
   fetchUserProfileContent,
@@ -15,17 +15,13 @@ import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/setti
 import {
   detectBrowserTimezone,
   parseUserMarkdown,
-  PRONOUNS_PRESETS,
   serializeUserMarkdown,
-  TIMEZONE_OPTIONS,
   type UserFields,
 } from '@/features/settings/agents/agent-profile-markdown';
+import { UserProfileFieldsEditor } from '@/features/settings/user-profile-fields-editor';
 import { agentsSettingsInputClass } from '@/features/settings/agents/utils';
-import { cn } from '@/lib/cn';
-import { interaction } from '@/lib/interaction';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
-import { Select, SelectOption } from '@/components/ui/popover-select';
 
 const emptyUser: UserFields = {
   callName: '',
@@ -67,9 +63,6 @@ export function UserProfileSettingsPanel() {
 
   const [user, setUser] = useState<UserFields>(emptyUser);
   const [snapshot, setSnapshot] = useState(JSON.stringify(emptyUser));
-  const [customTimezone, setCustomTimezone] = useState('');
-  const [showCustomTimezone, setShowCustomTimezone] = useState(false);
-  const [showCustomPronouns, setShowCustomPronouns] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -83,13 +76,8 @@ export function UserProfileSettingsPanel() {
       .then((content) => {
         if (cancelled) return;
         const parsed = userWithDetectedTimezone(parseUserMarkdown(content));
-        const isKnownTimezone = TIMEZONE_OPTIONS.some((tz) => tz.value === parsed.timezone);
-        const isKnownPronouns = !parsed.pronouns || PRONOUNS_PRESETS.some((p) => p.value === parsed.pronouns);
         setUser(parsed);
         setSnapshot(JSON.stringify(parsed));
-        setShowCustomTimezone(Boolean(parsed.timezone && !isKnownTimezone));
-        setCustomTimezone(parsed.timezone && !isKnownTimezone ? parsed.timezone : '');
-        setShowCustomPronouns(Boolean(parsed.pronouns && !isKnownPronouns));
       })
       .catch((err) => {
         if (cancelled) return;
@@ -104,44 +92,6 @@ export function UserProfileSettingsPanel() {
   }, [t.loadError]);
 
   const dirty = JSON.stringify(user) !== snapshot;
-
-  const locLabel = useCallback(
-    (en: string, zh: string) => (language === 'zh' ? zh : en),
-    [language],
-  );
-
-  const updateUser = useCallback((patch: Partial<UserFields>) => {
-    setUser((prev) => ({ ...prev, ...patch }));
-    setSaved(false);
-  }, []);
-
-  const timezoneSelectValue = useMemo(() => {
-    if (showCustomTimezone) return '__custom__';
-    const isKnown = TIMEZONE_OPTIONS.some((tz) => tz.value === user.timezone);
-    return isKnown ? user.timezone : '__custom__';
-  }, [showCustomTimezone, user.timezone]);
-
-  const handleTimezoneChange = useCallback(
-    (value: string) => {
-      if (value === '__custom__') {
-        setShowCustomTimezone(true);
-        return;
-      }
-      setShowCustomTimezone(false);
-      setCustomTimezone('');
-      updateUser({ timezone: value });
-    },
-    [updateUser],
-  );
-
-  const handleDetectTimezone = useCallback(() => {
-    const detected = detectBrowserTimezone();
-    if (!detected) return;
-    const isKnown = TIMEZONE_OPTIONS.some((tz) => tz.value === detected);
-    setShowCustomTimezone(!isKnown);
-    setCustomTimezone(isKnown ? '' : detected);
-    updateUser({ timezone: detected });
-  }, [updateUser]);
 
   async function save() {
     setSaving(true);
@@ -185,105 +135,16 @@ export function UserProfileSettingsPanel() {
         {loading ? (
           <UserProfileFormSkeleton />
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="flex flex-col gap-1.5 text-sm">
-              <span className="font-medium text-fg">{t.callName}</span>
-              <input
-                className={inputClass}
-                value={user.callName}
-                onChange={(e) => updateUser({ callName: e.target.value })}
-                placeholder={t.callNamePlaceholder}
-                autoComplete="off"
-              />
-            </label>
-
-            <div className="flex flex-col gap-1.5 text-sm">
-              <span className="font-medium text-fg">{t.pronouns}</span>
-              <Select
-                className={inputClass}
-                value={PRONOUNS_PRESETS.some((p) => p.value === user.pronouns) ? user.pronouns : '__custom__'}
-                onChange={(e) => {
-                  if (e.target.value === '__custom__') {
-                    setShowCustomPronouns(true);
-                    return;
-                  }
-                  setShowCustomPronouns(false);
-                  updateUser({ pronouns: e.target.value });
-                }}
-              >
-                <SelectOption value="" disabled>
-                  {t.pronounsPlaceholder}
-                </SelectOption>
-                {PRONOUNS_PRESETS.map((preset) => (
-                  <SelectOption key={preset.value} value={preset.value}>
-                    {locLabel(preset.labelEn, preset.labelZh)}
-                  </SelectOption>
-                ))}
-                <SelectOption value="__custom__">{t.custom}</SelectOption>
-              </Select>
-              {showCustomPronouns ? (
-                <input
-                  className={cn(inputClass, 'mt-1 text-xs')}
-                  value={PRONOUNS_PRESETS.some((p) => p.value === user.pronouns) ? '' : user.pronouns}
-                  onChange={(e) => updateUser({ pronouns: e.target.value })}
-                  placeholder={t.pronounsPlaceholder}
-                  autoComplete="off"
-                />
-              ) : null}
-            </div>
-
-            <div className="flex flex-col gap-1.5 text-sm sm:col-span-2">
-              <span className="font-medium text-fg">{t.timezone}</span>
-              <div className="flex flex-wrap items-stretch gap-2">
-                <Select
-                  className={cn(inputClass, 'min-w-0 flex-1')}
-                  value={timezoneSelectValue}
-                  onChange={(e) => handleTimezoneChange(e.target.value)}
-                >
-                  {TIMEZONE_OPTIONS.map((tz) => (
-                    <SelectOption key={tz.value} value={tz.value}>
-                      {locLabel(tz.labelEn, tz.labelZh)}
-                    </SelectOption>
-                  ))}
-                  <SelectOption value="__custom__">{t.timezoneCustom}</SelectOption>
-                </Select>
-                <button
-                  type="button"
-                  className={cn(
-                    'shrink-0 rounded-lg border border-edge bg-surface-panel px-3 py-2 text-xs font-medium text-fg-muted hover:bg-surface-hover hover:text-fg',
-                    interaction.press,
-                  )}
-                  onClick={handleDetectTimezone}
-                >
-                  {t.timezoneDetect}
-                </button>
-              </div>
-              {showCustomTimezone ? (
-                <input
-                  className={cn(inputClass, 'mt-1 font-mono text-xs')}
-                  value={customTimezone}
-                  onChange={(e) => {
-                    setCustomTimezone(e.target.value);
-                    updateUser({ timezone: e.target.value });
-                  }}
-                  placeholder="e.g. Asia/Shanghai"
-                  autoComplete="off"
-                />
-              ) : null}
-            </div>
-
-            <label className="flex flex-col gap-1.5 text-sm sm:col-span-2">
-              <span className="font-medium text-fg">{t.notes}</span>
-              <textarea
-                className={cn(inputClass, 'min-h-28 resize-y text-sm leading-relaxed')}
-                value={user.notes}
-                onChange={(e) => updateUser({ notes: e.target.value })}
-                placeholder={t.notesPlaceholder}
-                rows={5}
-                spellCheck
-              />
-            </label>
-          </div>
+          <UserProfileFieldsEditor
+            value={user}
+            onChange={(next) => {
+              setUser(next);
+              setSaved(false);
+            }}
+            labels={t}
+            language={language}
+            inputClassName={inputClass}
+          />
         )}
 
         <div className="mt-4 flex items-start gap-2 rounded-lg bg-accent-soft/30 px-3 py-2.5 text-xs text-fg-muted">

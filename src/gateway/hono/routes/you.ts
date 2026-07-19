@@ -8,6 +8,7 @@ import { resolveEffectiveAgentManifestForAgent } from '../../../config/agent-pro
 import type { Config } from '../../../config/schema.js';
 import { listConnectorCatalog } from '../../../connectors/catalog.js';
 import { listConnectorInstances } from '../../../connectors/instances.js';
+import { uninstallConnector } from '../../../connectors/install.js';
 import { draftGoalContract, GoalService } from '../../../goals/index.js';
 import { prepareUpdateAgent, readUserProfileFile, writeUserProfileFile } from '../../agents-admin.js';
 import {
@@ -32,7 +33,10 @@ import {
   isUserContextRecord,
   projectPersonalContextSources,
   projectUserContextRecord,
+  recordsDerivedFromPersonalContextSource,
 } from '../../../user-context/projection.js';
+import { prepareUserContextImport } from '../../../user-context/import.js';
+import { buildGoalSourceRecommendations } from '../../../user-context/source-recommendations.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 const VISIBLE_STATUSES = new Set<MemoryRecord['status']>(['active', 'candidate', 'needs_review']);
@@ -54,6 +58,28 @@ const PROFILE_FIELD_LIMITS: Record<keyof UserProfileFields, number> = {
   notes: 5_000,
 };
 const PROFILE_PROMPT_SNOOZE_MS = 7 * 24 * 60 * 60 * 1_000;
+const ALL_MEMORY_STATUSES: MemoryRecord['status'][] = [
+  'candidate',
+  'active',
+  'needs_review',
+  'stale',
+  'archived',
+  'rejected',
+];
+
+function listAllAgentMemoryRecords(agentId: string, statuses: MemoryRecord['status'][]): MemoryRecord[] {
+  return statuses.flatMap((status) => {
+    const records: MemoryRecord[] = [];
+    let offset = 0;
+    while (true) {
+      const page = listMemoryRecords({ agentId, status, limit: 500, offset });
+      records.push(...page);
+      if (page.length < 500) break;
+      offset += page.length;
+    }
+    return records;
+  });
+}
 
 async function readProfileBundle(config: Config) {
   const result = await readUserProfileFile();
@@ -180,21 +206,42 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
     const config = deps.service.currentConfig as Config;
     const agentId = selectedAgentId(config);
     const profileBundle = await readProfileBundle(config);
-    const records = Array.from(VISIBLE_STATUSES)
-      .flatMap((status) => listMemoryRecords({ agentId, status, limit: 200 }))
+    const allUserContextRecords = listAllAgentMemoryRecords(agentId, ALL_MEMORY_STATUSES)
       .filter(isUserContextRecord);
+    const records = allUserContextRecords.filter((record) => VISIBLE_STATUSES.has(record.status));
     const pausedPlaybookRecords = listMemoryRecords({ agentId, status: 'archived', limit: 200 })
       .filter(isUserContextRecord)
       .filter((record) => record.tags?.some((tag) => tag.startsWith('playbook:paused:')));
     const manifest = resolveEffectiveAgentManifestForAgent(config, agentId);
     const trustPolicy = getUserTrustPolicy();
+    const sourceDefinitions = listConnectorCatalog();
+    const sourceInstances = listConnectorInstances(config);
+    const sources = projectPersonalContextSources(sourceDefinitions, sourceInstances, allUserContextRecords);
+    const activeGoals = new GoalService().list({
+      agentId,
+      status: ['active', 'paused', 'blocked', 'needs_input'],
+      limit: 20,
+    });
     return c.json({
       agentId,
+      scope: {
+        profile: 'global',
+        memory: 'agent',
+        trust: 'global',
+        agentId,
+      },
       ...profileBundle,
       understanding: records.map(projectUserContextRecord),
       insights: buildInsightSuggestions(records),
       playbooks: buildPersonalPlaybooks([...records.filter((record) => record.status === 'active'), ...pausedPlaybookRecords]),
-      sources: projectPersonalContextSources(listConnectorCatalog(), listConnectorInstances(config)),
+      sources,
+      sourceRecommendations: buildGoalSourceRecommendations(
+        sourceDefinitions.filter((definition) => (
+          definition.capabilities.includes('context') || definition.capabilities.includes('memory_source')
+        )),
+        new Set(sourceInstances.map((instance) => instance.connectorId)),
+        activeGoals,
+      ),
       controls: {
         mode: manifest.memory.mode,
         sensitiveWritePolicy: manifest.memory.privacy?.sensitiveWritePolicy ?? 'confirm',
@@ -210,6 +257,65 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
 
   authenticated.get('/api/you/profile', async (c) => {
     return c.json(await readProfileBundle(deps.service.currentConfig as Config));
+  });
+
+  authenticated.get('/api/you/export', async (c) => {
+    const config = deps.service.currentConfig as Config;
+    const agentId = selectedAgentId(config);
+    const profileBundle = await readProfileBundle(config);
+    const understanding = listAllAgentMemoryRecords(agentId, ALL_MEMORY_STATUSES)
+      .filter(isUserContextRecord)
+      .map((record) => ({
+        statement: record.content,
+        kind: record.kind,
+        status: record.status,
+        sensitivity: record.sensitivity ?? 'normal',
+        durability: record.durability,
+        canReference: record.disclosurePolicy !== 'silent',
+        sourceName: record.source.provider ?? 'local',
+        updatedAt: record.updatedAt,
+      }));
+    return c.json({
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      agentId,
+      profile: profileBundle.profile,
+      understanding,
+    });
+  });
+
+  authenticated.post('/api/you/import', deps.strictRateLimitMiddleware, async (c) => {
+    const body = await c.req.json().catch(() => null);
+    if (!body || typeof body !== 'object' || Array.isArray(body) || body.version !== 1 || !Array.isArray(body.understanding)) {
+      return c.json({ error: 'Invalid About You export' }, 400);
+    }
+    if (body.understanding.length > 500) return c.json({ error: 'Import is limited to 500 understandings' }, 400);
+    const config = deps.service.currentConfig as Config;
+    const agentId = selectedAgentId(config);
+    const existingStatements = listAllAgentMemoryRecords(agentId, ALL_MEMORY_STATUSES)
+      .filter(isUserContextRecord)
+      .map((record) => record.content);
+    const { imports, skippedCount } = prepareUserContextImport(body.understanding, existingStatements);
+    runSqliteWriteTransaction(() => {
+      for (const item of imports) {
+        upsertMemoryRecord({
+          providerId: 'local',
+          kind: item.kind,
+          agentId,
+          content: item.statement,
+          source: { provider: 'local', path: 'import://about-you' },
+          confidence: 1,
+          tags: ['user-understanding', 'user-import'],
+          status: 'candidate',
+          sensitivity: item.sensitivity,
+          explicitness: 'explicit',
+          durability: item.durability,
+          importance: 0.7,
+          disclosurePolicy: item.canReference ? 'referenceable' : 'silent',
+        });
+      }
+    });
+    return c.json({ ok: true, importedCount: imports.length, skippedCount });
   });
 
   authenticated.patch('/api/you/profile', deps.strictRateLimitMiddleware, async (c) => {
@@ -373,6 +479,51 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
         crossAgentSharing: updated.memory.privacy?.crossAgentSharing ?? 'deny',
       },
     });
+  });
+
+  authenticated.delete('/api/you/sources/:instanceId', deps.strictRateLimitMiddleware, async (c) => {
+    const config = deps.service.currentConfig as Config;
+    const instanceId = c.req.param('instanceId');
+    const installedInstances = listConnectorInstances(config);
+    const instance = installedInstances.find((item) => item.instanceId === instanceId);
+    const definition = instance
+      ? listConnectorCatalog().find((item) => item.id === instance.connectorId)
+      : undefined;
+    if (!instance || !definition || !definition.capabilities.some((capability) => (
+      capability === 'context' || capability === 'memory_source'
+    ))) {
+      return c.json({ error: 'Personal context source not found' }, 404);
+    }
+    const body = await c.req.json().catch(() => ({}));
+    if (typeof body.deleteDerivedUnderstanding !== 'boolean') {
+      return c.json({ error: 'deleteDerivedUnderstanding must be a boolean' }, 400);
+    }
+
+    try {
+      const sourceInstances = installedInstances.filter((item) => item.connectorId === instance.connectorId);
+      for (const sourceInstance of sourceInstances) {
+        uninstallConnector(config, sourceInstance.instanceId);
+      }
+      const saved = await deps.service.saveConfig(config);
+      if (!saved.saved) return c.json({ error: saved.error ?? 'save failed' }, 500);
+    } catch (error) {
+      return c.json({ error: error instanceof Error ? error.message : String(error) }, 400);
+    }
+
+    let deletedUnderstandingCount = 0;
+    if (body.deleteDerivedUnderstanding) {
+      const agentId = selectedAgentId(config);
+      const targets = recordsDerivedFromPersonalContextSource(
+        listAllAgentMemoryRecords(agentId, ALL_MEMORY_STATUSES),
+        agentId,
+        instance.connectorId,
+      );
+      runSqliteWriteTransaction(() => {
+        for (const record of targets) deleteMemoryRecord(record.id);
+      });
+      deletedUnderstandingCount = targets.length;
+    }
+    return c.json({ ok: true, deletedUnderstandingCount });
   });
 
   authenticated.patch('/api/you/understanding/:id', deps.strictRateLimitMiddleware, async (c) => {

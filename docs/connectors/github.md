@@ -1,40 +1,34 @@
 # GitHub connector
 
-The built-in GitHub connector uses one authorization architecture in every deployment:
+The GitHub connector follows the same Composio integration path used by OpenHuman:
 
-- a product-owned public GitHub App;
-- GitHub Device Flow, polled by the Gateway;
-- expiring user access tokens with refresh-token rotation;
-- the official remote MCP endpoint at `https://api.githubcopilot.com/mcp/`;
-- an installed GitHub App to define repository access.
+- Composio hosts the GitHub OAuth flow and refreshes provider credentials;
+- xopc stores connection ownership and installation policy locally;
+- agents discover exact GitHub action contracts through Composio sessions;
+- xopc applies read, write, and admin scope checks before execution;
+- write and admin actions use the connector confirmation policy and execution audit log.
 
-It does not accept personal access tokens, OAuth App credentials, client secrets, or a local GitHub MCP package.
+xopc does not ship a separate GitHub App, Device Flow implementation, token vault, or remote GitHub MCP transport.
 
-## Release registration
+## Setup
 
-Create the product GitHub App with Device Flow and expiring user tokens enabled. Configure the required repository and organization permissions in the App itself. Release builds must embed its public registration values:
+1. Create a Composio project and copy its API key.
+2. Install the **Composio API Key** connector and enter that key.
+3. Install the **GitHub** connector (`composio-github`). Its default scope is `read`.
+4. Select **Connect account** and complete GitHub authorization on the Composio-hosted page.
+5. Return to xopc and verify that the GitHub connection is active.
+6. Raise the connector scope to `write` or `admin` only when those actions are required.
 
-```bash
-XOPC_BUILD_GITHUB_APP_CLIENT_ID=... \
-XOPC_BUILD_GITHUB_APP_SLUG=... \
-pnpm run build
-```
+No `XOPC_BUILD_GITHUB_APP_CLIENT_ID`, `XOPC_BUILD_GITHUB_APP_SLUG`, GitHub client secret, or GitHub App installation is required.
 
-The build fails when either value is missing. The client id and slug are public metadata; no client secret or private key is shipped.
+If an earlier development build already installed the retired `github` MCP connector, remove that managed instance before installing `composio-github`; the two runtimes must not remain enabled together.
 
-## Credential encryption
+## Action policy
 
-Electron generates a random 256-bit master key, protects it with Electron `safeStorage`, and passes it only to its Gateway subprocess. Linux `basic_text` storage is rejected.
+The GitHub connector uses the curated GitHub action catalog maintained alongside the connector implementation. Actions are classified as:
 
-A remote Gateway must provide its own 32-byte base64 master key through its secret manager:
+- `read`: repository, issue, pull request, branch, commit, user, and search operations;
+- `write`: creating or updating repositories, files, commits, issues, comments, pull requests, reviews, and gists;
+- `admin`: deleting repositories, refs, or files; changing collaborators; and cancelling workflow runs.
 
-```bash
-export XOPC_CREDENTIALS_MASTER_KEY="$(openssl rand -base64 32)"
-xopc gateway --bind lan
-```
-
-Persist the same secret across restarts. GitHub access and refresh tokens are encrypted at rest with AES-256-GCM. If the key is missing or invalid, GitHub connection fails closed; there is no plaintext fallback.
-
-## User flow
-
-The Connectors page displays the GitHub device code and opens GitHub's verification page. The Gateway polls automatically. After authorization it checks whether the product GitHub App is installed; if needed, the page links to the App installation screen. The connector becomes installable only after both authorization and App installation succeed.
+GitHub actions not present in this catalog are rejected even when the connector has `admin` scope. This matches OpenHuman's static-catalog behavior and prevents a newly published or ambiguous Composio action from bypassing local policy.

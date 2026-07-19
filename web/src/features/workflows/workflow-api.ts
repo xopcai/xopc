@@ -559,8 +559,12 @@ export async function saveWorkflowDefinition(
   manifest: WorkflowDefinitionManifest,
   expectedRevision: number,
 ): Promise<WorkflowDefinition> {
-  const data = await fetchJson<{ definition: WorkflowDefinition }>(apiUrl('/api/workflows/definitions'), {
-    method: 'POST',
+  const creating = expectedRevision === 0;
+  const endpoint = creating
+    ? '/api/workflows/definitions'
+    : `/api/workflows/definitions/${encodeURIComponent(name)}`;
+  const data = await fetchJson<{ definition: WorkflowDefinition }>(apiUrl(endpoint), {
+    method: creating ? 'POST' : 'PUT',
     body: JSON.stringify({ name, graph, manifest, expectedRevision }),
   });
   return data.definition;

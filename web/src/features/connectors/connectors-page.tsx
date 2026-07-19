@@ -284,7 +284,6 @@ export function ConnectorsPage() {
     setState((previous) => ({ ...previous, error: null }));
     try {
       const plan = await fetchStoreConnectorInstallPlan(packageName);
-      if (plan.requiresOAuth && plan.definition.id !== 'github') throw new Error(cs.storeOAuthUnsupported);
       setInstallDraft(buildInitialDraft(plan.definition, {
         packageName: plan.packageName,
         version: plan.version,
@@ -295,7 +294,7 @@ export function ConnectorsPage() {
     } finally {
       setStorePlanLoading(false);
     }
-  }, [cs.storeOAuthUnsupported]);
+  }, []);
 
   const managedServerIds = useMemo(
     () => new Set(state.instances.flatMap((instance) => instance.materialized.type === 'mcp' ? [instance.materialized.serverId] : [])),

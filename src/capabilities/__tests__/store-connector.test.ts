@@ -89,7 +89,6 @@ describe('store connector install plans', () => {
       packageName: 'demo-connector',
       version: '1.0.0',
       requiresRestart: false,
-      requiresOAuth: false,
       permissions: { data: ['workspace.read'], localExec: false },
       definition: {
         source: 'store',
@@ -120,6 +119,20 @@ describe('store connector install plans', () => {
 
     await expect(getStoreConnectorInstallPlan(config(), 'demo-connector')).rejects.toThrow(
       'explicitly deny local command execution',
+    );
+  });
+
+  it('rejects OAuth manifests because Store connectors have no authorization provider', async () => {
+    const oauthManifest = {
+      ...manifest,
+      capabilities: [...manifest.capabilities, 'auth.oauth'],
+      auth: { mode: 'oauth', provider: 'github' },
+    };
+    const archive = archiveForManifest(oauthManifest);
+    mockStore(archive, undefined, oauthManifest);
+
+    await expect(getStoreConnectorInstallPlan(config(), 'demo-connector')).rejects.toThrow(
+      'support only none or apiKey authentication',
     );
   });
 
