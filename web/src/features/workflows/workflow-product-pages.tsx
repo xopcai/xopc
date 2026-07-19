@@ -19,6 +19,11 @@ import { WorkflowRunPanel } from './workflow-run-panel';
 import { WorkflowRunSetupPanel, type WorkflowRunSetupValue } from './workflow-run-setup-panel';
 import { useWorkflowRunLive } from './use-workflow-run-live';
 import {
+  parseWorkflowSaveConflict,
+  suggestAvailableWorkflowName,
+  type WorkflowSaveConflict,
+} from './workflow-save-utils';
+import {
   cancelWorkflowRun,
   getWorkflowRun,
   getWorkflowRunComparison,
@@ -50,7 +55,23 @@ function useWorkflowDefinition(definitionId: string | undefined) {
     () => definitions.data?.find((item) => item.id === definitionId || item.name === definitionId),
     [definitionId, definitions.data],
   );
-  return { definition, definitions: definitions.data ?? [], loading: definitions.isLoading, error: definitions.error };
+  const upsertDefinition = useCallback(async (saved: WorkflowDefinition) => {
+    await definitions.mutate((current) => [
+      ...(current ?? []).filter((item) => item.id !== saved.id && item.name !== saved.name),
+      saved,
+    ], { revalidate: false });
+  }, [definitions]);
+  const refreshDefinitions = useCallback(async () => {
+    await definitions.mutate();
+  }, [definitions]);
+  return {
+    definition,
+    definitions: definitions.data ?? [],
+    loading: definitions.isLoading,
+    error: definitions.error,
+    upsertDefinition,
+    refreshDefinitions,
+  };
 }
 
 const emptyRunSetup = (): WorkflowRunSetupValue => ({ goal: '', argValues: {}, schemaInput: {}, concurrency: '', maxSubagents: '' });
@@ -197,10 +218,16 @@ export function WorkflowEditorPage() {
   const copyId = searchParams.get('copy')?.trim() || undefined;
   const repairRunId = searchParams.get('repairRun')?.trim() || undefined;
   const sourceId = definitionId ?? copyId;
-  const { definition, definitions, loading } = useWorkflowDefinition(sourceId);
+  const { definition, definitions, loading, upsertDefinition, refreshDefinitions } = useWorkflowDefinition(sourceId);
   const repairRun = useSWR(repairRunId && ownerAgentId ? ['workflow-repair-run', repairRunId, ownerAgentId] : null, () => getWorkflowRun(repairRunId!, { ownerAgentId }), { revalidateOnFocus: false });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saveConflict, setSaveConflict] = useState<WorkflowSaveConflict | null>(null);
+  const existingNames = useMemo(() => definitions.map((item) => item.name), [definitions]);
+  const initialName = useMemo(
+    () => suggestAvailableWorkflowName('my_workflow', existingNames),
+    [existingNames],
+  );
 
   const initialDraft = useMemo<WorkflowEditorInitialDraft | null>(() => {
     if (!definition) return null;
@@ -230,39 +257,63 @@ export function WorkflowEditorPage() {
   const save = useCallback(async (payload: { name: string; graph: WorkflowGraph; manifest: WorkflowDefinitionManifest; expectedRevision: number }) => {
     setSaving(true);
     setError(null);
+    setSaveConflict(null);
     try {
       const saved = await saveWorkflowDefinition(payload.name, payload.graph, payload.manifest, payload.expectedRevision);
+      await upsertDefinition(saved);
       navigate(`/workflows/${saved.id}/edit`, { replace: true });
       return saved;
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      const conflict = parseWorkflowSaveConflict(cause);
+      setSaveConflict(conflict);
+      if (!conflict) setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setSaving(false);
     }
-  }, [navigate]);
+  }, [navigate, upsertDefinition]);
 
   const saveAndStart = useCallback(async (payload: { name: string; graph: WorkflowGraph; manifest: WorkflowDefinitionManifest; expectedRevision: number; goal: string }) => {
     setSaving(true);
     setError(null);
+    setSaveConflict(null);
     try {
       const saved = await saveWorkflowDefinition(payload.name, payload.graph, payload.manifest, payload.expectedRevision);
+      await upsertDefinition(saved);
       const result = await startWorkflowRun({ definitionId: saved.id, goal: payload.goal, input: { goal: payload.goal }, agentId: ownerAgentId });
       navigate(`/workflows/runs/${result.runId}${ownerAgentId ? `?agentId=${encodeURIComponent(ownerAgentId)}` : ''}`);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      const conflict = parseWorkflowSaveConflict(cause);
+      setSaveConflict(conflict);
+      if (!conflict) setError(cause instanceof Error ? cause.message : String(cause));
       throw cause;
     } finally {
       setSaving(false);
     }
-  }, [navigate, ownerAgentId]);
+  }, [navigate, ownerAgentId, upsertDefinition]);
 
-  if (sourceId && loading) return <WorkflowRouteSkeleton />;
+  if (loading) return <WorkflowRouteSkeleton />;
   if (definitionId && !definition) return <WorkflowRouteError message={language === 'zh' ? '没有找到这个工作流' : 'Workflow not found'} />;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {error ? <div className="border-b border-danger/30 bg-danger/5 px-4 py-2 text-sm text-danger">{error}</div> : null}
-      <WorkflowEditor language={language} ownerAgentId={ownerAgentId} saving={saving} initialDraft={initialDraft} onSave={save} onSaveAndStart={saveAndStart} />
+      <WorkflowEditor
+        language={language}
+        ownerAgentId={ownerAgentId}
+        saving={saving}
+        initialDraft={initialDraft}
+        initialName={initialName}
+        existingNames={existingNames}
+        saveConflict={saveConflict}
+        onSave={save}
+        onSaveAndStart={saveAndStart}
+        onClearSaveConflict={() => setSaveConflict(null)}
+        onReloadLatest={() => {
+          setSaveConflict(null);
+          setError(null);
+          void refreshDefinitions();
+        }}
+      />
     </div>
   );
 }

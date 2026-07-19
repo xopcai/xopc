@@ -4,7 +4,11 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { createWorkflowCatalog, WorkflowRevisionConflictError } from '../catalog.js';
+import {
+  createWorkflowCatalog,
+  WorkflowNameConflictError,
+  WorkflowRevisionConflictError,
+} from '../catalog.js';
 
 const graph = {
   schemaVersion: 1 as const,
@@ -41,6 +45,27 @@ describe('visual workflow catalog', () => {
     const catalog = createWorkflowCatalog({ userDir: dir });
     catalog.save({ name: 'my_workflow', graph, expectedRevision: 0 });
     expect(() => catalog.save({ name: 'my_workflow', graph, expectedRevision: 0 })).toThrow(WorkflowRevisionConflictError);
+  });
+
+  it('distinguishes a duplicate create from a stale update', () => {
+    const catalog = createWorkflowCatalog({ userDir: dir });
+    catalog.save({ name: 'my_workflow', graph, expectedRevision: 0, intent: 'create' });
+    expect(() => catalog.save({
+      name: 'my_workflow',
+      graph,
+      expectedRevision: 0,
+      intent: 'create',
+    })).toThrow(WorkflowNameConflictError);
+  });
+
+  it('does not create a user workflow over a builtin in create mode', () => {
+    const catalog = createWorkflowCatalog({ userDir: dir });
+    expect(() => catalog.save({
+      name: 'research',
+      graph,
+      expectedRevision: 0,
+      intent: 'create',
+    })).toThrow(WorkflowNameConflictError);
   });
 
   it('keeps revision history and restores a snapshot as a new revision', () => {

@@ -7,12 +7,6 @@ const COMPOSIO_STRATEGY_OVERRIDES: Readonly<Record<string, ConnectorIntegrationS
     preferred: false,
     alternative: { kind: 'channel', id: 'telegram' },
   },
-  github: {
-    lane: 'mcp',
-    workload: 'high_frequency',
-    preferred: false,
-    alternative: { kind: 'connector', id: 'github' },
-  },
 };
 
 export function composioIntegrationStrategy(toolkit: string): ConnectorIntegrationStrategy {

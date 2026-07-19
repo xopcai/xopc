@@ -26,7 +26,6 @@ export type StoreConnectorInstallPlan = {
   definition: ConnectorDefinition;
   permissions: ConnectorPermissions;
   requiresRestart: false;
-  requiresOAuth: boolean;
 };
 
 function asRecord(value: unknown, label: string): JsonRecord {
@@ -142,28 +141,17 @@ function readConnectorManifest(
   }
   const auth = asRecord(manifest.auth, 'Connector auth');
   const authMode = auth.mode;
-  if (authMode !== 'none' && authMode !== 'apiKey' && authMode !== 'oauth') {
-    throw new Error('Connector auth mode must be none, apiKey, or oauth.');
+  if (authMode !== 'none' && authMode !== 'apiKey') {
+    throw new Error('Store connectors support only none or apiKey authentication.');
   }
-  const normalizedAuth: ConnectorDefinition['auth'] = authMode === 'oauth'
-    ? {
-        mode: 'oauth',
-        provider: asString(auth.provider, 'Connector auth provider'),
-        installPhase: (() => {
-          if (auth.installPhase !== 'before_install' && auth.installPhase !== 'after_install') {
-            throw new Error('Connector OAuth installPhase must be before_install or after_install.');
-          }
-          return auth.installPhase;
-        })(),
-      }
-    : { mode: authMode };
+  const normalizedAuth: ConnectorDefinition['auth'] = { mode: authMode };
   const category = asString(manifest.category, 'Connector category');
   if (!['code', 'docs', 'browser', 'data', 'automation', 'custom'].includes(category)) {
     throw new Error(`Unsupported connector category: ${category}`);
   }
   const capabilities = asStringArray(manifest.capabilities, 'Connector capabilities');
   const allowedCapabilities = new Set([
-    'tools', 'resources', 'prompts', 'context', 'events', 'auth.apiKey', 'auth.oauth',
+    'tools', 'resources', 'prompts', 'context', 'events', 'auth.apiKey',
     'runtime.mcp.stdio', 'runtime.mcp.sse', 'runtime.mcp.streamableHttp',
   ]);
   if (capabilities.some((capability) => !allowedCapabilities.has(capability))) {
@@ -262,7 +250,6 @@ export async function getStoreConnectorInstallPlan(
     version: detail.latestVersion.version,
     permissions: definition.permissions ?? {},
     requiresRestart: false,
-    requiresOAuth: definition.auth.mode === 'oauth',
     definition,
   };
 }
@@ -274,9 +261,6 @@ export async function installStoreConnector(
   version?: string,
 ) {
   const plan = await getStoreConnectorInstallPlan(config, packageName, version);
-  if (plan.requiresOAuth && plan.definition.id !== 'github') {
-    throw new Error('OAuth installation for store connectors is not available yet. Use an API-key connector or the built-in GitHub connector.');
-  }
   const instance = await installConnectorDefinition(config, plan.definition, input);
   return { instance, plan };
 }

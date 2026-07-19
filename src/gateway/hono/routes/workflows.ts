@@ -4,7 +4,11 @@ import { basename, join } from 'node:path';
 import type { Hono } from 'hono';
 
 import { resolveDefaultAgentId } from '../../../agent/agent-scope.js';
-import { createWorkflowCatalog, WorkflowRevisionConflictError } from '../../../agent/workflow/catalog.js';
+import {
+  createWorkflowCatalog,
+  WorkflowNameConflictError,
+  WorkflowRevisionConflictError,
+} from '../../../agent/workflow/catalog.js';
 import { messagesToClientHistory } from '../../../session/client-history.js';
 import type {
   WorkflowDefinition,
@@ -171,11 +175,54 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
         graph: body.graph!,
         manifest: body.manifest,
         expectedRevision: body.expectedRevision,
+        // Keep revision > 0 compatible with older clients while new clients use PUT for updates.
+        intent: body.expectedRevision === 0 ? 'create' : 'update',
       });
-      return c.json({ definition }, definition.revision === 1 ? 201 : 200);
+      return c.json({ definition }, body.expectedRevision === 0 ? 201 : 200);
+    } catch (err) {
+      if (err instanceof WorkflowNameConflictError) {
+        return c.json({
+          error: `Workflow name "${err.workflowName}" is already in use.`,
+          code: 'WORKFLOW_NAME_EXISTS',
+          name: err.workflowName,
+          currentRevision: err.currentRevision,
+          suggestedName: suggestAvailableWorkflowName(err.workflowName, catalog.list().map((entry) => entry.name)),
+        }, 409);
+      }
+      if (err instanceof WorkflowRevisionConflictError) {
+        return c.json({ error: err.message, code: 'WORKFLOW_REVISION_CONFLICT', currentRevision: err.currentRevision }, 409);
+      }
+      return c.json({ error: err instanceof Error ? err.message : 'Failed to save workflow' }, 400);
+    }
+  });
+
+  authenticated.put('/api/workflows/definitions/:id', async (c) => {
+    const id = c.req.param('id').trim();
+    const body = await readJsonBody<SaveWorkflowDefinitionRequestBody>(c.req.raw);
+    if (!Number.isSafeInteger(body.expectedRevision) || body.expectedRevision! < 1) {
+      return c.json({ error: 'expectedRevision is required' }, 400);
+    }
+    const validation = validateWorkflowDefinitionInput({ name: id, graph: body.graph });
+    if (!validation.valid) {
+      return c.json({ error: validation.errors[0]?.message ?? 'Invalid workflow definition', validation }, 400);
+    }
+    const catalog = createWorkflowCatalog();
+    try {
+      const { definition } = catalog.save({
+        name: id,
+        graph: body.graph!,
+        manifest: body.manifest,
+        expectedRevision: body.expectedRevision,
+        intent: 'update',
+      });
+      return c.json({ definition });
     } catch (err) {
       if (err instanceof WorkflowRevisionConflictError) {
-        return c.json({ error: err.message, currentRevision: err.currentRevision }, 409);
+        return c.json({
+          error: err.message,
+          code: 'WORKFLOW_REVISION_CONFLICT',
+          currentRevision: err.currentRevision,
+        }, 409);
       }
       return c.json({ error: err instanceof Error ? err.message : 'Failed to save workflow' }, 400);
     }
@@ -617,6 +664,15 @@ function normalizePositiveInteger(value: number | undefined): number | undefined
     return undefined;
   }
   return Math.floor(value);
+}
+
+function suggestAvailableWorkflowName(name: string, existingNames: string[]): string {
+  const used = new Set(existingNames);
+  for (let suffix = 2; suffix < 1_000; suffix += 1) {
+    const candidate = `${name}_${suffix}`;
+    if (!used.has(candidate)) return candidate;
+  }
+  return `${name}_${Date.now()}`;
 }
 
 function findWorkflowArtifact(

@@ -6,7 +6,6 @@ import {
   isXopcDatabaseOpen,
   upsertConnectorInstallation,
 } from '../storage/sqlite/index.js';
-import { assertConnectorAuthorizationReady } from './auth-provider-registry.js';
 import { saveComposioApiKey } from './composio.js';
 import { assertComposioApiKeyConfigured } from './composio-sessions.js';
 import { listConnectorInstances } from './instances.js';
@@ -94,7 +93,6 @@ registerConnectorRuntimeAdapter({
     if (existingServer && !isManagedConnectorServer(existingServer)) {
       throw new Error(`MCP server "${serverId}" already exists and is not managed by Connectors.`);
     }
-    await assertConnectorAuthorizationReady(definition);
     await saveConnectorSecrets(definition, input, resolver);
     config.mcp = config.mcp ?? {};
     config.mcp.servers = { ...(config.mcp.servers ?? {}), [serverId]: server };

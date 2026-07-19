@@ -44,6 +44,7 @@ export type UserUnderstanding = {
   reviewDue: boolean;
   evidenceCount: number;
   sourcePath?: string;
+  latestEvidenceAt?: string;
 };
 
 export type PersonalContextSource = {
@@ -52,11 +53,22 @@ export type PersonalContextSource = {
   description: string;
   category: string;
   capabilities: string[];
+  access: {
+    context: boolean;
+    memory: boolean;
+    read: boolean;
+    write: boolean;
+  };
+  permissionDetails: string[];
   installed: boolean;
   enabled: boolean;
   status: string;
   instanceId?: string;
   lastConnectedAt?: string;
+  lastHealthCheckAt?: string;
+  lastHealthStatus?: string;
+  lastActivityAt?: string;
+  derivedUnderstandingCount: number;
 };
 
 export type InsightSuggestion = {
@@ -78,6 +90,12 @@ export type PersonalPlaybook = {
 
 export type UserContextResponse = {
   agentId: string;
+  scope: {
+    profile: 'global';
+    memory: 'agent';
+    trust: 'global';
+    agentId: string;
+  };
   profileContent: string;
   profile: UserProfileFields;
   profileSetup: UserProfileSetup;
@@ -85,6 +103,12 @@ export type UserContextResponse = {
   insights: InsightSuggestion[];
   playbooks: PersonalPlaybook[];
   sources: PersonalContextSource[];
+  sourceRecommendations: Array<{
+    sourceId: string;
+    sourceName: string;
+    goalId: string;
+    goalTitle: string;
+  }>;
   controls: {
     mode: 'off' | 'readOnly' | 'confirmWrite' | 'auto';
     sensitiveWritePolicy: 'deny' | 'confirm' | 'allow';
@@ -135,6 +159,16 @@ export function forgetUnderstanding(id: string): Promise<{ ok: true }> {
   });
 }
 
+export function disconnectPersonalContextSource(
+  instanceId: string,
+  deleteDerivedUnderstanding: boolean,
+): Promise<{ ok: true; deletedUnderstandingCount: number }> {
+  return fetchJson(apiUrl(`/api/you/sources/${encodeURIComponent(instanceId)}`), {
+    method: 'DELETE',
+    body: JSON.stringify({ deleteDerivedUnderstanding }),
+  });
+}
+
 export function updateUserContextControls(
   controls: UserContextResponse['controls'],
 ): Promise<UserContextResponse['controls']> {
@@ -168,5 +202,33 @@ export function updateUserProfilePrompt(action: 'snooze' | 'reset'): Promise<{ p
   return fetchJson(apiUrl('/api/you/profile-prompt'), {
     method: 'POST',
     body: JSON.stringify({ action }),
+  });
+}
+
+export type UserContextExport = {
+  version: 1;
+  exportedAt: string;
+  agentId: string;
+  profile: UserProfileFields;
+  understanding: Array<{
+    statement: string;
+    kind: string;
+    status: string;
+    sensitivity: UserUnderstanding['sensitivity'];
+    durability: UserUnderstanding['durability'];
+    canReference: boolean;
+    sourceName: string;
+    updatedAt: string;
+  }>;
+};
+
+export function exportUserContext(): Promise<UserContextExport> {
+  return fetchJson(apiUrl('/api/you/export'));
+}
+
+export function importUserContext(payload: unknown): Promise<{ ok: true; importedCount: number; skippedCount: number }> {
+  return fetchJson(apiUrl('/api/you/import'), {
+    method: 'POST',
+    body: JSON.stringify(payload),
   });
 }

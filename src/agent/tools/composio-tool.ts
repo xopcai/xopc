@@ -5,7 +5,11 @@ import type { Config } from '../../config/schema.js';
 import { connectorArgumentsHash, connectorArgumentsPreview } from '../../connectors/approval.js';
 import { getConnectorDefinition } from '../../connectors/catalog.js';
 import { ComposioSessionsAdapter } from '../../connectors/composio-sessions.js';
-import { getComposioToolkitScope, scopeForComposioAction } from '../../connectors/composio.js';
+import {
+  getComposioToolkitScope,
+  isComposioActionAllowedByCatalog,
+  scopeForComposioAction,
+} from '../../connectors/composio.js';
 import type { ConnectorActionMetadata, ConnectorInstallationPolicy } from '../../connectors/types.js';
 import { parseSessionKey } from '../../routing/session-key.js';
 import {
@@ -178,19 +182,24 @@ export function createComposioTools(deps: ComposioToolDeps): AgentTool[] {
       if (requested.length === 0) return textResult('No connected apps are allowed for this user and agent.');
       const session = await adapter.createSession({ principalId: available.principalId, toolkits: requested });
       const result = await session.search({ query: params.query, toolkits: requested });
+      let visibleResult = result;
       if (result && typeof result === 'object' && !Array.isArray(result)) {
         const schemas = (result as Record<string, unknown>).toolSchemas;
         if (schemas && typeof schemas === 'object' && !Array.isArray(schemas)) {
+          const visibleSchemas: Record<string, unknown> = {};
           for (const [actionId, schema] of Object.entries(schemas)) {
             const toolkit = toolkitForAction(actionId, requested);
             if (toolkit && requested.includes(toolkit)) {
+              if (!isComposioActionAllowedByCatalog(actionId)) continue;
+              visibleSchemas[actionId] = schema;
               const installation = available.installations.find((candidate) => toolkitFromInstallation(candidate) === toolkit);
               if (installation) upsertConnectorActionMetadata(contractFromSearch(installation.connectorId, toolkit, actionId, schema));
             }
           }
+          visibleResult = { ...(result as Record<string, unknown>), toolSchemas: visibleSchemas };
         }
       }
-      return textResult(result);
+      return textResult(visibleResult);
     },
   };
 
@@ -231,6 +240,9 @@ export function createComposioTools(deps: ComposioToolDeps): AgentTool[] {
       if (!toolkit) return textResult('Unknown toolkit for this action. Call composio_search first.');
       const installation = available.installations.find((candidate) => toolkitFromInstallation(candidate) === toolkit);
       if (!installation) return textResult('This app is not allowed for this user and agent.');
+      if (!isComposioActionAllowedByCatalog(params.actionId)) {
+        return textResult('This action is not in the connector curated action catalog.');
+      }
       const action = listConnectorActionMetadata(installation.connectorId)
         .find((candidate) => candidate.actionId === params.actionId);
       if (!action?.inputSchema) {

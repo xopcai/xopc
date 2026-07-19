@@ -39,6 +39,11 @@ export function isUserContextRecord(record: MemoryRecord): boolean {
   return CONTEXTUAL_USER_KINDS.has(record.kind) && record.tags?.includes('user-understanding') === true;
 }
 
+export function isUserContextMemoryKind(value: unknown): value is MemoryKind {
+  return typeof value === 'string'
+    && (ALWAYS_PERSONAL_KINDS.has(value as MemoryKind) || CONTEXTUAL_USER_KINDS.has(value as MemoryKind));
+}
+
 export function facetForMemoryKind(kind: MemoryKind): UserContextFacet {
   if (kind === 'user_profile' || kind === 'personal_logistics') return 'basics';
   if (kind === 'preference' || kind === 'routine' || kind === 'tool_preference' || kind === 'task_lesson') {
@@ -57,6 +62,11 @@ export function originForMemoryRecord(record: MemoryRecord): UserContextOrigin {
 
 export function projectUserContextRecord(record: MemoryRecord) {
   const lifecycle = resolveMemoryStability(record);
+  const latestEvidenceAt = record.evidence
+    ?.map((evidence) => evidence.observedAt)
+    .filter((value): value is string => Boolean(value))
+    .sort()
+    .at(-1);
   return {
     id: record.id,
     statement: record.content,
@@ -76,6 +86,7 @@ export function projectUserContextRecord(record: MemoryRecord) {
     reviewDue: lifecycle.reviewDue,
     evidenceCount: record.evidence?.length ?? 0,
     sourcePath: record.source.path,
+    latestEvidenceAt,
   };
 }
 
@@ -83,9 +94,22 @@ export function isPersonalContextConnector(definition: ConnectorDefinition): boo
   return definition.capabilities.includes('context') || definition.capabilities.includes('memory_source');
 }
 
+export function recordsDerivedFromPersonalContextSource(
+  records: MemoryRecord[],
+  agentId: string,
+  connectorId: string,
+): MemoryRecord[] {
+  return records.filter((record) => (
+    record.scope.agentId === agentId
+    && record.source.provider === connectorId
+    && isUserContextRecord(record)
+  ));
+}
+
 export function projectPersonalContextSources(
   definitions: ConnectorDefinition[],
   instances: ConnectorInstance[],
+  records: MemoryRecord[] = [],
 ) {
   const instanceByConnector = new Map<string, ConnectorInstance[]>();
   for (const instance of instances) {
@@ -97,6 +121,16 @@ export function projectPersonalContextSources(
     .filter(isPersonalContextConnector)
     .map((definition) => {
       const connected = instanceByConnector.get(definition.id) ?? [];
+      const relatedRecords = records.filter((record) => record.source.provider === definition.id);
+      const latestHealth = connected
+        .filter((instance) => instance.usage.lastHealthCheckAt && instance.usage.lastHealthStatus)
+        .sort((left, right) => (
+          Date.parse(right.usage.lastHealthCheckAt!) - Date.parse(left.usage.lastHealthCheckAt!)
+        ))[0]?.usage;
+      const permissionDetails = definition.permissions?.data ?? [];
+      const canWrite = permissionDetails.some((permission) => (
+        /(?:^|[.:/_-])(write|create|update|delete|manage|send|admin)(?:$|[.:/_-])/i.test(permission)
+      ));
       return {
         id: definition.id,
         displayName: definition.displayName,
@@ -105,11 +139,36 @@ export function projectPersonalContextSources(
         capabilities: definition.capabilities.filter((capability) => (
           capability === 'context' || capability === 'memory_source' || capability === 'tools' || capability === 'events'
         )),
+        access: {
+          context: definition.capabilities.includes('context'),
+          memory: definition.capabilities.includes('memory_source'),
+          read: definition.capabilities.includes('context')
+            || definition.capabilities.includes('resources')
+            || definition.capabilities.includes('tools'),
+          write: canWrite,
+        },
+        permissionDetails,
         installed: connected.length > 0,
         enabled: connected.some((instance) => instance.enabled),
         status: connected[0]?.status ?? 'not_installed',
         instanceId: connected[0]?.instanceId,
-        lastConnectedAt: connected[0]?.lastConnectedAt,
+        lastConnectedAt: connected
+          .map((instance) => instance.lastConnectedAt)
+          .filter((value): value is string => Boolean(value))
+          .sort()
+          .at(-1),
+        lastHealthCheckAt: latestHealth?.lastHealthCheckAt,
+        lastHealthStatus: latestHealth?.lastHealthStatus,
+        lastActivityAt: connected
+          .flatMap((instance) => [
+            instance.lastConnectedAt,
+            instance.usage.lastHealthCheckAt,
+            ...instance.audit.map((entry) => entry.at),
+          ])
+          .filter((value): value is string => Boolean(value))
+          .sort()
+          .at(-1),
+        derivedUnderstandingCount: relatedRecords.length,
       };
     })
     .sort((left, right) => {
