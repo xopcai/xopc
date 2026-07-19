@@ -52,7 +52,8 @@ function maxBase64CharsForBinary(maxBinaryBytes: number): number {
  * SSE events follow XOPC Chat Stream Protocol v1:
  *   run_start, user_message, user_transcript, assistant_message_start,
  *   assistant_delta, thinking_delta, thinking_end, tool_start, tool_update,
- *   tool_end, assistant_message_end, compaction, tts_audio, clarify_request,
+ *   tool_end, review_start, review_delta, review_end, assistant_message_end,
+ *   compaction, tts_audio, clarify_request,
  *   run_end, error.
  */
 export function createAgentSSEHandler(config: SSEHandlerConfig) {

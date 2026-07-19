@@ -225,3 +225,22 @@ export function linkWorkspaceFileMentions(root: HTMLElement): void {
     node.parentNode?.replaceChild(frag, node);
   }
 }
+
+/** Marks HTTP(S) links to open separately without changing non-web deep links. */
+export function openHttpLinksInNewTab(root: HTMLElement): void {
+  for (const anchor of root.querySelectorAll<HTMLAnchorElement>('a[href]')) {
+    const href = anchor.getAttribute('href');
+    if (!href) continue;
+    try {
+      const url = new URL(href, window.location.href);
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') continue;
+      anchor.target = '_blank';
+      const rel = new Set(anchor.rel.split(/\s+/).filter(Boolean));
+      rel.add('noopener');
+      rel.add('noreferrer');
+      anchor.rel = [...rel].join(' ');
+    } catch {
+      /* Ignore malformed URLs. */
+    }
+  }
+}

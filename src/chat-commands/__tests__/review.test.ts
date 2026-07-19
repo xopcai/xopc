@@ -111,6 +111,8 @@ describe('/review command', () => {
       modelRef: 'openai/gpt-4.1',
       onTextDelta: expect.any(Function),
     });
+    expect(btwQuery.mock.calls[0]?.[0]).toContain('<review_progress>');
+    expect(btwQuery.mock.calls[0]?.[0]).toContain('<review_result>');
   });
 
   it('uses a session-selected model before the agent review role', async () => {
@@ -159,7 +161,7 @@ describe('/review command', () => {
     }));
   });
 
-  it('emits review trace tool events for streaming clients', async () => {
+  it('emits isolated review lifecycle events for streaming clients', async () => {
     writeFileSync(join(repo, 'app.ts'), 'export const value = 2;\n');
     const btwQuery = vi.fn(async () => ({
       text: JSON.stringify({
@@ -176,31 +178,25 @@ describe('/review command', () => {
 
     expect(result.success).toBe(true);
     expect(emitEvent).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'tool_execution_start',
-      toolName: 'review.prepare_diff',
+      type: 'review_start',
+      stage: 'preparing',
     }));
     expect(emitEvent).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'tool_execution_end',
-      toolName: 'review.prepare_diff',
-      isError: false,
+      type: 'review_start',
+      stage: 'reviewing',
+      target: 'uncommitted changes',
     }));
     expect(emitEvent).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'tool_execution_start',
-      toolName: 'review.model_judge',
-      args: expect.objectContaining({ modelRef: 'openai/gpt-4.1' }),
-    }));
-    expect(emitEvent).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'tool_execution_end',
-      toolName: 'review.model_judge',
-      isError: false,
+      type: 'review_end',
+      status: 'complete',
     }));
   });
 
-  it('forwards reviewer text deltas to the running judge tool', async () => {
+  it('forwards only user-facing reviewer draft deltas', async () => {
     writeFileSync(join(repo, 'app.ts'), 'export const value = 2;\n');
     const emitEvent = vi.fn();
     const btwQuery = vi.fn(async (_prompt: string, options?: { onTextDelta?: (delta: string) => Promise<void> }) => {
-      await options?.onTextDelta?.('{\"findings\": []}');
+      await options?.onTextDelta?.('<review_progress>Reviewing the changed value.</review_progress>');
       return {
         text: JSON.stringify({
           findings: [],
@@ -214,15 +210,12 @@ describe('/review command', () => {
     await commandRegistry.execute('review', createContext(repo, btwQuery, emitEvent), '');
 
     expect(emitEvent).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'tool_execution_update',
-      toolName: 'review.model_judge',
-      partialResult: {
-        content: [{ type: 'text', text: '{\"findings\": []}' }],
-      },
+      type: 'review_delta',
+      delta: 'Reviewing the changed value.',
     }));
   });
 
-  it('marks reviewer fallback as a failed judge trace instead of no findings', async () => {
+  it('marks reviewer fallback as a failed review instead of no findings', async () => {
     writeFileSync(join(repo, 'app.ts'), 'export const value = 2;\n');
     const btwQuery = vi.fn(async () => ({ text: 'not json' }));
     const emitEvent = vi.fn();
@@ -234,16 +227,9 @@ describe('/review command', () => {
     expect(result.content).toContain('Reviewer model output could not be parsed');
     expect(result.content).not.toContain('No findings.');
     expect(emitEvent).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'tool_execution_end',
-      toolName: 'review.model_judge',
-      isError: true,
-      result: expect.objectContaining({
-        details: expect.objectContaining({
-          fallback: true,
-          reason: expect.stringContaining('could not be parsed'),
-          responsePreview: 'not json',
-        }),
-      }),
+      type: 'review_end',
+      status: 'error',
+      message: expect.stringContaining('could not be parsed'),
     }));
   });
 

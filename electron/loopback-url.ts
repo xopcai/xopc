@@ -14,3 +14,13 @@ export function isEmbeddedGatewayLoopbackUrl(raw: string): boolean {
     return false;
   }
 }
+
+/** A published site served by the embedded gateway's `/site/:token/` fallback. */
+export function isEmbeddedGatewaySiteShareUrl(raw: string): boolean {
+  if (!isEmbeddedGatewayLoopbackUrl(raw)) return false;
+  try {
+    return /^\/site\/[^/]+(?:\/|$)/.test(new URL(raw).pathname);
+  } catch {
+    return false;
+  }
+}

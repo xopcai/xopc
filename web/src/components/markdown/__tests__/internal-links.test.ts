@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   findWorkspaceRelativeFileMentions,
   linkWorkspaceFileMentions,
+  openHttpLinksInNewTab,
   parseWorkspaceFileLinkTarget,
   rewriteXopcSettingsLinksInMarkdown,
   xopcSettingsUrlToRoute,
@@ -81,5 +82,23 @@ describe('markdown internal links', () => {
     expect(links[0]?.dataset.xopcFileKind).toBe('workspace-relative');
     expect(root.querySelector('code')?.innerHTML).toBe('src/skip.ts');
     expect(root.querySelector('a[href="docs/existing.md"]')?.textContent).toBe('docs/existing.md');
+  });
+
+  it('opens HTTP(S) links separately without changing deep links', () => {
+    const root = document.createElement('div');
+    root.innerHTML = [
+      '<a href="http://127.0.0.1:18790/site/example/">Published site</a>',
+      '<a href="https://example.com/docs">Docs</a>',
+      '<a href="xopc://settings/gateway">Settings</a>',
+    ].join('');
+
+    openHttpLinksInNewTab(root);
+
+    const [site, docs, settings] = [...root.querySelectorAll<HTMLAnchorElement>('a')];
+    expect(site?.target).toBe('_blank');
+    expect(site?.rel).toContain('noopener');
+    expect(site?.rel).toContain('noreferrer');
+    expect(docs?.target).toBe('_blank');
+    expect(settings?.target).toBe('');
   });
 });

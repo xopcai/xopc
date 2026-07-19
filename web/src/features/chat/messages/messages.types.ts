@@ -53,6 +53,7 @@ export type ReviewFindingContent = {
 
 export type ReviewContent = {
   type: 'review';
+  reviewId?: string;
   target: string;
   summary: string;
   findings: ReviewFindingContent[];
@@ -61,6 +62,11 @@ export type ReviewContent = {
   overallConfidenceScore?: number;
   generatedAt?: number;
   source?: 'model' | 'local';
+  /** Isolated reviewer context state, present only while `/review` is streaming. */
+  status?: 'preparing' | 'reviewing' | 'complete' | 'error';
+  /** User-facing reviewer draft; never contains the model's transport JSON. */
+  analysisMarkdown?: string;
+  errorMessage?: string;
 };
 
 export type MessageContent = TextContent | ImageContent | ToolUseContent | ThinkingContent | ReviewContent;

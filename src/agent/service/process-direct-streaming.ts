@@ -149,6 +149,32 @@ function reviewTraceContextEntryFromCommandEvent(
   event: { type: string; [key: string]: unknown },
   runId: string | undefined,
 ): ReviewTraceContextEntry | null {
+  if (event.type === 'review_start' || event.type === 'review_end') {
+    const reviewId = typeof event.reviewId === 'string' && event.reviewId
+      ? event.reviewId
+      : `review_trace_${Date.now()}`;
+    const ended = event.type === 'review_end';
+    const isError = ended && event.status === 'error';
+    return {
+      id: `review-trace:${reviewId}:${ended ? 'end' : 'start'}`,
+      text: ended
+        ? `Review trace: ${isError ? 'failed' : 'completed'}`
+        : 'Review trace: started',
+      createdAt: new Date().toISOString(),
+      data: {
+        type: 'review_trace',
+        scope: 'review',
+        event: ended ? 'review_end' : 'review_start',
+        llmInput: false,
+        ...(runId ? { runId } : {}),
+        reviewId,
+        status: ended ? (isError ? 'error' : 'done') : 'running',
+        ...(typeof event.target === 'string' ? { target: event.target } : {}),
+        ...(typeof event.message === 'string' ? { message: event.message } : {}),
+        ...(isError ? { isError: true } : {}),
+      },
+    };
+  }
   if (event.type !== 'tool_execution_start' && event.type !== 'tool_execution_end') {
     return null;
   }

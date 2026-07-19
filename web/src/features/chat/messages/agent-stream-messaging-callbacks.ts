@@ -9,11 +9,14 @@ import type { SessionManager } from '@/features/chat/session/session-manager';
 import {
   appendThinkingDelta,
   appendReview,
+  appendReviewDelta,
   appendTextDelta,
   appendToolStart,
   completeTool,
   finalizeStreamingThinking,
   startThinkingSegment,
+  startReview,
+  finishReview,
   updateToolDetails,
 } from '@/features/chat/messages/streaming';
 
@@ -67,6 +70,33 @@ export function createAgentStreamMessagingCallbacks(opts: {
       .loadSession(chatId, 0)
       .then((data) => applyLoadedSessionSnapshot(chatId, data))
       .catch(() => {});
+  };
+
+  // Reviewer tokens can arrive much faster than a user can read them. Batch
+  // them so the review card reads like a normal response instead of repainting
+  // the whole streaming bubble for every token.
+  const pendingReviewDeltas = new Map<string, string>();
+  let reviewDeltaTimer: number | undefined;
+  const flushReviewDeltas = () => {
+    if (reviewDeltaTimer !== undefined) {
+      window.clearTimeout(reviewDeltaTimer);
+      reviewDeltaTimer = undefined;
+    }
+    if (pendingReviewDeltas.size === 0) return;
+    const deltas = Array.from(pendingReviewDeltas.entries());
+    pendingReviewDeltas.clear();
+    beforeAssistantDelta();
+    store().mutateSessionStreaming(chatId, (msg) => {
+      for (const [reviewId, delta] of deltas) {
+        appendReviewDelta(msg.content, reviewId, delta);
+      }
+    });
+  };
+  const enqueueReviewDelta = (reviewId: string, delta: string) => {
+    pendingReviewDeltas.set(reviewId, `${pendingReviewDeltas.get(reviewId) ?? ''}${delta}`);
+    if (reviewDeltaTimer === undefined) {
+      reviewDeltaTimer = window.setTimeout(flushReviewDeltas, 120);
+    }
   };
 
   const onBackgroundTerminal = () => {
@@ -150,6 +180,25 @@ export function createAgentStreamMessagingCallbacks(opts: {
         store().setSessionFlags(chatId, { streaming: true });
       }
     },
+    onReviewStart: (review) => {
+      beforeAssistantDelta();
+      store().mutateSessionStreaming(chatId, (msg) => {
+        startReview(msg.content, review);
+      });
+      if (shouldApplyStreamUpdate(chatId)) {
+        store().setSessionFlags(chatId, { streaming: true });
+      }
+    },
+    onReviewDelta: ({ reviewId, delta }) => {
+      enqueueReviewDelta(reviewId, delta);
+    },
+    onReviewEnd: ({ reviewId, status, message }) => {
+      flushReviewDeltas();
+      beforeAssistantDelta();
+      store().mutateSessionStreaming(chatId, (msg) => {
+        finishReview(msg.content, reviewId, status, message);
+      });
+    },
     onProgress: (p) => {
       store().setSessionProgress(chatId, p);
     },
@@ -190,6 +239,7 @@ export function createAgentStreamMessagingCallbacks(opts: {
     },
     onClarifyRequest: fq.makeOnClarifyRequest(chatId),
     onResult: () => {
+      flushReviewDeltas();
       if (!shouldApplyStreamUpdate(chatId)) {
         onBackgroundTerminal();
         return;
@@ -201,6 +251,7 @@ export function createAgentStreamMessagingCallbacks(opts: {
       finalizeMessage();
     },
     onError: (msg) => {
+      flushReviewDeltas();
       if (!shouldApplyStreamUpdate(chatId)) {
         onBackgroundTerminal();
         return;

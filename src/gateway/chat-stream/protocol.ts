@@ -80,6 +80,18 @@ export type TurnDiffEvent = ChatStreamEnvelope<
   'turn_diff',
   { messageId: string; files: string[]; diff: string; added: number; removed: number }
 >;
+export type ReviewStartEvent = ChatStreamEnvelope<
+  'review_start',
+  { messageId: string; reviewId: string; target: string; stage: 'preparing' | 'reviewing' }
+>;
+export type ReviewDeltaEvent = ChatStreamEnvelope<
+  'review_delta',
+  { messageId: string; reviewId: string; delta: string }
+>;
+export type ReviewEndEvent = ChatStreamEnvelope<
+  'review_end',
+  { messageId: string; reviewId: string; status: 'complete' | 'error'; message?: string }
+>;
 export type ReviewEvent = ChatStreamEnvelope<'review', { messageId: string; review: unknown }>;
 export type AssistantMessageEndEvent = ChatStreamEnvelope<
   'assistant_message_end',
@@ -121,6 +133,9 @@ export type ChatStreamEvent =
   | PatchAppliedEvent
   | TurnPlanUpdatedEvent
   | TurnDiffEvent
+  | ReviewStartEvent
+  | ReviewDeltaEvent
+  | ReviewEndEvent
   | ReviewEvent
   | AssistantMessageEndEvent
   | ProgressEvent

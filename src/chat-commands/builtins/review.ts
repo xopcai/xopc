@@ -20,56 +20,83 @@ import {
 const MAX_DIFF_CHARS = 60_000;
 const REVIEW_JUDGE_MAX_TOKENS = 16_384;
 
-async function emitToolStart(
+async function emitReviewStart(
   ctx: CommandContext,
-  toolCallId: string,
-  toolName: string,
-  args: Record<string, unknown>,
+  reviewId: string,
+  target: string,
+  stage: 'preparing' | 'reviewing',
 ): Promise<void> {
   await ctx.emitEvent?.({
-    type: 'tool_execution_start',
-    toolCallId,
-    toolName,
-    args,
+    type: 'review_start',
+    reviewId,
+    target,
+    stage,
   });
 }
 
-async function emitToolEnd(
+async function emitReviewEnd(
   ctx: CommandContext,
-  toolCallId: string,
-  toolName: string,
-  resultText: string,
-  details?: Record<string, unknown>,
-  isError = false,
+  reviewId: string,
+  status: 'complete' | 'error',
+  message?: string,
 ): Promise<void> {
   await ctx.emitEvent?.({
-    type: 'tool_execution_end',
-    toolCallId,
-    toolName,
-    isError,
-    result: {
-      content: [{ type: 'text', text: resultText }],
-      ...(details ? { details } : {}),
-    },
+    type: 'review_end',
+    reviewId,
+    status,
+    ...(message ? { message } : {}),
   });
 }
 
-async function emitToolTextDelta(
+async function emitReviewDelta(
   ctx: CommandContext,
-  toolCallId: string,
-  toolName: string,
+  reviewId: string,
   delta: string,
 ): Promise<void> {
   if (!delta) return;
   await ctx.emitEvent?.({
-    type: 'tool_execution_update',
-    toolCallId,
-    toolName,
-    args: {},
-    partialResult: {
-      content: [{ type: 'text', text: delta }],
-    },
+    type: 'review_delta',
+    reviewId,
+    delta,
   });
+}
+
+function createReviewProgressExtractor(): (delta: string) => string {
+  const open = '<review_progress>';
+  const close = '</review_progress>';
+  let buffer = '';
+  let inside = false;
+
+  return (delta) => {
+    buffer += delta;
+    let visible = '';
+
+    while (buffer) {
+      if (!inside) {
+        const start = buffer.indexOf(open);
+        if (start < 0) {
+          buffer = buffer.slice(-Math.max(0, open.length - 1));
+          break;
+        }
+        buffer = buffer.slice(start + open.length);
+        inside = true;
+      }
+
+      const end = buffer.indexOf(close);
+      if (end < 0) {
+        const safeLength = Math.max(0, buffer.length - (close.length - 1));
+        visible += buffer.slice(0, safeLength);
+        buffer = buffer.slice(safeLength);
+        break;
+      }
+
+      visible += buffer.slice(0, end);
+      buffer = buffer.slice(end + close.length);
+      inside = false;
+    }
+
+    return visible;
+  };
 }
 
 function truncateForPrompt(text: string): { text: string; truncated: boolean } {
@@ -158,11 +185,6 @@ function parseReviewJson(raw: string, target: string): ReviewOutput {
   };
 }
 
-function previewText(text: string, max = 500): string {
-  const trimmed = text.trim();
-  return trimmed.length > max ? `${trimmed.slice(0, max)}…` : trimmed;
-}
-
 async function reviewModelRef(ctx: CommandContext): Promise<string | undefined> {
   const sessionOverride = await ctx.getSessionConfigStore?.()
     ?.get(ctx.sessionKey)
@@ -190,7 +212,9 @@ function buildReviewPrompt(params: {
     'You are a senior code reviewer. Review the provided git diff for correctness bugs only.',
     'Prioritize concrete regressions, broken behavior, missing required tests for changed behavior, data loss, security issues, and runtime/type errors.',
     'Do not mention style, broad refactors, praise, or speculative improvements.',
-    'Return strict JSON only with this shape:',
+    'Return exactly two XML-delimited sections and nothing else.',
+    'First write a concise, user-facing Markdown review draft inside <review_progress>...</review_progress>. State the scope and concrete evidence only; do not reveal hidden chain-of-thought.',
+    'Then put strict JSON inside <review_result>...</review_result> using this shape:',
     '{"findings":[{"title":"...","body":"...","priority":1,"confidence_score":0.9,"code_location":{"file_path":"path","line_range":{"start":12,"end":12}}}],"overall_correctness":"patch is correct","overall_explanation":"...","overall_confidence_score":0.8,"summary":"..."}',
     'Use priority 0 for release-blocking, 1 for high, 2 for medium, 3 for low.',
     params.instructions ? `Extra reviewer instructions: ${params.instructions}` : '',
@@ -222,39 +246,23 @@ async function buildReview(ctx: CommandContext, args: string): Promise<ReviewOut
   const workspace = await resolveWorkspace(ctx);
   const cwd = await resolveGitRoot(workspace);
   const reviewTarget = parseReviewTargetArgs(args);
-  const prepareToolCallId = `review_prepare_${randomUUID()}`;
-  await emitToolStart(ctx, prepareToolCallId, 'review.prepare_diff', {
-    target: args.trim() || 'uncommitted',
-    cwd,
-  });
+  const reviewId = `review_${randomUUID()}`;
+  await emitReviewStart(ctx, reviewId, args.trim() || 'current workspace changes', 'preparing');
   let bundle: Awaited<ReturnType<typeof buildReviewDiffBundle>>;
   try {
     bundle = await buildReviewDiffBundle(cwd, reviewTarget);
-    await emitToolEnd(
-      ctx,
-      prepareToolCallId,
-      'review.prepare_diff',
-      [
-        `Target: ${bundle.targetLabel}`,
-        bundle.stat.trim() ? `Changed files:\n${bundle.stat.trim()}` : 'No diff stat.',
-      ].join('\n\n'),
-      {
-        target: bundle.targetLabel,
-        status: bundle.status,
-        stat: bundle.stat,
-      },
-    );
   } catch (err) {
     const em = err instanceof Error ? err.message : String(err);
-    await emitToolEnd(ctx, prepareToolCallId, 'review.prepare_diff', em, { cwd }, true);
+    await emitReviewEnd(ctx, reviewId, 'error', em);
     throw err;
   }
   const { text: diff, truncated } = truncateForPrompt(bundle.diff);
   const target = bundle.targetLabel;
   const instructions = reviewTarget.instructions ?? '';
+  await emitReviewStart(ctx, reviewId, target, 'preparing');
 
   if (!bundle.status.trim() && !bundle.diff.trim()) {
-    return {
+    const review: ReviewOutput = {
       type: 'review',
       target,
       summary: 'Working tree is clean.',
@@ -264,6 +272,8 @@ async function buildReview(ctx: CommandContext, args: string): Promise<ReviewOut
       generatedAt: Date.now(),
       source: 'local',
     };
+    await emitReviewEnd(ctx, reviewId, 'complete');
+    return review;
   }
 
   const prompt = buildReviewPrompt({
@@ -275,18 +285,13 @@ async function buildReview(ctx: CommandContext, args: string): Promise<ReviewOut
     instructions,
   });
   const reviewerModelRef = await reviewModelRef(ctx);
-  const judgeToolCallId = `review_judge_${randomUUID()}`;
-  await emitToolStart(ctx, judgeToolCallId, 'review.model_judge', {
-    target,
-    diffChars: diff.length,
-    truncated,
-    ...(reviewerModelRef ? { modelRef: reviewerModelRef } : {}),
-  });
+  await emitReviewStart(ctx, reviewId, target, 'reviewing');
+  const extractReviewProgress = createReviewProgressExtractor();
   const answer = ctx.btwQuery
     ? await ctx.btwQuery(prompt, {
       maxTokens: REVIEW_JUDGE_MAX_TOKENS,
       includeSessionContext: false,
-      onTextDelta: (delta) => emitToolTextDelta(ctx, judgeToolCallId, 'review.model_judge', delta),
+      onTextDelta: (delta) => emitReviewDelta(ctx, reviewId, extractReviewProgress(delta)),
       ...(reviewerModelRef ? { modelRef: reviewerModelRef } : {}),
       })
     : { text: '', error: 'Review model query is not available in this command context.' };
@@ -298,17 +303,7 @@ async function buildReview(ctx: CommandContext, args: string): Promise<ReviewOut
   if (answer?.text && !answer.error) {
     try {
       const parsed = parseReviewJson(answer.text, target);
-      await emitToolEnd(
-        ctx,
-        judgeToolCallId,
-        'review.model_judge',
-        parsed.summary || `${parsed.findings.length} findings`,
-        {
-          target,
-          findings: parsed.findings.length,
-          overallCorrectness: parsed.overallCorrectness,
-        },
-      );
+      await emitReviewEnd(ctx, reviewId, 'complete');
       return parsed;
     } catch (err) {
       const em = err instanceof Error ? err.message : String(err);
@@ -332,21 +327,7 @@ async function buildReview(ctx: CommandContext, args: string): Promise<ReviewOut
     generatedAt: Date.now(),
     source: 'local',
   };
-  await emitToolEnd(
-    ctx,
-    judgeToolCallId,
-    'review.model_judge',
-    fallback.summary,
-    {
-      target,
-      findings: 0,
-      overallCorrectness: fallback.overallCorrectness,
-      fallback: true,
-      reason,
-      ...(answer.text ? { responsePreview: previewText(answer.text) } : {}),
-    },
-    true,
-  );
+  await emitReviewEnd(ctx, reviewId, 'error', reason);
   return fallback;
 }
 
