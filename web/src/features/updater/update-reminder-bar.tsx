@@ -6,6 +6,7 @@ import { restartGatewayAfterConfigChange } from '@/features/tunnel/gateway-resta
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { showToast } from '@/lib/toast';
+import { showActivity } from '@/stores/activity-center-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
 /**
@@ -53,10 +54,12 @@ export function UpdateReminderBar({
     const tp = messages(language).updatePanel;
     const r = await runNpmUpdate();
     if (r.ok) {
-      showToast({
-        type: 'success',
+      showActivity({
+        tone: 'success',
         title: tp.updateSuccess,
         message: tp.updateSuccessDetail,
+        source: language === 'zh' ? '系统更新' : 'System update',
+        dedupeKey: 'system-update',
       });
       return;
     }

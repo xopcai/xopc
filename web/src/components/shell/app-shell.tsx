@@ -3,6 +3,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { GatewayConnectLanding } from '@/components/shell/gateway-connect-landing';
 import { ToastHost } from '@/components/ui/toast-host';
+import { ActivityCenterPanel } from '@/features/activity/activity-center';
 import { PrimaryAppHeader } from '@/components/shell/primary-app-header';
 import { SidebarColumn } from '@/components/shell/sidebar-column';
 import { WorkspaceColumn } from '@/components/shell/workspace-column';
@@ -107,6 +108,7 @@ export function AppShell() {
       <ExtensionNavigateListener />
       <GlobalCommandPaletteHost />
       <GlobalQuickCaptureHost />
+      <ActivityCenterPanel />
       <ToastHost />
       <TokenDialog />
       <OnboardingDialog />

@@ -33,12 +33,12 @@ export interface WorkflowDefinition {
   title: string;
   description: string;
   version: string;
+  revision: number;
   contentHash?: string;
-  runtimeHash?: string;
   inputSchema?: JsonSchema;
   outputSchema?: JsonSchema;
   phases: WorkflowPhaseDefinition[];
-  runtime?: WorkflowRuntimeDefinition;
+  graph: WorkflowGraph;
   defaults: WorkflowDefinitionDefaults;
   permissions?: WorkflowPermissionPolicy;
   resources?: WorkflowResourceRefs;
@@ -58,10 +58,29 @@ export interface WorkflowResourceRefs {
   promptTemplates?: string[];
 }
 
-export interface WorkflowRuntimeDefinition {
-  kind: 'script';
-  source: string;
+export type WorkflowNodeKind = 'input' | 'agent' | 'decision' | 'merge' | 'output';
+export interface WorkflowGraphNode {
+  id: string;
+  kind: WorkflowNodeKind;
+  title: string;
+  description?: string;
+  phaseId?: string;
+  position: { x: number; y: number };
+  config: Record<string, unknown> & {
+    prompt?: string;
+    model?: string;
+    toolset?: string[];
+    maxIterations?: number;
+    outputSchema?: JsonSchema;
+    schema?: JsonSchema;
+    mode?: 'array' | 'object';
+    summary?: string;
+    title?: string;
+    rule?: { path: string; operator: 'exists' | 'equals' | 'not_equals' | 'contains'; value?: unknown };
+  };
 }
+export interface WorkflowGraphEdge { id: string; source: string; target: string; sourcePort?: 'true' | 'false' | 'default' }
+export interface WorkflowGraph { schemaVersion: 1; nodes: WorkflowGraphNode[]; edges: WorkflowGraphEdge[] }
 
 export interface WorkflowPhaseDefinition {
   id: string;
@@ -197,7 +216,8 @@ export interface WorkflowRunDefinitionSnapshot {
   title: string;
   version: string;
   contentHash?: string;
-  runtimeHash?: string;
+  revision: number;
+  graph: WorkflowGraph;
   source: 'builtin' | 'user';
   tags: string[];
   phaseCount: number;
@@ -291,6 +311,7 @@ export interface WorkflowPhaseView {
 
 export interface WorkflowAgentView {
   id: string;
+  nodeId?: string;
   label: string;
   phaseId?: string;
   status: WorkflowAgentStatus;
@@ -318,6 +339,7 @@ export interface WorkflowAgentView {
 }
 
 export interface WorkflowAgentInvocationSnapshot {
+  nodeId?: string;
   prompt: string;
   label: string;
   phase?: string;
@@ -338,6 +360,7 @@ export interface WorkflowRunView {
   run: WorkflowRun;
   phases: WorkflowPhaseView[];
   agents: WorkflowAgentView[];
+  nodes: WorkflowNodeView[];
   logs: WorkflowLogEntry[];
   artifacts: unknown[];
   timeline: Array<{ sequence: number; type: string; title: string; createdAtMs: number }>;
@@ -408,16 +431,29 @@ export interface WorkflowAgentSession {
 
 export type WorkflowDefinitionValidationIssueCode =
   | 'name_required'
-  | 'script_required'
-  | 'parse_failed'
-  | 'meta_name_mismatch'
-  | 'unknown_error';
+  | 'invalid_name'
+  | 'graph_required'
+  | 'invalid_schema_version'
+  | 'duplicate_node'
+  | 'missing_input'
+  | 'multiple_inputs'
+  | 'missing_output'
+  | 'multiple_outputs'
+  | 'unknown_edge_node'
+  | 'duplicate_edge'
+  | 'self_edge'
+  | 'cycle_detected'
+  | 'unreachable_node'
+  | 'dead_end_node'
+  | 'missing_prompt'
+  | 'invalid_node_config';
 
 export interface WorkflowDefinitionValidationIssue {
   code: WorkflowDefinitionValidationIssueCode;
   message: string;
-  line?: number;
-  column?: number;
+  nodeId?: string;
+  edgeId?: string;
+  field?: string;
 }
 
 export interface ValidateWorkflowDefinitionResponse {
@@ -446,7 +482,7 @@ export interface WorkflowDraftResponse {
   draftId: string;
   repairAttempts: number;
   name: string;
-  script: string;
+  graph: WorkflowGraph;
   manifest: WorkflowDefinitionManifest;
   explanation: string;
   assumptions: string[];
@@ -468,6 +504,7 @@ export interface WorkflowDefinitionManifest {
   whenToUse?: string;
   permissions?: WorkflowPermissionPolicy;
   resources?: WorkflowResourceRefs;
+  estimatedAgents?: WorkflowDefinitionEstimatedAgents;
 }
 
 export interface CreateWorkflowDraftOptions {
@@ -475,7 +512,7 @@ export interface CreateWorkflowDraftOptions {
   agentId?: string;
   language?: 'en' | 'zh';
   mode?: 'create' | 'improve';
-  existingScript?: string;
+  existingGraph?: WorkflowGraph;
   constraints?: WorkflowDraftConstraints;
 }
 
@@ -493,28 +530,96 @@ export async function getWorkflowDefinition(id: string): Promise<WorkflowDefinit
 
 export async function validateWorkflowDefinition(
   name: string,
-  script: string,
+  graph: WorkflowGraph,
 ): Promise<ValidateWorkflowDefinitionResponse> {
   return fetchJson<ValidateWorkflowDefinitionResponse>(apiUrl('/api/workflows/definitions/validate'), {
     method: 'POST',
-    body: JSON.stringify({ name, script }),
+    body: JSON.stringify({ name, graph }),
   });
 }
 
 export async function createWorkflowDraft(options: CreateWorkflowDraftOptions): Promise<WorkflowDraftResponse> {
-  const data = await fetchJson<{ draft: WorkflowDraftResponse }>(apiUrl('/api/workflows/definitions/draft'), {
+  const data = await fetchJson<{ draft: WorkflowDraftResponse }>(apiUrl('/api/workflows/definitions/generate'), {
     method: 'POST',
     body: JSON.stringify(options),
   });
   return data.draft;
 }
 
-export async function saveWorkflowDefinition(name: string, script: string): Promise<WorkflowDefinition> {
+export async function saveWorkflowDefinition(
+  name: string,
+  graph: WorkflowGraph,
+  manifest: WorkflowDefinitionManifest,
+  expectedRevision: number,
+): Promise<WorkflowDefinition> {
   const data = await fetchJson<{ definition: WorkflowDefinition }>(apiUrl('/api/workflows/definitions'), {
     method: 'POST',
-    body: JSON.stringify({ name, script }),
+    body: JSON.stringify({ name, graph, manifest, expectedRevision }),
   });
   return data.definition;
+}
+
+export interface WorkflowRevisionSummary {
+  revision: number;
+  title: string;
+  contentHash?: string;
+  createdAtMs: number;
+}
+
+export async function listWorkflowRevisions(id: string): Promise<WorkflowRevisionSummary[]> {
+  const data = await fetchJson<{ revisions: WorkflowRevisionSummary[] }>(
+    apiUrl(`/api/workflows/definitions/${encodeURIComponent(id)}/revisions`),
+  );
+  return data.revisions ?? [];
+}
+
+export async function restoreWorkflowRevision(
+  id: string,
+  revision: number,
+  expectedRevision: number,
+): Promise<WorkflowDefinition> {
+  const data = await fetchJson<{ definition: WorkflowDefinition }>(
+    apiUrl(`/api/workflows/definitions/${encodeURIComponent(id)}/revisions/${revision}/restore`),
+    { method: 'POST', body: JSON.stringify({ expectedRevision }) },
+  );
+  return data.definition;
+}
+
+export interface WorkflowNodeView {
+  id: string;
+  kind: string;
+  title: string;
+  status: 'pending' | 'running' | 'done' | 'error' | 'skipped';
+  resultPreview?: string;
+  error?: string;
+  startedAtMs?: number;
+  completedAtMs?: number;
+}
+
+export interface WorkflowAuthoringDraft {
+  id: string;
+  workflowName: string;
+  graph: WorkflowGraph;
+  manifest: WorkflowDefinitionManifest;
+  baseRevision: number;
+  createdAtMs: number;
+  updatedAtMs: number;
+}
+
+export async function saveWorkflowAuthoringDraft(input: {
+  id?: string;
+  workflowName: string;
+  graph: WorkflowGraph;
+  manifest: WorkflowDefinitionManifest;
+  baseRevision: number;
+  expectedUpdatedAtMs?: number;
+}): Promise<WorkflowAuthoringDraft> {
+  const data = await fetchJson<{ draft: WorkflowAuthoringDraft }>(apiUrl('/api/workflows/drafts'), { method: 'POST', body: JSON.stringify(input) });
+  return data.draft;
+}
+
+export async function deleteWorkflowAuthoringDraft(id: string): Promise<void> {
+  await fetchJson(apiUrl(`/api/workflows/drafts/${encodeURIComponent(id)}`), { method: 'DELETE' });
 }
 
 export async function deleteWorkflowDefinition(id: string): Promise<void> {

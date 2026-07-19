@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import type { ConnectorsSettingsMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 
-import type { ConnectorCategory, ConnectorDefinition, ConnectorInstance } from '../connectors-api';
+import type { ConnectorDefinition, ConnectorInstance } from '../connectors-api';
+import { ConnectorLogo } from './connector-logo';
 
 const connectorSkeletonBar = 'animate-pulse motion-reduce:animate-none rounded-md bg-surface-hover dark:bg-surface-active/50';
 
@@ -15,14 +16,6 @@ export function connectorIsInstalled(connector: ConnectorDefinition, instances: 
   return instances.some((instance) => instance.connectorId === connector.id);
 }
 
-function connectorCategoryLabel(category: ConnectorCategory, labels: ConnectorsSettingsMessages['connectorCategoryLabels']): string {
-  return labels[category] ?? category;
-}
-
-function formatConnectorCategory(category: ConnectorCategory, t: ConnectorsSettingsMessages): string {
-  return t.connectorCategoryTemplate.replace('{{category}}', connectorCategoryLabel(category, t.connectorCategoryLabels));
-}
-
 export function ConnectorCardSkeleton() {
   return (
     <div
@@ -30,6 +23,7 @@ export function ConnectorCardSkeleton() {
       aria-hidden
     >
       <div className="flex min-h-0 flex-1 items-start gap-3">
+        <div className={cn('size-10 shrink-0 rounded-xl', connectorSkeletonBar)} />
         <div className="flex min-w-0 flex-1 flex-col gap-2">
           <div className="flex items-start justify-between gap-2">
             <div className={cn('h-4 min-w-0 flex-1', connectorSkeletonBar)} />
@@ -46,14 +40,17 @@ export function ConnectorCardSkeleton() {
 export function InstalledConnectorRowSkeleton() {
   return (
     <div className="rounded-2xl bg-surface-panel p-4 shadow-surface" aria-hidden>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 flex-1 space-y-2">
-          <div className={cn('h-4 w-48 max-w-full', connectorSkeletonBar)} />
-          <div className={cn('h-3 w-72 max-w-full', connectorSkeletonBar)} />
-        </div>
-        <div className="flex shrink-0 gap-2">
-          <div className={cn('h-9 w-20 rounded-lg', connectorSkeletonBar)} />
-          <div className={cn('h-9 w-20 rounded-lg', connectorSkeletonBar)} />
+      <div className="flex items-start gap-3">
+        <div className={cn('size-10 shrink-0 rounded-xl', connectorSkeletonBar)} />
+        <div className="flex min-w-0 flex-1 flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className={cn('h-4 w-48 max-w-full', connectorSkeletonBar)} />
+            <div className={cn('h-3 w-72 max-w-full', connectorSkeletonBar)} />
+          </div>
+          <div className="flex shrink-0 gap-2">
+            <div className={cn('h-9 w-20 rounded-lg', connectorSkeletonBar)} />
+            <div className={cn('h-9 w-20 rounded-lg', connectorSkeletonBar)} />
+          </div>
         </div>
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
@@ -79,9 +76,18 @@ export function ConnectorCard({
   onOpenDetails?: (connector: ConnectorDefinition) => void;
   t: ConnectorsSettingsMessages;
 }) {
-  const categoryLabel = formatConnectorCategory(connector.category, t);
-  const visibleCapabilities = connector.capabilities.slice(0, 4);
-  const hiddenCapabilityCount = Math.max(0, connector.capabilities.length - visibleCapabilities.length);
+  const humanCapabilities = connector.capabilities
+    .filter((capability) => !capability.startsWith('runtime.') && !capability.startsWith('auth.'));
+  const visibleCapabilities = humanCapabilities.slice(0, 3);
+  const hiddenCapabilityCount = Math.max(0, humanCapabilities.length - visibleCapabilities.length);
+  const actionLabel = t.connect;
+  const verificationLabel = connector.verificationLevel === 'verified'
+    ? t.connectorVerified
+    : connector.verificationLevel === 'beta'
+      ? t.connectorBeta
+      : connector.verificationLevel === 'experimental'
+        ? t.connectorExperimental
+        : null;
   const renderInstallButton = (className?: string) => (
     <Button
       type="button"
@@ -93,7 +99,7 @@ export function ConnectorCard({
       }}
     >
       <PackagePlus className="size-4" />
-      {t.install}
+      {actionLabel}
     </Button>
   );
   const handleCardKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -117,9 +123,14 @@ export function ConnectorCard({
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-3">
+            <ConnectorLogo connector={connector} />
             <div className="min-w-0">
               <h3 className="truncate text-sm font-semibold text-fg">{connector.displayName}</h3>
-              <p className="mt-1 truncate text-xs text-fg-subtle">{categoryLabel}</p>
+              {verificationLabel ? (
+                <span className="mt-1 inline-flex rounded-full border border-edge px-1.5 py-0.5 text-[10px] font-medium text-fg-subtle">
+                  {verificationLabel}
+                </span>
+              ) : null}
             </div>
           </div>
           <div className="flex shrink-0 items-start gap-2">
@@ -131,7 +142,7 @@ export function ConnectorCard({
             {installed ? (
               <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
                 <CheckCircle2 className="size-3" aria-hidden />
-                {t.installedBadge}
+                {t.connectedBadge}
               </span>
             ) : null}
           </div>
@@ -148,7 +159,7 @@ export function ConnectorCard({
                 key={capability}
                 className="rounded-md bg-surface-base px-2 py-0.5 text-[11px] text-fg-muted"
               >
-                {capability}
+                {t.connectorCapabilityLabels[capability] ?? capability}
               </span>
             ))}
             {hiddenCapabilityCount > 0 ? (

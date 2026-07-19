@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Loader2, Star } from 'lucide-react';
+import { CheckCircle2, ChevronLeft, ChevronRight, Loader2, Star } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { PageTabs } from '@/components/ui/page-tabs';
@@ -186,27 +186,16 @@ export function SkillsPageMarketplaceContent(p: Props) {
                       'transition-colors hover:bg-surface-hover',
                     )}
                   >
-                    <div
-                      role="button"
-                      tabIndex={0}
+                    <button
+                      type="button"
                       className={cn(
-                        'flex min-h-0 flex-1 cursor-pointer flex-col rounded-lg text-left outline-none',
+                        'flex min-h-0 w-full flex-1 cursor-pointer flex-col rounded-lg text-left outline-none',
                         interaction.focusRingPanel,
                       )}
                       aria-labelledby={`mp-skill-title-${row.id}`}
-                      onClick={(e) => {
-                        const el = e.target as HTMLElement;
-                        if (el.closest('button')) return;
-                        void openMarketplaceDetail(packageName, row.name, row.providerId ?? undefined);
-                      }}
-                      onKeyDown={(e) => {
-                        const el = e.target as HTMLElement;
-                        if (el.closest('button')) return;
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          void openMarketplaceDetail(packageName, row.name, row.providerId ?? undefined);
-                        }
-                      }}
+                      onClick={() =>
+                        void openMarketplaceDetail(packageName, row.name, row.providerId ?? undefined)
+                      }
                     >
                       <div className="flex items-start gap-3">
                         <div className="flex min-w-0 flex-1 flex-col gap-2">
@@ -217,54 +206,12 @@ export function SkillsPageMarketplaceContent(p: Props) {
                             >
                               {row.name}
                             </h3>
-                            <div
-                              role="group"
-                              className={cn(
-                                'hidden shrink-0 items-center gap-1 transition-opacity sm:flex',
-                                'sm:pointer-events-none sm:opacity-0 sm:group-hover:pointer-events-auto sm:group-hover:opacity-100 sm:group-focus-within:pointer-events-auto sm:group-focus-within:opacity-100',
-                              )}
-                              onClick={(e) => e.stopPropagation()}
-                              onKeyDown={(e) => e.stopPropagation()}
-                            >
-                              {!installed ? (
-                                <Button
-                                  type="button"
-                                  variant="primary"
-                                  className="h-8 shrink-0 whitespace-nowrap px-2.5 text-xs font-medium"
-                                  disabled={mpLoading || installingMarketName === packageName}
-                                  onClick={() =>
-                                    void onMarketInstall(packageName, {
-                                      providerOverride: row.providerId ?? null,
-                                    })
-                                  }
-                                >
-                                  {installingMarketName === packageName
-                                    ? sk.uploading
-                                    : sk.marketplaceInstall}
-                                </Button>
-                              ) : null}
-                              <Button
-                                type="button"
-                                variant="secondary"
-                                className="h-8 shrink-0 whitespace-nowrap px-2.5 text-xs font-medium"
-                                disabled={
-                                  mpLoading ||
-                                  usingSkillInChatName === packageName ||
-                                  installingMarketName === packageName
-                                }
-                                onClick={() =>
-                                  void onUseSkillInChat({
-                                    name: packageName,
-                                    source: 'store',
-                                    providerOverride: row.providerId ?? null,
-                                  })
-                                }
-                              >
-                                {usingSkillInChatName === packageName
-                                  ? sk.previewUseInChatBusy
-                                  : sk.previewUseInChat}
-                              </Button>
-                            </div>
+                            {installed ? (
+                              <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
+                                <CheckCircle2 className="size-3" aria-hidden />
+                                {sk.marketplaceInstalled}
+                              </span>
+                            ) : null}
                           </div>
                           <p
                             className="line-clamp-2 text-sm leading-relaxed text-fg-muted"
@@ -298,14 +245,6 @@ export function SkillsPageMarketplaceContent(p: Props) {
                                   </span>
                                 </>
                               ) : null}
-                              {installed ? (
-                                <>
-                                  <span className="text-fg-subtle"> · </span>
-                                  <span className="text-emerald-700 dark:text-emerald-400">
-                                    {sk.marketplaceInstalled}
-                                  </span>
-                                </>
-                              ) : null}
                             </p>
                             {row.latestVersion ? (
                               <p
@@ -318,10 +257,10 @@ export function SkillsPageMarketplaceContent(p: Props) {
                           </div>
                         </div>
                       </div>
-                    </div>
+                    </button>
                     <div
                       role="group"
-                      className="mt-3 flex items-center justify-end gap-1 border-t border-edge-subtle pt-3 sm:hidden"
+                      className="mt-3 flex items-center justify-end gap-1 border-t border-edge-subtle pt-3"
                     >
                       {!installed ? (
                         <Button
@@ -337,28 +276,25 @@ export function SkillsPageMarketplaceContent(p: Props) {
                         >
                           {installingMarketName === packageName ? sk.uploading : sk.marketplaceInstall}
                         </Button>
-                      ) : null}
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        className="h-8 shrink-0 whitespace-nowrap px-2.5 text-xs font-medium"
-                        disabled={
-                          mpLoading ||
-                          usingSkillInChatName === packageName ||
-                          installingMarketName === packageName
-                        }
-                        onClick={() =>
-                          void onUseSkillInChat({
-                            name: packageName,
-                            source: 'store',
-                            providerOverride: row.providerId ?? null,
-                          })
-                        }
-                      >
-                        {usingSkillInChatName === packageName
-                          ? sk.previewUseInChatBusy
-                          : sk.previewUseInChat}
-                      </Button>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="h-8 shrink-0 whitespace-nowrap px-2.5 text-xs font-medium"
+                          disabled={mpLoading || usingSkillInChatName === packageName}
+                          onClick={() =>
+                            void onUseSkillInChat({
+                              name: packageName,
+                              source: 'store',
+                              providerOverride: row.providerId ?? null,
+                            })
+                          }
+                        >
+                          {usingSkillInChatName === packageName
+                            ? sk.previewUseInChatBusy
+                            : sk.previewUseInChat}
+                        </Button>
+                      )}
                     </div>
                   </article>
                 );

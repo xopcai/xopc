@@ -14,6 +14,7 @@ import {
   createGatewayTimeoutFailure,
   createPortInUseFailure,
 } from './startup-failure.js';
+import { getOrCreateCredentialsMasterKey } from './credentials-master-key.js';
 
 let gatewayChild: ChildProcess | null = null;
 let gatewayExitHandler: ((code: number | null, signal: string | null) => void) | null = null;
@@ -157,6 +158,7 @@ export interface GatewayProcessOptions {
 export function spawnGatewayProcess(opts: GatewayProcessOptions): ChildProcess {
   const cli = resolveCliEntry();
   const isPackaged = app.isPackaged;
+  const credentialsMasterKey = getOrCreateCredentialsMasterKey();
   clearGatewayLogBuffer();
   const child = spawn(
     process.execPath,
@@ -181,6 +183,7 @@ export function spawnGatewayProcess(opts: GatewayProcessOptions): ChildProcess {
         XOPC_STATE_DIR: dirname(opts.configPath),
         XOPC_CONFIG_PATH: opts.configPath,
         XOPC_WORKSPACE: opts.workspacePath,
+        ...(credentialsMasterKey ? { XOPC_CREDENTIALS_MASTER_KEY: credentialsMasterKey } : {}),
         ...(isPackaged
           ? {
               XOPC_UI_STATIC_ROOT: resolvePackagedStaticRoot(),

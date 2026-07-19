@@ -1,12 +1,8 @@
 import { CredentialResolver } from '../auth/credentials.js';
 import type { Config } from '../config/schema.js';
 import { getConnectorDefinition } from './catalog.js';
-import { listConnectorInstances } from './instances.js';
-import { isManagedConnectorServer, materializeConnectorMcpServer } from './materialize.js';
-import { saveComposioApiKey } from './composio.js';
-import { assertConnectorOAuthReady } from './oauth.js';
-import { saveConnectorSecrets } from './secret-store.js';
-import { appendConnectorAuditRecord } from './usage.js';
+import { getConnectorInstance } from './instances.js';
+import { getConnectorRuntimeAdapter } from './runtime-adapter-registry.js';
 import type { ConnectorDefinition, ConnectorInstallInput, ConnectorInstance } from './types.js';
 
 export async function installConnectorDefinition(
@@ -15,56 +11,7 @@ export async function installConnectorDefinition(
   input: ConnectorInstallInput,
   resolver = new CredentialResolver(),
 ): Promise<ConnectorInstance> {
-  if (definition.runtime.type !== 'mcp') {
-    const instanceId = definition.id;
-    if (definition.runtime.type === 'composio' && definition.id === 'composio-api-key') {
-      await saveComposioApiKey(input, resolver);
-    }
-    config.connectors = config.connectors ?? {};
-    config.connectors.instances = {
-      ...(config.connectors.instances ?? {}),
-      [instanceId]: {
-        xopcConnector: {
-          managed: true,
-          connectorId: definition.id,
-          version: definition.version,
-          enabled: true,
-          displayName: definition.displayName,
-          source: definition.source,
-          artifactSha256: definition.provenance?.sha256,
-        },
-        runtime: definition.runtime,
-        ...(definition.runtime.type === 'composio' && definition.runtime.toolkit !== 'composio' ? { scope: 'read' } : {}),
-      },
-    };
-    const instance = listConnectorInstances(config).find((candidate) => candidate.instanceId === instanceId);
-    if (!instance) {
-      throw new Error(`Connector "${definition.id}" was installed but could not be resolved.`);
-    }
-    return instance;
-  }
-
-  const { serverId, server } = materializeConnectorMcpServer(definition, input);
-  const existingServer = config.mcp?.servers?.[serverId];
-  if (existingServer && !isManagedConnectorServer(existingServer)) {
-    throw new Error(`MCP server "${serverId}" already exists and is not managed by Connectors.`);
-  }
-
-  await assertConnectorOAuthReady(definition, resolver);
-  await saveConnectorSecrets(definition, input, resolver);
-
-  config.mcp = config.mcp ?? {};
-  config.mcp.servers = {
-    ...(config.mcp.servers ?? {}),
-    [serverId]: server,
-  };
-
-  const instance = listConnectorInstances(config).find((candidate) => candidate.instanceId === serverId);
-  if (!instance) {
-    throw new Error(`Connector "${definition.id}" was installed but could not be resolved.`);
-  }
-  appendConnectorAuditRecord(config, serverId, { action: 'installed' });
-  return instance;
+  return await getConnectorRuntimeAdapter(definition.runtime.type).install({ config, definition, input, resolver });
 }
 
 export async function installConnector(
@@ -74,10 +21,8 @@ export async function installConnector(
   resolver = new CredentialResolver(),
 ): Promise<ConnectorInstance> {
   const definition = getConnectorDefinition(connectorId);
-  if (!definition) {
-    throw new Error(`Unknown connector: ${connectorId}`);
-  }
-  return installConnectorDefinition(config, definition, input, resolver);
+  if (!definition) throw new Error(`Unknown connector: ${connectorId}`);
+  return await installConnectorDefinition(config, definition, input, resolver);
 }
 
 export function updateConnectorConfig(
@@ -85,76 +30,25 @@ export function updateConnectorConfig(
   instanceId: string,
   input: ConnectorInstallInput,
 ): ConnectorInstance {
-  const existingServer = config.mcp?.servers?.[instanceId];
-  if (!existingServer || !isManagedConnectorServer(existingServer)) {
-    throw new Error(`MCP server "${instanceId}" is not managed by Connectors.`);
-  }
-  const definition = getConnectorDefinition(existingServer.xopcConnector.connectorId);
-  if (!definition) {
-    throw new Error(`Unknown connector: ${existingServer.xopcConnector.connectorId}`);
-  }
-  if (definition.runtime.type !== 'mcp') {
-    throw new Error(`Connector type "${definition.runtime.type}" does not support config updates.`);
-  }
-  if ((definition.setup.secrets ?? []).length > 0) {
-    throw new Error('Connectors with secrets must be reinstalled to change configuration.');
-  }
-
-  const { serverId, server } = materializeConnectorMcpServer(definition, input);
-  if (serverId !== instanceId) {
-    throw new Error(`Connector config update cannot change server id from "${instanceId}" to "${serverId}".`);
-  }
-
-  config.mcp = config.mcp ?? {};
-  config.mcp.servers = {
-    ...(config.mcp.servers ?? {}),
-    [serverId]: {
-      ...server,
-      xopcConnector: {
-        ...existingServer.xopcConnector,
-        ...(server.xopcConnector as Record<string, unknown>),
-        enabled: existingServer.xopcConnector.enabled,
-        lastConnectedAt: existingServer.xopcConnector.lastConnectedAt,
-        lastError: existingServer.xopcConnector.lastError,
-      },
-    },
-  };
-
-  const instance = listConnectorInstances(config).find((candidate) => candidate.instanceId === serverId);
-  if (!instance) {
-    throw new Error(`Connector "${definition.id}" was updated but could not be resolved.`);
-  }
-  return instance;
+  const instance = getConnectorInstance(config, instanceId);
+  if (!instance) throw new Error(`Connector instance not found: ${instanceId}`);
+  const definition = getConnectorDefinition(instance.connectorId);
+  if (!definition) throw new Error(`Unknown connector: ${instance.connectorId}`);
+  const adapter = getConnectorRuntimeAdapter(definition.runtime.type);
+  if (!adapter.update) throw new Error(`Connector type "${definition.runtime.type}" does not support config updates.`);
+  return adapter.update({ config, definition, input, resolver: new CredentialResolver(), instanceId });
 }
 
 export function uninstallConnector(config: Config, instanceId: string): ConnectorInstance {
-  const server = config.mcp?.servers?.[instanceId];
-  const connectorRecord = config.connectors?.instances?.[instanceId];
-  if (!server && !connectorRecord) {
-    throw new Error(`Connector instance not found: ${instanceId}`);
-  }
-  if (server && !isManagedConnectorServer(server)) {
-    throw new Error(`MCP server "${instanceId}" is not managed by Connectors.`);
-  }
-
-  const instance = listConnectorInstances(config).find((candidate) => candidate.instanceId === instanceId);
+  const instance = getConnectorInstance(config, instanceId);
   if (!instance) {
+    if (config.mcp?.servers?.[instanceId] || config.connectors?.instances?.[instanceId]) {
+      throw new Error(`Connector instance "${instanceId}" is not managed by Connectors.`);
+    }
     throw new Error(`Connector instance not found: ${instanceId}`);
   }
-  appendConnectorAuditRecord(config, instanceId, { action: 'removed' });
-
-  if (server) {
-    const nextServers = { ...(config.mcp?.servers ?? {}) };
-    delete nextServers[instanceId];
-    config.mcp = {
-      ...(config.mcp ?? {}),
-      servers: nextServers,
-    };
-  }
-  if (connectorRecord) {
-    const nextInstances = { ...(config.connectors?.instances ?? {}) };
-    delete nextInstances[instanceId];
-    config.connectors = { ...(config.connectors ?? {}), instances: nextInstances };
-  }
+  const definition = getConnectorDefinition(instance.connectorId);
+  if (!definition) throw new Error(`Unknown connector: ${instance.connectorId}`);
+  getConnectorRuntimeAdapter(definition.runtime.type).uninstall({ config, definition, instance });
   return instance;
 }

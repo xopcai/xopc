@@ -16,7 +16,6 @@ import {
 } from '@/features/workflows/workflow-api';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
-import { showToast } from '@/lib/toast';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -105,7 +104,6 @@ export function ChatGoalComposerMenu({
       setCurrent(res.goal);
       setTitle('');
       notifySessionGoalChanged();
-      showToast({ type: 'success', title: t.composerGoalStarted, message: nextTitle });
       onDone?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : t.composerStartGoalFailed);
@@ -122,7 +120,6 @@ export function ChatGoalComposerMenu({
       const res = await attachWebchatGoal(sessionKey, selectedGoalId);
       setCurrent(res.goal);
       notifySessionGoalChanged();
-      showToast({ type: 'success', title: t.composerGoalAttached, message: res.goal?.title });
       onDone?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : t.composerAttachGoalFailed);
@@ -139,7 +136,6 @@ export function ChatGoalComposerMenu({
       await detachWebchatGoal(current.id);
       setCurrent(null);
       notifySessionGoalChanged();
-      showToast({ type: 'info', title: t.composerGoalDetached });
       onDone?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : t.composerDetachGoalFailed);
@@ -159,7 +155,6 @@ export function ChatGoalComposerMenu({
         goal: current.nextAction || current.title,
       });
       notifySessionGoalChanged();
-      showToast({ type: 'success', title: t.composerWorkflowStarted, message: current.title });
       window.dispatchEvent(new CustomEvent('navigate-to-chat', { detail: { sessionKey: result.sessionKey } }));
       onDone?.();
     } catch (e) {

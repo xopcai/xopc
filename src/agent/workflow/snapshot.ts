@@ -10,16 +10,16 @@
 import type {
   WorkflowAgentSnapshot,
   WorkflowAgentStatus,
-  WorkflowMeta,
+  WorkflowSnapshotDefinition,
   WorkflowSnapshot,
 } from './types.js';
 import { emptySnapshotFor } from './snapshot-empty.js';
 
-export function createWorkflowSnapshot(meta: WorkflowMeta): WorkflowSnapshot {
+export function createWorkflowSnapshot(definition: WorkflowSnapshotDefinition): WorkflowSnapshot {
   return emptySnapshotFor(
-    meta.name,
-    meta.description,
-    meta.phases?.map((p) => p.title),
+    definition.name,
+    definition.description,
+    definition.phases?.map((phase) => phase.title),
   );
 }
 

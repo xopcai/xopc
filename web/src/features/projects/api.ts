@@ -295,6 +295,28 @@ export async function createProject(input: {
   return res.project;
 }
 
+export type DelegatedWorkResult = {
+  project: Project;
+  goal: ProjectGoal;
+  contractGenerated: boolean;
+  contractWarning?: string;
+  execution: {
+    status: 'queued' | 'saved';
+    warning?: string;
+  };
+};
+
+export async function delegateWork(input: {
+  outcome: string;
+  uiLocale?: 'en' | 'zh';
+}): Promise<DelegatedWorkResult> {
+  const res = await fetchJson<{ ok: true } & DelegatedWorkResult>(apiUrl('/api/projects/delegate'), {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return res;
+}
+
 export async function inferProjectDefaults(input: {
   name?: string;
   description?: string;

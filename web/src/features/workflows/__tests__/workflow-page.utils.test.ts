@@ -35,6 +35,7 @@ function minimalView(overrides: Partial<WorkflowRunView['run']>): WorkflowRunVie
     },
     phases: [],
     agents: [],
+    nodes: [],
     logs: [],
     artifacts: [],
     timeline: [],

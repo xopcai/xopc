@@ -2,7 +2,7 @@
  * Minimal card for a failed workflow run.
  *
  * Header is always clickable — expanded body shows the full error, logs,
- * failed subagents, optional progress snapshot, and submitted script.
+ * failed subagents and the optional progress snapshot.
  */
 
 import { memo, useMemo, useState } from 'react';
@@ -26,7 +26,7 @@ import { WorkflowAgentRow } from './workflow-agent-row';
 import type { WorkflowPhaseRowLabels } from './workflow-phase-row';
 
 export type WorkflowErrorCardLabels = {
-  titleParse: string;
+  titleValidation: string;
   titleAbort: string;
   titleTimeout: string;
   titleRuntime: string;
@@ -41,7 +41,6 @@ export type WorkflowErrorCardLabels = {
   failedAgentsHeading: string;
   executedAgentsHeading: string;
   progressHeading: string;
-  scriptHeading: string;
   noExtraDetails: string;
   copyReason: string;
   copyReasonDone: string;
@@ -56,7 +55,6 @@ export const WorkflowErrorCard = memo(function WorkflowErrorCard({
   logs,
   failedAgents,
   snapshot,
-  scriptPreview,
   selectedAgentId,
   onSelectAgent,
   labels,
@@ -68,15 +66,14 @@ export const WorkflowErrorCard = memo(function WorkflowErrorCard({
   logs?: string[];
   failedAgents?: WorkflowAgentSnapshot[];
   snapshot?: WorkflowSnapshot | null;
-  scriptPreview?: string;
   selectedAgentId?: number | null;
   onSelectAgent?: (agent: WorkflowAgentSnapshot) => void;
   labels: WorkflowErrorCardLabels;
   className?: string;
 }) {
   const title =
-    kind === 'parse_error'
-      ? labels.titleParse
+    kind === 'validation_error'
+      ? labels.titleValidation
       : kind === 'aborted'
         ? labels.titleAbort
         : kind === 'timeout'
@@ -107,8 +104,7 @@ export const WorkflowErrorCard = memo(function WorkflowErrorCard({
     Boolean(diagnosticText) ||
     recoveryActions.length > 0 ||
     logLines.length > 0 ||
-    workflowAgents.length > 0 ||
-    Boolean(scriptPreview?.trim());
+    workflowAgents.length > 0;
 
   const [collapsed, setCollapsed] = useState(false);
   const [reasonExpanded, setReasonExpanded] = useState(false);
@@ -270,17 +266,6 @@ export const WorkflowErrorCard = memo(function WorkflowErrorCard({
             </section>
           ) : null}
 
-          {scriptPreview?.trim() ? (
-            <section className="min-w-0">
-              <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
-                {labels.scriptHeading}
-              </div>
-              <pre className="max-h-60 min-w-0 overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-surface-hover/60 p-2 font-mono text-xs text-fg-muted dark:bg-surface-hover/35">
-                {scriptPreview}
-              </pre>
-            </section>
-          ) : null}
-
           {!bodySections ? (
             <div className="text-xs text-fg-disabled">{labels.noExtraDetails}</div>
           ) : null}
@@ -291,7 +276,7 @@ export const WorkflowErrorCard = memo(function WorkflowErrorCard({
 });
 
 const iconFor: Record<WorkflowFailureKind, React.ReactNode> = {
-  parse_error: <OctagonX className="size-4 shrink-0 text-rose-600 dark:text-rose-400" aria-hidden />,
+  validation_error: <OctagonX className="size-4 shrink-0 text-rose-600 dark:text-rose-400" aria-hidden />,
   aborted: <XCircle className="size-4 shrink-0 text-fg-muted" aria-hidden />,
   timeout: <TimerOff className="size-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />,
   runtime_error: <AlertTriangle className="size-4 shrink-0 text-rose-600 dark:text-rose-400" aria-hidden />,

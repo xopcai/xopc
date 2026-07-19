@@ -19,6 +19,8 @@ import {
   saveWorkflowDefinition,
   startWorkflowRun,
   type WorkflowDefinition,
+  type WorkflowDefinitionManifest,
+  type WorkflowGraph,
   type WorkflowRunSummary,
   type WorkflowRunReplayScope,
 } from './workflow-api';
@@ -72,7 +74,10 @@ export function useWorkflowsPage() {
     mode: 'edit' | 'copy';
     definition: WorkflowDefinition;
     initialName: string;
-    initialScript: string;
+    initialGraph: WorkflowGraph;
+    initialManifest: WorkflowDefinitionManifest;
+    baseRevision: number;
+    repairPrompt?: string;
   } | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
@@ -150,12 +155,7 @@ export function useWorkflowsPage() {
   );
 
   const openWorkflowEditor = useCallback(
-    (definition: WorkflowDefinition, forcedMode?: 'edit' | 'copy') => {
-      const script = definition.runtime?.source ?? '';
-      if (!script.trim()) {
-        setActionError(labels.editWorkflowSourceMissing);
-        return;
-      }
+    (definition: WorkflowDefinition, forcedMode?: 'edit' | 'copy', repairPrompt?: string) => {
       const mode = forcedMode ?? (definition.metadata.source === 'user' ? 'edit' : 'copy');
       const initialName = mode === 'edit' ? definition.name : buildWorkflowCopyName(definition);
       setActionError(null);
@@ -164,11 +164,14 @@ export function useWorkflowsPage() {
         mode,
         definition,
         initialName,
-        initialScript: mode === 'copy' ? renameWorkflowScript(script, initialName) : script,
+        initialGraph: structuredClone(definition.graph),
+        initialManifest: definitionToManifest(definition),
+        baseRevision: mode === 'edit' ? definition.revision : 0,
+        repairPrompt,
       });
       setManageOpenState(true);
     },
-    [buildWorkflowCopyName, labels.editWorkflowSourceMissing],
+    [buildWorkflowCopyName],
   );
 
   const patchSearchParams = useCallback(
@@ -184,6 +187,23 @@ export function useWorkflowsPage() {
     },
     [setSearchParams],
   );
+
+  const openDefinitionDetails = useCallback((definition: WorkflowDefinition) => {
+    patchSearchParams((next) => {
+      next.set(WORKFLOW_DEF_PARAM, definition.id);
+      next.delete(WORKFLOW_START_PARAM);
+      next.delete(WORKFLOW_COPY_PARAM);
+    });
+  }, [patchSearchParams]);
+
+  const closeDefinitionDetails = useCallback(() => {
+    setDetailDefinition(null);
+    patchSearchParams((next) => {
+      next.delete(WORKFLOW_DEF_PARAM);
+      next.delete(WORKFLOW_START_PARAM);
+      next.delete(WORKFLOW_COPY_PARAM);
+    });
+  }, [patchSearchParams]);
 
   useEffect(() => {
     const agents = agentsSwr.data?.agents ?? [];
@@ -303,7 +323,11 @@ export function useWorkflowsPage() {
     const defId = searchParams.get(WORKFLOW_DEF_PARAM);
     const shouldStart = searchParams.get(WORKFLOW_START_PARAM) === '1';
     const shouldCopy = searchParams.get(WORKFLOW_COPY_PARAM) === '1';
-    if (!defId || !definitions.length) return;
+    if (!defId) {
+      setDetailDefinition(null);
+      return;
+    }
+    if (!definitions.length) return;
     const definition = definitions.find((item) => item.id === defId || item.name === defId);
     if (!definition) return;
     if (shouldCopy) {
@@ -312,6 +336,7 @@ export function useWorkflowsPage() {
       setStartDefinition(definition);
     } else {
       setDetailDefinition(definition);
+      return;
     }
     patchSearchParams((next) => {
       next.delete(WORKFLOW_DEF_PARAM);
@@ -430,11 +455,11 @@ export function useWorkflowsPage() {
   );
 
   const saveCustomWorkflow = useCallback(
-    async (payload: { name: string; script: string }): Promise<WorkflowDefinition | void> => {
+    async (payload: { name: string; graph: WorkflowGraph; manifest: WorkflowDefinitionManifest; expectedRevision: number }): Promise<WorkflowDefinition | void> => {
       setSavingWorkflow(true);
       setActionError(null);
       try {
-        const definition = await saveWorkflowDefinition(payload.name, payload.script);
+        const definition = await saveWorkflowDefinition(payload.name, payload.graph, payload.manifest, payload.expectedRevision);
         setManageOpenState(false);
         setWorkflowEditorDraft(null);
         await definitionsSwr.mutate();
@@ -450,11 +475,11 @@ export function useWorkflowsPage() {
   );
 
   const saveDraftAndStart = useCallback(
-    async (payload: { name: string; script: string; goal: string }) => {
+    async (payload: { name: string; graph: WorkflowGraph; manifest: WorkflowDefinitionManifest; expectedRevision: number; goal: string }) => {
       setSavingWorkflow(true);
       setActionError(null);
       try {
-        const definition = await saveWorkflowDefinition(payload.name, payload.script);
+        const definition = await saveWorkflowDefinition(payload.name, payload.graph, payload.manifest, payload.expectedRevision);
         await definitionsSwr.mutate();
         const result = await startWorkflowRun({
           definitionId: definition.id,
@@ -474,6 +499,7 @@ export function useWorkflowsPage() {
         });
       } catch (err) {
         setActionError(err instanceof Error ? err.message : labels.startFailed);
+        throw err;
       } finally {
         setSavingWorkflow(false);
       }
@@ -535,7 +561,8 @@ export function useWorkflowsPage() {
     startDefinition,
     setStartDefinition,
     detailDefinition,
-    setDetailDefinition,
+    openDefinitionDetails,
+    closeDefinitionDetails,
     manageOpen,
     setManageOpen,
     workflowEditorDraft,
@@ -558,10 +585,20 @@ export function useWorkflowsPage() {
   };
 }
 
-function renameWorkflowScript(script: string, nextName: string): string {
-  return script.replace(/(name\s*:\s*['"`])([^'"`]+)(['"`])/, (_match, prefix: string, _current: string, suffix: string) => {
-    return `${prefix}${nextName}${suffix}`;
-  });
+function definitionToManifest(definition: WorkflowDefinition): WorkflowDefinitionManifest {
+  return {
+    title: definition.title,
+    description: definition.description,
+    version: definition.version,
+    inputSchema: definition.inputSchema,
+    outputSchema: definition.outputSchema,
+    defaults: definition.defaults,
+    tags: definition.metadata.tags,
+    whenToUse: definition.metadata.whenToUse,
+    estimatedAgents: definition.metadata.estimatedAgents,
+    permissions: definition.permissions,
+    resources: definition.resources,
+  };
 }
 
 export type WorkflowsPageVm = ReturnType<typeof useWorkflowsPage>;

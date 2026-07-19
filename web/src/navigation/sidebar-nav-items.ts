@@ -1,4 +1,4 @@
-import { Cable, FolderKanban, GitBranch, Layers, ListChecks, Plug, Puzzle, StickyNote, Users, Zap } from 'lucide-react';
+import { Cable, FolderKanban, GitBranch, HeartHandshake, Layers, ListChecks, Plug, Puzzle, StickyNote, Users, Zap } from 'lucide-react';
 
 import type { LucideIcon } from '@/features/extensions/extension-nav-icon';
 
@@ -17,6 +17,7 @@ export type NavItem = {
 };
 
 export type BuiltinNavId =
+  | 'builtin:profile'
   | 'builtin:agents'
   | 'builtin:skills'
   | 'builtin:connectors'
@@ -39,8 +40,9 @@ export type BuiltinNavDef = {
  * Order here is the *initial* sequence shown to first-time users.
  */
 export const BUILTIN_NAV_DEFS: readonly BuiltinNavDef[] = [
-  { id: 'builtin:agents', to: '/agents', Icon: Users },
   { id: 'builtin:projects', to: '/projects', Icon: FolderKanban },
+  { id: 'builtin:profile', to: '/you', Icon: HeartHandshake },
+  { id: 'builtin:agents', to: '/agents', Icon: Users },
   { id: 'builtin:goals', to: '/goals', Icon: ListChecks },
   { id: 'builtin:workflows', to: '/workflows', Icon: GitBranch },
   { id: 'builtin:skills', to: '/skills', Icon: Layers },
@@ -52,9 +54,9 @@ export const BUILTIN_NAV_DEFS: readonly BuiltinNavDef[] = [
 ] as const;
 
 /** Cap on visible rail rows excluding the "New chat" button at the top. */
-export const VISIBLE_NAV_CAP = 4;
+export const VISIBLE_NAV_CAP = 2;
 /** When overflowing, the last visible slot becomes the "More" button. */
-export const VISIBLE_NAV_WHEN_OVERFLOW = 4;
+export const VISIBLE_NAV_WHEN_OVERFLOW = 2;
 
 export type ReconciledNav = {
   visible: NavItem[];

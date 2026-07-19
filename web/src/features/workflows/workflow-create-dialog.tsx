@@ -1,50 +1,70 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { AlertTriangle, Braces, CheckCircle2, Code2, Sparkles } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
-import type { ReactNode } from 'react';
+import {
+  Background,
+  Controls,
+  Handle,
+  MarkerType,
+  Position,
+  ReactFlow,
+  addEdge,
+  applyEdgeChanges,
+  useNodesState,
+  type Connection,
+  type Edge,
+  type EdgeChange,
+  type Node,
+  type NodeProps,
+  type ReactFlowInstance,
+} from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
+import { Bot, GitBranch, History, Inbox, Layers3, Play, RotateCcw, Save, Sparkles, Trash2, X } from 'lucide-react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { messages } from '@/i18n/messages';
+import { PopoverSelect } from '@/components/ui/popover-select';
+import { cn } from '@/lib/cn';
 import type { StoredLanguage } from '@/lib/storage';
 
 import {
   createWorkflowDraft,
+  deleteWorkflowAuthoringDraft,
+  listWorkflowRevisions,
+  restoreWorkflowRevision,
+  saveWorkflowAuthoringDraft,
   validateWorkflowDefinition,
   type ValidateWorkflowDefinitionResponse,
   type WorkflowDefinition,
-  type WorkflowDraftConstraints,
-  type WorkflowDraftResponse,
+  type WorkflowDefinitionManifest,
+  type WorkflowGraph,
+  type WorkflowGraphNode,
+  type WorkflowNodeKind,
+  type WorkflowRevisionSummary,
 } from './workflow-api';
-import { Select, SelectOption } from '@/components/ui/popover-select';
-
-type WorkflowsMessages = ReturnType<typeof messages>['workflows'];
-type CreateMode = 'ai' | 'manual';
 
 export interface WorkflowEditorInitialDraft {
   mode: 'edit' | 'copy';
   name: string;
-  script: string;
+  graph: WorkflowGraph;
+  manifest: WorkflowDefinitionManifest;
+  baseRevision: number;
   sourceTitle: string;
+  repairPrompt?: string;
 }
 
-const DEFAULT_SCRIPT = `export const meta = {
-  name: 'my_workflow',
-  description: 'Describe what this workflow does.',
-  whenToUse: 'When the user asks for ...',
-  examplePrompts: [
-    { field: 'goal', text: 'Example goal for this workflow' },
-  ],
-  tags: ['custom'],
-  estimatedAgents: { min: 2, max: 4 },
-  phases: [{ title: 'Step 1' }, { title: 'Synthesize' }],
+interface SavePayload {
+  name: string;
+  graph: WorkflowGraph;
+  manifest: WorkflowDefinitionManifest;
+  expectedRevision: number;
 }
 
-phase('Step 1')
-const first = await agent('Do the first step.', { label: 'step 1' })
+interface FlowNodeData extends Record<string, unknown> {
+  workflowNode: WorkflowGraphNode;
+}
 
-phase('Synthesize')
-return await agent('Summarize:\\n\\n' + first, { label: 'synthesis' })
-`;
+type StudioNode = Node<FlowNodeData>;
+
+const FLOW_FIT_VIEW_OPTIONS = { padding: 0.24, minZoom: 0.45, maxZoom: 1 } as const;
 
 export function WorkflowCreateDialog({
   open,
@@ -62,611 +82,458 @@ export function WorkflowCreateDialog({
   saving: boolean;
   initialDraft?: WorkflowEditorInitialDraft | null;
   onClose: () => void;
-  onSave: (payload: { name: string; script: string }) => Promise<WorkflowDefinition | void> | WorkflowDefinition | void;
-  onSaveAndStart: (payload: { name: string; script: string; goal: string }) => Promise<void> | void;
+  onSave: (payload: SavePayload) => Promise<WorkflowDefinition | void> | WorkflowDefinition | void;
+  onSaveAndStart: (payload: SavePayload & { goal: string }) => Promise<void> | void;
 }) {
-  const labels = messages(language).workflows;
-  const [mode, setMode] = useState<CreateMode>('ai');
-  const [workflowName, setWorkflowName] = useState('');
-  const [workflowScript, setWorkflowScript] = useState('');
-  const editingExisting = initialDraft?.mode === 'edit';
-  const title = editingExisting ? labels.editWorkflowTitle : labels.createWorkflowTitle;
-  const hint = editingExisting
-    ? labels.editWorkflowHint
-    : initialDraft?.mode === 'copy'
-      ? labels.createWorkflowHintFromCopy
-      : labels.createWorkflowHint;
+  const copy = studioCopy(language);
+  const [name, setName] = useState('my_workflow');
+  const [graph, setGraph] = useState<WorkflowGraph>(() => createStarterGraph());
+  const [manifest, setManifest] = useState<WorkflowDefinitionManifest>(() => ({ title: copy.untitled, description: '', tags: ['custom'] }));
+  const [selectedNodeId, setSelectedNodeId] = useState<string>('agent-1');
+  const [flowNodes, setFlowNodes, onFlowNodesChange] = useNodesState<StudioNode>(
+    graph.nodes.map((node) => toFlowNode(node, node.id === 'agent-1')),
+  );
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [testGoal, setTestGoal] = useState('');
+  const [generating, setGenerating] = useState(false);
+  const [validation, setValidation] = useState<ValidateWorkflowDefinitionResponse | null>(null);
+  const [draftStatus, setDraftStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [currentRevision, setCurrentRevision] = useState(0);
+  const [revisions, setRevisions] = useState<WorkflowRevisionSummary[]>([]);
+  const [restoringRevision, setRestoringRevision] = useState<number | null>(null);
+  const initializedKey = useRef('');
+  const draftIdRef = useRef<string | undefined>(undefined);
+  const draftUpdatedAtMsRef = useRef<number | undefined>(undefined);
+  const flowInstanceRef = useRef<ReactFlowInstance<StudioNode, Edge> | null>(null);
+  const [fitViewRevision, setFitViewRevision] = useState(0);
 
   useEffect(() => {
-    if (!open) return;
-    setMode(initialDraft ? 'manual' : 'ai');
-    setWorkflowName(initialDraft?.name ?? '');
-    setWorkflowScript(initialDraft?.script ?? '');
-  }, [initialDraft, open]);
+    if (!open) {
+      initializedKey.current = '';
+      flowInstanceRef.current = null;
+      return;
+    }
+    const key = `${initialDraft?.mode ?? 'new'}:${initialDraft?.name ?? ''}:${initialDraft?.baseRevision ?? 0}`;
+    if (initializedKey.current === key) return;
+    initializedKey.current = key;
+    setName(initialDraft?.name ?? 'my_workflow');
+    setGraph(structuredClone(initialDraft?.graph ?? createStarterGraph()));
+    setFitViewRevision((revision) => revision + 1);
+    setManifest(structuredClone(initialDraft?.manifest ?? { title: copy.untitled, description: '', tags: ['custom'] }));
+    setSelectedNodeId(initialDraft?.graph.nodes.find((node) => node.kind === 'agent')?.id ?? 'agent-1');
+    setAiPrompt(initialDraft?.repairPrompt ?? '');
+    setTestGoal('');
+    setValidation(null);
+    setCurrentRevision(initialDraft?.baseRevision ?? 0);
+    setRevisions([]);
+    setRestoringRevision(null);
+    draftIdRef.current = undefined;
+    draftUpdatedAtMsRef.current = undefined;
+    setDraftStatus('idle');
+  }, [copy.untitled, initialDraft, open]);
+
+  useEffect(() => {
+    if (!open || initialDraft?.mode !== 'edit') return;
+    void listWorkflowRevisions(initialDraft.name).then(setRevisions).catch(() => setRevisions([]));
+  }, [initialDraft?.mode, initialDraft?.name, open]);
+
+  useEffect(() => {
+    if (!open || !name.trim()) return;
+    const timer = window.setTimeout(() => {
+      void validateWorkflowDefinition(name, graph).then(setValidation).catch(() => setValidation(null));
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [graph, name, open]);
+
+  useEffect(() => {
+    if (!open || !name.trim()) return;
+    setDraftStatus('saving');
+    const timer = window.setTimeout(() => {
+      void saveWorkflowAuthoringDraft({
+        id: draftIdRef.current,
+        workflowName: name,
+        graph,
+        manifest,
+        baseRevision: currentRevision,
+        expectedUpdatedAtMs: draftUpdatedAtMsRef.current,
+      }).then((draft) => {
+        draftIdRef.current = draft.id;
+        draftUpdatedAtMsRef.current = draft.updatedAtMs;
+        setDraftStatus('saved');
+      }).catch(() => setDraftStatus('error'));
+    }, 900);
+    return () => window.clearTimeout(timer);
+  }, [currentRevision, graph, manifest, name, open]);
+
+  useLayoutEffect(() => {
+    setFlowNodes((current) => {
+      const currentById = new Map(current.map((node) => [node.id, node]));
+      return graph.nodes.map((node) => ({
+        ...currentById.get(node.id),
+        ...toFlowNode(node, node.id === selectedNodeId),
+      }));
+    });
+  }, [graph.nodes, selectedNodeId, setFlowNodes]);
+
+  useEffect(() => {
+    const instance = flowInstanceRef.current;
+    if (!open || !instance || graph.nodes.length === 0) return;
+    const frame = window.requestAnimationFrame(() => {
+      void instance.fitView(FLOW_FIT_VIEW_OPTIONS);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [fitViewRevision, graph.nodes.length, open]);
+
+  const flowEdges = useMemo(() => graph.edges.map(toFlowEdge), [graph.edges]);
+  const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId) ?? null;
+  const canPublish = validation?.valid === true && !saving && !generating;
+
+  const commitNodePosition = useCallback((draggedNode: StudioNode) => {
+    setGraph((current) => {
+      const nodes = current.nodes.map((node) => {
+        if (node.id !== draggedNode.id) return node;
+        if (node.position.x === draggedNode.position.x && node.position.y === draggedNode.position.y) return node;
+        return { ...node, position: draggedNode.position };
+      });
+      return nodes.some((node, index) => node !== current.nodes[index]) ? { ...current, nodes } : current;
+    });
+  }, []);
+
+  const onEdgesChange = useCallback((changes: EdgeChange[]) => {
+    const structuralChanges = changes.filter((change) => change.type !== 'select');
+    if (structuralChanges.length === 0) return;
+    setGraph((current) => ({
+      ...current,
+      edges: applyEdgeChanges(structuralChanges, current.edges.map(toFlowEdge)).map((edge) => ({
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        sourcePort: edge.sourceHandle === 'true' || edge.sourceHandle === 'false' ? edge.sourceHandle : undefined,
+      })),
+    }));
+  }, []);
+
+  const onConnect = useCallback((connection: Connection) => {
+    if (!connection.source || !connection.target) return;
+    setGraph((current) => ({
+      ...current,
+      edges: addEdge({ ...connection, id: `edge-${crypto.randomUUID()}` }, current.edges.map(toFlowEdge)).map((edge) => ({
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        sourcePort: edge.sourceHandle === 'true' || edge.sourceHandle === 'false' ? edge.sourceHandle : undefined,
+      })),
+    }));
+  }, []);
+
+  const updateNode = useCallback((id: string, update: (node: WorkflowGraphNode) => WorkflowGraphNode) => {
+    setGraph((current) => ({ ...current, nodes: current.nodes.map((node) => node.id === id ? update(node) : node) }));
+  }, []);
+
+  const addNode = (kind: Extract<WorkflowNodeKind, 'agent' | 'decision' | 'merge'>) => {
+    const id = `${kind}-${crypto.randomUUID().slice(0, 8)}`;
+    const node = createNode(kind, id, graph.nodes.length);
+    setGraph((current) => {
+      const source = current.nodes.find((item) => item.id === selectedNodeId && item.kind !== 'output');
+      const edge = source ? [{ id: `edge-${crypto.randomUUID()}`, source: source.id, target: id }] : [];
+      return { ...current, nodes: [...current.nodes, node], edges: [...current.edges, ...edge] };
+    });
+    setFitViewRevision((revision) => revision + 1);
+    setSelectedNodeId(id);
+  };
+
+  const removeSelectedNode = () => {
+    if (!selectedNode || selectedNode.kind === 'input' || selectedNode.kind === 'output') return;
+    setGraph((current) => ({
+      ...current,
+      nodes: current.nodes.filter((node) => node.id !== selectedNode.id),
+      edges: current.edges.filter((edge) => edge.source !== selectedNode.id && edge.target !== selectedNode.id),
+    }));
+    setFitViewRevision((revision) => revision + 1);
+    setSelectedNodeId('');
+  };
+
+  const generate = async () => {
+    if (!aiPrompt.trim()) return;
+    setGenerating(true);
+    try {
+      const draft = await createWorkflowDraft({
+        prompt: aiPrompt,
+        agentId: ownerAgentId,
+        language: language === 'zh' ? 'zh' : 'en',
+        mode: initialDraft || graph.nodes.length > 3 ? 'improve' : 'create',
+        existingGraph: graph,
+      });
+      setName(draft.name);
+      setGraph(draft.graph);
+      setFitViewRevision((revision) => revision + 1);
+      setManifest(draft.manifest);
+      setSelectedNodeId(draft.graph.nodes.find((node) => node.kind === 'agent')?.id ?? '');
+      setValidation(draft.validation);
+      setAiPrompt('');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const publish = async (start: boolean) => {
+    if (!canPublish) return;
+    const payload = { name, graph, manifest, expectedRevision: currentRevision };
+    try {
+      if (start) {
+        await onSaveAndStart({ ...payload, goal: testGoal.trim() || manifest.description || name });
+      } else {
+        const saved = await onSave(payload);
+        if (!saved) return;
+        setCurrentRevision(saved.revision);
+      }
+      if (draftIdRef.current) await deleteWorkflowAuthoringDraft(draftIdRef.current).catch(() => undefined);
+    } catch {
+      return;
+    }
+  };
+
+  const restoreRevision = async (revision: number) => {
+    if (restoringRevision !== null || initialDraft?.mode !== 'edit') return;
+    setRestoringRevision(revision);
+    try {
+      const restored = await restoreWorkflowRevision(initialDraft.name, revision, currentRevision);
+      setGraph(restored.graph);
+      setFitViewRevision((fitRevision) => fitRevision + 1);
+      setManifest(definitionToManifest(restored));
+      setCurrentRevision(restored.revision);
+      setSelectedNodeId(restored.graph.nodes.find((node) => node.kind === 'agent')?.id ?? '');
+      setRevisions(await listWorkflowRevisions(initialDraft.name));
+    } finally {
+      setRestoringRevision(null);
+    }
+  };
 
   return (
     <Dialog.Root open={open} onOpenChange={(next) => !next && onClose()}>
       <Dialog.Portal>
         <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-65 bg-scrim backdrop-blur-[1px]" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-66 flex h-[min(92vh,52rem)] w-[min(100%-2rem,72rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-popover outline-none">
-          <div className="border-b border-edge px-5 py-4">
-            <Dialog.Title className="text-base font-semibold text-fg">{title}</Dialog.Title>
-            <Dialog.Description className="mt-1 text-sm text-fg-muted">{hint}</Dialog.Description>
-            <div className="mt-4 inline-flex rounded-xl border border-edge bg-surface-base p-1">
-              <ModeButton active={mode === 'ai'} onClick={() => setMode('ai')} icon={<Sparkles className="size-4" aria-hidden />}>
-                {labels.createWorkflowAiTab}
-              </ModeButton>
-              <ModeButton active={mode === 'manual'} onClick={() => setMode('manual')} icon={<Code2 className="size-4" aria-hidden />}>
-                {labels.createWorkflowManualTab}
-              </ModeButton>
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-66 flex h-[min(94vh,58rem)] w-[min(100%-1.5rem,88rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-popover outline-none">
+          <header className="flex shrink-0 items-center gap-3 border-b border-edge px-4 py-3">
+            <div className="min-w-0 flex-1">
+              <Dialog.Title className="text-base font-semibold text-fg">{initialDraft?.mode === 'edit' ? copy.editTitle : copy.createTitle}</Dialog.Title>
+              <Dialog.Description className="mt-0.5 text-xs text-fg-muted">{copy.subtitle}</Dialog.Description>
             </div>
+            <span className={cn('text-xs', draftStatus === 'error' ? 'text-danger' : 'text-fg-subtle')}>
+              {draftStatus === 'saving' ? copy.savingDraft : draftStatus === 'saved' ? copy.savedDraft : draftStatus === 'error' ? copy.draftError : ''}
+            </span>
+            <Dialog.Close asChild><Button variant="ghost" className="size-9 p-0" aria-label={copy.close}><X className="size-4" /></Button></Dialog.Close>
+          </header>
+
+          <div className="flex min-h-0 flex-1">
+            <section className="flex min-w-0 flex-1 flex-col bg-surface-base">
+              <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-edge px-3 py-2">
+                <div className="mr-2 min-w-36">
+                  <h2 className="text-sm font-semibold text-fg">{copy.flowTitle}</h2>
+                  <p className="text-xs text-fg-subtle">{copy.stepCount(graph.nodes.length)}</p>
+                </div>
+                <Button variant="secondary" className="h-8 rounded-lg text-xs" onClick={() => addNode('agent')}><Bot className="size-3.5" />{copy.addAgent}</Button>
+                <Button variant="secondary" className="h-8 rounded-lg text-xs" onClick={() => addNode('decision')}><GitBranch className="size-3.5" />{copy.addDecision}</Button>
+                <Button variant="secondary" className="h-8 rounded-lg text-xs" onClick={() => addNode('merge')}><Layers3 className="size-3.5" />{copy.addMerge}</Button>
+                <span className="ml-auto text-xs text-fg-subtle">{copy.canvasHint}</span>
+              </div>
+              <div className="relative min-h-72 flex-1">
+                {graph.nodes.length > 0 ? <ReactFlow
+                  aria-label={copy.flowAria}
+                  nodes={flowNodes}
+                  edges={flowEdges}
+                  nodeTypes={NODE_TYPES}
+                  onNodesChange={onFlowNodesChange}
+                  onEdgesChange={onEdgesChange}
+                  onConnect={onConnect}
+                  onNodeClick={(_event, node) => setSelectedNodeId(node.id)}
+                  onNodeDragStart={(_event, node) => setSelectedNodeId(node.id)}
+                  onNodeDragStop={(_event, node) => commitNodePosition(node)}
+                  onInit={(instance) => {
+                    flowInstanceRef.current = instance;
+                    window.requestAnimationFrame(() => {
+                      void instance.fitView(FLOW_FIT_VIEW_OPTIONS);
+                    });
+                  }}
+                  fitView
+                  fitViewOptions={FLOW_FIT_VIEW_OPTIONS}
+                  minZoom={0.25}
+                  maxZoom={1.5}
+                  deleteKeyCode={null}
+                  proOptions={{ hideAttribution: true }}
+                >
+                  <Background color="var(--color-edge)" gap={22} size={1} />
+                  <Controls showInteractive={false} className="!border-edge !bg-surface-panel !shadow-surface" />
+                </ReactFlow> : (
+                  <div className="flex h-full items-center justify-center px-6 text-center text-sm text-fg-muted">{copy.emptyFlow}</div>
+                )}
+              </div>
+            </section>
+
+            <aside className="flex w-[22rem] shrink-0 flex-col border-l border-edge bg-surface-panel">
+              <div className="min-h-0 flex-1 overflow-y-auto p-4">
+                <section>
+                  <label className="block text-xs font-medium text-fg" htmlFor="workflow-name">{copy.workflowName}</label>
+                  <input id="workflow-name" value={name} onChange={(event) => setName(normalizeName(event.target.value))} className={fieldClass} />
+                  <label className="mt-3 block text-xs font-medium text-fg" htmlFor="workflow-title">{copy.humanTitle}</label>
+                  <input id="workflow-title" value={manifest.title ?? ''} onChange={(event) => setManifest((current) => ({ ...current, title: event.target.value }))} className={fieldClass} />
+                  <label className="mt-3 block text-xs font-medium text-fg" htmlFor="workflow-description">{copy.outcome}</label>
+                  <textarea id="workflow-description" value={manifest.description ?? ''} onChange={(event) => setManifest((current) => ({ ...current, description: event.target.value }))} className={`${fieldClass} min-h-20 resize-y`} />
+                  {initialDraft?.mode === 'edit' && revisions.length > 0 ? (
+                    <details className="mt-4 border-t border-edge pt-3">
+                      <summary className="flex cursor-pointer list-none items-center gap-2 text-xs font-medium text-fg-muted">
+                        <History className="size-3.5" />{copy.versions} · v{currentRevision}
+                      </summary>
+                      <div className="mt-2 space-y-1">
+                        {revisions.map((item) => (
+                          <div key={item.revision} className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 hover:bg-surface-hover">
+                            <span className="min-w-0 text-xs text-fg-muted">v{item.revision} · {new Intl.DateTimeFormat(language, { dateStyle: 'medium', timeStyle: 'short' }).format(item.createdAtMs)}</span>
+                            {item.revision === currentRevision ? <span className="text-xs text-fg-subtle">{copy.currentVersion}</span> : (
+                              <Button variant="ghost" className="h-7 shrink-0 px-2 text-xs" disabled={restoringRevision !== null} onClick={() => void restoreRevision(item.revision)}>
+                                <RotateCcw className="size-3" />{restoringRevision === item.revision ? copy.restoring : copy.restore}
+                              </Button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  ) : null}
+                </section>
+
+                <div className="my-4 border-t border-edge" />
+                {selectedNode ? (
+                  <NodeInspector node={selectedNode} copy={copy} updateNode={updateNode} onDelete={removeSelectedNode} />
+                ) : (
+                  <div className="py-8 text-center text-sm text-fg-muted">{copy.selectNode}</div>
+                )}
+
+                {validation && !validation.valid ? (
+                  <section className="mt-4 rounded-lg border border-danger/30 bg-danger/5 p-3">
+                    <h3 className="text-xs font-medium text-danger">{copy.needsAttention}</h3>
+                    <ul className="mt-2 space-y-1 text-xs text-danger">
+                      {validation.errors.slice(0, 5).map((issue, index) => <li key={`${issue.code}-${index}`}>• {issue.message}</li>)}
+                    </ul>
+                  </section>
+                ) : null}
+              </div>
+            </aside>
           </div>
 
-          {mode === 'ai' ? (
-            <AiCreatePane
-              language={language}
-              ownerAgentId={ownerAgentId}
-              saving={saving}
-              initialDraft={initialDraft}
-              name={workflowName}
-              setName={setWorkflowName}
-              script={workflowScript}
-              setScript={setWorkflowScript}
-              onClose={onClose}
-              onSave={onSave}
-              onSaveAndStart={onSaveAndStart}
-            />
-          ) : (
-            <ManualCreatePane
-              language={language}
-              saving={saving}
-              initialDraft={initialDraft}
-              name={workflowName}
-              setName={setWorkflowName}
-              script={workflowScript}
-              setScript={setWorkflowScript}
-              onClose={onClose}
-              onSave={onSave}
-            />
-          )}
+          <footer className="shrink-0 border-t border-edge bg-surface-panel p-3">
+            <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+              <div className="flex min-w-0 flex-1 items-center gap-2">
+                <Sparkles className="size-4 shrink-0 text-accent-fg" />
+                <input value={aiPrompt} onChange={(event) => setAiPrompt(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void generate(); }} placeholder={copy.aiPlaceholder} className={`${fieldClass} mt-0 flex-1`} />
+                <Button variant="secondary" className="h-10 shrink-0" disabled={generating || !aiPrompt.trim()} onClick={() => void generate()}>{generating ? copy.designing : copy.applyWithAi}</Button>
+              </div>
+              <div className="flex items-center gap-2">
+                <input value={testGoal} onChange={(event) => setTestGoal(event.target.value)} placeholder={copy.testGoal} className={`${fieldClass} mt-0 w-52`} />
+                <Button variant="secondary" disabled={!canPublish} onClick={() => void publish(false)}><Save className="size-4" />{copy.publish}</Button>
+                <Button variant="primary" disabled={!canPublish} onClick={() => void publish(true)}><Play className="size-4" />{copy.publishAndRun}</Button>
+              </div>
+            </div>
+          </footer>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
   );
 }
 
-function ModeButton({
-  active,
-  onClick,
-  icon,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  icon: ReactNode;
-  children: ReactNode;
-}) {
+function WorkflowNodeCard({ data, selected }: NodeProps<StudioNode>) {
+  const node = data.workflowNode;
+  const icon = node.kind === 'input' ? <Inbox /> : node.kind === 'agent' ? <Bot /> : node.kind === 'decision' ? <GitBranch /> : node.kind === 'merge' ? <Layers3 /> : <Play />;
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={
-        active
-          ? 'inline-flex h-8 items-center gap-2 rounded-lg bg-surface-panel px-3 text-sm font-medium text-fg shadow-surface'
-          : 'inline-flex h-8 items-center gap-2 rounded-lg px-3 text-sm font-medium text-fg-muted hover:text-fg'
-      }
-    >
-      {icon}
-      {children}
-    </button>
+    <div className={cn('w-52 rounded-xl border bg-surface-panel px-3 py-3 shadow-surface transition-colors', selected ? 'border-accent ring-2 ring-accent/20' : 'border-edge')}>
+      {node.kind !== 'input' ? <Handle type="target" position={Position.Left} className="!size-2.5 !border-2 !border-surface-panel !bg-fg-subtle" /> : null}
+      <div className="flex items-start gap-2">
+        <span className="mt-0.5 [&>svg]:size-4 text-accent-fg">{icon}</span>
+        <span className="min-w-0"><strong className="block truncate text-sm font-medium text-fg">{node.title}</strong><span className="mt-1 block line-clamp-2 text-xs leading-4 text-fg-muted">{node.description || nodeKindLabel(node.kind)}</span></span>
+      </div>
+      {node.kind === 'decision' ? (
+        <><Handle id="true" type="source" position={Position.Right} style={{ top: '38%' }} className="!size-2.5 !border-2 !border-surface-panel !bg-success" /><Handle id="false" type="source" position={Position.Right} style={{ top: '70%' }} className="!size-2.5 !border-2 !border-surface-panel !bg-danger" /></>
+      ) : node.kind !== 'output' ? <Handle type="source" position={Position.Right} className="!size-2.5 !border-2 !border-surface-panel !bg-accent" /> : null}
+    </div>
   );
 }
 
-function AiCreatePane({
-  language,
-  ownerAgentId,
-  saving,
-  initialDraft,
-  name,
-  setName,
-  script,
-  setScript,
-  onClose,
-  onSave,
-  onSaveAndStart,
-}: {
-  language: StoredLanguage;
-  ownerAgentId?: string;
-  saving: boolean;
-  initialDraft?: WorkflowEditorInitialDraft | null;
-  name: string;
-  setName: (value: string) => void;
-  script: string;
-  setScript: (value: string) => void;
-  onClose: () => void;
-  onSave: (payload: { name: string; script: string }) => Promise<WorkflowDefinition | void> | WorkflowDefinition | void;
-  onSaveAndStart: (payload: { name: string; script: string; goal: string }) => Promise<void> | void;
-}) {
-  const labels = messages(language).workflows;
-  const [prompt, setPrompt] = useState('');
-  const [draft, setDraft] = useState<WorkflowDraftResponse | null>(null);
-  const [constraints, setConstraints] = useState<WorkflowDraftConstraints>({
-    allowNetwork: false,
-    fileSystem: 'read',
-    maxPhases: 4,
-    maxSubagents: 8,
-    outputFormat: 'report',
-  });
-  const [generating, setGenerating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+const NODE_TYPES = { workflow: WorkflowNodeCard };
 
-  const validationIssues = useMemo(() => draft?.validation.errors.map((issue) => issue.message) ?? [], [draft]);
-  const blockingLint = useMemo(() => draft?.lint.filter((issue) => issue.severity === 'error') ?? [], [draft]);
-  const canGenerate = prompt.trim().length > 0 && !generating;
-  const canSave = Boolean(draft && name.trim() && script.trim() && draft.validation.valid && blockingLint.length === 0 && !saving);
-  const hasExistingScript = script.trim().length > 0;
-  const promptLabel = hasExistingScript ? labels.nlBuilderEditPromptLabel : labels.nlBuilderPromptLabel;
-  const promptPlaceholder = hasExistingScript ? labels.nlBuilderEditPromptPlaceholder : labels.nlBuilderPromptPlaceholder;
-  const primaryGenerateMode: 'create' | 'improve' = hasExistingScript ? 'improve' : 'create';
+function NodeInspector({ node, copy, updateNode, onDelete }: { node: WorkflowGraphNode; copy: ReturnType<typeof studioCopy>; updateNode: (id: string, update: (node: WorkflowGraphNode) => WorkflowGraphNode) => void; onDelete: () => void }) {
+  const update = (patch: Partial<WorkflowGraphNode>) => updateNode(node.id, (current) => ({ ...current, ...patch }));
+  const updateConfig = (patch: Record<string, unknown>) => updateNode(node.id, (current) => ({ ...current, config: { ...current.config, ...patch } }));
+  return (
+    <section>
+      <div className="flex items-center justify-between gap-2"><h3 className="text-sm font-semibold text-fg">{copy.stepSettings}</h3>{node.kind !== 'input' && node.kind !== 'output' ? <Button variant="ghost" className="h-8 px-2 text-danger" onClick={onDelete}><Trash2 className="size-3.5" />{copy.remove}</Button> : null}</div>
+      <label className="mt-3 block text-xs font-medium text-fg" htmlFor="node-title">{copy.stepName}</label>
+      <input id="node-title" value={node.title} onChange={(event) => update({ title: event.target.value })} className={fieldClass} />
+      <label className="mt-3 block text-xs font-medium text-fg" htmlFor="node-description">{copy.stepPurpose}</label>
+      <textarea id="node-description" value={node.description ?? ''} onChange={(event) => update({ description: event.target.value })} className={`${fieldClass} min-h-16 resize-y`} />
+      {node.kind === 'agent' ? <>
+        <label className="mt-3 block text-xs font-medium text-fg" htmlFor="node-prompt">{copy.instructions}</label>
+        <textarea id="node-prompt" value={String(node.config.prompt ?? '')} onChange={(event) => updateConfig({ prompt: event.target.value })} className={`${fieldClass} min-h-36 resize-y`} />
+        <details className="mt-4 border-t border-edge pt-3">
+          <summary className="cursor-pointer text-xs font-medium text-fg-muted">{copy.advanced}</summary>
+          <label className="mt-3 block text-xs font-medium text-fg" htmlFor="node-model">{copy.model}</label>
+          <input id="node-model" value={String(node.config.model ?? '')} onChange={(event) => updateConfig({ model: event.target.value || undefined })} placeholder={copy.defaultModel} className={fieldClass} />
+        </details>
+      </> : null}
+      {node.kind === 'decision' ? <>
+        <label className="mt-3 block text-xs font-medium text-fg" htmlFor="decision-path">{copy.valuePath}</label>
+        <input id="decision-path" value={node.config.rule?.path ?? ''} onChange={(event) => updateConfig({ rule: { ...(node.config.rule ?? { operator: 'exists' }), path: event.target.value } })} placeholder="result.approved" className={fieldClass} />
+        <label className="mt-3 block text-xs font-medium text-fg" id="decision-operator-label">{copy.condition}</label>
+        <PopoverSelect value={node.config.rule?.operator ?? 'exists'} placeholder={copy.condition} allowEmpty={false} ariaLabelledBy="decision-operator-label" options={[{ value: 'exists', label: copy.exists }, { value: 'equals', label: copy.equals }, { value: 'not_equals', label: copy.notEquals }, { value: 'contains', label: copy.contains }]} onChange={(operator) => updateConfig({ rule: { ...(node.config.rule ?? { path: '' }), operator } })} />
+        {node.config.rule?.operator !== 'exists' ? <><label className="mt-3 block text-xs font-medium text-fg" htmlFor="decision-value">{copy.compareValue}</label><input id="decision-value" value={String(node.config.rule?.value ?? '')} onChange={(event) => updateConfig({ rule: { ...node.config.rule!, value: event.target.value } })} className={fieldClass} /></> : null}
+      </> : null}
+      {node.kind === 'merge' ? <><label className="mt-3 block text-xs font-medium text-fg" id="merge-mode-label">{copy.combineAs}</label><PopoverSelect value={String(node.config.mode ?? 'object')} placeholder={copy.combineAs} allowEmpty={false} ariaLabelledBy="merge-mode-label" options={[{ value: 'object', label: copy.namedResults }, { value: 'array', label: copy.listResults }]} onChange={(mode) => updateConfig({ mode })} /></> : null}
+      {node.kind === 'output' ? <><label className="mt-3 block text-xs font-medium text-fg" htmlFor="output-summary">{copy.summaryTemplate}</label><textarea id="output-summary" value={String(node.config.summary ?? '')} onChange={(event) => updateConfig({ summary: event.target.value || undefined })} placeholder={copy.autoSummary} className={`${fieldClass} min-h-20 resize-y`} /></> : null}
+    </section>
+  );
+}
 
-  const generate = async (mode: 'create' | 'improve') => {
-    if (!prompt.trim()) return;
-    setGenerating(true);
-    setError(null);
-    try {
-      const next = await createWorkflowDraft({
-        prompt,
-        agentId: ownerAgentId,
-        language: language === 'zh' ? 'zh' : 'en',
-        mode,
-        existingScript: mode === 'improve' ? script : undefined,
-        constraints,
-      });
-      setDraft(next);
-      setName(next.name);
-      setScript(next.script);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : labels.nlBuilderGenerateFailed);
-    } finally {
-      setGenerating(false);
-    }
+const fieldClass = 'mt-1 block h-10 w-full rounded-lg border border-edge bg-surface-subtle px-3 text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-edge-strong';
+
+function toFlowNode(node: WorkflowGraphNode, selected = false): StudioNode { return { id: node.id, type: 'workflow', position: node.position, selected, data: { workflowNode: node } }; }
+function toFlowEdge(edge: WorkflowGraph['edges'][number]): Edge { return { id: edge.id, source: edge.source, target: edge.target, sourceHandle: edge.sourcePort === 'true' || edge.sourcePort === 'false' ? edge.sourcePort : undefined, markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: 'var(--color-fg-subtle)', strokeWidth: 1.5 } }; }
+
+function createStarterGraph(): WorkflowGraph {
+  return { schemaVersion: 1, nodes: [
+    { id: 'input', kind: 'input', title: 'Input', description: 'What the user provides', position: { x: 0, y: 120 }, config: {} },
+    { id: 'agent-1', kind: 'agent', title: 'Do the work', description: 'Understand and complete the request', phaseId: 'work', position: { x: 300, y: 120 }, config: { prompt: 'Complete this goal: {{goal}}\n\nUser input:\n{{input}}', maxIterations: 12 } },
+    { id: 'output', kind: 'output', title: 'Result', description: 'A clear answer for the user', position: { x: 620, y: 120 }, config: {} },
+  ], edges: [{ id: 'input-agent', source: 'input', target: 'agent-1' }, { id: 'agent-output', source: 'agent-1', target: 'output' }] };
+}
+
+function createNode(kind: 'agent' | 'decision' | 'merge', id: string, index: number): WorkflowGraphNode {
+  const position = { x: 280 + (index % 3) * 280, y: 80 + Math.floor(index / 3) * 180 };
+  if (kind === 'agent') return { id, kind, title: 'New AI step', description: 'Describe what this step should accomplish', phaseId: 'work', position, config: { prompt: 'Use the previous results to complete this step:\n{{predecessors}}', maxIterations: 12 } };
+  if (kind === 'decision') return { id, kind, title: 'Check a condition', description: 'Choose what happens next', position, config: { rule: { path: '', operator: 'exists' } } };
+  return { id, kind, title: 'Combine results', description: 'Bring parallel work together', position, config: { mode: 'object' } };
+}
+
+function normalizeName(value: string): string { return value.toLowerCase().replace(/[^a-z0-9_-]+/g, '_').replace(/^_+/, ''); }
+function nodeKindLabel(kind: WorkflowNodeKind): string { return ({ input: 'User input', agent: 'AI step', decision: 'Decision', merge: 'Combine', output: 'User result' })[kind]; }
+
+function definitionToManifest(definition: WorkflowDefinition): WorkflowDefinitionManifest {
+  return {
+    title: definition.title,
+    description: definition.description,
+    version: definition.version,
+    inputSchema: definition.inputSchema,
+    outputSchema: definition.outputSchema,
+    defaults: definition.defaults,
+    tags: definition.metadata.tags,
+    whenToUse: definition.metadata.whenToUse,
+    estimatedAgents: definition.metadata.estimatedAgents,
+    permissions: definition.permissions,
+    resources: definition.resources,
   };
+}
 
-  const saveOnly = async () => {
-    if (!canSave) return;
-    const saved = await onSave({ name: name.trim(), script });
-    if (saved) onClose();
+function studioCopy(language: StoredLanguage) {
+  const zh = language === 'zh';
+  return zh ? {
+    untitled: '未命名工作流', editTitle: '编辑工作流', createTitle: '创建工作流', subtitle: '描述目标、连接步骤，然后直接运行。无需编写代码。', close: '关闭', savingDraft: '正在保存草稿…', savedDraft: '草稿已保存', draftError: '草稿保存失败', flowTitle: '工作流步骤图', flowAria: '可编辑的工作流步骤图', stepCount: (count: number) => `${count} 个步骤 · 点击步骤可编辑`, emptyFlow: '还没有步骤。添加一个 AI 步骤开始设计。', addAgent: '添加 AI 步骤', addDecision: '添加判断', addMerge: '合并结果', canvasHint: '拖动步骤并连接圆点', workflowName: '内部名称', humanTitle: '用户看到的名称', outcome: '这个工作流最终帮用户得到什么？', versions: '版本记录', currentVersion: '当前', restore: '恢复为新版本', restoring: '恢复中…', selectNode: '选择一个步骤来编辑', needsAttention: '发布前需要处理', stepSettings: '步骤设置', remove: '删除', stepName: '步骤名称', stepPurpose: '这一步的作用', instructions: '告诉 AI 要做什么', advanced: '高级设置', model: '模型（可选）', defaultModel: '使用智能默认值', valuePath: '要检查的值', condition: '判断条件', exists: '存在', equals: '等于', notEquals: '不等于', contains: '包含', compareValue: '比较值', combineAs: '合并方式', namedResults: '按步骤名称组织', listResults: '按列表组织', summaryTemplate: '结果摘要（可选）', autoSummary: '留空则自动生成', aiPlaceholder: '例如：增加一个风险评审步骤，并与方案分析并行', designing: '正在设计…', applyWithAi: '让 AI 修改', testGoal: '运行时要完成的目标', publish: '发布', publishAndRun: '发布并运行',
+  } : {
+    untitled: 'Untitled workflow', editTitle: 'Edit workflow', createTitle: 'Create workflow', subtitle: 'Describe the outcome, connect the steps, and run it. No code required.', close: 'Close', savingDraft: 'Saving draft…', savedDraft: 'Draft saved', draftError: 'Draft could not be saved', flowTitle: 'Workflow map', flowAria: 'Editable workflow step map', stepCount: (count: number) => `${count} steps · select a step to edit`, emptyFlow: 'No steps yet. Add an AI step to start designing.', addAgent: 'Add AI step', addDecision: 'Add decision', addMerge: 'Combine results', canvasHint: 'Drag steps and connect the dots', workflowName: 'Internal name', humanTitle: 'Name users see', outcome: 'What will this workflow help the user achieve?', versions: 'Version history', currentVersion: 'Current', restore: 'Restore as new', restoring: 'Restoring…', selectNode: 'Select a step to edit it', needsAttention: 'Needs attention before publishing', stepSettings: 'Step settings', remove: 'Remove', stepName: 'Step name', stepPurpose: 'Purpose of this step', instructions: 'Tell the AI what to do', advanced: 'Advanced settings', model: 'Model (optional)', defaultModel: 'Use smart default', valuePath: 'Value to check', condition: 'Condition', exists: 'Exists', equals: 'Equals', notEquals: 'Does not equal', contains: 'Contains', compareValue: 'Compare with', combineAs: 'Combine as', namedResults: 'Named results', listResults: 'List of results', summaryTemplate: 'Result summary (optional)', autoSummary: 'Leave blank to generate automatically', aiPlaceholder: 'For example: add a risk review in parallel with solution analysis', designing: 'Designing…', applyWithAi: 'Change with AI', testGoal: 'Goal for the first run', publish: 'Publish', publishAndRun: 'Publish & run',
   };
-
-  const saveAndStart = async () => {
-    if (!canSave) return;
-    await onSaveAndStart({ name: name.trim(), script, goal: prompt.trim() });
-  };
-
-  return (
-    <>
-      <div className="grid min-h-0 flex-1 gap-4 overflow-auto px-5 py-4 lg:grid-cols-[minmax(18rem,0.9fr)_minmax(24rem,1.4fr)]">
-        <section className="space-y-3">
-          <label className="block">
-            <span className="text-xs font-medium text-fg">{promptLabel}</span>
-            <textarea
-              value={prompt}
-              onChange={(event) => setPrompt(event.target.value)}
-              placeholder={promptPlaceholder}
-              className="mt-1.5 min-h-36 w-full resize-y rounded-xl border border-edge bg-surface-base px-3 py-2 text-sm leading-6 text-fg outline-none placeholder:text-fg-subtle focus:border-accent focus:ring-2 focus:ring-accent/20"
-            />
-          </label>
-
-          <div className="grid gap-2 sm:grid-cols-2">
-            <NumberField label={labels.nlBuilderMaxPhases} value={constraints.maxPhases ?? 4} min={1} max={8} onChange={(value) => setConstraints((current) => ({ ...current, maxPhases: value }))} />
-            <NumberField label={labels.nlBuilderMaxAgents} value={constraints.maxSubagents ?? 8} min={1} max={20} onChange={(value) => setConstraints((current) => ({ ...current, maxSubagents: value }))} />
-          </div>
-
-          <div className="grid gap-2 sm:grid-cols-2">
-            <label className="flex items-center gap-2 rounded-xl border border-edge bg-surface-base px-3 py-2 text-sm text-fg-muted">
-              <input
-                type="checkbox"
-                checked={Boolean(constraints.allowNetwork)}
-                onChange={(event) => setConstraints((value) => ({ ...value, allowNetwork: event.target.checked }))}
-              />
-              {labels.nlBuilderAllowNetwork}
-            </label>
-            <label className="block">
-              <span className="text-xs font-medium text-fg">{labels.nlBuilderFilesystem}</span>
-              <Select
-                value={constraints.fileSystem ?? 'read'}
-                onChange={(event) => setConstraints((value) => ({ ...value, fileSystem: event.target.value as WorkflowDraftConstraints['fileSystem'] }))}
-                className="mt-1.5 w-full rounded-xl border border-edge bg-surface-base px-3 py-2 text-sm text-fg outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
-              >
-                <SelectOption value="none">none</SelectOption>
-                <SelectOption value="read">read</SelectOption>
-                <SelectOption value="write">write</SelectOption>
-              </Select>
-            </label>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <Button variant="primary" disabled={!canGenerate} onClick={() => void generate(primaryGenerateMode)}>
-              <Sparkles className="size-4" aria-hidden />
-              {generating ? labels.nlBuilderGenerating : hasExistingScript ? labels.nlBuilderRewriteExisting : labels.nlBuilderGenerate}
-            </Button>
-          </div>
-
-          {error ? <Notice text={error} /> : null}
-          {draft ? <DraftSummary draft={draft} labels={labels} /> : null}
-        </section>
-
-        <section className="min-w-0 space-y-3">
-          <WorkflowEditorContextNotice initialDraft={initialDraft} labels={labels} />
-          <WorkflowNameField labels={labels} name={name} setName={setName} />
-          <WorkflowScriptField labels={labels} script={script} setScript={setScript} minHeightClass="min-h-96" />
-          {draft ? <AiValidationPanel draft={draft} labels={labels} validationIssues={validationIssues} /> : null}
-        </section>
-      </div>
-
-      <div className="flex flex-wrap justify-end gap-2 border-t border-edge px-5 py-4">
-        <Button variant="secondary" onClick={onClose} disabled={saving || generating}>
-          {labels.cancelDialog}
-        </Button>
-        <Button variant="secondary" disabled={!canSave} onClick={() => void saveOnly()}>
-          {saving ? labels.savingWorkflow : labels.saveWorkflow}
-        </Button>
-        <Button variant="primary" disabled={!canSave} onClick={() => void saveAndStart()}>
-          {labels.nlBuilderSaveAndStart}
-        </Button>
-      </div>
-    </>
-  );
-}
-
-function ManualCreatePane({
-  language,
-  saving,
-  initialDraft,
-  name,
-  setName,
-  script,
-  setScript,
-  onClose,
-  onSave,
-}: {
-  language: StoredLanguage;
-  saving: boolean;
-  initialDraft?: WorkflowEditorInitialDraft | null;
-  name: string;
-  setName: (value: string) => void;
-  script: string;
-  setScript: (value: string) => void;
-  onClose: () => void;
-  onSave: (payload: { name: string; script: string }) => Promise<WorkflowDefinition | void> | WorkflowDefinition | void;
-}) {
-  const labels = messages(language).workflows;
-  const [submitted, setSubmitted] = useState(false);
-  const [validating, setValidating] = useState(false);
-  const [validationError, setValidationError] = useState<string | null>(null);
-  const [validationResult, setValidationResult] = useState<ValidateWorkflowDefinitionResponse | null>(null);
-
-  const trimmedName = name.trim();
-  const hasRequiredFields = Boolean(trimmedName && script.trim());
-
-  useEffect(() => {
-    if (!hasRequiredFields) {
-      setValidating(false);
-      setValidationError(null);
-      setValidationResult(null);
-      return;
-    }
-
-    let cancelled = false;
-    const timeoutId = window.setTimeout(() => {
-      setValidating(true);
-      setValidationError(null);
-      void validateWorkflowDefinition(trimmedName, script)
-        .then((result) => {
-          if (cancelled) return;
-          setValidationResult(result);
-        })
-        .catch((err) => {
-          if (cancelled) return;
-          setValidationResult(null);
-          setValidationError(err instanceof Error ? err.message : labels.validateWorkflowFailed);
-        })
-        .finally(() => {
-          if (!cancelled) setValidating(false);
-        });
-    }, 450);
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timeoutId);
-    };
-  }, [hasRequiredFields, labels.validateWorkflowFailed, script, trimmedName]);
-
-  const validationIssues = useMemo(() => {
-    if (validationError) return [validationError];
-    return validationResult?.errors.map((issue) => issue.message) ?? [];
-  }, [validationError, validationResult]);
-
-  const showValidationPanel = submitted || validating || validationResult != null || validationError != null;
-  const canSave = hasRequiredFields && !saving && !validating && validationResult?.valid === true;
-
-  useEffect(() => {
-    if (!initialDraft && !script.trim()) {
-      setScript(DEFAULT_SCRIPT);
-    }
-    setSubmitted(false);
-    setValidating(false);
-    setValidationError(null);
-    setValidationResult(null);
-  }, [initialDraft, script, setScript]);
-
-  const submit = async () => {
-    setSubmitted(true);
-    if (!hasRequiredFields || saving) return;
-
-    setValidating(true);
-    setValidationError(null);
-    try {
-      const result = await validateWorkflowDefinition(trimmedName, script);
-      setValidationResult(result);
-      if (!result.valid) return;
-      const saved = await onSave({ name: trimmedName, script });
-      if (saved) onClose();
-    } catch (err) {
-      setValidationResult(null);
-      setValidationError(err instanceof Error ? err.message : labels.validateWorkflowFailed);
-    } finally {
-      setValidating(false);
-    }
-  };
-
-  return (
-    <>
-      <div className="min-h-0 flex-1 space-y-3 overflow-auto px-5 py-4">
-        <WorkflowEditorContextNotice initialDraft={initialDraft} labels={labels} />
-        <WorkflowNameField
-          labels={labels}
-          name={name}
-          setName={(value) => {
-            setName(value);
-            setValidationResult(null);
-            setValidationError(null);
-          }}
-        />
-        <WorkflowScriptField
-          labels={labels}
-          script={script}
-          setScript={(value) => {
-            setScript(value);
-            setValidationResult(null);
-            setValidationError(null);
-          }}
-          minHeightClass="min-h-72"
-        />
-        {showValidationPanel ? (
-          <ManualValidationPanel
-            labels={labels}
-            validating={validating}
-            validationIssues={validationIssues}
-            validationResult={validationResult}
-          />
-        ) : null}
-      </div>
-
-      <div className="flex justify-end gap-2 border-t border-edge px-5 py-4">
-        <Button variant="secondary" onClick={onClose} disabled={saving}>
-          {labels.cancelDialog}
-        </Button>
-        <Button variant="primary" disabled={!canSave} onClick={() => void submit()}>
-          {saving ? labels.savingWorkflow : labels.saveWorkflow}
-        </Button>
-      </div>
-    </>
-  );
-}
-
-function NumberField({
-  label,
-  value,
-  min,
-  max,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  onChange: (value: number | undefined) => void;
-}) {
-  return (
-    <label className="block">
-      <span className="text-xs font-medium text-fg">{label}</span>
-      <input
-        type="number"
-        min={min}
-        max={max}
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value) || undefined)}
-        className="mt-1.5 w-full rounded-xl border border-edge bg-surface-base px-3 py-2 text-sm text-fg outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
-      />
-    </label>
-  );
-}
-
-function WorkflowNameField({
-  labels,
-  name,
-  setName,
-}: {
-  labels: WorkflowsMessages;
-  name: string;
-  setName: (value: string) => void;
-}) {
-  return (
-    <label className="block">
-      <span className="text-xs font-medium text-fg">{labels.workflowNameLabel}</span>
-      <input
-        value={name}
-        onChange={(event) => setName(event.target.value)}
-        placeholder={labels.workflowNamePlaceholder}
-        className="mt-1.5 w-full rounded-xl border border-edge bg-surface-base px-3 py-2 font-mono text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-accent focus:ring-2 focus:ring-accent/20"
-      />
-    </label>
-  );
-}
-
-function WorkflowEditorContextNotice({
-  initialDraft,
-  labels,
-}: {
-  initialDraft?: WorkflowEditorInitialDraft | null;
-  labels: WorkflowsMessages;
-}) {
-  if (!initialDraft) return null;
-  const text =
-    initialDraft.mode === 'copy'
-      ? labels.copyWorkflowNotice.replace('{{title}}', initialDraft.sourceTitle)
-      : labels.editWorkflowNotice.replace('{{title}}', initialDraft.sourceTitle);
-  return (
-    <div className="rounded-xl border border-accent/20 bg-accent-soft/60 px-3 py-2 text-sm leading-6 text-accent-fg">
-      {text}
-    </div>
-  );
-}
-
-function WorkflowScriptField({
-  labels,
-  script,
-  setScript,
-  minHeightClass,
-}: {
-  labels: WorkflowsMessages;
-  script: string;
-  setScript: (value: string) => void;
-  minHeightClass: string;
-}) {
-  return (
-    <label className="block">
-      <span className="text-xs font-medium text-fg">{labels.workflowScriptLabel}</span>
-      <textarea
-        value={script}
-        onChange={(event) => setScript(event.target.value)}
-        spellCheck={false}
-        className={`mt-1.5 w-full resize-y rounded-xl border border-edge bg-surface-base px-3 py-2 font-mono text-xs leading-5 text-fg outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 ${minHeightClass}`}
-      />
-    </label>
-  );
-}
-
-function DraftSummary({ draft, labels }: { draft: WorkflowDraftResponse; labels: WorkflowsMessages }) {
-  return (
-    <div className="space-y-2 rounded-xl border border-edge bg-surface-base/50 p-3">
-      <div className="text-sm font-semibold text-fg">{draft.manifest.title ?? draft.name}</div>
-      <p className="text-xs leading-5 text-fg-muted">{draft.explanation}</p>
-      {draft.repairAttempts > 0 ? (
-        <div className="text-xs font-medium text-accent-fg">{labels.nlBuilderAutoRepaired.replace('{count}', String(draft.repairAttempts))}</div>
-      ) : null}
-      <ChipList title={labels.nlBuilderPermissions} items={draft.permissionsSummary} />
-      <ChipList title={labels.nlBuilderAssumptions} items={draft.assumptions} />
-      <ChipList title={labels.nlBuilderRisks} items={draft.risks} />
-    </div>
-  );
-}
-
-function AiValidationPanel({
-  draft,
-  labels,
-  validationIssues,
-}: {
-  draft: WorkflowDraftResponse;
-  labels: WorkflowsMessages;
-  validationIssues: string[];
-}) {
-  const lint = draft.lint;
-  const ok = draft.validation.valid && lint.every((issue) => issue.severity !== 'error');
-  return (
-    <div className={ok ? 'rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-800 dark:text-emerald-200' : 'rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200'}>
-      <div className="flex items-center gap-2 font-medium">
-        {ok ? <CheckCircle2 className="size-4" aria-hidden /> : <AlertTriangle className="size-4" aria-hidden />}
-        {ok ? labels.validationPassed : labels.nlBuilderReviewIssues}
-      </div>
-      {validationIssues.length > 0 || lint.length > 0 ? (
-        <ul className="mt-2 list-disc space-y-1 pl-5 text-xs leading-5">
-          {validationIssues.map((issue) => <li key={issue}>{issue}</li>)}
-          {lint.map((issue) => <li key={`${issue.code}:${issue.message}`}>{issue.message}</li>)}
-        </ul>
-      ) : (
-        <p className="mt-1 text-xs opacity-80">{labels.validationPreview.replace('{{phaseCount}}', String(draft.validation.definition?.phases.length ?? 0))}</p>
-      )}
-    </div>
-  );
-}
-
-function ManualValidationPanel({
-  labels,
-  validating,
-  validationIssues,
-  validationResult,
-}: {
-  labels: WorkflowsMessages;
-  validating: boolean;
-  validationIssues: string[];
-  validationResult: ValidateWorkflowDefinitionResponse | null;
-}) {
-  return (
-    <div
-      className={
-        validationIssues.length > 0
-          ? 'rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-200'
-          : 'rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-200'
-      }
-      role="status"
-    >
-      <div className="font-medium">
-        {validating
-          ? labels.validatingWorkflow
-          : validationIssues.length > 0
-            ? labels.validationFailed
-            : labels.validationPassed}
-      </div>
-      {validationIssues.length > 0 ? (
-        <ul className="mt-1 list-disc space-y-1 pl-5">
-          {validationIssues.map((issue) => (
-            <li key={issue}>{issue}</li>
-          ))}
-        </ul>
-      ) : validationResult?.definition ? (
-        <div className="mt-1 text-xs opacity-80">
-          {labels.validationPreview.replace('{{phaseCount}}', String(validationResult.definition.phases.length))}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function ChipList({ title, items }: { title: string; items: string[] }) {
-  if (!items.length) return null;
-  return (
-    <div>
-      <div className="mb-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-fg-subtle">
-        <Braces className="size-3" aria-hidden />
-        {title}
-      </div>
-      <div className="flex flex-wrap gap-1">
-        {items.slice(0, 5).map((item) => (
-          <span key={item} className="rounded-lg border border-edge-subtle bg-surface-panel px-2 py-1 text-[11px] text-fg-muted">
-            {item}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function Notice({ text }: { text: string }) {
-  return (
-    <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-200">
-      {text}
-    </div>
-  );
 }

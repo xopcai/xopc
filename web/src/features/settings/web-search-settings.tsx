@@ -20,7 +20,6 @@ import { secretInputLabelsFromChannels } from '@/lib/secret-input-labels';
 import { cn } from '@/lib/cn';
 import { messages, type WebSearchSettingsMessages } from '@/i18n/messages';
 import { createFormDraftReducer, syncFormDraftFromParsed } from '@/lib/settings-form-draft';
-import { showToast } from '@/lib/toast';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { Select, SelectOption } from '@/components/ui/popover-select';
@@ -123,7 +122,6 @@ export function WebSearchSettingsPanel() {
       await patchWebSearchSettings(form);
       dirtyRef.current = false;
       dispatchForm({ type: 'saved', value: form });
-      showToast({ type: 'success', title: w.saved });
     } catch (e) {
       setError(e instanceof Error ? e.message : w.saveError);
     } finally {

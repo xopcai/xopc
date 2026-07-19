@@ -37,6 +37,7 @@ import {
   summarizeUserUnderstandingQuality,
   upsertMemoryRecord,
 } from '../../../storage/sqlite/index.js';
+import { isUserContextRecord, projectUserContextRecord } from '../../../user-context/projection.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 const MEMORY_KINDS = new Set<MemoryKind>([
@@ -129,6 +130,16 @@ function parseSensitivity(raw: unknown): MemorySensitivity | undefined {
 
 function parseEnum<T extends string>(raw: unknown, allowed: Set<T>): T | undefined {
   return typeof raw === 'string' && allowed.has(raw as T) ? raw as T : undefined;
+}
+
+function personalContextForTrace(trace: { selectedRecordIds: string[] } | null | undefined) {
+  return (trace?.selectedRecordIds ?? [])
+    .map((recordId) => getMemoryRecord(recordId))
+    .filter((record): record is NonNullable<typeof record> => Boolean(record) && isUserContextRecord(record))
+    .filter((record) => record.sensitivity !== 'secret' && record.sensitivity !== 'regulated')
+    .filter((record) => record.disclosurePolicy !== 'silent')
+    .map(projectUserContextRecord)
+    .map(({ id, statement, facet, origin, sourceName }) => ({ id, statement, facet, origin, sourceName }));
 }
 
 export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
@@ -441,6 +452,9 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
       const outcome = body.outcome === 'helpful' || body.outcome === 'not_helpful'
         ? body.outcome
         : undefined;
+      const reason = typeof body.reason === 'string'
+        ? body.reason.trim().slice(0, 160)
+        : '';
       if (!sessionKey || !Number.isFinite(assistantTimestamp) || assistantTimestamp <= 0 || !outcome) {
         return c.json({ error: 'sessionKey, assistantTimestamp, and a valid outcome are required' }, 400);
       }
@@ -450,12 +464,13 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
         feedback: {
           outcome,
           source: 'user',
-          reason: 'assistant_response_feedback',
+          reason: reason || 'assistant_response_feedback',
         },
       });
       return c.json({
         matched: Boolean(trace),
         attributedRecordCount: trace?.selectedRecordIds.length ?? 0,
+        personalContext: personalContextForTrace(trace),
         feedback: trace?.feedback ?? null,
         remediation: trace?.remediation ?? null,
       });
@@ -475,6 +490,7 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
     return c.json({
       matched: Boolean(trace),
       attributedRecordCount: trace?.selectedRecordIds.length ?? 0,
+      personalContext: personalContextForTrace(trace),
       feedback: trace?.feedback ?? null,
     });
   });

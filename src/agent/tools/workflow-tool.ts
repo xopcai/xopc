@@ -7,7 +7,6 @@ import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 
 import { extractProfileAgentId } from '../../config/agent-profile.js';
 import { createLogger } from '../../utils/logger.js';
-import { parseWorkflowScript } from '../workflow/index.js';
 import type { WorkflowCatalog } from '../workflow/catalog.js';
 import type {
   StartWorkflowRunServiceParams,
@@ -20,16 +19,7 @@ const WorkflowToolSchema = Type.Object({
   name: Type.Optional(
     Type.String({
       description:
-        'Name of a saved workflow to run. Either `name` or `script` is required. ' +
-        'Use `name` whenever the user references a known workflow (built-in or in ~/.xopc/workflows/).',
-    }),
-  ),
-  script: Type.Optional(
-    Type.String({
-      description: [
-        'Raw JavaScript workflow script (no Markdown fences, no TypeScript syntax). Ignored when `name` is set.',
-        "First statement: export const meta = { name: 'snake_case', description: 'short, human-readable' }.",
-      ].join(' '),
+        'Name of a saved visual workflow to run.',
     }),
   ),
   args: Type.Optional(
@@ -51,7 +41,6 @@ const WorkflowToolSchema = Type.Object({
 
 export type WorkflowToolInput = {
   name?: string;
-  script?: string;
   args?: unknown;
   goal?: string;
   goalId?: string;
@@ -70,7 +59,7 @@ export function createWorkflowTool(deps: WorkflowToolDeps): AgentTool {
     label: '◆ Workflow',
     description: [
       'Start a multi-agent workflow run in its own chat session.',
-      'Use `name` for catalog workflows, or `script` for an inline workflow (saved under meta.name before run).',
+      'Use `name` for a workflow from the visual workflow catalog.',
       'Returns immediately with runId + sessionKey — track progress in the linked chat session.',
     ].join(' '),
     parameters: WorkflowToolSchema,
@@ -168,18 +157,5 @@ function resolveDefinitionId(params: WorkflowToolInput, catalog: WorkflowCatalog
     catalog.load(name);
     return name;
   }
-  if (!params.script?.trim()) {
-    throw new Error('either `name` or `script` is required.');
-  }
-  const script = normalizeScript(params.script);
-  const meta = parseWorkflowScript(script).meta;
-  catalog.save(meta.name, script);
-  return meta.name;
-}
-
-function normalizeScript(script: string): string {
-  let text = script.trim();
-  const fence = text.match(/^```(?:js|javascript)?\s*\n([\s\S]*?)\n```$/i);
-  if (fence) text = fence[1].trim();
-  return text;
+  throw new Error('`name` is required. Create workflows in the visual workflow studio.');
 }

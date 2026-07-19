@@ -1,4 +1,4 @@
-import type { WorkflowDefinitionDefaults, WorkflowDefinitionEstimatedAgents, WorkflowPermissionPolicy, WorkflowResourceRefs } from './definition.js';
+import type { WorkflowDefinitionDefaults, WorkflowDefinitionEstimatedAgents, WorkflowGraph, WorkflowPermissionPolicy, WorkflowResourceRefs } from './definition.js';
 import type { WorkflowArtifactRef, WorkflowResultEnvelope } from './result.js';
 
 export type WorkflowRunStatus =
@@ -120,7 +120,8 @@ export interface WorkflowRunDefinitionSnapshot {
   title: string;
   version: string;
   contentHash?: string;
-  runtimeHash?: string;
+  revision: number;
+  graph: WorkflowGraph;
   source: 'builtin' | 'user';
   tags: string[];
   phaseCount: number;
@@ -185,10 +186,22 @@ export interface WorkflowRunView {
   run: WorkflowRun;
   phases: WorkflowPhaseView[];
   agents: WorkflowAgentView[];
+  nodes: WorkflowNodeView[];
   logs: WorkflowLogEntry[];
   artifacts: WorkflowArtifactRef[];
   timeline: WorkflowTimelineItem[];
   controls: WorkflowRunControls;
+}
+
+export interface WorkflowNodeView {
+  id: string;
+  kind: string;
+  title: string;
+  status: 'pending' | 'running' | 'done' | 'error' | 'skipped';
+  resultPreview?: string;
+  error?: string;
+  startedAtMs?: number;
+  completedAtMs?: number;
 }
 
 export type WorkflowPhaseStatus = 'pending' | 'running' | 'completed' | 'failed';
@@ -206,6 +219,7 @@ export type WorkflowAgentStatus = 'queued' | 'running' | 'done' | 'error' | 'ski
 
 export interface WorkflowAgentView {
   id: string;
+  nodeId?: string;
   label: string;
   phaseId?: string;
   status: WorkflowAgentStatus;
@@ -222,6 +236,7 @@ export interface WorkflowAgentView {
 }
 
 export interface WorkflowAgentInvocationSnapshot {
+  nodeId?: string;
   prompt: string;
   label: string;
   phase?: string;

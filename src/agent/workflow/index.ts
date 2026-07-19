@@ -1,26 +1,19 @@
 export { applySubagentProgress } from './agent-progress.js';
-export { BUILTIN_WORKFLOWS, type BuiltinWorkflow } from './builtins/index.js';
+export { BUILTIN_WORKFLOWS } from './builtins/index.js';
 export {
   createWorkflowCatalog,
   defaultUserDir,
   type CatalogEntry,
-  type LoadedWorkflow,
+  type SaveWorkflowInput,
   type WorkflowCatalog,
   type WorkflowSource,
 } from './catalog.js';
-export {
-  getLastWorkflowMemory,
-  _resetLastWorkflowMemoryForTests,
-  type LastWorkflowEntry,
-  type LastWorkflowMemory,
-} from './last-run-memory.js';
 export type {
   ChannelProgressCapability,
   WorkflowProgressMode,
   WorkflowProgressPostInput,
   WorkflowProgressPostResult,
 } from './channel-capability.js';
-export { parseWorkflowScript, type ParsedWorkflow } from './parser.js';
 export {
   WorkflowProgressBroker,
   getWorkflowProgressBroker,
@@ -28,11 +21,7 @@ export {
   type BrokerListenerHandle,
   type SessionBusLike,
 } from './progress-broker.js';
-export {
-  emptySnapshotFor,
-  runWorkflow,
-  type RunWorkflowDeps,
-} from './runtime.js';
+export { emptySnapshotFor } from './snapshot-empty.js';
 export {
   createWorkflowSnapshot,
   previewValue,
@@ -51,7 +40,6 @@ export {
   type DelegateSubagentRunnerDeps,
 } from './subagent-runner.js';
 export type {
-  AgentScriptOptions,
   JsonSchema,
   SubagentRunner,
   SubagentRunOptions,
@@ -59,10 +47,8 @@ export type {
   WorkflowAgentSnapshot,
   WorkflowAgentStatus,
   WorkflowAgentStep,
-  WorkflowMeta,
-  WorkflowMetaEstimatedAgents,
-  WorkflowMetaPhase,
   WorkflowRunOptions,
   WorkflowRunResult,
   WorkflowSnapshot,
+  WorkflowSnapshotDefinition,
 } from './types.js';

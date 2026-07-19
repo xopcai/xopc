@@ -6,6 +6,8 @@ export type WorkflowEventType =
   | 'run_started'
   | 'phase_started'
   | 'phase_completed'
+  | 'node_started'
+  | 'node_completed'
   | 'agent_queued'
   | 'agent_started'
   | 'agent_step_started'
@@ -31,6 +33,8 @@ export type WorkflowEventPayload =
   | RunStartedPayload
   | PhaseStartedPayload
   | PhaseCompletedPayload
+  | NodeStartedPayload
+  | NodeCompletedPayload
   | AgentQueuedPayload
   | AgentStartedPayload
   | AgentStepStartedPayload
@@ -59,8 +63,24 @@ export interface PhaseCompletedPayload {
   phaseId: string;
 }
 
+export interface NodeStartedPayload {
+  nodeId: string;
+  kind: string;
+  title: string;
+}
+
+export interface NodeCompletedPayload {
+  nodeId: string;
+  kind: string;
+  title: string;
+  status: 'done' | 'error' | 'skipped';
+  resultPreview?: string;
+  error?: string;
+}
+
 export interface AgentQueuedPayload {
   agentId: string;
+  nodeId: string;
   label: string;
   phaseId?: string;
   prompt?: string;
@@ -71,6 +91,7 @@ export interface AgentQueuedPayload {
 
 export interface AgentStartedPayload {
   agentId: string;
+  nodeId?: string;
 }
 
 export interface AgentStepStartedPayload {
@@ -92,6 +113,7 @@ export interface AgentStepCompletedPayload {
 
 export interface AgentCompletedPayload {
   agentId: string;
+  nodeId?: string;
   status: 'done' | 'error' | 'skipped';
   resultPreview?: string;
   error?: string;

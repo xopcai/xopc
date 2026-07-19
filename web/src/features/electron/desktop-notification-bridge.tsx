@@ -23,7 +23,7 @@ type AgentStreamDetail = {
 
 /**
  * Mirrors in-app toasts to OS notifications when the user enabled desktop notifications
- * and the window is in the background (warnings/errors also fire while focused).
+ * and the window is in the background. Foreground feedback stays inside the app.
  */
 export function DesktopNotificationBridge() {
   const language = useLocaleStore((s) => s.language);
@@ -55,12 +55,11 @@ export function DesktopNotificationBridge() {
         return;
       }
       const body = typeof d?.message === 'string' ? d.message.trim() : undefined;
-      const urgent = d?.type === 'error' || d?.type === 'warning';
       showDesktopNotification({
         title,
         body,
         tag: `xopc-toast-${d?.type ?? 'info'}`,
-        urgent,
+        urgent: false,
       });
     };
 
@@ -75,7 +74,7 @@ export function DesktopNotificationBridge() {
         title: copy.agentErrorTitle,
         body: content || copy.agentErrorBody,
         tag: `xopc-agent-error-${d?.sessionKey ?? 'unknown'}`,
-        urgent: true,
+        urgent: false,
       });
     };
 

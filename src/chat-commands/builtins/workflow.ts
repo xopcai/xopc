@@ -19,11 +19,8 @@ import type { CommandContext, CommandDefinition } from '../types.js';
 import { bulletList, code, joinBlocks, section } from '../format-output.js';
 
 import { createWorkflowCatalog } from '../../agent/workflow/catalog.js';
-import { getLastWorkflowMemory } from '../../agent/workflow/last-run-memory.js';
 import type { CatalogEntry } from '../../agent/workflow/catalog.js';
 import { extractProfileAgentId } from '../../config/agent-profile.js';
-
-const VIEW_MAX_LINES = 200;
 
 function formatEntryDetail(entry: CatalogEntry): string {
   const tags = entry.tags?.length ? `[${entry.tags.join(', ')}] ` : '';
@@ -33,7 +30,7 @@ function formatEntryDetail(entry: CatalogEntry): string {
   return `${tags}${entry.description}${agents}`;
 }
 
-function formatWorkflowListContent(entries: CatalogEntry[], userDir: string): string {
+function formatWorkflowListContent(entries: CatalogEntry[]): string {
   const grouped = {
     builtin: entries.filter((e) => e.source === 'builtin'),
     user: entries.filter((e) => e.source === 'user'),
@@ -63,8 +60,8 @@ function formatWorkflowListContent(entries: CatalogEntry[], userDir: string): st
       section('How to run'),
       bulletList([
         `Plain language: "run the ${exampleName} workflow"`,
-        `Inspect source: ${code(`/workflow view ${exampleName}`)}`,
-        `Add your own: drop a ${code('.js')} at ${code(userDir)}`,
+        `Inspect its visual structure: ${code(`/workflow view ${exampleName}`)}`,
+        'Create and edit workflows in the Workflow Studio.',
       ]),
     ),
   );
@@ -83,11 +80,11 @@ const workflowsCommand: CommandDefinition = {
     const entries = catalog.list();
     if (entries.length === 0) {
       return {
-        content: `No workflows found. Drop a script at ${code(`${catalog.userDir}/<name>.js`)} to add one.`,
+        content: 'No workflows found. Create one in the Workflow Studio.',
         success: true,
       };
     }
-    return { content: formatWorkflowListContent(entries, catalog.userDir), success: true };
+    return { content: formatWorkflowListContent(entries), success: true };
   },
 };
 
@@ -115,16 +112,12 @@ export const workflowCommand: CommandDefinition = {
       const catalog = createWorkflowCatalog();
       try {
         const loaded = catalog.load(target);
-        const lines = loaded.script.split('\n');
-        const visible =
-          lines.length > VIEW_MAX_LINES
-            ? [...lines.slice(0, VIEW_MAX_LINES), `… (truncated; ${lines.length - VIEW_MAX_LINES} more lines)`]
-            : lines;
-        const source = loaded.source === 'user' ? loaded.path ?? 'user' : 'built-in';
+        const nodeSummary = loaded.graph.nodes.map((node) => `${node.title} (${node.kind})`).join(' → ');
         return {
           content: joinBlocks(
-            `**${loaded.name}** (${source}) — ${loaded.meta.description}`,
-            '```js\n' + visible.join('\n') + '\n```',
+            `**${loaded.title}** (${loaded.metadata.source}) — ${loaded.description}`,
+            `Flow: ${nodeSummary}`,
+            `Revision: ${loaded.revision}`,
           ),
           success: true,
         };
@@ -138,44 +131,9 @@ export const workflowCommand: CommandDefinition = {
       return runWorkflowFromCommand(ctx, target);
     }
 
-    if (subLower === 'save') {
-      if (!target) {
-        return { content: `usage: ${code('/workflow save <name>')}`, success: false };
-      }
-      const last = getLastWorkflowMemory().get(ctx.sessionKey);
-      if (!last) {
-        return {
-          content:
-            'No workflow has run successfully in this session yet. Run one first (e.g. ask "run the audit_repo workflow"), then `/workflow save <name>`.',
-          success: false,
-        };
-      }
-      const catalog = createWorkflowCatalog();
-      try {
-        // Allow the user to rename: if target differs from meta.name, rewrite it
-        // before saving so the file is addressable as `target`.
-        const script =
-          last.metaName === target ? last.script : rewriteMetaName(last.script, target);
-        const { path } = catalog.save(target, script);
-        return {
-          content: joinBlocks(
-            `✓ Saved workflow **${target}** → ${code(path)}`,
-            bulletList([
-              `Trigger with ${code(`/${target}`)} or "run the ${target} workflow"`,
-              `Inspect with ${code(`/workflow view ${target}`)}`,
-            ]),
-          ),
-          success: true,
-        };
-      } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
-        return { content: `error: ${message}`, success: false };
-      }
-    }
-
     return {
       content: joinBlocks(
-        `Unknown subcommand "${sub}". Available: list, view ${code('<name>')}, save ${code('<name>')}.`,
+        `Unknown subcommand "${sub}". Available: list, view ${code('<name>')}, run ${code('<name>')}.`,
         `Run directly with ${code('/workflow run <name> [--goal "..."] [--json \'{...}\']')}.`,
       ),
       success: false,
@@ -326,24 +284,6 @@ function tokenizeArgs(raw: string): string[] {
     tokens.push(value.replace(/\\(["'\\])/g, '$1'));
   }
   return tokens;
-}
-
-/**
- * Replace the `name` field inside the FIRST `export const meta = { ... }` literal.
- *
- * Why text-level (not AST re-emit)? The parser already accepted the script
- * once (the runtime ran it), so the surrounding code is unchanged. A targeted
- * regex on the `name: '...'` slot inside the first object literal keeps the
- * user's formatting / comments / quote style intact, which an AST round-trip
- * would smash. The match anchors to the first `name:` after `export const meta`
- * and only touches that single value.
- */
-function rewriteMetaName(script: string, newName: string): string {
-  const re = /(export\s+const\s+meta\s*=\s*\{[^}]*?\bname\s*:\s*)(['"`])([^'"`]*)\2/;
-  if (!re.test(script)) {
-    throw new Error('could not locate meta.name in the recorded script to rewrite');
-  }
-  return script.replace(re, (_m, prefix, quote) => `${prefix}${quote}${newName}${quote}`);
 }
 
 export function registerWorkflowCommands(): void {

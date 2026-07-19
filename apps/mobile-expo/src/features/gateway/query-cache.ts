@@ -80,4 +80,5 @@ export const QUERY_CACHE_NAMESPACES = {
   sessions: 'sessions',
   agents: 'agents',
   sessionDetail: 'sessionDetail',
+  sessionHistory: 'sessionHistory',
 } as const;

@@ -1,18 +1,17 @@
-import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { ChevronDown, Funnel } from 'lucide-react';
 import { useLayoutEffect, useMemo } from 'react';
 
 import { PageTabs } from '@/components/ui/page-tabs';
+import { PopoverSelect } from '@/components/ui/popover-select';
 import { SkillsPageHeaderEnd } from '@/features/skills/skills-page-header-end';
 import { SkillsPageCatalogContent } from '@/features/skills/skills-page-catalog-content';
 import { SkillsPageConfirmDialog } from '@/features/skills/skills-page-confirm-dialog';
 import { SkillsPageDetailDialog } from '@/features/skills/skills-page-detail-dialog';
 import { SkillsPageInstallDialog } from '@/features/skills/skills-page-install-dialog';
 import { SkillsPageMarketplaceContent } from '@/features/skills/skills-page-marketplace-content';
+import type { CatalogStatusFilter, SourceFilter } from '@/features/skills/skills-page.constants';
 import { interpolate } from '@/features/skills/skills-page.utils';
 import type { SkillsPageVm } from '@/features/skills/use-skills-page';
 import { cn } from '@/lib/cn';
-import { interaction } from '@/lib/interaction';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 
 export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
@@ -24,6 +23,7 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
     skillDiagnostics,
     mainTab,
     setMainTab,
+    sourceFilter,
     setSourceFilter,
     builtinTabStats,
     userTabStats,
@@ -35,7 +35,6 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
     marketBrowseProvider,
     setMarketBrowseProvider,
     registeredProviders,
-    filterLabel,
     inSettingsShell,
     searchInputActive,
     resultTab,
@@ -55,10 +54,16 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
     );
   }
 
+  const installedStats = {
+    total: builtinTabStats.total + userTabStats.total,
+    ready: builtinTabStats.enabled + userTabStats.enabled,
+    needsAttention:
+      builtinTabStats.total + userTabStats.total - builtinTabStats.enabled - userTabStats.enabled,
+    added: userTabStats.total,
+  };
   const mainTabItems = [
-    { id: 'marketplace' as const, label: sk.tabMarketplace },
-    { id: 'builtin' as const, label: sk.tabBuiltin, count: `${builtinTabStats.enabled}/${builtinTabStats.total}` },
-    { id: 'user' as const, label: sk.tabUser, count: `${userTabStats.enabled}/${userTabStats.total}` },
+    { id: 'installed' as const, label: sk.tabInstalled, count: installedStats.total },
+    { id: 'marketplace' as const, label: sk.tabDiscover },
   ];
   const resultTabItems = (['all', ...registeredProviders.map((rp) => rp.id)] as string[]).map((id) => {
     const label = id === 'all' ? sk.marketplaceResultsTabAll : registeredProviders.find((rp) => rp.id === id)?.displayName ?? id;
@@ -109,7 +114,10 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
             className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200"
             role="status"
           >
-            <div className="font-medium">Skill diagnostics: {skillDiagnostics.length}</div>
+            <div className="font-medium">
+              {interpolate(sk.diagnosticsTitle, { count: skillDiagnostics.length })}
+            </div>
+            <p className="mt-1 text-xs opacity-80">{sk.diagnosticsHint}</p>
             <ul className="mt-1 space-y-1">
               {skillDiagnostics.slice(0, 3).map((diag, index) => (
                 <li key={`${diag.path ?? diag.skillName ?? 'diagnostic'}-${index}`} className="truncate">
@@ -134,8 +142,8 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
           </div>
         ) : null}
 
-        <section className="flex flex-col gap-4">
-          <div className="flex flex-col gap-3 border-b border-edge-subtle pb-3 sm:flex-row sm:items-center sm:justify-between dark:border-edge-subtle">
+        <section className="flex flex-col gap-5">
+          <div className="border-b border-edge-subtle pb-3 dark:border-edge-subtle">
             <PageTabs
               items={mainTabItems}
               activeTab={mainTab}
@@ -145,172 +153,148 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
               panelIdPrefix="skills-panel"
               className="flex-wrap"
             />
-            <div
-              className={cn(
-                'flex min-h-9 min-w-0 items-center gap-2',
-                mainTab === 'user'
-                  ? 'flex-nowrap overflow-x-auto pb-0.5 sm:justify-end'
-                  : 'flex-wrap sm:justify-end',
-              )}
-            >
-              {mainTab === 'user' ? (
-                <DropdownMenu.Root>
-                  <DropdownMenu.Trigger asChild>
-                    <button
-                      type="button"
-                      className={cn(
-                        'inline-flex h-9 min-h-9 min-w-[9rem] shrink-0 items-center gap-1.5 rounded-lg border border-edge bg-surface-panel px-2.5 text-xs font-medium text-fg shadow-surface',
-                        interaction.transition,
-                        interaction.focusRingPanel,
-                      )}
-                    >
-                      <Funnel className="size-3.5 text-fg-muted" strokeWidth={1.75} aria-hidden />
-                      <span>{filterLabel}</span>
-                      <ChevronDown className="size-3.5 text-fg-subtle" strokeWidth={1.75} aria-hidden />
-                    </button>
-                  </DropdownMenu.Trigger>
-                  <DropdownMenu.Portal>
-                    <DropdownMenu.Content
-                      className="z-50 min-w-[10rem] rounded-xl border border-edge bg-surface-panel p-1 shadow-popover dark:border-edge"
-                      sideOffset={6}
-                      align="end"
-                    >
-                      {(['all', 'global', 'workspace', 'extra'] as const).map((key) => (
-                        <DropdownMenu.Item
-                          key={key}
-                          className={cn(
-                            'cursor-pointer rounded-lg px-3 py-2 text-sm text-fg outline-none',
-                            'hover:bg-surface-hover data-[highlighted]:bg-surface-hover',
-                          )}
-                          onSelect={() => setSourceFilter(key)}
-                        >
-                          {key === 'all'
-                            ? sk.filterAll
-                            : key === 'global'
-                              ? sk.filterGlobal
-                              : key === 'workspace'
-                                ? sk.filterWorkspace
-                                : sk.filterExtra}
-                        </DropdownMenu.Item>
-                      ))}
-                    </DropdownMenu.Content>
-                  </DropdownMenu.Portal>
-                </DropdownMenu.Root>
-              ) : null}
-              {mainTab === 'marketplace' ? (
-                searchInputActive ? (
-                  <PageTabs
-                    items={resultTabItems}
-                    activeTab={resultTab}
-                    onChange={setResultTab}
-                    ariaLabel={sk.marketplaceResultsTabsAria}
-                    tabIdPrefix="skills-marketplace-results-tab"
-                    panelIdPrefix="skills-marketplace-results-panel"
-                    className="inline-flex h-9 shrink-0 rounded-lg border border-edge bg-surface-panel p-0.5 shadow-surface"
-                    buttonClassName="rounded-md px-2.5 py-1.5 text-xs"
-                    selectedClassName="bg-fg text-surface-panel dark:bg-fg dark:text-surface-base"
-                    unselectedClassName="text-fg-muted hover:text-fg"
+          </div>
+
+          {mainTab === 'installed' ? (
+            <>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div className="min-w-0">
+                  <h2 className="text-balance text-sm font-semibold text-fg">{sk.installedHeading}</h2>
+                  <p className="mt-1 max-w-2xl text-sm text-fg-muted">{sk.installedHint}</p>
+                </div>
+                <div className="flex min-w-0 flex-wrap gap-2 sm:justify-end">
+                  <PopoverSelect
+                    value={sourceFilter}
+                    placeholder={sk.filterAll}
+                    ariaLabel={sk.sourceFilterAria}
+                    options={[
+                      { value: 'all', label: sk.filterAll },
+                      { value: 'builtin', label: sk.tabBuiltin },
+                      { value: 'installed', label: sk.filterInstalled },
+                      { value: 'workspace', label: sk.filterWorkspace },
+                      { value: 'global', label: sk.filterGlobal },
+                      { value: 'extra', label: sk.filterExtra },
+                    ]}
+                    allowEmpty={false}
+                    triggerClassName="h-9 w-auto min-w-[9rem] bg-surface-panel text-xs shadow-surface"
+                    align="end"
+                    onChange={(value) => setSourceFilter(value as SourceFilter)}
                   />
-                ) : (
-                  <>
-                    <div
-                      className="inline-flex h-9 shrink-0 rounded-lg border border-edge bg-surface-panel p-0.5 shadow-surface"
-                      role="group"
-                      aria-label={sk.marketplaceBrowseSwitchAria}
-                    >
-                      {registeredProviders.map((p) => {
-                        const selected = marketBrowseProvider === p.id;
-                        return (
-                          <button
-                            key={p.id}
-                            type="button"
-                            className={cn(
-                              'rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
-                              interaction.focusRingPanel,
-                              selected
-                                ? 'bg-fg text-surface-panel dark:bg-fg dark:text-surface-base'
-                                : 'text-fg-muted hover:text-fg',
-                            )}
-                            aria-pressed={selected}
-                            onClick={() => setMarketBrowseProvider(p.id)}
-                          >
-                            {p.displayName}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <DropdownMenu.Root>
-                      <DropdownMenu.Trigger asChild>
-                        <button
-                          type="button"
-                          className={cn(
-                            'inline-flex h-9 min-h-9 min-w-[9rem] shrink-0 items-center gap-1.5 rounded-lg border border-edge bg-surface-panel px-2.5 text-xs font-medium text-fg shadow-surface',
-                            interaction.transition,
-                            interaction.focusRingPanel,
-                          )}
-                        >
-                          <Funnel className="size-3.5 text-fg-muted" strokeWidth={1.75} aria-hidden />
-                          <span>
-                            {marketSort === 'newest' ? sk.marketplaceSortNewest : sk.marketplaceSortDownloads}
-                          </span>
-                          <ChevronDown className="size-3.5 text-fg-subtle" strokeWidth={1.75} aria-hidden />
-                        </button>
-                      </DropdownMenu.Trigger>
-                      <DropdownMenu.Portal>
-                        <DropdownMenu.Content
-                          className="z-50 min-w-[10rem] rounded-xl border border-edge bg-surface-panel p-1 shadow-popover dark:border-edge"
-                          sideOffset={6}
-                          align="end"
-                        >
-                          <DropdownMenu.Item
-                            className={cn(
-                              'cursor-pointer rounded-lg px-3 py-2 text-sm text-fg outline-none',
-                              'hover:bg-surface-hover data-[highlighted]:bg-surface-hover',
-                            )}
-                            onSelect={() => setMarketSort('downloads')}
-                          >
-                            {sk.marketplaceSortDownloads}
-                          </DropdownMenu.Item>
-                          <DropdownMenu.Item
-                            className={cn(
-                              'cursor-pointer rounded-lg px-3 py-2 text-sm text-fg outline-none',
-                              'hover:bg-surface-hover data-[highlighted]:bg-surface-hover',
-                            )}
-                            onSelect={() => setMarketSort('newest')}
-                          >
-                            {sk.marketplaceSortNewest}
-                          </DropdownMenu.Item>
-                        </DropdownMenu.Content>
-                      </DropdownMenu.Portal>
-                    </DropdownMenu.Root>
-                  </>
-                )
-              ) : null}
-              {mainTab !== 'marketplace' && catalogDisabledCount > 0 ? (
+                  <PopoverSelect
+                    value={catalogStatusFilter}
+                    placeholder={sk.filterAll}
+                    ariaLabel={sk.statusFilterAria}
+                    options={[
+                      { value: 'all', label: sk.filterAll },
+                      { value: 'enabled', label: sk.filterEnabled },
+                      {
+                        value: 'disabled',
+                        label: interpolate(sk.filterDisabledOnly, { count: catalogDisabledCount }),
+                      },
+                    ]}
+                    allowEmpty={false}
+                    triggerClassName="h-9 w-auto min-w-[9rem] bg-surface-panel text-xs shadow-surface"
+                    align="end"
+                    onChange={(value) => setCatalogStatusFilter(value as CatalogStatusFilter)}
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-3" aria-label={sk.installedHeading}>
                 <button
                   type="button"
                   className={cn(
-                    'inline-flex h-9 shrink-0 items-center rounded-lg border px-2.5 text-xs font-medium transition-colors',
-                    interaction.focusRingPanel,
-                    catalogStatusFilter === 'disabled'
-                      ? 'border-fg bg-fg text-surface-panel dark:border-fg dark:bg-fg dark:text-surface-base'
-                      : 'border-amber-300/80 bg-amber-50/90 text-amber-950 hover:border-amber-400 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-100',
+                    'rounded-xl border border-edge-subtle bg-surface-base p-3 text-left transition-colors hover:bg-surface-hover',
+                    catalogStatusFilter === 'enabled' && 'border-emerald-500/40 bg-emerald-500/5',
+                  )}
+                  aria-pressed={catalogStatusFilter === 'enabled'}
+                  onClick={() => setCatalogStatusFilter((value) => value === 'enabled' ? 'all' : 'enabled')}
+                >
+                  <div className="text-xl font-semibold tabular-nums text-success">{installedStats.ready}</div>
+                  <div className="mt-1 text-xs text-fg-muted">{sk.summaryReady}</div>
+                </button>
+                <button
+                  type="button"
+                  className={cn(
+                    'rounded-xl border border-edge-subtle bg-surface-base p-3 text-left transition-colors hover:bg-surface-hover',
+                    catalogStatusFilter === 'disabled' && 'border-amber-500/50 bg-amber-500/5',
                   )}
                   aria-pressed={catalogStatusFilter === 'disabled'}
-                  aria-label={sk.filterDisabledOnlyAria}
-                  onClick={() =>
-                    setCatalogStatusFilter((f) => (f === 'disabled' ? 'all' : 'disabled'))
-                  }
+                  onClick={() => setCatalogStatusFilter((value) => value === 'disabled' ? 'all' : 'disabled')}
                 >
-                  {catalogStatusFilter === 'disabled'
-                    ? sk.filterAll
-                    : interpolate(sk.filterDisabledOnly, { count: catalogDisabledCount })}
+                  <div className={cn('text-xl font-semibold tabular-nums', installedStats.needsAttention > 0 ? 'text-warning' : 'text-fg')}>
+                    {installedStats.needsAttention}
+                  </div>
+                  <div className="mt-1 text-xs text-fg-muted">{sk.summaryNeedsAttention}</div>
                 </button>
-              ) : mainTab === 'builtin' ? (
-                <div className="h-9 min-w-[9rem] shrink-0" aria-hidden />
+                <button
+                  type="button"
+                  className={cn(
+                    'rounded-xl border border-edge-subtle bg-surface-base p-3 text-left transition-colors hover:bg-surface-hover',
+                    sourceFilter === 'installed' && 'border-accent/40 bg-accent/5',
+                  )}
+                  aria-pressed={sourceFilter === 'installed'}
+                  onClick={() => setSourceFilter((value) => value === 'installed' ? 'all' : 'installed')}
+                >
+                  <div className="text-xl font-semibold tabular-nums text-fg">{installedStats.added}</div>
+                  <div className="mt-1 text-xs text-fg-muted">{sk.summaryAdded}</div>
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div className="min-w-0">
+                  <h2 className="text-balance text-sm font-semibold text-fg">{sk.discoverHeading}</h2>
+                  <p className="mt-1 max-w-2xl text-sm text-fg-muted">{sk.discoverHint}</p>
+                </div>
+                <div className="flex min-w-0 flex-wrap gap-2 sm:justify-end">
+                  {!searchInputActive ? (
+                    <PopoverSelect
+                      value={marketBrowseProvider ?? ''}
+                      placeholder={sk.marketplaceBrowseSwitchAria}
+                      ariaLabel={sk.marketplaceBrowseSwitchAria}
+                      options={registeredProviders.map((provider) => ({
+                        value: provider.id,
+                        label: provider.displayName,
+                      }))}
+                      allowEmpty={false}
+                      triggerClassName="h-9 w-auto min-w-[9rem] bg-surface-panel text-xs shadow-surface"
+                      align="end"
+                      onChange={setMarketBrowseProvider}
+                    />
+                  ) : null}
+                  <PopoverSelect
+                    value={marketSort}
+                    placeholder={sk.marketplaceSortLabel}
+                    ariaLabel={sk.marketplaceSortLabel}
+                    options={[
+                      { value: 'downloads', label: sk.marketplaceSortDownloads },
+                      { value: 'newest', label: sk.marketplaceSortNewest },
+                    ]}
+                    allowEmpty={false}
+                    triggerClassName="h-9 w-auto min-w-[9rem] bg-surface-panel text-xs shadow-surface"
+                    align="end"
+                    onChange={(value) => setMarketSort(value as 'downloads' | 'newest')}
+                  />
+                </div>
+              </div>
+              {searchInputActive ? (
+                <PageTabs
+                  items={resultTabItems}
+                  activeTab={resultTab}
+                  onChange={setResultTab}
+                  ariaLabel={sk.marketplaceResultsTabsAria}
+                  tabIdPrefix="skills-marketplace-results-tab"
+                  panelIdPrefix="skills-marketplace-results-panel"
+                  className="min-h-9 gap-1 overflow-x-auto rounded-lg border border-edge bg-surface-panel p-0.5 shadow-surface"
+                  buttonClassName="rounded-md px-2.5 py-1.5 text-xs"
+                  selectedClassName="bg-fg text-surface-panel dark:bg-fg dark:text-surface-base"
+                  unselectedClassName="text-fg-muted hover:text-fg"
+                />
               ) : null}
-            </div>
-          </div>
+            </>
+          )}
 
           {mainTab === 'marketplace' ? (
             <SkillsPageMarketplaceContent {...vm} />

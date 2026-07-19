@@ -362,7 +362,6 @@ export function GatewaySettingsPanel() {
         type: 'patch',
         patch: { saveOk: true, auditRefreshToken: auditRefreshToken + 1 },
       });
-      showToast({ type: 'success', title: g.saved });
     } catch (e) {
       dispatchUi({ type: 'patch', patch: { error: e instanceof Error ? e.message : g.saveError } });
     } finally {

@@ -11,7 +11,6 @@ import {
 import { useCallback, useState } from 'react';
 
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
-import { showToast } from '@/lib/toast';
 
 import { AgentDefaultsField } from '.././browser-settings-field';
 import { inputClassName } from '../../agents/defaults-field-styles';
@@ -168,7 +167,7 @@ export function ExtensionCard({
     try {
       const copied = await copyTextToClipboard(extensionDir);
       if (copied) {
-        showToast({ type: 'success', title: m.browserExtensionPathCopied });
+        setInstallMessage(m.browserExtensionPathCopied);
       } else {
         setInstallMessage(m.browserExtensionPathCopyFailed);
       }
@@ -186,7 +185,7 @@ export function ExtensionCard({
     setInstallMessage(null);
     try {
       await revealExtensionFolder();
-      showToast({ type: 'success', title: m.browserExtensionFolderOpened });
+      setInstallMessage(m.browserExtensionFolderOpened);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {

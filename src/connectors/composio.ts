@@ -1,15 +1,34 @@
 import { CredentialResolver } from '../auth/credentials.js';
 import type { Config } from '../config/schema.js';
+import {
+  getConnectorConnection,
+  getConnectorInstallation,
+  listConnectorConnections as listStoredConnectorConnections,
+  upsertConnectorConnection,
+  upsertConnectorActionMetadata,
+  upsertConnectorInstallation,
+} from '../storage/sqlite/connector-repository.js';
+import {
+  COMPOSIO_AGENT_READY_TOOLKITS,
+  COMPOSIO_TOOLKIT_DISPLAY_NAMES,
+  connectorDefinitionFromComposioToolkit,
+} from './composio-catalog.js';
+import { ComposioSessionsAdapter } from './composio-sessions.js';
 import { consumeConnectorSetupSecretRef } from './setup-secrets.js';
-import type { ConnectorDefinition } from './types.js';
+import type { ConnectorConfirmationPolicy, ConnectorDefinition, ConnectorInstallationPolicy } from './types.js';
 
 export type ComposioConnection = {
   id: string;
+  providerConnectionId: string;
   toolkit: string;
   status: string;
+  alias?: string;
+  isDefault: boolean;
   accountEmail?: string;
   workspace?: string;
   username?: string;
+  connectedAt?: string;
+  lastError?: string;
 };
 
 export type ComposioScope = 'read' | 'write' | 'admin';
@@ -23,18 +42,22 @@ export type ComposioTool = {
   curated: boolean;
 };
 
-const COMPOSIO_TOOLKITS = [
-  ['gmail', 'Gmail', 'Read and send Gmail messages through Composio.'],
-  ['googlecalendar', 'Google Calendar', 'Read and manage Google Calendar events through Composio.'],
-  ['googledrive', 'Google Drive', 'Search and manage Google Drive files through Composio.'],
-  ['notion', 'Notion', 'Search and update Notion pages and databases through Composio.'],
-  ['slack', 'Slack', 'Read and send Slack workspace messages through Composio.'],
-  ['github', 'GitHub via Composio', 'Work with GitHub repositories, issues, and pull requests through Composio.'],
-  ['linear', 'Linear via Composio', 'Manage Linear issues and projects through Composio.'],
-] as const;
+export type ComposioConnectorHealth = {
+  toolkit: string;
+  status: 'connected' | 'disconnected' | 'reauthorization_required' | 'degraded';
+  activeConnections: number;
+  affectedConnections: number;
+  checkedAt: string;
+  message: string;
+  recovery: 'none' | 'connect' | 'reconnect' | 'retry';
+};
 
 const COMPOSIO_API_KEY_PROVIDER = 'connector-composio-api-key';
 const COMPOSIO_SCOPE_ORDER: Record<ComposioScope, number> = { read: 1, write: 2, admin: 3 };
+const COMPOSIO_AGENT_READY = new Set<string>(COMPOSIO_AGENT_READY_TOOLKITS);
+const READ_ACTION_TOKENS = ['GET', 'LIST', 'SEARCH', 'FETCH', 'FIND', 'LOOKUP', 'RETRIEVE', 'READ', 'QUERY', 'CHECK', 'DESCRIBE', 'DOWNLOAD'];
+const WRITE_ACTION_TOKENS = ['CREATE', 'UPDATE', 'SEND', 'POST', 'ADD', 'UPLOAD', 'REPLY', 'DRAFT', 'INVITE', 'ASSIGN', 'MOVE', 'COPY', 'EDIT', 'WRITE', 'PUBLISH', 'SCHEDULE'];
+const ADMIN_ACTION_TOKENS = ['DELETE', 'REMOVE', 'REVOKE', 'TRASH', 'ARCHIVE', 'CANCEL', 'DISCONNECT', 'DEACTIVATE'];
 
 const COMPOSIO_CURATED_ACTIONS: Record<string, Record<string, ComposioScope>> = {
   gmail: {
@@ -86,51 +109,14 @@ const COMPOSIO_CURATED_ACTIONS: Record<string, Record<string, ComposioScope>> = 
   },
 };
 
-function composioBaseUrl(): string {
-  return process.env.XOPC_COMPOSIO_BASE_URL?.trim().replace(/\/+$/, '') || 'https://backend.composio.dev/api/v3';
-}
+const LOCAL_OWNER_PRINCIPAL = 'local-owner';
 
-async function composioApiKey(resolver = new CredentialResolver()): Promise<string> {
-  const stored = await resolver.resolveApiKey(COMPOSIO_API_KEY_PROVIDER).catch(() => undefined);
-  const key = stored?.trim() || process.env.XOPC_COMPOSIO_API_KEY?.trim() || process.env.COMPOSIO_API_KEY?.trim();
-  if (!key) {
-    throw new Error('Composio API key is not configured. Set XOPC_COMPOSIO_API_KEY or connect the Composio API Key connector.');
+function toolkitFromConnectionMetadata(connection: { id: string; metadata: Record<string, unknown> }): string {
+  const toolkit = connection.metadata.toolkit;
+  if (typeof toolkit !== 'string' || !toolkit.trim()) {
+    throw new Error(`Composio connection "${connection.id}" does not contain toolkit metadata.`);
   }
-  return key;
-}
-
-async function composioFetch(path: string, init: RequestInit = {}, resolver = new CredentialResolver()): Promise<unknown> {
-  const apiKey = await composioApiKey(resolver);
-  const response = await fetch(`${composioBaseUrl()}${path}`, {
-    ...init,
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      Authorization: `Bearer ${apiKey}`,
-      ...(init.headers ?? {}),
-    },
-  });
-  const data = await response.json().catch(async () => ({ error: await response.text().catch(() => response.statusText) }));
-  if (!response.ok) {
-    const record = data && typeof data === 'object' && !Array.isArray(data) ? data as Record<string, unknown> : {};
-    throw new Error(String(record.error ?? record.message ?? response.statusText));
-  }
-  return data;
-}
-
-function arrayAt(payload: unknown, keys: string[]): unknown[] {
-  if (Array.isArray(payload)) return payload;
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return [];
-  const record = payload as Record<string, unknown>;
-  for (const key of keys) {
-    if (Array.isArray(record[key])) return record[key] as unknown[];
-  }
-  return [];
-}
-
-function readString(value: unknown): string | undefined {
-  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+  return toolkit;
 }
 
 function normalizeToolkit(toolkit: string): string {
@@ -140,8 +126,9 @@ function normalizeToolkit(toolkit: string): string {
 export function toolkitFromComposioSlug(slug: string): string | undefined {
   const upper = slug.trim().toUpperCase();
   if (!upper) return undefined;
-  if (upper.startsWith('GOOGLECALENDAR_')) return 'googlecalendar';
-  if (upper.startsWith('GOOGLEDRIVE_')) return 'googledrive';
+  const known = [...COMPOSIO_AGENT_READY].sort((left, right) => right.length - left.length)
+    .find((toolkit) => upper === toolkit.toUpperCase() || upper.startsWith(`${toolkit.toUpperCase()}_`));
+  if (known) return known;
   const prefix = upper.split('_')[0]?.toLowerCase();
   return prefix || undefined;
 }
@@ -151,6 +138,18 @@ export function scopeForComposioAction(slug: string): { toolkit?: string; scope:
   if (!toolkit) return { scope: 'write', curated: false };
   const scope = COMPOSIO_CURATED_ACTIONS[toolkit]?.[slug.trim().toUpperCase()];
   if (scope) return { toolkit, scope, curated: true };
+  if (COMPOSIO_AGENT_READY.has(toolkit)) {
+    const tokens = slug.trim().toUpperCase().split('_');
+    if (tokens.some((token) => ADMIN_ACTION_TOKENS.some((verb) => token.startsWith(verb)))) {
+      return { toolkit, scope: 'admin', curated: true };
+    }
+    if (tokens.some((token) => READ_ACTION_TOKENS.some((verb) => token.startsWith(verb)))) {
+      return { toolkit, scope: 'read', curated: true };
+    }
+    if (tokens.some((token) => WRITE_ACTION_TOKENS.some((verb) => token.startsWith(verb)))) {
+      return { toolkit, scope: 'write', curated: true };
+    }
+  }
   return { toolkit, scope: 'write', curated: false };
 }
 
@@ -195,28 +194,28 @@ export const COMPOSIO_CONNECTORS: readonly ConnectorDefinition[] = [
     category: 'automation',
     kind: 'composio',
     source: 'builtin',
+    branding: {
+      logoUrl: '/connector-icons/composio.svg',
+      source: 'composio-catalog',
+    },
+    verificationLevel: 'verified',
     capabilities: ['auth.apiKey', 'tools', 'events', 'workflows'],
     tags: ['composio', 'oauth', 'integrations'],
     auth: { mode: 'apiKey' },
     setup: {
       secrets: [{ key: 'COMPOSIO_API_KEY', label: 'Composio API key', required: true }],
     },
-    runtime: { type: 'composio', toolkit: 'composio' },
+    runtime: { type: 'composio', toolkit: 'composio', role: 'credential' },
   },
-  ...COMPOSIO_TOOLKITS.map(([toolkit, displayName, description]) => ({
-    id: `composio-${toolkit}`,
-    version: '1.0.0',
-    displayName,
-    description,
-    category: 'automation' as const,
-    kind: 'composio' as const,
-    source: 'builtin' as const,
-    capabilities: ['tools', 'auth.oauth', 'events', 'workflows'] as ConnectorDefinition['capabilities'],
-    tags: ['composio', toolkit],
-    auth: { mode: 'none' as const },
-    setup: {},
-    runtime: { type: 'composio' as const, toolkit },
-  })),
+  ...COMPOSIO_AGENT_READY_TOOLKITS.map((toolkit) => {
+    const definition = connectorDefinitionFromComposioToolkit({
+      slug: toolkit,
+      name: COMPOSIO_TOOLKIT_DISPLAY_NAMES[toolkit],
+      isNoAuth: false,
+      connected: false,
+    });
+    return { ...definition, version: '1.0.0' };
+  }),
 ];
 
 export async function saveComposioApiKey(input: { secrets?: Record<string, unknown> }, resolver = new CredentialResolver()): Promise<void> {
@@ -230,53 +229,209 @@ export async function saveComposioApiKey(input: { secrets?: Record<string, unkno
 }
 
 export async function listComposioConnections(resolver = new CredentialResolver()): Promise<ComposioConnection[]> {
-  const payload = await composioFetch('/connected_accounts', {}, resolver);
-  return arrayAt(payload, ['items', 'connected_accounts', 'connections', 'data']).flatMap((item) => {
-    if (!item || typeof item !== 'object' || Array.isArray(item)) return [];
-    const row = item as Record<string, unknown>;
-    const toolkit = readString(row.toolkit_slug ?? row.toolkit ?? row.appName ?? row.app_name);
-    const id = readString(row.id ?? row.uuid ?? row.connectedAccountId ?? row.connected_account_id);
-    if (!toolkit || !id) return [];
-    return [{
-      id,
-      toolkit,
-      status: readString(row.status) ?? 'unknown',
-      accountEmail: readString(row.accountEmail ?? row.account_email ?? row.email),
-      workspace: readString(row.workspace ?? row.teamName ?? row.team_name),
-      username: readString(row.username ?? row.name),
-    }];
+  const adapter = new ComposioSessionsAdapter({ resolver });
+  await adapter.syncConnections({ principalId: LOCAL_OWNER_PRINCIPAL });
+  return listStoredConnectorConnections({ principalId: LOCAL_OWNER_PRINCIPAL })
+    .filter((connection) => connection.provider === 'composio')
+    .map((connection) => ({
+      id: connection.id,
+      providerConnectionId: connection.providerConnectionId,
+      toolkit: toolkitFromConnectionMetadata(connection),
+      status: connection.status,
+      alias: connection.alias,
+      isDefault: connection.isDefault,
+      accountEmail: typeof connection.identity.email === 'string' ? connection.identity.email : undefined,
+      workspace: typeof connection.identity.workspace === 'string' ? connection.identity.workspace : undefined,
+      username: typeof connection.identity.username === 'string' ? connection.identity.username : undefined,
+      connectedAt: connection.connectedAt,
+      lastError: connection.lastError,
+    }));
+}
+
+export async function inspectComposioConnectorHealth(toolkit: string, resolver = new CredentialResolver()): Promise<ComposioConnectorHealth> {
+  const normalizedToolkit = normalizeToolkit(toolkit);
+  try {
+    const all = await listComposioConnections(resolver);
+    const connections = all.filter((connection) => connection.toolkit.toLowerCase() === normalizedToolkit);
+    const activeConnections = connections.filter((connection) => connection.status === 'active').length;
+    const affectedConnections = connections.filter((connection) => connection.status === 'expired' || connection.status === 'failed').length;
+    if (activeConnections > 0) {
+      return {
+        toolkit: normalizedToolkit,
+        status: 'connected',
+        activeConnections,
+        affectedConnections,
+        checkedAt: new Date().toISOString(),
+        message: `${activeConnections} active account connection${activeConnections === 1 ? '' : 's'}.`,
+        recovery: 'none',
+      };
+    }
+    if (affectedConnections > 0) {
+      return {
+        toolkit: normalizedToolkit,
+        status: 'reauthorization_required',
+        activeConnections: 0,
+        affectedConnections,
+        checkedAt: new Date().toISOString(),
+        message: 'The account connection expired or failed and must be authorized again.',
+        recovery: 'reconnect',
+      };
+    }
+    return {
+      toolkit: normalizedToolkit,
+      status: 'disconnected',
+      activeConnections: 0,
+      affectedConnections: 0,
+      checkedAt: new Date().toISOString(),
+      message: 'No active account is connected.',
+      recovery: 'connect',
+    };
+  } catch (error) {
+    return {
+      toolkit: normalizedToolkit,
+      status: 'degraded',
+      activeConnections: 0,
+      affectedConnections: 0,
+      checkedAt: new Date().toISOString(),
+      message: errorMessageForHealth(error),
+      recovery: 'retry',
+    };
+  }
+}
+
+function errorMessageForHealth(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export function getComposioInstallationPolicy(config: Config | undefined, toolkit: string): ConnectorInstallationPolicy {
+  const normalizedToolkit = normalizeToolkit(toolkit);
+  const connectorId = `composio-${normalizedToolkit}`;
+  const id = `${connectorId}-${LOCAL_OWNER_PRINCIPAL}`;
+  const existing = getConnectorInstallation(id);
+  return upsertConnectorInstallation({
+    id,
+    connectorId,
+    principalId: LOCAL_OWNER_PRINCIPAL,
+    enabled: existing?.enabled ?? true,
+    allowedAgentIds: existing?.allowedAgentIds ?? [],
+    maxScope: getComposioToolkitScope(config, normalizedToolkit),
+    confirmationPolicy: existing?.confirmationPolicy ?? 'writes',
+    selectedConnectionIds: existing?.selectedConnectionIds ?? [],
+    createdAt: existing?.createdAt,
   });
 }
 
-export async function startComposioAuthorize(toolkit: string, resolver = new CredentialResolver()): Promise<{ toolkit: string; connectUrl: string; connectionId?: string }> {
-  const payload = await composioFetch('/connected_accounts', {
-    method: 'POST',
-    body: JSON.stringify({ toolkit_slug: toolkit, toolkit, auth_config: {} }),
-  }, resolver);
-  const record = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload as Record<string, unknown> : {};
-  const connectUrl = readString(record.redirect_url ?? record.redirectUrl ?? record.connect_url ?? record.connectUrl);
-  if (!connectUrl) {
+export function updateComposioInstallationPolicy(
+  config: Config | undefined,
+  toolkit: string,
+  patch: { allowedAgentIds?: string[]; confirmationPolicy?: ConnectorConfirmationPolicy; selectedConnectionIds?: string[] },
+): ConnectorInstallationPolicy {
+  const current = getComposioInstallationPolicy(config, toolkit);
+  return upsertConnectorInstallation({
+    ...current,
+    allowedAgentIds: patch.allowedAgentIds ?? current.allowedAgentIds,
+    confirmationPolicy: patch.confirmationPolicy ?? current.confirmationPolicy,
+    selectedConnectionIds: patch.selectedConnectionIds ?? current.selectedConnectionIds,
+  });
+}
+
+export function updateComposioConnection(
+  id: string,
+  patch: { alias?: string; isDefault?: boolean },
+): ComposioConnection {
+  const connection = getConnectorConnection(id);
+  if (!connection || connection.provider !== 'composio' || connection.principalId !== LOCAL_OWNER_PRINCIPAL) {
+    throw new Error('Composio connection not found.');
+  }
+  upsertConnectorConnection({
+    ...connection,
+    alias: patch.alias === undefined ? connection.alias : patch.alias.trim() || undefined,
+    isDefault: patch.isDefault ?? connection.isDefault,
+  });
+  const updated = getConnectorConnection(id)!;
+  return {
+    id: updated.id,
+    providerConnectionId: updated.providerConnectionId,
+    toolkit: toolkitFromConnectionMetadata(updated),
+    status: updated.status,
+    alias: updated.alias,
+    isDefault: updated.isDefault,
+    accountEmail: typeof updated.identity.email === 'string' ? updated.identity.email : undefined,
+    workspace: typeof updated.identity.workspace === 'string' ? updated.identity.workspace : undefined,
+    username: typeof updated.identity.username === 'string' ? updated.identity.username : undefined,
+    connectedAt: updated.connectedAt,
+    lastError: updated.lastError,
+  };
+}
+
+export async function refreshComposioConnection(id: string, resolver = new CredentialResolver()): Promise<void> {
+  const connection = getConnectorConnection(id);
+  if (!connection || connection.provider !== 'composio' || connection.principalId !== LOCAL_OWNER_PRINCIPAL) {
+    throw new Error('Composio connection not found.');
+  }
+  await new ComposioSessionsAdapter({ resolver }).refreshConnection(connection);
+}
+
+export async function revokeComposioConnection(id: string, resolver = new CredentialResolver()): Promise<void> {
+  const connection = getConnectorConnection(id);
+  if (!connection || connection.provider !== 'composio' || connection.principalId !== LOCAL_OWNER_PRINCIPAL) {
+    throw new Error('Composio connection not found.');
+  }
+  await new ComposioSessionsAdapter({ resolver }).revokeConnection(connection);
+}
+
+export async function startComposioAuthorize(connectorId: string, toolkit: string, resolver = new CredentialResolver()): Promise<{ toolkit: string; connectUrl: string; connectionId?: string }> {
+  const normalizedToolkit = normalizeToolkit(toolkit);
+  const authorization = await new ComposioSessionsAdapter({ resolver }).authorize({
+    principalId: LOCAL_OWNER_PRINCIPAL,
+    toolkit: normalizedToolkit,
+    installationId: getConnectorInstallation(`${connectorId}-${LOCAL_OWNER_PRINCIPAL}`)?.id,
+  });
+  if (!authorization.connectUrl) {
     throw new Error('Composio authorize did not return a connect URL.');
   }
-  return { toolkit, connectUrl, connectionId: readString(record.id ?? record.connectionId ?? record.connected_account_id) };
+  return {
+    toolkit: authorization.toolkit,
+    connectUrl: authorization.connectUrl,
+    connectionId: authorization.connectionId,
+  };
 }
 
 export async function listComposioTools(toolkit: string, config?: Config, resolver = new CredentialResolver()): Promise<ComposioTool[]> {
-  const path = `/tools?toolkit_slug=${encodeURIComponent(toolkit)}`;
-  const payload = await composioFetch(path, {}, resolver);
-  return arrayAt(payload, ['items', 'tools', 'data']).flatMap((item) => {
-    if (!item || typeof item !== 'object' || Array.isArray(item)) return [];
-    const row = item as Record<string, unknown>;
-    const slug = readString(row.slug ?? row.name);
+  const normalizedToolkit = normalizeToolkit(toolkit);
+  const session = await new ComposioSessionsAdapter({ resolver }).createSession({
+    principalId: LOCAL_OWNER_PRINCIPAL,
+    toolkits: [normalizedToolkit],
+  });
+  const payload = await session.search({
+    query: `List the available ${normalizedToolkit} actions and their exact input contracts.`,
+    toolkits: [normalizedToolkit],
+  });
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return [];
+  const schemas = (payload as Record<string, unknown>).toolSchemas;
+  if (!schemas || typeof schemas !== 'object' || Array.isArray(schemas)) return [];
+  return Object.values(schemas).flatMap((value) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
+    const row = value as Record<string, unknown>;
+    const slug = typeof row.toolSlug === 'string' ? row.toolSlug : undefined;
     if (!slug) return [];
     const action = scopeForComposioAction(slug);
-    const allowed = config ? canUseComposioAction(config, slug).ok : true;
-    if (!allowed) return [];
+    if (config && !canUseComposioAction(config, slug).ok) return [];
+    const inputSchema = row.inputSchema;
+    upsertConnectorActionMetadata({
+      connectorId: `composio-${normalizedToolkit}`,
+      actionId: slug,
+      toolkit: normalizedToolkit,
+      scope: action.scope,
+      curated: action.curated,
+      inputSchema,
+      cachedAt: new Date().toISOString(),
+    });
     return [{
       slug,
-      name: readString(row.name),
-      description: readString(row.description),
-      inputSchema: row.inputSchema ?? row.input_schema ?? row.parameters,
+      name: slug,
+      description: typeof row.description === 'string' ? row.description : undefined,
+      inputSchema,
       scope: action.scope,
       curated: action.curated,
     }];
@@ -288,8 +443,41 @@ export async function executeComposioTool(params: { slug: string; arguments?: un
   if (allowed.ok === false) {
     throw new Error(allowed.reason);
   }
-  return composioFetch(`/tools/${encodeURIComponent(params.slug)}/execute`, {
-    method: 'POST',
-    body: JSON.stringify({ arguments: params.arguments ?? {} }),
-  }, resolver);
+  if (!allowed.toolkit) throw new Error(`Unknown Composio toolkit for action: ${params.slug}`);
+  const connectorId = `composio-${allowed.toolkit}`;
+  const installation = upsertConnectorInstallation({
+    id: `${connectorId}-${LOCAL_OWNER_PRINCIPAL}`,
+    connectorId,
+    principalId: LOCAL_OWNER_PRINCIPAL,
+    enabled: true,
+    allowedAgentIds: [],
+    maxScope: getComposioToolkitScope(params.config, allowed.toolkit),
+    confirmationPolicy: 'writes',
+    selectedConnectionIds: [],
+  });
+  const connection = listStoredConnectorConnections({
+    principalId: LOCAL_OWNER_PRINCIPAL,
+    connectorId,
+  }).find((candidate) => candidate.status === 'active' && candidate.isDefault)
+    ?? listStoredConnectorConnections({ principalId: LOCAL_OWNER_PRINCIPAL, connectorId })
+      .find((candidate) => candidate.status === 'active');
+  const result = await new ComposioSessionsAdapter({ resolver }).executeWithPolicy({
+    context: { principalId: LOCAL_OWNER_PRINCIPAL, toolkits: [allowed.toolkit] },
+    installation,
+    connection,
+    action: {
+      connectorId,
+      actionId: params.slug,
+      toolkit: allowed.toolkit,
+      scope: allowed.scope,
+      curated: scopeForComposioAction(params.slug).curated,
+      cachedAt: new Date().toISOString(),
+    },
+    args: params.arguments && typeof params.arguments === 'object' && !Array.isArray(params.arguments)
+      ? params.arguments as Record<string, unknown>
+      : {},
+    confirmed: true,
+  });
+  if (result.decision !== 'allowed') throw new Error(result.reason);
+  return result.result;
 }

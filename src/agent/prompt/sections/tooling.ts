@@ -47,7 +47,7 @@ const CORE_TOOL_SUMMARIES: Record<string, string> = {
   code_architecture: 'Map packages, boundaries, layers, entry points, hotspots, and clusters',
   read_file: 'Read targeted file contents before editing',
   write_file: 'Create new files or intentional complete rewrites; prefer apply_patch for code changes',
-  apply_patch: 'Apply strict patches for source edits',
+  apply_patch: 'Apply source edits with patches that begin exactly with *** Begin Patch and end exactly with *** End Patch',
   grep: 'Search file contents for literals, errors, config values, and docs',
   find: 'Find files by glob pattern',
   list_dir: 'List directory contents',

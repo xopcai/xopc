@@ -316,7 +316,6 @@ function NoteDetailPanelInner({
     try {
       await catalyzeNote(noteId);
       await mutate();
-      showToast({ type: 'success', title: n.catalysisDone });
     } catch (err) {
       showToast({
         type: 'error',

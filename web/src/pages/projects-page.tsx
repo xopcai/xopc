@@ -1,327 +1,275 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { ArrowRight, FolderKanban, FolderPlus, Plus, Search } from 'lucide-react';
+import {
+  ArrowRight,
+  CalendarClock,
+  CheckCircle2,
+  CircleAlert,
+  Clock3,
+  Eye,
+  FolderKanban,
+  ListChecks,
+  MessageCircle,
+  Plus,
+  Search,
+  Sparkles,
+} from 'lucide-react';
 import { type FormEvent, useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
-import { Select, SelectOption } from '@/components/ui/popover-select';
-import { DirectoryPickerPathField } from '@/features/fs/directory-picker-path-field';
+import { Skeleton } from '@/components/ui/skeleton';
+import { delegateWork, fetchProjects, type Project } from '@/features/projects/api';
 import {
-  createProject,
-  fetchProjects,
-  inferProjectDefaults,
-  type Project,
-  type ProjectKindSelection,
-  type ProjectStatus,
-} from '@/features/projects/api';
-import { fetchGatewayAgents, type GatewayAgentRow } from '@/features/settings/agents-admin-api';
-import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
+  fetchWorkHome,
+  respondToWorkDecision,
+  type WorkHomeDecision,
+  type WorkHomeItem,
+  type WorkHomeResponse,
+} from '@/features/work/work-home-api';
+import { workflowBoardHref } from '@/features/workflows/workflow-page.utils';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 
-const STATUSES: Array<ProjectStatus | 'all'> = ['all', 'active', 'paused', 'archived'];
-const AUTO_AGENT_CHOICE = '__auto__';
-const GLOBAL_AGENT_CHOICE = '__global__';
-type AgentChoice = typeof AUTO_AGENT_CHOICE | typeof GLOBAL_AGENT_CHOICE | string;
-type WorkspaceMode = 'follow' | 'fixed';
-
-function statusTone(status: ProjectStatus): string {
-  if (status === 'active') return 'bg-accent-soft text-accent-fg';
-  if (status === 'paused') return 'bg-amber-500/10 text-amber-700 dark:text-amber-300';
-  return 'bg-surface-muted text-fg-subtle';
-}
-
 function interpolate(template: string, values: Record<string, string | number>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => String(values[key] ?? ''));
 }
 
-function directoryName(value: string): string {
-  return value.trim().replace(/[\\/]+$/, '').split(/[\\/]/).filter(Boolean).pop() ?? '';
-}
-
-function getWorkspaceConflictProject(err: unknown): Project | null {
-  const body = (err as { body?: { code?: string; project?: Project } } | null)?.body;
-  return body?.code === 'workspace_already_bound' && body.project ? body.project : null;
-}
-
-function getMissingWorkspaceRoot(err: unknown): string | null {
-  const body = (err as { body?: { code?: string; workspaceRoot?: string } } | null)?.body;
-  return body?.code === 'workspace_root_missing' && body.workspaceRoot ? body.workspaceRoot : null;
-}
-
-function formatDate(value: string | undefined, fallback: string): string {
-  if (!value) return fallback;
+function formatTime(value: string | number | undefined, fallback: string): string {
+  if (value == null) return fallback;
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
+  if (Number.isNaN(date.getTime())) return fallback;
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
 }
 
-function ProjectCard({ project, t }: { project: Project; t: ReturnType<typeof messages>['projectsPage'] }) {
-  const statusLabel = t.statuses[project.status];
+function WorkHomeSkeleton() {
+  return (
+    <div className="space-y-5" aria-busy>
+      <Skeleton className="h-32 rounded-2xl" />
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Skeleton className="h-64 rounded-2xl" />
+        <Skeleton className="h-64 rounded-2xl" />
+      </div>
+      <Skeleton className="h-44 rounded-2xl" />
+    </div>
+  );
+}
+
+function WorkItemCard({
+  item,
+  statusLabel,
+  needsAttention = false,
+}: {
+  item: WorkHomeItem;
+  statusLabel: string;
+  needsAttention?: boolean;
+}) {
   return (
     <Link
-      to={`/projects/${encodeURIComponent(project.id)}`}
-      className="group flex min-h-36 flex-col rounded-lg bg-surface-panel p-4 shadow-surface transition-colors hover:bg-surface-hover/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      to={`/work-items/${encodeURIComponent(item.id)}`}
+      className={cn(
+        'group block rounded-xl border p-3.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+        needsAttention
+          ? 'border-warning/35 bg-warning-soft/25 hover:bg-warning-soft/40'
+          : 'border-edge-subtle bg-surface-panel hover:bg-surface-hover/55',
+      )}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="truncate text-base font-semibold text-fg">{project.name}</h2>
-          <p className="mt-1 truncate text-xs text-fg-subtle">{project.slug}</p>
+          <h3 className="truncate text-sm font-semibold text-fg">{item.title}</h3>
+          <p className="mt-1 truncate text-xs text-fg-subtle">{item.projectName}</p>
         </div>
-        <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-xs font-medium', statusTone(project.status))}>
+        <span className="shrink-0 rounded-full bg-surface-hover px-2 py-0.5 text-[11px] font-medium text-fg-muted">
           {statusLabel}
         </span>
       </div>
-      <p className="mt-3 line-clamp-2 min-h-10 text-sm leading-5 text-fg-muted">
-        {project.description || project.brief || t.noDescription}
-      </p>
-      <div className="mt-auto grid gap-1 pt-4 text-xs text-fg-subtle">
-        <div className="truncate">{interpolate(t.workspaceLabel, { workspace: project.workspaceRoot || project.effectiveWorkspaceRoot || t.agentDefault })}</div>
-        <div>{interpolate(t.lastActive, { time: formatDate(project.lastActiveAt ?? project.updatedAt, t.never) })}</div>
+      {item.blockedReason || item.nextAction ? (
+        <p className="mt-2 line-clamp-2 text-xs leading-5 text-fg-muted">
+          {item.blockedReason || item.nextAction}
+        </p>
+      ) : null}
+    </Link>
+  );
+}
+
+function DecisionCard({
+  item,
+  kindLabel,
+  reasonLabel,
+  approveLabel,
+  denyLabel,
+  busy,
+  onRespond,
+}: {
+  item: WorkHomeDecision;
+  kindLabel: string;
+  reasonLabel: string;
+  approveLabel: string;
+  denyLabel: string;
+  busy: boolean;
+  onRespond: (decision: 'approve' | 'deny') => void;
+}) {
+  return (
+    <article className="rounded-xl border border-warning/35 bg-warning-soft/25 p-3.5 transition-colors hover:bg-warning-soft/40">
+      <Link to={item.href} className="group block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="truncate text-sm font-semibold text-fg">{item.title}</h3>
+          <p className="mt-1 truncate text-xs text-fg-subtle">{item.projectName || kindLabel}</p>
+        </div>
+        <span className="shrink-0 rounded-full bg-surface-panel/80 px-2 py-0.5 text-[11px] font-medium text-fg-muted">
+          {reasonLabel}
+        </span>
       </div>
+      {item.detail ? <p className="mt-2 line-clamp-2 text-xs leading-5 text-fg-muted">{item.detail}</p> : null}
+      </Link>
+      {item.response ? (
+        <div className="mt-3 flex justify-end gap-2 border-t border-warning/20 pt-3">
+          <Button type="button" variant="ghost" className="h-8 px-2" disabled={busy} onClick={() => onRespond('deny')}>{denyLabel}</Button>
+          <Button type="button" variant="primary" className="h-8 px-2" disabled={busy} onClick={() => onRespond('approve')}>{approveLabel}</Button>
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+function ProjectCard({ project, openLabel, noDescription }: {
+  project: Project;
+  openLabel: string;
+  noDescription: string;
+}) {
+  return (
+    <Link
+      to={`/projects/${encodeURIComponent(project.id)}`}
+      className="group flex min-h-32 flex-col rounded-xl border border-edge-subtle bg-surface-panel p-4 transition-colors hover:bg-surface-hover/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <FolderKanban className="size-4 shrink-0 text-accent" aria-hidden />
+          <h3 className="truncate text-sm font-semibold text-fg">{project.name}</h3>
+        </div>
+        <ArrowRight className="size-4 shrink-0 text-fg-subtle transition-transform group-hover:translate-x-0.5" aria-label={openLabel} />
+      </div>
+      <p className="mt-3 line-clamp-2 text-xs leading-5 text-fg-muted">
+        {project.description || project.brief || noDescription}
+      </p>
+      <p className="mt-auto pt-3 text-[11px] text-fg-subtle">
+        {formatTime(project.lastActiveAt ?? project.updatedAt, '')}
+      </p>
     </Link>
   );
 }
 
 export function ProjectsPage() {
-  const navigate = useNavigate();
-  const language = useLocaleStore((s) => s.language);
+  const language = useLocaleStore((state) => state.language);
   const msg = messages(language);
-  const wd = msg.chat.workingDirectory;
   const t = msg.projectsPage;
-  const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
-  const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
+  const navigate = useNavigate();
+  const setPageHeader = usePageHeaderStore((state) => state.setPageHeader);
+  const clearPageHeader = usePageHeaderStore((state) => state.clearPageHeader);
+  const [home, setHome] = useState<WorkHomeResponse | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [status, setStatus] = useState<ProjectStatus | 'all'>('all');
-  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [name, setName] = useState('');
-  const [nameEdited, setNameEdited] = useState(false);
-  const [workspaceRoot, setWorkspaceRoot] = useState('');
-  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('fixed');
-  const [projectKind, setProjectKind] = useState<ProjectKindSelection>('auto');
-  const [agentChoice, setAgentChoice] = useState<AgentChoice>(AUTO_AGENT_CHOICE);
-  const [agents, setAgents] = useState<GatewayAgentRow[]>([]);
-  const [gatewayDefaultAgentId, setGatewayDefaultAgentId] = useState<string | undefined>();
-  const [inferredDefaultAgentId, setInferredDefaultAgentId] = useState<string | undefined>();
-  const [inferredKind, setInferredKind] = useState<'coding' | 'general' | 'unknown'>('unknown');
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
+  const [createIntent, setCreateIntent] = useState<'delegate' | 'watch'>('delegate');
+  const [outcome, setOutcome] = useState('');
   const [creating, setCreating] = useState(false);
-  const [workspaceConflict, setWorkspaceConflict] = useState<Project | null>(null);
-  const [missingWorkspaceRoot, setMissingWorkspaceRoot] = useState<string | null>(null);
+  const [busyDecisionId, setBusyDecisionId] = useState<string | null>(null);
 
-  const updateProjectName = useCallback((value: string) => {
-    setName(value);
-    setNameEdited(Boolean(value.trim()));
-  }, []);
-
-  const updateWorkspaceRoot = useCallback((value: string) => {
-    setWorkspaceRoot(value);
-    if (!nameEdited) setName(directoryName(value));
-  }, [nameEdited]);
-
-  useEffect(() => {
-    let cancelled = false;
+  const load = useCallback(async () => {
     setLoading(true);
-    setError(null);
-    void fetchProjects({
-      ...(status !== 'all' ? { status } : {}),
-      ...(search.trim() ? { search } : {}),
-      limit: 100,
-    })
-      .then((res) => {
-        if (!cancelled) setProjects(res.items);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [search, status]);
-
-  useEffect(() => {
-    if (!createOpen) return;
-    let cancelled = false;
-    void fetchGatewayAgents()
-      .then((payload) => {
-        if (!cancelled) {
-          setAgents(payload.agents);
-          setGatewayDefaultAgentId(payload.defaultId);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setAgents([]);
-          setGatewayDefaultAgentId(undefined);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [createOpen]);
-
-  useEffect(() => {
-    if (!createOpen) return;
-    let cancelled = false;
-    const timeout = window.setTimeout(() => {
-      void inferProjectDefaults({
-        ...(name.trim() ? { name: name.trim() } : {}),
-        ...(workspaceMode === 'fixed' && workspaceRoot.trim() ? { workspaceRoot: workspaceRoot.trim() } : {}),
-        projectKind,
-      })
-        .then((result) => {
-          if (cancelled) return;
-          setInferredDefaultAgentId(result.defaultAgentId);
-          setInferredKind(result.inference.kind);
-        })
-        .catch(() => {
-          if (cancelled) return;
-          setInferredDefaultAgentId(undefined);
-          setInferredKind('unknown');
-        });
-    }, 250);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timeout);
-    };
-  }, [createOpen, name, projectKind, workspaceMode, workspaceRoot]);
-
-  const grouped = useMemo(() => {
-    const active = projects.filter((p) => p.status === 'active');
-    const paused = projects.filter((p) => p.status === 'paused');
-    const archived = projects.filter((p) => p.status === 'archived');
-    return { active, paused, archived };
-  }, [projects]);
-
-  const submitProjectCreate = useCallback(async (options: { createWorkspaceRoot?: boolean } = {}) => {
-    const trimmedName = name.trim();
-    const trimmedWorkspace = workspaceMode === 'fixed' ? workspaceRoot.trim() : '';
-    if (!trimmedName && !trimmedWorkspace) return;
-    setCreating(true);
-    setError(null);
-    setMissingWorkspaceRoot(null);
+    setLoadError(null);
     try {
-      const project = await createProject({
-        ...(trimmedName ? { name: trimmedName } : {}),
-        ...(trimmedWorkspace ? { workspaceRoot: trimmedWorkspace } : {}),
-        projectKind,
-        ...(agentChoice === AUTO_AGENT_CHOICE ? {} : { defaultAgentId: agentChoice === GLOBAL_AGENT_CHOICE ? '' : agentChoice }),
-        ...(options.createWorkspaceRoot ? { createWorkspaceRoot: true } : {}),
-      });
-      setProjects((items) => [project, ...items]);
-      setName('');
-      setNameEdited(false);
-      setWorkspaceRoot('');
-      setWorkspaceMode('fixed');
-      setProjectKind('auto');
-      setAgentChoice(AUTO_AGENT_CHOICE);
-      setCreateOpen(false);
+      const [homeResult, projectsResult] = await Promise.all([
+        fetchWorkHome(language),
+        fetchProjects({ limit: 100, sortBy: 'updatedAt', sortOrder: 'desc' }),
+      ]);
+      setHome(homeResult);
+      setProjects(projectsResult.items);
     } catch (err) {
-      const conflictProject = getWorkspaceConflictProject(err);
-      if (conflictProject) {
-        setProjects((items) => [conflictProject, ...items.filter((item) => item.id !== conflictProject.id)]);
-        setWorkspaceConflict(conflictProject);
-        setCreateOpen(false);
-      } else {
-        const missingRoot = getMissingWorkspaceRoot(err);
-        if (missingRoot) {
-          setMissingWorkspaceRoot(missingRoot);
-          setCreateOpen(false);
-        } else {
-          setError(err instanceof Error ? err.message : String(err));
-        }
-      }
+      setLoadError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }, [language]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const visibleProjects = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase();
+    const active = projects.filter((project) => project.status !== 'archived');
+    if (!query) return active.slice(0, 12);
+    return active.filter((project) => [project.name, project.description, project.brief]
+      .filter(Boolean)
+      .some((value) => value!.toLocaleLowerCase().includes(query)));
+  }, [projects, search]);
+
+  const needsYou = useMemo(() => home?.decisions ?? [], [home]);
+  const continuing = useMemo(() => home?.work.current.filter((item) => (
+    item.status !== 'needs_input'
+    && item.status !== 'in_review'
+    && item.status !== 'blocked'
+  )).slice(0, 10) ?? [], [home]);
+
+  const submitCreate = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmed = outcome.trim();
+    if (!trimmed || creating) return;
+    if (createIntent === 'watch') {
+      const prompt = language === 'zh'
+        ? `持续关注以下事项，在发生有意义的变化时通知我：\n${trimmed}`
+        : `Keep watching the following and notify me when something meaningfully changes:\n${trimmed}`;
+      setOutcome('');
+      setCreateOpen(false);
+      navigate(`/automations?draft=${encodeURIComponent(prompt)}&autogenerate=1`);
+      return;
+    }
+    setCreating(true);
+    setCreateError(null);
+    try {
+      const result = await delegateWork({ outcome: trimmed, uiLocale: language });
+      setOutcome('');
+      setCreateOpen(false);
+      navigate(`/projects/${encodeURIComponent(result.project.id)}`);
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : String(err));
     } finally {
       setCreating(false);
     }
-  }, [agentChoice, name, projectKind, workspaceMode, workspaceRoot]);
+  }, [createIntent, creating, language, navigate, outcome]);
 
-  const onCreate = useCallback((event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    void submitProjectCreate();
-  }, [submitProjectCreate]);
+  const headerEnd = useMemo(() => (
+    <div className="flex items-center gap-2">
+      <Button type="button" variant="secondary" className="h-9 rounded-lg" onClick={() => { setCreateIntent('watch'); setCreateOpen(true); }}>
+        <Eye className="size-4" aria-hidden />
+        {t.workHome.watch}
+      </Button>
+      <Button type="button" variant="primary" className="h-9 rounded-lg" onClick={() => { setCreateIntent('delegate'); setCreateOpen(true); }}>
+        <Plus className="size-4" aria-hidden />
+        {t.workHome.delegate}
+      </Button>
+    </div>
+  ), [t.workHome.delegate, t.workHome.watch]);
 
-  const openConflictProject = useCallback(() => {
-    if (!workspaceConflict) return;
-    const projectId = workspaceConflict.id;
-    setWorkspaceConflict(null);
-    navigate(`/projects/${encodeURIComponent(projectId)}`);
-  }, [navigate, workspaceConflict]);
-
-  const returnToCreateFromConflict = useCallback(() => {
-    setWorkspaceConflict(null);
-    setCreateOpen(true);
-  }, []);
-
-  const createMissingWorkspaceAndProject = useCallback(() => {
-    void submitProjectCreate({ createWorkspaceRoot: true });
-  }, [submitProjectCreate]);
-
-  const returnToCreateFromMissingWorkspace = useCallback(() => {
-    setMissingWorkspaceRoot(null);
-    setCreateOpen(true);
-  }, []);
-
-  const inferredAgentName = useMemo(() => {
-    const agent = agents.find((item) => item.id === inferredDefaultAgentId);
-    return agent?.name || inferredDefaultAgentId || '';
-  }, [agents, inferredDefaultAgentId]);
-
-  const selectedWorkspaceAgentId = useMemo(() => {
-    if (agentChoice === GLOBAL_AGENT_CHOICE) return gatewayDefaultAgentId;
-    if (agentChoice !== AUTO_AGENT_CHOICE) return agentChoice;
-    return inferredDefaultAgentId || gatewayDefaultAgentId;
-  }, [agentChoice, gatewayDefaultAgentId, inferredDefaultAgentId]);
-
-  const selectedWorkspaceAgent = useMemo(
-    () => agents.find((agent) => agent.id === selectedWorkspaceAgentId),
-    [agents, selectedWorkspaceAgentId],
-  );
-
-  const workspaceCurrentLabel = workspaceMode === 'fixed'
-    ? (workspaceRoot.trim() || t.workspacePlaceholder)
-    : (selectedWorkspaceAgent?.workspace || t.workspacePlaceholder);
-
-  const createAgentHint = useMemo(() => {
-    if (agentChoice === GLOBAL_AGENT_CHOICE) return t.agentHintGlobal;
-    if (agentChoice !== AUTO_AGENT_CHOICE) {
-      const agent = agents.find((item) => item.id === agentChoice);
-      return interpolate(t.agentHintSelected, { agent: agent?.name || agentChoice });
+  const respondToDecision = useCallback(async (item: WorkHomeDecision, decision: 'approve' | 'deny') => {
+    if (!item.response) return;
+    setBusyDecisionId(item.id);
+    setLoadError(null);
+    try {
+      await respondToWorkDecision(item.response, decision);
+      await load();
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusyDecisionId(null);
     }
-    if (inferredDefaultAgentId) return interpolate(t.agentHintCoding, { agent: inferredAgentName });
-    if (inferredKind === 'coding') return t.agentHintCoderUnavailable;
-    if (projectKind === 'general' || inferredKind === 'general') return t.agentHintGeneral;
-    return t.agentHintAuto;
-  }, [agentChoice, agents, inferredAgentName, inferredDefaultAgentId, inferredKind, projectKind, t]);
-
-  const headerEnd = useMemo(
-    () => (
-      <>
-        <label className="relative block min-w-0">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-subtle" aria-hidden />
-          <input
-            className="h-9 w-40 rounded-lg border border-edge bg-surface-muted pl-9 pr-3 text-sm text-fg outline-none placeholder:text-fg-muted focus:border-accent sm:w-56 lg:w-72"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder={t.searchPlaceholder}
-            aria-label={t.searchPlaceholder}
-          />
-        </label>
-        <Button type="button" variant="primary" className="h-9 rounded-lg" onClick={() => setCreateOpen((open) => !open)}>
-          <Plus className="size-4" aria-hidden />
-          {t.create}
-        </Button>
-      </>
-    ),
-    [search, t.create, t.searchPlaceholder],
-  );
+  }, [load]);
 
   useLayoutEffect(() => {
     setPageHeader({
@@ -329,248 +277,181 @@ export function ProjectsPage() {
       main: (
         <div className="min-w-0">
           <h1 className="truncate text-base font-semibold tracking-tight text-fg">{t.title}</h1>
-          <p className="truncate text-xs text-fg-muted">
-            {interpolate(t.summary, { count: projects.length })}
-          </p>
+          <p className="truncate text-xs text-fg-muted">{t.workHome.subtitle}</p>
         </div>
       ),
       end: headerEnd,
     });
     return () => clearPageHeader();
-  }, [clearPageHeader, headerEnd, projects.length, setPageHeader, t.summary, t.title]);
-
-  const visibleGroups: Array<[string, Project[]]> =
-    status === 'all'
-      ? [[t.statuses.active, grouped.active], [t.statuses.paused, grouped.paused], [t.statuses.archived, grouped.archived]]
-      : [[t.statuses[status], projects]];
+  }, [clearPageHeader, headerEnd, setPageHeader, t.title, t.workHome.subtitle]);
 
   return (
-    <main className="flex w-full flex-1 flex-col gap-6 px-3 py-6 sm:px-5 xl:px-6">
-      <Dialog.Root open={createOpen} onOpenChange={setCreateOpen}>
+    <main className="flex w-full flex-1 flex-col gap-5 px-3 py-6 sm:px-5 xl:px-6">
+      <Dialog.Root
+        open={createOpen}
+        onOpenChange={(open) => {
+          setCreateOpen(open);
+          if (!open) setCreateError(null);
+        }}
+      >
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-[90] flex h-[min(32rem,calc(100vh-2rem))] w-[min(40rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float focus:outline-none">
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-[90] flex h-[min(26rem,calc(100vh-2rem))] w-[min(36rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float focus:outline-none">
             <div className="shrink-0 border-b border-edge px-5 py-4">
-              <Dialog.Title className="text-base font-semibold text-fg">{t.createTitle}</Dialog.Title>
-              <Dialog.Description className="mt-1 text-sm text-fg-muted">{t.createDescription}</Dialog.Description>
+              <Dialog.Title className="text-base font-semibold text-fg">{createIntent === 'watch' ? t.workHome.watchTitle : t.workHome.delegateTitle}</Dialog.Title>
+              <Dialog.Description className="mt-1 text-sm text-fg-muted">{createIntent === 'watch' ? t.workHome.watchDescription : t.workHome.delegateDescription}</Dialog.Description>
             </div>
-            <form onSubmit={onCreate} className="flex min-h-0 flex-1 flex-col">
-              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
-                <div className="grid gap-1.5 text-sm">
-                  <span className="font-medium text-fg-muted">{t.workspaceRoot}</span>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    <label className={cn('flex min-h-10 items-start gap-2 rounded-md border px-3 py-2 text-sm', workspaceMode === 'fixed' ? 'border-accent bg-accent-soft/40 text-fg' : 'border-edge bg-surface-base text-fg-muted')}>
-                      <input
-                        type="radio"
-                        className="mt-0.5 size-4"
-                        checked={workspaceMode === 'fixed'}
-                        onChange={() => setWorkspaceMode('fixed')}
-                        disabled={creating}
-                      />
-                      <span className="min-w-0">
-                        <span className="block font-medium">{t.workspaceModeFixed}</span>
-                        <span className="block text-xs leading-5 text-fg-subtle">{t.workspaceFixedHint}</span>
-                      </span>
-                    </label>
-                    <label className={cn('flex min-h-10 items-start gap-2 rounded-md border px-3 py-2 text-sm', workspaceMode === 'follow' ? 'border-accent bg-accent-soft/40 text-fg' : 'border-edge bg-surface-base text-fg-muted')}>
-                      <input
-                        type="radio"
-                        className="mt-0.5 size-4"
-                        checked={workspaceMode === 'follow'}
-                        onChange={() => setWorkspaceMode('follow')}
-                        disabled={creating}
-                      />
-                      <span className="min-w-0">
-                        <span className="block font-medium">{t.workspaceModeFollow}</span>
-                        <span className="block text-xs leading-5 text-fg-subtle">{t.workspaceFollowHint}</span>
-                      </span>
-                    </label>
-                  </div>
-                  {workspaceMode === 'fixed' ? (
-                    <DirectoryPickerPathField
-                      value={workspaceRoot}
-                      onChange={updateWorkspaceRoot}
-                      disabled={creating}
-                      wd={wd}
-                      placeholder={t.workspacePlaceholder}
-                      inputClassName="min-h-10 rounded-md border border-edge bg-surface-base px-3 text-sm text-fg outline-none placeholder:text-fg-muted focus:border-accent"
-                      autoFocus
-                    />
-                  ) : null}
-                  <p className="text-xs text-fg-subtle">
-                    {interpolate(t.workspaceCurrent, { workspace: workspaceCurrentLabel })}
-                  </p>
-                </div>
-                <label className="grid gap-1.5 text-sm">
-                  <span className="font-medium text-fg-muted">{t.projectName}</span>
-                  <input
-                    className="min-h-10 rounded-md border border-edge bg-surface-base px-3 text-sm text-fg outline-none placeholder:text-fg-muted focus:border-accent"
-                    value={name}
-                    onChange={(event) => updateProjectName(event.target.value)}
-                    placeholder={workspaceRoot.trim() ? directoryName(workspaceRoot) || 'xopc' : 'xopc'}
+            <form onSubmit={submitCreate} className="flex min-h-0 flex-1 flex-col">
+              <div className="min-h-0 flex-1 px-5 py-4">
+                <label className="grid gap-2 text-sm font-medium text-fg">
+                  {createIntent === 'watch' ? t.workHome.watchLabel : t.workHome.outcomeLabel}
+                  <textarea
+                    className="min-h-40 w-full resize-none rounded-xl border border-edge bg-surface-base px-3 py-3 text-sm font-normal leading-6 text-fg outline-none placeholder:text-fg-subtle focus:border-accent focus:ring-2 focus:ring-accent/20"
+                    value={outcome}
+                    onChange={(event) => setOutcome(event.target.value)}
+                    placeholder={createIntent === 'watch' ? t.workHome.watchPlaceholder : t.workHome.outcomePlaceholder}
+                    maxLength={12_000}
+                    autoFocus
+                    disabled={creating}
                   />
                 </label>
-                <label className="grid gap-1.5 text-sm">
-                  <span className="font-medium text-fg-muted">{t.projectType}</span>
-                  <Select
-                    className="min-h-10 rounded-md border border-edge bg-surface-base px-3 text-sm text-fg outline-none focus:border-accent"
-                    value={projectKind}
-                    onChange={(event) => setProjectKind(event.target.value as ProjectKindSelection)}
-                    disabled={creating}
-                  >
-                    <SelectOption value="auto">{t.projectTypes.auto}</SelectOption>
-                    <SelectOption value="coding">{t.projectTypes.coding}</SelectOption>
-                    <SelectOption value="general">{t.projectTypes.general}</SelectOption>
-                  </Select>
-                </label>
-                <label className="grid gap-1.5 text-sm">
-                  <span className="font-medium text-fg-muted">{t.defaultAgent}</span>
-                  <Select
-                    className="min-h-10 rounded-md border border-edge bg-surface-base px-3 text-sm text-fg outline-none focus:border-accent"
-                    value={agentChoice}
-                    onChange={(event) => setAgentChoice(event.target.value)}
-                    disabled={creating}
-                  >
-                    <SelectOption value={AUTO_AGENT_CHOICE}>{t.agentAuto}</SelectOption>
-                    <SelectOption value={GLOBAL_AGENT_CHOICE}>{t.agentGlobalDefault}</SelectOption>
-                    {agents.map((agent) => (
-                      <SelectOption key={agent.id} value={agent.id}>
-                        {agentListDisplayName(agent, msg.agentsSettings)}
-                      </SelectOption>
-                    ))}
-                  </Select>
-                  <p className="text-xs text-fg-subtle">{createAgentHint}</p>
-                </label>
+                {createError ? (
+                  <p className="mt-3 rounded-lg bg-danger-soft px-3 py-2 text-xs text-danger" role="alert">
+                    {createError}
+                  </p>
+                ) : null}
               </div>
-              <div className="flex shrink-0 justify-end gap-2 border-t border-edge px-5 py-4">
-                <Dialog.Close asChild>
-                  <Button type="button" variant="ghost" className="rounded-lg">
-                    {t.cancel}
+              <div className="flex shrink-0 items-center justify-between gap-3 border-t border-edge px-5 py-4">
+                <p className="text-xs text-fg-subtle">{createIntent === 'watch' ? t.workHome.watchSetupHint : t.workHome.autoSetupHint}</p>
+                <div className="flex shrink-0 gap-2">
+                  <Dialog.Close asChild><Button type="button" variant="ghost">{t.cancel}</Button></Dialog.Close>
+                  <Button type="submit" variant="primary" disabled={creating || !outcome.trim()}>
+                    <Sparkles className="size-4" aria-hidden />
+                    {creating ? t.workHome.delegating : createIntent === 'watch' ? t.workHome.designWatch : t.workHome.delegate}
                   </Button>
-                </Dialog.Close>
-                <Button type="submit" variant="primary" className="rounded-lg" disabled={creating || (!name.trim() && (workspaceMode !== 'fixed' || !workspaceRoot.trim()))}>
-                  <Plus className="size-4" aria-hidden />
-                  {t.create}
-                </Button>
+                </div>
               </div>
             </form>
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
 
-      <Dialog.Root open={Boolean(workspaceConflict)} onOpenChange={(open) => {
-        if (!open) setWorkspaceConflict(null);
-      }}>
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-[100] bg-scrim backdrop-blur-[2px]" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-[110] flex w-[min(30rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float focus:outline-none">
-            <div className="border-b border-edge px-5 py-4">
-              <Dialog.Title className="text-base font-semibold text-fg">{t.workspaceConflictTitle}</Dialog.Title>
-              <Dialog.Description className="mt-1 text-sm leading-6 text-fg-muted">
-                {workspaceConflict
-                  ? interpolate(t.workspaceConflictDescription, { projectName: workspaceConflict.name })
-                  : null}
-              </Dialog.Description>
-            </div>
-            {workspaceConflict ? (
-              <div className="space-y-3 px-5 py-4">
-                <div className="flex items-center gap-2 rounded-lg border border-edge bg-surface-muted px-3 py-2 text-sm text-fg-muted">
-                  <FolderKanban className="size-4 shrink-0 text-fg-subtle" aria-hidden />
-                  <span className="min-w-0 truncate">
-                    {interpolate(t.workspaceConflictPath, { workspace: workspaceConflict.workspaceRoot || t.agentDefault })}
-                  </span>
-                </div>
-              </div>
-            ) : null}
-            <div className="flex justify-end gap-2 border-t border-edge px-5 py-4">
-              <Button type="button" variant="ghost" className="rounded-lg" onClick={returnToCreateFromConflict}>
-                {t.workspaceConflictBack}
-              </Button>
-              <Button type="button" variant="primary" className="rounded-lg" onClick={openConflictProject}>
-                <ArrowRight className="size-4" aria-hidden />
-                {t.workspaceConflictOpen}
-              </Button>
-            </div>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
-
-      <Dialog.Root open={Boolean(missingWorkspaceRoot)} onOpenChange={(open) => {
-        if (!open) setMissingWorkspaceRoot(null);
-      }}>
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-[100] bg-scrim backdrop-blur-[2px]" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-[110] flex w-[min(30rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float focus:outline-none">
-            <div className="border-b border-edge px-5 py-4">
-              <Dialog.Title className="text-base font-semibold text-fg">{t.workspaceMissingTitle}</Dialog.Title>
-              <Dialog.Description className="mt-1 text-sm leading-6 text-fg-muted">
-                {missingWorkspaceRoot
-                  ? interpolate(t.workspaceMissingDescription, { workspace: missingWorkspaceRoot })
-                  : null}
-              </Dialog.Description>
-            </div>
-            {missingWorkspaceRoot ? (
-              <div className="px-5 py-4">
-                <div className="flex items-center gap-2 rounded-lg border border-edge bg-surface-muted px-3 py-2 text-sm text-fg-muted">
-                  <FolderKanban className="size-4 shrink-0 text-fg-subtle" aria-hidden />
-                  <span className="min-w-0 truncate">{missingWorkspaceRoot}</span>
-                </div>
-              </div>
-            ) : null}
-            <div className="flex justify-end gap-2 border-t border-edge px-5 py-4">
-              <Button type="button" variant="ghost" className="rounded-lg" onClick={returnToCreateFromMissingWorkspace} disabled={creating}>
-                {t.workspaceMissingBack}
-              </Button>
-              <Button type="button" variant="primary" className="rounded-lg" onClick={createMissingWorkspaceAndProject} disabled={creating}>
-                <FolderPlus className="size-4" aria-hidden />
-                {t.workspaceMissingCreate}
-              </Button>
-            </div>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
-
-      <section className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap gap-1 rounded-lg bg-surface-panel p-1 shadow-surface">
-          {STATUSES.map((item) => (
-            <button
-              key={item}
-              type="button"
-              onClick={() => setStatus(item)}
-              className={cn(
-                'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-                status === item ? 'bg-accent text-white' : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
-              )}
-            >
-              {item === 'all' ? t.all : t.statuses[item]}
-            </button>
-          ))}
-        </div>
-        <div className="flex items-center gap-2 text-sm text-fg-muted">
-          <FolderKanban className="size-4" aria-hidden />
-          {t.optionalContext}
-        </div>
-      </section>
-
-      {error ? <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">{error}</p> : null}
-      {loading ? <p className="text-sm text-fg-muted">{t.loading}</p> : null}
-      {!loading && projects.length === 0 ? (
-        <div className="rounded-lg bg-surface-panel p-8 text-center shadow-surface">
-          <p className="text-sm font-medium text-fg">{t.emptyTitle}</p>
-          <p className="mt-1 text-sm text-fg-muted">{t.emptyHint}</p>
+      {loadError ? (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-danger/25 bg-danger-soft px-4 py-3 text-sm text-danger">
+          <span>{loadError}</span>
+          <Button type="button" variant="ghost" className="h-8 px-2" onClick={() => void load()}>{t.workHome.retry}</Button>
         </div>
       ) : null}
 
-      {visibleGroups.map(([label, items]) =>
-        items.length ? (
-          <section key={label} className="space-y-3">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-fg-subtle">{label}</h2>
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {items.map((project) => <ProjectCard key={project.id} project={project} t={t} />)}
+      {loading ? <WorkHomeSkeleton /> : home ? (
+        <>
+          <section className="relative overflow-hidden rounded-2xl border border-accent/15 bg-gradient-to-br from-accent-soft/70 via-surface-panel to-surface-panel p-5 sm:p-6">
+            <div className="absolute -right-8 -top-12 size-40 rounded-full bg-accent/10 blur-3xl" aria-hidden />
+            <div className="relative flex flex-wrap items-end justify-between gap-4">
+              <div className="max-w-2xl">
+                <div className="mb-3 flex size-10 items-center justify-center rounded-xl bg-accent text-white"><ListChecks className="size-5" aria-hidden /></div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-accent">{t.workHome.briefingTitle}</p>
+                <h2 className="mt-1 text-xl font-semibold tracking-tight text-fg">{t.workHome.heroTitle}</h2>
+                <p className="mt-2 text-sm leading-6 text-fg-muted">{home.briefing.summary}</p>
+              </div>
+              <div className="flex flex-wrap gap-2 text-xs">
+                <span className="rounded-full bg-surface-panel/80 px-3 py-1.5 text-fg-muted">{interpolate(t.workHome.activeCount, { count: home.briefing.progress.movingCount })}</span>
+                {home.decisions.length > 0 ? <span className="rounded-full bg-warning-soft px-3 py-1.5 text-fg">{interpolate(t.workHome.attentionCount, { count: home.decisions.length })}</span> : null}
+              </div>
             </div>
           </section>
-        ) : null,
-      )}
+
+          {home.work.current.length === 0 && home.workflowRuns.active.length === 0 ? (
+            <section className="rounded-2xl border border-dashed border-edge p-8 text-center">
+              <MessageCircle className="mx-auto size-6 text-accent" aria-hidden />
+              <h2 className="mt-3 text-sm font-semibold text-fg">{t.workHome.emptyTitle}</h2>
+              <p className="mx-auto mt-1 max-w-lg text-sm leading-6 text-fg-muted">{t.workHome.emptyBody}</p>
+              <div className="mt-4 flex justify-center gap-2">
+                <Button type="button" variant="primary" onClick={() => navigate('/chat/new')}>{t.workHome.startChat}</Button>
+                <Button type="button" variant="secondary" onClick={() => { setCreateIntent('delegate'); setCreateOpen(true); }}>{t.workHome.startLongWork}</Button>
+              </div>
+            </section>
+          ) : null}
+
+          <div className="grid gap-4 xl:grid-cols-2">
+            <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5">
+              <div className="flex items-center gap-2"><CircleAlert className="size-4 text-warning" aria-hidden /><h2 className="text-sm font-semibold text-fg">{t.workHome.needsYou}</h2></div>
+              <p className="mt-1 text-xs text-fg-muted">{t.workHome.needsYouHint}</p>
+              <div className="mt-4 space-y-2">
+                {needsYou.length ? needsYou.map((item) => (
+                  <DecisionCard
+                    key={item.id}
+                    item={item}
+                    kindLabel={t.workHome.decisionKinds[item.kind]}
+                    reasonLabel={t.workHome.decisionReasons[item.reason]}
+                    approveLabel={t.workHome.approve}
+                    denyLabel={t.workHome.deny}
+                    busy={busyDecisionId === item.id}
+                    onRespond={(decision) => void respondToDecision(item, decision)}
+                  />
+                )) : <p className="rounded-xl bg-surface-panel px-4 py-6 text-center text-sm text-fg-muted">{t.workHome.nothingNeedsYou}</p>}
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5">
+              <div className="flex items-center gap-2"><Clock3 className="size-4 text-accent" aria-hidden /><h2 className="text-sm font-semibold text-fg">{t.workHome.continueTitle}</h2></div>
+              <p className="mt-1 text-xs text-fg-muted">{t.workHome.continueHint}</p>
+              <div className="mt-4 space-y-2">
+                {continuing.length ? continuing.map((item) => (
+                  <WorkItemCard key={item.id} item={item} statusLabel={msg.projectDetailPage.workItems.statuses[item.status]} />
+                )) : <p className="rounded-xl bg-surface-panel px-4 py-6 text-center text-sm text-fg-muted">{t.workHome.noCurrentWork}</p>}
+              </div>
+            </section>
+          </div>
+
+          {(home.workflowRuns.active.length > 0 || home.upcomingAutomations.length > 0) ? (
+            <div className="grid gap-4 lg:grid-cols-2">
+              <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5">
+                <div className="flex items-center gap-2"><Sparkles className="size-4 text-accent" aria-hidden /><h2 className="text-sm font-semibold text-fg">{t.workHome.processing}</h2></div>
+                <div className="mt-3 space-y-2">{home.workflowRuns.active.map((run) => (
+                  <Link key={run.id} to={workflowBoardHref(run.id)} className="flex items-center justify-between gap-3 rounded-xl bg-surface-panel px-3 py-3 text-sm hover:bg-surface-hover">
+                    <span className="min-w-0 truncate text-fg">{run.title}</span><span className="shrink-0 text-xs text-fg-subtle">{t.workHome.running}</span>
+                  </Link>
+                ))}{home.workflowRuns.active.length === 0 ? <p className="text-sm text-fg-muted">{t.workHome.nothingRunning}</p> : null}</div>
+              </section>
+              <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5">
+                <div className="flex items-center gap-2"><CalendarClock className="size-4 text-accent" aria-hidden /><h2 className="text-sm font-semibold text-fg">{t.workHome.scheduled}</h2></div>
+                <div className="mt-3 space-y-2">{home.upcomingAutomations.map((automation) => (
+                  <Link key={automation.id} to="/automations" className="flex items-center justify-between gap-3 rounded-xl bg-surface-panel px-3 py-3 text-sm hover:bg-surface-hover">
+                    <span className="min-w-0 truncate text-fg">{automation.name || automation.action}</span><time className="shrink-0 text-xs text-fg-subtle">{formatTime(automation.nextRunAt, t.never)}</time>
+                  </Link>
+                ))}{home.upcomingAutomations.length === 0 ? <p className="text-sm text-fg-muted">{t.workHome.noScheduled}</p> : null}</div>
+              </section>
+            </div>
+          ) : null}
+
+          {home.briefing.wins.length > 0 ? (
+            <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5">
+              <div className="flex items-center gap-2"><CheckCircle2 className="size-4 text-success" aria-hidden /><h2 className="text-sm font-semibold text-fg">{t.workHome.completed}</h2></div>
+              <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">{home.briefing.wins.map((item) => (
+                <Link key={item.id} to={item.href} className="rounded-xl border border-edge-subtle bg-surface-panel p-3.5 transition-colors hover:bg-surface-hover/55">
+                  <p className="truncate text-sm font-medium text-fg">{item.title}</p>
+                  <p className="mt-1 text-xs text-fg-subtle">{t.workHome.winKinds[item.kind]}</p>
+                </Link>
+              ))}</div>
+            </section>
+          ) : null}
+        </>
+      ) : null}
+
+      <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div><h2 className="text-sm font-semibold text-fg">{t.workHome.spacesTitle}</h2><p className="mt-1 text-xs text-fg-muted">{t.workHome.spacesHint}</p></div>
+          <label className="relative block min-w-0">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-subtle" aria-hidden />
+            <input className="h-9 w-52 rounded-lg border border-edge bg-surface-panel pl-9 pr-3 text-sm text-fg outline-none placeholder:text-fg-muted focus:border-accent" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t.searchPlaceholder} aria-label={t.searchPlaceholder} />
+          </label>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {visibleProjects.map((project) => <ProjectCard key={project.id} project={project} openLabel={t.workHome.openSpace} noDescription={t.noDescription} />)}
+        </div>
+        {!loading && visibleProjects.length === 0 ? <p className="py-8 text-center text-sm text-fg-muted">{t.workHome.noSpaces}</p> : null}
+      </section>
     </main>
   );
 }

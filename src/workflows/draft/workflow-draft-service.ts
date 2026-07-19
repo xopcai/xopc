@@ -35,8 +35,8 @@ export class WorkflowDraftService {
     let messageContent = buildWorkflowDraftPrompt({
       prompt,
       language: request.language,
-      mode: request.mode ?? (request.existingScript ? 'improve' : 'create'),
-      existingScript: request.existingScript,
+      mode: request.mode ?? (request.existingGraph ? 'improve' : 'create'),
+      existingGraph: request.existingGraph,
       constraints: request.constraints,
     });
     let lastIssues: WorkflowDraftRepairIssue[] = [];
@@ -120,16 +120,12 @@ function getBlockingDraftIssues(response: WorkflowDraftResponse): WorkflowDraftR
       severity: 'error' as const,
       code: issue.code,
       message: issue.message,
-      line: issue.line,
-      column: issue.column,
     })),
     ...response.validation.warnings.map((issue) => ({
       source: 'validation' as const,
       severity: 'warning' as const,
       code: issue.code,
       message: issue.message,
-      line: issue.line,
-      column: issue.column,
     })),
   ];
   const lintIssues = response.lint

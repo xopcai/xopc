@@ -14,6 +14,7 @@ import type {
   MemoryWriteRequest,
   MemoryWriteResult,
 } from '../types.js';
+import { nextMemoryReviewAt } from '../lifecycle.js';
 import { extractExplicitUnderstandingCorrectionContent } from './correction.js';
 import type { UnderstandingCandidate, UnderstandingReviewResult } from './types.js';
 import { inferMemorySensitivity, redactSensitiveMemoryText } from '../sensitivity.js';
@@ -242,6 +243,10 @@ export class UserUnderstandingService {
         evidence: [evidence],
         validFrom: candidate.validFrom,
         validTo: candidate.validTo,
+        reviewAfter: nextMemoryReviewAt({
+          durability: candidate.durability,
+          explicitness: candidate.explicitness,
+        }),
         supersedesRecordId,
       });
       if (write.success) {

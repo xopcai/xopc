@@ -8,6 +8,7 @@ import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 
 import { previewConnector, type ConnectorCapability, type ConnectorDefinition, type ConnectorHealthResult } from '../connectors-api';
+import { ConnectorLogo } from './connector-logo';
 
 function formatConnectorMessage(template: string, params: Record<string, string | number>): string {
   return Object.entries(params).reduce((message, [key, value]) => (
@@ -23,8 +24,14 @@ function runtimeLabel(connector: ConnectorDefinition, t: ConnectorsSettingsMessa
   if (connector.runtime.type === 'mcp') {
     return formatConnectorMessage(t.connectorRuntimeMcp, { serverId: connector.runtime.serverId });
   }
-  const id = connector.runtime.id ?? connector.runtime.channelId ?? connector.runtime.toolkit ?? connector.runtime.toolsetId ?? connector.runtime.sourceKind ?? connector.runtime.type;
-  return formatConnectorMessage(t.connectorRuntimeGeneric, { runtime: connector.runtime.type, id });
+  const id = connector.runtime.type === 'composio'
+    ? connector.runtime.toolkit
+    : connector.runtime.type === 'channel'
+      ? connector.runtime.channelId
+      : connector.runtime.type === 'nativeTool'
+        ? connector.runtime.toolsetId
+        : connector.runtime.sourceKind;
+  return formatConnectorMessage(t.connectorRuntimeGeneric, { runtime: connector.runtime.type, id: id ?? connector.runtime.type });
 }
 
 function authLabel(connector: ConnectorDefinition, t: ConnectorsSettingsMessages): string {
@@ -122,27 +129,30 @@ export function ConnectorDetailDialog({
           )}
         >
           <div className="flex shrink-0 items-start justify-between gap-3 border-b border-edge-subtle px-6 py-5">
-            <div className="min-w-0">
-              <div className="mb-2 flex flex-wrap items-center gap-2">
-                <span className="rounded-md border border-edge bg-surface-base px-2 py-0.5 text-[11px] font-medium text-fg-muted">
-                  {connector.source}
-                </span>
-                <span className="rounded-md border border-edge bg-surface-base px-2 py-0.5 text-[11px] font-medium text-fg-muted">
-                  {connector.kind}
-                </span>
-                {installed ? (
-                  <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
-                    <CheckCircle2 className="size-3" aria-hidden />
-                    {t.installedBadge}
+            <div className="flex min-w-0 items-start gap-3">
+              <ConnectorLogo connector={connector} size="lg" />
+              <div className="min-w-0">
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <span className="rounded-md border border-edge bg-surface-base px-2 py-0.5 text-[11px] font-medium text-fg-muted">
+                    {connector.source}
                   </span>
-                ) : null}
+                  <span className="rounded-md border border-edge bg-surface-base px-2 py-0.5 text-[11px] font-medium text-fg-muted">
+                    {connector.kind}
+                  </span>
+                  {installed ? (
+                    <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
+                      <CheckCircle2 className="size-3" aria-hidden />
+                      {t.connectedBadge}
+                    </span>
+                  ) : null}
+                </div>
+                <Dialog.Title className="text-base font-semibold text-fg">
+                  {connector.displayName}
+                </Dialog.Title>
+                <Dialog.Description className="mt-1 line-clamp-3 text-sm leading-6 text-fg-muted">
+                  {connector.description}
+                </Dialog.Description>
               </div>
-              <Dialog.Title className="text-base font-semibold text-fg">
-                {connector.displayName}
-              </Dialog.Title>
-              <Dialog.Description className="mt-1 line-clamp-3 text-sm leading-6 text-fg-muted">
-                {connector.description}
-              </Dialog.Description>
             </div>
             <Dialog.Close asChild>
               <button
@@ -342,12 +352,12 @@ export function ConnectorDetailDialog({
                 }}
               >
                 <PackagePlus className="size-4" />
-                {t.install}
+                {t.connect}
               </Button>
             ) : (
               <Button variant="secondary" disabled>
                 <PlugZap className="size-4" />
-                {t.installedBadge}
+                {t.connectedBadge}
               </Button>
             )}
           </div>

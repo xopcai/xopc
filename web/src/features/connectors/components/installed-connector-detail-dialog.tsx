@@ -27,6 +27,7 @@ import {
 import { McpToolsListDialog } from '../mcp/mcp-tools-list-dialog';
 import { formatConnectorMessage } from '../utils/connector-i18n';
 import { ComposioConnectorPanel } from './composio-connector-panel';
+import { ConnectorLogo } from './connector-logo';
 
 type ConnectorDetailTab = 'health' | 'tools' | 'resources' | 'prompts' | 'permissions' | 'config';
 
@@ -147,7 +148,7 @@ export function InstalledConnectorDetailDialog({
       ['prompts', FileText, `${t.detailPrompts} ${health ? health.promptCount : instance.usage.lastPromptCount ?? ''}`],
       ['permissions', KeyRound, t.detailPermissions],
     ] as const;
-    return supportsConfigEdit ? [...items, ['config', Database, t.tabConfig] as const] : items;
+    return supportsConfigEdit ? [...items, ['config', Database, t.connectorConfigLabel] as const] : items;
   }, [health, instance.usage.lastPromptCount, instance.usage.lastResourceCount, instance.usage.lastToolCount, supportsConfigEdit, t]);
 
   const runTest = useCallback(async () => {
@@ -209,13 +210,16 @@ export function InstalledConnectorDetailDialog({
           )}
         >
           <div className="flex shrink-0 items-start justify-between gap-3 border-b border-edge-subtle px-6 py-5">
-            <div className="min-w-0">
-              <Dialog.Title className="text-base font-semibold text-fg">{instance.displayName}</Dialog.Title>
-              <Dialog.Description className="mt-1 text-sm text-fg-muted">
-                {instance.materialized.type === 'mcp'
-                  ? formatConnectorMessage(t.mcpServerRuntime, { serverId: instance.materialized.serverId })
-                  : formatConnectorMessage(t.runtimeLabel, { runtime: instance.materialized.type })}
-              </Dialog.Description>
+            <div className="flex min-w-0 items-start gap-3">
+              <ConnectorLogo connector={definition} size="lg" />
+              <div className="min-w-0">
+                <Dialog.Title className="text-base font-semibold text-fg">{instance.displayName}</Dialog.Title>
+                <Dialog.Description className="mt-1 text-sm text-fg-muted">
+                  {instance.materialized.type === 'mcp'
+                    ? formatConnectorMessage(t.mcpServerRuntime, { serverId: instance.materialized.serverId })
+                    : formatConnectorMessage(t.runtimeLabel, { runtime: instance.materialized.type })}
+                </Dialog.Description>
+              </div>
             </div>
             <Dialog.Close asChild>
               <button

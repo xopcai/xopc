@@ -72,14 +72,14 @@ describe('resolveCardStatus', () => {
 });
 
 describe('isWorkflowFailureOutcome', () => {
-  it('detects structured parse errors', () => {
+  it('detects structured graph validation errors', () => {
     expect(
       isWorkflowFailureOutcome(
         mkBlock({
           status: 'done',
           result: JSON.stringify({
-            content: [{ type: 'text', text: 'workflow: meta.name required' }],
-            details: { error: 'meta.name must be snake_case' },
+            content: [{ type: 'text', text: 'workflow graph validation failed' }],
+            details: { error: 'the Result step is unreachable' },
           }),
         }),
       ),
@@ -153,15 +153,15 @@ describe('extractSnapshot', () => {
 });
 
 describe('classifyFailure', () => {
-  it('detects parse / abort / timeout / runtime kinds', () => {
+  it('detects validation / abort / timeout / runtime kinds', () => {
     expect(
       classifyFailure(
         mkBlock({
           status: 'error',
-          result: JSON.stringify({ content: [{ type: 'text', text: 'workflow parse error: meta.name must be lowercase snake_case' }] }),
+          result: JSON.stringify({ content: [{ type: 'text', text: 'workflow graph validation failed: output is unreachable' }] }),
         }),
       ),
-    ).toBe('parse_error');
+    ).toBe('validation_error');
 
     expect(
       classifyFailure(
