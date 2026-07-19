@@ -943,6 +943,33 @@
     "messageNotHelpful": "这个回答需要改进",
     "messageFeedbackUnavailable": "无法将反馈关联到这个回答。",
     "messageUnderstandingReviewQueued": "相关理解已暂停使用，并进入待审核。",
+    "messageWhyThisAnswer": "为什么这个回答考虑了你的情况",
+    "messageWhyThisAnswerHint": "这些允许使用的个人上下文影响了本次回答。",
+    "messageContextOrigins": {
+      "told_by_you": "你亲自告诉我的",
+      "observed": "从多次协作中注意到的",
+      "inferred": "我的理解",
+      "connected_source": "来自 {{source}}"
+    },
+    "messageFeedbackReasonTitle": "哪里需要改进？",
+    "messageFeedbackReasonHint": "这会帮助我修正当前回答，也尽量不再重复同样的问题。",
+    "messageFeedbackReasons": {
+      "misunderstood_intent": "没理解我的意思",
+      "incorrect": "事实或结论不对",
+      "did_not_act": "只说了，没有行动",
+      "tone_mismatch": "表达方式不舒服",
+      "too_verbose": "太长了",
+      "other": "其他问题"
+    },
+    "messageFeedbackRepair": "让助手修正",
+    "messageFeedbackRepairPrompts": {
+      "misunderstood_intent": "你刚才没有理解我真正需要什么。请重新阅读我的请求，先用一句话说明你现在理解的目标，再修正回答。",
+      "incorrect": "你刚才的回答中有不准确的内容。请重新核对相关事实或证据，简要说明哪里需要纠正，然后给我正确结果。",
+      "did_not_act": "你刚才主要在解释或制定计划，没有真正推进事情。请现在直接行动，在合适时使用可用工具，最后给出结果或明确的阻塞原因。",
+      "tone_mismatch": "你刚才的表达方式让我感觉不太舒服。请更自然、平静地回应，克制地理解我的处境，然后帮助我继续往前推进。",
+      "too_verbose": "你刚才的回答太长了。请只保留最重要的结论和下一步，简洁回答。",
+      "other": "你刚才的回答没有帮到我。请只问一个最关键的问题，确认缺少什么，再根据我的回答修正。"
+    },
     "messageSaveToNote": "保存到来源 Note",
     "messageSavedToNote": "已保存到 Note",
     "messageExtractTask": "提取为任务",

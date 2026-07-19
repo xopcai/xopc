@@ -247,13 +247,11 @@ export function ProductAutomationFeedback({
   const runAction = async (
     actionKey: string,
     action: () => Promise<unknown>,
-    successTitle: string,
   ) => {
     setBusyAction(actionKey);
     try {
       await action();
       await mutate();
-      showToast({ type: 'success', title: successTitle });
     } catch (error) {
       showToast({
         type: 'error',
@@ -299,10 +297,6 @@ export function ProductAutomationFeedback({
         const next = { ...current };
         delete next[run.id];
         return next;
-      });
-      showToast({
-        type: 'success',
-        title: rerunAfterApply ? labels.feedback.repairAppliedAndQueued : labels.feedback.repairApplied,
       });
     } catch (error) {
       showToast({
@@ -472,7 +466,6 @@ export function ProductAutomationFeedback({
                     onClick={() => void runAction(
                       `${run.id}:saveInsight`,
                       () => Promise.resolve(onSaveInsight!(run)),
-                      labels.feedback.insightSaved,
                     )}
                   >
                     <CheckCircle2 className="size-3.5" aria-hidden />
@@ -513,7 +506,6 @@ export function ProductAutomationFeedback({
                   onClick={() => void runAction(
                     `${run.id}:rerun`,
                     () => automationApi.rerun(run.id),
-                    labels.feedback.rerunQueued,
                   )}
                 >
                   <RotateCw className="size-3.5" aria-hidden />
@@ -526,7 +518,6 @@ export function ProductAutomationFeedback({
                   onClick={() => void runAction(
                     `${run.id}:pause`,
                     () => automationApi.pause(run.automationId),
-                    labels.feedback.paused,
                   )}
                 >
                   <PauseCircle className="size-3.5" aria-hidden />

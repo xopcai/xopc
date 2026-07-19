@@ -6,7 +6,6 @@ import { extractObjectDefaults } from '@/components/ui/schema-form-utils';
 import { SchemaForm, type JsonSchema } from '@/components/ui/schema-form';
 import { apiFetch, fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
-import { showToast } from '@/lib/toast';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -137,7 +136,6 @@ export function ExtensionAutoSettings({ extensionId }: { extensionId: string }) 
       dirtyRef.current = false;
       dispatch({ type: 'save-success', value: draft.localValues });
       setSaveSuccessFlash(true);
-      showToast({ type: 'success', title: a.saved });
     } catch (e) {
       dispatch({ type: 'save-error', message: e instanceof Error ? e.message : String(e) });
     }

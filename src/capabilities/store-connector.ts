@@ -145,6 +145,18 @@ function readConnectorManifest(
   if (authMode !== 'none' && authMode !== 'apiKey' && authMode !== 'oauth') {
     throw new Error('Connector auth mode must be none, apiKey, or oauth.');
   }
+  const normalizedAuth: ConnectorDefinition['auth'] = authMode === 'oauth'
+    ? {
+        mode: 'oauth',
+        provider: asString(auth.provider, 'Connector auth provider'),
+        installPhase: (() => {
+          if (auth.installPhase !== 'before_install' && auth.installPhase !== 'after_install') {
+            throw new Error('Connector OAuth installPhase must be before_install or after_install.');
+          }
+          return auth.installPhase;
+        })(),
+      }
+    : { mode: authMode };
   const category = asString(manifest.category, 'Connector category');
   if (!['code', 'docs', 'browser', 'data', 'automation', 'custom'].includes(category)) {
     throw new Error(`Unsupported connector category: ${category}`);
@@ -175,7 +187,7 @@ function readConnectorManifest(
     source: 'store',
     capabilities: capabilities as ConnectorDefinition['capabilities'],
     ...(Array.isArray(manifest.tags) ? { tags: asStringArray(manifest.tags, 'Connector tags') } : {}),
-    auth: { mode: authMode },
+    auth: normalizedAuth,
     setup: setup as ConnectorDefinition['setup'],
     runtime: {
       type: 'mcp',

@@ -51,9 +51,17 @@ export type ConnectorDefinition = {
   source: string;
   capabilities: ConnectorCapability[];
   tags?: string[];
-  auth: {
-    mode: 'none' | 'apiKey' | 'oauth';
+  branding?: {
+    logoUrl?: string;
+    source?: 'builtin' | 'composio-catalog' | 'registry' | 'extension' | 'custom';
+    backgroundColor?: string;
+    fetchedAt?: string;
   };
+  verificationLevel?: 'verified' | 'beta' | 'experimental';
+  auth:
+    | { mode: 'none' }
+    | { mode: 'apiKey' }
+    | { mode: 'oauth'; provider: string; installPhase: 'before_install' | 'after_install' };
   setup: {
     secrets?: ConnectorSecretField[];
     config?: ConnectorConfigField[];
@@ -64,14 +72,19 @@ export type ConnectorDefinition = {
         serverId: string;
       }
     | {
-        type: 'channel' | 'composio' | 'nativeTool' | 'memorySource';
+        type: 'composio';
+        id?: string;
+        toolkit: string;
+        role: 'credential' | 'toolkit';
+      }
+    | {
+        type: 'channel' | 'nativeTool' | 'memorySource';
         id?: string;
         channelId?: string;
         pluginId?: string;
-        toolkit?: string;
         toolsetId?: string;
         sourceKind?: string;
-  };
+      };
 };
 
 export type StoreConnectorCatalogItem = {
@@ -142,9 +155,14 @@ export type ConnectorInstance = {
         serverId: string;
       }
     | {
-        type: 'channel' | 'composio' | 'nativeTool' | 'memorySource';
+        type: 'composio';
         id: string;
-        serverId?: string;
+        toolkit: string;
+        role: 'credential' | 'toolkit';
+      }
+    | {
+        type: 'channel' | 'nativeTool' | 'memorySource';
+        id: string;
       };
   usage: {
     lastHealthCheckAt?: string;
@@ -197,38 +215,69 @@ export type ConnectorInstallInput = {
   definition?: ConnectorDefinition;
 };
 
-export type ConnectorOAuthStartResult = {
+export type ConnectorAuthorizationStartResult = {
   connectorId: string;
-  provider: 'github';
-  deviceCode: string;
-  userCode: string;
-  verificationUri: string;
-  expiresInSeconds: number;
-  intervalSeconds: number;
+  provider: string;
+  flowId?: string;
+  userCode?: string;
+  verificationUri?: string;
+  authorizationUrl?: string;
+  expiresInSeconds?: number;
+  intervalSeconds?: number;
+  status: string;
+  installUrl?: string;
+  connectionId?: string;
 };
 
-export type ConnectorOAuthCompleteResult = {
+export type ConnectorAuthorizationStatusResult = {
   connectorId: string;
-  provider: 'github';
-  connected: true;
+  provider: string;
+  flowId: string;
+  status: 'pending' | 'installation_required' | 'connected' | 'expired' | 'error';
+  installUrl?: string;
+  error?: string;
 };
 
 export type ComposioConnection = {
   id: string;
+  providerConnectionId: string;
   toolkit: string;
   status: string;
+  alias?: string;
+  isDefault: boolean;
   accountEmail?: string;
   workspace?: string;
   username?: string;
-};
-
-export type ComposioAuthorizeResult = {
-  toolkit: string;
-  connectUrl: string;
-  connectionId?: string;
+  connectedAt?: string;
+  lastError?: string;
 };
 
 export type ComposioScope = 'read' | 'write' | 'admin';
+
+export type ComposioInstallationPolicy = {
+  id: string;
+  connectorId: string;
+  principalId: string;
+  enabled: boolean;
+  allowedAgentIds: string[];
+  maxScope: ComposioScope;
+  confirmationPolicy: 'never' | 'writes' | 'always';
+  selectedConnectionIds: string[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ConnectorAgentOption = { id: string; name: string };
+
+export type ComposioConnectorHealth = {
+  toolkit: string;
+  status: 'connected' | 'disconnected' | 'reauthorization_required' | 'degraded';
+  activeConnections: number;
+  affectedConnections: number;
+  checkedAt: string;
+  message: string;
+  recovery: 'none' | 'connect' | 'reconnect' | 'retry';
+};
 
 export type ComposioTool = {
   slug: string;
@@ -247,6 +296,23 @@ export type ComposioTriggerEvent = {
   payload: unknown;
 };
 
+export type ConnectorApproval = {
+  id: string;
+  principalId: string;
+  connectorId: string;
+  connectionId?: string;
+  agentId?: string;
+  sessionKey?: string;
+  actionId: string;
+  scope: ComposioScope;
+  argumentsPreview: Record<string, unknown>;
+  status: 'pending' | 'approved' | 'denied' | 'expired' | 'consumed';
+  expiresAt: string;
+  createdAt: string;
+  decidedAt?: string;
+  consumedAt?: string;
+};
+
 type ApiEnvelope<T> = {
   ok?: boolean;
   payload?: T;
@@ -261,10 +327,19 @@ function requirePayload<T>(response: ApiEnvelope<T>, fallbackMessage: string): T
 }
 
 export async function fetchConnectorCatalog(): Promise<ConnectorDefinition[]> {
+  const [response, composio] = await Promise.all([
+    fetchJson<ApiEnvelope<{ connectors: ConnectorDefinition[] }>>(apiUrl('/api/connectors/catalog')),
+    fetchComposioConnectorCatalog().catch(() => []),
+  ]);
+  const connectors = requirePayload(response, 'Could not load connector catalog.').connectors;
+  return [...new Map([...composio, ...connectors].map((connector) => [connector.id, connector])).values()];
+}
+
+export async function fetchComposioConnectorCatalog(refresh = false): Promise<ConnectorDefinition[]> {
   const response = await fetchJson<ApiEnvelope<{ connectors: ConnectorDefinition[] }>>(
-    apiUrl('/api/connectors/catalog'),
+    apiUrl(`/api/connectors/composio/catalog${refresh ? '?refresh=1' : ''}`),
   );
-  return requirePayload(response, 'Could not load connector catalog.').connectors;
+  return requirePayload(response, 'Could not load Composio catalog.').connectors;
 }
 
 export async function fetchStoreConnectorCatalog(params?: {
@@ -375,26 +450,22 @@ export async function searchConnectorRegistry(query: string, source = 'all', opt
   return (await searchConnectorRegistryPage(query, source, options)).connectors;
 }
 
-export async function startConnectorOAuth(connectorId: string): Promise<ConnectorOAuthStartResult> {
-  const response = await fetchJson<ApiEnvelope<{ oauth: ConnectorOAuthStartResult }>>(
-    apiUrl(`/api/connectors/${encodeURIComponent(connectorId)}/oauth/start`),
+export async function startConnectorAuthorization(connectorId: string): Promise<ConnectorAuthorizationStartResult> {
+  const response = await fetchJson<ApiEnvelope<{ authorization: ConnectorAuthorizationStartResult }>>(
+    apiUrl(`/api/connectors/${encodeURIComponent(connectorId)}/auth/start`),
     { method: 'POST' },
   );
-  return requirePayload(response, 'Could not start connector OAuth.').oauth;
+  return requirePayload(response, 'Could not start connector authorization.').authorization;
 }
 
-export async function completeConnectorOAuth(
+export async function getConnectorAuthorizationStatus(
   connectorId: string,
-  deviceCode: string,
-): Promise<ConnectorOAuthCompleteResult> {
-  const response = await fetchJson<ApiEnvelope<{ oauth: ConnectorOAuthCompleteResult }>>(
-    apiUrl(`/api/connectors/${encodeURIComponent(connectorId)}/oauth/complete`),
-    {
-      method: 'POST',
-      body: JSON.stringify({ deviceCode }),
-    },
+  flowId: string,
+): Promise<ConnectorAuthorizationStatusResult> {
+  const response = await fetchJson<ApiEnvelope<{ authorization: ConnectorAuthorizationStatusResult }>>(
+    apiUrl(`/api/connectors/${encodeURIComponent(connectorId)}/auth/status/${encodeURIComponent(flowId)}`),
   );
-  return requirePayload(response, 'Could not complete connector OAuth.').oauth;
+  return requirePayload(response, 'Could not read connector authorization status.').authorization;
 }
 
 export async function installConnector(
@@ -459,12 +530,30 @@ export async function listComposioConnections(): Promise<ComposioConnection[]> {
   return requirePayload(response, 'Could not load Composio connections.').connections;
 }
 
-export async function startComposioAuthorize(toolkit: string): Promise<ComposioAuthorizeResult> {
-  const response = await fetchJson<ApiEnvelope<{ oauth: ComposioAuthorizeResult }>>(
-    apiUrl(`/api/connectors/composio/${encodeURIComponent(toolkit)}/authorize`),
-    { method: 'POST' },
+export async function updateComposioConnection(
+  id: string,
+  patch: { alias?: string; isDefault?: boolean },
+): Promise<ComposioConnection> {
+  const response = await fetchJson<ApiEnvelope<{ connection: ComposioConnection }>>(
+    apiUrl(`/api/connectors/composio/connections/${encodeURIComponent(id)}`),
+    { method: 'PATCH', body: JSON.stringify(patch) },
   );
-  return requirePayload(response, 'Could not start Composio authorization.').oauth;
+  return requirePayload(response, 'Could not update Composio connection.').connection;
+}
+
+export async function getComposioHealth(toolkit: string): Promise<ComposioConnectorHealth> {
+  const response = await fetchJson<ApiEnvelope<{ health: ComposioConnectorHealth }>>(
+    apiUrl(`/api/connectors/composio/${encodeURIComponent(toolkit)}/health`),
+  );
+  return requirePayload(response, 'Could not check Composio connector health.').health;
+}
+
+export async function refreshComposioConnection(id: string): Promise<void> {
+  await fetchJson(apiUrl(`/api/connectors/composio/connections/${encodeURIComponent(id)}/refresh`), { method: 'POST' });
+}
+
+export async function revokeComposioConnection(id: string): Promise<void> {
+  await fetchJson(apiUrl(`/api/connectors/composio/connections/${encodeURIComponent(id)}`), { method: 'DELETE' });
 }
 
 export async function getComposioScope(toolkit: string): Promise<ComposioScope> {
@@ -481,6 +570,24 @@ export async function setComposioScope(toolkit: string, scope: ComposioScope): P
   );
   void revalidateGatewayConfig();
   return requirePayload(response, 'Could not update Composio scope.').scope;
+}
+
+export async function getComposioPolicy(toolkit: string): Promise<{ policy: ComposioInstallationPolicy; agents: ConnectorAgentOption[] }> {
+  const response = await fetchJson<ApiEnvelope<{ policy: ComposioInstallationPolicy; agents: ConnectorAgentOption[] }>>(
+    apiUrl(`/api/connectors/composio/${encodeURIComponent(toolkit)}/policy`),
+  );
+  return requirePayload(response, 'Could not load Composio policy.');
+}
+
+export async function updateComposioPolicy(
+  toolkit: string,
+  patch: Partial<Pick<ComposioInstallationPolicy, 'allowedAgentIds' | 'confirmationPolicy' | 'selectedConnectionIds'>>,
+): Promise<ComposioInstallationPolicy> {
+  const response = await fetchJson<ApiEnvelope<{ policy: ComposioInstallationPolicy }>>(
+    apiUrl(`/api/connectors/composio/${encodeURIComponent(toolkit)}/policy`),
+    { method: 'PATCH', body: JSON.stringify(patch) },
+  );
+  return requirePayload(response, 'Could not update Composio policy.').policy;
 }
 
 export async function listComposioTools(toolkit: string): Promise<ComposioTool[]> {
@@ -503,6 +610,38 @@ export async function executeComposioTool(slug: string, args: unknown): Promise<
     { method: 'POST', body: JSON.stringify({ arguments: args }) },
   );
   return requirePayload(response, 'Could not execute Composio tool.').result;
+}
+
+export async function syncComposioMemory(input: {
+  connectorId: string;
+  actionId: string;
+  agentId: string;
+  connectionId?: string;
+  arguments?: Record<string, unknown>;
+}): Promise<{ recordId: string }> {
+  const response = await fetchJson<ApiEnvelope<{ recordId: string }>>(
+    apiUrl(`/api/connectors/${encodeURIComponent(input.connectorId)}/memory-sync`),
+    { method: 'POST', body: JSON.stringify(input) },
+  );
+  return requirePayload(response, 'Could not sync connector data to memory.');
+}
+
+export async function listConnectorApprovals(status: ConnectorApproval['status'] = 'pending'): Promise<ConnectorApproval[]> {
+  const response = await fetchJson<ApiEnvelope<{ approvals: ConnectorApproval[] }>>(
+    apiUrl(`/api/connectors/approvals?status=${encodeURIComponent(status)}`),
+  );
+  return requirePayload(response, 'Could not load connector approvals.').approvals;
+}
+
+export async function respondConnectorApproval(
+  id: string,
+  decision: 'approved' | 'denied',
+): Promise<ConnectorApproval> {
+  const response = await fetchJson<ApiEnvelope<{ approval: ConnectorApproval }>>(
+    apiUrl('/api/connectors/approvals/respond'),
+    { method: 'POST', body: JSON.stringify({ id, decision }) },
+  );
+  return requirePayload(response, 'Could not update connector approval.').approval;
 }
 
 export async function setConnectorEnabled(instanceId: string, enabled: boolean): Promise<ConnectorInstance> {

@@ -22,44 +22,44 @@ export interface JsonSchema {
   [key: string]: unknown;
 }
 
-export interface WorkflowMetaPhase {
+export interface WorkflowSnapshotPhase {
   title: string;
   detail?: string;
   /** Default model for this phase: `provider/model` or configured typed id. */
   model?: string;
 }
 
-export interface WorkflowMetaEstimatedAgents {
+export interface WorkflowEstimatedAgents {
   min: number;
   max: number;
 }
 
 /** One-click starter text in the gateway start dialog; `field` is `goal` or an `args` key. */
-export interface WorkflowMetaExamplePrompt {
+export interface WorkflowExamplePrompt {
   field: string;
   text: string;
 }
 
 /** Locale-specific copy overrides; top-level `description` / `whenToUse` / `examplePrompts` are English defaults. */
-export interface WorkflowMetaLocale {
+export interface WorkflowLocaleCopy {
   description?: string;
   whenToUse?: string;
-  examplePrompts?: WorkflowMetaExamplePrompt[];
+  examplePrompts?: WorkflowExamplePrompt[];
 }
 
-export interface WorkflowMeta {
+export interface WorkflowSnapshotDefinition {
   name: string;
   description: string;
   whenToUse?: string;
-  phases?: WorkflowMetaPhase[];
+  phases?: WorkflowSnapshotPhase[];
   /** Discovery tags, e.g. `['code-review', 'planning']`. */
   tags?: string[];
   /** Rough subagent count range for UX / cost hints. */
-  estimatedAgents?: WorkflowMetaEstimatedAgents;
+  estimatedAgents?: WorkflowEstimatedAgents;
   /** English-default example prompts for the gateway start dialog. */
-  examplePrompts?: WorkflowMetaExamplePrompt[];
+  examplePrompts?: WorkflowExamplePrompt[];
   /** Non-English locale bundles keyed by BCP-47 language tag (e.g. `zh`). */
-  i18n?: Record<string, WorkflowMetaLocale>;
+  i18n?: Record<string, WorkflowLocaleCopy>;
 }
 
 export type WorkflowAgentStatus = 'queued' | 'running' | 'done' | 'error' | 'skipped';
@@ -100,6 +100,7 @@ export interface WorkflowAgentSnapshot {
 }
 
 export interface WorkflowAgentInvocationSnapshot {
+  nodeId?: string;
   prompt: string;
   label: string;
   phase?: string;
@@ -150,6 +151,7 @@ export interface SubagentRunOptions<T = unknown> {
     workflowRunId: string;
     workflowDefinitionId: string;
     workflowAgentId: string;
+    workflowNodeId?: string;
     workflowAgentLabel: string;
   };
   /** Live progress from the child agent loop (workflow tool binds per agent id). */
@@ -185,45 +187,35 @@ export interface SubagentRunner {
   run<T = string>(prompt: string, opts: SubagentRunOptions<T>): Promise<T | null>;
 }
 
-/** Options accepted by `agent()` inside a workflow script. */
-export interface AgentScriptOptions {
-  label?: string;
-  phase?: string;
-  schema?: JsonSchema;
-  /**
-   * Model ref: `provider/model` or a configured typed id (e.g. `small`, `@large`).
-   */
-  model?: string;
-  /** Subagent tool allowlist override (forwarded to the runner). */
-  toolset?: string[];
-  /** Max tool iterations inside the subagent. */
-  maxIterations?: number;
-}
-
 export interface WorkflowRunOptions {
   args?: unknown;
+  goal?: string;
   cwd: string;
   signal?: AbortSignal;
   /** Hard upper bound on concurrent subagents (default min(16, cpu-2)). */
   concurrency?: number;
-  /** Total token budget exposed to script via `budget`. `null` = unlimited. */
+  /** Optional total token budget for the run. `null` means unlimited. */
   tokenBudget?: number | null;
   /** Hard cap on total subagent count for one workflow run (default 1000). */
   maxSubagents?: number;
   onLog?: (message: string) => void;
   onPhase?: (title: string) => void;
+  onNodeStart?: (event: { nodeId: string; kind: string; title: string }) => void;
+  onNodeEnd?: (event: { nodeId: string; kind: string; title: string; status: 'done' | 'error' | 'skipped'; result?: unknown; error?: string }) => void;
   onAgentQueued?: (event: {
     id: number;
+    nodeId: string;
     label: string;
     phase?: string;
     prompt: string;
     invocation: WorkflowAgentInvocationSnapshot;
   }) => void;
-  onAgentStart?: (event: { id: number; label: string; phase?: string; prompt: string }) => void;
-  onAgentEnd?: (event: { id: number; label: string; phase?: string; result: unknown; status: WorkflowAgentStatus }) => void;
+  onAgentStart?: (event: { id: number; nodeId: string; label: string; phase?: string; prompt: string }) => void;
+  onAgentEnd?: (event: { id: number; nodeId: string; label: string; phase?: string; result: unknown; status: WorkflowAgentStatus }) => void;
   /** Merge extra subagent run options (e.g. progress callbacks) per agent id. */
   enhanceSubagentRun?: (ctx: {
     id: number;
+    nodeId: string;
     label: string;
     phase?: string;
     prompt: string;
@@ -231,7 +223,6 @@ export interface WorkflowRunOptions {
 }
 
 export interface WorkflowRunResult<T = unknown> {
-  meta: WorkflowMeta;
   result: T;
   logs: string[];
   phases: string[];

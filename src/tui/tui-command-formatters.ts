@@ -566,23 +566,23 @@ export function formatTuiWorkflowsInfo(entries: CatalogEntry[]): string {
 export function formatTuiWorkflowDetail(name: string): string {
   const catalog = createWorkflowCatalog();
   const loaded = catalog.load(name);
-  const meta = loaded.meta;
   const lines = [
     `Workflow: ${loaded.name}`,
     '',
-    `Source: ${loaded.source}${loaded.path ? ` (${loaded.path})` : ''}`,
-    `Description: ${meta.description}`,
+    `Source: ${loaded.metadata.source}`,
+    `Description: ${loaded.description}`,
+    `Revision: ${loaded.revision}`,
   ];
-  if (meta.whenToUse) {
-    lines.push(`When to use: ${meta.whenToUse}`);
+  if (loaded.metadata.whenToUse) {
+    lines.push(`When to use: ${loaded.metadata.whenToUse}`);
   }
-  if (meta.tags?.length) {
-    lines.push(`Tags: ${meta.tags.join(', ')}`);
+  if (loaded.metadata.tags.length) {
+    lines.push(`Tags: ${loaded.metadata.tags.join(', ')}`);
   }
-  if (meta.estimatedAgents) {
-    lines.push(`Agents: ${meta.estimatedAgents.min}-${meta.estimatedAgents.max}`);
+  if (loaded.metadata.estimatedAgents) {
+    lines.push(`Agents: ${loaded.metadata.estimatedAgents.min}-${loaded.metadata.estimatedAgents.max}`);
   }
-  lines.push('', 'Script:', loaded.script.trim());
+  lines.push('', 'Flow:', loaded.graph.nodes.map((node) => `- ${node.title} (${node.kind})`).join('\n'));
   return lines.join('\n');
 }
 

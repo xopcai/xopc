@@ -54,6 +54,7 @@ import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-st
 import { AgentRunErrorBanner } from '@/features/chat/messages/agent-run-error-banner';
 import { agentsAppDetailPath } from '@/features/settings/agents/agents-app-path';
 import { showToast } from '@/lib/toast';
+import { showActivity } from '@/stores/activity-center-store';
 import { Button } from '@/components/ui/button';
 
 type PendingSourceNoteSave = {
@@ -761,7 +762,6 @@ export function ChatPage() {
     setSourceNoteSaveSubmitting(true);
     try {
       await appendNoteContent(pending.sourceNoteId, content, heading);
-      showToast({ type: 'success', title: m.chat.sourceNoteSaveSuccess });
       window.dispatchEvent(
         new CustomEvent('note-updated', {
           detail: {
@@ -800,7 +800,6 @@ export function ChatPage() {
           sourceNoteId,
           sourceSessionKey: chatSessionKey,
         });
-        showToast({ type: 'success', title: m.chat.sourceNoteTaskSuccess });
       } catch (err) {
         showToast({
           type: 'error',
@@ -824,12 +823,19 @@ export function ChatPage() {
     const prompt = m.chat.sourceNoteDigestPrompt.replace('{{title}}', sourceNoteTitle);
     if (stream.streaming || stream.sending) {
       void followUp.addPendingFollowUp(prompt);
-      showToast({ type: 'info', title: m.chat.sourceNoteDigestQueued });
+      showActivity({
+        tone: 'info',
+        status: 'done',
+        title: m.chat.sourceNoteDigestQueued,
+        source: language === 'zh' ? '笔记整理' : 'Note digest',
+        dedupeKey: sourceNoteId ? `note-digest:${sourceNoteId}` : undefined,
+      });
       return;
     }
     void stream.sendMessage(prompt);
   }, [
     followUp,
+    language,
     m.chat.sourceNoteDigestPrompt,
     m.chat.sourceNoteDigestQueued,
     sourceNoteId,

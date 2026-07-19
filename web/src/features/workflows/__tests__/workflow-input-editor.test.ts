@@ -13,6 +13,8 @@ const schemaWorkflow: WorkflowDefinition = {
   title: 'Schema workflow',
   description: 'Uses JSON schema input.',
   version: '1.0.0',
+  revision: 1,
+  graph: { schemaVersion: 1, nodes: [], edges: [] },
   inputSchema: {
     type: 'object',
     required: ['topic'],

@@ -9,6 +9,8 @@ const workflow: WorkflowDefinition = {
   title: 'Report',
   description: 'Prepare a report.',
   version: '1.0.0',
+  revision: 1,
+  graph: { schemaVersion: 1, nodes: [], edges: [] },
   inputSchema: {
     type: 'object',
     required: ['topic'],
@@ -35,7 +37,8 @@ describe('automation buildInput', () => {
       triggerMode: 'daily',
       time: '09:30',
       weekday: '1',
-      intervalMinutes: '60',
+      intervalValue: '1',
+      intervalUnit: 'hour',
       cronExpr: '30 9 * * *',
       webhookSecretId: '',
       actionMode: 'workflow',
@@ -77,7 +80,8 @@ describe('automation buildInput', () => {
       triggerMode: 'manual',
       time: '09:30',
       weekday: '1',
-      intervalMinutes: '60',
+      intervalValue: '1',
+      intervalUnit: 'hour',
       cronExpr: '30 9 * * *',
       webhookSecretId: '',
       actionMode: 'agent',
@@ -96,5 +100,36 @@ describe('automation buildInput', () => {
 
     expect(input.safety).toEqual({ mode: 'ask_before_apply' });
     expect(input.afterRun).toEqual({ kind: 'none' });
+  });
+
+  it('converts the selected interval unit without asking for minutes', () => {
+    const input = buildInput({
+      name: 'Interval report',
+      description: '',
+      triggerMode: 'interval',
+      time: '09:30',
+      weekday: '1',
+      intervalValue: '1.5',
+      intervalUnit: 'hour',
+      cronExpr: '30 9 * * *',
+      webhookSecretId: '',
+      actionMode: 'agent',
+      agentId: '',
+      instruction: 'Prepare a recommendation.',
+      workflowId: '',
+      workflowGoal: '',
+      workflowInput: { goal: '', argValues: {}, schemaInput: {}, concurrency: '', maxSubagents: '' },
+      workflowInputValid: true,
+      safetyMode: 'suggest_only',
+      timeoutSeconds: '300',
+      afterRunMode: 'none',
+      webhookUrl: '',
+      disableAfterFailures: '3',
+    }, null);
+
+    expect(input.trigger).toEqual({
+      kind: 'schedule',
+      schedule: { kind: 'interval', everyMs: 90 * 60_000 },
+    });
   });
 });

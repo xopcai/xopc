@@ -3,6 +3,8 @@ import type { Hono } from 'hono';
 import { resolveDefaultAgentId } from '../../agent/agent-scope.js';
 import type { AuthenticatedRouteDeps } from '../../gateway/hono/routes/deps.js';
 import { logRouteError } from '../../gateway/hono/lib/route-logger.js';
+import { getUserTrustPolicy } from '../../storage/sqlite/index.js';
+import { resolveAutomationSafetyForTrust } from '../../user-context/trust-policy.js';
 import { createLogger } from '../../utils/logger.js';
 import { AutomationDraftService, simulateAutomation } from '../draft/index.js';
 import type { CreateAutomationInput } from '../domain/validation.js';
@@ -69,7 +71,16 @@ export function registerAutomationRoutes(authenticated: Hono, deps: Authenticate
         agentId,
         language: body?.language === 'zh' ? 'zh' : 'en',
       }, c.req.raw.signal);
-      return c.json({ draft }, 201);
+      const safetyMode = resolveAutomationSafetyForTrust(
+        getUserTrustPolicy().defaultActionLevel,
+        draft.automation.safety?.mode,
+      );
+      const trustedDraft = {
+        ...draft,
+        automation: { ...draft.automation, safety: { mode: safetyMode } },
+      };
+      trustedDraft.simulation = simulateAutomation(trustedDraft.automation);
+      return c.json({ draft: trustedDraft }, 201);
     } catch (err) {
       logRouteError(log, c, err, 'gateway.route.automations', { operation: 'draft' });
       return c.json({ error: err instanceof Error ? err.message : 'Failed to create automation draft' }, 400);

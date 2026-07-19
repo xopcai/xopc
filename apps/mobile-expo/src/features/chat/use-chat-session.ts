@@ -18,6 +18,7 @@ import { AgentMessageSender, submitClarifyResponse, type MessagingCallbacks } fr
 import { queryKeys } from '../../query/keys';
 import { invalidateSessionLists } from '../../query/workspace-sync';
 import { fetchSessionMessagePage, type SessionMessagePage } from '../../query/sessions';
+import { useGatewayStore } from '../../stores/gateway-store';
 import {
   useAgentStreamResume,
   type AgentStreamResumeOptions,
@@ -116,6 +117,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
   const { sessionKey, effectiveModelId } = options;
 
   const queryClient = useQueryClient();
+  const activeGatewayId = useGatewayStore((state) => state.activeGatewayId);
   const { gatewayOnline } = useGatewayHealth();
   const m = useMessages();
 
@@ -230,11 +232,13 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
 
   // ── Session invalidation ─────────────────────────────────
   const invalidateSessionByKey = useCallback((targetSessionKey: string) => {
-    void queryClient.invalidateQueries({ queryKey: queryKeys.sessionHistory(targetSessionKey) });
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.sessionHistory(targetSessionKey, activeGatewayId),
+    });
     invalidateSessionLists(queryClient);
     void queryClient.invalidateQueries({ queryKey: queryKeys.webchatGoal(targetSessionKey) });
     void queryClient.invalidateQueries({ queryKey: queryKeys.webchatGoalRuns(targetSessionKey, 1) });
-  }, [queryClient]);
+  }, [activeGatewayId, queryClient]);
 
   const refreshSessionHeadByKey = useCallback(async (targetSessionKey: string) => {
     const latestPage = await fetchSessionMessagePage(targetSessionKey, { limit: 50 });
@@ -244,16 +248,16 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     }
 
     void import('./session-history-cache').then((mod) => {
-      mod.writeCachedSessionHistoryHead(targetSessionKey, latestPage);
+      mod.writeCachedSessionHistoryHead(activeGatewayId, targetSessionKey, latestPage);
     });
     queryClient.setQueryData<InfiniteData<SessionMessagePage | null, string | undefined>>(
-      queryKeys.sessionHistory(targetSessionKey),
+      queryKeys.sessionHistory(targetSessionKey, activeGatewayId),
       (oldData) => mergeLatestSessionHistoryPage(oldData, latestPage),
     );
     invalidateSessionLists(queryClient);
     void queryClient.invalidateQueries({ queryKey: queryKeys.webchatGoal(targetSessionKey) });
     void queryClient.invalidateQueries({ queryKey: queryKeys.webchatGoalRuns(targetSessionKey, 1) });
-  }, [invalidateSessionByKey, queryClient]);
+  }, [activeGatewayId, invalidateSessionByKey, queryClient]);
 
   const invalidateSession = useCallback(() => {
     invalidateSessionByKey(sessionKey);
@@ -307,12 +311,14 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     setClarifySubmitError(null);
     setClarifySubmitting(false);
     sessionDataUpdatedAtRef.current =
-      queryClient.getQueryState(queryKeys.sessionHistory(targetSessionKey))?.dataUpdatedAt ?? 0;
+      queryClient.getQueryState(
+        queryKeys.sessionHistory(targetSessionKey, activeGatewayId),
+      )?.dataUpdatedAt ?? 0;
     setAwaitingSessionRefresh(true);
     void refreshSessionHeadByKey(targetSessionKey).catch(() => {
       invalidateSessionByKey(targetSessionKey);
     });
-  }, [invalidateSessionByKey, queryClient, refreshSessionHeadByKey, sessionKey]);
+  }, [activeGatewayId, invalidateSessionByKey, queryClient, refreshSessionHeadByKey, sessionKey]);
 
   // Safety: never leave the composer blocked if history refresh stalls (common on slow FRP).
   useEffect(() => {

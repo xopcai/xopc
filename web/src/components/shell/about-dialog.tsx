@@ -11,6 +11,7 @@ import { webBuildInfo } from '@/lib/build-info';
 import { cn } from '@/lib/cn';
 import { fetchJson } from '@/lib/fetch';
 import { showToast } from '@/lib/toast';
+import { showActivity } from '@/stores/activity-center-store';
 import { apiUrl } from '@/lib/url';
 import { useAsyncResource } from '@/lib/use-async-resource';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -93,10 +94,12 @@ export function AboutDialog({
     const panel = messages(language).updatePanel;
     const r = await runNpmUpdate();
     if (r.ok) {
-      showToast({
-        type: 'success',
+      showActivity({
+        tone: 'success',
         title: panel.updateSuccess,
         message: panel.updateSuccessDetail,
+        source: language === 'zh' ? '系统更新' : 'System update',
+        dedupeKey: 'system-update',
       });
       return;
     }

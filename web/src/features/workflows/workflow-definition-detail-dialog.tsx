@@ -1,11 +1,12 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { Braces, ShieldCheck } from 'lucide-react';
+import { Braces, CopyPlus, Pencil, Play, ShieldCheck, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { messages } from '@/i18n/messages';
 import type { StoredLanguage } from '@/lib/storage';
 
 import type { JsonSchema, WorkflowDefinition } from './workflow-api';
+import { WorkflowDefinitionGraph } from './workflow-definition-graph';
 import { resolveWorkflowLocalizedCopy } from './workflow-meta-locale';
 
 export function WorkflowDefinitionDetailDialog({
@@ -14,30 +15,57 @@ export function WorkflowDefinitionDetailDialog({
   language,
   onClose,
   onRun,
+  onEdit,
 }: {
   open: boolean;
   definition: WorkflowDefinition | null;
   language: StoredLanguage;
   onClose: () => void;
   onRun: () => void;
+  onEdit: () => void;
 }) {
   const labels = messages(language).workflows;
   if (!definition) return null;
 
   const localized = resolveWorkflowLocalizedCopy(definition, language);
-  const script = definition.runtime?.source ?? '';
+  const isUser = definition.metadata.source === 'user';
+  const copy = language === 'zh'
+    ? { map: '工作流怎么完成任务', mapHint: '点击任一步骤查看它负责什么。', version: `版本 ${definition.revision}` }
+    : { map: 'How this workflow completes the task', mapHint: 'Select any step to see what it is responsible for.', version: `Version ${definition.revision}` };
 
   return (
     <Dialog.Root open={open} onOpenChange={(next) => !next && onClose()}>
       <Dialog.Portal>
         <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-65 bg-scrim backdrop-blur-[1px]" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-66 flex max-h-[min(85vh,44rem)] w-[min(100%-2rem,48rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-popover outline-none">
-          <div className="border-b border-edge px-5 py-4">
-            <Dialog.Title className="text-base font-semibold text-fg">{definition.title}</Dialog.Title>
-            <Dialog.Description className="mt-1 text-sm text-fg-muted">{localized.description}</Dialog.Description>
-          </div>
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-66 flex h-[min(92vh,54rem)] w-[min(100%-1.5rem,72rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-popover outline-none">
+          <header className="flex shrink-0 items-start gap-4 border-b border-edge px-5 py-4">
+            <div className="min-w-0 flex-1">
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <span className={isUser ? 'rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent-fg' : 'rounded-full bg-surface-hover px-2 py-0.5 text-[11px] font-medium text-fg-muted'}>
+                  {isUser ? labels.badgeUser : labels.badgeBuiltin}
+                </span>
+                <span className="text-xs text-fg-subtle">{copy.version}</span>
+              </div>
+              <Dialog.Title className="text-lg font-semibold text-fg">{definition.title}</Dialog.Title>
+              <Dialog.Description className="mt-1 max-w-3xl text-sm leading-6 text-fg-muted">{localized.description}</Dialog.Description>
+            </div>
+            <Dialog.Close asChild>
+              <Button variant="ghost" className="size-9 shrink-0 p-0" aria-label={labels.closeResult}>
+                <X className="size-4" aria-hidden />
+              </Button>
+            </Dialog.Close>
+          </header>
 
-          <div className="min-h-0 flex-1 space-y-4 overflow-auto px-5 py-4">
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <section className="border-b border-edge bg-surface-base/35 px-5 py-4">
+              <div className="mb-3">
+                <h2 className="text-sm font-semibold text-fg">{copy.map}</h2>
+                <p className="mt-1 text-xs text-fg-muted">{copy.mapHint}</p>
+              </div>
+              <WorkflowDefinitionGraph key={definition.id} graph={definition.graph} language={language} className="rounded-xl border border-edge" />
+            </section>
+
+            <div className="space-y-4 px-5 py-4">
             {localized.whenToUse ? (
               <section>
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-fg-subtle">{labels.templateBestFor}</h3>
@@ -104,26 +132,24 @@ export function WorkflowDefinitionDetailDialog({
                   <SchemaPreview title={labels.outputsHeading} schema={definition.outputSchema} />
                 ) : null}
 
-                {script ? (
-                  <section>
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-fg-subtle">{labels.scriptHeading}</h3>
-                    <pre className="mt-2 max-h-64 overflow-auto rounded-xl border border-edge bg-surface-base/50 p-3 font-mono text-xs leading-5 text-fg-muted">
-                      {script}
-                    </pre>
-                  </section>
-                ) : null}
               </div>
             </details>
+            </div>
           </div>
 
-          <div className="flex justify-end gap-2 border-t border-edge px-5 py-4">
+          <footer className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-edge px-5 py-4">
             <Button variant="secondary" onClick={onClose}>
               {labels.closeResult}
             </Button>
+            <Button variant="secondary" onClick={onEdit}>
+              {isUser ? <Pencil className="size-4" aria-hidden /> : <CopyPlus className="size-4" aria-hidden />}
+              {isUser ? labels.editWorkflow : labels.copyAndEditWorkflow}
+            </Button>
             <Button variant="primary" onClick={onRun}>
+              <Play className="size-4" aria-hidden />
               {labels.runWorkflow}
             </Button>
-          </div>
+          </footer>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

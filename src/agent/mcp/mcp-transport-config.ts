@@ -32,6 +32,7 @@ export type ResolvedHttpMcpTransportConfig = ResolvedBaseMcpTransportConfig & {
   transportType: HttpMcpTransportType;
   url: string;
   headers?: Record<string, string>;
+  authProvider?: string;
 };
 
 export type ResolvedMcpTransportConfig =
@@ -101,11 +102,19 @@ function resolveHttpTransportConfig(
   if (!launch.ok) {
     return null;
   }
+  const xopcAuth = rawServer && typeof rawServer === 'object'
+    ? (rawServer as { xopcAuth?: unknown }).xopcAuth
+    : undefined;
+  const authProvider = xopcAuth && typeof xopcAuth === 'object' && !Array.isArray(xopcAuth)
+    && typeof (xopcAuth as { provider?: unknown }).provider === 'string'
+    ? (xopcAuth as { provider: string }).provider.trim() || undefined
+    : undefined;
   return {
     kind: "http",
     transportType: launch.config.transportType,
     url: launch.config.url,
     headers: launch.config.headers,
+    authProvider,
     description: describeHttpMcpServerLaunchConfig(launch.config),
     connectionTimeoutMs: getConnectionTimeoutMs(rawServer),
   };

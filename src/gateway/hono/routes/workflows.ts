@@ -4,18 +4,21 @@ import { basename, join } from 'node:path';
 import type { Hono } from 'hono';
 
 import { resolveDefaultAgentId } from '../../../agent/agent-scope.js';
-import { createWorkflowCatalog } from '../../../agent/workflow/catalog.js';
+import { createWorkflowCatalog, WorkflowRevisionConflictError } from '../../../agent/workflow/catalog.js';
 import { messagesToClientHistory } from '../../../session/client-history.js';
 import type {
   WorkflowDefinition,
+  WorkflowDefinitionManifest,
+  WorkflowGraph,
   WorkflowArtifactRef,
   WorkflowRunInputEnvelope,
   WorkflowRunSource,
   WorkflowRunSummary,
   WorkflowRunView,
 } from '../../../workflows/domain/index.js';
-import { buildWorkflowDefinition, validateWorkflowDefinitionInput } from '../../../workflows/domain/index.js';
+import { validateWorkflowDefinitionInput } from '../../../workflows/domain/index.js';
 import { WorkflowDraftService, type CreateWorkflowDraftRequest } from '../../../workflows/draft/index.js';
+import { WorkflowDraftConflictError, WorkflowDraftStore, type SaveWorkflowAuthoringDraftInput } from '../../../workflows/authoring/index.js';
 import { resolveWorkflowRunArtifactsDir } from '../../../workflows/store/paths.js';
 import { resolveProjectAgentId } from '../../../projects/index.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
@@ -70,11 +73,21 @@ interface WorkflowRunComparison {
 
 interface SaveWorkflowDefinitionRequestBody {
   name?: string;
-  script?: string;
+  graph?: WorkflowGraph;
+  manifest?: WorkflowDefinitionManifest;
+  expectedRevision?: number;
 }
 
 interface CreateWorkflowDraftRequestBody extends Omit<CreateWorkflowDraftRequest, 'agentId'> {
   agentId?: string;
+}
+
+interface SaveWorkflowAuthoringDraftRequestBody extends Omit<SaveWorkflowAuthoringDraftInput, 'id'> {
+  id?: string;
+}
+
+interface RestoreWorkflowRevisionRequestBody {
+  expectedRevision?: number;
 }
 
 export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
@@ -85,7 +98,7 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
     const catalog = createWorkflowCatalog();
     const definitions = catalog.list().map((entry) => {
       try {
-        return toWorkflowDefinition(catalog.load(entry.name));
+        return catalog.load(entry.name);
       } catch {
         return null;
       }
@@ -98,7 +111,7 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
     const id = c.req.param('id');
     const catalog = createWorkflowCatalog();
     try {
-      const definition = toWorkflowDefinition(catalog.load(id));
+      const definition = catalog.load(id);
       return c.json({ definition });
     } catch (err) {
       return c.json({ error: err instanceof Error ? err.message : 'Workflow definition not found' }, 404);
@@ -109,12 +122,12 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
     const body = await readJsonBody<SaveWorkflowDefinitionRequestBody>(c.req.raw);
     const result = validateWorkflowDefinitionInput({
       name: body.name,
-      script: body.script,
+      graph: body.graph,
     });
     return c.json(result);
   });
 
-  authenticated.post('/api/workflows/definitions/draft', async (c) => {
+  authenticated.post('/api/workflows/definitions/generate', async (c) => {
     const body = await readJsonBody<CreateWorkflowDraftRequestBody>(c.req.raw);
     const prompt = body.prompt?.trim();
     if (!prompt) {
@@ -128,7 +141,7 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
         agentId,
         language: body.language,
         mode: body.mode,
-        existingScript: body.existingScript,
+        existingGraph: body.existingGraph,
         constraints: body.constraints,
       }, c.req.raw.signal);
       return c.json({ draft }, 201);
@@ -139,23 +152,99 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
 
   authenticated.post('/api/workflows/definitions', async (c) => {
     const body = await readJsonBody<SaveWorkflowDefinitionRequestBody>(c.req.raw);
+    if (!Number.isSafeInteger(body.expectedRevision) || body.expectedRevision! < 0) {
+      return c.json({ error: 'expectedRevision is required' }, 400);
+    }
     const validation = validateWorkflowDefinitionInput({
       name: body.name,
-      script: body.script,
+      graph: body.graph,
     });
     if (!validation.valid) {
       return c.json({ error: validation.errors[0]?.message ?? 'Invalid workflow definition', validation }, 400);
     }
 
     const name = body.name?.trim() ?? '';
-    const script = body.script ?? '';
     const catalog = createWorkflowCatalog();
     try {
-      catalog.save(name, script);
-      const definition = toWorkflowDefinition(catalog.load(name));
+      const { definition } = catalog.save({
+        name,
+        graph: body.graph!,
+        manifest: body.manifest,
+        expectedRevision: body.expectedRevision,
+      });
+      return c.json({ definition }, definition.revision === 1 ? 201 : 200);
+    } catch (err) {
+      if (err instanceof WorkflowRevisionConflictError) {
+        return c.json({ error: err.message, currentRevision: err.currentRevision }, 409);
+      }
+      return c.json({ error: err instanceof Error ? err.message : 'Failed to save workflow' }, 400);
+    }
+  });
+
+  authenticated.get('/api/workflows/definitions/:id/revisions', (c) => {
+    const id = c.req.param('id');
+    try {
+      return c.json({ revisions: createWorkflowCatalog().listRevisions(id) });
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Failed to list workflow revisions' }, 400);
+    }
+  });
+
+  authenticated.get('/api/workflows/definitions/:id/revisions/:revision', (c) => {
+    const id = c.req.param('id');
+    const revision = Number.parseInt(c.req.param('revision'), 10);
+    try {
+      return c.json({ definition: createWorkflowCatalog().loadRevision(id, revision) });
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Workflow revision not found' }, 404);
+    }
+  });
+
+  authenticated.post('/api/workflows/definitions/:id/revisions/:revision/restore', async (c) => {
+    const id = c.req.param('id');
+    const revision = Number.parseInt(c.req.param('revision'), 10);
+    const body = await readJsonBody<RestoreWorkflowRevisionRequestBody>(c.req.raw);
+    if (!Number.isSafeInteger(body.expectedRevision)) return c.json({ error: 'expectedRevision is required' }, 400);
+    try {
+      const { definition } = createWorkflowCatalog().restore(id, revision, body.expectedRevision!);
       return c.json({ definition }, 201);
     } catch (err) {
-      return c.json({ error: err instanceof Error ? err.message : 'Failed to save workflow' }, 400);
+      if (err instanceof WorkflowRevisionConflictError) return c.json({ error: err.message, currentRevision: err.currentRevision }, 409);
+      return c.json({ error: err instanceof Error ? err.message : 'Failed to restore workflow revision' }, 400);
+    }
+  });
+
+  authenticated.get('/api/workflows/drafts', (c) => {
+    const workflowName = c.req.query('workflowName')?.trim();
+    return c.json({ drafts: new WorkflowDraftStore().list(workflowName) });
+  });
+
+  authenticated.get('/api/workflows/drafts/:draftId', (c) => {
+    try {
+      const draft = new WorkflowDraftStore().get(c.req.param('draftId'));
+      return draft ? c.json({ draft }) : c.json({ error: 'Workflow draft not found' }, 404);
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Failed to load workflow draft' }, 400);
+    }
+  });
+
+  authenticated.post('/api/workflows/drafts', async (c) => {
+    const body = await readJsonBody<SaveWorkflowAuthoringDraftRequestBody>(c.req.raw);
+    try {
+      const draft = new WorkflowDraftStore().save(body);
+      return c.json({ draft }, body.id ? 200 : 201);
+    } catch (err) {
+      if (err instanceof WorkflowDraftConflictError) return c.json({ error: err.message, currentUpdatedAtMs: err.currentUpdatedAtMs }, 409);
+      return c.json({ error: err instanceof Error ? err.message : 'Failed to save workflow draft' }, 400);
+    }
+  });
+
+  authenticated.delete('/api/workflows/drafts/:draftId', (c) => {
+    try {
+      const removed = new WorkflowDraftStore().remove(c.req.param('draftId'));
+      return removed ? c.json({ removed: true }) : c.json({ error: 'Workflow draft not found' }, 404);
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Failed to delete workflow draft' }, 400);
     }
   });
 
@@ -171,6 +260,8 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
       if (!removed) {
         return c.json({ error: 'User workflow not found or cannot delete built-in workflow' }, 404);
       }
+      const drafts = new WorkflowDraftStore().list(id);
+      for (const draft of drafts) new WorkflowDraftStore().remove(draft.id);
       return c.json({ removed: true });
     } catch (err) {
       return c.json({ error: err instanceof Error ? err.message : 'Failed to delete workflow' }, 400);
@@ -465,16 +556,6 @@ function getAgentId(rawAgentId: string | undefined, config: AuthenticatedRouteDe
     return trimmed;
   }
   return resolveDefaultAgentId(config);
-}
-
-function toWorkflowDefinition(loaded: ReturnType<ReturnType<typeof createWorkflowCatalog>['load']>): WorkflowDefinition {
-  return buildWorkflowDefinition({
-    name: loaded.name,
-    source: loaded.source,
-    script: loaded.script,
-    meta: loaded.meta,
-    manifest: loaded.manifest,
-  });
 }
 
 function buildWorkflowStats(runs: WorkflowRunSummary[]): {

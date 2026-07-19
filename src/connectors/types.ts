@@ -20,6 +20,26 @@ export type ConnectorCapability =
 
 export type ConnectorAuthMode = 'none' | 'apiKey' | 'oauth';
 
+export type ConnectorAuthInstallPhase = 'before_install' | 'after_install';
+
+export type ConnectorAuthDefinition =
+  | { mode: 'none' }
+  | { mode: 'apiKey' }
+  | { mode: 'oauth'; provider: string; installPhase: ConnectorAuthInstallPhase };
+
+export type ConnectorScope = 'read' | 'write' | 'admin';
+
+export type ConnectorVerificationLevel = 'verified' | 'beta' | 'experimental';
+
+export type ConnectorBranding = {
+  logoUrl?: string;
+  source?: 'builtin' | 'composio-catalog' | 'registry' | 'extension' | 'custom';
+  backgroundColor?: string;
+  fetchedAt?: string;
+};
+
+export type ConnectorConfirmationPolicy = 'always' | 'writes' | 'admin' | 'never';
+
 export type ConnectorPermissions = {
   data?: string[];
   networkDomains?: string[];
@@ -70,6 +90,7 @@ export type ConnectorRuntimeDefinition =
   | {
       type: 'composio';
       toolkit: string;
+      role: 'credential' | 'toolkit';
     }
   | {
       type: 'nativeTool';
@@ -90,9 +111,9 @@ export type ConnectorDefinition = {
   source: 'builtin' | 'extension' | 'custom' | 'registry' | 'store';
   capabilities: ConnectorCapability[];
   tags?: string[];
-  auth: {
-    mode: ConnectorAuthMode;
-  };
+  branding?: ConnectorBranding;
+  verificationLevel?: ConnectorVerificationLevel;
+  auth: ConnectorAuthDefinition;
   setup: {
     secrets?: ConnectorSecretField[];
     config?: ConnectorConfigField[];
@@ -103,6 +124,97 @@ export type ConnectorDefinition = {
     packageName: string;
     sha256: string;
   };
+};
+
+export type ConnectorInstallationPolicy = {
+  id: string;
+  connectorId: string;
+  principalId: string;
+  enabled: boolean;
+  allowedAgentIds: string[];
+  maxScope: ConnectorScope;
+  confirmationPolicy: ConnectorConfirmationPolicy;
+  selectedConnectionIds: string[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ConnectorConnectionStatus =
+  | 'pending'
+  | 'active'
+  | 'expired'
+  | 'failed'
+  | 'revoked'
+  | 'disabled'
+  | 'unknown';
+
+export type ConnectorConnection = {
+  id: string;
+  installationId?: string;
+  connectorId: string;
+  provider: string;
+  principalId: string;
+  providerConnectionId: string;
+  alias?: string;
+  identity: Record<string, unknown>;
+  status: ConnectorConnectionStatus;
+  isDefault: boolean;
+  connectedAt?: string;
+  expiresAt?: string;
+  lastError?: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ConnectorActionMetadata = {
+  connectorId: string;
+  actionId: string;
+  toolkit?: string;
+  scope: ConnectorScope;
+  curated: boolean;
+  inputSchema?: unknown;
+  schemaVersion?: string;
+  cachedAt: string;
+};
+
+export type ConnectorExecutionDecision = 'allowed' | 'denied' | 'confirmation_required';
+
+export type ConnectorExecutionAuditRecord = {
+  id: string;
+  installationId?: string;
+  connectionId?: string;
+  connectorId: string;
+  principalId: string;
+  agentId?: string;
+  sessionKey?: string;
+  actionId: string;
+  scope: ConnectorScope;
+  decision: ConnectorExecutionDecision;
+  resultStatus: 'success' | 'error' | 'not_executed';
+  durationMs?: number;
+  errorCode?: string;
+  createdAt: string;
+};
+
+export type ConnectorApprovalStatus = 'pending' | 'approved' | 'denied' | 'expired' | 'consumed';
+
+export type ConnectorApprovalRecord = {
+  id: string;
+  principalId: string;
+  connectorId: string;
+  connectionId?: string;
+  agentId?: string;
+  sessionKey?: string;
+  actionId: string;
+  scope: ConnectorScope;
+  argumentsHash: string;
+  argumentsPreview: Record<string, unknown>;
+  status: ConnectorApprovalStatus;
+  expiresAt: string;
+  createdAt: string;
+  decidedAt?: string;
+  consumedAt?: string;
 };
 
 export type ConnectorInstallInput = {
@@ -146,7 +258,13 @@ export type ConnectorInstance = {
         serverId: string;
       }
     | {
-        type: 'channel' | 'composio' | 'nativeTool' | 'memorySource';
+        type: 'composio';
+        id: string;
+        toolkit: string;
+        role: 'credential' | 'toolkit';
+      }
+    | {
+        type: 'channel' | 'nativeTool' | 'memorySource';
         id: string;
       };
   usage: ConnectorUsageRecord;

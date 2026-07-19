@@ -1,8 +1,8 @@
 /**
  * `structured_output` — terminating tool used to capture a subagent's final result.
  *
- * Injected into a subagent's toolset only when the workflow script asked for
- * structured output via `agent(prompt, { schema })`. The subagent is instructed
+ * Injected into a workflow agent node only when its output schema requires
+ * structured data. The subagent is instructed
  * to invoke this tool exactly once with its final result; the tool sets
  * `terminate: true` so the agent loop stops without paying for an extra
  * assistant turn.

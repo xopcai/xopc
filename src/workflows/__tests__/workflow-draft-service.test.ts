@@ -18,25 +18,22 @@ vi.mock('../../providers/index.js', () => ({
 
 import { WorkflowDraftService } from '../draft/workflow-draft-service.js';
 
-const validScript = `export const meta = {
-  name: 'daily_plan',
-  description: 'Create a daily plan.',
-  phases: [{ title: 'Plan' }],
-  tags: ['planning'],
-  estimatedAgents: { min: 1, max: 1 },
-}
+const validGraph = {
+  schemaVersion: 1,
+  nodes: [
+    { id: 'input', kind: 'input', title: 'Input', position: { x: 0, y: 0 }, config: {} },
+    { id: 'plan', kind: 'agent', title: 'Plan', position: { x: 300, y: 0 }, config: { prompt: 'Plan {{input.goal}}' } },
+    { id: 'output', kind: 'output', title: 'Output', position: { x: 600, y: 0 }, config: {} },
+  ],
+  edges: [{ id: 'a', source: 'input', target: 'plan' }, { id: 'b', source: 'plan', target: 'output' }],
+};
 
-phase('Plan')
-const plan = await agent('Create a plan for ' + args.goal, { label: 'planner', maxIterations: 2 })
-return { summary: String(plan), sections: [{ kind: 'text', title: 'Plan', content: String(plan) }] }
-`;
+const invalidGraph = { ...validGraph, nodes: validGraph.nodes.filter((node) => node.kind !== 'output'), edges: validGraph.edges.slice(0, 1) };
 
-const invalidScript = validScript.replace("name: 'daily_plan'", "name: 'wrong_name'");
-
-function draftJson(script: string): string {
+function draftJson(graph: typeof validGraph): string {
   return JSON.stringify({
     name: 'daily_plan',
-    script,
+    graph,
     manifest: {
       title: 'Daily Plan',
       inputSchema: { type: 'object', properties: { goal: { type: 'string' } }, required: ['goal'] },
@@ -56,8 +53,8 @@ describe('WorkflowDraftService', () => {
 
   it('asks the model to repair invalid drafts and returns only the valid result', async () => {
     vi.mocked(complete)
-      .mockResolvedValueOnce({ role: 'assistant', content: [{ type: 'text', text: draftJson(invalidScript) }] } as never)
-      .mockResolvedValueOnce({ role: 'assistant', content: [{ type: 'text', text: draftJson(validScript) }] } as never);
+      .mockResolvedValueOnce({ role: 'assistant', content: [{ type: 'text', text: draftJson(invalidGraph) }] } as never)
+      .mockResolvedValueOnce({ role: 'assistant', content: [{ type: 'text', text: draftJson(validGraph) }] } as never);
 
     const service = new WorkflowDraftService({ config: {} as never, maxRepairAttempts: 1 });
     const response = await service.createDraft({
@@ -70,13 +67,13 @@ describe('WorkflowDraftService', () => {
     expect(response.repairAttempts).toBe(1);
     expect(complete).toHaveBeenCalledTimes(2);
     expect((vi.mocked(complete).mock.calls[1]?.[1] as { messages: Array<{ content: string }> }).messages[0]?.content)
-      .toContain('meta_name_mismatch');
+      .toContain('missing_output');
   });
 
   it('fails with validation details when repair attempts are exhausted', async () => {
     vi.mocked(complete).mockResolvedValue({
       role: 'assistant',
-      content: [{ type: 'text', text: draftJson(invalidScript) }],
+      content: [{ type: 'text', text: draftJson(invalidGraph) }],
     } as never);
 
     const service = new WorkflowDraftService({ config: {} as never, maxRepairAttempts: 1 });

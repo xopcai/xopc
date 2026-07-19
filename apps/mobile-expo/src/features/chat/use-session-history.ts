@@ -8,6 +8,7 @@ import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef } from 'react';
 import { queryKeys } from '../../query/keys';
 import { fetchSessionMessagePage, emptySessionMessagePage, useGatewayConfigured } from '../../query/sessions';
+import { useGatewayStore } from '../../stores/gateway-store';
 import {
   readCachedSessionHistoryHead,
   writeCachedSessionHistoryHead,
@@ -20,14 +21,15 @@ import {
 export function useSessionHistory(sessionKey: string) {
   const queryClient = useQueryClient();
   const configured = useGatewayConfigured();
+  const activeGatewayId = useGatewayStore((state) => state.activeGatewayId);
   const prefetchedOlderHistoryCursorRef = useRef('');
 
   const cachedSessionHistoryHead = useMemo(() => (
-    sessionKey ? readCachedSessionHistoryHead(sessionKey) : null
-  ), [sessionKey]);
+    sessionKey ? readCachedSessionHistoryHead(activeGatewayId, sessionKey) : null
+  ), [activeGatewayId, sessionKey]);
 
   const sessionHistoryQuery = useInfiniteQuery({
-    queryKey: queryKeys.sessionHistory(sessionKey),
+    queryKey: queryKeys.sessionHistory(sessionKey, activeGatewayId),
     queryFn: async ({ pageParam }) => {
       const page = await fetchSessionMessagePage(sessionKey, {
         limit: 50,
@@ -35,15 +37,14 @@ export function useSessionHistory(sessionKey: string) {
       });
       return page ?? emptySessionMessagePage(sessionKey);
     },
-    initialData: cachedSessionHistoryHead
+    placeholderData: cachedSessionHistoryHead
       ? { pages: [cachedSessionHistoryHead], pageParams: [undefined] }
       : undefined,
-    initialDataUpdatedAt: cachedSessionHistoryHead ? 0 : undefined,
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => (
       lastPage?.pagination.hasMore ? lastPage.pagination.nextBeforeCursor : undefined
     ),
-    enabled: Boolean(sessionKey),
+    enabled: Boolean(sessionKey && configured),
     staleTime: 0,
     refetchOnMount: 'always',
   });
@@ -51,9 +52,9 @@ export function useSessionHistory(sessionKey: string) {
   // Write head page to cache when data arrives
   useEffect(() => {
     const headPage = sessionHistoryQuery.data?.pages[0];
-    if (!sessionKey || !headPage) return;
-    writeCachedSessionHistoryHead(sessionKey, headPage);
-  }, [sessionHistoryQuery.data?.pages, sessionKey]);
+    if (!activeGatewayId || !sessionKey || !headPage || sessionHistoryQuery.isPlaceholderData) return;
+    writeCachedSessionHistoryHead(activeGatewayId, sessionKey, headPage);
+  }, [activeGatewayId, sessionHistoryQuery.data?.pages, sessionHistoryQuery.isPlaceholderData, sessionKey]);
 
   // Reset prefetch cursor on session change
   useEffect(() => {
@@ -73,13 +74,13 @@ export function useSessionHistory(sessionKey: string) {
     prefetchedOlderHistoryCursorRef.current = prefetchKey;
 
     void queryClient.prefetchQuery({
-      queryKey: queryKeys.sessionHistoryOlderPreview(sessionKey, olderCursor),
+      queryKey: queryKeys.sessionHistoryOlderPreview(sessionKey, olderCursor, activeGatewayId),
       queryFn: () => fetchSessionMessagePage(sessionKey, { limit: 50, before: olderCursor }),
       staleTime: 60_000,
     }).catch(() => {
       prefetchedOlderHistoryCursorRef.current = '';
     });
-  }, [queryClient, sessionHistoryQuery.data?.pages, sessionHistoryQuery.isFetching, sessionHistoryQuery.isFetchingNextPage, sessionKey]);
+  }, [activeGatewayId, queryClient, sessionHistoryQuery.data?.pages, sessionHistoryQuery.isFetching, sessionHistoryQuery.isFetchingNextPage, sessionKey]);
 
   return {
     sessionHistoryQuery,

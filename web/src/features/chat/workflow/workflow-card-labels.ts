@@ -96,7 +96,7 @@ function enLabels(): WorkflowCardLabels {
       emptyResult: '(no result)',
     },
     error: {
-      titleParse: 'Workflow parse error',
+      titleValidation: 'Workflow setup needs attention',
       titleAbort: 'Workflow aborted',
       titleTimeout: 'Workflow timed out',
       titleRuntime: 'Workflow failed',
@@ -107,7 +107,7 @@ function enLabels(): WorkflowCardLabels {
       impactHeading: 'Impact',
       recoveryHeading: 'Recommended actions',
       recoveryActions: {
-        parse_error: ['Check the workflow script syntax.', 'Make sure workflow fields use the expected snake_case shape.'],
+        validation_error: ['Open the workflow and review the highlighted steps.', 'Reconnect any step that cannot reach the final result.'],
         aborted: ['The run was stopped. Start it again if you still need the result.'],
         timeout: ['Retry the workflow.', 'If it times out again, reduce concurrency or check model/API availability.'],
         runtime_error: ['Review the failed check first.', 'Use completed check results if they are still relevant.', 'Copy the error details if you want to continue diagnosis.'],
@@ -116,7 +116,6 @@ function enLabels(): WorkflowCardLabels {
       failedAgentsHeading: 'Check status',
       executedAgentsHeading: 'Check status',
       progressHeading: 'Execution process',
-      scriptHeading: 'Submitted script',
       noExtraDetails: 'No additional details recorded.',
       copyReason: 'Copy',
       copyReasonDone: 'Copied',
@@ -225,7 +224,7 @@ function zhLabels(): WorkflowCardLabels {
       emptyResult: '（无结果）',
     },
     error: {
-      titleParse: '工作流解析失败',
+      titleValidation: '工作流配置需要处理',
       titleAbort: '工作流已中止',
       titleTimeout: '工作流超时',
       titleRuntime: '工作流执行失败',
@@ -236,7 +235,7 @@ function zhLabels(): WorkflowCardLabels {
       impactHeading: '影响范围',
       recoveryHeading: '建议处理',
       recoveryActions: {
-        parse_error: ['检查工作流脚本语法。', '确认工作流字段使用预期的 snake_case 格式。'],
+        validation_error: ['打开工作流并查看高亮的问题步骤。', '重新连接无法到达最终结果的步骤。'],
         aborted: ['本次执行已停止。如仍需要结果，可以重新运行。'],
         timeout: ['重新运行工作流。', '如果仍然超时，建议降低并发或检查模型/API 可用性。'],
         runtime_error: ['优先查看失败检查项。', '已完成检查项的结果仍可按需参考。', '需要继续诊断时，可以复制错误详情。'],
@@ -245,7 +244,6 @@ function zhLabels(): WorkflowCardLabels {
       failedAgentsHeading: '检查项状态',
       executedAgentsHeading: '检查项状态',
       progressHeading: '执行过程',
-      scriptHeading: '提交的脚本',
       noExtraDetails: '没有更多诊断信息。',
       copyReason: '复制',
       copyReasonDone: '已复制',

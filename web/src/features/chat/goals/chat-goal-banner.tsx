@@ -20,7 +20,7 @@ import type { StoredLanguage } from '@/lib/storage';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useAsyncResource } from '@/lib/use-async-resource';
 import { cn } from '@/lib/cn';
-import { showToast } from '@/lib/toast';
+import { showActivity } from '@/stores/activity-center-store';
 
 import { GoalActions } from './chat-goal-banner-actions';
 import { GoalChecklist } from './chat-goal-banner-checklist';
@@ -396,15 +396,39 @@ function ChatGoalBannerBody({ sessionKey, streaming, sending }: ChatGoalBannerPr
     observedStatusRef.current = { goalId: goal.id, status: goal.status };
     if (!previous || previous.goalId !== goal.id || previous.status === goal.status) return;
     if (goal.status === 'done') {
-      showToast({ type: 'success', title: 'Goal completed', message: goal.title, duration: 0 });
+      showActivity({
+        tone: 'success',
+        status: 'done',
+        title: language === 'zh' ? '目标已完成' : 'Goal completed',
+        message: goal.title,
+        source: language === 'zh' ? '目标' : 'Goal',
+        href: `/goals/${encodeURIComponent(goal.id)}`,
+        dedupeKey: `goal:${goal.id}`,
+      });
       return;
     }
     if (goal.status === 'blocked') {
-      showToast({ type: 'warning', title: 'Goal blocked', message: goal.blockedReason || goal.title, duration: 0 });
+      showActivity({
+        tone: 'warning',
+        status: 'attention',
+        title: language === 'zh' ? '目标受阻' : 'Goal blocked',
+        message: goal.blockedReason || goal.title,
+        source: language === 'zh' ? '目标' : 'Goal',
+        href: `/goals/${encodeURIComponent(goal.id)}`,
+        dedupeKey: `goal:${goal.id}`,
+      });
       return;
     }
     if (goal.status === 'needs_input') {
-      showToast({ type: 'warning', title: 'Goal needs input', message: goal.blockedReason || goal.title, duration: 0 });
+      showActivity({
+        tone: 'warning',
+        status: 'attention',
+        title: language === 'zh' ? '目标需要你的输入' : 'Goal needs input',
+        message: goal.blockedReason || goal.title,
+        source: language === 'zh' ? '目标' : 'Goal',
+        href: `/goals/${encodeURIComponent(goal.id)}`,
+        dedupeKey: `goal:${goal.id}`,
+      });
     }
   }, [goal?.id, goal?.status, goal?.updatedAt, goal?.title, goal?.blockedReason]);
 

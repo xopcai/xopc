@@ -25,7 +25,6 @@ import { IMAGE_PROVIDERS_SWR_KEY } from '@/features/settings/image-providers-swr
 import { useImageProviderCredentials } from '@/features/settings/use-image-provider-credentials';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
-import { showToast } from '@/lib/toast';
 import { messages, type MessageBundle } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -520,7 +519,6 @@ export function ImageModelsSettingsPanel() {
         await mutateImageCapabilities();
       }
       dispatchUi({ type: 'patch', patch: { savedFlash: true } });
-      showToast({ type: 'success', title: t.saved });
     } catch (err) {
       dispatchUi({
         type: 'patch',

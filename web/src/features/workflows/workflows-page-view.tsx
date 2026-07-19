@@ -124,6 +124,7 @@ function WorkflowLaunchPanel({
   language,
   labels,
   onStart,
+  onDetail,
   onBrowseAll,
   onManageTemplates,
 }: {
@@ -131,6 +132,7 @@ function WorkflowLaunchPanel({
   language: WorkflowsPageVm['language'];
   labels: WorkflowsMessages;
   onStart: (definition: WorkflowDefinition) => void;
+  onDetail: (definition: WorkflowDefinition) => void;
   onBrowseAll: () => void;
   onManageTemplates: () => void;
 }) {
@@ -172,25 +174,34 @@ function WorkflowLaunchPanel({
           {launchDefinitions.map((definition) => {
             const localized = resolveWorkflowLocalizedCopy(definition, language);
             return (
-              <article key={definition.id} className="min-w-0 rounded-lg border border-edge bg-surface-panel p-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <h3 className="line-clamp-1 text-sm font-semibold text-fg">{definition.title}</h3>
-                    <p className="mt-1 line-clamp-2 text-xs leading-5 text-fg-muted">
+              <article
+                key={definition.id}
+                className="relative min-w-0 rounded-lg border border-edge bg-surface-panel p-3 transition-colors hover:bg-surface-hover/45"
+              >
+                <button
+                  type="button"
+                  aria-label={`${labels.viewDetails}: ${definition.title}`}
+                  className={cn('absolute inset-0 cursor-pointer rounded-lg', interaction.focusRingPanel)}
+                  onClick={() => onDetail(definition)}
+                />
+                <div className="pointer-events-none relative z-10 flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1 text-left">
+                    <span className="line-clamp-1 text-sm font-semibold text-fg">{definition.title}</span>
+                    <span className="mt-1 block line-clamp-2 text-xs leading-5 text-fg-muted">
                       {localized.whenToUse || localized.description}
-                    </p>
+                    </span>
                   </div>
                   <Button
                     type="button"
                     variant="primary"
-                    className="h-8 shrink-0 rounded-lg px-2.5 text-xs"
+                    className="pointer-events-auto h-8 shrink-0 rounded-lg px-2.5 text-xs"
                     onClick={() => onStart(definition)}
                   >
                     <Play className="size-3.5" aria-hidden />
                     {labels.runWorkflow}
                   </Button>
                 </div>
-                <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+                <dl className="pointer-events-none relative z-10 mt-3 grid gap-2 text-xs sm:grid-cols-2">
                   <div className="rounded-md bg-surface-muted/50 px-2.5 py-2">
                     <dt className="font-medium text-fg-subtle">{labels.templateInputs}</dt>
                     <dd className="mt-0.5 line-clamp-1 text-fg-muted">{templateInputSummary(definition, labels)}</dd>
@@ -244,7 +255,8 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
     startDefinition,
     setStartDefinition,
     detailDefinition,
-    setDetailDefinition,
+    openDefinitionDetails,
+    closeDefinitionDetails,
     manageOpen,
     setManageOpen,
     workflowEditorDraft,
@@ -323,6 +335,7 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
           language={language}
           labels={labels}
           onStart={setStartDefinition}
+          onDetail={openDefinitionDetails}
           onBrowseAll={() => setPickStartOpen(true)}
           onManageTemplates={() => setManageOpen(true)}
         />
@@ -540,7 +553,6 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
       <WorkflowRunPanel
         view={selectedRunView}
         comparison={selectedRunComparison}
-        currentDefinition={definitions.find((definition) => definition.id === selectedRunView?.run.definitionId)}
         loading={Boolean(selectedRunId) && selectedRunLoading}
         language={language}
         localeTag={localeTag}
@@ -557,6 +569,16 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
         }}
         onOpenRunId={openRunDetailsById}
         ownerAgentId={ownerAgentId}
+        onRepairWorkflow={() => {
+          const definition = definitions.find((item) => item.id === selectedRunView?.run.definitionId);
+          if (!definition || !selectedRunView) return;
+          const failures = (selectedRunView.nodes ?? []).filter((node) => node.status === 'error');
+          const repairPrompt = language === 'zh'
+            ? `修复这些失败步骤，同时保持工作流的原始目标：${failures.map((node) => `${node.title}: ${node.error ?? '执行失败'}`).join('；')}`
+            : `Repair these failed steps while preserving the workflow's original goal: ${failures.map((node) => `${node.title}: ${node.error ?? 'execution failed'}`).join('; ')}`;
+          closeRunDetails();
+          openWorkflowEditor(definition, undefined, repairPrompt);
+        }}
         onClose={closeRunDetails}
       />
 
@@ -571,7 +593,7 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
         }}
         onDetail={(definition) => {
           setPickStartOpen(false);
-          setDetailDefinition(definition);
+          openDefinitionDetails(definition);
         }}
         onEdit={openWorkflowEditor}
       />
@@ -589,11 +611,17 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
         open={detailDefinition != null}
         definition={detailDefinition}
         language={language}
-        onClose={() => setDetailDefinition(null)}
+        onClose={closeDefinitionDetails}
         onRun={() => {
           if (!detailDefinition) return;
-          setDetailDefinition(null);
+          closeDefinitionDetails();
           setStartDefinition(detailDefinition);
+        }}
+        onEdit={() => {
+          if (!detailDefinition) return;
+          const definition = detailDefinition;
+          closeDefinitionDetails();
+          openWorkflowEditor(definition);
         }}
       />
 
@@ -607,7 +635,10 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
             ? {
                 mode: workflowEditorDraft.mode,
                 name: workflowEditorDraft.initialName,
-                script: workflowEditorDraft.initialScript,
+                graph: workflowEditorDraft.initialGraph,
+                manifest: workflowEditorDraft.initialManifest,
+                baseRevision: workflowEditorDraft.baseRevision,
+                repairPrompt: workflowEditorDraft.repairPrompt,
                 sourceTitle: workflowEditorDraft.definition.title,
               }
             : null

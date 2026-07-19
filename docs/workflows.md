@@ -1,359 +1,133 @@
-# Dynamic Workflows
+# Visual workflows
 
-xopc workflows let one prompt fan out across many isolated subagents and merge their results back. Use them for tasks that are **decomposable** — repo audits, multi-perspective reviews, fan-out research, large refactors — where running one big assistant turn would either lose track or pollute the conversation with intermediate tool output.
+xopc workflows turn repeatable, multi-step work into a visual task plan. Users arrange steps on a canvas, describe changes in natural language, watch each step run, and consume the final result without reading code.
 
-A workflow is a small deterministic JavaScript script. The model writes it, the `workflow` tool runs it in a sandbox, and you see a live progress tree until the synthesised result lands.
+The workflow definition is a versioned directed acyclic graph. There is no script format or script execution path.
 
-Each workflow **run** gets its own chat session (`sessionType: workflow`). Progress, transcript, and the final synthesis live there — not mixed into the conversation that triggered the run.
+## Product model
 
-## How to run one
+- A **template** describes how a kind of task should be completed.
+- A **draft** is an unpublished visual edit and is saved automatically.
+- A **revision** is an immutable published version.
+- A **run** executes the exact graph revision captured when it starts.
+- An **automation** decides when a published workflow runs.
 
-You almost never write the script yourself — describe the goal in plain language, the model decides whether a workflow fits. Common triggers:
+This separation keeps the main experience simple: workflow means “how the work happens”; automation means “when it happens.”
 
-| Trigger | What happens |
+## Create and edit
+
+Open `#/workflows`, choose **Create template**, and start in either of two ways:
+
+1. Describe the outcome in natural language. xopc creates a visual draft.
+2. Add and connect steps directly on the canvas.
+
+The editor uses five user-facing step types:
+
+| Step | Purpose |
 |---|---|
-| **Chat (implicit)** | Say *"do a thorough audit of this repo"* or *"research X from multiple angles"*. The assistant calls the `workflow` tool, which starts an async run in a **dedicated session** and links back to your current chat. |
-| **Chat (by name)** | *"run the audit_repo workflow"*, or in the TUI type `/audit_repo` (rewritten into the correct prompt). |
-| **Gateway Workflows page** | Open `#/workflows`, pick a template, start a run. The console navigates to `#/chat/<sessionKey>` for live progress. |
-| **Automation** | Schedule a workflow directly from `#/automations` — no assistant turn required. |
-| **REST API** | `POST /api/workflows/runs` with `definitionId` (returns `{ runId, sessionKey }`). |
+| Input | Receives the goal and structured input. Every flow has exactly one. |
+| AI task | Gives one focused job to an isolated agent. Independent AI tasks run in parallel. |
+| Decision | Chooses a true or false branch using a simple rule. |
+| Merge | Collects results from active branches. |
+| Result | Produces the final summary and structured output. Every flow has exactly one. |
 
-Power users can also pass an inline script via the `workflow` tool's `script` parameter.
+Select a step to edit its plain-language instructions. Model, tool, schema, and iteration controls belong in advanced settings; they should not dominate normal authoring.
 
-When a workflow starts, the TUI and gateway Chat session show a progress tree that grows as subagents fan out:
+Drafts auto-save. Publishing validates the complete graph and creates a new revision. If another editor published first, xopc rejects the stale write instead of overwriting it.
 
-```
-◆ workflow: audit_repo (7/12 done, 3 running)
-  ✓ Inventory 1/1
-    #1 ✓ repo inventory
-  ▶ Review 4/6 · 2 running
-    #2 ✓ bugs review
-    #3 ✓ perf review
-    #4 ✓ security review
-    #5 ✓ tests review
-    #6 ● style review
-    #7 ● docs review
-  ▶ Synthesize 0/1
-    #8 ● report synthesis
-```
+## Validation
 
-Press `Esc` (TUI) or run `/abort` to cancel. In-flight subagents are aborted and surface as `skipped`.
+The server reports all known graph problems in one response. A publishable graph must have:
 
-## Gateway console
+- exactly one Input and one Result;
+- unique node and edge IDs;
+- valid connections with no self-links or cycles;
+- every step reachable from Input;
+- every step able to reach Result;
+- both true and false connections for every Decision;
+- a useful instruction for every AI task.
 
-### Workflows board (`#/workflows`)
+Invalid intermediate drafts are allowed, because temporarily disconnected nodes are normal while editing. Invalid graphs cannot be published or run.
 
-The Workflows page is a kanban-style board of **runs** (not templates):
+## Run and inspect
 
-| Column | Run statuses |
+Starting a workflow creates a dedicated workflow session. The run stores a snapshot of the graph and revision, so later edits never change the historical record.
+
+The run view overlays status on the same graph:
+
+- pending;
+- running;
+- completed;
+- skipped because another decision branch was selected;
+- failed.
+
+Select a node to inspect its input, output, elapsed time, model/tool details, and errors. Failed runs offer **Edit and repair**, which opens the same workflow graph with a natural-language repair request prefilled.
+
+Independent ready nodes run concurrently. A Decision activates only the selected branch. Merge waits for active predecessors and ignores skipped branches. A run fails when an active AI task fails or the graph cannot progress.
+
+## Start surfaces
+
+| Surface | Behavior |
 |---|---|
-| **Queued** | `queued` |
-| **In progress** | `running` |
-| **Done** | `succeeded` — last 7 days, up to 20 items (collapsed by default) |
-| **Needs attention** | `failed`, `timeout`, `cancelled` |
+| Workflow center | Pick a template, enter a goal, and follow the live graph. |
+| Chat | The `workflow` tool starts a published template by name. |
+| Automation | A schedule, webhook, or manual trigger starts a published template directly. |
+| REST API | Create and monitor runs without an assistant turn. |
+| TUI / channels | Receive compact progress summaries and final results. |
 
-Filter by workflow template with `?wf=<definitionId>`. Starting, retrying, or opening a run card navigates to its dedicated Chat session.
+The workflow tool accepts a definition name and run input only. It does not accept inline executable definitions.
 
-### Chat session for a run
+## Built-in templates
 
-Each run opens (or reopens) `#/chat/<sessionKey>`:
+Built-ins cover common product scenarios such as repository audit, research, planning, decision support, meeting preparation, weekly review, content creation, and competitive analysis. They use the same graph model and runtime as custom workflows. Copy a built-in to create an editable custom version without changing the original.
 
-- A **workflow banner** and live **WorkflowCard** stream progress via SSE.
-- The session transcript holds the goal line, subagent tree updates, and terminal result.
-- When the run was started from another chat, a **parent session** link card points back to the originating conversation.
+## Automations
 
-Cancel and retry actions are available from the board or the workflow card where supported.
+For recurring work, create an automation and select a published workflow. The automation stores the trigger and reliability policy; the workflow retains the task logic. Automation history links to the workflow run so users can inspect the exact graph, status, and result.
 
-## The `/workflows` command
+Use an agent-instruction automation only when a model must decide at runtime whether to start a workflow. For deterministic recurring work, direct workflow execution is simpler and easier to audit.
 
-| Command | What it does |
-|---|---|
-| `/workflows` | List built-in + user workflows with their descriptions. |
-| `/workflow list` | Alias of `/workflows`. |
-| `/workflow view <name>` | Show a workflow's source script (truncated past 200 lines). |
-| `/workflow save <name>` | Save the script of the most recently successful workflow in this session to `~/.xopc/workflows/<name>.js`. |
-| `/<name>` | TUI shortcut. Rewritten into *"Run the `<name>` workflow"* and sent to the assistant. |
+See [Automations](automations.md) for schedules, webhooks, reliability, and run history.
 
-The list and view commands are read-only and just return text. To actually run a workflow, the assistant has to call the `workflow` tool — that happens automatically via the rewrites described above.
+## Storage
 
-## Built-in workflows
+Custom definitions are JSON files under `~/.xopc/workflows/`. Revision snapshots and drafts are stored in private subdirectories of the same workflow store. Writes use temporary files plus atomic rename.
 
-| Name | What it does | Args |
-|---|---|---|
-| `audit_repo` | Fan-out repository audit (bugs / perf / security / tests / style), then a synthesised report. | none |
-| `multi_perspective_review` | Review a target through 4 lenses (User / Operator / Skeptic / Maintainer), then an adversarial judge. | `{ target: string }` |
-| `research` | Multi-angle research sweep with a cited synthesis. | `{ question: string }` |
+Deleting a custom workflow removes its current definition, revision history, and related drafts. Built-ins cannot be deleted.
 
-Inspect any of them with `/workflow view <name>`.
+## REST API
 
-## Saved workflows
-
-Two ways to save:
-
-- **`/workflow save <name>`** — capture the script of the most recent successful workflow in this session. If you saved it under a different name than the original `meta.name`, the meta field is rewritten to match so the file is addressable as `/<name>`. Memory is per-process: a restart clears it, so save while it's still fresh.
-- **Manual** — drop a `.js` file at `~/.xopc/workflows/<name>.js`. The filename must match `meta.name` (e.g. `audit_repo.js` → `meta.name: 'audit_repo'`).
-
-Both paths land in the same dir. `/workflows` reflects new files immediately. User workflows always win on name collision with a built-in, so you can override `audit_repo` with your own tuned version.
-
-## Writing your own
-
-A workflow is plain JavaScript with a strict header. The first statement must be a literal `export const meta = { ... }` so the catalog can index the file without executing it.
-
-```js
-export const meta = {
-  name: 'release_notes',
-  description: 'Draft release notes from the last N commits.',
-  whenToUse: 'User asks for release notes, changelog, or "what changed since".',
-  phases: [{ title: 'Collect' }, { title: 'Draft' }],
-}
-
-const since = args && typeof args === 'object' && args.since ? String(args.since) : 'origin/main'
-
-phase('Collect')
-const log = await agent(
-  `Run \`git log ${since}..HEAD --oneline\` and return the raw output.`,
-  { label: 'git log' },
-)
-
-phase('Draft')
-return await agent(
-  'Draft release notes from this git log. Group by feat/fix/chore. Keep it short.\n\n' + log,
-  {
-    label: 'draft notes',
-    schema: {
-      type: 'object',
-      properties: {
-        summary: { type: 'string' },
-        sections: {
-          type: 'object',
-          properties: {
-            feat: { type: 'array', items: { type: 'string' } },
-            fix:  { type: 'array', items: { type: 'string' } },
-            chore: { type: 'array', items: { type: 'string' } },
-          },
-        },
-      },
-      required: ['summary'],
-    },
-  },
-)
-```
-
-### Available globals
-
-| Global | Description |
-|---|---|
-| `agent(prompt, opts?)` | Spawn one fresh subagent. Returns its final assistant text — or, when `opts.schema` is provided, a validated object. Failures resolve to `null`; the workflow keeps going. |
-| `parallel(thunks)` | Run an array of `() => agent(...)` thunks concurrently. Results are returned in input order. Must be thunks, not promises — the limiter only sees thunks. |
-| `pipeline(items, ...stages)` | Run each item through sequential stages while different items fan out. Each stage receives `(prev, original, index)`. A stage that throws drops that item to `null`. |
-| `phase(title)` | Mark the current progress group. Subsequent `agent()` calls are bucketed under it. Phases can be created in loops or conditionals — empty phases never render. |
-| `log(message)` | Append a workflow-level log line. Shown under the progress tree. |
-| `args` | Whatever JSON was passed to the workflow tool's `args` parameter. |
-| `cwd` / `process.cwd()` | Working directory shown to subagents. |
-| `budget` | `{ total, spent(), remaining() }`. `total` is `null` unless a token budget was configured. |
-
-### `agent()` options
-
-```ts
-agent(prompt, {
-  label?: string,            // short text shown in the progress tree
-  phase?: string,            // override the current phase()
-  schema?: JsonSchema,       // when set, return value is validated against this
-  toolset?: string[],        // subagent tool allowlist (default DEFAULT_DELEGATE_TOOLS)
-  maxIterations?: number,    // subagent tool-iteration cap (default 30)
-  model?: string,            // provider/model or configured typed id (e.g. small, @large)
-})
-```
-
-### Determinism rules
-
-The sandbox intentionally rejects a few APIs so workflow runs stay reproducible (and so future resume / journaling can be added without breaking existing scripts):
-
-- `Date.now()`, `new Date()`, `Math.random()`
-- `require`, `import`, dynamic `eval`
-- `fs`, network APIs, anything not in the globals table
-
-If you need a timestamp, pass it in via `args` and stamp results after the workflow returns. If you need randomness, vary the prompt by index.
-
-### Failures
-
-Every `agent()`, `parallel()` entry, and `pipeline()` item that throws resolves to `null` (the failure is logged). Always filter or check before synthesising:
-
-```js
-const live = findings.filter(Boolean)
-if (!live.length) return { ok: false, reason: 'no findings' }
-```
-
-## Combining with automations
-
-Two patterns:
-
-1. **Direct workflow run (recommended)** — In `#/automations`, create a workflow automation, pick a template, fill structured input or a goal, and choose a schedule, manual trigger, or webhook trigger. The executor calls `WorkflowRunService` directly (no assistant turn).
-2. **Agent instruction** — An automation can run an agent instruction that asks the agent to run a workflow by name; the assistant then calls the `workflow` tool as in normal chat. Use this when a model should decide how to invoke the workflow mid-turn.
-
-**Operations:** Automation run history records the linked workflow run id. The workflows board can filter by trigger source, including automation-triggered runs. Failed workflow automations follow the automation reliability settings.
-
-See [Automations](automations.md) for triggers, actions, reliability, and run history.
-
-## Combining with todo
-
-Workflows can produce checklists for the `todo` tool. The simplest pattern is to ask the model to convert a workflow result into todos as a follow-up turn:
-
-> "Run the multi_perspective_review workflow on this plan, then turn the confirmed risks into a todo list."
-
-If you want a workflow itself to produce a `todo`-shaped output, return a structured object whose `topRisks` (or similar) array can be fed straight into `todo({merge:true, todos:[...]})`. The synthesis agent is the natural place to shape it.
-
-## Progress visibility per surface
-
-| Surface | What you see during a run |
-|---|---|
-| TUI (`xopc` or `xopc tui`) | Live progress tree, updated on every snapshot change. |
-| Gateway console | Dedicated workflow Chat session — WorkflowCard streams progress via SSE; board at `#/workflows` shows run status; cancel/retry from card or board. |
-| Telegram | **Live, edit-in-place.** A single message is sent at the start and edited every 5 s (default), with key events — phase change, new error, completion — bypassing the throttle for prompt visibility. |
-| Feishu / Lark | **Live, edit-in-place.** Same edit-in-place flow as Telegram (`im.v1.message.update`); 5 s default throttle. |
-| WeChat | **Final result only** by design. WeChat (personal/ilink bots) does not expose an editMessage API for bot replies, so live edits would have to spam the chat with a fresh message per tick. The broker silently drops mid-run snapshots and sends a single summary on completion. |
-
-### Per-channel configuration
-
-Each channel uses sensible defaults; override under `channels.<id>.workflowProgress` when you need to:
-
-```jsonc
-{
-  "channels": {
-    "telegram": {
-      "workflowProgress": {
-        "enabled": true,      // default true; set false to silence the channel
-        "throttleMs": 5000,   // default 5 s — Telegram limits ≈1 edit/sec/chat
-        "mode": "edit"        // 'edit' (default), 'append', or 'final-only'
-      }
-    },
-    "feishu": {
-      "workflowProgress": {
-        "enabled": true,
-        "throttleMs": 5000,
-        "mode": "edit"        // default; Feishu im.v1.message.update is supported
-      }
-    },
-    "weixin": {
-      "workflowProgress": {
-        "enabled": true,
-        "throttleMs": 60000,
-        "mode": "final-only"  // default; WeChat has no editMessage
-      }
-    }
-  }
-}
-```
-
-All fields are optional; missing fields fall back to the capability's defaults.
-
-### Experimental — WeChat `append` mode
-
-WeChat ships in `final-only` mode by default because the platform exposes no `editMessage` API for bot replies — without it, every "tick" would be a fresh message.
-
-If you'd rather see milestones land as separate WeChat messages (e.g. during a 5-minute audit), flip the channel to `append` mode and lengthen the throttle so the chat doesn't get noisy:
-
-```jsonc
-{
-  "channels": {
-    "weixin": {
-      "workflowProgress": {
-        "enabled": true,
-        "mode": "append",
-        "throttleMs": 60000
-      }
-    }
-  }
-}
-```
-
-What you'll see:
-
-- A header line on every mid-run message — `▾ 工作流进展` — so they're easy to scan vs. unrelated chat.
-- A different header on the final message — `✓ 工作流完成` — followed by the result summary.
-- Key events (phase change, new error, completion) bypass `throttleMs` and arrive promptly. Normal updates only land at the throttle interval.
-- For a 3-minute, 3-phase workflow you'd typically see **3–6 messages** total. Below 60 s throttle and you risk hitting WeChat's anti-spam.
-
-This is experimental — defaults will not change unless real-world usage confirms the cadence works for users.
-
-## Configuration
-
-Workflow availability and limits are controlled by the selected agent manifest and any `capabilityPresets` it extends. Typed model roles under `agents.list[].models.roles` let scripts reference `small` / `large` instead of hard-coded `provider/model` strings.
-
-```jsonc
-{
-  "agents": {
-    "default": "research",
-    "capabilityPresets": {},
-    "list": [
-      {
-        "id": "research",
-        "identity": { "name": "Research", "role": "Research assistant" },
-        "responsibilities": { "primary": ["Run research workflows"] },
-        "workspace": { "root": "~/.xopc/workspace/research" },
-        "models": {
-          "defaultRole": "large",
-          "roles": {
-            "small": { "model": "deepseek/deepseek-v4-flash", "description": "Fast fan-out subtasks" },
-            "large": { "model": "anthropic/claude-sonnet-4", "description": "High quality synthesis" }
-          }
-        },
-        "tools": { "builtin": {} },
-        "skills": { "mode": "all" },
-        "memory": { "mode": "off", "sources": ["session"] },
-        "workflows": { "enabled": true },
-        "boundaries": { "requiresConfirmation": [], "forbidden": [], "escalation": [] },
-        "runtime": { "timeoutMs": 1800000 }
-      }
-    ]
-  }
-}
-```
-
-Subagents inherit the parent agent's primary model when no override is set. Per-call `agent({ model: '...' })` and `meta.phases[].model` resolve to a real model at runtime:
-
-- **`provider/model`** — e.g. `openai/gpt-4o-mini`
-- **Typed id** — e.g. `small` or `@large`, mapped from config above
-
-Workflow example:
-
-```js
-export const meta = {
-  name: 'audit_repo',
-  phases: [
-    { title: 'Review', model: 'small' },
-    { title: 'Synthesize', model: 'large' },
-  ],
-}
-
-phase('Review')
-await agent('Review for bugs…', { model: 'small', label: 'bugs' })
-```
-
-## REST API (gateway)
-
-Authenticated routes under `/api/workflows/` (Bearer token same as other gateway APIs):
+Authenticated routes use the same bearer token as the gateway console.
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/definitions` | List built-in + user workflow definitions |
-| `GET` | `/definitions/:id` | Load one definition (script + meta) |
-| `POST` | `/definitions` | Save a user workflow script |
-| `POST` | `/definitions/validate` | Validate script without saving |
-| `DELETE` | `/definitions/:id` | Remove a user workflow (not built-ins) |
-| `GET` | `/stats` | Aggregate run counts |
-| `POST` | `/runs` | Start a run → `{ runId, sessionKey }` (202) |
-| `GET` | `/runs` | List recent run summaries |
-| `GET` | `/runs/:runId` | Full run view (tree, status, metrics) |
-| `POST` | `/runs/:runId/cancel` | Cancel an active run |
-| `POST` | `/runs/:runId/retry` | Retry a failed/cancelled run → new `{ runId, sessionKey }` |
+| `GET` | `/api/workflows/definitions` | List templates. |
+| `GET` | `/api/workflows/definitions/:id` | Load the current graph. |
+| `POST` | `/api/workflows/definitions/validate` | Validate a graph without publishing. |
+| `POST` | `/api/workflows/definitions/generate` | Generate or revise a graph from natural language. |
+| `POST` | `/api/workflows/definitions` | Publish a graph with `expectedRevision`. |
+| `DELETE` | `/api/workflows/definitions/:id` | Delete a custom template and its history. |
+| `GET` | `/api/workflows/definitions/:id/revisions` | List published revisions. |
+| `GET` | `/api/workflows/definitions/:id/revisions/:revision` | Load one revision. |
+| `POST` | `/api/workflows/definitions/:id/revisions/:revision/restore` | Restore by publishing a new revision. |
+| `GET` | `/api/workflows/drafts` | List visual drafts. |
+| `GET` | `/api/workflows/drafts/:draftId` | Load a draft. |
+| `POST` | `/api/workflows/drafts` | Create or update a draft with optimistic concurrency. |
+| `DELETE` | `/api/workflows/drafts/:draftId` | Discard a draft. |
+| `POST` | `/api/workflows/runs` | Start a run and return its run/session IDs. |
+| `GET` | `/api/workflows/runs` | List runs. |
+| `GET` | `/api/workflows/runs/:runId` | Load the live projected run view. |
+| `POST` | `/api/workflows/runs/:runId/cancel` | Stop an active run. |
+| `POST` | `/api/workflows/runs/:runId/retry` | Start a fresh retry. |
+| `POST` | `/api/workflows/runs/:runId/replay` | Replay selected failed checks or phases. |
 
-Optional query `agentId` scopes runs to a specific agent from `agents.list`.
+## Configuration and limits
 
-## Limits and what's not in v1
+Workflow availability and limits come from the selected agent capability manifest. Agent nodes can select a configured model role such as `small` or `large`; unresolved roles fail validation or execution rather than silently changing behavior.
 
-- No journaling / resume — a workflow that aborts mid-run starts over (use **Retry** for a fresh run).
-- No nested workflows — `agent()` does not have access to `workflow()`.
-- WeChat defaults to **final result only** on IM (see table above); Telegram and Feishu support live edits.
+Current operational boundaries:
 
-The runtime keeps determinism (no `Date.now`/`Math.random`) so future journaling can be added cleanly.
+- workflows are acyclic;
+- nested workflow runs are not available inside agent nodes;
+- cancelled runs restart from the beginning when retried;
+- channel progress varies by channel capability, while the gateway always provides the full node graph.

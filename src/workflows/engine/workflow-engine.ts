@@ -7,20 +7,19 @@ import type { WorkflowResultEnvelope } from '../domain/result.js';
 import { validateWorkflowJsonSchema } from '../domain/schema-validation.js';
 import { WorkflowEventStore } from '../store/event-store.js';
 import { WorkflowRunStore } from '../store/run-store.js';
-import { createScriptWorkflowRuntime } from '../runtime/script-workflow-runtime.js';
-import type { WorkflowRuntime } from '../runtime/workflow-runtime-port.js';
+import { createGraphWorkflowRuntime } from '../runtime/graph-workflow-runtime.js';
+import type { WorkflowRuntime, WorkflowRuntimeSubagentRunner } from '../runtime/workflow-runtime-port.js';
 import type { Api, Model } from '@earendil-works/pi-ai';
 
 import { workflowStepLabel } from '../../agent/workflow/step-labels.js';
 import type { SubagentProgressEvent } from '../../agent/workflow/types.js';
-import type { WorkflowScriptSubagentRunner } from '../runtime/script-runtime.js';
 import type { WorkflowAgentInvocationSnapshot } from '../domain/index.js';
 
 export interface WorkflowEngineOptions {
   cwd: string;
   eventStore: WorkflowEventStore;
   runStore: WorkflowRunStore;
-  runner: WorkflowScriptSubagentRunner;
+  runner: WorkflowRuntimeSubagentRunner;
   runtime?: WorkflowRuntime;
   hooks?: WorkflowEngineHook[];
   subagentSessionKeyFactory?: (ctx: { runId: string; agentId: string }) => string;
@@ -148,10 +147,10 @@ export class WorkflowEngine {
     await appendEvent('run_started', { startedAtMs: Date.now() });
 
     try {
-      const runtime = this.options.runtime ?? createScriptWorkflowRuntime();
+      const runtime = this.options.runtime ?? createGraphWorkflowRuntime();
       const runtimeResult = await withWorkflowTimeout(
         runtime.run<unknown>(
-          definition.runtime.source,
+          definition.graph,
           {
             runner: this.options.runner,
             resolveModelId: this.options.resolveModelId,
@@ -159,6 +158,7 @@ export class WorkflowEngine {
           {
             cwd: this.options.cwd,
             args: options.input,
+            goal: options.goal ?? definition.description,
             signal: options.signal,
             concurrency: options.concurrency ?? definition.defaults.concurrency,
             maxSubagents: options.maxSubagents ?? definition.defaults.maxSubagents,
@@ -173,6 +173,19 @@ export class WorkflowEngine {
             },
             onLog: (message) => {
               void appendEvent('log_appended', { message });
+            },
+            onNodeStart: (event) => {
+              void appendEvent('node_started', event);
+            },
+            onNodeEnd: (event) => {
+              void appendEvent('node_completed', {
+                nodeId: event.nodeId,
+                kind: event.kind,
+                title: event.title,
+                status: event.status,
+                resultPreview: previewWorkflowValue(event.result),
+                error: event.error,
+              });
             },
             onAgentQueued: (event) => {
               const agentId = formatRuntimeAgentId(event.id);
@@ -189,6 +202,7 @@ export class WorkflowEngine {
               }));
               void appendEvent('agent_queued', {
                 agentId,
+                nodeId: event.nodeId,
                 label: event.label,
                 phaseId,
                 prompt: event.prompt,
@@ -202,7 +216,7 @@ export class WorkflowEngine {
                 return;
               }
               runtimeAgentStatuses.set(event.id, 'running');
-              void appendEvent('agent_started', { agentId: formatRuntimeAgentId(event.id) });
+              void appendEvent('agent_started', { agentId: formatRuntimeAgentId(event.id), nodeId: event.nodeId });
             },
             onAgentEnd: (event) => {
               const currentStatus = runtimeAgentStatuses.get(event.id);
@@ -217,6 +231,7 @@ export class WorkflowEngine {
               progressRecorders.delete(event.id);
               void appendEvent('agent_completed', {
                 agentId,
+                nodeId: event.nodeId,
                 status: completedStatus,
                 resultPreview,
                 error: completedStatus === 'error' ? 'Subagent failed' : undefined,
@@ -245,6 +260,7 @@ export class WorkflowEngine {
                   workflowRunId: runId,
                   workflowDefinitionId: definition.id,
                   workflowAgentId: agentId,
+                  workflowNodeId: ctx.nodeId,
                   workflowAgentLabel: ctx.label,
                 },
                 onProgress: (event) => recorder.onProgress(event),
@@ -910,7 +926,7 @@ function requireWorkflowResultEnvelope(value: unknown): WorkflowResultEnvelope {
   }
   throw new WorkflowEngineRunError(
     'result_validation_failed',
-    'Workflow scripts must return a WorkflowResultEnvelope with summary and sections.',
+    'Workflow output node must return a result envelope with summary and sections.',
     false,
   );
 }

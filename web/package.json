@@ -49,6 +49,7 @@
     "@tiptap/suggestion": "^3.26.1",
     "@xopcai/extension-ui-sdk": "workspace:*",
     "@xopcai/gateway-contract": "workspace:*",
+    "@xyflow/react": "^12.11.2",
     "beautiful-mermaid": "^1.1.3",
     "clsx": "^2.1.1",
     "cron-parser": "^5.5.0",

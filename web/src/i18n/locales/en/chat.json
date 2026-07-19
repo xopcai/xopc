@@ -943,6 +943,33 @@
     "messageNotHelpful": "Response needs improvement",
     "messageFeedbackUnavailable": "Feedback could not be linked to this response.",
     "messageUnderstandingReviewQueued": "The related understanding is paused and queued for review.",
+    "messageWhyThisAnswer": "Why this answer was personalized",
+    "messageWhyThisAnswerHint": "These parts of your personal context were allowed to shape the response.",
+    "messageContextOrigins": {
+      "told_by_you": "You told me",
+      "observed": "Noticed across your work",
+      "inferred": "My interpretation",
+      "connected_source": "From {{source}}"
+    },
+    "messageFeedbackReasonTitle": "What should I improve?",
+    "messageFeedbackReasonHint": "This helps me repair the response and avoid repeating the same mistake.",
+    "messageFeedbackReasons": {
+      "misunderstood_intent": "Misunderstood me",
+      "incorrect": "Factually wrong",
+      "did_not_act": "Didn't take action",
+      "tone_mismatch": "Tone felt wrong",
+      "too_verbose": "Too long",
+      "other": "Something else"
+    },
+    "messageFeedbackRepair": "Help me correct it",
+    "messageFeedbackRepairPrompts": {
+      "misunderstood_intent": "You misunderstood what I needed in your previous response. Re-read my request, briefly state what you now think I need, then correct the response.",
+      "incorrect": "Your previous response contains something incorrect. Re-check the relevant facts or evidence, explain the correction briefly, and give me the corrected result.",
+      "did_not_act": "Your previous response explained or planned instead of doing the work. Continue now, use the available tools where appropriate, and finish with the result or a concrete blocker.",
+      "tone_mismatch": "The tone of your previous response did not feel right for me. Respond more calmly and naturally, acknowledge the situation without overdoing empathy, and help me move forward.",
+      "too_verbose": "Your previous response was too long. Give me the essential answer and next step concisely.",
+      "other": "Your previous response did not help. Ask me one focused question about what was missing, then repair the response based on my answer."
+    },
     "messageSaveToNote": "Save to source Note",
     "messageSavedToNote": "Saved to Note",
     "messageExtractTask": "Extract task",

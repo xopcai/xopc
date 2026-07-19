@@ -3,6 +3,7 @@ import type {
   WorkflowAgentStatus,
   WorkflowAgentView,
   WorkflowLogEntry,
+  WorkflowNodeView,
   WorkflowPhaseStatus,
   WorkflowPhaseView,
   WorkflowRun,
@@ -39,11 +40,20 @@ function buildTimelineItem(event: WorkflowEventEnvelope): WorkflowTimelineItem {
 }
 
 function isAgentMutationEvent(type: WorkflowEventEnvelope['type']): boolean {
-  return type === 'agent_queued'
+  return type === 'node_started'
+    || type === 'node_completed'
+    || type === 'agent_queued'
     || type === 'agent_started'
     || type === 'agent_step_started'
     || type === 'agent_step_completed'
     || type === 'agent_completed';
+}
+
+function markOpenNodesTerminal(nodes: Map<string, WorkflowNodeView>, status: 'error' | 'skipped', completedAtMs: number, error?: string): void {
+  for (const [nodeId, node] of nodes) {
+    if (node.status !== 'running') continue;
+    nodes.set(nodeId, { ...node, status, completedAtMs, error: status === 'error' ? error : node.error });
+  }
 }
 
 function markOpenAgentsTerminal(
@@ -93,6 +103,7 @@ export function projectWorkflowRunView(events: WorkflowEventEnvelope[]): Workflo
   };
   const phaseIdToPhase = new Map<string, WorkflowPhaseView>();
   const agentIdToAgent = new Map<string, WorkflowAgentView>();
+  const nodeIdToNode = new Map<string, WorkflowNodeView>();
   const logs: WorkflowLogEntry[] = [];
   const artifacts: WorkflowArtifactRef[] = [];
   const timeline: WorkflowTimelineItem[] = [];
@@ -134,9 +145,30 @@ export function projectWorkflowRunView(events: WorkflowEventEnvelope[]): Workflo
         }
         break;
       }
+      case 'node_started': {
+        const payload = event.payload as { nodeId: string; kind: string; title: string };
+        nodeIdToNode.set(payload.nodeId, { id: payload.nodeId, kind: payload.kind, title: payload.title, status: 'running', startedAtMs: event.createdAtMs });
+        break;
+      }
+      case 'node_completed': {
+        const payload = event.payload as { nodeId: string; kind: string; title: string; status: 'done' | 'error' | 'skipped'; resultPreview?: string; error?: string };
+        const existing = nodeIdToNode.get(payload.nodeId);
+        nodeIdToNode.set(payload.nodeId, {
+          id: payload.nodeId,
+          kind: payload.kind,
+          title: payload.title,
+          status: payload.status,
+          startedAtMs: existing?.startedAtMs,
+          completedAtMs: event.createdAtMs,
+          resultPreview: payload.resultPreview,
+          error: payload.error,
+        });
+        break;
+      }
       case 'agent_queued': {
         const payload = event.payload as {
           agentId: string;
+          nodeId: string;
           label: string;
           phaseId?: string;
           prompt?: string;
@@ -145,6 +177,7 @@ export function projectWorkflowRunView(events: WorkflowEventEnvelope[]): Workflo
         };
         agentIdToAgent.set(payload.agentId, {
           id: payload.agentId,
+          nodeId: payload.nodeId,
           label: payload.label,
           phaseId: payload.phaseId,
           status: 'queued',
@@ -285,12 +318,14 @@ export function projectWorkflowRunView(events: WorkflowEventEnvelope[]): Workflo
           event.createdAtMs,
           payload.error?.message,
         );
+        markOpenNodesTerminal(nodeIdToNode, payload.error?.code === 'timeout' ? 'skipped' : 'error', event.createdAtMs, payload.error?.message);
         break;
       }
       case 'run_cancelled': {
         run.status = 'cancelled';
         run.completedAtMs = event.createdAtMs;
         markOpenAgentsTerminal(agentIdToAgent, 'skipped', event.createdAtMs);
+        markOpenNodesTerminal(nodeIdToNode, 'skipped', event.createdAtMs);
         break;
       }
       case 'run_queued':
@@ -323,6 +358,7 @@ export function projectWorkflowRunView(events: WorkflowEventEnvelope[]): Workflo
     run,
     phases,
     agents,
+    nodes: [...nodeIdToNode.values()],
     logs,
     artifacts,
     timeline,

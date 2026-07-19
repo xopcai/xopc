@@ -28,7 +28,6 @@ import { apiUrl } from '@/lib/url';
 import { selectFieldMaxWidthClass, selectTriggerClass, settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { DEFAULT_SECRET_INPUT_LABELS } from '@/lib/secret-input-labels';
-import { showToast } from '@/lib/toast';
 import { messages, type VoiceSettingsMessages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -531,7 +530,6 @@ export function VoiceSettingsPanel() {
       await patchVoiceSettings(form);
       dispatchForm({ type: 'saved', value: form });
       dirtyRef.current = false;
-      showToast({ type: 'success', title: v.saved });
     } catch (e) {
       setError(e instanceof Error ? e.message : v.saveError);
     } finally {

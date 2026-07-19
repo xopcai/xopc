@@ -200,12 +200,12 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
               if (!olderCursor) { void sessionHistoryQuery.fetchNextPage(); return; }
 
               const prefetchedOlderPage = queryClient.getQueryData(
-                queryKeys.sessionHistoryOlderPreview(sessionKey, olderCursor),
+                queryKeys.sessionHistoryOlderPreview(sessionKey, olderCursor, activeGatewayId),
               );
 
               if (prefetchedOlderPage) {
                 queryClient.setQueryData(
-                  queryKeys.sessionHistory(sessionKey),
+                  queryKeys.sessionHistory(sessionKey, activeGatewayId),
                   (oldData) => appendOlderSessionHistoryPage(
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     oldData as any,
