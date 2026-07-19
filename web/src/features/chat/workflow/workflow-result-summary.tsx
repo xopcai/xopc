@@ -70,12 +70,14 @@ function WorkflowResultSectionView({
     return <StringList heading={section.title || labels.openQuestionsHeading} items={section.items} moreSuffix={labels.moreSuffix} />;
   }
   return (
-    <section className="min-w-0">
-      <div className="text-[10px] font-medium uppercase tracking-wide text-fg-subtle">{section.title}</div>
+    <details className="group min-w-0 rounded-lg border border-edge-subtle bg-surface-hover/20">
+      <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-fg-muted marker:text-fg-subtle hover:text-fg">
+        {section.title}
+      </summary>
       <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-edge-subtle bg-surface-hover/30 p-2 font-mono text-xs leading-5 text-fg-muted">
         {JSON.stringify(section.value, null, 2)}
       </pre>
-    </section>
+    </details>
   );
 }
 

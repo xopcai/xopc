@@ -1,4 +1,4 @@
-import { Braces, CopyPlus, Eye, Layers3, Pencil, Play, Search, UsersRound } from 'lucide-react';
+import { Braces, CopyPlus, Layers3, Pencil, Play, Search, UsersRound } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -44,17 +44,24 @@ function WorkflowPickCard({
 
   return (
     <article
+      role="link"
+      tabIndex={0}
+      onClick={(event) => {
+        if ((event.target as Element).closest('button, a')) return;
+        onDetail(definition);
+      }}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return;
+        event.preventDefault();
+        onDetail(definition);
+      }}
       className={cn(
-        'group flex h-full flex-col rounded-xl bg-surface-panel p-4 text-left shadow-surface transition-colors',
-        'hover:bg-surface-hover',
+        'group flex h-full cursor-pointer flex-col rounded-xl bg-surface-panel p-4 text-left shadow-surface transition-colors',
+        'hover:bg-surface-hover', interaction.focusRingPanel,
       )}
     >
-      <button
-        type="button"
-        onClick={() => onDetail(definition)}
-        className={cn('flex flex-1 flex-col text-left', interaction.focusRingPanel)}
-      >
-        <div className="flex items-start justify-between gap-2">
+      <div className="flex flex-1 flex-col">
+        <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
           <div className="mb-2 flex flex-wrap items-center gap-1.5">
             <span
@@ -79,9 +86,6 @@ function WorkflowPickCard({
           </div>
           <span className="line-clamp-2 text-sm font-semibold leading-5 text-fg">{definition.title}</span>
         </div>
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent-fg opacity-80 transition-opacity group-hover:opacity-100">
-          <Eye className="size-3.5" aria-hidden />
-        </span>
         </div>
 
         {localized.description ? (
@@ -100,16 +104,12 @@ function WorkflowPickCard({
             </span>
           ) : null}
         </div>
-      </button>
+      </div>
 
       <div className="mt-4 flex flex-wrap gap-2 border-t border-edge-subtle pt-3">
         <Button type="button" variant="primary" className="h-8 flex-1 rounded-lg text-xs" onClick={() => onPick(definition)}>
           <Play className="size-3.5" aria-hidden />
           {labels.runWorkflow}
-        </Button>
-        <Button type="button" variant="secondary" className="h-8 rounded-lg text-xs" onClick={() => onDetail(definition)}>
-          <Eye className="size-3.5" aria-hidden />
-          {labels.viewDetails}
         </Button>
         <Button type="button" variant="secondary" className="h-8 rounded-lg text-xs" onClick={() => onEdit(definition)}>
           {isUser ? <Pencil className="size-3.5" aria-hidden /> : <CopyPlus className="size-3.5" aria-hidden />}

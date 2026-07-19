@@ -16,8 +16,8 @@
     "next": "下次",
     "workflowPrefix": "工作流",
     "loading": "正在加载...",
-    "selectRun": "选择一次执行查看运行过程。",
-    "timeline": "运行过程",
+    "selectRun": "选择一次运行查看结果。",
+    "timeline": "技术记录",
     "details": {
       "created": "创建",
       "started": "开始",
@@ -62,8 +62,8 @@
       "templatesTitle": "选择模板"
     },
     "dashboard": {
-      "activity": "运行活动",
-      "activityDescription": "优先展示运行中和需要处理的运行记录。",
+      "activity": "运行结果",
+      "activityDescription": "先看每次自动化产出了什么，需要时再进入对话查看过程。",
       "manage": "自动化",
       "manageDescription": "打开某条自动化，查看配置和运行历史。",
       "needsAttention": "需要处理",
@@ -82,6 +82,17 @@
       "refreshed": "自动化已刷新",
       "created": "已创建自动化",
       "failures": "失败次数"
+    },
+    "runDetail": {
+      "resultTitle": "执行结果",
+      "resultPending": "正在执行，结果完成后会显示在这里。你也可以进入对话查看实时进度。",
+      "noResult": "本次运行没有返回可展示的结果。",
+      "openConversation": "查看完整对话",
+      "openWorkflow": "查看工作流运行",
+      "runInfo": "运行信息",
+      "technicalEvents": "技术记录",
+      "technicalEventsDescription": "用于排查问题的系统事件和原始数据，日常使用无需查看。",
+      "eventCount": "{count} 条"
     },
     "draft": {
       "title": "用 AI 起草",

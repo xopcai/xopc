@@ -16,8 +16,8 @@
     "next": "Next",
     "workflowPrefix": "workflow",
     "loading": "Loading...",
-    "selectRun": "Select a run to inspect its progress.",
-    "timeline": "Run progress",
+    "selectRun": "Select a run to view its result.",
+    "timeline": "Technical log",
     "details": {
       "created": "Created",
       "started": "Started",
@@ -62,8 +62,8 @@
       "templatesTitle": "Choose a template"
     },
     "dashboard": {
-      "activity": "Activity",
-      "activityDescription": "Current and recent runs, ordered by what needs attention first.",
+      "activity": "Run results",
+      "activityDescription": "Start with what each automation produced, then open its conversation when you need the process.",
       "manage": "Automations",
       "manageDescription": "Open an automation to inspect configuration and run history.",
       "needsAttention": "Needs attention",
@@ -82,6 +82,17 @@
       "refreshed": "Automations refreshed",
       "created": "Automation created",
       "failures": "Failures"
+    },
+    "runDetail": {
+      "resultTitle": "Result",
+      "resultPending": "This run is in progress. The result will appear here, or you can open the conversation to follow along.",
+      "noResult": "This run did not return a displayable result.",
+      "openConversation": "View full conversation",
+      "openWorkflow": "View workflow run",
+      "runInfo": "Run info",
+      "technicalEvents": "Technical log",
+      "technicalEventsDescription": "System events and raw data for troubleshooting. You normally do not need these.",
+      "eventCount": "{count} events"
     },
     "draft": {
       "title": "Draft with AI",

@@ -10,11 +10,7 @@ import { messages } from '@/i18n/messages';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 
 import { WorkflowBoard } from './workflow-board';
-import { WorkflowCreateDialog } from './workflow-create-dialog';
-import { WorkflowDefinitionDetailDialog } from './workflow-definition-detail-dialog';
-import { WorkflowPickStartDialog } from './workflow-pick-start-dialog';
-import { WorkflowRunPanel } from './workflow-run-panel';
-import { WorkflowStartDialog } from './workflow-start-dialog';
+import { WorkflowPickLibrary } from './workflow-pick-library';
 import { WorkflowStatsBar } from './workflow-stats-bar';
 import { WorkflowTaskCard } from './workflow-task-card';
 import type { WorkflowsPageVm } from './use-workflows-page';
@@ -239,41 +235,18 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
     setTriggerFilter,
     viewMode,
     setViewMode,
-    runTab,
-    setRunTab,
-    selectedRunId,
-    selectedRunView,
-    selectedRunComparison,
-    selectedRunLoading,
-    selectedRunError,
     openRunDetails,
-    closeRunDetails,
-    openRunDetailsById,
     openRunInChat,
-    pickStartOpen,
-    setPickStartOpen,
-    startDefinition,
-    setStartDefinition,
-    detailDefinition,
     openDefinitionDetails,
-    closeDefinitionDetails,
-    manageOpen,
-    setManageOpen,
-    workflowEditorDraft,
     openWorkflowEditor,
+    startWorkflow,
     actionError,
     actionFeedback,
-    starting,
-    savingWorkflow,
     loading,
     error,
     stats,
-    submitStart,
     cancelRun,
     retryRun,
-    replayRun,
-    saveCustomWorkflow,
-    saveDraftAndStart,
   } = vm;
 
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
@@ -311,7 +284,6 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
     stats,
     vm,
     vm.refreshAll,
-    vm.setManageOpen,
     vm.setSearchQuery,
   ]);
 
@@ -334,10 +306,10 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
           definitions={definitions}
           language={language}
           labels={labels}
-          onStart={setStartDefinition}
+          onStart={startWorkflow}
           onDetail={openDefinitionDetails}
-          onBrowseAll={() => setPickStartOpen(true)}
-          onManageTemplates={() => setManageOpen(true)}
+          onBrowseAll={() => document.getElementById('workflow-library')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+          onManageTemplates={() => document.getElementById('workflow-library')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
         />
 
         <section className="flex w-full flex-wrap items-center gap-2 rounded-lg border border-edge-subtle bg-surface-base px-3 py-2 shadow-surface">
@@ -472,12 +444,6 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
           <WorkflowStatsBar stats={stats} language={language} />
         </div>
 
-        {selectedRunError ? (
-          <div className="w-full rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
-            {selectedRunError}
-          </div>
-        ) : null}
-
         {viewMode === 'operations' ? (
           <div className="pb-3">
             <div className="grid w-full gap-4">
@@ -504,7 +470,7 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
                               language={language}
                               localeTag={localeTag}
                               nowMs={nowMs}
-                              selected={run.id === selectedRunId}
+                              selected={false}
                               onOpen={openRunDetails}
                               onOpenChat={openRunInChat}
                               onCancel={(runId) => void cancelRun(runId)}
@@ -538,115 +504,31 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
               searchQuery={searchQuery}
               workflowFilterId={workflowFilterId}
               triggerFilter={triggerFilter}
-              selectedRunId={selectedRunId}
+              selectedRunId={null}
               loading={loading}
               onOpenRun={openRunDetails}
               onOpenRunChat={openRunInChat}
               onCancelRun={(runId) => void cancelRun(runId)}
               onRetryRun={(runId) => void retryRun(runId)}
-              onStart={() => setPickStartOpen(true)}
+              onStart={() => document.getElementById('workflow-library')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
             />
           </div>
         )}
+
+        <section id="workflow-library" className="scroll-mt-4 border-t border-edge pt-6">
+          <div className="mb-4">
+            <h2 className="text-base font-semibold text-fg">{language === 'zh' ? '全部工作流' : 'All workflows'}</h2>
+            <p className="mt-1 text-sm text-fg-muted">{language === 'zh' ? '点击卡片进入详情，了解步骤、输入和最近运行。' : 'Select a card to see its steps, inputs, and recent runs.'}</p>
+          </div>
+          <WorkflowPickLibrary
+            definitions={definitions}
+            language={language}
+            onPick={startWorkflow}
+            onDetail={openDefinitionDetails}
+            onEdit={openWorkflowEditor}
+          />
+        </section>
       </div>
-
-      <WorkflowRunPanel
-        view={selectedRunView}
-        comparison={selectedRunComparison}
-        loading={Boolean(selectedRunId) && selectedRunLoading}
-        language={language}
-        localeTag={localeTag}
-        activeTab={runTab}
-        onTabChange={setRunTab}
-        onCancel={() => {
-          if (selectedRunId) void cancelRun(selectedRunId);
-        }}
-        onRetry={() => {
-          if (selectedRunId) void retryRun(selectedRunId);
-        }}
-        onReplay={(scope) => {
-          if (selectedRunId) void replayRun(selectedRunId, scope);
-        }}
-        onOpenRunId={openRunDetailsById}
-        ownerAgentId={ownerAgentId}
-        onRepairWorkflow={() => {
-          const definition = definitions.find((item) => item.id === selectedRunView?.run.definitionId);
-          if (!definition || !selectedRunView) return;
-          const failures = (selectedRunView.nodes ?? []).filter((node) => node.status === 'error');
-          const repairPrompt = language === 'zh'
-            ? `修复这些失败步骤，同时保持工作流的原始目标：${failures.map((node) => `${node.title}: ${node.error ?? '执行失败'}`).join('；')}`
-            : `Repair these failed steps while preserving the workflow's original goal: ${failures.map((node) => `${node.title}: ${node.error ?? 'execution failed'}`).join('; ')}`;
-          closeRunDetails();
-          openWorkflowEditor(definition, undefined, repairPrompt);
-        }}
-        onClose={closeRunDetails}
-      />
-
-      <WorkflowPickStartDialog
-        open={pickStartOpen}
-        definitions={definitions}
-        language={language}
-        onClose={() => setPickStartOpen(false)}
-        onPick={(definition) => {
-          setPickStartOpen(false);
-          setStartDefinition(definition);
-        }}
-        onDetail={(definition) => {
-          setPickStartOpen(false);
-          openDefinitionDetails(definition);
-        }}
-        onEdit={openWorkflowEditor}
-      />
-
-      <WorkflowStartDialog
-        open={startDefinition != null}
-        definition={startDefinition}
-        language={language}
-        starting={starting}
-        onClose={() => setStartDefinition(null)}
-        onStart={(payload) => void submitStart(payload)}
-      />
-
-      <WorkflowDefinitionDetailDialog
-        open={detailDefinition != null}
-        definition={detailDefinition}
-        language={language}
-        onClose={closeDefinitionDetails}
-        onRun={() => {
-          if (!detailDefinition) return;
-          closeDefinitionDetails();
-          setStartDefinition(detailDefinition);
-        }}
-        onEdit={() => {
-          if (!detailDefinition) return;
-          const definition = detailDefinition;
-          closeDefinitionDetails();
-          openWorkflowEditor(definition);
-        }}
-      />
-
-      <WorkflowCreateDialog
-        open={manageOpen}
-        language={language}
-        ownerAgentId={ownerAgentId}
-        saving={savingWorkflow}
-        initialDraft={
-          workflowEditorDraft
-            ? {
-                mode: workflowEditorDraft.mode,
-                name: workflowEditorDraft.initialName,
-                graph: workflowEditorDraft.initialGraph,
-                manifest: workflowEditorDraft.initialManifest,
-                baseRevision: workflowEditorDraft.baseRevision,
-                repairPrompt: workflowEditorDraft.repairPrompt,
-                sourceTitle: workflowEditorDraft.definition.title,
-              }
-            : null
-        }
-        onClose={() => setManageOpen(false)}
-        onSave={(payload) => saveCustomWorkflow(payload)}
-        onSaveAndStart={saveDraftAndStart}
-      />
     </main>
   );
 }

@@ -1,6 +1,6 @@
-import { Background, Handle, MarkerType, Position, ReactFlow, type Node, type NodeProps } from '@xyflow/react';
+import { Background, Handle, MarkerType, Position, ReactFlow, type Edge, type Node, type NodeProps, type ReactFlowInstance } from '@xyflow/react';
 import { AlertTriangle, Bot, Check, GitBranch, Inbox, Layers3, Play, RotateCcw } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
@@ -17,6 +17,8 @@ type RunFlowNode = Node<RunNodeData>;
 
 export function WorkflowRunGraph({ graph, view, language, onRepair }: { graph: WorkflowGraph; view: WorkflowRunView; language: StoredLanguage; onRepair?: () => void }) {
   const [selectedId, setSelectedId] = useState<string>();
+  const flowRef = useRef<ReactFlowInstance<RunFlowNode, Edge> | null>(null);
+  const lastAutoFocusedIdRef = useRef<string | undefined>(undefined);
   const copy = runGraphCopy(language);
   const statuses = useMemo(() => new Map(view.nodes.map((node) => [node.id, node])), [view.nodes]);
   const nodes = useMemo<RunFlowNode[]>(() => graph.nodes.map((node) => ({
@@ -25,7 +27,7 @@ export function WorkflowRunGraph({ graph, view, language, onRepair }: { graph: W
     position: node.position,
     data: { definitionNode: node, runNode: statuses.get(node.id) },
   })), [graph.nodes, statuses]);
-  const edges = useMemo(() => graph.edges.map((edge) => ({
+  const edges = useMemo<Edge[]>(() => graph.edges.map((edge) => ({
     id: edge.id,
     source: edge.source,
     target: edge.target,
@@ -35,7 +37,21 @@ export function WorkflowRunGraph({ graph, view, language, onRepair }: { graph: W
     style: { stroke: statuses.get(edge.source)?.status === 'done' ? 'var(--color-success)' : 'var(--color-fg-subtle)', strokeWidth: 1.5 },
   })), [graph.edges, statuses]);
   const selected = selectedId ? statuses.get(selectedId) : undefined;
+  const selectedDefinition = selectedId ? graph.nodes.find((node) => node.id === selectedId) : undefined;
   const hasFailure = view.nodes.some((node) => node.status === 'error');
+
+  useEffect(() => {
+    const focusNode = view.nodes.find((node) => node.status === 'running')
+      ?? view.nodes.find((node) => node.status === 'error')
+      ?? [...view.nodes].reverse().find((node) => node.status === 'done');
+    if (!focusNode || lastAutoFocusedIdRef.current === focusNode.id) return;
+    lastAutoFocusedIdRef.current = focusNode.id;
+    setSelectedId(focusNode.id);
+    const frame = window.requestAnimationFrame(() => {
+      void flowRef.current?.fitView({ nodes: [{ id: focusNode.id }], padding: 1.4, minZoom: 0.65, maxZoom: 1, duration: 300 });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [view.nodes]);
 
   return (
     <section className="mt-5 overflow-hidden rounded-2xl border border-edge bg-surface-base/35">
@@ -43,15 +59,19 @@ export function WorkflowRunGraph({ graph, view, language, onRepair }: { graph: W
         <div><h3 className="text-sm font-semibold text-fg">{copy.title}</h3><p className="mt-0.5 text-xs text-fg-subtle">{copy.hint}</p></div>
         {hasFailure && onRepair ? <Button variant="secondary" className="h-8 text-xs" onClick={onRepair}><RotateCcw className="size-3.5" />{copy.repair}</Button> : null}
       </div>
-      <div className="h-80">
-        <ReactFlow nodes={nodes} edges={edges} nodeTypes={RUN_NODE_TYPES} nodesDraggable={false} nodesConnectable={false} elementsSelectable onNodeClick={(_event, node) => setSelectedId(node.id)} fitView minZoom={0.3} maxZoom={1.25} panOnScroll zoomOnDoubleClick={false} proOptions={{ hideAttribution: true }}>
+      <div className="h-[28rem]">
+        <ReactFlow nodes={nodes} edges={edges} nodeTypes={RUN_NODE_TYPES} nodesDraggable={false} nodesConnectable={false} elementsSelectable onNodeClick={(_event, node) => setSelectedId(node.id)} onInit={(instance) => { flowRef.current = instance; }} fitView minZoom={0.3} maxZoom={1.25} panOnScroll zoomOnDoubleClick={false} proOptions={{ hideAttribution: true }}>
           <Background color="var(--color-edge)" gap={22} size={1} />
         </ReactFlow>
       </div>
       {selected ? (
         <div className={cn('flex items-start gap-2 border-t border-edge px-4 py-3 text-xs', selected.status === 'error' ? 'text-danger' : 'text-fg-muted')}>
           {selected.status === 'error' ? <AlertTriangle className="mt-0.5 size-3.5 shrink-0" /> : selected.status === 'done' ? <Check className="mt-0.5 size-3.5 shrink-0 text-success" /> : null}
-          <span><strong className="font-medium text-fg">{selected.title}</strong>{selected.error ? ` — ${selected.error}` : selected.resultPreview ? ` — ${selected.resultPreview}` : ` — ${copy.status[selected.status]}`}</span>
+          <span>
+            <strong className="font-medium text-fg">{selected.title}</strong>
+            {selectedDefinition?.description ? <span className="block pt-0.5 text-fg-subtle">{selectedDefinition.description}</span> : null}
+            <span className="block pt-1">{selected.error || selected.resultPreview || copy.status[selected.status]}</span>
+          </span>
         </div>
       ) : null}
     </section>
@@ -77,6 +97,7 @@ function RunNodeCard({ data, selected }: NodeProps<RunFlowNode>) {
         <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">{node.title}</span>
         <StatusMark status={status} />
       </div>
+      {node.description ? <p className="mt-1.5 line-clamp-2 text-xs leading-4 text-fg-muted">{node.description}</p> : null}
       {node.kind === 'decision' ? <><Handle id="true" type="source" position={Position.Right} className="!invisible" /><Handle id="false" type="source" position={Position.Right} className="!invisible" /></> : node.kind !== 'output' ? <Handle type="source" position={Position.Right} className="!invisible" /> : null}
     </div>
   );
