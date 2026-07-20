@@ -157,7 +157,7 @@ describe('SQLite migrations', () => {
     `);
     setSchemaVersion(db, 33);
 
-    expect(applyPendingMigrations(db)).toBe(XOPC_DB_SCHEMA_VERSION);
+    expect(applyPendingMigrations(db, { targetVersion: 34 })).toBe(34);
     expect(() => db.prepare(`
       UPDATE user_trust_policies
       SET default_action_level = 'auto'
@@ -186,7 +186,7 @@ describe('SQLite migrations', () => {
     `);
     setSchemaVersion(db, 35);
 
-    expect(applyPendingMigrations(db)).toBe(XOPC_DB_SCHEMA_VERSION);
+    expect(applyPendingMigrations(db, { targetVersion: 36 })).toBe(36);
     expect(
       db.prepare(`SELECT name FROM pragma_table_info('goal_contracts') WHERE name = 'outcome_metric_json'`).get(),
     ).toEqual({ name: 'outcome_metric_json' });

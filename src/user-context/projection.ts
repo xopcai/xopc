@@ -2,6 +2,7 @@ import type { MemoryKind, MemoryRecord } from '../agent/memory/types.js';
 import { effectiveMemoryStatus, resolveMemoryStability } from '../agent/memory/lifecycle.js';
 import { classifyMemoryContextOrigin } from '../agent/memory/source-origin.js';
 import type { ConnectorDefinition, ConnectorInstance } from '../connectors/types.js';
+import type { KnowledgeSourceItem, KnowledgeSyncRun } from '../knowledge/types.js';
 
 export type UserContextFacet =
   | 'basics'
@@ -110,6 +111,7 @@ export function projectPersonalContextSources(
   definitions: ConnectorDefinition[],
   instances: ConnectorInstance[],
   records: MemoryRecord[] = [],
+  knowledge: { sourceItems?: KnowledgeSourceItem[]; syncRuns?: KnowledgeSyncRun[] } = {},
 ) {
   const instanceByConnector = new Map<string, ConnectorInstance[]>();
   for (const instance of instances) {
@@ -122,6 +124,15 @@ export function projectPersonalContextSources(
     .map((definition) => {
       const connected = instanceByConnector.get(definition.id) ?? [];
       const relatedRecords = records.filter((record) => record.source.provider === definition.id);
+      const sourceItems = (knowledge.sourceItems ?? []).filter((item) => item.metadata.connectorId === definition.id);
+      const sourceInstanceIds = new Set(sourceItems.map((item) => item.sourceInstanceId));
+      const latestSync = (knowledge.syncRuns ?? [])
+        .filter((run) => (
+          sourceInstanceIds.has(run.sourceInstanceId)
+          || run.sourceInstanceId.startsWith(`composio:${definition.id}:`)
+          || run.sourceInstanceId.startsWith(`${definition.id}:`)
+        ))
+        .sort((left, right) => Date.parse(right.startedAt) - Date.parse(left.startedAt))[0];
       const latestHealth = connected
         .filter((instance) => instance.usage.lastHealthCheckAt && instance.usage.lastHealthStatus)
         .sort((left, right) => (
@@ -159,16 +170,23 @@ export function projectPersonalContextSources(
           .at(-1),
         lastHealthCheckAt: latestHealth?.lastHealthCheckAt,
         lastHealthStatus: latestHealth?.lastHealthStatus,
-        lastActivityAt: connected
-          .flatMap((instance) => [
+        lastActivityAt: [
+          ...connected.flatMap((instance) => [
             instance.lastConnectedAt,
             instance.usage.lastHealthCheckAt,
             ...instance.audit.map((entry) => entry.at),
-          ])
+          ]),
+          latestSync?.finishedAt,
+          latestSync?.startedAt,
+        ]
           .filter((value): value is string => Boolean(value))
           .sort()
           .at(-1),
         derivedUnderstandingCount: relatedRecords.length,
+        knowledgeItemCount: sourceItems.filter((item) => !item.deletedAt).length,
+        lastSyncAt: latestSync?.finishedAt ?? latestSync?.startedAt,
+        lastSyncStatus: latestSync?.status,
+        lastSyncError: latestSync?.error,
       };
     })
     .sort((left, right) => {

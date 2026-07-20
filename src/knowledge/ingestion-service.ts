@@ -6,7 +6,7 @@ import {
   startKnowledgeSyncRun,
   upsertKnowledgeSourceItems,
 } from '../storage/sqlite/knowledge-repository.js';
-import type { KnowledgeSourceAdapter, KnowledgeSyncRun } from './types.js';
+import type { KnowledgeSourceAdapter, KnowledgeSourceItemInput, KnowledgeSyncRun } from './types.js';
 
 const log = createLogger('KnowledgeIngestion');
 
@@ -30,6 +30,33 @@ export class KnowledgeIngestionService {
     private readonly adapters: ReadonlyMap<string, KnowledgeSourceAdapter>,
     private readonly state: KnowledgeSourceStateStore = new SqliteKnowledgeSourceStateStore(),
   ) {}
+
+  ingest(params: {
+    instanceId: string;
+    items: KnowledgeSourceItemInput[];
+    cursorAfter?: string;
+    warnings?: string[];
+  }): KnowledgeSyncRun {
+    const cursorBefore = this.state.getCursor(params.instanceId);
+    const run = startKnowledgeSyncRun({ sourceInstanceId: params.instanceId, cursorBefore });
+    try {
+      const stored = upsertKnowledgeSourceItems(params.items);
+      this.state.setCursor(params.instanceId, params.cursorAfter);
+      return finishKnowledgeSyncRun({
+        runId: run.id,
+        status: params.warnings?.length ? 'partial' : 'succeeded',
+        cursorAfter: params.cursorAfter,
+        itemsSeen: params.items.length,
+        itemsCreated: stored.created,
+        itemsUpdated: stored.updated,
+        warnings: params.warnings,
+      });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      finishKnowledgeSyncRun({ runId: run.id, status: 'failed', error: errorMessage });
+      throw err;
+    }
+  }
 
   async sync(params: {
     adapterKind: string;

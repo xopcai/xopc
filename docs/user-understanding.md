@@ -5,14 +5,12 @@ xopc implements user understanding as a native runtime capability. It is not an 
 ## Runtime flow
 
 ```text
-conversation / source adapter
-          │
-          ▼
-knowledge_source_items ──► UserUnderstandingService ──► memory_records
-          │                         │                         │
-          │                         └── memory_evidence ◄─────┘
-          │
-          └── cursor + sync run audit
+conversation ─────────────► UserUnderstandingService ──► governed user understanding
+
+connected source ──► knowledge_source_items ──► ConnectedKnowledgePipeline ──► source facts + daily notes
+                              │                            │                            │
+                              ├── change ledger            └── memory_evidence ◄───────┘
+                              └── cursor + sync run audit
 
 user turn ──► UserContextPlanner ──► <user-context> ──► model turn
                     │
@@ -35,6 +33,13 @@ SQLite schema version 29 adds:
 - `knowledge_sync_runs` and `knowledge_source_state`: observable incremental ingestion with persistent cursors;
 - `memory_evidence`: normalized provenance links;
 - `memory_relations`: typed record-to-record relationships.
+
+SQLite schema version 37 adds the connected-knowledge delivery layer:
+
+- `knowledge_source_changes`: an ordered added/modified/deleted ledger so downstream consumers do not need to rescan source payloads;
+- `knowledge_consumer_watermarks`: independent monotonic checkpoints for future indexes and synthesis consumers;
+- explicit `user_understanding` versus `connected_knowledge` pipeline routing, plus synthesis attempts, leases, worker ownership, and bounded errors on `knowledge_source_items`;
+- idempotent `(record, source item, relation)` evidence links.
 
 The normalized tables are the native source of truth for understanding and recall. Existing curated Markdown remains a compatibility projection for explicit `curated_memory` workflows; implicit turn learning and background review no longer write Markdown directly.
 
@@ -93,9 +98,19 @@ Feedback remediation is deliberately conservative:
 
 Implement `KnowledgeSourceAdapter.pull()` for a source and register it with `KnowledgeIngestionService`. Pulls are incremental and idempotent by `(sourceInstanceId, externalId)` plus `contentHash`. Cursors persist in SQLite by default, and every run records counts, warnings, failure state, and timing.
 
+Gmail, Google Drive, Notion, and Slack Composio read actions use the same ingestion path. Results are normalized into bounded source items before synthesis; the runtime never writes the connector's raw response directly into memory. `ConnectedKnowledgePipeline` claims pending work with expiring leases, retries failed items, ignores secret and regulated content, and produces:
+
+- one stable `workspace_fact` per external item;
+- a bounded `daily_note` per source and day;
+- normalized evidence links back to every contributing source item;
+- archived records when an upstream item is deleted.
+
+The gateway coordinator drains pending synthesis after startup and every minute. Manual connector memory-sync requests also process their own source immediately, so the existing endpoint remains synchronous from the caller's perspective. The About You source cards show indexed item count and latest sync status.
+
 The gateway exposes read-only operational views:
 
 - `GET /api/knowledge/source-items`
+- `GET /api/knowledge/source-changes?afterSequence=...`
 - `GET /api/knowledge/sync-runs`
 - existing `/api/memory/records`, `/api/memory/traces`, and trace feedback endpoints
 

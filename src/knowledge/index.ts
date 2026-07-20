@@ -1,2 +1,4 @@
 export * from './types.js';
 export * from './ingestion-service.js';
+export * from './connected-knowledge-pipeline.js';
+export * from './coordinator.js';
