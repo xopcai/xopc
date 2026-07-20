@@ -51,6 +51,10 @@ export type PersonalContextSource = {
   id: string;
   displayName: string;
   description: string;
+  branding?: {
+    logoUrl?: string;
+    backgroundColor?: string;
+  };
   category: string;
   capabilities: string[];
   access: {
