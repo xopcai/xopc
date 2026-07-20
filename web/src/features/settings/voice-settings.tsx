@@ -11,14 +11,18 @@ import {
   fetchVoiceModels,
   fetchVoiceProviders,
   fetchVoiceSttProviders,
+  fetchLocalVoiceStatus,
+  installLocalVoiceModel,
   normalizeVoiceSettings,
   patchVoiceSettings,
+  removeLocalVoiceModel,
   testTtsVoice,
   type SttProviderListEntry,
   type TtsProviderListEntry,
   type VoiceConfigFieldMetadata,
   type VoiceModelsPayload,
   type VoiceSettingsState,
+  type LocalVoiceModelStatus,
 } from '@/features/settings/voice-config-api';
 import {
   VoiceApiKeyField,
@@ -147,6 +151,8 @@ const TTS_LOCAL_CLI_PRESETS = [
 
 function sttProviderLabel(id: string, v: VoiceSettingsMessages): string {
   switch (id) {
+    case 'xopc-local':
+      return v.stt.localProvider;
     case 'openai':
       return v.stt.openai;
     case 'alibaba':
@@ -429,7 +435,7 @@ export function VoiceSettingsPanel() {
       type: 'update',
       updater: (f) => {
         if (!f) return null;
-        const cur = f.stt.fallback ?? { enabled: true, order: ['alibaba', 'openai'] };
+        const cur = f.stt.fallback ?? { enabled: false, order: ['xopc-local'] };
         return {
           ...f,
           stt: {
@@ -440,6 +446,47 @@ export function VoiceSettingsPanel() {
       },
     });
   }, []);
+
+  const updateVoiceRefinement = useCallback(
+    (patch: Partial<VoiceSettingsState['voice']['input']['refinement']>) => {
+      dirtyRef.current = true;
+      dispatchForm({
+        type: 'update',
+        updater: (f) =>
+          f
+            ? {
+                ...f,
+                voice: {
+                  ...f.voice,
+                  input: {
+                    ...f.voice.input,
+                    refinement: { ...f.voice.input.refinement, ...patch },
+                  },
+                },
+              }
+            : null,
+      });
+    },
+    [],
+  );
+
+  const updateVoiceLanguageMode = useCallback((languageMode: 'auto' | 'manual') => {
+    dirtyRef.current = true;
+    dispatchForm({
+      type: 'update',
+      updater: (f) =>
+        f
+          ? {
+              ...f,
+              voice: {
+                ...f.voice,
+                languageMode,
+                ...(languageMode === 'auto' ? { language } : {}),
+              },
+            }
+          : null,
+    });
+  }, [language]);
 
   const updateTts = useCallback((patch: Partial<VoiceSettingsState['tts']>) => {
     dirtyRef.current = true;
@@ -485,6 +532,10 @@ export function VoiceSettingsPanel() {
         f
           ? {
               ...f,
+              voice:
+                patch.voice !== undefined || patch.lang !== undefined
+                  ? { ...f.voice, languageMode: 'manual' }
+                  : f.voice,
               tts: { ...f.tts, edge: { ...f.tts.edge, ...patch } },
             }
           : null,
@@ -580,6 +631,7 @@ export function VoiceSettingsPanel() {
 
   const stt = form.stt;
   const tts = form.tts;
+  const refinement = form.voice.input.refinement;
   const apiKeyLabels = voiceApiKeyLabels(v);
 
   return (
@@ -587,6 +639,11 @@ export function VoiceSettingsPanel() {
       {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
 
       <div className="flex flex-col gap-4">
+        <VoiceLanguageSection
+          v={v}
+          voice={form.voice}
+          updateLanguageMode={updateVoiceLanguageMode}
+        />
         <VoiceOverview v={v} stt={stt} tts={tts} />
 
         <SttSection
@@ -595,10 +652,12 @@ export function VoiceSettingsPanel() {
           stt={stt}
           models={models}
           sttProviders={sttProviders}
+          refinement={refinement}
           updateStt={updateStt}
           updateSttAlibaba={updateSttAlibaba}
           updateSttOpenai={updateSttOpenai}
           updateSttFallback={updateSttFallback}
+          updateRefinement={updateVoiceRefinement}
         />
 
         <TtsSection
@@ -623,6 +682,37 @@ export function VoiceSettingsPanel() {
         <p className="mt-2 text-xs text-fg-muted">{v.notes.envVars}</p>
       </div>
     </div>
+  );
+}
+
+function VoiceLanguageSection({
+  v,
+  voice,
+  updateLanguageMode,
+}: {
+  v: VoiceSettingsMessages;
+  voice: VoiceSettingsState['voice'];
+  updateLanguageMode: (mode: 'auto' | 'manual') => void;
+}) {
+  return (
+    <section className="rounded-2xl bg-surface-base px-4 py-5 sm:px-5">
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,18rem)] sm:items-center">
+        <div>
+          <div className="text-sm font-semibold text-fg">{v.language.title}</div>
+          <p className="mt-1 text-xs text-fg-muted">
+            {voice.languageMode === 'auto' ? v.language.autoDescription : v.language.manualDescription}
+          </p>
+        </div>
+        <Select
+          className={selectClassName()}
+          value={voice.languageMode}
+          onChange={(e) => updateLanguageMode(e.target.value as 'auto' | 'manual')}
+        >
+          <SelectOption value="auto">{v.language.auto}</SelectOption>
+          <SelectOption value="manual">{v.language.manual}</SelectOption>
+        </Select>
+      </div>
+    </section>
   );
 }
 
@@ -675,20 +765,24 @@ function SttSection({
   stt,
   models,
   sttProviders,
+  refinement,
   updateStt,
   updateSttAlibaba,
   updateSttOpenai,
   updateSttFallback,
+  updateRefinement,
 }: {
   v: VoiceSettingsMessages;
   apiKeyLabels: VoiceApiKeyFieldLabels;
   stt: VoiceSettingsState['stt'];
   models: VoiceModelsPayload | null;
   sttProviders: SttProviderListEntry[];
+  refinement: VoiceSettingsState['voice']['input']['refinement'];
   updateStt: (p: Partial<VoiceSettingsState['stt']>) => void;
   updateSttAlibaba: (p: Partial<NonNullable<VoiceSettingsState['stt']['alibaba']>>) => void;
   updateSttOpenai: (p: Partial<NonNullable<VoiceSettingsState['stt']['openai']>>) => void;
   updateSttFallback: (p: Partial<NonNullable<VoiceSettingsState['stt']['fallback']>>) => void;
+  updateRefinement: (p: Partial<VoiceSettingsState['voice']['input']['refinement']>) => void;
 }) {
   const alibabaModels = models?.stt?.alibaba?.length ? models.stt.alibaba : STT_ALIBABA_FALLBACK;
   const openaiModels = models?.stt?.openai?.length ? models.stt.openai : STT_OPENAI_FALLBACK;
@@ -774,7 +868,19 @@ function SttSection({
 
               <div className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
                 <FieldLabel>{v.stt.model}</FieldLabel>
-                {stt.provider === 'alibaba' ? (
+                {stt.provider === 'xopc-local' ? (
+                  <Select
+                    className={selectClassName()}
+                    value={extensionModel || 'sensevoice-small'}
+                    onChange={(e) => updateExtensionProvider({ model: e.target.value })}
+                  >
+                    {(models?.stt?.['xopc-local'] ?? []).map((m) => (
+                      <SelectOption key={m.id} value={m.id}>
+                        {m.name}
+                      </SelectOption>
+                    ))}
+                  </Select>
+                ) : stt.provider === 'alibaba' ? (
                   <Select
                     className={selectClassName()}
                     value={stt.alibaba?.model ?? ''}
@@ -820,32 +926,34 @@ function SttSection({
                 )}
               </div>
 
-              <div className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
-                <FieldLabel>{v.stt.apiKey}</FieldLabel>
-                <VoiceApiKeyField
-                  kind="stt"
-                  providerId={stt.provider}
-                  fieldId={`voice-stt-${stt.provider}-api-key`}
-                  value={
-                    stt.provider === 'alibaba'
-                      ? (stt.alibaba?.apiKey ?? '')
-                      : stt.provider === 'openai'
-                        ? (stt.openai?.apiKey ?? '')
-                        : extensionApiKey
-                  }
-                  onChange={(next) => {
-                    if (stt.provider === 'alibaba') updateSttAlibaba({ apiKey: next });
-                    else if (stt.provider === 'openai') updateSttOpenai({ apiKey: next });
-                    else updateExtensionProvider({ apiKey: next });
-                  }}
-                  labels={apiKeyLabels}
-                  placeholder={stt.provider === 'groq' ? 'gsk_...' : 'sk-...'}
-                />
-                <p className="text-xs text-fg-subtle">
-                  {v.stt.apiKeyDesc}
-                  {sttEnvHint(stt.provider) ? ` ${sttEnvHint(stt.provider)}` : ''}
-                </p>
-              </div>
+              {activeProvider?.diagnostics.requiresApiKey !== false ? (
+                <div className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
+                  <FieldLabel>{v.stt.apiKey}</FieldLabel>
+                  <VoiceApiKeyField
+                    kind="stt"
+                    providerId={stt.provider}
+                    fieldId={`voice-stt-${stt.provider}-api-key`}
+                    value={
+                      stt.provider === 'alibaba'
+                        ? (stt.alibaba?.apiKey ?? '')
+                        : stt.provider === 'openai'
+                          ? (stt.openai?.apiKey ?? '')
+                          : extensionApiKey
+                    }
+                    onChange={(next) => {
+                      if (stt.provider === 'alibaba') updateSttAlibaba({ apiKey: next });
+                      else if (stt.provider === 'openai') updateSttOpenai({ apiKey: next });
+                      else updateExtensionProvider({ apiKey: next });
+                    }}
+                    labels={apiKeyLabels}
+                    placeholder={stt.provider === 'groq' ? 'gsk_...' : 'sk-...'}
+                  />
+                  <p className="text-xs text-fg-subtle">
+                    {v.stt.apiKeyDesc}
+                    {sttEnvHint(stt.provider) ? ` ${sttEnvHint(stt.provider)}` : ''}
+                  </p>
+                </div>
+              ) : null}
             </div>
 
             {additionalFields.length > 0 ? (
@@ -862,6 +970,8 @@ function SttSection({
               </div>
             ) : null}
 
+            {stt.provider === 'xopc-local' ? <LocalVoiceModelsPanel v={v} /> : null}
+
             <div className="flex items-center justify-between gap-2 rounded-xl bg-surface-hover/50 px-3 py-2.5 dark:bg-surface-hover/35">
               <div>
                 <div className="text-sm font-medium text-fg">{v.stt.fallback}</div>
@@ -870,14 +980,130 @@ function SttSection({
               <input
                 type="checkbox"
                 className="ui-checkbox"
-                checked={stt.fallback?.enabled ?? true}
+                checked={stt.fallback?.enabled ?? false}
                 onChange={(e) => updateSttFallback({ enabled: e.target.checked })}
               />
+            </div>
+
+            <div className="grid gap-3 rounded-xl bg-surface-hover/50 px-3 py-3 dark:bg-surface-hover/35 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,18rem)] sm:items-center">
+              <div>
+                <div className="text-sm font-medium text-fg">{v.stt.refinement}</div>
+                <p className="text-xs text-fg-muted">{v.stt.refinementDesc}</p>
+              </div>
+              <Select
+                className={selectClassName()}
+                value={refinement.mode}
+                onChange={(e) =>
+                  updateRefinement({
+                    mode: e.target.value as VoiceSettingsState['voice']['input']['refinement']['mode'],
+                  })
+                }
+              >
+                <SelectOption value="off">{v.stt.refinementOff}</SelectOption>
+                <SelectOption value="punctuation">{v.stt.refinementPunctuation}</SelectOption>
+                <SelectOption value="light">{v.stt.refinementLight}</SelectOption>
+              </Select>
             </div>
           </>
         ) : null}
       </div>
     </section>
+  );
+}
+
+function localModelSize(bytes: number): string {
+  return `${Math.round(bytes / 1024 / 1024)} MB`;
+}
+
+function LocalVoiceModelsPanel({ v }: { v: VoiceSettingsMessages }) {
+  const { data, error, mutate } = useSWR(
+    apiUrl('/api/voice/local/status'),
+    fetchLocalVoiceStatus,
+    {
+      revalidateOnFocus: false,
+      refreshInterval: (latest) =>
+        latest?.models.some((model) => model.state === 'downloading') ? 1000 : 0,
+    },
+  );
+  const [busyModel, setBusyModel] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const runAction = useCallback(
+    async (model: LocalVoiceModelStatus, action: 'install' | 'remove') => {
+      setBusyModel(model.id);
+      setActionError(null);
+      try {
+        if (action === 'install') await installLocalVoiceModel(model.id);
+        else await removeLocalVoiceModel(model.id);
+        await mutate();
+      } catch (cause) {
+        setActionError(cause instanceof Error ? cause.message : String(cause));
+      } finally {
+        setBusyModel(null);
+      }
+    },
+    [mutate],
+  );
+
+  return (
+    <div className="rounded-xl border border-edge bg-surface-panel/60 p-3">
+      <div className="text-sm font-medium text-fg">{v.stt.localModels}</div>
+      <p className="mt-1 text-xs text-fg-muted">{v.stt.localModelsDesc}</p>
+      {error ? <p className="mt-3 text-xs text-red-600 dark:text-red-400">{String(error)}</p> : null}
+      {actionError ? <p className="mt-3 text-xs text-red-600 dark:text-red-400">{actionError}</p> : null}
+      <div className="mt-3 grid gap-2">
+        {(data?.models ?? []).map((model) => {
+          const busy = busyModel === model.id || model.state === 'downloading';
+          return (
+            <div
+              key={model.id}
+              className={cn(
+                'flex items-center justify-between gap-3 rounded-lg bg-surface-base px-3 py-2.5',
+                model.recommended ? 'ring-1 ring-accent/40' : '',
+              )}
+            >
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-fg">
+                  {model.name}
+                  {model.recommended ? (
+                    <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent">
+                      {v.stt.localRecommended}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="text-xs text-fg-muted">
+                  {localModelSize(model.approximateBytes)} · {model.description}
+                </div>
+                <div className="mt-0.5 text-[11px] text-fg-subtle">
+                  {model.engine} · {model.languages.join(' / ')}
+                </div>
+                {model.state === 'downloading' ? (
+                  <div className="mt-1 text-xs text-accent">
+                    {v.stt.localDownloading} {Math.round((model.progress ?? 0) * 100)}%
+                  </div>
+                ) : model.state === 'error' ? (
+                  <div className="mt-1 text-xs text-red-600 dark:text-red-400">{model.error}</div>
+                ) : null}
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={busy}
+                onClick={() => void runAction(model, model.state === 'ready' ? 'remove' : 'install')}
+              >
+                {busy ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : model.state === 'ready' ? (
+                  v.stt.localRemove
+                ) : (
+                  v.stt.localInstall
+                )}
+              </Button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

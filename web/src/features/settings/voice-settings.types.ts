@@ -100,6 +100,17 @@ export interface TtsSettings {
 export interface VoiceSettingsState {
   stt: SttSettings;
   tts: TtsSettings;
+  voice: {
+    languageMode: 'auto' | 'manual';
+    language: 'en' | 'zh';
+    input: {
+      refinement: {
+        mode: 'off' | 'punctuation' | 'light' | 'custom';
+        model?: string;
+        customInstruction?: string;
+      };
+    };
+  };
 }
 
 export interface TtsProviderListEntry extends VoiceProviderMetadata {

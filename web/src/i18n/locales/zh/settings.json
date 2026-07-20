@@ -1182,6 +1182,7 @@
     "chatSend": "发送消息",
     "chatNewLine": "换行",
     "chatForceSend": "强制发送（编辑模式）",
+    "chatVoiceInput": "开始/结束语音输入",
     "editorHeading1": "一级标题",
     "editorHeading2": "二级标题",
     "editorHeading3": "三级标题",
@@ -1194,7 +1195,9 @@
     "quickCaptureShortcutChange": "更改快捷键",
     "quickCaptureShortcutReset": "恢复默认",
     "quickCaptureShortcutRecording": "请按下快捷键（Esc 取消）",
-    "quickCaptureShortcutConflict": "该快捷键已被核心导航操作占用。"
+    "quickCaptureShortcutConflict": "该快捷键已被占用。",
+    "voiceInputShortcutTitle": "语音输入快捷键",
+    "voiceInputShortcutDescription": "在对话或已打开的快速记录中开始/结束语音输入，按 Esc 取消。"
   },
   "mcpSettings": {
     "title": "外部工具 (MCP)",

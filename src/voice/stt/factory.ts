@@ -56,6 +56,11 @@ export function resolveSTTProviderConfig(
   const fields = readSttProviderFields(slice, entry);
   const apiKey = resolveApiKey(providerId, fields, plugin.envKey);
   const requiresApiKey = plugin.requiresApiKey !== false;
+  const model = fields.model ?? entry?.model ?? plugin.defaultModels?.audio;
+  if (plugin.isConfigured && !plugin.isConfigured({ model })) {
+    log.debug({ providerId }, `STT provider "${providerId}" runtime is not ready; skipping`);
+    return null;
+  }
   if (requiresApiKey && !apiKey) {
     log.debug({ providerId }, `STT provider "${providerId}" missing API key; skipping`);
     return null;
@@ -66,9 +71,7 @@ export function resolveSTTProviderConfig(
     ...(apiKey ? { apiKey } : {}),
     ...(fields.baseUrl ? { baseUrl: fields.baseUrl } : {}),
     ...(fields.headers ? { headers: fields.headers } : {}),
-    ...(fields.model ?? entry?.model ?? plugin.defaultModels?.audio
-      ? { model: fields.model ?? entry?.model ?? plugin.defaultModels?.audio }
-      : {}),
+    ...(model ? { model } : {}),
     ...(fields.language ? { language: fields.language } : {}),
     ...(fields.prompt ? { prompt: fields.prompt } : {}),
   };

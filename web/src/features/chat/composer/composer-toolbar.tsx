@@ -9,11 +9,14 @@ import { SessionWorkingDirectoryControl } from '@/features/chat/session/session-
 import { ChatGoalComposerMenu } from '@/features/chat/composer/chat-goal-composer-menu';
 import type { SessionManager } from '@/features/chat/session/session-manager';
 import type { ThinkingLevel } from '@/features/chat/composer/composer.types';
+import type { VoiceReadiness } from '@/features/chat/composer/voice-transcribe-api';
 import { interpolate } from '@/features/chat/composer/composer.types';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import type { MessageBundle } from '@/i18n/messages';
 import { Select, SelectOption } from '@/components/ui/popover-select';
+import { shortcutDisplayKeys } from '@/stores/quick-capture-shortcut-store';
+import { useVoiceInputShortcutStore } from '@/stores/voice-input-shortcut-store';
 
 function thinkingIcon(level: ThinkingLevel) {
   return level === 'off' ? Ban : Sparkles;
@@ -44,6 +47,7 @@ export interface ComposerToolbarProps {
   onThinkingChange: (level: string) => void;
 
   voiceActive: boolean;
+  voiceReadiness: VoiceReadiness;
   onStartVoiceInput: () => void;
 
   onSend: () => void;
@@ -78,6 +82,7 @@ export const ComposerToolbar = memo(function ComposerToolbar({
   showThinkingSelector,
   onThinkingChange,
   voiceActive,
+  voiceReadiness,
   onStartVoiceInput,
   onSend,
   onAbort,
@@ -89,12 +94,19 @@ export const ComposerToolbar = memo(function ComposerToolbar({
   contextUsageMessages,
   composerDraftChars,
 }: ComposerToolbarProps) {
+  const voiceShortcut = useVoiceInputShortcutStore((s) => s.shortcut);
   const [moreOpen, setMoreOpen] = useState(false);
   const ThinkingIcon = thinkingIcon(thinkingLevel as ThinkingLevel);
   const attachmentsFull = attachmentCount >= maxAttachments;
   const attachTitle = attachmentsFull
     ? interpolate(m.maxAttachmentsReached, { max: maxAttachments })
     : `${m.attachFile} (${attachmentCount}/${maxAttachments})`;
+  const voiceActionTitle = voiceReadiness.state === 'preparing'
+    ? m.voicePreparing
+    : voiceReadiness.state === 'error' || voiceReadiness.state === 'needs_download'
+      ? m.voiceNeedsPreparation
+      : m.voiceInput;
+  const voiceTitle = `${voiceActionTitle} (${shortcutDisplayKeys(voiceShortcut).join('+')})`;
 
   return (
     <div
@@ -242,18 +254,23 @@ export const ComposerToolbar = memo(function ComposerToolbar({
             <button
               type="button"
               className={cn(
-                'inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-transparent text-fg-subtle hover:bg-surface-hover hover:text-fg',
+                'relative inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-transparent text-fg-subtle hover:bg-surface-hover hover:text-fg',
                 interaction.transition,
                 interaction.press,
                 interaction.focusRingPanel,
                 'disabled:cursor-not-allowed disabled:opacity-50',
               )}
               disabled={disabled}
-              title={m.voiceInput}
-              aria-label={m.voiceInput}
+              title={voiceTitle}
+              aria-label={voiceTitle}
               onClick={() => void onStartVoiceInput()}
             >
               <Mic className="size-4 stroke-[1.75]" />
+              {voiceReadiness.state === 'preparing' ? (
+                <span className="absolute right-0.5 top-0.5 size-1.5 rounded-full bg-amber-500 motion-safe:animate-pulse" aria-hidden />
+              ) : voiceReadiness.state === 'error' || voiceReadiness.state === 'needs_download' ? (
+                <span className="absolute right-0.5 top-0.5 size-1.5 rounded-full bg-red-500" aria-hidden />
+              ) : null}
             </button>
           ) : null}
           {runBusy ? (

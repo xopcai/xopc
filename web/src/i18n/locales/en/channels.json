@@ -155,6 +155,13 @@
       "ready": "Ready",
       "off": "Off"
     },
+    "language": {
+      "title": "Voice language",
+      "auto": "Follow app language",
+      "manual": "Keep manual settings",
+      "autoDescription": "STT language and the built-in Edge voice follow the app language automatically.",
+      "manualDescription": "App language changes will not overwrite the model language or selected voice."
+    },
     "behavior": {
       "title": "How voice should work",
       "description": "Choose the user-facing behavior first. Engine details stay below.",
@@ -181,7 +188,19 @@
       "apiKeyDesc": "Optional if the key is already in the environment.",
       "model": "Model",
       "fallback": "Fallback between providers",
-      "fallbackDesc": "Try the other provider if the primary request fails."
+      "fallbackDesc": "Try the other provider if the primary request fails.",
+      "refinement": "Transcript cleanup",
+      "refinementDesc": "Optional model pass after transcription. Off avoids extra latency and model usage.",
+      "refinementOff": "Off (raw transcript)",
+      "refinementPunctuation": "Punctuation only",
+      "refinementLight": "Light cleanup",
+      "localProvider": "xopc Local Voice",
+      "localModels": "Local speech models",
+      "localModelsDesc": "Only model files are downloaded. Recognition runs privately inside xopc.",
+      "localRecommended": "Recommended for Chinese",
+      "localDownloading": "Downloading",
+      "localInstall": "Download",
+      "localRemove": "Remove"
     },
     "tts": {
       "title": "Assistant voice replies (TTS)",

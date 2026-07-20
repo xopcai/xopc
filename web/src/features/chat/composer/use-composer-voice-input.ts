@@ -2,12 +2,19 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import {
-  fetchVoiceSttAvailable,
+  fetchVoiceReadiness,
+  prepareLocalVoiceModel,
   transcribeVoiceBlob,
+  type VoiceReadiness,
 } from '@/features/chat/composer/voice-transcribe-api';
 import type { ChatMessages } from '@/i18n/messages';
 
-export type VoiceInputPhase = 'idle' | 'recording' | 'transcribing';
+import { PcmWavRecorder } from './pcm-wav-recorder';
+
+export type VoiceInputPhase = 'idle' | 'preparing' | 'requesting' | 'recording' | 'transcribing' | 'error';
+
+const MAX_RECORDING_MS = 120_000;
+const READINESS_POLL_MS = 1_000;
 
 function formatElapsed(sec: number): string {
   if (!Number.isFinite(sec) || sec < 0) return '0:00';
@@ -17,7 +24,6 @@ function formatElapsed(sec: number): string {
 }
 
 export interface UseComposerVoiceInputOptions {
-  /** Same gate as text input (session loading, clarify, etc.) — not blocked while agent streams. */
   disabled: boolean;
   chat: ChatMessages;
   onTranscript: (text: string) => void;
@@ -27,28 +33,38 @@ export interface UseComposerVoiceInputReturn {
   phase: VoiceInputPhase;
   voiceActive: boolean;
   elapsedLabel: string;
+  audioLevel: number;
+  readiness: VoiceReadiness;
+  hasRetainedRecording: boolean;
   startVoiceInput: () => Promise<void>;
   cancelVoiceInput: () => void;
   confirmVoiceInput: () => void;
+  retryVoiceInput: () => void;
 }
 
 export function useComposerVoiceInput(options: UseComposerVoiceInputOptions): UseComposerVoiceInputReturn {
   const { disabled, chat: m, onTranscript } = options;
-
   const [phase, setPhase] = useState<VoiceInputPhase>('idle');
   const [elapsedSec, setElapsedSec] = useState(0);
+  const [audioLevel, setAudioLevel] = useState(0);
+  const [readiness, setReadiness] = useState<VoiceReadiness>({ state: 'unavailable' });
+  const [hasRetainedRecording, setHasRetainedRecording] = useState(false);
 
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const mediaChunksRef = useRef<Blob[]>([]);
+  const phaseRef = useRef<VoiceInputPhase>('idle');
+  const recorderRef = useRef<PcmWavRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
-  const recorderMimeRef = useRef('');
-  const skipProcessRef = useRef(false);
-  const pendingConfirmRef = useRef(false);
+  const lastRecordingRef = useRef<Blob | null>(null);
+  const pendingCaptureRef = useRef(false);
   const recordStartPerfRef = useRef<number | null>(null);
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
+  const autoConfirmRef = useRef<() => void>(() => {});
   const onTranscriptRef = useRef(onTranscript);
   onTranscriptRef.current = onTranscript;
+
+  const updatePhase = useCallback((next: VoiceInputPhase) => {
+    phaseRef.current = next;
+    setPhase(next);
+  }, []);
 
   const stopTimer = useCallback(() => {
     if (timerIntervalRef.current != null) {
@@ -58,177 +74,199 @@ export function useComposerVoiceInput(options: UseComposerVoiceInputOptions): Us
   }, []);
 
   const stopVoiceMediaStreamTracks = useCallback(() => {
-    mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
+    mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
     mediaStreamRef.current = null;
   }, []);
 
-  const finishIdle = useCallback(() => {
+  const resetCaptureState = useCallback(() => {
     stopTimer();
     stopVoiceMediaStreamTracks();
-    mediaRecorderRef.current = null;
-    mediaChunksRef.current = [];
+    recorderRef.current = null;
     recordStartPerfRef.current = null;
-    pendingConfirmRef.current = false;
-    skipProcessRef.current = false;
     setElapsedSec(0);
-    setPhase('idle');
+    setAudioLevel(0);
   }, [stopTimer, stopVoiceMediaStreamTracks]);
 
-  const stopRecorder = useCallback(() => {
-    const rec = mediaRecorderRef.current;
-    if (rec && rec.state !== 'inactive') {
-      rec.stop();
-    } else {
-      finishIdle();
-    }
-    mediaRecorderRef.current = null;
-  }, [finishIdle]);
+  const finishIdle = useCallback(() => {
+    resetCaptureState();
+    pendingCaptureRef.current = false;
+    lastRecordingRef.current = null;
+    setHasRetainedRecording(false);
+    updatePhase('idle');
+  }, [resetCaptureState, updatePhase]);
 
   const cancelVoiceInput = useCallback(() => {
-    skipProcessRef.current = true;
-    pendingConfirmRef.current = false;
-    stopRecorder();
-  }, [stopRecorder]);
+    recorderRef.current?.cancel();
+    finishIdle();
+  }, [finishIdle]);
 
-  const processRecording = useCallback(
-    async (chunks: Blob[], mimeType: string) => {
-      setPhase('transcribing');
-      const blob = new Blob(chunks, { type: mimeType || 'audio/webm' });
-      if (blob.size < 32) {
+  const processRecording = useCallback(async (blob: Blob) => {
+    lastRecordingRef.current = blob;
+    setHasRetainedRecording(true);
+    updatePhase('transcribing');
+    if (blob.size < 32) {
+      showComposerNotification('warning', m.voiceTranscribeEmpty);
+      finishIdle();
+      return;
+    }
+    try {
+      const payload = await transcribeVoiceBlob(blob, 'audio/wav');
+      const text = (payload.refined ?? payload.raw).trim();
+      if (!text) {
         showComposerNotification('warning', m.voiceTranscribeEmpty);
         finishIdle();
         return;
       }
-
-      try {
-        const payload = await transcribeVoiceBlob(blob, blob.type || mimeType || 'audio/webm');
-        const text = (payload.refined ?? payload.raw).trim();
-        if (!text) {
-          showComposerNotification('warning', m.voiceTranscribeEmpty);
-          finishIdle();
-          return;
-        }
-        onTranscriptRef.current(text);
-        finishIdle();
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        if (msg.includes('STT is not configured') || msg.includes('503')) {
-          showComposerNotification('error', m.voiceSttNotConfigured, undefined, { href: '/settings/voice' });
-        } else {
-          showComposerNotification('error', m.voiceTranscribeFailed);
-        }
-        finishIdle();
+      onTranscriptRef.current(text);
+      finishIdle();
+    } catch (err) {
+      resetCaptureState();
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('STT is not configured') || msg.includes('503')) {
+        showComposerNotification('error', m.voiceSttNotConfigured, undefined, { href: '/settings/voice' });
+      } else {
+        showComposerNotification('error', m.voiceTranscribeFailed);
       }
-    },
-    [finishIdle, m.voiceSttNotConfigured, m.voiceTranscribeEmpty, m.voiceTranscribeFailed],
-  );
+      updatePhase('error');
+    }
+  }, [finishIdle, m.voiceSttNotConfigured, m.voiceTranscribeEmpty, m.voiceTranscribeFailed, resetCaptureState, updatePhase]);
+
+  const confirmVoiceInput = useCallback(() => {
+    if (phaseRef.current !== 'recording') return;
+    updatePhase('transcribing');
+    stopTimer();
+    stopVoiceMediaStreamTracks();
+    const recorder = recorderRef.current;
+    recorderRef.current = null;
+    if (!recorder) {
+      finishIdle();
+      return;
+    }
+    void recorder.stop().then(processRecording).catch(() => {
+      resetCaptureState();
+      showComposerNotification('error', m.voiceTranscribeFailed);
+      updatePhase('error');
+    });
+  }, [finishIdle, m.voiceTranscribeFailed, processRecording, resetCaptureState, stopTimer, stopVoiceMediaStreamTracks, updatePhase]);
+  autoConfirmRef.current = confirmVoiceInput;
 
   const startTimer = useCallback(() => {
     stopTimer();
     timerIntervalRef.current = setInterval(() => {
-      const t0 = recordStartPerfRef.current;
-      if (typeof t0 === 'number') {
-        setElapsedSec(Math.max(0, (performance.now() - t0) / 1000));
-      }
+      const startedAt = recordStartPerfRef.current;
+      if (typeof startedAt !== 'number') return;
+      const elapsedMs = performance.now() - startedAt;
+      setElapsedSec(Math.max(0, elapsedMs / 1000));
+      if (elapsedMs >= MAX_RECORDING_MS) autoConfirmRef.current();
     }, 200);
   }, [stopTimer]);
 
-  const startVoiceInput = useCallback(async () => {
-    if (disabled || phase !== 'idle') return;
-
-    const sttOk = await fetchVoiceSttAvailable();
-    if (!sttOk) {
-      showComposerNotification('error', m.voiceSttNotConfigured, undefined, { href: '/settings/voice' });
-      return;
-    }
-
-    skipProcessRef.current = false;
-    pendingConfirmRef.current = false;
+  const beginCapture = useCallback(async () => {
+    if (disabled) return;
+    updatePhase('requesting');
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      window.dispatchEvent(new Event('xopc-voice-recording-start'));
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      });
+      if (phaseRef.current !== 'requesting') {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       mediaStreamRef.current = stream;
-
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-        ? 'audio/webm;codecs=opus'
-        : MediaRecorder.isTypeSupported('audio/webm')
-          ? 'audio/webm'
-          : '';
-      recorderMimeRef.current = mimeType;
-      const rec = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
-
-      mediaChunksRef.current = [];
-      rec.ondataavailable = (e) => {
-        if (e.data.size > 0) mediaChunksRef.current.push(e.data);
-      };
-      rec.onstop = () => {
-        void (async () => {
-          try {
-            const chunks = mediaChunksRef.current;
-            mediaChunksRef.current = [];
-            const mime = recorderMimeRef.current || rec.mimeType;
-
-            if (skipProcessRef.current) {
-              finishIdle();
-              return;
-            }
-
-            if (pendingConfirmRef.current) {
-              pendingConfirmRef.current = false;
-              await processRecording(chunks, mime);
-              return;
-            }
-
-            finishIdle();
-          } finally {
-            stopVoiceMediaStreamTracks();
-          }
-        })();
-      };
-
-      mediaRecorderRef.current = rec;
-      recordStartPerfRef.current = performance.now();
+      const startedAt = performance.now();
+      recordStartPerfRef.current = startedAt;
+      recorderRef.current = await PcmWavRecorder.start(stream, {
+        onAudioLevel: ({ level }) => {
+          setAudioLevel(Math.min(1, level * 8));
+        },
+      });
+      lastRecordingRef.current = null;
+      setHasRetainedRecording(false);
+      pendingCaptureRef.current = false;
       setElapsedSec(0);
-      rec.start(250);
-      setPhase('recording');
+      updatePhase('recording');
       startTimer();
     } catch {
-      finishIdle();
+      resetCaptureState();
+      updatePhase('idle');
       showComposerNotification('error', m.voiceMicDenied);
     }
-  }, [
-    disabled,
-    finishIdle,
-    m.voiceMicDenied,
-    m.voiceSttNotConfigured,
-    phase,
-    processRecording,
-    startTimer,
-    stopVoiceMediaStreamTracks,
-  ]);
+  }, [disabled, m.voiceMicDenied, resetCaptureState, startTimer, updatePhase]);
 
-  const confirmVoiceInput = useCallback(() => {
-    if (phase !== 'recording') return;
-    pendingConfirmRef.current = true;
-    skipProcessRef.current = false;
-    setPhase('transcribing');
-    stopTimer();
-    stopRecorder();
-  }, [phase, stopRecorder, stopTimer]);
+  const prepareAndWait = useCallback(async (current: VoiceReadiness) => {
+    pendingCaptureRef.current = true;
+    updatePhase('preparing');
+    if (current.state === 'needs_download' || current.state === 'error') {
+      try {
+        await prepareLocalVoiceModel(current.modelId ?? 'sensevoice-small');
+      } catch (cause) {
+        setReadiness({ ...current, state: 'error', error: cause instanceof Error ? cause.message : String(cause) });
+        updatePhase('error');
+      }
+    }
+  }, [updatePhase]);
+
+  const startVoiceInput = useCallback(async () => {
+    if (disabled || phaseRef.current !== 'idle') return;
+    const current = await fetchVoiceReadiness();
+    setReadiness(current);
+    if (current.state === 'ready') {
+      await beginCapture();
+      return;
+    }
+    if (current.provider === 'xopc-local' && ['preparing', 'needs_download', 'error'].includes(current.state)) {
+      await prepareAndWait(current);
+      return;
+    }
+    showComposerNotification('error', m.voiceSttNotConfigured, undefined, { href: '/settings/voice' });
+  }, [beginCapture, disabled, m.voiceSttNotConfigured, prepareAndWait]);
+
+  const retryVoiceInput = useCallback(() => {
+    const blob = lastRecordingRef.current;
+    if (blob) {
+      void processRecording(blob);
+      return;
+    }
+    void prepareAndWait(readiness);
+  }, [prepareAndWait, processRecording, readiness]);
 
   useEffect(() => {
-    return () => {
-      skipProcessRef.current = true;
-      pendingConfirmRef.current = false;
-      stopRecorder();
+    let cancelled = false;
+    const refresh = async () => {
+      const current = await fetchVoiceReadiness();
+      if (cancelled) return;
+      setReadiness(current);
+      if (pendingCaptureRef.current && current.state === 'ready') {
+        await beginCapture();
+      } else if (pendingCaptureRef.current && current.state === 'error') {
+        updatePhase('error');
+      }
     };
-  }, [stopRecorder]);
+    void refresh();
+    const interval = phase === 'preparing' ? setInterval(() => void refresh(), READINESS_POLL_MS) : null;
+    return () => {
+      cancelled = true;
+      if (interval) clearInterval(interval);
+    };
+  }, [beginCapture, phase, updatePhase]);
+
+  useEffect(() => () => {
+    recorderRef.current?.cancel();
+    stopVoiceMediaStreamTracks();
+    stopTimer();
+  }, [stopTimer, stopVoiceMediaStreamTracks]);
 
   return {
     phase,
     voiceActive: phase !== 'idle',
     elapsedLabel: formatElapsed(elapsedSec),
+    audioLevel,
+    readiness,
+    hasRetainedRecording,
     startVoiceInput,
     cancelVoiceInput,
     confirmVoiceInput,
+    retryVoiceInput,
   };
 }

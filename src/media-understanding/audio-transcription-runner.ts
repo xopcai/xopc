@@ -82,6 +82,7 @@ export async function runAudioTranscription(
         attachment,
         config: configById.get(provider.id.toLowerCase()),
         timeoutMs: options.timeoutMs,
+        signal: options.signal,
       }),
   });
 
@@ -111,8 +112,9 @@ function buildAudioRequest(params: {
   attachment: CapabilityAttachmentInput;
   config?: AudioProviderResolvedConfig;
   timeoutMs: number;
+  signal?: AbortSignal;
 }): AudioTranscriptionRequest | undefined {
-  const { provider, attachment, config, timeoutMs } = params;
+  const { provider, attachment, config, timeoutMs, signal } = params;
   if (!config) {
     log.debug(
       { providerId: provider.id, attachmentIndex: attachment.attachmentIndex },
@@ -142,5 +144,6 @@ function buildAudioRequest(params: {
     ...(config.prompt ? { prompt: config.prompt } : {}),
     ...(config.query ? { query: config.query } : {}),
     timeoutMs,
+    ...(signal ? { signal } : {}),
   };
 }

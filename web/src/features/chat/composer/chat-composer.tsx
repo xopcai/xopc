@@ -26,6 +26,13 @@ import { ComposerVoiceInputBar } from '@/features/chat/composer/composer-voice-i
 import { ComposerContextNotice } from '@/features/chat/composer/composer-context-notice';
 import { useComposerVoiceInput } from '@/features/chat/composer/use-composer-voice-input';
 import { ReviewLauncherDialog } from '@/features/chat/review/review-launcher-dialog';
+import {
+  takePendingVoiceInputToggle,
+  queuePendingVoiceInputToggle,
+  type VoiceInputShortcutTarget,
+  VOICE_INPUT_CANCEL_EVENT,
+  VOICE_INPUT_TOGGLE_EVENT,
+} from '@/features/voice/voice-input-shortcut-events';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -219,6 +226,61 @@ export const ChatComposer = memo(function ChatComposer({
       editor.resetEditor({ nextText: next, caretOffset: next.length, focus: true });
     },
   });
+  const {
+    phase: voicePhase,
+    voiceActive,
+    startVoiceInput,
+    cancelVoiceInput: cancelVoiceCapture,
+    confirmVoiceInput,
+  } = voice;
+
+  useEffect(() => {
+    const toggleVoiceInput = (event?: Event) => {
+      const target = (event as CustomEvent<{ target?: VoiceInputShortcutTarget }> | undefined)?.detail?.target;
+      if (target && target !== 'chat') return;
+      event?.preventDefault();
+      if (disabled) return;
+      if (voicePhase === 'recording') {
+        confirmVoiceInput();
+        return;
+      }
+      if (voicePhase === 'idle' || voicePhase === 'error') {
+        editor.editorRef.current?.focus();
+        void startVoiceInput();
+      }
+    };
+    const cancelVoiceInput = (event: Event) => {
+      const target = (event as CustomEvent<{ target?: VoiceInputShortcutTarget }>).detail?.target;
+      if ((target && target !== 'chat') || !voiceActive) return;
+      event.preventDefault();
+      cancelVoiceCapture();
+      editor.editorRef.current?.focus();
+    };
+
+    window.addEventListener(VOICE_INPUT_TOGGLE_EVENT, toggleVoiceInput);
+    window.addEventListener(VOICE_INPUT_CANCEL_EVENT, cancelVoiceInput);
+    const pendingTimer = window.setTimeout(() => {
+      if (!takePendingVoiceInputToggle()) return;
+      if (disabled) {
+        queuePendingVoiceInputToggle();
+        return;
+      }
+      toggleVoiceInput();
+    }, 0);
+    return () => {
+      window.clearTimeout(pendingTimer);
+      window.removeEventListener(VOICE_INPUT_TOGGLE_EVENT, toggleVoiceInput);
+      window.removeEventListener(VOICE_INPUT_CANCEL_EVENT, cancelVoiceInput);
+    };
+  }, [
+    cancelVoiceCapture,
+    confirmVoiceInput,
+    disabled,
+    editor.editorRef,
+    startVoiceInput,
+    voiceActive,
+    voicePhase,
+  ]);
 
   const clearEditFollowUpRef = useCallback(() => {
     lastLoadedEditFollowUpIdRef.current = null;
@@ -465,10 +527,14 @@ export const ChatComposer = memo(function ChatComposer({
             <ComposerVoiceInputBar
               phase={voice.phase}
               elapsedLabel={voice.elapsedLabel}
+              audioLevel={voice.audioLevel}
+              readiness={voice.readiness}
+              hasRetainedRecording={voice.hasRetainedRecording}
               disabled={disabled}
               chat={m.chat}
               onCancel={voice.cancelVoiceInput}
               onConfirm={voice.confirmVoiceInput}
+              onRetry={voice.retryVoiceInput}
             />
           ) : (
             <ChatComposerInput
@@ -511,6 +577,7 @@ export const ChatComposer = memo(function ChatComposer({
           showThinkingSelector={showThinkingSelector}
           onThinkingChange={onThinkingChange}
           voiceActive={voice.voiceActive}
+          voiceReadiness={voice.readiness}
           onStartVoiceInput={voice.startVoiceInput}
           onSend={actions.send}
           onAbort={onAbort}

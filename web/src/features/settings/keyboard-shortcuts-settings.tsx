@@ -5,11 +5,18 @@ import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/setti
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 import { isElectron } from '@/lib/electron-env';
+import { APP_SHORTCUT_RECORDING_EVENT } from '@/features/voice/voice-input-shortcut-events';
 import {
   defaultQuickCaptureShortcut,
+  isMacPlatform,
+  shortcutDisplayKeys,
   shortcutFromKeyboardEvent,
   useQuickCaptureShortcutStore,
 } from '@/stores/quick-capture-shortcut-store';
+import {
+  defaultVoiceInputShortcut,
+  useVoiceInputShortcutStore,
+} from '@/stores/voice-input-shortcut-store';
 
 type ShortcutEntry = {
   keys: string[];
@@ -22,41 +29,42 @@ type ShortcutCategory = {
   shortcuts: ShortcutEntry[];
 };
 
-const isMac =
-  typeof navigator !== 'undefined' &&
-  (navigator.platform?.includes('Mac') ?? navigator.userAgent.includes('Mac'));
+const isMac = isMacPlatform();
 
 const MOD = isMac ? '⌘' : 'Ctrl';
 
-function shortcutKeys(shortcut: string): string[] {
-  return shortcut.split('+').map((key) => {
-    if (key === 'control') return 'Ctrl';
-    if (key === 'meta') return isMac ? '⌘' : 'Win';
-    if (key === 'alt') return isMac ? 'Option' : 'Alt';
-    if (key === 'shift') return 'Shift';
-    if (key === 'space') return 'Space';
-    return key.length === 1 ? key.toUpperCase() : key;
-  });
-}
-
-function QuickCaptureShortcutEditor() {
+function ShortcutEditor({
+  title,
+  description,
+  shortcut,
+  otherShortcut,
+  defaultShortcut,
+  setShortcut,
+  legacyRecordingEvent,
+}: {
+  title: string;
+  description: string;
+  shortcut: string;
+  otherShortcut: string;
+  defaultShortcut: () => string;
+  setShortcut: (shortcut: string) => void;
+  legacyRecordingEvent?: string;
+}) {
   const language = useLocaleStore((s) => s.language);
   const k = messages(language).keyboardShortcutsSettings;
-  const shortcut = useQuickCaptureShortcutStore((s) => s.shortcut);
-  const setShortcut = useQuickCaptureShortcutStore((s) => s.setShortcut);
   const [recording, setRecording] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    window.dispatchEvent(
-      new CustomEvent('quick-capture-shortcut-recording', { detail: { active: recording } }),
-    );
+    const detail = { active: recording };
+    window.dispatchEvent(new CustomEvent(APP_SHORTCUT_RECORDING_EVENT, { detail }));
+    if (legacyRecordingEvent) window.dispatchEvent(new CustomEvent(legacyRecordingEvent, { detail }));
     return () => {
-      window.dispatchEvent(
-        new CustomEvent('quick-capture-shortcut-recording', { detail: { active: false } }),
-      );
+      const inactive = { active: false };
+      window.dispatchEvent(new CustomEvent(APP_SHORTCUT_RECORDING_EVENT, { detail: inactive }));
+      if (legacyRecordingEvent) window.dispatchEvent(new CustomEvent(legacyRecordingEvent, { detail: inactive }));
     };
-  }, [recording]);
+  }, [legacyRecordingEvent, recording]);
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
     if (!recording) return;
@@ -78,7 +86,7 @@ function QuickCaptureShortcutEditor() {
       `${modifier}+b`,
       `${modifier}+,`,
     ]);
-    if (reserved.has(next)) {
+    if (reserved.has(next) || next === otherShortcut) {
       setError(k.quickCaptureShortcutConflict);
       return;
     }
@@ -89,14 +97,14 @@ function QuickCaptureShortcutEditor() {
   };
 
   return (
-    <section className="rounded-xl bg-surface-base px-4 py-3.5 sm:px-5 sm:py-4" aria-label={k.quickCaptureShortcutTitle}>
+    <section className="rounded-xl bg-surface-base px-4 py-3.5 sm:px-5 sm:py-4" aria-label={title}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-sm font-semibold text-fg">{k.quickCaptureShortcutTitle}</h2>
-          <p className="mt-1 text-sm text-fg-muted">{k.quickCaptureShortcutDescription}</p>
+          <h2 className="text-sm font-semibold text-fg">{title}</h2>
+          <p className="mt-1 text-sm text-fg-muted">{description}</p>
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          {shortcutKeys(shortcut).map((key, index) => (
+          {shortcutDisplayKeys(shortcut).map((key, index) => (
             <Kbd key={`${key}-${String(index)}`}>{key}</Kbd>
           ))}
         </div>
@@ -120,7 +128,7 @@ function QuickCaptureShortcutEditor() {
           type="button"
           className="rounded-lg px-3 py-1.5 text-sm font-medium text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           onClick={() => {
-            setShortcut(defaultQuickCaptureShortcut());
+            setShortcut(defaultShortcut());
             setError(null);
           }}
         >
@@ -140,6 +148,43 @@ function QuickCaptureShortcutEditor() {
       </div>
       {error ? <p className="mt-2 text-sm text-danger-fg">{error}</p> : null}
     </section>
+  );
+}
+
+function QuickCaptureShortcutEditor() {
+  const language = useLocaleStore((s) => s.language);
+  const k = messages(language).keyboardShortcutsSettings;
+  const shortcut = useQuickCaptureShortcutStore((s) => s.shortcut);
+  const setShortcut = useQuickCaptureShortcutStore((s) => s.setShortcut);
+  const voiceShortcut = useVoiceInputShortcutStore((s) => s.shortcut);
+  return (
+    <ShortcutEditor
+      title={k.quickCaptureShortcutTitle}
+      description={k.quickCaptureShortcutDescription}
+      shortcut={shortcut}
+      otherShortcut={voiceShortcut}
+      defaultShortcut={defaultQuickCaptureShortcut}
+      setShortcut={setShortcut}
+      legacyRecordingEvent="quick-capture-shortcut-recording"
+    />
+  );
+}
+
+function VoiceInputShortcutEditor() {
+  const language = useLocaleStore((s) => s.language);
+  const k = messages(language).keyboardShortcutsSettings;
+  const shortcut = useVoiceInputShortcutStore((s) => s.shortcut);
+  const setShortcut = useVoiceInputShortcutStore((s) => s.setShortcut);
+  const quickCaptureShortcut = useQuickCaptureShortcutStore((s) => s.shortcut);
+  return (
+    <ShortcutEditor
+      title={k.voiceInputShortcutTitle}
+      description={k.voiceInputShortcutDescription}
+      shortcut={shortcut}
+      otherShortcut={quickCaptureShortcut}
+      defaultShortcut={defaultVoiceInputShortcut}
+      setShortcut={setShortcut}
+    />
   );
 }
 
@@ -185,6 +230,7 @@ export function KeyboardShortcutsSettingsPanel() {
   const m = messages(language);
   const k = m.keyboardShortcutsSettings;
   const quickCaptureShortcut = useQuickCaptureShortcutStore((s) => s.shortcut);
+  const voiceInputShortcut = useVoiceInputShortcutStore((s) => s.shortcut);
 
   const categories: ShortcutCategory[] = [];
 
@@ -202,7 +248,7 @@ export function KeyboardShortcutsSettingsPanel() {
     shortcuts: [
       { keys: [MOD, 'N'], label: k.globalNewChat },
       { keys: [MOD, 'K'], label: k.navCommandPalette },
-      { keys: shortcutKeys(quickCaptureShortcut), label: k.navQuickCapture },
+      { keys: shortcutDisplayKeys(quickCaptureShortcut), label: k.navQuickCapture },
       ...(isElectron() ? [{ keys: [MOD, 'B'], label: k.navToggleSidebar }] : []),
       ...(isElectron() ? [{ keys: ['F11'], label: k.navToggleFullscreen }] : []),
       ...(isElectron() ? [{ keys: [MOD, ','], label: k.globalOpenSettings }] : []),
@@ -216,6 +262,7 @@ export function KeyboardShortcutsSettingsPanel() {
       { keys: ['Enter'], label: k.chatSend },
       { keys: ['Shift', 'Enter'], label: k.chatNewLine },
       { keys: [MOD, 'Enter'], label: k.chatForceSend },
+      { keys: shortcutDisplayKeys(voiceInputShortcut), label: k.chatVoiceInput },
     ],
   });
 
@@ -236,6 +283,7 @@ export function KeyboardShortcutsSettingsPanel() {
       <SettingsPageHeader title={k.pageTitle} subtitle={k.subtitle} />
 
       <QuickCaptureShortcutEditor />
+      <VoiceInputShortcutEditor />
 
       {categories.map((cat) => (
         <ShortcutSection key={cat.title} {...cat} />

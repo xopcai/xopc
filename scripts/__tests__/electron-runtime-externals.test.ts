@@ -12,7 +12,11 @@ import {
 
 describe('electron-runtime-externals', () => {
   it('keeps only unavoidable node_modules deps in packaged runtime', () => {
-    expect(ELECTRON_PACKAGED_DEPENDENCIES).toEqual(['silk-wasm']);
+    expect(ELECTRON_PACKAGED_DEPENDENCIES).toEqual([
+      'silk-wasm',
+      '@huggingface/transformers',
+      'sherpa-onnx-node',
+    ]);
     expect(ELECTRON_GATEWAY_EXTERNALS).toContain('playwright-core');
     expect(ELECTRON_PACKAGED_DEPENDENCIES).not.toContain('playwright-core');
     expect(ELECTRON_PACKAGED_DEPENDENCIES).not.toContain('node-cron');
@@ -27,12 +31,18 @@ describe('electron-runtime-externals', () => {
       dependencies: {
         hono: '^4.0.0',
         'silk-wasm': '^3.7.1',
+        '@huggingface/transformers': '3.8.1',
+        'sherpa-onnx-node': '1.13.4',
       },
       devDependencies: {
         vitest: '^4.0.0',
       },
     });
-    expect(Object.keys(minimal.dependencies)).toEqual(['silk-wasm']);
+    expect(Object.keys(minimal.dependencies)).toEqual([
+      'silk-wasm',
+      '@huggingface/transformers',
+      'sherpa-onnx-node',
+    ]);
     expect(minimal).not.toHaveProperty('devDependencies');
     expect(minimal.name).toBe('@xopcai/xopc');
   });
@@ -45,12 +55,16 @@ describe('electron-runtime-externals', () => {
         version: '0.0.0',
         dependencies: {
           'silk-wasm': '^3.7.1',
+          '@huggingface/transformers': '3.8.1',
+          'sherpa-onnx-node': '1.13.4',
         },
       },
       repoRoot,
     );
     expect(minimal.dependencies).toEqual({
       'silk-wasm': resolveInstalledPackageVersion(repoRoot, 'silk-wasm'),
+      '@huggingface/transformers': resolveInstalledPackageVersion(repoRoot, '@huggingface/transformers'),
+      'sherpa-onnx-node': resolveInstalledPackageVersion(repoRoot, 'sherpa-onnx-node'),
     });
     expect(Object.values(minimal.dependencies as Record<string, string>).every((v) => !v.startsWith('^'))).toBe(true);
   });
@@ -82,6 +96,8 @@ describe('electron-runtime-externals', () => {
       version: '0.0.0',
       dependencies: {
         'silk-wasm': '^3.7.1',
+        '@huggingface/transformers': '3.8.1',
+        'sherpa-onnx-node': '1.13.4',
       },
       devDependencies: {
         electron: '^41.7.1',

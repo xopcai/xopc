@@ -79,6 +79,13 @@ import { createGatewayStartupTrace, type GatewayStartupTrace } from './startup-t
 import { closeXopcDatabase, openXopcDatabase } from '../storage/sqlite/index.js';
 import { startConnectorSupervisor, type ConnectorSupervisor } from '../connectors/supervisor.js';
 import {
+  applyAutomaticVoiceLanguage,
+  inferProductLanguageFromEnvironment,
+  initializeVoiceDefaults,
+  prepareConfiguredLocalVoiceModel,
+  type ProductLanguage,
+} from '../voice/language-profile.js';
+import {
   startConnectedKnowledgeCoordinator,
   type ConnectedKnowledgeCoordinator,
 } from '../knowledge/index.js';
@@ -175,18 +182,22 @@ export class GatewayService {
     this.configPath = serviceConfig.configPath || resolveConfigPath();
     runBootstrapMigrationsSync(this.configPath);
     this.config = loadConfig(this.configPath);
+    let bootstrapConfigChanged = initializeVoiceDefaults(
+      this.config,
+      inferProductLanguageFromEnvironment(),
+    );
     const starterResult = ensureStarterAgentsInitialized(this.config);
     if (starterResult.changed) {
       this.config = starterResult.config;
-      void writeConfigToDisk(this.config, this.configPath).catch((err) => {
-        const em = err instanceof Error ? err.message : String(err);
-        log.warn({ err, phase: 'starter_agents_init', errorMessage: em }, `Starter agents init persist failed: ${em}`);
-      });
+      bootstrapConfigChanged = true;
     }
     if (sanitizeTunnelConfig(this.config)) {
+      bootstrapConfigChanged = true;
+    }
+    if (bootstrapConfigChanged) {
       void writeConfigToDisk(this.config, this.configPath).catch((err) => {
         const em = err instanceof Error ? err.message : String(err);
-        log.warn({ err, phase: 'tunnel_sanitize', errorMessage: em }, `Tunnel config sanitize persist failed: ${em}`);
+        log.warn({ err, phase: 'bootstrap_config_init', errorMessage: em }, `Bootstrap config persist failed: ${em}`);
       });
     }
 
@@ -686,6 +697,7 @@ export class GatewayService {
     openXopcDatabase();
     this.startTime = Date.now();
     this.running = true;
+    prepareConfiguredLocalVoiceModel(this.config);
     this.startupTrace = createGatewayStartupTrace();
     this.readiness.markStarting(this.startTime);
     const trace = this.startupTrace;
@@ -1185,6 +1197,27 @@ export class GatewayService {
 
   saveConfig(config: Config): Promise<{ saved: boolean; error?: string }> {
     return this.configCoordinator.saveConfig(config);
+  }
+
+  async syncVoiceLanguage(language: ProductLanguage): Promise<{
+    applied: boolean;
+    language: ProductLanguage;
+    mode: 'auto' | 'manual';
+    error?: string;
+  }> {
+    const mode = this.config.voice?.languageMode ?? 'auto';
+    if (mode === 'manual') {
+      return { applied: false, language, mode };
+    }
+    const changed = applyAutomaticVoiceLanguage(this.config, language);
+    if (changed) {
+      const saved = await this.configCoordinator.saveConfig(this.config);
+      if (!saved.saved) {
+        return { applied: false, language, mode, error: saved.error ?? 'Failed to save voice language' };
+      }
+    }
+    prepareConfiguredLocalVoiceModel(this.config);
+    return { applied: changed, language, mode };
   }
 
   setBundledExtensionActivationTarget(

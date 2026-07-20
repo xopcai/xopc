@@ -1,5 +1,5 @@
 import { Mic, Pause, Play } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import type { MessageAttachment } from '@/features/chat/messages/messages.types';
 import { mediaUriToReadUrl } from '@/features/chat/attachments/attachment-utils-core';
@@ -42,8 +42,10 @@ export function VoiceMessageBar({
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const playbackId = useId();
   const [src, setSrc] = useState<string | undefined>();
   const [playing, setPlaying] = useState(false);
+  const [playbackRate, setPlaybackRate] = useState(1);
   const hintDuration = useMemo(() => {
     const d = att.durationSeconds;
     return typeof d === 'number' && Number.isFinite(d) && d > 0 ? d : 0;
@@ -103,6 +105,20 @@ export function VoiceMessageBar({
     };
   }, [att, sessionKey]);
 
+  useEffect(() => {
+    const pauseForRecording = () => audioRef.current?.pause();
+    const pauseForOtherPlayback = (event: Event) => {
+      const otherId = (event as CustomEvent<{ id?: string }>).detail?.id;
+      if (otherId && otherId !== playbackId) audioRef.current?.pause();
+    };
+    window.addEventListener('xopc-voice-recording-start', pauseForRecording);
+    window.addEventListener('xopc-voice-playback-start', pauseForOtherPlayback);
+    return () => {
+      window.removeEventListener('xopc-voice-recording-start', pauseForRecording);
+      window.removeEventListener('xopc-voice-playback-start', pauseForOtherPlayback);
+    };
+  }, [playbackId]);
+
 
   const toggle = useCallback(() => {
     const el = audioRef.current;
@@ -150,7 +166,11 @@ export function VoiceMessageBar({
       onLoadedData={syncDurationFromElement}
       onDurationChange={syncDurationFromElement}
       onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime)}
-      onPlay={() => setPlaying(true)}
+      onPlay={(event) => {
+        event.currentTarget.playbackRate = playbackRate;
+        window.dispatchEvent(new CustomEvent('xopc-voice-playback-start', { detail: { id: playbackId } }));
+        setPlaying(true);
+      }}
       onPause={() => setPlaying(false)}
       onEnded={() => {
         setPlaying(false);
@@ -240,6 +260,21 @@ export function VoiceMessageBar({
           </div>
           <div className={cn('flex justify-end text-[10px] leading-snug tracking-tight text-fg-muted')}>{timeCaptionEl}</div>
         </div>
+        {src ? (
+          <button
+            type="button"
+            className="shrink-0 rounded px-1 py-0.5 text-[10px] tabular-nums text-fg-muted hover:bg-surface-hover hover:text-fg"
+            title={m.chat.voicePlaybackSpeed}
+            aria-label={`${m.chat.voicePlaybackSpeed}: ${playbackRate}×`}
+            onClick={() => {
+              const next = playbackRate === 1 ? 1.25 : playbackRate === 1.25 ? 1.5 : playbackRate === 1.5 ? 0.75 : 1;
+              setPlaybackRate(next);
+              if (audioRef.current) audioRef.current.playbackRate = next;
+            }}
+          >
+            {playbackRate}×
+          </button>
+        ) : null}
         {audioEl}
       </div>
     </div>

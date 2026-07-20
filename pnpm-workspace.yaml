@@ -29,7 +29,9 @@ allowBuilds:
   electron: true
   electron-winstaller: true
   esbuild: true
+  onnxruntime-node: true
   protobufjs: true
+  sharp: false
 
 # Exempt recently-published @earendil-works/pi-* from minimumReleaseAge policy
 minimumReleaseAgeExclude:

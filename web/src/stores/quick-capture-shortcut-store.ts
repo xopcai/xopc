@@ -1,9 +1,20 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-function isMacPlatform(): boolean {
+export function isMacPlatform(): boolean {
   if (typeof navigator === 'undefined') return false;
   return navigator.platform?.includes('Mac') ?? navigator.userAgent.includes('Mac');
+}
+
+export function shortcutDisplayKeys(shortcut: string, isMac = isMacPlatform()): string[] {
+  return normalizeShortcut(shortcut).split('+').map((key) => {
+    if (key === 'control') return 'Ctrl';
+    if (key === 'meta') return isMac ? '⌘' : 'Win';
+    if (key === 'alt') return isMac ? 'Option' : 'Alt';
+    if (key === 'shift') return 'Shift';
+    if (key === 'space') return 'Space';
+    return key.length === 1 ? key.toUpperCase() : key;
+  });
 }
 
 /** Keep the default aligned with the shortcut displayed in the settings UI. */

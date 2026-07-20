@@ -33,8 +33,8 @@ import type {
 
 const log = createLogger('SpeechProvider:Edge');
 
-const DEFAULT_VOICE = 'en-US-MichelleNeural';
-const DEFAULT_LANG = 'en-US';
+const DEFAULT_VOICE = 'zh-CN-XiaoxiaoNeural';
+const DEFAULT_LANG = 'zh-CN';
 const DEFAULT_OUTPUT_FORMAT = 'audio-24khz-48kbitrate-mono-mp3';
 
 interface EdgeTtsConfig extends Record<string, unknown> {

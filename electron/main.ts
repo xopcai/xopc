@@ -446,6 +446,38 @@ function startupDiagnosticText(): string {
   return JSON.stringify(currentStartupFailure ?? { kind: 'none' }, null, 2);
 }
 
+export function proxyUrlFromElectronSpec(spec: string): string | undefined {
+  for (const entry of spec.split(';')) {
+    const match = entry.trim().match(/^(?:PROXY|HTTPS?)\s+(.+)$/i);
+    if (!match?.[1]) continue;
+    try {
+      const url = new URL(`http://${match[1].trim()}`);
+      if (!url.hostname || !url.port) continue;
+      return url.toString();
+    } catch {
+      // Try the next proxy returned by Chromium.
+    }
+  }
+  return undefined;
+}
+
+async function resolveVoiceModelProxyUrl(): Promise<string | undefined> {
+  if (
+    process.env.HTTPS_PROXY
+    || process.env.https_proxy
+    || process.env.HTTP_PROXY
+    || process.env.http_proxy
+  ) {
+    return undefined;
+  }
+  try {
+    const spec = await session.defaultSession.resolveProxy('https://huggingface.co');
+    return proxyUrlFromElectronSpec(spec);
+  } catch {
+    return undefined;
+  }
+}
+
 async function resolveWindowLoad(): Promise<
   { kind: 'url'; href: string; openDevTools: boolean } | { kind: 'file'; path: string }
 > {
@@ -460,11 +492,13 @@ async function resolveWindowLoad(): Promise<
     // Browser-extension artifact install runs inside the gateway subprocess (see
     // gateway/service.ts → ensureBrowserExtensionOnStartup). Main does not import src/.
     try {
+      const proxyUrl = await resolveVoiceModelProxyUrl();
       const spawnOpts: GatewayProcessOptions = {
         configPath: paths.configPath,
         workspacePath: paths.workspacePath,
         port,
         bind,
+        ...(proxyUrl ? { proxyUrl } : {}),
         onUnexpectedExit: (code, signal) => {
           gatewayExitedUnexpectedly = true;
           console.error(`[main] Gateway exited unexpectedly: code=${code}, signal=${signal}`);

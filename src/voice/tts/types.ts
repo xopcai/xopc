@@ -93,15 +93,15 @@ export interface TTSSummarizationConfig {
 }
 
 export const DEFAULT_TTS_CONFIG: TTSConfig = {
-  enabled: false,
+  enabled: true,
   provider: 'edge',
-  trigger: 'always',
+  trigger: 'inbound',
   fallback: {
     enabled: true,
     order: ['openai', 'alibaba', 'minimax', 'edge'],
   },
   maxTextLength: 512, // Conservative default to accommodate all providers (Alibaba limit is 512)
-  timeoutMs: 30000,
+  timeoutMs: 60000,
   summarization: {
     enabled: true,
   },

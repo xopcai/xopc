@@ -49,6 +49,13 @@ function buildStatusPayload(service: AuthenticatedRouteDeps['service']) {
     uptime: health.uptime,
     voice: {
       sttAvailable: sttConfig ? isSTTAvailable(sttConfig) : false,
+      sttEnabled: sttConfig?.enabled === true,
+      sttProvider: sttConfig?.provider ?? null,
+      localModelId:
+        sttConfig?.provider === 'xopc-local' &&
+        typeof sttConfig.providers?.['xopc-local']?.model === 'string'
+          ? sttConfig.providers['xopc-local'].model
+          : null,
       refineAvailable: isRefineAvailable(config),
     },
   };

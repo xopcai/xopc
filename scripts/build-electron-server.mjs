@@ -13,6 +13,8 @@ import { ELECTRON_GATEWAY_EXTERNALS } from './electron-runtime-externals.mjs';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const entry = join(root, 'dist/src/cli/bin.js');
 const outfile = join(root, 'out/server/index.js');
+const voiceRuntimeEntry = join(root, 'dist/src/voice/local/runtime-worker.js');
+const voiceRuntimeOutfile = join(root, 'out/server/voice-runtime.js');
 
 if (!existsSync(entry)) {
   console.error(
@@ -48,6 +50,29 @@ await esbuild.build({
   minify,
   sourcemap: false,
 });
+
+if (!existsSync(voiceRuntimeEntry)) {
+  console.error(`[build-electron-server] Missing ${voiceRuntimeEntry}. Run \`pnpm run build\` first.`);
+  process.exit(1);
+}
+await esbuild.build({
+  entryPoints: [voiceRuntimeEntry],
+  bundle: true,
+  platform: 'node',
+  target: 'node22',
+  outfile: voiceRuntimeOutfile,
+  external: ['@huggingface/transformers', 'sherpa-onnx-node'],
+  format: 'esm',
+  banner: {
+    js: [
+      "import { createRequire as __xopcCreateRequire } from 'module';",
+      'globalThis.require = __xopcCreateRequire(import.meta.url);',
+    ].join('\n'),
+  },
+  minify,
+  sourcemap: false,
+});
+console.log(`[build-electron-server] Wrote ${voiceRuntimeOutfile}${minify ? ' (minified)' : ''}`);
 
 console.log(`[build-electron-server] Wrote ${outfile}${minify ? ' (minified)' : ''}`);
 

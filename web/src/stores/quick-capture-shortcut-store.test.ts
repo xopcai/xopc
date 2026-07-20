@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   defaultQuickCaptureShortcut,
   matchesShortcut,
+  shortcutDisplayKeys,
   shortcutFromKeyboardEvent,
 } from './quick-capture-shortcut-store';
 
@@ -34,5 +35,10 @@ describe('quick capture shortcut helpers', () => {
     expect(matchesShortcut(keyboardEvent({ ctrlKey: true, key: '.' }), 'control+.')).toBe(true);
     expect(matchesShortcut(keyboardEvent({ ctrlKey: true, shiftKey: true, key: '.' }), 'control+.')).toBe(false);
     expect(matchesShortcut(keyboardEvent({ metaKey: true, key: '.' }), 'control+.')).toBe(false);
+  });
+
+  it('formats shortcuts for discovery in tooltips and settings', () => {
+    expect(shortcutDisplayKeys('meta+shift+m', true)).toEqual(['⌘', 'Shift', 'M']);
+    expect(shortcutDisplayKeys('control+shift+m', false)).toEqual(['Ctrl', 'Shift', 'M']);
   });
 });

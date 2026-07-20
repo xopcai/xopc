@@ -22,6 +22,7 @@ import {
   ProviderHttpError,
   fetchWithTimeoutGuarded,
   postJsonRequest,
+  waitProviderOperationPollInterval,
 } from '../../../media-shared/http/index.js';
 import { registerMediaUnderstandingProvider } from '../../../media-understanding/registry.js';
 import type {
@@ -90,6 +91,7 @@ async function submitTask(params: {
   audioDataUrl: string;
   language?: string;
   timeoutMs: number;
+  signal?: AbortSignal;
 }): Promise<string> {
   const response = await postJsonRequest(params.baseUrl, {
     timeoutMs: params.timeoutMs,
@@ -103,6 +105,7 @@ async function submitTask(params: {
       input: { file_urls: [params.audioDataUrl] },
       ...(params.language ? { parameters: { language_hint: params.language } } : {}),
     },
+    signal: params.signal,
   });
   const data = (await response.json()) as TaskResponse;
   if (data.code) {
@@ -120,6 +123,7 @@ async function pollTask(params: {
   apiKey: string;
   taskId: string;
   timeoutMs: number;
+  signal?: AbortSignal;
 }): Promise<{ text: string }> {
   const startTime = Date.now();
   const url = `${TASKS_BASE_URL}/${params.taskId}`;
@@ -127,6 +131,7 @@ async function pollTask(params: {
     const response = await fetchWithTimeoutGuarded(url, {
       timeoutMs: params.timeoutMs,
       label: 'Alibaba STT poll',
+      signal: params.signal,
       init: {
         method: 'GET',
         headers: { Authorization: `Bearer ${params.apiKey}` },
@@ -147,22 +152,31 @@ async function pollTask(params: {
       if (!result) {
         throw new Error('Alibaba STT task succeeded but no results found');
       }
-      const transcription = await fetchTranscription(result.transcription_url, params.timeoutMs);
+      const transcription = await fetchTranscription(
+        result.transcription_url,
+        params.timeoutMs,
+        params.signal,
+      );
       const fullText = transcription.transcripts.map((t) => t.text).join('\n');
       return { text: fullText };
     }
     if (status === 'FAILED') {
       throw new Error('Alibaba STT task failed');
     }
-    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+    await waitProviderOperationPollInterval(POLL_INTERVAL_MS, params.signal);
   }
   throw new Error(`Alibaba STT task did not complete within ${MAX_POLL_MS}ms`);
 }
 
-async function fetchTranscription(url: string, timeoutMs: number): Promise<TranscriptionDetail> {
+async function fetchTranscription(
+  url: string,
+  timeoutMs: number,
+  signal?: AbortSignal,
+): Promise<TranscriptionDetail> {
   const response = await fetchWithTimeoutGuarded(url, {
     timeoutMs,
     label: 'Alibaba STT transcription fetch',
+    signal,
   });
   if (!response.ok) {
     throw new ProviderHttpError({
@@ -197,11 +211,13 @@ async function transcribeAudio(req: AudioTranscriptionRequest): Promise<AudioTra
       audioDataUrl,
       ...(req.language ? { language: req.language } : {}),
       timeoutMs: req.timeoutMs,
+      signal: req.signal,
     });
     const result = await pollTask({
       apiKey: req.apiKey,
       taskId,
       timeoutMs: req.timeoutMs,
+      signal: req.signal,
     });
     const durationSeconds = (Date.now() - startTime) / 1000;
     log.info(
@@ -215,6 +231,9 @@ async function transcribeAudio(req: AudioTranscriptionRequest): Promise<AudioTra
       durationSeconds,
     };
   } catch (error) {
+    if (req.signal?.aborted) {
+      throw error;
+    }
     const errorMsg = error instanceof Error ? error.message : String(error);
     log.error(
       { err: error, bufferSize: req.buffer.length, model },

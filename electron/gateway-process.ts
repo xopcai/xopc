@@ -150,6 +150,8 @@ export interface GatewayProcessOptions {
   workspacePath: string;
   port: number;
   bind: GatewayBindMode;
+  /** System proxy resolved by Electron for model downloads in the Node gateway subprocess. */
+  proxyUrl?: string;
   /** Called when gateway process exits unexpectedly (non-zero or by signal). */
   onUnexpectedExit?: (code: number | null, signal: string | null) => void;
 }
@@ -177,6 +179,9 @@ export function spawnGatewayProcess(opts: GatewayProcessOptions): ChildProcess {
     {
       env: {
         ...process.env,
+        ...(!process.env.HTTPS_PROXY && !process.env.https_proxy && opts.proxyUrl
+          ? { HTTPS_PROXY: opts.proxyUrl, HTTP_PROXY: opts.proxyUrl }
+          : {}),
         ELECTRON_RUN_AS_NODE: '1',
         XOPC_STATE_DIR: dirname(opts.configPath),
         XOPC_CONFIG_PATH: opts.configPath,
@@ -203,6 +208,11 @@ export function spawnGatewayProcess(opts: GatewayProcessOptions): ChildProcess {
                 process.resourcesPath,
                 'bin',
                 'codebase-memory-mcp.manifest.json',
+              ),
+              XOPC_VOICE_RUNTIME_ENTRY: resolvePackagedAppPath(
+                'out',
+                'server',
+                'voice-runtime.js',
               ),
               NODE_PATH: process.resourcesPath,
             }
@@ -338,6 +348,7 @@ export async function restartEmbeddedGatewayFromSavedConfig(params: {
     workspacePath: params.workspacePath,
     port,
     bind,
+    proxyUrl: embeddedGatewayRuntime.proxyUrl,
     onUnexpectedExit: embeddedGatewayRuntime.onUnexpectedExit,
   };
   const child = spawnGatewayProcess(opts);

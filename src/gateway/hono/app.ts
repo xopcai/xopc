@@ -214,7 +214,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       ? WEBCHAT_AGENT_BODY_MAX
       : c.req.path === '/api/skills/upload'
         ? SKILL_UPLOAD_BODY_MAX
-        : c.req.path === '/api/voice/transcribe'
+        : c.req.path === '/api/voice/transcribe' || c.req.path === '/api/voice/transcriptions'
           ? VOICE_TRANSCRIBE_BODY_MAX
           : isNoteMediaUploadRequest(c.req.path, c.req.method, contentType)
             ? NOTE_MEDIA_BODY_MAX

@@ -197,6 +197,7 @@ export async function runCapability(
         });
         continue;
       }
+      const startedAt = Date.now();
       try {
         // We narrow `method` by capability above; cast through `unknown` to keep
         // a single call site without per-capability ceremony.
@@ -211,6 +212,7 @@ export async function runCapability(
             outcome: 'failed',
             reason: 'empty transcription/description text',
             model: callResult.model,
+            latencyMs: Date.now() - startedAt,
           });
           continue;
         }
@@ -219,6 +221,7 @@ export async function runCapability(
           type: 'provider',
           outcome: 'success',
           model: callResult.model,
+          latencyMs: Date.now() - startedAt,
         };
         attempts.push(chosen);
         outputs.push({
@@ -230,6 +233,9 @@ export async function runCapability(
         });
         break;
       } catch (error) {
+        if (options.signal?.aborted) {
+          throw error;
+        }
         const reason = error instanceof Error ? error.message : String(error);
         log.warn(
           {
@@ -245,6 +251,7 @@ export async function runCapability(
           type: 'provider',
           outcome: 'failed',
           reason,
+          latencyMs: Date.now() - startedAt,
         });
       }
     }
