@@ -13,8 +13,8 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "adm-zip": "^0.5.17",
     "@types/chrome": "^0.0.287",
+    "adm-zip": "^0.6.0",
     "typescript": "^5.9.3",
     "vite": "^6.4.3"
   }
