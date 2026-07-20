@@ -338,7 +338,20 @@ jobs:
             done
           fi
 
+          REMOTE_ASSETS="$(
+            gh release view "$TAG" --repo "$REPO" --json assets \
+              --jq '.assets[] | [.name, .size] | @tsv'
+          )" || REMOTE_ASSETS=""
+
           for f in "${FILES[@]}"; do
+            asset_name="$(basename "$f")"
+            local_size="$(stat --format='%s' "$f")"
+            remote_size="$(awk -F '\t' -v name="$asset_name" '$1 == name { print $2; exit }' <<< "$REMOTE_ASSETS")"
+            if [ -n "$remote_size" ] && [ "$remote_size" = "$local_size" ]; then
+              echo "Already uploaded: $f"
+              continue
+            fi
+
             for attempt in $(seq 1 8); do
               if gh release upload "$TAG" "$f" --clobber --repo "$REPO"; then
                 echo "Uploaded: $f"
