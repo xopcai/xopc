@@ -1,7 +1,8 @@
 import { InMemoryCredentialStore } from '@earendil-works/pi-ai';
-import type { ModelRuntime } from '@earendil-works/pi-coding-agent';
+import { ModelRuntime } from '@earendil-works/pi-coding-agent';
 
 import { resolveProviderApiKeySync } from '../../auth/sync-provider-auth.js';
+import { resolveModelsJsonPath } from '../../config/paths.js';
 import { getApiKeySync } from '../../providers/index.js';
 
 /**
@@ -18,6 +19,14 @@ export function resolveXopcProviderApiKey(providerId: string): string | undefine
  */
 export function createEmbeddedCredentialStore(): InMemoryCredentialStore {
   return new InMemoryCredentialStore();
+}
+
+/** Create the pi model runtime used by embedded gateway / channel turns. */
+export function createEmbeddedModelRuntime(): Promise<ModelRuntime> {
+  return ModelRuntime.create({
+    credentials: createEmbeddedCredentialStore(),
+    modelsPath: resolveModelsJsonPath(),
+  });
 }
 
 /**

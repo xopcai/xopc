@@ -2,8 +2,10 @@ import type { MemorySensitivity } from '../agent/memory/types.js';
 
 export type KnowledgeSyncRunStatus = 'running' | 'succeeded' | 'partial' | 'failed' | 'cancelled';
 export type KnowledgeSynthesisStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'ignored';
+export type KnowledgeSynthesisPipeline = 'user_understanding' | 'connected_knowledge';
 export type KnowledgeRetentionClass = 'ephemeral' | 'bounded' | 'durable';
 export type KnowledgeAuthorRole = 'user' | 'assistant' | 'third_party' | 'system' | 'unknown';
+export type KnowledgeChangeKind = 'added' | 'modified' | 'deleted';
 
 export interface KnowledgeSourceItem {
   id: string;
@@ -19,10 +21,26 @@ export interface KnowledgeSourceItem {
   metadata: Record<string, unknown>;
   sensitivity: MemorySensitivity;
   retentionClass: KnowledgeRetentionClass;
+  synthesisPipeline: KnowledgeSynthesisPipeline;
   synthesisStatus: KnowledgeSynthesisStatus;
+  synthesisAttempts: number;
+  synthesisClaimedAt?: string;
+  synthesisClaimedBy?: string;
+  synthesisError?: string;
   deletedAt?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface KnowledgeSourceChange {
+  sequence: number;
+  id: string;
+  sourceInstanceId: string;
+  sourceItemId: string;
+  kind: KnowledgeChangeKind;
+  oldHash?: string;
+  newHash?: string;
+  changedAt: string;
 }
 
 export interface KnowledgeSourceItemInput {
@@ -39,6 +57,7 @@ export interface KnowledgeSourceItemInput {
   metadata?: Record<string, unknown>;
   sensitivity?: MemorySensitivity;
   retentionClass?: KnowledgeRetentionClass;
+  synthesisPipeline?: KnowledgeSynthesisPipeline;
   synthesisStatus?: KnowledgeSynthesisStatus;
   deletedAt?: string;
 }

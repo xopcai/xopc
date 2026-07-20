@@ -16,6 +16,8 @@ import {
   getMemoryRecord,
   getUserProfilePromptState,
   getUserTrustPolicy,
+  listKnowledgeSourceItems,
+  listKnowledgeSyncRuns,
   listMemoryRecords,
   runSqliteWriteTransaction,
   setUserProfilePromptState,
@@ -216,7 +218,10 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
     const trustPolicy = getUserTrustPolicy();
     const sourceDefinitions = listConnectorCatalog();
     const sourceInstances = listConnectorInstances(config);
-    const sources = projectPersonalContextSources(sourceDefinitions, sourceInstances, allUserContextRecords);
+    const sources = projectPersonalContextSources(sourceDefinitions, sourceInstances, allUserContextRecords, {
+      sourceItems: listKnowledgeSourceItems({ limit: 500 }),
+      syncRuns: listKnowledgeSyncRuns({ limit: 500 }),
+    });
     const activeGoals = new GoalService().list({
       agentId,
       status: ['active', 'paused', 'blocked', 'needs_input'],

@@ -25,6 +25,7 @@ import {
   deleteMemoryRecord,
   findLatestMemoryInjectTrace,
   getMemoryRecord,
+  listKnowledgeSourceChanges,
   listKnowledgeSourceItems,
   listKnowledgeSyncRuns,
   listMemoryRecords,
@@ -365,6 +366,17 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
       offset: c.req.query('offset') ? Number.parseInt(c.req.query('offset')!, 10) : 0,
     });
     return c.json({ sourceItems });
+  });
+
+  authenticated.get('/api/knowledge/source-changes', (c) => {
+    const afterSequenceQuery = c.req.query('afterSequence');
+    const afterSequence = afterSequenceQuery ? Number.parseInt(afterSequenceQuery, 10) : undefined;
+    const sourceChanges = listKnowledgeSourceChanges({
+      sourceInstanceId: c.req.query('sourceInstanceId') || undefined,
+      afterSequence: Number.isFinite(afterSequence) ? afterSequence : undefined,
+      limit: parseLimit(c.req.query('limit')),
+    });
+    return c.json({ sourceChanges });
   });
 
   authenticated.get('/api/knowledge/sync-runs', (c) => {
