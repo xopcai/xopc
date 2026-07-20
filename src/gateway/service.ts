@@ -78,6 +78,10 @@ import {
 import { createGatewayStartupTrace, type GatewayStartupTrace } from './startup-trace.js';
 import { closeXopcDatabase, openXopcDatabase } from '../storage/sqlite/index.js';
 import { startConnectorSupervisor, type ConnectorSupervisor } from '../connectors/supervisor.js';
+import {
+  startConnectedKnowledgeCoordinator,
+  type ConnectedKnowledgeCoordinator,
+} from '../knowledge/index.js';
 
 export type {
   GatewayChannelStartupPhase1Metrics,
@@ -136,6 +140,7 @@ export class GatewayService {
   private goalNotifications: GoalNotificationService | null = null;
   private mobileNotifications: MobileNotificationService | null = null;
   private connectorSupervisor: ConnectorSupervisor | null = null;
+  private connectedKnowledgeCoordinator: ConnectedKnowledgeCoordinator | null = null;
   private stopAutomationProductEventBridge: (() => void) | null = null;
   private stopSessionTranscriptAutomationEvents: (() => void) | null = null;
 
@@ -815,6 +820,12 @@ export class GatewayService {
       getConfig: () => this.config,
       saveConfig: (cfg) => this.saveConfig(cfg),
     });
+    this.connectedKnowledgeCoordinator = startConnectedKnowledgeCoordinator({
+      resolvePipelineOptions: () => ({
+        agentId: resolveDefaultAgentId(this.config),
+        workspaceId: this.currentWorkspacePath,
+      }),
+    });
 
     void import('../browser/providers/browser-ext-install.js')
       .then(({ ensureBrowserExtensionOnStartup }) => ensureBrowserExtensionOnStartup(this.config))
@@ -1000,6 +1011,8 @@ export class GatewayService {
     this.heartbeatService?.stop();
     this.connectorSupervisor?.stop();
     this.connectorSupervisor = null;
+    this.connectedKnowledgeCoordinator?.stop();
+    this.connectedKnowledgeCoordinator = null;
 
     // Stop browser extension WS server (shared acquire/release with BrowserManager)
     if (this.browserExtensionRelease) {

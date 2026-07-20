@@ -1,3 +1,7 @@
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { describe, expect, it, vi } from 'vitest';
 
 import { InMemoryCredentialStore } from '@earendil-works/pi-ai';
@@ -15,8 +19,13 @@ vi.mock('../../../providers/index.js', () => ({
   ),
 }));
 
-import { applyXopcProviderApiKey, resolveXopcProviderApiKey } from '../xopc-auth-storage.js';
+import {
+  applyXopcProviderApiKey,
+  createEmbeddedModelRuntime,
+  resolveXopcProviderApiKey,
+} from '../xopc-auth-storage.js';
 import { resolveProviderApiKeySync } from '../../../auth/sync-provider-auth.js';
+import { resolveModelsJsonPath } from '../../../config/paths.js';
 import { getApiKeySync } from '../../../providers/index.js';
 
 describe('resolveXopcProviderApiKey', () => {
@@ -64,6 +73,60 @@ describe('applyXopcProviderApiKey', () => {
     const auth = makeAuthStub();
     await applyXopcProviderApiKey(auth as never, 'unknown-vendor');
     expect(auth.calls).toEqual([]);
+  });
+});
+
+describe('createEmbeddedModelRuntime', () => {
+  it('loads custom providers from the xopc models.json path', async () => {
+    const createSpy = vi.spyOn(ModelRuntime, 'create').mockResolvedValue({} as ModelRuntime);
+
+    try {
+      await createEmbeddedModelRuntime();
+
+      expect(createSpy).toHaveBeenCalledWith({
+        credentials: expect.any(InMemoryCredentialStore),
+        modelsPath: resolveModelsJsonPath(),
+      });
+    } finally {
+      createSpy.mockRestore();
+    }
+  });
+
+  it('registers custom providers and resolves their configured auth', async () => {
+    const stateDir = await mkdtemp(join(tmpdir(), 'xopc-embedded-runtime-'));
+    const previousStateDir = process.env.XOPC_STATE_DIR;
+    const previousOffline = process.env.PI_OFFLINE;
+
+    try {
+      process.env.XOPC_STATE_DIR = stateDir;
+      process.env.PI_OFFLINE = '1';
+      await writeFile(
+        join(stateDir, 'models.json'),
+        JSON.stringify({
+          providers: {
+            'custom-test': {
+              baseUrl: 'https://example.invalid/v1',
+              api: 'openai-completions',
+              apiKey: 'sk-test',
+              models: [{ id: 'test-model', name: 'Test model' }],
+            },
+          },
+        }),
+      );
+
+      const modelRuntime = await createEmbeddedModelRuntime();
+
+      expect(modelRuntime.getModel('custom-test', 'test-model')).toBeDefined();
+      await expect(modelRuntime.getAuth('custom-test')).resolves.toMatchObject({
+        auth: { apiKey: 'sk-test' },
+      });
+    } finally {
+      if (previousStateDir === undefined) delete process.env.XOPC_STATE_DIR;
+      else process.env.XOPC_STATE_DIR = previousStateDir;
+      if (previousOffline === undefined) delete process.env.PI_OFFLINE;
+      else process.env.PI_OFFLINE = previousOffline;
+      await rm(stateDir, { recursive: true, force: true });
+    }
   });
 });
 

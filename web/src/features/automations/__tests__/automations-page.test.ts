@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildInput } from '../automations-page';
+import { buildAutomationEditInput, buildInput, formFromAutomation } from '../automations-page';
+import type { Automation, AutomationInput } from '../automation-api';
 import type { WorkflowDefinition } from '@/features/workflows/workflow-api';
 
 const workflow: WorkflowDefinition = {
@@ -30,6 +31,79 @@ const workflow: WorkflowDefinition = {
 };
 
 describe('automation buildInput', () => {
+  it('round-trips an AI-generated weekly schedule through the editable form', () => {
+    const automation: AutomationInput = {
+      name: 'Weekly report',
+      description: 'Summarize this week.',
+      trigger: { kind: 'schedule', schedule: { kind: 'cron', expr: '0 17 * * 5' } },
+      action: { kind: 'agent', instruction: 'Write my weekly report.', timeoutSeconds: 300 },
+      safety: { mode: 'suggest_only' },
+      afterRun: { kind: 'none' },
+      reliability: { timeoutSeconds: 300, disableAfterConsecutiveFailures: 3 },
+    };
+
+    const form = formFromAutomation(automation);
+
+    expect(form).toMatchObject({ triggerMode: 'weekly', time: '17:00', weekday: '5' });
+    expect(buildInput(form, null).trigger).toEqual(automation.trigger);
+  });
+
+  it('preserves hidden advanced fields when editing an existing automation', () => {
+    const automation: Automation = {
+      id: 'automation-1',
+      name: 'Custom event review',
+      description: 'Review selected Telegram messages.',
+      enabled: true,
+      trigger: {
+        kind: 'event',
+        eventType: 'channel.message.received',
+        source: 'channels',
+        payloadMatch: { channel: 'telegram' },
+      },
+      action: {
+        kind: 'agent',
+        agentId: 'main',
+        instruction: 'Review the message.',
+        workingDirectory: '/workspace/project',
+        model: 'openai/gpt-5',
+        timeoutSeconds: 600,
+      },
+      safety: { mode: 'ask_before_apply' },
+      afterRun: { kind: 'saveToSession' },
+      reliability: {
+        timeoutSeconds: 600,
+        retryCount: 2,
+        maxConcurrentRuns: 4,
+        disableAfterConsecutiveFailures: 5,
+      },
+      state: {},
+      createdAtMs: 1,
+      updatedAtMs: 1,
+    };
+    const form = formFromAutomation(automation);
+    const edited = buildAutomationEditInput(automation, {
+      ...form,
+      name: 'Telegram review',
+      description: '',
+      agentId: '',
+    }, null);
+
+    expect(form).toMatchObject({
+      triggerMode: 'event',
+      eventType: 'channel.message.received',
+      eventSource: 'channels',
+    });
+    expect(edited.trigger).toEqual(automation.trigger);
+    expect(edited.action).toMatchObject({
+      kind: 'agent',
+      workingDirectory: '/workspace/project',
+      model: 'openai/gpt-5',
+    });
+    expect(edited.description).toBe('');
+    expect(edited.action.agentId).toBeUndefined();
+    expect(edited.reliability).toMatchObject({ retryCount: 2, maxConcurrentRuns: 4 });
+  });
+
   it('includes structured workflow input when creating a workflow automation', () => {
     const input = buildInput({
       name: 'Morning report',
@@ -41,6 +115,10 @@ describe('automation buildInput', () => {
       intervalUnit: 'hour',
       cronExpr: '30 9 * * *',
       webhookSecretId: '',
+      onceAt: '',
+      eventType: '',
+      eventSource: '',
+      eventPayloadMatch: '',
       actionMode: 'workflow',
       agentId: 'main',
       instruction: '',
@@ -84,6 +162,10 @@ describe('automation buildInput', () => {
       intervalUnit: 'hour',
       cronExpr: '30 9 * * *',
       webhookSecretId: '',
+      onceAt: '',
+      eventType: '',
+      eventSource: '',
+      eventPayloadMatch: '',
       actionMode: 'agent',
       agentId: '',
       instruction: 'Prepare a recommendation.',
@@ -113,6 +195,10 @@ describe('automation buildInput', () => {
       intervalUnit: 'hour',
       cronExpr: '30 9 * * *',
       webhookSecretId: '',
+      onceAt: '',
+      eventType: '',
+      eventSource: '',
+      eventPayloadMatch: '',
       actionMode: 'agent',
       agentId: '',
       instruction: 'Prepare a recommendation.',

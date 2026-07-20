@@ -1,10 +1,12 @@
 import { randomUUID } from 'node:crypto';
 
 import type {
+  KnowledgeSourceChange,
   KnowledgeSourceItem,
   KnowledgeSourceItemInput,
   KnowledgeSyncRun,
   KnowledgeSyncRunStatus,
+  KnowledgeSynthesisPipeline,
   KnowledgeSynthesisStatus,
 } from '../../knowledge/types.js';
 import type { MemoryEvidence, MemoryEvidenceRelation } from '../../agent/memory/types.js';
@@ -24,10 +26,26 @@ type KnowledgeSourceItemRow = {
   metadata_json: string;
   sensitivity: string;
   retention_class: string;
+  synthesis_pipeline: string;
   synthesis_status: string;
+  synthesis_attempts: number;
+  synthesis_claimed_at: number | null;
+  synthesis_claimed_by: string | null;
+  synthesis_error: string | null;
   deleted_at: number | null;
   created_at: number;
   updated_at: number;
+};
+
+type KnowledgeSourceChangeRow = {
+  sequence: number;
+  change_id: string;
+  source_instance_id: string;
+  source_item_id: string;
+  change_kind: string;
+  old_hash: string | null;
+  new_hash: string | null;
+  changed_at: number;
 };
 
 type KnowledgeSyncRunRow = {
@@ -101,10 +119,28 @@ function sourceItemFromRow(row: KnowledgeSourceItemRow): KnowledgeSourceItem {
     metadata: parseRecord(row.metadata_json),
     sensitivity: row.sensitivity as KnowledgeSourceItem['sensitivity'],
     retentionClass: row.retention_class as KnowledgeSourceItem['retentionClass'],
+    synthesisPipeline: row.synthesis_pipeline as KnowledgeSourceItem['synthesisPipeline'],
     synthesisStatus: row.synthesis_status as KnowledgeSourceItem['synthesisStatus'],
+    synthesisAttempts: row.synthesis_attempts,
+    ...(timestampToIso(row.synthesis_claimed_at) ? { synthesisClaimedAt: timestampToIso(row.synthesis_claimed_at) } : {}),
+    ...(row.synthesis_claimed_by ? { synthesisClaimedBy: row.synthesis_claimed_by } : {}),
+    ...(row.synthesis_error ? { synthesisError: row.synthesis_error } : {}),
     ...(timestampToIso(row.deleted_at) ? { deletedAt: timestampToIso(row.deleted_at) } : {}),
     createdAt: new Date(row.created_at).toISOString(),
     updatedAt: new Date(row.updated_at).toISOString(),
+  };
+}
+
+function sourceChangeFromRow(row: KnowledgeSourceChangeRow): KnowledgeSourceChange {
+  return {
+    sequence: row.sequence,
+    id: row.change_id,
+    sourceInstanceId: row.source_instance_id,
+    sourceItemId: row.source_item_id,
+    kind: row.change_kind as KnowledgeSourceChange['kind'],
+    ...(row.old_hash ? { oldHash: row.old_hash } : {}),
+    ...(row.new_hash ? { newHash: row.new_hash } : {}),
+    changedAt: new Date(row.changed_at).toISOString(),
   };
 }
 
@@ -259,8 +295,8 @@ export function upsertKnowledgeSourceItems(
           item_id, source_instance_id, external_id, item_type, author_role,
           occurred_at, source_updated_at, content_hash, normalized_text,
           payload_ref, metadata_json, sensitivity, retention_class,
-          synthesis_status, deleted_at, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          synthesis_pipeline, synthesis_status, deleted_at, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(source_instance_id, external_id) DO UPDATE SET
           item_type = excluded.item_type,
           author_role = excluded.author_role,
@@ -272,7 +308,12 @@ export function upsertKnowledgeSourceItems(
           metadata_json = excluded.metadata_json,
           sensitivity = excluded.sensitivity,
           retention_class = excluded.retention_class,
+          synthesis_pipeline = excluded.synthesis_pipeline,
           synthesis_status = excluded.synthesis_status,
+          synthesis_attempts = 0,
+          synthesis_claimed_at = NULL,
+          synthesis_claimed_by = NULL,
+          synthesis_error = NULL,
           deleted_at = excluded.deleted_at,
           updated_at = excluded.updated_at`,
       ).run(
@@ -289,6 +330,7 @@ export function upsertKnowledgeSourceItems(
         JSON.stringify(input.metadata ?? {}),
         input.sensitivity ?? 'normal',
         input.retentionClass ?? 'bounded',
+        input.synthesisPipeline ?? 'user_understanding',
         input.synthesisStatus ?? 'pending',
         parseTimestamp(input.deletedAt),
         existing?.created_at ?? nowMs,
@@ -296,6 +338,21 @@ export function upsertKnowledgeSourceItems(
       );
       const row = db.prepare(`SELECT * FROM knowledge_source_items WHERE item_id = ?`).get(id) as KnowledgeSourceItemRow;
       items.push(sourceItemFromRow(row));
+      const changeKind = input.deletedAt ? 'deleted' : existing ? 'modified' : 'added';
+      db.prepare(
+        `INSERT INTO knowledge_source_changes (
+          change_id, source_instance_id, source_item_id, change_kind,
+          old_hash, new_hash, changed_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      ).run(
+        randomUUID(),
+        input.sourceInstanceId,
+        id,
+        changeKind,
+        existing?.content_hash ?? null,
+        input.deletedAt ? null : input.contentHash,
+        nowMs,
+      );
       if (existing) updated += 1;
       else created += 1;
     }
@@ -308,6 +365,56 @@ export function getKnowledgeSourceItem(itemId: string): KnowledgeSourceItem | nu
     .prepare(`SELECT * FROM knowledge_source_items WHERE item_id = ?`)
     .get(itemId) as KnowledgeSourceItemRow | undefined;
   return row ? sourceItemFromRow(row) : null;
+}
+
+export function listKnowledgeSourceChanges(options: {
+  sourceInstanceId?: string;
+  afterSequence?: number;
+  limit?: number;
+} = {}): KnowledgeSourceChange[] {
+  const where: string[] = [];
+  const params: Array<string | number> = [];
+  if (options.sourceInstanceId) {
+    where.push('source_instance_id = ?');
+    params.push(options.sourceInstanceId);
+  }
+  if (options.afterSequence != null) {
+    where.push('sequence > ?');
+    params.push(Math.max(0, options.afterSequence));
+  }
+  const limit = Math.max(1, Math.min(1_000, options.limit ?? 100));
+  const rows = getSqliteDatabase().prepare(
+    `SELECT * FROM knowledge_source_changes
+     ${where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''}
+     ORDER BY sequence ASC LIMIT ?`,
+  ).all(...params, limit) as KnowledgeSourceChangeRow[];
+  return rows.map(sourceChangeFromRow);
+}
+
+export function getKnowledgeConsumerWatermark(consumerId: string, sourceInstanceId: string): number {
+  const row = getSqliteDatabase().prepare(
+    `SELECT last_sequence FROM knowledge_consumer_watermarks
+     WHERE consumer_id = ? AND source_instance_id = ?`,
+  ).get(consumerId, sourceInstanceId) as { last_sequence: number } | undefined;
+  return row?.last_sequence ?? 0;
+}
+
+export function setKnowledgeConsumerWatermark(
+  consumerId: string,
+  sourceInstanceId: string,
+  sequence: number,
+  nowMs = Date.now(),
+): void {
+  runSqliteWriteTransaction((db) => {
+    db.prepare(
+      `INSERT INTO knowledge_consumer_watermarks (
+        consumer_id, source_instance_id, last_sequence, updated_at
+      ) VALUES (?, ?, ?, ?)
+      ON CONFLICT(consumer_id, source_instance_id) DO UPDATE SET
+        last_sequence = MAX(last_sequence, excluded.last_sequence),
+        updated_at = excluded.updated_at`,
+    ).run(consumerId, sourceInstanceId, Math.max(0, sequence), nowMs);
+  });
 }
 
 export function listKnowledgeSourceItems(options: {
@@ -357,6 +464,84 @@ export function setKnowledgeSourceItemSynthesisStatus(
   });
 }
 
+export function claimKnowledgeSourceItems(options: {
+  workerId: string;
+  sourceInstanceId?: string;
+  synthesisPipeline?: KnowledgeSynthesisPipeline;
+  limit?: number;
+  leaseMs?: number;
+  retryDelayMs?: number;
+  maxAttempts?: number;
+  nowMs?: number;
+}): KnowledgeSourceItem[] {
+  const now = options.nowMs ?? Date.now();
+  const leaseCutoff = now - Math.max(1_000, options.leaseMs ?? 5 * 60_000);
+  const retryCutoff = now - Math.max(1_000, options.retryDelayMs ?? 30_000);
+  const limit = Math.max(1, Math.min(100, options.limit ?? 20));
+  const maxAttempts = Math.max(1, options.maxAttempts ?? 3);
+  return runSqliteWriteTransaction((db) => {
+    const rows = db.prepare(
+      `SELECT * FROM knowledge_source_items
+       WHERE synthesis_attempts < ?
+         ${options.sourceInstanceId ? 'AND source_instance_id = ?' : ''}
+         ${options.synthesisPipeline ? 'AND synthesis_pipeline = ?' : ''}
+         AND (
+           synthesis_status = 'pending'
+           OR (synthesis_status = 'failed' AND updated_at < ?)
+           OR (synthesis_status = 'processing' AND synthesis_claimed_at < ?)
+         )
+       ORDER BY COALESCE(source_updated_at, occurred_at, updated_at) ASC
+       LIMIT ?`,
+    ).all(
+      maxAttempts,
+      ...(options.sourceInstanceId ? [options.sourceInstanceId] : []),
+      ...(options.synthesisPipeline ? [options.synthesisPipeline] : []),
+      retryCutoff,
+      leaseCutoff,
+      limit,
+    ) as KnowledgeSourceItemRow[];
+    if (rows.length === 0) return [];
+    const ids = rows.map((row) => row.item_id);
+    const placeholders = ids.map(() => '?').join(', ');
+    db.prepare(
+      `UPDATE knowledge_source_items SET
+        synthesis_status = 'processing',
+        synthesis_attempts = synthesis_attempts + 1,
+        synthesis_claimed_at = ?,
+        synthesis_claimed_by = ?,
+        synthesis_error = NULL,
+        updated_at = ?
+       WHERE item_id IN (${placeholders})`,
+    ).run(now, options.workerId, now, ...ids);
+    const claimed = db.prepare(
+      `SELECT * FROM knowledge_source_items WHERE item_id IN (${placeholders})`,
+    ).all(...ids) as KnowledgeSourceItemRow[];
+    return claimed.map(sourceItemFromRow);
+  });
+}
+
+export function completeKnowledgeSourceItemSynthesis(input: {
+  itemId: string;
+  workerId: string;
+  status: 'completed' | 'failed' | 'ignored';
+  error?: string;
+  nowMs?: number;
+}): boolean {
+  const now = input.nowMs ?? Date.now();
+  return runSqliteWriteTransaction((db) => {
+    const result = db.prepare(
+      `UPDATE knowledge_source_items SET
+        synthesis_status = ?,
+        synthesis_claimed_at = NULL,
+        synthesis_claimed_by = NULL,
+        synthesis_error = ?,
+        updated_at = ?
+       WHERE item_id = ? AND synthesis_status = 'processing' AND synthesis_claimed_by = ?`,
+    ).run(input.status, input.error ?? null, now, input.itemId, input.workerId);
+    return Number(result.changes) > 0;
+  });
+}
+
 export function attachMemoryEvidence(input: {
   recordId: string;
   sourceItemId?: string;
@@ -366,7 +551,7 @@ export function attachMemoryEvidence(input: {
   observedAt?: string;
   nowMs?: number;
 }): MemoryEvidence {
-  const evidenceId = randomUUID();
+  let evidenceId: string = randomUUID();
   const now = input.nowMs ?? Date.now();
   const observedAt = parseTimestamp(input.observedAt);
   runSqliteWriteTransaction((db) => {
@@ -374,7 +559,11 @@ export function attachMemoryEvidence(input: {
       `INSERT INTO memory_evidence (
         evidence_id, record_id, source_item_id, relation, excerpt,
         confidence, observed_at, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT DO UPDATE SET
+        excerpt = COALESCE(excluded.excerpt, memory_evidence.excerpt),
+        confidence = MAX(COALESCE(memory_evidence.confidence, 0), COALESCE(excluded.confidence, 0)),
+        observed_at = MAX(COALESCE(memory_evidence.observed_at, 0), COALESCE(excluded.observed_at, 0))`,
     ).run(
       evidenceId,
       input.recordId,
@@ -385,6 +574,13 @@ export function attachMemoryEvidence(input: {
       observedAt,
       now,
     );
+    if (input.sourceItemId) {
+      const stored = db.prepare(
+        `SELECT evidence_id FROM memory_evidence
+         WHERE record_id = ? AND source_item_id = ? AND relation = ?`,
+      ).get(input.recordId, input.sourceItemId, input.relation ?? 'supports') as { evidence_id: string } | undefined;
+      evidenceId = stored?.evidence_id ?? evidenceId;
+    }
   });
   return {
     evidenceId,
@@ -394,6 +590,18 @@ export function attachMemoryEvidence(input: {
     ...(input.confidence != null ? { confidence: input.confidence } : {}),
     ...(observedAt != null ? { observedAt: new Date(observedAt).toISOString() } : {}),
   };
+}
+
+export function deleteMemoryEvidenceForRecord(
+  recordId: string,
+  relation?: MemoryEvidenceRelation,
+): number {
+  return runSqliteWriteTransaction((db) => {
+    const result = relation
+      ? db.prepare(`DELETE FROM memory_evidence WHERE record_id = ? AND relation = ?`).run(recordId, relation)
+      : db.prepare(`DELETE FROM memory_evidence WHERE record_id = ?`).run(recordId);
+    return Number(result.changes);
+  });
 }
 
 export function listMemoryEvidence(recordId: string): MemoryEvidence[] {

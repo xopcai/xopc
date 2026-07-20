@@ -13,6 +13,7 @@ import {
   ListTree,
   MessageCircle,
   Pause,
+  Pencil,
   Play,
   Plus,
   RefreshCw,
@@ -43,6 +44,7 @@ import {
   resolveWorkflowInputPayload,
   validateWorkflowInputEditorValue,
 } from '@/features/workflows/workflow-input-editor';
+import { workflowInputToArgValues } from '@/features/workflows/workflow-input.utils';
 import { WorkflowRunSetupPanel, type WorkflowRunSetupValue } from '@/features/workflows/workflow-run-setup-panel';
 import {
   automationApi,
@@ -74,6 +76,7 @@ type CreateMode = 'blank' | 'draft' | 'template';
 type ViewTab = 'activity' | 'automations' | 'system';
 type TriggerMode =
   | 'manual'
+  | 'once'
   | 'daily'
   | 'weekly'
   | 'interval'
@@ -82,13 +85,14 @@ type TriggerMode =
   | 'goalBlocked'
   | 'noteCreated'
   | 'workflowFailed'
-  | 'sessionUpdated';
+  | 'sessionUpdated'
+  | 'event';
 type ActionMode = 'agent' | 'workflow';
 type AutomationsMessages = MessageBundle['automations'];
 type CronMessages = MessageBundle['cron'];
 type RunEventLabels = AutomationsMessages['events'];
 
-interface FormState {
+export interface FormState {
   name: string;
   description: string;
   triggerMode: TriggerMode;
@@ -98,6 +102,10 @@ interface FormState {
   intervalUnit: AutomationIntervalUnit;
   cronExpr: string;
   webhookSecretId: string;
+  onceAt: string;
+  eventType: string;
+  eventSource: string;
+  eventPayloadMatch: string;
   actionMode: ActionMode;
   agentId: string;
   instruction: string;
@@ -122,6 +130,10 @@ const initialForm: FormState = {
   intervalUnit: 'hour',
   cronExpr: '0 9 * * *',
   webhookSecretId: '',
+  onceAt: '',
+  eventType: '',
+  eventSource: '',
+  eventPayloadMatch: '',
   actionMode: 'agent',
   agentId: '',
   instruction: '',
@@ -279,6 +291,8 @@ export function buildInput(form: FormState, selectedWorkflow: WorkflowDefinition
   let trigger: AutomationTrigger;
   if (form.triggerMode === 'manual') {
     trigger = { kind: 'manual' };
+  } else if (form.triggerMode === 'once') {
+    trigger = { kind: 'schedule', schedule: { kind: 'once', at: new Date(form.onceAt).toISOString() } };
   } else if (form.triggerMode === 'webhook') {
     trigger = { kind: 'webhook', ...(form.webhookSecretId.trim() ? { secretId: form.webhookSecretId.trim() } : {}) };
   } else if (form.triggerMode === 'goalBlocked') {
@@ -299,6 +313,16 @@ export function buildInput(form: FormState, selectedWorkflow: WorkflowDefinition
     };
   } else if (form.triggerMode === 'sessionUpdated') {
     trigger = { kind: 'event', eventType: 'session.transcript.updated', source: 'sessions' };
+  } else if (form.triggerMode === 'event') {
+    const payloadMatch = form.eventPayloadMatch.trim()
+      ? JSON.parse(form.eventPayloadMatch) as Record<string, string | number | boolean | null>
+      : undefined;
+    trigger = {
+      kind: 'event',
+      eventType: form.eventType.trim(),
+      ...(form.eventSource.trim() ? { source: form.eventSource.trim() } : {}),
+      ...(payloadMatch ? { payloadMatch } : {}),
+    };
   } else if (form.triggerMode === 'interval') {
     trigger = {
       kind: 'schedule',
@@ -358,6 +382,174 @@ export function buildInput(form: FormState, selectedWorkflow: WorkflowDefinition
   };
 }
 
+function cronFormState(expr: string): Pick<FormState, 'triggerMode' | 'time' | 'weekday' | 'cronExpr'> {
+  const daily = expr.match(/^(\d{1,2})\s+(\d{1,2})\s+\*\s+\*\s+\*$/);
+  if (daily) {
+    return {
+      triggerMode: 'daily',
+      time: `${daily[2].padStart(2, '0')}:${daily[1].padStart(2, '0')}`,
+      weekday: '1',
+      cronExpr: expr,
+    };
+  }
+  const weekly = expr.match(/^(\d{1,2})\s+(\d{1,2})\s+\*\s+\*\s+([0-6])$/);
+  if (weekly) {
+    return {
+      triggerMode: 'weekly',
+      time: `${weekly[2].padStart(2, '0')}:${weekly[1].padStart(2, '0')}`,
+      weekday: weekly[3],
+      cronExpr: expr,
+    };
+  }
+  return { triggerMode: 'cron', time: initialForm.time, weekday: initialForm.weekday, cronExpr: expr };
+}
+
+function intervalFormState(everyMs: number): Pick<FormState, 'intervalValue' | 'intervalUnit'> {
+  const units: Array<[AutomationIntervalUnit, number]> = [
+    ['week', 7 * 24 * 60 * 60_000],
+    ['day', 24 * 60 * 60_000],
+    ['hour', 60 * 60_000],
+    ['minute', 60_000],
+  ];
+  const [unit, unitMs] = units.find(([, ms]) => everyMs >= ms && everyMs % ms === 0) ?? units.at(-1)!;
+  return { intervalValue: String(everyMs / unitMs), intervalUnit: unit };
+}
+
+function localDateTimeValue(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const offsetMs = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+}
+
+function eventFormState(trigger: Extract<AutomationTrigger, { kind: 'event' }>): Partial<FormState> {
+  const payload = trigger.payloadMatch;
+  if (trigger.eventType === 'goal.status_changed' && trigger.source === 'goals' && payload?.status === 'blocked') {
+    return { triggerMode: 'goalBlocked' };
+  }
+  if (trigger.eventType === 'note.created' && trigger.source === 'notes' && !payload) {
+    return { triggerMode: 'noteCreated' };
+  }
+  if (trigger.eventType === 'workflow.run.completed' && trigger.source === 'workflows' && payload?.status === 'failed') {
+    return { triggerMode: 'workflowFailed' };
+  }
+  if (trigger.eventType === 'session.transcript.updated' && trigger.source === 'sessions' && !payload) {
+    return { triggerMode: 'sessionUpdated' };
+  }
+  return {
+    triggerMode: 'event',
+    eventType: trigger.eventType,
+    eventSource: trigger.source ?? '',
+    eventPayloadMatch: payload ? JSON.stringify(payload, null, 2) : '',
+  };
+}
+
+function workflowInputRecord(input: unknown): Record<string, unknown> {
+  return input && typeof input === 'object' && !Array.isArray(input) ? input as Record<string, unknown> : {};
+}
+
+function payloadMatchIsValid(value: string): boolean {
+  if (!value.trim()) return true;
+  try {
+    const parsed = JSON.parse(value);
+    return Boolean(parsed)
+      && typeof parsed === 'object'
+      && !Array.isArray(parsed)
+      && Object.values(parsed as Record<string, unknown>).every((item) => (
+        item === null || ['string', 'number', 'boolean'].includes(typeof item)
+      ));
+  } catch {
+    return false;
+  }
+}
+
+export function formFromAutomation(
+  automation: AutomationInput,
+  workflowDefinitions: WorkflowDefinition[] = [],
+): FormState {
+  let triggerState: Partial<FormState> = { triggerMode: 'manual' };
+  if (automation.trigger.kind === 'webhook') {
+    triggerState = { triggerMode: 'webhook', webhookSecretId: automation.trigger.secretId ?? '' };
+  } else if (automation.trigger.kind === 'event') {
+    triggerState = eventFormState(automation.trigger);
+  } else if (automation.trigger.kind === 'schedule') {
+    const schedule = automation.trigger.schedule;
+    if (schedule.kind === 'cron') triggerState = cronFormState(schedule.expr);
+    if (schedule.kind === 'interval') triggerState = { triggerMode: 'interval', ...intervalFormState(schedule.everyMs) };
+    if (schedule.kind === 'once') triggerState = { triggerMode: 'once', onceAt: localDateTimeValue(schedule.at) };
+  }
+
+  const action = automation.action;
+  const definition = action.kind === 'workflow'
+    ? workflowDefinitions.find((item) => item.id === action.workflowId) ?? null
+    : null;
+  const workflowInput = action.kind === 'workflow' ? workflowInputRecord(action.input) : {};
+  const afterRun = automation.afterRun ?? { kind: 'none' as const };
+  const timeoutSeconds = action.timeoutSeconds ?? automation.reliability?.timeoutSeconds ?? 300;
+
+  return {
+    ...initialForm,
+    ...triggerState,
+    name: automation.name,
+    description: automation.description ?? '',
+    actionMode: action.kind,
+    agentId: action.agentId ?? '',
+    instruction: action.kind === 'agent' ? action.instruction : '',
+    workflowId: action.kind === 'workflow' ? action.workflowId : '',
+    workflowGoal: action.kind === 'workflow' ? action.goal ?? '' : '',
+    workflowInput: {
+      goal: action.kind === 'workflow' ? action.goal ?? '' : '',
+      argValues: definition ? workflowInputToArgValues(definition.name, workflowInput) : {},
+      schemaInput: workflowInput,
+      concurrency: action.kind === 'workflow' && action.concurrency ? String(action.concurrency) : '',
+      maxSubagents: action.kind === 'workflow' && action.maxSubagents ? String(action.maxSubagents) : '',
+    },
+    workflowInputValid: true,
+    safetyMode: automation.safety?.mode ?? 'auto_apply',
+    timeoutSeconds: String(timeoutSeconds),
+    afterRunMode: afterRun.kind,
+    webhookUrl: afterRun.kind === 'webhook' ? afterRun.url : '',
+    disableAfterFailures: String(automation.reliability?.disableAfterConsecutiveFailures ?? 3),
+  };
+}
+
+export function buildAutomationEditInput(
+  automation: Automation,
+  form: FormState,
+  selectedWorkflow: WorkflowDefinition | null,
+): AutomationInput {
+  const input = buildInput(form, selectedWorkflow);
+  const trigger = automation.trigger.kind === 'schedule' && input.trigger.kind === 'schedule'
+    && automation.trigger.schedule.kind === input.trigger.schedule.kind
+    ? { ...input.trigger, schedule: { ...automation.trigger.schedule, ...input.trigger.schedule } }
+    : input.trigger;
+  let action: AutomationAction = input.action;
+  if (automation.action.kind === 'agent' && input.action.kind === 'agent') {
+    action = {
+      ...automation.action,
+      ...input.action,
+      agentId: input.action.agentId,
+    };
+  } else if (automation.action.kind === 'workflow' && input.action.kind === 'workflow') {
+    action = {
+      ...automation.action,
+      ...input.action,
+      agentId: input.action.agentId,
+      input: input.action.input,
+      goal: input.action.goal,
+      concurrency: input.action.concurrency,
+      maxSubagents: input.action.maxSubagents,
+    };
+  }
+  return {
+    ...input,
+    description: form.description.trim(),
+    trigger,
+    action,
+    reliability: { ...automation.reliability, ...input.reliability },
+  };
+}
+
 export function AutomationsPage() {
   const language = useLocaleStore((s) => s.language);
   const messageBundle = messages(language);
@@ -376,6 +568,8 @@ export function AutomationsPage() {
   const [viewTab, setViewTab] = useState<ViewTab>('activity');
   const [createOpen, setCreateOpen] = useState(false);
   const [createMode, setCreateMode] = useState<CreateMode>('blank');
+  const [editingAutomationId, setEditingAutomationId] = useState<string | null>(null);
+  const [editingDraft, setEditingDraft] = useState(false);
   const [form, setForm] = useState<FormState>(initialForm);
   const [error, setError] = useState<string | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
@@ -449,6 +643,10 @@ export function AutomationsPage() {
     () => automations.find((automation) => automation.id === selectedAutomationId) ?? null,
     [automations, selectedAutomationId],
   );
+  const editingAutomation = useMemo(
+    () => automations.find((automation) => automation.id === editingAutomationId) ?? null,
+    [automations, editingAutomationId],
+  );
   const selectedAutomationRuns = useMemo(
     () => runs.filter((run) => run.automationId === selectedAutomationId),
     [runs, selectedAutomationId],
@@ -472,6 +670,8 @@ export function AutomationsPage() {
       : false;
   const formCanSubmit =
     Boolean(form.name.trim()) &&
+    (form.triggerMode !== 'once' || Number.isFinite(new Date(form.onceAt).getTime())) &&
+    (form.triggerMode !== 'event' || (Boolean(form.eventType.trim()) && payloadMatchIsValid(form.eventPayloadMatch))) &&
     (form.actionMode === 'workflow'
       ? !workflowSelectionInvalid && !workflowInputInvalid
       : Boolean(form.instruction.trim())) &&
@@ -533,10 +733,29 @@ export function AutomationsPage() {
   }, [automationsSwr.mutate, metricsSwr.mutate, runEventsSwr.mutate, runsSwr.mutate]);
 
   const openCreate = useCallback((mode: CreateMode) => {
+    setEditingAutomationId(null);
+    setEditingDraft(false);
     setCreateMode(mode);
     setCreateOpen(true);
     if (mode === 'blank') setForm(initialForm);
   }, []);
+
+  const openAutomationEditor = useCallback((automation: Automation) => {
+    setForm(formFromAutomation(automation, workflowDefinitions));
+    setEditingAutomationId(automation.id);
+    setEditingDraft(false);
+    setSelectedAutomationId(null);
+    setCreateMode('blank');
+    setCreateOpen(true);
+  }, [workflowDefinitions]);
+
+  const openDraftEditor = useCallback(() => {
+    if (!draft) return;
+    setForm(formFromAutomation(draft.automation, workflowDefinitions));
+    setEditingAutomationId(null);
+    setEditingDraft(true);
+    setCreateMode('blank');
+  }, [draft, workflowDefinitions]);
 
   const refreshNow = useCallback(async () => {
     setRefreshBusy(true);
@@ -623,6 +842,36 @@ export function AutomationsPage() {
   async function submitForm() {
     setError(null);
     if (!formCanSubmit) return;
+    if (editingDraft && draft) {
+      setBusyAction('draft:edit');
+      try {
+        const automation = buildInput(form, selectedWorkflow);
+        const { simulation } = await automationApi.simulate(automation);
+        setDraft({ ...draft, automation, simulation });
+        setDraftApproved(false);
+        setEditingDraft(false);
+        setCreateMode('draft');
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        setError(message);
+        showToast({ type: 'error', title: labels.feedback.actionFailed, message });
+      } finally {
+        setBusyAction(null);
+      }
+      return;
+    }
+    if (editingAutomation) {
+      const automationId = editingAutomation.id;
+      const updated = await mutateAutomation(`automation:${automationId}:edit`, () => (
+        automationApi.update(automationId, buildAutomationEditInput(editingAutomation, form, selectedWorkflow))
+      ));
+      if (updated) {
+        setCreateOpen(false);
+        setEditingAutomationId(null);
+        setSelectedAutomationId(automationId);
+      }
+      return;
+    }
     try {
       await automationApi.create({
         ...buildInput(form, selectedWorkflow),
@@ -878,7 +1127,16 @@ export function AutomationsPage() {
         )}
       </div>
 
-      <Dialog.Root open={createOpen} onOpenChange={setCreateOpen}>
+      <Dialog.Root
+        open={createOpen}
+        onOpenChange={(open) => {
+          setCreateOpen(open);
+          if (!open) {
+            setEditingAutomationId(null);
+            setEditingDraft(false);
+          }
+        }}
+      >
         <Dialog.Portal>
           <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-65 bg-scrim backdrop-blur-[1px]" />
           <Dialog.Content className="fixed left-1/2 top-1/2 z-66 flex h-[min(760px,calc(100vh-2rem))] w-[min(100%-2rem,48rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-popover outline-none">
@@ -888,7 +1146,11 @@ export function AutomationsPage() {
                   ? labels.draft.title
                   : createMode === 'template'
                     ? labels.createMenu.templatesTitle
-                    : labels.createTitle}
+                    : editingAutomation
+                      ? labels.editTitle
+                      : editingDraft
+                        ? labels.draft.editTitle
+                        : labels.createTitle}
               </Dialog.Title>
               <Dialog.Close asChild>
                 <Button variant="ghost" aria-label={labels.close}>
@@ -907,6 +1169,7 @@ export function AutomationsPage() {
                   publishBusy={busyAction === 'draft:publish'}
                   onPromptChange={setDraftPrompt}
                   onGenerate={generateDraft}
+                  onEdit={openDraftEditor}
                   onPublish={publishDraft}
                   onApprovedChange={setDraftApproved}
                   onDiscard={() => {
@@ -947,11 +1210,31 @@ export function AutomationsPage() {
                   language={language}
                 />
                 <div className="flex justify-end gap-2 border-t border-edge px-5 py-4">
-                  <Dialog.Close asChild>
-                    <Button variant="ghost">{labels.cancel}</Button>
-                  </Dialog.Close>
-                  <Button variant="primary" onClick={submitForm} disabled={!formCanSubmit}>
-                    {labels.create}
+                  {editingDraft ? (
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        setEditingDraft(false);
+                        setCreateMode('draft');
+                      }}
+                    >
+                      {labels.cancel}
+                    </Button>
+                  ) : (
+                    <Dialog.Close asChild>
+                      <Button variant="ghost">{labels.cancel}</Button>
+                    </Dialog.Close>
+                  )}
+                  <Button
+                    variant="primary"
+                    onClick={submitForm}
+                    disabled={!formCanSubmit || busyAction === 'draft:edit' || Boolean(editingAutomation && busyAction)}
+                  >
+                    {busyAction === 'draft:edit' || (editingAutomation && busyAction === `automation:${editingAutomation.id}:edit`)
+                      ? labels.feedback.working
+                      : editingAutomation || editingDraft
+                        ? labels.save
+                        : labels.create}
                   </Button>
                 </div>
               </>
@@ -971,6 +1254,7 @@ export function AutomationsPage() {
           selectRun(runId);
           setSelectedAutomationId(null);
         }}
+        onEdit={openAutomationEditor}
         onAction={mutateAutomation}
       />
       <Dialog.Root open={!wideActivityLayout && runDetailOpen && Boolean(selectedRun)} onOpenChange={setRunDetailOpen}>
@@ -1035,6 +1319,7 @@ function DraftPanel({
   publishBusy = false,
   onPromptChange,
   onGenerate,
+  onEdit,
   onPublish,
   onApprovedChange,
   onDiscard,
@@ -1047,6 +1332,7 @@ function DraftPanel({
   publishBusy?: boolean;
   onPromptChange: (value: string) => void;
   onGenerate: () => void;
+  onEdit: () => void;
   onPublish: () => void;
   onApprovedChange: (value: boolean) => void;
   onDiscard: () => void;
@@ -1107,6 +1393,10 @@ function DraftPanel({
             ) : null}
             <div className="mt-4 flex justify-end gap-2">
               <Button variant="ghost" onClick={onDiscard}>{labels.draft.discard}</Button>
+              <Button variant="secondary" onClick={onEdit}>
+                <Pencil className="size-4" />
+                {labels.draft.edit}
+              </Button>
               <Button variant="primary" onClick={onPublish} disabled={publishBusy || (requiresApproval && !approved)}>
                 {publishBusy ? labels.feedback.working : labels.draft.publish}
               </Button>
@@ -1650,6 +1940,7 @@ function AutomationDetailDialog({
   language,
   busyAction,
   onClose,
+  onEdit,
   onSelectRun,
   onAction,
 }: {
@@ -1660,6 +1951,7 @@ function AutomationDetailDialog({
   language: StoredLanguage;
   busyAction: string | null;
   onClose: () => void;
+  onEdit: (automation: Automation) => void;
   onSelectRun: (runId: string) => void;
   onAction: (actionKey: string, action: () => Promise<unknown>, successTitle?: string) => Promise<boolean>;
 }) {
@@ -1784,6 +2076,16 @@ function AutomationDetailDialog({
                   {labels.dashboard.delete}
                 </Button>
                 <div className="flex gap-2">
+                  {!isSystemManagedAutomation(automation) ? (
+                    <Button
+                      variant="secondary"
+                      disabled={busyAction !== null}
+                      onClick={() => onEdit(automation)}
+                    >
+                      <Pencil className="size-4" />
+                      {labels.edit}
+                    </Button>
+                  ) : null}
                   <Button
                     variant="secondary"
                     disabled={busyAction !== null}
@@ -2060,6 +2362,7 @@ function AutomationForm({
         <Section title={labels.form.trigger} />
         <Select className={inputClass} value={form.triggerMode} onChange={(e) => update({ triggerMode: e.target.value as TriggerMode })}>
           <SelectOption value="manual">{labels.trigger.manual}</SelectOption>
+          <SelectOption value="once">{labels.trigger.once}</SelectOption>
           <SelectOption value="daily">{labels.trigger.daily}</SelectOption>
           <SelectOption value="weekly">{labels.trigger.weekly}</SelectOption>
           <SelectOption value="interval">{labels.trigger.interval}</SelectOption>
@@ -2069,7 +2372,18 @@ function AutomationForm({
           <SelectOption value="noteCreated">{labels.trigger.noteCreated}</SelectOption>
           <SelectOption value="workflowFailed">{labels.trigger.workflowFailed}</SelectOption>
           <SelectOption value="sessionUpdated">{labels.trigger.sessionUpdated}</SelectOption>
+          <SelectOption value="event">{labels.trigger.customEvent}</SelectOption>
         </Select>
+        {form.triggerMode === 'once' ? (
+          <Field label={labels.form.onceAt}>
+            <input
+              className={inputClass}
+              type="datetime-local"
+              value={form.onceAt}
+              onChange={(event) => update({ onceAt: event.target.value })}
+            />
+          </Field>
+        ) : null}
         {form.triggerMode === 'daily' || form.triggerMode === 'weekly' ? (
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label={labels.form.time}><input className={inputClass} type="time" value={form.time} onChange={(e) => update({ time: e.target.value })} /></Field>
@@ -2162,6 +2476,29 @@ function AutomationForm({
           <Field label={labels.form.secretId}>
             <input className={inputClass} value={form.webhookSecretId} onChange={(e) => update({ webhookSecretId: e.target.value })} />
           </Field>
+        ) : null}
+        {form.triggerMode === 'event' ? (
+          <div className="grid gap-3 rounded-lg border border-edge-subtle bg-surface-base p-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label={labels.form.eventType}>
+                <input className={inputClass} value={form.eventType} onChange={(event) => update({ eventType: event.target.value })} />
+              </Field>
+              <Field label={labels.form.eventSource}>
+                <input className={inputClass} value={form.eventSource} onChange={(event) => update({ eventSource: event.target.value })} />
+              </Field>
+            </div>
+            <Field label={labels.form.eventPayloadMatch}>
+              <textarea
+                className={cn(inputClass, 'min-h-24 resize-y font-mono text-xs')}
+                value={form.eventPayloadMatch}
+                onChange={(event) => update({ eventPayloadMatch: event.target.value })}
+                placeholder={'{\n  "status": "blocked"\n}'}
+              />
+              {!payloadMatchIsValid(form.eventPayloadMatch) ? (
+                <span className="text-xs text-red-700 dark:text-red-300">{labels.form.invalidJsonObject}</span>
+              ) : null}
+            </Field>
+          </div>
         ) : null}
 
         <Section title={labels.form.action} />

@@ -84,6 +84,7 @@ export const COMPOSIO_TOOLKIT_DISPLAY_NAMES: Record<ComposioAgentReadyToolkit, s
 
 const RECOMMENDED = new Set<string>(COMPOSIO_RECOMMENDED_TOOLKITS);
 const AGENT_READY = new Set<string>(COMPOSIO_AGENT_READY_TOOLKITS);
+const PERSONAL_CONTEXT_TOOLKITS = new Set(['gmail', 'googledrive', 'notion', 'slack']);
 
 const LOCAL_TOOLKIT_LOGO_FILE_NAMES: Readonly<Record<string, string>> = {
   googlecalendar: 'google-calendar',
@@ -154,6 +155,9 @@ function verificationForToolkit(slug: string): ConnectorVerificationLevel {
 
 export function connectorDefinitionFromComposioToolkit(item: ComposioToolkitCatalogItem): ConnectorDefinition {
   const slug = item.slug.trim().toLowerCase();
+  const knowledgeCapabilities = PERSONAL_CONTEXT_TOOLKITS.has(slug)
+    ? ['context', 'memory_source'] as const
+    : [];
   return {
     id: `composio-${slug}`,
     version: 'sessions-v1',
@@ -164,8 +168,8 @@ export function connectorDefinitionFromComposioToolkit(item: ComposioToolkitCata
     kind: 'composio',
     source: 'builtin',
     capabilities: item.isNoAuth
-      ? ['tools', 'events', 'workflows']
-      : ['tools', 'auth.oauth', 'events', 'workflows'],
+      ? ['tools', 'events', 'workflows', ...knowledgeCapabilities]
+      : ['tools', 'auth.oauth', 'events', 'workflows', ...knowledgeCapabilities],
     tags: ['composio', slug, verificationForToolkit(slug)],
     branding: {
       logoUrl: composioLogoUrl(slug),

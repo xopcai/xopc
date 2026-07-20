@@ -69,6 +69,10 @@ export type PersonalContextSource = {
   lastHealthStatus?: string;
   lastActivityAt?: string;
   derivedUnderstandingCount: number;
+  knowledgeItemCount: number;
+  lastSyncAt?: string;
+  lastSyncStatus?: 'running' | 'succeeded' | 'partial' | 'failed' | 'cancelled';
+  lastSyncError?: string;
 };
 
 export type InsightSuggestion = {

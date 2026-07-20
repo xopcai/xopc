@@ -194,7 +194,18 @@ function SourceCard({ source, language, t, onDisconnect }: { source: PersonalCon
         {source.access.read ? <span className="rounded-full bg-surface-hover px-2 py-0.5">{t.sourceRead}</span> : null}
         {source.access.write ? <span className="rounded-full bg-warning-soft px-2 py-0.5 text-fg">{t.sourceWrite}</span> : null}
       </div>
-      {source.installed ? <div className="mt-3 space-y-1 border-t border-edge-subtle pt-3 text-xs text-fg-muted">{healthStatus ? <p>{healthStatus}</p> : null}<p>{source.lastActivityAt ? t.sourceLastUsed.replace('{{time}}', formatDateTime(source.lastActivityAt, language)) : t.sourceNeverUsed}</p><p>{t.sourceDerivedCount.replace('{{count}}', String(source.derivedUnderstandingCount))}</p></div> : null}
+      {source.installed ? (
+        <div className="mt-3 space-y-1 border-t border-edge-subtle pt-3 text-xs text-fg-muted">
+          {healthStatus ? <p>{healthStatus}</p> : null}
+          <p>{source.lastActivityAt ? t.sourceLastUsed.replace('{{time}}', formatDateTime(source.lastActivityAt, language)) : t.sourceNeverUsed}</p>
+          {source.lastSyncAt ? <p>{t.sourceLastSync.replace('{{time}}', formatDateTime(source.lastSyncAt, language))}</p> : null}
+          {source.lastSyncStatus === 'failed' && source.lastSyncError ? (
+            <p className="text-danger">{t.sourceSyncFailed.replace('{{error}}', source.lastSyncError)}</p>
+          ) : null}
+          <p>{t.sourceKnowledgeCount.replace('{{count}}', String(source.knowledgeItemCount))}</p>
+          <p>{t.sourceDerivedCount.replace('{{count}}', String(source.derivedUnderstandingCount))}</p>
+        </div>
+      ) : null}
       {source.installed && source.instanceId ? <div className="mt-3 flex justify-end"><Button type="button" variant="ghost" className="h-8 px-2 text-danger hover:bg-danger-soft hover:text-danger" onClick={onDisconnect}>{t.disconnect}</Button></div> : null}
     </article>
   );

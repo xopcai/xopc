@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { MemoryRecord } from '../../agent/memory/types.js';
 import type { ConnectorDefinition, ConnectorInstance } from '../../connectors/types.js';
+import type { KnowledgeSourceItem, KnowledgeSyncRun } from '../../knowledge/types.js';
 import {
   facetForMemoryKind,
   isPersonalContextConnector,
@@ -131,6 +132,51 @@ describe('user context projection', () => {
       lastHealthStatus: 'ok',
       lastActivityAt: '2026-07-20T09:00:00.000Z',
       derivedUnderstandingCount: 1,
+    });
+  });
+
+  it('projects connected knowledge volume and the latest sync outcome', () => {
+    const definitions = [{
+      id: 'composio-gmail',
+      displayName: 'Gmail',
+      description: 'Gmail access',
+      category: 'data',
+      capabilities: ['context', 'memory_source', 'tools'],
+    }] as ConnectorDefinition[];
+    const items = [{
+      id: 'item-1',
+      sourceInstanceId: 'composio:composio-gmail:gmail-work',
+      externalId: 'message-1',
+      itemType: 'email',
+      contentHash: 'hash-1',
+      metadata: { connectorId: 'composio-gmail' },
+      sensitivity: 'normal',
+      retentionClass: 'bounded',
+      synthesisPipeline: 'connected_knowledge',
+      synthesisStatus: 'completed',
+      synthesisAttempts: 1,
+      createdAt: '2026-07-20T08:00:00.000Z',
+      updatedAt: '2026-07-20T08:00:00.000Z',
+    }] as KnowledgeSourceItem[];
+    const syncRuns = [{
+      id: 'run-1',
+      sourceInstanceId: 'composio:composio-gmail:gmail-work',
+      status: 'partial',
+      itemsSeen: 1,
+      itemsCreated: 1,
+      itemsUpdated: 0,
+      warnings: ['one item was skipped'],
+      startedAt: '2026-07-20T08:00:00.000Z',
+      finishedAt: '2026-07-20T08:01:00.000Z',
+    }] as KnowledgeSyncRun[];
+
+    const [source] = projectPersonalContextSources(definitions, [], [], { sourceItems: items, syncRuns });
+
+    expect(source).toMatchObject({
+      knowledgeItemCount: 1,
+      lastSyncAt: '2026-07-20T08:01:00.000Z',
+      lastSyncStatus: 'partial',
+      lastActivityAt: '2026-07-20T08:01:00.000Z',
     });
   });
 });
