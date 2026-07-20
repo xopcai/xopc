@@ -3,6 +3,14 @@ import { describe, expect, it } from 'vitest';
 import { STTConfigSchema } from '../../../config/schema.js';
 
 describe('STTConfigSchema', () => {
+  it('defaults to local transcription without an implicit cloud fallback', () => {
+    const parsed = STTConfigSchema.parse({});
+
+    expect(parsed.enabled).toBe(true);
+    expect(parsed.provider).toBe('xopc-local');
+    expect(parsed.fallback).toEqual({ enabled: false, order: ['xopc-local'] });
+  });
+
   it('accepts open provider ids and providers map', () => {
     const parsed = STTConfigSchema.parse({
       enabled: true,

@@ -1,0 +1,53 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const { fetchJson, revalidateGatewayConfig } = vi.hoisted(() => ({
+  fetchJson: vi.fn(),
+  revalidateGatewayConfig: vi.fn(),
+}));
+
+vi.mock('@/lib/fetch', () => ({ fetchJson }));
+vi.mock('@/features/gateway/gateway-config-swr', () => ({ revalidateGatewayConfig }));
+vi.mock('@/lib/url', () => ({ apiUrl: (path: string) => path }));
+
+import { normalizeVoiceSettings, patchVoiceSettings } from '../voice-config-api';
+
+describe('voice-config-api', () => {
+  beforeEach(() => {
+    fetchJson.mockReset();
+    revalidateGatewayConfig.mockReset();
+  });
+
+  it('uses user-safe defaults and disables hidden transcript refinement', () => {
+    const state = normalizeVoiceSettings({});
+
+    expect(state.stt.enabled).toBe(true);
+    expect(state.tts.enabled).toBe(true);
+    expect(state.stt.provider).toBe('xopc-local');
+    expect(state.stt.fallback).toEqual({ enabled: false, order: ['xopc-local'] });
+    expect(state.tts.trigger).toBe('inbound');
+    expect(state.tts.timeoutMs).toBe(60_000);
+    expect(state.voice.input.refinement.mode).toBe('off');
+    expect(state.voice.languageMode).toBe('auto');
+  });
+
+  it('round-trips explicit refinement in the safe config patch', async () => {
+    fetchJson.mockResolvedValue({ ok: true });
+    const state = normalizeVoiceSettings({
+      voice: { input: { refinement: { mode: 'punctuation', model: 'openai/gpt-test' } } },
+    });
+
+    await patchVoiceSettings(state);
+
+    const init = fetchJson.mock.calls[0]?.[1] as RequestInit;
+    expect(JSON.parse(String(init.body))).toMatchObject({
+      voice: {
+        input: { refinement: { mode: 'punctuation', model: 'openai/gpt-test' } },
+      },
+      tts: { trigger: 'inbound', timeoutMs: 60_000 },
+    });
+    expect(fetchJson).toHaveBeenNthCalledWith(2, '/api/voice/language', {
+      method: 'POST',
+      body: JSON.stringify({ language: 'en' }),
+    });
+  });
+});

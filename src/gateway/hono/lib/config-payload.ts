@@ -328,6 +328,7 @@ export async function buildSafeWebConfigPayload(service: GatewayService, options
     },
     stt: maskSttConfigForWeb(config.tools?.media?.audio),
     tts: maskTtsConfigForWeb(config.messages?.tts),
+    voice: config.voice,
     tools: safeToolsWebForGet(config),
     bindings: Array.isArray(config.bindings) ? config.bindings : [],
     mcp: buildSafeMcpConfigForWeb(config),

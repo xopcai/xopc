@@ -36,6 +36,8 @@ import { interaction } from '@/lib/interaction';
 import { apiUrl } from '@/lib/url';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
+import { ReadAloudButton } from '@/features/voice/read-aloud-button';
+import { buildSpeakableText, detectSpeechLanguage } from '@/features/voice/read-aloud-text';
 
 const messageActionIconButton = cn(
   'inline-flex size-9 shrink-0 items-center justify-center rounded-lg',
@@ -254,6 +256,19 @@ export const MessageBubble = memo(function MessageBubble({
     () => (assistantActionsVisible && copyMarkdown ? getAssistantCopyPlainText(message.content ?? []) : ''),
     [assistantActionsVisible, copyMarkdown, message.content],
   );
+  const speakableText = useMemo(
+    () => (assistantActionsVisible && copyMarkdown ? buildSpeakableText(copyMarkdown) : ''),
+    [assistantActionsVisible, copyMarkdown],
+  );
+  const readAloudInput = useMemo(() => ({
+    source: {
+      type: 'chat-message' as const,
+      id: `${sessionKey ?? 'chat'}:${message.timestamp ?? messageIndex ?? copyMarkdown.length}`,
+      title: m.chat.messageReadAloudTitle,
+    },
+    text: speakableText,
+    language: detectSpeechLanguage(speakableText, language),
+  }), [copyMarkdown.length, language, m.chat.messageReadAloudTitle, message.timestamp, messageIndex, sessionKey, speakableText]);
   const userCopyText = useMemo(() => {
     if (!isUser) return '';
     return extractUserMessagePlainText(message.content);
@@ -743,6 +758,16 @@ export const MessageBubble = memo(function MessageBubble({
                 <FileCode2 className="size-4" strokeWidth={1.75} aria-hidden />
               )}
             </button>
+            <ReadAloudButton
+              input={readAloudInput}
+              labels={{
+                read: m.chat.messageReadAloud,
+                preparing: m.chat.messageReadAloudPreparing,
+                pause: m.chat.messageReadAloudPause,
+                resume: m.chat.messageReadAloudResume,
+                retry: m.chat.messageReadAloudRetry,
+              }}
+            />
             {sessionKey && message.timestamp ? (
               <>
                 <button

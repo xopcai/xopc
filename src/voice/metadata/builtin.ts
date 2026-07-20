@@ -17,6 +17,17 @@ const alibabaSttModels = [
   { id: 'paraformer-mtl-v1', name: 'Paraformer MTL v1 (Multilingual)' },
 ];
 
+const localSttModels = [
+  {
+    id: 'sensevoice-small',
+    name: 'SenseVoice Small 中文（推荐）',
+    description: '约 230 MB · 普通话、粤语、中英混说',
+  },
+  { id: 'tiny', name: 'Whisper Tiny (Fastest)', description: 'About 45 MB' },
+  { id: 'base', name: 'Whisper Base (Multilingual)', description: 'About 80 MB' },
+  { id: 'small', name: 'Whisper Small (Higher quality)', description: 'About 245 MB' },
+];
+
 const alibabaTtsModels = [
   { id: 'qwen-tts', name: 'Qwen TTS (Recommended)' },
   { id: 'qwen-tts-realtime', name: 'Qwen TTS Realtime' },
@@ -51,6 +62,19 @@ const edgeVoices = [
 ];
 
 export const builtinVoiceProviderMetadata: VoiceProviderMetadata[] = [
+  {
+    id: 'xopc-local',
+    capability: 'stt',
+    displayName: 'xopc Local Voice',
+    description: 'Private on-device Chinese and multilingual transcription. Audio never leaves this device.',
+    aliases: ['local'],
+    models: localSttModels,
+    fields: [
+      { key: 'model', label: 'Model', type: 'select', options: localSttModels, defaultValue: 'sensevoice-small' },
+      { key: 'language', label: 'Language hint', type: 'string', placeholder: 'zh' },
+    ],
+    diagnostics: { requiresApiKey: false, configPath: 'tools.media.audio.providers.xopc-local' },
+  },
   {
     id: 'alibaba',
     capability: 'stt',

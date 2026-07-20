@@ -57,6 +57,7 @@ describe('buildCredentialsHubSnapshot', () => {
       voice: {
         stt: { enabled: false, provider: 'openai' },
         tts: { enabled: false, provider: 'edge', trigger: 'off' },
+        voice: { languageMode: 'auto', language: 'en', input: { refinement: { mode: 'off' } } },
       },
       labels,
     });

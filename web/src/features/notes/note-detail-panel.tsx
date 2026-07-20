@@ -12,6 +12,8 @@ import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 import { useThemeStore } from '@/stores/theme-store';
+import { ReadAloudButton } from '@/features/voice/read-aloud-button';
+import { buildSpeakableText, detectSpeechLanguage } from '@/features/voice/read-aloud-text';
 
 import {
   catalyzeNote,
@@ -334,6 +336,17 @@ function NoteDetailPanelInner({
     }
   }, [activeSidePanel, catalyzing, handleCatalyze, note?.aiDeep?.catalysis?.report]);
 
+  const getNoteReadAloudInput = useCallback(() => {
+    const markdown = previewSnapshot?.markdown ?? pendingMarkdownRef.current ?? note?.markdown ?? '';
+    const noteTitle = previewSnapshot?.title ?? title;
+    const text = buildSpeakableText([noteTitle, markdown].filter(Boolean).join('\n\n'));
+    return {
+      source: { type: 'note' as const, id: noteId, title: noteTitle || n.titlePlaceholder },
+      text,
+      language: detectSpeechLanguage(text, language),
+    };
+  }, [language, n.titlePlaceholder, note?.markdown, noteId, previewSnapshot, title]);
+
   const headerEnd = useMemo(
     () => (
       <div className={cn('flex items-center gap-2', APP_CHROME_NO_DRAG_CLASS)}>
@@ -347,6 +360,17 @@ function NoteDetailPanelInner({
             <Search className="h-4 w-4" aria-hidden />
           </button>
         ) : null}
+        <ReadAloudButton
+          input={getNoteReadAloudInput}
+          labels={{
+            read: n.readAloud,
+            preparing: n.readAloudPreparing,
+            pause: n.readAloudPause,
+            resume: n.readAloudResume,
+            retry: n.readAloudRetry,
+          }}
+          showLabel
+        />
         <button
           type="button"
           onClick={handleBreakdownClick}
@@ -407,6 +431,12 @@ function NoteDetailPanelInner({
       activeSidePanel,
       onOpenSearch,
       n.searchDialogTitle,
+      n.readAloud,
+      n.readAloudPause,
+      n.readAloudPreparing,
+      n.readAloudResume,
+      n.readAloudRetry,
+      getNoteReadAloudInput,
     ],
   );
 

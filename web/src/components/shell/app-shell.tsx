@@ -20,6 +20,8 @@ import { GlobalQuickCaptureHost } from '@/features/notes/global-quick-capture';
 import { GatewaySseBridge } from '@/features/gateway/gateway-sse-bridge';
 import { DreamingOverlay } from '@/features/dreaming/dreaming-overlay';
 import { WorkspacePreviewPane } from '@/features/workspace/workspace-preview-pane';
+import { GlobalReadAloudPlayer } from '@/features/voice/global-read-aloud-player';
+import { GlobalVoiceInputShortcutHost } from '@/features/voice/global-voice-input-shortcut-host';
 import { OnboardingDialog } from '@/components/shell/onboarding-dialog';
 import { TopBannerStack } from '@/components/shell/top-banner-stack';
 import { cn } from '@/lib/cn';
@@ -108,6 +110,8 @@ export function AppShell() {
       <ExtensionNavigateListener />
       <GlobalCommandPaletteHost />
       <GlobalQuickCaptureHost />
+      <GlobalVoiceInputShortcutHost />
+      <GlobalReadAloudPlayer />
       <ActivityCenterPanel />
       <ToastHost />
       <TokenDialog />

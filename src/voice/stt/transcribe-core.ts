@@ -50,9 +50,7 @@ function toAttempt(attempt: MediaUnderstandingModelDecision): STTProviderAttempt
     provider: attempt.provider ?? 'unknown',
     outcome: attempt.outcome,
     reasonCode: attempt.outcome === 'success' ? 'success' : classifyFailureReason(attempt.reason),
-    // Latency is not tracked at the runner level today (deferred to future
-    // observability pass); we report 0 to keep the field shape stable.
-    latencyMs: 0,
+    latencyMs: attempt.latencyMs ?? 0,
     ...(attempt.reason ? { error: attempt.reason } : {}),
   };
 }
@@ -82,12 +80,12 @@ export async function transcribe(
       {
         attachmentIndex: 0,
         buffer: audioBuffer,
-        fileName: `audio-${Date.now()}.ogg`,
-        // mime is informational for OpenAI's multipart blob; alibaba uses base64 data URL.
-        mime: 'audio/ogg',
+        fileName: options?.fileName ?? `audio-${Date.now()}.ogg`,
+        mime: options?.mime ?? 'audio/ogg',
       },
     ],
     timeoutMs: config.timeoutMs ?? 60_000,
+    signal: options?.signal,
   });
 
   const attachmentDecision: MediaUnderstandingAttachmentDecision | undefined =
