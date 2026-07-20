@@ -155,6 +155,13 @@
       "ready": "可用",
       "off": "关闭"
     },
+    "language": {
+      "title": "语音语言",
+      "auto": "跟随应用语言",
+      "manual": "保留手动设置",
+      "autoDescription": "STT 识别语言和内置 Edge 音色会自动跟随应用语言。",
+      "manualDescription": "切换应用语言时，不覆盖模型语言和已选择的音色。"
+    },
     "behavior": {
       "title": "语音应该如何工作",
       "description": "先选择用户能感知的行为，引擎细节放在下方。",
@@ -181,7 +188,19 @@
       "apiKeyDesc": "若环境变量已配置密钥，此处可留空。",
       "model": "模型",
       "fallback": "备用服务商",
-      "fallbackDesc": "主服务商失败时尝试备用服务商。"
+      "fallbackDesc": "主服务商失败时尝试备用服务商。",
+      "refinement": "转写润色",
+      "refinementDesc": "转写后可选调用模型整理文本；关闭可避免额外延迟和模型用量。",
+      "refinementOff": "关闭（保留原文）",
+      "refinementPunctuation": "仅补标点",
+      "refinementLight": "轻度整理",
+      "localProvider": "xopc 本地语音",
+      "localModels": "本地语音模型",
+      "localModelsDesc": "只下载模型文件，识别过程完全在 xopc 内本地运行。",
+      "localRecommended": "中文推荐",
+      "localDownloading": "下载中",
+      "localInstall": "下载",
+      "localRemove": "删除"
     },
     "tts": {
       "title": "助手语音回复（TTS）",

@@ -105,6 +105,9 @@ export const useVoicePlayerStore = create<VoicePlayerState & VoicePlayerActions>
       currentAttachmentId = attachmentId;
       audio.src = url;
       await audio.play();
+      window.dispatchEvent(new CustomEvent('xopc-voice-playback-start', {
+        detail: { id: `note:${noteId}:${attachmentId}` },
+      }));
       set({ loading: false });
     } catch {
       set({ loading: false, playing: false });

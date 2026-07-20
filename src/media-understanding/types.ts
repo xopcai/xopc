@@ -89,6 +89,8 @@ export interface MediaUnderstandingModelDecision {
   type: 'provider' | 'cli';
   outcome: MediaUnderstandingAttemptOutcome;
   reason?: string;
+  /** Wall-clock time spent in this provider attempt. */
+  latencyMs?: number;
 }
 
 export interface MediaUnderstandingAttachmentDecision {
@@ -123,6 +125,7 @@ export interface AudioTranscriptionRequest {
   prompt?: string;
   query?: Record<string, string | number | boolean>;
   timeoutMs: number;
+  signal?: AbortSignal;
 }
 
 export interface AudioTranscriptionResult {
@@ -194,6 +197,9 @@ export interface MediaUnderstandingProvider {
    * Defaults to true.
    */
   requiresApiKey?: boolean;
+
+  /** Optional runtime readiness check for bundled providers such as local STT. */
+  isConfigured?: (options?: { model?: string }) => boolean;
 
   /** Lower number = higher priority in auto-selection. */
   autoPriority?: Partial<Record<MediaCapability, number>>;

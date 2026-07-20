@@ -23,14 +23,35 @@ export interface TtsTestInput {
   providerConfig?: Record<string, unknown>;
 }
 
+export interface LocalVoiceModelStatus {
+  id: string;
+  name: string;
+  description: string;
+  approximateBytes: number;
+  engine: string;
+  languages: string[];
+  recommended?: boolean;
+  state: 'not_installed' | 'downloading' | 'ready' | 'error';
+  progress?: number;
+  downloadedBytes?: number;
+  totalBytes?: number;
+  error?: string;
+}
+
+export interface LocalVoiceStatusPayload {
+  runtime: { ready: boolean; engine?: string; protocolVersion?: number; error?: string };
+  models: LocalVoiceModelStatus[];
+}
+
 
 function defaultStt(): SttSettings {
   return {
-    enabled: false,
-    provider: 'alibaba',
+    enabled: true,
+    provider: 'xopc-local',
     alibaba: { model: 'paraformer-v2' },
     openai: { model: 'whisper-1' },
-    fallback: { enabled: true, order: ['alibaba', 'openai'] },
+    providers: { 'xopc-local': { model: 'sensevoice-small' } },
+    fallback: { enabled: false, order: ['xopc-local'] },
   };
 }
 
@@ -39,14 +60,14 @@ function defaultStt(): SttSettings {
 // PATCH /api/config round-trip never silently overrides backend defaults.
 function defaultTts(): TtsSettings {
   return {
-    enabled: false,
+    enabled: true,
     provider: 'edge',
-    trigger: 'always',
+    trigger: 'inbound',
     maxTextLength: 512,
     timeoutMs: 60000,
     alibaba: { model: 'qwen-tts', voice: 'Cherry' },
     openai: { model: 'tts-1', voice: 'alloy' },
-    edge: { voice: 'en-US-MichelleNeural' },
+    edge: { voice: 'zh-CN-XiaoxiaoNeural', lang: 'zh-CN' },
     minimax: { model: 'speech-2.8-hd', voice: 'male-qn-qingse' },
     'tts-local-cli': {
       command: '',
@@ -60,7 +81,7 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 }
 
 function normalizeSttProvider(v: unknown): string {
-  return typeof v === 'string' && v.trim().length > 0 ? v.trim() : 'alibaba';
+  return typeof v === 'string' && v.trim().length > 0 ? v.trim() : 'xopc-local';
 }
 
 function readProviderSlice<T extends object>(
@@ -82,7 +103,7 @@ function mergeStt(raw: unknown): SttSettings {
   const provider = normalizeSttProvider(raw.provider);
   const alibaba = readProviderSlice(raw, 'alibaba', d.alibaba ?? {}) as SttSettings['alibaba'];
   const openai = readProviderSlice(raw, 'openai', d.openai ?? {}) as SttSettings['openai'];
-  const baseFallback = d.fallback ?? { enabled: true, order: ['alibaba', 'openai'] };
+  const baseFallback = d.fallback ?? { enabled: false, order: ['xopc-local'] };
   let fallback = baseFallback;
   if (isRecord(raw.fallback)) {
     const order = Array.isArray(raw.fallback.order)
@@ -128,7 +149,7 @@ function mergeTts(raw: unknown): TtsSettings {
     raw.trigger === 'inbound' ||
     raw.trigger === 'tagged'
       ? raw.trigger
-      : 'always';
+      : 'inbound';
   const localCliDefaults = d['tts-local-cli'] ?? {};
   const providers = isRecord(raw.providers)
     ? Object.fromEntries(
@@ -189,9 +210,33 @@ function toTtsPayload(tts: TtsSettings): Record<string, unknown> {
 
 export function normalizeVoiceSettings(config: unknown): VoiceSettingsState {
   const c = isRecord(config) ? config : {};
+  const voice = isRecord(c.voice) ? c.voice : {};
+  const input = isRecord(voice.input) ? voice.input : {};
+  const refinement = isRecord(input.refinement) ? input.refinement : {};
+  const refinementMode =
+    refinement.mode === 'punctuation' ||
+    refinement.mode === 'light' ||
+    refinement.mode === 'custom'
+      ? refinement.mode
+      : 'off';
   return {
     stt: mergeStt(c.stt),
     tts: mergeTts(c.tts),
+    voice: {
+      languageMode: voice.languageMode === 'manual' ? 'manual' : 'auto',
+      language: voice.language === 'zh' ? 'zh' : 'en',
+      input: {
+        refinement: {
+          mode: refinementMode,
+          ...(typeof refinement.model === 'string' && refinement.model.trim()
+            ? { model: refinement.model.trim() }
+            : {}),
+          ...(typeof refinement.customInstruction === 'string'
+            ? { customInstruction: refinement.customInstruction }
+            : {}),
+        },
+      },
+    },
   };
 }
 
@@ -203,8 +248,21 @@ export async function fetchVoiceSettings(): Promise<VoiceSettingsState> {
 export async function patchVoiceSettings(state: VoiceSettingsState): Promise<void> {
   await fetchJson(apiUrl('/api/config'), {
     method: 'PATCH',
-    body: JSON.stringify({ stt: toSttPayload(state.stt), tts: toTtsPayload(state.tts) }),
+    body: JSON.stringify({
+      stt: toSttPayload(state.stt),
+      tts: toTtsPayload(state.tts),
+      voice: state.voice,
+    }),
   });
+  if (state.voice.languageMode === 'auto') {
+    await fetchJson(apiUrl('/api/voice/language'), {
+      method: 'POST',
+      body: JSON.stringify({ language: state.voice.language }),
+    });
+  }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('voice-config-changed'));
+  }
   void revalidateGatewayConfig();
 }
 
@@ -236,6 +294,27 @@ export async function fetchVoiceSttProviders(): Promise<SttProvidersPayload> {
     throw new Error('Missing STT providers payload');
   }
   return res.payload;
+}
+
+export async function fetchLocalVoiceStatus(): Promise<LocalVoiceStatusPayload> {
+  const res = await fetchJson<{ ok?: boolean; payload?: LocalVoiceStatusPayload }>(
+    apiUrl('/api/voice/local/status'),
+  );
+  if (!res.payload) throw new Error('Missing local voice status payload');
+  return res.payload;
+}
+
+export async function installLocalVoiceModel(modelId: string): Promise<void> {
+  await fetchJson(apiUrl(`/api/voice/local/models/${encodeURIComponent(modelId)}/install`), {
+    method: 'POST',
+    body: '{}',
+  });
+}
+
+export async function removeLocalVoiceModel(modelId: string): Promise<void> {
+  await fetchJson(apiUrl(`/api/voice/local/models/${encodeURIComponent(modelId)}`), {
+    method: 'DELETE',
+  });
 }
 
 export type RevealVoiceApiKeyPayload = {

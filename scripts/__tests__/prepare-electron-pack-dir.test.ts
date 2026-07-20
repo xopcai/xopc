@@ -38,6 +38,9 @@ describe('prepare-electron-pack-dir', () => {
     expect(existsSync(join(packDir, 'dist/gateway/static/root/index.html'))).toBe(true);
     expect(existsSync(join(packDir, 'skills/tools/find-skills/SKILL.md'))).toBe(true);
     expect(existsSync(join(packDir, 'node_modules/silk-wasm'))).toBe(true);
+    expect(existsSync(join(packDir, 'node_modules/@huggingface/transformers'))).toBe(true);
+    expect(existsSync(join(packDir, 'node_modules/sherpa-onnx-node'))).toBe(true);
+    expect(existsSync(join(packDir, 'node_modules/onnxruntime-node/bin/napi-v3'))).toBe(true);
     expect(existsSync(join(packDir, 'node_modules/@vscode/ripgrep'))).toBe(false);
     expect(existsSync(join(packDir, '_pack-resources/rg'))).toBe(true);
     expect(existsSync(join(packDir, '_pack-resources/cbm'))).toBe(true);

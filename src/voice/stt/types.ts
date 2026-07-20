@@ -22,6 +22,10 @@ export interface STTOptions {
   language?: string;
   /** Model id (provider-specific). */
   model?: string;
+  /** Original upload metadata propagated to provider multipart/data URLs. */
+  mime?: string;
+  fileName?: string;
+  signal?: AbortSignal;
 }
 
 export type { MediaUnderstandingModelEntry } from '../../media-understanding/types.js';
@@ -70,15 +74,16 @@ export interface STTResultWithTracking extends STTResult {
 }
 
 export const DEFAULT_STT_CONFIG: STTConfig = {
-  enabled: false,
-  provider: 'alibaba',
+  enabled: true,
+  provider: 'xopc-local',
   providers: {
+    'xopc-local': { model: 'sensevoice-small' },
     alibaba: { model: 'paraformer-v2' },
     openai: { model: 'whisper-1' },
   },
   fallback: {
-    enabled: true,
-    order: ['alibaba', 'openai'],
+    enabled: false,
+    order: ['xopc-local'],
   },
   timeoutMs: 60_000,
 };

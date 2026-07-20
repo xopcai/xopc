@@ -731,8 +731,8 @@ export const STTProviderConfigSchema = z
   .catchall(SttProviderConfigCatchallSchema);
 
 export const STTFallbackConfigSchema = z.object({
-  enabled: z.boolean().default(true),
-  order: z.array(z.string().min(1)).default(['alibaba', 'openai']),
+  enabled: z.boolean().default(false),
+  order: z.array(z.string().min(1)).default(['xopc-local']),
 });
 
 export const MediaUnderstandingCapabilitiesSchema = z
@@ -756,10 +756,10 @@ export const MediaUnderstandingModelSchema = z
 
 export const STTConfigSchema = z
   .object({
-    enabled: z.boolean().default(false),
+    enabled: z.boolean().default(true),
     /** Primary provider id — any registered MediaUnderstandingProvider id. */
-    provider: z.string().min(1).default('alibaba'),
-    fallback: STTFallbackConfigSchema.optional(),
+    provider: z.string().min(1).default('xopc-local'),
+    fallback: STTFallbackConfigSchema.default({ enabled: false, order: ['xopc-local'] }),
     timeoutMs: z.number().int().min(1000).max(180000).optional(),
     /** Ordered model entries for this capability (OpenClaw `tools.media.audio.models`). */
     models: z.array(MediaUnderstandingModelSchema).optional(),
@@ -828,10 +828,10 @@ export const TTSSummarizationConfigSchema = z.object({
 
 export const TTSConfigSchema = z
   .object({
-    enabled: z.boolean().default(false),
+    enabled: z.boolean().default(true),
     /** Primary provider id — any registered SpeechProviderPlugin id. */
     provider: z.string().min(1).default('edge'),
-    trigger: z.enum(['off', 'always', 'inbound', 'tagged']).default('always'),
+    trigger: z.enum(['off', 'always', 'inbound', 'tagged']).default('inbound'),
     fallback: TTSFallbackConfigSchema.optional(),
     maxTextLength: z.number().int().min(1).default(512), // Conservative default to accommodate all providers (Alibaba limit is 512)
     timeoutMs: z.number().int().min(1000).max(180000).default(60000),
@@ -841,6 +841,29 @@ export const TTSConfigSchema = z
     providers: z.record(z.string(), TTSProviderConfigSchema).optional(),
   })
   .strict();
+
+export const VoiceRefinementConfigSchema = z
+  .object({
+    mode: z.enum(['off', 'punctuation', 'light', 'custom']).default('off'),
+    /** Optional provider/model reference used only when refinement is enabled. */
+    model: z.string().min(1).optional(),
+    customInstruction: z.string().max(4000).optional(),
+  })
+  .strict();
+
+export const VoiceConfigSchema = z
+  .object({
+    languageMode: z.enum(['auto', 'manual']).optional(),
+    language: z.enum(['en', 'zh']).optional(),
+    input: z
+      .object({
+        refinement: VoiceRefinementConfigSchema.optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict()
+  .optional();
 
 // ============================================
 // messages.* — delivery / presentation concerns
@@ -1202,6 +1225,8 @@ export const ConfigSchema = z.object({
   modelsDev: ModelsDevConfigSchema,
   /** Delivery / presentation concerns (currently `tts`). */
   messages: MessagesConfigSchema,
+  /** User-facing voice input behavior beyond provider selection. */
+  voice: VoiceConfigSchema,
   update: UpdateConfigSchema,
   commands: CommandsConfigSchema,
   tui: TuiConfigSchema,
@@ -1361,6 +1386,7 @@ export type GatewayAuthRateLimitConfig = z.infer<typeof GatewayAuthRateLimitSche
 export type GatewayBindMode = z.infer<typeof GatewayBindModeSchema>;
 export type STTConfig = z.infer<typeof STTConfigSchema>;
 export type TTSConfig = z.infer<typeof TTSConfigSchema>;
+export type VoiceConfig = z.infer<typeof VoiceConfigSchema>;
 
 // ============================================
 // Helper Functions

@@ -1182,6 +1182,7 @@
     "chatSend": "Send message",
     "chatNewLine": "New line",
     "chatForceSend": "Force send (edit mode)",
+    "chatVoiceInput": "Start / finish voice input",
     "editorHeading1": "Heading 1",
     "editorHeading2": "Heading 2",
     "editorHeading3": "Heading 3",
@@ -1194,7 +1195,9 @@
     "quickCaptureShortcutChange": "Change shortcut",
     "quickCaptureShortcutReset": "Reset",
     "quickCaptureShortcutRecording": "Press a shortcut (Esc to cancel)",
-    "quickCaptureShortcutConflict": "That shortcut is already used by a core navigation action."
+    "quickCaptureShortcutConflict": "That shortcut is already in use.",
+    "voiceInputShortcutTitle": "Voice input shortcut",
+    "voiceInputShortcutDescription": "Start or finish voice input in Chat or the open quick capture note. Press Esc to cancel."
   },
   "mcpSettings": {
     "title": "External tools (MCP)",

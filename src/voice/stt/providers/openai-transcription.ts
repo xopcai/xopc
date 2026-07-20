@@ -34,6 +34,7 @@ async function transcribeAudio(req: AudioTranscriptionRequest): Promise<AudioTra
   // openai SDK supports baseURL override per-instance.
   const client = new OpenAI({
     apiKey: req.apiKey,
+    timeout: req.timeoutMs,
     ...(req.baseUrl ? { baseURL: req.baseUrl } : {}),
     ...(req.headers ? { defaultHeaders: req.headers } : {}),
   });
@@ -43,10 +44,9 @@ async function transcribeAudio(req: AudioTranscriptionRequest): Promise<AudioTra
     req.buffer.byteOffset,
     req.buffer.byteLength,
   );
-  // MIME defaults to audio/ogg because Telegram voice notes are the most common
-  // input. The SDK doesn't actually inspect the type — it just uses it for the
-  // multipart Content-Type header. Whisper itself sniffs the file content.
-  const blob = new Blob([uint8Array], { type: req.mime ?? 'audio/ogg' });
+  // Preserve the original name and MIME so provider-side format detection and
+  // diagnostics reflect the real upload instead of a synthetic OGG file.
+  const file = new File([uint8Array], req.fileName, { type: req.mime ?? 'audio/ogg' });
 
   log.debug(
     { model, bufferSize: req.buffer.length, language: req.language, fileName: req.fileName },
@@ -54,13 +54,16 @@ async function transcribeAudio(req: AudioTranscriptionRequest): Promise<AudioTra
   );
 
   try {
-    const result = await client.audio.transcriptions.create({
-      file: blob,
-      model,
-      ...(req.language ? { language: req.language } : {}),
-      ...(req.prompt ? { prompt: req.prompt } : {}),
-      response_format: 'json',
-    });
+    const result = await client.audio.transcriptions.create(
+      {
+        file,
+        model,
+        ...(req.language ? { language: req.language } : {}),
+        ...(req.prompt ? { prompt: req.prompt } : {}),
+        response_format: 'json',
+      },
+      req.signal ? { signal: req.signal } : undefined,
+    );
     const durationSeconds = (Date.now() - startTime) / 1000;
     log.info(
       { provider: 'openai', durationSeconds, textLength: result.text?.length ?? 0 },
@@ -73,6 +76,9 @@ async function transcribeAudio(req: AudioTranscriptionRequest): Promise<AudioTra
       durationSeconds,
     };
   } catch (error) {
+    if (req.signal?.aborted) {
+      throw error;
+    }
     const errorMsg = error instanceof Error ? error.message : String(error);
     log.error(
       { err: error, bufferSize: req.buffer.length, model },

@@ -8,11 +8,17 @@ export const ELECTRON_GATEWAY_EXTERNALS = [
   '@vscode/ripgrep',
   'silk-wasm',
   'playwright-core',
+  '@huggingface/transformers',
+  'sherpa-onnx-node',
   'fsevents',
 ];
 
 /** Real node_modules packages required by the packaged gateway/extensions. */
-export const ELECTRON_PACKAGED_DEPENDENCIES = ['silk-wasm'];
+export const ELECTRON_PACKAGED_DEPENDENCIES = [
+  'silk-wasm',
+  '@huggingface/transformers',
+  'sherpa-onnx-node',
+];
 
 /** @param {string} repoRoot */
 export function resolveInstalledElectronVersion(repoRoot) {

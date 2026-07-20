@@ -57,6 +57,7 @@ import {
   type UserTrustLevel,
   type UserUnderstanding,
 } from './user-context-api';
+import { personalContextSourceBranding } from './source-branding';
 import { SourceDisconnectDialog } from './source-disconnect-dialog';
 
 type ViewId = 'overview' | 'understanding' | 'sources' | 'controls';
@@ -195,7 +196,7 @@ function SourceCard({ source, language, t, onConfigure, onDisconnect }: { source
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
-          <ConnectorLogo connector={{ displayName: source.displayName, branding: source.branding }} size="sm" />
+          <ConnectorLogo connector={{ displayName: source.displayName, branding: personalContextSourceBranding(source) }} size="sm" />
           <div className="min-w-0"><h3 className="text-sm font-semibold text-fg">{source.displayName}</h3><p className="mt-1 line-clamp-2 text-xs leading-5 text-fg-muted">{source.description}</p></div>
         </div>
         <span className={cn('shrink-0 rounded-full px-2 py-1 text-[11px] font-medium', source.installed && source.enabled ? 'bg-success-soft text-fg' : 'bg-surface-hover text-fg-muted')}>{status}</span>
