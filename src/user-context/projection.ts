@@ -146,6 +146,7 @@ export function projectPersonalContextSources(
         id: definition.id,
         displayName: definition.displayName,
         description: definition.description,
+        ...(definition.branding ? { branding: definition.branding } : {}),
         category: definition.category,
         capabilities: definition.capabilities.filter((capability) => (
           capability === 'context' || capability === 'memory_source' || capability === 'tools' || capability === 'events'

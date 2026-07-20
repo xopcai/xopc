@@ -9,7 +9,6 @@ import {
   HeartHandshake,
   Lightbulb,
   Pencil,
-  Plug,
   Settings2,
   ShieldCheck,
   Sparkles,
@@ -27,6 +26,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { PageTabs } from '@/components/ui/page-tabs';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ConnectorLogo } from '@/features/connectors/components/connector-logo';
 import { detectBrowserTimezone } from '@/features/settings/agents/agent-profile-markdown';
 import { UserProfileFieldsEditor } from '@/features/settings/user-profile-fields-editor';
 import { messages } from '@/i18n/messages';
@@ -174,16 +174,28 @@ function UnderstandingCard({
   );
 }
 
-function SourceCard({ source, language, t, onDisconnect }: { source: PersonalContextSource; language: 'en' | 'zh'; t: ReturnType<typeof messages>['you']; onDisconnect: () => void }) {
+function SourceCard({ source, language, t, onConfigure, onDisconnect }: { source: PersonalContextSource; language: 'en' | 'zh'; t: ReturnType<typeof messages>['you']; onConfigure: () => void; onDisconnect: () => void }) {
   const status = source.installed ? (source.enabled ? t.connected : t.paused) : t.available;
   const healthStatus = source.lastHealthStatus
     ? t.sourceHealth.replace('{{status}}', source.lastHealthStatus === 'ok' ? t.healthOk : t.healthIssue)
     : null;
   return (
-    <article className="rounded-xl border border-edge-subtle bg-surface-panel p-4">
+    <article
+      role="button"
+      tabIndex={0}
+      aria-label={`${t.manageSources}: ${source.displayName}`}
+      className="cursor-pointer rounded-xl border border-edge-subtle bg-surface-panel p-4 transition-colors hover:border-accent/30 hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+      onClick={onConfigure}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        onConfigure();
+      }}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent-fg"><Plug className="size-4" aria-hidden /></div>
+          <ConnectorLogo connector={{ displayName: source.displayName, branding: source.branding }} size="sm" />
           <div className="min-w-0"><h3 className="text-sm font-semibold text-fg">{source.displayName}</h3><p className="mt-1 line-clamp-2 text-xs leading-5 text-fg-muted">{source.description}</p></div>
         </div>
         <span className={cn('shrink-0 rounded-full px-2 py-1 text-[11px] font-medium', source.installed && source.enabled ? 'bg-success-soft text-fg' : 'bg-surface-hover text-fg-muted')}>{status}</span>
@@ -206,7 +218,7 @@ function SourceCard({ source, language, t, onDisconnect }: { source: PersonalCon
           <p>{t.sourceDerivedCount.replace('{{count}}', String(source.derivedUnderstandingCount))}</p>
         </div>
       ) : null}
-      {source.installed && source.instanceId ? <div className="mt-3 flex justify-end"><Button type="button" variant="ghost" className="h-8 px-2 text-danger hover:bg-danger-soft hover:text-danger" onClick={onDisconnect}>{t.disconnect}</Button></div> : null}
+      {source.installed && source.instanceId ? <div className="mt-3 flex justify-end border-t border-edge-subtle pt-3"><Button type="button" variant="ghost" className="h-8 px-2 text-danger hover:bg-danger-soft hover:text-danger" onClick={(event) => { event.stopPropagation(); onDisconnect(); }}>{t.disconnect}</Button></div> : null}
     </article>
   );
 }
@@ -278,6 +290,12 @@ export function UserContextPage() {
     if (status) params.set('status', status);
     else params.delete('status');
     setSearchParams(params, { replace: true });
+  };
+
+  const openSourceConfiguration = (source: Pick<PersonalContextSource, 'id' | 'instanceId'>) => {
+    const params = new URLSearchParams({ connector: source.id });
+    if (source.instanceId) params.set('instance', source.instanceId);
+    navigate(`/connectors?${params.toString()}`);
   };
 
   useLayoutEffect(() => {
@@ -514,8 +532,8 @@ export function UserContextPage() {
       {data && view === 'sources' ? (
         <div id="you-panel-sources" role="tabpanel" aria-labelledby="you-tab-sources" className="space-y-5">
           <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-base font-semibold text-fg">{t.sourcesTitle}</h2><p className="mt-1 max-w-2xl text-sm text-fg-muted">{t.sourcesHint}</p></div><Button type="button" variant="primary" onClick={() => navigate('/connectors?tab=connected&personalContext=1')}>{t.manageSources}<ChevronRight className="size-4" aria-hidden /></Button></div>
-          {data.sourceRecommendations.length > 0 ? <section className="rounded-2xl border border-accent/20 bg-accent-soft/25 p-5"><h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><Target className="size-4 text-accent" aria-hidden />{t.recommendationsTitle}</h2><p className="mt-1 text-xs text-fg-muted">{t.recommendationsHint}</p><div className="mt-3 grid gap-2 lg:grid-cols-3">{data.sourceRecommendations.map((item) => <button key={item.sourceId} type="button" className="rounded-xl border border-edge-subtle bg-surface-panel p-3 text-left hover:border-accent/30 hover:bg-surface-hover" onClick={() => navigate('/connectors')}><span className="text-sm font-semibold text-fg">{item.sourceName}</span><span className="mt-1 block text-xs leading-5 text-fg-muted">{t.recommendationReason.replace('{{goal}}', item.goalTitle)}</span></button>)}</div></section> : null}
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{data.sources.map((source) => <SourceCard key={source.id} source={source} language={language} t={t} onDisconnect={() => setDisconnectSource(source)} />)}</div>
+          {data.sourceRecommendations.length > 0 ? <section className="rounded-2xl border border-accent/20 bg-accent-soft/25 p-5"><h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><Target className="size-4 text-accent" aria-hidden />{t.recommendationsTitle}</h2><p className="mt-1 text-xs text-fg-muted">{t.recommendationsHint}</p><div className="mt-3 grid gap-2 lg:grid-cols-3">{data.sourceRecommendations.map((item) => <button key={item.sourceId} type="button" className="rounded-xl border border-edge-subtle bg-surface-panel p-3 text-left hover:border-accent/30 hover:bg-surface-hover" onClick={() => openSourceConfiguration({ id: item.sourceId })}><span className="text-sm font-semibold text-fg">{item.sourceName}</span><span className="mt-1 block text-xs leading-5 text-fg-muted">{t.recommendationReason.replace('{{goal}}', item.goalTitle)}</span></button>)}</div></section> : null}
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{data.sources.map((source) => <SourceCard key={source.id} source={source} language={language} t={t} onConfigure={() => openSourceConfiguration(source)} onDisconnect={() => setDisconnectSource(source)} />)}</div>
           {data.sources.length === 0 ? <div className="rounded-2xl border border-dashed border-edge p-8 text-center text-sm text-fg-muted">{t.noSources}</div> : null}
         </div>
       ) : null}

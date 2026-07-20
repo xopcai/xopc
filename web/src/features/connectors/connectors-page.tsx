@@ -1,5 +1,6 @@
 import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { PageTabs } from '@/components/ui/page-tabs';
@@ -103,7 +104,9 @@ export function ConnectorsPage() {
   const mcp = m.mcpSettings;
   const token = useGatewayStore((state) => state.token);
   const hasToken = Boolean(token);
-  const [tab, setTab] = useState<TabId>('discover');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab');
+  const [tab, setTab] = useState<TabId>(requestedTab === 'connected' ? 'connected' : 'discover');
   const initialTabResolvedRef = useRef(false);
   const [state, setState] = useState<LoadState>({
     catalog: [],
@@ -278,6 +281,41 @@ export function ConnectorsPage() {
   const connectorDefinitionsById = useMemo(() => new Map(
     [...state.catalog, ...state.registryCatalog].map((connector) => [connector.id, connector]),
   ), [state.catalog, state.registryCatalog]);
+
+  useEffect(() => {
+    if (state.loading) return;
+    const connectorId = searchParams.get('connector');
+    const requestedInstanceId = searchParams.get('instance');
+    if (!connectorId && !requestedInstanceId) return;
+
+    const instance = state.instances.find((candidate) => (
+      requestedInstanceId
+        ? candidate.instanceId === requestedInstanceId
+        : candidate.connectorId === connectorId
+    ));
+    if (instance) {
+      initialTabResolvedRef.current = true;
+      setConnectedSearchQuery('');
+      setDetailInstanceId(instance.instanceId);
+      setDetailInstanceSnapshot(instance);
+      setTab('connected');
+    } else if (connectorId) {
+      const definition = connectorDefinitionsById.get(connectorId);
+      if (!definition) return;
+      initialTabResolvedRef.current = true;
+      setDiscoverSource(DISCOVERY_SOURCE_BUILTIN);
+      setDiscoverSearchQuery('');
+      setDetailConnector(definition);
+      setTab('discover');
+    }
+
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('connector');
+    nextParams.delete('instance');
+    nextParams.delete('personalContext');
+    nextParams.set('tab', instance ? 'connected' : 'discover');
+    setSearchParams(nextParams, { replace: true });
+  }, [connectorDefinitionsById, searchParams, setSearchParams, state.instances, state.loading]);
 
   const openStoreInstall = useCallback(async (packageName: string) => {
     setStorePlanLoading(true);

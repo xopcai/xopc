@@ -80,6 +80,7 @@ describe('user context projection', () => {
       id: 'calendar',
       displayName: 'Calendar',
       description: 'Calendar access',
+      branding: { logoUrl: '/assets/connectors/calendar.svg', source: 'builtin' },
       category: 'data',
       capabilities: ['context', 'memory_source', 'tools'],
       permissions: { data: ['events:read', 'events:create'] },
@@ -88,6 +89,7 @@ describe('user context projection', () => {
     const [source] = projectPersonalContextSources(definitions, []);
 
     expect(source?.access).toEqual({ context: true, memory: true, read: true, write: true });
+    expect(source?.branding?.logoUrl).toBe('/assets/connectors/calendar.svg');
     expect(source?.permissionDetails).toEqual(['events:read', 'events:create']);
   });
 
