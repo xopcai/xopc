@@ -118,9 +118,11 @@ function collectExtensionNavItems(extensions: readonly ExtensionUiInfo[]): NavIt
 export function SidebarNavItems({
   collapsed = false,
   onNavigate,
+  visibleLimit,
 }: {
   collapsed?: boolean;
   onNavigate?: () => void;
+  visibleLimit?: number;
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -137,7 +139,7 @@ export function SidebarNavItems({
 
   const available = useMemo<NavItem[]>(() => {
     const builtins: NavItem[] = BUILTIN_NAV_DEFS.map((def) => {
-      const labelKey = def.id.slice('builtin:'.length) as 'profile' | 'agents' | 'projects' | 'localApps' | 'goals' | 'skills' | 'connectors' | 'automations' | 'notes' | 'workflows' | 'channels' | 'extensions';
+      const labelKey = def.id.slice('builtin:'.length) as 'profile' | 'agents' | 'work' | 'projects' | 'localApps' | 'goals' | 'skills' | 'connectors' | 'automations' | 'notes' | 'workflows' | 'channels' | 'extensions';
       return {
         id: def.id,
         kind: 'builtin',
@@ -150,7 +152,10 @@ export function SidebarNavItems({
     return [...builtins, ...ext];
   }, [m, uiExtensions]);
 
-  const reconciled = useMemo(() => reconcileNavOrder(available, order), [available, order]);
+  const reconciled = useMemo(
+    () => reconcileNavOrder(available, order, visibleLimit),
+    [available, order, visibleLimit],
+  );
 
   const onDragStart = useCallback((id: string) => (e: DragEvent<HTMLElement>) => {
     e.dataTransfer.setData(DRAG_MIME, dragPayload(id));

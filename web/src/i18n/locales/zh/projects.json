@@ -135,6 +135,20 @@
       "active": "活跃",
       "paused": "已暂停",
       "archived": "已归档"
+    },
+    "management": {
+      "title": "项目",
+      "subtitle": "创建、查找和管理长期事项空间。",
+      "filterLabel": "筛选项目",
+      "pin": "置顶",
+      "unpin": "取消置顶",
+      "archive": "归档",
+      "restore": "恢复",
+      "descriptionLabel": "项目描述",
+      "descriptionPlaceholder": "简要说明这个项目要持续推进什么。",
+      "emptyTitle": "没有匹配的项目",
+      "emptyHint": "调整筛选条件，或者创建一个新的项目。",
+      "viewAll": "查看全部项目"
     }
   },
   "projectDetailPage": {

@@ -1,4 +1,4 @@
-import { Box, Cable, FolderKanban, GitBranch, HeartHandshake, Layers, ListChecks, Plug, Puzzle, StickyNote, Users, Zap } from 'lucide-react';
+import { Box, BriefcaseBusiness, Cable, FolderKanban, GitBranch, HeartHandshake, Layers, ListChecks, Plug, Puzzle, StickyNote, Users, Zap } from 'lucide-react';
 
 import type { LucideIcon } from '@/features/extensions/extension-nav-icon';
 
@@ -22,6 +22,7 @@ export type BuiltinNavId =
   | 'builtin:skills'
   | 'builtin:connectors'
   | 'builtin:localApps'
+  | 'builtin:work'
   | 'builtin:projects'
   | 'builtin:goals'
   | 'builtin:automations'
@@ -41,24 +42,24 @@ export type BuiltinNavDef = {
  * Order here is the *initial* sequence shown to first-time users.
  */
 export const BUILTIN_NAV_DEFS: readonly BuiltinNavDef[] = [
-  { id: 'builtin:projects', to: '/projects', Icon: FolderKanban },
+  { id: 'builtin:work', to: '/work', Icon: BriefcaseBusiness },
   { id: 'builtin:profile', to: '/you', Icon: HeartHandshake },
-  { id: 'builtin:agents', to: '/agents', Icon: Users },
-  { id: 'builtin:goals', to: '/goals', Icon: ListChecks },
-  { id: 'builtin:workflows', to: '/workflows', Icon: GitBranch },
+  { id: 'builtin:projects', to: '/projects', Icon: FolderKanban },
+  { id: 'builtin:automations', to: '/automations', Icon: Zap },
   { id: 'builtin:skills', to: '/skills', Icon: Layers },
   { id: 'builtin:connectors', to: '/connectors', Icon: Cable },
-  { id: 'builtin:automations', to: '/automations', Icon: Zap },
+  { id: 'builtin:agents', to: '/agents', Icon: Users },
+  { id: 'builtin:notes', to: '/notes', Icon: StickyNote },
   { id: 'builtin:channels', to: '/channels', Icon: Plug },
+  { id: 'builtin:goals', to: '/goals', Icon: ListChecks },
+  { id: 'builtin:workflows', to: '/workflows', Icon: GitBranch },
   { id: 'builtin:localApps', to: '/local-apps', Icon: Box },
   { id: 'builtin:extensions', to: '/extensions', Icon: Puzzle },
-  { id: 'builtin:notes', to: '/notes', Icon: StickyNote },
 ] as const;
 
-/** Cap on visible rail rows excluding the "New chat" button at the top. */
-export const VISIBLE_NAV_CAP = 2;
-/** When overflowing, the last visible slot becomes the "More" button. */
-export const VISIBLE_NAV_WHEN_OVERFLOW = 2;
+/** Adjustable visible app-row bounds, excluding "New chat" and "More apps". */
+export const MIN_VISIBLE_NAV_ITEMS = 2;
+export const MAX_VISIBLE_NAV_ITEMS = 4;
 
 export type ReconciledNav = {
   visible: NavItem[];
@@ -68,7 +69,7 @@ export type ReconciledNav = {
 
 /**
  * Merge stored user order with live available items, then split into visible
- * vs overflow according to {@link VISIBLE_NAV_CAP}.
+ * vs overflow according to the requested visible limit (clamped to 2–4).
  *
  * - Items in `storedOrder` no longer present in `available` are silently dropped.
  * - Items in `available` not yet in `storedOrder` are appended at the end
@@ -78,6 +79,7 @@ export type ReconciledNav = {
 export function reconcileNavOrder(
   available: readonly NavItem[],
   storedOrder: readonly string[],
+  visibleLimit = MIN_VISIBLE_NAV_ITEMS,
 ): ReconciledNav {
   const byId = new Map<string, NavItem>();
   for (const item of available) byId.set(item.id, item);
@@ -96,12 +98,16 @@ export function reconcileNavOrder(
     seen.add(item.id);
   }
 
-  if (ordered.length <= VISIBLE_NAV_CAP) {
+  const clampedVisibleLimit = Math.min(
+    MAX_VISIBLE_NAV_ITEMS,
+    Math.max(MIN_VISIBLE_NAV_ITEMS, Math.round(visibleLimit)),
+  );
+  if (ordered.length <= clampedVisibleLimit) {
     return { visible: ordered, overflow: [], hasOverflow: false };
   }
   return {
-    visible: ordered.slice(0, VISIBLE_NAV_WHEN_OVERFLOW),
-    overflow: ordered.slice(VISIBLE_NAV_WHEN_OVERFLOW),
+    visible: ordered.slice(0, clampedVisibleLimit),
+    overflow: ordered.slice(clampedVisibleLimit),
     hasOverflow: true,
   };
 }
