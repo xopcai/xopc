@@ -16,6 +16,7 @@ import {
   getWorkDiscoveryOnboardingState,
   getWorkDiscoveryRun,
   getWorkDiscoveryRunByIdempotencyKey,
+  setWorkDiscoveryFeedback,
   setWorkDiscoveryOnboardingState,
   updateWorkDiscoveryRun,
 } from './repository.js';
@@ -28,6 +29,7 @@ import {
 import type {
   WorkDiscoveryErrorCode,
   WorkDiscoveryOnboardingState,
+  WorkDiscoveryRecognitionDecision,
   WorkDiscoveryRun,
   WorkDiscoverySource,
 } from './types.js';
@@ -228,9 +230,6 @@ export class WorkDiscoveryService {
         result: analysis.result,
         completedAt: Date.now(),
       })!;
-      if (run.source === 'onboarding_selected_directory') {
-        setWorkDiscoveryOnboardingState({ status: 'completed', activeRunId: run.id });
-      }
       this.activity.record({
         type: 'work_discovery.completed',
         primaryObject: { kind: 'project', id: run.projectId, title: project?.name },
@@ -314,6 +313,65 @@ export class WorkDiscoveryService {
     this.publish(queued);
     void this.execute(queued, controller.signal);
     return queued;
+  }
+
+  async submitRecognitionFeedback(input: {
+    runId: string;
+    decision: WorkDiscoveryRecognitionDecision;
+    correctedIntent?: string;
+  }): Promise<WorkDiscoveryRun | null> {
+    const run = getWorkDiscoveryRun(input.runId);
+    if (!run || run.status !== 'completed' || !run.result) return null;
+    const correctedIntent = input.correctedIntent?.trim().slice(0, 2_000);
+    if ((input.decision === 'corrected' || input.decision === 'different_goal') && !correctedIntent) {
+      throw new Error('A corrected intent is required for this decision');
+    }
+    const feedback = setWorkDiscoveryFeedback({
+      runId: run.id,
+      recognitionDecision: input.decision,
+      ...(correctedIntent ? { correctedIntent } : {}),
+    });
+    if (run.source === 'onboarding_selected_directory') {
+      setWorkDiscoveryOnboardingState({
+        status: input.decision === 'dismissed' ? 'dismissed' : 'completed',
+        activeRunId: input.decision === 'dismissed' ? null : run.id,
+      });
+    }
+    const feedbackText = correctedIntent
+      ? `The user corrected the work discovery understanding: ${correctedIntent}`
+      : input.decision === 'confirmed'
+        ? 'The user confirmed the work discovery understanding.'
+        : 'The user left work discovery without confirming the suggested understanding.';
+    await this.options.sessions.appendTranscriptContextEntry(run.sessionKey, {
+      text: feedbackText,
+      data: {
+        type: 'work_discovery_recognition_feedback',
+        runId: run.id,
+        decision: input.decision,
+        ...(correctedIntent ? { correctedIntent } : {}),
+      },
+    });
+    this.activity.record({
+      type: `work_discovery.recognition_${input.decision}`,
+      primaryObject: { kind: 'project', id: run.projectId },
+      actor: { kind: 'user', sessionKey: run.sessionKey },
+      source: { kind: 'gateway_api', runId: run.id },
+      payload: {
+        decision: input.decision,
+        corrected: Boolean(correctedIntent),
+      },
+      scopes: [
+        { scopeKind: 'project', scopeId: run.projectId, reason: 'object_owner' },
+        { scopeKind: 'session', scopeId: run.sessionKey, reason: 'runtime_context' },
+      ],
+    });
+    this.options.emit('work-discovery.recognition-feedback', {
+      runId: run.id,
+      projectId: run.projectId,
+      sessionKey: run.sessionKey,
+      decision: input.decision,
+    });
+    return { ...run, feedback };
   }
 
   selectSuggestion(runId: string, suggestionId: string): WorkDiscoveryRun | null {
