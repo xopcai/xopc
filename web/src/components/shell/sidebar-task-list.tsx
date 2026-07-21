@@ -1257,22 +1257,24 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
             />
             {projectGroups.length > 0 ? (
               <div className="pb-1">
-                <button
-                  type="button"
-                  className="flex items-center gap-1 px-2 pb-1 text-[11px] font-medium uppercase tracking-wide text-fg-subtle transition-colors hover:text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
-                  onClick={() => setProjectsCollapsed((value) => !value)}
-                  aria-expanded={!projectsCollapsed}
-                >
-                  {sb.projectsHeading}
-                  <ChevronDown
-                    className={cn(
-                      'size-3.5 transition-transform duration-150 ease-out',
-                      projectsCollapsed && '-rotate-90',
-                    )}
-                    strokeWidth={1.75}
-                    aria-hidden
-                  />
-                </button>
+                <div className="px-2 pb-1">
+                  <button
+                    type="button"
+                    className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-fg-subtle transition-colors hover:text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
+                    onClick={() => setProjectsCollapsed((value) => !value)}
+                    aria-expanded={!projectsCollapsed}
+                  >
+                    {sb.projectsHeading}
+                    <ChevronDown
+                      className={cn(
+                        'size-3.5 transition-transform duration-150 ease-out',
+                        projectsCollapsed && '-rotate-90',
+                      )}
+                      strokeWidth={1.75}
+                      aria-hidden
+                    />
+                  </button>
+                </div>
                 {!projectsCollapsed
                   ? projectGroups.map((group) => (
                       <SidebarProjectSection

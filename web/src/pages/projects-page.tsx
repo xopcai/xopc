@@ -1,202 +1,166 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import {
+  Archive,
   ArrowRight,
-  CalendarClock,
-  CheckCircle2,
-  CircleAlert,
-  Clock3,
-  Eye,
   FolderKanban,
-  ListChecks,
-  MessageCircle,
+  Pin,
+  PinOff,
   Plus,
+  RotateCcw,
   Search,
-  Sparkles,
 } from 'lucide-react';
 import { type FormEvent, useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { WorkbenchActivity } from '@/features/activity/workbench-activity';
-import { delegateWork, fetchProjects, type Project } from '@/features/projects/api';
 import {
-  fetchWorkHome,
-  respondToWorkDecision,
-  type WorkHomeDecision,
-  type WorkHomeItem,
-  type WorkHomeResponse,
-} from '@/features/work/work-home-api';
-import { workflowBoardHref } from '@/features/workflows/workflow-page.utils';
+  archiveProject,
+  createProject,
+  fetchProjects,
+  pinProject,
+  restoreProject,
+  unpinProject,
+  type Project,
+  type ProjectStatus,
+} from '@/features/projects/api';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 
-function interpolate(template: string, values: Record<string, string | number>): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => String(values[key] ?? ''));
-}
+type ProjectFilter = 'all' | ProjectStatus;
 
-function formatTime(value: string | number | undefined, fallback: string): string {
+function projectTime(value: string | number | undefined, fallback: string): string {
   if (value == null) return fallback;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return fallback;
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
+  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(date);
 }
 
-function WorkHomeSkeleton() {
+function sortLoadedProjects(projects: Project[]): Project[] {
+  return [...projects].sort((a, b) => {
+    const pinned = Number(Boolean(b.pinnedAt)) - Number(Boolean(a.pinnedAt));
+    if (pinned !== 0) return pinned;
+    return new Date(b.lastActiveAt ?? b.updatedAt).getTime() - new Date(a.lastActiveAt ?? a.updatedAt).getTime();
+  });
+}
+
+function ProjectsSkeleton() {
   return (
-    <div className="space-y-5" aria-busy>
-      <Skeleton className="h-32 rounded-2xl" />
-      <div className="grid gap-4 xl:grid-cols-2">
-        <Skeleton className="h-64 rounded-2xl" />
-        <Skeleton className="h-64 rounded-2xl" />
-      </div>
-      <Skeleton className="h-44 rounded-2xl" />
+    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" aria-busy>
+      {Array.from({ length: 6 }, (_, index) => (
+        <Skeleton key={index} className="h-40 rounded-xl" />
+      ))}
     </div>
   );
 }
 
-function WorkItemCard({
-  item,
-  statusLabel,
-  needsAttention = false,
-}: {
-  item: WorkHomeItem;
-  statusLabel: string;
-  needsAttention?: boolean;
-}) {
-  return (
-    <Link
-      to={`/work-items/${encodeURIComponent(item.id)}`}
-      className={cn(
-        'group block rounded-xl border p-3.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-        needsAttention
-          ? 'border-warning/35 bg-warning-soft/25 hover:bg-warning-soft/40'
-          : 'border-edge-subtle bg-surface-panel hover:bg-surface-hover/55',
-      )}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="truncate text-sm font-semibold text-fg">{item.title}</h3>
-          <p className="mt-1 truncate text-xs text-fg-subtle">{item.projectName}</p>
-        </div>
-        <span className="shrink-0 rounded-full bg-surface-hover px-2 py-0.5 text-[11px] font-medium text-fg-muted">
-          {statusLabel}
-        </span>
-      </div>
-      {item.blockedReason || item.nextAction ? (
-        <p className="mt-2 line-clamp-2 text-xs leading-5 text-fg-muted">
-          {item.blockedReason || item.nextAction}
-        </p>
-      ) : null}
-    </Link>
-  );
-}
-
-function DecisionCard({
-  item,
-  kindLabel,
-  reasonLabel,
-  approveLabel,
-  denyLabel,
+function ProjectCard({
+  project,
   busy,
-  onRespond,
+  onTogglePin,
+  onToggleArchive,
 }: {
-  item: WorkHomeDecision;
-  kindLabel: string;
-  reasonLabel: string;
-  approveLabel: string;
-  denyLabel: string;
-  busy: boolean;
-  onRespond: (decision: 'approve' | 'deny') => void;
-}) {
-  return (
-    <article className="rounded-xl border border-warning/35 bg-warning-soft/25 p-3.5 transition-colors hover:bg-warning-soft/40">
-      <Link to={item.href} className="group block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="truncate text-sm font-semibold text-fg">{item.title}</h3>
-          <p className="mt-1 truncate text-xs text-fg-subtle">{item.projectName || kindLabel}</p>
-        </div>
-        <span className="shrink-0 rounded-full bg-surface-panel/80 px-2 py-0.5 text-[11px] font-medium text-fg-muted">
-          {reasonLabel}
-        </span>
-      </div>
-      {item.detail ? <p className="mt-2 line-clamp-2 text-xs leading-5 text-fg-muted">{item.detail}</p> : null}
-      </Link>
-      {item.response ? (
-        <div className="mt-3 flex justify-end gap-2 border-t border-warning/20 pt-3">
-          <Button type="button" variant="ghost" className="h-8 px-2" disabled={busy} onClick={() => onRespond('deny')}>{denyLabel}</Button>
-          <Button type="button" variant="primary" className="h-8 px-2" disabled={busy} onClick={() => onRespond('approve')}>{approveLabel}</Button>
-        </div>
-      ) : null}
-    </article>
-  );
-}
-
-function ProjectCard({ project, openLabel, noDescription }: {
   project: Project;
-  openLabel: string;
-  noDescription: string;
+  busy: boolean;
+  onTogglePin: () => void;
+  onToggleArchive: () => void;
 }) {
+  const language = useLocaleStore((state) => state.language);
+  const t = messages(language).projectsPage;
+  const management = t.management;
+
   return (
-    <Link
-      to={`/projects/${encodeURIComponent(project.id)}`}
-      className="group flex min-h-32 flex-col rounded-xl border border-edge-subtle bg-surface-panel p-4 transition-colors hover:bg-surface-hover/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <FolderKanban className="size-4 shrink-0 text-accent" aria-hidden />
-          <h3 className="truncate text-sm font-semibold text-fg">{project.name}</h3>
+    <article className="flex h-full flex-col rounded-xl border border-edge-subtle bg-surface-base p-4">
+      <Link
+        to={`/projects/${encodeURIComponent(project.id)}`}
+        className="group flex min-w-0 flex-1 flex-col rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+              <FolderKanban className="size-4" aria-hidden />
+            </span>
+            <div className="min-w-0">
+              <h2 className="truncate text-sm font-semibold text-fg">{project.name}</h2>
+              <p className="mt-0.5 text-xs text-fg-subtle">{t.statuses[project.status]}</p>
+            </div>
+          </div>
+          <ArrowRight className="mt-2 size-4 shrink-0 text-fg-subtle transition-transform group-hover:translate-x-0.5" aria-hidden />
         </div>
-        <ArrowRight className="size-4 shrink-0 text-fg-subtle transition-transform group-hover:translate-x-0.5" aria-label={openLabel} />
+        <p className="mt-3 line-clamp-2 min-h-10 text-xs leading-5 text-fg-muted">
+          {project.description || project.brief || t.noDescription}
+        </p>
+      </Link>
+
+      <div className="mt-3 flex shrink-0 items-end justify-between gap-3 border-t border-edge-subtle pt-3">
+        <div className="min-w-0 text-[11px] text-fg-subtle">
+          <p className="truncate">{project.workspaceRoot || t.agentDefault}</p>
+          <p className="mt-1">{projectTime(project.lastActiveAt ?? project.updatedAt, t.never)}</p>
+        </div>
+        <div className="flex shrink-0 gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            className="size-8 p-0"
+            disabled={busy}
+            onClick={onTogglePin}
+            aria-label={project.pinnedAt ? management.unpin : management.pin}
+            title={project.pinnedAt ? management.unpin : management.pin}
+          >
+            {project.pinnedAt ? <PinOff className="size-4" aria-hidden /> : <Pin className="size-4" aria-hidden />}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            className="size-8 p-0"
+            disabled={busy}
+            onClick={onToggleArchive}
+            aria-label={project.status === 'archived' ? management.restore : management.archive}
+            title={project.status === 'archived' ? management.restore : management.archive}
+          >
+            {project.status === 'archived'
+              ? <RotateCcw className="size-4" aria-hidden />
+              : <Archive className="size-4" aria-hidden />}
+          </Button>
+        </div>
       </div>
-      <p className="mt-3 line-clamp-2 text-xs leading-5 text-fg-muted">
-        {project.description || project.brief || noDescription}
-      </p>
-      <p className="mt-auto pt-3 text-[11px] text-fg-subtle">
-        {formatTime(project.lastActiveAt ?? project.updatedAt, '')}
-      </p>
-    </Link>
+    </article>
   );
 }
 
 export function ProjectsPage() {
   const language = useLocaleStore((state) => state.language);
-  const msg = messages(language);
-  const t = msg.projectsPage;
-  const navigate = useNavigate();
+  const t = messages(language).projectsPage;
+  const management = t.management;
   const setPageHeader = usePageHeaderStore((state) => state.setPageHeader);
   const clearPageHeader = usePageHeaderStore((state) => state.clearPageHeader);
-  const [home, setHome] = useState<WorkHomeResponse | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [createError, setCreateError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState<ProjectFilter>('active');
+  const [busyProjectId, setBusyProjectId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
-  const [createIntent, setCreateIntent] = useState<'delegate' | 'watch'>('delegate');
-  const [outcome, setOutcome] = useState('');
+  const [createError, setCreateError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  const [busyDecisionId, setBusyDecisionId] = useState<string | null>(null);
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [workspaceRoot, setWorkspaceRoot] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
-    setLoadError(null);
+    setError(null);
     try {
-      const [homeResult, projectsResult] = await Promise.all([
-        fetchWorkHome(language),
-        fetchProjects({ limit: 100, sortBy: 'updatedAt', sortOrder: 'desc' }),
-      ]);
-      setHome(homeResult);
-      setProjects(projectsResult.items);
-    } catch (err) {
-      setLoadError(err instanceof Error ? err.message : String(err));
+      const result = await fetchProjects({ limit: 100, sortBy: 'updatedAt', sortOrder: 'desc' });
+      setProjects(sortLoadedProjects(result.items));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setLoading(false);
     }
-  }, [language]);
+  }, []);
 
   useEffect(() => {
     void load();
@@ -204,87 +168,90 @@ export function ProjectsPage() {
 
   const visibleProjects = useMemo(() => {
     const query = search.trim().toLocaleLowerCase();
-    const active = projects.filter((project) => project.status !== 'archived');
-    if (!query) return active.slice(0, 12);
-    return active.filter((project) => [project.name, project.description, project.brief]
-      .filter(Boolean)
-      .some((value) => value!.toLocaleLowerCase().includes(query)));
-  }, [projects, search]);
-
-  const needsYou = useMemo(() => home?.decisions ?? [], [home]);
-  const continuing = useMemo(() => home?.work.current.filter((item) => (
-    item.status !== 'needs_input'
-    && item.status !== 'in_review'
-    && item.status !== 'blocked'
-  )).slice(0, 10) ?? [], [home]);
-
-  const submitCreate = useCallback(async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const trimmed = outcome.trim();
-    if (!trimmed || creating) return;
-    if (createIntent === 'watch') {
-      const prompt = language === 'zh'
-        ? `持续关注以下事项，在发生有意义的变化时通知我：\n${trimmed}`
-        : `Keep watching the following and notify me when something meaningfully changes:\n${trimmed}`;
-      setOutcome('');
-      setCreateOpen(false);
-      navigate(`/automations?draft=${encodeURIComponent(prompt)}&autogenerate=1`);
-      return;
-    }
-    setCreating(true);
-    setCreateError(null);
-    try {
-      const result = await delegateWork({ outcome: trimmed, uiLocale: language });
-      setOutcome('');
-      setCreateOpen(false);
-      navigate(`/projects/${encodeURIComponent(result.project.id)}`);
-    } catch (err) {
-      setCreateError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setCreating(false);
-    }
-  }, [createIntent, creating, language, navigate, outcome]);
+    return projects
+      .filter((project) => filter === 'all' || project.status === filter)
+      .filter((project) => !query || [project.name, project.description, project.brief, project.workspaceRoot]
+        .filter(Boolean)
+        .some((value) => value!.toLocaleLowerCase().includes(query)));
+  }, [filter, projects, search]);
 
   const headerEnd = useMemo(() => (
-    <div className="flex items-center gap-2">
-      <Button type="button" variant="secondary" className="h-9 rounded-lg" onClick={() => { setCreateIntent('watch'); setCreateOpen(true); }}>
-        <Eye className="size-4" aria-hidden />
-        {t.workHome.watch}
-      </Button>
-      <Button type="button" variant="primary" className="h-9 rounded-lg" onClick={() => { setCreateIntent('delegate'); setCreateOpen(true); }}>
-        <Plus className="size-4" aria-hidden />
-        {t.workHome.delegate}
-      </Button>
-    </div>
-  ), [t.workHome.delegate, t.workHome.watch]);
-
-  const respondToDecision = useCallback(async (item: WorkHomeDecision, decision: 'approve' | 'deny') => {
-    if (!item.response) return;
-    setBusyDecisionId(item.id);
-    setLoadError(null);
-    try {
-      await respondToWorkDecision(item.response, decision);
-      await load();
-    } catch (err) {
-      setLoadError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusyDecisionId(null);
-    }
-  }, [load]);
+    <Button type="button" variant="primary" className="h-9 rounded-lg" onClick={() => setCreateOpen(true)}>
+      <Plus className="size-4" aria-hidden />
+      {t.create}
+    </Button>
+  ), [t.create]);
 
   useLayoutEffect(() => {
     setPageHeader({
       startExtra: null,
       main: (
         <div className="min-w-0">
-          <h1 className="truncate text-base font-semibold tracking-tight text-fg">{t.title}</h1>
-          <p className="truncate text-xs text-fg-muted">{t.workHome.subtitle}</p>
+          <h1 className="truncate text-base font-semibold tracking-tight text-fg">{management.title}</h1>
+          <p className="truncate text-xs text-fg-muted">{management.subtitle}</p>
         </div>
       ),
       end: headerEnd,
     });
     return () => clearPageHeader();
-  }, [clearPageHeader, headerEnd, setPageHeader, t.title, t.workHome.subtitle]);
+  }, [clearPageHeader, headerEnd, management.subtitle, management.title, setPageHeader]);
+
+  const submitCreate = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmedName = name.trim();
+    if (!trimmedName || creating) return;
+    setCreating(true);
+    setCreateError(null);
+    try {
+      const project = await createProject({
+        name: trimmedName,
+        ...(description.trim() ? { description: description.trim() } : {}),
+        ...(workspaceRoot.trim() ? { workspaceRoot: workspaceRoot.trim() } : {}),
+      });
+      setProjects((current) => [project, ...current.filter((item) => item.id !== project.id)]);
+      setName('');
+      setDescription('');
+      setWorkspaceRoot('');
+      setCreateOpen(false);
+      window.dispatchEvent(new CustomEvent('project-updated', { detail: { id: project.id } }));
+    } catch (cause) {
+      setCreateError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setCreating(false);
+    }
+  }, [creating, description, name, workspaceRoot]);
+
+  const mutateProject = useCallback(async (project: Project, action: 'pin' | 'archive') => {
+    setBusyProjectId(project.id);
+    setError(null);
+    try {
+      let updatedProject: Project;
+      if (action === 'pin') {
+        updatedProject = project.pinnedAt
+          ? await unpinProject(project.id)
+          : await pinProject(project.id);
+      } else if (project.status === 'archived') {
+        updatedProject = await restoreProject(project.id);
+      } else {
+        updatedProject = await archiveProject(project.id);
+      }
+      setProjects((current) => current.map((item) => (
+        item.id === updatedProject.id ? updatedProject : item
+      )));
+      window.dispatchEvent(new CustomEvent('project-updated', { detail: { id: project.id } }));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setBusyProjectId(null);
+    }
+  }, []);
+
+  const filters: Array<{ id: ProjectFilter; label: string }> = [
+    { id: 'active', label: t.statuses.active },
+    { id: 'paused', label: t.statuses.paused },
+    { id: 'archived', label: t.statuses.archived },
+    { id: 'all', label: t.all },
+  ];
 
   return (
     <main className="flex w-full flex-1 flex-col gap-5 px-3 py-6 sm:px-5 xl:px-6">
@@ -297,164 +264,80 @@ export function ProjectsPage() {
       >
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-[90] flex h-[min(26rem,calc(100vh-2rem))] w-[min(36rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float focus:outline-none">
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-[90] flex h-[min(34rem,calc(100vh-2rem))] w-[min(38rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float focus:outline-none">
             <div className="shrink-0 border-b border-edge px-5 py-4">
-              <Dialog.Title className="text-base font-semibold text-fg">{createIntent === 'watch' ? t.workHome.watchTitle : t.workHome.delegateTitle}</Dialog.Title>
-              <Dialog.Description className="mt-1 text-sm text-fg-muted">{createIntent === 'watch' ? t.workHome.watchDescription : t.workHome.delegateDescription}</Dialog.Description>
+              <Dialog.Title className="text-base font-semibold text-fg">{t.createTitle}</Dialog.Title>
+              <Dialog.Description className="mt-1 text-sm text-fg-muted">{t.createDescription}</Dialog.Description>
             </div>
             <form onSubmit={submitCreate} className="flex min-h-0 flex-1 flex-col">
-              <div className="min-h-0 flex-1 px-5 py-4">
-                <label className="grid gap-2 text-sm font-medium text-fg">
-                  {createIntent === 'watch' ? t.workHome.watchLabel : t.workHome.outcomeLabel}
-                  <textarea
-                    className="min-h-40 w-full resize-none rounded-xl border border-edge bg-surface-base px-3 py-3 text-sm font-normal leading-6 text-fg outline-none placeholder:text-fg-subtle focus:border-accent focus:ring-2 focus:ring-accent/20"
-                    value={outcome}
-                    onChange={(event) => setOutcome(event.target.value)}
-                    placeholder={createIntent === 'watch' ? t.workHome.watchPlaceholder : t.workHome.outcomePlaceholder}
-                    maxLength={12_000}
-                    autoFocus
-                    disabled={creating}
-                  />
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+                <label className="grid gap-1.5 text-sm font-medium text-fg">
+                  {t.projectName}
+                  <input className="h-10 rounded-lg border border-edge bg-surface-base px-3 font-normal outline-none focus:border-accent focus:ring-2 focus:ring-accent/20" value={name} onChange={(event) => setName(event.target.value)} autoFocus maxLength={160} />
+                </label>
+                <label className="grid gap-1.5 text-sm font-medium text-fg">
+                  {management.descriptionLabel}
+                  <textarea className="min-h-28 resize-none rounded-lg border border-edge bg-surface-base px-3 py-2 font-normal leading-6 outline-none focus:border-accent focus:ring-2 focus:ring-accent/20" value={description} onChange={(event) => setDescription(event.target.value)} maxLength={2_000} placeholder={management.descriptionPlaceholder} />
+                </label>
+                <label className="grid gap-1.5 text-sm font-medium text-fg">
+                  {t.workspaceRoot}
+                  <input className="h-10 rounded-lg border border-edge bg-surface-base px-3 font-mono text-xs font-normal outline-none focus:border-accent focus:ring-2 focus:ring-accent/20" value={workspaceRoot} onChange={(event) => setWorkspaceRoot(event.target.value)} placeholder={t.workspacePlaceholder} />
                 </label>
                 {createError ? (
-                  <p className="mt-3 rounded-lg bg-danger-soft px-3 py-2 text-xs text-danger" role="alert">
-                    {createError}
-                  </p>
+                  <p className="rounded-lg bg-danger-soft px-3 py-2 text-xs text-danger" role="alert">{createError}</p>
                 ) : null}
               </div>
-              <div className="flex shrink-0 items-center justify-between gap-3 border-t border-edge px-5 py-4">
-                <p className="text-xs text-fg-subtle">{createIntent === 'watch' ? t.workHome.watchSetupHint : t.workHome.autoSetupHint}</p>
-                <div className="flex shrink-0 gap-2">
-                  <Dialog.Close asChild><Button type="button" variant="ghost">{t.cancel}</Button></Dialog.Close>
-                  <Button type="submit" variant="primary" disabled={creating || !outcome.trim()}>
-                    <Sparkles className="size-4" aria-hidden />
-                    {creating ? t.workHome.delegating : createIntent === 'watch' ? t.workHome.designWatch : t.workHome.delegate}
-                  </Button>
-                </div>
+              <div className="flex shrink-0 justify-end gap-2 border-t border-edge px-5 py-4">
+                <Dialog.Close asChild><Button type="button" variant="ghost">{t.cancel}</Button></Dialog.Close>
+                <Button type="submit" variant="primary" disabled={creating || !name.trim()}>
+                  {creating ? t.workHome.creating : t.create}
+                </Button>
               </div>
             </form>
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
 
-      {loadError ? (
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-danger/25 bg-danger-soft px-4 py-3 text-sm text-danger">
-          <span>{loadError}</span>
+      <section className="flex flex-col gap-3 rounded-xl border border-edge-subtle bg-surface-base p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap gap-1" aria-label={management.filterLabel}>
+          {filters.map((item) => (
+            <button key={item.id} type="button" className={cn('rounded-lg px-3 py-1.5 text-xs font-medium transition-colors', filter === item.id ? 'bg-accent-soft text-accent-fg' : 'text-fg-muted hover:bg-surface-hover hover:text-fg')} onClick={() => setFilter(item.id)}>
+              {item.label}
+            </button>
+          ))}
+        </div>
+        <label className="relative block min-w-0 sm:w-64">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-subtle" aria-hidden />
+          <input className="h-9 w-full rounded-lg border border-edge bg-surface-panel pl-9 pr-3 text-sm text-fg outline-none placeholder:text-fg-muted focus:border-accent" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t.searchPlaceholder} aria-label={t.searchPlaceholder} />
+        </label>
+      </section>
+
+      {error ? (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-danger/25 bg-danger-soft px-4 py-3 text-sm text-danger" role="alert">
+          <span>{error}</span>
           <Button type="button" variant="ghost" className="h-8 px-2" onClick={() => void load()}>{t.workHome.retry}</Button>
         </div>
       ) : null}
 
-      {loading ? <WorkHomeSkeleton /> : home ? (
-        <>
-          <section className="relative overflow-hidden rounded-2xl border border-accent/15 bg-gradient-to-br from-accent-soft/70 via-surface-panel to-surface-panel p-5 sm:p-6">
-            <div className="absolute -right-8 -top-12 size-40 rounded-full bg-accent/10 blur-3xl" aria-hidden />
-            <div className="relative flex flex-wrap items-end justify-between gap-4">
-              <div className="max-w-2xl">
-                <div className="mb-3 flex size-10 items-center justify-center rounded-xl bg-accent text-white"><ListChecks className="size-5" aria-hidden /></div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-accent">{t.workHome.briefingTitle}</p>
-                <h2 className="mt-1 text-xl font-semibold tracking-tight text-fg">{t.workHome.heroTitle}</h2>
-                <p className="mt-2 text-sm leading-6 text-fg-muted">{home.briefing.summary}</p>
-              </div>
-              <div className="flex flex-wrap gap-2 text-xs">
-                <span className="rounded-full bg-surface-panel/80 px-3 py-1.5 text-fg-muted">{interpolate(t.workHome.activeCount, { count: home.briefing.progress.movingCount })}</span>
-                {home.decisions.length > 0 ? <span className="rounded-full bg-warning-soft px-3 py-1.5 text-fg">{interpolate(t.workHome.attentionCount, { count: home.decisions.length })}</span> : null}
-              </div>
-            </div>
-          </section>
-
-          {home.work.current.length === 0 && home.workflowRuns.active.length === 0 ? (
-            <section className="rounded-2xl border border-dashed border-edge p-8 text-center">
-              <MessageCircle className="mx-auto size-6 text-accent" aria-hidden />
-              <h2 className="mt-3 text-sm font-semibold text-fg">{t.workHome.emptyTitle}</h2>
-              <p className="mx-auto mt-1 max-w-lg text-sm leading-6 text-fg-muted">{t.workHome.emptyBody}</p>
-              <div className="mt-4 flex justify-center gap-2">
-                <Button type="button" variant="primary" onClick={() => navigate('/chat/new')}>{t.workHome.startChat}</Button>
-                <Button type="button" variant="secondary" onClick={() => { setCreateIntent('delegate'); setCreateOpen(true); }}>{t.workHome.startLongWork}</Button>
-              </div>
-            </section>
-          ) : null}
-
-          <div className="grid gap-4 xl:grid-cols-2">
-            <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5">
-              <div className="flex items-center gap-2"><CircleAlert className="size-4 text-warning" aria-hidden /><h2 className="text-sm font-semibold text-fg">{t.workHome.needsYou}</h2></div>
-              <p className="mt-1 text-xs text-fg-muted">{t.workHome.needsYouHint}</p>
-              <div className="mt-4 space-y-2">
-                {needsYou.length ? needsYou.map((item) => (
-                  <DecisionCard
-                    key={item.id}
-                    item={item}
-                    kindLabel={t.workHome.decisionKinds[item.kind]}
-                    reasonLabel={t.workHome.decisionReasons[item.reason]}
-                    approveLabel={t.workHome.approve}
-                    denyLabel={t.workHome.deny}
-                    busy={busyDecisionId === item.id}
-                    onRespond={(decision) => void respondToDecision(item, decision)}
-                  />
-                )) : <p className="rounded-xl bg-surface-panel px-4 py-6 text-center text-sm text-fg-muted">{t.workHome.nothingNeedsYou}</p>}
-              </div>
-            </section>
-
-            <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5">
-              <div className="flex items-center gap-2"><Clock3 className="size-4 text-accent" aria-hidden /><h2 className="text-sm font-semibold text-fg">{t.workHome.continueTitle}</h2></div>
-              <p className="mt-1 text-xs text-fg-muted">{t.workHome.continueHint}</p>
-              <div className="mt-4 space-y-2">
-                {continuing.length ? continuing.map((item) => (
-                  <WorkItemCard key={item.id} item={item} statusLabel={msg.projectDetailPage.workItems.statuses[item.status]} />
-                )) : <p className="rounded-xl bg-surface-panel px-4 py-6 text-center text-sm text-fg-muted">{t.workHome.noCurrentWork}</p>}
-              </div>
-            </section>
-          </div>
-
-          {(home.workflowRuns.active.length > 0 || home.upcomingAutomations.length > 0) ? (
-            <div className="grid gap-4 lg:grid-cols-2">
-              <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5">
-                <div className="flex items-center gap-2"><Sparkles className="size-4 text-accent" aria-hidden /><h2 className="text-sm font-semibold text-fg">{t.workHome.processing}</h2></div>
-                <div className="mt-3 space-y-2">{home.workflowRuns.active.map((run) => (
-                  <Link key={run.id} to={workflowBoardHref(run.id)} className="flex items-center justify-between gap-3 rounded-xl bg-surface-panel px-3 py-3 text-sm hover:bg-surface-hover">
-                    <span className="min-w-0 truncate text-fg">{run.title}</span><span className="shrink-0 text-xs text-fg-subtle">{t.workHome.running}</span>
-                  </Link>
-                ))}{home.workflowRuns.active.length === 0 ? <p className="text-sm text-fg-muted">{t.workHome.nothingRunning}</p> : null}</div>
-              </section>
-              <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5">
-                <div className="flex items-center gap-2"><CalendarClock className="size-4 text-accent" aria-hidden /><h2 className="text-sm font-semibold text-fg">{t.workHome.scheduled}</h2></div>
-                <div className="mt-3 space-y-2">{home.upcomingAutomations.map((automation) => (
-                  <Link key={automation.id} to="/automations" className="flex items-center justify-between gap-3 rounded-xl bg-surface-panel px-3 py-3 text-sm hover:bg-surface-hover">
-                    <span className="min-w-0 truncate text-fg">{automation.name || automation.action}</span><time className="shrink-0 text-xs text-fg-subtle">{formatTime(automation.nextRunAt, t.never)}</time>
-                  </Link>
-                ))}{home.upcomingAutomations.length === 0 ? <p className="text-sm text-fg-muted">{t.workHome.noScheduled}</p> : null}</div>
-              </section>
-            </div>
-          ) : null}
-
-          {home.briefing.wins.length > 0 ? (
-            <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5">
-              <div className="flex items-center gap-2"><CheckCircle2 className="size-4 text-success" aria-hidden /><h2 className="text-sm font-semibold text-fg">{t.workHome.completed}</h2></div>
-              <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">{home.briefing.wins.map((item) => (
-                <Link key={item.id} to={item.href} className="rounded-xl border border-edge-subtle bg-surface-panel p-3.5 transition-colors hover:bg-surface-hover/55">
-                  <p className="truncate text-sm font-medium text-fg">{item.title}</p>
-                  <p className="mt-1 text-xs text-fg-subtle">{t.workHome.winKinds[item.kind]}</p>
-                </Link>
-              ))}</div>
-            </section>
-          ) : null}
-
-          <WorkbenchActivity />
-        </>
-      ) : null}
-
-      <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div><h2 className="text-sm font-semibold text-fg">{t.workHome.spacesTitle}</h2><p className="mt-1 text-xs text-fg-muted">{t.workHome.spacesHint}</p></div>
-          <label className="relative block min-w-0">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-subtle" aria-hidden />
-            <input className="h-9 w-52 rounded-lg border border-edge bg-surface-panel pl-9 pr-3 text-sm text-fg outline-none placeholder:text-fg-muted focus:border-accent" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t.searchPlaceholder} aria-label={t.searchPlaceholder} />
-          </label>
-        </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {visibleProjects.map((project) => <ProjectCard key={project.id} project={project} openLabel={t.workHome.openSpace} noDescription={t.noDescription} />)}
-        </div>
-        {!loading && visibleProjects.length === 0 ? <p className="py-8 text-center text-sm text-fg-muted">{t.workHome.noSpaces}</p> : null}
-      </section>
+      {loading ? <ProjectsSkeleton /> : visibleProjects.length ? (
+        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {visibleProjects.map((project) => (
+            <ProjectCard
+              key={project.id}
+              project={project}
+              busy={busyProjectId === project.id}
+              onTogglePin={() => void mutateProject(project, 'pin')}
+              onToggleArchive={() => void mutateProject(project, 'archive')}
+            />
+          ))}
+        </section>
+      ) : (
+        <section className="rounded-xl border border-dashed border-edge p-10 text-center">
+          <FolderKanban className="mx-auto size-7 text-fg-subtle" aria-hidden />
+          <h2 className="mt-3 text-sm font-semibold text-fg">{management.emptyTitle}</h2>
+          <p className="mt-1 text-sm text-fg-muted">{management.emptyHint}</p>
+        </section>
+      )}
     </main>
   );
 }

@@ -135,6 +135,20 @@
       "active": "Active",
       "paused": "Paused",
       "archived": "Archived"
+    },
+    "management": {
+      "title": "Projects",
+      "subtitle": "Create, find, and manage spaces for ongoing work.",
+      "filterLabel": "Filter projects",
+      "pin": "Pin",
+      "unpin": "Unpin",
+      "archive": "Archive",
+      "restore": "Restore",
+      "descriptionLabel": "Project description",
+      "descriptionPlaceholder": "Briefly describe what this project should keep moving forward.",
+      "emptyTitle": "No matching projects",
+      "emptyHint": "Change the filters or create a new project.",
+      "viewAll": "View all projects"
     }
   },
   "projectDetailPage": {
