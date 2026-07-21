@@ -1,7 +1,7 @@
 /** Stage the minimal Electron app directory consumed by electron-builder. */
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -57,6 +57,51 @@ function installRuntimeDeps(packDirPath, target) {
   if ((r.status ?? 1) !== 0) {
     throw new Error(`[prepare-electron-pack-dir] pnpm install failed in ${packDirPath}`);
   }
+}
+
+function removeDirectoryChildrenExcept(dir, keep) {
+  if (!existsSync(dir)) return;
+  for (const entry of readdirSync(dir)) {
+    if (!keep.has(entry)) rmSync(join(dir, entry), { recursive: true, force: true });
+  }
+}
+
+/** Remove runtime files that cannot be used by the target Electron build. */
+export function pruneElectronRuntimeDeps(packDirPath, target) {
+  const onnxTargetDir = join(
+    packDirPath,
+    'node_modules',
+    'onnxruntime-node',
+    'bin',
+    'napi-v3',
+    target.platform,
+    target.arch,
+  );
+  if (!existsSync(onnxTargetDir)) {
+    throw new Error(
+      `[prepare-electron-pack-dir] Missing ONNX Runtime binaries for ${target.platform}/${target.arch}`,
+    );
+  }
+  const onnxPlatformsDir = join(packDirPath, 'node_modules', 'onnxruntime-node', 'bin', 'napi-v3');
+  removeDirectoryChildrenExcept(onnxPlatformsDir, new Set([target.platform]));
+  removeDirectoryChildrenExcept(join(onnxPlatformsDir, target.platform), new Set([target.arch]));
+
+  const transformersDir = join(packDirPath, 'node_modules', '@huggingface', 'transformers');
+  const transformersPkgPath = join(transformersDir, 'package.json');
+  if (!existsSync(transformersPkgPath)) {
+    throw new Error('[prepare-electron-pack-dir] Missing @huggingface/transformers runtime dependency');
+  }
+  const transformersPkg = JSON.parse(readFileSync(transformersPkgPath, 'utf8'));
+  delete transformersPkg.dependencies?.['onnxruntime-web'];
+  writeFileSync(transformersPkgPath, `${JSON.stringify(transformersPkg, null, 2)}\n`);
+
+  rmSync(join(packDirPath, 'node_modules', 'onnxruntime-web'), { recursive: true, force: true });
+  rmSync(join(transformersDir, 'src'), { recursive: true, force: true });
+  rmSync(join(transformersDir, 'types'), { recursive: true, force: true });
+  removeDirectoryChildrenExcept(
+    join(transformersDir, 'dist'),
+    new Set(['transformers.node.mjs', 'transformers.node.cjs']),
+  );
 }
 
 function stageRipgrepBinary(packDirPath, target) {
@@ -119,6 +164,7 @@ export function prepareElectronPackDir(
   writeFileSync(join(packDir, 'package.json'), `${JSON.stringify(minimalPkg, null, 2)}\n`);
 
   installRuntimeDeps(packDir, target);
+  pruneElectronRuntimeDeps(packDir, target);
   stageRipgrepBinary(packDir, target);
   stageCodebaseMemoryBinary(repoRoot, packDir, target);
   rmSync(join(packDir, 'node_modules', '@vscode', `ripgrep-${target.platform}-${target.arch}`), {

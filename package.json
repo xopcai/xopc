@@ -170,6 +170,7 @@
     "jsdom": "^29.1.1",
     "markdown-it": "^14.2.0",
     "node-edge-tts": "^1.2.10",
+    "onnxruntime-common": "1.21.0",
     "openai": "^6.39.1",
     "pino": "^10.3.1",
     "pino-pretty": "^13.1.3",
