@@ -139,136 +139,6 @@ export const SkillPolicySchema = z
   .strict()
   .default({ mode: 'all' });
 
-export const DreamingPhasePolicySchema = z
-  .object({
-    enabled: z.boolean().optional(),
-    cron: z.string().min(1).optional(),
-  })
-  .strict();
-
-export const DreamingLightPolicySchema = DreamingPhasePolicySchema.extend({
-  lookbackDays: z.number().int().positive().optional(),
-  limit: z.number().int().nonnegative().optional(),
-  dedupeSimilarity: z.number().min(0).max(1).optional(),
-}).strict();
-
-export const DreamingDeepPolicySchema = DreamingPhasePolicySchema.extend({
-  minScore: z.number().min(0).max(1).optional(),
-  minRecallCount: z.number().int().positive().optional(),
-  minUniqueQueries: z.number().int().positive().optional(),
-  limit: z.number().int().nonnegative().optional(),
-  recencyHalfLifeDays: z.number().positive().optional(),
-  maxAgeDays: z.number().positive().optional(),
-}).strict();
-
-export const DreamingRemPolicySchema = DreamingPhasePolicySchema.extend({
-  lookbackDays: z.number().int().positive().optional(),
-  limit: z.number().int().nonnegative().optional(),
-  minPatternStrength: z.number().min(0).max(1).optional(),
-}).strict();
-
-export const DreamingPolicySchema = z
-  .object({
-    enabled: z.boolean().default(false),
-    frequency: z.string().min(1).optional(),
-    timezone: z.string().optional(),
-    phases: z
-      .object({
-        light: DreamingLightPolicySchema.optional(),
-        deep: DreamingDeepPolicySchema.optional(),
-        rem: DreamingRemPolicySchema.optional(),
-      })
-      .strict()
-      .optional(),
-  })
-  .strict()
-  .optional();
-
-export const UserUnderstandingPolicySchema = z
-  .object({
-    enabled: z.boolean().optional(),
-    adaptiveCadence: z.boolean().optional(),
-    reviewIntervalTurns: z.number().int().min(1).max(1_000).optional(),
-    maxHistoryMessages: z.number().int().min(1).max(200).optional(),
-    maxDurationMs: z.number().int().min(1_000).max(600_000).optional(),
-  })
-  .strict();
-
-export const MemoryPolicySchema = z
-  .object({
-    mode: z.enum(['off', 'readOnly', 'confirmWrite', 'auto']).default('off'),
-    sources: z
-      .array(z.enum(['session', 'userProfile', 'agentProfile', 'curated', 'workspace', 'connectedSources']))
-      .default(['session']),
-    writePolicy: z
-      .object({
-        userProfile: z.enum(['deny', 'confirm', 'allow']).optional(),
-        agentProfile: z.enum(['deny', 'confirm', 'allow']).optional(),
-        curated: z.enum(['deny', 'confirm', 'allow']).optional(),
-        workspace: z.enum(['deny', 'confirm', 'allow']).optional(),
-      })
-      .strict()
-      .optional(),
-    retention: z
-      .object({
-        compaction: z.boolean().default(true),
-        maxAgeDays: z.number().int().positive().optional(),
-        maxItems: z.number().int().positive().optional(),
-        maxChars: z.number().int().positive().optional(),
-      })
-      .strict()
-      .optional(),
-    privacy: z
-      .object({
-        crossAgentSharing: z.enum(['deny', 'readOnly', 'allow']).default('deny'),
-        sensitiveWritePolicy: z.enum(['deny', 'confirm', 'allow']).default('confirm'),
-      })
-      .strict()
-      .optional(),
-    providerRouting: z
-      .object({
-        searchStrategy: z
-          .enum(['local-first', 'external-first', 'fanout', 'local-only', 'external-only'])
-          .default('fanout'),
-        writeStrategy: z
-          .enum(['local-first', 'external-first', 'write-through', 'local-only', 'external-only'])
-          .default('local-first'),
-        allowExternalWrites: z.boolean().default(false),
-        allowedProviderIds: z.array(z.string().min(1)).optional(),
-        autoWriteKinds: z
-          .array(
-            z.enum([
-              'user_profile',
-              'preference',
-              'boundary',
-              'relationship',
-              'project_context',
-              'commitment',
-              'routine',
-              'personal_logistics',
-              'open_question',
-              'milestone',
-              'current_state',
-              'agent_note',
-              'workspace_fact',
-              'daily_note',
-              'session_summary',
-              'derived_insight',
-              'task_lesson',
-              'tool_preference',
-              'long_term_goal',
-            ]),
-          )
-          .optional(),
-      })
-      .strict()
-      .optional(),
-    dreaming: DreamingPolicySchema,
-    understanding: UserUnderstandingPolicySchema.optional(),
-  })
-  .strict()
-  .default({ mode: 'off', sources: ['session'] });
-
 export const WorkflowPolicySchema = z
   .object({
     default: z.string().min(1).optional(),
@@ -348,7 +218,6 @@ export const AgentManifestSchema = z
     models: ModelPolicySchema,
     tools: ToolPolicySetSchema,
     skills: SkillPolicySchema,
-    memory: MemoryPolicySchema,
     workflows: WorkflowPolicySchema,
     boundaries: BoundaryPolicySchema,
     runtime: RuntimePolicySchema,
@@ -370,7 +239,6 @@ export const CapabilityPresetSchema = z
     models: ModelPolicyPatchSchema.optional(),
     tools: ToolPolicySetSchema.optional(),
     skills: SkillPolicySchema.optional(),
-    memory: MemoryPolicySchema.optional(),
     workflows: WorkflowPolicySchema.optional(),
     boundaries: BoundaryPolicySchema.optional(),
     runtime: RuntimePolicySchema,

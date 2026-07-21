@@ -64,7 +64,7 @@ Start with a local assistant using your own model keys. When the work becomes du
 | Layer | What xopc provides | What it solves |
 | --- | --- | --- |
 | **Runtime & ownership** | Self-hosted gateway, local state, BYOK, cloud and local models | You control data, cost, deployment, and availability |
-| **Durable state** | Persistent sessions, projects, goals, notes, workspaces, and agent memory policy | Resume work without reconstructing it every time |
+| **Durable state** | Persistent sessions, projects, goals, notes, workspaces, and shared user memory | Resume work without reconstructing it every time |
 | **Execution & initiative** | Tools, skills, subagents, observable workflows, and scheduled/manual/webhook automations | Move from advice to execution, review, and follow-up |
 | **Access everywhere** | CLI, TUI, web, desktop, iOS/Android, Telegram, WeChat, Feishu/Lark, and HTTP/SSE APIs | Use one system wherever the work happens |
 
@@ -157,7 +157,7 @@ Windows git install: `& ([scriptblock]::Create((irm https://xopc.ai/install.ps1)
 - ⚙️ **Executes and triggers work** — Tools and workflows perform tasks; scheduled, manual, and webhook automations run agents or workflows later.
 - 🧭 **Graph-backed code intelligence** — The `coder` agent gets managed, local repository indexing for symbol search, source grounding, call tracing, change impact, and architecture mapping, with direct-source fallback when graph coverage is incomplete.
 - 📡 **One runtime, many surfaces** — Desktop, terminal, web, mobile, and messengers share agents, sessions, and project state.
-- 🧩 **Explicit capability boundaries** — Each agent can have its own identity, model roles, workspace, tool policy, skills, memory, and boundaries, then grow through extensions.
+- 🧩 **Explicit capability boundaries** — Each agent can have its own identity, model roles, workspace, tool policy, skills, and boundaries, while every agent shares one user understanding and memory context.
 
 ## How xopc compares
 

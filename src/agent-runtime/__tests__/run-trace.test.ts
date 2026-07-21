@@ -29,7 +29,6 @@ const manifest: EffectiveAgentManifest = {
   },
   tools: { builtin: { web_search: { mode: 'allow' } } },
   skills: { mode: 'off' },
-  memory: { mode: 'off', sources: ['session'] },
   workflows: {},
   boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
 };

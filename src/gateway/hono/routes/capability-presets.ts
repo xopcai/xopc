@@ -38,7 +38,8 @@ function parseCreateBody(raw: unknown): CreateCapabilityPresetBody | { error: st
     description: typeof body.description === 'string' ? body.description : undefined,
   };
   if (Object.hasOwn(body, 'version')) out.version = Number(body.version);
-  for (const key of ['extends', 'models', 'tools', 'skills', 'memory', 'workflows', 'boundaries', 'runtime', 'locks'] as const) {
+  if (Object.hasOwn(body, 'memory')) return { error: 'memory is not a capability preset field' };
+  for (const key of ['extends', 'models', 'tools', 'skills', 'workflows', 'boundaries', 'runtime', 'locks'] as const) {
     if (!Object.hasOwn(body, key)) continue;
     const parsed = CapabilityPresetSchema.pick({ [key]: true } as Record<typeof key, true>).safeParse({
       [key]: body[key],
@@ -60,7 +61,8 @@ function parseUpdateBody(raw: unknown): UpdateCapabilityPresetBody | { error: st
     out.description = body.description === null ? null : String(body.description ?? '');
   }
   if (Object.hasOwn(body, 'version')) out.version = Number(body.version);
-  for (const key of ['extends', 'models', 'tools', 'skills', 'memory', 'workflows', 'boundaries', 'runtime', 'locks'] as const) {
+  if (Object.hasOwn(body, 'memory')) return { error: 'memory is not a capability preset field' };
+  for (const key of ['extends', 'models', 'tools', 'skills', 'workflows', 'boundaries', 'runtime', 'locks'] as const) {
     if (!Object.hasOwn(body, key)) continue;
     if (body[key] === null) {
       out[key] = null as never;

@@ -40,15 +40,6 @@ const baseAgent: AgentManifest = {
     mode: 'allowlist',
     allow: ['diagnose'],
   },
-  memory: {
-    mode: 'confirmWrite',
-    sources: ['session', 'curated'],
-    writePolicy: { curated: 'confirm' },
-    privacy: {
-      crossAgentSharing: 'readOnly',
-      sensitiveWritePolicy: 'confirm',
-    },
-  },
   workflows: {
     default: 'implement-change',
     allowed: ['implement-change', 'review-code'],
@@ -70,10 +61,6 @@ const presets: Record<string, CapabilityPreset> = {
         send_message: { mode: 'confirm' },
         exec_command: { mode: 'deny' },
       },
-    },
-    memory: {
-      mode: 'readOnly',
-      sources: ['session'],
     },
     boundaries: {
       requiresConfirmation: ['External communication'],
@@ -102,7 +89,6 @@ describe('agent manifest resolver', () => {
     expect(result.manifest.tools.builtin.read_file).toEqual({ mode: 'allow', scope: 'workspace' });
     expect(result.manifest.tools.builtin.send_message).toEqual({ mode: 'confirm' });
     expect(result.manifest.tools.builtin.exec_command).toEqual({ mode: 'confirm', scope: 'workspace' });
-    expect(result.manifest.memory.mode).toBe('confirmWrite');
     expect(result.sources['tools.builtin.read_file.mode']).toBe('preset:code-tools@2');
     expect(result.sources['tools.builtin.exec_command.mode']).toBe('agent:coder');
   });
@@ -187,30 +173,12 @@ describe('agent manifest resolver', () => {
 });
 
 describe('agent manifest validator', () => {
-  it('accepts bounded user-understanding review settings', () => {
+  it('rejects agent-owned memory configuration', () => {
     const parsed = AgentManifestSchema.safeParse({
       ...baseAgent,
-      memory: {
-        ...baseAgent.memory,
-        understanding: {
-          enabled: true,
-          adaptiveCadence: true,
-          reviewIntervalTurns: 5,
-          maxHistoryMessages: 40,
-          maxDurationMs: 60_000,
-        },
-      },
+      memory: { mode: 'auto', sources: ['session'] },
     });
-    expect(parsed.success).toBe(true);
-
-    const invalid = AgentManifestSchema.safeParse({
-      ...baseAgent,
-      memory: {
-        ...baseAgent.memory,
-        understanding: { reviewIntervalTurns: 0 },
-      },
-    });
-    expect(invalid.success).toBe(false);
+    expect(parsed.success).toBe(false);
   });
 
   it('validates catalogs and default model role', () => {
@@ -258,7 +226,7 @@ describe('agent manifest prompt', () => {
     expect(prompt).toContain('<agent_identity>');
     expect(prompt).toContain('Role: Software engineering agent');
     expect(prompt).toContain('exec_command: confirm, scope=workspace');
-    expect(prompt).toContain('<memory_policy>');
+    expect(prompt).not.toContain('<memory_policy>');
     expect(prompt).toContain('Default: implement-change');
   });
 });

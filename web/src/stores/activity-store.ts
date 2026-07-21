@@ -29,16 +29,16 @@ export type ActivityInput = {
   read?: boolean;
 };
 
-type ActivityCenterState = {
-  open: boolean;
+type ActivityState = {
   items: ActivityItem[];
-  setOpen: (open: boolean) => void;
   add: (input: ActivityInput) => void;
   markAllRead: () => void;
   remove: (id: string) => void;
+  clearFinished: () => void;
   clear: () => void;
 };
 
+// Keep the existing key so moving activity into the workbench does not discard history.
 const STORAGE_KEY = 'xopc.activity-center.v1';
 const MAX_ITEMS = 80;
 
@@ -80,15 +80,8 @@ function nextId(now: number): string {
   return `${now.toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export const useActivityCenterStore = create<ActivityCenterState>((set) => ({
-  open: false,
+export const useActivityStore = create<ActivityState>((set) => ({
   items: loadItems(),
-  setOpen: (open) =>
-    set((state) => {
-      const items = open ? state.items.map((item) => ({ ...item, read: true })) : state.items;
-      if (open) persistItems(items);
-      return { open, items };
-    }),
   add: (input) =>
     set((state) => {
       const title = input.title.trim();
@@ -109,7 +102,7 @@ export const useActivityCenterStore = create<ActivityCenterState>((set) => ({
         dedupeKey: input.dedupeKey,
         createdAt: existingIndex >= 0 ? state.items[existingIndex].createdAt : now,
         updatedAt: now,
-        read: input.read ?? state.open,
+        read: input.read ?? false,
         occurrences: existingIndex >= 0 ? state.items[existingIndex].occurrences + 1 : 1,
       };
       const withoutExisting =
@@ -130,6 +123,12 @@ export const useActivityCenterStore = create<ActivityCenterState>((set) => ({
       persistItems(items);
       return { items };
     }),
+  clearFinished: () =>
+    set((state) => {
+      const items = state.items.filter((item) => item.status !== 'done');
+      persistItems(items);
+      return { items };
+    }),
   clear: () => {
     persistItems([]);
     set({ items: [] });
@@ -137,5 +136,5 @@ export const useActivityCenterStore = create<ActivityCenterState>((set) => ({
 }));
 
 export function showActivity(input: ActivityInput): void {
-  useActivityCenterStore.getState().add(input);
+  useActivityStore.getState().add(input);
 }

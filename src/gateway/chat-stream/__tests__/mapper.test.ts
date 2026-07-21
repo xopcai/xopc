@@ -86,6 +86,20 @@ describe('ChatStreamMapper', () => {
     expect(done).toMatchObject({ type: 'run_end' });
   });
 
+  it('maps quiet memory consent and capture events', () => {
+    const m = mapper();
+    const [consent] = m.map({
+      type: 'memory_consent_required',
+      requests: [{ id: 'consent-1', recordId: 'memory-1', statement: 'Prefer concise answers.', purpose: 'Draft a reply' }],
+    });
+    const [captured] = m.map({
+      type: 'memory_captured',
+      records: [{ id: 'memory-2', content: 'Use pnpm.', kind: 'tool_preference' }],
+    });
+    expect(consent).toMatchObject({ type: 'memory_consent_required', payload: { requests: [{ id: 'consent-1' }] } });
+    expect(captured).toMatchObject({ type: 'memory_captured', payload: { records: [{ id: 'memory-2' }] } });
+  });
+
   it('maps tool lifecycle', () => {
     const m = mapper();
     m.map({ type: 'message_start', message: { role: 'assistant', content: [] } });

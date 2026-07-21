@@ -2,46 +2,35 @@ import { join } from 'node:path';
 
 import type { Config } from '../../config/schema.js';
 import { resolveUserMemoryPath } from '../../config/paths.js';
-import { resolveEffectiveAgentManifestForAgent } from '../../config/agent-profile.js';
-import { resolveAgentHomeDir, resolveAgentIdForWorkspacePath } from '../agent-scope.js';
+import { resolveUserDir } from '../../config/paths.js';
 
 import type { MemoryStoreConfig } from './types.js';
 
-/** When false, curated `memories/` (under agent home) + external memory providers are off. */
+/** When false, shared curated memory and external memory providers are off. */
 export function isMemorySubsystemEnabled(config: Config | undefined): boolean {
   if (!config) return true;
-  return config.agents.list.some((agent) => agent.enabled !== false && agent.memory.mode !== 'off');
+  return config.userContext.enabled && config.userContext.memory.mode !== 'off';
 }
 
-/** Curated memory tool + agent-home `memories/` store (not injected into system prompt). */
+/** Curated memory tool + shared user `memories/` store (not injected into system prompt). */
 export function isCuratedMemoryInPrompt(config: Config | undefined): boolean {
   if (!config) return true;
-  return config.agents.list.some((agent) => agent.enabled !== false && agent.memory.sources.includes('curated'));
+  return config.userContext.enabled && config.userContext.memory.sources.includes('curated');
 }
 
 export function resolveBuiltinMemoryStoreConfig(
   workspaceDir: string,
   config: Config | undefined,
-  requestedAgentId?: string,
+  _requestedAgentId?: string,
 ): MemoryStoreConfig {
-  const agentId = config != null
-    ? requestedAgentId?.trim() || resolveAgentIdForWorkspacePath(config, workspaceDir)
-    : undefined;
-  const manifest = config && agentId ? resolveEffectiveAgentManifestForAgent(config, agentId) : undefined;
-  const memoriesDir =
-    config != null
-      ? join(
-          resolveAgentHomeDir(config, agentId ?? 'main'),
-          'memories',
-        )
-      : join(workspaceDir, 'memories');
+  const memoriesDir = config != null ? join(resolveUserDir(), 'memories') : join(workspaceDir, 'memories');
   return {
     workspaceDir,
     memoriesDir,
     userMemoryPath: config != null ? resolveUserMemoryPath() : join(workspaceDir, 'user', 'MEMORY.md'),
-    memoryCharLimit: manifest?.memory.retention?.maxChars ?? 2200,
+    memoryCharLimit: config?.userContext.memory.retention?.maxChars ?? 2200,
     userCharLimit: 1375,
-    userProfileEnabled: manifest?.memory.sources.includes('userProfile') ?? true,
+    userProfileEnabled: config?.userContext.memory.sources.includes('userProfile') ?? true,
   };
 }
 

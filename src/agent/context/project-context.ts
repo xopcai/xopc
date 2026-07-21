@@ -1,4 +1,5 @@
 import { GoalService, type GoalWithDetails } from '../../goals/index.js';
+import { LocalAppStore } from '../../local-apps/store.js';
 import {
   getProjectForSession,
   getProjectWorkspacePathForSession,
@@ -34,6 +35,9 @@ function formatGoal(goal: GoalWithDetails): string {
 export function buildActiveProjectContextForPrompt(sessionKey: string): string | undefined {
   const project = getProjectForSession(sessionKey);
   if (!project) return undefined;
+  const localAppStore = new LocalAppStore();
+  const localApp = localAppStore.findByProjectId(project.id);
+  const latestAcceptance = localApp ? localAppStore.listAcceptanceRuns(localApp.id, 1)[0] : undefined;
   return formatActiveProjectContextForPrompt({
     project,
     workspacePath: getProjectWorkspacePathForSession(sessionKey) ?? project.workspaceRoot,
@@ -48,6 +52,22 @@ export function buildActiveProjectContextForPrompt(sessionKey: string): string |
       status: 'active',
       limit: MAX_MEMORY,
     }),
+    localApp: localApp ? {
+      extensionId: localApp.extensionId,
+      draftVersion: localApp.draftVersion,
+      activeVersion: localApp.activeVersion,
+      installationState: localApp.installationState,
+      enabled: localApp.enabled,
+      retainedVersions: localAppStore.listReleases(localApp.id).map((release) => release.version),
+      latestAcceptance: latestAcceptance ? {
+        status: latestAcceptance.status,
+        sourceHash: latestAcceptance.sourceHash,
+        failures: latestAcceptance.checks
+          .filter((check) => check.status === 'failed')
+          .map((check) => check.message),
+        createdAt: latestAcceptance.createdAt,
+      } : undefined,
+    } : undefined,
   });
 }
 
@@ -57,6 +77,20 @@ export function formatActiveProjectContextForPrompt(input: {
   activeGoals: GoalWithDetails[];
   recentSessions: Array<{ key: string; name?: string; updatedAt: string; agentId: string }>;
   memoryRecords?: Array<{ kind: string; content: string; updatedAt: string }>;
+  localApp?: {
+    extensionId: string;
+    draftVersion: number;
+    activeVersion?: number;
+    installationState: 'not_installed' | 'installed';
+    enabled: boolean;
+    retainedVersions: number[];
+    latestAcceptance?: {
+      status: 'passed' | 'failed';
+      sourceHash: string;
+      failures: string[];
+      createdAt: number;
+    };
+  };
 }): string {
   const lines: string[] = [
     '# Active Project',
@@ -83,6 +117,28 @@ export function formatActiveProjectContextForPrompt(input: {
       '## Project Instructions',
       'Follow these project-level instructions unless they conflict with higher-priority system, developer, safety, or direct user instructions.',
       instructions,
+    );
+  }
+
+  if (input.localApp) {
+    const retained = input.localApp.retainedVersions.length
+      ? input.localApp.retainedVersions.map((version) => `v${version}`).join(', ')
+      : 'none';
+    lines.push(
+      '',
+      '## Local App Runtime',
+      `Extension id: ${sanitizeForPromptLiteral(input.localApp.extensionId)}`,
+      `Draft version: v${input.localApp.draftVersion}`,
+      `Installed version: ${input.localApp.activeVersion ? `v${input.localApp.activeVersion}` : 'none'}`,
+      `Installation: ${input.localApp.installationState} | enabled=${String(input.localApp.enabled)}`,
+      `Retained releases: ${retained}`,
+      input.localApp.latestAcceptance
+        ? `Latest acceptance: ${input.localApp.latestAcceptance.status} | source=${sanitizeForPromptLiteral(input.localApp.latestAcceptance.sourceHash.slice(0, 12))} | checked=${new Date(input.localApp.latestAcceptance.createdAt).toISOString()}`
+        : 'Latest acceptance: none',
+      ...(input.localApp.latestAcceptance?.failures.map((failure) => (
+        `Acceptance failure: ${sanitizeForPromptLiteral(truncateText(failure, 240) ?? '')}`
+      )) ?? []),
+      'Edit only the Project draft. Do not modify installed release artifacts directly; installation and rollback are host-managed.',
     );
   }
 

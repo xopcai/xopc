@@ -72,7 +72,7 @@ describe('understanding correction attribution', () => {
       id: 'preference-1',
       providerId: 'local',
       kind: 'preference',
-      agentId: 'main',
+      sourceAgentId: 'main',
       content: 'Prefer concise answers.',
       tags: ['user-understanding'],
       status: 'active',

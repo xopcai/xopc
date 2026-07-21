@@ -6,7 +6,7 @@ import { restartGatewayAfterConfigChange } from '@/features/tunnel/gateway-resta
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { showToast } from '@/lib/toast';
-import { showActivity } from '@/stores/activity-center-store';
+import { showActivity } from '@/stores/activity-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
 /**

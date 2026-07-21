@@ -9,8 +9,6 @@ import { useLocaleStore } from '@/stores/locale-store';
 
 import {
   cancelWorkflowRun,
-  deleteWorkflowDefinition,
-  getWorkflowStats,
   listWorkflowDefinitions,
   listWorkflowRuns,
   retryWorkflowRun,
@@ -20,14 +18,20 @@ import {
 import {
   RUN_FETCH_LIMIT,
   WORKFLOW_AGENT_PARAM,
+  WORKFLOW_PAGE_TAB_PARAM,
+  WORKFLOW_PAGE_TAB_SET,
+  WORKFLOW_RUN_LAYOUT_PARAM,
+  WORKFLOW_RUN_LAYOUT_SET,
   WORKFLOW_SEARCH_PARAM,
+  WORKFLOW_STATUS_FILTER_PARAM,
+  WORKFLOW_STATUS_FILTER_SET,
   WORKFLOW_TRIGGER_FILTER_PARAM,
-  WORKFLOW_VIEW_MODE_SET,
-  WORKFLOW_VIEW_PARAM,
   WORKFLOW_WF_FILTER_PARAM,
-  type WorkflowViewMode,
+  type WorkflowPageTab,
+  type WorkflowRunLayout,
+  type WorkflowStatusFilter,
 } from './workflow-page.constants';
-import { filterDefinitions, interpolate, workflowChatHref } from './workflow-page.utils';
+import { workflowChatHref } from './workflow-page.utils';
 import { resolveRunSessionKey } from './workflow-board.utils';
 
 export function useWorkflowsPage() {
@@ -42,11 +46,14 @@ export function useWorkflowsPage() {
   const searchQuery = searchParams.get(WORKFLOW_SEARCH_PARAM) ?? '';
   const workflowFilterId = searchParams.get(WORKFLOW_WF_FILTER_PARAM)?.trim() ?? '';
   const triggerFilter = searchParams.get(WORKFLOW_TRIGGER_FILTER_PARAM)?.trim() || 'all';
-  const viewParam = searchParams.get(WORKFLOW_VIEW_PARAM)?.trim() ?? '';
+  const statusParam = searchParams.get(WORKFLOW_STATUS_FILTER_PARAM)?.trim() ?? '';
+  const pageTabParam = searchParams.get(WORKFLOW_PAGE_TAB_PARAM)?.trim() ?? '';
+  const runLayoutParam = searchParams.get(WORKFLOW_RUN_LAYOUT_PARAM)?.trim() ?? '';
   const ownerAgentParam = searchParams.get(WORKFLOW_AGENT_PARAM)?.trim() ?? '';
-  const viewMode: WorkflowViewMode = WORKFLOW_VIEW_MODE_SET.has(viewParam) ? (viewParam as WorkflowViewMode) : 'operations';
+  const pageTab: WorkflowPageTab = WORKFLOW_PAGE_TAB_SET.has(pageTabParam) ? (pageTabParam as WorkflowPageTab) : 'runs';
+  const runLayout: WorkflowRunLayout = WORKFLOW_RUN_LAYOUT_SET.has(runLayoutParam) ? (runLayoutParam as WorkflowRunLayout) : 'list';
+  const statusFilter: WorkflowStatusFilter = WORKFLOW_STATUS_FILTER_SET.has(statusParam) ? (statusParam as WorkflowStatusFilter) : 'all';
   const [actionError, setActionError] = useState<string | null>(null);
-  const [actionFeedback, setActionFeedback] = useState<string | null>(null);
 
   const agentsSwr = useSWR(hasToken ? ['workflow-agents', token] : null, fetchGatewayAgents, { revalidateOnFocus: false });
   const ownerAgentId = useMemo(() => {
@@ -63,15 +70,8 @@ export function useWorkflowsPage() {
       refreshInterval: (latest) => latest?.some((run) => run.status === 'queued' || run.status === 'running') ? 3000 : 0,
     },
   );
-  const statsSwr = useSWR(
-    hasToken && ownerAgentId ? ['workflow-stats', token, ownerAgentId, workflowFilterId] : null,
-    () => getWorkflowStats(workflowFilterId, { ownerAgentId }),
-    { revalidateOnFocus: false },
-  );
-
   const definitions = definitionsSwr.data ?? [];
   const runs = runsSwr.data ?? [];
-  const filteredDefinitions = useMemo(() => filterDefinitions(definitions, searchQuery, 'all', 'all'), [definitions, searchQuery]);
 
   const patchSearchParams = useCallback((mutate: (next: URLSearchParams) => void) => {
     setSearchParams((previous) => {
@@ -100,9 +100,23 @@ export function useWorkflowsPage() {
     if (value && value !== 'all') next.set(WORKFLOW_TRIGGER_FILTER_PARAM, value);
     else next.delete(WORKFLOW_TRIGGER_FILTER_PARAM);
   }), [patchSearchParams]);
-  const setViewMode = useCallback((value: WorkflowViewMode) => patchSearchParams((next) => {
-    if (value === 'operations') next.delete(WORKFLOW_VIEW_PARAM);
-    else next.set(WORKFLOW_VIEW_PARAM, value);
+  const setPageTab = useCallback((value: WorkflowPageTab) => patchSearchParams((next) => {
+    if (value === 'runs') next.delete(WORKFLOW_PAGE_TAB_PARAM);
+    else next.set(WORKFLOW_PAGE_TAB_PARAM, value);
+  }), [patchSearchParams]);
+  const setRunLayout = useCallback((value: WorkflowRunLayout) => patchSearchParams((next) => {
+    if (value === 'list') next.delete(WORKFLOW_RUN_LAYOUT_PARAM);
+    else next.set(WORKFLOW_RUN_LAYOUT_PARAM, value);
+  }), [patchSearchParams]);
+  const setStatusFilter = useCallback((value: WorkflowStatusFilter) => patchSearchParams((next) => {
+    if (value === 'all') next.delete(WORKFLOW_STATUS_FILTER_PARAM);
+    else next.set(WORKFLOW_STATUS_FILTER_PARAM, value);
+  }), [patchSearchParams]);
+  const clearRunFilters = useCallback(() => patchSearchParams((next) => {
+    next.delete(WORKFLOW_SEARCH_PARAM);
+    next.delete(WORKFLOW_WF_FILTER_PARAM);
+    next.delete(WORKFLOW_TRIGGER_FILTER_PARAM);
+    next.delete(WORKFLOW_STATUS_FILTER_PARAM);
   }), [patchSearchParams]);
 
   const ownerSuffix = ownerAgentId ? `?agentId=${encodeURIComponent(ownerAgentId)}` : '';
@@ -120,11 +134,11 @@ export function useWorkflowsPage() {
   const cancelRun = useCallback(async (runId: string) => {
     try {
       await cancelWorkflowRun(runId, { ownerAgentId });
-      await Promise.all([runsSwr.mutate(), statsSwr.mutate()]);
+      await runsSwr.mutate();
     } catch (cause) {
       setActionError(cause instanceof Error ? cause.message : labels.cancelFailed);
     }
-  }, [labels.cancelFailed, ownerAgentId, runsSwr, statsSwr]);
+  }, [labels.cancelFailed, ownerAgentId, runsSwr]);
   const retryRun = useCallback(async (runId: string) => {
     try {
       const result = await retryWorkflowRun(runId, { ownerAgentId });
@@ -133,36 +147,19 @@ export function useWorkflowsPage() {
       setActionError(cause instanceof Error ? cause.message : labels.retryFailed);
     }
   }, [labels.retryFailed, navigate, ownerAgentId, ownerSuffix]);
-  const removeCustomWorkflow = useCallback(async (definition: WorkflowDefinition) => {
-    if (definition.metadata.source !== 'user') return;
-    if (!window.confirm(interpolate(labels.deleteConfirm, { name: definition.name }))) return;
-    try {
-      await deleteWorkflowDefinition(definition.id);
-      await definitionsSwr.mutate();
-      setActionFeedback(labels.deleteWorkflowSuccess);
-    } catch (cause) {
-      setActionError(cause instanceof Error ? cause.message : labels.deleteWorkflowFailed);
-    }
-  }, [definitionsSwr, labels]);
-
   useEffect(() => {
-    if (!actionFeedback) return;
-    const timer = window.setTimeout(() => setActionFeedback(null), 4000);
-    return () => window.clearTimeout(timer);
-  }, [actionFeedback]);
-  useEffect(() => {
-    const refresh = () => void Promise.all([runsSwr.mutate(), statsSwr.mutate()]);
+    const refresh = () => void runsSwr.mutate();
     window.addEventListener('workflow-run-updated', refresh);
     window.addEventListener('workflow-run-error', refresh);
     return () => {
       window.removeEventListener('workflow-run-updated', refresh);
       window.removeEventListener('workflow-run-error', refresh);
     };
-  }, [runsSwr, statsSwr]);
+  }, [runsSwr]);
 
   const refreshAll = useCallback(() => {
-    void Promise.all([agentsSwr.mutate(), definitionsSwr.mutate(), runsSwr.mutate(), statsSwr.mutate()]);
-  }, [agentsSwr, definitionsSwr, runsSwr, statsSwr]);
+    void Promise.all([agentsSwr.mutate(), definitionsSwr.mutate(), runsSwr.mutate()]);
+  }, [agentsSwr, definitionsSwr, runsSwr]);
   const loading = agentsSwr.isLoading || definitionsSwr.isLoading || runsSwr.isLoading;
   const error = agentsSwr.error?.message ?? definitionsSwr.error?.message ?? runsSwr.error?.message ?? null;
 
@@ -180,10 +177,14 @@ export function useWorkflowsPage() {
     setWorkflowFilterId,
     triggerFilter,
     setTriggerFilter,
-    viewMode,
-    setViewMode,
+    statusFilter,
+    setStatusFilter,
+    clearRunFilters,
+    pageTab,
+    setPageTab,
+    runLayout,
+    setRunLayout,
     definitions,
-    filteredDefinitions,
     runs,
     openDefinitionDetails,
     startWorkflow,
@@ -191,14 +192,11 @@ export function useWorkflowsPage() {
     openRunDetails,
     openRunInChat,
     actionError,
-    actionFeedback,
     loading,
     error,
-    stats: statsSwr.data,
     refreshAll,
     cancelRun,
     retryRun,
-    removeCustomWorkflow,
   };
 }
 

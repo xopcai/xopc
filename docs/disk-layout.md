@@ -9,7 +9,7 @@ For narrative setup (init, templates, env vars), see [State directory & workspac
 | Area | Role |
 |------|------|
 | **State directory** | Global config, credentials, logs, global skills/extensions cache, managed tooling. |
-| **Agent home** `<stateDir>/agents/<agentId>/` | Per-agent runtime: curated memory, **`profile/`** Markdown (`SOUL.md`, …), inbound/TTS blobs. Session transcripts live in **`xopc.db`**, not under `sessions/`. |
+| **Agent home** `<stateDir>/agents/<agentId>/` | Per-agent runtime: **`profile/`** Markdown (`SOUL.md`, …), inbound/TTS blobs. Session transcripts live in **`xopc.db`**, not under `sessions/`. |
 | **Agent dir** `…/agents/<agentId>/agent/` | Process state: `agent.json`, per-agent credentials, IPC inbox, pid/socket, small machine state, extension installs, outbound crash-recovery queue. |
 | **Markdown workspace** | User project tree: tool `cwd`, generated media, project `.xopc/skills/`, arbitrary files. |
 
@@ -29,6 +29,9 @@ Default: `~/.xopc/`
 | `logs/` | Application logs (overridable via `XOPC_LOG_DIR`). |
 | `bin/`, `tools/` | Managed CLI shim and tool runtimes. |
 | `models.json` | Optional custom model registry data. |
+| `user/PROFILE.md` | Shared user profile loaded by every agent. |
+| `user/MEMORY.md` | Shared user-profile memory edited through memory tools. |
+| `user/memories/` | Shared curated memory and dreaming state used by every agent. |
 
 ## Agent home: `agents/<agentId>/`
 
@@ -36,9 +39,8 @@ Resolved by `resolveAgentHomeDir(config, agentId)`. Typical layout:
 
 | Path | Purpose |
 |------|---------|
-| `profile/` | Agent profile Markdown for the system prompt stack: `SOUL.md`, `IDENTITY.md`, `TOOLS.md`, `AGENTS.md`, `HEARTBEAT.md`, `MEMORY.md` (separate from curated `memories/`), optional `agent-avatar.*` for the gateway console. Global user profile lives in `user/PROFILE.md`. |
+| `profile/` | Agent profile Markdown for the system prompt stack: `SOUL.md`, `IDENTITY.md`, `TOOLS.md`, `AGENTS.md`, `HEARTBEAT.md`, plus optional `agent-avatar.*` for the gateway console. Global user profile lives in `user/PROFILE.md`. |
 | `sessions/` | Legacy directory (optional); may remain from older installs. New installs store transcripts in `xopc.db` only. |
-| `memories/` | Agent curated structured store (`MEMORY.md`; entries separated by a fixed delimiter — `BuiltinMemoryStore`). Global user memory lives in `user/MEMORY.md`. |
 | `inbound/` | Persisted inbound attachments (non-image binaries); transcript paths use `inbound/...` relative to agent home. |
 | `tts/` | Cached outbound TTS audio per session. |
 | `agent/` | See **Agent dir** below. |

@@ -48,6 +48,10 @@ export function SourceDisconnectDialog({
           </div>
 
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-5">
+            <div className="rounded-xl bg-surface-muted px-4 py-3 text-xs leading-5 text-fg-muted">
+              {source?.accountLabel ? <p className="font-medium text-fg">{t.disconnectAccount.replace('{{account}}', source.accountLabel)}</p> : null}
+              <p>{t.disconnectImpact.replace('{{items}}', String(source?.knowledgeItemCount ?? 0)).replace('{{understandings}}', String(source?.derivedUnderstandingCount ?? 0))}</p>
+            </div>
             <button
               type="button"
               aria-pressed={!deleteDerived}

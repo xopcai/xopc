@@ -61,6 +61,7 @@ sessionLog.info('Session created');
 | `XOPC_LOG_FILE` | `true` | Enable file output |
 | `XOPC_LOG_RETENTION_DAYS` | `7` | Days to keep logs |
 | `XOPC_PRETTY_LOGS` | `false` | Pretty print (dev) |
+| `XOPC_LOG_LLM_PAYLOAD` | `false` | Include complete AI request context in debug logs (sensitive) |
 
 ---
 

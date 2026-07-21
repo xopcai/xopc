@@ -2,7 +2,7 @@
 
 For a concise map of **profile Markdown**, **agent home**, and the **Markdown workspace**, see [On-disk layout](disk-layout.md).
 
-xopc keeps **machine-local state** under a single **state directory** (the “Agent OS” root) and, inside it, **per-agent** trees for inbox, inbound/TTS blobs, curated memory, and runtime files. **Session transcripts** live in **`xopc.db`** (SQLite) at the state root. Separately, the **agent workspace** is the Markdown root the runtime uses as tool `cwd`, for user files, generated artifacts, and extensions under that tree.
+xopc keeps **machine-local state** under a single **state directory** (the “Agent OS” root), with a shared `user/` context plus per-agent trees for profile, inbox, inbound/TTS blobs, and runtime files. **Session transcripts** live in **`xopc.db`** (SQLite) at the state root. Separately, the **agent workspace** is the Markdown root the runtime uses as tool `cwd`, for user files, generated artifacts, and extensions under that tree.
 
 Paths come from your **main config file** (default `<stateDir>/xopc.json`) and optional env overrides. **`xopc init`** and **`xopc agents add`** create directories and seed templates. The **Markdown workspace** (tool `cwd` and project files) is **not** the same folder as `agents/<id>/` state: each manifest owns `agents.list[].workspace.root`; when unavailable during fallback resolution xopc uses `<stateDir>/workspace/<agentId>/`.
 
@@ -34,6 +34,7 @@ These are shared across agents unless noted.
 | `bin/` | Managed CLI shim (e.g. `xopc`). |
 | `tools/` | Bundled tool runtimes (e.g. `tools/node/current/` for Node/npm used by tools). |
 | `models.json` | Cached model registry data. |
+| `user/` | Shared `PROFILE.md`, `MEMORY.md`, curated `memories/`, and dreaming state for all agents. |
 
 ## Per-agent tree: `agents/<agentId>/`
 
@@ -51,7 +52,7 @@ With a normal config, each agent gets an explicit **`agents.list[].workspace.roo
 
 When the CLI runs **without** a loaded config file, **`XOPC_WORKSPACE`** wins if set (full path to the primary agent’s Markdown root); otherwise the primary Markdown tree defaults to **`<stateDir>/workspace/main`**. **`xopc init`** creates **`agents/<id>/`**, the Markdown workspace, and seeds profile Markdown under **`agents/<id>/profile/`** from built-in templates (filenames in [Workspace templates](/reference/templates)) only when missing. **`xopc agents add`** updates **`agents.list`**, creates directories, and seeds profile files (see [CLI](cli.md#agents)).
 
-### Profile Markdown (persona & memory index)
+### Profile Markdown (agent persona)
 
 These files are injected into the system prompt as **Project Context** (OpenClaw-aligned bootstrap). Location: **`agents/<agentId>/profile/`** (same filenames). Runtime also injects the global user profile from **`user/PROFILE.md`** when present. Agents should not manually reread startup context at session start unless the user asks or context is incomplete.
 
@@ -62,9 +63,7 @@ These files are injected into the system prompt as **Project Context** (OpenClaw
 | `TOOLS.md` | Environment-specific tool hints (hosts, devices, …). |
 | `AGENTS.md` | Session Startup, Red Lines, and collaboration guidelines. |
 | `HEARTBEAT.md` | Heartbeat / proactive check configuration (dynamic Project Context when enabled). |
-| `MEMORY.md` | Curated long-term memory index (main session only; omitted for subagent/automation runs). |
-
-On `/new` and `/reset`, profile memory snippets may be injected only when the selected manifest/workflow enables that runtime behavior. **`agents/<id>/memories/`** is controlled by manifest `memory` policy; use the `curated_memory` tool for live read/write.
+Memory is not part of an agent profile. Every agent reads and writes the shared user context under `user/`, controlled by top-level `userContext`.
 
 Other root Markdown files (for example `CONTEXT.md` or `SKILLS.md`) are optional and are **not** loaded into the default system prompt unless you wire them in yourself (e.g. read via tools or custom workflow).
 
@@ -76,11 +75,11 @@ Other root Markdown files (for example `CONTEXT.md` or `SKILLS.md`) are optional
 | `.state/` | Machine state: `workspace.json` (profile Markdown seed metadata), `skills-cache.json`, etc. |
 | `.extensions/` | Per-workspace extension install/cache paths (when used by the extension loader). |
 
-Per-session overrides (SQLite `session_config`), **inbound** blobs (`inbound/`), **TTS** cache (`tts/`), and the **curated** store (`memories/`) relate to **`agents/<agentId>/`** (agent home) or **`xopc.db`**, not under this Markdown tree.
+Per-session overrides (SQLite `session_config`), **inbound** blobs (`inbound/`), and **TTS** cache (`tts/`) relate to **`agents/<agentId>/`** (agent home) or **`xopc.db`**, not under this Markdown tree. Curated memory lives under the shared `user/` tree.
 
-### Curated memory (`agents/<agentId>/memories/`) {#curated-memory}
+### Shared user memory (`user/`) {#curated-memory}
 
-Separate from **`agents/<agentId>/profile/MEMORY.md`** (system-prompt profile index), **`agents/<agentId>/memories/`** holds bounded agent notes in `MEMORY.md`. Global user memory lives in **`user/MEMORY.md`**. A frozen snapshot is injected only when manifest `memory` policy allows it; the agent can update live files via the **`curated_memory`** tool.
+**`user/memories/MEMORY.md`** holds bounded curated notes and dreaming state; **`user/MEMORY.md`** holds user-profile memory. Every agent receives the same frozen snapshot according to top-level `userContext`, and can update live files through **`curated_memory`**.
 
 ## Which path is “the” workspace at runtime?
 

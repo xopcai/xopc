@@ -1,8 +1,8 @@
 import type { Agent } from '@earendil-works/pi-agent-core';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { AgentManifest } from '../../../agent-manifest/index.js';
-import type { Config } from '../../../config/schema.js';
+import { ConfigSchema, type Config } from '../../../config/schema.js';
+import type { UserContextConfig } from '../../../user-context/config.js';
 import type { WorkspaceRuntime } from '../../workspace-runtime/registry.js';
 import { BackgroundReviewCoordinator } from '../coordinator.js';
 
@@ -10,27 +10,12 @@ const runBackgroundReviewTurn = vi.hoisted(() => vi.fn().mockResolvedValue(undef
 
 vi.mock('../run-background-review.js', () => ({ runBackgroundReviewTurn }));
 
-function config(memory: AgentManifest['memory']): Config {
-  return {
-    agents: {
-      default: 'main',
-      defaultPreset: 'default',
-      capabilityPresets: {},
-      list: [{
-        id: 'main',
-        enabled: true,
-        identity: { name: 'main', role: 'Assistant', language: 'en', tone: 'direct' },
-        responsibilities: { primary: ['Help'] },
-        workspace: { root: '/tmp/xopc' },
-        models: { defaultRole: 'main', roles: { main: { model: 'openai/gpt-4.1' } } },
-        tools: { builtin: {} },
-        skills: { mode: 'all' },
-        memory,
-        workflows: {},
-        boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
-      }],
-    },
-  } as Config;
+function config(memory: UserContextConfig['memory'], understanding?: Partial<UserContextConfig['understanding']>): Config {
+  const base = ConfigSchema.parse({});
+  return ConfigSchema.parse({
+    ...base,
+    userContext: { ...base.userContext, memory, understanding: { ...base.userContext.understanding, ...understanding } },
+  });
 }
 
 describe('BackgroundReviewCoordinator', () => {
@@ -38,8 +23,7 @@ describe('BackgroundReviewCoordinator', () => {
     const cfg = config({
       mode: 'confirmWrite',
       sources: ['session'],
-      understanding: { reviewIntervalTurns: 2 },
-    });
+    }, { reviewIntervalTurns: 2 });
     const coordinator = new BackgroundReviewCoordinator({ getConfig: () => cfg });
     const agent = {
       state: {

@@ -211,7 +211,6 @@ export async function buildSafeWebConfigPayload(service: GatewayService, options
           models: e.models,
           tools: e.tools,
           skills: e.skills,
-          memory: e.memory,
           workflows: e.workflows,
           boundaries: e.boundaries,
         })),

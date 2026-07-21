@@ -82,11 +82,14 @@ export function parseAgentRunError(text: string): AgentRunErrorPayload | null {
 }
 
 export function toProviderSetupPayload(payload: AgentRunErrorPayload): ProviderSetupPayload | null {
-  if (payload.kind !== 'provider_setup_required' || !payload.provider) return null;
+  if (
+    (payload.kind !== 'provider_setup_required' && payload.kind !== 'provider_auth_invalid')
+    || !payload.provider
+  ) return null;
   return {
-    kind: 'provider_setup_required',
+    kind: payload.kind,
     provider: payload.provider,
-    deepLink: '/settings/credentials',
+    deepLink: payload.deepLink ?? '/settings/credentials',
     message: payload.message,
   };
 }

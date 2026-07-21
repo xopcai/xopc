@@ -3,7 +3,6 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { GatewayConnectLanding } from '@/components/shell/gateway-connect-landing';
 import { ToastHost } from '@/components/ui/toast-host';
-import { ActivityCenterPanel } from '@/features/activity/activity-center';
 import { PrimaryAppHeader } from '@/components/shell/primary-app-header';
 import { SidebarColumn } from '@/components/shell/sidebar-column';
 import { WorkspaceColumn } from '@/components/shell/workspace-column';
@@ -66,6 +65,7 @@ export function AppShell() {
   const token = useGatewayStore((s) => s.token);
   const { pathname } = useLocation();
   const isSettingsRoute = pathname.startsWith('/settings');
+  const isWorkDiscoveryRoute = pathname === '/onboarding/workspace';
   const language = useLocaleStore((s) => s.language);
   const updateReminder = useUpdateReminder();
   const previewPath = useWorkspacePreviewStore((s) => s.path);
@@ -94,6 +94,20 @@ export function AppShell() {
   /** Routes that scroll inside the page (not on this shell wrapper). */
   const routeUsesInternalScroll = routeKey === 'chat' || routeKey === 'notes';
 
+  if (isWorkDiscoveryRoute) {
+    return (
+      <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-surface-base">
+        <GatewaySseBridge />
+        <ElectronMenuListener />
+        <ToastHost />
+        <WindowsTitlebar />
+        <main id="app-main-content" className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          <Outlet />
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-surface-base">
       <a
@@ -112,7 +126,6 @@ export function AppShell() {
       <GlobalQuickCaptureHost />
       <GlobalVoiceInputShortcutHost />
       <GlobalReadAloudPlayer />
-      <ActivityCenterPanel />
       <ToastHost />
       <TokenDialog />
       <OnboardingDialog />

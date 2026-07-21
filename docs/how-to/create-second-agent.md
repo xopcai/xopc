@@ -32,6 +32,6 @@ xopc tui -s agent:coder:main
 
 ## 3. Edit capabilities
 
-The runtime source of truth is `agents.list[]` in `~/.xopc/xopc.json`. Each entry is an Agent Capability Manifest with identity, responsibilities, workspace, model roles, tools, skills, memory, workflows, and boundaries.
+The runtime source of truth is `agents.list[]` in `~/.xopc/xopc.json`. Each entry is an Agent Capability Manifest with identity, responsibilities, workspace, model roles, tools, skills, workflows, and boundaries. User understanding and memory are configured once in top-level `userContext` and shared by every agent.
 
 For the field reference, see [Agent manifest](../agent-manifest.md) and [Configuration](../configuration.md).

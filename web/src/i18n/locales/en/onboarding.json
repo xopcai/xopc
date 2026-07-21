@@ -23,6 +23,45 @@
     "skipSetup": "Skip — I'll set this up later",
     "setupComplete": "You're all set! Start chatting below.",
     "stepOf": "Step {{current}} of {{total}}",
-    "providerRecommended": "Recommended"
+    "providerRecommended": "Recommended",
+    "workDiscovery": {
+      "title": "Connect your recent work",
+      "subtitle": "Choose a local folder. xopc will read it without making changes, understand the current state, and suggest a few ways to keep moving. This usually takes less than a minute.",
+      "chooseFolder": "Choose folder",
+      "skip": "Skip for now",
+      "readOnlyNote": "Files will not be changed. You can review the read scope before analysis starts.",
+      "selectedTitle": "Review the read scope",
+      "selectedSubtitle": "xopc will inspect project structure, project instructions, recent text changes, and Git state.",
+      "willRead": "Will read",
+      "willReadValue": "Project structure, instructions, recent text files, and Git state",
+      "willIgnore": "Will ignore",
+      "willIgnoreValue": "Dependencies, build output, binary files, and common secret files",
+      "providerDisclosure": "Relevant text excerpts may be sent to {{provider}} for analysis. Raw credentials and excluded files are not included.",
+      "localDisclosure": "Analysis uses the configured local model. Excluded files are not included.",
+      "startAnalysis": "Start analysis",
+      "changeFolder": "Choose another folder",
+      "stages": {
+        "folder_structure": "Understanding the folder",
+        "recent_progress": "Reviewing recent progress",
+        "next_steps": "Preparing next steps"
+      },
+      "analyzingTitle": "Understanding your recent work",
+      "analyzingSubtitle": "You can leave this page. The gateway will keep the analysis running.",
+      "cancelAnalysis": "Cancel analysis",
+      "foundTitle": "What I found",
+      "suggestionsTitle": "Suggested next steps",
+      "continue": "Continue",
+      "discussFirst": "Discuss first",
+      "openConversation": "Open the conversation",
+      "notAccurate": "These suggestions are not accurate",
+      "chooseDifferent": "Choose a different folder",
+      "errorTitle": "The analysis could not finish",
+      "retry": "Try again",
+      "loading": "Preparing work discovery…",
+      "codingProject": "Software project",
+      "generalProject": "General work folder",
+      "unknownProject": "Local folder",
+      "lowConfidenceTitle": "A little more context will help"
+    }
   }
 }

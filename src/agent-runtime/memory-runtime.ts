@@ -1,4 +1,4 @@
-import type { EffectiveAgentManifest } from '../agent-manifest/schema.js';
+import type { UserContextConfig } from '../user-context/config.js';
 
 export type MemorySource =
   | 'session'
@@ -36,18 +36,19 @@ function normalizeConfidence(value: number | undefined): number {
   return Math.max(0, Math.min(1, value));
 }
 
-export function buildMemoryRuntime(manifest: EffectiveAgentManifest): MemoryRuntime {
-  const readableSources = manifest.memory.mode === 'off' ? [] : [...manifest.memory.sources];
+export function buildMemoryRuntime(userContext: UserContextConfig): MemoryRuntime {
+  const memory = userContext.memory;
+  const readableSources = !userContext.enabled || memory.mode === 'off' ? [] : [...memory.sources];
   const sourceSet = new Set<MemorySource>(readableSources);
 
   return {
     readableSources,
     canRead: (source) => sourceSet.has(source),
     checkWrite: (candidate) => {
-      if (manifest.memory.mode === 'off') {
+      if (!userContext.enabled || memory.mode === 'off') {
         return { decision: 'deny', reason: 'memory is disabled' };
       }
-      if (READ_ONLY_MODES.has(manifest.memory.mode)) {
+      if (READ_ONLY_MODES.has(memory.mode)) {
         return { decision: 'deny', reason: 'memory is read-only' };
       }
       if (!candidate.content.trim()) {
@@ -57,15 +58,15 @@ export function buildMemoryRuntime(manifest: EffectiveAgentManifest): MemoryRunt
       if (confidence < 0.3) {
         return { decision: 'deny', reason: 'memory confidence is too low' };
       }
-      const sensitivePolicy = manifest.memory.privacy?.sensitiveWritePolicy ?? 'confirm';
+      const sensitivePolicy = userContext.privacy.sensitiveWritePolicy;
       if (candidate.sensitive && sensitivePolicy !== 'allow') {
         return {
           decision: sensitivePolicy,
           reason: 'memory candidate is sensitive',
         };
       }
-      const targetPolicy = manifest.memory.writePolicy?.[candidate.target] ?? 'deny';
-      if (manifest.memory.mode === 'confirmWrite' && targetPolicy === 'allow') {
+      const targetPolicy = memory.writePolicy?.[candidate.target] ?? 'deny';
+      if (memory.mode === 'confirmWrite' && targetPolicy === 'allow') {
         return { decision: 'confirm', reason: 'agent memory mode requires confirmation' };
       }
       return {

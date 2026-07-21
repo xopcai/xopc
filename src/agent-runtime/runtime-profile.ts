@@ -17,6 +17,7 @@ import {
   type WorkflowResolution,
   type WorkflowValidationIssue,
 } from './workflow-runtime.js';
+import type { UserContextConfig } from '../user-context/config.js';
 
 export interface AgentRuntimeProfile<TTool = unknown> {
   manifest: EffectiveAgentManifest;
@@ -33,6 +34,7 @@ export interface AgentRuntimeProfile<TTool = unknown> {
 
 export interface BuildAgentRuntimeProfileParams<TTool = unknown> {
   manifest: EffectiveAgentManifest;
+  userContext: UserContextConfig;
   toolCatalog: Iterable<ToolCatalogEntry<TTool>>;
   workflowCatalog?: Iterable<WorkflowCatalogEntry>;
 }
@@ -51,7 +53,7 @@ export function buildAgentRuntimeProfile<TTool = unknown>(
       capability: buildAgentManifestPromptSection(params.manifest),
     },
     tools,
-    memory: buildMemoryRuntime(params.manifest),
+    memory: buildMemoryRuntime(params.userContext),
     resolveModel: (role?: string) => resolveModelRole({ manifest: params.manifest, role }),
     checkBoundary: (action: string, detail?: string) => checkBoundary({ manifest: params.manifest, action, detail }),
     resolveWorkflow: (intent?: string) => resolveWorkflow({ manifest: params.manifest, catalog: workflowCatalog, intent }),

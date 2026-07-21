@@ -65,6 +65,7 @@ describe('Gateway Status Command', () => {
   let processExitSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
+    delete process.env.XOPC_CONFIG_PATH;
     consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     processExitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);

@@ -1,32 +1,3 @@
-const STORAGE_KEY = 'xopc.extensionUiGrants.v1';
-
-function permissionFingerprint(permissions: string[]): string {
-  return permissions
-    .flatMap((p) => {
-      const v = p.trim();
-      return v ? [v] : [];
-    })
-    .toSorted()
-    .join('\0');
-}
-
-export function hasUiGrant(extensionId: string, permissions: string[]): boolean {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    const map = (raw ? JSON.parse(raw) : {}) as Record<string, string>;
-    return map[extensionId] === permissionFingerprint(permissions);
-  } catch {
-    return false;
-  }
-}
-
-export function saveUiGrant(extensionId: string, permissions: string[]): void {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  const map = (raw ? (JSON.parse(raw) as Record<string, string>) : {}) ?? {};
-  map[extensionId] = permissionFingerprint(permissions);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(map));
-}
-
 /** Short human labels for manifest `ui.permissions` (EN). */
 const PERMISSION_LABELS_EN: Record<string, string> = {
   theme: 'Read theme (light / dark)',

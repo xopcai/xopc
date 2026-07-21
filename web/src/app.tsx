@@ -33,6 +33,8 @@ import {
   loadSkillsPage,
   loadUserContextPage,
   loadWorkflowsPage,
+  loadLocalAppsPage,
+  loadLocalAppWorkbenchPage,
 } from '@/lib/route-preload';
 import { SwrProvider } from '@/providers/swr-provider';
 import { syncFontScaleAfterHydration, useFontScaleStore } from '@/stores/font-scale-store';
@@ -73,6 +75,11 @@ const ExtensionDebugPage = lazy(() =>
 );
 const SharePreviewPage = lazy(() => loadSharePreviewPage().then((m) => ({ default: m.SharePreviewPage })));
 const DesktopPetPage = lazy(() => import('@/pages/desktop-pet').then((m) => ({ default: m.DesktopPetPage })));
+const LocalAppsPage = lazy(() => loadLocalAppsPage().then((m) => ({ default: m.LocalAppsPage })));
+const LocalAppWorkbenchPage = lazy(() => loadLocalAppWorkbenchPage().then((m) => ({ default: m.LocalAppWorkbenchPage })));
+const WorkDiscoveryPage = lazy(() =>
+  import('@/features/work-discovery/work-discovery-page').then((m) => ({ default: m.WorkDiscoveryPage })),
+);
 
 function SecondaryRouteFallback() {
   return (
@@ -141,6 +148,14 @@ const router = createHashRouter([
     element: <AppShell />,
     children: [
       { index: true, element: <Navigate to="/chat" replace /> },
+      {
+        path: 'onboarding/workspace',
+        element: (
+          <Suspense fallback={<SecondaryRouteFallback />}>
+            <WorkDiscoveryPage />
+          </Suspense>
+        ),
+      },
       {
         path: 'chat',
         element: <ChatRouteLayout />,
@@ -356,6 +371,27 @@ const router = createHashRouter([
             <ExtensionsPage />
           </Suspense>
         ),
+      },
+      {
+        path: 'local-apps',
+        children: [
+          {
+            index: true,
+            element: (
+              <Suspense fallback={<SecondaryRouteFallback />}>
+                <LocalAppsPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: ':appId',
+            element: (
+              <Suspense fallback={<SecondaryRouteFallback />}>
+                <LocalAppWorkbenchPage />
+              </Suspense>
+            ),
+          },
+        ],
       },
       {
         path: 'extensions/:extensionId',

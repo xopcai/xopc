@@ -12,7 +12,8 @@ import {
   StickyNote,
   Target,
 } from 'lucide-react';
-import { memo, useId, useMemo, useState } from 'react';
+import { memo, useEffect, useId, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import { BrandLogo } from '@/components/shell/brand-logo';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -22,6 +23,9 @@ import type {
 } from '@/features/chat/welcome/welcome-suggestions';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
+import { fetchWorkDiscoveryOnboarding } from '@/features/work-discovery/api';
+import { messages } from '@/i18n/messages';
+import { useLocaleStore } from '@/stores/locale-store';
 
 const categoryIcons = {
   code: Code2,
@@ -57,6 +61,18 @@ export const ChatWelcomeSpotlight = memo(function ChatWelcomeSpotlight({
   const s = spotlight;
   const panelId = useId();
   const [selectedCategoryIndex, setSelectedCategoryIndex] = useState<number | null>(null);
+  const [workDiscoveryEnabled, setWorkDiscoveryEnabled] = useState(false);
+  const navigate = useNavigate();
+  const language = useLocaleStore((state) => state.language);
+  const workDiscoveryCopy = messages(language).onboarding.workDiscovery;
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchWorkDiscoveryOnboarding().then(({ enabled }) => {
+      if (!cancelled) setWorkDiscoveryEnabled(enabled);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   const selectedCategory = useMemo(
     () => (selectedCategoryIndex == null ? undefined : s.categories[selectedCategoryIndex]),
@@ -103,6 +119,21 @@ export const ChatWelcomeSpotlight = memo(function ChatWelcomeSpotlight({
             </span>
           ) : null}
         </div>
+        {workDiscoveryEnabled ? (
+          <button
+            type="button"
+            onClick={() => navigate('/onboarding/workspace?new=1')}
+            className={cn(
+              'mt-1 inline-flex min-h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium text-accent-fg hover:bg-accent-soft',
+              interaction.transition,
+              interaction.press,
+              interaction.focusRingBase,
+            )}
+          >
+            <FolderOpen className="size-4" strokeWidth={1.75} aria-hidden />
+            {workDiscoveryCopy.title}
+          </button>
+        ) : null}
       </div>
 
       <section className="mt-7 sm:mt-8 [@media(max-height:800px)]:mt-4 sm:[@media(max-height:800px)]:mt-5" aria-label={s.otherSuggestionsLabel}>

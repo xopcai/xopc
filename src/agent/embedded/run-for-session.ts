@@ -9,7 +9,6 @@ import { resolveAgentTurnTimeoutMs } from '../orchestration/run-agent-turn-with-
 import { runXopcEmbeddedTurn } from './run-turn.js';
 import type { EmbeddedStreamEvent, RunXopcEmbeddedTurnParams, RunXopcEmbeddedTurnResult } from './types.js';
 import { applyStartupContextToUserMessage } from '../reply/apply-turn-user-enrichment.js';
-import { resolveEffectiveAgentManifestForSession } from '../../config/agent-profile.js';
 import {
   mergeTurnTools,
   resolveEmbeddedMcpToolsForTurn,
@@ -251,8 +250,7 @@ async function maybeAutoCompactBeforeTurn(opts: {
   const { sessionKey, sessionStore, agentManager, model, config, onEvent } = opts;
   if (config) {
     try {
-      const manifest = resolveEffectiveAgentManifestForSession(config, sessionKey);
-      if (manifest.memory.retention?.compaction === false) {
+      if (config.userContext.memory.retention?.compaction === false) {
         return;
       }
     } catch {

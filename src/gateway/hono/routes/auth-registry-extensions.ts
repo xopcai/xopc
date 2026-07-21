@@ -321,6 +321,14 @@ export function registerAuthRegistryExtensionsRoutes(authenticated: Hono, deps: 
     });
   });
 
+  authenticated.get('/api/extensions/:id/ui-grant', (c) => {
+    return c.json({ grant: service.localApps.getUiGrant(c.req.param('id')) });
+  });
+
+  authenticated.post('/api/extensions/:id/ui-grant', (c) => {
+    return c.json({ grant: service.localApps.grantUiPermissions(c.req.param('id')) });
+  });
+
   authenticated.get('/api/extensions/:id/storage', async (c) => {
     const extensionId = c.req.param('id');
     const store = await loadExtensionStore(extensionId);

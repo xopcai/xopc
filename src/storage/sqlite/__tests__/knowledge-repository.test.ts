@@ -57,7 +57,7 @@ describe('knowledge repository', () => {
     const record = upsertMemoryRecord({
       providerId: 'local',
       kind: 'commitment',
-      agentId: 'main',
+      sourceAgentId: 'main',
       content: 'Attend the design review.',
     });
     const evidence = attachMemoryEvidence({

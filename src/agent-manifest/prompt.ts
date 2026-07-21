@@ -14,13 +14,6 @@ function toolPolicySummary(manifest: EffectiveAgentManifest): string {
   return rows.length > 0 ? rows.join('\n') : '- No built-in tools declared';
 }
 
-function memorySummary(manifest: EffectiveAgentManifest): string {
-  return [
-    `Mode: ${manifest.memory.mode}`,
-    `Sources: ${manifest.memory.sources.join(', ') || 'none'}`,
-  ].join('\n');
-}
-
 export function buildAgentManifestPromptSection(manifest: EffectiveAgentManifest): string {
   const sections = [
     `<agent_identity>
@@ -46,9 +39,6 @@ ${listBlock(manifest.boundaries.escalation)}
     `<tool_policy>
 ${toolPolicySummary(manifest)}
 </tool_policy>`,
-    `<memory_policy>
-${memorySummary(manifest)}
-</memory_policy>`,
   ];
 
   if (manifest.workflows.default || manifest.workflows.allowed?.length) {

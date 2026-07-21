@@ -28,7 +28,6 @@ const minimalConfig = {
         workspace: { root: '~/default-ws' },
         tools: { builtin: {} },
         skills: { mode: 'all' },
-        memory: { mode: 'confirmWrite', sources: ['session'] },
         workflows: {},
         boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
       },

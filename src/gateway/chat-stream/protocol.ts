@@ -113,6 +113,14 @@ export type ClarifyRequestEvent = ChatStreamEnvelope<
   'clarify_request',
   { requestId: string; question: string; choices?: string[]; default?: string }
 >;
+export type MemoryConsentRequiredEvent = ChatStreamEnvelope<
+  'memory_consent_required',
+  { requests: Array<{ id: string; recordId: string; statement: string; purpose: string }> }
+>;
+export type MemoryCapturedEvent = ChatStreamEnvelope<
+  'memory_captured',
+  { records: Array<{ id: string; content: string; kind: string }> }
+>;
 export type RunEndEvent = ChatStreamEnvelope<'run_end', { status: ChatStreamStatus; summary?: string }>;
 export type StreamErrorEvent = ChatStreamEnvelope<'error', { code: string; message: string; recoverable?: boolean }>;
 
@@ -142,5 +150,7 @@ export type ChatStreamEvent =
   | CompactionEvent
   | TtsAudioEvent
   | ClarifyRequestEvent
+  | MemoryConsentRequiredEvent
+  | MemoryCapturedEvent
   | RunEndEvent
   | StreamErrorEvent;

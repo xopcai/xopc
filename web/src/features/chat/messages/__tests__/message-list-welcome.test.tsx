@@ -2,6 +2,7 @@
 
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/features/chat/messages/message-bubble', () => ({
@@ -43,16 +44,18 @@ describe('MessageList welcome state', () => {
 
     act(() => {
       root.render(
-        <MessageList
-          messages={[]}
-          streaming={false}
-          progress={null}
-          reasoningLevel="stream"
-          registerListContentRef={() => {}}
-          onPickWelcomePrompt={onPickWelcomePrompt}
-          onRefreshWelcomeExploration={onRefreshWelcomeExploration}
-          welcomeSpotlight={welcomeSpotlight}
-        />,
+        <MemoryRouter>
+          <MessageList
+            messages={[]}
+            streaming={false}
+            progress={null}
+            reasoningLevel="stream"
+            registerListContentRef={() => {}}
+            onPickWelcomePrompt={onPickWelcomePrompt}
+            onRefreshWelcomeExploration={onRefreshWelcomeExploration}
+            welcomeSpotlight={welcomeSpotlight}
+          />
+        </MemoryRouter>,
       );
     });
 

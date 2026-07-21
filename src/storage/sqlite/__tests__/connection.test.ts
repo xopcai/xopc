@@ -62,6 +62,9 @@ describe('openXopcDatabase', () => {
         'notes',
         'memory_files',
         'memory_chunks',
+        'local_apps',
+        'local_app_releases',
+        'local_app_acceptance_runs',
       ]),
     );
   });

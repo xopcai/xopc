@@ -1,19 +1,18 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { useCallback } from 'react';
-import { Cog, Eye, MessageSquarePlus, Pencil, Sparkles, User, X } from 'lucide-react';
+import { Brain, Eye, ExternalLink, Pencil, Sparkles, User, X } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
-import { Button } from '@/components/ui/button';
 import { MarkdownEditor } from '@/components/markdown/markdown-editor';
 import { MarkdownView } from '@/components/markdown/markdown-view';
-import { ModelSelector } from '@/features/chat/model/model-selector';
-import { DirectoryPickerPathField } from '@/features/fs/directory-picker-path-field';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 import type { GatewayAgentRow } from '@/features/settings/agents-admin-api';
 import type { OverviewProfileDraft } from '@/features/settings/agents/hooks/use-agent-overview-profile-markdown';
 import { SettingsPanelSkeleton } from '@/features/settings/settings-loading-skeleton';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
-import type { AgentsSettingsMessages, ChatMessages } from '@/i18n/messages';
+import type { AgentsSettingsMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
-import { ghostIconButton, interaction } from '@/lib/interaction';
+import { ghostIconButton } from '@/lib/interaction';
 import {
   SETTINGS_SHELL_CONTENT_Z,
   SETTINGS_SHELL_OVERLAY_Z,
@@ -29,27 +28,15 @@ import {
   SOUL_TEMPLATES,
   type SoulTemplateId,
 } from '../agent-profile-markdown';
-import { Select, SelectOption } from '@/components/ui/popover-select';
 
 export function AgentOverviewTab(props: {
   a: AgentsSettingsMessages;
-  chat: ChatMessages;
   selected: GatewayAgentRow | null;
   busy: boolean;
   editName: string;
   setEditName: (v: string) => void;
   editDescription: string;
   setEditDescription: (v: string) => void;
-  editWorkspace: string;
-  setEditWorkspace: (v: string) => void;
-  editModel: string;
-  setEditModel: (v: string) => void;
-  onSetDefault: () => void;
-  onSetTuiDefault: () => void;
-  isTuiDefault: boolean;
-  isTuiDefaultInherited: boolean;
-  onSaveAgentEdits: () => void;
-  hideInlineSave?: boolean;
   profileMarkdownLoading: boolean;
   profileDraft: OverviewProfileDraft | null;
   updateIdentity: (patch: Partial<OverviewProfileDraft['identity']>) => void;
@@ -57,29 +44,15 @@ export function AgentOverviewTab(props: {
   handleSoulContentChange: (content: string) => void;
   setAvatarDialogOpen: (open: boolean) => void;
   toggleSoulPreviewMode: () => void;
-  defaultModel?: string;
-  defaultWorkspace?: string;
-  onTryInChat?: () => void;
 }) {
   const {
     a,
-    chat,
     selected,
     busy,
     editName,
     setEditName,
     editDescription,
     setEditDescription,
-    editWorkspace,
-    setEditWorkspace,
-    editModel,
-    setEditModel,
-    onSetDefault,
-    onSetTuiDefault,
-    isTuiDefault,
-    isTuiDefaultInherited,
-    onSaveAgentEdits,
-    hideInlineSave,
     profileMarkdownLoading,
     profileDraft,
     updateIdentity,
@@ -87,18 +60,10 @@ export function AgentOverviewTab(props: {
     handleSoulContentChange,
     setAvatarDialogOpen,
     toggleSoulPreviewMode,
-    onTryInChat,
   } = props;
 
   const language = useLocaleStore((s) => s.language);
   const isDark = useThemeStore((s) => s.resolved === 'dark');
-  const identity = profileDraft?.identity ?? { name: '', description: '', language: '', creature: '', emoji: '', avatar: '' };
-  const soulTemplate = profileDraft?.soulTemplate ?? 'professional';
-  const soulCustomContent = profileDraft?.soulCustomContent ?? '';
-  const soulEditorNonce = profileDraft?.soulEditorNonce ?? 0;
-  const soulPreviewMode = profileDraft?.soulPreviewMode ?? false;
-  const avatarDialogOpen = profileDraft?.avatarDialogOpen ?? false;
-
   const inputClass = agentsSettingsInputClass();
   const locLabel = useCallback(
     (en: string, zh: string) => (language === 'zh' ? zh : en),
@@ -108,6 +73,16 @@ export function AgentOverviewTab(props: {
   if (!selected) {
     return <p className="text-sm text-fg-muted">{a.selectAgentHint}</p>;
   }
+  if (profileMarkdownLoading || !profileDraft) {
+    return <SettingsPanelSkeleton rows={4} />;
+  }
+
+  const identity = profileDraft.identity;
+  const soulTemplate = profileDraft.soulTemplate;
+  const soulCustomContent = profileDraft.soulCustomContent;
+  const soulEditorNonce = profileDraft.soulEditorNonce;
+  const soulPreviewMode = profileDraft.soulPreviewMode;
+  const avatarDialogOpen = profileDraft.avatarDialogOpen;
 
   return (
     <div className="flex flex-col gap-8">
@@ -130,50 +105,6 @@ export function AgentOverviewTab(props: {
             ariaLabel: a.avatarOpenSettingsAria,
             id: 'agent-avatar-settings',
           }}
-          titleAccessory={
-            selected.isDefault || isTuiDefault ? (
-              <div className="flex flex-wrap items-center gap-1.5">
-                {selected.isDefault ? (
-                  <span className="rounded-full bg-accent-soft px-2 py-0.5 text-xs font-medium text-accent">
-                    {a.globalDefaultBadge}
-                  </span>
-                ) : null}
-                {isTuiDefault ? (
-                  <span className="rounded-full bg-surface-hover px-2 py-0.5 text-xs font-medium text-fg">
-                    {isTuiDefaultInherited ? a.tuiDefaultInheritedBadge : a.tuiDefaultBadge}
-                  </span>
-                ) : null}
-              </div>
-            ) : null
-          }
-          trailing={
-            !selected.isDefault || !isTuiDefault ? (
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                {!selected.isDefault ? (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="text-xs"
-                    disabled={busy}
-                    onClick={() => void onSetDefault()}
-                  >
-                    {a.setDefault}
-                  </Button>
-                ) : null}
-                {!isTuiDefault ? (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="text-xs"
-                    disabled={busy}
-                    onClick={() => void onSetTuiDefault()}
-                  >
-                    {a.setTuiDefault}
-                  </Button>
-                ) : null}
-              </div>
-            ) : null
-          }
         />
 
         <Dialog.Root open={avatarDialogOpen} onOpenChange={setAvatarDialogOpen}>
@@ -286,121 +217,73 @@ export function AgentOverviewTab(props: {
         </div>
       </SettingsFormSection>
 
-      {/* ===== Section 2: Runtime Configuration ===== */}
+      <div className="flex items-start gap-3 rounded-xl border border-edge-subtle bg-surface-panel px-4 py-3">
+        <Brain className="mt-0.5 size-4 shrink-0 text-accent-fg" aria-hidden />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-fg">{a.sharedUserContextTitle}</p>
+          <p className="mt-0.5 max-w-[68ch] text-xs leading-5 text-fg-muted">{a.sharedUserContextHint}</p>
+        </div>
+        <Link
+          to="/you"
+          className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-accent-fg hover:underline"
+        >
+          {a.sharedUserContextLink}
+          <ExternalLink className="size-3" aria-hidden />
+        </Link>
+      </div>
+
+      {/* Personality and operating style are stored in SOUL.md. */}
       <SettingsFormSection>
-        <SettingsFormSectionHeader icon={Cog} title={a.editAgent} subtitle={a.editAgentHint} />
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="flex flex-col gap-1.5 text-sm sm:col-span-2">
-            <span className="font-medium text-fg">{a.modelPrimary}</span>
-            <div className="flex flex-wrap items-stretch gap-2">
-              <ModelSelector
-                className="min-w-0 flex-1"
-                value={editModel}
-                disabled={busy}
-                placeholder={chat.modelPlaceholder}
-                searchPlaceholder={chat.modelSearchPlaceholder}
-                noMatches={chat.modelNoMatches}
-                onChange={(id) => setEditModel(id)}
-              />
-              {editModel.trim() ? (
-                <Button type="button" variant="secondary" className="shrink-0" disabled={busy} onClick={() => setEditModel('')}>
-                  {a.modelClear}
-                </Button>
-              ) : null}
-            </div>
+        <SettingsFormSectionHeader icon={User} title={a.personaSectionSoul} subtitle={a.personaSectionSoulHint} />
+        <div className="mb-4 flex flex-col gap-2 sm:max-w-sm">
+          <span className="text-sm font-medium text-fg">{a.personaSoulTemplate}</span>
+          <Select
+            className={inputClass}
+            value={soulTemplate}
+            onChange={(event) => handleSoulTemplateChange(event.target.value as SoulTemplateId)}
+            disabled={busy}
+          >
+            {SOUL_TEMPLATES.map((template) => (
+              <SelectOption key={template.id} value={template.id}>
+                {template.emoji} {locLabel(template.labelEn, template.labelZh)}
+              </SelectOption>
+            ))}
+          </Select>
+          <p className="text-xs leading-5 text-fg-muted">{a.personaTemplateHint}</p>
+        </div>
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm font-medium text-fg">{a.personaBehaviorEditorLabel}</span>
+            <button
+              type="button"
+              className={cn(
+                ghostIconButton,
+                'inline-flex size-9 shrink-0 items-center justify-center rounded-md p-0 hover:bg-surface-hover',
+              )}
+              title={soulPreviewMode ? a.personaSoulEdit : a.personaSoulPreview}
+              aria-label={soulPreviewMode ? a.personaSoulEdit : a.personaSoulPreview}
+              onClick={toggleSoulPreviewMode}
+            >
+              {soulPreviewMode ? <Pencil className="size-4" aria-hidden /> : <Eye className="size-4" aria-hidden />}
+            </button>
           </div>
-          <div className="flex flex-col gap-1.5 text-sm sm:col-span-2">
-            <span className="font-medium text-fg">{a.workspacePath}</span>
-            <DirectoryPickerPathField
-              value={editWorkspace}
-              onChange={setEditWorkspace}
-              disabled={busy}
-              wd={chat.workingDirectory}
-              placeholder={chat.workingDirectory.notSet}
-              inputClassName={cn(inputClass, 'font-mono text-xs')}
-            />
+          <div className={cn(inputClass, 'flex min-h-64 flex-col overflow-hidden p-0')}>
+            {soulPreviewMode ? (
+              <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+                <MarkdownView content={soulCustomContent} />
+              </div>
+            ) : (
+              <MarkdownEditor
+                key={`soul-${soulEditorNonce}`}
+                initialContent={soulCustomContent}
+                onChange={handleSoulContentChange}
+                isDark={isDark}
+                className="min-h-0 flex-1"
+              />
+            )}
           </div>
         </div>
-        {!hideInlineSave ? (
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <Button type="button" disabled={busy} onClick={() => void onSaveAgentEdits()}>
-              {a.save}
-            </Button>
-            {onTryInChat ? (
-              <Button type="button" variant="secondary" disabled={busy} onClick={onTryInChat}>
-                <MessageSquarePlus className="mr-1.5 size-4" aria-hidden />
-                {a.tryInChat}
-              </Button>
-            ) : null}
-          </div>
-        ) : null}
       </SettingsFormSection>
-
-      {/* ===== Section 3: Personality & Style ===== */}
-      {profileMarkdownLoading ? (
-        <SettingsPanelSkeleton rows={2} />
-      ) : (
-        <SettingsFormSection>
-          <SettingsFormSectionHeader icon={User} title={a.personaSectionSoul} subtitle={a.personaSectionSoulHint} />
-          <div className="mb-4 flex flex-col gap-2">
-            <span className="text-sm font-medium text-fg">{a.personaSoulTemplate}</span>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {SOUL_TEMPLATES.map((template) => (
-                <button
-                  key={template.id}
-                  type="button"
-                  className={cn(
-                    'flex flex-col items-center gap-1.5 rounded-xl border-2 p-3 text-center transition-all',
-                    interaction.pressCard,
-                    soulTemplate === template.id
-                      ? 'border-accent bg-accent-soft/40 shadow-sm'
-                      : 'border-edge hover:border-accent/40 hover:bg-surface-hover',
-                  )}
-                  onClick={() => handleSoulTemplateChange(template.id)}
-                >
-                  <span className="text-xl">{template.emoji}</span>
-                  <span className="text-xs font-medium text-fg">{locLabel(template.labelEn, template.labelZh)}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-          {soulTemplate === 'custom' ? (
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-sm font-medium text-fg">{a.personaSoulCustomEdit}</span>
-                <button
-                  type="button"
-                  className={cn(
-                    ghostIconButton,
-                    'inline-flex size-9 shrink-0 items-center justify-center rounded-md p-0 hover:bg-surface-hover',
-                  )}
-                  title={soulPreviewMode ? a.personaSoulEdit : a.personaSoulPreview}
-                  aria-label={soulPreviewMode ? a.personaSoulEdit : a.personaSoulPreview}
-                  onClick={toggleSoulPreviewMode}
-                >
-                  {soulPreviewMode ? <Pencil className="size-4" aria-hidden /> : <Eye className="size-4" aria-hidden />}
-                </button>
-              </div>
-              <div className={cn(inputClass, 'flex min-h-64 flex-col overflow-hidden p-0')}>
-                {soulPreviewMode ? (
-                  <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-                    <MarkdownView content={soulCustomContent} />
-                  </div>
-                ) : (
-                  <MarkdownEditor
-                    key={`soul-${soulEditorNonce}`}
-                    initialContent={soulCustomContent}
-                    onChange={handleSoulContentChange}
-                    isDark={isDark}
-                    className="min-h-0 flex-1"
-                  />
-                )}
-              </div>
-            </div>
-          ) : null}
-        </SettingsFormSection>
-      )}
-
     </div>
   );
 }

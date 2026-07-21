@@ -1,12 +1,12 @@
 /**
  * Curated Markdown compatibility store:
- * - agent notes: `~/.xopc/agents/<id>/memories/MEMORY.md`
- * - user memory: `~/.xopc/user/MEMORY.md`
+ * - shared memories: `~/.xopc/user/memories/MEMORY.md`
+ * - user profile: `~/.xopc/user/MEMORY.md`
  */
 
 export interface MemoryStoreConfig {
   workspaceDir: string;
-  /** Absolute path to `…/agents/<id>/memories/` (not under markdown workspace). */
+  /** Absolute path to the shared user memories directory. */
   memoriesDir: string;
   /** Absolute path to global user memory (`~/.xopc/user/MEMORY.md`). */
   userMemoryPath: string;
@@ -36,7 +36,7 @@ export type MemoryKind =
   | 'open_question'
   | 'milestone'
   | 'current_state'
-  | 'agent_note'
+  | 'curated_note'
   | 'workspace_fact'
   | 'daily_note'
   | 'session_summary'
@@ -76,7 +76,7 @@ export interface MemoryEvidence {
 }
 
 export interface MemoryScope {
-  agentId: string;
+  userId: string;
   workspaceId?: string;
   sessionKey?: string;
   projectId?: string;
@@ -99,8 +99,12 @@ export interface MemoryRecord {
   status?: MemoryStatus;
   canonicalKey?: string;
   scope: MemoryScope;
+  provenance: {
+    sourceAgentId: string;
+  };
   content: string;
   source: {
+    sourceInstanceId?: string;
     path?: string;
     lineStart?: number;
     lineEnd?: number;

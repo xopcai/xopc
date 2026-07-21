@@ -31,7 +31,6 @@ function configWithGlobalModel(model = 'anthropic/claude-sonnet-4-5'): Config {
           workspace: { root: '~/.xopc/workspace/main' },
           tools: { builtin: {} },
           skills: { mode: 'all' },
-          memory: { mode: 'confirmWrite', sources: ['session'] },
           workflows: {},
           boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
         },

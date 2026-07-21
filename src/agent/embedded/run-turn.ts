@@ -155,6 +155,15 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
           lastUserMessagePreview: getLastUserMessagePreview(effectiveContext.messages),
           loopWarningInjected: !!loopGuard.injection,
           hiddenToolCount: loopGuard.hiddenTools.size,
+          ...(process.env.XOPC_LOG_LLM_PAYLOAD === 'true'
+            ? {
+                effectiveContext: {
+                  systemPrompt: effectiveContext.systemPrompt,
+                  messages: effectiveContext.messages,
+                  tools: effectiveContext.tools,
+                },
+              }
+            : {}),
         },
         'Sending messages to AI',
       );

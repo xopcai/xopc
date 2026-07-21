@@ -115,7 +115,7 @@ export class BackgroundReviewCoordinator {
       return state.adaptiveIntervalTurns;
     }
     try {
-      const metrics = summarizeUserUnderstandingQuality({ agentId: settings.agentId, windowDays: 30, nowMs: now });
+      const metrics = summarizeUserUnderstandingQuality({ windowDays: 30, nowMs: now });
       const decision = resolveAdaptiveUnderstandingCadence(settings.reviewIntervalTurns, metrics);
       state.adaptiveIntervalTurns = decision.effectiveIntervalTurns;
       state.adaptiveIntervalExpiresAt = now + 5 * 60_000;

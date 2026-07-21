@@ -409,6 +409,7 @@ describe('createDefaultContext', () => {
     delete process.env.XOPC_CONFIG;
     delete process.env.XOPC_STATE_DIR;
     delete process.env.XOPC_PROFILE;
+    delete process.env.XOPC_CONFIG_PATH;
   });
 
   it('should create context with defaults', () => {

@@ -57,7 +57,7 @@ export function useAgentProfileFiles(options: {
 }) {
   const { panel, selectedId, hasToken, dataAgentsLength, saveErrorMessage, setError } = options;
 
-  const filesEnabled = panel === 'behavior' && !!selectedId && hasToken;
+  const filesEnabled = panel === 'advanced' && !!selectedId && hasToken;
   const filesResource = useAsyncResource(
     () => (selectedId ? fetchAgentProfileFiles(selectedId) : Promise.resolve(null as ProfileFiles | null)),
     [panel, selectedId, hasToken, dataAgentsLength],
@@ -163,7 +163,7 @@ export function useAgentProfileFiles(options: {
 
   const trackedPanelRef = useRef(panel);
   if (trackedPanelRef.current !== panel) {
-    if (trackedPanelRef.current === 'behavior') {
+    if (trackedPanelRef.current === 'advanced') {
       flushProfileSaveRef.current();
     }
     trackedPanelRef.current = panel;

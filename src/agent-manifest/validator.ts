@@ -94,25 +94,6 @@ function validateSkills(manifest: EffectiveAgentManifest, issues: ManifestIssue[
   }
 }
 
-function validateMemory(manifest: EffectiveAgentManifest, issues: ManifestIssue[]): void {
-  if (manifest.memory.mode === 'off' && manifest.memory.sources.some((source) => source !== 'session')) {
-    addIssue(issues, 'warning', 'memory.sources', 'memory sources are configured while memory mode is off');
-  }
-  if (manifest.memory.mode === 'auto') {
-    const privacy = manifest.memory.privacy;
-    if (!privacy || privacy.sensitiveWritePolicy === 'allow') {
-      addIssue(issues, 'warning', 'memory.privacy', 'auto memory writes should configure sensitiveWritePolicy');
-    }
-  }
-  if (manifest.memory.mode !== 'off') {
-    const policy = manifest.memory.writePolicy ?? {};
-    const hasWritePolicy = Object.values(policy).some(Boolean);
-    if (!hasWritePolicy && manifest.memory.mode !== 'readOnly') {
-      addIssue(issues, 'warning', 'memory.writePolicy', 'write-capable memory mode has no write policy');
-    }
-  }
-}
-
 function validateWorkflows(manifest: EffectiveAgentManifest, issues: ManifestIssue[], catalogs: ManifestCatalogs): void {
   const workflows = toSet(catalogs.workflows);
   const check = (path: string, value: string | undefined) => {
@@ -149,7 +130,6 @@ export function validateAgentManifest(params: ValidateManifestParams): ValidateM
   validateModels(manifest, issues);
   validateTools(manifest, issues, params.catalogs ?? {});
   validateSkills(manifest, issues, params.catalogs ?? {});
-  validateMemory(manifest, issues);
   validateWorkflows(manifest, issues, params.catalogs ?? {});
 
   return {

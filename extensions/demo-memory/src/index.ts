@@ -60,16 +60,17 @@ class DemoMemoryProvider implements MemoryProvider {
 
   private records = new Map<string, MemoryRecord>();
   private sequence = 0;
-  private scope: MemoryScope = { agentId: 'main' };
+  private scope: MemoryScope = { userId: 'local-owner' };
+  private sourceAgentId = 'main';
 
   isAvailable(): boolean {
     return isAvailable();
   }
 
   initialize(_sessionId: string, options?: MemoryProviderInitOptions): void {
-    const agentId = typeof options?.config?.agentId === 'string' ? options.config.agentId : 'main';
+    this.sourceAgentId = typeof options?.config?.agentId === 'string' ? options.config.agentId : 'main';
     const workspaceId = typeof options?.workspace === 'string' ? options.workspace : undefined;
-    this.scope = workspaceId ? { agentId, workspaceId } : { agentId };
+    this.scope = workspaceId ? { userId: 'local-owner', workspaceId } : { userId: 'local-owner' };
   }
 
   async write(request: MemoryWriteRequest): Promise<MemoryWriteResult> {
@@ -134,6 +135,7 @@ class DemoMemoryProvider implements MemoryProvider {
       id,
       kind: request.kind,
       scope: { ...this.scope, ...request.scope },
+      provenance: { sourceAgentId: this.sourceAgentId },
       content: request.content,
       source: request.source ?? { provider: this.id },
       explicitness: request.explicitness ?? 'inferred',

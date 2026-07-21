@@ -136,7 +136,7 @@ export const SidebarColumn = memo(function SidebarColumn() {
           mobileNavOpen ? 'max-md:translate-x-0' : 'max-md:-translate-x-full',
           // Tablet+: in-flow rail
           'md:relative md:h-full md:translate-x-0',
-          sidebarCollapsed ? 'md:w-0 md:min-w-0 md:max-w-0 md:overflow-hidden md:border-0' : 'app-sidebar-expanded-width',
+          sidebarCollapsed ? 'md:w-0 md:overflow-hidden md:border-0' : 'app-sidebar-expanded-width',
         )}
         aria-hidden={sidebarCollapsed && !mobileNavOpen ? true : undefined}
         style={

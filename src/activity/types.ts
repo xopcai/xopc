@@ -41,6 +41,11 @@ export type ActivityEventType =
   | 'workflow_run.completed'
   | 'automation.run_started'
   | 'automation.run_completed'
+  | 'work_discovery.started'
+  | 'work_discovery.completed'
+  | 'work_discovery.failed'
+  | 'work_discovery.canceled'
+  | 'work_discovery.suggestion_selected'
   | (string & {});
 
 export interface ActivityPrincipal {

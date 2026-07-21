@@ -4,8 +4,13 @@ import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
 vi.mock('../../../storage/sqlite/index.js', () => ({
   appendMemoryTraceEvent: vi.fn(),
+  consumeMemoryReferenceConsent: vi.fn().mockReturnValue(false),
+  ensureMemoryReferenceConsentRequest: vi.fn().mockImplementation(({ recordId, purpose }) => ({ id: `consent:${recordId}`, recordId, purpose })),
+  hasMemoryReferenceConsent: vi.fn().mockReturnValue(false),
+  hasUnresolvedMemoryConflict: vi.fn().mockReturnValue(false),
 }));
 
+import { consumeMemoryReferenceConsent, hasMemoryReferenceConsent, hasUnresolvedMemoryConflict } from '../../../storage/sqlite/index.js';
 import { UserContextPlanner } from '../context/planner.js';
 import type { MemoryManager } from '../manager.js';
 import type { MemoryRecord, MemorySearchResult } from '../types.js';
@@ -71,7 +76,7 @@ describe('UserContextPlanner', () => {
     expect(String(plan.modelMessage.content)).toContain('Prefer concise answers.');
     expect(String(plan.modelMessage.content)).not.toContain('Token value');
     expect(memoryManager.search).toHaveBeenCalledWith(expect.objectContaining({
-      scope: { agentId: 'research', sessionKey: 'session-1' },
+      scope: { userId: 'local-owner', sessionKey: 'session-1' },
     }));
   });
 
@@ -120,5 +125,71 @@ describe('UserContextPlanner', () => {
 
     expect(plan.items).toHaveLength(0);
     expect(plan.rejected).toContainEqual({ recordId: 'due', reason: 'needs_review' });
+  });
+
+  it('does not inject a disabled playbook rule', async () => {
+    const disabled = result({ id: 'disabled', tags: ['playbook:disabled'] });
+    const memoryManager = {
+      search: vi.fn().mockResolvedValue([disabled]),
+      list: vi.fn().mockResolvedValue([]),
+    } as unknown as MemoryManager;
+    const plan = await new UserContextPlanner().plan({
+      memoryManager,
+      agentId: 'main',
+      sessionKey: 'session-1',
+      query: 'Draft a response.',
+      userMessage: { role: 'user', content: 'Draft a response.' } as AgentMessage,
+    });
+    expect(plan.items).toHaveLength(0);
+    expect(plan.rejected).toContainEqual({ recordId: 'disabled', reason: 'disabled' });
+  });
+
+  it('requests explicit consent and injects the record only after a grant', async () => {
+    const guarded = result({ id: 'guarded', disclosurePolicy: 'ask_before_reference' });
+    const memoryManager = {
+      search: vi.fn().mockResolvedValue([guarded]),
+      list: vi.fn().mockResolvedValue([]),
+    } as unknown as MemoryManager;
+    const planner = new UserContextPlanner();
+    const input = {
+      memoryManager,
+      agentId: 'main',
+      sessionKey: 'session-1',
+      query: 'How should you answer?',
+      userMessage: { role: 'user', content: 'How should you answer?' } as AgentMessage,
+    };
+
+    const pending = await planner.plan(input);
+    expect(pending.items).toHaveLength(0);
+    expect(pending.consentRequests).toEqual([{
+      id: 'consent:guarded',
+      recordId: 'guarded',
+      statement: 'Prefer concise answers.',
+      purpose: 'How should you answer?',
+    }]);
+    expect(String(pending.modelMessage.content)).not.toContain('Prefer concise answers.');
+
+    vi.mocked(hasMemoryReferenceConsent).mockReturnValueOnce(true);
+    vi.mocked(consumeMemoryReferenceConsent).mockReturnValueOnce(true);
+    const granted = await planner.plan(input);
+    expect(granted.items.map((item) => item.recordId)).toEqual(['guarded']);
+    expect(granted.consentRequests).toHaveLength(0);
+  });
+
+  it('never injects an unresolved conflict', async () => {
+    vi.mocked(hasUnresolvedMemoryConflict).mockReturnValueOnce(true);
+    const memoryManager = {
+      search: vi.fn().mockResolvedValue([result({ id: 'conflicted', conflictGroupId: 'group-1' })]),
+      list: vi.fn().mockResolvedValue([]),
+    } as unknown as MemoryManager;
+    const plan = await new UserContextPlanner().plan({
+      memoryManager,
+      agentId: 'main',
+      sessionKey: 'session-1',
+      query: 'Help me decide.',
+      userMessage: { role: 'user', content: 'Help me decide.' } as AgentMessage,
+    });
+    expect(plan.items).toHaveLength(0);
+    expect(plan.rejected).toContainEqual({ recordId: 'conflicted', reason: 'conflict' });
   });
 });
