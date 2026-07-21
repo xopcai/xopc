@@ -15,6 +15,18 @@ export function buildAutomationActionHits(
   return [
     {
       kind: 'action',
+      id: 'action:local-app:create',
+      title: a.createLocalApp,
+      subtitle: a.createLocalAppSubtitle,
+      groupLabel,
+      keywords: ['app', 'local app', 'create app', 'tool', 'workshop', 'coder', '应用', '创建应用', '工具', '工坊'],
+      run: () => {
+        closePalette();
+        navigate('/local-apps/new');
+      },
+    },
+    {
+      kind: 'action',
       id: 'action:automation:create',
       title: 'Create automation',
       subtitle: 'Open automations to create a trigger and action',

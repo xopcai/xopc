@@ -323,7 +323,7 @@ export function useChatSessionLoad(deps: {
   );
 
   const createNewSession = useCallback(
-    async (opts?: { forceNew?: boolean }) => {
+    async (opts?: { forceNew?: boolean; projectId?: string | null }) => {
       dismissClarifyOnSessionLoad();
       detachForNewConversation();
       historyBeforeCursorRef.current = null;
@@ -335,6 +335,7 @@ export function useChatSessionLoad(deps: {
         currentSessionKey: sessionKey,
         routeSessionKey: sessionKey,
         forceNew: opts?.forceNew,
+        projectId: opts?.projectId,
         navigateToSession,
         onOpened: (key) => {
           store().setCommittedSnapshot(key, { messages: [], hasMore: false, name: null });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  BUILTIN_NAV_DEFS,
   reconcileNavOrder,
   VISIBLE_NAV_CAP,
   VISIBLE_NAV_WHEN_OVERFLOW,
@@ -12,6 +13,13 @@ function item(id: string): NavItem {
 }
 
 describe('reconcileNavOrder', () => {
+  it('offers the app workshop as a built-in navigation destination', () => {
+    expect(BUILTIN_NAV_DEFS).toContainEqual(expect.objectContaining({
+      id: 'builtin:localApps',
+      to: '/local-apps',
+    }));
+  });
+
   it('preserves the available order when nothing is stored', () => {
     const available = [item('builtin:projects'), item('builtin:profile')];
     const out = reconcileNavOrder(available, []);

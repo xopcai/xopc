@@ -1,4 +1,5 @@
 import {
+  ChevronRight,
   ClipboardCheck,
   Code2,
   FileBarChart,
@@ -12,18 +13,25 @@ import {
   StickyNote,
   Target,
 } from 'lucide-react';
+import * as Popover from '@radix-ui/react-popover';
 import { memo, useEffect, useId, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { BrandLogo } from '@/components/shell/brand-logo';
 import { Skeleton } from '@/components/ui/skeleton';
+import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import type {
   WelcomeSpotlightModel,
   WelcomeSuggestionSelection,
 } from '@/features/chat/welcome/welcome-suggestions';
+import {
+  resolveWelcomeProjectEntryMode,
+  type WorkDiscoveryOnboardingState,
+} from '@/features/chat/welcome/welcome-project-entry';
+import { fetchProjects, type Project } from '@/features/projects/api';
+import { fetchWorkDiscoveryOnboarding } from '@/features/work-discovery/api';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
-import { fetchWorkDiscoveryOnboarding } from '@/features/work-discovery/api';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -52,27 +60,46 @@ export const ChatWelcomeSpotlight = memo(function ChatWelcomeSpotlight({
   onPickPrompt,
   onRetryContext,
   onRefreshExploration,
+  onSelectProject,
 }: {
   spotlight: WelcomeSpotlightModel;
   onPickPrompt: (selection: WelcomeSuggestionSelection) => void;
   onRetryContext?: () => void;
   onRefreshExploration?: () => void;
+  onSelectProject?: (projectId: string) => Promise<void> | void;
 }) {
   const s = spotlight;
   const panelId = useId();
   const [selectedCategoryIndex, setSelectedCategoryIndex] = useState<number | null>(null);
-  const [workDiscoveryEnabled, setWorkDiscoveryEnabled] = useState(false);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [workDiscovery, setWorkDiscovery] = useState<WorkDiscoveryOnboardingState | null>(null);
+  const [projectEntryLoaded, setProjectEntryLoaded] = useState(s.contextKind !== 'empty');
+  const [projectPickerOpen, setProjectPickerOpen] = useState(false);
+  const [selectingProjectId, setSelectingProjectId] = useState<string | null>(null);
   const navigate = useNavigate();
   const language = useLocaleStore((state) => state.language);
   const workDiscoveryCopy = messages(language).onboarding.workDiscovery;
 
   useEffect(() => {
+    if (s.contextKind !== 'empty') {
+      setProjectEntryLoaded(true);
+      setProjects([]);
+      setWorkDiscovery(null);
+      return undefined;
+    }
     let cancelled = false;
-    void fetchWorkDiscoveryOnboarding().then(({ enabled }) => {
-      if (!cancelled) setWorkDiscoveryEnabled(enabled);
-    }).catch(() => {});
+    setProjectEntryLoaded(false);
+    void Promise.allSettled([
+      fetchProjects({ status: 'active', sortBy: 'updatedAt', sortOrder: 'desc', limit: 5 }),
+      fetchWorkDiscoveryOnboarding(),
+    ]).then(([projectResult, discoveryResult]) => {
+      if (cancelled) return;
+      setProjects(projectResult.status === 'fulfilled' ? projectResult.value.items : []);
+      setWorkDiscovery(discoveryResult.status === 'fulfilled' ? discoveryResult.value : null);
+      setProjectEntryLoaded(true);
+    });
     return () => { cancelled = true; };
-  }, []);
+  }, [s.contextKind]);
 
   const selectedCategory = useMemo(
     () => (selectedCategoryIndex == null ? undefined : s.categories[selectedCategoryIndex]),
@@ -83,6 +110,29 @@ export const ChatWelcomeSpotlight = memo(function ChatWelcomeSpotlight({
     onPickPrompt({ ...selection, contextKind: s.contextKind });
   };
   const canRefreshExploration = Boolean(onRefreshExploration);
+  const projectEntryMode = resolveWelcomeProjectEntryMode({
+    contextKind: s.contextKind,
+    projectCount: projects.length,
+    workDiscovery,
+  });
+  const selectProject = async (projectId: string) => {
+    if (!onSelectProject || selectingProjectId) return;
+    setSelectingProjectId(projectId);
+    try {
+      await onSelectProject(projectId);
+      setProjectPickerOpen(false);
+    } catch {
+      showComposerNotification('error', workDiscoveryCopy.projectStartFailed);
+    } finally {
+      setSelectingProjectId(null);
+    }
+  };
+  const projectEntryButtonClass = cn(
+    'mt-1 inline-flex min-h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium text-accent-fg hover:bg-accent-soft',
+    interaction.transition,
+    interaction.press,
+    interaction.focusRingBase,
+  );
 
   return (
     <div className="flex flex-col gap-3.5 pb-2 pt-6 sm:gap-4 sm:pb-3 sm:pt-8 [@media(max-height:800px)]:pt-3 sm:[@media(max-height:800px)]:pt-4">
@@ -119,19 +169,86 @@ export const ChatWelcomeSpotlight = memo(function ChatWelcomeSpotlight({
             </span>
           ) : null}
         </div>
-        {workDiscoveryEnabled ? (
+        {!projectEntryLoaded && s.contextKind === 'empty' ? (
+          <Skeleton className="mt-1 h-9 w-36 rounded-lg" />
+        ) : projectEntryMode === 'choose_project' && onSelectProject ? (
+          <Popover.Root open={projectPickerOpen} onOpenChange={setProjectPickerOpen}>
+            <Popover.Trigger asChild>
+              <button type="button" className={projectEntryButtonClass}>
+                <FolderOpen className="size-4" strokeWidth={1.75} aria-hidden />
+                {workDiscoveryCopy.selectProject}
+              </button>
+            </Popover.Trigger>
+            <Popover.Portal>
+              <Popover.Content
+                align="center"
+                side="bottom"
+                sideOffset={6}
+                collisionPadding={12}
+                className="z-50 w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-edge bg-surface-panel p-1.5 text-left shadow-popover outline-none"
+              >
+                <p className="px-2.5 pb-1.5 pt-1 text-xs font-medium text-fg-muted">
+                  {workDiscoveryCopy.recentProjects}
+                </p>
+                {projects.map((project) => (
+                  <button
+                    key={project.id}
+                    type="button"
+                    disabled={selectingProjectId !== null}
+                    onClick={() => void selectProject(project.id)}
+                    className={cn(
+                      'flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left hover:bg-surface-hover disabled:cursor-wait disabled:opacity-60',
+                      interaction.transition,
+                      interaction.focusRingPanel,
+                    )}
+                  >
+                    <FolderOpen className="size-4 shrink-0 text-fg-muted" strokeWidth={1.75} aria-hidden />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-fg">{project.name}</span>
+                      {project.description ? (
+                        <span className="mt-0.5 block truncate text-xs text-fg-muted">{project.description}</span>
+                      ) : null}
+                    </span>
+                    <ChevronRight className="size-4 shrink-0 text-fg-subtle" strokeWidth={1.75} aria-hidden />
+                  </button>
+                ))}
+                {workDiscovery?.enabled ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProjectPickerOpen(false);
+                      navigate('/onboarding/workspace?new=1');
+                    }}
+                    className={cn(
+                      'mt-1 flex min-h-10 w-full items-center gap-2.5 border-t border-edge-subtle px-2.5 pt-2 text-left text-sm font-medium text-fg-muted hover:text-fg',
+                      interaction.transition,
+                      interaction.focusRingPanel,
+                    )}
+                  >
+                    <FolderOpen className="size-4 shrink-0" strokeWidth={1.75} aria-hidden />
+                    {workDiscoveryCopy.chooseAnotherFolder}
+                  </button>
+                ) : null}
+              </Popover.Content>
+            </Popover.Portal>
+          </Popover.Root>
+        ) : projectEntryMode === 'discover_folder' ? (
           <button
             type="button"
             onClick={() => navigate('/onboarding/workspace?new=1')}
-            className={cn(
-              'mt-1 inline-flex min-h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium text-accent-fg hover:bg-accent-soft',
-              interaction.transition,
-              interaction.press,
-              interaction.focusRingBase,
-            )}
+            className={projectEntryButtonClass}
           >
             <FolderOpen className="size-4" strokeWidth={1.75} aria-hidden />
-            {workDiscoveryCopy.title}
+            {workDiscoveryCopy.chooseWorkFolder}
+          </button>
+        ) : projectEntryMode === 'resume_discovery' ? (
+          <button
+            type="button"
+            onClick={() => navigate('/onboarding/workspace')}
+            className={projectEntryButtonClass}
+          >
+            <RefreshCw className="size-4" strokeWidth={1.75} aria-hidden />
+            {workDiscoveryCopy.resumeAnalysis}
           </button>
         ) : null}
       </div>

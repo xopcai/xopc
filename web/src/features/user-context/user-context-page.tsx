@@ -613,9 +613,7 @@ export function UserContextPage() {
                 {!profile.callName ? <Button type="button" variant="secondary" onClick={openProfileEditor}>{t.completeProfile}<ChevronRight className="size-4" aria-hidden /></Button> : null}
               </div>
             </section>
-          ) : (
-            <section className="rounded-2xl border border-success/20 bg-success-soft p-4 text-sm text-fg"><Check className="mr-2 inline size-4 text-success" aria-hidden />{t.upToDate}</section>
-          )}
+          ) : null}
 
           <section className="rounded-2xl border border-accent/15 bg-gradient-to-br from-accent-soft/55 via-surface-panel to-surface-panel p-5">
             <h2 className="text-lg font-semibold tracking-tight text-fg">{t.heroTitle}</h2>

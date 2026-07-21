@@ -9,4 +9,11 @@ describe('buildRouteSeeds', () => {
     expect(browser?.path).toBe('/settings/agent-browser');
     expect(browser?.keywords).toContain('browser');
   });
+
+  it('offers the app workshop as a searchable route', () => {
+    const seeds = buildRouteSeeds('en');
+    const workshop = seeds.find((s) => s.id === 'route:local-apps');
+    expect(workshop?.path).toBe('/local-apps');
+    expect(workshop?.keywords).toContain('workshop');
+  });
 });

@@ -24,6 +24,7 @@ export const MessageList = memo(function MessageList({
   welcomeSpotlight,
   onRetryWelcomeContext,
   onRefreshWelcomeExploration,
+  onSelectWelcomeProject,
   welcomeOverlay,
   onDeleteRound,
   onRetryUserMessageRound,
@@ -45,6 +46,7 @@ export const MessageList = memo(function MessageList({
   welcomeSpotlight?: WelcomeSpotlightModel;
   onRetryWelcomeContext?: () => void;
   onRefreshWelcomeExploration?: () => void;
+  onSelectWelcomeProject?: (projectId: string) => Promise<void> | void;
   welcomeOverlay?: ReactNode;
   onDeleteRound?: (messageIndex: number) => void;
   onRetryUserMessageRound?: (messageIndex: number) => void;
@@ -71,6 +73,7 @@ export const MessageList = memo(function MessageList({
             onPickPrompt={onPickWelcomePrompt}
             onRetryContext={onRetryWelcomeContext}
             onRefreshExploration={onRefreshWelcomeExploration}
+            onSelectProject={onSelectWelcomeProject}
           />
         </div>
       );

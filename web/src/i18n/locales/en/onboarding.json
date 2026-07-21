@@ -26,6 +26,12 @@
     "providerRecommended": "Recommended",
     "workDiscovery": {
       "title": "Connect your recent work",
+      "selectProject": "Choose a project",
+      "recentProjects": "Recent projects",
+      "chooseWorkFolder": "Choose a work folder",
+      "chooseAnotherFolder": "Choose another folder",
+      "resumeAnalysis": "View analysis progress",
+      "projectStartFailed": "Could not open a conversation in this project.",
       "subtitle": "Choose a local folder. xopc will read it without making changes, understand the current state, and suggest a few ways to keep moving. This usually takes less than a minute.",
       "chooseFolder": "Choose folder",
       "skip": "Skip for now",
