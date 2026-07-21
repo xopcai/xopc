@@ -187,7 +187,7 @@ Default summary:
 
 If the selected model is remote:
 
-> Relevant text excerpts may be sent to {{providerName}} for analysis. Raw credentials and excluded files are not included.
+> Relevant text excerpts may be sent to &#123;&#123;providerName&#125;&#125; for analysis. Raw credentials and excluded files are not included.
 
 Actions:
 
@@ -216,7 +216,7 @@ If the user navigates away, analysis continues in the gateway. A small shell-lev
 The result begins with a short, editable interpretation:
 
 > **What I found**  
-> {{two or three sentence project and current-state summary}}
+> &#123;&#123;two or three sentence project and current-state summary&#125;&#125;
 
 Then show exactly three next-step rows. Do not present a dashboard or identical card grid. Each row contains:
 
@@ -748,7 +748,7 @@ Folder selection grants access only to that canonical root for this run. It does
 
 ### Remote gateway boundary
 
-When the Web UI connects to a remote gateway, folder selection and analysis refer to the gateway machine, not the browser device. The UI must say **Choose a folder on {{gatewayName}}** when the gateway is known to be remote.
+When the Web UI connects to a remote gateway, folder selection and analysis refer to the gateway machine, not the browser device. The UI must say **Choose a folder on &#123;&#123;gatewayName&#125;&#125;** when the gateway is known to be remote.
 
 Pure cloud Web deployments cannot read an arbitrary local folder on the browser device through this API. A future upload or client-side indexing flow would be a separate design with different privacy and lifecycle semantics.
 

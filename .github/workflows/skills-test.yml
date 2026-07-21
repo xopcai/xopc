@@ -3,11 +3,19 @@ name: Skills Test
 on:
   push:
     paths:
+      - '.github/workflows/skills-test.yml'
+      - '**/package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
       - 'skills/**'
       - 'src/agent/skills/**'
       - 'src/cli/commands/skills*.ts'
   pull_request:
     paths:
+      - '.github/workflows/skills-test.yml'
+      - '**/package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
       - 'skills/**'
       - 'src/agent/skills/**'
       - 'src/cli/commands/skills*.ts'
