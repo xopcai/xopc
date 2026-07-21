@@ -186,7 +186,7 @@ Agent configuration is manifest-first. The required runtime entries live in **`a
 
 #### `agents.list` entries
 
-Each entry must include **`id`**, **`identity`**, **`responsibilities`**, **`workspace`**, **`tools`**, **`skills`**, **`memory`**, **`workflows`**, and **`boundaries`**. Add **`models`** directly to the agent when the agent owns its model roles. Profile Markdown still lives under **`agents/<id>/profile/`** for long-form persona/context files, but the structured manifest is the source of truth for runtime policy.
+Each entry must include **`id`**, **`identity`**, **`responsibilities`**, **`workspace`**, **`tools`**, **`skills`**, **`workflows`**, and **`boundaries`**. Add **`models`** directly to the agent when the agent owns its model roles. Profile Markdown still lives under **`agents/<id>/profile/`** for long-form persona/context files, but the structured manifest is the source of truth for runtime policy. User understanding and memory are configured once in top-level **`userContext`**.
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -745,6 +745,7 @@ xopc supports environment variables for sensitive data:
 | `XOPC_LOG_FILE` | Enable file output (true/false) |
 | `XOPC_LOG_RETENTION_DAYS` | Days to retain log files |
 | `XOPC_PRETTY_LOGS` | Pretty print logs for development |
+| `XOPC_LOG_LLM_PAYLOAD` | Include the complete system prompt, messages, and tools in debug logs (sensitive; default false) |
 
 Environment variables take priority over config file values.
 

@@ -2,7 +2,13 @@ import { randomUUID } from 'node:crypto';
 
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
-import { appendMemoryTraceEvent } from '../../../storage/sqlite/index.js';
+import {
+  appendMemoryTraceEvent,
+  consumeMemoryReferenceConsent,
+  ensureMemoryReferenceConsentRequest,
+  hasMemoryReferenceConsent,
+  hasUnresolvedMemoryConflict,
+} from '../../../storage/sqlite/index.js';
 import { createLogger } from '../../../utils/logger.js';
 import { readAgentMessageContent } from '../agent-message-access.js';
 import { buildUserContextBlock } from '../context-fence.js';
@@ -41,14 +47,16 @@ function sectionFor(record: MemoryRecord): PlannedUserContextItem['section'] {
   return 'task';
 }
 
-function rejectReason(record: MemoryRecord, now: number): UserContextRejectionReason | undefined {
+function rejectReason(record: MemoryRecord, now: number, hasReferenceConsent: boolean): UserContextRejectionReason | undefined {
+  if (record.tags?.includes('playbook:disabled')) return 'disabled';
+  if (record.conflictGroupId && hasUnresolvedMemoryConflict(record.conflictGroupId)) return 'conflict';
   if (record.validFrom && Date.parse(record.validFrom) > now) return 'not_yet_valid';
   if (
     (record.validTo && Date.parse(record.validTo) < now) ||
     (record.expiresAt && Date.parse(record.expiresAt) < now)
   ) return 'expired';
   if (record.sensitivity === 'secret' || record.sensitivity === 'regulated') return 'sensitive';
-  if (record.disclosurePolicy === 'ask_before_reference') return 'requires_consent';
+  if (record.disclosurePolicy === 'ask_before_reference' && !hasReferenceConsent) return 'requires_consent';
   if (record.status === 'needs_review' || record.status === 'stale' || resolveMemoryStability(record, now).reviewDue) return 'needs_review';
   return undefined;
 }
@@ -65,15 +73,13 @@ function scoreResult(result: MemorySearchResult, now: number): number {
 }
 
 function citationFor(result: MemorySearchResult, requesterAgentId: string): string {
+  void requesterAgentId;
   const base = result.citation.path ?? `${result.citation.providerId}:${result.citation.recordId}`;
-  const ownerPrefix = result.record.scope.agentId !== requesterAgentId
-    ? `shared-from-agent:${result.record.scope.agentId} `
-    : '';
-  if (result.citation.lineStart == null) return `${ownerPrefix}${base}`;
+  if (result.citation.lineStart == null) return base;
   const end = result.citation.lineEnd && result.citation.lineEnd !== result.citation.lineStart
     ? `-L${result.citation.lineEnd}`
     : '';
-  return `${ownerPrefix}${base}#L${result.citation.lineStart}${end}`;
+  return `${base}#L${result.citation.lineStart}${end}`;
 }
 
 function evidenceLabel(item: PlannedUserContextItem): string {
@@ -112,10 +118,10 @@ export class UserContextPlanner {
     const traceId = randomUUID();
     const query = params.query.trim();
     if (!query) {
-      return { traceId, modelMessage: params.userMessage, items: [], rejected: [], estimatedTokens: 0 };
+      return { traceId, modelMessage: params.userMessage, items: [], rejected: [], consentRequests: [], estimatedTokens: 0 };
     }
     const started = Date.now();
-    const scope = { agentId: params.agentId, sessionKey: params.sessionKey };
+    const scope = { userId: 'local-owner', sessionKey: params.sessionKey };
     const [taskResults, baselineLists] = await Promise.all([
       params.memoryManager.search({
         query,
@@ -149,6 +155,7 @@ export class UserContextPlanner {
     const now = Date.now();
     const excluded = new Set(params.excludedRecordIds ?? []);
     const rejected: UserContextPlan['rejected'] = [];
+    const consentRequests: UserContextPlan['consentRequests'] = [];
     const ranked = results
       .filter((result) => !excluded.has(result.record.id))
       .map((result) => ({ result, score: scoreResult(result, now) }))
@@ -158,14 +165,38 @@ export class UserContextPlanner {
     const items: PlannedUserContextItem[] = [];
     let usedChars = 0;
     for (const { result, score } of ranked) {
-      const reason = rejectReason(result.record, now) ?? (score < 0.25 ? 'low_score' : undefined);
+      const needsConsent = result.record.disclosurePolicy === 'ask_before_reference'
+        && result.record.sensitivity !== 'secret'
+        && result.record.sensitivity !== 'regulated';
+      const hasReferenceConsent = needsConsent
+        ? hasMemoryReferenceConsent(result.record.id, params.sessionKey)
+        : false;
+      const reason = rejectReason(result.record, now, hasReferenceConsent) ?? (score < 0.25 ? 'low_score' : undefined);
       if (reason) {
         rejected.push({ recordId: result.record.id, reason });
+        if (reason === 'requires_consent') {
+          const request = ensureMemoryReferenceConsentRequest({
+            recordId: result.record.id,
+            sessionKey: params.sessionKey,
+            purpose: query,
+          });
+          consentRequests.push({ id: request.id, recordId: request.recordId, statement: result.record.content, purpose: request.purpose });
+        }
         continue;
       }
       const content = result.snippet.trim();
       if (usedChars + content.length > MAX_CONTEXT_CHARS) {
         rejected.push({ recordId: result.record.id, reason: 'budget' });
+        continue;
+      }
+      if (needsConsent && !consumeMemoryReferenceConsent(result.record.id, params.sessionKey)) {
+        rejected.push({ recordId: result.record.id, reason: 'requires_consent' });
+        const request = ensureMemoryReferenceConsentRequest({
+          recordId: result.record.id,
+          sessionKey: params.sessionKey,
+          purpose: query,
+        });
+        consentRequests.push({ id: request.id, recordId: request.recordId, statement: result.record.content, purpose: request.purpose });
         continue;
       }
       usedChars += content.length;
@@ -186,7 +217,10 @@ export class UserContextPlanner {
         sections.push(`${title}:\n${sectionItems.map((item) => `- ${item.content}\n  Evidence: ${evidenceLabel(item)}`).join('\n')}`);
       }
     }
-    const block = buildUserContextBlock(sections.join('\n\n'));
+    const consentNotice = consentRequests.length > 0
+      ? 'A relevant saved understanding requires the user’s explicit permission before it can be referenced. Do not infer or reveal its contents. Briefly ask the user to approve the pending item in You > Understanding, then continue without it.'
+      : '';
+    const block = [buildUserContextBlock(sections.join('\n\n')), consentNotice].filter(Boolean).join('\n\n');
     try {
       appendMemoryTraceEvent({
         traceId,
@@ -216,6 +250,7 @@ export class UserContextPlanner {
       modelMessage: prependContext(params.userMessage, block),
       items,
       rejected,
+      consentRequests,
       estimatedTokens: Math.ceil(block.length / 4),
     };
   }

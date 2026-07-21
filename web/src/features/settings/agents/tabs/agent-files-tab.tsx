@@ -8,6 +8,7 @@ import { MarkdownView } from '@/components/markdown/markdown-view';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import type { AgentsSettingsMessages } from '@/i18n/messages';
+import { SettingsPanelSkeleton } from '@/features/settings/settings-loading-skeleton';
 import { useThemeStore } from '@/stores/theme-store';
 
 import { agentsSettingsInputClass } from '../utils';
@@ -55,7 +56,7 @@ export function AgentFilesTab(props: {
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
       <p className="shrink-0 text-sm text-fg-muted">{a.filesHint}</p>
       {filesLoading ? (
-        <p className="shrink-0 text-sm text-fg-muted">{a.filesLoading}</p>
+        <SettingsPanelSkeleton rows={3} />
       ) : files ? (
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
           <PageTabs

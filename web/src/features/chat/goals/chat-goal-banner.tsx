@@ -20,7 +20,7 @@ import type { StoredLanguage } from '@/lib/storage';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useAsyncResource } from '@/lib/use-async-resource';
 import { cn } from '@/lib/cn';
-import { showActivity } from '@/stores/activity-center-store';
+import { showActivity } from '@/stores/activity-store';
 
 import { GoalActions } from './chat-goal-banner-actions';
 import { GoalChecklist } from './chat-goal-banner-checklist';

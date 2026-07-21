@@ -1,7 +1,7 @@
 import type { Hono } from 'hono';
 
 import { AgentModelsSchema, type Config } from '../../../config/schema.js';
-import { MemoryPolicySchema, ToolPolicySetSchema } from '../../../agent-manifest/schema.js';
+import { ToolPolicySetSchema } from '../../../agent-manifest/schema.js';
 import { getVoiceModelsConfig } from '../../../config/voice.js';
 import { normalizeAgentId } from '../../../agent/agent-scope.js';
 import {
@@ -305,13 +305,8 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
     if (isParseError(modelsPatch)) {
       return c.json({ ok: false, error: { message: modelsPatch.error } }, 400);
     }
-    let memoryPatch: Config['agents']['list'][number]['memory'] | undefined;
     if (Object.hasOwn(body, 'memory')) {
-      const parsedMemory = MemoryPolicySchema.safeParse(body.memory);
-      if (!parsedMemory.success) {
-        return c.json({ ok: false, error: { message: `memory ${parsedMemory.error.issues[0]?.message ?? 'is invalid'}` } }, 400);
-      }
-      memoryPatch = parsedMemory.data;
+      return c.json({ ok: false, error: { message: 'Agent memory configuration is not supported; use userContext' } }, 400);
     }
 
     const prep = prepareUpdateAgent(service.currentConfig as Config, id, {
@@ -321,7 +316,6 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
       setDefault: body.setDefault === true,
       ...(skillsPatch !== undefined ? { skills: skillsPatch } : {}),
       ...(toolsPatch !== undefined ? { tools: toolsPatch } : {}),
-      ...(memoryPatch !== undefined ? { memory: memoryPatch } : {}),
     });
     if (prep.ok === false) {
       return c.json({ ok: false, error: { message: prep.error } }, prep.status ?? 400);

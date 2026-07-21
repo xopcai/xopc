@@ -97,6 +97,11 @@ function createMockModelManager() {
 
 function configWithCompaction(enabled: boolean) {
   return {
+    userContext: {
+      memory: {
+        retention: { compaction: enabled },
+      },
+    },
     agents: {
       default: 'main',
       defaultPreset: 'default',
@@ -115,11 +120,6 @@ function configWithCompaction(enabled: boolean) {
           workspace: { root: '/tmp/workspace' },
           tools: { builtin: {} },
           skills: { mode: 'all' },
-          memory: {
-            mode: 'confirmWrite',
-            sources: ['session'],
-            retention: { compaction: enabled },
-          },
           workflows: {},
           boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
         },

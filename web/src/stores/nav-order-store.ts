@@ -27,6 +27,7 @@ export type MovePosition = 'before' | 'after';
 export type NavOrderState = {
   order: string[];
   move: (fromId: string, toId: string, position: MovePosition) => void;
+  moveToFront: (id: string) => void;
   moveToEnd: (id: string) => void;
   setOrder: (order: string[]) => void;
 };
@@ -72,6 +73,11 @@ export const useNavOrderStore = create<NavOrderState>((set, get) => ({
   move: (fromId, toId, position) => {
     const next = applyMove(get().order, fromId, toId, position, new Set(get().order));
     if (next === get().order) return;
+    set({ order: next });
+    queueMicrotask(() => writeOrder(next));
+  },
+  moveToFront: (id) => {
+    const next = [id, ...get().order.filter((existing) => existing !== id)];
     set({ order: next });
     queueMicrotask(() => writeOrder(next));
   },

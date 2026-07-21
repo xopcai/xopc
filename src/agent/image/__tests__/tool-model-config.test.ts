@@ -50,7 +50,6 @@ function baseConfig(models: NonNullable<Config['agents']['capabilityPresets'][st
           workspace: { root: '/tmp' },
           tools: { builtin: {} },
           skills: { mode: 'all' },
-          memory: { mode: 'off', sources: ['session'] },
           workflows: {},
           boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
         },

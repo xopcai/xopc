@@ -36,7 +36,6 @@ describe('default capability preset migration', () => {
             workspace: { root: '~/.xopc/workspace/main' },
             tools: { builtin: {} },
             skills: { mode: 'all' },
-            memory: { mode: 'confirmWrite', sources: ['session', 'curated'], writePolicy: { curated: 'confirm' } },
             workflows: {},
             boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
           },

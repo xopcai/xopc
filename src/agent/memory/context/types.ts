@@ -6,6 +6,8 @@ export type UserContextRejectionReason =
   | 'sensitive'
   | 'requires_consent'
   | 'needs_review'
+  | 'disabled'
+  | 'conflict'
   | 'low_score'
   | 'budget';
 
@@ -24,5 +26,6 @@ export interface UserContextPlan {
   modelMessage: AgentMessage;
   items: PlannedUserContextItem[];
   rejected: Array<{ recordId: string; reason: UserContextRejectionReason }>;
+  consentRequests: Array<{ id: string; recordId: string; statement: string; purpose: string }>;
   estimatedTokens: number;
 }

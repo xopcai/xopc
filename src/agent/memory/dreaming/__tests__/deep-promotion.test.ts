@@ -77,7 +77,7 @@ describe('runDreamingDeepPromotion', () => {
     const agentMemory = readFileSync(join(dreamingRoot, 'MEMORY.md'), 'utf-8');
     expect(agentMemory).toContain('Remember the launch checklist.');
     expect(existsSync(join(workspaceDir, 'MEMORY.md'))).toBe(false);
-    expect(listMemoryRecords({ agentId: 'research', status: 'active' })).toEqual([
+    expect(listMemoryRecords({ status: 'active' })).toEqual([
       expect.objectContaining({
         kind: 'project_context',
         content: 'Remember the launch checklist.',
@@ -129,7 +129,7 @@ describe('runDreamingDeepPromotion', () => {
     });
 
     expect(result.applied).toBe(0);
-    expect(listMemoryRecords({ agentId: 'research' })).toEqual([]);
+    expect(listMemoryRecords()).toEqual([]);
     expect(existsSync(join(dreamingRoot, 'MEMORY.md'))).toBe(false);
   });
 });

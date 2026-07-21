@@ -38,7 +38,6 @@ describe('AgentToolsFactory', () => {
                 workspace: { root: '/tmp/xopc-tools-factory-test' },
                 tools: { builtin: {} },
                 skills: { mode: 'all' },
-                memory: { mode: 'confirmWrite', sources: ['session'] },
                 workflows: {},
                 boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
               },

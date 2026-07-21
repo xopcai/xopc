@@ -15,14 +15,15 @@ import { MessageList } from '@/features/chat/messages/message-list';
 import { ScrollToBottomButton } from '@/features/chat/scroll/scroll-to-bottom-button';
 import { useChatScrollViewport } from '@/features/chat/scroll/use-chat-scroll-viewport';
 import { useChatSession } from '@/features/chat/session/use-chat-session';
+import { buildComposerDraftSeed } from '@/features/chat/session/composer-handoff-params';
 import { ChatTimelinePanel } from '@/features/chat/timeline/chat-timeline-panel';
 import { ChatTimelineRail } from '@/features/chat/timeline/chat-timeline-rail';
 import { ClarifyPrompt } from '@/features/chat/composer/clarify-prompt';
+import { MemoryCaptureReceipt, MemoryConsentPrompt } from '@/features/chat/composer/memory-consent-prompt';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
-import { isValidSkillWireId } from '@/features/chat/palette/skill-wire-pattern';
 import { wireTextForSlashCommandEntry } from '@/features/chat/palette/slash-command-wire-text';
 import { WorkflowRunLinkCard } from '@/features/chat/workflow/workflow-run-link-card';
 import { WorkflowSessionBanner } from '@/features/chat/workflow/workflow-session-banner';
@@ -54,7 +55,7 @@ import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-st
 import { AgentRunErrorBanner } from '@/features/chat/messages/agent-run-error-banner';
 import { agentsAppDetailPath } from '@/features/settings/agents/agents-app-path';
 import { showToast } from '@/lib/toast';
-import { showActivity } from '@/stores/activity-center-store';
+import { showActivity } from '@/stores/activity-store';
 import { Button } from '@/components/ui/button';
 
 type PendingSourceNoteSave = {
@@ -249,20 +250,15 @@ export function ChatPage() {
       });
     };
 
-    if (skillQuery) {
-      if (!isValidSkillWireId(skillQuery)) {
-        stripRouteComposerParams();
-        return;
-      }
-      const marker = `${session.sessionKey}:skill:${skillQuery}`;
-      applyWireSeed(`/skill:${skillQuery} `, marker);
+    const composerDraftSeed = buildComposerDraftSeed(skillQuery, draftQuery);
+    if (composerDraftSeed) {
+      const marker = `${session.sessionKey}:draft:${composerDraftSeed}`;
+      applyWireSeed(composerDraftSeed, marker);
       return;
     }
 
-    const trimmedDraftQuery = draftQuery.trim();
-    if (trimmedDraftQuery) {
-      const marker = `${session.sessionKey}:draft:${trimmedDraftQuery}`;
-      applyWireSeed(trimmedDraftQuery, marker);
+    if (skillQuery) {
+      stripRouteComposerParams();
       return;
     }
 
@@ -1176,6 +1172,8 @@ export function ChatPage() {
                 compactWelcomeLayout ? 'py-2.5' : 'py-4',
               )}
             >
+              {chatSessionKey ? <MemoryCaptureReceipt sessionKey={chatSessionKey} language={language} /> : null}
+              {chatSessionKey ? <MemoryConsentPrompt sessionKey={chatSessionKey} language={language} /> : null}
               <ClarifyPrompt
                 prompt={clarify.clarifyPrompt}
                 submitting={clarify.clarifySubmitting}

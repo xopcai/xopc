@@ -39,7 +39,6 @@ function buildConfig(workspaceRoot: string): Partial<Config> {
           workspace: { root: workspaceRoot },
           tools: { builtin: {} },
           skills: { mode: 'all' },
-          memory: { mode: 'confirmWrite', sources: ['session'] },
           workflows: {},
           boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
         },

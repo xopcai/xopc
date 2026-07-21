@@ -163,13 +163,12 @@ function jsonText(value: unknown): string {
 }
 
 function emptyAdvancedJson(): PresetAdvancedJsonFields {
-  return { mcp: '', memory: '', workflows: '', boundaries: '', runtime: '', locks: '' };
+  return { mcp: '', workflows: '', boundaries: '', runtime: '', locks: '' };
 }
 
 function advancedJsonFromPreset(preset: CapabilityPresetRow | null): PresetAdvancedJsonFields {
   return {
     mcp: jsonText(preset?.tools?.mcp),
-    memory: jsonText(preset?.memory),
     workflows: jsonText(preset?.workflows),
     boundaries: jsonText(preset?.boundaries),
     runtime: jsonText(preset?.runtime),
@@ -273,7 +272,6 @@ function comparableDraft(draft: Draft, selected: CapabilityPresetRow | null) {
     },
     skills: skillsPatchFromDraft(draft),
     extends: [...draft.extendsIds].toSorted(),
-    memory: normalizedJsonText(draft.jsonFields.memory),
     workflows: normalizedJsonText(draft.jsonFields.workflows),
     boundaries: normalizedJsonText(draft.jsonFields.boundaries),
     runtime: normalizedJsonText(draft.jsonFields.runtime),
@@ -294,7 +292,6 @@ function comparablePreset(preset: CapabilityPresetRow | null) {
     },
     skills: preset.skills ?? null,
     extends: [...(preset.extends ?? [])].toSorted(),
-    memory: normalizedJsonText(jsonText(preset.memory)),
     workflows: normalizedJsonText(jsonText(preset.workflows)),
     boundaries: normalizedJsonText(jsonText(preset.boundaries)),
     runtime: normalizedJsonText(jsonText(preset.runtime)),
@@ -328,7 +325,6 @@ function policyPayloadFromDraft(
     models: modelsPatchFromDraft(draft, selected) ?? undefined,
     tools: toolsPatchFromDraft(draft) ?? undefined,
     skills: skillsPatchFromDraft(draft) ?? undefined,
-    memory: parseOptionalJson<CapabilityPresetRow['memory']>(draft.jsonFields.memory),
     workflows: parseOptionalJson<CapabilityPresetRow['workflows']>(draft.jsonFields.workflows),
     boundaries: parseOptionalJson<CapabilityPresetRow['boundaries']>(draft.jsonFields.boundaries),
     runtime: parseOptionalJson<CapabilityPresetRow['runtime']>(draft.jsonFields.runtime),
@@ -454,14 +450,12 @@ export function CapabilityPresetsSettingsPanel() {
     JSON.stringify(draftComparable.skills) !== JSON.stringify(presetComparable?.skills) ? cp.tabs.skills : '',
     JSON.stringify({
       extends: draftComparable.extends,
-      memory: draftComparable.memory,
       workflows: draftComparable.workflows,
       boundaries: draftComparable.boundaries,
       runtime: draftComparable.runtime,
       locks: draftComparable.locks,
     }) !== JSON.stringify({
       extends: presetComparable?.extends,
-      memory: presetComparable?.memory,
       workflows: presetComparable?.workflows,
       boundaries: presetComparable?.boundaries,
       runtime: presetComparable?.runtime,
@@ -591,7 +585,6 @@ export function CapabilityPresetsSettingsPanel() {
           models: policy.models ?? null,
           tools: policy.tools ?? null,
           skills: policy.skills ?? null,
-          memory: policy.memory ?? null,
           workflows: policy.workflows ?? null,
           boundaries: policy.boundaries ?? null,
           runtime: policy.runtime ?? null,

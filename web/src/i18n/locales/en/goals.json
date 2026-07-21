@@ -1,44 +1,23 @@
 {
   "goalsPage": {
     "title": "Goals",
-    "summary": "{{open}} open · {{attention}} need attention · {{shown}} shown",
     "refresh": "Refresh",
-    "newGoalPlaceholder": "What should be true when done?",
+    "newGoalPlaceholder": "What do you want to achieve?",
     "searchPlaceholder": "Search goals…",
-    "create": "Start goal",
-    "executionQueue": "Execution queue",
+    "create": "New goal",
     "attempt": "attempt {{attempts}}/{{max}}",
-    "boardLabel": "Goal status board",
-    "focusLabel": "Goal operations focus",
-    "loading": "Loading goals…",
     "turns": "turns {{used}}/{{max}}",
     "checklistProgress": "checklist {{done}}/{{total}}",
     "checklist": "Checklist",
     "openDetails": "Open details",
     "closeDetails": "Close details",
-    "fullDetails": "Full details",
+    "fullDetails": "View details",
     "currentBlocker": "Current blocker",
     "nextAction": "Next action",
     "noNextAction": "No next action recorded yet.",
     "noChecklist": "No checklist yet.",
     "prioritySummary": "{{priority}} priority",
     "deadlineSummary": "due {{deadline}}",
-    "sourceSummary": "from {{source}}",
-    "viewModes": {
-      "focus": "Focus",
-      "board": "Board"
-    },
-    "overview": {
-      "attention": "Needs attention",
-      "running": "Running",
-      "queued": "Queued",
-      "active": "Active"
-    },
-    "queueSummary": {
-      "running": "{{count}} running",
-      "queued": "{{count}} queued",
-      "failed": "{{count}} failed"
-    },
     "priorities": {
       "low": "low",
       "normal": "normal",
@@ -46,28 +25,28 @@
     },
     "createDialog": {
       "title": "New goal",
-      "description": "Start with the outcome. xopc can draft completion criteria and evidence when you need them.",
-      "simpleStartTitle": "Start simple",
-      "simpleStartHint": "Write what should be true when this is done. Add completion details only when they help.",
+      "description": "Describe the outcome you want. xopc can help draft acceptance criteria and completion evidence.",
+      "simpleStartTitle": "Describe the goal",
+      "simpleStartHint": "Start with the outcome. You can add acceptance criteria and evidence later.",
       "goalTitle": "Goal",
       "goalFallback": "the goal",
       "goalDescription": "Context",
       "descriptionPlaceholder": "Relevant background, constraints, existing progress…",
       "addAttachment": "Add attachment",
       "criteriaTitle": "Acceptance criteria",
-      "criteriaHint": "These become the checklist xopc uses to decide whether the goal is done.",
-      "checklistPolicyEmptyOnly": "When criteria are filled in, AI will not decompose extra criteria after the first turn.",
-      "checklistPolicySupplementExisting": "After the first turn, AI may add non-duplicate acceptance criteria.",
-      "aiDraft": "Define goal",
-      "drafting": "Defining…",
-      "draftFailed": "Could not prepare a goal draft.",
+      "criteriaHint": "xopc uses these criteria to decide whether the goal is complete.",
+      "checklistPolicyEmptyOnly": "If you add criteria now, xopc will not add more during the first run.",
+      "checklistPolicySupplementExisting": "After the first run, xopc may add new, non-duplicate criteria.",
+      "aiDraft": "Draft completion plan",
+      "drafting": "Drafting…",
+      "draftFailed": "xopc couldn't draft the completion plan. Try again.",
       "criteriaPlaceholder": "Acceptance criterion {{index}}",
       "addCriteria": "Add acceptance criterion",
       "removeCriteria": "Remove acceptance criterion",
       "completionPlan": "Completion plan",
-      "completionPlanHint": "Optional: tune how xopc decides this goal is done.",
-      "contractTitle": "Goal contract",
-      "contractHint": "Set the delivery boundary and the evidence required before this goal can be considered complete.",
+      "completionPlanHint": "Optional: define how xopc should determine that this goal is complete.",
+      "contractTitle": "Completion agreement",
+      "contractHint": "Define the expected outcome, scope, and evidence so xopc can determine when the goal is complete.",
       "objective": "Desired outcome",
       "objectivePlaceholder": "What will observably be true when this goal is complete?",
       "scopeBoundary": "Scope boundary",
@@ -90,13 +69,13 @@
       "deadlineCustom": "Custom",
       "deadlineAt": "Exact time",
       "maxTurns": "Max execution turns",
-      "agentId": "Execution agent",
+      "agentId": "Assigned agent",
       "defaultAgent": "default",
       "agentPrimaryModel": "Primary model: {{model}}",
-      "judgeModel": "Check model",
+      "judgeModel": "Review model",
       "judgeModelPlaceholder": "Use system default",
       "agentModelRoles": "Current agent model roles",
-      "judgeRole": "check",
+      "judgeRole": "review",
       "configuredModels": "Configured models",
       "titleRequired": "Goal title is required.",
       "cancel": "Cancel",
@@ -108,87 +87,92 @@
         "Known blockers and follow-up questions for {{goal}} are resolved or explicitly documented."
       ]
     },
-    "lanes": {
-      "active": {
-        "title": "Active",
-        "description": "Ready to continue.",
-        "empty": "No active goals."
+    "workbench": {
+      "pageDescription": "Track progress and handle goals that need attention.",
+      "tabs": { "label": "Goal views", "workbench": "Overview", "all": "Open", "history": "History" },
+      "hero": {
+        "eyebrow": "Goal status",
+        "attentionOne": "1 goal needs attention",
+        "attentionMany": "{{count}} goals need attention",
+        "attentionDescription": "Start with the most important issue, then continue the goal.",
+        "runningOne": "1 goal is in progress",
+        "runningMany": "{{count}} goals are in progress",
+        "runningDescription": "These goals are running, queued, or waiting to retry.",
+        "readyOne": "1 goal is ready to continue",
+        "readyMany": "{{count}} goals are ready to continue",
+        "readyDescription": "Choose a goal to continue.",
+        "calm": "Nothing needs your attention",
+        "calmDescription": "No goals are running or need your attention.",
+        "calmDescriptionWithPaused": "No goals are running or need your attention. You have {{paused}} paused for later.",
+        "nextFocus": "Recommended next"
       },
-      "paused": {
-        "title": "Paused",
-        "description": "Stopped by user or turn budget.",
-        "empty": "No paused goals."
+      "status": {
+        "blocked": "Blocked", "needsInput": "Needs your input", "executionFailed": "Execution failed",
+        "running": "Running", "queued": "Queued", "retryWaiting": "Retry scheduled",
+        "ready": "Ready to continue", "paused": "Paused", "done": "Completed", "archived": "Archived"
       },
-      "attention": {
-        "title": "Needs attention",
-        "description": "Blocked or waiting for input.",
-        "empty": "Nothing needs attention."
+      "actions": {
+        "handle": "Review issue", "review": "Review outcome", "viewExecution": "View progress",
+        "continueExecution": "Continue goal", "working": "Working…", "retryLoad": "Try again"
       },
-      "done": {
-        "title": "Done",
-        "description": "Completed outcomes.",
-        "empty": "No completed goals."
+      "row": {
+        "inputNeeded": "Open the goal and add the missing information.",
+        "reviewBlocker": "Review the blocker before continuing.",
+        "executionFailed": "Review why the latest run failed, then try again.",
+        "executionInProgress": "xopc is working on the next step.",
+        "pausedByUser": "This goal is paused. Resume it whenever you're ready.",
+        "completedReview": "This goal is complete and ready for review.",
+        "archived": "This goal is archived and no longer appears with open goals.",
+        "highPriority": "High priority",
+        "lastSucceeded": "Last run succeeded · {{time}}", "lastFailed": "Last run failed · {{time}}",
+        "lastFinished": "Last run finished · {{time}}", "latestExecution": "Latest run"
       },
-      "archived": {
-        "title": "Archived",
-        "description": "Removed from active operation.",
-        "empty": "No archived goals."
-      }
-    },
-    "focusSections": {
-      "attention": {
-        "title": "Needs attention",
-        "description": "Blocked goals, waiting input, and failed queue items.",
-        "empty": "Nothing needs attention."
+      "sections": {
+        "attention": { "title": "Needs attention", "description": "Blocked, waiting for input, or failed after retries." },
+        "running": { "title": "In progress", "description": "Executing now, queued, or waiting for a retry." },
+        "ready": { "title": "Ready to continue", "description": "These goals have a clear next step and can continue now." },
+        "later": { "title": "Paused", "description": "These goals are not running and can be resumed at any time." }
       },
-      "running": {
-        "title": "Running or queued",
-        "description": "Goals currently executing or waiting for the next run.",
-        "empty": "No goals are running or queued."
+      "filters": {
+        "agent": "Filter by agent", "status": "Filter by status", "priority": "Filter by priority",
+        "allAgents": "All agents", "allStatuses": "All statuses", "allPriorities": "All priorities", "clear": "Clear filters"
       },
-      "active": {
-        "title": "Ready to continue",
-        "description": "Open goals that can be advanced now.",
-        "empty": "No ready goals."
+      "empty": {
+        "healthyTitle": "Nothing needs attention",
+        "healthyDescription": "No goals are running or need your attention.",
+        "healthyDescriptionWithPaused": "No goals are running or need your attention. You have {{paused}} paused for later.",
+        "noOpenTitle": "No matching goals", "noOpenDescription": "Adjust your search or filters, or create a new goal.",
+        "noHistoryTitle": "No goal history yet", "noHistoryDescription": "Completed and archived goals will appear here."
       },
-      "paused": {
-        "title": "Paused",
-        "description": "Goals intentionally stopped or waiting for later.",
-        "empty": "No paused goals."
-      },
-      "recentDone": {
-        "title": "Recently done",
-        "description": "Completed goals kept nearby for review.",
-        "empty": "No completed goals."
-      }
+      "history": { "title": "Goal history", "description": "Review completed and archived goals, or reopen one when needed." },
+      "undo": { "message": "Updated the status of “{{title}}”.", "action": "Undo", "dismiss": "Dismiss" }
     },
     "actions": {
       "continue": "Continue",
       "pause": "Pause",
-      "resume": "Resume",
       "reopen": "Reopen",
       "complete": "Complete",
       "archive": "Archive",
       "unarchive": "Unarchive"
     },
     "errors": {
-      "load": "Failed to load goals",
-      "create": "Failed to create goal",
-      "action": "Goal action failed"
+      "load": "Couldn't load goals. Try again.",
+      "create": "Couldn't create the goal. Try again.",
+      "action": "Couldn't update the goal. Try again."
     },
     "statuses": {
-      "active": "active",
-      "paused": "paused",
-      "blocked": "blocked",
-      "needs_input": "needs input",
-      "done": "done",
-      "archived": "archived",
-      "queued": "queued",
-      "running": "running",
-      "retry_waiting": "retry waiting",
-      "succeeded": "succeeded",
-      "failed": "failed",
-      "skipped": "skipped"
+      "active": "Open",
+      "paused": "Paused",
+      "blocked": "Blocked",
+      "needs_input": "Needs input",
+      "done": "Completed",
+      "archived": "Archived",
+      "queued": "Queued",
+      "running": "Running",
+      "retry_waiting": "Waiting to retry",
+      "succeeded": "Succeeded",
+      "failed": "Failed",
+      "skipped": "Skipped"
     },
     "sources": {
       "manual": "manual",
@@ -215,20 +199,20 @@
     "refresh": "Refresh",
     "pause": "Pause",
     "archive": "Archive",
-    "archiveConfirm": "Archive this goal?",
-    "goalBrief": "Background and completion agreement",
+    "archiveConfirm": "Archive this goal? It will move to history and can be reopened later.",
+    "goalBrief": "Goal brief and completion agreement",
     "progressPanel": {
-      "activeTitle": "Ready to keep moving",
-      "blockedTitle": "This goal is blocked",
-      "blockedFallback": "xopc could not find a safe next step. Review the blocker, then continue or run a diagnostic workflow.",
+      "activeTitle": "Ready to continue",
+      "blockedTitle": "This goal can't continue yet",
+      "blockedFallback": "xopc can't continue safely yet. Review the blocker, then continue the goal or run a diagnostic workflow.",
       "needsInputTitle": "Input is needed",
       "needsInputFallback": "Add the missing detail, then continue the goal.",
       "pausedTitle": "Paused for later",
-      "pausedFallback": "Resume when you are ready to spend more turns on this goal.",
-      "doneTitle": "Completion recorded",
-      "doneFallback": "Review the evidence and archive the goal when it no longer needs to stay nearby.",
+      "pausedFallback": "Resume this goal whenever you're ready to continue.",
+      "doneTitle": "Goal completed",
+      "doneFallback": "Review the completion evidence, then archive the goal when you no longer need it nearby.",
       "executionFinishedTitle": "Execution finished; review is pending",
-      "executionFinishedFallback": "There is an inspectable result, but its evidence or business outcome is not yet satisfied. Review it before confirming completion.",
+      "executionFinishedFallback": "A result is available, but its evidence or business outcome still needs review. Review it before marking the goal complete.",
       "reviewPendingLabel": "Review pending",
       "archivedTitle": "Archived",
       "archivedFallback": "This goal is preserved for history and removed from active work.",
@@ -238,8 +222,8 @@
       "execution": "Execution progress",
       "evidence": "Evidence",
       "evidenceCount": "{{count}} recorded",
-      "reviewNeeded": "Evidence still needs review",
-      "reviewComplete": "Evidence review complete",
+      "reviewNeeded": "Evidence still needs approval",
+      "reviewComplete": "Evidence approved",
       "outcome": "Business outcome",
       "outcomeNotSet": "Not set",
       "outcomeNotSetHint": "Add a baseline, current value, and target",
@@ -251,7 +235,7 @@
     },
     "outcomeMetric": {
       "title": "Business outcome metric",
-      "hint": "Use an observable baseline, current value, and target to distinguish delivered output from achieved outcome.",
+      "hint": "Set a baseline, current value, and target to confirm whether the goal achieved its intended outcome.",
       "achieved": "Outcome achieved",
       "notAchieved": "Outcome not achieved",
       "name": "Metric",
@@ -268,14 +252,14 @@
     },
     "actionRail": {
       "nextTitle": "Recommended next step",
-      "continueAction": "Let xopc continue",
+      "continueAction": "Continue with xopc",
       "needsYou": "Needs your attention",
       "defineOutcome": "Add a verifiable business outcome metric",
       "reviewEvidenceCount": "{{count}} evidence items await review",
-      "latestCheckContinue": "The latest check still recommends continuing",
+      "latestCheckContinue": "The latest review recommends continuing",
       "setOutcome": "Set outcome metric",
       "reviewEvidence": "Review evidence",
-      "automation": "Automation and suggestions"
+      "automation": "Automated actions and suggestions"
     },
     "executionProgress": {
       "runTitle": "Execution {{number}}",
@@ -283,10 +267,10 @@
       "systemActivity": "System activity and technical records ({{count}})"
     },
     "acceptance": "Acceptance",
-    "acceptanceHint": "Completion criteria and supporting evidence.",
-    "goalContract": "Goal contract",
-    "editContract": "Revise contract",
-    "saveContract": "Save contract",
+    "acceptanceHint": "Review acceptance criteria and supporting evidence.",
+    "goalContract": "Completion agreement",
+    "editContract": "Edit completion agreement",
+    "saveContract": "Save completion agreement",
     "contractObjective": "Desired outcome",
     "contractObjectivePlaceholder": "Describe the user-visible outcome…",
     "scopeBoundaryPlaceholder": "What is in or out of scope…",
@@ -295,14 +279,14 @@
     "scopeBoundary": "Scope boundary",
     "completionEvidence": "Completion evidence",
     "evidenceRequirements": "Evidence requirements",
-    "evidenceRequirementProgress": "approved {{approved}}/{{total}}",
-    "linkedEvidenceCount": "{{count}} linked evidence",
-    "provesRequirement": "Proves requirement",
-    "reviewEvidence": "Ask AI to review",
+    "evidenceRequirementProgress": "Approved evidence: {{approved}}/{{total}}",
+    "linkedEvidenceCount": "Linked evidence: {{count}}",
+    "provesRequirement": "Evidence requirement",
+    "reviewEvidence": "Verify with xopc",
     "approveEvidence": "Approve evidence",
     "evidenceRequirementStatuses": {
       "pending": "Evidence needs review",
-      "ai_verified": "AI verified; human approval required",
+      "ai_verified": "Verified by xopc; awaiting your approval",
       "approved": "Approved",
       "rejected": "Rejected"
     },
@@ -311,7 +295,7 @@
     "checklist": "Checklist",
     "addAcceptancePlaceholder": "Add acceptance criterion…",
     "add": "Add",
-    "noChecklist": "No checklist yet. Automatic checks can create one after the next run.",
+    "noChecklist": "No acceptance criteria yet. xopc can create them during the next run.",
     "markPending": "Mark pending",
     "markCompleted": "Mark completed",
     "markImpossible": "Mark impossible",
@@ -325,13 +309,13 @@
     "summary": "Summary",
     "summaryPlaceholder": "Summary…",
     "addEvidence": "Add evidence",
-    "noEvidence": "No evidence recorded yet.",
+    "noEvidence": "No completion evidence yet.",
     "timeline": "Timeline",
-    "timelineHint": "Runs, workflows, evidence, and system events in one history.",
-    "noTimeline": "No timeline activity in this view.",
+    "timelineHint": "View goal runs, workflows, evidence, and system events in chronological order.",
+    "noTimeline": "No activity in this view.",
     "goalSettings": "Goal Settings",
     "deadline": "Deadline",
-    "judgeModel": "Check model",
+    "judgeModel": "Review model",
     "created": "Created",
     "updated": "Updated",
     "editDetails": "Edit details",
@@ -341,8 +325,8 @@
     "blockedReason": "Blocked reason",
     "saveDetails": "Save details",
     "workflow": "Workflow",
-    "workflowHint": "Run a repeatable execution path.",
-    "activeCount": "{{count}} active",
+    "workflowHint": "Use a predefined process to execute this goal.",
+    "activeCount": "Active runs: {{count}}",
     "definition": "Definition",
     "noWorkflows": "No workflows",
     "workflowGoal": "Workflow goal",
@@ -382,20 +366,20 @@
       "artifact": "artifact"
     },
     "statuses": {
-      "active": "active",
-      "paused": "paused",
-      "blocked": "blocked",
-      "needs_input": "needs input",
-      "done": "done",
-      "archived": "archived",
-      "queued": "queued",
-      "running": "running",
-      "succeeded": "succeeded",
-      "failed": "failed",
-      "timeout": "timed out",
-      "cancelled": "cancelled",
-      "continue": "continue",
-      "decompose": "decompose"
+      "active": "Open",
+      "paused": "Paused",
+      "blocked": "Blocked",
+      "needs_input": "Needs input",
+      "done": "Completed",
+      "archived": "Archived",
+      "queued": "Queued",
+      "running": "Running",
+      "succeeded": "Succeeded",
+      "failed": "Failed",
+      "timeout": "Timed out",
+      "cancelled": "Cancelled",
+      "continue": "Continue",
+      "decompose": "Break down"
     },
     "priorities": {
       "low": "low",
@@ -403,18 +387,18 @@
       "high": "high"
     },
     "errors": {
-      "load": "Failed to load goal",
-      "loadWorkflows": "Failed to load workflows",
-      "continue": "Failed to continue goal",
-      "save": "Failed to save goal",
-      "action": "Goal action failed",
-      "startWorkflow": "Failed to start workflow",
-      "cancelWorkflow": "Failed to cancel workflow",
-      "retryWorkflow": "Failed to retry workflow",
-      "addChecklist": "Failed to add checklist item",
-      "updateChecklist": "Failed to update checklist item",
-      "deleteChecklist": "Failed to delete checklist item",
-      "addEvidence": "Failed to add evidence"
+      "load": "Couldn't load the goal. Try again.",
+      "loadWorkflows": "Couldn't load workflows. Try again.",
+      "continue": "Couldn't continue the goal. Try again.",
+      "save": "Couldn't save the goal. Try again.",
+      "action": "Couldn't update the goal. Try again.",
+      "startWorkflow": "Couldn't start the workflow. Try again.",
+      "cancelWorkflow": "Couldn't cancel the workflow. Try again.",
+      "retryWorkflow": "Couldn't retry the workflow. Try again later.",
+      "addChecklist": "Couldn't add the acceptance criterion. Try again.",
+      "updateChecklist": "Couldn't update the acceptance criterion. Try again.",
+      "deleteChecklist": "Couldn't delete the acceptance criterion. Try again.",
+      "addEvidence": "Couldn't add the evidence. Try again."
     }
   }
 }

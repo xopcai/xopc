@@ -77,9 +77,9 @@ describe('sqlite notes and memory repositories', () => {
     const dailyPath = join(memoryDir, dailyFileName);
     writeFileSync(dailyPath, '# Daily\nproject-phoenix launch checklist\n');
 
-    syncMemoryIndex({ agentId: 'main', workspaceDir });
+    syncMemoryIndex({ userId: 'local-owner', workspaceDir });
     const hits = searchMemoryIndex({
-      agentId: 'main',
+      userId: 'local-owner',
       query: 'phoenix',
       maxResults: 5,
       minScore: 0.01,
@@ -95,7 +95,7 @@ describe('sqlite notes and memory repositories', () => {
       id: 'memory-strong',
       providerId: 'local',
       kind: 'project_context',
-      agentId: 'main',
+      sourceAgentId: 'main',
       workspaceId: '/workspace',
       content: 'Phoenix launch checklist uses staged rollout and verification.',
     });
@@ -103,13 +103,12 @@ describe('sqlite notes and memory repositories', () => {
       id: 'memory-weak',
       providerId: 'local',
       kind: 'project_context',
-      agentId: 'main',
+      sourceAgentId: 'main',
       workspaceId: '/workspace',
       content: 'Phoenix is the internal project name.',
     });
 
     const hits = searchMemoryRecords({
-      agentId: 'main',
       workspaceId: '/workspace',
       query: 'What was the Phoenix launch verification checklist?',
       maxResults: 5,
@@ -125,13 +124,12 @@ describe('sqlite notes and memory repositories', () => {
       id: 'memory-zh-preference',
       providerId: 'local',
       kind: 'preference',
-      agentId: 'main',
+      sourceAgentId: 'main',
       workspaceId: '/workspace',
       content: '用户偏好简洁的中文回复。',
     });
 
     const hits = searchMemoryRecords({
-      agentId: 'main',
       workspaceId: '/workspace',
       query: '请用简洁中文回答',
       maxResults: 5,

@@ -383,7 +383,7 @@ export const MessageBubble = memo(function MessageBubble({
       feedback: { outcome?: string } | null;
       remediation: { needsReviewRecordIds: string[] } | null;
       personalContext: ResponsePersonalContext[];
-    }>(apiUrl('/api/memory/understanding/response-feedback'), {
+    }>(apiUrl('/api/user-context/understanding/response-feedback'), {
       method: 'PATCH',
       body: JSON.stringify({
         sessionKey,
@@ -425,7 +425,7 @@ export const MessageBubble = memo(function MessageBubble({
       matched: boolean;
       feedback: { outcome?: string } | null;
       personalContext: ResponsePersonalContext[];
-    }>(apiUrl(`/api/memory/understanding/response-feedback?${query.toString()}`))
+    }>(apiUrl(`/api/user-context/understanding/response-feedback?${query.toString()}`))
       .then((result) => {
         setResponsePersonalContext(result.personalContext ?? []);
         const outcome = result.feedback?.outcome;

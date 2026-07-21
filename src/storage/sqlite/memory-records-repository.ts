@@ -12,13 +12,15 @@ import type {
   MemoryStatus,
 } from '../../agent/memory/types.js';
 import { buildFts5SearchQuery, fts5RankToScore, memoryLexicalSimilarity } from './fts.js';
+import { LOCAL_USER_ID } from '../../user-context/owner.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 
 type MemoryRecordRow = {
   record_id: string;
   provider_id: string;
   kind: string;
-  agent_id: string;
+  user_id: string;
+  source_agent_id: string;
   workspace_id: string | null;
   session_key: string | null;
   project_id: string | null;
@@ -52,7 +54,8 @@ export interface UpsertMemoryRecordInput {
   id?: string;
   providerId: string;
   kind: MemoryKind;
-  agentId: string;
+  userId?: string;
+  sourceAgentId: string;
   workspaceId?: string;
   sessionKey?: string;
   projectId?: string;
@@ -79,7 +82,8 @@ export interface UpsertMemoryRecordInput {
 
 export interface ListMemoryRecordsOptions {
   providerId?: string;
-  agentId?: string;
+  userId?: string;
+  sourceAgentId?: string;
   workspaceId?: string;
   projectId?: string;
   /** Include unscoped records plus records visible to this session. */
@@ -99,7 +103,8 @@ export interface ListMemoryRecordsOptions {
 
 export interface SearchMemoryRecordsOptions {
   query: string;
-  agentId?: string;
+  userId?: string;
+  sourceAgentId?: string;
   workspaceId?: string;
   projectId?: string;
   /** Include unscoped records plus records visible to this session. */
@@ -120,7 +125,8 @@ export interface SearchMemoryRecordsOptions {
 export interface AppendMemorySignalInput {
   signal: MemorySignal;
   providerId?: string;
-  agentId?: string;
+  userId?: string;
+  sourceAgentId?: string;
   workspaceId?: string;
   sessionKey?: string;
   nowMs?: number;
@@ -131,7 +137,8 @@ export interface MemorySignalRowPayload {
   source: string;
   recordId?: string;
   providerId?: string;
-  agentId?: string;
+  userId?: string;
+  sourceAgentId?: string;
   workspaceId?: string;
   sessionKey?: string;
   score?: number;
@@ -145,7 +152,8 @@ type MemorySignalRow = {
   source: string;
   record_id: string | null;
   provider_id: string | null;
-  agent_id: string | null;
+  user_id: string;
+  source_agent_id: string | null;
   workspace_id: string | null;
   session_key: string | null;
   score: number | null;
@@ -160,6 +168,8 @@ type MemoryTraceRow = {
   turn_id: string | null;
   phase: string;
   provider_id: string;
+  user_id: string;
+  source_agent_id: string | null;
   request_json: string;
   result_count: number | null;
   selected_record_ids_json: string;
@@ -187,6 +197,7 @@ export interface AppendMemoryTraceEventInput {
   turnId?: string;
   phase: 'search' | 'read' | 'write' | 'update' | 'delete' | 'sync' | 'inject' | 'test' | 'understanding' | 'remediation';
   providerId: string;
+  sourceAgentId?: string;
   request?: unknown;
   resultCount?: number;
   selectedRecordIds?: string[];
@@ -259,7 +270,6 @@ export interface MemoryRecallFeedbackSummary {
 }
 
 export interface UserUnderstandingQualityMetrics {
-  agentId?: string;
   windowDays: number;
   since: string;
   attempts: {
@@ -417,11 +427,12 @@ function rowToRecord(row: MemoryRecordRow): MemoryRecord {
     status: row.status as MemoryStatus,
     ...(row.canonical_key ? { canonicalKey: row.canonical_key } : {}),
     scope: {
-      agentId: row.agent_id,
+      userId: row.user_id,
       ...(row.workspace_id ? { workspaceId: row.workspace_id } : {}),
       ...(row.session_key ? { sessionKey: row.session_key } : {}),
       ...(row.project_id ? { projectId: row.project_id } : {}),
     },
+    provenance: { sourceAgentId: row.source_agent_id },
     content: row.content,
     source: parseSource(row.source_json),
     ...(row.confidence != null ? { confidence: row.confidence } : {}),
@@ -445,15 +456,15 @@ function rowToRecord(row: MemoryRecordRow): MemoryRecord {
 
 function upsertMemoryRecordFts(
   db: ReturnType<typeof getSqliteDatabase>,
-  row: Pick<UpsertMemoryRecordInput, 'providerId' | 'kind' | 'agentId' | 'workspaceId' | 'content'> & { id: string },
+  row: Pick<UpsertMemoryRecordInput, 'providerId' | 'kind' | 'userId' | 'sourceAgentId' | 'workspaceId' | 'content'> & { id: string },
 ): void {
   db.prepare(`DELETE FROM memory_records_fts WHERE record_id = ?`).run(row.id);
   if (!row.content.trim()) return;
   db.prepare(
     `INSERT INTO memory_records_fts (
-      content, record_id, provider_id, kind, agent_id, workspace_id
-    ) VALUES (?, ?, ?, ?, ?, ?)`,
-  ).run(row.content, row.id, row.providerId, row.kind, row.agentId, row.workspaceId ?? null);
+      content, record_id, provider_id, kind, user_id, source_agent_id, workspace_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  ).run(row.content, row.id, row.providerId, row.kind, row.userId ?? LOCAL_USER_ID, row.sourceAgentId, row.workspaceId ?? null);
 }
 
 export function upsertMemoryRecord(input: UpsertMemoryRecordInput): MemoryRecord {
@@ -477,16 +488,17 @@ export function upsertMemoryRecord(input: UpsertMemoryRecordInput): MemoryRecord
   runSqliteWriteTransaction((db) => {
     db.prepare(
       `INSERT INTO memory_records (
-        record_id, provider_id, kind, agent_id, workspace_id, session_key, project_id,
+        record_id, provider_id, kind, user_id, source_agent_id, workspace_id, session_key, project_id,
         content, source_json, confidence, tags_json, status, sensitivity,
         evidence_json, canonical_key, explicitness, durability, importance,
         disclosure_policy, valid_from, valid_to, review_after, expires_at,
         supersedes_record_id, conflict_group_id, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(record_id) DO UPDATE SET
         provider_id = excluded.provider_id,
         kind = excluded.kind,
-        agent_id = excluded.agent_id,
+        user_id = excluded.user_id,
+        source_agent_id = excluded.source_agent_id,
         workspace_id = excluded.workspace_id,
         session_key = excluded.session_key,
         project_id = excluded.project_id,
@@ -513,7 +525,8 @@ export function upsertMemoryRecord(input: UpsertMemoryRecordInput): MemoryRecord
       id,
       input.providerId,
       input.kind,
-      input.agentId,
+      input.userId ?? LOCAL_USER_ID,
+      input.sourceAgentId,
       input.workspaceId ?? null,
       input.sessionKey ?? null,
       input.projectId ?? null,
@@ -579,11 +592,12 @@ export function upsertMemoryRecord(input: UpsertMemoryRecordInput): MemoryRecord
     status,
     ...(input.canonicalKey ? { canonicalKey: input.canonicalKey } : {}),
     scope: {
-      agentId: input.agentId,
+      userId: input.userId ?? LOCAL_USER_ID,
       ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
       ...(input.sessionKey ? { sessionKey: input.sessionKey } : {}),
       ...(input.projectId ? { projectId: input.projectId } : {}),
     },
+    provenance: { sourceAgentId: input.sourceAgentId },
     content: input.content,
     source,
     ...(input.confidence != null ? { confidence: input.confidence } : {}),
@@ -612,6 +626,17 @@ export function getMemoryRecord(recordId: string): MemoryRecord | null {
   return row ? rowToRecord(row) : null;
 }
 
+export function hasUnresolvedMemoryConflict(conflictGroupId: string): boolean {
+  if (!conflictGroupId.trim()) return false;
+  const row = getSqliteDatabase().prepare(`
+    SELECT COUNT(*) AS count
+    FROM memory_records
+    WHERE conflict_group_id = ?
+      AND status IN ('active', 'candidate', 'needs_review', 'stale')
+  `).get(conflictGroupId) as { count: number };
+  return Number(row.count) > 1;
+}
+
 export function listMemoryRecords(options: ListMemoryRecordsOptions = {}): MemoryRecord[] {
   const where: string[] = [];
   const params: Array<string | number | null> = [];
@@ -619,9 +644,13 @@ export function listMemoryRecords(options: ListMemoryRecordsOptions = {}): Memor
     where.push('provider_id = ?');
     params.push(options.providerId);
   }
-  if (options.agentId) {
-    where.push('agent_id = ?');
-    params.push(options.agentId);
+  if (options.userId) {
+    where.push('user_id = ?');
+    params.push(options.userId);
+  }
+  if (options.sourceAgentId) {
+    where.push('source_agent_id = ?');
+    params.push(options.sourceAgentId);
   }
   if (options.workspaceId) {
     where.push('workspace_id = ?');
@@ -674,9 +703,13 @@ export function searchMemoryRecords(options: SearchMemoryRecordsOptions): Memory
 
   const filters: string[] = ['memory_records_fts MATCH ?'];
   const params: Array<string | number | null> = [query];
-  if (options.agentId) {
-    filters.push('f.agent_id = ?');
-    params.push(options.agentId);
+  if (options.userId) {
+    filters.push('f.user_id = ?');
+    params.push(options.userId);
+  }
+  if (options.sourceAgentId) {
+    filters.push('f.source_agent_id = ?');
+    params.push(options.sourceAgentId);
   }
   if (options.workspaceId) {
     filters.push('f.workspace_id = ?');
@@ -728,7 +761,8 @@ export function searchMemoryRecords(options: SearchMemoryRecordsOptions): Memory
   if (rows.length === 0) {
     const fallbackRecords = listMemoryRecords({
       providerId: options.providerId,
-      agentId: options.agentId,
+      userId: options.userId,
+      sourceAgentId: options.sourceAgentId,
       workspaceId: options.workspaceId,
       projectId: options.projectId,
       visibleToSessionKey: options.visibleToSessionKey,
@@ -791,21 +825,38 @@ export function deleteMemoryRecord(recordId: string): boolean {
   });
 }
 
+export function markMemoryRecordsConflicted(recordIds: string[], conflictGroupId: string): number {
+  const ids = [...new Set(recordIds.filter(Boolean))];
+  if (!ids.length || !conflictGroupId.trim()) return 0;
+  return runSqliteWriteTransaction((db) => {
+    const now = Date.now();
+    const update = db.prepare(`
+      UPDATE memory_records
+      SET conflict_group_id = ?, status = 'needs_review', review_after = ?, updated_at = ?
+      WHERE record_id = ? AND status IN ('active', 'candidate', 'needs_review', 'stale')
+    `);
+    let changed = 0;
+    for (const id of ids) changed += Number(update.run(conflictGroupId, now, now, id).changes);
+    return changed;
+  });
+}
+
 export function appendMemorySignal(input: AppendMemorySignalInput): string {
   const id = randomUUID();
   const now = input.nowMs ?? Date.now();
   runSqliteWriteTransaction((db) => {
     db.prepare(
       `INSERT INTO memory_signals (
-        signal_id, source, record_id, provider_id, agent_id, workspace_id,
+        signal_id, source, record_id, provider_id, user_id, source_agent_id, workspace_id,
         session_key, score, content, metadata_json, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       id,
       input.signal.source,
       input.signal.recordId ?? null,
       input.providerId ?? null,
-      input.agentId ?? null,
+      input.userId ?? LOCAL_USER_ID,
+      input.sourceAgentId ?? null,
       input.workspaceId ?? null,
       input.sessionKey ?? null,
       input.signal.score ?? null,
@@ -827,7 +878,8 @@ export function appendMemorySignal(input: AppendMemorySignalInput): string {
 export function listMemorySignals(options: {
   recordId?: string;
   providerId?: string;
-  agentId?: string;
+  userId?: string;
+  sourceAgentId?: string;
   workspaceId?: string;
   limit?: number;
 } = {}): MemorySignalRowPayload[] {
@@ -841,9 +893,13 @@ export function listMemorySignals(options: {
     where.push('provider_id = ?');
     params.push(options.providerId);
   }
-  if (options.agentId) {
-    where.push('agent_id = ?');
-    params.push(options.agentId);
+  if (options.userId) {
+    where.push('user_id = ?');
+    params.push(options.userId);
+  }
+  if (options.sourceAgentId) {
+    where.push('source_agent_id = ?');
+    params.push(options.sourceAgentId);
   }
   if (options.workspaceId) {
     where.push('workspace_id = ?');
@@ -871,7 +927,8 @@ export function listMemorySignals(options: {
       source: row.source,
       ...(row.record_id ? { recordId: row.record_id } : {}),
       ...(row.provider_id ? { providerId: row.provider_id } : {}),
-      ...(row.agent_id ? { agentId: row.agent_id } : {}),
+      userId: row.user_id,
+      ...(row.source_agent_id ? { sourceAgentId: row.source_agent_id } : {}),
       ...(row.workspace_id ? { workspaceId: row.workspace_id } : {}),
       ...(row.session_key ? { sessionKey: row.session_key } : {}),
       ...(row.score != null ? { score: row.score } : {}),
@@ -917,8 +974,9 @@ export function appendMemoryTraceEvent(input: AppendMemoryTraceEventInput): stri
     db.prepare(
       `INSERT INTO memory_trace_events (
         trace_id, session_key, turn_id, phase, provider_id, request_json,
-        result_count, selected_record_ids_json, skipped_reason, error, feedback_json, duration_ms, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        result_count, selected_record_ids_json, skipped_reason, error, feedback_json, duration_ms, created_at,
+        user_id, source_agent_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       id,
       input.sessionKey ?? null,
@@ -933,6 +991,8 @@ export function appendMemoryTraceEvent(input: AppendMemoryTraceEventInput): stri
       JSON.stringify(feedback ?? {}),
       Math.max(0, Math.floor(input.durationMs ?? 0)),
       now,
+      LOCAL_USER_ID,
+      input.sourceAgentId ?? null,
     );
   });
   return id;
@@ -940,7 +1000,8 @@ export function appendMemoryTraceEvent(input: AppendMemoryTraceEventInput): stri
 
 export function listMemoryTraceEvents(options: {
   providerId?: string;
-  agentId?: string;
+  userId?: string;
+  sourceAgentId?: string;
   sessionKey?: string;
   phase?: string;
   limit?: number;
@@ -951,9 +1012,11 @@ export function listMemoryTraceEvents(options: {
     where.push('provider_id = ?');
     params.push(options.providerId);
   }
-  if (options.agentId) {
-    where.push('session_key LIKE ?');
-    params.push(`agent:${options.agentId}:%`);
+  where.push('user_id = ?');
+  params.push(options.userId ?? LOCAL_USER_ID);
+  if (options.sourceAgentId) {
+    where.push('source_agent_id = ?');
+    params.push(options.sourceAgentId);
   }
   if (options.sessionKey) {
     where.push('session_key = ?');
@@ -1132,7 +1195,7 @@ export function setLatestMemoryInjectFeedback(
 export function summarizeMemoryRecallFeedback(options: {
   recordId?: string;
   providerId?: string;
-  agentId?: string;
+  sourceAgentId?: string;
   sessionKey?: string;
   limit?: number;
 } = {}): MemoryRecallFeedbackSummary[] {
@@ -1142,9 +1205,11 @@ export function summarizeMemoryRecallFeedback(options: {
     where.push('provider_id = ?');
     params.push(options.providerId);
   }
-  if (options.agentId) {
-    where.push('session_key LIKE ?');
-    params.push(`agent:${options.agentId}:%`);
+  where.push('user_id = ?');
+  params.push(LOCAL_USER_ID);
+  if (options.sourceAgentId) {
+    where.push('source_agent_id = ?');
+    params.push(options.sourceAgentId);
   }
   if (options.sessionKey) {
     where.push('session_key = ?');
@@ -1209,7 +1274,6 @@ function metricRate(numerator: number, denominator: number): number | null {
 }
 
 export function summarizeUserUnderstandingQuality(options: {
-  agentId?: string;
   windowDays?: number;
   agingCandidateDays?: number;
   nowMs?: number;
@@ -1220,13 +1284,12 @@ export function summarizeUserUnderstandingQuality(options: {
   const agingCandidateDays = Math.max(1, Math.min(windowDays, Math.floor(options.agingCandidateDays ?? 7)));
   const agingCutoffMs = nowMs - agingCandidateDays * 24 * 60 * 60 * 1000;
   const db = getSqliteDatabase();
-  const agentWhere = options.agentId ? 'AND agent_id = ?' : '';
   const recordRows = db.prepare(
     `SELECT record_id, status, explicitness, confidence, created_at, updated_at
      FROM memory_records
      WHERE tags_json LIKE '%"user-understanding"%'
-       ${agentWhere}`,
-  ).all(...(options.agentId ? [options.agentId] : [])) as Array<{
+       AND user_id = ?`,
+  ).all(LOCAL_USER_ID) as Array<{
     record_id: string;
     status: string;
     explicitness: string;
@@ -1286,7 +1349,6 @@ export function summarizeUserUnderstandingQuality(options: {
     const parsed = parseJsonValue(row.request_json, {});
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) continue;
     const request = parsed as Record<string, unknown>;
-    if (options.agentId && request.agentId !== options.agentId) continue;
     attempts.total += 1;
     if (request.source === 'turn') attempts.turn += 1;
     if (request.source === 'background') attempts.background += 1;
@@ -1329,7 +1391,6 @@ export function summarizeUserUnderstandingQuality(options: {
   const decisionTotal = recentDecisions.length;
 
   return {
-    ...(options.agentId ? { agentId: options.agentId } : {}),
     windowDays,
     since: new Date(sinceMs).toISOString(),
     attempts,

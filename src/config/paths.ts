@@ -52,7 +52,6 @@ export const WORKSPACE_FILES = {
   AGENTS: 'AGENTS.md',
   TOOLS: 'TOOLS.md',
   HEARTBEAT: 'HEARTBEAT.md',
-  MEMORY: 'MEMORY.md',
 } as const;
 
 export const USER_PROFILE_FILENAME = 'PROFILE.md';

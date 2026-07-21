@@ -2,7 +2,6 @@ import type { CapabilityPresetRow } from './capability-presets-api';
 
 export type PresetAdvancedJsonFields = {
   mcp: string;
-  memory: string;
   workflows: string;
   boundaries: string;
   runtime: string;

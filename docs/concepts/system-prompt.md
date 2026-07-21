@@ -28,7 +28,7 @@ The following project context files have been loaded:
 Runtime loads bootstrap files from **`agents/<agentId>/profile/`** in a fixed order (see [Workspace](workspace.md)):
 
 - Per-file and total character budgets are runtime constants unless exposed by a future manifest runtime field.
-- Subagent and automation-run sessions omit `MEMORY.md` (allowlist: AGENTS, TOOLS, SOUL, IDENTITY, USER)
+- Subagent and automation-run sessions use a minimal agent profile allowlist (AGENTS, TOOLS, SOUL, IDENTITY) while memory remains supplied by the shared user-context runtime.
 - Profile context injection follows the selected manifest/runtime policy and session state.
 
 Implementation: `src/agent/bootstrap/`, assembled in `src/agent/prompt/system-prompt.ts`.
@@ -43,12 +43,13 @@ Agents must not claim they manually read files when startup context was injected
 
 After transcript compaction, xopc may append a context row with excerpts from AGENTS.md sections **Session Startup** and **Red Lines** according to runtime compaction policy.
 
-## Curated memory vs profile MEMORY
+## Shared memory
 
 | Location | In prompt? | Access |
 |----------|------------|--------|
-| `agents/<id>/profile/MEMORY.md` | Yes (main session bootstrap) | Project Context + memory tools |
-| `agents/<id>/memories/` | No | `curated_memory` tool only |
+| `user/PROFILE.md` | Yes | Shared user profile |
+| `user/MEMORY.md` | Via memory snapshot | `curated_memory` tool |
+| `user/memories/` | Via memory snapshot | `curated_memory` and dreaming tools |
 | Session history | No | `session_search` when available |
 
 ## Related

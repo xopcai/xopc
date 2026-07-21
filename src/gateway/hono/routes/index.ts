@@ -8,6 +8,8 @@ import { registerMemoryRoutes } from './memory.js';
 import { registerProjectsRoutes } from './projects.js';
 import { registerSearchRoutes } from './search.js';
 import { registerMobileRoutes } from './mobile.js';
+import { registerLocalAppsRoutes } from './local-apps.js';
+import { registerWorkDiscoveryRoutes } from './work-discovery.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import {
   mountAppLazyRoutePrefixes,
@@ -24,6 +26,8 @@ export function registerCoreAuthenticatedRoutes(
   registerMemoryRoutes(authenticated, deps);
   registerActivityRoutes(authenticated, deps);
   registerProjectsRoutes(authenticated, deps);
+  registerLocalAppsRoutes(authenticated, deps);
+  registerWorkDiscoveryRoutes(authenticated, deps);
   registerSearchRoutes(authenticated, deps);
   registerMobileRoutes(authenticated, deps);
 }

@@ -6,7 +6,7 @@ export type PreparedUserContextImport = {
   kind: MemoryRecord['kind'];
   sensitivity: NonNullable<MemoryRecord['sensitivity']>;
   durability: MemoryRecord['durability'];
-  canReference: boolean;
+  disclosurePolicy: MemoryRecord['disclosurePolicy'];
 };
 
 export function prepareUserContextImport(
@@ -45,7 +45,11 @@ export function prepareUserContextImport(
       ? item.durability as MemoryRecord['durability']
       : 'durable';
     known.add(normalized);
-    imports.push({ statement, kind, sensitivity, durability, canReference: item.canReference !== false });
+    const disclosurePolicy = typeof item.disclosurePolicy === 'string'
+      && ['silent', 'referenceable', 'ask_before_reference'].includes(item.disclosurePolicy)
+      ? item.disclosurePolicy as MemoryRecord['disclosurePolicy']
+      : 'referenceable';
+    imports.push({ statement, kind, sensitivity, durability, disclosurePolicy });
   }
 
   return { imports, skippedCount };

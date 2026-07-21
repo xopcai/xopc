@@ -18,7 +18,9 @@ export const WORKFLOW_SOURCE_FILTER_SET = new Set<string>(WORKFLOW_SOURCE_FILTER
 export const WORKFLOW_SEARCH_PARAM = 'q';
 export const WORKFLOW_WF_FILTER_PARAM = 'wf';
 export const WORKFLOW_AGENT_PARAM = 'agent';
-export const WORKFLOW_VIEW_PARAM = 'view';
+export const WORKFLOW_PAGE_TAB_PARAM = 'tab';
+export const WORKFLOW_RUN_LAYOUT_PARAM = 'layout';
+export const WORKFLOW_STATUS_FILTER_PARAM = 'status';
 export const WORKFLOW_RUN_PARAM = 'run';
 export const WORKFLOW_RUN_TAB_PARAM = 'runTab';
 export const WORKFLOW_TRIGGER_FILTER_PARAM = 'trigger';
@@ -26,9 +28,17 @@ export const WORKFLOW_DEF_PARAM = 'def';
 export const WORKFLOW_START_PARAM = 'start';
 export const WORKFLOW_COPY_PARAM = 'copy';
 
-export const WORKFLOW_VIEW_MODES = ['operations', 'board'] as const;
-export type WorkflowViewMode = (typeof WORKFLOW_VIEW_MODES)[number];
-export const WORKFLOW_VIEW_MODE_SET = new Set<string>(WORKFLOW_VIEW_MODES);
+export const WORKFLOW_PAGE_TABS = ['runs', 'library'] as const;
+export type WorkflowPageTab = (typeof WORKFLOW_PAGE_TABS)[number];
+export const WORKFLOW_PAGE_TAB_SET = new Set<string>(WORKFLOW_PAGE_TABS);
+
+export const WORKFLOW_RUN_LAYOUTS = ['list', 'board'] as const;
+export type WorkflowRunLayout = (typeof WORKFLOW_RUN_LAYOUTS)[number];
+export const WORKFLOW_RUN_LAYOUT_SET = new Set<string>(WORKFLOW_RUN_LAYOUTS);
+
+export const WORKFLOW_STATUS_FILTERS = ['all', 'attention', 'running', 'queued', 'succeeded'] as const;
+export type WorkflowStatusFilter = (typeof WORKFLOW_STATUS_FILTERS)[number];
+export const WORKFLOW_STATUS_FILTER_SET = new Set<string>(WORKFLOW_STATUS_FILTERS);
 
 export const WORKFLOW_RUN_PANEL_TABS = ['result', 'process', 'diagnostics', 'artifacts', 'debug'] as const;
 export type WorkflowRunPanelTab = (typeof WORKFLOW_RUN_PANEL_TABS)[number];

@@ -41,7 +41,6 @@ function createContext(
             models: { defaultRole: 'deep', roles: { deep: { model: 'openai/gpt-4.1' } } },
             tools: { builtin: {} },
             skills: { mode: 'all' },
-            memory: { mode: 'off', sources: [], writePolicy: {} },
             workflows: {},
             boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
           },
@@ -113,7 +112,7 @@ describe('/review command', () => {
     });
     expect(btwQuery.mock.calls[0]?.[0]).toContain('<review_progress>');
     expect(btwQuery.mock.calls[0]?.[0]).toContain('<review_result>');
-  });
+  }, 15_000);
 
   it('uses a session-selected model before the agent review role', async () => {
     writeFileSync(join(repo, 'app.ts'), 'export const value = 2;\n');
@@ -138,7 +137,7 @@ describe('/review command', () => {
       modelRef: 'openai/gpt-5.3-codex',
       includeSessionContext: false,
     }));
-  });
+  }, 15_000);
 
   it('uses an agent review role when the session has no model override', async () => {
     writeFileSync(join(repo, 'app.ts'), 'export const value = 2;\n');

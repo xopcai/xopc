@@ -1,7 +1,7 @@
 import type { MemoryKind, MemoryRecord } from '../agent/memory/types.js';
 import { effectiveMemoryStatus, resolveMemoryStability } from '../agent/memory/lifecycle.js';
 import { classifyMemoryContextOrigin } from '../agent/memory/source-origin.js';
-import type { ConnectorDefinition, ConnectorInstance } from '../connectors/types.js';
+import type { ConnectorConnection, ConnectorDefinition, ConnectorInstance } from '../connectors/types.js';
 import type { KnowledgeSourceItem, KnowledgeSyncRun } from '../knowledge/types.js';
 
 export type UserContextFacet =
@@ -80,7 +80,7 @@ export function projectUserContextRecord(record: MemoryRecord) {
     sensitivity: record.sensitivity ?? 'normal',
     explicitness: record.explicitness,
     durability: record.durability,
-    canReference: record.disclosurePolicy !== 'silent',
+    disclosurePolicy: record.disclosurePolicy,
     stability: lifecycle.band,
     stabilityScore: lifecycle.score,
     reviewAt: lifecycle.reviewAt,
@@ -97,12 +97,10 @@ export function isPersonalContextConnector(definition: ConnectorDefinition): boo
 
 export function recordsDerivedFromPersonalContextSource(
   records: MemoryRecord[],
-  agentId: string,
-  connectorId: string,
+  sourceInstanceId: string,
 ): MemoryRecord[] {
   return records.filter((record) => (
-    record.scope.agentId === agentId
-    && record.source.provider === connectorId
+    record.source.sourceInstanceId === sourceInstanceId
     && isUserContextRecord(record)
   ));
 }
@@ -111,7 +109,11 @@ export function projectPersonalContextSources(
   definitions: ConnectorDefinition[],
   instances: ConnectorInstance[],
   records: MemoryRecord[] = [],
-  knowledge: { sourceItems?: KnowledgeSourceItem[]; syncRuns?: KnowledgeSyncRun[] } = {},
+  knowledge: {
+    sourceItems?: KnowledgeSourceItem[];
+    syncRuns?: KnowledgeSyncRun[];
+    connections?: ConnectorConnection[];
+  } = {},
 ) {
   const instanceByConnector = new Map<string, ConnectorInstance[]>();
   for (const instance of instances) {
@@ -121,19 +123,55 @@ export function projectPersonalContextSources(
   }
   return definitions
     .filter(isPersonalContextConnector)
-    .map((definition) => {
+    .flatMap((definition) => {
       const connected = instanceByConnector.get(definition.id) ?? [];
-      const relatedRecords = records.filter((record) => record.source.provider === definition.id);
-      const sourceItems = (knowledge.sourceItems ?? []).filter((item) => item.metadata.connectorId === definition.id);
-      const sourceInstanceIds = new Set(sourceItems.map((item) => item.sourceInstanceId));
+      const accounts = (knowledge.connections ?? []).filter((connection) => (
+        connection.provider === 'composio'
+        && connection.connectorId === definition.id
+        && connection.status !== 'revoked'
+      ));
+      const rows = accounts.length > 0
+        ? accounts.map((connection) => ({
+            instanceId: connection.id,
+            sourceInstanceId: `composio:${definition.id}:${connection.id}`,
+            accountLabel: connection.alias
+              ?? (typeof connection.identity.email === 'string' ? connection.identity.email : undefined)
+              ?? (typeof connection.identity.username === 'string' ? connection.identity.username : undefined),
+            enabled: connection.status === 'active',
+            status: connection.status,
+            lastConnectedAt: connection.connectedAt,
+            instances: connected,
+          }))
+        : connected.length > 0
+          ? connected.map((instance) => ({
+              instanceId: instance.instanceId,
+              sourceInstanceId: instance.instanceId,
+              accountLabel: undefined,
+              enabled: instance.enabled,
+              status: instance.status,
+              lastConnectedAt: instance.lastConnectedAt,
+              instances: [instance],
+            }))
+          : [{
+              instanceId: undefined,
+              sourceInstanceId: undefined,
+              accountLabel: undefined,
+              enabled: false,
+              status: 'not_installed',
+              lastConnectedAt: undefined,
+              instances: [] as ConnectorInstance[],
+            }];
+      return rows.map((row) => {
+      const relatedRecords = row.sourceInstanceId
+        ? records.filter((record) => record.source.sourceInstanceId === row.sourceInstanceId)
+        : [];
+      const sourceItems = row.sourceInstanceId
+        ? (knowledge.sourceItems ?? []).filter((item) => item.sourceInstanceId === row.sourceInstanceId)
+        : [];
       const latestSync = (knowledge.syncRuns ?? [])
-        .filter((run) => (
-          sourceInstanceIds.has(run.sourceInstanceId)
-          || run.sourceInstanceId.startsWith(`composio:${definition.id}:`)
-          || run.sourceInstanceId.startsWith(`${definition.id}:`)
-        ))
+        .filter((run) => run.sourceInstanceId === row.sourceInstanceId)
         .sort((left, right) => Date.parse(right.startedAt) - Date.parse(left.startedAt))[0];
-      const latestHealth = connected
+      const latestHealth = row.instances
         .filter((instance) => instance.usage.lastHealthCheckAt && instance.usage.lastHealthStatus)
         .sort((left, right) => (
           Date.parse(right.usage.lastHealthCheckAt!) - Date.parse(left.usage.lastHealthCheckAt!)
@@ -144,6 +182,7 @@ export function projectPersonalContextSources(
       ));
       return {
         id: definition.id,
+        accountLabel: row.accountLabel,
         displayName: definition.displayName,
         description: definition.description,
         ...(definition.branding ? { branding: definition.branding } : {}),
@@ -160,19 +199,15 @@ export function projectPersonalContextSources(
           write: canWrite,
         },
         permissionDetails,
-        installed: connected.length > 0,
-        enabled: connected.some((instance) => instance.enabled),
-        status: connected[0]?.status ?? 'not_installed',
-        instanceId: connected[0]?.instanceId,
-        lastConnectedAt: connected
-          .map((instance) => instance.lastConnectedAt)
-          .filter((value): value is string => Boolean(value))
-          .sort()
-          .at(-1),
+        installed: row.instanceId !== undefined,
+        enabled: row.enabled,
+        status: row.status,
+        instanceId: row.instanceId,
+        lastConnectedAt: row.lastConnectedAt,
         lastHealthCheckAt: latestHealth?.lastHealthCheckAt,
         lastHealthStatus: latestHealth?.lastHealthStatus,
         lastActivityAt: [
-          ...connected.flatMap((instance) => [
+          ...row.instances.flatMap((instance) => [
             instance.lastConnectedAt,
             instance.usage.lastHealthCheckAt,
             ...instance.audit.map((entry) => entry.at),
@@ -189,6 +224,7 @@ export function projectPersonalContextSources(
         lastSyncStatus: latestSync?.status,
         lastSyncError: latestSync?.error,
       };
+      });
     })
     .sort((left, right) => {
       if (left.installed !== right.installed) return left.installed ? -1 : 1;

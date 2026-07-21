@@ -57,7 +57,6 @@ describe('SessionStore', () => {
               workspace: { root: join(tempDir, 'main') },
               tools: { builtin: {} },
               skills: { mode: 'all' },
-              memory: { mode: 'confirmWrite', sources: ['session'] },
               workflows: {},
               boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
             },

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { parseAgentRunError } from '../agent-run-error-parser';
+import { parseAgentRunError, toProviderSetupPayload } from '../agent-run-error-parser';
 
 describe('parseAgentRunError', () => {
   it('parses provider_auth_invalid structured payload', () => {
@@ -15,6 +15,23 @@ describe('parseAgentRunError', () => {
     expect(parsed?.code).toBe('provider_auth_invalid');
     expect(parsed?.provider).toBe('dashscope');
     expect(parsed?.message).toContain('401 Authentication Fails');
+  });
+
+  it('maps invalid provider auth to the actionable provider setup card', () => {
+    const parsed = parseAgentRunError(JSON.stringify({
+      kind: 'provider_auth_invalid',
+      code: 'provider_auth_invalid',
+      provider: 'bailian',
+      deepLink: '/settings/credentials',
+      message: '401: {"code":"invalid_api_key"}',
+    }));
+
+    expect(parsed && toProviderSetupPayload(parsed)).toEqual({
+      kind: 'provider_auth_invalid',
+      provider: 'bailian',
+      deepLink: '/settings/credentials',
+      message: '401: {"code":"invalid_api_key"}',
+    });
   });
 
   it('parses plain missing API key text', () => {

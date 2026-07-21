@@ -5,10 +5,10 @@ import { join, relative } from 'path';
 import { createLogger } from '../../../utils/logger.js';
 import {
   requireXopcDatabase,
-  resolveAgentIdFromMemoriesDir,
   searchMemoryIndex,
   syncMemoryIndex,
 } from '../../../storage/sqlite/index.js';
+import { LOCAL_USER_ID } from '../../../user-context/owner.js';
 
 const log = createLogger('MemorySearch');
 
@@ -26,11 +26,10 @@ interface MemoryMatch {
 export interface MemorySearchOptions {
   maxResults?: number;
   minScore?: number;
-  /** Absolute path to agent-scoped curated memories dir (MEMORY.md). */
+  /** Absolute path to the shared curated memories dir (MEMORY.md). */
   memoriesDir?: string;
   /** Absolute path to global user memory (`~/.xopc/user/MEMORY.md`). */
   userMemoryPath?: string;
-  agentId?: string;
 }
 
 const AGENT_MEMORY_FILENAME = 'MEMORY.md';
@@ -87,14 +86,13 @@ export async function memorySearch(
   query: string,
   options: MemorySearchOptions = {},
 ): Promise<MemoryMatch[]> {
-  const { maxResults = 5, minScore = 0.3, memoriesDir, userMemoryPath, agentId } = options;
-  const resolvedAgentId = agentId ?? resolveAgentIdFromMemoriesDir(memoriesDir);
+  const { maxResults = 5, minScore = 0.3, memoriesDir, userMemoryPath } = options;
 
   try {
     ensureMemoryDatabase();
-    syncMemoryIndex({ agentId: resolvedAgentId, workspaceDir: baseDir, memoriesDir, userMemoryPath });
+    syncMemoryIndex({ userId: LOCAL_USER_ID, workspaceDir: baseDir, memoriesDir, userMemoryPath });
     const hits = searchMemoryIndex({
-      agentId: resolvedAgentId,
+      userId: LOCAL_USER_ID,
       query,
       maxResults,
       minScore,
@@ -107,7 +105,7 @@ export async function memorySearch(
     }));
   } catch (err) {
     const em = err instanceof Error ? err.message : String(err);
-    log.warn({ err, errorMessage: em, agentId: resolvedAgentId }, `Memory FTS search failed: ${em}`);
+    log.warn({ err, errorMessage: em }, `Memory FTS search failed: ${em}`);
     return fallbackMemorySearch(baseDir, query, { maxResults, minScore, memoriesDir, userMemoryPath });
   }
 }

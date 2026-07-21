@@ -65,7 +65,7 @@ import { createBrowserUseTool } from './browser/tool/browser-use-tool.js';
 import { createDelegateTool } from './delegate-tool.js';
 import { createWorkflowTool } from './workflow-tool.js';
 import { createWorkflowCatalog } from '../workflow/catalog.js';
-import { resolveDreamingRootForAgent } from '../memory/dreaming/scope.js';
+import { resolveDreamingRoot } from '../memory/dreaming/scope.js';
 import { resolveDreamingConfig } from '../memory/dreaming/config.js';
 import { buildSandboxToolMap, createExecuteCodeTool } from './execute-code-tool.js';
 import type { AutomationService } from '../../automations/index.js';
@@ -140,7 +140,7 @@ export interface CreateCoreToolsOptions {
   /** Optional primary model for image tool heuristics. */
   getPrimaryModel?: () => Model<Api>;
   getMemoryManager?: () => MemoryManager;
-  /** Agent-scoped memories directory used for dreaming state (`agents/<id>/memories`). */
+  /** Shared user memories directory used for dreaming state (`user/memories`). */
   dreamingRoot?: string;
   agentId?: string;
   /** When set, registers `skills_list` and `skill_view` bound to this workspace\'s skills. */
@@ -259,7 +259,7 @@ export class AgentToolsFactory {
     const primary = getPrimary?.();
     const modelHasVision = primary?.input?.includes('image') ?? false;
     const cfg = this.deps.getConfig?.();
-    const dreamingRoot = options?.dreamingRoot ?? (cfg ? resolveDreamingRootForAgent(cfg, options?.agentId) : workspace);
+    const dreamingRoot = options?.dreamingRoot ?? (cfg ? resolveDreamingRoot() : workspace);
     const browserEnabled = cfg?.browser?.enabled !== false;
     const recordGoalEvidence = createGoalEvidenceRecorder({
       getSessionKey: () => this.deps.getCurrentContext()?.sessionKey,

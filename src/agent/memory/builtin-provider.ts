@@ -1,5 +1,4 @@
 import type { BuiltinMemoryStore } from './builtin-memory-store.js';
-import type { MemoryAccessPolicy } from './access-policy.js';
 import { normalizeAgentId } from '../../routing/agent-session-key.js';
 import type { MemoryProvider, MemoryProviderInitOptions } from './provider.js';
 import { memoryGet, memorySearch } from '../prompt/memory/index.js';
@@ -49,10 +48,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
   private workspaceDir = '';
   private agentId = 'main';
 
-  constructor(
-    private readonly store: BuiltinMemoryStore,
-    private readonly accessPolicy?: MemoryAccessPolicy,
-  ) {}
+  constructor(private readonly store: BuiltinMemoryStore) {}
 
   isAvailable(): boolean {
     return true;
@@ -75,12 +71,8 @@ export class BuiltinMemoryProvider implements MemoryProvider {
 
   async search(request: MemorySearchRequest): Promise<MemorySearchResult[]> {
     const workspaceId = request.scope?.workspaceId ?? this.workspaceDir;
-    const readableAgentIds = this.accessPolicy?.readableAgentIds ?? [this.agentId];
-    const recordHits = readableAgentIds
-      .flatMap((ownerAgentId) => searchMemoryRecords({
+    const recordHits = searchMemoryRecords({
         query: request.query,
-        agentId: ownerAgentId,
-        workspaceId: ownerAgentId === this.agentId ? workspaceId : undefined,
         visibleToSessionKey: request.scope?.sessionKey,
         unscopedSessionOnly: request.scope?.sessionKey == null,
         visibleToProjectId: request.scope?.projectId,
@@ -89,7 +81,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
         kinds: request.kinds,
         maxResults: request.maxResults,
         minScore: request.minScore,
-      }))
+      })
       .filter((result) => this.canReadRecord(result.record, request.scope))
       .sort((left, right) => right.score - left.score)
       .slice(0, request.maxResults ?? 5);
@@ -102,7 +94,6 @@ export class BuiltinMemoryProvider implements MemoryProvider {
       minScore: request.minScore,
       memoriesDir: this.store.memoriesDir,
       userMemoryPath: this.store.userMemoryPath,
-      agentId: this.agentId,
     });
     return results.map((entry) => {
       const start = entry.lineNumbers[0] ?? 1;
@@ -113,7 +104,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
         id,
         providerId: this.id,
         kind,
-        agentId: this.agentId,
+        sourceAgentId: this.agentId,
         workspaceId,
         content: entry.lines,
         source: {
@@ -161,7 +152,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
       id: `${path}#L${result.lineNumbers.start}-L${result.lineNumbers.end}`,
       providerId: this.id,
       kind: inferKindFromPath(path),
-      agentId: this.agentId,
+      sourceAgentId: this.agentId,
       workspaceId: request.scope?.workspaceId ?? this.workspaceDir,
       content: result.content,
       source: {
@@ -190,7 +181,6 @@ export class BuiltinMemoryProvider implements MemoryProvider {
   async list(request: MemoryListRequest): Promise<MemoryRecord[]> {
     const records = listMemoryRecords({
       providerId: this.id,
-      agentId: request.scope?.agentId ?? this.agentId,
       workspaceId: request.scope?.workspaceId ?? this.workspaceDir,
       visibleToSessionKey: request.scope?.sessionKey,
       visibleToProjectId: request.scope?.projectId,
@@ -210,8 +200,8 @@ export class BuiltinMemoryProvider implements MemoryProvider {
       upsertMemoryRecord({
         id: `curated:${target}:${index + 1}`,
         providerId: this.id,
-        kind: target === 'user' ? 'user_profile' : 'agent_note',
-        agentId: request.scope?.agentId ?? this.agentId,
+        kind: target === 'user' ? 'user_profile' : 'curated_note',
+        sourceAgentId: this.agentId,
         workspaceId: request.scope?.workspaceId ?? this.workspaceDir,
         content,
         source: {
@@ -224,31 +214,21 @@ export class BuiltinMemoryProvider implements MemoryProvider {
 
   async write(request: MemoryWriteRequest): Promise<MemoryWriteResult> {
     const target = request.target ?? (request.kind === 'user_profile' ? 'user' : 'memory');
-    const ownerAgentId = normalizeAgentId(request.scope?.agentId ?? this.agentId);
-    const isCrossAgentWrite = ownerAgentId !== this.agentId;
-    if (isCrossAgentWrite && request.status !== 'candidate') {
-      return { success: false, error: 'Cross-agent writes must be submitted as candidates' };
-    }
-    if (isCrossAgentWrite && !this.accessPolicy?.canSubmitCandidate(ownerAgentId)) {
-      return { success: false, error: 'Cross-agent candidate submission is not allowed' };
-    }
     if (request.status === 'candidate') {
       const record = upsertMemoryRecord({
         providerId: this.id,
         kind: request.kind,
-        agentId: ownerAgentId,
-        workspaceId: isCrossAgentWrite ? request.scope?.workspaceId : request.scope?.workspaceId ?? this.workspaceDir,
-        sessionKey: isCrossAgentWrite ? undefined : request.scope?.sessionKey,
-        projectId: isCrossAgentWrite ? undefined : request.scope?.projectId,
+        sourceAgentId: this.agentId,
+        workspaceId: request.scope?.workspaceId ?? this.workspaceDir,
+        sessionKey: request.scope?.sessionKey,
+        projectId: request.scope?.projectId,
         content: request.content,
         source: {
           ...(request.source ?? {}),
           provider: this.id,
         },
         confidence: request.confidence,
-        tags: isCrossAgentWrite
-          ? [...(request.tags ?? []), `shared-from:${this.agentId}`]
-          : request.tags,
+        tags: request.tags,
         status: 'candidate',
         sensitivity: request.sensitivity,
         canonicalKey: request.canonicalKey,
@@ -279,7 +259,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
         id: `curated:${target}:${Date.now()}`,
         providerId: this.id,
         kind: request.kind,
-        agentId: this.agentId,
+        sourceAgentId: this.agentId,
         workspaceId: request.scope?.workspaceId ?? this.workspaceDir,
         sessionKey: request.scope?.sessionKey,
         content: request.content,
@@ -307,11 +287,6 @@ export class BuiltinMemoryProvider implements MemoryProvider {
 
   async update(request: MemoryUpdateRequest): Promise<MemoryWriteResult> {
     const target = request.target ?? 'memory';
-    const existingRecord = request.id ? getMemoryRecord(request.id) : null;
-    const requestedOwnerAgentId = existingRecord?.scope.agentId ?? request.scope?.agentId ?? this.agentId;
-    if (requestedOwnerAgentId !== this.agentId) {
-      return { success: false, error: 'Cross-agent memory updates are not allowed' };
-    }
     const result = await this.store.replace(target, request.matchText ?? request.id ?? '', request.content);
     if (!result.success) return { success: false, error: result.error };
     if (request.id) {
@@ -319,8 +294,8 @@ export class BuiltinMemoryProvider implements MemoryProvider {
       upsertMemoryRecord({
         id: request.id,
         providerId: this.id,
-        kind: existing?.kind ?? (target === 'user' ? 'user_profile' : 'agent_note'),
-        agentId: existing?.scope.agentId ?? request.scope?.agentId ?? this.agentId,
+        kind: existing?.kind ?? (target === 'user' ? 'user_profile' : 'curated_note'),
+        sourceAgentId: existing?.provenance.sourceAgentId ?? this.agentId,
         workspaceId: existing?.scope.workspaceId ?? request.scope?.workspaceId ?? this.workspaceDir,
         sessionKey: existing?.scope.sessionKey ?? request.scope?.sessionKey,
         content: request.content,
@@ -330,9 +305,8 @@ export class BuiltinMemoryProvider implements MemoryProvider {
     } else if (request.matchText) {
       for (const existing of listMemoryRecords({
         providerId: this.id,
-        agentId: request.scope?.agentId ?? this.agentId,
         workspaceId: request.scope?.workspaceId ?? this.workspaceDir,
-        kind: target === 'user' ? 'user_profile' : 'agent_note',
+        kind: target === 'user' ? 'user_profile' : 'curated_note',
         limit: 200,
       })) {
         if (!existing.content.includes(request.matchText)) continue;
@@ -340,7 +314,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
           id: existing.id,
           providerId: this.id,
           kind: existing.kind,
-          agentId: existing.scope.agentId,
+          sourceAgentId: existing.provenance.sourceAgentId,
           workspaceId: existing.scope.workspaceId,
           sessionKey: existing.scope.sessionKey,
           content: request.content,
@@ -354,11 +328,6 @@ export class BuiltinMemoryProvider implements MemoryProvider {
 
   async delete(request: MemoryDeleteRequest): Promise<MemoryWriteResult> {
     const target = request.target ?? 'memory';
-    const existingRecord = request.id ? getMemoryRecord(request.id) : null;
-    const requestedOwnerAgentId = existingRecord?.scope.agentId ?? request.scope?.agentId ?? this.agentId;
-    if (requestedOwnerAgentId !== this.agentId) {
-      return { success: false, error: 'Cross-agent memory deletion is not allowed' };
-    }
     const result = await this.store.remove(target, request.matchText ?? request.id ?? '');
     if (!result.success) return { success: false, error: result.error };
     if (request.id) {
@@ -366,9 +335,8 @@ export class BuiltinMemoryProvider implements MemoryProvider {
     } else if (request.matchText) {
       for (const existing of listMemoryRecords({
         providerId: this.id,
-        agentId: request.scope?.agentId ?? this.agentId,
         workspaceId: request.scope?.workspaceId ?? this.workspaceDir,
-        kind: target === 'user' ? 'user_profile' : 'agent_note',
+        kind: target === 'user' ? 'user_profile' : 'curated_note',
         limit: 200,
       })) {
         if (existing.content.includes(request.matchText)) {
@@ -384,7 +352,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
     appendMemorySignal({
       signal: event.signal,
       providerId: this.id,
-      agentId: this.agentId,
+      sourceAgentId: this.agentId,
       workspaceId: this.workspaceDir,
       sessionKey:
         typeof event.signal.metadata?.sessionKey === 'string'
@@ -396,8 +364,6 @@ export class BuiltinMemoryProvider implements MemoryProvider {
   async shutdown(): Promise<void> {}
 
   private canReadRecord(record: MemoryRecord, scope: MemoryReadRequest['scope']): boolean {
-    if (this.accessPolicy) return this.accessPolicy.canReadRecord(record, scope);
-    if (record.scope.agentId !== this.agentId) return false;
     if (record.scope.sessionKey && record.scope.sessionKey !== scope?.sessionKey) return false;
     if (record.scope.projectId && record.scope.projectId !== scope?.projectId) return false;
     return true;
@@ -408,7 +374,7 @@ function inferKindFromPath(path: string): MemoryRecord['kind'] {
   const normalized = path.replace(/\\/g, '/');
   if (normalized === 'user/MEMORY.md' || normalized.endsWith('/user/MEMORY.md')) return 'user_profile';
   if (/^memory\/\d{4}-\d{2}-\d{2}\.md$/.test(normalized)) return 'daily_note';
-  if (normalized.endsWith('MEMORY.md')) return 'agent_note';
+  if (normalized.endsWith('MEMORY.md')) return 'curated_note';
   return 'workspace_fact';
 }
 

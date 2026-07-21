@@ -212,6 +212,10 @@ export interface ElectronMenuAPI {
   onHistoryNavigate(callback: (delta: -1 | 1) => void): () => void;
 }
 
+export interface ElectronVoiceInputHotkeyAPI {
+  onToggle(callback: () => void): () => void;
+}
+
 export type ElectronUiLanguage = "en" | "zh";
 
 export interface ElectronLocaleAPI {
@@ -427,6 +431,7 @@ export interface ElectronAPI {
   startup?: ElectronStartupAPI;
   gateway?: ElectronGatewayShellAPI;
   platform: "darwin" | "win32" | "linux";
+  voiceInputHotkey?: ElectronVoiceInputHotkeyAPI;
   menu?: ElectronMenuAPI;
   locale?: ElectronLocaleAPI;
   cron?: ElectronCronDisplayWakeAPI;

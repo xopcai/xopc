@@ -246,6 +246,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
     },
   },
   platform: process.platform as "darwin" | "win32" | "linux",
+  voiceInputHotkey: {
+    onToggle: (callback: () => void) => {
+      const handler = () => callback();
+      ipcRenderer.on("voice-input:toggle", handler);
+      return () => ipcRenderer.removeListener("voice-input:toggle", handler);
+    },
+  },
   menu: {
     getModel: () =>
       ipcRenderer.invoke("menu:get-model") as Promise<

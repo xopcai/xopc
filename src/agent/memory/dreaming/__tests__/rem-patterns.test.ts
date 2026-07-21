@@ -61,10 +61,11 @@ describe('runRemPatterns', () => {
     await runRemPatterns(params);
     await runRemPatterns(params);
 
-    const records = listMemoryRecords({ agentId: 'research', status: 'active' });
+    const records = listMemoryRecords({ status: 'active' });
     expect(records).toEqual([expect.objectContaining({
       kind: 'derived_insight',
-      scope: expect.objectContaining({ agentId: 'research', workspaceId: workspaceDir }),
+      scope: expect.objectContaining({ userId: 'local-owner', workspaceId: workspaceDir }),
+      provenance: { sourceAgentId: 'research' },
       canonicalKey: expect.stringMatching(/^dreaming-rem:/),
       content: expect.stringContaining('Recurring context across 2 memory sources'),
     })]);
@@ -80,6 +81,6 @@ describe('runRemPatterns', () => {
     });
 
     expect(result.patternsDiscovered).toBe(1);
-    expect(listMemoryRecords({ agentId: 'research' })).toEqual([]);
+    expect(listMemoryRecords()).toEqual([]);
   });
 });

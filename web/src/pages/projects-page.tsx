@@ -18,6 +18,7 @@ import { Link, useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { WorkbenchActivity } from '@/features/activity/workbench-activity';
 import { delegateWork, fetchProjects, type Project } from '@/features/projects/api';
 import {
   fetchWorkHome,
@@ -436,6 +437,8 @@ export function ProjectsPage() {
               ))}</div>
             </section>
           ) : null}
+
+          <WorkbenchActivity />
         </>
       ) : null}
 

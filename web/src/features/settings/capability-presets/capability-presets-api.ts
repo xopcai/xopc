@@ -34,7 +34,6 @@ export type CapabilityPresetPolicyFields = {
     allow?: string[];
     deny?: string[];
   };
-  memory?: Record<string, unknown>;
   workflows?: Record<string, unknown>;
   boundaries?: {
     requiresConfirmation: string[];

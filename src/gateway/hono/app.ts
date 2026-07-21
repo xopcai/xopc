@@ -28,6 +28,7 @@ import { routeErrorMiddleware } from './middleware/route-errors.js';
 import { registerPublicExtensionAssetRoutes } from './routes/auth-registry-extensions.js';
 import { registerAuthenticatedRoutes } from './routes/index.js';
 import { registerPublicGatewayRoutes } from './routes/public-gateway.js';
+import { registerPublicLocalAppPreviewRoutes } from './routes/local-apps.js';
 import { resetLazyRouteBundlesForTests } from './routes/lazy-fallback.js';
 import { prewarmStaticUiCache } from './lib/static-ui.js';
 import { registerSiteShareMiddleware } from '../../share/site-share-router.js';
@@ -43,7 +44,8 @@ export interface HonoAppConfig {
  * with `frame-ancestors 'none'` / `X-Frame-Options: DENY`, or the console cannot embed iframes.
  */
 export function isExtensionGatewayUiAssetPath(path: string): boolean {
-  return /^\/api\/extensions\/[^/]+\/assets\//.test(path);
+  return /^\/api\/extensions\/[^/]+\/assets\//.test(path)
+    || /^\/api\/local-apps\/preview\/[^/]+\//.test(path);
 }
 
 export function createHonoApp(config: HonoAppConfig): Hono {
@@ -237,6 +239,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   // have an opaque origin of `null` and cannot forward the ?token= from the parent HTML URL.
   // Security is enforced by the strict CSP (frame-ancestors 'self') on every response.
   registerPublicExtensionAssetRoutes(app, service);
+  registerPublicLocalAppPreviewRoutes(app, service);
 
   const authenticated = new Hono();
   authenticated.use(routeErrorMiddleware());

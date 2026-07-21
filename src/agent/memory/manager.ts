@@ -5,7 +5,6 @@ import { createLogger } from '../../utils/logger.js';
 import type { MemoryProvider, MemoryProviderInitOptions } from './provider.js';
 import { UserUnderstandingService } from './understanding/service.js';
 import type { UnderstandingCandidate } from './understanding/types.js';
-import type { MemoryAccessPolicy } from './access-policy.js';
 import type {
   MemoryDeleteRequest,
   MemoryListRequest,
@@ -36,7 +35,6 @@ export interface MemoryRoutingOptions {
 export interface MemoryManagerOptions extends MemoryRoutingOptions {
   loadProviders?: () => Promise<MemoryProvider[]>;
   writePolicy?: MemoryWritePolicy;
-  accessPolicy?: MemoryAccessPolicy;
 }
 
 export interface MemoryWritePolicy {
@@ -57,7 +55,6 @@ export class MemoryManager {
   private readonly understanding: UserUnderstandingService;
   private readonly lastTurnSourceItem = new Map<string, string>();
   private understandingAgentId: string | undefined;
-  private readonly accessPolicy?: MemoryAccessPolicy;
 
   constructor(options: MemoryManagerOptions = {}) {
     this.routing = {
@@ -66,7 +63,6 @@ export class MemoryManager {
       replicateTo: options.replicateTo ?? [],
     };
     this.loadProviders = options.loadProviders;
-    this.accessPolicy = options.accessPolicy;
     this.writePolicy = {
       allowExternalWrites: options.writePolicy?.allowExternalWrites ?? false,
       requireUserProfileApproval: options.writePolicy?.requireUserProfileApproval ?? false,
@@ -147,7 +143,7 @@ export class MemoryManager {
     userContent: string,
     assistantContent: string,
     options?: { agentId?: string; sessionId?: string; correctionTargetRecordIds?: string[] },
-  ): Promise<void> {
+  ): Promise<import('./understanding/types.js').UnderstandingReviewResult> {
     const review = await this.understanding.reviewTurn({
       agentId: options?.agentId ?? this.understandingAgentId,
       userContent,
@@ -158,6 +154,7 @@ export class MemoryManager {
     if (options?.sessionId && review.sourceItemId) {
       this.lastTurnSourceItem.set(options.sessionId, review.sourceItemId);
     }
+    return review;
   }
 
   async syncProvidersForTurn(
@@ -339,41 +336,21 @@ export class MemoryManager {
   }
 
   async write(request: MemoryWriteRequest): Promise<MemoryWriteResult> {
-    const denied = this.crossAgentWriteDenied('write', request);
-    if (denied) return denied;
     return this.writeWithStrategy('write', request);
   }
 
   async update(request: MemoryUpdateRequest): Promise<MemoryWriteResult> {
-    const denied = this.crossAgentWriteDenied('update', request);
-    if (denied) return denied;
     return this.writeWithStrategy('update', request);
   }
 
   async delete(request: MemoryDeleteRequest): Promise<MemoryWriteResult> {
-    const denied = this.crossAgentWriteDenied('delete', request);
-    if (denied) return denied;
     return this.writeWithStrategy('delete', request);
   }
 
   private canReadRecord(record: MemoryRecord, scope?: MemorySearchRequest['scope']): boolean {
-    return this.accessPolicy?.canReadRecord(record, scope) ?? true;
-  }
-
-  private crossAgentWriteDenied(
-    action: 'write' | 'update' | 'delete',
-    request: MemoryWriteRequest | MemoryUpdateRequest | MemoryDeleteRequest,
-  ): MemoryWriteResult | null {
-    if (!this.accessPolicy) return null;
-    const ownerAgentId = request.scope?.agentId ?? this.accessPolicy.requesterAgentId;
-    if (ownerAgentId === this.accessPolicy.requesterAgentId) return null;
-    if (action !== 'write' || !('status' in request) || request.status !== 'candidate') {
-      return { success: false, error: 'Cross-agent changes must be submitted as memory candidates' };
-    }
-    if (!this.accessPolicy.canSubmitCandidate(ownerAgentId)) {
-      return { success: false, error: 'Cross-agent candidate submission is not allowed' };
-    }
-    return null;
+    void record;
+    void scope;
+    return true;
   }
 
   onMemoryWrite(action: 'add' | 'replace' | 'remove', target: 'memory' | 'user', content: string): void {

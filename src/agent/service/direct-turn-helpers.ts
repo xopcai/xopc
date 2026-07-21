@@ -151,6 +151,13 @@ export async function runDirectAgentTurn(
     input.sessionKey,
   );
   const userMessageForModel = userContext.modelMessage;
+  if (userContext.consentRequests.length > 0) {
+    input.onEvent?.({
+      type: 'memory_consent_required',
+      runId: input.runId,
+      requests: userContext.consentRequests,
+    });
+  }
 
   const modelRef = deps.modelManager.getModelForSession(input.sessionKey);
   const llmTurn = await hydrateUserTurnForLlm({
@@ -174,7 +181,10 @@ export async function runDirectAgentTurn(
     onEvent: input.onEvent,
   });
 
-  await deps.agentManager.afterAgentTurn(input.sessionKey, userPlain);
+  const understandingReview = await deps.agentManager.afterAgentTurn(input.sessionKey, userPlain);
+  if (understandingReview?.createdRecords.length) {
+    input.onEvent?.({ type: 'memory_captured', runId: input.runId, records: understandingReview.createdRecords });
+  }
   deps.agentManager.scheduleBackgroundReviewAfterUserTurn(input.sessionKey);
 
   return result;

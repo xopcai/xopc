@@ -1,4 +1,4 @@
-import { showActivity } from '@/stores/activity-center-store';
+import { showActivity } from '@/stores/activity-store';
 
 export type ToastType = 'info' | 'success' | 'warning' | 'error';
 
