@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { ArrowLeft, Check, ExternalLink, Loader2, Plus, Search, Settings, X } from 'lucide-react';
+import { ArrowLeft, Box, Check, ExternalLink, Loader2, Plus, Search, Settings, X } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useSWRConfig } from 'swr';
@@ -120,13 +120,21 @@ export function ExtensionsPage() {
         </div>
       ),
       end: (
-        <Button asChild variant="primary" className="h-9">
-          <Link to="/local-apps/new"><Plus className="size-4" />{language === 'zh' ? '创建本地应用' : 'Create local app'}</Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button asChild variant="secondary" className="h-9">
+            <Link to="/local-apps" aria-label={m.extensionsPage.openLocalApps} title={m.extensionsPage.openLocalApps}>
+              <Box className="size-4" />
+              <span className="hidden sm:inline">{m.extensionsPage.openLocalApps}</span>
+            </Link>
+          </Button>
+          <Button asChild variant="primary" className="h-9">
+            <Link to="/local-apps/new"><Plus className="size-4" />{m.extensionsPage.createLocalApp}</Link>
+          </Button>
+        </div>
       ),
     });
     return () => clearPageHeader();
-  }, [clearPageHeader, language, m.extensionsPage.title, setPageHeader]);
+  }, [clearPageHeader, m.extensionsPage.createLocalApp, m.extensionsPage.openLocalApps, m.extensionsPage.title, setPageHeader]);
 
   if (loading && mainTab !== 'marketplace') {
     return <ExtensionsPageSkeleton />;

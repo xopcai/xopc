@@ -26,6 +26,12 @@
     "providerRecommended": "推荐",
     "workDiscovery": {
       "title": "把最近的工作接进来",
+      "selectProject": "选择一个项目",
+      "recentProjects": "最近使用",
+      "chooseWorkFolder": "选择一个工作文件夹",
+      "chooseAnotherFolder": "选择其他文件夹",
+      "resumeAnalysis": "查看分析进度",
+      "projectStartFailed": "无法在这个项目中打开会话。",
       "subtitle": "选择一个本地文件夹。xopc 会只读了解当前进展，并整理几个可以继续推进的方向。通常需要不到一分钟。",
       "chooseFolder": "选择文件夹",
       "skip": "暂时跳过",

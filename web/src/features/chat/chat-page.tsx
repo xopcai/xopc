@@ -488,6 +488,12 @@ export function ChatPage() {
   const refreshWelcomeExploration = useCallback(() => {
     setWelcomeExplorationOffset((value) => value + 1);
   }, []);
+  const selectWelcomeProject = useCallback(
+    async (projectId: string) => {
+      await session.createNewSession({ projectId });
+    },
+    [session.createNewSession],
+  );
 
   const canSelectWorkingDirectory = useMemo(
     () =>
@@ -1154,6 +1160,7 @@ export function ChatPage() {
                     }
                     onRetryWelcomeContext={welcomeContextState.retry}
                     onRefreshWelcomeExploration={refreshWelcomeExploration}
+                    onSelectWelcomeProject={selectWelcomeProject}
                     onDeleteRound={stream.deleteMessageRound}
                     onRetryUserMessageRound={stream.retryUserMessageRound}
                     deleteRoundDisabled={stream.streaming || stream.sending}

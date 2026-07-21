@@ -74,6 +74,13 @@ export function buildRouteSeeds(language: StoredLanguage): RouteHitSeed[] {
       keywords: ['extension', 'plugin', 'addon'],
     },
     {
+      id: 'route:local-apps',
+      title: m.nav.localApps,
+      subtitle: r.localAppsSubtitle,
+      path: '/local-apps',
+      keywords: ['app', 'apps', 'local app', 'tool', 'workshop', 'coder', '应用', '本地应用', '工具', '工坊'],
+    },
+    {
       id: 'route:sessions',
       title: m.nav.sessions,
       subtitle: r.sessionsSubtitle,

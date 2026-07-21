@@ -2,6 +2,8 @@
   "extensionsPage": {
     "title": "Extensions",
     "subtitle": "Browse the marketplace and manage built-in and installed extensions.",
+    "openLocalApps": "App Workshop",
+    "createLocalApp": "Create app",
     "tabMarketplace": "Marketplace",
     "tabBuiltin": "Built-in",
     "tabUser": "Installed",

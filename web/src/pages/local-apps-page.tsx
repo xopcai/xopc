@@ -18,7 +18,7 @@ export function LocalAppsPage() {
   useLayoutEffect(() => {
     setPageHeader({
       startExtra: null,
-      main: <h1 className="truncate text-base font-semibold tracking-tight text-fg">{zh ? '本地应用' : 'Local Apps'}</h1>,
+      main: <h1 className="truncate text-base font-semibold tracking-tight text-fg">{zh ? '应用工坊' : 'App Workshop'}</h1>,
       end: (
         <Button asChild variant="primary" className="h-9">
           <Link to="/local-apps/new"><Plus className="size-4" />{zh ? '创建应用' : 'Create app'}</Link>
