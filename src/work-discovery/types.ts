@@ -39,11 +39,16 @@ export interface WorkDiscoveryEvidence {
 
 export interface WorkDiscoverySuggestion {
   id: string;
+  actionType: 'summarize_recent_work' | 'inspect_related_tests' | 'plan_next_step';
   title: string;
   rationale: string;
   evidence: WorkDiscoveryEvidence[];
   actionPrompt: string;
   confidence: 'high' | 'medium' | 'low';
+  expectedOutcome: string;
+  estimatedMinutes: number;
+  risk: 'analysis' | 'command' | 'file_write';
+  verification: string[];
 }
 
 export interface WorkDiscoveryResult {
@@ -51,8 +56,23 @@ export interface WorkDiscoveryResult {
   currentState: string;
   uncertainties: string[];
   suggestions: WorkDiscoverySuggestion[];
+  primarySuggestionId?: string;
   lowConfidence?: boolean;
   contextQuestion?: string;
+}
+
+export type WorkDiscoveryRecognitionDecision =
+  | 'confirmed'
+  | 'corrected'
+  | 'different_goal'
+  | 'dismissed';
+
+export interface WorkDiscoveryFeedback {
+  runId: string;
+  recognitionDecision: WorkDiscoveryRecognitionDecision;
+  correctedIntent?: string;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface WorkContextDocument {
@@ -119,6 +139,7 @@ export interface WorkDiscoveryRun {
   scanPolicyVersion: number;
   snapshot?: WorkContextSnapshotSummary;
   result?: WorkDiscoveryResult;
+  feedback?: WorkDiscoveryFeedback;
   errorCode?: WorkDiscoveryErrorCode;
   errorMessage?: string;
   createdAt: number;
@@ -135,6 +156,12 @@ export interface WorkDiscoveryPreview {
   projectKind: 'coding' | 'general' | 'unknown';
   projectKindConfidence: number;
   markerReasons: string[];
+  fingerprint: {
+    branch?: string;
+    changedFileCount: number;
+    recentAreas: string[];
+    generatedAt: number;
+  };
   provider: string;
   remoteModel: boolean;
   policyVersion: number;

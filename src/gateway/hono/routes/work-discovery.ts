@@ -5,7 +5,7 @@ import { isLocalModelBaseUrl } from '../../../providers/model-call.js';
 import { resolveModel } from '../../../providers/index.js';
 import { previewWorkDiscoveryRoot, WORK_DISCOVERY_SCAN_POLICY_VERSION } from '../../../work-discovery/probe.js';
 import { WorkDiscoveryService } from '../../../work-discovery/service.js';
-import type { WorkDiscoverySource } from '../../../work-discovery/types.js';
+import type { WorkDiscoveryRecognitionDecision, WorkDiscoverySource } from '../../../work-discovery/types.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 const services = new WeakMap<AuthenticatedRouteDeps['service'], WorkDiscoveryService>();
@@ -105,6 +105,24 @@ export function registerWorkDiscoveryRoutes(authenticated: Hono, deps: Authentic
   authenticated.post('/api/work-discovery/runs/:runId/retry', (c) => {
     const run = service.retryRun(c.req.param('runId'));
     return run ? c.json({ ok: true, run }) : c.json({ ok: false, error: 'Run not found' }, 404);
+  });
+
+  authenticated.post('/api/work-discovery/runs/:runId/recognition-feedback', async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const decision = stringField(body, 'decision');
+    if (!['confirmed', 'corrected', 'different_goal', 'dismissed'].includes(decision)) {
+      return c.json({ ok: false, error: 'Invalid recognition decision' }, 400);
+    }
+    try {
+      const run = await service.submitRecognitionFeedback({
+        runId: c.req.param('runId'),
+        decision: decision as WorkDiscoveryRecognitionDecision,
+        ...(stringField(body, 'correctedIntent') ? { correctedIntent: stringField(body, 'correctedIntent') } : {}),
+      });
+      return run ? c.json({ ok: true, run }) : c.json({ ok: false, error: 'Completed run not found' }, 404);
+    } catch (error) {
+      return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400);
+    }
   });
 
   authenticated.post('/api/work-discovery/runs/:runId/suggestions/:suggestionId/select', (c) => {

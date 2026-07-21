@@ -6,11 +6,16 @@ export type WorkDiscoveryStage = 'folder_structure' | 'recent_progress' | 'next_
 
 export type WorkDiscoverySuggestion = {
   id: string;
+  actionType: 'summarize_recent_work' | 'inspect_related_tests' | 'plan_next_step';
   title: string;
   rationale: string;
   evidence: Array<{ path?: string; observation: string }>;
   actionPrompt: string;
   confidence: 'high' | 'medium' | 'low';
+  expectedOutcome: string;
+  estimatedMinutes: number;
+  risk: 'analysis' | 'command' | 'file_write';
+  verification: string[];
 };
 
 export type WorkDiscoveryResult = {
@@ -18,6 +23,7 @@ export type WorkDiscoveryResult = {
   currentState: string;
   uncertainties: string[];
   suggestions: WorkDiscoverySuggestion[];
+  primarySuggestionId?: string;
   lowConfidence?: boolean;
   contextQuestion?: string;
 };
@@ -30,6 +36,10 @@ export type WorkDiscoveryRun = {
   projectId: string;
   sessionKey: string;
   result?: WorkDiscoveryResult;
+  feedback?: {
+    recognitionDecision: 'confirmed' | 'corrected' | 'different_goal' | 'dismissed';
+    correctedIntent?: string;
+  };
   errorCode?: string;
   errorMessage?: string;
 };
@@ -42,6 +52,12 @@ export type WorkDiscoveryPreview = {
   projectKind: 'coding' | 'general' | 'unknown';
   projectKindConfidence: number;
   markerReasons: string[];
+  fingerprint: {
+    branch?: string;
+    changedFileCount: number;
+    recentAreas: string[];
+    generatedAt: number;
+  };
   provider: string;
   remoteModel: boolean;
   policyVersion: number;
@@ -96,6 +112,20 @@ export async function cancelWorkDiscoveryRun(runId: string): Promise<WorkDiscove
 export async function retryWorkDiscoveryRun(runId: string): Promise<WorkDiscoveryRun> {
   const response = await fetchJson<{ run: WorkDiscoveryRun }>(apiUrl(`/api/work-discovery/runs/${encodeURIComponent(runId)}/retry`), {
     method: 'POST',
+  });
+  return response.run;
+}
+
+export async function submitWorkDiscoveryRecognitionFeedback(
+  runId: string,
+  decision: 'confirmed' | 'corrected' | 'different_goal' | 'dismissed',
+  correctedIntent?: string,
+): Promise<WorkDiscoveryRun> {
+  const response = await fetchJson<{ run: WorkDiscoveryRun }>(apiUrl(
+    `/api/work-discovery/runs/${encodeURIComponent(runId)}/recognition-feedback`,
+  ), {
+    method: 'POST',
+    body: JSON.stringify({ decision, correctedIntent }),
   });
   return response.run;
 }

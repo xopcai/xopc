@@ -131,12 +131,24 @@ export async function canonicalWorkDiscoveryRoot(input: string): Promise<string>
 export async function previewWorkDiscoveryRoot(rootPath: string) {
   const canonicalRootPath = await canonicalWorkDiscoveryRoot(rootPath);
   const inference = inferProjectKind({ workspaceRoot: canonicalRootPath });
+  const git = await gitInfo(canonicalRootPath);
+  const recentAreas = Array.from(new Set((git?.changedPaths ?? []).map((path) => {
+    const normalized = path.replaceAll('\\', '/');
+    const [first, second] = normalized.split('/');
+    return second ? `${first}/${second}` : first;
+  }).filter((area): area is string => Boolean(area)))).slice(0, 5);
   return {
     canonicalRootPath,
     displayName: basename(canonicalRootPath),
     projectKind: inference.kind,
     projectKindConfidence: inference.confidence,
     markerReasons: inference.reasons,
+    fingerprint: {
+      ...(git?.branch ? { branch: git.branch } : {}),
+      changedFileCount: git?.changedPaths.length ?? 0,
+      recentAreas,
+      generatedAt: Date.now(),
+    },
   };
 }
 

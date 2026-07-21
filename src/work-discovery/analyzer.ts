@@ -57,6 +57,18 @@ function validateSuggestion(value: unknown, allowedPaths: Set<string>): WorkDisc
   const confidence = item.confidence === 'high' || item.confidence === 'medium' || item.confidence === 'low'
     ? item.confidence
     : 'medium';
+  const actionType = item.actionType === 'summarize_recent_work'
+    || item.actionType === 'inspect_related_tests'
+    || item.actionType === 'plan_next_step'
+    ? item.actionType
+    : 'plan_next_step';
+  const risk = item.risk === 'command' || item.risk === 'file_write' ? item.risk : 'analysis';
+  const estimatedMinutes = typeof item.estimatedMinutes === 'number' && Number.isFinite(item.estimatedMinutes)
+    ? Math.max(1, Math.min(30, Math.round(item.estimatedMinutes)))
+    : 3;
+  const expectedOutcome = typeof item.expectedOutcome === 'string' && item.expectedOutcome.trim()
+    ? item.expectedOutcome.trim().slice(0, 500)
+    : item.title.trim().slice(0, 120);
   const evidence = Array.isArray(item.evidence)
     ? item.evidence.flatMap((raw) => {
       if (!raw || typeof raw !== 'object') return [];
@@ -71,12 +83,23 @@ function validateSuggestion(value: unknown, allowedPaths: Set<string>): WorkDisc
   if (evidence.length === 0) return null;
   return {
     id: randomUUID(),
+    actionType,
     title: item.title.trim().slice(0, 120),
     rationale: item.rationale.trim().slice(0, 600),
     evidence,
     actionPrompt: item.actionPrompt.trim().slice(0, 2_000),
     confidence,
+    expectedOutcome,
+    estimatedMinutes,
+    risk,
+    verification: strings(item.verification, 4).map((entry) => entry.slice(0, 300)),
   };
+}
+
+function suggestionScore(suggestion: WorkDiscoverySuggestion): number {
+  const confidence = suggestion.confidence === 'high' ? 3 : suggestion.confidence === 'medium' ? 2 : 1;
+  const safety = suggestion.risk === 'analysis' ? 3 : suggestion.risk === 'command' ? 2 : 1;
+  return confidence * 4 + safety * 2 - Math.min(suggestion.estimatedMinutes, 10) / 10;
 }
 
 function snapshotForModel(snapshot: WorkContextSnapshot): WorkContextSnapshot {
@@ -130,7 +153,10 @@ export async function analyzeWorkContext(input: {
     'Analyze only the supplied bounded snapshot. Never claim that you ran commands, tests, or inspected anything absent from it.',
     'Return only one JSON object with projectSummary, currentState, uncertainties, suggestions, lowConfidence, and contextQuestion.',
     'For a normal result, suggestions must contain exactly 3 materially different next steps.',
-    'Each suggestion must include title, rationale, evidence, actionPrompt, and confidence (high, medium, or low).',
+    'Each suggestion must include actionType, title, rationale, evidence, actionPrompt, confidence, expectedOutcome, estimatedMinutes, risk, and verification.',
+    'actionType must be summarize_recent_work, inspect_related_tests, or plan_next_step.',
+    'risk must be analysis, command, or file_write. estimatedMinutes is an integer from 1 to 30.',
+    'verification is a short array describing how the user can tell the outcome is real.',
     'Each evidence item contains an optional exact relative path from the snapshot and one concrete observation.',
     'actionPrompt asks the assistant to investigate or continue the step; it does not silently authorize file changes.',
     'If the current objective is unclear or fewer than three credible suggestions exist, set lowConfidence=true, return suggestions=[], and ask one concise contextQuestion.',
@@ -167,6 +193,7 @@ export async function analyzeWorkContext(input: {
     ? parsed.suggestions.map((value) => validateSuggestion(value, allowedPaths)).filter((value): value is WorkDiscoverySuggestion => Boolean(value))
     : [];
   if (suggestions.length !== 3) return { modelRef, result: lowConfidenceResult(input.snapshot) };
+  const primarySuggestion = [...suggestions].sort((a, b) => suggestionScore(b) - suggestionScore(a))[0];
   const projectSummary = typeof parsed.projectSummary === 'string' ? parsed.projectSummary.trim() : '';
   const currentState = typeof parsed.currentState === 'string' ? parsed.currentState.trim() : '';
   if (!projectSummary || !currentState) throw new Error('Analysis result is missing its summary');
@@ -177,6 +204,7 @@ export async function analyzeWorkContext(input: {
       currentState: currentState.slice(0, 1_200),
       uncertainties: strings(parsed.uncertainties, 6).map((value) => value.slice(0, 500)),
       suggestions,
+      ...(primarySuggestion ? { primarySuggestionId: primarySuggestion.id } : {}),
     },
   };
 }
@@ -189,7 +217,7 @@ export function workDiscoveryResultMarkdown(result: WorkDiscoveryResult): string
   }
   lines.push('', '## Suggested next steps');
   for (const [index, suggestion] of result.suggestions.entries()) {
-    lines.push('', `### ${index + 1}. ${suggestion.title}`, '', suggestion.rationale, '');
+    lines.push('', `### ${index + 1}. ${suggestion.title}`, '', suggestion.rationale, '', `Expected outcome: ${suggestion.expectedOutcome}`, '');
     for (const evidence of suggestion.evidence) {
       lines.push(`- ${evidence.path ? `\`${evidence.path}\`: ` : ''}${evidence.observation}`);
     }

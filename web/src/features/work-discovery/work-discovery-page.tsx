@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Check, ChevronRight, FileText, FolderOpen, GitBranch, Loader2, ShieldCheck, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Clock3, FileText, FolderOpen, GitBranch, Loader2, ShieldCheck, X } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { BrandLogo } from '@/components/shell/brand-logo';
@@ -19,13 +19,14 @@ import {
   retryWorkDiscoveryRun,
   selectWorkDiscoverySuggestion,
   startWorkDiscoveryRun,
+  submitWorkDiscoveryRecognitionFeedback,
   type WorkDiscoveryPreview,
   type WorkDiscoveryRun,
   type WorkDiscoveryStage,
   type WorkDiscoverySuggestion,
 } from './api';
 
-type PageState = 'loading' | 'intro' | 'consent' | 'running' | 'result' | 'error';
+type PageState = 'loading' | 'intro' | 'consent' | 'running' | 'recognition' | 'recommendation' | 'error';
 
 const STAGES: WorkDiscoveryStage[] = ['folder_structure', 'recent_progress', 'next_steps'];
 
@@ -45,10 +46,15 @@ export function WorkDiscoveryPage() {
   const [run, setRun] = useState<WorkDiscoveryRun | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [correctionOpen, setCorrectionOpen] = useState(false);
+  const [correction, setCorrection] = useState('');
+  const [alternativesOpen, setAlternativesOpen] = useState(false);
 
   const applyRun = useCallback((next: WorkDiscoveryRun) => {
     setRun(next);
-    if (next.status === 'completed') setPageState('result');
+    if (next.status === 'completed') {
+      setPageState(next.feedback?.recognitionDecision === 'confirmed' ? 'recommendation' : 'recognition');
+    }
     else if (next.status === 'failed' || next.status === 'canceled') setPageState('error');
     else setPageState('running');
   }, []);
@@ -164,6 +170,60 @@ export function WorkDiscoveryPage() {
     openConversation(run.sessionKey, draft);
   };
 
+  const confirmRecognition = async () => {
+    if (!run) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const next = await submitWorkDiscoveryRecognitionFeedback(run.id, 'confirmed');
+      setRun(next);
+      setPageState('recommendation');
+    } catch (cause) {
+      setError(errorText(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitCorrection = async (decision: 'corrected' | 'different_goal') => {
+    if (!run || !correction.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const next = await submitWorkDiscoveryRecognitionFeedback(run.id, decision, correction.trim());
+      setRun(next);
+      openConversation(next.sessionKey, correction.trim());
+    } catch (cause) {
+      setError(errorText(cause));
+      setBusy(false);
+    }
+  };
+
+  const openWithoutConfirming = async () => {
+    if (!run) return;
+    setBusy(true);
+    try {
+      const next = await submitWorkDiscoveryRecognitionFeedback(run.id, 'dismissed');
+      openConversation(next.sessionKey);
+    } catch (cause) {
+      setError(errorText(cause));
+      setBusy(false);
+    }
+  };
+
+  const primarySuggestion = run?.result?.suggestions.find(
+    (suggestion) => suggestion.id === run.result?.primarySuggestionId,
+  ) ?? run?.result?.suggestions[0];
+  const alternativeSuggestions = run?.result?.suggestions.filter(
+    (suggestion) => suggestion.id !== primarySuggestion?.id,
+  ) ?? [];
+
+  const riskLabel = (risk: WorkDiscoverySuggestion['risk']) => {
+    if (risk === 'command') return copy.riskCommand;
+    if (risk === 'file_write') return copy.riskFileWrite;
+    return copy.riskAnalysis;
+  };
+
   return (
     <div className="flex min-h-full flex-1 flex-col bg-surface-base">
       <main className="mx-auto flex w-full max-w-[40rem] flex-1 flex-col px-5 py-10 sm:px-8 sm:py-16">
@@ -227,6 +287,32 @@ export function WorkDiscoveryPage() {
                   {preview.projectKind === 'coding' ? copy.codingProject : preview.projectKind === 'general' ? copy.generalProject : copy.unknownProject}
                 </span>
               </div>
+              <div className="grid gap-3 border-b border-edge-subtle bg-surface-base/60 px-4 py-4 sm:grid-cols-2">
+                <div>
+                  <p className="text-xs font-medium text-fg-muted">{copy.localFingerprint}</p>
+                  <p className="mt-1 text-sm text-fg">
+                    {preview.fingerprint.branch
+                      ? copy.branchValue.replace('{{branch}}', preview.fingerprint.branch)
+                      : copy.noGitBranch}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-fg-muted">{copy.recentActivity}</p>
+                  <p className="mt-1 text-sm text-fg">
+                    {copy.changedFiles.replace('{{count}}', String(preview.fingerprint.changedFileCount))}
+                  </p>
+                </div>
+                {preview.fingerprint.recentAreas.length > 0 ? (
+                  <div className="sm:col-span-2">
+                    <p className="text-xs font-medium text-fg-muted">{copy.recentAreas}</p>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {preview.fingerprint.recentAreas.map((area) => (
+                        <code key={area} className="rounded-md bg-surface-muted px-2 py-1 text-xs text-fg">{area}</code>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
               <div className="divide-y divide-edge-subtle px-4">
                 <div className="flex gap-3 py-4">
                   <FileText className="mt-0.5 size-4 shrink-0 text-fg-muted" />
@@ -283,53 +369,123 @@ export function WorkDiscoveryPage() {
           </section>
         ) : null}
 
-        {pageState === 'result' && run?.result ? (
-          <section aria-labelledby="work-discovery-result-title">
+        {pageState === 'recognition' && run?.result ? (
+          <section aria-labelledby="work-discovery-recognition-title">
             <div className="text-center">
-              <h1 id="work-discovery-result-title" className="text-2xl font-semibold tracking-tight text-fg">
-                {run.result.lowConfidence ? copy.lowConfidenceTitle : copy.foundTitle}
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent-fg">{copy.recognitionEyebrow}</p>
+              <h1 id="work-discovery-recognition-title" className="mt-2 text-2xl font-semibold tracking-tight text-fg">
+                {run.result.lowConfidence ? copy.lowConfidenceTitle : copy.recognitionTitle}
               </h1>
-              <p className="mt-3 text-[0.95rem] leading-7 text-fg-muted">{run.result.projectSummary}</p>
-              <p className="mt-2 text-sm leading-6 text-fg-muted">{run.result.currentState}</p>
             </div>
+            <div className="mt-7 rounded-2xl border border-accent/25 bg-gradient-to-br from-accent-soft/45 via-surface-panel to-surface-panel p-5 sm:p-6">
+              <p className="text-base font-medium leading-7 text-fg">{run.result.projectSummary}</p>
+              <p className="mt-3 text-sm leading-6 text-fg-muted">{run.result.currentState}</p>
+              {!run.result.lowConfidence && primarySuggestion?.evidence.length ? (
+                <ul className="mt-5 space-y-2 border-t border-edge-subtle pt-4">
+                  {primarySuggestion.evidence.slice(0, 3).map((item, index) => (
+                    <li key={`${primarySuggestion.id}-recognition-${index}`} className="flex gap-2 text-xs leading-5 text-fg-muted">
+                      <GitBranch className="mt-0.5 size-3.5 shrink-0 text-accent-fg" />
+                      <span>{item.path ? <><code className="font-mono text-fg">{item.path}</code>: </> : null}{item.observation}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+
             {run.result.lowConfidence ? (
-              <div className="mt-8 rounded-xl border border-edge bg-surface-panel p-5 text-center">
+              <div className="mt-5">
                 <p className="text-sm font-medium leading-6 text-fg">{run.result.contextQuestion}</p>
-                <Button className="mt-5 bg-accent text-white hover:bg-accent-hover" onClick={() => openConversation(run.sessionKey, run.result?.contextQuestion)}>{copy.openConversation}</Button>
+                <textarea
+                  value={correction}
+                  onChange={(event) => setCorrection(event.target.value)}
+                  placeholder={copy.correctionPlaceholder}
+                  className="mt-3 min-h-24 w-full resize-y rounded-xl border border-edge bg-surface-panel px-3 py-2.5 text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-accent focus:ring-2 focus:ring-accent/15"
+                />
+                <Button className="mt-3 w-full bg-accent text-white hover:bg-accent-hover" disabled={busy || !correction.trim()} onClick={() => void submitCorrection('different_goal')}>
+                  {copy.continueWithCorrection}
+                </Button>
               </div>
             ) : (
-              <div className="mt-9">
-                <h2 className="text-sm font-semibold text-fg">{copy.suggestionsTitle}</h2>
-                <div className="mt-3 divide-y divide-edge-subtle border-y border-edge-subtle">
-                  {run.result.suggestions.map((suggestion) => (
-                    <article key={suggestion.id} className="py-5">
-                      <div className="flex items-start gap-3">
-                        <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent-fg"><ChevronRight className="size-4" /></div>
-                        <div className="min-w-0 flex-1">
-                          <h3 className="text-base font-semibold text-fg">{suggestion.title}</h3>
-                          <p className="mt-1 text-sm leading-6 text-fg-muted">{suggestion.rationale}</p>
-                          <ul className="mt-3 space-y-1.5">
-                            {suggestion.evidence.map((item, index) => (
-                              <li key={`${suggestion.id}-${index}`} className="flex gap-2 text-xs leading-5 text-fg-muted">
-                                <GitBranch className="mt-0.5 size-3.5 shrink-0" />
-                                <span>{item.path ? <><code className="font-mono text-fg">{item.path}</code>: </> : null}{item.observation}</span>
-                              </li>
-                            ))}
-                          </ul>
-                          <div className="mt-4 flex flex-wrap gap-2">
-                            <Button className="h-9 bg-accent px-3 py-1.5 text-white hover:bg-accent-hover" onClick={() => void handleSuggestion(suggestion, false)}>{copy.continue}</Button>
-                            <Button className="h-9 px-3 py-1.5" variant="secondary" onClick={() => void handleSuggestion(suggestion, true)}>{copy.discussFirst}</Button>
-                          </div>
-                        </div>
-                      </div>
-                    </article>
-                  ))}
+              <>
+                <div className="mt-6 flex flex-col gap-3 sm:flex-row-reverse">
+                  <Button className="h-11 flex-1 bg-accent text-white hover:bg-accent-hover" disabled={busy} onClick={() => void confirmRecognition()}>
+                    {busy ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}{copy.confirmUnderstanding}
+                  </Button>
+                  <Button variant="secondary" className="h-11 flex-1" disabled={busy} onClick={() => setCorrectionOpen((open) => !open)}>
+                    {copy.notQuiteRight}
+                  </Button>
+                </div>
+                {correctionOpen ? (
+                  <div className="mt-4 rounded-xl border border-edge bg-surface-panel p-4">
+                    <label className="text-sm font-medium text-fg" htmlFor="work-discovery-correction">{copy.correctionLabel}</label>
+                    <textarea
+                      id="work-discovery-correction"
+                      value={correction}
+                      onChange={(event) => setCorrection(event.target.value)}
+                      placeholder={copy.correctionPlaceholder}
+                      className="mt-2 min-h-24 w-full resize-y rounded-lg border border-edge bg-surface-base px-3 py-2.5 text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-accent focus:ring-2 focus:ring-accent/15"
+                    />
+                    <div className="mt-3 flex flex-wrap justify-end gap-2">
+                      <Button variant="ghost" disabled={busy || !correction.trim()} onClick={() => void submitCorrection('different_goal')}>{copy.differentGoal}</Button>
+                      <Button variant="primary" disabled={busy || !correction.trim()} onClick={() => void submitCorrection('corrected')}>{copy.useCorrection}</Button>
+                    </div>
+                  </div>
+                ) : null}
+              </>
+            )}
+            {error ? <p className="mt-4 text-sm text-danger" role="alert">{error}</p> : null}
+            <button type="button" disabled={busy} className="mx-auto mt-6 block text-sm text-fg-muted hover:text-fg hover:underline disabled:opacity-60" onClick={() => void openWithoutConfirming()}>{copy.openConversation}</button>
+          </section>
+        ) : null}
+
+        {pageState === 'recommendation' && run?.result && primarySuggestion ? (
+          <section aria-labelledby="work-discovery-recommendation-title">
+            <div className="text-center">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent-fg">{copy.understandingConfirmed}</p>
+              <h1 id="work-discovery-recommendation-title" className="mt-2 text-2xl font-semibold tracking-tight text-fg">{copy.primaryRecommendationTitle}</h1>
+            </div>
+            <article className="mt-7 rounded-2xl border border-accent/30 bg-surface-panel p-5 sm:p-6">
+              <div className="flex items-start gap-3">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent-fg"><ChevronRight className="size-5" /></div>
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-lg font-semibold text-fg">{primarySuggestion.title}</h2>
+                  <p className="mt-2 text-sm leading-6 text-fg-muted">{primarySuggestion.rationale}</p>
+                  <div className="mt-4 flex flex-wrap gap-2 text-xs">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-muted px-2.5 py-1 text-fg-muted"><Clock3 className="size-3.5" />{copy.estimatedMinutes.replace('{{count}}', String(primarySuggestion.estimatedMinutes))}</span>
+                    <span className="rounded-full bg-surface-muted px-2.5 py-1 text-fg-muted">{riskLabel(primarySuggestion.risk)}</span>
+                  </div>
+                  <div className="mt-4 rounded-xl bg-surface-base px-4 py-3">
+                    <p className="text-xs font-medium text-fg-muted">{copy.expectedOutcome}</p>
+                    <p className="mt-1 text-sm leading-6 text-fg">{primarySuggestion.expectedOutcome}</p>
+                  </div>
+                  <div className="mt-5 flex flex-wrap gap-2">
+                    <Button className="h-10 bg-accent px-4 text-white hover:bg-accent-hover" onClick={() => void handleSuggestion(primarySuggestion, false)}>{copy.startRecommendedAction}</Button>
+                    <Button className="h-10 px-4" variant="secondary" onClick={() => void handleSuggestion(primarySuggestion, true)}>{copy.explainFirst}</Button>
+                  </div>
                 </div>
               </div>
-            )}
-            <div className="mt-7 flex flex-wrap items-center justify-center gap-x-5 gap-y-3">
-              <button type="button" className="text-sm text-fg-muted hover:text-fg hover:underline" onClick={() => openConversation(run.sessionKey)}>{copy.openConversation}</button>
-              <button type="button" className="text-sm text-fg-muted hover:text-fg hover:underline" onClick={() => { setRun(null); setPreview(null); setPageState('intro'); }}>{copy.notAccurate}</button>
+            </article>
+            {alternativeSuggestions.length > 0 ? (
+              <div className="mt-5 border-t border-edge-subtle pt-4">
+                <button type="button" className="flex w-full items-center justify-between py-2 text-sm font-medium text-fg-muted hover:text-fg" onClick={() => setAlternativesOpen((open) => !open)}>
+                  {copy.otherDirections}
+                  <ChevronDown className={`size-4 transition-transform ${alternativesOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {alternativesOpen ? (
+                  <div className="mt-2 divide-y divide-edge-subtle rounded-xl border border-edge bg-surface-panel px-4">
+                    {alternativeSuggestions.map((suggestion) => (
+                      <button key={suggestion.id} type="button" className="flex w-full items-start gap-3 py-4 text-left" onClick={() => void handleSuggestion(suggestion, true)}>
+                        <ChevronRight className="mt-0.5 size-4 shrink-0 text-fg-subtle" />
+                        <span><span className="block text-sm font-medium text-fg">{suggestion.title}</span><span className="mt-1 block text-xs leading-5 text-fg-muted">{suggestion.expectedOutcome}</span></span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-3">
+              <button type="button" className="text-sm text-fg-muted hover:text-fg hover:underline" onClick={() => openConversation(run.sessionKey)}>{copy.doSomethingElse}</button>
+              <button type="button" className="text-sm text-fg-muted hover:text-fg hover:underline" onClick={() => { setCorrectionOpen(true); setPageState('recognition'); }}>{copy.correctUnderstanding}</button>
             </div>
           </section>
         ) : null}

@@ -6,6 +6,8 @@ import { runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import type {
   WorkDiscoveryOnboardingState,
   WorkDiscoveryOnboardingStatus,
+  WorkDiscoveryFeedback,
+  WorkDiscoveryRecognitionDecision,
   WorkDiscoveryRun,
 } from './types.js';
 
@@ -37,6 +39,14 @@ type RunRow = {
   started_at: number | null;
   completed_at: number | null;
   canceled_at: number | null;
+};
+
+type FeedbackRow = {
+  run_id: string;
+  recognition_decision: string;
+  corrected_intent: string | null;
+  created_at: number;
+  updated_at: number;
 };
 
 function parseJson<T>(value: string | null): T | undefined {
@@ -88,7 +98,25 @@ function runFromRow(row: RunRow): WorkDiscoveryRun {
 
 function readRun(db: DatabaseSync, clause: string, value: string): WorkDiscoveryRun | null {
   const row = db.prepare(`SELECT * FROM work_discovery_runs WHERE ${clause} = ?`).get(value) as RunRow | undefined;
-  return row ? runFromRow(row) : null;
+  if (!row) return null;
+  const run = runFromRow(row);
+  const feedback = getWorkDiscoveryFeedbackFromDb(db, run.id);
+  return feedback ? { ...run, feedback } : run;
+}
+
+function feedbackFromRow(row: FeedbackRow): WorkDiscoveryFeedback {
+  return {
+    runId: row.run_id,
+    recognitionDecision: row.recognition_decision as WorkDiscoveryRecognitionDecision,
+    ...(row.corrected_intent ? { correctedIntent: row.corrected_intent } : {}),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function getWorkDiscoveryFeedbackFromDb(db: DatabaseSync, runId: string): WorkDiscoveryFeedback | null {
+  const row = db.prepare('SELECT * FROM work_discovery_feedback WHERE run_id = ?').get(runId) as FeedbackRow | undefined;
+  return row ? feedbackFromRow(row) : null;
 }
 
 export function getWorkDiscoveryOnboardingState(): WorkDiscoveryOnboardingState {
@@ -157,6 +185,34 @@ export function getWorkDiscoveryRun(id: string): WorkDiscoveryRun | null {
 export function getWorkDiscoveryRunByIdempotencyKey(key: string): WorkDiscoveryRun | null {
   const { db } = requireXopcDatabase();
   return readRun(db, 'idempotency_key', key);
+}
+
+export function setWorkDiscoveryFeedback(input: {
+  runId: string;
+  recognitionDecision: WorkDiscoveryRecognitionDecision;
+  correctedIntent?: string;
+  nowMs?: number;
+}): WorkDiscoveryFeedback {
+  const now = input.nowMs ?? Date.now();
+  runSqliteWriteTransaction((db) => {
+    db.prepare(
+      `INSERT INTO work_discovery_feedback (
+        run_id, recognition_decision, corrected_intent, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(run_id) DO UPDATE SET
+        recognition_decision = excluded.recognition_decision,
+        corrected_intent = excluded.corrected_intent,
+        updated_at = excluded.updated_at`,
+    ).run(
+      input.runId,
+      input.recognitionDecision,
+      input.correctedIntent ?? null,
+      now,
+      now,
+    );
+  });
+  const { db } = requireXopcDatabase();
+  return getWorkDiscoveryFeedbackFromDb(db, input.runId)!;
 }
 
 export function updateWorkDiscoveryRun(

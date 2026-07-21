@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   canonicalWorkDiscoveryRoot,
+  previewWorkDiscoveryRoot,
   probeWorkDiscoveryRoot,
   summarizeWorkContextSnapshot,
 } from '../probe.js';
@@ -73,6 +74,23 @@ describe('work discovery probe', () => {
       documentCount: 1,
       contentBytes: expect.any(Number),
       changedPathCount: 0,
+    });
+  });
+
+  it('builds a bounded local fingerprint before deep analysis', async () => {
+    const root = await temporaryRoot();
+    await writeFile(join(root, 'package.json'), '{"name":"fingerprint-test"}');
+
+    const preview = await previewWorkDiscoveryRoot(root);
+
+    expect(preview).toMatchObject({
+      canonicalRootPath: expect.any(String),
+      displayName: expect.any(String),
+      fingerprint: {
+        changedFileCount: 0,
+        recentAreas: [],
+        generatedAt: expect.any(Number),
+      },
     });
   });
 });
