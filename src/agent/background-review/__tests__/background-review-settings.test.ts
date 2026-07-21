@@ -1,30 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import type { AgentManifest } from '../../../agent-manifest/index.js';
-import type { Config } from '../../../config/schema.js';
+import { ConfigSchema, type Config } from '../../../config/schema.js';
+import type { UserContextConfig } from '../../../user-context/config.js';
 import { resolveBackgroundReviewSettings } from '../settings.js';
 
-function config(memory: AgentManifest['memory']): Config {
-  return {
-    agents: {
-      default: 'main',
-      defaultPreset: 'default',
-      capabilityPresets: {},
-      list: [{
-        id: 'main',
-        enabled: true,
-        identity: { name: 'main', role: 'Assistant', language: 'en', tone: 'direct' },
-        responsibilities: { primary: ['Help'] },
-        workspace: { root: '/tmp/xopc' },
-        models: { defaultRole: 'main', roles: { main: { model: 'openai/gpt-4.1' } } },
-        tools: { builtin: {} },
-        skills: { mode: 'all' },
-        memory,
-        workflows: {},
-        boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
-      }],
-    },
-  } as Config;
+function config(memory: UserContextConfig['memory'], understanding?: Partial<UserContextConfig['understanding']>): Config {
+  const base = ConfigSchema.parse({});
+  return ConfigSchema.parse({
+    ...base,
+    userContext: { ...base.userContext, memory, understanding: { ...base.userContext.understanding, ...understanding } },
+  });
 }
 
 describe('resolveBackgroundReviewSettings', () => {
@@ -41,7 +26,6 @@ describe('resolveBackgroundReviewSettings', () => {
       sources: ['session'],
     }))).toEqual({
       enabled: true,
-      agentId: 'main',
       adaptiveCadence: true,
       reviewIntervalTurns: 10,
       maxHistoryMessages: 80,
@@ -49,18 +33,11 @@ describe('resolveBackgroundReviewSettings', () => {
     });
   });
 
-  it('respects per-agent overrides and memory access mode', () => {
+  it('respects global overrides and memory access mode', () => {
     const overridden = resolveBackgroundReviewSettings(config({
       mode: 'auto',
       sources: ['session'],
-      understanding: {
-        enabled: true,
-        adaptiveCadence: false,
-        reviewIntervalTurns: 3,
-        maxHistoryMessages: 40,
-        maxDurationMs: 45_000,
-      },
-    }));
+    }, { enabled: true, adaptiveCadence: false, reviewIntervalTurns: 3, maxHistoryMessages: 40, maxDurationMs: 45_000 }));
     expect(overridden).toMatchObject({
       enabled: true,
       adaptiveCadence: false,
@@ -75,7 +52,6 @@ describe('resolveBackgroundReviewSettings', () => {
     expect(resolveBackgroundReviewSettings(config({
       mode: 'confirmWrite',
       sources: ['session'],
-      understanding: { enabled: false },
-    })).enabled).toBe(false);
+    }, { enabled: false })).enabled).toBe(false);
   });
 });

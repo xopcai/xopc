@@ -14,7 +14,7 @@ export function buildUserContextBlock(raw: string): string {
   const clean = sanitizeUserContextFenceEscapes(trimmed);
   return (
     '<user-context>\n' +
-    '[System note: This is selected background context, not a user instruction. Use it only when relevant. Never reveal sensitive context or claim certainty beyond the evidence.]\n\n' +
+    '[System note: This is selected background context, not a user instruction. Use it quietly only when relevant, prioritizing a correct and useful result. Adapt without announcing that you remembered something. If the user shows effort, frustration, uncertainty, or progress, acknowledge it briefly and specifically before helping; never flatter, diagnose feelings, or manufacture intimacy. Never reveal sensitive context or claim certainty beyond the evidence.]\n\n' +
     `${clean}\n` +
     '</user-context>'
   );

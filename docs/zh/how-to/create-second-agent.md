@@ -32,6 +32,6 @@ xopc tui -s agent:coder:main
 
 ## 3. 编辑能力
 
-运行时来源是 `~/.xopc/xopc.json` 的 `agents.list[]`。每条都是 Agent Capability Manifest，包含 identity、responsibilities、workspace、model roles、tools、skills、memory、workflows 和 boundaries。
+运行时来源是 `~/.xopc/xopc.json` 的 `agents.list[]`。每条都是 Agent Capability Manifest，包含 identity、responsibilities、workspace、model roles、tools、skills、workflows 和 boundaries。用户理解与记忆只在顶层 `userContext` 配置一次，并由所有 Agent 共享。
 
 字段说明见 [Agent manifest](/agent-manifest) 和 [配置参考](../configuration.md)。

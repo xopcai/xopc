@@ -265,30 +265,6 @@ Skills are shared. Your setup is yours.
     log.info({ path: heartbeatPath }, 'Created HEARTBEAT.md');
   }
 
-  // MEMORY.md - Long-term memory (empty initially)
-  const memoryPath = join(profileDir, WORKSPACE_FILES.MEMORY);
-  if (!existsSync(memoryPath)) {
-    const memoryContent = `# MEMORY.md - Long-Term Memory
-
-_This is your curated memory — the distilled essence of what you've learned._
-
-## People
-
-## Projects
-
-## Preferences
-
-## Decisions
-
-## Lessons
-
----
-
-_Review and update this periodically from curated memory signals._
-`;
-    await writeFile(memoryPath, memoryContent, 'utf-8');
-    log.info({ path: memoryPath }, 'Created MEMORY.md');
-  }
 }
 
 // ─── CLI registration ───

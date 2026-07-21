@@ -1,26 +1,40 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
 const mocks = vi.hoisted(() => ({
   prompt: vi.fn(),
   waitForIdle: vi.fn(),
+  baseStreamFn: vi.fn(),
+  debug: vi.fn(),
+  session: undefined as any,
+}));
+
+vi.mock('../../../utils/logger.js', () => ({
+  createLogger: () => ({
+    debug: mocks.debug,
+    error: vi.fn(),
+  }),
 }));
 
 vi.mock('../session-runner.js', () => ({
-  acquireEmbeddedSessionRunner: vi.fn().mockResolvedValue({
-    session: {
+  acquireEmbeddedSessionRunner: vi.fn().mockImplementation(async () => {
+    const session = {
       prompt: mocks.prompt,
       agent: {
-        streamFn: vi.fn(),
+        streamFn: mocks.baseStreamFn,
         waitForIdle: mocks.waitForIdle,
       },
       abort: vi.fn(),
-    },
-    piSm: {
-      flushPendingToolResults: vi.fn(),
-    },
-    reused: false,
-    release: vi.fn(),
+    };
+    mocks.session = session;
+    return {
+      session,
+      piSm: {
+        flushPendingToolResults: vi.fn(),
+      },
+      reused: false,
+      release: vi.fn(),
+    };
   }),
   resolveEmbeddedTranscriptInputs: vi.fn().mockResolvedValue({
     sessionId: 'session-1',
@@ -65,6 +79,11 @@ describe('runXopcEmbeddedTurn image input', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.waitForIdle.mockResolvedValue(undefined);
+    delete process.env.XOPC_LOG_LLM_PAYLOAD;
+  });
+
+  afterEach(() => {
+    delete process.env.XOPC_LOG_LLM_PAYLOAD;
   });
 
   it('passes hydrated params.images to session.prompt (not inline content blocks)', async () => {
@@ -117,5 +136,48 @@ describe('runXopcEmbeddedTurn image input', () => {
     expect(mocks.prompt).toHaveBeenCalledWith('', {
       images: [{ type: 'image', data: 'ZnJvbS1wYXJhbXM=', mimeType: 'image/png' }],
     });
+  });
+
+  it('logs the complete effective context only when payload logging is enabled', async () => {
+    await runXopcEmbeddedTurn({
+      sessionKey: 'agent:main:test',
+      runId: 'run-3',
+      userMessage: { role: 'user', content: 'hello', timestamp: 1 } as AgentMessage,
+      model: { id: 'gpt-4o', provider: 'openai' } as any,
+      modelRef: 'openai/gpt-4o',
+      tools: [],
+      systemPrompt: 'system',
+      workspaceDir: '/tmp/workspace',
+      sessionStore: {} as any,
+      timeoutMs: 60_000,
+    });
+
+    const effectiveContext = {
+      systemPrompt: 'complete system prompt',
+      messages: [{ role: 'user', content: 'complete user message', timestamp: 1 }],
+      tools: [{ name: 'example_tool', description: 'Example tool' }],
+    };
+
+    mocks.session.agent.streamFn(
+      { id: 'gpt-4o', provider: 'openai' },
+      effectiveContext,
+      {},
+    );
+    expect(mocks.debug).toHaveBeenLastCalledWith(
+      expect.not.objectContaining({ effectiveContext: expect.anything() }),
+      'Sending messages to AI',
+    );
+
+    process.env.XOPC_LOG_LLM_PAYLOAD = 'true';
+    mocks.session.agent.streamFn(
+      { id: 'gpt-4o', provider: 'openai' },
+      effectiveContext,
+      {},
+    );
+
+    expect(mocks.debug).toHaveBeenCalledWith(
+      expect.objectContaining({ effectiveContext }),
+      'Sending messages to AI',
+    );
   });
 });

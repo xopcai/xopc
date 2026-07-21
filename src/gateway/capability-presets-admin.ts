@@ -37,7 +37,6 @@ export type CreateCapabilityPresetBody = {
   models?: CapabilityPreset['models'];
   tools?: CapabilityPreset['tools'];
   skills?: CapabilityPreset['skills'];
-  memory?: CapabilityPreset['memory'];
   workflows?: CapabilityPreset['workflows'];
   boundaries?: CapabilityPreset['boundaries'];
   runtime?: CapabilityPreset['runtime'];
@@ -52,7 +51,6 @@ export type UpdateCapabilityPresetBody = {
   models?: CapabilityPreset['models'] | null;
   tools?: CapabilityPreset['tools'] | null;
   skills?: CapabilityPreset['skills'] | null;
-  memory?: CapabilityPreset['memory'] | null;
   workflows?: CapabilityPreset['workflows'] | null;
   boundaries?: CapabilityPreset['boundaries'] | null;
   runtime?: CapabilityPreset['runtime'] | null;

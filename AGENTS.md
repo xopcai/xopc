@@ -217,8 +217,9 @@ import { DraftStreamManager } from '@xopcai/xopc/channels/telegram/draft-stream.
 |---------|---------|
 | `providers` | LLM API keys |
 | `agents.default` | Default agent id for routing/session creation |
-| `agents.capabilityPresets` | Reusable manifest policy patches (models, tools, skills, memory, runtime, boundaries) |
-| `agents.list` | Agent Capability Manifests: identity, responsibilities, workspace, model roles, tools, skills, memory, workflows, boundaries |
+| `agents.capabilityPresets` | Reusable manifest policy patches (models, tools, skills, runtime, boundaries) |
+| `userContext` | Global user understanding, memory, privacy, provider routing, and dreaming settings shared by every agent |
+| `agents.list` | Agent Capability Manifests: identity, responsibilities, workspace, model roles, tools, skills, workflows, boundaries |
 | `channels` | Telegram and other channel configs |
 | `gateway` | HTTP + SSE |
 | `mcp` | Outbound MCP server registry (`mcp.servers`) + session idle TTL |

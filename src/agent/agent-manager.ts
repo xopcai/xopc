@@ -16,7 +16,7 @@ import type { Model, Api } from '@earendil-works/pi-ai';
 import type { AgentInstanceGateway } from './agent-instance-gateway.js';
 import { type Config, getAgentDefaultModelRef } from '../config/schema.js';
 import { applyConfigOverrides } from '../config/runtime-overrides.js';
-import { resolveAgentHomeDir, resolveAgentProfileDir } from './agent-scope.js';
+import { resolveAgentProfileDir } from './agent-scope.js';
 import {
   type EffectiveAgentProfile,
   resolveEffectiveAgentProfile,
@@ -71,13 +71,14 @@ import type {
 import { createSkillConfigManager, isSkillEnabled, resolveSkillConfig } from './skills/config.js';
 import { isUnderManagedSkillsDir } from './skills/managed-store.js';
 import { loadSkillsLock, type SkillHubLockEntry, type SkillsLockFile } from './skills/hub-lock.js';
-import { basename, join, resolve, sep } from 'node:path';
+import { basename, resolve, sep } from 'node:path';
 
 import {
   isMemorySubsystemEnabled,
   shouldRegisterCuratedMemoryTool,
 } from './memory/memory-config.js';
 import type { MemoryManager } from './memory/manager.js';
+import { resolveDreamingRoot } from './memory/dreaming/scope.js';
 import { UserContextCoordinator } from './memory/user-context-coordinator.js';
 import type { UserContextPlan } from './memory/context/types.js';
 import { WorkspaceRuntimeRegistry, type WorkspaceRuntime } from './workspace-runtime/registry.js';
@@ -282,7 +283,10 @@ export class AgentManager implements AgentInstanceGateway {
     });
     this.userContext = new UserContextCoordinator({
       getConfig: () => this.config.config,
-      isEnabledForSession: (sk) => this.agents.get(sk)?.effectiveProfile.manifest.memory.mode !== 'off',
+      isEnabledForSession: () => Boolean(
+        this.config.config?.userContext.enabled
+        && this.config.config.userContext.memory.mode !== 'off',
+      ),
       getAgentIdForSession: (sk) => this.agents.get(sk)?.effectiveProfile.agentId ?? 'main',
       getMemoryManagerForSession: (sk) => this.getMemoryManagerForSession(sk),
       getLastAssistantContent: (sk) => this.getLastAssistantContent(sk),
@@ -488,7 +492,7 @@ export class AgentManager implements AgentInstanceGateway {
    * After a completed turn: sync external providers and queue next-turn prefetch.
    * Delegates to {@link UserContextCoordinator}.
    */
-  afterAgentTurn(sessionKey: string, userPlainText: string): Promise<void> {
+  afterAgentTurn(sessionKey: string, userPlainText: string): Promise<import('./memory/understanding/types.js').UnderstandingReviewResult | undefined> {
     return this.userContext.afterTurn(sessionKey, userPlainText);
   }
 
@@ -1236,7 +1240,7 @@ export class AgentManager implements AgentInstanceGateway {
     const model = this.resolveModelStringToModel(modelRef);
 
     const contextFiles = this.resolveContextFilesForSession(sessionKey, profile);
-    const dreamingRoot = join(resolveAgentHomeDir(this.config.config!, profile.agentId), 'memories');
+    const dreamingRoot = resolveDreamingRoot();
     const tools = this.toolsFactory.createAllTools({
       workspace: resolvedWorkspacePath,
       profileMarkdownRoot: resolveAgentProfileDir(this.config.config!, profile.agentId),

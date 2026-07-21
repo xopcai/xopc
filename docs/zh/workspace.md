@@ -2,7 +2,7 @@
 
 **profile Markdown、agent 主目录与 Markdown 工作区**的简明路径表见 [磁盘与目录布局](disk-layout.md)。
 
-xopc 在单一 **状态目录**（“Agent OS” 根）下保存本机状态；其下有 **按智能体划分** 的目录树（收件箱、入站/TTS、托管记忆、运行时文件等）。**会话 transcript** 存储在状态根下的 **`xopc.db`**（SQLite）。**工作空间（workspace）** 是 Markdown 根目录：工具 `cwd`、按日的 `memory/` 笔记、用户文件，以及其下的扩展安装路径。
+xopc 在单一 **状态目录**（“Agent OS” 根）下保存本机状态；其中 `user/` 保存所有 Agent 共享的用户上下文，按 Agent 划分的目录只保存 profile、收件箱、入站/TTS 与运行时文件。**会话 transcript** 存储在状态根下的 **`xopc.db`**（SQLite）。**工作空间（workspace）** 是 Markdown 根目录：工具 `cwd`、按日的 `memory/` 笔记、用户文件，以及其下的扩展安装路径。
 
 路径由 **主配置文件**（默认 `<状态目录>/xopc.json`）及环境变量决定。**`xopc init`** 与 **`xopc agents add`** 会创建目录并写入模板。**Markdown 工作区**（工具 `cwd` 与项目文件）与 **`agents/<id>/` 状态目录** 不是同一棵树：当前配置通常由 **`agents.list[].workspace.root`** 显式指定；生成默认值时回退到 **`<状态目录>/workspace/<agentId>/`**（默认智能体 id 为 `main`）。
 
@@ -34,6 +34,7 @@ xopc 在单一 **状态目录**（“Agent OS” 根）下保存本机状态；�
 | `bin/` | 托管的 CLI 包装（如 `xopc`）。 |
 | `tools/` | 内置工具运行时（例如 `tools/node/current/` 下的 Node/npm）。 |
 | `models.json` | 模型注册表缓存。 |
+| `user/` | 所有 Agent 共享的 `PROFILE.md`、`MEMORY.md`、托管 `memories/` 与 dreaming 状态。 |
 
 ## 按 Agent：`agents/<agentId>/`
 
@@ -51,7 +52,7 @@ xopc 在单一 **状态目录**（“Agent OS” 根）下保存本机状态；�
 
 CLI **未**加载到配置文件时，优先 **`XOPC_WORKSPACE`**（主智能体 Markdown 根的完整路径）；否则主 Markdown 树默认为 **`<状态目录>/workspace/main`**。**`xopc init`** 会创建 **`agents/<id>/`**、Markdown 工作区，并按 [工作区模板](/zh/reference/templates) 将缺失的 profile 文件写入 **`agents/<id>/profile/`**（仅当文件尚不存在时）。**`xopc agents add`** 更新 **`agents.list`** 并初始化目录与 profile 种子（见 [CLI](cli.md#agents)）。
 
-### 引导用 Markdown（人格与记忆索引）
+### 引导用 Markdown（Agent 人格）
 
 这些文件按 **固定顺序** 进入系统提示（有长度限制）。路径：**`agents/<agentId>/profile/`**（文件名不变）。
 
@@ -62,7 +63,7 @@ CLI **未**加载到配置文件时，优先 **`XOPC_WORKSPACE`**（主智能体
 | `TOOLS.md` | 环境相关的工具提示（主机、设备等）。 |
 | `AGENTS.md` | 安全与协作规范。 |
 | `HEARTBEAT.md` | 心跳 / 主动巡检配置（空或仅注释则跳过相关调用）。 |
-| `MEMORY.md` | 长期记忆索引。 |
+记忆不属于 Agent profile。所有 Agent 统一读取和写入 `user/` 下的共享用户上下文，并由顶层 `userContext` 控制。
 
 根目录下的其他 Markdown（例如 `CONTEXT.md`、`SKILLS.md`）为可选，**默认不会**写入系统提示；需自行通过工具读取或自定义流程使用。
 
@@ -74,11 +75,11 @@ CLI **未**加载到配置文件时，优先 **`XOPC_WORKSPACE`**（主智能体
 | `.state/` | 机器状态：`workspace.json`（引导种子信息）、`skills-cache.json` 等。 |
 | `.extensions/` | 与工作空间绑定的扩展安装/缓存（扩展加载器使用）。 |
 
-按会话的配置覆盖（SQLite `session_config`）、**入站**附件（`inbound/`）、**TTS** 缓存（`tts/`）与 **托管** 存储（`memories/`）与 **`agents/<agentId>/`**（agent 主目录）或 **`xopc.db`** 相关，不在本 Markdown 树内。
+按会话的配置覆盖（SQLite `session_config`）、**入站**附件（`inbound/`）与 **TTS** 缓存（`tts/`）与 **`agents/<agentId>/`**（agent 主目录）或 **`xopc.db`** 相关，不在本 Markdown 树内。托管记忆位于共享 `user/` 目录。
 
-### 托管记忆（`agents/<agentId>/memories/`） {#curated-memory}
+### 共享用户记忆（`user/`） {#curated-memory}
 
-与 **`agents/<agentId>/profile/MEMORY.md`**（系统提示用 profile 索引）不同，**`agents/<agentId>/memories/`** 使用 **`MEMORY.md`（助手笔记）** 存放有上限、以 § 分隔的条目。全局用户记忆位于 **`user/MEMORY.md`**。是否注入快照、是否允许运行中写入，由所选 agent manifest 的 `memory` 策略控制；运行中可通过 **`curated_memory`** 工具读写磁盘上的最新内容。
+**`user/memories/MEMORY.md`** 保存有上限、以 § 分隔的托管条目与 dreaming 状态；**`user/MEMORY.md`** 保存用户资料记忆。所有 Agent 按顶层 `userContext` 接收相同快照，并通过 **`curated_memory`** 读写最新内容。
 
 ## 运行时到底用哪个「工作空间」？
 

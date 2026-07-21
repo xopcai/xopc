@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
 import { cn } from '@/lib/cn';
 import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
@@ -41,6 +41,7 @@ function ShortcutEditor({
   defaultShortcut,
   setShortcut,
   legacyRecordingEvent,
+  notice,
 }: {
   title: string;
   description: string;
@@ -49,6 +50,7 @@ function ShortcutEditor({
   defaultShortcut: () => string;
   setShortcut: (shortcut: string) => void;
   legacyRecordingEvent?: string;
+  notice?: ReactNode;
 }) {
   const language = useLocaleStore((s) => s.language);
   const k = messages(language).keyboardShortcutsSettings;
@@ -147,6 +149,7 @@ function ShortcutEditor({
         ) : null}
       </div>
       {error ? <p className="mt-2 text-sm text-danger-fg">{error}</p> : null}
+      {notice ? <div className="mt-3 border-t border-edge pt-3">{notice}</div> : null}
     </section>
   );
 }
@@ -184,7 +187,64 @@ function VoiceInputShortcutEditor() {
       otherShortcut={quickCaptureShortcut}
       defaultShortcut={defaultVoiceInputShortcut}
       setShortcut={setShortcut}
+      notice={<MacVoiceHotkeyPermissionNotice />}
     />
+  );
+}
+
+function MacVoiceHotkeyPermissionNotice() {
+  const language = useLocaleStore((s) => s.language);
+  const k = messages(language).keyboardShortcutsSettings;
+  const system = window.electronAPI?.system;
+  const isMacElectron = isElectron() && window.electronAPI?.platform === 'darwin';
+  const [granted, setGranted] = useState(false);
+  const [requesting, setRequesting] = useState(false);
+
+  useEffect(() => {
+    if (!isMacElectron || !system) return;
+    let active = true;
+    const refresh = () => {
+      void system.getPermissions().then((permissions) => {
+        if (active) setGranted(permissions.accessibility === 'granted');
+      }).catch(() => undefined);
+    };
+    refresh();
+    window.addEventListener('focus', refresh);
+    return () => {
+      active = false;
+      window.removeEventListener('focus', refresh);
+    };
+  }, [isMacElectron, system]);
+
+  if (!isMacElectron || !system) return null;
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <p className="max-w-[65ch] text-xs text-fg-muted">
+        {granted ? k.voiceInputAccessibilityGranted : k.voiceInputAccessibilityDescription}
+      </p>
+      {!granted ? (
+        <button
+          type="button"
+          disabled={requesting}
+          className={cn(
+            'rounded-lg border border-edge-strong bg-surface-panel px-3 py-1.5 text-xs font-medium text-fg transition-colors hover:bg-surface-hover',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:text-fg-disabled',
+          )}
+          onClick={async () => {
+            setRequesting(true);
+            try {
+              const result = await system.requestAccessibility();
+              setGranted(result.status === 'granted');
+            } finally {
+              setRequesting(false);
+            }
+          }}
+        >
+          {requesting ? k.voiceInputAccessibilityRequesting : k.voiceInputAccessibilityEnable}
+        </button>
+      ) : null}
+    </div>
   );
 }
 
@@ -235,10 +295,15 @@ export function KeyboardShortcutsSettingsPanel() {
   const categories: ShortcutCategory[] = [];
 
   if (isElectron()) {
+    const voiceModifier = window.electronAPI?.platform === 'darwin' ? 'Fn' : 'Alt';
+    const voiceModifierNote = window.electronAPI?.platform === 'darwin'
+      ? k.globalVoiceInputMacNote
+      : k.globalVoiceInputWindowsNote;
     categories.push({
       title: k.categoryGlobal,
       shortcuts: [
         { keys: [MOD, 'Shift', 'Space'], label: k.globalToggleWindow },
+        { keys: [voiceModifier], label: k.globalVoiceInput, note: voiceModifierNote },
       ],
     });
   }

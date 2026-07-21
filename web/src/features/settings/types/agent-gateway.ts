@@ -64,18 +64,6 @@ export type GatewayAgentEffectiveManifestPayload = {
       allow?: string[];
       deny?: string[];
     };
-    memory?: {
-      mode?: string;
-      sources?: string[];
-      writePolicy?: Record<string, string>;
-      providerRouting?: {
-        searchStrategy?: string;
-        writeStrategy?: string;
-        allowExternalWrites?: boolean;
-        allowedProviderIds?: string[];
-        autoWriteKinds?: string[];
-      };
-    };
     workflows?: {
       default?: string;
       allowed?: string[];

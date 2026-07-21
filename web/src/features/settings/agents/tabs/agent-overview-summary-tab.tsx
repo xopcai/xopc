@@ -1,4 +1,4 @@
-import { Bot, Brain, Cable, Folder, MessageSquarePlus, Sparkles, Wrench } from 'lucide-react';
+import { Bot, Brain, Cable, MessageSquarePlus, Sparkles, Wrench } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import type { GatewayAgentRow } from '@/features/settings/agents-admin-api';
@@ -163,9 +163,8 @@ export function AgentOverviewSummaryTab({
             label={a.listSkillsLabel}
             value={skillsCount ? a.listSkillsCount.replace('{{count}}', String(skillsCount)) : a.listInheritedValue}
           />
-          <CapabilityCard icon={Brain} label={a.memoryTitle} value={a.overviewMemoryManaged} />
           <CapabilityCard icon={Cable} label={a.connectionsTitle} value={a.overviewConnectionsManaged} />
-          <CapabilityCard icon={Folder} label={a.listWorkspaceLabel} value={workspaceValue} />
+          <CapabilityCard icon={Brain} label={a.overviewSharedMemoryLabel} value={a.overviewSharedMemoryValue} />
         </div>
       </SettingsFormSection>
     </div>

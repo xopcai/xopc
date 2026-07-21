@@ -11,7 +11,6 @@ xopc 使用 **profile Markdown** 模板定义智能体行为与知识。执行 `
 | [SOUL.md](/zh/reference/templates/SOUL) | 智能体的核心身份、个性与价值观 |
 | [TOOLS.md](/zh/reference/templates/TOOLS) | 工具使用说明和最佳实践 |
 | [AGENTS.md](/zh/reference/templates/AGENTS) | 多智能体协作说明 |
-| [MEMORY.md](/zh/reference/templates/MEMORY) | 关键信息存储和记忆索引 |
 | [IDENTITY.md](/zh/reference/templates/IDENTITY) | 身份和边界定义 |
 | [HEARTBEAT.md](/zh/reference/templates/HEARTBEAT) | 主动监控配置 |
 
@@ -24,26 +23,18 @@ xopc 使用 **profile Markdown** 模板定义智能体行为与知识。执行 `
 3. **TOOLS.md**
 4. **AGENTS.md**
 5. **HEARTBEAT.md**
-6. **MEMORY.md**
 
 **CONTEXT.md**、**SKILLS.md** **不在**默认写入系统提示的列表中。`xopc init` **不会**在工作区根下创建这两个文件；需要时可自行放在工作区根。`onboard` / `agents add` 的种子流程只复制上文列表，**不会**自动从本文档目录带入 `CONTEXT.md` / `SKILLS.md`（需自行放入工作区根）。
 
 ## 记忆系统
 
-记忆文件支持动态更新：
-
-- **MEMORY.md** - 永久记忆的索引
-- 记忆通过运行时工具和 curated store 管理；profile 模板不会创建按日期命名的记忆文件
-
-智能体可以通过 `memory_search` 和 `memory_get` 工具搜索和读取记忆。
-
-**托管记忆**（可选）：**`agents/<agentId>/memories/MEMORY.md`** 与 **`user/MEMORY.md`** 存放有上限、可由 `curated_memory` 维护的条目，与 **`agents/<agentId>/profile/MEMORY.md`**（系统提示用 profile）和 **`user/PROFILE.md`**（可编辑个人资料）不同。见 [托管记忆](../workspace.md#curated-memory) 与 [配置参考](../configuration.md) 中所选 agent manifest 的 `memory` 策略。
+记忆不属于 Agent profile 模板。所有 Agent 使用同一份用户存储：**`user/MEMORY.md`** 与 **`user/memories/MEMORY.md`**。通过顶层 `userContext` 统一配置，并在运行时使用 `memory_search`、`memory_get` 和 `curated_memory`。见 [共享用户记忆](../workspace.md#curated-memory)。
 
 ## 编辑建议
 
 - 使用 Markdown 格式
 - 保持简洁，关键信息放在前面
-- 定期更新全局个人资料、用户记忆和智能体 MEMORY.md
+- 定期更新全局个人资料与共享用户记忆
 - 使用清晰的标题结构
 
 ## 另见

@@ -1,6 +1,6 @@
 import { dispatchConfigReload } from '@/features/gateway/dispatch-config-reload';
 import { useLocaleStore } from '@/stores/locale-store';
-import { showActivity } from '@/stores/activity-center-store';
+import { showActivity } from '@/stores/activity-store';
 
 type GoalQueueEventDetail = {
   item?: {

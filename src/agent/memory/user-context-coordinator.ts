@@ -45,6 +45,7 @@ export class UserContextCoordinator {
       modelMessage: userMessage,
       items: [],
       rejected: [],
+      consentRequests: [],
       estimatedTokens: 0,
     });
     const config = this.options.getConfig();
@@ -84,14 +85,14 @@ export class UserContextCoordinator {
     });
   }
 
-  async afterTurn(sessionKey: string, userPlainText: string): Promise<void> {
-    if (!this.options.isEnabledForSession(sessionKey)) return;
+  async afterTurn(sessionKey: string, userPlainText: string): Promise<import('./understanding/types.js').UnderstandingReviewResult | undefined> {
+    if (!this.options.isEnabledForSession(sessionKey)) return undefined;
     const memoryManager = this.options.getMemoryManagerForSession(sessionKey);
     const assistantContent = this.options.getLastAssistantContent(sessionKey) ?? '';
     const correctionTargetRecordIds = this.correctionTargets.get(sessionKey);
     this.correctionTargets.delete(sessionKey);
     try {
-      await memoryManager.captureTurnUnderstanding(
+      const review = await memoryManager.captureTurnUnderstanding(
         userPlainText,
         assistantContent,
         {
@@ -100,10 +101,14 @@ export class UserContextCoordinator {
           correctionTargetRecordIds,
         },
       );
+      void memoryManager.syncProvidersForTurn(userPlainText, assistantContent, { sessionId: sessionKey });
+      memoryManager.queuePrefetchAll(userPlainText, { sessionId: sessionKey });
+      return review;
     } catch (err) {
       log.warn({ err, sessionKey }, 'Turn understanding capture failed');
     }
     void memoryManager.syncProvidersForTurn(userPlainText, assistantContent, { sessionId: sessionKey });
     memoryManager.queuePrefetchAll(userPlainText, { sessionId: sessionKey });
+    return undefined;
   }
 }

@@ -50,7 +50,6 @@ export function applyAgentConfig(
     workspace: { root: `~/.xopc/workspace/${agentId}` },
     tools: { builtin: {} },
     skills: { mode: 'all' as const },
-    memory: { mode: 'confirmWrite' as const, sources: ['session' as const, 'curated' as const], writePolicy: { curated: 'confirm' as const } },
     workflows: {},
     boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
   };
@@ -85,7 +84,6 @@ export function applyAgentConfig(
         workspace: { root: `~/.xopc/workspace/${resolveDefaultAgentId(cfg)}` },
         tools: { builtin: {} },
         skills: { mode: 'all' },
-        memory: { mode: 'confirmWrite', sources: ['session', 'curated'], writePolicy: { curated: 'confirm' } },
         workflows: {},
         boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
       });

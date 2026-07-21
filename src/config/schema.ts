@@ -7,6 +7,7 @@ import {
 } from '../agent-manifest/schema.js';
 import { linearizePresetIds } from '../agent-manifest/preset-chain.js';
 import { checkCacheDir } from '../browser/cache-dir-policy.js';
+import { UserContextConfigSchema } from '../user-context/config.js';
 import { DEFAULT_AGENT_MODELS } from './default-model.js';
 import { validatePublicUrl } from './public-url.js';
 
@@ -135,18 +136,6 @@ export const AgentsConfigSchema = z.object({
       workspace: { root: '~/.xopc/workspace/main' },
       tools: { builtin: {} },
       skills: { mode: 'all' },
-      memory: {
-        mode: 'confirmWrite',
-        sources: ['session', 'curated'],
-        writePolicy: { curated: 'confirm' },
-        understanding: {
-          enabled: true,
-          adaptiveCadence: true,
-          reviewIntervalTurns: 10,
-          maxHistoryMessages: 80,
-          maxDurationMs: 120_000,
-        },
-      },
       workflows: {},
       boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
     },
@@ -1201,11 +1190,22 @@ export const ConnectorsConfigSchema = z
 
 export type ConnectorsConfig = z.infer<typeof ConnectorsConfigSchema>;
 
+export const ExperimentalConfigSchema = z
+  .object({
+    /** Optional first-run activation that analyzes one explicitly selected local folder. */
+    workDiscoveryOnboarding: z.boolean().default(false),
+  })
+  .strict()
+  .default({ workDiscoveryOnboarding: false });
+
+export type ExperimentalConfig = z.infer<typeof ExperimentalConfigSchema>;
+
 // ============================================
 // Root Config
 // ============================================
 
 export const ConfigSchema = z.object({
+  userContext: UserContextConfigSchema,
   agents: AgentsConfigSchema,
   bindings: BindingsConfigSchema,
   session: SessionConfigSchema,
@@ -1218,6 +1218,7 @@ export const ConfigSchema = z.object({
   mcp: McpConfigSchema,
   codeIntelligence: CodeIntelligenceConfigSchema,
   connectors: ConnectorsConfigSchema,
+  experimental: ExperimentalConfigSchema,
   goals: GoalsConfigSchema.optional(),
   extensions: ExtensionsConfigSchema.default({}),
   /** Per-vendor capability provider config (image / audio / video). */
@@ -1231,6 +1232,28 @@ export const ConfigSchema = z.object({
   commands: CommandsConfigSchema,
   tui: TuiConfigSchema,
 }).default({
+  userContext: {
+    enabled: true,
+    memory: {
+      mode: 'confirmWrite',
+      sources: ['session', 'curated'],
+      writePolicy: { curated: 'confirm' },
+    },
+    understanding: {
+      enabled: true,
+      adaptiveCadence: true,
+      reviewIntervalTurns: 10,
+      maxHistoryMessages: 80,
+      maxDurationMs: 120_000,
+    },
+    privacy: { sensitiveWritePolicy: 'confirm' },
+    providerRouting: {
+      searchStrategy: 'fanout',
+      writeStrategy: 'local-first',
+      allowExternalWrites: false,
+    },
+    dreaming: { enabled: false },
+  },
   agents: {
     default: 'main',
     defaultPreset: DEFAULT_CAPABILITY_PRESET_ID,
@@ -1260,18 +1283,6 @@ export const ConfigSchema = z.object({
         workspace: { root: '~/.xopc/workspace/main' },
         tools: { builtin: {} },
         skills: { mode: 'all' },
-        memory: {
-          mode: 'confirmWrite',
-          sources: ['session', 'curated'],
-          writePolicy: { curated: 'confirm' },
-          understanding: {
-            enabled: true,
-            adaptiveCadence: true,
-            reviewIntervalTurns: 10,
-            maxHistoryMessages: 80,
-            maxDurationMs: 120_000,
-          },
-        },
         workflows: {},
         boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
       },
@@ -1343,6 +1354,9 @@ export const ConfigSchema = z.object({
     refreshDebounceMs: 600,
     queryTimeoutMs: 20_000,
     indexTimeoutMs: 5 * 60_000,
+  },
+  experimental: {
+    workDiscoveryOnboarding: false,
   },
   goals: {
     maxTurns: 20,

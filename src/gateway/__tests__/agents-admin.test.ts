@@ -26,7 +26,6 @@ function manifest(id: string, patch: Partial<AgentManifest> = {}): AgentManifest
     models: { defaultRole: 'deep', roles: { deep: { model: 'openai/gpt-4.1' } } },
     tools: { builtin: {} },
     skills: { mode: 'all' },
-    memory: { mode: 'off', sources: ['session'] },
     workflows: {},
     boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
     ...patch,

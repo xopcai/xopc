@@ -1,7 +1,5 @@
 import type { Config } from '../../../config/schema.js';
 import { buildMemoryRuntime, type MemoryWriteCheckResult } from '../../../agent-runtime/memory-runtime.js';
-import { resolveDefaultAgentId } from '../../agent-scope.js';
-import { resolveEffectiveAgentManifestForAgent } from '../../../config/agent-profile.js';
 import {
   DEFAULT_DEEP_CRON,
   DEFAULT_LIGHT_CRON,
@@ -86,19 +84,18 @@ function optionalTrimmedString(value: unknown): string | undefined {
 
 /** Resolve the full three-phase dreaming config from an agent manifest. */
 export function resolveDreamingConfig(cfg: Config | undefined, requestedAgentId?: string | null): DreamingResolvedConfig {
-  const agentId = cfg ? (requestedAgentId?.trim() || resolveDefaultAgentId(cfg)) : undefined;
-  const manifest = cfg && agentId ? resolveEffectiveAgentManifestForAgent(cfg, agentId) : undefined;
-  const dreaming = manifest?.memory.dreaming;
-  const enabled = dreaming?.enabled === true && manifest?.memory.mode !== 'off';
-  const promotionWritePolicy = manifest
-    ? buildMemoryRuntime(manifest).checkWrite({
+  void requestedAgentId;
+  const dreaming = cfg?.userContext.dreaming;
+  const enabled = dreaming?.enabled === true && cfg?.userContext.enabled === true && cfg.userContext.memory.mode !== 'off';
+  const promotionWritePolicy = cfg
+    ? buildMemoryRuntime(cfg.userContext).checkWrite({
         target: 'curated',
         content: 'Dreaming automatic memory promotion',
         source: 'dreaming',
         confidence: 1,
         sensitive: false,
       })
-    : { decision: 'deny' as const, reason: 'agent memory manifest is unavailable' };
+    : { decision: 'deny' as const, reason: 'user context configuration is unavailable' };
 
   const frequency = trimmedStringOr(dreaming?.frequency, DEFAULT_DEEP_CRON);
   const timezone = optionalTrimmedString(dreaming?.timezone);

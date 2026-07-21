@@ -94,6 +94,10 @@ describe('prepare-electron-pack-dir', () => {
     expect(existsSync(join(packDir, '_pack-resources/rg'))).toBe(true);
     expect(existsSync(join(packDir, '_pack-resources/cbm'))).toBe(true);
     expect(existsSync(join(packDir, '_pack-resources/cbm/codebase-memory-mcp.manifest.json'))).toBe(true);
+    if (process.platform === 'darwin' || process.platform === 'win32') {
+      const helperName = process.platform === 'win32' ? 'voice-hotkey-helper.exe' : 'voice-hotkey-helper';
+      expect(existsSync(join(packDir, '_pack-resources/voice-hotkey', helperName))).toBe(true);
+    }
     expect(existsSync(join(packDir, 'node_modules/@earendil-works/pi-ai'))).toBe(false);
     // Pack dir lives outside the repo so `pnpm --workspace-root` (run by electron-builder)
     // returns nothing and the dep collector stays scoped to pack dir.

@@ -394,7 +394,8 @@ export class ExtensionLoader {
   }
 
   invalidateManifestCache(): void {
-    this.manifestRegistry = this.manifestSnapshot?.manifestRegistry ?? null;
+    this.manifestSnapshot = null;
+    this.manifestRegistry = null;
   }
 
   private resolveExtensionConfig(extensionId: string): Record<string, unknown> {

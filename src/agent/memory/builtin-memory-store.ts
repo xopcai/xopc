@@ -1,5 +1,5 @@
 /**
- * Bounded curated memory: agent home `memories/MEMORY.md` + global `user/MEMORY.md`, §-delimited entries.
+ * Bounded curated memory under the shared user context directory, §-delimited entries.
  * Snapshot for system prompt is captured at load time and not mutated until next load.
  */
 
@@ -27,7 +27,7 @@ export class BuiltinMemoryStore {
     return this.config.userProfileEnabled !== false;
   }
 
-  /** Agent-scoped curated memory directory (`~/.xopc/agents/<id>/memories/`). */
+  /** Shared curated memory directory (`~/.xopc/user/memories/`). */
   get memoriesDir(): string {
     return this.config.memoriesDir;
   }

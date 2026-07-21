@@ -81,7 +81,6 @@ describe('buildSafeWebConfigPayload', () => {
               },
               tools: { builtin: {} },
               skills: { mode: 'all' },
-              memory: { mode: 'off', sources: ['session'] },
               workflows: {},
               boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
             },

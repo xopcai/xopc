@@ -13,12 +13,11 @@ import type {
   MemorySensitivity,
   MemoryStatus,
 } from '../../../agent/memory/types.js';
-import { MemoryPolicySchema } from '../../../agent-manifest/schema.js';
 import { resolveDefaultAgentId } from '../../../agent/agent-scope.js';
-import { resolveEffectiveAgentManifestForAgent } from '../../../config/agent-profile.js';
 import type { Config } from '../../../config/schema.js';
+import { UserContextConfigSchema } from '../../../user-context/config.js';
+import { LOCAL_USER_ID } from '../../../user-context/owner.js';
 import type { KnowledgeSynthesisStatus } from '../../../knowledge/types.js';
-import { prepareUpdateAgent } from '../../agents-admin.js';
 import {
   appendMemorySignal,
   appendMemoryTraceEvent,
@@ -53,7 +52,7 @@ const MEMORY_KINDS = new Set<MemoryKind>([
   'open_question',
   'milestone',
   'current_state',
-  'agent_note',
+  'curated_note',
   'workspace_fact',
   'daily_note',
   'session_summary',
@@ -144,7 +143,7 @@ function personalContextForTrace(trace: { selectedRecordIds: string[] } | null |
 }
 
 export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
-  authenticated.get('/api/memory/providers', async (c) => {
+  authenticated.get('/api/user-context/providers', async (c) => {
     const cfg = deps.service.currentConfig as Config;
     const plugins = await discoverMemoryPlugins(cfg);
     return c.json({
@@ -179,38 +178,28 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
     });
   });
 
-  authenticated.get('/api/memory/config', (c) => {
+  authenticated.get('/api/user-context/config', (c) => {
     const cfg = deps.service.currentConfig as Config;
-    const agentId = c.req.query('agentId') || resolveDefaultAgentId(cfg);
-    const manifest = resolveEffectiveAgentManifestForAgent(cfg, agentId);
-    return c.json({ agentId: manifest.id, memory: manifest.memory });
+    return c.json({ userContext: cfg.userContext });
   });
 
-  authenticated.patch('/api/memory/config', deps.strictRateLimitMiddleware, async (c) => {
+  authenticated.put('/api/user-context/config', deps.strictRateLimitMiddleware, async (c) => {
     const cfg = deps.service.currentConfig as Config;
     const body = await c.req.json().catch(() => ({}));
-    const agentId = typeof body.agentId === 'string' && body.agentId.trim()
-      ? body.agentId.trim()
-      : resolveDefaultAgentId(cfg);
-    const parsed = MemoryPolicySchema.safeParse(body.memory);
+    const parsed = UserContextConfigSchema.safeParse(body);
     if (!parsed.success) {
-      return c.json({ error: `memory ${parsed.error.issues[0]?.message ?? 'is invalid'}` }, 400);
+      return c.json({ error: `userContext ${parsed.error.issues[0]?.message ?? 'is invalid'}` }, 400);
     }
-    const prep = prepareUpdateAgent(cfg, agentId, { memory: parsed.data });
-    if (prep.ok === false) {
-      return c.json({ error: prep.error }, prep.status ?? 400);
-    }
-    const save = await deps.service.saveConfig(prep.data.nextConfig);
+    const save = await deps.service.saveConfig({ ...cfg, userContext: parsed.data });
     if (!save.saved) return c.json({ error: save.error ?? 'save failed' }, 500);
-    const manifest = resolveEffectiveAgentManifestForAgent(deps.service.currentConfig as Config, agentId);
-    return c.json({ agentId: manifest.id, memory: manifest.memory });
+    return c.json({ userContext: (deps.service.currentConfig as Config).userContext });
   });
 
-  authenticated.get('/api/memory/records', (c) => {
-    const agentId = c.req.query('agentId') || resolveDefaultAgentId(deps.service.currentConfig as Config);
+  authenticated.get('/api/user-context/memories', (c) => {
+    if (c.req.query('agentId')) return c.json({ error: 'agentId is not supported' }, 400);
     const records = listMemoryRecords({
       providerId: c.req.query('providerId') || undefined,
-      agentId,
+      userId: LOCAL_USER_ID,
       workspaceId: c.req.query('workspaceId') || undefined,
       projectId: c.req.query('projectId') || undefined,
       kind: parseKind(c.req.query('kind')),
@@ -221,19 +210,19 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
     return c.json({ records });
   });
 
-  authenticated.post('/api/memory/search', async (c) => {
+  authenticated.post('/api/user-context/memories/search', async (c) => {
     const body = await c.req.json().catch(() => ({}));
     const query = typeof body.query === 'string' ? body.query.trim() : '';
     if (!query) {
       return c.json({ error: 'Missing required field: query' }, 400);
     }
-    const agentId = typeof body.agentId === 'string' && body.agentId.trim()
-      ? body.agentId.trim()
-      : resolveDefaultAgentId(deps.service.currentConfig as Config);
+    if (Object.hasOwn(body, 'agentId') || Object.hasOwn(body, 'userId')) {
+      return c.json({ error: 'agentId and userId are not accepted' }, 400);
+    }
     const records = searchMemoryRecords({
       query,
       providerId: typeof body.providerId === 'string' ? body.providerId : undefined,
-      agentId,
+      userId: LOCAL_USER_ID,
       workspaceId: typeof body.workspaceId === 'string' ? body.workspaceId : undefined,
       projectId: typeof body.projectId === 'string' ? body.projectId : undefined,
       kinds: Array.isArray(body.kinds)
@@ -248,13 +237,13 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
     return c.json({ results: records });
   });
 
-  authenticated.post('/api/memory/records', async (c) => {
+  authenticated.post('/api/user-context/memories', async (c) => {
     const body = await c.req.json().catch(() => ({}));
     const kind = parseKind(body.kind);
     const content = typeof body.content === 'string' ? body.content.trim() : '';
-    const agentId = typeof body.agentId === 'string' && body.agentId.trim()
-      ? body.agentId.trim()
-      : resolveDefaultAgentId(deps.service.currentConfig as Config);
+    if (Object.hasOwn(body, 'agentId') || Object.hasOwn(body, 'userId')) {
+      return c.json({ error: 'agentId and userId are not accepted' }, 400);
+    }
     if (!kind || !content) {
       return c.json({ error: 'Missing required fields: kind, content' }, 400);
     }
@@ -262,7 +251,7 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
       id: typeof body.id === 'string' && body.id.trim() ? body.id.trim() : undefined,
       providerId: typeof body.providerId === 'string' && body.providerId.trim() ? body.providerId.trim() : 'local',
       kind,
-      agentId,
+      sourceAgentId: resolveDefaultAgentId(deps.service.currentConfig as Config),
       workspaceId: typeof body.workspaceId === 'string' ? body.workspaceId : deps.service.currentWorkspacePath,
       sessionKey: typeof body.sessionKey === 'string' ? body.sessionKey : undefined,
       projectId: typeof body.projectId === 'string' ? body.projectId : undefined,
@@ -292,19 +281,16 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
     return c.json({ record }, 201);
   });
 
-  authenticated.patch('/api/memory/records/:id', async (c) => {
+  authenticated.put('/api/user-context/memories/:id', async (c) => {
     const existing = getMemoryRecord(c.req.param('id'));
     if (!existing) return c.json({ error: 'Memory record not found' }, 404);
-    const selectedAgentId = c.req.query('agentId') || resolveDefaultAgentId(deps.service.currentConfig as Config);
-    if (existing.scope.agentId !== selectedAgentId) {
-      return c.json({ error: 'Memory record not found for selected agent' }, 404);
-    }
+    if (c.req.query('agentId')) return c.json({ error: 'agentId is not supported' }, 400);
     const body = await c.req.json().catch(() => ({}));
     const record = upsertMemoryRecord({
       id: existing.id,
       providerId: existing.source.provider ?? 'local',
       kind: parseKind(body.kind) ?? existing.kind,
-      agentId: existing.scope.agentId,
+      sourceAgentId: existing.provenance.sourceAgentId,
       workspaceId: existing.scope.workspaceId,
       sessionKey: existing.scope.sessionKey,
       projectId: typeof body.projectId === 'string' ? body.projectId : existing.scope.projectId,
@@ -334,23 +320,21 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
     return c.json({ record });
   });
 
-  authenticated.delete('/api/memory/records/:id', (c) => {
+  authenticated.delete('/api/user-context/memories/:id', (c) => {
     const existing = getMemoryRecord(c.req.param('id'));
-    const selectedAgentId = c.req.query('agentId') || resolveDefaultAgentId(deps.service.currentConfig as Config);
-    if (!existing || existing.scope.agentId !== selectedAgentId) {
-      return c.json({ error: 'Memory record not found for selected agent' }, 404);
-    }
+    if (c.req.query('agentId')) return c.json({ error: 'agentId is not supported' }, 400);
+    if (!existing || existing.scope.userId !== LOCAL_USER_ID) return c.json({ error: 'Memory record not found' }, 404);
     const deleted = deleteMemoryRecord(c.req.param('id'));
     if (!deleted) return c.json({ error: 'Memory record not found' }, 404);
     return c.json({ ok: true });
   });
 
-  authenticated.get('/api/memory/signals', (c) => {
-    const agentId = c.req.query('agentId') || resolveDefaultAgentId(deps.service.currentConfig as Config);
+  authenticated.get('/api/user-context/signals', (c) => {
+    if (c.req.query('agentId')) return c.json({ error: 'agentId is not supported' }, 400);
     const signals = listMemorySignals({
       recordId: c.req.query('recordId') || undefined,
       providerId: c.req.query('providerId') || undefined,
-      agentId,
+      userId: LOCAL_USER_ID,
       workspaceId: c.req.query('workspaceId') || undefined,
       limit: parseLimit(c.req.query('limit')),
     });
@@ -387,11 +371,9 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
     return c.json({ syncRuns });
   });
 
-  authenticated.get('/api/memory/traces', (c) => {
-    const agentId = c.req.query('agentId') || resolveDefaultAgentId(deps.service.currentConfig as Config);
+  authenticated.get('/api/user-context/traces', (c) => {
     const traces = listMemoryTraceEvents({
       providerId: c.req.query('providerId') || undefined,
-      agentId,
       sessionKey: c.req.query('sessionKey') || undefined,
       phase: c.req.query('phase') || undefined,
       limit: parseLimit(c.req.query('limit')),
@@ -399,7 +381,7 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
     return c.json({ traces });
   });
 
-  authenticated.patch('/api/memory/traces/:traceId/feedback', async (c) => {
+  authenticated.patch('/api/user-context/traces/:traceId/feedback', async (c) => {
     const body = await c.req.json().catch(() => ({}));
     const outcome = typeof body.outcome === 'string' && MEMORY_TRACE_FEEDBACK_OUTCOMES.has(body.outcome)
       ? body.outcome
@@ -423,37 +405,32 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
     return c.json({ trace });
   });
 
-  authenticated.get('/api/memory/feedback-summary', (c) => {
-    const agentId = c.req.query('agentId') || resolveDefaultAgentId(deps.service.currentConfig as Config);
+  authenticated.get('/api/user-context/feedback-summary', (c) => {
     const summaries = summarizeMemoryRecallFeedback({
       recordId: c.req.query('recordId') || undefined,
       providerId: c.req.query('providerId') || undefined,
-      agentId,
       sessionKey: c.req.query('sessionKey') || undefined,
       limit: parseFeedbackSummaryLimit(c.req.query('limit')),
     });
     return c.json({ summaries });
   });
 
-  authenticated.get('/api/memory/understanding/quality', (c) => {
+  authenticated.get('/api/user-context/quality', (c) => {
     const cfg = deps.service.currentConfig as Config;
-    const agentId = c.req.query('agentId') || resolveDefaultAgentId(cfg);
-    const manifest = resolveEffectiveAgentManifestForAgent(cfg, agentId);
     const metrics = summarizeUserUnderstandingQuality({
-      agentId: manifest.id,
       windowDays: parseWindowDays(c.req.query('windowDays')),
     });
-    const baseIntervalTurns = manifest.memory.understanding?.reviewIntervalTurns ?? 10;
+    const baseIntervalTurns = cfg.userContext.understanding.reviewIntervalTurns;
     const cadence = resolveAdaptiveUnderstandingCadence(
       baseIntervalTurns,
       metrics,
-      manifest.memory.understanding?.adaptiveCadence ?? true,
+      cfg.userContext.understanding.adaptiveCadence,
     );
     return c.json({ metrics, cadence });
   });
 
   authenticated.patch(
-    '/api/memory/understanding/response-feedback',
+    '/api/user-context/understanding/response-feedback',
     deps.strictRateLimitMiddleware,
     async (c) => {
       const body = await c.req.json().catch(() => ({}));
@@ -489,7 +466,7 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
     },
   );
 
-  authenticated.get('/api/memory/understanding/response-feedback', (c) => {
+  authenticated.get('/api/user-context/understanding/response-feedback', (c) => {
     const sessionKey = c.req.query('sessionKey')?.trim() ?? '';
     const assistantTimestamp = Number(c.req.query('assistantTimestamp'));
     if (!sessionKey || !Number.isFinite(assistantTimestamp) || assistantTimestamp <= 0) {
@@ -507,13 +484,13 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
     });
   });
 
-  authenticated.post('/api/memory/signals', async (c) => {
+  authenticated.post('/api/user-context/signals', async (c) => {
     const body = await c.req.json().catch(() => ({}));
     const source = typeof body.source === 'string' ? body.source : '';
     if (!source) return c.json({ error: 'Missing required field: source' }, 400);
     const signalId = appendMemorySignal({
       providerId: typeof body.providerId === 'string' ? body.providerId : undefined,
-      agentId: typeof body.agentId === 'string' ? body.agentId : undefined,
+      sourceAgentId: resolveDefaultAgentId(deps.service.currentConfig as Config),
       workspaceId: typeof body.workspaceId === 'string' ? body.workspaceId : undefined,
       sessionKey: typeof body.sessionKey === 'string' ? body.sessionKey : undefined,
       signal: {
@@ -527,7 +504,7 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
     return c.json({ signalId }, 201);
   });
 
-  authenticated.post('/api/memory/providers/:id/test', deps.strictRateLimitMiddleware, async (c) => {
+  authenticated.post('/api/user-context/providers/:id/test', deps.strictRateLimitMiddleware, async (c) => {
     const providerId = c.req.param('id');
     const cfg = deps.service.currentConfig as Config;
     const workspace = deps.service.currentWorkspacePath;
@@ -547,16 +524,16 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
       const write = await manager.write({
         kind: 'workspace_fact',
         content: `Smoke test record for ${providerId}: ${token}`,
-        scope: { agentId: resolveDefaultAgentId(cfg) },
+        scope: { userId: LOCAL_USER_ID },
         tags: ['xopc-smoke-test'],
       });
       checks.push({ name: 'write', ok: write.success, message: write.error ?? write.message });
-      const results = await manager.search({ query: token, scope: { agentId: resolveDefaultAgentId(cfg) }, maxResults: 10 });
+      const results = await manager.search({ query: token, scope: { userId: LOCAL_USER_ID }, maxResults: 10 });
       const ownResults = results.filter((result) => result.citation.providerId === providerId);
       checks.push({ name: 'search', ok: ownResults.length > 0, resultCount: ownResults.length });
       const recordId = ownResults[0]?.record.id ?? write.record?.id;
       if (recordId) {
-        const read = await manager.read({ id: recordId, scope: { agentId: resolveDefaultAgentId(cfg) } });
+        const read = await manager.read({ id: recordId, scope: { userId: LOCAL_USER_ID } });
         checks.push({ name: 'read', ok: Boolean(read), message: read ? undefined : 'Record was not readable' });
       } else {
         checks.push({ name: 'read', ok: false, message: 'No record id available' });

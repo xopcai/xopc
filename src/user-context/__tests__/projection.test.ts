@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { MemoryRecord } from '../../agent/memory/types.js';
-import type { ConnectorDefinition, ConnectorInstance } from '../../connectors/types.js';
+import type { ConnectorConnection, ConnectorDefinition, ConnectorInstance } from '../../connectors/types.js';
 import type { KnowledgeSourceItem, KnowledgeSyncRun } from '../../knowledge/types.js';
 import {
   facetForMemoryKind,
@@ -19,7 +19,8 @@ function record(patch: Partial<MemoryRecord> = {}): MemoryRecord {
     id: 'memory-1',
     kind: 'preference',
     status: 'active',
-    scope: { agentId: 'main' },
+    scope: { userId: 'local-owner' },
+    provenance: { sourceAgentId: 'main' },
     content: 'Prefer a concise answer.',
     source: { provider: 'local' },
     explicitness: 'explicit',
@@ -37,7 +38,7 @@ describe('user context projection', () => {
     expect(isUserContextRecord(record({ kind: 'preference' }))).toBe(true);
     expect(isUserContextRecord(record({ kind: 'project_context', tags: ['user-understanding'] }))).toBe(true);
     expect(isUserContextRecord(record({ kind: 'project_context', tags: [] }))).toBe(false);
-    expect(isUserContextRecord(record({ kind: 'agent_note' }))).toBe(false);
+    expect(isUserContextRecord(record({ kind: 'curated_note' }))).toBe(false);
   });
 
   it('maps records to human facets and origins', () => {
@@ -93,17 +94,16 @@ describe('user context projection', () => {
     expect(source?.permissionDetails).toEqual(['events:read', 'events:create']);
   });
 
-  it('selects source-derived understanding by exact connector and agent scope', () => {
-    const exact = record({ source: { provider: 'calendar' } });
-    const similarSource = record({ id: 'memory-2', source: { provider: 'calendar-archive' } });
-    const otherAgent = record({ id: 'memory-3', source: { provider: 'calendar' }, scope: { agentId: 'other' } });
-    const operational = record({ id: 'memory-4', kind: 'agent_note', source: { provider: 'calendar' } });
+  it('selects source-derived understanding by exact connection instance across agents', () => {
+    const exact = record({ source: { provider: 'calendar', sourceInstanceId: 'calendar-1' } });
+    const similarSource = record({ id: 'memory-2', source: { provider: 'calendar', sourceInstanceId: 'calendar-2' } });
+    const otherAgent = record({ id: 'memory-3', source: { provider: 'calendar', sourceInstanceId: 'calendar-1' }, provenance: { sourceAgentId: 'other' } });
+    const operational = record({ id: 'memory-4', kind: 'curated_note', source: { provider: 'calendar', sourceInstanceId: 'calendar-1' } });
 
     expect(recordsDerivedFromPersonalContextSource(
       [exact, similarSource, otherAgent, operational],
-      'main',
-      'calendar',
-    )).toEqual([exact]);
+      'calendar-1',
+    )).toEqual([exact, otherAgent]);
   });
 
   it('projects the latest source health, activity, and derived understanding count', () => {
@@ -125,7 +125,7 @@ describe('user context projection', () => {
     }] as ConnectorInstance[];
 
     const [source] = projectPersonalContextSources(definitions, instances, [
-      record({ source: { provider: 'calendar' } }),
+      record({ source: { provider: 'calendar', sourceInstanceId: 'calendar-1' } }),
       record({ id: 'memory-2', source: { provider: 'mail' } }),
     ]);
 
@@ -172,13 +172,59 @@ describe('user context projection', () => {
       finishedAt: '2026-07-20T08:01:00.000Z',
     }] as KnowledgeSyncRun[];
 
-    const [source] = projectPersonalContextSources(definitions, [], [], { sourceItems: items, syncRuns });
+    const connections = [{
+      id: 'gmail-work',
+      connectorId: 'composio-gmail',
+      provider: 'composio',
+      principalId: 'local-owner',
+      providerConnectionId: 'provider-work',
+      alias: 'Work',
+      identity: {},
+      status: 'active',
+      isDefault: true,
+      metadata: {},
+      createdAt: '2026-07-20T07:00:00.000Z',
+      updatedAt: '2026-07-20T07:00:00.000Z',
+    }] as ConnectorConnection[];
+    const [source] = projectPersonalContextSources(definitions, [], [], { sourceItems: items, syncRuns, connections });
 
     expect(source).toMatchObject({
       knowledgeItemCount: 1,
       lastSyncAt: '2026-07-20T08:01:00.000Z',
       lastSyncStatus: 'partial',
       lastActivityAt: '2026-07-20T08:01:00.000Z',
+      instanceId: 'gmail-work',
+      accountLabel: 'Work',
     });
+  });
+
+  it('keeps multiple accounts isolated in the source projection', () => {
+    const definitions = [{
+      id: 'composio-gmail', displayName: 'Gmail', description: 'Gmail access', category: 'data',
+      capabilities: ['context', 'memory_source'],
+    }] as ConnectorDefinition[];
+    const connections = ['work', 'personal'].map((id) => ({
+      id,
+      connectorId: 'composio-gmail',
+      provider: 'composio',
+      principalId: 'local-owner',
+      providerConnectionId: `provider-${id}`,
+      alias: id,
+      identity: {},
+      status: 'active',
+      isDefault: id === 'work',
+      metadata: {},
+      createdAt: '2026-07-20T07:00:00.000Z',
+      updatedAt: '2026-07-20T07:00:00.000Z',
+    })) as ConnectorConnection[];
+    const sources = projectPersonalContextSources(definitions, [], [
+      record({ source: { provider: 'composio-gmail', sourceInstanceId: 'composio:composio-gmail:work' } }),
+      record({ id: 'personal-record', source: { provider: 'composio-gmail', sourceInstanceId: 'composio:composio-gmail:personal' } }),
+    ], { connections });
+
+    expect(sources.map((source) => [source.instanceId, source.derivedUnderstandingCount])).toEqual([
+      ['work', 1],
+      ['personal', 1],
+    ]);
   });
 });

@@ -1163,7 +1163,7 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
       id: projectDigestMemoryRecordId(project.id),
       providerId: 'local',
       kind: 'daily_note',
-      agentId: resolveProjectAgentId({
+      sourceAgentId: resolveProjectAgentId({
         config: service.currentConfig,
         projects: service.projects,
         projectId: project.id,
@@ -1545,7 +1545,7 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
     const record = upsertMemoryRecord({
       providerId: 'local',
       kind: 'session_summary',
-      agentId: session.routing?.agentId ?? 'main',
+      sourceAgentId: session.routing?.agentId ?? 'main',
       workspaceId: session.cwd,
       sessionKey,
       projectId,

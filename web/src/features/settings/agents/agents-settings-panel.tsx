@@ -117,7 +117,7 @@ export function AgentsSettingsPanel() {
           onFooterSave={() => void vm.handleModalFooterSave()}
           footerSaveDisabled={vm.footerSaveDisabled}
           footerSavedFlash={vm.savedFlash}
-          showFooter={vm.panel === 'behavior'}
+          showFooter={vm.panel === 'profile' || vm.panel === 'runtime'}
           busy={vm.busy}
         >
           {vm.loading || !vm.data ? (

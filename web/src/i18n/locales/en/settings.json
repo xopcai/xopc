@@ -1171,6 +1171,9 @@
     "categoryChat": "Chat",
     "categoryEditor": "Notes editor",
     "globalToggleWindow": "Show / hide app window",
+    "globalVoiceInput": "Start / finish voice input",
+    "globalVoiceInputMacNote": "Tap and release Fn by itself. Requires Accessibility access; set the macOS Fn action to Do Nothing to avoid conflicts.",
+    "globalVoiceInputWindowsNote": "Tap and release Alt by itself. Alt combinations are ignored; some apps may still focus their menu.",
     "globalOpenSettings": "Open settings",
     "globalNewChat": "New chat",
     "globalCommandPalette": "Command palette",
@@ -1196,8 +1199,12 @@
     "quickCaptureShortcutReset": "Reset",
     "quickCaptureShortcutRecording": "Press a shortcut (Esc to cancel)",
     "quickCaptureShortcutConflict": "That shortcut is already in use.",
-    "voiceInputShortcutTitle": "Voice input shortcut",
-    "voiceInputShortcutDescription": "Start or finish voice input in Chat or the open quick capture note. Press Esc to cancel."
+    "voiceInputShortcutTitle": "Voice input fallback shortcut",
+    "voiceInputShortcutDescription": "Use this shortcut while the app is focused. Desktop also accepts the global Fn or Alt shortcut shown below. Press Esc to cancel.",
+    "voiceInputAccessibilityDescription": "Global Fn detection needs macOS Accessibility access.",
+    "voiceInputAccessibilityGranted": "Accessibility access is enabled for global Fn input.",
+    "voiceInputAccessibilityEnable": "Enable access",
+    "voiceInputAccessibilityRequesting": "Opening settings…"
   },
   "mcpSettings": {
     "title": "External tools (MCP)",

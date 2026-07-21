@@ -1,4 +1,4 @@
-// Curated memory tool — agent home `memories/MEMORY.md` + global `user/MEMORY.md` (session snapshot + live edits)
+// Curated memory tool — shared user context files (session snapshot + live edits)
 import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 
@@ -15,7 +15,7 @@ const CuratedMemorySchema = Type.Object({
   target: Type.Union([Type.Literal('memory'), Type.Literal('user')]),
   kind: Type.Optional(Type.Union([
     Type.Literal('user_profile'),
-    Type.Literal('agent_note'),
+    Type.Literal('curated_note'),
     Type.Literal('workspace_fact'),
     Type.Literal('daily_note'),
     Type.Literal('session_summary'),
@@ -41,7 +41,7 @@ const CuratedMemorySchema = Type.Object({
 type CuratedMemoryParams = {
   action: 'add' | 'propose' | 'replace' | 'remove' | 'read';
   target: 'memory' | 'user';
-  kind?: 'user_profile' | 'agent_note' | 'workspace_fact' | 'daily_note' | 'session_summary' | 'derived_insight' | 'task_lesson' | 'tool_preference' | 'long_term_goal';
+  kind?: 'user_profile' | 'curated_note' | 'workspace_fact' | 'daily_note' | 'session_summary' | 'derived_insight' | 'task_lesson' | 'tool_preference' | 'long_term_goal';
   sensitivity?: 'normal' | 'personal' | 'secret' | 'regulated';
   confidence?: number;
   source_text?: string;
@@ -56,7 +56,7 @@ export function createCuratedMemoryTool(
     name: 'curated_memory',
     label: 'Curated memory',
     description:
-      'Read, edit, or propose bounded curated memory (MEMORY.md = agent notes, user/MEMORY.md = global user memory). Use propose when a memory should be reviewed by the user before it becomes active recall context. Entries are separated by a section-sign delimiter (see store format). System prompt shows a frozen snapshot from session start; this tool reads/writes live state on disk. Use add/replace/remove for structured updates; use read to inspect current entries.',
+      'Read, edit, or propose bounded memory in the shared user store (user/memories/MEMORY.md for curated notes and user/MEMORY.md for the user profile). Use propose when a memory should be reviewed by the user before it becomes active recall context. Entries are separated by a section-sign delimiter (see store format). System prompt shows a frozen snapshot from session start; this tool reads/writes live state on disk. Use add/replace/remove for structured updates; use read to inspect current entries.',
     parameters: CuratedMemorySchema,
 
     async execute(
@@ -85,7 +85,7 @@ export function createCuratedMemoryTool(
         if (action === 'add') {
           const content = (params as CuratedMemoryParams).content?.trim() ?? '';
           const result = await memoryManager.write({
-            kind: target === 'user' ? 'user_profile' : 'agent_note',
+            kind: target === 'user' ? 'user_profile' : 'curated_note',
             target,
             content,
           });
@@ -107,7 +107,7 @@ export function createCuratedMemoryTool(
           const content = p.content?.trim() ?? '';
           const sourceText = p.source_text?.trim();
           const result = await memoryManager.write({
-            kind: p.kind ?? (target === 'user' ? 'user_profile' : 'agent_note'),
+            kind: p.kind ?? (target === 'user' ? 'user_profile' : 'curated_note'),
             target,
             content,
             status: 'candidate',

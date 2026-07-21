@@ -186,7 +186,7 @@ xopc onboard
 
 #### `agents.list` 条目
 
-每条至少包含 **`id`**、**`identity`**、**`responsibilities`**、**`workspace`**、**`tools`**、**`skills`**、**`memory`**、**`workflows`** 和 **`boundaries`**。当 agent 自己拥有模型角色时，直接在该条目上配置 **`models`**。长文本 profile 仍可放在 **`agents/<id>/profile/`**，但结构化 manifest 是运行时策略的来源。
+每条至少包含 **`id`**、**`identity`**、**`responsibilities`**、**`workspace`**、**`tools`**、**`skills`**、**`workflows`** 和 **`boundaries`**。当 agent 自己拥有模型角色时，直接在该条目上配置 **`models`**。长文本 profile 仍可放在 **`agents/<id>/profile/`**，但结构化 manifest 是运行时策略的来源。用户理解与记忆只在顶层 **`userContext`** 配置一次。
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -738,6 +738,7 @@ xopc 支持环境变量存储敏感数据：
 | `XOPC_LOG_FILE` | 启用文件输出（true/false） |
 | `XOPC_LOG_RETENTION_DAYS` | 日志文件保留天数 |
 | `XOPC_PRETTY_LOGS` | 开发环境美化日志输出 |
+| `XOPC_LOG_LLM_PAYLOAD` | 在 debug 日志中包含完整 system prompt、消息和工具定义（敏感信息；默认关闭） |
 
 环境变量优先于配置文件中的值。
 

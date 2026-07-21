@@ -99,7 +99,7 @@ to repositories under `src/storage/sqlite/`.
 Important boundaries:
 
 - `~/.xopc/xopc.json` remains the primary configuration file, with environment variables for secrets and overrides.
-- Agent profile Markdown, skills, memory files, extension state, logs, media, and workspaces live under the state directory, usually `~/.xopc`.
+- Agent profile Markdown, skills, shared user memory, extension state, logs, media, and workspaces live under the state directory, usually `~/.xopc`.
 - The Markdown workspace is not the transcript store. Model input is loaded from SQLite through `SessionStore.loadMessages`, which applies transcript hygiene before sending history to the LLM.
 
 ## Channels and Extensions
@@ -188,7 +188,7 @@ Packaging surfaces include:
 
 Long-lived structural decisions are recorded in [`docs/adr/`](./adr/README.md):
 
-- [ADR 0001](./adr/0001-agent-service-decomposition.md) describes the AgentService decomposition into collaborators such as `SessionStateBag`, `OutboundCoordinator`, `TurnDispatcher`, `PersistentGoalService`, `SessionConfigService`, `SessionHydrator`, `SessionInspector`, and `AgentInstanceGateway`.
+- [ADR 0002](./adr/0002-local-app-platform.md) proposes modeling user-created Local Apps as Projects with immutable releases and capability-scoped runtimes.
 
 The invariants are enforced in CI via `pnpm run depcheck`. Render the current
 source dependency graph with `pnpm run depcheck:graph`, which writes

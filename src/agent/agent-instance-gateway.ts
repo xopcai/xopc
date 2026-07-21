@@ -57,7 +57,7 @@ export interface AgentInstanceGateway {
   ): Promise<import('./memory/context/types.js').UserContextPlan>;
 
   /** Post-turn: sync external memory providers, queue next prefetch. */
-  afterAgentTurn(sessionKey: string, userPlainText: string): Promise<void>;
+  afterAgentTurn(sessionKey: string, userPlainText: string): Promise<import('./memory/understanding/types.js').UnderstandingReviewResult | undefined>;
 
   /** Bump the per-session "turns since memory review" counter. */
   beginBackgroundReviewUserTurn(sessionKey: string): void;

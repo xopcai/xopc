@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { EffectiveAgentManifest } from '../../agent-manifest/index.js';
+import { UserContextConfigSchema } from '../../user-context/config.js';
 import {
   buildAgentRuntimeProfile,
   buildMemoryRuntime,
@@ -40,7 +41,6 @@ const manifest: EffectiveAgentManifest = {
     },
   },
   skills: { mode: 'all' },
-  memory: { mode: 'readOnly', sources: ['session'] },
   workflows: {
     default: 'implement-change',
     allowed: ['implement-change', 'review-code'],
@@ -52,6 +52,10 @@ const manifest: EffectiveAgentManifest = {
     escalation: ['production'],
   },
 };
+
+const userContext = UserContextConfigSchema.parse({
+  memory: { mode: 'readOnly', sources: ['session'] },
+});
 
 const catalog = [
   {
@@ -122,25 +126,24 @@ describe('boundary guard', () => {
 
 describe('memory runtime', () => {
   it('allows configured reads and denies reads when memory is off', () => {
-    const runtime = buildMemoryRuntime(manifest);
+    const runtime = buildMemoryRuntime(userContext);
     expect(runtime.readableSources).toEqual(['session']);
     expect(runtime.canRead('session')).toBe(true);
     expect(runtime.canRead('workspace')).toBe(false);
 
-    const offRuntime = buildMemoryRuntime({ ...manifest, memory: { mode: 'off', sources: ['session'] } });
+    const offRuntime = buildMemoryRuntime(UserContextConfigSchema.parse({ memory: { mode: 'off', sources: ['session'] } }));
     expect(offRuntime.canRead('session')).toBe(false);
   });
 
   it('enforces write mode target policy sensitivity and confidence', () => {
-    const runtime = buildMemoryRuntime({
-      ...manifest,
+    const runtime = buildMemoryRuntime(UserContextConfigSchema.parse({
       memory: {
         mode: 'confirmWrite',
         sources: ['session', 'curated'],
         writePolicy: { curated: 'allow', workspace: 'confirm' },
-        privacy: { crossAgentSharing: 'deny', sensitiveWritePolicy: 'confirm' },
       },
-    });
+      privacy: { sensitiveWritePolicy: 'confirm' },
+    }));
 
     expect(runtime.checkWrite({ target: 'curated', content: 'Use pnpm', source: 'test' })).toMatchObject({
       decision: 'confirm',
@@ -179,7 +182,7 @@ describe('workflow runtime', () => {
 
 describe('agent runtime profile', () => {
   it('assembles prompt, tools, model router, and boundary guard', () => {
-    const profile = buildAgentRuntimeProfile({ manifest, toolCatalog: catalog, workflowCatalog });
+    const profile = buildAgentRuntimeProfile({ manifest, userContext, toolCatalog: catalog, workflowCatalog });
 
     expect(profile.promptSections.capability).toContain('<agent_identity>');
     expect(profile.tools.tools).toHaveLength(2);

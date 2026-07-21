@@ -11,7 +11,7 @@ import { webBuildInfo } from '@/lib/build-info';
 import { cn } from '@/lib/cn';
 import { fetchJson } from '@/lib/fetch';
 import { showToast } from '@/lib/toast';
-import { showActivity } from '@/stores/activity-center-store';
+import { showActivity } from '@/stores/activity-store';
 import { apiUrl } from '@/lib/url';
 import { useAsyncResource } from '@/lib/use-async-resource';
 import { useLocaleStore } from '@/stores/locale-store';

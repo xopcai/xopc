@@ -3,102 +3,62 @@ import {
   Archive,
   ArchiveRestore,
   CheckCircle2,
+  CircleAlert,
   CirclePause,
   CirclePlay,
   Clock3,
   ExternalLink,
-  LayoutGrid,
+  History,
+  Inbox,
   ListChecks,
-  ListFilter,
-  MoreHorizontal,
   Plus,
   RotateCcw,
   Search,
   X,
 } from 'lucide-react';
-import { type DragEvent, type PointerEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
+import { PageTabs } from '@/components/ui/page-tabs';
 import { RefreshButton } from '@/components/ui/refresh-button';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchConfiguredModelsCached } from '@/features/chat/api/registry-api';
 import type { WireAttachment } from '@/features/chat/composer/composer.types';
 import { fetchGatewayConfigSwrResponse } from '@/features/gateway/gateway-config-swr';
 import { GoalCreateDialog, normalizeChecklist, type CreateGoalDraft, type GoalCreateOptions, type GoalsPageMessages } from '@/features/goals/goal-create-dialog';
+import {
+  actionableCounts,
+  compareOperationalGoals,
+  GOAL_STATUSES,
+  goalProgress,
+  isLiveQueueStatus,
+  latestQueueForGoals,
+  matchesGoalSearch,
+  queueTime,
+  type GoalItem,
+  type GoalQueueItem,
+  type GoalStatus,
+  type WorkbenchSectionId,
+  workbenchSectionForGoal,
+  WORKBENCH_SECTIONS,
+} from '@/features/goals/goals-workbench-model';
 import { fetchGatewayAgents } from '@/features/settings/agents-admin-api';
 import { normalizeGoalsConfigFromConfig } from '@/features/settings/goals-config-api';
 import { messages } from '@/i18n/messages';
-import { fetchJson } from '@/lib/fetch';
-import { apiUrl } from '@/lib/url';
 import { cn } from '@/lib/cn';
+import { fetchJson } from '@/lib/fetch';
 import { interaction } from '@/lib/interaction';
 import type { StoredLanguage } from '@/lib/storage';
+import { apiUrl } from '@/lib/url';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 
-type GoalStatus = 'active' | 'paused' | 'blocked' | 'needs_input' | 'done' | 'archived';
-type GoalBoardLaneId = 'active' | 'paused' | 'attention' | 'done' | 'archived';
-type GoalAction = 'continue' | 'pause' | 'resume' | 'reopen' | 'complete' | 'archive' | 'unarchive';
-type GoalsViewMode = 'focus' | 'board';
-type FocusSectionId = 'attention' | 'running' | 'active' | 'paused' | 'recentDone';
-type BoardPanState = {
-  pointerId: number;
-  startX: number;
-  scrollLeft: number;
-  active: boolean;
-};
-
-type GoalItem = {
-  id: string;
-  title: string;
-  description?: string;
-  status: GoalStatus;
-  agentId: string;
-  priority: 'low' | 'normal' | 'high';
-  deadlineAt?: number;
-  createdAt: number;
-  updatedAt: number;
-  turnsUsed: number;
-  maxTurns: number;
-  nextAction?: string;
-  blockedReason?: string;
-  activeSessionKey?: string;
-  checklist: Array<{ id: string; text: string; status: 'pending' | 'completed' | 'impossible' }>;
-  latestRun?: { verdict?: string; reason?: string; finishedAt?: number; startedAt: number };
-};
-
-type GoalQueueItem = {
-  id: string;
-  goalId: string;
-  status: 'queued' | 'running' | 'retry_waiting' | 'succeeded' | 'failed' | 'skipped';
-  source: 'manual' | 'cron' | 'workflow' | 'api';
-  userTurn?: { text?: string };
-  enqueuedAt: number;
-  startedAt?: number;
-  finishedAt?: number;
-  nextRunAt?: number;
-  attempts: number;
-  maxRetries: number;
-  sessionKey?: string;
-  error?: string;
-};
-
-const BOARD_STATUSES: GoalStatus[] = ['active', 'paused', 'blocked', 'needs_input', 'done', 'archived'];
-const BOARD_LANES: GoalBoardLaneId[] = ['active', 'paused', 'attention', 'done', 'archived'];
-const FOCUS_SECTIONS: FocusSectionId[] = ['attention', 'running', 'active', 'paused', 'recentDone'];
-const DRAG_TYPE = 'application/x-xopc-goal-id';
-
-function shouldIgnoreBoardPan(target: EventTarget | null): boolean {
-  if (!(target instanceof Element)) return true;
-  return Boolean(target.closest('a,button,input,select,textarea,[contenteditable="true"],[draggable="true"],[data-board-pan-skip="true"]'));
-}
-
-function progress(goal: GoalItem): { done: number; total: number } {
-  const total = goal.checklist.length;
-  const done = goal.checklist.filter((it) => it.status === 'completed' || it.status === 'impossible').length;
-  return { done, total };
-}
+type GoalAction = 'continue' | 'pause' | 'reopen' | 'complete' | 'archive' | 'unarchive';
+type GoalsView = 'workbench' | 'all' | 'history';
+type GoalIntent = GoalAction | 'details' | 'review' | 'execution';
+type UndoRecord = { goalId: string; action: Exclude<GoalAction, 'continue' | 'pause'>; title: string };
 
 function formatMessage(template: string, values: Record<string, string | number>): string {
   return Object.entries(values).reduce((text, [key, value]) => text.replaceAll(`{{${key}}}`, String(value)), template);
@@ -111,21 +71,90 @@ function formatDateTime(value: number, language: StoredLanguage): string {
   }).format(new Date(value));
 }
 
-function statusLabel(status: GoalStatus | GoalQueueItem['status'], t: GoalsPageMessages): string {
+function formatRelativeTime(value: number, language: StoredLanguage): string {
+  const deltaSeconds = Math.round((value - Date.now()) / 1000);
+  const absolute = Math.abs(deltaSeconds);
+  const formatter = new Intl.RelativeTimeFormat(language === 'zh' ? 'zh-CN' : 'en-US', { numeric: 'auto' });
+  if (absolute < 60) return formatter.format(deltaSeconds, 'second');
+  if (absolute < 3_600) return formatter.format(Math.round(deltaSeconds / 60), 'minute');
+  if (absolute < 86_400) return formatter.format(Math.round(deltaSeconds / 3_600), 'hour');
+  if (absolute < 2_592_000) return formatter.format(Math.round(deltaSeconds / 86_400), 'day');
+  return formatDateTime(value, language);
+}
+
+function queueLabel(status: GoalQueueItem['status'], t: GoalsPageMessages): string {
   return t.statuses[status] ?? status;
 }
 
-function laneForGoal(goal: GoalItem): GoalBoardLaneId {
-  if (goal.status === 'blocked' || goal.status === 'needs_input') return 'attention';
-  return goal.status;
+function mainStatus(goal: GoalItem, queueItem: GoalQueueItem | undefined, t: GoalsPageMessages) {
+  if (goal.status === 'blocked') return { label: t.workbench.status.blocked, tone: 'attention' as const };
+  if (goal.status === 'needs_input') return { label: t.workbench.status.needsInput, tone: 'attention' as const };
+  if (queueItem?.status === 'failed') return { label: t.workbench.status.executionFailed, tone: 'attention' as const };
+  if (queueItem?.status === 'running') return { label: t.workbench.status.running, tone: 'running' as const };
+  if (queueItem?.status === 'queued') return { label: t.workbench.status.queued, tone: 'running' as const };
+  if (queueItem?.status === 'retry_waiting') return { label: t.workbench.status.retryWaiting, tone: 'running' as const };
+  if (goal.status === 'active') return { label: t.workbench.status.ready, tone: 'ready' as const };
+  if (goal.status === 'paused') return { label: t.workbench.status.paused, tone: 'neutral' as const };
+  if (goal.status === 'done') return { label: t.workbench.status.done, tone: 'done' as const };
+  return { label: t.workbench.status.archived, tone: 'neutral' as const };
 }
 
-function statusClass(status: GoalStatus): string {
-  if (status === 'active') return 'bg-accent-soft text-accent-fg';
-  if (status === 'paused') return 'bg-surface-hover text-fg-muted';
-  if (status === 'done') return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
-  if (status === 'archived') return 'bg-surface-muted text-fg-subtle';
-  return 'bg-amber-500/10 text-amber-700 dark:text-amber-300';
+function statusTone(tone: ReturnType<typeof mainStatus>['tone']): string {
+  if (tone === 'attention') return 'bg-warning-soft text-amber-800 dark:text-amber-200';
+  if (tone === 'running') return 'bg-accent-soft text-accent-fg';
+  if (tone === 'ready') return 'bg-surface-active text-fg';
+  if (tone === 'done') return 'bg-success-soft text-emerald-800 dark:text-emerald-200';
+  return 'bg-surface-hover text-fg-muted';
+}
+
+function primaryIntent(goal: GoalItem, queueItem?: GoalQueueItem): GoalIntent {
+  if (goal.status === 'done') return 'review';
+  if (goal.status === 'archived') return 'unarchive';
+  if (goal.status === 'blocked' || goal.status === 'needs_input') return 'details';
+  if (queueItem?.status === 'running' || queueItem?.status === 'queued' || queueItem?.status === 'retry_waiting') return 'execution';
+  return 'continue';
+}
+
+function intentLabel(intent: GoalIntent, t: GoalsPageMessages): string {
+  if (intent === 'details') return t.workbench.actions.handle;
+  if (intent === 'review') return t.workbench.actions.review;
+  if (intent === 'execution') return t.workbench.actions.viewExecution;
+  if (intent === 'continue') return t.workbench.actions.continueExecution;
+  return t.actions[intent];
+}
+
+function intentIcon(intent: GoalIntent) {
+  if (intent === 'details') return CircleAlert;
+  if (intent === 'review') return ListChecks;
+  if (intent === 'execution') return Clock3;
+  if (intent === 'pause') return CirclePause;
+  if (intent === 'archive') return Archive;
+  if (intent === 'unarchive') return ArchiveRestore;
+  if (intent === 'reopen') return RotateCcw;
+  if (intent === 'complete') return CheckCircle2;
+  return CirclePlay;
+}
+
+function supportText(goal: GoalItem, queueItem: GoalQueueItem | undefined, t: GoalsPageMessages): string {
+  if (goal.status === 'needs_input') return goal.blockedReason || goal.nextAction || t.workbench.row.inputNeeded;
+  if (goal.status === 'blocked') return goal.blockedReason || t.workbench.row.reviewBlocker;
+  if (queueItem?.status === 'failed') return queueItem.error || t.workbench.row.executionFailed;
+  if (queueItem && isLiveQueueStatus(queueItem.status)) return goal.nextAction || queueItem.userTurn?.text || t.workbench.row.executionInProgress;
+  if (goal.status === 'paused') {
+    if (goal.blockedReason && goal.blockedReason !== 'user-paused') return goal.blockedReason;
+    return t.workbench.row.pausedByUser;
+  }
+  if (goal.status === 'done') return t.workbench.row.completedReview;
+  if (goal.status === 'archived') return t.workbench.row.archived;
+  return goal.nextAction || t.noNextAction;
+}
+
+function lastExecutionText(queueItem: GoalQueueItem | undefined, language: StoredLanguage, t: GoalsPageMessages): string | null {
+  if (!queueItem || isLiveQueueStatus(queueItem.status)) return null;
+  const time = formatRelativeTime(queueTime(queueItem), language);
+  if (queueItem.status === 'succeeded') return formatMessage(t.workbench.row.lastSucceeded, { time });
+  if (queueItem.status === 'failed') return formatMessage(t.workbench.row.lastFailed, { time });
+  return formatMessage(t.workbench.row.lastFinished, { time });
 }
 
 function checklistGlyph(status: GoalItem['checklist'][number]['status']): string {
@@ -134,124 +163,46 @@ function checklistGlyph(status: GoalItem['checklist'][number]['status']): string
   return '○';
 }
 
-function queueTime(item: GoalQueueItem): number {
-  return item.nextRunAt ?? item.finishedAt ?? item.startedAt ?? item.enqueuedAt;
-}
-
-function queueRank(item: GoalQueueItem): number {
-  if (item.status === 'running') return 6;
-  if (item.status === 'retry_waiting') return 5;
-  if (item.status === 'queued') return 4;
-  if (item.status === 'failed') return 3;
-  if (item.status === 'succeeded') return 2;
-  return 1;
-}
-
-function queueForGoals(queue: GoalQueueItem[]): Map<string, GoalQueueItem> {
-  const byGoal = new Map<string, GoalQueueItem>();
-  for (const item of queue) {
-    const current = byGoal.get(item.goalId);
-    if (!current || queueRank(item) > queueRank(current) || (queueRank(item) === queueRank(current) && queueTime(item) > queueTime(current))) {
-      byGoal.set(item.goalId, item);
-    }
-  }
-  return byGoal;
-}
-
-function queueTone(status: GoalQueueItem['status']): string {
-  if (status === 'running') return 'bg-accent-soft text-accent-fg';
-  if (status === 'retry_waiting' || status === 'failed') return 'bg-amber-500/10 text-amber-700 dark:text-amber-300';
-  if (status === 'succeeded') return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
-  return 'bg-surface-hover text-fg-muted';
-}
-
-function isActiveQueueStatus(status: GoalQueueItem['status']): boolean {
-  return status === 'running' || status === 'queued' || status === 'retry_waiting';
-}
-
-function focusSectionForGoal(goal: GoalItem, queueItem?: GoalQueueItem): FocusSectionId | null {
-  if (goal.status === 'archived') return null;
-  if (goal.status === 'blocked' || goal.status === 'needs_input' || queueItem?.status === 'failed') return 'attention';
-  if (queueItem && isActiveQueueStatus(queueItem.status)) return 'running';
-  if (goal.status === 'active') return 'active';
-  if (goal.status === 'paused') return 'paused';
-  if (goal.status === 'done') return 'recentDone';
-  return null;
-}
-
-function priorityRank(priority: GoalItem['priority']): number {
-  if (priority === 'high') return 3;
-  if (priority === 'normal') return 2;
-  return 1;
-}
-
-function compareGoalsForFocus(a: GoalItem, b: GoalItem, queueByGoal: Map<string, GoalQueueItem>): number {
-  const qa = queueByGoal.get(a.id);
-  const qb = queueByGoal.get(b.id);
-  const queueDiff = (qa ? queueRank(qa) : 0) - (qb ? queueRank(qb) : 0);
-  if (queueDiff !== 0) return -queueDiff;
-  const priorityDiff = priorityRank(a.priority) - priorityRank(b.priority);
-  if (priorityDiff !== 0) return -priorityDiff;
-  const aDeadline = a.deadlineAt ?? Number.POSITIVE_INFINITY;
-  const bDeadline = b.deadlineAt ?? Number.POSITIVE_INFINITY;
-  if (aDeadline !== bDeadline) return aDeadline - bDeadline;
-  return b.updatedAt - a.updatedAt;
-}
-
-function matchesSearch(goal: GoalItem, query: string): boolean {
-  const q = query.trim().toLowerCase();
-  if (!q) return true;
-  return [
-    goal.title,
-    goal.description,
-    goal.nextAction,
-    goal.blockedReason,
-    goal.latestRun?.reason,
-    ...goal.checklist.map((item) => item.text),
-  ].filter(Boolean).join('\n').toLowerCase().includes(q);
+function reverseAction(action: UndoRecord['action']): UndoRecord['action'] {
+  if (action === 'archive') return 'unarchive';
+  if (action === 'unarchive') return 'archive';
+  if (action === 'complete') return 'reopen';
+  return 'complete';
 }
 
 async function listGoals(): Promise<GoalItem[]> {
-  const q = new URLSearchParams({ status: BOARD_STATUSES.join(','), limit: '500' });
-  const res = await fetchJson<{ ok: true; goals: GoalItem[] }>(apiUrl(`/api/goals?${q.toString()}`));
-  return res.goals;
+  const query = new URLSearchParams({ status: GOAL_STATUSES.join(','), limit: '500' });
+  const response = await fetchJson<{ ok: true; goals: GoalItem[] }>(apiUrl(`/api/goals?${query.toString()}`));
+  return response.goals;
 }
 
 async function fetchGoalQueue(): Promise<GoalQueueItem[]> {
-  const res = await fetchJson<{ ok: true; queue: GoalQueueItem[] }>(apiUrl('/api/goals/queue'));
-  return res.queue ?? [];
+  const response = await fetchJson<{ ok: true; queue: GoalQueueItem[] }>(apiUrl('/api/goals/queue'));
+  return response.queue ?? [];
 }
 
 async function createGoal(input: {
   title: string;
-  contextMessage: {
-    text: string;
-    attachments?: WireAttachment[];
-  };
+  contextMessage: { text: string; attachments?: WireAttachment[] };
   priority?: GoalItem['priority'];
   deadlineAt?: number;
   maxTurns?: number;
   agentId?: string;
   judgeModelRef?: string;
-  contract?: {
-    objective?: string;
-    scopeBoundary?: string;
-    evidencePlan?: string[];
-    criteria?: string[];
-  };
+  contract?: { objective?: string; scopeBoundary?: string; evidencePlan?: string[]; criteria?: string[] };
 }): Promise<GoalItem> {
-  const res = await fetchJson<{ ok: true; goal: GoalItem }>(apiUrl('/api/goals'), {
+  const response = await fetchJson<{ ok: true; goal: GoalItem }>(apiUrl('/api/goals'), {
     method: 'POST',
     body: JSON.stringify({ ...input, source: 'api' }),
   });
-  return res.goal;
+  return response.goal;
 }
 
 async function draftGoalContract(
   input: CreateGoalDraft,
   uiLocale: StoredLanguage,
 ): Promise<Pick<CreateGoalDraft, 'objective' | 'scopeBoundary' | 'evidencePlan' | 'checklist'>> {
-  const res = await fetchJson<{
+  const response = await fetchJson<{
     ok: true;
     contract: { objective?: string; scopeBoundary?: string; evidencePlan?: string[]; criteria?: string[] };
   }>(apiUrl('/api/goals/contract/draft'), {
@@ -265,10 +216,10 @@ async function draftGoalContract(
     }),
   });
   return {
-    objective: res.contract.objective ?? input.objective,
-    scopeBoundary: res.contract.scopeBoundary ?? input.scopeBoundary,
-    evidencePlan: res.contract.evidencePlan ?? input.evidencePlan,
-    checklist: res.contract.criteria ?? input.checklist,
+    objective: response.contract.objective ?? input.objective,
+    scopeBoundary: response.contract.scopeBoundary ?? input.scopeBoundary,
+    evidencePlan: response.contract.evidencePlan ?? input.evidencePlan,
+    checklist: response.contract.criteria ?? input.checklist,
   };
 }
 
@@ -280,313 +231,223 @@ async function postGoalAction(goalId: string, action: Exclude<GoalAction, 'conti
 }
 
 async function continueGoal(goalId: string): Promise<string | undefined> {
-  const res = await fetchJson<{ ok: true; sessionKey?: string }>(
+  const response = await fetchJson<{ ok: true; sessionKey?: string }>(
     apiUrl(`/api/goals/${encodeURIComponent(goalId)}/continue`),
-    {
-      method: 'POST',
-      body: JSON.stringify({}),
-    },
+    { method: 'POST', body: JSON.stringify({}) },
   );
-  return res.sessionKey;
-}
-
-function primaryAction(goal: GoalItem): GoalAction | null {
-  if (goal.status === 'active') return 'continue';
-  if (goal.status === 'paused' || goal.status === 'blocked' || goal.status === 'needs_input') return 'resume';
-  if (goal.status === 'done') return 'reopen';
-  if (goal.status === 'archived') return 'unarchive';
-  return null;
-}
-
-function secondaryActions(goal: GoalItem): GoalAction[] {
-  if (goal.status === 'active') return ['pause', 'complete', 'archive'];
-  if (goal.status === 'paused' || goal.status === 'blocked' || goal.status === 'needs_input') return ['archive'];
-  if (goal.status === 'done') return ['archive'];
-  return [];
-}
-
-function actionLabel(action: GoalAction, t: GoalsPageMessages): string {
-  return t.actions[action];
-}
-
-function actionIcon(action: GoalAction) {
-  if (action === 'pause') return CirclePause;
-  if (action === 'archive') return Archive;
-  if (action === 'unarchive') return ArchiveRestore;
-  if (action === 'reopen') return RotateCcw;
-  if (action === 'complete') return CheckCircle2;
-  return CirclePlay;
-}
-
-function dragAction(goal: GoalItem, lane: GoalBoardLaneId): Exclude<GoalAction, 'continue'> | null {
-  const current = laneForGoal(goal);
-  if (current === lane) return null;
-  if (lane === 'active') {
-    if (goal.status === 'done') return 'reopen';
-    if (goal.status === 'archived') return 'unarchive';
-    return 'resume';
-  }
-  if (lane === 'paused') {
-    if (goal.status === 'archived') return 'unarchive';
-    return 'pause';
-  }
-  if (lane === 'done') return 'complete';
-  if (lane === 'archived') return 'archive';
-  return null;
-}
-
-function GoalCard({
-  goal,
-  queueItem,
-  t,
-  language,
-  selected,
-  dragging,
-  onOpen,
-  onDragStart,
-  onDragEnd,
-}: {
-  goal: GoalItem;
-  queueItem?: GoalQueueItem;
-  t: GoalsPageMessages;
-  language: StoredLanguage;
-  selected: boolean;
-  dragging: boolean;
-  onOpen: (goal: GoalItem) => void;
-  onDragStart: (goalId: string, event: DragEvent<HTMLElement>) => void;
-  onDragEnd: () => void;
-}) {
-  const p = progress(goal);
-  const updatedAt = goal.latestRun?.finishedAt ?? goal.updatedAt;
-
-  return (
-    <article
-      draggable
-      onDragStart={(event) => onDragStart(goal.id, event)}
-      onDragEnd={onDragEnd}
-      className={cn(
-        'group relative flex min-h-24 w-full min-w-0 max-w-full cursor-grab flex-col overflow-hidden rounded-lg bg-surface-panel px-3 py-3 shadow-surface transition-colors active:cursor-grabbing',
-        selected && 'ring-1 ring-accent/30',
-        dragging ? 'opacity-50' : 'hover:bg-surface-hover',
-      )}
-    >
-      <button
-        type="button"
-        onClick={() => onOpen(goal)}
-        aria-label={`${t.openDetails}: ${goal.title}`}
-        aria-current={selected ? 'true' : undefined}
-        className={cn('w-full text-left', interaction.focusRingPanel)}
-      >
-        <div className="flex min-w-0 items-start justify-between gap-2">
-          <div className="min-w-0">
-            <div className="line-clamp-2 text-sm font-medium leading-5 text-fg">{goal.title}</div>
-            <div className="mt-1 truncate text-[11px] text-fg-muted">{goal.agentId}</div>
-          </div>
-          <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold shadow-sm', statusClass(goal.status))}>
-            {statusLabel(goal.status, t)}
-          </span>
-        </div>
-
-        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-fg-subtle">
-          <span>{formatDateTime(updatedAt, language)}</span>
-          <span aria-hidden>·</span>
-          <span>{formatMessage(t.turns, { used: goal.turnsUsed, max: goal.maxTurns })}</span>
-          {p.total ? (
-            <>
-              <span aria-hidden>·</span>
-              <span>{formatMessage(t.checklistProgress, { done: p.done, total: p.total })}</span>
-            </>
-          ) : null}
-        </div>
-
-        {queueItem ? (
-          <div className="mt-2.5">
-            <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-semibold', queueTone(queueItem.status))}>
-              {statusLabel(queueItem.status, t)}
-            </span>
-          </div>
-        ) : null}
-
-        {goal.blockedReason ? <p className="mt-2 line-clamp-1 text-xs leading-5 text-amber-700 dark:text-amber-300">{goal.blockedReason}</p> : null}
-        {goal.nextAction ? <p className="mt-2 line-clamp-1 text-xs leading-5 text-fg-muted">{goal.nextAction}</p> : null}
-        {!goal.blockedReason && !goal.nextAction && goal.latestRun?.reason ? (
-          <p className="mt-2 line-clamp-1 text-xs leading-5 text-fg-muted">{goal.latestRun.reason}</p>
-        ) : null}
-
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-fg-subtle">
-          {goal.checklist.length ? (
-            <span className="rounded-full bg-surface-hover px-2 py-0.5 font-medium text-fg-muted">
-              {formatMessage(t.checklistProgress, { done: p.done, total: p.total })}
-            </span>
-          ) : null}
-          {selected ? <span className="font-medium text-accent-fg">{t.openDetails}</span> : null}
-        </div>
-      </button>
-    </article>
-  );
-}
-
-function FocusGoalRow({
-  goal,
-  queueItem,
-  t,
-  language,
-  busy,
-  selected,
-  onOpen,
-  onAction,
-}: {
-  goal: GoalItem;
-  queueItem?: GoalQueueItem;
-  t: GoalsPageMessages;
-  language: StoredLanguage;
-  busy: string | null;
-  selected: boolean;
-  onOpen: (goal: GoalItem) => void;
-  onAction: (goalId: string, action: GoalAction) => void;
-}) {
-  const p = progress(goal);
-  const primary = primaryAction(goal);
-  const attentionText = goal.blockedReason || goal.nextAction || goal.latestRun?.reason || t.noNextAction;
-  const updatedAt = goal.latestRun?.finishedAt ?? goal.updatedAt;
-
-  return (
-    <article
-      className={cn(
-        'rounded-lg shadow-surface transition-colors hover:bg-surface-hover/40',
-        selected ? 'bg-surface-active ring-1 ring-accent/30' : 'bg-surface-panel',
-      )}
-    >
-      <div className="flex flex-col gap-3 p-3.5 lg:flex-row lg:items-center">
-        <button
-          type="button"
-          className={cn('min-w-0 flex-1 text-left', interaction.focusRingPanel)}
-          aria-label={`${t.openDetails}: ${goal.title}`}
-          onClick={() => onOpen(goal)}
-        >
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-semibold', statusClass(goal.status))}>
-              {statusLabel(goal.status, t)}
-            </span>
-            {queueItem ? (
-              <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-semibold', queueTone(queueItem.status))}>
-                {statusLabel(queueItem.status, t)}
-              </span>
-            ) : null}
-            <span className="text-[11px] font-medium text-fg-muted">{formatMessage(t.prioritySummary, { priority: t.priorities[goal.priority] })}</span>
-            <span className="text-[11px] text-fg-subtle">{goal.agentId}</span>
-          </div>
-          <h3 className="mt-2 line-clamp-2 text-sm font-semibold leading-5 text-fg">{goal.title}</h3>
-          <p className={cn('mt-1 line-clamp-2 text-sm leading-5', goal.blockedReason ? 'text-amber-700 dark:text-amber-300' : 'text-fg-muted')}>
-            {attentionText}
-          </p>
-          <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-fg-subtle">
-            <span>{formatDateTime(updatedAt, language)}</span>
-            <span>{formatMessage(t.turns, { used: goal.turnsUsed, max: goal.maxTurns })}</span>
-            {p.total ? <span>{formatMessage(t.checklistProgress, { done: p.done, total: p.total })}</span> : null}
-            {goal.deadlineAt ? <span>{formatMessage(t.deadlineSummary, { deadline: formatDateTime(goal.deadlineAt, language) })}</span> : null}
-            {queueItem ? <span>{formatMessage(t.sourceSummary, { source: t.sources[queueItem.source] })}</span> : null}
-          </div>
-        </button>
-
-        <div className="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">
-          {primary ? (
-            <GoalActionButton
-              goalId={goal.id}
-              action={primary}
-              t={t}
-              busy={busy}
-              variant={primary === 'continue' ? 'primary' : 'secondary'}
-              onAction={onAction}
-            />
-          ) : null}
-          <Button asChild type="button" variant="ghost" className="h-9 rounded-lg px-3">
-            <Link to={`/goals/${encodeURIComponent(goal.id)}`}>
-              <ExternalLink className="size-4" aria-hidden />
-              {t.fullDetails}
-            </Link>
-          </Button>
-        </div>
-      </div>
-    </article>
-  );
+  return response.sessionKey;
 }
 
 function GoalActionButton({
-  goalId,
-  action,
+  goal,
+  queueItem,
+  intent,
   t,
   busy,
-  variant,
   onAction,
 }: {
-  goalId: string;
-  action: GoalAction;
+  goal: GoalItem;
+  queueItem?: GoalQueueItem;
+  intent: GoalIntent;
   t: GoalsPageMessages;
   busy: string | null;
-  variant: 'primary' | 'secondary' | 'ghost';
   onAction: (goalId: string, action: GoalAction) => void;
 }) {
-  const Icon = actionIcon(action);
+  const Icon = intentIcon(intent);
+  const isBusy = busy === `${goal.id}:${intent}`;
+  const variant = intent === 'continue' ? 'primary' : 'secondary';
+
+  if (intent === 'details' || intent === 'review') {
+    return (
+      <Button asChild type="button" variant={variant} className="h-11 rounded-lg px-3.5">
+        <Link to={`/goals/${encodeURIComponent(goal.id)}`}>
+          <Icon className="size-4" aria-hidden />
+          {intentLabel(intent, t)}
+        </Link>
+      </Button>
+    );
+  }
+
+  if (intent === 'execution') {
+    if (queueItem?.sessionKey) {
+      return (
+        <Button asChild type="button" variant="secondary" className="h-11 rounded-lg px-3.5">
+          <Link to={`/chat/${encodeURIComponent(queueItem.sessionKey)}`}>
+            <Icon className="size-4" aria-hidden />
+            {intentLabel(intent, t)}
+          </Link>
+        </Button>
+      );
+    }
+    return (
+      <Button asChild type="button" variant="secondary" className="h-11 rounded-lg px-3.5">
+        <Link to={`/goals/${encodeURIComponent(goal.id)}`}>
+          <Icon className="size-4" aria-hidden />
+          {intentLabel(intent, t)}
+        </Link>
+      </Button>
+    );
+  }
+
   return (
     <Button
       type="button"
       variant={variant}
-      className="h-9 rounded-lg px-3 text-sm"
-      disabled={busy != null}
-      onClick={() => onAction(goalId, action)}
+      className="h-11 rounded-lg px-3.5"
+      disabled={isBusy}
+      onClick={() => onAction(goal.id, intent)}
     >
-      <Icon className="size-4" aria-hidden />
-      {actionLabel(action, t)}
+      <Icon className={cn('size-4', isBusy && 'animate-pulse')} aria-hidden />
+      {isBusy ? t.workbench.actions.working : intentLabel(intent, t)}
     </Button>
   );
 }
 
-function FocusGoalRowSkeleton() {
+function GoalRow({
+  goal,
+  queueItem,
+  t,
+  language,
+  busy,
+  actionError,
+  onOpen,
+  onAction,
+}: {
+  goal: GoalItem;
+  queueItem?: GoalQueueItem;
+  t: GoalsPageMessages;
+  language: StoredLanguage;
+  busy: string | null;
+  actionError?: string;
+  onOpen: (goal: GoalItem) => void;
+  onAction: (goalId: string, action: GoalAction) => void;
+}) {
+  const status = mainStatus(goal, queueItem, t);
+  const intent = primaryIntent(goal, queueItem);
+  const progress = goalProgress(goal);
+  const updatedAt = queueItem && isLiveQueueStatus(queueItem.status)
+    ? queueTime(queueItem)
+    : goal.latestRun?.finishedAt ?? goal.updatedAt;
+  const lastExecution = lastExecutionText(queueItem, language, t);
+
   return (
-    <article className="rounded-lg bg-surface-panel p-3.5 shadow-surface" aria-hidden="true">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-        <div className="min-w-0 flex-1">
+    <article className="group border-b border-edge-subtle py-4 last:border-b-0 sm:py-5">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
+        <button
+          type="button"
+          className={cn('min-w-0 flex-1 rounded-lg text-left', interaction.focusRingPanel)}
+          aria-label={`${t.openDetails}: ${goal.title}`}
+          onClick={() => onOpen(goal)}
+        >
           <div className="flex flex-wrap items-center gap-2">
-            <Skeleton className="h-5 w-16 rounded-full" />
-            <Skeleton className="h-5 w-20 rounded-full" />
-            <Skeleton className="h-3 w-24" />
+            <span className={cn('rounded-full px-2.5 py-1 text-xs font-semibold', statusTone(status.tone))}>{status.label}</span>
+            {goal.priority === 'high' ? <span className="text-xs font-semibold text-fg">{t.workbench.row.highPriority}</span> : null}
+            <span className="text-xs text-fg-subtle">{goal.agentId}</span>
           </div>
-          <Skeleton className="mt-3 h-4 w-2/3 max-w-full" />
-          <Skeleton className="mt-2 h-4 w-full max-w-xl" />
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Skeleton className="h-3 w-24" />
-            <Skeleton className="h-3 w-28" />
-            <Skeleton className="h-3 w-20" />
+          <h3 className="mt-2.5 text-base font-semibold leading-6 text-fg">{goal.title}</h3>
+          <p className={cn('mt-1 max-w-[70ch] text-sm leading-6', status.tone === 'attention' ? 'text-amber-800 dark:text-amber-200' : 'text-fg-muted')}>
+            {supportText(goal, queueItem, t)}
+          </p>
+          <div className="mt-2.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-fg-subtle">
+            <span title={formatDateTime(updatedAt, language)}>{formatRelativeTime(updatedAt, language)}</span>
+            <span>{formatMessage(t.turns, { used: goal.turnsUsed, max: goal.maxTurns })}</span>
+            {progress.total ? <span>{formatMessage(t.checklistProgress, { done: progress.done, total: progress.total })}</span> : null}
+            {goal.deadlineAt ? <span>{formatMessage(t.deadlineSummary, { deadline: formatDateTime(goal.deadlineAt, language) })}</span> : null}
+            {lastExecution ? <span>{lastExecution}</span> : null}
+            {queueItem && isLiveQueueStatus(queueItem.status) ? (
+              <span>{formatMessage(t.attempt, { attempts: queueItem.attempts, max: queueItem.maxRetries + 1 })}</span>
+            ) : null}
           </div>
-        </div>
-        <div className="flex shrink-0 gap-2">
-          <Skeleton className="h-9 w-24 rounded-lg" />
-          <Skeleton className="h-9 w-24 rounded-lg" />
+        </button>
+        <div className="flex shrink-0 items-center gap-2 lg:justify-end">
+          <GoalActionButton
+            goal={goal}
+            queueItem={queueItem}
+            intent={intent}
+            t={t}
+            busy={busy}
+            onAction={onAction}
+          />
+          <Button type="button" variant="ghost" className="size-11 shrink-0 rounded-lg p-0" aria-label={t.openDetails} onClick={() => onOpen(goal)}>
+            <ExternalLink className="size-4" aria-hidden />
+          </Button>
         </div>
       </div>
+      {actionError ? (
+        <p className="mt-3 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger" role="alert">{actionError}</p>
+      ) : null}
     </article>
   );
 }
 
-function GoalCardSkeleton() {
+function GoalRowsSkeleton() {
   return (
-    <article className="min-h-24 rounded-lg bg-surface-panel px-3 py-3 shadow-surface" aria-hidden="true">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <Skeleton className="h-4 w-4/5" />
-          <Skeleton className="mt-2 h-3 w-24" />
+    <div aria-hidden="true">
+      {Array.from({ length: 3 }).map((_, index) => (
+        <div key={index} className="border-b border-edge-subtle py-5 last:border-b-0">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
+            <div className="min-w-0 flex-1">
+              <div className="flex gap-2"><Skeleton className="h-6 w-24 rounded-full" /><Skeleton className="h-4 w-16" /></div>
+              <Skeleton className="mt-3 h-5 w-2/3" />
+              <Skeleton className="mt-2 h-4 w-full max-w-2xl" />
+              <Skeleton className="mt-3 h-3 w-72 max-w-full" />
+            </div>
+            <Skeleton className="h-11 w-32 rounded-lg" />
+          </div>
         </div>
-        <Skeleton className="h-5 w-16 rounded-full" />
+      ))}
+    </div>
+  );
+}
+
+function GoalSection({
+  title,
+  description,
+  goals,
+  queueByGoal,
+  t,
+  language,
+  busy,
+  actionError,
+  onOpen,
+  onAction,
+}: {
+  title: string;
+  description: string;
+  goals: GoalItem[];
+  queueByGoal: Map<string, GoalQueueItem>;
+  t: GoalsPageMessages;
+  language: StoredLanguage;
+  busy: string | null;
+  actionError: { goalId: string; message: string } | null;
+  onOpen: (goal: GoalItem) => void;
+  onAction: (goalId: string, action: GoalAction) => void;
+}) {
+  return (
+    <section aria-labelledby={`goal-section-${title}`}>
+      <header className="flex items-start justify-between gap-4 pb-1">
+        <div className="min-w-0">
+          <h2 id={`goal-section-${title}`} className="text-base font-semibold text-fg">{title}</h2>
+          <p className="mt-1 text-sm leading-5 text-fg-muted">{description}</p>
+        </div>
+        <span className="shrink-0 rounded-full bg-surface-hover px-2.5 py-1 text-xs font-semibold tabular-nums text-fg-muted">{goals.length}</span>
+      </header>
+      <div className="mt-2">
+        {goals.map((goal) => (
+          <GoalRow
+            key={goal.id}
+            goal={goal}
+            queueItem={queueByGoal.get(goal.id)}
+            t={t}
+            language={language}
+            busy={busy}
+            actionError={actionError?.goalId === goal.id ? actionError.message : undefined}
+            onOpen={onOpen}
+            onAction={onAction}
+          />
+        ))}
       </div>
-      <div className="mt-3 flex gap-2">
-        <Skeleton className="h-3 w-20" />
-        <Skeleton className="h-3 w-24" />
-      </div>
-      <Skeleton className="mt-3 h-4 w-full" />
-      <Skeleton className="mt-2 h-4 w-2/3" />
-      <Skeleton className="mt-4 h-5 w-28 rounded-full" />
-    </article>
+    </section>
   );
 }
 
@@ -608,118 +469,76 @@ function GoalDetailDialog({
   onAction: (goalId: string, action: GoalAction) => void;
 }) {
   if (!goal) return null;
-  const p = progress(goal);
-  const primary = primaryAction(goal);
-  const secondary = secondaryActions(goal);
+  const progress = goalProgress(goal);
+  const status = mainStatus(goal, queueItem, t);
+  const intent = primaryIntent(goal, queueItem);
 
   return (
     <Dialog.Root open onOpenChange={(next) => !next && onClose()}>
       <Dialog.Portal>
         <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-65 bg-scrim backdrop-blur-[1px]" />
         <Dialog.Content className="fixed left-1/2 top-1/2 z-66 flex h-[min(90vh,48rem)] w-[min(100%-2rem,56rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-popover outline-none">
-          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-edge px-5 py-4">
+          <header className="flex shrink-0 items-start justify-between gap-3 border-b border-edge px-5 py-4">
             <div className="min-w-0">
-              <Dialog.Title className="truncate text-base font-semibold tracking-tight text-fg">{goal.title}</Dialog.Title>
-              <Dialog.Description className="mt-1 truncate text-xs text-fg-muted">
-                {statusLabel(goal.status, t)} · {formatMessage(t.turns, { used: goal.turnsUsed, max: goal.maxTurns })}
-              </Dialog.Description>
+              <Dialog.Title className="text-base font-semibold leading-6 text-fg">{goal.title}</Dialog.Title>
+              <Dialog.Description className="mt-1 text-sm text-fg-muted">{supportText(goal, queueItem, t)}</Dialog.Description>
             </div>
-            <Button type="button" variant="ghost" className="size-9 shrink-0 p-0" aria-label={t.closeDetails} onClick={onClose}>
+            <Button type="button" variant="ghost" className="size-11 shrink-0 rounded-lg p-0" aria-label={t.closeDetails} onClick={onClose}>
               <X className="size-5" aria-hidden />
             </Button>
-          </div>
-          <section className="min-h-0 flex-1 overflow-y-auto p-5">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium', statusClass(goal.status))}>
-                    {statusLabel(goal.status, t)}
-                  </span>
-                  <span className="text-xs text-fg-muted">{goal.agentId}</span>
-                  <span className="text-xs text-fg-muted">{formatMessage(t.checklistProgress, { done: p.done, total: p.total })}</span>
-                </div>
-                {goal.description ? <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-fg-muted">{goal.description}</p> : null}
+          </header>
+          <div className="min-h-0 flex-1 overflow-y-auto p-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={cn('rounded-full px-2.5 py-1 text-xs font-semibold', statusTone(status.tone))}>{status.label}</span>
+                <span className="text-xs text-fg-muted">{goal.agentId}</span>
+                <span className="text-xs text-fg-muted">{formatMessage(t.checklistProgress, { done: progress.done, total: progress.total })}</span>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {primary ? (
-                  <GoalActionButton
-                    goalId={goal.id}
-                    action={primary}
-                    t={t}
-                    busy={busy}
-                    variant={primary === 'continue' ? 'primary' : 'secondary'}
-                    onAction={onAction}
-                  />
-                ) : null}
-                {secondary.map((action) => (
-                  <GoalActionButton
-                    key={action}
-                    goalId={goal.id}
-                    action={action}
-                    t={t}
-                    busy={busy}
-                    variant={action === 'archive' ? 'ghost' : 'secondary'}
-                    onAction={onAction}
-                  />
-                ))}
-                <Button asChild type="button" variant="secondary" className="h-9 rounded-lg">
-                  <Link to={`/goals/${encodeURIComponent(goal.id)}`}>
-                    <ExternalLink className="size-4" aria-hidden />
-                    {t.fullDetails}
-                  </Link>
-                </Button>
-              </div>
+              <GoalActionButton goal={goal} queueItem={queueItem} intent={intent} t={t} busy={busy} onAction={onAction} />
             </div>
 
-            <div className="mt-5 rounded-2xl bg-surface-base/60 p-4">
-              <div className="flex items-start gap-3">
-                <div className="rounded-xl bg-accent-soft p-2 text-accent-fg">
-                  <ListChecks className="size-4" aria-hidden />
-                </div>
-                <div className="min-w-0">
-                  <h3 className="text-sm font-semibold text-fg">{goal.blockedReason ? t.currentBlocker : t.nextAction}</h3>
-                  <p className={cn('mt-1 text-sm leading-6', goal.blockedReason ? 'text-amber-700 dark:text-amber-300' : 'text-fg-muted')}>
-                    {goal.blockedReason || goal.nextAction || t.noNextAction}
-                  </p>
-                </div>
-              </div>
-            </div>
+            {goal.description ? <p className="mt-6 max-w-[70ch] whitespace-pre-wrap break-words text-sm leading-6 text-fg-muted">{goal.description}</p> : null}
+
+            <section className="mt-7 border-t border-edge-subtle pt-5">
+              <h3 className="text-sm font-semibold text-fg">{goal.blockedReason ? t.currentBlocker : t.nextAction}</h3>
+              <p className={cn('mt-2 text-sm leading-6', status.tone === 'attention' ? 'text-amber-800 dark:text-amber-200' : 'text-fg-muted')}>
+                {supportText(goal, queueItem, t)}
+              </p>
+            </section>
 
             {queueItem ? (
-              <div className="mt-4 rounded-2xl bg-surface-base/60 p-4">
+              <section className="mt-6 border-t border-edge-subtle pt-5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="text-sm font-semibold text-fg">{t.executionQueue}</h3>
-                  <span className={cn('rounded-full px-2 py-0.5 text-xs font-semibold', queueTone(queueItem.status))}>
-                    {statusLabel(queueItem.status, t)}
-                  </span>
+                  <h3 className="text-sm font-semibold text-fg">{t.workbench.row.latestExecution}</h3>
+                  <span className="text-xs font-medium text-fg-muted">{queueLabel(queueItem.status, t)}</span>
                 </div>
                 <p className="mt-2 text-sm text-fg-muted">
                   {formatMessage(t.attempt, { attempts: queueItem.attempts, max: queueItem.maxRetries + 1 })} · {formatDateTime(queueTime(queueItem), language)}
                 </p>
-                {queueItem.error ? <p className="mt-2 text-sm text-amber-700 dark:text-amber-300">{queueItem.error}</p> : null}
-                {queueItem.userTurn?.text ? <p className="mt-2 text-sm text-fg-muted">{queueItem.userTurn.text}</p> : null}
-              </div>
+                {queueItem.error ? <p className="mt-2 text-sm text-danger">{queueItem.error}</p> : null}
+              </section>
             ) : null}
 
-            <div className="mt-4 rounded-2xl bg-surface-base/60 p-4">
-              <h3 className="flex items-center gap-2 text-sm font-semibold text-fg">
-                <ListChecks className="size-4 text-accent" aria-hidden />
-                {t.checklist}
-              </h3>
+            <section className="mt-6 border-t border-edge-subtle pt-5">
+              <h3 className="flex items-center gap-2 text-sm font-semibold text-fg"><ListChecks className="size-4 text-accent" aria-hidden />{t.checklist}</h3>
               {goal.checklist.length ? (
-                <ul className="mt-3 grid gap-2 text-sm text-fg-muted">
+                <ul className="mt-3 grid gap-2 text-sm leading-6 text-fg-muted">
                   {goal.checklist.map((item) => (
-                    <li key={item.id} className="flex gap-2">
-                      <span className="w-5 shrink-0 text-center">{checklistGlyph(item.status)}</span>
-                      <span className="break-words">{item.text}</span>
-                    </li>
+                    <li key={item.id} className="flex gap-2"><span className="w-5 shrink-0 text-center">{checklistGlyph(item.status)}</span><span className="break-words">{item.text}</span></li>
                   ))}
                 </ul>
-              ) : (
-                <p className="mt-2 text-sm text-fg-muted">{t.noChecklist}</p>
-              )}
+              ) : <p className="mt-2 text-sm text-fg-muted">{t.noChecklist}</p>}
+            </section>
+          </div>
+          <footer className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-edge px-5 py-3">
+            <div className="flex flex-wrap gap-2">
+              {goal.status === 'active' ? <Button type="button" variant="ghost" className="h-11 rounded-lg" onClick={() => onAction(goal.id, 'pause')}><CirclePause className="size-4" aria-hidden />{t.actions.pause}</Button> : null}
+              {goal.status !== 'archived' ? <Button type="button" variant="ghost" className="h-11 rounded-lg" onClick={() => onAction(goal.id, 'archive')}><Archive className="size-4" aria-hidden />{t.actions.archive}</Button> : null}
             </div>
-          </section>
+            <Button asChild type="button" variant="secondary" className="h-11 rounded-lg">
+              <Link to={`/goals/${encodeURIComponent(goal.id)}`}><ExternalLink className="size-4" aria-hidden />{t.fullDetails}</Link>
+            </Button>
+          </footer>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
@@ -728,48 +547,46 @@ function GoalDetailDialog({
 
 export function GoalsPage() {
   const navigate = useNavigate();
-  const language = useLocaleStore((s) => s.language);
+  const language = useLocaleStore((state) => state.language);
   const t = messages(language).goalsPage;
-  const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
-  const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
-  const boardScrollerRef = useRef<HTMLElement | null>(null);
-  const boardPanRef = useRef<BoardPanState | null>(null);
+  const setPageHeader = usePageHeaderStore((state) => state.setPageHeader);
+  const clearPageHeader = usePageHeaderStore((state) => state.clearPageHeader);
   const [goals, setGoals] = useState<GoalItem[]>([]);
   const [queue, setQueue] = useState<GoalQueueItem[]>([]);
   const [query, setQuery] = useState('');
+  const [view, setView] = useState<GoalsView>('workbench');
+  const [agentFilter, setAgentFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [priorityFilter, setPriorityFilter] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<{ goalId: string; message: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [undo, setUndo] = useState<UndoRecord | null>(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null);
   const [createOptions, setCreateOptions] = useState<GoalCreateOptions>({
     defaultAgentId: '',
     agents: [],
     models: [],
     checklistDecomposePolicy: 'empty_only',
   });
-  const [viewMode, setViewMode] = useState<GoalsViewMode>('focus');
-  const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null);
-  const [draggingGoalId, setDraggingGoalId] = useState<string | null>(null);
-  const [dropLane, setDropLane] = useState<GoalBoardLaneId | null>(null);
-  const [isPanningBoard, setIsPanningBoard] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    setError(null);
+    setLoadError(null);
     try {
       const [nextGoals, nextQueue] = await Promise.all([listGoals(), fetchGoalQueue()]);
       setGoals(nextGoals);
       setQueue(nextQueue);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : t.errors.load);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : t.errors.load);
     } finally {
       setLoading(false);
     }
   }, [t.errors.load]);
 
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
+  useEffect(() => { void refresh(); }, [refresh]);
 
   useEffect(() => {
     let cancelled = false;
@@ -780,92 +597,106 @@ export function GoalsPage() {
         fetchGatewayConfigSwrResponse(),
       ]);
       if (cancelled) return;
-      setCreateOptions((prev) => {
-        const defaultAgentId = agentsResult.status === 'fulfilled' ? agentsResult.value.defaultId : prev.defaultAgentId;
-        const agents = agentsResult.status === 'fulfilled' ? agentsResult.value.agents : prev.agents;
-        const models = modelsResult.status === 'fulfilled' ? modelsResult.value : prev.models;
-        const checklistDecomposePolicy = configResult.status === 'fulfilled'
-          ? normalizeGoalsConfigFromConfig(configResult.value.payload?.config).checklistDecomposePolicy
-          : prev.checklistDecomposePolicy;
+      setCreateOptions((previous) => {
+        const defaultAgentId = agentsResult.status === 'fulfilled' ? agentsResult.value.defaultId : previous.defaultAgentId;
+        const agents = agentsResult.status === 'fulfilled' ? agentsResult.value.agents : previous.agents;
         return {
           defaultAgentId,
           agents: agents.length ? agents : [{
-            id: defaultAgentId || 'main',
-            workspace: '',
-            profileDir: '',
-            typedModels: { defaultRole: 'deep', preset: [], effective: [] },
-            extends: [],
-            isDefault: true,
-            skills: { preset: [] },
-            tools: { presetDenied: [], entryDisable: [], effectiveDisable: [] },
+            id: defaultAgentId || 'main', workspace: '', profileDir: '', typedModels: { defaultRole: 'deep', preset: [], effective: [] },
+            extends: [], isDefault: true, skills: { preset: [] }, tools: { presetDenied: [], entryDisable: [], effectiveDisable: [] },
           }],
-          models,
-          checklistDecomposePolicy,
+          models: modelsResult.status === 'fulfilled' ? modelsResult.value : previous.models,
+          checklistDecomposePolicy: configResult.status === 'fulfilled'
+            ? normalizeGoalsConfigFromConfig(configResult.value.payload?.config).checklistDecomposePolicy
+            : previous.checklistDecomposePolicy,
         };
       });
     }
     void loadCreateOptions();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
-    const handler = () => {
-      void fetchGoalQueue()
-        .then(setQueue)
-        .catch(() => {
-          /* keep the last snapshot */
-        });
-    };
+    const handler = () => { void refresh(); };
     window.addEventListener('goal-queue-updated', handler);
-    return () => window.removeEventListener('goal-queue-updated', handler);
-  }, []);
+    window.addEventListener('goal-status-updated', handler);
+    return () => {
+      window.removeEventListener('goal-queue-updated', handler);
+      window.removeEventListener('goal-status-updated', handler);
+    };
+  }, [refresh]);
 
-  const queueByGoal = useMemo(() => queueForGoals(queue), [queue]);
-  const visibleGoals = useMemo(() => goals.filter((goal) => matchesSearch(goal, query)), [goals, query]);
-  const focusGroups = useMemo(() => {
-    const grouped = new Map<FocusSectionId, GoalItem[]>(FOCUS_SECTIONS.map((section) => [section, []]));
-    for (const goal of visibleGoals) {
-      const section = focusSectionForGoal(goal, queueByGoal.get(goal.id));
-      if (section) grouped.get(section)?.push(goal);
-    }
-    for (const section of FOCUS_SECTIONS) {
-      grouped.get(section)?.sort((a, b) => compareGoalsForFocus(a, b, queueByGoal));
-    }
-    return grouped;
-  }, [queueByGoal, visibleGoals]);
-  const lanes = useMemo(() => {
-    const grouped = new Map<GoalBoardLaneId, GoalItem[]>(BOARD_LANES.map((lane) => [lane, []]));
-    for (const goal of visibleGoals) {
-      grouped.get(laneForGoal(goal))?.push(goal);
-    }
-    return grouped;
-  }, [visibleGoals]);
+  useEffect(() => {
+    if (!undo) return;
+    const timer = window.setTimeout(() => setUndo(null), 8_000);
+    return () => window.clearTimeout(timer);
+  }, [undo]);
+
+  const queueByGoal = useMemo(() => latestQueueForGoals(queue), [queue]);
+  const searchedGoals = useMemo(() => goals.filter((goal) => matchesGoalSearch(goal, query)), [goals, query]);
+  const counts = useMemo(() => actionableCounts(goals, queueByGoal), [goals, queueByGoal]);
   const selectedGoal = useMemo(() => goals.find((goal) => goal.id === selectedGoalId) ?? null, [goals, selectedGoalId]);
+  const agents = useMemo(() => [...new Set(goals.map((goal) => goal.agentId))].sort(), [goals]);
 
-  const counts = useMemo(() => {
-    const open = goals.filter((g) => g.status === 'active' || g.status === 'paused' || g.status === 'blocked' || g.status === 'needs_input').length;
-    const attention = goals.filter((g) => g.status === 'blocked' || g.status === 'needs_input').length;
-    const running = queue.filter((item) => item.status === 'running').length;
-    const queued = queue.filter((item) => item.status === 'queued' || item.status === 'retry_waiting').length;
-    const failed = queue.filter((item) => item.status === 'failed').length;
-    const active = goals.filter((g) => g.status === 'active').length;
-    return { open, attention, running, queued, failed, active };
-  }, [goals, queue]);
+  const workbenchGroups = useMemo(() => {
+    const groups = new Map<WorkbenchSectionId, GoalItem[]>(WORKBENCH_SECTIONS.map((section) => [section, []]));
+    for (const goal of searchedGoals) {
+      const section = workbenchSectionForGoal(goal, queueByGoal.get(goal.id));
+      if (section) groups.get(section)?.push(goal);
+    }
+    for (const section of WORKBENCH_SECTIONS) groups.get(section)?.sort((a, b) => compareOperationalGoals(a, b, queueByGoal));
+    return groups;
+  }, [queueByGoal, searchedGoals]);
 
-  const queueSummary = useMemo(
-    () => [
-      { key: 'running', count: counts.running },
-      { key: 'queued', count: counts.queued },
-      { key: 'failed', count: counts.failed },
-    ],
-    [counts.failed, counts.queued, counts.running],
-  );
+  const openGoals = useMemo(() => searchedGoals
+    .filter((goal) => goal.status !== 'done' && goal.status !== 'archived')
+    .filter((goal) => !agentFilter || goal.agentId === agentFilter)
+    .filter((goal) => !statusFilter || goal.status === statusFilter)
+    .filter((goal) => !priorityFilter || goal.priority === priorityFilter)
+    .sort((a, b) => compareOperationalGoals(a, b, queueByGoal)), [agentFilter, priorityFilter, queueByGoal, searchedGoals, statusFilter]);
 
-  const runAction = async (goalId: string, action: GoalAction) => {
+  const historyGoals = useMemo(() => searchedGoals
+    .filter((goal) => goal.status === 'done' || goal.status === 'archived')
+    .sort((a, b) => b.updatedAt - a.updatedAt), [searchedGoals]);
+
+  const importantGoal = workbenchGroups.get('attention')?.[0]
+    ?? workbenchGroups.get('running')?.[0]
+    ?? workbenchGroups.get('ready')?.[0]
+    ?? null;
+
+  const hero = counts.attention > 0
+    ? {
+      title: counts.attention === 1
+        ? t.workbench.hero.attentionOne
+        : formatMessage(t.workbench.hero.attentionMany, { count: counts.attention }),
+      description: t.workbench.hero.attentionDescription,
+    }
+    : counts.running > 0
+      ? {
+        title: counts.running === 1
+          ? t.workbench.hero.runningOne
+          : formatMessage(t.workbench.hero.runningMany, { count: counts.running }),
+        description: t.workbench.hero.runningDescription,
+      }
+      : counts.ready > 0
+        ? {
+          title: counts.ready === 1
+            ? t.workbench.hero.readyOne
+            : formatMessage(t.workbench.hero.readyMany, { count: counts.ready }),
+          description: t.workbench.hero.readyDescription,
+        }
+        : {
+          title: t.workbench.hero.calm,
+          description: counts.later > 0
+            ? formatMessage(t.workbench.hero.calmDescriptionWithPaused, { paused: counts.later })
+            : t.workbench.hero.calmDescription,
+        };
+
+  const runAction = useCallback(async (goalId: string, action: GoalAction, options?: { skipUndo?: boolean }) => {
+    const goal = goals.find((item) => item.id === goalId);
     setBusy(`${goalId}:${action}`);
-    setError(null);
+    setActionError(null);
     try {
       if (action === 'continue') {
         const sessionKey = await continueGoal(goalId);
@@ -875,73 +706,27 @@ export function GoalsPage() {
         }
       } else {
         await postGoalAction(goalId, action);
+        if (!options?.skipUndo && goal && (action === 'archive' || action === 'unarchive' || action === 'complete' || action === 'reopen')) {
+          setUndo({ goalId, action, title: goal.title });
+        }
       }
       await refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : t.errors.action);
+    } catch (error) {
+      setActionError({ goalId, message: error instanceof Error ? error.message : t.errors.action });
     } finally {
       setBusy(null);
     }
-  };
-
-  const applyDrop = async (goalId: string, lane: GoalBoardLaneId) => {
-    const goal = goals.find((item) => item.id === goalId);
-    const action = goal ? dragAction(goal, lane) : null;
-    setDropLane(null);
-    setDraggingGoalId(null);
-    if (!goal || !action) return;
-    await runAction(goal.id, action);
-  };
-
-  const endBoardPan = useCallback((event: PointerEvent<HTMLElement>) => {
-    const pan = boardPanRef.current;
-    if (!pan || pan.pointerId !== event.pointerId) return;
-    boardPanRef.current = null;
-    setIsPanningBoard(false);
-    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-  }, []);
-
-  const handleBoardPointerDown = useCallback((event: PointerEvent<HTMLElement>) => {
-    if (event.button !== 0 || draggingGoalId || shouldIgnoreBoardPan(event.target)) return;
-    const scroller = boardScrollerRef.current;
-    if (!scroller) return;
-    boardPanRef.current = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      scrollLeft: scroller.scrollLeft,
-      active: false,
-    };
-    event.currentTarget.setPointerCapture(event.pointerId);
-  }, [draggingGoalId]);
-
-  const handleBoardPointerMove = useCallback((event: PointerEvent<HTMLElement>) => {
-    const pan = boardPanRef.current;
-    const scroller = boardScrollerRef.current;
-    if (!pan || !scroller || pan.pointerId !== event.pointerId) return;
-    const deltaX = event.clientX - pan.startX;
-    if (!pan.active && Math.abs(deltaX) < 5) return;
-    if (!pan.active) {
-      pan.active = true;
-      setIsPanningBoard(true);
-    }
-    event.preventDefault();
-    scroller.scrollLeft = pan.scrollLeft - deltaX;
-  }, []);
+  }, [goals, navigate, refresh, t.errors.action]);
 
   const createFromDraft = useCallback(async (draft: CreateGoalDraft) => {
     const maxTurns = Number.parseInt(draft.maxTurns, 10);
     const deadlineAt = draft.deadline ? new Date(draft.deadline).getTime() : undefined;
     setBusy('create');
-    setError(null);
+    setLoadError(null);
     try {
       const goal = await createGoal({
         title: draft.title.trim(),
-        contextMessage: {
-          text: draft.description.trim(),
-          attachments: draft.attachments.length ? draft.attachments : undefined,
-        },
+        contextMessage: { text: draft.description.trim(), attachments: draft.attachments.length ? draft.attachments : undefined },
         priority: draft.priority,
         deadlineAt: Number.isFinite(deadlineAt) ? deadlineAt : undefined,
         maxTurns: Number.isFinite(maxTurns) ? maxTurns : undefined,
@@ -956,270 +741,196 @@ export function GoalsPage() {
       });
       await refresh();
       setSelectedGoalId(goal.id);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t.errors.create);
-      throw err;
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : t.errors.create);
+      throw error;
     } finally {
       setBusy(null);
     }
   }, [refresh, t.errors.create]);
 
-  const headerEnd = useMemo(
-    () => (
-      <>
-        <label className="relative min-w-0">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted" aria-hidden />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            aria-label={t.searchPlaceholder}
-            autoComplete="off"
-            placeholder={t.searchPlaceholder}
-            className="h-9 w-36 rounded-lg border border-edge bg-surface-muted py-2 pl-9 pr-3 text-sm text-fg placeholder:text-fg-muted focus-visible:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent sm:w-56 lg:w-72"
-          />
-        </label>
-        <RefreshButton className="size-9 shrink-0 p-0" loading={loading} label={t.refresh} onClick={refresh} />
-        <Button type="button" variant="primary" className="h-9 rounded-lg" disabled={busy === 'create'} onClick={() => setCreateDialogOpen(true)}>
-          <Plus className="size-4" aria-hidden />
-          {t.create}
-        </Button>
-      </>
-    ),
-    [busy, loading, query, refresh, t.create, t.refresh, t.searchPlaceholder],
-  );
+  const headerEnd = useMemo(() => (
+    <>
+      <label className="relative min-w-0">
+        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted" aria-hidden />
+        <input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          aria-label={t.searchPlaceholder}
+          autoComplete="off"
+          placeholder={t.searchPlaceholder}
+          className="h-10 w-36 rounded-lg border border-edge bg-surface-muted py-2 pl-9 pr-3 text-sm text-fg placeholder:text-fg-muted focus-visible:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent sm:w-56 lg:w-72"
+        />
+      </label>
+      <RefreshButton className="size-10 shrink-0 p-0" loading={loading} label={t.refresh} onClick={refresh} />
+      <Button type="button" variant="primary" className="h-10 rounded-lg" disabled={busy === 'create'} onClick={() => setCreateDialogOpen(true)}>
+        <Plus className="size-4" aria-hidden />{t.create}
+      </Button>
+    </>
+  ), [busy, loading, query, refresh, t.create, t.refresh, t.searchPlaceholder]);
 
   useLayoutEffect(() => {
     setPageHeader({
       startExtra: null,
-      main: (
-        <div className="min-w-0">
-          <h1 className="truncate text-base font-semibold tracking-tight text-fg">{t.title}</h1>
-          <p className="truncate text-xs text-fg-muted">
-            {formatMessage(t.summary, { open: counts.open, attention: counts.attention, shown: visibleGoals.length })}
-          </p>
-        </div>
-      ),
+      main: <div className="min-w-0"><h1 className="truncate text-base font-semibold tracking-tight text-fg">{t.title}</h1><p className="truncate text-xs text-fg-muted">{t.workbench.pageDescription}</p></div>,
       end: headerEnd,
     });
     return () => clearPageHeader();
-  }, [clearPageHeader, counts.attention, counts.open, headerEnd, setPageHeader, t.summary, t.title, visibleGoals.length]);
+  }, [clearPageHeader, headerEnd, setPageHeader, t.title, t.workbench.pageDescription]);
+
+  const tabs = [
+    { id: 'workbench' as const, label: t.workbench.tabs.workbench, icon: Inbox, count: counts.attention + counts.running + counts.ready },
+    { id: 'all' as const, label: t.workbench.tabs.all, icon: ListChecks, count: goals.length - counts.history },
+    { id: 'history' as const, label: t.workbench.tabs.history, icon: History, count: counts.history },
+  ];
+
+  const sectionMessages: Record<WorkbenchSectionId, { title: string; description: string }> = t.workbench.sections;
 
   return (
     <main className="flex min-h-0 flex-1 flex-col overflow-hidden bg-surface-panel">
-      <div className="flex min-h-0 w-full flex-1 flex-col gap-4 px-3 py-5 sm:px-5 xl:px-6">
-        <section className="w-full rounded-lg border border-edge-subtle bg-surface-base p-3 shadow-surface">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <div className="rounded-md bg-surface-muted/50 px-3 py-2">
-                <p className="text-[11px] font-medium text-fg-muted">{t.overview.attention}</p>
-                <p className="mt-1 text-lg font-semibold tabular-nums text-fg">{counts.attention + counts.failed}</p>
-              </div>
-              <div className="rounded-md bg-surface-muted/50 px-3 py-2">
-                <p className="text-[11px] font-medium text-fg-muted">{t.overview.running}</p>
-                <p className="mt-1 text-lg font-semibold tabular-nums text-fg">{counts.running}</p>
-              </div>
-              <div className="rounded-md bg-surface-muted/50 px-3 py-2">
-                <p className="text-[11px] font-medium text-fg-muted">{t.overview.queued}</p>
-                <p className="mt-1 text-lg font-semibold tabular-nums text-fg">{counts.queued}</p>
-              </div>
-              <div className="rounded-md bg-surface-muted/50 px-3 py-2">
-                <p className="text-[11px] font-medium text-fg-muted">{t.overview.active}</p>
-                <p className="mt-1 text-lg font-semibold tabular-nums text-fg">{counts.active}</p>
-              </div>
+      <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col px-3 py-5 sm:px-6 lg:px-8">
+        <section className="rounded-xl border border-edge bg-surface-base px-4 py-5 sm:px-6 sm:py-6" aria-labelledby="goals-now-title">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0 max-w-2xl">
+              <p className="text-sm font-medium text-fg-muted">{t.workbench.hero.eyebrow}</p>
+              <h2 id="goals-now-title" className="mt-1.5 text-xl font-semibold tracking-tight text-fg sm:text-2xl">{hero.title}</h2>
+              <p className="mt-2 text-sm leading-6 text-fg-muted">{hero.description}</p>
             </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="mr-1 flex items-center gap-2 text-sm font-medium text-fg">
-                <Clock3 className="size-4 text-accent" aria-hidden />
-                {t.executionQueue}
+            {importantGoal ? (
+              <div className="flex min-w-0 flex-col gap-3 border-t border-edge-subtle pt-4 lg:max-w-md lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-fg-subtle">{t.workbench.hero.nextFocus}</p>
+                  <p className="mt-1 line-clamp-2 text-sm font-semibold leading-5 text-fg">{importantGoal.title}</p>
+                </div>
+                <GoalActionButton
+                  goal={importantGoal}
+                  queueItem={queueByGoal.get(importantGoal.id)}
+                  intent={primaryIntent(importantGoal, queueByGoal.get(importantGoal.id))}
+                  t={t}
+                  busy={busy}
+                  onAction={(goalId, action) => void runAction(goalId, action)}
+                />
               </div>
-              {queueSummary.map((item) => (
-                <span key={item.key} className="rounded-full bg-surface-muted px-2 py-0.5 text-xs text-fg-muted">
-                  {formatMessage(t.queueSummary[item.key as keyof typeof t.queueSummary], { count: item.count })}
-                </span>
-              ))}
-              <div className="ml-0 flex rounded-lg border border-edge bg-surface-muted p-0.5 lg:ml-2">
-                <button
-                  type="button"
-                  className={cn(
-                    'inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors',
-                    viewMode === 'focus' ? 'bg-surface-panel text-fg shadow-surface' : 'text-fg-muted hover:text-fg',
-                  )}
-                  onClick={() => setViewMode('focus')}
-                >
-                  <ListFilter className="size-3.5" aria-hidden />
-                  {t.viewModes.focus}
-                </button>
-                <button
-                  type="button"
-                  className={cn(
-                    'inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors',
-                    viewMode === 'board' ? 'bg-surface-panel text-fg shadow-surface' : 'text-fg-muted hover:text-fg',
-                  )}
-                  onClick={() => setViewMode('board')}
-                >
-                  <LayoutGrid className="size-3.5" aria-hidden />
-                  {t.viewModes.board}
-                </button>
-              </div>
-            </div>
+            ) : null}
           </div>
         </section>
 
-        {error ? <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p> : null}
+        <div className="mt-5 border-b border-edge-subtle">
+          <PageTabs
+            items={tabs}
+            activeTab={view}
+            onChange={setView}
+            ariaLabel={t.workbench.tabs.label}
+            tabIdPrefix="goals-tab"
+            panelIdPrefix="goals-panel"
+            className="pb-2"
+            selectedClassName="bg-surface-active text-fg"
+          />
+        </div>
 
-        {viewMode === 'focus' ? (
-          <section className="min-h-0 flex-1 overflow-y-auto pb-3" aria-label={t.focusLabel}>
-            <div className="grid w-full gap-4">
-              {FOCUS_SECTIONS.map((section) => {
-                const sectionGoals = focusGroups.get(section) ?? [];
+        {loadError ? (
+          <div className="mt-4 flex flex-col gap-3 rounded-lg bg-danger-soft px-4 py-3 text-sm text-danger sm:flex-row sm:items-center sm:justify-between" role="alert">
+            <span>{loadError}</span><Button type="button" variant="secondary" className="h-10 rounded-lg" onClick={() => void refresh()}>{t.workbench.actions.retryLoad}</Button>
+          </div>
+        ) : null}
+
+        <section id={`goals-panel-${view}`} role="tabpanel" aria-labelledby={`goals-tab-${view}`} className="min-h-0 flex-1 overflow-y-auto pb-12 pt-5">
+          {loading && goals.length === 0 ? <GoalRowsSkeleton /> : null}
+
+          {!loading && view === 'workbench' ? (
+            <div className="grid gap-9">
+              {(['attention', 'running', 'ready'] as WorkbenchSectionId[]).map((section) => {
+                const sectionGoals = workbenchGroups.get(section) ?? [];
+                if (sectionGoals.length === 0) return null;
                 return (
-                  <section key={section} className="rounded-lg border border-edge-subtle bg-surface-base shadow-surface">
-                    <header className="flex flex-wrap items-start justify-between gap-3 border-b border-edge-subtle px-4 py-3">
-                      <div className="min-w-0">
-                        <h2 className="text-sm font-semibold text-fg">{t.focusSections[section].title}</h2>
-                        <p className="mt-1 text-xs text-fg-muted">{t.focusSections[section].description}</p>
-                      </div>
-                      <span className="rounded-full bg-surface-hover px-2.5 py-1 text-xs font-semibold tabular-nums text-fg-muted">
-                        {sectionGoals.length}
-                      </span>
-                    </header>
-                    <div className="grid gap-2 p-2.5">
-                      {loading && sectionGoals.length === 0
-                        ? Array.from({ length: section === 'attention' ? 2 : 1 }).map((_, i) => (
-                            <FocusGoalRowSkeleton key={i} />
-                          ))
-                        : sectionGoals.map((goal) => (
-                            <FocusGoalRow
-                              key={goal.id}
-                              goal={goal}
-                              queueItem={queueByGoal.get(goal.id)}
-                              t={t}
-                              language={language}
-                              busy={busy}
-                              selected={goal.id === selectedGoalId}
-                              onOpen={(next) => setSelectedGoalId(next.id)}
-                              onAction={(id, action) => void runAction(id, action)}
-                            />
-                          ))}
-                      {!loading && sectionGoals.length === 0 ? (
-                        <div className="flex min-h-20 items-center justify-center rounded-md border border-dashed border-edge bg-surface-panel/40 px-4 py-5 text-center text-xs text-fg-subtle">
-                          {t.focusSections[section].empty}
-                        </div>
-                      ) : null}
-                    </div>
-                  </section>
+                  <GoalSection
+                    key={section}
+                    {...sectionMessages[section]}
+                    goals={sectionGoals}
+                    queueByGoal={queueByGoal}
+                    t={t}
+                    language={language}
+                    busy={busy}
+                    actionError={actionError}
+                    onOpen={(goal) => setSelectedGoalId(goal.id)}
+                    onAction={(goalId, action) => void runAction(goalId, action)}
+                  />
                 );
               })}
+
+              {(workbenchGroups.get('attention')?.length ?? 0) + (workbenchGroups.get('running')?.length ?? 0) + (workbenchGroups.get('ready')?.length ?? 0) === 0 ? (
+                <div className="rounded-xl border border-edge-subtle bg-surface-base px-5 py-8 text-center">
+                  <CheckCircle2 className="mx-auto size-6 text-success" aria-hidden />
+                  <h2 className="mt-3 text-base font-semibold text-fg">{t.workbench.empty.healthyTitle}</h2>
+                  <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-fg-muted">
+                    {counts.later > 0
+                      ? formatMessage(t.workbench.empty.healthyDescriptionWithPaused, { paused: counts.later })
+                      : t.workbench.empty.healthyDescription}
+                  </p>
+                </div>
+              ) : null}
+
+              {(workbenchGroups.get('later')?.length ?? 0) > 0 ? (
+                <details className="group border-t border-edge-subtle pt-5">
+                  <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-1 text-sm font-semibold text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+                    <span>{sectionMessages.later.title}</span>
+                    <span className="rounded-full bg-surface-hover px-2.5 py-1 text-xs tabular-nums text-fg-muted">{workbenchGroups.get('later')?.length}</span>
+                  </summary>
+                  <p className="mt-1 px-1 text-sm text-fg-muted">{sectionMessages.later.description}</p>
+                  <div className="mt-2">
+                    {(workbenchGroups.get('later') ?? []).map((goal) => (
+                      <GoalRow key={goal.id} goal={goal} queueItem={queueByGoal.get(goal.id)} t={t} language={language} busy={busy} actionError={actionError?.goalId === goal.id ? actionError.message : undefined} onOpen={(item) => setSelectedGoalId(item.id)} onAction={(goalId, action) => void runAction(goalId, action)} />
+                    ))}
+                  </div>
+                </details>
+              ) : null}
             </div>
-          </section>
-        ) : (
-          <section
-            ref={boardScrollerRef}
-            className={cn(
-              'min-h-0 w-full flex-1 overflow-x-auto rounded-lg px-2 py-2',
-              isPanningBoard ? 'cursor-grabbing select-none' : 'cursor-grab',
-            )}
-            aria-label={t.boardLabel}
-            onPointerDown={handleBoardPointerDown}
-            onPointerMove={handleBoardPointerMove}
-            onPointerUp={endBoardPan}
-            onPointerCancel={endBoardPan}
-            onLostPointerCapture={(event) => {
-              if (boardPanRef.current?.pointerId === event.pointerId) {
-                boardPanRef.current = null;
-                setIsPanningBoard(false);
-              }
-            }}
-          >
-            <div className="flex min-h-full min-w-max items-start gap-3 pr-4">
-              {BOARD_LANES.map((lane) => {
-                const laneGoals = lanes.get(lane) ?? [];
-                return (
-                  <section
-                    key={lane}
-                    className={cn(
-                      'flex max-h-full w-72 min-w-72 max-w-72 shrink-0 flex-col overflow-y-auto rounded-lg bg-surface-base shadow-surface',
-                      dropLane === lane && 'bg-surface-active',
-                    )}
-                    aria-label={t.lanes[lane].title}
-                    onDragOver={(event) => {
-                      event.preventDefault();
-                      event.dataTransfer.dropEffect = 'move';
-                      setDropLane(lane);
-                    }}
-                    onDragLeave={(event) => {
-                      if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropLane(null);
-                    }}
-                    onDrop={(event) => {
-                      event.preventDefault();
-                      const goalId = event.dataTransfer.getData(DRAG_TYPE) || draggingGoalId;
-                      if (goalId) void applyDrop(goalId, lane);
-                    }}
-                  >
-                    <header className="flex shrink-0 items-center justify-between gap-2 px-3 py-3">
-                      <div className="flex min-w-0 items-baseline gap-2">
-                        <h2 className="truncate text-sm font-semibold text-fg">{t.lanes[lane].title}</h2>
-                        <span className="shrink-0 text-xs text-fg-subtle">{laneGoals.length}</span>
-                      </div>
-                      <MoreHorizontal className="size-4 shrink-0 text-fg-subtle" aria-hidden />
-                    </header>
-                    <div className="mx-2 mt-3 grid min-h-0 min-w-0 content-start gap-2 pb-2 pr-1 [scrollbar-gutter:stable]">
-                      {loading && laneGoals.length === 0
-                        ? Array.from({ length: 3 }).map((_, i) => <GoalCardSkeleton key={i} />)
-                        : laneGoals.map((goal) => (
-                            <GoalCard
-                              key={goal.id}
-                              goal={goal}
-                              queueItem={queueByGoal.get(goal.id)}
-                              t={t}
-                              language={language}
-                              selected={goal.id === selectedGoalId}
-                              dragging={goal.id === draggingGoalId}
-                              onOpen={(next) => setSelectedGoalId(next.id)}
-                              onDragStart={(goalId, event) => {
-                                event.dataTransfer.effectAllowed = 'move';
-                                event.dataTransfer.setData(DRAG_TYPE, goalId);
-                                setDraggingGoalId(goalId);
-                              }}
-                              onDragEnd={() => {
-                                setDraggingGoalId(null);
-                                setDropLane(null);
-                              }}
-                            />
-                          ))}
-                      {!loading && laneGoals.length === 0 ? (
-                        <div className="rounded-lg bg-surface-panel/70 px-3 py-6 text-center text-xs text-fg-subtle">
-                          {t.lanes[lane].empty}
-                        </div>
-                      ) : null}
-                    </div>
-                  </section>
-                );
-              })}
+          ) : null}
+
+          {!loading && view === 'all' ? (
+            <div>
+              <div className="flex flex-wrap gap-2 border-b border-edge-subtle pb-4">
+                <Select value={agentFilter} onChange={(event) => setAgentFilter(event.target.value)} className="w-full sm:w-44" aria-label={t.workbench.filters.agent}>
+                  <SelectOption value="">{t.workbench.filters.allAgents}</SelectOption>
+                  {agents.map((agent) => <SelectOption key={agent} value={agent}>{agent}</SelectOption>)}
+                </Select>
+                <Select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="w-full sm:w-44" aria-label={t.workbench.filters.status}>
+                  <SelectOption value="">{t.workbench.filters.allStatuses}</SelectOption>
+                  {(['active', 'paused', 'blocked', 'needs_input'] as GoalStatus[]).map((status) => <SelectOption key={status} value={status}>{t.statuses[status]}</SelectOption>)}
+                </Select>
+                <Select value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value)} className="w-full sm:w-44" aria-label={t.workbench.filters.priority}>
+                  <SelectOption value="">{t.workbench.filters.allPriorities}</SelectOption>
+                  {(['high', 'normal', 'low'] as GoalItem['priority'][]).map((priority) => <SelectOption key={priority} value={priority}>{t.priorities[priority]}</SelectOption>)}
+                </Select>
+                {agentFilter || statusFilter || priorityFilter ? <Button type="button" variant="ghost" className="h-10 rounded-lg" onClick={() => { setAgentFilter(''); setStatusFilter(''); setPriorityFilter(''); }}>{t.workbench.filters.clear}</Button> : null}
+              </div>
+              {openGoals.length ? openGoals.map((goal) => <GoalRow key={goal.id} goal={goal} queueItem={queueByGoal.get(goal.id)} t={t} language={language} busy={busy} actionError={actionError?.goalId === goal.id ? actionError.message : undefined} onOpen={(item) => setSelectedGoalId(item.id)} onAction={(goalId, action) => void runAction(goalId, action)} />) : (
+                <div className="py-14 text-center"><p className="text-sm font-medium text-fg">{t.workbench.empty.noOpenTitle}</p><p className="mt-2 text-sm text-fg-muted">{t.workbench.empty.noOpenDescription}</p></div>
+              )}
             </div>
-          </section>
-        )}
+          ) : null}
+
+          {!loading && view === 'history' ? (
+            <div>
+              <header className="border-b border-edge-subtle pb-4"><h2 className="text-base font-semibold text-fg">{t.workbench.history.title}</h2><p className="mt-1 text-sm text-fg-muted">{t.workbench.history.description}</p></header>
+              {historyGoals.length ? historyGoals.map((goal) => <GoalRow key={goal.id} goal={goal} queueItem={queueByGoal.get(goal.id)} t={t} language={language} busy={busy} actionError={actionError?.goalId === goal.id ? actionError.message : undefined} onOpen={(item) => setSelectedGoalId(item.id)} onAction={(goalId, action) => void runAction(goalId, action)} />) : (
+                <div className="py-14 text-center"><p className="text-sm font-medium text-fg">{t.workbench.empty.noHistoryTitle}</p><p className="mt-2 text-sm text-fg-muted">{t.workbench.empty.noHistoryDescription}</p></div>
+              )}
+            </div>
+          ) : null}
+        </section>
       </div>
-      <GoalCreateDialog
-        open={createDialogOpen}
-        t={t}
-        chat={messages(language).chat}
-        busy={busy === 'create'}
-        options={createOptions}
-        onClose={() => setCreateDialogOpen(false)}
-        onCreate={createFromDraft}
-        onDraftContract={(draft) => draftGoalContract(draft, language)}
-      />
-      <GoalDetailDialog
-        goal={selectedGoal}
-        queueItem={selectedGoal ? queueByGoal.get(selectedGoal.id) : undefined}
-        t={t}
-        language={language}
-        busy={busy}
-        onClose={() => setSelectedGoalId(null)}
-        onAction={(id, action) => void runAction(id, action)}
-      />
+
+      {undo ? (
+        <div className="fixed bottom-5 right-5 z-50 flex max-w-[calc(100%-2rem)] items-center gap-3 rounded-xl border border-edge bg-surface-panel px-4 py-3 shadow-popover" role="status" aria-live="polite">
+          <p className="min-w-0 text-sm text-fg">{formatMessage(t.workbench.undo.message, { title: undo.title })}</p>
+          <Button type="button" variant="ghost" className="h-10 shrink-0 rounded-lg text-accent-fg" onClick={() => { const current = undo; setUndo(null); void runAction(current.goalId, reverseAction(current.action), { skipUndo: true }); }}>{t.workbench.undo.action}</Button>
+          <Button type="button" variant="ghost" className="size-10 shrink-0 rounded-lg p-0" aria-label={t.workbench.undo.dismiss} onClick={() => setUndo(null)}><X className="size-4" aria-hidden /></Button>
+        </div>
+      ) : null}
+
+      <GoalCreateDialog open={createDialogOpen} t={t} chat={messages(language).chat} busy={busy === 'create'} options={createOptions} onClose={() => setCreateDialogOpen(false)} onCreate={createFromDraft} onDraftContract={(draft) => draftGoalContract(draft, language)} />
+      <GoalDetailDialog goal={selectedGoal} queueItem={selectedGoal ? queueByGoal.get(selectedGoal.id) : undefined} t={t} language={language} busy={busy} onClose={() => setSelectedGoalId(null)} onAction={(goalId, action) => void runAction(goalId, action)} />
     </main>
   );
 }

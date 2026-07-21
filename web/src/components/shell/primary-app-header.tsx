@@ -6,7 +6,6 @@ import { getShellChromeRuntime, resolveShellChromeLayout } from '@/components/sh
 import { MainRailExpandWhenCollapsed } from '@/components/shell/main-rail-expand-when-collapsed';
 import { MobileNavMenuButton } from '@/components/shell/mobile-nav-menu-button';
 import { ShellQuickActions } from '@/components/shell/shell-quick-actions';
-import { ActivityCenterTrigger } from '@/features/activity/activity-center';
 import { cn } from '@/lib/cn';
 import { useAppShellStore } from '@/stores/app-shell-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
@@ -54,7 +53,6 @@ export const PrimaryAppHeader = memo(function PrimaryAppHeader() {
       </div>
       <div className={cn('flex min-w-0 shrink-0 items-center justify-end gap-2', APP_CHROME_NO_DRAG_CLASS)}>
         {end}
-        <ActivityCenterTrigger />
       </div>
     </header>
   );

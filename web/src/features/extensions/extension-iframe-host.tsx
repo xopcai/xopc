@@ -4,12 +4,11 @@ import { uiPatchReducer } from '@/lib/settings-form-draft';
 
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
-import { useGatewayStore } from '@/stores/gateway-store';
 import { useThemeStore } from '@/stores/theme-store';
 import { apiUrl } from '@/lib/url';
 
 import { ExtensionPermissionDialog } from './extension-permission-dialog';
-import { hasUiGrant, saveUiGrant } from './extension-permission-grants';
+import { confirmExtensionUiGrant, resolveExtensionUiGrant } from './extension-authoritative-grants';
 import { useExtensionRouter } from './extension-provider';
 import { buildThemeInfo } from './theme-bridge';
 
@@ -25,6 +24,8 @@ type IframeHostUi = {
   reloadKey: number;
   loadError: boolean;
   dynamicHeight: number;
+  grantResolved: boolean;
+  grantError: string | null;
 };
 
 export type ExtensionIframeHostProps = {
@@ -49,6 +50,11 @@ function encodeAssetPath(entrypoint: string): string {
     .join('/');
 }
 
+export function buildExtensionAssetUrl(extensionId: string, entrypoint: string): string {
+  const rel = encodeAssetPath(entrypoint);
+  return apiUrl(`/api/extensions/${encodeURIComponent(extensionId)}/assets/${rel}`);
+}
+
 export function ExtensionIframeHost({
   extensionId,
   extensionName,
@@ -65,7 +71,6 @@ export function ExtensionIframeHost({
   const t = messages(language).extensionUi;
   const router = useExtensionRouter();
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const gatewayToken = useGatewayStore((s) => s.token);
   const resolved = useThemeStore((s) => s.resolved);
   const displayName = extensionName?.trim() || extensionId;
   const iframeTitle = title?.trim() || `Extension ${extensionId}`;
@@ -76,38 +81,54 @@ export function ExtensionIframeHost({
   /** Stable list so registerIframe effect does not churn every render (permissions ?? [] is a new []). */
   const permList = useMemo(() => JSON.parse(permsKey) as string[], [permsKey]);
 
-  const initialGranted = hasUiGrant(extensionId, permList);
   const [ui, dispatch] = useReducer(uiPatchReducer<IframeHostUi>, {
-    allowed: initialGranted,
-    dialogOpen: !initialGranted,
+    allowed: false,
+    dialogOpen: false,
     reloadKey: 0,
     loadError: false,
     dynamicHeight: fixedHeight ?? Math.min(maxHeight, Math.max(minHeight, 320)),
+    grantResolved: false,
+    grantError: null,
   });
-  const { allowed, dialogOpen, reloadKey, loadError, dynamicHeight } = ui;
+  const { allowed, dialogOpen, reloadKey, loadError, dynamicHeight, grantResolved, grantError } = ui;
 
-  const trackedGrantKeyRef = useRef({ id: extensionId, k: permsKey });
-  if (trackedGrantKeyRef.current.id !== extensionId || trackedGrantKeyRef.current.k !== permsKey) {
-    trackedGrantKeyRef.current = { id: extensionId, k: permsKey };
-    const ok = hasUiGrant(extensionId, permList);
-    dispatch({ type: 'patch', patch: { allowed: ok, dialogOpen: !ok } });
-  }
+  useEffect(() => {
+    let active = true;
+    dispatch({ type: 'patch', patch: { allowed: false, dialogOpen: false, grantResolved: false, grantError: null } });
+    void resolveExtensionUiGrant(extensionId).then((grant) => {
+      if (!active) return;
+      dispatch({
+        type: 'patch',
+        patch: {
+          allowed: grant.granted,
+          dialogOpen: !grant.granted,
+          grantResolved: true,
+        },
+      });
+    }).catch((cause) => {
+      if (!active) return;
+      dispatch({
+        type: 'patch',
+        patch: {
+          allowed: false,
+          dialogOpen: true,
+          grantResolved: true,
+          grantError: cause instanceof Error ? cause.message : String(cause),
+        },
+      });
+    });
+    return () => { active = false; };
+  }, [extensionId, permList]);
 
   const setDialogOpen = useCallback(
     (open: boolean) => dispatch({ type: 'patch', patch: { dialogOpen: open } }),
     [],
   );
 
-  const src = useMemo(() => {
-    const rel = encodeAssetPath(entrypoint);
-    const base = apiUrl(`/api/extensions/${encodeURIComponent(extensionId)}/assets/${rel}`);
-    if (!gatewayToken?.trim()) {
-      return base;
-    }
-    const u = new URL(base);
-    u.searchParams.set('token', gatewayToken.trim());
-    return u.toString();
-  }, [extensionId, entrypoint, gatewayToken]);
+  const src = useMemo(
+    () => buildExtensionAssetUrl(extensionId, entrypoint),
+    [extensionId, entrypoint],
+  );
 
   useLayoutEffect(() => {
     if (!allowed) return;
@@ -142,9 +163,20 @@ export function ExtensionIframeHost({
       : { width: '100%', height: dynamicHeight, border: 'none' };
 
   const handleConfirmGrant = () => {
-    saveUiGrant(extensionId, permList);
-    dispatch({ type: 'patch', patch: { allowed: true } });
+    void confirmExtensionUiGrant(extensionId).then((grant) => {
+      if (!grant.granted) throw new Error('Permission grant was not persisted');
+      dispatch({ type: 'patch', patch: { allowed: true, grantError: null } });
+    }).catch((cause) => {
+      dispatch({
+        type: 'patch',
+        patch: { allowed: false, grantError: cause instanceof Error ? cause.message : String(cause) },
+      });
+    });
   };
+
+  if (!grantResolved) {
+    return <div className={`${className ?? ''} min-h-32 animate-pulse rounded-lg bg-surface-muted`} />;
+  }
 
   if (!allowed) {
     return (
@@ -165,6 +197,7 @@ export function ExtensionIframeHost({
                 : 'rounded-lg border border-edge border-dashed bg-surface-base p-4 text-sm text-fg-muted'
             }
           >
+            {grantError ? <p className="mb-2 text-danger">{grantError}</p> : null}
             <p>{t.deniedHint}</p>
             <button
               type="button"

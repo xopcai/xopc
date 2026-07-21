@@ -4,14 +4,12 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 import { loadProfileBootstrapFiles } from '../load-bootstrap-files.js';
-import { filterBootstrapFilesForSession } from '../filter-bootstrap-files.js';
 import { buildBootstrapContextFiles } from '../bootstrap-context.js';
 import {
   clearBootstrapSnapshot,
   resolveBootstrapContextSync,
 } from '../bootstrap-files.js';
 import { loadProjectAgentsContextFile } from '../project-agents-context.js';
-import { DEFAULT_MEMORY_FILENAME } from '../../context/workspace.js';
 
 function fixtureProfileDir(prefix: string): string {
   const profileDir = join(mkdtempSync(join(tmpdir(), prefix)), 'profile');
@@ -30,7 +28,7 @@ describe('bootstrap-files', () => {
     const names = files.map((f) => f.name);
     expect(names.indexOf('AGENTS.md')).toBeLessThan(names.indexOf('SOUL.md'));
     expect(names.indexOf('SOUL.md')).toBeLessThan(names.indexOf('IDENTITY.md'));
-    expect(names).not.toContain(DEFAULT_MEMORY_FILENAME);
+    expect(names).not.toContain('MEMORY.md');
     expect(names).not.toContain('TOOLS.md');
     expect(names).not.toContain('HEARTBEAT.md');
   });
@@ -43,19 +41,7 @@ describe('bootstrap-files', () => {
     expect(files.find((f) => f.name === 'IDENTITY.md')?.missing).toBe(true);
     expect(files.some((f) => f.name === 'AGENTS.md')).toBe(false);
     expect(files.some((f) => f.name === 'USER.md')).toBe(false);
-    expect(files.some((f) => f.name === DEFAULT_MEMORY_FILENAME)).toBe(false);
-  });
-
-  it('filters MEMORY for subagent sessions', () => {
-    const files = [
-      { name: 'AGENTS.md', path: '/p/AGENTS.md', content: 'a', missing: false },
-      { name: 'MEMORY.md', path: '/p/MEMORY.md', content: 'm', missing: false },
-    ];
-    const main = filterBootstrapFilesForSession(files, 'agent:main:webchat:direct:u1');
-    expect(main.some((f) => f.name === 'MEMORY.md')).toBe(true);
-
-    const sub = filterBootstrapFilesForSession(files, 'agent:main:subagent:telegram:default:direct:123456');
-    expect(sub.some((f) => f.name === 'MEMORY.md')).toBe(false);
+    expect(files.some((f) => f.name === 'MEMORY.md')).toBe(false);
   });
 
   it('truncates oversized bootstrap content', () => {

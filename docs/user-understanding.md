@@ -49,13 +49,15 @@ Background review has no storage mutation tool. Its pass produces strict JSON ca
 
 This separation prevents a reviewer model from bypassing sensitivity checks, deduplication, provenance, or candidate approval.
 
-The review is an Agent Manifest memory policy. It is enabled by default for `confirmWrite` and `auto` memory modes, runs every 10 user turns, and is disabled for `off` and `readOnly`. Override it per agent:
+Background review is configured once in top-level `userContext`. It is enabled by default for `confirmWrite` and `auto` memory modes, runs every 10 user turns, and is disabled for `off` and `readOnly`:
 
 ```json
 {
-  "memory": {
-    "mode": "confirmWrite",
-    "sources": ["session", "curated"],
+  "userContext": {
+    "memory": {
+      "mode": "confirmWrite",
+      "sources": ["session", "curated"]
+    },
     "understanding": {
       "enabled": true,
       "adaptiveCadence": true,
@@ -71,14 +73,14 @@ Set `understanding.enabled` to `false` when model cost or data policy requires d
 
 With `adaptiveCadence` enabled, the configured interval is the fastest allowed cadence. xopc doubles the interval when the candidate inbox is backlogged, at least 10 review decisions have a low acceptance rate, or at least 10 recall ratings show low helpfulness. It never increases review frequency above the configured interval.
 
-Quality is available from `GET /api/memory/understanding/quality?agentId=main&windowDays=30` and in the Memory page. The response includes the candidate funnel, current record states, acceptance rate, recall helpfulness, and the effective cadence decision.
+Quality is available from `GET /api/user-context/quality?windowDays=30` and the About You page. The response includes the candidate funnel, current record states, acceptance rate, recall helpfulness, and the effective cadence decision.
 
 ## Response feedback attribution
 
 Completed assistant responses expose helpful / needs-improvement controls. The gateway resolves feedback by `sessionKey` and the assistant response timestamp to the most recent preceding `inject` trace, then updates that trace idempotently. This attributes feedback only to understanding records actually selected for that response; responses without selected understanding can retain feedback without affecting understanding quality.
 
-- `GET /api/memory/understanding/response-feedback` resolves existing feedback for a response.
-- `PATCH /api/memory/understanding/response-feedback` records or replaces `helpful` / `not_helpful` feedback.
+- `GET /api/user-context/understanding/response-feedback` resolves existing feedback for a response.
+- `PATCH /api/user-context/understanding/response-feedback` records or replaces `helpful` / `not_helpful` feedback.
 
 Explicit corrections such as “你记错了我的偏好” or “I never said that about me” conservatively mark the previous selected-understanding trace as not helpful before planning the correction turn. Generic task feedback such as “the command failed” does not affect understanding quality. Correction traces store only a fixed reason code, not the user's correction text.
 
@@ -92,7 +94,7 @@ Feedback remediation is deliberately conservative:
 4. A concrete correction such as “你记错了我的偏好，我更喜欢详细解释” creates a new `candidate` linked with `supersedesRecordId`. A pure denial creates no replacement content.
 5. The old record remains `needs_review` until the replacement is explicitly approved. Activating the replacement archives the old record and closes its validity interval.
 
-`PATCH /api/memory/understanding/response-feedback` includes a `remediation` result when feedback evaluation runs. The chat UI acknowledges when related understanding has been paused and queued for review.
+`PATCH /api/user-context/understanding/response-feedback` includes a `remediation` result when feedback evaluation runs. The chat UI acknowledges when related understanding has been paused and queued for review.
 
 ## Connected sources
 
@@ -112,7 +114,7 @@ The gateway exposes read-only operational views:
 - `GET /api/knowledge/source-items`
 - `GET /api/knowledge/source-changes?afterSequence=...`
 - `GET /api/knowledge/sync-runs`
-- existing `/api/memory/records`, `/api/memory/traces`, and trace feedback endpoints
+- `/api/user-context/memories`, `/api/user-context/traces`, and trace feedback endpoints
 
 ## Safety defaults
 

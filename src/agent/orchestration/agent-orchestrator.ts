@@ -156,7 +156,7 @@ export class AgentOrchestrator {
             workspaceDir: scope.workspaceDir,
             dreamingRoot: scope.memoriesDir,
             config: resolved.phases.rem,
-            sensitiveWritePolicy: scope.memory.privacy?.sensitiveWritePolicy,
+            sensitiveWritePolicy: cfg.userContext.privacy.sensitiveWritePolicy,
             promotionWritePolicy: resolved.promotionWritePolicy.decision,
           });
           const event: DreamingEvent = {
@@ -171,7 +171,7 @@ export class AgentOrchestrator {
             workspaceDir: scope.workspaceDir,
             dreamingRoot: scope.memoriesDir,
             config: resolved.phases.deep,
-            sensitiveWritePolicy: scope.memory.privacy?.sensitiveWritePolicy,
+            sensitiveWritePolicy: cfg.userContext.privacy.sensitiveWritePolicy,
             memoryManager: this.agentManager.getMemoryManagerForSession(sessionKey),
           });
           const event: DreamingEvent = {

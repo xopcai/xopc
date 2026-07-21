@@ -28,7 +28,6 @@ const minimalConfig = {
         models: { defaultRole: 'deep', roles: { deep: { model: 'openai/gpt-4o' } } },
         tools: { builtin: {} },
         skills: { mode: 'all' },
-        memory: { mode: 'confirmWrite', sources: ['session'] },
         workflows: {},
         boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
       },

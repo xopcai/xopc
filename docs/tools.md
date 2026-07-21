@@ -266,7 +266,7 @@ Loads a labeled snippet from a memory file.
 
 ### `curated_memory`
 
-Read/write curated files: agent notes under **`agents/<agentId>/memories/MEMORY.md`** and global user memory under **`user/MEMORY.md`** (section boundaries per format). These files are separate from profile Markdown under **`agents/<agentId>/profile/`** and **`user/PROFILE.md`**; use this tool for live read/write when the selected agent manifest allows curated memory writes.
+Read/write shared curated files under **`user/memories/MEMORY.md`** and user-profile memory under **`user/MEMORY.md`** (section boundaries per format). These files are separate from agent profile Markdown and are controlled once by top-level `userContext`.
 
 See [Configuration](configuration.md) and [Curated memory](workspace.md#curated-memory).
 

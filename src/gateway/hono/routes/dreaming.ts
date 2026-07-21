@@ -3,7 +3,6 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import { type Config } from '../../../config/schema.js';
-import { normalizeAgentId, resolveDefaultAgentId } from '../../../agent/agent-scope.js';
 import {
   DREAMING_DIR_RELATIVE,
   DREAMING_LAST_RUN_RELATIVE,
@@ -30,22 +29,8 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return v !== null && typeof v === 'object' && !Array.isArray(v);
 }
 
-function requestedAgentIdFrom(c: { req: { query(name: string): string | undefined } }, body?: unknown): string | undefined {
-  const fromBody = isRecord(body) && typeof body.agentId === 'string' ? body.agentId : undefined;
-  return fromBody ?? c.req.query('agentId');
-}
-
-function hasEnabledAgent(cfg: Config, agentId: string): boolean {
-  const normalized = normalizeAgentId(agentId);
-  return cfg.agents.list.some((agent) => agent.enabled !== false && normalizeAgentId(agent.id) === normalized);
-}
-
-function resolveRouteScope(cfg: Config, requestedAgentId?: string): DreamingAgentScope {
-  const agentId = normalizeAgentId(requestedAgentId || resolveDefaultAgentId(cfg));
-  if (!hasEnabledAgent(cfg, agentId)) {
-    throw new Error(`Agent not found: ${agentId}`);
-  }
-  return resolveDreamingAgentScope(cfg, agentId);
+function resolveRouteScope(cfg: Config): DreamingAgentScope {
+  return resolveDreamingAgentScope(cfg);
 }
 
 async function readLockInfo(dreamingRoot: string): Promise<
@@ -161,7 +146,7 @@ export function registerDreamingRoutes(authenticated: Hono, deps: AuthenticatedR
     const cfg = service.currentConfig as Config;
     let scope: DreamingAgentScope;
     try {
-      scope = resolveRouteScope(cfg, c.req.query('agentId'));
+      scope = resolveRouteScope(cfg);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return c.json({ ok: false, error: { message } }, 404);
@@ -198,7 +183,7 @@ export function registerDreamingRoutes(authenticated: Hono, deps: AuthenticatedR
     const cfg = service.currentConfig as Config;
     let scope: DreamingAgentScope;
     try {
-      scope = resolveRouteScope(cfg, c.req.query('agentId'));
+      scope = resolveRouteScope(cfg);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return c.json({ ok: false, error: { message } }, 404);
@@ -228,7 +213,7 @@ export function registerDreamingRoutes(authenticated: Hono, deps: AuthenticatedR
     const cfg = service.currentConfig as Config;
     let scope: DreamingAgentScope;
     try {
-      scope = resolveRouteScope(cfg, requestedAgentIdFrom(c, body));
+      scope = resolveRouteScope(cfg);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return c.json({ ok: false, error: { message } }, 404);
@@ -261,7 +246,7 @@ export function registerDreamingRoutes(authenticated: Hono, deps: AuthenticatedR
                 workspaceDir: scope.workspaceDir,
                 dreamingRoot: scope.memoriesDir,
                 config: dreaming.phases.rem,
-                sensitiveWritePolicy: scope.memory.privacy?.sensitiveWritePolicy,
+                sensitiveWritePolicy: cfg.userContext.privacy.sensitiveWritePolicy,
                 promotionWritePolicy: dreaming.promotionWritePolicy.decision,
               })
             : await runDreamingDeepPromotion({
@@ -269,7 +254,7 @@ export function registerDreamingRoutes(authenticated: Hono, deps: AuthenticatedR
                 workspaceDir: scope.workspaceDir,
                 dreamingRoot: scope.memoriesDir,
                 config: dreaming.phases.deep,
-                sensitiveWritePolicy: scope.memory.privacy?.sensitiveWritePolicy,
+                sensitiveWritePolicy: cfg.userContext.privacy.sensitiveWritePolicy,
               });
 
       service.emit('dreaming.phase.end', {
@@ -305,7 +290,7 @@ export function registerDreamingRoutes(authenticated: Hono, deps: AuthenticatedR
     const action = isRecord(body) && typeof body.action === 'string' ? body.action.trim() : '';
     let scope: DreamingAgentScope;
     try {
-      scope = resolveRouteScope(cfg, requestedAgentIdFrom(c, body));
+      scope = resolveRouteScope(cfg);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return c.json({ ok: false, error: { message } }, 404);
@@ -340,7 +325,7 @@ export function registerDreamingRoutes(authenticated: Hono, deps: AuthenticatedR
     const cfg = service.currentConfig as Config;
     let scope: DreamingAgentScope;
     try {
-      scope = resolveRouteScope(cfg, c.req.query('agentId'));
+      scope = resolveRouteScope(cfg);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return c.json({ ok: false, error: { message } }, 404);

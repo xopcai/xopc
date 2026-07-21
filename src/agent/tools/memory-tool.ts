@@ -79,7 +79,7 @@ export function createMemorySearchTool(options: MemoryToolOptions): AgentTool {
         }
         const withCitations = results.map((entry) => ({
           id: entry.record.id,
-          ownerAgentId: entry.record.scope.agentId,
+          ownerAgentId: entry.record.provenance.sourceAgentId,
           kind: entry.record.kind,
           file: entry.citation.path ?? entry.record.source.path,
           lines: entry.snippet,

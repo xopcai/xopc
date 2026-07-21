@@ -48,16 +48,6 @@ import {
   type AgentTypedModelRow,
 } from './typed-models-lib';
 
-function modelRolePatchForOverview(agent: GatewayAgentRow, modelRef: string) {
-  const roleId = agent.typedModels.defaultRole;
-  return {
-    defaultRole: roleId,
-    roles: {
-      [roleId]: { model: modelRef },
-    },
-  };
-}
-
 function modelRowsForPresetReset(agent: GatewayAgentRow): AgentTypedModelRow[] {
   const presetRows = typedModelsRowsFromList(agent.typedModels.preset);
   if (presetRows.some((row) => row.id === agent.typedModels.defaultRole)) {
@@ -207,7 +197,7 @@ export function useAgentsSettingsPanel() {
     if (searchParams.get('focus') !== 'avatar' || !routeAgentId) {
       return;
     }
-    setPanel('overview');
+    setPanel('profile');
     if (loading || !data?.agents.some((x) => x.id === routeAgentId)) {
       return;
     }
@@ -277,7 +267,7 @@ export function useAgentsSettingsPanel() {
 
   const overviewProfile = useAgentOverviewProfileMarkdown({
     agentId: selected?.id ?? null,
-    enabled: panel === 'behavior' && Boolean(selected),
+    enabled: panel === 'profile' && Boolean(selected),
     saveRef: overviewSaveProfileMarkdownRef,
   });
 
@@ -475,25 +465,6 @@ export function useAgentsSettingsPanel() {
     }
   }
 
-  async function onSaveAgentEdits() {
-    if (!selected) {
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      const next = await updateGatewayAgent(selected.id, {
-        workspace: editWorkspace.trim() || undefined,
-        ...(editModel.trim() ? { models: modelRolePatchForOverview(selected, editModel.trim()) } : {}),
-      });
-      void mutateAgents(next, { revalidate: false });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : a.saveError);
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function onSetDefault(agent: GatewayAgentRow) {
     setBusy(true);
     setError(null);
@@ -647,29 +618,54 @@ export function useAgentsSettingsPanel() {
     }
   }
 
-  async function onClearModelsEntry() {
+  async function onSaveRuntime(): Promise<boolean> {
     if (!selected) {
-      return;
+      return false;
     }
-    const resetRows = modelRowsForPresetReset(selected);
-    const resetPatch = cleanTypedModelsForPatch(resetRows);
-    if (!resetPatch?.roles?.[selected.typedModels.defaultRole]) {
-      setError(a.typedModelsInvalidModel);
-      return;
+    const typedErr = validateTypedModelsForSave(toolsSkills.modelRows, {
+      invalidId: a.typedModelsInvalidId,
+      duplicateId: a.typedModelsDuplicateId,
+      invalidModel: a.typedModelsInvalidModel,
+    });
+    if (typedErr) {
+      setError(typedErr);
+      return false;
     }
     setBusy(true);
     setError(null);
     try {
+      const baselineRoles = cleanTypedModelsForPatch(
+        typedModelsRowsFromList(selected.typedModels.effective),
+      )?.roles ?? {};
+      const draftRoles = cleanTypedModelsForPatch(toolsSkills.modelRows)?.roles ?? {};
+      const modelsChanged = JSON.stringify(draftRoles) !== JSON.stringify(baselineRoles);
       const next = await updateGatewayAgent(selected.id, {
-        models: { defaultRole: selected.typedModels.defaultRole, roles: resetPatch.roles },
+        workspace: editWorkspace.trim() || undefined,
+        ...(toolsSkills.modelsResetRequested
+          ? { models: null }
+          : modelsChanged
+            ? { models: { roles: draftRoles } }
+            : {}),
       });
       void mutateAgents(next, { revalidate: false });
-      toolsSkills.setModelRows(resetRows);
+      toolsSkills.setModelsResetRequested(false);
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : a.saveError);
+      return false;
     } finally {
       setBusy(false);
     }
+  }
+
+  function onClearModelsEntry() {
+    if (!selected) {
+      return;
+    }
+    const resetRows = modelRowsForPresetReset(selected);
+    setError(null);
+    toolsSkills.replaceModelRows(resetRows);
+    toolsSkills.setModelsResetRequested(true);
   }
 
   async function onSaveSkills() {
@@ -708,15 +704,17 @@ export function useAgentsSettingsPanel() {
       setBusy(false);
     }
   }
-  const footerSaveNotApplicable = panel !== 'behavior';
+  const footerSaveNotApplicable = panel !== 'profile' && panel !== 'runtime';
 
-  const overviewRestDirty = (() => {
-    if (!selected || panel !== 'behavior') return false;
-    const origWorkspace = selected.workspace;
-    const origModel = selected.model?.primary ?? '';
-    return (
-      editWorkspace.trim() !== origWorkspace ||
-      editModel.trim() !== origModel
+  const runtimeDirty = (() => {
+    if (!selected || panel !== 'runtime') return false;
+    const baselineRoles = cleanTypedModelsForPatch(
+      typedModelsRowsFromList(selected.typedModels.effective),
+    )?.roles ?? {};
+    const draftRoles = cleanTypedModelsForPatch(toolsSkills.modelRows)?.roles ?? {};
+    return toolsSkills.modelsResetRequested || (
+      editWorkspace.trim() !== selected.workspace ||
+      JSON.stringify(draftRoles) !== JSON.stringify(baselineRoles)
     );
   })();
 
@@ -724,8 +722,10 @@ export function useAgentsSettingsPanel() {
     if (footerSaveNotApplicable) return false;
     if (!selected) return false;
     switch (panel) {
-      case 'behavior':
-        return overviewRestDirty || overviewProfile.dirty;
+      case 'profile':
+        return overviewProfile.dirty;
+      case 'runtime':
+        return runtimeDirty;
       default:
         return true;
     }
@@ -740,15 +740,29 @@ export function useAgentsSettingsPanel() {
 
   async function handleModalFooterSave() {
     switch (panel) {
-      case 'behavior':
-        await Promise.all([
-          onSaveAgentEdits(),
-          overviewSaveProfileMarkdownRef.current?.() ?? Promise.resolve(),
-        ]);
-        showSavedFlash();
-        break;
+      case 'profile': {
+        setBusy(true);
+        setError(null);
+        try {
+          await (overviewSaveProfileMarkdownRef.current?.() ?? Promise.resolve());
+          await mutateAgents();
+          showSavedFlash();
+          return true;
+        } catch (err) {
+          setError(err instanceof Error ? err.message : a.saveError);
+          return false;
+        } finally {
+          setBusy(false);
+        }
+      }
+      case 'runtime':
+        if (await onSaveRuntime()) {
+          showSavedFlash();
+          return true;
+        }
+        return false;
       default:
-        break;
+        return true;
     }
   }
 
@@ -764,7 +778,7 @@ export function useAgentsSettingsPanel() {
   const handleTryInChat = useCallback(async () => {
     if (!selected) return;
     // Save current panel state before navigating
-    await handleModalFooterSave();
+    if (!(await handleModalFooterSave())) return;
     profileFiles.saveProfileMarkdownDebounced.flush();
     // Set agent in localStorage and navigate to a new chat
     try {
@@ -790,7 +804,6 @@ export function useAgentsSettingsPanel() {
     editWorkspace,
     setEditWorkspace,
     editModel,
-    setEditModel,
     defaultModel: defaultAgent?.model?.primary ?? '',
     defaultWorkspace: defaultAgent?.workspace ?? '',
     onSetDefault: () => {
@@ -807,7 +820,6 @@ export function useAgentsSettingsPanel() {
       selected.id === effectiveTuiDefaultAgentId &&
       (!savedTuiDefaultAgentId || tuiDefaultAgentUnavailable),
     ),
-    onSaveAgentEdits: () => void onSaveAgentEdits(),
     onDelete: (purge: boolean) => {
       if (!selected) return;
       void onDelete(selected, purge);
@@ -823,7 +835,6 @@ export function useAgentsSettingsPanel() {
           : '/settings/capability-presets',
       );
     },
-    overviewSaveProfileMarkdownRef,
     overviewProfile,
     filesLoading: profileFiles.filesLoading,
     files: profileFiles.files,
@@ -843,7 +854,7 @@ export function useAgentsSettingsPanel() {
     modelRows: toolsSkills.modelRows,
     setModelRows: toolsSkills.setModelRows,
     onSaveModels: () => void onSaveModels(),
-    onClearModelsEntry: () => void onClearModelsEntry(),
+    onClearModelsEntry,
     skillsCatalogLoading: skillsCatalog.skillsCatalogLoading,
     catalogForPick: skillsCatalog.catalogForPick,
     skillsInherit: toolsSkills.skillsInherit,

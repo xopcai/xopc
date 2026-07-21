@@ -111,6 +111,37 @@ export class ChatStreamMapper {
             default: typeof event.default === 'string' ? event.default : undefined,
           }),
         ];
+      case 'memory_consent_required':
+        return [
+          this.make('memory_consent_required', {
+            requests: Array.isArray(event.requests)
+              ? event.requests.flatMap((raw) => {
+                  if (!raw || typeof raw !== 'object') return [];
+                  const request = raw as Record<string, unknown>;
+                  const id = typeof request.id === 'string' ? request.id : '';
+                  const recordId = typeof request.recordId === 'string' ? request.recordId : '';
+                  const statement = typeof request.statement === 'string' ? request.statement : '';
+                  const purpose = typeof request.purpose === 'string' ? request.purpose : '';
+                  return id && recordId && statement ? [{ id, recordId, statement, purpose }] : [];
+                })
+              : [],
+          }),
+        ];
+      case 'memory_captured':
+        return [
+          this.make('memory_captured', {
+            records: Array.isArray(event.records)
+              ? event.records.flatMap((raw) => {
+                  if (!raw || typeof raw !== 'object') return [];
+                  const record = raw as Record<string, unknown>;
+                  const id = typeof record.id === 'string' ? record.id : '';
+                  const content = typeof record.content === 'string' ? record.content : '';
+                  const kind = typeof record.kind === 'string' ? record.kind : '';
+                  return id && content ? [{ id, content, kind }] : [];
+                })
+              : [],
+          }),
+        ];
       case 'error':
         return [this.make('error', { code: 'AGENT_RUN_ERROR', message: String(event.content ?? event.message ?? 'Unknown error') })];
       default:

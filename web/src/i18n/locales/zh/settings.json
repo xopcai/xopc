@@ -1171,6 +1171,9 @@
     "categoryChat": "对话",
     "categoryEditor": "笔记编辑器",
     "globalToggleWindow": "显示/隐藏应用窗口",
+    "globalVoiceInput": "开始/结束语音输入",
+    "globalVoiceInputMacNote": "单独轻按并松开 Fn。需要辅助功能权限；建议将 macOS 的 Fn 键操作设为“不执行任何操作”以避免冲突。",
+    "globalVoiceInputWindowsNote": "单独轻按并松开 Alt。Alt 组合键不会触发；部分应用仍可能聚焦菜单栏。",
     "globalOpenSettings": "打开设置",
     "globalNewChat": "新建对话",
     "globalCommandPalette": "命令面板",
@@ -1196,8 +1199,12 @@
     "quickCaptureShortcutReset": "恢复默认",
     "quickCaptureShortcutRecording": "请按下快捷键（Esc 取消）",
     "quickCaptureShortcutConflict": "该快捷键已被占用。",
-    "voiceInputShortcutTitle": "语音输入快捷键",
-    "voiceInputShortcutDescription": "在对话或已打开的快速记录中开始/结束语音输入，按 Esc 取消。"
+    "voiceInputShortcutTitle": "语音输入备用快捷键",
+    "voiceInputShortcutDescription": "应用处于焦点时可使用此快捷键。桌面端还支持下方所示的全局 Fn 或 Alt 快捷键，按 Esc 取消。",
+    "voiceInputAccessibilityDescription": "全局 Fn 检测需要 macOS 辅助功能权限。",
+    "voiceInputAccessibilityGranted": "已启用全局 Fn 输入所需的辅助功能权限。",
+    "voiceInputAccessibilityEnable": "启用权限",
+    "voiceInputAccessibilityRequesting": "正在打开设置…"
   },
   "mcpSettings": {
     "title": "外部工具 (MCP)",

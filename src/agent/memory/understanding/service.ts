@@ -1,8 +1,9 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import {
   appendMemoryTraceEvent,
   attachMemoryEvidence,
+  markMemoryRecordsConflicted,
   upsertKnowledgeSourceItems,
 } from '../../../storage/sqlite/index.js';
 import { createLogger } from '../../../utils/logger.js';
@@ -57,7 +58,7 @@ function inferKind(content: string): MemoryKind {
   if (/\b(next time|lesson|failed|error)\b/i.test(content) || /下次|教训|失败|错误/.test(content)) {
     return 'task_lesson';
   }
-  return 'agent_note';
+  return 'curated_note';
 }
 
 const SENSITIVITY_RANK: Record<MemorySensitivity, number> = {
@@ -180,6 +181,10 @@ export class UserUnderstandingService {
     let deduplicated = 0;
     let rejected = 0;
     const recordIds: string[] = [];
+    const createdRecords: UnderstandingReviewResult['createdRecords'] = [];
+    const correctionTargets = [...new Set(context.supersedesRecordIds ?? [])];
+    const conflictGroupId = correctionTargets.length > 1 ? randomUUID() : undefined;
+    if (conflictGroupId) markMemoryRecordsConflicted(correctionTargets, conflictGroupId);
     for (const candidate of candidates.slice(0, 10)) {
       const content = normalizeContent(candidate.content);
       const sensitivity = stricterSensitivity(content, candidate.sensitivity);
@@ -196,9 +201,8 @@ export class UserUnderstandingService {
         ? redactSensitiveMemoryText(context.sourceText).slice(0, MAX_CANDIDATE_CHARS)
         : undefined;
       const key = candidate.canonicalKey ?? canonicalKey(candidate.kind, content);
-      const supersedesRecordId = context.supersedesRecordIds
-        && [...new Set(context.supersedesRecordIds)].length === 1
-        ? context.supersedesRecordIds[0]
+      const supersedesRecordId = correctionTargets.length === 1
+        ? correctionTargets[0]
         : undefined;
       const existing = await this.options.list(key);
       const evidence: MemoryEvidence = {
@@ -228,7 +232,7 @@ export class UserUnderstandingService {
         content,
         canonicalKey: key,
         scope: context.agentId || context.sessionKey
-          ? { agentId: context.agentId, sessionKey: context.sessionKey }
+          ? { userId: 'local-owner', sessionKey: context.sessionKey }
           : undefined,
         target: candidate.kind === 'preference' ? 'user' : 'memory',
         tags: [...new Set(['user-understanding', ...(candidate.tags ?? [])])],
@@ -248,10 +252,14 @@ export class UserUnderstandingService {
           explicitness: candidate.explicitness,
         }),
         supersedesRecordId,
+        conflictGroupId,
       });
       if (write.success) {
         created += 1;
-        if (write.record) recordIds.push(write.record.id);
+        if (write.record) {
+          recordIds.push(write.record.id);
+          createdRecords.push({ id: write.record.id, content: write.record.content, kind: write.record.kind });
+        }
         if (write.record && context.sourceItemId) {
           attachMemoryEvidence({
             recordId: write.record.id,
@@ -286,6 +294,6 @@ export class UserUnderstandingService {
     } catch (err) {
       log.debug({ err, sessionKey: context.sessionKey }, 'Understanding quality trace append failed');
     }
-    return { proposed: candidates.length, created, deduplicated, rejected };
+    return { proposed: candidates.length, created, deduplicated, rejected, createdRecords };
   }
 }

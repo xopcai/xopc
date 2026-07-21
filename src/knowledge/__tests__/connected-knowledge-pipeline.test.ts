@@ -65,7 +65,8 @@ describe('ConnectedKnowledgePipeline', () => {
       status: 'active',
       sensitivity: 'personal',
       source: { provider: 'composio-gmail' },
-      scope: { agentId: 'main', workspaceId: '/workspace' },
+      scope: { userId: 'local-owner', workspaceId: '/workspace' },
+      provenance: { sourceAgentId: 'main' },
       evidence: [expect.objectContaining({ sourceItemId: item!.id, relation: 'derived_from' })],
     });
     expect(listMemoryEvidence(record!.id)).toEqual([

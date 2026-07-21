@@ -32,6 +32,12 @@ export type EmbeddedStreamEvent =
       isError: boolean;
     }
   | { type: 'progress'; runId?: string; stage: string; message: string }
+  | {
+      type: 'memory_consent_required';
+      runId?: string;
+      requests: Array<{ id: string; recordId: string; statement: string; purpose: string }>;
+    }
+  | { type: 'memory_captured'; runId?: string; records: Array<{ id: string; content: string; kind: string }> }
   | { type: 'error'; runId?: string; content: string }
   | {
       type: 'compaction';

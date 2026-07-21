@@ -6,7 +6,6 @@ import { APP_CHROME_DRAG_CLASS, APP_CHROME_NO_DRAG_CLASS } from '@/components/sh
 import { getShellChromeRuntime, resolveShellChromeLayout } from '@/components/shell/chrome-layout';
 import { SettingsModeToggle } from '@/components/shell/settings-mode-toggle';
 import { TabIcon } from '@/components/shell/tab-icons';
-import { ActivityCenterTrigger } from '@/features/activity/activity-center';
 import { messages, tabLabel } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { ExtensionSettingsNav } from '@/features/extensions/extension-settings-nav';
@@ -261,7 +260,6 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
           <p className="text-[11px] font-medium uppercase tracking-wider text-fg-subtle">{m.nav.settings}</p>
           <h1 className="truncate text-base font-semibold tracking-tight text-fg">{activeTitle}</h1>
         </div>
-        <ActivityCenterTrigger />
         <button
           type="button"
           className={mobileToolbarButtonClass}
@@ -321,7 +319,6 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
           )}
         >
           {backControl}
-          <ActivityCenterTrigger />
         </div>
 
         {railNav}

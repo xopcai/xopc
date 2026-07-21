@@ -88,7 +88,6 @@ export {
   type NoteAgentContextRecord,
 } from './note-agent-context-repository.js';
 export {
-  resolveAgentIdFromMemoriesDir,
   searchMemoryIndex,
   syncMemoryIndex,
   type MemorySearchHit,
@@ -100,9 +99,11 @@ export {
   findLatestMemoryInjectTrace,
   getMemoryProviderState,
   getMemoryRecord,
+  hasUnresolvedMemoryConflict,
   listMemorySignals,
   listMemoryTraceEvents,
   listMemoryRecords,
+  markMemoryRecordsConflicted,
   searchMemoryRecords,
   setMemoryProviderState,
   setMemoryTraceFeedback,
@@ -191,6 +192,16 @@ export {
   getUserTrustPolicy,
   setUserTrustPolicy,
 } from './user-trust-repository.js';
+export {
+  consumeMemoryReferenceConsent,
+  decideMemoryReferenceConsent,
+  ensureMemoryReferenceConsentRequest,
+  hasMemoryReferenceConsent,
+  listMemoryReferenceConsents,
+  revokeMemoryReferenceConsent,
+  type MemoryReferenceConsent,
+  type MemoryReferenceGrantScope,
+} from './memory-reference-consent-repository.js';
 export {
   getUserProfilePromptState,
   setUserProfilePromptState,

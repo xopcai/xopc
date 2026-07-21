@@ -29,7 +29,7 @@ export function ExtensionProvider({ children }: { children: React.ReactNode }) {
   }
   const router = routerRef.current;
   const hasToken = useGatewayStore((s) => Boolean(s.token));
-  const { data, isLoading } = useSWR(
+  const { data, isLoading, mutate } = useSWR(
     hasToken ? 'gateway-extensions-list' : null,
     () => fetchJson<ExtensionsListResponse>(apiUrl('/api/extensions')),
     { revalidateOnFocus: false },
@@ -52,6 +52,7 @@ export function ExtensionProvider({ children }: { children: React.ReactNode }) {
     };
     const refetch = () => {
       void useContextStore.getState().fetchContext();
+      void mutate();
     };
     window.addEventListener('context-update', onCtx);
     window.addEventListener('config-reload', refetch);
@@ -61,7 +62,7 @@ export function ExtensionProvider({ children }: { children: React.ReactNode }) {
       window.removeEventListener('config-reload', refetch);
       window.removeEventListener('registry-updated', refetch);
     };
-  }, []);
+  }, [mutate]);
 
   const handleAgentStreamEvent = useCallback(
     (event: Event) => {

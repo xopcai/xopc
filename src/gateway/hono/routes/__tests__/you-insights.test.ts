@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { MemoryRecord } from '../../../../agent/memory/types.js';
-import { buildInsightSuggestions, buildPersonalPlaybooks } from '../you.js';
+import { buildInsightSuggestions, buildPersonalPlaybooks, buildRoutineAutomationDraftHref } from '../you.js';
 
 function record(patch: Partial<MemoryRecord> = {}): MemoryRecord {
   return {
@@ -47,6 +47,15 @@ describe('insight action suggestions', () => {
       expect.objectContaining({ action: 'start_progress' }),
     );
   });
+
+  it('builds a direct, encoded automation draft route for routines', () => {
+    const href = buildRoutineAutomationDraftHref(record({ content: 'Every Friday, send R&D status.' }));
+    const url = new URL(href, 'https://xopc.local');
+    expect(url.pathname).toBe('/automations');
+    expect(url.searchParams.get('draft')).toBe('Every Friday, send R&D status.');
+    expect(url.searchParams.get('autogenerate')).toBe('1');
+    expect(url.searchParams.get('insight')).toBe('memory-1');
+  });
 });
 
 describe('personal playbooks', () => {
@@ -61,13 +70,17 @@ describe('personal playbooks', () => {
     expect(playbooks.every((item) => item.enabled)).toBe(true);
   });
 
-  it('keeps paused playbooks visible and marked inactive', () => {
+  it('keeps disabled playbook rules active as understanding but out of use', () => {
     const playbooks = buildPersonalPlaybooks([
-      record({ status: 'archived', tags: ['user-understanding', 'playbook:paused:routines'] }),
+      record({ tags: ['user-understanding', 'playbook:disabled'] }),
     ]);
 
-    expect(playbooks).toEqual([
+    expect(playbooks.find((item) => item.id === 'routines')).toEqual(
       expect.objectContaining({ id: 'routines', enabled: false }),
-    ]);
+    );
+  });
+
+  it('keeps empty playbooks available for explicit rules', () => {
+    expect(buildPersonalPlaybooks([]).map((item) => item.id)).toEqual(['communication', 'execution', 'routines']);
   });
 });

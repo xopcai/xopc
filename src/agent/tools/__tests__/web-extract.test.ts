@@ -42,7 +42,6 @@ function configWithGlobalModel() {
           workspace: { root: '~/.xopc/workspace/main' },
           tools: { builtin: {} },
           skills: { mode: 'all' },
-          memory: { mode: 'confirmWrite', sources: ['session'] },
           workflows: {},
           boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
         },

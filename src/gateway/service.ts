@@ -51,6 +51,7 @@ import { PACKAGE_VERSION } from '../package-version.js';
 import { GoalNotificationService, GoalRunner, type EnqueueGoalRunOptions } from '../goals/index.js';
 import { MobileNotificationService } from '../mobile/notification-service.js';
 import { ProjectService } from '../projects/index.js';
+import { LocalAppService } from '../local-apps/index.js';
 import { buildWorkItemAgentContext, WorkItemService } from '../work-items/index.js';
 
 import { disposeAllSessionMcpRuntimes } from '../agent/mcp/bundle-mcp-tools.js';
@@ -177,6 +178,9 @@ export class GatewayService {
   /** First-class project grouping surface. */
   readonly projects: ProjectService;
 
+  /** Local user-created apps, their coder projects, previews, and installs. */
+  readonly localApps: LocalAppService;
+
   constructor(private serviceConfig: GatewayServiceConfig = {}) {
     this.bus = new MessageBus();
     this.configPath = serviceConfig.configPath || resolveConfigPath();
@@ -268,6 +272,15 @@ export class GatewayService {
     this.notesService = new NotesService(new NotesStore());
 
     this.projects = new ProjectService();
+
+    this.localApps = new LocalAppService({
+      projects: this.projects,
+      workspaceRoot: this.workspacePath,
+      getConfig: () => this.config,
+      saveConfig: (cfg) => this.saveConfig(cfg),
+      getExtensionLoader: () => this.extensionLoader,
+      emit: (type, payload) => this.emit(type, payload),
+    });
 
     this.agentRunner = new GatewayAgentRunner({
       bus: this.bus,

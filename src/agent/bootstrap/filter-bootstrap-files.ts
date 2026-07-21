@@ -16,7 +16,7 @@ const MINIMAL_BOOTSTRAP_ALLOWLIST = new Set<string>([
   USER_PROFILE_FILENAME,
 ]);
 
-/** Subagent and cron sessions omit MEMORY.md and other heavy profile files. */
+/** Subagent and cron sessions load only the minimal identity and instruction profile. */
 export function filterBootstrapFilesForSession(
   files: WorkspaceBootstrapFile[],
   sessionKey?: string,

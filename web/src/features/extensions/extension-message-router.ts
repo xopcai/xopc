@@ -3,7 +3,7 @@ import { ExtensionErrorCode, type ThemeInfo } from '@xopcai/extension-ui-sdk';
 import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import type { ToastDetail } from '@/lib/toast';
-import { showActivity } from '@/stores/activity-center-store';
+import { showActivity } from '@/stores/activity-store';
 import { useThemeStore } from '@/stores/theme-store';
 
 import { buildThemeInfo } from './theme-bridge';

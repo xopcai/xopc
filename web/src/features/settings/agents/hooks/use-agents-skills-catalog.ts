@@ -39,5 +39,5 @@ export function useSkillsCatalogLoad(enabled: boolean, hasToken: boolean) {
 }
 
 export function useAgentsSkillsCatalog(options: { panel: AgentPanel; hasToken: boolean }) {
-  return useSkillsCatalogLoad(options.panel === 'skills', options.hasToken);
+  return useSkillsCatalogLoad(options.panel === 'capabilities', options.hasToken);
 }

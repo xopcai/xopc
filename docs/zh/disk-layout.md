@@ -9,7 +9,7 @@
 | 区域 | 作用 |
 |------|------|
 | **状态目录** | 全局配置、凭据、日志、全局 skills/extensions、托管工具链等。 |
-| **智能体主目录** `<stateDir>/agents/<agentId>/` | 按 `agentId` 隔离的运行时数据：托管记忆、**`profile/`** 下的 profile Markdown（`SOUL.md` 等）、入站/TTS 落盘。会话 transcript 存储在 **`xopc.db`**，而非 `sessions/`。 |
+| **智能体主目录** `<stateDir>/agents/<agentId>/` | 按 `agentId` 隔离的运行时数据：**`profile/`** 下的 profile Markdown（`SOUL.md` 等）、入站/TTS 落盘。会话 transcript 存储在 **`xopc.db`**，而非 `sessions/`。 |
 | **智能体状态目录** `…/agents/<agentId>/agent/` | 进程状态：`agent.json`、各智能体凭据、IPC 收件箱、pid/socket、小型机器状态、扩展安装、出站崩溃恢复队列。 |
 | **Markdown 工作空间** | 用户项目树：工具 **cwd**、生成媒体、项目 `.xopc/skills/`、任意用户文件。 |
 
@@ -29,6 +29,9 @@
 | `logs/` | 应用日志（可用 `XOPC_LOG_DIR` 覆盖）。 |
 | `bin/`、`tools/` | CLI 包装与工具运行时。 |
 | `models.json` | 可选的自定义模型注册数据。 |
+| `user/PROFILE.md` | 所有 Agent 共享的用户资料。 |
+| `user/MEMORY.md` | 共享的用户资料记忆。 |
+| `user/memories/` | 所有 Agent 共享的托管记忆与 dreaming 状态。 |
 
 ## 智能体主目录：`agents/<agentId>/`
 
@@ -36,9 +39,8 @@
 
 | 路径 | 用途 |
 |------|------|
-| `profile/` | 智能体自身的系统提示用 profile Markdown：`SOUL.md`、`IDENTITY.md`、`TOOLS.md`、`AGENTS.md`、`HEARTBEAT.md`、`MEMORY.md`（与托管 `memories/` 不同），以及网关可选 `agent-avatar.*`。全局个人资料位于 `user/PROFILE.md`。 |
+| `profile/` | 智能体自身的系统提示用 profile Markdown：`SOUL.md`、`IDENTITY.md`、`TOOLS.md`、`AGENTS.md`、`HEARTBEAT.md`，以及网关可选 `agent-avatar.*`。全局个人资料位于 `user/PROFILE.md`。 |
 | `sessions/` | 遗留目录（可选）；旧版安装可能仍存在。新安装仅将 transcript 写入 `xopc.db`。 |
-| `memories/` | 智能体托管结构化存储（`MEMORY.md`，条目以固定分隔符分段 — `BuiltinMemoryStore`）。全局用户记忆位于 `user/MEMORY.md`。 |
 | `inbound/` | 入站附件（非图片二进制）落盘；transcript 中相对路径为相对 agent home 的 `inbound/...`。 |
 | `tts/` | 按会话缓存的出站 TTS 音频。 |
 | `agent/` | 见下节 **智能体状态目录**。 |

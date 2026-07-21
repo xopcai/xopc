@@ -29,6 +29,18 @@ export function GlobalVoiceInputShortcutHost() {
   }, []);
 
   useEffect(() => {
+    const unsubscribe = window.electronAPI?.voiceInputHotkey?.onToggle(() => {
+      if (recordingShortcutRef.current || !token) return;
+      const target = document.querySelector('[data-voice-input-scope="note"]') ? 'note' : 'chat';
+      if (!dispatchVoiceInputEvent(VOICE_INPUT_TOGGLE_EVENT, target)) {
+        queuePendingVoiceInputToggle();
+        navigate('/chat');
+      }
+    });
+    return unsubscribe;
+  }, [navigate, token]);
+
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (recordingShortcutRef.current || event.repeat || event.isComposing) return;
       const target = document.querySelector('[data-voice-input-scope="note"]') ? 'note' : 'chat';

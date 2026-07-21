@@ -417,8 +417,6 @@ export type UpdateAgentBody = {
   skills?: string[] | null;
   /** Replace `agents.list[].tools`; `null` resets to no explicit policies. */
   tools?: NonNullable<Config['agents']['list']>[number]['tools'] | null;
-  /** Replace `agents.list[].memory`; every agent manifest owns its memory policy. */
-  memory?: NonNullable<Config['agents']['list']>[number]['memory'];
 };
 
 export function prepareUpdateAgent(
@@ -438,7 +436,6 @@ export function prepareUpdateAgent(
       workspace: { root: `~/.xopc/workspace/${agentId}` },
       tools: { builtin: {} },
       skills: { mode: 'all' },
-      memory: { mode: 'confirmWrite', sources: ['session', 'curated'], writePolicy: { curated: 'confirm' } },
       workflows: {},
       boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
     }];
@@ -539,10 +536,6 @@ export function prepareUpdateAgent(
     } else {
       entry.tools = body.tools;
     }
-  }
-
-  if (body.memory !== undefined) {
-    entry.memory = body.memory;
   }
 
   list[idx] = entry;

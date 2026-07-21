@@ -191,7 +191,6 @@ export function useChatSessionLoad(deps: {
               return loaded;
             }
             historyBeforeCursorRef.current = nextBeforeCursor ?? null;
-            store().setShellError(null);
             try {
               const cfg = await sessionMgrRef.current.loadSessionAgentConfig(k);
               if (!isStillViewingSession(k)) return loaded;

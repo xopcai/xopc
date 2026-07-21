@@ -19,7 +19,6 @@ function manifest(id: string, patch: Partial<AgentManifest> = {}): AgentManifest
     models: { defaultRole: 'deep', roles: { deep: { model: 'openai/gpt-4.1' } } },
     tools: { builtin: {} },
     skills: { mode: 'all' },
-    memory: { mode: 'off', sources: ['session'] },
     workflows: {},
     boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
     ...patch,
@@ -123,11 +122,6 @@ describe('capability-presets-admin', () => {
           tools: { 'filesystem__write': { mode: 'deny', limits: { maxCallsPerTurn: 2 } } },
         },
       },
-      memory: {
-        mode: 'confirmWrite',
-        sources: ['session', 'workspace'],
-        privacy: { crossAgentSharing: 'deny', sensitiveWritePolicy: 'confirm' },
-      },
       workflows: { default: 'research', allowed: ['research'] },
       boundaries: {
         requiresConfirmation: ['external-write'],
@@ -147,7 +141,6 @@ describe('capability-presets-admin', () => {
         policy: { maxCostTier: 'medium' },
       },
       tools: { mcp: { servers: { filesystem: { mode: 'confirm', scope: 'workspace' } } } },
-      memory: { mode: 'confirmWrite', sources: ['session', 'workspace'] },
       workflows: { default: 'research' },
       boundaries: { forbidden: ['secrets'] },
       runtime: { maxTurns: 20 },

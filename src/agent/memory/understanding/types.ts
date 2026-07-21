@@ -27,4 +27,5 @@ export interface UnderstandingReviewResult {
   created: number;
   deduplicated: number;
   rejected: number;
+  createdRecords: Array<{ id: string; content: string; kind: MemoryKind }>;
 }

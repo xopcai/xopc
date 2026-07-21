@@ -1,17 +1,16 @@
 /**
- * WorkspaceRuntimeRegistry — lazy per-workspace cache of skill/memory/prompt-builder runtimes.
+ * WorkspaceRuntimeRegistry — lazy per-workspace cache of agent execution runtimes.
  *
  * Previously these four collaborators (`SkillManager`, `SystemPromptBuilder`,
  * `BuiltinMemoryStore`, `MemoryManager`) were created inline inside
  * `AgentManager.getWorkspaceRuntime` and cached in a private Map. They live
  * outside `AgentInstance` because multiple session keys for the same agent may
- * share a workspace. Memory ownership is agent-scoped, so runtimes are keyed by
- * both the effective agent id and resolved workspace path.
+ * share a workspace. Skill, prompt, and code-intelligence state stays keyed by
+ * agent and workspace, while memory comes from one process-wide user context.
  *
  * Extracted so:
  *   - `AgentManager` no longer juggles four sibling caches.
- *   - Hot-reload teardown (`clearAll`) lives in one place — there are now no
- *     callers that forget to shut down `memoryManager`.
+ *   - Hot-reload teardown (`clearAll`) shuts down the shared user context once.
  *   - Future per-workspace runtimes (e.g. embedding store, vector cache) plug in
  *     through `getOrCreate` without touching `AgentManager`.
  */
@@ -20,13 +19,12 @@ import type { Config } from '../../config/schema.js';
 import { normalizeAgentId } from '../../routing/agent-session-key.js';
 import { resolveAgentIdForWorkspacePath } from '../agent-scope.js';
 import { BuiltinMemoryStore } from '../memory/builtin-memory-store.js';
-import { createMemoryManagerFromConfig } from '../memory/create-memory-manager.js';
-import { resolveBuiltinMemoryStoreConfig } from '../memory/memory-config.js';
 import type { MemoryManager } from '../memory/manager.js';
 import { SkillManager } from '../skills/skill-manager.js';
 import { SystemPromptBuilder } from '../prompt/service-prompt-builder.js';
 import { CodeIntelligenceRuntime } from '../code-intelligence/index.js';
 import { createLogger } from '../../utils/logger.js';
+import { UserContextRuntimeRegistry } from '../../user-context/runtime.js';
 
 const log = createLogger('WorkspaceRuntimeRegistry');
 
@@ -53,6 +51,7 @@ export class WorkspaceRuntimeRegistry {
   private readonly getConfig: () => Config;
   private readonly bundledSkillsDir: string;
   private readonly onRuntimeCreated?: (resolvedPath: string) => void;
+  private readonly userContextRuntimes = new UserContextRuntimeRegistry();
 
   constructor(opts: WorkspaceRuntimeRegistryOptions) {
     this.getConfig = opts.getConfig;
@@ -72,10 +71,7 @@ export class WorkspaceRuntimeRegistry {
       return existing;
     }
 
-    const builtinMemoryStore = new BuiltinMemoryStore(
-      resolveBuiltinMemoryStoreConfig(resolvedPath, cfg, agentId),
-    );
-    const memoryManager = createMemoryManagerFromConfig(resolvedPath, builtinMemoryStore, cfg, agentId);
+    const { builtinMemoryStore, memoryManager } = this.userContextRuntimes.getOrCreate(cfg);
     const skillManager = new SkillManager(resolvedPath, this.bundledSkillsDir);
     const systemPromptBuilder = new SystemPromptBuilder({
       workspace: resolvedPath,
@@ -115,15 +111,13 @@ export class WorkspaceRuntimeRegistry {
     const toShutdown = [...this.runtimes.values()];
     this.runtimes.clear();
     this.notifiedWorkspacePaths.clear();
-    await Promise.allSettled(
-      toShutdown.flatMap((rt) => [
-        rt.memoryManager.shutdownAll().catch((err) => {
-          log.warn({ err }, 'memoryManager.shutdownAll failed');
-        }),
+    await Promise.allSettled([
+      this.userContextRuntimes.clear(),
+      ...toShutdown.map((rt) =>
         rt.codeIntelligence.dispose().catch((err) => {
           log.warn({ err }, 'codeIntelligence.dispose failed');
         }),
-      ]),
-    );
+      ),
+    ]);
   }
 }

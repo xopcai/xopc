@@ -17,7 +17,6 @@ export const TEMPLATE_FILES = [
   'TOOLS.md',
   'AGENTS.md',
   'HEARTBEAT.md',
-  'MEMORY.md',
 ] as const;
 
 export type TemplateFile = (typeof TEMPLATE_FILES)[number];
@@ -170,20 +169,6 @@ Edit this file to define what you check during heartbeat polls.
 - [ ] Check calendar for upcoming events
 
 **Remember:** If nothing needs attention, reply \`HEARTBEAT_OK\`.
-`,
-    'MEMORY.md': `# MEMORY.md - Long-Term Memory
-
-_Your curated memories._
-
-## People
-
-## Projects
-
-## Preferences
-
-## Learned Lessons
-
-**Only load in main sessions.**
 `,
   };
   

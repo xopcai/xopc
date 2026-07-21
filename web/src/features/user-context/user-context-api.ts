@@ -30,14 +30,14 @@ export type UserUnderstanding = {
   statement: string;
   facet: UserContextFacet;
   kind: string;
-  status: 'active' | 'candidate' | 'needs_review';
+  status: 'active' | 'candidate' | 'needs_review' | 'stale';
   origin: UserContextOrigin;
   sourceName: string;
   updatedAt: string;
   sensitivity: 'normal' | 'personal' | 'secret' | 'regulated';
   explicitness: 'explicit' | 'observed' | 'inferred';
   durability: 'ephemeral' | 'durable' | 'recurring';
-  canReference: boolean;
+  disclosurePolicy: 'silent' | 'referenceable' | 'ask_before_reference';
   stability: 'strong' | 'working' | 'fragile';
   stabilityScore: number;
   reviewAt: string;
@@ -49,6 +49,7 @@ export type UserUnderstanding = {
 
 export type PersonalContextSource = {
   id: string;
+  accountLabel?: string;
   displayName: string;
   description: string;
   branding?: {
@@ -92,22 +93,27 @@ export type InsightSuggestion = {
 export type PersonalPlaybook = {
   id: 'communication' | 'execution' | 'routines';
   enabled: boolean;
-  rules: Array<{ id: string; statement: string; origin: 'explicit' | 'observed' | 'inferred' }>;
+  rules: Array<{ id: string; statement: string; origin: 'explicit' | 'observed' | 'inferred'; enabled: boolean; order: number }>;
   updatedAt?: string;
 };
 
 export type UserContextResponse = {
-  agentId: string;
   scope: {
     profile: 'global';
-    memory: 'agent';
+    memory: 'global';
     trust: 'global';
-    agentId: string;
   };
   profileContent: string;
   profile: UserProfileFields;
   profileSetup: UserProfileSetup;
   understanding: UserUnderstanding[];
+  consentRequests: ReferenceConsent[];
+  referenceGrants: ReferenceConsent[];
+  conflictGroups: Array<{
+    id: string;
+    unresolved: boolean;
+    records: Array<UserUnderstanding & { storedStatus: string }>;
+  }>;
   insights: InsightSuggestion[];
   playbooks: PersonalPlaybook[];
   sources: PersonalContextSource[];
@@ -120,13 +126,26 @@ export type UserContextResponse = {
   controls: {
     mode: 'off' | 'readOnly' | 'confirmWrite' | 'auto';
     sensitiveWritePolicy: 'deny' | 'confirm' | 'allow';
-    crossAgentSharing: 'deny' | 'readOnly' | 'allow';
   };
   trust: {
     defaultActionLevel: UserTrustLevel;
     levels: UserTrustLevel[];
     autoRequiresExplicitOptIn: boolean;
   };
+};
+
+export type ReferenceConsent = {
+  id: string;
+  recordId: string;
+  sessionKey: string;
+  purpose: string;
+  statement: string;
+  sourceName: string;
+  status: 'pending' | 'granted' | 'denied' | 'consumed';
+  grantScope?: 'once' | 'session' | 'always';
+  expiresAt?: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export function fetchUserContext(): Promise<UserContextResponse> {
@@ -140,10 +159,32 @@ export function setPersonalPlaybookEnabled(id: PersonalPlaybook['id'], enabled: 
   });
 }
 
+export function createPersonalPlaybookRule(id: PersonalPlaybook['id'], statement: string, order?: number) {
+  return fetchJson(apiUrl(`/api/you/playbooks/${id}/rules`), {
+    method: 'POST',
+    body: JSON.stringify({ statement, order }),
+  });
+}
+
+export function updatePersonalPlaybookRule(
+  id: PersonalPlaybook['id'],
+  ruleId: string,
+  patch: { statement?: string; enabled?: boolean; order?: number },
+) {
+  return fetchJson(apiUrl(`/api/you/playbooks/${id}/rules/${encodeURIComponent(ruleId)}`), {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+}
+
+export function deletePersonalPlaybookRule(id: PersonalPlaybook['id'], ruleId: string) {
+  return fetchJson(apiUrl(`/api/you/playbooks/${id}/rules/${encodeURIComponent(ruleId)}`), { method: 'DELETE' });
+}
+
 export function updateInsightSuggestion(
   id: string,
-  input: { action: 'apply' | 'dismiss'; uiLocale?: 'en' | 'zh' },
-): Promise<{ ok: true; status: 'queued' | 'saved' | 'dismissed'; href?: string }> {
+  input: { action: 'apply' | 'complete' | 'dismiss'; uiLocale?: 'en' | 'zh' },
+): Promise<{ ok: true; status: 'queued' | 'saved' | 'dismissed' | 'drafting'; href?: string }> {
   return fetchJson(apiUrl(`/api/you/insights/${encodeURIComponent(id)}`), {
     method: 'PATCH',
     body: JSON.stringify(input),
@@ -165,6 +206,53 @@ export function forgetUnderstanding(id: string): Promise<{ ok: true }> {
   return fetchJson<{ ok: true }>(apiUrl(`/api/you/understanding/${encodeURIComponent(id)}`), {
     method: 'DELETE',
   });
+}
+
+export function createUnderstanding(input: {
+  content: string;
+  kind: string;
+  sensitivity?: UserUnderstanding['sensitivity'];
+  durability?: UserUnderstanding['durability'];
+  disclosurePolicy?: UserUnderstanding['disclosurePolicy'];
+}): Promise<UserUnderstanding> {
+  return fetchJson<{ understanding: UserUnderstanding }>(apiUrl('/api/you/understanding'), {
+    method: 'POST',
+    body: JSON.stringify(input),
+  }).then((response) => response.understanding);
+}
+
+export function batchUpdateUnderstanding(ids: string[], action: 'confirm' | 'reject' | 'forget') {
+  return fetchJson<{ ok: true; updatedCount: number }>(apiUrl('/api/you/understanding/batch'), {
+    method: 'POST',
+    body: JSON.stringify({ ids, action }),
+  });
+}
+
+export function fetchUnderstandingHistory(id: string) {
+  return fetchJson<{ history: Array<UserUnderstanding & { storedStatus: string }> }>(
+    apiUrl(`/api/you/understanding/${encodeURIComponent(id)}/history`),
+  );
+}
+
+export function resolveUnderstandingConflict(groupId: string, winnerId: string) {
+  return fetchJson<{ ok: true; understanding: UserUnderstanding }>(
+    apiUrl(`/api/you/conflicts/${encodeURIComponent(groupId)}/resolve`),
+    { method: 'POST', body: JSON.stringify({ winnerId }) },
+  );
+}
+
+export function decideReferenceConsent(
+  id: string,
+  decision: 'once' | 'session' | 'always' | 'deny',
+): Promise<{ ok: true }> {
+  return fetchJson(apiUrl(`/api/you/consents/${encodeURIComponent(id)}`), {
+    method: 'PATCH',
+    body: JSON.stringify({ decision }),
+  });
+}
+
+export function revokeReferenceConsent(id: string): Promise<{ ok: true }> {
+  return fetchJson(apiUrl(`/api/you/consents/${encodeURIComponent(id)}`), { method: 'DELETE' });
 }
 
 export function disconnectPersonalContextSource(
@@ -214,9 +302,8 @@ export function updateUserProfilePrompt(action: 'snooze' | 'reset'): Promise<{ p
 }
 
 export type UserContextExport = {
-  version: 1;
+  version: 2;
   exportedAt: string;
-  agentId: string;
   profile: UserProfileFields;
   understanding: Array<{
     statement: string;
@@ -224,7 +311,7 @@ export type UserContextExport = {
     status: string;
     sensitivity: UserUnderstanding['sensitivity'];
     durability: UserUnderstanding['durability'];
-    canReference: boolean;
+    disclosurePolicy: UserUnderstanding['disclosurePolicy'];
     sourceName: string;
     updatedAt: string;
   }>;

@@ -1,4 +1,4 @@
-import { AlertTriangle, Brain, Cable, Gauge, SlidersHorizontal, Sparkles, Wrench, Zap } from 'lucide-react';
+import { AlertTriangle, Bot, Cable, Gauge, Settings2, SlidersHorizontal, Sparkles } from 'lucide-react';
 
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
@@ -8,12 +8,11 @@ import type { AgentPanel } from './utils';
 
 const navItems: { id: AgentPanel; labelKey: keyof AgentsSettingsMessages; icon: typeof Gauge }[] = [
   { id: 'overview', labelKey: 'navOverview', icon: Gauge },
-  { id: 'behavior', labelKey: 'navBehavior', icon: Sparkles },
-  { id: 'tools', labelKey: 'navTools', icon: Wrench },
-  { id: 'skills', labelKey: 'navSkills', icon: Zap },
-  { id: 'memory', labelKey: 'navMemory', icon: Brain },
+  { id: 'profile', labelKey: 'navProfile', icon: Sparkles },
+  { id: 'capabilities', labelKey: 'navCapabilities', icon: Bot },
+  { id: 'runtime', labelKey: 'navRuntime', icon: Settings2 },
   { id: 'connections', labelKey: 'navConnections', icon: Cable },
-  { id: 'config', labelKey: 'navConfig', icon: SlidersHorizontal },
+  { id: 'advanced', labelKey: 'navAdvanced', icon: SlidersHorizontal },
   { id: 'dangerZone', labelKey: 'navDangerZone', icon: AlertTriangle },
 ];
 
@@ -30,7 +29,7 @@ export function AgentsEditorSidebar(props: {
       type="button"
       onClick={() => onPanelChange(id)}
       className={cn(
-        'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors',
+        'flex w-auto shrink-0 items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors sm:w-full',
         interaction.press,
         panel === id
           ? 'bg-accent-soft text-accent-fg'
@@ -43,8 +42,8 @@ export function AgentsEditorSidebar(props: {
   );
 
   return (
-    <nav className="flex w-full flex-col gap-1" aria-label={a.editorNavAria}>
-      <div className="flex flex-col gap-0.5">
+    <nav className="w-full overflow-x-auto sm:overflow-visible" aria-label={a.editorNavAria}>
+      <div className="flex gap-1 pb-1 sm:flex-col sm:gap-0.5 sm:pb-0">
         {navItems.map(({ id, labelKey, icon }) => item(id, a[labelKey] as string, icon))}
       </div>
     </nav>

@@ -266,7 +266,7 @@ TTS 开启时注册。用于需要语音播报的场景；一般仍以文字回�
 
 ### `curated_memory`
 
-读写托管记忆：智能体笔记位于 **`agents/<agentId>/memories/MEMORY.md`**，全局用户记忆位于 **`user/MEMORY.md`**（章节边界按格式约定）。这些文件与 **`agents/<agentId>/profile/`** 和 **`user/PROFILE.md`** 分离；当所选 agent manifest 允许 curated memory 写入时，可用本工具读写实时状态。
+读写共享托管记忆：共享条目位于 **`user/memories/MEMORY.md`**，用户资料记忆位于 **`user/MEMORY.md`**（章节边界按格式约定）。这些文件与 Agent profile 分离，并由顶层 `userContext` 统一控制。
 
 详见 [配置参考](./configuration.md) 与 [托管记忆](./workspace.md#curated-memory)。
 

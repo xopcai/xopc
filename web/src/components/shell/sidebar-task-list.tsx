@@ -89,30 +89,6 @@ function interpolate(template: string, params: Record<string, string | number>):
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => String(params[key] ?? ''));
 }
 
-function timeAgoLabel(value: string | undefined, language: string): string {
-  if (!value) return '';
-  const timestamp = new Date(value).getTime();
-  if (!Number.isFinite(timestamp)) return '';
-  const diffMs = Date.now() - timestamp;
-  const minute = 60_000;
-  const hour = 60 * minute;
-  const day = 24 * hour;
-  if (diffMs < hour) {
-    const n = Math.max(1, Math.floor(diffMs / minute));
-    return language === 'zh' ? `${n} 分` : `${n}m`;
-  }
-  if (diffMs < day) {
-    const n = Math.max(1, Math.floor(diffMs / hour));
-    return language === 'zh' ? `${n} 小时` : `${n}h`;
-  }
-  if (diffMs < 7 * day) {
-    const n = Math.max(1, Math.floor(diffMs / day));
-    return language === 'zh' ? `${n} 天` : `${n}d`;
-  }
-  const n = Math.max(1, Math.floor(diffMs / (7 * day)));
-  return language === 'zh' ? `${n} 周` : `${n}w`;
-}
-
 function sessionUpdatedAtMs(session: SessionMetadata): number {
   const timestamp = new Date(session.updatedAt).getTime();
   return Number.isFinite(timestamp) ? timestamp : 0;
@@ -192,7 +168,6 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   defaultUnnamedTitle,
   sessionAgentId,
   sessionAgentAvatar,
-  timeLabel,
 }: {
   session: SessionMetadata;
   isActive: boolean;
@@ -208,7 +183,6 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   defaultUnnamedTitle: string;
   sessionAgentId: string;
   sessionAgentAvatar?: string;
-  timeLabel?: string;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const agentRunActive = useSidebarSessionAgentRun(session.key);
@@ -287,17 +261,6 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
         ) : (
           <span className="min-w-0 max-w-[10rem] truncate">{title}</span>
         )}
-        {timeLabel ? (
-          <span
-            className={cn(
-              'ml-auto shrink-0 tabular-nums',
-              isActive ? 'text-fg-muted' : 'text-fg-subtle',
-            )}
-            aria-hidden
-          >
-            {timeLabel}
-          </span>
-        ) : null}
       </Link>
       <Popover.Root open={menuOpen} onOpenChange={setMenuOpen}>
         <Popover.Trigger asChild>
@@ -537,7 +500,6 @@ function SidebarProjectSection({
   defaultUnnamedTitle,
   defaultAgentId,
   agentItems,
-  language,
   excludedSessionKeys,
 }: {
   group: ProjectSidebarGroup;
@@ -561,7 +523,6 @@ function SidebarProjectSection({
   defaultUnnamedTitle: string;
   defaultAgentId: string;
   agentItems: Awaited<ReturnType<typeof fetchChatAgents>>['items'];
-  language: string;
   /** Sessions rendered in the dedicated pinned section stay out of their project list. */
   excludedSessionKeys?: ReadonlySet<string>;
 }) {
@@ -635,7 +596,6 @@ function SidebarProjectSection({
                 defaultUnnamedTitle={defaultUnnamedTitle}
                 sessionAgentId={sessionAgentId}
                 sessionAgentAvatar={agentAvatarFromOptions(sessionAgentId, agentItems)}
-                timeLabel={timeAgoLabel(session.updatedAt, language)}
               />
             );
           })}
@@ -686,7 +646,6 @@ function SidebarInboxSection({
   defaultUnnamedTitle,
   defaultAgentId,
   agentItems,
-  language,
   excludedSessionKeys,
 }: {
   sessions: SessionMetadata[];
@@ -706,7 +665,6 @@ function SidebarInboxSection({
   defaultUnnamedTitle: string;
   defaultAgentId: string;
   agentItems: Awaited<ReturnType<typeof fetchChatAgents>>['items'];
-  language: string;
   /** Sessions rendered in the dedicated pinned section stay out of the inbox. */
   excludedSessionKeys?: ReadonlySet<string>;
 }) {
@@ -752,7 +710,6 @@ function SidebarInboxSection({
               defaultUnnamedTitle={defaultUnnamedTitle}
               sessionAgentId={sessionAgentId}
               sessionAgentAvatar={agentAvatarFromOptions(sessionAgentId, agentItems)}
-              timeLabel={timeAgoLabel(session.updatedAt, language)}
             />
           );
         })}
@@ -790,7 +747,6 @@ function SidebarPinnedSection({
   defaultUnnamedTitle,
   defaultAgentId,
   agentItems,
-  language,
 }: {
   sessions: SessionMetadata[];
   activeSessionKey?: string;
@@ -804,7 +760,6 @@ function SidebarPinnedSection({
   defaultUnnamedTitle: string;
   defaultAgentId: string;
   agentItems: Awaited<ReturnType<typeof fetchChatAgents>>['items'];
-  language: string;
 }) {
   if (sessions.length === 0) return null;
 
@@ -832,7 +787,6 @@ function SidebarPinnedSection({
               defaultUnnamedTitle={defaultUnnamedTitle}
               sessionAgentId={sessionAgentId}
               sessionAgentAvatar={agentAvatarFromOptions(sessionAgentId, agentItems)}
-              timeLabel={timeAgoLabel(session.updatedAt, language)}
             />
           );
         })}
@@ -1300,7 +1254,6 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
               defaultUnnamedTitle={m.chat.newSession}
               defaultAgentId={defaultAgentId}
               agentItems={agentItems}
-              language={language}
             />
             {projectGroups.length > 0 ? (
               <div className="pb-1">
@@ -1345,7 +1298,6 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
                         defaultUnnamedTitle={m.chat.newSession}
                         defaultAgentId={defaultAgentId}
                         agentItems={agentItems}
-                        language={language}
                         excludedSessionKeys={pinnedSessionKeys}
                       />
                     ))
@@ -1371,7 +1323,6 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
               defaultUnnamedTitle={m.chat.newSession}
               defaultAgentId={defaultAgentId}
               agentItems={agentItems}
-              language={language}
               excludedSessionKeys={pinnedSessionKeys}
             />
           </div>

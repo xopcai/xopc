@@ -27,7 +27,7 @@ export function activateDreamingPromotion(input: DreamingPromotionInput): Memory
     id: `dreaming:${stableId}`,
     providerId: 'local',
     kind: 'project_context',
-    agentId: input.agentId,
+    sourceAgentId: input.agentId,
     workspaceId: input.workspaceId,
     content: input.content,
     source: {
@@ -78,7 +78,7 @@ export function activateRemInsight(input: RemInsightInput): MemoryRecord {
     id: `dreaming-rem:${input.agentId}:${patternKey}`,
     providerId: 'local',
     kind: 'derived_insight',
-    agentId: input.agentId,
+    sourceAgentId: input.agentId,
     workspaceId: input.workspaceId,
     content,
     source: { provider: 'dreaming', path: 'DREAMS.md' },

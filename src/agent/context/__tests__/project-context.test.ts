@@ -78,4 +78,34 @@ describe('formatActiveProjectContextForPrompt', () => {
     expect(text).toContain('## Recent Project Sessions\n- None recorded.');
     expect(text).toContain('## Project Memory\n- None recorded.');
   });
+
+  it('tells coder sessions which local-app release is stable', () => {
+    const text = formatActiveProjectContextForPrompt({
+      project,
+      activeGoals: [],
+      recentSessions: [],
+      localApp: {
+        extensionId: 'local-reading-list-abcd1234',
+        draftVersion: 3,
+        activeVersion: 2,
+        installationState: 'installed',
+        enabled: true,
+        retainedVersions: [2, 1],
+        latestAcceptance: {
+          status: 'failed',
+          sourceHash: '1234567890abcdef',
+          failures: ['One interactive control needs an accessible name'],
+          createdAt: 1234,
+        },
+      },
+    });
+
+    expect(text).toContain('## Local App Runtime');
+    expect(text).toContain('Draft version: v3');
+    expect(text).toContain('Installed version: v2');
+    expect(text).toContain('Retained releases: v2, v1');
+    expect(text).toContain('Latest acceptance: failed | source=1234567890ab | checked=1970-01-01T00:00:01.234Z');
+    expect(text).toContain('Acceptance failure: One interactive control needs an accessible name');
+    expect(text).toContain('Do not modify installed release artifacts directly');
+  });
 });

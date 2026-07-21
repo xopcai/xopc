@@ -1,3 +1,14 @@
+import { isValidSkillWireId } from '@/features/chat/palette/skill-wire-pattern';
+
+export function buildComposerDraftSeed(skill: string, draft: string): string | null {
+  const trimmedSkill = skill.trim();
+  const trimmedDraft = draft.trim();
+  if (trimmedSkill && isValidSkillWireId(trimmedSkill)) {
+    return `/skill:${trimmedSkill}${trimmedDraft ? ` ${trimmedDraft}` : ' '}`;
+  }
+  return trimmedDraft || null;
+}
+
 /**
  * When `/chat/new?skill=…&slash=…` resolves to an actual session and the URL is
  * replaced with `/chat/:key?…`, only composer deep-link params should survive —

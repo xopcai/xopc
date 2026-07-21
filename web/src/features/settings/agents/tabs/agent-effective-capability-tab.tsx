@@ -68,7 +68,6 @@ export function AgentEffectiveCapabilityTab(props: {
   const modelRoles = Object.entries(manifest?.models?.roles ?? {}).sort(([aId], [bId]) => aId.localeCompare(bId));
   const toolPolicies = Object.entries(manifest?.tools?.builtin ?? {}).sort(([aId], [bId]) => aId.localeCompare(bId));
   const skills = manifest?.skills;
-  const memory = manifest?.memory;
   const boundaries = manifest?.boundaries;
 
   return (
@@ -166,24 +165,6 @@ export function AgentEffectiveCapabilityTab(props: {
                     source={sourceFor(sources, ['skills.deny', 'skills'])}
                   />
                 ) : null}
-              </div>
-            </div>
-
-            <div>
-              <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">
-                {a.effectiveMemoryTitle}
-              </h4>
-              <div className="flex flex-col gap-2">
-                <PolicyRow
-                  name="mode"
-                  value={memory?.mode ?? 'off'}
-                  source={sourceFor(sources, ['memory.mode', 'memory'])}
-                />
-                <PolicyRow
-                  name="sources"
-                  value={listValue(memory?.sources, '—')}
-                  source={sourceFor(sources, ['memory.sources', 'memory'])}
-                />
               </div>
             </div>
 

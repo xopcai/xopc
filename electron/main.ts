@@ -83,6 +83,7 @@ import {
   stopTunnelStatusPolling,
 } from './tunnel-main.js';
 import { createTray, destroyTray, updateTrayLanguage } from './tray.js';
+import { startVoiceInputHotkey, stopVoiceInputHotkey } from './voice-input-hotkey.js';
 import {
   MAIN_WINDOW_MIN_HEIGHT,
   MAIN_WINDOW_MIN_WIDTH,
@@ -573,6 +574,25 @@ function focusOrCreateMainWindow(): void {
   mainWindow.focus();
 }
 
+function toggleVoiceInputFromSystemHotkey(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow();
+  }
+  const win = mainWindow;
+  if (!win || win.isDestroyed()) return;
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+  const send = () => {
+    if (!win.isDestroyed()) win.webContents.send('voice-input:toggle');
+  };
+  if (win.webContents.isLoading()) {
+    win.webContents.once('did-finish-load', send);
+  } else {
+    send();
+  }
+}
+
 function resolveDesktopPetUrl(): string | null {
   const rendererUrl = process.env['ELECTRON_RENDERER_URL'];
   const baseHref = rendererUrl || lastGatewayConsoleHref;
@@ -1061,6 +1081,7 @@ app.whenReady().then(async () => {
   });
 
   registerTunnelPowerMonitor();
+  startVoiceInputHotkey(() => toggleVoiceInputFromSystemHotkey());
 
   const hotkey = process.platform === 'darwin' ? 'Command+Shift+Space' : 'Control+Shift+Space';
   const registered = globalShortcut.register(hotkey, () => {
@@ -1121,6 +1142,7 @@ app.on('before-quit', () => {
   appIsQuitting = true;
   destroyDesktopPetWindow();
   destroyTray();
+  stopVoiceInputHotkey();
   globalShortcut.unregisterAll();
   stopAllPowerSaveBlockers();
   stopCronDisplayWakeBlocker();

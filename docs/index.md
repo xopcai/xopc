@@ -31,7 +31,7 @@ features:
     details: "TUI, CLI, browser, desktop, iOS/Android, and messengers connect to the same agents, sessions, and project state."
     link: /desktop-app
   - title: 🧩 Explicit agent boundaries
-    details: "Configure identity, model roles, workspace, tool policy, skills, memory, and boundaries per agent; add tools, channels, and UI through extensions."
+    details: "Configure identity, model roles, workspace, tool policy, skills, and boundaries per agent; user understanding and memory stay shared across all agents."
     link: /extensions
   - title: ⏰ Triggerable automations
     details: Run agents or workflows on schedules, manually, or from webhooks, with visible run results and failures.
@@ -59,7 +59,7 @@ Most chat products organize everything around one conversation. xopc gives long-
 
 | Object | What it keeps | How it continues |
 | --- | --- | --- |
-| Agent | Identity, responsibilities, model roles, tools, skills, memory, and boundaries | Give each kind of work a deliberate capability envelope |
+| Agent | Identity, responsibilities, model roles, tools, skills, and boundaries | Give each kind of work a deliberate capability envelope; all agents share user context |
 | Session | Transcript, context, and run events | Resume from terminal, web, desktop, mobile, or a messenger |
 | Project / Goal | Brief, status, blockers, next actions, and linked activity | See what needs attention without mining chat history |
 | Note / Workspace | Quick inputs, attachments, and durable files | Collect source material and retain reusable context and artifacts |

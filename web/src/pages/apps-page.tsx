@@ -119,10 +119,14 @@ export function ExtensionsPage() {
           <h1 className="truncate text-base font-semibold tracking-tight text-fg">{m.extensionsPage.title}</h1>
         </div>
       ),
-      end: null,
+      end: (
+        <Button asChild variant="primary" className="h-9">
+          <Link to="/local-apps/new"><Plus className="size-4" />{language === 'zh' ? '创建本地应用' : 'Create local app'}</Link>
+        </Button>
+      ),
     });
     return () => clearPageHeader();
-  }, [clearPageHeader, m.extensionsPage.title, setPageHeader]);
+  }, [clearPageHeader, language, m.extensionsPage.title, setPageHeader]);
 
   if (loading && mainTab !== 'marketplace') {
     return <ExtensionsPageSkeleton />;

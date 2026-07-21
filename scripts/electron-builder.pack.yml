@@ -53,6 +53,11 @@ extraResources:
       - codebase-memory-mcp
       - codebase-memory-mcp.exe
       - codebase-memory-mcp.manifest.json
+  - from: _pack-resources/voice-hotkey
+    to: bin
+    filter:
+      - voice-hotkey-helper
+      - voice-hotkey-helper.exe
   # Playwright Chromium install + CDP (must stay a real package tree; not esbuild-bundled).
   # types/ is .d.ts only; lib/vite/ is the Trace Viewer UI we never invoke.
   - from: _pack-resources/playwright-core

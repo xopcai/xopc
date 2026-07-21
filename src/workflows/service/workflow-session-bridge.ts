@@ -216,7 +216,7 @@ export class WorkflowSessionBridge {
       id: `workflow-run:${view.run.id}`,
       providerId: 'workflow-run',
       kind: 'task_lesson',
-      agentId,
+      sourceAgentId: agentId,
       workspaceId: this.gateway.currentWorkspacePath,
       sessionKey,
       projectId,

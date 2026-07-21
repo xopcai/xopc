@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import type { GatewayAgentRow } from '@/features/settings/agents-admin-api';
 
 import type { AgentPanel } from '../utils';
@@ -28,21 +28,26 @@ export function useAgentsToolsSkillsLocalState(options: {
   const [skillsPick, setSkillsPick] = useState<Set<string>>(() => new Set());
   const [skillsInherit, setSkillsInherit] = useState(true);
   const [modelRows, setModelRows] = useState<AgentTypedModelRow[]>(() => []);
+  const [modelsResetRequested, setModelsResetRequested] = useState(false);
 
   if (trackedSyncRef.current !== syncKey) {
     trackedSyncRef.current = syncKey;
-    if (selected && panel === 'tools') {
+    if (selected && panel === 'capabilities') {
       setToolEntryDisable(toolDisableFromSelected(selected));
-    }
-    if (selected && panel === 'skills') {
       const next = skillsStateFromSelected(selected);
       setSkillsInherit(next.inherit);
       setSkillsPick(next.pick);
     }
-    if (selected && panel === 'behavior') {
+    if (selected && panel === 'runtime') {
       setModelRows(typedModelsRowsFromList(selected.typedModels.effective));
+      setModelsResetRequested(false);
     }
   }
+
+  const setModelRowsDraft: Dispatch<SetStateAction<AgentTypedModelRow[]>> = (next) => {
+    setModelsResetRequested(false);
+    setModelRows(next);
+  };
 
   return {
     toolEntryDisable,
@@ -52,6 +57,9 @@ export function useAgentsToolsSkillsLocalState(options: {
     skillsInherit,
     setSkillsInherit,
     modelRows,
-    setModelRows,
+    setModelRows: setModelRowsDraft,
+    replaceModelRows: setModelRows,
+    modelsResetRequested,
+    setModelsResetRequested,
   };
 }

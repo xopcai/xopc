@@ -23,6 +23,45 @@
     "skipSetup": "跳过 — 稍后再设置",
     "setupComplete": "设置完成！在下方开始对话吧。",
     "stepOf": "第 {{current}} 步，共 {{total}} 步",
-    "providerRecommended": "推荐"
+    "providerRecommended": "推荐",
+    "workDiscovery": {
+      "title": "把最近的工作接进来",
+      "subtitle": "选择一个本地文件夹。xopc 会只读了解当前进展，并整理几个可以继续推进的方向。通常需要不到一分钟。",
+      "chooseFolder": "选择文件夹",
+      "skip": "暂时跳过",
+      "readOnlyNote": "不会修改文件。开始分析前，你可以查看读取范围。",
+      "selectedTitle": "确认读取范围",
+      "selectedSubtitle": "xopc 将了解项目结构、项目说明、最近的文本变更和 Git 状态。",
+      "willRead": "将会读取",
+      "willReadValue": "项目结构、说明文件、最近的文本文件和 Git 状态",
+      "willIgnore": "不会读取",
+      "willIgnoreValue": "依赖、构建产物、二进制文件和常见密钥文件",
+      "providerDisclosure": "相关文本片段可能发送至 {{provider}} 进行分析。原始凭据和已排除文件不会包含在内。",
+      "localDisclosure": "分析使用当前配置的本地模型，已排除文件不会包含在内。",
+      "startAnalysis": "开始分析",
+      "changeFolder": "更改文件夹",
+      "stages": {
+        "folder_structure": "识别项目结构",
+        "recent_progress": "了解最近进展",
+        "next_steps": "整理下一步建议"
+      },
+      "analyzingTitle": "正在了解你最近的工作",
+      "analyzingSubtitle": "你可以离开此页面，Gateway 会继续完成分析。",
+      "cancelAnalysis": "取消分析",
+      "foundTitle": "我看到的当前状态",
+      "suggestionsTitle": "建议下一步",
+      "continue": "继续推进",
+      "discussFirst": "先聊一聊",
+      "openConversation": "直接进入对话",
+      "notAccurate": "这些建议不准确",
+      "chooseDifferent": "选择其他文件夹",
+      "errorTitle": "分析未能完成",
+      "retry": "重试",
+      "loading": "正在准备工作接入…",
+      "codingProject": "软件项目",
+      "generalProject": "通用工作目录",
+      "unknownProject": "本地文件夹",
+      "lowConfidenceTitle": "再补充一点背景会更准确"
+    }
   }
 }

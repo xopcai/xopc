@@ -2,6 +2,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { OnboardingCard } from '@/features/onboarding/onboarding-card';
+import { fetchWorkDiscoveryOnboarding } from '@/features/work-discovery/api';
 import { useNeedsModelSetup } from '@/features/onboarding/use-needs-model-setup';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
@@ -53,7 +54,8 @@ export function OnboardingDialog() {
           <OnboardingCard
             onComplete={async () => {
               await modelSetup.refresh();
-              navigate('/chat');
+              const workDiscovery = await fetchWorkDiscoveryOnboarding().catch(() => null);
+              navigate(workDiscovery?.enabled ? '/onboarding/workspace' : '/chat');
             }}
             onDismiss={modelSetup.dismissPermanently}
             canDismiss

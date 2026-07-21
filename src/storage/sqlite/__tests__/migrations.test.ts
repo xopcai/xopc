@@ -192,6 +192,62 @@ describe('SQLite migrations', () => {
     ).toEqual({ name: 'outcome_metric_json' });
   });
 
+  it('repairs work discovery foreign keys from v43 without losing runs', () => {
+    const db = openEmptyDb();
+    ensureSchemaMetaTable(db);
+    db.exec('PRAGMA foreign_keys = OFF');
+    db.exec(`
+      CREATE TABLE projects (project_id TEXT PRIMARY KEY);
+      CREATE TABLE sessions (session_key TEXT PRIMARY KEY);
+      INSERT INTO projects VALUES ('project-1');
+      INSERT INTO sessions VALUES ('session-1');
+      CREATE TABLE work_discovery_runs (
+        id TEXT PRIMARY KEY,
+        idempotency_key TEXT NOT NULL UNIQUE,
+        source TEXT NOT NULL,
+        status TEXT NOT NULL,
+        stage TEXT,
+        root_path TEXT NOT NULL,
+        project_id TEXT NOT NULL,
+        session_key TEXT NOT NULL,
+        agent_id TEXT NOT NULL,
+        model_ref TEXT NOT NULL,
+        scan_policy_version INTEGER NOT NULL,
+        snapshot_summary_json TEXT,
+        result_json TEXT,
+        error_code TEXT,
+        error_message TEXT,
+        created_at INTEGER NOT NULL,
+        started_at INTEGER,
+        completed_at INTEGER,
+        canceled_at INTEGER,
+        FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+        FOREIGN KEY (session_key) REFERENCES sessions(key) ON DELETE CASCADE
+      );
+      INSERT INTO work_discovery_runs (
+        id, idempotency_key, source, status, root_path, project_id, session_key,
+        agent_id, model_ref, scan_policy_version, created_at
+      ) VALUES (
+        'run-1', 'discovery-1', 'manual_selected_directory', 'queued', '/workspace',
+        'project-1', 'session-1', 'main', 'provider/model', 1, 1
+      );
+    `);
+    setSchemaVersion(db, 43);
+    db.exec('PRAGMA foreign_keys = ON');
+
+    expect(applyPendingMigrations(db, { targetVersion: 44 })).toBe(44);
+    expect(db.prepare(`SELECT id FROM work_discovery_runs`).all()).toEqual([{ id: 'run-1' }]);
+    expect(db.prepare(`PRAGMA foreign_key_list('work_discovery_runs')`).all()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ table: 'projects', from: 'project_id', to: 'project_id' }),
+        expect.objectContaining({ table: 'sessions', from: 'session_key', to: 'session_key' }),
+      ]),
+    );
+
+    db.prepare(`DELETE FROM projects WHERE project_id = ?`).run('project-1');
+    expect(db.prepare(`SELECT id FROM work_discovery_runs`).get()).toBeUndefined();
+  });
+
   it('upgrades v21 databases with first-class work item tables', () => {
     const db = openEmptyDb();
     ensureSchemaMetaTable(db);
@@ -213,6 +269,56 @@ describe('SQLite migrations', () => {
         updated_at INTEGER NOT NULL,
         last_active_at INTEGER
       );
+      CREATE TABLE sessions (
+        session_key TEXT PRIMARY KEY
+      );
+      CREATE TABLE automations (
+        automation_id TEXT PRIMARY KEY, name TEXT NOT NULL, enabled INTEGER NOT NULL,
+        trigger_json TEXT NOT NULL, action_json TEXT NOT NULL, state_json TEXT NOT NULL DEFAULT '{}',
+        created_at_ms INTEGER NOT NULL, updated_at_ms INTEGER NOT NULL
+      );
+      INSERT INTO automations (
+        automation_id, name, enabled, trigger_json, action_json, created_at_ms, updated_at_ms
+      ) VALUES (
+        'system-dreaming:research:deep', 'Legacy dreaming', 1, '{}', '{}', 1, 1
+      );
+      CREATE TABLE memory_records (
+        record_id TEXT PRIMARY KEY, provider_id TEXT NOT NULL, kind TEXT NOT NULL,
+        agent_id TEXT NOT NULL, workspace_id TEXT, session_key TEXT, project_id TEXT, content TEXT NOT NULL,
+        source_json TEXT NOT NULL, confidence REAL, tags_json TEXT NOT NULL DEFAULT '[]',
+        created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, last_recalled_at INTEGER,
+        recall_count INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'active',
+        sensitivity TEXT NOT NULL DEFAULT 'normal', evidence_json TEXT NOT NULL DEFAULT '[]',
+        review_after INTEGER, expires_at INTEGER
+      );
+      CREATE VIRTUAL TABLE memory_records_fts USING fts5(
+        content, record_id UNINDEXED, provider_id UNINDEXED, kind UNINDEXED,
+        agent_id UNINDEXED, workspace_id UNINDEXED
+      );
+      CREATE TABLE memory_signals (
+        signal_id TEXT PRIMARY KEY, source TEXT NOT NULL, record_id TEXT, provider_id TEXT,
+        agent_id TEXT, workspace_id TEXT, session_key TEXT, score REAL, content TEXT,
+        metadata_json TEXT NOT NULL DEFAULT '{}', created_at INTEGER NOT NULL
+      );
+      CREATE TABLE memory_trace_events (
+        trace_id TEXT PRIMARY KEY, session_key TEXT, turn_id TEXT, phase TEXT NOT NULL,
+        provider_id TEXT NOT NULL, request_json TEXT NOT NULL DEFAULT '{}', result_count INTEGER,
+        selected_record_ids_json TEXT NOT NULL DEFAULT '[]', skipped_reason TEXT, error TEXT,
+        duration_ms INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL,
+        feedback_json TEXT NOT NULL DEFAULT '{}'
+      );
+      CREATE TABLE memory_files (
+        file_id TEXT PRIMARY KEY, agent_id TEXT NOT NULL, path TEXT NOT NULL,
+        mtime_ms INTEGER NOT NULL, content_hash TEXT NOT NULL, UNIQUE(agent_id, path)
+      );
+      CREATE TABLE memory_chunks (
+        chunk_id TEXT PRIMARY KEY, file_id TEXT NOT NULL, start_line INTEGER NOT NULL,
+        end_line INTEGER NOT NULL, content TEXT NOT NULL
+      );
+      CREATE VIRTUAL TABLE memory_fts USING fts5(
+        content, chunk_id UNINDEXED, agent_id UNINDEXED, path UNINDEXED,
+        start_line UNINDEXED, end_line UNINDEXED
+      );
     `);
     setSchemaVersion(db, 21);
 
@@ -220,6 +326,7 @@ describe('SQLite migrations', () => {
 
     expect(finalVersion).toBe(XOPC_DB_SCHEMA_VERSION);
     expect(readSchemaVersion(db)).toBe(XOPC_DB_SCHEMA_VERSION);
+    expect(db.prepare(`SELECT automation_id FROM automations WHERE automation_id LIKE 'system-dreaming%'`).get()).toBeUndefined();
     for (const table of [
       'work_items',
       'work_item_links',

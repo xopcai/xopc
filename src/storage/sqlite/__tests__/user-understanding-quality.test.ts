@@ -33,12 +33,12 @@ describe('summarizeUserUnderstandingQuality', () => {
     rmSync(stateDir, { recursive: true, force: true });
   });
 
-  it('aggregates the candidate funnel and recall feedback by agent', () => {
+  it('aggregates the global candidate funnel and recall feedback', () => {
     const nowMs = Date.UTC(2026, 6, 16);
     const active = upsertMemoryRecord({
       providerId: 'local',
       kind: 'preference',
-      agentId: 'main',
+      sourceAgentId: 'main',
       workspaceId: '/tmp/main',
       content: 'Prefer concise answers.',
       tags: ['user-understanding'],
@@ -50,7 +50,7 @@ describe('summarizeUserUnderstandingQuality', () => {
     upsertMemoryRecord({
       providerId: 'local',
       kind: 'routine',
-      agentId: 'main',
+      sourceAgentId: 'main',
       workspaceId: '/tmp/main',
       content: 'Reviews plans on Fridays.',
       tags: ['user-understanding'],
@@ -62,7 +62,7 @@ describe('summarizeUserUnderstandingQuality', () => {
     upsertMemoryRecord({
       providerId: 'local',
       kind: 'project_context',
-      agentId: 'main',
+      sourceAgentId: 'main',
       workspaceId: '/tmp/main',
       content: 'Works on xopc.',
       tags: ['user-understanding'],
@@ -74,7 +74,7 @@ describe('summarizeUserUnderstandingQuality', () => {
     upsertMemoryRecord({
       providerId: 'local',
       kind: 'workspace_fact',
-      agentId: 'main',
+      sourceAgentId: 'main',
       workspaceId: '/tmp/main',
       content: 'Not an understanding record.',
       tags: ['other'],
@@ -84,7 +84,7 @@ describe('summarizeUserUnderstandingQuality', () => {
     upsertMemoryRecord({
       providerId: 'local',
       kind: 'boundary',
-      agentId: 'main',
+      sourceAgentId: 'main',
       workspaceId: '/tmp/main',
       content: 'Do not send external messages.',
       tags: ['user-understanding'],
@@ -97,14 +97,9 @@ describe('summarizeUserUnderstandingQuality', () => {
       phase: 'understanding',
       providerId: 'user-understanding',
       sessionKey: 'agent:main:webchat:test',
-      request: { agentId: 'main', source: 'background', proposed: 4, created: 2, deduplicated: 1, rejected: 1 },
+      sourceAgentId: 'main',
+      request: { source: 'background', proposed: 4, created: 2, deduplicated: 1, rejected: 1 },
       resultCount: 2,
-      nowMs,
-    });
-    appendMemoryTraceEvent({
-      phase: 'understanding',
-      providerId: 'user-understanding',
-      request: { agentId: 'other', source: 'turn', proposed: 10, created: 10, deduplicated: 0, rejected: 0 },
       nowMs,
     });
     appendMemoryTraceEvent({
@@ -119,7 +114,7 @@ describe('summarizeUserUnderstandingQuality', () => {
       nowMs,
     });
 
-    const metrics = summarizeUserUnderstandingQuality({ agentId: 'main', nowMs, windowDays: 30 });
+    const metrics = summarizeUserUnderstandingQuality({ nowMs, windowDays: 30 });
 
     expect(metrics.attempts).toEqual({ total: 1, turn: 0, background: 1 });
     expect(metrics.candidates).toEqual({ proposed: 4, created: 2, deduplicated: 1, rejectedByPolicy: 1 });
@@ -189,7 +184,7 @@ describe('summarizeUserUnderstandingQuality', () => {
     const record = upsertMemoryRecord({
       providerId: 'local',
       kind: 'preference',
-      agentId: 'main',
+      sourceAgentId: 'main',
       content: 'Prefer concise answers.',
       tags: ['user-understanding'],
       status: 'active',
@@ -241,7 +236,7 @@ describe('summarizeUserUnderstandingQuality', () => {
     const previous = upsertMemoryRecord({
       providerId: 'local',
       kind: 'preference',
-      agentId: 'main',
+      sourceAgentId: 'main',
       content: 'Prefer concise answers.',
       tags: ['user-understanding'],
       status: 'needs_review',
@@ -251,7 +246,7 @@ describe('summarizeUserUnderstandingQuality', () => {
     const replacement = upsertMemoryRecord({
       providerId: 'local',
       kind: 'preference',
-      agentId: 'main',
+      sourceAgentId: 'main',
       content: 'Prefer detailed explanations.',
       tags: ['user-understanding', 'explicit-user-correction'],
       status: 'candidate',
@@ -265,7 +260,7 @@ describe('summarizeUserUnderstandingQuality', () => {
       id: replacement.id,
       providerId: 'local',
       kind: replacement.kind,
-      agentId: replacement.scope.agentId,
+      sourceAgentId: replacement.provenance.sourceAgentId,
       content: replacement.content,
       tags: replacement.tags,
       status: 'active',

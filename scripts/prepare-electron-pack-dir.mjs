@@ -143,6 +143,18 @@ function stageCodebaseMemoryBinary(repoRoot, packDirPath, target) {
   );
 }
 
+function stageVoiceHotkeyHelper(repoRoot, packDirPath, target) {
+  const destDir = join(packDirPath, '_pack-resources', 'voice-hotkey');
+  mkdirSync(destDir, { recursive: true });
+  if (target.platform !== 'darwin' && target.platform !== 'win32') return;
+  const name = target.platform === 'win32' ? 'voice-hotkey-helper.exe' : 'voice-hotkey-helper';
+  const source = join(repoRoot, 'dist', 'electron', 'native', name);
+  if (!existsSync(source)) {
+    throw new Error(`[prepare-electron-pack-dir] Missing native voice hotkey helper: ${source}`);
+  }
+  cpSync(source, join(destDir, name));
+}
+
 export function prepareElectronPackDir(
   repoRoot = root,
   target = { platform: process.platform, arch: process.arch },
@@ -167,6 +179,7 @@ export function prepareElectronPackDir(
   pruneElectronRuntimeDeps(packDir, target);
   stageRipgrepBinary(packDir, target);
   stageCodebaseMemoryBinary(repoRoot, packDir, target);
+  stageVoiceHotkeyHelper(repoRoot, packDir, target);
   rmSync(join(packDir, 'node_modules', '@vscode', `ripgrep-${target.platform}-${target.arch}`), {
     recursive: true,
     force: true,

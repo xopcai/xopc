@@ -1,4 +1,4 @@
-import type { Dispatch, FormEvent, MutableRefObject, SetStateAction } from 'react';
+import type { Dispatch, FormEvent, SetStateAction } from 'react';
 
 import type { ChannelStatus, SessionChatId } from '@/features/settings/channel-recipient-api';
 import type {
@@ -10,19 +10,14 @@ import type {
 } from '@/features/settings/agents-admin-api';
 import type { CapabilityPresetRow } from '@/features/settings/capability-presets/capability-presets-api';
 import type { AgentsSettingsMessages, ChatMessages, MessageBundle } from '@/i18n/messages';
-import { MemoryPage } from '@/pages/memory-page';
 
-import {
-  AgentConfigTab,
-  AgentDangerZoneTab,
-} from './tabs/agent-advanced-tab';
+import { AgentDangerZoneTab } from './tabs/agent-advanced-tab';
+import { AgentAdvancedPanel } from './tabs/agent-advanced-panel';
+import { AgentCapabilitiesTab } from './tabs/agent-capabilities-tab';
 import { AgentChannelsTab } from './tabs/agent-channels-tab';
-import { AgentFilesTab } from './tabs/agent-files-tab';
-import { AgentModelsTab } from './tabs/agent-models-tab';
 import { AgentOverviewTab } from './tabs/agent-overview-tab';
 import { AgentOverviewSummaryTab } from './tabs/agent-overview-summary-tab';
-import { AgentSkillsTab } from './tabs/agent-skills-tab';
-import { AgentToolsTab } from './tabs/agent-tools-tab';
+import { AgentRuntimeTab } from './tabs/agent-runtime-tab';
 import type { OverviewProfileDraft } from './hooks/use-agent-overview-profile-markdown';
 import type { SoulTemplateId } from './agent-profile-markdown';
 import type { AgentPanel } from './utils';
@@ -45,20 +40,17 @@ export type AgentsEditorPanelContentProps = {
   editWorkspace: string;
   setEditWorkspace: (v: string) => void;
   editModel: string;
-  setEditModel: (v: string) => void;
   defaultModel: string;
   defaultWorkspace: string;
   onSetDefault: () => void;
   onSetTuiDefault: () => void;
   isTuiDefault: boolean;
   isTuiDefaultInherited: boolean;
-  onSaveAgentEdits: () => void;
   onDelete: (purge: boolean) => void;
   capabilityPresets: CapabilityPresetRow[];
   defaultPresetId?: string;
   onUpdateAgentExtends: (nextExtends: string[]) => void;
   onOpenCapabilityPreset: (presetId: string) => void;
-  overviewSaveProfileMarkdownRef: MutableRefObject<(() => Promise<void>) | null>;
   overviewProfile: {
     profileMarkdownLoading: boolean;
     draft: OverviewProfileDraft | null;
@@ -128,20 +120,17 @@ export function AgentsEditorPanelContent({
   editWorkspace,
   setEditWorkspace,
   editModel,
-  setEditModel,
   defaultModel,
   defaultWorkspace,
   onSetDefault,
   onSetTuiDefault,
   isTuiDefault,
   isTuiDefaultInherited,
-  onSaveAgentEdits,
   onDelete,
   capabilityPresets,
   defaultPresetId,
   onUpdateAgentExtends,
   onOpenCapabilityPreset,
-  overviewSaveProfileMarkdownRef: _overviewSaveProfileMarkdownRef,
   overviewProfile,
   filesLoading,
   files,
@@ -208,28 +197,17 @@ export function AgentsEditorPanelContent({
     );
   }
 
-  if (panel === 'behavior') {
+  if (panel === 'profile') {
     return (
-      <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto">
         <AgentOverviewTab
           a={a}
-          chat={chat}
           selected={selected}
           busy={busy}
           editName={editName}
           setEditName={setEditName}
           editDescription={editDescription}
           setEditDescription={setEditDescription}
-          editWorkspace={editWorkspace}
-          setEditWorkspace={setEditWorkspace}
-          editModel={editModel}
-          setEditModel={setEditModel}
-          onSetDefault={onSetDefault}
-          onSetTuiDefault={onSetTuiDefault}
-          isTuiDefault={isTuiDefault}
-          isTuiDefaultInherited={isTuiDefaultInherited}
-          onSaveAgentEdits={onSaveAgentEdits}
-          hideInlineSave
           profileMarkdownLoading={overviewProfile.profileMarkdownLoading}
           profileDraft={overviewProfile.draft}
           updateIdentity={overviewProfile.updateIdentity}
@@ -237,44 +215,14 @@ export function AgentsEditorPanelContent({
           handleSoulContentChange={overviewProfile.handleSoulContentChange}
           setAvatarDialogOpen={overviewProfile.setAvatarDialogOpen}
           toggleSoulPreviewMode={overviewProfile.toggleSoulPreviewMode}
-          onTryInChat={onTryInChat}
         />
-        <section className="min-h-[34rem]">
-          <AgentModelsTab
-            a={a}
-            chat={chat}
-            selected={selected}
-            busy={busy}
-            modelRows={modelRows}
-            setModelRows={setModelRows}
-            onSaveModels={onSaveModels}
-            onClearModelsEntry={onClearModelsEntry}
-          />
-        </section>
-        <section className="min-h-[34rem]">
-          <AgentFilesTab
-            a={a}
-            filesLoading={filesLoading}
-            files={files}
-            activeFile={activeFile}
-            setActiveFile={setActiveFile}
-            filesViewMode={filesViewMode}
-            setFilesViewMode={setFilesViewMode}
-            fileDraft={fileDraft}
-            setFileDraft={setFileDraft}
-            fileSaving={fileSaving}
-            profileFileLoading={profileFileLoading}
-            profileEditorNonce={profileEditorNonce}
-            onTryInChat={onTryInChat}
-          />
-        </section>
       </div>
     );
   }
 
-  if (panel === 'tools') {
+  if (panel === 'capabilities') {
     return (
-      <AgentToolsTab
+      <AgentCapabilitiesTab
         a={a}
         data={data!}
         selected={selected}
@@ -283,16 +231,6 @@ export function AgentsEditorPanelContent({
         setToolEntryDisable={setToolEntryDisable}
         onSaveTools={onSaveTools}
         onClearToolsEntry={onClearToolsEntry}
-      />
-    );
-  }
-
-  if (panel === 'skills') {
-    return (
-      <AgentSkillsTab
-        a={a}
-        selected={selected}
-        busy={busy}
         skillsCatalogLoading={skillsCatalogLoading}
         catalogForPick={catalogForPick}
         skillsInherit={skillsInherit}
@@ -304,8 +242,21 @@ export function AgentsEditorPanelContent({
     );
   }
 
-  if (panel === 'memory') {
-    return <MemoryPage embedded agentId={selected.id} />;
+  if (panel === 'runtime') {
+    return (
+      <AgentRuntimeTab
+        a={a}
+        chat={chat}
+        selected={selected}
+        busy={busy}
+        editWorkspace={editWorkspace}
+        setEditWorkspace={setEditWorkspace}
+        modelRows={modelRows}
+        setModelRows={setModelRows}
+        onSaveModels={onSaveModels}
+        onClearModelsEntry={onClearModelsEntry}
+      />
+    );
   }
 
   if (panel === 'connections') {
@@ -335,9 +286,9 @@ export function AgentsEditorPanelContent({
     );
   }
 
-  if (panel === 'config') {
+  if (panel === 'advanced') {
     return (
-      <AgentConfigTab
+      <AgentAdvancedPanel
         a={a}
         selected={selected}
         busy={busy}
@@ -349,6 +300,18 @@ export function AgentsEditorPanelContent({
         defaultPresetId={defaultPresetId}
         onUpdateAgentExtends={onUpdateAgentExtends}
         onOpenCapabilityPreset={onOpenCapabilityPreset}
+        filesLoading={filesLoading}
+        files={files}
+        activeFile={activeFile}
+        setActiveFile={setActiveFile}
+        filesViewMode={filesViewMode}
+        setFilesViewMode={setFilesViewMode}
+        fileDraft={fileDraft}
+        setFileDraft={setFileDraft}
+        fileSaving={fileSaving}
+        profileFileLoading={profileFileLoading}
+        profileEditorNonce={profileEditorNonce}
+        onTryInChat={onTryInChat}
       />
     );
   }
