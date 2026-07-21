@@ -66,8 +66,41 @@ function appIconSvg(appearance, options = {}) {
     markScale = 0.77,
     markOffsetX = 0,
     markOffsetY = 0,
+    palette = 'default',
   } = options;
-  const definitions = isDark
+  const isMobile = palette === 'mobile';
+  const definitions = isMobile && isDark
+    ? `
+    <linearGradient id="surface" x1="90" y1="74" x2="910" y2="950" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3A425F" />
+      <stop offset="0.52" stop-color="#252B40" />
+      <stop offset="1" stop-color="#302B48" />
+    </linearGradient>
+    <radialGradient id="bloom" cx="0" cy="0" r="1" gradientTransform="translate(744 264) rotate(133) scale(640)">
+      <stop stop-color="#A8B3FF" stop-opacity="0.28" />
+      <stop offset="1" stop-color="#A8B3FF" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="mark" x1="344" y1="244" x2="690" y2="780" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" />
+      <stop offset="1" stop-color="#D9E0FF" />
+    </linearGradient>`
+    : isMobile
+      ? `
+    <linearGradient id="surface" x1="68" y1="74" x2="936" y2="940" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FBFCFF" />
+      <stop offset="0.53" stop-color="#F0F2F8" />
+      <stop offset="1" stop-color="#E8EAF3" />
+    </linearGradient>
+    <radialGradient id="bloom" cx="0" cy="0" r="1" gradientTransform="translate(770 248) rotate(133) scale(620)">
+      <stop stop-color="#FFFFFF" stop-opacity="0.75" />
+      <stop offset="0.5" stop-color="#AEB9EF" stop-opacity="0.2" />
+      <stop offset="1" stop-color="#AEB9EF" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="mark" x1="346" y1="244" x2="686" y2="780" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#151A2C" />
+      <stop offset="1" stop-color="#46547E" />
+    </linearGradient>`
+      : isDark
     ? `
     <linearGradient id="surface" x1="90" y1="74" x2="910" y2="950" gradientUnits="userSpaceOnUse">
       <stop stop-color="#181D31" />
@@ -96,7 +129,13 @@ function appIconSvg(appearance, options = {}) {
       <stop stop-color="#0B1020" />
       <stop offset="1" stop-color="#35436E" />
     </linearGradient>`;
-  const orbit = isDark ? '#AEBBFF' : '#6473AD';
+  const orbit = isMobile
+    ? isDark
+      ? '#C5CEFA'
+      : '#53618A'
+    : isDark
+      ? '#AEBBFF'
+      : '#6473AD';
   const body = `  <rect width="1024" height="1024" fill="url(#surface)" />
   <rect width="1024" height="1024" fill="url(#bloom)" />
   <circle cx="512" cy="512" r="402" fill="none" stroke="${orbit}" stroke-opacity="0.14" stroke-width="2" />
@@ -107,6 +146,7 @@ ${markLayer('url(#mark)', markScale, markOffsetX, markOffsetY)}`;
 function mobileAppIconSvg(appearance) {
   return appIconSvg(appearance, {
     markScale: MOBILE_MARK_SCALE,
+    palette: 'mobile',
   });
 }
 
@@ -117,22 +157,23 @@ function mobileAdaptiveIconSvg(foreground) {
 function desktopIconSvg() {
   const definitions = `
     <linearGradient id="desktop-surface" x1="118" y1="98" x2="900" y2="930" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#222A47" />
-      <stop offset="0.5" stop-color="#0D111D" />
-      <stop offset="1" stop-color="#1D1737" />
+      <stop stop-color="#FBFCFF" />
+      <stop offset="0.52" stop-color="#EEF1F8" />
+      <stop offset="1" stop-color="#E6E8F3" />
     </linearGradient>
     <radialGradient id="desktop-bloom" cx="0" cy="0" r="1" gradientTransform="translate(760 250) rotate(130) scale(590)">
-      <stop stop-color="#7384FF" stop-opacity="0.42" />
-      <stop offset="1" stop-color="#7384FF" stop-opacity="0" />
+      <stop stop-color="#FFFFFF" stop-opacity="0.78" />
+      <stop offset="0.48" stop-color="#AEB9EF" stop-opacity="0.22" />
+      <stop offset="1" stop-color="#AEB9EF" stop-opacity="0" />
     </radialGradient>
     <linearGradient id="desktop-mark" x1="362" y1="280" x2="690" y2="740" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#FFFFFF" />
-      <stop offset="1" stop-color="#BCCBFF" />
+      <stop stop-color="#151A2C" />
+      <stop offset="1" stop-color="#46547E" />
     </linearGradient>`;
   const body = `  <rect x="64" y="64" width="896" height="896" rx="264" fill="url(#desktop-surface)" />
   <rect x="64" y="64" width="896" height="896" rx="264" fill="url(#desktop-bloom)" />
-  <rect x="65" y="65" width="894" height="894" rx="263" fill="none" stroke="#D8E1FF" stroke-opacity="0.15" stroke-width="2" />
-  <circle cx="512" cy="512" r="338" fill="none" stroke="#D6DEFF" stroke-opacity="0.12" stroke-width="2" />
+  <rect x="65" y="65" width="894" height="894" rx="263" fill="none" stroke="#FFFFFF" stroke-opacity="0.9" stroke-width="2" />
+  <circle cx="512" cy="512" r="338" fill="none" stroke="#53618A" stroke-opacity="0.12" stroke-width="2" />
 ${markLayer('url(#desktop-mark)', 0.68)}`;
   return document(definitions, body);
 }
@@ -169,7 +210,8 @@ function renderSvg(scene) {
   if (scene === 'app-light') return appIconSvg('light');
   if (scene === 'mobile-app-dark') return mobileAppIconSvg('dark');
   if (scene === 'mobile-app-light') return mobileAppIconSvg('light');
-  if (scene === 'mobile-adaptive-light') return mobileAdaptiveIconSvg(LIGHT);
+  if (scene === 'mobile-adaptive-light') return mobileAdaptiveIconSvg(LIGHT_MARK);
+  if (scene === 'mobile-adaptive-monochrome') return mobileAdaptiveIconSvg(LIGHT);
   if (scene === 'desktop') return desktopIconSvg();
   if (scene === 'badge') return badgeSvg();
   if (scene === 'favicon') return faviconSvg();
@@ -300,12 +342,12 @@ queue(
 
 // Native mobile icons. iOS receives appearance-specific full-bleed PNGs; Android gets
 // a transparent foreground plus the same silhouette for Android 13+ themed icons.
-queue('mobile', 'apps/mobile-expo/assets/icon.png', mobileAppDarkPngs.get(1024));
+queue('mobile', 'apps/mobile-expo/assets/icon.png', mobileAppLightPngs.get(1024));
 queue('mobile', 'apps/mobile-expo/assets/icon-light.png', mobileAppLightPngs.get(1024));
 queue('mobile', 'apps/mobile-expo/assets/icon-dark.png', mobileAppDarkPngs.get(1024));
 queue('mobile', 'apps/mobile-expo/assets/icon-tinted.png', mobileAppLightPngs.get(1024));
 queue('mobile', 'apps/mobile-expo/assets/adaptive-icon.png', renderPng('mobile-adaptive-light', 1024));
-queue('mobile', 'apps/mobile-expo/assets/adaptive-icon-monochrome.png', renderPng('mobile-adaptive-light', 1024));
+queue('mobile', 'apps/mobile-expo/assets/adaptive-icon-monochrome.png', renderPng('mobile-adaptive-monochrome', 1024));
 queue('mobile', 'apps/mobile-expo/assets/favicon.png', badgePngs.get(48));
 queue('mobile', 'apps/mobile-expo/assets/splash-icon.png', renderPng('mark-dark-plain', 1024));
 queue('mobile', 'apps/mobile-expo/assets/splash-icon-dark.png', renderPng('mark-light-plain', 1024));

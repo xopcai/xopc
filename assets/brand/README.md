@@ -22,11 +22,15 @@ PNG everywhere:
 
 The palette is deliberately compact:
 
-- `#0B0D10` / `#F8FAFC`: app-icon surfaces and high-contrast mark.
+- `#0B0D10` / `#F8FAFC`: splash surfaces and high-contrast marks.
+- `#FBFCFF` / `#E8EAF3`: pale mobile and desktop icon surfaces; the mobile dark
+  appearance uses a softer blue-slate range instead of near-black.
 - `#111827` / `#F8FAFC`: transparent UI mark on light and dark themes.
-- Android uses the white foreground over `#0B0D10`; its monochrome image exposes the
-  same alpha silhouette for Android themed icons.
+- Android uses a slate foreground over `#EEF1F8`; its monochrome image exposes the same
+  alpha silhouette for Android themed icons.
 
 The macOS menu-bar asset remains a transparent template image and is recoloured by the
 system. Browser and Windows/Linux tray assets use a white rounded-square badge with an
-ink mark, while the mobile and desktop application icons use their own richer composition.
+ink mark. Mobile application icons use their own richer composition, while the desktop
+application icon uses a pale porcelain surface with a slate ink mark for a lighter native
+appearance.
