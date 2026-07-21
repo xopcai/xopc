@@ -15,6 +15,7 @@ import {
   loadAgentBrowserSettingsPage,
   loadExtensionsPage,
   loadAutomationsPage,
+  loadWorkPage,
   loadChannelsPage,
   loadConnectorsPage,
   loadGoalDetailPage,
@@ -43,6 +44,7 @@ import { subscribeSystemTheme, syncThemeAfterHydration, useThemeStore } from '@/
 
 const SessionsPage = lazy(() => loadSessionsPage().then((m) => ({ default: m.SessionsPage })));
 const AutomationsPage = lazy(() => loadAutomationsPage().then((m) => ({ default: m.AutomationsPage })));
+const WorkPage = lazy(() => loadWorkPage().then((m) => ({ default: m.WorkPage })));
 const ProjectsPage = lazy(() => loadProjectsPage().then((m) => ({ default: m.ProjectsPage })));
 const ProjectDetailPage = lazy(() => loadProjectDetailPage().then((m) => ({ default: m.ProjectDetailPage })));
 const WorkItemDetailPage = lazy(() => loadWorkItemDetailPage().then((m) => ({ default: m.WorkItemDetailPage })));
@@ -176,6 +178,14 @@ const router = createHashRouter([
         element: (
           <Suspense fallback={<SecondaryRouteFallback />}>
             <UserContextPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'work',
+        element: (
+          <Suspense fallback={<SecondaryRouteFallback />}>
+            <WorkPage />
           </Suspense>
         ),
       },
