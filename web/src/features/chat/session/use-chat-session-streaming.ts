@@ -59,7 +59,7 @@ export function useChatSessionStreaming(deps: {
     data: { messages: Message[]; hasMore: boolean; name?: string },
   ) => void;
   loadSessionById: (key: string, offset?: number) => Promise<Message[] | undefined>;
-  createNewSession: (opts?: { forceNew?: boolean }) => Promise<void>;
+  createNewSession: (opts?: { forceNew?: boolean; projectId?: string | null }) => Promise<void>;
   pollSessionNameAfterTurn: () => void;
 }) {
   const {

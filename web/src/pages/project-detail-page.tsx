@@ -461,7 +461,7 @@ function ProjectSwitcher({
         <Popover.Trigger asChild>
           <button
             type="button"
-            className="group -ml-2 flex max-w-full min-w-0 items-center gap-2 rounded-lg px-2 py-1 text-left hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+            className="group flex max-w-full min-w-0 items-center gap-2 rounded-lg px-2 py-1 text-left hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
             aria-label={pm.projectSwitcher.switchProject}
             title={pm.projectSwitcher.switchProject}
           >

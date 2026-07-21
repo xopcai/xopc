@@ -2,6 +2,8 @@
   "extensionsPage": {
     "title": "扩展",
     "subtitle": "浏览扩展市场，管理内置扩展和已安装扩展。",
+    "openLocalApps": "应用工坊",
+    "createLocalApp": "创建应用",
     "tabMarketplace": "扩展市场",
     "tabBuiltin": "内置",
     "tabUser": "已安装",
