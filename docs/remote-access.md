@@ -208,7 +208,7 @@ The mobile app stores the URL as the primary `baseUrl` and falls back to LAN / F
 
 **Caddy** (auto Let's Encrypt):
 
-```caddy
+```txt
 gateway.example.com {
   reverse_proxy 127.0.0.1:18790 {
     flush_interval -1                     # SSE: disable response buffering

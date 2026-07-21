@@ -22,7 +22,7 @@ Use when an OAuth-aware reverse proxy (Caddy, nginx, Pomerium) terminates TLS an
 
 ## Caddy (sketch)
 
-```caddyfile
+```txt
 gateway.example.com {
   reverse_proxy 127.0.0.1:18790 {
     header_up X-Forwarded-User {http.auth.user.id}

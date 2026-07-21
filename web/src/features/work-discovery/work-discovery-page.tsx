@@ -155,7 +155,7 @@ export function WorkDiscoveryPage() {
     navigate(`/chat/${encodeURIComponent(sessionKey)}${query}`);
   };
 
-  const useSuggestion = async (suggestion: WorkDiscoverySuggestion, discussOnly: boolean) => {
+  const handleSuggestion = async (suggestion: WorkDiscoverySuggestion, discussOnly: boolean) => {
     if (!run) return;
     await selectWorkDiscoverySuggestion(run.id, suggestion.id).catch(() => {});
     const draft = discussOnly
@@ -317,8 +317,8 @@ export function WorkDiscoveryPage() {
                             ))}
                           </ul>
                           <div className="mt-4 flex flex-wrap gap-2">
-                            <Button className="h-9 bg-accent px-3 py-1.5 text-white hover:bg-accent-hover" onClick={() => void useSuggestion(suggestion, false)}>{copy.continue}</Button>
-                            <Button className="h-9 px-3 py-1.5" variant="secondary" onClick={() => void useSuggestion(suggestion, true)}>{copy.discussFirst}</Button>
+                            <Button className="h-9 bg-accent px-3 py-1.5 text-white hover:bg-accent-hover" onClick={() => void handleSuggestion(suggestion, false)}>{copy.continue}</Button>
+                            <Button className="h-9 px-3 py-1.5" variant="secondary" onClick={() => void handleSuggestion(suggestion, true)}>{copy.discussFirst}</Button>
                           </div>
                         </div>
                       </div>

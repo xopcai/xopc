@@ -208,7 +208,7 @@ ssh -N -L 18790:127.0.0.1:18790 user@your-host
 
 **Caddy**（自动 Let's Encrypt）：
 
-```caddy
+```txt
 gateway.example.com {
   reverse_proxy 127.0.0.1:18790 {
     flush_interval -1                     # SSE：禁用响应缓冲
