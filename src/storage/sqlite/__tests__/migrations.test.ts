@@ -248,6 +248,28 @@ describe('SQLite migrations', () => {
     expect(db.prepare(`SELECT id FROM work_discovery_runs`).get()).toBeUndefined();
   });
 
+  it('adds persistent work discovery recognition feedback', () => {
+    const db = openEmptyDb();
+    ensureSchemaMetaTable(db);
+    db.exec('PRAGMA foreign_keys = OFF');
+    db.exec(`
+      CREATE TABLE projects (project_id TEXT PRIMARY KEY);
+      CREATE TABLE sessions (session_key TEXT PRIMARY KEY);
+      CREATE TABLE work_discovery_runs (id TEXT PRIMARY KEY);
+    `);
+    setSchemaVersion(db, 45);
+    db.exec('PRAGMA foreign_keys = ON');
+
+    expect(applyPendingMigrations(db, { targetVersion: 46 })).toBe(46);
+    expect(db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'work_discovery_feedback'`).get())
+      .toEqual({ name: 'work_discovery_feedback' });
+    expect(db.prepare(`PRAGMA foreign_key_list('work_discovery_feedback')`).all()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ table: 'work_discovery_runs', from: 'run_id', to: 'id' }),
+      ]),
+    );
+  });
+
   it('upgrades v21 databases with first-class work item tables', () => {
     const db = openEmptyDb();
     ensureSchemaMetaTable(db);
