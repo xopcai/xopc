@@ -12,7 +12,10 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const requireRoot = createRequire(join(root, 'package.json'));
 const requireFromBuilder = createRequire(requireRoot.resolve('electron-builder/package.json'));
 const asar = requireFromBuilder('@electron/asar');
-const maxNodeModulesBytes = Number(process.env['XOPC_ELECTRON_ASAR_NODE_MODULES_MAX_BYTES'] ?? 10 * 1024 * 1024);
+export const DEFAULT_MAX_NODE_MODULES_BYTES = 192 * 1024 * 1024;
+const maxNodeModulesBytes = Number(
+  process.env['XOPC_ELECTRON_ASAR_NODE_MODULES_MAX_BYTES'] ?? DEFAULT_MAX_NODE_MODULES_BYTES,
+);
 
 function findAppAsarFiles(dir, acc = []) {
   if (!existsSync(dir)) return acc;

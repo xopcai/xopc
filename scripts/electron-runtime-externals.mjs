@@ -17,6 +17,7 @@ export const ELECTRON_GATEWAY_EXTERNALS = [
 export const ELECTRON_PACKAGED_DEPENDENCIES = [
   'silk-wasm',
   '@huggingface/transformers',
+  'onnxruntime-common',
   'sherpa-onnx-node',
 ];
 

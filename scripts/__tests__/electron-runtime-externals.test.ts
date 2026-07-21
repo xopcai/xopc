@@ -15,6 +15,7 @@ describe('electron-runtime-externals', () => {
     expect(ELECTRON_PACKAGED_DEPENDENCIES).toEqual([
       'silk-wasm',
       '@huggingface/transformers',
+      'onnxruntime-common',
       'sherpa-onnx-node',
     ]);
     expect(ELECTRON_GATEWAY_EXTERNALS).toContain('playwright-core');
@@ -32,6 +33,7 @@ describe('electron-runtime-externals', () => {
         hono: '^4.0.0',
         'silk-wasm': '^3.7.1',
         '@huggingface/transformers': '3.8.1',
+        'onnxruntime-common': '1.21.0',
         'sherpa-onnx-node': '1.13.4',
       },
       devDependencies: {
@@ -41,6 +43,7 @@ describe('electron-runtime-externals', () => {
     expect(Object.keys(minimal.dependencies)).toEqual([
       'silk-wasm',
       '@huggingface/transformers',
+      'onnxruntime-common',
       'sherpa-onnx-node',
     ]);
     expect(minimal).not.toHaveProperty('devDependencies');
@@ -56,6 +59,7 @@ describe('electron-runtime-externals', () => {
         dependencies: {
           'silk-wasm': '^3.7.1',
           '@huggingface/transformers': '3.8.1',
+          'onnxruntime-common': '1.21.0',
           'sherpa-onnx-node': '1.13.4',
         },
       },
@@ -64,6 +68,7 @@ describe('electron-runtime-externals', () => {
     expect(minimal.dependencies).toEqual({
       'silk-wasm': resolveInstalledPackageVersion(repoRoot, 'silk-wasm'),
       '@huggingface/transformers': resolveInstalledPackageVersion(repoRoot, '@huggingface/transformers'),
+      'onnxruntime-common': resolveInstalledPackageVersion(repoRoot, 'onnxruntime-common'),
       'sherpa-onnx-node': resolveInstalledPackageVersion(repoRoot, 'sherpa-onnx-node'),
     });
     expect(Object.values(minimal.dependencies as Record<string, string>).every((v) => !v.startsWith('^'))).toBe(true);
@@ -97,6 +102,7 @@ describe('electron-runtime-externals', () => {
       dependencies: {
         'silk-wasm': '^3.7.1',
         '@huggingface/transformers': '3.8.1',
+        'onnxruntime-common': '1.21.0',
         'sherpa-onnx-node': '1.13.4',
       },
       devDependencies: {

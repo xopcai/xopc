@@ -114,7 +114,7 @@ function ShortcutEditor({
         <button
           type="button"
           className={cn(
-            'rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-accent-contrast transition-colors hover:bg-accent/90',
+            'rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-accent-hover',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
           )}
           onClick={() => {

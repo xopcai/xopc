@@ -119,6 +119,9 @@ importers:
       node-edge-tts:
         specifier: ^1.2.10
         version: 1.2.10
+      onnxruntime-common:
+        specifier: 1.21.0
+        version: 1.21.0
       openai:
         specifier: ^6.39.1
         version: 6.39.1(ws@8.21.0)(zod@4.4.3)
