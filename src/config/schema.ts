@@ -1192,11 +1192,11 @@ export type ConnectorsConfig = z.infer<typeof ConnectorsConfigSchema>;
 
 export const ExperimentalConfigSchema = z
   .object({
-    /** Optional first-run activation that analyzes one explicitly selected local folder. */
-    workDiscoveryOnboarding: z.boolean().default(false),
+    /** First-run activation that analyzes one explicitly selected local folder. */
+    workDiscoveryOnboarding: z.boolean().default(true),
   })
   .strict()
-  .default({ workDiscoveryOnboarding: false });
+  .default({ workDiscoveryOnboarding: true });
 
 export type ExperimentalConfig = z.infer<typeof ExperimentalConfigSchema>;
 
@@ -1356,7 +1356,7 @@ export const ConfigSchema = z.object({
     indexTimeoutMs: 5 * 60_000,
   },
   experimental: {
-    workDiscoveryOnboarding: false,
+    workDiscoveryOnboarding: true,
   },
   goals: {
     maxTurns: 20,
