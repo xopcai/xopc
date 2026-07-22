@@ -15,6 +15,20 @@ export type CreateDesktopPetPackageInput = {
   description?: string;
   targetDir?: string;
   overwrite?: boolean;
+  persona?: DesktopPetPackagePersona;
+};
+
+export type DesktopPetPackagePersona = {
+  tone: 'calm' | 'warm' | 'playful' | 'focused';
+  warmth: number;
+  energy: number;
+  humor: number;
+  phrases?: {
+    greeting?: string[];
+    success?: string[];
+    waiting?: string[];
+    error?: string[];
+  };
 };
 
 export type CreateDesktopPetPackageResult = {
@@ -85,6 +99,36 @@ function titleFromPrompt(prompt: string): string {
 function clampText(value: string, max: number): string {
   const trimmed = value.trim().replace(/\s+/g, ' ');
   return trimmed.length > max ? `${trimmed.slice(0, max - 1)}...` : trimmed;
+}
+
+function normalizePersona(value: unknown): DesktopPetPackagePersona | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const raw = value as Partial<DesktopPetPackagePersona>;
+  const tone = raw.tone === 'warm' || raw.tone === 'playful' || raw.tone === 'focused'
+    ? raw.tone
+    : 'calm';
+  const unit = (item: unknown, fallback: number) =>
+    typeof item === 'number' && Number.isFinite(item) ? Math.min(1, Math.max(0, item)) : fallback;
+  const phraseList = (item: unknown) => Array.isArray(item)
+    ? item.filter((phrase): phrase is string => typeof phrase === 'string')
+      .map((phrase) => clampText(phrase, 80))
+      .filter(Boolean)
+      .slice(0, 8)
+    : undefined;
+  const phraseSource = raw.phrases && typeof raw.phrases === 'object' ? raw.phrases : {};
+  const phrases = {
+    greeting: phraseList(phraseSource.greeting),
+    success: phraseList(phraseSource.success),
+    waiting: phraseList(phraseSource.waiting),
+    error: phraseList(phraseSource.error),
+  };
+  return {
+    tone,
+    warmth: unit(raw.warmth, 0.6),
+    energy: unit(raw.energy, 0.4),
+    humor: unit(raw.humor, 0.1),
+    ...(Object.values(phrases).some((items) => items?.length) ? { phrases } : {}),
+  };
 }
 
 function hsl(seed: number, offset: number, saturation = 74, lightness = 56): string {
@@ -382,6 +426,7 @@ export async function createDesktopPetPackage(
   );
   const existingManifest = input.overwrite === true ? await readExistingManifest(dir) : null;
   const existingName = typeof existingManifest?.name === 'string' ? existingManifest.name.trim() : '';
+  const persona = normalizePersona(input.persona ?? existingManifest?.persona);
   const baseName = clampText(input.name?.trim() || existingName || titleFromPrompt(prompt), 36);
   const description = clampText(
     input.description?.trim() || `Custom pet generated from: ${prompt}`,
@@ -398,6 +443,7 @@ export async function createDesktopPetPackage(
     description,
     sourcePrompt: prompt,
     generatedAt: new Date().toISOString(),
+    ...(persona ? { persona } : {}),
     thumbnail: 'thumbnail.svg',
     canvasWidth: FRAME_SIZE,
     canvasHeight: FRAME_SIZE,

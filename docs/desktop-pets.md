@@ -23,6 +23,18 @@ Custom pets live under `~/.xopc/pets` by default. The exact path is shown in Set
   "id": "my-pet",
   "name": "My Pet",
   "description": "A helpful animated companion.",
+  "persona": {
+    "tone": "warm",
+    "warmth": 0.8,
+    "energy": 0.35,
+    "humor": 0.1,
+    "phrases": {
+      "greeting": ["我在。"],
+      "success": ["处理好了。"],
+      "waiting": ["到你决定了，我先停在这里。"],
+      "error": ["这一步没走通，前面的内容还在。"]
+    }
+  },
   "thumbnail": "thumbnail.png",
   "canvasWidth": 96,
   "canvasHeight": 96,
@@ -41,6 +53,10 @@ Custom pets live under `~/.xopc/pets` by default. The exact path is shown in Set
 ```
 
 All fields shown above are required except `canvasWidth`, `canvasHeight`, `fps`, `loop`, `offsetX`, and `offsetY`.
+
+`persona` is optional and backward compatible. Numeric traits are clamped to `0..1`. Phrase lists are intended for short, truthful ambient reactions; they must not demand attention, guilt the user, or claim biological needs. Runtime task facts remain system-owned so personality never obscures status accuracy.
+
+Desktop bubbles only display an agent event summary when the event explicitly provides `publicSummary`. Raw assistant text, command output, tool arguments, and error payloads are not treated as safe ambient content.
 
 ## Creating Pets
 

@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Threading;
 
 internal static class VoiceHotkeyHelper
 {
@@ -10,14 +11,20 @@ internal static class VoiceHotkeyHelper
     private const int WmSysKeyDown = 0x0104;
     private const int WmSysKeyUp = 0x0105;
     private const int VkControl = 0x11;
+    private const int VkShift = 0x10;
     private const int VkMenu = 0x12;
     private const int VkLMenu = 0xA4;
     private const int VkRMenu = 0xA5;
+    private const int VkLWin = 0x5B;
+    private const int VkRWin = 0x5C;
+    private const int HoldDelayMs = 300;
 
     private static readonly LowLevelKeyboardProc HookProc = OnKeyboardEvent;
     private static IntPtr hook = IntPtr.Zero;
     private static bool altIsDown;
     private static bool chorded;
+    private static bool holdTriggered;
+    private static Timer holdTimer;
 
     public static void Main()
     {
@@ -55,30 +62,53 @@ internal static class VoiceHotkeyHelper
                 if (!altIsDown)
                 {
                     altIsDown = true;
-                    chorded = (GetAsyncKeyState(VkControl) & 0x8000) != 0;
-                }
-                else
-                {
-                    chorded = true;
+                    chorded = IsModifierDown(VkControl) || IsModifierDown(VkShift) ||
+                        IsModifierDown(VkLWin) || IsModifierDown(VkRWin);
+                    holdTriggered = false;
+                    holdTimer = new Timer(OnHoldElapsed, null, HoldDelayMs, Timeout.Infinite);
                 }
             }
             else if (isDown && altIsDown)
             {
                 chorded = true;
+                DisposeHoldTimer();
             }
             else if (isUp && isAlt && altIsDown)
             {
-                if (!chorded)
-                {
-                    Console.WriteLine("{\"type\":\"modifier-tap\",\"key\":\"alt\"}");
-                    Console.Out.Flush();
-                }
+                DisposeHoldTimer();
+                if (holdTriggered) Emit("release");
                 altIsDown = false;
                 chorded = false;
+                holdTriggered = false;
             }
         }
 
         return CallNextHookEx(hook, code, message, data);
+    }
+
+    private static void OnHoldElapsed(object _)
+    {
+        if (!altIsDown || chorded) return;
+        holdTriggered = true;
+        Emit("press");
+    }
+
+    private static bool IsModifierDown(int key)
+    {
+        return (GetAsyncKeyState(key) & 0x8000) != 0;
+    }
+
+    private static void DisposeHoldTimer()
+    {
+        Timer timer = holdTimer;
+        holdTimer = null;
+        if (timer != null) timer.Dispose();
+    }
+
+    private static void Emit(string action)
+    {
+        Console.WriteLine("{\"type\":\"modifier-hold\",\"action\":\"" + action + "\",\"key\":\"alt\"}");
+        Console.Out.Flush();
     }
 
     private delegate IntPtr LowLevelKeyboardProc(int code, IntPtr message, IntPtr data);

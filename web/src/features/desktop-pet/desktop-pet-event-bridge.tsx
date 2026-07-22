@@ -11,7 +11,7 @@ import { isElectron } from "@/lib/electron-env";
 import { apiFetch } from "@/lib/fetch";
 import { apiUrl } from "@/lib/url";
 import { useLocaleStore } from "@/stores/locale-store";
-import type { PetSessionUpdate } from "@/types/electron";
+import type { PetFeedback, PetSessionUpdate } from "@/types/electron";
 
 type AgentStreamDetail = { sessionKey?: string; event?: unknown };
 
@@ -23,15 +23,50 @@ function text(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-function safeTail(value: unknown): string | undefined {
-  const tail = text(value)?.split(/\r?\n/).at(-1)?.replace(/(?:token|authorization|api[_-]?key)\s*[:=].*/i, "[redacted]").trim();
-  return tail ? tail.slice(0, 96) : undefined;
+function safePublicSummary(value: unknown): string | undefined {
+  const summary = text(value)
+    ?.replace(/```[\s\S]*?```/g, "")
+    .replace(/[`*_#>\[\]]/g, "")
+    .replace(/https?:\/\/\S+/g, "")
+    .replace(/(?:token|authorization|api[_-]?key|password|secret)\s*[:=].*/gi, "[redacted]")
+    .replace(/\s+/g, " ")
+    .trim();
+  return summary ? summary.slice(0, 96) : undefined;
 }
 
-function safeLines(value: unknown): string[] | undefined {
-  if (typeof value !== "string") return undefined;
-  const lines = value.split(/\r?\n/).map((line) => safeTail(line)).filter((line): line is string => Boolean(line));
-  return lines.length ? lines.slice(0, 12) : undefined;
+const feedbackStates = new Set(["working", "waiting", "success", "error"]);
+const feedbackReassurances = new Set(["making_progress", "waiting_safely", "completed", "work_preserved", "details_available"]);
+const feedbackActions = new Set(["open_session", "confirm", "review_error"]);
+
+function parsePetFeedback(value: unknown): PetFeedback | undefined {
+  const input = record(value);
+  if (input.version !== 2 || !feedbackStates.has(String(input.taskState))) return undefined;
+  if (input.sensitivity !== "public" && input.sensitivity !== "private") return undefined;
+  const nextActionInput = record(input.nextAction);
+  const nextAction = feedbackActions.has(String(nextActionInput.type))
+    && feedbackActions.has(String(nextActionInput.label))
+    ? {
+        type: String(nextActionInput.type) as NonNullable<PetFeedback["nextAction"]>["type"],
+        label: String(nextActionInput.label) as NonNullable<PetFeedback["nextAction"]>["label"],
+      }
+    : undefined;
+  const progressInput = record(input.progress);
+  const progress = typeof progressInput.completed === "number" && typeof progressInput.total === "number" && progressInput.total > 0
+    ? { completed: progressInput.completed, total: progressInput.total }
+    : undefined;
+  const reassurance = feedbackReassurances.has(String(input.reassurance))
+    ? input.reassurance as PetFeedback["reassurance"]
+    : undefined;
+  const publicSummary = input.sensitivity === "public" ? safePublicSummary(input.publicSummary) : undefined;
+  return {
+    version: 2,
+    taskState: String(input.taskState) as PetFeedback["taskState"],
+    sensitivity: input.sensitivity,
+    ...(reassurance ? { reassurance } : {}),
+    ...(nextAction ? { nextAction } : {}),
+    ...(progress ? { progress } : {}),
+    ...(publicSummary ? { publicSummary } : {}),
+  };
 }
 
 function petNarrativeLabels(t: ReturnType<typeof messages>["desktopPet"]): DesktopPetNarrativeLabels {
@@ -74,6 +109,10 @@ export function mapAgentStreamEvent(
   if (!type) return null;
   const runId = text(event.runId) ?? "active";
   const base = { sessionKey: detail.sessionKey, runId, sessionLabel, sequence, timestamp: Date.now() };
+  const feedback = parsePetFeedback(payload.petFeedback ?? event.petFeedback);
+  const publicSummary = feedback
+    ? feedback.publicSummary
+    : safePublicSummary(payload.publicSummary ?? event.publicSummary);
   if (type === "run_start") return { ...base, state: "running", phase: "preparing", action: labels.tipRunStart, animation: "toolbox", priority: "low" };
   if (type === "tool_start" || type === "tool_update") {
     const toolName = text(event.toolName) ?? text(payload.toolName) ?? "tool";
@@ -86,14 +125,17 @@ export function mapAgentStreamEvent(
     const activity = type === "compaction" ? { phase: "compacting" as const } : activityForProgress(payload);
     const phase = activity.phase ?? "preparing";
     const narrative = progressNarrative(labels, phase, activity.completed, activity.total);
-    return { ...base, state: "running", phase, ...narrative, progress: typeof activity.completed === "number" && typeof activity.total === "number" ? { completed: activity.completed, total: activity.total } : undefined };
+    return { ...base, state: "running", phase, ...narrative, feedback, progress: feedback?.progress ?? (typeof activity.completed === "number" && typeof activity.total === "number" ? { completed: activity.completed, total: activity.total } : undefined) };
   }
-  if (type === "clarify_request") return { ...base, state: "waiting", phase: "waiting", action: labels.tipWaiting, animation: "typing", priority: "high", outputTail: safeTail(payload.question) };
-  if (type === "assistant_delta") return { ...base, state: "running", phase: "running", action: labels.tipAssistantDelta, animation: "typing", priority: "low", outputTail: safeTail(payload.delta ?? event.delta) };
-  if (type === "command_output_delta") return { ...base, state: "running", phase: "running", action: labels.tipCommandDelta, animation: "terminal", priority: "low", outputTail: safeTail(payload.delta ?? event.delta) };
-  if (type === "assistant_message_end") return { ...base, state: "running", phase: "running", action: labels.tipAssistantDone, animation: "typing", priority: "normal", outputLines: safeLines(payload.content ?? event.content) };
-  if (type === "run_end") return { ...base, state: "success", phase: "running", action: labels.tipComplete, animation: "success", priority: "high" };
-  if (type === "error") return { ...base, state: "error", phase: "waiting", action: labels.tipError, animation: "error", priority: "high", outputTail: safeTail(payload.message ?? event.message) };
+  if (type === "clarify_request") return { ...base, state: "waiting", phase: "waiting", action: labels.tipWaiting, animation: "typing", priority: "high", publicSummary, feedback };
+  if (type === "assistant_delta") return { ...base, state: "running", phase: "running", action: labels.tipAssistantDelta, animation: "typing", priority: "low" };
+  if (type === "command_output_delta") return { ...base, state: "running", phase: "running", action: labels.tipCommandDelta, animation: "terminal", priority: "low" };
+  if (type === "assistant_message_end") return { ...base, state: "running", phase: "running", action: labels.tipAssistantDone, animation: "typing", priority: "normal", publicSummary };
+  if (type === "run_end") {
+    const state = feedback?.taskState === "error" ? "error" : "success";
+    return { ...base, state, phase: state === "error" ? "waiting" : "running", action: state === "error" ? labels.tipError : labels.tipComplete, animation: state === "error" ? "error" : "success", priority: "high", publicSummary, feedback };
+  }
+  if (type === "error") return { ...base, state: "error", phase: "waiting", action: labels.tipError, animation: "error", priority: "high", publicSummary, feedback };
   return null;
 }
 

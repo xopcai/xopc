@@ -15,6 +15,13 @@ describe('createDesktopPetPackage', () => {
         targetDir: root,
         name: 'Blue Terminal Buddy',
         prompt: 'a sleepy blue robot that loves terminals',
+        persona: {
+          tone: 'warm',
+          warmth: 0.8,
+          energy: 0.3,
+          humor: 0.1,
+          phrases: { success: ['处理好了。'] },
+        },
       });
 
       await expect(stat(result.manifestPath)).resolves.toBeTruthy();
@@ -26,10 +33,12 @@ describe('createDesktopPetPackage', () => {
         id: string;
         sourcePrompt: string;
         animations: Record<string, unknown>;
+        persona: { tone: string; phrases?: { success?: string[] } };
       };
       expect(manifest.id).toBe(result.id);
       expect(manifest.sourcePrompt).toBe('a sleepy blue robot that loves terminals');
       expect(Object.keys(manifest.animations)).toEqual([...DESKTOP_PET_ACTIONS]);
+      expect(manifest.persona).toMatchObject({ tone: 'warm', phrases: { success: ['处理好了。'] } });
       const entries = await readdir(root);
       expect(entries.some((entry) => entry.startsWith('.tmp-'))).toBe(false);
     } finally {
@@ -44,6 +53,7 @@ describe('createDesktopPetPackage', () => {
         targetDir: root,
         name: 'Blue Terminal Buddy',
         prompt: 'a sleepy blue robot that loves terminals',
+        persona: { tone: 'calm', warmth: 0.7, energy: 0.25, humor: 0.05 },
       });
       const updated = await createDesktopPetPackage({
         targetDir: root,
@@ -57,9 +67,11 @@ describe('createDesktopPetPackage', () => {
       const manifest = JSON.parse(await readFile(updated.manifestPath, 'utf8')) as {
         name: string;
         sourcePrompt: string;
+        persona?: { tone: string };
       };
       expect(manifest.name).toBe('Blue Terminal Buddy');
       expect(manifest.sourcePrompt).toBe('same robot, larger eyes, softer rounded laptop animation');
+      expect(manifest.persona?.tone).toBe('calm');
       await expect(validateDesktopPetPackage(updated.dir)).resolves.toEqual({ ok: true });
     } finally {
       await rm(root, { recursive: true, force: true });

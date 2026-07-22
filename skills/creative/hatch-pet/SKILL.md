@@ -59,5 +59,6 @@ Once the pet concept is clear, call `create_desktop_pet` with:
 - `name`: a short display name when the user provides or implies one.
 - `prompt`: the full visual and personality description, including all requested refinements.
 - `description`: a concise one-line description for Settings.
+- `persona`: always provide a restrained personality profile. Choose `tone`, numeric `warmth`, `energy`, and `humor` values between 0 and 1, plus 2–4 short phrases for greeting, success, waiting, and error. Phrases must be concise, truthful, non-manipulative, and written in the user's language. Never make the pet guilt the user, demand attention, or pretend to have biological needs.
 
 When updating an existing pet, keep the same name unless the user explicitly asks to rename it. After the tool succeeds, tell the user the pet was installed under `~/.xopc/pets` and can be selected from Settings > Pet.

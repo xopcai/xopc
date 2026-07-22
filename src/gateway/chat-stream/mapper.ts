@@ -1,6 +1,7 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
 import type { EmbeddedStreamEvent } from '../../agent/embedded/types.js';
+import { createPetFeedback } from './pet-feedback.js';
 import type { ChatStreamEvent, ChatStreamStatus } from './protocol.js';
 
 export type RuntimeStreamEvent = EmbeddedStreamEvent | { type: string; [key: string]: unknown };
@@ -72,17 +73,24 @@ export class ChatStreamMapper {
         return [this.make('user_message', { message: userMessageFromLegacyEvent(event) })];
       case 'user_transcript':
         return [this.make('user_transcript', { text: String(event.text ?? ''), media: event.media })];
-      case 'progress':
+      case 'progress': {
+        const completed = typeof event.completed === 'number' ? event.completed : undefined;
+        const total = typeof event.total === 'number' ? event.total : undefined;
         return [
           this.make('progress', {
             stage: String(event.stage ?? ''),
             message: String(event.message ?? ''),
             ...(typeof event.detail === 'string' ? { detail: event.detail } : {}),
             ...(typeof event.toolName === 'string' ? { toolName: event.toolName } : {}),
-            ...(typeof event.completed === 'number' ? { completed: event.completed } : {}),
-            ...(typeof event.total === 'number' ? { total: event.total } : {}),
+            ...(completed !== undefined ? { completed } : {}),
+            ...(total !== undefined ? { total } : {}),
+            petFeedback: createPetFeedback('progress', {
+              publicSummary: typeof event.publicSummary === 'string' ? event.publicSummary : undefined,
+              progress: { completed, total },
+            }),
           }),
         ];
+      }
       case 'compaction':
         return [
           this.make('compaction', {
@@ -109,6 +117,7 @@ export class ChatStreamMapper {
             question: String(event.question ?? ''),
             choices: Array.isArray(event.choices) ? event.choices.filter((x): x is string => typeof x === 'string') : undefined,
             default: typeof event.default === 'string' ? event.default : undefined,
+            petFeedback: createPetFeedback('clarify'),
           }),
         ];
       case 'memory_consent_required':
@@ -143,7 +152,11 @@ export class ChatStreamMapper {
           }),
         ];
       case 'error':
-        return [this.make('error', { code: 'AGENT_RUN_ERROR', message: String(event.content ?? event.message ?? 'Unknown error') })];
+        return [this.make('error', {
+          code: 'AGENT_RUN_ERROR',
+          message: String(event.content ?? event.message ?? 'Unknown error'),
+          petFeedback: createPetFeedback('error', { recoverable: event.recoverable === true }),
+        })];
       default:
         return [];
     }
@@ -158,11 +171,15 @@ export class ChatStreamMapper {
   end(status: ChatStreamStatus, summary?: string): ChatStreamEvent[] {
     if (this.ended) return [];
     this.ended = true;
-    return [this.make('run_end', { status, summary })];
+    return [this.make('run_end', {
+      status,
+      summary,
+      petFeedback: createPetFeedback(status === 'success' ? 'success' : 'error', { recoverable: status !== 'error' }),
+    })];
   }
 
   error(message: string, code = 'AGENT_RUN_ERROR'): ChatStreamEvent[] {
-    return [this.make('error', { code, message })];
+    return [this.make('error', { code, message, petFeedback: createPetFeedback('error', { recoverable: false }) })];
   }
 
   private mapMessageStart(raw: unknown): ChatStreamEvent[] {
