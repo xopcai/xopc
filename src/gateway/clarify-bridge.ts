@@ -1,4 +1,5 @@
 import type { AgentRunRelay, RelayEvent } from './agent-run-relay.js';
+import { createPetFeedback } from './chat-stream/pet-feedback.js';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('gateway:clarify');
@@ -84,6 +85,7 @@ export class ClarifyBridge {
         question: request.question,
         choices: request.choices,
         default: request.default,
+        petFeedback: createPetFeedback('clarify'),
       };
 
       if (runId) {

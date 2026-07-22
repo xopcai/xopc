@@ -12,6 +12,8 @@ import type {
   DesktopPetDefinition,
   DesktopPetIssue,
   DesktopPetPrefs,
+  DesktopPetPersona,
+  DesktopPetPersonaTone,
   DesktopPetState,
 } from "./types.js";
 
@@ -654,6 +656,19 @@ function createBuiltInAnimation(
   };
 }
 
+function builtInPersona(kind: BuiltInPetKind): DesktopPetPersona {
+  if (kind === "ember" || kind === "sprout") {
+    return { tone: "warm", warmth: 0.82, energy: 0.45, humor: 0.08 };
+  }
+  if (kind === "relay" || kind === "scout") {
+    return { tone: "playful", warmth: 0.68, energy: 0.72, humor: 0.28 };
+  }
+  if (kind === "forge" || kind === "loom" || kind === "atlas" || kind === "patch") {
+    return { tone: "focused", warmth: 0.48, energy: 0.38, humor: 0.04 };
+  }
+  return { tone: "calm", warmth: 0.62, energy: 0.24, humor: 0.04 };
+}
+
 function createBuiltInPet(palette: BuiltInPetPalette): DesktopPetDefinition {
   const animations = Object.fromEntries(
     PET_ACTIONS.map((action) => [
@@ -671,6 +686,7 @@ function createBuiltInPet(palette: BuiltInPetPalette): DesktopPetDefinition {
     canvasHeight: FRAME_SIZE,
     thumbnailDataUrl: svgToDataUrl(renderBuiltInSheet(palette, "idle", 1)),
     animations,
+    persona: builtInPersona(palette.kind),
   };
 }
 
@@ -679,6 +695,45 @@ const builtinPets: DesktopPetDefinition[] =
 
 function numberFromManifest(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function unitNumberFromManifest(value: unknown, fallback: number): number {
+  return Math.min(1, Math.max(0, numberFromManifest(value, fallback)));
+}
+
+function stringListFromManifest(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const values = value
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 8);
+  return values.length ? values : undefined;
+}
+
+function personaFromManifest(value: unknown): DesktopPetPersona | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const raw = value as Record<string, unknown>;
+  const tone: DesktopPetPersonaTone =
+    raw.tone === "warm" || raw.tone === "playful" || raw.tone === "focused"
+      ? raw.tone
+      : "calm";
+  const phraseSource = raw.phrases && typeof raw.phrases === "object"
+    ? raw.phrases as Record<string, unknown>
+    : {};
+  const phrases = {
+    greeting: stringListFromManifest(phraseSource.greeting),
+    success: stringListFromManifest(phraseSource.success),
+    waiting: stringListFromManifest(phraseSource.waiting),
+    error: stringListFromManifest(phraseSource.error),
+  };
+  return {
+    tone,
+    warmth: unitNumberFromManifest(raw.warmth, 0.6),
+    energy: unitNumberFromManifest(raw.energy, 0.4),
+    humor: unitNumberFromManifest(raw.humor, 0.1),
+    ...(Object.values(phrases).some(Boolean) ? { phrases } : {}),
+  };
 }
 
 function positiveNumberFromManifest(value: unknown): number | null {
@@ -860,6 +915,7 @@ async function loadCustomPet(
         ),
         thumbnailDataUrl,
         animations,
+        persona: personaFromManifest(raw.persona),
       },
     };
   } catch (e) {
@@ -919,5 +975,6 @@ export async function readDesktopPetState(
     visible,
     customPetsDir: desktopPetCustomDir(),
     petIssues: issues,
+    activities: [],
   };
 }

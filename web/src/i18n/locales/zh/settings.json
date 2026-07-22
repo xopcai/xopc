@@ -687,6 +687,7 @@
     "settings": "设置",
     "menu": "收起/展开提示",
     "hide": "隐藏",
+    "dismissSession": "收起这条会话反馈",
     "mute": "静音",
     "unmute": "取消静音",
     "toolUsing": "我正在{{action}}。",
@@ -728,8 +729,39 @@
     "tipStaleSignal": "这步有点慢，我还在等新信号。",
     "petCtaNeedsInput": "去确认",
     "petCtaReviewIssue": "去处理",
+    "petReassuranceMakingProgress": "事情在往前走，我会继续帮你看着。",
+    "petReassuranceWaitingSafely": "我先停在这里，等你方便时再决定。",
+    "petReassuranceCompleted": "这一步已经稳稳处理好了。",
+    "petReassuranceWorkPreserved": "前面的进展还在，我们可以接着来。",
+    "petReassuranceDetailsAvailable": "具体情况我留好了，随时可以一起看。",
     "idleTipTitle": "我在边上待命",
     "idleTipBody": "如果继续开工，我会帮你看住后台进度。",
+    "personaPhrases": {
+      "calm": {
+        "greeting": ["我在。"],
+        "success": ["处理好了。"],
+        "waiting": ["到你决定了，我先停在这里。"],
+        "error": ["这一步没走通，前面的内容还在。"]
+      },
+      "warm": {
+        "greeting": ["我在边上陪你。"],
+        "success": ["处理好了，可以松口气了。"],
+        "waiting": ["到你确认了，我在这里等。"],
+        "error": ["这里卡了一下，已经完成的内容还在。"]
+      },
+      "playful": {
+        "greeting": ["我在，随时可以出发。"],
+        "success": ["稳稳拿下。"],
+        "waiting": ["轮到你拍板了。"],
+        "error": ["碰到一个路障，我们去看看。"]
+      },
+      "focused": {
+        "greeting": ["我在，状态正常。"],
+        "success": ["任务完成。"],
+        "waiting": ["需要你的决定，我已暂停。"],
+        "error": ["这一步未完成，现有结果已保留。"]
+      }
+    },
     "taskInProgress": "任务进行中",
     "taskRecentActivity": "最近活动",
     "viewSession": "查看会话",

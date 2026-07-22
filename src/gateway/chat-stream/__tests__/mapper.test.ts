@@ -1,12 +1,24 @@
 import { describe, expect, it } from 'vitest';
 
 import { ChatStreamMapper } from '../mapper.js';
+import { createPetFeedback } from '../pet-feedback.js';
 
 function mapper() {
   return new ChatStreamMapper({ runId: 'run-1', sessionKey: 'sk', channel: 'webchat' });
 }
 
 describe('ChatStreamMapper', () => {
+  it('publishes only summaries that a producer explicitly marks for the pet', () => {
+    expect(createPetFeedback('success', { publicSummary: '  Tests passed  ' })).toMatchObject({
+      sensitivity: 'public',
+      publicSummary: 'Tests passed',
+    });
+    expect(createPetFeedback('error')).toMatchObject({
+      sensitivity: 'private',
+      reassurance: 'details_available',
+    });
+  });
+
   it('maps run lifecycle with gateway-owned terminal event', () => {
     const m = mapper();
     expect(m.map({ type: 'agent_start', runId: 'run-1' })[0]).toMatchObject({
@@ -18,8 +30,63 @@ describe('ChatStreamMapper', () => {
     expect(m.map({ type: 'agent_end', runId: 'run-1' })).toEqual([]);
     expect(m.end('success')[0]).toMatchObject({
       type: 'run_end',
-      payload: { status: 'success' },
+      payload: {
+        status: 'success',
+        petFeedback: {
+          version: 2,
+          taskState: 'success',
+          sensitivity: 'private',
+          reassurance: 'completed',
+          nextAction: { type: 'open_session' },
+        },
+      },
     });
+  });
+
+  it('adds ambient-safe feedback to progress without inferring from its private message', () => {
+    const m = mapper();
+    const [progress] = m.map({
+      type: 'progress',
+      stage: 'testing',
+      message: 'Testing /private/customer-repo',
+      completed: 8,
+      total: 5,
+    });
+
+    expect(progress).toMatchObject({
+      type: 'progress',
+      payload: {
+        message: 'Testing /private/customer-repo',
+        petFeedback: {
+          version: 2,
+          taskState: 'working',
+          sensitivity: 'private',
+          reassurance: 'making_progress',
+          progress: { completed: 5, total: 5 },
+        },
+      },
+    });
+    expect(progress.payload.petFeedback).not.toHaveProperty('publicSummary');
+  });
+
+  it('never copies raw errors into ambient pet feedback', () => {
+    const m = mapper();
+    const [error] = m.error('Authorization: Bearer private-token');
+
+    expect(error).toMatchObject({
+      type: 'error',
+      payload: {
+        message: 'Authorization: Bearer private-token',
+        petFeedback: {
+          version: 2,
+          taskState: 'error',
+          sensitivity: 'private',
+          reassurance: 'details_available',
+          nextAction: { type: 'review_error' },
+        },
+      },
+    });
+    expect(error.payload.petFeedback).not.toHaveProperty('publicSummary');
   });
 
   it('maps assistant text deltas', () => {

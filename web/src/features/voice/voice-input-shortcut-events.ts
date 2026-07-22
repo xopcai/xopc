@@ -22,6 +22,10 @@ export function queuePendingVoiceInputToggle(): void {
   pendingToggle = true;
 }
 
+export function clearPendingVoiceInputToggle(): void {
+  pendingToggle = false;
+}
+
 export function takePendingVoiceInputToggle(): boolean {
   if (!pendingToggle) return false;
   pendingToggle = false;

@@ -7,7 +7,7 @@ import {
   type DesktopPetNarrativeLabels,
 } from '../desktop-pet-narrative';
 import { mapAgentStreamEvent } from '../desktop-pet-event-bridge';
-import { activityCompletionText, activityDetailText, activityHealthText, shouldShowIdleTip } from '../desktop-pet-root';
+import { activityCompletionText, activityDetailText, activityHealthText, activityReassuranceText, shouldShowIdleTip } from '../desktop-pet-root';
 
 const labels: DesktopPetNarrativeLabels = {
   searchedWeb: 'searching the web',
@@ -75,8 +75,8 @@ describe('desktop pet narrative', () => {
       animation: 'terminal',
       priority: 'low',
       action: 'The command has new output.',
-      outputTail: 'pnpm test passed',
     });
+    expect(update).not.toHaveProperty('outputTail');
   });
 
   it('does not append progress counts when the tip already contains them', () => {
@@ -139,7 +139,7 @@ describe('desktop pet narrative', () => {
           state: 'success',
           phase: 'running',
           action: 'Done. The result is back in this chat.',
-          outputLines: ['Edited two files', 'Tests passed'],
+          publicSummary: 'Tests passed',
         },
         'Done: {{summary}}',
       ),
@@ -160,5 +160,64 @@ describe('desktop pet narrative', () => {
     expect(shouldShowIdleTip({ ...base, feedbackLevel: 'quiet', now: 20 * 60_000, lastActivityAt: 0 })).toBe(false);
     expect(shouldShowIdleTip({ ...base, activeCount: 1, now: 20 * 60_000, lastActivityAt: 0 })).toBe(false);
     expect(shouldShowIdleTip({ ...base, now: 21 * 60_000, lastActivityAt: 0 })).toBe(false);
+    expect(shouldShowIdleTip({ ...base, now: 65 * 60_000, lastActivityAt: 0 })).toBe(true);
+  });
+
+  it('only exposes summaries explicitly marked for the ambient pet surface', () => {
+    const update = mapAgentStreamEvent(
+      {
+        sessionKey: 'agent:main:webchat:test',
+        event: {
+          type: 'run_end',
+          payload: {
+            content: 'secret raw response',
+            publicSummary: '**Tests passed** https://internal.example/path',
+          },
+        },
+      },
+      2,
+      'Fix tests',
+      labels,
+    );
+    expect(update?.publicSummary).toBe('Tests passed');
+    expect(update).not.toHaveProperty('outputLines');
+  });
+
+  it('honors v2 privacy and keeps private feedback generic', () => {
+    const update = mapAgentStreamEvent(
+      {
+        sessionKey: 'agent:main:webchat:test',
+        event: {
+          type: 'error',
+          payload: {
+            publicSummary: 'must not escape',
+            petFeedback: {
+              version: 2,
+              taskState: 'error',
+              sensitivity: 'private',
+              reassurance: 'work_preserved',
+              nextAction: { type: 'review_error', label: 'review_error' },
+            },
+          },
+        },
+      },
+      3,
+      'Fix tests',
+      labels,
+    );
+
+    expect(update?.publicSummary).toBeUndefined();
+    expect(update?.feedback).toMatchObject({
+      sensitivity: 'private',
+      reassurance: 'work_preserved',
+      nextAction: { type: 'review_error' },
+    });
+    expect(activityReassuranceText(update!, {
+      making_progress: 'moving',
+      waiting_safely: 'waiting',
+      completed: 'done',
+      work_preserved: 'your work is safe',
+      details_available: 'details ready',
+    })).toBe('your work is safe');
   });
 });

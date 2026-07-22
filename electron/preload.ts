@@ -247,10 +247,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
   platform: process.platform as "darwin" | "win32" | "linux",
   voiceInputHotkey: {
-    onToggle: (callback: () => void) => {
-      const handler = () => callback();
-      ipcRenderer.on("voice-input:toggle", handler);
-      return () => ipcRenderer.removeListener("voice-input:toggle", handler);
+    onEvent: (callback: (action: "press" | "release") => void) => {
+      const handler = (_: unknown, action: "press" | "release") => callback(action);
+      ipcRenderer.on("voice-input:hotkey", handler);
+      return () => ipcRenderer.removeListener("voice-input:hotkey", handler);
     },
   },
   menu: {
@@ -353,6 +353,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.invoke("desktop-pet:set-click-through", enabled),
     sendEvent: (event: Record<string, unknown>) =>
       ipcRenderer.invoke("desktop-pet:send-event", event),
+    acknowledgeEvent: (sessionKey: string, runId: string) =>
+      ipcRenderer.invoke("desktop-pet:ack-event", sessionKey, runId),
     openCustomPetsDir: () => ipcRenderer.invoke("desktop-pet:open-custom-dir"),
     createFromPrompt: (request: Record<string, unknown>) =>
       ipcRenderer.invoke("desktop-pet:create-from-prompt", request),

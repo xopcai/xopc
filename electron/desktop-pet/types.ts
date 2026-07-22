@@ -58,6 +58,23 @@ export type DesktopPetAnimation = {
   sheetHeight?: number;
 };
 
+export type DesktopPetPersonaTone = "calm" | "warm" | "playful" | "focused";
+
+export type DesktopPetPersonaPhrases = {
+  greeting?: string[];
+  success?: string[];
+  waiting?: string[];
+  error?: string[];
+};
+
+export type DesktopPetPersona = {
+  tone: DesktopPetPersonaTone;
+  warmth: number;
+  energy: number;
+  humor: number;
+  phrases?: DesktopPetPersonaPhrases;
+};
+
 export type DesktopPetDefinition = {
   id: string;
   name: string;
@@ -69,6 +86,7 @@ export type DesktopPetDefinition = {
   canvasHeight: number;
   thumbnailDataUrl: string;
   animations: Record<DesktopPetAction, DesktopPetAnimation>;
+  persona?: DesktopPetPersona;
 };
 
 export type DesktopPetIssue = {
@@ -112,9 +130,23 @@ export type DesktopPetState = {
   visible: boolean;
   customPetsDir: string;
   petIssues: DesktopPetIssue[];
+  activities: PetSessionUpdate[];
 };
 
 export type PetSessionState = "running" | "waiting" | "success" | "error";
+
+export type PetFeedback = {
+  version: 2;
+  taskState: "working" | "waiting" | "success" | "error";
+  publicSummary?: string;
+  reassurance?: "making_progress" | "waiting_safely" | "completed" | "work_preserved" | "details_available";
+  nextAction?: {
+    type: "open_session" | "confirm" | "review_error";
+    label: "open_session" | "confirm" | "review_error";
+  };
+  sensitivity: "public" | "private";
+  progress?: { completed: number; total: number };
+};
 
 export type PetSessionUpdate = {
   sessionKey: string;
@@ -131,4 +163,7 @@ export type PetSessionUpdate = {
   progress?: { completed: number; total: number };
   outputTail?: string;
   outputLines?: string[];
+  /** Explicitly safe for an ambient desktop surface. Never infer this from raw tool output. */
+  publicSummary?: string;
+  feedback?: PetFeedback;
 };

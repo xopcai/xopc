@@ -213,7 +213,7 @@ export interface ElectronMenuAPI {
 }
 
 export interface ElectronVoiceInputHotkeyAPI {
-  onToggle(callback: () => void): () => void;
+  onEvent(callback: (action: "press" | "release") => void): () => void;
 }
 
 export type ElectronUiLanguage = "en" | "zh";
@@ -308,6 +308,7 @@ export type DesktopPetDefinition = {
   canvasHeight: number;
   thumbnailDataUrl: string;
   animations: Record<DesktopPetAction, DesktopPetAnimation>;
+  persona?: DesktopPetPersona;
 };
 
 export type DesktopPetIssue = {
@@ -331,6 +332,21 @@ export type DesktopPetCreateResult = {
   sourcePrompt?: string;
 };
 
+export type DesktopPetPersonaTone = "calm" | "warm" | "playful" | "focused";
+
+export type DesktopPetPersona = {
+  tone: DesktopPetPersonaTone;
+  warmth: number;
+  energy: number;
+  humor: number;
+  phrases?: {
+    greeting?: string[];
+    success?: string[];
+    waiting?: string[];
+    error?: string[];
+  };
+};
+
 export type DesktopPetPrefs = {
   enabled: boolean;
   showOnStartup: boolean;
@@ -347,6 +363,19 @@ export type DesktopPetPrefs = {
 
 export type PetSessionState = "running" | "waiting" | "success" | "error";
 
+export type PetFeedback = {
+  version: 2;
+  taskState: "working" | "waiting" | "success" | "error";
+  publicSummary?: string;
+  reassurance?: "making_progress" | "waiting_safely" | "completed" | "work_preserved" | "details_available";
+  nextAction?: {
+    type: "open_session" | "confirm" | "review_error";
+    label: "open_session" | "confirm" | "review_error";
+  };
+  sensitivity: "public" | "private";
+  progress?: { completed: number; total: number };
+};
+
 export type PetSessionUpdate = {
   sessionKey: string;
   runId: string;
@@ -362,6 +391,8 @@ export type PetSessionUpdate = {
   progress?: { completed: number; total: number };
   outputTail?: string;
   outputLines?: string[];
+  publicSummary?: string;
+  feedback?: PetFeedback;
 };
 
 export type DesktopPetState = {
@@ -370,6 +401,7 @@ export type DesktopPetState = {
   visible: boolean;
   customPetsDir: string;
   petIssues: DesktopPetIssue[];
+  activities: PetSessionUpdate[];
 };
 
 export interface ElectronDesktopPetAPI {
@@ -382,6 +414,7 @@ export interface ElectronDesktopPetAPI {
   openMainWindow(path?: string): Promise<void>;
   setClickThrough(enabled: boolean): Promise<void>;
   sendEvent(event: PetSessionUpdate): Promise<void>;
+  acknowledgeEvent(sessionKey: string, runId: string): Promise<void>;
   openCustomPetsDir(): Promise<{ ok: true } | { ok: false; error: string }>;
   createFromPrompt(
     request: DesktopPetCreateRequest,

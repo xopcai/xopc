@@ -687,6 +687,7 @@
     "settings": "Settings",
     "menu": "Collapse or expand tip",
     "hide": "Hide",
+    "dismissSession": "Dismiss this session update",
     "mute": "Mute",
     "unmute": "Unmute",
     "toolUsing": "I am {{action}}.",
@@ -728,8 +729,39 @@
     "tipStaleSignal": "This step is taking a while; I am waiting for a new signal.",
     "petCtaNeedsInput": "Review",
     "petCtaReviewIssue": "Fix",
+    "petReassuranceMakingProgress": "It is moving forward, and I am keeping watch.",
+    "petReassuranceWaitingSafely": "I have paused here until you are ready.",
+    "petReassuranceCompleted": "Everything for this step is taken care of.",
+    "petReassuranceWorkPreserved": "Your earlier work is still here; we can continue from it.",
+    "petReassuranceDetailsAvailable": "I kept the details ready for you to review.",
     "idleTipTitle": "I am on standby",
     "idleTipBody": "When you start again, I will watch the background progress.",
+    "personaPhrases": {
+      "calm": {
+        "greeting": ["I am here."],
+        "success": ["It is taken care of."],
+        "waiting": ["I have paused here for your decision."],
+        "error": ["This step did not work, but the earlier work is safe."]
+      },
+      "warm": {
+        "greeting": ["I am right here with you."],
+        "success": ["It is done. You can breathe a little easier."],
+        "waiting": ["I will wait here for your confirmation."],
+        "error": ["We hit a snag here. The completed work is still safe."]
+      },
+      "playful": {
+        "greeting": ["Ready when you are."],
+        "success": ["Nicely handled."],
+        "waiting": ["Your call from here."],
+        "error": ["There is a roadblock here. Let us take a look."]
+      },
+      "focused": {
+        "greeting": ["I am here. Everything is steady."],
+        "success": ["Task complete."],
+        "waiting": ["Your decision is needed. I have paused."],
+        "error": ["This step is incomplete. Existing results are preserved."]
+      }
+    },
     "taskInProgress": "Task in progress",
     "taskRecentActivity": "Recent activity",
     "viewSession": "View session",

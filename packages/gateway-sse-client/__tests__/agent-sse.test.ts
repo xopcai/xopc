@@ -46,6 +46,7 @@ function callbacks(overrides: Partial<Parameters<typeof dispatchAgentSseEvent>[2
     onTurnDiff: vi.fn(),
     onReview: vi.fn(),
     onProgress: vi.fn(),
+    onPetFeedback: vi.fn(),
     onResult: vi.fn(),
     onError: vi.fn(),
     ...overrides,
@@ -53,6 +54,29 @@ function callbacks(overrides: Partial<Parameters<typeof dispatchAgentSseEvent>[2
 }
 
 describe('dispatchAgentSseEvent', () => {
+  it('dispatches validated pet feedback without exposing private summaries', () => {
+    const cb = callbacks();
+    dispatchAgentSseEvent('error', JSON.stringify(envelope('error', 'run-1', {
+      message: 'private failure',
+      petFeedback: {
+        version: 2,
+        taskState: 'error',
+        sensitivity: 'private',
+        publicSummary: 'must not escape',
+        reassurance: 'details_available',
+        nextAction: { type: 'review_error', label: 'review_error' },
+      },
+    })), cb);
+
+    expect(cb.onPetFeedback).toHaveBeenCalledWith({
+      version: 2,
+      taskState: 'error',
+      sensitivity: 'private',
+      reassurance: 'details_available',
+      nextAction: { type: 'review_error', label: 'review_error' },
+    });
+  });
+
   it('persists runId on run_start and starts stream', () => {
     const savePendingRunId = vi.fn();
     const cb = callbacks();

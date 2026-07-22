@@ -47,6 +47,30 @@ let dragState: {
 } | null = null;
 let contentSize: DesktopPetContentSize = { width: 138, height: 132 };
 let interactiveSize: DesktopPetContentSize = { width: 138, height: 132 };
+const recentActivities = new Map<string, PetSessionUpdate>();
+const RECENT_SUCCESS_TTL_MS = 60_000;
+const MAX_RECENT_ACTIVITIES = 12;
+
+function currentActivities(now = Date.now()): PetSessionUpdate[] {
+  for (const [sessionKey, activity] of recentActivities) {
+    if (activity.state === "success" && now - activity.timestamp > RECENT_SUCCESS_TTL_MS) {
+      recentActivities.delete(sessionKey);
+    }
+  }
+  return [...recentActivities.values()]
+    .sort((a, b) => b.timestamp - a.timestamp)
+    .slice(0, MAX_RECENT_ACTIVITIES);
+}
+
+function rememberActivity(event: PetSessionUpdate): void {
+  const prior = recentActivities.get(event.sessionKey);
+  if (prior && prior.runId === event.runId && event.sequence <= prior.sequence) return;
+  recentActivities.set(event.sessionKey, event);
+  const retained = currentActivities();
+  if (recentActivities.size <= MAX_RECENT_ACTIVITIES) return;
+  recentActivities.clear();
+  for (const activity of retained) recentActivities.set(activity.sessionKey, activity);
+}
 
 function scaleFromPrefs(prefs: DesktopPetPrefs): number {
   return Math.min(1.4, Math.max(0.7, prefs.sizePercent / 100));
@@ -213,17 +237,24 @@ export async function resetDesktopPetPosition(): Promise<DesktopPetState> {
 }
 
 export async function getDesktopPetState(): Promise<DesktopPetState> {
-  return readDesktopPetState(
+  const state = await readDesktopPetState(
     Boolean(petWindow && !petWindow.isDestroyed() && petWindow.isVisible()),
   );
+  return { ...state, activities: currentActivities() };
 }
 
 export async function sendDesktopPetEvent(event: PetSessionUpdate): Promise<void> {
   const prefs = await readDesktopPetPrefs();
   if (!prefs.enabled) return;
+  rememberActivity(event);
   const win = petWindow && !petWindow.isDestroyed() ? petWindow : null;
   if (!win || !win.isVisible()) return;
   win.webContents.send("desktop-pet:event", event);
+}
+
+export function acknowledgeDesktopPetEvent(sessionKey: string, runId: string): void {
+  const activity = recentActivities.get(sessionKey);
+  if (activity?.runId === runId) recentActivities.delete(sessionKey);
 }
 
 export function setDesktopPetClickThrough(enabled: boolean): void {

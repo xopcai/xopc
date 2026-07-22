@@ -4,7 +4,23 @@ export interface AgentSseProgressState {
   detail?: string;
   toolName?: string;
   timestamp: number;
+  petFeedback?: PetFeedback;
 }
+
+export type PetFeedbackTaskState = 'working' | 'waiting' | 'success' | 'error';
+export type PetFeedbackSensitivity = 'public' | 'private';
+export type PetFeedbackReassurance = 'making_progress' | 'waiting_safely' | 'completed' | 'work_preserved' | 'details_available';
+export type PetFeedbackActionType = 'open_session' | 'confirm' | 'review_error';
+
+export type PetFeedback = {
+  version: 2;
+  taskState: PetFeedbackTaskState;
+  publicSummary?: string;
+  reassurance?: PetFeedbackReassurance;
+  nextAction?: { type: PetFeedbackActionType; label: PetFeedbackActionType };
+  sensitivity: PetFeedbackSensitivity;
+  progress?: { completed: number; total: number };
+};
 
 export type AgentSseUserTranscriptAttachment = {
   uri?: string;
@@ -78,4 +94,5 @@ export type AgentSseClarifyRequestPayload = {
   question: string;
   choices?: string[];
   default?: string;
+  petFeedback?: PetFeedback;
 };

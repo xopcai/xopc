@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { Select, SelectOption } from '@/components/ui/popover-select';
+import { Skeleton } from '@/components/ui/skeleton';
 import { DesktopPetSprite } from '@/features/desktop-pet/desktop-pet-sprite';
 import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
 import { messages } from '@/i18n/messages';
@@ -95,8 +96,17 @@ export function DesktopPetSettings() {
     return (
       <SettingsPageFrame gap="gap-4">
         <SettingsPageHeader title={t.title} subtitle={t.subtitle} />
-        <section className="rounded-xl border border-edge bg-surface-base p-4 text-sm text-fg-muted">
-          {t.loading}
+        <section className="rounded-xl border border-edge bg-surface-base p-4" aria-busy aria-label={t.loading}>
+          <div className="space-y-3">
+            <Skeleton className="h-14 rounded-xl" />
+            <Skeleton className="h-14 rounded-xl" />
+            <Skeleton className="h-24 rounded-xl" />
+            <div className="space-y-2 pt-2">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <Skeleton key={index} className="h-16 rounded-xl" />
+              ))}
+            </div>
+          </div>
         </section>
       </SettingsPageFrame>
     );

@@ -4,6 +4,24 @@ import type { AgentToolResult } from '@earendil-works/pi-agent-core';
 import { createDesktopPetPackage } from '../../pets/factory.js';
 import type { AgentToolWithMetadata } from './metadata.js';
 
+const DesktopPetPersonaSchema = Type.Object({
+  tone: Type.Union([
+    Type.Literal('calm'),
+    Type.Literal('warm'),
+    Type.Literal('playful'),
+    Type.Literal('focused'),
+  ]),
+  warmth: Type.Number({ minimum: 0, maximum: 1 }),
+  energy: Type.Number({ minimum: 0, maximum: 1 }),
+  humor: Type.Number({ minimum: 0, maximum: 1 }),
+  phrases: Type.Optional(Type.Object({
+    greeting: Type.Optional(Type.Array(Type.String({ maxLength: 80 }), { maxItems: 8 })),
+    success: Type.Optional(Type.Array(Type.String({ maxLength: 80 }), { maxItems: 8 })),
+    waiting: Type.Optional(Type.Array(Type.String({ maxLength: 80 }), { maxItems: 8 })),
+    error: Type.Optional(Type.Array(Type.String({ maxLength: 80 }), { maxItems: 8 })),
+  })),
+});
+
 const DesktopPetCreateSchema = Type.Object({
   mode: Type.Optional(
     Type.Union([Type.Literal('create'), Type.Literal('update')], {
@@ -23,6 +41,7 @@ const DesktopPetCreateSchema = Type.Object({
   }),
   name: Type.Optional(Type.String({ description: 'Optional display name for the pet.' })),
   description: Type.Optional(Type.String({ description: 'Optional short description shown in Settings.' })),
+  persona: Type.Optional(DesktopPetPersonaSchema),
   overwrite: Type.Optional(
     Type.Boolean({
       description:
@@ -87,6 +106,9 @@ export function createDesktopPetTool(): AgentToolWithMetadata<typeof DesktopPetC
           ...(typeof params.name === 'string' && params.name.trim() ? { name: params.name.trim() } : {}),
           ...(typeof params.description === 'string' && params.description.trim()
             ? { description: params.description.trim() }
+            : {}),
+          ...(params.persona && typeof params.persona === 'object'
+            ? { persona: params.persona as Parameters<typeof createDesktopPetPackage>[0]['persona'] }
             : {}),
           overwrite: mode === 'update' ? true : params.overwrite === true,
         });
