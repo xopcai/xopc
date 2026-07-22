@@ -83,7 +83,11 @@ import {
   stopTunnelStatusPolling,
 } from './tunnel-main.js';
 import { createTray, destroyTray, updateTrayLanguage } from './tray.js';
-import { startVoiceInputHotkey, stopVoiceInputHotkey } from './voice-input-hotkey.js';
+import {
+  startVoiceInputHotkey,
+  stopVoiceInputHotkey,
+  type VoiceHotkeyEvent,
+} from './voice-input-hotkey.js';
 import {
   MAIN_WINDOW_MIN_HEIGHT,
   MAIN_WINDOW_MIN_WIDTH,
@@ -574,7 +578,7 @@ function focusOrCreateMainWindow(): void {
   mainWindow.focus();
 }
 
-function toggleVoiceInputFromSystemHotkey(): void {
+function handleVoiceInputSystemHotkey(event: VoiceHotkeyEvent): void {
   if (!mainWindow || mainWindow.isDestroyed()) {
     createWindow();
   }
@@ -584,7 +588,7 @@ function toggleVoiceInputFromSystemHotkey(): void {
   win.show();
   win.focus();
   const send = () => {
-    if (!win.isDestroyed()) win.webContents.send('voice-input:toggle');
+    if (!win.isDestroyed()) win.webContents.send('voice-input:hotkey', event.action);
   };
   if (win.webContents.isLoading()) {
     win.webContents.once('did-finish-load', send);
@@ -1081,7 +1085,7 @@ app.whenReady().then(async () => {
   });
 
   registerTunnelPowerMonitor();
-  startVoiceInputHotkey(() => toggleVoiceInputFromSystemHotkey());
+  startVoiceInputHotkey(handleVoiceInputSystemHotkey);
 
   const hotkey = process.platform === 'darwin' ? 'Command+Shift+Space' : 'Control+Shift+Space';
   const registered = globalShortcut.register(hotkey, () => {

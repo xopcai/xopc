@@ -3,6 +3,7 @@ import type { IpcMain } from "electron";
 import { assertTrustedRenderer } from "../ipc/trusted-renderer.js";
 import { resolveDesktopPetMainWindowPath } from "./open-main-window-path.js";
 import {
+  acknowledgeDesktopPetEvent,
   applyDesktopPetPrefs,
   createDesktopPetFromPrompt,
   dragDesktopPet,
@@ -110,6 +111,15 @@ export function registerDesktopPetIpc(ipcMain: IpcMain): void {
       await sendDesktopPetEvent(value);
     }
   });
+  ipcMain.handle(
+    "desktop-pet:ack-event",
+    (event, sessionKey: unknown, runId: unknown) => {
+      assertTrustedRenderer(event);
+      if (typeof sessionKey === "string" && typeof runId === "string") {
+        acknowledgeDesktopPetEvent(sessionKey, runId);
+      }
+    },
+  );
   ipcMain.handle("desktop-pet:open-custom-dir", async (event) => {
     assertTrustedRenderer(event);
     return openDesktopPetCustomDir();

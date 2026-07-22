@@ -1,5 +1,22 @@
 export type ChatStreamStatus = 'success' | 'error' | 'cancelled';
 
+export type PetFeedbackTaskState = 'working' | 'waiting' | 'success' | 'error';
+export type PetFeedbackSensitivity = 'public' | 'private';
+export type PetFeedbackReassurance = 'making_progress' | 'waiting_safely' | 'completed' | 'work_preserved' | 'details_available';
+export type PetFeedbackActionType = 'open_session' | 'confirm' | 'review_error';
+export type PetFeedbackActionLabel = PetFeedbackActionType;
+export type PetFeedbackProgress = { completed: number; total: number };
+export type PetFeedback = {
+  version: 2;
+  taskState: PetFeedbackTaskState;
+  /** Present only when the producer explicitly marks a short summary as ambient-safe. */
+  publicSummary?: string;
+  reassurance?: PetFeedbackReassurance;
+  nextAction?: { type: PetFeedbackActionType; label: PetFeedbackActionLabel };
+  sensitivity: PetFeedbackSensitivity;
+  progress?: PetFeedbackProgress;
+};
+
 export interface ChatStreamEnvelope<TType extends string, TPayload> {
   type: TType;
   seq?: number;
@@ -99,7 +116,7 @@ export type AssistantMessageEndEvent = ChatStreamEnvelope<
 >;
 export type ProgressEvent = ChatStreamEnvelope<
   'progress',
-  { stage: string; message: string; detail?: string; toolName?: string; completed?: number; total?: number }
+  { stage: string; message: string; detail?: string; toolName?: string; completed?: number; total?: number; petFeedback: PetFeedback }
 >;
 export type CompactionEvent = ChatStreamEnvelope<
   'compaction',
@@ -111,7 +128,7 @@ export type TtsAudioEvent = ChatStreamEnvelope<
 >;
 export type ClarifyRequestEvent = ChatStreamEnvelope<
   'clarify_request',
-  { requestId: string; question: string; choices?: string[]; default?: string }
+  { requestId: string; question: string; choices?: string[]; default?: string; petFeedback: PetFeedback }
 >;
 export type MemoryConsentRequiredEvent = ChatStreamEnvelope<
   'memory_consent_required',
@@ -121,8 +138,8 @@ export type MemoryCapturedEvent = ChatStreamEnvelope<
   'memory_captured',
   { records: Array<{ id: string; content: string; kind: string }> }
 >;
-export type RunEndEvent = ChatStreamEnvelope<'run_end', { status: ChatStreamStatus; summary?: string }>;
-export type StreamErrorEvent = ChatStreamEnvelope<'error', { code: string; message: string; recoverable?: boolean }>;
+export type RunEndEvent = ChatStreamEnvelope<'run_end', { status: ChatStreamStatus; summary?: string; petFeedback: PetFeedback }>;
+export type StreamErrorEvent = ChatStreamEnvelope<'error', { code: string; message: string; recoverable?: boolean; petFeedback: PetFeedback }>;
 
 export type ChatStreamEvent =
   | RunStartEvent

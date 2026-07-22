@@ -15,6 +15,7 @@ import type {
   AgentSseTurnPlanUpdatedPayload,
   AgentSseUserTranscriptAttachment,
   AgentSseUserTranscriptPayload,
+  PetFeedback,
 } from '@xopcai/gateway-contract';
 
 export type ProgressState = AgentSseProgressState;
@@ -46,6 +47,7 @@ export type AgentSseCallbacks = {
   onProgress: (progress: ProgressState) => void;
   onTtsAudio?: (payload: AgentSseTtsAudioPayload) => void;
   onClarifyRequest?: (payload: AgentSseClarifyRequestPayload) => void;
+  onPetFeedback?: (feedback: PetFeedback) => void;
   onResult: () => void;
   onError: (msg: string) => void;
 };
@@ -96,6 +98,50 @@ function serializePayload(value: unknown): unknown {
   return value;
 }
 
+const petTaskStates = new Set(['working', 'waiting', 'success', 'error']);
+const petReassurances = new Set(['making_progress', 'waiting_safely', 'completed', 'work_preserved', 'details_available']);
+const petActions = new Set(['open_session', 'confirm', 'review_error']);
+
+function normalizePetFeedback(raw: unknown): PetFeedback | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const input = raw as Record<string, unknown>;
+  if (input.version !== 2 || !petTaskStates.has(String(input.taskState))) return undefined;
+  if (input.sensitivity !== 'public' && input.sensitivity !== 'private') return undefined;
+  const actionInput = input.nextAction && typeof input.nextAction === 'object' && !Array.isArray(input.nextAction)
+    ? input.nextAction as Record<string, unknown>
+    : undefined;
+  const nextAction = actionInput && petActions.has(String(actionInput.type)) && petActions.has(String(actionInput.label))
+    ? {
+        type: String(actionInput.type) as NonNullable<PetFeedback['nextAction']>['type'],
+        label: String(actionInput.label) as NonNullable<PetFeedback['nextAction']>['label'],
+      }
+    : undefined;
+  const progressInput = input.progress && typeof input.progress === 'object' && !Array.isArray(input.progress)
+    ? input.progress as Record<string, unknown>
+    : undefined;
+  const progress = progressInput
+    && typeof progressInput.completed === 'number'
+    && typeof progressInput.total === 'number'
+    && progressInput.total > 0
+    ? { completed: progressInput.completed, total: progressInput.total }
+    : undefined;
+  const reassurance = petReassurances.has(String(input.reassurance))
+    ? input.reassurance as PetFeedback['reassurance']
+    : undefined;
+  const publicSummary = input.sensitivity === 'public' && typeof input.publicSummary === 'string' && input.publicSummary.trim()
+    ? input.publicSummary.trim().slice(0, 160)
+    : undefined;
+  return {
+    version: 2,
+    taskState: String(input.taskState) as PetFeedback['taskState'],
+    sensitivity: input.sensitivity,
+    ...(publicSummary ? { publicSummary } : {}),
+    ...(reassurance ? { reassurance } : {}),
+    ...(nextAction ? { nextAction } : {}),
+    ...(progress ? { progress } : {}),
+  };
+}
+
 export function dispatchAgentSseEvent(
   event: string,
   data: string,
@@ -111,6 +157,8 @@ export function dispatchAgentSseEvent(
 
   const p = payloadOf(parsed);
   const effectiveEvent = normalizedEventName(event, parsed);
+  const petFeedback = normalizePetFeedback(p.petFeedback);
+  if (petFeedback) cb?.onPetFeedback?.(petFeedback);
 
   switch (effectiveEvent) {
     case 'run_start':
@@ -254,6 +302,7 @@ export function dispatchAgentSseEvent(
         detail: p.detail as string | undefined,
         toolName: p.toolName as string | undefined,
         timestamp: Date.now(),
+        petFeedback,
       });
       break;
     case 'compaction':
@@ -286,6 +335,7 @@ export function dispatchAgentSseEvent(
           question,
           choices: choices && choices.length >= 2 ? choices : undefined,
           default: def,
+          petFeedback,
         });
       }
       break;

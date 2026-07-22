@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 import {
   APP_SHORTCUT_RECORDING_EVENT,
+  clearPendingVoiceInputToggle,
   dispatchVoiceInputEvent,
   queuePendingVoiceInputToggle,
   VOICE_INPUT_CANCEL_EVENT,
@@ -17,6 +18,7 @@ export function GlobalVoiceInputShortcutHost() {
   const token = useGatewayStore((s) => s.token);
   const shortcut = useVoiceInputShortcutStore((s) => s.shortcut);
   const recordingShortcutRef = useRef(false);
+  const systemHotkeyActiveRef = useRef(false);
 
   useEffect(() => {
     const onRecordingChange = (event: Event) => {
@@ -29,15 +31,32 @@ export function GlobalVoiceInputShortcutHost() {
   }, []);
 
   useEffect(() => {
-    const unsubscribe = window.electronAPI?.voiceInputHotkey?.onToggle(() => {
-      if (recordingShortcutRef.current || !token) return;
+    const hotkeyApi = window.electronAPI?.voiceInputHotkey;
+    if (typeof hotkeyApi?.onEvent !== 'function') return;
+
+    const unsubscribe = hotkeyApi.onEvent((action) => {
+      if (action === 'press') {
+        if (recordingShortcutRef.current || !token) return;
+        systemHotkeyActiveRef.current = true;
+      } else {
+        if (!systemHotkeyActiveRef.current) return;
+        systemHotkeyActiveRef.current = false;
+      }
+
       const target = document.querySelector('[data-voice-input-scope="note"]') ? 'note' : 'chat';
-      if (!dispatchVoiceInputEvent(VOICE_INPUT_TOGGLE_EVENT, target)) {
+      if (dispatchVoiceInputEvent(VOICE_INPUT_TOGGLE_EVENT, target)) return;
+
+      if (action === 'press') {
         queuePendingVoiceInputToggle();
         navigate('/chat');
+      } else {
+        clearPendingVoiceInputToggle();
       }
     });
-    return unsubscribe;
+    return () => {
+      systemHotkeyActiveRef.current = false;
+      unsubscribe();
+    };
   }, [navigate, token]);
 
   useEffect(() => {
