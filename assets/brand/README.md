@@ -28,6 +28,8 @@ The palette is deliberately compact:
 - `#111827` / `#F8FAFC`: transparent UI mark on light and dark themes.
 - Android uses a slate foreground over `#EEF1F8`; its monochrome image exposes the same
   alpha silhouette for Android themed icons.
+- iOS receives opaque Light, Dark, and Tinted App Icon variants; Android receives legacy
+  density PNGs plus adaptive foreground, background, and monochrome resources.
 
 The macOS menu-bar asset remains a transparent template image and is recoloured by the
 system. Browser and Windows/Linux tray assets use a white rounded-square badge with an

@@ -122,6 +122,16 @@ npm install -g @xopcai/xopc
 
 Or with pnpm: `pnpm add -g @xopcai/xopc` · China mirror: `npm install -g @xopcai/xopc --registry=https://registry.npmmirror.com`
 
+Large optional runtimes are installed only when you enable the related feature:
+
+```bash
+npm install -g @huggingface/transformers@3.8.1 sherpa-onnx-node@1.13.4
+npm install -g @composio/core@0.14.0 @composio/experimental@0.2.0
+npm install -g @larksuiteoapi/node-sdk@1.66.0 playwright-core@1.60.0
+```
+
+Use the same command without `-g` when xopc is installed as a project dependency.
+
 ### More commands
 
 ```bash

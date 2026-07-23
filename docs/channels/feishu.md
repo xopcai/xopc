@@ -5,6 +5,14 @@ Feishu/Lark is configured under **`channels.feishu`**. The channel supports two 
 - **`websocket`** (default): Feishu Socket Mode.
 - **`webhook`**: a local HTTP server that receives Feishu events. Requires webhook secrets.
 
+Install the optional SDK next to xopc before enabling the channel:
+
+```bash
+npm install @larksuiteoapi/node-sdk@1.66.0
+```
+
+Add `-g` when xopc itself was installed globally.
+
 ## Gateway console — IM channels
 
 On **`#/channels`** (sidebar **IM channels**), you can onboard Feishu when the gateway is running and a **gateway token** is saved in settings.
@@ -194,4 +202,3 @@ Use `channels.feishu.accounts.<id>` to override per-account settings (including 
 ## Troubleshooting
 
 - **Error: `Feishu webhook mode requires encryptKey`**: your effective config resolved `connectionMode=webhook` for that account, but `encryptKey` is missing. Set `encryptKey` (either top-level `channels.feishu.encryptKey` or per-account `channels.feishu.accounts.<id>.encryptKey`), or switch back to `connectionMode: "websocket"`.
-

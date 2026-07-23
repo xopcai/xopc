@@ -2,7 +2,6 @@ import crypto from 'node:crypto';
 import * as http from 'node:http';
 
 import type { InboundMessage } from '@xopcai/xopc/channels/transport-types.js';
-import * as lark from '@larksuiteoapi/node-sdk';
 
 import type { Config } from '@xopcai/xopc/config/schema.js';
 import type { ChannelSecurityContext } from '@xopcai/xopc/channels/plugin-types.js';
@@ -15,6 +14,7 @@ import type { FeishuInboundWork } from '../reliability/inbound-pipeline.js';
 import { stripFeishuMentions } from '../text/mentions.js';
 import { recordFeishuMessageBinding } from '../../state/message-bindings.js';
 import { sendFeishuPairingPromptIfNeeded } from '../../pairing/feishu-pairing-prompt.js';
+import { loadFeishuLarkSdk } from '../client/lark-sdk.js';
 import { createFeishuLarkSdkPinoLogger } from '../client/lark-sdk-logger.js';
 
 const log = createLogger('FeishuWebhook');
@@ -153,7 +153,7 @@ export function createFeishuWebhookMonitor(deps: FeishuWebhookMonitorDeps) {
   const host = (account.webhookHost ?? '127.0.0.1').trim() || '127.0.0.1';
   const port = account.webhookPort ?? 3000;
   const path = (account.webhookPath ?? '/feishu/events').trim() || '/feishu/events';
-  const l = lark as any;
+  const l = loadFeishuLarkSdk() as any;
   const sdkLogger = createFeishuLarkSdkPinoLogger(account.accountId);
 
   function resolveTextDebounceMs(): number {
@@ -300,7 +300,7 @@ export function createFeishuWebhookMonitor(deps: FeishuWebhookMonitorDeps) {
       return text(res, 401, 'Invalid verification token');
     }
 
-    const { isChallenge, challenge } = lark.generateChallenge(payload, { encryptKey });
+    const { isChallenge, challenge } = l.generateChallenge(payload, { encryptKey });
     if (isChallenge) return json(res, 200, challenge);
 
     const envelope = Object.assign(Object.create({ headers: req.headers }), payload);
@@ -358,4 +358,3 @@ function safeJsonText(raw: unknown): string | undefined {
     return raw;
   }
 }
-

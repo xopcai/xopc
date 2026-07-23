@@ -47,7 +47,7 @@ export function resolveInstalledPackageVersion(repoRoot, name) {
 export function buildMinimalElectronPackageJson(rootPkg, repoRoot) {
   const dependencies = {};
   for (const name of ELECTRON_PACKAGED_DEPENDENCIES) {
-    const version = rootPkg.dependencies?.[name];
+    const version = rootPkg.dependencies?.[name] ?? rootPkg.devDependencies?.[name];
     if (typeof version === 'string') {
       dependencies[name] = repoRoot != null ? resolveInstalledPackageVersion(repoRoot, name) : version;
     }

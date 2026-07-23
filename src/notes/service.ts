@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import { type UserMessage } from '@earendil-works/pi-ai/compat';
 
@@ -33,6 +33,13 @@ import type {
 const log = createLogger('NotesService');
 const MAX_SNAPSHOTS_PER_NOTE = 50;
 const SNAPSHOT_THROTTLE_MS = 60_000;
+
+function quickCaptureId(idempotencyKey: string): string {
+  const digest = createHash('sha256')
+    .update(`xopc:quick-capture:${idempotencyKey}`)
+    .digest('hex');
+  return `capture_${digest.slice(0, 32)}`;
+}
 
 function inferKind(markdown?: string, hasAttachments?: boolean, attachments?: NoteAttachment[]): NoteKind {
   if (hasAttachments && attachments?.length && attachments.every((item) => item.type === 'audio')) return 'voice';
@@ -163,6 +170,7 @@ async function buildAiCatalysisReport(note: Note, config?: Config): Promise<Note
 
 export class NotesService {
   private lastSnapshotAt = new Map<string, number>();
+  private quickCapturesInFlight = new Map<string, Promise<Note>>();
 
   constructor(private readonly store = new NotesStore()) {}
 
@@ -170,8 +178,22 @@ export class NotesService {
     await this.store.initialize();
   }
 
-  async quickCapture(markdown: string, source: CaptureSource): Promise<Note> {
-    const id = randomUUID();
+  async quickCapture(markdown: string, source: CaptureSource, idempotencyKey?: string): Promise<Note> {
+    const id = idempotencyKey ? quickCaptureId(idempotencyKey) : randomUUID();
+    if (idempotencyKey) {
+      const existing = await this.store.getNote(id);
+      if (existing) return existing;
+      const inFlight = this.quickCapturesInFlight.get(id);
+      if (inFlight) return inFlight;
+      const capture = this.createQuickCapture(id, markdown, source)
+        .finally(() => this.quickCapturesInFlight.delete(id));
+      this.quickCapturesInFlight.set(id, capture);
+      return capture;
+    }
+    return this.createQuickCapture(id, markdown, source);
+  }
+
+  private async createQuickCapture(id: string, markdown: string, source: CaptureSource): Promise<Note> {
     const now = Date.now();
     const note: Note = {
       id,

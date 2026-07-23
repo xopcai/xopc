@@ -103,7 +103,17 @@ async function loadPipeline(
     throw new Error(`Model ${model.id} does not use the Transformers.js engine`);
   }
   const promise = (async () => {
-    const transformers = await import('@huggingface/transformers');
+    let transformers: typeof import('@huggingface/transformers');
+    try {
+      transformers = await import('@huggingface/transformers');
+    } catch (cause) {
+      throw new Error(
+        'The Transformers.js local voice engine is not installed. '
+        + 'Install @huggingface/transformers@3.8.1 alongside @xopcai/xopc; '
+        + 'use npm install -g when xopc is installed globally.',
+        { cause },
+      );
+    }
     transformers.env.cacheDir = cacheDir;
     transformers.env.allowRemoteModels = allowRemote;
     transformers.env.allowLocalModels = true;
@@ -167,7 +177,17 @@ async function loadSherpaRecognizer(
   }
   const modelDir = resolveLocalVoiceModelDir(model.id);
   const promise = (async () => {
-    const imported = await import('sherpa-onnx-node');
+    let imported: typeof import('sherpa-onnx-node');
+    try {
+      imported = await import('sherpa-onnx-node');
+    } catch (cause) {
+      throw new Error(
+        'The sherpa-onnx local voice engine is not installed. '
+        + 'Install sherpa-onnx-node@1.13.4 alongside @xopcai/xopc; '
+        + 'use npm install -g when xopc is installed globally.',
+        { cause },
+      );
+    }
     const sherpa = ((imported as { default?: SherpaModule }).default ?? imported) as SherpaModule;
     return new sherpa.OfflineRecognizer({
       featConfig: { sampleRate: 16_000, featureDim: 80 },

@@ -97,10 +97,11 @@ function stripHtmlFallback(html: string): string {
 }
 
 async function extractReadableText(html: string, pageUrl: string): Promise<string> {
-  const { JSDOM } = await import('jsdom');
+  const { parseHTML } = await import('linkedom');
   const { Readability } = await import('@mozilla/readability');
-  const dom = new JSDOM(html, { url: pageUrl });
-  const reader = new Readability(dom.window.document);
+  const { document } = parseHTML(html);
+  Object.defineProperty(document, 'documentURI', { value: pageUrl });
+  const reader = new Readability(document);
   const article = reader.parse();
   const text = article?.textContent?.trim() ?? '';
   return text;

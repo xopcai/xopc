@@ -332,7 +332,14 @@ TTS 开启时注册。用于需要语音播报的场景；一般仍以文字回�
 
 ## 浏览器（可选）
 
-当浏览器自动化已在配置中启用，并被所选 agent manifest 允许时注册。若需本机浏览器，可执行如：`npx playwright install chromium`。
+当浏览器自动化已在配置中启用，并被所选 agent manifest 允许时注册。本地浏览器运行时为可选依赖：
+
+```bash
+npm install playwright-core@1.60.0
+npx playwright-core install chromium
+```
+
+如果 xopc 本身是全局安装，请在安装命令中添加 `-g`。
 
 | 工具 | 作用 |
 |------|------|
