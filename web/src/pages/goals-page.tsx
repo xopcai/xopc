@@ -788,7 +788,7 @@ export function GoalsPage() {
 
   return (
     <main className="flex min-h-0 flex-1 flex-col overflow-hidden bg-surface-panel">
-      <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col px-3 py-5 sm:px-6 lg:px-8">
+      <div className="flex min-h-0 w-full flex-1 flex-col px-3 py-5 sm:px-5 xl:px-6">
         <section className="rounded-xl border border-edge bg-surface-base px-4 py-5 sm:px-6 sm:py-6" aria-labelledby="goals-now-title">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0 max-w-2xl">

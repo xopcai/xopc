@@ -50,6 +50,27 @@ describe('electron-runtime-externals', () => {
     expect(minimal.name).toBe('@xopcai/xopc');
   });
 
+  it('promotes optional runtime packages from devDependencies for Electron packaging', () => {
+    const minimal = buildMinimalElectronPackageJson({
+      name: '@xopcai/xopc',
+      version: '0.0.0',
+      dependencies: {
+        'silk-wasm': '^3.7.1',
+      },
+      devDependencies: {
+        '@huggingface/transformers': '3.8.1',
+        'onnxruntime-common': '1.21.0',
+        'sherpa-onnx-node': '1.13.4',
+      },
+    });
+    expect(minimal.dependencies).toEqual({
+      'silk-wasm': '^3.7.1',
+      '@huggingface/transformers': '3.8.1',
+      'onnxruntime-common': '1.21.0',
+      'sherpa-onnx-node': '1.13.4',
+    });
+  });
+
   it('pins packaged runtime deps to installed exact versions when repoRoot is provided', () => {
     const repoRoot = process.cwd();
     const minimal = buildMinimalElectronPackageJson(

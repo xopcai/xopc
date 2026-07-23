@@ -10,6 +10,14 @@ export interface PlaywrightChromiumDoctorResult {
   reason?: string;
 }
 
+function playwrightMissingError(cause: unknown): Error {
+  return new Error(
+    'Browser automation requires playwright-core@1.60.0. Install it alongside @xopcai/xopc; '
+    + 'use npm install -g when xopc is installed globally.',
+    { cause },
+  );
+}
+
 /** Root directory of the `playwright-core` package (Electron extraResources or node_modules). */
 export function resolvePlaywrightCoreRoot(): string {
   const envRoot = process.env.XOPC_PLAYWRIGHT_CORE_ROOT?.trim();
@@ -21,9 +29,13 @@ export function resolvePlaywrightCoreRoot(): string {
     return envRoot;
   }
 
-  const require = createRequire(fileURLToPath(import.meta.url));
-  const pkgJson = require.resolve('playwright-core/package.json');
-  return dirname(pkgJson);
+  try {
+    const require = createRequire(fileURLToPath(import.meta.url));
+    const pkgJson = require.resolve('playwright-core/package.json');
+    return dirname(pkgJson);
+  } catch (cause) {
+    throw playwrightMissingError(cause);
+  }
 }
 
 /** Absolute path to bundled `playwright-core/cli.js` (same revision as runtime). */
@@ -39,7 +51,11 @@ export async function loadPlaywrightCoreModule(): Promise<typeof import('playwri
     const require = createRequire(import.meta.url);
     return require(entry) as typeof import('playwright-core');
   }
-  return import('playwright-core');
+  try {
+    return await import('playwright-core');
+  } catch (cause) {
+    throw playwrightMissingError(cause);
+  }
 }
 
 /** Check whether playwright-core's default Chromium revision is on disk. */

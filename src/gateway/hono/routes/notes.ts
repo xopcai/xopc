@@ -56,7 +56,11 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
       return c.json({ error: 'Missing required field: text' }, 400);
     }
     const source = parseCaptureSource(body);
-    const note = await service.notesServiceInstance.quickCapture(text, source);
+    const idempotencyKey = c.req.header('idempotency-key')?.trim();
+    if (idempotencyKey && idempotencyKey.length > 200) {
+      return c.json({ error: 'Idempotency-Key is too long' }, 400);
+    }
+    const note = await service.notesServiceInstance.quickCapture(text, source, idempotencyKey || undefined);
     return c.json({ note }, 201);
   });
 

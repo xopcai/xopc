@@ -4,6 +4,34 @@ import { describe, expect, it, vi } from 'vitest';
 import { registerNotesRoutes } from '../notes.js';
 
 describe('notes routes', () => {
+  it('forwards the quick capture idempotency key to the notes service', async () => {
+    const app = new Hono();
+    const quickCapture = vi.fn().mockResolvedValue({ id: 'note-1' });
+    registerNotesRoutes(app, {
+      service: {
+        notesServiceInstance: { quickCapture },
+      },
+      strictRateLimitMiddleware: async (_c, next) => next(),
+      sseConfig: {},
+    } as never);
+
+    const res = await app.request('/api/notes/quick-capture', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'idempotency-key': 'capture-request-1',
+      },
+      body: JSON.stringify({ text: 'Remember this', channel: 'app', platform: 'android' }),
+    });
+
+    expect(res.status).toBe(201);
+    expect(quickCapture).toHaveBeenCalledWith(
+      'Remember this',
+      { channel: 'app', platform: 'android' },
+      'capture-request-1',
+    );
+  });
+
   it('returns a stable note_not_found code when patching a missing note', async () => {
     const app = new Hono();
     registerNotesRoutes(app, {

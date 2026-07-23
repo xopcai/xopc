@@ -1,6 +1,5 @@
-import * as lark from '@larksuiteoapi/node-sdk';
-
 import type { ResolvedFeishuAccount } from '../../state/accounts.js';
+import { loadFeishuLarkSdk } from './lark-sdk.js';
 import { createFeishuLarkSdkPinoLogger } from './lark-sdk-logger.js';
 
 export function createFeishuClient(account: ResolvedFeishuAccount): {
@@ -8,7 +7,7 @@ export function createFeishuClient(account: ResolvedFeishuAccount): {
   dispatcher: any;
   api: any;
 } {
-  const l = lark as any;
+  const l = loadFeishuLarkSdk() as any;
   const sdkLogger = createFeishuLarkSdkPinoLogger(account.accountId);
 
   const apiBaseUrl = resolveFeishuBaseUrl(account.domain);
@@ -46,4 +45,3 @@ function resolveFeishuBaseUrl(domain: string): string | undefined {
   }
   return undefined;
 }
-

@@ -334,7 +334,15 @@ Programmatic generation may support reference images for some providers; the `im
 
 ## Browser (optional)
 
-Registered when browser automation is enabled by config and allowed by the selected agent manifest. Install browsers once if required, e.g. `npx playwright install chromium`.
+Registered when browser automation is enabled by config and allowed by the selected agent manifest. The local
+browser runtime is optional:
+
+```bash
+npm install playwright-core@1.60.0
+npx playwright-core install chromium
+```
+
+Add `-g` to the install command when xopc itself is installed globally.
 
 | Tool | Purpose |
 |------|---------|

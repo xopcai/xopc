@@ -122,6 +122,16 @@ npm install -g @xopcai/xopc
 
 也可用 pnpm：`pnpm add -g @xopcai/xopc` · 国内：`npm install -g @xopcai/xopc --registry=https://registry.npmmirror.com`
 
+大体积的可选运行时只在启用对应功能时安装：
+
+```bash
+npm install -g @huggingface/transformers@3.8.1 sherpa-onnx-node@1.13.4
+npm install -g @composio/core@0.14.0 @composio/experimental@0.2.0
+npm install -g @larksuiteoapi/node-sdk@1.66.0 playwright-core@1.60.0
+```
+
+如果 xopc 是项目依赖，请使用不带 `-g` 的相同命令。
+
 ### 更多命令
 
 ```bash
