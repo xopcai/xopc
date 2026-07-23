@@ -31,17 +31,26 @@ RUN NODE_OPTIONS=--max-old-space-size=4096 pnpm run build
 
 FROM build AS runtime-assets
 
+ARG XOPC_INSTALL_BROWSER=""
+
 ENV CI=true \
     NODE_ENV=production \
     PNPM_HOME=/pnpm \
     PATH=/pnpm:$PATH
 
 RUN --mount=type=cache,id=xopc-pnpm-store,target=/pnpm/store,sharing=locked \
+    if [ -n "$XOPC_INSTALL_BROWSER" ]; then \
+      cp -LR node_modules/playwright-core /tmp/xopc-playwright-core; \
+    fi && \
     pnpm prune --prod \
       --config.store-dir=/pnpm/store \
       --config.supportedArchitectures.os=linux \
       --config.supportedArchitectures.cpu="$(node -p 'process.arch')" \
       --config.supportedArchitectures.libc=glibc && \
+    if [ -n "$XOPC_INSTALL_BROWSER" ]; then \
+      mkdir -p node_modules/playwright-core && \
+      cp -R /tmp/xopc-playwright-core/. node_modules/playwright-core/; \
+    fi && \
     find dist -type f \( -name '*.map' -o -name '*.tsbuildinfo' \) -delete
 
 FROM ${XOPC_NODE_SLIM_IMAGE} AS runtime

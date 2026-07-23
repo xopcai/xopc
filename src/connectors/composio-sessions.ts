@@ -1,9 +1,7 @@
 import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 
-import { Composio } from '@composio/core';
 import type { ToolRouterCreateSessionConfig } from '@composio/core';
-import { PiProvider } from '@composio/experimental';
 
 import { CredentialResolver } from '../auth/credentials.js';
 import {
@@ -157,6 +155,20 @@ export class ComposioSessionsAdapter {
     const resolver = options.resolver ?? new CredentialResolver();
     this.createClient = async () => {
       const apiKey = await assertComposioApiKeyConfigured(resolver);
+      let Composio: typeof import('@composio/core').Composio;
+      let PiProvider: typeof import('@composio/experimental').PiProvider;
+      try {
+        [{ Composio }, { PiProvider }] = await Promise.all([
+          import('@composio/core'),
+          import('@composio/experimental'),
+        ]);
+      } catch (cause) {
+        throw new Error(
+          'Composio support requires @composio/core and @composio/experimental. '
+          + 'Install them alongside @xopcai/xopc; use npm install -g when xopc is installed globally.',
+          { cause },
+        );
+      }
       return new Composio({
         apiKey,
         baseURL: process.env.XOPC_COMPOSIO_BASE_URL?.trim() || undefined,

@@ -6,6 +6,19 @@ const MIN_COLUMN_WIDTH = 50;
 const MAX_COLUMN_WIDTH = 400;
 const DEFAULT_TABLE_WIDTH = 730;
 
+type TableMutationResult = {
+  success: true;
+  block: unknown;
+};
+
+type TableRowDeletionResult = TableMutationResult & {
+  rows_deleted: number;
+};
+
+type TableColumnDeletionResult = TableMutationResult & {
+  columns_deleted: number;
+};
+
 function normalizeChildBlockIds(children: string[] | string | undefined): string[] {
   if (Array.isArray(children)) return children;
   return typeof children === 'string' ? [children] : [];
@@ -128,7 +141,12 @@ export function cleanBlocksForDescendant(blocks: FeishuDocxBlock[]): FeishuDocxB
   });
 }
 
-export async function insertTableRow(client: Lark.Client, docToken: string, blockId: string, rowIndex: number = -1) {
+export async function insertTableRow(
+  client: Lark.Client,
+  docToken: string,
+  blockId: string,
+  rowIndex: number = -1,
+): Promise<TableMutationResult> {
   const res = await client.docx.documentBlock.patch({
     path: { document_id: docToken, block_id: blockId },
     data: { insert_table_row: { row_index: rowIndex } },
@@ -142,7 +160,7 @@ export async function insertTableColumn(
   docToken: string,
   blockId: string,
   columnIndex: number = -1,
-) {
+): Promise<TableMutationResult> {
   const res = await client.docx.documentBlock.patch({
     path: { document_id: docToken, block_id: blockId },
     data: { insert_table_column: { column_index: columnIndex } },
@@ -157,7 +175,7 @@ export async function deleteTableRows(
   blockId: string,
   rowStart: number,
   rowCount: number = 1,
-) {
+): Promise<TableRowDeletionResult> {
   const res = await client.docx.documentBlock.patch({
     path: { document_id: docToken, block_id: blockId },
     data: { delete_table_rows: { row_start_index: rowStart, row_end_index: rowStart + rowCount } },
@@ -172,7 +190,7 @@ export async function deleteTableColumns(
   blockId: string,
   columnStart: number,
   columnCount: number = 1,
-) {
+): Promise<TableColumnDeletionResult> {
   const res = await client.docx.documentBlock.patch({
     path: { document_id: docToken, block_id: blockId },
     data: { delete_table_columns: { column_start_index: columnStart, column_end_index: columnStart + columnCount } },
@@ -189,7 +207,7 @@ export async function mergeTableCells(
   rowEnd: number,
   columnStart: number,
   columnEnd: number,
-) {
+): Promise<TableMutationResult> {
   const res = await client.docx.documentBlock.patch({
     path: { document_id: docToken, block_id: blockId },
     data: {
@@ -204,4 +222,3 @@ export async function mergeTableCells(
   if (res.code !== 0) throw new Error(res.msg);
   return { success: true, block: res.data?.block };
 }
-

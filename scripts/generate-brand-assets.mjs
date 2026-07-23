@@ -10,6 +10,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { Resvg } from '@resvg/resvg-js';
+import { optimize } from 'svgo';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const sourcePath = join(root, 'assets/brand/xopc-mark.svg');
@@ -44,7 +45,22 @@ function isEnabled(outputTarget) {
 
 function queue(outputTarget, relativePath, data) {
   if (!isEnabled(outputTarget)) return;
-  outputs.push({ path: join(root, relativePath), data: Buffer.isBuffer(data) ? data : Buffer.from(data) });
+  const output = outputTarget === 'web' && relativePath.endsWith('.svg') && typeof data === 'string'
+    ? optimize(data, {
+      multipass: true,
+      path: relativePath,
+      plugins: [{
+        name: 'preset-default',
+        params: {
+          overrides: {
+            cleanupNumericValues: { floatPrecision: 1 },
+            convertPathData: { floatPrecision: 1 },
+          },
+        },
+      }],
+    }).data
+    : data;
+  outputs.push({ path: join(root, relativePath), data: Buffer.isBuffer(output) ? output : Buffer.from(output) });
 }
 
 function document(definitions, body) {
@@ -306,7 +322,6 @@ queue('docs', 'docs/public/apple-touch-icon.png', appDarkPngs.get(180));
 queue('docs', 'docs/public/favicon.svg', renderSvg('badge'));
 
 queue('web', 'web/public/favicon.svg', renderSvg('favicon'));
-queue('web', 'web/public/favicon-icon.svg', renderSvg('favicon'));
 queue('web', 'web/public/favicon.png', faviconPngs.get(192));
 queue('web', 'web/public/favicon-16x16.png', faviconPngs.get(16));
 queue('web', 'web/public/favicon-32x32.png', faviconPngs.get(32));
@@ -340,8 +355,7 @@ queue(
   )}\n`,
 );
 
-// Native mobile icons. iOS receives appearance-specific full-bleed PNGs; Android gets
-// a transparent foreground plus the same silhouette for Android 13+ themed icons.
+// Expo mobile icons for iOS and Android.
 queue('mobile', 'apps/mobile-expo/assets/icon.png', mobileAppLightPngs.get(1024));
 queue('mobile', 'apps/mobile-expo/assets/icon-light.png', mobileAppLightPngs.get(1024));
 queue('mobile', 'apps/mobile-expo/assets/icon-dark.png', mobileAppDarkPngs.get(1024));
@@ -379,6 +393,7 @@ for (const { path, data } of outputs) {
   if (existsSync(path) && readFileSync(path).equals(data)) continue;
   stale += 1;
   if (!check) {
+    mkdirSync(dirname(path), { recursive: true });
     writeFileSync(path, data);
     written += 1;
   }

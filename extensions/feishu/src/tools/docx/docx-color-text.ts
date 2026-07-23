@@ -38,6 +38,12 @@ type DocxTextElement = NonNullable<
   NonNullable<NonNullable<DocxPatchPayload['data']>['update_text_elements']>['elements']
 >[number];
 
+type ColorTextUpdateResult = {
+  success: true;
+  segments: number;
+  block: unknown;
+};
+
 export function parseColorMarkup(content: string): Segment[] {
   const segments: Segment[] = [];
   const KNOWN = '(?:bg:[a-z]+|bold|red|orange|yellow|green|blue|purple|gr[ae]y)';
@@ -71,7 +77,12 @@ export function parseColorMarkup(content: string): Segment[] {
   return segments;
 }
 
-export async function updateColorText(client: Lark.Client, docToken: string, blockId: string, content: string) {
+export async function updateColorText(
+  client: Lark.Client,
+  docToken: string,
+  blockId: string,
+  content: string,
+): Promise<ColorTextUpdateResult> {
   const segments = parseColorMarkup(content);
   const elements: DocxTextElement[] = segments.map((seg) => ({
     text_run: {
@@ -91,4 +102,3 @@ export async function updateColorText(client: Lark.Client, docToken: string, blo
   if (res.code !== 0) throw new Error(res.msg);
   return { success: true, segments: segments.length, block: res.data?.block };
 }
-

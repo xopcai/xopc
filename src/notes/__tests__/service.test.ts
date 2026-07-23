@@ -110,6 +110,24 @@ describe('NotesService markdown sync and AI edit', () => {
     expect(note.title).toBe('今天要整理产品方案和');
   });
 
+  it('reuses the original quick capture for the same idempotency key', async () => {
+    const first = await service.quickCapture('Original capture', { channel: 'app' }, 'capture-request-1');
+    const replay = await service.quickCapture('Replayed capture', { channel: 'app' }, 'capture-request-1');
+
+    expect(replay.id).toBe(first.id);
+    expect(replay.markdown).toBe('Original capture');
+  });
+
+  it('coalesces concurrent quick captures with the same idempotency key', async () => {
+    const [first, replay] = await Promise.all([
+      service.quickCapture('Original capture', { channel: 'app' }, 'capture-request-2'),
+      service.quickCapture('Replayed capture', { channel: 'app' }, 'capture-request-2'),
+    ]);
+
+    expect(replay.id).toBe(first.id);
+    expect(replay.markdown).toBe(first.markdown);
+  });
+
   it('creates notes from markdown', async () => {
     const note = await service.createNote({ markdown: '第一段\n\n第二段', capturedVia: { channel: 'web' } });
     expect(note.markdown).toBe('第一段\n\n第二段');
