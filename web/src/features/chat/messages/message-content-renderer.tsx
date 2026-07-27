@@ -1,6 +1,5 @@
-// Block-level renderers used by MessageBubble. Splits the bubble's main column
-// into either text/image nodes or a collapsible AssistantStepsBlock for runs
-// of consecutive thinking/tool_use blocks.
+// Block-level renderers used by MessageBubble. Assistant activity is collected
+// into one turn-level disclosure instead of fragmenting the reply around text.
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { AlertCircle, Copy, ExternalLink, File, FolderOpen, Loader2, X } from 'lucide-react';
@@ -8,13 +7,15 @@ import { useThrottledCallback } from 'use-debounce';
 
 import { MarkdownView } from '@/features/chat/markdown/markdown-view';
 import type { WorkspaceFileLinkTarget } from '@/components/markdown/internal-links';
-import { AssistantStepsBlock } from '@/features/chat/messages/assistant-steps-block';
+import {
+  AssistantStepsBlock,
+  type AssistantActivityWorkflowOptions,
+} from '@/features/chat/messages/assistant-steps-block';
 import type {
   ImageContent,
   MessageContent,
+  ReasoningLevel,
   ReviewContent,
-  ThinkingContent,
-  ToolUseContent,
 } from '@/features/chat/messages/messages.types';
 import type {
   StepsClusterDoneLabels,
@@ -25,8 +26,6 @@ import type { ToolCardLabels } from '@/features/chat/tool-results/tool-result-ca
 import { UserMessageSegments } from '@/features/chat/messages/user-message-segments';
 import { stripEnvelopeTimestampPrefix } from '@/features/chat/messages/user-message-plain-text';
 import { stripStartupContextForDisplay } from '@/features/chat/messages/wire-text-scrub';
-import { WorkflowCard, type WorkflowCardLabels } from '@/features/chat/workflow/workflow-card';
-import { isWorkflowToolBlock } from '@/features/chat/workflow/workflow.utils';
 import { ProviderSetupRequiredCard } from '@/features/chat/messages/provider-setup-required-banner';
 import { parseProviderSetupRequired } from '@/features/chat/messages/provider-setup-required.parser';
 import {
@@ -38,6 +37,10 @@ import {
   mergeConsecutiveTextBlocks,
   prepareStreamingMarkdown,
 } from '@/features/chat/messages/streaming-markdown';
+import {
+  collectTurnActivityBlocks,
+  hasAssistantAnswerText,
+} from '@/features/chat/messages/turn-activity';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
@@ -438,17 +441,6 @@ function renderTextOrImageBlock(
   return null;
 }
 
-/** True once assistant text exists after this index (first answer token closes the steps drawer). */
-function hasAssistantTextAfter(content: MessageContent[], indexAfterSteps: number): boolean {
-  for (let j = indexAfterSteps; j < content.length; j++) {
-    const b = content[j];
-    if (b.type === 'text' && (b.text ?? '').length > 0) {
-      return true;
-    }
-  }
-  return false;
-}
-
 export function ChunkedContent({
   content,
   isUser,
@@ -461,6 +453,7 @@ export function ChunkedContent({
   onImagePreview,
   sessionKey,
   workflowOptions,
+  reasoningLevel,
 }: {
   content: MessageContent[];
   isUser: boolean;
@@ -481,6 +474,14 @@ export function ChunkedContent({
     openUrl: string;
     fetchUrl: string;
     unknownTool: string;
+    activityCompleted: string;
+    activityPartial: string;
+    activityFailedCount: string;
+    activityAnalysisComplete: string;
+    toolFailedImpact: string;
+    rawThinking: string;
+    toolRunning: string;
+    toolError: string;
   };
   clusterLabels: {
     done: StepsClusterDoneLabels;
@@ -491,65 +492,39 @@ export function ChunkedContent({
   imagePreviewLabel: string;
   onImagePreview: ((block: ImageContent, index: number) => void) | undefined;
   sessionKey: string | null | undefined;
-  workflowOptions: WorkflowRenderOptions;
+  workflowOptions: AssistantActivityWorkflowOptions;
+  reasoningLevel: ReasoningLevel;
 }) {
   const renderContent = isUser ? content : mergeConsecutiveTextBlocks(content);
   const nodes: ReactNode[] = [];
-  const wfOpts = workflowOptions;
+  const activityBlocks = isUser ? [] : collectTurnActivityBlocks(renderContent);
+  const answerStarted = !isUser && hasAssistantAnswerText(renderContent);
+  let activityRendered = false;
   let i = 0;
   let imageOrdinal = 0;
   while (i < renderContent.length) {
     const b = renderContent[i];
 
-    // Workflow tool_use is rendered as its own block (independent card) and
-    // breaks the surrounding steps run so the steps drawer above/below stays
-    // accurate without it.
-    if (b.type === 'tool_use' && isWorkflowToolBlock(b)) {
-      nodes.push(
-        <WorkflowCard
-          key={`workflow-${b.id ?? i}`}
-          block={b}
-          startedAt={wfOpts.getStartedAt?.(b)}
-          sessionKey={sessionKey}
-          onAbort={wfOpts.onAbort}
-          labels={wfOpts.labels}
-        />,
-      );
-      i++;
-      continue;
-    }
-
     if (b.type === 'thinking' || b.type === 'tool_use') {
-      const start = i;
-      while (i < renderContent.length) {
-        const c = renderContent[i];
-        if (c.type === 'thinking') {
-          i++;
-          continue;
-        }
-        if (c.type === 'tool_use' && !isWorkflowToolBlock(c)) {
-          i++;
-          continue;
-        }
-        break;
-      }
-      const slice = renderContent.slice(start, i) as Array<ThinkingContent | ToolUseContent>;
-      if (slice.length > 0) {
-        const finalAnswerStarted = !isUser && hasAssistantTextAfter(renderContent, i);
+      if (!isUser && !activityRendered && activityBlocks.length > 0) {
         nodes.push(
           <AssistantStepsBlock
-            key={`steps-${start}`}
-            blocks={slice}
+            key="turn-activity"
+            blocks={activityBlocks}
             toolLabels={toolLabels}
             stepLabels={stepLabels}
             clusterLabels={clusterLabels}
             cardLabels={cardLabels}
             sessionKey={sessionKey}
             isMessageStreaming={!isUser && isAssistantMessageStreaming}
-            finalAnswerStarted={finalAnswerStarted}
+            finalAnswerStarted={answerStarted}
+            workflowOptions={workflowOptions}
+            reasoningLevel={reasoningLevel}
           />,
         );
+        activityRendered = true;
       }
+      i++;
     } else {
       const imgIdx = b.type === 'image' ? imageOrdinal++ : 0;
       const el = renderTextOrImageBlock(
@@ -567,19 +542,4 @@ export function ChunkedContent({
     }
   }
   return <>{nodes}</>;
-}
-
-/**
- * Plumbing for WorkflowCard. The message bubble owns locale labels; running
- * rows may additionally receive an abort handler and elapsed-time anchor.
- */
-export interface WorkflowRenderOptions {
-  labels: WorkflowCardLabels;
-  onAbort?: () => void;
-  /**
-   * Resolve a "running since" timestamp for the live elapsed-time ticker.
-   * Defaults to `undefined` (no elapsed time shown until the snapshot
-   * provides durationMs at completion).
-   */
-  getStartedAt?: (block: ToolUseContent) => number | undefined;
 }

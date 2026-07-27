@@ -65,12 +65,18 @@ export type MessagingCallbacks = {
   onToken: (delta: string) => void;
   onThinking: (content: string, isDelta: boolean) => void;
   onThinkingEnd: () => void;
-  onToolStart: (toolName: string, args?: unknown, toolCallId?: string) => void;
+  onToolStart: (
+    toolName: string,
+    args: unknown,
+    toolCallId: string | undefined,
+    startedAt: number,
+  ) => void;
   onToolEnd: (
     toolName: string,
     isError: boolean,
-    result?: unknown,
-    toolCallId?: string,
+    result: unknown,
+    toolCallId: string | undefined,
+    completedAt: number,
   ) => void;
   /**
    * Mid-execution structured update for a tool whose `partialResult` carried
@@ -417,7 +423,7 @@ export class MessageSender {
         const toolName = String(payload.toolName || 'unknown');
         const toolCallId = typeof payload.toolCallId === 'string' ? payload.toolCallId : undefined;
         if (toolName === 'clarify') break;
-        cb?.onToolStart(toolName, payload.args, toolCallId);
+        cb?.onToolStart(toolName, payload.args, toolCallId, protocolTimestamp(parsed.timestamp));
         break;
       }
       case 'tool_update': {
@@ -433,6 +439,7 @@ export class MessageSender {
           payload.status === 'error' || payload.status === 'cancelled',
           serializeProtocolPayload(payload.result),
           typeof payload.toolCallId === 'string' ? payload.toolCallId : undefined,
+          protocolTimestamp(parsed.timestamp),
         );
         break;
       case 'review_start':
@@ -562,6 +569,13 @@ function serializeProtocolPayload(result: unknown): unknown {
   } catch {
     return String(result);
   }
+}
+
+function protocolTimestamp(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new Error('Chat stream event is missing a numeric timestamp');
+  }
+  return value;
 }
 
 function normalizeTurnPlan(raw: unknown): TurnPlanState['plan'] {
