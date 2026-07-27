@@ -50,7 +50,9 @@ export async function runShellCommand(
 ): Promise<CommandResult> {
   const started = Date.now();
   const shell = process.platform === 'win32' ? 'cmd.exe' : '/bin/sh';
-  const args = process.platform === 'win32' ? ['/d', '/s', '/c', command] : ['-lc', command];
+  const args = process.platform === 'win32'
+    ? ['/d', '/s', '/c', `"${command}"`]
+    : ['-lc', command];
   try {
     const { stdout, stderr } = await execFileAsync(shell, args, {
       cwd: options.cwd,
@@ -58,6 +60,7 @@ export async function runShellCommand(
       signal: options.signal,
       maxBuffer: 8 * 1024 * 1024,
       env: process.env,
+      windowsVerbatimArguments: process.platform === 'win32',
     });
     return { command, exitCode: 0, stdout, stderr, durationMs: Date.now() - started };
   } catch (error) {

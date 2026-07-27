@@ -82,28 +82,17 @@ async function impactCount(): Promise<void> {
 }
 
 async function perAgentGating(): Promise<void> {
-  const { AgentToolsFactory } = await import(
-    sourceModule('src/agent/tools/factory.ts')
+  const { isCodeIntelligenceEnabledForAgent } = await import(
+    sourceModule('src/agent/code-intelligence/tool-gating.ts')
   );
-  const rt = runtime(async () => ({ text: 'ok', status: rt.getStatus() }));
-  const factory = new AgentToolsFactory({
-    workspace: process.cwd(),
-    bus: {} as never,
-    getCurrentContext: () => null,
-    getConfig: () => ({
-      codeIntelligence: {
-        enabled: true,
-        agentIds: ['coder'],
-      },
-      browser: { enabled: false },
-    }) as never,
-    getCodeIntelligenceRuntime: () => rt,
-  });
-  const coderNames = factory.createCoreTools({ agentId: 'coder' }).map((tool) => tool.name);
-  const otherNames = factory.createCoreTools({ agentId: 'other' }).map((tool) => tool.name);
-  assert.ok(coderNames.includes('code_search'));
-  assert.ok(!otherNames.includes('code_search'));
-  await factory.shutdownBrowser();
+  const config = {
+    enabled: true,
+    agentIds: ['coder'],
+  };
+  assert.equal(isCodeIntelligenceEnabledForAgent(config, 'coder'), true);
+  assert.equal(isCodeIntelligenceEnabledForAgent(config, 'other'), false);
+  assert.equal(isCodeIntelligenceEnabledForAgent({ ...config, enabled: false }, 'coder'), false);
+  assert.equal(isCodeIntelligenceEnabledForAgent(config, undefined), false);
 }
 
 async function workspaceInvalidation(): Promise<void> {

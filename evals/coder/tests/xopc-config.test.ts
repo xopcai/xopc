@@ -69,7 +69,9 @@ describe('prepareXopcConfig', () => {
       mode: 'token',
       token: 'ephemeral-eval-gateway-token',
     });
-    expect((await stat(output)).mode & 0o777).toBe(0o600);
+    if (process.platform !== 'win32') {
+      expect((await stat(output)).mode & 0o777).toBe(0o600);
+    }
     expect(await readFile(join(stateDir, 'agents', 'eval-coder-baseline', 'profile', 'SOUL.md'), 'utf8'))
       .toBe('# Coder\n');
     expect(await readFile(join(stateDir, 'agents', 'eval-coder-cbm', 'profile', 'SOUL.md'), 'utf8'))

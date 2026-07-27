@@ -109,7 +109,7 @@ cases:
       - pnpm install --offline --frozen-lockfile
     setup:
       - >-
-        node -e "const fs=require('node:fs');const p='src/agent/tools/factory.ts';const s=fs.readFileSync(p,'utf8');const a='      codeIntelligenceConfig.agentIds.includes(agentId);';if(!s.includes(a))throw new Error('seed target missing');fs.writeFileSync(p,s.replace(a,'      !codeIntelligenceConfig.agentIds.includes(agentId);'))"
+        node -e "const fs=require('node:fs');const p='src/agent/code-intelligence/tool-gating.ts';const s=fs.readFileSync(p,'utf8');const a='    config.agentIds?.includes(agentId) === true;';if(!s.includes(a))throw new Error('seed target missing');fs.writeFileSync(p,s.replace(a,'    config.agentIds?.includes(agentId) !== true;'))"
     budget:
       timeoutMs: 600000
       maxModelRequests: 40

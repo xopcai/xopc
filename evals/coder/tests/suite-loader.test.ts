@@ -1,4 +1,4 @@
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -59,13 +59,14 @@ cases:
     const suite = await loadSuite(path);
 
     expect(suite.cases[0]?.repo.path).toBe(join(root, 'repo'));
-    expect(suite.cases[0]?.graders[0]).toMatchObject({
+    const grader = suite.cases[0]?.graders[0];
+    expect(grader).toMatchObject({
       type: 'command',
-      hiddenFiles: [{
-        source: realpathSync(join(root, 'hidden.test.ts')),
-        target: '.xopc-eval-hidden/check.test.ts',
-      }],
+      hiddenFiles: [{ target: '.xopc-eval-hidden/check.test.ts' }],
     });
+    if (grader?.type === 'command') {
+      expect(existsSync(grader.hiddenFiles?.[0]?.source ?? '')).toBe(true);
+    }
     expect(suite.contentHash).toHaveLength(64);
   });
 

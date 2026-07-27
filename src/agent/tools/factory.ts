@@ -84,6 +84,7 @@ import { mergeTtsConfigFromAppConfig } from '../../voice/tts/merge-config.js';
 import { createGoalEvidenceRecorder } from './goal-evidence-recorder.js';
 import { getAgentCapabilityToolNames } from '../capabilities/index.js';
 import type { CodeIntelligenceRuntimeLike } from '../code-intelligence/index.js';
+import { isCodeIntelligenceEnabledForAgent } from '../code-intelligence/tool-gating.js';
 
 const log = createLogger('AgentToolsFactory');
 
@@ -278,10 +279,10 @@ export class AgentToolsFactory {
     });
     const codeIntelligenceConfig = cfg?.codeIntelligence;
     const agentId = options?.agentId;
-    const codeIntelligenceEnabled =
-      codeIntelligenceConfig?.enabled === true &&
-      agentId !== undefined &&
-      codeIntelligenceConfig.agentIds.includes(agentId);
+    const codeIntelligenceEnabled = isCodeIntelligenceEnabledForAgent(
+      codeIntelligenceConfig,
+      agentId,
+    );
     const codeIntelligenceTools = codeIntelligenceEnabled && this.deps.getCodeIntelligenceRuntime
       ? createCodeIntelligenceTools({
           getRuntime: () => this.deps.getCodeIntelligenceRuntime!(workspace),
