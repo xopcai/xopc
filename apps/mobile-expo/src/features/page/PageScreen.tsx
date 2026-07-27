@@ -393,6 +393,7 @@ export function PageScreen() {
 
   const showLoading = noteQuery.isLoading && !note;
   const showError = noteQuery.isError && !note;
+  const showMissing = !showLoading && !showError && (!id || !note);
   const showViewActions = Boolean(note && id && !keyboardVisible && noteEditorMode === 'viewing');
   const wordCount = useMemo(() => countNoteCharacters(markdown), [markdown]);
 
@@ -445,6 +446,14 @@ export function PageScreen() {
             {noteQuery.error instanceof Error ? noteQuery.error.message : pm.actionFailed}
           </Text>
           <Button mode="contained-tonal" onPress={() => void noteQuery.refetch()}>{m.common.retry}</Button>
+        </View>
+      ) : showMissing ? (
+        <View style={styles.center}>
+          <Icon source="note-alert-outline" size={42} color={colors.text.tertiary} />
+          <Text style={[styles.emptyTitle, { color: colors.text.primary }]}>
+            {pm.missing}
+          </Text>
+          <Button mode="contained-tonal" onPress={handleBack}>{m.common.back}</Button>
         </View>
       ) : note && id ? (
         <View style={styles.editorWrap}>

@@ -135,7 +135,7 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
       toggleSelected(note.id);
       return;
     }
-    router.push(`/items/${note.id}`);
+    router.push(noteDetailRoute(note.id));
   }, [router, selectionMode, toggleSelected]);
 
   const createNoteMutation = useMutation({
