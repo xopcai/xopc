@@ -54,6 +54,8 @@ coverage/
 # Misc
 *.pem
 .cache/
+.xopc-evals/
+.agent-evals/
 
 # Memory (local notes, not for git)
 # Note: Only root-level memory/, not src/agent/prompt/memory/

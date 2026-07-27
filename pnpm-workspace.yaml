@@ -3,6 +3,10 @@ packages:
   - 'extensions/*'
   - 'packages/*'
   - 'apps/*'
+  - 'evals/*'
+  - 'evals/*/apps/*'
+  - 'evals/*/packages/*'
+  - 'evals/*/packages/adapters/*'
   - 'web'
 
 # Keep native Android build paths below CMake's Windows object path limit.

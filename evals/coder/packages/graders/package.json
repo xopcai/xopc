@@ -1,0 +1,12 @@
+{
+  "name": "@agent-evals/graders",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "dependencies": {
+    "@agent-evals/protocol": "workspace:*",
+    "@agent-evals/sandbox": "workspace:*",
+    "@agent-evals/storage": "workspace:*"
+  }
+}

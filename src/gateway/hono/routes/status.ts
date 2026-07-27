@@ -1,11 +1,81 @@
+import { createHash } from 'node:crypto';
+
 import type { Context } from 'hono';
 import type { Hono } from 'hono';
 
 import type { Config } from '../../../config/schema.js';
+import { getGatewayAgentEffectiveManifest } from '../../agents-admin.js';
 import { isSTTAvailable } from '../../../voice/stt/index.js';
 import { mergeSttConfigFromAppConfig } from '../../../channels/attachments/voice-stt-webchat.js';
 import { getDefaultModelSync, resolveModel } from '../../../providers/index.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+
+function stableValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stableValue);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, child]) => [key, stableValue(child)]),
+  );
+}
+
+function contentHash(value: unknown): string {
+  return createHash('sha256').update(JSON.stringify(stableValue(value))).digest('hex');
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+export function buildEvalRuntimeIdentity(
+  service: AuthenticatedRouteDeps['service'],
+  agentId: string,
+): { ok: true; payload: Record<string, unknown> } | { ok: false; error: string; status: number } {
+  const config = service.currentConfig as Config | undefined;
+  if (!config) return { ok: false, error: 'Gateway configuration is unavailable', status: 503 };
+  const effective = getGatewayAgentEffectiveManifest(config, agentId);
+  if ('error' in effective) {
+    return {
+      ok: false,
+      error: effective.error,
+      status: effective.status ?? 400,
+    };
+  }
+
+  const manifest = asRecord(effective.data.manifest);
+  const models = asRecord(manifest.models);
+  const tools = asRecord(manifest.tools);
+  const skills = manifest.skills ?? [];
+  const codeIntelligence = config.codeIntelligence;
+  return {
+    ok: true,
+    payload: {
+      schemaVersion: 1,
+      version: service.getHealth().version,
+      buildCommit:
+        process.env.XOPC_BUILD_COMMIT?.trim() ||
+        process.env.GITHUB_SHA?.trim() ||
+        null,
+      agentId,
+      modelRef: models.primary ?? null,
+      thinkingLevel: manifest.thinkingDefault ?? null,
+      manifestHash: contentHash(effective.data.manifest),
+      systemPromptConfigHash: contentHash(manifest.systemPrompt ?? null),
+      toolPolicyHash: contentHash(tools),
+      skillPolicyHash: contentHash(skills),
+      codeIntelligence: {
+        enabled: codeIntelligence?.enabled === true,
+        configuredForAgent: codeIntelligence?.agentIds?.includes(agentId) === true,
+        indexMode: codeIntelligence?.indexMode ?? null,
+        configHash: contentHash(codeIntelligence ?? null),
+      },
+      presetChain: effective.data.sources,
+    },
+  };
+}
 
 function isRefineAvailable(config: Config | undefined): boolean {
   if (!config) return false;
@@ -68,6 +138,16 @@ export function registerStatusRoutes(authenticated: Hono, deps: AuthenticatedRou
 
   authenticated.get('/status', handler);
   authenticated.get('/api/status', handler);
+  authenticated.get('/api/eval/runtime-identity', (c) => {
+    const agentId = c.req.query('agentId')?.trim();
+    if (!agentId) return c.json({ ok: false, error: 'agentId is required' }, 400);
+    const result = buildEvalRuntimeIdentity(service, agentId);
+    if ('error' in result) {
+      const status = result.status === 404 ? 404 : result.status === 503 ? 503 : 400;
+      return c.json({ ok: false, error: result.error }, status);
+    }
+    return c.json(result);
+  });
 
   /**
    * POST /api/gateway/restart — respawn gateway process when supported (foreground `xopc gateway`).

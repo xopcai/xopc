@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
+    "paths": {
+      "@agent-evals/protocol": ["packages/protocol/src/index.ts"],
+      "@agent-evals/storage": ["packages/storage/src/index.ts"],
+      "@agent-evals/sandbox": ["packages/sandbox/src/index.ts"],
+      "@agent-evals/graders": ["packages/graders/src/index.ts"],
+      "@agent-evals/runner": ["packages/runner/src/index.ts"],
+      "@agent-evals/adapter-mock": ["packages/adapters/mock/src/index.ts"],
+      "@agent-evals/adapter-xopc": ["packages/adapters/xopc/src/index.ts"]
+    },
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "types": ["node", "vitest/globals"]
+  },
+  "include": ["apps/**/*.ts", "packages/**/*.ts", "tests/**/*.ts"]
+}
