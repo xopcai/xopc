@@ -2,6 +2,54 @@ name: Coder Evals
 
 on:
   workflow_dispatch:
+    inputs:
+      run_paid_eval:
+        description: 'Run the paid xopc CBM A/B experiment'
+        required: true
+        default: false
+        type: boolean
+      source_agent:
+        description: 'Agent id from XOPC_EVAL_CONFIG_JSON to clone'
+        required: true
+        default: coder
+        type: string
+      model:
+        description: 'Optional provider/model session override; blank uses the agent configuration'
+        required: false
+        default: ''
+        type: string
+      reasoning:
+        description: 'Reasoning override'
+        required: true
+        default: configured
+        type: choice
+        options:
+          - configured
+          - off
+          - low
+          - medium
+          - high
+          - xhigh
+      repetitions:
+        description: 'Repetitions per case and variant (1-10; 10 runs per repetition)'
+        required: true
+        default: '1'
+        type: string
+      provider_key_env:
+        description: 'Environment variable receiving XOPC_EVAL_PROVIDER_API_KEY'
+        required: true
+        default: OPENAI_API_KEY
+        type: string
+      max_pass_regression:
+        description: 'Maximum candidate pass-rate regression (0-1)'
+        required: true
+        default: '0'
+        type: string
+      max_failure_rate_increase:
+        description: 'Maximum candidate execution-failure-rate increase (0-1)'
+        required: true
+        default: '0'
+        type: string
   schedule:
     - cron: '17 2 * * 1'
   pull_request:
@@ -54,3 +102,183 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm run eval:coder:smoke
+
+  paid-cbm-eval:
+    name: Paid xopc CBM A/B
+    if: github.event_name == 'workflow_dispatch' && inputs.run_paid_eval == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    environment: coder-evals
+    concurrency:
+      group: coder-evals-paid-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Materialize protected evaluation configuration
+        env:
+          XOPC_EVAL_CONFIG_JSON: ${{ secrets.XOPC_EVAL_CONFIG_JSON }}
+          XOPC_EVAL_PROVIDER_API_KEY: ${{ secrets.XOPC_EVAL_PROVIDER_API_KEY }}
+          PROVIDER_KEY_ENV: ${{ inputs.provider_key_env }}
+        run: |
+          set -euo pipefail
+          if [ -z "$XOPC_EVAL_CONFIG_JSON" ]; then
+            echo "Missing coder-evals environment secret: XOPC_EVAL_CONFIG_JSON" >&2
+            exit 1
+          fi
+          if ! [[ "$PROVIDER_KEY_ENV" =~ ^[A-Z][A-Z0-9_]*$ ]]; then
+            echo "provider_key_env must be an uppercase environment variable name" >&2
+            exit 1
+          fi
+          mkdir -p .xopc-evals/github
+          node -e "const fs=require('node:fs');const value=process.env.XOPC_EVAL_CONFIG_JSON;JSON.parse(value);fs.writeFileSync('.xopc-evals/github/source-xopc.json', value, { mode: 0o600 })"
+          if [ -n "$XOPC_EVAL_PROVIDER_API_KEY" ]; then
+            echo "::add-mask::$XOPC_EVAL_PROVIDER_API_KEY"
+            {
+              echo "${PROVIDER_KEY_ENV}<<__XOPC_PROVIDER_KEY__"
+              printf '%s\n' "$XOPC_EVAL_PROVIDER_API_KEY"
+              echo "__XOPC_PROVIDER_KEY__"
+            } >> "$GITHUB_ENV"
+          fi
+          GATEWAY_TOKEN=$(openssl rand -hex 32)
+          echo "::add-mask::$GATEWAY_TOKEN"
+          {
+            echo "XOPC_EVAL_GATEWAY_TOKEN=$GATEWAY_TOKEN"
+            echo "XOPC_GATEWAY_TOKEN=$GATEWAY_TOKEN"
+            echo "XOPC_EVAL_TOKEN=$GATEWAY_TOKEN"
+          } >> "$GITHUB_ENV"
+
+      - name: Prepare isolated agents and experiment
+        env:
+          SOURCE_AGENT: ${{ inputs.source_agent }}
+          EVAL_MODEL: ${{ inputs.model }}
+          EVAL_REASONING: ${{ inputs.reasoning }}
+          EVAL_REPETITIONS: ${{ inputs.repetitions }}
+        run: |
+          pnpm run eval:coder:xopc:prepare \
+            --source .xopc-evals/github/source-xopc.json \
+            --output .xopc-evals/github/xopc.json \
+            --state-dir .xopc-evals/github/state \
+            --source-agent "$SOURCE_AGENT" \
+            --port 4321
+          pnpm run eval:coder:github:experiment \
+            --output .xopc-evals/github/experiment.yaml \
+            --repetitions "$EVAL_REPETITIONS" \
+            --model "$EVAL_MODEL" \
+            --reasoning "$EVAL_REASONING"
+
+      - name: Start isolated xopc Gateway
+        run: |
+          set -euo pipefail
+          XOPC_STATE_DIR="$PWD/.xopc-evals/github/state" \
+          XOPC_CONFIG_PATH="$PWD/.xopc-evals/github/xopc.json" \
+          XOPC_LOG_DIR="$PWD/.xopc-evals/github/logs" \
+            nohup pnpm run dev -- gateway > .xopc-evals/github/gateway.log 2>&1 &
+          echo "$!" > .xopc-evals/github/gateway.pid
+          for attempt in $(seq 1 90); do
+            if curl --fail --silent \
+              -H "Authorization: Bearer $XOPC_EVAL_TOKEN" \
+              http://127.0.0.1:4321/api/status > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          tail -n 200 .xopc-evals/github/gateway.log
+          exit 1
+
+      - name: Run paid experiment
+        id: experiment
+        env:
+          XOPC_EVAL_REPO: ${{ github.workspace }}
+          XOPC_EVAL_BASE_URL: http://127.0.0.1:4321
+        run: |
+          set -euo pipefail
+          pnpm run eval:coder run \
+            --suite evals/coder/suites/xopc-cbm-pilot/suite.yaml \
+            --experiment .xopc-evals/github/experiment.yaml \
+            --db .xopc-evals/github/evals.db \
+            --artifacts .xopc-evals/github/artifacts \
+            | tee .xopc-evals/github/run.txt
+          EXPERIMENT_ID=$(awk '/^Experiment / { print $2; exit }' .xopc-evals/github/run.txt)
+          if [ -z "$EXPERIMENT_ID" ]; then
+            echo "Evaluator did not report an experiment id" >&2
+            exit 1
+          fi
+          echo "experiment_id=$EXPERIMENT_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Compare variants and write summary
+        run: |
+          pnpm run eval:coder compare \
+            --experiment-id "${{ steps.experiment.outputs.experiment_id }}" \
+            --db .xopc-evals/github/evals.db \
+            | tee .xopc-evals/github/compare.txt
+          pnpm run eval:coder trend \
+            --suite-id xopc-cbm-pilot \
+            --db .xopc-evals/github/evals.db \
+            | tee .xopc-evals/github/trend.txt
+          {
+            echo "## xopc Coder Eval"
+            echo
+            echo "Experiment: \`${{ steps.experiment.outputs.experiment_id }}\`"
+            echo
+            echo '```text'
+            cat .xopc-evals/github/compare.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Enforce promotion gate
+        env:
+          MAX_PASS_REGRESSION: ${{ inputs.max_pass_regression }}
+          MAX_FAILURE_RATE_INCREASE: ${{ inputs.max_failure_rate_increase }}
+        run: |
+          set +e
+          set -o pipefail
+          pnpm run eval:coder gate \
+            --experiment-id "${{ steps.experiment.outputs.experiment_id }}" \
+            --db .xopc-evals/github/evals.db \
+            --max-pass-regression "$MAX_PASS_REGRESSION" \
+            --max-failure-rate-increase "$MAX_FAILURE_RATE_INCREASE" \
+            | tee .xopc-evals/github/gate.txt
+          GATE_STATUS=${PIPESTATUS[0]}
+          set -e
+          {
+            echo
+            echo "### Promotion gate"
+            echo
+            echo '```json'
+            cat .xopc-evals/github/gate.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$GATE_STATUS"
+
+      - name: Upload evaluation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coder-eval-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            .xopc-evals/github/evals.db
+            .xopc-evals/github/artifacts/
+            .xopc-evals/github/run.txt
+            .xopc-evals/github/compare.txt
+            .xopc-evals/github/trend.txt
+            .xopc-evals/github/gate.txt
+
+      - name: Show redacted Gateway diagnostics
+        if: failure()
+        run: tail -n 200 .xopc-evals/github/gateway.log || true
+
+      - name: Stop isolated Gateway
+        if: always()
+        run: |
+          if [ -f .xopc-evals/github/gateway.pid ]; then
+            kill "$(cat .xopc-evals/github/gateway.pid)" || true
+          fi

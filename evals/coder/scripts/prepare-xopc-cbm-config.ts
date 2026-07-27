@@ -60,6 +60,8 @@ export async function prepareXopcConfig(options: PrepareXopcConfigOptions): Prom
   if (!sourceAgent) throw new Error(`source agent not found: ${options.sourceAgent}`);
 
   const gateway = object(sourceConfig.gateway ?? {}, 'gateway');
+  const gatewayAuth = object(gateway.auth ?? {}, 'gateway.auth');
+  const evalGatewayToken = process.env.XOPC_EVAL_GATEWAY_TOKEN?.trim();
   const codeIntelligence = object(sourceConfig.codeIntelligence ?? {}, 'codeIntelligence');
   const generated: JsonRecord = {
     ...structuredClone(sourceConfig),
@@ -77,6 +79,17 @@ export async function prepareXopcConfig(options: PrepareXopcConfigOptions): Prom
       ...structuredClone(gateway),
       bind: 'loopback',
       port: options.port,
+      ...(evalGatewayToken
+        ? {
+            auth: {
+              ...structuredClone(gatewayAuth),
+              mode: 'token',
+              token: evalGatewayToken,
+              password: undefined,
+              trustedProxy: undefined,
+            },
+          }
+        : {}),
     },
     codeIntelligence: {
       ...structuredClone(codeIntelligence),
