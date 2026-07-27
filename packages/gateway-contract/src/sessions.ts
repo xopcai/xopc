@@ -60,7 +60,7 @@ export interface SessionTranscriptSummary {
 export interface SessionMessage {
   role: string;
   content: string | unknown[];
-  timestamp?: string;
+  timestamp?: string | number;
 }
 
 export interface SessionDetail extends SessionMetadata {
@@ -239,7 +239,7 @@ export const sessionMessageSchema = z
   .object({
     role: z.string(),
     content: z.unknown(),
-    timestamp: z.string().optional(),
+    timestamp: z.union([z.string(), z.number()]).optional(),
   })
   .passthrough();
 

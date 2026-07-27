@@ -320,6 +320,19 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
     setCommand({ id: commandIdRef.current, ...next } as EditorCommand);
   }, []);
 
+  useEffect(() => {
+    const subscription = Keyboard.addListener('keyboardDidHide', () => {
+      const current = editorStateRef.current;
+      if (!current.focused || current.focusTarget !== 'body') return;
+      if (canUseDomEditor) {
+        dispatch({ type: 'blur' });
+      } else {
+        richEditorRef.current?.blur();
+      }
+    });
+    return () => subscription.remove();
+  }, [canUseDomEditor, dispatch]);
+
   const runNativeEditorCommand = useCallback((next: EditorCommand) => {
     const native = richEditorRef.current;
     if (!native) return;
@@ -576,7 +589,11 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
     labels.todo,
     openEditorSheet,
   ]);
-  const showEditorToolbar = (editorState.focused && editorState.focusTarget === 'body' && !nativeModalVisible) || Boolean(voiceActive);
+  const showEditorToolbar = (
+    editorState.focused
+    && editorState.focusTarget === 'body'
+    && !nativeModalVisible
+  ) || Boolean(voiceActive);
 
   return (
     <View style={styles.container}>

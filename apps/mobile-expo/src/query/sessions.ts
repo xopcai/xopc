@@ -33,7 +33,7 @@ export type SessionListItem = GatewaySessionListItem;
 export type SessionMessage = {
   role: string;
   content: unknown;
-  timestamp?: string;
+  timestamp?: string | number;
 };
 
 export type SessionDetail = {

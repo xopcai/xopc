@@ -115,7 +115,8 @@ export function useNoteEditSession({
     enabled: Boolean(id),
     retry: 1,
   });
-  const note = noteQuery.data ?? undefined;
+  const note = noteQuery.data?.id === id ? noteQuery.data : undefined;
+  const editorReadyForCurrentNote = editorReady && seededNoteIdRef.current === id;
 
   useEffect(() => {
     setEditorReady(false);
@@ -371,7 +372,7 @@ export function useNoteEditSession({
     tags,
     noteStatus,
     saveState,
-    editorReady,
+    editorReady: editorReadyForCurrentNote,
     markdownRef,
     titleRef,
     flushSave,
