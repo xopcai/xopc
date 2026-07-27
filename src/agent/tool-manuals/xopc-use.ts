@@ -8,8 +8,8 @@ Basic shape:
 
 \`\`\`json
 {
-  "mode": "project | note | work_item",
-  "command": "list | get | create | update | append | preview_edit | resolve_workspace",
+  "mode": "project | note | work_item | local_app | settings",
+  "command": "list | get | create | update | append | preview_edit | resolve_workspace | validate | open",
   "args": { "...": "..." },
   "dryRun": false
 }
@@ -23,6 +23,7 @@ Basic shape:
 - Do not invent ids. If an id is not known, search/list first.
 - Do not attempt delete/archive workflows through this tool unless the command is explicitly supported.
 - For non-trivial note rewrites, use \`note.preview_edit\` before \`note.update\`.
+- Preserve the returned “Open in xopc” link in channel replies so the user can jump directly into the delivered object.
 
 ## Projects
 
@@ -186,6 +187,44 @@ Work items are project-scoped tasks. If \`projectId\` is omitted, the tool may i
     "workItemId": "work_item_id",
     "status": "in_progress",
     "nextAction": "Prototype the xopc_use tool path."
+  }
+}
+\`\`\`
+
+## Local Apps
+
+Local apps are first-class XOPC extension UIs backed by a project workspace.
+
+\`\`\`json
+{
+  "mode": "local_app",
+  "command": "create",
+  "args": {
+    "name": "Research Hub",
+    "idea": "Keep product research sources and decisions together.",
+    "description": "A compact local research workspace."
+  }
+}
+\`\`\`
+
+Use \`list\`, \`get\`, and \`validate\` to inspect an existing app. Installation,
+activation, rollback, and uninstall remain explicit product UI operations because
+they change the extension runtime.
+
+## Settings
+
+Use settings references when the user must review credentials, privacy, gateway,
+appearance, agent browser, or another configuration surface. This does not change
+configuration silently; it returns an exact inline jump target.
+
+\`\`\`json
+{
+  "mode": "settings",
+  "command": "open",
+  "args": {
+    "section": "credentials",
+    "title": "Provider credentials",
+    "summary": "Add the API key required by the selected model."
   }
 }
 \`\`\`

@@ -20,6 +20,9 @@
     "docs": "typedoc --options typedoc.json"
   },
   "license": "MIT",
+  "dependencies": {
+    "@xopcai/gateway-contract": "workspace:*"
+  },
   "devDependencies": {
     "typedoc": "^0.28.19",
     "typedoc-plugin-markdown": "^4.11.0",

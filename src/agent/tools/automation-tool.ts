@@ -1,7 +1,11 @@
 import { Type } from '@sinclair/typebox';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
+import {
+  appendProductDeliveryText,
+  type ProductDeliveryEnvelope,
+} from '@xopcai/gateway-contract';
 
-import type { AutomationService } from '../../automations/index.js';
+import type { Automation, AutomationService } from '../../automations/index.js';
 import type { CreateAutomationInput, UpdateAutomationInput } from '../../automations/domain/validation.js';
 
 const AutomationToolSchema = Type.Object({
@@ -34,7 +38,16 @@ export interface AutomationToolDeps {
 }
 
 function textResult(text: string, details: Record<string, unknown> = {}) {
-  return { content: [{ type: 'text' as const, text }], details };
+  return {
+    content: [{
+      type: 'text' as const,
+      text: appendProductDeliveryText(
+        text,
+        details.delivery as ProductDeliveryEnvelope | undefined,
+      ),
+    }],
+    details,
+  };
 }
 
 function formatAutomation(item: Awaited<ReturnType<AutomationService['list']>>[number]): string {
@@ -45,6 +58,32 @@ function formatAutomation(item: Awaited<ReturnType<AutomationService['list']>>[n
   const status = item.enabled ? 'enabled' : 'paused';
   const next = item.state.nextRunAtMs ? new Date(item.state.nextRunAtMs).toISOString() : 'none';
   return `- ${item.id} · ${item.name} · ${status} · trigger=${trigger} · next=${next}`;
+}
+
+function automationDelivery(
+  automation: Automation,
+  operation: 'created' | 'updated' | 'started',
+): ProductDeliveryEnvelope {
+  return {
+    version: 1,
+    operation,
+    primary: {
+      kind: 'automation',
+      id: automation.id,
+      title: automation.name,
+      summary: automation.description?.trim() || undefined,
+      status: automation.enabled ? 'enabled' : 'paused',
+      revision: String(automation.updatedAtMs),
+      projectId: automation.projectId ?? undefined,
+      capabilities: [
+        'open',
+        'edit',
+        'continue_in_chat',
+        'run',
+        automation.enabled ? 'pause' : 'resume',
+      ],
+    },
+  };
 }
 
 export function createAutomationTool(deps: AutomationToolDeps): AgentTool<typeof AutomationToolSchema, Record<string, unknown>> {
@@ -73,7 +112,10 @@ export function createAutomationTool(deps: AutomationToolDeps): AgentTool<typeof
             return textResult('automation payload is required for create.', { ok: false });
           }
           const automation = await service.create(params.automation as CreateAutomationInput);
-          return textResult(`Created automation ${automation.id}: ${automation.name}`, { automation });
+          return textResult(`Created automation ${automation.id}: ${automation.name}`, {
+            automation,
+            delivery: automationDelivery(automation, 'created'),
+          });
         }
         case 'update': {
           const id = params.automationId?.trim();
@@ -83,7 +125,10 @@ export function createAutomationTool(deps: AutomationToolDeps): AgentTool<typeof
           }
           const automation = await service.update(id, params.patch as UpdateAutomationInput);
           if (!automation) return textResult(`Automation not found: ${id}`, { ok: false });
-          return textResult(`Updated automation ${automation.id}: ${automation.name}`, { automation });
+          return textResult(`Updated automation ${automation.id}: ${automation.name}`, {
+            automation,
+            delivery: automationDelivery(automation, 'updated'),
+          });
         }
         case 'delete': {
           const id = params.automationId?.trim();
@@ -94,22 +139,32 @@ export function createAutomationTool(deps: AutomationToolDeps): AgentTool<typeof
         case 'run': {
           const id = params.automationId?.trim();
           if (!id) return textResult('automationId is required for run.', { ok: false });
+          const automation = (await service.list()).find((item) => item.id === id);
           const run = await service.runNow(id);
-          return textResult(`Started automation run ${run.id}.`, { run });
+          return textResult(`Started automation run ${run.id}.`, {
+            run,
+            ...(automation ? { delivery: automationDelivery(automation, 'started') } : {}),
+          });
         }
         case 'pause': {
           const id = params.automationId?.trim();
           if (!id) return textResult('automationId is required for pause.', { ok: false });
           const automation = await service.pause(id);
           if (!automation) return textResult(`Automation not found: ${id}`, { ok: false });
-          return textResult(`Paused automation ${id}.`, { automation });
+          return textResult(`Paused automation ${id}.`, {
+            automation,
+            delivery: automationDelivery(automation, 'updated'),
+          });
         }
         case 'resume': {
           const id = params.automationId?.trim();
           if (!id) return textResult('automationId is required for resume.', { ok: false });
           const automation = await service.resume(id);
           if (!automation) return textResult(`Automation not found: ${id}`, { ok: false });
-          return textResult(`Resumed automation ${id}.`, { automation });
+          return textResult(`Resumed automation ${id}.`, {
+            automation,
+            delivery: automationDelivery(automation, 'updated'),
+          });
         }
         case 'history': {
           const id = params.automationId?.trim();

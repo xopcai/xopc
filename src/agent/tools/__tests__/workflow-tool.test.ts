@@ -34,6 +34,13 @@ describe('workflow tool async run start', () => {
     expect(result.details).toMatchObject({
       runId: 'run-1',
       sessionKey: 'agent:main:webchat:default:direct:wf_run-1',
+      delivery: {
+        operation: 'started',
+        primary: {
+          kind: 'workflow_run',
+          id: 'run-1',
+        },
+      },
     });
     expect(result.content[0]?.type).toBe('text');
   });

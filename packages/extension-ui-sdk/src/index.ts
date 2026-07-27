@@ -1,4 +1,5 @@
 export { createExtensionClient, type CreateExtensionClientOptions } from './client.js';
+export type { ProductReferenceLocator } from '@xopcai/gateway-contract';
 export { Transport, type TransportOptions } from './transport.js';
 export {
   ExtensionErrorCode,

@@ -4,6 +4,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   type LayoutChangeEvent,
+  DeviceEventEmitter,
   PanResponder,
   Platform,
   Pressable,
@@ -45,6 +46,7 @@ import {
 } from './composer-draft-storage';
 import { useComposerAttachments } from './use-composer-attachments';
 import { EMPTY_CHAT_GOAL_SHORTCUT } from './chat-empty-shortcuts';
+import { MOBILE_COMPOSER_FILL_EVENT } from './mobile-composer-fill';
 import {
   VoiceRecordingOverlay,
   type VoiceRecordingZone,
@@ -142,6 +144,20 @@ export const ChatComposer = memo(function ChatComposer({
   const [cursorPos, setCursorPos] = useState(0);
   const [isFocused, setIsFocused] = useState(false);
   const inputRef = useRef<TextInput>(null);
+
+  useEffect(() => {
+    const subscription = DeviceEventEmitter.addListener(
+      MOBILE_COMPOSER_FILL_EVENT,
+      (text: unknown) => {
+        if (typeof text !== 'string') return;
+        setMode('text');
+        setDraft(text);
+        setCursorPos(text.length);
+        requestAnimationFrame(() => inputRef.current?.focus());
+      },
+    );
+    return () => subscription.remove();
+  }, []);
 
   const measureShell = useCallback(async () => {
     return new Promise<{ x: number; y: number; width: number; height: number } | null>((resolve) => {

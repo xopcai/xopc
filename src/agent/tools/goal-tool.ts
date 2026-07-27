@@ -1,7 +1,11 @@
 import { Type } from '@sinclair/typebox';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
+import {
+  appendProductDeliveryText,
+  type ProductDeliveryEnvelope,
+} from '@xopcai/gateway-contract';
 
-import { GoalService, type GoalPriority, type GoalStatus } from '../../goals/index.js';
+import { GoalService, type Goal, type GoalPriority, type GoalStatus } from '../../goals/index.js';
 import { getSessionMetadata } from '../../storage/sqlite/index.js';
 
 const GoalToolSchema = Type.Object({
@@ -59,11 +63,36 @@ export interface GoalToolOptions {
   getCurrentSessionKey?: () => string | undefined;
 }
 
-function textResult(text: string) {
-  return { content: [{ type: 'text' as const, text }], details: {} };
+type GoalToolDetails = {
+  goal?: Goal;
+  delivery?: ProductDeliveryEnvelope;
+};
+
+function goalDelivery(goal: Goal, operation: 'created' | 'updated'): ProductDeliveryEnvelope {
+  return {
+    version: 1,
+    operation,
+    primary: {
+      kind: 'goal',
+      id: goal.id,
+      title: goal.title,
+      summary: goal.description?.trim() || goal.nextAction?.trim() || undefined,
+      status: goal.status,
+      revision: String(goal.updatedAt),
+      projectId: goal.projectId ?? undefined,
+      capabilities: ['open', 'edit', 'continue_in_chat', 'pause', 'resume'],
+    },
+  };
 }
 
-export function createGoalTool(options: GoalToolOptions = {}): AgentTool<typeof GoalToolSchema, {}> {
+function textResult(text: string, details: GoalToolDetails = {}) {
+  return {
+    content: [{ type: 'text' as const, text: appendProductDeliveryText(text, details.delivery) }],
+    details,
+  };
+}
+
+export function createGoalTool(options: GoalToolOptions = {}): AgentTool<typeof GoalToolSchema, GoalToolDetails> {
   return {
     name: 'goal',
     label: 'Goal',
@@ -95,7 +124,10 @@ export function createGoalTool(options: GoalToolOptions = {}): AgentTool<typeof 
           maxTurns: params.maxTurns,
           source: 'workflow',
         });
-        return textResult(`Created goal ${goal.id}\n${goal.title}`);
+        return textResult(`Created goal ${goal.id}\n${goal.title}`, {
+          goal,
+          delivery: goalDelivery(goal, 'created'),
+        });
       }
 
       const goalId = params.goalId?.trim();
@@ -114,7 +146,9 @@ export function createGoalTool(options: GoalToolOptions = {}): AgentTool<typeof 
       if (params.status) {
         goal = goals.setStatus(goalId, params.status, { reason: params.blockedReason });
       }
-      return textResult(`Updated goal ${goalId}\n${goal?.title ?? ''}`);
+      return textResult(`Updated goal ${goalId}\n${goal?.title ?? ''}`, goal
+        ? { goal, delivery: goalDelivery(goal, 'updated') }
+        : {});
     },
   };
 }

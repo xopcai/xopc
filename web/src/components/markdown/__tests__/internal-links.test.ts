@@ -37,6 +37,22 @@ describe('markdown internal links', () => {
     });
   });
 
+  it('maps product deep links to internal product routes before sanitization', () => {
+    expect(
+      rewriteXopcSettingsLinksInMarkdown(
+        'Open [note](xopc://open?kind=note&id=note%2Fwith+spaces).',
+      ),
+    ).toBe('Open [note](#/notes/note%2Fwith%20spaces).');
+  });
+
+  it('does not merge a product deep link used as both the label and target', () => {
+    expect(
+      rewriteXopcSettingsLinksInMarkdown(
+        '快捷打开：[xopc://open?kind=note&id=b2d422b5](xopc://open?kind=note&id=b2d422b5)',
+      ),
+    ).toBe('快捷打开：[Open in xopc](#/notes/b2d422b5)');
+  });
+
   it('parses workspace-relative file targets with optional line numbers', () => {
     expect(parseWorkspaceFileLinkTarget('src/app.ts')).toEqual({ path: 'src/app.ts', kind: 'workspace-relative' });
     expect(parseWorkspaceFileLinkTarget('src/app.ts:42')).toEqual({

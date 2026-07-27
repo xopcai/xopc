@@ -37,7 +37,7 @@ describe('goal tool project binding', () => {
     new ProjectService().attachSession(SESSION_KEY, project.id);
     const tool = createGoalTool({ getCurrentSessionKey: () => SESSION_KEY });
 
-    await tool.execute('tool-call-1', {
+    const result = await tool.execute('tool-call-1', {
       action: 'create',
       title: 'Ship TUI project goals',
     });
@@ -46,5 +46,13 @@ describe('goal tool project binding', () => {
     expect(goals).toHaveLength(1);
     expect(goals[0]?.title).toBe('Ship TUI project goals');
     expect(goals[0]?.projectId).toBe(project.id);
+    expect(result.details.delivery).toMatchObject({
+      operation: 'created',
+      primary: {
+        kind: 'goal',
+        id: goals[0]?.id,
+        projectId: project.id,
+      },
+    });
   });
 });

@@ -5,6 +5,7 @@
  * - **Expo Go / unsafe native tables / render errors:** `react-native-markdown-display` JS fallback.
  */
 import Constants, { ExecutionEnvironment } from 'expo-constants';
+import { type Href, useRouter } from 'expo-router';
 import type { ComponentType } from 'react';
 import { memo, useCallback, useMemo } from 'react';
 import { Linking, StyleSheet } from 'react-native';
@@ -13,6 +14,7 @@ import Markdown from 'react-native-markdown-display';
 import { ChatRenderErrorBoundary } from './ChatRenderErrorBoundary';
 import { shouldUseMarkdownFallback } from './markdown-render-safety';
 import { typography, useTheme, type ColorScheme } from '../../theme';
+import { mobileRouteFromProductDeepLink } from './product-delivery';
 
 function createMarkdownStyle(themeColors: ColorScheme, isDark: boolean) {
   const codeBackground = isDark ? themeColors.surface.active : themeColors.surface.input;
@@ -337,6 +339,7 @@ export const MarkdownView = memo(function MarkdownView({
   onLinkPress?: (url: string) => void;
 }) {
   const { colors, isDark } = useTheme();
+  const router = useRouter();
   const Enriched = useMemo(() => getEnrichedMarkdownText(), []);
   const markdownStyle = useMemo(() => createMarkdownStyle(colors, isDark), [colors, isDark]);
 
@@ -345,13 +348,25 @@ export const MarkdownView = memo(function MarkdownView({
       onLinkPress(url);
       return;
     }
+    const productRoute = mobileRouteFromProductDeepLink(url);
+    if (productRoute) {
+      router.push(productRoute as Href);
+      return;
+    }
     void Linking.openURL(url);
-  }, [onLinkPress]);
+  }, [onLinkPress, router]);
 
   if (!content?.trim()) return null;
 
   if (shouldUsePlainFallback(content, Enriched != null)) {
-    return <JsMarkdownFallback content={content} themeColors={colors} isDark={isDark} onLinkPress={onLinkPress} />;
+    return (
+      <JsMarkdownFallback
+        content={content}
+        themeColors={colors}
+        isDark={isDark}
+        onLinkPress={(url) => handleLinkPress({ url })}
+      />
+    );
   }
 
   return (

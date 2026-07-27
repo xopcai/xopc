@@ -1,5 +1,9 @@
 import DOMPurify from 'dompurify';
 import { memo, useLayoutEffect, useMemo, useRef } from 'react';
+import {
+  parseProductReferenceDeepLink,
+  productReferenceRoute,
+} from '@xopcai/gateway-contract';
 
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { messages } from '@/i18n/messages';
@@ -281,6 +285,19 @@ function MarkdownViewImpl({
       }
 
       const href = anchor.getAttribute('href') ?? '';
+      const productReference = parseProductReferenceDeepLink(href);
+      if (productReference) {
+        const route = productReferenceRoute({
+          ...productReference,
+          title: productReference.id,
+          capabilities: ['open'],
+        });
+        if (route) {
+          event.preventDefault();
+          window.location.hash = `#${route}`;
+          return;
+        }
+      }
       const fileTarget = onWorkspaceFileOpen ? parseWorkspaceFileLinkTarget(href) : null;
       if (fileTarget && onWorkspaceFileOpen) {
         event.preventDefault();

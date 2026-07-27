@@ -1,6 +1,6 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import * as Linking from 'expo-linking';
-import { Stack, useRouter } from 'expo-router';
+import { type Href, Stack, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { StatusBar } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -26,6 +26,7 @@ import {
   usePreferencesStore,
 } from '@/stores/preferences-store';
 import { useNoteTagsStore } from '@/stores/note-tags-store';
+import { mobileRouteFromProductDeepLink } from '@/features/chat/product-delivery';
 
 export default function RootLayout() {
   const router = useRouter();
@@ -78,7 +79,11 @@ export default function RootLayout() {
   useEffect(() => {
     let alive = true;
     const run = (url: string) => {
-      void tryConsumeGatewayDeeplink(url, router);
+      void (async () => {
+        if (await tryConsumeGatewayDeeplink(url, router)) return;
+        const route = mobileRouteFromProductDeepLink(url);
+        if (route) router.push(route as Href);
+      })();
     };
     void Linking.getInitialURL().then((url) => {
       if (alive && url) run(url);

@@ -22,6 +22,8 @@ import {
   isWebSearchToolName,
 } from './web-search-tool-result-links';
 import { WorkspaceArtifactStrip } from './WorkspaceArtifactStrip';
+import { ProductDeliveryCard } from './ProductDeliveryCard';
+import { extractMobileProductDelivery } from './product-delivery';
 
 export type ToolUseBlockLabels = {
   searchedWeb: string;
@@ -134,6 +136,7 @@ export const ToolUseBlock = memo(function ToolUseBlock({
   const detailLine = getKeyDetailLine(block.input);
 
   const resultText = useMemo(() => formatToolDisplayText(block), [block]);
+  const productDelivery = useMemo(() => extractMobileProductDelivery(block), [block]);
   const resultPreview = resultText.length > 200 ? resultText.slice(0, 200) + '…' : resultText;
 
   let outputPreview = resultText;
@@ -218,6 +221,7 @@ export const ToolUseBlock = memo(function ToolUseBlock({
               {detailLine}
             </Text>
           ) : null}
+          {productDelivery ? <ProductDeliveryCard delivery={productDelivery} /> : null}
           {isError && resultText ? (
             <Text
               variant="bodySmall"
@@ -227,7 +231,7 @@ export const ToolUseBlock = memo(function ToolUseBlock({
               {resultText}
             </Text>
           ) : null}
-          {!isRunning ? (
+          {!isRunning && !productDelivery ? (
             <Pressable
               style={inlineStyles.detailsToggle}
               onPress={() => setDetailsExpanded((v) => !v)}
@@ -295,7 +299,7 @@ export const ToolUseBlock = memo(function ToolUseBlock({
   }
 
   // ── Standalone mode: card with left border accent (original behaviour) ──
-  const hasResult = block.result != null;
+  const hasResult = block.result != null && !productDelivery;
 
   return (
     <View
@@ -335,6 +339,7 @@ export const ToolUseBlock = memo(function ToolUseBlock({
           />
         ) : null}
       </Pressable>
+      {productDelivery ? <ProductDeliveryCard delivery={productDelivery} /> : null}
       {expanded && resultText ? (
         <View style={styles.resultContainer}>
           <Text
