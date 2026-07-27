@@ -95,3 +95,10 @@ export function parseTs(raw: unknown): number {
   }
   return Date.now();
 }
+
+export function parseOptionalTs(raw: unknown): number | undefined {
+  if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
+  if (typeof raw !== 'string') return undefined;
+  const parsed = Date.parse(raw);
+  return Number.isNaN(parsed) ? undefined : parsed;
+}

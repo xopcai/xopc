@@ -7,11 +7,15 @@ import type {
   MessageAttachment,
   ProgressState,
   ReasoningLevel,
+  ToolUseContent,
 } from '@/features/chat/messages/messages.types';
 import { collectAssistantStepBlocks } from '@/features/chat/messages/assistant-step-blocks';
 import { AttachmentPreviewDialog } from '@/features/chat/attachments/attachment-preview-dialog';
 import { AttachmentRenderer } from '@/features/chat/attachments/attachment-renderer';
-import { SearchSourceList } from '@/features/chat/tool-results/search-source-list';
+import {
+  extractSearchSources,
+  SearchSourceList,
+} from '@/features/chat/tool-results/search-source-list';
 import { dispatchFillChatComposer } from '@/features/chat/composer/fill-composer-dispatch';
 import { extractUserMessagePlainText } from '@/features/chat/messages/user-message-plain-text';
 import { ToolResultFileLinks } from '@/features/chat/tool-results/tool-result-file-links';
@@ -148,6 +152,14 @@ export const MessageBubble = memo(function MessageBubble({
       openUrl: m.chat.stepOpenUrl,
       fetchUrl: m.chat.stepFetchUrl,
       unknownTool: m.chat.stepUnknownTool,
+      activityCompleted: m.chat.activityCompleted,
+      activityPartial: m.chat.activityPartial,
+      activityFailedCount: m.chat.activityFailedCount,
+      activityAnalysisComplete: m.chat.activityAnalysisComplete,
+      toolFailedImpact: m.chat.toolFailedImpact,
+      rawThinking: m.chat.rawThinking,
+      toolRunning: m.chat.toolRunning,
+      toolError: m.chat.toolError,
     }),
     [
       m.chat.thoughts,
@@ -164,6 +176,14 @@ export const MessageBubble = memo(function MessageBubble({
       m.chat.stepOpenUrl,
       m.chat.stepFetchUrl,
       m.chat.stepUnknownTool,
+      m.chat.activityCompleted,
+      m.chat.activityPartial,
+      m.chat.activityFailedCount,
+      m.chat.activityAnalysisComplete,
+      m.chat.toolFailedImpact,
+      m.chat.rawThinking,
+      m.chat.toolRunning,
+      m.chat.toolError,
     ],
   );
 
@@ -460,6 +480,20 @@ export const MessageBubble = memo(function MessageBubble({
     if (reasoningHidden) return blocks.filter((b) => b.type !== 'thinking');
     return blocks;
   }, [message, reasoningHidden]);
+  const assistantSearchSourceCount = useMemo(
+    () =>
+      isAssistant
+        ? extractSearchSources(
+            stepBlocksForSources.filter(
+              (block): block is ToolUseContent => block.type === 'tool_use',
+            ),
+          ).length
+        : 0,
+    [isAssistant, stepBlocksForSources],
+  );
+  const showAssistantOutcomes =
+    isAssistant &&
+    (showAssistantArtifacts || assistantSearchSourceCount > 0);
 
   useLayoutEffect(() => {
     if (!isUser) return;
@@ -581,6 +615,7 @@ export const MessageBubble = memo(function MessageBubble({
                       // stays hidden.
                       onAbort: isAssistant && isStreaming ? onAbortCurrentTurn : undefined,
                     }}
+                    reasoningLevel={reasoningLevel}
                   />
                 </div>
                 {isUser && userMessageCanExpand ? (
@@ -606,20 +641,19 @@ export const MessageBubble = memo(function MessageBubble({
               <span className="inline-block h-3 w-0.5 animate-pulse bg-accent" />
             ) : null}
 
-            {isAssistant && stepBlocksForSources.length > 0 ? (
-              <SearchSourceList blocks={stepBlocksForSources} />
-            ) : null}
-
-            {showAssistantArtifacts ? (
+            {showAssistantOutcomes ? (
               <div
                 className="rounded-lg border border-edge-subtle/60 bg-surface-elevated/20 px-3 py-2.5"
                 role="group"
-                aria-label={m.chat.messageArtifactsHeading}
+                aria-label={m.chat.messageOutcomesHeading}
               >
                 <div className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
-                  {m.chat.messageArtifactsHeading}
+                  {m.chat.messageOutcomesHeading}
                 </div>
                 <div className="flex min-w-0 flex-col gap-2">
+                  {assistantSearchSourceCount > 0 ? (
+                    <SearchSourceList blocks={stepBlocksForSources} className="" />
+                  ) : null}
                   {assistantWorkspacePaths.length > 0 ? (
                     <ToolResultFileLinks paths={assistantWorkspacePaths} sessionKey={sessionKey} />
                   ) : null}
