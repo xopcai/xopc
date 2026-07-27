@@ -70,6 +70,23 @@ describe('parseSseStream', () => {
         }));
         return;
       }
+      if (
+        method === 'GET' &&
+        url === `/api/sessions/${encodeURIComponent(sessionKey)}/agent-config`
+      ) {
+        requests.push({ method, url });
+        response.writeHead(200, { 'Content-Type': 'application/json' });
+        response.end(JSON.stringify({
+          ok: true,
+          payload: {
+            model: 'test/model',
+            thinkingLevel: 'high',
+            reasoningLevel: 'stream',
+            effectiveWorkspacePath: '/tmp/repo',
+          },
+        }));
+        return;
+      }
       if (method === 'POST' && url === '/api/agent') {
         const body = await readJson(request);
         requests.push({ method, url, body });
@@ -111,7 +128,6 @@ describe('parseSseStream', () => {
         reasoning: 'high',
         config: {
           baseUrl: `http://127.0.0.1:${address.port}`,
-          thinking: 'medium',
         },
       },
       environment: {
@@ -142,6 +158,10 @@ describe('parseSseStream', () => {
           agentId: 'coder',
           modelRef: 'test/model',
           manifestHash: 'manifest',
+          effectiveModelRef: 'test/model',
+          effectiveThinkingLevel: 'high',
+          effectiveReasoningVisibility: 'stream',
+          effectiveWorkspacePath: '/tmp/repo',
         },
       });
       expect(requests).toEqual([
@@ -156,8 +176,7 @@ describe('parseSseStream', () => {
           body: {
             workingDirectory: '/tmp/repo',
             model: 'test/model',
-            thinkingLevel: 'medium',
-            reasoningLevel: 'high',
+            thinkingLevel: 'high',
           },
         },
         {
@@ -165,12 +184,16 @@ describe('parseSseStream', () => {
           url: '/api/eval/runtime-identity?agentId=coder',
         },
         {
+          method: 'GET',
+          url: `/api/sessions/${encodeURIComponent(sessionKey)}/agent-config`,
+        },
+        {
           method: 'POST',
           url: '/api/agent',
           body: expect.objectContaining({
             sessionKey,
             message: 'Make the change',
-            thinking: 'medium',
+            thinking: 'high',
           }),
         },
         { method: 'DELETE', url: `/api/sessions/${encodeURIComponent(sessionKey)}` },

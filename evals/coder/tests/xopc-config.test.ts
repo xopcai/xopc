@@ -29,21 +29,32 @@ describe('prepareXopcConfig', () => {
         list: [{ id: 'coder', identity: { name: 'Coder' }, tools: { builtin: {} } }],
       },
       channels: { telegram: { enabled: true } },
-      gateway: { port: 3000, bind: 'all', auth: { mode: 'token' } },
+      gateway: {
+        port: 3000,
+        bind: 'all',
+        auth: { mode: 'password', password: 'source-password' },
+      },
       codeIntelligence: { enabled: true, agentIds: ['coder'], indexMode: 'moderate' },
     }));
     const output = join(root, 'generated', 'xopc.json');
     const stateDir = join(root, 'state');
 
-    await prepareXopcConfig({
-      source,
-      output,
-      stateDir,
-      sourceAgent: 'coder',
-      baselineAgent: 'eval-coder-baseline',
-      candidateAgent: 'eval-coder-cbm',
-      port: 4321,
-    });
+    const priorGatewayToken = process.env.XOPC_EVAL_GATEWAY_TOKEN;
+    process.env.XOPC_EVAL_GATEWAY_TOKEN = 'ephemeral-eval-gateway-token';
+    try {
+      await prepareXopcConfig({
+        source,
+        output,
+        stateDir,
+        sourceAgent: 'coder',
+        baselineAgent: 'eval-coder-baseline',
+        candidateAgent: 'eval-coder-cbm',
+        port: 4321,
+      });
+    } finally {
+      if (priorGatewayToken === undefined) delete process.env.XOPC_EVAL_GATEWAY_TOKEN;
+      else process.env.XOPC_EVAL_GATEWAY_TOKEN = priorGatewayToken;
+    }
 
     const generated = JSON.parse(await readFile(output, 'utf8')) as Record<string, any>;
     expect(generated.agents.list.map((agent: { id: string }) => agent.id)).toEqual([
@@ -54,6 +65,10 @@ describe('prepareXopcConfig', () => {
     expect(generated.codeIntelligence.agentIds).toEqual(['eval-coder-cbm']);
     expect(generated.channels).toEqual({});
     expect(generated.gateway).toMatchObject({ bind: 'loopback', port: 4321 });
+    expect(generated.gateway.auth).toEqual({
+      mode: 'token',
+      token: 'ephemeral-eval-gateway-token',
+    });
     expect((await stat(output)).mode & 0o777).toBe(0o600);
     expect(await readFile(join(stateDir, 'agents', 'eval-coder-baseline', 'profile', 'SOUL.md'), 'utf8'))
       .toBe('# Coder\n');

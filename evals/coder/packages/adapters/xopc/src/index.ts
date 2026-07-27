@@ -143,11 +143,11 @@ export class XopcGatewayAdapter implements AgentAdapter {
       cleanupSession: config.cleanupSession ?? true,
     });
 
+    const thinkingLevel = config.thinking ?? request.variant.reasoning;
     const sessionConfig = {
       workingDirectory: request.environment.workspace,
       ...(request.variant.model ? { model: request.variant.model } : {}),
-      ...(config.thinking ? { thinkingLevel: config.thinking } : {}),
-      ...(request.variant.reasoning ? { reasoningLevel: request.variant.reasoning } : {}),
+      ...(thinkingLevel ? { thinkingLevel } : {}),
     };
     await requireOk(await fetch(
       `${baseUrl}/api/sessions/${encodeURIComponent(sessionKey)}/agent-config`,
@@ -160,16 +160,36 @@ export class XopcGatewayAdapter implements AgentAdapter {
     ), 'session configuration');
 
     let runtimeIdentity: Record<string, unknown> | undefined;
-    const identityResponse = await fetch(
-      `${baseUrl}/api/eval/runtime-identity?agentId=${encodeURIComponent(agentId)}`,
-      {
-        headers: requestHeaders,
-        signal,
-      },
-    ).catch(() => undefined);
+    const [identityResponse, sessionConfigResponse] = await Promise.all([
+      fetch(
+        `${baseUrl}/api/eval/runtime-identity?agentId=${encodeURIComponent(agentId)}`,
+        {
+          headers: requestHeaders,
+          signal,
+        },
+      ).catch(() => undefined),
+      fetch(
+        `${baseUrl}/api/sessions/${encodeURIComponent(sessionKey)}/agent-config`,
+        {
+          headers: requestHeaders,
+          signal,
+        },
+      ).catch(() => undefined),
+    ]);
     if (identityResponse?.ok) {
       const body = record(await identityResponse.json());
       runtimeIdentity = record(body.payload ?? body);
+      if (sessionConfigResponse?.ok) {
+        const sessionBody = record(await sessionConfigResponse.json());
+        const effectiveSession = record(sessionBody.payload ?? sessionBody);
+        runtimeIdentity = {
+          ...runtimeIdentity,
+          effectiveModelRef: effectiveSession.model ?? null,
+          effectiveThinkingLevel: effectiveSession.thinkingLevel ?? null,
+          effectiveReasoningVisibility: effectiveSession.reasoningLevel ?? null,
+          effectiveWorkspacePath: effectiveSession.effectiveWorkspacePath ?? null,
+        };
+      }
       await trace.emit('agent.event', {
         kind: 'runtime.identity',
         identity: redactSensitive(runtimeIdentity),
@@ -184,7 +204,7 @@ export class XopcGatewayAdapter implements AgentAdapter {
         channel: 'webchat',
         sessionKey,
         clientCreatedAtMs: Date.now(),
-        ...(config.thinking ? { thinking: config.thinking } : {}),
+        ...(thinkingLevel ? { thinking: thinkingLevel } : {}),
       }),
       signal,
     });

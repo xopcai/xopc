@@ -56,7 +56,14 @@ variants:
 
 Prefer passing `XOPC_EVAL_TOKEN` through the environment rather than committing it. Run the gateway with a temporary `XOPC_STATE_DIR`, `XOPC_CONFIG_PATH`, and `XOPC_WORKSPACE` when strict isolation is required.
 
-When present, `model`, `reasoning`, and `config.thinking` are applied as session overrides before the first turn. The adapter then captures xopc's runtime identity—including the effective model and hashes of the manifest, prompt configuration, tool policy, skill policy, and code-intelligence configuration—so configuration drift is visible in stored results. Use separate agent IDs or isolated gateways for broader configuration comparisons.
+When present, `model` and `reasoning` are applied as session overrides before
+the first turn; evaluation `reasoning` maps to xopc's model-effort
+`thinkingLevel`. The legacy `config.thinking` override remains supported. The
+adapter then captures xopc's runtime identity—including the effective model and
+hashes of the manifest, prompt configuration, tool policy, skill policy, and
+code-intelligence configuration—so configuration drift is visible in stored
+results. Use separate agent IDs or isolated gateways for broader configuration
+comparisons.
 
 ## CBM A/B pilot
 
@@ -80,6 +87,10 @@ XOPC_EVAL_TOKEN="$XOPC_GATEWAY_TOKEN" \
 ```
 
 See [docs/xopc-cbm-ab.md](docs/xopc-cbm-ab.md) for isolation, fairness, and interpretation details.
+
+The same paid pilot can be launched manually from GitHub Actions after adding
+protected model configuration and credentials. See
+[docs/github-actions.md](docs/github-actions.md).
 
 ## Commands
 
@@ -119,7 +130,7 @@ pnpm run eval:coder:xopc:fixture-check --case cbm-binary-precedence
 
 The Coder Evals workflow runs the cross-platform control-plane tests on relevant
 changes and every Monday. Its deterministic smoke job also executes all five
-hidden CBM behavior contracts. Paid model experiments remain an explicit local
-or self-hosted operation.
+hidden CBM behavior contracts. Paid model experiments require an explicit
+checked manual dispatch.
 
 See [docs/architecture.md](docs/architecture.md) and [docs/case-authoring.md](docs/case-authoring.md).
