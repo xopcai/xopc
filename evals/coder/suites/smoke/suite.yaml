@@ -1,0 +1,21 @@
+id: agent-evals-smoke
+version: "1.0.0"
+description: Verifies the evaluation control plane with a deterministic local repository.
+cases:
+  - id: create-eval-marker
+    title: Create a requested marker file
+    repo:
+      source: local
+      path: ${EVAL_FIXTURE_REPO}
+      commit: HEAD
+    task: Create eval-result.txt containing exactly "agent eval completed" followed by a newline.
+    budget:
+      timeoutMs: 30000
+    graders:
+      - type: file_contains
+        path: eval-result.txt
+        text: agent eval completed
+      - type: unchanged
+        paths:
+          - protected.txt
+    tags: [smoke, deterministic]

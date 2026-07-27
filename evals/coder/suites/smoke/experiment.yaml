@@ -1,0 +1,13 @@
+name: Mock baseline versus candidate
+variants:
+  - id: baseline
+    adapter: mock
+    config:
+      finalText: No workspace change
+  - id: candidate
+    adapter: mock
+    config:
+      finalText: Created the requested marker
+      writes:
+        - path: eval-result.txt
+          content: "agent eval completed\n"
