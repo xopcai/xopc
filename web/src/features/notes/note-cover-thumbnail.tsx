@@ -24,7 +24,7 @@ export function NoteCoverThumbnail({ noteId, attachmentId, className }: NoteCove
         )}
         aria-hidden
       >
-        <ImageOff className="h-4 w-4" />
+        <ImageOff className="size-4" />
       </div>
     );
   }

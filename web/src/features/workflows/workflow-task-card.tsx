@@ -69,7 +69,7 @@ export const WorkflowTaskCard = memo(function WorkflowTaskCard({
   return (
     <div
       className={cn(
-        'group relative min-h-24 overflow-hidden rounded-lg bg-surface-panel px-3 py-3 shadow-surface transition-colors',
+        'group relative min-h-24 overflow-hidden rounded-lg bg-surface-panel p-3 shadow-surface transition-colors',
         selected && 'ring-1 ring-accent/30',
         'hover:bg-surface-hover',
       )}

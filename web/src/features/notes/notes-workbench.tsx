@@ -622,7 +622,7 @@ export function NotesWorkbench({
   if (!hasToken) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
-        <StickyNote className="h-10 w-10 text-fg-muted" />
+        <StickyNote className="size-10 text-fg-muted" />
         <p className="text-sm text-fg-muted">{n.needToken}</p>
       </div>
     );
@@ -686,7 +686,7 @@ export function NotesWorkbench({
                 aria-label={n.createBlankNote}
                 title={n.createBlankShortcut}
               >
-                <Plus className="h-4 w-4" aria-hidden />
+                <Plus className="size-4" aria-hidden />
               </button>
               <button
                 type="button"
@@ -694,7 +694,7 @@ export function NotesWorkbench({
                 className="inline-flex size-8 items-center justify-center rounded-lg text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                 aria-label={n.searchDialogTitle}
               >
-                <Search className="h-4 w-4" aria-hidden />
+                <Search className="size-4" aria-hidden />
               </button>
             </div>
           </div>
@@ -717,7 +717,7 @@ export function NotesWorkbench({
             </div>
           ) : notes.length === 0 ? (
             <div className="flex min-h-[min(40vh,20rem)] flex-col items-center justify-center gap-2 px-6 py-16 text-center">
-              <StickyNote className="h-8 w-8 text-fg-muted" />
+              <StickyNote className="size-8 text-fg-muted" />
               <p className="text-sm font-medium text-fg-muted">
                 {selectedNoteId && !selectedNoteInCurrentList ? n.noteOutsideCurrentView : (emptyText ?? n.noNotes)}
               </p>
@@ -830,7 +830,7 @@ export function NotesWorkbench({
         ) : (
           <div className="flex h-full min-h-0 flex-1 items-center justify-center px-8 text-center">
             <div className="max-w-sm">
-              <StickyNote className="mx-auto h-9 w-9 text-fg-muted" aria-hidden />
+              <StickyNote className="mx-auto size-9 text-fg-muted" aria-hidden />
               <h2 className="mt-4 text-base font-semibold text-fg">{n.emptyEditorTitle}</h2>
               <p className="mt-2 text-sm leading-6 text-fg-muted">{n.emptyEditorDescription}</p>
               <button
@@ -839,7 +839,7 @@ export function NotesWorkbench({
                 disabled={creatingBlankNote}
                 className="mt-5 inline-flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <Plus className="h-4 w-4" aria-hidden />
+                <Plus className="size-4" aria-hidden />
                 {creatingBlankNote ? n.creatingBlankNote : n.createBlankNote}
               </button>
             </div>
@@ -865,9 +865,8 @@ export function NotesWorkbench({
             </div>
             <div className="p-4">
               <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-muted" aria-hidden />
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted" aria-hidden />
                 <input
-                  autoFocus
                   type="search"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -889,7 +888,7 @@ export function NotesWorkbench({
               <div className="mt-4 max-h-[min(28rem,calc(100vh-14rem))] overflow-y-auto [scrollbar-gutter:stable]">
                 {!trimmedSearchQuery ? (
                   <div className="flex min-h-40 flex-col items-center justify-center gap-2 px-6 text-center">
-                    <Search className="h-7 w-7 text-fg-muted" aria-hidden />
+                    <Search className="size-7 text-fg-muted" aria-hidden />
                     <p className="text-sm font-medium text-fg">{n.searchEmptyTitle}</p>
                     <p className="text-xs leading-5 text-fg-muted">{n.searchEmptyDescription}</p>
                   </div>
@@ -901,7 +900,7 @@ export function NotesWorkbench({
                   </div>
                 ) : searchResults.length === 0 ? (
                   <div className="flex min-h-40 flex-col items-center justify-center gap-2 px-6 text-center">
-                    <StickyNote className="h-7 w-7 text-fg-muted" aria-hidden />
+                    <StickyNote className="size-7 text-fg-muted" aria-hidden />
                     <p className="text-sm font-medium text-fg">{n.searchNoResults}</p>
                     <p className="text-xs leading-5 text-fg-muted">{n.searchNoResultsDescription}</p>
                   </div>
@@ -925,7 +924,7 @@ export function NotesWorkbench({
                             active ? 'bg-surface-active' : 'hover:bg-surface-hover',
                           )}
                         >
-                          <Icon className="mt-0.5 h-4 w-4 shrink-0 text-fg-muted" aria-hidden />
+                          <Icon className="mt-0.5 size-4 shrink-0 text-fg-muted" aria-hidden />
                           <span className="min-w-0 flex-1">
                             <span className="flex min-w-0 items-center gap-2">
                               <span className="truncate text-sm font-medium text-fg">

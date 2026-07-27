@@ -14,12 +14,11 @@ import {
   installConnector,
   installStoreConnector,
   testConnector,
-  type ConnectorDefinition,
   type ConnectorHealthResult,
   type ConnectorInstance,
-  type StoreConnectorPermissions,
 } from '../connectors-api';
 import { ConnectorLogo } from './connector-logo';
+import type { InstallDraft } from './install-connector-draft';
 
 const inputClass = cn(
   'w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg',
@@ -34,21 +33,6 @@ function healthStatusLabel(status: ConnectorHealthResult['status'] | undefined, 
   return t.healthStatusLabels[status] ?? status;
 }
 
-export type InstallDraft = {
-  connector: ConnectorDefinition;
-  secrets: Record<string, string>;
-  config: Record<string, string>;
-  installing: boolean;
-  error: string | null;
-  result: ConnectorInstance | null;
-  health: ConnectorHealthResult | null;
-  store?: {
-    packageName: string;
-    version: string;
-    permissions: StoreConnectorPermissions;
-  };
-};
-
 function parseConfigValue(type: string, raw: string): unknown {
   const trimmed = raw.trim();
   if (type === 'json') {
@@ -61,35 +45,6 @@ function parseConfigValue(type: string, raw: string): unknown {
     return trimmed === 'true';
   }
   return trimmed || undefined;
-}
-
-export function buildInitialDraft(
-  connector: ConnectorDefinition,
-  store?: InstallDraft['store'],
-): InstallDraft {
-  const secrets: Record<string, string> = {};
-  for (const field of connector.setup.secrets ?? []) {
-    secrets[field.key] = '';
-  }
-  const config: Record<string, string> = {};
-  for (const field of connector.setup.config ?? []) {
-    config[field.key] =
-      field.defaultValue === undefined
-        ? ''
-        : typeof field.defaultValue === 'string'
-          ? field.defaultValue
-          : JSON.stringify(field.defaultValue, null, 2);
-  }
-  return {
-    connector,
-    secrets,
-    config,
-    installing: false,
-    error: null,
-    result: null,
-    health: null,
-    ...(store ? { store } : {}),
-  };
 }
 
 function CapabilityResultList({

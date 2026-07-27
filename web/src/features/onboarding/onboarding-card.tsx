@@ -236,7 +236,6 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
                 onChange={(event) => dispatch({ type: 'patch', patch: { callName: event.target.value } })}
                 placeholder={o.profileCallNamePlaceholder}
                 className="mt-1 w-full rounded-xl border border-edge bg-surface-base px-3 py-2.5 text-sm text-fg outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/30"
-                autoFocus
               />
             </label>
             <div className="flex flex-wrap justify-between gap-2">

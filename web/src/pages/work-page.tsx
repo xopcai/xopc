@@ -30,6 +30,7 @@ import {
 import { workflowBoardHref } from '@/features/workflows/workflow-page.utils';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+import { formatMediumDateTime } from '@/lib/date-formatters';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 
@@ -41,7 +42,7 @@ function formatTime(value: string | number | undefined, fallback: string): strin
   if (value == null) return fallback;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return fallback;
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
+  return formatMediumDateTime(date);
 }
 
 function WorkHomeSkeleton() {
@@ -307,12 +308,11 @@ export function WorkPage() {
                 <label className="grid gap-2 text-sm font-medium text-fg">
                   {createIntent === 'watch' ? t.workHome.watchLabel : t.workHome.outcomeLabel}
                   <textarea
-                    className="min-h-40 w-full resize-none rounded-xl border border-edge bg-surface-base px-3 py-3 text-sm font-normal leading-6 text-fg outline-none placeholder:text-fg-subtle focus:border-accent focus:ring-2 focus:ring-accent/20"
+                    className="min-h-40 w-full resize-none rounded-xl border border-edge bg-surface-base p-3 text-sm font-normal leading-6 text-fg outline-none placeholder:text-fg-subtle focus:border-accent focus:ring-2 focus:ring-accent/20"
                     value={outcome}
                     onChange={(event) => setOutcome(event.target.value)}
                     placeholder={createIntent === 'watch' ? t.workHome.watchPlaceholder : t.workHome.outcomePlaceholder}
                     maxLength={12_000}
-                    autoFocus
                     disabled={creating}
                   />
                 </label>
@@ -410,7 +410,7 @@ export function WorkPage() {
               <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5">
                 <div className="flex items-center gap-2"><Sparkles className="size-4 text-accent" aria-hidden /><h2 className="text-sm font-semibold text-fg">{t.workHome.processing}</h2></div>
                 <div className="mt-3 space-y-2">{home.workflowRuns.active.map((run) => (
-                  <Link key={run.id} to={workflowBoardHref(run.id)} className="flex items-center justify-between gap-3 rounded-xl bg-surface-panel px-3 py-3 text-sm hover:bg-surface-hover">
+                  <Link key={run.id} to={workflowBoardHref(run.id)} className="flex items-center justify-between gap-3 rounded-xl bg-surface-panel p-3 text-sm hover:bg-surface-hover">
                     <span className="min-w-0 truncate text-fg">{run.title}</span><span className="shrink-0 text-xs text-fg-subtle">{t.workHome.running}</span>
                   </Link>
                 ))}{home.workflowRuns.active.length === 0 ? <p className="text-sm text-fg-muted">{t.workHome.nothingRunning}</p> : null}</div>
@@ -418,7 +418,7 @@ export function WorkPage() {
               <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5">
                 <div className="flex items-center gap-2"><CalendarClock className="size-4 text-accent" aria-hidden /><h2 className="text-sm font-semibold text-fg">{t.workHome.scheduled}</h2></div>
                 <div className="mt-3 space-y-2">{home.upcomingAutomations.map((automation) => (
-                  <Link key={automation.id} to="/automations" className="flex items-center justify-between gap-3 rounded-xl bg-surface-panel px-3 py-3 text-sm hover:bg-surface-hover">
+                  <Link key={automation.id} to="/automations" className="flex items-center justify-between gap-3 rounded-xl bg-surface-panel p-3 text-sm hover:bg-surface-hover">
                     <span className="min-w-0 truncate text-fg">{automation.name || automation.action}</span><time className="shrink-0 text-xs text-fg-subtle">{formatTime(automation.nextRunAt, t.never)}</time>
                   </Link>
                 ))}{home.upcomingAutomations.length === 0 ? <p className="text-sm text-fg-muted">{t.workHome.noScheduled}</p> : null}</div>

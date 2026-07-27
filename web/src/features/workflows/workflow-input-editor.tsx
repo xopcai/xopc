@@ -8,28 +8,19 @@ import { cn } from '@/lib/cn';
 
 import type { WorkflowDefinition, WorkflowDefinitionExamplePrompt } from './workflow-api';
 import { resolveWorkflowLocalizedCopy } from './workflow-meta-locale';
-import { WORKFLOW_ARG_FIELDS } from './workflow-page.constants';
-import { buildWorkflowInput } from './workflow-page.utils';
 import { WorkflowArgFieldsForm } from './workflow-arg-fields-form';
 import {
-  supportsWorkflowSchemaForm,
-  validateWorkflowSchemaInput,
-  WorkflowSchemaInputForm,
+  type WorkflowInputEditorValidity,
+  type WorkflowInputEditorValue,
+  validateWorkflowInputEditorValue,
+} from './workflow-input-editor.utils';
+import {
   type SchemaInputValue,
-} from './workflow-schema-input-form';
+  supportsWorkflowSchemaForm,
+} from './workflow-schema-input';
+import { WorkflowSchemaInputForm } from './workflow-schema-input-form';
 
 type WorkflowsMessages = ReturnType<typeof messages>['workflows'];
-
-export interface WorkflowInputEditorValue {
-  goal: string;
-  argValues: Record<string, string>;
-  schemaInput: SchemaInputValue;
-}
-
-export interface WorkflowInputEditorValidity {
-  valid: boolean;
-  reason?: 'schema-required' | 'raw-json';
-}
 
 export interface WorkflowInputEditorAiAssistConfig {
   disabled?: boolean;
@@ -65,54 +56,6 @@ function ExamplePromptList({
       </div>
     </div>
   );
-}
-
-export function resolveWorkflowInputPayload(
-  definition: WorkflowDefinition | null | undefined,
-  value: WorkflowInputEditorValue,
-): unknown {
-  if (!definition) return undefined;
-  if (supportsWorkflowSchemaForm(definition.inputSchema)) {
-    return Object.keys(value.schemaInput).length > 0 ? value.schemaInput : undefined;
-  }
-  return buildWorkflowInput(value.argValues);
-}
-
-export function summarizeWorkflowInput(
-  definition: WorkflowDefinition | null | undefined,
-  language: StoredLanguage,
-  value: WorkflowInputEditorValue,
-): string {
-  const labels = messages(language).workflows;
-  if (!definition) return labels.noInputSummary;
-  const localized = resolveWorkflowLocalizedCopy(definition, language);
-  const hasSchemaForm = supportsWorkflowSchemaForm(definition.inputSchema);
-  if (hasSchemaForm && Object.keys(value.schemaInput).length > 0) {
-    return Object.entries(value.schemaInput).map(([key, item]) => `${key}: ${String(item)}`).join(' · ');
-  }
-  const parts = Object.values(value.argValues)
-    .map((item) => item.trim())
-    .filter(Boolean);
-  const resolvedGoal = value.goal.trim() || localized.description;
-  if (resolvedGoal) parts.unshift(resolvedGoal);
-  return parts.length > 0 ? parts.join(' · ') : labels.noInputSummary;
-}
-
-export function validateWorkflowInputEditorValue(
-  definition: WorkflowDefinition | null | undefined,
-  value: WorkflowInputEditorValue,
-  rawJsonValid = true,
-): WorkflowInputEditorValidity {
-  if (!definition) return { valid: false };
-  if (!rawJsonValid) return { valid: false, reason: 'raw-json' };
-  if (supportsWorkflowSchemaForm(definition.inputSchema)) {
-    return validateWorkflowSchemaInput(definition.inputSchema, value.schemaInput)
-      ? { valid: true }
-      : { valid: false, reason: 'schema-required' };
-  }
-  const fields = WORKFLOW_ARG_FIELDS[definition.name] ?? [];
-  const valid = fields.every((field) => !field.required || Boolean(value.argValues[field.key]?.trim()));
-  return { valid };
 }
 
 export function WorkflowInputEditor({

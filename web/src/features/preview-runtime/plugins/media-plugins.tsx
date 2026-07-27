@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import { inferMimeTypeFromFileName } from '@/features/chat/attachments/attachment-utils-core';
 import { useBlobObjectUrl } from '@/features/file-preview/use-blob-object-url';
 import { PreviewOpenAlternativesBar } from '@/features/preview/preview-open-alternatives';
-import type { PreviewPlugin, PreviewRuntimeRenderProps } from '@/features/preview-runtime/preview-types';
+import type { PreviewRuntimeRenderProps } from '@/features/preview-runtime/preview-types';
 import { messages } from '@/i18n/messages';
 
 export function AudioPreviewPluginView(props: PreviewRuntimeRenderProps) {
@@ -33,20 +33,6 @@ function MediaPreview({ props, kind }: { props: PreviewRuntimeRenderProps; kind:
   );
 }
 
-export const audioPlugin: PreviewPlugin = {
-  id: 'audio',
-  readMode: 'binary',
-  capabilities: ['download'],
-  render: (props) => <AudioPreviewPluginView {...props} />,
-};
-
-export const videoPlugin: PreviewPlugin = {
-  id: 'video',
-  readMode: 'binary',
-  capabilities: ['download'],
-  render: (props) => <VideoPreviewPluginView {...props} />,
-};
-
 export function UnsupportedPreviewPluginView(props: PreviewRuntimeRenderProps) {
   const m = messages(props.language);
   const isWorkspace = props.descriptor.context === 'workspace';
@@ -70,10 +56,3 @@ export function UnsupportedPreviewPluginView(props: PreviewRuntimeRenderProps) {
     </div>
   );
 }
-
-export const unsupportedPlugin: PreviewPlugin = {
-  id: 'unsupported',
-  readMode: 'metadata',
-  capabilities: ['download'],
-  render: (props) => <UnsupportedPreviewPluginView {...props} />,
-};

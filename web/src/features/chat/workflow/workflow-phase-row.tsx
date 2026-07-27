@@ -70,7 +70,7 @@ export const WorkflowPhaseRow = memo(function WorkflowPhaseRow({
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         className={cn(
-          'flex w-full min-w-0 items-center gap-2 rounded-md px-1 py-1 text-left',
+          'flex w-full min-w-0 items-center gap-2 rounded-md p-1 text-left',
           'text-sm font-medium text-fg',
           'hover:bg-surface-hover',
           interaction.transition,

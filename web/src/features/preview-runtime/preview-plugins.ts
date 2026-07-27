@@ -1,10 +1,19 @@
-import { lazy, Suspense, type ReactNode } from 'react';
+import { createElement, lazy, Suspense, type ReactNode } from 'react';
 
-import { codePlugin, htmlPlugin, markdownPlugin, textPlugin } from '@/features/preview-runtime/plugins/textual-plugins';
+import {
+  CodePreviewPluginView,
+  HtmlPreviewPluginView,
+  MarkdownPreviewPluginView,
+  TextPreviewPluginView,
+} from '@/features/preview-runtime/plugins/textual-plugins';
 import type { PreviewFileType, PreviewPlugin, PreviewRuntimeRenderProps } from '@/features/preview-runtime/preview-types';
 
 function loadingPreview() {
-  return <div className="px-4 py-6 text-sm text-fg-muted">Loading preview...</div>;
+  return createElement(
+    'div',
+    { className: 'px-4 py-6 text-sm text-fg-muted' },
+    'Loading preview...',
+  );
 }
 
 function lazyPlugin(
@@ -18,19 +27,40 @@ function lazyPlugin(
     id,
     readMode,
     capabilities,
-    render: (props) => (
-      <Suspense fallback={loadingPreview()}>
-        <Component {...props} />
-      </Suspense>
-    ),
+    render: (props) =>
+      createElement(
+        Suspense,
+        { fallback: loadingPreview() },
+        createElement(Component, props),
+      ),
   };
 }
 
 const PLUGINS: Record<PreviewFileType, PreviewPlugin> = {
-  text: textPlugin,
-  markdown: markdownPlugin,
-  code: codePlugin,
-  html: htmlPlugin,
+  text: {
+    id: 'text',
+    readMode: 'text',
+    capabilities: ['download'],
+    render: (props) => createElement(TextPreviewPluginView, props),
+  },
+  markdown: {
+    id: 'markdown',
+    readMode: 'text',
+    capabilities: ['download', 'edit'],
+    render: (props) => createElement(MarkdownPreviewPluginView, props),
+  },
+  code: {
+    id: 'code',
+    readMode: 'text',
+    capabilities: ['download'],
+    render: (props) => createElement(CodePreviewPluginView, props),
+  },
+  html: {
+    id: 'html',
+    readMode: 'text',
+    capabilities: ['download', 'edit'],
+    render: (props) => createElement(HtmlPreviewPluginView, props),
+  },
   image: lazyPlugin('image', ['download', 'zoom', 'rotate'], () =>
     import('@/features/preview-runtime/plugins/binary-plugins').then((m) => ({ default: m.InteractiveImagePreview })),
   ),

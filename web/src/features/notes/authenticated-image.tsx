@@ -69,7 +69,7 @@ export function AuthenticatedImage({
         )}
         aria-hidden={!alt}
       >
-        <ImageOff className="h-5 w-5" />
+        <ImageOff className="size-5" />
       </div>
     );
   }

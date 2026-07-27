@@ -118,7 +118,7 @@ function AgentRunErrorCard({ payload }: { payload: AgentRunErrorPayload }) {
     <section
       role="alert"
       aria-live="polite"
-      className={cn('flex flex-col gap-2 rounded-xl border px-3 py-3', shellClass)}
+      className={cn('flex flex-col gap-2 rounded-xl border p-3', shellClass)}
     >
       <div className="flex items-start gap-3">
         <span

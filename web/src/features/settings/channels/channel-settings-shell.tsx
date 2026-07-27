@@ -107,7 +107,7 @@ export function ChannelSettingsShell({
               </>
             )}
 
-            <div className={cn('min-h-0 flex-1 overflow-y-auto', isDrawer ? 'px-4 py-4' : 'p-6')}>{children}</div>
+            <div className={cn('min-h-0 flex-1 overflow-y-auto', isDrawer ? 'p-4' : 'p-6')}>{children}</div>
             {footer}
           </SettingsShellLayerProvider>
         </Dialog.Content>

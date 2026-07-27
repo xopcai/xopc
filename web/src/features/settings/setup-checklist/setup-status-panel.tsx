@@ -129,7 +129,7 @@ function HealthBanner({
     );
 
   return (
-    <section className={cn('rounded-xl px-4 py-4', meta.className)}>
+    <section className={cn('rounded-xl p-4', meta.className)}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 gap-3">
           <Icon className="mt-0.5 size-5 shrink-0" aria-hidden />
@@ -202,14 +202,14 @@ function IssueRow({ issue, fixLabel }: { issue: SetupIssue; fixLabel: string }) 
     return (
       <Link
         to={issue.path}
-        className="flex items-start gap-3 rounded-lg bg-surface-panel/80 px-3 py-3 shadow-surface hover:bg-surface-hover/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="flex items-start gap-3 rounded-lg bg-surface-panel/80 p-3 shadow-surface hover:bg-surface-hover/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         {content}
       </Link>
     );
   }
 
-  return <div className="flex items-start gap-3 rounded-lg bg-surface-panel/80 px-3 py-3 shadow-surface">{content}</div>;
+  return <div className="flex items-start gap-3 rounded-lg bg-surface-panel/80 p-3 shadow-surface">{content}</div>;
 }
 
 function ReadinessRow({ item, labels }: { item: ReadinessPipelineItem; labels: Record<string, string> }) {
@@ -232,13 +232,13 @@ function ReadinessRow({ item, labels }: { item: ReadinessPipelineItem; labels: R
     return (
       <Link
         to={item.path}
-        className="flex items-center gap-3 rounded-lg px-3 py-3 hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="flex items-center gap-3 rounded-lg p-3 hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         {content}
       </Link>
     );
   }
-  return <div className="flex items-center gap-3 rounded-lg px-3 py-3">{content}</div>;
+  return <div className="flex items-center gap-3 rounded-lg p-3">{content}</div>;
 }
 
 function DiagnosticSignalRow({ signal, fixLabel }: { signal: SetupDiagnosticSignal; fixLabel: string }) {
@@ -370,7 +370,7 @@ export function SetupStatusPanel() {
                 ))}
               </div>
             ) : (
-              <p className="mt-4 rounded-lg bg-surface-panel/80 px-3 py-3 text-sm text-fg-muted shadow-surface">
+              <p className="mt-4 rounded-lg bg-surface-panel/80 p-3 text-sm text-fg-muted shadow-surface">
                 {snapshot.diagnosticSignals.length ? s.diagnosticsAllClear : s.diagnosticsEmpty}
               </p>
             )}

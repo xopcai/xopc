@@ -106,7 +106,7 @@ export function GlobalReadAloudPlayer() {
           <div
             ref={playerRef}
             className={cn(
-              'pointer-events-auto isolate absolute flex w-[min(20rem,calc(100%-1.5rem))] touch-none items-center gap-2 rounded-xl border border-edge-strong bg-surface-panel px-2.5 py-2.5 shadow-popover',
+              'pointer-events-auto isolate absolute flex w-[min(20rem,calc(100%-1.5rem))] touch-none items-center gap-2 rounded-xl border border-edge-strong bg-surface-panel p-2.5 shadow-popover',
               !position && 'bottom-3 left-1/2 -translate-x-1/2 sm:bottom-5',
               dragging ? 'cursor-grabbing select-none' : 'cursor-grab',
             )}

@@ -57,7 +57,7 @@ export function NoteImageLightboxProvider({ children, closeLabel = 'Close' }: No
                 aria-label={closeLabel}
                 className="absolute right-4 top-4 z-10 rounded-lg bg-surface-panel/80 p-2 text-fg-muted backdrop-blur transition-colors hover:bg-surface-hover hover:text-fg"
               >
-                <X className="h-5 w-5" aria-hidden />
+                <X className="size-5" aria-hidden />
               </button>
             </Dialog.Close>
             {image ? (

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { verifyGatewayCredential } from './gateway-token-form';
+import { verifyGatewayCredential } from './gateway-credential-verification';
 
 describe('verifyGatewayCredential', () => {
   afterEach(() => {

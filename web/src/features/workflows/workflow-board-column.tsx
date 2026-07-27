@@ -62,7 +62,7 @@ export const WorkflowBoardColumn = memo(function WorkflowBoardColumn({
       )}
       aria-label={columnTitle(column.id, labels)}
     >
-      <header className="flex shrink-0 items-center justify-between gap-2 px-3 py-3">
+      <header className="flex shrink-0 items-center justify-between gap-2 p-3">
         <div className="flex min-w-0 items-baseline gap-2">
           <h2 className="truncate text-sm font-semibold text-fg">{columnTitle(column.id, labels)}</h2>
           <span className="shrink-0 text-xs text-fg-subtle">{column.runs.length}</span>
@@ -115,10 +115,10 @@ export const WorkflowBoardColumn = memo(function WorkflowBoardColumn({
 
 function WorkflowBoardCardSkeleton() {
   return (
-    <article className="min-h-24 rounded-lg bg-surface-panel px-3 py-3 shadow-surface" aria-hidden="true">
+    <article className="min-h-24 rounded-lg bg-surface-panel p-3 shadow-surface" aria-hidden="true">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <Skeleton className="h-4 w-4/5" />
+          <Skeleton className="size-4/5" />
           <Skeleton className="mt-2 h-3 w-24" />
         </div>
         <Skeleton className="h-5 w-14 rounded-full" />

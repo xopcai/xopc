@@ -283,7 +283,7 @@ export function DesktopPetSettings() {
               const selected = pet.id === state.prefs.selectedPetId;
               const displayText = petDisplayText(pet);
               return (
-                <div key={pet.id} className="flex items-center gap-3 px-3 py-3">
+                <div key={pet.id} className="flex items-center gap-3 p-3">
                   <DesktopPetSprite pet={pet} action="idle" size="tiny" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
@@ -328,7 +328,7 @@ export function DesktopPetSettings() {
                 </div>
               );
             })}
-            <div className="flex flex-col gap-1 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-1 p-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-xs font-semibold text-fg">{t.customPets}</p>
                 <p className="font-mono text-xs text-fg-muted">{state.customPetsDir}</p>
@@ -381,7 +381,7 @@ export function DesktopPetSettings() {
         </div>
 
         <div className="mt-5 grid gap-2">
-          <div className="rounded-xl bg-surface-hover/50 px-3 py-3 dark:bg-surface-hover/35">
+          <div className="rounded-xl bg-surface-hover/50 p-3 dark:bg-surface-hover/35">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <div className="text-sm font-medium text-fg">{t.size}</div>
@@ -422,7 +422,7 @@ export function DesktopPetSettings() {
               onChange={(checked) => void patch({ bubbleEnabled: checked })}
             />
           </div>
-          <div className="flex flex-col gap-2 rounded-xl bg-surface-hover/50 px-3 py-3 dark:bg-surface-hover/35 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-2 rounded-xl bg-surface-hover/50 p-3 dark:bg-surface-hover/35 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="text-sm font-medium text-fg">{t.feedbackLevel}</div>
               <p className="text-xs text-fg-muted">{t.feedbackLevelDesc}</p>

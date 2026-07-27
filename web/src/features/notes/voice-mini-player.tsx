@@ -60,7 +60,7 @@ export function VoiceMiniPlayer({ noteId, attachmentId, durationSec, className }
         onClick={handleClick}
         onKeyDown={handleKeyDown}
         className={cn(
-          'flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors',
+          'flex size-7 shrink-0 items-center justify-center rounded-full transition-colors',
           isPlaying
             ? 'bg-accent text-white'
             : 'bg-accent/10 text-accent hover:bg-accent/20',
@@ -68,11 +68,11 @@ export function VoiceMiniPlayer({ noteId, attachmentId, durationSec, className }
         aria-label={isPlaying ? 'Pause' : 'Play'}
       >
         {isLoading ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          <Loader2 className="size-3.5 animate-spin" />
         ) : isPlaying ? (
-          <Pause className="h-3.5 w-3.5" />
+          <Pause className="size-3.5" />
         ) : (
-          <Play className="h-3.5 w-3.5 ml-0.5" />
+          <Play className="size-3.5 ml-0.5" />
         )}
       </button>
 

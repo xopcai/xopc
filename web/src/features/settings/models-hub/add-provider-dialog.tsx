@@ -267,7 +267,6 @@ function PickProviderStep({
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder={labels.searchPlaceholder}
             autoComplete="off"
-            autoFocus
             className={cn(
               'w-full rounded-lg border border-edge bg-surface-panel py-2 pl-10 pr-3 text-sm text-fg placeholder:text-fg-subtle',
               settingsInputFocusClass,
@@ -514,7 +513,7 @@ function ConfigureBuiltinStep({
         ) : null}
 
         {supportsOAuth ? (
-          <div className="flex flex-col gap-2 rounded-lg border border-edge-subtle bg-surface-panel/60 px-3 py-3">
+          <div className="flex flex-col gap-2 rounded-lg border border-edge-subtle bg-surface-panel/60 p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-sm font-medium text-fg">{providerLabels.oauth}</p>
@@ -858,7 +857,6 @@ function ConfigureCustomStep({
             id="custom-provider-id"
             type="text"
             autoComplete="off"
-            autoFocus
             value={providerId}
             onChange={(e) => dispatch({ type: 'setProviderId', value: e.target.value })}
             placeholder={labels.providerIdPlaceholder}

@@ -172,7 +172,7 @@ export function TunnelControlCard({
       ) : (
         <div className="space-y-4">
           {st.publicUrl ? (
-            <div className="rounded-xl bg-surface-panel/80 px-3 py-3 shadow-surface">
+            <div className="rounded-xl bg-surface-panel/80 p-3 shadow-surface">
               <CopyTextRow label={t.publicUrlLabel} text={st.publicUrl} labels={copyLabels} />
             </div>
           ) : null}

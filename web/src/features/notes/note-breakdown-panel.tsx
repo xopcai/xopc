@@ -58,7 +58,7 @@ export function NoteBreakdownPanel({
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between border-b border-edge-subtle px-4 py-3">
         <div className="flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-accent" aria-hidden />
+          <Sparkles className="size-4 text-accent" aria-hidden />
           <span className="text-sm font-semibold text-fg">{n.catalysisSectionTitle}</span>
         </div>
         <button
@@ -67,7 +67,7 @@ export function NoteBreakdownPanel({
           aria-label={n.lightboxClose}
           className="rounded-lg p-1.5 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
         >
-          <ArrowLeft className="h-4 w-4 rotate-180" aria-hidden />
+          <ArrowLeft className="size-4 rotate-180" aria-hidden />
         </button>
       </div>
 
@@ -145,7 +145,7 @@ export function NoteBreakdownPanel({
               <ul className="mt-1 space-y-1 text-sm leading-relaxed text-fg">
                 {catalysisReport.keyQuestions.slice(0, 3).map((question) => (
                   <li key={question} className="flex gap-2">
-                    <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-accent" />
+                    <span className="mt-2 size-1 shrink-0 rounded-full bg-accent" />
                     <span>{question}</span>
                   </li>
                 ))}
@@ -167,7 +167,7 @@ export function NoteBreakdownPanel({
               <ul className="mt-1 space-y-1 text-sm leading-relaxed text-fg">
                 {catalysisReport.risks.slice(0, 3).map((risk) => (
                   <li key={risk} className="flex gap-2">
-                    <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-fg-muted" />
+                    <span className="mt-2 size-1 shrink-0 rounded-full bg-fg-muted" />
                     <span>{risk}</span>
                   </li>
                 ))}
@@ -200,7 +200,7 @@ export function NoteBreakdownPanel({
                   )}
                   aria-label={n.feedbackHelpfulAria}
                 >
-                  <ThumbsUp className="h-3.5 w-3.5" aria-hidden />
+                  <ThumbsUp className="size-3.5" aria-hidden />
                 </button>
                 <button
                   type="button"
@@ -211,7 +211,7 @@ export function NoteBreakdownPanel({
                   )}
                   aria-label={n.feedbackNotHelpfulAria}
                 >
-                  <ThumbsDown className="h-3.5 w-3.5" aria-hidden />
+                  <ThumbsDown className="size-3.5" aria-hidden />
                 </button>
               </div>
             </div>
@@ -227,7 +227,7 @@ export function NoteBreakdownPanel({
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
               <div className="flex items-center gap-2 text-sm font-semibold text-fg">
-                <MessageCircle className="h-4 w-4 text-accent" aria-hidden />
+                <MessageCircle className="size-4 text-accent" aria-hidden />
                 {n.relatedThreadsTitle}
               </div>
               <p className="mt-1 text-xs text-fg-muted">{n.relatedThreadsDescription}</p>
