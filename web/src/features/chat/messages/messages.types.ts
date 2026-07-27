@@ -23,6 +23,10 @@ export type ToolUseContent = {
   name: string;
   input?: unknown;
   status: 'running' | 'done' | 'error';
+  /** Tool lifecycle timing from the stream or reconstructed session transcript. */
+  startedAt?: number;
+  completedAt?: number;
+  durationMs?: number;
   /** Serialized tool output; may be an object in edge cases (normalize before parsing). */
   result?: string | unknown;
   /**

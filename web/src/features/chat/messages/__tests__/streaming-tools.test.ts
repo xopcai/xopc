@@ -14,10 +14,10 @@ describe('streaming tool updates', () => {
   it('completes a running tool by toolCallId before falling back to tool name', () => {
     const content: MessageContent[] = [];
 
-    appendToolStart(content, 'codebase-memory-mcp.get_code_snippet', { qualified_name: 'first' }, 'call-1');
-    appendToolStart(content, 'codebase-memory-mcp.get_code_snippet', { qualified_name: 'second' }, 'call-2');
+    appendToolStart(content, 'codebase-memory-mcp.get_code_snippet', { qualified_name: 'first' }, 'call-1', 1_000);
+    appendToolStart(content, 'codebase-memory-mcp.get_code_snippet', { qualified_name: 'second' }, 'call-2', 1_100);
 
-    completeTool(content, 'codebase-memory-mcp.get_code_snippet', false, 'first result', 'call-1');
+    completeTool(content, 'codebase-memory-mcp.get_code_snippet', false, 'first result', 'call-1', 1_500);
 
     expect(content).toMatchObject([
       { type: 'tool_use', toolCallId: 'call-1', status: 'done', result: 'first result' },
@@ -27,7 +27,7 @@ describe('streaming tool updates', () => {
 
   it('accumulates live text output on a running tool', () => {
     const content: MessageContent[] = [];
-    appendToolStart(content, 'review.model_judge', {}, 'review-1');
+    appendToolStart(content, 'review.model_judge', {}, 'review-1', 1_000);
 
     updateToolDetails(content, 'review.model_judge', 'review-1', { textDelta: '{\"findings\":' });
     updateToolDetails(content, 'review.model_judge', 'review-1', { textDelta: ' []}' });

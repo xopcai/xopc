@@ -1,14 +1,15 @@
-import { memo, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, ChevronDown, Loader2, XCircle } from 'lucide-react';
 
-import { TOOL_NAMES_WITH_WORKSPACE_OUTPUT } from '@/features/chat/messages/assistant-message-artifacts';
 import {
   buildStepsRoundCompleteSummary,
   buildStepsRoundStreamingSummary,
   filterVisibleSteps,
   viewStepsLabel,
 } from '@/features/chat/messages/assistant-steps-summary';
+import { getActivityTiming } from '@/features/chat/messages/activity-timing';
 import type {
+  ReasoningLevel,
   ThinkingContent,
   ToolUseContent,
 } from '@/features/chat/messages/messages.types';
@@ -35,8 +36,6 @@ import {
   BrowserSetupRequiredCard,
 } from '@/features/chat/tool-results/browser-setup-required-card';
 import { parseBrowserSetupRequired } from '@/features/chat/tool-results/browser-setup-required-parser';
-import { ToolResultFileLinks } from '@/features/chat/tool-results/tool-result-file-links';
-import { extractFilePathsFromToolResult } from '@/features/chat/tool-results/tool-result-file-paths';
 import { ExtensionChatWidget } from '@/features/extensions/extension-chat-widget';
 import { useUiExtensions } from '@/features/extensions/extension-provider';
 import { useChatWidgetMatch } from '@/features/extensions/use-chat-widget-match';
@@ -46,10 +45,26 @@ import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import type { StoredLanguage } from '@/lib/storage';
 import { useLocaleStore } from '@/stores/locale-store';
+import { WorkflowCard, type WorkflowCardLabels } from '@/features/chat/workflow/workflow-card';
+import { isWorkflowToolBlock } from '@/features/chat/workflow/workflow.utils';
 
-const AssistantStepsHeaderStatusIcon = memo(function AssistantStepsHeaderStatusIcon({ active }: { active: boolean }) {
+export interface AssistantActivityWorkflowOptions {
+  labels: WorkflowCardLabels;
+  onAbort?: () => void;
+}
+
+const AssistantStepsHeaderStatusIcon = memo(function AssistantStepsHeaderStatusIcon({
+  active,
+  failed,
+}: {
+  active: boolean;
+  failed: boolean;
+}) {
   if (active) {
     return <Loader2 className="mt-0.5 size-4 shrink-0 animate-spin text-accent-fg" aria-hidden />;
+  }
+  if (failed) {
+    return <XCircle className="mt-0.5 size-4 shrink-0 text-red-600 dark:text-red-400" aria-hidden />;
   }
   return <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />;
 });
@@ -60,13 +75,13 @@ const AssistantStepsHeaderStatusIcon = memo(function AssistantStepsHeaderStatusI
  */
 const StepRoundDurationText = memo(function StepRoundDurationText({
   active,
-  roundStartRef,
+  startedAt,
   frozenMs,
   language,
   className,
 }: {
   active: boolean;
-  roundStartRef: MutableRefObject<number | null>;
+  startedAt: number | null;
   frozenMs: number | null;
   language: StoredLanguage;
   className: string;
@@ -78,7 +93,6 @@ const StepRoundDurationText = memo(function StepRoundDurationText({
     return () => window.clearInterval(id);
   }, [active]);
 
-  const startedAt = roundStartRef.current;
   const elapsedMs = active && startedAt != null ? Math.max(0, Date.now() - startedAt) : 0;
   const text =
     active && startedAt != null
@@ -90,7 +104,7 @@ const StepRoundDurationText = memo(function StepRoundDurationText({
   return <span className={className}>{text}</span>;
 });
 
-/** Collapsible inline block: "View N steps" header + timeline (main chat column). */
+/** One turn-level activity disclosure for model summaries and tool execution. */
 export function AssistantStepsBlock({
   blocks,
   toolLabels,
@@ -100,6 +114,8 @@ export function AssistantStepsBlock({
   sessionKey,
   isMessageStreaming = false,
   finalAnswerStarted = false,
+  workflowOptions,
+  reasoningLevel,
 }: {
   blocks: Array<ThinkingContent | ToolUseContent>;
   toolLabels: { input: string; output: string; noOutput: string };
@@ -118,6 +134,14 @@ export function AssistantStepsBlock({
     openUrl: string;
     fetchUrl: string;
     unknownTool: string;
+    activityCompleted: string;
+    activityPartial: string;
+    activityFailedCount: string;
+    activityAnalysisComplete: string;
+    toolFailedImpact: string;
+    rawThinking: string;
+    toolRunning: string;
+    toolError: string;
   };
   clusterLabels: {
     done: StepsClusterDoneLabels;
@@ -130,52 +154,73 @@ export function AssistantStepsBlock({
   isMessageStreaming?: boolean;
   /** A non-empty assistant `text` block exists after this thinking/tool chunk (final answer has begun). */
   finalAnswerStarted?: boolean;
+  workflowOptions: AssistantActivityWorkflowOptions;
+  reasoningLevel: ReasoningLevel;
 }) {
   const language = useLocaleStore((s) => s.language);
-  const visibleBlocks = useMemo(() => filterVisibleSteps(blocks), [blocks]);
+  const visibleBlocks = useMemo(() => {
+    const visible = filterVisibleSteps(blocks);
+    if (reasoningLevel !== 'off') return visible;
+    return visible.filter((block) => block.type !== 'thinking');
+  }, [blocks, reasoningLevel]);
   const stepCount = visibleBlocks.length;
   const anyActive = visibleBlocks.some(
     (b) =>
       (b.type === 'thinking' && b.streaming) || (b.type === 'tool_use' && b.status === 'running'),
   );
+  const failedCount = visibleBlocks.filter(
+    (block) => block.type === 'tool_use' && block.status === 'error',
+  ).length;
 
-  /** Open during tools/thinking; fold as soon as answer text starts, or when the turn ends (tool-only). */
-  const stepsDrawerOpen = Boolean(isMessageStreaming) && !finalAnswerStarted;
+  /** Detailed mode opens live activity; all modes fold once answer text starts. */
+  const stepsDrawerOpen =
+    reasoningLevel === 'stream' && Boolean(isMessageStreaming) && !finalAnswerStarted;
 
-  const roundStartRef = useRef<number | null>(null);
+  const activityTiming = useMemo(() => getActivityTiming(visibleBlocks), [visibleBlocks]);
   const prevStepsDrawerOpenRef = useRef(stepsDrawerOpen);
-  const [frozenDurationMs, setFrozenDurationMs] = useState<number | null>(null);
   const [userExpanded, setUserExpanded] = useState<boolean | null>(null);
-
-  if (anyActive && roundStartRef.current === null) {
-    roundStartRef.current = Date.now();
-  }
 
   useEffect(() => {
     if (stepsDrawerOpen && !prevStepsDrawerOpenRef.current) {
       setUserExpanded(null);
-      setFrozenDurationMs(null);
     } else if (!stepsDrawerOpen && prevStepsDrawerOpenRef.current) {
-      if (roundStartRef.current !== null) {
-        setFrozenDurationMs(Date.now() - roundStartRef.current);
-      }
       setUserExpanded(false);
     }
     prevStepsDrawerOpenRef.current = stepsDrawerOpen;
   }, [stepsDrawerOpen]);
 
   const expanded = userExpanded ?? stepsDrawerOpen;
+  const effectiveStartedAt = activityTiming.startedAt ?? null;
+  const completedDurationMs = activityTiming.durationMs ?? null;
 
   const completedHeader = useMemo(() => {
     if (anyActive) return '';
-    return buildStepsRoundCompleteSummary(
+    const detail = buildStepsRoundCompleteSummary(
       visibleBlocks,
       clusterLabels.done,
       clusterLabels.join,
       language,
       viewStepsLabel(stepCount, stepLabels),
     );
-  }, [anyActive, visibleBlocks, language, stepCount, stepLabels, clusterLabels]);
+    if (failedCount > 0) {
+      return `${stepLabels.activityPartial} · ${stepLabels.activityFailedCount.replace(
+        /\{\{count\}\}/g,
+        String(failedCount),
+      )}`;
+    }
+    const hasTool = visibleBlocks.some((block) => block.type === 'tool_use');
+    return hasTool
+      ? `${stepLabels.activityCompleted} · ${detail}`
+      : stepLabels.activityAnalysisComplete;
+  }, [
+    anyActive,
+    visibleBlocks,
+    language,
+    stepCount,
+    stepLabels,
+    clusterLabels,
+    failedCount,
+  ]);
 
   const streamingHeaderText = useMemo(() => {
     if (!anyActive) return null;
@@ -199,6 +244,10 @@ export function AssistantStepsBlock({
     openUrl: stepLabels.openUrl,
     fetchUrl: stepLabels.fetchUrl,
     unknownTool: stepLabels.unknownTool,
+    toolFailedImpact: stepLabels.toolFailedImpact,
+    rawThinking: stepLabels.rawThinking,
+    toolRunning: stepLabels.toolRunning,
+    toolError: stepLabels.toolError,
   };
 
   const headerMain = anyActive ? (
@@ -208,7 +257,7 @@ export function AssistantStepsBlock({
       </span>
       <StepRoundDurationText
         active={anyActive}
-        roundStartRef={roundStartRef}
+        startedAt={effectiveStartedAt}
         frozenMs={null}
         language={language}
         className="ml-1.5 tabular-nums text-fg-muted"
@@ -223,8 +272,8 @@ export function AssistantStepsBlock({
   const headerDurationRight = !anyActive ? (
     <StepRoundDurationText
       active={false}
-      roundStartRef={roundStartRef}
-      frozenMs={frozenDurationMs}
+      startedAt={effectiveStartedAt}
+      frozenMs={completedDurationMs}
       language={language}
       className="mt-0.5 tabular-nums text-xs text-fg-muted"
     />
@@ -243,7 +292,7 @@ export function AssistantStepsBlock({
         onClick={() => setUserExpanded((current) => !(current ?? stepsDrawerOpen))}
         aria-expanded={expanded}
       >
-        <AssistantStepsHeaderStatusIcon active={anyActive} />
+        <AssistantStepsHeaderStatusIcon active={anyActive} failed={failedCount > 0} />
         <div className="min-w-0">
           <span className="inline-flex max-w-full flex-wrap items-baseline rounded-md bg-accent-soft/70 px-2 py-0.5 text-xs font-medium text-fg dark:bg-accent-soft/40">
             {headerMain}
@@ -258,11 +307,12 @@ export function AssistantStepsBlock({
       {expanded ? (
         <div className="border-t border-edge-subtle/90 px-3 pb-3 pt-2 dark:border-edge-subtle">
           <AssistantStepsTimeline
-            blocks={blocks}
+            blocks={visibleBlocks}
             toolLabels={toolLabels}
             stepLabels={timelineLabels}
             cardLabels={cardLabels}
             sessionKey={sessionKey}
+            workflowOptions={workflowOptions}
           />
         </div>
       ) : null}
@@ -277,6 +327,7 @@ export function AssistantStepsTimeline({
   cardLabels,
   className,
   sessionKey,
+  workflowOptions,
 }: {
   blocks: Array<ThinkingContent | ToolUseContent>;
   toolLabels: { input: string; output: string; noOutput: string };
@@ -293,10 +344,15 @@ export function AssistantStepsTimeline({
     openUrl: string;
     fetchUrl: string;
     unknownTool: string;
+    toolFailedImpact: string;
+    rawThinking: string;
+    toolRunning: string;
+    toolError: string;
   };
   cardLabels: ToolCardLabels;
   className?: string;
   sessionKey?: string | null;
+  workflowOptions: AssistantActivityWorkflowOptions;
 }) {
   const visibleBlocks = filterVisibleSteps(blocks);
   if (visibleBlocks.length === 0) {
@@ -314,6 +370,7 @@ export function AssistantStepsTimeline({
             stepLabels={stepLabels}
             cardLabels={cardLabels}
             sessionKey={sessionKey}
+            workflowOptions={workflowOptions}
           />
         ))}
       </div>
@@ -364,6 +421,7 @@ function StepRow({
   stepLabels,
   cardLabels,
   sessionKey,
+  workflowOptions,
 }: {
   block: ThinkingContent | ToolUseContent;
   toolLabels: { input: string; output: string; noOutput: string };
@@ -380,9 +438,14 @@ function StepRow({
     openUrl: string;
     fetchUrl: string;
     unknownTool: string;
+    toolFailedImpact: string;
+    rawThinking: string;
+    toolRunning: string;
+    toolError: string;
   };
   cardLabels: ToolCardLabels;
   sessionKey?: string | null;
+  workflowOptions: AssistantActivityWorkflowOptions;
 }) {
   const showRawToolData = useDevViewStore((s) => s.showRawToolData);
   const toolResultText = useMemo(() => {
@@ -405,19 +468,6 @@ function StepRow({
       return String(r);
     }
   }, [block]);
-
-  const extractedFilePaths = useMemo(() => {
-    if (block.type !== 'tool_use' || block.status === 'running' || block.status === 'error') {
-      return [];
-    }
-    if (!TOOL_NAMES_WITH_WORKSPACE_OUTPUT.has(block.name)) {
-      return [];
-    }
-    if (!toolResultText) {
-      return [];
-    }
-    return extractFilePathsFromToolResult(toolResultText);
-  }, [block, toolResultText]);
 
   // browser_use preflight produces a structured "setup required" sentinel.
   // The agent-side text is JSON, so the generic outputPreview would render
@@ -456,15 +506,32 @@ function StepRow({
           <span className="inline-flex max-w-full min-w-0 break-words rounded-md bg-accent-soft/60 px-1.5 py-0.5 text-xs font-medium text-fg [overflow-wrap:anywhere] dark:bg-accent-soft/35">
             {streaming ? stepLabels.thoughtsStreaming : stepLabels.thoughts}
           </span>
-          {text ? (
-            <p className="line-clamp-4 whitespace-pre-wrap break-words text-xs leading-relaxed text-fg-muted [overflow-wrap:anywhere]">
-              {text}
-            </p>
+          {showRawToolData && text ? (
+            <details className="group min-w-0 text-xs">
+              <summary className="cursor-pointer select-none text-fg-subtle underline-offset-2 hover:text-fg-muted">
+                {stepLabels.rawThinking}
+              </summary>
+              <p className="mt-1 whitespace-pre-wrap break-words text-xs leading-relaxed text-fg-muted [overflow-wrap:anywhere]">
+                {text}
+              </p>
+            </details>
           ) : streaming ? (
             <p className="text-xs text-fg-muted">…</p>
           ) : null}
         </div>
       </div>
+    );
+  }
+
+  if (isWorkflowToolBlock(block)) {
+    return (
+      <WorkflowCard
+        block={block}
+        startedAt={block.startedAt}
+        sessionKey={sessionKey}
+        onAbort={workflowOptions.onAbort}
+        labels={workflowOptions.labels}
+      />
     );
   }
 
@@ -539,12 +606,17 @@ function StepRow({
             {title}
           </span>
           {isStreaming ? (
-            <span className="text-xs text-fg-disabled">running…</span>
+            <span className="text-xs text-fg-disabled">{stepLabels.toolRunning}</span>
           ) : isError ? (
-            <span className="text-xs text-red-600 dark:text-red-400">error</span>
+            <span className="text-xs text-red-600 dark:text-red-400">{stepLabels.toolError}</span>
           ) : null}
         </div>
         {card}
+        {isError ? (
+          <p className="text-xs leading-relaxed text-red-600 dark:text-red-400">
+            {stepLabels.toolFailedImpact}
+          </p>
+        ) : null}
         {renderProductDelivery ? <ProductDeliveryCard delivery={renderProductDelivery} /> : null}
         {!hasCard && detailLine ? (
           <p className="min-w-0 rounded-md bg-accent-soft/40 px-1.5 py-1 text-xs break-words text-fg-muted [overflow-wrap:anywhere] dark:bg-accent-soft/25">
@@ -579,9 +651,6 @@ function StepRow({
         ) : null}
         {!isStreaming && !isError ? (
           <ToolUseWidgetSlot toolName={block.name} toolResult={block.result} />
-        ) : null}
-        {!isStreaming && !isError && extractedFilePaths.length > 0 ? (
-          <ToolResultFileLinks paths={extractedFilePaths} sessionKey={sessionKey} />
         ) : null}
         {!isStreaming && browserSetup ? (
           <BrowserSetupRequiredCard payload={browserSetup} />

@@ -54,6 +54,7 @@ import {
 } from '@/features/work-items/api';
 import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-store';
 import { AgentRunErrorBanner } from '@/features/chat/messages/agent-run-error-banner';
+import { LongRunningTurnNotice } from '@/features/chat/messages/long-running-turn-notice';
 import { agentsAppDetailPath } from '@/features/settings/agents/agents-app-path';
 import { showToast } from '@/lib/toast';
 import { showActivity } from '@/stores/activity-store';
@@ -1190,6 +1191,17 @@ export function ChatPage() {
                 onSubmit={clarify.submitClarifyAnswer}
                 onCancel={clarify.cancelClarifyAnswer}
               />
+              <LongRunningTurnNotice
+                running={
+                  (stream.streaming || stream.sending) &&
+                  !clarify.clarifyPrompt &&
+                  !showWorkflowLiveBanner
+                }
+                title={m.chat.longRunTitle}
+                description={m.chat.longRunDescription}
+                stopLabel={m.chat.longRunStop}
+                onStop={stream.abort}
+              />
               <ChatComposer
                 disabled={
                   isSessionTransitioning ||
@@ -1206,6 +1218,8 @@ export function ChatPage() {
                 thinkingLevel={session.thinkingLevel}
                 showThinkingSelector={session.modelSupportsThinking}
                 onThinkingChange={session.onSessionThinkingLevelChange}
+                reasoningLevel={session.reasoningLevel}
+                onReasoningChange={session.onSessionReasoningLevelChange}
                 onSend={handleComposerSend}
                 onAbort={stream.abort}
                 onAddPendingFollowUp={(text, atts) => void followUp.addPendingFollowUp(text, atts)}

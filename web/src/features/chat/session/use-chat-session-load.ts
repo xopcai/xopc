@@ -2,7 +2,11 @@ import { useCallback, useRef, type RefObject } from 'react';
 
 import { DEFAULT_THINKING } from '@/features/chat/session/chat-session-defaults';
 import type { SessionInfo } from '@/features/chat/chat.types';
-import { type Message, coerceReasoningLevel } from '@/features/chat/messages/messages.types';
+import {
+  type Message,
+  type ReasoningLevel,
+  coerceReasoningLevel,
+} from '@/features/chat/messages/messages.types';
 import { modelSupportsReasoning } from '@/features/chat/model/model-capabilities';
 import { hasPendingAgentRunForChat } from '@/features/chat/messages/message-sender';
 import { isViewingSession, resolveViewSessionKey } from '@/features/chat/session/chat-session-view';
@@ -321,6 +325,19 @@ export function useChatSessionLoad(deps: {
     },
     [sessionKey, sessionMgrRef],
   );
+  const onSessionReasoningLevelChange = useCallback(
+    async (level: ReasoningLevel) => {
+      if (!sessionKey) return;
+      try {
+        store().setShellError(null);
+        await sessionMgrRef.current.patchSessionAgentConfig(sessionKey, { reasoningLevel: level });
+        store().patchSessionMeta(sessionKey, { reasoningLevel: level });
+      } catch (e) {
+        store().setShellError(e instanceof Error ? e.message : 'Failed to update activity detail');
+      }
+    },
+    [sessionKey, sessionMgrRef],
+  );
 
   const createNewSession = useCallback(
     async (opts?: { forceNew?: boolean; projectId?: string | null }) => {
@@ -362,6 +379,7 @@ export function useChatSessionLoad(deps: {
     loadMoreMessages,
     onSessionModelChange,
     onSessionThinkingLevelChange,
+    onSessionReasoningLevelChange,
     createNewSession,
   };
 }

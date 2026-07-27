@@ -8,7 +8,7 @@ interface SearchSource {
   snippet?: string;
 }
 
-function extractSearchSources(blocks: ToolUseContent[]): SearchSource[] {
+export function extractSearchSources(blocks: ToolUseContent[]): SearchSource[] {
   const sources: SearchSource[] = [];
   for (const block of blocks) {
     if (!block.name.toLowerCase().includes('search') || block.result == null) continue;
@@ -34,9 +34,10 @@ function extractSearchSources(blocks: ToolUseContent[]): SearchSource[] {
 
 interface SearchSourceListProps {
   blocks: Array<{ type: string; [key: string]: unknown }>;
+  className?: string;
 }
 
-export function SearchSourceList({ blocks }: SearchSourceListProps) {
+export function SearchSourceList({ blocks, className = 'mt-6' }: SearchSourceListProps) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
 
@@ -46,7 +47,7 @@ export function SearchSourceList({ blocks }: SearchSourceListProps) {
   if (sources.length === 0) return null;
 
   return (
-    <div className="mt-6">
+    <div className={className}>
       <p className="mb-3 text-xs font-medium text-fg-muted">
         {m.chat.searchSourcesHeading.replace('{{count}}', String(sources.length))}
       </p>

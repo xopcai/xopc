@@ -269,7 +269,8 @@ export function appendToolStart(
   content: MessageContent[],
   toolName: string,
   args: unknown,
-  toolCallId?: string,
+  toolCallId: string | undefined,
+  startedAt: number,
 ): void {
   closeStreamingThinkingIfAny(content);
 
@@ -280,6 +281,7 @@ export function appendToolStart(
     name: toolName,
     input: args,
     status: 'running',
+    startedAt,
   };
   content.push(block);
 }
@@ -288,8 +290,9 @@ export function completeTool(
   content: MessageContent[],
   toolName: string,
   isError: boolean,
-  result?: unknown,
-  toolCallId?: string,
+  result: unknown,
+  toolCallId: string | undefined,
+  completedAt: number,
 ): void {
   for (let i = content.length - 1; i >= 0; i--) {
     const b = content[i];
@@ -298,6 +301,10 @@ export function completeTool(
     if (!toolCallId && !toolNameMatches(b.name, toolName)) continue;
     b.status = isError ? 'error' : 'done';
     b.result = result;
+    b.completedAt = completedAt;
+    if (b.startedAt != null) {
+      b.durationMs = Math.max(0, completedAt - b.startedAt);
+    }
     return;
   }
 }

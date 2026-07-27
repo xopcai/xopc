@@ -1,8 +1,8 @@
 import * as Popover from '@radix-ui/react-popover';
-import { Ban, File as FileIcon, ListChecks, Mic, Plus, Send, Sparkles, Square } from 'lucide-react';
+import { Activity, Ban, File as FileIcon, ListChecks, Mic, Plus, Send, Sparkles, Square } from 'lucide-react';
 import { memo, useState } from 'react';
 
-import type { Message } from '@/features/chat/messages/messages.types';
+import type { Message, ReasoningLevel } from '@/features/chat/messages/messages.types';
 import { ModelContextRing } from '@/features/chat/model/model-context-ring';
 import { ModelSelector } from '@/features/chat/model/model-selector';
 import { SessionWorkingDirectoryControl } from '@/features/chat/session/session-working-directory-control';
@@ -45,6 +45,8 @@ export interface ComposerToolbarProps {
   thinkingLevel: string;
   showThinkingSelector: boolean;
   onThinkingChange: (level: string) => void;
+  reasoningLevel: ReasoningLevel;
+  onReasoningChange: (level: ReasoningLevel) => void;
 
   voiceActive: boolean;
   voiceReadiness: VoiceReadiness;
@@ -81,6 +83,8 @@ export const ComposerToolbar = memo(function ComposerToolbar({
   thinkingLevel,
   showThinkingSelector,
   onThinkingChange,
+  reasoningLevel,
+  onReasoningChange,
   voiceActive,
   voiceReadiness,
   onStartVoiceInput,
@@ -217,6 +221,28 @@ export const ComposerToolbar = memo(function ComposerToolbar({
                   </Select>
                 </label>
               ) : null}
+              <label
+                className={cn(
+                  'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-fg',
+                  'hover:bg-surface-hover',
+                )}
+                title={`${m.activityDetailLabel}: ${m.activityDetailLevels[reasoningLevel]}`}
+              >
+                <Activity className="size-4 shrink-0 text-fg-subtle" aria-hidden />
+                <span className="shrink-0 text-fg-muted">{m.activityDetailLabel}</span>
+                <Select
+                  className="min-w-0 flex-1 cursor-pointer appearance-none rounded-md bg-surface-hover/80 px-2 py-0.5 text-sm font-medium text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  value={reasoningLevel}
+                  disabled={disabled}
+                  onChange={(e) => onReasoningChange(e.target.value as ReasoningLevel)}
+                >
+                  {(Object.keys(m.activityDetailLevels) as ReasoningLevel[]).map((level) => (
+                    <SelectOption key={level} value={level}>
+                      {m.activityDetailLevels[level]}
+                    </SelectOption>
+                  ))}
+                </Select>
+              </label>
             </div>
           </Popover.Content>
         </Popover.Portal>

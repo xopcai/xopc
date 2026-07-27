@@ -11,6 +11,7 @@ import {
   isToolCallBlock,
   isWireContentBlock,
   isWireSessionMessage,
+  parseOptionalTs,
   parseTs,
   type WireContentBlock,
   type WireMessage,
@@ -379,8 +380,11 @@ function mergeAssistantContent(m: WireMessage): MessageContent[] {
   // Session history carries a flattened `content` string for text-only clients.
   // Prefer the structured copy when present so a reload keeps the original
   // thinking/tool ordering instead of replacing it with plain assistant text.
-  const rawBlocks = normalizeContentBlocks(m.rawContent);
-  const blocks = rawBlocks.length > 0 ? rawBlocks : normalizeContentBlocks(m.content);
+  const messageStartedAt = parseOptionalTs(m.timestamp);
+  const rawBlocks = normalizeContentBlocks(m.rawContent, messageStartedAt);
+  const blocks = rawBlocks.length > 0
+    ? rawBlocks
+    : normalizeContentBlocks(m.content, messageStartedAt);
 
   const tc = m.tool_calls;
   if (Array.isArray(tc)) {
@@ -402,6 +406,7 @@ function mergeAssistantContent(m: WireMessage): MessageContent[] {
         name: call.function?.name || 'tool',
         input,
         status: 'running',
+        startedAt: messageStartedAt,
       });
     }
   }
@@ -424,6 +429,9 @@ function mergeAssistantContent(m: WireMessage): MessageContent[] {
         input: call.args,
         status: hasResult ? (call.isError ? 'error' : 'done') : 'running',
         result: hasResult ? call.result : undefined,
+        startedAt: messageStartedAt,
+        completedAt: hasResult ? messageStartedAt : undefined,
+        durationMs: hasResult && messageStartedAt != null ? 0 : undefined,
       });
     }
   }
@@ -438,6 +446,7 @@ function applyToolResultToLastAssistant(out: Message[], m: WireMessage): void {
   const id = String(m.tool_call_id ?? m.toolCallId ?? '');
   const text = extractToolResultText(m.content);
   const isError = Boolean(m.isError);
+  const completedAt = parseOptionalTs(m.timestamp);
 
   const block = id
     ? lastAssistant.content.find(
@@ -448,6 +457,10 @@ function applyToolResultToLastAssistant(out: Message[], m: WireMessage): void {
   if (block) {
     block.status = isError ? 'error' : 'done';
     block.result = text;
+    block.completedAt = completedAt;
+    if (block.startedAt != null && completedAt != null) {
+      block.durationMs = Math.max(0, completedAt - block.startedAt);
+    }
     return;
   }
 
@@ -457,6 +470,10 @@ function applyToolResultToLastAssistant(out: Message[], m: WireMessage): void {
   if (running.length === 1) {
     running[0].status = isError ? 'error' : 'done';
     running[0].result = text;
+    running[0].completedAt = completedAt;
+    if (running[0].startedAt != null && completedAt != null) {
+      running[0].durationMs = Math.max(0, completedAt - running[0].startedAt);
+    }
   }
 }
 
@@ -504,7 +521,7 @@ function wireImageBlockToContent(item: WireContentBlock): MessageContent | null 
   return { type: 'image', source: { data: `data:${mime};base64,${compact}` } };
 }
 
-function normalizeContentBlocks(raw: unknown): MessageContent[] {
+function normalizeContentBlocks(raw: unknown, messageStartedAt?: number): MessageContent[] {
   if (raw == null) return [];
   if (typeof raw === 'string') {
     return raw.trim() ? [{ type: 'text', text: raw }] : [];
@@ -544,9 +561,11 @@ function normalizeContentBlocks(raw: unknown): MessageContent[] {
       out.push({
         type: 'tool_use',
         id,
+        toolCallId: id,
         name,
         input,
         status: 'done',
+        startedAt: messageStartedAt,
         result: typeof item.result === 'string' ? item.result : undefined,
       });
     } else if (t === 'toolCall') {
@@ -556,9 +575,11 @@ function normalizeContentBlocks(raw: unknown): MessageContent[] {
       out.push({
         type: 'tool_use',
         id,
+        toolCallId: id,
         name,
         input: extractToolCallBlockInput(item),
         status: 'done',
+        startedAt: messageStartedAt,
         result: typeof item.result === 'string' ? item.result : undefined,
       });
     }

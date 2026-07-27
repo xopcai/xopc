@@ -15,7 +15,7 @@ import { addSkillToAgentAllowlist, fetchCommandsCached } from '@/features/chat/p
 import type { PendingFollowUp } from '@/features/chat/follow-up/pending-follow-up.types';
 import { interpolate, type WireAttachment } from '@/features/chat/composer/composer.types';
 import { useComposerInputHistoryWalk } from '@/features/chat/composer/use-composer-input-history-walk';
-import type { Message } from '@/features/chat/messages/messages.types';
+import type { Message, ReasoningLevel } from '@/features/chat/messages/messages.types';
 import type { WelcomeSuggestionSelection } from '@/features/chat/welcome/welcome-suggestions';
 import { useComposerActions } from '@/features/chat/composer/use-composer-actions';
 import { useComposerAttachments } from '@/features/chat/composer/use-composer-attachments';
@@ -47,6 +47,8 @@ export const ChatComposer = memo(function ChatComposer({
   thinkingLevel,
   showThinkingSelector,
   onThinkingChange,
+  reasoningLevel,
+  onReasoningChange,
   onSend,
   onAbort,
   onAddPendingFollowUp,
@@ -90,6 +92,8 @@ export const ChatComposer = memo(function ChatComposer({
   thinkingLevel: string;
   showThinkingSelector: boolean;
   onThinkingChange: (level: string) => void;
+  reasoningLevel: ReasoningLevel;
+  onReasoningChange: (level: ReasoningLevel) => void;
   onSend: (text: string, attachments?: WireAttachment[], thinkingLevel?: string) => void;
   onAbort: () => void;
   onAddPendingFollowUp?: (text: string, attachments?: WireAttachment[]) => void | Promise<void>;
@@ -576,6 +580,8 @@ export const ChatComposer = memo(function ChatComposer({
           thinkingLevel={thinkingLevel}
           showThinkingSelector={showThinkingSelector}
           onThinkingChange={onThinkingChange}
+          reasoningLevel={reasoningLevel}
+          onReasoningChange={onReasoningChange}
           voiceActive={voice.voiceActive}
           voiceReadiness={voice.readiness}
           onStartVoiceInput={voice.startVoiceInput}
