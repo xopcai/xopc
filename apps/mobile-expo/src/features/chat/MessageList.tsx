@@ -14,7 +14,7 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import { ActivityIndicator, Icon, IconButton, Text } from 'react-native-paper';
+import { ActivityIndicator, Button, Icon, IconButton, Text } from 'react-native-paper';
 
 import { useKeyboardListPadding } from '../../hooks/use-keyboard-list-padding';
 import { typography, useTheme } from '../../theme';
@@ -75,6 +75,7 @@ export const MessageList = memo(function MessageList({
   onUserMessageEdit,
   onAssistantCopy,
   onAssistantRegenerate,
+  loadError,
   networkUnreachableTip,
 }: {
   messages: Message[];
@@ -96,6 +97,7 @@ export const MessageList = memo(function MessageList({
   onUserMessageEdit?: (text: string) => void;
   onAssistantCopy?: (text: string) => void;
   onAssistantRegenerate?: (messageIndex: number) => void;
+  loadError?: { message: string; retryLabel: string; onRetry: () => void } | null;
   networkUnreachableTip?: { message: string; onPress: () => void } | null;
 }) {
   const { colors } = useTheme();
@@ -200,6 +202,20 @@ export const MessageList = memo(function MessageList({
       <View style={styles.center}>
         {listHeader}
         <ActivityIndicator size="large" />
+      </View>
+    );
+  }
+
+  if (messages.length === 0 && !streaming && loadError) {
+    return (
+      <View style={styles.center}>
+        <Icon source="alert-circle-outline" size={36} color={colors.semantic.errorBold} />
+        <Text variant="titleMedium" style={[styles.emptyTitle, { color: colors.text.primary }]}>
+          {loadError.message}
+        </Text>
+        <Button mode="outlined" onPress={loadError.onRetry}>
+          {loadError.retryLabel}
+        </Button>
       </View>
     );
   }

@@ -190,6 +190,11 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
             streaming={chat.streaming}
             progress={chat.progress}
             loading={sessionHistoryQuery.isLoading || (!sessionKey && bootstrap.creatingInitialSession)}
+            loadError={sessionHistoryQuery.isError ? {
+              message: m.chat.historyLoadFailed,
+              retryLabel: m.common.retry,
+              onRetry: () => { void sessionHistoryQuery.refetch(); },
+            } : null}
             loadingOlder={sessionHistoryQuery.isFetchingNextPage}
             hasOlder={sessionHistoryQuery.hasNextPage}
             onLoadOlder={() => {
