@@ -1,0 +1,14 @@
+{
+  "name": "@agent-evals/runner",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "dependencies": {
+    "@agent-evals/graders": "workspace:*",
+    "@agent-evals/protocol": "workspace:*",
+    "@agent-evals/sandbox": "workspace:*",
+    "@agent-evals/storage": "workspace:*",
+    "yaml": "^2.8.0"
+  }
+}

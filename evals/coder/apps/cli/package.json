@@ -1,0 +1,12 @@
+{
+  "name": "@agent-evals/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@agent-evals/adapter-mock": "workspace:*",
+    "@agent-evals/adapter-xopc": "workspace:*",
+    "@agent-evals/runner": "workspace:*",
+    "@agent-evals/storage": "workspace:*"
+  }
+}

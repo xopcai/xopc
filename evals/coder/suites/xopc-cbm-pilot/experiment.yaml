@@ -1,0 +1,13 @@
+name: xopc CBM pilot A/B
+repetitions: 1
+variants:
+  - id: no-cbm
+    adapter: xopc
+    agentId: eval-coder-baseline
+    config:
+      cleanupSession: true
+  - id: with-cbm
+    adapter: xopc
+    agentId: eval-coder-cbm
+    config:
+      cleanupSession: true

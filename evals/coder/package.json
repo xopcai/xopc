@@ -1,0 +1,34 @@
+{
+  "name": "@xopcai/coder-evals",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.9.0",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "eval": "tsx apps/cli/src/main.ts",
+    "xopc:prepare": "tsx scripts/prepare-xopc-cbm-config.ts",
+    "xopc:pilot-checks": "tsx scripts/check-xopc-cbm-hidden.ts",
+    "xopc:fixture-check": "tsx scripts/check-xopc-cbm-fixtures.ts",
+    "web": "tsx apps/web/src/server.ts",
+    "smoke": "vitest run tests/runner.test.ts tests/xopc-adapter.test.ts tests/sandbox.test.ts && pnpm run xopc:pilot-checks",
+    "check": "pnpm run typecheck && pnpm test"
+  },
+  "devDependencies": {
+    "@agent-evals/adapter-mock": "workspace:*",
+    "@agent-evals/adapter-xopc": "workspace:*",
+    "@agent-evals/graders": "workspace:*",
+    "@agent-evals/protocol": "workspace:*",
+    "@agent-evals/runner": "workspace:*",
+    "@agent-evals/sandbox": "workspace:*",
+    "@agent-evals/storage": "workspace:*",
+    "@types/node": "^25.9.1",
+    "tsx": "^4.22.3",
+    "typescript": "^6.0.3",
+    "vitest": "4.1.5"
+  }
+}

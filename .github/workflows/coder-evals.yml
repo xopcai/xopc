@@ -1,0 +1,56 @@
+name: Coder Evals
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 2 * * 1'
+  pull_request:
+    paths:
+      - 'evals/coder/**'
+      - 'src/gateway/hono/routes/status.ts'
+      - 'package.json'
+      - 'pnpm-workspace.yaml'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/coder-evals.yml'
+  push:
+    branches: [main, master]
+    paths:
+      - 'evals/coder/**'
+      - 'src/gateway/hono/routes/status.ts'
+      - 'package.json'
+      - 'pnpm-workspace.yaml'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/coder-evals.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  control-plane:
+    name: Control plane (${{ matrix.os }})
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run eval:coder:check
+
+  smoke:
+    name: Deterministic smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run eval:coder:smoke

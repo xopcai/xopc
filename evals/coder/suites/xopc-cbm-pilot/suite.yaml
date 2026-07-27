@@ -1,0 +1,163 @@
+id: xopc-cbm-pilot
+version: "1.0.0"
+description: Seeded xopc regressions for comparing code discovery with and without CBM.
+cases:
+  - id: cbm-binary-precedence
+    title: Restore the explicit CBM binary override
+    repo:
+      source: local
+      path: ${XOPC_EVAL_REPO}
+      commit: HEAD
+    task: The configured codeIntelligence.binaryPath override is no longer honored. Restore its precedence without changing the packaged or npm fallback order. Keep the change focused and verify it.
+    prepare:
+      - pnpm install --offline --frozen-lockfile
+    setup:
+      - >-
+        node -e "const fs=require('node:fs');const p='src/agent/code-intelligence/binary.ts';const s=fs.readFileSync(p,'utf8');const a='for (const candidate of [explicitPath, process.env.XOPC_CBM_BINARY]) {';if(!s.includes(a))throw new Error('seed target missing');fs.writeFileSync(p,s.replace(a,'for (const candidate of [process.env.XOPC_CBM_BINARY, explicitPath]) {'))"
+    budget:
+      timeoutMs: 600000
+      maxModelRequests: 40
+      maxTokens: 120000
+    graders:
+      - type: command
+        category: correctness
+        required: true
+        weight: 3
+        command: pnpm exec tsx .xopc-eval-hidden/cbm-regression-check.ts binary-precedence
+        hiddenFiles:
+          - source: hidden/cbm-regression-check.ts
+            target: .xopc-eval-hidden/cbm-regression-check.ts
+      - type: unchanged
+        category: scope
+        required: true
+        weight: 1
+        paths: [package.json, pnpm-lock.yaml]
+    tags: [xopc, cbm, discovery, configuration]
+
+  - id: trace-direction-forwarding
+    title: Preserve code trace direction
+    repo:
+      source: local
+      path: ${XOPC_EVAL_REPO}
+      commit: HEAD
+    task: code_trace ignores the caller's requested direction and always traces both directions. Fix the regression while preserving the default behavior when direction is omitted.
+    prepare:
+      - pnpm install --offline --frozen-lockfile
+    setup:
+      - >-
+        node -e "const fs=require('node:fs');const p='src/agent/code-intelligence/tools.ts';const s=fs.readFileSync(p,'utf8');const a=\"        direction: params.direction ?? 'both',\";if(!s.includes(a))throw new Error('seed target missing');fs.writeFileSync(p,s.replace(a,\"        direction: 'both',\"))"
+    budget:
+      timeoutMs: 600000
+      maxModelRequests: 40
+      maxTokens: 120000
+    graders:
+      - type: command
+        category: correctness
+        required: true
+        weight: 3
+        command: pnpm exec tsx .xopc-eval-hidden/cbm-regression-check.ts trace-direction
+        hiddenFiles:
+          - source: hidden/cbm-regression-check.ts
+            target: .xopc-eval-hidden/cbm-regression-check.ts
+      - type: unchanged
+        category: scope
+        required: true
+        weight: 1
+        paths: [package.json, pnpm-lock.yaml]
+    tags: [xopc, cbm, call-graph, parameters]
+
+  - id: impact-count-normalization
+    title: Restore deduplicated impact counts
+    repo:
+      source: local
+      path: ${XOPC_EVAL_REPO}
+      commit: HEAD
+    task: code_impact deduplicates changed_files but still reports the upstream pre-deduplication changed_count. Make the reported count match the normalized changed_files result without changing symbol truncation behavior.
+    prepare:
+      - pnpm install --offline --frozen-lockfile
+    setup:
+      - >-
+        node -e "const fs=require('node:fs');const p='src/agent/code-intelligence/tools.ts';const s=fs.readFileSync(p,'utf8');const a='        changed_count: changedFiles.length,';if(!s.includes(a))throw new Error('seed target missing');fs.writeFileSync(p,s.replace(a,'        changed_count: Number(parsed.changed_count ?? 0),'))"
+    budget:
+      timeoutMs: 600000
+      maxModelRequests: 40
+      maxTokens: 120000
+    graders:
+      - type: command
+        category: correctness
+        required: true
+        weight: 3
+        command: pnpm exec tsx .xopc-eval-hidden/cbm-regression-check.ts impact-count
+        hiddenFiles:
+          - source: hidden/cbm-regression-check.ts
+            target: .xopc-eval-hidden/cbm-regression-check.ts
+      - type: unchanged
+        category: scope
+        required: true
+        weight: 1
+        paths: [package.json, pnpm-lock.yaml]
+    tags: [xopc, cbm, data-flow, normalization]
+
+  - id: per-agent-tool-gating
+    title: Restore per-agent code intelligence gating
+    repo:
+      source: local
+      path: ${XOPC_EVAL_REPO}
+      commit: HEAD
+    task: Managed code-intelligence tools are being exposed to agents outside codeIntelligence.agentIds while configured agents lose them. Restore the intended per-agent gate and keep the global enabled check intact.
+    prepare:
+      - pnpm install --offline --frozen-lockfile
+    setup:
+      - >-
+        node -e "const fs=require('node:fs');const p='src/agent/tools/factory.ts';const s=fs.readFileSync(p,'utf8');const a='      codeIntelligenceConfig.agentIds.includes(agentId);';if(!s.includes(a))throw new Error('seed target missing');fs.writeFileSync(p,s.replace(a,'      !codeIntelligenceConfig.agentIds.includes(agentId);'))"
+    budget:
+      timeoutMs: 600000
+      maxModelRequests: 40
+      maxTokens: 120000
+    graders:
+      - type: command
+        category: correctness
+        required: true
+        weight: 3
+        command: pnpm exec tsx .xopc-eval-hidden/cbm-regression-check.ts per-agent-gating
+        hiddenFiles:
+          - source: hidden/cbm-regression-check.ts
+            target: .xopc-eval-hidden/cbm-regression-check.ts
+      - type: unchanged
+        category: scope
+        required: true
+        weight: 1
+        paths: [package.json, pnpm-lock.yaml]
+    tags: [xopc, cbm, agent-manifest, tool-policy]
+
+  - id: workspace-agent-invalidation
+    title: Invalidate an agent after workspace rebinding
+    repo:
+      source: local
+      path: ${XOPC_EVAL_REPO}
+      commit: HEAD
+    task: Updating a new session's workingDirectory succeeds, but the next turn can continue using a cached agent bound to the old workspace. Restore the lifecycle step that makes the new workspace effective. Do not relax the first-message guard.
+    prepare:
+      - pnpm install --offline --frozen-lockfile
+    setup:
+      - >-
+        node -e "const fs=require('node:fs');const p='src/agent/session/session-config-service.ts';const s=fs.readFileSync(p,'utf8');const a='        this.opts.agentManager.removeAgent(sessionKey);\n        return { ok: true };';if(!s.includes(a))throw new Error('seed target missing');fs.writeFileSync(p,s.replace(a,'        return { ok: true };'))"
+    budget:
+      timeoutMs: 600000
+      maxModelRequests: 40
+      maxTokens: 120000
+    graders:
+      - type: command
+        category: correctness
+        required: true
+        weight: 3
+        command: pnpm exec tsx .xopc-eval-hidden/cbm-regression-check.ts workspace-invalidation
+        hiddenFiles:
+          - source: hidden/cbm-regression-check.ts
+            target: .xopc-eval-hidden/cbm-regression-check.ts
+      - type: unchanged
+        category: scope
+        required: true
+        weight: 1
+        paths: [package.json, pnpm-lock.yaml]
+    tags: [xopc, session, lifecycle, workspace]

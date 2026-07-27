@@ -1,0 +1,9 @@
+{
+  "name": "@agent-evals/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@agent-evals/storage": "workspace:*"
+  }
+}
