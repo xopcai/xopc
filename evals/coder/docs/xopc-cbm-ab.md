@@ -73,6 +73,10 @@ XOPC_EVAL_TOKEN='<gateway-token>' \
 
 This performs ten model runs and may incur provider cost. The command is intentionally never invoked by `pnpm test` or `pnpm run check`.
 
+Alternatively, configure the protected `coder-evals` GitHub Environment and
+launch the manual paid workflow described in
+[github-actions.md](github-actions.md).
+
 Compare the result:
 
 ```bash

@@ -14,6 +14,7 @@
     "xopc:prepare": "tsx scripts/prepare-xopc-cbm-config.ts",
     "xopc:pilot-checks": "tsx scripts/check-xopc-cbm-hidden.ts",
     "xopc:fixture-check": "tsx scripts/check-xopc-cbm-fixtures.ts",
+    "github:experiment": "tsx scripts/prepare-github-experiment.ts",
     "web": "tsx apps/web/src/server.ts",
     "smoke": "vitest run tests/runner.test.ts tests/xopc-adapter.test.ts tests/sandbox.test.ts && pnpm run xopc:pilot-checks",
     "check": "pnpm run typecheck && pnpm test"
@@ -29,6 +30,7 @@
     "@types/node": "^25.9.1",
     "tsx": "^4.22.3",
     "typescript": "^6.0.3",
-    "vitest": "4.1.5"
+    "vitest": "4.1.5",
+    "yaml": "^2.8.0"
   }
 }

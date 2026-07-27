@@ -83,6 +83,7 @@
     "eval:coder:xopc:prepare": "tsx evals/coder/scripts/prepare-xopc-cbm-config.ts",
     "eval:coder:xopc:pilot-checks": "tsx evals/coder/scripts/check-xopc-cbm-hidden.ts",
     "eval:coder:xopc:fixture-check": "tsx evals/coder/scripts/check-xopc-cbm-fixtures.ts",
+    "eval:coder:github:experiment": "tsx evals/coder/scripts/prepare-github-experiment.ts",
     "tunnel:broker-tls:verify": "node scripts/tunnel-broker-tls-verify.mjs",
     "release:patch": "bash scripts/release-patch.sh",
     "growth:snapshot": "node scripts/growth-snapshot.mjs",
