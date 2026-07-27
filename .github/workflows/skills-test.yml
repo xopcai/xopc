@@ -124,8 +124,8 @@ jobs:
         run: |
           echo "Running security audit on all skills..."
           pnpm run dev -- skills test security --deep
-          # high+critical: moderate-only findings remain in dev-only transitive deps (e.g. electron-builder, old esbuild via vitepress).
-          pnpm audit --audit-level=high
+          # Legacy brace-expansion majors remain only in build/test tooling and have no compatible patched release.
+          pnpm audit --prod --audit-level=high
 
   validate-skill-format:
     name: Validate SKILL.md Format
