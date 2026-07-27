@@ -146,6 +146,7 @@
     "@hono/node-server": "^2.0.4",
     "@inquirer/prompts": "^8.5.0",
     "@modelcontextprotocol/sdk": "1.29.0",
+    "@xopcai/gateway-contract": "workspace:*",
     "@mozilla/readability": "^0.6.0",
     "@sinclair/typebox": "^0.34.49",
     "@vscode/ripgrep": "^1.18.0",

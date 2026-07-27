@@ -368,6 +368,7 @@ export class GatewayService {
       getNotesService: () => this.notesService,
       getProjectService: () => this.projects,
       getWorkItemService: () => new WorkItemService(),
+      getLocalAppService: () => this.localApps,
       getWorkflowRunService: () => this.createWorkflowRunService(),
       sourceContextResolver: async (binding) => {
         if (binding.kind === 'note') {

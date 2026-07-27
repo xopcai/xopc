@@ -220,6 +220,7 @@ export function AutomationsPage() {
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
   const [searchParams, setSearchParams] = useSearchParams();
   const runParam = searchParams.get('run')?.trim() ?? '';
+  const automationParam = searchParams.get('automation')?.trim() ?? '';
   const draftParam = searchParams.get('draft')?.trim() ?? '';
   const actionParam = searchParams.get('action')?.trim() ?? '';
   const projectIdParam = searchParams.get('projectId')?.trim() ?? '';
@@ -439,6 +440,19 @@ export function AutomationsPage() {
     setSelectedRunId(runParam);
     if (!wideActivityLayout) setRunDetailOpen(true);
   }, [runParam, wideActivityLayout]);
+
+  useEffect(() => {
+    if (!automationParam) return;
+    const automation = automations.find((item) => item.id === automationParam);
+    if (!automation) return;
+    setViewTab(isSystemManagedAutomation(automation) ? 'system' : 'automations');
+    setSelectedAutomationId(automation.id);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('automation');
+      return next;
+    }, { replace: true });
+  }, [automationParam, automations, setSearchParams]);
 
   useEffect(() => {
     if (wideActivityLayout) setRunDetailOpen(false);

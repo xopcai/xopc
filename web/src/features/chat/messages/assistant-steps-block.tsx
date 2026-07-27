@@ -40,6 +40,8 @@ import { extractFilePathsFromToolResult } from '@/features/chat/tool-results/too
 import { ExtensionChatWidget } from '@/features/extensions/extension-chat-widget';
 import { useUiExtensions } from '@/features/extensions/extension-provider';
 import { useChatWidgetMatch } from '@/features/extensions/use-chat-widget-match';
+import { ProductDeliveryCard } from '@/features/chat/product-delivery/product-delivery-card';
+import { extractProductDelivery } from '@/features/chat/product-delivery/product-delivery';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import type { StoredLanguage } from '@/lib/storage';
@@ -426,6 +428,16 @@ function StepRow({
     return parseBrowserSetupRequired(toolResultText);
   }, [block, toolResultText]);
 
+  const productDelivery = useMemo(
+    () => block.type === 'tool_use' ? extractProductDelivery(block) : null,
+    [block],
+  );
+  const renderProductDelivery = productDelivery
+    && productDelivery.primary?.kind !== 'workflow_run'
+    && productDelivery.primary?.kind !== 'file'
+    ? productDelivery
+    : null;
+
   if (block.type === 'thinking') {
     const streaming = Boolean(block.streaming);
     const text = block.text?.trim() ?? '';
@@ -508,7 +520,7 @@ function StepRow({
   /** Show legacy JSON panel when (a) developer toggle is on, or (b) no structured card exists. */
   // The browser setup card replaces the raw text view; only resurface it when devs explicitly opt in.
   const showLegacyDetails =
-    !isStreaming && (showRawToolData || (!hasCard && !browserSetup));
+    !isStreaming && (showRawToolData || (!hasCard && !browserSetup && !productDelivery));
 
   return (
     <div className="flex min-w-0 gap-2.5">
@@ -533,6 +545,7 @@ function StepRow({
           ) : null}
         </div>
         {card}
+        {renderProductDelivery ? <ProductDeliveryCard delivery={renderProductDelivery} /> : null}
         {!hasCard && detailLine ? (
           <p className="min-w-0 rounded-md bg-accent-soft/40 px-1.5 py-1 text-xs break-words text-fg-muted [overflow-wrap:anywhere] dark:bg-accent-soft/25">
             {detailLine}

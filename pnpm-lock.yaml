@@ -56,6 +56,9 @@ importers:
       '@vscode/ripgrep':
         specifier: ^1.18.0
         version: 1.18.0
+      '@xopcai/gateway-contract':
+        specifier: workspace:*
+        version: link:packages/gateway-contract
       abort-controller:
         specifier: ^3.0.0
         version: 3.0.0
@@ -631,6 +634,10 @@ importers:
         version: 6.4.3(@types/node@25.9.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)
 
   packages/extension-ui-sdk:
+    dependencies:
+      '@xopcai/gateway-contract':
+        specifier: workspace:*
+        version: link:../gateway-contract
     devDependencies:
       typedoc:
         specifier: ^0.28.19
