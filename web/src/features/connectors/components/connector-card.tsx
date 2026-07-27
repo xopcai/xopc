@@ -5,63 +5,8 @@ import { Button } from '@/components/ui/button';
 import type { ConnectorsSettingsMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 
-import type { ConnectorDefinition, ConnectorInstance } from '../connectors-api';
+import type { ConnectorDefinition } from '../connectors-api';
 import { ConnectorLogo } from './connector-logo';
-
-const connectorSkeletonBar = 'animate-pulse motion-reduce:animate-none rounded-md bg-surface-hover dark:bg-surface-active/50';
-
-export const CONNECTOR_SKELETON_KEYS = ['c0', 'c1', 'c2', 'c3', 'c4', 'c5'] as const;
-
-export function connectorIsInstalled(connector: ConnectorDefinition, instances: ConnectorInstance[]): boolean {
-  return instances.some((instance) => instance.connectorId === connector.id);
-}
-
-export function ConnectorCardSkeleton() {
-  return (
-    <div
-      className="flex h-full min-h-[9.5rem] flex-col rounded-xl bg-surface-panel p-4 shadow-surface"
-      aria-hidden
-    >
-      <div className="flex min-h-0 flex-1 items-start gap-3">
-        <div className={cn('size-10 shrink-0 rounded-xl', connectorSkeletonBar)} />
-        <div className="flex min-w-0 flex-1 flex-col gap-2">
-          <div className="flex items-start justify-between gap-2">
-            <div className={cn('h-4 min-w-0 flex-1', connectorSkeletonBar)} />
-            <div className={cn('h-8 w-[4.5rem] shrink-0 rounded-lg', connectorSkeletonBar)} />
-          </div>
-          <div className={cn('h-3 w-full', connectorSkeletonBar)} />
-          <div className={cn('h-3 w-[88%]', connectorSkeletonBar)} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export function InstalledConnectorRowSkeleton() {
-  return (
-    <div className="rounded-2xl bg-surface-panel p-4 shadow-surface" aria-hidden>
-      <div className="flex items-start gap-3">
-        <div className={cn('size-10 shrink-0 rounded-xl', connectorSkeletonBar)} />
-        <div className="flex min-w-0 flex-1 flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0 flex-1 space-y-2">
-            <div className={cn('h-4 w-48 max-w-full', connectorSkeletonBar)} />
-            <div className={cn('h-3 w-72 max-w-full', connectorSkeletonBar)} />
-          </div>
-          <div className="flex shrink-0 gap-2">
-            <div className={cn('h-9 w-20 rounded-lg', connectorSkeletonBar)} />
-            <div className={cn('h-9 w-20 rounded-lg', connectorSkeletonBar)} />
-          </div>
-        </div>
-      </div>
-      <div className="mt-4 flex flex-wrap gap-2">
-        <div className={cn('h-8 w-20 rounded-md', connectorSkeletonBar)} />
-        <div className={cn('h-8 w-24 rounded-md', connectorSkeletonBar)} />
-        <div className={cn('h-8 w-28 rounded-md', connectorSkeletonBar)} />
-      </div>
-      <div className={cn('mt-3 h-20 rounded-xl', connectorSkeletonBar)} />
-    </div>
-  );
-}
 
 export function ConnectorCard({
   connector,

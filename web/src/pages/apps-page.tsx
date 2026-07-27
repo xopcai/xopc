@@ -150,7 +150,7 @@ export function ExtensionsPage() {
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-panel">
       <div className="w-full px-3 py-8 sm:px-5 xl:px-6">
-        <div className="mb-5 flex flex-col gap-3 rounded-xl border border-edge-subtle bg-surface-base px-3 py-3 shadow-surface sm:flex-row sm:items-center sm:justify-between">
+        <div className="mb-5 flex flex-col gap-3 rounded-xl border border-edge-subtle bg-surface-base p-3 shadow-surface sm:flex-row sm:items-center sm:justify-between">
           <PageTabs
             items={tabItems}
             activeTab={mainTab}

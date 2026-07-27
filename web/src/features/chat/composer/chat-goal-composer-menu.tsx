@@ -167,7 +167,7 @@ export function ChatGoalComposerMenu({
   const inactive = disabled || !sessionKey || busy != null;
 
   return (
-    <div className="grid w-72 gap-2 px-1 py-1 text-xs">
+    <div className="grid w-72 gap-2 p-1 text-xs">
       <div className="flex items-center gap-2 px-1.5 text-fg">
         <Target className="size-4 text-accent-fg" aria-hidden />
         <div className="min-w-0">

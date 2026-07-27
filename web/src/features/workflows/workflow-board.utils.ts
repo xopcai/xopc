@@ -1,3 +1,5 @@
+import { formatRelativeTime as formatIntlRelativeTime } from '@/lib/date-formatters';
+
 import type { WorkflowRunSummary, WorkflowRunStatus } from './workflow-api';
 import { runMatchesTriggerFilter } from './workflow-page.utils';
 
@@ -140,27 +142,15 @@ export function buildWorkflowBoardColumns(
   });
 }
 
-const relativeTimeFormatters = new Map<string, Intl.RelativeTimeFormat>();
-
-function getRelativeTimeFormatter(localeTag: string): Intl.RelativeTimeFormat {
-  let formatter = relativeTimeFormatters.get(localeTag);
-  if (!formatter) {
-    formatter = new Intl.RelativeTimeFormat(localeTag, { numeric: 'auto' });
-    relativeTimeFormatters.set(localeTag, formatter);
-  }
-  return formatter;
-}
-
 export function formatRelativeTime(ms: number, nowMs: number, localeTag: string): string {
   const deltaSec = Math.round((nowMs - ms) / 1000);
-  const rtf = getRelativeTimeFormatter(localeTag);
-  if (deltaSec < 60) return rtf.format(-deltaSec, 'second');
+  if (deltaSec < 60) return formatIntlRelativeTime(-deltaSec, 'second', localeTag);
   const deltaMin = Math.round(deltaSec / 60);
-  if (deltaMin < 60) return rtf.format(-deltaMin, 'minute');
+  if (deltaMin < 60) return formatIntlRelativeTime(-deltaMin, 'minute', localeTag);
   const deltaHour = Math.round(deltaMin / 60);
-  if (deltaHour < 48) return rtf.format(-deltaHour, 'hour');
+  if (deltaHour < 48) return formatIntlRelativeTime(-deltaHour, 'hour', localeTag);
   const deltaDay = Math.round(deltaHour / 24);
-  return rtf.format(-deltaDay, 'day');
+  return formatIntlRelativeTime(-deltaDay, 'day', localeTag);
 }
 
 export function isRunActive(run: WorkflowRunSummary): boolean {

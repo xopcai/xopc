@@ -129,6 +129,7 @@ export function WorkflowPickLibrary({
   onDetail: (definition: WorkflowDefinition) => void;
   onEdit: (definition: WorkflowDefinition) => void;
 }) {
+  const [renderedAtMs] = useState(() => Date.now());
   const labels = messages(language).workflows;
   const localeTag = language === 'zh' ? 'zh-CN' : 'en-US';
   const [query, setQuery] = useState('');
@@ -173,7 +174,7 @@ export function WorkflowPickLibrary({
               >
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-medium text-fg">{definition.title}</span>
-                  <span className="mt-0.5 block text-[11px] text-fg-subtle">{formatRelativeTime(lastRunAtMs, Date.now(), localeTag)}</span>
+                  <span className="mt-0.5 block text-[11px] text-fg-subtle">{formatRelativeTime(lastRunAtMs, renderedAtMs, localeTag)}</span>
                 </span>
                 <Play className="size-3.5 shrink-0 text-accent-fg" aria-hidden />
               </button>

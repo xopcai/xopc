@@ -162,7 +162,7 @@ export function MobilePairQrSection({
       </div>
 
       {pairingBlocked ? (
-        <div className="mb-3 space-y-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 dark:border-amber-900/50 dark:bg-amber-950/30">
+        <div className="mb-3 space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-900/50 dark:bg-amber-950/30">
           <div>
             <div className="text-sm font-medium text-amber-950 dark:text-amber-100">{t.pairBlockedTitle}</div>
             <p className="mt-1 text-xs leading-relaxed text-amber-900 dark:text-amber-200">{t.pairBlockedLoopbackBody}</p>
@@ -217,7 +217,7 @@ export function MobilePairQrSection({
 
       {tunnelActive && !lanOnly ? (
         !effectiveStreamlined ? (
-          <div className="mb-3 space-y-2 rounded-lg bg-surface-panel/80 px-3 py-3 shadow-surface">
+          <div className="mb-3 space-y-2 rounded-lg bg-surface-panel/80 p-3 shadow-surface">
             <div>
               <div className="text-xs font-medium text-fg-muted">{t.pairTunnelPublicUrl}</div>
               <div className="mt-0.5 break-all font-mono text-xs text-fg">{tunnelStatus?.publicUrl}</div>

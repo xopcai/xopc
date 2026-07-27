@@ -86,7 +86,7 @@ function NoteDetailModeSwitcher({
               : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
           )}
         >
-          <Icon className="h-3.5 w-3.5" aria-hidden />
+          <Icon className="size-3.5" aria-hidden />
           {label}
         </button>
       ))}
@@ -247,7 +247,7 @@ function NoteDetailPanelInner({
           backButtonClassName,
         )}
       >
-        <ArrowLeft className="h-4 w-4" aria-hidden />
+        <ArrowLeft className="size-4" aria-hidden />
       </button>
     ) : null,
     [backButtonClassName, n.back, onBack, showBackButton],
@@ -357,7 +357,7 @@ function NoteDetailPanelInner({
             aria-label={n.searchDialogTitle}
             className="rounded-lg p-1.5 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
-            <Search className="h-4 w-4" aria-hidden />
+            <Search className="size-4" aria-hidden />
           </button>
         ) : null}
         <ReadAloudButton
@@ -383,7 +383,7 @@ function NoteDetailPanelInner({
               : 'bg-accent/10 text-fg hover:bg-accent/15',
           )}
         >
-          <Sparkles className="h-3.5 w-3.5" aria-hidden />
+          <Sparkles className="size-3.5" aria-hidden />
           {catalyzing ? n.catalyzing : n.catalyzeButton}
         </button>
         <button
@@ -395,7 +395,7 @@ function NoteDetailPanelInner({
             'border border-edge text-fg-muted hover:bg-surface-hover hover:text-fg disabled:cursor-not-allowed disabled:opacity-50',
           )}
         >
-          <MessageCircle className="h-3.5 w-3.5" aria-hidden />
+          <MessageCircle className="size-3.5" aria-hidden />
           {openingChat ? n.openingChat : n.openChatButton}
         </button>
         <NoteDetailModeSwitcher
@@ -414,7 +414,7 @@ function NoteDetailPanelInner({
               : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
           )}
         >
-          <History className="h-4 w-4" aria-hidden />
+          <History className="size-4" aria-hidden />
         </button>
       </div>
     ),
@@ -520,7 +520,7 @@ function NoteDetailPanelInner({
   if (note === undefined) {
     return (
       <div className="flex flex-1 items-center justify-center">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+        <div className="size-6 animate-spin rounded-full border-2 border-accent border-t-transparent" />
       </div>
     );
   }

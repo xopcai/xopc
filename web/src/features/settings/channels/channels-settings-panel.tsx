@@ -23,7 +23,8 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 
 import { CHANNELS_HUB_PATH, channelDetailPath, normalizeChannelRouteId } from './channels-routes';
-import { ChannelSetupCard, choosePrimaryChannelAction } from './channel-setup-card';
+import { choosePrimaryChannelAction } from './channel-primary-action';
+import { ChannelSetupCard } from './channel-setup-card';
 import { getChannelAgentBinding, mergeChannelAgentBinding } from './channel-agent-binding';
 import { resolveChannelRuntime, type ChannelRuntimeState } from './channel-runtime';
 import { ChannelSettingsShell } from './channel-settings-shell';
@@ -426,7 +427,7 @@ function ChannelHubCard({
             ) : null}
           </>
         ) : (
-          <div className="rounded-lg bg-surface-base px-3 py-3">
+          <div className="rounded-lg bg-surface-base p-3">
             <p className="text-sm font-medium text-fg">{ch.cardSetupTitle}</p>
             <p className="mt-1 line-clamp-2 text-sm leading-5 text-fg-muted">
               {summary[0] ?? channelSetupHint(entry, ch)}
@@ -864,7 +865,7 @@ export function ChannelsSettingsPanel() {
       >
         {activeEntry ? (
           <div className="space-y-4">
-            <div className="rounded-xl bg-surface-panel/80 px-3 py-3 shadow-surface">
+            <div className="rounded-xl bg-surface-panel/80 p-3 shadow-surface">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 items-start gap-3">
                   <ChannelIcon entry={activeEntry} />

@@ -171,7 +171,7 @@ export function QuickCaptureBar({
   return (
     <div
       className={cn(
-        'flex items-center gap-1.5 rounded-2xl border border-edge bg-surface-panel px-2 py-2 shadow-float dark:shadow-elevated',
+        'flex items-center gap-1.5 rounded-2xl border border-edge bg-surface-panel p-2 shadow-float dark:shadow-elevated',
         'focus-within:border-accent focus-within:ring-1 focus-within:ring-accent',
         recording && 'border-danger ring-1 ring-danger/40',
       )}
@@ -184,7 +184,7 @@ export function QuickCaptureBar({
           className="shrink-0 rounded-lg p-2 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
           aria-label="Image"
         >
-          <Image className="h-4 w-4" />
+          <Image className="size-4" />
         </button>
       )}
       {onVoiceCapture && (
@@ -201,7 +201,7 @@ export function QuickCaptureBar({
           aria-label={recording ? 'Stop recording' : 'Voice'}
           aria-pressed={recording}
         >
-          {recording ? <Square className="h-4 w-4 fill-current" /> : <Mic className="h-4 w-4" />}
+          {recording ? <Square className="size-4 fill-current" /> : <Mic className="size-4" />}
         </button>
       )}
       {recording ? (
@@ -233,7 +233,7 @@ export function QuickCaptureBar({
             : 'text-fg-disabled',
         )}
       >
-        <Send className="h-4 w-4" />
+        <Send className="size-4" />
       </button>
     </div>
   );

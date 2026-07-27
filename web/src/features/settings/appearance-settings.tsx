@@ -149,7 +149,7 @@ function ColorSchemeSelector() {
   const setColorScheme = useThemeStore((s) => s.setColorScheme);
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg bg-surface-panel/50 px-3 py-3.5 sm:py-4">
+    <div className="flex flex-col gap-2 rounded-lg bg-surface-panel/50 p-3.5 sm:py-4">
       <div className="min-w-0">
         <div className="text-sm font-semibold text-fg">{a.colorSchemeTitle}</div>
         <p className="mt-0.5 text-xs text-fg-muted">{a.colorSchemeDescription}</p>

@@ -85,7 +85,7 @@ export function ImageBlock({ node, updateAttributes, selected }: NodeViewProps) 
         <div
           onMouseDown={handleMouseDown}
           className={cn(
-            'absolute bottom-1 right-1 h-4 w-4 cursor-se-resize rounded-sm opacity-0 transition-opacity',
+            'absolute bottom-1 right-1 size-4 cursor-se-resize rounded-sm opacity-0 transition-opacity',
             'bg-accent/70 hover:bg-accent',
             (selected || resizing) && 'opacity-100',
           )}

@@ -380,7 +380,6 @@ export const WorkspaceColumn = memo(function WorkspaceColumn() {
                     onChange={(event) => setFileSearchQuery(event.target.value)}
                     placeholder={m.workspace.searchPlaceholder}
                     aria-label={m.workspace.searchPlaceholder}
-                    autoFocus
                     className="min-w-0 flex-1 bg-transparent text-sm text-fg outline-none placeholder:text-fg-subtle"
                   />
                   <button

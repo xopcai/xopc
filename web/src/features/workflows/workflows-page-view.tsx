@@ -69,7 +69,7 @@ function getPageTabFromKey(key: string, currentTab: PageTab): PageTab | null {
 
 function WorkflowRunRowSkeleton() {
   return (
-    <div className="flex items-center gap-3 border-b border-edge-subtle px-4 py-4 last:border-b-0" aria-hidden="true">
+    <div className="flex items-center gap-3 border-b border-edge-subtle p-4 last:border-b-0" aria-hidden="true">
       <Skeleton className="h-5 w-16 rounded-full" />
       <div className="min-w-0 flex-1">
         <Skeleton className="h-4 w-52 max-w-full" />
@@ -246,7 +246,7 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
               </section>
             ) : null}
 
-            <section className="flex flex-col gap-3 rounded-xl border border-edge-subtle bg-surface-base px-3 py-3" aria-label={labels.runFiltersAria}>
+            <section className="flex flex-col gap-3 rounded-xl border border-edge-subtle bg-surface-base p-3" aria-label={labels.runFiltersAria}>
               <div className="flex flex-wrap items-center gap-2">
                 <div className="relative min-w-52 flex-1 sm:max-w-sm">
                   <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-fg-subtle" aria-hidden />

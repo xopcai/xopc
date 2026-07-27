@@ -10,7 +10,8 @@ import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { cn } from '@/lib/cn';
 
-import type { ChannelActionDescriptor, ChannelCatalogEntry } from './use-channel-catalog';
+import { choosePrimaryChannelAction } from './channel-primary-action';
+import type { ChannelCatalogEntry } from './use-channel-catalog';
 
 export type ChannelActionPayload =
   | { type?: 'ok'; message?: string; configChanged?: boolean; [key: string]: unknown }
@@ -54,28 +55,6 @@ type ActionState = {
   formDraft: Record<string, unknown>;
   generatedQr: string | null;
 };
-
-export function choosePrimaryChannelAction(entry: ChannelCatalogEntry): [string, ChannelActionDescriptor] | null {
-  const actions = entry.actions ?? {};
-  const preferredQr = ['login.start', 'setup.start'];
-  for (const id of preferredQr) {
-    const action = actions[id];
-    if (action?.result === 'qr') return [id, action];
-  }
-  const firstQr = Object.entries(actions).find(([, action]) => action.result === 'qr');
-  if (firstQr) return firstQr;
-
-  const declaredPrimary = entry.ui?.card?.primaryAction;
-  if (declaredPrimary && actions[declaredPrimary]) return [declaredPrimary, actions[declaredPrimary]];
-
-  const preferred = ['login.start', 'setup.start'];
-  for (const id of preferred) {
-    const action = actions[id];
-    if (action) return [id, action];
-  }
-  const first = Object.entries(actions).find(([, action]) => action.result === 'form');
-  return first ?? null;
-}
 
 async function runChannelAction(params: {
   channelId: string;
@@ -304,7 +283,7 @@ export function ChannelSetupCard({
       {qrStageActive ? (
         <div
           className={cn(
-            'flex h-80 items-center justify-center gap-4 overflow-hidden rounded-lg bg-surface-base px-3 py-3 shadow-surface',
+            'flex h-80 items-center justify-center gap-4 overflow-hidden rounded-lg bg-surface-base p-3 shadow-surface',
             compact ? 'mt-1 flex-col text-center sm:h-64 sm:flex-row sm:text-left' : 'mt-4 flex-col sm:h-64 sm:flex-row',
           )}
         >

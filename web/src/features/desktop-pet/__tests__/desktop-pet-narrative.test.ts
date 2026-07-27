@@ -6,8 +6,8 @@ import {
   toolNarrative,
   type DesktopPetNarrativeLabels,
 } from '../desktop-pet-narrative';
-import { mapAgentStreamEvent } from '../desktop-pet-event-bridge';
-import { activityCompletionText, activityDetailText, activityHealthText, activityReassuranceText, shouldShowIdleTip } from '../desktop-pet-root';
+import { mapAgentStreamEvent } from '../desktop-pet-event-mapper';
+import { activityCompletionText, activityDetailText, activityHealthText, activityReassuranceText, shouldShowIdleTip } from '../desktop-pet-display';
 
 const labels: DesktopPetNarrativeLabels = {
   searchedWeb: 'searching the web',

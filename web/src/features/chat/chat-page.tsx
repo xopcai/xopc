@@ -22,6 +22,7 @@ import { ClarifyPrompt } from '@/features/chat/composer/clarify-prompt';
 import { MemoryCaptureReceipt, MemoryConsentPrompt } from '@/features/chat/composer/memory-consent-prompt';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+import { formatMediumDateTime } from '@/lib/date-formatters';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { wireTextForSlashCommandEntry } from '@/features/chat/palette/slash-command-wire-text';
@@ -1036,7 +1037,7 @@ export function ChatPage() {
                 </p>
                 <p className="min-w-0">
                   <span className="font-medium text-fg">{m.chat.workItemUpdatedLabel}: </span>
-                  {new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(sourceWorkItem.updatedAt))}
+                  {formatMediumDateTime(new Date(sourceWorkItem.updatedAt))}
                 </p>
                 {sourceWorkItem.description ? (
                   <p className="min-w-0 sm:col-span-2">
@@ -1332,7 +1333,7 @@ export function ChatPage() {
               </Dialog.Description>
             </div>
             <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-4">
-              <label className="flex items-start gap-3 rounded-lg border border-edge-subtle bg-surface-base px-3 py-3">
+              <label className="flex items-start gap-3 rounded-lg border border-edge-subtle bg-surface-base p-3">
                 <input
                   type="checkbox"
                   className="mt-1 size-4"
@@ -1360,7 +1361,7 @@ export function ChatPage() {
                 </span>
               </label>
 
-              <label className="flex items-start gap-3 rounded-lg border border-edge-subtle bg-surface-base px-3 py-3">
+              <label className="flex items-start gap-3 rounded-lg border border-edge-subtle bg-surface-base p-3">
                 <input
                   type="checkbox"
                   className="mt-1 size-4"
@@ -1383,7 +1384,7 @@ export function ChatPage() {
                 </span>
               </label>
 
-              <label className="flex items-start gap-3 rounded-lg border border-edge-subtle bg-surface-base px-3 py-3">
+              <label className="flex items-start gap-3 rounded-lg border border-edge-subtle bg-surface-base p-3">
                 <input
                   type="checkbox"
                   className="mt-1 size-4"
@@ -1406,7 +1407,7 @@ export function ChatPage() {
                 </span>
               </label>
 
-              <label className="flex items-start gap-3 rounded-lg border border-edge-subtle bg-surface-base px-3 py-3">
+              <label className="flex items-start gap-3 rounded-lg border border-edge-subtle bg-surface-base p-3">
                 <input
                   type="checkbox"
                   className="mt-1 size-4"

@@ -37,6 +37,7 @@ import { messages } from '@/i18n/messages';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { cn } from '@/lib/cn';
+import { formatMediumDate, formatMediumDateTime } from '@/lib/date-formatters';
 import type { StoredLanguage } from '@/lib/storage';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
@@ -303,17 +304,12 @@ function localeTag(language: StoredLanguage): string {
 
 function formatDateTime(value: number | undefined, language: StoredLanguage, t: GoalDetailMessages): string {
   if (!value) return t.notSet;
-  return new Intl.DateTimeFormat(localeTag(language), {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value));
+  return formatMediumDateTime(value, localeTag(language));
 }
 
 function formatDate(value: number | undefined, language: StoredLanguage, t: GoalDetailMessages): string {
   if (!value) return t.noDeadline;
-  return new Intl.DateTimeFormat(localeTag(language), {
-    dateStyle: 'medium',
-  }).format(new Date(value));
+  return formatMediumDate(value, localeTag(language));
 }
 
 function primaryActionLabel(status: GoalStatus, t: GoalDetailMessages): string {
@@ -1383,7 +1379,7 @@ export function GoalDetailPage() {
               <h2 className="text-sm font-semibold text-fg">{t.goalBrief}</h2>
               {goal.description ? <p className="mt-3 whitespace-pre-wrap break-words text-sm text-fg-muted">{goal.description}</p> : null}
               {goal.contract ? (
-                <div className="mt-3 rounded-md border border-edge-subtle bg-surface-muted/40 px-3 py-3">
+                <div className="mt-3 rounded-md border border-edge-subtle bg-surface-muted/40 p-3">
                   <p className="text-xs font-medium text-fg-muted">{t.goalContract}</p>
                   <p className="mt-1 break-words text-sm text-fg">{goal.contract.objective}</p>
                   {goal.contract.scopeBoundary ? (

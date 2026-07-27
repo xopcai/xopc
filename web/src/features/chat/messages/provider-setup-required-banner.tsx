@@ -27,7 +27,7 @@ export function ProviderSetupRequiredCard({ payload }: { payload: ProviderSetupP
       role={authInvalid ? 'alert' : 'status'}
       aria-live="polite"
       className={cn(
-        'flex flex-col gap-2 rounded-xl border border-amber-300/60 bg-amber-50/70 px-3 py-3',
+        'flex flex-col gap-2 rounded-xl border border-amber-300/60 bg-amber-50/70 p-3',
         'dark:border-amber-500/30 dark:bg-amber-500/10',
       )}
     >

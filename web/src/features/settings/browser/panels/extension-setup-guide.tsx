@@ -94,7 +94,7 @@ export function ExtensionSetupGuide({
   return (
     <div
       aria-label={m.browserExtensionInstallGuideTitle}
-      className="rounded-xl bg-surface-base px-3 py-3"
+      className="rounded-xl bg-surface-base p-3"
     >
       <div className="mb-3 flex items-center gap-2">
         <h4 className="text-sm font-medium text-fg">{m.browserExtensionInstallGuideTitle}</h4>

@@ -798,7 +798,7 @@ export function CapabilityPresetsSettingsPanel() {
                 ))}
               </div>
 
-              <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+              <div className="min-h-0 flex-1 overflow-y-auto p-4">
                 <div className="mx-auto max-w-4xl">
             {activeTab === 'overview' ? (
               <SettingsFormSection>

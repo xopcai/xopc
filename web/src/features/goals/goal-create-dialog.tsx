@@ -18,6 +18,8 @@ import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
 
+import { emptyCreateDraft, normalizeChecklist } from './goal-create-draft';
+
 export type GoalPriority = 'low' | 'normal' | 'high';
 export type GoalsPageMessages = ReturnType<typeof messages>['goalsPage'];
 export type ChatMessages = ReturnType<typeof messages>['chat'];
@@ -44,24 +46,6 @@ export type GoalCreateOptions = {
   models: ConfiguredModel[];
   checklistDecomposePolicy: GoalsConfigState['checklistDecomposePolicy'];
 };
-
-export function emptyCreateDraft(): CreateGoalDraft {
-  return {
-    title: '',
-    objective: '',
-    description: '',
-    attachments: [],
-    checklist: [''],
-    scopeBoundary: '',
-    evidencePlan: [''],
-    priority: 'normal',
-    deadlineMode: 'none',
-    deadline: '',
-    maxTurns: '10',
-    agentId: '',
-    judgeModelRef: '',
-  };
-}
 
 function formatMessage(template: string, values: Record<string, string | number>): string {
   return Object.entries(values).reduce((text, [key, value]) => text.replaceAll(`{{${key}}}`, String(value)), template);
@@ -109,18 +93,6 @@ function nextDeadlineForMode(mode: CreateGoalDraft['deadlineMode']): string {
     return formatDatetimeLocal(date);
   }
   return '';
-}
-
-export function normalizeChecklist(items: string[]): string[] {
-  const seen = new Set<string>();
-  const result: string[] = [];
-  for (const item of items) {
-    const text = item.trim();
-    if (!text || seen.has(text.toLowerCase())) continue;
-    seen.add(text.toLowerCase());
-    result.push(text);
-  }
-  return result;
 }
 
 export function GoalCreateDialog({
@@ -271,7 +243,7 @@ export function GoalCreateDialog({
 
           <div className="min-h-0 flex-1 overflow-y-auto p-5">
             <div className="grid gap-4">
-              <section className="rounded-lg border border-accent/25 bg-accent-soft/50 px-3 py-3">
+              <section className="rounded-lg border border-accent/25 bg-accent-soft/50 p-3">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-fg">{t.createDialog.simpleStartTitle}</p>
@@ -297,7 +269,6 @@ export function GoalCreateDialog({
                   onChange={(e) => patch({ title: e.target.value })}
                   placeholder={t.newGoalPlaceholder}
                   className="rounded-lg border border-edge bg-surface-muted px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus-visible:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
-                  autoFocus
                 />
               </label>
 

@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildAutomationEditInput, buildInput, formFromAutomation } from '../automations-page';
+import {
+  buildAutomationEditInput,
+  buildInput,
+  formFromAutomation,
+} from '../automation-form';
 import type { Automation, AutomationInput } from '../automation-api';
 import type { WorkflowDefinition } from '@/features/workflows/workflow-api';
 

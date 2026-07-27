@@ -25,7 +25,7 @@ import {
   getAssistantCopyMarkdown,
   getAssistantCopyPlainText,
 } from '@/features/chat/messages/assistant-copy-utils';
-import { renderChunkedContent } from '@/features/chat/messages/message-content-renderer';
+import { ChunkedContent } from '@/features/chat/messages/message-content-renderer';
 import { formatChatMessageTime } from '@/features/chat/messages/message-time';
 import { workflowCardLabels } from '@/features/chat/workflow/workflow-card-labels';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -562,26 +562,26 @@ export const MessageBubble = memo(function MessageBubble({
                   )}
                   style={isUser && !userMessageExpanded ? { maxHeight: 'calc(10lh)' } : undefined}
                 >
-                  {renderChunkedContent(
-                    displayForFlow,
-                    isUser,
-                    isAssistant && isStreaming,
-                    toolLabels,
-                    stepLabels,
-                    clusterLabels,
-                    cardLabels,
-                    m.chat.attachmentPreviewImage,
-                    openInlineImagePreview,
-                    sessionKey,
-                    {
+                  <ChunkedContent
+                    content={displayForFlow}
+                    isUser={isUser}
+                    isAssistantMessageStreaming={isAssistant && isStreaming}
+                    toolLabels={toolLabels}
+                    stepLabels={stepLabels}
+                    clusterLabels={clusterLabels}
+                    cardLabels={cardLabels}
+                    imagePreviewLabel={m.chat.attachmentPreviewImage}
+                    onImagePreview={openInlineImagePreview}
+                    sessionKey={sessionKey}
+                    workflowOptions={{
                       labels: workflowCardLabels(language),
                       // Only the streaming row owns the abort handler — for
                       // completed/historical rows it would point at an unrelated
                       // turn, so we leave it undefined and the cancel button
                       // stays hidden.
                       onAbort: isAssistant && isStreaming ? onAbortCurrentTurn : undefined,
-                    },
-                  )}
+                    }}
+                  />
                 </div>
                 {isUser && userMessageCanExpand ? (
                   <button

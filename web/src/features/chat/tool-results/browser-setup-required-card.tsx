@@ -29,7 +29,7 @@ export function BrowserSetupRequiredCard({ payload }: { payload: BrowserSetupReq
       role="status"
       aria-live="polite"
       className={cn(
-        'mt-2 flex flex-col gap-2 rounded-xl border border-amber-300/60 bg-amber-50/70 px-3 py-3',
+        'mt-2 flex flex-col gap-2 rounded-xl border border-amber-300/60 bg-amber-50/70 p-3',
         'dark:border-amber-500/30 dark:bg-amber-500/10',
       )}
     >
