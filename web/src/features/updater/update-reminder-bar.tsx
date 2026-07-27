@@ -1,6 +1,7 @@
 import { AlertCircle, Download, Loader2, RefreshCw, X } from 'lucide-react';
 import { useCallback, useState } from 'react';
 
+import { APP_CHROME_DRAG_CLASS, APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import type { UpdateReminderController } from '@/features/updater/use-update-reminder';
 import { restartGatewayAfterConfigChange } from '@/features/tunnel/gateway-restart';
 import { messages } from '@/i18n/messages';
@@ -76,13 +77,17 @@ export function UpdateReminderBar({
     return null;
   }
 
-  const actionsRight = 'absolute right-2 top-1/2 z-[1] flex -translate-y-1/2 items-center gap-1 sm:right-3';
+  const actionsRight = cn(
+    'absolute right-2 top-1/2 z-[1] flex -translate-y-1/2 items-center gap-1 sm:right-3',
+    APP_CHROME_NO_DRAG_CLASS,
+  );
 
   if (show.kind === 'electron-ready') {
     return (
       <div
         className={cn(
           'relative flex min-h-10 w-full min-w-0 items-center justify-center border-b border-accent/20 bg-accent/10 px-10 py-2 text-sm sm:px-12',
+          APP_CHROME_DRAG_CLASS,
           compact && 'text-xs',
         )}
       >
@@ -120,6 +125,7 @@ export function UpdateReminderBar({
       <div
         className={cn(
           'relative flex min-h-10 w-full min-w-0 items-center justify-center border-b border-red-500/20 bg-red-500/10 px-10 py-2 text-sm text-fg sm:px-12',
+          APP_CHROME_DRAG_CLASS,
           compact && 'text-xs',
         )}
       >
@@ -147,6 +153,7 @@ export function UpdateReminderBar({
       <div
         className={cn(
           'relative flex min-h-10 w-full min-w-0 flex-col items-center justify-center gap-2 border-b border-edge bg-surface-secondary px-10 py-2 text-sm text-fg-muted sm:flex-row sm:gap-4 sm:px-12',
+          APP_CHROME_DRAG_CLASS,
           compact && 'text-xs',
         )}
       >
@@ -179,6 +186,7 @@ export function UpdateReminderBar({
       <div
         className={cn(
           'relative flex min-h-10 w-full min-w-0 items-center justify-center border-b border-amber-500/25 bg-amber-500/10 py-2 text-sm',
+          APP_CHROME_DRAG_CLASS,
           compact && 'text-xs',
         )}
       >
@@ -188,7 +196,10 @@ export function UpdateReminderBar({
             type="button"
             onClick={onRestartGateway}
             disabled={restartBusy}
-            className="inline-flex shrink-0 items-center gap-1 rounded bg-accent px-2.5 py-1 text-xs font-medium text-white hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-60"
+            className={cn(
+              'inline-flex shrink-0 items-center gap-1 rounded bg-accent px-2.5 py-1 text-xs font-medium text-white hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-60',
+              APP_CHROME_NO_DRAG_CLASS,
+            )}
           >
             {restartBusy ? (
               <Loader2 className="size-3 shrink-0 animate-spin" aria-hidden />
@@ -216,6 +227,7 @@ export function UpdateReminderBar({
       <div
         className={cn(
           'relative flex min-h-10 w-full min-w-0 items-center justify-center border-b border-accent/20 bg-accent/10 py-2 text-sm',
+          APP_CHROME_DRAG_CLASS,
           compact && 'text-xs',
         )}
       >
@@ -232,7 +244,10 @@ export function UpdateReminderBar({
             type="button"
             onClick={onNpmUpdateClick}
             disabled={npmUpdateRunning}
-            className="inline-flex shrink-0 items-center gap-1 rounded bg-accent px-2.5 py-1 text-xs font-medium text-white hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-60"
+            className={cn(
+              'inline-flex shrink-0 items-center gap-1 rounded bg-accent px-2.5 py-1 text-xs font-medium text-white hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-60',
+              APP_CHROME_NO_DRAG_CLASS,
+            )}
           >
             {npmUpdateRunning ? (
               <Loader2 className="size-3 shrink-0 animate-spin" aria-hidden />
