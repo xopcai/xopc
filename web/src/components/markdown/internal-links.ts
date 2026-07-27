@@ -1,3 +1,8 @@
+import {
+  parseProductReferenceDeepLink,
+  productReferenceRoute,
+} from '@xopcai/gateway-contract';
+
 const KNOWN_FILE_EXT =
   'png|jpe?g|gif|webp|bmp|svg|pdf|docx?|xlsx?|pptx?|txt|md|json|html?|css|mjs?|cjs|js|ts|tsx|jsx|yaml|yml|toml|xml';
 
@@ -42,10 +47,30 @@ export function xopcWorkspaceFileUrlToHref(raw: string): string | null {
   }
 }
 
+function xopcUrlToInternalHref(raw: string): string {
+  const reference = parseProductReferenceDeepLink(raw);
+  const productRoute = reference
+    ? productReferenceRoute({
+      ...reference,
+      title: reference.id,
+      capabilities: ['open'],
+    })
+    : null;
+  if (productRoute) return `#${productRoute}`;
+  return xopcSettingsUrlToRoute(raw)
+    ?? xopcWorkspaceFileUrlToHref(raw)
+    ?? raw;
+}
+
 export function rewriteXopcSettingsLinksInMarkdown(markdown: string): string {
-  return markdown.replace(/xopc:\/\/(?:settings|workspace\/file)[^\s)<>"']*/gi, (raw) => {
-    return xopcSettingsUrlToRoute(raw) ?? xopcWorkspaceFileUrlToHref(raw) ?? raw;
+  const xopcUrlPattern = String.raw`xopc:\/\/(?:settings|workspace\/file|open\?)[^\s[\]()<>"']*`;
+  const markdownLinkPattern = new RegExp(String.raw`\[([^\]\n]*)\]\((${xopcUrlPattern})\)`, 'gi');
+  const bareUrlPattern = new RegExp(xopcUrlPattern, 'gi');
+  const rewrittenLinks = markdown.replace(markdownLinkPattern, (_match, label: string, raw: string) => {
+    const normalizedLabel = /^xopc:\/\//i.test(label.trim()) ? 'Open in xopc' : label;
+    return `[${normalizedLabel}](${xopcUrlToInternalHref(raw)})`;
   });
+  return rewrittenLinks.replace(bareUrlPattern, xopcUrlToInternalHref);
 }
 
 export function parseWorkspaceFileLinkTarget(raw: string): WorkspaceFileLinkTarget | null {

@@ -7,6 +7,7 @@ import type { ExtensionRegistryImpl as ExtensionRegistry } from '../extensions/i
 import type { NotesService } from '../notes/index.js';
 import type { ProjectService } from '../projects/index.js';
 import type { WorkItemService } from '../work-items/index.js';
+import type { LocalAppService } from '../local-apps/index.js';
 import type { GatewayClarifyRequestFn } from './tools/clarify-tool.js';
 import type { ProgressStage } from './lifecycle/progress.js';
 import type { AgentSourceContextResolver } from './source-context/types.js';
@@ -33,6 +34,7 @@ export interface AgentServiceConfig {
   getNotesService?: () => NotesService | undefined;
   getProjectService?: () => ProjectService | undefined;
   getWorkItemService?: () => WorkItemService | undefined;
+  getLocalAppService?: () => LocalAppService | undefined;
   /**
    * Gateway: reuse the gateway `SessionManager` store so web API and agent share one index + files.
    * When omitted, `AgentService` creates its own `SessionStore` (CLI / embedded).

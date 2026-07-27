@@ -1,8 +1,12 @@
 // Write file tool
 import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
+import {
+  appendProductDeliveryText,
+  type ProductDeliveryEnvelope,
+} from '@xopcai/gateway-contract';
 import { writeFile, mkdir } from 'fs/promises';
-import { dirname } from 'path';
+import { basename, dirname } from 'path';
 import { checkFileSafety } from '../prompt/safety.js';
 import {
   isBareProfileMarkdownFileName,
@@ -88,7 +92,24 @@ export function createWriteFileTool(
           uri: target,
           data: { path: target, size: contentBytes, operation: 'write' },
         });
-        return { content: [{ type: 'text', text: `File written: ${target}` }], details: { size: contentBytes } };
+        const delivery: ProductDeliveryEnvelope = {
+          version: 1,
+          operation: 'updated',
+          primary: {
+            kind: 'file',
+            id: target,
+            title: basename(target),
+            summary: `${contentBytes} bytes written`,
+            capabilities: ['preview', 'reveal', 'share'],
+          },
+        };
+        return {
+          content: [{
+            type: 'text',
+            text: appendProductDeliveryText(`File written: ${target}`, delivery),
+          }],
+          details: { size: contentBytes, path: target, delivery },
+        };
       } catch (error) {
         return { content: [{ type: 'text', text: `Error: ${error instanceof Error ? error.message : String(error)}` }], details: {} };
       }

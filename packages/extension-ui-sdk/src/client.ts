@@ -1,3 +1,8 @@
+import {
+  productReferenceRoute,
+  type ProductReferenceLocator,
+} from '@xopcai/gateway-contract';
+
 import { Transport } from './transport.js';
 import type { ExtensionClient, StreamHandler, ThemeInfo } from './types.js';
 
@@ -86,6 +91,17 @@ export function createExtensionClient(options?: CreateExtensionClientOptions): E
         transport.emit('ui.closePanel', undefined);
       },
       async navigate(path: string) {
+        await transport.request('ui.navigate', { path });
+      },
+      async openProduct(reference: ProductReferenceLocator) {
+        const path = productReferenceRoute({
+          ...reference,
+          title: reference.id,
+          capabilities: ['open'],
+        });
+        if (!path) {
+          throw new Error(`Product kind cannot be opened by route: ${reference.kind}`);
+        }
         await transport.request('ui.navigate', { path });
       },
       onWidgetResult(handler: (data: unknown) => void) {

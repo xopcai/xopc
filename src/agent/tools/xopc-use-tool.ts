@@ -1,5 +1,10 @@
 import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
+import {
+  appendProductDeliveryText,
+  type ProductDeliveryEnvelope,
+  type ProductReference,
+} from '@xopcai/gateway-contract';
 
 import { runWithActivityContext } from '../../activity/index.js';
 import type { Config } from '../../config/schema.js';
@@ -15,6 +20,7 @@ import type {
   WorkItemService,
   WorkItemStatus,
 } from '../../work-items/index.js';
+import type { LocalAppService } from '../../local-apps/index.js';
 import { getSessionMetadata } from '../../storage/sqlite/index.js';
 
 const XopcUseToolSchema = Type.Object({
@@ -22,10 +28,12 @@ const XopcUseToolSchema = Type.Object({
     Type.Literal('project'),
     Type.Literal('note'),
     Type.Literal('work_item'),
+    Type.Literal('local_app'),
+    Type.Literal('settings'),
   ]),
   command: Type.String({
     description:
-      'Object command. Supports project list/get/create/update/resolve_workspace, note list/get/create/append/update/preview_edit, and work_item list/get/create/update.',
+      'Object command. Supports project list/get/create/update/resolve_workspace, note list/get/create/append/update/preview_edit, work_item list/get/create/update, local_app list/get/create/validate, and settings open.',
   }),
   args: Type.Optional(Type.Record(Type.String(), Type.Any())),
   dryRun: Type.Optional(Type.Boolean({
@@ -33,7 +41,7 @@ const XopcUseToolSchema = Type.Object({
   })),
 });
 
-export type XopcUseMode = 'project' | 'note' | 'work_item';
+export type XopcUseMode = 'project' | 'note' | 'work_item' | 'local_app' | 'settings';
 
 export interface XopcUseToolInput {
   mode: XopcUseMode;
@@ -49,6 +57,7 @@ export interface XopcUseToolDeps {
   getNotesService?: () => NotesService | undefined;
   getProjectService?: () => ProjectService | undefined;
   getWorkItemService?: () => WorkItemService | undefined;
+  getLocalAppService?: () => LocalAppService | undefined;
 }
 
 type XopcUseDetails = {
@@ -56,6 +65,7 @@ type XopcUseDetails = {
   command: string;
   dryRun: boolean;
   result?: unknown;
+  delivery?: ProductDeliveryEnvelope;
 };
 
 const PROJECT_STATUSES = new Set<ProjectStatus>(['active', 'paused', 'archived']);
@@ -74,8 +84,9 @@ const WORK_ITEM_STATUSES = new Set<WorkItemStatus>([
 const WORK_ITEM_PRIORITIES = new Set<WorkItemPriority>(['urgent', 'high', 'normal', 'low']);
 
 function okText(details: XopcUseDetails): AgentToolResult<XopcUseDetails> {
+  const text = JSON.stringify(details.result ?? {}, null, 2);
   return {
-    content: [{ type: 'text', text: JSON.stringify(details.result ?? {}, null, 2) }],
+    content: [{ type: 'text', text: appendProductDeliveryText(text, details.delivery) }],
     details,
   };
 }
@@ -133,6 +144,126 @@ function nullableNumber(value: unknown): number | null | undefined {
 
 function ensureArgs(input: XopcUseToolInput): Record<string, unknown> {
   return input.args && typeof input.args === 'object' && !Array.isArray(input.args) ? input.args : {};
+}
+
+function record(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined;
+}
+
+function deliveryText(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function deliveryRevision(value: unknown): string | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  return deliveryText(value);
+}
+
+function deliverySummary(...values: unknown[]): string | undefined {
+  const value = values.map(deliveryText).find(Boolean);
+  if (!value) return undefined;
+  return value.length > 180 ? `${value.slice(0, 177)}…` : value;
+}
+
+function deliveryForXopcResult(
+  mode: XopcUseMode,
+  command: string,
+  result: unknown,
+  dryRun: boolean,
+): ProductDeliveryEnvelope | undefined {
+  if (dryRun || command === 'list') return undefined;
+  const resultRecord = record(result);
+  if (!resultRecord || resultRecord.ok === false) return undefined;
+
+  let source: Record<string, unknown> | undefined;
+  let primary: ProductReference | undefined;
+  if (mode === 'project') {
+    const match = record(resultRecord.match);
+    source = record(resultRecord.project) ?? record(match?.project) ?? match;
+    const id = deliveryText(source?.id);
+    if (id) {
+      primary = {
+        kind: 'project',
+        id,
+        title: deliveryText(source?.name) ?? 'Project',
+        summary: deliverySummary(source?.description, source?.brief),
+        status: deliveryText(source?.status),
+        revision: deliveryRevision(source?.updatedAt),
+        capabilities: ['open', 'edit', 'continue_in_chat'],
+      };
+    }
+  } else if (mode === 'note') {
+    source = record(resultRecord.note);
+    const id = deliveryText(source?.id);
+    if (id) {
+      primary = {
+        kind: 'note',
+        id,
+        title: deliveryText(source?.title) ?? 'Untitled note',
+        summary: deliverySummary(source?.markdown),
+        status: deliveryText(source?.status),
+        revision: deliveryRevision(source?.localVersion) ?? deliveryRevision(source?.updatedAt),
+        capabilities: ['open', 'preview', 'edit', 'continue_in_chat', 'share'],
+      };
+    }
+  } else if (mode === 'work_item') {
+    source = record(resultRecord.item);
+    const id = deliveryText(source?.id);
+    if (id) {
+      primary = {
+        kind: 'work_item',
+        id,
+        title: deliveryText(source?.title) ?? 'Work item',
+        summary: deliverySummary(source?.description, source?.nextAction),
+        status: deliveryText(source?.status),
+        revision: deliveryRevision(source?.updatedAt),
+        projectId: deliveryText(source?.projectId),
+        capabilities: ['open', 'edit', 'continue_in_chat'],
+      };
+    }
+  } else if (mode === 'local_app') {
+    source = record(resultRecord.app);
+    const id = deliveryText(source?.id);
+    if (id) {
+      primary = {
+        kind: 'local_app',
+        id,
+        title: deliveryText(source?.name) ?? 'Local app',
+        summary: deliverySummary(source?.description, source?.idea),
+        status: deliveryText(source?.installationState) ?? deliveryText(source?.status),
+        revision: deliveryRevision(source?.updatedAt),
+        projectId: deliveryText(source?.projectId),
+        capabilities: ['open', 'preview', 'edit', 'continue_in_chat', 'run'],
+      };
+    }
+  } else {
+    source = record(resultRecord.settings);
+    const id = deliveryText(source?.section);
+    if (id) {
+      primary = {
+        kind: 'settings',
+        id,
+        title: deliveryText(source?.title) ?? 'Settings',
+        summary: deliverySummary(source?.summary),
+        capabilities: ['open', 'configure', 'continue_in_chat'],
+      };
+    }
+  }
+
+  if (!primary) return undefined;
+  return {
+    version: 1,
+    operation: command === 'create'
+      ? 'created'
+      : command === 'get' || command === 'resolve_workspace' || mode === 'settings'
+        ? 'opened'
+        : command === 'validate'
+          ? 'completed'
+        : 'updated',
+    primary,
+  };
 }
 
 function currentProjectId(args: Record<string, unknown>, deps: XopcUseToolDeps): string | undefined {
@@ -432,12 +563,73 @@ async function handleWorkItem(
   return { ok: false, error: `Unsupported work_item command: ${command}` };
 }
 
+async function handleLocalApp(
+  command: string,
+  args: Record<string, unknown>,
+  deps: XopcUseToolDeps,
+  dryRun: boolean,
+): Promise<unknown> {
+  const localApps = deps.getLocalAppService?.();
+  if (!localApps) return { ok: false, error: 'Local app service is unavailable' };
+
+  if (command === 'list') {
+    return { ok: true, apps: localApps.list() };
+  }
+
+  const id = trimString(args.localAppId) ?? trimString(args.id);
+  if (command === 'get') {
+    if (!id) return { ok: false, error: 'localAppId is required' };
+    const app = localApps.get(id);
+    return app ? { ok: true, app } : { ok: false, error: `Local app not found: ${id}` };
+  }
+
+  if (command === 'create') {
+    const name = trimString(args.name);
+    const idea = trimString(args.idea);
+    if (!name) return { ok: false, error: 'name is required' };
+    if (!idea) return { ok: false, error: 'idea is required' };
+    const input = { name, idea, description: trimString(args.description) };
+    if (dryRun) return { ok: true, dryRun: true, action: 'create_local_app', input };
+    return { ok: true, app: localApps.create(input) };
+  }
+
+  if (command === 'validate') {
+    if (!id) return { ok: false, error: 'localAppId is required' };
+    const app = localApps.get(id);
+    if (!app) return { ok: false, error: `Local app not found: ${id}` };
+    return { ok: true, app, validation: localApps.validate(id) };
+  }
+
+  return { ok: false, error: `Unsupported local_app command: ${command}` };
+}
+
+function handleSettings(
+  command: string,
+  args: Record<string, unknown>,
+): unknown {
+  if (command !== 'open') {
+    return { ok: false, error: `Unsupported settings command: ${command}` };
+  }
+  const section = trimString(args.section) ?? 'overview';
+  if (!/^[a-z0-9][a-z0-9/_-]*$/i.test(section) || section.includes('..')) {
+    return { ok: false, error: 'Invalid settings section' };
+  }
+  return {
+    ok: true,
+    settings: {
+      section,
+      title: trimString(args.title) ?? 'Settings',
+      summary: trimString(args.summary),
+    },
+  };
+}
+
 export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcUseToolSchema, XopcUseDetails> {
   return {
     name: 'xopc_use',
     label: 'XOPC Use',
     description:
-      'Operate first-class xopc objects through one safe entry point. Use for projects, notes, and project work items instead of editing storage files directly. For non-trivial object changes, load the built-in manual first with tool_manual({ tool: "xopc_use" }).',
+      'Operate first-class xopc objects through one safe entry point. Use for projects, notes, project work items, local apps, and exact settings jump targets instead of editing storage files directly. For non-trivial object changes, load the built-in manual first with tool_manual({ tool: "xopc_use" }).',
     parameters: XopcUseToolSchema,
     mutatesWorkspace: true,
     mutationScope: 'external',
@@ -467,9 +659,17 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
                 ? await handleNote(command, args, deps, dryRun)
                 : mode === 'work_item'
                   ? await handleWorkItem(command, args, deps, dryRun)
-                  : { ok: false, error: `Unsupported mode: ${String(mode)}` },
+                  : mode === 'local_app'
+                    ? await handleLocalApp(command, args, deps, dryRun)
+                    : mode === 'settings'
+                      ? handleSettings(command, args)
+                      : { ok: false, error: `Unsupported mode: ${String(mode)}` },
         );
-        return okText({ ...details, result });
+        return okText({
+          ...details,
+          result,
+          delivery: deliveryForXopcResult(mode, command, result, dryRun),
+        });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         return errorText(message, details);

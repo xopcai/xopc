@@ -14,13 +14,14 @@ import {
   resetXopcDatabaseSingletonForTest,
 } from '../../../storage/sqlite/index.js';
 import { WorkItemService } from '../../../work-items/index.js';
+import type { LocalAppService } from '../../../local-apps/index.js';
 import { createXopcUseTool } from '../xopc-use-tool.js';
 
 const SESSION_KEY = 'agent:main:tui:xopc-use';
 
 function parseToolJson(result: Awaited<ReturnType<ReturnType<typeof createXopcUseTool>['execute']>>) {
   const text = result.content[0]?.type === 'text' ? result.content[0].text : '{}';
-  return JSON.parse(text) as Record<string, any>;
+  return JSON.parse(text.split('\nOpen in xopc:')[0]) as Record<string, any>;
 }
 
 describe('xopc_use tool', () => {
@@ -63,6 +64,20 @@ describe('xopc_use tool', () => {
 
     expect(created.ok).toBe(true);
     expect(created.project.name).toBe('Agent Objects');
+    const createdResult = await tool.execute('call-delivery', {
+      mode: 'project',
+      command: 'get',
+      args: { projectId: created.project.id },
+    });
+    expect(createdResult.details.delivery).toMatchObject({
+      version: 1,
+      operation: 'opened',
+      primary: {
+        kind: 'project',
+        id: created.project.id,
+        capabilities: expect.arrayContaining(['open', 'continue_in_chat']),
+      },
+    });
 
     const updated = parseToolJson(await tool.execute('call-2', {
       mode: 'project',
@@ -201,6 +216,67 @@ describe('xopc_use tool', () => {
 
     expect(result.dryRun).toBe(true);
     expect(projects.list({ search: 'Dry Run Project' }).items).toHaveLength(0);
+  });
+
+  it('creates a local app and returns an inline delivery reference', async () => {
+    const app = {
+      id: 'app-1',
+      projectId: 'project-1',
+      name: 'Research Hub',
+      idea: 'Keep sources together',
+      installationState: 'draft',
+      updatedAt: 123,
+    };
+    const localApps = {
+      create: () => app,
+      list: () => [app],
+      get: (id: string) => id === app.id ? app : null,
+      validate: () => ({ status: 'healthy' }),
+    } as unknown as LocalAppService;
+    const tool = createXopcUseTool({
+      getLocalAppService: () => localApps,
+      getCurrentSessionKey: () => SESSION_KEY,
+    });
+
+    const result = await tool.execute('call-local-app', {
+      mode: 'local_app',
+      command: 'create',
+      args: { name: app.name, idea: app.idea },
+    });
+
+    expect(result.details.delivery).toMatchObject({
+      operation: 'created',
+      primary: {
+        kind: 'local_app',
+        id: app.id,
+        projectId: app.projectId,
+      },
+    });
+  });
+
+  it('returns an exact settings jump target without changing config', async () => {
+    const tool = createXopcUseTool({
+      getProjectService: () => projects,
+      getCurrentSessionKey: () => SESSION_KEY,
+    });
+    const result = await tool.execute('call-settings', {
+      mode: 'settings',
+      command: 'open',
+      args: {
+        section: 'credentials',
+        title: 'Provider credentials',
+        summary: 'Add the required API key.',
+      },
+    });
+
+    expect(result.details.delivery).toMatchObject({
+      operation: 'opened',
+      primary: {
+        kind: 'settings',
+        id: 'credentials',
+        title: 'Provider credentials',
+      },
+    });
   });
 
   it('rejects invalid work item dates without creating an item', async () => {

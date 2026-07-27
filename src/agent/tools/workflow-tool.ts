@@ -4,6 +4,10 @@
 
 import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
+import {
+  appendProductDeliveryText,
+  type ProductDeliveryEnvelope,
+} from '@xopcai/gateway-contract';
 
 import { extractProfileAgentId } from '../../config/agent-profile.js';
 import { createLogger } from '../../utils/logger.js';
@@ -53,6 +57,16 @@ export interface WorkflowToolDeps {
   startWorkflowRun?: (params: StartWorkflowRunServiceParams) => Promise<WorkflowRunServiceResult>;
 }
 
+type WorkflowToolDetails =
+  | {
+      runId: string;
+      sessionKey: string;
+      definitionId: string;
+      parentSessionKey: string | null;
+      delivery: ProductDeliveryEnvelope;
+    }
+  | { error: string };
+
 export function createWorkflowTool(deps: WorkflowToolDeps): AgentTool {
   return {
     name: 'workflow',
@@ -67,7 +81,7 @@ export function createWorkflowTool(deps: WorkflowToolDeps): AgentTool {
     async execute(
       _toolCallId: string,
       params: WorkflowToolInput,
-    ): Promise<AgentToolResult<{ runId: string; sessionKey: string } | { error: string }>> {
+    ): Promise<AgentToolResult<WorkflowToolDetails>> {
       if (!deps.startWorkflowRun) {
         return {
           content: [{ type: 'text', text: 'workflow: gateway workflow runs are not available in this context' }],
@@ -124,12 +138,41 @@ export function createWorkflowTool(deps: WorkflowToolDeps): AgentTool {
         const summary = goal
           ? `Started workflow \`${definitionId}\` (run ${result.runId}). Open chat session to track progress and continue.`
           : `Started workflow \`${definitionId}\` (run ${result.runId}). Open the workflow chat session to track progress.`;
+        const delivery: ProductDeliveryEnvelope = {
+          version: 1,
+          operation: 'started',
+          primary: {
+            kind: 'workflow_run',
+            id: result.runId,
+            title: goal || definitionId,
+            summary: `Workflow ${definitionId}`,
+            status: 'running',
+            capabilities: ['open', 'continue_in_chat'],
+          },
+          related: [
+            {
+              kind: 'workflow_definition',
+              id: definitionId,
+              title: definitionId,
+              capabilities: ['open', 'edit', 'run'],
+            },
+            {
+              kind: 'session',
+              id: result.sessionKey,
+              title: goal || definitionId,
+              capabilities: ['open', 'continue_in_chat'],
+            },
+          ],
+        };
 
         return {
           content: [
             {
               type: 'text',
-              text: `${summary}\n\nsessionKey: ${result.sessionKey}`,
+              text: appendProductDeliveryText(
+                `${summary}\n\nsessionKey: ${result.sessionKey}`,
+                delivery,
+              ),
             },
           ],
           details: {
@@ -137,7 +180,8 @@ export function createWorkflowTool(deps: WorkflowToolDeps): AgentTool {
             sessionKey: result.sessionKey,
             definitionId,
             parentSessionKey: parentSessionKey ?? null,
-          } as { runId: string; sessionKey: string },
+            delivery,
+          },
         };
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
