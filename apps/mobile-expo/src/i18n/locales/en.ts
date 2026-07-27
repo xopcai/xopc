@@ -334,6 +334,7 @@ export const en = {
     overlayClosedAnnouncement: 'Returned to workspace',
     shareFile: 'Share',
     shareFilePreview: 'Share this file',
+    historyLoadFailed: 'Could not load this conversation.',
     send: 'Send',
     stop: 'Stop',
     thinking: 'Thinking…',

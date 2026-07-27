@@ -113,8 +113,8 @@ describe('sessions backend response contract', () => {
         sourceChatId: 'chat_a',
         routing: { agentId: 'main' },
         messages: [
-          { role: 'user', content: 'hello' },
-          { role: 'assistant', content: [{ type: 'text', text: 'hi' }] },
+          { role: 'user', content: 'hello', timestamp: 1_784_064_000_000 },
+          { role: 'assistant', content: [{ type: 'text', text: 'hi' }], timestamp: 1_784_064_001_000 },
         ],
       },
       pagination: {
@@ -129,6 +129,7 @@ describe('sessions backend response contract', () => {
     const parsed = parseSessionMessagePage(response);
     expect(parsed.pagination.nextBeforeCursor).toBe('row_1');
     expect(parsed.session.routing?.agentId).toBe('main');
+    expect(parsed.session.messages[0]?.timestamp).toBe(1_784_064_000_000);
   });
 
   it('accepts active run and create session response shapes', () => {

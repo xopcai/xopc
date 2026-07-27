@@ -332,6 +332,7 @@ export const zh: MessageBundle = {
     overlayClosedAnnouncement: '已返回工作空间',
     shareFile: '分享',
     shareFilePreview: '分享此文件',
+    historyLoadFailed: '无法加载此会话的历史消息。',
     send: '发送',
     stop: '停止',
     thinking: '思考中…',

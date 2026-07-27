@@ -255,7 +255,11 @@ describe('fetchSessionMessagePage', () => {
       json: async () => ({
         session: {
           key: 'agent:main:webchat:default:direct:chat_a',
-          messages: [{ role: 'assistant', content: [{ type: 'text', text: 'hi' }] }],
+          messages: [{
+            role: 'assistant',
+            content: [{ type: 'text', text: 'hi' }],
+            timestamp: 1_784_064_001_000,
+          }],
         },
         pagination: { total: 1, limit: 50, offset: 0, hasMore: false, nextBeforeCursor: 'cursor_0' },
       }),
@@ -267,6 +271,7 @@ describe('fetchSessionMessagePage', () => {
     });
 
     expect(page?.session.messages).toHaveLength(1);
+    expect(page?.session.messages[0]?.timestamp).toBe(1_784_064_001_000);
     expect(mockedApiFetch).toHaveBeenCalledWith(
       '/api/sessions/agent%3Amain%3Awebchat%3Adefault%3Adirect%3Achat_a/history?limit=50&before=cursor_1',
     );

@@ -25,11 +25,9 @@ import {
 import { countNoteCharacters } from '../notes/note-title';
 import { useVoiceCaptureInteraction } from '../notes/use-voice-capture-interaction';
 import { applyMarkdownPatchResult } from '../notes/markdown/markdown-patch';
-import { DEFAULT_EDITOR_RUNTIME_STATE } from '../notes/editor/editor-contract';
 import type {
   EditorCommand,
   EditorCommandInput,
-  EditorRuntimeState,
   NoteEditorMode,
   NoteEditorLabels,
 } from '../notes/editor/editor-protocol';
@@ -62,13 +60,11 @@ export function PageScreen() {
   const [tagPickerVisible, setTagPickerVisible] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [noteEditorMode, setNoteEditorMode] = useState<NoteEditorMode>('viewing');
-  const [editorRuntimeState, setEditorRuntimeState] = useState<EditorRuntimeState>(DEFAULT_EDITOR_RUNTIME_STATE);
   const [editorCommand, setEditorCommand] = useState<EditorCommand | null>(null);
   const [aiLoadingKey, setAiLoadingKey] = useState<string | null>(null);
 
   const editorCommandIdRef = useRef(0);
   const editorRef = useRef<NoteEditorBridgeHandle | null>(null);
-  const autoFocusedNoteIdRef = useRef<string | null>(null);
   const allowNextRemoveRef = useRef(false);
   const savingBeforeLeaveRef = useRef(false);
   const skipNextFocusCleanupSaveRef = useRef(false);
@@ -217,15 +213,6 @@ export function PageScreen() {
     });
     return unsubscribe;
   }, [id, navigation, note, saveEditorBeforeLeave]);
-
-  useEffect(() => {
-    if (!id || !note || !editorRuntimeState.ready || autoFocusedNoteIdRef.current === id) return;
-    autoFocusedNoteIdRef.current = id;
-    const timer = setTimeout(() => {
-      editorRef.current?.focus(titleRef.current.trim() ? 'body' : 'title', 'end');
-    }, 80);
-    return () => clearTimeout(timer);
-  }, [editorRuntimeState.ready, id, note, titleRef]);
 
   const handleBack = useCallback(() => {
     if (savingBeforeLeaveRef.current) return;
@@ -463,6 +450,7 @@ export function PageScreen() {
         <View style={styles.editorWrap}>
           {editorReady ? (
             <NoteEditorBridge
+              key={id}
               ref={editorRef}
               noteId={id}
               title={title}
@@ -475,7 +463,6 @@ export function PageScreen() {
               onChangeMarkdown={updateMarkdown}
               onRequestAttachment={handleRequestAttachment}
               onInteractionStateChange={handleEditorInteractionStateChange}
-              onRuntimeStateChange={setEditorRuntimeState}
               aiActions={aiActions}
               aiLoadingKey={aiLoadingKey}
               onRequestAiAction={handleRequestAiAction}
