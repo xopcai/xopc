@@ -12,6 +12,46 @@ const MINUTE_MS = 60 * SECOND_MS;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
 const WEEK_MS = 7 * DAY_MS;
+const EN_DURATION_LIST_FORMATTER = new Intl.ListFormat('en-US', {
+  type: 'conjunction',
+});
+const EN_UNIT_FORMATTERS: Record<string, Intl.NumberFormat> = Object.fromEntries(
+  ['second', 'minute', 'hour', 'day', 'week'].map((unit) => [
+    unit,
+    new Intl.NumberFormat('en-US', {
+      style: 'unit',
+      unit,
+      unitDisplay: 'long',
+    }),
+  ]),
+);
+const AUTOMATION_DATE_TIME_FORMATTERS: Record<
+  StoredLanguage,
+  Intl.DateTimeFormat
+> = {
+  en: new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }),
+  zh: new Intl.DateTimeFormat('zh-CN', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }),
+};
+const AUTOMATION_TIME_FORMATTERS: Record<StoredLanguage, Intl.DateTimeFormat> = {
+  en: new Intl.DateTimeFormat('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+  }),
+  zh: new Intl.DateTimeFormat('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+  }),
+};
 
 export type AutomationIntervalUnit = 'minute' | 'hour' | 'day' | 'week';
 
@@ -39,15 +79,13 @@ function formatUnit(value: number, unit: Intl.NumberFormatOptions['unit'], langu
             : '秒';
     return `${value} ${unitLabel}`;
   }
-  return new Intl.NumberFormat(automationLocale(language), {
-    style: 'unit',
-    unit,
-    unitDisplay: 'long',
-  }).format(value);
+  return EN_UNIT_FORMATTERS[String(unit)].format(value);
 }
 
 function joinDurationParts(parts: string[], language: StoredLanguage): string {
-  return language === 'zh' ? parts.join(' ') : new Intl.ListFormat('en-US', { type: 'conjunction' }).format(parts);
+  return language === 'zh'
+    ? parts.join(' ')
+    : EN_DURATION_LIST_FORMATTER.format(parts);
 }
 
 export function automationIntervalMs(value: string | number, unit: AutomationIntervalUnit): number {
@@ -109,12 +147,7 @@ export function formatAutomationInterval(everyMs: number, language: StoredLangua
 }
 
 export function formatAutomationDateTime(ms: number, language: StoredLanguage): string {
-  return new Intl.DateTimeFormat(automationLocale(language), {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(ms));
+  return AUTOMATION_DATE_TIME_FORMATTERS[language].format(new Date(ms));
 }
 
 function localDateKey(date: Date): number {
@@ -128,10 +161,7 @@ export function formatAutomationRelativeDateTime(
 ): string {
   const date = new Date(ms);
   const dayDifference = Math.round((localDateKey(date) - localDateKey(new Date(nowMs))) / DAY_MS);
-  const time = new Intl.DateTimeFormat(automationLocale(language), {
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date);
+  const time = AUTOMATION_TIME_FORMATTERS[language].format(date);
   if (dayDifference === 0) return language === 'zh' ? `今天 ${time}` : `today at ${time}`;
   if (dayDifference === 1) return language === 'zh' ? `明天 ${time}` : `tomorrow at ${time}`;
   if (dayDifference === -1) return language === 'zh' ? `昨天 ${time}` : `yesterday at ${time}`;

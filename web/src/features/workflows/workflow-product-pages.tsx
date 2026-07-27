@@ -7,12 +7,14 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchGatewayAgents } from '@/features/settings/agents-admin-api';
 import { messages } from '@/i18n/messages';
+import { formatMediumDateTime } from '@/lib/date-formatters';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
-import { WorkflowEditor, definitionToManifest, type WorkflowEditorInitialDraft } from './workflow-create-dialog';
+import { WorkflowEditor, type WorkflowEditorInitialDraft } from './workflow-create-dialog';
+import { definitionToManifest } from './workflow-definition-manifest';
 import { WorkflowDefinitionGraph } from './workflow-definition-graph';
-import { resolveWorkflowInputPayload, validateWorkflowInputEditorValue } from './workflow-input-editor';
+import { resolveWorkflowInputPayload, validateWorkflowInputEditorValue } from './workflow-input-editor.utils';
 import { resolveWorkflowLocalizedCopy } from './workflow-meta-locale';
 import { ACTIVE_RUN_STATUSES, type WorkflowRunPanelTab } from './workflow-page.constants';
 import { WorkflowRunPanel } from './workflow-run-panel';
@@ -198,7 +200,7 @@ export function WorkflowDetailPage() {
                     <span className="truncate text-sm font-medium text-fg">{run.title}</span>
                     <span className="shrink-0 text-xs text-fg-subtle">{labels.status[run.status]}</span>
                   </div>
-                  <p className="mt-1 text-xs text-fg-muted">{new Intl.DateTimeFormat(localeTag, { dateStyle: 'medium', timeStyle: 'short' }).format(run.createdAtMs)}</p>
+                  <p className="mt-1 text-xs text-fg-muted">{formatMediumDateTime(run.createdAtMs, localeTag)}</p>
                 </button>
               ))}
             </div>

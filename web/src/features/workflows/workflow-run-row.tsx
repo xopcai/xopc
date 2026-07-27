@@ -50,7 +50,7 @@ export const WorkflowRunRow = memo(function WorkflowRunRow({
 
   return (
     <article className="group border-b border-edge-subtle last:border-b-0">
-      <div className="flex min-w-0 flex-col gap-3 px-3 py-3 transition-colors hover:bg-surface-hover/55 sm:px-4 lg:flex-row lg:items-center">
+      <div className="flex min-w-0 flex-col gap-3 p-3 transition-colors hover:bg-surface-hover/55 sm:px-4 lg:flex-row lg:items-center">
         <button
           type="button"
           onClick={() => onOpen(run)}

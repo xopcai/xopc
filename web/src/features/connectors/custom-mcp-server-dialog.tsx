@@ -309,7 +309,7 @@ export function CustomMcpServerDialog({
                     <span className="group-open:hidden">{cs.connectorShowAdvancedConfig}</span>
                     <span className="hidden group-open:inline">{cs.connectorHideAdvancedConfig}</span>
                   </summary>
-                  <div className="border-t border-edge px-4 py-4">
+                  <div className="border-t border-edge p-4">
                     <McpServerFormFields
                       row={row}
                       t={t}

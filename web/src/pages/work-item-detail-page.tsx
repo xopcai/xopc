@@ -37,6 +37,7 @@ import {
 import { listWorkflowDefinitions, type WorkflowDefinition } from '@/features/workflows/workflow-api';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+import { formatMediumDateTime } from '@/lib/date-formatters';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 
@@ -52,7 +53,7 @@ function statusTone(status: WorkItemStatus): string {
 
 function formatTime(value?: number | string): string {
   if (!value) return '';
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+  return formatMediumDateTime(new Date(value));
 }
 
 function formatFileSize(bytes: number): string {
@@ -381,7 +382,7 @@ export function WorkItemDetailPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-[var(--max-width-app-main)] flex-1 flex-col px-3 py-5 sm:px-5 xl:px-6">
-      <section className="rounded-lg bg-surface-panel px-4 py-4 shadow-surface sm:px-5">
+      <section className="rounded-lg bg-surface-panel p-4 shadow-surface sm:px-5">
         <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex min-w-0 items-center gap-2">
@@ -477,7 +478,7 @@ export function WorkItemDetailPage() {
               <label className="grid gap-1 text-xs font-medium text-fg-subtle">
                 {t.detail.workflowGoal}
                 <textarea
-                  className="min-h-20 resize-y rounded-md border border-edge bg-surface-base px-2 py-2 text-sm font-normal text-fg outline-none focus:border-accent"
+                  className="min-h-20 resize-y rounded-md border border-edge bg-surface-base p-2 text-sm font-normal text-fg outline-none focus:border-accent"
                   value={workflowGoal}
                   disabled={busy}
                   onChange={(event) => setWorkflowGoal(event.target.value)}
@@ -519,7 +520,7 @@ export function WorkItemDetailPage() {
             </div>
             <div className="mt-3 grid gap-2">
               {item.attachments?.length ? item.attachments.map((attachment) => (
-                <div key={attachment.id} className="flex min-w-0 items-center gap-2 rounded-md border border-edge bg-surface-base px-2 py-2 text-sm">
+                <div key={attachment.id} className="flex min-w-0 items-center gap-2 rounded-md border border-edge bg-surface-base p-2 text-sm">
                   <FileText className="size-4 shrink-0 text-fg-muted" aria-hidden />
                   <div className="min-w-0 flex-1">
                     <div className="truncate font-medium text-fg">{attachment.fileName}</div>

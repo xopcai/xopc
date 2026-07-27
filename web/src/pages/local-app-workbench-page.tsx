@@ -61,14 +61,10 @@ import { apiUrl } from '@/lib/url';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useNavOrderStore } from '@/stores/nav-order-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
+import { formatShortMonthDateTime } from '@/lib/date-formatters';
 
 function formatReleaseDate(timestamp: number, language: string): string {
-  return new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(timestamp));
+  return formatShortMonthDateTime(timestamp, language);
 }
 
 function acceptanceRunMatches(
@@ -526,7 +522,7 @@ export function LocalAppWorkbenchPage() {
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-accent"><Sparkles className="size-4" />{zh ? '告诉 Coder 你的想法' : 'Tell Coder your idea'}</div>
             <h2 className="mt-4 text-xl font-semibold tracking-tight text-fg">{zh ? '你想创建什么？' : 'What do you want to create?'}</h2>
             <p className="mt-2 text-sm leading-6 text-fg-muted">{zh ? '我们会建立一个 Coder Project，并把应用上下文和开发 Skill 带入对话。' : 'We will create a Coder Project and carry the app context and development skill into chat.'}</p>
-            <label className="mt-6 text-xs font-medium text-fg-muted">{zh ? '应用名称' : 'App name'}<input value={name} onChange={(event) => setName(event.target.value)} required autoFocus className="mt-2 w-full rounded-xl border border-edge bg-surface-panel px-3 py-2.5 text-sm text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" placeholder={zh ? '例如：阅读清单' : 'e.g. Reading list'} /></label>
+            <label className="mt-6 text-xs font-medium text-fg-muted">{zh ? '应用名称' : 'App name'}<input value={name} onChange={(event) => setName(event.target.value)} required className="mt-2 w-full rounded-xl border border-edge bg-surface-panel px-3 py-2.5 text-sm text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" placeholder={zh ? '例如：阅读清单' : 'e.g. Reading list'} /></label>
             <label className="mt-4 text-xs font-medium text-fg-muted">{zh ? '描述你的想法' : 'Describe your idea'}<textarea value={idea} onChange={(event) => setIdea(event.target.value)} required rows={7} className="mt-2 w-full resize-none rounded-xl border border-edge bg-surface-panel px-3 py-2.5 text-sm leading-6 text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" placeholder={zh ? '我想要一个可以记录待读文章、标记进度并按主题筛选的小工具…' : 'I want a small tool that tracks articles, reading progress, and topics…'} /></label>
             {actionError ? <p className="mt-3 text-sm text-danger" role="alert">{actionError}</p> : null}
             <Button type="submit" variant="primary" className="mt-5 h-10" disabled={busy || !name.trim() || !idea.trim()}>{busy ? <Loader2 className="size-4 animate-spin" /> : <MessageSquareCode className="size-4" />}{zh ? '进入 Coder 对话' : 'Continue with Coder'}</Button>

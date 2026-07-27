@@ -985,7 +985,7 @@ function SttSection({
               />
             </div>
 
-            <div className="grid gap-3 rounded-xl bg-surface-hover/50 px-3 py-3 dark:bg-surface-hover/35 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,18rem)] sm:items-center">
+            <div className="grid gap-3 rounded-xl bg-surface-hover/50 p-3 dark:bg-surface-hover/35 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,18rem)] sm:items-center">
               <div>
                 <div className="text-sm font-medium text-fg">{v.stt.refinement}</div>
                 <p className="text-xs text-fg-muted">{v.stt.refinementDesc}</p>

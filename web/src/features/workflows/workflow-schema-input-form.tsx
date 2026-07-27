@@ -6,14 +6,11 @@ import { cn } from '@/lib/cn';
 
 import type { JsonSchema } from './workflow-api';
 import { Select, SelectOption } from '@/components/ui/popover-select';
-
-export type SchemaInputValue = Record<string, unknown>;
-
-export interface SchemaField {
-  key: string;
-  schema: JsonSchema;
-  required: boolean;
-}
+import {
+  schemaToFields,
+  type SchemaField,
+  type SchemaInputValue,
+} from './workflow-schema-input';
 
 export interface WorkflowSchemaAiAssistConfig {
   locale: string;
@@ -24,10 +21,6 @@ export interface WorkflowSchemaAiAssistConfig {
 
 const inputClass =
   'mt-1.5 w-full rounded-xl border border-edge bg-surface-base px-3 py-2 text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-accent focus:ring-2 focus:ring-accent/20';
-
-export function supportsWorkflowSchemaForm(schema: JsonSchema | undefined): boolean {
-  return Boolean(schema && schema.type === 'object' && schema.properties && !Array.isArray(schema.properties));
-}
 
 export function WorkflowSchemaInputForm({
   schema,
@@ -212,24 +205,4 @@ function SchemaFieldInput({
       )}
     </div>
   );
-}
-
-export function schemaToFields(schema: JsonSchema): SchemaField[] {
-  const properties = schema.properties ?? {};
-  const required = new Set(schema.required ?? []);
-  return Object.entries(properties).map(([key, fieldSchema]) => ({
-    key,
-    schema: fieldSchema,
-    required: required.has(key),
-  }));
-}
-
-export function validateWorkflowSchemaInput(schema: JsonSchema | undefined, value: SchemaInputValue): boolean {
-  if (!supportsWorkflowSchemaForm(schema) || !schema) return true;
-  return schemaToFields(schema).every((field) => {
-    if (!field.required) return true;
-    const raw = value[field.key];
-    if (raw === undefined || raw === null) return false;
-    return typeof raw === 'string' ? raw.trim().length > 0 : true;
-  });
 }

@@ -102,7 +102,7 @@ export function createSlashMenuRenderer({ editor, getRuntime }: SlashMenuRendere
 
       const icon = document.createElement('span');
       icon.className =
-        'flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-edge bg-surface-raised text-xs font-semibold uppercase text-fg-muted';
+        'flex size-8 shrink-0 items-center justify-center rounded-md border border-edge bg-surface-raised text-xs font-semibold uppercase text-fg-muted';
       icon.textContent = item.label.slice(0, 2);
 
       const copy = document.createElement('span');

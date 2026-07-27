@@ -12,6 +12,7 @@ import { detectPreviewFileType, inferPreviewMimeType } from '@/features/preview-
 import { messages } from '@/i18n/messages';
 import { apiFetch } from '@/lib/fetch';
 import { cn } from '@/lib/cn';
+import { formatMediumDateTime } from '@/lib/date-formatters';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import {
@@ -55,7 +56,7 @@ function statusTone(status: WorkItemStatus): string {
 
 function formatTime(value: number): string {
   if (!value) return '';
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+  return formatMediumDateTime(new Date(value));
 }
 
 function formatFileSize(bytes: number): string {
@@ -236,7 +237,7 @@ function WorkItemCard({
       onDragEnd={onDragEnd}
       title={t.dragToUpdate}
       className={cn(
-        'flex min-h-24 w-full min-w-0 max-w-full cursor-grab flex-col overflow-hidden rounded-lg bg-surface-panel px-3 py-3 shadow-surface transition-colors hover:bg-surface-hover active:cursor-grabbing',
+        'flex min-h-24 w-full min-w-0 max-w-full cursor-grab flex-col overflow-hidden rounded-lg bg-surface-panel p-3 shadow-surface transition-colors hover:bg-surface-hover active:cursor-grabbing',
         dragging && 'opacity-50',
       )}
     >
@@ -320,7 +321,7 @@ function PendingAttachmentRow({
   const thumbnailUrl = useObjectUrl(mimeType.startsWith('image/') ? file : null);
 
   return (
-    <div className="flex min-w-0 items-center gap-2 rounded-md border border-edge bg-surface-panel px-2 py-2 text-sm">
+    <div className="flex min-w-0 items-center gap-2 rounded-md border border-edge bg-surface-panel p-2 text-sm">
       <AttachmentPreviewThumb
         name={file.name || 'upload'}
         mimeType={mimeType}
@@ -378,7 +379,7 @@ function SavedAttachmentRow({
   const thumbnailUrl = useWorkItemAttachmentThumbnail(item.id, attachment);
 
   return (
-    <div className="flex min-w-0 items-center gap-2 rounded-md border border-edge bg-surface-panel px-2 py-2 text-sm">
+    <div className="flex min-w-0 items-center gap-2 rounded-md border border-edge bg-surface-panel p-2 text-sm">
       <AttachmentPreviewThumb
         name={attachment.fileName}
         mimeType={attachment.mimeType}
@@ -734,7 +735,6 @@ function WorkItemModal({
                     className="h-10 rounded-lg border border-edge bg-surface-base px-3 text-sm text-fg outline-none focus:border-accent"
                     value={title}
                     onChange={(event) => setTitle(event.target.value)}
-                    autoFocus={mode === 'create'}
                   />
                 </label>
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -1107,7 +1107,7 @@ export function WorkItemsPanel({ projectId, createRequestKey = 0 }: { projectId:
       <section
         ref={boardScrollerRef}
         className={cn(
-          'min-h-0 flex-1 overflow-x-auto rounded-lg px-2 py-2 transition-opacity',
+          'min-h-0 flex-1 overflow-x-auto rounded-lg p-2 transition-opacity',
           loading && 'opacity-60',
           isPanningBoard ? 'cursor-grabbing select-none' : 'cursor-grab',
         )}
@@ -1144,7 +1144,7 @@ export function WorkItemsPanel({ projectId, createRequestKey = 0 }: { projectId:
                 }}
                 onDrop={(event) => dropOnStatus(column.status, event)}
               >
-                <header className="flex shrink-0 items-center justify-between gap-2 px-3 py-3">
+                <header className="flex shrink-0 items-center justify-between gap-2 p-3">
                   <div className="flex min-w-0 items-baseline gap-2">
                     <h3 className="truncate text-sm font-semibold text-fg">{column.title}</h3>
                     <span className="shrink-0 text-xs text-fg-subtle">{column.items.length}</span>

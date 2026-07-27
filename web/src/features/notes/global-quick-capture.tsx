@@ -131,7 +131,7 @@ function GlobalQuickCaptureModal({ onClose }: { onClose: () => void }) {
     >
       <div className="flex w-full max-w-lg flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-elevated">
         <div className="flex items-center gap-2 border-b border-edge px-4 py-3">
-          <StickyNote className="h-4 w-4 text-accent" />
+          <StickyNote className="size-4 text-accent" />
           <span className="text-sm font-medium text-fg">{n.quickCapturePlaceholder}</span>
         </div>
 
@@ -191,7 +191,7 @@ function GlobalQuickCaptureModal({ onClose }: { onClose: () => void }) {
             </span>
           </div>
           {saving && (
-            <div className="h-4 w-4 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+            <div className="size-4 animate-spin rounded-full border-2 border-accent border-t-transparent" />
           )}
         </div>
       </div>

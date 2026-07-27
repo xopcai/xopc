@@ -146,12 +146,12 @@ export function TailscaleServeSection({ embedded = false }: { embedded?: boolean
             <div className="mt-3 flex flex-wrap gap-2">
               {!active ? (
                 <Button type="button" disabled={busy || !cliAvailable} onClick={() => void onStart()}>
-                  {busy ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Power className="mr-1 h-4 w-4" />}
+                  {busy ? <Loader2 className="mr-1 size-4 animate-spin" /> : <Power className="mr-1 size-4" />}
                   {t.enableServe}
                 </Button>
               ) : (
                 <Button type="button" variant="secondary" disabled={busy} onClick={() => void onStop()}>
-                  {busy ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
+                  {busy ? <Loader2 className="mr-1 size-4 animate-spin" /> : null}
                   {t.disableServe}
                 </Button>
               )}

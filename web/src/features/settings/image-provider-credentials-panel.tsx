@@ -343,7 +343,7 @@ export function ImageProviderCredentialsPanel({
               </button>
 
               {isExpanded ? (
-                <div id={`img-provider-credentials-${p.id}`} className="bg-surface-base/45 px-4 py-4">
+                <div id={`img-provider-credentials-${p.id}`} className="bg-surface-base/45 p-4">
                   {extPath ? (
                     <Link
                       to={extPath}

@@ -139,7 +139,6 @@ function ShortcutEditor({
         {recording ? (
           <button
             type="button"
-            autoFocus
             className="rounded-lg border border-accent bg-accent-soft px-3 py-1.5 text-sm font-medium text-accent-fg outline-none"
             onKeyDown={onKeyDown}
             onClick={() => setRecording(false)}

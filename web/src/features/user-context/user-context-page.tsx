@@ -33,6 +33,7 @@ import { detectBrowserTimezone } from '@/features/settings/agents/agent-profile-
 import { UserProfileFieldsEditor } from '@/features/settings/user-profile-fields-editor';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+import { formatMediumDateTime } from '@/lib/date-formatters';
 import { showToast } from '@/lib/toast';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
@@ -84,10 +85,7 @@ function replaceCount(template: string, count: number): string {
 function formatDateTime(value: string, language: 'en' | 'zh'): string {
   const timestamp = Date.parse(value);
   if (!Number.isFinite(timestamp)) return value;
-  return new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(timestamp);
+  return formatMediumDateTime(timestamp, language);
 }
 
 function viewFromSearchParams(value: string | null): ViewId {
@@ -146,7 +144,7 @@ function UnderstandingCard({
     )}>
       {editing ? (
         <div className="space-y-2">
-          <textarea className={cn(inputClass, 'min-h-20 resize-y')} value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={t.updatePlaceholder} autoFocus />
+          <textarea className={cn(inputClass, 'min-h-20 resize-y')} value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={t.updatePlaceholder} />
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" className="h-8 px-2" onClick={() => { setDraft(item.statement); setEditing(false); }}>{t.cancel}</Button>
             <Button type="button" variant="primary" className="h-8 px-2" disabled={busy || !draft.trim()} onClick={() => { onUpdate(draft.trim()); setEditing(false); }}>{t.save}</Button>
@@ -276,7 +274,7 @@ function FirstMeetingCard({ suggestion, draft, busy, onDraftChange, onSave, onLa
         <p className="mt-2 text-sm leading-6 text-fg-muted">{suggestion ? t.meetSuggestedBody : t.meetBody}</p>
         <div className="mt-5 flex max-w-xl flex-col gap-2 sm:flex-row">
           <label className="sr-only" htmlFor="you-call-name">{t.callName}</label>
-          <input id="you-call-name" value={draft} maxLength={80} autoFocus onChange={(event) => onDraftChange(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && draft.trim() && !busy) onSave(); }} placeholder={t.meetPlaceholder} className={cn(inputClass, 'h-10 flex-1 bg-surface-base/90')} />
+          <input id="you-call-name" value={draft} maxLength={80} onChange={(event) => onDraftChange(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && draft.trim() && !busy) onSave(); }} placeholder={t.meetPlaceholder} className={cn(inputClass, 'h-10 flex-1 bg-surface-base/90')} />
           <Button type="button" variant="primary" className="h-10 shrink-0" disabled={busy || !draft.trim()} onClick={onSave}>{busy ? t.meetSaving : t.meetSave}</Button>
         </div>
         {suggestion ? <p className="mt-3 flex items-start gap-1.5 text-xs leading-5 text-fg-subtle"><ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-accent" aria-hidden /><span>{t.meetSource}</span></p> : null}
@@ -648,7 +646,7 @@ export function UserContextPage() {
               <div><h2 className="text-base font-semibold text-fg">{t.addUnderstanding}</h2><p className="mt-1 text-sm text-fg-muted">{t.addUnderstandingHint}</p></div>
               {!addingUnderstanding ? <Button type="button" variant="secondary" onClick={() => setAddingUnderstanding(true)}><Plus className="size-4" aria-hidden />{t.add}</Button> : null}
             </div>
-            {addingUnderstanding ? <div className="mt-3 rounded-xl border border-edge bg-surface-panel p-3"><textarea className={cn(inputClass, 'min-h-24 resize-y')} value={understandingDraft} onChange={(event) => setUnderstandingDraft(event.target.value)} placeholder={t.understandingPlaceholder} autoFocus /><div className="mt-3 flex flex-wrap items-end justify-between gap-3"><label className="grid min-w-48 gap-1 text-xs font-medium text-fg-muted">{t.understandingKind}<Select value={understandingKind} onChange={(event) => setUnderstandingKind(event.target.value)}>{Object.entries(t.understandingKinds).map(([value, label]) => <SelectOption key={value} value={value}>{label}</SelectOption>)}</Select></label><div className="flex gap-2"><Button type="button" variant="ghost" onClick={() => { setAddingUnderstanding(false); setUnderstandingDraft(''); }}>{t.cancel}</Button><Button type="button" variant="primary" disabled={!understandingDraft.trim() || busyId === 'understanding:new'} onClick={() => void addUnderstanding()}>{t.add}</Button></div></div></div> : null}
+            {addingUnderstanding ? <div className="mt-3 rounded-xl border border-edge bg-surface-panel p-3"><textarea className={cn(inputClass, 'min-h-24 resize-y')} value={understandingDraft} onChange={(event) => setUnderstandingDraft(event.target.value)} placeholder={t.understandingPlaceholder} /><div className="mt-3 flex flex-wrap items-end justify-between gap-3"><label className="grid min-w-48 gap-1 text-xs font-medium text-fg-muted">{t.understandingKind}<Select value={understandingKind} onChange={(event) => setUnderstandingKind(event.target.value)}>{Object.entries(t.understandingKinds).map(([value, label]) => <SelectOption key={value} value={value}>{label}</SelectOption>)}</Select></label><div className="flex gap-2"><Button type="button" variant="ghost" onClick={() => { setAddingUnderstanding(false); setUnderstandingDraft(''); }}>{t.cancel}</Button><Button type="button" variant="primary" disabled={!understandingDraft.trim() || busyId === 'understanding:new'} onClick={() => void addUnderstanding()}>{t.add}</Button></div></div></div> : null}
           </section>
           {data.conflictGroups.some((group) => group.unresolved) ? <section><h2 className="text-base font-semibold text-fg">{t.conflictsTitle}</h2><p className="mt-1 text-sm text-fg-muted">{t.conflictsHint}</p><div className="mt-3 space-y-3">{data.conflictGroups.filter((group) => group.unresolved).map((group) => <div key={group.id} className="divide-y divide-edge overflow-hidden rounded-xl border border-warning/35 bg-warning-soft/25">{group.records.filter((record) => record.storedStatus !== 'archived' && record.storedStatus !== 'rejected').map((record) => <div key={record.id} className="flex flex-wrap items-start justify-between gap-3 px-4 py-3"><div className="min-w-0 flex-1"><p className="text-sm leading-6 text-fg">{record.statement}</p><p className="mt-1 text-xs text-fg-subtle">{originLabel(record, t)} · {formatDateTime(record.updatedAt, language)}</p></div><Button type="button" variant="secondary" className="h-8 shrink-0 px-2.5" disabled={busyId === `conflict:${group.id}`} onClick={() => void resolveConflict(group.id, record.id)}>{t.useThis}</Button></div>)}</div>)}</div></section> : null}
           {data.consentRequests.length > 0 ? <section className="space-y-3"><div><h2 className="text-base font-semibold text-fg">{t.consentTitle}</h2><p className="mt-1 text-sm text-fg-muted">{t.consentHint}</p></div>{data.consentRequests.map((request) => <article key={request.id} className="rounded-2xl border border-accent/25 bg-accent-soft/20 p-4"><p className="text-sm leading-6 text-fg">{request.statement}</p><p className="mt-2 text-xs text-fg-muted">{t.consentPurpose.replace('{{purpose}}', request.purpose)}</p><div className="mt-3 flex flex-wrap justify-end gap-2"><Button type="button" variant="ghost" disabled={busyId === `consent:${request.id}`} onClick={() => void decideConsent(request.id, 'deny')}>{t.consentDeny}</Button><Button type="button" variant="secondary" disabled={busyId === `consent:${request.id}`} onClick={() => void decideConsent(request.id, 'once')}>{t.consentOnce}</Button><Button type="button" variant="secondary" disabled={busyId === `consent:${request.id}`} onClick={() => void decideConsent(request.id, 'session')}>{t.consentSession}</Button><Button type="button" variant="primary" disabled={busyId === `consent:${request.id}`} onClick={() => void decideConsent(request.id, 'always')}>{t.consentAlways}</Button></div></article>)}</section> : null}

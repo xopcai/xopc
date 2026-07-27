@@ -235,7 +235,7 @@ export function WorkDiscoveryPage() {
           <div className="space-y-5" aria-busy>
             <Skeleton className="mx-auto h-8 w-64" />
             <Skeleton className="mx-auto h-4 w-full max-w-lg" />
-            <Skeleton className="mx-auto h-4 w-4/5 max-w-md" />
+            <Skeleton className="mx-auto size-4/5 max-w-md" />
             <Skeleton className="mt-8 h-12 w-full rounded-xl" />
           </div>
         ) : null}
@@ -287,7 +287,7 @@ export function WorkDiscoveryPage() {
                   {preview.projectKind === 'coding' ? copy.codingProject : preview.projectKind === 'general' ? copy.generalProject : copy.unknownProject}
                 </span>
               </div>
-              <div className="grid gap-3 border-b border-edge-subtle bg-surface-base/60 px-4 py-4 sm:grid-cols-2">
+              <div className="grid gap-3 border-b border-edge-subtle bg-surface-base/60 p-4 sm:grid-cols-2">
                 <div>
                   <p className="text-xs font-medium text-fg-muted">{copy.localFingerprint}</p>
                   <p className="mt-1 text-sm text-fg">

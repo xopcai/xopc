@@ -23,6 +23,7 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { PopoverSelect } from '@/components/ui/popover-select';
 import { cn } from '@/lib/cn';
+import { formatMediumDateTime } from '@/lib/date-formatters';
 import { interaction } from '@/lib/interaction';
 import type { StoredLanguage } from '@/lib/storage';
 
@@ -42,6 +43,7 @@ import {
   type WorkflowNodeKind,
   type WorkflowRevisionSummary,
 } from './workflow-api';
+import { definitionToManifest } from './workflow-definition-manifest';
 import {
   suggestAvailableWorkflowName,
   type WorkflowSaveConflict,
@@ -530,7 +532,7 @@ export function WorkflowEditor({
                       <div className="mt-2 space-y-1">
                         {revisions.map((item) => (
                           <div key={item.revision} className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 hover:bg-surface-hover">
-                            <span className="min-w-0 text-xs text-fg-muted">v{item.revision} · {new Intl.DateTimeFormat(language, { dateStyle: 'medium', timeStyle: 'short' }).format(item.createdAtMs)}</span>
+                            <span className="min-w-0 text-xs text-fg-muted">v{item.revision} · {formatMediumDateTime(item.createdAtMs, language)}</span>
                             {item.revision === currentRevision ? <span className="text-xs text-fg-subtle">{copy.currentVersion}</span> : (
                               <Button variant="ghost" className="h-7 shrink-0 px-2 text-xs" disabled={restoringRevision !== null} onClick={() => void restoreRevision(item.revision)}>
                                 <RotateCcw className="size-3" />{restoringRevision === item.revision ? copy.restoring : copy.restore}
@@ -605,7 +607,6 @@ function ChatFirstStart({
         <h2 className="mt-5 text-2xl font-semibold text-fg">{copy.introTitle}</h2>
         <p className="mt-2 text-sm leading-6 text-fg-muted">{copy.introDescription}</p>
         <textarea
-          autoFocus
           value={prompt}
           onChange={(event) => onPromptChange(event.target.value)}
           placeholder={copy.introPlaceholder}
@@ -666,9 +667,9 @@ function ProposalReview({
         <h3 className="text-sm font-medium text-fg">{proposal.manifest.title || proposal.name}</h3>
         <p className="mt-2 text-sm leading-6 text-fg-muted">{proposal.explanation || proposal.manifest.description}</p>
         <dl className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
-          <div className="rounded-lg bg-success-soft px-2 py-2"><dt className="text-fg-subtle">{copy.added}</dt><dd className="mt-1 font-semibold text-success">{diff.addedIds.length}</dd></div>
-          <div className="rounded-lg bg-accent-soft px-2 py-2"><dt className="text-fg-subtle">{copy.changed}</dt><dd className="mt-1 font-semibold text-accent-fg">{diff.changedIds.length + diff.connectionChanges}</dd></div>
-          <div className="rounded-lg bg-danger/5 px-2 py-2"><dt className="text-fg-subtle">{copy.removed}</dt><dd className="mt-1 font-semibold text-danger">{diff.removedIds.length}</dd></div>
+          <div className="rounded-lg bg-success-soft p-2"><dt className="text-fg-subtle">{copy.added}</dt><dd className="mt-1 font-semibold text-success">{diff.addedIds.length}</dd></div>
+          <div className="rounded-lg bg-accent-soft p-2"><dt className="text-fg-subtle">{copy.changed}</dt><dd className="mt-1 font-semibold text-accent-fg">{diff.changedIds.length + diff.connectionChanges}</dd></div>
+          <div className="rounded-lg bg-danger/5 p-2"><dt className="text-fg-subtle">{copy.removed}</dt><dd className="mt-1 font-semibold text-danger">{diff.removedIds.length}</dd></div>
         </dl>
       </div>
       {proposal.assumptions.length ? <ProposalList title={copy.assumptions} items={proposal.assumptions} /> : null}
@@ -704,7 +705,7 @@ function WorkflowNodeCard({ data, selected }: NodeProps<StudioNode>) {
   const icon = node.kind === 'input' ? <Inbox /> : node.kind === 'agent' ? <Bot /> : node.kind === 'decision' ? <GitBranch /> : node.kind === 'merge' ? <Layers3 /> : <Play />;
   return (
     <div className={cn(
-      'w-52 rounded-xl border bg-surface-panel px-3 py-3 shadow-surface transition-colors',
+      'w-52 rounded-xl border bg-surface-panel p-3 shadow-surface transition-colors',
       selected ? 'border-accent ring-2 ring-accent/20' : 'border-edge',
       diffState === 'added' && 'border-success ring-2 ring-success/15',
       diffState === 'changed' && 'border-accent ring-2 ring-accent/15',
@@ -811,22 +812,6 @@ function semanticEdgeKey(edge: WorkflowGraph['edges'][number]): string {
 
 function normalizeName(value: string): string { return value.toLowerCase().replace(/[^a-z0-9_-]+/g, '_').replace(/^_+/, ''); }
 function nodeKindLabel(kind: WorkflowNodeKind): string { return ({ input: 'User input', agent: 'AI step', decision: 'Decision', merge: 'Combine', output: 'User result' })[kind]; }
-
-export function definitionToManifest(definition: WorkflowDefinition): WorkflowDefinitionManifest {
-  return {
-    title: definition.title,
-    description: definition.description,
-    version: definition.version,
-    inputSchema: definition.inputSchema,
-    outputSchema: definition.outputSchema,
-    defaults: definition.defaults,
-    tags: definition.metadata.tags,
-    whenToUse: definition.metadata.whenToUse,
-    estimatedAgents: definition.metadata.estimatedAgents,
-    permissions: definition.permissions,
-    resources: definition.resources,
-  };
-}
 
 function studioCopy(language: StoredLanguage) {
   const zh = language === 'zh';

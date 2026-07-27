@@ -5,8 +5,8 @@ import { uiPatchReducer } from '@/lib/settings-form-draft';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useThemeStore } from '@/stores/theme-store';
-import { apiUrl } from '@/lib/url';
 
+import { buildExtensionAssetUrl } from './extension-asset-url';
 import { ExtensionPermissionDialog } from './extension-permission-dialog';
 import { confirmExtensionUiGrant, resolveExtensionUiGrant } from './extension-authoritative-grants';
 import { useExtensionRouter } from './extension-provider';
@@ -41,19 +41,6 @@ export type ExtensionIframeHostProps = {
   minHeight?: number;
   initialData?: unknown;
 };
-
-function encodeAssetPath(entrypoint: string): string {
-  return entrypoint
-    .split('/')
-    .filter(Boolean)
-    .map((seg) => encodeURIComponent(seg))
-    .join('/');
-}
-
-export function buildExtensionAssetUrl(extensionId: string, entrypoint: string): string {
-  const rel = encodeAssetPath(entrypoint);
-  return apiUrl(`/api/extensions/${encodeURIComponent(extensionId)}/assets/${rel}`);
-}
 
 export function ExtensionIframeHost({
   extensionId,

@@ -7,12 +7,14 @@ import type { StoredLanguage } from '@/lib/storage';
 
 import type { WorkflowDefinition } from './workflow-api';
 import {
-  summarizeWorkflowInput,
   WorkflowInputEditor,
   type WorkflowInputEditorAiAssistConfig,
+} from './workflow-input-editor';
+import {
+  summarizeWorkflowInput,
   type WorkflowInputEditorValidity,
   type WorkflowInputEditorValue,
-} from './workflow-input-editor';
+} from './workflow-input-editor.utils';
 import { resolveWorkflowLocalizedCopy } from './workflow-meta-locale';
 import { interpolate } from './workflow-page.utils';
 

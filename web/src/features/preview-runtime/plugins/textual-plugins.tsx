@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef } from 'react';
 
 import { MarkdownView } from '@/components/markdown/markdown-view';
-import type { PreviewPlugin, PreviewRuntimeRenderProps } from '@/features/preview-runtime/preview-types';
+import type { PreviewRuntimeRenderProps } from '@/features/preview-runtime/preview-types';
 
 const loadMarkdownSplit = () => import('@/components/markdown/markdown-split');
 const loadHtmlWorkspaceEditor = () => import('@/components/html/html-workspace-editor');
@@ -152,30 +152,18 @@ function renderTextLike(props: PreviewRuntimeRenderProps, mode: 'text' | 'markdo
   );
 }
 
-export const textPlugin: PreviewPlugin = {
-  id: 'text',
-  readMode: 'text',
-  capabilities: ['download'],
-  render: (props) => renderTextLike(props, 'text'),
-};
+export function TextPreviewPluginView(props: PreviewRuntimeRenderProps) {
+  return renderTextLike(props, 'text');
+}
 
-export const markdownPlugin: PreviewPlugin = {
-  id: 'markdown',
-  readMode: 'text',
-  capabilities: ['download', 'edit'],
-  render: (props) => renderTextLike(props, 'markdown'),
-};
+export function MarkdownPreviewPluginView(props: PreviewRuntimeRenderProps) {
+  return renderTextLike(props, 'markdown');
+}
 
-export const codePlugin: PreviewPlugin = {
-  id: 'code',
-  readMode: 'text',
-  capabilities: ['download'],
-  render: (props) => renderTextLike(props, 'code'),
-};
+export function CodePreviewPluginView(props: PreviewRuntimeRenderProps) {
+  return renderTextLike(props, 'code');
+}
 
-export const htmlPlugin: PreviewPlugin = {
-  id: 'html',
-  readMode: 'text',
-  capabilities: ['download', 'edit'],
-  render: (props) => renderTextLike(props, 'html'),
-};
+export function HtmlPreviewPluginView(props: PreviewRuntimeRenderProps) {
+  return renderTextLike(props, 'html');
+}

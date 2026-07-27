@@ -129,7 +129,7 @@ export const WorkflowBoard = memo(function WorkflowBoard({
     <div
       ref={boardScrollerRef}
       className={[
-        'min-h-0 h-full min-w-0 overflow-x-auto rounded-lg px-2 py-2',
+        'min-h-0 h-full min-w-0 overflow-x-auto rounded-lg p-2',
         isPanningBoard ? 'cursor-grabbing select-none' : 'cursor-grab',
       ].join(' ')}
       onPointerDown={handleBoardPointerDown}

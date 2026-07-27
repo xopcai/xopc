@@ -449,11 +449,23 @@ function hasAssistantTextAfter(content: MessageContent[], indexAfterSteps: numbe
   return false;
 }
 
-export function renderChunkedContent(
-  content: MessageContent[],
-  isUser: boolean,
-  isAssistantMessageStreaming: boolean,
-  toolLabels: { input: string; output: string; noOutput: string },
+export function ChunkedContent({
+  content,
+  isUser,
+  isAssistantMessageStreaming,
+  toolLabels,
+  stepLabels,
+  clusterLabels,
+  cardLabels,
+  imagePreviewLabel,
+  onImagePreview,
+  sessionKey,
+  workflowOptions,
+}: {
+  content: MessageContent[];
+  isUser: boolean;
+  isAssistantMessageStreaming: boolean;
+  toolLabels: { input: string; output: string; noOutput: string };
   stepLabels: {
     thoughts: string;
     thoughtsStreaming: string;
@@ -469,18 +481,18 @@ export function renderChunkedContent(
     openUrl: string;
     fetchUrl: string;
     unknownTool: string;
-  },
+  };
   clusterLabels: {
     done: StepsClusterDoneLabels;
     ing: StepsClusterIngLabels;
     join: StepsClusterJoinLabels;
-  },
-  cardLabels: ToolCardLabels,
-  imagePreviewLabel: string,
-  onImagePreview: ((block: ImageContent, index: number) => void) | undefined,
-  sessionKey: string | null | undefined,
-  workflowOptions: WorkflowRenderOptions,
-) {
+  };
+  cardLabels: ToolCardLabels;
+  imagePreviewLabel: string;
+  onImagePreview: ((block: ImageContent, index: number) => void) | undefined;
+  sessionKey: string | null | undefined;
+  workflowOptions: WorkflowRenderOptions;
+}) {
   const renderContent = isUser ? content : mergeConsecutiveTextBlocks(content);
   const nodes: ReactNode[] = [];
   const wfOpts = workflowOptions;
@@ -554,7 +566,7 @@ export function renderChunkedContent(
       i++;
     }
   }
-  return nodes;
+  return <>{nodes}</>;
 }
 
 /**

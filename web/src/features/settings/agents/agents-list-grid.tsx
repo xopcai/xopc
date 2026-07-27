@@ -217,7 +217,7 @@ export function AgentsListGrid(props: {
                 </div>
 
                 <div className="mt-5 min-h-[6.25rem] text-left">
-                  <div className="rounded-lg bg-surface-base px-3 py-3">
+                  <div className="rounded-lg bg-surface-base p-3">
                     <p
                       className={cn(
                         'line-clamp-2 text-sm leading-5',

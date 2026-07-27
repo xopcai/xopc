@@ -120,7 +120,7 @@ function DefinitionNodeCard({ data, selected }: NodeProps<DefinitionFlowNode>) {
   return (
     <div
       className={cn(
-        'w-48 rounded-xl border bg-surface-panel px-3 py-3 shadow-surface transition-colors',
+        'w-48 rounded-xl border bg-surface-panel p-3 shadow-surface transition-colors',
         selected ? 'border-accent ring-2 ring-accent/20' : 'border-edge',
       )}
     >

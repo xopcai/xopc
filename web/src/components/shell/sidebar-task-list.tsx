@@ -119,7 +119,7 @@ function rowShellClass(isActive: boolean): string {
 
 function SidebarSessionSkeletonRow({ indented = false }: { indented?: boolean }) {
   return (
-    <div className={cn('flex items-center gap-2 px-1.5 py-1.5', indented && 'pl-7')}>
+    <div className={cn('flex items-center gap-2 p-1.5', indented && 'pl-7')}>
       <Skeleton className="size-6 shrink-0 animate-none rounded-lg" />
       <div className="min-w-0 flex-1">
         <Skeleton className="h-3 w-4/5 animate-none" />
@@ -132,7 +132,7 @@ function SidebarSessionSkeletonRow({ indented = false }: { indented?: boolean })
 /** Mirrors the sidebar's section hierarchy so first load has a stable footprint. */
 function SidebarTaskListSkeleton() {
   return (
-    <div className="flex flex-col gap-3 px-4 py-4" aria-busy="true">
+    <div className="flex flex-col gap-3 p-4" aria-busy="true">
       <div>
         <Skeleton className="mb-1.5 h-2.5 w-14 animate-none" />
         <SidebarSessionSkeletonRow />

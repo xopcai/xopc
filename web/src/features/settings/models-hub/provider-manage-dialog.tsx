@@ -392,7 +392,7 @@ function ManageBuiltinProvider({
         ) : null}
 
         {supportsOAuth ? (
-          <div className="flex flex-col gap-2 rounded-lg border border-edge-subtle bg-surface-panel/60 px-3 py-3">
+          <div className="flex flex-col gap-2 rounded-lg border border-edge-subtle bg-surface-panel/60 p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-sm font-medium text-fg">{providerLabels.oauth}</p>

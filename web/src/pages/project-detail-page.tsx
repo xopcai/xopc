@@ -17,7 +17,8 @@ import { FileTree } from '@/features/file-tree/file-tree';
 import type { FileTreeAction, TreeEntry } from '@/features/file-tree/file-tree-types';
 import { DirectoryPickerPathField } from '@/features/fs/directory-picker-path-field';
 import { fetchGatewayConfigSwrResponse } from '@/features/gateway/gateway-config-swr';
-import { GoalCreateDialog, normalizeChecklist, type CreateGoalDraft, type GoalCreateOptions } from '@/features/goals/goal-create-dialog';
+import { normalizeChecklist } from '@/features/goals/goal-create-draft';
+import { GoalCreateDialog, type CreateGoalDraft, type GoalCreateOptions } from '@/features/goals/goal-create-dialog';
 import { NotesWorkbench } from '@/features/notes/notes-workbench';
 import {
   archiveProject,
@@ -72,6 +73,7 @@ import { WorkspaceFilePreviewPanel } from '@/features/workspace/workspace-file-p
 import { WorkspaceOpenLocationMenu } from '@/features/workspace/workspace-open-location-menu';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+import { formatMediumDateTime } from '@/lib/date-formatters';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
@@ -146,7 +148,7 @@ function formatDate(value?: string | number, fallback = ''): string {
   if (!value) return fallback;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
+  return formatMediumDateTime(date);
 }
 
 function statusTone(status: string): string {
@@ -436,7 +438,7 @@ function ProjectSwitcher({
       key={project.id}
       type="button"
       className={cn(
-        'grid w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2 rounded-md px-2 py-2 text-left hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+        'grid w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2 rounded-md p-2 text-left hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
         current && 'bg-accent-soft/55 hover:bg-accent-soft/70',
       )}
       onClick={() => {
@@ -507,7 +509,7 @@ function ProjectSwitcher({
                 {pm.projectSwitcher.recent}
               </div>
               {loadError ? (
-                <div className="px-2 py-2 text-xs text-red-600 dark:text-red-400">{loadError}</div>
+                <div className="p-2 text-xs text-red-600 dark:text-red-400">{loadError}</div>
               ) : null}
               {loading && filteredProjects.length === 0 ? (
                 <div className="px-2 py-3 text-center text-xs text-fg-muted">{pm.projectSwitcher.loading}</div>
@@ -577,7 +579,6 @@ function ProjectSwitcher({
                     value={name}
                     onChange={(event) => setName(event.target.value)}
                     placeholder="xopc"
-                    autoFocus
                   />
                 </label>
                 <div className="grid gap-1.5 text-sm">
@@ -1450,12 +1451,12 @@ export function ProjectDetailPage() {
   }, [projectId, tab]);
 
   if (loading) {
-    return <main className="w-full flex-1 px-3 py-3 text-sm text-fg-muted sm:px-5 sm:py-4 xl:px-6">{pm.loading}</main>;
+    return <main className="w-full flex-1 p-3 text-sm text-fg-muted sm:px-5 sm:py-4 xl:px-6">{pm.loading}</main>;
   }
 
   if (!project) {
     return (
-      <main className="w-full flex-1 px-3 py-3 sm:px-5 sm:py-4 xl:px-6">
+      <main className="w-full flex-1 p-3 sm:px-5 sm:py-4 xl:px-6">
         <Link to="/projects" className="inline-flex items-center gap-2 text-sm text-accent-fg hover:underline">
           <ArrowLeft className="size-4" aria-hidden />
           {pm.backToProjects}
@@ -1520,7 +1521,7 @@ export function ProjectDetailPage() {
   }
 
   return (
-    <main className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden px-3 py-3 sm:px-5 sm:py-4 xl:px-6">
+    <main className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden p-3 sm:px-5 sm:py-4 xl:px-6">
       <div className="flex shrink-0 items-start justify-between gap-3">
         <PageTabs
           items={surfaceTabItems}
@@ -2056,7 +2057,6 @@ export function ProjectDetailPage() {
                           onChange={(event) => setProjectFileSearchQuery(event.target.value)}
                           placeholder={pm.files.searchPlaceholder}
                           aria-label={pm.files.searchPlaceholder}
-                          autoFocus
                           className="min-w-0 flex-1 bg-transparent text-xs text-fg outline-none placeholder:text-fg-subtle"
                         />
                         <button
@@ -2448,7 +2448,7 @@ export function ProjectDetailPage() {
           <section className="grid gap-4 rounded-lg bg-surface-panel p-4 shadow-surface">
             <div className="grid gap-2 text-sm">
               <span className="font-medium text-fg-muted">{pm.settings.workspaceRoot}</span>
-              <div className="grid gap-3 rounded-md border border-edge bg-surface-base px-3 py-3">
+              <div className="grid gap-3 rounded-md border border-edge bg-surface-base p-3">
                 <div className="flex min-w-0 flex-col gap-3 md:flex-row md:items-start md:justify-between">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -2496,7 +2496,7 @@ export function ProjectDetailPage() {
               <p className="mt-1 text-sm leading-6 text-fg-muted">{pm.settings.managementHint}</p>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
-              <div className="grid gap-3 rounded-md border border-edge bg-surface-base px-3 py-3">
+              <div className="grid gap-3 rounded-md border border-edge bg-surface-base p-3">
                 <div className="min-w-0">
                   <h3 className="text-sm font-medium text-fg">{projectIsPinned ? pm.settings.pinnedTitle : pm.settings.pinTitle}</h3>
                   <p className="mt-1 text-xs leading-5 text-fg-subtle">{pm.settings.pinHint}</p>
@@ -2506,7 +2506,7 @@ export function ProjectDetailPage() {
                   {projectIsPinned ? pm.settings.unpinProject : pm.settings.pinProject}
                 </Button>
               </div>
-              <div className="grid gap-3 rounded-md border border-edge bg-surface-base px-3 py-3">
+              <div className="grid gap-3 rounded-md border border-edge bg-surface-base p-3">
                 <div className="min-w-0">
                   <h3 className="text-sm font-medium text-fg">{projectIsArchived ? pm.settings.restoreTitle : pm.settings.archiveTitle}</h3>
                   <p className="mt-1 text-xs leading-5 text-fg-subtle">{projectIsArchived ? pm.settings.restoreHint : pm.settings.archiveHint}</p>

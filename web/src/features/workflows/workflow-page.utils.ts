@@ -1,4 +1,5 @@
 import type { WorkflowDefinition, WorkflowResultEnvelope, WorkflowRunStatus, WorkflowRunSummary, WorkflowRunView } from './workflow-api';
+import { formatNumericDateTime } from '@/lib/date-formatters';
 import { collectWorkflowSearchText } from './workflow-meta-locale';
 import {
   ACTIVE_RUN_STATUSES,
@@ -15,12 +16,7 @@ export function interpolate(template: string, params: Record<string, string | nu
 
 export function formatTime(ms: number | undefined, localeTag: string): string {
   if (!ms) return '—';
-  return new Intl.DateTimeFormat(localeTag, {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(ms));
+  return formatNumericDateTime(ms, localeTag);
 }
 
 export function formatDuration(ms: number | undefined): string {

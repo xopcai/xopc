@@ -35,7 +35,7 @@ function MethodCard({
       type="button"
       onClick={onOpen}
       className={cn(
-        'group flex w-full flex-col rounded-2xl bg-surface-base px-4 py-4 text-left transition-colors',
+        'group flex w-full flex-col rounded-2xl bg-surface-base p-4 text-left transition-colors',
         'hover:bg-surface-hover/40',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
       )}

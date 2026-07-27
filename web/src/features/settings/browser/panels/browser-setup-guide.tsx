@@ -32,7 +32,7 @@ function MethodCard({
       onClick={onSelect}
       aria-label={`${title} — ${selectLabel}`}
       className={cn(
-        'group flex w-full flex-col rounded-xl bg-surface-panel/80 px-3 py-3 text-left shadow-surface transition-colors',
+        'group flex w-full flex-col rounded-xl bg-surface-panel/80 p-3 text-left shadow-surface transition-colors',
         'hover:bg-surface-hover/40',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
       )}
@@ -108,7 +108,7 @@ export function BrowserSetupGuide({
   );
 
   return (
-    <div className="flex flex-col gap-3 rounded-xl bg-surface-base px-4 py-4">
+    <div className="flex flex-col gap-3 rounded-xl bg-surface-base p-4">
       <div>
         <h2 className="text-sm font-semibold text-fg">{m.browserSetupTitle}</h2>
         <p className="mt-1 text-xs leading-relaxed text-fg-muted">{m.browserSetupSubtitle}</p>

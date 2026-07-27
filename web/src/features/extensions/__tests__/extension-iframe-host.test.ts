@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 
-import { buildExtensionAssetUrl } from '../extension-iframe-host';
+import { buildExtensionAssetUrl } from '../extension-asset-url';
 
 describe('buildExtensionAssetUrl', () => {
   it('never exposes gateway credentials in the iframe URL', () => {

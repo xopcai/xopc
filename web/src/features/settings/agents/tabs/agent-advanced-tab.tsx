@@ -277,7 +277,7 @@ export function AgentSharedSettingsTab({
               );
             })
           ) : (
-            <div className="rounded-lg bg-surface-panel/60 px-3 py-3 text-sm text-fg-muted shadow-surface">
+            <div className="rounded-lg bg-surface-panel/60 p-3 text-sm text-fg-muted shadow-surface">
               {a.capabilityPresetsEmptyAdditional}
             </div>
           )}

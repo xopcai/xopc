@@ -6,24 +6,9 @@ import { SecretInput } from '@/components/ui/secret-input';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { secretInputLabelsFromToken } from '@/lib/secret-input-labels';
-import { apiUrl } from '@/lib/url';
 import { useLocaleStore } from '@/stores/locale-store';
 
-export type GatewayCredentialVerification = 'valid' | 'rejected' | 'unreachable' | 'failed';
-
-/** Verify a candidate before storing it so invalid credentials do not briefly enter app state. */
-export async function verifyGatewayCredential(credential: string): Promise<GatewayCredentialVerification> {
-  try {
-    const response = await fetch(apiUrl('/api/config'), {
-      headers: { Authorization: `Bearer ${credential}` },
-    });
-    if (response.ok) return 'valid';
-    if (response.status === 401 || response.status === 403) return 'rejected';
-    return 'failed';
-  } catch {
-    return 'unreachable';
-  }
-}
+import { verifyGatewayCredential } from './gateway-credential-verification';
 
 export type GatewayTokenFormProps = {
   baseUrl: string;

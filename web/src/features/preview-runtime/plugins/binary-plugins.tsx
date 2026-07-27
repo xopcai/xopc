@@ -11,7 +11,7 @@ import {
 import { useBinaryPreviewInContainer } from '@/features/file-preview/use-binary-preview-in-container';
 import { useBlobObjectUrl } from '@/features/file-preview/use-blob-object-url';
 import { messages } from '@/i18n/messages';
-import type { PreviewPlugin, PreviewRuntimeRenderProps } from '@/features/preview-runtime/preview-types';
+import type { PreviewRuntimeRenderProps } from '@/features/preview-runtime/preview-types';
 
 function AlternativesBar({ props, message }: { props: PreviewRuntimeRenderProps; message: string }) {
   const m = messages(props.language);
@@ -39,13 +39,6 @@ function openElsewhereMessage(props: PreviewRuntimeRenderProps): string {
     ? m.workspace.openElsewhereHint
     : m.chat.attachmentPreviewOpenElsewhereHint;
 }
-
-export const imagePlugin: PreviewPlugin = {
-  id: 'image',
-  readMode: 'binary',
-  capabilities: ['download', 'zoom', 'rotate'],
-  render: (props) => <InteractiveImagePreview {...props} />,
-};
 
 export function InteractiveImagePreview(props: PreviewRuntimeRenderProps) {
   const imageBlob = useMemo(() => {
@@ -191,27 +184,6 @@ function BinaryContainerPlugin(props: PreviewRuntimeRenderProps & { kind: 'pdf' 
   );
 }
 
-export const pdfPlugin: PreviewPlugin = {
-  id: 'pdf',
-  readMode: 'binary',
-  capabilities: ['download', 'zoom', 'rotate', 'pageNavigation', 'print'],
-  render: (props) => <PdfPreviewPluginView {...props} />,
-};
-
-export const docxPlugin: PreviewPlugin = {
-  id: 'docx',
-  readMode: 'binary',
-  capabilities: ['download'],
-  render: (props) => <DocxPreviewPluginView {...props} />,
-};
-
-export const spreadsheetPlugin: PreviewPlugin = {
-  id: 'spreadsheet',
-  readMode: 'binary',
-  capabilities: ['download'],
-  render: (props) => <SpreadsheetPreviewPluginView {...props} />,
-};
-
 export function PptxPreviewPluginView(props: PreviewRuntimeRenderProps) {
     const m = messages(props.language);
     const raw = props.extractedText || m.chat.attachmentPreviewNoText;
@@ -237,10 +209,3 @@ export function PptxPreviewPluginView(props: PreviewRuntimeRenderProps) {
       </div>
     );
 }
-
-export const pptxPlugin: PreviewPlugin = {
-  id: 'pptx',
-  readMode: 'binary',
-  capabilities: ['download'],
-  render: (props) => <PptxPreviewPluginView {...props} />,
-};

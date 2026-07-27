@@ -75,7 +75,7 @@ export function NoteHistoryPanel({ noteId, activeTimestamp, onSelect, onClose, o
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex shrink-0 items-center justify-between border-b border-edge px-4 py-3">
         <div className="flex items-center gap-2 text-sm font-medium text-fg">
-          <History className="h-4 w-4" aria-hidden />
+          <History className="size-4" aria-hidden />
           {n.history}
         </div>
         <button
@@ -83,7 +83,7 @@ export function NoteHistoryPanel({ noteId, activeTimestamp, onSelect, onClose, o
           onClick={onClose}
           className="rounded-lg p-1 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
         >
-          <X className="h-4 w-4" aria-hidden />
+          <X className="size-4" aria-hidden />
         </button>
       </div>
 
@@ -110,7 +110,7 @@ export function NoteHistoryPanel({ noteId, activeTimestamp, onSelect, onClose, o
                     )}
                   >
                     <div className="flex items-center gap-2">
-                      <Icon className="h-3.5 w-3.5 shrink-0 text-fg-muted" aria-hidden />
+                      <Icon className="size-3.5 shrink-0 text-fg-muted" aria-hidden />
                       <span className="text-xs font-medium text-fg">
                         {triggerLabel(entry.trigger, n)}
                       </span>

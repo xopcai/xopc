@@ -4,6 +4,16 @@ import { type CSSProperties, type PointerEvent, useCallback, useEffect, useLayou
 import { desktopPetActionForPhase } from "@/features/desktop-pet/desktop-pet-narrative";
 import { DesktopPetSprite } from "@/features/desktop-pet/desktop-pet-sprite";
 import {
+  activityCompletionText,
+  activityDetailText,
+  activityHealthText,
+  activityReassuranceText,
+  hasStaleSignal,
+  IDLE_COMPANION_COOLDOWN_MS,
+  isLongRunning,
+  shouldShowIdleTip,
+} from "@/features/desktop-pet/desktop-pet-display";
+import {
   type DesktopPetActivity as Activity,
   type DesktopPetDismissal,
   isDesktopPetActivityDismissed,
@@ -14,21 +24,6 @@ import { desktopPetWindowTarget } from "@/features/desktop-pet/desktop-pet-windo
 import { messages } from "@/i18n/messages";
 import { useLocaleStore } from "@/stores/locale-store";
 import type { DesktopPetAction, DesktopPetDefinition, DesktopPetFeedbackLevel, DesktopPetState } from "@/types/electron";
-
-const LONG_RUNNING_MS = 90_000;
-const STALE_SIGNAL_MS = 30_000;
-const IDLE_COMPANION_DELAY_MS = 20 * 60_000;
-const IDLE_COMPANION_TTL_MS = 45_000;
-const IDLE_COMPANION_COOLDOWN_MS = 45 * 60_000;
-const COMPLETION_SUMMARY_MAX_CHARS = 58;
-
-function isLongRunning(item: Activity, now: number): boolean {
-  return item.state === "running" && now - (item.startedAt ?? item.timestamp) >= LONG_RUNNING_MS;
-}
-
-function hasStaleSignal(item: Activity, now: number): boolean {
-  return item.state === "running" && now - item.timestamp >= STALE_SIGNAL_MS;
-}
 
 function activityVisibleForFeedback(item: Activity, feedbackLevel: DesktopPetFeedbackLevel, now: number): boolean {
   if (hasStaleSignal(item, now)) return true;
@@ -43,36 +38,6 @@ function activityAnimation(item: Activity | undefined): DesktopPetAction {
   if (item.state === "error") return "error";
   if (item.state === "success") return "success";
   return item.animation ?? desktopPetActionForPhase(item.phase);
-}
-
-function detailSuffix(template: string, detail: string): string {
-  return template.replace(/\{\{detail\}\}/g, detail);
-}
-
-function compactLine(value: string): string {
-  return value.replace(/\s+/g, ' ').trim();
-}
-
-function truncateSummary(value: string): string {
-  const text = compactLine(value);
-  return text.length > COMPLETION_SUMMARY_MAX_CHARS ? `${text.slice(0, COMPLETION_SUMMARY_MAX_CHARS - 1)}…` : text;
-}
-
-export function activityDetailText(item: Activity, now: number, targetSuffix: string): string {
-  if (item.progress) {
-    const progress = `${item.progress.completed}/${item.progress.total}`;
-    return item.action.includes(progress) ? "" : ` · ${progress}`;
-  }
-  if (item.detail && !item.action.includes(item.detail)) return detailSuffix(targetSuffix, item.detail);
-  if (item.state === "running") return ` · ${Math.max(1, Math.floor((now - item.timestamp) / 1000))}s`;
-  return "";
-}
-
-export function activityCompletionText(item: Activity, template: string): string | undefined {
-  if (item.state !== "success") return undefined;
-  const summary = item.publicSummary;
-  if (!summary) return undefined;
-  return template.replace(/\{\{summary\}\}/g, truncateSummary(summary));
 }
 
 function stablePhrase(values: string[] | undefined, item: Activity): string | undefined {
@@ -99,24 +64,6 @@ function joinReaction(reaction: string | undefined, fact: string, hasSpecificFac
   return hasSpecificFact ? `${reaction} · ${fact}` : reaction;
 }
 
-export function activityHealthText(
-  item: Activity,
-  now: number,
-  labels: { longRunning: string; stale: string },
-): string | undefined {
-  if (hasStaleSignal(item, now)) return labels.stale;
-  if (isLongRunning(item, now)) return labels.longRunning;
-  return undefined;
-}
-
-export function activityReassuranceText(
-  item: Activity,
-  labels: Record<NonNullable<NonNullable<Activity["feedback"]>["reassurance"]>, string>,
-): string | undefined {
-  const reassurance = item.feedback?.reassurance;
-  return reassurance ? labels[reassurance] : undefined;
-}
-
 function activityCtaText(item: Activity, labels: { open: string; needsInput: string; reviewIssue: string }): string | undefined {
   const nextAction = item.feedback?.nextAction?.type;
   if (nextAction === "confirm") return labels.needsInput;
@@ -126,31 +73,6 @@ function activityCtaText(item: Activity, labels: { open: string; needsInput: str
   if (item.state === "error") return labels.reviewIssue;
   if (item.state === "success") return labels.open;
   return undefined;
-}
-
-export function shouldShowIdleTip(params: {
-  bubbleEnabled: boolean;
-  feedbackLevel: DesktopPetFeedbackLevel;
-  collapsed: boolean;
-  queuedCount: number;
-  activeCount: number;
-  now: number;
-  lastActivityAt: number;
-  dismissedUntil: number;
-}): boolean {
-  const idleElapsed = params.now - params.lastActivityAt;
-  const idleCycleElapsed = idleElapsed >= IDLE_COMPANION_DELAY_MS
-    ? (idleElapsed - IDLE_COMPANION_DELAY_MS) % IDLE_COMPANION_COOLDOWN_MS
-    : Number.POSITIVE_INFINITY;
-  return (
-    params.bubbleEnabled &&
-    params.feedbackLevel !== "quiet" &&
-    !params.collapsed &&
-    params.queuedCount === 0 &&
-    params.activeCount === 0 &&
-    idleCycleElapsed <= IDLE_COMPANION_TTL_MS &&
-    params.now >= params.dismissedUntil
-  );
 }
 
 function fallbackState(): DesktopPetState {
@@ -288,7 +210,7 @@ export function DesktopPetRoot() {
       const cta = activityCtaText(item, { open: t.viewSession, needsInput: t.petCtaNeedsInput, reviewIssue: t.petCtaReviewIssue });
       return <div key={item.sessionKey} className={`desktop-pet-session desktop-pet-session--${item.state}${health ? " desktop-pet-session--health" : ""}`}><button type="button" className="desktop-pet-session-open" onClick={() => open(item)}><span className="desktop-pet-session-dot" /><span className="desktop-pet-session-main"><strong>{item.sessionLabel}</strong><span>{displayText}{completion || health ? "" : activityDetailText(item, now, t.tipTargetSuffix)}</span></span>{cta ? <span className="desktop-pet-session-cta">{cta}</span> : null}</button><button type="button" className="desktop-pet-session-close" aria-label={t.dismissSession} onClick={() => { void window.electronAPI?.pet?.acknowledgeEvent(item.sessionKey, item.runId); setDismissals((current) => ({ ...current, [item.sessionKey]: { runId: item.runId, state: item.state } })); }}><X size={12} /></button></div>;
     })}</div> : null}
-    {idleTipVisible ? <div ref={queueRef} className="desktop-pet-bubble desktop-pet-queue desktop-pet-idle-tip"><div className="desktop-pet-session desktop-pet-session--idle"><button type="button" className="desktop-pet-session-open" onClick={() => open()}><span className="desktop-pet-session-dot" /><span className="desktop-pet-session-main"><strong>{t.idleTipTitle}</strong><span>{stablePhrase(selectedPet.persona?.phrases?.greeting ?? personaPhrases.greeting, { sessionKey: "idle", runId: "idle", sessionLabel: "", sequence: 0, timestamp: lastActivityAt, state: "running", phase: "waiting", action: t.idleTipBody }) ?? t.idleTipBody}</span></span></button><button type="button" className="desktop-pet-session-close" aria-label={t.dismissSession} onClick={() => setIdleDismissedUntil(Date.now() + IDLE_COMPANION_COOLDOWN_MS)}><X size={12} /></button></div></div> : null}
+    {idleTipVisible ? <div ref={queueRef} className="desktop-pet-bubble desktop-pet-queue desktop-pet-idle-tip"><div className="desktop-pet-session desktop-pet-session--idle"><button type="button" className="desktop-pet-session-open" onClick={() => open()}><span className="desktop-pet-session-dot" /><span className="desktop-pet-session-main"><strong>{t.idleTipTitle}</strong><span>{stablePhrase(selectedPet.persona?.phrases?.greeting ?? personaPhrases.greeting, { sessionKey: "idle", runId: "idle", sessionLabel: "", sequence: 0, timestamp: lastActivityAt, state: "running", phase: "waiting", action: t.idleTipBody }) ?? t.idleTipBody}</span></span></button><button type="button" className="desktop-pet-session-close" aria-label={t.dismissSession} onClick={() => setIdleDismissedUntil(now + IDLE_COMPANION_COOLDOWN_MS)}><X size={12} /></button></div></div> : null}
     <div ref={stageRef} className="desktop-pet-stage"><button type="button" className="desktop-pet-menu-button" onClick={() => void toggle()} aria-label={t.menu}>{menuCount > 0 ? <span className="desktop-pet-tip-count">{Math.min(99, menuCount)}</span> : <ChevronDown className="desktop-pet-menu-chevron size-4" />}</button><button type="button" className="desktop-pet-hit-area" onClick={handlePetClick} onPointerDown={beginDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag} title={t.openApp}><DesktopPetSprite pet={selectedPet} action={action} displayHeight={Math.round(112 * sizeScale)} /></button></div>
   </div>;
 }

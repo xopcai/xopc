@@ -32,7 +32,7 @@ export function SshCliSection({ embedded = false }: { embedded?: boolean }) {
       </pre>
       <div className="mt-2">
         <Button type="button" variant="ghost" onClick={() => void onCopy()}>
-          <Copy className="mr-1 h-4 w-4" />
+          <Copy className="mr-1 size-4" />
           {copied ? t.copied : t.copy}
         </Button>
       </div>

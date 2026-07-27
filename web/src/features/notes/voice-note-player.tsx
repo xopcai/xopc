@@ -66,8 +66,8 @@ export function VoiceNotePlayer({ noteId, attachment, transcript, className }: V
   return (
     <div className={cn('flex flex-col gap-3 rounded-xl border border-edge bg-surface-panel p-4', className)}>
       <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent/10">
-          <Mic className="h-5 w-5 text-accent" />
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent/10">
+          <Mic className="size-5 text-accent" />
         </div>
 
         <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -76,7 +76,7 @@ export function VoiceNotePlayer({ noteId, attachment, transcript, className }: V
               type="button"
               onClick={handleToggle}
               className={cn(
-                'flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors',
+                'flex size-8 shrink-0 items-center justify-center rounded-full transition-colors',
                 isPlaying
                   ? 'bg-accent text-white'
                   : 'bg-accent/10 text-accent hover:bg-accent/20',
@@ -84,11 +84,11 @@ export function VoiceNotePlayer({ noteId, attachment, transcript, className }: V
               aria-label={isPlaying ? 'Pause' : 'Play'}
             >
               {isLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="size-4 animate-spin" />
               ) : isPlaying ? (
-                <Pause className="h-4 w-4" />
+                <Pause className="size-4" />
               ) : (
-                <Play className="h-4 w-4 ml-0.5" />
+                <Play className="size-4 ml-0.5" />
               )}
             </button>
 

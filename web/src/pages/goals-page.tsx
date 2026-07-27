@@ -27,7 +27,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { fetchConfiguredModelsCached } from '@/features/chat/api/registry-api';
 import type { WireAttachment } from '@/features/chat/composer/composer.types';
 import { fetchGatewayConfigSwrResponse } from '@/features/gateway/gateway-config-swr';
-import { GoalCreateDialog, normalizeChecklist, type CreateGoalDraft, type GoalCreateOptions, type GoalsPageMessages } from '@/features/goals/goal-create-dialog';
+import { normalizeChecklist } from '@/features/goals/goal-create-draft';
+import { GoalCreateDialog, type CreateGoalDraft, type GoalCreateOptions, type GoalsPageMessages } from '@/features/goals/goal-create-dialog';
 import {
   actionableCounts,
   compareOperationalGoals,
@@ -48,6 +49,10 @@ import { fetchGatewayAgents } from '@/features/settings/agents-admin-api';
 import { normalizeGoalsConfigFromConfig } from '@/features/settings/goals-config-api';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+import {
+  formatMediumDateTime,
+  formatRelativeTime as formatIntlRelativeTime,
+} from '@/lib/date-formatters';
 import { fetchJson } from '@/lib/fetch';
 import { interaction } from '@/lib/interaction';
 import type { StoredLanguage } from '@/lib/storage';
@@ -65,20 +70,16 @@ function formatMessage(template: string, values: Record<string, string | number>
 }
 
 function formatDateTime(value: number, language: StoredLanguage): string {
-  return new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-US', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value));
+  return formatMediumDateTime(value, language);
 }
 
 function formatRelativeTime(value: number, language: StoredLanguage): string {
   const deltaSeconds = Math.round((value - Date.now()) / 1000);
   const absolute = Math.abs(deltaSeconds);
-  const formatter = new Intl.RelativeTimeFormat(language === 'zh' ? 'zh-CN' : 'en-US', { numeric: 'auto' });
-  if (absolute < 60) return formatter.format(deltaSeconds, 'second');
-  if (absolute < 3_600) return formatter.format(Math.round(deltaSeconds / 60), 'minute');
-  if (absolute < 86_400) return formatter.format(Math.round(deltaSeconds / 3_600), 'hour');
-  if (absolute < 2_592_000) return formatter.format(Math.round(deltaSeconds / 86_400), 'day');
+  if (absolute < 60) return formatIntlRelativeTime(deltaSeconds, 'second', language);
+  if (absolute < 3_600) return formatIntlRelativeTime(Math.round(deltaSeconds / 60), 'minute', language);
+  if (absolute < 86_400) return formatIntlRelativeTime(Math.round(deltaSeconds / 3_600), 'hour', language);
+  if (absolute < 2_592_000) return formatIntlRelativeTime(Math.round(deltaSeconds / 86_400), 'day', language);
   return formatDateTime(value, language);
 }
 

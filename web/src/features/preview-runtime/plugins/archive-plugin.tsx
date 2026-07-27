@@ -2,7 +2,7 @@ import JSZip from 'jszip';
 import { useEffect, useState } from 'react';
 
 import { PreviewOpenAlternativesBar } from '@/features/preview/preview-open-alternatives';
-import type { PreviewPlugin, PreviewRuntimeRenderProps } from '@/features/preview-runtime/preview-types';
+import type { PreviewRuntimeRenderProps } from '@/features/preview-runtime/preview-types';
 import { messages } from '@/i18n/messages';
 
 export function ArchivePreviewPluginView(props: PreviewRuntimeRenderProps) {
@@ -70,13 +70,6 @@ export function ArchivePreviewPluginView(props: PreviewRuntimeRenderProps) {
     </div>
   );
 }
-
-export const archivePlugin: PreviewPlugin = {
-  id: 'archive',
-  readMode: 'binary',
-  capabilities: ['download'],
-  render: (props) => <ArchivePreviewPluginView {...props} />,
-};
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;

@@ -87,7 +87,7 @@ export function NoteCard({ note, selected = false, onPress, onPin, onArchive, on
               className="shrink-0 rounded-md p-1 text-fg-muted opacity-0 transition-opacity group-hover:opacity-100 hover:bg-surface-panel focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               aria-label="Actions"
             >
-              <MoreVertical className="h-4 w-4" />
+              <MoreVertical className="size-4" />
             </button>
           </DropdownMenu.Trigger>
           <DropdownMenu.Portal>
@@ -101,14 +101,14 @@ export function NoteCard({ note, selected = false, onPress, onPin, onArchive, on
                 className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg outline-none hover:bg-surface-hover focus:bg-surface-hover"
                 onSelect={() => onPin(note.id, !note.pinned)}
               >
-                {note.pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+                {note.pinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
                 {note.pinned ? labels.unpin : labels.pin}
               </DropdownMenu.Item>
               <DropdownMenu.Item
                 className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg outline-none hover:bg-surface-hover focus:bg-surface-hover"
                 onSelect={() => onArchive(note.id)}
               >
-                <Archive className="h-4 w-4" />
+                <Archive className="size-4" />
                 {labels.archive}
               </DropdownMenu.Item>
               <DropdownMenu.Separator className="my-1 h-px bg-edge-subtle" />
@@ -116,7 +116,7 @@ export function NoteCard({ note, selected = false, onPress, onPin, onArchive, on
                 className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-500 outline-none hover:bg-surface-hover focus:bg-surface-hover"
                 onSelect={() => onDelete(note.id)}
               >
-                <Trash2 className="h-4 w-4" />
+                <Trash2 className="size-4" />
                 {labels.delete}
               </DropdownMenu.Item>
             </DropdownMenu.Content>
@@ -127,7 +127,7 @@ export function NoteCard({ note, selected = false, onPress, onPin, onArchive, on
       <div className="flex min-w-0 items-center gap-2">
         {note.pinned && (
           <span className="inline-flex items-center gap-1 rounded-md bg-accent/10 px-1.5 py-0.5 text-xs font-medium text-accent">
-            <Pin className="h-3 w-3" />
+            <Pin className="size-3" />
           </span>
         )}
         {note.tags?.slice(0, 2).map((tag) => (

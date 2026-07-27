@@ -327,7 +327,7 @@ export const ChatWelcomeSpotlight = memo(function ChatWelcomeSpotlight({
                     })
                   }
                   className={cn(
-                    'flex min-h-11 w-full items-start gap-2 rounded-lg border border-transparent px-2 py-2.5 text-left text-sm leading-snug text-fg',
+                    'flex min-h-11 w-full items-start gap-2 rounded-lg border border-transparent p-2.5 text-left text-sm leading-snug text-fg',
                     interaction.transition,
                     interaction.press,
                     interaction.focusRingPanel,

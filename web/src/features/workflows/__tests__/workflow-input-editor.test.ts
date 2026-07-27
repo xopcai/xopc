@@ -5,7 +5,7 @@ import {
   resolveWorkflowInputPayload,
   validateWorkflowInputEditorValue,
   type WorkflowInputEditorValue,
-} from '../workflow-input-editor';
+} from '../workflow-input-editor.utils';
 
 const schemaWorkflow: WorkflowDefinition = {
   id: 'schema-workflow',

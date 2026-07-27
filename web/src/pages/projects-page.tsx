@@ -26,6 +26,7 @@ import {
 } from '@/features/projects/api';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+import { formatMediumDate } from '@/lib/date-formatters';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 
@@ -35,7 +36,7 @@ function projectTime(value: string | number | undefined, fallback: string): stri
   if (value == null) return fallback;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return fallback;
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(date);
+  return formatMediumDate(date);
 }
 
 function sortLoadedProjects(projects: Project[]): Project[] {
@@ -273,7 +274,7 @@ export function ProjectsPage() {
               <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
                 <label className="grid gap-1.5 text-sm font-medium text-fg">
                   {t.projectName}
-                  <input className="h-10 rounded-lg border border-edge bg-surface-base px-3 font-normal outline-none focus:border-accent focus:ring-2 focus:ring-accent/20" value={name} onChange={(event) => setName(event.target.value)} autoFocus maxLength={160} />
+                  <input className="h-10 rounded-lg border border-edge bg-surface-base px-3 font-normal outline-none focus:border-accent focus:ring-2 focus:ring-accent/20" value={name} onChange={(event) => setName(event.target.value)} maxLength={160} />
                 </label>
                 <label className="grid gap-1.5 text-sm font-medium text-fg">
                   {management.descriptionLabel}
