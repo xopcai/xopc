@@ -15,7 +15,7 @@ import { ListSelectionCheckbox } from '../../components/ListSelectionCheckbox';
 import { SwipeableRow, type SwipeAction } from '../../components/SwipeableRow';
 import { LIST_DELAY_LONG_PRESS, LIST_DELETE_UNDO_MS } from '../../constants/list-interaction';
 import { TOAST_BOTTOM_LIFT_ABOVE_BAR, TOAST_DURATION_SHORT } from '../../constants/toast';
-import { dismissOrHome } from '../../lib/navigation';
+import { dismissOrHome, noteDetailRoute } from '../../lib/navigation';
 import { useFlatListEndReached } from '../../lib/use-flat-list-end-reached';
 import { useDelayedDelete } from '../../hooks/use-delayed-delete';
 import { useListSelection } from '../../hooks/use-list-selection';
@@ -221,7 +221,7 @@ export function InboxScreen() {
       toggleSelected(item.id);
       return;
     }
-    router.push(`/items/${item.id}`);
+    router.push(noteDetailRoute(item.id));
   }, [router, selectionMode, toggleSelected]);
 
   const handleItemLongPress = useCallback((item: NoteIndexEntry) => {
