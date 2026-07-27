@@ -48,6 +48,6 @@ export default defineConfig({
   minify: 'dce-only',
   deps: {
     neverBundle: ['@vscode/ripgrep', 'silk-wasm', 'playwright-core'],
-    skipNodeModulesBundle: true,
+    alwaysBundle: ['@xopcai/gateway-contract'],
   },
 });
