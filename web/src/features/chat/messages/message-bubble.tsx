@@ -1,5 +1,6 @@
 import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, ChevronUp, CircleHelp, Copy, FileCode2, FileText, ListTodo, Pencil, RefreshCw, SquarePen, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react';
+import * as Popover from '@radix-ui/react-popover';
+import { Check, ChevronDown, ChevronUp, CircleHelp, Copy, FileCode2, FileText, ListTodo, MoreHorizontal, Pencil, RefreshCw, SquarePen, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react';
 
 import type {
   ImageContent,
@@ -7,24 +8,12 @@ import type {
   MessageAttachment,
   ProgressState,
   ReasoningLevel,
-  ToolUseContent,
 } from '@/features/chat/messages/messages.types';
-import { collectAssistantStepBlocks } from '@/features/chat/messages/assistant-step-blocks';
 import { AttachmentPreviewDialog } from '@/features/chat/attachments/attachment-preview-dialog';
 import { AttachmentRenderer } from '@/features/chat/attachments/attachment-renderer';
-import {
-  extractSearchSources,
-  SearchSourceList,
-} from '@/features/chat/tool-results/search-source-list';
 import { dispatchFillChatComposer } from '@/features/chat/composer/fill-composer-dispatch';
 import { extractUserMessagePlainText } from '@/features/chat/messages/user-message-plain-text';
-import { ToolResultFileLinks } from '@/features/chat/tool-results/tool-result-file-links';
-import {
-  collectAssistantWorkspaceOutputPaths,
-  filterAssistantAttachmentsDedupedAgainstWorkspacePaths,
-  imageBlockToMessageAttachment,
-  imageContentBlocksToAttachments,
-} from '@/features/chat/messages/assistant-message-artifacts';
+import { imageBlockToMessageAttachment } from '@/features/chat/messages/assistant-message-artifacts';
 import {
   getAssistantCopyMarkdown,
   getAssistantCopyPlainText,
@@ -42,6 +31,11 @@ import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 import { ReadAloudButton } from '@/features/voice/read-aloud-button';
 import { buildSpeakableText, detectSpeechLanguage } from '@/features/voice/read-aloud-text';
+import { buildAssistantTurnViewModel } from '@/features/chat/messages/assistant-turn-view-model';
+import {
+  AssistantAttachmentList,
+  AssistantTurnOutcomes,
+} from '@/features/chat/messages/assistant-turn-outcomes';
 
 const messageActionIconButton = cn(
   'inline-flex size-9 shrink-0 items-center justify-center rounded-lg',
@@ -88,7 +82,6 @@ export const MessageBubble = memo(function MessageBubble({
   onRetryUserMessageRound,
   userMessageCanRetry = false,
   deleteRoundDisabled = false,
-  onAbortCurrentTurn,
   onSaveAssistantToSourceNote,
   onExtractAssistantTask,
   onSuggestWorkItemUpdate,
@@ -112,8 +105,6 @@ export const MessageBubble = memo(function MessageBubble({
   userMessageCanRetry?: boolean;
   /** When true, omit delete control (e.g. while sending or streaming). */
   deleteRoundDisabled?: boolean;
-  /** Cancel the in-flight assistant turn — wires WorkflowCard's cancel button. */
-  onAbortCurrentTurn?: () => void;
   /** Append this assistant reply back to the source Note for note-bound chat threads. */
   onSaveAssistantToSourceNote?: (content: string) => Promise<void> | void;
   /** Create a task Note from this assistant reply for note-bound chat threads. */
@@ -209,58 +200,43 @@ export const MessageBubble = memo(function MessageBubble({
   const cardLabels = useMemo(() => m.chat.toolCard, [m.chat.toolCard]);
 
   const reasoningHidden = reasoningLevel === 'off';
-
-  const displayContent = useMemo(() => {
-    if (!reasoningHidden) return message.content ?? [];
-    return (message.content ?? []).filter((b) => b.type !== 'thinking');
-  }, [message.content, reasoningHidden]);
-
-  /** User/assistant images: grid via AttachmentRenderer, not stacked inline blocks in the text column. */
-  const displayForFlow = useMemo(() => {
-    if (!isUser && !isAssistant) {
-      return displayContent;
-    }
-    return (displayContent ?? []).filter((b) => b.type !== 'image');
-  }, [isUser, isAssistant, displayContent]);
-
-  const assistantWorkspacePaths = useMemo(
-    () => (isAssistant ? collectAssistantWorkspaceOutputPaths(message.content) : []),
-    [isAssistant, message.content],
-  );
-
-  const assistantImageBlocks = useMemo(
+  const assistantTurnView = useMemo(
     () =>
       isAssistant
-        ? (message.content ?? []).filter((b): b is ImageContent => b.type === 'image' && Boolean(b.source?.data))
-        : [],
-    [isAssistant, message.content],
+        ? buildAssistantTurnViewModel({ message, isStreaming, reasoningLevel })
+        : null,
+    [isAssistant, isStreaming, message, reasoningLevel],
   );
+  const displayContent = assistantTurnView?.displayContent ?? message.content ?? [];
 
-  const assistantImageAttachments = useMemo(
-    () => (isAssistant ? imageContentBlocksToAttachments(assistantImageBlocks) : []),
-    [isAssistant, assistantImageBlocks],
+  /** User/assistant images: grid via AttachmentRenderer, not stacked inline blocks in the text column. */
+  const displayForFlow = useMemo(
+    () =>
+      assistantTurnView?.flowContent ??
+      (isUser ? displayContent.filter((block) => block.type !== 'image') : displayContent),
+    [assistantTurnView, displayContent, isUser],
   );
-
-  const showAssistantArtifacts =
-    isAssistant &&
-    (assistantWorkspacePaths.length > 0 || assistantImageAttachments.length > 0);
 
   const attachmentsForBubble = useMemo(() => {
-    if (isAssistant) {
-      return filterAssistantAttachmentsDedupedAgainstWorkspacePaths(
-        message.attachments,
-        assistantWorkspacePaths,
-      );
-    }
+    if (assistantTurnView) return assistantTurnView.deliverables.attachments;
     return message.attachments;
-  }, [isAssistant, message.attachments, assistantWorkspacePaths]);
+  }, [assistantTurnView, message.attachments]);
 
+  const hasAssistantActivity = Boolean(assistantTurnView?.activityBlocks.length);
   const progressForMeta =
-    reasoningHidden && progress?.stage === 'thinking' ? null : progress;
+    (reasoningHidden && progress?.stage === 'thinking') ||
+    (isAssistant && hasAssistantActivity)
+      ? null
+      : progress;
 
   const streamingThinking = reasoningHidden
     ? false
     : Boolean(message.content?.some((b) => b.type === 'thinking' && b.streaming));
+  const showStreamingCursor =
+    isStreaming &&
+    (!isAssistant ||
+      !hasAssistantActivity ||
+      assistantTurnView?.lifecycle.state === 'answering');
 
   const showMeta =
     Boolean(message.timestamp) ||
@@ -475,26 +451,6 @@ export const MessageBubble = memo(function MessageBubble({
     setDeleteConfirmOpen(false);
   }, []);
 
-  const stepBlocksForSources = useMemo(() => {
-    const blocks = collectAssistantStepBlocks(message);
-    if (reasoningHidden) return blocks.filter((b) => b.type !== 'thinking');
-    return blocks;
-  }, [message, reasoningHidden]);
-  const assistantSearchSourceCount = useMemo(
-    () =>
-      isAssistant
-        ? extractSearchSources(
-            stepBlocksForSources.filter(
-              (block): block is ToolUseContent => block.type === 'tool_use',
-            ),
-          ).length
-        : 0,
-    [isAssistant, stepBlocksForSources],
-  );
-  const showAssistantOutcomes =
-    isAssistant &&
-    (showAssistantArtifacts || assistantSearchSourceCount > 0);
-
   useLayoutEffect(() => {
     if (!isUser) return;
     const el = userMessageContentRef.current;
@@ -609,13 +565,10 @@ export const MessageBubble = memo(function MessageBubble({
                     sessionKey={sessionKey}
                     workflowOptions={{
                       labels: workflowCardLabels(language),
-                      // Only the streaming row owns the abort handler — for
-                      // completed/historical rows it would point at an unrelated
-                      // turn, so we leave it undefined and the cancel button
-                      // stays hidden.
-                      onAbort: isAssistant && isStreaming ? onAbortCurrentTurn : undefined,
                     }}
                     reasoningLevel={reasoningLevel}
+                    activityBlocks={assistantTurnView?.activityBlocks}
+                    answerStarted={assistantTurnView?.answerStarted}
                   />
                 </div>
                 {isUser && userMessageCanExpand ? (
@@ -633,40 +586,25 @@ export const MessageBubble = memo(function MessageBubble({
                     <span>{userMessageExpanded ? m.chat.userMessageCollapse : m.chat.userMessageExpand}</span>
                   </button>
                 ) : null}
-                {isStreaming ? (
+                {showStreamingCursor ? (
                   <span className="inline-block h-3 w-0.5 animate-pulse bg-accent align-middle" />
                 ) : null}
               </>
-            ) : isStreaming ? (
+            ) : showStreamingCursor ? (
               <span className="inline-block h-3 w-0.5 animate-pulse bg-accent" />
             ) : null}
 
-            {showAssistantOutcomes ? (
-              <div
-                className="rounded-lg border border-edge-subtle/60 bg-surface-elevated/20 px-3 py-2.5"
-                role="group"
-                aria-label={m.chat.messageOutcomesHeading}
-              >
-                <div className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
-                  {m.chat.messageOutcomesHeading}
-                </div>
-                <div className="flex min-w-0 flex-col gap-2">
-                  {assistantSearchSourceCount > 0 ? (
-                    <SearchSourceList blocks={stepBlocksForSources} className="" />
-                  ) : null}
-                  {assistantWorkspacePaths.length > 0 ? (
-                    <ToolResultFileLinks paths={assistantWorkspacePaths} sessionKey={sessionKey} />
-                  ) : null}
-                  {assistantImageAttachments.length > 0 ? (
-                    <AttachmentRenderer
-                      attachments={assistantImageAttachments}
-                      authToken={authToken}
-                      sessionKey={sessionKey}
-                      layout="assistant"
-                    />
-                  ) : null}
-                </div>
-              </div>
+            {assistantTurnView ? (
+              <AssistantTurnOutcomes
+                view={assistantTurnView}
+                authToken={authToken}
+                sessionKey={sessionKey}
+                deliverablesLabel={m.chat.messageArtifactsHeading}
+                sourcesLabel={m.chat.searchSourcesHeading.replace(
+                  '{{count}}',
+                  String(assistantTurnView.sources.length),
+                )}
+              />
             ) : null}
 
             {attachmentsForBubble?.length ? (
@@ -679,11 +617,10 @@ export const MessageBubble = memo(function MessageBubble({
                   centerUserVoiceRow={userCopyText.length === 0}
                 />
               ) : (
-                <AttachmentRenderer
+                <AssistantAttachmentList
                   attachments={attachmentsForBubble}
                   authToken={authToken}
                   sessionKey={sessionKey}
-                  layout="assistant"
                 />
               )
             ) : null}
@@ -779,19 +716,6 @@ export const MessageBubble = memo(function MessageBubble({
                 <Copy className="size-4" strokeWidth={1.75} aria-hidden />
               )}
             </button>
-            <button
-              type="button"
-              className={messageActionIconButton}
-              onClick={handleCopyMd}
-              title={copyFeedback === 'markdown' ? m.chat.messageCopied : m.chat.messageCopyMarkdown}
-              aria-label={copyFeedback === 'markdown' ? m.chat.messageCopied : m.chat.messageCopyMarkdown}
-            >
-              {copyFeedback === 'markdown' ? (
-                <Check className="size-4 text-fg-muted" strokeWidth={1.75} aria-hidden />
-              ) : (
-                <FileCode2 className="size-4" strokeWidth={1.75} aria-hidden />
-              )}
-            </button>
             <ReadAloudButton
               input={readAloudInput}
               labels={{
@@ -832,18 +756,6 @@ export const MessageBubble = memo(function MessageBubble({
                 >
                   <ThumbsDown className="size-4" strokeWidth={1.75} aria-hidden />
                 </button>
-                {responsePersonalContext.length > 0 ? (
-                  <button
-                    type="button"
-                    className={cn(messageActionIconButton, responseContextOpen && 'bg-surface-active text-fg')}
-                    onClick={() => setResponseContextOpen((open) => !open)}
-                    title={m.chat.messageWhyThisAnswer}
-                    aria-label={m.chat.messageWhyThisAnswer}
-                    aria-expanded={responseContextOpen}
-                  >
-                    <CircleHelp className="size-4" strokeWidth={1.75} aria-hidden />
-                  </button>
-                ) : null}
                 {responseFeedbackError ? (
                   <span className="text-xs text-danger" role="status">{m.chat.messageFeedbackUnavailable}</span>
                 ) : null}
@@ -852,54 +764,110 @@ export const MessageBubble = memo(function MessageBubble({
                 ) : null}
               </>
             ) : null}
-            {onSaveAssistantToSourceNote ? (
-              <button
-                type="button"
-                className={messageActionIconButton}
-                onClick={handleSaveAssistantToSourceNote}
-                disabled={!copyMarkdown || assistantActionBusy !== null}
-                title={assistantActionFeedback === 'save-note' ? m.chat.messageSavedToNote : m.chat.messageSaveToNote}
-                aria-label={assistantActionFeedback === 'save-note' ? m.chat.messageSavedToNote : m.chat.messageSaveToNote}
-              >
-                {assistantActionFeedback === 'save-note' ? (
-                  <Check className="size-4 text-fg-muted" strokeWidth={1.75} aria-hidden />
-                ) : (
-                  <FileText className="size-4" strokeWidth={1.75} aria-hidden />
-                )}
-              </button>
-            ) : null}
-            {onExtractAssistantTask ? (
-              <button
-                type="button"
-                className={messageActionIconButton}
-                onClick={handleExtractAssistantTask}
-                disabled={(!copyPlainText && !copyMarkdown) || assistantActionBusy !== null}
-                title={assistantActionFeedback === 'extract-task' ? m.chat.messageTaskExtracted : m.chat.messageExtractTask}
-                aria-label={assistantActionFeedback === 'extract-task' ? m.chat.messageTaskExtracted : m.chat.messageExtractTask}
-              >
-                {assistantActionFeedback === 'extract-task' ? (
-                  <Check className="size-4 text-fg-muted" strokeWidth={1.75} aria-hidden />
-                ) : (
-                  <ListTodo className="size-4" strokeWidth={1.75} aria-hidden />
-                )}
-              </button>
-            ) : null}
-            {onSuggestWorkItemUpdate ? (
-              <button
-                type="button"
-                className={messageActionIconButton}
-                onClick={handleSuggestWorkItemUpdate}
-                disabled={(!copyPlainText && !copyMarkdown) || assistantActionBusy !== null}
-                title={assistantActionFeedback === 'work-item-update' ? m.chat.workItemUpdateDrafted : m.chat.workItemUpdateAction}
-                aria-label={assistantActionFeedback === 'work-item-update' ? m.chat.workItemUpdateDrafted : m.chat.workItemUpdateAction}
-              >
-                {assistantActionFeedback === 'work-item-update' ? (
-                  <Check className="size-4 text-fg-muted" strokeWidth={1.75} aria-hidden />
-                ) : (
-                  <SquarePen className="size-4" strokeWidth={1.75} aria-hidden />
-                )}
-              </button>
-            ) : null}
+            <Popover.Root>
+              <Popover.Trigger asChild>
+                <button
+                  type="button"
+                  className={messageActionIconButton}
+                  title={m.chat.messageMoreActions}
+                  aria-label={m.chat.messageMoreActions}
+                >
+                  <MoreHorizontal className="size-4" strokeWidth={1.75} aria-hidden />
+                </button>
+              </Popover.Trigger>
+              <Popover.Portal>
+                <Popover.Content
+                  side="bottom"
+                  align="start"
+                  sideOffset={6}
+                  className="z-[70] w-56 rounded-xl border border-edge bg-surface-panel p-1.5 shadow-popover outline-none"
+                >
+                  <Popover.Close asChild>
+                    <button
+                      type="button"
+                      className="flex h-9 w-full items-center gap-2 rounded-lg px-2.5 text-left text-xs text-fg-muted hover:bg-surface-hover hover:text-fg"
+                      onClick={handleCopyMd}
+                    >
+                      {copyFeedback === 'markdown' ? (
+                        <Check className="size-4" strokeWidth={1.75} aria-hidden />
+                      ) : (
+                        <FileCode2 className="size-4" strokeWidth={1.75} aria-hidden />
+                      )}
+                      {copyFeedback === 'markdown' ? m.chat.messageCopied : m.chat.messageCopyMarkdown}
+                    </button>
+                  </Popover.Close>
+                  {responsePersonalContext.length > 0 ? (
+                    <Popover.Close asChild>
+                      <button
+                        type="button"
+                        className="flex h-9 w-full items-center gap-2 rounded-lg px-2.5 text-left text-xs text-fg-muted hover:bg-surface-hover hover:text-fg"
+                        onClick={() => setResponseContextOpen((open) => !open)}
+                      >
+                        <CircleHelp className="size-4" strokeWidth={1.75} aria-hidden />
+                        {m.chat.messageWhyThisAnswer}
+                      </button>
+                    </Popover.Close>
+                  ) : null}
+                  {onSaveAssistantToSourceNote ? (
+                    <Popover.Close asChild>
+                      <button
+                        type="button"
+                        className="flex h-9 w-full items-center gap-2 rounded-lg px-2.5 text-left text-xs text-fg-muted hover:bg-surface-hover hover:text-fg disabled:opacity-40"
+                        onClick={handleSaveAssistantToSourceNote}
+                        disabled={!copyMarkdown || assistantActionBusy !== null}
+                      >
+                        {assistantActionFeedback === 'save-note' ? (
+                          <Check className="size-4" strokeWidth={1.75} aria-hidden />
+                        ) : (
+                          <FileText className="size-4" strokeWidth={1.75} aria-hidden />
+                        )}
+                        {assistantActionFeedback === 'save-note'
+                          ? m.chat.messageSavedToNote
+                          : m.chat.messageSaveToNote}
+                      </button>
+                    </Popover.Close>
+                  ) : null}
+                  {onExtractAssistantTask ? (
+                    <Popover.Close asChild>
+                      <button
+                        type="button"
+                        className="flex h-9 w-full items-center gap-2 rounded-lg px-2.5 text-left text-xs text-fg-muted hover:bg-surface-hover hover:text-fg disabled:opacity-40"
+                        onClick={handleExtractAssistantTask}
+                        disabled={(!copyPlainText && !copyMarkdown) || assistantActionBusy !== null}
+                      >
+                        {assistantActionFeedback === 'extract-task' ? (
+                          <Check className="size-4" strokeWidth={1.75} aria-hidden />
+                        ) : (
+                          <ListTodo className="size-4" strokeWidth={1.75} aria-hidden />
+                        )}
+                        {assistantActionFeedback === 'extract-task'
+                          ? m.chat.messageTaskExtracted
+                          : m.chat.messageExtractTask}
+                      </button>
+                    </Popover.Close>
+                  ) : null}
+                  {onSuggestWorkItemUpdate ? (
+                    <Popover.Close asChild>
+                      <button
+                        type="button"
+                        className="flex h-9 w-full items-center gap-2 rounded-lg px-2.5 text-left text-xs text-fg-muted hover:bg-surface-hover hover:text-fg disabled:opacity-40"
+                        onClick={handleSuggestWorkItemUpdate}
+                        disabled={(!copyPlainText && !copyMarkdown) || assistantActionBusy !== null}
+                      >
+                        {assistantActionFeedback === 'work-item-update' ? (
+                          <Check className="size-4" strokeWidth={1.75} aria-hidden />
+                        ) : (
+                          <SquarePen className="size-4" strokeWidth={1.75} aria-hidden />
+                        )}
+                        {assistantActionFeedback === 'work-item-update'
+                          ? m.chat.workItemUpdateDrafted
+                          : m.chat.workItemUpdateAction}
+                      </button>
+                    </Popover.Close>
+                  ) : null}
+                </Popover.Content>
+              </Popover.Portal>
+            </Popover.Root>
           </div>
         ) : null}
 

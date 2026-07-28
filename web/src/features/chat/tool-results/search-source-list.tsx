@@ -2,7 +2,7 @@ import type { ToolUseContent } from '@/features/chat/messages/messages.types';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
-interface SearchSource {
+export interface SearchSource {
   url: string;
   title: string;
   snippet?: string;
@@ -33,16 +33,21 @@ export function extractSearchSources(blocks: ToolUseContent[]): SearchSource[] {
 }
 
 interface SearchSourceListProps {
-  blocks: Array<{ type: string; [key: string]: unknown }>;
+  blocks?: Array<{ type: string; [key: string]: unknown }>;
+  sources?: SearchSource[];
   className?: string;
 }
 
-export function SearchSourceList({ blocks, className = 'mt-6' }: SearchSourceListProps) {
+export function SearchSourceList({
+  blocks = [],
+  sources: suppliedSources,
+  className = 'mt-6',
+}: SearchSourceListProps) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
 
   const toolBlocks = blocks.filter((b): b is ToolUseContent => b.type === 'tool_use');
-  const sources = extractSearchSources(toolBlocks);
+  const sources = suppliedSources ?? extractSearchSources(toolBlocks);
 
   if (sources.length === 0) return null;
 

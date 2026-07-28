@@ -174,6 +174,8 @@ export interface MarkdownViewProps {
   onWorkspaceFileOpen?: (target: WorkspaceFileLinkTarget) => void;
   /** Opens HTTP(S) links in a separate browser tab or window. */
   openHttpLinksInNewTab?: boolean;
+  /** Render Mermaid diagrams. Disabled while chat Markdown is still streaming. */
+  renderMermaid?: boolean;
 }
 
 function MarkdownViewImpl({
@@ -184,6 +186,7 @@ function MarkdownViewImpl({
   codeCopy = true,
   onWorkspaceFileOpen,
   openHttpLinksInNewTab: shouldOpenHttpLinksInNewTab = false,
+  renderMermaid = true,
 }: MarkdownViewProps) {
   const language = useLocaleStore((s) => s.language);
   const labels = useMemo(() => {
@@ -235,7 +238,7 @@ function MarkdownViewImpl({
 
   useLayoutEffect(() => {
     const el = hostRef.current;
-    if (!el || !safeHtml) return;
+    if (!el || !safeHtml || !renderMermaid) return;
 
     const blocks = findMermaidCodeBlocks(el);
     if (blocks.length === 0) return;
@@ -261,7 +264,7 @@ function MarkdownViewImpl({
     return () => {
       cancelled = true;
     };
-  }, [safeHtml]);
+  }, [renderMermaid, safeHtml]);
 
   useLayoutEffect(() => {
     const el = hostRef.current;

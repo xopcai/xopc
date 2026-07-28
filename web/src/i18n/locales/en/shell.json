@@ -135,6 +135,8 @@
     "appMenuAria": "App menu and settings",
     "taskSessionMenuAria": "Session actions",
     "taskSessionAgentRunning": "Assistant is still responding",
+    "taskSessionAgentCompleted": "New response ready",
+    "taskSessionAgentFailed": "Response needs attention",
     "taskRename": "Rename",
     "taskCopyChatId": "Copy chat ID",
     "taskChatIdCopied": "Chat ID copied",
