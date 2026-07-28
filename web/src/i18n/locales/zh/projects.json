@@ -9,6 +9,8 @@
     "projectName": "项目名称",
     "workspaceRoot": "项目工作区",
     "workspacePlaceholder": "Agent 默认工作区",
+    "workspaceSelectionPlaceholder": "选择项目文件夹",
+    "workspaceSelectionHint": "请选择该项目要使用的文件夹，不会再自动替换为 Agent 默认工作区。",
     "workspaceModeFollow": "跟随 Agent 默认工作区",
     "workspaceModeFixed": "使用指定项目文件夹",
     "workspaceModeGlobal": "使用全局默认工作区",

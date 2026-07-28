@@ -3,6 +3,8 @@ import {
   Archive,
   ArrowRight,
   FolderKanban,
+  FolderOpen,
+  Loader2,
   Pin,
   PinOff,
   Plus,
@@ -14,6 +16,8 @@ import { Link } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useDirectoryPicker } from '@/features/fs/use-directory-picker';
+import { WorkingDirectoryPickerModal } from '@/features/fs/working-directory-picker-modal';
 import {
   archiveProject,
   createProject,
@@ -133,8 +137,10 @@ function ProjectCard({
 
 export function ProjectsPage() {
   const language = useLocaleStore((state) => state.language);
-  const t = messages(language).projectsPage;
+  const msg = messages(language);
+  const t = msg.projectsPage;
   const management = t.management;
+  const wd = msg.chat.workingDirectory;
   const setPageHeader = usePageHeaderStore((state) => state.setPageHeader);
   const clearPageHeader = usePageHeaderStore((state) => state.clearPageHeader);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -149,6 +155,10 @@ export function ProjectsPage() {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [workspaceRoot, setWorkspaceRoot] = useState('');
+  const workspacePicker = useDirectoryPicker({
+    initialPath: workspaceRoot,
+    onPicked: setWorkspaceRoot,
+  });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -200,14 +210,15 @@ export function ProjectsPage() {
   const submitCreate = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmedName = name.trim();
-    if (!trimmedName || creating) return;
+    const trimmedWorkspaceRoot = workspaceRoot.trim();
+    if (!trimmedName || !trimmedWorkspaceRoot || creating) return;
     setCreating(true);
     setCreateError(null);
     try {
       const project = await createProject({
         name: trimmedName,
         ...(description.trim() ? { description: description.trim() } : {}),
-        ...(workspaceRoot.trim() ? { workspaceRoot: workspaceRoot.trim() } : {}),
+        workspaceRoot: trimmedWorkspaceRoot,
       });
       setProjects((current) => [project, ...current.filter((item) => item.id !== project.id)]);
       setName('');
@@ -280,17 +291,41 @@ export function ProjectsPage() {
                   {management.descriptionLabel}
                   <textarea className="min-h-28 resize-none rounded-lg border border-edge bg-surface-base px-3 py-2 font-normal leading-6 outline-none focus:border-accent focus:ring-2 focus:ring-accent/20" value={description} onChange={(event) => setDescription(event.target.value)} maxLength={2_000} placeholder={management.descriptionPlaceholder} />
                 </label>
-                <label className="grid gap-1.5 text-sm font-medium text-fg">
-                  {t.workspaceRoot}
-                  <input className="h-10 rounded-lg border border-edge bg-surface-base px-3 font-mono text-xs font-normal outline-none focus:border-accent focus:ring-2 focus:ring-accent/20" value={workspaceRoot} onChange={(event) => setWorkspaceRoot(event.target.value)} placeholder={t.workspacePlaceholder} />
-                </label>
+                <div className="grid gap-1.5 text-sm">
+                  <span className="font-medium text-fg">{t.workspaceRoot}</span>
+                  <button
+                    type="button"
+                    className="flex min-h-12 w-full items-center gap-3 rounded-lg border border-edge bg-surface-base px-3 py-2 text-left outline-none transition-colors hover:bg-surface-hover focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={workspacePicker.pick}
+                    disabled={creating || workspacePicker.picking}
+                  >
+                    {workspacePicker.picking
+                      ? <Loader2 className="size-5 shrink-0 animate-spin text-accent" aria-hidden />
+                      : <FolderOpen className="size-5 shrink-0 text-accent" aria-hidden />}
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-medium text-fg">
+                        {workspaceRoot ? wd.chooseFolder : wd.selectWorkingDirectory}
+                      </span>
+                      <span
+                        className={cn(
+                          'mt-0.5 block truncate font-mono text-xs font-normal',
+                          workspaceRoot ? 'text-fg-muted' : 'text-fg-subtle',
+                        )}
+                        title={workspaceRoot || undefined}
+                      >
+                        {workspaceRoot || t.workspaceSelectionPlaceholder}
+                      </span>
+                    </span>
+                  </button>
+                  <p className="text-xs font-normal text-fg-subtle">{t.workspaceSelectionHint}</p>
+                </div>
                 {createError ? (
                   <p className="rounded-lg bg-danger-soft px-3 py-2 text-xs text-danger" role="alert">{createError}</p>
                 ) : null}
               </div>
               <div className="flex shrink-0 justify-end gap-2 border-t border-edge px-5 py-4">
                 <Dialog.Close asChild><Button type="button" variant="ghost">{t.cancel}</Button></Dialog.Close>
-                <Button type="submit" variant="primary" disabled={creating || !name.trim()}>
+                <Button type="submit" variant="primary" disabled={creating || !name.trim() || !workspaceRoot.trim()}>
                   {creating ? t.workHome.creating : t.create}
                 </Button>
               </div>
@@ -298,6 +333,16 @@ export function ProjectsPage() {
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
+
+      {!workspacePicker.hasNativePicker ? (
+        <WorkingDirectoryPickerModal
+          open={workspacePicker.modalOpen}
+          onOpenChange={workspacePicker.setModalOpen}
+          initialAbsolutePath={workspaceRoot || undefined}
+          onConfirm={workspacePicker.confirmPick}
+          wd={wd}
+        />
+      ) : null}
 
       <section className="flex flex-col gap-3 rounded-xl border border-edge-subtle bg-surface-base p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap gap-1" aria-label={management.filterLabel}>
