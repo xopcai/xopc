@@ -9,6 +9,8 @@
     "projectName": "Project name",
     "workspaceRoot": "Project workspace",
     "workspacePlaceholder": "Agent default workspace",
+    "workspaceSelectionPlaceholder": "Choose a project folder",
+    "workspaceSelectionHint": "Choose the folder this project will use. It will not be replaced by the agent's default workspace.",
     "workspaceModeFollow": "Follow the agent's default workspace",
     "workspaceModeFixed": "Use a specific project folder",
     "workspaceModeGlobal": "Use global default workspace",
