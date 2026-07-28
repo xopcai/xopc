@@ -237,7 +237,7 @@ export class MessageSender {
     }
   }
 
-  async resume(runId: string, chatId: string, callbacks?: MessagingCallbacks): Promise<void> {
+  async resume(runId: string, chatId: string, callbacks?: MessagingCallbacks): Promise<boolean> {
     this._trackedRunId = undefined;
     this._abort = new AbortController();
     this._sseChatId = chatId;
@@ -252,11 +252,13 @@ export class MessageSender {
     if (!res.ok) {
       this._clearPendingRun();
       this._abort = undefined;
-      return;
+      return false;
     }
 
     const ct = res.headers.get('Content-Type') || '';
+    let resumed = false;
     if (ct.includes('text/event-stream') && res.body) {
+      resumed = true;
       const terminal = this._wrapTerminalCallbacks(callbacks);
       await this._consumeSSE(res.body, terminal.wrapped);
       if (!terminal.sawTerminal && !this._abort?.signal.aborted) {
@@ -266,6 +268,7 @@ export class MessageSender {
 
     this._abort = undefined;
     this._clearPendingRun();
+    return resumed;
   }
 
   /** Ensures at most one of onResult/onError fires from the wrapped callbacks. */
