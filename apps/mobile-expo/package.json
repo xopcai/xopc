@@ -18,7 +18,7 @@
     "lint": "eslint app src",
     "typecheck": "tsc --noEmit && pnpm --filter @xopcai/gateway-sse-client run typecheck",
     "test": "vitest run",
-    "test:note-editor": "vitest run src/features/notes/__tests__/markdown-document.test.ts src/features/notes/__tests__/markdown-link-index.test.ts src/features/notes/__tests__/markdown-patch.test.ts src/query/__tests__/note-link-index.test.ts",
+    "test:note-editor": "vitest run src/features/notes/__tests__/dom-editor-markdown.test.ts src/features/notes/__tests__/editor-contract.test.ts src/features/notes/__tests__/editor-link.test.ts src/features/notes/__tests__/markdown-document.test.ts src/features/notes/__tests__/markdown-link-index.test.ts src/features/notes/__tests__/markdown-patch.test.ts src/features/notes/__tests__/native-editor-markdown.test.ts src/query/__tests__/note-link-index.test.ts",
     "test:gateway-sse-client": "pnpm --filter @xopcai/gateway-sse-client test",
     "release:patch": "bash ../../scripts/apps/mobile-expo/release-patch.sh",
     "build:android:preview": "eas build --platform android --profile preview",

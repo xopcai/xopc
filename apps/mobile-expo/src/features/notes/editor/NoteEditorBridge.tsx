@@ -8,16 +8,22 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 
 import { BottomSheetModal } from '../../../components/BottomSheetModal';
-import { useKeyboardListPadding } from '../../../hooks/use-keyboard-list-padding';
 import { FLOATING_BOTTOM_OFFSET, floatingBottomPadding, radii, spacing, useTheme } from '../../../theme';
 import NoteEditorDomAdapter, { type NoteEditorAdapterCommand } from '../web-editor/NoteEditorDomAdapter';
 import { DEFAULT_EDITOR_RUNTIME_STATE } from './editor-contract';
 import type { NoteEditorInteractionState, NoteEditorPresentationState } from './editor-interaction';
 import { canUseDomEditor } from './editor-platform';
 import {
+  isLikelyEditorLinkUrl,
+  normalizeEditorLinkUrl,
+  sanitizeEditorLinkText,
+} from './editor-link';
+import {
+  decideNativeMarkdownMessage,
   isNativeMarkdownFlushResponse,
+  NATIVE_CODE_FENCE_HELPERS_SCRIPT,
+  NATIVE_INDENTED_BLOCK_HELPERS_SCRIPT,
   NATIVE_JOIN_MARKDOWN_BLOCKS_SCRIPT,
-  shouldForwardNativeMarkdownMessage,
 } from './native-editor-markdown';
 import type {
   EditorAttachmentPickSource,
@@ -119,6 +125,26 @@ function dismissKeyboardAndWait(): Promise<void> {
   });
 }
 
+function useKeyboardBottomInset(): number {
+  const [inset, setInset] = useState(0);
+
+  useEffect(() => {
+    const showSubscription = Keyboard.addListener('keyboardDidShow', (event) => {
+      const height = event.endCoordinates.height;
+      setInset(Number.isFinite(height) ? Math.max(0, Math.round(height)) : 0);
+    });
+    const hideSubscription = Keyboard.addListener('keyboardDidHide', () => {
+      setInset(0);
+    });
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
+
+  return inset;
+}
+
 function sameEditorState(a: EditorRuntimeState, b: EditorRuntimeState): boolean {
   return a.ready === b.ready
     && a.focused === b.focused
@@ -193,7 +219,7 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
 }, ref) {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
-  const keyboardBottomInset = useKeyboardListPadding();
+  const keyboardBottomInset = useKeyboardBottomInset();
   const richEditorRef = useRef<NativeRichEditorHandle | null>(null);
   const nativeTitleInputRef = useRef<TextInput | null>(null);
   const linkUrlInputRef = useRef<TextInput | null>(null);
@@ -210,6 +236,7 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
   const [sheetPresentation, setSheetPresentation] = useState<SheetPresentation>({ active: null, pending: null });
   const [linkTitle, setLinkTitle] = useState('');
   const [linkUrl, setLinkUrl] = useState('');
+  const canApplyLink = isLikelyEditorLinkUrl(normalizeEditorLinkUrl(linkUrl));
   const [nativeActionActive, setNativeActionActive] = useState(false);
   const sheetRequestIdRef = useRef(0);
   const activeSheet = sheetPresentation.active;
@@ -319,19 +346,6 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
     commandIdRef.current += 1;
     setCommand({ id: commandIdRef.current, ...next } as EditorCommand);
   }, []);
-
-  useEffect(() => {
-    const subscription = Keyboard.addListener('keyboardDidHide', () => {
-      const current = editorStateRef.current;
-      if (!current.focused || current.focusTarget !== 'body') return;
-      if (canUseDomEditor) {
-        dispatch({ type: 'blur' });
-      } else {
-        richEditorRef.current?.blur();
-      }
-    });
-    return () => subscription.remove();
-  }, [canUseDomEditor, dispatch]);
 
   const runNativeEditorCommand = useCallback((next: EditorCommand) => {
     const native = richEditorRef.current;
@@ -485,14 +499,15 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
   }, [activeSheet]);
 
   const handleApplyLink = useCallback(() => {
-    const url = linkUrl.trim();
-    if (!url) return;
+    const normalizedUrl = normalizeEditorLinkUrl(linkUrl);
+    if (!isLikelyEditorLinkUrl(normalizedUrl)) return;
+    const normalizedTitle = sanitizeEditorLinkText(linkTitle).trim();
     runAfterEditorSheetClose(() => {
       if (!canUseDomEditor) {
-        richEditorRef.current?.setLink(linkTitle, url);
+        richEditorRef.current?.setLink(normalizedTitle, normalizedUrl);
         return;
       }
-      dispatch({ type: 'setLink', title: linkTitle, url });
+      dispatch({ type: 'setLink', title: normalizedTitle, url: normalizedUrl });
     });
   }, [canUseDomEditor, dispatch, linkTitle, linkUrl, runAfterEditorSheetClose]);
 
@@ -902,11 +917,11 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
                 {
                   backgroundColor: colors.accent.primary,
                   borderColor: colors.accent.primary,
-                  opacity: !linkUrl.trim() ? 0.42 : pressed ? 0.72 : 1,
+                  opacity: !canApplyLink ? 0.42 : pressed ? 0.72 : 1,
                 },
               ]}
               onPress={handleApplyLink}
-              disabled={!linkUrl.trim()}
+              disabled={!canApplyLink}
               accessibilityRole="button"
               accessibilityLabel={labels.apply}
             >
@@ -934,7 +949,7 @@ type NativeRichTextEditorProps = {
 
 type NativeRichEditorMessage =
   | { type: 'ready'; markdown?: string; state?: EditorRuntimeState }
-  | { type: 'content'; markdown: string; reason: 'typing' | 'command' | 'flush'; flushRequestId?: number | null; state?: EditorRuntimeState }
+  | { type: 'content'; markdown: string; reason: 'typing' | 'command' | 'flush' | 'sync'; flushRequestId?: number | null; state?: EditorRuntimeState }
   | { type: 'selection'; context: EditorSelectionContext; state?: EditorRuntimeState }
   | { type: 'focus'; focused: boolean; state: EditorRuntimeState };
 
@@ -978,6 +993,7 @@ function nativeEditorHtml({
     hr { border: 0; height: 1px; background: ${theme.border}; margin: 18px 0; }
     img { display: block; max-width: 100%; height: auto; border-radius: 8px; margin: 8px 0 12px; background: ${theme.input}; }
     input[type="checkbox"] { transform: translateY(1px); margin-right: 8px; }
+    [data-xopc-preserve-whitespace="true"] { white-space: pre-wrap; }
   </style>
 </head>
 <body>
@@ -1030,38 +1046,50 @@ function nativeEditorHtml({
         if (!String(markdown || '').trim()) return '';
         var lines = String(markdown || '').split(/\\r?\\n/);
         var out = [];
-        var state = { list: '', code: false, codeLines: [], paragraphLines: [] };
+        var state = { list: '', code: false, codeFence: '', codeLanguage: '', codeLines: [], paragraphLines: [] };
+        ${NATIVE_CODE_FENCE_HELPERS_SCRIPT}
+        ${NATIVE_INDENTED_BLOCK_HELPERS_SCRIPT}
         lines.forEach(function (line) {
           var m;
           if (state.code) {
-            if (line.indexOf(tick + tick + tick) === 0) {
-              out.push('<pre><code>' + escapeHtml(state.codeLines.join('\\n')) + '</code></pre>');
+            if (isNativeCodeFenceClosing(line, state.codeFence)) {
+              out.push('<pre data-language="' + escapeAttr(state.codeLanguage) + '"><code>' + escapeHtml(state.codeLines.join('\\n')) + '</code></pre>');
               state.code = false;
+              state.codeFence = '';
+              state.codeLanguage = '';
               state.codeLines = [];
             } else {
               state.codeLines.push(line);
             }
-          } else if (line.indexOf(tick + tick + tick) === 0) {
-            closeList(out, state);
-            closeParagraph(out, state);
-            state.code = true;
-            state.codeLines = [];
-          } else if (!line.trim()) {
-            closeList(out, state);
-            closeParagraph(out, state);
-          } else if ((m = /^(#{1,4})\\s+(.+)$/.exec(line))) {
+          } else {
+            var codeFence = parseNativeCodeFenceOpening(line);
+            if (codeFence) {
+              closeList(out, state);
+              closeParagraph(out, state);
+              state.code = true;
+              state.codeFence = codeFence.marker;
+              state.codeLanguage = codeFence.language;
+              state.codeLines = [];
+            } else if (!line.trim()) {
+              closeList(out, state);
+              closeParagraph(out, state);
+            } else if (isNativeIndentedListLine(line)) {
+              closeList(out, state);
+              closeParagraph(out, state);
+              out.push('<p data-xopc-preserve-whitespace="true">' + inlineToHtml(line) + '</p>');
+            } else if ((m = /^(#{1,4})\\s+(.+)$/.exec(line))) {
             closeList(out, state);
             closeParagraph(out, state);
             out.push('<h' + m[1].length + '>' + inlineToHtml(m[2]) + '</h' + m[1].length + '>');
-          } else if (/^(-{3,}|\\*{3,}|_{3,})$/.test(line.trim())) {
+            } else if (/^(-{3,}|\\*{3,}|_{3,})$/.test(line.trim())) {
             closeList(out, state);
             closeParagraph(out, state);
             out.push('<hr />');
-          } else if ((m = /^>\\s?(.+)$/.exec(line))) {
+            } else if ((m = /^>\\s?(.+)$/.exec(line))) {
             closeList(out, state);
             closeParagraph(out, state);
             out.push('<blockquote>' + inlineToHtml(m[1]) + '</blockquote>');
-          } else if ((m = /^- \\[([ xX])\\]\\s*(.*)$/.exec(line))) {
+            } else if ((m = /^- \\[([ xX])\\]\\s*(.*)$/.exec(line))) {
             closeParagraph(out, state);
             if (state.list !== 'ul') {
               closeList(out, state);
@@ -1069,7 +1097,7 @@ function nativeEditorHtml({
               state.list = 'ul';
             }
             out.push('<li data-task-item="true"><input type="checkbox" ' + (m[1].toLowerCase() === 'x' ? 'checked ' : '') + '/>' + inlineToHtml(m[2]) + '</li>');
-          } else if ((m = /^[-*]\\s+(.+)$/.exec(line))) {
+            } else if ((m = /^[-*]\\s+(.+)$/.exec(line))) {
             closeParagraph(out, state);
             if (state.list !== 'ul') {
               closeList(out, state);
@@ -1077,7 +1105,7 @@ function nativeEditorHtml({
               state.list = 'ul';
             }
             out.push('<li>' + inlineToHtml(m[1]) + '</li>');
-          } else if ((m = /^\\d+\\.\\s+(.+)$/.exec(line))) {
+            } else if ((m = /^\\d+\\.\\s+(.+)$/.exec(line))) {
             closeParagraph(out, state);
             if (state.list !== 'ol') {
               closeList(out, state);
@@ -1085,13 +1113,14 @@ function nativeEditorHtml({
               state.list = 'ol';
             }
             out.push('<li>' + inlineToHtml(m[1]) + '</li>');
-          } else {
-            closeList(out, state);
-            state.paragraphLines.push(line);
+            } else {
+              closeList(out, state);
+              state.paragraphLines.push(line);
+            }
           }
         });
         if (state.code) {
-          out.push('<pre><code>' + escapeHtml(state.codeLines.join('\\n')) + '</code></pre>');
+          out.push('<pre data-language="' + escapeAttr(state.codeLanguage) + '"><code>' + escapeHtml(state.codeLines.join('\\n')) + '</code></pre>');
         }
         closeParagraph(out, state);
         closeList(out, state);
@@ -1121,13 +1150,16 @@ function nativeEditorHtml({
         if (node.nodeType === Node.TEXT_NODE) return markdownBlock((node.nodeValue || '').trim(), false);
         if (node.nodeType !== Node.ELEMENT_NODE) return markdownBlock('', false);
         var tag = node.tagName.toLowerCase();
-        var text = childrenToMarkdown(node).trim();
+        var preserveWhitespace = tag === 'p' && node.getAttribute('data-xopc-preserve-whitespace') === 'true';
+        var text = preserveWhitespace
+          ? childrenToMarkdown(node).replace(/\\s+$/, '')
+          : childrenToMarkdown(node).trim();
         if (tag === 'h1') return markdownBlock('# ' + text, false);
         if (tag === 'h2') return markdownBlock('## ' + text, false);
         if (tag === 'h3') return markdownBlock('### ' + text, false);
         if (tag === 'h4') return markdownBlock('#### ' + text, false);
         if (tag === 'blockquote') return markdownBlock('> ' + text, false);
-        if (tag === 'pre') return markdownBlock(tick + tick + tick + '\\n' + (node.textContent || '').trim() + '\\n' + tick + tick + tick, false);
+        if (tag === 'pre') return markdownBlock(serializeNativeCodeFence(node.getAttribute('data-language') || '', node.textContent || ''), false);
         if (tag === 'hr') return markdownBlock('---', false);
         if (tag === 'ul') {
           return markdownBlock(Array.prototype.map.call(node.children, function (li) {
@@ -1181,8 +1213,8 @@ function nativeEditorHtml({
           taskList: active('ul[data-task-list="true"], li[data-task-item="true"]'),
           blockquote: active('blockquote'),
           codeBlock: active('pre'),
-          link: false,
-          image: false
+          link: active('a'),
+          image: active('img')
         };
       }
       function postState() {
@@ -1274,6 +1306,17 @@ function nativeEditorHtml({
         saveSelection();
         emitChange('command');
       }
+      function selectedElement() {
+        restoreSelection();
+        var selection = window.getSelection();
+        if (!selection || !selection.rangeCount) return null;
+        var node = selection.getRangeAt(0).commonAncestorContainer;
+        return node && node.nodeType === Node.ELEMENT_NODE ? node : node && node.parentElement;
+      }
+      function toggleFormatBlock(tagName) {
+        var selected = selectedElement();
+        formatBlock(selected && selected.closest && selected.closest(tagName) ? 'p' : tagName);
+      }
       function command(name, payload) {
         if (name === 'setHeading') {
           var level = payload && Number(payload.level);
@@ -1290,26 +1333,58 @@ function nativeEditorHtml({
           document.execCommand('italic', false);
           saveSelection();
           emitChange('command');
-        } else if (name === 'toggleBulletList') insertHtml('<ul><li> </li></ul>');
-        else if (name === 'insertTodo') insertHtml('<ul data-task-list="true"><li data-task-item="true"><input type="checkbox" /> </li></ul>');
-        else if (name === 'toggleBlockquote') formatBlock('blockquote');
-        else if (name === 'toggleCodeBlock') formatBlock('pre');
+        } else if (name === 'toggleBulletList') {
+          editor.focus();
+          restoreSelection();
+          document.execCommand('insertUnorderedList', false);
+          saveSelection();
+          emitChange('command');
+        } else if (name === 'insertTodo') {
+          var taskElement = selectedElement();
+          var taskItem = taskElement && taskElement.closest && taskElement.closest('li[data-task-item="true"]');
+          if (taskItem) {
+            var checkbox = taskItem.querySelector('input[type="checkbox"]');
+            if (checkbox) checkbox.remove();
+            taskItem.removeAttribute('data-task-item');
+            var taskList = taskItem.closest('ul[data-task-list="true"]');
+            if (taskList) taskList.removeAttribute('data-task-list');
+            saveSelection();
+            emitChange('command');
+          } else {
+            insertHtml('<ul data-task-list="true"><li data-task-item="true"><input type="checkbox" /> </li></ul>');
+          }
+        } else if (name === 'toggleBlockquote') toggleFormatBlock('blockquote');
+        else if (name === 'toggleCodeBlock') toggleFormatBlock('pre');
         else if (name === 'insertDivider') insertHtml('<hr /><p><br /></p>');
         else if (name === 'insertAttachment') {
           var label = (payload && payload.alt) || (payload && payload.kind === 'image' ? 'image' : 'attachment');
           if (payload && payload.kind === 'image') {
             insertHtml('<img alt="' + escapeAttr(label) + '" data-src="' + escapeAttr(payload.src) + '" src="' + escapeAttr(payload.displaySrc || attachmentMap[payload.src] || payload.src) + '" />');
           } else {
-            insertHtml('<a href="' + escapeAttr(payload.src) + '">' + escapeHtml(label) + '</a>');
+            var transcript = payload && payload.kind === 'audio' && String(payload.transcript || '').trim();
+            var transcriptHtml = transcript ? '<blockquote>Voice memo: ' + escapeHtml(transcript) + '</blockquote>' : '';
+            insertHtml(transcriptHtml + '<p><a href="' + escapeAttr(payload.src) + '">' + escapeHtml(label) + '</a></p>');
           }
         } else if (name === 'setLink') {
-          var title = (payload && payload.title) || (payload && payload.url) || '';
           var url = (payload && payload.url) || '';
-          insertHtml('<a href="' + escapeAttr(url) + '">' + escapeHtml(title) + '</a>');
+          editor.focus();
+          restoreSelection();
+          var linkSelection = window.getSelection();
+          var selectedText = linkSelection ? String(linkSelection.toString() || '').trim() : '';
+          var explicitTitle = String((payload && payload.title) || '').trim();
+          var title = explicitTitle || selectedText || url;
+          if (selectedText && !explicitTitle) {
+            document.execCommand('createLink', false, url);
+            saveSelection();
+            emitChange('command');
+          } else {
+            insertHtml('<a href="' + escapeAttr(url) + '">' + escapeHtml(title) + '</a>');
+          }
         } else if (name === 'removeLink') {
           editor.focus();
           restoreSelection();
           document.execCommand('unlink', false);
+          saveSelection();
           emitChange('command');
         } else if (name === 'undo' || name === 'redo') {
           editor.focus();
@@ -1334,7 +1409,7 @@ function nativeEditorHtml({
         },
         setMarkdown: function (nextMarkdown) {
           editor.innerHTML = markdownToHtml(nextMarkdown || '');
-          emitChange('flush');
+          emitChange('sync');
         },
         flushMarkdown: function (requestId) {
           emitChange('flush', requestId);
@@ -1376,6 +1451,7 @@ const NativeRichTextEditor = memo(forwardRef<NativeRichEditorHandle, NativeRichT
   const latestMarkdownRef = useRef(markdown);
   const lastWebMarkdownRef = useRef(markdown);
   const readyRef = useRef(false);
+  const contentSyncedRef = useRef(false);
   const flushRequestIdRef = useRef(0);
   const pendingFlushesRef = useRef(new Map<number, PendingMarkdownFlush>());
   const html = useMemo(
@@ -1395,8 +1471,13 @@ const NativeRichTextEditor = memo(forwardRef<NativeRichEditorHandle, NativeRichT
     webViewRef.current?.injectJavaScript(`${script}\ntrue;`);
   }, []);
 
+  const syncMarkdown = useCallback((nextMarkdown: string) => {
+    contentSyncedRef.current = false;
+    inject(`window.xopcEditor && window.xopcEditor.setMarkdown(${JSON.stringify(nextMarkdown)});`);
+  }, [inject]);
+
   const flushMarkdown = useCallback(() => new Promise<string>((resolve) => {
-    if (!readyRef.current) {
+    if (!readyRef.current || !contentSyncedRef.current) {
       resolve(latestMarkdownRef.current);
       return;
     }
@@ -1447,8 +1528,8 @@ const NativeRichTextEditor = memo(forwardRef<NativeRichEditorHandle, NativeRichT
   useEffect(() => {
     latestMarkdownRef.current = markdown;
     if (!readyRef.current || markdown === lastWebMarkdownRef.current) return;
-    inject(`window.xopcEditor && window.xopcEditor.setMarkdown(${JSON.stringify(markdown)});`);
-  }, [inject, markdown]);
+    syncMarkdown(markdown);
+  }, [markdown, syncMarkdown]);
 
   useEffect(() => {
     if (!readyRef.current) return;
@@ -1469,14 +1550,21 @@ const NativeRichTextEditor = memo(forwardRef<NativeRichEditorHandle, NativeRichT
     }
     if (message.type === 'ready') {
       readyRef.current = true;
-      if (typeof message.markdown === 'string') {
-        lastWebMarkdownRef.current = message.markdown;
+      if (typeof message.markdown !== 'string') {
+        syncMarkdown(latestMarkdownRef.current);
       }
     }
     if ('markdown' in message && typeof message.markdown === 'string') {
-      const shouldForward = shouldForwardNativeMarkdownMessage(message, latestMarkdownRef.current);
-      latestMarkdownRef.current = message.markdown;
+      const decision = decideNativeMarkdownMessage(message, latestMarkdownRef.current);
       lastWebMarkdownRef.current = message.markdown;
+      if (decision.type === 'accept') {
+        latestMarkdownRef.current = decision.markdown;
+        contentSyncedRef.current = true;
+      } else if (decision.type === 'acknowledge') {
+        contentSyncedRef.current = true;
+      } else {
+        syncMarkdown(decision.markdown);
+      }
       if (message.type === 'content' && typeof message.flushRequestId === 'number' && isNativeMarkdownFlushResponse(message, message.flushRequestId)) {
         const pending = pendingFlushesRef.current.get(message.flushRequestId);
         if (pending) {
@@ -1485,8 +1573,8 @@ const NativeRichTextEditor = memo(forwardRef<NativeRichEditorHandle, NativeRichT
           pending.resolve(message.markdown);
         }
       }
-      if (shouldForward) {
-        void onChangeMarkdown(message.markdown);
+      if (decision.type === 'accept') {
+        void onChangeMarkdown(decision.markdown);
       }
     }
     if (message.type === 'selection') {
@@ -1495,7 +1583,7 @@ const NativeRichTextEditor = memo(forwardRef<NativeRichEditorHandle, NativeRichT
     if (message.state) {
       void onStateChange?.(message.state);
     }
-  }, [onChangeMarkdown, onSelectionChange, onStateChange]);
+  }, [onChangeMarkdown, onSelectionChange, onStateChange, syncMarkdown]);
 
   return (
     <WebView
@@ -1510,6 +1598,10 @@ const NativeRichTextEditor = memo(forwardRef<NativeRichEditorHandle, NativeRichT
       automaticallyAdjustContentInsets={false}
       contentInset={{ top: 0, left: 0, bottom: Math.max(0, Math.round(bottomInset)), right: 0 }}
       contentInsetAdjustmentBehavior="never"
+      onLoadStart={() => {
+        readyRef.current = false;
+        contentSyncedRef.current = false;
+      }}
       onMessage={handleMessage}
       style={styles.richWebView}
       containerStyle={styles.richWebViewContainer}

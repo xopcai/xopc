@@ -107,24 +107,6 @@ async function throwIfNotOk(res: Response): Promise<void> {
   throw new Error(formatApiHttpError(res.status, res.statusText, apiErrorMessage(data)));
 }
 
-function isCronJob(x: unknown): x is CronJob {
-  if (x == null || typeof x !== 'object') return false;
-  const o = x as Record<string, unknown>;
-  return typeof o.id === 'string' && typeof o.schedule === 'string' && typeof o.enabled === 'boolean';
-}
-
-function isCronRunRow(x: unknown): x is CronRunRow {
-  if (x == null || typeof x !== 'object') return false;
-  const o = x as Record<string, unknown>;
-  const status = o.status;
-  return (
-    typeof o.id === 'string' &&
-    typeof o.jobId === 'string' &&
-    typeof o.startedAt === 'string' &&
-    (status === 'running' || status === 'success' || status === 'failed' || status === 'cancelled')
-  );
-}
-
 function isAutomation(x: unknown): x is Automation {
   if (x == null || typeof x !== 'object') return false;
   const o = x as Record<string, unknown>;
@@ -147,6 +129,7 @@ function isAutomationRun(x: unknown): x is AutomationRun {
     typeof o.automationId === 'string' &&
     typeof o.automationName === 'string' &&
     typeof o.createdAtMs === 'number' &&
+    Number.isFinite(o.createdAtMs) &&
     (o.status === 'queued' ||
       o.status === 'running' ||
       o.status === 'succeeded' ||
@@ -164,7 +147,7 @@ function cronJobFromAutomation(automation: Automation): CronJob {
       ? automation.trigger.schedule.expr
       : '';
   const payload =
-    automation.action.kind === 'agent' && typeof automation.action.instruction === 'string'
+    schedule && automation.action.kind === 'agent' && typeof automation.action.instruction === 'string'
       ? { kind: 'agentTurn' as const, message: automation.action.instruction }
       : undefined;
 
@@ -174,7 +157,7 @@ function cronJobFromAutomation(automation: Automation): CronJob {
     schedule,
     enabled: automation.enabled,
     next_run:
-      typeof automation.state?.nextRunAtMs === 'number'
+      typeof automation.state?.nextRunAtMs === 'number' && Number.isFinite(automation.state.nextRunAtMs)
         ? new Date(automation.state.nextRunAtMs).toISOString()
         : undefined,
     payload,
@@ -190,7 +173,10 @@ function cronRunFromAutomationRun(run: AutomationRun): CronRunRow {
         : run.status === 'cancelled'
           ? 'cancelled'
           : 'failed';
-  const startedAtMs = run.startedAtMs ?? run.createdAtMs;
+  const startedAtMs =
+    typeof run.startedAtMs === 'number' && Number.isFinite(run.startedAtMs)
+      ? run.startedAtMs
+      : run.createdAtMs;
 
   return {
     id: run.id,
@@ -198,7 +184,10 @@ function cronRunFromAutomationRun(run: AutomationRun): CronRunRow {
     jobName: run.automationName,
     status,
     startedAt: new Date(startedAtMs).toISOString(),
-    endedAt: typeof run.endedAtMs === 'number' ? new Date(run.endedAtMs).toISOString() : undefined,
+    endedAt:
+      typeof run.endedAtMs === 'number' && Number.isFinite(run.endedAtMs)
+        ? new Date(run.endedAtMs).toISOString()
+        : undefined,
     duration: run.durationMs,
     error: run.error,
     summary: run.summary,
