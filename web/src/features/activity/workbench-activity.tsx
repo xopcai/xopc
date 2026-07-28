@@ -20,7 +20,7 @@ import { cn } from '@/lib/cn';
 import { type ActivityItem, useActivityStore } from '@/stores/activity-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
-const INITIAL_VISIBLE_ITEMS = 6;
+const INITIAL_VISIBLE_ITEMS = 3;
 
 const TONE_META = {
   info: { Icon: Info, className: 'text-accent-fg bg-accent-soft' },
@@ -100,11 +100,11 @@ export function WorkbenchActivity() {
   const visibleItems = expanded ? items : items.slice(0, INITIAL_VISIBLE_ITEMS);
 
   return (
-    <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5" aria-labelledby="workbench-activity-title">
+    <section className="rounded-2xl bg-surface-base p-4 shadow-surface" aria-labelledby="workbench-activity-title">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            <Activity className="size-4 text-accent" aria-hidden />
+            <Activity className="size-4 text-fg-subtle" aria-hidden />
             <h2 id="workbench-activity-title" className="text-sm font-semibold text-fg">{copy.activityTitle}</h2>
             {runningCount > 0 ? (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent-fg">
@@ -117,9 +117,9 @@ export function WorkbenchActivity() {
               </span>
             ) : null}
           </div>
-          <p className="mt-1 text-xs text-fg-muted">{copy.activityHint}</p>
+          {items.length > 0 ? <p className="mt-1 text-xs text-fg-muted">{copy.activityHint}</p> : null}
         </div>
-        {items.length > 0 ? (
+        {expanded && items.length > 0 ? (
           <div className="flex items-center gap-1">
             {unreadCount > 0 ? (
               <Button type="button" variant="ghost" className="h-8 px-2 text-xs" onClick={markAllRead}>
@@ -138,7 +138,7 @@ export function WorkbenchActivity() {
       </div>
 
       {items.length > 0 ? (
-        <div className="mt-4 rounded-xl bg-surface-panel px-3">
+        <div className="mt-3 px-1">
           {visibleItems.map((item) => <ActivityRow key={item.id} item={item} />)}
           {items.length > INITIAL_VISIBLE_ITEMS ? (
             <div className="border-t border-edge-subtle py-2 text-center">
@@ -149,10 +149,9 @@ export function WorkbenchActivity() {
           ) : null}
         </div>
       ) : (
-        <div className="mt-4 flex min-h-28 flex-col items-center justify-center rounded-xl bg-surface-panel px-6 text-center">
-          <Clock3 className="size-5 text-fg-subtle" aria-hidden />
-          <p className="mt-2 text-sm font-medium text-fg">{copy.activityEmpty}</p>
-          <p className="mt-1 max-w-lg text-xs leading-5 text-fg-muted">{copy.activityEmptyBody}</p>
+        <div className="mt-3 flex items-center gap-2 text-sm text-fg-muted">
+          <Clock3 className="size-4 text-fg-subtle" aria-hidden />
+          <p>{copy.activityEmpty}</p>
         </div>
       )}
     </section>
