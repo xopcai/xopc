@@ -29,7 +29,6 @@ export const MessageList = memo(function MessageList({
   onDeleteRound,
   onRetryUserMessageRound,
   deleteRoundDisabled,
-  onAbortCurrentTurn,
   onSaveAssistantToSourceNote,
   onExtractAssistantTask,
   onSuggestWorkItemUpdate,
@@ -51,7 +50,6 @@ export const MessageList = memo(function MessageList({
   onDeleteRound?: (messageIndex: number) => void;
   onRetryUserMessageRound?: (messageIndex: number) => void;
   deleteRoundDisabled?: boolean;
-  onAbortCurrentTurn?: () => void;
   onSaveAssistantToSourceNote?: (content: string) => Promise<void> | void;
   onExtractAssistantTask?: (content: string) => Promise<void> | void;
   onSuggestWorkItemUpdate?: (content: string) => Promise<void> | void;
@@ -119,7 +117,6 @@ export const MessageList = memo(function MessageList({
               // Streaming is only relevant to the active user round. Passing this
               // session-wide flag to every historical row defeats MessageBubble's memo.
               deleteRoundDisabled={Boolean(deleteRoundDisabled && isLastUserRow)}
-              onAbortCurrentTurn={onAbortCurrentTurn}
               onSaveAssistantToSourceNote={onSaveAssistantToSourceNote}
               onExtractAssistantTask={onExtractAssistantTask}
               onSuggestWorkItemUpdate={onSuggestWorkItemUpdate}

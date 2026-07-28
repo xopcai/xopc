@@ -1,7 +1,7 @@
 // Block-level renderers used by MessageBubble. Assistant activity is collected
 // into one turn-level disclosure instead of fragmenting the reply around text.
 
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { AlertCircle, Copy, ExternalLink, File, FolderOpen, Loader2, X } from 'lucide-react';
 import { useThrottledCallback } from 'use-debounce';
 
@@ -37,9 +37,11 @@ import {
   mergeConsecutiveTextBlocks,
   prepareStreamingMarkdown,
 } from '@/features/chat/messages/streaming-markdown';
+import { splitStreamingMarkdownBlocks } from '@/components/markdown/parse-markdown';
 import {
   collectTurnActivityBlocks,
   hasAssistantAnswerText,
+  type TurnActivityBlock,
 } from '@/features/chat/messages/turn-activity';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
@@ -296,7 +298,16 @@ function ChatMarkdownView({
   // the first and final values. This prevents high-frequency DOM replacement
   // without allowing a table to wait for the stream to finish.
   const streamingContent = useThrottledStreamingMarkdown(content, streaming);
-  const renderedContent = streaming ? prepareStreamingMarkdown(streamingContent) : content;
+  const streamingBlocks = useMemo(
+    () =>
+      streaming
+        ? splitStreamingMarkdownBlocks(streamingContent)
+        : { stable: [], tail: content },
+    [content, streaming, streamingContent],
+  );
+  const renderedTail = streaming
+    ? prepareStreamingMarkdown(streamingBlocks.tail)
+    : content;
   const setPreview = useWorkspacePreviewStore((s) => s.setPath);
   const language = useLocaleStore((s) => s.language);
   const fileReferenceMessages = messages(language).chat.fileReference;
@@ -341,12 +352,36 @@ function ChatMarkdownView({
 
   return (
     <>
-      <MarkdownView
-        content={renderedContent}
-        compact={compact}
-        onWorkspaceFileOpen={openFile}
-        openHttpLinksInNewTab
-      />
+      {streaming ? (
+        <div className="markdown-stream-blocks">
+          {streamingBlocks.stable.map((block, index) => (
+            <MarkdownView
+              key={index}
+              content={block}
+              compact={compact}
+              className="markdown-stream-block"
+              onWorkspaceFileOpen={openFile}
+              openHttpLinksInNewTab
+              renderMermaid={false}
+            />
+          ))}
+          <MarkdownView
+            content={renderedTail}
+            compact={compact}
+            className="markdown-stream-block markdown-stream-tail"
+            onWorkspaceFileOpen={openFile}
+            openHttpLinksInNewTab
+            renderMermaid={false}
+          />
+        </div>
+      ) : (
+        <MarkdownView
+          content={content}
+          compact={compact}
+          onWorkspaceFileOpen={openFile}
+          openHttpLinksInNewTab
+        />
+      )}
       {resolution ? (
         <ChatMarkdownFileActionCard
           resolution={resolution}
@@ -454,6 +489,8 @@ export function ChunkedContent({
   sessionKey,
   workflowOptions,
   reasoningLevel,
+  activityBlocks: suppliedActivityBlocks,
+  answerStarted: suppliedAnswerStarted,
 }: {
   content: MessageContent[];
   isUser: boolean;
@@ -494,11 +531,16 @@ export function ChunkedContent({
   sessionKey: string | null | undefined;
   workflowOptions: AssistantActivityWorkflowOptions;
   reasoningLevel: ReasoningLevel;
+  activityBlocks?: TurnActivityBlock[];
+  answerStarted?: boolean;
 }) {
   const renderContent = isUser ? content : mergeConsecutiveTextBlocks(content);
   const nodes: ReactNode[] = [];
-  const activityBlocks = isUser ? [] : collectTurnActivityBlocks(renderContent);
-  const answerStarted = !isUser && hasAssistantAnswerText(renderContent);
+  const activityBlocks = isUser
+    ? []
+    : (suppliedActivityBlocks ?? collectTurnActivityBlocks(renderContent));
+  const answerStarted =
+    suppliedAnswerStarted ?? (!isUser && hasAssistantAnswerText(renderContent));
   let activityRendered = false;
   let i = 0;
   let imageOrdinal = 0;

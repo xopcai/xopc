@@ -52,3 +52,46 @@ export function parseMarkdown(
 ): string {
   return marked.parse(text, { ...MARKED_OPTIONS, ...overrides, async: false });
 }
+
+export type StreamingMarkdownBlocks = {
+  stable: string[];
+  tail: string;
+};
+
+const REFERENCE_DEFINITION_RE = /^(?: {0,3})\[[^\]]+\]:\s+\S+/m;
+
+/**
+ * Freeze completed top-level Markdown tokens while the final token is still
+ * receiving SSE deltas. Reference-style links intentionally fall back to one
+ * tail because their definitions can affect earlier tokens.
+ */
+export function splitStreamingMarkdownBlocks(text: string): StreamingMarkdownBlocks {
+  if (!text || REFERENCE_DEFINITION_RE.test(text)) {
+    return { stable: [], tail: text };
+  }
+
+  const tokens = marked.lexer(text, MARKED_OPTIONS);
+  let tailIndex = tokens.length - 1;
+  while (tailIndex > 0 && tokens[tailIndex]?.type === 'space') {
+    tailIndex -= 1;
+  }
+  if (tailIndex <= 0) {
+    return { stable: [], tail: text };
+  }
+
+  const stable: string[] = [];
+  for (const token of tokens.slice(0, tailIndex)) {
+    const raw = token.raw ?? '';
+    if (!raw) continue;
+    if (token.type === 'space' && stable.length > 0) {
+      stable[stable.length - 1] += raw;
+    } else {
+      stable.push(raw);
+    }
+  }
+  const stableLength = stable.reduce((sum, block) => sum + block.length, 0);
+  return {
+    stable,
+    tail: text.slice(stableLength),
+  };
+}

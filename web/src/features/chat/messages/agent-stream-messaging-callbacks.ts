@@ -7,6 +7,11 @@ import {
 } from '@/features/chat/session/chat-session-store';
 import type { SessionManager } from '@/features/chat/session/session-manager';
 import {
+  markChatRunCompleted,
+  markChatRunFailed,
+  markChatRunRunning,
+} from '@/features/chat/session/chat-run-presence-store';
+import {
   appendThinkingDelta,
   appendReview,
   appendReviewDelta,
@@ -19,6 +24,36 @@ import {
   finishReview,
   updateToolDetails,
 } from '@/features/chat/messages/streaming';
+import { messages } from '@/i18n/messages';
+import { showToast } from '@/lib/toast';
+import { showActivity } from '@/stores/activity-store';
+import { useLocaleStore } from '@/stores/locale-store';
+
+function notifyBackgroundRunCompleted(chatId: string, failed = false): void {
+  const m = messages(useLocaleStore.getState().language).chat;
+  const title = failed ? m.backgroundRunFailedTitle : m.backgroundRunCompletedTitle;
+  const message = m.backgroundRunCompletedDescription;
+  const href = `/chat/${encodeURIComponent(chatId)}`;
+  showToast({
+    type: failed ? 'error' : 'success',
+    title,
+    message,
+    duration: failed ? 0 : 4_000,
+    source: 'chat',
+    href,
+    dedupeKey: `chat-run:${failed ? 'failed' : 'completed'}:${chatId}`,
+  });
+  if (!failed) {
+    showActivity({
+      tone: 'success',
+      title,
+      message,
+      source: 'chat',
+      href,
+      dedupeKey: `chat-run:completed:${chatId}`,
+    });
+  }
+}
 
 export type AgentStreamFqCallbacks = {
   dismissClarifyForSession: (chatId: string) => void;
@@ -120,6 +155,7 @@ export function createAgentStreamMessagingCallbacks(opts: {
       window.dispatchEvent(new CustomEvent('workflow-run-started-from-chat', { detail: { sessionKey: chatId } }));
     },
     onStreamStart: () => {
+      markChatRunRunning(chatId);
       beforeAssistantDelta();
       store().mutateSessionStreaming(chatId, () => {});
       store().setSessionFlags(chatId, { streaming: true });
@@ -240,19 +276,25 @@ export function createAgentStreamMessagingCallbacks(opts: {
     onClarifyRequest: fq.makeOnClarifyRequest(chatId),
     onResult: () => {
       flushReviewDeltas();
-      if (!shouldApplyStreamUpdate(chatId)) {
-        onBackgroundTerminal();
-        return;
-      }
+      const visible = shouldApplyStreamUpdate(chatId);
       if (chatRunManager.userAborted) {
         chatRunManager.userAborted = false;
+        return;
+      }
+      markChatRunCompleted(chatId, !visible);
+      if (!visible) {
+        notifyBackgroundRunCompleted(chatId);
+        onBackgroundTerminal();
         return;
       }
       finalizeMessage();
     },
     onError: (msg) => {
       flushReviewDeltas();
-      if (!shouldApplyStreamUpdate(chatId)) {
+      const visible = shouldApplyStreamUpdate(chatId);
+      markChatRunFailed(chatId, !visible);
+      if (!visible) {
+        notifyBackgroundRunCompleted(chatId, true);
         onBackgroundTerminal();
         return;
       }

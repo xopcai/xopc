@@ -53,8 +53,8 @@ import {
   type WorkItemUpdateSuggestion,
 } from '@/features/work-items/api';
 import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-store';
+import { useChatRunPresenceStore } from '@/features/chat/session/chat-run-presence-store';
 import { AgentRunErrorBanner } from '@/features/chat/messages/agent-run-error-banner';
-import { LongRunningTurnNotice } from '@/features/chat/messages/long-running-turn-notice';
 import { agentsAppDetailPath } from '@/features/settings/agents/agents-app-path';
 import { showToast } from '@/lib/toast';
 import { showActivity } from '@/stores/activity-store';
@@ -193,6 +193,10 @@ export function ChatPage() {
   const slashQuery = searchParams.get('slash')?.trim() ?? '';
   const draftQuery = searchParams.get('draft') ?? '';
   const chatSessionKey = session.decodedKey ?? session.sessionKey;
+  const markChatRunViewed = useChatRunPresenceStore((state) => state.markViewed);
+  useEffect(() => {
+    if (chatSessionKey) markChatRunViewed(chatSessionKey);
+  }, [chatSessionKey, markChatRunViewed]);
   const { data: workflowMeta } = useWorkflowSessionMetadata(chatSessionKey);
   const workflowRunId = workflowMeta?.workflowRunId ?? null;
   const workflowOwnerAgentId = workflowMeta?.ownerAgentId ?? undefined;
@@ -1166,7 +1170,6 @@ export function ChatPage() {
                     onDeleteRound={stream.deleteMessageRound}
                     onRetryUserMessageRound={stream.retryUserMessageRound}
                     deleteRoundDisabled={stream.streaming || stream.sending}
-                    onAbortCurrentTurn={stream.abort}
                     onSaveAssistantToSourceNote={sourceNoteId ? handleSaveAssistantToSourceNote : undefined}
                     onExtractAssistantTask={sourceNoteId ? handleExtractAssistantTask : undefined}
                     onSuggestWorkItemUpdate={sourceWorkItem ? handleSuggestWorkItemUpdate : undefined}
@@ -1190,17 +1193,6 @@ export function ChatPage() {
                 labels={m.chat}
                 onSubmit={clarify.submitClarifyAnswer}
                 onCancel={clarify.cancelClarifyAnswer}
-              />
-              <LongRunningTurnNotice
-                running={
-                  (stream.streaming || stream.sending) &&
-                  !clarify.clarifyPrompt &&
-                  !showWorkflowLiveBanner
-                }
-                title={m.chat.longRunTitle}
-                description={m.chat.longRunDescription}
-                stopLabel={m.chat.longRunStop}
-                onStop={stream.abort}
               />
               <ChatComposer
                 disabled={

@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api';
 import { useSidebarSessionAgentRun } from '@/features/chat/session/use-sidebar-session-agent-run';
+import { useChatRunPresenceStore } from '@/features/chat/session/chat-run-presence-store';
 import {
   archiveProject,
   createProjectSession,
@@ -186,6 +187,7 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const agentRunActive = useSidebarSessionAgentRun(session.key);
+  const runPresence = useChatRunPresenceStore((state) => state.runs[session.key]);
   const title = sessionTitle(session, defaultUnnamedTitle);
   const isPinned = session.status === 'pinned';
 
@@ -243,6 +245,23 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
                 aria-hidden
               />
             </span>
+          ) : runPresence?.unread ? (
+            <span
+              className={cn(
+                'pointer-events-none absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full shadow-sm ring-2 ring-surface-panel dark:ring-surface-base',
+                runPresence.status === 'failed' ? 'bg-red-500' : 'bg-emerald-500',
+              )}
+              title={
+                runPresence.status === 'failed'
+                  ? sb.taskSessionAgentFailed
+                  : sb.taskSessionAgentCompleted
+              }
+              aria-label={
+                runPresence.status === 'failed'
+                  ? sb.taskSessionAgentFailed
+                  : sb.taskSessionAgentCompleted
+              }
+            />
           ) : null}
         </span>
         {showSourceChannelIcon ? (

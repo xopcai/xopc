@@ -304,6 +304,14 @@ html.dark .markdown-code-copy-btn:hover {
   margin-bottom: 0;
 }
 
+.markdown-stream-block:not(.markdown-stream-tail) > :last-child {
+  margin-bottom: 0.75em;
+}
+
+.markdown-stream-tail:empty {
+  display: none;
+}
+
 .markdown-body.markdown-compact pre {
   margin-bottom: 0.75em;
 }

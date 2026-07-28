@@ -16,6 +16,10 @@ import {
   getSessionMessages,
   useChatSessionStore,
 } from '@/features/chat/session/chat-session-store';
+import {
+  clearChatRunPresence,
+  markChatRunRunning,
+} from '@/features/chat/session/chat-run-presence-store';
 import { defaultSessionMeta } from '@/features/chat/session/chat-session-defaults';
 import {
   dispatchSessionTitleUpdated,
@@ -170,6 +174,7 @@ export function useChatSessionStreaming(deps: {
       store().seedSessionIfEmpty(chatId, seedMessages, true, true, seedHasMore);
       store().setSessionFlags(chatId, { sending: true, streaming: true });
       store().setSessionProgress(chatId, null);
+      markChatRunRunning(chatId);
 
       let hydratedResumeTail = false;
       const hydrateResumeTailAssistant = () => {
@@ -216,12 +221,14 @@ export function useChatSessionStreaming(deps: {
 
         const resumed = await chatRunManager.sender.resume(runId, chatId, resumeStreamCallbacks);
         if (!resumed) {
+          clearChatRunPresence(chatId);
           clearFailedResumeState();
         }
       } catch (err) {
         if ((err as Error).name !== 'AbortError') {
           console.error('[chat] resume failed:', err);
         }
+        clearChatRunPresence(chatId);
         clearFailedResumeState();
       }
     },
@@ -328,6 +335,7 @@ export function useChatSessionStreaming(deps: {
         sending: true,
         streaming: false,
       });
+      markChatRunRunning(chatId);
 
       if (!existing?.name?.trim() && trimmed) {
         const provisional = provisionalTitleFromUserText(trimmed);
@@ -364,7 +372,10 @@ export function useChatSessionStreaming(deps: {
       } catch (err) {
         if ((err as Error).name !== 'AbortError') {
           store().clearStreamingState(chatId);
+          clearChatRunPresence(chatId);
           setShellError(JSON.stringify(buildSendFailedErrorPayload()));
+        } else {
+          clearChatRunPresence(chatId);
         }
       } finally {
         sendingRef.current = false;
@@ -393,10 +404,11 @@ export function useChatSessionStreaming(deps: {
     chatRunManager.resetRunTracking();
     fq.dismissClarifyAndClearPending();
     chatRunManager.abort();
+    const key = sessionKeyRef.current;
+    if (key) clearChatRunPresence(key);
     sendingRef.current = false;
     streamingRef.current = false;
     finalizeMessage({ skipSteeringQueueFlush: true });
-    const key = sessionKeyRef.current;
     if (key) {
       window.setTimeout(() => {
         void loadSessionById(key, 0);
