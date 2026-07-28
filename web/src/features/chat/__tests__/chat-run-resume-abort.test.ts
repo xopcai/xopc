@@ -203,4 +203,27 @@ describe('MessageSender terminal state', () => {
       expect(hasPendingAgentRunForChat(sessionKey)).toBe(false);
     },
   );
+
+  it('reports an expired resume run so the session state can return to idle', async () => {
+    const sender = new MessageSender();
+    vi.stubGlobal('window', {
+      location: { origin: 'http://localhost:3000' },
+      dispatchEvent: vi.fn(),
+    });
+    vi.mocked(apiFetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: false,
+          error: { code: 'NOT_FOUND', message: 'Run not found or already expired' },
+        }),
+        { status: 404, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    setPendingAgentRun(sessionKey, 'run-expired');
+
+    await expect(sender.resume('run-expired', sessionKey)).resolves.toBe(false);
+
+    expect(sender.isStreamingFor(sessionKey)).toBe(false);
+    expect(hasPendingAgentRunForChat(sessionKey)).toBe(false);
+  });
 });

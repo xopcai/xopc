@@ -185,6 +185,20 @@ export function useChatSessionStreaming(deps: {
         store().applyHydratedTail(chatId, committedWithoutTail, extractedTail);
       };
 
+      const clearFailedResumeState = () => {
+        store().clearStreamingState(chatId);
+        if (chatRunManager.activeResumeRunId === runId) {
+          chatRunManager.activeResumeRunId = null;
+        }
+        if (!shouldApplyStreamUpdate(chatId)) {
+          chatRunManager.clearActiveStreamSessionKey(chatId);
+          return;
+        }
+        sendingRef.current = false;
+        streamingRef.current = false;
+        chatRunManager.clearActiveStreamSessionKey(chatId);
+      };
+
       try {
         const resumeStreamCallbacks = createAgentStreamMessagingCallbacks({
           chatId,
@@ -200,20 +214,15 @@ export function useChatSessionStreaming(deps: {
           fq,
         });
 
-        await chatRunManager.sender.resume(runId, chatId, resumeStreamCallbacks);
+        const resumed = await chatRunManager.sender.resume(runId, chatId, resumeStreamCallbacks);
+        if (!resumed) {
+          clearFailedResumeState();
+        }
       } catch (err) {
         if ((err as Error).name !== 'AbortError') {
           console.error('[chat] resume failed:', err);
         }
-        store().clearStreamingState(chatId);
-        chatRunManager.activeResumeRunId = null;
-        if (!shouldApplyStreamUpdate(chatId)) {
-          chatRunManager.clearActiveStreamSessionKey(chatId);
-          return;
-        }
-        sendingRef.current = false;
-        streamingRef.current = false;
-        chatRunManager.clearActiveStreamSessionKey(chatId);
+        clearFailedResumeState();
       }
     },
     [

@@ -29,6 +29,37 @@ export type CronRunRow = {
   sessionId?: string;
 };
 
+type Automation = {
+  id: string;
+  name: string;
+  enabled: boolean;
+  trigger: {
+    kind: string;
+    schedule?: { kind: string; expr?: string };
+  };
+  action: {
+    kind: string;
+    instruction?: string;
+  };
+  state?: {
+    nextRunAtMs?: number;
+  };
+};
+
+type AutomationRun = {
+  id: string;
+  automationId: string;
+  automationName: string;
+  status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'timeout';
+  createdAtMs: number;
+  startedAtMs?: number;
+  endedAtMs?: number;
+  durationMs?: number;
+  error?: string;
+  summary?: string;
+  sessionKey?: string;
+};
+
 export function cronRunSessionKey(run: Pick<CronRunRow, 'sessionKey' | 'sessionId'>): string | null {
   const sk = run.sessionKey?.trim();
   if (sk) return sk;
@@ -94,6 +125,87 @@ function isCronRunRow(x: unknown): x is CronRunRow {
   );
 }
 
+function isAutomation(x: unknown): x is Automation {
+  if (x == null || typeof x !== 'object') return false;
+  const o = x as Record<string, unknown>;
+  return (
+    typeof o.id === 'string' &&
+    typeof o.name === 'string' &&
+    typeof o.enabled === 'boolean' &&
+    o.trigger != null &&
+    typeof o.trigger === 'object' &&
+    o.action != null &&
+    typeof o.action === 'object'
+  );
+}
+
+function isAutomationRun(x: unknown): x is AutomationRun {
+  if (x == null || typeof x !== 'object') return false;
+  const o = x as Record<string, unknown>;
+  return (
+    typeof o.id === 'string' &&
+    typeof o.automationId === 'string' &&
+    typeof o.automationName === 'string' &&
+    typeof o.createdAtMs === 'number' &&
+    (o.status === 'queued' ||
+      o.status === 'running' ||
+      o.status === 'succeeded' ||
+      o.status === 'failed' ||
+      o.status === 'cancelled' ||
+      o.status === 'timeout')
+  );
+}
+
+function cronJobFromAutomation(automation: Automation): CronJob {
+  const schedule =
+    automation.trigger.kind === 'schedule' &&
+    automation.trigger.schedule?.kind === 'cron' &&
+    typeof automation.trigger.schedule.expr === 'string'
+      ? automation.trigger.schedule.expr
+      : '';
+  const payload =
+    automation.action.kind === 'agent' && typeof automation.action.instruction === 'string'
+      ? { kind: 'agentTurn' as const, message: automation.action.instruction }
+      : undefined;
+
+  return {
+    id: automation.id,
+    name: automation.name,
+    schedule,
+    enabled: automation.enabled,
+    next_run:
+      typeof automation.state?.nextRunAtMs === 'number'
+        ? new Date(automation.state.nextRunAtMs).toISOString()
+        : undefined,
+    payload,
+  };
+}
+
+function cronRunFromAutomationRun(run: AutomationRun): CronRunRow {
+  const status: CronRunRow['status'] =
+    run.status === 'succeeded'
+      ? 'success'
+      : run.status === 'queued' || run.status === 'running'
+        ? 'running'
+        : run.status === 'cancelled'
+          ? 'cancelled'
+          : 'failed';
+  const startedAtMs = run.startedAtMs ?? run.createdAtMs;
+
+  return {
+    id: run.id,
+    jobId: run.automationId,
+    jobName: run.automationName,
+    status,
+    startedAt: new Date(startedAtMs).toISOString(),
+    endedAt: typeof run.endedAtMs === 'number' ? new Date(run.endedAtMs).toISOString() : undefined,
+    duration: run.durationMs,
+    error: run.error,
+    summary: run.summary,
+    sessionKey: run.sessionKey,
+  };
+}
+
 export function isEditableCronJob(job: CronJob): job is CronJob & { payload: CronAgentPayload } {
   const payload = job.payload;
   return payload?.kind === 'agentTurn' && typeof payload.message === 'string';
@@ -109,61 +221,63 @@ export function cronJobMessage(job: Pick<CronJob, 'payload'>): string {
 
 function createJobBody(input: CreateCronJobInput) {
   return {
-    schedule: input.schedule,
     name: input.name.trim(),
-    sessionTarget: 'isolated' as const,
-    delivery: { mode: 'none' as const },
-    payload: { kind: 'agentTurn' as const, message: input.message.trim() },
+    enabled: true,
+    trigger: { kind: 'schedule' as const, schedule: { kind: 'cron' as const, expr: input.schedule } },
+    action: { kind: 'agent' as const, instruction: input.message.trim() },
+    afterRun: { kind: 'saveToSession' as const },
   };
 }
 
 function updateJobBody(input: UpdateCronJobInput) {
   const body: Record<string, unknown> = {};
   if (input.name !== undefined) body.name = input.name.trim();
-  if (input.schedule !== undefined) body.schedule = input.schedule;
+  if (input.schedule !== undefined) {
+    body.trigger = { kind: 'schedule', schedule: { kind: 'cron', expr: input.schedule } };
+  }
   if (input.message !== undefined) {
-    body.payload = { kind: 'agentTurn', message: input.message.trim() };
+    body.action = { kind: 'agent', instruction: input.message.trim() };
   }
   return body;
 }
 
 export async function fetchCronJobs(): Promise<CronJob[]> {
-  const res = await apiFetch('/api/cron');
-  const data = (await parseJson(res)) as { jobs?: unknown };
+  const res = await apiFetch('/api/automations');
+  const data = (await parseJson(res)) as { automations?: unknown };
   if (!res.ok) {
     throw new Error(formatApiHttpError(res.status, res.statusText, apiErrorMessage(data)));
   }
-  if (!Array.isArray(data.jobs)) return [];
-  return data.jobs.filter(isCronJob);
+  if (!Array.isArray(data.automations)) return [];
+  return data.automations.filter(isAutomation).map(cronJobFromAutomation);
 }
 
 export async function fetchCronJob(id: string): Promise<CronJob | null> {
-  const res = await apiFetch(`/api/cron/${encId(id)}`);
-  const data = (await parseJson(res)) as { job?: unknown; error?: unknown };
+  const res = await apiFetch(`/api/automations/${encId(id)}`);
+  const data = (await parseJson(res)) as { automation?: unknown; error?: unknown };
   if (res.status === 404) return null;
   if (!res.ok) {
     throw new Error(formatApiHttpError(res.status, res.statusText, apiErrorMessage(data)));
   }
-  return isCronJob(data.job) ? data.job : null;
+  return isAutomation(data.automation) ? cronJobFromAutomation(data.automation) : null;
 }
 
 export async function createCronJob(input: CreateCronJobInput): Promise<{ id: string }> {
-  const res = await apiFetch('/api/cron', {
+  const res = await apiFetch('/api/automations', {
     method: 'POST',
     body: JSON.stringify(createJobBody(input)),
   });
-  const data = (await parseJson(res)) as { id?: unknown; error?: unknown };
+  const data = (await parseJson(res)) as { automation?: unknown; error?: unknown };
   if (!res.ok) {
     throw new Error(formatApiHttpError(res.status, res.statusText, apiErrorMessage(data)));
   }
-  if (typeof data.id !== 'string') {
+  if (!isAutomation(data.automation)) {
     throw new Error('Invalid create response');
   }
-  return { id: data.id };
+  return { id: data.automation.id };
 }
 
 export async function updateCronJob(id: string, input: UpdateCronJobInput): Promise<void> {
-  const res = await apiFetch(`/api/cron/${encId(id)}`, {
+  const res = await apiFetch(`/api/automations/${encId(id)}`, {
     method: 'PATCH',
     body: JSON.stringify(updateJobBody(input)),
   });
@@ -171,30 +285,30 @@ export async function updateCronJob(id: string, input: UpdateCronJobInput): Prom
 }
 
 export async function deleteCronJob(id: string): Promise<void> {
-  const res = await apiFetch(`/api/cron/${encId(id)}`, { method: 'DELETE' });
+  const res = await apiFetch(`/api/automations/${encId(id)}`, { method: 'DELETE' });
   await throwIfNotOk(res);
 }
 
 export async function toggleCronJob(id: string, enabled: boolean): Promise<void> {
-  const res = await apiFetch(`/api/cron/${encId(id)}/toggle`, {
+  const action = enabled ? 'resume' : 'pause';
+  const res = await apiFetch(`/api/automations/${encId(id)}/${action}`, {
     method: 'POST',
-    body: JSON.stringify({ enabled }),
   });
   await throwIfNotOk(res);
 }
 
 export async function runCronJobNow(id: string): Promise<void> {
-  const res = await apiFetch(`/api/cron/${encId(id)}/run`, { method: 'POST' });
+  const res = await apiFetch(`/api/automations/${encId(id)}/run`, { method: 'POST' });
   await throwIfNotOk(res);
 }
 
 export async function fetchCronRunsHistory(limit = RUNS_HISTORY_LIMIT): Promise<CronRunRow[]> {
   const q = encodeURIComponent(String(limit));
-  const res = await apiFetch(`/api/cron/runs/history?limit=${q}`);
+  const res = await apiFetch(`/api/automation-runs?limit=${q}`);
   const data = (await parseJson(res)) as { runs?: unknown };
   if (!res.ok) {
     throw new Error(formatApiHttpError(res.status, res.statusText, apiErrorMessage(data)));
   }
   if (!Array.isArray(data.runs)) return [];
-  return data.runs.filter(isCronRunRow);
+  return data.runs.filter(isAutomationRun).map(cronRunFromAutomationRun);
 }
