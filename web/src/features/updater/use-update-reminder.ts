@@ -35,6 +35,7 @@ export type UpdateReminderView =
   | { kind: 'electron-ready'; version: string }
   | { kind: 'electron-downloading'; percent: number }
   | { kind: 'electron-error'; message: string }
+  | { kind: 'npm-restarting'; version: string }
   | { kind: 'npm-restart-required'; version: string }
   | { kind: 'npm'; version: string; channel: string | null };
 
@@ -55,14 +56,17 @@ export function useUpdateReminder() {
     useUpdateStatus();
   const [dismissed, setDismissed] = useState<Dismissed>(readDismissed);
   const [dismissUi, setDismissUi] = useState({ downloading: false, electronError: false });
-  const [pendingNpmRestartVersion, setPendingNpmRestartVersion] = useState<string | null>(() => {
+  const [pendingNpmRestart, setPendingNpmRestart] = useState<{
+    version: string;
+    automatic: boolean;
+  } | null>(() => {
     if (typeof window === 'undefined' || isElectronEnv) return null;
     try {
       const raw = sessionStorage.getItem(NPM_PENDING_RESTART_KEY);
       if (!raw) return null;
-      const p = JSON.parse(raw) as { installedVersion?: string };
+      const p = JSON.parse(raw) as { installedVersion?: string; automaticRestart?: boolean };
       const v = typeof p.installedVersion === 'string' ? p.installedVersion.trim() : '';
-      return v || null;
+      return v ? { version: v, automatic: p.automaticRestart === true } : null;
     } catch {
       return null;
     }
@@ -81,17 +85,17 @@ export function useUpdateReminder() {
 
   const clearedPendingRestartRef = useRef<string | null>(null);
   if (
-    pendingNpmRestartVersion &&
-    npm?.currentVersion === pendingNpmRestartVersion &&
-    clearedPendingRestartRef.current !== pendingNpmRestartVersion
+    pendingNpmRestart &&
+    npm?.currentVersion === pendingNpmRestart.version &&
+    clearedPendingRestartRef.current !== pendingNpmRestart.version
   ) {
-    clearedPendingRestartRef.current = pendingNpmRestartVersion;
+    clearedPendingRestartRef.current = pendingNpmRestart.version;
     try {
       sessionStorage.removeItem(NPM_PENDING_RESTART_KEY);
     } catch {
       /* ignore */
     }
-    setPendingNpmRestartVersion(null);
+    setPendingNpmRestart(null);
   }
 
   useEffect(() => {
@@ -100,14 +104,16 @@ export function useUpdateReminder() {
       try {
         const raw = sessionStorage.getItem(NPM_PENDING_RESTART_KEY);
         if (!raw) {
-          setPendingNpmRestartVersion(null);
+          setPendingNpmRestart(null);
           return;
         }
-        const p = JSON.parse(raw) as { installedVersion?: string };
+        const p = JSON.parse(raw) as { installedVersion?: string; automaticRestart?: boolean };
         const v = typeof p.installedVersion === 'string' ? p.installedVersion.trim() : '';
-        setPendingNpmRestartVersion(v || null);
+        setPendingNpmRestart(
+          v ? { version: v, automatic: p.automaticRestart === true } : null,
+        );
       } catch {
-        setPendingNpmRestartVersion(null);
+        setPendingNpmRestart(null);
       }
     };
     sync();
@@ -167,11 +173,13 @@ export function useUpdateReminder() {
     }
     if (
       !isElectron &&
-      pendingNpmRestartVersion &&
+      pendingNpmRestart &&
       npm &&
-      npm.currentVersion !== pendingNpmRestartVersion
+      npm.currentVersion !== pendingNpmRestart.version
     ) {
-      return { kind: 'npm-restart-required', version: pendingNpmRestartVersion };
+      return pendingNpmRestart.automatic
+        ? { kind: 'npm-restarting', version: pendingNpmRestart.version }
+        : { kind: 'npm-restart-required', version: pendingNpmRestart.version };
     }
     if (!isElectron && npm?.updateAvailable && npm.latestVersion) {
       if (dismissed.npm === npm.latestVersion) {
@@ -188,7 +196,7 @@ export function useUpdateReminder() {
     dismissUi.electronError,
     isElectron,
     npm,
-    pendingNpmRestartVersion,
+    pendingNpmRestart,
   ]);
 
   const dismiss = useCallback(() => {
@@ -200,13 +208,13 @@ export function useUpdateReminder() {
       setDismissUi((ui) => ({ ...ui, electronError: true }));
       return;
     }
-    if (show.kind === 'npm-restart-required') {
+    if (show.kind === 'npm-restart-required' || show.kind === 'npm-restarting') {
       try {
         sessionStorage.removeItem(NPM_PENDING_RESTART_KEY);
       } catch {
         /* ignore */
       }
-      setPendingNpmRestartVersion(null);
+      setPendingNpmRestart(null);
       return;
     }
     if (show.kind === 'none') return;

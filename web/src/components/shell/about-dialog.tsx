@@ -4,7 +4,10 @@ import { useCallback, useState } from 'react';
 
 import { BrandLogo } from '@/components/shell/brand-logo';
 import { XOPC_ELECTRON_UPDATE_RECHECK_EVENT } from '@/features/updater/use-update-reminder';
-import { useUpdateStatus } from '@/features/updater/use-update-status';
+import {
+  npmUpdateRestartIsAutomatic,
+  useUpdateStatus,
+} from '@/features/updater/use-update-status';
 import type { ElectronUpdateState, NpmUpdateStatus } from '@/features/updater/use-update-status';
 import { messages } from '@/i18n/messages';
 import { webBuildInfo } from '@/lib/build-info';
@@ -97,7 +100,9 @@ export function AboutDialog({
       showActivity({
         tone: 'success',
         title: panel.updateSuccess,
-        message: panel.updateSuccessDetail,
+        message: npmUpdateRestartIsAutomatic(r.result)
+          ? panel.updateSuccessAutoRestartDetail
+          : panel.updateSuccessDetail,
         source: language === 'zh' ? '系统更新' : 'System update',
         dedupeKey: 'system-update',
       });

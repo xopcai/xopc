@@ -9,6 +9,7 @@ import { cn } from '@/lib/cn';
 import { showToast } from '@/lib/toast';
 import { showActivity } from '@/stores/activity-store';
 import { useLocaleStore } from '@/stores/locale-store';
+import { npmUpdateRestartIsAutomatic } from '@/features/updater/use-update-status';
 
 /**
  * Full-width top strip: main copy is centered; optional actions (dismiss) on the far right; npm CTA sits after the text.
@@ -58,7 +59,9 @@ export function UpdateReminderBar({
       showActivity({
         tone: 'success',
         title: tp.updateSuccess,
-        message: tp.updateSuccessDetail,
+        message: npmUpdateRestartIsAutomatic(r.result)
+          ? tp.updateSuccessAutoRestartDetail
+          : tp.updateSuccessDetail,
         source: language === 'zh' ? '系统更新' : 'System update',
         dedupeKey: 'system-update',
       });
@@ -218,6 +221,23 @@ export function UpdateReminderBar({
         >
           <X className="size-4" />
         </button>
+      </div>
+    );
+  }
+
+  if (show.kind === 'npm-restarting') {
+    return (
+      <div
+        className={cn(
+          'relative flex min-h-10 w-full min-w-0 items-center justify-center border-b border-accent/20 bg-accent/10 py-2 text-sm',
+          APP_CHROME_DRAG_CLASS,
+          compact && 'text-xs',
+        )}
+      >
+        <div className="mx-auto flex max-w-[min(100%,52rem)] items-center justify-center gap-2 px-10 pr-14 text-center sm:px-12 sm:pr-16">
+          <Loader2 className="size-4 shrink-0 animate-spin text-accent" aria-hidden />
+          <span>{t.restartingAutomatically.replace('{{version}}', show.version)}</span>
+        </div>
       </div>
     );
   }
