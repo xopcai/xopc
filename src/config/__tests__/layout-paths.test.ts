@@ -11,7 +11,7 @@
  *  7. Auth profiles at `agents/<id>/agent/auth-profiles.json` (no credentials subdir)
  *  8. Git init on brand-new workspace (tested in workspace-seed.test.ts)
  */
-import { existsSync, mkdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -34,6 +34,7 @@ import {
   resolveAgentProfileMarkdownPath as resolveAgentProfileMarkdownPathFromPaths,
   resolveXopcDatabasePath,
   resolveBundledExtensionsDir,
+  hasBundledExtensionManifest,
   FILENAMES,
 } from '../paths.js';
 
@@ -129,6 +130,25 @@ describe('Layout alignment: state root and workspace paths', () => {
     try {
       expect(existsSync(dir)).toBe(true);
       expect(resolveBundledExtensionsDir()).toBe(dir);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('recognizes bundled extension directories only when they contain a manifest file', () => {
+    const dir = join(tmpdir(), `xopc-incomplete-bundled-extensions-${process.pid}`);
+    const extensionDir = join(dir, 'telegram');
+    rmSync(dir, { recursive: true, force: true });
+    mkdirSync(extensionDir, { recursive: true });
+    try {
+      expect(hasBundledExtensionManifest(dir)).toBe(false);
+
+      mkdirSync(join(extensionDir, 'xopc.extension.json'));
+      expect(hasBundledExtensionManifest(dir)).toBe(false);
+
+      rmSync(join(extensionDir, 'xopc.extension.json'), { recursive: true, force: true });
+      writeFileSync(join(extensionDir, 'xopc.extension.json'), '{}');
+      expect(hasBundledExtensionManifest(dir)).toBe(true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

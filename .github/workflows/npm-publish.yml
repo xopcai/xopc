@@ -42,6 +42,9 @@ jobs:
       - name: Run tests
         run: pnpm test
 
+      - name: Validate publish manifest
+        run: pnpm run release:check-package
+
       - name: Determine npm tag
         id: npm-tag
         run: |

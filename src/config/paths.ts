@@ -1,7 +1,7 @@
 import { join, sep } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
-import { existsSync } from 'fs';
+import { existsSync, readdirSync, statSync } from 'fs';
 
 import type { Config } from './schema.js';
 import {
@@ -342,6 +342,19 @@ export function resolveSkillsCachePath(config: Config, agentId: string): string 
  * - `src/config` → `dist/extensions` when built, else `extensions/` (dev, tsx)
  * - `out/server` → `dist/electron/extensions` (Electron extension bundles)
  */
+export function hasBundledExtensionManifest(dir: string): boolean {
+  try {
+    return readdirSync(dir, { withFileTypes: true }).some(
+      (entry) =>
+        entry.isDirectory() &&
+        statSync(join(dir, entry.name, 'xopc.extension.json'), { throwIfNoEntry: false })?.isFile() ===
+          true,
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function resolveBundledExtensionsDir(): string | null {
   const envDir = process.env[ENV_BUNDLED_EXTENSIONS_ROOT];
   if (envDir && existsSync(envDir)) {
@@ -363,7 +376,9 @@ export function resolveBundledExtensionsDir(): string | null {
           join(srcDir, '..', '..', '..', 'extensions'),
         ];
     for (const dir of candidates) {
-      if (existsSync(dir)) {
+      // A partial direct tsdown build can create dist/extensions without copying manifests.
+      // Ignore that incomplete directory so source-tree development falls back to extensions/.
+      if (existsSync(dir) && hasBundledExtensionManifest(dir)) {
         return dir;
       }
     }
