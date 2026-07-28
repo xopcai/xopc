@@ -2,12 +2,10 @@ import * as Dialog from '@radix-ui/react-dialog';
 import {
   ArrowRight,
   CalendarClock,
-  CheckCircle2,
   CircleAlert,
   Clock3,
   Eye,
   FolderKanban,
-  ListChecks,
   MessageCircle,
   Plus,
   Search,
@@ -18,6 +16,7 @@ import { Link, useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { SlidingSegmented } from '@/components/ui/sliding-segmented';
 import { WorkbenchActivity } from '@/features/activity/workbench-activity';
 import { delegateWork, fetchProjects, type Project } from '@/features/projects/api';
 import {
@@ -29,7 +28,6 @@ import {
 } from '@/features/work/work-home-api';
 import { workflowBoardHref } from '@/features/workflows/workflow-page.utils';
 import { messages } from '@/i18n/messages';
-import { cn } from '@/lib/cn';
 import { formatMediumDateTime } from '@/lib/date-formatters';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
@@ -48,11 +46,8 @@ function formatTime(value: string | number | undefined, fallback: string): strin
 function WorkHomeSkeleton() {
   return (
     <div className="space-y-5" aria-busy>
-      <Skeleton className="h-32 rounded-2xl" />
-      <div className="grid gap-4 xl:grid-cols-2">
-        <Skeleton className="h-64 rounded-2xl" />
-        <Skeleton className="h-64 rounded-2xl" />
-      </div>
+      <Skeleton className="h-20 rounded-2xl" />
+      <Skeleton className="h-72 rounded-2xl" />
       <Skeleton className="h-44 rounded-2xl" />
     </div>
   );
@@ -61,28 +56,21 @@ function WorkHomeSkeleton() {
 function WorkItemCard({
   item,
   statusLabel,
-  needsAttention = false,
 }: {
   item: WorkHomeItem;
   statusLabel: string;
-  needsAttention?: boolean;
 }) {
   return (
     <Link
       to={`/work-items/${encodeURIComponent(item.id)}`}
-      className={cn(
-        'group block rounded-xl border p-3.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-        needsAttention
-          ? 'border-warning/35 bg-warning-soft/25 hover:bg-warning-soft/40'
-          : 'border-edge-subtle bg-surface-panel hover:bg-surface-hover/55',
-      )}
+      className="group block rounded-lg px-1 py-2.5 transition-colors hover:bg-surface-hover/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="truncate text-sm font-semibold text-fg">{item.title}</h3>
           <p className="mt-1 truncate text-xs text-fg-subtle">{item.projectName}</p>
         </div>
-        <span className="shrink-0 rounded-full bg-surface-hover px-2 py-0.5 text-[11px] font-medium text-fg-muted">
+        <span className="shrink-0 text-xs text-fg-subtle">
           {statusLabel}
         </span>
       </div>
@@ -206,7 +194,7 @@ export function WorkPage() {
   const visibleProjects = useMemo(() => {
     const query = search.trim().toLocaleLowerCase();
     const active = projects.filter((project) => project.status !== 'archived');
-    if (!query) return active.slice(0, 12);
+    if (!query) return active.slice(0, 6);
     return active.filter((project) => [project.name, project.description, project.brief]
       .filter(Boolean)
       .some((value) => value!.toLocaleLowerCase().includes(query)));
@@ -247,17 +235,16 @@ export function WorkPage() {
   }, [createIntent, creating, language, navigate, outcome]);
 
   const headerEnd = useMemo(() => (
-    <div className="flex items-center gap-2">
-      <Button type="button" variant="secondary" className="h-9 rounded-lg" onClick={() => { setCreateIntent('watch'); setCreateOpen(true); }}>
-        <Eye className="size-4" aria-hidden />
-        {t.workHome.watch}
-      </Button>
-      <Button type="button" variant="primary" className="h-9 rounded-lg" onClick={() => { setCreateIntent('delegate'); setCreateOpen(true); }}>
-        <Plus className="size-4" aria-hidden />
-        {t.workHome.delegate}
-      </Button>
-    </div>
-  ), [t.workHome.delegate, t.workHome.watch]);
+    <Button type="button" variant="primary" className="h-9 rounded-lg" onClick={() => { setCreateIntent('delegate'); setCreateOpen(true); }}>
+      <Plus className="size-4" aria-hidden />
+      {t.workHome.newWork}
+    </Button>
+  ), [t.workHome.newWork]);
+
+  const createIntentOptions = useMemo(() => [
+    { value: 'delegate' as const, label: t.workHome.delegateMode, icon: Sparkles },
+    { value: 'watch' as const, label: t.workHome.watchMode, icon: Eye },
+  ], [t.workHome.delegateMode, t.workHome.watchMode]);
 
   const respondToDecision = useCallback(async (item: WorkHomeDecision, decision: 'approve' | 'deny') => {
     if (!item.response) return;
@@ -288,7 +275,7 @@ export function WorkPage() {
   }, [clearPageHeader, headerEnd, setPageHeader, t.title, t.workHome.subtitle]);
 
   return (
-    <main className="flex w-full flex-1 flex-col gap-5 px-3 py-6 sm:px-5 xl:px-6">
+    <main className="mx-auto flex w-full max-w-[1200px] flex-1 flex-col gap-7 px-4 py-7 sm:px-6 lg:px-8 lg:py-9">
       <Dialog.Root
         open={createOpen}
         onOpenChange={(open) => {
@@ -300,11 +287,19 @@ export function WorkPage() {
           <Dialog.Overlay className="fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
           <Dialog.Content className="fixed left-1/2 top-1/2 z-[90] flex h-[min(26rem,calc(100vh-2rem))] w-[min(36rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float focus:outline-none">
             <div className="shrink-0 border-b border-edge px-5 py-4">
-              <Dialog.Title className="text-base font-semibold text-fg">{createIntent === 'watch' ? t.workHome.watchTitle : t.workHome.delegateTitle}</Dialog.Title>
-              <Dialog.Description className="mt-1 text-sm text-fg-muted">{createIntent === 'watch' ? t.workHome.watchDescription : t.workHome.delegateDescription}</Dialog.Description>
+              <Dialog.Title className="text-base font-semibold text-fg">{t.workHome.newWorkTitle}</Dialog.Title>
+              <Dialog.Description className="mt-1 text-sm text-fg-muted">{t.workHome.newWorkDescription}</Dialog.Description>
             </div>
             <form onSubmit={submitCreate} className="flex min-h-0 flex-1 flex-col">
-              <div className="min-h-0 flex-1 px-5 py-4">
+              <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+                <SlidingSegmented
+                  value={createIntent}
+                  onChange={setCreateIntent}
+                  options={createIntentOptions}
+                  aria-label={t.workHome.createModeLabel}
+                  className="mb-4"
+                  buttonClassName="h-9"
+                />
                 <label className="grid gap-2 text-sm font-medium text-fg">
                   {createIntent === 'watch' ? t.workHome.watchLabel : t.workHome.outcomeLabel}
                   <textarea
@@ -346,23 +341,27 @@ export function WorkPage() {
 
       {loading ? <WorkHomeSkeleton /> : home ? (
         <>
-          <section className="relative overflow-hidden rounded-2xl border border-accent/15 bg-gradient-to-br from-accent-soft/70 via-surface-panel to-surface-panel p-5 sm:p-6">
-            <div className="absolute -right-8 -top-12 size-40 rounded-full bg-accent/10 blur-3xl" aria-hidden />
-            <div className="relative flex flex-wrap items-end justify-between gap-4">
-              <div className="max-w-2xl">
-                <div className="mb-3 flex size-10 items-center justify-center rounded-xl bg-accent text-white"><ListChecks className="size-5" aria-hidden /></div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-accent">{t.workHome.briefingTitle}</p>
-                <h2 className="mt-1 text-xl font-semibold tracking-tight text-fg">{t.workHome.heroTitle}</h2>
-                <p className="mt-2 text-sm leading-6 text-fg-muted">{home.briefing.summary}</p>
-              </div>
-              <div className="flex flex-wrap gap-2 text-xs">
-                <span className="rounded-full bg-surface-panel/80 px-3 py-1.5 text-fg-muted">{interpolate(t.workHome.activeCount, { count: home.briefing.progress.movingCount })}</span>
-                {home.decisions.length > 0 ? <span className="rounded-full bg-warning-soft px-3 py-1.5 text-fg">{interpolate(t.workHome.attentionCount, { count: home.decisions.length })}</span> : null}
-              </div>
-            </div>
+          <section className="border-b border-edge-subtle pb-5">
+            <p className="text-xs font-medium text-fg-subtle">{t.workHome.briefingTitle}</p>
+            <h2 className="mt-1 text-xl font-semibold tracking-tight text-fg">
+              {home.decisions.length > 0
+                ? interpolate(t.workHome.todaySummary, {
+                    attention: home.decisions.length,
+                    moving: home.briefing.progress.movingCount,
+                  })
+                : interpolate(t.workHome.todaySummaryClear, {
+                    moving: home.briefing.progress.movingCount,
+                  })}
+            </h2>
+            {home.briefing.summary ? (
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-fg-muted">{home.briefing.summary}</p>
+            ) : null}
           </section>
 
-          {home.work.current.length === 0 && home.workflowRuns.active.length === 0 ? (
+          {home.work.current.length === 0
+            && home.workflowRuns.active.length === 0
+            && home.decisions.length === 0
+            && home.upcomingAutomations.length === 0 ? (
             <section className="rounded-2xl border border-dashed border-edge p-8 text-center">
               <MessageCircle className="mx-auto size-6 text-accent" aria-hidden />
               <h2 className="mt-3 text-sm font-semibold text-fg">{t.workHome.emptyTitle}</h2>
@@ -374,85 +373,101 @@ export function WorkPage() {
             </section>
           ) : null}
 
-          <div className="grid gap-4 xl:grid-cols-2">
-            <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5">
-              <div className="flex items-center gap-2"><CircleAlert className="size-4 text-warning" aria-hidden /><h2 className="text-sm font-semibold text-fg">{t.workHome.needsYou}</h2></div>
-              <p className="mt-1 text-xs text-fg-muted">{t.workHome.needsYouHint}</p>
-              <div className="mt-4 space-y-2">
-                {needsYou.length ? needsYou.map((item) => (
-                  <DecisionCard
-                    key={item.id}
-                    item={item}
-                    kindLabel={t.workHome.decisionKinds[item.kind]}
-                    reasonLabel={t.workHome.decisionReasons[item.reason]}
-                    approveLabel={t.workHome.approve}
-                    denyLabel={t.workHome.deny}
-                    busy={busyDecisionId === item.id}
-                    onRespond={(decision) => void respondToDecision(item, decision)}
-                  />
-                )) : <p className="rounded-xl bg-surface-panel px-4 py-6 text-center text-sm text-fg-muted">{t.workHome.nothingNeedsYou}</p>}
-              </div>
-            </section>
+          <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
+            <div className="min-w-0 space-y-6">
+              {needsYou.length > 0 ? (
+                <section className="rounded-2xl bg-surface-base p-5 shadow-surface">
+                  <div className="flex items-center gap-2"><CircleAlert className="size-4 text-warning" aria-hidden /><h2 className="text-base font-semibold text-fg">{t.workHome.needsYou}</h2></div>
+                  <p className="mt-1 text-xs text-fg-muted">{t.workHome.needsYouHint}</p>
+                  <div className="mt-4 space-y-2">
+                    {needsYou.map((item) => (
+                      <DecisionCard
+                        key={item.id}
+                        item={item}
+                        kindLabel={t.workHome.decisionKinds[item.kind]}
+                        reasonLabel={t.workHome.decisionReasons[item.reason]}
+                        approveLabel={t.workHome.approve}
+                        denyLabel={t.workHome.deny}
+                        busy={busyDecisionId === item.id}
+                        onRespond={(decision) => void respondToDecision(item, decision)}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ) : (
+                <p className="flex items-center gap-2 text-sm text-fg-muted">
+                  <span className="flex size-5 items-center justify-center rounded-full bg-success-soft text-xs text-success" aria-hidden>✓</span>
+                  {t.workHome.nothingNeedsYou}
+                </p>
+              )}
 
-            <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5">
-              <div className="flex items-center gap-2"><Clock3 className="size-4 text-accent" aria-hidden /><h2 className="text-sm font-semibold text-fg">{t.workHome.continueTitle}</h2></div>
-              <p className="mt-1 text-xs text-fg-muted">{t.workHome.continueHint}</p>
-              <div className="mt-4 space-y-2">
-                {continuing.length ? continuing.map((item) => (
-                  <WorkItemCard key={item.id} item={item} statusLabel={msg.projectDetailPage.workItems.statuses[item.status]} />
-                )) : <p className="rounded-xl bg-surface-panel px-4 py-6 text-center text-sm text-fg-muted">{t.workHome.noCurrentWork}</p>}
-              </div>
-            </section>
-          </div>
-
-          {(home.workflowRuns.active.length > 0 || home.upcomingAutomations.length > 0) ? (
-            <div className="grid gap-4 lg:grid-cols-2">
-              <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5">
-                <div className="flex items-center gap-2"><Sparkles className="size-4 text-accent" aria-hidden /><h2 className="text-sm font-semibold text-fg">{t.workHome.processing}</h2></div>
-                <div className="mt-3 space-y-2">{home.workflowRuns.active.map((run) => (
-                  <Link key={run.id} to={workflowBoardHref(run.id)} className="flex items-center justify-between gap-3 rounded-xl bg-surface-panel p-3 text-sm hover:bg-surface-hover">
-                    <span className="min-w-0 truncate text-fg">{run.title}</span><span className="shrink-0 text-xs text-fg-subtle">{t.workHome.running}</span>
-                  </Link>
-                ))}{home.workflowRuns.active.length === 0 ? <p className="text-sm text-fg-muted">{t.workHome.nothingRunning}</p> : null}</div>
-              </section>
-              <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5">
-                <div className="flex items-center gap-2"><CalendarClock className="size-4 text-accent" aria-hidden /><h2 className="text-sm font-semibold text-fg">{t.workHome.scheduled}</h2></div>
-                <div className="mt-3 space-y-2">{home.upcomingAutomations.map((automation) => (
-                  <Link key={automation.id} to="/automations" className="flex items-center justify-between gap-3 rounded-xl bg-surface-panel p-3 text-sm hover:bg-surface-hover">
-                    <span className="min-w-0 truncate text-fg">{automation.name || automation.action}</span><time className="shrink-0 text-xs text-fg-subtle">{formatTime(automation.nextRunAt, t.never)}</time>
-                  </Link>
-                ))}{home.upcomingAutomations.length === 0 ? <p className="text-sm text-fg-muted">{t.workHome.noScheduled}</p> : null}</div>
+              <section className="rounded-2xl bg-surface-base p-5 shadow-surface">
+                <div className="flex items-center gap-2"><Clock3 className="size-4 text-fg-subtle" aria-hidden /><h2 className="text-base font-semibold text-fg">{t.workHome.continueTitle}</h2></div>
+                <p className="mt-1 text-xs text-fg-muted">{t.workHome.continueHint}</p>
+                <div className="mt-4 divide-y divide-edge-subtle px-1">
+                  {home.workflowRuns.active.map((run) => (
+                    <Link key={run.id} to={workflowBoardHref(run.id)} className="flex items-center justify-between gap-3 rounded-lg px-2 py-3 text-sm hover:bg-surface-hover/55">
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="size-1.5 shrink-0 rounded-full bg-accent" aria-hidden />
+                        <span className="truncate font-medium text-fg">{run.title}</span>
+                      </span>
+                      <span className="shrink-0 text-xs text-fg-subtle">{t.workHome.running}</span>
+                    </Link>
+                  ))}
+                  {continuing.map((item) => (
+                    <div key={item.id} className="py-1">
+                      <WorkItemCard item={item} statusLabel={msg.projectDetailPage.workItems.statuses[item.status]} />
+                    </div>
+                  ))}
+                  {home.workflowRuns.active.length === 0 && continuing.length === 0 ? (
+                    <p className="py-6 text-center text-sm text-fg-muted">{t.workHome.noCurrentWork}</p>
+                  ) : null}
+                </div>
               </section>
             </div>
-          ) : null}
 
-          {home.briefing.wins.length > 0 ? (
-            <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5">
-              <div className="flex items-center gap-2"><CheckCircle2 className="size-4 text-success" aria-hidden /><h2 className="text-sm font-semibold text-fg">{t.workHome.completed}</h2></div>
-              <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">{home.briefing.wins.map((item) => (
-                <Link key={item.id} to={item.href} className="rounded-xl border border-edge-subtle bg-surface-panel p-3.5 transition-colors hover:bg-surface-hover/55">
-                  <p className="truncate text-sm font-medium text-fg">{item.title}</p>
-                  <p className="mt-1 text-xs text-fg-subtle">{t.workHome.winKinds[item.kind]}</p>
+            <aside className="min-w-0 space-y-4" aria-label={t.workHome.nowTitle}>
+              <div className="px-1">
+                <h2 className="text-base font-semibold text-fg">{t.workHome.nowTitle}</h2>
+                <p className="mt-1 text-xs text-fg-muted">{t.workHome.nowHint}</p>
+              </div>
+              {home.upcomingAutomations.length > 0 ? (
+                <section className="rounded-2xl bg-surface-base p-4 shadow-surface">
+                  <div className="flex items-center gap-2"><CalendarClock className="size-4 text-fg-subtle" aria-hidden /><h3 className="text-sm font-semibold text-fg">{t.workHome.scheduled}</h3></div>
+                  <div className="mt-2 divide-y divide-edge-subtle">{home.upcomingAutomations.slice(0, 3).map((automation) => (
+                    <Link key={automation.id} to="/automations" className="flex items-center justify-between gap-3 rounded-lg px-1 py-3 text-sm hover:bg-surface-hover/55">
+                      <span className="min-w-0 truncate text-fg">{automation.name || automation.action}</span>
+                      <time className="shrink-0 text-xs text-fg-subtle">{formatTime(automation.nextRunAt, t.never)}</time>
+                    </Link>
+                  ))}</div>
+                </section>
+              ) : null}
+              <WorkbenchActivity />
+              {home.briefing.wins.length > 0 ? (
+                <Link
+                  to={home.briefing.wins[0].href}
+                  className="flex items-center justify-between gap-3 rounded-xl px-2 py-2 text-sm text-fg-muted hover:bg-surface-hover/55 hover:text-fg"
+                >
+                  <span>{interpolate(t.workHome.completedSummary, { count: home.briefing.wins.length })}</span>
+                  <span className="shrink-0 text-xs font-medium text-accent">{t.workHome.viewLatestResult} →</span>
                 </Link>
-              ))}</div>
-            </section>
-          ) : null}
-
-          <WorkbenchActivity />
+              ) : null}
+            </aside>
+          </div>
         </>
       ) : null}
 
-      <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5">
+      <section className="border-t border-edge-subtle pt-7">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div><h2 className="text-sm font-semibold text-fg">{t.workHome.spacesTitle}</h2><p className="mt-1 text-xs text-fg-muted">{t.workHome.spacesHint}</p></div>
           <Link to="/projects" className="text-xs font-medium text-accent hover:underline">{t.management.viewAll}</Link>
         </div>
-        <div className="mt-3 flex justify-end">
+        {projects.filter((project) => project.status !== 'archived').length > 6 ? <div className="mt-3 flex justify-end">
           <label className="relative block min-w-0">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-subtle" aria-hidden />
             <input className="h-9 w-52 rounded-lg border border-edge bg-surface-panel pl-9 pr-3 text-sm text-fg outline-none placeholder:text-fg-muted focus:border-accent" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t.searchPlaceholder} aria-label={t.searchPlaceholder} />
           </label>
-        </div>
+        </div> : null}
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {visibleProjects.map((project) => <ProjectCard key={project.id} project={project} openLabel={t.workHome.openSpace} noDescription={t.noDescription} />)}
         </div>
