@@ -1,7 +1,25 @@
-import { mergeAttributes } from '@tiptap/core';
+import { Extension, mergeAttributes } from '@tiptap/core';
 import Image from '@tiptap/extension-image';
 
 export const EMPTY_IMAGE_SRC = 'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%221%22%20height%3D%221%22/%3E';
+
+export const CodeBlockLanguage = Extension.create({
+  name: 'xopcCodeBlockLanguage',
+  addGlobalAttributes() {
+    return [{
+      types: ['codeBlock'],
+      attributes: {
+        language: {
+          default: null,
+          parseHTML: (element) => element.getAttribute('data-language'),
+          renderHTML: (attributes) => attributes.language
+            ? { 'data-language': String(attributes.language) }
+            : {},
+        },
+      },
+    }];
+  },
+});
 
 export function isXopcAttachmentSrc(src: string): boolean {
   return src.startsWith('xopc-attachment://');

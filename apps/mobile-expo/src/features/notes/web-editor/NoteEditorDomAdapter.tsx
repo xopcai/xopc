@@ -21,7 +21,9 @@ import type {
   NoteEditorTheme,
 } from '../editor/editor-protocol';
 import { DEFAULT_EDITOR_RUNTIME_STATE } from '../editor/editor-contract';
+import { resolveEditorLink, sanitizeEditorLinkText } from '../editor/editor-link';
 import {
+  CodeBlockLanguage,
   EMPTY_IMAGE_SRC,
   createXopcImage,
   isXopcAttachmentSrc,
@@ -156,24 +158,10 @@ function getEditorDom(editor: NonNullable<ReturnType<typeof useEditor>>): HTMLEl
   }
 }
 
-function sanitizeLinkText(value: string): string {
-  return value.replace(/[<>&]/g, '');
-}
-
-function isLikelyUrl(value: string): boolean {
-  return /^(https?:\/\/|www\.)\S+\.\S+$/i.test(value) || /^[a-z0-9-]+(\.[a-z0-9-]+)+\/?\S*$/i.test(value);
-}
-
-function normalizedUrl(value: string): string {
-  const trimmed = value.trim();
-  if (!trimmed) return '';
-  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed.replace(/^www\./i, 'www.')}`;
-}
-
 function linkNode(label: string, href: string) {
   return {
     type: 'text',
-    text: sanitizeLinkText(label),
+    text: sanitizeEditorLinkText(label),
     marks: [{ type: 'link', attrs: { href } }],
   };
 }
@@ -184,7 +172,7 @@ function audioTranscriptNode(text: string) {
     content: [
       {
         type: 'paragraph',
-        content: [{ type: 'text', text: `Voice memo: ${sanitizeLinkText(text)}` }],
+        content: [{ type: 'text', text: `Voice memo: ${sanitizeEditorLinkText(text)}` }],
       },
     ],
   };
@@ -303,6 +291,7 @@ export default function NoteEditorDomAdapter({
         link: false,
         underline: false,
       }),
+      CodeBlockLanguage,
       TaskList,
       TaskItem.configure({ nested: true }),
       Link.configure({
@@ -483,7 +472,7 @@ export default function NoteEditorDomAdapter({
 
   const insertPreparedAttachment = useCallback((picked: NonNullable<EditorAttachmentPickResult>) => {
     if (!editor || !editable) return;
-    const label = sanitizeLinkText(picked.alt?.trim() || 'attachment');
+    const label = sanitizeEditorLinkText(picked.alt?.trim() || 'attachment');
     if (picked.kind === 'document') {
       editor
         .chain()
@@ -524,18 +513,17 @@ export default function NoteEditorDomAdapter({
 
   const applyLink = useCallback((title: string, url: string) => {
     if (!editor || !editable) return;
-    const href = normalizedUrl(url);
-    if (!href || !isLikelyUrl(href)) return;
     const { from, to } = editor.state.selection;
     const selected = editor.state.doc.textBetween(from, to, ' ').trim();
-    const label = (title.trim() || selected || href).trim();
+    const resolved = resolveEditorLink(title, url, selected);
+    if (!resolved) return;
     editor
       .chain()
       .focus()
       .insertContent({
         type: 'text',
-        text: sanitizeLinkText(label),
-        marks: [{ type: 'link', attrs: { href } }],
+        text: resolved.title,
+        marks: [{ type: 'link', attrs: { href: resolved.url } }],
       })
       .run();
   }, [editable, editor]);
