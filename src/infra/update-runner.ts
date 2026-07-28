@@ -655,6 +655,8 @@ export async function runGatewayUpdateWithPostSteps(
   const restart = await maybeRestartGatewayAfterUpdate({
     shouldRestart: opts.shouldRestart,
     expectedVersion: result.after?.version ?? undefined,
+    updatedPackageRoot:
+      result.mode === 'npm' || result.mode === 'pnpm' ? result.root : undefined,
     triggerInProcessRestart: opts.triggerInProcessRestart,
   });
   postUpdate.restart = restart;

@@ -12,6 +12,7 @@ import {
   signalVerifiedGatewayPidSync,
 } from './gateway-processes.js';
 import { authorizeGatewaySigusr1Restart, writeGatewayRestartIntentSync } from './restart.js';
+import { refreshGatewayServiceAfterUpdate } from './update-service-refresh.js';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('UpdateRestart');
@@ -174,6 +175,7 @@ async function restartDaemonGateway(
 export async function maybeRestartGatewayAfterUpdate(params: {
   shouldRestart?: boolean;
   expectedVersion?: string;
+  updatedPackageRoot?: string;
   configPath?: string;
   triggerInProcessRestart?: InProcessRestartTrigger;
 }): Promise<UpdateRestartResult> {
@@ -192,6 +194,31 @@ export async function maybeRestartGatewayAfterUpdate(params: {
   }
 
   if (isRunningInsideGatewayService() && params.triggerInProcessRestart) {
+    if (params.updatedPackageRoot && params.expectedVersion) {
+      try {
+        const service = await resolveGatewayService();
+        const loaded = await service.isLoaded({ env: process.env });
+        if (loaded) {
+          await refreshGatewayServiceAfterUpdate({
+            service,
+            packageRoot: params.updatedPackageRoot,
+            expectedVersion: params.expectedVersion,
+          });
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        log.warn(
+          { err, expectedVersion: params.expectedVersion },
+          `Gateway service refresh failed after update: ${message}`,
+        );
+        return {
+          ok: false,
+          mode: 'failed',
+          message: `Installed ${params.expectedVersion}, but failed to refresh the gateway service: ${message}`,
+        };
+      }
+    }
+
     const result = params.triggerInProcessRestart();
     if (!result.ok) {
       return {
