@@ -111,6 +111,7 @@
       "watchLabel": "你希望关注什么？",
       "watchPlaceholder": "例如：关注三家主要竞品的定价页，降价或推出新套餐时告诉我。",
       "watchSetupHint": "下一步可以检查触发条件、通知方式和风险。",
+      "submitShortcut": "⌘/Ctrl + Enter 提交",
       "designWatch": "生成关注方案",
       "creating": "创建中…",
       "retry": "重试"

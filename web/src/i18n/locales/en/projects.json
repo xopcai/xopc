@@ -111,6 +111,7 @@
       "watchLabel": "What should xopc watch?",
       "watchPlaceholder": "For example: watch three competitors’ pricing pages and tell me about price cuts or new plans.",
       "watchSetupHint": "Next, review the trigger, notification, assumptions, and risks.",
+      "submitShortcut": "Submit with ⌘/Ctrl + Enter",
       "designWatch": "Design the watch",
       "creating": "Creating…",
       "retry": "Try again"

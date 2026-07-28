@@ -104,6 +104,11 @@ describe('electron-runtime-externals', () => {
     expect(packYml).not.toContain("'dist/src/**'");
   });
 
+  it('uses a path-safe executable name instead of the scoped npm package name', () => {
+    const packYml = readFileSync(join(process.cwd(), 'scripts/electron-builder.pack.yml'), 'utf8');
+    expect(packYml).toMatch(/^executableName: xopc$/m);
+  });
+
   it('enables production Electron fuses that do not break the gateway subprocess', () => {
     const packYml = readFileSync(join(process.cwd(), 'scripts/electron-builder.pack.yml'), 'utf8');
     expect(packYml).toContain('electronFuses:');

@@ -3,6 +3,7 @@
 # the repo's dist/release/).
 appId: ai.xopc.xopc
 productName: xopc
+executableName: xopc
 
 npmRebuild: false
 nodeGypRebuild: false

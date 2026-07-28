@@ -50,7 +50,7 @@ type PooledRunner = {
   session: AgentSession;
   piSm: GuardedPiTranscriptManager;
   settingsManager: SettingsManager;
-  baseStreamFn: AgentSession['agent']['streamFn'];
+  baseStreamFn: AgentSession['agent']['streamFunction'];
   lastUsedAt: number;
   idleTimer: ReturnType<typeof setTimeout> | null;
 };
@@ -185,7 +185,7 @@ export class EmbeddedSessionRunnerPool {
       reused = true;
       this.stats.reuses += 1;
       applySystemPromptOverrideToSession(entry.session, params.systemPrompt);
-      entry.session.agent.streamFn = entry.baseStreamFn;
+      entry.session.agent.streamFunction = entry.baseStreamFn;
       log.debug({ sessionKey: params.sessionKey }, 'Reusing pooled embedded session runner');
     } else {
       if (existing) {
@@ -290,8 +290,8 @@ export class EmbeddedSessionRunnerPool {
     });
 
     applySystemPromptOverrideToSession(session, systemPrompt);
-    const baseStreamFn = wrapStreamFnForXopcExtensions(session.agent.streamFn);
-    session.agent.streamFn = baseStreamFn;
+    const baseStreamFn = wrapStreamFnForXopcExtensions(session.agent.streamFunction);
+    session.agent.streamFunction = baseStreamFn;
 
     const fingerprint = buildEmbeddedRunnerFingerprint({
       sessionId,
