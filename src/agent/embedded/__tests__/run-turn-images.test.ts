@@ -21,7 +21,7 @@ vi.mock('../session-runner.js', () => ({
     const session = {
       prompt: mocks.prompt,
       agent: {
-        streamFn: mocks.baseStreamFn,
+        streamFunction: mocks.baseStreamFn,
         waitForIdle: mocks.waitForIdle,
       },
       abort: vi.fn(),
@@ -158,7 +158,7 @@ describe('runXopcEmbeddedTurn image input', () => {
       tools: [{ name: 'example_tool', description: 'Example tool' }],
     };
 
-    mocks.session.agent.streamFn(
+    mocks.session.agent.streamFunction(
       { id: 'gpt-4o', provider: 'openai' },
       effectiveContext,
       {},
@@ -169,7 +169,7 @@ describe('runXopcEmbeddedTurn image input', () => {
     );
 
     process.env.XOPC_LOG_LLM_PAYLOAD = 'true';
-    mocks.session.agent.streamFn(
+    mocks.session.agent.streamFunction(
       { id: 'gpt-4o', provider: 'openai' },
       effectiveContext,
       {},

@@ -11,7 +11,7 @@ import { createExtensionAwareStreamFn } from '../../providers/extension-stream-b
  * implementation. Wrap the original streamFn so plugin models go through xopc's bridge
  * and everything else falls through to the original auth-aware streamFn.
  *
- * Use this by reassigning {@link Agent.streamFn} after `createAgentSession` returns.
+ * Use this by reassigning {@link Agent.streamFunction} after `createAgentSession` returns.
  */
 export function wrapStreamFnForXopcExtensions(originalStreamFn: StreamFn): StreamFn {
   const extensionStreamFn = createExtensionAwareStreamFn();

@@ -125,8 +125,8 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
 
     const { session, reused } = runner;
 
-    const streamFnWithXopcExtensions = wrapStreamFnForXopcExtensions(session.agent.streamFn);
-    const loggingStreamFn: typeof session.agent.streamFn = (streamModel, context, options) => {
+    const streamFnWithXopcExtensions = wrapStreamFnForXopcExtensions(session.agent.streamFunction);
+    const loggingStreamFn: typeof session.agent.streamFunction = (streamModel, context, options) => {
       const recentToolCalls = extractRecentToolCalls(context.messages);
       const loopGuard = detectToolLoops(recentToolCalls);
 
@@ -169,7 +169,7 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
       );
       return streamFnWithXopcExtensions(streamModel, effectiveContext, options);
     };
-    session.agent.streamFn = loggingStreamFn;
+    session.agent.streamFunction = loggingStreamFn;
 
     if (onEvent) {
       unsubscribe = subscribeEmbeddedSessionEvents(session, (event) => {
