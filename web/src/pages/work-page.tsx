@@ -10,6 +10,7 @@ import {
   Plus,
   Search,
   Sparkles,
+  X,
 } from 'lucide-react';
 import { type FormEvent, useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -279,49 +280,85 @@ export function WorkPage() {
       <Dialog.Root
         open={createOpen}
         onOpenChange={(open) => {
+          if (!open && creating) return;
           setCreateOpen(open);
           if (!open) setCreateError(null);
         }}
       >
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-[90] flex h-[min(26rem,calc(100vh-2rem))] w-[min(36rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float focus:outline-none">
-            <div className="shrink-0 border-b border-edge px-5 py-4">
-              <Dialog.Title className="text-base font-semibold text-fg">{t.workHome.newWorkTitle}</Dialog.Title>
-              <Dialog.Description className="mt-1 text-sm text-fg-muted">{t.workHome.newWorkDescription}</Dialog.Description>
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-[90] flex h-[min(31rem,calc(100dvh-1.5rem))] w-[min(36rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float focus:outline-none">
+            <div className="flex shrink-0 items-start gap-4 border-b border-edge px-5 py-4">
+              <div className="min-w-0 flex-1">
+                <Dialog.Title className="text-base font-semibold text-fg">
+                  {createIntent === 'watch' ? t.workHome.watchTitle : t.workHome.delegateTitle}
+                </Dialog.Title>
+                <Dialog.Description className="mt-1 text-sm leading-5 text-fg-muted">
+                  {createIntent === 'watch' ? t.workHome.watchDescription : t.workHome.delegateDescription}
+                </Dialog.Description>
+              </div>
+              <Dialog.Close asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="-mr-2 -mt-1 size-8 shrink-0 rounded-lg p-0"
+                  title={t.cancel}
+                  aria-label={t.cancel}
+                  disabled={creating}
+                >
+                  <X className="size-4" aria-hidden />
+                </Button>
+              </Dialog.Close>
             </div>
             <form onSubmit={submitCreate} className="flex min-h-0 flex-1 flex-col">
-              <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+              <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-4">
                 <SlidingSegmented
                   value={createIntent}
-                  onChange={setCreateIntent}
+                  onChange={(intent) => {
+                    setCreateIntent(intent);
+                    setCreateError(null);
+                  }}
                   options={createIntentOptions}
                   aria-label={t.workHome.createModeLabel}
-                  className="mb-4"
+                  className="mb-4 shrink-0"
                   buttonClassName="h-9"
                 />
-                <label className="grid gap-2 text-sm font-medium text-fg">
+                <label htmlFor="new-work-outcome" className="mb-2 shrink-0 text-sm font-medium text-fg">
                   {createIntent === 'watch' ? t.workHome.watchLabel : t.workHome.outcomeLabel}
-                  <textarea
-                    className="min-h-40 w-full resize-none rounded-xl border border-edge bg-surface-base p-3 text-sm font-normal leading-6 text-fg outline-none placeholder:text-fg-subtle focus:border-accent focus:ring-2 focus:ring-accent/20"
-                    value={outcome}
-                    onChange={(event) => setOutcome(event.target.value)}
-                    placeholder={createIntent === 'watch' ? t.workHome.watchPlaceholder : t.workHome.outcomePlaceholder}
-                    maxLength={12_000}
-                    disabled={creating}
-                  />
                 </label>
+                <textarea
+                  id="new-work-outcome"
+                  className="min-h-32 w-full flex-1 resize-none rounded-xl border border-edge bg-surface-base p-3 text-sm font-normal leading-6 text-fg outline-none placeholder:text-fg-subtle focus:border-accent focus:ring-2 focus:ring-accent/20"
+                  value={outcome}
+                  onChange={(event) => setOutcome(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+                      event.preventDefault();
+                      event.currentTarget.form?.requestSubmit();
+                    }
+                  }}
+                  placeholder={createIntent === 'watch' ? t.workHome.watchPlaceholder : t.workHome.outcomePlaceholder}
+                  maxLength={12_000}
+                  disabled={creating}
+                  autoFocus
+                />
+                <div className="mt-2 flex shrink-0 items-center justify-between gap-3 text-[11px] text-fg-subtle">
+                  <span>{t.workHome.submitShortcut}</span>
+                  <span className="tabular-nums">
+                    {outcome.length.toLocaleString()} / {(12_000).toLocaleString()}
+                  </span>
+                </div>
                 {createError ? (
                   <p className="mt-3 rounded-lg bg-danger-soft px-3 py-2 text-xs text-danger" role="alert">
                     {createError}
                   </p>
                 ) : null}
               </div>
-              <div className="flex shrink-0 items-center justify-between gap-3 border-t border-edge px-5 py-4">
-                <p className="text-xs text-fg-subtle">{createIntent === 'watch' ? t.workHome.watchSetupHint : t.workHome.autoSetupHint}</p>
-                <div className="flex shrink-0 gap-2">
-                  <Dialog.Close asChild><Button type="button" variant="ghost">{t.cancel}</Button></Dialog.Close>
-                  <Button type="submit" variant="primary" disabled={creating || !outcome.trim()}>
+              <div className="flex shrink-0 flex-col gap-3 border-t border-edge px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs leading-5 text-fg-subtle">{createIntent === 'watch' ? t.workHome.watchSetupHint : t.workHome.autoSetupHint}</p>
+                <div className="flex shrink-0 justify-end gap-2">
+                  <Dialog.Close asChild><Button type="button" variant="ghost" disabled={creating}>{t.cancel}</Button></Dialog.Close>
+                  <Button type="submit" variant="primary" className="min-w-32" disabled={creating || !outcome.trim()}>
                     <Sparkles className="size-4" aria-hidden />
                     {creating ? t.workHome.delegating : createIntent === 'watch' ? t.workHome.designWatch : t.workHome.delegate}
                   </Button>
