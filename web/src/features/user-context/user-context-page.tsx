@@ -11,7 +11,6 @@ import {
   Lightbulb,
   Pencil,
   Plus,
-  Settings2,
   ShieldCheck,
   Sparkles,
   Target,
@@ -58,7 +57,6 @@ import {
   updateUserContextControls,
   updateUserProfile,
   updateUserProfilePrompt,
-  updateUserTrust,
   type InsightSuggestion,
   type PersonalContextSource,
   type PersonalPlaybook,
@@ -66,15 +64,14 @@ import {
   type UserContextResponse,
   type UserProfileFields,
   type UserProfileSetup,
-  type UserTrustLevel,
   type UserUnderstanding,
 } from './user-context-api';
 import { personalContextSourceBranding } from './source-branding';
 import { SourceDisconnectDialog } from './source-disconnect-dialog';
 
-type ViewId = 'overview' | 'understanding' | 'sources' | 'controls';
+type ViewId = 'overview' | 'profile' | 'understanding' | 'sources' | 'controls';
 
-const VIEW_IDS = new Set<ViewId>(['overview', 'understanding', 'sources', 'controls']);
+const VIEW_IDS = new Set<ViewId>(['overview', 'profile', 'understanding', 'sources', 'controls']);
 const FACET_ORDER: UserContextFacet[] = ['collaboration', 'priorities', 'boundaries', 'people', 'current', 'basics'];
 const inputClass = 'w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-accent/50 focus:ring-2 focus:ring-accent/20';
 
@@ -305,8 +302,6 @@ export function UserContextPage() {
   const [profilePromptSaving, setProfilePromptSaving] = useState(false);
   const [controlsDraft, setControlsDraft] = useState<UserContextResponse['controls'] | null>(null);
   const [controlsSaving, setControlsSaving] = useState(false);
-  const [trustSaving, setTrustSaving] = useState(false);
-  const [pendingTrustLevel, setPendingTrustLevel] = useState<UserTrustLevel | null>(null);
   const [disconnectSource, setDisconnectSource] = useState<PersonalContextSource | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
   const [transferBusy, setTransferBusy] = useState<'export' | 'import' | null>(null);
@@ -508,7 +503,14 @@ export function UserContextPage() {
   function openProfileEditor() {
     setProfileDraft(profile);
     setProfileEditing(true);
-    requestAnimationFrame(() => profileCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+    selectView('profile');
+    requestAnimationFrame(() => profileCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  }
+
+  function startUnderstanding(kind: string) {
+    setUnderstandingKind(kind);
+    setAddingUnderstanding(true);
+    selectView('understanding');
   }
 
   async function saveControls() {
@@ -517,14 +519,6 @@ export function UserContextPage() {
     try { const saved = await updateUserContextControls(controls); setControlsDraft(saved); await mutate(); showToast({ type: 'success', title: t.title, message: t.saved }); }
     catch { showToast({ type: 'error', title: t.title, message: t.saveError }); }
     finally { setControlsSaving(false); }
-  }
-
-  async function selectTrustLevel(level: UserTrustLevel) {
-    if (trustSaving || level === data?.trust.defaultActionLevel) return;
-    setTrustSaving(true);
-    try { const trust = await updateUserTrust(level); await mutate((current) => current ? { ...current, trust } : current, { revalidate: false }); }
-    catch { showToast({ type: 'error', title: t.trustTitle, message: t.saveError }); }
-    finally { setTrustSaving(false); setPendingTrustLevel(null); }
   }
 
   async function confirmDisconnectSource(deleteDerivedUnderstanding: boolean) {
@@ -586,14 +580,30 @@ export function UserContextPage() {
 
   const tabs = [
     { id: 'overview' as const, label: t.tabs.overview, icon: HeartHandshake },
+    { id: 'profile' as const, label: t.tabs.profile, icon: CircleUserRound },
     { id: 'understanding' as const, label: t.tabs.understanding, icon: Brain, count: review.length || undefined },
     { id: 'sources' as const, label: t.tabs.sources, icon: Database },
-    { id: 'controls' as const, label: t.tabs.controls, icon: Settings2 },
+    { id: 'controls' as const, label: t.tabs.controls, icon: ShieldCheck },
   ];
 
   return (
     <main className="flex w-full flex-1 flex-col gap-5 px-3 py-6 sm:px-5 xl:px-6">
-      <PageTabs items={tabs} activeTab={view} onChange={selectView} ariaLabel={t.title} tabIdPrefix="you-tab" panelIdPrefix="you-panel" />
+      <div className="relative">
+        <PageTabs
+          items={tabs}
+          activeTab={view}
+          onChange={selectView}
+          ariaLabel={t.title}
+          tabIdPrefix="you-tab"
+          panelIdPrefix="you-panel"
+          className="pr-8 sm:pr-1"
+          buttonClassName="px-2.5 sm:px-3"
+        />
+        <div
+          className="pointer-events-none absolute inset-y-1 right-0 w-8 bg-gradient-to-l from-surface-panel to-transparent sm:hidden"
+          aria-hidden
+        />
+      </div>
       {isLoading ? <UserContextSkeleton /> : error || !data ? <div className="rounded-2xl border border-danger/25 bg-danger-soft p-5 text-sm text-danger">{t.loadError}</div> : null}
 
       {data && view === 'overview' ? (
@@ -619,22 +629,62 @@ export function UserContextPage() {
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <button type="button" className="rounded-xl bg-surface-base/80 p-3 text-left" onClick={() => selectView('understanding')}><span className="text-xl font-semibold text-fg">{active.length}</span><span className="mt-1 block text-xs text-fg-muted">{t.knownSummary}</span></button>
               <button type="button" className="rounded-xl bg-surface-base/80 p-3 text-left" onClick={() => selectView('sources')}><span className="text-xl font-semibold text-fg">{connectedSources.length}</span><span className="mt-1 block text-xs text-fg-muted">{t.connectedSources}</span></button>
-              <button type="button" className="rounded-xl bg-surface-base/80 p-3 text-left" onClick={() => selectView('controls')}><span className="text-sm font-semibold text-fg">{t.trustLevels[data.trust.defaultActionLevel]}</span><span className="mt-1 block text-xs text-fg-muted">{t.currentTrust}</span></button>
+              <button type="button" className="rounded-xl bg-surface-base/80 p-3 text-left" onClick={() => selectView('understanding', 'review')}><span className="text-xl font-semibold text-fg">{review.length}</span><span className="mt-1 block text-xs text-fg-muted">{t.waitingReview}</span></button>
             </div>
           </section>
 
           {data.insights.length > 0 ? <section className="rounded-2xl border border-accent/15 bg-surface-base p-5"><h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><Lightbulb className="size-4 text-accent" aria-hidden />{t.insightsTitle}</h2><p className="mt-1 text-xs text-fg-muted">{t.insightsHint}</p><div className="mt-4 grid gap-3 lg:grid-cols-2">{data.insights.map((item) => <article key={item.id} className="rounded-xl border border-edge-subtle bg-surface-panel p-4"><p className="text-sm leading-6 text-fg">{item.insight}</p><p className="mt-2 text-xs text-fg-subtle">{item.evidenceCount > 1 ? replaceCount(t.insightEvidence, item.evidenceCount) : t.insightReason}</p><div className="mt-3 flex justify-end gap-2"><Button type="button" variant="ghost" className="h-8 px-2" disabled={busyId === `insight:${item.id}`} onClick={() => void runInsightAction(item, 'dismiss')}>{t.notNow}</Button><Button type="button" variant="primary" className="h-8 px-2" disabled={busyId === `insight:${item.id}`} onClick={() => void runInsightAction(item, 'apply')}>{t.insightActions[item.action]}</Button></div></article>)}</div></section> : null}
 
           <div className="grid gap-4 lg:grid-cols-2">
-            <section ref={profileCardRef} id="you-profile-card" className="rounded-2xl border border-edge-subtle bg-surface-base p-5">
-              <div className="flex items-start justify-between gap-3"><div><h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><CircleUserRound className="size-4 text-accent" aria-hidden />{t.profileTitle}</h2><p className="mt-1 text-xs text-fg-muted">{t.profileHint}</p></div>{!profileEditing ? <Button type="button" variant="ghost" className="h-8 px-2" onClick={openProfileEditor}><Pencil className="size-3.5" aria-hidden />{t.edit}</Button> : null}</div>
-              {profileEditing && profileDraft ? <div className="mt-4"><UserProfileFieldsEditor value={profileDraft} onChange={setProfileDraft} language={language} inputClassName={inputClass} labels={{ callName: t.callName, callNamePlaceholder: t.meetPlaceholder, pronouns: t.pronouns, pronounsPlaceholder: t.pronounsPlaceholder, timezone: t.timezone, timezoneCustom: t.timezoneCustom, timezoneDetect: t.timezoneDetect, custom: t.custom, notes: t.notes, notesPlaceholder: t.notesPlaceholder }} /><div className="mt-4 flex justify-end gap-2"><Button type="button" variant="ghost" onClick={() => { setProfileEditing(false); setProfileDraft(null); }}>{t.cancel}</Button><Button type="button" variant="primary" disabled={profileSaving} onClick={() => void saveProfile()}>{profileSaving ? t.saving : t.save}</Button></div></div> : <dl className="mt-4 grid gap-3 sm:grid-cols-2"><div><dt className="text-xs text-fg-subtle">{t.callName}</dt><dd className="mt-1 text-sm text-fg">{profile.callName || '—'}</dd></div><div><dt className="text-xs text-fg-subtle">{t.timezone}</dt><dd className="mt-1 text-sm text-fg">{profile.timezone || '—'}</dd></div><div><dt className="text-xs text-fg-subtle">{t.pronouns}</dt><dd className="mt-1 text-sm text-fg">{profile.pronouns || '—'}</dd></div>{profile.notes ? <div className="sm:col-span-2"><dt className="text-xs text-fg-subtle">{t.notes}</dt><dd className="mt-1 line-clamp-3 text-sm leading-6 text-fg">{profile.notes}</dd></div> : null}</dl>}
+            <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5">
+              <div className="flex items-start justify-between gap-3"><div><h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><CircleUserRound className="size-4 text-accent" aria-hidden />{t.profileTitle}</h2><p className="mt-1 text-xs text-fg-muted">{t.profileHint}</p></div><Button type="button" variant="ghost" className="h-8 px-2" onClick={() => selectView('profile')}><ChevronRight className="size-4" aria-hidden /></Button></div>
+              <dl className="mt-4 grid gap-3 sm:grid-cols-2"><div><dt className="text-xs text-fg-subtle">{t.callName}</dt><dd className="mt-1 text-sm text-fg">{profile.callName || '—'}</dd></div><div><dt className="text-xs text-fg-subtle">{t.timezone}</dt><dd className="mt-1 text-sm text-fg">{profile.timezone || '—'}</dd></div><div><dt className="text-xs text-fg-subtle">{t.pronouns}</dt><dd className="mt-1 text-sm text-fg">{profile.pronouns || '—'}</dd></div>{profile.notes ? <div className="sm:col-span-2"><dt className="text-xs text-fg-subtle">{t.notes}</dt><dd className="mt-1 line-clamp-2 text-sm leading-6 text-fg">{profile.notes}</dd></div> : null}</dl>
             </section>
 
             <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5"><div className="flex items-start justify-between gap-3"><div><h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><Brain className="size-4 text-accent" aria-hidden />{t.understandingTitle}</h2><p className="mt-1 text-xs text-fg-muted">{t.understandingHint}</p></div><Button type="button" variant="ghost" className="h-8 px-2" onClick={() => selectView('understanding')}><ChevronRight className="size-4" aria-hidden /></Button></div><div className="mt-4 space-y-2">{active.slice(0, 4).map((item) => <div key={item.id} className="rounded-lg bg-surface-panel px-3 py-2.5 text-sm leading-5 text-fg">{item.statement}</div>)}{active.length === 0 ? <p className="py-5 text-center text-sm text-fg-muted">{t.emptyUnderstanding}</p> : null}</div></section>
           </div>
 
-          {data.playbooks.length > 0 ? <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5"><h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><BookOpen className="size-4 text-accent" aria-hidden />{t.playbooksTitle}</h2><p className="mt-1 text-xs text-fg-muted">{t.playbooksHint}</p><div className="mt-4 grid gap-3 xl:grid-cols-3">{data.playbooks.map((playbook) => <PlaybookCard key={playbook.id} playbook={playbook} busy={busyId === `playbook:${playbook.id}`} t={t} onToggleGroup={() => void togglePlaybook(playbook)} onCreate={(statement) => void mutatePlaybookRule(playbook.id, () => createPersonalPlaybookRule(playbook.id, statement, (playbook.rules.at(-1)?.order ?? 0) + 10))} onUpdate={(ruleId, patch) => void mutatePlaybookRule(playbook.id, () => updatePersonalPlaybookRule(playbook.id, ruleId, patch))} onDelete={(ruleId) => void mutatePlaybookRule(playbook.id, () => deletePersonalPlaybookRule(playbook.id, ruleId))} />)}</div></section> : null}
+        </div>
+      ) : null}
+
+      {data && view === 'profile' ? (
+        <div id="you-panel-profile" role="tabpanel" aria-labelledby="you-tab-profile" className="space-y-5">
+          <div className="rounded-xl bg-surface-muted px-4 py-3 text-xs leading-5 text-fg-muted">
+            {t.profileOwnershipHint}
+          </div>
+          <section ref={profileCardRef} id="you-profile-card" className="rounded-2xl border border-edge-subtle bg-surface-base p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="flex items-center gap-2 text-base font-semibold text-fg"><CircleUserRound className="size-4 text-accent" aria-hidden />{t.profileTitle}</h2>
+                <p className="mt-1 max-w-2xl text-sm text-fg-muted">{t.profileHint}</p>
+              </div>
+              {!profileEditing ? <Button type="button" variant="secondary" onClick={openProfileEditor}><Pencil className="size-3.5" aria-hidden />{t.edit}</Button> : null}
+            </div>
+            {profileEditing && profileDraft ? (
+              <div className="mt-5">
+                <UserProfileFieldsEditor value={profileDraft} onChange={setProfileDraft} language={language} inputClassName={inputClass} labels={{ callName: t.callName, callNamePlaceholder: t.meetPlaceholder, pronouns: t.pronouns, pronounsPlaceholder: t.pronounsPlaceholder, timezone: t.timezone, timezoneCustom: t.timezoneCustom, timezoneDetect: t.timezoneDetect, custom: t.custom, notes: t.notes, notesPlaceholder: t.notesPlaceholder }} />
+                <div className="mt-4 flex justify-end gap-2"><Button type="button" variant="ghost" onClick={() => { setProfileEditing(false); setProfileDraft(null); }}>{t.cancel}</Button><Button type="button" variant="primary" disabled={profileSaving} onClick={() => void saveProfile()}>{profileSaving ? t.saving : t.save}</Button></div>
+              </div>
+            ) : (
+              <dl className="mt-5 grid gap-4 sm:grid-cols-2"><div><dt className="text-xs text-fg-subtle">{t.callName}</dt><dd className="mt-1 text-sm text-fg">{profile.callName || '—'}</dd></div><div><dt className="text-xs text-fg-subtle">{t.timezone}</dt><dd className="mt-1 text-sm text-fg">{profile.timezone || '—'}</dd></div><div><dt className="text-xs text-fg-subtle">{t.pronouns}</dt><dd className="mt-1 text-sm text-fg">{profile.pronouns || '—'}</dd></div><div className="sm:col-span-2"><dt className="text-xs text-fg-subtle">{t.notes}</dt><dd className="mt-1 whitespace-pre-wrap text-sm leading-6 text-fg">{profile.notes || '—'}</dd></div></dl>
+            )}
+          </section>
+
+          <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5">
+            <h2 className="text-base font-semibold text-fg">{t.structuredContextTitle}</h2>
+            <p className="mt-1 max-w-2xl text-sm text-fg-muted">{t.structuredContextHint}</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <button type="button" className="rounded-xl border border-edge-subtle bg-surface-panel p-4 text-left hover:border-accent/30 hover:bg-surface-hover" onClick={() => startUnderstanding('preference')}><span className="text-sm font-semibold text-fg">{t.addPreference}</span><span className="mt-1 block text-xs leading-5 text-fg-muted">{t.addPreferenceHint}</span></button>
+              <button type="button" className="rounded-xl border border-edge-subtle bg-surface-panel p-4 text-left hover:border-accent/30 hover:bg-surface-hover" onClick={() => startUnderstanding('boundary')}><span className="text-sm font-semibold text-fg">{t.addBoundary}</span><span className="mt-1 block text-xs leading-5 text-fg-muted">{t.addBoundaryHint}</span></button>
+              <button type="button" className="rounded-xl border border-edge-subtle bg-surface-panel p-4 text-left hover:border-accent/30 hover:bg-surface-hover" onClick={() => startUnderstanding('current_state')}><span className="text-sm font-semibold text-fg">{t.addCurrentFocus}</span><span className="mt-1 block text-xs leading-5 text-fg-muted">{t.addCurrentFocusHint}</span></button>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5">
+            <h2 className="flex items-center gap-2 text-base font-semibold text-fg"><BookOpen className="size-4 text-accent" aria-hidden />{t.playbooksTitle}</h2>
+            <p className="mt-1 text-sm text-fg-muted">{t.playbooksHint}</p>
+            {data.playbooks.length > 0 ? <div className="mt-4 grid gap-3 xl:grid-cols-3">{data.playbooks.map((playbook) => <PlaybookCard key={playbook.id} playbook={playbook} busy={busyId === `playbook:${playbook.id}`} t={t} onToggleGroup={() => void togglePlaybook(playbook)} onCreate={(statement) => void mutatePlaybookRule(playbook.id, () => createPersonalPlaybookRule(playbook.id, statement, (playbook.rules.at(-1)?.order ?? 0) + 10))} onUpdate={(ruleId, patch) => void mutatePlaybookRule(playbook.id, () => updatePersonalPlaybookRule(playbook.id, ruleId, patch))} onDelete={(ruleId) => void mutatePlaybookRule(playbook.id, () => deletePersonalPlaybookRule(playbook.id, ruleId))} />)}</div> : <p className="mt-4 rounded-xl bg-surface-muted px-4 py-3 text-sm text-fg-muted">{t.emptyPlaybooks}</p>}
+          </section>
         </div>
       ) : null}
 
@@ -667,17 +717,14 @@ export function UserContextPage() {
 
       {data && view === 'controls' && controls ? (
         <div id="you-panel-controls" role="tabpanel" aria-labelledby="you-tab-controls" className="space-y-6">
-          <div className="grid gap-6 xl:grid-cols-2">
-            <section><h2 className="text-base font-semibold text-fg">{t.controlTitle}</h2><p className="mt-1 text-sm text-fg-muted">{t.controlHint}</p><div className="mt-4 space-y-3 rounded-2xl border border-edge-subtle bg-surface-base p-5"><label className="grid gap-1.5 text-sm font-medium text-fg">{t.learningMode}<Select value={controls.mode} onChange={(event) => setControlsDraft({ ...controls, mode: event.target.value as typeof controls.mode })}>{Object.entries(t.learningModes).map(([value, label]) => <SelectOption key={value} value={value}>{label}</SelectOption>)}</Select></label><label className="grid gap-1.5 text-sm font-medium text-fg">{t.sensitive}<Select value={controls.sensitiveWritePolicy} onChange={(event) => setControlsDraft({ ...controls, sensitiveWritePolicy: event.target.value as typeof controls.sensitiveWritePolicy })}>{Object.entries(t.sensitiveOptions).map(([value, label]) => <SelectOption key={value} value={value}>{label}</SelectOption>)}</Select></label><div className="flex items-start gap-2 rounded-xl bg-accent-soft/40 p-3 text-xs leading-5 text-fg-muted"><ShieldCheck className="mt-0.5 size-4 shrink-0 text-accent" aria-hidden /><span>{t.transientPromise}</span></div><div className="flex justify-end pt-2"><Button type="button" variant="primary" disabled={controlsSaving} onClick={() => void saveControls()}>{controlsSaving ? t.saving : t.save}</Button></div></div></section>
-            <section><h2 className="text-base font-semibold text-fg">{t.trustTitle}</h2><p className="mt-1 text-sm text-fg-muted">{t.trustHint}</p><div className="mt-4 grid gap-2 sm:grid-cols-2">{data.trust.levels.map((level) => <button key={level} type="button" aria-pressed={level === data.trust.defaultActionLevel} disabled={trustSaving} onClick={() => level === 'auto' ? setPendingTrustLevel(level) : void selectTrustLevel(level)} className={cn('rounded-xl border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-70', level === data.trust.defaultActionLevel ? 'border-accent/35 bg-accent-soft/35' : 'border-edge-subtle bg-surface-panel hover:border-accent/25 hover:bg-surface-hover')}><p className="text-xs font-semibold text-fg">{t.trustLevels[level]}</p><p className="mt-1 text-xs leading-5 text-fg-muted">{t.trustLevelHints[level]}</p>{level === data.trust.defaultActionLevel ? <span className="mt-2 inline-block rounded-full bg-accent-soft px-2 py-0.5 text-[11px] text-accent-fg">{t.defaultTrust}</span> : null}</button>)}</div><p className="mt-3 text-xs leading-5 text-fg-subtle">{t.autoOptInPromise}</p></section>
-          </div>
+          <section><h2 className="text-base font-semibold text-fg">{t.controlTitle}</h2><p className="mt-1 max-w-2xl text-sm text-fg-muted">{t.controlHint}</p><div className="mt-4 max-w-2xl space-y-3 rounded-2xl border border-edge-subtle bg-surface-base p-5"><label className="grid gap-1.5 text-sm font-medium text-fg">{t.learningMode}<Select value={controls.mode} onChange={(event) => setControlsDraft({ ...controls, mode: event.target.value as typeof controls.mode })}>{Object.entries(t.learningModes).map(([value, label]) => <SelectOption key={value} value={value}>{label}</SelectOption>)}</Select></label><label className="grid gap-1.5 text-sm font-medium text-fg">{t.sensitive}<Select value={controls.sensitiveWritePolicy} onChange={(event) => setControlsDraft({ ...controls, sensitiveWritePolicy: event.target.value as typeof controls.sensitiveWritePolicy })}>{Object.entries(t.sensitiveOptions).map(([value, label]) => <SelectOption key={value} value={value}>{label}</SelectOption>)}</Select></label><div className="flex items-start gap-2 rounded-xl bg-accent-soft/40 p-3 text-xs leading-5 text-fg-muted"><ShieldCheck className="mt-0.5 size-4 shrink-0 text-accent" aria-hidden /><span>{t.transientPromise}</span></div><div className="flex justify-end pt-2"><Button type="button" variant="primary" disabled={controlsSaving} onClick={() => void saveControls()}>{controlsSaving ? t.saving : t.save}</Button></div></div></section>
+          <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-edge-subtle bg-surface-base p-5"><div><h2 className="text-base font-semibold text-fg">{t.actionBoundaryMovedTitle}</h2><p className="mt-1 max-w-2xl text-sm text-fg-muted">{t.actionBoundaryMovedHint}</p></div><Button type="button" variant="secondary" onClick={() => navigate('/settings/action-boundary')}>{t.manageActionBoundary}<ChevronRight className="size-4" aria-hidden /></Button></section>
           <section><h2 className="text-base font-semibold text-fg">{t.grantsTitle}</h2><p className="mt-1 text-sm text-fg-muted">{t.grantsHint}</p>{data.referenceGrants.length > 0 ? <div className="mt-3 divide-y divide-edge overflow-hidden rounded-xl border border-edge bg-surface-panel">{data.referenceGrants.map((grant) => <div key={grant.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"><div className="min-w-0"><p className="truncate text-sm text-fg">{grant.statement}</p><p className="mt-1 text-xs text-fg-subtle">{grant.grantScope ? t.grantScopes[grant.grantScope] : ''}{grant.expiresAt ? ` · ${formatDateTime(grant.expiresAt, language)}` : ''}</p></div><Button type="button" variant="ghost" className="h-8 px-2.5" disabled={busyId === `grant:${grant.id}`} onClick={() => void revokeGrant(grant.id)}>{t.revoke}</Button></div>)}</div> : <p className="mt-3 rounded-xl bg-surface-muted px-4 py-3 text-sm text-fg-muted">{t.noGrants}</p>}</section>
           <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5"><h2 className="text-base font-semibold text-fg">{t.transferTitle}</h2><p className="mt-1 max-w-2xl text-sm leading-6 text-fg-muted">{t.transferHint}</p><div className="mt-4 flex flex-wrap gap-2"><Button type="button" variant="secondary" disabled={transferBusy !== null} onClick={() => void downloadUserContext()}><Download className="size-4" aria-hidden />{transferBusy === 'export' ? t.exporting : t.exportAction}</Button><Button type="button" variant="secondary" disabled={transferBusy !== null} onClick={() => importInputRef.current?.click()}><Upload className="size-4" aria-hidden />{transferBusy === 'import' ? t.importing : t.importAction}</Button><input ref={importInputRef} type="file" accept="application/json,.json" className="sr-only" onChange={(event) => void uploadUserContext(event.target.files?.[0])} /></div><p className="mt-3 text-xs leading-5 text-fg-subtle">{t.importPromise}</p></section>
         </div>
       ) : null}
 
       <ConfirmDialog open={forgetItem !== null} title={t.forgetTitle} description={t.forgetBody} confirmLabel={t.forget} cancelLabel={t.cancel} destructive onConfirm={() => void confirmForget()} onCancel={() => setForgetItem(null)} />
-      <ConfirmDialog open={pendingTrustLevel === 'auto'} title={t.autoConfirmTitle} description={t.autoConfirmBody} confirmLabel={t.autoConfirmAction} cancelLabel={t.cancel} onConfirm={() => void selectTrustLevel('auto')} onCancel={() => setPendingTrustLevel(null)} />
       <SourceDisconnectDialog source={disconnectSource} language={language} busy={disconnecting} onOpenChange={(open) => { if (!open) setDisconnectSource(null); }} onConfirm={(deleteDerivedUnderstanding) => void confirmDisconnectSource(deleteDerivedUnderstanding)} />
     </main>
   );
