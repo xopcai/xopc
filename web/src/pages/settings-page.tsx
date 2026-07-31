@@ -11,7 +11,7 @@ import {
   loadGoalsSettingsPanel,
   loadHeartbeatSettingsPanel,
   loadKeyboardShortcutsSettingsPanel,
-  loadUserProfileSettingsPanel,
+  loadActionBoundarySettingsPanel,
   loadCapabilityPresetsSettingsPanel,
   loadModelsHubPanel,
   loadRemoteAccessHub,
@@ -26,7 +26,7 @@ const SECTIONS: SettingsSectionId[] = [
   'overview',
   'appearance',
   'keyboard-shortcuts',
-  'user-profile',
+  'action-boundary',
   'system',
   'desktop-pet',
   'desktop-app',
@@ -47,8 +47,8 @@ const AppearanceSettingsPanel = lazy(() =>
 const KeyboardShortcutsSettingsPanel = lazy(() =>
   loadKeyboardShortcutsSettingsPanel().then((m) => ({ default: m.KeyboardShortcutsSettingsPanel })),
 );
-const UserProfileSettingsPanel = lazy(() =>
-  loadUserProfileSettingsPanel().then((m) => ({ default: m.UserProfileSettingsPanel })),
+const ActionBoundarySettingsPanel = lazy(() =>
+  loadActionBoundarySettingsPanel().then((m) => ({ default: m.ActionBoundarySettingsPanel })),
 );
 const SystemSettingsPanel = lazy(() => loadSystemSettingsPanel().then((m) => ({ default: m.SystemSettingsPanel })));
 const DesktopPetSettings = lazy(() => loadDesktopPetSettingsPanel().then((m) => ({ default: m.DesktopPetSettings })));
@@ -115,8 +115,8 @@ export function SettingsPage() {
     return renderLazySection(KeyboardShortcutsSettingsPanel);
   }
 
-  if (id === 'user-profile') {
-    return renderLazySection(UserProfileSettingsPanel);
+  if (id === 'action-boundary') {
+    return renderLazySection(ActionBoundarySettingsPanel);
   }
 
   if (id === 'system') {

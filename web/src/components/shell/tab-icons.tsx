@@ -24,7 +24,6 @@ import {
   Share2,
   Shield,
   Target,
-  UserCircle,
   Users,
 } from 'lucide-react';
 
@@ -48,7 +47,7 @@ const TAB_ICONS: Record<Tab, LucideIcon> = {
   settingsDesktopPet: PawPrint,
   settingsDesktopApp: Package,
   settingsAgentBrowser: Globe,
-  settingsUserProfile: UserCircle,
+  settingsActionBoundary: Shield,
   settingsCapabilityPresets: Layers,
   settingsAgents: Users,
   settingsProviders: Cloud,
