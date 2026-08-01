@@ -47,10 +47,14 @@ describe('resolveXopcProviderApiKey', () => {
 
 describe('applyXopcProviderApiKey', () => {
   function makeAuthStub() {
-    const calls: Array<[string, string]> = [];
+    const calls: Array<[string, string, { allowNetwork?: boolean } | undefined]> = [];
     return {
-      setRuntimeApiKey: async (provider: string, key: string) => {
-        calls.push([provider, key]);
+      setRuntimeApiKey: async (
+        provider: string,
+        key: string,
+        refreshOptions?: { allowNetwork?: boolean },
+      ) => {
+        calls.push([provider, key, refreshOptions]);
       },
       calls,
     };
@@ -59,7 +63,9 @@ describe('applyXopcProviderApiKey', () => {
   it('injects the resolved key as a runtime override', async () => {
     const auth = makeAuthStub();
     await applyXopcProviderApiKey(auth as never, 'deepseek');
-    expect(auth.calls).toEqual([['deepseek', 'sk-from-profiles']]);
+    expect(auth.calls).toEqual([
+      ['deepseek', 'sk-from-profiles', { allowNetwork: false }],
+    ]);
   });
 
   it('skips extension-managed sentinel keys', async () => {
