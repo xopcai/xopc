@@ -126,7 +126,7 @@ export const WindowsTitlebar = memo(function WindowsTitlebar() {
       )}
     >
       <div className={cn('windows-titlebar-interactive flex shrink-0 items-center gap-0.5', APP_CHROME_NO_DRAG_CLASS)}>
-        <ShellQuickActions sidebarToggleVariant="main" showHistory />
+        <ShellQuickActions sidebarToggleVariant="main" />
       </div>
       <WindowsTitlebarMenu groups={groups} />
       <div className={cn('min-w-8 flex-1 self-stretch', APP_CHROME_DRAG_CLASS)} aria-hidden />
