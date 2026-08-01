@@ -39,6 +39,6 @@ export async function applyXopcProviderApiKey(
 ): Promise<void> {
   const key = resolveXopcProviderApiKey(providerId);
   if (key && key !== 'extension-managed') {
-    await modelRuntime.setRuntimeApiKey(providerId, key);
+    await modelRuntime.setRuntimeApiKey(providerId, key, { allowNetwork: false });
   }
 }
