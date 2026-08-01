@@ -133,7 +133,6 @@ export function AttachmentRenderer({
                     sessionKey={sessionKey}
                     imageSize="grid-cell"
                     compact={layout === 'user'}
-                    gridCellFill="square"
                     overflowLabel={`+${grid.overflowCount}`}
                     onOpen={(att) => {
                       setActive(att);

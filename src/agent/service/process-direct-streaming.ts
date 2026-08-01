@@ -233,7 +233,7 @@ function pushAssistantReceipt(
 ): void {
   const message = makeAssistantReceiptMessage(text, metadata);
   queue.push({ type: 'message_start', runId, message });
-  queue.push({ type: 'message_update', runId, message });
+  queue.push({ type: 'assistant_snapshot', runId, message });
   queue.push({ type: 'message_end', runId, message });
 }
 

@@ -92,36 +92,126 @@ describe('ChatStreamMapper', () => {
   it('maps assistant text deltas', () => {
     const m = mapper();
     const [start] = m.map({ type: 'message_start', message: { role: 'assistant', content: [] } });
-    const [delta] = m.map({
+    const [firstDelta] = m.map({
       type: 'message_update',
       message: { role: 'assistant', content: [{ type: 'text', text: 'h' }] },
       assistantMessageEvent: { type: 'text_delta', delta: 'h' },
     });
+    const [secondDelta] = m.map({
+      type: 'message_update',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'hi' }] },
+      assistantMessageEvent: { type: 'text_delta', delta: 'i' },
+    });
     const end = m.map({ type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text: 'hi' }] } });
 
     expect(start).toMatchObject({ type: 'assistant_message_start', payload: { messageId: 'msg_run-1_1' } });
-    expect(delta).toMatchObject({ type: 'assistant_delta', payload: { messageId: 'msg_run-1_1', delta: 'h' } });
-    expect(end.map((e) => e.type)).toEqual(['assistant_delta', 'thinking_end', 'assistant_message_end']);
-    expect(end[0]).toMatchObject({ payload: { delta: 'i' } });
+    expect(firstDelta).toMatchObject({ type: 'assistant_delta', payload: { messageId: 'msg_run-1_1', delta: 'h' } });
+    expect(secondDelta).toMatchObject({ type: 'assistant_delta', payload: { messageId: 'msg_run-1_1', delta: 'i' } });
+    expect(end.map((e) => e.type)).toEqual(['thinking_end', 'assistant_message_end']);
   });
 
-  it('does not duplicate text when a provider reports cumulative text_delta chunks', () => {
+  it('uses text_delta as the only live text source when the message snapshot is ahead', () => {
     const m = mapper();
     m.map({ type: 'message_start', message: { role: 'assistant', content: [] } });
 
     const first = m.map({
       type: 'message_update',
-      message: { role: 'assistant', content: [{ type: 'text', text: 'Hey! What can' }] },
-      assistantMessageEvent: { type: 'text_delta', delta: 'Hey! What can' },
+      message: { role: 'assistant', content: [{ type: 'text', text: '先看看刚生成的三款 logo 实际效果，再针对性优化。' }] },
+      assistantMessageEvent: { type: 'text_delta', delta: '先看看' },
     });
     const second = m.map({
       type: 'message_update',
-      message: { role: 'assistant', content: [{ type: 'text', text: 'Hey! What can I help you with today?' }] },
-      assistantMessageEvent: { type: 'text_delta', delta: 'Hey! What can I help you with today?' },
+      message: { role: 'assistant', content: [{ type: 'text', text: '先看看刚生成的三款 logo 实际效果，再针对性优化。' }] },
+      assistantMessageEvent: { type: 'text_delta', delta: '刚生成的三款 logo 实际效果，再针对性优化。' },
     });
 
-    expect(first[0]).toMatchObject({ type: 'assistant_delta', payload: { delta: 'Hey! What can' } });
-    expect(second[0]).toMatchObject({ type: 'assistant_delta', payload: { delta: ' I help you with today?' } });
+    expect(first[0]).toMatchObject({ type: 'assistant_delta', payload: { delta: '先看看' } });
+    expect(second[0]).toMatchObject({ type: 'assistant_delta', payload: { delta: '刚生成的三款 logo 实际效果，再针对性优化。' } });
+  });
+
+  it('uses text_delta as the only live text source when the message snapshot is stale', () => {
+    const m = mapper();
+    m.map({ type: 'message_start', message: { role: 'assistant', content: [] } });
+
+    const first = m.map({
+      type: 'message_update',
+      message: { role: 'assistant', content: [{ type: 'text', text: '让我' }] },
+      assistantMessageEvent: { type: 'text_delta', delta: '让我' },
+    });
+    const second = m.map({
+      type: 'message_update',
+      message: { role: 'assistant', content: [{ type: 'text', text: '让我' }] },
+      assistantMessageEvent: { type: 'text_delta', delta: '先快速' },
+    });
+    const third = m.map({
+      type: 'message_update',
+      message: { role: 'assistant', content: [{ type: 'text', text: '让我' }] },
+      assistantMessageEvent: { type: 'text_delta', delta: '查一下' },
+    });
+    const end = m.map({
+      type: 'message_end',
+      message: { role: 'assistant', content: [{ type: 'text', text: '让我先快速查一下' }] },
+    });
+
+    expect(first[0]).toMatchObject({ type: 'assistant_delta', payload: { delta: '让我' } });
+    expect(second[0]).toMatchObject({ type: 'assistant_delta', payload: { delta: '先快速' } });
+    expect(third[0]).toMatchObject({ type: 'assistant_delta', payload: { delta: '查一下' } });
+    expect(end.map((event) => event.type)).toEqual(['thinking_end', 'assistant_message_end']);
+  });
+
+  it('maps an explicit assistant snapshot as one complete delta', () => {
+    const m = mapper();
+    m.map({ type: 'message_start', message: { role: 'assistant', content: [] } });
+
+    const [delta] = m.map({
+      type: 'assistant_snapshot',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'Background task completed.' }] },
+    });
+
+    expect(delta).toMatchObject({ type: 'assistant_delta', payload: { delta: 'Background task completed.' } });
+  });
+
+  it('does not reinterpret a non-text sub-event message snapshot as text', () => {
+    const m = mapper();
+    m.map({ type: 'message_start', message: { role: 'assistant', content: [] } });
+
+    const events = m.map({
+      type: 'message_update',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'Already streamed.' }] },
+      assistantMessageEvent: { type: 'toolcall_delta', delta: '{}' },
+    });
+
+    expect(events).toEqual([]);
+  });
+
+  it('does not reinterpret a message update without an incremental sub-event', () => {
+    const m = mapper();
+    m.map({ type: 'message_start', message: { role: 'assistant', content: [] } });
+
+    const events = m.map({
+      type: 'message_update',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'Complete snapshot.' }] },
+    });
+
+    expect(events).toEqual([]);
+  });
+
+  it('preserves a text delta when the same update first publishes a review', () => {
+    const m = mapper();
+    m.map({ type: 'message_start', message: { role: 'assistant', content: [] } });
+
+    const events = m.map({
+      type: 'message_update',
+      message: {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'Complete answer.' }],
+        metadata: { review: { type: 'review', status: 'complete' } },
+      },
+      assistantMessageEvent: { type: 'text_delta', delta: 'Complete answer.' },
+    });
+
+    expect(events.map((event) => event.type)).toEqual(['review', 'assistant_delta']);
+    expect(events[1]).toMatchObject({ payload: { delta: 'Complete answer.' } });
   });
 
   it('maps TTS audio before the gateway run_end and targets the last assistant', () => {
@@ -230,8 +320,8 @@ describe('ChatStreamMapper', () => {
 
     expect(toolEnd.map((event) => event.type)).toEqual(['tool_end', 'patch_applied']);
     expect(toolEnd[1]).toMatchObject({ payload: { added: 1, removed: 1 } });
-    expect(messageEnd.map((event) => event.type)).toEqual(['assistant_delta', 'thinking_end', 'turn_diff', 'assistant_message_end']);
-    expect(messageEnd[2]).toMatchObject({ type: 'turn_diff', payload: { files: ['a.ts'], added: 1, removed: 1 } });
+    expect(messageEnd.map((event) => event.type)).toEqual(['thinking_end', 'turn_diff', 'assistant_message_end']);
+    expect(messageEnd[1]).toMatchObject({ type: 'turn_diff', payload: { files: ['a.ts'], added: 1, removed: 1 } });
   });
 
   it('emits turn_plan for update_plan', () => {

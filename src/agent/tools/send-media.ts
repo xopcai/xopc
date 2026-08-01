@@ -5,6 +5,7 @@ import { basename } from 'node:path';
 import { AgentTool, type AgentToolResult } from '@earendil-works/pi-agent-core';
 import { checkFileSafety } from '../prompt/safety.js';
 import { resolvePathUnderWorkspace } from './tool-paths.js';
+import { persistToolMedia, type ToolMediaType } from './tool-media.js';
 import type { MessageBus, OutboundMessage } from '../../infra/bus/index.js';
 
 const SendMediaSchema = Type.Object({
@@ -31,49 +32,6 @@ type SendMediaParams = {
   mediaType?: 'photo' | 'video' | 'audio' | 'document';
   caption?: string;
 };
-
-// Detect media type from file extension
-function detectMediaType(filePath: string): 'photo' | 'video' | 'audio' | 'document' {
-  const ext = filePath.split('.').pop()?.toLowerCase();
-  const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'];
-  const videoExts = ['mp4', 'mov', 'avi', 'webm', 'mkv'];
-  const audioExts = ['mp3', 'wav', 'ogg', 'm4a', 'flac'];
-
-  if (imageExts.includes(ext || '')) return 'photo';
-  if (videoExts.includes(ext || '')) return 'video';
-  if (audioExts.includes(ext || '')) return 'audio';
-  return 'document';
-}
-
-// Detect MIME type from file extension
-function detectMimeType(filePath: string): string {
-  const ext = filePath.split('.').pop()?.toLowerCase();
-  const mimeMap: Record<string, string> = {
-    jpg: 'image/jpeg',
-    jpeg: 'image/jpeg',
-    png: 'image/png',
-    gif: 'image/gif',
-    webp: 'image/webp',
-    bmp: 'image/bmp',
-    svg: 'image/svg+xml',
-    mp4: 'video/mp4',
-    mov: 'video/quicktime',
-    avi: 'video/x-msvideo',
-    webm: 'video/webm',
-    mp3: 'audio/mpeg',
-    wav: 'audio/wav',
-    ogg: 'audio/ogg',
-    m4a: 'audio/mp4',
-    flac: 'audio/flac',
-    pdf: 'application/pdf',
-    doc: 'application/msword',
-    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    txt: 'text/plain',
-    zip: 'application/zip',
-    rar: 'application/x-rar-compressed',
-  };
-  return mimeMap[ext || ''] || 'application/octet-stream';
-}
 
 export function createSendMediaTool(
   workspace: string,
@@ -112,27 +70,30 @@ export function createSendMediaTool(
 
       try {
         const fileBuffer = await readFile(resolved);
-        const base64 = fileBuffer.toString('base64');
-        const mimeType = detectMimeType(resolved);
-        const mediaType = p.mediaType || detectMediaType(resolved);
+        const media = await persistToolMedia({
+          buffer: fileBuffer,
+          filePath: resolved,
+          ...(p.mediaType ? { mediaType: p.mediaType as ToolMediaType } : {}),
+        });
 
-        // Create data URL
-        const dataUrl = `data:${mimeType};base64,${base64}`;
-
-        const msg: OutboundMessage = {
-          channel: ctx.channel,
-          chat_id: ctx.chatId,
-          content: p.caption || '',
-          mediaUrl: dataUrl,
-          mediaType,
-        };
-
-        await bus.publishOutbound(msg);
+        if (ctx.channel !== 'webchat') {
+          const msg: OutboundMessage = {
+            channel: ctx.channel,
+            chat_id: ctx.chatId,
+            content: p.caption || '',
+            mediaUrl: `data:${media.mimeType};base64,${fileBuffer.toString('base64')}`,
+            mediaType: media.type as ToolMediaType,
+          };
+          await bus.publishOutbound(msg);
+        }
 
         const fileName = basename(resolved);
         return {
-          content: [{ type: 'text', text: `✅ Media sent: ${fileName} (${mediaType})` }],
-          details: { filePath: resolved, mediaType },
+          content: [{ type: 'text', text: `Media attached: ${fileName} (${media.type})` }],
+          details: {
+            media: [media],
+            ...(p.caption ? { caption: p.caption } : {}),
+          },
         };
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);

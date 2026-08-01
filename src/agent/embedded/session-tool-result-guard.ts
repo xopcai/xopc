@@ -351,6 +351,17 @@ function sanitizeToolResultDetailsForPersistence(details: unknown): unknown {
       out.sessionsTruncated = src.sessions.length - MAX_PERSISTED_DETAIL_SESSION_COUNT;
     }
   }
+  if (Array.isArray(src.media)) {
+    out.media = src.media.slice(0, 12).map((item) => {
+      if (!item || typeof item !== 'object') return item;
+      const media = item as Record<string, unknown>;
+      return Object.fromEntries(
+        ['id', 'bucket', 'type', 'mimeType', 'name', 'size', 'uri', 'path']
+          .filter((key) => media[key] !== undefined)
+          .map((key) => [key, media[key]]),
+      );
+    });
+  }
   return enforcePersistedDetailsByteCap(out, src, originalSize);
 }
 

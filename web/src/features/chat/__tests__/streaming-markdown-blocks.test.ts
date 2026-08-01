@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { splitStreamingMarkdownBlocks } from '@/components/markdown/parse-markdown';
+import {
+  buildStreamingMarkdownRenderBlocks,
+  splitStreamingMarkdownBlocks,
+} from '@/components/markdown/parse-markdown';
 
 describe('splitStreamingMarkdownBlocks', () => {
   it('freezes completed top-level blocks and leaves the active block as the tail', () => {
@@ -37,5 +40,25 @@ describe('splitStreamingMarkdownBlocks', () => {
 
     expect(next.stable).toEqual(first.stable);
     expect(next.tail).toContain('Part two');
+  });
+
+  it('keeps a block identity when the active tail becomes stable', () => {
+    const first = buildStreamingMarkdownRenderBlocks(
+      'Intro.\n\nStill streaming',
+    );
+    const previousTail = first.at(-1);
+    const next = buildStreamingMarkdownRenderBlocks(
+      'Intro.\n\nStill streaming\n\nNext block',
+    );
+    const completedBlock = next.find((block) =>
+      block.content.includes('Still streaming'),
+    );
+
+    expect(previousTail?.isTail).toBe(true);
+    expect(completedBlock?.isTail).toBe(false);
+    expect(completedBlock?.key).toBe(previousTail?.key);
+    expect(next.map((block) => block.content).join('')).toBe(
+      'Intro.\n\nStill streaming\n\nNext block',
+    );
   });
 });

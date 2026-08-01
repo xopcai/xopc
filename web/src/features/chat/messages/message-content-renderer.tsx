@@ -1,9 +1,15 @@
 // Block-level renderers used by MessageBubble. Assistant activity is collected
 // into one turn-level disclosure instead of fragmenting the reply around text.
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
 import { AlertCircle, Copy, ExternalLink, File, FolderOpen, Loader2, X } from 'lucide-react';
-import { useThrottledCallback } from 'use-debounce';
 
 import { MarkdownView } from '@/features/chat/markdown/markdown-view';
 import type { WorkspaceFileLinkTarget } from '@/components/markdown/internal-links';
@@ -14,7 +20,6 @@ import {
 import type {
   ImageContent,
   MessageContent,
-  ReasoningLevel,
   ReviewContent,
 } from '@/features/chat/messages/messages.types';
 import type {
@@ -37,12 +42,14 @@ import {
   mergeConsecutiveTextBlocks,
   prepareStreamingMarkdown,
 } from '@/features/chat/messages/streaming-markdown';
-import { splitStreamingMarkdownBlocks } from '@/components/markdown/parse-markdown';
+import { buildStreamingMarkdownRenderBlocks } from '@/components/markdown/parse-markdown';
 import {
-  collectTurnActivityBlocks,
-  hasAssistantAnswerText,
-  type TurnActivityBlock,
-} from '@/features/chat/messages/turn-activity';
+  finishStreamingRenderMetrics,
+  recordStreamingShape,
+  startStreamingRenderMetrics,
+} from '@/components/markdown/streaming-render-metrics';
+import { useProgressiveStreamingMarkdown } from '@/features/chat/messages/use-progressive-streaming-markdown';
+import type { AssistantTurnActivityPresentation } from '@/features/chat/messages/assistant-turn-view-model';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
@@ -259,30 +266,6 @@ const fileActionButtonClass = cn(
   interaction.press,
 );
 
-const STREAMING_MARKDOWN_RENDER_INTERVAL_MS = 80;
-
-function useThrottledStreamingMarkdown(content: string, streaming: boolean): string {
-  const [throttledContent, setThrottledContent] = useState(content);
-  const updateThrottledContent = useThrottledCallback(
-    (nextContent: string) => setThrottledContent(nextContent),
-    STREAMING_MARKDOWN_RENDER_INTERVAL_MS,
-    { leading: true, trailing: true },
-  );
-
-  useEffect(() => {
-    if (!streaming) {
-      updateThrottledContent.cancel();
-      setThrottledContent(content);
-      return;
-    }
-    updateThrottledContent(content);
-  }, [content, streaming, updateThrottledContent]);
-
-  useEffect(() => () => updateThrottledContent.cancel(), [updateThrottledContent]);
-
-  return streaming ? throttledContent : content;
-}
-
 function ChatMarkdownView({
   content,
   compact,
@@ -294,20 +277,40 @@ function ChatMarkdownView({
   sessionKey?: string | null;
   streaming?: boolean;
 }) {
-  // Bound reparsing to one update per interval during SSE while still flushing
-  // the first and final values. This prevents high-frequency DOM replacement
-  // without allowing a table to wait for the stream to finish.
-  const streamingContent = useThrottledStreamingMarkdown(content, streaming);
-  const streamingBlocks = useMemo(
-    () =>
-      streaming
-        ? splitStreamingMarkdownBlocks(streamingContent)
-        : { stable: [], tail: content },
-    [content, streaming, streamingContent],
+  // Reveal bounded chunks at an adaptive cadence so fast providers remain
+  // perceptible without forcing one render per raw delta.
+  const generatedMetricsKey = useId();
+  const metricsKey = `assistant-markdown-${generatedMetricsKey}`;
+  const streamingContent = useProgressiveStreamingMarkdown(
+    content,
+    streaming,
+    metricsKey,
   );
-  const renderedTail = streaming
-    ? prepareStreamingMarkdown(streamingBlocks.tail)
-    : content;
+  const [hasStreamed, setHasStreamed] = useState(streaming);
+  useEffect(() => {
+    if (streaming) setHasStreamed(true);
+  }, [streaming]);
+  const progressivelyRevealing = streaming || streamingContent !== content;
+  const preserveStreamingLayout = streaming || hasStreamed;
+  const blockSource = streamingContent;
+  const streamingBlocks = useMemo(
+    () => buildStreamingMarkdownRenderBlocks(blockSource),
+    [blockSource],
+  );
+  useEffect(() => {
+    if (!progressivelyRevealing) return;
+    startStreamingRenderMetrics(metricsKey);
+    return () => finishStreamingRenderMetrics(metricsKey);
+  }, [metricsKey, progressivelyRevealing]);
+  useEffect(() => {
+    if (!preserveStreamingLayout) return;
+    const tail = streamingBlocks.at(-1);
+    recordStreamingShape(
+      metricsKey,
+      Math.max(0, streamingBlocks.length - 1),
+      tail?.content.length ?? 0,
+    );
+  }, [metricsKey, preserveStreamingLayout, streamingBlocks]);
   const setPreview = useWorkspacePreviewStore((s) => s.setPath);
   const language = useLocaleStore((s) => s.language);
   const fileReferenceMessages = messages(language).chat.fileReference;
@@ -352,27 +355,27 @@ function ChatMarkdownView({
 
   return (
     <>
-      {streaming ? (
+      {preserveStreamingLayout ? (
         <div className="markdown-stream-blocks">
-          {streamingBlocks.stable.map((block, index) => (
+          {streamingBlocks.map((block) => (
             <MarkdownView
-              key={index}
-              content={block}
+              key={block.key}
+              content={
+                progressivelyRevealing && block.isTail
+                  ? prepareStreamingMarkdown(block.content)
+                  : block.content
+              }
               compact={compact}
-              className="markdown-stream-block"
+              className={cn(
+                'markdown-stream-block',
+                block.isTail && 'markdown-stream-tail',
+              )}
               onWorkspaceFileOpen={openFile}
               openHttpLinksInNewTab
-              renderMermaid={false}
+              renderMermaid={!progressivelyRevealing}
+              streamingMetricsKey={metricsKey}
             />
           ))}
-          <MarkdownView
-            content={renderedTail}
-            compact={compact}
-            className="markdown-stream-block markdown-stream-tail"
-            onWorkspaceFileOpen={openFile}
-            openHttpLinksInNewTab
-            renderMermaid={false}
-          />
         </div>
       ) : (
         <MarkdownView
@@ -488,9 +491,7 @@ export function ChunkedContent({
   onImagePreview,
   sessionKey,
   workflowOptions,
-  reasoningLevel,
-  activityBlocks: suppliedActivityBlocks,
-  answerStarted: suppliedAnswerStarted,
+  assistantActivity,
 }: {
   content: MessageContent[];
   isUser: boolean;
@@ -530,17 +531,11 @@ export function ChunkedContent({
   onImagePreview: ((block: ImageContent, index: number) => void) | undefined;
   sessionKey: string | null | undefined;
   workflowOptions: AssistantActivityWorkflowOptions;
-  reasoningLevel: ReasoningLevel;
-  activityBlocks?: TurnActivityBlock[];
-  answerStarted?: boolean;
+  assistantActivity?: AssistantTurnActivityPresentation;
 }) {
   const renderContent = isUser ? content : mergeConsecutiveTextBlocks(content);
   const nodes: ReactNode[] = [];
-  const activityBlocks = isUser
-    ? []
-    : (suppliedActivityBlocks ?? collectTurnActivityBlocks(renderContent));
-  const answerStarted =
-    suppliedAnswerStarted ?? (!isUser && hasAssistantAnswerText(renderContent));
+  const activityBlocks = isUser ? [] : (assistantActivity?.blocks ?? []);
   let activityRendered = false;
   let i = 0;
   let imageOrdinal = 0;
@@ -548,20 +543,22 @@ export function ChunkedContent({
     const b = renderContent[i];
 
     if (b.type === 'thinking' || b.type === 'tool_use') {
-      if (!isUser && !activityRendered && activityBlocks.length > 0) {
+      if (
+        !isUser &&
+        assistantActivity &&
+        !activityRendered &&
+        activityBlocks.length > 0
+      ) {
         nodes.push(
           <AssistantStepsBlock
             key="turn-activity"
-            blocks={activityBlocks}
+            activity={assistantActivity}
             toolLabels={toolLabels}
             stepLabels={stepLabels}
             clusterLabels={clusterLabels}
             cardLabels={cardLabels}
             sessionKey={sessionKey}
-            isMessageStreaming={!isUser && isAssistantMessageStreaming}
-            finalAnswerStarted={answerStarted}
             workflowOptions={workflowOptions}
-            reasoningLevel={reasoningLevel}
           />,
         );
         activityRendered = true;

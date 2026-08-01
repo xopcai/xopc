@@ -61,4 +61,43 @@ describe('session-tool-result-guard', () => {
     expect(assistant).toBeDefined();
     expect((assistant as { usage?: { totalTokens?: number } }).usage?.totalTokens).toBe(0);
   });
+
+  it('keeps structured media when oversized tool details are sanitized', () => {
+    const listener = vi.fn();
+    const unsubscribe = onSessionTranscriptUpdate(listener);
+    const sm = guardSessionManager(SessionManager.inMemory(process.cwd()), {
+      sessionKey: 'agent:main:media-test',
+    });
+
+    sm.appendMessage({
+      role: 'toolResult',
+      toolCallId: 'call-media',
+      toolName: 'send_media',
+      content: [{ type: 'text', text: 'Media attached' }],
+      details: {
+        media: [{
+          id: 'cat---id.webp',
+          bucket: 'outbound',
+          type: 'photo',
+          mimeType: 'image/webp',
+          name: 'cat.webp',
+          size: 120,
+          uri: 'media://outbound/cat---id.webp',
+          path: '/state/media/outbound/cat---id.webp',
+        }],
+        oversized: 'x'.repeat(80_000),
+      },
+      timestamp: Date.now(),
+    } as never);
+
+    const update = listener.mock.calls.at(-1)?.[0];
+    expect(update?.message).toMatchObject({
+      role: 'toolResult',
+      details: {
+        persistedDetailsTruncated: true,
+        media: [{ uri: 'media://outbound/cat---id.webp' }],
+      },
+    });
+    unsubscribe();
+  });
 });

@@ -29,30 +29,32 @@ import { showToast } from '@/lib/toast';
 import { showActivity } from '@/stores/activity-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
-function notifyBackgroundRunCompleted(chatId: string, failed = false): void {
+function recordBackgroundRunCompleted(chatId: string): void {
   const m = messages(useLocaleStore.getState().language).chat;
-  const title = failed ? m.backgroundRunFailedTitle : m.backgroundRunCompletedTitle;
+  const title = m.backgroundRunCompletedTitle;
   const message = m.backgroundRunCompletedDescription;
   const href = `/chat/${encodeURIComponent(chatId)}`;
-  showToast({
-    type: failed ? 'error' : 'success',
+  showActivity({
+    tone: 'success',
     title,
     message,
-    duration: failed ? 0 : 4_000,
     source: 'chat',
     href,
-    dedupeKey: `chat-run:${failed ? 'failed' : 'completed'}:${chatId}`,
+    dedupeKey: `chat-run:completed:${chatId}`,
   });
-  if (!failed) {
-    showActivity({
-      tone: 'success',
-      title,
-      message,
-      source: 'chat',
-      href,
-      dedupeKey: `chat-run:completed:${chatId}`,
-    });
-  }
+}
+
+function notifyBackgroundRunFailed(chatId: string): void {
+  const m = messages(useLocaleStore.getState().language).chat;
+  showToast({
+    type: 'error',
+    title: m.backgroundRunFailedTitle,
+    message: m.backgroundRunCompletedDescription,
+    duration: 0,
+    source: 'chat',
+    href: `/chat/${encodeURIComponent(chatId)}`,
+    dedupeKey: `chat-run:failed:${chatId}`,
+  });
 }
 
 export type AgentStreamFqCallbacks = {
@@ -283,7 +285,7 @@ export function createAgentStreamMessagingCallbacks(opts: {
       }
       markChatRunCompleted(chatId, !visible);
       if (!visible) {
-        notifyBackgroundRunCompleted(chatId);
+        recordBackgroundRunCompleted(chatId);
         onBackgroundTerminal();
         return;
       }
@@ -294,7 +296,7 @@ export function createAgentStreamMessagingCallbacks(opts: {
       const visible = shouldApplyStreamUpdate(chatId);
       markChatRunFailed(chatId, !visible);
       if (!visible) {
-        notifyBackgroundRunCompleted(chatId, true);
+        notifyBackgroundRunFailed(chatId);
         onBackgroundTerminal();
         return;
       }

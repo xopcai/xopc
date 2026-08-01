@@ -335,6 +335,14 @@ html.dark .markdown-code-copy-btn:hover {
   text-align: center;
 }
 
+.markdown-mermaid-shell {
+  min-height: var(--markdown-mermaid-placeholder-height, 11.25rem);
+}
+
+.markdown-mermaid-pending {
+  background: var(--color-surface-hover);
+}
+
 .markdown-mermaid svg {
   max-width: 100%;
   height: auto;

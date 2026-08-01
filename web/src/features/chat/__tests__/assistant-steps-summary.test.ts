@@ -108,7 +108,7 @@ describe('buildStepsRoundStreamingSummary', () => {
     expect(s).toBe('正在思考…');
   });
 
-  it('returns null when nothing is in flight (caller falls back to legacy header)', () => {
+  it('returns null when nothing is in flight', () => {
     expect(buildStepsRoundStreamingSummary([], ingZh)).toBeNull();
   });
 });

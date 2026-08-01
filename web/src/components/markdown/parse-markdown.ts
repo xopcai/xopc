@@ -58,6 +58,13 @@ export type StreamingMarkdownBlocks = {
   tail: string;
 };
 
+export type StreamingMarkdownRenderBlock = {
+  /** Append-only source offset; remains stable when the tail becomes complete. */
+  key: string;
+  content: string;
+  isTail: boolean;
+};
+
 const REFERENCE_DEFINITION_RE = /^(?: {0,3})\[[^\]]+\]:\s+\S+/m;
 
 /**
@@ -94,4 +101,31 @@ export function splitStreamingMarkdownBlocks(text: string): StreamingMarkdownBlo
     stable,
     tail: text.slice(stableLength),
   };
+}
+
+/**
+ * Add stable React identities to streaming blocks. A block keeps the same key
+ * when it moves from the mutable tail into the completed prefix, avoiding a
+ * DOM replacement at every top-level Markdown boundary.
+ */
+export function buildStreamingMarkdownRenderBlocks(
+  text: string,
+): StreamingMarkdownRenderBlock[] {
+  const { stable, tail } = splitStreamingMarkdownBlocks(text);
+  let offset = 0;
+  const blocks = stable.map((content) => {
+    const block = {
+      key: `markdown-${offset}`,
+      content,
+      isTail: false,
+    };
+    offset += content.length;
+    return block;
+  });
+  blocks.push({
+    key: `markdown-${offset}`,
+    content: tail,
+    isTail: true,
+  });
+  return blocks;
 }
