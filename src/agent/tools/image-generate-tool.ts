@@ -28,6 +28,7 @@ import type {
 } from '../image/generation/types.js';
 import { applyImageGenerationModelConfigDefaults } from '../image/image-helpers.js';
 import type { ToolModelConfig } from '../image/tool-model-config.js';
+import { persistToolMedia } from './tool-media.js';
 
 const DEFAULT_COUNT = 1;
 const MAX_COUNT = 9;
@@ -264,7 +265,7 @@ export function createImageGenerateTool(options: {
     name: 'image_generate',
     label: 'Image Generation',
     description:
-      'Generate images with the configured image-generation model (default OpenAI). Use action="list" to see providers. Saves files under workspace/media/generated/.',
+      'Generate and attach images with the configured image-generation model. Use action="list" to see providers. Also saves files under workspace/media/generated/. Do not call send_media for generated images.',
     parameters: ImageGenerateToolSchema,
     async execute(
       _toolCallId: string,
@@ -360,9 +361,18 @@ export function createImageGenerateTool(options: {
         const workspaceRelativePaths = paths.map((p) =>
           path.relative(options.workspace, p).split(path.sep).join('/'),
         );
+        const media = await Promise.all(
+          result.images.map((image, index) =>
+            persistToolMedia({
+              buffer: image.buffer,
+              filePath: paths[index]!,
+              mediaType: 'photo',
+            }),
+          ),
+        );
 
         const lines: string[] = [
-          `Generated ${paths.length} image(s) with ${result.provider}/${result.model}.`,
+          `Generated and attached ${paths.length} image(s) with ${result.provider}/${result.model}.`,
           ...paths.map((p) => `Saved: ${p}`),
         ];
         for (const note of buildNormalizationNotes(result.normalization, result.ignoredOverrides)) {
@@ -376,6 +386,7 @@ export function createImageGenerateTool(options: {
             model: result.model,
             paths,
             workspaceRelativePaths,
+            media,
             attempts: result.attempts,
             ...(result.normalization ? { normalization: result.normalization } : {}),
             ...(result.ignoredOverrides.length > 0

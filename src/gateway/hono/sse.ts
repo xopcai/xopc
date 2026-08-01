@@ -222,7 +222,7 @@ export function createAgentSSEHandler(config: SSEHandlerConfig) {
  * POST /api/agent/resume — Re-attach to an in-progress agent run via SSE.
  *
  * Request body: { runId, sessionKey }
- * The relay replays all buffered events from the beginning and then live-tails
+ * The relay replays retained buffered events from the beginning and then live-tails
  * until the run completes.
  *
  * SSE events are identical to those from POST /api/agent.

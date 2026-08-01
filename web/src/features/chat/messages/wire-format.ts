@@ -10,6 +10,7 @@ export interface WireContentBlock {
   input?: unknown;
   function?: { name?: string; arguments?: string | unknown };
   result?: string;
+  details?: unknown;
   source?: { data?: string; media_type?: string };
   data?: string;
   mimeType?: string;
@@ -27,6 +28,7 @@ export interface WireMessage {
     args?: unknown;
     result?: string;
     isError?: boolean;
+    details?: unknown;
   }>;
   /** Persisted media refs (`media://…`) on user/assistant turns. */
   media?: unknown;
@@ -38,6 +40,7 @@ export interface WireMessage {
   tool_call_id?: string;
   toolCallId?: string;
   isError?: boolean;
+  details?: unknown;
 }
 
 /** Tool-related blocks in session wire format (tool_use / OpenAI / pi toolCall). */

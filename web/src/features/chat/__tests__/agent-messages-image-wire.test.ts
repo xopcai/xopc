@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { collectAssistantWorkspaceOutputPaths } from '@/features/chat/messages/assistant-message-artifacts';
+import {
+  collectAssistantToolMedia,
+  collectAssistantWorkspaceOutputPaths,
+} from '@/features/chat/messages/assistant-message-artifacts';
 import { normalizeAgentMessages } from '@/features/chat/messages/agent-messages';
 import { messageAttachmentsToWire } from '@/features/chat/messages/user-message-plain-text';
 
@@ -73,21 +76,40 @@ describe('normalizeAgentMessages user attachment wire shape', () => {
     }
   });
 
-  it('restores generated image tool results from client history toolCalls', () => {
+  it('restores generated images from structured tool result media', () => {
     const ui = normalizeAgentMessages([
       {
         role: 'assistant',
-        content: 'Done.',
-        toolCalls: [
+        content: '',
+        rawContent: [
           {
+            type: 'toolCall',
+            id: 'call-image',
             name: 'image_generate',
-            args: { prompt: 'a lake' },
-            result:
-              'Generated 1 image(s) with openai/gpt-image-1.\nSaved: /Users/test/workspace/media/generated/lake.png',
+            arguments: { prompt: 'a lake' },
           },
         ],
+        toolCalls: [{
+          id: 'call-image',
+          name: 'image_generate',
+          args: { prompt: 'a lake' },
+          result: 'Generated and attached 1 image.',
+          details: {
+            media: [{
+              id: 'lake---id.png',
+              bucket: 'outbound',
+              type: 'photo',
+              mimeType: 'image/png',
+              name: 'lake.png',
+              size: 100,
+              uri: 'media://outbound/lake---id.png',
+              path: '/state/media/outbound/lake---id.png',
+            }],
+          },
+        }],
         timestamp: 4,
       },
+      { role: 'assistant', content: 'Done.', timestamp: 5 },
     ]);
 
     const block = ui[0]?.content.find((b) => b.type === 'tool_use');
@@ -97,11 +119,18 @@ describe('normalizeAgentMessages user attachment wire shape', () => {
       status: 'done',
     });
     if (block?.type === 'tool_use') {
-      expect(block.result).toContain('Saved: /Users/test/workspace/media/generated/lake.png');
+      expect(block.details).toMatchObject({ media: [{ name: 'lake.png' }] });
     }
 
     const paths = collectAssistantWorkspaceOutputPaths(ui[0]?.content);
-    expect(paths.map((p) => p.fileName)).toEqual(['lake.png']);
+    expect(paths).toEqual([]);
+    expect(collectAssistantToolMedia(ui[0]?.content)).toEqual([
+      expect.objectContaining({
+        name: 'lake.png',
+        type: 'image',
+        uri: 'media://outbound/lake---id.png',
+      }),
+    ]);
   });
 
   it('collects shared generated files from create_share tool input when tool results are missing', () => {

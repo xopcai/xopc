@@ -4,15 +4,13 @@ import { CheckCircle2, ChevronDown, Loader2, XCircle } from 'lucide-react';
 import {
   buildStepsRoundCompleteSummary,
   buildStepsRoundStreamingSummary,
-  filterVisibleSteps,
   viewStepsLabel,
 } from '@/features/chat/messages/assistant-steps-summary';
-import { getActivityTiming } from '@/features/chat/messages/activity-timing';
 import type {
-  ReasoningLevel,
   ThinkingContent,
   ToolUseContent,
 } from '@/features/chat/messages/messages.types';
+import type { AssistantTurnActivityPresentation } from '@/features/chat/messages/assistant-turn-view-model';
 import { formatParamsJson, getKeyDetailLine } from '@/features/chat/messages/tool-input-preview';
 import { getFriendlyToolTitle } from '@/features/chat/messages/tool-friendly-title';
 import {
@@ -50,7 +48,6 @@ import { isWorkflowToolBlock } from '@/features/chat/workflow/workflow.utils';
 
 export interface AssistantActivityWorkflowOptions {
   labels: WorkflowCardLabels;
-  onAbort?: () => void;
 }
 
 const AssistantStepsHeaderStatusIcon = memo(function AssistantStepsHeaderStatusIcon({
@@ -106,18 +103,15 @@ const StepRoundDurationText = memo(function StepRoundDurationText({
 
 /** One turn-level activity disclosure for model summaries and tool execution. */
 export function AssistantStepsBlock({
-  blocks,
+  activity,
   toolLabels,
   stepLabels,
   clusterLabels,
   cardLabels,
   sessionKey,
-  isMessageStreaming = false,
-  finalAnswerStarted = false,
   workflowOptions,
-  reasoningLevel,
 }: {
-  blocks: Array<ThinkingContent | ToolUseContent>;
+  activity: AssistantTurnActivityPresentation;
   toolLabels: { input: string; output: string; noOutput: string };
   stepLabels: {
     thoughts: string;
@@ -150,33 +144,14 @@ export function AssistantStepsBlock({
   };
   cardLabels: ToolCardLabels;
   sessionKey?: string | null;
-  /** Assistant reply SSE still open for this bubble. */
-  isMessageStreaming?: boolean;
-  /** A non-empty assistant `text` block exists after this thinking/tool chunk (final answer has begun). */
-  finalAnswerStarted?: boolean;
   workflowOptions: AssistantActivityWorkflowOptions;
-  reasoningLevel: ReasoningLevel;
 }) {
   const language = useLocaleStore((s) => s.language);
-  const visibleBlocks = useMemo(() => {
-    const visible = filterVisibleSteps(blocks);
-    if (reasoningLevel !== 'off') return visible;
-    return visible.filter((block) => block.type !== 'thinking');
-  }, [blocks, reasoningLevel]);
+  const visibleBlocks = activity.blocks;
   const stepCount = visibleBlocks.length;
-  const anyActive = visibleBlocks.some(
-    (b) =>
-      (b.type === 'thinking' && b.streaming) || (b.type === 'tool_use' && b.status === 'running'),
-  );
-  const failedCount = visibleBlocks.filter(
-    (block) => block.type === 'tool_use' && block.status === 'error',
-  ).length;
-
-  /** Detailed mode opens live activity; all modes fold once answer text starts. */
-  const stepsDrawerOpen =
-    reasoningLevel === 'stream' && Boolean(isMessageStreaming) && !finalAnswerStarted;
-
-  const activityTiming = useMemo(() => getActivityTiming(visibleBlocks), [visibleBlocks]);
+  const anyActive = activity.active;
+  const failedCount = activity.failedCount;
+  const stepsDrawerOpen = activity.expandedByDefault;
   const prevStepsDrawerOpenRef = useRef(stepsDrawerOpen);
   const [userExpanded, setUserExpanded] = useState<boolean | null>(null);
 
@@ -190,8 +165,8 @@ export function AssistantStepsBlock({
   }, [stepsDrawerOpen]);
 
   const expanded = userExpanded ?? stepsDrawerOpen;
-  const effectiveStartedAt = activityTiming.startedAt ?? null;
-  const completedDurationMs = activityTiming.durationMs ?? null;
+  const effectiveStartedAt = activity.startedAt ?? null;
+  const completedDurationMs = activity.durationMs ?? null;
 
   const completedHeader = useMemo(() => {
     if (anyActive) return '';
@@ -208,8 +183,7 @@ export function AssistantStepsBlock({
         String(failedCount),
       )}`;
     }
-    const hasTool = visibleBlocks.some((block) => block.type === 'tool_use');
-    return hasTool
+    return activity.hasTool
       ? `${stepLabels.activityCompleted} · ${detail}`
       : stepLabels.activityAnalysisComplete;
   }, [
@@ -220,6 +194,7 @@ export function AssistantStepsBlock({
     stepLabels,
     clusterLabels,
     failedCount,
+    activity.hasTool,
   ]);
 
   const streamingHeaderText = useMemo(() => {
@@ -354,15 +329,14 @@ export function AssistantStepsTimeline({
   sessionKey?: string | null;
   workflowOptions: AssistantActivityWorkflowOptions;
 }) {
-  const visibleBlocks = filterVisibleSteps(blocks);
-  if (visibleBlocks.length === 0) {
+  if (blocks.length === 0) {
     return null;
   }
 
   return (
     <div className={cn('min-w-0 overflow-x-hidden', className)}>
       <div className="ml-1 min-w-0 space-y-3 border-l border-edge-subtle pl-3 dark:border-edge-subtle">
-        {visibleBlocks.map((b, i) => (
+        {blocks.map((b, i) => (
           <StepRow
             key={b.type === 'tool_use' ? b.id : `thinking-${i}`}
             block={b}
@@ -529,7 +503,6 @@ function StepRow({
         block={block}
         startedAt={block.startedAt}
         sessionKey={sessionKey}
-        onAbort={workflowOptions.onAbort}
         labels={workflowOptions.labels}
       />
     );
@@ -584,10 +557,8 @@ function StepRow({
               : null
     : null;
 
-  /** Show legacy JSON panel when (a) developer toggle is on, or (b) no structured card exists. */
-  // The browser setup card replaces the raw text view; only resurface it when devs explicitly opt in.
-  const showLegacyDetails =
-    !isStreaming && (showRawToolData || (!hasCard && !browserSetup && !productDelivery));
+  // Raw payloads are a developer inspection surface, never a user-facing fallback renderer.
+  const showRawDetails = !isStreaming && showRawToolData;
 
   return (
     <div className="flex min-w-0 gap-2.5">
@@ -628,7 +599,7 @@ function StepRow({
             {liveOutputText}
           </pre>
         ) : null}
-        {showLegacyDetails ? (
+        {showRawDetails ? (
           <details className="group min-w-0 text-xs">
             <summary className="cursor-pointer select-none text-fg-subtle underline-offset-2 hover:text-fg-muted group-open:text-fg-muted">
               {hasCard ? cardLabels.rawDetails : stepLabels.stepDetails}

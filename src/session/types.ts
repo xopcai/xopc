@@ -19,6 +19,7 @@ export interface Message {
   tool_call_id$?: string;
   toolName?: string;
   isError?: boolean;
+  details?: unknown;
   name?: string;
   /** Token usage from the LLM response (assistant messages only). */
   usage?: {

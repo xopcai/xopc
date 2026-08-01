@@ -16,6 +16,7 @@ import { shouldSkipWebchatInboundByAbortCutoff } from '../../session/abort-cutof
 import { formatAgentRunErrorForClient } from '../../agent/client-error-format.js';
 
 import { ChatStreamMapper } from '../chat-stream/mapper.js';
+import { coalesceThinkingDeltas } from '../chat-stream/thinking-delta-coalescer.js';
 import type { ChatStreamEvent } from '../chat-stream/protocol.js';
 import type { AgentRunRelay } from '../agent-run-relay.js';
 import { MAX_CHAT_ATTACHMENTS } from '../chat-limits.js';
@@ -158,8 +159,13 @@ export async function *runGatewayAgent(
           { signal: mergedSignal, runId },
         );
 
-        for await (const event of eventStream) {
-          yield* emitAndYield(mapper.map(event));
+        const mappedEvents = (async function* (): AsyncGenerator<ChatStreamEvent> {
+          for await (const event of eventStream) {
+            yield* mapper.map(event);
+          }
+        })();
+        for await (const event of coalesceThinkingDeltas(mappedEvents)) {
+          yield* emitAndYield([event]);
         }
 
         const endStatus = mergedSignal.aborted ? 'cancelled' : 'success';

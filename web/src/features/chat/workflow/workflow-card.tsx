@@ -2,7 +2,7 @@
  * Top-level WorkflowCard — the only piece message-content-renderer.tsx wires
  * into the chat stream. It owns the state machine:
  *
- *   running   →  spinner + name + elapsed time + cancel
+ *   running   →  spinner + name + elapsed time
  *   completed →  result summary (priority) + collapsed progress tree (default)
  *                + save / copy / collapse actions
  *   failed    →  WorkflowErrorCard with reason and recovery guidance
@@ -14,7 +14,7 @@
 
 import { memo, useCallback, useEffect, useMemo, useState, type MouseEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CircleStop, Copy, Check, GitBranch, Save } from 'lucide-react';
+import { Copy, Check, GitBranch, Save } from 'lucide-react';
 
 import type { ToolUseContent } from '@/features/chat/messages/messages.types';
 import { cn } from '@/lib/cn';
@@ -47,7 +47,6 @@ export type WorkflowCardLabels = {
   error: WorkflowErrorCardLabels;
   checkDetail: WorkflowAgentInlineDetailLabels;
   /** Header action button tooltips / a11y. */
-  cancel: string;
   saveAria: string;
   saveTitle: string;
   copyAria: string;
@@ -88,8 +87,6 @@ export interface WorkflowCardProps {
   /** Live elapsed-time anchor; set when the block transitions to running. */
   startedAt?: number;
   sessionKey?: string | null;
-  /** Cancel handler — wired by parent (typically calls existing /abort path). */
-  onAbort?: () => void;
   labels: WorkflowCardLabels;
   className?: string;
 }
@@ -97,7 +94,6 @@ export interface WorkflowCardProps {
 export const WorkflowCard = memo(function WorkflowCard({
   block,
   startedAt,
-  onAbort,
   labels,
   className,
 }: WorkflowCardProps) {
@@ -242,22 +238,6 @@ export const WorkflowCard = memo(function WorkflowCard({
 
   const actions = (
     <>
-      {status === 'running' && onAbort ? (
-        <button
-          type="button"
-          onClick={onAbort}
-          className={cn(
-            'inline-flex size-7 items-center justify-center rounded-md text-fg-muted',
-            'hover:bg-surface-hover hover:text-rose-600 dark:hover:text-rose-400',
-            interaction.transition,
-            interaction.focusRingPanel,
-          )}
-          aria-label={labels.cancel}
-          title={labels.cancel}
-        >
-          <CircleStop className="size-4" />
-        </button>
-      ) : null}
       {status === 'completed' && snapshot ? (
         <>
           <button

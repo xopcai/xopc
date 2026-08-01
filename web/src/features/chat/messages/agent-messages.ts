@@ -418,10 +418,22 @@ function mergeAssistantContent(m: WireMessage): MessageContent[] {
       const id = typeof call.id === 'string' && call.id
         ? call.id
         : `tool-call-${i}-${call.name || 'tool'}`;
-      if (blocks.some((b) => b.type === 'tool_use' && b.id === id)) {
+      const hasResult = typeof call.result === 'string';
+      const existing = blocks.find(
+        (block): block is ToolUseContent => block.type === 'tool_use' && block.id === id,
+      );
+      if (existing) {
+        existing.status = hasResult ? (call.isError ? 'error' : 'done') : existing.status;
+        existing.result = hasResult ? call.result : existing.result;
+        existing.details = call.details ?? existing.details;
+        if (hasResult) {
+          existing.completedAt = messageStartedAt;
+          existing.durationMs = existing.startedAt != null && messageStartedAt != null
+            ? Math.max(0, messageStartedAt - existing.startedAt)
+            : existing.durationMs;
+        }
         continue;
       }
-      const hasResult = typeof call.result === 'string';
       blocks.push({
         type: 'tool_use',
         id,
@@ -429,6 +441,7 @@ function mergeAssistantContent(m: WireMessage): MessageContent[] {
         input: call.args,
         status: hasResult ? (call.isError ? 'error' : 'done') : 'running',
         result: hasResult ? call.result : undefined,
+        details: call.details,
         startedAt: messageStartedAt,
         completedAt: hasResult ? messageStartedAt : undefined,
         durationMs: hasResult && messageStartedAt != null ? 0 : undefined,
@@ -457,6 +470,7 @@ function applyToolResultToLastAssistant(out: Message[], m: WireMessage): void {
   if (block) {
     block.status = isError ? 'error' : 'done';
     block.result = text;
+    block.details = m.details;
     block.completedAt = completedAt;
     if (block.startedAt != null && completedAt != null) {
       block.durationMs = Math.max(0, completedAt - block.startedAt);
@@ -470,6 +484,7 @@ function applyToolResultToLastAssistant(out: Message[], m: WireMessage): void {
   if (running.length === 1) {
     running[0].status = isError ? 'error' : 'done';
     running[0].result = text;
+    running[0].details = m.details;
     running[0].completedAt = completedAt;
     if (running[0].startedAt != null && completedAt != null) {
       running[0].durationMs = Math.max(0, completedAt - running[0].startedAt);
@@ -567,6 +582,7 @@ function normalizeContentBlocks(raw: unknown, messageStartedAt?: number): Messag
         status: 'done',
         startedAt: messageStartedAt,
         result: typeof item.result === 'string' ? item.result : undefined,
+        details: item.details,
       });
     } else if (t === 'toolCall') {
       if (!isToolCallBlock(item)) continue;
@@ -581,6 +597,7 @@ function normalizeContentBlocks(raw: unknown, messageStartedAt?: number): Messag
         status: 'done',
         startedAt: messageStartedAt,
         result: typeof item.result === 'string' ? item.result : undefined,
+        details: item.details,
       });
     }
   }

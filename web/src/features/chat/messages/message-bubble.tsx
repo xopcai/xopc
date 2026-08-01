@@ -222,7 +222,7 @@ export const MessageBubble = memo(function MessageBubble({
     return message.attachments;
   }, [assistantTurnView, message.attachments]);
 
-  const hasAssistantActivity = Boolean(assistantTurnView?.activityBlocks.length);
+  const hasAssistantActivity = Boolean(assistantTurnView?.activity.blocks.length);
   const progressForMeta =
     (reasoningHidden && progress?.stage === 'thinking') ||
     (isAssistant && hasAssistantActivity)
@@ -232,11 +232,9 @@ export const MessageBubble = memo(function MessageBubble({
   const streamingThinking = reasoningHidden
     ? false
     : Boolean(message.content?.some((b) => b.type === 'thinking' && b.streaming));
-  const showStreamingCursor =
-    isStreaming &&
-    (!isAssistant ||
-      !hasAssistantActivity ||
-      assistantTurnView?.lifecycle.state === 'answering');
+  const showStreamingCursor = isAssistant
+    ? Boolean(assistantTurnView?.answer.showStreamingCursor)
+    : isStreaming;
 
   const showMeta =
     Boolean(message.timestamp) ||
@@ -566,9 +564,7 @@ export const MessageBubble = memo(function MessageBubble({
                     workflowOptions={{
                       labels: workflowCardLabels(language),
                     }}
-                    reasoningLevel={reasoningLevel}
-                    activityBlocks={assistantTurnView?.activityBlocks}
-                    answerStarted={assistantTurnView?.answerStarted}
+                    assistantActivity={assistantTurnView?.activity}
                   />
                 </div>
                 {isUser && userMessageCanExpand ? (

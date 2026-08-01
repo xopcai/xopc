@@ -32,7 +32,14 @@ export interface ClientHistoryMessage {
     summary: string;
     fromId?: string;
   };
-  toolCalls?: Array<{ id?: string; name: string; args?: unknown; result?: string; isError?: boolean }>;
+  toolCalls?: Array<{
+    id?: string;
+    name: string;
+    args?: unknown;
+    result?: string;
+    isError?: boolean;
+    details?: unknown;
+  }>;
 }
 
 export function flattenMessageContent(content: string | unknown[]): string {
@@ -65,8 +72,10 @@ function safeJsonParseArguments(raw: string): unknown {
   }
 }
 
-function collectToolResults(messages: Message[]): Map<string, { text: string; isError?: boolean }> {
-  const map = new Map<string, { text: string; isError?: boolean }>();
+type HistoryToolResult = { text: string; isError?: boolean; details?: unknown };
+
+function collectToolResults(messages: Message[]): Map<string, HistoryToolResult> {
+  const map = new Map<string, HistoryToolResult>();
   for (const m of messages) {
     if (m.role !== 'tool' && m.role !== 'toolResult') continue;
     const id = m.tool_call_id;
@@ -74,25 +83,84 @@ function collectToolResults(messages: Message[]): Map<string, { text: string; is
     map.set(id, {
       text: flattenMessageContent(m.content),
       isError: m.isError,
+      details: m.details,
     });
   }
   return map;
 }
 
+type HistoryToolCall = { id?: string; name: string; args?: unknown };
+
+function collectMessageToolCalls(
+  content: string | unknown[] | undefined,
+  openAiToolCalls: Message['tool_calls'] | undefined,
+  rawToolCalls?: unknown,
+): HistoryToolCall[] | undefined {
+  const out: HistoryToolCall[] = [];
+  const seen = new Set<string>();
+  const add = (call: HistoryToolCall) => {
+    const key = call.id ? `id:${call.id}` : `position:${out.length}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(call);
+  };
+
+  for (const call of openAiToolCalls ?? []) {
+    add({
+      id: call.id,
+      name: call.function.name,
+      args: safeJsonParseArguments(call.function.arguments),
+    });
+  }
+  for (const item of Array.isArray(rawToolCalls) ? rawToolCalls : []) {
+    if (!item || typeof item !== 'object') continue;
+    const call = item as Record<string, unknown>;
+    const name = typeof call.name === 'string' ? call.name : undefined;
+    if (!name) continue;
+    add({
+      id: typeof call.id === 'string' ? call.id : undefined,
+      name,
+      args: call.args ?? call.arguments ?? call.input,
+    });
+  }
+  for (const item of Array.isArray(content) ? content : []) {
+    if (!item || typeof item !== 'object') continue;
+    const call = item as Record<string, unknown>;
+    if (call.type !== 'toolCall' && call.type !== 'tool_use' && call.type !== 'tool_call') continue;
+    const fn = call.function && typeof call.function === 'object'
+      ? call.function as Record<string, unknown>
+      : undefined;
+    const name = typeof call.name === 'string'
+      ? call.name
+      : typeof fn?.name === 'string'
+        ? fn.name
+        : undefined;
+    if (!name) continue;
+    const rawArgs = call.arguments ?? call.args ?? call.input ?? fn?.arguments;
+    add({
+      id: typeof call.id === 'string' ? call.id : undefined,
+      name,
+      args: typeof rawArgs === 'string' ? safeJsonParseArguments(rawArgs) : rawArgs,
+    });
+  }
+  return out.length ? out : undefined;
+}
+
 function toolCallsWithResults(
-  tool_calls: Message['tool_calls'],
-  results: Map<string, { text: string; isError?: boolean }>,
+  toolCalls: HistoryToolCall[] | undefined,
+  results: Map<string, HistoryToolResult>,
 ): ClientHistoryMessage['toolCalls'] | undefined {
-  if (!tool_calls?.length) return undefined;
+  if (!toolCalls?.length) return undefined;
   const out: NonNullable<ClientHistoryMessage['toolCalls']> = [];
-  for (const tc of tool_calls) {
-    const res = results.get(tc.id);
+  for (const call of toolCalls) {
+    const res = call.id ? results.get(call.id) : undefined;
     out.push({
-      id: tc.id,
-      name: tc.function.name,
-      args: safeJsonParseArguments(tc.function.arguments),
+      id: call.id,
+      name: call.name,
+      args: call.args,
       result: res?.text,
       isError: res?.isError,
+      details: res?.details,
     });
   }
   return out.length ? out : undefined;
@@ -131,7 +199,10 @@ export function messagesToClientHistory(
 
     if (m.role === 'assistant') {
       const text = flattenMessageContent(m.content);
-      const toolCalls = toolCallsWithResults(m.tool_calls, results);
+      const toolCalls = toolCallsWithResults(
+        collectMessageToolCalls(m.content, m.tool_calls),
+        results,
+      );
       out.push({
         role: 'assistant',
         content: text,
@@ -151,8 +222,9 @@ type HistoryMessageRow = {
   tool_call_id?: string;
   toolCallId?: string;
   tool_calls?: Message['tool_calls'];
-  toolCalls?: Message['tool_calls'];
+  toolCalls?: unknown;
   isError?: boolean;
+  details?: unknown;
 };
 
 function asHistoryMessageRow(row: TranscriptStoredRow): HistoryMessageRow | null {
@@ -171,8 +243,8 @@ function parseTimestampValue(ts: string | number | undefined): number | undefine
   return parseTimestamp(ts);
 }
 
-function collectHistoryToolResults(messages: HistoryMessageRow[]): Map<string, { text: string; isError?: boolean }> {
-  const map = new Map<string, { text: string; isError?: boolean }>();
+function collectHistoryToolResults(messages: HistoryMessageRow[]): Map<string, HistoryToolResult> {
+  const map = new Map<string, HistoryToolResult>();
   for (const m of messages) {
     if (m.role !== 'tool' && m.role !== 'toolResult') continue;
     const id = m.tool_call_id ?? m.toolCallId;
@@ -180,6 +252,7 @@ function collectHistoryToolResults(messages: HistoryMessageRow[]): Map<string, {
     map.set(id, {
       text: flattenMessageContent(m.content ?? ''),
       isError: m.isError,
+      details: m.details,
     });
   }
   return map;
@@ -545,7 +618,14 @@ export function transcriptRowsToClientHistory(
       ...(rawContent ? { rawContent } : {}),
       ...(displayIndex !== undefined ? { displayIndex } : {}),
       timestamp: parseTimestampValue(messageRow.timestamp),
-      toolCalls: toolCallsWithResults(messageRow.tool_calls ?? messageRow.toolCalls, results),
+      toolCalls: toolCallsWithResults(
+        collectMessageToolCalls(
+          messageRow.content,
+          messageRow.tool_calls,
+          messageRow.toolCalls,
+        ),
+        results,
+      ),
     });
   }
 

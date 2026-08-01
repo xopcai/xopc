@@ -10,6 +10,7 @@ import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
 import { parseMarkdown } from './parse-markdown';
+import { recordStreamingParse } from './streaming-render-metrics';
 import {
   linkWorkspaceFileMentions,
   openHttpLinksInNewTab,
@@ -161,6 +162,41 @@ function findMermaidCodeBlocks(root: HTMLElement): HTMLElement[] {
   return Array.from(root.querySelectorAll<HTMLElement>('pre code.language-mermaid, pre code.hljs.language-mermaid'));
 }
 
+export function estimateMermaidPlaceholderHeight(code: string): number {
+  const lineCount = Math.max(1, code.trim().split(/\r?\n/).length);
+  return Math.min(360, Math.max(180, 120 + lineCount * 18));
+}
+
+function prepareMermaidShell(code: HTMLElement): HTMLElement | null {
+  const pre = code.closest('pre');
+  if (!pre?.parentNode) return null;
+  const mountedCodeBlock = pre.closest<HTMLElement>('[data-md-code-block]');
+  const shell = mountedCodeBlock ?? document.createElement('div');
+  if (!mountedCodeBlock) {
+    pre.parentNode.insertBefore(shell, pre);
+    shell.appendChild(pre);
+  }
+  shell.classList.add('markdown-mermaid-shell', 'markdown-mermaid-pending');
+  shell.style.setProperty(
+    '--markdown-mermaid-placeholder-height',
+    `${estimateMermaidPlaceholderHeight(code.textContent ?? '')}px`,
+  );
+  return shell;
+}
+
+function commitMermaidShell(
+  shell: HTMLElement,
+  renderedNode: Element,
+  error: boolean,
+): void {
+  shell.replaceChildren(...Array.from(renderedNode.childNodes));
+  shell.className = `${renderedNode.className} markdown-mermaid-shell`;
+  shell.removeAttribute('data-md-code-block');
+  shell.removeAttribute('data-mermaid-diagram');
+  shell.removeAttribute('data-mermaid-fallback');
+  shell.setAttribute(error ? 'data-mermaid-fallback' : 'data-mermaid-diagram', '');
+}
+
 export interface MarkdownViewProps {
   content: string;
   /** Tighter heading/paragraph spacing for chat bubbles */
@@ -176,6 +212,8 @@ export interface MarkdownViewProps {
   openHttpLinksInNewTab?: boolean;
   /** Render Mermaid diagrams. Disabled while chat Markdown is still streaming. */
   renderMermaid?: boolean;
+  /** Development-only stream identifier for parse timing metrics. */
+  streamingMetricsKey?: string;
 }
 
 function MarkdownViewImpl({
@@ -187,6 +225,7 @@ function MarkdownViewImpl({
   onWorkspaceFileOpen,
   openHttpLinksInNewTab: shouldOpenHttpLinksInNewTab = false,
   renderMermaid = true,
+  streamingMetricsKey,
 }: MarkdownViewProps) {
   const language = useLocaleStore((s) => s.language);
   const labels = useMemo(() => {
@@ -196,8 +235,9 @@ function MarkdownViewImpl({
 
   const safeHtml = useMemo(() => {
     if (!content.trim()) return '';
+    const startedAt = streamingMetricsKey ? performance.now() : 0;
     const raw = parseMarkdown(rewriteXopcSettingsLinksInMarkdown(content), breaks ? { breaks: true } : undefined);
-    return DOMPurify.sanitize(raw, {
+    const sanitized = DOMPurify.sanitize(raw, {
       USE_PROFILES: { html: true, svg: true },
       ADD_ATTR: [
         'viewBox', 'xmlns', 'd', 'fill', 'stroke', 'transform',
@@ -211,7 +251,11 @@ function MarkdownViewImpl({
         'preserveAspectRatio', 'xmlns:xlink', 'xlink:href', 'xml:space',
       ],
     });
-  }, [content, breaks]);
+    if (streamingMetricsKey) {
+      recordStreamingParse(streamingMetricsKey, performance.now() - startedAt);
+    }
+    return sanitized;
+  }, [content, breaks, streamingMetricsKey]);
 
   const hostRef = useRef<HTMLDivElement>(null);
 
@@ -243,20 +287,24 @@ function MarkdownViewImpl({
     const blocks = findMermaidCodeBlocks(el);
     if (blocks.length === 0) return;
 
+    const pending = blocks
+      .map((code) => ({ code, shell: prepareMermaidShell(code) }))
+      .filter(
+        (entry): entry is { code: HTMLElement; shell: HTMLElement } =>
+          entry.shell !== null,
+      );
+
     let cancelled = false;
     void import('./mermaid-render').then(({ renderMermaidBlock }) => {
       if (cancelled) return;
-      for (const code of blocks) {
-        if (!code.isConnected) continue;
-        const pre = code.closest('pre');
-        if (!pre) continue;
-        const replaceTarget = pre.closest('[data-md-code-block]') ?? pre;
+      for (const { code, shell } of pending) {
+        if (!code.isConnected || !shell.isConnected) continue;
         const rendered = renderMermaidBlock(code.textContent ?? '');
         const template = document.createElement('template');
         template.innerHTML = rendered.html.trim();
         const node = template.content.firstElementChild;
         if (node) {
-          replaceTarget.replaceWith(node);
+          commitMermaidShell(shell, node, rendered.error);
         }
       }
     });
