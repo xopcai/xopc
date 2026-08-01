@@ -22,17 +22,36 @@ describe('resolveShellChromeLayout', () => {
     });
   });
 
-  it('uses the Windows titlebar and Linux native menu instead of duplicate sidebar actions', () => {
-    for (const runtime of ['win32', 'linux'] as const) {
-      expect(
-        resolveShellChromeLayout({ runtime, sidebarCollapsed: false, mobileNavOpen: false }),
-      ).toMatchObject({
-        sidebarChromeVisible: false,
-        sidebarQuickActionsVisible: false,
-        mainHeaderQuickActionsVisible: false,
-        mainHeaderDraggable: false,
-      });
-    }
+  it('uses the Windows titlebar instead of duplicate sidebar actions', () => {
+    expect(
+      resolveShellChromeLayout({ runtime: 'win32', sidebarCollapsed: false, mobileNavOpen: false }),
+    ).toMatchObject({
+      sidebarChromeVisible: false,
+      sidebarQuickActionsVisible: false,
+      mainHeaderQuickActionsVisible: false,
+      mainHeaderDraggable: false,
+    });
+  });
+
+  it('keeps Linux quick actions in the sidebar and moves them into the header when collapsed', () => {
+    expect(
+      resolveShellChromeLayout({ runtime: 'linux', sidebarCollapsed: false, mobileNavOpen: false }),
+    ).toMatchObject({
+      sidebarChromeVisible: true,
+      sidebarQuickActionsVisible: true,
+      mainHeaderQuickActionsVisible: false,
+      mainHeaderDraggable: false,
+      collapsedNewChatVisible: false,
+    });
+
+    expect(
+      resolveShellChromeLayout({ runtime: 'linux', sidebarCollapsed: true, mobileNavOpen: false }),
+    ).toMatchObject({
+      sidebarQuickActionsVisible: true,
+      mainHeaderQuickActionsVisible: true,
+      mainHeaderDraggable: false,
+      collapsedNewChatVisible: false,
+    });
   });
 
   it('keeps macOS actions beside traffic lights when expanded and in the header when collapsed', () => {

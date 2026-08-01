@@ -8,11 +8,9 @@ import { cn } from '@/lib/cn';
 
 export const ShellQuickActions = memo(function ShellQuickActions({
   sidebarToggleVariant,
-  showHistory = false,
   className,
 }: {
   sidebarToggleVariant: 'sidebar' | 'main';
-  showHistory?: boolean;
   className?: string;
 }) {
   return (
@@ -20,7 +18,7 @@ export const ShellQuickActions = memo(function ShellQuickActions({
       <SidebarRailToggleButton variant={sidebarToggleVariant} />
       <QuickCaptureButton />
       <CommandPaletteSearchButton />
-      {showHistory ? <ElectronHistoryNav /> : null}
+      <ElectronHistoryNav />
     </div>
   );
 });
