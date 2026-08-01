@@ -30,11 +30,12 @@ export function resolveShellChromeLayout({
   mobileNavOpen,
 }: ResolveShellChromeLayoutInput): ShellChromeLayout {
   const isDarwin = runtime === 'darwin';
+  const isLinux = runtime === 'linux';
   const isWeb = runtime === 'web';
   const sidebarQuickActionsVisible =
-    isWeb || (isDarwin && !sidebarCollapsed && !mobileNavOpen);
+    isWeb || isLinux || (isDarwin && !sidebarCollapsed && !mobileNavOpen);
   const mainHeaderQuickActionsVisible =
-    (isWeb && sidebarCollapsed) || (isDarwin && sidebarCollapsed && !mobileNavOpen);
+    ((isWeb || isLinux) && sidebarCollapsed) || (isDarwin && sidebarCollapsed && !mobileNavOpen);
 
   return {
     sidebarChromeVisible: sidebarQuickActionsVisible || mobileNavOpen,
