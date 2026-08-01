@@ -26,7 +26,7 @@ function blobWithAttachmentMime(blob: Blob, mimeType: string | undefined): Blob 
 export function useAttachmentImageSrc(
   attachment: MessageAttachment,
   opts: { authToken?: string; sessionKey?: string | null },
-): string {
+): { src: string; error: boolean } {
   const isImage =
     attachment.type === 'image' ||
     attachment.mimeType?.startsWith('image/') === true;
@@ -39,34 +39,48 @@ export function useAttachmentImageSrc(
     return resolveDataUrlForDisplay(mime, inlinePayload);
   }, [inlinePayload, attachment.mimeType]);
 
-  const [blobUrl, setBlobUrl] = useState<string | undefined>();
+  const requestKey = `${attachment.uri ?? ''}\n${opts.sessionKey ?? ''}`;
+  const [remote, setRemote] = useState<{
+    key: string;
+    blobUrl?: string;
+    status: 'loading' | 'loaded' | 'error';
+  }>();
 
   useEffect(() => {
     if (inlineSrc || !attachment.uri || !isImage) {
-      setBlobUrl(undefined);
+      setRemote(undefined);
       return;
     }
     if (!String(opts.authToken ?? '').trim()) {
-      setBlobUrl(undefined);
+      setRemote(undefined);
       return;
     }
 
     let revoke: string | undefined;
     let cancelled = false;
+    setRemote({ key: requestKey, status: 'loading' });
 
     void (async () => {
       const result = await fetchMediaUriBlob({ uri: attachment.uri!, sessionKey: opts.sessionKey });
-      if (!result.ok || cancelled) return;
+      if (cancelled) return;
+      if (!result.ok) {
+        setRemote({ key: requestKey, status: 'error' });
+        return;
+      }
       const u = URL.createObjectURL(blobWithAttachmentMime(result.blob, attachment.mimeType));
       revoke = u;
-      setBlobUrl(u);
+      setRemote({ key: requestKey, blobUrl: u, status: 'loaded' });
     })();
 
     return () => {
       cancelled = true;
       if (revoke) URL.revokeObjectURL(revoke);
     };
-  }, [inlineSrc, attachment.uri, isImage, opts.authToken, opts.sessionKey]);
+  }, [inlineSrc, attachment.uri, isImage, opts.authToken, opts.sessionKey, requestKey]);
 
-  return inlineSrc ?? blobUrl ?? '';
+  const activeRemote = remote?.key === requestKey ? remote : undefined;
+  return {
+    src: inlineSrc ?? activeRemote?.blobUrl ?? '',
+    error: !inlineSrc && activeRemote?.status === 'error',
+  };
 }

@@ -3,29 +3,32 @@ import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import { deleteMediaBuffer } from './store.js';
 import { tryParseMediaUri } from './uri.js';
 
-function collectFromValue(value: unknown, out: Set<string>): void {
+function collectFromValue(value: unknown, out: Set<string>, seen: WeakSet<object>): void {
   if (!value) return;
   if (typeof value === 'string') {
     if (value.startsWith('media://')) out.add(value.trim());
     return;
   }
   if (Array.isArray(value)) {
-    for (const item of value) collectFromValue(item, out);
+    if (seen.has(value)) return;
+    seen.add(value);
+    for (const item of value) collectFromValue(item, out, seen);
     return;
   }
   if (typeof value !== 'object') return;
 
+  if (seen.has(value)) return;
+  seen.add(value);
   const record = value as Record<string, unknown>;
-  if (typeof record.uri === 'string' && record.uri.startsWith('media://')) {
-    out.add(record.uri.trim());
+  for (const nested of Object.values(record)) {
+    collectFromValue(nested, out, seen);
   }
-  if (Array.isArray(record.media)) collectFromValue(record.media, out);
-  if (Array.isArray(record.attachments)) collectFromValue(record.attachments, out);
 }
 
 export function collectMediaUrisFromMessages(messages: readonly AgentMessage[]): Set<string> {
   const out = new Set<string>();
-  for (const message of messages) collectFromValue(message, out);
+  const seen = new WeakSet<object>();
+  for (const message of messages) collectFromValue(message, out, seen);
   return out;
 }
 

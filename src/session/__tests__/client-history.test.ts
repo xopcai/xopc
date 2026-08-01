@@ -114,6 +114,56 @@ describe('messagesToClientHistory', () => {
     ]);
   });
 
+  it('carries structured tool result media through the transcript history DTO', () => {
+    const rows = [
+      {
+        role: 'assistant',
+        content: [{
+          type: 'toolCall',
+          id: 'call-image',
+          name: 'image_generate',
+          arguments: { prompt: 'a kitten on a beach' },
+        }],
+        timestamp: 100,
+      },
+      {
+        role: 'toolResult',
+        toolCallId: 'call-image',
+        toolName: 'image_generate',
+        content: [{ type: 'text', text: 'Generated and attached 1 image.' }],
+        details: {
+          media: [{
+            id: 'kitten---id.jpg',
+            bucket: 'outbound',
+            type: 'photo',
+            mimeType: 'image/jpeg',
+            name: 'kitten.jpg',
+            size: 257_915,
+            uri: 'media://outbound/kitten---id.jpg',
+            path: '/state/media/outbound/kitten---id.jpg',
+          }],
+        },
+        timestamp: 101,
+      },
+      { role: 'assistant', content: 'Done.', timestamp: 102 },
+    ] as unknown as TranscriptStoredRow[];
+
+    const history = transcriptRowsToClientHistory(rows);
+
+    expect(history[0]).toMatchObject({
+      role: 'assistant',
+      toolCalls: [{
+        id: 'call-image',
+        name: 'image_generate',
+        args: { prompt: 'a kitten on a beach' },
+        result: 'Generated and attached 1 image.',
+        details: {
+          media: [{ uri: 'media://outbound/kitten---id.jpg' }],
+        },
+      }],
+    });
+  });
+
   it('preserves row numbers and global display indexes for explicit transcript windows', () => {
     const rows = [
       { role: 'user', content: 'turn 1' },

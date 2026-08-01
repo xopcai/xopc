@@ -7,6 +7,13 @@ const PNG_HEADER = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 const PNG_BASE64 = PNG_HEADER.toString('base64');
 
 const generateImageMock = vi.fn();
+const saveMediaBufferMock = vi.fn();
+
+vi.mock('../../../media/store.js', () => ({
+  MEDIA_MAX_BYTES: 5 * 1024 * 1024,
+  mimeTypeFromMediaPath: () => 'image/png',
+  saveMediaBuffer: (...args: unknown[]) => saveMediaBufferMock(...args),
+}));
 
 vi.mock('../../image/generation/runtime.js', () => ({
   generateImage: (...args: unknown[]) => generateImageMock(...args),
@@ -38,6 +45,15 @@ let workspace: string;
 beforeEach(async () => {
   workspace = await mkdtemp(path.join(os.tmpdir(), 'xopc-img-tool-'));
   generateImageMock.mockReset();
+  saveMediaBufferMock.mockReset();
+  saveMediaBufferMock.mockResolvedValue({
+    id: 'generated---id.png',
+    bucket: 'outbound',
+    contentType: 'image/png',
+    path: '/state/media/outbound/generated---id.png',
+    size: PNG_HEADER.length,
+    uri: 'media://outbound/generated---id.png',
+  });
 });
 
 afterEach(() => {
@@ -130,6 +146,12 @@ describe('image_generate tool — Step 2 input wiring', () => {
       providerOptions: { openai: { moderation: 'low', user: 'u1', outputCompression: 90 } },
     });
     expect(res.details?.provider).toBe('mock');
+    expect(res.details?.media).toEqual([
+      expect.objectContaining({
+        type: 'photo',
+        uri: 'media://outbound/generated---id.png',
+      }),
+    ]);
   });
 
   it('drops invalid enum values silently (lets provider apply defaults)', async () => {

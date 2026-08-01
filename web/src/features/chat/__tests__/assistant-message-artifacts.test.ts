@@ -1,10 +1,45 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  collectAssistantToolMedia,
   collectAssistantWorkspaceOutputPaths,
   filterAssistantAttachmentsDedupedAgainstWorkspacePaths,
 } from '@/features/chat/messages/assistant-message-artifacts';
 import type { MessageContent } from '@/features/chat/messages/messages.types';
+
+describe('collectAssistantToolMedia', () => {
+  it('reads media from the live tool_end result envelope', () => {
+    const content: MessageContent[] = [{
+      type: 'tool_use',
+      id: 'image-1',
+      name: 'image_generate',
+      status: 'done',
+      result: JSON.stringify({
+        content: [{ type: 'text', text: 'Generated and attached 1 image.' }],
+        details: {
+          media: [{
+            id: 'cat---id.webp',
+            bucket: 'outbound',
+            type: 'photo',
+            mimeType: 'image/webp',
+            name: 'cat.webp',
+            size: 120,
+            uri: 'media://outbound/cat---id.webp',
+            path: '/state/media/outbound/cat---id.webp',
+          }],
+        },
+      }),
+    }];
+
+    expect(collectAssistantToolMedia(content)).toEqual([
+      expect.objectContaining({
+        type: 'image',
+        mimeType: 'image/webp',
+        uri: 'media://outbound/cat---id.webp',
+      }),
+    ]);
+  });
+});
 
 describe('collectAssistantWorkspaceOutputPaths', () => {
   it('merges absolute paths from write_file tool text', () => {

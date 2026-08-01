@@ -4,6 +4,57 @@ import { AgentRunRelay } from '../../agent-run-relay.js';
 import { runGatewayAgent, type RunGatewayAgentDeps } from '../run-gateway-agent.js';
 
 describe('runGatewayAgent', () => {
+  it('coalesces thinking bursts before relay sequence assignment', async () => {
+    const sessionKey = 'agent:main:webchat:default:direct:chat-thinking';
+    const broadcastEvents: Array<{ event?: { type?: string } }> = [];
+    const deps = {
+      config: {},
+      agentService: {
+        resolveUserTimezoneForSession: () => 'UTC',
+        prepareInboundAttachments: async () => undefined,
+        beginInboundTurn: () => {},
+        turnDispatcher: {
+          processDirectStreaming: async function* () {
+            const message = { role: 'assistant', content: [] };
+            yield { type: 'message_start', message };
+            for (const delta of [' ', '30', '-minute', ' plan', '.']) {
+              yield {
+                type: 'message_update',
+                message,
+                assistantMessageEvent: { type: 'thinking_delta', delta },
+              };
+            }
+            yield { type: 'message_end', message };
+          },
+        },
+        getLastAssistantPlainText: () => '',
+        persistentGoals: { takeStreamOutcome: () => undefined },
+        outboundCoordinator: { emitSessionTurnComplete: async () => {} },
+        endInboundTurn: () => {},
+      },
+      bus: { publishInbound: async () => {} },
+      runRelay: new AgentRunRelay(),
+      runAbortControllers: new Map<string, AbortController>(),
+      activeWebchatRunBySession: new Map<string, string>(),
+      sessionIndex: {
+        getSessionMetadata: async () => ({ sessionId: 'session-thinking' }),
+        updateSessionMetadata: async () => {},
+      },
+      emit: (_type: string, payload: unknown) => {
+        broadcastEvents.push(payload as { event?: { type?: string } });
+      },
+    } as unknown as RunGatewayAgentDeps;
+
+    const events = [];
+    for await (const item of runGatewayAgent(deps, 'hello', 'webchat', sessionKey)) events.push(item);
+
+    const thinkingEvents = events.filter((item) => item.type === 'thinking_delta');
+    expect(thinkingEvents).toHaveLength(1);
+    expect(thinkingEvents[0]).toMatchObject({ payload: { delta: ' 30-minute plan.' } });
+    expect(events.map((item) => item.seq)).toEqual(events.map((_, index) => index + 1));
+    expect(broadcastEvents.filter((item) => item.event?.type === 'thinking_delta')).toHaveLength(1);
+  });
+
   it('does not replace or clear an existing active webchat run when this run fails', async () => {
     const sessionKey = 'agent:main:webchat:default:direct:chat-test';
     const activeWebchatRunBySession = new Map<string, string>([[sessionKey, 'existing-run']]);

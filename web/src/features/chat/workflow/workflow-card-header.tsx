@@ -4,8 +4,7 @@
  *
  * Pure visual: it does not own any state besides showing what its props say.
  * Action buttons are passed in as ReactNode slots so the parent (WorkflowCard)
- * controls visibility per status (cancel only while running, save only when
- * completed, etc.).
+ * controls visibility per status (save only when completed, etc.).
  */
 
 import { memo } from 'react';

@@ -1,4 +1,4 @@
-import { FileSpreadsheet, FileText, X } from 'lucide-react';
+import { FileSpreadsheet, FileText, ImageOff, X } from 'lucide-react';
 import { useId } from 'react';
 
 import type { MessageAttachment } from '@/features/chat/messages/messages.types';
@@ -17,8 +17,6 @@ type AttachmentTileProps = {
   onDelete?: () => void;
   /** How image thumbnails are sized inside attachment grids. */
   imageSize?: 'thumbnail' | 'single' | 'grid-cell';
-  /** Grid-cell aspect (legacy; grid tiles always use square cells). */
-  gridCellFill?: 'square' | 'stretch';
   /** Smaller thumbnails for user message bubbles. */
   compact?: boolean;
   className?: string;
@@ -35,7 +33,6 @@ export function AttachmentTile({
   onDelete,
   imageSize = 'thumbnail',
   compact = false,
-  gridCellFill: _gridCellFill = 'square',
   className,
   overflowLabel,
   onOpen,
@@ -45,8 +42,7 @@ export function AttachmentTile({
   const missingAuthHintId = useId();
 
   const isImageMime = attachment.mimeType?.startsWith('image/') || attachment.type === 'image';
-  const thumbSrc = useAttachmentImageSrc(attachment, { authToken, sessionKey });
-  const showImageThumb = isImageMime && Boolean(thumbSrc);
+  const imageSource = useAttachmentImageSrc(attachment, { authToken, sessionKey });
 
   const needsGatewayBinary = Boolean(attachment.uri) && !getAttachmentBinaryPayload(attachment);
   const showMissingAuthHint = needsGatewayBinary && !String(authToken ?? '').trim();
@@ -66,9 +62,7 @@ export function AttachmentTile({
 
   const imageThumbClass =
     imageSize === 'single'
-      ? compact
-        ? 'max-h-28 w-full max-w-[9rem] object-contain'
-        : 'max-h-36 w-full max-w-44 object-contain'
+      ? 'size-full object-contain'
       : imageSize === 'grid-cell'
         ? 'size-full object-cover'
         : 'max-h-16 w-full object-cover';
@@ -76,8 +70,8 @@ export function AttachmentTile({
   const imageWrapperClass =
     imageSize === 'single'
       ? compact
-        ? 'max-w-[9rem]'
-        : 'max-w-44'
+        ? 'w-36 max-w-full'
+        : 'w-44 max-w-full'
       : imageSize === 'grid-cell'
         ? 'min-h-0 w-full'
         : 'max-w-[10rem]';
@@ -85,7 +79,9 @@ export function AttachmentTile({
   const imageButtonClass =
     imageSize === 'grid-cell'
       ? 'relative block aspect-square w-full min-w-0 overflow-hidden rounded-md border border-edge dark:border-edge'
-      : 'block w-full overflow-hidden rounded-md border border-edge dark:border-edge';
+      : imageSize === 'single'
+        ? 'relative block aspect-[4/3] w-full overflow-hidden rounded-md border border-edge bg-surface-hover dark:border-edge'
+        : 'block w-full overflow-hidden rounded-md border border-edge dark:border-edge';
 
   return (
     <div
@@ -95,7 +91,7 @@ export function AttachmentTile({
         className,
       )}
     >
-      {showImageThumb ? (
+      {isImageMime ? (
         <div className={imageWrapperClass}>
           <div className="relative size-full min-h-0">
             <button
@@ -111,7 +107,27 @@ export function AttachmentTile({
               aria-label={mainLabel}
               aria-describedby={showMissingAuthHint ? missingAuthHintId : undefined}
             >
-              <img src={thumbSrc} alt={displayName} className={imageThumbClass} />
+              {imageSource.src ? (
+                <img
+                  src={imageSource.src}
+                  alt={displayName}
+                  className={imageThumbClass}
+                  decoding="async"
+                />
+              ) : imageSource.error || showMissingAuthHint ? (
+                <span
+                  className="flex size-full flex-col items-center justify-center gap-1 bg-surface-hover px-2 text-center text-[10px] text-fg-muted"
+                  title={showMissingAuthHint ? missingAuthText : m.chat.attachmentPreviewLoadError}
+                >
+                  <ImageOff className="size-5" strokeWidth={1.5} aria-hidden />
+                  <span>{showMissingAuthHint ? missingAuthText : m.chat.attachmentPreviewLoadError}</span>
+                </span>
+              ) : (
+                <span
+                  className="block size-full animate-pulse bg-surface-active"
+                  aria-hidden
+                />
+              )}
               {overflowLabel ? (
                 <span className="absolute inset-0 flex items-center justify-center bg-black/55 text-lg font-semibold text-white">
                   {overflowLabel}

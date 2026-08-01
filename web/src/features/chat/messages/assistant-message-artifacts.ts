@@ -1,4 +1,6 @@
 import type { ImageContent, MessageAttachment, MessageContent } from '@/features/chat/messages/messages.types';
+import { dedupeAttachments, normalizeWireMedia } from '@/features/chat/messages/wire-attachments';
+import { parseToolResult } from '@/features/chat/tool-results/parse-tool-result';
 import {
   absolutePathSameAsWorkspaceRelative,
   extractFilePathsFromToolResult,
@@ -14,7 +16,11 @@ import {
 export const TOOL_NAMES_WITH_WORKSPACE_OUTPUT = new Set<string>([
   'write_file',
   'apply_patch',
+]);
+
+export const TOOL_NAMES_WITH_MEDIA_OUTPUT = new Set<string>([
   'image_generate',
+  'send_media',
 ]);
 
 const TOOL_NAMES_WITH_INPUT_FILE_ARTIFACTS = new Set<string>([
@@ -33,6 +39,22 @@ function normalizeToolResultString(result: string | undefined | unknown): string
   } catch {
     return String(result);
   }
+}
+
+export function collectAssistantToolMedia(
+  content: MessageContent[] | undefined,
+): MessageAttachment[] {
+  if (!content?.length) return [];
+  const attachments: MessageAttachment[] = [];
+  for (const block of content) {
+    if (block.type !== 'tool_use' || block.status !== 'done') continue;
+    const resultDetails = parseToolResult(block.result).details;
+    const liveDetails = block.details && typeof block.details === 'object' && !Array.isArray(block.details)
+      ? block.details as Record<string, unknown>
+      : null;
+    attachments.push(...(normalizeWireMedia((resultDetails ?? liveDetails)?.media) ?? []));
+  }
+  return dedupeAttachments(attachments) ?? [];
 }
 
 function normalizeWorkspaceRel(s: string | undefined): string {

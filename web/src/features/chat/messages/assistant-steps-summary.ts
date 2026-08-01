@@ -56,8 +56,8 @@ export function buildStepsRoundCompleteSummary(
 
 /**
  * Streaming-state header. Returns the progressive-tense action label for the
- * currently running cluster (e.g. "Reading files…"), or `null` to let the
- * caller fall back to the legacy "View N steps" treatment.
+ * currently running cluster (e.g. "Reading files…"), or `null` when there is
+ * no active work to summarize.
  */
 export function buildStepsRoundStreamingSummary(
   visibleBlocks: Array<ThinkingContent | ToolUseContent>,

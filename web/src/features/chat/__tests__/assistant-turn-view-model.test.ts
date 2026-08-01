@@ -24,7 +24,8 @@ describe('buildAssistantTurnViewModel', () => {
       reasoningLevel: 'stream',
     });
 
-    expect(view.answerStarted).toBe(true);
+    expect(view.answer.started).toBe(true);
+    expect(view.answer.showStreamingCursor).toBe(false);
     expect(view.lifecycle.state).toBe('using_tool');
     expect(view.lifecycle.activeTool?.name).toBe('read_file');
   });
@@ -48,8 +49,57 @@ describe('buildAssistantTurnViewModel', () => {
     });
 
     expect(view.displayContent.some((block) => block.type === 'thinking')).toBe(false);
-    expect(view.activityBlocks).toHaveLength(1);
-    expect(view.lifecycle.durationMs).toBe(500);
+    expect(view.activity.blocks).toHaveLength(1);
+    expect(view.activity.expandedByDefault).toBe(false);
+    expect(view.activity.durationMs).toBe(500);
+  });
+
+  it('opens live reasoning and moves the cursor to the answer once text starts', () => {
+    const reasoning = buildAssistantTurnViewModel({
+      message: assistantMessage([
+        { type: 'thinking', text: 'working', streaming: true },
+      ]),
+      isStreaming: true,
+      reasoningLevel: 'stream',
+    });
+
+    expect(reasoning.lifecycle.state).toBe('reasoning');
+    expect(reasoning.activity.active).toBe(true);
+    expect(reasoning.activity.expandedByDefault).toBe(true);
+    expect(reasoning.answer.showStreamingCursor).toBe(false);
+
+    const answering = buildAssistantTurnViewModel({
+      message: assistantMessage([
+        { type: 'thinking', text: 'working', streaming: false },
+        { type: 'text', text: 'Final answer' },
+      ]),
+      isStreaming: true,
+      reasoningLevel: 'stream',
+    });
+
+    expect(answering.lifecycle.state).toBe('answering');
+    expect(answering.activity.expandedByDefault).toBe(false);
+    expect(answering.answer.showStreamingCursor).toBe(true);
+  });
+
+  it('normalizes stale running blocks after the stream closes', () => {
+    const view = buildAssistantTurnViewModel({
+      message: assistantMessage([
+        {
+          type: 'tool_use',
+          id: 'tool-1',
+          name: 'read_file',
+          status: 'running',
+          startedAt: 2_000,
+        },
+      ]),
+      isStreaming: false,
+      reasoningLevel: 'stream',
+    });
+
+    expect(view.lifecycle.state).toBe('completed');
+    expect(view.lifecycle.activeTool).toBeUndefined();
+    expect(view.activity.active).toBe(false);
   });
 
   it('separates search evidence from deliverables and reports partial completion', () => {
@@ -87,6 +137,6 @@ describe('buildAssistantTurnViewModel', () => {
     ]);
     expect(view.deliverables.workspacePaths).toHaveLength(1);
     expect(view.lifecycle.state).toBe('partial');
-    expect(view.lifecycle.failedToolCount).toBe(1);
+    expect(view.activity.failedCount).toBe(1);
   });
 });

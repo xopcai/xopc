@@ -258,8 +258,7 @@ export function summarizeClustersCompleted(
  * "thinking" when no tool has started yet, and to "mixed" when several clusters
  * are running in parallel.
  *
- * Returns `null` if there is nothing meaningful to show (caller may keep the
- * legacy "View N steps" fallback).
+ * Returns `null` if there is nothing meaningful to show.
  */
 export function summarizeClustersStreaming(
   blocks: ReadonlyArray<ThinkingContent | ToolUseContent>,
@@ -285,8 +284,8 @@ export function summarizeClustersStreaming(
     return ingLabels.thinking;
   }
 
-  // Some tools may have finished but no streaming token is in flight; fall back
-  // to a soft "working" message rather than the developer-y "View N steps".
+  // Some tools may have finished but no streaming token is in flight; keep the
+  // activity header stable with a soft "working" message.
   if (map.size > 0) {
     return ingLabels.mixed;
   }
