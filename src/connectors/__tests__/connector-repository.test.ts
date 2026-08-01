@@ -17,6 +17,7 @@ import {
   listConnectorConnections,
   listConnectorExecutionAudit,
   listConnectorInstallations,
+  listCachedConnectorCatalogEntries,
   openXopcDatabase,
   readSchemaVersion,
   requireXopcDatabase,
@@ -26,6 +27,9 @@ import {
   upsertConnectorConnection,
   upsertConnectorInstallation,
 } from '../../storage/sqlite/index.js';
+import { listComposioConnectorCatalog } from '../composio-catalog.js';
+import { listConnectorCatalog } from '../catalog.js';
+import type { ComposioSessionsAdapter } from '../composio-sessions.js';
 
 describe('connector repository', () => {
   let stateDir: string;
@@ -136,6 +140,38 @@ describe('connector repository', () => {
     expect(consumeConnectorApproval(approval.id, 'different-hash')).toBeUndefined();
     expect(consumeConnectorApproval(approval.id, 'hash-1')?.status).toBe('consumed');
     expect(consumeConnectorApproval(approval.id, 'hash-1')).toBeUndefined();
+  });
+
+  it('paginates experimental Composio discovery and replaces stale provider cache entries', async () => {
+    const firstAdapter = {
+      listToolkitCatalog: async () => [
+        { slug: 'alpha', name: 'Alpha', isNoAuth: false, connected: false },
+        { slug: 'beta', name: 'Beta', isNoAuth: false, connected: false },
+        { slug: 'gmail', name: 'Gmail', isNoAuth: false, connected: false },
+      ],
+    } as unknown as ComposioSessionsAdapter;
+
+    const firstPage = await listComposioConnectorCatalog({
+      adapter: firstAdapter,
+      refresh: true,
+      verification: 'experimental',
+      page: 1,
+      pageSize: 1,
+    });
+
+    expect(firstPage.connectors.map((connector) => connector.id)).toEqual(['composio-alpha']);
+    expect(firstPage.meta).toMatchObject({ total: 2, totalPages: 2, pageSize: 1 });
+    expect(listCachedConnectorCatalogEntries('composio')).toHaveLength(3);
+    expect(listConnectorCatalog().map((connector) => connector.id)).not.toContain('composio-alpha');
+
+    const secondAdapter = {
+      listToolkitCatalog: async () => [
+        { slug: 'beta', name: 'Beta', isNoAuth: false, connected: false },
+      ],
+    } as unknown as ComposioSessionsAdapter;
+    await listComposioConnectorCatalog({ adapter: secondAdapter, refresh: true });
+
+    expect(listCachedConnectorCatalogEntries('composio').map((entry) => entry.connectorId)).toEqual(['composio-beta']);
   });
 
   it('claims webhook deliveries once and acknowledges processed retries', () => {

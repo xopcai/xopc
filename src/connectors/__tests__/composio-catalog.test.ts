@@ -28,6 +28,7 @@ describe('Composio agent-ready catalog', () => {
       });
       expect(definition).toMatchObject({
         id: `composio-${slug}`,
+        source: 'registry',
         verificationLevel: 'verified',
         runtime: { type: 'composio', toolkit: slug, role: 'toolkit' },
         auth: { mode: 'oauth', provider: 'composio' },
@@ -97,6 +98,7 @@ describe('Composio agent-ready catalog', () => {
   it('gives every built-in Composio connector a logo', () => {
     expect(COMPOSIO_CONNECTORS).toHaveLength(COMPOSIO_AGENT_READY_TOOLKITS.length + 1);
     for (const definition of COMPOSIO_CONNECTORS) {
+      expect(definition.source).toBe('builtin');
       expect(definition.branding?.logoUrl).toMatch(/^\/connector-icons\/[^/]+\.svg$/);
     }
   });

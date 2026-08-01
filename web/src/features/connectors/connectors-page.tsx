@@ -28,15 +28,13 @@ import { usePageHeaderStore } from '@/stores/page-header-store';
 import { buildNewCustomServerRow } from './build-new-custom-server-row';
 import {
   fetchConnectorCatalog,
+  fetchComposioConnectorCatalog,
   fetchConnectorInstances,
-  fetchConnectorRegistries,
   fetchConnectedPeopleGraph,
   fetchStoreConnectorCatalog,
   fetchStoreConnectorInstallPlan,
-  searchConnectorRegistryPage,
   type ConnectorDefinition,
   type ConnectorInstance,
-  type ConnectorRegistryProvider,
   type ConnectedPeopleGraph,
   type StoreConnectorCatalogItem,
 } from './connectors-api';
@@ -66,13 +64,13 @@ type DiscoveryOutcome = 'all' | ConnectorBenefit;
 
 const DISCOVERY_SOURCE_ALL = 'all';
 const DISCOVERY_SOURCE_BUILTIN = 'builtin';
+const COMPOSIO_CONNECTOR_SOURCE = 'composio';
 const STORE_CONNECTOR_SOURCE = 'xopc-store';
 
 type LoadState = {
   catalog: ConnectorDefinition[];
   registryCatalog: ConnectorDefinition[];
   instances: ConnectorInstance[];
-  registries: ConnectorRegistryProvider[];
   loading: boolean;
   error: string | null;
   peopleGraph: ConnectedPeopleGraph | null;
@@ -124,7 +122,6 @@ export function ConnectorsPage() {
     catalog: [],
     registryCatalog: [],
     instances: [],
-    registries: [],
     loading: true,
     error: null,
     peopleGraph: null,
@@ -165,22 +162,20 @@ export function ConnectorsPage() {
 
   const load = useCallback(async () => {
     if (!token) {
-      setState({ catalog: [], registryCatalog: [], instances: [], registries: [], loading: false, error: null, peopleGraph: null });
+      setState({ catalog: [], registryCatalog: [], instances: [], loading: false, error: null, peopleGraph: null });
       return;
     }
     setState((previous) => ({ ...previous, loading: true, error: null }));
     try {
-      const [catalog, instances, registries, peopleGraph] = await Promise.all([
+      const [catalog, instances, peopleGraph] = await Promise.all([
         fetchConnectorCatalog(),
         fetchConnectorInstances(),
-        fetchConnectorRegistries(),
         fetchConnectedPeopleGraph('', 12).catch(() => null),
       ]);
       setState((previous) => ({
         catalog,
         registryCatalog: previous.registryCatalog,
         instances,
-        registries,
         loading: false,
         error: null,
         peopleGraph,
@@ -190,7 +185,6 @@ export function ConnectorsPage() {
         catalog: [],
         registryCatalog: [],
         instances: [],
-        registries: [],
         loading: false,
         error: error instanceof Error ? error.message : String(error),
         peopleGraph: null,
@@ -234,11 +228,14 @@ export function ConnectorsPage() {
   }, []);
 
   const marketplaceSources = useMemo(
-    () => [{ id: STORE_CONNECTOR_SOURCE, displayName: cs.storeSourceName }, ...state.registries],
-    [cs.storeSourceName, state.registries],
+    () => [
+      { id: COMPOSIO_CONNECTOR_SOURCE, displayName: cs.composioSourceName },
+      { id: STORE_CONNECTOR_SOURCE, displayName: cs.storeSourceName },
+    ],
+    [cs.composioSourceName, cs.storeSourceName],
   );
 
-  const searchRegistry = useCallback(async (options?: { browse?: boolean; page?: number; append?: boolean }) => {
+  const searchRegistry = useCallback(async (options?: { page?: number; append?: boolean }) => {
     if (!hasToken || discoverSource === DISCOVERY_SOURCE_BUILTIN) {
       setState((previous) => ({ ...previous, registryCatalog: [] }));
       setRegistryPage(1);
@@ -246,7 +243,6 @@ export function ConnectorsPage() {
       return;
     }
     const query = discoverSearchQuery.trim();
-    const browse = options?.browse ?? false;
     const page = Math.max(options?.page ?? 1, 1);
     const append = options?.append ?? false;
     const sources = discoverSource === DISCOVERY_SOURCE_ALL
@@ -264,19 +260,25 @@ export function ConnectorsPage() {
     }
     try {
       const results = await Promise.all(sources.map(async (source) => {
-        if (source.id === STORE_CONNECTOR_SOURCE) {
-          const catalog = await fetchStoreConnectorCatalog({
+        if (source.id === COMPOSIO_CONNECTOR_SOURCE) {
+          const catalog = await fetchComposioConnectorCatalog({
             q: query || undefined,
             page,
             pageSize: 24,
-            sort: connectorSort === 'source' ? 'newest' : 'downloads',
+            verification: 'experimental',
           });
-          return {
-            connectors: catalog.items.map(connectorFromStoreItem),
-            totalPages: catalog.meta.totalPages,
-          };
+          return { connectors: catalog.connectors, totalPages: catalog.meta.totalPages };
         }
-        return searchConnectorRegistryPage(query, source.id, { browse, page });
+        const catalog = await fetchStoreConnectorCatalog({
+          q: query || undefined,
+          page,
+          pageSize: 24,
+          sort: connectorSort === 'source' ? 'newest' : 'downloads',
+        });
+        return {
+          connectors: catalog.items.map(connectorFromStoreItem),
+          totalPages: catalog.meta.totalPages,
+        };
       }));
       const connectors = uniqueConnectors(results.flatMap((result) => result.connectors));
       const totalPages = Math.max(1, ...results.map((result) => result.totalPages ?? 1));
@@ -307,7 +309,7 @@ export function ConnectorsPage() {
       return;
     }
     const timeout = window.setTimeout(() => {
-      void searchRegistry({ browse: !discoverSearchQuery.trim() });
+      void searchRegistry();
     }, discoverSearchQuery.trim() ? 350 : 0);
     return () => window.clearTimeout(timeout);
   }, [discoverSearchQuery, discoverSource, searchRegistry, state.loading, tab]);
@@ -442,11 +444,6 @@ export function ConnectorsPage() {
     () => new Map(connectedValue.map(({ instance, value }) => [instance.instanceId, value])),
     [connectedValue],
   );
-  const connectionSummary = useMemo(() => ({
-    ready: connectedValue.filter(({ value }) => value.state === 'ready').length,
-    needsSetup: connectedValue.filter(({ value }) => value.state === 'needs_setup').length,
-    checking: connectedValue.filter(({ value }) => value.state === 'checking').length,
-  }), [connectedValue]);
   const visibleInstances = useMemo(() => state.instances
     .filter((instance) => installedConnectorMatchesQuery(instance, connectedSearchQuery))
     .sort((left, right) => {
@@ -546,28 +543,7 @@ export function ConnectorsPage() {
                 />
               </div>
 
-              {connectedValue.length > 0 ? (
-                <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5">
-                  <h2 className="text-sm font-semibold text-fg">{cs.connectionSummaryTitle}</h2>
-                  <p className="mt-1 text-xs text-fg-muted">{cs.connectionSummaryHint}</p>
-                  <div className="mt-4 grid gap-2 sm:grid-cols-3">
-                    <div className="rounded-xl bg-surface-panel p-3">
-                      <div className="text-xl font-semibold tabular-nums text-success">{connectionSummary.ready}</div>
-                      <div className="mt-1 text-xs text-fg-muted">{cs.connectionReady}</div>
-                    </div>
-                    <div className="rounded-xl bg-surface-panel p-3">
-                      <div className={cn('text-xl font-semibold tabular-nums', connectionSummary.needsSetup > 0 ? 'text-warning' : 'text-fg')}>{connectionSummary.needsSetup}</div>
-                      <div className="mt-1 text-xs text-fg-muted">{cs.connectionNeedsSetup}</div>
-                    </div>
-                    <div className="rounded-xl bg-surface-panel p-3">
-                      <div className="text-xl font-semibold tabular-nums text-fg">{connectionSummary.checking}</div>
-                      <div className="mt-1 text-xs text-fg-muted">{cs.connectionChecking}</div>
-                    </div>
-                  </div>
-                </section>
-              ) : null}
-
-              {state.peopleGraph && (state.peopleGraph.scannedItems > 0 || peopleSearchQuery) ? (
+              {state.peopleGraph && (state.peopleGraph.people.length > 0 || peopleSearchQuery) ? (
                 <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div className="flex items-start gap-3">
@@ -616,11 +592,6 @@ export function ConnectorsPage() {
                 </section>
               ) : null}
 
-              <div>
-                <h2 className="text-sm font-semibold text-fg">{cs.connectionsTitle}</h2>
-                <p className="mt-1 text-sm text-fg-muted">{cs.connectionsHint}</p>
-              </div>
-
               {state.loading ? (
                 <div className="grid gap-3" aria-busy="true" aria-label={cs.loading}>
                   {CONNECTOR_SKELETON_KEYS.slice(0, 3).map((key) => <InstalledConnectorRowSkeleton key={key} />)}
@@ -667,15 +638,6 @@ export function ConnectorsPage() {
 
           {tab === 'discover' && hasToken ? (
             <div className="flex flex-col gap-5">
-              <div>
-                <h2 className="text-base font-semibold text-fg">{cs.discoverTitle}</h2>
-                <p className="mt-1 text-sm text-fg-muted">{cs.discoverHint}</p>
-              </div>
-
-              <div className="rounded-xl border border-accent/20 bg-accent-soft/60 px-4 py-3 text-sm text-accent-fg">
-                {cs.integrationStrategyHint}
-              </div>
-
               <div className="flex flex-wrap gap-2" role="group" aria-label={cs.outcomeFilterAria}>
                 {(['all', ...availableOutcomes] as DiscoveryOutcome[]).map((outcome) => (
                   <button
@@ -764,7 +726,7 @@ export function ConnectorsPage() {
                         type="button"
                         variant="secondary"
                         disabled={registryLoading || storePlanLoading}
-                        onClick={() => void searchRegistry({ browse: !discoverSearchQuery.trim(), page: registryPage + 1, append: true })}
+                        onClick={() => void searchRegistry({ page: registryPage + 1, append: true })}
                       >
                         {registryLoading ? <Loader2 className="size-4 animate-spin" /> : null}
                         {cs.loadMore}

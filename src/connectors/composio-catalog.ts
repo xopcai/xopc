@@ -1,6 +1,6 @@
 import {
   listCachedConnectorCatalogEntries,
-  upsertConnectorCatalogEntry,
+  replaceConnectorCatalogEntries,
 } from '../storage/sqlite/connector-repository.js';
 import { ComposioSessionsAdapter, type ComposioToolkitCatalogItem } from './composio-sessions.js';
 import { composioIntegrationStrategy } from './integration-strategy.js';
@@ -193,7 +193,7 @@ export function connectorDefinitionFromComposioToolkit(item: ComposioToolkitCata
       ?? `Connect ${item.name} so agents can use approved actions on your behalf.`,
     category: categoryForToolkit(slug),
     kind: 'composio',
-    source: 'builtin',
+    source: 'registry',
     capabilities: item.isNoAuth
       ? ['tools', 'events', 'workflows', ...knowledgeCapabilities]
       : ['tools', 'auth.oauth', 'events', 'workflows', ...knowledgeCapabilities],
@@ -219,20 +219,57 @@ export type ComposioCatalogResult = {
   source: 'live' | 'cache';
   stale: boolean;
   fetchedAt?: string;
+  meta: { page: number; pageSize: number; total: number; totalPages: number };
 };
+
+type ComposioCatalogQuery = {
+  query?: string;
+  page?: number;
+  pageSize?: number;
+  verification?: 'all' | ConnectorVerificationLevel;
+};
+
+function projectComposioCatalog(
+  connectors: ConnectorDefinition[],
+  options: ComposioCatalogQuery,
+): Pick<ComposioCatalogResult, 'connectors' | 'meta'> {
+  const query = options.query?.trim().toLocaleLowerCase() ?? '';
+  const verification = options.verification ?? 'all';
+  const filtered = connectors
+    .map((connector) => ({ ...connector, source: 'registry' as const }))
+    .filter((connector) => {
+      if (verification !== 'all' && connector.verificationLevel !== verification) return false;
+      if (!query) return true;
+      return [connector.displayName, connector.description, connector.category, ...(connector.tags ?? [])]
+        .some((value) => value.toLocaleLowerCase().includes(query));
+    });
+  const pageSize = Math.max(1, Math.min(options.pageSize ?? 24, 100));
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const page = Math.max(1, Math.min(options.page ?? 1, totalPages));
+  const start = (page - 1) * pageSize;
+  return {
+    connectors: filtered.slice(start, start + pageSize),
+    meta: { page, pageSize, total: filtered.length, totalPages },
+  };
+}
 
 export async function listComposioConnectorCatalog(options: {
   principalId?: string;
   refresh?: boolean;
   adapter?: ComposioSessionsAdapter;
   now?: number;
+  query?: string;
+  page?: number;
+  pageSize?: number;
+  verification?: 'all' | ConnectorVerificationLevel;
 } = {}): Promise<ComposioCatalogResult> {
   const now = options.now ?? Date.now();
   const cached = listCachedConnectorCatalogEntries('composio');
   const freshCached = cached.filter((entry) => !entry.expiresAt || Date.parse(entry.expiresAt) > now);
   if (!options.refresh && freshCached.length > 0) {
+    const projected = projectComposioCatalog(freshCached.map((entry) => entry.definition), options);
     return {
-      connectors: freshCached.map((entry) => entry.definition),
+      ...projected,
       source: 'cache',
       stale: false,
       fetchedAt: freshCached[0]?.fetchedAt,
@@ -245,20 +282,19 @@ export async function listComposioConnectorCatalog(options: {
     const fetchedAt = new Date(now).toISOString();
     const expiresAt = new Date(now + CATALOG_CACHE_TTL_MS).toISOString();
     const connectors = toolkits.map(connectorDefinitionFromComposioToolkit);
-    for (const definition of connectors) {
-      upsertConnectorCatalogEntry({
-        connectorId: definition.id,
-        provider: 'composio',
-        definition,
-        fetchedAt,
-        expiresAt,
-      });
-    }
-    return { connectors, source: 'live', stale: false, fetchedAt };
+    replaceConnectorCatalogEntries('composio', connectors.map((definition) => ({
+      connectorId: definition.id,
+      provider: 'composio',
+      definition,
+      fetchedAt,
+      expiresAt,
+    })));
+    return { ...projectComposioCatalog(connectors, options), source: 'live', stale: false, fetchedAt };
   } catch (error) {
     if (cached.length === 0) throw error;
+    const projected = projectComposioCatalog(cached.map((entry) => entry.definition), options);
     return {
-      connectors: cached.map((entry) => entry.definition),
+      ...projected,
       source: 'cache',
       stale: true,
       fetchedAt: cached[0]?.fetchedAt,

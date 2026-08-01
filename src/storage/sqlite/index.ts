@@ -182,6 +182,7 @@ export {
   listConnectorExecutionAudit,
   listConnectorInstallations,
   releaseConnectorWebhookDelivery,
+  replaceConnectorCatalogEntries,
   upsertConnectorActionMetadata,
   upsertConnectorCatalogEntry,
   upsertConnectorConnection,

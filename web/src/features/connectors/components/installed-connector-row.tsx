@@ -1,4 +1,4 @@
-import { CheckCircle2, Loader2, PlugZap, Trash2 } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock3, Loader2, PlugZap, Trash2 } from 'lucide-react';
 import { useCallback, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -6,6 +6,7 @@ import type { ConnectorsSettingsMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 
 import { removeConnector, testConnector, type ConnectorDefinition, type ConnectorInstance } from '../connectors-api';
+import { connectorFirstValue } from '../utils/connector-benefits';
 import { formatConnectorMessage } from '../utils/connector-i18n';
 import { ConnectorLogo } from './connector-logo';
 
@@ -58,6 +59,12 @@ export function InstalledConnectorRow({
     : t.healthNotTested;
   const toolCount = instance.usage.lastToolCount ?? 0;
   const canEditConfig = Boolean(definition?.setup.config?.length && !definition.setup.secrets?.length && instance.materialized.type === 'mcp');
+  const connectionState = connectorFirstValue(instance, definition).state;
+  const connectionStatus = connectionState === 'ready'
+    ? { label: t.connectionReady, Icon: CheckCircle2, className: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' }
+    : connectionState === 'needs_setup'
+      ? { label: t.connectionNeedsSetup, Icon: AlertCircle, className: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300' }
+      : { label: t.connectionChecking, Icon: Clock3, className: 'border-edge bg-surface-base text-fg-muted' };
 
   return (
     <div
@@ -72,9 +79,9 @@ export function InstalledConnectorRow({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="truncate text-sm font-semibold text-fg">{instance.displayName}</h3>
-            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
-              <CheckCircle2 className="size-3" aria-hidden />
-              {t.connectedBadge}
+            <span className={cn('inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium', connectionStatus.className)}>
+              <connectionStatus.Icon className="size-3" aria-hidden />
+              {connectionStatus.label}
             </span>
             {canEditConfig ? (
               <span className="rounded-full bg-surface-base px-2 py-0.5 text-[11px] text-fg-muted">
@@ -101,6 +108,12 @@ export function InstalledConnectorRow({
       <div className="mt-4 flex items-center justify-between gap-2 border-t border-edge pt-3" onClick={(event) => event.stopPropagation()}>
         <span className="text-xs text-fg-subtle">{t.connectorDetails}</span>
         <div className="flex shrink-0 gap-2">
+          {connectionState === 'needs_setup' ? (
+            <Button variant="primary" onClick={() => onOpenDetails(instance)}>
+              <AlertCircle className="size-4" />
+              {t.connectionResolveAction}
+            </Button>
+          ) : null}
           {instance.materialized.type === 'mcp' ? (
             <Button variant="secondary" disabled={testing} onClick={() => void runTest()}>
               {testing ? <Loader2 className="size-4 animate-spin" /> : <PlugZap className="size-4" />}

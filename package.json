@@ -188,7 +188,7 @@
     "zod": "^4.4.3"
   },
   "peerDependencies": {
-    "@composio/core": "0.14.0",
+    "@composio/core": "0.14.1",
     "@composio/experimental": "0.2.0",
     "@huggingface/transformers": "3.8.1",
     "@larksuiteoapi/node-sdk": "^1.66.0",
@@ -216,7 +216,7 @@
     }
   },
   "devDependencies": {
-    "@composio/core": "0.14.0",
+    "@composio/core": "0.14.1",
     "@composio/experimental": "0.2.0",
     "@huggingface/transformers": "3.8.1",
     "@larksuiteoapi/node-sdk": "^1.66.0",
