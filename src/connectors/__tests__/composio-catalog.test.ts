@@ -59,14 +59,39 @@ describe('Composio agent-ready catalog', () => {
     });
     expect(strategyById.get('composio-github')).toEqual({
       lane: 'composio',
-      workload: 'long_tail',
+      workload: 'core',
       preferred: true,
     });
     expect(strategyById.get('composio-notion')).toEqual({
       lane: 'composio',
-      workload: 'long_tail',
+      workload: 'core',
       preferred: true,
     });
+  });
+
+  it('marks first-phase understanding sources as personal context', () => {
+    for (const slug of [
+      'gmail', 'googlecalendar', 'googledrive', 'googledocs', 'googlesheets', 'notion', 'slack', 'github', 'linear', 'jira',
+      'outlook', 'microsoft_teams', 'one_drive', 'excel',
+    ]) {
+      const definition = connectorDefinitionFromComposioToolkit({
+        slug,
+        name: slug,
+        isNoAuth: false,
+        connected: false,
+      });
+      expect(definition.capabilities).toEqual(expect.arrayContaining(['context', 'memory_source']));
+    }
+  });
+
+  it('describes user benefits explicitly and allows one app in multiple filters', () => {
+    const gmail = connectorDefinitionFromComposioToolkit({ slug: 'gmail', name: 'Gmail', isNoAuth: false, connected: false });
+    const github = connectorDefinitionFromComposioToolkit({ slug: 'github', name: 'GitHub', isNoAuth: false, connected: false });
+    const todoist = connectorDefinitionFromComposioToolkit({ slug: 'todoist', name: 'Todoist', isNoAuth: false, connected: false });
+
+    expect(gmail.benefits).toEqual(['understand', 'act', 'reach']);
+    expect(github.benefits).toEqual(['understand', 'act']);
+    expect(todoist.benefits).toEqual(['act']);
   });
 
   it('gives every built-in Composio connector a logo', () => {

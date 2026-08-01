@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Fetch">
-  <rect width="64" height="64" rx="16" fill="#E8F3FF"/>
-  <circle cx="30" cy="32" r="17" fill="none" stroke="#2563EB" stroke-width="4"/>
-  <path d="M13 32h34M30 15c5 5 8 10 8 17s-3 12-8 17c-5-5-8-10-8-17s3-12 8-17Z" fill="none" stroke="#2563EB" stroke-width="3" stroke-linecap="round"/>
-  <path d="m40 22 9-5-2 10" fill="none" stroke="#0EA5E9" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>

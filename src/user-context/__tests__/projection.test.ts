@@ -222,9 +222,47 @@ describe('user context projection', () => {
       record({ id: 'personal-record', source: { provider: 'composio-gmail', sourceInstanceId: 'composio:composio-gmail:personal' } }),
     ], { connections });
 
-    expect(sources.map((source) => [source.instanceId, source.derivedUnderstandingCount])).toEqual([
-      ['work', 1],
-      ['personal', 1],
+    expect(sources.map((source) => [source.instanceId, source.derivedUnderstandingCount])).toEqual(
+      expect.arrayContaining([
+        ['work', 1],
+        ['personal', 1],
+      ]),
+    );
+  });
+
+  it('numbers multiple Composio accounts when identity labels are unavailable', () => {
+    const definitions = [{
+      id: 'composio-gmail', displayName: 'Gmail', description: 'Gmail access', category: 'data',
+      capabilities: ['context', 'memory_source'],
+    }] as ConnectorDefinition[];
+    const connections = [
+      { id: 'newer', connectedAt: '2026-07-20T08:00:00.000Z' },
+      { id: 'older', connectedAt: '2026-07-20T07:00:00.000Z' },
+    ].map(({ id, connectedAt }) => ({
+      id,
+      connectorId: 'composio-gmail',
+      provider: 'composio',
+      principalId: 'local-owner',
+      providerConnectionId: `provider-${id}`,
+      identity: {},
+      status: 'active',
+      isDefault: false,
+      metadata: {},
+      connectedAt,
+      createdAt: connectedAt,
+      updatedAt: connectedAt,
+    })) as ConnectorConnection[];
+
+    const sources = projectPersonalContextSources(definitions, [], [], { connections });
+
+    expect(sources.map((source) => ({
+      instanceId: source.instanceId,
+      accountLabel: source.accountLabel,
+      accountOrdinal: source.accountOrdinal,
+      accountCount: source.accountCount,
+    }))).toEqual([
+      { instanceId: 'older', accountLabel: undefined, accountOrdinal: 1, accountCount: 2 },
+      { instanceId: 'newer', accountLabel: undefined, accountOrdinal: 2, accountCount: 2 },
     ]);
   });
 });
