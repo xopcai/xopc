@@ -42,18 +42,19 @@ export const useGatewayStore = create<GatewayState>((set, get) => ({
   },
 }));
 
-export function initGatewayFromWindow(): void {
+export async function initGatewayFromWindow(): Promise<void> {
   const getElectronCredential = window.electronAPI?.gateway?.getCredential;
   if (typeof getElectronCredential === 'function') {
-    void getElectronCredential()
-      .then((credential) => {
-        if (credential) {
-          useGatewayStore.setState({ token: credential, tokenDialogOpen: false, tokenExpired: false });
-          return;
-        }
-        hydrateStoredGatewayToken();
-      })
-      .catch(hydrateStoredGatewayToken);
+    try {
+      const credential = await getElectronCredential();
+      if (credential) {
+        useGatewayStore.setState({ token: credential, tokenDialogOpen: false, tokenExpired: false });
+        return;
+      }
+    } catch {
+      // Development renderers may expose the bridge before an embedded gateway is available.
+    }
+    hydrateStoredGatewayToken();
     return;
   }
   hydrateStoredGatewayToken();

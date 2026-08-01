@@ -36,7 +36,16 @@ export interface ElectronAgentAPI {
 }
 
 export interface ElectronStartupAPI {
-  onFailed(callback: (detail: { message: string }) => void): () => void;
+  onProgress(
+    callback: (detail: {
+      phase:
+        | 'preparing-workspace'
+        | 'checking-core'
+        | 'starting-core'
+        | 'connecting-assistant'
+        | 'opening-workspace';
+    }) => void,
+  ): () => void;
 }
 
 export interface ElectronGatewayShellAPI {

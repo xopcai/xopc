@@ -13,23 +13,32 @@ describe('initGatewayFromWindow', () => {
     vi.restoreAllMocks();
   });
 
+  it('hydrates the embedded credential before initialization completes', async () => {
+    window.electronAPI = {
+      gateway: { getCredential: vi.fn().mockResolvedValue('embedded-token') },
+    } as unknown as ElectronAPI;
+
+    await initGatewayFromWindow();
+
+    expect(useGatewayStore.getState().token).toBe('embedded-token');
+  });
+
   it('falls back to the stored credential when the Electron gateway is not embedded', async () => {
     localStorage.setItem('xopc.token', 'dev-gateway-token');
     window.electronAPI = {
       gateway: { getCredential: vi.fn().mockResolvedValue(undefined) },
     } as unknown as ElectronAPI;
 
-    initGatewayFromWindow();
-    await Promise.resolve();
+    await initGatewayFromWindow();
 
     expect(useGatewayStore.getState().token).toBe('dev-gateway-token');
   });
 
-  it('falls back to the stored credential when a dev preload has no credential bridge', () => {
+  it('falls back to the stored credential when a dev preload has no credential bridge', async () => {
     localStorage.setItem('xopc.token', 'stored-token');
     window.electronAPI = { gateway: {} } as unknown as ElectronAPI;
 
-    initGatewayFromWindow();
+    await initGatewayFromWindow();
 
     expect(useGatewayStore.getState().token).toBe('stored-token');
   });
