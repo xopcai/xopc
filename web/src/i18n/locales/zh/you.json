@@ -172,6 +172,7 @@
     "sourceLastSync": "最近同步：{{time}}",
     "sourceSyncFailed": "最近同步失败：{{error}}",
     "sourceNeverUsed": "尚无活动记录",
+    "sourceAccountFallback": "账号 {{index}}（共 {{count}} 个）",
     "healthOk": "正常",
     "healthIssue": "需要处理",
     "disconnect": "断开",

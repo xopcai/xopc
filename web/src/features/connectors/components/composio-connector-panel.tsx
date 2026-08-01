@@ -10,6 +10,7 @@ import {
   getComposioScope,
   getComposioPolicy,
   getComposioHealth,
+  getComposioMemorySyncProfile,
   listConnectorApprovals,
   listComposioConnections,
   listComposioTools,
@@ -21,6 +22,7 @@ import {
   startConnectorAuthorization,
   syncComposioMemory,
   updateComposioConnection,
+  updateComposioMemorySyncProfile,
   updateComposioPolicy,
   type ComposioConnection,
   type ComposioInstallationPolicy,
@@ -61,7 +63,15 @@ function degradedHealthMessage(health: ComposioConnectorHealth, t: ConnectorsSet
   return t.composioHealthDegraded;
 }
 
-export function ComposioConnectorPanel({ instance, t }: { instance: ConnectorInstance; t: ConnectorsSettingsMessages }) {
+export function ComposioConnectorPanel({
+  instance,
+  t,
+  onChanged,
+}: {
+  instance: ConnectorInstance;
+  t: ConnectorsSettingsMessages;
+  onChanged?: () => Promise<void>;
+}) {
   const toolkit = toolkitFromComposioInstance(instance);
   const [connections, setConnections] = useState<ComposioConnection[]>([]);
   const [tools, setTools] = useState<ComposioTool[]>([]);
@@ -72,6 +82,9 @@ export function ComposioConnectorPanel({ instance, t }: { instance: ConnectorIns
   const [memoryAction, setMemoryAction] = useState('');
   const [memoryArguments, setMemoryArguments] = useState('{}');
   const [memorySynced, setMemorySynced] = useState<string | null>(null);
+  const [memoryAutoSync, setMemoryAutoSync] = useState(false);
+  const [memoryTriggerSync, setMemoryTriggerSync] = useState(true);
+  const [memoryIntervalMinutes, setMemoryIntervalMinutes] = useState('15');
   const [health, setHealth] = useState<ComposioConnectorHealth | null>(null);
   const [scope, setScope] = useState<ComposioScope>('read');
   const [loading, setLoading] = useState(false);
@@ -82,7 +95,7 @@ export function ComposioConnectorPanel({ instance, t }: { instance: ConnectorIns
     setLoading(true);
     setError(null);
     try {
-      const [nextConnections, nextTools, nextEvents, nextScope, nextApprovals, nextPolicy, nextHealth] = await Promise.all([
+      const [nextConnections, nextTools, nextEvents, nextScope, nextApprovals, nextPolicy, nextHealth, nextMemoryProfile] = await Promise.all([
         listComposioConnections().catch(() => []),
         listComposioTools(toolkit).catch(() => []),
         listComposioTriggerEvents(20).catch(() => []),
@@ -90,6 +103,7 @@ export function ComposioConnectorPanel({ instance, t }: { instance: ConnectorIns
         listConnectorApprovals().catch(() => []),
         getComposioPolicy(toolkit).catch(() => null),
         getComposioHealth(toolkit).catch(() => null),
+        getComposioMemorySyncProfile(instance.connectorId).catch(() => null),
       ]);
       setConnections(nextConnections.filter((connection) => connection.toolkit.toLowerCase() === toolkit.toLowerCase()));
       setTools(nextTools);
@@ -98,7 +112,11 @@ export function ComposioConnectorPanel({ instance, t }: { instance: ConnectorIns
       setApprovals(nextApprovals.filter((approval) => approval.connectorId === instance.connectorId));
       setPolicy(nextPolicy?.policy ?? null);
       setAgents(nextPolicy?.agents ?? []);
-      setMemoryAction((current) => current || nextTools.find((tool) => tool.scope === 'read' && tool.curated)?.slug || '');
+      setMemoryAction(nextMemoryProfile?.actionId ?? nextTools.find((tool) => tool.scope === 'read' && tool.curated)?.slug ?? '');
+      setMemoryArguments(nextMemoryProfile ? JSON.stringify(nextMemoryProfile.arguments) : '{}');
+      setMemoryAutoSync(nextMemoryProfile?.enabled ?? false);
+      setMemoryTriggerSync(nextMemoryProfile?.triggerSync ?? true);
+      setMemoryIntervalMinutes(String(nextMemoryProfile?.intervalMinutes ?? 15));
       setHealth(nextHealth);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : String(loadError));
@@ -199,12 +217,53 @@ export function ComposioConnectorPanel({ instance, t }: { instance: ConnectorIns
         arguments: parsed as Record<string, unknown>,
       });
       setMemorySynced(result.recordId);
+      await onChanged?.();
     } catch (syncError) {
       setError(syncError instanceof Error ? syncError.message : String(syncError));
     } finally {
       setLoading(false);
     }
-  }, [agents, connections, instance.connectorId, memoryAction, memoryArguments, policy, t, toolkit]);
+  }, [agents, connections, instance.connectorId, memoryAction, memoryArguments, onChanged, policy, t, toolkit]);
+
+  const saveMemoryProfile = useCallback(async () => {
+    if (!toolkit || !memoryAction) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const parsed = JSON.parse(memoryArguments) as unknown;
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error(t.composioMemoryArgumentsObject);
+      const agentId = policy?.allowedAgentIds[0] ?? agents[0]?.id;
+      if (!agentId) throw new Error(t.composioMemoryAgentMissing);
+      const profile = await updateComposioMemorySyncProfile(instance.connectorId, {
+        enabled: memoryAutoSync,
+        actionId: memoryAction,
+        arguments: parsed as Record<string, unknown>,
+        agentId,
+        connectionId: connections.find((connection) => connection.isDefault)?.id,
+        intervalMinutes: Number(memoryIntervalMinutes),
+        triggerSync: memoryTriggerSync,
+      });
+      setMemoryIntervalMinutes(String(profile.intervalMinutes));
+      await onChanged?.();
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : String(saveError));
+    } finally {
+      setLoading(false);
+    }
+  }, [
+    agents,
+    connections,
+    instance.connectorId,
+    memoryAction,
+    memoryArguments,
+    memoryAutoSync,
+    memoryIntervalMinutes,
+    memoryTriggerSync,
+    onChanged,
+    policy,
+    t,
+    toolkit,
+  ]);
 
   if (!toolkit) return null;
   if (instance.materialized.type === 'composio' && instance.materialized.role === 'credential') {
@@ -219,15 +278,6 @@ export function ComposioConnectorPanel({ instance, t }: { instance: ConnectorIns
           <p className="text-xs text-fg-subtle">{t.composioScopeHint}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Select
-            className={cn(inputClass, 'h-9 w-28 py-1')}
-            value={scope}
-            onChange={(event) => void updateScope(event.currentTarget.value as ComposioScope)}
-          >
-            <SelectOption value="read">{t.composioScopeRead}</SelectOption>
-            <SelectOption value="write">{t.composioScopeWrite}</SelectOption>
-            <SelectOption value="admin">{t.composioScopeAdmin}</SelectOption>
-          </Select>
           <Button variant="secondary" disabled={loading} onClick={() => void authorize()}>
             {loading ? <Loader2 className="size-4 animate-spin" /> : <KeyRound className="size-4" />}
             {t.connectOAuth}
@@ -261,7 +311,22 @@ export function ComposioConnectorPanel({ instance, t }: { instance: ConnectorIns
         </div>
       ) : null}
       {policy ? (
-        <div className="mt-4 grid gap-3 rounded-lg border border-edge bg-surface-panel p-3 md:grid-cols-[minmax(0,180px)_1fr]">
+        <div className="mt-4 grid gap-3 rounded-lg border border-edge bg-surface-panel p-3 md:grid-cols-3">
+          <label className="text-xs font-medium text-fg-subtle">
+            {t.composioAccessTitle}
+            <Select
+              className={cn(inputClass, 'mt-1 h-9 py-1')}
+              value={scope}
+              onChange={(event) => void updateScope(event.currentTarget.value as ComposioScope)}
+            >
+              <SelectOption value="read">{t.composioAccessReadOnly}</SelectOption>
+              <SelectOption value="write">{t.composioAccessReadWrite}</SelectOption>
+              {scope === 'admin' ? <SelectOption value="admin">{t.composioAccessAdminCurrent}</SelectOption> : null}
+            </Select>
+            <span className="mt-1 block font-normal leading-4 text-fg-muted">
+              {scope === 'read' ? t.composioAccessReadHint : scope === 'admin' ? t.composioAccessAdminHint : t.composioAccessWriteHint}
+            </span>
+          </label>
           <label className="text-xs font-medium text-fg-subtle">
             {t.composioConfirmationPolicy}
             <Select
@@ -271,7 +336,7 @@ export function ComposioConnectorPanel({ instance, t }: { instance: ConnectorIns
             >
               <SelectOption value="writes">{t.composioConfirmWrites}</SelectOption>
               <SelectOption value="always">{t.composioConfirmAlways}</SelectOption>
-              <SelectOption value="never">{t.composioConfirmNever}</SelectOption>
+              {policy.confirmationPolicy === 'never' ? <SelectOption value="never">{t.composioConfirmNever}</SelectOption> : null}
             </Select>
           </label>
           <div>
@@ -295,7 +360,10 @@ export function ComposioConnectorPanel({ instance, t }: { instance: ConnectorIns
           </div>
         </div>
       ) : null}
-      {['gmail', 'googledrive', 'notion', 'slack'].includes(toolkit) && tools.some((tool) => tool.scope === 'read' && tool.curated) ? (
+      {[
+        'gmail', 'googlecalendar', 'googledrive', 'googledocs', 'googlesheets', 'notion',
+        'slack', 'github', 'linear', 'jira', 'outlook', 'microsoft_teams', 'one_drive', 'excel',
+      ].includes(toolkit) && tools.some((tool) => tool.scope === 'read' && tool.curated) ? (
         <div className="mt-4 rounded-lg border border-edge bg-surface-panel p-3">
           <div className="flex items-start gap-2">
             <Database className="mt-0.5 size-4 text-accent" />
@@ -304,25 +372,27 @@ export function ComposioConnectorPanel({ instance, t }: { instance: ConnectorIns
               <p className="text-xs text-fg-muted">{t.composioMemorySyncHint}</p>
             </div>
           </div>
-          <div className="mt-3 grid gap-2 md:grid-cols-[minmax(0,240px)_1fr_auto] md:items-end">
-            <label className="text-xs text-fg-subtle">
-              {t.composioMemoryReadAction}
-              <Select className={cn(inputClass, 'mt-1 h-9 py-1')} value={memoryAction} onChange={(event) => setMemoryAction(event.currentTarget.value)}>
-                {tools.filter((tool) => tool.scope === 'read' && tool.curated).map((tool) => (
-                  <SelectOption key={tool.slug} value={tool.slug}>{tool.name ?? tool.slug}</SelectOption>
-                ))}
-              </Select>
-            </label>
-            <label className="text-xs text-fg-subtle">
-              {t.composioMemoryArguments}
-              <input className={cn(inputClass, 'mt-1 h-9 py-1 font-mono text-xs')} value={memoryArguments} onChange={(event) => setMemoryArguments(event.currentTarget.value)} />
-            </label>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
             <Button disabled={loading || !memoryAction} onClick={() => void syncMemory()}>
               {loading ? <Loader2 className="size-4 animate-spin" /> : <Database className="size-4" />}
               {t.composioSyncNow}
             </Button>
           </div>
-          {memorySynced ? <p className="mt-2 text-xs text-emerald-600">{formatConnectorMessage(t.composioMemorySynced, { id: memorySynced })}</p> : null}
+          {memorySynced ? <p className="mt-2 text-xs text-emerald-600">{t.composioMemorySyncedSimple}</p> : null}
+          <div className="mt-3 flex flex-wrap items-end gap-3 border-t border-edge-subtle pt-3">
+            <label className="flex items-center gap-2 text-xs text-fg-muted">
+              <input type="checkbox" checked={memoryAutoSync} onChange={(event) => setMemoryAutoSync(event.currentTarget.checked)} />
+              {t.composioMemoryAutoSync}
+            </label>
+            <label className="flex items-center gap-2 text-xs text-fg-muted">
+              <input type="checkbox" checked={memoryTriggerSync} onChange={(event) => setMemoryTriggerSync(event.currentTarget.checked)} />
+              {t.composioMemoryTriggerSync}
+            </label>
+            <Button variant="secondary" disabled={loading || !memoryAction} onClick={() => void saveMemoryProfile()}>
+              {loading ? <Loader2 className="size-4 animate-spin" /> : <Database className="size-4" />}
+              {t.composioMemorySaveSchedule}
+            </Button>
+          </div>
         </div>
       ) : null}
       {approvals.length ? (
@@ -347,7 +417,7 @@ export function ComposioConnectorPanel({ instance, t }: { instance: ConnectorIns
           ))}
         </div>
       ) : null}
-      <div className="mt-4 grid gap-3 lg:grid-cols-3">
+      <div className="mt-4">
         <div>
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-fg-subtle">{t.composioConnections}</p>
           {connections.length ? connections.map((connection) => (
@@ -393,25 +463,58 @@ export function ComposioConnectorPanel({ instance, t }: { instance: ConnectorIns
             </div>
           )) : <p className="text-xs text-fg-muted">{t.composioConnectionsEmpty}</p>}
         </div>
-        <div>
-          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-fg-subtle">{t.composioAgentTools}</p>
-          {tools.length ? tools.slice(0, 8).map((tool) => (
-            <div key={tool.slug} className="rounded-lg border border-edge bg-surface-panel p-2">
-              <p className="truncate font-mono text-xs text-fg">{tool.slug}</p>
-              <p className="text-xs text-fg-subtle">{scopeLabel(tool.scope, t)}{tool.curated ? '' : ` ${t.composioUncuratedSuffix}`}</p>
-            </div>
-          )) : <p className="text-xs text-fg-muted">{t.composioToolsEmpty}</p>}
-        </div>
-        <div>
-          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-fg-subtle">{t.composioRecentTriggers}</p>
-          {events.length ? events.slice(0, 5).map((event) => (
-            <div key={`${event.id}-${event.at}`} className="rounded-lg border border-edge bg-surface-panel p-2">
-              <p className="truncate text-xs text-fg">{event.trigger ?? event.id}</p>
-              <p className="text-xs text-fg-subtle">{new Date(event.at).toLocaleString()}</p>
-            </div>
-          )) : <p className="text-xs text-fg-muted">{t.composioTriggersEmpty}</p>}
-        </div>
       </div>
+      <details className="mt-4 rounded-lg border border-edge bg-surface-panel p-3">
+        <summary className="cursor-pointer text-xs font-medium text-fg-muted">{t.composioAdvancedSettings}</summary>
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <div className="space-y-3">
+            <label className="block text-xs text-fg-subtle">
+              {t.composioAdvancedScope}
+              <Select className={cn(inputClass, 'mt-1 h-9 py-1')} value={scope} onChange={(event) => void updateScope(event.currentTarget.value as ComposioScope)}>
+                <SelectOption value="read">{t.composioScopeRead}</SelectOption>
+                <SelectOption value="write">{t.composioScopeWrite}</SelectOption>
+                <SelectOption value="admin">{t.composioScopeAdmin}</SelectOption>
+              </Select>
+            </label>
+            <label className="block text-xs text-fg-subtle">
+              {t.composioMemoryReadAction}
+              <Select className={cn(inputClass, 'mt-1 h-9 py-1')} value={memoryAction} onChange={(event) => setMemoryAction(event.currentTarget.value)}>
+                {tools.filter((tool) => tool.scope === 'read' && tool.curated).map((tool) => (
+                  <SelectOption key={tool.slug} value={tool.slug}>{tool.name ?? tool.slug}</SelectOption>
+                ))}
+              </Select>
+            </label>
+            <label className="block text-xs text-fg-subtle">
+              {t.composioMemoryArguments}
+              <input className={cn(inputClass, 'mt-1 h-9 py-1 font-mono text-xs')} value={memoryArguments} onChange={(event) => setMemoryArguments(event.currentTarget.value)} />
+            </label>
+            <label className="block text-xs text-fg-subtle">
+              {t.composioMemoryInterval}
+              <input type="number" min={5} max={1440} className={cn(inputClass, 'mt-1 h-9 w-28 py-1')} value={memoryIntervalMinutes} onChange={(event) => setMemoryIntervalMinutes(event.currentTarget.value)} />
+            </label>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-fg-subtle">{t.composioAgentTools}</p>
+              {tools.length ? tools.slice(0, 8).map((tool) => (
+                <div key={tool.slug} className="rounded-lg border border-edge bg-surface-base p-2">
+                  <p className="truncate font-mono text-xs text-fg">{tool.slug}</p>
+                  <p className="text-xs text-fg-subtle">{scopeLabel(tool.scope, t)}{tool.curated ? '' : ` ${t.composioUncuratedSuffix}`}</p>
+                </div>
+              )) : <p className="text-xs text-fg-muted">{t.composioToolsEmpty}</p>}
+            </div>
+            <div>
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-fg-subtle">{t.composioRecentTriggers}</p>
+              {events.length ? events.slice(0, 5).map((event) => (
+                <div key={`${event.id}-${event.at}`} className="rounded-lg border border-edge bg-surface-base p-2">
+                  <p className="truncate text-xs text-fg">{event.trigger ?? event.id}</p>
+                  <p className="text-xs text-fg-subtle">{new Date(event.at).toLocaleString()}</p>
+                </div>
+              )) : <p className="text-xs text-fg-muted">{t.composioTriggersEmpty}</p>}
+            </div>
+          </div>
+        </div>
+      </details>
     </div>
   );
 }

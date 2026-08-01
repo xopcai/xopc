@@ -187,6 +187,13 @@ function UnderstandingCard({
 
 function SourceCard({ source, language, t, onConfigure, onDisconnect }: { source: PersonalContextSource; language: 'en' | 'zh'; t: ReturnType<typeof messages>['you']; onConfigure: () => void; onDisconnect: () => void }) {
   const status = source.installed ? (source.enabled ? t.connected : t.paused) : t.available;
+  const accountLabel = source.accountLabel ?? (
+    source.accountCount && source.accountCount > 1 && source.accountOrdinal
+      ? t.sourceAccountFallback
+        .replace('{{index}}', String(source.accountOrdinal))
+        .replace('{{count}}', String(source.accountCount))
+      : undefined
+  );
   const healthStatus = source.lastHealthStatus
     ? t.sourceHealth.replace('{{status}}', source.lastHealthStatus === 'ok' ? t.healthOk : t.healthIssue)
     : null;
@@ -207,7 +214,7 @@ function SourceCard({ source, language, t, onConfigure, onDisconnect }: { source
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
           <ConnectorLogo connector={{ displayName: source.displayName, branding: personalContextSourceBranding(source) }} size="sm" />
-          <div className="min-w-0"><h3 className="text-sm font-semibold text-fg">{source.displayName}</h3>{source.accountLabel ? <p className="mt-0.5 truncate text-xs font-medium text-fg-muted">{source.accountLabel}</p> : null}<p className="mt-1 line-clamp-2 text-xs leading-5 text-fg-muted">{source.description}</p></div>
+          <div className="min-w-0"><h3 className="text-sm font-semibold text-fg">{source.displayName}</h3>{accountLabel ? <p className="mt-0.5 truncate text-xs font-medium text-fg-muted">{accountLabel}</p> : null}<p className="mt-1 line-clamp-2 text-xs leading-5 text-fg-muted">{source.description}</p></div>
         </div>
         <span className={cn('shrink-0 rounded-full px-2 py-1 text-[11px] font-medium', source.installed && source.enabled ? 'bg-success-soft text-fg' : 'bg-surface-hover text-fg-muted')}>{status}</span>
       </div>

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ConnectorDefinition } from '../../connectors-api';
-import { connectorBenefitFor, connectorFirstValue, groupConnectorsByBenefit } from '../connector-benefits';
+import { connectorBenefitFor, connectorBenefitsFor, connectorFirstValue, groupConnectorsByBenefit } from '../connector-benefits';
 
 function connector(overrides: Partial<ConnectorDefinition>): ConnectorDefinition {
   return {
@@ -22,8 +22,9 @@ function connector(overrides: Partial<ConnectorDefinition>): ConnectorDefinition
 }
 
 describe('connectorBenefitFor', () => {
-  it('prioritizes communication connectors', () => {
-    expect(connectorBenefitFor(connector({ displayName: 'Slack', capabilities: ['tools', 'events'] }))).toBe('reach');
+  it('supports multiple explicit user benefits', () => {
+    expect(connectorBenefitsFor(connector({ benefits: ['understand', 'act', 'reach'] })))
+      .toEqual(['understand', 'act', 'reach']);
   });
 
   it('recognizes context and knowledge sources', () => {
@@ -35,6 +36,10 @@ describe('connectorBenefitFor', () => {
     expect(connectorBenefitFor(connector({ category: 'code', capabilities: ['tools'] }))).toBe('act');
   });
 
+  it('does not mistake a provider event feed for a communication channel', () => {
+    expect(connectorBenefitsFor(connector({ capabilities: ['tools', 'events'] }))).toEqual(['act']);
+  });
+
   it('groups connectors without dropping any', () => {
     const groups = groupConnectorsByBenefit([
       connector({ id: 'docs', category: 'docs' }),
@@ -42,7 +47,7 @@ describe('connectorBenefitFor', () => {
       connector({ id: 'mail', capabilities: ['channel'] }),
     ]);
     expect(groups.understand).toHaveLength(1);
-    expect(groups.act).toHaveLength(1);
+    expect(groups.act).toHaveLength(2);
     expect(groups.reach).toHaveLength(1);
   });
 

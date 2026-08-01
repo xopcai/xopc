@@ -3,6 +3,10 @@ import type { McpServerRow } from '../mcp/mcp-config-api';
 
 type ConnectorSort = 'name' | 'source';
 
+export function isProductConnector(connector: ConnectorDefinition): boolean {
+  return !(connector.runtime.type === 'composio' && connector.runtime.role === 'credential');
+}
+
 function connectorMatchesQuery(connector: ConnectorDefinition, query: string): boolean {
   const normalized = query.trim().toLowerCase();
   if (!normalized) return true;
@@ -48,4 +52,3 @@ export function customServerMatchesQuery(row: McpServerRow, query: string): bool
   if (!normalized) return true;
   return [row.id, row.command ?? '', row.url ?? '', row.transport].some((value) => value.toLowerCase().includes(normalized));
 }
-

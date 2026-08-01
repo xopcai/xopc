@@ -2,6 +2,7 @@ import { createLogger } from '../utils/logger.js';
 import {
   finishKnowledgeSyncRun,
   getKnowledgeSourceCursor,
+  listKnowledgeSourceItems,
   setKnowledgeSourceCursor,
   startKnowledgeSyncRun,
   upsertKnowledgeSourceItems,
@@ -9,6 +10,38 @@ import {
 import type { KnowledgeSourceAdapter, KnowledgeSourceItemInput, KnowledgeSyncRun } from './types.js';
 
 const log = createLogger('KnowledgeIngestion');
+
+function deletionInputs(instanceId: string, snapshotExternalIds: string[] | undefined): KnowledgeSourceItemInput[] {
+  if (!snapshotExternalIds) return [];
+  const seen = new Set(snapshotExternalIds);
+  const deletedAt = new Date().toISOString();
+  const missing: KnowledgeSourceItemInput[] = [];
+  for (let offset = 0; ; offset += 500) {
+    const page = listKnowledgeSourceItems({ sourceInstanceId: instanceId, limit: 500, offset });
+    for (const item of page) {
+      if (seen.has(item.externalId)) continue;
+      missing.push({
+        id: item.id,
+        sourceInstanceId: item.sourceInstanceId,
+        externalId: item.externalId,
+        itemType: item.itemType,
+        authorRole: item.authorRole,
+        occurredAt: item.occurredAt,
+        sourceUpdatedAt: item.sourceUpdatedAt,
+        contentHash: item.contentHash,
+        normalizedText: item.normalizedText,
+        payloadRef: item.payloadRef,
+        metadata: item.metadata,
+        sensitivity: item.sensitivity,
+        retentionClass: item.retentionClass,
+        synthesisPipeline: item.synthesisPipeline,
+        deletedAt,
+      });
+    }
+    if (page.length < 500) break;
+  }
+  return missing;
+}
 
 export interface KnowledgeSourceStateStore {
   getCursor(instanceId: string): string | undefined;
@@ -83,7 +116,8 @@ export class KnowledgeIngestionService {
         windowStart: params.windowStart,
         signal,
       });
-      const stored = upsertKnowledgeSourceItems(pulled.items);
+      const tombstones = deletionInputs(params.instanceId, pulled.snapshotExternalIds);
+      const stored = upsertKnowledgeSourceItems([...pulled.items, ...tombstones]);
       this.state.setCursor(params.instanceId, pulled.nextCursor);
       const completed = finishKnowledgeSyncRun({
         runId: run.id,
@@ -101,6 +135,7 @@ export class KnowledgeIngestionService {
           itemsSeen: pulled.items.length,
           itemsCreated: stored.created,
           itemsUpdated: stored.updated,
+          itemsDeleted: tombstones.length,
         },
         'Knowledge source sync completed',
       );

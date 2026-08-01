@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Sequential Thinking">
-  <rect width="64" height="64" rx="16" fill="#ECFDF5"/>
-  <circle cx="17" cy="18" r="6" fill="#10B981"/>
-  <circle cx="32" cy="32" r="6" fill="#14B8A6"/>
-  <circle cx="47" cy="46" r="6" fill="#0EA5E9"/>
-  <path d="M22 22.5 27.5 28M36.5 36.5 42 42" stroke="#0F766E" stroke-width="4" stroke-linecap="round"/>
-  <path d="m42 37 1 6-6-1" fill="none" stroke="#0F766E" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>

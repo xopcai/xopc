@@ -1,5 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Memory">
-  <rect width="64" height="64" rx="16" fill="#F3E8FF"/>
-  <path d="M25 13a9 9 0 0 0-8 13 9 9 0 0 0 1 16 9 9 0 0 0 14 7V17a8 8 0 0 0-7-4Zm14 0a8 8 0 0 0-7 4v32a9 9 0 0 0 14-7 9 9 0 0 0 1-16 9 9 0 0 0-8-13Z" fill="#8B5CF6"/>
-  <path d="M22 27h7M20 38h9M35 23h7M35 35h9M24 27v-5M42 23v-5M24 38v6M42 35v7" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
-</svg>

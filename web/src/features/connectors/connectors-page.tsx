@@ -1,4 +1,4 @@
-import { Loader2 } from 'lucide-react';
+import { Loader2, Users } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
@@ -30,12 +30,14 @@ import {
   fetchConnectorCatalog,
   fetchConnectorInstances,
   fetchConnectorRegistries,
+  fetchConnectedPeopleGraph,
   fetchStoreConnectorCatalog,
   fetchStoreConnectorInstallPlan,
   searchConnectorRegistryPage,
   type ConnectorDefinition,
   type ConnectorInstance,
   type ConnectorRegistryProvider,
+  type ConnectedPeopleGraph,
   type StoreConnectorCatalogItem,
 } from './connectors-api';
 import { CustomMcpServerDialog } from './custom-mcp-server-dialog';
@@ -47,11 +49,16 @@ import {
 } from './mcp/mcp-config-api';
 import {
   CONNECTOR_BENEFIT_ORDER,
-  connectorBenefitFor,
+  connectorBenefitsFor,
   connectorFirstValue,
   type ConnectorBenefit,
 } from './utils/connector-benefits';
-import { customServerMatchesQuery, filterAndSortConnectors, installedConnectorMatchesQuery } from './utils/connector-filters';
+import {
+  customServerMatchesQuery,
+  filterAndSortConnectors,
+  installedConnectorMatchesQuery,
+  isProductConnector,
+} from './utils/connector-filters';
 
 type TabId = 'connected' | 'discover';
 type ConnectorSort = 'name' | 'source';
@@ -68,6 +75,7 @@ type LoadState = {
   registries: ConnectorRegistryProvider[];
   loading: boolean;
   error: string | null;
+  peopleGraph: ConnectedPeopleGraph | null;
 };
 
 type CustomDialogState =
@@ -119,12 +127,15 @@ export function ConnectorsPage() {
     registries: [],
     loading: true,
     error: null,
+    peopleGraph: null,
   });
   const [registryLoading, setRegistryLoading] = useState(false);
   const [storePlanLoading, setStorePlanLoading] = useState(false);
   const [registryPage, setRegistryPage] = useState(1);
   const [registryTotalPages, setRegistryTotalPages] = useState<number | undefined>(undefined);
   const [connectedSearchQuery, setConnectedSearchQuery] = useState('');
+  const [peopleSearchQuery, setPeopleSearchQuery] = useState('');
+  const [peopleSearching, setPeopleSearching] = useState(false);
   const [discoverSearchQuery, setDiscoverSearchQuery] = useState('');
   const [discoverSource, setDiscoverSource] = useState(DISCOVERY_SOURCE_BUILTIN);
   const [connectorSort, setConnectorSort] = useState<ConnectorSort>('name');
@@ -154,15 +165,16 @@ export function ConnectorsPage() {
 
   const load = useCallback(async () => {
     if (!token) {
-      setState({ catalog: [], registryCatalog: [], instances: [], registries: [], loading: false, error: null });
+      setState({ catalog: [], registryCatalog: [], instances: [], registries: [], loading: false, error: null, peopleGraph: null });
       return;
     }
     setState((previous) => ({ ...previous, loading: true, error: null }));
     try {
-      const [catalog, instances, registries] = await Promise.all([
+      const [catalog, instances, registries, peopleGraph] = await Promise.all([
         fetchConnectorCatalog(),
         fetchConnectorInstances(),
         fetchConnectorRegistries(),
+        fetchConnectedPeopleGraph('', 12).catch(() => null),
       ]);
       setState((previous) => ({
         catalog,
@@ -171,6 +183,7 @@ export function ConnectorsPage() {
         registries,
         loading: false,
         error: null,
+        peopleGraph,
       }));
     } catch (error) {
       setState({
@@ -180,6 +193,7 @@ export function ConnectorsPage() {
         registries: [],
         loading: false,
         error: error instanceof Error ? error.message : String(error),
+        peopleGraph: null,
       });
     }
   }, [token]);
@@ -187,6 +201,26 @@ export function ConnectorsPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!hasToken || tab !== 'connected') return;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      setPeopleSearching(true);
+      void fetchConnectedPeopleGraph(peopleSearchQuery, 50)
+        .then((peopleGraph) => {
+          if (!cancelled) setState((previous) => ({ ...previous, peopleGraph }));
+        })
+        .catch(() => {})
+        .finally(() => {
+          if (!cancelled) setPeopleSearching(false);
+        });
+    }, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [hasToken, peopleSearchQuery, tab]);
 
   useEffect(() => {
     if (initialTabResolvedRef.current || state.loading || (hasToken && !mcpSettings)) return;
@@ -429,21 +463,32 @@ export function ConnectorsPage() {
 
   const builtinCatalog = useMemo(
     () => state.catalog.filter((connector) => (
-      connector.source === 'builtin' && connector.integrationStrategy?.preferred !== false
+      connector.source === 'builtin'
+      && connector.integrationStrategy?.preferred !== false
+      && isProductConnector(connector)
     )),
     [state.catalog],
   );
-  const discoveryCatalog = useMemo(() => {
-    const sourceCatalog = discoverSource === DISCOVERY_SOURCE_BUILTIN
+  const discoverySourceCatalog = useMemo(() => (
+    discoverSource === DISCOVERY_SOURCE_BUILTIN
       ? builtinCatalog
       : discoverSource === DISCOVERY_SOURCE_ALL
         ? uniqueConnectors([...builtinCatalog, ...state.registryCatalog])
-        : state.registryCatalog;
+        : state.registryCatalog
+  ), [builtinCatalog, discoverSource, state.registryCatalog]);
+  const discoveryCatalog = useMemo(() => {
     const filtered = selectedOutcome === 'all'
-      ? sourceCatalog
-      : sourceCatalog.filter((connector) => connectorBenefitFor(connector) === selectedOutcome);
+      ? discoverySourceCatalog
+      : discoverySourceCatalog.filter((connector) => connectorBenefitsFor(connector).includes(selectedOutcome));
     return filterAndSortConnectors(filtered, discoverSearchQuery, connectorSort);
-  }, [builtinCatalog, connectorSort, discoverSearchQuery, discoverSource, selectedOutcome, state.registryCatalog]);
+  }, [connectorSort, discoverSearchQuery, discoverySourceCatalog, selectedOutcome]);
+  const availableOutcomes = useMemo(() => CONNECTOR_BENEFIT_ORDER.filter((benefit) => (
+    discoverySourceCatalog.some((connector) => connectorBenefitsFor(connector).includes(benefit))
+  )), [discoverySourceCatalog]);
+
+  useEffect(() => {
+    if (selectedOutcome !== 'all' && !availableOutcomes.includes(selectedOutcome)) setSelectedOutcome('all');
+  }, [availableOutcomes, selectedOutcome]);
   const registryCanLoadMore = tab === 'discover'
     && discoverSource !== DISCOVERY_SOURCE_BUILTIN
     && Boolean(registryTotalPages && registryPage < registryTotalPages);
@@ -522,6 +567,55 @@ export function ConnectorsPage() {
                 </section>
               ) : null}
 
+              {state.peopleGraph && (state.peopleGraph.scannedItems > 0 || peopleSearchQuery) ? (
+                <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex items-start gap-3">
+                    <div className="rounded-lg bg-accent-soft p-2 text-accent-fg">
+                      <Users className="size-4" aria-hidden />
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-semibold text-fg">{cs.peopleGraphTitle}</h2>
+                      <p className="mt-1 text-xs text-fg-muted">
+                        {cs.peopleGraphHint
+                          .replace('{{people}}', String(state.peopleGraph.people.length))
+                          .replace('{{sources}}', String(new Set(state.peopleGraph.sourceEdges.map((edge) => edge.sourceInstanceId)).size))}
+                      </p>
+                    </div>
+                    </div>
+                    <div className="relative w-full max-w-xs">
+                      <ConnectorSearchField
+                        value={peopleSearchQuery}
+                        onChange={setPeopleSearchQuery}
+                        placeholder={cs.peopleGraphSearchPlaceholder}
+                      />
+                      {peopleSearching ? <Loader2 className="absolute right-3 top-2.5 size-4 animate-spin text-fg-subtle" aria-hidden /> : null}
+                    </div>
+                  </div>
+                  {state.peopleGraph.people.length ? (
+                    <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                      {state.peopleGraph.people.slice(0, 10).map((person) => {
+                        const sourceLabels = [...new Set(state.peopleGraph!.sourceEdges
+                          .filter((edge) => edge.personId === person.id)
+                          .map((edge) => edge.toolkit ?? edge.connectorId ?? edge.sourceInstanceId))];
+                        return (
+                          <div key={person.id} className="rounded-xl border border-edge bg-surface-panel px-3 py-2.5">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="truncate text-sm font-medium text-fg">{person.label}</p>
+                              <span className="shrink-0 text-xs text-fg-subtle">{person.mentionCount}</span>
+                            </div>
+                            <p className="mt-1 truncate text-xs text-fg-muted">
+                              {person.emails[0] ?? person.usernames[0] ?? person.roles.join(' · ')}
+                            </p>
+                            <p className="mt-1 truncate text-[11px] text-fg-subtle">{sourceLabels.join(' · ')}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : <p className="mt-4 text-sm text-fg-muted">{cs.peopleGraphSearchEmpty}</p>}
+                </section>
+              ) : null}
+
               <div>
                 <h2 className="text-sm font-semibold text-fg">{cs.connectionsTitle}</h2>
                 <p className="mt-1 text-sm text-fg-muted">{cs.connectionsHint}</p>
@@ -583,7 +677,7 @@ export function ConnectorsPage() {
               </div>
 
               <div className="flex flex-wrap gap-2" role="group" aria-label={cs.outcomeFilterAria}>
-                {(['all', ...CONNECTOR_BENEFIT_ORDER] as DiscoveryOutcome[]).map((outcome) => (
+                {(['all', ...availableOutcomes] as DiscoveryOutcome[]).map((outcome) => (
                   <button
                     key={outcome}
                     type="button"

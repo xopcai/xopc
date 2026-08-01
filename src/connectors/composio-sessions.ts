@@ -211,7 +211,7 @@ export class ComposioSessionsAdapter {
     const items: ComposioToolkitCatalogItem[] = [];
     let cursor: string | undefined;
     for (let page = 0; page < 20; page++) {
-      const response = await session.toolkits({ limit: 100, cursor });
+      const response = await session.toolkits({ limit: 50, cursor });
       for (const item of response.items) {
         items.push({
           slug: item.slug,

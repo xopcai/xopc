@@ -50,6 +50,7 @@ export type ConnectorDefinition = {
   kind: string;
   source: string;
   capabilities: ConnectorCapability[];
+  benefits?: Array<'understand' | 'act' | 'reach'>;
   tags?: string[];
   branding?: {
     logoUrl?: string;
@@ -179,6 +180,31 @@ export type ConnectorInstance = {
   audit: ConnectorAuditRecord[];
 };
 
+export type ConnectedPersonNode = {
+  id: string;
+  label: string;
+  names: string[];
+  emails: string[];
+  usernames: string[];
+  roles: string[];
+  mentionCount: number;
+  lastObservedAt: string;
+};
+
+export type ConnectedPeopleGraph = {
+  people: ConnectedPersonNode[];
+  sourceEdges: Array<{
+    personId: string;
+    sourceInstanceId: string;
+    connectorId?: string;
+    toolkit?: string;
+    mentionCount: number;
+    lastObservedAt: string;
+  }>;
+  scannedItems: number;
+  truncated: boolean;
+};
+
 export type ConnectorToolInfo = {
   name: string;
   shortName?: string;
@@ -240,6 +266,17 @@ export type ComposioConnection = {
   username?: string;
   connectedAt?: string;
   lastError?: string;
+};
+
+export type ComposioMemorySyncProfile = {
+  enabled: boolean;
+  actionId: string;
+  arguments: Record<string, unknown>;
+  agentId: string;
+  connectionId?: string;
+  intervalMinutes: number;
+  triggerSync: boolean;
+  updatedAt: string;
 };
 
 export type ComposioScope = 'read' | 'write' | 'admin';
@@ -449,6 +486,21 @@ export async function startConnectorAuthorization(connectorId: string): Promise<
   return requirePayload(response, 'Could not start connector authorization.').authorization;
 }
 
+export async function getComposioSetupStatus(): Promise<{ configured: boolean }> {
+  const response = await fetchJson<ApiEnvelope<{ configured: boolean }>>(
+    apiUrl('/api/connectors/composio/setup-status'),
+  );
+  return requirePayload(response, 'Could not check the connection service.');
+}
+
+export async function configureComposio(apiKey: string): Promise<void> {
+  const response = await fetchJson<ApiEnvelope<{ configured: boolean }>>(
+    apiUrl('/api/connectors/composio/setup'),
+    { method: 'POST', body: JSON.stringify({ apiKey }) },
+  );
+  requirePayload(response, 'Could not enable the connection service.');
+}
+
 export async function installConnector(
   connectorId: string,
   input: ConnectorInstallInput,
@@ -605,6 +657,42 @@ export async function syncComposioMemory(input: {
     { method: 'POST', body: JSON.stringify(input) },
   );
   return requirePayload(response, 'Could not sync connector data to memory.');
+}
+
+export async function getComposioMemorySyncProfile(
+  connectorId: string,
+): Promise<ComposioMemorySyncProfile | null> {
+  const response = await fetchJson<ApiEnvelope<{ profile: ComposioMemorySyncProfile | null }>>(
+    apiUrl(`/api/connectors/${encodeURIComponent(connectorId)}/memory-sync-profile`),
+  );
+  return requirePayload(response, 'Could not load memory sync settings.').profile;
+}
+
+export async function updateComposioMemorySyncProfile(
+  connectorId: string,
+  profile: Omit<ComposioMemorySyncProfile, 'updatedAt'>,
+): Promise<ComposioMemorySyncProfile> {
+  const response = await fetchJson<ApiEnvelope<{ profile: ComposioMemorySyncProfile }>>(
+    apiUrl(`/api/connectors/${encodeURIComponent(connectorId)}/memory-sync-profile`),
+    { method: 'PATCH', body: JSON.stringify(profile) },
+  );
+  return requirePayload(response, 'Could not save memory sync settings.').profile;
+}
+
+export async function syncConnectorMemory(connectorId: string): Promise<{ recordIds: string[] }> {
+  const response = await fetchJson<ApiEnvelope<{ recordIds: string[] }>>(
+    apiUrl(`/api/connectors/${encodeURIComponent(connectorId)}/memory-sync`),
+    { method: 'POST', body: JSON.stringify({}) },
+  );
+  return requirePayload(response, 'Could not sync connector data to memory.');
+}
+
+export async function fetchConnectedPeopleGraph(query = '', limit = 100): Promise<ConnectedPeopleGraph> {
+  const params = new URLSearchParams({ q: query, limit: String(limit) });
+  const response = await fetchJson<ApiEnvelope<ConnectedPeopleGraph>>(
+    apiUrl(`/api/connectors/people?${params.toString()}`),
+  );
+  return requirePayload(response, 'Could not load the connected people graph.');
 }
 
 export async function listConnectorApprovals(status: ConnectorApproval['status'] = 'pending'): Promise<ConnectorApproval[]> {

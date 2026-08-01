@@ -1,13 +1,23 @@
 import type { Hono } from 'hono';
 
+import { resolveDefaultAgentId } from '../../../agent/agent-scope.js';
 import type { Config } from '../../../config/schema.js';
+import { buildConnectedPeopleGraph } from '../../../knowledge/index.js';
 import { startConnectorAuthorization } from '../../../connectors/auth-provider-registry.js';
 import { getConnectorDefinition, listConnectorCatalog, listConnectorProviders } from '../../../connectors/catalog.js';
 import { listComposioConnectorCatalog } from '../../../connectors/composio-catalog.js';
 import { composioLogoResponse } from '../../../connectors/composio-logo.js';
-import { syncComposioResultToMemory } from '../../../connectors/connector-memory-sync.js';
+import {
+  syncComposioResultToMemory,
+  syncLocalFolderToMemory,
+} from '../../../connectors/connector-memory-sync.js';
+import {
+  getComposioMemorySyncProfile,
+  updateComposioMemorySyncProfile,
+} from '../../../connectors/memory-sync-profile.js';
 import {
   executeComposioTool,
+  configureComposioApiKey,
   getComposioInstallationPolicy,
   getComposioToolkitScope,
   listComposioConnections,
@@ -20,11 +30,13 @@ import {
   updateComposioInstallationPolicy,
   type ComposioScope,
 } from '../../../connectors/composio.js';
+import { resolveComposioApiKey } from '../../../connectors/composio-sessions.js';
 import { appendComposioTriggerEvent, listComposioTriggerEvents } from '../../../connectors/composio-triggers.js';
 import { previewConnectorDefinition, testConnectorInstance } from '../../../connectors/health.js';
 import { installConnector, installConnectorDefinition, uninstallConnector, updateConnectorConfig } from '../../../connectors/install.js';
 import { getConnectorInstance, listConnectorInstances } from '../../../connectors/instances.js';
 import { setConnectorEnabled } from '../../../connectors/lifecycle.js';
+import { projectComposioRuntimeStatus, type ComposioRuntimeProbe } from '../../../connectors/runtime-status.js';
 import { isConnectorRegistrySource, listConnectorRegistries, searchConnectorRegistries } from '../../../connectors/registries/search.js';
 import { createConnectorSetupSecretRequest, submitConnectorSetupSecret } from '../../../connectors/setup-secrets.js';
 import { recordConnectorHealthUsage } from '../../../connectors/usage.js';
@@ -32,6 +44,7 @@ import type { ConnectorDefinition, ConnectorInstallInput } from '../../../connec
 import {
   decideConnectorApproval,
   getConnectorApproval,
+  listConnectorConnections,
   listConnectorApprovals,
 } from '../../../storage/sqlite/index.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
@@ -57,9 +70,44 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     });
   });
 
-  authenticated.get('/api/connectors/installed', (c) => {
+  authenticated.get('/api/connectors/installed', async (c) => {
     const config = service.currentConfig as Config;
-    return c.json({ ok: true, payload: { instances: listConnectorInstances(config) } });
+    const instances = listConnectorInstances(config);
+    const composioInstances = instances.filter((instance) => (
+      instance.materialized.type === 'composio' && instance.materialized.role === 'toolkit'
+    ));
+    if (composioInstances.length === 0) {
+      return c.json({ ok: true, payload: { instances } });
+    }
+
+    const checkedAt = new Date().toISOString();
+    let connectionError: string | undefined;
+    try {
+      await listComposioConnections();
+    } catch (error) {
+      connectionError = errorMessage(error);
+    }
+    const probes = await Promise.all(
+      [...new Map(composioInstances.map((instance) => [instance.connectorId, instance])).values()]
+        .map(async (instance): Promise<ComposioRuntimeProbe> => {
+          try {
+            const tools = await listComposioTools(instance.materialized.type === 'composio' ? instance.materialized.toolkit : '', config);
+            return {
+              connectorId: instance.connectorId,
+              checkedAt,
+              toolCount: tools.length,
+              ...(connectionError ? { error: connectionError, connectionError: true } : {}),
+            };
+          } catch (error) {
+            return { connectorId: instance.connectorId, checkedAt, error: errorMessage(error) };
+          }
+        }),
+    );
+    const connections = listConnectorConnections({ principalId: 'local-owner' });
+    return c.json({
+      ok: true,
+      payload: { instances: projectComposioRuntimeStatus(instances, connections, probes) },
+    });
   });
 
   authenticated.get('/api/connectors/registry/search', async (c) => {
@@ -205,6 +253,7 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     const body = await c.req.json().catch(() => ({}));
     try {
       const event = await appendComposioTriggerEvent(service.currentConfig as Config, body);
+      service.requestConnectorMemorySync(event.toolkit);
       return c.json({ ok: true, payload: { event } });
     } catch (error) {
       return c.json({ ok: false, error: errorMessage(error) }, 400);
@@ -216,6 +265,41 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     try {
       const events = await listComposioTriggerEvents(service.currentConfig as Config, limit);
       return c.json({ ok: true, payload: { events } });
+    } catch (error) {
+      return c.json({ ok: false, error: errorMessage(error) }, 400);
+    }
+  });
+
+  authenticated.get('/api/connectors/people', (c) => {
+    const query = c.req.query('q') ?? '';
+    const limit = Number(c.req.query('limit') ?? '100');
+    return c.json({ ok: true, payload: buildConnectedPeopleGraph({ query, limit }) });
+  });
+
+  authenticated.get('/api/connectors/:id/memory-sync-profile', (c) => {
+    const profile = getComposioMemorySyncProfile(service.currentConfig as Config, c.req.param('id'));
+    return c.json({ ok: true, payload: { profile: profile ?? null } });
+  });
+
+  authenticated.patch('/api/connectors/:id/memory-sync-profile', strictRateLimitMiddleware, async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const row = body && typeof body === 'object' && !Array.isArray(body) ? body as Record<string, unknown> : {};
+    try {
+      const config = service.currentConfig as Config;
+      const profile = updateComposioMemorySyncProfile(config, c.req.param('id'), {
+        enabled: row.enabled === true,
+        actionId: typeof row.actionId === 'string' ? row.actionId : '',
+        arguments: row.arguments && typeof row.arguments === 'object' && !Array.isArray(row.arguments)
+          ? row.arguments as Record<string, unknown>
+          : {},
+        agentId: typeof row.agentId === 'string' ? row.agentId : '',
+        connectionId: typeof row.connectionId === 'string' ? row.connectionId : undefined,
+        intervalMinutes: Number(row.intervalMinutes),
+        triggerSync: row.triggerSync !== false,
+      });
+      const saved = await service.saveConfig(config);
+      if (!saved.saved) return c.json({ ok: false, error: saved.error }, 500);
+      return c.json({ ok: true, payload: { profile } });
     } catch (error) {
       return c.json({ ok: false, error: errorMessage(error) }, 400);
     }
@@ -258,12 +342,25 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     const body = await c.req.json().catch(() => ({}));
     const row = body && typeof body === 'object' && !Array.isArray(body) ? body as Record<string, unknown> : {};
     const actionId = typeof row.actionId === 'string' ? row.actionId.trim() : '';
-    const agentId = typeof row.agentId === 'string' ? row.agentId.trim() : '';
-    if (!actionId || !agentId) return c.json({ ok: false, error: 'actionId and agentId are required.' }, 400);
+    const config = service.currentConfig as Config;
+    const agentId = typeof row.agentId === 'string' && row.agentId.trim()
+      ? row.agentId.trim()
+      : resolveDefaultAgentId(config);
     try {
+      const connectorId = c.req.param('id');
+      const definition = getConnectorDefinition(connectorId);
+      if (definition?.runtime.type === 'memorySource') {
+        const result = await syncLocalFolderToMemory({
+          config,
+          connectorId,
+          agentId,
+        });
+        return c.json({ ok: true, payload: result });
+      }
+      if (!actionId) return c.json({ ok: false, error: 'actionId is required for Composio memory sync.' }, 400);
       const result = await syncComposioResultToMemory({
-        config: service.currentConfig as Config,
-        connectorId: c.req.param('id'),
+        config,
+        connectorId,
         actionId,
         agentId,
         connectionId: typeof row.connectionId === 'string' ? row.connectionId : undefined,
@@ -362,6 +459,24 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     try {
       const authorization = await startConnectorAuthorization(connector);
       return c.json({ ok: true, payload: { authorization } });
+    } catch (error) {
+      return c.json({ ok: false, error: errorMessage(error) }, 400);
+    }
+  });
+
+  authenticated.get('/api/connectors/composio/setup-status', async (c) => {
+    const configured = Boolean(await resolveComposioApiKey());
+    return c.json({ ok: true, payload: { configured } });
+  });
+
+  authenticated.post('/api/connectors/composio/setup', strictRateLimitMiddleware, async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const apiKey = body && typeof body === 'object' && !Array.isArray(body)
+      ? String((body as Record<string, unknown>).apiKey ?? '')
+      : '';
+    try {
+      await configureComposioApiKey(apiKey);
+      return c.json({ ok: true, payload: { configured: true } });
     } catch (error) {
       return c.json({ ok: false, error: errorMessage(error) }, 400);
     }
