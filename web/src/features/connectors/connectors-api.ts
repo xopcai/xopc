@@ -36,11 +36,6 @@ export type ConnectorConfigField = {
   defaultValue?: unknown;
 };
 
-export type ConnectorRegistryProvider = {
-  id: string;
-  displayName: string;
-};
-
 export type ConnectorDefinition = {
   id: string;
   version: string;
@@ -355,19 +350,31 @@ function requirePayload<T>(response: ApiEnvelope<T>, fallbackMessage: string): T
 }
 
 export async function fetchConnectorCatalog(): Promise<ConnectorDefinition[]> {
-  const [response, composio] = await Promise.all([
-    fetchJson<ApiEnvelope<{ connectors: ConnectorDefinition[] }>>(apiUrl('/api/connectors/catalog')),
-    fetchComposioConnectorCatalog().catch(() => []),
-  ]);
-  const connectors = requirePayload(response, 'Could not load connector catalog.').connectors;
-  return [...new Map([...composio, ...connectors].map((connector) => [connector.id, connector])).values()];
+  const response = await fetchJson<ApiEnvelope<{ connectors: ConnectorDefinition[] }>>(apiUrl('/api/connectors/catalog'));
+  return requirePayload(response, 'Could not load connector catalog.').connectors;
 }
 
-export async function fetchComposioConnectorCatalog(refresh = false): Promise<ConnectorDefinition[]> {
-  const response = await fetchJson<ApiEnvelope<{ connectors: ConnectorDefinition[] }>>(
-    apiUrl(`/api/connectors/composio/catalog${refresh ? '?refresh=1' : ''}`),
+export async function fetchComposioConnectorCatalog(params?: {
+  q?: string;
+  page?: number;
+  pageSize?: number;
+  refresh?: boolean;
+  verification?: 'verified' | 'experimental' | 'all';
+}): Promise<{ connectors: ConnectorDefinition[]; meta: { page: number; pageSize: number; total: number; totalPages: number } }> {
+  const search = new URLSearchParams();
+  if (params?.q?.trim()) search.set('q', params.q.trim());
+  if (params?.page) search.set('page', String(params.page));
+  if (params?.pageSize) search.set('pageSize', String(params.pageSize));
+  if (params?.refresh) search.set('refresh', '1');
+  if (params?.verification) search.set('verification', params.verification);
+  const suffix = search.size ? `?${search.toString()}` : '';
+  const response = await fetchJson<ApiEnvelope<{
+    connectors: ConnectorDefinition[];
+    meta: { page: number; pageSize: number; total: number; totalPages: number };
+  }>>(
+    apiUrl(`/api/connectors/composio/catalog${suffix}`),
   );
-  return requirePayload(response, 'Could not load Composio catalog.').connectors;
+  return requirePayload(response, 'Could not load Composio catalog.');
 }
 
 export async function fetchStoreConnectorCatalog(params?: {
@@ -414,68 +421,11 @@ export async function installStoreConnector(
   return requirePayload(response, 'Could not install Store connector.').instance;
 }
 
-export async function fetchConnectorRegistries(): Promise<ConnectorRegistryProvider[]> {
-  const response = await fetchJson<ApiEnvelope<{ registries?: ConnectorRegistryProvider[] }>>(
-    apiUrl('/api/connectors/catalog'),
-  );
-  return requirePayload(response, 'Could not load connector registries.').registries ?? [];
-}
-
 export async function fetchConnectorInstances(): Promise<ConnectorInstance[]> {
   const response = await fetchJson<ApiEnvelope<{ instances: ConnectorInstance[] }>>(
     apiUrl('/api/connectors/installed'),
   );
   return requirePayload(response, 'Could not load installed connectors.').instances;
-}
-
-export type ConnectorRegistrySearchPage = {
-  connectors: ConnectorDefinition[];
-  totalPages?: number;
-};
-
-const registrySearchCache = new Map<string, { expiresAt: number; promise: Promise<ConnectorRegistrySearchPage> }>();
-const REGISTRY_SEARCH_CACHE_MS = 5 * 60 * 1000;
-
-export async function searchConnectorRegistryPage(
-  query: string,
-  source = 'all',
-  options?: { browse?: boolean; page?: number; pageSize?: number },
-): Promise<ConnectorRegistrySearchPage> {
-  const normalizedQuery = query.trim();
-  const normalizedSource = source.trim() || 'all';
-  const browse = options?.browse ?? false;
-  const page = Math.max(options?.page ?? 1, 1);
-  const pageSize = Math.max(options?.pageSize ?? 24, 1);
-  const cacheKey = `${normalizedSource}:${normalizedQuery}:${browse ? 'browse' : 'search'}:${page}:${pageSize}`;
-  const now = Date.now();
-  const cached = registrySearchCache.get(cacheKey);
-  if (cached && cached.expiresAt > now) {
-    return cached.promise;
-  }
-  const params = new URLSearchParams();
-  if (normalizedQuery) params.set('q', normalizedQuery);
-  if (normalizedSource !== 'all') params.set('source', normalizedSource);
-  if (browse) params.set('browse', '1');
-  params.set('page', String(page));
-  params.set('pageSize', String(pageSize));
-  const promise = fetchJson<ApiEnvelope<{ connectors: ConnectorDefinition[]; results?: Array<{ totalPages?: number }> }>>(
-    apiUrl(`/api/connectors/registry/search?${params.toString()}`),
-  ).then((response) => {
-    const payload = requirePayload(response, 'Could not search connector registries.');
-    const totalPages = Math.max(0, ...(payload.results ?? []).map((result) => result.totalPages ?? 0)) || undefined;
-    return { connectors: payload.connectors, totalPages };
-  });
-  registrySearchCache.set(cacheKey, { expiresAt: now + REGISTRY_SEARCH_CACHE_MS, promise });
-  try {
-    return await promise;
-  } catch (error) {
-    registrySearchCache.delete(cacheKey);
-    throw error;
-  }
-}
-
-export async function searchConnectorRegistry(query: string, source = 'all', options?: { browse?: boolean }): Promise<ConnectorDefinition[]> {
-  return (await searchConnectorRegistryPage(query, source, options)).connectors;
 }
 
 export async function startConnectorAuthorization(connectorId: string): Promise<ConnectorAuthorizationStartResult> {

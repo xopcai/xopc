@@ -355,6 +355,29 @@ export function upsertConnectorCatalogEntry(input: CachedConnectorCatalogEntry):
   return input;
 }
 
+export function replaceConnectorCatalogEntries(
+  provider: string,
+  entries: CachedConnectorCatalogEntry[],
+): CachedConnectorCatalogEntry[] {
+  runSqliteWriteTransaction((db) => {
+    db.prepare('DELETE FROM connector_catalog_entries WHERE provider = ?').run(provider);
+    const insert = db.prepare(`
+      INSERT INTO connector_catalog_entries (connector_id, provider, definition_json, fetched_at, expires_at)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    for (const entry of entries) {
+      insert.run(
+        entry.connectorId,
+        provider,
+        JSON.stringify(entry.definition),
+        entry.fetchedAt,
+        entry.expiresAt ?? null,
+      );
+    }
+  });
+  return entries;
+}
+
 export function getCachedConnectorCatalogEntry(connectorId: string): CachedConnectorCatalogEntry | undefined {
   const row = getSqliteDatabase().prepare(
     'SELECT * FROM connector_catalog_entries WHERE connector_id = ?',

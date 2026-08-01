@@ -37,7 +37,6 @@ import { installConnector, installConnectorDefinition, uninstallConnector, updat
 import { getConnectorInstance, listConnectorInstances } from '../../../connectors/instances.js';
 import { setConnectorEnabled } from '../../../connectors/lifecycle.js';
 import { projectComposioRuntimeStatus, type ComposioRuntimeProbe } from '../../../connectors/runtime-status.js';
-import { isConnectorRegistrySource, listConnectorRegistries, searchConnectorRegistries } from '../../../connectors/registries/search.js';
 import { createConnectorSetupSecretRequest, submitConnectorSetupSecret } from '../../../connectors/setup-secrets.js';
 import { recordConnectorHealthUsage } from '../../../connectors/usage.js';
 import type { ConnectorDefinition, ConnectorInstallInput } from '../../../connectors/types.js';
@@ -65,7 +64,6 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
           id: provider.id,
           displayName: provider.displayName,
         })),
-        registries: listConnectorRegistries(),
       },
     });
   });
@@ -108,17 +106,6 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
       ok: true,
       payload: { instances: projectComposioRuntimeStatus(instances, connections, probes) },
     });
-  });
-
-  authenticated.get('/api/connectors/registry/search', async (c) => {
-    const query = c.req.query('q') ?? c.req.query('query') ?? '';
-    const sourceParam = c.req.query('source') ?? 'all';
-    const source = sourceParam !== 'all' && isConnectorRegistrySource(sourceParam) ? sourceParam : 'all';
-    const page = Number(c.req.query('page') ?? '1');
-    const pageSize = Number(c.req.query('pageSize') ?? '24');
-    const browse = c.req.query('browse') === '1' || c.req.query('browse') === 'true';
-    const results = await searchConnectorRegistries({ query, source, page, pageSize, browse });
-    return c.json({ ok: true, payload: { results, connectors: results.flatMap((result) => result.connectors) } });
   });
 
   authenticated.post('/api/connectors/setup/request-secret', strictRateLimitMiddleware, async (c) => {
@@ -190,7 +177,20 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
   authenticated.get('/api/connectors/composio/catalog', async (c) => {
     try {
       const refresh = c.req.query('refresh') === '1' || c.req.query('refresh') === 'true';
-      return c.json({ ok: true, payload: await listComposioConnectorCatalog({ refresh }) });
+      const verificationParam = c.req.query('verification');
+      const verification = verificationParam === 'verified' || verificationParam === 'experimental'
+        ? verificationParam
+        : 'all';
+      return c.json({
+        ok: true,
+        payload: await listComposioConnectorCatalog({
+          refresh,
+          verification,
+          query: c.req.query('q') ?? '',
+          page: Number(c.req.query('page') ?? '1'),
+          pageSize: Number(c.req.query('pageSize') ?? '24'),
+        }),
+      });
     } catch (error) {
       return c.json({ ok: false, error: errorMessage(error) }, 400);
     }
