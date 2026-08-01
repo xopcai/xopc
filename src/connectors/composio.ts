@@ -268,7 +268,7 @@ export const COMPOSIO_CONNECTORS: readonly ConnectorDefinition[] = [
       isNoAuth: false,
       connected: false,
     });
-    return { ...definition, version: '1.0.0' };
+    return { ...definition, version: '1.0.0', source: 'builtin' as const };
   }),
 ];
 
