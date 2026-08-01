@@ -78,8 +78,9 @@ import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 
-type TabId = 'overview' | 'work-items' | 'workflows' | 'automations' | 'notes' | 'files' | 'activity' | 'sessions' | 'goals' | 'settings';
-type SurfaceTabId = 'overview' | 'work' | 'context';
+type WorkTabId = 'work-items' | 'goals' | 'workflows' | 'automations';
+type PrimaryTabId = 'overview' | 'work' | 'files' | 'notes' | 'sessions' | 'activity' | 'settings';
+type TabId = Exclude<PrimaryTabId, 'work'> | WorkTabId;
 
 const TABS: Array<{ id: TabId; icon: LucideIcon }> = [
   { id: 'overview', icon: LayoutDashboard },
@@ -93,6 +94,8 @@ const TABS: Array<{ id: TabId; icon: LucideIcon }> = [
   { id: 'notes', icon: File },
   { id: 'settings', icon: Settings },
 ];
+
+const WORK_TAB_IDS = new Set<WorkTabId>(['work-items', 'goals', 'workflows', 'automations']);
 
 const PROJECT_TAB_IDS = new Set<TabId>(TABS.map((tab) => tab.id));
 const PROJECT_FILES_PANEL_WIDTH_STORAGE_KEY = 'xopc.projectFiles.panelWidthPx';
@@ -128,16 +131,8 @@ function isProjectTabId(value: string | undefined): value is TabId {
   return Boolean(value && PROJECT_TAB_IDS.has(value as TabId));
 }
 
-function surfaceTabFor(tab: TabId): SurfaceTabId {
-  if (tab === 'overview') return 'overview';
-  if (tab === 'work-items' || tab === 'goals' || tab === 'workflows' || tab === 'automations') return 'work';
-  return 'context';
-}
-
-function surfaceTabTarget(tab: SurfaceTabId): TabId {
-  if (tab === 'work') return 'work-items';
-  if (tab === 'context') return 'files';
-  return 'overview';
+function isWorkTab(tab: TabId): tab is WorkTabId {
+  return WORK_TAB_IDS.has(tab as WorkTabId);
 }
 
 function interpolate(template: string, values: Record<string, string | number>): string {
@@ -1502,12 +1497,21 @@ export function ProjectDetailPage() {
   const workspaceMigrationValue = workspaceMigrationMode === 'fixed' ? workspaceMigrationRoot.trim() : '';
   const workspaceMigrationChanged = workspaceMigrationValue !== fixedProjectWorkspace;
   const workspaceMigrationCanSubmit = workspaceMigrationChanged && (workspaceMigrationMode === 'follow' || Boolean(workspaceMigrationRoot.trim()));
-  const surfaceTabItems: Array<{ id: SurfaceTabId; icon: LucideIcon; label: string }> = [
-    { id: 'overview', icon: LayoutDashboard, label: pm.surfaceTabs.overview },
-    { id: 'work', icon: ListChecks, label: pm.surfaceTabs.work },
-    { id: 'context', icon: Folder, label: pm.surfaceTabs.context },
+  const primaryTabItems: Array<{ id: Exclude<PrimaryTabId, 'settings'>; icon: LucideIcon; label: string }> = [
+    { id: 'overview', icon: LayoutDashboard, label: pm.tabs.overview },
+    { id: 'work', icon: ListChecks, label: pm.tabs.work },
+    { id: 'files', icon: Folder, label: pm.tabs.files },
+    { id: 'notes', icon: File, label: pm.tabs.notes },
+    { id: 'sessions', icon: MessageSquarePlus, label: pm.tabs.sessions },
+    { id: 'activity', icon: History, label: pm.tabs.activity },
   ];
-  const detailTabs = TABS.filter((item) => item.id !== 'overview' && item.id !== 'work-items' && item.id !== 'files');
+  const workTabItems: Array<{ id: WorkTabId; icon: LucideIcon; label: string }> = [
+    { id: 'work-items', icon: ListChecks, label: pm.tabs.workItems },
+    { id: 'goals', icon: Target, label: pm.tabs.goals },
+    { id: 'workflows', icon: Play, label: pm.tabs.workflows },
+    { id: 'automations', icon: Zap, label: pm.tabs.automations },
+  ];
+  const activePrimaryTab: PrimaryTabId = isWorkTab(tab) ? 'work' : tab;
 
   async function copyProjectWorkspacePath() {
     if (!workspaceRootLabel) return;
@@ -1524,51 +1528,41 @@ export function ProjectDetailPage() {
     <main className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden p-3 sm:px-5 sm:py-4 xl:px-6">
       <div className="flex shrink-0 items-start justify-between gap-3">
         <PageTabs
-          items={surfaceTabItems}
-          activeTab={surfaceTabFor(tab)}
-          onChange={(nextTab) => navigateProjectTab(surfaceTabTarget(nextTab))}
+          items={primaryTabItems}
+          activeTab={activePrimaryTab}
+          onChange={(nextTab) => navigateProjectTab(nextTab === 'work' ? 'work-items' : nextTab)}
           ariaLabel={pm.navAria}
-          tabIdPrefix="project-surface-tab"
+          tabIdPrefix="project-primary-tab"
           className="min-w-0 flex-1"
         />
-        <Popover.Root>
-          <Popover.Trigger asChild>
-            <Button
-              type="button"
-              variant={detailTabs.some((item) => item.id === tab) ? 'secondary' : 'ghost'}
-              className="h-9 shrink-0 rounded-lg px-3"
-            >
-              {pm.surfaceTabs.details}
-              <ChevronDown className="size-3.5" aria-hidden />
-            </Button>
-          </Popover.Trigger>
-          <Popover.Portal>
-            <Popover.Content align="end" sideOffset={6} className="z-[70] w-48 rounded-xl border border-edge bg-surface-panel p-1.5 shadow-float">
-              {detailTabs.map((item) => {
-                const Icon = item.icon;
-                const label = item.id === 'work-items' ? pm.workItems.tab : pm.tabs[item.id];
-                return (
-                  <Popover.Close asChild key={item.id}>
-                    <button
-                      type="button"
-                      className={cn(
-                        'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-surface-hover',
-                        tab === item.id ? 'bg-accent-soft text-accent-fg' : 'text-fg-muted',
-                      )}
-                      onClick={() => navigateProjectTab(item.id)}
-                    >
-                      <Icon className="size-4" aria-hidden />
-                      <span>{label}</span>
-                    </button>
-                  </Popover.Close>
-                );
-              })}
-            </Popover.Content>
-          </Popover.Portal>
-        </Popover.Root>
+        <Button
+          id="project-primary-tab-settings"
+          type="button"
+          variant={tab === 'settings' ? 'secondary' : 'ghost'}
+          className="h-9 shrink-0 rounded-lg px-3"
+          aria-current={tab === 'settings' ? 'page' : undefined}
+          onClick={() => navigateProjectTab('settings')}
+        >
+          <Settings className="size-4" aria-hidden />
+          {pm.tabs.settings}
+        </Button>
       </div>
 
       {error ? <p className="mt-3 shrink-0 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">{error}</p> : null}
+
+      {isWorkTab(tab) ? (
+        <div className="mt-3 shrink-0 rounded-xl border border-edge-subtle bg-surface-panel px-2 py-1 shadow-surface">
+          <PageTabs
+            items={workTabItems}
+            activeTab={tab}
+            onChange={navigateProjectTab}
+            ariaLabel={pm.workNavAria}
+            tabIdPrefix="project-work-tab"
+            panelIdPrefix="project-panel"
+            buttonClassName="h-8 px-2.5 py-1.5 text-xs"
+          />
+        </div>
+      ) : null}
 
       <div
         className={cn(
@@ -1581,7 +1575,7 @@ export function ProjectDetailPage() {
         )}
       >
       {tab === 'overview' ? (
-        <section id="project-panel-overview" role="tabpanel" aria-labelledby="project-surface-tab-overview" className="grid min-h-full gap-4 xl:h-full xl:min-h-0 xl:grid-cols-[minmax(0,1fr)_20rem] xl:overflow-hidden">
+        <section id="project-panel-overview" role="tabpanel" aria-labelledby="project-primary-tab-overview" className="grid min-h-full gap-4 xl:h-full xl:min-h-0 xl:grid-cols-[minmax(0,1fr)_20rem] xl:overflow-hidden">
           <div className="grid min-w-0 content-start gap-4 xl:min-h-0 xl:overflow-y-auto xl:pr-1 xl:[scrollbar-gutter:stable]">
             <div className="min-w-0 rounded-lg bg-surface-panel p-4 shadow-surface">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1717,17 +1711,7 @@ export function ProjectDetailPage() {
       ) : null}
 
       {tab === 'work-items' ? (
-        <section className="flex h-full min-h-0 flex-col" role="tabpanel" aria-labelledby="project-surface-tab-work">
-          <div className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-xl border border-edge-subtle bg-surface-panel px-3 py-2">
-            <p className="text-xs text-fg-muted">{pm.surfaceTabs.workHint}</p>
-            <div className="flex flex-wrap gap-1">
-              {(['goals', 'workflows', 'automations'] as const).map((detailTab) => (
-                <Button key={detailTab} type="button" variant="ghost" className="h-7 rounded-md px-2 text-xs" onClick={() => navigateProjectTab(detailTab)}>
-                  {pm.tabs[detailTab]}
-                </Button>
-              ))}
-            </div>
-          </div>
+        <section id="project-panel-work-items" className="flex h-full min-h-0 flex-col" role="tabpanel" aria-labelledby="project-work-tab-work-items">
           <div className="min-h-0 flex-1 overflow-hidden">
             <WorkItemsPanel projectId={project.id} createRequestKey={createWorkItemRequestKey} />
           </div>
@@ -1735,7 +1719,7 @@ export function ProjectDetailPage() {
       ) : null}
 
       {tab === 'workflows' ? (
-        <section id="project-panel-workflows" role="tabpanel" aria-labelledby="project-surface-tab-work" className="grid h-full min-h-[28rem] gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+        <section id="project-panel-workflows" role="tabpanel" aria-labelledby="project-work-tab-workflows" className="grid h-full min-h-[28rem] gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
           <div className="min-h-0">
             <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg bg-surface-panel shadow-surface">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-edge px-4 py-3">
@@ -1861,7 +1845,7 @@ export function ProjectDetailPage() {
       ) : null}
 
       {tab === 'automations' ? (
-        <section id="project-panel-automations" role="tabpanel" aria-labelledby="project-surface-tab-work" className="grid h-full min-h-[28rem] overflow-hidden gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+        <section id="project-panel-automations" role="tabpanel" aria-labelledby="project-work-tab-automations" className="grid h-full min-h-[28rem] overflow-hidden gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
           <div className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg bg-surface-panel shadow-surface">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-edge px-4 py-3">
               <div>
@@ -1976,7 +1960,7 @@ export function ProjectDetailPage() {
       ) : null}
 
       {tab === 'notes' ? (
-        <section id="project-panel-notes" role="tabpanel" aria-labelledby="project-surface-tab-context" className="flex h-full min-h-[28rem] overflow-hidden rounded-lg bg-surface-panel shadow-surface">
+        <section id="project-panel-notes" role="tabpanel" aria-labelledby="project-primary-tab-notes" className="flex h-full min-h-[28rem] overflow-hidden rounded-lg bg-surface-panel shadow-surface">
           <NotesWorkbench
             selectedNoteId={noteId}
             basePath={`/projects/${encodeURIComponent(project.id)}/notes`}
@@ -1994,22 +1978,7 @@ export function ProjectDetailPage() {
       ) : null}
 
       {tab === 'files' ? (
-        <section id="project-panel-files" role="tabpanel" aria-labelledby="project-surface-tab-context" className="flex h-full min-h-[28rem] flex-col gap-3">
-          <div className="flex shrink-0 flex-wrap items-start justify-between gap-3 rounded-xl border border-edge-subtle bg-surface-panel px-4 py-3">
-            <div className="min-w-0 max-w-3xl">
-              <h2 className="text-sm font-semibold text-fg">{pm.surfaceTabs.contextTitle}</h2>
-              <p className="mt-1 line-clamp-2 text-xs leading-5 text-fg-muted">
-                {project.brief || project.instructions || project.description || pm.surfaceTabs.contextFallback}
-              </p>
-            </div>
-            <div className="flex shrink-0 flex-wrap gap-1">
-              {(['sessions', 'notes', 'settings'] as const).map((detailTab) => (
-                <Button key={detailTab} type="button" variant="ghost" className="h-7 rounded-md px-2 text-xs" onClick={() => navigateProjectTab(detailTab)}>
-                  {pm.tabs[detailTab]}
-                </Button>
-              ))}
-            </div>
-          </div>
+        <section id="project-panel-files" role="tabpanel" aria-labelledby="project-primary-tab-files" className="flex h-full min-h-[28rem] flex-col">
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg bg-surface-panel shadow-surface">
             {project.effectiveWorkspaceRoot ? (
               <div
@@ -2184,7 +2153,7 @@ export function ProjectDetailPage() {
       ) : null}
 
       {tab === 'sessions' ? (
-        <section id="project-panel-sessions" role="tabpanel" aria-labelledby="project-surface-tab-context" className="grid min-h-full content-start gap-3">
+        <section id="project-panel-sessions" role="tabpanel" aria-labelledby="project-primary-tab-sessions" className="grid min-h-full content-start gap-3">
           {sessions.length ? (
             <label className="relative flex min-h-9 w-full max-w-lg cursor-text items-center rounded-lg bg-surface-panel py-1.5 pl-9 pr-9 shadow-surface">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-disabled" aria-hidden />
@@ -2272,7 +2241,7 @@ export function ProjectDetailPage() {
       ) : null}
 
       {tab === 'goals' ? (
-        <section id="project-panel-goals" role="tabpanel" aria-labelledby="project-surface-tab-work" className="grid min-h-full content-start gap-3">
+        <section id="project-panel-goals" role="tabpanel" aria-labelledby="project-work-tab-goals" className="grid min-h-full content-start gap-3">
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="text-sm font-semibold text-fg">{pm.goals.title}</h2>
@@ -2310,7 +2279,7 @@ export function ProjectDetailPage() {
       ) : null}
 
       {tab === 'activity' ? (
-        <section id="project-panel-activity" role="tabpanel" aria-labelledby="project-surface-tab-context" className="grid min-h-full content-start gap-3">
+        <section id="project-panel-activity" role="tabpanel" aria-labelledby="project-primary-tab-activity" className="grid min-h-full content-start gap-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-sm font-semibold text-fg">{pm.activity.title}</h2>
@@ -2389,12 +2358,12 @@ export function ProjectDetailPage() {
       ) : null}
 
       {tab === 'settings' ? (
-        <form id="project-panel-settings" role="tabpanel" aria-labelledby="project-surface-tab-context" onSubmit={saveProject} className="grid min-h-full content-start gap-4">
+        <form id="project-panel-settings" role="tabpanel" aria-labelledby="project-primary-tab-settings" onSubmit={saveProject} className="grid min-h-full content-start gap-4">
           <section className="grid gap-3 rounded-lg bg-surface-panel p-4 shadow-surface">
             <div className="flex min-w-0 items-start justify-between gap-3">
               <div className="min-w-0">
-                <h2 className="text-sm font-semibold text-fg">{pm.settings.contextTitle}</h2>
-                <p className="mt-1 text-sm leading-6 text-fg-muted">{pm.settings.contextHint}</p>
+                <h2 className="text-sm font-semibold text-fg">{pm.settings.summaryTitle}</h2>
+                <p className="mt-1 text-sm leading-6 text-fg-muted">{pm.settings.summaryHint}</p>
               </div>
               <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-xs font-medium', statusTone(draft.status))}>
                 {pm.settings.statuses[draft.status]}
@@ -2479,8 +2448,8 @@ export function ProjectDetailPage() {
 
           <section className="grid gap-4 rounded-lg bg-surface-panel p-4 shadow-surface">
             <div>
-              <h2 className="text-sm font-semibold text-fg">{pm.settings.agentContextTitle}</h2>
-              <p className="mt-1 text-sm leading-6 text-fg-muted">{pm.settings.agentContextHint}</p>
+              <h2 className="text-sm font-semibold text-fg">{pm.settings.projectGuidanceTitle}</h2>
+              <p className="mt-1 text-sm leading-6 text-fg-muted">{pm.settings.projectGuidanceHint}</p>
             </div>
             <Field label={pm.settings.brief} hint={pm.settings.briefHint}>
               <textarea className={inputClass(true)} value={draft.brief} onChange={(event) => setDraft((d) => ({ ...d, brief: event.target.value }))} />

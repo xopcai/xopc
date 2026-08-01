@@ -168,17 +168,10 @@
     }
   },
   "projectDetailPage": {
-    "surfaceTabs": {
-      "overview": "概览",
-      "work": "工作",
-      "context": "上下文",
-      "details": "更多",
-      "workHint": "只需要看清下一步；执行细节在需要时仍然可用。",
-      "contextTitle": "这件事所知道的上下文",
-      "contextFallback": "与这件事相关的对话、文件、笔记和要求会汇集在这里。"
-    },
     "tabs": {
       "overview": "概览",
+      "work": "工作",
+      "workItems": "工作事项",
       "sessions": "会话",
       "goals": "目标",
       "workflows": "工作流",
@@ -189,6 +182,7 @@
       "settings": "设置"
     },
     "navAria": "项目导航",
+    "workNavAria": "项目工作导航",
     "backToProjects": "项目",
     "fallbackTitle": "项目",
     "fallbackContext": "项目上下文",
@@ -530,8 +524,8 @@
       "noNextAction": "尚未设置下一步。"
     },
     "settings": {
-      "contextTitle": "项目上下文",
-      "contextHint": "会话、目标、文件、工作流运行和自动化都会使用这份项目上下文。",
+      "summaryTitle": "项目设置",
+      "summaryHint": "管理项目信息、工作区、默认 Agent 和生命周期。",
       "detailsTitle": "项目信息",
       "name": "名称",
       "status": "状态",
@@ -579,8 +573,8 @@
       "restoreProject": "恢复项目",
       "dangerTitle": "危险操作",
       "dangerHint": "移除项目会解除会话、目标、工作流、自动化和记忆的项目分组；本地文件不会被删除。",
-      "agentContextTitle": "Agent 上下文",
-      "agentContextHint": "这些内容会作为项目上下文提供给 Agent，帮助它更稳定地理解和推进这个项目。",
+      "projectGuidanceTitle": "项目说明与规则",
+      "projectGuidanceHint": "说明项目背景、目标和处理规则，帮助 Agent 稳定地理解并推进工作。",
       "brief": "项目背景",
       "briefHint": "提供给 Agent 的项目摘要，帮助它理解目标、范围、现状和关键约束。",
       "instructions": "Agent 工作指引",

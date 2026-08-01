@@ -168,17 +168,10 @@
     }
   },
   "projectDetailPage": {
-    "surfaceTabs": {
-      "overview": "Overview",
-      "work": "Work",
-      "context": "Context",
-      "details": "Details",
-      "workHint": "Keep the next actions clear; execution details stay available when you need them.",
-      "contextTitle": "What this work knows",
-      "contextFallback": "Conversations, files, notes, and instructions connected to this work."
-    },
     "tabs": {
       "overview": "Overview",
+      "work": "Work",
+      "workItems": "Work items",
       "sessions": "Sessions",
       "goals": "Goals",
       "workflows": "Workflows",
@@ -189,6 +182,7 @@
       "settings": "Settings"
     },
     "navAria": "Project sections",
+    "workNavAria": "Project work sections",
     "backToProjects": "Projects",
     "fallbackTitle": "Project",
     "fallbackContext": "Project context",
@@ -530,8 +524,8 @@
       "noNextAction": "No next action set."
     },
     "settings": {
-      "contextTitle": "Project context",
-      "contextHint": "Chats, goals, files, workflow runs, and automations use this project context.",
+      "summaryTitle": "Project settings",
+      "summaryHint": "Manage project details, workspace, default agent, and lifecycle.",
       "detailsTitle": "Project details",
       "name": "Name",
       "status": "Status",
@@ -579,8 +573,8 @@
       "restoreProject": "Restore project",
       "dangerTitle": "Danger zone",
       "dangerHint": "Removing a project ungroups its chats, goals, workflows, automations, and memories. Local files are not deleted.",
-      "agentContextTitle": "Agent context",
-      "agentContextHint": "These notes are provided to the agent as project context so it can understand and continue the work more reliably.",
+      "projectGuidanceTitle": "Project guidance and rules",
+      "projectGuidanceHint": "Describe the project background, goals, and handling rules so the agent can understand and advance the work reliably.",
       "brief": "Project background",
       "briefHint": "A project summary for the agent: goals, scope, current state, and important constraints.",
       "instructions": "Agent working guidance",
