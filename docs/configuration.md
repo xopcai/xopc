@@ -738,7 +738,7 @@ xopc supports environment variables for sensitive data:
 | `TELEGRAM_BOT_TOKEN` | Telegram bot token |
 | `XOPC_CONFIG` | Custom config file path |
 | `XOPC_WORKSPACE` | Custom workspace directory |
-| `XOPC_SESSION_SEARCH_MODEL` | Default model for `session_search` summaries when the selected manifest does not provide a summary model role |
+| `XOPC_SESSION_SEARCH_MODEL` | Explicitly override the current session model for `session_search` summaries |
 | `XOPC_LOG_LEVEL` | Log level (trace/debug/info/warn/error/fatal) |
 | `XOPC_LOG_DIR` | Log directory path |
 | `XOPC_LOG_CONSOLE` | Enable console output (true/false) |

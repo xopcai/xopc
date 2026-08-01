@@ -1240,6 +1240,7 @@ export class AgentManager implements AgentInstanceGateway {
   ): { agent: Agent; registeredToolNames: string[] } {
     const modelRef = profile.primaryModelRef?.trim() || this.defaultModel;
     const model = this.resolveModelStringToModel(modelRef);
+    let agent: Agent | undefined;
 
     const contextFiles = this.resolveContextFilesForSession(sessionKey, profile);
     const dreamingRoot = resolveDreamingRoot();
@@ -1249,7 +1250,7 @@ export class AgentManager implements AgentInstanceGateway {
       agentId: profile.agentId,
       dreamingRoot,
       disabledTools: profile.tools.denied,
-      getPrimaryModel: () => this.resolveModelStringToModel(modelRef),
+      getPrimaryModel: () => (agent?.state.model as Model<Api> | undefined) ?? model,
       getMemoryManager: () => rt.memoryManager,
       getSkillManager: () => rt.skillManager,
     });
@@ -1264,7 +1265,7 @@ export class AgentManager implements AgentInstanceGateway {
     const thinkingLevel =
       (profile.thinkingDefault as ThinkingLevel | undefined) ?? this.config.thinkingLevel ?? 'medium';
 
-    const agent = new Agent({
+    agent = new Agent({
       initialState: {
         systemPrompt: rt.systemPromptBuilder.build(contextFiles, {
           externalMemoryInstructions: rt.memoryManager.buildExternalSystemPrompt(),
