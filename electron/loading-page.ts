@@ -441,11 +441,30 @@ export function getLoadingPageDataUrl(appLocale: string): string {
   const lang = uiLangFromAppLocale(appLocale || 'en');
   const isEn = lang === 'en';
   const htmlLang = isEn ? 'en' : 'zh-CN';
-  const title = isEn ? 'Starting local gateway…' : '正在启动本地网关…';
-  const hint = isEn ? 'This may take a few seconds on first launch.' : '首次启动可能需要几秒钟。';
-  const failTitle = isEn ? 'Could not start' : '无法启动';
-  const failSub = isEn ? 'The app will close. You can restart after fixing the issue.' : '应用将退出。处理问题后可重新打开。';
-  const unknownErr = isEn ? 'Unknown error' : '未知错误';
+  const title = isEn ? 'Waking up your workspace' : '正在唤醒你的工作空间';
+  const hint = isEn ? 'Preparing your assistant…' : '正在准备你的助手…';
+  const privacy = isEn ? 'Local-first · Your data stays yours' : '本地优先 · 你的数据由你掌控';
+  const slowHint = isEn
+    ? 'First launch or an update can take a little longer.'
+    : '首次启动或更新后可能需要更长时间。';
+  const verySlowHint = isEn
+    ? 'Still working locally — xopc will keep trying.'
+    : '仍在本地处理中，xopc 会继续尝试。';
+  const phaseCopy = isEn
+    ? {
+        'preparing-workspace': 'Preparing your workspace…',
+        'checking-core': 'Checking local services…',
+        'starting-core': 'Starting the local core…',
+        'connecting-assistant': 'Connecting your assistant…',
+        'opening-workspace': 'Opening your workspace…',
+      }
+    : {
+        'preparing-workspace': '正在准备工作空间…',
+        'checking-core': '正在检查本地服务…',
+        'starting-core': '正在启动本地核心…',
+        'connecting-assistant': '正在连接你的助手…',
+        'opening-workspace': '正在打开工作空间…',
+      };
 
   const html = `<!DOCTYPE html>
 <html lang="${htmlLang}">
@@ -464,81 +483,200 @@ export function getLoadingPageDataUrl(appLocale: string): string {
       justify-content: center;
       padding: 2rem;
       font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
-      background: #0f172a;
-      color: #e2e8f0;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 50% 42%, rgba(58, 107, 255, 0.13), transparent 28rem),
+        #f7f8fb;
+      color: #111111;
     }
     .card {
-      max-width: 28rem;
+      position: relative;
+      width: min(30rem, 100%);
       text-align: center;
+      transition:
+        opacity 120ms ease,
+        transform 140ms cubic-bezier(0.4, 0, 1, 1);
     }
+    .is-ready .card { opacity: 0; transform: translateY(-0.2rem) scale(0.985); }
+    .brand {
+      margin-bottom: 2.25rem;
+      font-size: 0.875rem;
+      font-weight: 680;
+      letter-spacing: 0.18em;
+      text-transform: lowercase;
+    }
+    .mark-wrap {
+      position: relative;
+      width: 6.5rem;
+      height: 6.5rem;
+      margin: 0 auto 1.75rem;
+      display: grid;
+      place-items: center;
+    }
+    .halo {
+      position: absolute;
+      inset: 0;
+      border: 1px solid rgba(37, 99, 235, 0.16);
+      border-radius: 999px;
+      background: rgba(37, 99, 235, 0.06);
+      box-shadow: 0 0 4rem rgba(37, 99, 235, 0.16);
+      animation: breathe 2.2s ease-in-out infinite;
+    }
+    .mark {
+      position: relative;
+      z-index: 1;
+      width: 3.75rem;
+      height: 3.75rem;
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(148, 163, 184, 0.38);
+      border-radius: 1.15rem;
+      background: rgba(255, 255, 255, 0.86);
+      box-shadow: 0 16px 42px rgba(15, 23, 42, 0.12);
+      color: #2563eb;
+      font-size: 1.7rem;
+      font-weight: 720;
+      line-height: 1;
+    }
+    .node {
+      position: absolute;
+      z-index: 2;
+      width: 0.42rem;
+      height: 0.42rem;
+      border: 2px solid #f7f8fb;
+      border-radius: 999px;
+      background: #3a6bff;
+      box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.2);
+    }
+    .node-a { left: 0.55rem; top: 2rem; animation: drift-a 3.2s ease-in-out infinite; }
+    .node-b { right: 0.4rem; top: 1.25rem; animation: drift-b 3.6s ease-in-out infinite; }
+    .node-c { right: 1.05rem; bottom: 0.65rem; animation: drift-a 3.8s ease-in-out infinite reverse; }
     h1 {
-      margin: 0 0 0.5rem;
-      font-size: 1.125rem;
-      font-weight: 600;
-      letter-spacing: -0.02em;
+      margin: 0 0 0.65rem;
+      font-size: clamp(1.35rem, 4vw, 1.7rem);
+      font-weight: 680;
+      letter-spacing: -0.035em;
     }
     p {
       margin: 0;
       font-size: 0.875rem;
       line-height: 1.5;
-      color: #94a3b8;
+      color: #64748b;
     }
-    #status {
-      margin-top: 1rem;
-      font-size: 0.8125rem;
-      color: #f87171;
-      white-space: pre-wrap;
-      word-break: break-word;
+    .status-line {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.55rem;
+      min-height: 1.35rem;
     }
-    #sub {
+    .activity-dot {
+      width: 0.42rem;
+      height: 0.42rem;
+      flex: 0 0 auto;
+      border-radius: 999px;
+      background: #3a6bff;
+      box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.3);
+      animation: status-pulse 1.8s ease-out infinite;
+    }
+    #hint {
+      transition: opacity 180ms ease;
+    }
+    #slow {
+      display: none;
       margin-top: 0.75rem;
-      font-size: 0.8125rem;
       color: #94a3b8;
+      font-size: 0.78rem;
     }
-    .spinner {
-      width: 2.25rem;
-      height: 2.25rem;
-      margin: 0 auto 1.25rem;
-      border: 2px solid #334155;
-      border-top-color: #38bdf8;
-      border-radius: 50%;
-      animation: spin 0.85s linear infinite;
+    .privacy {
+      margin-top: 2.5rem;
+      color: #94a3b8;
+      font-size: 0.75rem;
+      letter-spacing: 0.015em;
     }
-    @keyframes spin {
-      to { transform: rotate(360deg); }
+    @keyframes breathe {
+      0%, 100% { opacity: 0.62; transform: scale(0.94); }
+      50% { opacity: 1; transform: scale(1.04); }
+    }
+    @keyframes drift-a {
+      0%, 100% { transform: translate3d(0, 0, 0); }
+      50% { transform: translate3d(0.18rem, -0.22rem, 0); }
+    }
+    @keyframes drift-b {
+      0%, 100% { transform: translate3d(0, 0, 0); }
+      50% { transform: translate3d(-0.2rem, 0.16rem, 0); }
+    }
+    @keyframes status-pulse {
+      0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.32); }
+      70%, 100% { box-shadow: 0 0 0 0.42rem rgba(59, 130, 246, 0); }
+    }
+    @media (prefers-color-scheme: dark) {
+      body {
+        background:
+          radial-gradient(circle at 50% 42%, rgba(58, 107, 255, 0.18), transparent 28rem),
+          #14171c;
+        color: #f4f6f8;
+      }
+      .mark {
+        border-color: rgba(71, 85, 105, 0.65);
+        background: rgba(17, 24, 39, 0.88);
+        box-shadow: 0 16px 46px rgba(2, 6, 23, 0.38);
+        color: #60a5fa;
+      }
+      .node { border-color: #14171c; }
+      p { color: #94a3b8; }
+      .privacy { color: #64748b; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .halo, .node, .activity-dot { animation: none; }
     }
   </style>
 </head>
 <body>
   <div class="card">
-    <div class="spinner" aria-hidden="true"></div>
+    <div class="brand">xopc</div>
+    <div class="mark-wrap" aria-hidden="true">
+      <div class="halo"></div>
+      <div class="mark">x</div>
+      <span class="node node-a"></span>
+      <span class="node node-b"></span>
+      <span class="node node-c"></span>
+    </div>
     <h1 id="title">${title}</h1>
-    <p id="hint">${hint}</p>
-    <p id="status" style="display:none"></p>
-    <p id="sub" style="display:none"></p>
+    <div class="status-line" role="status" aria-live="polite" aria-atomic="true">
+      <span class="activity-dot" aria-hidden="true"></span>
+      <p id="hint">${hint}</p>
+    </div>
+    <p id="slow"></p>
+    <p class="privacy">${privacy}</p>
   </div>
   <script>
     (function () {
-      var failTitle = ${JSON.stringify(failTitle)};
-      var failSub = ${JSON.stringify(failSub)};
-      var unknownErr = ${JSON.stringify(unknownErr)};
-      if (!window.electronAPI || !window.electronAPI.startup || typeof window.electronAPI.startup.onFailed !== 'function') return;
-      window.electronAPI.startup.onFailed(function (d) {
-        var st = document.getElementById('status');
-        var sub = document.getElementById('sub');
-        var titleEl = document.getElementById('title');
-        var hint = document.getElementById('hint');
-        if (titleEl) titleEl.textContent = failTitle;
-        if (hint) hint.style.display = 'none';
-        if (st) {
-          st.style.display = 'block';
-          st.textContent = d && d.message ? d.message : unknownErr;
-        }
-        if (sub) {
-          sub.style.display = 'block';
-          sub.textContent = failSub;
-        }
-      });
+      var phases = ${JSON.stringify(phaseCopy)};
+      var slowHint = ${JSON.stringify(slowHint)};
+      var verySlowHint = ${JSON.stringify(verySlowHint)};
+      var hint = document.getElementById('hint');
+      var slow = document.getElementById('slow');
+      var api = window.electronAPI && window.electronAPI.startup;
+
+      if (api && typeof api.onProgress === 'function') {
+        api.onProgress(function (detail) {
+          var text = detail && phases[detail.phase];
+          if (hint && text) hint.textContent = text;
+          if (detail && detail.phase === 'opening-workspace') {
+            document.documentElement.classList.add('is-ready');
+          }
+        });
+      }
+
+      window.setTimeout(function () {
+        if (!slow) return;
+        slow.textContent = slowHint;
+        slow.style.display = 'block';
+      }, 10000);
+      window.setTimeout(function () {
+        if (slow) slow.textContent = verySlowHint;
+      }, 20000);
     })();
   </script>
 </body>

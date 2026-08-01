@@ -1,5 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 
+import type { StartupProgressDetail } from './startup-progress.js';
+
 function notifyPreload(
   channel: "preload:ready" | "preload:dom-content-loaded",
 ): void {
@@ -119,11 +121,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     },
   },
   startup: {
-    onFailed: (callback: (detail: { message: string }) => void) => {
-      const handler = (_: unknown, detail: { message: string }) =>
-        callback(detail);
-      ipcRenderer.on("startup:failed", handler);
-      return () => ipcRenderer.removeListener("startup:failed", handler);
+    onProgress: (callback: (detail: StartupProgressDetail) => void) => {
+      const handler = (_: unknown, detail: StartupProgressDetail) => callback(detail);
+      ipcRenderer.on('startup:progress', handler);
+      return () => ipcRenderer.removeListener('startup:progress', handler);
     },
     getDiagnostic: () =>
       ipcRenderer.invoke("startup:get-diagnostic") as Promise<Record<

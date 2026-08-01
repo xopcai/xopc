@@ -75,6 +75,7 @@ import {
   isGatewayStartupError,
   type GatewayStartupFailure,
 } from './startup-failure.js';
+import type { StartupProgressReporter } from './startup-progress.js';
 import {
   maybeAutoStartTunnel,
   registerTunnelPowerMonitor,
@@ -483,7 +484,7 @@ async function resolveVoiceModelProxyUrl(): Promise<string | undefined> {
   }
 }
 
-async function resolveWindowLoad(): Promise<
+async function resolveWindowLoad(reportProgress: StartupProgressReporter = () => {}): Promise<
   { kind: 'url'; href: string; openDevTools: boolean } | { kind: 'file'; path: string }
 > {
   const devUrl = process.env['ELECTRON_RENDERER_URL'];
@@ -492,6 +493,7 @@ async function resolveWindowLoad(): Promise<
   }
 
   if (shouldEmbedGateway()) {
+    reportProgress({ phase: 'preparing-workspace' });
     const paths = getElectronUserPaths();
     const { port, token, bind, bindHost } = await ensureGatewayConfigForElectron(paths);
     // Browser-extension artifact install runs inside the gateway subprocess (see
@@ -519,18 +521,22 @@ async function resolveWindowLoad(): Promise<
           }
         },
       };
+      reportProgress({ phase: 'checking-core' });
       const startupMode = await resolveGatewayStartupMode({ port, token, bindHost });
       if (startupMode === 'spawn') {
+        reportProgress({ phase: 'starting-core' });
         if (!isCliBundlePresent()) {
           throw new Error(`Embedded gateway bundle is missing: ${resolveCliEntry()}`);
         }
         const child = spawnGatewayProcess(spawnOpts);
+        reportProgress({ phase: 'connecting-assistant' });
         const readyPort = await waitForGatewayReady(port, token, child);
         registerEmbeddedGatewayRuntime({ ...spawnOpts, port: readyPort, authToken: token });
       }
       setEmbeddedGatewayCredentials(port, token);
       void maybeAutoStartTunnel();
       startTunnelStatusPolling();
+      reportProgress({ phase: 'opening-workspace' });
       const u = new URL(`http://127.0.0.1:${port}/`);
       u.hash = '#/chat';
       return { kind: 'url', href: u.toString(), openDevTools: false };
@@ -844,9 +850,18 @@ function createWindow(): void {
       if (embed || app.isPackaged) {
         await loadMainWindowUrl(win, getLoadingPageDataUrl(app.getLocale()));
       }
-      const load = await resolveWindowLoad();
+      const load = await resolveWindowLoad((detail) => {
+        if (!win.isDestroyed()) {
+          win.webContents.send('startup:progress', detail);
+        }
+      });
       if (gatewayExitedUnexpectedly) {
         return;
+      }
+      // Let the embedded startup page complete its short exit transition before replacing
+      // the document. This only runs for embedded/package startup, never the Vite dev renderer.
+      if (embed && load.kind === 'url') {
+        await new Promise((resolve) => setTimeout(resolve, 140));
       }
       if (load.kind === 'url') {
         appendElectronStartupLog(`loading gateway url=${redactUrlForLog(load.href)}`);

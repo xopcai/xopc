@@ -14,10 +14,17 @@ document.documentElement.setAttribute('lang', htmlLangAttribute(getLanguage()));
 
 hydrateThemeFromStorage();
 hydrateFontScaleFromStorage();
-initGatewayFromWindow();
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-);
+async function bootstrap(): Promise<void> {
+  // Electron credentials arrive over IPC. Hydrate them before the first render so the
+  // gateway-token landing does not flash between the startup page and the chat shell.
+  await initGatewayFromWindow();
+
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  );
+}
+
+void bootstrap();
