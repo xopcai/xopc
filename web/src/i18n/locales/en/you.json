@@ -172,6 +172,7 @@
     "sourceLastSync": "Last sync: {{time}}",
     "sourceSyncFailed": "Last sync failed: {{error}}",
     "sourceNeverUsed": "No activity recorded yet",
+    "sourceAccountFallback": "Account {{index}} of {{count}}",
     "healthOk": "Healthy",
     "healthIssue": "Needs attention",
     "disconnect": "Disconnect",

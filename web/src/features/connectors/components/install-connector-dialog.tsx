@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { CheckCircle2, Loader2, PackagePlus, X } from 'lucide-react';
-import { useCallback } from 'react';
+import { CheckCircle2, ExternalLink, Loader2, PackagePlus, X } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { SecretInput } from '@/components/ui/secret-input';
@@ -11,8 +11,12 @@ import { interaction } from '@/lib/interaction';
 
 import { formatConnectorMessage } from '../utils/connector-i18n';
 import {
+  configureComposio,
+  getComposioHealth,
+  getComposioSetupStatus,
   installConnector,
   installStoreConnector,
+  startConnectorAuthorization,
   testConnector,
   type ConnectorHealthResult,
   type ConnectorInstance,
@@ -87,6 +91,26 @@ export function InstallConnectorDialog({
   t: ConnectorsSettingsMessages;
 }) {
   const { connector } = draft;
+  const isComposioToolkit = connector.runtime.type === 'composio' && connector.runtime.role === 'toolkit';
+  const composioToolkit = connector.runtime.type === 'composio' && connector.runtime.role === 'toolkit'
+    ? connector.runtime.toolkit
+    : null;
+  const [composioConfigured, setComposioConfigured] = useState(!isComposioToolkit);
+  const [composioSetupLoading, setComposioSetupLoading] = useState(isComposioToolkit);
+  const [composioApiKey, setComposioApiKey] = useState('');
+  const [composioSetupError, setComposioSetupError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isComposioToolkit) return;
+    let cancelled = false;
+    void getComposioSetupStatus()
+      .then(({ configured }) => { if (!cancelled) setComposioConfigured(configured); })
+      .catch((error) => {
+        if (!cancelled) setComposioSetupError(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => { if (!cancelled) setComposioSetupLoading(false); });
+    return () => { cancelled = true; };
+  }, [connector.id, isComposioToolkit]);
   const wizardStep = draft.result ? 'complete' : draft.installing ? 'health' : 'configure';
   const stepItems = [
     { id: 'configure', label: t.connectStepConfigure },
@@ -95,8 +119,15 @@ export function InstallConnectorDialog({
   ] as const;
 
   const submit = useCallback(async () => {
+    const authWindow = isComposioToolkit ? window.open('', '_blank') : null;
+    if (authWindow) authWindow.opener = null;
+    setComposioSetupError(null);
     onChange({ ...draft, installing: true, error: null, result: null, health: null });
     try {
+      if (isComposioToolkit && !composioConfigured) {
+        await configureComposio(composioApiKey);
+        setComposioConfigured(true);
+      }
       const config: Record<string, unknown> = {};
       for (const field of connector.setup.config ?? []) {
         const parsed = parseConfigValue(field.type, draft.config[field.key] ?? '');
@@ -109,20 +140,49 @@ export function InstallConnectorDialog({
         : await installConnector(connector.id, { secrets: draft.secrets, config, definition: connector.source === 'registry' ? connector : undefined });
       let health: ConnectorHealthResult | null = null;
       try {
-        health = await testConnector(instance.instanceId);
-      } catch {
-        health = null;
+        if (isComposioToolkit) {
+          const existingHealth = composioToolkit
+            ? await getComposioHealth(composioToolkit).catch(() => null)
+            : null;
+          if (existingHealth?.status === 'connected') {
+            authWindow?.close();
+          } else {
+            const authorization = await startConnectorAuthorization(connector.id);
+            if (!authorization.authorizationUrl) throw new Error('The connection service did not return an authorization URL.');
+            if (authWindow) authWindow.location.href = authorization.authorizationUrl;
+            else window.open(authorization.authorizationUrl, '_blank', 'noopener,noreferrer');
+          }
+        }
+      } catch (error) {
+        authWindow?.close();
+        onChange({
+          ...draft,
+          installing: false,
+          result: instance,
+          health: null,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        await onInstalled(instance);
+        return;
+      }
+      if (!isComposioToolkit) {
+        try {
+          health = await testConnector(instance.instanceId);
+        } catch {
+          health = null;
+        }
       }
       onChange({ ...draft, installing: false, result: instance, health });
       await onInstalled(instance);
     } catch (error) {
+      authWindow?.close();
       onChange({
         ...draft,
         installing: false,
         error: error instanceof Error ? error.message : String(error),
       });
     }
-  }, [connector, draft, onChange, onInstalled]);
+  }, [composioApiKey, composioConfigured, composioToolkit, connector, draft, isComposioToolkit, onChange, onInstalled]);
 
   return (
     <Dialog.Root open onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -194,6 +254,33 @@ export function InstallConnectorDialog({
                   ? t.integrationStrategyNativeHint
                   : t.integrationStrategyComposioHint}
             </div>
+          ) : null}
+          {isComposioToolkit && !composioConfigured ? (
+            <section className="rounded-2xl border border-accent/25 bg-accent-soft/50 p-4">
+              <h3 className="text-sm font-semibold text-fg">{t.composioSetupTitle}</h3>
+              <p className="mt-1 text-xs leading-5 text-fg-muted">{t.composioSetupHint}</p>
+              <ol className="mt-3 list-inside list-decimal space-y-1 text-xs text-fg-muted">
+                <li>{t.composioSetupStepProject}</li>
+                <li>{t.composioSetupStepKey}</li>
+                <li>{t.composioSetupStepPaste}</li>
+              </ol>
+              <a
+                className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-accent-fg hover:underline"
+                href="https://app.composio.dev"
+                target="_blank"
+                rel="noreferrer"
+              >
+                {t.composioSetupOpenDashboard}<ExternalLink className="size-3.5" aria-hidden />
+              </a>
+              <SecretInput
+                className="mt-3"
+                value={composioApiKey}
+                onChange={setComposioApiKey}
+                labels={t.secretInputLabels}
+                placeholder={t.composioSetupKeyPlaceholder}
+              />
+              <p className="mt-2 text-[11px] text-fg-subtle">{t.composioSetupStorageHint}</p>
+            </section>
           ) : null}
           {draft.store ? (
             <section className="rounded-2xl border border-edge bg-surface-base p-4">
@@ -281,6 +368,7 @@ export function InstallConnectorDialog({
           ) : null}
 
           {draft.error ? <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-600">{draft.error}</p> : null}
+          {composioSetupError ? <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-600">{composioSetupError}</p> : null}
           {draft.result ? (
             <div className="rounded-2xl border border-edge bg-surface-base p-4 text-sm text-fg-muted">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -360,7 +448,7 @@ export function InstallConnectorDialog({
           </div>
 
           <div className="flex shrink-0 justify-end gap-2 border-t border-edge-subtle px-6 py-4">
-            <Button variant="primary" disabled={Boolean(draft.result) || draft.installing} onClick={() => void submit()}>
+            <Button variant="primary" disabled={Boolean(draft.result) || draft.installing || composioSetupLoading || (isComposioToolkit && !composioConfigured && !composioApiKey.trim())} onClick={() => void submit()}>
               {draft.installing ? <Loader2 className="size-4 animate-spin" /> : draft.result ? <CheckCircle2 className="size-4" /> : <PackagePlus className="size-4" />}
               {draft.result ? t.connectedBadge : t.connect}
             </Button>

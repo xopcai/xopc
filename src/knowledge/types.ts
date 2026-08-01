@@ -88,6 +88,8 @@ export interface KnowledgePullResult {
   items: KnowledgeSourceItemInput[];
   nextCursor?: string;
   warnings: string[];
+  /** All active external ids observed during a complete source snapshot. Omit for partial/incremental-only pulls. */
+  snapshotExternalIds?: string[];
 }
 
 export interface KnowledgeSourceAdapter {

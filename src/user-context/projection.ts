@@ -125,18 +125,25 @@ export function projectPersonalContextSources(
     .filter(isPersonalContextConnector)
     .flatMap((definition) => {
       const connected = instanceByConnector.get(definition.id) ?? [];
-      const accounts = (knowledge.connections ?? []).filter((connection) => (
-        connection.provider === 'composio'
-        && connection.connectorId === definition.id
-        && connection.status !== 'revoked'
-      ));
+      const accounts = (knowledge.connections ?? [])
+        .filter((connection) => (
+          connection.provider === 'composio'
+          && connection.connectorId === definition.id
+          && connection.status !== 'revoked'
+        ))
+        .sort((left, right) => {
+          const byConnectedAt = (left.connectedAt ?? left.createdAt).localeCompare(right.connectedAt ?? right.createdAt);
+          return byConnectedAt || left.id.localeCompare(right.id);
+        });
       const rows = accounts.length > 0
-        ? accounts.map((connection) => ({
+        ? accounts.map((connection, index) => ({
             instanceId: connection.id,
             sourceInstanceId: `composio:${definition.id}:${connection.id}`,
             accountLabel: connection.alias
               ?? (typeof connection.identity.email === 'string' ? connection.identity.email : undefined)
               ?? (typeof connection.identity.username === 'string' ? connection.identity.username : undefined),
+            accountOrdinal: index + 1,
+            accountCount: accounts.length,
             enabled: connection.status === 'active',
             status: connection.status,
             lastConnectedAt: connection.connectedAt,
@@ -147,6 +154,8 @@ export function projectPersonalContextSources(
               instanceId: instance.instanceId,
               sourceInstanceId: instance.instanceId,
               accountLabel: undefined,
+              accountOrdinal: undefined,
+              accountCount: undefined,
               enabled: instance.enabled,
               status: instance.status,
               lastConnectedAt: instance.lastConnectedAt,
@@ -156,6 +165,8 @@ export function projectPersonalContextSources(
               instanceId: undefined,
               sourceInstanceId: undefined,
               accountLabel: undefined,
+              accountOrdinal: undefined,
+              accountCount: undefined,
               enabled: false,
               status: 'not_installed',
               lastConnectedAt: undefined,
@@ -183,6 +194,8 @@ export function projectPersonalContextSources(
       return {
         id: definition.id,
         accountLabel: row.accountLabel,
+        accountOrdinal: row.accountOrdinal,
+        accountCount: row.accountCount,
         displayName: definition.displayName,
         description: definition.description,
         ...(definition.branding ? { branding: definition.branding } : {}),

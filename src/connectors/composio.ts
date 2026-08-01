@@ -283,6 +283,19 @@ export async function saveComposioApiKey(input: { secrets?: Record<string, unkno
   await resolver.saveApiKey(COMPOSIO_API_KEY_PROVIDER, resolved.trim(), { profileName: 'default' });
 }
 
+export async function configureComposioApiKey(apiKey: string, resolver = new CredentialResolver()): Promise<void> {
+  const normalized = apiKey.trim();
+  if (!normalized) throw new Error('Composio API key is required.');
+  if (normalized.length > 4096) throw new Error('Composio API key is too long.');
+  const validationResolver = {
+    resolveApiKey: async () => normalized,
+  } as unknown as CredentialResolver;
+  await new ComposioSessionsAdapter({ resolver: validationResolver }).listToolkitCatalog({
+    principalId: LOCAL_OWNER_PRINCIPAL,
+  });
+  await resolver.saveApiKey(COMPOSIO_API_KEY_PROVIDER, normalized, { profileName: 'default' });
+}
+
 export async function listComposioConnections(resolver = new CredentialResolver()): Promise<ComposioConnection[]> {
   const adapter = new ComposioSessionsAdapter({ resolver });
   await adapter.syncConnections({ principalId: LOCAL_OWNER_PRINCIPAL });

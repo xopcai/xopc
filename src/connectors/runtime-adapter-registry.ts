@@ -54,7 +54,12 @@ function installedInstance(config: Config, instanceId: string, connectorId: stri
   return instance;
 }
 
-function installRecord(config: Config, definition: ConnectorDefinition, extra: Record<string, unknown> = {}): ConnectorInstance {
+function installRecord(
+  config: Config,
+  definition: ConnectorDefinition,
+  extra: Record<string, unknown> = {},
+  markerExtra: Record<string, unknown> = {},
+): ConnectorInstance {
   const instanceId = definition.id;
   config.connectors = config.connectors ?? {};
   config.connectors.instances = {
@@ -68,6 +73,7 @@ function installRecord(config: Config, definition: ConnectorDefinition, extra: R
         displayName: definition.displayName,
         source: definition.source,
         artifactSha256: definition.provenance?.sha256,
+        ...markerExtra,
       },
       runtime: definition.runtime,
       ...extra,
@@ -181,11 +187,22 @@ registerConnectorRuntimeAdapter({
 for (const type of ['channel', 'nativeTool', 'memorySource'] as const) {
   registerConnectorRuntimeAdapter({
     type,
-    async install({ config, definition }) {
-      return installRecord(config, definition);
+    async install({ config, definition, input }) {
+      return installRecord(config, definition, {}, { config: input.config ?? {} });
     },
     uninstall({ config, instance }) {
       uninstallRecord(config, instance.instanceId);
+    },
+    update({ config, definition, input, instanceId }) {
+      const record = config.connectors?.instances?.[instanceId];
+      const marker = record?.xopcConnector;
+      if (!marker || typeof marker !== 'object' || Array.isArray(marker)) {
+        throw new Error(`Connector instance not found: ${instanceId}`);
+      }
+      const markerRecord = marker as Record<string, unknown>;
+      if (markerRecord.managed !== true) throw new Error(`Connector instance not found: ${instanceId}`);
+      record.xopcConnector = { ...markerRecord, config: input.config ?? {} };
+      return installedInstance(config, instanceId, definition.id);
     },
   });
 }

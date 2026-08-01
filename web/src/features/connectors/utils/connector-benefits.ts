@@ -4,16 +4,11 @@ export type ConnectorBenefit = 'understand' | 'act' | 'reach';
 
 export const CONNECTOR_BENEFIT_ORDER: ConnectorBenefit[] = ['understand', 'act', 'reach'];
 
-export function connectorBenefitFor(connector: ConnectorDefinition): ConnectorBenefit {
+export function connectorBenefitsFor(connector: ConnectorDefinition): ConnectorBenefit[] {
+  if (connector.benefits?.length) return [...new Set(connector.benefits)];
   const capabilities = new Set(connector.capabilities);
   const searchable = [connector.id, connector.displayName, ...(connector.tags ?? [])].join(' ').toLowerCase();
-
-  if (
-    capabilities.has('channel')
-    || capabilities.has('events')
-    || /slack|telegram|discord|teams|mail|message|wechat|weixin/.test(searchable)
-  ) return 'reach';
-
+  const benefits: ConnectorBenefit[] = [];
   if (
     capabilities.has('context')
     || capabilities.has('memory_source')
@@ -21,14 +16,22 @@ export function connectorBenefitFor(connector: ConnectorDefinition): ConnectorBe
     || connector.category === 'docs'
     || connector.category === 'data'
     || /notion|drive|document|confluence|airtable|database|knowledge|wiki/.test(searchable)
-  ) return 'understand';
+  ) benefits.push('understand');
+  if (capabilities.has('tools')) benefits.push('act');
+  if (
+    capabilities.has('channel')
+    || /slack|telegram|discord|teams|mail|message|wechat|weixin/.test(searchable)
+  ) benefits.push('reach');
+  return benefits.length ? [...new Set(benefits)] : ['act'];
+}
 
-  return 'act';
+export function connectorBenefitFor(connector: ConnectorDefinition): ConnectorBenefit {
+  return connectorBenefitsFor(connector)[0] ?? 'act';
 }
 
 export function groupConnectorsByBenefit(connectors: ConnectorDefinition[]): Record<ConnectorBenefit, ConnectorDefinition[]> {
   return connectors.reduce<Record<ConnectorBenefit, ConnectorDefinition[]>>((groups, connector) => {
-    groups[connectorBenefitFor(connector)].push(connector);
+    for (const benefit of connectorBenefitsFor(connector)) groups[benefit].push(connector);
     return groups;
   }, { understand: [], act: [], reach: [] });
 }
@@ -43,6 +46,7 @@ export function connectorFirstValue(
     || instance.usage.lastHealthStatus === 'ok';
   const needsSetup = instance.status === 'not_configured'
     || instance.status === 'failed'
+    || instance.status === 'degraded'
     || instance.status === 'unauthorized'
     || instance.connectionStatus === 'unauthorized'
     || instance.connectionStatus === 'error';

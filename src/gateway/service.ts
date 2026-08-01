@@ -80,6 +80,10 @@ import { createGatewayStartupTrace, type GatewayStartupTrace } from './startup-t
 import { closeXopcDatabase, openXopcDatabase } from '../storage/sqlite/index.js';
 import { startConnectorSupervisor, type ConnectorSupervisor } from '../connectors/supervisor.js';
 import {
+  startConnectorMemorySyncCoordinator,
+  type ConnectorMemorySyncCoordinator,
+} from '../connectors/memory-sync-coordinator.js';
+import {
   applyAutomaticVoiceLanguage,
   inferProductLanguageFromEnvironment,
   initializeVoiceDefaults,
@@ -148,6 +152,7 @@ export class GatewayService {
   private goalNotifications: GoalNotificationService | null = null;
   private mobileNotifications: MobileNotificationService | null = null;
   private connectorSupervisor: ConnectorSupervisor | null = null;
+  private connectorMemorySyncCoordinator: ConnectorMemorySyncCoordinator | null = null;
   private connectedKnowledgeCoordinator: ConnectedKnowledgeCoordinator | null = null;
   private stopAutomationProductEventBridge: (() => void) | null = null;
   private stopSessionTranscriptAutomationEvents: (() => void) | null = null;
@@ -846,6 +851,10 @@ export class GatewayService {
       getConfig: () => this.config,
       saveConfig: (cfg) => this.saveConfig(cfg),
     });
+    this.connectorMemorySyncCoordinator = startConnectorMemorySyncCoordinator({
+      getConfig: () => this.config,
+      resolveAgentId: () => resolveDefaultAgentId(this.config),
+    });
     this.connectedKnowledgeCoordinator = startConnectedKnowledgeCoordinator({
       resolvePipelineOptions: () => ({
         agentId: resolveDefaultAgentId(this.config),
@@ -1037,6 +1046,8 @@ export class GatewayService {
     this.heartbeatService?.stop();
     this.connectorSupervisor?.stop();
     this.connectorSupervisor = null;
+    this.connectorMemorySyncCoordinator?.stop();
+    this.connectorMemorySyncCoordinator = null;
     this.connectedKnowledgeCoordinator?.stop();
     this.connectedKnowledgeCoordinator = null;
 
@@ -1333,6 +1344,10 @@ export class GatewayService {
    */
   requestHeartbeatNow(opts?: { reason?: string }): void {
     this.heartbeatService?.requestNow({ reason: opts?.reason ?? 'manual' });
+  }
+
+  requestConnectorMemorySync(toolkit?: string): void {
+    void this.connectorMemorySyncCoordinator?.runNow({ toolkit, force: true });
   }
 
   /**

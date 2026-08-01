@@ -17,6 +17,7 @@ import { interaction } from '@/lib/interaction';
 
 import {
   removeConnector,
+  syncConnectorMemory,
   testConnector,
   updateConnectorConfig,
   type ConnectorDefinition,
@@ -131,25 +132,33 @@ export function InstalledConnectorDetailDialog({
   const [testing, setTesting] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [savingConfig, setSavingConfig] = useState(false);
+  const [syncingMemory, setSyncingMemory] = useState(false);
+  const [memorySyncCount, setMemorySyncCount] = useState<number | null>(null);
   const [health, setHealth] = useState<ConnectorHealthResult | null>(null);
-  const [detailTab, setDetailTab] = useState<ConnectorDetailTab>('health');
+  const [detailTab, setDetailTab] = useState<ConnectorDetailTab>(
+    instance.materialized.type === 'mcp' ? 'health' : 'permissions',
+  );
   const [toolsDialogOpen, setToolsDialogOpen] = useState(false);
   const [configDraft, setConfigDraft] = useState(() => initialConfigDraft(definition, instance));
   const [error, setError] = useState<string | null>(null);
 
   const editableConfigFields = definition?.setup.config ?? [];
-  const supportsConfigEdit = instance.materialized.type === 'mcp' && editableConfigFields.length > 0 && (definition?.setup.secrets ?? []).length === 0;
+  const supportsConfigEdit = (instance.materialized.type === 'mcp' || instance.materialized.type === 'memorySource')
+    && editableConfigFields.length > 0
+    && (definition?.setup.secrets ?? []).length === 0;
   const lastToolCount = health ? health.toolCount : instance.usage.lastToolCount;
   const tabItems = useMemo(() => {
-    const items = [
-      ['health', ShieldCheck, t.detailHealth],
-      ['tools', Wrench, `${t.detailTools} ${health ? health.toolCount : instance.usage.lastToolCount ?? ''}`],
-      ['resources', Database, `${t.detailResources} ${health ? health.resourceCount : instance.usage.lastResourceCount ?? ''}`],
-      ['prompts', FileText, `${t.detailPrompts} ${health ? health.promptCount : instance.usage.lastPromptCount ?? ''}`],
-      ['permissions', KeyRound, t.detailPermissions],
-    ] as const;
+    const items = instance.materialized.type === 'mcp'
+      ? [
+          ['health', ShieldCheck, t.detailHealth],
+          ['tools', Wrench, `${t.detailTools} ${health ? health.toolCount : instance.usage.lastToolCount ?? ''}`],
+          ['resources', Database, `${t.detailResources} ${health ? health.resourceCount : instance.usage.lastResourceCount ?? ''}`],
+          ['prompts', FileText, `${t.detailPrompts} ${health ? health.promptCount : instance.usage.lastPromptCount ?? ''}`],
+          ['permissions', KeyRound, t.detailPermissions],
+        ] as const
+      : [['permissions', KeyRound, t.detailPermissions]] as const;
     return supportsConfigEdit ? [...items, ['config', Database, t.connectorConfigLabel] as const] : items;
-  }, [health, instance.usage.lastPromptCount, instance.usage.lastResourceCount, instance.usage.lastToolCount, supportsConfigEdit, t]);
+  }, [health, instance.materialized.type, instance.usage.lastPromptCount, instance.usage.lastResourceCount, instance.usage.lastToolCount, supportsConfigEdit, t]);
 
   const runTest = useCallback(async () => {
     setTesting(true);
@@ -198,6 +207,21 @@ export function InstalledConnectorDetailDialog({
       setSavingConfig(false);
     }
   }, [configDraft, definition, instance.instanceId, onChanged, supportsConfigEdit]);
+
+  const syncMemory = useCallback(async () => {
+    setSyncingMemory(true);
+    setMemorySyncCount(null);
+    setError(null);
+    try {
+      const result = await syncConnectorMemory(instance.connectorId);
+      setMemorySyncCount(result.recordIds.length);
+      await onChanged();
+    } catch (syncError) {
+      setError(syncError instanceof Error ? syncError.message : String(syncError));
+    } finally {
+      setSyncingMemory(false);
+    }
+  }, [instance.connectorId, onChanged]);
 
   return (
     <Dialog.Root open onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -370,7 +394,26 @@ export function InstalledConnectorDetailDialog({
               ) : null}
             </div>
 
-            {instance.materialized.type === 'composio' ? <ComposioConnectorPanel instance={instance} t={t} /> : null}
+            {instance.materialized.type === 'composio' ? (
+              <ComposioConnectorPanel instance={instance} t={t} onChanged={onChanged} />
+            ) : null}
+            {instance.materialized.type === 'memorySource' ? (
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-edge bg-surface-base p-3 text-sm">
+                <div>
+                  <p className="font-medium text-fg">{t.memorySourceSync}</p>
+                  <p className="text-xs text-fg-muted">{definition?.description}</p>
+                  {memorySyncCount !== null ? (
+                    <p className="mt-1 text-xs text-emerald-600">
+                      {formatConnectorMessage(t.memorySourceSynced, { count: String(memorySyncCount) })}
+                    </p>
+                  ) : null}
+                </div>
+                <Button disabled={syncingMemory} onClick={() => void syncMemory()}>
+                  {syncingMemory ? <Loader2 className="size-4 animate-spin" /> : <Database className="size-4" />}
+                  {t.composioSyncNow}
+                </Button>
+              </div>
+            ) : null}
           </div>
 
           <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-edge-subtle px-6 py-4">

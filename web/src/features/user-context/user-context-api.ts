@@ -50,6 +50,8 @@ export type UserUnderstanding = {
 export type PersonalContextSource = {
   id: string;
   accountLabel?: string;
+  accountOrdinal?: number;
+  accountCount?: number;
   displayName: string;
   description: string;
   branding?: {

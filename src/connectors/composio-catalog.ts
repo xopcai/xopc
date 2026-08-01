@@ -4,7 +4,7 @@ import {
 } from '../storage/sqlite/connector-repository.js';
 import { ComposioSessionsAdapter, type ComposioToolkitCatalogItem } from './composio-sessions.js';
 import { composioIntegrationStrategy } from './integration-strategy.js';
-import type { ConnectorCategory, ConnectorDefinition, ConnectorVerificationLevel } from './types.js';
+import type { ConnectorBenefit, ConnectorCategory, ConnectorDefinition, ConnectorVerificationLevel } from './types.js';
 
 const CATALOG_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 
@@ -84,7 +84,22 @@ export const COMPOSIO_TOOLKIT_DISPLAY_NAMES: Record<ComposioAgentReadyToolkit, s
 
 const RECOMMENDED = new Set<string>(COMPOSIO_RECOMMENDED_TOOLKITS);
 const AGENT_READY = new Set<string>(COMPOSIO_AGENT_READY_TOOLKITS);
-const PERSONAL_CONTEXT_TOOLKITS = new Set(['gmail', 'googledrive', 'notion', 'slack']);
+const PERSONAL_CONTEXT_TOOLKITS = new Set([
+  'gmail',
+  'googlecalendar',
+  'googledrive',
+  'googledocs',
+  'googlesheets',
+  'notion',
+  'slack',
+  'github',
+  'linear',
+  'jira',
+  'outlook',
+  'microsoft_teams',
+  'one_drive',
+  'excel',
+]);
 
 const LOCAL_TOOLKIT_LOGO_FILE_NAMES: Readonly<Record<string, string>> = {
   googlecalendar: 'google-calendar',
@@ -140,6 +155,18 @@ const CONNECTOR_DESCRIPTIONS: Record<string, string> = {
 const CODE_TOOLKITS = new Set(['github', 'gitlab', 'bitbucket', 'linear', 'jira']);
 const DOC_TOOLKITS = new Set(['notion', 'googledocs', 'figma']);
 const DATA_TOOLKITS = new Set(['googledrive', 'dropbox', 'one_drive', 'googlesheets', 'excel', 'airtable']);
+const COMMUNICATION_TOOLKITS = new Set([
+  'gmail', 'outlook', 'slack', 'microsoft_teams', 'discord', 'telegram', 'whatsapp', 'twitter',
+]);
+
+function benefitsForToolkit(slug: string): ConnectorBenefit[] {
+  const benefits: ConnectorBenefit[] = ['act'];
+  if (PERSONAL_CONTEXT_TOOLKITS.has(slug) || DOC_TOOLKITS.has(slug) || DATA_TOOLKITS.has(slug)) {
+    benefits.unshift('understand');
+  }
+  if (COMMUNICATION_TOOLKITS.has(slug)) benefits.push('reach');
+  return benefits;
+}
 
 function categoryForToolkit(slug: string): ConnectorCategory {
   if (CODE_TOOLKITS.has(slug)) return 'code';
@@ -170,6 +197,7 @@ export function connectorDefinitionFromComposioToolkit(item: ComposioToolkitCata
     capabilities: item.isNoAuth
       ? ['tools', 'events', 'workflows', ...knowledgeCapabilities]
       : ['tools', 'auth.oauth', 'events', 'workflows', ...knowledgeCapabilities],
+    benefits: benefitsForToolkit(slug),
     tags: ['composio', slug, verificationForToolkit(slug)],
     branding: {
       logoUrl: composioLogoUrl(slug),

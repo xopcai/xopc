@@ -23,6 +23,13 @@ export function SourceDisconnectDialog({
 }) {
   const t = messages(language).you;
   const [deleteDerived, setDeleteDerived] = useState(false);
+  const accountLabel = source?.accountLabel ?? (
+    source?.accountCount && source.accountCount > 1 && source.accountOrdinal
+      ? t.sourceAccountFallback
+        .replace('{{index}}', String(source.accountOrdinal))
+        .replace('{{count}}', String(source.accountCount))
+      : undefined
+  );
 
   useEffect(() => {
     if (source) setDeleteDerived(false);
@@ -49,7 +56,7 @@ export function SourceDisconnectDialog({
 
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-5">
             <div className="rounded-xl bg-surface-muted px-4 py-3 text-xs leading-5 text-fg-muted">
-              {source?.accountLabel ? <p className="font-medium text-fg">{t.disconnectAccount.replace('{{account}}', source.accountLabel)}</p> : null}
+              {accountLabel ? <p className="font-medium text-fg">{t.disconnectAccount.replace('{{account}}', accountLabel)}</p> : null}
               <p>{t.disconnectImpact.replace('{{items}}', String(source?.knowledgeItemCount ?? 0)).replace('{{understandings}}', String(source?.derivedUnderstandingCount ?? 0))}</p>
             </div>
             <button

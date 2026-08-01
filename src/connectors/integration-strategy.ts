@@ -1,6 +1,17 @@
 import type { ConnectorDefinition, ConnectorIntegrationStrategy } from './types.js';
 
 const COMPOSIO_STRATEGY_OVERRIDES: Readonly<Record<string, ConnectorIntegrationStrategy>> = {
+  gmail: { lane: 'composio', workload: 'core', preferred: true },
+  googlecalendar: { lane: 'composio', workload: 'core', preferred: true },
+  googledrive: { lane: 'composio', workload: 'core', preferred: true },
+  notion: { lane: 'composio', workload: 'core', preferred: true },
+  slack: { lane: 'composio', workload: 'core', preferred: true },
+  github: { lane: 'composio', workload: 'core', preferred: true },
+  linear: { lane: 'composio', workload: 'core', preferred: true },
+  jira: { lane: 'composio', workload: 'core', preferred: true },
+  outlook: { lane: 'composio', workload: 'core', preferred: true },
+  microsoft_teams: { lane: 'composio', workload: 'core', preferred: true },
+  one_drive: { lane: 'composio', workload: 'core', preferred: true },
   telegram: {
     lane: 'native',
     workload: 'core',

@@ -6,12 +6,36 @@ import {
   getConnectorInstallation,
   listConnectorConnections,
 } from '../storage/sqlite/index.js';
-import { ConnectedKnowledgePipeline, KnowledgeIngestionService, type KnowledgeSourceItemInput } from '../knowledge/index.js';
+import {
+  ConnectedKnowledgePipeline,
+  KnowledgeIngestionService,
+  LocalFolderKnowledgeSourceAdapter,
+  type KnowledgePullInput,
+  type KnowledgePullResult,
+  type KnowledgeSourceAdapter,
+  type KnowledgeSourceItemInput,
+} from '../knowledge/index.js';
 import { ComposioSessionsAdapter } from './composio-sessions.js';
 import { scopeForComposioAction } from './composio.js';
 import { getConnectorDefinition } from './catalog.js';
+import { getConnectorInstance } from './instances.js';
 
-const MEMORY_SOURCE_TOOLKITS = new Set(['gmail', 'googledrive', 'notion', 'slack']);
+export const COMPOSIO_MEMORY_SOURCE_TOOLKITS = new Set([
+  'gmail',
+  'googlecalendar',
+  'googledrive',
+  'googledocs',
+  'googlesheets',
+  'notion',
+  'slack',
+  'github',
+  'linear',
+  'jira',
+  'outlook',
+  'microsoft_teams',
+  'one_drive',
+  'excel',
+]);
 const EXTERNAL_ID_KEYS = ['id', 'messageId', 'message_id', 'threadId', 'thread_id', 'eventId', 'event_id', 'pageId', 'page_id', 'fileId', 'file_id'];
 const OCCURRED_AT_KEYS = ['occurredAt', 'createdAt', 'created_at', 'date', 'timestamp', 'startTime', 'start_time'];
 const UPDATED_AT_KEYS = ['updatedAt', 'updated_at', 'modifiedTime', 'modified_time'];
@@ -67,17 +91,83 @@ function sanitizeSourceValue(value: unknown, depth = 0): unknown {
   ]));
 }
 
+function itemTypeFor(toolkit: string, actionId: string): string {
+  if (toolkit === 'gmail' || toolkit === 'outlook') return 'email';
+  if (toolkit === 'googlecalendar' || actionId.includes('CALENDAR')) return 'calendar_event';
+  if (toolkit === 'slack' || toolkit === 'microsoft_teams') return 'conversation_message';
+  if (toolkit === 'github') return 'development_activity';
+  if (toolkit === 'linear' || toolkit === 'jira') return 'work_item';
+  if (['googledrive', 'googledocs', 'googlesheets', 'notion', 'one_drive', 'excel'].includes(toolkit)) {
+    return 'document';
+  }
+  return 'connector_item';
+}
+
+type PersonEntitySignal = {
+  role: string;
+  name?: string;
+  email?: string;
+  username?: string;
+};
+
+function boundedPersonValue(value: unknown, maxLength = 320): string {
+  return typeof value === 'string' ? value.trim().slice(0, maxLength) : '';
+}
+
+function personEntities(record: Record<string, unknown> | null): PersonEntitySignal[] {
+  if (!record) return [];
+  const extractPerson = (value: unknown, role: string): PersonEntitySignal[] => {
+    if (typeof value === 'string') {
+      const normalized = boundedPersonValue(value);
+      if (!normalized) return [];
+      return normalized.includes('@') ? [{ role, email: normalized }] : [{ role, name: normalized }];
+    }
+    const nested = asRecord(value);
+    if (!nested) return [];
+    const name = boundedPersonValue(nested.name, 160) || boundedPersonValue(nested.displayName, 160);
+    const email = boundedPersonValue(nested.email);
+    const username = boundedPersonValue(nested.username, 160);
+    return name || email || username
+      ? [{ role, name: name || undefined, email: email || undefined, username: username || undefined }]
+      : [];
+  };
+  const entities = ['email', 'from', 'sender', 'author', 'user', 'username', 'owner', 'assignee', 'attendees', 'participants']
+    .flatMap((key) => {
+      const value = record[key];
+      return Array.isArray(value)
+        ? value.flatMap((item) => extractPerson(item, key))
+        : extractPerson(value, key);
+    });
+  const unique = new Map<string, PersonEntitySignal>();
+  for (const entity of entities) {
+    const key = `${entity.role}\u0000${entity.email?.toLowerCase() ?? ''}\u0000${entity.username?.toLowerCase() ?? ''}\u0000${entity.name?.toLowerCase() ?? ''}`;
+    unique.set(key, entity);
+  }
+  return [...unique.values()].slice(0, 50);
+}
+
+function peopleSignals(entities: PersonEntitySignal[]): string[] {
+  const values = entities
+    .flatMap((entity) => [entity.email, entity.name, entity.username])
+    .filter((value): value is string => typeof value === 'string')
+    .map((value) => value.trim())
+    .filter(Boolean);
+  return [...new Set(values)].slice(0, 50);
+}
+
 function resultToSourceItems(input: {
   result: unknown;
   sourceInstanceId: string;
   connectorId: string;
   connectionId: string;
   actionId: string;
+  toolkit: string;
   agentId: string;
   workspaceId: string;
 }): KnowledgeSourceItemInput[] {
   return resultRows(input.result).slice(0, 200).map((row, index) => {
     const record = asRecord(row);
+    const people = personEntities(record);
     const serialized = JSON.stringify(sanitizeSourceValue(row), null, 2) ?? String(row);
     const normalizedText = serialized.length > 8_000 ? `${serialized.slice(0, 8_000)}\n…` : serialized;
     const contentHash = createHash('sha256').update(serialized).digest('hex');
@@ -85,7 +175,7 @@ function resultToSourceItems(input: {
     return {
       sourceInstanceId: input.sourceInstanceId,
       externalId,
-      itemType: `${input.connectorId}:${input.actionId}`,
+      itemType: itemTypeFor(input.toolkit, input.actionId),
       authorRole: 'third_party',
       occurredAt: timestampField(record, OCCURRED_AT_KEYS),
       sourceUpdatedAt: timestampField(record, UPDATED_AT_KEYS),
@@ -95,6 +185,9 @@ function resultToSourceItems(input: {
         connectorId: input.connectorId,
         connectionId: input.connectionId,
         actionId: input.actionId,
+        toolkit: input.toolkit,
+        people: peopleSignals(people),
+        personEntities: people,
         agentId: input.agentId,
         workspaceId: input.workspaceId,
       },
@@ -104,6 +197,56 @@ function resultToSourceItems(input: {
       synthesisStatus: 'pending',
     };
   });
+}
+
+class ComposioKnowledgeSourceAdapter implements KnowledgeSourceAdapter {
+  readonly kind = 'composio';
+
+  constructor(private readonly input: {
+    connectorId: string;
+    actionId: string;
+    arguments: Record<string, unknown>;
+    agentId: string;
+    connection: ReturnType<typeof listConnectorConnections>[number];
+    toolkit: string;
+    workspaceId: string;
+    installation: NonNullable<ReturnType<typeof getConnectorInstallation>>;
+    adapter: ComposioSessionsAdapter;
+  }) {}
+
+  async pull(pull: KnowledgePullInput): Promise<KnowledgePullResult> {
+    const execution = await this.input.adapter.executeWithPolicy({
+      context: { principalId: 'local-owner', toolkits: [this.input.toolkit] },
+      installation: { ...this.input.installation, maxScope: 'read', confirmationPolicy: 'never' },
+      connection: this.input.connection,
+      agentId: this.input.agentId,
+      action: {
+        connectorId: this.input.connectorId,
+        actionId: this.input.actionId,
+        toolkit: this.input.toolkit,
+        scope: 'read',
+        curated: true,
+        cachedAt: new Date().toISOString(),
+      },
+      args: this.input.arguments,
+      confirmed: true,
+    });
+    if (execution.decision !== 'allowed') throw new Error(execution.reason);
+    return {
+      items: resultToSourceItems({
+        result: execution.result,
+        sourceInstanceId: pull.instanceId,
+        connectorId: this.input.connectorId,
+        connectionId: this.input.connection.id,
+        actionId: this.input.actionId,
+        toolkit: this.input.toolkit,
+        agentId: this.input.agentId,
+        workspaceId: this.input.workspaceId,
+      }),
+      nextCursor: new Date().toISOString(),
+      warnings: [],
+    };
+  }
 }
 
 export async function syncComposioResultToMemory(input: {
@@ -120,8 +263,8 @@ export async function syncComposioResultToMemory(input: {
     throw new Error('Memory sync requires a Composio toolkit connector.');
   }
   const toolkit = definition.runtime.toolkit;
-  if (!MEMORY_SOURCE_TOOLKITS.has(toolkit)) {
-    throw new Error('Memory sync is supported for Gmail, Google Drive, Notion, and Slack.');
+  if (!COMPOSIO_MEMORY_SOURCE_TOOLKITS.has(toolkit)) {
+    throw new Error(`Memory sync is not supported for the ${toolkit} connector.`);
   }
   const risk = scopeForComposioAction(input.actionId);
   if (risk.toolkit !== toolkit || risk.scope !== 'read' || !risk.curated) {
@@ -140,39 +283,26 @@ export async function syncComposioResultToMemory(input: {
     : activeConnections.find((candidate) => candidate.isDefault) ?? activeConnections[0];
   if (!connection) throw new Error('No active connector account is available for memory sync.');
   const adapter = input.adapter ?? new ComposioSessionsAdapter();
-  const execution = await adapter.executeWithPolicy({
-    context: { principalId: 'local-owner', toolkits: [toolkit] },
-    installation: { ...installation, maxScope: 'read', confirmationPolicy: 'never' },
-    connection,
-    agentId: input.agentId,
-    action: {
-      connectorId,
-      actionId: input.actionId,
-      toolkit,
-      scope: 'read',
-      curated: true,
-      cachedAt: new Date().toISOString(),
-    },
-    args: input.arguments ?? {},
-    confirmed: true,
-  });
-  if (execution.decision !== 'allowed') throw new Error(execution.reason);
   const workspaceId = getWorkspacePath(input.config);
   const sourceInstanceId = `composio:${connectorId}:${connection.id}`;
-  const items = resultToSourceItems({
-    result: execution.result,
-    sourceInstanceId,
+  const sourceAdapter = new ComposioKnowledgeSourceAdapter({
     connectorId,
-    connectionId: connection.id,
+    connection,
     actionId: input.actionId,
+    arguments: input.arguments ?? {},
     agentId: input.agentId,
+    toolkit,
     workspaceId,
+    installation,
+    adapter,
   });
-  new KnowledgeIngestionService(new Map()).ingest({
+  const syncRun = await new KnowledgeIngestionService(new Map([[sourceAdapter.kind, sourceAdapter]])).sync({
+    adapterKind: sourceAdapter.kind,
     instanceId: sourceInstanceId,
-    items,
-    cursorAfter: new Date().toISOString(),
   });
+  if (syncRun.status === 'failed' || syncRun.status === 'cancelled') {
+    throw new Error(syncRun.error ?? `Connector memory sync ${syncRun.status}.`);
+  }
   const pipeline = new ConnectedKnowledgePipeline({ agentId: input.agentId, workspaceId });
   let recordId: string | undefined;
   for (let batch = 0; batch < 10; batch += 1) {
@@ -182,4 +312,39 @@ export async function syncComposioResultToMemory(input: {
   }
   if (!recordId) throw new Error('Connector result did not contain any synthesizable knowledge.');
   return { recordId, connectorId, actionId: input.actionId };
+}
+
+export async function syncLocalFolderToMemory(input: {
+  config: Config;
+  connectorId: string;
+  agentId: string;
+}): Promise<{ connectorId: string; sourceInstanceId: string; recordIds: string[] }> {
+  const definition = getConnectorDefinition(input.connectorId);
+  if (definition?.runtime.type !== 'memorySource' || definition.runtime.sourceKind !== 'local-folder') {
+    throw new Error('Local folder sync requires a local-folder memory source connector.');
+  }
+  const instance = getConnectorInstance(input.config, definition.id);
+  if (!instance?.enabled) throw new Error('Local folder connector is not installed and enabled.');
+  const rootPath = typeof instance.config?.rootPath === 'string' ? instance.config.rootPath.trim() : '';
+  if (!rootPath) throw new Error('Local folder connector requires a rootPath.');
+  const sourceInstanceId = `local-folder:${definition.id}`;
+  const adapter = new LocalFolderKnowledgeSourceAdapter(rootPath);
+  const syncRun = await new KnowledgeIngestionService(new Map([[adapter.kind, adapter]])).sync({
+    adapterKind: adapter.kind,
+    instanceId: sourceInstanceId,
+  });
+  if (syncRun.status === 'failed' || syncRun.status === 'cancelled') {
+    throw new Error(syncRun.error ?? `Local folder sync ${syncRun.status}.`);
+  }
+  const pipeline = new ConnectedKnowledgePipeline({
+    agentId: input.agentId,
+    workspaceId: getWorkspacePath(input.config),
+  });
+  const recordIds: string[] = [];
+  for (let batch = 0; batch < 10; batch += 1) {
+    const synthesis = await pipeline.processPending(sourceInstanceId);
+    recordIds.push(...synthesis.recordIds);
+    if (synthesis.claimed === 0) break;
+  }
+  return { connectorId: definition.id, sourceInstanceId, recordIds };
 }

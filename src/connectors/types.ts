@@ -29,6 +29,8 @@ export type ConnectorScope = 'read' | 'write' | 'admin';
 
 export type ConnectorVerificationLevel = 'verified' | 'beta' | 'experimental';
 
+export type ConnectorBenefit = 'understand' | 'act' | 'reach';
+
 export type ConnectorBranding = {
   logoUrl?: string;
   source?: 'builtin' | 'composio-catalog' | 'registry' | 'extension' | 'custom';
@@ -118,6 +120,7 @@ export type ConnectorDefinition = {
   kind: ConnectorKind;
   source: 'builtin' | 'extension' | 'custom' | 'registry' | 'store';
   capabilities: ConnectorCapability[];
+  benefits?: ConnectorBenefit[];
   tags?: string[];
   branding?: ConnectorBranding;
   verificationLevel?: ConnectorVerificationLevel;

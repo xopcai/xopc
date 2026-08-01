@@ -68,6 +68,7 @@ export function registerPublicGatewayRoutes(app: Hono, service: GatewayService):
       const normalized = normalizeComposioTriggerPayload(archivedPayload, webhookId);
       applyComposioConnectionLifecycleEvent(archivedPayload);
       const event = await appendComposioTriggerEvent(service.currentConfig, archivedPayload);
+      service.requestConnectorMemorySync(normalized.toolkit);
       const runs = await service.automationServiceInstance.triggerEvent({
         type: `connector.${normalized.trigger ?? normalized.type}`,
         source: normalized.toolkit ? `composio:${normalized.toolkit}` : 'composio',

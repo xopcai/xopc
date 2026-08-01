@@ -75,6 +75,7 @@ describe('ComposioSessionsAdapter', () => {
     await expect(adapter.listToolkitCatalog({ principalId: 'owner', installationScope: stateDir })).resolves.toEqual([
       expect.objectContaining({ slug: 'gmail', name: 'Gmail', connected: false }),
     ]);
+    expect(session.toolkits).toHaveBeenCalledWith({ limit: 50, cursor: undefined });
     const authorization = await adapter.authorize({
       principalId: 'owner',
       installationScope: stateDir,

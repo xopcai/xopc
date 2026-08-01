@@ -34,14 +34,9 @@ describe('connectors catalog', () => {
   it('exposes connector-only built-ins without secret values', () => {
     const ids = listConnectorCatalog().map((connector) => connector.id);
 
-    expect(ids).toEqual(expect.arrayContaining([
-      'brave-search',
-      'fetch',
-      'filesystem',
-      'memory',
-      'playwright',
-      'sequential-thinking',
-      'time',
+    expect(ids).toContain('filesystem');
+    expect(ids).not.toEqual(expect.arrayContaining([
+      'brave-search', 'fetch', 'memory', 'playwright', 'sequential-thinking', 'time',
     ]));
     expect(ids).toEqual(expect.arrayContaining([
       'composio-gmail',
@@ -256,29 +251,29 @@ describe('connector install and instances', () => {
   it('installs, lists, and uninstalls managed connectors', async () => {
     const config = { mcp: { servers: {} } } as Config;
 
-    const instance = await installConnector(config, 'fetch', {});
+    const instance = await installConnector(config, 'filesystem', { config: { rootPath: '/tmp/files' } });
 
     expect(instance).toMatchObject({
-      instanceId: 'fetch',
-      connectorId: 'fetch',
-      materialized: { type: 'mcp', serverId: 'fetch' },
+      instanceId: 'filesystem',
+      connectorId: 'filesystem',
+      materialized: { type: 'mcp', serverId: 'filesystem' },
     });
     expect(listConnectorInstances(config)).toHaveLength(1);
-    expect(config.mcp?.servers?.fetch).toMatchObject({
-      command: 'uvx',
-      args: ['mcp-server-fetch'],
-      xopcConnector: { managed: true, connectorId: 'fetch' },
+    expect(config.mcp?.servers?.filesystem).toMatchObject({
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-filesystem', '/tmp/files'],
+      xopcConnector: { managed: true, connectorId: 'filesystem' },
     });
 
-    const disabled = setConnectorEnabled(config, 'fetch', false);
+    const disabled = setConnectorEnabled(config, 'filesystem', false);
     expect(disabled.enabled).toBe(false);
     expect(disabled.status).toBe('disabled');
-    expect(config.mcp?.servers?.fetch?.xopcConnector?.enabled).toBe(false);
+    expect(config.mcp?.servers?.filesystem?.xopcConnector?.enabled).toBe(false);
 
-    const removed = uninstallConnector(config, 'fetch');
+    const removed = uninstallConnector(config, 'filesystem');
 
-    expect(removed.connectorId).toBe('fetch');
-    expect(config.mcp?.servers?.fetch).toBeUndefined();
+    expect(removed.connectorId).toBe('filesystem');
+    expect(config.mcp?.servers?.filesystem).toBeUndefined();
   });
 
   it('updates config-only MCP connectors without reinstalling secrets', async () => {
@@ -298,71 +293,85 @@ describe('connector install and instances', () => {
     });
   });
 
+  it('installs and updates the native local-files memory source', async () => {
+    const config = {} as Config;
+
+    const installed = await installConnector(config, 'local-files', { config: { rootPath: '/tmp/notes' } });
+    expect(installed).toMatchObject({
+      connectorId: 'local-files',
+      config: { rootPath: '/tmp/notes' },
+      materialized: { type: 'memorySource' },
+    });
+
+    const updated = updateConnectorConfig(config, 'local-files', { config: { rootPath: '/tmp/vault' } });
+    expect(updated.config).toEqual({ rootPath: '/tmp/vault' });
+  });
+
   it('blocks unmanaged MCP server conflicts without listing them as connectors', async () => {
     const config = {
       mcp: {
         servers: {
-          fetch: { command: 'node', args: ['manual-fetch.js'] },
+          filesystem: { command: 'node', args: ['manual-filesystem.js'] },
         },
       },
     } as Config;
 
-    await expect(installConnector(config, 'fetch', {})).rejects.toThrow(/not managed by Connectors/);
-    expect(() => uninstallConnector(config, 'fetch')).toThrow(/not managed by Connectors/);
+    await expect(installConnector(config, 'filesystem', { config: { rootPath: '/tmp/files' } })).rejects.toThrow(/not managed by Connectors/);
+    expect(() => uninstallConnector(config, 'filesystem')).toThrow(/not managed by Connectors/);
     expect(listConnectorInstances(config)).toEqual([]);
   });
 
   it('previews MCP connector capabilities without saving the server config', async () => {
     const config = { mcp: { servers: {} } } as Config;
-    const fetch = getConnectorDefinition('fetch');
-    expect(fetch).toBeDefined();
+    const filesystem = getConnectorDefinition('filesystem');
+    expect(filesystem).toBeDefined();
     const capabilitySpy = vi
       .spyOn(bundleMcpMaterialize, 'listBundleMcpServerCapabilitiesForGateway')
       .mockResolvedValue({
-        serverId: 'fetch',
+        serverId: 'filesystem',
         toolCount: 1,
         resourceCount: 0,
         promptCount: 0,
-        tools: [{ name: 'fetch', shortName: 'fetch', description: 'Fetch a URL.' }],
+        tools: [{ name: 'read_file', shortName: 'read_file', description: 'Read a file.' }],
         resources: [],
         prompts: [],
       });
 
-    const preview = await previewConnectorDefinition(config, fetch!, {});
+    const preview = await previewConnectorDefinition(config, filesystem!, { config: { rootPath: '/tmp/files' } });
 
     expect(preview).toMatchObject({
-      serverId: 'fetch',
+      serverId: 'filesystem',
       ok: true,
       status: 'ok',
       toolCount: 1,
-      tools: [{ name: 'fetch', shortName: 'fetch', description: 'Fetch a URL.' }],
+      tools: [{ name: 'read_file', shortName: 'read_file', description: 'Read a file.' }],
     });
     expect(capabilitySpy).toHaveBeenCalledWith(expect.objectContaining({
-      serverId: 'fetch',
+      serverId: 'filesystem',
       cfg: expect.objectContaining({
         mcp: expect.objectContaining({
           servers: expect.objectContaining({
-            fetch: expect.objectContaining({
-              xopcConnector: expect.objectContaining({ managed: true, connectorId: 'fetch' }),
+            filesystem: expect.objectContaining({
+              xopcConnector: expect.objectContaining({ managed: true, connectorId: 'filesystem' }),
             }),
           }),
         }),
       }),
     }));
-    expect(config.mcp?.servers?.fetch).toBeUndefined();
+    expect(config.mcp?.servers?.filesystem).toBeUndefined();
     expect(listConnectorInstances(config)).toEqual([]);
   });
 
   it('stores connector setup secret refs without exposing raw values to config', async () => {
-    const request = createConnectorSetupSecretRequest({ key: 'BRAVE_API_KEY' });
+    const request = createConnectorSetupSecretRequest({ key: 'COMPOSIO_API_KEY' });
     expect(request.ref).toMatch(/^secret:\/\//);
     expect(submitConnectorSetupSecret(request.ref, 'brave_secret')).toBe(true);
     const config = { mcp: { servers: {} } } as Config;
     const resolver = { saveApiKey: vi.fn() } as unknown as CredentialResolver;
 
-    await installConnector(config, 'brave-search', { secrets: { BRAVE_API_KEY: request.ref } }, resolver);
+    await installConnector(config, 'composio-api-key', { secrets: { COMPOSIO_API_KEY: request.ref } }, resolver);
 
-    expect(resolver.saveApiKey).toHaveBeenCalledWith('connector-brave-search-brave_api_key', 'brave_secret', { profileName: 'default' });
+    expect(resolver.saveApiKey).toHaveBeenCalledWith('connector-composio-api-key', 'brave_secret', { profileName: 'default' });
     expect(JSON.stringify(config)).not.toContain('brave_secret');
   });
 
