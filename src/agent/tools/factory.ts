@@ -421,11 +421,11 @@ export class AgentToolsFactory {
           ]
         : []),
       ...(getMemMgr?.().getAdditionalTools() ?? []),
-      ...(this.deps.getSessionStore
+      ...(this.deps.getSessionStore && getPrimary
         ? [
             createSessionSearchTool({
               getSessionStore: this.deps.getSessionStore,
-              getConfig: this.deps.getConfig,
+              getPrimaryModel: getPrimary,
               getCurrentSessionKey: () => this.deps.getCurrentContext()?.sessionKey,
             }),
           ]

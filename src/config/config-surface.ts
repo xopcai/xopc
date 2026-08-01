@@ -3,29 +3,6 @@
  * (Runtime validation lives in schema / zod elsewhere.)
  */
 export interface Config {
-  agents?: {
-    defaults?: {
-      workspace?: string;
-      model?: string | { primary?: string; fallbacks?: string[] };
-      maxTokens?: number;
-      temperature?: number;
-      max_tool_iterations?: number;
-      memory?: {
-        enabled?: boolean;
-        useEnhancedSystem?: boolean;
-        userProfileEnabled?: boolean;
-        memoryCharLimit?: number;
-        userCharLimit?: number;
-        provider?: 'none' | 'stub';
-        injectionFrequency?: 'every-turn' | 'first-turn';
-        contextCadence?: number;
-        dialecticCadence?: number;
-      };
-      sessionSearch?: {
-        summaryModel?: string;
-      };
-    };
-  };
   channels?: Record<string, unknown>;
   gateway?: {
     host?: string;
