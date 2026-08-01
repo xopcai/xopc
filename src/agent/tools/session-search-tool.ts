@@ -1,35 +1,25 @@
 // Cross-session transcript search + optional LLM summaries
 import { Type } from '@sinclair/typebox';
 import type { AgentMessage, AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
-import { type UserMessage } from '@earendil-works/pi-ai/compat';
+import { type Api, type Model, type UserMessage } from '@earendil-works/pi-ai/compat';
 
-import type { Config } from '../../config/schema.js';
-import { getDefaultModelSync, resolveModel } from '../../providers/index.js';
+import { resolveModel } from '../../providers/index.js';
 import { completeWithResolvedCredentials } from '../../providers/model-call.js';
 import type { SessionStore } from '../../session/store.js';
-import { readAgentMessageContent } from '../memory/agent-message-access.js';
 import { createLogger } from '../../utils/logger.js';
+import { readAgentMessageContent } from '../memory/agent-message-access.js';
 
 const log = createLogger('Agent:SessionSearch');
 
 const MAX_SUMMARY_CHARS = 20_000;
 
-function resolveSummaryModel(getConfig?: () => Config | undefined) {
+function resolveSummaryModel(deps: SessionSearchToolDeps): Model<Api> {
   const envRef = process.env.XOPC_SESSION_SEARCH_MODEL?.trim();
-  const ref = envRef;
-  if (ref) {
-    try {
-      return resolveModel(ref);
-    } catch (err) {
-      log.warn({ err, ref }, 'session_search: summary model resolve failed, using fallback');
-    }
+  if (envRef) {
+    return resolveModel(envRef);
   }
-  try {
-    return resolveModel('openai/gpt-4o-mini');
-  } catch {
-    const d = getDefaultModelSync(getConfig?.());
-    return resolveModel(d);
-  }
+
+  return deps.getPrimaryModel();
 }
 
 function extractTextFromContent(content: unknown): string {
@@ -72,7 +62,7 @@ function formatMessagesForSummary(messages: AgentMessage[]): string {
 async function summarizeSession(
   messages: AgentMessage[],
   query: string,
-  getConfig: (() => Config | undefined) | undefined,
+  deps: SessionSearchToolDeps,
   signal: AbortSignal | undefined,
   logMeta?: { summarizingSessionKey: string },
 ): Promise<string> {
@@ -87,7 +77,7 @@ Conversation:
 ${formatted}`;
 
   const userMsg: UserMessage = { role: 'user', content: prompt, timestamp: Date.now() };
-  const model = resolveSummaryModel(getConfig);
+  const model = resolveSummaryModel(deps);
 
   try {
     const result = await completeWithResolvedCredentials(
@@ -145,7 +135,7 @@ const SessionSearchSchema = Type.Object({
 
 export interface SessionSearchToolDeps {
   getSessionStore: () => SessionStore;
-  getConfig?: () => Config | undefined;
+  getPrimaryModel: () => Model<Api>;
   getCurrentSessionKey?: () => string | undefined;
 }
 
@@ -227,7 +217,7 @@ export function createSessionSearchTool(deps: SessionSearchToolDeps): AgentTool 
               messages = messages.filter((m) => m.role === p.roleFilter);
             }
 
-            const summary = await summarizeSession(messages, query, deps.getConfig, signal, {
+            const summary = await summarizeSession(messages, query, deps, signal, {
               summarizingSessionKey: key,
             });
             return { sessionKey: key, score, summary };
