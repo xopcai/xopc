@@ -36,4 +36,18 @@ describe('personal playbook prompt', () => {
     expect(prompt).not.toContain('Never shown');
     expect(prompt).not.toContain('Also never shown');
   });
+
+  it('applies contextual rules only in the matching support need and channel', () => {
+    const contextual = rule('contextual', 'Listen before advising', [
+      'playbook:rule',
+      'playbook:when:support:listen',
+      'playbook:when:channel:webchat',
+    ]);
+    expect(buildPersonalPlaybookPrompt([contextual], { supportNeed: 'listen', channel: 'webchat' }))
+      .toContain('Listen before advising');
+    expect(buildPersonalPlaybookPrompt([contextual], { supportNeed: 'act', channel: 'webchat' }))
+      .toBe('');
+    expect(buildPersonalPlaybookPrompt([contextual], { supportNeed: 'listen', channel: 'telegram' }))
+      .toBe('');
+  });
 });

@@ -8,11 +8,15 @@ import type { Config } from '../../config/schema.js';
 import {
   buildRelationshipPrompt,
   getRelationshipSettings,
+  getInteractionState,
   getUserTrustPolicy,
   isXopcDatabaseOpen,
   listMemoryRecords,
 } from '../../storage/sqlite/index.js';
 import { buildPersonalPlaybookPrompt } from '../../user-context/personal-playbook.js';
+import { buildInteractionStatePrompt } from '../../user-context/interaction-state.js';
+import { buildRelationshipContinuityPrompt } from '../../user-context/relationship-continuity.js';
+import { parseSessionKey } from '../../routing/session-key.js';
 import {
   buildActionTrustPrompt,
   DEFAULT_USER_TRUST_LEVEL,
@@ -74,9 +78,21 @@ export class SystemPromptBuilder {
     const relationshipPrompt = isXopcDatabaseOpen()
       ? buildRelationshipPrompt(getRelationshipSettings())
       : '';
+    const interactionState = isXopcDatabaseOpen() && options.sessionKey
+      ? getInteractionState(options.sessionKey)
+      : undefined;
+    const session = parseSessionKey(options.sessionKey);
+    const activeMemories = isXopcDatabaseOpen()
+      ? listMemoryRecords({ status: 'active', limit: 500 })
+      : [];
     const playbookPrompt = isXopcDatabaseOpen()
-      ? buildPersonalPlaybookPrompt(listMemoryRecords({ status: 'active', limit: 500 }))
+      ? buildPersonalPlaybookPrompt(activeMemories, {
+          ...(session ? { channel: session.source } : {}),
+          ...(interactionState ? { supportNeed: interactionState.supportNeed } : {}),
+        })
       : '';
+    const continuityPrompt = buildRelationshipContinuityPrompt(activeMemories);
+    const interactionPrompt = interactionState ? buildInteractionStatePrompt(interactionState) : '';
     if (options.systemPromptOverride?.trim()) {
       const skillPrompt =
         options.skillPromptText !== undefined
@@ -102,6 +118,8 @@ export class SystemPromptBuilder {
       fullPrompt = `${fullPrompt}\n\n${buildActionTrustPrompt(actionTrustLevel)}`;
       if (relationshipPrompt) fullPrompt = `${fullPrompt}\n\n${relationshipPrompt}`;
       if (playbookPrompt) fullPrompt = `${fullPrompt}\n\n${playbookPrompt}`;
+      if (interactionPrompt) fullPrompt = `${fullPrompt}\n\n${interactionPrompt}`;
+      if (continuityPrompt) fullPrompt = `${fullPrompt}\n\n${continuityPrompt}`;
       log.debug({ baseLength: trimmed.length, skillLength: skillPrompt.length, totalLength: fullPrompt.length }, 'System prompt built (override)');
       return fullPrompt;
     }
@@ -128,7 +146,13 @@ export class SystemPromptBuilder {
       externalMemoryInstructions: options.externalMemoryInstructions,
       heartbeatEnabled,
       ttsSystemHint,
-      extraSystemPrompt: [options.extraSystemPrompt, relationshipPrompt, playbookPrompt].filter(Boolean).join('\n\n'),
+      extraSystemPrompt: [
+        options.extraSystemPrompt,
+        relationshipPrompt,
+        playbookPrompt,
+        interactionPrompt,
+        continuityPrompt,
+      ].filter(Boolean).join('\n\n'),
       activeProjectContext: options.activeProjectContext,
       modelRef: options.modelRef,
       agentId: options.agentId,

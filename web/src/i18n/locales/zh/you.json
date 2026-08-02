@@ -75,6 +75,16 @@
     "deleteRule": "删除",
     "ruleHistory": "版本历史",
     "rollbackRule": "恢复此版本",
+    "ruleSupportContext": "适用支持需求",
+    "ruleChannelContext": "适用渠道",
+    "ruleContextAny": "全部",
+    "ruleSupportNeeds": {
+      "listen": "倾听",
+      "clarify": "梳理",
+      "advise": "建议",
+      "act": "行动",
+      "unknown": "尚不明确"
+    },
     "moveUp": "上移",
     "moveDown": "下移",
     "profileTitle": "基本信息",

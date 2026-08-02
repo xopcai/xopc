@@ -614,6 +614,9 @@ export const MessageBubble = memo(function MessageBubble({
                   objective: m.chat.taskOutcomeObjective,
                   acceptance: m.chat.taskOutcomeAcceptance,
                   evidence: m.chat.taskOutcomeEvidence,
+                  verification: m.chat.taskOutcomeVerification,
+                  verificationStates: m.chat.taskOutcomeVerificationStates,
+                  recovery: m.chat.taskOutcomeRecovery,
                 }}
               />
             ) : null}

@@ -30,6 +30,12 @@ export {
 } from './connection.js';
 export { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 export {
+  getInteractionState,
+  setInteractionState,
+  updateInteractionStateFromMessage,
+  type InteractionState,
+} from './interaction-state-repository.js';
+export {
   buildRelationshipPrompt,
   getRelationshipSettings,
   isProactiveSupportAllowed,

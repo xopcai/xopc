@@ -1,4 +1,13 @@
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
+import {
+  diagnoseTaskFailure,
+  verifyTaskCompletion,
+  type TaskFailureCode,
+  type TaskFailurePhase,
+  type TaskRecoveryAction,
+  type TaskVerification,
+  type TaskVerificationStatus,
+} from '../../agent/outcomes/task-verifier.js';
 
 export type TaskOutcomeStatus = 'running' | 'succeeded' | 'failed' | 'cancelled';
 export type TaskFeedbackOutcome = 'helpful' | 'not_helpful';
@@ -16,6 +25,7 @@ export interface TaskEvidence {
   title: string;
   summary: string;
   uri?: string;
+  verifies?: string[];
 }
 
 export interface TaskOutcome {
@@ -27,6 +37,12 @@ export interface TaskOutcome {
   summary?: string;
   contract?: TaskContract;
   evidence: TaskEvidence[];
+  verification: TaskVerification;
+  failure?: {
+    code: TaskFailureCode;
+    phase: TaskFailurePhase;
+    recoveryAction: TaskRecoveryAction;
+  };
   feedback?: {
     outcome: TaskFeedbackOutcome;
     reason?: string;
@@ -54,6 +70,11 @@ type TaskOutcomeRow = {
   started_at: number;
   completed_at: number | null;
   updated_at: number;
+  verification_status: TaskVerificationStatus;
+  verification_json: string;
+  failure_code: TaskFailureCode | null;
+  failure_phase: TaskFailurePhase | null;
+  recovery_action: TaskRecoveryAction | null;
 };
 
 export interface TaskOutcomeMetrics {
@@ -89,6 +110,17 @@ function fromRow(row: TaskOutcomeRow): TaskOutcome {
     ...(row.summary ? { summary: row.summary } : {}),
     ...(contract ? { contract } : {}),
     evidence,
+    verification: {
+      ...(JSON.parse(row.verification_json) as Omit<TaskVerification, 'status'>),
+      status: row.verification_status,
+    },
+    ...(row.failure_code && row.failure_phase && row.recovery_action ? {
+      failure: {
+        code: row.failure_code,
+        phase: row.failure_phase,
+        recoveryAction: row.recovery_action,
+      },
+    } : {}),
     ...(feedback ? { feedback } : {}),
     startedAt: row.started_at,
     ...(row.completed_at === null ? {} : { completedAt: row.completed_at }),
@@ -98,7 +130,8 @@ function fromRow(row: TaskOutcomeRow): TaskOutcome {
 
 const SELECT_COLUMNS = `run_id, session_key, channel, objective, status, summary,
   contract_json, evidence_json, feedback_outcome, feedback_reason,
-  needs_correction, support_fit, started_at, completed_at, updated_at`;
+  needs_correction, support_fit, started_at, completed_at, updated_at,
+  verification_status, verification_json, failure_code, failure_phase, recovery_action`;
 
 export function startTaskOutcome(input: {
   runId: string;
@@ -125,12 +158,35 @@ export function completeTaskOutcome(input: {
   now?: number;
 }): TaskOutcome | undefined {
   const now = input.now ?? Date.now();
+  const current = getTaskOutcome(input.runId);
+  if (!current) return undefined;
+  const verification = verifyTaskCompletion({
+    status: input.status,
+    acceptanceCriteria: current.contract?.acceptanceCriteria ?? [],
+    evidence: current.evidence,
+  });
+  const failure = input.status === 'succeeded'
+    ? undefined
+    : diagnoseTaskFailure({ status: input.status, summary: input.summary });
   runSqliteWriteTransaction((db) => {
     db.prepare(
       `UPDATE task_outcomes
-       SET status = ?, summary = ?, completed_at = ?, updated_at = ?
+       SET status = ?, summary = ?, completed_at = ?, updated_at = ?,
+           verification_status = ?, verification_json = ?, failure_code = ?,
+           failure_phase = ?, recovery_action = ?
        WHERE run_id = ?`,
-    ).run(input.status, input.summary, now, now, input.runId);
+    ).run(
+      input.status,
+      input.summary,
+      now,
+      now,
+      verification.status,
+      JSON.stringify({ checks: verification.checks }),
+      failure?.code ?? null,
+      failure?.phase ?? null,
+      failure?.recoveryAction ?? null,
+      input.runId,
+    );
   });
   return getTaskOutcome(input.runId);
 }
@@ -239,7 +295,7 @@ export function summarizeTaskOutcomes(): TaskOutcomeMetrics {
         COUNT(*) AS total,
         SUM(CASE WHEN status != 'running' THEN 1 ELSE 0 END) AS completed,
         SUM(CASE WHEN status = 'succeeded' THEN 1 ELSE 0 END) AS succeeded,
-        SUM(CASE WHEN status != 'running' AND json_array_length(evidence_json) > 0 THEN 1 ELSE 0 END) AS verified,
+        SUM(CASE WHEN verification_status = 'passed' THEN 1 ELSE 0 END) AS verified,
         SUM(CASE WHEN feedback_outcome = 'helpful' THEN 1 ELSE 0 END) AS helpful,
         SUM(CASE WHEN feedback_outcome = 'not_helpful' THEN 1 ELSE 0 END) AS not_helpful
        FROM task_outcomes`,
