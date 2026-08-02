@@ -271,11 +271,15 @@ function ChatMarkdownView({
   compact,
   sessionKey,
   streaming = false,
+  animateInitialContent = false,
+  onProgressiveRenderComplete,
 }: {
   content: string;
   compact?: boolean;
   sessionKey?: string | null;
   streaming?: boolean;
+  animateInitialContent?: boolean;
+  onProgressiveRenderComplete?: () => void;
 }) {
   // Reveal bounded chunks at an adaptive cadence so fast providers remain
   // perceptible without forcing one render per raw delta.
@@ -285,8 +289,10 @@ function ChatMarkdownView({
     content,
     streaming,
     metricsKey,
+    animateInitialContent,
+    onProgressiveRenderComplete,
   );
-  const [hasStreamed, setHasStreamed] = useState(streaming);
+  const [hasStreamed, setHasStreamed] = useState(streaming || animateInitialContent);
   useEffect(() => {
     if (streaming) setHasStreamed(true);
   }, [streaming]);
@@ -405,6 +411,8 @@ function renderTextOrImageBlock(
   onImagePreview?: (block: ImageContent, index: number) => void,
   contentIndex?: number,
   sessionKey?: string | null,
+  animateInitialContent?: boolean,
+  onProgressiveRenderComplete?: () => void,
 ) {
   if (block.type === 'text') {
     if (isUser) {
@@ -435,6 +443,8 @@ function renderTextOrImageBlock(
           compact
           sessionKey={sessionKey}
           streaming={isAssistantMessageStreaming}
+          animateInitialContent={animateInitialContent}
+          onProgressiveRenderComplete={onProgressiveRenderComplete}
         />
       </div>
     );
@@ -492,6 +502,8 @@ export function ChunkedContent({
   sessionKey,
   workflowOptions,
   assistantActivity,
+  progressiveRender = false,
+  onProgressiveRenderComplete,
 }: {
   content: MessageContent[];
   isUser: boolean;
@@ -532,6 +544,8 @@ export function ChunkedContent({
   sessionKey: string | null | undefined;
   workflowOptions: AssistantActivityWorkflowOptions;
   assistantActivity?: AssistantTurnActivityPresentation;
+  progressiveRender?: boolean;
+  onProgressiveRenderComplete?: () => void;
 }) {
   const renderContent = isUser ? content : mergeConsecutiveTextBlocks(content);
   const nodes: ReactNode[] = [];
@@ -575,6 +589,8 @@ export function ChunkedContent({
         onImagePreview,
         b.type === 'image' ? imgIdx : i,
         sessionKey,
+        progressiveRender,
+        onProgressiveRenderComplete,
       );
       if (el) nodes.push(el);
       i++;

@@ -104,6 +104,10 @@ export type Attachment = MessageAttachment;
 export interface Message {
   role: 'user' | 'assistant';
   content: MessageContent[];
+  /** Client-only identity that survives live-to-persisted message reconciliation. */
+  renderKey?: string;
+  /** Client-only hint: reveal this live response progressively even if the transport already ended. */
+  progressiveRender?: boolean;
   attachments?: MessageAttachment[];
   usage?: {
     inputTokens?: number;

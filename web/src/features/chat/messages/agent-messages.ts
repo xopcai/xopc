@@ -118,6 +118,8 @@ export function mergeConsecutiveAssistantMessages(messages: Message[]): Message[
     if (prev?.role === 'assistant') {
       prev.content = mergeAssistantContentFragments(prev.content, m.content);
       if (m.timestamp != null) prev.timestamp = m.timestamp;
+      if (m.renderKey) prev.renderKey = m.renderKey;
+      if (m.progressiveRender) prev.progressiveRender = true;
       if (m.usage) prev.usage = m.usage;
       if (m.attachments?.length) {
         prev.attachments = dedupeAttachments([...(prev.attachments ?? []), ...m.attachments]);

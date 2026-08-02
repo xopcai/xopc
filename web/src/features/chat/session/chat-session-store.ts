@@ -7,7 +7,10 @@ import type {
   ReasoningLevel,
 } from '@/features/chat/messages/messages.types';
 import { hasPendingAgentRunForChat } from '@/features/chat/messages/message-sender';
-import { mergeConsecutiveAssistantMessages } from '@/features/chat/messages/agent-messages';
+import {
+  assistantTurnVisuallyEquivalent,
+  mergeConsecutiveAssistantMessages,
+} from '@/features/chat/messages/agent-messages';
 import { mergeMissingUserMessagesFromServer } from '@/features/chat/messages/merge-missing-user-messages';
 import {
   shouldReplaceOptimisticUserRow,
@@ -83,6 +86,7 @@ type ChatSessionStoreActions = {
     updater: (prev: Message[]) => Message[],
   ) => void;
   finalizeStreamingTurn: (sessionKey: string, message: Message) => void;
+  completeProgressiveRender: (sessionKey: string, renderKey: string) => void;
   clearStreamingState: (sessionKey: string) => void;
   clearSession: (sessionKey: string) => void;
   getSessionSnapshot: (sessionKey: string) => ChatSessionSlice | undefined;
@@ -158,7 +162,16 @@ function reconcileMessages(current: Message[], incoming: Message[]): Message[] {
       return existing;
     }
     changed = true;
-    return cloneMessageForRender(message);
+    const nextMessage = cloneMessageForRender(message);
+    if (
+      existing?.role === 'assistant'
+      && message.role === 'assistant'
+      && existing.renderKey
+      && assistantTurnVisuallyEquivalent(existing, message)
+    ) {
+      nextMessage.renderKey = existing.renderKey;
+    }
+    return nextMessage;
   });
   return changed ? next : current;
 }
@@ -366,6 +379,32 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
       });
     },
 
+    completeProgressiveRender: (sessionKey, renderKey) => {
+      const key = normalizeKey(sessionKey);
+      if (!key || !renderKey) return;
+      set((state) => {
+        const current = state.sessions[key];
+        if (!current) return state;
+        let changed = false;
+        const clearHint = (message: Message): Message => {
+          if (message.renderKey !== renderKey || !message.progressiveRender) return message;
+          changed = true;
+          const next = cloneMessageForRender(message);
+          delete next.progressiveRender;
+          return next;
+        };
+        const messages = current.messages.map(clearHint);
+        const streamingMsg = current.streamingMsg ? clearHint(current.streamingMsg) : null;
+        if (!changed) return state;
+        return {
+          sessions: {
+            ...state.sessions,
+            [key]: { ...current, messages, streamingMsg },
+          },
+        };
+      });
+    },
+
     clearStreamingState: (sessionKey) => {
       const key = normalizeKey(sessionKey);
       if (!key) return;
@@ -454,6 +493,8 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
         const current = state.sessions[key];
         if (!current) return state;
         const shell = ensureAssistantMessage(current.streamingMsg, timestamp);
+        shell.renderKey ??= `assistant-stream:${key}:${timestamp}`;
+        shell.progressiveRender = true;
         mutator(shell);
         return {
           sessions: {

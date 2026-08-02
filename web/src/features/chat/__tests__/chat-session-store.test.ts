@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 
 import type { Message } from '@/features/chat/messages/messages.types';
+import { messageRowKey } from '@/features/chat/messages/thinking-blocks';
 import { defaultSessionMeta } from '@/features/chat/session/chat-session-defaults';
 import {
   getChatSessionSnapshot,
@@ -205,6 +206,52 @@ describe('useChatSessionStore', () => {
     expect(snap?.hasMore).toBe(true);
     expect(isSessionSliceLive(snap)).toBe(false);
     expect(useChatSessionStore.getState().sessions[sessionKey].messages[0]).toBe(historicalRow);
+  });
+
+  it('keeps the live row identity when the persisted snapshot has a different timestamp', () => {
+    useChatSessionStore.getState().initSessionSnapshot(sessionKey, {
+      ...idleSlice,
+      sending: true,
+    });
+    useChatSessionStore.getState().mutateSessionStreaming(
+      sessionKey,
+      (message) => message.content.push({ type: 'text', text: 'final answer' }),
+      100,
+    );
+
+    const liveMessage = getChatSessionSnapshot(sessionKey)?.streamingMsg;
+    expect(liveMessage?.progressiveRender).toBe(true);
+    expect(liveMessage?.renderKey).toBeTruthy();
+    if (!liveMessage) throw new Error('expected a live assistant message');
+
+    useChatSessionStore.getState().finalizeStreamingTurn(sessionKey, liveMessage);
+    const localFinal = getChatSessionSnapshot(sessionKey)?.messages[1];
+    if (!localFinal) throw new Error('expected a finalized assistant message');
+    if (!localFinal.renderKey) throw new Error('expected a stable assistant render key');
+    const rowKey = messageRowKey(localFinal, 1);
+    useChatSessionStore.getState().completeProgressiveRender(sessionKey, localFinal.renderKey);
+    const completedFinal = getChatSessionSnapshot(sessionKey)?.messages[1];
+    expect(completedFinal?.progressiveRender).toBeUndefined();
+    expect(completedFinal?.renderKey).toBe(localFinal.renderKey);
+
+    useChatSessionStore.getState().setCommittedSnapshot(sessionKey, {
+      messages: [
+        userMsg,
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'final answer' }],
+          timestamp: 999,
+        },
+      ],
+      hasMore: false,
+    });
+
+    const persistedFinal = getChatSessionSnapshot(sessionKey)?.messages[1];
+    if (!persistedFinal) throw new Error('expected a persisted assistant message');
+    expect(persistedFinal.timestamp).toBe(999);
+    expect(persistedFinal.renderKey).toBe(localFinal.renderKey);
+    expect(persistedFinal.progressiveRender).toBeUndefined();
+    expect(messageRowKey(persistedFinal, 1)).toBe(rowKey);
   });
 
   it('clearSession removes slice', () => {

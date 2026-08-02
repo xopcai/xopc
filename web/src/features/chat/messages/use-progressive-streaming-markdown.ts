@@ -16,18 +16,24 @@ export function useProgressiveStreamingMarkdown(
   content: string,
   streaming: boolean,
   metricsKey: string,
+  animateInitialContent = false,
+  onComplete?: () => void,
 ): string {
-  const [visibleContent, setVisibleContent] = useState(() => streaming ? '' : content);
+  const [visibleContent, setVisibleContent] = useState(
+    () => streaming || animateInitialContent ? '' : content,
+  );
   const pendingContentRef = useRef(content);
   const visibleContentRef = useRef(visibleContent);
   const timerRef = useRef<number | null>(null);
   const lastCommitAtRef = useRef<number | null>(null);
-  const hasStreamedRef = useRef(streaming);
+  const hasStreamedRef = useRef(streaming || animateInitialContent);
+  const completedRef = useRef(false);
 
   useEffect(() => {
     pendingContentRef.current = content;
     if (streaming) {
       hasStreamedRef.current = true;
+      completedRef.current = false;
       recordStreamingDelta(metricsKey, content.length);
     }
     if (!hasStreamedRef.current) {
@@ -39,6 +45,10 @@ export function useProgressiveStreamingMarkdown(
       if (!streaming) {
         hasStreamedRef.current = false;
         lastCommitAtRef.current = null;
+        if (!completedRef.current) {
+          completedRef.current = true;
+          onComplete?.();
+        }
       }
       return;
     }
@@ -74,11 +84,14 @@ export function useProgressiveStreamingMarkdown(
       recordStreamingCommit(metricsKey, nextContent.length);
       setVisibleContent(nextContent);
     }, waitMs);
-  }, [content, metricsKey, streaming, visibleContent]);
+  }, [content, metricsKey, onComplete, streaming, visibleContent]);
 
   useEffect(
     () => () => {
-      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+      if (timerRef.current !== null) {
+        window.clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
     },
     [],
   );
