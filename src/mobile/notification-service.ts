@@ -61,6 +61,7 @@ function goalEvent(payload: unknown): Omit<MobileActivityEvent, 'id' | 'createdA
 
 function automationEvent(payload: unknown): Omit<MobileActivityEvent, 'id' | 'createdAt'> | null {
   if (!payload || typeof payload !== 'object') return null;
+  if ((payload as { silent?: unknown }).silent === true) return null;
   const run = (payload as { run?: AutomationRun }).run;
   if (!run || (run.status !== 'failed' && run.status !== 'timeout' && run.status !== 'succeeded')) return null;
   const type: MobileNotificationEventType = run.status === 'succeeded'

@@ -419,6 +419,7 @@ export function setKnowledgeConsumerWatermark(
 
 export function listKnowledgeSourceItems(options: {
   sourceInstanceId?: string;
+  itemType?: string;
   synthesisStatus?: KnowledgeSynthesisStatus;
   includeDeleted?: boolean;
   limit?: number;
@@ -429,6 +430,10 @@ export function listKnowledgeSourceItems(options: {
   if (options.sourceInstanceId) {
     where.push('source_instance_id = ?');
     params.push(options.sourceInstanceId);
+  }
+  if (options.itemType) {
+    where.push('item_type = ?');
+    params.push(options.itemType);
   }
   if (options.synthesisStatus) {
     where.push('synthesis_status = ?');

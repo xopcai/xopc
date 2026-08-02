@@ -42,6 +42,37 @@ export type WorkUnderstandingThread = {
   evidenceIds: string[];
 };
 
+export type FocusWatch = {
+  id: string;
+  threadId: string;
+  goalId?: string;
+  automationId: string;
+  kind: 'progress' | 'staleness' | 'deadline' | 'intelligence';
+  status: 'active' | 'paused';
+  config: Record<string, unknown>;
+  trialEndsAt?: number;
+  lastRunAt?: number;
+  lastUsefulResultAt?: number;
+  consecutiveEmptyRuns: number;
+};
+
+export type FocusView = {
+  id: string;
+  title: string;
+  summary: string;
+  status: WorkUnderstandingThread['status'];
+  horizon: WorkUnderstandingThread['horizon'];
+  confidence: number;
+  focusScore: number;
+  userStatus: WorkUnderstandingThread['userStatus'];
+  projectIds: string[];
+  goalId?: string;
+  nextAction?: string;
+  blockedReason?: string;
+  watches: FocusWatch[];
+  lastObservedAt: number;
+};
+
 export type WorkDiscoveryResult = {
   projectSummary: string;
   currentState: string;
@@ -239,6 +270,30 @@ export async function updateWorkUnderstandingThread(
     { method: 'PATCH', body: JSON.stringify(input) },
   );
   return response.thread;
+}
+
+export async function fetchFocuses(includeUnreviewed = false): Promise<FocusView[]> {
+  const response = await fetchJson<{ focuses: FocusView[] }>(apiUrl(
+    `/api/focuses${includeUnreviewed ? '?includeUnreviewed=true' : ''}`,
+  ));
+  return response.focuses;
+}
+
+export async function activateFocusTrial(
+  focusId: string,
+  kind: FocusWatch['kind'] = 'progress',
+): Promise<{ focus: FocusView; watch: FocusWatch }> {
+  return fetchJson(apiUrl(`/api/focuses/${encodeURIComponent(focusId)}/watches/trial`), {
+    method: 'POST',
+    body: JSON.stringify({ kind }),
+  });
+}
+
+export async function pauseFocusWatch(focusId: string, watchId: string): Promise<FocusWatch> {
+  const response = await fetchJson<{ watch: FocusWatch }>(apiUrl(
+    `/api/focuses/${encodeURIComponent(focusId)}/watches/${encodeURIComponent(watchId)}/pause`,
+  ), { method: 'POST' });
+  return response.watch;
 }
 
 export async function startWorkDiscoveryRun(rootPath: string): Promise<WorkDiscoveryRun> {

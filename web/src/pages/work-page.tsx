@@ -17,11 +17,19 @@ import { Link, useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { SlidingSegmented } from '@/components/ui/sliding-segmented';
 import { WorkbenchActivity } from '@/features/activity/workbench-activity';
 import { delegateWork, fetchProjects, type Project } from '@/features/projects/api';
 import {
+  activateFocusTrial,
+  fetchFocuses,
+  pauseFocusWatch,
+  type FocusView,
+} from '@/features/work-discovery/api';
+import {
+  approveProactiveInsight,
   fetchWorkHome,
+  prepareFocusCalendarSignal,
+  respondToProactiveInsight,
   respondToWorkDecision,
   type WorkHomeDecision,
   type WorkHomeItem,
@@ -161,26 +169,30 @@ export function WorkPage() {
   const clearPageHeader = usePageHeaderStore((state) => state.clearPageHeader);
   const [home, setHome] = useState<WorkHomeResponse | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [focuses, setFocuses] = useState<FocusView[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
-  const [createIntent, setCreateIntent] = useState<'delegate' | 'watch'>('delegate');
   const [outcome, setOutcome] = useState('');
   const [creating, setCreating] = useState(false);
   const [busyDecisionId, setBusyDecisionId] = useState<string | null>(null);
+  const [busyFocusId, setBusyFocusId] = useState<string | null>(null);
+  const [busyInsightId, setBusyInsightId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
     try {
-      const [homeResult, projectsResult] = await Promise.all([
+      const [homeResult, projectsResult, focusResult] = await Promise.all([
         fetchWorkHome(language),
         fetchProjects({ limit: 100, sortBy: 'updatedAt', sortOrder: 'desc' }),
+        fetchFocuses(),
       ]);
       setHome(homeResult);
       setProjects(projectsResult.items);
+      setFocuses(focusResult);
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -212,15 +224,6 @@ export function WorkPage() {
     event.preventDefault();
     const trimmed = outcome.trim();
     if (!trimmed || creating) return;
-    if (createIntent === 'watch') {
-      const prompt = language === 'zh'
-        ? `持续关注以下事项，在发生有意义的变化时通知我：\n${trimmed}`
-        : `Keep watching the following and notify me when something meaningfully changes:\n${trimmed}`;
-      setOutcome('');
-      setCreateOpen(false);
-      navigate(`/automations?draft=${encodeURIComponent(prompt)}&autogenerate=1`);
-      return;
-    }
     setCreating(true);
     setCreateError(null);
     try {
@@ -233,19 +236,14 @@ export function WorkPage() {
     } finally {
       setCreating(false);
     }
-  }, [createIntent, creating, language, navigate, outcome]);
+  }, [creating, language, navigate, outcome]);
 
   const headerEnd = useMemo(() => (
-    <Button type="button" variant="primary" className="h-9 rounded-lg" onClick={() => { setCreateIntent('delegate'); setCreateOpen(true); }}>
+    <Button type="button" variant="primary" className="h-9 rounded-lg" onClick={() => setCreateOpen(true)}>
       <Plus className="size-4" aria-hidden />
       {t.workHome.newWork}
     </Button>
   ), [t.workHome.newWork]);
-
-  const createIntentOptions = useMemo(() => [
-    { value: 'delegate' as const, label: t.workHome.delegateMode, icon: Sparkles },
-    { value: 'watch' as const, label: t.workHome.watchMode, icon: Eye },
-  ], [t.workHome.delegateMode, t.workHome.watchMode]);
 
   const respondToDecision = useCallback(async (item: WorkHomeDecision, decision: 'approve' | 'deny') => {
     if (!item.response) return;
@@ -260,6 +258,51 @@ export function WorkPage() {
       setBusyDecisionId(null);
     }
   }, [load]);
+
+  const toggleFocusWatch = useCallback(async (focus: FocusView, kind: 'progress' | 'intelligence') => {
+    setBusyFocusId(focus.id);
+    setLoadError(null);
+    try {
+      const active = focus.watches.find((watch) => watch.kind === kind && watch.status === 'active');
+      if (active) await pauseFocusWatch(focus.id, active.id);
+      else await activateFocusTrial(focus.id, kind);
+      setFocuses(await fetchFocuses());
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusyFocusId(null);
+    }
+  }, []);
+
+  const respondToInsight = useCallback(async (insightId: string, decision: 'approved' | 'dismissed') => {
+    setBusyInsightId(insightId);
+    setLoadError(null);
+    try {
+      if (decision === 'approved') await approveProactiveInsight(insightId);
+      else await respondToProactiveInsight(insightId, 'dismissed');
+      setHome((current) => current ? {
+        ...current,
+        proactiveInsights: current.proactiveInsights.filter((item) => item.id !== insightId),
+      } : current);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusyInsightId(null);
+    }
+  }, []);
+
+  const prepareForCalendarSignal = useCallback(async (focusId: string, signalId: string) => {
+    setBusyFocusId(focusId);
+    setLoadError(null);
+    try {
+      await prepareFocusCalendarSignal(focusId, signalId);
+      setFocuses(await fetchFocuses());
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusyFocusId(null);
+    }
+  }, []);
 
   useLayoutEffect(() => {
     setPageHeader({
@@ -291,10 +334,10 @@ export function WorkPage() {
             <div className="flex shrink-0 items-start gap-4 border-b border-edge px-5 py-4">
               <div className="min-w-0 flex-1">
                 <Dialog.Title className="text-base font-semibold text-fg">
-                  {createIntent === 'watch' ? t.workHome.watchTitle : t.workHome.delegateTitle}
+                  {t.workHome.delegateTitle}
                 </Dialog.Title>
                 <Dialog.Description className="mt-1 text-sm leading-5 text-fg-muted">
-                  {createIntent === 'watch' ? t.workHome.watchDescription : t.workHome.delegateDescription}
+                  {t.workHome.delegateDescription}
                 </Dialog.Description>
               </div>
               <Dialog.Close asChild>
@@ -312,19 +355,8 @@ export function WorkPage() {
             </div>
             <form onSubmit={submitCreate} className="flex min-h-0 flex-1 flex-col">
               <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-4">
-                <SlidingSegmented
-                  value={createIntent}
-                  onChange={(intent) => {
-                    setCreateIntent(intent);
-                    setCreateError(null);
-                  }}
-                  options={createIntentOptions}
-                  aria-label={t.workHome.createModeLabel}
-                  className="mb-4 shrink-0"
-                  buttonClassName="h-9"
-                />
                 <label htmlFor="new-work-outcome" className="mb-2 shrink-0 text-sm font-medium text-fg">
-                  {createIntent === 'watch' ? t.workHome.watchLabel : t.workHome.outcomeLabel}
+                  {t.workHome.outcomeLabel}
                 </label>
                 <textarea
                   id="new-work-outcome"
@@ -337,7 +369,7 @@ export function WorkPage() {
                       event.currentTarget.form?.requestSubmit();
                     }
                   }}
-                  placeholder={createIntent === 'watch' ? t.workHome.watchPlaceholder : t.workHome.outcomePlaceholder}
+                  placeholder={t.workHome.outcomePlaceholder}
                   maxLength={12_000}
                   disabled={creating}
                   autoFocus
@@ -355,12 +387,12 @@ export function WorkPage() {
                 ) : null}
               </div>
               <div className="flex shrink-0 flex-col gap-3 border-t border-edge px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-xs leading-5 text-fg-subtle">{createIntent === 'watch' ? t.workHome.watchSetupHint : t.workHome.autoSetupHint}</p>
+                <p className="text-xs leading-5 text-fg-subtle">{t.workHome.autoSetupHint}</p>
                 <div className="flex shrink-0 justify-end gap-2">
                   <Dialog.Close asChild><Button type="button" variant="ghost" disabled={creating}>{t.cancel}</Button></Dialog.Close>
                   <Button type="submit" variant="primary" className="min-w-32" disabled={creating || !outcome.trim()}>
                     <Sparkles className="size-4" aria-hidden />
-                    {creating ? t.workHome.delegating : createIntent === 'watch' ? t.workHome.designWatch : t.workHome.delegate}
+                    {creating ? t.workHome.delegating : t.workHome.delegate}
                   </Button>
                 </div>
               </div>
@@ -395,17 +427,138 @@ export function WorkPage() {
             ) : null}
           </section>
 
+          {home.proactiveInsights.length > 0 ? (
+            <section className="rounded-2xl border border-accent/20 bg-accent-soft/20 p-5">
+              <div className="flex items-center gap-2">
+                <Sparkles className="size-4 text-accent" aria-hidden />
+                <h2 className="text-base font-semibold text-fg">{t.workHome.insightsTitle}</h2>
+              </div>
+              <p className="mt-1 text-xs text-fg-muted">{t.workHome.insightsHint}</p>
+              <div className="mt-4 space-y-3">
+                {home.proactiveInsights.map((insight) => (
+                  <article key={insight.id} className="rounded-xl border border-edge-subtle bg-surface-panel p-4">
+                    <h3 className="text-sm font-semibold text-fg">{insight.title}</h3>
+                    <p className="mt-2 text-sm leading-6 text-fg-muted">{insight.summary}</p>
+                    <p className="mt-2 text-xs leading-5 text-fg-muted">
+                      <span className="font-medium text-fg">{t.workHome.whyItMatters}: </span>{insight.whyItMatters}
+                    </p>
+                    <p className="mt-2 rounded-lg bg-surface-base px-3 py-2 text-xs leading-5 text-fg-muted">
+                      <span className="font-medium text-fg">{t.workHome.suggestedNext}: </span>{insight.nextAction}
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {insight.evidence.map((evidence, index) => (
+                        <span key={`${evidence.label}-${index}`} className="rounded-full border border-edge-subtle px-2 py-1 text-[11px] text-fg-subtle">
+                          {evidence.label}{evidence.source ? ` · ${evidence.source}` : ''}
+                        </span>
+                      ))}
+                    </div>
+                    <div className="mt-3 flex justify-end gap-2 border-t border-edge-subtle pt-3">
+                      <Button type="button" variant="ghost" className="h-8 px-2 text-xs" disabled={busyInsightId === insight.id} onClick={() => void respondToInsight(insight.id, 'dismissed')}>
+                        {t.workHome.dismissInsight}
+                      </Button>
+                      <Button type="button" variant="primary" className="h-8 px-2 text-xs" disabled={busyInsightId === insight.id} onClick={() => void respondToInsight(insight.id, 'approved')}>
+                        {t.workHome.investigateInsight}
+                      </Button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          {home.calendarSignals.length > 0 ? (
+            <section className="rounded-2xl bg-surface-base p-5 shadow-surface">
+              <div className="flex items-center gap-2">
+                <CalendarClock className="size-4 text-accent" aria-hidden />
+                <h2 className="text-base font-semibold text-fg">{t.workHome.relatedCalendarTitle}</h2>
+              </div>
+              <p className="mt-1 text-xs text-fg-muted">{t.workHome.relatedCalendarHint}</p>
+              <div className="mt-4 divide-y divide-edge-subtle">
+                {home.calendarSignals.map((signal) => (
+                  <article key={signal.id} className="flex flex-col gap-3 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <h3 className="truncate text-sm font-semibold text-fg">{signal.title}</h3>
+                      <p className="mt-1 text-xs text-fg-muted">{signal.focusTitle} · {formatTime(signal.startsAt, '')}</p>
+                    </div>
+                    <Button type="button" variant="secondary" className="h-8 shrink-0 px-2 text-xs" disabled={busyFocusId === signal.focusId} onClick={() => void prepareForCalendarSignal(signal.focusId, signal.id)}>
+                      {busyFocusId === signal.focusId ? t.workHome.focusWatchUpdating : t.workHome.prepareForEvent}
+                    </Button>
+                  </article>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          {focuses.length > 0 ? (
+            <section className="rounded-2xl bg-surface-base p-5 shadow-surface">
+              <div className="flex items-center gap-2">
+                <Eye className="size-4 text-accent" aria-hidden />
+                <h2 className="text-base font-semibold text-fg">{t.workHome.focusesTitle}</h2>
+              </div>
+              <p className="mt-1 text-xs text-fg-muted">{t.workHome.focusesHint}</p>
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                {focuses.slice(0, 6).map((focus) => {
+                  const progressActive = focus.watches.some((watch) => watch.kind === 'progress' && watch.status === 'active');
+                  const intelligenceActive = focus.watches.some((watch) => watch.kind === 'intelligence' && watch.status === 'active');
+                  const active = progressActive || intelligenceActive;
+                  return (
+                    <article key={focus.id} className="rounded-xl border border-edge-subtle bg-surface-panel p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <h3 className="truncate text-sm font-semibold text-fg">{focus.title}</h3>
+                          <p className="mt-1 line-clamp-2 text-xs leading-5 text-fg-muted">{focus.summary}</p>
+                        </div>
+                        <span className={`mt-0.5 size-2 shrink-0 rounded-full ${active ? 'bg-success' : 'bg-fg-subtle/40'}`} aria-hidden />
+                      </div>
+                      {focus.blockedReason || focus.nextAction ? (
+                        <p className="mt-3 line-clamp-2 border-t border-edge-subtle pt-3 text-xs leading-5 text-fg-muted">
+                          {focus.blockedReason || focus.nextAction}
+                        </p>
+                      ) : null}
+                      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-[11px] text-fg-subtle">
+                          {active ? t.workHome.focusWatchActive : t.workHome.focusWatchInactive}
+                        </span>
+                        <div className="flex gap-1">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            className="h-8 px-2 text-xs"
+                            disabled={busyFocusId === focus.id}
+                            onClick={() => void toggleFocusWatch(focus, 'progress')}
+                          >
+                            {busyFocusId === focus.id ? t.workHome.focusWatchUpdating : progressActive ? t.workHome.pauseProgressWatch : t.workHome.startFocusWatch}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            className="h-8 px-2 text-xs"
+                            disabled={busyFocusId === focus.id}
+                            onClick={() => void toggleFocusWatch(focus, 'intelligence')}
+                          >
+                            {busyFocusId === focus.id ? t.workHome.focusWatchUpdating : intelligenceActive ? t.workHome.pauseNewsWatch : t.workHome.startNewsWatch}
+                          </Button>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null}
+
           {home.work.current.length === 0
             && home.workflowRuns.active.length === 0
             && home.decisions.length === 0
-            && home.upcomingAutomations.length === 0 ? (
+            && home.upcomingAutomations.length === 0
+            && focuses.length === 0 ? (
             <section className="rounded-2xl border border-dashed border-edge p-8 text-center">
               <MessageCircle className="mx-auto size-6 text-accent" aria-hidden />
               <h2 className="mt-3 text-sm font-semibold text-fg">{t.workHome.emptyTitle}</h2>
               <p className="mx-auto mt-1 max-w-lg text-sm leading-6 text-fg-muted">{t.workHome.emptyBody}</p>
               <div className="mt-4 flex justify-center gap-2">
                 <Button type="button" variant="primary" onClick={() => navigate('/chat/new')}>{t.workHome.startChat}</Button>
-                <Button type="button" variant="secondary" onClick={() => { setCreateIntent('delegate'); setCreateOpen(true); }}>{t.workHome.startLongWork}</Button>
+                <Button type="button" variant="secondary" onClick={() => setCreateOpen(true)}>{t.workHome.startLongWork}</Button>
               </div>
             </section>
           ) : null}
