@@ -1,6 +1,15 @@
 import type { Hono } from 'hono';
 
 import { getAgentDefaultModelRef } from '../../../config/schema.js';
+import {
+  FocusService,
+  claimProactiveInsightApproval,
+  getProactiveInsight,
+  listFocusCalendarSignals,
+  setProactiveInsightStatus,
+  type FocusWatchKind,
+  type ProactiveInsightStatus,
+} from '../../../proactive/index.js';
 import { isLocalModelBaseUrl } from '../../../providers/model-call.js';
 import { resolveModel } from '../../../providers/index.js';
 import { previewWorkDiscoveryRoot, WORK_DISCOVERY_SCAN_POLICY_VERSION } from '../../../work-discovery/probe.js';
@@ -31,6 +40,7 @@ function stringField(body: unknown, field: string): string {
 
 export function registerWorkDiscoveryRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const service = workDiscoveryService(deps);
+  const focuses = new FocusService(deps.service.automationServiceInstance);
   const limited = deps.strictRateLimitMiddleware;
 
   authenticated.get('/api/onboarding/work-discovery', (c) => c.json({
@@ -259,6 +269,112 @@ export function registerWorkDiscoveryRoutes(authenticated: Hono, deps: Authentic
       ...(stringField(body, 'correctedSummary') ? { correctedSummary: stringField(body, 'correctedSummary') } : {}),
     });
     return thread ? c.json({ ok: true, thread }) : c.json({ ok: false, error: 'Work thread not found' }, 404);
+  });
+
+  authenticated.get('/api/focuses', async (c) => {
+    await focuses.reconcileExpiredTrials();
+    return c.json({
+      ok: true,
+      focuses: focuses.list({ includeUnreviewed: c.req.query('includeUnreviewed') === 'true' }),
+    });
+  });
+
+  authenticated.post('/api/focuses/:focusId/confirm', limited, (c) => {
+    const focus = focuses.confirm(c.req.param('focusId'));
+    return focus ? c.json({ ok: true, focus }) : c.json({ ok: false, error: 'Focus not found' }, 404);
+  });
+
+  authenticated.post('/api/focuses/:focusId/watches/trial', limited, async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const requestedKind = stringField(body, 'kind');
+    const kind: FocusWatchKind | undefined = ['progress', 'staleness', 'deadline', 'intelligence'].includes(requestedKind)
+      ? requestedKind as FocusWatchKind
+      : undefined;
+    try {
+      const result = await focuses.activateTrial({ threadId: c.req.param('focusId'), ...(kind ? { kind } : {}) });
+      return c.json({ ok: true, ...result }, 201);
+    } catch (error) {
+      return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400);
+    }
+  });
+
+  authenticated.post('/api/focuses/:focusId/watches/:watchId/pause', limited, async (c) => {
+    const focus = focuses.list({ includeUnreviewed: true }).find((item) => item.id === c.req.param('focusId'));
+    const watch = focus?.watches.find((item) => item.id === c.req.param('watchId'));
+    if (!watch) return c.json({ ok: false, error: 'Watch not found' }, 404);
+    const paused = await focuses.pauseWatch(watch.id);
+    return c.json({ ok: true, watch: paused });
+  });
+
+  authenticated.patch('/api/proactive/insights/:insightId', limited, async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const requested = stringField(body, 'status');
+    const status: ProactiveInsightStatus | undefined = requested === 'read' || requested === 'dismissed'
+      ? requested
+      : undefined;
+    if (!status) return c.json({ ok: false, error: 'Status must be read or dismissed' }, 400);
+    const insight = setProactiveInsightStatus(c.req.param('insightId'), status, Date.now(), 'unread');
+    if (!insight) return c.json({ ok: false, error: 'Insight was already handled or not found' }, 409);
+    if (status === 'dismissed') await focuses.recordInsightFeedback(insight.watchId, false);
+    return c.json({ ok: true, insight });
+  });
+
+  authenticated.post('/api/proactive/insights/:insightId/approve', limited, async (c) => {
+    const insight = getProactiveInsight(c.req.param('insightId'));
+    if (!insight) return c.json({ ok: false, error: 'Insight not found' }, 404);
+    if (insight.status !== 'unread') return c.json({ ok: false, error: `Insight is ${insight.status}` }, 409);
+    const focus = focuses.list({ includeUnreviewed: true })
+      .find((item) => item.watches.some((watch) => watch.id === insight.watchId));
+    if (!focus) return c.json({ ok: false, error: 'Focus not found' }, 404);
+    const claimed = claimProactiveInsightApproval(insight.id);
+    if (!claimed) return c.json({ ok: false, error: 'Insight was already handled' }, 409);
+    let automationId: string | undefined;
+    try {
+      const automation = await deps.service.automationServiceInstance.create({
+        name: `Investigate: ${insight.title}`.slice(0, 200),
+        description: `User-approved read-only proposal from proactive insight ${insight.id}.`,
+        ...(focus.projectIds[0] ? { projectId: focus.projectIds[0] } : {}),
+        trigger: { kind: 'manual' },
+        action: {
+          kind: 'agent',
+          instruction: [
+            'The user approved this evidence-backed proposal for read-only investigation and preparation.',
+            `Focus: ${focus.title}`,
+            `Observed change: ${insight.summary}`,
+            `Why it matters: ${insight.whyItMatters}`,
+            `Approved next step: ${insight.nextAction}`,
+            `Evidence: ${JSON.stringify(insight.evidence)}`,
+            'Investigate or prepare the requested material. Return a concise result with evidence. Do not modify files or external systems.',
+          ].join('\n'),
+          timeoutSeconds: 300,
+        },
+        safety: { mode: 'suggest_only' },
+        afterRun: { kind: 'none' },
+        reliability: { timeoutSeconds: 300, disableAfterConsecutiveFailures: 1 },
+      });
+      automationId = automation.id;
+      const run = await deps.service.automationServiceInstance.runNow(automation.id);
+      await focuses.recordInsightFeedback(insight.watchId, true);
+      return c.json({ ok: true, automationId: automation.id, runId: run.id }, 202);
+    } catch (error) {
+      if (automationId) await deps.service.automationServiceInstance.remove(automationId);
+      setProactiveInsightStatus(insight.id, 'unread', Date.now(), 'approved');
+      return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 500);
+    }
+  });
+
+  authenticated.post('/api/focuses/:focusId/calendar/:signalId/prepare', limited, async (c) => {
+    const focus = focuses.list().find((item) => item.id === c.req.param('focusId'));
+    if (!focus) return c.json({ ok: false, error: 'Focus not found' }, 404);
+    const signal = listFocusCalendarSignals([focus]).find((item) => item.id === c.req.param('signalId'));
+    if (!signal) return c.json({ ok: false, error: 'Calendar event not found' }, 404);
+    const eventContext = `${signal.title} at ${new Date(signal.startsAt).toISOString()}`;
+    try {
+      const result = await focuses.activateTrial({ threadId: focus.id, kind: 'deadline', eventContext });
+      return c.json({ ok: true, ...result });
+    } catch (error) {
+      return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 500);
+    }
   });
 
   authenticated.post('/api/work-discovery/runs/:runId/cancel', (c) => {

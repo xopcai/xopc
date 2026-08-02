@@ -11,8 +11,9 @@ import { setPairingBroadcastSink } from '../channels/pairing/pairing-events.js';
 import { MessageBus, MessageBusShutdownError } from '../infra/bus/index.js';
 import { loadConfig, saveConfig as writeConfigToDisk } from '../config/index.js';
 import { getWorkspacePath } from '../config/workspace-path-helpers.js';
-import { AutomationService } from '../automations/index.js';
+import { AutomationService, type AutomationRun } from '../automations/index.js';
 import { onAutomationProductEvent, publishAutomationProductEvent } from '../automations/product-events.js';
+import { processFocusAutomationRun } from '../proactive/index.js';
 import { buildNoteAgentContext, NotesService, NotesStore } from '../notes/index.js';
 import { buildWorkflowChildTools } from '../agent/workflow/workflow-child-tools.js';
 import { WorkflowRunService } from '../workflows/service/workflow-run-service.js';
@@ -414,7 +415,7 @@ export class GatewayService {
       getDefaultAgentId: () => getDefaultAgentId(this.config),
       getProjectWorkspaceRoot: (projectId) => this.projects.get(projectId)?.workspaceRoot,
       workflowRunService: this.createWorkflowRunService(),
-      onRunCompleted: (run) => this.emit('automation.run.completed', { run }),
+      onRunCompleted: (run) => this.handleAutomationRunCompleted(run),
     });
 
     this._agentService.persistentGoals.setWebchatContinuationScheduler((sessionKey, message) => {
@@ -830,7 +831,7 @@ export class GatewayService {
       agentService: this.agentService,
       getDefaultAgentId: () => getDefaultAgentId(this.config),
       workflowRunService: this.createWorkflowRunService(),
-      onRunCompleted: (run) => this.emit('automation.run.completed', { run }),
+      onRunCompleted: (run) => this.handleAutomationRunCompleted(run),
     });
     this.startAutomationProductEventBridge();
 
@@ -1572,6 +1573,19 @@ export class GatewayService {
     this.sse.emit(type, payload);
     this.createGoalNotificationService().handleGatewayEvent(type, payload);
     this.createMobileNotificationService().handleGatewayEvent(type, payload);
+  }
+
+  private handleAutomationRunCompleted(run: AutomationRun): void {
+    try {
+      const proactive = processFocusAutomationRun(run);
+      this.emit('automation.run.completed', { run, silent: proactive.handled });
+      if (proactive.insight) {
+        this.emit('proactive.insight.created', { insight: proactive.insight });
+      }
+    } catch (err) {
+      log.warn({ err, automationId: run.automationId, runId: run.id }, 'Proactive result processing failed');
+      this.emit('automation.run.completed', { run });
+    }
   }
 
   private startAutomationProductEventBridge(): void {

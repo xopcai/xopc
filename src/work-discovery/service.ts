@@ -11,6 +11,7 @@ import { getDefaultAgentId } from '../routing/resolve-route.js';
 import type { SessionIndex } from '../session/manager.js';
 import {
   getMemoryRecord,
+  upsertKnowledgeSourceItems,
   upsertMemoryRecord,
   type SessionMetadataSeed,
 } from '../storage/sqlite/index.js';
@@ -295,9 +296,11 @@ export class WorkDiscoveryService {
         ? raw.content.trim().slice(0, Math.min(12_000, remaining))
         : '';
       remaining -= content.length;
-      const timestamp = (key: string) => typeof raw[key] === 'number' && Number.isFinite(raw[key])
-        ? raw[key] as number
-        : undefined;
+      const timestamp = (key: string) => {
+        const value = raw[key];
+        if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+        return Number.isFinite(new Date(value).getTime()) ? value : undefined;
+      };
       return [{
         id,
         source,
@@ -325,6 +328,33 @@ export class WorkDiscoveryService {
       } : {}),
       signal,
     });
+    const calendarItems = items.filter((item) => item.source === 'calendar' && item.startsAt != null);
+    if (calendarItems.length > 0) {
+      upsertKnowledgeSourceItems(calendarItems.map((item) => {
+        const normalizedText = JSON.stringify({
+          title: item.title,
+          description: item.content,
+          start: new Date(item.startsAt!).toISOString(),
+          ...(item.endsAt != null ? { end: new Date(item.endsAt).toISOString() } : {}),
+          ...(item.group ? { calendar: item.group } : {}),
+        });
+        return {
+          sourceInstanceId: 'desktop:calendar',
+          externalId: item.id,
+          itemType: 'calendar_event',
+          authorRole: 'unknown' as const,
+          occurredAt: new Date(item.startsAt!).toISOString(),
+          ...(item.modifiedAt != null ? { sourceUpdatedAt: new Date(item.modifiedAt).toISOString() } : {}),
+          contentHash: createHash('sha256').update(normalizedText).digest('hex'),
+          normalizedText,
+          metadata: { provider: 'desktop-calendar', calendar: item.group ?? '' },
+          sensitivity: 'personal' as const,
+          retentionClass: 'bounded' as const,
+          synthesisPipeline: 'user_understanding' as const,
+          synthesisStatus: 'ignored' as const,
+        };
+      }));
+    }
     const rawContents = items.flatMap((item) => item.content ? [item.content] : []);
     const safeProfileCandidates = analysis.profileCandidates
       .filter((candidate) => !hasLongVerbatimOverlap(candidate.statement, rawContents));

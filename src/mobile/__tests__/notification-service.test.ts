@@ -42,5 +42,9 @@ describe('mobileNotificationEventFromGatewayEvent', () => {
       goalId: 'goal-1',
       status: 'running',
     })).toBeNull();
+    expect(mobileNotificationEventFromGatewayEvent('automation.run.completed', {
+      silent: true,
+      run: { id: 'run-2', automationId: 'focus-1', automationName: 'Focus watch', status: 'succeeded' },
+    })).toBeNull();
   });
 });

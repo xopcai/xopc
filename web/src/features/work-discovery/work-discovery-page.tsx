@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Check, ChevronDown, ChevronRight, Clock3, FileText, FolderOpen, GitBranch, Loader2, ShieldCheck, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Clock3, Eye, FileText, FolderOpen, GitBranch, Loader2, ShieldCheck, X } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { BrandLogo } from '@/components/shell/brand-logo';
@@ -12,6 +12,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 
 import {
   cancelWorkDiscoveryRun,
+  activateFocusTrial,
   dismissWorkDiscoveryOnboarding,
   fetchWorkDiscoveryOnboarding,
   fetchWorkDiscoveryRun,
@@ -55,6 +56,7 @@ export function WorkDiscoveryPage() {
   const [correction, setCorrection] = useState('');
   const [alternativesOpen, setAlternativesOpen] = useState(false);
   const [profileSelection, setProfileSelection] = useState<Set<string>>(() => new Set());
+  const [watchActivated, setWatchActivated] = useState(false);
 
   const applyRun = useCallback((next: WorkDiscoveryRun) => {
     useUnderstandingActivityStore.getState().updateDirectoryRun(next);
@@ -253,6 +255,22 @@ export function WorkDiscoveryPage() {
       openConversation(next.sessionKey);
     } catch (cause) {
       setError(errorText(cause));
+      setBusy(false);
+    }
+  };
+
+  const activateTrial = async () => {
+    const focus = run?.result?.workThreads?.find((thread) => thread.horizon === 'current')
+      ?? run?.result?.workThreads?.[0];
+    if (!focus) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await activateFocusTrial(focus.id);
+      setWatchActivated(true);
+    } catch (cause) {
+      setError(errorText(cause));
+    } finally {
       setBusy(false);
     }
   };
@@ -570,6 +588,29 @@ export function WorkDiscoveryPage() {
                 </div>
               </div>
             </article>
+            {run.result.workThreads?.length ? (
+              <div className="mt-5 rounded-xl border border-edge bg-surface-panel p-4">
+                <div className="flex items-start gap-3">
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent-fg">
+                    {watchActivated ? <Check className="size-4" /> : <Eye className="size-4" />}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-fg">
+                      {watchActivated ? copy.focusTrialActive : copy.focusTrialTitle}
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-fg-muted">
+                      {watchActivated ? copy.focusTrialActiveDescription : copy.focusTrialDescription}
+                    </p>
+                    {!watchActivated ? (
+                      <Button className="mt-3 h-9" variant="secondary" disabled={busy} onClick={() => void activateTrial()}>
+                        {busy ? <Loader2 className="size-4 animate-spin" /> : <Eye className="size-4" />}
+                        {copy.activateFocusTrial}
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            ) : null}
             {alternativeSuggestions.length > 0 ? (
               <div className="mt-5 border-t border-edge-subtle pt-4">
                 <button type="button" className="flex w-full items-center justify-between py-2 text-sm font-medium text-fg-muted hover:text-fg" onClick={() => setAlternativesOpen((open) => !open)}>
