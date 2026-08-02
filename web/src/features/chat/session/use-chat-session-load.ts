@@ -14,6 +14,7 @@ import {
   shouldShowHistoryLoading,
   useChatSessionStore,
 } from '@/features/chat/session/chat-session-store';
+import { buildSessionNotFoundErrorPayload } from '@/features/chat/messages/agent-run-error-parser';
 import { openNewChatHandoff } from '@/features/chat/session/new-chat-handoff';
 import type { SessionManager } from '@/features/chat/session/session-manager';
 
@@ -218,10 +219,15 @@ export function useChatSessionLoad(deps: {
           }
           store().prependHistoryMessages(k, loaded, more);
           return undefined;
-        } catch {
+        } catch (error) {
           if (o === 0 && !cursor) {
             historyBeforeCursorRef.current = null;
-            store().setShellError('Failed to load session');
+            const message = error instanceof Error ? error.message : 'Failed to load session';
+            store().setShellError(
+              /^HTTP 404\b/.test(message)
+                ? JSON.stringify(buildSessionNotFoundErrorPayload(message))
+                : 'Failed to load session',
+            );
             const routedViewKey = resolveViewSessionKey(routeSessionKeyRef.current);
             if (routedViewKey && routedViewKey === k) {
               return undefined;

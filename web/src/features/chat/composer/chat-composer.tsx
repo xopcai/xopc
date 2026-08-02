@@ -1,10 +1,12 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 import { MAX_CHAT_ATTACHMENTS } from '@/features/chat/attachments/attachment-utils';
 import { ACCEPT } from '@/features/chat/composer/composer-clipboard';
 import { ChatComposerInput, type ComposerKbdContext } from '@/features/chat/composer/chat-composer-input';
 import { ChatPendingFollowUpStack } from '@/features/chat/follow-up/chat-pending-follow-up-stack';
 import { ComposerAttachmentChips } from '@/features/chat/composer/composer-attachment-chips';
+import { takeComposerAttachmentHandoff } from '@/features/chat/composer/composer-attachment-handoff';
 import { ComposerToolbar } from '@/features/chat/composer/composer-toolbar';
 import { wireFollowUpAttachmentsToComposer } from '@/features/chat/composer/follow-up-attachments-wire';
 import { MAX_PENDING_FOLLOW_UPS } from '@/features/chat/follow-up/pending-follow-up.types';
@@ -120,6 +122,7 @@ export const ChatComposer = memo(function ChatComposer({
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
+  const [searchParams, setSearchParams] = useSearchParams();
   useEffect(() => {
     void fetchCommandsCached();
   }, []);
@@ -167,6 +170,22 @@ export const ChatComposer = memo(function ChatComposer({
     onExternalTextReplace,
     shouldSyncSelectionRef,
   });
+
+  const attachmentHandoffId = searchParams.get('attachmentHandoff');
+  useEffect(() => {
+    if (!sessionKey || !attachmentHandoffId) return;
+    const file = takeComposerAttachmentHandoff(attachmentHandoffId);
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        next.delete('attachmentHandoff');
+        return next;
+      },
+      { replace: true },
+    );
+    if (!file) return;
+    void att.processFiles([file]).then(() => editor.editorRef.current?.focus());
+  }, [attachmentHandoffId, att.processFiles, editor.editorRef, sessionKey, setSearchParams]);
 
   const { onUserTextCommitted, onWireInputClearWalk, tryInputHistoryArrow } =
     useComposerInputHistoryWalk({

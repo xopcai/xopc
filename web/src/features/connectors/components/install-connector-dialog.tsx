@@ -246,15 +246,6 @@ export function InstallConnectorDialog({
               })}
             </div>
             <div className="flex flex-col gap-4">
-          {connector.integrationStrategy ? (
-            <div className="rounded-xl border border-accent/20 bg-accent-soft/60 px-4 py-3 text-sm text-accent-fg">
-              {connector.integrationStrategy.lane === 'mcp'
-                ? t.integrationStrategyMcpHint
-                : connector.integrationStrategy.lane === 'native'
-                  ? t.integrationStrategyNativeHint
-                  : t.integrationStrategyComposioHint}
-            </div>
-          ) : null}
           {isComposioToolkit && !composioConfigured ? (
             <section className="rounded-2xl border border-accent/25 bg-accent-soft/50 p-4">
               <h3 className="text-sm font-semibold text-fg">{t.composioSetupTitle}</h3>
@@ -373,14 +364,7 @@ export function InstallConnectorDialog({
             <div className="rounded-2xl border border-edge bg-surface-base p-4 text-sm text-fg-muted">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <p className="font-medium text-fg">
-                    {formatConnectorMessage(t.connectedAs, {
-                      target: draft.result.materialized.type === 'mcp' ? draft.result.materialized.serverId : draft.result.instanceId,
-                    })}
-                  </p>
-                  <p className="mt-1 text-xs text-fg-subtle">
-                    {formatConnectorMessage(t.runtimeLabel, { runtime: draft.result.materialized.type.toUpperCase() })}
-                  </p>
+                  <p className="font-medium text-fg">{t.connectedBadge}</p>
                 </div>
                 <span
                   className={cn(

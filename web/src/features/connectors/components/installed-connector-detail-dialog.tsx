@@ -239,9 +239,9 @@ export function InstalledConnectorDetailDialog({
               <div className="min-w-0">
                 <Dialog.Title className="text-base font-semibold text-fg">{instance.displayName}</Dialog.Title>
                 <Dialog.Description className="mt-1 text-sm text-fg-muted">
-                  {instance.materialized.type === 'mcp'
+                  {definition?.description ?? (instance.materialized.type === 'mcp'
                     ? formatConnectorMessage(t.mcpServerRuntime, { serverId: instance.materialized.serverId })
-                    : formatConnectorMessage(t.runtimeLabel, { runtime: instance.materialized.type })}
+                    : formatConnectorMessage(t.runtimeLabel, { runtime: instance.materialized.type }))}
                 </Dialog.Description>
               </div>
             </div>

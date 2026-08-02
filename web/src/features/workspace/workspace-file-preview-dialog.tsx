@@ -8,6 +8,7 @@ import {
   Link2,
   Loader2,
   Maximize2,
+  MessageSquarePlus,
   Minimize2,
   MoreHorizontal,
   Pencil,
@@ -16,9 +17,13 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
+import { createComposerAttachmentHandoff } from '@/features/chat/composer/composer-attachment-handoff';
+import { formatFileSize } from '@/features/chat/attachments/attachment-utils';
+import { MAX_WEBCHAT_ATTACHMENT_FILE_BYTES } from '@/features/chat/constants';
 import {
   getPreviewFileExtension,
   getPreviewFileName,
@@ -29,6 +34,7 @@ import {
 } from '@/features/preview-runtime';
 import { ShareLinkDialog } from '@/features/shares/share-link-dialog';
 import { useShareLink } from '@/features/shares/use-share-link';
+import { getSessionDetail } from '@/features/sessions/session-api';
 import { cn } from '@/lib/cn';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { isElectron } from '@/lib/electron-env';
@@ -99,6 +105,7 @@ export function WorkspaceFilePreviewPanel({
 }: WorkspaceFilePreviewPanelProps) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
+  const navigate = useNavigate();
   const resolvedTheme = useThemeStore((s) => s.resolved);
 
   const state = useWorkspacePreviewState({ filePath, projectId, sessionKey, agentId });
@@ -117,6 +124,7 @@ export function WorkspaceFilePreviewPanel({
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [markdownWordWrap, setMarkdownWordWrap] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [attachmentHandoffLoading, setAttachmentHandoffLoading] = useState(false);
 
   const ext = filePath ? getPreviewFileExtension(filePath) : '';
   const name = filePath ? getPreviewFileName(filePath) : '';
@@ -179,6 +187,42 @@ export function WorkspaceFilePreviewPanel({
     void createShareLink({ path: filePath, ...scope });
   }, [agentId, createShareLink, filePath, projectId, sessionKey]);
 
+  const handleClose = useCallback(() => {
+    setExpanded(false);
+    onClose();
+  }, [onClose]);
+
+  const handleEditInNewChat = useCallback(async () => {
+    if (!filePath || attachmentHandoffLoading) return;
+    setAttachmentHandoffLoading(true);
+    try {
+      const [file, sourceSession] = await Promise.all([
+        state.createAttachmentFile(),
+        sessionKey ? getSessionDetail(sessionKey).catch(() => null) : Promise.resolve(null),
+      ]);
+      if (file.size > MAX_WEBCHAT_ATTACHMENT_FILE_BYTES) {
+        showComposerNotification('warning', m.chat.attachmentFileTooLarge, {
+          name: file.name,
+          maxSize: formatFileSize(MAX_WEBCHAT_ATTACHMENT_FILE_BYTES),
+        });
+        return;
+      }
+      const handoffId = createComposerAttachmentHandoff(file);
+      const params = new URLSearchParams({ attachmentHandoff: handoffId });
+      const targetProjectId = projectId?.trim() || sourceSession?.projectId?.trim();
+      const targetAgentId = agentId?.trim() || sourceSession?.routing?.agentId?.trim();
+      if (targetProjectId) params.set('projectId', targetProjectId);
+      navigate({ pathname: '/chat/new', search: `?${params.toString()}` }, {
+        state: { forceNewChat: true, agentId: targetAgentId || undefined },
+      });
+      handleClose();
+    } catch {
+      showComposerNotification('error', m.workspace.editInNewChatFailed);
+    } finally {
+      setAttachmentHandoffLoading(false);
+    }
+  }, [agentId, attachmentHandoffLoading, filePath, handleClose, m.chat.attachmentFileTooLarge, m.workspace.editInNewChatFailed, navigate, projectId, sessionKey, state]);
+
   const canExpandPreview = Boolean(filePath && !state.loading && !state.loadError);
   const previewActions = {
     onDownload: () => void state.onDownload(),
@@ -188,11 +232,6 @@ export function WorkspaceFilePreviewPanel({
     onChooseOpenWithApp: () => void state.onChooseOpenWithApp(),
     canChooseOpenWithApp: state.canChooseOpenWithApp,
   };
-
-  const handleClose = useCallback(() => {
-    setExpanded(false);
-    onClose();
-  }, [onClose]);
 
   if (!filePath) {
     return null;
@@ -306,6 +345,29 @@ export function WorkspaceFilePreviewPanel({
               {expanded ? <Minimize2 className="size-4" strokeWidth={1.75} /> : <Maximize2 className="size-4" strokeWidth={1.75} />}
             </button>
           ) : null}
+          <button
+            type="button"
+            className={cn(
+              'inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg',
+              interaction.focusRingPanel,
+              'disabled:cursor-not-allowed disabled:opacity-40',
+            )}
+            title={m.workspace.editInNewChat}
+            aria-label={m.workspace.editInNewChat}
+            disabled={
+              state.loading ||
+              Boolean(state.loadError) ||
+              state.saveStatus === 'saving' ||
+              attachmentHandoffLoading
+            }
+            onClick={() => void handleEditInNewChat()}
+          >
+            {attachmentHandoffLoading ? (
+              <Loader2 className="size-4 animate-spin" aria-hidden />
+            ) : (
+              <MessageSquarePlus className="size-4" aria-hidden />
+            )}
+          </button>
           {!projectId ? (
             <button
               type="button"

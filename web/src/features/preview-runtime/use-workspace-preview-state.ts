@@ -321,6 +321,24 @@ export function useWorkspacePreviewState({
     downloadBinaryFile(name, await blob.arrayBuffer(), preview.descriptor.mimeType || blob.type || 'application/octet-stream');
   }, [filePath, preview.binaryBuffer, preview.descriptor.mimeType, preview.textContent, readOpts]);
 
+  const createAttachmentFile = useCallback(async (): Promise<File> => {
+    if (!filePath) throw new Error('No workspace file selected');
+    const name = getPreviewFileName(filePath);
+    const type = preview.descriptor.mimeType || 'application/octet-stream';
+    let blob: Blob;
+    if (preview.binaryBuffer) {
+      blob = new Blob([preview.binaryBuffer], { type });
+    } else if (preview.textContent != null) {
+      blob = new Blob([preview.textContent], { type });
+    } else {
+      blob = await fetchWorkspaceFileBlob(filePath, readOpts);
+    }
+    return new File([blob], name, {
+      type: preview.descriptor.mimeType || blob.type || 'application/octet-stream',
+      lastModified: preview.mtimeMs ?? Date.now(),
+    });
+  }, [filePath, preview.binaryBuffer, preview.descriptor.mimeType, preview.mtimeMs, preview.textContent, readOpts]);
+
   const canDownload = !preview.loading && Boolean(filePath);
   const canOpenWithSystemApp =
     isElectron() && Boolean(preview.hostAbsolutePath) && Boolean(window.electronAPI?.shell?.openPath);
@@ -391,6 +409,7 @@ export function useWorkspacePreviewState({
     onSaveMarkdown,
     onHtmlChange,
     onDownload,
+    createAttachmentFile,
     canDownload,
     canOpenWithSystemApp,
     onOpenWithSystemApp,

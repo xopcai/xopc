@@ -92,6 +92,8 @@
       "activityNew": "条新动态",
       "activityUnread": "未读活动",
       "activityViewRelated": "查看相关内容",
+      "activityCheckingRelated": "正在检查相关内容",
+      "activityRelatedMissing": "内容已不存在",
       "activityRemove": "移除活动",
       "activityMarkRead": "全部标为已读",
       "activityClearFinished": "清除已完成",
