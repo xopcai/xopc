@@ -11,10 +11,16 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  checkActivityTarget,
+  parseActivityTarget,
+  type ActivityTargetAvailability,
+} from '@/features/activity/activity-target';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { type ActivityItem, useActivityStore } from '@/stores/activity-store';
@@ -40,7 +46,13 @@ function relativeTime(timestamp: number, language: 'en' | 'zh'): string {
   return language === 'zh' ? `${days} 天前` : `${days}d ago`;
 }
 
-function ActivityRow({ item }: { item: ActivityItem }) {
+function ActivityRow({
+  item,
+  targetAvailability,
+}: {
+  item: ActivityItem;
+  targetAvailability: ActivityTargetAvailability;
+}) {
   const language = useLocaleStore((state) => state.language);
   const copy = messages(language).projectsPage.workHome;
   const remove = useActivityStore((state) => state.remove);
@@ -65,7 +77,7 @@ function ActivityRow({ item }: { item: ActivityItem }) {
           {item.source ? <span className="max-w-48 truncate">{item.source}</span> : null}
           <span>{relativeTime(item.updatedAt, language)}</span>
           {item.occurrences > 1 ? <span>×{item.occurrences}</span> : null}
-          {item.href ? (
+          {item.href && targetAvailability === 'available' ? (
             <Link
               to={item.href}
               className="inline-flex items-center gap-0.5 font-medium text-accent-fg hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
@@ -73,6 +85,12 @@ function ActivityRow({ item }: { item: ActivityItem }) {
               {copy.activityViewRelated}
               <ChevronRight className="size-3" aria-hidden />
             </Link>
+          ) : item.href && targetAvailability === 'checking' ? (
+            <Skeleton className="h-3 w-20 rounded" aria-label={copy.activityCheckingRelated} />
+          ) : item.href && targetAvailability === 'missing' ? (
+            <span className="font-medium text-fg-subtle" role="status">
+              {copy.activityRelatedMissing}
+            </span>
           ) : null}
         </div>
       </div>
@@ -95,9 +113,29 @@ export function WorkbenchActivity() {
   const markAllRead = useActivityStore((state) => state.markAllRead);
   const clearFinished = useActivityStore((state) => state.clearFinished);
   const [expanded, setExpanded] = useState(false);
+  const [targetAvailability, setTargetAvailability] = useState<Record<string, ActivityTargetAvailability>>({});
   const runningCount = useMemo(() => items.filter((item) => item.status === 'running').length, [items]);
   const unreadCount = useMemo(() => items.filter((item) => !item.read).length, [items]);
   const visibleItems = expanded ? items : items.slice(0, INITIAL_VISIBLE_ITEMS);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const targets = new Map(
+      items.flatMap((item) => {
+        const target = parseActivityTarget(item.href);
+        return item.href && target ? [[item.href, target] as const] : [];
+      }),
+    );
+    setTargetAvailability(Object.fromEntries([...targets.keys()].map((href) => [href, 'checking'])));
+    void Promise.all(
+      [...targets].map(async ([href, target]) => {
+        const availability = await checkActivityTarget(target, controller.signal);
+        if (controller.signal.aborted) return;
+        setTargetAvailability((current) => ({ ...current, [href]: availability }));
+      }),
+    ).catch(() => undefined);
+    return () => controller.abort();
+  }, [items]);
 
   return (
     <section className="rounded-2xl bg-surface-base p-4 shadow-surface" aria-labelledby="workbench-activity-title">
@@ -139,7 +177,15 @@ export function WorkbenchActivity() {
 
       {items.length > 0 ? (
         <div className="mt-3 px-1">
-          {visibleItems.map((item) => <ActivityRow key={item.id} item={item} />)}
+          {visibleItems.map((item) => (
+            <ActivityRow
+              key={item.id}
+              item={item}
+              targetAvailability={item.href && parseActivityTarget(item.href)
+                ? (targetAvailability[item.href] ?? 'checking')
+                : 'available'}
+            />
+          ))}
           {items.length > INITIAL_VISIBLE_ITEMS ? (
             <div className="border-t border-edge-subtle py-2 text-center">
               <Button type="button" variant="ghost" className="h-8 px-2 text-xs" onClick={() => setExpanded((value) => !value)}>

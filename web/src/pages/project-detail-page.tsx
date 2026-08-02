@@ -2125,6 +2125,7 @@ export function ProjectDetailPage() {
                     <WorkspaceFilePreviewPanel
                       filePath={previewFilePath}
                       projectId={project.id}
+                      agentId={project.defaultAgentId || selectedAgentId || undefined}
                       onClose={() => setPreviewFilePath(null)}
                     />
                   ) : (

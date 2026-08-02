@@ -6,6 +6,7 @@ export type AgentRunErrorKind =
   | 'rate_limit'
   | 'timeout'
   | 'billing'
+  | 'session_not_found'
   | 'unknown'
   | 'send_failed';
 
@@ -42,6 +43,14 @@ export function buildSendFailedErrorPayload(): AgentRunErrorPayload {
     kind: 'send_failed',
     code: 'send_failed',
     message: 'Send failed',
+  };
+}
+
+export function buildSessionNotFoundErrorPayload(message: string): AgentRunErrorPayload {
+  return {
+    kind: 'session_not_found',
+    code: 'session_not_found',
+    message,
   };
 }
 

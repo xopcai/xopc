@@ -42,6 +42,8 @@
     "revealInFolder": "打开所在目录",
     "shareLink": "分享链接",
     "sharing": "正在创建分享…",
-    "shareFailed": "创建分享链接失败"
+    "shareFailed": "创建分享链接失败",
+    "editInNewChat": "在新对话中修改",
+    "editInNewChatFailed": "无法将文件带到新对话"
   }
 }

@@ -632,7 +632,6 @@ export function ConnectorsPage() {
                   ))}
                 </div>
               )}
-              <p className="text-xs text-fg-subtle">{mcp.disableHint}</p>
             </div>
           ) : null}
 

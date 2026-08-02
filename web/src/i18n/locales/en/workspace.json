@@ -42,6 +42,8 @@
     "revealInFolder": "Show in folder",
     "shareLink": "Share link",
     "sharing": "Creating share…",
-    "shareFailed": "Failed to create share link"
+    "shareFailed": "Failed to create share link",
+    "editInNewChat": "Edit in a new chat",
+    "editInNewChatFailed": "Could not add the file to a new chat"
   }
 }

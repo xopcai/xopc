@@ -12,7 +12,10 @@ import {
   getChatSessionSnapshot,
   getSessionMessages,
 } from '@/features/chat/session/chat-session-store';
-import { searchParamsForComposerHandoff } from '@/features/chat/session/composer-handoff-params';
+import {
+  projectIdForNewChatHandoff,
+  searchParamsForComposerHandoff,
+} from '@/features/chat/session/composer-handoff-params';
 import { openNewChatHandoff } from '@/features/chat/session/new-chat-handoff';
 import type { SessionManager } from '@/features/chat/session/session-manager';
 import { lastNonNewSessionKeyRef } from '@/features/chat/session/use-chat-session-route';
@@ -130,6 +133,7 @@ export function useChatSessionInit(opts: {
         currentSessionKey: lastNonNewSessionKeyRef.current,
         routeSessionKey: null,
         forceNew: request.forceNewChat,
+        projectId: projectIdForNewChatHandoff(request.newRouteLocationSearch),
         navigateToSession: runtime.navigateToSession,
         replaceNavigate: true,
         search: searchParamsForComposerHandoff(request.newRouteLocationSearch),

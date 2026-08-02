@@ -597,6 +597,9 @@
     "backgroundRunCompletedTitle": "Response ready",
     "backgroundRunFailedTitle": "Response needs attention",
     "backgroundRunCompletedDescription": "Open the conversation to review the result.",
+    "sessionNotFoundTitle": "Conversation no longer exists",
+    "sessionNotFoundBody": "This conversation may have been deleted or reset. Start a new conversation to continue.",
+    "sessionNotFoundCta": "Start new conversation",
     "messageMoreActions": "More actions",
     "activityDetailLabel": "Activity",
     "activityDetailLevels": {

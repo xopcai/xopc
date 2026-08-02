@@ -597,6 +597,9 @@
     "backgroundRunCompletedTitle": "回复已完成",
     "backgroundRunFailedTitle": "回复需要处理",
     "backgroundRunCompletedDescription": "打开会话查看结果。",
+    "sessionNotFoundTitle": "会话已不存在",
+    "sessionNotFoundBody": "这个会话可能已被删除或重置。你可以新建对话继续处理。",
+    "sessionNotFoundCta": "新建对话",
     "messageMoreActions": "更多操作",
     "activityDetailLabel": "执行动态",
     "activityDetailLevels": {

@@ -22,9 +22,18 @@ export function searchParamsForComposerHandoff(search: string): string {
   const skill = sp.get('skill');
   const slash = sp.get('slash');
   const draft = sp.get('draft');
+  const attachmentHandoff = sp.get('attachmentHandoff');
   if (skill) next.set('skill', skill);
   if (slash) next.set('slash', slash);
   if (draft) next.set('draft', draft);
+  if (attachmentHandoff) next.set('attachmentHandoff', attachmentHandoff);
   const out = next.toString();
   return out ? `?${out}` : '';
+}
+
+/** Project scope is consumed while creating `/chat/new`; it must not leak into the final chat URL. */
+export function projectIdForNewChatHandoff(search: string): string | null {
+  const raw = search.startsWith('?') ? search.slice(1) : search;
+  const projectId = new URLSearchParams(raw).get('projectId')?.trim();
+  return projectId || null;
 }

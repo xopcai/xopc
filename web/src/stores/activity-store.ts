@@ -41,6 +41,7 @@ type ActivityState = {
 // Keep the existing key so moving activity into the workbench does not discard history.
 const STORAGE_KEY = 'xopc.activity-center.v1';
 const MAX_ITEMS = 80;
+const MAX_ITEM_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 function statusForTone(tone: ActivityTone): ActivityStatus {
   if (tone === 'error') return 'failed';
@@ -60,9 +61,13 @@ function loadItems(): ActivityItem[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw) as { items?: ActivityItem[] };
     if (!Array.isArray(parsed.items)) return [];
-    return parsed.items
+    const cutoff = Date.now() - MAX_ITEM_AGE_MS;
+    const items = parsed.items
       .filter((item) => item && typeof item.id === 'string' && typeof item.title === 'string')
+      .filter((item) => Number.isFinite(item.updatedAt) && item.updatedAt >= cutoff)
       .slice(0, MAX_ITEMS);
+    if (items.length !== parsed.items.length) persistItems(items);
+    return items;
   } catch {
     return [];
   }
