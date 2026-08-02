@@ -1,14 +1,29 @@
 # Work Discovery Onboarding
 
-Status: Proposed  
+Status: Implemented behind `experimental.workDiscoveryOnboarding`
 Audience: Product, design, agent, gateway, Electron, storage, and Web UI maintainers  
-Last updated: 2026-07-21
+Last updated: 2026-08-02
 
 ## Summary
 
 Work Discovery Onboarding helps a newly configured user reach useful work instead of landing on an empty chat. After the user profile and first model are configured, xopc offers one optional action: select a local folder that represents something the user is currently working on. xopc performs a bounded, read-only analysis, creates or reuses a Project and a visible Project session, and returns three evidence-backed next-step suggestions that the user can continue in conversation.
 
-The first release analyzes only a folder explicitly selected by the user. It does not automatically inspect Desktop, Documents, Downloads, the home directory, or the full disk. Common-directory project discovery is a later, separately consented feature that must initially inspect metadata only.
+The implemented flow starts with bounded candidate discovery in common developer roots and in work folders up to two levels below Desktop, Documents, and Downloads. It supports macOS and Windows standard locations, Windows OneDrive redirection, and Linux XDG user directories, plus an explicit folder fallback. Broad personal roots are metadata-only discovery containers; only the selected child work folder receives bounded content analysis. On macOS, the same onboarding action also starts bounded, read-only scans of Apple Notes, Calendar, and Reminders. A bounded AI investigator combines those signals into paraphrased user understanding and evidence-backed Work Threads. It does not inspect the home root, browser history, chats, mail, or the full disk.
+
+## Implemented phases
+
+1. **Candidate discovery:** bounded, read-only ranking across existing Projects and work roots up to two levels below common developer directories, Desktop, Documents, and Downloads. Grouping and personal-root folders are traversed but never promoted as projects themselves. Recent general-document folders may become candidates based on filenames, extensions, and timestamps without reading file content. Every discovered candidate is scored before the top eight are selected; previously connected projects receive no artificial activity boost.
+2. **Multi-project understanding:** the selected project receives bounded content analysis; other ranked projects contribute metadata only. Stable user facts remain memory candidates until the user confirms them.
+3. **Persistent folder grants:** approved work folders are stored as read-only sources, can be rescanned, and can be revoked. `lastScannedAt` advances only after a successful analysis.
+4. **Native personal context scan:** available only in the Electron app on macOS. The onboarding action requests the operating-system permissions for Notes, Calendar, and Reminders, then reads up to 50 recent items from each source with per-item and total character limits. The personal-context synthesis waits for the directory investigation and reconciles corroboration, conflicts, current focus, and stale signals across the sources. Raw source content is held only for the model call and is not stored in xopc's database.
+5. **Bounded AI investigation:** the model iteratively plans hypotheses and selects read-only `read_text_excerpt` or `search_authorized_text` actions. Tool calls, content characters, and elapsed time have hard limits. Secret paths, binaries, excluded directories, writes, and arbitrary shell commands are unavailable.
+6. **Work Threads:** current, ongoing, and long-term work streams are persisted with evidence lineage, focus scores, status, confidence, project relationships, and user feedback. Explicit corrections survive later inference.
+7. **Unified evidence and memory review:** file, Git, related-project metadata, connected personal context, session context, and direct user statements use one evidence model. Personal context can corroborate an existing Work Thread; long verbatim overlaps are rejected. Only high-confidence, non-ephemeral facts supported by multiple observations become active memory automatically. Other candidates require a Remember or Ignore decision in the global understanding drawer.
+8. **Incremental refresh and governance:** approved folders use bounded metadata fingerprints. A refresh runs only when the fingerprint changes and duplicate active refreshes are reused. Source lineage, derived-data deletion, quality metrics, and offline precision/recall/evidence-coverage evaluation are exposed by the gateway.
+
+Native app access uses fixed JXA programs through the public Automation interfaces for Notes, Calendar, and Reminders. No source values are interpolated into executable script text, and xopc does not read private application databases. Each scan is initiated by the onboarding action; there is no durable native-source grant or scheduled rescan. User-confirmed memories remain user-controlled through About You.
+
+The global understanding indicator is a one-shot progress and review surface. It appears while the investigation runs, remains until the user reviews the result, and then disappears. The user may explicitly run the investigation again. Scheduled scanning is intentionally out of scope until change detection, source-specific consent, cost controls, and result quality justify it.
 
 ## Product Decision
 
@@ -56,14 +71,14 @@ The onboarding is successful when the user selects a suggestion and continues th
 
 ## Non-goals
 
-- Automatically reading common user folders during the first release.
+- Reading, indexing, or sending all content from Desktop, Documents, Downloads, or the home root. Personal roots are candidate-discovery containers only.
 - Indexing the full selected directory or building a permanent semantic index.
 - Modifying files during discovery.
 - Running arbitrary shell commands during discovery.
 - Diagnosing or fixing the project before the user chooses a suggestion.
 - Guaranteeing that a folder is a software repository.
 - Replacing the Projects, sessions, goals, work items, or welcome-suggestion models.
-- Continuously monitoring the folder after onboarding.
+- Running an OS-wide filesystem watcher or background full-disk index. Incremental checks are explicit and limited to approved sources.
 - Making a remote browser capable of reading the browser device's local filesystem.
 
 ## Primary User
@@ -79,7 +94,7 @@ Code projects will usually produce higher-confidence results in the first releas
 
 ## Experience Principles
 
-1. **Ask for one meaningful permission.** The user selects one folder and confirms the analysis scope.
+1. **Use one clear activation action.** It starts work-folder discovery and, on macOS, requests each native app permission from the operating system. The copy discloses AI transfer before scanning.
 2. **Show evidence, not confidence theater.** File paths, Git state, and concrete observations support each suggestion.
 3. **Analyze before acting.** Discovery cannot write files or execute project code.
 4. **Use real product objects.** The result belongs to a normal Project and a visible session.
@@ -127,12 +142,18 @@ Re-entry is an ordinary feature action and does not reset first-run onboarding s
 ```mermaid
 flowchart TD
   Config[Profile and model configured] --> Intro[Connect recent work]
-  Intro -->|Choose folder| Pick[Native or gateway folder picker]
+  Intro -->|Understand my work| Discover[Discover likely work folders]
+  Intro -->|Choose folder manually| Pick[Native or gateway folder picker]
+  Discover --> Create[Create or reuse Project and session]
+  Discover --> Native[macOS Notes, Calendar, and Reminders scan]
   Intro -->|Skip| Chat[Normal Chat]
   Pick --> Confirm[Confirm read-only scope]
   Confirm -->|Start analysis| Create[Create or reuse Project and session]
+  Confirm --> Native
   Confirm -->|Change folder| Pick
   Create --> Analyze[Bounded local probe and model analysis]
+  Native --> Context[AI personal-context synthesis]
+  Context --> Drawer[Global progress and memory review drawer]
   Analyze --> Results[Three evidence-backed suggestions]
   Analyze -->|Cancel| Partial[Open Project chat with folder attached]
   Analyze -->|Failure| Partial

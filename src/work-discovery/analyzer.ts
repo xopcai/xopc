@@ -9,11 +9,16 @@ import { resolveModel } from '../providers/index.js';
 
 import type {
   WorkContextSnapshot,
+  WorkDiscoveryCandidate,
+  WorkDiscoveryPersonalContextItem,
+  WorkDiscoveryProfileCandidate,
   WorkDiscoveryResult,
   WorkDiscoverySuggestion,
+  WorkUnderstandingThreadCandidate,
 } from './types.js';
 
 const MAX_MODEL_CONTEXT_CHARS = 120_000;
+const MAX_PERSONAL_CONTEXT_CHARS = 100_000;
 
 function extractText(content: unknown): string {
   if (typeof content === 'string') return content;
@@ -96,6 +101,53 @@ function validateSuggestion(value: unknown, allowedPaths: Set<string>): WorkDisc
   };
 }
 
+function validateProfileCandidate(value: unknown): WorkDiscoveryProfileCandidate | null {
+  if (!value || typeof value !== 'object') return null;
+  const item = value as Record<string, unknown>;
+  const category = item.category === 'role'
+    || item.category === 'focus'
+    || item.category === 'technology'
+    || item.category === 'workflow'
+    || item.category === 'preference'
+    ? item.category
+    : undefined;
+  if (!category || typeof item.statement !== 'string') return null;
+  const statement = item.statement.trim().slice(0, 500);
+  if (statement.length < 4) return null;
+  const confidence = item.confidence === 'high' || item.confidence === 'low' ? item.confidence : 'medium';
+  return {
+    id: randomUUID(),
+    category,
+    statement,
+    confidence,
+    evidence: strings(item.evidence, 4).map((entry) => entry.slice(0, 300)),
+    status: 'pending',
+  };
+}
+
+function validateWorkThreadCandidate(value: unknown, allowedRefs: Set<string>): WorkUnderstandingThreadCandidate | null {
+  if (!value || typeof value !== 'object') return null;
+  const item = value as Record<string, unknown>;
+  if (typeof item.title !== 'string' || typeof item.summary !== 'string') return null;
+  const title = item.title.trim().slice(0, 200);
+  const summary = item.summary.trim().slice(0, 2_000);
+  if (!title || !summary) return null;
+  const horizon = item.horizon === 'current' || item.horizon === 'ongoing' || item.horizon === 'long_term'
+    ? item.horizon
+    : 'current';
+  const status = item.status === 'active' || item.status === 'paused' || item.status === 'blocked'
+    || item.status === 'completed' || item.status === 'uncertain'
+    ? item.status
+    : 'uncertain';
+  const confidence = item.confidence === 'high' || item.confidence === 'low' ? item.confidence : 'medium';
+  const topicKeyRaw = typeof item.topicKey === 'string' ? item.topicKey.toLowerCase() : title.toLowerCase();
+  const topicKey = topicKeyRaw.replace(/[^a-z0-9\p{L}]+/gu, '-').replace(/^-+|-+$/g, '').slice(0, 100)
+    || `thread-${randomUUID().slice(0, 8)}`;
+  const evidenceRefs = strings(item.evidenceRefs, 12).filter((ref) => allowedRefs.has(ref));
+  if (!evidenceRefs.length) return null;
+  return { topicKey, title, summary, horizon, status, confidence, evidenceRefs };
+}
+
 function suggestionScore(suggestion: WorkDiscoverySuggestion): number {
   const confidence = suggestion.confidence === 'high' ? 3 : suggestion.confidence === 'medium' ? 2 : 1;
   const safety = suggestion.risk === 'analysis' ? 3 : suggestion.risk === 'command' ? 2 : 1;
@@ -138,6 +190,7 @@ function lowConfidenceResult(snapshot: WorkContextSnapshot, question?: string): 
 export async function analyzeWorkContext(input: {
   config: Config;
   snapshot: WorkContextSnapshot;
+  candidateContext?: WorkDiscoveryCandidate[];
   signal?: AbortSignal;
 }): Promise<{ modelRef: string; result: WorkDiscoveryResult }> {
   const modelRef = getAgentDefaultModelRef(input.config);
@@ -151,7 +204,14 @@ export async function analyzeWorkContext(input: {
   const prompt = [
     'You help a user resume real work in one explicitly selected local folder.',
     'Analyze only the supplied bounded snapshot. Never claim that you ran commands, tests, or inspected anything absent from it.',
-    'Return only one JSON object with projectSummary, currentState, uncertainties, suggestions, lowConfidence, and contextQuestion.',
+    'Return only one JSON object with projectSummary, currentState, uncertainties, suggestions, profileCandidates, workThreads, lowConfidence, and contextQuestion.',
+    'profileCandidates contains up to 6 stable, useful facts about the user inferred from the supplied project evidence.',
+    'Each profile candidate has category (role, focus, technology, workflow, or preference), statement, confidence, and evidence.',
+    'Do not infer sensitive traits, identity, health, finances, political views, or anything not directly supported by the work evidence.',
+    'workThreads contains up to 3 evidence-backed work streams with topicKey, title, summary, horizon, status, confidence, and evidenceRefs.',
+    'horizon is current, ongoing, or long_term. status is active, paused, blocked, completed, or uncertain.',
+    'topicKey is a short stable topic identifier. evidenceRefs must use exact relative paths from the snapshot or git://recent-state.',
+    'Distinguish one-off recent edits from work sustained across multiple days. Prefer one current thread and only add ongoing or long_term threads when evidence supports them.',
     'For a normal result, suggestions must contain exactly 3 materially different next steps.',
     'Each suggestion must include actionType, title, rationale, evidence, actionPrompt, confidence, expectedOutcome, estimatedMinutes, risk, and verification.',
     'actionType must be summarize_recent_work, inspect_related_tests, or plan_next_step.',
@@ -162,6 +222,17 @@ export async function analyzeWorkContext(input: {
     'If the current objective is unclear or fewer than three credible suggestions exist, set lowConfidence=true, return suggestions=[], and ask one concise contextQuestion.',
     'Use Simplified Chinese for every user-facing string when the visible snapshot documents are mainly Chinese; otherwise use English.',
     '',
+    input.candidateContext?.length
+      ? `Other ranked local work projects (metadata only):\n${JSON.stringify(input.candidateContext.slice(0, 8).map((candidate) => ({
+          displayName: candidate.displayName,
+          projectKind: candidate.projectKind,
+          score: candidate.score,
+          lastActiveAt: candidate.lastActiveAt,
+          branch: candidate.branch,
+          changedFileCount: candidate.changedFileCount,
+          evidence: candidate.evidence,
+        })))}`
+      : '',
     JSON.stringify(compactSnapshot),
   ].join('\n');
   const message: UserMessage = { role: 'user', content: prompt, timestamp: Date.now() };
@@ -185,15 +256,27 @@ export async function analyzeWorkContext(input: {
   }
 
   const allowedPaths = new Set([
-    ...input.snapshot.structure.sampledPaths,
     ...input.snapshot.documents.map((document) => document.relativePath),
     ...(input.snapshot.git?.changedPaths ?? []),
   ]);
+  const allowedThreadRefs = new Set([...allowedPaths, 'git://recent-state']);
   const suggestions = Array.isArray(parsed.suggestions)
     ? parsed.suggestions.map((value) => validateSuggestion(value, allowedPaths)).filter((value): value is WorkDiscoverySuggestion => Boolean(value))
     : [];
   if (suggestions.length !== 3) return { modelRef, result: lowConfidenceResult(input.snapshot) };
   const primarySuggestion = [...suggestions].sort((a, b) => suggestionScore(b) - suggestionScore(a))[0];
+  const profileCandidates = input.candidateContext?.length && Array.isArray(parsed.profileCandidates)
+    ? parsed.profileCandidates
+      .map(validateProfileCandidate)
+      .filter((value): value is WorkDiscoveryProfileCandidate => Boolean(value))
+      .slice(0, 6)
+    : [];
+  const workThreadCandidates = Array.isArray(parsed.workThreads)
+    ? parsed.workThreads
+      .map((value) => validateWorkThreadCandidate(value, allowedThreadRefs))
+      .filter((value): value is WorkUnderstandingThreadCandidate => Boolean(value))
+      .slice(0, 3)
+    : [];
   const projectSummary = typeof parsed.projectSummary === 'string' ? parsed.projectSummary.trim() : '';
   const currentState = typeof parsed.currentState === 'string' ? parsed.currentState.trim() : '';
   if (!projectSummary || !currentState) throw new Error('Analysis result is missing its summary');
@@ -204,9 +287,86 @@ export async function analyzeWorkContext(input: {
       currentState: currentState.slice(0, 1_200),
       uncertainties: strings(parsed.uncertainties, 6).map((value) => value.slice(0, 500)),
       suggestions,
+      ...(profileCandidates.length > 0 ? { profileCandidates } : {}),
+      ...(workThreadCandidates.length > 0 ? { workThreadCandidates } : {}),
       ...(primarySuggestion ? { primarySuggestionId: primarySuggestion.id } : {}),
     },
   };
+}
+
+export async function analyzePersonalContext(input: {
+  config: Config;
+  items: WorkDiscoveryPersonalContextItem[];
+  workContext?: Pick<WorkDiscoveryResult, 'projectSummary' | 'currentState' | 'uncertainties' | 'workThreads'>;
+  signal?: AbortSignal;
+}): Promise<{
+  modelRef: string;
+  profileCandidates: WorkDiscoveryProfileCandidate[];
+  workThreadCandidates: WorkUnderstandingThreadCandidate[];
+}> {
+  const modelRef = getAgentDefaultModelRef(input.config);
+  if (!modelRef) throw new Error('No default model configured');
+  let remaining = MAX_PERSONAL_CONTEXT_CHARS;
+  const items = input.items.slice(0, 150).flatMap((item, index) => {
+    if (remaining <= 0) return [];
+    const content = item.content.slice(0, remaining);
+    remaining -= content.length;
+    return [{
+      ref: `${item.source}:${index + 1}`,
+      source: item.source,
+      title: item.title,
+      group: item.group,
+      createdAt: item.createdAt,
+      modifiedAt: item.modifiedAt,
+      startsAt: item.startsAt,
+      endsAt: item.endsAt,
+      content,
+    }];
+  });
+  if (!items.some((item) => item.title.trim() || item.content.trim())) {
+    return { modelRef, profileCandidates: [], workThreadCandidates: [] };
+  }
+  const prompt = [
+    'Analyze the bounded personal work context that the user explicitly chose to connect from Apple Notes, Calendar, and Reminders.',
+    'Return only one JSON object with profileCandidates and workThreads.',
+    'profileCandidates contains at most 6 stable, useful work-related facts.',
+    'Each item has category (role, focus, technology, workflow, or preference), statement, confidence, and evidence.',
+    'workThreads contains at most 3 evidence-backed current, ongoing, or long-term work streams.',
+    'Each work thread has topicKey, title, summary, status, horizon, confidence, and evidenceRefs.',
+    'evidenceRefs must contain only the supplied source:index refs. Do not create a thread without direct support.',
+    'Prefer recurring work themes and durable preferences. Do not turn one-off errands or stale notes into user facts.',
+    'Do not infer sensitive identity, health, finances, political views, relationships, passwords, credentials, or private contact details.',
+    'Evidence must be a short paraphrase and must not quote private note content verbatim.',
+    'Calendar and reminder titles may establish commitments and timing, but must not be treated as stable preferences without repeated evidence.',
+    'When a work-directory summary is supplied, reconcile it with the personal sources: identify corroboration, conflicts, and whether an apparent focus is current or merely stale.',
+    'Do not repeat the directory summary as a personal fact unless at least one supplied personal source supports it.',
+    'Use Simplified Chinese when the supplied items are mainly Chinese; otherwise use English.',
+    input.workContext ? `Work-directory understanding from the same one-shot investigation:\n${JSON.stringify(input.workContext)}` : '',
+    JSON.stringify(items),
+  ].join('\n');
+  const model = resolveModel(modelRef);
+  const message: UserMessage = { role: 'user', content: prompt, timestamp: Date.now() };
+  const response = await completeWithResolvedCredentials(model, { messages: [message] }, {
+    maxTokens: 1_500,
+    temperature: 0.1,
+    signal: input.signal,
+  });
+  const parsed = parseJson(extractText(response.content));
+  if (!parsed) throw new Error('Personal context analysis did not return valid JSON');
+  const profileCandidates = Array.isArray(parsed.profileCandidates)
+    ? parsed.profileCandidates
+      .map(validateProfileCandidate)
+      .filter((value): value is WorkDiscoveryProfileCandidate => Boolean(value))
+      .slice(0, 6)
+    : [];
+  const allowedRefs = new Set(items.map((item) => item.ref));
+  const workThreadCandidates = Array.isArray(parsed.workThreads)
+    ? parsed.workThreads
+      .map((value) => validateWorkThreadCandidate(value, allowedRefs))
+      .filter((value): value is WorkUnderstandingThreadCandidate => Boolean(value))
+      .slice(0, 3)
+    : [];
+  return { modelRef, profileCandidates, workThreadCandidates };
 }
 
 export function workDiscoveryResultMarkdown(result: WorkDiscoveryResult): string {

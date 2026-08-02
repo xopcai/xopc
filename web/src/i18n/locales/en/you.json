@@ -53,7 +53,12 @@
     "pausePlaybook": "Pause",
     "resumePlaybook": "Resume",
     "addRule": "Add",
-    "newRulePlaceholder": "Add a collaboration rule…",
+    "newRulePlaceholder": "Write a rule you want xopc to follow…",
+    "playbookRuleExamples": {
+      "communication": "For example: Lead with the conclusion; ask before deleting anything or sending something externally.",
+      "execution": "For example: Complete straightforward tasks directly; when options exist, explain the tradeoffs and recommend one.",
+      "routines": "For example: Every Friday, summarize this week's progress and list the three most important tasks for next week."
+    },
     "enableRule": "Enable",
     "disableRule": "Disable",
     "deleteRule": "Delete",

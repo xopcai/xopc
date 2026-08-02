@@ -53,7 +53,12 @@
     "pausePlaybook": "暂停使用",
     "resumePlaybook": "恢复使用",
     "addRule": "添加",
-    "newRulePlaceholder": "添加一条协作规则…",
+    "newRulePlaceholder": "写下你希望 xopc 遵循的规则…",
+    "playbookRuleExamples": {
+      "communication": "例如：先给结论再展开说明；涉及删除或对外发送前必须先问我。",
+      "execution": "例如：能直接完成就直接做；有多个方案时说明取舍并推荐一个。",
+      "routines": "例如：每周五总结本周进展，并列出下周最重要的三件事。"
+    },
     "enableRule": "启用",
     "disableRule": "停用",
     "deleteRule": "删除",

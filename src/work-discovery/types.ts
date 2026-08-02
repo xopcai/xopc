@@ -22,6 +22,150 @@ export type WorkDiscoveryRunStatus =
 
 export type WorkDiscoveryStage = 'folder_structure' | 'recent_progress' | 'next_steps';
 export type WorkDiscoverySource = 'onboarding_selected_directory' | 'manual_selected_directory';
+
+export type WorkDiscoveryCandidateSource =
+  | 'existing_project'
+  | 'approved_directory'
+  | 'common_work_root'
+  | 'personal_work_root';
+
+export interface WorkDiscoveryCandidate {
+  id: string;
+  rootPath: string;
+  displayName: string;
+  source: WorkDiscoveryCandidateSource;
+  projectId?: string;
+  projectKind: 'coding' | 'general' | 'unknown';
+  projectKindConfidence: number;
+  score: number;
+  lastActiveAt?: number;
+  branch?: string;
+  changedFileCount: number;
+  evidence: string[];
+}
+
+export interface WorkDiscoveryDirectorySource {
+  id: string;
+  kind: 'directory';
+  rootPath: string;
+  displayName: string;
+  status: 'active' | 'revoked';
+  scope: { readOnly: true };
+  fingerprint?: WorkDiscoveryPreview['fingerprint'];
+  lastScannedAt?: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface WorkDiscoverySourceRefresh {
+  id: string;
+  sourceId: string;
+  changed: boolean;
+  previousFingerprint?: WorkDiscoveryPreview['fingerprint'];
+  currentFingerprint: WorkDiscoveryPreview['fingerprint'];
+  status: 'checked' | 'queued' | 'completed' | 'failed';
+  discoveryRunId?: string;
+  checkedAt: number;
+}
+
+export type WorkDiscoveryPersonalContextSource = 'apple_notes' | 'calendar' | 'reminders';
+
+export interface WorkDiscoveryPersonalContextItem {
+  id: string;
+  source: WorkDiscoveryPersonalContextSource;
+  title: string;
+  group?: string;
+  content: string;
+  createdAt?: number;
+  modifiedAt?: number;
+  startsAt?: number;
+  endsAt?: number;
+}
+
+export type WorkUnderstandingInvestigationStatus =
+  | 'planning'
+  | 'investigating'
+  | 'synthesizing'
+  | 'completed'
+  | 'failed'
+  | 'canceled';
+
+export type WorkUnderstandingEvidenceSourceType =
+  | 'file'
+  | 'git'
+  | 'project_metadata'
+  | 'personal_context'
+  | 'session'
+  | 'user_statement';
+
+export interface WorkUnderstandingInvestigationBudget {
+  maxToolCalls: number;
+  maxContentChars: number;
+  maxDurationMs: number;
+}
+
+export interface WorkUnderstandingInvestigation {
+  id: string;
+  discoveryRunId: string;
+  status: WorkUnderstandingInvestigationStatus;
+  plan: {
+    hypotheses: string[];
+    questions: string[];
+  };
+  budget: WorkUnderstandingInvestigationBudget;
+  toolCallCount: number;
+  contentCharsRead: number;
+  startedAt: number;
+  completedAt?: number;
+  errorMessage?: string;
+}
+
+export interface WorkUnderstandingEvidenceItem {
+  id: string;
+  investigationId: string;
+  sourceGrantId?: string;
+  projectId?: string;
+  sourceType: WorkUnderstandingEvidenceSourceType;
+  sourceRef: string;
+  observation: string;
+  contentHash?: string;
+  observedAt?: number;
+  collectedAt: number;
+  sensitivity: 'normal' | 'restricted';
+}
+
+export type WorkUnderstandingThreadStatus = 'active' | 'paused' | 'blocked' | 'completed' | 'uncertain';
+export type WorkUnderstandingThreadHorizon = 'current' | 'ongoing' | 'long_term';
+export type WorkUnderstandingThreadUserStatus = 'unreviewed' | 'confirmed' | 'corrected' | 'rejected';
+
+export interface WorkUnderstandingThreadCandidate {
+  topicKey: string;
+  title: string;
+  summary: string;
+  status: WorkUnderstandingThreadStatus;
+  horizon: WorkUnderstandingThreadHorizon;
+  confidence: 'high' | 'medium' | 'low';
+  evidenceRefs: string[];
+}
+
+export interface WorkUnderstandingThread {
+  id: string;
+  canonicalKey: string;
+  title: string;
+  summary: string;
+  status: WorkUnderstandingThreadStatus;
+  horizon: WorkUnderstandingThreadHorizon;
+  focusScore: number;
+  confidence: number;
+  userStatus: WorkUnderstandingThreadUserStatus;
+  projectIds: string[];
+  evidenceIds: string[];
+  parentThreadId?: string;
+  firstObservedAt: number;
+  lastObservedAt: number;
+  createdAt: number;
+  updatedAt: number;
+}
 export type WorkDiscoveryErrorCode =
   | 'folder_unavailable'
   | 'folder_not_readable'
@@ -56,9 +200,38 @@ export interface WorkDiscoveryResult {
   currentState: string;
   uncertainties: string[];
   suggestions: WorkDiscoverySuggestion[];
+  discoveredProjects?: Array<{
+    rootPath: string;
+    displayName: string;
+    score: number;
+    projectKind: 'coding' | 'general' | 'unknown';
+    lastActiveAt?: number;
+    evidence: string[];
+  }>;
+  profileCandidates?: WorkDiscoveryProfileCandidate[];
   primarySuggestionId?: string;
   lowConfidence?: boolean;
   contextQuestion?: string;
+  investigation?: {
+    id: string;
+    hypotheses: string[];
+    questions: string[];
+    toolCallCount: number;
+    contentCharsRead: number;
+    degraded: boolean;
+  };
+  workThreadCandidates?: WorkUnderstandingThreadCandidate[];
+  workThreads?: WorkUnderstandingThread[];
+}
+
+export interface WorkDiscoveryProfileCandidate {
+  id: string;
+  memoryRecordId?: string;
+  category: 'role' | 'focus' | 'technology' | 'workflow' | 'preference';
+  statement: string;
+  confidence: 'high' | 'medium' | 'low';
+  evidence: string[];
+  status: 'pending' | 'accepted' | 'edited' | 'rejected';
 }
 
 export type WorkDiscoveryRecognitionDecision =
@@ -160,6 +333,7 @@ export interface WorkDiscoveryPreview {
     branch?: string;
     changedFileCount: number;
     recentAreas: string[];
+    contentSignature: string;
     generatedAt: number;
   };
   provider: string;
