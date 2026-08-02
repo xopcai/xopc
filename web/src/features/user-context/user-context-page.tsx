@@ -3,6 +3,7 @@ import {
   BookOpen,
   Check,
   ChevronRight,
+  CircleHelp,
   CircleUserRound,
   Database,
   Download,
@@ -18,7 +19,7 @@ import {
   Upload,
   X,
 } from 'lucide-react';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
@@ -57,6 +58,7 @@ import {
   updateUserContextControls,
   updateUserProfile,
   updateUserProfilePrompt,
+  updateUserTrust,
   type InsightSuggestion,
   type PersonalContextSource,
   type PersonalPlaybook,
@@ -64,9 +66,11 @@ import {
   type UserContextResponse,
   type UserProfileFields,
   type UserProfileSetup,
+  type UserTrustLevel,
   type UserUnderstanding,
 } from './user-context-api';
 import { personalContextSourceBranding } from './source-branding';
+import { AboutYouExplainerDialog } from './about-you-explainer-dialog';
 import { SourceDisconnectDialog } from './source-disconnect-dialog';
 
 type ViewId = 'overview' | 'profile' | 'understanding' | 'sources' | 'controls';
@@ -77,6 +81,10 @@ const inputClass = 'w-full rounded-lg border border-edge bg-surface-panel px-3 p
 
 function replaceCount(template: string, count: number): string {
   return template.replace('{{count}}', String(count));
+}
+
+function ContextBadge({ children }: { children: ReactNode }) {
+  return <span className="inline-flex rounded-full bg-surface-muted px-2 py-0.5 text-[11px] font-medium text-fg-muted">{children}</span>;
 }
 
 function formatDateTime(value: string, language: 'en' | 'zh'): string {
@@ -312,6 +320,10 @@ export function UserContextPage() {
   const [profilePromptSaving, setProfilePromptSaving] = useState(false);
   const [controlsDraft, setControlsDraft] = useState<UserContextResponse['controls'] | null>(null);
   const [controlsSaving, setControlsSaving] = useState(false);
+  const [trustSaving, setTrustSaving] = useState(false);
+  const [pendingTrustLevel, setPendingTrustLevel] = useState<UserTrustLevel | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [pendingImportFile, setPendingImportFile] = useState<File | null>(null);
   const [disconnectSource, setDisconnectSource] = useState<PersonalContextSource | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
   const [transferBusy, setTransferBusy] = useState<'export' | 'import' | null>(null);
@@ -342,9 +354,13 @@ export function UserContextPage() {
   };
 
   useLayoutEffect(() => {
-    setPageHeader({ startExtra: null, main: <div className="min-w-0"><h1 className="truncate text-base font-semibold tracking-tight text-fg">{t.title}</h1><p className="truncate text-xs text-fg-muted">{t.subtitle}</p></div>, end: null });
+    setPageHeader({
+      startExtra: null,
+      main: <div className="min-w-0"><h1 className="truncate text-base font-semibold tracking-tight text-fg">{t.title}</h1><p className="truncate text-xs text-fg-muted">{t.subtitle}</p></div>,
+      end: <Button type="button" variant="ghost" className="h-8 gap-1.5 px-2.5 text-xs" onClick={() => setHelpOpen(true)}><CircleHelp className="size-3.5" aria-hidden />{t.howItWorks}</Button>,
+    });
     return () => clearPageHeader();
-  }, [clearPageHeader, setPageHeader, t.subtitle, t.title]);
+  }, [clearPageHeader, setPageHeader, t.howItWorks, t.subtitle, t.title]);
 
   useEffect(() => {
     if (!data || data.profile.callName) return;
@@ -531,6 +547,14 @@ export function UserContextPage() {
     finally { setControlsSaving(false); }
   }
 
+  async function selectTrustLevel(level: UserTrustLevel) {
+    if (trustSaving || level === data?.trust.defaultActionLevel) return;
+    setTrustSaving(true);
+    try { const trust = await updateUserTrust(level); await mutate((current) => current ? { ...current, trust } : current, { revalidate: false }); }
+    catch { showToast({ type: 'error', title: t.trustTitle, message: t.saveError }); }
+    finally { setTrustSaving(false); setPendingTrustLevel(null); }
+  }
+
   async function confirmDisconnectSource(deleteDerivedUnderstanding: boolean) {
     if (!disconnectSource?.instanceId || disconnecting) return;
     setDisconnecting(true);
@@ -570,7 +594,7 @@ export function UserContextPage() {
     }
   }
 
-  async function uploadUserContext(file: File | undefined) {
+  async function uploadUserContext(file: File | null) {
     if (!file || transferBusy) return;
     setTransferBusy('import');
     try {
@@ -584,8 +608,14 @@ export function UserContextPage() {
       showToast({ type: 'error', title: t.transferTitle, message: t.importError });
     } finally {
       if (importInputRef.current) importInputRef.current.value = '';
+      setPendingImportFile(null);
       setTransferBusy(null);
     }
+  }
+
+  function cancelImport() {
+    setPendingImportFile(null);
+    if (importInputRef.current) importInputRef.current.value = '';
   }
 
   const tabs = [
@@ -633,17 +663,15 @@ export function UserContextPage() {
             </section>
           ) : null}
 
-          <section className="rounded-2xl border border-accent/15 bg-gradient-to-br from-accent-soft/55 via-surface-panel to-surface-panel p-5">
-            <h2 className="text-lg font-semibold tracking-tight text-fg">{t.heroTitle}</h2>
-            <p className="mt-1 max-w-2xl text-sm leading-6 text-fg-muted">{t.heroBody}</p>
-            <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              <button type="button" className="rounded-xl bg-surface-base/80 p-3 text-left" onClick={() => selectView('understanding')}><span className="text-xl font-semibold text-fg">{active.length}</span><span className="mt-1 block text-xs text-fg-muted">{t.knownSummary}</span></button>
-              <button type="button" className="rounded-xl bg-surface-base/80 p-3 text-left" onClick={() => selectView('sources')}><span className="text-xl font-semibold text-fg">{connectedSources.length}</span><span className="mt-1 block text-xs text-fg-muted">{t.connectedSources}</span></button>
-              <button type="button" className="rounded-xl bg-surface-base/80 p-3 text-left" onClick={() => selectView('understanding', 'review')}><span className="text-xl font-semibold text-fg">{review.length}</span><span className="mt-1 block text-xs text-fg-muted">{t.waitingReview}</span></button>
+          <section className="rounded-2xl border border-edge-subtle bg-surface-base p-4">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <button type="button" className="rounded-xl border border-edge-subtle bg-surface-panel p-3 text-left hover:bg-surface-hover" onClick={() => selectView('understanding')}><span className="text-xl font-semibold text-fg">{active.length}</span><span className="mt-1 block text-xs text-fg-muted">{t.knownSummary}</span></button>
+              <button type="button" className="rounded-xl border border-edge-subtle bg-surface-panel p-3 text-left hover:bg-surface-hover" onClick={() => selectView('sources')}><span className="text-xl font-semibold text-fg">{connectedSources.length}</span><span className="mt-1 block text-xs text-fg-muted">{t.connectedSources}</span></button>
+              <button type="button" className="rounded-xl border border-edge-subtle bg-surface-panel p-3 text-left hover:bg-surface-hover" onClick={() => selectView('understanding', 'review')}><span className="text-xl font-semibold text-fg">{review.length}</span><span className="mt-1 block text-xs text-fg-muted">{t.waitingReview}</span></button>
             </div>
           </section>
 
-          {data.insights.length > 0 ? <section className="rounded-2xl border border-accent/15 bg-surface-base p-5"><h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><Lightbulb className="size-4 text-accent" aria-hidden />{t.insightsTitle}</h2><p className="mt-1 text-xs text-fg-muted">{t.insightsHint}</p><div className="mt-4 grid gap-3 lg:grid-cols-2">{data.insights.map((item) => <article key={item.id} className="rounded-xl border border-edge-subtle bg-surface-panel p-4"><p className="text-sm leading-6 text-fg">{item.insight}</p><p className="mt-2 text-xs text-fg-subtle">{item.evidenceCount > 1 ? replaceCount(t.insightEvidence, item.evidenceCount) : t.insightReason}</p><div className="mt-3 flex justify-end gap-2"><Button type="button" variant="ghost" className="h-8 px-2" disabled={busyId === `insight:${item.id}`} onClick={() => void runInsightAction(item, 'dismiss')}>{t.notNow}</Button><Button type="button" variant="primary" className="h-8 px-2" disabled={busyId === `insight:${item.id}`} onClick={() => void runInsightAction(item, 'apply')}>{t.insightActions[item.action]}</Button></div></article>)}</div></section> : null}
+          {data.insights.length > 0 ? <section className="rounded-2xl border border-accent/15 bg-surface-base p-5"><div className="flex flex-wrap items-center gap-2"><h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><Lightbulb className="size-4 text-accent" aria-hidden />{t.insightsTitle}</h2><ContextBadge>{t.confirmedContextBadge}</ContextBadge></div><div className="mt-4 grid gap-3 lg:grid-cols-2">{data.insights.map((item) => <article key={item.id} className="rounded-xl border border-edge-subtle bg-surface-panel p-4"><p className="text-sm leading-6 text-fg">{item.insight}</p><p className="mt-2 text-xs text-fg-subtle">{item.evidenceCount > 1 ? replaceCount(t.insightEvidence, item.evidenceCount) : t.insightReason}</p><div className="mt-3 flex justify-end gap-2"><Button type="button" variant="ghost" className="h-8 px-2" disabled={busyId === `insight:${item.id}`} onClick={() => void runInsightAction(item, 'dismiss')}>{t.notNow}</Button><Button type="button" variant="primary" className="h-8 px-2" disabled={busyId === `insight:${item.id}`} onClick={() => void runInsightAction(item, 'apply')}>{t.insightActions[item.action]}</Button></div></article>)}</div></section> : null}
 
           <div className="grid gap-4 lg:grid-cols-2">
             <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5">
@@ -659,13 +687,10 @@ export function UserContextPage() {
 
       {data && view === 'profile' ? (
         <div id="you-panel-profile" role="tabpanel" aria-labelledby="you-tab-profile" className="space-y-5">
-          <div className="rounded-xl bg-surface-muted px-4 py-3 text-xs leading-5 text-fg-muted">
-            {t.profileOwnershipHint}
-          </div>
           <section ref={profileCardRef} id="you-profile-card" className="rounded-2xl border border-edge-subtle bg-surface-base p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h2 className="flex items-center gap-2 text-base font-semibold text-fg"><CircleUserRound className="size-4 text-accent" aria-hidden />{t.profileTitle}</h2>
+                <div className="flex flex-wrap items-center gap-2"><h2 className="flex items-center gap-2 text-base font-semibold text-fg"><CircleUserRound className="size-4 text-accent" aria-hidden />{t.profileTitle}</h2><ContextBadge>{t.onlyYouEditBadge}</ContextBadge></div>
                 <p className="mt-1 max-w-2xl text-sm text-fg-muted">{t.profileHint}</p>
               </div>
               {!profileEditing ? <Button type="button" variant="secondary" onClick={openProfileEditor}><Pencil className="size-3.5" aria-hidden />{t.edit}</Button> : null}
@@ -682,7 +707,6 @@ export function UserContextPage() {
 
           <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5">
             <h2 className="text-base font-semibold text-fg">{t.structuredContextTitle}</h2>
-            <p className="mt-1 max-w-2xl text-sm text-fg-muted">{t.structuredContextHint}</p>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <button type="button" className="rounded-xl border border-edge-subtle bg-surface-panel p-4 text-left hover:border-accent/30 hover:bg-surface-hover" onClick={() => startUnderstanding('preference')}><span className="text-sm font-semibold text-fg">{t.addPreference}</span><span className="mt-1 block text-xs leading-5 text-fg-muted">{t.addPreferenceHint}</span></button>
               <button type="button" className="rounded-xl border border-edge-subtle bg-surface-panel p-4 text-left hover:border-accent/30 hover:bg-surface-hover" onClick={() => startUnderstanding('boundary')}><span className="text-sm font-semibold text-fg">{t.addBoundary}</span><span className="mt-1 block text-xs leading-5 text-fg-muted">{t.addBoundaryHint}</span></button>
@@ -691,8 +715,7 @@ export function UserContextPage() {
           </section>
 
           <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5">
-            <h2 className="flex items-center gap-2 text-base font-semibold text-fg"><BookOpen className="size-4 text-accent" aria-hidden />{t.playbooksTitle}</h2>
-            <p className="mt-1 text-sm text-fg-muted">{t.playbooksHint}</p>
+            <div className="flex flex-wrap items-center gap-2"><h2 className="flex items-center gap-2 text-base font-semibold text-fg"><BookOpen className="size-4 text-accent" aria-hidden />{t.playbooksTitle}</h2><ContextBadge>{t.affectsAgentsBadge}</ContextBadge></div>
             {data.playbooks.length > 0 ? <div className="mt-4 grid gap-3 xl:grid-cols-3">{data.playbooks.map((playbook) => <PlaybookCard key={playbook.id} playbook={playbook} busy={busyId === `playbook:${playbook.id}`} t={t} onToggleGroup={() => void togglePlaybook(playbook)} onCreate={(statement) => void mutatePlaybookRule(playbook.id, () => createPersonalPlaybookRule(playbook.id, statement, (playbook.rules.at(-1)?.order ?? 0) + 10))} onUpdate={(ruleId, patch) => void mutatePlaybookRule(playbook.id, () => updatePersonalPlaybookRule(playbook.id, ruleId, patch))} onDelete={(ruleId) => void mutatePlaybookRule(playbook.id, () => deletePersonalPlaybookRule(playbook.id, ruleId))} />)}</div> : <p className="mt-4 rounded-xl bg-surface-muted px-4 py-3 text-sm text-fg-muted">{t.emptyPlaybooks}</p>}
           </section>
         </div>
@@ -700,7 +723,6 @@ export function UserContextPage() {
 
       {data && view === 'understanding' ? (
         <div id="you-panel-understanding" role="tabpanel" aria-labelledby="you-tab-understanding" className="space-y-6">
-          <div className="rounded-xl bg-surface-muted px-4 py-3 text-xs text-fg-muted">{t.memoryScope}</div>
           <section className="border-b border-edge pb-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div><h2 className="text-base font-semibold text-fg">{t.addUnderstanding}</h2><p className="mt-1 text-sm text-fg-muted">{t.addUnderstandingHint}</p></div>
@@ -718,8 +740,8 @@ export function UserContextPage() {
 
       {data && view === 'sources' ? (
         <div id="you-panel-sources" role="tabpanel" aria-labelledby="you-tab-sources" className="space-y-5">
-          <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-base font-semibold text-fg">{t.sourcesTitle}</h2><p className="mt-1 max-w-2xl text-sm text-fg-muted">{t.sourcesHint}</p></div><Button type="button" variant="primary" onClick={() => navigate('/connectors?tab=connected&personalContext=1')}>{t.manageSources}<ChevronRight className="size-4" aria-hidden /></Button></div>
-          {data.sourceRecommendations.length > 0 ? <section className="rounded-2xl border border-accent/20 bg-accent-soft/25 p-5"><h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><Target className="size-4 text-accent" aria-hidden />{t.recommendationsTitle}</h2><p className="mt-1 text-xs text-fg-muted">{t.recommendationsHint}</p><div className="mt-3 grid gap-2 lg:grid-cols-3">{data.sourceRecommendations.map((item) => <button key={item.sourceId} type="button" className="rounded-xl border border-edge-subtle bg-surface-panel p-3 text-left hover:border-accent/30 hover:bg-surface-hover" onClick={() => openSourceConfiguration({ id: item.sourceId })}><span className="text-sm font-semibold text-fg">{item.sourceName}</span><span className="mt-1 block text-xs leading-5 text-fg-muted">{t.recommendationReason.replace('{{goal}}', item.goalTitle)}</span></button>)}</div></section> : null}
+          <div className="flex flex-wrap items-start justify-between gap-3"><div><div className="flex flex-wrap items-center gap-2"><h2 className="text-base font-semibold text-fg">{t.sourcesTitle}</h2><ContextBadge>{t.personalContextBadge}</ContextBadge></div></div><Button type="button" variant="primary" onClick={() => navigate('/connectors?tab=connected&personalContext=1')}>{t.manageSources}<ChevronRight className="size-4" aria-hidden /></Button></div>
+          {data.sourceRecommendations.length > 0 ? <section className="rounded-2xl border border-accent/20 bg-accent-soft/25 p-5"><div className="flex flex-wrap items-center gap-2"><h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><Target className="size-4 text-accent" aria-hidden />{t.recommendationsTitle}</h2><ContextBadge>{t.permissionsBeforeConnectBadge}</ContextBadge></div><div className="mt-3 grid gap-2 lg:grid-cols-3">{data.sourceRecommendations.map((item) => <button key={item.sourceId} type="button" className="rounded-xl border border-edge-subtle bg-surface-panel p-3 text-left hover:border-accent/30 hover:bg-surface-hover" onClick={() => openSourceConfiguration({ id: item.sourceId })}><span className="text-sm font-semibold text-fg">{item.sourceName}</span><span className="mt-1 block text-xs leading-5 text-fg-muted">{t.recommendationReason.replace('{{goal}}', item.goalTitle)}</span></button>)}</div></section> : null}
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{data.sources.map((source) => <SourceCard key={`${source.id}:${source.instanceId ?? 'catalog'}`} source={source} language={language} t={t} onConfigure={() => openSourceConfiguration(source)} onDisconnect={() => setDisconnectSource(source)} />)}</div>
           {data.sources.length === 0 ? <div className="rounded-2xl border border-dashed border-edge p-8 text-center text-sm text-fg-muted">{t.noSources}</div> : null}
         </div>
@@ -727,15 +749,20 @@ export function UserContextPage() {
 
       {data && view === 'controls' && controls ? (
         <div id="you-panel-controls" role="tabpanel" aria-labelledby="you-tab-controls" className="space-y-6">
-          <section><h2 className="text-base font-semibold text-fg">{t.controlTitle}</h2><p className="mt-1 max-w-2xl text-sm text-fg-muted">{t.controlHint}</p><div className="mt-4 max-w-2xl space-y-3 rounded-2xl border border-edge-subtle bg-surface-base p-5"><label className="grid gap-1.5 text-sm font-medium text-fg">{t.learningMode}<Select value={controls.mode} onChange={(event) => setControlsDraft({ ...controls, mode: event.target.value as typeof controls.mode })}>{Object.entries(t.learningModes).map(([value, label]) => <SelectOption key={value} value={value}>{label}</SelectOption>)}</Select></label><label className="grid gap-1.5 text-sm font-medium text-fg">{t.sensitive}<Select value={controls.sensitiveWritePolicy} onChange={(event) => setControlsDraft({ ...controls, sensitiveWritePolicy: event.target.value as typeof controls.sensitiveWritePolicy })}>{Object.entries(t.sensitiveOptions).map(([value, label]) => <SelectOption key={value} value={value}>{label}</SelectOption>)}</Select></label><div className="flex items-start gap-2 rounded-xl bg-accent-soft/40 p-3 text-xs leading-5 text-fg-muted"><ShieldCheck className="mt-0.5 size-4 shrink-0 text-accent" aria-hidden /><span>{t.transientPromise}</span></div><div className="flex justify-end pt-2"><Button type="button" variant="primary" disabled={controlsSaving} onClick={() => void saveControls()}>{controlsSaving ? t.saving : t.save}</Button></div></div></section>
-          <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-edge-subtle bg-surface-base p-5"><div><h2 className="text-base font-semibold text-fg">{t.actionBoundaryMovedTitle}</h2><p className="mt-1 max-w-2xl text-sm text-fg-muted">{t.actionBoundaryMovedHint}</p></div><Button type="button" variant="secondary" onClick={() => navigate('/settings/action-boundary')}>{t.manageActionBoundary}<ChevronRight className="size-4" aria-hidden /></Button></section>
+          <div className="grid gap-6 xl:grid-cols-2">
+            <section><h2 className="text-base font-semibold text-fg">{t.controlTitle}</h2><p className="mt-1 text-sm text-fg-muted">{t.controlHint}</p><div className="mt-4 space-y-3 rounded-2xl border border-edge-subtle bg-surface-base p-5"><label className="grid gap-1.5 text-sm font-medium text-fg">{t.learningMode}<Select value={controls.mode} onChange={(event) => setControlsDraft({ ...controls, mode: event.target.value as typeof controls.mode })}>{Object.entries(t.learningModes).map(([value, label]) => <SelectOption key={value} value={value}>{label}</SelectOption>)}</Select></label><label className="grid gap-1.5 text-sm font-medium text-fg">{t.sensitive}<Select value={controls.sensitiveWritePolicy} onChange={(event) => setControlsDraft({ ...controls, sensitiveWritePolicy: event.target.value as typeof controls.sensitiveWritePolicy })}>{Object.entries(t.sensitiveOptions).map(([value, label]) => <SelectOption key={value} value={value}>{label}</SelectOption>)}</Select><span className="font-normal leading-5 text-fg-subtle">{t.sensitiveOptionHints[controls.sensitiveWritePolicy]}</span></label><div className="flex justify-end pt-2"><Button type="button" variant="primary" disabled={controlsSaving} onClick={() => void saveControls()}>{controlsSaving ? t.saving : t.save}</Button></div></div></section>
+            <section><h2 className="text-base font-semibold text-fg">{t.trustTitle}</h2><p className="mt-1 text-sm text-fg-muted">{t.trustHint}</p><div className="mt-4 grid gap-2 sm:grid-cols-2">{data.trust.levels.map((level) => <button key={level} type="button" aria-pressed={level === data.trust.defaultActionLevel} disabled={trustSaving} onClick={() => { if (level === data.trust.defaultActionLevel) return; if (level === 'auto') setPendingTrustLevel(level); else void selectTrustLevel(level); }} className={cn('rounded-xl border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-70', level === data.trust.defaultActionLevel ? 'border-accent/35 bg-accent-soft/35' : 'border-edge-subtle bg-surface-panel hover:border-accent/25 hover:bg-surface-hover')}><p className="text-xs font-semibold text-fg">{t.trustLevels[level]}</p><p className="mt-1 text-xs leading-5 text-fg-muted">{t.trustLevelHints[level]}</p>{level === data.trust.defaultActionLevel ? <span className="mt-2 inline-block rounded-full bg-accent-soft px-2 py-0.5 text-[11px] text-accent-fg">{t.defaultTrust}</span> : null}</button>)}</div></section>
+          </div>
           <section><h2 className="text-base font-semibold text-fg">{t.grantsTitle}</h2><p className="mt-1 text-sm text-fg-muted">{t.grantsHint}</p>{data.referenceGrants.length > 0 ? <div className="mt-3 divide-y divide-edge overflow-hidden rounded-xl border border-edge bg-surface-panel">{data.referenceGrants.map((grant) => <div key={grant.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"><div className="min-w-0"><p className="truncate text-sm text-fg">{grant.statement}</p><p className="mt-1 text-xs text-fg-subtle">{grant.grantScope ? t.grantScopes[grant.grantScope] : ''}{grant.expiresAt ? ` · ${formatDateTime(grant.expiresAt, language)}` : ''}</p></div><Button type="button" variant="ghost" className="h-8 px-2.5" disabled={busyId === `grant:${grant.id}`} onClick={() => void revokeGrant(grant.id)}>{t.revoke}</Button></div>)}</div> : <p className="mt-3 rounded-xl bg-surface-muted px-4 py-3 text-sm text-fg-muted">{t.noGrants}</p>}</section>
-          <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5"><h2 className="text-base font-semibold text-fg">{t.transferTitle}</h2><p className="mt-1 max-w-2xl text-sm leading-6 text-fg-muted">{t.transferHint}</p><div className="mt-4 flex flex-wrap gap-2"><Button type="button" variant="secondary" disabled={transferBusy !== null} onClick={() => void downloadUserContext()}><Download className="size-4" aria-hidden />{transferBusy === 'export' ? t.exporting : t.exportAction}</Button><Button type="button" variant="secondary" disabled={transferBusy !== null} onClick={() => importInputRef.current?.click()}><Upload className="size-4" aria-hidden />{transferBusy === 'import' ? t.importing : t.importAction}</Button><input ref={importInputRef} type="file" accept="application/json,.json" className="sr-only" onChange={(event) => void uploadUserContext(event.target.files?.[0])} /></div><p className="mt-3 text-xs leading-5 text-fg-subtle">{t.importPromise}</p></section>
+          <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5"><h2 className="text-base font-semibold text-fg">{t.transferTitle}</h2><div className="mt-4 flex flex-wrap gap-2"><Button type="button" variant="secondary" disabled={transferBusy !== null} onClick={() => void downloadUserContext()}><Download className="size-4" aria-hidden />{transferBusy === 'export' ? t.exporting : t.exportAction}</Button><Button type="button" variant="secondary" disabled={transferBusy !== null} onClick={() => importInputRef.current?.click()}><Upload className="size-4" aria-hidden />{transferBusy === 'import' ? t.importing : t.importAction}</Button><input ref={importInputRef} type="file" accept="application/json,.json" className="sr-only" onChange={(event) => setPendingImportFile(event.target.files?.[0] ?? null)} /></div></section>
         </div>
       ) : null}
 
       <ConfirmDialog open={forgetItem !== null} title={t.forgetTitle} description={t.forgetBody} confirmLabel={t.forget} cancelLabel={t.cancel} destructive onConfirm={() => void confirmForget()} onCancel={() => setForgetItem(null)} />
+      <ConfirmDialog open={pendingTrustLevel === 'auto'} title={t.autoConfirmTitle} description={t.autoConfirmBody} confirmLabel={t.autoConfirmAction} cancelLabel={t.cancel} onConfirm={() => void selectTrustLevel('auto')} onCancel={() => setPendingTrustLevel(null)} />
+      <ConfirmDialog open={pendingImportFile !== null} title={t.importConfirmTitle} description={t.importConfirmBody.replace('{{name}}', pendingImportFile?.name ?? '')} confirmLabel={t.importConfirmAction} cancelLabel={t.cancel} onConfirm={() => { const file = pendingImportFile; setPendingImportFile(null); void uploadUserContext(file); }} onCancel={cancelImport} />
       <SourceDisconnectDialog source={disconnectSource} language={language} busy={disconnecting} onOpenChange={(open) => { if (!open) setDisconnectSource(null); }} onConfirm={(deleteDerivedUnderstanding) => void confirmDisconnectSource(deleteDerivedUnderstanding)} />
+      <AboutYouExplainerDialog open={helpOpen} t={t} onOpenChange={setHelpOpen} onNavigate={selectView} />
     </main>
   );
 }

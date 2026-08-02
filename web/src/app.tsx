@@ -439,6 +439,7 @@ const router = createHashRouter([
         children: [
           { index: true, element: <Navigate to="overview" replace /> },
           { path: 'user-profile', element: <Navigate to="/you?tab=profile" replace /> },
+          { path: 'action-boundary', element: <Navigate to="/you?tab=controls" replace /> },
           {
             path: 'sessions',
             element: (

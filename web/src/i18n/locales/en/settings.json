@@ -2,7 +2,6 @@
   "settingsSections": {
     "overview": "System status",
     "appearance": "Preferences",
-    "action-boundary": "Action boundary",
     "agent": "Agent",
     "agent-browser": "Browser",
     "capability-presets": "Capability plans",
@@ -31,11 +30,6 @@
   },
   "settingsPage": {
     "comingSoon": "Settings · {{title}} (coming soon)."
-  },
-  "actionBoundarySettings": {
-    "title": "Action boundary",
-    "subtitle": "Choose how far xopc may act by default within permissions you have already granted.",
-    "loadError": "Could not load the current action boundary."
   },
   "userProfileSettings": {
     "title": "About you",

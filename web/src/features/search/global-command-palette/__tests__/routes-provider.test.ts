@@ -10,11 +10,9 @@ describe('buildRouteSeeds', () => {
     expect(browser?.keywords).toContain('browser');
   });
 
-  it('offers the global action boundary instead of the legacy profile settings route', () => {
+  it('does not expose profile or action boundaries as standalone settings routes', () => {
     const seeds = buildRouteSeeds('en');
-    const boundary = seeds.find((s) => s.id === 'route:settings:agent:settingsActionBoundary');
-    expect(boundary?.path).toBe('/settings/action-boundary');
-    expect(boundary?.keywords).toContain('safety');
+    expect(seeds.some((s) => s.path === '/settings/action-boundary')).toBe(false);
     expect(seeds.some((s) => s.path === '/settings/user-profile')).toBe(false);
   });
 
