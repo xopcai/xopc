@@ -44,14 +44,14 @@ export function desktopPetActionForPhase(
 ): DesktopPetAction {
   const normalizedToolName = toolName?.trim().toLowerCase().replace(/[.:/\\-]+/g, '_') ?? '';
   if (normalizedToolName.includes('exec_command') || normalizedToolName.includes('run_command') || normalizedToolName.includes('shell')) {
-    return 'terminal';
+    return 'execute';
   }
-  if (phase === 'researching') return 'search';
-  if (phase === 'reading' || phase === 'editing') return 'file';
-  if (phase === 'browsing') return 'browser';
-  if (phase === 'planning' || phase === 'compacting' || phase === 'preparing') return 'toolbox';
-  if (phase === 'running') return 'typing';
-  return 'typing';
+  if (phase === 'researching' || phase === 'browsing') return 'research';
+  if (phase === 'reading') return 'read';
+  if (phase === 'editing') return 'create';
+  if (phase === 'planning' || phase === 'compacting' || phase === 'preparing') return 'prepare';
+  if (phase === 'waiting') return 'wait';
+  return 'execute';
 }
 
 export function toolNarrative(

@@ -30,12 +30,14 @@ describe('createDesktopPetPackage', () => {
       await expect(validateDesktopPetPackage(result.dir)).resolves.toEqual({ ok: true });
 
       const manifest = JSON.parse(await readFile(result.manifestPath, 'utf8')) as {
+        schemaVersion: number;
         id: string;
         sourcePrompt: string;
         animations: Record<string, unknown>;
         persona: { tone: string; phrases?: { success?: string[] } };
       };
       expect(manifest.id).toBe(result.id);
+      expect(manifest.schemaVersion).toBe(2);
       expect(manifest.sourcePrompt).toBe('a sleepy blue robot that loves terminals');
       expect(Object.keys(manifest.animations)).toEqual([...DESKTOP_PET_ACTIONS]);
       expect(manifest.persona).toMatchObject({ tone: 'warm', phrases: { success: ['处理好了。'] } });

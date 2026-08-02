@@ -20,6 +20,7 @@ Custom pets live under `~/.xopc/pets` by default. The exact path is shown in Set
 
 ```json
 {
+  "schemaVersion": 2,
   "id": "my-pet",
   "name": "My Pet",
   "description": "A helpful animated companion.",
@@ -40,21 +41,27 @@ Custom pets live under `~/.xopc/pets` by default. The exact path is shown in Set
   "canvasHeight": 96,
   "animations": {
     "idle": { "src": "pet.png", "frameWidth": 96, "frameHeight": 96, "frameCount": 6, "fps": 6, "loop": true, "offsetX": 0, "offsetY": 0 },
-    "typing": { "src": "pet.png", "frameWidth": 96, "frameHeight": 96, "frameCount": 10, "fps": 10, "loop": true, "offsetX": 0, "offsetY": 96 },
-    "toolbox": { "src": "pet.png", "frameWidth": 96, "frameHeight": 96, "frameCount": 10, "fps": 10, "loop": true, "offsetX": 0, "offsetY": 192 },
-    "search": { "src": "pet.png", "frameWidth": 96, "frameHeight": 96, "frameCount": 10, "fps": 10, "loop": true, "offsetX": 0, "offsetY": 288 },
-    "file": { "src": "pet.png", "frameWidth": 96, "frameHeight": 96, "frameCount": 10, "fps": 10, "loop": true, "offsetX": 0, "offsetY": 384 },
-    "terminal": { "src": "pet.png", "frameWidth": 96, "frameHeight": 96, "frameCount": 10, "fps": 10, "loop": true, "offsetX": 0, "offsetY": 480 },
-    "browser": { "src": "pet.png", "frameWidth": 96, "frameHeight": 96, "frameCount": 10, "fps": 10, "loop": true, "offsetX": 0, "offsetY": 576 },
-    "success": { "src": "pet.png", "frameWidth": 96, "frameHeight": 96, "frameCount": 8, "fps": 12, "loop": false, "offsetX": 0, "offsetY": 672 },
-    "error": { "src": "pet.png", "frameWidth": 96, "frameHeight": 96, "frameCount": 8, "fps": 12, "loop": false, "offsetX": 0, "offsetY": 768 }
+    "sleep": { "src": "pet.png", "frameWidth": 96, "frameHeight": 96, "frameCount": 6, "fps": 6, "loop": true, "offsetX": 0, "offsetY": 96 },
+    "wake": { "src": "pet.png", "frameWidth": 96, "frameHeight": 96, "frameCount": 10, "fps": 10, "loop": false, "offsetX": 0, "offsetY": 192 },
+    "greet": { "src": "pet.png", "frameWidth": 96, "frameHeight": 96, "frameCount": 10, "fps": 10, "loop": false, "offsetX": 0, "offsetY": 288 },
+    "prepare": { "src": "pet.png", "frameWidth": 96, "frameHeight": 96, "frameCount": 10, "fps": 10, "loop": false, "offsetX": 0, "offsetY": 384 },
+    "research": { "src": "pet.png", "frameWidth": 96, "frameHeight": 96, "frameCount": 10, "fps": 10, "loop": true, "offsetX": 0, "offsetY": 480 },
+    "read": { "src": "pet.png", "frameWidth": 96, "frameHeight": 96, "frameCount": 10, "fps": 10, "loop": true, "offsetX": 0, "offsetY": 576 },
+    "create": { "src": "pet.png", "frameWidth": 96, "frameHeight": 96, "frameCount": 10, "fps": 10, "loop": true, "offsetX": 0, "offsetY": 672 },
+    "execute": { "src": "pet.png", "frameWidth": 96, "frameHeight": 96, "frameCount": 10, "fps": 10, "loop": true, "offsetX": 0, "offsetY": 768 },
+    "wait": { "src": "pet.png", "frameWidth": 96, "frameHeight": 96, "frameCount": 10, "fps": 10, "loop": true, "offsetX": 0, "offsetY": 864 },
+    "success": { "src": "pet.png", "frameWidth": 96, "frameHeight": 96, "frameCount": 8, "fps": 12, "loop": false, "offsetX": 0, "offsetY": 960 },
+    "concern": { "src": "pet.png", "frameWidth": 96, "frameHeight": 96, "frameCount": 8, "fps": 12, "loop": false, "offsetX": 0, "offsetY": 1056 },
+    "pet": { "src": "pet.png", "frameWidth": 96, "frameHeight": 96, "frameCount": 10, "fps": 10, "loop": false, "offsetX": 0, "offsetY": 1152 },
+    "pickedUp": { "src": "pet.png", "frameWidth": 96, "frameHeight": 96, "frameCount": 10, "fps": 10, "loop": false, "offsetX": 0, "offsetY": 1248 },
+    "released": { "src": "pet.png", "frameWidth": 96, "frameHeight": 96, "frameCount": 10, "fps": 10, "loop": false, "offsetX": 0, "offsetY": 1344 }
   }
 }
 ```
 
 All fields shown above are required except `canvasWidth`, `canvasHeight`, `fps`, `loop`, `offsetX`, and `offsetY`.
 
-`persona` is optional and backward compatible. Numeric traits are clamped to `0..1`. Phrase lists are intended for short, truthful ambient reactions; they must not demand attention, guilt the user, or claim biological needs. Runtime task facts remain system-owned so personality never obscures status accuracy.
+`schemaVersion` must be `2`; earlier manifests and unknown actions are rejected. `persona` is optional. Numeric traits are clamped to `0..1`. Phrase lists are intended for short, truthful ambient reactions; they must not demand attention, guilt the user, or claim biological needs. Runtime task facts remain system-owned so personality never obscures status accuracy.
 
 Desktop bubbles only display an agent event summary when the event explicitly provides `publicSummary`. Raw assistant text, command output, tool arguments, and error payloads are not treated as safe ambient content.
 
@@ -73,14 +80,17 @@ Generated pets use the same strict manifest protocol as hand-authored pets.
 | Action | Used for |
 | --- | --- |
 | `idle` | Waiting for work |
-| `typing` | Agent start and progress |
-| `toolbox` | Generic tool use |
-| `search` | Search, weather, finance, sports, and image lookup tools |
-| `file` | Reading, writing, editing, or listing files |
-| `terminal` | Shell and command execution |
-| `browser` | Browser and URL operations |
+| `sleep` / `wake` | Daily rest rhythm |
+| `greet` / `pet` | Warm, user-initiated companionship |
+| `prepare` | Planning and getting ready |
+| `research` | Search, browsing, and discovery |
+| `read` | Reading files and sources |
+| `create` | Writing, editing, and composing |
+| `execute` | Shell commands and tool execution |
+| `wait` | Safely waiting for user input |
 | `success` | Completed work |
-| `error` | Errors and blocked work |
+| `concern` | Errors and blocked work |
+| `pickedUp` / `released` | Drag interaction feedback |
 
 ## Spritesheet Rules
 

@@ -36,17 +36,17 @@ const labels: DesktopPetNarrativeLabels = {
 
 describe('desktop pet narrative', () => {
   it('maps work phases to the matching pet animation', () => {
-    expect(desktopPetActionForPhase('researching')).toBe('search');
-    expect(desktopPetActionForPhase('reading')).toBe('file');
-    expect(desktopPetActionForPhase('editing')).toBe('file');
-    expect(desktopPetActionForPhase('browsing')).toBe('browser');
-    expect(desktopPetActionForPhase('running', 'exec_command')).toBe('terminal');
+    expect(desktopPetActionForPhase('researching')).toBe('research');
+    expect(desktopPetActionForPhase('reading')).toBe('read');
+    expect(desktopPetActionForPhase('editing')).toBe('create');
+    expect(desktopPetActionForPhase('browsing')).toBe('research');
+    expect(desktopPetActionForPhase('running', 'exec_command')).toBe('execute');
   });
 
   it('builds concise tool tips with safe target context', () => {
     expect(toolNarrative(labels, 'read_file', 'reading', 'service.ts')).toMatchObject({
       action: 'I am reading files: service.ts.',
-      animation: 'file',
+      animation: 'read',
       priority: 'normal',
     });
   });
@@ -72,7 +72,7 @@ describe('desktop pet narrative', () => {
       sessionLabel: 'Fix tests',
       state: 'running',
       phase: 'running',
-      animation: 'terminal',
+      animation: 'execute',
       priority: 'low',
       action: 'The command has new output.',
     });
@@ -149,7 +149,8 @@ describe('desktop pet narrative', () => {
   it('shows idle companionship only in the quiet window between tasks', () => {
     const base = {
       bubbleEnabled: true,
-      feedbackLevel: 'normal' as const,
+      behaviorMode: 'companion' as const,
+      proactiveTipsEnabled: true,
       collapsed: false,
       queuedCount: 0,
       activeCount: 0,
@@ -157,7 +158,8 @@ describe('desktop pet narrative', () => {
     };
 
     expect(shouldShowIdleTip({ ...base, now: 20 * 60_000, lastActivityAt: 0 })).toBe(true);
-    expect(shouldShowIdleTip({ ...base, feedbackLevel: 'quiet', now: 20 * 60_000, lastActivityAt: 0 })).toBe(false);
+    expect(shouldShowIdleTip({ ...base, behaviorMode: 'focus', now: 20 * 60_000, lastActivityAt: 0 })).toBe(false);
+    expect(shouldShowIdleTip({ ...base, proactiveTipsEnabled: false, now: 20 * 60_000, lastActivityAt: 0 })).toBe(false);
     expect(shouldShowIdleTip({ ...base, activeCount: 1, now: 20 * 60_000, lastActivityAt: 0 })).toBe(false);
     expect(shouldShowIdleTip({ ...base, now: 21 * 60_000, lastActivityAt: 0 })).toBe(false);
     expect(shouldShowIdleTip({ ...base, now: 65 * 60_000, lastActivityAt: 0 })).toBe(true);

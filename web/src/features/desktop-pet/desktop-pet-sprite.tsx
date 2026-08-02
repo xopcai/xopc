@@ -10,12 +10,14 @@ export function DesktopPetSprite({
   action,
   size = 'normal',
   displayHeight: displayHeightOverride,
+  reducedMotion = false,
   className,
 }: {
   pet: DesktopPetDefinition;
   action: DesktopPetAction;
   size?: 'tiny' | 'small' | 'normal';
   displayHeight?: number;
+  reducedMotion?: boolean;
   className?: string;
 }) {
   const animation = pet.animations[action];
@@ -58,6 +60,7 @@ export function DesktopPetSprite({
         'desktop-pet-sprite',
         `desktop-pet-sprite--${action}`,
         animation.loop ? 'desktop-pet-sprite--loop' : 'desktop-pet-sprite--once',
+        reducedMotion && 'desktop-pet-sprite--reduced-motion',
         size === 'tiny' && 'desktop-pet-sprite--tiny',
         size === 'small' && 'desktop-pet-sprite--small',
         className,
