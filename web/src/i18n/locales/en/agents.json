@@ -610,7 +610,7 @@
     "modelsInherit": "Use shared model roles",
     "modelsCustomize": "Edit global roles",
     "modelsResetInherit": "Restore model strategy",
-    "modelsDefaultsLink": "Edit settings",
+    "modelsDefaultsLink": "Manage model services",
     "modelsPresetLabel": "Shared:",
     "modelsEffectiveLabel": "Active:",
     "modelsSave": "Save model roles",

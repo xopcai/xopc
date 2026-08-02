@@ -21,7 +21,7 @@ import { useSaveBarStore, type SaveAllFailure } from './save-bar-store';
 export function SaveBarControls() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
-  const t = m.modelsHub.saveBar;
+  const t = m.capabilitiesSettings.saveBar;
 
   const anyDirty = useSaveBarStore((s) => s.anyDirty);
   const anySaving = useSaveBarStore((s) => s.anySaving);

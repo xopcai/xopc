@@ -833,7 +833,7 @@
     "contextWindowHoverNoLimit": "~{{used}} context",
     "contextWindowAriaSummary": "Context usage about {{used}} of {{limit}} tokens",
     "contextWindowAriaSummaryNoLimit": "Estimated context usage about {{used}} tokens",
-    "modelProviderSettingsLink": "Missing a model? Open Models & capabilities",
+    "modelProviderSettingsLink": "Missing a model? Open Models & services",
     "dropFiles": "Drop files here to attach",
     "voiceRecording": "Record voice",
     "voiceRecordingStop": "Stop recording",

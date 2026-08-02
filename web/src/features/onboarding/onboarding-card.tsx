@@ -195,8 +195,8 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
       const recommendedModel = await resolveRecommendedModel(selectedProvider);
       if (!recommendedModel) {
         throw new Error(language === 'zh'
-          ? '没有找到可用模型，请检查密钥或前往“模型与能力”进行高级配置。'
-          : 'No available model was found. Check the key or open Models & capabilities for advanced setup.');
+          ? '没有找到可用模型，请检查密钥或前往“模型与服务”进行高级配置。'
+          : 'No available model was found. Check the key or open Models & services for advanced setup.');
       }
       await finishSetup(recommendedModel.id);
     } catch (cause) {
@@ -284,7 +284,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
               }}
             />
             <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-              <Link to="/settings/credentials" className="text-xs font-medium text-accent-fg hover:underline">
+              <Link to="/settings/capabilities/models" className="text-xs font-medium text-accent-fg hover:underline">
                 {language === 'zh' ? '配置其他模型…' : 'Configure other models…'}
               </Link>
               {canDismiss ? (

@@ -223,6 +223,7 @@ function ShareLinkConfirmation({
               <SelectOption value={86_400_000}>{t.ttlOptions['24h']}</SelectOption>
               <SelectOption value={259_200_000}>{t.ttlOptions['3d']}</SelectOption>
               <SelectOption value={604_800_000}>{t.ttlOptions['7d']}</SelectOption>
+              <SelectOption value={2_592_000_000}>{t.ttlOptions['30d']}</SelectOption>
             </Select>
           </label>
           <label className="flex min-w-0 flex-col gap-1.5">

@@ -260,10 +260,10 @@ export function invokeAppMenuAction(
       wc.send('menu:navigate', '/automations');
       break;
     case 'agent.providers':
-      wc.send('menu:navigate', '/settings/credentials?tab=providers');
+      wc.send('menu:navigate', '/settings/capabilities/models');
       break;
     case 'agent.models':
-      wc.send('menu:navigate', '/settings/credentials?tab=catalog');
+      wc.send('menu:navigate', '/settings/capabilities/models');
       break;
     case 'window.minimize':
       mainWindow.minimize();

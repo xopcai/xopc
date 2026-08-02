@@ -66,7 +66,7 @@ export interface CreateSiteShareParams {
   path?: string;
   /** Proxy: full upstream URL (must be loopback or whitelisted). */
   upstreamUrl?: string;
-  /** Default 6h. */
+  /** Default 24h. */
   ttlMs?: number;
   /** Optional friendly description. */
   description?: string;
@@ -111,13 +111,13 @@ export interface SiteShareConfig {
 export const SITE_SHARE_CONFIG_DEFAULTS: SiteShareConfig = {
   enabled: true,
   publicHostSuffix: 'share.xopc.ai',
-  defaultTtlMs: 21_600_000,
-  maxTtlMs: 604_800_000,
-  maxActiveSites: 5,
+  defaultTtlMs: 86_400_000,
+  maxTtlMs: 2_592_000_000,
+  maxActiveSites: 50,
   static: {
     enabled: true,
-    maxRootDirSize: 524_288_000,
-    maxFileCount: 10_000,
+    maxRootDirSize: 1_073_741_824,
+    maxFileCount: 20_000,
     rewriteEnabledByDefault: false,
   },
   proxy: {

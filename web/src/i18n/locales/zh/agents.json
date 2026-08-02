@@ -610,7 +610,7 @@
     "modelsInherit": "使用共享模型用途",
     "modelsCustomize": "编辑全局角色",
     "modelsResetInherit": "恢复模型策略",
-    "modelsDefaultsLink": "编辑配置",
+    "modelsDefaultsLink": "管理模型服务",
     "modelsPresetLabel": "共享：",
     "modelsEffectiveLabel": "当前生效：",
     "modelsSave": "保存模型角色",

@@ -1,10 +1,12 @@
-import { Layers } from 'lucide-react';
+import { Layers, Settings2 } from 'lucide-react';
 import type { Dispatch, SetStateAction } from 'react';
+import { Link } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import type { GatewayAgentRow } from '@/features/settings/agents-admin-api';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 import type { AgentsSettingsMessages, ChatMessages } from '@/i18n/messages';
+import { capabilitySettingsPath } from '@/navigation';
 
 import { TypedModelsEditor } from '../typed-models-editor';
 import { formatTypedModelsSummary, type AgentTypedModelRow } from '../typed-models-lib';
@@ -90,6 +92,12 @@ export function AgentModelsTab(props: {
         ) : null}
         <Button type="button" variant="secondary" disabled={busy} onClick={() => void onClearModelsEntry()}>
           {a.modelsResetInherit}
+        </Button>
+        <Button asChild variant="ghost">
+          <Link to={capabilitySettingsPath('models')}>
+            <Settings2 className="size-4" aria-hidden />
+            {a.modelsDefaultsLink}
+          </Link>
         </Button>
       </div>
     </SettingsFormSection>

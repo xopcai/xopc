@@ -1,14 +1,15 @@
-import { Loader2 } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import {
+  getRecommendedSharePolicy,
   normalizeSharePolicyFromConfig,
   patchSharePolicy,
   type SharePolicyState,
 } from '@/features/shares/share-policy-api';
 import { SettingsFormSection } from '@/features/settings/settings-form-section';
+import { SettingsPanelSkeleton } from '@/features/settings/settings-loading-skeleton';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { messages, type SharesSettingsMessages } from '@/i18n/messages';
@@ -91,10 +92,7 @@ export function SharePolicySection({ hasToken }: Props) {
     if (isLoading) {
       return (
         <SettingsFormSection>
-          <p className="flex items-center gap-2 text-sm text-fg-muted">
-            <Loader2 className="size-4 animate-spin" />
-            {t.policyLoading}
-          </p>
+          <SettingsPanelSkeleton rows={2} />
         </SettingsFormSection>
       );
     }
@@ -110,6 +108,14 @@ export function SharePolicySection({ hasToken }: Props) {
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           {saveOk ? <span className="text-sm text-fg-muted">{t.policySaved}</span> : null}
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={saving}
+            onClick={() => update(getRecommendedSharePolicy())}
+          >
+            {t.policyUseRecommended}
+          </Button>
           <Button type="button" variant="secondary" disabled={!dirty || saving} onClick={discard}>
             {t.policyDiscard}
           </Button>
@@ -139,74 +145,160 @@ function SharePolicyFields({
 }) {
   return (
     <div className="space-y-4">
-      <label className="flex cursor-pointer items-center gap-2 text-sm text-fg">
-        <input
-          type="checkbox"
-          className="ui-checkbox"
-          checked={form.enabled}
-          onChange={(e) => onChange({ enabled: e.target.checked })}
-        />
-        {t.policyEnabled}
-      </label>
+      <div className="rounded-xl border border-edge bg-surface-muted/25 p-4">
+        <div className="mb-4">
+          <h3 className="text-sm font-semibold text-fg">{t.policyFileSection}</h3>
+          <p className="mt-0.5 text-xs text-fg-muted">{t.policyFileSectionHint}</p>
+        </div>
+        <label className="mb-4 flex cursor-pointer items-center gap-2 text-sm text-fg">
+          <input
+            type="checkbox"
+            className="ui-checkbox"
+            checked={form.enabled}
+            onChange={(e) => onChange({ enabled: e.target.checked })}
+          />
+          {t.policyEnabled}
+        </label>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <NumberField
-          id="share-default-ttl-hours"
-          label={t.policyDefaultTtlHours}
-          hint={t.policyDefaultTtlHint}
-          value={form.defaultTtlHours}
-          min={1}
-          max={168}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <NumberField
+            id="share-default-ttl-hours"
+            label={t.policyDefaultTtlHours}
+            hint={t.policyDefaultTtlHint}
+            value={form.defaultTtlHours}
+            min={1}
+            max={168}
+            disabled={!form.enabled}
+            onChange={(defaultTtlHours) => onChange({ defaultTtlHours })}
+          />
+          <NumberField
+            id="share-max-ttl-days"
+            label={t.policyMaxTtlDays}
+            hint={t.policyMaxTtlHint}
+            value={form.maxTtlDays}
+            min={1}
+            max={30}
+            disabled={!form.enabled}
+            onChange={(maxTtlDays) => onChange({ maxTtlDays })}
+          />
+          <NumberField
+            id="share-max-active"
+            label={t.policyMaxActiveShares}
+            hint={t.policyMaxActiveSharesHint}
+            value={form.maxActiveShares}
+            min={1}
+            max={10_000}
+            disabled={!form.enabled}
+            onChange={(maxActiveShares) => onChange({ maxActiveShares })}
+          />
+          <NumberField
+            id="share-max-file-mb"
+            label={t.policyMaxFileSizeMb}
+            hint={t.policyMaxFileSizeHint}
+            value={form.maxFileSizeMb}
+            min={1}
+            max={10_240}
+            disabled={!form.enabled}
+            onChange={(maxFileSizeMb) => onChange({ maxFileSizeMb })}
+          />
+          <NumberField
+            id="share-directory-max-size-mb"
+            label={t.policyDirectoryMaxFolderSizeMb}
+            hint={t.policyDirectoryMaxFolderSizeHint}
+            value={form.directoryMaxFolderSizeMb}
+            min={1}
+            max={10_240}
+            disabled={!form.enabled}
+            onChange={(directoryMaxFolderSizeMb) => onChange({ directoryMaxFolderSizeMb })}
+          />
+          <NumberField
+            id="share-directory-max-files"
+            label={t.policyDirectoryMaxFileCount}
+            hint={t.policyDirectoryMaxFileCountHint}
+            value={form.directoryMaxFileCount}
+            min={1}
+            max={100_000}
+            disabled={!form.enabled}
+            onChange={(directoryMaxFileCount) => onChange({ directoryMaxFileCount })}
+          />
+        </div>
+
+        <MimeListField
+          t={t}
+          values={form.inlinePreviewMimes}
           disabled={!form.enabled}
-          onChange={(defaultTtlHours) => onChange({ defaultTtlHours })}
-        />
-        <NumberField
-          id="share-max-ttl-days"
-          label={t.policyMaxTtlDays}
-          hint={t.policyMaxTtlHint}
-          value={form.maxTtlDays}
-          min={1}
-          max={30}
-          disabled={!form.enabled}
-          onChange={(maxTtlDays) => onChange({ maxTtlDays })}
-        />
-        <NumberField
-          id="share-max-active"
-          label={t.policyMaxActiveShares}
-          hint={t.policyMaxActiveSharesHint}
-          value={form.maxActiveShares}
-          min={1}
-          max={10_000}
-          disabled={!form.enabled}
-          onChange={(maxActiveShares) => onChange({ maxActiveShares })}
-        />
-        <NumberField
-          id="site-share-max-active"
-          label={t.policyMaxActiveSites}
-          hint={t.policyMaxActiveSitesHint}
-          value={form.maxActiveSites}
-          min={1}
-          max={1_000}
-          onChange={(maxActiveSites) => onChange({ maxActiveSites })}
-        />
-        <NumberField
-          id="share-max-file-mb"
-          label={t.policyMaxFileSizeMb}
-          hint={t.policyMaxFileSizeHint}
-          value={form.maxFileSizeMb}
-          min={1}
-          max={10_240}
-          disabled={!form.enabled}
-          onChange={(maxFileSizeMb) => onChange({ maxFileSizeMb })}
+          onChange={(inlinePreviewMimes) => onChange({ inlinePreviewMimes })}
         />
       </div>
 
-      <MimeListField
-        t={t}
-        values={form.inlinePreviewMimes}
-        disabled={!form.enabled}
-        onChange={(inlinePreviewMimes) => onChange({ inlinePreviewMimes })}
-      />
+      <div className="rounded-xl border border-edge bg-surface-muted/25 p-4">
+        <div className="mb-4">
+          <h3 className="text-sm font-semibold text-fg">{t.policySiteSection}</h3>
+          <p className="mt-0.5 text-xs text-fg-muted">{t.policySiteSectionHint}</p>
+        </div>
+        <label className="mb-4 flex cursor-pointer items-center gap-2 text-sm text-fg">
+          <input
+            type="checkbox"
+            className="ui-checkbox"
+            checked={form.siteEnabled}
+            onChange={(e) => onChange({ siteEnabled: e.target.checked })}
+          />
+          {t.policySiteEnabled}
+        </label>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <NumberField
+            id="site-share-default-ttl-hours"
+            label={t.policySiteDefaultTtlHours}
+            hint={t.policySiteDefaultTtlHint}
+            value={form.siteDefaultTtlHours}
+            min={1}
+            max={168}
+            disabled={!form.siteEnabled}
+            onChange={(siteDefaultTtlHours) => onChange({ siteDefaultTtlHours })}
+          />
+          <NumberField
+            id="site-share-max-ttl-days"
+            label={t.policySiteMaxTtlDays}
+            hint={t.policySiteMaxTtlHint}
+            value={form.siteMaxTtlDays}
+            min={1}
+            max={30}
+            disabled={!form.siteEnabled}
+            onChange={(siteMaxTtlDays) => onChange({ siteMaxTtlDays })}
+          />
+          <NumberField
+            id="site-share-max-active"
+            label={t.policyMaxActiveSites}
+            hint={t.policyMaxActiveSitesHint}
+            value={form.maxActiveSites}
+            min={1}
+            max={1_000}
+            disabled={!form.siteEnabled}
+            onChange={(maxActiveSites) => onChange({ maxActiveSites })}
+          />
+          <NumberField
+            id="site-share-max-root-size-mb"
+            label={t.policySiteMaxRootDirSizeMb}
+            hint={t.policySiteMaxRootDirSizeHint}
+            value={form.siteMaxRootDirSizeMb}
+            min={1}
+            max={10_240}
+            disabled={!form.siteEnabled}
+            onChange={(siteMaxRootDirSizeMb) => onChange({ siteMaxRootDirSizeMb })}
+          />
+          <NumberField
+            id="site-share-max-files"
+            label={t.policySiteMaxFileCount}
+            hint={t.policySiteMaxFileCountHint}
+            value={form.siteMaxFileCount}
+            min={1}
+            max={100_000}
+            disabled={!form.siteEnabled}
+            onChange={(siteMaxFileCount) => onChange({ siteMaxFileCount })}
+          />
+        </div>
+      </div>
     </div>
   );
 }

@@ -30,7 +30,7 @@ export const loadKeyboardShortcutsSettingsPanel = () => import('@/features/setti
 export const loadSystemSettingsPanel = () => import('@/features/settings/system-settings-panel');
 export const loadDesktopPetSettingsPanel = () => import('@/features/desktop-pet/desktop-pet-settings');
 export const loadAppManagementSettingsPanel = () => import('@/features/settings/app-management-settings-panel');
-export const loadModelsHubPanel = () => import('@/features/settings/models-hub/models-hub-panel');
+export const loadCapabilitiesSettingsPanel = () => import('@/features/settings/models-hub/capabilities-settings-panel');
 export const loadGatewaySettingsPanel = () => import('@/features/settings/gateway-settings');
 export const loadHeartbeatSettingsPanel = () => import('@/features/settings/heartbeat-settings');
 export const loadRemoteAccessHub = () => import('@/features/remote-access/remote-access-hub');
@@ -68,7 +68,7 @@ function preloadSettingsSection(path: string) {
   if (section === 'system') return preload(loadSystemSettingsPanel);
   if (section === 'desktop-pet') return preload(loadDesktopPetSettingsPanel);
   if (section === 'desktop-app') return preload(loadAppManagementSettingsPanel);
-  if (section === 'credentials') return preload(loadModelsHubPanel);
+  if (section.startsWith('capabilities/')) return preload(loadCapabilitiesSettingsPanel);
   if (section === 'gateway') return preload(loadGatewaySettingsPanel);
   if (section === 'heartbeat') return preload(loadHeartbeatSettingsPanel);
   if (section === 'tunnel' || section === 'remote-access') return preload(loadRemoteAccessHub);

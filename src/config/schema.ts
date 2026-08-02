@@ -574,12 +574,12 @@ export const GatewayConfigSchema = z.object({
     enabled: z.boolean().default(true),
     /** Default TTL in ms (default 24h). */
     defaultTtlMs: z.number().min(60_000).max(604_800_000).default(86_400_000),
-    /** Maximum TTL in ms (default 7 days). */
-    maxTtlMs: z.number().min(60_000).max(2_592_000_000).default(604_800_000),
-    /** Maximum concurrent active shares (default 100). */
-    maxActiveShares: z.number().min(1).max(10_000).default(100),
-    /** Maximum shareable file size in bytes (default 100MB). */
-    maxFileSize: z.number().min(1_048_576).max(10_737_418_240).default(104_857_600),
+    /** Maximum TTL in ms (default 30 days). */
+    maxTtlMs: z.number().min(60_000).max(2_592_000_000).default(2_592_000_000),
+    /** Maximum concurrent active shares (default 500). */
+    maxActiveShares: z.number().min(1).max(10_000).default(500),
+    /** Maximum shareable file size in bytes (default 500 MB). */
+    maxFileSize: z.number().min(1_048_576).max(10_737_418_240).default(524_288_000),
     /** MIME types allowed for inline preview (?inline=1). */
     inlinePreviewMimes: z.array(z.string()).default([
       'image/png',
@@ -596,10 +596,10 @@ export const GatewayConfigSchema = z.object({
     /** Folder-sharing controls (browse + ZIP). */
     directory: z.object({
       enabled: z.boolean().default(true),
-      /** Maximum folder size in bytes at scan time (default 1 GB). */
-      maxFolderSize: z.number().int().min(1_048_576).max(10_737_418_240).default(1_073_741_824),
+      /** Maximum folder size in bytes at scan time (default 2 GB). */
+      maxFolderSize: z.number().int().min(1_048_576).max(10_737_418_240).default(2_147_483_648),
       /** Maximum number of entries scanned for a single folder share. */
-      maxFileCount: z.number().int().min(1).max(100_000).default(1_000),
+      maxFileCount: z.number().int().min(1).max(100_000).default(10_000),
       /** Traversal depth cap (defense against recursive symlinks). */
       maxDepth: z.number().int().min(1).max(64).default(20),
       /** In-memory directory listing cache TTL. */
@@ -608,8 +608,8 @@ export const GatewayConfigSchema = z.object({
       zipConcurrency: z.number().int().min(1).max(8).default(1),
     }).default({
       enabled: true,
-      maxFolderSize: 1_073_741_824,
-      maxFileCount: 1_000,
+      maxFolderSize: 2_147_483_648,
+      maxFileCount: 10_000,
       maxDepth: 20,
       listingCacheMs: 60_000,
       zipConcurrency: 1,
@@ -620,24 +620,24 @@ export const GatewayConfigSchema = z.object({
     enabled: z.boolean().default(true),
     /** Public host suffix that subdomain shares are served under. */
     publicHostSuffix: z.string().min(1).default('share.xopc.ai'),
-    /** Default TTL in ms (default 6h, shorter than file shares — live app surface). */
-    defaultTtlMs: z.number().int().min(60_000).max(604_800_000).default(21_600_000),
-    /** Maximum TTL in ms (default 7 days). */
-    maxTtlMs: z.number().int().min(60_000).max(2_592_000_000).default(604_800_000),
-    /** Maximum concurrent active site shares. */
-    maxActiveSites: z.number().int().min(1).max(1_000).default(5),
+    /** Default TTL in ms (default 24h). */
+    defaultTtlMs: z.number().int().min(60_000).max(604_800_000).default(86_400_000),
+    /** Maximum TTL in ms (default 30 days). */
+    maxTtlMs: z.number().int().min(60_000).max(2_592_000_000).default(2_592_000_000),
+    /** Maximum concurrent active site shares (default 50). */
+    maxActiveSites: z.number().int().min(1).max(1_000).default(50),
     static: z.object({
       enabled: z.boolean().default(true),
       /** Maximum total bytes of files served per static site. */
-      maxRootDirSize: z.number().int().min(1_048_576).max(10_737_418_240).default(524_288_000),
+      maxRootDirSize: z.number().int().min(1_048_576).max(10_737_418_240).default(1_073_741_824),
       /** Maximum file count under root dir. */
-      maxFileCount: z.number().int().min(1).max(100_000).default(10_000),
+      maxFileCount: z.number().int().min(1).max(100_000).default(20_000),
       /** Whether HTML/CSS rewrite of absolute paths is on by default. */
       rewriteEnabledByDefault: z.boolean().default(false),
     }).default({
       enabled: true,
-      maxRootDirSize: 524_288_000,
-      maxFileCount: 10_000,
+      maxRootDirSize: 1_073_741_824,
+      maxFileCount: 20_000,
       rewriteEnabledByDefault: false,
     }),
     proxy: z.object({
