@@ -4,6 +4,8 @@ The PC desktop app is the easiest first path for most users. It starts a local x
 
 Use this page when you want to install and use xopc as a desktop application. Use [First 5 Minutes](./first-5-minutes.md) when you prefer a terminal-first setup.
 
+![xopc desktop app demo](/xopc-desktop.gif)
+
 ## Quick Path
 
 1. Open [GitHub Releases](https://github.com/xopcai/xopc/releases).
@@ -129,9 +131,9 @@ pnpm run build
 pnpm run electron:dev
 ```
 
-## Media Placeholders
+## Additional Media
 
-Put desktop app screenshots, GIFs, and videos under `docs/public/desktop/`. The docs intentionally do not embed missing files yet, so pages will not show broken images before assets are captured.
+The main desktop demo lives at `docs/public/xopc-desktop.gif`. Put additional desktop app screenshots, GIFs, and videos under `docs/public/desktop/`, and only embed them after the files have been added.
 
 | Asset | Put file here | Use |
 | --- | --- | --- |

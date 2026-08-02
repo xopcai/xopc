@@ -29,7 +29,9 @@
 </p>
 
 <p align="center">
-  <img src="docs/public/xopc-tui.gif" alt="xopc 终端界面演示" width="720">
+  <a href="https://xopcai.github.io/xopc/zh/desktop-app">
+    <img src="docs/public/xopc-desktop.gif" alt="xopc 桌面端演示" width="1200">
+  </a>
 </p>
 
 <details>
@@ -87,7 +89,7 @@ xopc 不是某个模型的套壳，也不只是另一个聊天界面。它是一
 2. 打开 xopc，完成模型设置。
 3. 开始聊天。
 
-详见 **[PC 桌面端](https://xopcai.github.io/xopc/zh/desktop-app)**：安装说明、源码打包命令，以及后续截图/GIF/视频素材的预留文件位置。
+详见 **[PC 桌面端](https://xopcai.github.io/xopc/zh/desktop-app)**：安装说明、首次使用指引和源码打包命令。
 
 ### 一键安装（30 秒启动 — 推荐）
 
