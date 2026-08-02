@@ -47,7 +47,6 @@ const TAB_ICONS: Record<Tab, LucideIcon> = {
   settingsDesktopPet: PawPrint,
   settingsDesktopApp: Package,
   settingsAgentBrowser: Globe,
-  settingsActionBoundary: Shield,
   settingsCapabilityPresets: Layers,
   settingsAgents: Users,
   settingsProviders: Cloud,

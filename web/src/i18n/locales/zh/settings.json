@@ -2,7 +2,6 @@
   "settingsSections": {
     "overview": "系统状态",
     "appearance": "偏好设置",
-    "action-boundary": "行动边界",
     "agent": "智能体",
     "agent-browser": "浏览器",
     "capability-presets": "能力方案",
@@ -31,11 +30,6 @@
   },
   "settingsPage": {
     "comingSoon": "设置 · {{title}}（即将推出）。"
-  },
-  "actionBoundarySettings": {
-    "title": "行动边界",
-    "subtitle": "设置 xopc 在已授权权限范围内，默认可以主动执行到哪一步。",
-    "loadError": "无法加载当前行动边界。"
   },
   "userProfileSettings": {
     "title": "关于你",

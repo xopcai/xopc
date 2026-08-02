@@ -17,13 +17,12 @@ export type RouteHitSeed = {
  * Tabs for which the command palette offers a deep-link shortcut.
  *
  * Manifest-first agent management lives under `/agents`; browser automation
- * and the global action boundary are standalone agent-related settings routes.
+ * remains a standalone agent-related settings route.
  */
-const AGENT_SETTINGS_PALETTE_TABS: readonly Tab[] = ['settingsAgentBrowser', 'settingsActionBoundary'];
+const AGENT_SETTINGS_PALETTE_TABS: readonly Tab[] = ['settingsAgentBrowser'];
 
 const AGENT_SETTINGS_ROUTE_KEYWORDS: Partial<Record<Tab, string[]>> = {
   settingsAgentBrowser: ['browser', 'playwright', 'automation'],
-  settingsActionBoundary: ['trust', 'autonomy', 'approval', 'safety', 'action'],
 };
 
 function buildAgentSettingsRouteSeeds(language: StoredLanguage, settingsMode: ReturnType<typeof useSettingsModeStore.getState>['mode']): RouteHitSeed[] {
