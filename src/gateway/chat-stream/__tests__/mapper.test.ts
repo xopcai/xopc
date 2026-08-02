@@ -184,7 +184,7 @@ describe('ChatStreamMapper', () => {
     expect(events).toEqual([]);
   });
 
-  it('does not reinterpret a message update without an incremental sub-event', () => {
+  it('falls back to a message snapshot when an update has no incremental sub-event', () => {
     const m = mapper();
     m.map({ type: 'message_start', message: { role: 'assistant', content: [] } });
 
@@ -193,7 +193,37 @@ describe('ChatStreamMapper', () => {
       message: { role: 'assistant', content: [{ type: 'text', text: 'Complete snapshot.' }] },
     });
 
-    expect(events).toEqual([]);
+    expect(events).toEqual([
+      expect.objectContaining({
+        type: 'assistant_delta',
+        payload: expect.objectContaining({ delta: 'Complete snapshot.' }),
+      }),
+    ]);
+  });
+
+  it('emits text missing from incremental events before the assistant message ends', () => {
+    const m = mapper();
+    m.map({ type: 'message_start', message: { role: 'assistant', content: [] } });
+    m.map({
+      type: 'message_update',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'Partial' }] },
+      assistantMessageEvent: { type: 'text_delta', delta: 'Partial' },
+    });
+
+    const events = m.map({
+      type: 'message_end',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'Partial final answer' }] },
+    });
+
+    expect(events[0]).toMatchObject({
+      type: 'assistant_delta',
+      payload: { delta: ' final answer' },
+    });
+    expect(events.map((event) => event.type)).toEqual([
+      'assistant_delta',
+      'thinking_end',
+      'assistant_message_end',
+    ]);
   });
 
   it('preserves a text delta when the same update first publishes a review', () => {
@@ -320,8 +350,9 @@ describe('ChatStreamMapper', () => {
 
     expect(toolEnd.map((event) => event.type)).toEqual(['tool_end', 'patch_applied']);
     expect(toolEnd[1]).toMatchObject({ payload: { added: 1, removed: 1 } });
-    expect(messageEnd.map((event) => event.type)).toEqual(['thinking_end', 'turn_diff', 'assistant_message_end']);
-    expect(messageEnd[1]).toMatchObject({ type: 'turn_diff', payload: { files: ['a.ts'], added: 1, removed: 1 } });
+    expect(messageEnd.map((event) => event.type)).toEqual(['assistant_delta', 'thinking_end', 'turn_diff', 'assistant_message_end']);
+    expect(messageEnd[0]).toMatchObject({ type: 'assistant_delta', payload: { delta: 'done' } });
+    expect(messageEnd[2]).toMatchObject({ type: 'turn_diff', payload: { files: ['a.ts'], added: 1, removed: 1 } });
   });
 
   it('emits turn_plan for update_plan', () => {

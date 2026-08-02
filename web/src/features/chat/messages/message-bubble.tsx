@@ -32,6 +32,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { ReadAloudButton } from '@/features/voice/read-aloud-button';
 import { buildSpeakableText, detectSpeechLanguage } from '@/features/voice/read-aloud-text';
 import { buildAssistantTurnViewModel } from '@/features/chat/messages/assistant-turn-view-model';
+import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
 import {
   AssistantAttachmentList,
   AssistantTurnOutcomes,
@@ -290,6 +291,10 @@ export const MessageBubble = memo(function MessageBubble({
       setInlineImagePreview(att);
     }
   }, []);
+  const completeProgressiveRender = useCallback(() => {
+    if (!sessionKey || !message.renderKey) return;
+    useChatSessionStore.getState().completeProgressiveRender(sessionKey, message.renderKey);
+  }, [message.renderKey, sessionKey]);
   const handleCopyPlain = useCallback(() => {
     if (!copyPlainText) return;
     void copyTextToClipboard(copyPlainText).then((ok) => {
@@ -565,6 +570,8 @@ export const MessageBubble = memo(function MessageBubble({
                       labels: workflowCardLabels(language),
                     }}
                     assistantActivity={assistantTurnView?.activity}
+                    progressiveRender={Boolean(message.progressiveRender)}
+                    onProgressiveRenderComplete={completeProgressiveRender}
                   />
                 </div>
                 {isUser && userMessageCanExpand ? (
