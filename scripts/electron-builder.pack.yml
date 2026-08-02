@@ -110,6 +110,7 @@ mac:
   extendInfo:
     NSMicrophoneUsageDescription: 'xopc needs microphone access to record voice messages in chat.'
     NSScreenCaptureUsageDescription: 'xopc needs screen recording access for screen capture and vision features.'
+    NSAppleEventsUsageDescription: 'xopc uses Apple Events only when you choose to analyze Apple Notes, Calendar, and Reminders for work understanding.'
   notarize: true
 
 win:

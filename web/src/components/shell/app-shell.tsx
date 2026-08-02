@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
+import { APP_CHROME_BAR_CLASS, APP_CHROME_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { GatewayConnectLanding } from '@/components/shell/gateway-connect-landing';
 import { ToastHost } from '@/components/ui/toast-host';
 import { PrimaryAppHeader } from '@/components/shell/primary-app-header';
@@ -23,7 +24,9 @@ import { GlobalReadAloudPlayer } from '@/features/voice/global-read-aloud-player
 import { GlobalVoiceInputShortcutHost } from '@/features/voice/global-voice-input-shortcut-host';
 import { OnboardingDialog } from '@/components/shell/onboarding-dialog';
 import { TopBannerStack } from '@/components/shell/top-banner-stack';
+import { UnderstandingStatusButton } from '@/features/work-discovery/understanding-status-button';
 import { cn } from '@/lib/cn';
+import { isElectronDarwin } from '@/lib/electron-window-chrome';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
@@ -101,6 +104,13 @@ export function AppShell() {
         <ElectronMenuListener />
         <ToastHost />
         <WindowsTitlebar />
+        <UnderstandingStatusButton floating />
+        {isElectronDarwin() ? (
+          <div
+            className={cn('w-full', APP_CHROME_BAR_CLASS, APP_CHROME_DRAG_CLASS)}
+            aria-hidden="true"
+          />
+        ) : null}
         <main id="app-main-content" className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           <Outlet />
         </main>
