@@ -18,6 +18,7 @@ export class ChatStreamMapper {
   private assistantIndex = 0;
   private currentAssistantMessageId: string | undefined;
   private lastAssistantMessageId: string | undefined;
+  private currentAssistantText = '';
   private currentAssistantReviewEmitted = false;
   private toolCallToMessageId = new Map<string, string>();
   private turnDiffs: string[] = [];
@@ -188,6 +189,7 @@ export class ChatStreamMapper {
     if (message?.role !== 'assistant') return [];
     const messageId = this.nextAssistantMessageId();
     this.currentAssistantMessageId = messageId;
+    this.currentAssistantText = '';
     this.currentAssistantReviewEmitted = false;
     return [this.make('assistant_message_start', { messageId })];
   }
@@ -205,9 +207,18 @@ export class ChatStreamMapper {
     const delta = event.assistantMessageEvent as { type?: unknown; delta?: unknown } | undefined;
     if (delta?.type === 'text_delta' && typeof delta.delta === 'string' && delta.delta) {
       events.push(this.make('assistant_delta', { messageId, delta: delta.delta }));
+      this.currentAssistantText += delta.delta;
     }
     if (delta?.type === 'thinking_delta' && typeof delta.delta === 'string' && delta.delta) {
       events.push(this.make('thinking_delta', { messageId, delta: delta.delta }));
+    }
+    if (!delta) {
+      const text = extractTextFromMessage(message);
+      const suffix = appendSuffix(this.currentAssistantText, text);
+      if (suffix) {
+        events.push(this.make('assistant_delta', { messageId, delta: suffix }));
+        this.currentAssistantText = text || `${this.currentAssistantText}${suffix}`;
+      }
     }
     return events;
   }
@@ -222,7 +233,10 @@ export class ChatStreamMapper {
       return [this.make('review', { messageId, review })];
     }
     const text = extractTextFromMessage(message);
-    return text ? [this.make('assistant_delta', { messageId, delta: text })] : [];
+    const suffix = appendSuffix(this.currentAssistantText, text);
+    if (!suffix) return [];
+    this.currentAssistantText = text || `${this.currentAssistantText}${suffix}`;
+    return [this.make('assistant_delta', { messageId, delta: suffix })];
   }
 
   private mapMessageEnd(raw: unknown): ChatStreamEvent[] {
@@ -235,6 +249,10 @@ export class ChatStreamMapper {
       this.currentAssistantReviewEmitted = true;
       events.push(this.make('review', { messageId, review }));
     }
+    const text = extractTextFromMessage(message);
+    const suffix = appendSuffix(this.currentAssistantText, text);
+    if (suffix) events.push(this.make('assistant_delta', { messageId, delta: suffix }));
+    this.currentAssistantText = text || this.currentAssistantText;
     events.push(this.make('thinking_end', { messageId }));
     if (this.turnDiffs.length > 0) {
       events.push(
@@ -254,6 +272,7 @@ export class ChatStreamMapper {
     events.push(this.make('assistant_message_end', { messageId, usage: extractUsage(message) }));
     this.lastAssistantMessageId = messageId;
     this.currentAssistantMessageId = undefined;
+    this.currentAssistantText = '';
     this.currentAssistantReviewEmitted = false;
     return events;
   }
@@ -451,6 +470,18 @@ function extractText(value: unknown): string | undefined {
     })
     .join('');
   return text || undefined;
+}
+
+function appendSuffix(base: string, next: string | undefined): string {
+  if (!next) return '';
+  if (!base) return next;
+  if (next === base || base.endsWith(next)) return '';
+  if (next.startsWith(base)) return next.slice(base.length);
+  const max = Math.min(base.length, next.length, 512);
+  for (let overlap = max; overlap > 0; overlap--) {
+    if (base.slice(-overlap) === next.slice(0, overlap)) return next.slice(overlap);
+  }
+  return next;
 }
 
 function extractUsage(message: AgentMessage): AssistantMessageEndEventPayload['usage'] {

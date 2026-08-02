@@ -56,7 +56,11 @@ describe('streaming assistant Markdown rendering', () => {
     vi.useRealTimers();
   });
 
-  function render(content: MessageContent[], streaming: boolean) {
+  function render(
+    content: MessageContent[],
+    streaming: boolean,
+    progressiveRender = false,
+  ) {
     act(() => {
       root.render(
         <ChunkedContent
@@ -71,6 +75,7 @@ describe('streaming assistant Markdown rendering', () => {
           onImagePreview={undefined}
           sessionKey={null}
           workflowOptions={{ labels: {} as never }}
+          progressiveRender={progressiveRender}
         />,
       );
     });
@@ -134,5 +139,16 @@ describe('streaming assistant Markdown rendering', () => {
     expect(container.textContent?.trim()).toBe('First updat');
     act(() => vi.advanceTimersByTime(32));
     expect(container.textContent?.trim()).toBe('First update');
+  });
+
+  it('animates a completed response that did not render before run_end', () => {
+    vi.useFakeTimers();
+    render([{ type: 'text', text: 'abcdefghijkl' }], false, true);
+
+    expect(container.textContent?.trim()).toBe('');
+    act(() => vi.advanceTimersByTime(48));
+    expect(container.textContent?.trim()).toBe('abcdef');
+    act(() => vi.advanceTimersByTime(32));
+    expect(container.textContent?.trim()).toBe('abcdefghijkl');
   });
 });
