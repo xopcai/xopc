@@ -56,6 +56,8 @@ features:
     link: /voice
 ---
 
+[![xopc desktop app demo](/xopc-desktop.gif)](./desktop-app.md)
+
 ## xopc manages a work runtime
 
 Most chat products organize everything around one conversation. xopc gives long-running work several explicit, connected objects:
@@ -74,7 +76,7 @@ The point is not that “AI remembers everything automatically.” Important sta
 
 | Goal | Start here |
 | --- | --- |
-| I want a private AI assistant on my computer | [First 5 Minutes](./first-5-minutes.md) |
+| I want a private AI assistant on my computer | [PC Desktop App](./desktop-app.md) |
 | I want to understand how xopc stores state, executes work, and triggers follow-up | [The Continuous Work Model](./concepts/loops.md) |
 | I want to organize long-running work with projects, goals, and notes | [Projects, Goals, and Notes](./projects-goals-notes.md) |
 | I want to know how xopc differs from Codex, Claude Code, Qoder, and WorkBuddy | [Comparison](./comparison.md) |

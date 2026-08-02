@@ -29,7 +29,9 @@
 </p>
 
 <p align="center">
-  <img src="docs/public/xopc-tui.gif" alt="xopc terminal UI demo" width="720">
+  <a href="https://xopcai.github.io/xopc/desktop-app">
+    <img src="docs/public/xopc-desktop.gif" alt="xopc desktop app demo" width="1200">
+  </a>
 </p>
 
 <details>
@@ -87,7 +89,7 @@ For most users, the **PC desktop app** is the easiest way to start: install the 
 2. Open xopc and complete model setup.
 3. Start chatting.
 
-See **[PC Desktop app](https://xopcai.github.io/xopc/desktop-app)** for install notes, build-from-source commands, and reserved screenshot/GIF/video file locations.
+See **[PC Desktop app](https://xopcai.github.io/xopc/desktop-app)** for install notes, first-run guidance, and build-from-source commands.
 
 ### One-liner (30-second start — recommended)
 

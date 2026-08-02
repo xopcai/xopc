@@ -4,6 +4,8 @@ PC 桌面端是大多数用户最省心的开始方式。它会自动启动本�
 
 如果你想以桌面应用的方式安装和使用 xopc，请按本文操作。偏终端的用户可以看 [5 分钟快速入门](./first-5-minutes.md)。
 
+![xopc 桌面端演示](/xopc-desktop.gif)
+
 ## 快速路径
 
 1. 打开 [GitHub Releases](https://github.com/xopcai/xopc/releases)。
@@ -126,9 +128,9 @@ pnpm run build
 pnpm run electron:dev
 ```
 
-## 素材预留
+## 更多展示素材
 
-截图、GIF 或视频文件统一放在 `docs/public/desktop/`。当前文档只预留文件名，不引用不存在的文件，避免页面出现破图。
+桌面端主演示位于 `docs/public/xopc-desktop.gif`。更多截图、GIF 或视频统一放在 `docs/public/desktop/`，文件补齐后再嵌入文档，避免页面出现破图。
 
 | 素材 | 文件位置 | 用途 |
 | --- | --- | --- |
