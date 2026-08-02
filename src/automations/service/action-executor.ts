@@ -128,7 +128,7 @@ export class AutomationActionExecutor {
     const model = agentService.getModelForSession?.(sessionKey);
     return {
       status: 'succeeded',
-      summary: response.slice(0, 500),
+      summary: response.slice(0, 4_000),
       sessionKey,
       model,
     };

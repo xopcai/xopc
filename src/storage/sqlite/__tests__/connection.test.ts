@@ -59,6 +59,8 @@ describe('openXopcDatabase', () => {
         'checkpoint_entries',
         'automations',
         'automation_runs',
+        'focus_watches',
+        'proactive_insights',
         'notes',
         'memory_files',
         'memory_chunks',
