@@ -270,6 +270,33 @@ describe('SQLite migrations', () => {
     );
   });
 
+  it('adds persistent work discovery sources', () => {
+    const db = openEmptyDb();
+    ensureSchemaMetaTable(db);
+    db.exec(`CREATE TABLE projects (project_id TEXT PRIMARY KEY);`);
+    setSchemaVersion(db, 46);
+
+    expect(applyPendingMigrations(db, { targetVersion: 50 })).toBe(50);
+    expect(db.prepare(
+      `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'work_discovery_sources'`,
+    ).get()).toEqual({ name: 'work_discovery_sources' });
+    expect(db.prepare(
+      `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'work_understanding_investigations'`,
+    ).get()).toEqual({ name: 'work_understanding_investigations' });
+    expect(db.prepare(
+      `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'work_understanding_evidence'`,
+    ).get()).toEqual({ name: 'work_understanding_evidence' });
+    expect(db.prepare(
+      `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'work_understanding_threads'`,
+    ).get()).toEqual({ name: 'work_understanding_threads' });
+    expect(db.prepare(
+      `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'work_understanding_thread_feedback'`,
+    ).get()).toEqual({ name: 'work_understanding_thread_feedback' });
+    expect(db.prepare(
+      `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'work_discovery_source_refreshes'`,
+    ).get()).toEqual({ name: 'work_discovery_source_refreshes' });
+  });
+
   it('upgrades v21 databases with first-class work item tables', () => {
     const db = openEmptyDb();
     ensureSchemaMetaTable(db);

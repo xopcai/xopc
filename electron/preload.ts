@@ -120,6 +120,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
       );
     },
   },
+  personalContext: {
+    scan: () => ipcRenderer.invoke('personal-context:scan'),
+  },
   startup: {
     onProgress: (callback: (detail: StartupProgressDetail) => void) => {
       const handler = (_: unknown, detail: StartupProgressDetail) => callback(detail);

@@ -464,12 +464,37 @@ export interface ElectronSystemSettingsAPI {
   }): Promise<UninstallAppResult>;
 }
 
+export type ElectronPersonalContextSource = 'apple_notes' | 'calendar' | 'reminders';
+
+export interface ElectronPersonalContextItem {
+  id: string;
+  source: ElectronPersonalContextSource;
+  title: string;
+  group?: string;
+  createdAt?: number;
+  modifiedAt?: number;
+  startsAt?: number;
+  endsAt?: number;
+  content?: string;
+}
+
+export interface ElectronPersonalContextSourceResult {
+  source: ElectronPersonalContextSource;
+  status: 'completed' | 'denied' | 'failed';
+  items: ElectronPersonalContextItem[];
+}
+
+export interface ElectronPersonalContextAPI {
+  scan(): Promise<ElectronPersonalContextSourceResult[]>;
+}
+
 export interface ElectronAPI {
   clipboard?: ElectronClipboardAPI;
   shell?: ElectronShellAPI;
   file: ElectronFileAPI;
   search: ElectronSearchAPI;
   agent: ElectronAgentAPI;
+  personalContext?: ElectronPersonalContextAPI;
   startup?: ElectronStartupAPI;
   gateway?: ElectronGatewayShellAPI;
   platform: "darwin" | "win32" | "linux";

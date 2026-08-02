@@ -15,16 +15,21 @@ import {
   dismissWorkDiscoveryOnboarding,
   fetchWorkDiscoveryOnboarding,
   fetchWorkDiscoveryRun,
+  grantWorkDiscoveryDirectory,
   previewWorkDiscoveryFolder,
   retryWorkDiscoveryRun,
   selectWorkDiscoverySuggestion,
+  startQuickWorkDiscoveryRun,
   startWorkDiscoveryRun,
   submitWorkDiscoveryRecognitionFeedback,
+  updateWorkUnderstandingThread,
+  updateWorkDiscoveryProfile,
   type WorkDiscoveryPreview,
   type WorkDiscoveryRun,
   type WorkDiscoveryStage,
   type WorkDiscoverySuggestion,
 } from './api';
+import { useUnderstandingActivityStore } from './understanding-activity-store';
 
 type PageState = 'loading' | 'intro' | 'consent' | 'running' | 'recognition' | 'recommendation' | 'error';
 
@@ -49,15 +54,35 @@ export function WorkDiscoveryPage() {
   const [correctionOpen, setCorrectionOpen] = useState(false);
   const [correction, setCorrection] = useState('');
   const [alternativesOpen, setAlternativesOpen] = useState(false);
+  const [profileSelection, setProfileSelection] = useState<Set<string>>(() => new Set());
 
   const applyRun = useCallback((next: WorkDiscoveryRun) => {
+    useUnderstandingActivityStore.getState().updateDirectoryRun(next);
     setRun(next);
     if (next.status === 'completed') {
+      setProfileSelection(new Set(
+        next.result?.profileCandidates?.filter((candidate) => candidate.status === 'pending').map((candidate) => candidate.id) ?? [],
+      ));
       setPageState(next.feedback?.recognitionDecision === 'confirmed' ? 'recommendation' : 'recognition');
     }
     else if (next.status === 'failed' || next.status === 'canceled') setPageState('error');
     else setPageState('running');
   }, []);
+
+  const quickScan = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const next = await startQuickWorkDiscoveryRun();
+      applyRun(next);
+      void useUnderstandingActivityStore.getState().scanPersonalContext(next.id);
+    } catch (cause) {
+      setError(errorText(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
+
 
   const selectFolder = useCallback(async (rootPath: string) => {
     setBusy(true);
@@ -147,7 +172,10 @@ export function WorkDiscoveryPage() {
     setBusy(true);
     setError(null);
     try {
-      applyRun(await startWorkDiscoveryRun(preview.canonicalRootPath));
+      await grantWorkDiscoveryDirectory(preview.canonicalRootPath);
+      const next = await startWorkDiscoveryRun(preview.canonicalRootPath);
+      applyRun(next);
+      void useUnderstandingActivityStore.getState().scanPersonalContext(next.id);
     } catch (cause) {
       setError(errorText(cause));
       setPageState('consent');
@@ -175,7 +203,17 @@ export function WorkDiscoveryPage() {
     setBusy(true);
     setError(null);
     try {
-      const next = await submitWorkDiscoveryRecognitionFeedback(run.id, 'confirmed');
+      const candidates = run.result?.profileCandidates ?? [];
+      const withProfile = candidates.length > 0
+        ? await updateWorkDiscoveryProfile(run.id, candidates.map((candidate) => ({
+            id: candidate.id,
+            status: profileSelection.has(candidate.id) ? 'accepted' as const : 'rejected' as const,
+          })))
+        : run;
+      await Promise.all((withProfile.result?.workThreads ?? [])
+        .filter((thread) => thread.userStatus === 'unreviewed')
+        .map((thread) => updateWorkUnderstandingThread(thread.id, { decision: 'confirmed' })));
+      const next = await submitWorkDiscoveryRecognitionFeedback(withProfile.id, 'confirmed');
       setRun(next);
       setPageState('recommendation');
     } catch (cause) {
@@ -190,6 +228,14 @@ export function WorkDiscoveryPage() {
     setBusy(true);
     setError(null);
     try {
+      const currentThread = run.result?.workThreads?.find((thread) => thread.horizon === 'current')
+        ?? run.result?.workThreads?.[0];
+      if (currentThread) {
+        await updateWorkUnderstandingThread(currentThread.id, {
+          decision: 'corrected',
+          correctedSummary: correction.trim(),
+        });
+      }
       const next = await submitWorkDiscoveryRecognitionFeedback(run.id, decision, correction.trim());
       setRun(next);
       openConversation(next.sessionKey, correction.trim());
@@ -252,15 +298,25 @@ export function WorkDiscoveryPage() {
               <Button
                 type="button"
                 className="h-12 w-full gap-2 bg-accent text-white hover:bg-accent-hover"
+                onClick={() => void quickScan()}
+                disabled={busy || picker.picking}
+              >
+                {busy ? <Loader2 className="size-4 animate-spin" /> : <ShieldCheck className="size-4" />}
+                {copy.quickScan}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                className="mt-3 h-11 w-full gap-2"
                 onClick={picker.pick}
                 disabled={busy || picker.picking}
               >
-                {busy || picker.picking ? <Loader2 className="size-4 animate-spin" /> : <FolderOpen className="size-4" />}
-                {copy.chooseFolder}
+                {picker.picking ? <Loader2 className="size-4 animate-spin" /> : <FolderOpen className="size-4" />}
+                {copy.chooseFolderManually}
               </Button>
               <div className="mt-4 flex items-start justify-center gap-2 text-xs leading-5 text-fg-muted">
                 <ShieldCheck className="mt-0.5 size-4 shrink-0 text-accent-fg" />
-                <span>{copy.readOnlyNote}</span>
+                <span>{copy.quickScanNote}</span>
               </div>
               {error ? <p className="mt-4 text-sm text-danger" role="alert">{error}</p> : null}
             </div>
@@ -391,6 +447,55 @@ export function WorkDiscoveryPage() {
                 </ul>
               ) : null}
             </div>
+
+            {run.result.workThreads?.length ? (
+              <div className="mt-5 rounded-xl border border-edge bg-surface-panel p-4">
+                <p className="text-sm font-medium text-fg">{copy.workThreadsTitle}</p>
+                <p className="mt-1 text-xs leading-5 text-fg-muted">{copy.workThreadsSubtitle}</p>
+                <div className="mt-3 divide-y divide-edge-subtle">
+                  {run.result.workThreads.map((thread) => (
+                    <div key={thread.id} className="py-3 first:pt-0 last:pb-0">
+                      <div className="flex items-center gap-2">
+                        <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[0.7rem] font-medium text-accent-fg">
+                          {thread.horizon === 'current'
+                            ? copy.workThreadCurrent
+                            : thread.horizon === 'ongoing'
+                              ? copy.workThreadOngoing
+                              : copy.workThreadLongTerm}
+                        </span>
+                        <span className="text-sm font-medium text-fg">{thread.title}</span>
+                      </div>
+                      <p className="mt-1.5 text-xs leading-5 text-fg-muted">{thread.summary}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {run.result.profileCandidates?.length ? (
+              <div className="mt-5 rounded-xl border border-edge bg-surface-panel p-4">
+                <p className="text-sm font-medium text-fg">{copy.profileCandidatesTitle}</p>
+                <p className="mt-1 text-xs leading-5 text-fg-muted">{copy.profileCandidatesSubtitle}</p>
+                <div className="mt-3 space-y-2">
+                  {run.result.profileCandidates.map((candidate) => (
+                    <label key={candidate.id} className="flex cursor-pointer items-start gap-3 rounded-lg px-2 py-2 hover:bg-surface-muted">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 size-4 rounded border-edge accent-accent"
+                        checked={profileSelection.has(candidate.id)}
+                        onChange={() => setProfileSelection((current) => {
+                          const next = new Set(current);
+                          if (next.has(candidate.id)) next.delete(candidate.id);
+                          else next.add(candidate.id);
+                          return next;
+                        })}
+                      />
+                      <span className="text-sm leading-5 text-fg">{candidate.statement}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ) : null}
 
             {run.result.lowConfidence ? (
               <div className="mt-5">

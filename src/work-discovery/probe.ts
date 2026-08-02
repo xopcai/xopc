@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { constants as fsConstants } from 'node:fs';
 import { access, lstat, readFile, readdir, realpath, stat } from 'node:fs/promises';
 import { basename, extname, isAbsolute, relative, resolve, sep } from 'node:path';
@@ -118,6 +119,31 @@ async function gitInfo(root: string, signal?: AbortSignal): Promise<WorkContextS
   }
 }
 
+async function metadataFingerprint(root: string, signal?: AbortSignal): Promise<string> {
+  const entries: string[] = [];
+  const visit = async (directory: string, depth: number): Promise<void> => {
+    if (depth > 2 || entries.length >= 300) return;
+    abortIfNeeded(signal);
+    const children = await readdir(directory, { withFileTypes: true }).catch(() => []);
+    for (const child of children.sort((left, right) => left.name.localeCompare(right.name))) {
+      if (entries.length >= 300) break;
+      if (isSecretFile(child.name)) continue;
+      if (child.isDirectory() && isExcludedDirectory(child.name)) continue;
+      const absolutePath = resolve(directory, child.name);
+      const relativePath = relative(root, absolutePath).replaceAll('\\', '/');
+      if (child.isDirectory()) {
+        await visit(absolutePath, depth + 1);
+        continue;
+      }
+      const info = await lstat(absolutePath).catch(() => null);
+      if (!info?.isFile() || info.isSymbolicLink()) continue;
+      entries.push(`${relativePath}\0${info.size}\0${Math.floor(info.mtimeMs)}`);
+    }
+  };
+  await visit(root, 0);
+  return createHash('sha256').update(entries.join('\n')).digest('hex');
+}
+
 export async function canonicalWorkDiscoveryRoot(input: string): Promise<string> {
   const trimmed = input.trim();
   if (!trimmed || !isAbsolute(trimmed)) throw new Error('An absolute folder path is required');
@@ -132,6 +158,7 @@ export async function previewWorkDiscoveryRoot(rootPath: string) {
   const canonicalRootPath = await canonicalWorkDiscoveryRoot(rootPath);
   const inference = inferProjectKind({ workspaceRoot: canonicalRootPath });
   const git = await gitInfo(canonicalRootPath);
+  const contentSignature = await metadataFingerprint(canonicalRootPath);
   const recentAreas = Array.from(new Set((git?.changedPaths ?? []).map((path) => {
     const normalized = path.replaceAll('\\', '/');
     const [first, second] = normalized.split('/');
@@ -147,6 +174,7 @@ export async function previewWorkDiscoveryRoot(rootPath: string) {
       ...(git?.branch ? { branch: git.branch } : {}),
       changedFileCount: git?.changedPaths.length ?? 0,
       recentAreas,
+      contentSignature,
       generatedAt: Date.now(),
     },
   };
@@ -296,6 +324,87 @@ export async function probeWorkDiscoveryRoot(
       truncated: traversalTruncated || candidates.length > 200 || documents.some((document) => document.truncated),
     },
   };
+}
+
+async function resolveWorkDiscoveryTextFile(rootPath: string, relativePath: string): Promise<{
+  root: string;
+  resolvedPath: string;
+  relativePath: string;
+  modifiedAt: number;
+}> {
+  const root = await canonicalWorkDiscoveryRoot(rootPath);
+  const normalized = relativePath.trim().replaceAll('\\', '/');
+  if (!normalized || isAbsolute(normalized) || normalized.split('/').includes('..')) {
+    throw new Error('A safe relative path is required');
+  }
+  if (normalized.split('/').some((segment) => isExcludedDirectory(segment)) || isSecretFile(basename(normalized))) {
+    throw new Error('The requested path is excluded by the scan policy');
+  }
+  if (isLikelyBinary(normalized) || METADATA_ONLY_EXTENSIONS.has(extname(normalized).toLowerCase())) {
+    throw new Error('The requested path is not a readable text file');
+  }
+  const resolvedPath = await realpath(resolve(root, normalized));
+  if (!isInsideRoot(root, resolvedPath)) throw new Error('The requested path is outside the approved folder');
+  const info = await lstat(resolvedPath);
+  if (!info.isFile() || info.size > MAX_FILE_BYTES * 4) throw new Error('The requested file is not eligible for investigation');
+  return { root, resolvedPath, relativePath: relative(root, resolvedPath), modifiedAt: info.mtimeMs };
+}
+
+export async function readWorkDiscoveryTextExcerpt(input: {
+  rootPath: string;
+  relativePath: string;
+  maxChars?: number;
+  signal?: AbortSignal;
+}): Promise<{ relativePath: string; excerpt: string; modifiedAt: number; truncated: boolean }> {
+  abortIfNeeded(input.signal);
+  const file = await resolveWorkDiscoveryTextFile(input.rootPath, input.relativePath);
+  const maxChars = Math.max(500, Math.min(20_000, input.maxChars ?? 8_000));
+  const buffer = await readFile(file.resolvedPath);
+  abortIfNeeded(input.signal);
+  if (buffer.includes(0)) throw new Error('The requested file appears to be binary');
+  const text = buffer.toString('utf8');
+  return {
+    relativePath: file.relativePath,
+    excerpt: text.slice(0, maxChars).trim(),
+    modifiedAt: file.modifiedAt,
+    truncated: text.length > maxChars,
+  };
+}
+
+export async function searchWorkDiscoveryText(input: {
+  rootPath: string;
+  relativePaths: string[];
+  query: string;
+  signal?: AbortSignal;
+}): Promise<Array<{ relativePath: string; excerpt: string; modifiedAt: number }>> {
+  const query = input.query.trim().slice(0, 120);
+  if (query.length < 2) throw new Error('Search query is too short');
+  const needle = query.toLocaleLowerCase();
+  const results: Array<{ relativePath: string; excerpt: string; modifiedAt: number }> = [];
+  for (const relativePath of input.relativePaths.slice(0, 120)) {
+    abortIfNeeded(input.signal);
+    try {
+      const file = await readWorkDiscoveryTextExcerpt({
+        rootPath: input.rootPath,
+        relativePath,
+        maxChars: 20_000,
+        signal: input.signal,
+      });
+      const index = file.excerpt.toLocaleLowerCase().indexOf(needle);
+      if (index < 0) continue;
+      const start = Math.max(0, index - 300);
+      const end = Math.min(file.excerpt.length, index + query.length + 700);
+      results.push({
+        relativePath: file.relativePath,
+        excerpt: file.excerpt.slice(start, end).trim(),
+        modifiedAt: file.modifiedAt,
+      });
+      if (results.length >= 8) break;
+    } catch {
+      // Skip paths rejected by the scan policy or no longer readable.
+    }
+  }
+  return results;
 }
 
 export function summarizeWorkContextSnapshot(snapshot: WorkContextSnapshot): WorkContextSnapshotSummary {

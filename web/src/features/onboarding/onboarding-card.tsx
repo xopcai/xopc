@@ -39,7 +39,8 @@ type OnboardingState = {
 };
 
 type OnboardingAction =
-  { type: 'patch'; patch: Partial<OnboardingState> };
+  | { type: 'patch'; patch: Partial<OnboardingState> }
+  | { type: 'prefillCallName'; value: string };
 
 const initialOnboarding: OnboardingState = {
   step: 'callName',
@@ -54,6 +55,8 @@ function onboardingReducer(state: OnboardingState, action: OnboardingAction): On
   switch (action.type) {
     case 'patch':
       return { ...state, ...action.patch };
+    case 'prefillCallName':
+      return state.callName.trim() ? state : { ...state, callName: action.value };
   }
 }
 
@@ -116,10 +119,10 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
   useEffect(() => {
     let cancelled = false;
     void fetchUserProfile()
-      .then(({ profile }) => {
-        if (!cancelled && profile.callName) {
-          dispatch({ type: 'patch', patch: { callName: profile.callName } });
-        }
+      .then(({ profile, profileSetup }) => {
+        if (cancelled) return;
+        const value = profile.callName || profileSetup.callNameSuggestion?.value;
+        if (value) dispatch({ type: 'prefillCallName', value });
       })
       .catch(() => {});
     return () => {
