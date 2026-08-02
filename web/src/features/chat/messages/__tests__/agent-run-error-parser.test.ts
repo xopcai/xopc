@@ -8,7 +8,7 @@ describe('parseAgentRunError', () => {
       kind: 'provider_auth_invalid',
       code: 'provider_auth_invalid',
       provider: 'dashscope',
-      deepLink: '/settings/credentials',
+      deepLink: '/settings/capabilities/models',
       message: '401 Authentication Fails, Your api key: ****0000 is invalid',
     });
     const parsed = parseAgentRunError(text);
@@ -22,14 +22,14 @@ describe('parseAgentRunError', () => {
       kind: 'provider_auth_invalid',
       code: 'provider_auth_invalid',
       provider: 'bailian',
-      deepLink: '/settings/credentials',
+      deepLink: '/settings/capabilities/models',
       message: '401: {"code":"invalid_api_key"}',
     }));
 
     expect(parsed && toProviderSetupPayload(parsed)).toEqual({
       kind: 'provider_auth_invalid',
       provider: 'bailian',
-      deepLink: '/settings/credentials',
+      deepLink: '/settings/capabilities/models',
       message: '401: {"code":"invalid_api_key"}',
     });
   });

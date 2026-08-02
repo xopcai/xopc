@@ -52,6 +52,10 @@ function formatTime(value: string | number | undefined, fallback: string): strin
   return formatMediumDateTime(date);
 }
 
+function WorkBadge({ children }: { children: string }) {
+  return <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[11px] font-medium text-fg-muted">{children}</span>;
+}
+
 function WorkHomeSkeleton() {
   return (
     <div className="space-y-5" aria-busy>
@@ -386,15 +390,12 @@ export function WorkPage() {
                   </p>
                 ) : null}
               </div>
-              <div className="flex shrink-0 flex-col gap-3 border-t border-edge px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-xs leading-5 text-fg-subtle">{t.workHome.autoSetupHint}</p>
-                <div className="flex shrink-0 justify-end gap-2">
-                  <Dialog.Close asChild><Button type="button" variant="ghost" disabled={creating}>{t.cancel}</Button></Dialog.Close>
-                  <Button type="submit" variant="primary" className="min-w-32" disabled={creating || !outcome.trim()}>
-                    <Sparkles className="size-4" aria-hidden />
-                    {creating ? t.workHome.delegating : t.workHome.delegate}
-                  </Button>
-                </div>
+              <div className="flex shrink-0 justify-end gap-2 border-t border-edge px-5 py-4">
+                <Dialog.Close asChild><Button type="button" variant="ghost" disabled={creating}>{t.cancel}</Button></Dialog.Close>
+                <Button type="submit" variant="primary" className="min-w-32" disabled={creating || !outcome.trim()}>
+                  <Sparkles className="size-4" aria-hidden />
+                  {creating ? t.workHome.delegating : t.workHome.delegate}
+                </Button>
               </div>
             </form>
           </Dialog.Content>
@@ -429,11 +430,11 @@ export function WorkPage() {
 
           {home.proactiveInsights.length > 0 ? (
             <section className="rounded-2xl border border-accent/20 bg-accent-soft/20 p-5">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Sparkles className="size-4 text-accent" aria-hidden />
                 <h2 className="text-base font-semibold text-fg">{t.workHome.insightsTitle}</h2>
+                <WorkBadge>{t.workHome.insightsBadge}</WorkBadge>
               </div>
-              <p className="mt-1 text-xs text-fg-muted">{t.workHome.insightsHint}</p>
               <div className="mt-4 space-y-3">
                 {home.proactiveInsights.map((insight) => (
                   <article key={insight.id} className="rounded-xl border border-edge-subtle bg-surface-panel p-4">
@@ -468,11 +469,11 @@ export function WorkPage() {
 
           {home.calendarSignals.length > 0 ? (
             <section className="rounded-2xl bg-surface-base p-5 shadow-surface">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <CalendarClock className="size-4 text-accent" aria-hidden />
                 <h2 className="text-base font-semibold text-fg">{t.workHome.relatedCalendarTitle}</h2>
+                <WorkBadge>{t.workHome.relatedCalendarBadge}</WorkBadge>
               </div>
-              <p className="mt-1 text-xs text-fg-muted">{t.workHome.relatedCalendarHint}</p>
               <div className="mt-4 divide-y divide-edge-subtle">
                 {home.calendarSignals.map((signal) => (
                   <article key={signal.id} className="flex flex-col gap-3 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
@@ -491,11 +492,11 @@ export function WorkPage() {
 
           {focuses.length > 0 ? (
             <section className="rounded-2xl bg-surface-base p-5 shadow-surface">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Eye className="size-4 text-accent" aria-hidden />
                 <h2 className="text-base font-semibold text-fg">{t.workHome.focusesTitle}</h2>
+                <WorkBadge>{t.workHome.focusesBadge}</WorkBadge>
               </div>
-              <p className="mt-1 text-xs text-fg-muted">{t.workHome.focusesHint}</p>
               <div className="mt-4 grid gap-3 md:grid-cols-2">
                 {focuses.slice(0, 6).map((focus) => {
                   const progressActive = focus.watches.some((watch) => watch.kind === 'progress' && watch.status === 'active');
@@ -568,7 +569,6 @@ export function WorkPage() {
               {needsYou.length > 0 ? (
                 <section className="rounded-2xl bg-surface-base p-5 shadow-surface">
                   <div className="flex items-center gap-2"><CircleAlert className="size-4 text-warning" aria-hidden /><h2 className="text-base font-semibold text-fg">{t.workHome.needsYou}</h2></div>
-                  <p className="mt-1 text-xs text-fg-muted">{t.workHome.needsYouHint}</p>
                   <div className="mt-4 space-y-2">
                     {needsYou.map((item) => (
                       <DecisionCard
@@ -593,7 +593,6 @@ export function WorkPage() {
 
               <section className="rounded-2xl bg-surface-base p-5 shadow-surface">
                 <div className="flex items-center gap-2"><Clock3 className="size-4 text-fg-subtle" aria-hidden /><h2 className="text-base font-semibold text-fg">{t.workHome.continueTitle}</h2></div>
-                <p className="mt-1 text-xs text-fg-muted">{t.workHome.continueHint}</p>
                 <div className="mt-4 divide-y divide-edge-subtle px-1">
                   {home.workflowRuns.active.map((run) => (
                     <Link key={run.id} to={workflowBoardHref(run.id)} className="flex items-center justify-between gap-3 rounded-lg px-2 py-3 text-sm hover:bg-surface-hover/55">
@@ -619,7 +618,6 @@ export function WorkPage() {
             <aside className="min-w-0 space-y-4" aria-label={t.workHome.nowTitle}>
               <div className="px-1">
                 <h2 className="text-base font-semibold text-fg">{t.workHome.nowTitle}</h2>
-                <p className="mt-1 text-xs text-fg-muted">{t.workHome.nowHint}</p>
               </div>
               {home.upcomingAutomations.length > 0 ? (
                 <section className="rounded-2xl bg-surface-base p-4 shadow-surface">
@@ -649,7 +647,7 @@ export function WorkPage() {
 
       <section className="border-t border-edge-subtle pt-7">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div><h2 className="text-sm font-semibold text-fg">{t.workHome.spacesTitle}</h2><p className="mt-1 text-xs text-fg-muted">{t.workHome.spacesHint}</p></div>
+          <h2 className="text-sm font-semibold text-fg">{t.workHome.spacesTitle}</h2>
           <Link to="/projects" className="text-xs font-medium text-accent hover:underline">{t.management.viewAll}</Link>
         </div>
         {projects.filter((project) => project.status !== 'archived').length > 6 ? <div className="mt-3 flex justify-end">
