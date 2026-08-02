@@ -12,7 +12,6 @@ import {
   hideDesktopPet,
   openDesktopPetCustomDir,
   openDesktopPetMainWindow,
-  recordDesktopPetTaskCompletion,
   resetDesktopPetPosition,
   sendDesktopPetEvent,
   setDesktopPetClickThrough,
@@ -110,12 +109,6 @@ export function registerDesktopPetIpc(ipcMain: IpcMain): void {
     assertTrustedRenderer(event);
     if (isPetSessionUpdate(value)) {
       await sendDesktopPetEvent(value);
-    }
-  });
-  ipcMain.handle("desktop-pet:record-completion", async (event, runId: unknown) => {
-    assertTrustedRenderer(event);
-    if (typeof runId === "string" && runId.trim()) {
-      await recordDesktopPetTaskCompletion(runId);
     }
   });
   ipcMain.handle(

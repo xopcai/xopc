@@ -446,7 +446,6 @@ export interface ElectronDesktopPetAPI {
   setClickThrough(enabled: boolean): Promise<void>;
   sendEvent(event: PetSessionUpdate): Promise<void>;
   acknowledgeEvent(sessionKey: string, runId: string): Promise<void>;
-  recordCompletion(runId: string): Promise<void>;
   openCustomPetsDir(): Promise<{ ok: true } | { ok: false; error: string }>;
   createFromPrompt(
     request: DesktopPetCreateRequest,
