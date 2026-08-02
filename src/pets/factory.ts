@@ -3,7 +3,7 @@ import { access, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs
 import { join, resolve } from 'node:path';
 
 import { resolveStateDir } from '../config/paths-state.js';
-import { DESKTOP_PET_ACTIONS, type DesktopPetPackageAction } from './manifest.js';
+import { DESKTOP_PET_ACTIONS, DESKTOP_PET_SCHEMA_VERSION, type DesktopPetPackageAction } from './manifest.js';
 import { validateDesktopPetPackage } from './validator.js';
 
 export { DESKTOP_PET_ACTIONS, type DesktopPetPackageAction } from './manifest.js';
@@ -168,26 +168,37 @@ function esc(value: string): string {
 }
 
 export function desktopPetActionFrameCount(action: DesktopPetPackageAction): number {
-  if (action === 'idle') return 6;
-  if (action === 'success' || action === 'error') return 8;
+  if (action === 'idle' || action === 'sleep') return 6;
+  if (action === 'success' || action === 'concern') return 8;
   return 10;
 }
 
 export function desktopPetActionFps(action: DesktopPetPackageAction): number {
-  if (action === 'idle') return 6;
-  if (action === 'success' || action === 'error') return 12;
+  if (action === 'idle' || action === 'sleep') return 6;
+  if (action === 'success' || action === 'concern') return 12;
   return 10;
 }
 
 export function desktopPetActionLoops(action: DesktopPetPackageAction): boolean {
-  return action !== 'success' && action !== 'error';
+  return action === 'idle' || action === 'sleep' || action === 'research' ||
+    action === 'read' || action === 'create' || action === 'execute' ||
+    action === 'wait';
 }
 
 function renderAccessory(action: DesktopPetPackageAction, frame: number, style: PetStyle): string {
   const t = frame / Math.max(1, desktopPetActionFrameCount(action) - 1);
   const bob = Math.sin(t * Math.PI * 2) * 2;
   const { palette } = style;
-  if (action === 'typing') {
+  if (action === 'sleep') {
+    return `<g fill="${palette.screen}" font-family="Arial, sans-serif" font-weight="800"><text x="70" y="28" font-size="13" opacity="${frame % 2 ? 0.45 : 0.9}">z</text><text x="80" y="17" font-size="10" opacity="${frame % 2 ? 0.9 : 0.45}">z</text></g>`;
+  }
+  if (action === 'greet' || action === 'wake' || action === 'pet') {
+    return `<path d="M76 23c-7-9-19 1-7 13l7 7 7-7c12-12 0-22-7-13z" fill="${palette.cheek}" stroke="#101827" stroke-width="2"/>`;
+  }
+  if (action === 'wait') {
+    return `<g fill="${palette.screen}" transform="translate(62 18)"><circle cx="0" cy="0" r="3" opacity="${frame % 3 === 0 ? 1 : 0.35}"/><circle cx="10" cy="0" r="3" opacity="${frame % 3 === 1 ? 1 : 0.35}"/><circle cx="20" cy="0" r="3" opacity="${frame % 3 === 2 ? 1 : 0.35}"/></g>`;
+  }
+  if (action === 'create') {
     const glow = frame % 2 === 0 ? 1 : 0.45;
     return `
       <g transform="translate(55 ${59 + bob})">
@@ -199,7 +210,7 @@ function renderAccessory(action: DesktopPetPackageAction, frame: number, style: 
         <rect x="29" y="28" width="5" height="2" rx="1" fill="#e0f2fe" opacity="${glow}"/>
       </g>`;
   }
-  if (action === 'toolbox') {
+  if (action === 'prepare') {
     const open = frame % 2 === 0 ? -11 : -3;
     return `
       <g transform="translate(6 ${61 + bob})">
@@ -210,14 +221,14 @@ function renderAccessory(action: DesktopPetPackageAction, frame: number, style: 
         <rect x="29" y="${8 + open / 2}" width="5" height="17" rx="2" fill="#e5e7eb" stroke="#101827" stroke-width="2" transform="rotate(25 31 24)"/>
       </g>`;
   }
-  if (action === 'search') {
+  if (action === 'research') {
     return `
       <g transform="translate(58 ${58 + bob}) rotate(${frame % 2 === 0 ? -7 : 4} 18 18)">
         <circle cx="15" cy="14" r="11" fill="#e0f2fe" stroke="${palette.accent}" stroke-width="5"/>
         <rect x="24" y="24" width="17" height="7" rx="3" fill="${palette.accent}" stroke="#101827" stroke-width="3" transform="rotate(43 24 24)"/>
       </g>`;
   }
-  if (action === 'file') {
+  if (action === 'read') {
     return `
       <g transform="translate(59 ${55 + bob}) rotate(${frame % 2 === 0 ? -5 : 5} 16 20)">
         <path d="M5 1h22l9 9v31H5z" fill="#eff6ff" stroke="#101827" stroke-width="3" stroke-linejoin="round"/>
@@ -226,22 +237,12 @@ function renderAccessory(action: DesktopPetPackageAction, frame: number, style: 
         <rect x="12" y="28" width="12" height="3" rx="1.5" fill="${palette.body}"/>
       </g>`;
   }
-  if (action === 'terminal') {
+  if (action === 'execute') {
     return `
       <g transform="translate(55 ${61 + bob})">
         <rect x="0" y="0" width="39" height="29" rx="7" fill="#111827" stroke="#101827" stroke-width="3"/>
         <path d="M10 10l6 5-6 5" fill="none" stroke="#86efac" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="${frame % 2 === 0 ? 1 : 0.4}"/>
         <path d="M20 20h9" stroke="#86efac" stroke-width="3" stroke-linecap="round"/>
-      </g>`;
-  }
-  if (action === 'browser') {
-    return `
-      <g transform="translate(55 ${58 + bob})">
-        <rect x="0" y="0" width="40" height="31" rx="7" fill="#e0f2fe" stroke="#101827" stroke-width="3"/>
-        <path d="M1 11h38" stroke="${palette.accent}" stroke-width="8"/>
-        <circle cx="10" cy="10" r="2" fill="#101827"/>
-        <circle cx="17" cy="10" r="2" fill="#101827"/>
-        <rect x="11" y="21" width="20" height="4" rx="2" fill="${palette.body}"/>
       </g>`;
   }
   if (action === 'success') {
@@ -251,7 +252,7 @@ function renderAccessory(action: DesktopPetPackageAction, frame: number, style: 
         <path d="M-12 18l2 5 5 2-5 2-2 5-2-5-5-2 5-2z" opacity="0.78"/>
       </g>`;
   }
-  if (action === 'error') {
+  if (action === 'concern') {
     return `
       <g transform="translate(61 ${56 + bob})">
         <path d="M18 0l18 32H0z" fill="#facc15" stroke="#101827" stroke-width="3" stroke-linejoin="round"/>
@@ -286,14 +287,15 @@ function renderHead(style: PetStyle): string {
 
 function renderFrame(style: PetStyle, action: DesktopPetPackageAction, frame: number): string {
   const t = frame / Math.max(1, desktopPetActionFrameCount(action) - 1);
-  const bob = Math.sin(t * Math.PI * 2) * (action === 'idle' ? 2.5 : 1.5);
-  const tilt = action === 'toolbox' ? Math.sin(t * Math.PI * 2) * 2.5 : 0;
+  const sleeping = action === 'sleep';
+  const bob = sleeping ? 7 : action === 'pickedUp' ? -6 : action === 'released' ? 4 : Math.sin(t * Math.PI * 2) * (action === 'idle' ? 2.5 : 1.5);
+  const tilt = action === 'prepare' ? Math.sin(t * Math.PI * 2) * 2.5 : action === 'pet' ? Math.sin(t * Math.PI) * 5 : 0;
   const { palette } = style;
-  const face = action === 'error' ? '#3f0f18' : palette.face;
-  const eye = action === 'error' ? '#fca5a5' : palette.screen;
-  const mouth = action === 'success' ? 'M39 45q5 5 10 0' : 'M42 46h9';
-  const leftArm = action === 'typing' ? 23 + (frame % 2) * 13 : action === 'toolbox' ? 39 + (frame % 2) * 10 : 9;
-  const rightArm = action === 'typing' ? -23 - (frame % 2) * 13 : action === 'toolbox' ? -39 - (frame % 2) * 10 : -9;
+  const face = action === 'concern' ? '#3f0f18' : palette.face;
+  const eye = action === 'concern' ? '#fca5a5' : palette.screen;
+  const mouth = action === 'success' || action === 'greet' || action === 'pet' ? 'M39 45q5 5 10 0' : 'M42 46h9';
+  const leftArm = action === 'create' || action === 'execute' ? 23 + (frame % 2) * 13 : action === 'prepare' || action === 'read' ? 39 + (frame % 2) * 10 : action === 'pickedUp' ? 58 : 9;
+  const rightArm = action === 'create' || action === 'execute' ? -23 - (frame % 2) * 13 : action === 'prepare' || action === 'read' ? -39 - (frame % 2) * 10 : action === 'greet' || action === 'wake' ? -48 - (frame % 2) * 12 : action === 'pickedUp' ? -58 : -9;
   return `
     <g transform="translate(0 ${bob}) rotate(${tilt} 48 76)">
       ${renderHead(style)}
@@ -425,6 +427,9 @@ export async function createDesktopPetPackage(
     input.overwrite === true,
   );
   const existingManifest = input.overwrite === true ? await readExistingManifest(dir) : null;
+  if (existingManifest && existingManifest.schemaVersion !== DESKTOP_PET_SCHEMA_VERSION) {
+    throw new Error(`Existing pet package must use schemaVersion ${DESKTOP_PET_SCHEMA_VERSION}`);
+  }
   const existingName = typeof existingManifest?.name === 'string' ? existingManifest.name.trim() : '';
   const persona = normalizePersona(input.persona ?? existingManifest?.persona);
   const baseName = clampText(input.name?.trim() || existingName || titleFromPrompt(prompt), 36);
@@ -438,6 +443,7 @@ export async function createDesktopPetPackage(
   const thumbnailPath = join(tempDir, 'thumbnail.svg');
   const manifestPath = join(tempDir, 'manifest.json');
   const manifest = {
+    schemaVersion: DESKTOP_PET_SCHEMA_VERSION,
     id,
     name: baseName,
     description,

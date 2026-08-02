@@ -359,6 +359,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.invoke("desktop-pet:send-event", event),
     acknowledgeEvent: (sessionKey: string, runId: string) =>
       ipcRenderer.invoke("desktop-pet:ack-event", sessionKey, runId),
+    recordCompletion: (runId: string) =>
+      ipcRenderer.invoke("desktop-pet:record-completion", runId),
     openCustomPetsDir: () => ipcRenderer.invoke("desktop-pet:open-custom-dir"),
     createFromPrompt: (request: Record<string, unknown>) =>
       ipcRenderer.invoke("desktop-pet:create-from-prompt", request),

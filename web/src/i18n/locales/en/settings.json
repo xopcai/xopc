@@ -689,6 +689,14 @@
     "loading": "Loading…",
     "idleMessage": "I am here when you need me.",
     "openApp": "Open xopc",
+    "quickTaskTitle": "What should we do?",
+    "quickTaskPlaceholder": "Give me a small task…",
+    "sendQuickTask": "Start task",
+    "closeQuickTask": "Close quick task",
+    "quickTaskWorking": "I have it. I’ll keep watch while it runs.",
+    "quickTaskDone": "All done — nicely handled.",
+    "answerInApp": "Answer in xopc",
+    "relationshipSummary": "Day {{days}} together · {{tasks}} tasks",
     "settings": "Settings",
     "menu": "Collapse or expand tip",
     "hide": "Hide",
@@ -792,6 +800,9 @@
     "createInChat": "Create in chat",
     "creating": "Creating…",
     "createSuccess": "{name} was created and selected.",
+    "bondTitle": "Growing together",
+    "bondDesc": "Progress only accumulates; taking time away never reduces it.",
+    "bondSummary": "Day {days} · {tasks} tasks",
     "createChatDraft": "/skill:hatch-pet I want to create a new xopc pet. Please ask me what kind of pet I want first, then call create_desktop_pet once the concept is clear.",
     "optimizeInChat": "Refine",
     "optimizeChatDraft": "/skill:hatch-pet I want to refine the existing pet {name}. The petId is {id}. Current description: {description}. Original concept: {sourcePrompt}. Please ask what I want to adjust first; once I describe the change, call create_desktop_pet with mode=update and petId={id} to overwrite the same pet package.",
@@ -807,39 +818,15 @@
     "builtinPets": {
       "ember": {
         "name": "Ember",
-        "description": "A warm little push for everyday agent work."
-      },
-      "relay": {
-        "name": "Relay",
-        "description": "Carries messages across apps and channels."
-      },
-      "loom": {
-        "name": "Loom",
-        "description": "Weaves context, notes, and memory together."
+        "description": "Warm and dependable, with a tiny glow when work moves forward."
       },
       "scout": {
         "name": "Scout",
-        "description": "Finds the useful signal inside the noise."
-      },
-      "forge": {
-        "name": "Forge",
-        "description": "Helps you build, repair, and call tools."
+        "description": "Curious and quick, always ready to investigate the next clue."
       },
       "sprout": {
         "name": "Sprout",
-        "description": "Gives new workflows and ideas room to grow."
-      },
-      "atlas": {
-        "name": "Atlas",
-        "description": "Brings structure to large workspaces."
-      },
-      "pulse": {
-        "name": "Pulse",
-        "description": "Keeps a feel for gateway, automation, and runtime status."
-      },
-      "patch": {
-        "name": "Patch",
-        "description": "Best for careful edits and diff review."
+        "description": "Quiet and steady, keeping you company without getting in the way."
       }
     },
     "invalidPets": "Some custom pets could not be loaded",
@@ -853,11 +840,17 @@
     "clickThroughDesc": "Let clicks pass through the transparent window when the menu is closed.",
     "mute": "Mute sounds",
     "muteDesc": "Keep visual feedback but silence pet sounds.",
-    "feedbackLevel": "Feedback detail",
-    "feedbackLevelDesc": "Choose how much execution progress the pet shows.",
-    "feedbackQuiet": "Quiet",
-    "feedbackNormal": "Compact",
-    "feedbackChatty": "Progress",
+    "behaviorMode": "Companion style",
+    "behaviorModeDesc": "Choose how often the pet steps forward without being asked.",
+    "behaviorFocus": "Focus",
+    "behaviorCompanion": "Companion",
+    "behaviorPlayful": "Playful",
+    "proactiveTips": "Gentle check-ins",
+    "proactiveTipsDesc": "Let the pet offer occasional low-priority companionship.",
+    "interactions": "Pet interactions",
+    "interactionsDesc": "Allow petting, greetings, and quick task entry.",
+    "reducedMotion": "Reduced motion",
+    "reducedMotionDesc": "Use calmer animation with fewer moving frames.",
     "resetPosition": "Reset position"
   },
   "systemSettings": {
