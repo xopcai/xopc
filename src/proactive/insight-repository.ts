@@ -22,6 +22,8 @@ interface ProactiveInsightRow {
   evidence_json: string;
   content_hash: string;
   status: ProactiveInsightStatus;
+  value_score: number;
+  value_reasons_json: string;
   created_at: number;
   updated_at: number;
 }
@@ -38,6 +40,8 @@ function insightFromRow(row: ProactiveInsightRow): ProactiveInsight {
     nextAction: row.next_action,
     evidence: JSON.parse(row.evidence_json) as ProactiveEvidence[],
     status: row.status,
+    valueScore: row.value_score,
+    valueReasons: JSON.parse(row.value_reasons_json) as string[],
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -75,6 +79,8 @@ export function createProactiveInsight(input: {
   whyItMatters: string;
   nextAction: string;
   evidence: ProactiveEvidence[];
+  valueScore: number;
+  valueReasons: string[];
   nowMs?: number;
 }): ProactiveInsight | null {
   const id = randomUUID();
@@ -105,8 +111,9 @@ export function createProactiveInsight(input: {
     created = db.prepare(
       `INSERT OR IGNORE INTO proactive_insights (
         insight_id, watch_id, run_id, kind, title, summary, why_it_matters,
-        next_action, evidence_json, content_hash, status, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unread', ?, ?)`,
+        next_action, evidence_json, content_hash, status, value_score,
+        value_reasons_json, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unread', ?, ?, ?, ?)`,
     ).run(
       id,
       input.watchId,
@@ -118,6 +125,8 @@ export function createProactiveInsight(input: {
       input.nextAction,
       JSON.stringify(input.evidence),
       contentHash,
+      input.valueScore,
+      JSON.stringify(input.valueReasons),
       now,
       now,
     ).changes > 0;

@@ -54,7 +54,12 @@ describe('task outcome repository', () => {
         constraints: [],
         approvalRequired: [],
       },
-      evidence: [{ kind: 'artifact', title: 'Report', summary: 'Created report.md' }],
+      evidence: [{
+        kind: 'artifact',
+        title: 'Report',
+        summary: 'Created report.md',
+        verifies: ['The report opens'],
+      }],
       now: 1_500,
     });
     completeTaskOutcome({ runId: 'run-1', status: 'succeeded', summary: 'Done', now: 2_000 });
@@ -62,6 +67,7 @@ describe('task outcome repository', () => {
     const matched = findTaskOutcomeForAssistant(sessionKey, 2_100);
     expect(matched?.runId).toBe('run-1');
     expect(matched?.evidence).toHaveLength(1);
+    expect(matched?.verification.status).toBe('passed');
 
     const rated = setTaskOutcomeFeedback({
       sessionKey,
@@ -82,5 +88,51 @@ describe('task outcome repository', () => {
       verificationRate: 1,
       helpfulRate: 1,
     });
+  });
+
+  it('never treats unrelated evidence as independent verification', () => {
+    startTaskOutcome({
+      runId: 'run-unverified',
+      sessionKey: 'agent:main:webchat:task-outcome',
+      channel: 'webchat',
+      objective: 'Ship safely',
+      now: 3_000,
+    });
+    updateTaskOutcome({
+      runId: 'run-unverified',
+      contract: {
+        objective: 'Ship safely',
+        deliverables: [],
+        acceptanceCriteria: ['Regression tests pass'],
+        constraints: [],
+        approvalRequired: [],
+      },
+      evidence: [{ kind: 'state', title: 'Files changed', summary: 'Patch applied' }],
+      now: 3_100,
+    });
+    const result = completeTaskOutcome({ runId: 'run-unverified', status: 'succeeded', summary: 'Done', now: 3_200 });
+    expect(result?.verification).toMatchObject({ status: 'unverified' });
+  });
+
+  it('classifies failures and recommends a changed recovery strategy', () => {
+    startTaskOutcome({
+      runId: 'run-failed',
+      sessionKey: 'agent:main:webchat:task-outcome',
+      channel: 'webchat',
+      objective: 'Run checks',
+      now: 4_000,
+    });
+    const result = completeTaskOutcome({
+      runId: 'run-failed',
+      status: 'failed',
+      summary: 'Typecheck failed with exit code 2',
+      now: 4_100,
+    });
+    expect(result?.failure).toEqual({
+      code: 'verification_failed',
+      phase: 'verification',
+      recoveryAction: 'replan',
+    });
+    expect(result?.verification.status).toBe('failed');
   });
 });

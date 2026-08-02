@@ -967,6 +967,13 @@
     "taskOutcomeObjective": "任务目标",
     "taskOutcomeAcceptance": "验收标准",
     "taskOutcomeEvidence": "验证证据",
+    "taskOutcomeVerification": "验收状态",
+    "taskOutcomeVerificationStates": {
+      "passed": "已独立验证",
+      "failed": "验证失败",
+      "unverified": "尚未独立验证"
+    },
+    "taskOutcomeRecovery": "失败与恢复",
     "messageOutcomesHeading": "本轮成果",
     "stepTimelineThinkingStreaming": "正在思考…",
     "stepTimelineThinkingDone": "思考完成",

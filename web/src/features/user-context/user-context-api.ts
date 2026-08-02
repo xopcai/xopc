@@ -105,6 +105,10 @@ export type PersonalPlaybook = {
     origin: 'explicit' | 'observed' | 'inferred';
     enabled: boolean;
     order: number;
+    context: {
+      channel?: string;
+      supportNeed?: 'listen' | 'clarify' | 'advise' | 'act' | 'unknown';
+    };
     versions: Array<{ id: string; statement: string; updatedAt: string; current: boolean }>;
   }>;
   updatedAt?: string;
@@ -208,7 +212,12 @@ export function createPersonalPlaybookRule(id: PersonalPlaybook['id'], statement
 export function updatePersonalPlaybookRule(
   id: PersonalPlaybook['id'],
   ruleId: string,
-  patch: { statement?: string; enabled?: boolean; order?: number },
+  patch: {
+    statement?: string;
+    enabled?: boolean;
+    order?: number;
+    context?: { channel?: string | null; supportNeed?: string | null };
+  },
 ) {
   return fetchJson(apiUrl(`/api/you/playbooks/${id}/rules/${encodeURIComponent(ruleId)}`), {
     method: 'PATCH',
