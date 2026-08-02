@@ -57,7 +57,7 @@ function reasonToCode(reason: FailoverReason): string {
 
 function providerDeepLink(kind: AgentRunErrorKind): string | undefined {
   if (kind === 'provider_setup_required' || kind === 'provider_auth_invalid') {
-    return '/settings/credentials';
+    return '/settings/capabilities/models';
   }
   return undefined;
 }
@@ -108,7 +108,7 @@ export function formatAgentRunErrorForClient(
       kind: 'provider_setup_required',
       code: 'provider_setup_required',
       provider,
-      deepLink: '/settings/credentials',
+      deepLink: '/settings/capabilities/models',
       message: trimmed,
     } satisfies AgentRunErrorPayload);
   }
@@ -130,7 +130,7 @@ export function formatAgentRunErrorForClient(
   if (kind === 'unknown' && isAuthErrorMessage(trimmed)) {
     payload.kind = 'provider_auth_invalid';
     payload.code = 'provider_auth_invalid';
-    payload.deepLink = '/settings/credentials';
+    payload.deepLink = '/settings/capabilities/models';
   }
 
   return JSON.stringify(payload);

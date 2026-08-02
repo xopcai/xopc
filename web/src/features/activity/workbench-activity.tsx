@@ -155,7 +155,6 @@ export function WorkbenchActivity() {
               </span>
             ) : null}
           </div>
-          {items.length > 0 ? <p className="mt-1 text-xs text-fg-muted">{copy.activityHint}</p> : null}
         </div>
         {expanded && items.length > 0 ? (
           <div className="flex items-center gap-1">

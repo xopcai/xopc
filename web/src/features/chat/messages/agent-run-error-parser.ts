@@ -70,7 +70,7 @@ export function parseAgentRunError(text: string): AgentRunErrorPayload | null {
       kind: 'provider_setup_required',
       code: 'provider_setup_required',
       provider,
-      deepLink: '/settings/credentials',
+      deepLink: '/settings/capabilities/models',
       message: trimmed,
     };
   }
@@ -98,7 +98,7 @@ export function toProviderSetupPayload(payload: AgentRunErrorPayload): ProviderS
   return {
     kind: payload.kind,
     provider: payload.provider,
-    deepLink: payload.deepLink ?? '/settings/credentials',
+    deepLink: payload.deepLink ?? '/settings/capabilities/models',
     message: payload.message,
   };
 }

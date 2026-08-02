@@ -234,7 +234,7 @@ export function ImageProviderCredentialsPanel({
         {showImageModelsLink ? (
           <p>
             <Link
-              to="/settings/credentials?tab=image-models"
+              to="/settings/capabilities/image"
               className="font-medium text-accent hover:underline"
               title={t.imageModelsLinkTitle}
             >

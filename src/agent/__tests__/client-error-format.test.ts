@@ -21,7 +21,7 @@ describe('formatAgentRunErrorForClient', () => {
     expect(out.kind).toBe('provider_auth_invalid');
     expect(out.code).toBe('provider_auth_invalid');
     expect(out.provider).toBe('dashscope');
-    expect(out.deepLink).toBe('/settings/credentials');
+    expect(out.deepLink).toBe('/settings/capabilities/models');
   });
 
   it('maps rate limit errors', () => {
@@ -36,7 +36,7 @@ describe('formatAgentRunErrorForClient', () => {
       kind: 'provider_setup_required',
       code: 'provider_setup_required',
       provider: 'openai',
-      deepLink: '/settings/credentials',
+      deepLink: '/settings/capabilities/models',
       message: 'No API key found for openai',
     });
     expect(formatAgentRunErrorForClient(existing)).toBe(existing);

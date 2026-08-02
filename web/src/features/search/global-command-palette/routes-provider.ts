@@ -1,6 +1,6 @@
 import type { StoredLanguage } from '@/lib/storage';
 import { messages, tabLabel, type Tab } from '@/i18n/messages';
-import { pathForTab } from '@/navigation';
+import { capabilitySettingsPath, pathForTab } from '@/navigation';
 import { isSettingsPathVisibleInMode, isSettingsTabVisibleInMode } from '@/navigation/settings-nav-visibility';
 import { channelDetailPath } from '@/features/settings/channels/channels-routes';
 import { useSettingsModeStore } from '@/stores/settings-mode-store';
@@ -47,6 +47,7 @@ function filterRouteSeedsBySettingsMode(
 export function buildRouteSeeds(language: StoredLanguage): RouteHitSeed[] {
   const m = messages(language);
   const r = m.commandPalette.routes;
+  const c = m.capabilitiesSettings;
   const ch = m.channelsSettings;
   const settingsMode = useSettingsModeStore.getState().mode;
   return filterRouteSeedsBySettingsMode(
@@ -170,48 +171,73 @@ export function buildRouteSeeds(language: StoredLanguage): RouteHitSeed[] {
       path: '/settings/overview',
       keywords: ['config', 'status', 'providers', 'models', 'agents', 'search', 'preferences'],
     },
-    // Models & Capabilities center keeps task-specific deep links in query params.
     {
-      id: 'route:settings:credentials',
-      title: m.nav.settingsCredentials,
-      subtitle: r.credentialsSubtitle,
-      path: '/settings/credentials',
-      keywords: ['api', 'key', 'credentials', 'oauth', 'token', 'models', 'providers'],
+      id: 'route:settings:capabilities',
+      title: m.nav.settingsCapabilities,
+      subtitle: r.capabilitiesSubtitle,
+      path: capabilitySettingsPath('models'),
+      keywords: [
+        'api',
+        'key',
+        'credentials',
+        'oauth',
+        'token',
+        'models',
+        'providers',
+        'image',
+        'voice',
+        'search',
+        '模型与服务',
+        '模型与能力',
+        '密钥',
+        '服务商',
+        '图片',
+        '语音',
+        '网络搜索',
+      ],
     },
     {
-      id: 'route:settings:providers',
-      title: m.nav.settingsProviders,
-      subtitle: r.providersSubtitle,
-      path: '/settings/credentials?tab=services',
-      keywords: ['api', 'key', 'openai', 'anthropic', 'google'],
-    },
-    {
-      id: 'route:settings:models',
-      title: m.nav.settingsModels,
+      id: 'route:settings:capabilities:models',
+      title: c.tabs.models,
       subtitle: r.modelsSubtitle,
-      path: '/settings/credentials?tab=services',
-      keywords: ['gpt', 'claude', 'gemini', 'llm'],
+      path: capabilitySettingsPath('models'),
+      keywords: [
+        'api',
+        'key',
+        'provider',
+        'openai',
+        'anthropic',
+        'google',
+        'gpt',
+        'claude',
+        'gemini',
+        'llm',
+        '模型',
+        '模型服务',
+        '服务商',
+        '密钥',
+      ],
     },
     {
-      id: 'route:settings:image-models',
-      title: m.nav.settingsImageModels,
+      id: 'route:settings:capabilities:image',
+      title: c.tabs.image,
       subtitle: r.imageModelsSubtitle,
-      path: '/settings/credentials?tab=image-models',
-      keywords: ['image', 'vision', 'generate', 'picture'],
+      path: capabilitySettingsPath('image'),
+      keywords: ['image', 'vision', 'generate', 'picture', '图片', '图像', '视觉', '生成图片'],
     },
     {
-      id: 'route:settings:voice',
-      title: m.nav.settingsVoice,
+      id: 'route:settings:capabilities:voice',
+      title: c.tabs.voice,
       subtitle: r.voiceSubtitle,
-      path: '/settings/credentials?tab=voice',
-      keywords: ['tts', 'stt', 'speech', 'microphone'],
+      path: capabilitySettingsPath('voice'),
+      keywords: ['tts', 'stt', 'speech', 'microphone', '语音', '语音识别', '语音合成'],
     },
     {
-      id: 'route:settings:search',
-      title: m.nav.settingsSearch,
+      id: 'route:settings:capabilities:search',
+      title: c.tabs.search,
       subtitle: r.searchSubtitle,
-      path: '/settings/credentials?tab=search',
-      keywords: ['search', 'web', 'tavily', 'serper', 'brave'],
+      path: capabilitySettingsPath('search'),
+      keywords: ['search', 'web', 'tavily', 'serper', 'brave', '搜索', '网络搜索', '联网搜索'],
     },
     {
       id: 'route:settings:gateway',

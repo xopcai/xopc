@@ -37,6 +37,7 @@ import {
   loadLocalAppsPage,
   loadLocalAppWorkbenchPage,
   loadProductOpenPage,
+  loadCapabilitiesSettingsPanel,
 } from '@/lib/route-preload';
 import { SwrProvider } from '@/providers/swr-provider';
 import { syncFontScaleAfterHydration, useFontScaleStore } from '@/stores/font-scale-store';
@@ -61,6 +62,9 @@ const UserContextPage = lazy(() => loadUserContextPage().then((m) => ({ default:
 const ConnectorsPage = lazy(() => loadConnectorsPage().then((m) => ({ default: m.ConnectorsPage })));
 const LogsPage = lazy(() => loadLogsPage().then((m) => ({ default: m.LogsPage })));
 const SettingsPage = lazy(() => loadSettingsPage().then((m) => ({ default: m.SettingsPage })));
+const CapabilitiesSettingsPanel = lazy(() =>
+  loadCapabilitiesSettingsPanel().then((m) => ({ default: m.CapabilitiesSettingsPanel })),
+);
 const AgentsSettingsDetailPage = lazy(() =>
   loadAgentsSettingsPage().then((m) => ({ default: m.AgentsSettingsPanel })),
 );
@@ -461,6 +465,14 @@ const router = createHashRouter([
             element: (
               <Suspense fallback={<SettingsRouteFallback />}>
                 <AgentBrowserSettingsPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'capabilities/:capability',
+            element: (
+              <Suspense fallback={<SettingsRouteFallback />}>
+                <CapabilitiesSettingsPanel />
               </Suspense>
             ),
           },

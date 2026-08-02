@@ -1,8 +1,11 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import {
+  ArrowLeft,
+  ArrowUpRight,
   Copy,
   Eye,
   Layers,
+  Loader2,
   Plus,
   Puzzle,
   Save,
@@ -12,7 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
@@ -61,6 +64,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 
 type PresetTab = 'overview' | 'models' | 'tools' | 'skills' | 'advanced' | 'impact';
 type StarterId = 'blank' | 'safe-coder' | 'read-only' | 'low-cost';
+const STARTER_IDS: readonly StarterId[] = ['blank', 'safe-coder', 'read-only', 'low-cost'];
 type CapabilityPresetMessages = ReturnType<typeof messages>['capabilityPresetsSettings'];
 
 type ToolModelDraft = {
@@ -406,6 +410,14 @@ export function CapabilityPresetsSettingsPanel() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const cp = m.capabilityPresetsSettings;
+  const manageAgentsAction = (
+    <Button asChild type="button" variant="secondary">
+      <Link to="/agents">
+        {cp.manageAgents}
+        <ArrowUpRight className="size-4" aria-hidden />
+      </Link>
+    </Button>
+  );
   const token = useGatewayStore((s) => s.token);
   const hasToken = Boolean(token);
   const { data, error, isLoading, mutate } = useSWR(
@@ -422,8 +434,11 @@ export function CapabilityPresetsSettingsPanel() {
   const [selectedId, setSelectedId] = useState('');
   const [activeTab, setActiveTab] = useState<PresetTab>('overview');
   const [draft, setDraft] = useState<Draft>(() => starterDraft('blank', cp));
+  const [selectedStarter, setSelectedStarter] = useState<StarterId | null>(null);
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(null);
 
   const presets = data?.presets ?? [];
@@ -464,6 +479,7 @@ export function CapabilityPresetsSettingsPanel() {
   ].filter(Boolean);
   const displayError = localError ?? (error instanceof Error ? error.message : null);
   const dialogOpen = searchParams.get('action') === 'new' || Boolean(searchParams.get('preset'));
+  const choosingTemplate = searchParams.get('action') === 'new' && selectedStarter === null;
   const dialogTitle = isNew ? cp.newPreset : selected?.name ?? cp.editorTitle;
   const getToolGroupTitle = (key: BuiltinToolUiGroupKey) => m.agentsSettings.toolsDisableGroups[key];
   const getToolDescription = (toolId: string) =>
@@ -474,9 +490,8 @@ export function CapabilityPresetsSettingsPanel() {
   useEffect(() => {
     if (!data || busy) return;
     if (searchParams.get('action') === 'new') {
-      const starter = searchParams.get('starter');
       setSelectedId('');
-      setDraft(starterDraft(starter === 'safe-coder' || starter === 'read-only' || starter === 'low-cost' ? starter : 'blank', cp));
+      setDraft(starterDraft('blank', cp));
       setActiveTab('overview');
       return;
     }
@@ -495,24 +510,46 @@ export function CapabilityPresetsSettingsPanel() {
   }, [busy, data, searchParams, selected]);
 
   function selectPreset(preset: CapabilityPresetRow) {
+    setSelectedStarter(null);
     setSelectedId(preset.id);
     setDraft(draftFromPreset(preset));
     setSearchParams({ preset: preset.id }, { replace: true });
     setActiveTab('overview');
   }
 
-  function startNew(starter: StarterId) {
-    const next = starterDraft(starter, cp);
+  function openNewPreset() {
+    setSelectedStarter(null);
     setSelectedId('');
-    setDraft(next);
+    setDraft(starterDraft('blank', cp));
     setLocalError(null);
-    setSearchParams(starter === 'blank' ? { action: 'new' } : { action: 'new', starter }, { replace: true });
+    setSearchParams({ action: 'new' }, { replace: true });
     setActiveTab('overview');
   }
 
+  function chooseTemplate(starter: StarterId) {
+    setSelectedStarter(starter);
+    setDraft(starterDraft(starter, cp));
+    setLocalError(null);
+    setActiveTab('overview');
+  }
+
+  function returnToTemplates() {
+    if (selectedStarter) {
+      const initialDraft = starterDraft(selectedStarter, cp);
+      const changedFromTemplate =
+        JSON.stringify(comparableDraft(draft, null)) !== JSON.stringify(comparableDraft(initialDraft, null));
+      if (changedFromTemplate && !window.confirm(cp.changeTemplateConfirm)) return;
+    }
+    setSelectedStarter(null);
+    setLocalError(null);
+  }
+
   function closeDialog() {
-    if (dirty && !window.confirm(cp.discardConfirm)) return;
+    if (!choosingTemplate && dirty && !window.confirm(cp.discardConfirm)) return;
+    setDeleteConfirmOpen(false);
+    setDeleteError(null);
     setSearchParams({}, { replace: true });
+    setSelectedStarter(null);
     setLocalError(null);
     setDraft(draftFromPreset(selected));
     setActiveTab('overview');
@@ -576,6 +613,7 @@ export function CapabilityPresetsSettingsPanel() {
         });
         await mutate(created.presets, { revalidate: false });
         setSelectedId(created.presetId);
+        setSelectedStarter(null);
         setSearchParams({ preset: created.presetId }, { replace: true });
       } else if (selected) {
         const next = await updateCapabilityPreset(selected.id, {
@@ -601,18 +639,20 @@ export function CapabilityPresetsSettingsPanel() {
 
   async function onDelete() {
     if (!selected) return;
-    if (!window.confirm(cp.deleteConfirm.replace('{{name}}', selected.name))) return;
     setBusy(true);
     setLocalError(null);
+    setDeleteError(null);
     try {
       const next = await deleteCapabilityPreset(selected.id);
       await mutate(next, { revalidate: false });
-      const first = next.presets[0] ?? null;
-      setSelectedId(first?.id ?? '');
-      setDraft(draftFromPreset(first));
-      setSearchParams(first ? { preset: first.id } : {}, { replace: true });
+      setDeleteConfirmOpen(false);
+      setSelectedId('');
+      setSelectedStarter(null);
+      setDraft(starterDraft('blank', cp));
+      setActiveTab('overview');
+      setSearchParams({}, { replace: true });
     } catch (err) {
-      setLocalError(err instanceof Error ? err.message : cp.saveError);
+      setDeleteError(err instanceof Error ? err.message : cp.deleteError);
     } finally {
       setBusy(false);
     }
@@ -621,7 +661,7 @@ export function CapabilityPresetsSettingsPanel() {
   if (!hasToken) {
     return (
       <SettingsPageFrame gap="gap-3">
-        <SettingsPageHeader title={cp.title} />
+        <SettingsPageHeader title={cp.title} actions={manageAgentsAction} />
         <p className="text-sm text-fg-muted">{cp.needToken}</p>
       </SettingsPageFrame>
     );
@@ -633,10 +673,13 @@ export function CapabilityPresetsSettingsPanel() {
         title={cp.title}
         subtitle={cp.subtitle}
         actions={
-        <Button type="button" onClick={() => startNew('blank')} disabled={busy}>
-          <Plus className="size-4" aria-hidden />
-          {cp.newPreset}
-        </Button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {manageAgentsAction}
+            <Button type="button" onClick={openNewPreset} disabled={busy}>
+              <Plus className="size-4" aria-hidden />
+              {cp.newPreset}
+            </Button>
+          </div>
         }
       />
 
@@ -650,25 +693,6 @@ export function CapabilityPresetsSettingsPanel() {
         <SettingsPageSkeleton sections={2} />
       ) : (
         <div className="flex flex-col gap-5">
-          <SettingsFormSection>
-            <SettingsFormSectionHeader icon={Plus} title={cp.newPreset} subtitle={cp.editorHint} />
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {(['blank', 'safe-coder', 'read-only', 'low-cost'] as const).map((starter) => (
-                <button
-                  key={starter}
-                  type="button"
-                  className="min-h-28 rounded-lg bg-surface-panel/80 px-4 py-3 text-left text-sm text-fg shadow-surface transition-colors hover:bg-surface-hover/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                  onClick={() => startNew(starter)}
-                >
-                  <span className="font-medium">{cp.starters[starter].title}</span>
-                  <span className="mt-2 block text-xs leading-relaxed text-fg-muted">
-                    {cp.starters[starter].description}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </SettingsFormSection>
-
           {defaultPreset ? (
             <SettingsFormSection>
               <SettingsFormSectionHeader
@@ -708,8 +732,12 @@ export function CapabilityPresetsSettingsPanel() {
           <SettingsFormSection>
             <SettingsFormSectionHeader icon={Layers} title={cp.listTitle} subtitle={cp.listHint} />
             {sharedPresets.length === 0 ? (
-              <div className="rounded-lg bg-surface-panel/70 px-3 py-4 text-sm text-fg-muted shadow-surface">
-                {cp.empty}
+              <div className="flex flex-col items-start gap-3 rounded-lg bg-surface-panel/70 px-3 py-4 text-sm text-fg-muted shadow-surface">
+                <p>{cp.empty}</p>
+                <Button type="button" variant="secondary" onClick={openNewPreset} disabled={busy}>
+                  <Plus className="size-4" aria-hidden />
+                  {cp.newPreset}
+                </Button>
               </div>
             ) : (
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -758,11 +786,30 @@ export function CapabilityPresetsSettingsPanel() {
           >
             <SettingsShellLayerProvider layer="modal" portalContainer={portalContainer}>
               <div className="flex shrink-0 items-start justify-between gap-3 border-b border-edge-subtle px-4 py-3 dark:border-edge">
-                <div className="min-w-0">
-                  <Dialog.Title className="truncate text-base font-semibold text-fg">{dialogTitle}</Dialog.Title>
-                  <Dialog.Description className="mt-0.5 truncate text-xs text-fg-muted">
-                    {isNew ? cp.editorHint : draft.id}
-                  </Dialog.Description>
+                <div className="flex min-w-0 items-start gap-2">
+                  {!choosingTemplate && isNew && selectedStarter ? (
+                    <button
+                      type="button"
+                      className={cn(ghostIconButton, 'shrink-0 p-1.5 hover:bg-surface-base')}
+                      onClick={returnToTemplates}
+                      aria-label={cp.changeTemplate}
+                      title={cp.changeTemplate}
+                    >
+                      <ArrowLeft className="size-4" aria-hidden />
+                    </button>
+                  ) : null}
+                  <div className="min-w-0">
+                    <Dialog.Title className="truncate text-base font-semibold text-fg">{dialogTitle}</Dialog.Title>
+                    <Dialog.Description className="mt-0.5 truncate text-xs text-fg-muted">
+                      {choosingTemplate
+                        ? cp.templatePickerSubtitle
+                        : isNew && selectedStarter
+                          ? `${cp.editorHint} · ${cp.basedOnTemplate.replace('{{template}}', cp.starters[selectedStarter].title)}`
+                          : isNew
+                            ? cp.editorHint
+                            : draft.id}
+                    </Dialog.Description>
+                  </div>
                 </div>
                 <Dialog.Close asChild>
                   <button
@@ -775,6 +822,40 @@ export function CapabilityPresetsSettingsPanel() {
                 </Dialog.Close>
               </div>
 
+              {choosingTemplate ? (
+                <>
+                  <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
+                    <div className="mx-auto grid max-w-3xl gap-3 sm:grid-cols-2">
+                      {STARTER_IDS.map((starter) => (
+                        <button
+                          key={starter}
+                          type="button"
+                          className="group min-h-32 rounded-xl border border-edge-subtle bg-surface-base px-4 py-4 text-left text-fg transition-colors hover:border-edge hover:bg-surface-hover/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                          onClick={() => chooseTemplate(starter)}
+                        >
+                          <span className="flex items-center justify-between gap-3">
+                            <span className="font-medium">{cp.starters[starter].title}</span>
+                            {starter === 'blank' ? (
+                              <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent-fg">
+                                {cp.templateRecommended}
+                              </span>
+                            ) : null}
+                          </span>
+                          <span className="mt-2 block text-xs leading-relaxed text-fg-muted">
+                            {cp.starters[starter].description}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 justify-end border-t border-edge-subtle px-4 py-3 dark:border-edge">
+                    <Button type="button" variant="secondary" onClick={closeDialog}>
+                      {cp.cancel}
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <>
               {displayError ? (
                 <div className="mx-4 mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
                   {displayError}
@@ -799,7 +880,7 @@ export function CapabilityPresetsSettingsPanel() {
               </div>
 
               <div className="min-h-0 flex-1 overflow-y-auto p-4">
-                <div className="mx-auto max-w-4xl">
+                <div className="w-full">
             {activeTab === 'overview' ? (
               <SettingsFormSection>
                 <SettingsFormSectionHeader icon={Copy} title={cp.overviewTitle} subtitle={cp.overviewHint} />
@@ -1048,7 +1129,15 @@ export function CapabilityPresetsSettingsPanel() {
                     </Button>
                   ) : null}
                   {selected && !isDefaultPreset ? (
-                    <Button type="button" variant="secondary" disabled={busy} onClick={() => void onDelete()}>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={busy}
+                      onClick={() => {
+                        setDeleteError(null);
+                        setDeleteConfirmOpen(true);
+                      }}
+                    >
                       <Trash2 className="size-4" aria-hidden />
                       {cp.delete}
                     </Button>
@@ -1059,7 +1148,57 @@ export function CapabilityPresetsSettingsPanel() {
                   </Button>
                 </div>
               </div>
+                </>
+              )}
             </SettingsShellLayerProvider>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
+      <Dialog.Root
+        open={deleteConfirmOpen}
+        onOpenChange={(open) => {
+          if (busy) return;
+          setDeleteConfirmOpen(open);
+          if (!open) setDeleteError(null);
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay className={cn('xopc-dialog-overlay fixed inset-0 bg-scrim', SETTINGS_SHELL_OVERLAY_Z)} />
+          <Dialog.Content
+            className={cn(
+              'xopc-dialog-content fixed left-1/2 top-1/2 w-[min(100%-2rem,28rem)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-popover dark:border-edge',
+              SETTINGS_SHELL_CONTENT_Z,
+            )}
+            onOpenAutoFocus={(event) => event.preventDefault()}
+          >
+            <div className="border-b border-edge-subtle px-4 py-3 dark:border-edge">
+              <Dialog.Title className="text-base font-semibold text-fg">{cp.deleteDialogTitle}</Dialog.Title>
+              <Dialog.Description className="mt-1 text-sm leading-relaxed text-fg-muted">
+                {selected ? cp.deleteConfirm.replace('{{name}}', selected.name) : cp.deleteConfirmFallback}
+              </Dialog.Description>
+            </div>
+
+            {deleteError ? (
+              <div className="mx-4 mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
+                {deleteError}
+              </div>
+            ) : null}
+
+            <div className="flex justify-end gap-2 px-4 py-3">
+              <Button type="button" variant="secondary" disabled={busy} onClick={() => setDeleteConfirmOpen(false)}>
+                {cp.cancel}
+              </Button>
+              <Button
+                type="button"
+                disabled={busy || !selected}
+                className="bg-red-600 text-white shadow-surface hover:bg-red-700 focus-visible:ring-red-600 dark:bg-red-500 dark:hover:bg-red-600"
+                onClick={() => void onDelete()}
+              >
+                {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Trash2 className="size-4" aria-hidden />}
+                {busy ? cp.deleting : cp.delete}
+              </Button>
+            </div>
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>

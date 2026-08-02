@@ -139,9 +139,9 @@ export interface ShareConfig {
 export const SHARE_CONFIG_DEFAULTS: ShareConfig = {
   enabled: true,
   defaultTtlMs: 86_400_000,
-  maxTtlMs: 604_800_000,
-  maxActiveShares: 100,
-  maxFileSize: 104_857_600,
+  maxTtlMs: 2_592_000_000,
+  maxActiveShares: 500,
+  maxFileSize: 524_288_000,
   inlinePreviewMimes: [
     'image/png',
     'image/jpeg',
@@ -156,8 +156,8 @@ export const SHARE_CONFIG_DEFAULTS: ShareConfig = {
   ],
   directory: {
     enabled: true,
-    maxFolderSize: 1_073_741_824, // 1 GB
-    maxFileCount: 1000,
+    maxFolderSize: 2_147_483_648, // 2 GB
+    maxFileCount: 10_000,
     maxDepth: 20,
     listingCacheMs: 60_000,
     zipConcurrency: 1,

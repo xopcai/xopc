@@ -22,7 +22,6 @@ describe('activity targets', () => {
 
   it('ignores routes without a target that needs validation', () => {
     expect(parseActivityTarget('/chat/new')).toBeNull();
-    expect(parseActivityTarget('/settings/credentials')).toBeNull();
     expect(parseActivityTarget('/goals/bad%ZZ')).toBeNull();
   });
 

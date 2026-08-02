@@ -644,7 +644,7 @@ export function NotesWorkbench({
         )}
         aria-hidden={notesListCollapsed ? true : undefined}
       >
-        <div className="flex shrink-0 flex-col gap-3 border-b border-edge-subtle p-3">
+        <div className="shrink-0 border-b border-edge-subtle p-3">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               {showLibrary ? (
@@ -698,14 +698,6 @@ export function NotesWorkbench({
               </button>
             </div>
           </div>
-          <QuickCaptureBar
-            placeholder={n.quickCapturePlaceholder}
-            sendLabel={n.send}
-            onCapture={handleCapture}
-            onImagePick={allowMediaCapture ? handleImagePick : undefined}
-            onVoiceCapture={allowMediaCapture ? handleVoiceCapture : undefined}
-            recordingLabel={n.recording}
-          />
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-3 [scrollbar-gutter:stable]">
@@ -766,6 +758,17 @@ export function NotesWorkbench({
               })}
             </div>
           )}
+        </div>
+
+        <div className="shrink-0 border-t border-edge-subtle p-3">
+          <QuickCaptureBar
+            placeholder={n.quickCapturePlaceholder}
+            sendLabel={n.send}
+            onCapture={handleCapture}
+            onImagePick={allowMediaCapture ? handleImagePick : undefined}
+            onVoiceCapture={allowMediaCapture ? handleVoiceCapture : undefined}
+            recordingLabel={n.recording}
+          />
         </div>
       </section>
 

@@ -1,9 +1,8 @@
 /**
- * Cross-panel "save bar" coordination for the Models & credentials hub.
+ * Cross-panel save coordination for Models & services settings.
  *
- * Each embedded settings panel (providers / models / image / voice / search)
- * registers itself here so the hub can render a single "Save all" / "Discard
- * all" bar on top of its accordion. Sections still own their own save logic
+ * Each capability panel registers itself here so the page can render a single
+ * "Save all" / "Discard all" bar above the section navigation. Sections still own their own save logic
  * — this store is purely a coordination layer; it doesn't replicate or
  * replace any panel's local state machine.
  *

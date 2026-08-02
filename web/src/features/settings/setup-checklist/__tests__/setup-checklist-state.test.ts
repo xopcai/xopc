@@ -152,7 +152,7 @@ describe('buildSetupStatusSnapshot', () => {
 
     expect(snapshot.healthTier).toBe('blocked');
     expect(snapshot.issues.map((issue) => issue.id)).toEqual(['provider-auth']);
-    expect(snapshot.issues[0]?.path).toBe('/settings/credentials');
+    expect(snapshot.issues[0]?.path).toBe('/settings/capabilities/models');
   });
 });
 

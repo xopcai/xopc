@@ -24,7 +24,7 @@ function resolveErrorCopy(payload: AgentRunErrorPayload, m: ReturnType<typeof me
           payload.provider ?? m.agentRunErrorUnknownProvider,
         ),
         cta: m.providerSetupRequiredCta,
-        deepLink: '/settings/credentials',
+        deepLink: '/settings/capabilities/models',
       };
     case 'provider_auth_invalid':
       return {
@@ -34,7 +34,7 @@ function resolveErrorCopy(payload: AgentRunErrorPayload, m: ReturnType<typeof me
           payload.provider ?? m.agentRunErrorUnknownProvider,
         ),
         cta: m.agentRunErrorCtaProviders,
-        deepLink: '/settings/credentials',
+        deepLink: '/settings/capabilities/models',
       };
     case 'rate_limit':
       return { title: m.agentRunErrorRateLimitTitle, body: m.agentRunErrorRateLimitBody };

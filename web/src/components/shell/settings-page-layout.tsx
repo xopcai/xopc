@@ -100,7 +100,9 @@ function SettingsNavGroupBlock({
             onFocus={() => preloadRouteForPath(pathForTab(tab))}
             className={({ isActive: routerActive }) =>
               settingsNavLinkClass({
-                isActive: routerActive,
+                isActive:
+                  routerActive ||
+                  (tab === 'settingsCapabilities' && location.pathname.startsWith('/settings/capabilities/')),
               })
             }
           >
@@ -205,7 +207,8 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
       railNavGroups
         .flatMap((group) => visibleSettingsNavTabs(group, settingsMode))
         .find((tab) =>
-          location.pathname === pathForTab(tab),
+          location.pathname === pathForTab(tab) ||
+          (tab === 'settingsCapabilities' && location.pathname.startsWith('/settings/capabilities/')),
         ),
     [location, railNavGroups, settingsMode],
   );

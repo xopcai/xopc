@@ -11,19 +11,12 @@ const TAB_TO_SETTINGS_SECTION: Record<
   | 'settingsDesktopPet'
   | 'settingsDesktopApp'
   | 'settingsKeyboardShortcuts'
-  | 'settingsAgents'
   | 'settingsCapabilityPresets'
-  | 'settingsCredentials'
-  | 'settingsProviders'
-  | 'settingsModels'
-  | 'settingsImageModels'
   | 'settingsChannels'
-  | 'settingsVoice'
   | 'settingsGateway'
   | 'settingsHeartbeat'
   | 'settingsTunnel'
   | 'settingsShares'
-  | 'settingsSearch'
   | 'settingsDreams'
   | 'settingsGoals'
   | 'skills'
@@ -37,19 +30,12 @@ const TAB_TO_SETTINGS_SECTION: Record<
   settingsSystem: 'system',
   settingsDesktopPet: 'desktop-pet',
   settingsDesktopApp: 'desktop-app',
-  settingsAgents: 'agents',
   settingsCapabilityPresets: 'capability-presets',
-  settingsCredentials: 'credentials',
-  settingsProviders: 'credentials',
-  settingsModels: 'credentials',
-  settingsImageModels: 'credentials',
   settingsChannels: 'channels',
-  settingsVoice: 'credentials',
   settingsGateway: 'gateway',
   settingsHeartbeat: 'heartbeat',
   settingsTunnel: 'remote-access',
   settingsShares: 'shares',
-  settingsSearch: 'credentials',
   settingsDreams: 'dreams',
   settingsGoals: 'goals',
   skills: 'skills',
@@ -65,7 +51,7 @@ function tabToSettingsSection(tab: Tab): SettingsSectionId | null {
 export type SettingsNavGroupId =
   | 'general'
   | 'system'
-  | 'credentials'
+  | 'capabilities'
   | 'agent'
   | 'connection'
   | 'automation'
@@ -93,8 +79,8 @@ export const ELECTRON_SYSTEM_NAV_GROUP: SettingsShellNavGroup = {
  * Settings rail. M3.1 collapsed two groups that previously exposed many
  * sibling rail items leading to the same underlying page or hub:
  *
- *   - `credentials` group: one Models & Capabilities center for keys, catalog,
- *     capability models, and setup health.
+ *   - `capabilities` group: one Models & Services center with dedicated
+ *     routes for models, images, voice, and web search.
  *   - `agent` group: manifest-first. Agent identity, workspace, model roles,
  *     tools, skills, memory, and boundaries are managed from `/agents`.
  *
@@ -102,7 +88,7 @@ export const ELECTRON_SYSTEM_NAV_GROUP: SettingsShellNavGroup = {
  */
 export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
   { id: 'general', tabs: ['settingsOverview', 'settingsAppearance', 'settingsKeyboardShortcuts'] },
-  { id: 'credentials', tabs: ['settingsCredentials'] },
+  { id: 'capabilities', tabs: ['settingsCapabilities'] },
   {
     id: 'agent',
     tabs: ['settingsCapabilityPresets', 'settingsAgentBrowser'],
@@ -163,7 +149,7 @@ export function browserDocsUrl(language: StoredLanguage): string {
 /** Path for React Router `to` prop (hash router, no `#`). */
 export function pathForTab(tab: Tab): string {
   if (tab === 'chat') return '/chat';
-  if (tab === 'agents' || tab === 'settingsAgents') return '/agents';
+  if (tab === 'agents') return '/agents';
   if (tab === 'automations') return '/automations';
   if (tab === 'goals') return '/goals';
   if (tab === 'settingsGoals') return '/settings/goals';
@@ -172,15 +158,24 @@ export function pathForTab(tab: Tab): string {
   if (tab === 'connectors') return '/connectors';
   if (tab === 'channels' || tab === 'settingsChannels') return '/channels';
   if (tab === 'settingsAgentBrowser') return '/settings/agent-browser';
-  if (tab === 'settingsProviders') return '/settings/credentials?tab=services';
-  if (tab === 'settingsModels') return '/settings/credentials?tab=services';
-  if (tab === 'settingsImageModels') return '/settings/credentials?tab=image-models';
-  if (tab === 'settingsVoice') return '/settings/credentials?tab=voice';
-  if (tab === 'settingsSearch') return '/settings/credentials?tab=search';
+  if (tab === 'settingsCapabilities') return capabilitySettingsPath('models');
   const section = tabToSettingsSection(tab);
   if (section) return `/settings/${section}`;
   if (tab === 'sessions' || tab === 'logs') {
     return `/settings/${tab}`;
   }
   return `/${tab}`;
+}
+
+export type CapabilitySettingsSectionId = 'models' | 'image' | 'voice' | 'search';
+
+export const CAPABILITY_SETTINGS_SECTIONS: readonly CapabilitySettingsSectionId[] = [
+  'models',
+  'image',
+  'voice',
+  'search',
+] as const;
+
+export function capabilitySettingsPath(section: CapabilitySettingsSectionId): string {
+  return `/settings/capabilities/${section}`;
 }

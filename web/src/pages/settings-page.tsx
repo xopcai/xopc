@@ -12,7 +12,6 @@ import {
   loadHeartbeatSettingsPanel,
   loadKeyboardShortcutsSettingsPanel,
   loadCapabilityPresetsSettingsPanel,
-  loadModelsHubPanel,
   loadRemoteAccessHub,
   loadSetupStatusPanel,
   loadSharesSettingsPanel,
@@ -28,7 +27,6 @@ const SECTIONS: SettingsSectionId[] = [
   'system',
   'desktop-pet',
   'desktop-app',
-  'credentials',
   'capability-presets',
   'gateway',
   'heartbeat',
@@ -50,7 +48,6 @@ const DesktopPetSettings = lazy(() => loadDesktopPetSettingsPanel().then((m) => 
 const AppManagementSettingsPanel = lazy(() =>
   loadAppManagementSettingsPanel().then((m) => ({ default: m.AppManagementSettingsPanel })),
 );
-const ModelsHubPanel = lazy(() => loadModelsHubPanel().then((m) => ({ default: m.ModelsHubPanel })));
 const GatewaySettingsPanel = lazy(() =>
   loadGatewaySettingsPanel().then((m) => ({ default: m.GatewaySettingsPanel })),
 );
@@ -120,10 +117,6 @@ export function SettingsPage() {
 
   if (id === 'desktop-app') {
     return renderLazySection(AppManagementSettingsPanel);
-  }
-
-  if (id === 'credentials') {
-    return renderLazySection(ModelsHubPanel);
   }
 
   if (id === 'capability-presets') {

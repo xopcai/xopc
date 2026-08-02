@@ -10,6 +10,10 @@ describe('resolveShareConfig', () => {
     expect(cfg.enabled).toBe(false);
     expect(cfg.maxFileSize).toBe(5_242_880);
     expect(cfg.defaultTtlMs).toBe(SHARE_CONFIG_DEFAULTS.defaultTtlMs);
+    expect(cfg.maxTtlMs).toBe(2_592_000_000);
+    expect(cfg.maxActiveShares).toBe(500);
+    expect(cfg.directory.maxFolderSize).toBe(2_147_483_648);
+    expect(cfg.directory.maxFileCount).toBe(10_000);
   });
 });
 

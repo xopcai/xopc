@@ -14,22 +14,16 @@ export type Tab =
   | 'logs'
   | 'settingsOverview'
   | 'settingsAppearance'
-  | 'settingsCredentials'
-  | 'settingsProviders'
-  | 'settingsModels'
-  | 'settingsImageModels'
+  | 'settingsCapabilities'
   | 'settingsChannels'
-  | 'settingsVoice'
   | 'settingsGateway'
   | 'settingsHeartbeat'
   | 'settingsTunnel'
   | 'settingsShares'
-  | 'settingsSearch'
   | 'settingsDreams'
   | 'settingsGoals'
   | 'settingsAgentBrowser'
   | 'settingsCapabilityPresets'
-  | 'settingsAgents'
   | 'settingsKeyboardShortcuts'
   | 'settingsSystem'
   | 'settingsDesktopPet'
@@ -41,21 +35,14 @@ export type SettingsSectionId =
   | 'agent'
   | 'agent-browser'
   | 'capability-presets'
-  | 'providers'
-  | 'credentials'
-  | 'models'
-  | 'image-models'
   | 'channels'
-  | 'voice'
   | 'gateway'
   | 'heartbeat'
   | 'tunnel'
   | 'remote-access'
   | 'shares'
-  | 'search'
   | 'dreams'
   | 'goals'
-  | 'agents'
   | 'keyboard-shortcuts'
   | 'system'
   | 'desktop-pet'
@@ -87,8 +74,5 @@ export function messages(lang: StoredLanguage) {
 
 export function tabLabel(lang: StoredLanguage, tab: Tab): string {
   const m = messages(lang);
-  if (tab === 'settingsAgents') {
-    return m.nav.agents;
-  }
   return m.nav[tab];
 }

@@ -142,7 +142,7 @@ function statusFromDone(done: boolean): DoctorCheckStatus {
 }
 
 function issuePath(id: string): string | undefined {
-  if (id === 'provider-auth') return '/settings/credentials';
+  if (id === 'provider-auth') return '/settings/capabilities/models';
   if (id === 'config-health') return '/settings/gateway';
   if (id === 'state-integrity' || id === 'workspace-status') return '/agents';
   if (id === 'database-schema' || id === 'session-integrity') return '/settings/sessions';
@@ -309,14 +309,14 @@ export function buildSetupStatusSnapshot(input: {
           ? input.labels.providersMetaReady(providerMetaConfigured, providerMetaTotal)
           : input.labels.providersConfigured(providerCount)
         : input.labels.providersMissing,
-      path: '/settings/credentials',
+      path: '/settings/capabilities/models',
     },
     {
       id: 'defaultModel',
       status: statusFromDone(defaultModelConfigured),
       title: 'Default model',
       detail: defaultModelConfigured ? input.labels.modelConfigured(defaultModel) : input.labels.modelMissing,
-      path: '/settings/credentials?tab=services',
+      path: '/settings/capabilities/models',
     },
     {
       id: 'ready',

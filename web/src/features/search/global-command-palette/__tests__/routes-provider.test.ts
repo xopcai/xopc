@@ -22,4 +22,28 @@ describe('buildRouteSeeds', () => {
     expect(workshop?.path).toBe('/local-apps');
     expect(workshop?.keywords).toContain('workshop');
   });
+
+  it('links every capability result to its dedicated route', () => {
+    const seeds = buildRouteSeeds('en');
+    expect(seeds.find((s) => s.id === 'route:settings:capabilities')?.path).toBe(
+      '/settings/capabilities/models',
+    );
+    expect(seeds.find((s) => s.id === 'route:settings:capabilities:models')?.path).toBe(
+      '/settings/capabilities/models',
+    );
+    expect(seeds.find((s) => s.id === 'route:settings:capabilities:image')?.path).toBe(
+      '/settings/capabilities/image',
+    );
+    expect(seeds.find((s) => s.id === 'route:settings:capabilities:voice')?.path).toBe(
+      '/settings/capabilities/voice',
+    );
+    expect(seeds.find((s) => s.id === 'route:settings:capabilities:search')?.path).toBe(
+      '/settings/capabilities/search',
+    );
+    expect(
+      seeds
+        .filter((s) => s.id.startsWith('route:settings:capabilities'))
+        .every((s) => s.path.startsWith('/settings/capabilities/')),
+    ).toBe(true);
+  });
 });
