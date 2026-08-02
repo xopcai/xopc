@@ -63,6 +63,8 @@ import { useNavOrderStore } from '@/stores/nav-order-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 import { formatShortMonthDateTime } from '@/lib/date-formatters';
 
+const LOCAL_APP_PREVIEW_SANDBOX = 'allow-scripts allow-forms';
+
 function formatReleaseDate(timestamp: number, language: string): string {
   return formatShortMonthDateTime(timestamp, language);
 }
@@ -111,6 +113,7 @@ export function LocalAppWorkbenchPage() {
   const [baseAcceptanceResult, setBaseAcceptanceResult] = useState<LocalAppAcceptanceResult | null>(null);
   const [criteriaResults, setCriteriaResults] = useState<Record<string, LocalAppCriteriaScenarioResult>>({});
   const [criteriaRunTarget, setCriteriaRunTarget] = useState<'all' | string>('all');
+  const [criteriaScenarioIndex, setCriteriaScenarioIndex] = useState(0);
   const [criteriaRunKey, setCriteriaRunKey] = useState(0);
   const [criteriaRunningTarget, setCriteriaRunningTarget] = useState<'all' | string | null>(null);
   const [acceptanceSourceHash, setAcceptanceSourceHash] = useState<string | null>(null);
@@ -172,6 +175,7 @@ export function LocalAppWorkbenchPage() {
       if (refreshPreview) {
         previewSourceHashRef.current = next.sourceHash ?? null;
         setCriteriaRunTarget('all');
+        setCriteriaScenarioIndex(0);
         setPreviewKey((value) => value + 1);
       }
       return next;
@@ -223,6 +227,7 @@ export function LocalAppWorkbenchPage() {
     if (!validation?.sourceHash || previewSourceHashRef.current) return;
     previewSourceHashRef.current = validation.sourceHash;
     setCriteriaRunTarget('all');
+    setCriteriaScenarioIndex(0);
     setPreviewKey((value) => value + 1);
   }, [validation?.sourceHash]);
 
@@ -269,17 +274,19 @@ export function LocalAppWorkbenchPage() {
       setCriteriaRunningTarget(null);
       return;
     }
-    const targetScenarios = criteriaRunTarget === 'all'
-      ? acceptanceScenarios
-      : acceptanceScenarios.filter((scenario) => scenario.id === criteriaRunTarget);
+    const activeScenario = criteriaRunTarget === 'all'
+      ? acceptanceScenarios[criteriaScenarioIndex]
+      : acceptanceScenarios.find((scenario) => scenario.id === criteriaRunTarget);
+    const targetScenarios = activeScenario ? [activeScenario] : [];
     if (!targetScenarios.length) return;
     setCriteriaRunningTarget(criteriaRunTarget);
     setCriteriaResults((current) => {
-      if (criteriaRunTarget === 'all') return {};
+      if (criteriaRunTarget === 'all' && criteriaScenarioIndex === 0) return {};
       const next = { ...current };
       delete next[criteriaRunTarget];
       return next;
     });
+    let runnerReady = false;
     const failTargetScenarios = (message: string) => {
       setCriteriaResults((current) => {
         const next = { ...current };
@@ -289,19 +296,23 @@ export function LocalAppWorkbenchPage() {
             name: scenario.name,
             status: 'failed',
             message,
+            failureKind: 'runner',
           };
         }
         return next;
       });
       setCriteriaRunningTarget(null);
     };
-    const timeout = window.setTimeout(() => failTargetScenarios(
-      zh ? '场景在 10 秒内未完成。' : 'Scenario did not finish within 10 seconds.',
-    ), 10_000);
+    const timeout = window.setTimeout(() => failTargetScenarios(runnerReady
+      ? (zh ? '场景在 10 秒内未完成。' : 'Scenario did not finish within 10 seconds.')
+      : (zh ? '验收执行器未能连接，请重新验收。' : 'The acceptance runner did not connect. Run acceptance again.')),
+    10_000);
     const onCriteriaMessage = (value: unknown) => {
       const message = parseLocalAppRuntimeMessage(value);
       if (!message) return;
-      if (message.type === 'criteria') {
+      if (message.type === 'ready') {
+        runnerReady = true;
+      } else if (message.type === 'criteria') {
         window.clearTimeout(timeout);
         setCriteriaResults((current) => {
           const next = { ...current };
@@ -310,7 +321,12 @@ export function LocalAppWorkbenchPage() {
           }
           return next;
         });
-        setCriteriaRunningTarget(null);
+        if (criteriaRunTarget === 'all' && criteriaScenarioIndex + 1 < acceptanceScenarios.length) {
+          setCriteriaScenarioIndex((value) => value + 1);
+          setCriteriaRunKey((value) => value + 1);
+        } else {
+          setCriteriaRunningTarget(null);
+        }
       } else if (message.type === 'error') {
         window.clearTimeout(timeout);
         failTargetScenarios(formatLocalAppRuntimeIssue(message.detail));
@@ -323,7 +339,7 @@ export function LocalAppWorkbenchPage() {
       window.clearTimeout(timeout);
       detachChannel();
     };
-  }, [acceptanceScenarios, app, criteriaRunKey, criteriaRunTarget, previewKey, validation?.status, zh]);
+  }, [acceptanceScenarios, app, criteriaRunKey, criteriaRunTarget, criteriaScenarioIndex, previewKey, validation?.status, zh]);
 
   useEffect(() => {
     if (!app || !acceptanceResult || !acceptanceSourceHash) return;
@@ -442,32 +458,36 @@ export function LocalAppWorkbenchPage() {
   }
 
   function onAskCoderToFix() {
-    const diagnostics = [
+    const diagnostics = Array.from(new Set([
       ...(validation?.issues.map((issue) => issue.message) ?? []),
       ...(runtimeIssue ? [formatLocalAppRuntimeIssue(runtimeIssue)] : []),
-      ...getLocalAppAcceptanceFailures(acceptanceResult),
+      ...(acceptanceResult?.checks
+        .filter((check) => check.status === 'failed' && check.id !== 'criteria')
+        .map((check) => check.message) ?? []),
       ...Object.values(criteriaResults)
         .filter((result) => result.status === 'failed')
-        .map((result) => `${result.name}: ${result.message}`),
+        .map((result) => `${result.name}: ${result.failureKind === 'runner' ? '[验收执行器] ' : ''}${result.message}`),
       ...(runtimeHealth === 'timeout'
         ? [zh ? '预览在 7 秒内未完成启动，可能存在白屏或阻塞。' : 'The preview did not finish booting within 7 seconds and may be blank or blocked.']
         : []),
-    ];
+    ]));
     if (!diagnostics.length) return;
     const issueList = diagnostics.map((message) => `- ${message}`).join('\n');
     const prompt = zh
-      ? `请修复当前本地应用草稿的校验问题，保持扩展 ID 和已安装版本不变。修复后运行完整校验。\n\n${issueList}`
-      : `Fix the current local-app draft validation issues without changing the extension id or installed release. Run the full validation afterward.\n\n${issueList}`;
+      ? `请修复当前本地应用草稿的校验问题，保持扩展 ID 和已安装版本不变。先复现并判断问题来自应用行为还是验收执行器，不要通过弱化断言绕过问题。修复后运行完整校验。\n\n${issueList}`
+      : `Fix the current local-app draft validation issues without changing the extension id or installed release. Reproduce first and determine whether each issue comes from app behavior or the acceptance runner; do not weaken assertions to bypass it. Run the full validation afterward.\n\n${issueList}`;
     void onContinueDevelopment(prompt);
   }
 
   function onRunAllScenarios() {
     setCriteriaRunTarget('all');
+    setCriteriaScenarioIndex(0);
     setCriteriaRunKey((value) => value + 1);
   }
 
   function onRunScenario(scenarioId: string) {
     setCriteriaRunTarget(scenarioId);
+    setCriteriaScenarioIndex(0);
     setCriteriaRunKey((value) => value + 1);
   }
 
@@ -475,9 +495,12 @@ export function LocalAppWorkbenchPage() {
     scenario: LocalAppAcceptanceScenarioSummary,
     result: LocalAppCriteriaScenarioResult,
   ) {
+    const source = result.failureKind === 'runner'
+      ? (zh ? '验收执行器' : 'acceptance runner')
+      : (zh ? '产品场景' : 'product scenario');
     const prompt = zh
-      ? `请修复本地应用的产品场景“${scenario.name}”。当前失败信息：${result.message}\n\n保持扩展 ID 和场景原意不变；优先修复应用行为，不要通过弱化断言来绕过问题。修复后运行完整校验。`
-      : `Fix the local-app product scenario "${scenario.name}". Current failure: ${result.message}\n\nPreserve the extension id and the scenario intent. Fix the app behavior instead of weakening the assertion. Run the full validation afterward.`;
+      ? `请修复本地应用的${source}问题“${scenario.name}”。当前失败信息：${result.message}\n\n保持扩展 ID 和场景原意不变；先复现并判断问题来自应用行为还是验收执行器，不要通过弱化断言绕过问题。修复后运行完整校验。`
+      : `Fix the local-app ${source} issue "${scenario.name}". Current failure: ${result.message}\n\nPreserve the extension id and scenario intent. Reproduce first and determine whether the issue comes from app behavior or the runner; do not weaken assertions to bypass it. Run the full validation afterward.`;
     void onContinueDevelopment(prompt);
   }
 
@@ -494,6 +517,11 @@ export function LocalAppWorkbenchPage() {
   const previousAcceptanceFailures = previousAcceptanceRun
     ? previousAcceptanceRun.checks.filter((check) => check.status === 'failed').map((check) => check.message)
     : [];
+  const hasCoderFixableIssue = validation?.status === 'failed'
+    || runtimeHealth === 'failed'
+    || runtimeHealth === 'timeout'
+    || acceptanceResult?.status === 'failed'
+    || Object.values(criteriaResults).some((result) => result.status === 'failed');
   const fixedAcceptanceCount = previousAcceptanceFailures.filter((message) => (
     !currentAcceptanceFailures.includes(message)
   )).length;
@@ -502,6 +530,7 @@ export function LocalAppWorkbenchPage() {
     const result = await runDraftChecks(false);
     if (result?.status === 'healthy' && result.sourceHash !== acceptanceSourceHash) {
       previewSourceHashRef.current = result.sourceHash ?? null;
+      setCriteriaScenarioIndex(0);
       setPreviewKey((value) => value + 1);
       return;
     }
@@ -564,14 +593,18 @@ export function LocalAppWorkbenchPage() {
 
       <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-edge-subtle bg-surface-base shadow-surface">
         <div className="flex h-11 shrink-0 items-center justify-between border-b border-edge-subtle px-3"><div className="flex items-center gap-2 text-xs font-medium text-fg-muted"><span className={`size-2 rounded-full ${validation?.status === 'failed' || runtimeHealth === 'failed' || runtimeHealth === 'timeout' || acceptanceResult?.status === 'failed' ? 'bg-danger' : validation?.status === 'healthy' && runtimeHealth === 'healthy' && acceptanceResult?.status === 'passed' && currentAcceptanceRun?.sourceHash === validation.sourceHash && !savingAcceptance ? 'bg-success' : 'bg-fg-subtle'}`} />{runtimeHealth === 'failed' || runtimeHealth === 'timeout' ? (zh ? '预览运行异常' : 'Preview runtime issue') : validation?.status === 'failed' || acceptanceResult?.status === 'failed' ? (zh ? '自动验收未通过' : 'Acceptance needs attention') : runtimeHealth === 'booting' || !acceptanceResult ? (zh ? '自动验收中' : 'Running acceptance') : savingAcceptance || currentAcceptanceRun?.sourceHash !== validation?.sourceHash ? (zh ? '正在保存验收快照' : 'Saving acceptance snapshot') : (zh ? '草稿已通过验收' : 'Draft accepted')}</div><Button variant="ghost" className="h-8 px-2" onClick={() => void runDraftChecks(true)} disabled={checkingDraft}>{checkingDraft ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}{zh ? '重新验收' : 'Run again'}</Button></div>
-        <iframe ref={iframeRef} key={previewKey} title={`${app.name} preview`} src={apiUrl(app.previewUrl)} sandbox="allow-scripts" className="min-h-0 w-full flex-1 bg-white" onError={() => { setRuntimeIssue({ kind: 'script_error', message: 'Preview document failed to load' }); setRuntimeHealth('failed'); }} />
+        <iframe ref={iframeRef} key={previewKey} title={`${app.name} preview`} src={apiUrl(app.previewUrl)} sandbox={LOCAL_APP_PREVIEW_SANDBOX} className="min-h-0 w-full flex-1 bg-white" onError={() => { setRuntimeIssue({ kind: 'script_error', message: 'Preview document failed to load' }); setRuntimeHealth('failed'); }} />
         {validation?.status === 'healthy' && validation.acceptanceScenarioCount > 0 ? (
           <iframe
             ref={criteriaIframeRef}
-            key={`criteria-${previewKey}-${criteriaRunKey}`}
+            key={`criteria-${previewKey}-${criteriaRunKey}-${criteriaScenarioIndex}`}
             title={`${app.name} acceptance runner`}
-            src={`${apiUrl(app.previewUrl)}?xopcAcceptance=1${criteriaRunTarget === 'all' ? '' : `&xopcScenario=${encodeURIComponent(criteriaRunTarget)}`}`}
-            sandbox="allow-scripts"
+            src={`${apiUrl(app.previewUrl)}?xopcAcceptance=1&xopcScenario=${encodeURIComponent(
+              criteriaRunTarget === 'all'
+                ? acceptanceScenarios[criteriaScenarioIndex]?.id ?? ''
+                : criteriaRunTarget,
+            )}`}
+            sandbox={LOCAL_APP_PREVIEW_SANDBOX}
             aria-hidden="true"
             tabIndex={-1}
             className="pointer-events-none fixed left-[-200vw] top-0 h-[720px] w-[1024px] opacity-0"
@@ -633,7 +666,7 @@ export function LocalAppWorkbenchPage() {
                   onAskCoder={onAskCoderToFixScenario}
                 />
               </div>
-              {validation.status === 'failed' || runtimeHealth === 'failed' || runtimeHealth === 'timeout' || acceptanceResult?.status === 'failed' ? <Button className="mt-3 w-full" onClick={onAskCoderToFix} disabled={chatBusy}><MessageSquareCode className="size-4" />{zh ? '让 Coder 修复' : 'Ask Coder to fix'}</Button> : null}
+              {hasCoderFixableIssue ? <Button className="mt-3 w-full" onClick={onAskCoderToFix} disabled={chatBusy}><MessageSquareCode className="size-4" />{zh ? '让 Coder 修复' : 'Ask Coder to fix'}</Button> : null}
             </div>
           ) : <Skeleton className="mt-2 h-12 rounded-lg" />}
         </div>

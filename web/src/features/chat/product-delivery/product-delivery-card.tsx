@@ -3,7 +3,7 @@ import type {
   ProductReference,
   ProductReferenceKind,
 } from '@xopcai/gateway-contract';
-import { productReferenceRoute } from '@xopcai/gateway-contract';
+import { productReferenceOpenRoute } from '@xopcai/gateway-contract';
 import {
   AppWindow,
   Bot,
@@ -76,7 +76,7 @@ export function ProductDeliveryCard({ delivery }: { delivery: ProductDeliveryEnv
   if (!reference) return null;
 
   const Icon = KIND_ICON[reference.kind];
-  const route = productReferenceRoute(reference);
+  const route = productReferenceOpenRoute(reference);
   const canOpen = Boolean(route && reference.capabilities.includes('open'));
   const canContinue = reference.capabilities.includes('continue_in_chat');
   const isFailure = delivery.operation === 'failed';

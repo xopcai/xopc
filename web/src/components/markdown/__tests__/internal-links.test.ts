@@ -43,6 +43,11 @@ describe('markdown internal links', () => {
         'Open [note](xopc://open?kind=note&id=note%2Fwith+spaces).',
       ),
     ).toBe('Open [note](#/notes/note%2Fwith%20spaces).');
+    expect(
+      rewriteXopcSettingsLinksInMarkdown(
+        'Open [app](xopc://open?kind=local_app&id=app%2Fwith+spaces).',
+      ),
+    ).toBe('Open [app](#/open?kind=local_app&id=app%2Fwith+spaces).');
   });
 
   it('does not merge a product deep link used as both the label and target', () => {
@@ -105,16 +110,20 @@ describe('markdown internal links', () => {
     root.innerHTML = [
       '<a href="http://127.0.0.1:18790/site/example/">Published site</a>',
       '<a href="https://example.com/docs">Docs</a>',
+      '<a href="#/open?kind=local_app&amp;id=reading-list">Local app</a>',
+      '<a href="/settings/gateway">Settings route</a>',
       '<a href="xopc://settings/gateway">Settings</a>',
     ].join('');
 
     openHttpLinksInNewTab(root);
 
-    const [site, docs, settings] = [...root.querySelectorAll<HTMLAnchorElement>('a')];
+    const [site, docs, localApp, settingsRoute, settings] = [...root.querySelectorAll<HTMLAnchorElement>('a')];
     expect(site?.target).toBe('_blank');
     expect(site?.rel).toContain('noopener');
     expect(site?.rel).toContain('noreferrer');
     expect(docs?.target).toBe('_blank');
+    expect(localApp?.target).toBe('');
+    expect(settingsRoute?.target).toBe('');
     expect(settings?.target).toBe('');
   });
 });

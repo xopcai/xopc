@@ -14,8 +14,8 @@ describe('AcceptanceScenarioList', () => {
       <AcceptanceScenarioList
         scenarios={scenarios}
         results={{
-          'create-item': { id: 'create-item', name: 'Create an item', status: 'passed', message: 'Scenario passed' },
-          'delete-item': { id: 'delete-item', name: 'Delete an item', status: 'failed', message: 'Step 2: target was not found' },
+          'create-item': { id: 'create-item', name: 'Create an item', status: 'passed', message: 'Scenario passed', failureKind: 'scenario' },
+          'delete-item': { id: 'delete-item', name: 'Delete an item', status: 'failed', message: 'Step 2: target was not found', failureKind: 'scenario' },
         }}
         runningTarget={null}
         zh={false}
@@ -30,6 +30,31 @@ describe('AcceptanceScenarioList', () => {
     expect(html).toContain('Step 2: target was not found');
     expect(html).toContain('Ask Coder to fix');
     expect(html).toContain('Rerun Delete an item');
+  });
+
+  it('offers Coder diagnostics when the runner failed', () => {
+    const html = renderToStaticMarkup(
+      <AcceptanceScenarioList
+        scenarios={[scenarios[0]]}
+        results={{
+          'create-item': {
+            id: 'create-item',
+            name: 'Create an item',
+            status: 'failed',
+            message: 'The acceptance runner did not connect.',
+            failureKind: 'runner',
+          },
+        }}
+        runningTarget={null}
+        zh={false}
+        onRunAll={vi.fn()}
+        onRunScenario={vi.fn()}
+        onAskCoder={vi.fn()}
+      />,
+    );
+
+    expect(html).toContain('Ask Coder to fix');
+    expect(html).toContain('Rerun Create an item');
   });
 
   it('shows isolated execution while a single scenario reruns', () => {

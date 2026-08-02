@@ -1,10 +1,16 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { ExternalLink, Globe, Loader2, Wifi, WifiOff, X } from 'lucide-react';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
+import { Button } from '@/components/ui/button';
 import { CopyTextRowList } from '@/components/ui/copy-text-row';
-import type { CreateShareResponse, ShareReachability } from '@/features/shares/shares-api';
+import { Select, SelectOption } from '@/components/ui/popover-select';
+import type {
+  CreateShareParams,
+  CreateShareResponse,
+  ShareReachability,
+} from '@/features/shares/shares-api';
 import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -171,18 +177,111 @@ function ShareLinkResultContent({ result }: { result: ShareLinkResult }) {
   );
 }
 
+function ShareLinkConfirmation({
+  params,
+  loading,
+  error,
+  onConfirm,
+  onCancel,
+}: {
+  params: CreateShareParams;
+  loading: boolean;
+  error?: string | null;
+  onConfirm: (options: Pick<CreateShareParams, 'ttlMs' | 'maxViews' | 'description'>) => void;
+  onCancel: () => void;
+}) {
+  const language = useLocaleStore((s) => s.language);
+  const t = messages(language).sharesSettings;
+  const [ttlMs, setTtlMs] = useState(params.ttlMs ?? 86_400_000);
+  const [maxViews, setMaxViews] = useState<number | null>(params.maxViews ?? null);
+  const [description, setDescription] = useState(params.description ?? '');
+
+  return (
+    <form
+      className="flex min-h-0 flex-1 flex-col"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onConfirm({ ttlMs, maxViews, description: description.trim() || undefined });
+      }}
+    >
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+        <div className="rounded-lg border border-edge-subtle bg-surface-muted/45 px-3 py-2.5">
+          <p className="truncate text-sm font-medium text-fg" title={params.path}>{params.path}</p>
+          <p className="mt-1 text-xs leading-5 text-fg-muted">{t.shareConfirmHint}</p>
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <label className="flex min-w-0 flex-col gap-1.5">
+            <span className="text-xs font-medium text-fg">{t.ttlLabel}</span>
+            <Select
+              value={ttlMs}
+              disabled={loading}
+              onChange={(event) => setTtlMs(Number(event.target.value))}
+            >
+              <SelectOption value={3_600_000}>{t.ttlOptions['1h']}</SelectOption>
+              <SelectOption value={21_600_000}>{t.ttlOptions['6h']}</SelectOption>
+              <SelectOption value={86_400_000}>{t.ttlOptions['24h']}</SelectOption>
+              <SelectOption value={259_200_000}>{t.ttlOptions['3d']}</SelectOption>
+              <SelectOption value={604_800_000}>{t.ttlOptions['7d']}</SelectOption>
+            </Select>
+          </label>
+          <label className="flex min-w-0 flex-col gap-1.5">
+            <span className="text-xs font-medium text-fg">{t.maxViewsLabel}</span>
+            <Select
+              value={maxViews ?? 'unlimited'}
+              disabled={loading}
+              onChange={(event) => setMaxViews(event.target.value === 'unlimited' ? null : Number(event.target.value))}
+            >
+              <SelectOption value="unlimited">{t.maxViewsUnlimited}</SelectOption>
+              <SelectOption value={1}>1</SelectOption>
+              <SelectOption value={5}>5</SelectOption>
+              <SelectOption value={10}>10</SelectOption>
+              <SelectOption value={50}>50</SelectOption>
+            </Select>
+          </label>
+        </div>
+
+        <label className="mt-3 flex flex-col gap-1.5">
+          <span className="text-xs font-medium text-fg">{t.descriptionLabel}</span>
+          <input
+            type="text"
+            value={description}
+            disabled={loading}
+            onChange={(event) => setDescription(event.target.value)}
+            placeholder={t.descriptionPlaceholder}
+            className="h-10 rounded-lg border border-edge bg-surface-subtle px-3 text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-edge-strong disabled:opacity-60"
+          />
+        </label>
+
+        {error ? <p className="mt-3 text-sm text-red-600 dark:text-red-400">{error}</p> : null}
+      </div>
+      <div className="flex shrink-0 items-center justify-end gap-2 border-t border-edge px-4 py-3">
+        <Button type="button" variant="ghost" disabled={loading} onClick={onCancel}>{t.cancel}</Button>
+        <Button type="submit" disabled={loading}>
+          {loading ? <Loader2 className="size-4 animate-spin" /> : null}
+          {loading ? t.creating : t.createButton}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 export function ShareLinkDialog({
   open,
   onOpenChange,
   loading,
   error,
   result,
+  pendingParams,
+  onConfirm,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   loading?: boolean;
   error?: string | null;
   result?: ShareLinkResult | null;
+  pendingParams?: CreateShareParams | null;
+  onConfirm?: (options: Pick<CreateShareParams, 'ttlMs' | 'maxViews' | 'description'>) => void;
 }) {
   const language = useLocaleStore((s) => s.language);
   const t = messages(language).sharesSettings;
@@ -194,12 +293,19 @@ export function ShareLinkDialog({
         <Dialog.Overlay className="fixed inset-0 z-[70] bg-scrim backdrop-blur-[2px]" />
         <Dialog.Content
           className={cn(
-            'fixed left-1/2 top-1/2 z-[71] w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2',
-            'overflow-hidden rounded-lg border border-edge bg-surface-panel p-4 shadow-popover outline-none',
+            'fixed left-1/2 top-1/2 z-[71] flex h-[min(31rem,calc(100dvh-2rem))] w-[min(30rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col',
+            'overflow-hidden rounded-lg border border-edge bg-surface-panel shadow-popover outline-none',
           )}
         >
-          <div className="mb-3 flex items-start justify-between gap-2">
-            <Dialog.Title className="text-base font-semibold text-fg">{t.shareCreated}</Dialog.Title>
+          <div className="flex shrink-0 items-start justify-between gap-2 border-b border-edge px-4 py-3">
+            <div>
+              <Dialog.Title className="text-base font-semibold text-fg">
+                {result ? t.shareCreated : t.shareConfirmTitle}
+              </Dialog.Title>
+              {!result && pendingParams ? (
+                <Dialog.Description className="mt-0.5 text-xs text-fg-muted">{t.createHint}</Dialog.Description>
+              ) : null}
+            </div>
             <Dialog.Close asChild>
               <button
                 type="button"
@@ -211,15 +317,26 @@ export function ShareLinkDialog({
             </Dialog.Close>
           </div>
 
-          {loading ? (
-            <p className="flex items-center gap-2 py-4 text-sm text-fg-muted">
+          {result ? (
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+              <ShareLinkResultContent result={result} />
+            </div>
+          ) : pendingParams && onConfirm ? (
+            <ShareLinkConfirmation
+              key={`${pendingParams.path}:${pendingParams.sessionKey ?? pendingParams.agentId ?? ''}`}
+              params={pendingParams}
+              loading={Boolean(loading)}
+              error={error}
+              onConfirm={onConfirm}
+              onCancel={() => onOpenChange(false)}
+            />
+          ) : loading ? (
+            <p className="flex items-center gap-2 p-4 text-sm text-fg-muted">
               <Loader2 className="size-4 animate-spin" />
               {m.workspace.sharing}
             </p>
           ) : error ? (
-            <p className="py-2 text-sm text-red-600 dark:text-red-400">{error}</p>
-          ) : result ? (
-            <ShareLinkResultContent result={result} />
+            <p className="p-4 text-sm text-red-600 dark:text-red-400">{error}</p>
           ) : null}
         </Dialog.Content>
       </Dialog.Portal>

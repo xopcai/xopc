@@ -132,6 +132,16 @@ export function productReferenceRoute(reference: ProductReference): string | nul
   }
 }
 
+/**
+ * Resolve the user-facing "open" intent. Local apps need a transient route so the
+ * console can choose between the installed app and its draft workbench at click time.
+ */
+export function productReferenceOpenRoute(reference: ProductReference): string | null {
+  if (reference.kind !== 'local_app') return productReferenceRoute(reference);
+  const params = new URLSearchParams({ kind: reference.kind, id: reference.id });
+  return `/open?${params.toString()}`;
+}
+
 export function productReferenceDeepLink(reference: Pick<ProductReference, 'kind' | 'id'>): string {
   const params = new URLSearchParams({ kind: reference.kind, id: reference.id });
   return `xopc://open?${params.toString()}`;

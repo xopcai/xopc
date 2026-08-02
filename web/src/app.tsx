@@ -36,6 +36,7 @@ import {
   loadWorkflowsPage,
   loadLocalAppsPage,
   loadLocalAppWorkbenchPage,
+  loadProductOpenPage,
 } from '@/lib/route-preload';
 import { SwrProvider } from '@/providers/swr-provider';
 import { syncFontScaleAfterHydration, useFontScaleStore } from '@/stores/font-scale-store';
@@ -79,6 +80,7 @@ const SharePreviewPage = lazy(() => loadSharePreviewPage().then((m) => ({ defaul
 const DesktopPetPage = lazy(() => import('@/pages/desktop-pet').then((m) => ({ default: m.DesktopPetPage })));
 const LocalAppsPage = lazy(() => loadLocalAppsPage().then((m) => ({ default: m.LocalAppsPage })));
 const LocalAppWorkbenchPage = lazy(() => loadLocalAppWorkbenchPage().then((m) => ({ default: m.LocalAppWorkbenchPage })));
+const ProductOpenPage = lazy(() => loadProductOpenPage().then((m) => ({ default: m.ProductOpenPage })));
 const WorkDiscoveryPage = lazy(() =>
   import('@/features/work-discovery/work-discovery-page').then((m) => ({ default: m.WorkDiscoveryPage })),
 );
@@ -150,6 +152,14 @@ const router = createHashRouter([
     element: <AppShell />,
     children: [
       { index: true, element: <Navigate to="/chat" replace /> },
+      {
+        path: 'open',
+        element: (
+          <Suspense fallback={<SecondaryRouteFallback />}>
+            <ProductOpenPage />
+          </Suspense>
+        ),
+      },
       {
         path: 'onboarding/workspace',
         element: (

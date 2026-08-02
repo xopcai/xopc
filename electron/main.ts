@@ -20,6 +20,7 @@ import {
 import './thread-stream-bundle-shim.js';
 
 import { ensureGatewayConfigForElectron, getElectronUserPaths } from './ensure-gateway-config.js';
+import { xopcDeepLinkToRoute } from './deep-link.js';
 import {
   isCliBundlePresent,
   resolveCliEntry,
@@ -106,6 +107,8 @@ import {
 
 /** Track the main window for gateway exit notifications. */
 let mainWindow: BrowserWindow | null = null;
+let mainWindowNavigationReady = false;
+let pendingMainWindowNavigation: string | null = null;
 
 let crashReporterStarted = false;
 let rendererCrashReloadAttempted = false;
@@ -288,20 +291,15 @@ if (process.defaultApp) {
   app.setAsDefaultProtocolClient('xopc');
 }
 
-function handleDeepLink(url: string): void {
-  try {
-    const parsed = new URL(url);
-    const path = `/${parsed.hostname}${parsed.pathname}`;
-    const queryString = parsed.search;
-
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.show();
-      mainWindow.focus();
-      mainWindow.webContents.send('menu:navigate', path + queryString);
-    }
-  } catch {
+function handleDeepLink(url: string): boolean {
+  const route = xopcDeepLinkToRoute(url);
+  if (!route) {
     console.warn(`[main] Invalid deep link URL: ${url}`);
+    return false;
   }
+  pendingMainWindowNavigation = route;
+  if (app.isReady()) navigateMainWindow(route);
+  return true;
 }
 
 if (process.platform === 'darwin') {
@@ -345,6 +343,10 @@ function attachExternalUrlHandlers(win: BrowserWindow): void {
   wc.setWindowOpenHandler((details) => {
     try {
       const next = new URL(details.url);
+      if (next.protocol === 'xopc:') {
+        handleDeepLink(details.url);
+        return { action: 'deny' };
+      }
       if (next.protocol !== 'http:' && next.protocol !== 'https:') {
         return { action: 'allow' };
       }
@@ -352,19 +354,21 @@ function attachExternalUrlHandlers(win: BrowserWindow): void {
         void shell.openExternal(details.url);
         return { action: 'deny' };
       }
-      // Embedded gateway console always stays in-app on loopback.
-      if (isEmbeddedGatewayLoopbackUrl(details.url)) {
-        return { action: 'allow' };
-      }
       const curHref = wc.getURL();
       if (!curHref || curHref === 'about:blank') {
         return { action: 'allow' };
       }
       const cur = new URL(curHref);
-      if (next.origin !== cur.origin) {
+      if (next.origin === cur.origin) {
+        if (next.hash.startsWith('#/')) navigateMainWindow(next.hash.slice(1));
+        return { action: 'deny' };
+      }
+      if (isEmbeddedGatewayLoopbackUrl(details.url)) {
         void shell.openExternal(details.url);
         return { action: 'deny' };
       }
+      void shell.openExternal(details.url);
+      return { action: 'deny' };
     } catch {
       /* ignore */
     }
@@ -374,6 +378,11 @@ function attachExternalUrlHandlers(win: BrowserWindow): void {
   wc.on('will-navigate', (event, navigationUrl) => {
     try {
       const next = new URL(navigationUrl);
+      if (next.protocol === 'xopc:') {
+        event.preventDefault();
+        handleDeepLink(navigationUrl);
+        return;
+      }
       if (next.protocol !== 'http:' && next.protocol !== 'https:') return;
       // Startup: data: loading page → http://127.0.0.1:<port>/ must stay in-window.
       // Without this, Windows Electron preventDefault() leaves a blank white shell while
@@ -552,25 +561,29 @@ async function resolveWindowLoad(reportProgress: StartupProgressReporter = () =>
 
 /** Send navigate IPC once the window can receive it (handles tray actions after window was closed). */
 function navigateMainWindow(hashPath: string): void {
+  const path = hashPath.startsWith('/') ? hashPath : `/${hashPath}`;
+  pendingMainWindowNavigation = path;
   const needNew = !mainWindow || mainWindow.isDestroyed();
   if (needNew) {
     createWindow();
   }
   const win = mainWindow;
   if (!win || win.isDestroyed()) return;
+  if (win.isMinimized()) win.restore();
   win.show();
   win.focus();
-  const path = hashPath.startsWith('/') ? hashPath : `/${hashPath}`;
-  const send = () => {
-    if (!win.isDestroyed()) {
-      win.webContents.send('menu:navigate', path);
-    }
-  };
-  if (win.webContents.isLoading()) {
-    win.webContents.once('did-finish-load', send);
-  } else {
-    send();
-  }
+  if (!mainWindowNavigationReady) return;
+  pendingMainWindowNavigation = null;
+  win.webContents.send('menu:navigate', path);
+}
+
+function markMainWindowNavigationReady(win: BrowserWindow): void {
+  if (win.isDestroyed() || win !== mainWindow) return;
+  mainWindowNavigationReady = true;
+  if (!pendingMainWindowNavigation) return;
+  const path = pendingMainWindowNavigation;
+  pendingMainWindowNavigation = null;
+  win.webContents.send('menu:navigate', path);
 }
 
 function focusOrCreateMainWindow(): void {
@@ -641,6 +654,7 @@ function createWindow(): void {
   });
 
   mainWindow = win;
+  mainWindowNavigationReady = false;
   registerMainWindowStatePersistence(win);
   if (initialWindowState.isMaximized) {
     win.maximize();
@@ -836,6 +850,7 @@ function createWindow(): void {
 
   win.on('closed', () => {
     mainWindow = null;
+    mainWindowNavigationReady = false;
   });
 
   let externalUrlHandlersAttached = false;
@@ -884,6 +899,7 @@ function createWindow(): void {
       // loadURL (data: loading page → loopback gateway SPA); deferring avoids any chance that
       // will-navigate / window.open handlers interfere with that transition on Windows.
       attachExternalUrlHandlersOnce();
+      markMainWindowNavigationReady(win);
       void maybeShowDesktopPetOnStartup();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -1093,6 +1109,7 @@ app.whenReady().then(async () => {
       }
       await loadMainWindowUrl(win, load.href);
       attachExternalUrlHandlers(win);
+      markMainWindowNavigationReady(win);
       return { ok: true };
     } catch (err) {
       const failure = startupFailureFromError(err);

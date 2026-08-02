@@ -30,4 +30,22 @@ Only description and body.
 `;
     expect(collapseExpandedSkillBlockForDisplay(expanded)).toBe('/skill:weather');
   });
+
+  it('preserves multiline skill arguments used by local-app diagnostics', () => {
+    const expanded = `## Skill: build-xopc-local-app
+
+Build a local XOPC app.
+
+**Arguments**: 请修复当前本地应用草稿的校验问题。
+
+- Add a book: Visible text was not found
+- Mark a book as read: Target was not found`;
+
+    expect(collapseExpandedSkillBlockForDisplay(expanded)).toBe(
+      `/skill:build-xopc-local-app 请修复当前本地应用草稿的校验问题。
+
+- Add a book: Visible text was not found
+- Mark a book as read: Target was not found`,
+    );
+  });
 });

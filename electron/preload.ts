@@ -2,6 +2,18 @@ import { contextBridge, ipcRenderer } from "electron";
 
 import type { StartupProgressDetail } from './startup-progress.js';
 
+const menuNavigationListeners = new Set<(path: string) => void>();
+let pendingMenuNavigation: string | null = null;
+
+ipcRenderer.on("menu:navigate", (_event, path: unknown) => {
+  if (typeof path !== "string" || !path.startsWith("/")) return;
+  if (menuNavigationListeners.size === 0) {
+    pendingMenuNavigation = path;
+    return;
+  }
+  for (const listener of menuNavigationListeners) listener(path);
+});
+
 function notifyPreload(
   channel: "preload:ready" | "preload:dom-content-loaded",
 ): void {
@@ -280,9 +292,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
         { ok: true } | { ok: false; error: "UNKNOWN_MENU_ACTION" }
       >,
     onNavigate: (callback: (path: string) => void) => {
-      const handler = (_: unknown, path: string) => callback(path);
-      ipcRenderer.on("menu:navigate", handler);
-      return () => ipcRenderer.removeListener("menu:navigate", handler);
+      menuNavigationListeners.add(callback);
+      if (pendingMenuNavigation) {
+        const path = pendingMenuNavigation;
+        pendingMenuNavigation = null;
+        callback(path);
+      }
+      return () => menuNavigationListeners.delete(callback);
     },
     onTogglePalette: (callback: () => void) => {
       const handler = () => callback();

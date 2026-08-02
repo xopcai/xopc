@@ -1,6 +1,6 @@
 import {
   parseProductReferenceDeepLink,
-  productReferenceRoute,
+  productReferenceOpenRoute,
 } from '@xopcai/gateway-contract';
 
 const KNOWN_FILE_EXT =
@@ -50,7 +50,7 @@ export function xopcWorkspaceFileUrlToHref(raw: string): string | null {
 function xopcUrlToInternalHref(raw: string): string {
   const reference = parseProductReferenceDeepLink(raw);
   const productRoute = reference
-    ? productReferenceRoute({
+    ? productReferenceOpenRoute({
       ...reference,
       title: reference.id,
       capabilities: ['open'],
@@ -251,13 +251,13 @@ export function linkWorkspaceFileMentions(root: HTMLElement): void {
   }
 }
 
-/** Marks HTTP(S) links to open separately without changing non-web deep links. */
+/** Marks explicit absolute HTTP(S) links to open separately; app-relative links stay in-window. */
 export function openHttpLinksInNewTab(root: HTMLElement): void {
   for (const anchor of root.querySelectorAll<HTMLAnchorElement>('a[href]')) {
     const href = anchor.getAttribute('href');
-    if (!href) continue;
+    if (!href || !/^https?:\/\//i.test(href)) continue;
     try {
-      const url = new URL(href, window.location.href);
+      const url = new URL(href);
       if (url.protocol !== 'http:' && url.protocol !== 'https:') continue;
       anchor.target = '_blank';
       const rel = new Set(anchor.rel.split(/\s+/).filter(Boolean));

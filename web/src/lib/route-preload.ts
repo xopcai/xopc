@@ -23,6 +23,7 @@ export const loadExtensionDebugPage = () => import('@/features/extensions/extens
 export const loadSharePreviewPage = () => import('@/pages/share-preview-page');
 export const loadLocalAppsPage = () => import('@/pages/local-apps-page');
 export const loadLocalAppWorkbenchPage = () => import('@/pages/local-app-workbench-page');
+export const loadProductOpenPage = () => import('@/pages/product-open-page');
 export const loadSetupStatusPanel = () => import('@/features/settings/setup-checklist/setup-status-panel');
 export const loadAppearanceSettingsPanel = () => import('@/features/settings/appearance-settings');
 export const loadKeyboardShortcutsSettingsPanel = () => import('@/features/settings/keyboard-shortcuts-settings');
@@ -104,6 +105,7 @@ export function preloadRouteForPath(to: string) {
   if (path.startsWith('/extensions/')) return preload(loadExtensionPage);
   if (path === '/local-apps') return preload(loadLocalAppsPage);
   if (path.startsWith('/local-apps/')) return preload(loadLocalAppWorkbenchPage);
+  if (path === '/open') return preload(loadProductOpenPage);
   if (path.startsWith('/share/')) return preload(loadSharePreviewPage);
 
   if (path === '/settings/sessions') return preload(loadSessionsPage);

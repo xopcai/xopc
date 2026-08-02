@@ -79,8 +79,16 @@ export const WorkspaceColumn = memo(function WorkspaceColumn() {
   );
   const normalizedFileSearchQuery = fileSearchQuery.trim();
 
-  const { dialogOpen, loading: shareLoading, result, error: shareError, createShareLink, handleOpenChange } =
-    useShareLink();
+  const {
+    dialogOpen,
+    loading: shareLoading,
+    result,
+    error: shareError,
+    pendingParams: pendingShareParams,
+    createShareLink,
+    confirmShareLink,
+    handleOpenChange,
+  } = useShareLink();
 
   const onWorkspaceResizePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
@@ -473,6 +481,8 @@ export const WorkspaceColumn = memo(function WorkspaceColumn() {
         loading={shareLoading}
         error={shareError}
         result={result}
+        pendingParams={pendingShareParams}
+        onConfirm={(options) => void confirmShareLink(options)}
       />
     </>
   );

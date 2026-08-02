@@ -5,6 +5,10 @@ const STARTUP_CONTEXT_MARKER = '[Startup context loaded by runtime]';
 const STARTUP_MEMORY_TRUNCATED = '...[additional startup memory truncated]...';
 const STARTUP_MEMORY_END = 'END_QUOTED_NOTES';
 
+function joinDisplayParts(...parts: string[]): string {
+  return parts.filter((part) => part.length > 0).join('\n\n');
+}
+
 /**
  * Remove runtime-injected startup daily-memory prelude from persisted user text.
  * The LLM still receives the prelude; the chat bubble should show only the user's words.
@@ -41,15 +45,16 @@ export function stripStartupContextForDisplay(text: string): string {
   return trimmed.slice(cutIndex).replace(/^\s+/, '');
 }
 
-/**
- * Session stores the server-expanded skill body (see SkillManager.buildSkillBlock).
- * Collapse back to wire form for UI: `/skill:name` and optional trailing args from `**Arguments**:`.
- */
+/** Collapse an expanded skill block back to its wire form without dropping surrounding user text. */
 export function collapseExpandedSkillBlockForDisplay(text: string): string {
   if (typeof text !== 'string' || !text.includes('## Skill:')) {
     return text;
   }
-  const nameMatch = text.match(/## Skill:\s*([^\s\r\n]+)/);
+
+  const blockStart = text.indexOf('## Skill:');
+  const prefix = text.slice(0, blockStart).replace(/\s+$/, '');
+  const skillSection = text.slice(blockStart);
+  const nameMatch = skillSection.match(/## Skill:\s*([^\s\r\n]+)/);
   if (!nameMatch) {
     return text;
   }
@@ -57,10 +62,18 @@ export function collapseExpandedSkillBlockForDisplay(text: string): string {
   if (!name) {
     return text;
   }
-  const argMatches = [...text.matchAll(/\*\*Arguments\*\*:\s*([^\r\n]+)/g)];
+  const argMatches = [...skillSection.matchAll(/\*\*Arguments\*\*:\s*([^\r\n]+)/g)];
   const args =
     argMatches.length > 0 ? (argMatches[argMatches.length - 1]?.[1] ?? '').trim() : '';
-  return args ? `/skill:${name} ${args}` : `/skill:${name}`;
+  const wireToken = args ? `/skill:${name} ${args}` : `/skill:${name}`;
+
+  let blockEnd = skillSection.length;
+  if (argMatches.length > 0) {
+    const lastArgument = argMatches[argMatches.length - 1];
+    blockEnd = (lastArgument.index ?? 0) + lastArgument[0].length;
+  }
+  const suffix = skillSection.slice(blockEnd).replace(/^\s+/, '');
+  return joinDisplayParts(prefix, wireToken, suffix);
 }
 
 /**

@@ -12,14 +12,21 @@ export function useShareLink() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ShareLinkResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pendingParams, setPendingParams] = useState<CreateShareParams | null>(null);
 
-  const createShareLink = useCallback(async (params: CreateShareParams) => {
+  const createShareLink = useCallback((params: CreateShareParams) => {
     setDialogOpen(true);
-    setLoading(true);
+    setPendingParams(params);
     setResult(null);
     setError(null);
+  }, []);
+
+  const confirmShareLink = useCallback(async (options?: Pick<CreateShareParams, 'ttlMs' | 'maxViews' | 'description'>) => {
+    if (!pendingParams || loading) return null;
+    setLoading(true);
+    setError(null);
     try {
-      const res: CreateShareResponse = await createShare(params);
+      const res: CreateShareResponse = await createShare({ ...pendingParams, ...options });
       setResult(res.payload);
       return res.payload;
     } catch (err) {
@@ -29,12 +36,13 @@ export function useShareLink() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loading, pendingParams]);
 
   const resetShareLink = useCallback(() => {
     setResult(null);
     setError(null);
     setLoading(false);
+    setPendingParams(null);
   }, []);
 
   const handleOpenChange = useCallback(
@@ -50,7 +58,9 @@ export function useShareLink() {
     loading,
     result,
     error,
+    pendingParams,
     createShareLink,
+    confirmShareLink,
     handleOpenChange,
   };
 }
