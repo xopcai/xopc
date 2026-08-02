@@ -69,6 +69,7 @@ describe('openXopcDatabase', () => {
         'local_app_acceptance_runs',
         'task_outcomes',
         'relationship_settings',
+        'interaction_states',
       ]),
     );
   });

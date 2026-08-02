@@ -36,12 +36,17 @@ export function AssistantTurnOutcomes({
     objective: string;
     acceptance: string;
     evidence: string;
+    verification: string;
+    verificationStates: Record<'passed' | 'failed' | 'unverified', string>;
+    recovery: string;
   };
 }) {
   const [taskOutcome, setTaskOutcome] = useState<{
     objective: string;
     contract?: { acceptanceCriteria: string[] };
     evidence: Array<{ title: string; summary: string }>;
+    verification: { status: 'passed' | 'failed' | 'unverified' };
+    failure?: { code: string; phase: string; recoveryAction: string };
   } | null>(null);
   useEffect(() => {
     setTaskOutcome(null);
@@ -82,6 +87,10 @@ export function AssistantTurnOutcomes({
               <dt className="font-medium text-fg-muted">{taskLabels.objective}</dt>
               <dd className="mt-0.5 text-fg-secondary">{taskOutcome.objective}</dd>
             </div>
+            <div>
+              <dt className="font-medium text-fg-muted">{taskLabels.verification}</dt>
+              <dd className="mt-0.5 text-fg-secondary">{taskLabels.verificationStates[taskOutcome.verification.status]}</dd>
+            </div>
             {taskOutcome.contract?.acceptanceCriteria.length ? (
               <div>
                 <dt className="font-medium text-fg-muted">{taskLabels.acceptance}</dt>
@@ -107,6 +116,12 @@ export function AssistantTurnOutcomes({
                     ))}
                   </ul>
                 </dd>
+              </div>
+            ) : null}
+            {taskOutcome.failure ? (
+              <div>
+                <dt className="font-medium text-fg-muted">{taskLabels.recovery}</dt>
+                <dd className="mt-0.5 text-fg-secondary">{taskOutcome.failure.phase} · {taskOutcome.failure.code} · {taskOutcome.failure.recoveryAction}</dd>
               </div>
             ) : null}
           </dl>

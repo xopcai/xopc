@@ -255,29 +255,52 @@ function SourceCard({ source, language, t, onConfigure, onDisconnect }: { source
   );
 }
 
+type PlaybookRulePatch = {
+  statement?: string;
+  enabled?: boolean;
+  order?: number;
+  context?: { channel?: string | null; supportNeed?: string | null };
+};
+
 function PlaybookCard({ playbook, busy, t, onToggleGroup, onCreate, onUpdate, onDelete, onRollback }: {
   playbook: PersonalPlaybook;
   busy: boolean;
   t: ReturnType<typeof messages>['you'];
   onToggleGroup: () => void;
   onCreate: (statement: string) => void;
-  onUpdate: (ruleId: string, patch: { statement?: string; enabled?: boolean; order?: number }) => void;
+  onUpdate: (ruleId: string, patch: PlaybookRulePatch) => void;
   onDelete: (ruleId: string) => void;
   onRollback: (ruleId: string, versionId: string) => void;
 }) {
   const [newRule, setNewRule] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState('');
-  return <article className={cn('rounded-xl border p-4', playbook.enabled ? 'border-edge-subtle bg-surface-panel' : 'border-edge-subtle bg-surface-muted')}>
-    <div className="flex items-start justify-between gap-3"><div><h3 className="text-sm font-semibold text-fg">{t.playbookNames[playbook.id]}</h3><p className="mt-1 text-xs text-fg-muted">{replaceCount(t.playbookRuleCount, playbook.rules.filter((rule) => rule.enabled).length)}</p></div><Button type="button" variant="ghost" className="h-8 px-2" disabled={busy} onClick={onToggleGroup}>{playbook.enabled ? t.pausePlaybook : t.resumePlaybook}</Button></div>
-    <ul className="mt-3 space-y-2">{playbook.rules.map((rule, index) => <li key={rule.id} className={cn('rounded-lg border border-edge-subtle p-2.5', !rule.enabled && 'opacity-60')}>
-      {editingId === rule.id ? <div className="space-y-2"><textarea className={cn(inputClass, 'min-h-16 resize-y')} value={editingText} onChange={(event) => setEditingText(event.target.value)} /><div className="flex justify-end gap-1"><Button type="button" variant="ghost" className="h-7 px-2" onClick={() => setEditingId(null)}>{t.cancel}</Button><Button type="button" variant="primary" className="h-7 px-2" disabled={!editingText.trim()} onClick={() => { onUpdate(rule.id, { statement: editingText.trim() }); setEditingId(null); }}>{t.save}</Button></div></div> : <><p className="text-xs leading-5 text-fg-muted">{rule.statement}</p><div className="mt-2 flex flex-wrap justify-end gap-1"><Button type="button" variant="ghost" className="h-7 px-2" disabled={busy || index === 0} onClick={() => onUpdate(rule.id, { order: playbook.rules[index - 1].order - 1 })}>{t.moveUp}</Button><Button type="button" variant="ghost" className="h-7 px-2" disabled={busy || index === playbook.rules.length - 1} onClick={() => onUpdate(rule.id, { order: playbook.rules[index + 1].order + 1 })}>{t.moveDown}</Button><Button type="button" variant="ghost" className="h-7 px-2" disabled={busy} onClick={() => onUpdate(rule.id, { enabled: !rule.enabled })}>{rule.enabled ? t.disableRule : t.enableRule}</Button><Button type="button" variant="ghost" className="h-7 px-2" disabled={busy} onClick={() => { setEditingId(rule.id); setEditingText(rule.statement); }}><Pencil className="size-3" aria-hidden />{t.edit}</Button><Button type="button" variant="ghost" className="h-7 px-2 text-danger" disabled={busy} onClick={() => onDelete(rule.id)}><Trash2 className="size-3" aria-hidden />{t.deleteRule}</Button></div>{rule.versions.length > 1 ? <details className="mt-2 border-t border-edge-subtle pt-2"><summary className="cursor-pointer text-[11px] text-fg-subtle">{t.ruleHistory}</summary><div className="mt-2 space-y-2">{rule.versions.filter((version) => !version.current).map((version) => <div key={version.id} className="flex items-start justify-between gap-2 text-[11px]"><p className="line-clamp-2 text-fg-muted">{version.statement}</p><Button type="button" variant="ghost" className="h-7 shrink-0 px-2" disabled={busy} onClick={() => onRollback(rule.id, version.id)}>{t.rollbackRule}</Button></div>)}</div></details> : null}</>}
-    </li>)}</ul>
-    <div className="mt-3">
-      <div className="flex gap-2"><input className={inputClass} value={newRule} onChange={(event) => setNewRule(event.target.value)} placeholder={t.newRulePlaceholder} /><Button type="button" variant="secondary" disabled={busy || !newRule.trim()} onClick={() => { onCreate(newRule.trim()); setNewRule(''); }}>{t.addRule}</Button></div>
-      <p className="mt-1.5 text-[11px] leading-5 text-fg-subtle">{t.playbookRuleExamples[playbook.id]}</p>
-    </div>
-  </article>;
+  return (
+    <article className={cn('rounded-xl border p-4', playbook.enabled ? 'border-edge-subtle bg-surface-panel' : 'border-edge-subtle bg-surface-muted')}>
+      <div className="flex items-start justify-between gap-3">
+        <div><h3 className="text-sm font-semibold text-fg">{t.playbookNames[playbook.id]}</h3><p className="mt-1 text-xs text-fg-muted">{replaceCount(t.playbookRuleCount, playbook.rules.filter((rule) => rule.enabled).length)}</p></div>
+        <Button type="button" variant="ghost" className="h-8 px-2" disabled={busy} onClick={onToggleGroup}>{playbook.enabled ? t.pausePlaybook : t.resumePlaybook}</Button>
+      </div>
+      <ul className="mt-3 space-y-2">{playbook.rules.map((rule, index) => (
+        <li key={rule.id} className={cn('rounded-lg border border-edge-subtle p-2.5', !rule.enabled && 'opacity-60')}>
+          {editingId === rule.id ? (
+            <div className="space-y-2"><textarea className={cn(inputClass, 'min-h-16 resize-y')} value={editingText} onChange={(event) => setEditingText(event.target.value)} /><div className="flex justify-end gap-1"><Button type="button" variant="ghost" className="h-7 px-2" onClick={() => setEditingId(null)}>{t.cancel}</Button><Button type="button" variant="primary" className="h-7 px-2" disabled={!editingText.trim()} onClick={() => { onUpdate(rule.id, { statement: editingText.trim() }); setEditingId(null); }}>{t.save}</Button></div></div>
+          ) : (
+            <>
+              <p className="text-xs leading-5 text-fg-muted">{rule.statement}</p>
+              <div className="mt-2 grid grid-cols-2 gap-1">
+                <label className="grid gap-1 text-[10px] text-fg-subtle">{t.ruleSupportContext}<Select value={rule.context.supportNeed ?? ''} disabled={busy} onChange={(event) => onUpdate(rule.id, { context: { supportNeed: event.target.value || null } })}><SelectOption value="">{t.ruleContextAny}</SelectOption>{(['listen', 'clarify', 'advise', 'act', 'unknown'] as const).map((value) => <SelectOption key={value} value={value}>{t.ruleSupportNeeds[value]}</SelectOption>)}</Select></label>
+                <label className="grid gap-1 text-[10px] text-fg-subtle">{t.ruleChannelContext}<Select value={rule.context.channel ?? ''} disabled={busy} onChange={(event) => onUpdate(rule.id, { context: { channel: event.target.value || null } })}><SelectOption value="">{t.ruleContextAny}</SelectOption>{['webchat', 'telegram', 'weixin', 'feishu', 'cli'].map((value) => <SelectOption key={value} value={value}>{value}</SelectOption>)}</Select></label>
+              </div>
+              <div className="mt-2 flex flex-wrap justify-end gap-1"><Button type="button" variant="ghost" className="h-7 px-2" disabled={busy || index === 0} onClick={() => onUpdate(rule.id, { order: playbook.rules[index - 1].order - 1 })}>{t.moveUp}</Button><Button type="button" variant="ghost" className="h-7 px-2" disabled={busy || index === playbook.rules.length - 1} onClick={() => onUpdate(rule.id, { order: playbook.rules[index + 1].order + 1 })}>{t.moveDown}</Button><Button type="button" variant="ghost" className="h-7 px-2" disabled={busy} onClick={() => onUpdate(rule.id, { enabled: !rule.enabled })}>{rule.enabled ? t.disableRule : t.enableRule}</Button><Button type="button" variant="ghost" className="h-7 px-2" disabled={busy} onClick={() => { setEditingId(rule.id); setEditingText(rule.statement); }}><Pencil className="size-3" aria-hidden />{t.edit}</Button><Button type="button" variant="ghost" className="h-7 px-2 text-danger" disabled={busy} onClick={() => onDelete(rule.id)}><Trash2 className="size-3" aria-hidden />{t.deleteRule}</Button></div>
+              {rule.versions.length > 1 ? <details className="mt-2 border-t border-edge-subtle pt-2"><summary className="cursor-pointer text-[11px] text-fg-subtle">{t.ruleHistory}</summary><div className="mt-2 space-y-2">{rule.versions.filter((version) => !version.current).map((version) => <div key={version.id} className="flex items-start justify-between gap-2 text-[11px]"><p className="line-clamp-2 text-fg-muted">{version.statement}</p><Button type="button" variant="ghost" className="h-7 shrink-0 px-2" disabled={busy} onClick={() => onRollback(rule.id, version.id)}>{t.rollbackRule}</Button></div>)}</div></details> : null}
+            </>
+          )}
+        </li>
+      ))}</ul>
+      <div className="mt-3"><div className="flex gap-2"><input className={inputClass} value={newRule} onChange={(event) => setNewRule(event.target.value)} placeholder={t.newRulePlaceholder} /><Button type="button" variant="secondary" disabled={busy || !newRule.trim()} onClick={() => { onCreate(newRule.trim()); setNewRule(''); }}>{t.addRule}</Button></div><p className="mt-1.5 text-[11px] leading-5 text-fg-subtle">{t.playbookRuleExamples[playbook.id]}</p></div>
+    </article>
+  );
 }
 
 function FirstMeetingCard({ suggestion, draft, busy, onDraftChange, onSave, onLater, t }: {

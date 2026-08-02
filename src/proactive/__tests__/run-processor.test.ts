@@ -115,6 +115,8 @@ describe('focus automation result processing', () => {
       summary: 'A new release is available.',
       whyItMatters: 'The focus may need an upgrade.',
       nextAction: 'Review the release notes.',
+      valueScore: 0.9,
+      valueReasons: ['dated_evidence', 'actionable'],
     };
 
     expect(createProactiveInsight({

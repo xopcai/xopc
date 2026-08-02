@@ -35,11 +35,13 @@ import {
   setMemoryTraceFeedback,
   setLatestMemoryInjectFeedback,
   setTaskOutcomeFeedback,
+  setInteractionState,
   summarizeMemoryRecallFeedback,
   summarizeUserUnderstandingQuality,
   upsertMemoryRecord,
 } from '../../../storage/sqlite/index.js';
 import { isUserContextRecord, projectUserContextRecord } from '../../../user-context/projection.js';
+import { summarizeMemoryUseAudit } from '../../../user-context/memory-use-audit.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 const MEMORY_KINDS = new Set<MemoryKind>([
@@ -383,6 +385,14 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
     return c.json({ traces });
   });
 
+  authenticated.get('/api/user-context/memory-use-audit', (c) => {
+    const traces = listMemoryTraceEvents({
+      sessionKey: c.req.query('sessionKey') || undefined,
+      limit: parseLimit(c.req.query('limit')),
+    });
+    return c.json({ audit: summarizeMemoryUseAudit(traces) });
+  });
+
   authenticated.patch('/api/user-context/traces/:traceId/feedback', async (c) => {
     const body = await c.req.json().catch(() => ({}));
     const outcome = typeof body.outcome === 'string' && MEMORY_TRACE_FEEDBACK_OUTCOMES.has(body.outcome)
@@ -461,6 +471,18 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
             ? { supportFit: false }
             : {}),
       });
+      if (outcome === 'not_helpful' && reason.includes('tone_mismatch')) {
+        setInteractionState({
+          sessionKey,
+          signal: {
+            supportNeed: 'unknown',
+            confidence: 1,
+            source: 'explicit',
+            repairStatus: 'needed',
+            repairReason: reason,
+          },
+        });
+      }
       const trace = setLatestMemoryInjectFeedback({
         sessionKey,
         beforeMs: assistantTimestamp,

@@ -967,6 +967,13 @@
     "taskOutcomeObjective": "Objective",
     "taskOutcomeAcceptance": "Acceptance criteria",
     "taskOutcomeEvidence": "Verification evidence",
+    "taskOutcomeVerification": "Verification status",
+    "taskOutcomeVerificationStates": {
+      "passed": "Verified",
+      "failed": "Failed",
+      "unverified": "Not independently verified"
+    },
+    "taskOutcomeRecovery": "Failure and recovery",
     "messageOutcomesHeading": "Results from this turn",
     "stepTimelineThinkingStreaming": "Thinking…",
     "stepTimelineThinkingDone": "Thinking complete",

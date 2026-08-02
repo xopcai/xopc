@@ -75,6 +75,16 @@
     "deleteRule": "Delete",
     "ruleHistory": "Version history",
     "rollbackRule": "Restore",
+    "ruleSupportContext": "Use when support need is",
+    "ruleChannelContext": "Use in channel",
+    "ruleContextAny": "Any",
+    "ruleSupportNeeds": {
+      "listen": "Listening",
+      "clarify": "Clarifying",
+      "advise": "Advice",
+      "act": "Action",
+      "unknown": "Unclear"
+    },
     "moveUp": "Up",
     "moveDown": "Down",
     "profileTitle": "The basics",

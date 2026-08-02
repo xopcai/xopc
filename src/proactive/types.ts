@@ -55,6 +55,8 @@ export interface ProactiveInsight {
   whyItMatters: string;
   nextAction: string;
   evidence: ProactiveEvidence[];
+  valueScore: number;
+  valueReasons: string[];
   status: ProactiveInsightStatus;
   createdAt: number;
   updatedAt: number;

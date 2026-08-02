@@ -2,9 +2,10 @@ import type { AutomationRun } from '../automations/index.js';
 import { getRelationshipSettings, isProactiveSupportAllowed } from '../storage/sqlite/index.js';
 import { createLogger } from '../utils/logger.js';
 
-import { createProactiveInsight } from './insight-repository.js';
+import { createProactiveInsight, listProactiveInsights } from './insight-repository.js';
 import type { ProactiveEvidence, ProactiveInsight } from './types.js';
 import { getFocusWatchByAutomationId, recordFocusWatchRun } from './watch-repository.js';
+import { scoreProactiveValue } from './value-score.js';
 
 const log = createLogger('ProactiveRunProcessor');
 
@@ -100,6 +101,15 @@ export function processFocusAutomationRun(run: AutomationRun): {
     now: new Date(run.endedAtMs),
     topic: watch.kind,
   })) return { handled: true };
+  const history = listProactiveInsights({ status: ['approved', 'dismissed'], limit: 50 });
+  const value = scoreProactiveValue({
+    kind: watch.kind,
+    evidenceCount: result.evidence.length,
+    hasNextAction: Boolean(result.nextAction),
+    approvedCount: history.filter((item) => item.status === 'approved').length,
+    dismissedCount: history.filter((item) => item.status === 'dismissed').length,
+  });
+  if (!value.shouldDeliver) return { handled: true };
   const insight = createProactiveInsight({
       watchId: watch.id,
       runId: run.id,
@@ -109,6 +119,8 @@ export function processFocusAutomationRun(run: AutomationRun): {
       whyItMatters: result.whyItMatters,
       nextAction: result.nextAction,
       evidence: result.evidence,
+      valueScore: value.score,
+      valueReasons: value.reasons,
       nowMs: run.endedAtMs,
     });
   return insight ? { handled: true, insight } : { handled: true };

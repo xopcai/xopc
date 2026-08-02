@@ -36,6 +36,9 @@ import {
   PERSONAL_PLAYBOOK_DISABLED_TAG as PLAYBOOK_DISABLED_TAG,
   PERSONAL_PLAYBOOK_ORDER_PREFIX as PLAYBOOK_ORDER_PREFIX,
   PERSONAL_PLAYBOOK_RULE_TAG as PLAYBOOK_RULE_TAG,
+  patchPersonalPlaybookContextTags,
+  personalPlaybookContext,
+  type PersonalPlaybookContext,
 } from '../../../user-context/personal-playbook.js';
 import {
   buildUserProfileSetup,
@@ -66,6 +69,7 @@ const INSIGHT_ACCEPTED_TAG = 'insight-action:accepted';
 const INSIGHT_DISMISSED_TAG = 'insight-action:dismissed';
 const PLAYBOOK_IDS = ['communication', 'execution', 'routines'] as const;
 type PlaybookId = typeof PLAYBOOK_IDS[number];
+const PLAYBOOK_SUPPORT_NEEDS = new Set(['listen', 'clarify', 'advise', 'act', 'unknown']);
 const PROFILE_FIELD_LIMITS: Record<keyof UserProfileFields, number> = {
   callName: 80,
   pronouns: 80,
@@ -184,6 +188,28 @@ function patchPlaybookRuleTags(record: MemoryRecord, patch: { enabled?: boolean;
   return [...new Set(tags)];
 }
 
+function parsePlaybookContext(value: unknown): { context: PersonalPlaybookContext } | { error: string } {
+  if (value === undefined) return { context: {} };
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return { error: 'context must be an object' };
+  const input = value as Record<string, unknown>;
+  const context: PersonalPlaybookContext = {};
+  if ('channel' in input) {
+    if (input.channel !== null && (typeof input.channel !== 'string' || !/^[a-z0-9_-]{1,40}$/i.test(input.channel))) {
+      return { error: 'context.channel is invalid' };
+    }
+    context.channel = input.channel === null ? undefined : String(input.channel);
+  }
+  if ('supportNeed' in input) {
+    if (input.supportNeed !== null && !PLAYBOOK_SUPPORT_NEEDS.has(String(input.supportNeed))) {
+      return { error: 'context.supportNeed is invalid' };
+    }
+    context.supportNeed = input.supportNeed === null
+      ? undefined
+      : input.supportNeed as PersonalPlaybookContext['supportNeed'];
+  }
+  return { context };
+}
+
 export function buildPersonalPlaybooks(records: MemoryRecord[]) {
   return PLAYBOOK_IDS.map((id) => {
     const rules = records
@@ -198,6 +224,7 @@ export function buildPersonalPlaybooks(records: MemoryRecord[]) {
         origin: record.explicitness,
         enabled: !record.tags?.includes(PLAYBOOK_DISABLED_TAG),
         order: playbookRuleOrder(record),
+        context: personalPlaybookContext(record),
         versions: playbookVersionChain(records, record.id).map((version) => ({
           id: version.id,
           statement: version.content,
@@ -667,6 +694,8 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
     const body = await c.req.json().catch(() => ({}));
     const statement = typeof body.statement === 'string' ? body.statement.trim() : '';
     if (!statement || statement.length > 5_000) return c.json({ error: 'Rule statement is required' }, 400);
+    const parsedContext = parsePlaybookContext(body.context);
+    if ('error' in parsedContext) return c.json({ error: parsedContext.error }, 400);
     const kind: MemoryRecord['kind'] = id === 'communication' ? 'preference' : id === 'execution' ? 'task_lesson' : 'routine';
     const record = upsertMemoryRecord({
       providerId: 'local',
@@ -675,7 +704,10 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
       content: statement,
       source: { provider: 'local', path: 'you://playbook' },
       confidence: 1,
-      tags: ['user-understanding', PLAYBOOK_RULE_TAG, `${PLAYBOOK_ORDER_PREFIX}${Number.isInteger(body.order) ? body.order : 1_000}`],
+      tags: patchPersonalPlaybookContextTags(
+        ['user-understanding', PLAYBOOK_RULE_TAG, `${PLAYBOOK_ORDER_PREFIX}${Number.isInteger(body.order) ? body.order : 1_000}`],
+        parsedContext.context,
+      ),
       status: 'active',
       sensitivity: 'normal',
       explicitness: 'explicit',
@@ -704,9 +736,12 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
     if (body.order !== undefined && (!Number.isInteger(body.order) || body.order < 0 || body.order > 10_000)) {
       return c.json({ error: 'order must be an integer between 0 and 10000' }, 400);
     }
+    const parsedContext = parsePlaybookContext(body.context);
+    if ('error' in parsedContext) return c.json({ error: parsedContext.error }, 400);
+    const ruleTags = patchPlaybookRuleTags(record, { enabled: body.enabled, order: body.order });
     const updated = versionPlaybookRule(record, {
       content,
-      tags: patchPlaybookRuleTags(record, { enabled: body.enabled, order: body.order }),
+      tags: patchPersonalPlaybookContextTags(ruleTags, parsedContext.context),
       explicitness: body.statement === undefined ? record.explicitness : 'explicit',
     });
     return c.json({

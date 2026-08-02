@@ -12,9 +12,12 @@ import {
   updateAsyncLogContext,
 } from '../../utils/logger.js';
 import { shouldSkipWebchatInboundByAbortCutoff } from '../../session/abort-cutoff.js';
+import { parseSessionKey } from '../../routing/session-key.js';
+import { recordExplicitRelationshipFollowUp } from '../../user-context/relationship-continuity.js';
 import {
   completeTaskOutcome,
   startTaskOutcome,
+  updateInteractionStateFromMessage,
   updateTaskOutcome,
   type TaskContract,
   type TaskEvidence,
@@ -110,6 +113,14 @@ export async function *runGatewayAgent(
 
   const streamSessionKey = webchatSessionKey ?? chatId;
   if (webchatSessionKey) {
+    const parsedSession = parseSessionKey(webchatSessionKey);
+    if (!parsedSession) throw new Error('Resolved webchat session key is invalid');
+    updateInteractionStateFromMessage({ sessionKey: webchatSessionKey, message });
+    recordExplicitRelationshipFollowUp({
+      sessionKey: webchatSessionKey,
+      sourceAgentId: parsedSession.agentId,
+      message,
+    });
     startTaskOutcome({
       runId,
       sessionKey: webchatSessionKey,

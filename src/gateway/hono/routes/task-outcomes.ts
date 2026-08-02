@@ -10,6 +10,7 @@ import {
   type TaskEvidence,
 } from '../../../storage/sqlite/index.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+import { replayTaskEvaluation } from '../../../agent/outcomes/task-evaluation.js';
 
 function parseLimit(raw: string | undefined): number | undefined {
   if (!raw) return undefined;
@@ -41,7 +42,8 @@ function isTaskEvidence(value: unknown): value is TaskEvidence[] {
       || evidence.kind === 'source')
       && typeof evidence.title === 'string'
       && typeof evidence.summary === 'string'
-      && (evidence.uri === undefined || typeof evidence.uri === 'string');
+      && (evidence.uri === undefined || typeof evidence.uri === 'string')
+      && (evidence.verifies === undefined || isStringArray(evidence.verifies));
   });
 }
 
@@ -56,6 +58,11 @@ export function registerTaskOutcomeRoutes(authenticated: Hono, _deps: Authentica
 
   authenticated.get('/api/task-outcomes/metrics', (c) => {
     return c.json({ ok: true, metrics: summarizeTaskOutcomes() });
+  });
+
+  authenticated.get('/api/task-outcomes/evaluation', (c) => {
+    const items = listTaskOutcomes({ limit: parseLimit(c.req.query('limit')) ?? 100 });
+    return c.json({ ok: true, evaluation: replayTaskEvaluation(items) });
   });
 
   authenticated.get('/api/task-outcomes/for-assistant', (c) => {
