@@ -33,7 +33,8 @@ export async function runGatewayLoop(opts: RunGatewayLoopOptions): Promise<void>
   let lock = await acquireGatewayLock(opts.configPath, { port: opts.port });
   let server: GatewayServer | null = null;
   let shuttingDown = false;
-  let restartResolver: (() => void) | null = null;
+  let forceCloseRequested = false;
+  let loopResolver: ((action: GatewayRunSignalAction) => void) | null = null;
 
   const cleanupSignals = () => {
     process.removeListener('SIGTERM', onSigterm);
@@ -84,12 +85,13 @@ export async function runGatewayLoop(opts: RunGatewayLoopOptions): Promise<void>
     }
 
     shuttingDown = false;
-    restartResolver?.();
+    forceCloseRequested = false;
+    loopResolver?.('restart');
   };
 
   const handleStopAfterClose = async () => {
     await releaseLock();
-    exitProcess(0);
+    loopResolver?.('stop');
   };
 
   const DRAIN_TIMEOUT_MS = 30_000;
@@ -97,14 +99,17 @@ export async function runGatewayLoop(opts: RunGatewayLoopOptions): Promise<void>
 
   const requestShutdown = (action: GatewayRunSignalAction, signal: string) => {
     if (shuttingDown) {
+      if (!forceCloseRequested && (signal === 'SIGINT' || signal === 'SIGTERM')) {
+        forceCloseRequested = true;
+        console.warn(`[GatewayRunLoop] Received ${signal} again; force closing connections`);
+        server?.forceCloseConnections();
+      }
       return;
     }
 
     shuttingDown = true;
     const isRestart = action === 'restart';
     console.log(`[GatewayRunLoop] Received ${signal}; ${isRestart ? 'restarting' : 'shutting down'}`);
-
-    cleanupSignals();
 
     const forceExitMs = isRestart ? DRAIN_TIMEOUT_MS + SHUTDOWN_TIMEOUT_MS : SHUTDOWN_TIMEOUT_MS;
     const forceExitTimer = setTimeout(() => {
@@ -188,9 +193,14 @@ export async function runGatewayLoop(opts: RunGatewayLoopOptions): Promise<void>
         return;
       }
 
-      await new Promise<void>((resolve) => {
-        restartResolver = resolve;
+      const action = await new Promise<GatewayRunSignalAction>((resolve) => {
+        loopResolver = resolve;
       });
+
+      loopResolver = null;
+      if (action === 'stop') {
+        return;
+      }
 
       console.log('[GatewayRunLoop] Restart signal received, restarting gateway...');
     }
