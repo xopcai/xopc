@@ -287,7 +287,6 @@ export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRoute
     const health = service.getHealth();
     const workItems = new WorkItemService();
     const nowMs = Date.now();
-    await focuses.reconcileExpiredTrials(nowMs);
     const focusViews = focuses.list();
 
     const [

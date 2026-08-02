@@ -79,9 +79,16 @@ export function createProactiveInsight(input: {
 }): ProactiveInsight | null {
   const id = randomUUID();
   const now = input.nowMs ?? Date.now();
-  const canonicalSources = input.evidence.map((item) => canonicalSource(item.source)).filter(Boolean).toSorted();
-  const fingerprint = input.kind === 'intelligence' && canonicalSources.length > 0
-    ? JSON.stringify({ kind: input.kind, sources: canonicalSources })
+  const intelligenceUpdates = input.evidence
+    .map((item) => [
+      canonicalSource(item.source),
+      canonicalPublishedAt(item.publishedAt),
+      normalizeIdentityText(item.label),
+    ])
+    .filter(([source]) => Boolean(source))
+    .toSorted((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+  const fingerprint = input.kind === 'intelligence' && intelligenceUpdates.length > 0
+    ? JSON.stringify({ kind: input.kind, updates: intelligenceUpdates })
     : JSON.stringify({
         kind: input.kind,
         title: input.title.toLocaleLowerCase().trim(),
@@ -116,6 +123,16 @@ export function createProactiveInsight(input: {
     ).changes > 0;
   });
   return created ? listProactiveInsights({ limit: 100 }).find((item) => item.id === id) ?? null : null;
+}
+
+function canonicalPublishedAt(value: string | undefined): string {
+  if (!value) return '';
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : value.trim();
+}
+
+function normalizeIdentityText(value: string): string {
+  return value.trim().toLocaleLowerCase().replace(/\s+/g, ' ');
 }
 
 function canonicalSource(source: string | undefined): string {

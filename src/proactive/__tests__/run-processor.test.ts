@@ -11,7 +11,7 @@ import {
   resetXopcDatabaseSingletonForTest,
 } from '../../storage/sqlite/index.js';
 import { upsertWorkUnderstandingThread } from '../../work-discovery/thread-repository.js';
-import { listProactiveInsights } from '../insight-repository.js';
+import { createProactiveInsight, listProactiveInsights } from '../insight-repository.js';
 import {
   hasValidIntelligenceEvidence,
   parseFocusRunResult,
@@ -102,6 +102,48 @@ describe('focus automation result processing', () => {
     expect(processFocusAutomationRun(empty)).toEqual({ handled: true });
     expect(listProactiveInsights()).toHaveLength(1);
     expect(getFocusWatchByAutomationId(automationId)?.consecutiveEmptyRuns).toBe(1);
+  });
+
+  it('deduplicates the same intelligence update but accepts a later update at the same URL', () => {
+    const watchId = getFocusWatchByAutomationId(automationId)!.id;
+    const base = {
+      watchId,
+      kind: 'intelligence' as const,
+      title: 'Stable release page changed',
+      summary: 'A new release is available.',
+      whyItMatters: 'The focus may need an upgrade.',
+      nextAction: 'Review the release notes.',
+    };
+
+    expect(createProactiveInsight({
+      ...base,
+      runId: 'intelligence-1',
+      evidence: [{
+        label: 'Release 1.0',
+        source: 'https://example.com/releases?utm_source=xopc',
+        publishedAt: '2026-08-01T00:00:00Z',
+      }],
+    })).not.toBeNull();
+    expect(createProactiveInsight({
+      ...base,
+      runId: 'intelligence-duplicate',
+      evidence: [{
+        label: '  RELEASE   1.0 ',
+        source: 'https://example.com/releases',
+        publishedAt: '2026-08-01T00:00:00.000Z',
+      }],
+    })).toBeNull();
+    expect(createProactiveInsight({
+      ...base,
+      runId: 'intelligence-2',
+      evidence: [{
+        label: 'Release 1.1',
+        source: 'https://example.com/releases',
+        publishedAt: '2026-08-02T00:00:00Z',
+      }],
+    })).not.toBeNull();
+
+    expect(listProactiveInsights()).toHaveLength(2);
   });
 
   function completedRun(id: string, summary: string): AutomationRun {
