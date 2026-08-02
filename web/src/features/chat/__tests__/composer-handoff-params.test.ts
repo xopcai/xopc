@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildComposerDraftSeed, searchParamsForComposerHandoff } from '@/features/chat/session/composer-handoff-params';
+import {
+  buildComposerDraftSeed,
+  projectIdForNewChatHandoff,
+  searchParamsForComposerHandoff,
+} from '@/features/chat/session/composer-handoff-params';
 
 describe('composer handoff params', () => {
   it('combines a skill invocation with a supplied draft', () => {
@@ -16,5 +20,14 @@ describe('composer handoff params', () => {
   it('preserves both params while resolving a new chat route', () => {
     expect(searchParamsForComposerHandoff('?skill=build-xopc-local-app&draft=Add+filters&agent=coder'))
       .toBe('?skill=build-xopc-local-app&draft=Add+filters');
+  });
+
+  it('preserves the attachment handoff but consumes project scope at session creation', () => {
+    expect(
+      searchParamsForComposerHandoff('?attachmentHandoff=file-1&projectId=project-1'),
+    ).toBe('?attachmentHandoff=file-1');
+    expect(projectIdForNewChatHandoff('?attachmentHandoff=file-1&projectId=project-1')).toBe(
+      'project-1',
+    );
   });
 });

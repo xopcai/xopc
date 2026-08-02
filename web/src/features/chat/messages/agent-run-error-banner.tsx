@@ -44,6 +44,13 @@ function resolveErrorCopy(payload: AgentRunErrorPayload, m: ReturnType<typeof me
       return { title: m.agentRunErrorBillingTitle, body: m.agentRunErrorBillingBody };
     case 'send_failed':
       return { title: m.agentRunErrorSendFailedTitle, body: m.agentRunErrorSendFailedBody };
+    case 'session_not_found':
+      return {
+        title: m.sessionNotFoundTitle,
+        body: m.sessionNotFoundBody,
+        cta: m.sessionNotFoundCta,
+        deepLink: '/chat/new',
+      };
     default:
       return { title: m.agentRunErrorUnknownTitle, body: m.agentRunErrorUnknownBody };
   }
@@ -71,7 +78,8 @@ function toneForCode(code: string): 'amber' | 'red' {
     code === 'provider_auth_invalid' ||
     code === 'rate_limit' ||
     code === 'timeout' ||
-    code === 'billing'
+    code === 'billing' ||
+    code === 'session_not_found'
   ) {
     return 'amber';
   }

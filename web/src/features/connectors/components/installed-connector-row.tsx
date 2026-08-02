@@ -89,11 +89,9 @@ export function InstalledConnectorRow({
               </span>
             ) : null}
           </div>
-          <p className="mt-3 line-clamp-2 break-all text-sm leading-5 text-fg-muted">
-            {instance.materialized.type === 'mcp'
-              ? formatConnectorMessage(t.mcpServerRuntime, { serverId: instance.materialized.serverId })
-              : formatConnectorMessage(t.runtimeLabel, { runtime: instance.materialized.type })}
-          </p>
+          {definition?.description ? (
+            <p className="mt-3 line-clamp-2 text-sm leading-5 text-fg-muted">{definition.description}</p>
+          ) : null}
           <div className="mt-3 flex flex-wrap gap-2 text-xs text-fg-muted">
             <span className="rounded-md bg-surface-base px-2 py-1">
               {t.statusLabel} {statusText}

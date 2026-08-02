@@ -92,6 +92,8 @@
       "activityNew": "new",
       "activityUnread": "Unread activity",
       "activityViewRelated": "View related",
+      "activityCheckingRelated": "Checking related content",
+      "activityRelatedMissing": "Content no longer exists",
       "activityRemove": "Remove activity",
       "activityMarkRead": "Mark all read",
       "activityClearFinished": "Clear finished",

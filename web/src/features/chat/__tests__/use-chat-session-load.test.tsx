@@ -78,4 +78,53 @@ describe('useChatSessionLoad', () => {
     act(() => root.unmount());
     container.remove();
   });
+
+  it('reports a missing routed session explicitly', async () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    const sessionManager = {
+      loadSession: vi.fn(async () => {
+        throw new Error('HTTP 404: Not Found');
+      }),
+      loadSessions: vi.fn(async () => []),
+    } as unknown as SessionManager;
+    let loadSessionById: ((key: string, offset?: number) => Promise<Message[] | undefined>) | undefined;
+
+    function Harness() {
+      ({ loadSessionById } = useChatSessionLoad({
+        sessionMgrRef: { current: sessionManager },
+        routeSessionKeyRef: { current: sessionKey },
+        sendingRef: { current: false },
+        streamingRef: { current: false },
+        activeStreamSessionKeyRef: { current: null },
+        loadingSessionRef: { current: false },
+        messagesLenRef: { current: 0 },
+        thinkingSupportGenRef: { current: 0 },
+        navigateToSession: vi.fn(),
+        resolveAgentIdForPost: () => 'main',
+        dismissClarifyOnSessionLoad: vi.fn(),
+        detachForNewConversation: vi.fn(),
+        sessionKey,
+        hasMore: false,
+      }));
+      return null;
+    }
+
+    await act(async () => {
+      root.render(<Harness />);
+    });
+    await act(async () => {
+      await loadSessionById?.(sessionKey, 0);
+    });
+
+    expect(JSON.parse(useChatSessionStore.getState().shellError ?? '{}')).toMatchObject({
+      kind: 'session_not_found',
+      code: 'session_not_found',
+    });
+    expect(sessionManager.loadSessions).not.toHaveBeenCalled();
+
+    act(() => root.unmount());
+    container.remove();
+  });
 });

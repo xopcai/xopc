@@ -33,13 +33,6 @@ export function ConnectorCard({
       : connector.verificationLevel === 'experimental'
         ? t.connectorExperimental
         : null;
-  const strategyLabel = connector.integrationStrategy?.lane === 'native'
-    ? t.integrationStrategyNative
-    : connector.integrationStrategy?.lane === 'mcp'
-      ? t.integrationStrategyMcp
-      : connector.integrationStrategy?.lane === 'composio'
-        ? t.integrationStrategyComposio
-        : null;
   const renderInstallButton = (className?: string) => (
     <Button
       type="button"
@@ -81,11 +74,6 @@ export function ConnectorCard({
               {verificationLabel ? (
                 <span className="mt-1 inline-flex rounded-full border border-edge px-1.5 py-0.5 text-[10px] font-medium text-fg-subtle">
                   {verificationLabel}
-                </span>
-              ) : null}
-              {strategyLabel ? (
-                <span className="ml-1 mt-1 inline-flex rounded-full border border-accent/20 bg-accent-soft px-1.5 py-0.5 text-[10px] font-medium text-accent-fg">
-                  {strategyLabel}
                 </span>
               ) : null}
             </div>

@@ -55,6 +55,7 @@ import {
 import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-store';
 import { useChatRunPresenceStore } from '@/features/chat/session/chat-run-presence-store';
 import { AgentRunErrorBanner } from '@/features/chat/messages/agent-run-error-banner';
+import { parseAgentRunError } from '@/features/chat/messages/agent-run-error-parser';
 import { agentsAppDetailPath } from '@/features/settings/agents/agents-app-path';
 import { showToast } from '@/lib/toast';
 import { showActivity } from '@/stores/activity-store';
@@ -926,6 +927,28 @@ export function ChatPage() {
     return (
       <div className="mx-auto w-full max-w-[var(--max-width-chat)] px-3 py-16 text-center text-sm leading-relaxed text-fg-muted sm:px-5">
         {m.chat.needToken}
+      </div>
+    );
+  }
+
+  const sessionError = stream.error ? parseAgentRunError(stream.error) : null;
+  if (sessionError?.code === 'session_not_found') {
+    return (
+      <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-surface-panel">
+        <ChatSseStatus />
+        <ChatPageHeaderRegistration
+          chatHeadline={m.chat.sessionNotFoundTitle}
+          chatAgents={agents.chatAgents?.items ?? []}
+          showChatAgentSelector={false}
+          chatAgentId={agents.displayAgentId}
+          onChatAgentChange={agents.onChatAgentChange}
+          chatAgentDisabled
+        />
+        <main className="mx-auto flex w-full max-w-xl flex-1 items-center px-4 py-12 sm:px-6">
+          <div className="w-full">
+            <AgentRunErrorBanner errorText={stream.error!} />
+          </div>
+        </main>
       </div>
     );
   }

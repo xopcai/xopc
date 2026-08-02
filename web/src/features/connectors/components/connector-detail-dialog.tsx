@@ -132,20 +132,14 @@ export function ConnectorDetailDialog({
             <div className="flex min-w-0 items-start gap-3">
               <ConnectorLogo connector={connector} size="lg" />
               <div className="min-w-0">
-                <div className="mb-2 flex flex-wrap items-center gap-2">
-                  <span className="rounded-md border border-edge bg-surface-base px-2 py-0.5 text-[11px] font-medium text-fg-muted">
-                    {connector.source}
-                  </span>
-                  <span className="rounded-md border border-edge bg-surface-base px-2 py-0.5 text-[11px] font-medium text-fg-muted">
-                    {connector.kind}
-                  </span>
-                  {installed ? (
+                {installed ? (
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
                     <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
                       <CheckCircle2 className="size-3" aria-hidden />
                       {t.connectedBadge}
                     </span>
-                  ) : null}
-                </div>
+                  </div>
+                ) : null}
                 <Dialog.Title className="text-base font-semibold text-fg">
                   {connector.displayName}
                 </Dialog.Title>
@@ -217,7 +211,6 @@ export function ConnectorDetailDialog({
                       </span>
                     ) : null}
                   </div>
-                  <p className="mt-3 text-sm leading-6 text-fg-muted">{t.connectorCapabilitiesHint}</p>
                 </section>
 
                 {previewError ? (
