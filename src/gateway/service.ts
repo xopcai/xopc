@@ -54,6 +54,7 @@ import { MobileNotificationService } from '../mobile/notification-service.js';
 import { ProjectService } from '../projects/index.js';
 import { LocalAppService } from '../local-apps/index.js';
 import { buildWorkItemAgentContext, WorkItemService } from '../work-items/index.js';
+import { createRuntimeBrowserRecipeService, type BrowserRecipeService } from '../browser/recipes/index.js';
 
 import { disposeAllSessionMcpRuntimes } from '../agent/mcp/bundle-mcp-tools.js';
 import { getDefaultAgentId } from '../routing/resolve-route.js';
@@ -112,6 +113,7 @@ export class GatewayService {
   private _agentService: AgentService | null = null;
   private channelManager: ChannelManager;
   private automationService: AutomationService;
+  private browserRecipeService: BrowserRecipeService | null = null;
   private notesService: NotesService;
   private extensionLoader: ExtensionLoader | null = null;
   private extensionMetadataSnapshot: import('../extensions/extension-metadata-snapshot.js').ExtensionMetadataSnapshot | null = null;
@@ -133,6 +135,16 @@ export class GatewayService {
 
   getConfig(): Config {
     return this.config;
+  }
+
+  get browserRecipes(): BrowserRecipeService {
+    if (!this.browserRecipeService) {
+      this.browserRecipeService = createRuntimeBrowserRecipeService({
+        getConfig: () => this.config,
+        emit: (type, payload) => this.emit(type, payload),
+      });
+    }
+    return this.browserRecipeService;
   }
 
   private stopGatewayUpdateCheck: (() => void) | null = null;
@@ -372,6 +384,7 @@ export class GatewayService {
       },
       extensionRegistry: this.extensionLoader?.getRegistry(),
       getAutomationService: () => this.automationService,
+      getBrowserRecipeService: () => this.browserRecipes,
       getNotesService: () => this.notesService,
       getProjectService: () => this.projects,
       getWorkItemService: () => new WorkItemService(),
@@ -416,6 +429,7 @@ export class GatewayService {
       getDefaultAgentId: () => getDefaultAgentId(this.config),
       getProjectWorkspaceRoot: (projectId) => this.projects.get(projectId)?.workspaceRoot,
       workflowRunService: this.createWorkflowRunService(),
+      browserRecipeService: this.browserRecipes,
       onRunCompleted: (run) => this.handleAutomationRunCompleted(run),
     });
 
@@ -832,6 +846,7 @@ export class GatewayService {
       agentService: this.agentService,
       getDefaultAgentId: () => getDefaultAgentId(this.config),
       workflowRunService: this.createWorkflowRunService(),
+      browserRecipeService: this.browserRecipes,
       onRunCompleted: (run) => this.handleAutomationRunCompleted(run),
     });
     this.startAutomationProductEventBridge();
@@ -1055,6 +1070,8 @@ export class GatewayService {
     this.connectorMemorySyncCoordinator = null;
     this.connectedKnowledgeCoordinator?.stop();
     this.connectedKnowledgeCoordinator = null;
+
+    await this.browserRecipeService?.shutdown();
 
     // Stop browser extension WS server (shared acquire/release with BrowserManager)
     if (this.browserExtensionRelease) {

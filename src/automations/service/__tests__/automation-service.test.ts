@@ -320,4 +320,27 @@ describe('AutomationService', () => {
     });
     expect(productRunsAfterRerun.map((item) => item.run.id)).toContain(rerun.id);
   });
+
+  it('runs a published Browser Recipe action and records its outcome', async () => {
+    const runAndWait = vi.fn(async () => ({
+      id: 'recipe-run-1',
+      status: 'succeeded' as const,
+      result: { title: 'Example' },
+    }));
+    service.setDeps({ browserRecipeService: { runAndWait } });
+    const automation = await service.create({
+      name: 'Collect page title',
+      trigger: { kind: 'manual' },
+      action: { kind: 'browser_recipe', recipeId: 'collect-title', args: { query: 'xopc' } },
+    });
+
+    const queued = await service.runNow(automation.id);
+    const runs = await waitFor(
+      () => service.listRuns({ automationId: automation.id, limit: 5 }),
+      (items) => items.some((item) => item.id === queued.id && item.status === 'succeeded'),
+    );
+
+    expect(runAndWait).toHaveBeenCalledWith('collect-title', { query: 'xopc' }, expect.any(AbortSignal));
+    expect(runs.find((item) => item.id === queued.id)?.summary).toContain('"title":"Example"');
+  });
 });

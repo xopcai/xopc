@@ -1,6 +1,6 @@
 # 自动化
 
-xopc 自动化是持久化的产品级规则，存储在 SQLite（`~/.xopc/xopc.db`）。一个自动化由一个触发器和一个动作组成，记录每次运行，并可执行 Agent 指令或工作流。
+xopc 自动化是持久化的产品级规则，存储在 SQLite（`~/.xopc/xopc.db`）。一个自动化由一个触发器和一个动作组成，记录每次运行，并可执行 Agent 指令、工作流或已保存的[浏览器自动化](browser-workflows.md)。
 
 在网关控制台打开 `#/automations` 可以创建、暂停、恢复、立即运行、删除和查看自动化。创建使用居中的 modal；页面同时展示下一次运行、最近历史和运行指标。
 
@@ -9,7 +9,7 @@ xopc 自动化是持久化的产品级规则，存储在 SQLite（`~/.xopc/xopc.
 | 概念 | 含义 |
 | --- | --- |
 | 触发器 | 自动化如何开始：手动、计划或 webhook |
-| 动作 | 实际执行内容：Agent 指令或工作流 |
+| 动作 | 实际执行内容：Agent 指令、工作流或浏览器自动化 |
 | 运行记录 | 一次执行尝试，包含状态、时间、摘要和错误 |
 | 运行后处理 | 可选的保存到会话或调用 webhook |
 | 可靠性 | 超时、重试、并发和连续失败后停用设置 |
@@ -53,10 +53,16 @@ type AutomationAction =
       input?: unknown;
       goal?: string;
       timeoutSeconds?: number;
+    }
+  | {
+      kind: 'browser_recipe';
+      recipeId: string;
+      args?: Record<string, unknown>;
+      timeoutSeconds?: number;
     };
 ```
 
-需要在会话中让 Agent 做事时选择 Agent 动作；需要直接调用已知工作流、不依赖模型判断如何触发时选择工作流动作。
+需要在会话中让 Agent 做事时选择 Agent 动作；需要直接调用已知工作流、不依赖模型判断如何触发时选择工作流动作；需要重复执行已经和助手创建并测试过的网页操作时，选择浏览器自动化。只有已启用的浏览器自动化可以被选择。
 
 ## 数据模型
 

@@ -6,7 +6,6 @@ import { setTimeout as sleep } from 'node:timers/promises';
 
 import { createLogger } from '../../utils/logger.js';
 import type { BrowserActionContext, BrowserActionRegistry, BrowserActionResult } from '../actions/types.js';
-import { loadBrowserPipelineSource, resolvePipelineIncludeLocation } from './source.js';
 import { parseBrowserPipeline, type PipelineDocument, type PipelineStep } from './schema.js';
 import { isTruthyValue, resolveTemplateDeep, type TemplateContext } from './template.js';
 import { addStepTrace, createPipelineOutput, formatPipelineResult, type PipelineOutput } from './output.js';
@@ -14,6 +13,12 @@ import { addStepTrace, createPipelineOutput, formatPipelineResult, type Pipeline
 const log = createLogger('PipelineRunner');
 
 const CONTROL_ACTIONS = new Set(['if', 'retry', 'sleep', 'set_var']);
+const RECIPE_ACTIONS = new Set([
+  ...CONTROL_ACTIONS,
+  'navigate', 'snapshot', 'click', 'type', 'scroll', 'screenshot', 'press', 'evaluate',
+  'wait', 'wait_for_navigation', 'wait_for_network_idle', 'element_text', 'element_attribute',
+  'output', 'assert', 'select', 'map', 'filter', 'sort', 'limit',
+]);
 
 export interface ValidateResult {
   ok: boolean;
@@ -23,7 +28,16 @@ export interface ValidateResult {
 
 export interface RunBrowserPipelineOptions {
   dryRun?: boolean;
-  sourceLocation?: string;
+  onStep?: (event: BrowserRecipeStepEvent) => void;
+}
+
+export interface BrowserRecipeStepEvent {
+  index: number;
+  scope: string;
+  action: string;
+  status: 'started' | 'completed' | 'failed';
+  elapsedMs?: number;
+  error?: string;
 }
 
 interface PipelineRuntime {
@@ -49,22 +63,6 @@ export function validateBrowserPipeline(yamlSource: string, registry?: BrowserAc
     : { ok: true, document: parseResult.document, errors: [] };
 }
 
-export async function validateBrowserPipelineSource(
-  yamlSource: string,
-  registry?: BrowserActionRegistry,
-  sourceLocation?: string,
-): Promise<ValidateResult> {
-  try {
-    const doc = await expandPipelineDocument(yamlSource, sourceLocation);
-    const errors: { path: string; message: string }[] = [];
-    validateSteps(doc.pipeline, 'pipeline', registry, errors);
-    validateSteps(doc.onError ?? [], 'on_error', registry, errors);
-    return errors.length > 0 ? { ok: false, document: doc, errors } : { ok: true, document: doc, errors: [] };
-  } catch (e) {
-    return { ok: false, errors: [{ path: '', message: e instanceof Error ? e.message : String(e) }] };
-  }
-}
-
 function validateSteps(
   steps: PipelineStep[],
   path: string,
@@ -74,64 +72,35 @@ function validateSteps(
   if (!registry) return;
   for (let i = 0; i < steps.length; i++) {
     const step = steps[i];
-    if (!CONTROL_ACTIONS.has(step.action) && !registry.has(step.action)) {
+    if (!RECIPE_ACTIONS.has(step.action)) {
+      errors.push({ path: `${path}[${i}]`, message: `Action is not available in Browser Recipe v1: "${step.action}"` });
+    } else if (!CONTROL_ACTIONS.has(step.action) && !registry.has(step.action)) {
       errors.push({ path: `${path}[${i}]`, message: `Unknown action: "${step.action}"` });
     }
+    const requiredKey = ({
+      navigate: 'url', type: 'text', press: 'key', evaluate: 'javascript',
+      element_text: 'selector', element_attribute: 'selector', set_var: 'name',
+    } as Record<string, string>)[step.action];
+    if (requiredKey && !(requiredKey in step.args)) {
+      errors.push({ path: `${path}[${i}].${step.action}.${requiredKey}`, message: `Required field is missing: ${requiredKey}` });
+    }
+    if (step.action === 'click' && !['selector', 'text', 'role'].some((key) => key in step.args)) {
+      errors.push({ path: `${path}[${i}].click`, message: 'One of selector, text, or role is required' });
+    }
+    if (step.action === 'type' && !['selector', 'label'].some((key) => key in step.args)) {
+      errors.push({ path: `${path}[${i}].type`, message: 'One of selector or label is required' });
+    }
+    try {
+      if (step.action === 'if') {
+        validateSteps(normalizeNestedPipeline(step.args.then, `${path}[${i}].if.then`), `${path}[${i}].if.then`, registry, errors);
+        validateSteps(normalizeNestedPipeline(step.args.else, `${path}[${i}].if.else`), `${path}[${i}].if.else`, registry, errors);
+      } else if (step.action === 'retry') {
+        validateSteps(normalizeNestedPipeline(step.args.pipeline, `${path}[${i}].retry.pipeline`), `${path}[${i}].retry.pipeline`, registry, errors);
+      }
+    } catch (error) {
+      errors.push({ path: `${path}[${i}].${step.action}`, message: error instanceof Error ? error.message : String(error) });
+    }
   }
-}
-
-async function expandPipelineDocument(
-  yamlSource: string,
-  sourceLocation: string | undefined,
-  visiting = new Set<string>(),
-): Promise<PipelineDocument> {
-  const parsed = parseBrowserPipeline(yamlSource);
-  if (!parsed.ok || !parsed.document) {
-    const message = parsed.errors.map((e) => `${e.path}: ${e.message}`).join('\n');
-    throw new Error(message);
-  }
-
-  const doc = parsed.document;
-  const key = sourceLocation ?? `inline:${doc.name}`;
-  if (visiting.has(key)) {
-    throw new Error(`Circular pipeline include detected: ${key}`);
-  }
-
-  visiting.add(key);
-  let merged: PipelineDocument = {
-    name: doc.name,
-    description: doc.description,
-    provider: doc.provider,
-    include: [],
-    timeoutSeconds: doc.timeoutSeconds,
-    args: {},
-    pipeline: [],
-    onError: [],
-  };
-
-  for (const includePath of doc.include ?? []) {
-    const includeLocation = resolvePipelineIncludeLocation(includePath, sourceLocation);
-    const includeSource = await loadBrowserPipelineSource(includeLocation);
-    const includeDoc = await expandPipelineDocument(includeSource.source, includeSource.location, visiting);
-    merged = mergePipelineDocuments(merged, includeDoc);
-  }
-
-  merged = mergePipelineDocuments(merged, doc);
-  visiting.delete(key);
-  return merged;
-}
-
-function mergePipelineDocuments(target: PipelineDocument, source: PipelineDocument): PipelineDocument {
-  return {
-    name: source.name || target.name,
-    description: source.description ?? target.description,
-    provider: source.provider ?? target.provider,
-    include: [...(target.include ?? []), ...(source.include ?? [])],
-    timeoutSeconds: source.timeoutSeconds ?? target.timeoutSeconds,
-    args: { ...target.args, ...source.args },
-    pipeline: [...target.pipeline, ...source.pipeline],
-    onError: [...(target.onError ?? []), ...(source.onError ?? [])],
-  };
 }
 
 function resolveArgs(doc: PipelineDocument, overrides: Record<string, unknown>): Record<string, unknown> {
@@ -150,6 +119,10 @@ function resolveArgs(doc: PipelineDocument, overrides: Record<string, unknown>):
     if (def.choices && !def.choices.some((choice) => Object.is(choice, value))) {
       throw new Error(`Invalid value for arg ${key}: expected one of ${def.choices.map(String).join(', ')}`);
     }
+    if (def.type === 'string' && typeof value !== 'string') throw new Error(`Arg ${key} must be a string`);
+    if (def.type === 'number' && (typeof value !== 'number' || !Number.isFinite(value))) throw new Error(`Arg ${key} must be a number`);
+    if (def.type === 'integer' && (typeof value !== 'number' || !Number.isInteger(value))) throw new Error(`Arg ${key} must be an integer`);
+    if (def.type === 'boolean' && typeof value !== 'boolean') throw new Error(`Arg ${key} must be a boolean`);
     resolved[key] = value;
   }
   return resolved;
@@ -166,13 +139,6 @@ function templateContext(runtime: PipelineRuntime): TemplateContext {
 }
 
 function actionArgs(step: PipelineStep, runtime: PipelineRuntime): Record<string, unknown> {
-  if (typeof step.args === 'string') {
-    const resolved = resolveTemplateDeep(step.args, templateContext(runtime));
-    if (step.action === 'evaluate' || step.action === 'eval' || step.action === 'console') {
-      return { javascript: String(resolved ?? '') };
-    }
-    return { value: resolved };
-  }
   return resolveTemplateDeep(step.args, templateContext(runtime)) as Record<string, unknown>;
 }
 
@@ -183,12 +149,13 @@ async function executePipeline(
   actionCtx: BrowserActionContext,
   registry: BrowserActionRegistry,
   output: PipelineOutput,
+  options: RunBrowserPipelineOptions,
 ): Promise<void> {
   for (let i = 0; i < steps.length; i++) {
     if (actionCtx.signal?.aborted) {
       throw actionError('ABORTED', 'Pipeline aborted');
     }
-    await executeStep(steps[i], i, scope, runtime, actionCtx, registry, output);
+    await executeStep(steps[i], i, scope, runtime, actionCtx, registry, output, options);
   }
 }
 
@@ -200,11 +167,13 @@ async function executeStep(
   actionCtx: BrowserActionContext,
   registry: BrowserActionRegistry,
   output: PipelineOutput,
+  options: RunBrowserPipelineOptions,
 ): Promise<void> {
   const started = Date.now();
+  options.onStep?.({ index, scope, action: step.action, status: 'started' });
   let result: BrowserActionResult;
   try {
-    result = await executeStepOnce(step, index, scope, runtime, actionCtx, registry, output);
+    result = await executeStepOnce(step, index, scope, runtime, actionCtx, registry, output, options);
   } catch (e) {
     const error = e instanceof Error ? e : new Error(String(e));
     result = {
@@ -224,6 +193,7 @@ async function executeStep(
     data: result.data,
     error: result.error,
   }, result);
+  options.onStep?.({ index, scope, action: step.action, status: result.ok ? 'completed' : 'failed', elapsedMs: Date.now() - started, error: result.error?.message });
 
   if (!result.ok) {
     runtime.error = result.error;
@@ -239,11 +209,12 @@ async function executeStepOnce(
   actionCtx: BrowserActionContext,
   registry: BrowserActionRegistry,
   output: PipelineOutput,
+  options: RunBrowserPipelineOptions,
 ): Promise<BrowserActionResult> {
   switch (step.action) {
     case 'sleep': {
       const args = actionArgs(step, runtime);
-      const ms = Number(args.ms ?? args.delay_ms ?? args.delayMs ?? 1000);
+      const ms = Number(args.ms ?? 1000);
       await sleep(Number.isFinite(ms) ? ms : 1000, undefined, { signal: actionCtx.signal });
       runtime.last = null;
       return { ok: true, action: 'sleep', text: `Slept ${ms}ms.`, data: null };
@@ -260,18 +231,18 @@ async function executeStepOnce(
       const args = actionArgs(step, runtime);
       const branch = isTruthyValue(args.condition) ? args.then : args.else;
       const branchSteps = normalizeNestedPipeline(branch, `${scope}.${index}.if`);
-      await executePipeline(branchSteps, `${scope}.${index}.if`, runtime, actionCtx, registry, output);
+      await executePipeline(branchSteps, `${scope}.${index}.if`, runtime, actionCtx, registry, output, options);
       return { ok: true, action: 'if', text: 'Conditional branch completed.', data: runtime.last };
     }
     case 'retry': {
       const args = actionArgs(step, runtime);
       const times = Math.max(1, Number(args.times ?? 3));
-      const delayMs = Math.max(0, Number(args.delay_ms ?? args.delayMs ?? 250));
-      const retrySteps = normalizeNestedPipeline(args.pipeline ?? args.step, `${scope}.${index}.retry`);
+      const delayMs = Math.max(0, Number(args.delay_ms ?? 250));
+      const retrySteps = normalizeNestedPipeline(args.pipeline, `${scope}.${index}.retry`);
       let lastError: unknown;
       for (let attempt = 1; attempt <= times; attempt++) {
         try {
-          await executePipeline(retrySteps, `${scope}.${index}.retry.${attempt}`, runtime, actionCtx, registry, output);
+          await executePipeline(retrySteps, `${scope}.${index}.retry.${attempt}`, runtime, actionCtx, registry, output, options);
           output.ok = true;
           output.error = undefined;
           return { ok: true, action: 'retry', text: `Retry block completed on attempt ${attempt}.`, data: runtime.last };
@@ -297,6 +268,18 @@ async function executeBrowserAction(
   registry: BrowserActionRegistry,
 ): Promise<BrowserActionResult> {
   const args = actionArgs(step, runtime);
+  if (step.action === 'navigate') {
+    let hostname: string;
+    try {
+      hostname = new URL(String(args.url)).hostname.toLowerCase();
+    } catch {
+      return { ok: false, action: step.action, error: { code: 'INVALID_URL', message: 'navigate.url must be an absolute URL' } };
+    }
+    const allowed = runtime.doc.domains.some((domain) => hostname === domain || hostname.endsWith(`.${domain}`));
+    if (!allowed) {
+      return { ok: false, action: step.action, error: { code: 'DOMAIN_BLOCKED', message: `Domain is not declared by the recipe: ${hostname}` } };
+    }
+  }
   actionCtx.pipeline = {
     args: runtime.args,
     last: runtime.last,
@@ -305,6 +288,16 @@ async function executeBrowserAction(
     error: runtime.error,
   };
   const result = await registry.execute(step.action, actionCtx, args);
+  if (result.ok && step.action === 'navigate') {
+    const finalUrl = (result.data as { url?: unknown } | undefined)?.url;
+    if (typeof finalUrl === 'string') {
+      const hostname = new URL(finalUrl).hostname.toLowerCase();
+      const allowed = runtime.doc.domains.some((domain) => hostname === domain || hostname.endsWith(`.${domain}`));
+      if (!allowed) {
+        return { ok: false, action: step.action, error: { code: 'DOMAIN_BLOCKED', message: `Redirected to an undeclared domain: ${hostname}` } };
+      }
+    }
+  }
   if (result.ok) {
     if (step.action === 'output') {
       runtime.outputs.push(result.data);
@@ -329,10 +322,8 @@ function normalizeNestedPipeline(value: unknown, path: string): PipelineStep[] {
     }
     const action = keys[0];
     const args = obj[action];
-    if (typeof args === 'string') return { action, args };
     if (args && typeof args === 'object' && !Array.isArray(args)) return { action, args: args as Record<string, unknown> };
-    if (args === undefined || args === null) return { action, args: {} };
-    return { action, args: { value: args } };
+    throw new Error(`${path}[${index}].${action} must be an object`);
   });
 }
 
@@ -351,7 +342,9 @@ export async function runBrowserPipeline(
 ): Promise<BrowserActionResult> {
   let doc: PipelineDocument;
   try {
-    doc = await expandPipelineDocument(yamlSource, options.sourceLocation);
+    const parsed = parseBrowserPipeline(yamlSource);
+    if (!parsed.ok || !parsed.document) throw new Error(parsed.errors.map((error) => `${error.path}: ${error.message}`).join('\n'));
+    doc = parsed.document;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return { ok: false, action: 'pipeline', error: { code: 'VALIDATION_FAILED', message: msg }, text: msg };
@@ -388,20 +381,31 @@ export async function runBrowserPipeline(
   log.info({ pipeline: doc.name, steps: doc.pipeline.length }, `Running pipeline: ${doc.name}`);
 
   try {
-    const run = executePipeline(doc.pipeline, 'pipeline', runtime, ctx, registry, output);
+    const timeoutController = new AbortController();
+    const runContext = {
+      ...ctx,
+      signal: ctx.signal
+        ? AbortSignal.any([ctx.signal, timeoutController.signal])
+        : timeoutController.signal,
+    };
+    const run = executePipeline(doc.pipeline, 'pipeline', runtime, runContext, registry, output, options);
     if (doc.timeoutSeconds && doc.timeoutSeconds > 0) {
       await Promise.race([
         run,
         sleep(doc.timeoutSeconds * 1000, undefined, { signal: ctx.signal }).then(() => {
+          timeoutController.abort();
           throw actionError('PIPELINE_TIMEOUT', `Pipeline timed out after ${doc.timeoutSeconds} seconds`);
         }),
       ]);
     } else {
       await run;
     }
-  } catch {
+  } catch (error) {
+    const failure = error instanceof Error ? error : new Error(String(error));
+    const code = (failure as Error & { code?: string }).code ?? 'PIPELINE_FAILED';
+    runtime.error ??= { code, message: failure.message };
     output.ok = false;
-    output.error ??= { step: output.trace.length, action: 'pipeline', code: 'PIPELINE_FAILED', message: runtime.error?.message ?? 'Pipeline failed' };
+    output.error ??= { step: output.trace.length, action: 'pipeline', code, message: failure.message };
   }
 
   output.last = runtime.last;
@@ -410,7 +414,7 @@ export async function runBrowserPipeline(
   if (!output.ok && doc.onError && doc.onError.length > 0) {
     log.info({ pipeline: doc.name }, 'Running on_error diagnostics');
     try {
-      await executePipeline(doc.onError, 'on_error', runtime, ctx, registry, output);
+      await executePipeline(doc.onError, 'on_error', runtime, ctx, registry, output, options);
     } catch {
       // Main pipeline error remains authoritative.
     }

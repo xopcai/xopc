@@ -64,7 +64,7 @@ function createBrowserCommand(_ctx: CLIContext): Command {
 
     cmd
       .command('validate <file>')
-      .description('Validate a browser pipeline YAML file or URL without executing')
+      .description('Validate a Browser Recipe v1 YAML file without executing')
       .action(async (file: string) => {
         const { validatePipelineCli } = await import('./browser-cli-helpers.js');
         await validatePipelineCli(file);
@@ -72,15 +72,16 @@ function createBrowserCommand(_ctx: CLIContext): Command {
 
     cmd
       .command('run <file>')
-      .description('Run a browser pipeline YAML file or URL')
-      .option('--arg <args...>', 'Pipeline args (key=value)')
+      .description('Run a Browser Recipe v1 YAML file')
+      .option('--arg <args...>', 'Recipe args (key=<JSON value>)')
       .action(async (file: string, opts: { arg?: string[] }) => {
         const { runPipelineCli } = await import('./browser-cli-helpers.js');
-        const args: Record<string, string> = {};
+        const args: Record<string, unknown> = {};
         if (opts.arg) {
           for (const a of opts.arg) {
             const eq = a.indexOf('=');
-            if (eq > 0) args[a.slice(0, eq)] = a.slice(eq + 1);
+            if (eq <= 0) throw new Error(`Invalid --arg: ${a}`);
+            args[a.slice(0, eq)] = JSON.parse(a.slice(eq + 1));
           }
         }
         await runPipelineCli(file, args);

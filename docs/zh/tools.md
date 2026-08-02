@@ -19,7 +19,7 @@
 | 语音（可选） | `text_to_speech` — 在配置中启用 TTS 时注册 |
 | 记忆（可选） | `memory_search`, `memory_get`；配置后可含 `curated_memory`、`session_search` |
 | 图像（可选） | `image`, `image_generate` — 需模型与密钥 |
-| 浏览器（可选） | `browser_use` — 启用浏览器自动化时 |
+| 浏览器（可选） | `browser_use`；`browser_recipe` 用于管理已保存的[浏览器自动化](browser-workflows.md) |
 | 委托与代码（可选） | `delegate_task`, `execute_code` |
 | 多 Agent 编排（可选） | `workflow` — 通过确定性 JS 脚本扇出子 Agent。见 [动态工作流](workflows.md)。 |
 | 自动化（可选） | `automation` — 运行时提供自动化服务（常见为网关） |
@@ -343,7 +343,8 @@ npx playwright-core install chromium
 
 | 工具 | 作用 |
 |------|------|
-| `browser_use` | 统一的浏览器自动化工具。可用 `mode: "command"` 执行 `open` / `navigate`、`snapshot`、`click`、`type`、`scroll`、`keys` / `press`、`screenshot`、`console` / `eval`、`images`、`dialog`、`cdp`、`close`、`wait`、网络辅助等动作；也可用 `mode: "pipeline"` 执行 YAML pipeline。复杂任务先调用 `tool_manual({ tool: "browser_use" })`。 |
+| `browser_use` | 负责打开网页、读取内容、点击、输入、滚动、截图和等待页面变化等浏览器操作。复杂任务可先调用 `tool_manual({ tool: "browser_use" })`。 |
+| `browser_recipe` | 网关提供浏览器自动化服务时，用于保存、列出、运行、暂停和修改可重复使用的[浏览器自动化](browser-workflows.md)。 |
 
 如需为某个 agent 禁用浏览器自动化，将该 agent manifest 的 `tools.builtin.browser_use.mode` 设为 `"deny"`，或从相关 capability preset 中移除浏览器权限。
 

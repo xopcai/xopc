@@ -83,7 +83,37 @@ export class AutomationActionExecutor {
     if (automation.action.kind === 'workflow') {
       return this.executeWorkflow(automation, automation.action, run);
     }
+    if (automation.action.kind === 'browser_recipe') {
+      return this.executeBrowserRecipe(automation, automation.action, signal);
+    }
     return this.executeAgent(automation, automation.action);
+  }
+
+  private async executeBrowserRecipe(
+    automation: Automation,
+    action: Extract<AutomationAction, { kind: 'browser_recipe' }>,
+    signal: AbortSignal,
+  ): Promise<AutomationActionOutcome> {
+    const safetyMode = automation.safety?.mode ?? 'auto_apply';
+    if (safetyMode !== 'auto_apply') {
+      return {
+        status: 'succeeded',
+        summary: `${safetyMode === 'suggest_only' ? 'Suggest only' : 'Ask before applying'}: Browser automation ${action.recipeId} was not run.`,
+      };
+    }
+    const service = this.deps.browserRecipeService;
+    if (!service) return { status: 'failed', error: 'Browser automation is not available' };
+    const run = await service.runAndWait(action.recipeId, action.args ?? {}, signal);
+    if (run.status === 'succeeded') {
+      return {
+        status: 'succeeded',
+        summary: `Browser automation ${action.recipeId} completed: ${JSON.stringify(run.result ?? null).slice(0, 3_500)}`,
+      };
+    }
+    return {
+      status: run.status === 'cancelled' ? 'cancelled' : 'failed',
+      error: run.error ?? `Browser automation ${action.recipeId} ${run.status}`,
+    };
   }
 
   private async executeAgent(

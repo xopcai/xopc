@@ -85,6 +85,12 @@ export const AutomationActionSchema = z.discriminatedUnion('kind', [
     maxSubagents: z.number().int().min(1).max(100).optional(),
     timeoutSeconds: z.number().int().min(1).max(86400).optional(),
   }).strict(),
+  z.object({
+    kind: z.literal('browser_recipe'),
+    recipeId: nonEmptyString.max(100),
+    args: z.record(z.string(), z.unknown()).optional(),
+    timeoutSeconds: z.number().int().min(1).max(86400).optional(),
+  }).strict(),
 ]);
 
 export const AutomationAfterRunSchema = z.discriminatedUnion('kind', [

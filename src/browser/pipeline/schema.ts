@@ -1,144 +1,130 @@
-/**
- * Pipeline YAML schema — parse and validate brocli-style browser pipeline documents.
- */
-
 import yaml from 'js-yaml';
+import { z } from 'zod';
 
-// ─── Types ──────────────────────────────────────────────────────────────────
+export const BROWSER_RECIPE_API_VERSION = 'xopc.ai/browser-recipe/v1' as const;
 
-export interface PipelineArgDef {
-  type: string;
-  required?: boolean;
-  default?: unknown;
-  description?: string;
-  choices?: unknown[];
-}
+const IdSchema = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(100);
+const JsonValueSchema: z.ZodType<unknown> = z.lazy(() => z.union([
+  z.string(),
+  z.number(),
+  z.boolean(),
+  z.null(),
+  z.array(JsonValueSchema),
+  z.record(z.string(), JsonValueSchema),
+]));
 
+const PipelineArgSchema = z.object({
+  type: z.enum(['string', 'number', 'integer', 'boolean']),
+  required: z.boolean().optional(),
+  default: JsonValueSchema.optional(),
+  description: z.string().max(500).optional(),
+  choices: z.array(JsonValueSchema).optional(),
+}).strict().superRefine((definition, ctx) => {
+  const matchesType = (value: unknown) => {
+    if (definition.type === 'string') return typeof value === 'string';
+    if (definition.type === 'boolean') return typeof value === 'boolean';
+    if (definition.type === 'integer') return typeof value === 'number' && Number.isInteger(value);
+    return typeof value === 'number' && Number.isFinite(value);
+  };
+  if (definition.default !== undefined && !matchesType(definition.default)) {
+    ctx.addIssue({ code: 'custom', path: ['default'], message: `Default must match arg type ${definition.type}.` });
+  }
+  definition.choices?.forEach((choice, index) => {
+    if (!matchesType(choice)) ctx.addIssue({ code: 'custom', path: ['choices', index], message: `Choice must match arg type ${definition.type}.` });
+  });
+});
+
+const DomainSchema = z.string().trim().toLowerCase().regex(
+  /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/,
+  'Domain must be a hostname without scheme, path, port, or wildcard.',
+);
+
+const StepSchema: z.ZodType<Record<string, Record<string, unknown>>> = z.record(
+  z.string(),
+  z.record(z.string(), z.unknown()),
+).superRefine((step, ctx) => {
+  if (Object.keys(step).length !== 1) {
+    ctx.addIssue({ code: 'custom', message: 'Each step must contain exactly one action.' });
+  }
+});
+
+const RecipeSchema = z.object({
+  apiVersion: z.literal(BROWSER_RECIPE_API_VERSION),
+  id: IdSchema,
+  name: z.string().trim().min(1).max(200),
+  description: z.string().max(2000).optional(),
+  risk: z.enum(['read_only', 'account_write', 'sensitive']),
+  domains: z.array(DomainSchema).min(1),
+  timeoutSeconds: z.number().int().min(1).max(3600).optional(),
+  args: z.record(z.string(), PipelineArgSchema).default({}),
+  pipeline: z.array(StepSchema).min(1),
+  on_error: z.array(StepSchema).optional(),
+}).strict();
+
+export type PipelineArgDef = z.infer<typeof PipelineArgSchema>;
 export interface PipelineStep {
-  /** The single action name (key of the step object). */
   action: string;
-  /** Action arguments (value of that key), or raw string for shorthand like `evaluate: |`. */
-  args: Record<string, unknown> | string;
+  args: Record<string, unknown>;
 }
-
 export interface PipelineDocument {
+  apiVersion: typeof BROWSER_RECIPE_API_VERSION;
+  id: string;
   name: string;
   description?: string;
-  provider?: string;
-  include?: string[];
+  risk: 'read_only' | 'account_write' | 'sensitive';
+  domains: string[];
   timeoutSeconds?: number;
   args: Record<string, PipelineArgDef>;
   pipeline: PipelineStep[];
   onError?: PipelineStep[];
 }
-
-export interface PipelineValidationError {
-  path: string;
-  message: string;
-}
-
+export interface PipelineValidationError { path: string; message: string }
 export interface PipelineParseResult {
   ok: boolean;
   document?: PipelineDocument;
   errors: PipelineValidationError[];
 }
 
-// ─── Parse ──────────────────────────────────────────────────────────────────
+function stepsFromRaw(steps: Array<Record<string, Record<string, unknown>>>): PipelineStep[] {
+  return steps.map((step) => {
+    const [action, args] = Object.entries(step)[0]!;
+    return { action, args };
+  });
+}
 
 export function parseBrowserPipeline(yamlSource: string): PipelineParseResult {
-  const errors: PipelineValidationError[] = [];
-
   let raw: unknown;
   try {
     raw = yaml.load(yamlSource);
-  } catch (e) {
-    return { ok: false, errors: [{ path: '', message: `YAML parse error: ${e instanceof Error ? e.message : String(e)}` }] };
+  } catch (error) {
+    return { ok: false, errors: [{ path: '', message: `YAML parse error: ${error instanceof Error ? error.message : String(error)}` }] };
   }
 
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return { ok: false, errors: [{ path: '', message: 'Pipeline must be a YAML mapping (object).' }] };
-  }
-
-  const doc = raw as Record<string, unknown>;
-
-  // name
-  const name = typeof doc.name === 'string' ? doc.name.trim() : '';
-  if (!name) errors.push({ path: 'name', message: '`name` is required.' });
-
-  // description
-  const description = typeof doc.description === 'string' ? doc.description : undefined;
-
-  // provider
-  const provider = typeof doc.provider === 'string' ? doc.provider : undefined;
-
-  // include
-  const include = Array.isArray(doc.include)
-    ? doc.include.filter((x): x is string => typeof x === 'string')
-    : undefined;
-
-  const timeoutSeconds = typeof doc.timeoutSeconds === 'number' ? doc.timeoutSeconds : undefined;
-
-  // args
-  const argsRaw = (doc.args && typeof doc.args === 'object' && !Array.isArray(doc.args)) ? doc.args as Record<string, unknown> : {};
-  const args: Record<string, PipelineArgDef> = {};
-  for (const [k, v] of Object.entries(argsRaw)) {
-    if (v && typeof v === 'object' && !Array.isArray(v)) {
-      const def = v as Record<string, unknown>;
-      args[k] = {
-        type: typeof def.type === 'string' ? def.type : 'string',
-        required: def.required === true,
-        default: def.default,
-        description: typeof def.description === 'string' ? def.description : undefined,
-        choices: Array.isArray(def.choices) ? def.choices : undefined,
-      };
-    } else {
-      args[k] = { type: 'string', default: v };
-    }
-  }
-
-  function parseSteps(rawSteps: unknown, path: string, required: boolean): PipelineStep[] {
-    if (!Array.isArray(rawSteps)) {
-      if (required) errors.push({ path, message: `\`${path}\` must be an array of steps.` });
-      return [];
-    }
-  const pipeline: PipelineStep[] = [];
-    for (let i = 0; i < rawSteps.length; i++) {
-      const step = rawSteps[i];
-    if (!step || typeof step !== 'object' || Array.isArray(step)) {
-        errors.push({ path: `${path}[${i}]`, message: 'Each step must be a YAML mapping.' });
-      continue;
-    }
-    const stepObj = step as Record<string, unknown>;
-    const actionKeys = Object.keys(stepObj);
-    if (actionKeys.length !== 1) {
-        errors.push({ path: `${path}[${i}]`, message: `Each step must have exactly one action key, found ${actionKeys.length}: [${actionKeys.join(', ')}].` });
-      continue;
-    }
-    const action = actionKeys[0];
-    const actionArgs = stepObj[action];
-    if (typeof actionArgs === 'string') {
-      pipeline.push({ action, args: actionArgs });
-    } else if (actionArgs && typeof actionArgs === 'object' && !Array.isArray(actionArgs)) {
-      pipeline.push({ action, args: actionArgs as Record<string, unknown> });
-    } else if (actionArgs === null || actionArgs === undefined) {
-      pipeline.push({ action, args: {} });
-    } else {
-      pipeline.push({ action, args: { value: actionArgs } });
-    }
-  }
-    return pipeline;
-  }
-
-  const pipeline = parseSteps(doc.pipeline, 'pipeline', true);
-  const onError = doc.on_error === undefined ? undefined : parseSteps(doc.on_error, 'on_error', false);
-
-  if (errors.length > 0) {
-    return { ok: false, errors };
+  const parsed = RecipeSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      errors: parsed.error.issues.map((issue) => ({
+        path: issue.path.join('.'),
+        message: issue.message,
+      })),
+    };
   }
 
   return {
     ok: true,
-    document: { name, description, provider, include, timeoutSeconds, args, pipeline, onError },
+    document: {
+      apiVersion: parsed.data.apiVersion,
+      id: parsed.data.id,
+      name: parsed.data.name,
+      description: parsed.data.description,
+      risk: parsed.data.risk,
+      domains: parsed.data.domains,
+      timeoutSeconds: parsed.data.timeoutSeconds,
+      args: parsed.data.args,
+      pipeline: stepsFromRaw(parsed.data.pipeline),
+      onError: parsed.data.on_error ? stepsFromRaw(parsed.data.on_error) : undefined,
+    },
     errors: [],
   };
 }

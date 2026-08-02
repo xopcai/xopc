@@ -4,6 +4,7 @@ import {
   buildAutomationEditInput,
   buildInput,
   formFromAutomation,
+  initialForm,
 } from '../automation-form';
 import type { Automation, AutomationInput } from '../automation-api';
 import type { WorkflowDefinition } from '@/features/workflows/workflow-api';
@@ -104,7 +105,7 @@ describe('automation buildInput', () => {
       model: 'openai/gpt-5',
     });
     expect(edited.description).toBe('');
-    expect(edited.action.agentId).toBeUndefined();
+    expect(edited.action.kind === 'agent' ? edited.action.agentId : undefined).toBeUndefined();
     expect(edited.reliability).toMatchObject({ retryCount: 2, maxConcurrentRuns: 4 });
   });
 
@@ -136,6 +137,8 @@ describe('automation buildInput', () => {
         maxSubagents: '5',
       },
       workflowInputValid: true,
+      browserWorkflowId: '',
+      browserWorkflowInputs: {},
       safetyMode: 'suggest_only',
       timeoutSeconds: '300',
       afterRunMode: 'none',
@@ -153,6 +156,25 @@ describe('automation buildInput', () => {
       maxSubagents: 5,
     });
     expect(input.safety).toEqual({ mode: 'suggest_only' });
+  });
+
+  it('builds a browser workflow automation with typed form inputs', () => {
+    const input = buildInput({
+      ...initialForm,
+      name: 'Collect title',
+      triggerMode: 'manual',
+      actionMode: 'browser_recipe',
+      browserWorkflowId: 'collect-title',
+      browserWorkflowInputs: { query: 'xopc', limit: 2 },
+      safetyMode: 'auto_apply',
+    }, null);
+
+    expect(input.action).toEqual({
+      kind: 'browser_recipe',
+      recipeId: 'collect-title',
+      args: { query: 'xopc', limit: 2 },
+      timeoutSeconds: 300,
+    });
   });
 
   it('suppresses after-run webhooks outside auto-apply mode', () => {
@@ -177,6 +199,8 @@ describe('automation buildInput', () => {
       workflowGoal: '',
       workflowInput: { goal: '', argValues: {}, schemaInput: {}, concurrency: '', maxSubagents: '' },
       workflowInputValid: true,
+      browserWorkflowId: '',
+      browserWorkflowInputs: {},
       safetyMode: 'ask_before_apply',
       timeoutSeconds: '300',
       afterRunMode: 'webhook',
@@ -210,6 +234,8 @@ describe('automation buildInput', () => {
       workflowGoal: '',
       workflowInput: { goal: '', argValues: {}, schemaInput: {}, concurrency: '', maxSubagents: '' },
       workflowInputValid: true,
+      browserWorkflowId: '',
+      browserWorkflowInputs: {},
       safetyMode: 'suggest_only',
       timeoutSeconds: '300',
       afterRunMode: 'none',

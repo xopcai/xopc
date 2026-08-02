@@ -36,6 +36,12 @@ export type AutomationAction =
       concurrency?: number;
       maxSubagents?: number;
       timeoutSeconds?: number;
+    }
+  | {
+      kind: 'browser_recipe';
+      recipeId: string;
+      args?: Record<string, unknown>;
+      timeoutSeconds?: number;
     };
 
 export type AutomationAfterRun =

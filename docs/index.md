@@ -36,6 +36,9 @@ features:
   - title: ⏰ Triggerable automations
     details: Run agents or workflows on schedules, manually, or from webhooks, with visible run results and failures.
     link: /automations
+  - title: 🌐 Browser automations
+    details: Teach the assistant a web task once, then run the verified steps again from the console, chat, or a schedule.
+    link: /browser-workflows
   - title: 🔀 Dynamic workflows
     details: Fan out subagents from deterministic scripts — repo audits, multi-perspective reviews, and parallel research with live progress.
     link: /workflows
@@ -77,5 +80,6 @@ The point is not that “AI remembers everything automatically.” Important sta
 | I want to know how xopc differs from Codex, Claude Code, Qoder, and WorkBuddy | [Comparison](./comparison.md) |
 | I want the same assistant in Telegram, WeChat, or Feishu/Lark | [Channels](./channels/index.md) |
 | I want scheduled reviews, reminders, and summaries | [Automations](./automations.md) |
+| I want the assistant to repeat a task on a website | [Browser automations](./browser-workflows.md) |
 | I want multiple agents for work, code, and personal contexts | [Routing system](./routing-system.md) |
 | I want to extend xopc with tools, channels, or reusable skills | [Skills](./skills.md) and [Extensions](./extensions.md) |
