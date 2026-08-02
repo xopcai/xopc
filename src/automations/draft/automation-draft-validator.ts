@@ -131,6 +131,7 @@ function summarizeTrigger(trigger: CreateAutomationInput['trigger']): string {
 
 function summarizeAction(action: CreateAutomationInput['action']): string {
   if (action.kind === 'workflow') return `Starts workflow ${action.workflowId}.`;
+  if (action.kind === 'browser_recipe') return `Runs browser automation ${action.recipeId}.`;
   return action.agentId ? `Runs agent ${action.agentId}.` : 'Runs the default agent.';
 }
 

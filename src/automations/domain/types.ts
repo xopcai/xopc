@@ -39,6 +39,12 @@ export type AutomationAction =
       concurrency?: number;
       maxSubagents?: number;
       timeoutSeconds?: number;
+    }
+  | {
+      kind: 'browser_recipe';
+      recipeId: string;
+      args?: Record<string, unknown>;
+      timeoutSeconds?: number;
     };
 
 export type AutomationAfterRun =
@@ -171,6 +177,14 @@ export interface AutomationDeps {
   getProjectWorkspaceRoot?: (projectId: string) => string | undefined;
   workflowRunService?: {
     startWorkflowRun(params: StartWorkflowRunServiceParams): Promise<WorkflowRunServiceResult>;
+  };
+  browserRecipeService?: {
+    runAndWait(recipeId: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<{
+      id: string;
+      status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
+      result?: unknown;
+      error?: string;
+    }>;
   };
   onRunCompleted?: (run: AutomationRun) => void;
 }

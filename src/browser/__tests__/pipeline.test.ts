@@ -1,20 +1,20 @@
-import { describe, it, expect, vi } from 'vitest';
-import { mkdtemp, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
+import { describe, it, expect } from 'vitest';
 
-import { loadBrowserPipelineSource } from '../pipeline/source.js';
 import { parseBrowserPipeline } from '../pipeline/schema.js';
 import { resolveTemplate, resolveTemplateDeep } from '../pipeline/template.js';
-import { runBrowserPipeline, validateBrowserPipeline, validateBrowserPipelineSource } from '../pipeline/runner.js';
+import { runBrowserPipeline, validateBrowserPipeline } from '../pipeline/runner.js';
 import { createBrowserActionRegistry } from '../actions/registry.js';
 import type { BrowserActionContext } from '../actions/types.js';
 
 describe('Pipeline YAML parsing', () => {
   it('parses a valid pipeline document', () => {
     const yaml = `
+apiVersion: xopc.ai/browser-recipe/v1
+id: test-pipeline
 name: test-pipeline
 description: A test pipeline
+risk: read_only
+domains: [example.com]
 args:
   url:
     type: string
@@ -46,6 +46,10 @@ on_error:
 
   it('rejects YAML without name', () => {
     const yaml = `
+apiVersion: xopc.ai/browser-recipe/v1
+id: missing-name
+risk: read_only
+domains: [example.com]
 pipeline:
   - navigate:
       url: https://example.com
@@ -57,7 +61,11 @@ pipeline:
 
   it('rejects YAML without pipeline array', () => {
     const yaml = `
+apiVersion: xopc.ai/browser-recipe/v1
+id: bad
 name: bad
+risk: read_only
+domains: [example.com]
 pipeline: not-an-array
 `;
     const result = parseBrowserPipeline(yaml);
@@ -67,7 +75,11 @@ pipeline: not-an-array
 
   it('rejects steps with multiple actions', () => {
     const yaml = `
+apiVersion: xopc.ai/browser-recipe/v1
+id: multi-action
 name: multi-action
+risk: read_only
+domains: [example.com]
 pipeline:
   - navigate:
       url: https://example.com
@@ -79,17 +91,19 @@ pipeline:
     expect(result.errors.some((e) => e.message.includes('exactly one action'))).toBe(true);
   });
 
-  it('handles evaluate shorthand (string value)', () => {
+  it('rejects scalar action shorthand', () => {
     const yaml = `
+apiVersion: xopc.ai/browser-recipe/v1
+id: eval-test
 name: eval-test
+risk: read_only
+domains: [example.com]
 pipeline:
   - evaluate: |
       document.title
 `;
     const result = parseBrowserPipeline(yaml);
-    expect(result.ok).toBe(true);
-    expect(result.document!.pipeline[0].action).toBe('evaluate');
-    expect(typeof result.document!.pipeline[0].args).toBe('string');
+    expect(result.ok).toBe(false);
   });
 });
 
@@ -137,32 +151,14 @@ describe('Pipeline template expressions', () => {
   });
 });
 
-describe('Pipeline source loading', () => {
-  it('loads pipeline YAML from a remote URL', async () => {
-    const yaml = 'name: remote\npipeline:\n  - wait:\n      ms: 100';
-    const fetchMock = vi.fn().mockResolvedValue(new Response(yaml, { status: 200 }));
-    vi.stubGlobal('fetch', fetchMock);
-
-    try {
-      const result = await loadBrowserPipelineSource('https://example.com/pipeline.yaml');
-
-      expect(result.origin).toBe('url');
-      expect(result.location).toBe('https://example.com/pipeline.yaml');
-      expect(result.source).toBe(yaml);
-      expect(fetchMock).toHaveBeenCalledWith(
-        'https://example.com/pipeline.yaml',
-        expect.objectContaining({ headers: expect.any(Object) }),
-      );
-    } finally {
-      vi.unstubAllGlobals();
-    }
-  });
-});
-
 describe('Pipeline validation', () => {
   it('validates against action registry', () => {
     const yaml = `
+apiVersion: xopc.ai/browser-recipe/v1
+id: validate-test
 name: validate-test
+risk: read_only
+domains: [example.com]
 pipeline:
   - navigate:
       url: https://example.com
@@ -177,7 +173,11 @@ pipeline:
 
   it('passes validation for known actions', () => {
     const yaml = `
+apiVersion: xopc.ai/browser-recipe/v1
+id: valid
 name: valid
+risk: read_only
+domains: [example.com]
 pipeline:
   - navigate:
       url: https://example.com
@@ -191,49 +191,24 @@ pipeline:
     expect(result.ok).toBe(true);
   });
 
-  it('expands include files before validation', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'xopc-pipeline-'));
-    const includePath = join(dir, 'common.yaml');
-    const mainPath = join(dir, 'main.yaml');
-    await writeFile(includePath, `
-name: common
-pipeline:
-  - wait:
-      ms: 1
-`);
-    await writeFile(mainPath, `
-name: main
-include:
-  - common.yaml
-pipeline:
-  - output:
-      value: done
-`);
-
-    const loaded = await loadBrowserPipelineSource(mainPath);
-    const registry = createBrowserActionRegistry();
-    const result = await validateBrowserPipelineSource(loaded.source, registry, loaded.location);
-
-    expect(result.ok).toBe(true);
-    expect(result.document!.pipeline).toHaveLength(2);
-  });
 });
 
 describe('Pipeline runtime', () => {
   it('runs control flow and data actions against runtime state', async () => {
     const yaml = `
+apiVersion: xopc.ai/browser-recipe/v1
+id: runtime
 name: runtime
-args:
-  items:
-    default:
+risk: read_only
+domains: [example.com]
+pipeline:
+  - set_var:
+      name: items
+      value:
       - name: alpha
         score: 2
       - name: beta
         score: 1
-pipeline:
-  - set_var:
-      name: items
-      value: \${{ args.items }}
   - filter:
       from: \${{ vars.items }}
       path: name

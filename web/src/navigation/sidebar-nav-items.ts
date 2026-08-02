@@ -1,4 +1,4 @@
-import { Box, BriefcaseBusiness, Cable, FolderKanban, GitBranch, HeartHandshake, Layers, ListChecks, Plug, Puzzle, StickyNote, Users, Zap } from 'lucide-react';
+import { Box, BriefcaseBusiness, Cable, FolderKanban, GitBranch, HeartHandshake, Layers, ListChecks, MonitorPlay, Plug, Puzzle, StickyNote, Users, Zap } from 'lucide-react';
 
 import type { LucideIcon } from '@/features/extensions/extension-nav-icon';
 
@@ -26,6 +26,7 @@ export type BuiltinNavId =
   | 'builtin:projects'
   | 'builtin:goals'
   | 'builtin:automations'
+  | 'builtin:browserWorkflows'
   | 'builtin:notes'
   | 'builtin:workflows'
   | 'builtin:channels'
@@ -46,6 +47,7 @@ export const BUILTIN_NAV_DEFS: readonly BuiltinNavDef[] = [
   { id: 'builtin:profile', to: '/you', Icon: HeartHandshake },
   { id: 'builtin:projects', to: '/projects', Icon: FolderKanban },
   { id: 'builtin:automations', to: '/automations', Icon: Zap },
+  { id: 'builtin:browserWorkflows', to: '/browser-workflows', Icon: MonitorPlay },
   { id: 'builtin:skills', to: '/skills', Icon: Layers },
   { id: 'builtin:connectors', to: '/connectors', Icon: Cable },
   { id: 'builtin:agents', to: '/agents', Icon: Users },

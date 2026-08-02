@@ -3,11 +3,11 @@
  */
 
 import type { Page } from 'playwright-core';
+import { readFile } from 'node:fs/promises';
 
 import { BrowserManager, resolveBrowserBackendFromConfig, createBrowserActionRegistry } from '../../browser/index.js';
 import { loadPlaywrightCoreModule } from '../../browser/providers/playwright-doctor.js';
-import { runBrowserPipeline, validateBrowserPipelineSource } from '../../browser/pipeline/runner.js';
-import { loadBrowserPipelineSource } from '../../browser/pipeline/source.js';
+import { runBrowserPipeline, validateBrowserPipeline } from '../../browser/pipeline/runner.js';
 import type { BrowserActionContext } from '../../browser/actions/types.js';
 import { loadConfig } from '../../config/loader.js';
 
@@ -68,11 +68,8 @@ export async function executeBrowserCliAction(action: string, args: Record<strin
 
 export async function validatePipelineCli(file: string): Promise<void> {
   let yamlSource: string;
-  let sourceLocation: string | undefined;
   try {
-    const loaded = await loadBrowserPipelineSource(file);
-    yamlSource = loaded.source;
-    sourceLocation = loaded.location;
+    yamlSource = await readFile(file, 'utf8');
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error(`Failed to read pipeline source: ${msg}`);
@@ -81,7 +78,7 @@ export async function validatePipelineCli(file: string): Promise<void> {
   }
 
   const registry = createBrowserActionRegistry();
-  const result = await validateBrowserPipelineSource(yamlSource, registry, sourceLocation);
+  const result = validateBrowserPipeline(yamlSource, registry);
 
   if (result.ok) {
     console.log(`✓ Pipeline "${result.document!.name}" is valid (${result.document!.pipeline.length} steps).`);
@@ -96,11 +93,8 @@ export async function validatePipelineCli(file: string): Promise<void> {
 
 export async function runPipelineCli(file: string, args: Record<string, unknown>): Promise<void> {
   let yamlSource: string;
-  let sourceLocation: string | undefined;
   try {
-    const loaded = await loadBrowserPipelineSource(file);
-    yamlSource = loaded.source;
-    sourceLocation = loaded.location;
+    yamlSource = await readFile(file, 'utf8');
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error(`Failed to read pipeline source: ${msg}`);
@@ -110,7 +104,7 @@ export async function runPipelineCli(file: string, args: Record<string, unknown>
 
   const registry = createBrowserActionRegistry();
   const ctx = await getActionContext();
-  const result = await runBrowserPipeline(yamlSource, args, ctx, registry, { sourceLocation });
+  const result = await runBrowserPipeline(yamlSource, args, ctx, registry);
 
   if (result.ok) {
     if (result.text) console.log(result.text);

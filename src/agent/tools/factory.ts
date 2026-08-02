@@ -39,6 +39,7 @@ import {
   createToolManualTool,
   createGoalTool,
   createAutomationTool,
+  createBrowserRecipeTool,
   createXopcUseTool,
   createDesktopPetTool,
   createSkillInstallTool,
@@ -69,6 +70,7 @@ import { resolveDreamingRoot } from '../memory/dreaming/scope.js';
 import { resolveDreamingConfig } from '../memory/dreaming/config.js';
 import { buildSandboxToolMap, createExecuteCodeTool } from './execute-code-tool.js';
 import type { AutomationService } from '../../automations/index.js';
+import type { BrowserRecipeService } from '../../browser/recipes/index.js';
 import type { NotesService } from '../../notes/index.js';
 import type { ProjectService } from '../../projects/index.js';
 import type { WorkItemService } from '../../work-items/index.js';
@@ -110,6 +112,7 @@ export interface ToolFactoryDeps {
   gatewayClarify?: { requestClarification: GatewayClarifyRequestFn };
   /** Gateway: enables the `automation` tool. */
   getAutomationService?: () => AutomationService | undefined;
+  getBrowserRecipeService?: () => BrowserRecipeService | undefined;
   /** Gateway: enables the `xopc_use` product-object tool. */
   getNotesService?: () => NotesService | undefined;
   getProjectService?: () => ProjectService | undefined;
@@ -436,6 +439,9 @@ export class AgentToolsFactory {
               getAutomationService: this.deps.getAutomationService,
             }),
           ]
+        : []),
+      ...(browserEnabled && this.deps.getBrowserRecipeService
+        ? [createBrowserRecipeTool({ getBrowserRecipeService: this.deps.getBrowserRecipeService })]
         : []),
       ...(this.deps.getProjectService
         || this.deps.getNotesService

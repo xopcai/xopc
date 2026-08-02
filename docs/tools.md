@@ -19,7 +19,7 @@ This page lists tools the xopc agent can call: read and edit files, run commands
 | Voice (optional) | `text_to_speech` — when TTS is enabled in config |
 | Memory (optional) | `memory_search`, `memory_get`; `curated_memory`, `session_search` when configured |
 | Images (optional) | `image`, `image_generate` when models and keys are set |
-| Browser (optional) | `browser_use` when browser automation is enabled |
+| Browser (optional) | `browser_use`; `browser_recipe` for saved [Browser automations](browser-workflows.md) |
 | Delegation & code (optional) | `delegate_task`, `execute_code` |
 | Multi-agent orchestration | `workflow` — fan-out subagents via a deterministic JS script. See [Dynamic Workflows](workflows.md). |
 | Automations (optional) | `automation` — when the runtime exposes the automation service (typical gateway setup) |
@@ -346,7 +346,8 @@ Add `-g` to the install command when xopc itself is installed globally.
 
 | Tool | Purpose |
 |------|---------|
-| `browser_use` | Unified browser automation tool. Use `mode: "command"` with actions such as `open` / `navigate`, `snapshot`, `click`, `type`, `scroll`, `keys` / `press`, `screenshot`, `console` / `eval`, `images`, `dialog`, `cdp`, `close`, `wait`, and network helpers; or `mode: "pipeline"` for YAML pipelines. For complex tasks, call `tool_manual({ tool: "browser_use" })` first. |
+| `browser_use` | Operates the browser with actions such as opening pages, inspecting content, clicking, typing, scrolling, taking screenshots, and waiting for page changes. For complex tasks, call `tool_manual({ tool: "browser_use" })` first. |
+| `browser_recipe` | Saves, lists, runs, pauses, and updates reusable [Browser automations](browser-workflows.md) when the Gateway provides the browser automation service. |
 
 To disable browser automation for an agent, set the selected agent manifest's `tools.builtin.browser_use.mode` to `"deny"` or omit browser access from the relevant capability preset.
 

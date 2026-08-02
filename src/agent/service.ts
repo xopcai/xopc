@@ -283,6 +283,7 @@ export class AgentService {
       verboseLevel: config.verboseLevel,
       gatewayClarify: config.gatewayClarify,
       getAutomationService: config.getAutomationService,
+      getBrowserRecipeService: config.getBrowserRecipeService,
       getNotesService: config.getNotesService,
       getProjectService: config.getProjectService,
       getWorkItemService: config.getWorkItemService,

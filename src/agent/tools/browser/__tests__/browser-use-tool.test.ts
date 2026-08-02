@@ -98,50 +98,6 @@ describe('browser_use tool', () => {
     });
   });
 
-  describe('pipeline mode', () => {
-    it('requires pipeline parameter', async () => {
-      const { tool } = createTool();
-      const result = await tool.execute('call-6', { mode: 'pipeline' }, undefined as any, undefined as any);
-      expect(result.details.ok).toBe(false);
-      expect(result.content[0].text).toContain('Missing');
-    });
-
-    it('validates with dryRun', async () => {
-      const { tool } = createTool();
-      const yaml = 'name: dry\npipeline:\n  - wait:\n      ms: 100';
-      const result = await tool.execute('call-7', { mode: 'pipeline', pipeline: { yaml, dryRun: true } }, undefined as any, undefined as any);
-      expect(result.details.ok).toBe(true);
-      expect(result.content[0].text).toContain('validated');
-    });
-
-    it('loads pipeline YAML from a remote path URL', async () => {
-      const { tool } = createTool();
-      const yaml = 'name: remote\npipeline:\n  - wait:\n      ms: 100';
-      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(yaml, { status: 200 })));
-
-      try {
-        const result = await tool.execute(
-          'call-remote',
-          { mode: 'pipeline', pipeline: { path: 'https://example.com/pipeline.yaml', dryRun: true } },
-          undefined as any,
-          undefined as any,
-        );
-
-        expect(result.details.ok).toBe(true);
-        expect(result.content[0].text).toContain('validated');
-      } finally {
-        vi.unstubAllGlobals();
-      }
-    });
-
-    it('returns validation error for invalid YAML', async () => {
-      const { tool } = createTool();
-      const yaml = 'name: bad\npipeline: not-array';
-      const result = await tool.execute('call-8', { mode: 'pipeline', pipeline: { yaml, dryRun: true } }, undefined as any, undefined as any);
-      expect(result.content[0].text).toContain('VALIDATION_FAILED');
-    });
-  });
-
   describe('unknown mode', () => {
     it('returns error', async () => {
       const { tool } = createTool();
