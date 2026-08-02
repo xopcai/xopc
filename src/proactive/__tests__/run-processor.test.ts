@@ -9,6 +9,7 @@ import {
   closeXopcDatabase,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
+  updateRelationshipSettings,
 } from '../../storage/sqlite/index.js';
 import { upsertWorkUnderstandingThread } from '../../work-discovery/thread-repository.js';
 import { createProactiveInsight, listProactiveInsights } from '../insight-repository.js';
@@ -27,6 +28,7 @@ describe('focus automation result processing', () => {
     stateDir = mkdtempSync(join(tmpdir(), 'xopc-proactive-run-'));
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
+    updateRelationshipSettings({ proactiveEnabled: true });
     const now = Date.now();
     const automation: Automation = {
       id: automationId,

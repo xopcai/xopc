@@ -83,11 +83,15 @@ export function projectUserContextRecord(record: MemoryRecord) {
     disclosurePolicy: record.disclosurePolicy,
     stability: lifecycle.band,
     stabilityScore: lifecycle.score,
+    confidence: record.confidence,
     reviewAt: lifecycle.reviewAt,
     reviewDue: lifecycle.reviewDue,
     evidenceCount: record.evidence?.length ?? 0,
     sourcePath: record.source.path,
     latestEvidenceAt,
+    validFrom: record.validFrom,
+    validTo: record.validTo,
+    expiresAt: record.expiresAt,
   };
 }
 

@@ -1,4 +1,5 @@
 import type { AutomationRun } from '../automations/index.js';
+import { getRelationshipSettings, isProactiveSupportAllowed } from '../storage/sqlite/index.js';
 import { createLogger } from '../utils/logger.js';
 
 import { createProactiveInsight } from './insight-repository.js';
@@ -95,6 +96,10 @@ export function processFocusAutomationRun(run: AutomationRun): {
   });
   if (!recorded) return { handled: true };
   if (!result.meaningful) return { handled: true };
+  if (!isProactiveSupportAllowed(getRelationshipSettings(), {
+    now: new Date(run.endedAtMs),
+    topic: watch.kind,
+  })) return { handled: true };
   const insight = createProactiveInsight({
       watchId: watch.id,
       runId: run.id,

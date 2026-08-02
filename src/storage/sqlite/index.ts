@@ -30,6 +30,30 @@ export {
 } from './connection.js';
 export { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 export {
+  buildRelationshipPrompt,
+  getRelationshipSettings,
+  isProactiveSupportAllowed,
+  updateRelationshipSettings,
+  type RelationshipSettings,
+  type SupportMode,
+} from './relationship-settings-repository.js';
+export {
+  completeTaskOutcome,
+  findTaskOutcomeForAssistant,
+  getTaskOutcome,
+  listTaskOutcomes,
+  setTaskOutcomeFeedback,
+  startTaskOutcome,
+  summarizeTaskOutcomes,
+  updateTaskOutcome,
+  type TaskContract,
+  type TaskEvidence,
+  type TaskFeedbackOutcome,
+  type TaskOutcome,
+  type TaskOutcomeMetrics,
+  type TaskOutcomeStatus,
+} from './task-outcome-repository.js';
+export {
   buildDefaultSessionMetadata,
   type SessionMetadataSeed,
 } from './session-metadata.js';

@@ -8,6 +8,7 @@ import { registerMemoryRoutes } from './memory.js';
 import { registerProjectsRoutes } from './projects.js';
 import { registerSearchRoutes } from './search.js';
 import { registerMobileRoutes } from './mobile.js';
+import { registerTaskOutcomeRoutes } from './task-outcomes.js';
 import { registerLocalAppsRoutes } from './local-apps.js';
 import { registerWorkDiscoveryRoutes } from './work-discovery.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
@@ -30,6 +31,7 @@ export function registerCoreAuthenticatedRoutes(
   registerWorkDiscoveryRoutes(authenticated, deps);
   registerSearchRoutes(authenticated, deps);
   registerMobileRoutes(authenticated, deps);
+  registerTaskOutcomeRoutes(authenticated, deps);
 }
 
 export function registerAuthenticatedRoutes(app: Hono, authenticated: Hono, deps: AuthenticatedRouteDeps): void {

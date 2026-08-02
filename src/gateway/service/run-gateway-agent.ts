@@ -12,6 +12,14 @@ import {
   updateAsyncLogContext,
 } from '../../utils/logger.js';
 import { shouldSkipWebchatInboundByAbortCutoff } from '../../session/abort-cutoff.js';
+import {
+  completeTaskOutcome,
+  startTaskOutcome,
+  updateTaskOutcome,
+  type TaskContract,
+  type TaskEvidence,
+  type TaskOutcomeStatus,
+} from '../../storage/sqlite/index.js';
 
 import { formatAgentRunErrorForClient } from '../../agent/client-error-format.js';
 
@@ -70,6 +78,11 @@ export async function *runGatewayAgent(
     emit,
   } = deps;
   const sessionIndex = sessionIndexFromDeps;
+  let taskOutcomeStarted = false;
+  let taskOutcomeStatus: Exclude<TaskOutcomeStatus, 'running'> = 'failed';
+  let taskOutcomeSummary = 'Agent run ended unexpectedly';
+  let taskContract: TaskContract | undefined;
+  const taskEvidence: TaskEvidence[] = [];
 
   let webchatSessionKey: string | undefined;
   let webchatSessionId: string | undefined;
@@ -96,14 +109,61 @@ export async function *runGatewayAgent(
   }
 
   const streamSessionKey = webchatSessionKey ?? chatId;
+  if (webchatSessionKey) {
+    startTaskOutcome({
+      runId,
+      sessionKey: webchatSessionKey,
+      channel,
+      objective: message.trim(),
+    });
+    taskOutcomeStarted = true;
+  }
   const mapper = new ChatStreamMapper({ runId, sessionKey: streamSessionKey, channel });
   let registeredActiveWebchatRun = false;
+  const addTaskEvidence = (evidence: TaskEvidence): void => {
+    if (taskEvidence.some((item) => item.kind === evidence.kind && item.title === evidence.title)) return;
+    taskEvidence.push(evidence);
+  };
+  const captureTaskEvent = (event: ChatStreamEvent): void => {
+    if (event.type === 'turn_plan') {
+      taskContract = {
+        objective: message.trim(),
+        deliverables: [],
+        acceptanceCriteria: event.payload.plan.map((item) => item.step),
+        constraints: [],
+        approvalRequired: [],
+      };
+      return;
+    }
+    if (event.type === 'patch_applied') {
+      addTaskEvidence({
+        kind: 'state',
+        title: 'Changes applied',
+        summary: `${event.payload.added} additions and ${event.payload.removed} removals`,
+      });
+      return;
+    }
+    if (
+      event.type === 'command_completed'
+      && event.payload.exitCode === 0
+      && /(^|\s)(test|vitest|jest|pytest|lint|typecheck|build)(\s|$|:)/i.test(event.payload.command)
+    ) {
+      addTaskEvidence({
+        kind: 'test',
+        title: event.payload.command.slice(0, 120),
+        summary: event.payload.durationMs === undefined
+          ? 'Command completed successfully'
+          : `Command completed successfully in ${event.payload.durationMs} ms`,
+      });
+    }
+  };
   const publishStreamEvent = (event: ChatStreamEvent): ChatStreamEvent =>
     channel === 'webchat'
       ? ((runRelay.publish(runId, event as unknown as import('../agent-run-relay.js').RelayEvent) as unknown as ChatStreamEvent | undefined) ?? event)
       : event;
   const emitAndYield = function *(events: ChatStreamEvent[]): Generator<ChatStreamEvent> {
     for (const event of events) {
+      if (taskOutcomeStarted) captureTaskEvent(event);
       const relayedEvent = publishStreamEvent(event);
       if (channel === 'webchat') emit('agent.stream', { sessionKey: streamSessionKey, event: relayedEvent });
       yield relayedEvent;
@@ -115,6 +175,8 @@ export async function *runGatewayAgent(
   try {
     if (channel === 'webchat' && webchatSessionKey) {
       if (webchatStaleSkip) {
+        taskOutcomeStatus = 'cancelled';
+        taskOutcomeSummary = 'Stale inbound message skipped';
         yield* emitAndYield(mapper.end('cancelled', 'Stale inbound after abort (clientCreatedAtMs before cutoff)'));
         runRelay.complete(runId);
         runAbortControllers.delete(runId);
@@ -170,6 +232,8 @@ export async function *runGatewayAgent(
 
         const endStatus = mergedSignal.aborted ? 'cancelled' : 'success';
         const endSummary = mergedSignal.aborted ? 'Interrupted' : 'Message processed successfully';
+        taskOutcomeStatus = mergedSignal.aborted ? 'cancelled' : 'succeeded';
+        taskOutcomeSummary = endSummary;
         yield* emitAndYield(mapper.end(endStatus, endSummary));
         runRelay.complete(runId);
         try {
@@ -198,6 +262,8 @@ export async function *runGatewayAgent(
           `Agent processing failed: ${em}`,
         );
         streamError = em;
+        taskOutcomeStatus = 'failed';
+        taskOutcomeSummary = em;
         const errorContent = formatAgentRunErrorForClient(streamError);
         yield* emitAndYield(mapper.error(errorContent));
         yield* emitAndYield(mapper.end('error', streamError));
@@ -276,9 +342,13 @@ export async function *runGatewayAgent(
       },
     ]);
     yield* emitAndYield(mapper.end('success', 'Message processed'));
+    taskOutcomeStatus = 'succeeded';
+    taskOutcomeSummary = 'Message processed';
     return { status: 'ok', summary: 'Message processed' };
   } catch (error) {
     const em = error instanceof Error ? error.message : String(error);
+    taskOutcomeStatus = 'failed';
+    taskOutcomeSummary = em;
     log.error(
       {
         err: error,
@@ -291,5 +361,18 @@ export async function *runGatewayAgent(
       `Agent run failed: ${em}`,
     );
     throw error;
+  } finally {
+    if (taskOutcomeStarted) {
+      updateTaskOutcome({
+        runId,
+        ...(taskContract ? { contract: taskContract } : {}),
+        evidence: taskEvidence,
+      });
+      completeTaskOutcome({
+        runId,
+        status: taskOutcomeStatus,
+        summary: taskOutcomeSummary,
+      });
+    }
   }
 }

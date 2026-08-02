@@ -22,6 +22,7 @@ import {
   appendMemorySignal,
   appendMemoryTraceEvent,
   deleteMemoryRecord,
+  findTaskOutcomeForAssistant,
   findLatestMemoryInjectTrace,
   getMemoryRecord,
   listKnowledgeSourceChanges,
@@ -33,6 +34,7 @@ import {
   searchMemoryRecords,
   setMemoryTraceFeedback,
   setLatestMemoryInjectFeedback,
+  setTaskOutcomeFeedback,
   summarizeMemoryRecallFeedback,
   summarizeUserUnderstandingQuality,
   upsertMemoryRecord,
@@ -447,6 +449,18 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
       if (!sessionKey || !Number.isFinite(assistantTimestamp) || assistantTimestamp <= 0 || !outcome) {
         return c.json({ error: 'sessionKey, assistantTimestamp, and a valid outcome are required' }, 400);
       }
+      const taskOutcome = setTaskOutcomeFeedback({
+        sessionKey,
+        assistantTimestamp,
+        outcome,
+        reason: reason || undefined,
+        needsCorrection: outcome === 'not_helpful',
+        ...(outcome === 'helpful'
+          ? { supportFit: true }
+          : reason.includes('tone_mismatch')
+            ? { supportFit: false }
+            : {}),
+      });
       const trace = setLatestMemoryInjectFeedback({
         sessionKey,
         beforeMs: assistantTimestamp,
@@ -457,10 +471,10 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
         },
       });
       return c.json({
-        matched: Boolean(trace),
+        matched: Boolean(taskOutcome),
         attributedRecordCount: trace?.selectedRecordIds.length ?? 0,
         personalContext: personalContextForTrace(trace),
-        feedback: trace?.feedback ?? null,
+        feedback: taskOutcome?.feedback ?? null,
         remediation: trace?.remediation ?? null,
       });
     },
@@ -472,15 +486,16 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
     if (!sessionKey || !Number.isFinite(assistantTimestamp) || assistantTimestamp <= 0) {
       return c.json({ error: 'sessionKey and assistantTimestamp are required' }, 400);
     }
+    const taskOutcome = findTaskOutcomeForAssistant(sessionKey, assistantTimestamp);
     const trace = findLatestMemoryInjectTrace({
       sessionKey,
       beforeMs: assistantTimestamp,
     });
     return c.json({
-      matched: Boolean(trace),
+      matched: Boolean(taskOutcome),
       attributedRecordCount: trace?.selectedRecordIds.length ?? 0,
       personalContext: personalContextForTrace(trace),
-      feedback: trace?.feedback ?? null,
+      feedback: taskOutcome?.feedback ?? null,
     });
   });
 
