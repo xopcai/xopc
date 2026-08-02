@@ -70,7 +70,6 @@ import type {
   WorkDiscoveryPersonalContextItem,
   WorkDiscoveryPersonalContextSource,
   WorkDiscoveryOnboardingState,
-  WorkDiscoveryProfileCandidate,
   WorkDiscoveryRecognitionDecision,
   WorkDiscoveryRun,
   WorkDiscoverySource,

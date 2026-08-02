@@ -13,7 +13,7 @@ import { loadConfig, saveConfig as writeConfigToDisk } from '../config/index.js'
 import { getWorkspacePath } from '../config/workspace-path-helpers.js';
 import { AutomationService, type AutomationRun } from '../automations/index.js';
 import { onAutomationProductEvent, publishAutomationProductEvent } from '../automations/product-events.js';
-import { processFocusAutomationRun } from '../proactive/index.js';
+import { FocusService, processFocusAutomationRun, startTrialExpiryReconciler } from '../proactive/index.js';
 import { buildNoteAgentContext, NotesService, NotesStore } from '../notes/index.js';
 import { buildWorkflowChildTools } from '../agent/workflow/workflow-child-tools.js';
 import { WorkflowRunService } from '../workflows/service/workflow-run-service.js';
@@ -157,6 +157,7 @@ export class GatewayService {
   private connectedKnowledgeCoordinator: ConnectedKnowledgeCoordinator | null = null;
   private stopAutomationProductEventBridge: (() => void) | null = null;
   private stopSessionTranscriptAutomationEvents: (() => void) | null = null;
+  private stopFocusTrialExpiryReconciler: (() => Promise<void>) | null = null;
 
   /**
    * Webchat agent invocation surface (`runAgent`, `abortAgentRun`, `steer*`,
@@ -843,6 +844,9 @@ export class GatewayService {
 
     await trace.measure('automations.initialize', () => this.automationService.initialize());
     await trace.measure('dreaming.reconcile', () => this.reconcileDreamingAutomations());
+    this.stopFocusTrialExpiryReconciler = startTrialExpiryReconciler(
+      new FocusService(this.automationService),
+    );
 
     await this.notesService.initialize();
 
@@ -1077,6 +1081,8 @@ export class GatewayService {
 
     await this.channelManager.stop();
 
+    await this.stopFocusTrialExpiryReconciler?.();
+    this.stopFocusTrialExpiryReconciler = null;
     await this.automationService.stop();
     this.stopAutomationProductEventBridge?.();
     this.stopAutomationProductEventBridge = null;

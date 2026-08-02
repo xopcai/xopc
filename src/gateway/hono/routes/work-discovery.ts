@@ -271,8 +271,7 @@ export function registerWorkDiscoveryRoutes(authenticated: Hono, deps: Authentic
     return thread ? c.json({ ok: true, thread }) : c.json({ ok: false, error: 'Work thread not found' }, 404);
   });
 
-  authenticated.get('/api/focuses', async (c) => {
-    await focuses.reconcileExpiredTrials();
+  authenticated.get('/api/focuses', (c) => {
     return c.json({
       ok: true,
       focuses: focuses.list({ includeUnreviewed: c.req.query('includeUnreviewed') === 'true' }),
