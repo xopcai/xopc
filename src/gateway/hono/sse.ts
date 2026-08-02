@@ -12,6 +12,13 @@ const log = createLogger('Gateway:SSE');
 // Active SSE connections tracking for connection limiting
 const activeConnections = new Map<string, AbortController>();
 
+/** Close long-lived gateway event streams before the HTTP server starts draining. */
+export function closeAllEventStreams(): void {
+  for (const controller of activeConnections.values()) {
+    controller.abort();
+  }
+}
+
 export interface SSEHandlerConfig {
   service: GatewayService;
   maxSseConnections?: number;
@@ -391,16 +398,22 @@ export function createEventsSSEHandler(config: SSEHandlerConfig) {
         }
       }, 30_000);
 
-      // Block until aborted — streamSSE closes when the callback returns
+      // Block until the client disconnects or gateway shutdown aborts the stream.
       await new Promise<void>((resolve) => {
-        stream.onAbort(() => {
+        const finish = () => {
           aborted = true;
           clearInterval(keepAlive);
           cleanup();
           activeConnections.delete(sessionId);
           log.debug({ sessionId }, 'Event stream disconnected');
           resolve();
-        });
+        };
+
+        stream.onAbort(finish);
+        abortController.signal.addEventListener('abort', () => stream.abort(), { once: true });
+        if (abortController.signal.aborted) {
+          stream.abort();
+        }
       });
     });
   };
