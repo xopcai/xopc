@@ -55,6 +55,8 @@ features:
     link: /zh/voice
 ---
 
+[![xopc 桌面端演示](/xopc-desktop.gif)](./desktop-app.md)
+
 ## xopc 管理的是一套工作运行时
 
 普通聊天产品通常围绕一次对话组织能力。xopc 把长期工作拆成几类可以独立管理、又能互相连接的对象：
@@ -73,7 +75,7 @@ features:
 
 | 你想做什么 | 从这里开始 |
 | --- | --- |
-| 在自己电脑上运行一个私有 AI 助手 | [5 分钟快速入门](./first-5-minutes.md) |
+| 在自己电脑上运行一个私有 AI 助手 | [PC 桌面端](./desktop-app.md) |
 | 理解 xopc 如何保存状态、执行任务并触发后续工作 | [持续工作模型](./concepts/loops.md) |
 | 用项目、目标和笔记组织长期工作 | [项目、目标与笔记](./projects-goals-notes.md) |
 | 了解 xopc 和 Codex、Claude Code、Qoder、WorkBuddy 的区别 | [产品对比](./comparison.md) |
