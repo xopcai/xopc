@@ -13,7 +13,6 @@ const TAB_TO_SETTINGS_SECTION: Record<
   | 'settingsKeyboardShortcuts'
   | 'settingsAgents'
   | 'settingsCapabilityPresets'
-  | 'settingsActionBoundary'
   | 'settingsCredentials'
   | 'settingsProviders'
   | 'settingsModels'
@@ -40,7 +39,6 @@ const TAB_TO_SETTINGS_SECTION: Record<
   settingsDesktopApp: 'desktop-app',
   settingsAgents: 'agents',
   settingsCapabilityPresets: 'capability-presets',
-  settingsActionBoundary: 'action-boundary',
   settingsCredentials: 'credentials',
   settingsProviders: 'credentials',
   settingsModels: 'credentials',
@@ -107,7 +105,7 @@ export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
   { id: 'credentials', tabs: ['settingsCredentials'] },
   {
     id: 'agent',
-    tabs: ['settingsCapabilityPresets', 'settingsAgentBrowser', 'settingsActionBoundary'],
+    tabs: ['settingsCapabilityPresets', 'settingsAgentBrowser'],
   },
   {
     id: 'connection',
