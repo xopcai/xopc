@@ -4,15 +4,6 @@
 
 import { Type } from '@sinclair/typebox';
 
-export const BrowserUsePipelineSchema = Type.Object({
-  yaml: Type.Optional(Type.String({ description: 'Inline YAML browser pipeline.' })),
-  path: Type.Optional(Type.String({ description: 'Path or http(s) URL to a .yaml pipeline file.' })),
-  args: Type.Optional(
-    Type.Record(Type.String(), Type.Unknown(), { description: 'Override pipeline arg defaults.' }),
-  ),
-  dryRun: Type.Optional(Type.Boolean({ description: 'Only parse & validate, do not execute.' })),
-});
-
 export const BrowserUseOptionsSchema = Type.Object({
   timeout: Type.Optional(Type.Number({ description: 'Action timeout override (ms).' })),
   headless: Type.Optional(Type.Boolean({ description: 'Override headless mode for this call.' })),
@@ -22,7 +13,6 @@ export const BrowserUseSchema = Type.Object({
   mode: Type.Union(
     [
       Type.Literal('command'),
-      Type.Literal('pipeline'),
       Type.Literal('inspect'),
       Type.Literal('close'),
     ],
@@ -34,6 +24,5 @@ export const BrowserUseSchema = Type.Object({
   args: Type.Optional(
     Type.Record(Type.String(), Type.Unknown(), { description: 'Action arguments (command mode).' }),
   ),
-  pipeline: Type.Optional(BrowserUsePipelineSchema),
   options: Type.Optional(BrowserUseOptionsSchema),
 });

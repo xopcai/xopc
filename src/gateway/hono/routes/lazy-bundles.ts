@@ -66,6 +66,14 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     },
   },
   {
+    id: 'browser-workflows',
+    match: (path) => startsWithAny(path, ['/api/browser/workflows', '/api/browser/workflow-runs']),
+    load: async () => {
+      const { registerBrowserWorkflowRoutes } = await import('./browser-workflows.js');
+      return { register: registerBrowserWorkflowRoutes };
+    },
+  },
+  {
     id: 'browser',
     // `browser-install` above already matched the SSE install streams; this
     // catches the remaining /api/browser/* handlers (extension, cdp,

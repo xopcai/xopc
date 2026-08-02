@@ -74,6 +74,7 @@ export default defineConfig({
               { text: 'Mobile app', link: '/mobile-app' },
               { text: 'Session', link: '/session' },
               { text: 'Projects, Goals & Notes', link: '/projects-goals-notes' },
+              { text: 'Browser automations', link: '/browser-workflows' },
               {
                 text: 'Channels',
                 collapsed: true,
@@ -183,6 +184,7 @@ export default defineConfig({
               { text: '手机端 App', link: '/zh/mobile-app' },
               { text: '会话管理', link: '/zh/session' },
               { text: '项目、目标与笔记', link: '/zh/projects-goals-notes' },
+              { text: '浏览器自动化', link: '/zh/browser-workflows' },
               {
                 text: '消息通道',
                 collapsed: true,

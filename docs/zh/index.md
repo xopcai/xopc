@@ -35,6 +35,9 @@ features:
   - title: ⏰ 可触发的自动化
     details: 定时、手动或 webhook 触发 Agent 与工作流运行，并保留运行结果与失败记录。
     link: /zh/automations
+  - title: 🌐 浏览器自动化
+    details: 和助手一起完成一次网页任务，再从控制台、对话或定时任务中重复运行已验证的步骤。
+    link: /zh/browser-workflows
   - title: 🔀 动态工作流
     details: 确定性脚本扇出多个子 Agent——仓库审计、多视角评审、并行调研，实时进度可见。
     link: /zh/workflows
@@ -76,5 +79,6 @@ features:
 | 了解 xopc 和 Codex、Claude Code、Qoder、WorkBuddy 的区别 | [产品对比](./comparison.md) |
 | 在 Telegram、微信或飞书/Lark 中使用同一个助手 | [消息通道](./channels/index.md) |
 | 设置定期复盘、提醒和摘要 | [自动化](./automations.md) |
+| 让助手重复完成网站上的固定任务 | [浏览器自动化](./browser-workflows.md) |
 | 为工作、代码和个人场景配置不同 Agent | [Session 路由](./routing-system.md) |
 | 用工具、通道或可复用技能扩展 xopc | [技能系统](./skills.md) 和 [扩展](./extensions.md) |

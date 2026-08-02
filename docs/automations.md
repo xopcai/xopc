@@ -1,6 +1,6 @@
 # Automations
 
-xopc automations are durable, product-level rules stored in SQLite (`~/.xopc/xopc.db`). An automation combines one trigger with one action, records every run, and can execute either an agent instruction or a workflow.
+xopc automations are durable, product-level rules stored in SQLite (`~/.xopc/xopc.db`). An automation combines one trigger with one action, records every run, and can execute an agent instruction, a workflow, or a saved [Browser automation](browser-workflows.md).
 
 Use the Gateway console at `#/automations` to create, pause, resume, run, delete, and inspect automations. The page keeps creation in a centered modal and shows upcoming runs, recent history, and operational metrics in one place.
 
@@ -9,7 +9,7 @@ Use the Gateway console at `#/automations` to create, pause, resume, run, delete
 | Concept | Meaning |
 | --- | --- |
 | Trigger | How the automation starts: manual, schedule, or webhook |
-| Action | What runs: agent instruction or workflow |
+| Action | What runs: agent instruction, workflow, or browser automation |
 | Run | One execution attempt with status, timestamps, summary, and errors |
 | After-run | Optional post-run behavior such as saving to session or posting a webhook |
 | Reliability | Timeout, retry, concurrency, and failure-disable settings |
@@ -53,10 +53,16 @@ type AutomationAction =
       input?: unknown;
       goal?: string;
       timeoutSeconds?: number;
+    }
+  | {
+      kind: 'browser_recipe';
+      recipeId: string;
+      args?: Record<string, unknown>;
+      timeoutSeconds?: number;
     };
 ```
 
-Choose an agent action when the automation should ask an agent to do work in a session. Choose a workflow action when the job should call a known workflow directly without relying on a model to decide the invocation.
+Choose an agent action when the automation should ask an agent to do work in a session. Choose a workflow action when the job should call a known workflow directly without relying on a model to decide the invocation. Choose a browser automation when the action should repeat web steps that you have already created and tested with the assistant. Only enabled browser automations can be selected.
 
 ## Data Model
 

@@ -31,7 +31,7 @@ export type TriggerMode =
   | 'sessionUpdated'
   | 'event';
 
-export type ActionMode = 'agent' | 'workflow';
+export type ActionMode = 'agent' | 'workflow' | 'browser_recipe';
 
 export interface FormState {
   name: string;
@@ -54,6 +54,8 @@ export interface FormState {
   workflowGoal: string;
   workflowInput: WorkflowRunSetupValue;
   workflowInputValid: boolean;
+  browserWorkflowId: string;
+  browserWorkflowInputs: Record<string, unknown>;
   safetyMode: AutomationSafetyMode;
   timeoutSeconds: string;
   afterRunMode: 'none' | 'saveToSession' | 'webhook';
@@ -88,6 +90,8 @@ export const initialForm: FormState = {
     maxSubagents: '',
   },
   workflowInputValid: true,
+  browserWorkflowId: '',
+  browserWorkflowInputs: {},
   safetyMode: 'suggest_only',
   timeoutSeconds: '300',
   afterRunMode: 'none',
@@ -196,12 +200,12 @@ export function buildInput(
     form.workflowInput,
   );
   const workflowGoal = form.workflowInput.goal.trim() || form.workflowGoal.trim();
-  const afterRunMode =
-    form.safetyMode === 'auto_apply' ? form.afterRunMode : 'none';
-  const action: AutomationAction =
-    form.actionMode === 'workflow'
-      ? {
-          kind: 'workflow',
+  const safetyMode = form.actionMode === 'browser_recipe' ? 'auto_apply' : form.safetyMode;
+  const afterRunMode = safetyMode === 'auto_apply' ? form.afterRunMode : 'none';
+  let action: AutomationAction;
+  if (form.actionMode === 'workflow') {
+    action = {
+      kind: 'workflow',
           workflowId: form.workflowId.trim(),
           ...(form.agentId.trim() ? { agentId: form.agentId.trim() } : {}),
           ...(workflowInput !== undefined ? { input: workflowInput } : {}),
@@ -226,16 +230,25 @@ export function buildInput(
             1,
             Number.parseInt(form.timeoutSeconds, 10) || 300,
           ),
-        }
-      : {
-          kind: 'agent',
-          instruction: form.instruction.trim(),
-          ...(form.agentId.trim() ? { agentId: form.agentId.trim() } : {}),
-          timeoutSeconds: Math.max(
-            1,
-            Number.parseInt(form.timeoutSeconds, 10) || 300,
-          ),
-        };
+    };
+  } else if (form.actionMode === 'browser_recipe') {
+    action = {
+      kind: 'browser_recipe',
+      recipeId: form.browserWorkflowId.trim(),
+      args: form.browserWorkflowInputs,
+      timeoutSeconds: Math.max(1, Number.parseInt(form.timeoutSeconds, 10) || 300),
+    };
+  } else {
+    action = {
+      kind: 'agent',
+      instruction: form.instruction.trim(),
+      ...(form.agentId.trim() ? { agentId: form.agentId.trim() } : {}),
+      timeoutSeconds: Math.max(
+        1,
+        Number.parseInt(form.timeoutSeconds, 10) || 300,
+      ),
+    };
+  }
 
   return {
     name: form.name.trim(),
@@ -244,7 +257,7 @@ export function buildInput(
       : {}),
     trigger,
     action,
-    safety: { mode: form.safetyMode },
+    safety: { mode: safetyMode },
     afterRun:
       afterRunMode === 'webhook'
         ? { kind: 'webhook', url: form.webhookUrl.trim() }
@@ -432,10 +445,12 @@ export function formFromAutomation(
     name: automation.name,
     description: automation.description ?? '',
     actionMode: action.kind,
-    agentId: action.agentId ?? '',
+    agentId: action.kind === 'browser_recipe' ? '' : (action.agentId ?? ''),
     instruction: action.kind === 'agent' ? action.instruction : '',
     workflowId: action.kind === 'workflow' ? action.workflowId : '',
     workflowGoal: action.kind === 'workflow' ? (action.goal ?? '') : '',
+    browserWorkflowId: action.kind === 'browser_recipe' ? action.recipeId : '',
+    browserWorkflowInputs: action.kind === 'browser_recipe' ? action.args ?? {} : {},
     workflowInput: {
       goal: action.kind === 'workflow' ? (action.goal ?? '') : '',
       argValues: definition
@@ -503,6 +518,11 @@ export function buildAutomationEditInput(
       concurrency: input.action.concurrency,
       maxSubagents: input.action.maxSubagents,
     };
+  } else if (
+    automation.action.kind === 'browser_recipe' &&
+    input.action.kind === 'browser_recipe'
+  ) {
+    action = { ...automation.action, ...input.action };
   }
   return {
     ...input,

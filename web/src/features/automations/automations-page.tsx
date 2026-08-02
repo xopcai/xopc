@@ -40,6 +40,12 @@ import { showToast } from '@/lib/toast';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 import { listWorkflowDefinitions, type WorkflowDefinition } from '@/features/workflows/workflow-api';
+import { browserWorkflowApi, type BrowserWorkflow } from '@/features/browser-workflows/browser-workflow-api';
+import {
+  BrowserWorkflowInputFields,
+  browserWorkflowInputsComplete,
+  defaultBrowserWorkflowInputs,
+} from '@/features/browser-workflows/browser-workflow-inputs';
 import { validateWorkflowInputEditorValue } from '@/features/workflows/workflow-input-editor.utils';
 import { WorkflowRunSetupPanel } from '@/features/workflows/workflow-run-setup-panel';
 import {
@@ -90,6 +96,7 @@ function formatDate(ms: number | undefined, labels: AutomationsMessages, languag
 
 function actionLabel(action: AutomationAction, labels: AutomationsMessages): string {
   if (action.kind === 'workflow') return labels.action.workflowWithId.replace('{id}', action.workflowId);
+  if (action.kind === 'browser_recipe') return `Browser automation: ${action.recipeId}`;
   return action.agentId ? labels.action.agentWithId.replace('{id}', action.agentId) : labels.action.agent;
 }
 
@@ -265,6 +272,7 @@ export function AutomationsPage() {
     { refreshInterval: 5_000 },
   );
   const workflowDefinitionsSwr = useSWR('automation-workflow-definitions', listWorkflowDefinitions);
+  const browserWorkflowsSwr = useSWR('automation-browser-workflows', () => browserWorkflowApi.list());
   const chatAgentsSwr = useSWR('automation-chat-agents', fetchChatAgents);
   const initialLoading =
     (automationsSwr.isLoading && !automationsSwr.data) ||
@@ -318,10 +326,18 @@ export function AutomationsPage() {
   const attentionRuns = useMemo(() => userRuns.filter(needsAttention), [userRuns]);
   const latestRun = userRuns[0] ?? null;
   const workflowDefinitions = useMemo(() => workflowDefinitionsSwr.data ?? [], [workflowDefinitionsSwr.data]);
+  const browserWorkflows = useMemo(
+    () => (browserWorkflowsSwr.data?.workflows ?? []).filter((workflow) => workflow.enabled),
+    [browserWorkflowsSwr.data],
+  );
   const agentOptions = chatAgentsSwr.data?.items ?? [];
   const selectedWorkflow = useMemo(
     () => workflowDefinitions.find((workflow) => workflow.id === form.workflowId.trim()) ?? null,
     [form.workflowId, workflowDefinitions],
+  );
+  const selectedBrowserWorkflow = useMemo(
+    () => browserWorkflows.find((workflow) => workflow.id === form.browserWorkflowId.trim()) ?? null,
+    [browserWorkflows, form.browserWorkflowId],
   );
   const workflowSelectionInvalid =
     form.actionMode === 'workflow' &&
@@ -337,7 +353,9 @@ export function AutomationsPage() {
     (form.triggerMode !== 'event' || (Boolean(form.eventType.trim()) && payloadMatchIsValid(form.eventPayloadMatch))) &&
     (form.actionMode === 'workflow'
       ? !workflowSelectionInvalid && !workflowInputInvalid
-      : Boolean(form.instruction.trim())) &&
+      : form.actionMode === 'browser_recipe'
+        ? selectedBrowserWorkflow !== null && browserWorkflowInputsComplete(selectedBrowserWorkflow, form.browserWorkflowInputs)
+        : Boolean(form.instruction.trim())) &&
     (form.afterRunMode !== 'webhook' || Boolean(form.webhookUrl.trim()));
   const templates = useMemo(
     () => [
@@ -885,6 +903,9 @@ export function AutomationsPage() {
                   workflowDefinitions={workflowDefinitions}
                   selectedWorkflow={selectedWorkflow}
                   workflowsLoading={workflowDefinitionsSwr.isLoading}
+                  browserWorkflows={browserWorkflows}
+                  selectedBrowserWorkflow={selectedBrowserWorkflow}
+                  browserWorkflowsLoading={browserWorkflowsSwr.isLoading}
                   agentOptions={agentOptions}
                   agentsLoading={chatAgentsSwr.isLoading}
                   language={language}
@@ -1871,7 +1892,9 @@ function AutomationOverview({
         <OverviewItem
           icon={automation.action.kind === 'workflow'
             ? <GitBranch className="size-4" aria-hidden />
-            : <Zap className="size-4" aria-hidden />}
+            : automation.action.kind === 'browser_recipe'
+              ? <ListTree className="size-4" aria-hidden />
+              : <Zap className="size-4" aria-hidden />}
           label={labels.info.action}
           value={actionLabel(automation.action, labels)}
         />
@@ -1995,6 +2018,9 @@ function AutomationForm({
   workflowDefinitions,
   selectedWorkflow,
   workflowsLoading,
+  browserWorkflows,
+  selectedBrowserWorkflow,
+  browserWorkflowsLoading,
   agentOptions,
   agentsLoading,
   language,
@@ -2005,6 +2031,9 @@ function AutomationForm({
   workflowDefinitions: WorkflowDefinition[];
   selectedWorkflow: WorkflowDefinition | null;
   workflowsLoading: boolean;
+  browserWorkflows: BrowserWorkflow[];
+  selectedBrowserWorkflow: BrowserWorkflow | null;
+  browserWorkflowsLoading: boolean;
   agentOptions: ChatAgentOption[];
   agentsLoading: boolean;
   language: StoredLanguage;
@@ -2030,6 +2059,18 @@ function AutomationForm({
       workflowInputValid: true,
     }));
   }, [form.actionMode, form.workflowId, setForm, workflowDefinitions]);
+
+  useEffect(() => {
+    if (form.actionMode !== 'browser_recipe') return;
+    if (form.browserWorkflowId.trim()) return;
+    const first = browserWorkflows[0];
+    if (!first) return;
+    setForm((prev) => ({
+      ...prev,
+      browserWorkflowId: first.id,
+      browserWorkflowInputs: defaultBrowserWorkflowInputs(first),
+    }));
+  }, [browserWorkflows, form.actionMode, form.browserWorkflowId, setForm]);
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
@@ -2190,6 +2231,7 @@ function AutomationForm({
             const actionMode = e.target.value as ActionMode;
             update({
               actionMode,
+              ...(actionMode === 'browser_recipe' ? { safetyMode: 'auto_apply' as const } : {}),
               ...(actionMode === 'workflow' && !form.workflowId.trim() && workflowDefinitions[0]
                 ? {
                     workflowId: workflowDefinitions[0].id,
@@ -2203,8 +2245,9 @@ function AutomationForm({
         >
           <SelectOption value="agent">{labels.action.runAgent}</SelectOption>
           <SelectOption value="workflow">{labels.action.runWorkflow}</SelectOption>
+          <SelectOption value="browser_recipe">{language === 'zh' ? '浏览器自动化' : 'Browser automation'}</SelectOption>
         </Select>
-        <Field label={labels.form.agent}>
+        {form.actionMode !== 'browser_recipe' ? <Field label={labels.form.agent}>
           <Select
             className={inputClass}
             value={form.agentId}
@@ -2217,7 +2260,7 @@ function AutomationForm({
               </SelectOption>
             ))}
           </Select>
-        </Field>
+        </Field> : null}
         {form.actionMode === 'agent' ? (
           <Field label={labels.form.instruction}>
             <div className="flex justify-end">
@@ -2239,7 +2282,7 @@ function AutomationForm({
             </div>
             <textarea className={cn(inputClass, 'min-h-32 resize-y')} value={form.instruction} onChange={(e) => update({ instruction: e.target.value })} />
           </Field>
-        ) : (
+        ) : form.actionMode === 'workflow' ? (
           <>
             <Field label={labels.form.workflow}>
               <Select
@@ -2291,9 +2334,30 @@ function AutomationForm({
               />
             ) : null}
           </>
+        ) : (
+          <>
+            <Field label={language === 'zh' ? '浏览器自动化' : 'Browser automation'}>
+              <Select
+                className={inputClass}
+                value={form.browserWorkflowId}
+                onChange={(event) => {
+                  const workflow = browserWorkflows.find((item) => item.id === event.target.value);
+                  update({
+                    browserWorkflowId: event.target.value,
+                    browserWorkflowInputs: workflow ? defaultBrowserWorkflowInputs(workflow) : {},
+                  });
+                }}
+                disabled={browserWorkflowsLoading || browserWorkflows.length === 0}
+              >
+                {browserWorkflows.length === 0 ? <SelectOption value="">{language === 'zh' ? '没有已启用的浏览器自动化' : 'No enabled browser automations'}</SelectOption> : null}
+                {browserWorkflows.map((workflow) => <SelectOption key={workflow.id} value={workflow.id}>{workflow.name}</SelectOption>)}
+              </Select>
+            </Field>
+            {selectedBrowserWorkflow && Object.keys(selectedBrowserWorkflow.inputs).length > 0 ? <Field label={language === 'zh' ? '运行时填写' : 'Run inputs'}><BrowserWorkflowInputFields workflow={selectedBrowserWorkflow} values={form.browserWorkflowInputs} language={language} onChange={(browserWorkflowInputs) => update({ browserWorkflowInputs })} /></Field> : null}
+          </>
         )}
 
-        <Section title={labels.form.safety} />
+        {form.actionMode !== 'browser_recipe' ? <><Section title={labels.form.safety} />
         <Field label={labels.form.safety}>
           <Select
             className={inputClass}
@@ -2319,7 +2383,7 @@ function AutomationForm({
                 ? labels.safety.askBeforeApplyDescription
                 : labels.safety.autoApplyDescription}
           </p>
-        </Field>
+        </Field></> : null}
 
         <Section title={labels.form.afterRun} />
         <Select className={inputClass} value={form.afterRunMode} onChange={(e) => update({ afterRunMode: e.target.value as FormState['afterRunMode'] })}>

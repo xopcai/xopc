@@ -1,7 +1,7 @@
 /**
  * browser_use — unified browser AgentTool.
  *
- * Modes: command | pipeline | inspect | close.
+ * Modes: command | inspect | close.
  * Replaces the 14 fine-grained browser_* tools with a single entry point.
  */
 
@@ -16,7 +16,6 @@ import type { Page } from 'playwright-core';
 import { BrowserUseSchema } from './schemas.js';
 import { createBrowserActionRegistry } from '../../../../browser/actions/registry.js';
 import type { BrowserActionContext, BrowserActionResult } from '../../../../browser/actions/types.js';
-import { loadBrowserPipelineSource } from '../../../../browser/pipeline/source.js';
 import type { BrowserNotReadyError, BrowserSetupHint } from '../../../../browser/readiness.js';
 
 const log = createLogger('Agent:BrowserUse');
@@ -34,13 +33,6 @@ export interface CreateBrowserUseToolDeps {
    * card. Cache the result upstream (~30s) so back-to-back calls don't reprobe.
    */
   getReadiness?: () => Promise<BrowserNotReadyError | null>;
-  /** Pipeline runner (injected to avoid circular deps; lazy-loaded if not provided). */
-  runPipeline?: (
-    yaml: string,
-    args: Record<string, unknown>,
-    ctx: BrowserActionContext,
-    options: { dryRun?: boolean; sourceLocation?: string },
-  ) => Promise<BrowserActionResult>;
 }
 
 export function createBrowserUseTool(deps: CreateBrowserUseToolDeps): AgentTool<any, any> {
@@ -113,15 +105,14 @@ export function createBrowserUseTool(deps: CreateBrowserUseToolDeps): AgentTool<
     name: 'browser_use',
     label: '🌐 Browser',
     description:
-      'Use a persistent browser for web navigation, page inspection, interaction, screenshots, network capture, and scripted browser pipelines. For non-trivial browser tasks, load the built-in manual first with tool_manual({ tool: "browser_use" }).',
+      'Use a persistent browser for navigation, inspection, interaction, screenshots, and network capture. Use browser_recipe for saved repeatable browser work.',
     parameters: BrowserUseSchema,
 
     async execute(_toolCallId, params: any, signal, _onUpdate) {
-      const { mode, command, args: cmdArgs, pipeline: pipelineParams, options: _options } = params as {
+      const { mode, command, args: cmdArgs, options: _options } = params as {
         mode: string;
         command?: string;
         args?: Record<string, unknown>;
-        pipeline?: { yaml?: string; path?: string; args?: Record<string, unknown>; dryRun?: boolean };
         options?: { timeout?: number; headless?: boolean };
       };
 
@@ -204,65 +195,6 @@ export function createBrowserUseTool(deps: CreateBrowserUseToolDeps): AgentTool<
         const args = cmdArgs ?? {};
         const result = await registry.execute(command, ctx, args);
         return formatResult(result);
-      }
-
-      // ─── pipeline ──────────────────────────────────────────────────────
-      if (mode === 'pipeline') {
-        if (!pipelineParams) {
-          return {
-            content: [{ type: 'text', text: 'Missing `pipeline` parameter for pipeline mode.' }],
-            details: { ok: false, mode: 'pipeline' },
-          };
-        }
-
-        let yamlSource = pipelineParams.yaml ?? '';
-        let sourceLocation: string | undefined;
-
-        if (!yamlSource && pipelineParams.path) {
-          try {
-            const loaded = await loadBrowserPipelineSource(pipelineParams.path);
-            yamlSource = loaded.source;
-            sourceLocation = loaded.location;
-          } catch (e) {
-            const msg = e instanceof Error ? e.message : String(e);
-            return {
-              content: [{ type: 'text', text: `Failed to read pipeline source: ${msg}` }],
-              details: { ok: false, mode: 'pipeline', error: msg },
-            };
-          }
-        }
-
-        if (!yamlSource) {
-          return {
-            content: [{ type: 'text', text: 'Pipeline mode requires `yaml`, `script`, or `path`.' }],
-            details: { ok: false, mode: 'pipeline' },
-          };
-        }
-
-        const pipelineArgs = (pipelineParams.args as Record<string, unknown>) ?? {};
-        const dryRun = pipelineParams.dryRun === true;
-        const page = await deps.getPageForTask();
-        const ctx = buildContext(page, signal);
-
-        // Use injected runner or lazy-load
-        if (deps.runPipeline) {
-          const result = await deps.runPipeline(yamlSource, pipelineArgs, ctx, { dryRun, sourceLocation });
-          return formatResult(result);
-        }
-
-        // Lazy import pipeline runner
-        try {
-          const { runBrowserPipeline } = await import('../../../../browser/pipeline/runner.js');
-          const result = await runBrowserPipeline(yamlSource, pipelineArgs, ctx, registry, { dryRun, sourceLocation });
-          return formatResult(result);
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          log.error({ err: e }, `Pipeline execution failed: ${msg}`);
-          return {
-            content: [{ type: 'text', text: `Pipeline failed: ${msg}` }],
-            details: { ok: false, mode: 'pipeline', error: msg },
-          };
-        }
       }
 
       return {

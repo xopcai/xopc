@@ -143,6 +143,7 @@ function triggerLabel(automation: Automation): string {
 
 function actionLabel(automation: Automation): string {
   if (automation.action.kind === 'workflow') return `workflow:${automation.action.workflowId}`;
+  if (automation.action.kind === 'browser_recipe') return `browser-workflow:${automation.action.recipeId}`;
   return automation.action.agentId ? `agent:${automation.action.agentId}` : 'agent';
 }
 
