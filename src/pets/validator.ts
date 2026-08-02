@@ -2,7 +2,7 @@ import { constants } from 'node:fs';
 import { access, readFile } from 'node:fs/promises';
 import { extname, join, resolve } from 'node:path';
 
-import { DESKTOP_PET_ACTIONS, type DesktopPetPackageAction } from './manifest.js';
+import { DESKTOP_PET_ACTIONS, DESKTOP_PET_SCHEMA_VERSION, type DesktopPetPackageAction } from './manifest.js';
 
 export type DesktopPetValidationIssue = {
   dir: string;
@@ -153,6 +153,9 @@ export async function validateDesktopPetPackage(dir: string): Promise<DesktopPet
   }
 
   if (typeof manifest.id !== 'string' || !manifest.id.trim()) details.push('id is required');
+  if (manifest.schemaVersion !== DESKTOP_PET_SCHEMA_VERSION) {
+    details.push(`schemaVersion must be ${DESKTOP_PET_SCHEMA_VERSION}`);
+  }
   if (typeof manifest.name !== 'string' || !manifest.name.trim()) details.push('name is required');
   if (typeof manifest.description !== 'string' || !manifest.description.trim()) {
     details.push('description is required');
@@ -176,6 +179,10 @@ export async function validateDesktopPetPackage(dir: string): Promise<DesktopPet
 
   const animations: ManifestAnimation[] = [];
   if (rawAnimations) {
+    const supportedActions = new Set<string>(DESKTOP_PET_ACTIONS);
+    for (const action of Object.keys(rawAnimations)) {
+      if (!supportedActions.has(action)) details.push(`${action}: unsupported animation action`);
+    }
     for (const action of DESKTOP_PET_ACTIONS) {
       const animation = parseAnimation(action, rawAnimations[action], details);
       if (animation) animations.push(animation);

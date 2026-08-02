@@ -1,5 +1,5 @@
 import type { DesktopPetActivity as Activity } from './desktop-pet-session-state';
-import type { DesktopPetFeedbackLevel } from '@/types/electron';
+import type { DesktopPetBehaviorMode } from '@/types/electron';
 
 const LONG_RUNNING_MS = 90_000;
 const STALE_SIGNAL_MS = 30_000;
@@ -73,7 +73,9 @@ export function activityReassuranceText(
 
 export function shouldShowIdleTip(params: {
   bubbleEnabled: boolean;
-  feedbackLevel: DesktopPetFeedbackLevel;
+  behaviorMode: DesktopPetBehaviorMode;
+  proactiveTipsEnabled: boolean;
+  remindersPausedUntil?: number;
   collapsed: boolean;
   queuedCount: number;
   activeCount: number;
@@ -89,7 +91,9 @@ export function shouldShowIdleTip(params: {
       : Number.POSITIVE_INFINITY;
   return (
     params.bubbleEnabled &&
-    params.feedbackLevel !== 'quiet' &&
+    params.behaviorMode !== 'focus' &&
+    params.proactiveTipsEnabled &&
+    (!params.remindersPausedUntil || params.now >= params.remindersPausedUntil) &&
     !params.collapsed &&
     params.queuedCount === 0 &&
     params.activeCount === 0 &&

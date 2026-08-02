@@ -1605,6 +1605,122 @@ html[data-desktop-pet="true"] body {
       1;
 }
 
+.desktop-pet-sprite--reduced-motion {
+  animation: none;
+}
+
+.desktop-pet-quick-task {
+  width: 420px;
+  border: 1px solid var(--color-edge);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  background: color-mix(in srgb, var(--color-surface-panel) 96%, transparent);
+  box-shadow: none;
+}
+
+.desktop-pet-quick-task form {
+  display: grid;
+  gap: 10px;
+}
+
+.desktop-pet-quick-task-header,
+.desktop-pet-quick-task-composer,
+.desktop-pet-quick-task-clarify > div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.desktop-pet-quick-task-header {
+  justify-content: space-between;
+  min-width: 0;
+  color: #334155;
+  font-size: 12px;
+}
+
+.desktop-pet-quick-task-header > span {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.desktop-pet-quick-task-header small {
+  color: #94a3b8;
+  font-size: 9px;
+  font-weight: 500;
+}
+
+.desktop-pet-quick-task-header button,
+.desktop-pet-quick-task-composer button {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: rgb(59 130 246 / 0.12);
+  color: #2563eb;
+  cursor: pointer;
+}
+
+.desktop-pet-quick-task-composer input {
+  min-width: 0;
+  height: 34px;
+  flex: 1;
+  border: 1px solid rgb(148 163 184 / 0.35);
+  border-radius: 9px;
+  padding: 0 11px;
+  outline: none;
+  background: rgb(255 255 255 / 0.82);
+  color: #334155;
+  font-size: 12px;
+}
+
+.desktop-pet-quick-task-composer input:focus {
+  border-color: rgb(59 130 246 / 0.55);
+}
+
+.desktop-pet-quick-task-composer button {
+  width: 34px;
+  height: 34px;
+}
+
+.desktop-pet-quick-task p {
+  margin: 0;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.desktop-pet-quick-task-clarify {
+  display: grid;
+  gap: 6px;
+}
+
+.desktop-pet-quick-task-clarify button,
+.desktop-pet-quick-task-open {
+  border: 0;
+  border-radius: 7px;
+  padding: 5px 7px;
+  background: rgb(59 130 246 / 0.1);
+  color: #2563eb;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.desktop-pet-quick-task-error {
+  color: #dc2626 !important;
+}
+
+.desktop-pet-quick-task-open {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 4px;
+}
+
 @keyframes desktop-pet-float {
   0%,
   100% {

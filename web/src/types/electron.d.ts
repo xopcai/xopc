@@ -249,16 +249,22 @@ export interface ElectronFullscreenAPI {
 
 export type DesktopPetAction =
   | "idle"
-  | "typing"
-  | "toolbox"
-  | "search"
-  | "file"
-  | "terminal"
-  | "browser"
+  | "sleep"
+  | "wake"
+  | "greet"
+  | "prepare"
+  | "research"
+  | "read"
+  | "create"
+  | "execute"
+  | "wait"
   | "success"
-  | "error";
+  | "concern"
+  | "pet"
+  | "pickedUp"
+  | "released";
 
-export type DesktopPetFeedbackLevel = "quiet" | "normal" | "chatty";
+export type DesktopPetBehaviorMode = "focus" | "companion" | "playful";
 
 export type DesktopPetActivityPhase =
   | "preparing"
@@ -364,7 +370,11 @@ export type DesktopPetPrefs = {
   bubbleEnabled: boolean;
   clickThroughWhenIdle: boolean;
   muted: boolean;
-  feedbackLevel: DesktopPetFeedbackLevel;
+  behaviorMode: DesktopPetBehaviorMode;
+  proactiveTipsEnabled: boolean;
+  interactionEnabled: boolean;
+  reducedMotion: boolean;
+  remindersPausedUntil?: number;
   sizePercent: number;
   collapsed: boolean;
   anchor?: DesktopPetAnchor;
@@ -406,11 +416,23 @@ export type PetSessionUpdate = {
 
 export type DesktopPetState = {
   prefs: DesktopPetPrefs;
+  relationship: DesktopPetRelationship;
+  relationshipMoment?: DesktopPetRelationshipMoment;
   pets: DesktopPetDefinition[];
   visible: boolean;
   customPetsDir: string;
   petIssues: DesktopPetIssue[];
   activities: PetSessionUpdate[];
+};
+
+export type DesktopPetRelationshipMoment = "first_meeting" | "new_day" | "returning";
+
+export type DesktopPetRelationship = {
+  firstMetAt: number;
+  lastSeenAt: number;
+  completedTaskCount: number;
+  unlockedReactions: string[];
+  recentCompletedRunIds: string[];
 };
 
 export interface ElectronDesktopPetAPI {
@@ -424,6 +446,7 @@ export interface ElectronDesktopPetAPI {
   setClickThrough(enabled: boolean): Promise<void>;
   sendEvent(event: PetSessionUpdate): Promise<void>;
   acknowledgeEvent(sessionKey: string, runId: string): Promise<void>;
+  recordCompletion(runId: string): Promise<void>;
   openCustomPetsDir(): Promise<{ ok: true } | { ok: false; error: string }>;
   createFromPrompt(
     request: DesktopPetCreateRequest,

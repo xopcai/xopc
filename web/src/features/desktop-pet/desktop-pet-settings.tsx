@@ -20,8 +20,8 @@ import { isElectron } from '@/lib/electron-env';
 import { interaction } from '@/lib/interaction';
 import { useLocaleStore } from '@/stores/locale-store';
 import type {
+  DesktopPetBehaviorMode,
   DesktopPetDefinition,
-  DesktopPetFeedbackLevel,
   DesktopPetIssue,
   DesktopPetState,
 } from '@/types/electron';
@@ -182,6 +182,7 @@ export function DesktopPetSettings() {
   };
 
   const displayedSize = sizeDraft ?? state.prefs.sizePercent;
+  const daysTogether = Math.max(1, Math.floor((Date.now() - state.relationship.firstMetAt) / 86_400_000) + 1);
 
   const commitSize = async (value = displayedSize) => {
     const next = Math.min(140, Math.max(70, Math.round(value / 5) * 5));
@@ -264,6 +265,16 @@ export function DesktopPetSettings() {
               {t.createInChat}
             </button>
           </div>
+        </div>
+
+        <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-edge-subtle bg-surface-panel p-3">
+          <div>
+            <h3 className="text-sm font-semibold text-fg">{t.bondTitle}</h3>
+            <p className="text-xs text-fg-muted">{t.bondDesc}</p>
+          </div>
+          <span className="shrink-0 rounded-full bg-accent-soft px-2.5 py-1 text-xs font-medium text-accent-fg">
+            {t.bondSummary.replace('{days}', String(daysTogether)).replace('{tasks}', String(state.relationship.completedTaskCount))}
+          </span>
         </div>
 
         <div className="mt-5">
@@ -421,21 +432,49 @@ export function DesktopPetSettings() {
               disabled={busy}
               onChange={(checked) => void patch({ bubbleEnabled: checked })}
             />
+            <ToggleRow
+              title={t.proactiveTips}
+              desc={t.proactiveTipsDesc}
+              checked={state.prefs.proactiveTipsEnabled}
+              disabled={busy}
+              onChange={(checked) => void patch({ proactiveTipsEnabled: checked })}
+            />
+            <ToggleRow
+              title={t.interactions}
+              desc={t.interactionsDesc}
+              checked={state.prefs.interactionEnabled}
+              disabled={busy}
+              onChange={(checked) => void patch({ interactionEnabled: checked })}
+            />
+            <ToggleRow
+              title={t.reducedMotion}
+              desc={t.reducedMotionDesc}
+              checked={state.prefs.reducedMotion}
+              disabled={busy}
+              onChange={(checked) => void patch({ reducedMotion: checked })}
+            />
+            <ToggleRow
+              title={t.clickThrough}
+              desc={t.clickThroughDesc}
+              checked={state.prefs.clickThroughWhenIdle}
+              disabled={busy}
+              onChange={(checked) => void patch({ clickThroughWhenIdle: checked })}
+            />
           </div>
           <div className="flex flex-col gap-2 rounded-xl bg-surface-hover/50 p-3 dark:bg-surface-hover/35 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <div className="text-sm font-medium text-fg">{t.feedbackLevel}</div>
-              <p className="text-xs text-fg-muted">{t.feedbackLevelDesc}</p>
+              <div className="text-sm font-medium text-fg">{t.behaviorMode}</div>
+              <p className="text-xs text-fg-muted">{t.behaviorModeDesc}</p>
             </div>
             <Select
               className="w-full sm:w-40"
               triggerClassName="h-9 bg-surface-panel"
-              value={state.prefs.feedbackLevel}
-              onChange={(e) => void patch({ feedbackLevel: e.target.value as DesktopPetFeedbackLevel })}
+              value={state.prefs.behaviorMode}
+              onChange={(e) => void patch({ behaviorMode: e.target.value as DesktopPetBehaviorMode })}
             >
-              <SelectOption value="quiet">{t.feedbackQuiet}</SelectOption>
-              <SelectOption value="normal">{t.feedbackNormal}</SelectOption>
-              <SelectOption value="chatty">{t.feedbackChatty}</SelectOption>
+              <SelectOption value="focus">{t.behaviorFocus}</SelectOption>
+              <SelectOption value="companion">{t.behaviorCompanion}</SelectOption>
+              <SelectOption value="playful">{t.behaviorPlayful}</SelectOption>
             </Select>
           </div>
           <button

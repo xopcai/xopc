@@ -26,7 +26,7 @@ Recommended questions for a new pet:
    - Choices: `Soft and cute`, `Techy and energetic`, `Calm and focused`, `Describe my own`
    - Default: `Soft and cute`
 3. Signature work behavior: ask which behavior should be most recognizable.
-   - Choices: `Typing at a laptop`, `Searching a toolbox`, `Celebrating completed work`, `Describe my own`
+   - Choices: `Creating at a laptop`, `Investigating clues`, `Celebrating completed work`, `Describe my own`
    - Default: `Typing at a laptop`
 
 For an existing pet update, ask only what is missing for the requested refinement:
@@ -44,7 +44,7 @@ After clarification, synthesize one complete `prompt` for `create_desktop_pet`. 
 
 - The pet's base form, silhouette, colors, face/expression, and visual style.
 - Personality and short dialogue tone.
-- Required desktop-helper animation ideas: idle, greeting, thinking, typing at a laptop, searching through a toolbox, reading/searching, file or terminal work, success celebration, and error/blocked reaction.
+- Required v2 desktop-helper animation ideas: idle/sleep/wake, greeting and petting, preparing, researching, reading, creating, executing, safely waiting, success celebration, concern, and picked-up/released reactions.
 - Any user-requested refinements, constraints, or brand cues.
 - A note that the pet should read clearly at small desktop size and feel cute, lively, and polished.
 

@@ -117,7 +117,7 @@ export function mapAgentStreamEvent(
       state: 'running',
       phase: 'preparing',
       action: labels.tipRunStart,
-      animation: 'toolbox',
+      animation: 'prepare',
       priority: 'low',
     };
   }
@@ -171,7 +171,7 @@ export function mapAgentStreamEvent(
       state: 'waiting',
       phase: 'waiting',
       action: labels.tipWaiting,
-      animation: 'typing',
+      animation: 'wait',
       priority: 'high',
       publicSummary,
       feedback,
@@ -183,7 +183,7 @@ export function mapAgentStreamEvent(
       state: 'running',
       phase: 'running',
       action: labels.tipAssistantDelta,
-      animation: 'typing',
+      animation: 'create',
       priority: 'low',
     };
   }
@@ -193,7 +193,7 @@ export function mapAgentStreamEvent(
       state: 'running',
       phase: 'running',
       action: labels.tipCommandDelta,
-      animation: 'terminal',
+      animation: 'execute',
       priority: 'low',
     };
   }
@@ -203,7 +203,7 @@ export function mapAgentStreamEvent(
       state: 'running',
       phase: 'running',
       action: labels.tipAssistantDone,
-      animation: 'typing',
+      animation: 'create',
       priority: 'normal',
       publicSummary,
     };
@@ -215,7 +215,7 @@ export function mapAgentStreamEvent(
       state,
       phase: state === 'error' ? 'waiting' : 'running',
       action: state === 'error' ? labels.tipError : labels.tipComplete,
-      animation: state === 'error' ? 'error' : 'success',
+      animation: state === 'error' ? 'concern' : 'success',
       priority: 'high',
       publicSummary,
       feedback,
@@ -227,7 +227,7 @@ export function mapAgentStreamEvent(
       state: 'error',
       phase: 'waiting',
       action: labels.tipError,
-      animation: 'error',
+      animation: 'concern',
       priority: 'high',
       publicSummary,
       feedback,

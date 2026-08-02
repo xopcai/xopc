@@ -689,6 +689,14 @@
     "loading": "加载中…",
     "idleMessage": "我在这里，有事点我。",
     "openApp": "打开 xopc",
+    "quickTaskTitle": "想让我做点什么？",
+    "quickTaskPlaceholder": "交给我一个小任务…",
+    "sendQuickTask": "开始任务",
+    "closeQuickTask": "关闭快捷任务",
+    "quickTaskWorking": "收到，我会帮你看着它跑完。",
+    "quickTaskDone": "稳稳做好啦，可以放心了。",
+    "answerInApp": "去 xopc 回答",
+    "relationshipSummary": "相伴第 {{days}} 天 · 一起完成 {{tasks}} 件事",
     "settings": "设置",
     "menu": "收起/展开提示",
     "hide": "隐藏",
@@ -792,6 +800,9 @@
     "createInChat": "新对话创建",
     "creating": "创建中…",
     "createSuccess": "{name} 已创建并选中。",
+    "bondTitle": "一起成长",
+    "bondDesc": "只记录共同完成的事，离开一阵也不会降低进度。",
+    "bondSummary": "第 {days} 天 · {tasks} 件事",
     "createChatDraft": "/skill:hatch-pet 我想创建一个新的 xopc 宠物。请先问我想要的宠物设定，等设定清楚后再调用 create_desktop_pet 创建。",
     "optimizeInChat": "优化",
     "optimizeChatDraft": "/skill:hatch-pet 我想优化已有宠物 {name}。petId 是 {id}。当前描述：{description}。原始设定：{sourcePrompt}。请先问我想怎么调整；当我给出修改要求后，调用 create_desktop_pet，并使用 mode=update、petId={id} 覆盖更新同一个宠物包。",
@@ -806,40 +817,16 @@
     "customPets": "自定义宠物",
     "builtinPets": {
       "ember": {
-        "name": "逐焰",
-        "description": "给日常代理工作一点温热的推进感。"
-      },
-      "relay": {
-        "name": "信铃",
-        "description": "在不同应用和渠道之间传递消息。"
-      },
-      "loom": {
-        "name": "织忆",
-        "description": "把上下文、笔记和记忆织在一起。"
+        "name": "小焰",
+        "description": "温暖又可靠，每次事情向前推进都会亮起一点小光。"
       },
       "scout": {
-        "name": "探光",
-        "description": "帮你从信息里找到真正有用的线索。"
-      },
-      "forge": {
-        "name": "铸匠",
-        "description": "陪你构建、修复和调用工具。"
+        "name": "探探",
+        "description": "好奇又机灵，随时准备追踪下一条线索。"
       },
       "sprout": {
-        "name": "新芽",
-        "description": "给新的工作流和想法留出生长空间。"
-      },
-      "atlas": {
-        "name": "叠境",
-        "description": "为大型工作区提供清晰的结构感。"
-      },
-      "pulse": {
-        "name": "脉点",
-        "description": "感知网关、自动化和持续运行的状态。"
-      },
-      "patch": {
-        "name": "补丁",
-        "description": "适合陪你做细致改动和审阅差异。"
+        "name": "芽芽",
+        "description": "安静又稳定，陪在旁边但不打断你的节奏。"
       }
     },
     "invalidPets": "部分自定义宠物无法加载",
@@ -853,11 +840,17 @@
     "clickThroughDesc": "菜单关闭时，让透明区域的点击穿透到下方窗口。",
     "mute": "静音",
     "muteDesc": "保留视觉反馈，但不播放宠物声音。",
-    "feedbackLevel": "反馈密度",
-    "feedbackLevelDesc": "选择桌宠展示执行进度的密度。",
-    "feedbackQuiet": "静默",
-    "feedbackNormal": "简洁",
-    "feedbackChatty": "进度",
+    "behaviorMode": "陪伴风格",
+    "behaviorModeDesc": "选择宠物主动靠近你的频率。",
+    "behaviorFocus": "专注",
+    "behaviorCompanion": "陪伴",
+    "behaviorPlayful": "活泼",
+    "proactiveTips": "轻声问候",
+    "proactiveTipsDesc": "允许宠物偶尔给出低打扰的陪伴反馈。",
+    "interactions": "宠物互动",
+    "interactionsDesc": "允许摸摸、招呼和快捷任务入口。",
+    "reducedMotion": "减少动态效果",
+    "reducedMotionDesc": "使用更平静、帧数更少的动画。",
     "resetPosition": "重置位置"
   },
   "systemSettings": {

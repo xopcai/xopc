@@ -17,6 +17,7 @@ import {
   readDesktopPetPrefs,
   readDesktopPetState,
 } from "./prefs.js";
+import { completeDesktopPetTask, visitDesktopPet } from "./relationship-store.js";
 import type {
   DesktopPetAnchor,
   DesktopPetContentSize,
@@ -26,6 +27,7 @@ import type {
   PetSessionUpdate,
   DesktopPetPrefs,
   DesktopPetState,
+  DesktopPetRelationshipMoment,
 } from "./types.js";
 import {
   clampDesktopPetAnchor,
@@ -50,6 +52,7 @@ let interactiveSize: DesktopPetContentSize = { width: 138, height: 132 };
 const recentActivities = new Map<string, PetSessionUpdate>();
 const RECENT_SUCCESS_TTL_MS = 60_000;
 const MAX_RECENT_ACTIVITIES = 12;
+let currentRelationshipMoment: DesktopPetRelationshipMoment | undefined;
 
 function currentActivities(now = Date.now()): PetSessionUpdate[] {
   for (const [sessionKey, activity] of recentActivities) {
@@ -104,6 +107,8 @@ function boundsForAnchor(anchor: DesktopPetAnchor): Rectangle {
 
 async function getInitialAnchor(): Promise<DesktopPetAnchor> {
   const prefs = await readDesktopPetPrefs();
+  const visit = await visitDesktopPet();
+  currentRelationshipMoment = visit.moment;
   return clampAnchor(
     prefs.anchor ??
       desktopPetDefaultAnchor(screen.getPrimaryDisplay().workArea),
@@ -240,13 +245,19 @@ export async function getDesktopPetState(): Promise<DesktopPetState> {
   const state = await readDesktopPetState(
     Boolean(petWindow && !petWindow.isDestroyed() && petWindow.isVisible()),
   );
-  return { ...state, activities: currentActivities() };
+  return { ...state, relationshipMoment: currentRelationshipMoment, activities: currentActivities() };
+}
+
+export async function recordDesktopPetTaskCompletion(runId: string): Promise<void> {
+  await completeDesktopPetTask(runId);
+  emitStateChanged();
 }
 
 export async function sendDesktopPetEvent(event: PetSessionUpdate): Promise<void> {
   const prefs = await readDesktopPetPrefs();
   if (!prefs.enabled) return;
   rememberActivity(event);
+  if (event.state === "success") await recordDesktopPetTaskCompletion(event.runId);
   const win = petWindow && !petWindow.isDestroyed() ? petWindow : null;
   if (!win || !win.isVisible()) return;
   win.webContents.send("desktop-pet:event", event);
