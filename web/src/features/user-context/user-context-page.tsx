@@ -51,8 +51,10 @@ import {
   importUserContext,
   resolveUnderstandingConflict,
   revokeReferenceConsent,
+  rollbackPersonalPlaybookRule,
   setPersonalPlaybookEnabled,
   updateInsightSuggestion,
+  updateRelationshipSettings,
   updatePersonalPlaybookRule,
   updateUnderstanding,
   updateUserContextControls,
@@ -62,6 +64,7 @@ import {
   type InsightSuggestion,
   type PersonalContextSource,
   type PersonalPlaybook,
+  type RelationshipSettingsPatch,
   type UserContextFacet,
   type UserContextResponse,
   type UserProfileFields,
@@ -184,6 +187,9 @@ function UnderstandingCard({
               {item.sourcePath ? <div><dt className="text-fg-subtle">{t.evidencePath}</dt><dd className="mt-0.5 break-all text-fg-muted">{item.sourcePath}</dd></div> : null}
               <div><dt className="text-fg-subtle">{t.evidenceUpdated}</dt><dd className="mt-0.5 text-fg-muted">{formatDateTime(item.updatedAt, language)}</dd></div>
               <div><dt className="text-fg-subtle">{t.evidenceSupport}</dt><dd className="mt-0.5 text-fg-muted">{replaceCount(t.evidenceCount, item.evidenceCount)}</dd></div>
+              {item.confidence === undefined ? null : <div><dt className="text-fg-subtle">{t.evidenceConfidence}</dt><dd className="mt-0.5 text-fg-muted">{Math.round(item.confidence * 100)}%</dd></div>}
+              {item.validTo ? <div><dt className="text-fg-subtle">{t.evidenceValidUntil}</dt><dd className="mt-0.5 text-fg-muted">{formatDateTime(item.validTo, language)}</dd></div> : null}
+              {item.expiresAt ? <div><dt className="text-fg-subtle">{t.evidenceExpires}</dt><dd className="mt-0.5 text-fg-muted">{formatDateTime(item.expiresAt, language)}</dd></div> : null}
             </dl>
           </details>
           {history ? <div className="mt-2 space-y-2 border-t border-edge pt-2"><p className="text-xs font-medium text-fg-muted">{t.historyTitle}</p>{history.map((version) => <div key={version.id} className="flex items-start justify-between gap-3 text-xs"><p className="min-w-0 text-fg-muted">{version.statement}</p><span className="shrink-0 text-fg-subtle">{formatDateTime(version.updatedAt, language)}</span></div>)}</div> : null}
@@ -249,7 +255,7 @@ function SourceCard({ source, language, t, onConfigure, onDisconnect }: { source
   );
 }
 
-function PlaybookCard({ playbook, busy, t, onToggleGroup, onCreate, onUpdate, onDelete }: {
+function PlaybookCard({ playbook, busy, t, onToggleGroup, onCreate, onUpdate, onDelete, onRollback }: {
   playbook: PersonalPlaybook;
   busy: boolean;
   t: ReturnType<typeof messages>['you'];
@@ -257,6 +263,7 @@ function PlaybookCard({ playbook, busy, t, onToggleGroup, onCreate, onUpdate, on
   onCreate: (statement: string) => void;
   onUpdate: (ruleId: string, patch: { statement?: string; enabled?: boolean; order?: number }) => void;
   onDelete: (ruleId: string) => void;
+  onRollback: (ruleId: string, versionId: string) => void;
 }) {
   const [newRule, setNewRule] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -264,7 +271,7 @@ function PlaybookCard({ playbook, busy, t, onToggleGroup, onCreate, onUpdate, on
   return <article className={cn('rounded-xl border p-4', playbook.enabled ? 'border-edge-subtle bg-surface-panel' : 'border-edge-subtle bg-surface-muted')}>
     <div className="flex items-start justify-between gap-3"><div><h3 className="text-sm font-semibold text-fg">{t.playbookNames[playbook.id]}</h3><p className="mt-1 text-xs text-fg-muted">{replaceCount(t.playbookRuleCount, playbook.rules.filter((rule) => rule.enabled).length)}</p></div><Button type="button" variant="ghost" className="h-8 px-2" disabled={busy} onClick={onToggleGroup}>{playbook.enabled ? t.pausePlaybook : t.resumePlaybook}</Button></div>
     <ul className="mt-3 space-y-2">{playbook.rules.map((rule, index) => <li key={rule.id} className={cn('rounded-lg border border-edge-subtle p-2.5', !rule.enabled && 'opacity-60')}>
-      {editingId === rule.id ? <div className="space-y-2"><textarea className={cn(inputClass, 'min-h-16 resize-y')} value={editingText} onChange={(event) => setEditingText(event.target.value)} /><div className="flex justify-end gap-1"><Button type="button" variant="ghost" className="h-7 px-2" onClick={() => setEditingId(null)}>{t.cancel}</Button><Button type="button" variant="primary" className="h-7 px-2" disabled={!editingText.trim()} onClick={() => { onUpdate(rule.id, { statement: editingText.trim() }); setEditingId(null); }}>{t.save}</Button></div></div> : <><p className="text-xs leading-5 text-fg-muted">{rule.statement}</p><div className="mt-2 flex flex-wrap justify-end gap-1"><Button type="button" variant="ghost" className="h-7 px-2" disabled={busy || index === 0} onClick={() => onUpdate(rule.id, { order: playbook.rules[index - 1].order - 1 })}>{t.moveUp}</Button><Button type="button" variant="ghost" className="h-7 px-2" disabled={busy || index === playbook.rules.length - 1} onClick={() => onUpdate(rule.id, { order: playbook.rules[index + 1].order + 1 })}>{t.moveDown}</Button><Button type="button" variant="ghost" className="h-7 px-2" disabled={busy} onClick={() => onUpdate(rule.id, { enabled: !rule.enabled })}>{rule.enabled ? t.disableRule : t.enableRule}</Button><Button type="button" variant="ghost" className="h-7 px-2" disabled={busy} onClick={() => { setEditingId(rule.id); setEditingText(rule.statement); }}><Pencil className="size-3" aria-hidden />{t.edit}</Button><Button type="button" variant="ghost" className="h-7 px-2 text-danger" disabled={busy} onClick={() => onDelete(rule.id)}><Trash2 className="size-3" aria-hidden />{t.deleteRule}</Button></div></>}
+      {editingId === rule.id ? <div className="space-y-2"><textarea className={cn(inputClass, 'min-h-16 resize-y')} value={editingText} onChange={(event) => setEditingText(event.target.value)} /><div className="flex justify-end gap-1"><Button type="button" variant="ghost" className="h-7 px-2" onClick={() => setEditingId(null)}>{t.cancel}</Button><Button type="button" variant="primary" className="h-7 px-2" disabled={!editingText.trim()} onClick={() => { onUpdate(rule.id, { statement: editingText.trim() }); setEditingId(null); }}>{t.save}</Button></div></div> : <><p className="text-xs leading-5 text-fg-muted">{rule.statement}</p><div className="mt-2 flex flex-wrap justify-end gap-1"><Button type="button" variant="ghost" className="h-7 px-2" disabled={busy || index === 0} onClick={() => onUpdate(rule.id, { order: playbook.rules[index - 1].order - 1 })}>{t.moveUp}</Button><Button type="button" variant="ghost" className="h-7 px-2" disabled={busy || index === playbook.rules.length - 1} onClick={() => onUpdate(rule.id, { order: playbook.rules[index + 1].order + 1 })}>{t.moveDown}</Button><Button type="button" variant="ghost" className="h-7 px-2" disabled={busy} onClick={() => onUpdate(rule.id, { enabled: !rule.enabled })}>{rule.enabled ? t.disableRule : t.enableRule}</Button><Button type="button" variant="ghost" className="h-7 px-2" disabled={busy} onClick={() => { setEditingId(rule.id); setEditingText(rule.statement); }}><Pencil className="size-3" aria-hidden />{t.edit}</Button><Button type="button" variant="ghost" className="h-7 px-2 text-danger" disabled={busy} onClick={() => onDelete(rule.id)}><Trash2 className="size-3" aria-hidden />{t.deleteRule}</Button></div>{rule.versions.length > 1 ? <details className="mt-2 border-t border-edge-subtle pt-2"><summary className="cursor-pointer text-[11px] text-fg-subtle">{t.ruleHistory}</summary><div className="mt-2 space-y-2">{rule.versions.filter((version) => !version.current).map((version) => <div key={version.id} className="flex items-start justify-between gap-2 text-[11px]"><p className="line-clamp-2 text-fg-muted">{version.statement}</p><Button type="button" variant="ghost" className="h-7 shrink-0 px-2" disabled={busy} onClick={() => onRollback(rule.id, version.id)}>{t.rollbackRule}</Button></div>)}</div></details> : null}</>}
     </li>)}</ul>
     <div className="mt-3">
       <div className="flex gap-2"><input className={inputClass} value={newRule} onChange={(event) => setNewRule(event.target.value)} placeholder={t.newRulePlaceholder} /><Button type="button" variant="secondary" disabled={busy || !newRule.trim()} onClick={() => { onCreate(newRule.trim()); setNewRule(''); }}>{t.addRule}</Button></div>
@@ -321,6 +328,7 @@ export function UserContextPage() {
   const [controlsDraft, setControlsDraft] = useState<UserContextResponse['controls'] | null>(null);
   const [controlsSaving, setControlsSaving] = useState(false);
   const [trustSaving, setTrustSaving] = useState(false);
+  const [relationshipSaving, setRelationshipSaving] = useState(false);
   const [pendingTrustLevel, setPendingTrustLevel] = useState<UserTrustLevel | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const [pendingImportFile, setPendingImportFile] = useState<File | null>(null);
@@ -337,6 +345,19 @@ export function UserContextPage() {
   const controls = controlsDraft ?? data?.controls ?? null;
   const connectedSources = data?.sources.filter((source) => source.installed && source.enabled) ?? [];
   const unhealthySources = connectedSources.filter((source) => ['failed', 'unauthorized', 'degraded', 'not_configured'].includes(source.status));
+
+  async function saveRelationship(patch: RelationshipSettingsPatch) {
+    if (!data || relationshipSaving) return;
+    setRelationshipSaving(true);
+    try {
+      const result = await updateRelationshipSettings(patch);
+      await mutate({ ...data, relationship: result.relationship }, { revalidate: false });
+    } catch {
+      showToast({ type: 'error', title: t.supportModeTitle, message: t.saveError });
+    } finally {
+      setRelationshipSaving(false);
+    }
+  }
 
   const selectView = (next: ViewId, status?: 'review') => {
     const params = new URLSearchParams(searchParams);
@@ -671,6 +692,27 @@ export function UserContextPage() {
             </div>
           </section>
 
+          <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="max-w-2xl">
+                <h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><HeartHandshake className="size-4 text-accent" aria-hidden />{t.supportModeTitle}</h2>
+                <p className="mt-1 text-xs leading-5 text-fg-muted">{t.supportModeHint}</p>
+              </div>
+              <label className="grid min-w-48 gap-1 text-xs font-medium text-fg-muted">
+                <span className="sr-only">{t.supportModeTitle}</span>
+                <Select value={data.relationship.supportMode} disabled={relationshipSaving} onChange={(event) => void saveRelationship({ supportMode: event.target.value as UserContextResponse['relationship']['supportMode'] })}>
+                  {(Object.entries(t.supportModes) as Array<[UserContextResponse['relationship']['supportMode'], string]>).map(([value, label]) => <SelectOption key={value} value={value}>{label}</SelectOption>)}
+                </Select>
+              </label>
+            </div>
+            <div className="mt-4 grid gap-3 border-t border-edge-subtle pt-4 sm:grid-cols-2 lg:grid-cols-4">
+              <label className="flex items-center gap-2 text-xs text-fg-muted"><input type="checkbox" checked={data.relationship.proactiveEnabled} disabled={relationshipSaving} onChange={(event) => void saveRelationship({ proactiveEnabled: event.target.checked })} />{t.proactiveEnabled}</label>
+              <label className="grid gap-1 text-xs text-fg-muted">{t.quietStart}<input type="time" className={inputClass} value={data.relationship.quietStart ?? ''} disabled={relationshipSaving} onChange={(event) => void saveRelationship({ quietStart: event.target.value || null })} /></label>
+              <label className="grid gap-1 text-xs text-fg-muted">{t.quietEnd}<input type="time" className={inputClass} value={data.relationship.quietEnd ?? ''} disabled={relationshipSaving} onChange={(event) => void saveRelationship({ quietEnd: event.target.value || null })} /></label>
+              <label className="grid gap-1 text-xs text-fg-muted">{t.blockedTopics}<input className={inputClass} defaultValue={data.relationship.blockedTopics.join(', ')} disabled={relationshipSaving} onBlur={(event) => void saveRelationship({ blockedTopics: event.target.value.split(',').map((value) => value.trim()).filter(Boolean) })} /></label>
+            </div>
+          </section>
+
           {data.insights.length > 0 ? <section className="rounded-2xl border border-accent/15 bg-surface-base p-5"><div className="flex flex-wrap items-center gap-2"><h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><Lightbulb className="size-4 text-accent" aria-hidden />{t.insightsTitle}</h2><ContextBadge>{t.confirmedContextBadge}</ContextBadge></div><div className="mt-4 grid gap-3 lg:grid-cols-2">{data.insights.map((item) => <article key={item.id} className="rounded-xl border border-edge-subtle bg-surface-panel p-4"><p className="text-sm leading-6 text-fg">{item.insight}</p><p className="mt-2 text-xs text-fg-subtle">{item.evidenceCount > 1 ? replaceCount(t.insightEvidence, item.evidenceCount) : t.insightReason}</p><div className="mt-3 flex justify-end gap-2"><Button type="button" variant="ghost" className="h-8 px-2" disabled={busyId === `insight:${item.id}`} onClick={() => void runInsightAction(item, 'dismiss')}>{t.notNow}</Button><Button type="button" variant="primary" className="h-8 px-2" disabled={busyId === `insight:${item.id}`} onClick={() => void runInsightAction(item, 'apply')}>{t.insightActions[item.action]}</Button></div></article>)}</div></section> : null}
 
           <div className="grid gap-4 lg:grid-cols-2">
@@ -716,7 +758,7 @@ export function UserContextPage() {
 
           <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5">
             <div className="flex flex-wrap items-center gap-2"><h2 className="flex items-center gap-2 text-base font-semibold text-fg"><BookOpen className="size-4 text-accent" aria-hidden />{t.playbooksTitle}</h2><ContextBadge>{t.affectsAgentsBadge}</ContextBadge></div>
-            {data.playbooks.length > 0 ? <div className="mt-4 grid gap-3 xl:grid-cols-3">{data.playbooks.map((playbook) => <PlaybookCard key={playbook.id} playbook={playbook} busy={busyId === `playbook:${playbook.id}`} t={t} onToggleGroup={() => void togglePlaybook(playbook)} onCreate={(statement) => void mutatePlaybookRule(playbook.id, () => createPersonalPlaybookRule(playbook.id, statement, (playbook.rules.at(-1)?.order ?? 0) + 10))} onUpdate={(ruleId, patch) => void mutatePlaybookRule(playbook.id, () => updatePersonalPlaybookRule(playbook.id, ruleId, patch))} onDelete={(ruleId) => void mutatePlaybookRule(playbook.id, () => deletePersonalPlaybookRule(playbook.id, ruleId))} />)}</div> : <p className="mt-4 rounded-xl bg-surface-muted px-4 py-3 text-sm text-fg-muted">{t.emptyPlaybooks}</p>}
+            {data.playbooks.length > 0 ? <div className="mt-4 grid gap-3 xl:grid-cols-3">{data.playbooks.map((playbook) => <PlaybookCard key={playbook.id} playbook={playbook} busy={busyId === `playbook:${playbook.id}`} t={t} onToggleGroup={() => void togglePlaybook(playbook)} onCreate={(statement) => void mutatePlaybookRule(playbook.id, () => createPersonalPlaybookRule(playbook.id, statement, (playbook.rules.at(-1)?.order ?? 0) + 10))} onUpdate={(ruleId, patch) => void mutatePlaybookRule(playbook.id, () => updatePersonalPlaybookRule(playbook.id, ruleId, patch))} onDelete={(ruleId) => void mutatePlaybookRule(playbook.id, () => deletePersonalPlaybookRule(playbook.id, ruleId))} onRollback={(ruleId, versionId) => void mutatePlaybookRule(playbook.id, () => rollbackPersonalPlaybookRule(playbook.id, ruleId, versionId))} />)}</div> : <p className="mt-4 rounded-xl bg-surface-muted px-4 py-3 text-sm text-fg-muted">{t.emptyPlaybooks}</p>}
           </section>
         </div>
       ) : null}

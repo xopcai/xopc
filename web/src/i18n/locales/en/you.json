@@ -46,6 +46,7 @@
     "insightEvidence": "Seen across {{count}} relevant moments",
     "insightActions": {
       "make_repeatable": "Make it repeatable",
+      "add_playbook": "Add to my playbook",
       "start_progress": "Start moving it"
     },
     "notNow": "Not now",
@@ -72,6 +73,8 @@
     "enableRule": "Enable",
     "disableRule": "Disable",
     "deleteRule": "Delete",
+    "ruleHistory": "Version history",
+    "rollbackRule": "Restore",
     "moveUp": "Up",
     "moveDown": "Down",
     "profileTitle": "The basics",
@@ -162,6 +165,21 @@
     "evidencePath": "Source location",
     "evidenceUpdated": "Last updated",
     "evidenceSupport": "Supporting evidence",
+    "evidenceConfidence": "Confidence",
+    "evidenceValidUntil": "Valid until",
+    "evidenceExpires": "Expires",
+    "supportModeTitle": "How xopc supports you",
+    "supportModeHint": "Choose the response style that feels most useful. Auto adapts between listening, reflection, advice, and action.",
+    "proactiveEnabled": "Allow proactive suggestions",
+    "quietStart": "Quiet hours start",
+    "quietEnd": "Quiet hours end",
+    "blockedTopics": "Never proactively mention",
+    "supportModes": {
+      "efficient": "Efficient",
+      "coach": "Coach",
+      "companion": "Companion",
+      "auto": "Auto"
+    },
     "confirm": "That's right",
     "notTrue": "That's not right",
     "change": "Correct",

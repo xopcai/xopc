@@ -48,6 +48,12 @@ describe('insight action suggestions', () => {
     );
   });
 
+  it('proposes learned execution patterns for explicit approval', () => {
+    expect(buildInsightSuggestions([record({ kind: 'task_lesson', explicitness: 'observed' })])[0]).toEqual(
+      expect.objectContaining({ action: 'add_playbook' }),
+    );
+  });
+
   it('builds a direct, encoded automation draft route for routines', () => {
     const href = buildRoutineAutomationDraftHref(record({ content: 'Every Friday, send R&D status.' }));
     const url = new URL(href, 'https://xopc.local');
@@ -61,9 +67,9 @@ describe('insight action suggestions', () => {
 describe('personal playbooks', () => {
   it('groups active memory rules by how they affect collaboration', () => {
     const playbooks = buildPersonalPlaybooks([
-      record({ id: 'preference-1', kind: 'preference', content: 'Keep updates concise.' }),
-      record({ id: 'lesson-1', kind: 'task_lesson', content: 'Run focused tests before the full suite.' }),
-      record({ id: 'routine-1', kind: 'routine', content: 'Prepare a Friday summary.' }),
+      record({ id: 'preference-1', kind: 'preference', content: 'Keep updates concise.', tags: ['user-understanding', 'playbook:rule'] }),
+      record({ id: 'lesson-1', kind: 'task_lesson', content: 'Run focused tests before the full suite.', tags: ['user-understanding', 'playbook:rule'] }),
+      record({ id: 'routine-1', kind: 'routine', content: 'Prepare a Friday summary.', tags: ['user-understanding', 'playbook:rule'] }),
     ]);
 
     expect(playbooks.map((item) => item.id)).toEqual(['communication', 'execution', 'routines']);
@@ -72,7 +78,7 @@ describe('personal playbooks', () => {
 
   it('keeps disabled playbook rules active as understanding but out of use', () => {
     const playbooks = buildPersonalPlaybooks([
-      record({ tags: ['user-understanding', 'playbook:disabled'] }),
+      record({ tags: ['user-understanding', 'playbook:rule', 'playbook:disabled'] }),
     ]);
 
     expect(playbooks.find((item) => item.id === 'routines')).toEqual(
@@ -82,5 +88,23 @@ describe('personal playbooks', () => {
 
   it('keeps empty playbooks available for explicit rules', () => {
     expect(buildPersonalPlaybooks([]).map((item) => item.id)).toEqual(['communication', 'execution', 'routines']);
+  });
+
+  it('does not activate learned preferences before user approval', () => {
+    expect(buildPersonalPlaybooks([record({ kind: 'task_lesson' })]).every((item) => item.rules.length === 0)).toBe(true);
+  });
+
+  it('returns the complete version chain for rollback', () => {
+    const previous = record({ id: 'rule-v1', status: 'archived', tags: ['user-understanding', 'playbook:rule'] });
+    const current = record({
+      id: 'rule-v2',
+      kind: 'routine',
+      content: 'Prepare a Friday summary with evidence.',
+      tags: ['user-understanding', 'playbook:rule'],
+      supersedesRecordId: previous.id,
+      updatedAt: '2026-07-11T00:00:00.000Z',
+    });
+    const rule = buildPersonalPlaybooks([previous, current]).find((item) => item.id === 'routines')?.rules[0];
+    expect(rule?.versions.map((version) => version.id)).toEqual(['rule-v2', 'rule-v1']);
   });
 });

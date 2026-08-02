@@ -15,6 +15,7 @@ import {
   decideMemoryReferenceConsent,
   deleteMemoryRecord,
   getMemoryRecord,
+  getRelationshipSettings,
   getUserProfilePromptState,
   getUserTrustPolicy,
   listKnowledgeSourceItems,
@@ -27,9 +28,15 @@ import {
   runSqliteWriteTransaction,
   setUserProfilePromptState,
   setUserTrustPolicy,
+  updateRelationshipSettings,
   upsertMemoryRecord,
 } from '../../../storage/sqlite/index.js';
 import { isUserTrustLevel, USER_TRUST_LEVELS } from '../../../user-context/trust-policy.js';
+import {
+  PERSONAL_PLAYBOOK_DISABLED_TAG as PLAYBOOK_DISABLED_TAG,
+  PERSONAL_PLAYBOOK_ORDER_PREFIX as PLAYBOOK_ORDER_PREFIX,
+  PERSONAL_PLAYBOOK_RULE_TAG as PLAYBOOK_RULE_TAG,
+} from '../../../user-context/personal-playbook.js';
 import {
   buildUserProfileSetup,
   parseUserProfileMarkdown,
@@ -59,8 +66,6 @@ const INSIGHT_ACCEPTED_TAG = 'insight-action:accepted';
 const INSIGHT_DISMISSED_TAG = 'insight-action:dismissed';
 const PLAYBOOK_IDS = ['communication', 'execution', 'routines'] as const;
 type PlaybookId = typeof PLAYBOOK_IDS[number];
-const PLAYBOOK_DISABLED_TAG = 'playbook:disabled';
-const PLAYBOOK_ORDER_PREFIX = 'playbook:order:';
 const PROFILE_FIELD_LIMITS: Record<keyof UserProfileFields, number> = {
   callName: 80,
   pronouns: 80,
@@ -158,6 +163,7 @@ function parseProfilePatch(body: unknown): { patch: Partial<UserProfileFields> }
 }
 
 function playbookForRecord(record: MemoryRecord): PlaybookId | undefined {
+  if (!record.tags?.includes(PLAYBOOK_RULE_TAG)) return undefined;
   if (record.kind === 'preference' || record.kind === 'boundary' || record.kind === 'tool_preference') return 'communication';
   if (record.kind === 'task_lesson' || record.kind === 'derived_insight') return 'execution';
   if (record.kind === 'routine') return 'routines';
@@ -181,7 +187,7 @@ function patchPlaybookRuleTags(record: MemoryRecord, patch: { enabled?: boolean;
 export function buildPersonalPlaybooks(records: MemoryRecord[]) {
   return PLAYBOOK_IDS.map((id) => {
     const rules = records
-      .filter((record) => playbookForRecord(record) === id)
+      .filter((record) => record.status === 'active' && playbookForRecord(record) === id)
       .sort((left, right) => playbookRuleOrder(left) - playbookRuleOrder(right) || left.updatedAt.localeCompare(right.updatedAt));
     return {
       id,
@@ -192,6 +198,12 @@ export function buildPersonalPlaybooks(records: MemoryRecord[]) {
         origin: record.explicitness,
         enabled: !record.tags?.includes(PLAYBOOK_DISABLED_TAG),
         order: playbookRuleOrder(record),
+        versions: playbookVersionChain(records, record.id).map((version) => ({
+          id: version.id,
+          statement: version.content,
+          updatedAt: version.updatedAt,
+          current: version.id === record.id,
+        })),
       })),
       updatedAt: rules.map((record) => record.updatedAt).sort().at(-1),
     };
@@ -213,7 +225,11 @@ export function buildInsightSuggestions(records: MemoryRecord[]) {
       id: record.id,
       insight: record.content,
       kind: record.kind,
-      action: record.kind === 'routine' ? 'make_repeatable' as const : 'start_progress' as const,
+      action: record.kind === 'routine'
+        ? 'make_repeatable' as const
+        : record.kind === 'task_lesson' || record.kind === 'derived_insight'
+          ? 'add_playbook' as const
+          : 'start_progress' as const,
       evidenceCount: record.evidence?.length ?? 0,
       confidence: record.confidence,
       sourceName: record.source.provider ?? 'local',
@@ -243,11 +259,11 @@ function editableRecord(recordId: string): MemoryRecord | null {
   return record;
 }
 
-function preserveRecord(record: MemoryRecord, patch: Partial<Parameters<typeof upsertMemoryRecord>[0]>) {
-  return upsertMemoryRecord({
-    id: record.id,
+function memoryRecordInput(record: MemoryRecord): Parameters<typeof upsertMemoryRecord>[0] {
+  return {
     providerId: record.source.provider ?? 'local',
     kind: record.kind,
+    userId: record.scope.userId,
     sourceAgentId: record.provenance.sourceAgentId,
     workspaceId: record.scope.workspaceId,
     sessionKey: record.scope.sessionKey,
@@ -270,7 +286,41 @@ function preserveRecord(record: MemoryRecord, patch: Partial<Parameters<typeof u
     validTo: record.validTo,
     supersedesRecordId: record.supersedesRecordId,
     conflictGroupId: record.conflictGroupId,
+  };
+}
+
+function preserveRecord(record: MemoryRecord, patch: Partial<Parameters<typeof upsertMemoryRecord>[0]>) {
+  return upsertMemoryRecord({ ...memoryRecordInput(record), ...patch, id: record.id });
+}
+
+function playbookVersionChain(records: MemoryRecord[], recordId: string): MemoryRecord[] {
+  const relatedIds = new Set([recordId]);
+  let previousSize = 0;
+  while (previousSize !== relatedIds.size) {
+    previousSize = relatedIds.size;
+    for (const record of records) {
+      if (!record.supersedesRecordId) continue;
+      if (relatedIds.has(record.id) || relatedIds.has(record.supersedesRecordId)) {
+        relatedIds.add(record.id);
+        relatedIds.add(record.supersedesRecordId);
+      }
+    }
+  }
+  return records
+    .filter((record) => relatedIds.has(record.id) && playbookForRecord(record) !== undefined)
+    .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
+}
+
+function versionPlaybookRule(
+  record: MemoryRecord,
+  patch: Partial<Parameters<typeof upsertMemoryRecord>[0]>,
+): MemoryRecord {
+  return upsertMemoryRecord({
+    ...memoryRecordInput(record),
     ...patch,
+    status: 'active',
+    supersedesRecordId: record.id,
+    source: { provider: 'local', path: 'you://playbook/version' },
   });
 }
 
@@ -318,7 +368,7 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
       }),
       conflictGroups: buildConflictGroups(allUserContextRecords),
       insights: buildInsightSuggestions(records),
-      playbooks: buildPersonalPlaybooks(records.filter((record) => record.status === 'active')),
+      playbooks: buildPersonalPlaybooks(allUserContextRecords),
       sources,
       sourceRecommendations: buildGoalSourceRecommendations(
         sourceDefinitions.filter((definition) => (
@@ -331,12 +381,45 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
         mode: config.userContext.memory.mode,
         sensitiveWritePolicy: config.userContext.privacy.sensitiveWritePolicy,
       },
+      relationship: getRelationshipSettings(),
       trust: {
         defaultActionLevel: trustPolicy.defaultActionLevel,
         levels: USER_TRUST_LEVELS,
         autoRequiresExplicitOptIn: true,
       },
     });
+  });
+
+  authenticated.patch('/api/you/relationship', deps.strictRateLimitMiddleware, async (c) => {
+    const body = await c.req.json().catch(() => null);
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return c.json({ error: 'Invalid relationship settings' }, 400);
+    const input = body as Record<string, unknown>;
+    const patch: Parameters<typeof updateRelationshipSettings>[0] = {};
+    if ('supportMode' in input) {
+      if (!['efficient', 'coach', 'companion', 'auto'].includes(String(input.supportMode))) return c.json({ error: 'Invalid supportMode' }, 400);
+      patch.supportMode = input.supportMode as 'efficient' | 'coach' | 'companion' | 'auto';
+    }
+    if ('proactiveEnabled' in input) {
+      if (typeof input.proactiveEnabled !== 'boolean') return c.json({ error: 'proactiveEnabled must be boolean' }, 400);
+      patch.proactiveEnabled = input.proactiveEnabled;
+    }
+    for (const field of ['quietStart', 'quietEnd'] as const) {
+      if (!(field in input)) continue;
+      const value = input[field];
+      if (value !== null && (typeof value !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(value))) {
+        return c.json({ error: `${field} must use HH:mm` }, 400);
+      }
+      patch[field] = value === null ? undefined : String(value);
+    }
+    for (const field of ['allowedTopics', 'blockedTopics'] as const) {
+      if (!(field in input)) continue;
+      if (!Array.isArray(input[field]) || input[field].length > 20 || input[field].some((value) => typeof value !== 'string' || !value.trim() || value.length > 80)) {
+        return c.json({ error: `${field} must contain up to 20 short topics` }, 400);
+      }
+      patch[field] = [...new Set(input[field].map((value) => value.trim()))];
+    }
+    if (Object.keys(patch).length === 0) return c.json({ error: 'No relationship settings provided' }, 400);
+    return c.json({ ok: true, relationship: updateRelationshipSettings(patch) });
   });
 
   authenticated.get('/api/you/profile', async (c) => {
@@ -569,7 +652,7 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
       .filter((record) => playbookForRecord(record) === id);
     runSqliteWriteTransaction(() => {
       for (const record of active) {
-        preserveRecord(record, {
+        versionPlaybookRule(record, {
           tags: patchPlaybookRuleTags(record, { enabled }),
         });
       }
@@ -592,7 +675,7 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
       content: statement,
       source: { provider: 'local', path: 'you://playbook' },
       confidence: 1,
-      tags: ['user-understanding', 'playbook:explicit', `${PLAYBOOK_ORDER_PREFIX}${Number.isInteger(body.order) ? body.order : 1_000}`],
+      tags: ['user-understanding', PLAYBOOK_RULE_TAG, `${PLAYBOOK_ORDER_PREFIX}${Number.isInteger(body.order) ? body.order : 1_000}`],
       status: 'active',
       sensitivity: 'normal',
       explicitness: 'explicit',
@@ -621,7 +704,7 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
     if (body.order !== undefined && (!Number.isInteger(body.order) || body.order < 0 || body.order > 10_000)) {
       return c.json({ error: 'order must be an integer between 0 and 10000' }, 400);
     }
-    const updated = preserveRecord(record, {
+    const updated = versionPlaybookRule(record, {
       content,
       tags: patchPlaybookRuleTags(record, { enabled: body.enabled, order: body.order }),
       explicitness: body.statement === undefined ? record.explicitness : 'explicit',
@@ -638,8 +721,32 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
     if (!PLAYBOOK_IDS.includes(id) || !record || playbookForRecord(record) !== id) {
       return c.json({ error: 'Playbook rule not found' }, 404);
     }
-    deleteMemoryRecord(record.id);
+    preserveRecord(record, { status: 'archived', validTo: new Date().toISOString() });
     return c.json({ ok: true });
+  });
+
+  authenticated.post('/api/you/playbooks/:id/rules/:recordId/rollback', deps.strictRateLimitMiddleware, async (c) => {
+    const id = c.req.param('id') as PlaybookId;
+    const current = editableRecord(c.req.param('recordId'));
+    if (!PLAYBOOK_IDS.includes(id) || !current || playbookForRecord(current) !== id) {
+      return c.json({ error: 'Playbook rule not found' }, 404);
+    }
+    const body = await c.req.json().catch(() => ({}));
+    const versionId = typeof body.versionId === 'string' ? body.versionId : '';
+    const all = listAllUserContextRecords(ALL_MEMORY_STATUSES);
+    const target = playbookVersionChain(all, current.id).find((record) => record.id === versionId);
+    if (!target || target.id === current.id) return c.json({ error: 'Previous version not found' }, 404);
+    const rolledBack = versionPlaybookRule(current, {
+      content: target.content,
+      tags: target.tags,
+      evidence: target.evidence,
+      explicitness: 'explicit',
+    });
+    return c.json({
+      ok: true,
+      rule: buildPersonalPlaybooks([...all, rolledBack]).find((playbook) => playbook.id === id)?.rules
+        .find((rule) => rule.id === rolledBack.id),
+    });
   });
 
   authenticated.patch('/api/you/insights/:id', deps.strictRateLimitMiddleware, async (c) => {
@@ -662,6 +769,27 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
 
     if (existing.kind === 'routine') {
       return c.json({ ok: true, status: 'drafting', href: buildRoutineAutomationDraftHref(existing) });
+    }
+
+    if (existing.kind === 'task_lesson' || existing.kind === 'derived_insight') {
+      upsertMemoryRecord({
+        providerId: 'local',
+        kind: 'task_lesson',
+        sourceAgentId: selectedAgentId(config),
+        content: existing.content,
+        source: { provider: 'local', path: 'you://insight-proposal' },
+        confidence: 1,
+        tags: ['user-understanding', PLAYBOOK_RULE_TAG, `${PLAYBOOK_ORDER_PREFIX}1000`],
+        status: 'active',
+        sensitivity: existing.sensitivity,
+        explicitness: 'explicit',
+        durability: 'durable',
+        importance: existing.importance,
+        disclosurePolicy: existing.disclosurePolicy,
+        evidence: existing.evidence,
+      });
+      preserveRecord(existing, { tags: [...new Set([...(existing.tags ?? []), INSIGHT_ACCEPTED_TAG])] });
+      return c.json({ ok: true, status: 'saved' });
     }
 
     const title = existing.content.trim().split(/\r?\n/)[0]!.slice(0, 72);

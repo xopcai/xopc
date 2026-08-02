@@ -40,11 +40,15 @@ export type UserUnderstanding = {
   disclosurePolicy: 'silent' | 'referenceable' | 'ask_before_reference';
   stability: 'strong' | 'working' | 'fragile';
   stabilityScore: number;
+  confidence?: number;
   reviewAt: string;
   reviewDue: boolean;
   evidenceCount: number;
   sourcePath?: string;
   latestEvidenceAt?: string;
+  validFrom?: string;
+  validTo?: string;
+  expiresAt?: string;
 };
 
 export type PersonalContextSource = {
@@ -86,7 +90,7 @@ export type InsightSuggestion = {
   id: string;
   insight: string;
   kind: string;
-  action: 'make_repeatable' | 'start_progress';
+  action: 'make_repeatable' | 'start_progress' | 'add_playbook';
   evidenceCount: number;
   confidence?: number;
   sourceName: string;
@@ -95,7 +99,14 @@ export type InsightSuggestion = {
 export type PersonalPlaybook = {
   id: 'communication' | 'execution' | 'routines';
   enabled: boolean;
-  rules: Array<{ id: string; statement: string; origin: 'explicit' | 'observed' | 'inferred'; enabled: boolean; order: number }>;
+  rules: Array<{
+    id: string;
+    statement: string;
+    origin: 'explicit' | 'observed' | 'inferred';
+    enabled: boolean;
+    order: number;
+    versions: Array<{ id: string; statement: string; updatedAt: string; current: boolean }>;
+  }>;
   updatedAt?: string;
 };
 
@@ -129,11 +140,28 @@ export type UserContextResponse = {
     mode: 'off' | 'readOnly' | 'confirmWrite' | 'auto';
     sensitiveWritePolicy: 'deny' | 'confirm' | 'allow';
   };
+  relationship: {
+    supportMode: 'efficient' | 'coach' | 'companion' | 'auto';
+    proactiveEnabled: boolean;
+    quietStart?: string;
+    quietEnd?: string;
+    allowedTopics: string[];
+    blockedTopics: string[];
+    updatedAt: number;
+  };
   trust: {
     defaultActionLevel: UserTrustLevel;
     levels: UserTrustLevel[];
     autoRequiresExplicitOptIn: boolean;
   };
+};
+
+export type RelationshipSettingsPatch = Partial<Omit<
+  UserContextResponse['relationship'],
+  'updatedAt' | 'quietStart' | 'quietEnd'
+>> & {
+  quietStart?: string | null;
+  quietEnd?: string | null;
 };
 
 export type ReferenceConsent = {
@@ -152,6 +180,15 @@ export type ReferenceConsent = {
 
 export function fetchUserContext(): Promise<UserContextResponse> {
   return fetchJson<UserContextResponse>(apiUrl('/api/you'));
+}
+
+export function updateRelationshipSettings(
+  patch: RelationshipSettingsPatch,
+) {
+  return fetchJson<{ ok: true; relationship: UserContextResponse['relationship'] }>(
+    apiUrl('/api/you/relationship'),
+    { method: 'PATCH', body: JSON.stringify(patch) },
+  );
 }
 
 export function setPersonalPlaybookEnabled(id: PersonalPlaybook['id'], enabled: boolean) {
@@ -181,6 +218,13 @@ export function updatePersonalPlaybookRule(
 
 export function deletePersonalPlaybookRule(id: PersonalPlaybook['id'], ruleId: string) {
   return fetchJson(apiUrl(`/api/you/playbooks/${id}/rules/${encodeURIComponent(ruleId)}`), { method: 'DELETE' });
+}
+
+export function rollbackPersonalPlaybookRule(id: PersonalPlaybook['id'], ruleId: string, versionId: string) {
+  return fetchJson(apiUrl(`/api/you/playbooks/${id}/rules/${encodeURIComponent(ruleId)}/rollback`), {
+    method: 'POST',
+    body: JSON.stringify({ versionId }),
+  });
 }
 
 export function updateInsightSuggestion(
