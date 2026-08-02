@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, ChevronRight, Clock3, Eye, FileText, FolderOpen, GitBranch, Loader2, ShieldCheck, X } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
@@ -14,25 +14,27 @@ import {
   cancelWorkDiscoveryRun,
   activateFocusTrial,
   dismissWorkDiscoveryOnboarding,
+  discoverWorkDiscoveryCandidates,
   fetchWorkDiscoveryOnboarding,
   fetchWorkDiscoveryRun,
   grantWorkDiscoveryDirectory,
   previewWorkDiscoveryFolder,
   retryWorkDiscoveryRun,
   selectWorkDiscoverySuggestion,
-  startQuickWorkDiscoveryRun,
   startWorkDiscoveryRun,
   submitWorkDiscoveryRecognitionFeedback,
   updateWorkUnderstandingThread,
   updateWorkDiscoveryProfile,
+  type WorkDiscoveryCandidate,
   type WorkDiscoveryPreview,
   type WorkDiscoveryRun,
   type WorkDiscoveryStage,
   type WorkDiscoverySuggestion,
 } from './api';
+import { runWorkDiscoveryBatch } from './run-work-discovery-batch';
 import { useUnderstandingActivityStore } from './understanding-activity-store';
 
-type PageState = 'loading' | 'intro' | 'consent' | 'running' | 'recognition' | 'recommendation' | 'error';
+type PageState = 'loading' | 'intro' | 'candidates' | 'consent' | 'running' | 'recognition' | 'recommendation' | 'error';
 
 const STAGES: WorkDiscoveryStage[] = ['folder_structure', 'recent_progress', 'next_steps'];
 
@@ -57,6 +59,12 @@ export function WorkDiscoveryPage() {
   const [alternativesOpen, setAlternativesOpen] = useState(false);
   const [profileSelection, setProfileSelection] = useState<Set<string>>(() => new Set());
   const [watchActivated, setWatchActivated] = useState(false);
+  const [candidates, setCandidates] = useState<WorkDiscoveryCandidate[]>([]);
+  const [selectedCandidatePaths, setSelectedCandidatePaths] = useState<Set<string>>(() => new Set());
+  const [batchRuns, setBatchRuns] = useState<WorkDiscoveryRun[]>([]);
+  const [batchRunning, setBatchRunning] = useState(false);
+  const [batchPosition, setBatchPosition] = useState({ current: 0, total: 0 });
+  const stopBatchRef = useRef(false);
 
   const applyRun = useCallback((next: WorkDiscoveryRun) => {
     useUnderstandingActivityStore.getState().updateDirectoryRun(next);
@@ -75,12 +83,86 @@ export function WorkDiscoveryPage() {
     setBusy(true);
     setError(null);
     try {
-      const next = await startQuickWorkDiscoveryRun();
-      applyRun(next);
-      void useUnderstandingActivityStore.getState().scanPersonalContext(next.id);
+      const discovered = await discoverWorkDiscoveryCandidates();
+      if (!discovered.length) {
+        setError(copy.noCandidates);
+        return;
+      }
+      setCandidates(discovered);
+      setSelectedCandidatePaths(new Set([discovered[0].rootPath]));
+      setPageState('candidates');
     } catch (cause) {
       setError(errorText(cause));
     } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggleCandidate = (rootPath: string) => {
+    setSelectedCandidatePaths((current) => {
+      const next = new Set(current);
+      if (next.has(rootPath)) next.delete(rootPath);
+      else next.add(rootPath);
+      return next;
+    });
+  };
+
+  const trackBatchRun = useCallback((next: WorkDiscoveryRun, index: number, total: number) => {
+    useUnderstandingActivityStore.getState().updateDirectoryRun(next);
+    setRun(next);
+    setBatchPosition({ current: index + 1, total });
+    setBatchRuns((current) => {
+      const copy = [...current];
+      copy[index] = next;
+      return copy;
+    });
+    setPageState('running');
+  }, []);
+
+  const replaceBatchRun = useCallback((next: WorkDiscoveryRun) => {
+    setBatchRuns((current) => current.map((item) => item?.id === next.id ? next : item));
+  }, []);
+
+  const startSelectedCandidates = async () => {
+    const selected = candidates.filter((candidate) => selectedCandidatePaths.has(candidate.rootPath));
+    if (!selected.length) return;
+    setBusy(true);
+    setError(null);
+    setBatchRuns([]);
+    setBatchPosition({ current: 1, total: selected.length });
+    setBatchRunning(true);
+    stopBatchRef.current = false;
+    let personalContextStarted = false;
+    try {
+      const results = await runWorkDiscoveryBatch(selected, {
+        grantDirectory: grantWorkDiscoveryDirectory,
+        startRun: startWorkDiscoveryRun,
+        fetchRun: fetchWorkDiscoveryRun,
+        shouldStop: () => stopBatchRef.current,
+        onRun: (next, index, total) => {
+          trackBatchRun(next, index, total);
+          if (!personalContextStarted) {
+            personalContextStarted = true;
+            void useUnderstandingActivityStore.getState().scanPersonalContext(next.id);
+          }
+        },
+        onError: (cause, candidate, index) => {
+          setBatchPosition({ current: index + 1, total: selected.length });
+          setError(copy.folderAnalysisFailed
+            .replace('{{folder}}', candidate.displayName)
+            .replace('{{error}}', errorText(cause)));
+        },
+      });
+      if (stopBatchRef.current) return;
+      const firstCompleted = results.find((item) => item.status === 'completed');
+      const finalRun = firstCompleted ?? results.at(-1);
+      if (finalRun) applyRun(finalRun);
+      else setPageState('candidates');
+    } catch (cause) {
+      setError(errorText(cause));
+      setPageState('candidates');
+    } finally {
+      setBatchRunning(false);
       setBusy(false);
     }
   };
@@ -133,7 +215,7 @@ export function WorkDiscoveryPage() {
   }, [applyRun, navigate, startFresh]);
 
   useEffect(() => {
-    if (!run || pageState !== 'running') return;
+    if (!run || pageState !== 'running' || batchRunning) return;
     let cancelled = false;
     const refresh = async () => {
       try {
@@ -158,7 +240,7 @@ export function WorkDiscoveryPage() {
         window.removeEventListener(name, onEvent);
       }
     };
-  }, [applyRun, pageState, run]);
+  }, [applyRun, batchRunning, pageState, run]);
 
   const skip = async () => {
     setBusy(true);
@@ -173,6 +255,8 @@ export function WorkDiscoveryPage() {
     if (!preview) return;
     setBusy(true);
     setError(null);
+    setBatchRuns([]);
+    setBatchPosition({ current: 0, total: 0 });
     try {
       await grantWorkDiscoveryDirectory(preview.canonicalRootPath);
       const next = await startWorkDiscoveryRun(preview.canonicalRootPath);
@@ -189,6 +273,30 @@ export function WorkDiscoveryPage() {
   const openConversation = (sessionKey: string, draft?: string) => {
     const query = draft ? `?draft=${encodeURIComponent(draft)}` : '';
     navigate(`/chat/${encodeURIComponent(sessionKey)}${query}`);
+  };
+
+  const selectBatchRun = (next: WorkDiscoveryRun) => {
+    setRun(next);
+    setWatchActivated(false);
+    setCorrectionOpen(false);
+    setAlternativesOpen(false);
+    setProfileSelection(new Set(
+      next.result?.profileCandidates?.filter((candidate) => candidate.status === 'pending').map((candidate) => candidate.id) ?? [],
+    ));
+    if (next.status === 'completed') {
+      setPageState(next.feedback?.recognitionDecision === 'confirmed' ? 'recommendation' : 'recognition');
+    } else if (next.status === 'failed' || next.status === 'canceled') {
+      setPageState('error');
+    } else {
+      setPageState('running');
+    }
+  };
+
+  const cancelCurrentAnalysis = async () => {
+    if (!run) return;
+    stopBatchRef.current = true;
+    const canceled = await cancelWorkDiscoveryRun(run.id);
+    applyRun(canceled);
   };
 
   const handleSuggestion = async (suggestion: WorkDiscoverySuggestion, discussOnly: boolean) => {
@@ -217,6 +325,7 @@ export function WorkDiscoveryPage() {
         .map((thread) => updateWorkUnderstandingThread(thread.id, { decision: 'confirmed' })));
       const next = await submitWorkDiscoveryRecognitionFeedback(withProfile.id, 'confirmed');
       setRun(next);
+      replaceBatchRun(next);
       setPageState('recommendation');
     } catch (cause) {
       setError(errorText(cause));
@@ -288,6 +397,30 @@ export function WorkDiscoveryPage() {
     return copy.riskAnalysis;
   };
 
+  const completedBatchRuns = batchRuns.filter((item): item is WorkDiscoveryRun => item?.status === 'completed');
+  const batchRunSwitcher = completedBatchRuns.length > 1 ? (
+    <div className="mt-6 rounded-xl border border-edge bg-surface-panel p-2">
+      <p className="px-2 pb-2 text-xs font-medium text-fg-muted">{copy.analysisResults}</p>
+      <div className="flex flex-wrap gap-2">
+        {completedBatchRuns.map((item) => {
+          const label = candidates.find((candidate) => candidate.rootPath === item.rootPath)?.displayName
+            ?? item.rootPath.split(/[\\/]/).filter(Boolean).at(-1)
+            ?? item.rootPath;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              className={`rounded-lg px-3 py-2 text-sm font-medium transition ${item.id === run?.id ? 'bg-accent text-white' : 'bg-surface-muted text-fg hover:bg-surface-hover'}`}
+              onClick={() => selectBatchRun(item)}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  ) : null;
+
   return (
     <div className="flex min-h-full flex-1 flex-col bg-surface-base">
       <main className="mx-auto flex w-full max-w-[40rem] flex-1 flex-col px-5 py-10 sm:px-8 sm:py-16">
@@ -340,6 +473,70 @@ export function WorkDiscoveryPage() {
             </div>
             <button type="button" className="mx-auto mt-auto pt-10 text-sm text-fg-muted hover:text-fg hover:underline" onClick={() => void skip()} disabled={busy}>
               {copy.skip}
+            </button>
+          </section>
+        ) : null}
+
+        {pageState === 'candidates' ? (
+          <section aria-labelledby="work-discovery-candidates-title">
+            <div className="text-center">
+              <h1 id="work-discovery-candidates-title" className="text-2xl font-semibold tracking-tight text-fg">
+                {copy.candidatesTitle}
+              </h1>
+              <p className="mt-3 text-[0.95rem] leading-7 text-fg-muted">{copy.candidatesSubtitle}</p>
+            </div>
+            <div className="mt-7 space-y-2">
+              {candidates.map((candidate, index) => {
+                const selected = selectedCandidatePaths.has(candidate.rootPath);
+                return (
+                  <button
+                    key={candidate.id}
+                    type="button"
+                    aria-pressed={selected}
+                    className={`flex w-full items-start gap-3 rounded-xl border p-4 text-left transition ${selected ? 'border-accent bg-accent-soft/45' : 'border-edge bg-surface-panel hover:border-edge-strong'}`}
+                    onClick={() => toggleCandidate(candidate.rootPath)}
+                  >
+                    <span className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md border ${selected ? 'border-accent bg-accent text-white' : 'border-edge bg-surface-base text-transparent'}`}>
+                      <Check className="size-3.5" />
+                    </span>
+                    <FolderOpen className="mt-0.5 size-5 shrink-0 text-accent-fg" />
+                    <span className="min-w-0 flex-1">
+                      <span className="flex flex-wrap items-center gap-2">
+                        <span className="truncate text-sm font-medium text-fg">{candidate.displayName}</span>
+                        {index === 0 ? <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[0.7rem] font-medium text-accent-fg">{copy.recommendedCandidate}</span> : null}
+                      </span>
+                      <span className="mt-1 block truncate font-mono text-xs text-fg-muted">{candidate.rootPath}</span>
+                      <span className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-fg-muted">
+                        <span>{candidate.projectKind === 'coding' ? copy.codingProject : candidate.projectKind === 'general' ? copy.generalProject : copy.unknownProject}</span>
+                        {candidate.branch ? <span>{copy.branchValue.replace('{{branch}}', candidate.branch)}</span> : null}
+                        {candidate.changedFileCount > 0 ? <span>{copy.changedFiles.replace('{{count}}', String(candidate.changedFileCount))}</span> : null}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="mt-5 flex items-start gap-2 rounded-xl border border-edge-subtle bg-surface-panel px-4 py-3 text-xs leading-5 text-fg-muted">
+              <ShieldCheck className="mt-0.5 size-4 shrink-0 text-accent-fg" />
+              <span>{copy.multiFolderPrivacyNote}</span>
+            </div>
+            {error ? <p className="mt-4 text-sm text-danger" role="alert">{error}</p> : null}
+            <div className="mt-7 flex flex-col gap-3 sm:flex-row-reverse">
+              <Button
+                type="button"
+                className="h-11 flex-1 bg-accent text-white hover:bg-accent-hover"
+                disabled={busy || selectedCandidatePaths.size === 0}
+                onClick={() => void startSelectedCandidates()}
+              >
+                {busy ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                {copy.analyzeSelected.replace('{{count}}', String(selectedCandidatePaths.size))}
+              </Button>
+              <Button type="button" variant="secondary" className="h-11 flex-1" disabled={busy} onClick={picker.pick}>
+                {copy.chooseFolderManually}
+              </Button>
+            </div>
+            <button type="button" className="mx-auto mt-6 block text-sm text-fg-muted hover:text-fg hover:underline" onClick={() => setPageState('intro')}>
+              {copy.back}
             </button>
           </section>
         ) : null}
@@ -420,6 +617,13 @@ export function WorkDiscoveryPage() {
             <div className="text-center">
               <h1 id="work-discovery-running-title" className="text-2xl font-semibold tracking-tight text-fg">{copy.analyzingTitle}</h1>
               <p className="mt-3 text-[0.95rem] leading-7 text-fg-muted">{copy.analyzingSubtitle}</p>
+              {batchPosition.total > 1 ? (
+                <p className="mt-2 text-sm font-medium text-accent-fg">
+                  {copy.analyzingFolderProgress
+                    .replace('{{current}}', String(batchPosition.current))
+                    .replace('{{total}}', String(batchPosition.total))}
+                </p>
+              ) : null}
             </div>
             <div className="mt-9 rounded-xl border border-edge bg-surface-panel px-5 py-2">
               {STAGES.map((stage, index) => {
@@ -437,9 +641,14 @@ export function WorkDiscoveryPage() {
               })}
             </div>
             <p className="mt-4 truncate text-center font-mono text-xs text-fg-muted">{run.rootPath}</p>
-            <button type="button" className="mx-auto mt-7 block text-sm text-fg-muted hover:text-danger hover:underline" onClick={() => void cancelWorkDiscoveryRun(run.id).then(applyRun)}>
-              {copy.cancelAnalysis}
-            </button>
+            <div className="mx-auto mt-7 flex max-w-md flex-col gap-3">
+              <Button type="button" variant="secondary" className="h-11 w-full" onClick={() => navigate('/chat')}>
+                {copy.continueInBackground}
+              </Button>
+              <button type="button" className="mx-auto text-sm text-fg-muted hover:text-danger hover:underline" onClick={() => void cancelCurrentAnalysis()}>
+                {copy.cancelAnalysis}
+              </button>
+            </div>
           </section>
         ) : null}
 
@@ -451,6 +660,7 @@ export function WorkDiscoveryPage() {
                 {run.result.lowConfidence ? copy.lowConfidenceTitle : copy.recognitionTitle}
               </h1>
             </div>
+            {batchRunSwitcher}
             <div className="mt-7 rounded-2xl border border-accent/25 bg-gradient-to-br from-accent-soft/45 via-surface-panel to-surface-panel p-5 sm:p-6">
               <p className="text-base font-medium leading-7 text-fg">{run.result.projectSummary}</p>
               <p className="mt-3 text-sm leading-6 text-fg-muted">{run.result.currentState}</p>
@@ -567,6 +777,7 @@ export function WorkDiscoveryPage() {
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent-fg">{copy.understandingConfirmed}</p>
               <h1 id="work-discovery-recommendation-title" className="mt-2 text-2xl font-semibold tracking-tight text-fg">{copy.primaryRecommendationTitle}</h1>
             </div>
+            {batchRunSwitcher}
             <article className="mt-7 rounded-2xl border border-accent/30 bg-surface-panel p-5 sm:p-6">
               <div className="flex items-start gap-3">
                 <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent-fg"><ChevronRight className="size-5" /></div>
