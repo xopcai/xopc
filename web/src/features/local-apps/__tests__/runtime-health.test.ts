@@ -95,6 +95,7 @@ describe('local app runtime health messages', () => {
           name: 'Create an item',
           status: 'failed',
           message: 'Step 2: expected text was not found',
+          failureKind: 'scenario',
         }],
       },
     });

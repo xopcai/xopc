@@ -38,6 +38,8 @@
     "descriptionPlaceholder": "给接收者的简短说明",
     "createButton": "生成链接",
     "creating": "创建中…",
+    "shareConfirmTitle": "创建分享链接",
+    "shareConfirmHint": "在链接过期或达到下载次数限制前，任何能够访问该链接的人都可以下载此文件。",
     "shareCreated": "分享链接已生成",
     "copyUrl": "复制链接",
     "copy": "复制",

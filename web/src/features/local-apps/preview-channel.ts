@@ -4,7 +4,7 @@ export const LOCAL_APP_PREVIEW_CONNECT_MESSAGE = Object.freeze({
   type: 'connect',
 });
 
-/** Attach a private channel after iframe load; preview messages never use the shared window bus. */
+/** Attach a private channel immediately and after load; preview messages never use the shared window bus. */
 export function attachLocalAppPreviewChannel(
   iframe: HTMLIFrameElement,
   onMessage: (value: unknown) => void,
@@ -19,6 +19,7 @@ export function attachLocalAppPreviewChannel(
     iframe.contentWindow?.postMessage(LOCAL_APP_PREVIEW_CONNECT_MESSAGE, '*', [channel.port2]);
   };
   iframe.addEventListener('load', connect);
+  connect();
   return () => {
     iframe.removeEventListener('load', connect);
     port?.close();

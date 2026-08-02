@@ -54,9 +54,11 @@ export function usePreviewRuntimeController(descriptor: PreviewRuntimeRenderProp
 export function PreviewRuntimeToolbar({
   controller,
   actions,
+  showDownload = true,
 }: {
   controller: PreviewRuntimeController;
   actions: PreviewRuntimeRenderProps['actions'];
+  showDownload?: boolean;
 }) {
   return (
     <PreviewToolbar
@@ -68,6 +70,7 @@ export function PreviewRuntimeToolbar({
       onZoomReset={controller.onZoomReset}
       onRotate={controller.onRotate}
       onSearchChange={controller.onSearchChange}
+      showDownload={showDownload}
     />
   );
 }

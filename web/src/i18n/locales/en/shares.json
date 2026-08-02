@@ -38,6 +38,8 @@
     "descriptionPlaceholder": "Brief note for the recipient",
     "createButton": "Create link",
     "creating": "Creating…",
+    "shareConfirmTitle": "Create share link",
+    "shareConfirmHint": "Anyone who can reach the generated link may download this file until the link expires or reaches its download limit.",
     "shareCreated": "Share link created",
     "copyUrl": "Copy link",
     "copy": "Copy",

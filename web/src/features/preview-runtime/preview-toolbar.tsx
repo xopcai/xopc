@@ -13,6 +13,7 @@ type PreviewToolbarProps = {
   onZoomReset: () => void;
   onRotate: () => void;
   onSearchChange: (value: string) => void;
+  showDownload?: boolean;
 };
 
 export function PreviewToolbar({
@@ -24,13 +25,15 @@ export function PreviewToolbar({
   onZoomReset,
   onRotate,
   onSearchChange,
+  showDownload = true,
 }: PreviewToolbarProps) {
   const [moreOpen, setMoreOpen] = useState(false);
   const canZoom = plugin.capabilities.includes('zoom');
   const canSearch = plugin.capabilities.includes('search');
   const canRotate = plugin.capabilities.includes('rotate');
   const canPage = plugin.capabilities.includes('pageNavigation') && controls.pageCount != null && controls.pageCount > 1;
-  const show = canZoom || canSearch || canRotate || canPage || actions.canDownload;
+  const canDownload = showDownload && actions.canDownload;
+  const show = canZoom || canSearch || canRotate || canPage || canDownload;
   if (!show) return null;
 
   const units: ReactNode[] = [];
@@ -97,7 +100,7 @@ export function PreviewToolbar({
       </label>,
     );
   }
-  if (actions.canDownload) {
+  if (canDownload) {
     units.push(
       <ToolbarButton key="download" label="Download" onClick={() => void actions.onDownload()}>
           <Download className="size-3.5" />
