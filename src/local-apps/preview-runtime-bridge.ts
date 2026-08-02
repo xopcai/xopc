@@ -5,20 +5,20 @@ import { encodeLocalAppAcceptanceConfig } from './acceptance.js';
 
 export const LOCAL_APP_RUNTIME_BRIDGE_SCRIPT = `(() => {
   let hostPort = null;
-  const pending = [];
+  const latest = new Map();
   const send = (type, detail) => {
     const message = { source: 'xopc-local-app-preview', version: 1, type, detail };
-    if (hostPort) hostPort.postMessage(message);
-    else pending.push(message);
+    latest.set(type, message);
+    hostPort?.postMessage(message);
   };
   const connect = (event) => {
     const message = event.data;
     if (event.source !== parent || message?.source !== 'xopc-local-app-host' || message?.version !== 1 || message?.type !== 'connect' || !event.ports[0]) return;
     event.stopImmediatePropagation();
-    removeEventListener('message', connect, true);
+    hostPort?.close();
     hostPort = event.ports[0];
     hostPort.start();
-    for (const queued of pending.splice(0)) hostPort.postMessage(queued);
+    for (const message of latest.values()) hostPort.postMessage(message);
   };
   addEventListener('message', connect, true);
   const text = (value) => String(value ?? '').slice(0, 500);
@@ -35,7 +35,10 @@ export const LOCAL_APP_RUNTIME_BRIDGE_SCRIPT = `(() => {
   };
   const target = (id) => Array.from(document.querySelectorAll('[data-xopc-test-id]'))
     .find((element) => element.getAttribute('data-xopc-test-id') === id);
-  const pause = () => new Promise((resolve) => setTimeout(resolve, 50));
+  const settle = async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  };
   const readCriteria = () => {
     const encoded = document.querySelector('meta[name="xopc-local-app-acceptance"]')?.content;
     if (!encoded) return { schemaVersion: 1, scenarios: [] };
@@ -118,7 +121,7 @@ export const LOCAL_APP_RUNTIME_BRIDGE_SCRIPT = `(() => {
             if (!(element instanceof HTMLElement)) throw new Error('Target "' + step.target + '" was not found');
             if ('disabled' in element && element.disabled || element.getAttribute('aria-disabled') === 'true') throw new Error('Target "' + step.target + '" is disabled');
             element.click();
-            await pause();
+            await settle();
           } else if (step.action === 'fill') {
             const element = target(step.target);
             if (!(element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement)) throw new Error('Target "' + step.target + '" cannot be filled');
@@ -128,7 +131,7 @@ export const LOCAL_APP_RUNTIME_BRIDGE_SCRIPT = `(() => {
             else element.value = step.value;
             element.dispatchEvent(new Event('input', { bubbles: true }));
             element.dispatchEvent(new Event('change', { bubbles: true }));
-            await pause();
+            await settle();
           } else if (step.assert === 'text_visible') {
             const found = Array.from(document.body.querySelectorAll('*')).some((element) => visible(element) && text(element.textContent).includes(step.text));
             if (!found) throw new Error('Visible text was not found: "' + step.text + '"');
@@ -154,9 +157,9 @@ export const LOCAL_APP_RUNTIME_BRIDGE_SCRIPT = `(() => {
   };
   const loaded = () => {
     send('ready', { readyState: document.readyState });
-    const run = () => { runAcceptance(); void runCriteria(); };
-    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => requestAnimationFrame(run));
-    else setTimeout(run, 0);
+    void runCriteria();
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => requestAnimationFrame(runAcceptance));
+    else setTimeout(runAcceptance, 0);
   };
   if (document.readyState === 'complete') queueMicrotask(loaded);
   else addEventListener('load', loaded, { once: true });

@@ -6,6 +6,7 @@ import {
   parseProductDeliveryText,
   parseProductReferenceDeepLink,
   productReferenceDeepLink,
+  productReferenceOpenRoute,
   productReferenceRoute,
   type ProductDeliveryEnvelope,
 } from './product-delivery.js';
@@ -46,5 +47,12 @@ describe('product delivery contract', () => {
       title: 'Extension debug',
       capabilities: ['open'],
     })).toBe('/settings/extensions/debug');
+    expect(productReferenceOpenRoute({
+      kind: 'local_app',
+      id: 'app/with spaces',
+      title: 'Local app',
+      capabilities: ['open'],
+    })).toBe('/open?kind=local_app&id=app%2Fwith+spaces');
+    expect(productReferenceOpenRoute(delivery.primary!)).toBe('/notes/note%2Fwith%20spaces');
   });
 });

@@ -23,6 +23,7 @@ export type LocalAppCriteriaScenarioResult = {
   name: string;
   status: 'passed' | 'failed';
   message: string;
+  failureKind: 'scenario' | 'runner';
 };
 
 export type LocalAppCriteriaResult = {
@@ -61,6 +62,7 @@ export function parseLocalAppRuntimeMessage(value: unknown): LocalAppRuntimeMess
         name: scenario.name,
         status: scenario.status,
         message: scenario.message.slice(0, 500),
+        failureKind: 'scenario' as const,
       };
     });
     if (scenarios.some((scenario) => scenario === null)) return null;

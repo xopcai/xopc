@@ -51,7 +51,7 @@ type WorkspacePreviewLoadState = PreviewLoadedSource & {
 type EditorUiState = {
   markdownEditMode: boolean;
   htmlCodeMode: boolean;
-  saveStatus: 'idle' | 'saving' | 'saved';
+  saveStatus: 'idle' | 'saving' | 'saved' | 'error';
 };
 
 type WorkspacePreviewAction =
@@ -290,7 +290,8 @@ export function useWorkspacePreviewState({
         dispatchEditorUi({ type: 'saveStatus', value: 'saved' });
         saveStatusClearRef.current = setTimeout(() => dispatchEditorUi({ type: 'saveStatus', value: 'idle' }), 2000);
       } catch {
-        dispatchEditorUi({ type: 'saveStatus', value: 'idle' });
+        dispatchEditorUi({ type: 'saveStatus', value: 'error' });
+        saveStatusClearRef.current = setTimeout(() => dispatchEditorUi({ type: 'saveStatus', value: 'idle' }), 4000);
       }
     },
     [filePath, readOpts],

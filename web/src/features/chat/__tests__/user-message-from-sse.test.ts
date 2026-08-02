@@ -37,6 +37,30 @@ describe('userMessageFromSsePayload', () => {
 });
 
 describe('shouldReplaceOptimisticUserRow', () => {
+  it('replaces a multiline skill draft with its expanded server row', () => {
+    const text = `/skill:build-xopc-local-app 请修复当前草稿。
+
+- Add a book: Visible text was not found`;
+    const optimistic: Message = {
+      role: 'user',
+      content: [{ type: 'text', text }],
+      timestamp: 1000,
+    };
+    const server = userMessageFromSsePayload({
+      timestamp: 1005,
+      content: `## Skill: build-xopc-local-app
+
+Build a local XOPC app.
+
+**Arguments**: 请修复当前草稿。
+
+- Add a book: Visible text was not found`,
+    });
+
+    expect(server?.content[0]).toEqual({ type: 'text', text });
+    expect(server && shouldReplaceOptimisticUserRow(optimistic, server)).toBe(true);
+  });
+
   it('keeps optimistic attachments when an early server row has only matching text', () => {
     const optimistic: Message = {
       role: 'user',

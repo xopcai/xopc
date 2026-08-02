@@ -1,5 +1,5 @@
 import {
-  productReferenceRoute,
+  productReferenceOpenRoute,
   type ProductReferenceLocator,
 } from '@xopcai/gateway-contract';
 
@@ -94,7 +94,7 @@ export function createExtensionClient(options?: CreateExtensionClientOptions): E
         await transport.request('ui.navigate', { path });
       },
       async openProduct(reference: ProductReferenceLocator) {
-        const path = productReferenceRoute({
+        const path = productReferenceOpenRoute({
           ...reference,
           title: reference.id,
           capabilities: ['open'],

@@ -2,7 +2,7 @@ import DOMPurify from 'dompurify';
 import { memo, useLayoutEffect, useMemo, useRef } from 'react';
 import {
   parseProductReferenceDeepLink,
-  productReferenceRoute,
+  productReferenceOpenRoute,
 } from '@xopcai/gateway-contract';
 
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
@@ -338,7 +338,7 @@ function MarkdownViewImpl({
       const href = anchor.getAttribute('href') ?? '';
       const productReference = parseProductReferenceDeepLink(href);
       if (productReference) {
-        const route = productReferenceRoute({
+        const route = productReferenceOpenRoute({
           ...productReference,
           title: productReference.id,
           capabilities: ['open'],

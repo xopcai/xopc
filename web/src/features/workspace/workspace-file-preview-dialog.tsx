@@ -1,6 +1,7 @@
 import {
   Check,
   Copy,
+  Download,
   ExternalLink,
   Eye,
   FolderOpen,
@@ -13,7 +14,8 @@ import {
   WrapText,
   X,
 } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
@@ -25,11 +27,11 @@ import {
   usePreviewRuntimeController,
   useWorkspacePreviewState,
 } from '@/features/preview-runtime';
-import { useFilePreviewFullscreen } from '@/features/file-preview/use-file-preview-fullscreen';
 import { ShareLinkDialog } from '@/features/shares/share-link-dialog';
 import { useShareLink } from '@/features/shares/use-share-link';
 import { cn } from '@/lib/cn';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
+import { isElectron } from '@/lib/electron-env';
 import { interaction } from '@/lib/interaction';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -62,6 +64,31 @@ export interface WorkspaceFilePreviewPanelProps {
   agentId?: string;
 }
 
+function PreviewMenuItem({
+  icon,
+  label,
+  disabled,
+  onClick,
+}: {
+  icon: ReactNode;
+  label: string;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      className="flex h-9 w-full min-w-0 items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-fg hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-40"
+      disabled={disabled}
+      onClick={onClick}
+    >
+      <span className="flex size-4 shrink-0 items-center justify-center text-fg-muted">{icon}</span>
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+    </button>
+  );
+}
+
 export function WorkspaceFilePreviewPanel({
   filePath,
   onClose,
@@ -76,27 +103,70 @@ export function WorkspaceFilePreviewPanel({
 
   const state = useWorkspacePreviewState({ filePath, projectId, sessionKey, agentId });
   const previewController = usePreviewRuntimeController(state.descriptor);
-  const { rootRef, active, enter, exit } = useFilePreviewFullscreen();
-  const { dialogOpen, loading, result, error, createShareLink, handleOpenChange } = useShareLink();
+  const {
+    dialogOpen,
+    loading,
+    result,
+    error,
+    pendingParams,
+    createShareLink,
+    confirmShareLink,
+    handleOpenChange,
+  } = useShareLink();
   const [pathCopied, setPathCopied] = useState(false);
-  const [openWithMenuOpen, setOpenWithMenuOpen] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [markdownWordWrap, setMarkdownWordWrap] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
   const ext = filePath ? getPreviewFileExtension(filePath) : '';
   const name = filePath ? getPreviewFileName(filePath) : '';
   const isMd = ext === '.md';
   const isHtml = ext === '.html' || ext === '.htm';
+  const desktop = isElectron();
+  const hasPreviewControls = previewController.plugin.capabilities.some((capability) =>
+    ['zoom', 'search', 'rotate', 'pageNavigation'].includes(capability),
+  );
+
+  useEffect(() => {
+    if (!expanded) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopPropagation();
+      setExpanded(false);
+    };
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown, true);
+    };
+  }, [expanded]);
+
+  useEffect(() => {
+    if (!moreMenuOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      setMoreMenuOpen(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [moreMenuOpen]);
 
   const handleCopyPath = useCallback(async () => {
     if (!filePath) return;
-    const ok = await copyTextToClipboard(filePath);
+    const pathToCopy = desktop && state.hostAbsolutePath ? state.hostAbsolutePath : filePath;
+    const ok = await copyTextToClipboard(pathToCopy);
     if (ok) {
       setPathCopied(true);
+      showComposerNotification('success', m.workspace.pathCopied, undefined, { duration: 2500 });
       window.setTimeout(() => setPathCopied(false), 2000);
       return;
     }
     showComposerNotification('warning', m.clipboard.copyFailed, undefined, { duration: 4000 });
-  }, [filePath, m.clipboard.copyFailed, m.workspace.pathCopied]);
+  }, [desktop, filePath, m.clipboard.copyFailed, m.workspace.pathCopied, state.hostAbsolutePath]);
 
   const handleShare = useCallback(() => {
     if (!filePath || projectId) return;
@@ -109,7 +179,7 @@ export function WorkspaceFilePreviewPanel({
     void createShareLink({ path: filePath, ...scope });
   }, [agentId, createShareLink, filePath, projectId, sessionKey]);
 
-  const canPreviewFullscreen = Boolean(filePath && !state.loading && !state.loadError);
+  const canExpandPreview = Boolean(filePath && !state.loading && !state.loadError);
   const previewActions = {
     onDownload: () => void state.onDownload(),
     canDownload: state.canDownload,
@@ -120,57 +190,70 @@ export function WorkspaceFilePreviewPanel({
   };
 
   const handleClose = useCallback(() => {
-    void exit();
+    setExpanded(false);
     onClose();
-  }, [exit, onClose]);
+  }, [onClose]);
 
   if (!filePath) {
     return null;
   }
 
-  return (
-    <>
-    <div ref={rootRef} className="flex h-full min-h-0 flex-col bg-surface-panel">
+  const previewPanel = (
+    <div
+      className={cn(
+        'flex h-full min-h-0 flex-col bg-surface-panel',
+        expanded && 'fixed inset-0 z-[65] h-[100dvh] w-screen',
+      )}
+    >
       <div
         className={cn(
-          'flex shrink-0 items-start gap-2 border-b border-edge px-4 py-2 dark:border-edge',
+          'shrink-0 border-b border-edge px-3 py-2 dark:border-edge sm:px-4',
           APP_CHROME_NO_DRAG_CLASS,
         )}
       >
-        <div className="min-w-0 flex-1">
-          <h2
-            className="truncate text-base font-semibold leading-tight tracking-tight text-fg"
-            title={name}
-          >
-            {name}
-          </h2>
-          {!state.loading && state.mtimeMs != null ? (
-            <p
-              suppressHydrationWarning
-              className="mt-0.5 truncate text-xs leading-tight text-fg-muted"
-              title={new Date(state.mtimeMs).toISOString()}
+        <div className="flex min-w-0 items-start gap-2">
+          <div className="min-w-0 flex-1 py-0.5">
+            <h2
+              className="truncate text-base font-semibold leading-tight tracking-tight text-fg"
+              title={name}
             >
-              {m.workspace.lastModified}: {formatWorkspaceFileMtime(state.mtimeMs, language)}
-              {targetLine ? ` · Line ${targetLine}` : ''}
-            </p>
-          ) : null}
-        </div>
-        <div className="flex shrink-0 items-center gap-2 pt-0.5">
-          {state.loading ? (
-            <Loader2 className="size-4 animate-spin text-fg-muted" aria-hidden />
-          ) : null}
-          {(isMd || (isHtml && state.htmlCodeMode)) && state.saveStatus !== 'idle' ? (
-            <span className="shrink-0 text-xs leading-tight text-fg-muted">
-              {state.saveStatus === 'saving' ? m.workspace.saving : m.workspace.saved}
-            </span>
-          ) : null}
-          <PreviewRuntimeToolbar controller={previewController} actions={previewActions} />
+              {name}
+            </h2>
+            <div className="mt-0.5 flex min-w-0 items-center gap-2 text-xs leading-tight text-fg-muted">
+              {!state.loading && state.mtimeMs != null ? (
+                <p
+                  suppressHydrationWarning
+                  className="min-w-0 truncate"
+                  title={new Date(state.mtimeMs).toISOString()}
+                >
+                  {m.workspace.lastModified}: {formatWorkspaceFileMtime(state.mtimeMs, language)}
+                  {targetLine ? ` · Line ${targetLine}` : ''}
+                </p>
+              ) : null}
+              {state.loading ? <Loader2 className="size-3.5 shrink-0 animate-spin" aria-hidden /> : null}
+              {(isMd || (isHtml && state.htmlCodeMode)) && state.saveStatus !== 'idle' ? (
+                <span className={cn('shrink-0', state.saveStatus === 'error' && 'text-red-600 dark:text-red-400')}>
+                  {state.saveStatus === 'saving'
+                    ? m.workspace.saving
+                    : state.saveStatus === 'error'
+                      ? m.workspace.saveFailed
+                      : m.workspace.saved}
+                </span>
+              ) : null}
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
           {isMd ? (
             <button
               type="button"
-              className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
-              title={state.markdownEditMode ? m.workspace.viewing : m.workspace.edit}
-              aria-label={state.markdownEditMode ? m.workspace.viewing : m.workspace.edit}
+              className={cn(
+                'inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg',
+                state.markdownEditMode && 'bg-surface-active text-fg',
+                interaction.focusRingPanel,
+              )}
+              title={state.markdownEditMode ? m.workspace.preview : m.workspace.edit}
+              aria-label={state.markdownEditMode ? m.workspace.preview : m.workspace.edit}
+              aria-pressed={state.markdownEditMode}
               onClick={() => state.setMarkdownEditMode((v) => !v)}
             >
               {state.markdownEditMode ? <Eye className="size-4" /> : <Pencil className="size-4" />}
@@ -178,9 +261,14 @@ export function WorkspaceFilePreviewPanel({
           ) : isHtml ? (
             <button
               type="button"
-              className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
+              className={cn(
+                'inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg',
+                state.htmlCodeMode && 'bg-surface-active text-fg',
+                interaction.focusRingPanel,
+              )}
               title={state.htmlCodeMode ? m.workspace.preview : m.workspace.edit}
               aria-label={state.htmlCodeMode ? m.workspace.preview : m.workspace.edit}
+              aria-pressed={state.htmlCodeMode}
               onClick={() => state.setHtmlCodeMode((v) => !v)}
             >
               {state.htmlCodeMode ? <Eye className="size-4" /> : <Pencil className="size-4" />}
@@ -202,39 +290,40 @@ export function WorkspaceFilePreviewPanel({
               <WrapText className="size-4" />
             </button>
           ) : null}
-          {canPreviewFullscreen ? (
+          {canExpandPreview ? (
+            <button
+              type="button"
+              className={cn(
+                'inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg',
+                expanded && 'bg-surface-active text-fg',
+                interaction.focusRingPanel,
+              )}
+              title={expanded ? m.workspace.collapsePreview : m.workspace.expandPreview}
+              aria-label={expanded ? m.workspace.collapsePreview : m.workspace.expandPreview}
+              aria-pressed={expanded}
+              onClick={() => setExpanded((value) => !value)}
+            >
+              {expanded ? <Minimize2 className="size-4" strokeWidth={1.75} /> : <Maximize2 className="size-4" strokeWidth={1.75} />}
+            </button>
+          ) : null}
+          {!projectId ? (
             <button
               type="button"
               className={cn(
                 'inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg',
                 interaction.focusRingPanel,
+                'disabled:cursor-not-allowed disabled:opacity-40',
               )}
-              title={active ? m.chat.attachmentPreviewExitFullscreen : m.chat.attachmentPreviewFullscreen}
-              aria-label={active ? m.chat.attachmentPreviewExitFullscreen : m.chat.attachmentPreviewFullscreen}
-              onClick={() => void (active ? exit() : enter())}
+              title={m.workspace.shareLink}
+              aria-label={m.workspace.shareLink}
+              onClick={handleShare}
+              disabled={loading}
             >
-              {active ? <Minimize2 className="size-4" strokeWidth={1.75} /> : <Maximize2 className="size-4" strokeWidth={1.75} />}
+              {loading ? <Loader2 className="size-4 animate-spin" /> : <Link2 className="size-4" />}
             </button>
           ) : null}
-          {state.canOpenWithSystemApp ? (
-            <button
-              type="button"
-              className={cn(
-                'inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg',
-                interaction.focusRingPanel,
-              )}
-              title={m.workspace.openSystemApp}
-              aria-label={m.workspace.openSystemApp}
-              onClick={() => void state.onOpenWithSystemApp()}
-            >
-              <ExternalLink className="size-4" />
-            </button>
-          ) : null}
-          {state.canChooseOpenWithApp ||
-          state.recommendedOpenWithApps.length > 0 ||
-          state.recentOpenWithApps.length > 0 ? (
-            <div className="relative shrink-0">
-              {openWithMenuOpen ? (
+          <div className="relative shrink-0">
+              {moreMenuOpen ? (
                 <button
                   type="button"
                   className="fixed inset-0 z-40 cursor-default bg-transparent"
@@ -242,7 +331,7 @@ export function WorkspaceFilePreviewPanel({
                   tabIndex={-1}
                   onPointerDown={(e) => {
                     e.preventDefault();
-                    setOpenWithMenuOpen(false);
+                    setMoreMenuOpen(false);
                   }}
                 />
               ) : null}
@@ -252,34 +341,41 @@ export function WorkspaceFilePreviewPanel({
                   'inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg',
                   interaction.focusRingPanel,
                 )}
-                title={m.workspace.openWith}
-                aria-label={m.workspace.openWith}
+                title={m.workspace.moreActions}
+                aria-label={m.workspace.moreActions}
                 aria-haspopup="menu"
-                aria-expanded={openWithMenuOpen}
-                onClick={() => setOpenWithMenuOpen((v) => !v)}
+                aria-expanded={moreMenuOpen}
+                onClick={() => setMoreMenuOpen((v) => !v)}
               >
                 <MoreHorizontal className="size-4" />
               </button>
-              {openWithMenuOpen ? (
+              {moreMenuOpen ? (
                 <div
                   role="menu"
-                  className="absolute right-0 top-full z-50 mt-1 min-w-[13rem] rounded-md border border-edge bg-surface-panel py-1 shadow-popover"
+                  className="absolute right-0 top-full z-50 mt-1 w-60 rounded-lg border border-edge bg-surface-panel p-1 shadow-popover"
                 >
-                  {state.canChooseOpenWithApp ? (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="block w-full px-3 py-1.5 text-left text-sm text-fg hover:bg-surface-hover"
+                  {state.canOpenWithSystemApp ? (
+                    <PreviewMenuItem
+                      icon={<ExternalLink className="size-4" />}
+                      label={m.workspace.openSystemApp}
                       onClick={() => {
-                        setOpenWithMenuOpen(false);
+                        setMoreMenuOpen(false);
+                        void state.onOpenWithSystemApp();
+                      }}
+                    />
+                  ) : null}
+                  {state.canChooseOpenWithApp ? (
+                    <PreviewMenuItem
+                      icon={<MoreHorizontal className="size-4" />}
+                      label={m.workspace.chooseApp}
+                      onClick={() => {
+                        setMoreMenuOpen(false);
                         void state.onChooseOpenWithApp();
                       }}
-                    >
-                      {m.workspace.chooseApp}
-                    </button>
+                    />
                   ) : null}
                   {state.recommendedOpenWithApps.length > 0 ? (
-                    <div className="border-t border-edge-subtle py-1 dark:border-edge">
+                    <div className="mt-1 border-t border-edge-subtle pt-1 dark:border-edge">
                       <p className="px-3 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-normal text-fg-subtle">
                         {m.workspace.recommendedApps}
                       </p>
@@ -288,10 +384,10 @@ export function WorkspaceFilePreviewPanel({
                           key={app.path}
                           type="button"
                           role="menuitem"
-                          className="block w-full min-w-0 px-3 py-1.5 text-left text-sm text-fg hover:bg-surface-hover"
+                          className="flex h-9 w-full min-w-0 items-center rounded-md px-2.5 text-left text-sm text-fg hover:bg-surface-hover"
                           title={app.path}
                           onClick={() => {
-                            setOpenWithMenuOpen(false);
+                            setMoreMenuOpen(false);
                             void state.onOpenWithRecentApp(app.path);
                           }}
                         >
@@ -301,7 +397,7 @@ export function WorkspaceFilePreviewPanel({
                     </div>
                   ) : null}
                   {state.recentOpenWithApps.length > 0 ? (
-                    <div className="border-t border-edge-subtle py-1 dark:border-edge">
+                    <div className="mt-1 border-t border-edge-subtle pt-1 dark:border-edge">
                       <p className="px-3 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-normal text-fg-subtle">
                         {m.workspace.recentApps}
                       </p>
@@ -310,10 +406,10 @@ export function WorkspaceFilePreviewPanel({
                           key={app.path}
                           type="button"
                           role="menuitem"
-                          className="block w-full min-w-0 px-3 py-1.5 text-left text-sm text-fg hover:bg-surface-hover"
+                          className="flex h-9 w-full min-w-0 items-center rounded-md px-2.5 text-left text-sm text-fg hover:bg-surface-hover"
                           title={app.path}
                           onClick={() => {
-                            setOpenWithMenuOpen(false);
+                            setMoreMenuOpen(false);
                             void state.onOpenWithRecentApp(app.path);
                           }}
                         >
@@ -322,48 +418,38 @@ export function WorkspaceFilePreviewPanel({
                       ))}
                     </div>
                   ) : null}
+                  {state.canRevealInFolder ? (
+                    <PreviewMenuItem
+                      icon={<FolderOpen className="size-4" />}
+                      label={m.workspace.revealInFolder}
+                      onClick={() => {
+                        setMoreMenuOpen(false);
+                        void state.onRevealInFolder();
+                      }}
+                    />
+                  ) : null}
+                  <div className="my-1 border-t border-edge-subtle dark:border-edge" />
+                  <PreviewMenuItem
+                    icon={<Download className="size-4" />}
+                    label={desktop ? m.workspace.saveCopy : m.workspace.download}
+                    disabled={!state.canDownload}
+                    onClick={() => {
+                      setMoreMenuOpen(false);
+                      void state.onDownload();
+                    }}
+                  />
+                  <PreviewMenuItem
+                    icon={pathCopied ? <Check className="size-4 text-emerald-500" /> : <Copy className="size-4" />}
+                    label={pathCopied ? m.workspace.pathCopied : desktop ? m.workspace.copyFilePath : m.workspace.copyWorkspacePath}
+                    onClick={() => {
+                      setMoreMenuOpen(false);
+                      void handleCopyPath();
+                    }}
+                  />
                 </div>
               ) : null}
             </div>
-          ) : null}
-          <button
-            type="button"
-            className={cn(
-              'inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg',
-              interaction.focusRingPanel,
-            )}
-            title={m.workspace.copyPath}
-            aria-label={m.workspace.copyPath}
-            onClick={() => void handleCopyPath()}
-          >
-            {pathCopied ? <Check className="size-4" /> : <Copy className="size-4" />}
-          </button>
-          {state.canRevealInFolder ? (
-            <button
-              type="button"
-              className={cn(
-                'inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg',
-                interaction.focusRingPanel,
-              )}
-              title={m.workspace.revealInFolder}
-              aria-label={m.workspace.revealInFolder}
-              onClick={() => void state.onRevealInFolder()}
-            >
-              <FolderOpen className="size-4" />
-            </button>
-          ) : null}
-          {!projectId ? (
-            <button
-              type="button"
-              className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg disabled:opacity-50"
-              title={m.workspace.shareLink}
-              aria-label={m.workspace.shareLink}
-              onClick={handleShare}
-              disabled={loading}
-            >
-              {loading ? <Loader2 className="size-4 animate-spin" /> : <Link2 className="size-4" />}
-            </button>
-          ) : null}
+          <div className="mx-0.5 h-5 w-px bg-edge-subtle" aria-hidden />
           <button
             type="button"
             className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
@@ -374,6 +460,12 @@ export function WorkspaceFilePreviewPanel({
             <X className="size-4" strokeWidth={1.75} />
           </button>
         </div>
+        </div>
+        {hasPreviewControls ? (
+          <div className="mt-2 overflow-x-auto pb-0.5">
+            <PreviewRuntimeToolbar controller={previewController} actions={previewActions} showDownload={false} />
+          </div>
+        ) : null}
       </div>
       <PreviewRuntimeView
         language={language}
@@ -402,12 +494,19 @@ export function WorkspaceFilePreviewPanel({
         renderToolbar={() => null}
       />
     </div>
+  );
+
+  return (
+    <>
+    {expanded ? createPortal(previewPanel, document.body) : previewPanel}
     <ShareLinkDialog
       open={dialogOpen}
       onOpenChange={handleOpenChange}
       loading={loading}
       error={error}
       result={result}
+      pendingParams={pendingParams}
+      onConfirm={(options) => void confirmShareLink(options)}
     />
     </>
   );
