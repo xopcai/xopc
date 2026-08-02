@@ -5,7 +5,14 @@
  */
 
 import type { Config } from '../../config/schema.js';
-import { getUserTrustPolicy, isXopcDatabaseOpen } from '../../storage/sqlite/index.js';
+import {
+  buildRelationshipPrompt,
+  getRelationshipSettings,
+  getUserTrustPolicy,
+  isXopcDatabaseOpen,
+  listMemoryRecords,
+} from '../../storage/sqlite/index.js';
+import { buildPersonalPlaybookPrompt } from '../../user-context/personal-playbook.js';
 import {
   buildActionTrustPrompt,
   DEFAULT_USER_TRUST_LEVEL,
@@ -64,6 +71,12 @@ export class SystemPromptBuilder {
     const actionTrustLevel = isXopcDatabaseOpen()
       ? getUserTrustPolicy().defaultActionLevel
       : DEFAULT_USER_TRUST_LEVEL;
+    const relationshipPrompt = isXopcDatabaseOpen()
+      ? buildRelationshipPrompt(getRelationshipSettings())
+      : '';
+    const playbookPrompt = isXopcDatabaseOpen()
+      ? buildPersonalPlaybookPrompt(listMemoryRecords({ status: 'active', limit: 500 }))
+      : '';
     if (options.systemPromptOverride?.trim()) {
       const skillPrompt =
         options.skillPromptText !== undefined
@@ -87,6 +100,8 @@ export class SystemPromptBuilder {
         fullPrompt = `${fullPrompt}\n\n## Voice (TTS)\n\n${ttsHint.trim()}`;
       }
       fullPrompt = `${fullPrompt}\n\n${buildActionTrustPrompt(actionTrustLevel)}`;
+      if (relationshipPrompt) fullPrompt = `${fullPrompt}\n\n${relationshipPrompt}`;
+      if (playbookPrompt) fullPrompt = `${fullPrompt}\n\n${playbookPrompt}`;
       log.debug({ baseLength: trimmed.length, skillLength: skillPrompt.length, totalLength: fullPrompt.length }, 'System prompt built (override)');
       return fullPrompt;
     }
@@ -113,7 +128,7 @@ export class SystemPromptBuilder {
       externalMemoryInstructions: options.externalMemoryInstructions,
       heartbeatEnabled,
       ttsSystemHint,
-      extraSystemPrompt: options.extraSystemPrompt,
+      extraSystemPrompt: [options.extraSystemPrompt, relationshipPrompt, playbookPrompt].filter(Boolean).join('\n\n'),
       activeProjectContext: options.activeProjectContext,
       modelRef: options.modelRef,
       agentId: options.agentId,

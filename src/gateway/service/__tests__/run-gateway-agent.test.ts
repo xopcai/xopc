@@ -1,9 +1,34 @@
-import { describe, expect, it } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { AgentRunRelay } from '../../agent-run-relay.js';
+import {
+  closeXopcDatabase,
+  ensureSessionRecord,
+  openXopcDatabase,
+  resetXopcDatabaseSingletonForTest,
+} from '../../../storage/sqlite/index.js';
 import { runGatewayAgent, type RunGatewayAgentDeps } from '../run-gateway-agent.js';
 
 describe('runGatewayAgent', () => {
+  let stateDir: string;
+
+  beforeEach(() => {
+    stateDir = mkdtempSync(join(tmpdir(), 'xopc-gateway-agent-'));
+    resetXopcDatabaseSingletonForTest();
+    openXopcDatabase({ path: join(stateDir, 'xopc.db') });
+    ensureSessionRecord('agent:main:webchat:default:direct:chat-thinking', stateDir);
+    ensureSessionRecord('agent:main:webchat:default:direct:chat-test', stateDir);
+  });
+
+  afterEach(() => {
+    closeXopcDatabase();
+    resetXopcDatabaseSingletonForTest();
+    rmSync(stateDir, { recursive: true, force: true });
+  });
+
   it('coalesces thinking bursts before relay sequence assignment', async () => {
     const sessionKey = 'agent:main:webchat:default:direct:chat-thinking';
     const broadcastEvents: Array<{ event?: { type?: string } }> = [];
