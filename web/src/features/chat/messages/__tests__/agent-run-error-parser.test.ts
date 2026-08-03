@@ -58,4 +58,16 @@ describe('parseAgentRunError', () => {
       code: 'model_quota_exhausted',
     });
   });
+
+  it('preserves the XOPC platform token-limit code', () => {
+    const parsed = parseAgentRunError(JSON.stringify({
+      kind: 'xopc_platform_limit',
+      code: 'platform_token_limit_exceeded',
+      message: 'Platform hourly token limit reached',
+    }));
+    expect(parsed).toMatchObject({
+      kind: 'xopc_platform_limit',
+      code: 'platform_token_limit_exceeded',
+    });
+  });
 });

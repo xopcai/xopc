@@ -44,6 +44,13 @@ function resolveErrorCopy(payload: AgentRunErrorPayload, m: ReturnType<typeof me
       return { title: m.agentRunErrorBillingTitle, body: m.agentRunErrorBillingBody };
     case 'model_quota_exhausted':
       return { title: m.xopcQuotaExhaustedTitle, body: m.xopcQuotaExhaustedBody };
+    case 'platform_token_limit_exceeded':
+      return {
+        title: m.xopcPlatformLimitTitle,
+        body: m.xopcPlatformLimitBody,
+        cta: m.xopcPlatformLimitCta,
+        deepLink: '/settings/capabilities/models?add=1',
+      };
     case 'send_failed':
       return { title: m.agentRunErrorSendFailedTitle, body: m.agentRunErrorSendFailedBody };
     case 'session_not_found':
@@ -69,6 +76,7 @@ function ErrorIcon({ code }: { code: string }) {
       return <Clock className={className} strokeWidth={1.75} />;
     case 'billing':
     case 'model_quota_exhausted':
+    case 'platform_token_limit_exceeded':
       return <Wallet className={className} strokeWidth={1.75} />;
     default:
       return <AlertCircle className={className} strokeWidth={1.75} />;
@@ -83,6 +91,7 @@ function toneForCode(code: string): 'amber' | 'red' {
     code === 'timeout' ||
     code === 'billing' ||
     code === 'model_quota_exhausted' ||
+    code === 'platform_token_limit_exceeded' ||
     code === 'session_not_found'
   ) {
     return 'amber';
