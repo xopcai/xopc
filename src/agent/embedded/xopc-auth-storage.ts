@@ -4,6 +4,7 @@ import { ModelRuntime } from '@earendil-works/pi-coding-agent';
 import { resolveProviderApiKeySync } from '../../auth/sync-provider-auth.js';
 import { resolveModelsJsonPath } from '../../config/paths.js';
 import { getApiKeySync } from '../../providers/index.js';
+import { getModelCatalogStore } from '../../providers/model-catalog-store.js';
 
 /**
  * Resolve API keys the same way as {@link AgentManager} / gateway settings:
@@ -22,11 +23,22 @@ export function createEmbeddedCredentialStore(): InMemoryCredentialStore {
 }
 
 /** Create the pi model runtime used by embedded gateway / channel turns. */
-export function createEmbeddedModelRuntime(): Promise<ModelRuntime> {
-  return ModelRuntime.create({
+export async function createEmbeddedModelRuntime(): Promise<ModelRuntime> {
+  const modelRuntime = await ModelRuntime.create({
     credentials: createEmbeddedCredentialStore(),
     modelsPath: resolveModelsJsonPath(),
   });
+
+  const xopcCloud = getModelCatalogStore().getSource('xopc-cloud');
+  if (xopcCloud) {
+    modelRuntime.registerProvider('xopc-cloud', {
+      name: 'XOPC Model Service',
+      baseUrl: xopcCloud.baseUrl,
+      api: xopcCloud.api,
+    });
+  }
+
+  return modelRuntime;
 }
 
 /**
