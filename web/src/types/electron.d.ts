@@ -91,6 +91,7 @@ export type ElectronRecommendedOpenWithApp = {
 };
 
 export interface ElectronShellAPI {
+  openExternalUrl(url: string): Promise<{ ok: true } | { ok: false; error: string }>;
   openPath(filePath: string): Promise<ElectronShellOpenResult>;
   showItemInFolder(filePath: string): Promise<{ success: boolean }>;
   chooseAppAndOpenPath(filePath: string): Promise<ElectronShellOpenResult>;

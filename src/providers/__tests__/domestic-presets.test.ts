@@ -14,6 +14,7 @@ describe('domestic provider presets', () => {
 
     expect(ids).toEqual(
       expect.arrayContaining([
+        'xopc-cloud',
         'dashscope-cn',
         'dashscope-intl',
         'volcengine-ark',
@@ -53,10 +54,20 @@ describe('domestic provider presets', () => {
   });
 
   it('preserves provider-specific compatibility choices', () => {
+    const xopcCloud = getDomesticProviderPreset('xopc-cloud');
     const minimax = getDomesticProviderPreset('minimax');
     const ark = getDomesticProviderPreset('volcengine-ark');
 
     expect(minimax).toBeDefined();
+    expect(xopcCloud).toMatchObject({
+      api: 'openai-completions',
+      envVars: ['XOPC_MODEL_API_KEY'],
+      requiresModelDiscovery: true,
+    });
+    expect(providerConfigFromDomesticPreset(xopcCloud!, { apiKey: 'XOPC_MODEL_API_KEY' })).toMatchObject({
+      baseUrl: 'https://router.xopc.ai/v1',
+      models: [],
+    });
     expect(providerConfigFromDomesticPreset(minimax!, { apiKey: 'MINIMAX_API_KEY' })).toMatchObject({
       baseUrl: 'https://api.minimax.io/anthropic',
       api: 'anthropic-messages',
@@ -69,7 +80,7 @@ describe('domestic provider presets', () => {
   it('feeds onboarding and provider presentation before a provider is configured', () => {
     const featuredProviders = getOnboardingFeaturedProviders();
 
-    expect(featuredProviders[0]).toBe('deepseek');
+    expect(featuredProviders[0]).toBe('xopc-cloud');
     expect(featuredProviders).toEqual(
       expect.arrayContaining([
         'dashscope-cn',

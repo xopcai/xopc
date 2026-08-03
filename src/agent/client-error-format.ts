@@ -10,6 +10,7 @@ export type AgentRunErrorKind =
   | 'rate_limit'
   | 'timeout'
   | 'billing'
+  | 'xopc_quota_exhausted'
   | 'unknown';
 
 export type AgentRunErrorPayload = {
@@ -22,6 +23,7 @@ export type AgentRunErrorPayload = {
 };
 
 const API_KEY_MISSING_RE = /^No API key found for (\S+)/i;
+const XOPC_QUOTA_RE = /model_quota_exhausted|model quota exhausted/i;
 
 function reasonToKind(reason: FailoverReason): AgentRunErrorKind {
   switch (reason) {
@@ -114,10 +116,12 @@ export function formatAgentRunErrorForClient(
   }
 
   const reason = classifyFailoverReason(trimmed);
-  const kind = reasonToKind(reason);
+  const xopcQuotaExhausted = context?.provider === 'xopc-cloud'
+    && (XOPC_QUOTA_RE.test(trimmed) || reason === 'billing');
+  const kind = xopcQuotaExhausted ? 'xopc_quota_exhausted' : reasonToKind(reason);
   const payload: AgentRunErrorPayload = {
     kind,
-    code: reasonToCode(reason),
+    code: xopcQuotaExhausted ? 'model_quota_exhausted' : reasonToCode(reason),
     message: trimmed,
     ...(context?.provider ? { provider: context.provider } : {}),
     ...(context?.modelRef ? { modelRef: context.modelRef } : {}),

@@ -72,6 +72,7 @@ class BucketRegistry {
   private authFailureSignature?: string;
 
   private strictApiLimiter?: RateLimiter;
+  private xopcCloudPollLimiter?: RateLimiter;
   private channelApiLimiter?: RateLimiter;
   private tunnelMutateLimiter?: RateLimiter;
   private pairingExchangeLimiter?: FailureLimiter;
@@ -104,6 +105,14 @@ class BucketRegistry {
       this.strictApiLimiter = new RateLimiter({ maxRequests: 15, windowMs: 60_000 });
     }
     return this.strictApiLimiter;
+  }
+
+  /** XOPC Cloud authorization polling — 60 req / 60 s per client IP. */
+  xopcCloudPoll(): RateLimiter {
+    if (!this.xopcCloudPollLimiter) {
+      this.xopcCloudPollLimiter = new RateLimiter({ maxRequests: 60, windowMs: 60_000 });
+    }
+    return this.xopcCloudPollLimiter;
   }
 
   /** Channel mutation/action endpoints — 20 req / 60 s per client IP. */
@@ -162,6 +171,7 @@ class BucketRegistry {
   destroyAll(): void {
     this.authFailureLimiter?.destroy();
     this.strictApiLimiter?.destroy();
+    this.xopcCloudPollLimiter?.destroy();
     this.channelApiLimiter?.destroy();
     this.tunnelMutateLimiter?.destroy();
     this.pairingExchangeLimiter?.destroy();
@@ -169,6 +179,7 @@ class BucketRegistry {
     this.sharePublicLongLimiter?.destroy();
     this.authFailureLimiter = undefined;
     this.strictApiLimiter = undefined;
+    this.xopcCloudPollLimiter = undefined;
     this.channelApiLimiter = undefined;
     this.tunnelMutateLimiter = undefined;
     this.pairingExchangeLimiter = undefined;
@@ -181,6 +192,7 @@ class BucketRegistry {
   resetAllForTests(): void {
     this.authFailureLimiter?.resetForTests();
     this.strictApiLimiter?.resetForTests();
+    this.xopcCloudPollLimiter?.resetForTests();
     this.channelApiLimiter?.resetForTests();
     this.tunnelMutateLimiter?.resetForTests();
     this.pairingExchangeLimiter?.resetForTests();

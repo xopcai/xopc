@@ -4,6 +4,7 @@
  */
 import type { ReactNode, SVGAttributes } from 'react';
 
+import { BrandLogo } from '@/components/shell/brand-logo';
 import { cn } from '@/lib/cn';
 
 type IconProps = {
@@ -17,6 +18,7 @@ const PROVIDERS_WITH_LOGOS = new Set([
   'kimi-coding',
   'minimax',
   'openai',
+  'xopc-cloud',
 ]);
 
 export function hasProviderLogo(providerId: string): boolean {
@@ -120,6 +122,8 @@ export function ProviderLogo({ providerId, className }: { providerId: string; cl
   const props = { className, 'aria-hidden': true as const };
 
   switch (providerId) {
+    case 'xopc-cloud':
+      return <BrandLogo className={className} aria-hidden />;
     case 'deepseek':
       return <DeepSeekIcon {...props} />;
     case 'minimax':

@@ -10,11 +10,15 @@ describe('xopcDeepLinkToRoute', () => {
     expect(xopcDeepLinkToRoute('xopc://settings/appearance?tab=theme')).toBe(
       '/settings/appearance?tab=theme',
     );
+    expect(xopcDeepLinkToRoute('xopc://cloud/model-connected?request_id=request-1')).toBe(
+      '/settings/capabilities/models',
+    );
   });
 
   it('rejects malformed and unsupported links', () => {
     expect(xopcDeepLinkToRoute('xopc://open?kind=local_app')).toBeNull();
     expect(xopcDeepLinkToRoute('xopc://unknown/path')).toBeNull();
+    expect(xopcDeepLinkToRoute('xopc://cloud/model-connected')).toBeNull();
     expect(xopcDeepLinkToRoute('https://example.com')).toBeNull();
   });
 });

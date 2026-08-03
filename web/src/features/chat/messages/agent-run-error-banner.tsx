@@ -42,6 +42,8 @@ function resolveErrorCopy(payload: AgentRunErrorPayload, m: ReturnType<typeof me
       return { title: m.agentRunErrorTimeoutTitle, body: m.agentRunErrorTimeoutBody };
     case 'billing':
       return { title: m.agentRunErrorBillingTitle, body: m.agentRunErrorBillingBody };
+    case 'model_quota_exhausted':
+      return { title: m.xopcQuotaExhaustedTitle, body: m.xopcQuotaExhaustedBody };
     case 'send_failed':
       return { title: m.agentRunErrorSendFailedTitle, body: m.agentRunErrorSendFailedBody };
     case 'session_not_found':
@@ -66,6 +68,7 @@ function ErrorIcon({ code }: { code: string }) {
     case 'timeout':
       return <Clock className={className} strokeWidth={1.75} />;
     case 'billing':
+    case 'model_quota_exhausted':
       return <Wallet className={className} strokeWidth={1.75} />;
     default:
       return <AlertCircle className={className} strokeWidth={1.75} />;
@@ -79,6 +82,7 @@ function toneForCode(code: string): 'amber' | 'red' {
     code === 'rate_limit' ||
     code === 'timeout' ||
     code === 'billing' ||
+    code === 'model_quota_exhausted' ||
     code === 'session_not_found'
   ) {
     return 'amber';
@@ -121,6 +125,12 @@ function AgentRunErrorCard({ payload }: { payload: AgentRunErrorPayload }) {
     tone === 'amber'
       ? 'bg-amber-600 text-white hover:bg-amber-700 dark:bg-amber-500 dark:text-amber-950 dark:hover:bg-amber-400'
       : 'bg-red-600 text-white hover:bg-red-700 dark:bg-red-500 dark:text-red-950 dark:hover:bg-red-400';
+  const quotaExhausted = payload.code === 'model_quota_exhausted';
+  const openConsole = (path: string) => window.open(
+    `https://console.xopc.ai${path}`,
+    '_blank',
+    'noopener,noreferrer',
+  );
 
   return (
     <section
@@ -140,7 +150,19 @@ function AgentRunErrorCard({ payload }: { payload: AgentRunErrorPayload }) {
           <p className={cn('mt-1 text-xs leading-relaxed', bodyClass)}>{copy.body}</p>
         </div>
       </div>
-      {copy.cta && copy.deepLink ? (
+      {quotaExhausted ? (
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <button type="button" className={cn('inline-flex h-8 items-center rounded-lg px-3 py-1.5 text-xs font-medium transition-colors', ctaClass)} onClick={() => openConsole('/models/billing')}>
+            {m.xopcQuotaPurchaseCta}
+          </button>
+          <button type="button" className="inline-flex h-8 items-center rounded-lg border border-current px-3 py-1.5 text-xs font-medium transition-colors hover:bg-amber-500/10" onClick={() => openConsole('/models/quota/request')}>
+            {m.xopcQuotaRequestCta}
+          </button>
+          <button type="button" className="inline-flex h-8 items-center rounded-lg border border-current px-3 py-1.5 text-xs font-medium transition-colors hover:bg-amber-500/10" onClick={() => navigate('/settings/capabilities/models?add=1')}>
+            {m.xopcQuotaOwnProviderCta}
+          </button>
+        </div>
+      ) : copy.cta && copy.deepLink ? (
         <div className="flex flex-wrap items-center justify-end gap-2">
           <button
             type="button"

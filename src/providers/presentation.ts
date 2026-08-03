@@ -43,6 +43,7 @@ export interface ProviderCatalogView {
 }
 
 const FEATURED_PROVIDER_ORDER = [
+  'xopc-cloud',
   'deepseek',
   'openai',
   'anthropic',
@@ -73,6 +74,7 @@ const FEATURED_PROVIDER_ORDER = [
 ];
 
 const PROVIDER_HINTS: Record<string, string> = {
+  'xopc-cloud': 'Official XOPC model service with models discovered from your account.',
   openai: 'Frontier OpenAI models from the official API.',
   anthropic: 'Claude models for coding, long context, and reasoning.',
   xai: 'Grok models from xAI.',

@@ -45,4 +45,17 @@ describe('parseAgentRunError', () => {
     expect(parsed?.code).toBe('unknown');
     expect(parsed?.message).toBe('Assistant turn failed');
   });
+
+  it('preserves the XOPC quota recovery code', () => {
+    const parsed = parseAgentRunError(JSON.stringify({
+      kind: 'xopc_quota_exhausted',
+      code: 'model_quota_exhausted',
+      provider: 'xopc-cloud',
+      message: 'Model quota exhausted',
+    }));
+    expect(parsed).toMatchObject({
+      kind: 'xopc_quota_exhausted',
+      code: 'model_quota_exhausted',
+    });
+  });
 });

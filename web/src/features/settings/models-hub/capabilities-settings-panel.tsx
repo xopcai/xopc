@@ -1,6 +1,6 @@
 import { ImageIcon, Mic, Plug, Search, Users, type LucideIcon } from 'lucide-react';
-import { useCallback, useRef, useState, type ReactNode } from 'react';
-import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { PageTabs } from '@/components/ui/page-tabs';
@@ -27,6 +27,7 @@ import { AddProviderDialog } from './add-provider-dialog';
 import { ConnectedProvidersGrid, useConnectedProviders } from './connected-providers-grid';
 import { revalidateModelsHubCaches } from './models-hub-cache';
 import { ProviderManageDialog } from './provider-manage-dialog';
+import { XopcCloudConnect } from './xopc-cloud-connect';
 
 interface SectionDefinition {
   id: CapabilitySettingsSectionId;
@@ -45,12 +46,21 @@ export function CapabilitiesSettingsPanel() {
   const m = messages(language);
   const c = m.capabilitiesSettings;
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { capability } = useParams<{ capability: string }>();
   const registeredSaveSections = useSaveBarStore((s) => s.sections);
 
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [manageTarget, setManageTarget] = useState<{ providerId: string; isCustom: boolean } | null>(null);
   const providerData = useConnectedProviders();
+
+  useEffect(() => {
+    if (capability !== 'models' || searchParams.get('add') !== '1') return;
+    setAddDialogOpen(true);
+    const next = new URLSearchParams(searchParams);
+    next.delete('add');
+    setSearchParams(next, { replace: true });
+  }, [capability, searchParams, setSearchParams]);
 
   const unsavedIndicator = (sectionId: string) =>
     registeredSaveSections.get(sectionId)?.dirty ? (
@@ -130,11 +140,14 @@ export function CapabilitiesSettingsPanel() {
       {sections.map((section) => (
         <LazySectionHost key={section.id} id={section.id} activeSection={capability} hint={section.hint}>
           {section.id === 'models' ? (
-            <ConnectedProvidersGrid
-              labels={c.connectedProviders}
-              onAdd={() => setAddDialogOpen(true)}
-              onManage={(providerId, isCustom) => setManageTarget({ providerId, isCustom })}
-            />
+            <>
+              <XopcCloudConnect connected={providerData.cards.some((card) => card.id === 'xopc-cloud')} />
+              <ConnectedProvidersGrid
+                labels={c.connectedProviders}
+                onAdd={() => setAddDialogOpen(true)}
+                onManage={(providerId, isCustom) => setManageTarget({ providerId, isCustom })}
+              />
+            </>
           ) : (
             <CapabilitySectionPanel section={section.id} />
           )}

@@ -48,6 +48,7 @@ import { isShellChromiumPermissionGranted } from './ipc/shell-permission-gates.j
 import { registerCronDisplayWakeIpc, stopCronDisplayWakeBlocker } from './ipc/cron-display-wake-ipc.js';
 import { registerUpdaterIpc } from './ipc/updater-ipc.js';
 import { registerDesktopPetIpc } from './desktop-pet/ipc.js';
+import { normalizeExternalHttpUrl } from './external-url.js';
 import {
   destroyDesktopPetWindow,
   initDesktopPetWindow,
@@ -141,8 +142,8 @@ function redactUrlForLog(href: string): string {
   }
   try {
     const url = new URL(href);
-    if (url.searchParams.has('token')) {
-      url.searchParams.set('token', '[redacted]');
+    for (const name of ['token', 'code', 'state', 'request_id']) {
+      if (url.searchParams.has(name)) url.searchParams.set(name, '[redacted]');
     }
     return url.toString();
   } catch {
@@ -984,6 +985,19 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle('clipboard:read-text', () => clipboard.readText());
+
+  ipcMain.handle('shell:open-external-url', async (event, rawUrl: unknown) => {
+    assertTrustedRenderer(event);
+    try {
+      await shell.openExternal(normalizeExternalHttpUrl(rawUrl));
+      return { ok: true as const };
+    } catch (error) {
+      return {
+        ok: false as const,
+        error: error instanceof Error ? error.message : 'Failed to open the system browser',
+      };
+    }
+  });
 
   ipcMain.handle('menu:get-model', (event) => {
     assertTrustedRenderer(event);

@@ -31,6 +31,24 @@ describe('formatAgentRunErrorForClient', () => {
     expect(out.code).toBe('rate_limit');
   });
 
+  it('maps XOPC billing errors to the quota recovery flow', () => {
+    const raw = '402: {"error":{"code":"model_quota_exhausted","message":"Model quota exhausted"}}';
+    const out = JSON.parse(
+      formatAgentRunErrorForClient(raw, { provider: 'xopc-cloud' }),
+    ) as { kind: string; code: string };
+    expect(out.kind).toBe('xopc_quota_exhausted');
+    expect(out.code).toBe('model_quota_exhausted');
+  });
+
+  it('does not map another provider quota error to the XOPC recovery flow', () => {
+    const raw = '402: model quota exhausted';
+    const out = JSON.parse(
+      formatAgentRunErrorForClient(raw, { provider: 'openai' }),
+    ) as { kind: string; code: string };
+    expect(out.kind).not.toBe('xopc_quota_exhausted');
+    expect(out.code).not.toBe('model_quota_exhausted');
+  });
+
   it('passes through already-structured payloads', () => {
     const existing = JSON.stringify({
       kind: 'provider_setup_required',

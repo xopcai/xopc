@@ -33,6 +33,8 @@ export interface DomesticProviderPreset {
   models: DomesticProviderModelPreset[];
   aliases: string[];
   quirks?: string[];
+  onboardingIcon?: string;
+  requiresModelDiscovery?: boolean;
 }
 
 const QWEN_MODELS: DomesticProviderModelPreset[] = [
@@ -60,6 +62,23 @@ const MINIMAX_MODELS: DomesticProviderModelPreset[] = [
 ];
 
 export const DOMESTIC_PROVIDER_PRESETS = [
+  {
+    id: 'xopc-cloud',
+    displayName: 'XOPC Model Service',
+    description: 'Official XOPC OpenAI-compatible model service. Available models are loaded from your account.',
+    docsUrl: 'https://console.xopc.ai/models',
+    apiKeyUrl: 'https://console.xopc.ai/models',
+    envVars: ['XOPC_MODEL_API_KEY'],
+    api: 'openai-completions',
+    baseUrlPresets: [{ id: 'official', label: 'XOPC Official', baseUrl: 'https://router.xopc.ai/v1' }],
+    defaultBaseUrlPreset: 'official',
+    defaultModel: '',
+    models: [],
+    aliases: ['xopc', 'xopc cloud', 'xopc models'],
+    onboardingIcon: '☁️',
+    requiresModelDiscovery: true,
+    quirks: ['Connect through XOPC Console; credentials and available models are configured automatically.'],
+  },
   {
     id: 'dashscope-cn',
     displayName: 'Alibaba Bailian / DashScope China',

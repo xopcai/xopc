@@ -49,6 +49,8 @@ import { interaction } from '@/lib/interaction';
 import type { StoredLanguage } from '@/lib/storage';
 import { messages } from '@/i18n/messages';
 
+import { XopcCloudConnect } from './xopc-cloud-connect';
+
 export interface ProviderManageDialogMessages {
   apiKeyLabel: string;
   apiKeyPlaceholder: string;
@@ -124,7 +126,12 @@ export function ProviderManageDialog({
             SETTINGS_SHELL_CONTENT_Z,
           )}
         >
-          {isCustom ? (
+          {providerId === 'xopc-cloud' ? (
+            <ManageXopcCloudProvider
+              labels={labels}
+              onSaved={onSaved}
+            />
+          ) : isCustom ? (
             <ManageCustomProvider
               providerId={providerId}
               customConfig={customConfig}
@@ -147,6 +154,34 @@ export function ProviderManageDialog({
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
+  );
+}
+
+function ManageXopcCloudProvider({
+  labels,
+  onSaved,
+}: {
+  labels: ProviderManageDialogMessages;
+  onSaved: () => void;
+}) {
+  return (
+    <>
+      <div className="flex items-center justify-between border-b border-edge-subtle px-5 py-4">
+        <Dialog.Title className="text-base font-semibold text-fg">XOPC Model Service</Dialog.Title>
+        <Dialog.Close asChild>
+          <button
+            type="button"
+            className={cn('rounded-lg p-1.5 text-fg-muted hover:bg-surface-hover hover:text-fg', interaction.press)}
+            aria-label={labels.close}
+          >
+            <X className="size-4" aria-hidden />
+          </button>
+        </Dialog.Close>
+      </div>
+      <div className="px-5 py-4">
+        <XopcCloudConnect connected onConnected={onSaved} />
+      </div>
+    </>
   );
 }
 

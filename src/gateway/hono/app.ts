@@ -21,6 +21,7 @@ import { operatorScopes } from './middleware/scopes.js';
 import {
   createChannelRateLimitMiddleware,
   createStrictRateLimitMiddleware,
+  createXopcCloudPollRateLimitMiddleware,
 } from './middleware/strict-rate-limit.js';
 import { logContextMiddleware } from './middleware/log-context.js';
 import { logger } from './middleware/logger.js';
@@ -267,6 +268,12 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       allowRealIpFallback: service.currentConfig.gateway?.allowRealIpFallback === true,
     }),
   });
+  const xopcCloudPollRateLimitMiddleware = createXopcCloudPollRateLimitMiddleware({
+    getTrustedProxyContext: () => ({
+      trustedProxies: service.currentConfig.gateway?.trustedProxies,
+      allowRealIpFallback: service.currentConfig.gateway?.allowRealIpFallback === true,
+    }),
+  });
 
   const sseConfig = {
     service,
@@ -276,6 +283,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   registerAuthenticatedRoutes(app, authenticated, {
     service,
     strictRateLimitMiddleware,
+    xopcCloudPollRateLimitMiddleware,
     channelRateLimitMiddleware,
     sseConfig,
   });

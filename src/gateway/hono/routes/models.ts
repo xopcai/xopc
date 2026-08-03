@@ -39,6 +39,7 @@ import {
 } from '../../../providers/domestic-presets.js';
 import { discoverProviderModels, isProviderApiDiscoverable } from '../../../providers/model-discovery.js';
 import { CredentialResolver } from '../../../auth/credentials.js';
+import { XopcCloudConnectionService } from '../../../providers/xopc-cloud-connection.js';
 import { getProviderRegistry } from '../../../providers/plugin-registry.js';
 import type { ProviderModelDefinition } from '../../../extensions/types/providers.js';
 import type { GatewayService } from '../../service.js';
@@ -105,7 +106,43 @@ function mapPluginModel(providerId: string, model: ProviderModelDefinition, avai
 }
 
 export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
-  const { service, strictRateLimitMiddleware } = deps;
+  const { service, strictRateLimitMiddleware, xopcCloudPollRateLimitMiddleware } = deps;
+  const xopcCloud = new XopcCloudConnectionService();
+
+  authenticated.post('/api/models/xopc-cloud/connect', strictRateLimitMiddleware, async (c) => {
+    const body = await c.req.json().catch(() => ({})) as { clientType?: unknown };
+    const clientType = body.clientType === 'electron' || body.clientType === 'cli'
+      ? body.clientType
+      : 'web';
+    try {
+      return c.json({ ok: true, payload: await xopcCloud.start(clientType) }, 201);
+    } catch (error) {
+      return c.json({ ok: false, error: { message: error instanceof Error ? error.message : 'Connection failed' } }, 502);
+    }
+  });
+
+  authenticated.post('/api/models/xopc-cloud/connect/:requestId/poll', xopcCloudPollRateLimitMiddleware, async (c) => {
+    try {
+      const result = await xopcCloud.poll(c.req.param('requestId'));
+      if (result.status === 'pending') return c.json({ ok: true, payload: result }, 202);
+      service.emit('models-json.updated', { modelCount: getModelRegistry().getAll().length });
+      return c.json({ ok: true, payload: result });
+    } catch (error) {
+      return c.json({ ok: false, error: { message: error instanceof Error ? error.message : 'Connection failed' } }, 400);
+    }
+  });
+
+  authenticated.post('/api/models/xopc-cloud/refresh', strictRateLimitMiddleware, async (c) => {
+    try {
+      const result = await xopcCloud.refreshCatalog();
+      if (result.status === 'updated') {
+        service.emit('models-json.updated', { modelCount: getModelRegistry().getAll().length });
+      }
+      return c.json({ ok: true, payload: result });
+    } catch (error) {
+      return c.json({ ok: false, error: { message: error instanceof Error ? error.message : 'Refresh failed' } }, 502);
+    }
+  });
 
   // GET /api/models-json - Get models.json configuration
   authenticated.get('/api/models-json', async (c) => {
