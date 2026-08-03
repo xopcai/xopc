@@ -608,6 +608,7 @@
       "stream": "实时详细"
     },
     "thinkingLevelLabel": "思考深度",
+    "thinkingUnsupported": "当前模型不支持",
     "thinkingLevels": {
       "off": "关闭",
       "minimal": "最低",

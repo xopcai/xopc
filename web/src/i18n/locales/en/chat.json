@@ -608,6 +608,7 @@
       "stream": "Detailed live"
     },
     "thinkingLevelLabel": "Thinking",
+    "thinkingUnsupported": "Not supported by this model",
     "thinkingLevels": {
       "off": "Off",
       "minimal": "Minimal",

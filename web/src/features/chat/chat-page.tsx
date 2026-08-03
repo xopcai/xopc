@@ -1231,7 +1231,7 @@ export function ChatPage() {
                 onAcceptWelcomeSuggestion={onPickWelcomePrompt}
                 canSelectWorkingDirectory={canSelectWorkingDirectory}
                 thinkingLevel={session.thinkingLevel}
-                showThinkingSelector={session.modelSupportsThinking}
+                modelSupportsThinking={session.modelSupportsThinking}
                 onThinkingChange={session.onSessionThinkingLevelChange}
                 reasoningLevel={session.reasoningLevel}
                 onReasoningChange={session.onSessionReasoningLevelChange}
