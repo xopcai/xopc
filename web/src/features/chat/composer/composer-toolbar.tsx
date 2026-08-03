@@ -1,12 +1,11 @@
 import * as Popover from '@radix-ui/react-popover';
-import { Activity, Ban, File as FileIcon, ListChecks, Mic, Plus, Send, Sparkles, Square } from 'lucide-react';
+import { Activity, Ban, File as FileIcon, Mic, Plus, Send, Sparkles, Square } from 'lucide-react';
 import { memo, useState } from 'react';
 
 import type { Message, ReasoningLevel } from '@/features/chat/messages/messages.types';
 import { ModelContextRing } from '@/features/chat/model/model-context-ring';
 import { ModelSelector } from '@/features/chat/model/model-selector';
 import { SessionWorkingDirectoryControl } from '@/features/chat/session/session-working-directory-control';
-import { ChatGoalComposerMenu } from '@/features/chat/composer/chat-goal-composer-menu';
 import type { SessionManager } from '@/features/chat/session/session-manager';
 import type { ThinkingLevel } from '@/features/chat/composer/composer.types';
 import type { VoiceReadiness } from '@/features/chat/composer/voice-transcribe-api';
@@ -40,10 +39,9 @@ export interface ComposerToolbarProps {
   attachmentCount: number;
   maxAttachments: number;
   onPickFiles: () => void;
-  onOpenReviewLauncher: () => void;
 
   thinkingLevel: string;
-  showThinkingSelector: boolean;
+  modelSupportsThinking: boolean;
   onThinkingChange: (level: string) => void;
   reasoningLevel: ReasoningLevel;
   onReasoningChange: (level: ReasoningLevel) => void;
@@ -79,9 +77,8 @@ export const ComposerToolbar = memo(function ComposerToolbar({
   attachmentCount,
   maxAttachments,
   onPickFiles,
-  onOpenReviewLauncher,
   thinkingLevel,
-  showThinkingSelector,
+  modelSupportsThinking,
   onThinkingChange,
   reasoningLevel,
   onReasoningChange,
@@ -154,28 +151,6 @@ export const ComposerToolbar = memo(function ComposerToolbar({
             onOpenAutoFocus={(e) => e.preventDefault()}
           >
             <div className="flex flex-col gap-0.5">
-              <ChatGoalComposerMenu
-                sessionKey={sessionKey}
-                disabled={disabled || runBusy}
-                onDone={() => setMoreOpen(false)}
-              />
-              <button
-                type="button"
-                className={cn(
-                  'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-fg',
-                  'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                  'disabled:cursor-not-allowed disabled:opacity-50',
-                )}
-                disabled={disabled || runBusy || !sessionKey}
-                onClick={() => {
-                  onOpenReviewLauncher();
-                  setMoreOpen(false);
-                }}
-              >
-                <ListChecks className="size-4 shrink-0 text-fg-subtle" aria-hidden />
-                <span className="min-w-0 flex-1 truncate">{m.reviewLauncher.actionLabel}</span>
-              </button>
-              <div className="my-1 h-px bg-edge-subtle" />
               <button
                 type="button"
                 className={cn(
@@ -197,30 +172,38 @@ export const ComposerToolbar = memo(function ComposerToolbar({
                 </span>
               </button>
 
-              {showThinkingSelector ? (
-                <label
-                  className={cn(
-                    'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-fg',
-                    'hover:bg-surface-hover',
-                  )}
-                  title={`${m.thinkingLevelLabel}: ${m.thinkingLevels[thinkingLevel as ThinkingLevel] ?? thinkingLevel}`}
-                >
-                  <ThinkingIcon className="size-4 shrink-0 text-accent-fg" aria-hidden />
-                  <span className="shrink-0 text-fg-muted">{m.thinkingLevelLabel}</span>
+              <label
+                className={cn(
+                  'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-fg',
+                  'hover:bg-surface-hover',
+                )}
+                title={
+                  modelSupportsThinking
+                    ? `${m.thinkingLevelLabel}: ${m.thinkingLevels[thinkingLevel as ThinkingLevel] ?? thinkingLevel}`
+                    : m.thinkingUnsupported
+                }
+              >
+                <ThinkingIcon className="size-4 shrink-0 text-accent-fg" aria-hidden />
+                <span className="shrink-0 text-fg-muted">{m.thinkingLevelLabel}</span>
+                {modelSupportsThinking ? (
                   <Select
                     className="min-w-0 flex-1 cursor-pointer appearance-none rounded-md bg-surface-hover/80 px-2 py-0.5 text-sm font-medium text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                     value={thinkingLevel}
                     disabled={disabled || (sending && !streaming)}
-                    onChange={(e) => onThinkingChange(e.target.value)}
+                    onChange={(event) => onThinkingChange(event.target.value)}
                   >
-                    {(Object.keys(m.thinkingLevels) as ThinkingLevel[]).map((lvl) => (
-                      <SelectOption key={lvl} value={lvl}>
-                        {m.thinkingLevels[lvl]}
+                    {(Object.keys(m.thinkingLevels) as ThinkingLevel[]).map((level) => (
+                      <SelectOption key={level} value={level}>
+                        {m.thinkingLevels[level]}
                       </SelectOption>
                     ))}
                   </Select>
-                </label>
-              ) : null}
+                ) : (
+                  <span className="min-w-0 flex-1 truncate text-right text-xs text-fg-disabled">
+                    {m.thinkingUnsupported}
+                  </span>
+                )}
+              </label>
               <label
                 className={cn(
                   'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-fg',
@@ -234,7 +217,7 @@ export const ComposerToolbar = memo(function ComposerToolbar({
                   className="min-w-0 flex-1 cursor-pointer appearance-none rounded-md bg-surface-hover/80 px-2 py-0.5 text-sm font-medium text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                   value={reasoningLevel}
                   disabled={disabled}
-                  onChange={(e) => onReasoningChange(e.target.value as ReasoningLevel)}
+                  onChange={(event) => onReasoningChange(event.target.value as ReasoningLevel)}
                 >
                   {(Object.keys(m.activityDetailLevels) as ReasoningLevel[]).map((level) => (
                     <SelectOption key={level} value={level}>
