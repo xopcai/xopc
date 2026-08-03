@@ -30,6 +30,7 @@ import { Button } from '@/components/ui/button';
 import { MarkdownView } from '@/components/markdown/markdown-view';
 import { RefreshButton } from '@/components/ui/refresh-button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { TimePicker } from '@/components/ui/time-picker';
 import { AiTextAssistButton } from '@/features/ai-assist/ai-text-assist-button';
 import { fetchChatAgents, type ChatAgentOption } from '@/features/chat/agent-selection/chat-agents-api';
 import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
@@ -2108,7 +2109,7 @@ function AutomationForm({
         ) : null}
         {form.triggerMode === 'daily' || form.triggerMode === 'weekly' ? (
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label={labels.form.time}><input className={inputClass} type="time" value={form.time} onChange={(e) => update({ time: e.target.value })} /></Field>
+            <Field label={labels.form.time}><TimePicker value={form.time} onChange={(time) => update({ time })} ariaLabel={labels.form.time} /></Field>
             {form.triggerMode === 'weekly' ? (
               <Field label={labels.form.day}>
                 <Select className={inputClass} value={form.weekday} onChange={(e) => update({ weekday: e.target.value })}>

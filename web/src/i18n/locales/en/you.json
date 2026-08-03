@@ -183,6 +183,7 @@
     "proactiveEnabled": "Allow proactive suggestions",
     "quietStart": "Quiet hours start",
     "quietEnd": "Quiet hours end",
+    "clearTime": "Clear time",
     "blockedTopics": "Never proactively mention",
     "supportModes": {
       "efficient": "Efficient",

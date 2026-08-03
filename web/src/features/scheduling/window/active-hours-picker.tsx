@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button';
+import { TimePicker } from '@/components/ui/time-picker';
 import { cn } from '@/lib/cn';
 import { formControlBorderFocusClass } from '@/lib/form-field-width';
 
@@ -54,24 +55,24 @@ export function ActiveHoursPicker({ value, onChange, labels, disabled }: ActiveH
       <div className="grid gap-2 sm:grid-cols-3">
         <label className="block min-w-0">
           <span className="text-xs font-medium text-fg-muted">{labels.start}</span>
-          <input
-            type="time"
-            step={60}
+          <TimePicker
             disabled={disabled}
-            className={timeInputClass}
+            className="mt-1 w-full"
+            triggerClassName="h-9 border-edge-subtle px-2.5"
             value={value.start}
-            onChange={(e) => onChange({ ...value, start: e.target.value })}
+            onChange={(start) => onChange({ ...value, start })}
+            ariaLabel={labels.start}
           />
         </label>
         <label className="block min-w-0">
           <span className="text-xs font-medium text-fg-muted">{labels.end}</span>
-          <input
-            type="time"
-            step={60}
+          <TimePicker
             disabled={disabled}
-            className={timeInputClass}
+            className="mt-1 w-full"
+            triggerClassName="h-9 border-edge-subtle px-2.5"
             value={value.end}
-            onChange={(e) => onChange({ ...value, end: e.target.value })}
+            onChange={(end) => onChange({ ...value, end })}
+            ariaLabel={labels.end}
           />
         </label>
         <label className="block min-w-0">
