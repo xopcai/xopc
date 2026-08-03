@@ -47,7 +47,6 @@ export const BUILTIN_NAV_DEFS: readonly BuiltinNavDef[] = [
   { id: 'builtin:profile', to: '/you', Icon: HeartHandshake },
   { id: 'builtin:projects', to: '/projects', Icon: FolderKanban },
   { id: 'builtin:automations', to: '/automations', Icon: Zap },
-  { id: 'builtin:browserWorkflows', to: '/browser-workflows', Icon: MonitorPlay },
   { id: 'builtin:skills', to: '/skills', Icon: Layers },
   { id: 'builtin:connectors', to: '/connectors', Icon: Cable },
   { id: 'builtin:agents', to: '/agents', Icon: Users },
@@ -55,6 +54,7 @@ export const BUILTIN_NAV_DEFS: readonly BuiltinNavDef[] = [
   { id: 'builtin:channels', to: '/channels', Icon: Plug },
   { id: 'builtin:goals', to: '/goals', Icon: ListChecks },
   { id: 'builtin:workflows', to: '/workflows', Icon: GitBranch },
+  { id: 'builtin:browserWorkflows', to: '/browser-workflows', Icon: MonitorPlay },
   { id: 'builtin:localApps', to: '/local-apps', Icon: Box },
   { id: 'builtin:extensions', to: '/extensions', Icon: Puzzle },
 ] as const;
