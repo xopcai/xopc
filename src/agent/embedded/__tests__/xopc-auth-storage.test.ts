@@ -9,7 +9,7 @@ import { ModelRuntime } from '@earendil-works/pi-coding-agent';
 
 vi.mock('../../../auth/sync-provider-auth.js', () => ({
   resolveProviderApiKeySync: vi.fn((provider: string) =>
-    provider === 'deepseek' ? 'sk-from-profiles' : undefined,
+    provider === 'deepseek' || provider === 'xopc-cloud' ? 'sk-from-profiles' : undefined,
   ),
 }));
 
@@ -27,6 +27,7 @@ import {
 import { resolveProviderApiKeySync } from '../../../auth/sync-provider-auth.js';
 import { resolveModelsJsonPath } from '../../../config/paths.js';
 import { getApiKeySync } from '../../../providers/index.js';
+import { resetModelCatalogStore } from '../../../providers/model-catalog-store.js';
 
 describe('resolveXopcProviderApiKey', () => {
   it('prefers auth-profiles sync resolution', () => {
@@ -84,7 +85,9 @@ describe('applyXopcProviderApiKey', () => {
 
 describe('createEmbeddedModelRuntime', () => {
   it('loads custom providers from the xopc models.json path', async () => {
-    const createSpy = vi.spyOn(ModelRuntime, 'create').mockResolvedValue({} as ModelRuntime);
+    const createSpy = vi.spyOn(ModelRuntime, 'create').mockResolvedValue({
+      registerProvider: vi.fn(),
+    } as unknown as ModelRuntime);
 
     try {
       await createEmbeddedModelRuntime();
@@ -127,6 +130,57 @@ describe('createEmbeddedModelRuntime', () => {
         auth: { apiKey: 'sk-test' },
       });
     } finally {
+      if (previousStateDir === undefined) delete process.env.XOPC_STATE_DIR;
+      else process.env.XOPC_STATE_DIR = previousStateDir;
+      if (previousOffline === undefined) delete process.env.PI_OFFLINE;
+      else process.env.PI_OFFLINE = previousOffline;
+      await rm(stateDir, { recursive: true, force: true });
+    }
+  });
+
+  it('registers the catalog-backed xopc-cloud provider before injecting auth', async () => {
+    const stateDir = await mkdtemp(join(tmpdir(), 'xopc-embedded-runtime-'));
+    const previousStateDir = process.env.XOPC_STATE_DIR;
+    const previousOffline = process.env.PI_OFFLINE;
+
+    try {
+      process.env.XOPC_STATE_DIR = stateDir;
+      process.env.PI_OFFLINE = '1';
+      await writeFile(
+        join(stateDir, 'model-catalog.json'),
+        JSON.stringify({
+          sources: {
+            'xopc-cloud': {
+              providerId: 'xopc-cloud',
+              baseUrl: 'https://router.xopc.ai/v1',
+              api: 'openai-completions',
+              etag: null,
+              recommendedModel: 'deepseek-v4-flash',
+              lastSuccessAt: Date.now(),
+              models: [{
+                id: 'deepseek-v4-flash',
+                name: 'DeepSeek V4 Flash',
+                availability: 'available',
+                maxOutputTokens: 8192,
+              }],
+            },
+          },
+        }),
+      );
+      resetModelCatalogStore();
+
+      const modelRuntime = await createEmbeddedModelRuntime();
+      await applyXopcProviderApiKey(modelRuntime, 'xopc-cloud');
+
+      expect(modelRuntime.getRegisteredProviderConfig('xopc-cloud')).toMatchObject({
+        baseUrl: 'https://router.xopc.ai/v1',
+        api: 'openai-completions',
+      });
+      await expect(modelRuntime.getAuth('xopc-cloud')).resolves.toMatchObject({
+        auth: { apiKey: 'sk-from-profiles' },
+      });
+    } finally {
+      resetModelCatalogStore();
       if (previousStateDir === undefined) delete process.env.XOPC_STATE_DIR;
       else process.env.XOPC_STATE_DIR = previousStateDir;
       if (previousOffline === undefined) delete process.env.PI_OFFLINE;
