@@ -43,6 +43,7 @@ export interface ProviderConfig {
   authHeader?: boolean;
   headers?: Record<string, string>;
   modelOverrides?: Record<string, unknown>;
+  modelDiscovery?: { enabled: boolean };
 }
 
 export interface ModelsJsonConfig {

@@ -39,6 +39,7 @@ import { assertGatewayRuntimeConfig } from './runtime-config.js';
 import { resolveEffectiveGatewayPort } from './host.js';
 import { buckets, isGatewayStrictSecurityEnabled } from './rate-limit/index.js';
 import { prewarmModelRegistry } from '../providers/index.js';
+import { ModelCatalogSyncService } from '../providers/model-catalog-sync-service.js';
 import { runBootstrapMigrationsSync } from '../migrations/runner.js';
 import { createLogger, getLogDir, getRuntimeLogStats } from '../utils/logger.js';
 import {
@@ -127,6 +128,10 @@ export class GatewayService {
   private startTime = Date.now();
   private workspacePath: string;
   private readonly configCoordinator: GatewayConfigCoordinator;
+  private readonly modelCatalogSync = new ModelCatalogSyncService({
+    onUpdated: (modelCount) => this.emit('model-catalog.updated', { modelCount }),
+    getConfig: () => this.config,
+  });
 
   // Authentication
   private auth: ResolvedGatewayAuth;
@@ -135,6 +140,10 @@ export class GatewayService {
 
   getConfig(): Config {
     return this.config;
+  }
+
+  getModelCatalogSync(): ModelCatalogSyncService {
+    return this.modelCatalogSync;
   }
 
   get browserRecipes(): BrowserRecipeService {
@@ -705,6 +714,8 @@ export class GatewayService {
       log.warn({ err, errorMessage: em, phase: 'sidecars.model_prewarm' }, `Model registry prewarm failed: ${em}`);
     }
 
+    this.modelCatalogSync.start();
+
     if (!this.extensionLoader || areExtensionsGloballyDisabled(this.config)) {
       return;
     }
@@ -1059,6 +1070,8 @@ export class GatewayService {
       this.stopGatewayUpdateCheck();
       this.stopGatewayUpdateCheck = null;
     }
+
+    this.modelCatalogSync.stop();
 
     await this.configCoordinator.stopHotReloader();
 

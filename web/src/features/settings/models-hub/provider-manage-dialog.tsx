@@ -692,6 +692,9 @@ function ManageCustomProvider({
   const [baseUrl, setBaseUrl] = useState(existingProvider?.baseUrl ?? '');
   const [apiKey, setApiKey] = useState(existingProvider?.apiKey ?? '');
   const [models, setModels] = useState<CustomModel[]>(existingProvider?.models ?? []);
+  const [modelDiscoveryEnabled, setModelDiscoveryEnabled] = useState(
+    existingProvider?.modelDiscovery?.enabled === true,
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
@@ -717,7 +720,10 @@ function ManageCustomProvider({
   };
 
   const handleSave = async () => {
-    const config = buildUpdatedConfig({ models });
+    const config = buildUpdatedConfig({
+      models,
+      modelDiscovery: { enabled: modelDiscoveryEnabled },
+    });
     if (!config) return;
     setSaving(true);
     setError(null);
@@ -837,6 +843,25 @@ function ManageCustomProvider({
             loadFailed: labels.loadFailed,
           }}
         />
+
+        <label className="flex items-start gap-3 rounded-xl border border-edge-subtle bg-surface-panel/40 p-3">
+          <input
+            type="checkbox"
+            checked={modelDiscoveryEnabled}
+            onChange={(event) => setModelDiscoveryEnabled(event.target.checked)}
+            className="mt-0.5 size-4 rounded border-edge accent-accent"
+          />
+          <span className="min-w-0">
+            <span className="block text-sm font-medium text-fg">
+              {language === 'zh' ? '自动同步模型目录' : 'Automatically sync model catalog'}
+            </span>
+            <span className="mt-0.5 block text-xs text-fg-muted">
+              {language === 'zh'
+                ? '启动时及定时从此服务的 /models 接口更新模型。'
+                : 'Update models from this service’s /models endpoint at startup and on schedule.'}
+            </span>
+          </span>
+        </label>
 
         {/* Models */}
         <div className="border-t border-edge-subtle pt-3">
