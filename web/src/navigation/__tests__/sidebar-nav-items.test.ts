@@ -34,7 +34,6 @@ describe('reconcileNavOrder', () => {
       'builtin:profile',
       'builtin:projects',
       'builtin:automations',
-      'builtin:browserWorkflows',
       'builtin:skills',
       'builtin:connectors',
       'builtin:agents',
@@ -42,6 +41,7 @@ describe('reconcileNavOrder', () => {
       'builtin:channels',
       'builtin:goals',
       'builtin:workflows',
+      'builtin:browserWorkflows',
       'builtin:localApps',
       'builtin:extensions',
     ]);
