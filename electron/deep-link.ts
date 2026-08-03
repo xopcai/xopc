@@ -15,6 +15,12 @@ export function xopcDeepLinkToRoute(value: string): string | null {
       return `/settings${path}${url.search}${url.hash}`;
     }
 
+    if (url.hostname === 'cloud' && url.pathname === '/model-connected') {
+      const requestId = url.searchParams.get('request_id')?.trim();
+      if (!requestId) return null;
+      return '/settings/capabilities/models';
+    }
+
     return null;
   } catch {
     return null;

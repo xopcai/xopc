@@ -83,6 +83,14 @@ export function createStrictRateLimitMiddleware(deps: StrictRateLimitDeps) {
   });
 }
 
+export function createXopcCloudPollRateLimitMiddleware(deps: StrictRateLimitDeps) {
+  return createClientRateLimitMiddleware(deps, {
+    limiter: () => buckets.xopcCloudPoll(),
+    exceededMessage: 'XOPC Cloud polling rate limit exceeded',
+    reason: 'xopc_cloud_poll_rate_limit_exceeded',
+  });
+}
+
 export function createChannelRateLimitMiddleware(deps: StrictRateLimitDeps) {
   return createClientRateLimitMiddleware(deps, {
     limiter: () => buckets.channelApi(),

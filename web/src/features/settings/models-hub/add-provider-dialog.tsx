@@ -54,6 +54,8 @@ import { interaction } from '@/lib/interaction';
 import type { StoredLanguage } from '@/lib/storage';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 
+import { XopcCloudConnect } from './xopc-cloud-connect';
+
 export interface AddProviderDialogMessages {
   title: string;
   searchPlaceholder: string;
@@ -104,6 +106,7 @@ export interface AddProviderDialogMessages {
 
 type DialogStep =
   | { type: 'pick' }
+  | { type: 'xopcCloud' }
   | { type: 'builtin'; providerId: string }
   | { type: 'custom'; presetKey?: string };
 
@@ -169,10 +172,21 @@ export function AddProviderDialog({
               onSearchChange={setSearchQuery}
               labels={labels}
               onPickBuiltin={(id) => {
+                if (id === 'xopc-cloud') {
+                  setStep({ type: 'xopcCloud' });
+                  return;
+                }
                 const presetKey = modelsJsonPresetKeyForProviderId(id);
                 setStep(presetKey ? { type: 'custom', presetKey } : { type: 'builtin', providerId: id });
               }}
               onPickCustom={() => setStep({ type: 'custom' })}
+            />
+          ) : step.type === 'xopcCloud' ? (
+            <ConfigureXopcCloudStep
+              connected={builtinRows.some((row) => row.id === 'xopc-cloud' && row.configured)}
+              labels={labels}
+              onBack={() => setStep({ type: 'pick' })}
+              onConnected={handleSaved}
             />
           ) : step.type === 'builtin' ? (
             <ConfigureBuiltinStep
@@ -196,6 +210,41 @@ export function AddProviderDialog({
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
+  );
+}
+
+function ConfigureXopcCloudStep({
+  connected,
+  labels,
+  onBack,
+  onConnected,
+}: {
+  connected: boolean;
+  labels: AddProviderDialogMessages;
+  onBack: () => void;
+  onConnected: () => void;
+}) {
+  return (
+    <>
+      <div className="flex items-center gap-2 border-b border-edge-subtle px-5 py-4">
+        <button
+          type="button"
+          onClick={onBack}
+          className={cn('rounded-lg p-1.5 text-fg-muted hover:bg-surface-hover hover:text-fg', interaction.press)}
+          aria-label={labels.back}
+        >
+          <ChevronRight className="size-4 rotate-180" aria-hidden />
+        </button>
+        <Dialog.Title className="min-w-0 flex-1 text-base font-semibold text-fg">
+          XOPC Model Service
+        </Dialog.Title>
+        <DialogCloseButton label={labels.close} />
+      </div>
+
+      <div className="px-5 py-4">
+        <XopcCloudConnect connected={connected} onConnected={onConnected} />
+      </div>
+    </>
   );
 }
 

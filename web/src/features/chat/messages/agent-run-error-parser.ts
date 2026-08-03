@@ -6,6 +6,7 @@ export type AgentRunErrorKind =
   | 'rate_limit'
   | 'timeout'
   | 'billing'
+  | 'xopc_quota_exhausted'
   | 'session_not_found'
   | 'unknown'
   | 'send_failed';
