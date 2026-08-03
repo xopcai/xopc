@@ -125,6 +125,7 @@ export const ProviderConfigSchema = z.object({
 	authHeader: z.boolean().optional(),
 	models: z.array(CustomModelSchema).optional(),
 	modelOverrides: z.record(z.string(), ModelOverrideSchema).optional(),
+	modelDiscovery: z.object({ enabled: z.boolean() }).strict().optional(),
 });
 
 // ============================================

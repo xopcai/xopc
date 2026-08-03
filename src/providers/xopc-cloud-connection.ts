@@ -4,14 +4,9 @@ import { hostname } from 'node:os';
 import { join } from 'node:path';
 
 import { getCredentialResolver, type CredentialResolver } from '../auth/credentials.js';
-import {
-  getModelsJsonPath,
-  loadModelsJson,
-  saveModelsJson,
-  type CustomModel,
-} from '../config/models-json.js';
 import { resolveStateDir } from '../config/paths-state.js';
 import { writeTextAtomicSync } from '../infra/write-file-atomic.js';
+import { getModelCatalogStore, type ModelCatalogStore } from './model-catalog-store.js';
 import { getModelRegistry } from './model-registry.js';
 
 const DEFAULT_CONSOLE_URL = 'https://console.xopc.ai';
@@ -29,6 +24,12 @@ interface CatalogModel {
   maxOutputTokens: number | null;
 }
 
+interface CatalogResult {
+  models: CatalogModel[];
+  recommendedModel: string | null;
+  etag: string | null;
+}
+
 interface ConnectionToken {
   providerId: 'xopc-cloud';
   apiKey: string;
@@ -39,7 +40,7 @@ export interface XopcCloudConnectionOptions {
   consoleUrl?: string;
   routerUrl?: string;
   deviceIdPath?: string;
-  modelsJsonPath?: string;
+  catalogStore?: ModelCatalogStore;
   credentials?: Pick<CredentialResolver, 'saveApiKey' | 'revealGatewayStoredApiKey' | 'deleteProfile'>;
   refreshModels?: () => void;
   now?: () => number;
@@ -75,18 +76,17 @@ export class XopcCloudConnectionService {
   private readonly consoleUrl: string;
   private readonly routerUrl: string;
   private readonly deviceIdPath: string;
-  private readonly modelsJsonPath: string;
+  private readonly catalogStore: ModelCatalogStore;
   private readonly credentials: XopcCloudConnectionOptions['credentials'];
   private readonly refreshModels: () => void;
   private readonly now: () => number;
-  private catalogEtag: string | null = null;
 
   constructor(options: XopcCloudConnectionOptions = {}) {
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.consoleUrl = normalizedBaseUrl(options.consoleUrl ?? process.env.XOPC_CONSOLE_URL ?? DEFAULT_CONSOLE_URL);
     this.routerUrl = normalizedBaseUrl(options.routerUrl ?? process.env.XOPC_MODEL_ROUTER_URL ?? DEFAULT_ROUTER_URL);
     this.deviceIdPath = options.deviceIdPath ?? join(resolveStateDir(), 'xopc-cloud-device.json');
-    this.modelsJsonPath = options.modelsJsonPath ?? getModelsJsonPath();
+    this.catalogStore = options.catalogStore ?? getModelCatalogStore();
     this.credentials = options.credentials ?? getCredentialResolver();
     this.refreshModels = options.refreshModels ?? (() => getModelRegistry().refresh());
     this.now = options.now ?? Date.now;
@@ -158,8 +158,7 @@ export class XopcCloudConnectionService {
 
     const catalog = await this.fetchCatalog(token.apiKey);
     if (!catalog) throw new Error('XOPC model catalog was not available');
-    await this.install(token.apiKey, catalog.models, true);
-    this.catalogEtag = catalog.etag;
+    await this.install(token.apiKey, catalog, true);
     this.pending.delete(requestId);
     return {
       status: 'connected',
@@ -172,10 +171,13 @@ export class XopcCloudConnectionService {
   async refreshCatalog(): Promise<{ status: 'disconnected' | 'unchanged' | 'updated'; modelCount?: number }> {
     const apiKey = await this.credentials!.revealGatewayStoredApiKey('xopc-cloud');
     if (!apiKey) return { status: 'disconnected' };
-    const catalog = await this.fetchCatalog(apiKey, this.catalogEtag);
-    if (!catalog) return { status: 'unchanged' };
-    await this.install(apiKey, catalog.models, false);
-    this.catalogEtag = catalog.etag;
+    const previous = this.catalogStore.getSource('xopc-cloud');
+    const catalog = await this.fetchCatalog(apiKey, previous?.etag);
+    if (!catalog) {
+      if (previous) this.catalogStore.saveSource('xopc-cloud', { ...previous, lastSuccessAt: this.now() });
+      return { status: 'unchanged' };
+    }
+    await this.install(apiKey, catalog, false);
     return { status: 'updated', modelCount: catalog.models.length };
   }
 
@@ -193,11 +195,7 @@ export class XopcCloudConnectionService {
     return deviceId;
   }
 
-  private async fetchCatalog(apiKey: string, etag?: string | null): Promise<{
-    models: CatalogModel[];
-    recommendedModel: string | null;
-    etag: string | null;
-  } | null> {
+  private async fetchCatalog(apiKey: string, etag?: string | null): Promise<CatalogResult | null> {
     const headers = new Headers({ authorization: `Bearer ${apiKey}` });
     if (etag) headers.set('if-none-match', etag);
     const response = await this.fetchImpl(`${this.routerUrl}/catalog`, {
@@ -246,38 +244,24 @@ export class XopcCloudConnectionService {
     };
   }
 
-  private async install(apiKey: string, models: CatalogModel[], saveCredential: boolean): Promise<void> {
-    const before = loadModelsJson(this.modelsJsonPath).config;
+  private async install(apiKey: string, catalog: CatalogResult, saveCredential: boolean): Promise<void> {
     const previousKey = await this.credentials!.revealGatewayStoredApiKey('xopc-cloud');
-    const customModels: CustomModel[] = models.map((model) => ({
-      id: model.id,
-      name: model.name,
-      api: 'openai-completions',
-      input: ['text'],
-      contextWindow: 128_000,
-      maxTokens: model.maxOutputTokens ?? 16_384,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    }));
-    const next = {
-      ...before,
-      providers: {
-        ...before.providers,
-        'xopc-cloud': {
-          baseUrl: this.routerUrl,
-          api: 'openai-completions' as const,
-          models: customModels,
-        },
-      },
-    };
-
     if (saveCredential) await this.credentials!.saveApiKey('xopc-cloud', apiKey, { envVar: null });
-    const saved = saveModelsJson(this.modelsJsonPath, next);
-    if (!saved.success) {
+    try {
+      this.catalogStore.replaceSourceModels('xopc-cloud', {
+        providerId: 'xopc-cloud',
+        baseUrl: this.routerUrl,
+        api: 'openai-completions',
+        etag: catalog.etag,
+        recommendedModel: catalog.recommendedModel,
+        lastSuccessAt: this.now(),
+      }, catalog.models);
+    } catch (err) {
       if (saveCredential) {
         if (previousKey) await this.credentials!.saveApiKey('xopc-cloud', previousKey, { envVar: null });
         else await this.credentials!.deleteProfile('xopc-cloud:default');
       }
-      throw new Error(saved.error ?? 'Unable to save XOPC models');
+      throw err;
     }
     this.refreshModels();
   }

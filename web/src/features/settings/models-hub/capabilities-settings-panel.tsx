@@ -28,6 +28,7 @@ import { ConnectedProvidersGrid, useConnectedProviders } from './connected-provi
 import { revalidateModelsHubCaches } from './models-hub-cache';
 import { ProviderManageDialog } from './provider-manage-dialog';
 import { XopcCloudConnect } from './xopc-cloud-connect';
+import { ModelCatalogStatus } from './model-catalog-status';
 
 interface SectionDefinition {
   id: CapabilitySettingsSectionId;
@@ -142,6 +143,7 @@ export function CapabilitiesSettingsPanel() {
           {section.id === 'models' ? (
             <>
               <XopcCloudConnect connected={providerData.cards.some((card) => card.id === 'xopc-cloud')} />
+              <ModelCatalogStatus />
               <ConnectedProvidersGrid
                 labels={c.connectedProviders}
                 onAdd={() => setAddDialogOpen(true)}
