@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { XopcCloudConnectionService } from '../xopc-cloud-connection.js';
+import { XopcCloudConnectionService, XopcCloudHttpError } from '../xopc-cloud-connection.js';
 
 describe('XopcCloudConnectionService', () => {
   const directories: string[] = [];
@@ -102,5 +102,30 @@ describe('XopcCloudConnectionService', () => {
       }),
     });
     await expect(service.start('web')).rejects.toThrow('unsafe authorization URL');
+  });
+
+  it('preserves catalog authentication failures so callers can request reconnection', async () => {
+    const service = new XopcCloudConnectionService({
+      ...paths(),
+      routerUrl: 'https://router.test/v1',
+      fetchImpl: async () => Response.json({
+        error: {
+          message: 'Invalid API key',
+          type: 'authentication_error',
+          code: 'invalid_api_key',
+        },
+      }, { status: 401 }),
+      credentials: {
+        saveApiKey: async () => undefined,
+        revealGatewayStoredApiKey: async () => 'xopc_model_expired',
+        deleteProfile: async () => undefined,
+      },
+    });
+
+    await expect(service.refreshCatalog()).rejects.toMatchObject<XopcCloudHttpError>({
+      status: 401,
+      code: 'invalid_api_key',
+      message: 'XOPC Model Service authorization expired. Reconnect the service.',
+    });
   });
 });

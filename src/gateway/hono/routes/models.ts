@@ -39,7 +39,10 @@ import {
 } from '../../../providers/domestic-presets.js';
 import { discoverProviderModels, isProviderApiDiscoverable } from '../../../providers/model-discovery.js';
 import { CredentialResolver } from '../../../auth/credentials.js';
-import { XopcCloudConnectionService } from '../../../providers/xopc-cloud-connection.js';
+import {
+  XopcCloudConnectionService,
+  XopcCloudHttpError,
+} from '../../../providers/xopc-cloud-connection.js';
 import { getProviderRegistry } from '../../../providers/plugin-registry.js';
 import type { ProviderModelDefinition } from '../../../extensions/types/providers.js';
 import type { GatewayService } from '../../service.js';
@@ -140,7 +143,18 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
       }
       return c.json({ ok: true, payload: result });
     } catch (error) {
-      return c.json({ ok: false, error: { message: error instanceof Error ? error.message : 'Refresh failed' } }, 502);
+      const status = error instanceof XopcCloudHttpError && error.status === 401
+        ? 401
+        : error instanceof XopcCloudHttpError && error.status === 403
+          ? 403
+          : 502;
+      return c.json({
+        ok: false,
+        error: {
+          message: error instanceof Error ? error.message : 'Refresh failed',
+          ...(error instanceof XopcCloudHttpError && error.code ? { code: error.code } : {}),
+        },
+      }, status);
     }
   });
 

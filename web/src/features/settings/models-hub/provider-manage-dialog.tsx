@@ -122,13 +122,15 @@ export function ProviderManageDialog({
         />
         <Dialog.Content
           className={cn(
-            'fixed left-1/2 top-1/2 flex max-h-[85vh] w-full max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge-subtle bg-surface-base shadow-xl',
+            'fixed left-1/2 top-1/2 flex max-h-[85vh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge-subtle bg-surface-base shadow-xl',
             SETTINGS_SHELL_CONTENT_Z,
           )}
         >
           {providerId === 'xopc-cloud' ? (
             <ManageXopcCloudProvider
+              allModels={allModels}
               labels={labels}
+              language={language}
               onSaved={onSaved}
             />
           ) : isCustom ? (
@@ -158,16 +160,34 @@ export function ProviderManageDialog({
 }
 
 function ManageXopcCloudProvider({
+  allModels,
   labels,
+  language,
   onSaved,
 }: {
+  allModels: ConfiguredModel[];
   labels: ProviderManageDialogMessages;
+  language: StoredLanguage;
   onSaved: () => void;
 }) {
+  const providerModels = useMemo(
+    () => allModels
+      .filter((model) => model.provider === 'xopc-cloud')
+      .sort((left, right) => Number(right.recommended === true) - Number(left.recommended === true)
+        || left.name.localeCompare(right.name)),
+    [allModels],
+  );
+  const zh = language === 'zh';
+
   return (
-    <>
+    <div className="flex min-h-0 flex-col">
       <div className="flex items-center justify-between border-b border-edge-subtle px-5 py-4">
-        <Dialog.Title className="text-base font-semibold text-fg">XOPC Model Service</Dialog.Title>
+        <div className="min-w-0">
+          <Dialog.Title className="text-base font-semibold text-fg">XOPC Model Service</Dialog.Title>
+          <Dialog.Description className="mt-0.5 text-xs text-fg-muted">
+            {zh ? `当前可使用 ${providerModels.length} 个模型` : `${providerModels.length} models available`}
+          </Dialog.Description>
+        </div>
         <Dialog.Close asChild>
           <button
             type="button"
@@ -178,10 +198,59 @@ function ManageXopcCloudProvider({
           </button>
         </Dialog.Close>
       </div>
-      <div className="px-5 py-4">
+
+      <div className="flex min-h-0 flex-col gap-4 overflow-y-auto px-5 py-4">
         <XopcCloudConnect connected onConnected={onSaved} />
+
+        <section className="flex min-h-0 flex-col gap-2" aria-labelledby="xopc-cloud-models-heading">
+          <div className="flex items-center justify-between gap-3">
+            <h3 id="xopc-cloud-models-heading" className="text-sm font-medium text-fg">
+              {zh ? '可用模型' : 'Available models'}
+            </h3>
+            <span className="text-xs tabular-nums text-fg-subtle">{providerModels.length}</span>
+          </div>
+
+          {providerModels.length > 0 ? (
+            <div className="divide-y divide-edge-subtle overflow-hidden rounded-xl border border-edge-subtle bg-surface-panel/40">
+              {providerModels.map((model) => {
+                const modelId = model.id.includes('/') ? model.id.split('/').pop()! : model.id;
+                return (
+                  <div key={model.id} className="flex items-start justify-between gap-3 px-3 py-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="truncate text-sm font-medium text-fg">{model.name || modelId}</span>
+                        {model.recommended ? (
+                          <span className="rounded-md bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent-fg">
+                            {zh ? '推荐' : 'Recommended'}
+                          </span>
+                        ) : null}
+                      </div>
+                      <code className="mt-1 block truncate text-xs text-fg-subtle">{modelId}</code>
+                    </div>
+                    <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                      {model.reasoning ? (
+                        <span className="rounded-md bg-surface-hover px-1.5 py-0.5 text-[10px] text-fg-muted">
+                          {zh ? '思考' : 'Reasoning'}
+                        </span>
+                      ) : null}
+                      {model.vision ? (
+                        <span className="rounded-md bg-surface-hover px-1.5 py-0.5 text-[10px] text-fg-muted">
+                          {zh ? '视觉' : 'Vision'}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="flex items-center justify-center rounded-xl border border-dashed border-edge px-4 py-8 text-center text-sm text-fg-muted">
+              {zh ? '暂未同步到可用模型，请重新连接后再试。' : 'No models are available yet. Reconnect and try again.'}
+            </div>
+          )}
+        </section>
       </div>
-    </>
+    </div>
   );
 }
 
