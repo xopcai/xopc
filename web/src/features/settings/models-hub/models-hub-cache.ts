@@ -5,6 +5,7 @@ import { mutate } from 'swr';
 
 /** SWR key for GET /api/models-json in the models hub. */
 export const MODELS_JSON_SWR_KEY = 'models-json-config';
+export const MODEL_CATALOG_SWR_KEY = 'model-catalog';
 
 /** Revalidate all data sources that drive the Models & services cards. */
 export async function revalidateModelsHubCaches(): Promise<void> {
@@ -12,6 +13,7 @@ export async function revalidateModelsHubCaches(): Promise<void> {
     revalidateGatewayConfig(),
     mutate(apiUrl('/api/providers/meta')),
     mutate(MODELS_JSON_SWR_KEY),
+    mutate(MODEL_CATALOG_SWR_KEY),
     invalidateConfiguredModelsCache(),
   ]);
 }

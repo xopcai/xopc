@@ -26,6 +26,7 @@ import type {
 import { validateModelsConfig, getDefaultModelValues } from '../config/models-json.js';
 import { createLogger } from '../utils/logger.js';
 import { getApiKeyFromEnv } from './env-keys.js';
+import { getModelCatalogStore, type CatalogSource, type ModelCatalogStore } from './model-catalog-store.js';
 
 const log = createLogger('ModelRegistry');
 
@@ -140,7 +141,10 @@ export class ModelRegistry {
 	private _availableModelsCache: Model<Api>[] | undefined;
 	private _authStatusCache: Map<string, boolean> = new Map();
 
-	constructor(private modelsJsonPath: string = getModelsJsonPath()) {
+	constructor(
+		private modelsJsonPath: string = getModelsJsonPath(),
+		private catalogStore: ModelCatalogStore = getModelCatalogStore(),
+	) {
 		// Catalog loads on first use or via prewarm() — keeps gateway constructor off the hot path.
 	}
 
@@ -314,12 +318,41 @@ export class ModelRegistry {
 		const builtInModels = this.loadBuiltInModels(overrides, modelOverrides);
 
 		// Merge custom models
-		this.models = this.mergeCustomModels(builtInModels, customModels);
+		const remoteModels = this.loadRemoteModels();
+		this.models = this.mergeCustomModels(
+			this.mergeCustomModels(builtInModels, remoteModels),
+			customModels,
+		);
 
 		log.debug(
-			{ builtIn: builtInModels.length, custom: customModels.length, total: this.models.length },
+			{ builtIn: builtInModels.length, remote: remoteModels.length, custom: customModels.length, total: this.models.length },
 			'Models loaded'
 		);
+	}
+
+	private loadRemoteModels(): Model<Api>[] {
+		let sources: Record<string, CatalogSource>;
+		try {
+			sources = this.catalogStore.load().sources;
+		} catch (err) {
+			log.warn({ err }, 'Failed to load remote model catalog');
+			return [];
+		}
+
+		return Object.values(sources).flatMap((source) => source.models
+			.filter((model) => model.availability === 'available')
+			.map((model) => ({
+				id: model.id,
+				name: model.name,
+				api: source.api as Api,
+				provider: source.providerId,
+				baseUrl: source.baseUrl,
+				reasoning: false,
+				input: ['text'] as ('text' | 'image')[],
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+				contextWindow: 128_000,
+				maxTokens: model.maxOutputTokens ?? 16_384,
+			})));
 	}
 
 	/**
@@ -410,6 +443,7 @@ export class ModelRegistry {
 			const apiKeyConfigs = new Map<string, string>();
 
 			for (const [providerName, providerConfig] of Object.entries(config.providers)) {
+				if (providerName === 'xopc-cloud') continue;
 				// Apply provider-level baseUrl/headers/apiKey override
 				if (providerConfig.baseUrl || providerConfig.headers || providerConfig.apiKey) {
 					overrides.set(providerName, {
@@ -457,6 +491,7 @@ export class ModelRegistry {
 		const defaults = getDefaultModelValues();
 
 		for (const [providerName, providerConfig] of Object.entries(config.providers)) {
+			if (providerName === 'xopc-cloud') continue;
 			const modelDefs = providerConfig.models ?? [];
 			if (modelDefs.length === 0) continue;
 

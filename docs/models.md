@@ -86,6 +86,7 @@ Create `~/.xopc/models.json`:
       "baseUrl": "http://localhost:11434/v1",
       "api": "openai-completions",
       "apiKey": "ollama",
+      "modelDiscovery": { "enabled": true },
       "models": [
         { "id": "llama3.1:8b" },
         { "id": "qwen2.5-coder:7b" }
@@ -197,6 +198,25 @@ Create `~/.xopc/models.json`:
 | `authHeader` | Add `Authorization: Bearer <apiKey>` header |
 | `models` | Array of model configurations |
 | `modelOverrides` | Per-model overrides for built-in models |
+| `modelDiscovery.enabled` | Periodically synchronize this OpenAI-compatible provider from its `/models` endpoint |
+
+### Catalog synchronization
+
+The gateway loads the last successful remote catalog snapshot immediately, then refreshes connected sources after startup and every six hours. Network failures keep the previous snapshot. Models missing from a successful response become unavailable and are skipped by runtime fallback selection; xopc does not rewrite agent or session configuration automatically.
+
+Configure the global schedule in `xopc.json`:
+
+```json
+{
+  "modelCatalog": {
+    "enabled": true,
+    "refreshOnStartup": true,
+    "intervalHours": 6
+  }
+}
+```
+
+Automatic discovery is opt-in for custom OpenAI-compatible providers. XOPC Model Service synchronization is enabled whenever that service is connected. Remote snapshots are stored separately from `models.json`, so user-defined models and overrides remain explicit configuration.
 
 ---
 

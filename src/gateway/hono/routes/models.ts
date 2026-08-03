@@ -33,10 +33,10 @@ import {
 } from '../../../providers/domestic-presets.js';
 import { discoverProviderModels, isProviderApiDiscoverable } from '../../../providers/model-discovery.js';
 import { CredentialResolver } from '../../../auth/credentials.js';
-import {
-  XopcCloudConnectionService,
-  XopcCloudHttpError,
-} from '../../../providers/xopc-cloud-connection.js';
+import { SessionConfigStore } from '../../../session/config-store.js';
+import { getModelCatalogStore } from '../../../providers/model-catalog-store.js';
+import { auditModelReferences } from '../../../providers/model-reference-auditor.js';
+import { XopcCloudHttpError } from '../../../providers/xopc-cloud-connection.js';
 import { getProviderRegistry } from '../../../providers/plugin-registry.js';
 import type { ProviderModelDefinition } from '../../../extensions/types/providers.js';
 import type { GatewayService } from '../../service.js';
@@ -96,7 +96,8 @@ function mapPluginModel(providerId: string, model: ProviderModelDefinition, avai
 
 export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service, strictRateLimitMiddleware, xopcCloudPollRateLimitMiddleware } = deps;
-  const xopcCloud = new XopcCloudConnectionService();
+  const catalogSync = service.getModelCatalogSync();
+  const xopcCloud = catalogSync.getXopcCloudConnection();
 
   authenticated.post('/api/models/xopc-cloud/connect', strictRateLimitMiddleware, async (c) => {
     const body = await c.req.json().catch(() => ({})) as { clientType?: unknown };
@@ -114,7 +115,7 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
     try {
       const result = await xopcCloud.poll(c.req.param('requestId'));
       if (result.status === 'pending') return c.json({ ok: true, payload: result }, 202);
-      service.emit('models-json.updated', { modelCount: getModelRegistry().getAll().length });
+      service.emit('model-catalog.updated', { modelCount: getModelRegistry().getAll().length });
       return c.json({ ok: true, payload: result });
     } catch (error) {
       return c.json({ ok: false, error: { message: error instanceof Error ? error.message : 'Connection failed' } }, 400);
@@ -123,10 +124,7 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
 
   authenticated.post('/api/models/xopc-cloud/refresh', strictRateLimitMiddleware, async (c) => {
     try {
-      const result = await xopcCloud.refreshCatalog();
-      if (result.status === 'updated') {
-        service.emit('models-json.updated', { modelCount: getModelRegistry().getAll().length });
-      }
+      const result = await catalogSync.refreshNow();
       return c.json({ ok: true, payload: result });
     } catch (error) {
       const status = error instanceof XopcCloudHttpError && error.status === 401
@@ -142,6 +140,30 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
         },
       }, status);
     }
+  });
+
+  authenticated.get('/api/models/catalog/status', (c) => c.json({
+    ok: true,
+    payload: catalogSync.getStatus(),
+  }));
+
+  authenticated.get('/api/models/catalog', async (c) => {
+    const catalog = getModelCatalogStore().load();
+    const sessionConfigs = await new SessionConfigStore('').getAll();
+    const references = auditModelReferences(service.currentConfig, sessionConfigs, { catalog });
+    return c.json({
+      ok: true,
+      payload: {
+        sources: catalog.sources,
+        sync: catalogSync.getStatus(),
+        references,
+      },
+    });
+  });
+
+  authenticated.post('/api/models/catalog/refresh', strictRateLimitMiddleware, async (c) => {
+    const result = await catalogSync.refreshAll();
+    return c.json({ ok: true, payload: result });
   });
 
   // GET /api/models-json - Get models.json configuration

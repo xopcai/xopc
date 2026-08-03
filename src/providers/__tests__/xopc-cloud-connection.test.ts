@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { ModelCatalogStore } from '../model-catalog-store.js';
 import { XopcCloudConnectionService, XopcCloudHttpError } from '../xopc-cloud-connection.js';
 
 describe('XopcCloudConnectionService', () => {
@@ -18,12 +19,13 @@ describe('XopcCloudConnectionService', () => {
     directories.push(directory);
     return {
       deviceIdPath: join(directory, 'device.json'),
-      modelsJsonPath: join(directory, 'models.json'),
+      catalogPath: join(directory, 'model-catalog.json'),
     };
   }
 
-  it('uses PKCE, stores the credential outside models.json, and refreshes models', async () => {
+  it('uses PKCE, stores the credential outside the catalog, and refreshes models', async () => {
     const local = paths();
+    const catalogStore = new ModelCatalogStore(local.catalogPath);
     const savedKeys: string[] = [];
     const refreshModels = vi.fn();
     let tokenPolls = 0;
@@ -63,7 +65,8 @@ describe('XopcCloudConnectionService', () => {
       throw new Error(`Unexpected URL: ${url}`);
     });
     const service = new XopcCloudConnectionService({
-      ...local,
+      deviceIdPath: local.deviceIdPath,
+      catalogStore,
       consoleUrl: 'https://console.test',
       routerUrl: 'https://router.test/v1',
       fetchImpl,
@@ -85,16 +88,17 @@ describe('XopcCloudConnectionService', () => {
     expect(savedKeys).toEqual(['xopc_model_secret']);
     expect(refreshModels).toHaveBeenCalledOnce();
 
-    const modelsJson = readFileSync(local.modelsJsonPath, 'utf8');
-    expect(modelsJson).toContain('MiniMax-M2.1');
-    expect(modelsJson).not.toContain('xopc_model_secret');
-    expect(modelsJson).not.toContain('apiKey');
+    const catalogJson = readFileSync(local.catalogPath, 'utf8');
+    expect(catalogJson).toContain('MiniMax-M2.1');
+    expect(catalogStore.getSource('xopc-cloud')?.etag).toBe('"catalog-1"');
+    expect(catalogJson).not.toContain('xopc_model_secret');
+    expect(catalogJson).not.toContain('apiKey');
     expect(await service.refreshCatalog()).toEqual({ status: 'unchanged' });
   });
 
   it('rejects an authorization URL outside the configured Console origin', async () => {
     const service = new XopcCloudConnectionService({
-      ...paths(),
+      deviceIdPath: paths().deviceIdPath,
       consoleUrl: 'https://console.test',
       fetchImpl: async () => Response.json({
         requestId: 'r'.repeat(43),
@@ -106,7 +110,7 @@ describe('XopcCloudConnectionService', () => {
 
   it('preserves catalog authentication failures so callers can request reconnection', async () => {
     const service = new XopcCloudConnectionService({
-      ...paths(),
+      deviceIdPath: paths().deviceIdPath,
       routerUrl: 'https://router.test/v1',
       fetchImpl: async () => Response.json({
         error: {

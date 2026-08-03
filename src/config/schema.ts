@@ -695,6 +695,16 @@ export const ModelsDevConfigSchema = z.object({
   enabled: true,
 });
 
+export const ModelCatalogConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+  refreshOnStartup: z.boolean().default(true),
+  intervalHours: z.number().min(0.25).default(6),
+}).strict().default({
+  enabled: true,
+  refreshOnStartup: true,
+  intervalHours: 6,
+});
+
 // ============================================
 // STT (Speech-to-Text) Config
 // ============================================
@@ -1218,6 +1228,7 @@ export const ConfigSchema = z.object({
   /** Per-vendor capability provider config (image / audio / video). */
   providers: ProvidersConfigSchema.optional(),
   modelsDev: ModelsDevConfigSchema,
+  modelCatalog: ModelCatalogConfigSchema,
   /** Delivery / presentation concerns (currently `tts`). */
   messages: MessagesConfigSchema,
   /** User-facing voice input behavior beyond provider selection. */
@@ -1380,6 +1391,11 @@ export const ConfigSchema = z.object({
   },
   modelsDev: {
     enabled: true,
+  },
+  modelCatalog: {
+    enabled: true,
+    refreshOnStartup: true,
+    intervalHours: 6,
   },
   tui: {},
   // messages.tts / tools.media.audio start undefined; the factory layer fills

@@ -55,11 +55,41 @@ export async function runEmbeddedTurnForSession(
     };
   };
   const mm = modelManager as any;
-  await mm.applyModelForSession(agent, sessionKey);
+  const configuredModelRef = String(mm.getModelForSession(sessionKey));
+  const candidates = typeof mm.getFallbackCandidatesForSession === 'function'
+    ? mm.getFallbackCandidatesForSession(sessionKey)
+    : [];
+  const candidateModelRefs = candidates.length > 0
+    ? candidates.map((candidate: { provider: string; model: string }) => `${candidate.provider}/${candidate.model}`)
+    : [configuredModelRef];
+  const resolvedCandidates: Array<{
+    ref: string;
+    model: RunXopcEmbeddedTurnParams['model'];
+  }> = [];
+  for (const [index, ref] of candidateModelRefs.entries()) {
+    try {
+      const resolved = index === 0 && typeof mm.getResolvedModelForSession === 'function'
+        ? mm.getResolvedModelForSession(sessionKey)
+        : resolveModel(ref);
+      resolvedCandidates.push({
+        ref,
+        model: resolved as RunXopcEmbeddedTurnParams['model'],
+      });
+    } catch (err) {
+      log.warn({ err, sessionKey, runId, modelRef: ref }, 'Skipping unavailable model candidate');
+    }
+  }
+  const primary = resolvedCandidates[0];
+  if (!primary) throw new Error(`No available model candidates for '${configuredModelRef}'`);
 
-  const modelRef = String(mm.getModelForSession(sessionKey));
+  const modelRef = primary.ref;
+  const model = primary.model;
+  if (typeof mm.applyResolvedModel === 'function') {
+    mm.applyResolvedModel(agent, model, modelRef);
+  } else {
+    await mm.applyModelForSession(agent, sessionKey);
+  }
   agentManager.setModelForSession(sessionKey, modelRef);
-  const model = mm.getResolvedModelForSession(sessionKey) as RunXopcEmbeddedTurnParams['model'];
   const tools = agent.state.tools;
   const systemPrompt = agent.state.systemPrompt ?? '';
   const thinkingLevel = (params.thinkingOverride as ThinkingLevel | undefined) ?? agent.state.thinkingLevel;
@@ -99,40 +129,29 @@ export async function runEmbeddedTurnForSession(
     });
     const turnTools = mergeTurnTools(tools, mcpResolved.tools);
     try {
-      const candidates = typeof mm.getFallbackCandidatesForSession === 'function'
-        ? mm.getFallbackCandidatesForSession(sessionKey)
-        : [];
-      const candidateModelRefs = candidates.length > 0
-        ? candidates.map((candidate: { provider: string; model: string }) => `${candidate.provider}/${candidate.model}`)
-        : [modelRef];
       log.info(
-        { sessionKey, runId, primaryModelRef: candidateModelRefs[0], candidateModelRefs },
+        {
+          sessionKey,
+          runId,
+          configuredModelRef,
+          primaryModelRef: modelRef,
+          candidateModelRefs: resolvedCandidates.map((candidate) => candidate.ref),
+        },
         'Agent model fallback candidates resolved',
       );
 
       let lastResult: RunXopcEmbeddedTurnResult | undefined;
       let lastError: unknown;
-      const primaryModelRef = candidateModelRefs[0] ?? modelRef;
+      const primaryModelRef = modelRef;
       const beforeLen = Array.isArray((agent as any).state?.messages)
         ? (agent as any).state.messages.length
         : undefined;
 
-      for (let i = 0; i < candidateModelRefs.length; i++) {
-        const candidateModelRef = candidateModelRefs[i] ?? modelRef;
+      for (let i = 0; i < resolvedCandidates.length; i++) {
+        const candidate = resolvedCandidates[i]!;
+        const candidateModelRef = candidate.ref;
         const isFallbackAttempt = i > 0;
-        let candidateModel = model;
-        if (candidateModelRef !== modelRef) {
-          try {
-            candidateModel = resolveModel(candidateModelRef) as RunXopcEmbeddedTurnParams['model'];
-          } catch (err) {
-            lastError = err;
-            log.warn(
-              { err, sessionKey, runId, modelRef: candidateModelRef, attempt: i + 1, total: candidateModelRefs.length },
-              'Skipping model fallback candidate (resolve failed)',
-            );
-            continue;
-          }
-        }
+        const candidateModel = candidate.model;
 
         if (typeof mm.applyResolvedModel === 'function') {
           mm.applyResolvedModel(agent, candidateModel, candidateModelRef);
@@ -147,7 +166,7 @@ export async function runEmbeddedTurnForSession(
               primaryModelRef,
               fallbackModelRef: candidateModelRef,
               attempt: i + 1,
-              total: candidateModelRefs.length,
+              total: resolvedCandidates.length,
             },
             'Agent model fallback started',
           );
@@ -180,7 +199,7 @@ export async function runEmbeddedTurnForSession(
                   primaryModelRef,
                   fallbackModelRef: candidateModelRef,
                   attempt: i + 1,
-                  total: candidateModelRefs.length,
+                  total: resolvedCandidates.length,
                 },
                 'Agent model fallback succeeded',
               );
@@ -189,14 +208,14 @@ export async function runEmbeddedTurnForSession(
           }
 
           lastResult = turnResult;
-          const hasNextCandidate = i + 1 < candidateModelRefs.length;
+          const hasNextCandidate = i + 1 < resolvedCandidates.length;
           log.warn(
             {
               sessionKey,
               runId,
               modelRef: candidateModelRef,
               attempt: i + 1,
-              total: candidateModelRefs.length,
+              total: resolvedCandidates.length,
               hasNextCandidate,
               errorMessage: turnResult.errorMessage,
             },
@@ -209,9 +228,9 @@ export async function runEmbeddedTurnForSession(
           if (err instanceof DOMException && err.name === 'AbortError') {
             throw err;
           }
-          const hasNextCandidate = i + 1 < candidateModelRefs.length;
+          const hasNextCandidate = i + 1 < resolvedCandidates.length;
           log.warn(
-            { err, sessionKey, runId, modelRef: candidateModelRef, attempt: i + 1, total: candidateModelRefs.length, hasNextCandidate },
+            { err, sessionKey, runId, modelRef: candidateModelRef, attempt: i + 1, total: resolvedCandidates.length, hasNextCandidate },
             hasNextCandidate
               ? 'Agent model call threw, trying fallback'
               : 'Agent model call threw, no fallback remains',

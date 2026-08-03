@@ -47,24 +47,8 @@ export function XopcCloudConnect({
   const [error, setError] = useState<string | null>(null);
   const [modelCount, setModelCount] = useState<number | null>(null);
   const cancelledRef = useRef(false);
-  const refreshedRef = useRef(false);
 
   useEffect(() => () => { cancelledRef.current = true; }, []);
-  useEffect(() => {
-    if (!connected || refreshedRef.current) return;
-    refreshedRef.current = true;
-    void apiFetch(apiUrl('/api/models/xopc-cloud/refresh'), { method: 'POST' })
-      .then((response) => responsePayload<{ status: string; modelCount?: number }>(response))
-      .then(async (result) => {
-        if (result.status !== 'updated') return;
-        if (typeof result.modelCount === 'number') setModelCount(result.modelCount);
-        await revalidateModelsHubCaches();
-      })
-      .catch((cause) => {
-        if (cancelledRef.current) return;
-        setError(cause instanceof Error ? cause.message : (zh ? '模型目录刷新失败。' : 'Model catalog refresh failed.'));
-      });
-  }, [connected, zh]);
 
   const connect = async () => {
     cancelledRef.current = false;
