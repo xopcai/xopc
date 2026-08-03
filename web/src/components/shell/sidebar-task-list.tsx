@@ -596,7 +596,7 @@ function SidebarProjectSection({
       </div>
 
       {!isCollapsed ? (
-        <div className="ml-6 flex flex-col gap-0.5">
+        <div className="ml-3 flex flex-col gap-0.5">
           {visibleSessions.map((session) => {
             const sessionAgentId = resolveSessionAgentId(session, defaultAgentId);
             return (
@@ -710,7 +710,7 @@ function SidebarInboxSection({
           aria-hidden
         />
       </button>
-      <div className={cn('ml-6 flex flex-col gap-0.5', isCollapsed && 'hidden')}>
+      <div className={cn('ml-3 flex flex-col gap-0.5', isCollapsed && 'hidden')}>
         {unpinnedSessions.map((session) => {
           const sessionAgentId = resolveSessionAgentId(session, defaultAgentId);
           return (

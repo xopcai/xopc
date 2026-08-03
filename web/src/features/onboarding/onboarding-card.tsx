@@ -10,6 +10,7 @@ import { fetchConfiguredModelsCached, invalidateConfiguredModelsCache } from '@/
 import { dispatchConfigReload } from '@/features/gateway/dispatch-config-reload';
 import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
 import { OnboardingProviderGrid } from '@/features/onboarding/onboarding-provider-grid';
+import { XopcCloudConnect } from '@/features/settings/models-hub/xopc-cloud-connect';
 import { buildProviderConfigFromPresetProviderId } from '@/features/settings/models/models-settings-lib';
 import { fetchModelsJson, saveModelsJson } from '@/features/settings/models-json-api';
 import { detectBrowserTimezone } from '@/features/settings/agents/agent-profile-markdown';
@@ -206,6 +207,26 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
     }
   };
 
+  const finishXopcCloudSetup = async () => {
+    dispatch({ type: 'patch', patch: { busy: true, error: null } });
+    try {
+      const recommendedModel = await resolveRecommendedModel('xopc-cloud');
+      if (!recommendedModel) {
+        throw new Error(language === 'zh'
+          ? 'XOPC Cloud 已连接，但没有找到可用模型，请稍后重试。'
+          : 'XOPC Cloud connected, but no available model was found. Try again shortly.');
+      }
+      await finishSetup(recommendedModel.id);
+    } catch (cause) {
+      dispatch({
+        type: 'patch',
+        patch: { error: cause instanceof Error ? cause.message : String(cause) },
+      });
+    } finally {
+      dispatch({ type: 'patch', patch: { busy: false } });
+    }
+  };
+
   return (
     <div className="relative w-full max-w-xl rounded-2xl border border-edge bg-surface-panel p-6 shadow-elevated">
       {canDismiss ? (
@@ -304,57 +325,77 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
           <div className="flex flex-col gap-4">
             <div>
               <h3 className="text-base font-medium text-fg">
-                {o.step2Title}
-                {selectedProvider ? ` (${selectedProvider})` : ''}
+                {selectedProvider === 'xopc-cloud'
+                  ? (language === 'zh' ? '连接 XOPC Cloud' : 'Connect XOPC Cloud')
+                  : `${o.step2Title}${selectedProvider ? ` (${selectedProvider})` : ''}`}
               </h3>
-              <p className="mt-1 text-sm text-fg-muted">{o.step2Subtitle}</p>
+              <p className="mt-1 text-sm text-fg-muted">
+                {selectedProvider === 'xopc-cloud'
+                  ? (language === 'zh'
+                      ? '登录 XOPC Console 并授权，模型会自动同步，无需填写 API Key。'
+                      : 'Sign in to XOPC Console to sync your models. No API key is required.')
+                  : o.step2Subtitle}
+              </p>
             </div>
-            {selectedProvider && (() => {
-              const enrichment = PROVIDER_ENRICHMENT[selectedProvider];
-              const apiKeyUrl = enrichment?.apiKeyUrl;
-              if (!apiKeyUrl) return null;
-              return (
-                <div className="flex flex-wrap items-center gap-3 rounded-xl border border-edge-subtle bg-surface-base px-3.5 py-2.5">
-                  <span className="text-xs text-fg-muted">
-                    {language === 'zh' ? '获取 API Key：' : 'Get your API Key:'}
-                  </span>
-                  <a
-                    href={apiKeyUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-xs font-medium text-accent-fg hover:underline"
-                  >
-                    {language === 'zh' ? '前往获取' : 'Get API Key'}
-                    <ExternalLink className="size-3" />
-                  </a>
-                </div>
-              );
-            })()}
-            <label className="block text-sm font-medium text-fg">
-              <span className="sr-only">{o.step2Placeholder}</span>
-              <SecretInput
-                className="mt-1"
-                value={apiKey}
-                onChange={(next) => dispatch({ type: 'patch', patch: { apiKey: next } })}
-                placeholder={o.step2Placeholder}
-                labels={secretInputLabelsFromChannels(messages(language).providersSettings)}
-                inputClassName="rounded-xl py-2.5 ring-accent focus:border-accent focus:ring-2 focus:ring-accent/30"
-              />
-            </label>
-            <p className="text-xs text-fg-muted">{o.step2SecurityNote}</p>
+            {selectedProvider === 'xopc-cloud' ? (
+              <XopcCloudConnect connected={false} onConnected={() => void finishXopcCloudSetup()} />
+            ) : (
+              <>
+                {selectedProvider && (() => {
+                  const enrichment = PROVIDER_ENRICHMENT[selectedProvider];
+                  const apiKeyUrl = enrichment?.apiKeyUrl;
+                  if (!apiKeyUrl) return null;
+                  return (
+                    <div className="flex flex-wrap items-center gap-3 rounded-xl border border-edge-subtle bg-surface-base px-3.5 py-2.5">
+                      <span className="text-xs text-fg-muted">
+                        {language === 'zh' ? '获取 API Key：' : 'Get your API Key:'}
+                      </span>
+                      <a
+                        href={apiKeyUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs font-medium text-accent-fg hover:underline"
+                      >
+                        {language === 'zh' ? '前往获取' : 'Get API Key'}
+                        <ExternalLink className="size-3" />
+                      </a>
+                    </div>
+                  );
+                })()}
+                <label className="block text-sm font-medium text-fg">
+                  <span className="sr-only">{o.step2Placeholder}</span>
+                  <SecretInput
+                    className="mt-1"
+                    value={apiKey}
+                    onChange={(next) => dispatch({ type: 'patch', patch: { apiKey: next } })}
+                    placeholder={o.step2Placeholder}
+                    labels={secretInputLabelsFromChannels(messages(language).providersSettings)}
+                    inputClassName="rounded-xl py-2.5 ring-accent focus:border-accent focus:ring-2 focus:ring-accent/30"
+                  />
+                </label>
+                <p className="text-xs text-fg-muted">{o.step2SecurityNote}</p>
+              </>
+            )}
+            {busy && selectedProvider === 'xopc-cloud' ? (
+              <p className="text-sm text-fg-muted">
+                {language === 'zh' ? '正在应用推荐模型…' : 'Applying the recommended model…'}
+              </p>
+            ) : null}
             {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
             <div className="flex flex-wrap justify-between gap-2">
               <Button type="button" variant="secondary" disabled={busy} onClick={() => dispatch({ type: 'patch', patch: { step: 'provider' } })}>
                 {o.back}
               </Button>
-              <Button
-                type="button"
-                className="bg-accent text-white hover:bg-accent/90"
-                disabled={busy || !apiKey.trim()}
-                onClick={() => void onContinueApiKey()}
-              >
-                {busy ? o.continue : o.startChatting}
-              </Button>
+              {selectedProvider !== 'xopc-cloud' ? (
+                <Button
+                  type="button"
+                  className="bg-accent text-white hover:bg-accent/90"
+                  disabled={busy || !apiKey.trim()}
+                  onClick={() => void onContinueApiKey()}
+                >
+                  {busy ? o.continue : o.startChatting}
+                </Button>
+              ) : null}
             </div>
           </div>
         ) : null}

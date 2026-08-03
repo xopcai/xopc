@@ -226,19 +226,12 @@ export function validateModelsConfig(config: unknown): ValidationResult {
 		const hasModelOverrides = providerConfig.modelOverrides && Object.keys(providerConfig.modelOverrides).length > 0;
 		const hasBaseUrl = !!providerConfig.baseUrl;
 
-		// If defining custom models, baseUrl and apiKey are required
+		// Custom models require an endpoint. Credentials may live in the auth profile store.
 		if (hasModels) {
 			if (!hasBaseUrl) {
 				errors.push({
 					path: `providers.${providerName}.baseUrl`,
 					message: 'baseUrl is required when defining custom models',
-					severity: 'error',
-				});
-			}
-			if (!providerConfig.apiKey) {
-				errors.push({
-					path: `providers.${providerName}.apiKey`,
-					message: 'apiKey is required when defining custom models',
 					severity: 'error',
 				});
 			}

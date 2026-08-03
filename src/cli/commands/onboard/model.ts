@@ -350,7 +350,7 @@ async function setupDomesticPreset(
   ctx: CLIContext,
   preset: DomesticProviderPreset,
 ): Promise<Config> {
-  console.log(`\n🇨🇳 ${preset.displayName}\n`);
+  console.log(`\n${preset.onboardingIcon ?? '🇨🇳'} ${preset.displayName}\n`);
   console.log(preset.description);
   if (preset.quirks?.length) {
     for (const quirk of preset.quirks) {
@@ -399,10 +399,15 @@ async function setupDomesticPreset(
     headers: preset.headers,
   });
   const modelChoices = discoveredChoices.length > 0 ? discoveredChoices : getModelsForProvider(preset.id);
+  if (preset.requiresModelDiscovery && modelChoices.length === 0) {
+    throw new Error(
+      `No models are available from ${preset.displayName}. Ask an administrator to publish a model, then retry.`,
+    );
+  }
   const modelRef = await select({
     message: 'Model:',
     choices: modelChoices.map((choice) => ({ ...choice, name: modelChoiceName(choice) })),
-    default: `${preset.id}/${preset.defaultModel}`,
+    default: preset.defaultModel ? `${preset.id}/${preset.defaultModel}` : modelChoices[0]?.value,
   });
   const modelId = modelRef.split('/').slice(1).join('/');
 
