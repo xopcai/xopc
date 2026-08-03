@@ -1,4 +1,6 @@
-import { useCallback, useMemo, useReducer, useRef, type ChangeEvent } from 'react';
+import { useCallback, useMemo, useReducer, useRef } from 'react';
+
+import { TimePicker } from '@/components/ui/time-picker';
 
 import {
   buildCronFromPickerState,
@@ -37,12 +39,6 @@ export type CronSchedulePickerLabels = {
 const pickerSelectClass = cn(
   selectTriggerClass,
   'min-w-0 shrink text-xs sm:min-w-[7rem] sm:max-w-[11rem]',
-);
-
-const timeInputClass = cn(
-  'h-9 min-w-[6.5rem] shrink-0 rounded-lg border border-edge-subtle bg-surface-panel px-2 py-1.5 text-sm text-fg',
-  formControlBorderFocusClass,
-  'dark:bg-surface-panel',
 );
 
 const dateInputClass = cn(
@@ -145,8 +141,7 @@ export function CronSchedulePicker({
 
   const timeValue = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 
-  const onTimeChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const v = e.target.value;
+  const onTimeChange = (v: string) => {
     if (!v) return;
     const [hh, mm] = v.split(':').map((x) => parseInt(x, 10));
     if (Number.isNaN(hh) || Number.isNaN(mm)) return;
@@ -186,14 +181,13 @@ export function CronSchedulePicker({
             }}
             aria-label={labels.modeNoRepeat}
           />
-          <input
-            type="time"
-            step={60}
+          <TimePicker
             disabled={disabled}
-            className={timeInputClass}
+            className="min-w-[6.5rem] shrink-0"
+            triggerClassName="h-9 border-edge-subtle px-2"
             value={timeValue}
             onChange={onTimeChange}
-            aria-label={labels.scheduleTimeLabel}
+            ariaLabel={labels.scheduleTimeLabel}
           />
         </>
       )}
@@ -297,26 +291,24 @@ export function CronSchedulePicker({
       )}
 
       {mode === 'daily' && (
-        <input
-          type="time"
-          step={60}
+        <TimePicker
           disabled={disabled}
-          className={timeInputClass}
+          className="min-w-[6.5rem] shrink-0"
+          triggerClassName="h-9 border-edge-subtle px-2"
           value={timeValue}
           onChange={onTimeChange}
-          aria-label={labels.scheduleTimeLabel}
+          ariaLabel={labels.scheduleTimeLabel}
         />
       )}
 
       {mode === 'weekly' && (
-        <input
-          type="time"
-          step={60}
+        <TimePicker
           disabled={disabled}
-          className={timeInputClass}
+          className="min-w-[6.5rem] shrink-0"
+          triggerClassName="h-9 border-edge-subtle px-2"
           value={timeValue}
           onChange={onTimeChange}
-          aria-label={labels.scheduleTimeLabel}
+          ariaLabel={labels.scheduleTimeLabel}
         />
       )}
 
@@ -338,14 +330,13 @@ export function CronSchedulePicker({
               </SelectOption>
             ))}
           </Select>
-          <input
-            type="time"
-            step={60}
+          <TimePicker
             disabled={disabled}
-            className={timeInputClass}
+            className="min-w-[6.5rem] shrink-0"
+            triggerClassName="h-9 border-edge-subtle px-2"
             value={timeValue}
             onChange={onTimeChange}
-            aria-label={labels.scheduleTimeLabel}
+            ariaLabel={labels.scheduleTimeLabel}
           />
         </>
       )}
