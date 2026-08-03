@@ -11,6 +11,7 @@ import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { Model, Api } from '@earendil-works/pi-ai';
 import type { Page } from 'playwright-core';
 import type { Config } from '../../config/schema.js';
+import { resolveDefaultAgentId } from '../agent-scope.js';
 import type { MessageBus } from '../../infra/bus/index.js';
 import {
   createReadFileTool,
@@ -279,6 +280,7 @@ export class AgentToolsFactory {
     const imageGenerateTool = createImageGenerateTool({
       config: cfg,
       workspace,
+      agentId: options?.agentId ?? (cfg ? resolveDefaultAgentId(cfg) : 'main'),
     });
     const codeIntelligenceConfig = cfg?.codeIntelligence;
     const agentId = options?.agentId;

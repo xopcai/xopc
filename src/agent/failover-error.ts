@@ -34,7 +34,7 @@ export type FailoverReason =
 export interface FallbackAttempt {
   /** Provider id, e.g. "openai". */
   provider: string;
-  /** Model id, e.g. "gpt-image-1". */
+  /** Model id, e.g. "gpt-image-2". */
   model: string;
   /** Short, human-readable failure summary. */
   error: string;

@@ -18,17 +18,17 @@ describe('resolveApiKeyForProvider', () => {
     expect(v).toBeUndefined();
   });
 
-  it('reads cfg.providers.<id>.apiKey when present', () => {
+  it('does not read credentials from config', () => {
     const cfg = cfgWith({ openai: { apiKey: 'sk-test' } });
     const v = resolveApiKeyForProvider({
       providerId: 'openai',
       cfg,
       envReader: () => undefined,
     });
-    expect(v).toBe('sk-test');
+    expect(v).toBeUndefined();
   });
 
-  it('falls through to env when cfg has no apiKey', () => {
+  it('reads environment credentials', () => {
     const v = resolveApiKeyForProvider({
       providerId: 'dashscope',
       envReader: (name) => (name === 'DASHSCOPE_API_KEY' ? 'env-key' : undefined),
@@ -45,17 +45,15 @@ describe('resolveApiKeyForProvider', () => {
       ],
       get: () => ({ provider: 'openai', profileId: 'default', mode: 'api-key', apiKey: 'from-store' }),
     };
-    const cfg = cfgWith({ openai: { apiKey: 'sk-cfg' } });
     const v = resolveApiKeyForProvider({
       providerId: 'openai',
-      cfg,
       store,
       envReader: () => 'from-env',
     });
     expect(v).toBe('from-store');
   });
 
-  it('safely ignores store throwing', () => {
+  it('safely ignores a throwing store and falls through to env', () => {
     const store: AuthProfileStore = {
       getApiKeySync: () => {
         throw new Error('store boom');
@@ -66,17 +64,15 @@ describe('resolveApiKeyForProvider', () => {
         throw new Error('store boom');
       },
     };
-    const cfg = cfgWith({ openai: { apiKey: 'sk-cfg' } });
     const v = resolveApiKeyForProvider({
       providerId: 'openai',
-      cfg,
       store,
-      envReader: () => undefined,
+      envReader: () => 'from-env',
     });
-    expect(v).toBe('sk-cfg');
+    expect(v).toBe('from-env');
   });
 
-  it('treats empty / non-string apiKey as missing', () => {
+  it('ignores legacy config apiKey values', () => {
     const cfg = cfgWith({ openai: { apiKey: '' }, minimax: { apiKey: 42 } });
     expect(
       resolveApiKeyForProvider({ providerId: 'openai', cfg, envReader: () => undefined }),
@@ -92,8 +88,7 @@ describe('isProviderApiKeyConfigured', () => {
     expect(
       isProviderApiKeyConfigured({
         providerId: 'openai',
-        cfg: cfgWith({ openai: { apiKey: 'sk-1' } }),
-        envReader: () => undefined,
+        envReader: () => 'sk-1',
       }),
     ).toBe(true);
   });

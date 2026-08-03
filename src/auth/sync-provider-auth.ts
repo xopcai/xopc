@@ -11,6 +11,7 @@ import {
   resolveOAuthPath,
 } from '../config/paths.js';
 import { loadConfig } from '../config/loader.js';
+import type { Config } from '../config/schema.js';
 import { getDefaultAgentId } from '../routing/resolve-route.js';
 
 import type { AuthProfilesFile, ApiKeyProfile, OAuthToken } from './credentials.js';
@@ -114,6 +115,26 @@ export function resolveProviderApiKeySync(provider: string): string | undefined 
   const agentPath = resolveAgentAuthProfilesPath(cfg, getDefaultAgentId(cfg));
   const fromAgent = readApiKeyFromProfilesFile(agentPath, normalized);
   if (fromAgent) return fromAgent;
+  const fromGlobal = readApiKeyFromProfilesFile(resolveAuthProfilesPath(), normalized);
+  if (fromGlobal) return fromGlobal;
+  return readOAuthAccessTokenSync(normalized);
+}
+
+/** Resolve one agent's private credential, then the shared credential and OAuth token. */
+export function resolveProviderApiKeyForAgentSync(
+  provider: string,
+  agentId?: string,
+  config?: Config,
+): string | undefined {
+  const normalized = provider.toLowerCase();
+  if (agentId?.trim()) {
+    const cfg = config ?? loadConfig();
+    const fromAgent = readApiKeyFromProfilesFile(
+      resolveAgentAuthProfilesPath(cfg, agentId.trim()),
+      normalized,
+    );
+    if (fromAgent) return fromAgent;
+  }
   const fromGlobal = readApiKeyFromProfilesFile(resolveAuthProfilesPath(), normalized);
   if (fromGlobal) return fromGlobal;
   return readOAuthAccessTokenSync(normalized);

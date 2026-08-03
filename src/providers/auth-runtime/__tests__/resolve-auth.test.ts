@@ -23,7 +23,7 @@ describe('resolveAuthProfileForProvider', () => {
     expect(r).toMatchObject({ apiKey: undefined, mode: 'api-key', source: 'none' });
   });
 
-  it('store wins over config + env, mode follows the profile', () => {
+  it('store wins over env, mode follows the profile', () => {
     const profile: AuthProfile = {
       provider: 'openai',
       profileId: 'codex',
@@ -32,7 +32,6 @@ describe('resolveAuthProfileForProvider', () => {
     };
     const r = resolveAuthProfileForProvider({
       providerId: 'openai',
-      cfg: cfgWith({ openai: { apiKey: 'sk-cfg' } }),
       store: makeStore(profile),
       envReader: () => 'env-key',
     });
@@ -44,22 +43,21 @@ describe('resolveAuthProfileForProvider', () => {
     });
   });
 
-  it('config api-key route reports azure-key + meta when azure block is present', () => {
+  it('environment key uses non-secret Azure connection metadata', () => {
     const cfg = cfgWith({
       openai: {
-        apiKey: 'sk-azure',
-        azure: { resource: 'my-az', deployment: 'gpt-image-1' },
+        azure: { resource: 'my-az', deployment: 'gpt-image-2' },
       },
     });
     const r = resolveAuthProfileForProvider({
       providerId: 'openai',
       cfg,
-      envReader: () => undefined,
+      envReader: () => 'sk-azure',
     });
-    expect(r.source).toBe('config');
+    expect(r.source).toBe('env');
     expect(r.mode).toBe('azure-key');
     expect(r.apiKey).toBe('sk-azure');
-    expect(r.meta).toEqual({ resource: 'my-az', deployment: 'gpt-image-1' });
+    expect(r.meta).toEqual({ resource: 'my-az', deployment: 'gpt-image-2' });
   });
 
   it('falls back to env when nothing else matches', () => {
@@ -70,7 +68,7 @@ describe('resolveAuthProfileForProvider', () => {
     expect(r).toMatchObject({ apiKey: 'env-dash', mode: 'api-key', source: 'env' });
   });
 
-  it('store throwing is swallowed; resolution falls through to config', () => {
+  it('store throwing is swallowed; resolution falls through to env', () => {
     const bad: AuthProfileStore = {
       getApiKeySync: () => {
         throw new Error('boom');
@@ -83,10 +81,9 @@ describe('resolveAuthProfileForProvider', () => {
     };
     const r = resolveAuthProfileForProvider({
       providerId: 'openai',
-      cfg: cfgWith({ openai: { apiKey: 'sk-cfg' } }),
       store: bad,
-      envReader: () => undefined,
+      envReader: () => 'env-key',
     });
-    expect(r).toMatchObject({ apiKey: 'sk-cfg', mode: 'api-key', source: 'config' });
+    expect(r).toMatchObject({ apiKey: 'env-key', mode: 'api-key', source: 'env' });
   });
 });

@@ -4,7 +4,7 @@ import { formatCapabilityModelRef, parseCapabilityModelRef } from '../model-ref.
 
 describe('parseCapabilityModelRef', () => {
   it('parses standard provider/model', () => {
-    expect(parseCapabilityModelRef('openai/gpt-image-1')).toEqual({ provider: 'openai', model: 'gpt-image-1' });
+    expect(parseCapabilityModelRef('openai/gpt-image-2')).toEqual({ provider: 'openai', model: 'gpt-image-2' });
   });
 
   it('lower-cases provider but preserves model casing', () => {
@@ -35,7 +35,7 @@ describe('parseCapabilityModelRef', () => {
 
 describe('formatCapabilityModelRef', () => {
   it('joins provider and model with a slash', () => {
-    expect(formatCapabilityModelRef('openai', 'gpt-image-1')).toBe('openai/gpt-image-1');
+    expect(formatCapabilityModelRef('openai', 'gpt-image-2')).toBe('openai/gpt-image-2');
   });
 
   it('lower-cases provider', () => {

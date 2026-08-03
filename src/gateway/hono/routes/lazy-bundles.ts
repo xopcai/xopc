@@ -124,6 +124,16 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     },
   },
   {
+    id: 'image-generation',
+    match: (path) =>
+      startsWithAny(path, ['/api/image-generation']) ||
+      /^\/api\/agents\/[^/]+\/image-generation(?:\/setup)?$/.test(path),
+    load: async () => {
+      const { registerModelsRoutes } = await import('./models.js');
+      return { register: registerModelsRoutes };
+    },
+  },
+  {
     id: 'agents',
     match: (path) => startsWithAny(path, ['/api/agents', '/api/user-profile', '/api/voice/models']),
     load: async () => {
@@ -163,7 +173,7 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
   {
     id: 'models',
     match: (path) =>
-      startsWithAny(path, ['/api/models', '/api/models-json', '/api/providers', '/api/image']),
+      startsWithAny(path, ['/api/models', '/api/models-json', '/api/providers']),
     load: async () => {
       const { registerModelsRoutes } = await import('./models.js');
       return { register: registerModelsRoutes };

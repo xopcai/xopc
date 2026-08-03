@@ -1,5 +1,5 @@
 /**
- * Bundled Google Gemini image-generation provider.
+ * Built-in Google Gemini image-generation provider.
  *
  * Uses the Gemini `generateContent` REST surface
  * (`https://generativelanguage.googleapis.com/v1beta/models/<model>:generateContent`)
@@ -11,45 +11,40 @@
  * falls back to `Authorization: Bearer` when the user explicitly configures an
  * OAuth-style key. Configure via env `GOOGLE_API_KEY` /
  * `GEMINI_API_KEY` / `GENERATIVE_LANGUAGE_API_KEY`, or via
- * `cfg.providers.google.apiKey`.
+ * the local credential store.
  */
 import {
   isProviderApiKeyConfigured,
   resolveApiKeyForProvider,
-} from '@xopcai/xopc/providers/auth-runtime/index.js';
+} from '../../../../providers/auth-runtime/index.js';
 import {
   pickTimeoutMsOrFallback,
   postJsonRequest,
   privateNetworkPolicyToSsrfGuardOptions,
   resolveProviderHttpRequestConfig,
-} from '@xopcai/xopc/media-shared/http/index.js';
-import { createLogger } from '@xopcai/xopc/utils/logger.js';
+} from '../../../../media-shared/http/index.js';
+import { createLogger } from '../../../../utils/logger.js';
 import {
   imageFileExtensionForMimeType,
-} from '@xopcai/xopc/agent/image/generation/image-assets.js';
+} from '../image-assets.js';
 import type {
   ImageGenerationProvider,
   ImageGenerationProviderCapabilities,
   ImageGenerationRequest,
   ImageGenerationResult,
-  ImageProviderUiMetadata,
-} from '@xopcai/xopc/agent/image/generation/types.js';
+} from '../types.js';
 
 const log = createLogger('ImageGen:Google');
 
 const DEFAULT_GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com';
-const GOOGLE_IMAGE_UI: ImageProviderUiMetadata = {
-  baseUrlPresets: [{ value: DEFAULT_GEMINI_BASE_URL, label: 'Google AI (default)' }],
-  baseUrlPresetKind: 'google',
-};
 const DEFAULT_GEMINI_API_VERSION = 'v1beta';
 const DEFAULT_TIMEOUT_MS = 180_000;
 
-/** Gemini image-capable model ids for this extension. */
+/** Gemini image-capable model ids exposed by xopc. */
 export const GOOGLE_IMAGE_MODELS: readonly string[] = [
-  'gemini-2.5-flash-image-preview',
-  'gemini-3-pro-image-preview',
-  'gemini-3-flash-image-preview',
+  'gemini-3.1-flash-image',
+  'gemini-3.1-flash-lite-image',
+  'gemini-3-pro-image',
 ];
 export const GOOGLE_DEFAULT_IMAGE_MODEL = GOOGLE_IMAGE_MODELS[0]!;
 
@@ -278,19 +273,25 @@ export async function generateGoogleImages(params: {
 export function buildGoogleImageGenerationProvider(): ImageGenerationProvider {
   return {
     id: 'google',
-    aliases: ['gemini'],
     label: 'Google Gemini',
     defaultModel: GOOGLE_DEFAULT_IMAGE_MODEL,
     models: [...GOOGLE_IMAGE_MODELS],
     capabilities: GOOGLE_CAPABILITIES,
-    ui: GOOGLE_IMAGE_UI,
     isConfigured: (ctx) =>
-      isProviderApiKeyConfigured({ providerId: 'google', cfg: ctx.cfg }),
+      isProviderApiKeyConfigured({
+        providerId: 'google',
+        cfg: ctx.cfg,
+        agentId: ctx.agentId,
+      }),
     async generateImage(req) {
-      const apiKey = resolveApiKeyForProvider({ providerId: 'google', cfg: req.cfg });
+      const apiKey = resolveApiKeyForProvider({
+        providerId: 'google',
+        cfg: req.cfg,
+        agentId: req.agentId,
+      });
       if (!apiKey) {
         throw new Error(
-          'Google Gemini API key missing (set GOOGLE_API_KEY / GEMINI_API_KEY or providers.google.apiKey)',
+          'Google Gemini API key missing (set GOOGLE_API_KEY / GEMINI_API_KEY or save a credential)',
         );
       }
       return generateGoogleImages({ req, apiKey });

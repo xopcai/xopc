@@ -2,24 +2,6 @@ import type { Config } from '../../../config/schema.js';
 import type { AuthProfileStore } from '../../../providers/auth-runtime/index.js';
 import type { MediaNormalizationEntry } from '../../media-generation/normalization.types.js';
 
-// Re-export the provider contract from `provider-registry.ts` so callers can
-// continue importing it from `./types.js` (single import surface).
-// NOTE: this re-export creates a known circular cycle with `provider-registry.ts`
-// (which imports the capability type from this file). It is preserved because
-// removing it breaks 5 extension packages' public API. Suppressed via
-// dependency-cruiser at the warning level.
-export type {
-  ImageGenerationProvider,
-  ImageGenerationProviderConfiguredContext,
-  ImageGenerationProviderSummary,
-} from './provider-registry.js';
-export type {
-  ImageProviderUiBaseUrlPreset,
-  ImageProviderUiMetadata,
-  ImageProviderUiPresetKind,
-  ImageProviderUiRegionOption,
-} from './image-provider-ui.js';
-
 // ============================================
 // Capability dimensions (Step 2 — new model)
 // ============================================
@@ -72,6 +54,30 @@ export interface ImageGenerationProviderCapabilities {
   output?: ImageGenerationOutputCapability;
 }
 
+export interface ImageGenerationProviderConfiguredContext {
+  cfg?: Config;
+  agentId?: string;
+  agentDir?: string;
+}
+
+export interface ImageGenerationProvider {
+  id: string;
+  label: string;
+  defaultModel: string;
+  models: string[];
+  capabilities: ImageGenerationProviderCapabilities;
+  isConfigured(ctx: ImageGenerationProviderConfiguredContext): boolean;
+  generateImage(req: ImageGenerationRequest): Promise<ImageGenerationResult>;
+}
+
+export interface ImageGenerationProviderSummary {
+  id: string;
+  label: string;
+  defaultModel: string;
+  models: string[];
+  capabilities: ImageGenerationProviderCapabilities;
+}
+
 // ============================================
 // Per-vendor escape hatch
 // ============================================
@@ -96,7 +102,7 @@ export interface GeneratedImageAsset {
   buffer: Buffer;
   mimeType: string;
   fileName?: string;
-  /** Provider-side prompt rewrite (e.g. OpenAI dall-e-3 / gpt-image-1). */
+  /** Provider-side prompt rewrite. */
   revisedPrompt?: string;
   /** Vendor-private metadata. Not surfaced to the LLM context directly. */
   metadata?: Record<string, unknown>;
@@ -141,6 +147,7 @@ export interface ImageGenerationRequest {
   model: string;
   prompt: string;
   cfg?: Config;
+  agentId?: string;
   agentDir?: string;
   authStore?: AuthProfileStore;
   timeoutMs?: number;
@@ -161,4 +168,3 @@ export interface ImageGenerationResult {
   model?: string;
   metadata?: Record<string, unknown>;
 }
-

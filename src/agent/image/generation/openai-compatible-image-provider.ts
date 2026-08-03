@@ -5,7 +5,7 @@
  * speak the same `/images/generations` and `/images/edits` REST shape.
  * This factory wraps that wire format on top of shared provider HTTP, normalization,
  * and auth-runtime so vendor modules only need to declare:
- *   - id / aliases / models / capabilities
+ *   - id / models / capabilities
  *   - baseUrl resolution
  *   - apiKey resolution
  *   - optional request body / response transforms
@@ -24,7 +24,6 @@ import {
   imageAssetFromBase64,
   imageFileExtensionForMimeType,
 } from './image-assets.js';
-import type { ImageProviderUiMetadata } from './image-provider-ui.js';
 import type {
   GeneratedImageAsset,
   ImageGenerationProvider,
@@ -68,8 +67,7 @@ export interface OpenAiCompatibleEndpointResolution {
 
 export interface OpenAiCompatibleImageProviderOptions {
   id: string;
-  aliases?: string[];
-  label?: string;
+  label: string;
   defaultModel: string;
   models: string[];
   capabilities: ImageGenerationProviderCapabilities;
@@ -110,8 +108,6 @@ export interface OpenAiCompatibleImageProviderOptions {
   /** Default count clamp. Provider may also enforce via `capabilities.generate.maxCount`. */
   defaultCount?: number;
   defaultSize?: string;
-  /** Gateway console presets for `cfg.providers.<id>.baseUrl`. */
-  ui?: ImageProviderUiMetadata;
 }
 
 export function createOpenAiCompatibleImageProvider(
@@ -123,13 +119,11 @@ export function createOpenAiCompatibleImageProvider(
 
   return {
     id: options.id,
-    ...(options.aliases ? { aliases: options.aliases } : {}),
-    ...(options.label ? { label: options.label } : {}),
+    label: options.label,
     defaultModel: options.defaultModel,
     models: options.models,
     capabilities: options.capabilities,
     isConfigured: options.isConfigured,
-    ...(options.ui ? { ui: options.ui } : {}),
     async generateImage(req): Promise<ImageGenerationResult> {
       const apiKey = options.resolveApiKey(req) ?? null;
       const endpoint = options.resolveEndpoint(req);

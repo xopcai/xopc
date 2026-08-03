@@ -1,7 +1,8 @@
 import { isMaskedKey, type ProviderMeta } from '@/features/settings/providers-api';
 import type { WebSearchSettingsState } from '@/features/settings/web-search-config-api';
-import type { ImageGenProviderCredentialSummary } from '@/features/settings/use-image-provider-credentials';
 import type { VoiceSettingsState } from '@/features/settings/voice-settings.types';
+
+type ImageProviderCredentialSummary = { configured: boolean };
 
 export type CredentialDomainId = 'llm' | 'webSearch' | 'image' | 'voice';
 
@@ -80,7 +81,7 @@ function webSearchDomain(
 }
 
 function imageDomain(
-  imageProviders: ImageGenProviderCredentialSummary[],
+  imageProviders: ImageProviderCredentialSummary[],
   labels: CredentialsHubLabels,
 ): CredentialDomainSummary {
   const total = imageProviders.length;
@@ -209,7 +210,7 @@ export type CredentialsHubLabels = {
 export function buildCredentialsHubSnapshot(input: {
   providerMeta: ProviderMeta[];
   webSearch: WebSearchSettingsState | null;
-  imageProviders: ImageGenProviderCredentialSummary[];
+  imageProviders: ImageProviderCredentialSummary[];
   voice: VoiceSettingsState | null;
   labels: CredentialsHubLabels;
 }): CredentialDomainSummary[] {

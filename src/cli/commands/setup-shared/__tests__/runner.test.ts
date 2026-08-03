@@ -45,12 +45,12 @@ describe('runSetup pipeline', () => {
         action: 'add',
         mutate(config: Config) {
           config.providers = config.providers ?? {};
-          config.providers.openai = { apiKey: 'sk-test' };
+          config.providers.openai = { baseUrl: 'https://api.example.test/v1' };
           return config;
         },
         resultValue: (config) => ({
           id: 'openai',
-          apiKey: config.providers?.openai?.apiKey ? '***' : null,
+          baseUrl: config.providers?.openai?.baseUrl ?? null,
         }),
       },
     });
@@ -62,7 +62,7 @@ describe('runSetup pipeline', () => {
     expect(process.exitCode).toBe(0);
 
     const saved = JSON.parse(readFileSync(configPath, 'utf8'));
-    expect(saved.providers.openai.apiKey).toBe('sk-test');
+    expect(saved.providers.openai.baseUrl).toBe('https://api.example.test/v1');
   });
 
   it('--dry-run does not modify the file', async () => {
@@ -79,7 +79,7 @@ describe('runSetup pipeline', () => {
         action: 'add',
         mutate(config: Config) {
           config.providers = config.providers ?? {};
-          config.providers.openai = { apiKey: 'sk-dry' };
+          config.providers.openai = { baseUrl: 'https://dry.example.test/v1' };
           return config;
         },
       },
@@ -93,7 +93,7 @@ describe('runSetup pipeline', () => {
 
   it('reports noop when nothing changes', async () => {
     const configPath = makeTempConfig({
-      providers: { openai: { apiKey: 'sk-same' } },
+      providers: { openai: { baseUrl: 'https://api.example.test/v1' } },
     });
     cleanup.push(configPath);
 
@@ -106,7 +106,7 @@ describe('runSetup pipeline', () => {
         action: 'set',
         mutate(config: Config) {
           config.providers = config.providers ?? {};
-          config.providers.openai = { apiKey: 'sk-same' };
+          config.providers.openai = { baseUrl: 'https://api.example.test/v1' };
           return config;
         },
       },

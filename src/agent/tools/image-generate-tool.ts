@@ -47,7 +47,7 @@ const ImageGenerateToolSchema = Type.Object({
   model: Type.Optional(
     Type.String({
       description:
-        'Optional provider/model override, e.g. openai/gpt-image-1 / dashscope/wan2.7-image-pro / minimax/image-01.',
+        'Optional provider/model override, e.g. openai/gpt-image-2 / dashscope/wan2.7-image-pro / minimax/image-01.',
     }),
   ),
   filename: Type.Optional(Type.String({ description: 'Optional basename hint for saved files.' })),
@@ -187,8 +187,10 @@ async function loadInputImages(params: {
 // Re-exported for callers / tests; no behavioural change vs imported helper.
 export { parseImageDataUrl };
 
-export function resolveImageGenerationModelConfigForTool(params: { cfg?: Config }): ToolModelConfig | null {
-  const explicit = params.cfg ? getAgentDefaultImageGenerationModelConfig(params.cfg) : undefined;
+export function resolveImageGenerationModelConfigForTool(params: { cfg?: Config; agentId: string }): ToolModelConfig | null {
+  const explicit = params.cfg
+    ? getAgentDefaultImageGenerationModelConfig(params.cfg, params.agentId)
+    : undefined;
   if (explicit?.primary?.trim()) {
     return {
       primary: explicit.primary.trim(),
@@ -200,13 +202,13 @@ export function resolveImageGenerationModelConfigForTool(params: { cfg?: Config 
 
   // Step 2: tool default = enumerate every provider whose isConfigured() is true,
   // ordered as registered. No more hard-coded openai/dashscope fallback.
-  const providers = listImageGenerationProvidersSummary(params.cfg);
+  const providers = listImageGenerationProvidersSummary();
   const candidates: string[] = [];
   for (const providerSummary of providers) {
-    const provider = getImageGenerationProvider(providerSummary.id, params.cfg);
+    const provider = getImageGenerationProvider(providerSummary.id);
     let configured = false;
     try {
-      configured = provider?.isConfigured?.({ cfg: params.cfg }) ?? false;
+      configured = provider?.isConfigured?.({ cfg: params.cfg, agentId: params.agentId }) ?? false;
     } catch {
       configured = false;
     }
@@ -251,8 +253,12 @@ async function saveGeneratedImages(params: {
 export function createImageGenerateTool(options: {
   config?: Config;
   workspace: string;
+  agentId: string;
 }): AgentTool<any, Record<string, unknown>> | null {
-  const imageGenerationModelConfig = resolveImageGenerationModelConfigForTool({ cfg: options.config });
+  const imageGenerationModelConfig = resolveImageGenerationModelConfigForTool({
+    cfg: options.config,
+    agentId: options.agentId,
+  });
   if (!imageGenerationModelConfig) {
     return null;
   }
@@ -274,7 +280,7 @@ export function createImageGenerateTool(options: {
       const params = args as Record<string, unknown>;
       const action = (readStringParam(params, 'action') || 'generate').toLowerCase();
       if (action === 'list') {
-        const providers = listImageGenerationProvidersSummary(effectiveCfg);
+        const providers = listImageGenerationProvidersSummary();
         const lines = providers.flatMap((p) => [
           `${p.id}${p.defaultModel ? ` (default ${p.defaultModel})` : ''}`,
           `  models: ${p.models.join(', ')}`,
@@ -334,6 +340,7 @@ export function createImageGenerateTool(options: {
       try {
         const result = await generateImage({
           cfg: effectiveCfg,
+          agentId: options.agentId,
           modelConfig: imageGenerationModelConfig,
           prompt,
           ...(modelOverride ? { modelOverride } : {}),
