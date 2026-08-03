@@ -40,6 +40,15 @@ describe('formatAgentRunErrorForClient', () => {
     expect(out.code).toBe('model_quota_exhausted');
   });
 
+  it('maps the XOPC shared token cap to the platform recovery flow', () => {
+    const raw = '429: {"error":{"code":"platform_token_limit_exceeded"}}';
+    const out = JSON.parse(
+      formatAgentRunErrorForClient(raw, { provider: 'xopc-cloud' }),
+    ) as { kind: string; code: string };
+    expect(out.kind).toBe('xopc_platform_limit');
+    expect(out.code).toBe('platform_token_limit_exceeded');
+  });
+
   it('does not map another provider quota error to the XOPC recovery flow', () => {
     const raw = '402: model quota exhausted';
     const out = JSON.parse(
