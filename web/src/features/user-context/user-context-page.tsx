@@ -28,6 +28,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { PageTabs } from '@/components/ui/page-tabs';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { TimePicker } from '@/components/ui/time-picker';
 import { ConnectorLogo } from '@/features/connectors/components/connector-logo';
 import { detectBrowserTimezone } from '@/features/settings/agents/agent-profile-markdown';
 import { UserProfileFieldsEditor } from '@/features/settings/user-profile-fields-editor';
@@ -730,8 +731,8 @@ export function UserContextPage() {
             </div>
             <div className="mt-4 grid gap-3 border-t border-edge-subtle pt-4 sm:grid-cols-2 lg:grid-cols-4">
               <label className="flex items-center gap-2 text-xs text-fg-muted"><input type="checkbox" checked={data.relationship.proactiveEnabled} disabled={relationshipSaving} onChange={(event) => void saveRelationship({ proactiveEnabled: event.target.checked })} />{t.proactiveEnabled}</label>
-              <label className="grid gap-1 text-xs text-fg-muted">{t.quietStart}<input type="time" className={inputClass} value={data.relationship.quietStart ?? ''} disabled={relationshipSaving} onChange={(event) => void saveRelationship({ quietStart: event.target.value || null })} /></label>
-              <label className="grid gap-1 text-xs text-fg-muted">{t.quietEnd}<input type="time" className={inputClass} value={data.relationship.quietEnd ?? ''} disabled={relationshipSaving} onChange={(event) => void saveRelationship({ quietEnd: event.target.value || null })} /></label>
+              <label className="grid gap-1 text-xs text-fg-muted">{t.quietStart}<TimePicker value={data.relationship.quietStart ?? ''} disabled={relationshipSaving} allowEmpty clearLabel={t.clearTime} ariaLabel={t.quietStart} onChange={(quietStart) => void saveRelationship({ quietStart: quietStart || null })} /></label>
+              <label className="grid gap-1 text-xs text-fg-muted">{t.quietEnd}<TimePicker value={data.relationship.quietEnd ?? ''} disabled={relationshipSaving} allowEmpty clearLabel={t.clearTime} ariaLabel={t.quietEnd} onChange={(quietEnd) => void saveRelationship({ quietEnd: quietEnd || null })} /></label>
               <label className="grid gap-1 text-xs text-fg-muted">{t.blockedTopics}<input className={inputClass} defaultValue={data.relationship.blockedTopics.join(', ')} disabled={relationshipSaving} onBlur={(event) => void saveRelationship({ blockedTopics: event.target.value.split(',').map((value) => value.trim()).filter(Boolean) })} /></label>
             </div>
           </section>
