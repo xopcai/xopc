@@ -47,7 +47,7 @@ export const ChatComposer = memo(function ChatComposer({
   sessionManager,
   canSelectWorkingDirectory,
   thinkingLevel,
-  showThinkingSelector,
+  modelSupportsThinking,
   onThinkingChange,
   reasoningLevel,
   onReasoningChange,
@@ -92,7 +92,7 @@ export const ChatComposer = memo(function ChatComposer({
   /** Messages in the active session (for context-window ring). */
   contextUsageMessages: readonly Message[];
   thinkingLevel: string;
-  showThinkingSelector: boolean;
+  modelSupportsThinking: boolean;
   onThinkingChange: (level: string) => void;
   reasoningLevel: ReasoningLevel;
   onReasoningChange: (level: ReasoningLevel) => void;
@@ -351,7 +351,7 @@ export const ChatComposer = memo(function ChatComposer({
       return;
     }
     lastLoadedEditFollowUpIdRef.current = editingFollowUpId;
-    if (row.thinkingLevel != null && showThinkingSelector) {
+    if (row.thinkingLevel != null && modelSupportsThinking) {
       onThinkingChange(row.thinkingLevel);
     }
     att.setAttachments(wireFollowUpAttachmentsToComposer(row.attachments ?? []));
@@ -364,7 +364,7 @@ export const ChatComposer = memo(function ChatComposer({
     onCancelEditFollowUp,
     onThinkingChange,
     pendingFollowUps,
-    showThinkingSelector,
+    modelSupportsThinking,
   ]);
 
   const openFollowUpInComposer = useCallback(
@@ -595,9 +595,8 @@ export const ChatComposer = memo(function ChatComposer({
           attachmentCount={att.attachments.length}
           maxAttachments={MAX_CHAT_ATTACHMENTS}
           onPickFiles={() => fileInputRef.current?.click()}
-          onOpenReviewLauncher={openReviewLauncher}
           thinkingLevel={thinkingLevel}
-          showThinkingSelector={showThinkingSelector}
+          modelSupportsThinking={modelSupportsThinking}
           onThinkingChange={onThinkingChange}
           reasoningLevel={reasoningLevel}
           onReasoningChange={onReasoningChange}
