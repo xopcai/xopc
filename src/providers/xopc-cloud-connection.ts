@@ -49,6 +49,17 @@ export type XopcCloudPollResult =
   | { status: 'pending' }
   | { status: 'connected'; modelCount: number; models: string[]; recommendedModel: string | null };
 
+export class XopcCloudHttpError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code?: string,
+  ) {
+    super(message);
+    this.name = 'XopcCloudHttpError';
+  }
+}
+
 function normalizedBaseUrl(value: string): string {
   return value.trim().replace(/\/+$/, '');
 }
@@ -194,11 +205,27 @@ export class XopcCloudConnectionService {
       signal: AbortSignal.timeout(15_000),
     });
     if (response.status === 304) return null;
+    const rawBody = await response.json().catch(() => null);
+    if (!response.ok) {
+      const body = rawBody && typeof rawBody === 'object' ? rawBody as Record<string, unknown> : null;
+      const errorBody = body?.error && typeof body.error === 'object'
+        ? body.error as Record<string, unknown>
+        : null;
+      const code = typeof errorBody?.code === 'string' ? errorBody.code : undefined;
+      const authorizationFailed = response.status === 401 || response.status === 403;
+      throw new XopcCloudHttpError(
+        authorizationFailed
+          ? 'XOPC Model Service authorization expired. Reconnect the service.'
+          : 'Unable to load the XOPC model catalog',
+        response.status,
+        code,
+      );
+    }
     const catalog = parseJson<{ models?: unknown; recommendedModel?: unknown }>(
-      await response.json().catch(() => null),
+      rawBody,
       'XOPC model catalog returned an invalid response',
     );
-    if (!response.ok || !Array.isArray(catalog.models)) throw new Error('Unable to load the XOPC model catalog');
+    if (!Array.isArray(catalog.models)) throw new Error('Unable to load the XOPC model catalog');
     const models = catalog.models.flatMap((item): CatalogModel[] => {
       if (!item || typeof item !== 'object') return [];
       const value = item as Record<string, unknown>;

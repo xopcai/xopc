@@ -15,7 +15,7 @@ describe('EmbeddedSessionRunner fingerprint', () => {
     delete process.env.XOPC_SESSION_RUNNER_TTL_MS;
   });
 
-  it('changes when model, tools, or system prompt change', () => {
+  it('changes when model, tools, system prompt, or provider credential changes', () => {
     const base = {
       sessionId: 'aaa2f53e-7cc1-43bf-8581-84f4254cb335',
       workspaceDir: '/tmp/ws',
@@ -23,16 +23,19 @@ describe('EmbeddedSessionRunner fingerprint', () => {
       toolNames: ['read', 'write'],
       systemPrompt: 'You are helpful.',
       thinkingLevel: 'medium',
+      credentialRevision: 'current-credential',
     };
 
     const a = buildEmbeddedRunnerFingerprint(base);
     const b = buildEmbeddedRunnerFingerprint({ ...base, modelRef: 'anthropic/claude-sonnet' });
     const c = buildEmbeddedRunnerFingerprint({ ...base, toolNames: ['read'] });
     const d = buildEmbeddedRunnerFingerprint({ ...base, systemPrompt: 'Different prompt.' });
+    const e = buildEmbeddedRunnerFingerprint({ ...base, credentialRevision: 'new-credential' });
 
     expect(b).not.toBe(a);
     expect(c).not.toBe(a);
     expect(d).not.toBe(a);
+    expect(e).not.toBe(a);
   });
 
   it('is stable for identical inputs regardless of tool order', () => {
@@ -43,6 +46,7 @@ describe('EmbeddedSessionRunner fingerprint', () => {
       toolNames: ['b', 'a'],
       systemPrompt: 'Prompt',
       thinkingLevel: 'low',
+      credentialRevision: 'current-credential',
     };
     const inputB = { ...inputA, toolNames: ['a', 'b'] };
     expect(buildEmbeddedRunnerFingerprint(inputA)).toBe(buildEmbeddedRunnerFingerprint(inputB));

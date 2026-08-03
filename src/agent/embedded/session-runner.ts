@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
 import {
@@ -13,7 +15,11 @@ import { createLogger } from '../../utils/logger.js';
 import { guardSessionManager, type GuardedPiTranscriptManager } from './session-tool-result-guard.js';
 import { transformUserMessageForPersistence } from '../inbound/attachment-pipeline.js';
 import { openSqliteHydratingSessionManager } from './sqlite-hydrating-session-manager.js';
-import { applyXopcProviderApiKey, createEmbeddedModelRuntime } from './xopc-auth-storage.js';
+import {
+  applyXopcProviderApiKey,
+  createEmbeddedModelRuntime,
+  resolveXopcProviderApiKey,
+} from './xopc-auth-storage.js';
 import { wrapStreamFnForXopcExtensions } from './xopc-stream-bridge.js';
 import { xopcToolsToDefinitions } from './xopc-tools-bridge.js';
 import { applySystemPromptOverrideToSession } from './system-prompt-override.js';
@@ -29,7 +35,13 @@ export type EmbeddedRunnerFingerprintInput = {
   toolNames: readonly string[];
   systemPrompt: string;
   thinkingLevel: string;
+  credentialRevision: string;
 };
+
+function providerCredentialRevision(providerId: string): string {
+  const apiKey = resolveXopcProviderApiKey(providerId);
+  return apiKey ? createHash('sha256').update(apiKey).digest('base64url') : 'none';
+}
 
 export function buildEmbeddedRunnerFingerprint(input: EmbeddedRunnerFingerprintInput): string {
   const tools = [...input.toolNames].sort().join('\0');
@@ -41,6 +53,7 @@ export function buildEmbeddedRunnerFingerprint(input: EmbeddedRunnerFingerprintI
     tools,
     promptMarker,
     input.thinkingLevel,
+    input.credentialRevision,
   ].join('');
 }
 
@@ -170,6 +183,7 @@ export class EmbeddedSessionRunnerPool {
       toolNames: params.tools.map((t) => t.name),
       systemPrompt: params.systemPrompt,
       thinkingLevel: params.thinkingLevel ?? 'medium',
+      credentialRevision: providerCredentialRevision(params.model.provider),
     });
 
     const reuseEnabled = this.isEnabledFn();
@@ -300,6 +314,7 @@ export class EmbeddedSessionRunnerPool {
       toolNames,
       systemPrompt,
       thinkingLevel: thinkingLevel ?? 'medium',
+      credentialRevision: providerCredentialRevision(model.provider),
     });
 
     return {

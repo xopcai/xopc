@@ -60,8 +60,11 @@ export function XopcCloudConnect({
         if (typeof result.modelCount === 'number') setModelCount(result.modelCount);
         await revalidateModelsHubCaches();
       })
-      .catch(() => undefined);
-  }, [connected]);
+      .catch((cause) => {
+        if (cancelledRef.current) return;
+        setError(cause instanceof Error ? cause.message : (zh ? '模型目录刷新失败。' : 'Model catalog refresh failed.'));
+      });
+  }, [connected, zh]);
 
   const connect = async () => {
     cancelledRef.current = false;
