@@ -9,10 +9,10 @@ xopc can **receive images** in chat, run **vision / image understanding** with t
 | Field | Type | Purpose |
 |-------|------|---------|
 | Agent model roles | `agents.list[].models.roles` | The selected chat model may receive images directly when it supports vision. |
-| Image generation providers | Provider credentials / image provider registry | `image_generate` discovers available generation providers at runtime. |
+| Image generation model | `agents.list[].models.imageGenerationModel` | Selects one built-in provider/model for each agent. |
 | Media size limits | Runtime/gateway limits | Maximum upload and tool payload sizes depend on the route/tool in use. |
 
-Use `xopc image status` to inspect current manifest-era behavior and `xopc image providers` to list available generation providers.
+The built-in catalog contains OpenAI, Google, Alibaba Model Studio, MiniMax, and fal. Configure it in **Settings → Capabilities → Image**; credentials are stored outside `xopc.json`.
 
 ---
 
@@ -30,9 +30,10 @@ See [Built-in Tools](tools.md#vision--image-generation) for parameter summaries.
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET | `/api/image/capabilities` | Snapshot of image-related settings and available provider/model hints. |
-| POST | `/api/image/validate-model` | Body `{ "modelRef": "provider/model" }` — checks format, keys, and registry resolution. |
-| GET / PATCH | `/api/config` | Read or update gateway/runtime configuration. |
+| GET | `/api/image-generation/catalog` | List the built-in providers, models, and credential status. |
+| GET | `/api/agents/:agentId/image-generation` | Read the selected image generation model for one agent. |
+| POST | `/api/agents/:agentId/image-generation/setup` | Store an optional API key and enable a provider/model in one operation. |
+| POST | `/api/image-generation/providers/:providerId/verify` | Verify a credential when the provider supports a lightweight check. |
 
 ---
 

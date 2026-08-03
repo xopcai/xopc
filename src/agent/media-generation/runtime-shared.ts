@@ -27,7 +27,7 @@ export interface CapabilityProviderCandidate {
   aliases?: readonly string[];
   defaultModel?: string | null;
   models?: readonly string[];
-  isConfigured?: (ctx: { cfg?: Config; agentDir?: string }) => boolean;
+  isConfigured?: (ctx: { cfg?: Config; agentId?: string; agentDir?: string }) => boolean;
 }
 
 export interface ResolveCapabilityModelCandidatesParams {
@@ -38,6 +38,7 @@ export interface ResolveCapabilityModelCandidatesParams {
   modelOverride?: string;
   /** Optional ref parser; defaults to {@link parseCapabilityModelRef}. */
   parseModelRef?: (raw: string | undefined) => ParsedCapabilityModelRef | null;
+  agentId?: string;
   agentDir?: string;
   /** Snapshot of registered providers used to enumerate fallbacks. */
   listProviders: (cfg?: Config) => CapabilityProviderCandidate[];
@@ -89,7 +90,11 @@ export function resolveCapabilityModelCandidates(
       if (!provider.defaultModel) continue;
       let configured = true;
       try {
-        configured = provider.isConfigured?.({ cfg: params.cfg, agentDir: params.agentDir }) ?? true;
+        configured = provider.isConfigured?.({
+          cfg: params.cfg,
+          agentId: params.agentId,
+          agentDir: params.agentDir,
+        }) ?? true;
       } catch {
         configured = false;
       }

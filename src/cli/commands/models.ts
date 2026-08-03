@@ -23,14 +23,11 @@ import { colors } from '../utils/colors.js';
 import { runCliOAuthLogin } from '../utils/oauth-login.js';
 
 const IMAGE_GENERATION_IDS = new Set([
-  'gpt-image-1',
-  'dall-e-3',
-  'dall-e-2',
+  'gpt-image-2',
+  'gpt-image-1.5',
   'wan2.6-t2i',
   'wan2.7-image-pro',
   'wan2.7-image',
-  'wan2.1-t2i-turbo',
-  'wan2.1-t2i-plus',
   'image-01',
   'image-01-live',
 ]);

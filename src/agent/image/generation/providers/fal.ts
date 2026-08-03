@@ -1,5 +1,5 @@
 /**
- * Bundled Fal.ai image-generation provider.
+ * Built-in Fal.ai image-generation provider.
  *
  * Fal.ai is queue-based:
  *   1. POST https://queue.fal.run/<model>           → { request_id, status_url, response_url }
@@ -8,7 +8,7 @@
  *   4. fetch each images[].url                      → bytes
  *
  * Auth: `Authorization: Key <FAL_KEY>` (Fal's REST convention).
- * Configure via env `FAL_KEY` / `FAL_API_KEY` or `cfg.providers.fal.apiKey`.
+ * Configure via env `FAL_KEY` / `FAL_API_KEY` or the local credential store.
  *
  * Polling stays inside `req.timeoutMs` (default 600s for queue + inference);
  * exceeding it surfaces a clear error rather than hanging forever.
@@ -16,35 +16,27 @@
 import {
   isProviderApiKeyConfigured,
   resolveApiKeyForProvider,
-} from '@xopcai/xopc/providers/auth-runtime/index.js';
+} from '../../../../providers/auth-runtime/index.js';
 import {
   pickTimeoutMsOrFallback,
   postJsonRequest,
   privateNetworkPolicyToSsrfGuardOptions,
   resolveProviderHttpRequestConfig,
-} from '@xopcai/xopc/media-shared/http/index.js';
-import { createLogger } from '@xopcai/xopc/utils/logger.js';
+} from '../../../../media-shared/http/index.js';
+import { createLogger } from '../../../../utils/logger.js';
 import {
   imageFileExtensionForMimeType,
-} from '@xopcai/xopc/agent/image/generation/image-assets.js';
+} from '../image-assets.js';
 import type {
   ImageGenerationProvider,
   ImageGenerationProviderCapabilities,
   ImageGenerationRequest,
   ImageGenerationResult,
-  ImageProviderUiMetadata,
-} from '@xopcai/xopc/agent/image/generation/types.js';
+} from '../types.js';
 
 const log = createLogger('ImageGen:Fal');
 
 const DEFAULT_FAL_QUEUE_BASE_URL = 'https://queue.fal.run';
-const FAL_IMAGE_UI: ImageProviderUiMetadata = {
-  baseUrlPresets: [
-    { value: DEFAULT_FAL_QUEUE_BASE_URL, label: 'Fal queue (default)' },
-    { value: 'https://fal.run', label: 'Fal direct (fal.run)' },
-  ],
-  baseUrlPresetKind: 'fal',
-};
 export const FAL_DEFAULT_IMAGE_MODEL = 'fal-ai/flux/schnell';
 const DEFAULT_TIMEOUT_MS = 600_000; // queue + inference (10 min)
 const DEFAULT_POLL_INTERVAL_MS = 1500;
@@ -240,7 +232,6 @@ async function pollFalStatus(params: {
   const { statusUrl, headers, signal, deadlineEpochMs } = params;
   let interval = DEFAULT_POLL_INTERVAL_MS;
   // First check is immediate; subsequent checks back off up to MAX_POLL_INTERVAL_MS.
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     if (Date.now() > deadlineEpochMs) {
       throw new Error('Fal.ai request timed out while waiting for completion');
@@ -396,19 +387,25 @@ export async function generateFalImages(params: {
 export function buildFalImageGenerationProvider(): ImageGenerationProvider {
   return {
     id: 'fal',
-    aliases: ['fal-ai'],
     label: 'Fal.ai',
     defaultModel: FAL_DEFAULT_IMAGE_MODEL,
     models: [...FAL_IMAGE_MODELS],
     capabilities: FAL_CAPABILITIES,
-    ui: FAL_IMAGE_UI,
     isConfigured: (ctx) =>
-      isProviderApiKeyConfigured({ providerId: 'fal', cfg: ctx.cfg }),
+      isProviderApiKeyConfigured({
+        providerId: 'fal',
+        cfg: ctx.cfg,
+        agentId: ctx.agentId,
+      }),
     async generateImage(req) {
-      const apiKey = resolveApiKeyForProvider({ providerId: 'fal', cfg: req.cfg });
+      const apiKey = resolveApiKeyForProvider({
+        providerId: 'fal',
+        cfg: req.cfg,
+        agentId: req.agentId,
+      });
       if (!apiKey) {
         throw new Error(
-          'Fal.ai API key missing (set FAL_KEY / FAL_API_KEY or providers.fal.apiKey)',
+          'Fal.ai API key missing (set FAL_KEY / FAL_API_KEY or save a credential)',
         );
       }
       return generateFalImages({ req, apiKey });

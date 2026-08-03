@@ -30,6 +30,7 @@ describe('generateImage runtime', () => {
         geometry: { sizes: ['1024x1024'] },
       },
       generateImage: vi.fn(async (req) => {
+        expect(req.agentId).toBe('studio');
         expect(req.size).toBe('1024x1024'); // normalised from 1000x1000
         return {
           images: [{ buffer: Buffer.from('img'), mimeType: 'image/png', fileName: 'a.png' }],
@@ -39,7 +40,13 @@ describe('generateImage runtime', () => {
     });
 
     const result = await generateImage(
-      { cfg: undefined, modelConfig: baseModelConfig, prompt: 'cat', size: '1000x1000' },
+      {
+        cfg: undefined,
+        agentId: 'studio',
+        modelConfig: baseModelConfig,
+        prompt: 'cat',
+        size: '1000x1000',
+      },
       {
         getProvider: () => provider,
         listProviders: () => [provider],

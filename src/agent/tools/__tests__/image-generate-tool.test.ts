@@ -60,8 +60,8 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function makeTool(config: any = {}) {
-  const tool = createImageGenerateTool({ workspace, config });
+function makeTool(config: any = {}, agentId = 'studio') {
+  const tool = createImageGenerateTool({ workspace, config, agentId });
   expect(tool).not.toBeNull();
   return tool!;
 }
@@ -71,7 +71,7 @@ describe('image_generate tool — Step 2 input wiring', () => {
     generateImageMock.mockResolvedValueOnce({
       images: [{ buffer: PNG_HEADER, mimeType: 'image/png' }],
       provider: 'openai',
-      model: 'gpt-image-1',
+      model: 'gpt-image-2',
       attempts: [],
       ignoredOverrides: [],
     });
@@ -83,8 +83,8 @@ describe('image_generate tool — Step 2 input wiring', () => {
           default: {
             models: {
               imageGenerationModel: {
-                primary: 'openai/gpt-image-1',
-                fallbacks: ['google/gemini-2.5-flash-image-preview'],
+                primary: 'openai/gpt-image-2',
+                fallbacks: ['google/gemini-3.1-flash-image'],
                 timeoutMs: 120_000,
                 autoProviderFallback: true,
               },
@@ -99,9 +99,10 @@ describe('image_generate tool — Step 2 input wiring', () => {
 
     expect(generateImageMock).toHaveBeenCalledTimes(1);
     expect(generateImageMock.mock.calls[0]?.[0]).toMatchObject({
+      agentId: 'studio',
       modelConfig: {
-        primary: 'openai/gpt-image-1',
-        fallbacks: ['google/gemini-2.5-flash-image-preview'],
+        primary: 'openai/gpt-image-2',
+        fallbacks: ['google/gemini-3.1-flash-image'],
         timeoutMs: 120_000,
         autoProviderFallback: true,
       },

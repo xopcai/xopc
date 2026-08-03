@@ -412,8 +412,9 @@ Creates a webchat-scoped session (or returns an existing empty one). JSON body (
 | GET | `/api/models` | List available models |
 | GET | `/api/models-json` | Get models.json config |
 | PATCH | `/api/models-json` | Save models.json |
-| GET | `/api/image/capabilities` | Image generation / vision capability snapshot (auth) |
-| POST | `/api/image/validate-model` | Validate a `provider/model` ref for image flows (auth) |
+| GET | `/api/image-generation/catalog` | Built-in image generation provider catalog (auth) |
+| GET | `/api/agents/:agentId/image-generation` | Agent image generation model (auth) |
+| POST | `/api/agents/:agentId/image-generation/setup` | Store a credential and enable an image model (auth) |
 | GET | `/api/events` | Server-Sent Events stream (auth); broadcast events including **`agent.stream`** for the web console and Gateway extension iframes |
 | GET | `/api/extensions` | List discovered extensions (includes optional `ui` summary) (auth) |
 | GET | `/api/extensions/:id` | Extension detail and full manifest (auth) |

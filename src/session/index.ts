@@ -84,6 +84,7 @@ export {
   maybeRefineSessionTitleWithLlm,
   generateSessionTitleFromMessages,
   sanitizeSessionTitle,
+  sanitizeGeneratedSessionTitle,
   provisionalTitleFromUserText,
   fallbackTitleFromMessages,
   getSessionTitleSource,

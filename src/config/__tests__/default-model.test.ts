@@ -37,8 +37,8 @@ describe('default model config', () => {
           fallbacks: ['google/gemini-2.5-flash'],
         },
         imageGenerationModel: {
-          primary: 'openai/gpt-image-1',
-          fallbacks: ['google/gemini-2.5-flash-image-preview'],
+          primary: 'openai/gpt-image-2',
+          fallbacks: ['google/gemini-3.1-flash-image'],
           timeoutMs: 120_000,
           autoProviderFallback: true,
         },
@@ -49,9 +49,9 @@ describe('default model config', () => {
       primary: 'openai/gpt-4.1-mini',
       fallbacks: ['google/gemini-2.5-flash'],
     });
-    expect(getAgentDefaultImageGenerationModelConfig(config)).toEqual({
-      primary: 'openai/gpt-image-1',
-      fallbacks: ['google/gemini-2.5-flash-image-preview'],
+    expect(getAgentDefaultImageGenerationModelConfig(config, 'main')).toEqual({
+      primary: 'openai/gpt-image-2',
+      fallbacks: ['google/gemini-3.1-flash-image'],
       timeoutMs: 120_000,
       autoProviderFallback: true,
     });

@@ -2,7 +2,7 @@
  * SSRF / private-network protection for provider HTTP calls.
  *
  * Provider URLs are mostly user-controllable (cfg.providers.<id>.baseUrl,
- * imageBaseUrl, etc.). Without a guard a malicious config could make xopc
+ * custom provider base URLs. Without a guard a malicious config could make xopc
  * fetch internal services (169.254.x.x metadata, 127.0.0.1, RFC1918, …).
  *
  * Policy:

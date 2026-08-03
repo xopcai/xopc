@@ -27,11 +27,6 @@
     "extensions/telegram/src/**/*",
     "extensions/weixin/src/**/*",
     "extensions/feishu/src/**/*",
-    "extensions/openai/src/**/*",
-    "extensions/dashscope/src/**/*",
-    "extensions/minimax/src/**/*",
-    "extensions/google/src/**/*",
-    "extensions/fal/src/**/*",
     "extensions/demo-memory/src/**/*"
   ],
   "exclude": ["node_modules", "dist", "**/__tests__/**/*"]

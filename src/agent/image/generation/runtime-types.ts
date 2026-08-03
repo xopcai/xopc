@@ -28,6 +28,7 @@ export interface GenerateImageParams {
   /** Active xopc config. Optional in Step 2 to keep tool-level callers compatible. */
   cfg?: Config;
   prompt: string;
+  agentId?: string;
   agentDir?: string;
   authStore?: AuthProfileStore;
   modelConfig?: ToolModelConfig;

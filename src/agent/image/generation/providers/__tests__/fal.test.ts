@@ -4,8 +4,8 @@ import {
   buildFalImageGenerationProvider,
   FAL_DEFAULT_IMAGE_MODEL,
   resolveFalBaseUrl,
-} from '../image-generation-provider.js';
-import type { ImageGenerationRequest } from '@xopcai/xopc/agent/image/generation/types.js';
+} from '../fal.js';
+import type { ImageGenerationRequest } from '../../types.js';
 
 let savedBaseUrl: string | undefined;
 let savedQueueBaseUrl: string | undefined;
@@ -67,7 +67,6 @@ describe('buildFalImageGenerationProvider', () => {
   it('exposes id, alias, default model, and edit capabilities', () => {
     const p = buildFalImageGenerationProvider();
     expect(p.id).toBe('fal');
-    expect(p.aliases).toContain('fal-ai');
     expect(p.label).toBe('Fal.ai');
     expect(p.defaultModel).toBe(FAL_DEFAULT_IMAGE_MODEL);
     expect(p.models?.length ?? 0).toBeGreaterThan(0);

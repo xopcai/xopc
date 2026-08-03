@@ -1,28 +1,24 @@
 /**
- * Bundled DashScope (Alibaba) image-generation provider.
- *
- * Migrated from src/agent/image/generation/dashscope-generate.ts. Logic stays
- * identical; the only change is registration is now driven by the bundled
- * provider generator.
+ * Built-in DashScope (Alibaba Model Studio) image-generation provider.
  */
 import {
   isProviderApiKeyConfigured,
   resolveApiKeyForProvider,
-} from '@xopcai/xopc/providers/auth-runtime/index.js';
+} from '../../../../providers/auth-runtime/index.js';
 import {
   pickTimeoutMsOrFallback,
   postJsonRequest,
   privateNetworkPolicyToSsrfGuardOptions,
   resolveProviderHttpRequestConfig,
-} from '@xopcai/xopc/media-shared/http/index.js';
-import { createLogger } from '@xopcai/xopc/utils/logger.js';
-import { imageFileExtensionForMimeType } from '@xopcai/xopc/agent/image/generation/image-assets.js';
+} from '../../../../media-shared/http/index.js';
+import { createLogger } from '../../../../utils/logger.js';
+import { imageFileExtensionForMimeType } from '../image-assets.js';
 import type {
   ImageGenerationProvider,
   ImageGenerationProviderCapabilities,
   ImageGenerationRequest,
   ImageGenerationResult,
-} from '@xopcai/xopc/agent/image/generation/types.js';
+} from '../types.js';
 
 const log = createLogger('ImageGen:DashScope');
 
@@ -68,34 +64,24 @@ export type DashScopeImageRegion = keyof typeof DASHSCOPE_IMAGE_ENDPOINTS;
 
 const DEFAULT_OUTPUT_MIME = 'image/png';
 
-function providerConfigId(req?: ImageGenerationRequest, fallback = 'dashscope-cn'): string {
-  return req?.provider?.trim() || fallback;
-}
-
 export function resolveDashScopeImageGenerationUrl(
-  req?: ImageGenerationRequest,
-  defaultRegion: DashScopeImageRegion = 'beijing',
+  req: ImageGenerationRequest,
 ): string {
-  const id = providerConfigId(req);
-  const cfgImageBase = readDashScopeCfgString(req?.cfg, id, 'imageBaseUrl');
-  if (cfgImageBase) return cfgImageBase.replace(/\/+$/, '');
-  const cfgBase = readDashScopeCfgString(req?.cfg, id, 'baseUrl');
+  const cfgBase = readDashScopeCfgString(req.cfg, 'baseUrl');
   if (cfgBase) return cfgBase.replace(/\/+$/, '');
-  const trimmed = process.env.DASHSCOPE_IMAGE_BASE_URL?.trim();
-  if (trimmed) {
-    return trimmed.replace(/\/+$/, '');
-  }
-  return DASHSCOPE_IMAGE_ENDPOINTS[defaultRegion];
+  const region = readDashScopeCfgString(req.cfg, 'region');
+  if (region === 'cn') return DASHSCOPE_IMAGE_ENDPOINTS.beijing;
+  if (region === 'intl') return DASHSCOPE_IMAGE_ENDPOINTS.singapore;
+  throw new Error('DashScope image generation requires providers.dashscope.region (cn or intl)');
 }
 
 function readDashScopeCfgString(
   cfg: ImageGenerationRequest['cfg'],
-  providerId: string,
   key: string,
 ): string | undefined {
   const providers = (cfg as unknown as { providers?: Record<string, unknown> } | undefined)?.providers;
   if (!providers || typeof providers !== 'object') return undefined;
-  const entry = (providers as Record<string, unknown>)[providerId];
+  const entry = (providers as Record<string, unknown>).dashscope;
   if (!entry || typeof entry !== 'object') return undefined;
   const v = (entry as Record<string, unknown>)[key];
   return typeof v === 'string' && v.trim() ? v.trim() : undefined;
@@ -194,11 +180,9 @@ async function fetchImageBuffers(
 export async function generateDashScopeImages(params: {
   req: ImageGenerationRequest;
   apiKey: string;
-  providerId?: string;
-  defaultRegion?: DashScopeImageRegion;
 }): Promise<ImageGenerationResult> {
   const { req, apiKey } = params;
-  const providerId = params.providerId ?? req.provider ?? 'dashscope-cn';
+  const providerId = 'dashscope';
   if (req.inputImages && req.inputImages.length > 0) {
     throw new Error('Image-to-image is not supported for Qwen/DashScope in this build');
   }
@@ -233,7 +217,7 @@ export async function generateDashScopeImages(params: {
     parameters,
   };
 
-  const url = resolveDashScopeImageGenerationUrl(req, params.defaultRegion);
+  const url = resolveDashScopeImageGenerationUrl(req);
   const httpDefaults = resolveProviderHttpRequestConfig({
     providerId,
     cfg: req.cfg,
@@ -289,48 +273,30 @@ export async function generateDashScopeImages(params: {
   };
 }
 
-function createDashScopeImageGenerationProvider(options: {
-  id: string;
-  label: string;
-  defaultRegion: DashScopeImageRegion;
-}): ImageGenerationProvider {
+export function buildDashScopeImageGenerationProvider(): ImageGenerationProvider {
   return {
-    id: options.id,
-    label: options.label,
+    id: 'dashscope',
+    label: 'Alibaba Model Studio',
     defaultModel: DASHSCOPE_DEFAULT_IMAGE_MODEL,
     models: [...DASHSCOPE_IMAGE_MODELS],
     capabilities: DASHSCOPE_CAPABILITIES,
     isConfigured: (ctx) =>
-      isProviderApiKeyConfigured({ providerId: options.id, cfg: ctx.cfg }),
+      isProviderApiKeyConfigured({
+        providerId: 'dashscope',
+        cfg: ctx.cfg,
+        agentId: ctx.agentId,
+      }) &&
+      ['cn', 'intl'].includes(readDashScopeCfgString(ctx.cfg, 'region') ?? ''),
     async generateImage(req) {
-      const apiKey = resolveApiKeyForProvider({ providerId: options.id, cfg: req.cfg });
-      if (!apiKey) {
-        throw new Error(
-          `DashScope API key missing (set DASHSCOPE_API_KEY or providers.${options.id}.apiKey)`,
-        );
-      }
-      return generateDashScopeImages({
-        req,
-        apiKey,
-        providerId: options.id,
-        defaultRegion: options.defaultRegion,
+      const apiKey = resolveApiKeyForProvider({
+        providerId: 'dashscope',
+        cfg: req.cfg,
+        agentId: req.agentId,
       });
+      if (!apiKey) {
+        throw new Error('DashScope API key missing (set DASHSCOPE_API_KEY or save a credential)');
+      }
+      return generateDashScopeImages({ req, apiKey });
     },
   };
-}
-
-export function buildDashScopeCnImageGenerationProvider(): ImageGenerationProvider {
-  return createDashScopeImageGenerationProvider({
-    id: 'dashscope-cn',
-    label: 'DashScope (Alibaba · China)',
-    defaultRegion: 'beijing',
-  });
-}
-
-export function buildDashScopeIntlImageGenerationProvider(): ImageGenerationProvider {
-  return createDashScopeImageGenerationProvider({
-    id: 'dashscope-intl',
-    label: 'DashScope (Alibaba · International)',
-    defaultRegion: 'singapore',
-  });
 }

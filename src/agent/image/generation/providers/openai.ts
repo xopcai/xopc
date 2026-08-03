@@ -1,8 +1,7 @@
 /**
- * Bundled OpenAI image-generation provider.
+ * Built-in OpenAI image-generation provider.
  *
- * Migrated from src/agent/image/generation/openai-generate.ts as part of the
- * Step 3 plugin-isation. Step 4 adds:
+ * Supports:
  *   - **Azure OpenAI** routing (when `cfg.providers.openai.azure.{resource,
  *     deployment, apiVersion}` is set, or env `AZURE_OPENAI_*`): swaps base
  *     URL + uses `api-key` header instead of `Authorization: Bearer`.
@@ -14,26 +13,20 @@
 import {
   isProviderApiKeyConfigured,
   resolveAuthProfileForProvider,
-} from '@xopcai/xopc/providers/auth-runtime/index.js';
-import { createOpenAiCompatibleImageProvider } from '@xopcai/xopc/agent/image/generation/openai-compatible-image-provider.js';
-import type { OpenAiCompatibleEndpointResolution } from '@xopcai/xopc/agent/image/generation/openai-compatible-image-provider.js';
+} from '../../../../providers/auth-runtime/index.js';
+import { createOpenAiCompatibleImageProvider } from '../openai-compatible-image-provider.js';
+import type { OpenAiCompatibleEndpointResolution } from '../openai-compatible-image-provider.js';
 import type {
   ImageGenerationProvider,
   ImageGenerationProviderCapabilities,
   ImageGenerationRequest,
-  ImageProviderUiMetadata,
-} from '@xopcai/xopc/agent/image/generation/types.js';
+} from '../types.js';
 
 const OPENAI_DEFAULT_BASE_URL = 'https://api.openai.com/v1';
 
-/** Image models exposed by this extension (OpenAI Images API + compatible hosts). */
-export const OPENAI_IMAGE_MODELS: readonly string[] = ['gpt-image-1', 'dall-e-3', 'dall-e-2'];
+/** Image models exposed by the OpenAI Images API. */
+export const OPENAI_IMAGE_MODELS: readonly string[] = ['gpt-image-2', 'gpt-image-1.5'];
 export const OPENAI_DEFAULT_IMAGE_MODEL = OPENAI_IMAGE_MODELS[0]!;
-
-const OPENAI_IMAGE_UI: ImageProviderUiMetadata = {
-  baseUrlPresets: [{ value: OPENAI_DEFAULT_BASE_URL, label: 'OpenAI API (default)' }],
-  baseUrlPresetKind: 'openai',
-};
 
 const OPENAI_CAPABILITIES: ImageGenerationProviderCapabilities = {
   generate: { maxCount: 4, supportsSize: true },
@@ -101,13 +94,17 @@ export function buildOpenAIImageGenerationProvider(): ImageGenerationProvider {
     defaultModel: OPENAI_DEFAULT_IMAGE_MODEL,
     models: [...OPENAI_IMAGE_MODELS],
     capabilities: OPENAI_CAPABILITIES,
-    ui: OPENAI_IMAGE_UI,
     isConfigured: (ctx) =>
-      isProviderApiKeyConfigured({ providerId: 'openai', cfg: ctx.cfg }),
+      isProviderApiKeyConfigured({
+        providerId: 'openai',
+        cfg: ctx.cfg,
+        agentId: ctx.agentId,
+      }),
     resolveApiKey: (req) => {
       const auth = resolveAuthProfileForProvider({
         providerId: 'openai',
         cfg: req.cfg,
+        agentId: req.agentId,
         store: req.authStore,
       });
       return auth.apiKey ?? null;
@@ -123,26 +120,5 @@ export function buildOpenAIImageGenerationProvider(): ImageGenerationProvider {
       return { baseUrl: resolveOpenAiBaseUrl(req) };
     },
     defaultTimeoutMs: 120_000,
-    buildGenerateRequestBody: (req, base) => {
-      // dall-e-2 / dall-e-3 have stricter validation. Strip params they reject.
-      const m = (req.model || '').toLowerCase();
-      if (m === 'dall-e-2' || m === 'dall-e-3') {
-        const cleaned: Record<string, unknown> = { ...base };
-        delete cleaned.output_format;
-        delete cleaned.background;
-        delete cleaned.output_compression;
-        delete cleaned.moderation;
-        if (m === 'dall-e-3' && (cleaned.n === undefined || Number(cleaned.n) > 1)) {
-          // dall-e-3 only accepts n=1.
-          cleaned.n = 1;
-        }
-        if (m === 'dall-e-2' && cleaned.quality !== undefined) {
-          // dall-e-2 has no quality dimension.
-          delete cleaned.quality;
-        }
-        return cleaned;
-      }
-      return base;
-    },
   });
 }

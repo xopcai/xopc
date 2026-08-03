@@ -4,8 +4,7 @@
  *
  * Resolution order:
  *   1. AuthProfileStore (per-agent / per-profile; noop in Step 1)
- *   2. cfg.providers.<id>.apiKey
- *   3. PROVIDER_ENV_MAP[providerId] env vars (or `<PROVIDER>_API_KEY` fallback)
+ *   2. PROVIDER_ENV_MAP[providerId] env vars (or `<PROVIDER>_API_KEY` fallback)
  *
  * Distinct from `src/providers/index.ts#getApiKeySync` which is keyed to the
  * LLM model registry. Capability providers care only about per-vendor API
@@ -24,8 +23,7 @@ import type { ResolveApiKeyOptions } from './types.js';
  *
  * Resolution order (matches spec §8.4):
  *   1. AuthProfileStore (per-agent profile — may be OAuth)
- *   2. cfg.providers.<id>.apiKey
- *   3. PROVIDER_ENV_MAP[providerId] env vars
+ *   2. PROVIDER_ENV_MAP[providerId] env vars
  */
 export function resolveApiKeyForProvider(options: ResolveApiKeyOptions): string | undefined {
   return resolveAuthProfileForProvider(options).apiKey;

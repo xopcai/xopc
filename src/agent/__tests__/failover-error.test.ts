@@ -66,7 +66,7 @@ describe('classifyAttemptError', () => {
 
 describe('FailoverError', () => {
   const attempts: FallbackAttempt[] = [
-    { provider: 'openai', model: 'gpt-image-1', error: 'timeout', reason: 'timeout' },
+    { provider: 'openai', model: 'gpt-image-2', error: 'timeout', reason: 'timeout' },
     { provider: 'dashscope', model: 'wan2.6-t2i', error: 'auth failed', reason: 'auth', status: 401 },
   ];
 
@@ -93,7 +93,7 @@ describe('FailoverError', () => {
     const err = new FailoverError({ capability: 'image-generation', attempts });
     const description = describeFailoverError(err);
     expect(description).toContain('[image-generation] 2 attempt(s) failed');
-    expect(description).toContain('1. openai/gpt-image-1 [timeout]');
+    expect(description).toContain('1. openai/gpt-image-2 [timeout]');
     expect(description).toContain('2. dashscope/wan2.6-t2i [auth] status=401 - auth failed');
   });
 

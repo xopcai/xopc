@@ -33,7 +33,6 @@ export {
   type GenerateImageRuntimeResult,
 } from './generation/runtime.js';
 export {
-  registerImageGenerationProvider,
   getImageGenerationProvider,
   listImageGenerationProviders,
   type ImageGenerationProvider,

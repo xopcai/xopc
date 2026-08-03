@@ -6,8 +6,7 @@
  *
  * Resolution order matches `resolveApiKeyForProvider`:
  *   1. AuthProfileStore (per-agent profile — may be OAuth)
- *   2. cfg.providers.<id>.apiKey
- *   3. PROVIDER_ENV_MAP[providerId] env vars
+ *   2. Environment variables
  *
  * Returns:
  *   - `mode: 'oauth' | 'azure-key' | 'api-key'`
@@ -16,6 +15,7 @@
  */
 
 import { getApiKeyFromEnv } from '../env-keys.js';
+import { resolveProviderApiKeyForAgentSync } from '../../auth/sync-provider-auth.js';
 import { getDefaultAuthProfileStore } from './auth-profile-store.js';
 import type { AuthProfile, AuthProfileStore, ProviderAuthMode, ResolveApiKeyOptions } from './types.js';
 
@@ -23,8 +23,8 @@ export interface ProviderAuthResolution {
   apiKey?: string;
   mode: ProviderAuthMode;
   profileId?: string;
-  /** Source bucket: 'store' | 'config' | 'env' | 'none'. */
-  source: 'store' | 'config' | 'env' | 'none';
+  /** Source bucket. */
+  source: 'store' | 'env' | 'none';
   /** Vendor metadata copied from the matched profile (azure resource etc.). */
   meta?: Record<string, unknown>;
 }
@@ -57,24 +57,26 @@ export function resolveAuthProfileForProvider(
     }
   }
 
-  // 2. cfg.providers.<id>.apiKey
-  const cfgKey = readCfgApiKey(options.cfg, providerId);
-  if (cfgKey) {
-    const azure = readCfgAzureMeta(options.cfg, providerId);
-    return {
-      apiKey: cfgKey,
-      mode: azure ? 'azure-key' : 'api-key',
-      source: 'config',
-      meta: azure,
-    };
+  if (!options.store && !options.envReader) {
+    const storedKey = resolveProviderApiKeyForAgentSync(providerId, options.agentId, options.cfg);
+    if (storedKey) {
+      const azure = readCfgAzureMeta(options.cfg, providerId);
+      return {
+        apiKey: storedKey,
+        mode: azure ? 'azure-key' : 'api-key',
+        source: 'store',
+        meta: azure,
+      };
+    }
   }
 
-  // 3. env
+  // 2. env
   const envKey = options.envReader
     ? readFromCustomEnv(options.envReader, providerId)
     : getApiKeyFromEnv(providerId);
   if (envKey) {
-    return { apiKey: envKey, mode: 'api-key', source: 'env' };
+    const azure = readCfgAzureMeta(options.cfg, providerId);
+    return { apiKey: envKey, mode: azure ? 'azure-key' : 'api-key', source: 'env', meta: azure };
   }
 
   return { apiKey: undefined, mode: 'api-key', source: 'none' };
@@ -90,15 +92,6 @@ function pickProfile(
   } catch {
     return undefined;
   }
-}
-
-function readCfgApiKey(cfg: ResolveApiKeyOptions['cfg'], providerId: string): string | undefined {
-  const providers = (cfg as unknown as { providers?: Record<string, unknown> } | undefined)?.providers;
-  if (!providers || typeof providers !== 'object') return undefined;
-  const entry = (providers as Record<string, unknown>)[providerId];
-  if (!entry || typeof entry !== 'object') return undefined;
-  const apiKey = (entry as Record<string, unknown>).apiKey;
-  return typeof apiKey === 'string' && apiKey.length > 0 ? apiKey : undefined;
 }
 
 function readCfgAzureMeta(

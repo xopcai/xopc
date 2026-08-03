@@ -25,11 +25,6 @@ import type {
   ImageGenerationSourceImage,
 } from './types.js';
 
-// Side-effect: registers every bundled image-generation provider listed in
-// src/generated/bundled-image-generation-providers.ts (regenerated via
-// `pnpm run generate:bundled-image-providers`). Vendor implementations live
-// under extensions/<vendor>/src/image-generation-provider.ts.
-import './bundled.js';
 
 export type {
   GenerateImageParams,
@@ -63,6 +58,7 @@ export async function generateImage(
     modelConfig: params.modelConfig,
     modelOverride: params.modelOverride,
     parseModelRef: parseImageGenerationModelRef,
+    agentId: params.agentId,
     agentDir: params.agentDir,
     listProviders: (cfg) => listProviders(cfg).map(toCapabilityCandidate),
     autoProviderFallback: params.autoProviderFallback,
@@ -181,10 +177,8 @@ export async function generateImage(
   });
 }
 
-export function listImageGenerationProvidersSummary(
-  cfg?: Config,
-): ImageGenerationProviderSummary[] {
-  return listProvidersSummaryFromRegistry(cfg);
+export function listImageGenerationProvidersSummary(): ImageGenerationProviderSummary[] {
+  return listProvidersSummaryFromRegistry();
 }
 
 // ============================================
@@ -206,6 +200,7 @@ function buildProviderRequest(input: {
     model: candidate.model,
     prompt: params.prompt,
     ...(params.cfg ? { cfg: params.cfg } : {}),
+    ...(params.agentId ? { agentId: params.agentId } : {}),
     ...(params.agentDir ? { agentDir: params.agentDir } : {}),
     ...(params.authStore ? { authStore: params.authStore } : {}),
     ...(typeof params.timeoutMs === 'number' ? { timeoutMs: params.timeoutMs } : {}),
@@ -234,9 +229,8 @@ function cloneInputImages(images: ImageGenerationSourceImage[]): ImageGeneration
 function toCapabilityCandidate(provider: ImageGenerationProvider): CapabilityProviderCandidate {
   return {
     id: provider.id,
-    ...(provider.aliases ? { aliases: provider.aliases } : {}),
-    defaultModel: provider.defaultModel ?? null,
-    models: provider.models ?? [],
+    defaultModel: provider.defaultModel,
+    models: provider.models,
     isConfigured: provider.isConfigured,
   };
 }

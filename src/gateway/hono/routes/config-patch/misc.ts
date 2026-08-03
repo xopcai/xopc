@@ -129,9 +129,7 @@ export async function applyMiscPatch(config: Config, body: any): Promise<PatchRe
     }
   }
 
-  // Structured per-vendor provider config (cfg.providers.<id>) for capability
-  // providers (image / audio / video). Distinct from `body.providers` above
-  // which targets the LLM-side credential resolver.
+  // Non-secret provider connection settings.
   if (body.providersConfig && typeof body.providersConfig === 'object' && !Array.isArray(body.providersConfig)) {
     const cfgProviders = (config as { providers?: Record<string, Record<string, unknown>> }).providers ?? {};
     for (const [vendorId, raw] of Object.entries(body.providersConfig as Record<string, unknown>)) {
@@ -143,14 +141,11 @@ export async function applyMiscPatch(config: Config, body: any): Promise<PatchRe
       if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
       const next = (cfgProviders[vendorId] ?? {}) as Record<string, unknown>;
       const patch = raw as Record<string, unknown>;
-      for (const field of ['apiKey', 'baseUrl', 'region', 'imageBaseUrl'] as const) {
+      for (const field of ['baseUrl', 'region'] as const) {
         if (patch[field] === null || patch[field] === '') {
           delete next[field];
         } else if (typeof patch[field] === 'string') {
           const trimmed = (patch[field] as string).trim();
-          if (field === 'apiKey' && isMaskedSecretPatchValue(trimmed)) {
-            continue;
-          }
           next[field] = trimmed;
         }
       }
