@@ -908,20 +908,14 @@ export const ProviderRequestOverridesSchema = z
 
 /**
  * Generic per-vendor provider config — used by image / audio / video
- * capability providers via `cfg.providers.<id>`. Kept loose (`.strict()` but
- * everything optional) so adding a new vendor never requires a config
- * migration.
+ * capability providers via `cfg.providers.<id>`.
  */
 export const ProviderAuthConfigSchema = z
   .object({
-    /** Static API key (api-key / azure-key modes). */
-    apiKey: z.string().optional(),
     /** Override the default REST base URL. */
     baseUrl: z.string().url().optional(),
-    /** Vendor region (DashScope: `beijing` / `singapore`; AWS: region id). */
-    region: z.string().optional(),
-    /** Image-only base URL override (DashScope splits image vs LLM). */
-    imageBaseUrl: z.string().url().optional(),
+    /** Provider deployment region. */
+    region: z.enum(['cn', 'intl']).optional(),
     /** Per-vendor request overrides. */
     request: ProviderRequestOverridesSchema.optional(),
     /** Azure OpenAI deployment overrides; only consumed by OpenAI image provider. */
@@ -932,8 +926,8 @@ export const ProviderAuthConfigSchema = z
 export type ProviderAuthConfig = z.infer<typeof ProviderAuthConfigSchema>;
 
 /**
- * `cfg.providers.<id>` is keyed by provider id (`openai`, `dashscope`,
- * `minimax`, `google`, `fal`, …). Every entry is optional and validated by
+ * `cfg.providers.<id>` stores non-secret connection settings. Credentials
+ * live in the credential store or environment. Every entry is validated by
  * {@link ProviderAuthConfigSchema}.
  */
 export const ProvidersConfigSchema = z.record(z.string(), ProviderAuthConfigSchema);
@@ -1442,9 +1436,10 @@ export function getAgentDefaultModelRef(config: Config): string | undefined {
   return modelRef;
 }
 
-function getAgentDefaultModelsConfig(config: Config): AgentModelsConfig | undefined {
+function getAgentDefaultModelsConfig(config: Config, requestedAgentId?: string): AgentModelsConfig | undefined {
   const list = Array.isArray(config.agents?.list) ? config.agents.list : [];
   const defaultId =
+    requestedAgentId?.trim() ||
     config.agents?.default?.trim() ||
     list.find((entry) => (entry as { default?: boolean }).default === true)?.id?.trim() ||
     list[0]?.id;
@@ -1480,8 +1475,9 @@ export function getAgentDefaultImageModelConfig(config: Config): AgentModelConfi
 
 export function getAgentDefaultImageGenerationModelConfig(
   config: Config,
+  agentId: string,
 ): AgentImageGenerationModelConfig | undefined {
-  return getAgentDefaultModelsConfig(config)?.imageGenerationModel;
+  return getAgentDefaultModelsConfig(config, agentId)?.imageGenerationModel;
 }
 
 /** `provider/model` or null when invalid. */

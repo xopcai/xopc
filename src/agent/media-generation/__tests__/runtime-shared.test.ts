@@ -30,11 +30,11 @@ describe('resolveCapabilityModelCandidates', () => {
 
   it('orders override → primary → fallbacks → autoFallback', () => {
     const modelConfig: AgentModelConfig = {
-      primary: 'openai/gpt-image-1',
+      primary: 'openai/gpt-image-2',
       fallbacks: ['dashscope/wan2.6-t2i', 'minimax/image-01'],
     };
     const providers: CapabilityProviderCandidate[] = [
-      { id: 'google', defaultModel: 'gemini-3.0-flash-image', isConfigured: () => true },
+      { id: 'google', defaultModel: 'gemini-3.1-flash-image', isConfigured: () => true },
       { id: 'fal', defaultModel: 'flux-pro', isConfigured: () => false },
     ];
     const candidates = resolveCapabilityModelCandidates({
@@ -46,17 +46,17 @@ describe('resolveCapabilityModelCandidates', () => {
     });
     expect(candidates).toEqual([
       { provider: 'override', model: 'model-x' },
-      { provider: 'openai', model: 'gpt-image-1' },
+      { provider: 'openai', model: 'gpt-image-2' },
       { provider: 'dashscope', model: 'wan2.6-t2i' },
       { provider: 'minimax', model: 'image-01' },
-      { provider: 'google', model: 'gemini-3.0-flash-image' },
+      { provider: 'google', model: 'gemini-3.1-flash-image' },
     ]);
   });
 
   it('deduplicates by case-insensitive provider + exact model', () => {
     const modelConfig: AgentModelConfig = {
-      primary: 'OpenAI/gpt-image-1',
-      fallbacks: ['openai/gpt-image-1', 'openai/gpt-image-2'],
+      primary: 'OpenAI/gpt-image-2',
+      fallbacks: ['openai/gpt-image-2', 'openai/gpt-image-1.5'],
     };
     const candidates = resolveCapabilityModelCandidates({
       cfg: emptyCfg,
@@ -64,18 +64,18 @@ describe('resolveCapabilityModelCandidates', () => {
       listProviders,
     });
     expect(candidates).toEqual([
-      { provider: 'openai', model: 'gpt-image-1' },
       { provider: 'openai', model: 'gpt-image-2' },
+      { provider: 'openai', model: 'gpt-image-1.5' },
     ]);
   });
 
   it('skips invalid refs silently', () => {
     const candidates = resolveCapabilityModelCandidates({
       cfg: emptyCfg,
-      modelConfig: { primary: 'no-slash', fallbacks: ['openai/gpt-image-1', '/empty', ''] },
+      modelConfig: { primary: 'no-slash', fallbacks: ['openai/gpt-image-2', '/empty', ''] },
       listProviders,
     });
-    expect(candidates).toEqual([{ provider: 'openai', model: 'gpt-image-1' }]);
+    expect(candidates).toEqual([{ provider: 'openai', model: 'gpt-image-2' }]);
   });
 
   it('listProviders throwing does not break autoFallback', () => {
@@ -88,6 +88,24 @@ describe('resolveCapabilityModelCandidates', () => {
       autoProviderFallback: true,
     });
     expect(candidates).toEqual([{ provider: 'openai', model: 'x' }]);
+  });
+
+  it('uses the active agent scope when checking automatic fallback providers', () => {
+    const candidates = resolveCapabilityModelCandidates({
+      cfg: emptyCfg,
+      agentId: 'studio',
+      modelConfig: undefined,
+      listProviders: () => [{
+        id: 'google',
+        defaultModel: 'gemini-3.1-flash-image',
+        isConfigured: ({ agentId }) => agentId === 'studio',
+      }],
+      autoProviderFallback: true,
+    });
+
+    expect(candidates).toEqual([
+      { provider: 'google', model: 'gemini-3.1-flash-image' },
+    ]);
   });
 });
 
@@ -184,14 +202,14 @@ describe('recordCapabilityCandidateFailure + throwCapabilityGenerationFailure', 
     recordCapabilityCandidateFailure({
       attempts,
       provider: 'openai',
-      model: 'gpt-image-1',
+      model: 'gpt-image-2',
       error: new Error('boom'),
       durationMs: 123,
     });
     expect(attempts).toHaveLength(1);
     expect(attempts[0]).toMatchObject({
       provider: 'openai',
-      model: 'gpt-image-1',
+      model: 'gpt-image-2',
       reason: 'unknown',
       durationMs: 123,
     });
@@ -223,14 +241,14 @@ describe('buildNoCapabilityModelConfiguredMessage', () => {
       capabilityLabel: 'image-generation',
       modelConfigKey: 'imageGenerationModel',
       providers: [
-        { id: 'openai', defaultModel: 'gpt-image-1' },
+        { id: 'openai', defaultModel: 'gpt-image-2' },
         { id: 'dashscope', defaultModel: 'wan2.7-image-pro' },
       ],
       getProviderEnvVars: (id) => (id === 'openai' ? ['OPENAI_API_KEY'] : ['DASHSCOPE_API_KEY']),
     });
     expect(msg).toContain('No image-generation model configured');
     expect(msg).toContain('manifest/runtime model policy');
-    expect(msg).toContain('- openai default=gpt-image-1 (env: OPENAI_API_KEY)');
+    expect(msg).toContain('- openai default=gpt-image-2 (env: OPENAI_API_KEY)');
     expect(msg).toContain('- dashscope default=wan2.7-image-pro (env: DASHSCOPE_API_KEY)');
   });
 

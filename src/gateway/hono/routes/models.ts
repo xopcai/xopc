@@ -8,12 +8,7 @@ import {
   type ProviderConfig,
 } from '../../../config/models-json.js';
 import type { Config } from '../../../config/schema.js';
-import { parseModelRef } from '../../../config/schema.js';
 import { testApiKeyResolution } from '../../../config/resolve-config-value.js';
-import {
-  getImageGenerationProvider,
-  listImageGenerationProvidersSummary,
-} from '../../../agent/image/generation/runtime.js';
 import {
   EXTENSION_PROVIDER_BASE_URL,
   getAllModels,
@@ -23,7 +18,6 @@ import {
   getProviderAuthState,
   isProviderConfigured,
   PROVIDER_META,
-  resolveModel,
 } from '../../../providers/index.js';
 import {
   getProviderHint,
@@ -47,10 +41,11 @@ import { getProviderRegistry } from '../../../providers/plugin-registry.js';
 import type { ProviderModelDefinition } from '../../../extensions/types/providers.js';
 import type { GatewayService } from '../../service.js';
 import {
-  resolveCurrentImageModelCapabilities,
-  resolveImageGenerationCapabilities,
-  resolveImageUnderstandingCapabilities,
-} from '../../image-capabilities.js';
+  getAgentImageGenerationConfig,
+  getImageGenerationCatalog,
+  prepareImageGenerationSetup,
+  verifyImageGenerationCredential,
+} from '../../image-generation-setup.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { respondStartupUnavailable } from '../lib/startup-unavailable.js';
 
@@ -67,15 +62,6 @@ function readStringRecord(value: unknown): Record<string, string> | undefined {
     (entry): entry is [string, string] => typeof entry[1] === 'string',
   );
   return entries.length > 0 ? Object.fromEntries(entries) : undefined;
-}
-
-/** Plaintext key only when persisted under `cfg.providers.<id>.apiKey` (not env / credential store). */
-function readProviderApiKeyFromConfigFileOnly(cfg: Config, providerId: string): string | undefined {
-  const id = providerId.trim().toLowerCase();
-  const bucket = cfg.providers?.[id];
-  if (!bucket || typeof bucket !== 'object' || Array.isArray(bucket)) return undefined;
-  const k = (bucket as { apiKey?: unknown }).apiKey;
-  return typeof k === 'string' && k.trim() ? k.trim() : undefined;
 }
 
 /** Extension id from manifest `providers[]` (e.g. provider `demo` → extension `demo-provider`). */
@@ -342,157 +328,110 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
     return c.json({ ok: true, payload: { models } });
   });
 
-  authenticated.get('/api/image/capabilities', async (c) => {
-    const config = service.currentConfig as Config;
-    const agentId = c.req.query('agentId')?.trim() || undefined;
-    const imageGenerationProviders = await resolveImageGenerationCapabilities(config);
-    const imageUnderstandingProviders = await resolveImageUnderstandingCapabilities(config);
+  authenticated.get('/api/image-generation/catalog', (c) => {
     return c.json({
       ok: true,
-      payload: {
-        current: resolveCurrentImageModelCapabilities(config, agentId),
-        imageGeneration: { providers: imageGenerationProviders },
-        imageUnderstanding: { providers: imageUnderstandingProviders },
-      },
+      payload: { providers: getImageGenerationCatalog(service.currentConfig as Config) },
     });
   });
 
-  authenticated.post('/api/image/validate-model', strictRateLimitMiddleware, async (c) => {
-    let body: { modelRef?: unknown };
+  authenticated.get('/api/agents/:agentId/image-generation', (c) => {
     try {
-      body = (await c.req.json()) as { modelRef?: unknown };
-    } catch {
-      return c.json({ ok: false, error: 'Invalid JSON' }, 400);
-    }
-    const modelRef = body.modelRef;
-    if (!modelRef || typeof modelRef !== 'string') {
-      return c.json({ ok: false, error: 'modelRef is required' }, 400);
-    }
-
-    const parsed = parseModelRef(modelRef);
-    if (!parsed) {
       return c.json({
         ok: true,
-        payload: {
-          valid: false,
-          reason: 'invalid_format',
-          message: 'Model reference must be in "provider/model" format',
-        },
+        payload: getAgentImageGenerationConfig(
+          service.currentConfig as Config,
+          c.req.param('agentId'),
+        ),
       });
-    }
-
-    const configured = await isProviderConfigured(parsed.provider);
-    if (!configured) {
-      return c.json({
-        ok: true,
-        payload: {
-          valid: false,
-          reason: 'provider_not_configured',
-          message: `Provider "${parsed.provider}" is not configured. Set the API key first.`,
-          provider: parsed.provider,
-        },
-      });
-    }
-
-    try {
-      resolveModel(modelRef);
-    } catch {
-      return c.json({
-        ok: true,
-        payload: {
-          valid: false,
-          reason: 'model_not_found',
-          message: `Model not found in registry: ${modelRef}`,
-          provider: parsed.provider,
-          model: parsed.model,
-        },
-      });
-    }
-
-    return c.json({
-      ok: true,
-      payload: {
-        valid: true,
-        provider: parsed.provider,
-        model: parsed.model,
-      },
-    });
-  });
-
-  // GET /api/image/providers — registered image generation providers and models (not in LLM model registry)
-  authenticated.get('/api/image/providers', (c) => {
-    const cfg = deps.service.currentConfig;
-    const summaries = listImageGenerationProvidersSummary(cfg);
-    const providers = summaries.map((p) => {
-      const provider = getImageGenerationProvider(p.id, cfg);
-      let configured = false;
-      try {
-        configured = provider?.isConfigured?.({ cfg }) === true;
-      } catch {
-        configured = false;
-      }
-      return { ...p, configured };
-    });
-    return c.json({ ok: true, payload: { providers } });
-  });
-
-  // POST /api/image/providers/:id/test — lightweight credential probe; does NOT
-  // hit the vendor (no quota burn). Returns `{ ok, configured, reason }`.
-  authenticated.post('/api/image/providers/:id/test', (c) => {
-    const id = c.req.param('id');
-    const cfg = deps.service.currentConfig;
-    const provider = getImageGenerationProvider(id, cfg);
-    if (!provider) {
+    } catch (error) {
       return c.json(
-        { ok: false, error: { message: `Image generation provider not found: ${id}` } },
+        { ok: false, error: { message: error instanceof Error ? error.message : String(error) } },
         404,
       );
     }
-    let configured = false;
-    let reason: string | undefined;
-    try {
-      configured = provider.isConfigured?.({ cfg }) === true;
-      if (!configured) reason = 'Missing API key (set via config or environment).';
-    } catch (err) {
-      reason = err instanceof Error ? err.message : String(err);
-    }
-    return c.json({
-      ok: true,
-      payload: {
-        id: provider.id,
-        configured,
-        ...(reason ? { reason } : {}),
-        defaultModel: provider.defaultModel ?? null,
-      },
-    });
   });
 
-  /**
-   * POST /api/image/providers/:id/reveal-api-key — return `cfg.providers.<id>.apiKey` plaintext for the
-   * gateway console (same auth as PATCH /api/config). Does not resolve env vars or credential files.
-   */
   authenticated.post(
-    '/api/image/providers/:id/reveal-api-key',
+    '/api/agents/:agentId/image-generation/setup',
     strictRateLimitMiddleware,
     async (c) => {
-      const rawId = c.req.param('id');
-      const cfg = deps.service.currentConfig;
-      const provider = getImageGenerationProvider(rawId, cfg);
-      if (!provider) {
-        return c.json(
-          { ok: false, error: { message: `Image generation provider not found: ${rawId}` } },
-          404,
-        );
+      const body = await c.req.json().catch(() => null) as Record<string, unknown> | null;
+      if (!body || typeof body.providerId !== 'string') {
+        return c.json({ ok: false, error: { message: 'providerId is required' } }, 400);
       }
-      const apiKey = readProviderApiKeyFromConfigFileOnly(cfg, provider.id);
+      const prepared = prepareImageGenerationSetup(
+        service.currentConfig as Config,
+        c.req.param('agentId'),
+        {
+          providerId: body.providerId,
+          ...(typeof body.modelId === 'string' ? { modelId: body.modelId } : {}),
+          ...(body.region === 'cn' || body.region === 'intl' ? { region: body.region } : {}),
+          ...(typeof body.baseUrl === 'string' ? { baseUrl: body.baseUrl } : {}),
+        },
+      );
+      if (prepared.ok === false) {
+        return c.json({ ok: false, error: { message: prepared.error } }, 400);
+      }
+
+      const resolver = new CredentialResolver();
+      const previousKey = await resolver.revealGatewayStoredApiKey(prepared.providerId);
+      const suppliedKey = typeof body.apiKey === 'string' ? body.apiKey.trim() : '';
+      const effectiveKey = suppliedKey || await resolver.resolveApiKey(prepared.providerId);
+      if (!effectiveKey) {
+        return c.json({ ok: false, error: { message: 'API key is required' } }, 400);
+      }
+
+      const verification = suppliedKey
+        ? await verifyImageGenerationCredential({
+            providerId: prepared.providerId,
+            apiKey: suppliedKey,
+            baseUrl: typeof body.baseUrl === 'string' ? body.baseUrl : undefined,
+          })
+        : { verified: false, supported: false };
+      if (verification.supported && !verification.verified) {
+        return c.json({ ok: false, error: { message: verification.message ?? 'Credential verification failed' } }, 400);
+      }
+
+      if (suppliedKey) {
+        await resolver.saveApiKey(prepared.providerId, suppliedKey, { profileName: 'default' });
+      }
+      const saved = await service.saveConfig(prepared.config);
+      if (!saved.saved) {
+        if (suppliedKey) {
+          if (previousKey) {
+            await resolver.saveApiKey(prepared.providerId, previousKey, { profileName: 'default' });
+          } else {
+            await resolver.deleteProfile(`${prepared.providerId}:default`);
+          }
+        }
+        return c.json({ ok: false, error: { message: saved.error ?? 'Failed to save configuration' } }, 500);
+      }
       return c.json({
         ok: true,
         payload: {
-          id: provider.id,
-          apiKey: apiKey ?? null,
-          source: apiKey ? ('config' as const) : ('none' as const),
+          agent: getAgentImageGenerationConfig(service.currentConfig as Config, c.req.param('agentId')),
+          providers: getImageGenerationCatalog(service.currentConfig as Config),
+          verification,
         },
       });
+    },
+  );
+
+  authenticated.post(
+    '/api/image-generation/providers/:providerId/verify',
+    strictRateLimitMiddleware,
+    async (c) => {
+      const body = await c.req.json().catch(() => null) as Record<string, unknown> | null;
+      if (!body || typeof body.apiKey !== 'string') {
+        return c.json({ ok: false, error: { message: 'apiKey is required' } }, 400);
+      }
+      const result = await verifyImageGenerationCredential({
+        providerId: c.req.param('providerId'),
+        apiKey: body.apiKey,
+        baseUrl: typeof body.baseUrl === 'string' ? body.baseUrl : undefined,
+      });
+      return c.json({ ok: true, payload: result });
     },
   );
 

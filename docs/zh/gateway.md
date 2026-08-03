@@ -403,8 +403,9 @@ GET /health
 | GET | `/api/models` | 列出可用模型 |
 | GET | `/api/models-json` | 读取 models.json |
 | PATCH | `/api/models-json` | 保存 models.json |
-| GET | `/api/image/capabilities` | 图像生成 / 视觉能力快照（需认证） |
-| POST | `/api/image/validate-model` | 校验 `provider/model` 引用（需认证） |
+| GET | `/api/image-generation/catalog` | 内置图片生成 Provider 目录（需认证） |
+| GET | `/api/agents/:agentId/image-generation` | Agent 图片生成模型（需认证） |
+| POST | `/api/agents/:agentId/image-generation/setup` | 保存凭据并启用图片模型（需认证） |
 | GET | `/api/events` | Server-Sent Events 广播（需认证），包含 **`agent.stream`** 等事件，供网页控制台与扩展 iframe 消费 |
 | GET | `/api/extensions` | 列出已发现扩展（含可选 `ui` 摘要）（需认证） |
 | GET | `/api/extensions/:id` | 扩展详情与完整 manifest（需认证） |

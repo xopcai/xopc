@@ -9,10 +9,10 @@ xopc 支持在对话中**接收图片**、通过 **`image` 工具**做**图像�
 | 字段 | 类型 | 作用 |
 |------|------|------|
 | Agent 模型角色 | `agents.list[].models.roles` | 所选对话模型支持视觉时，图片可直接进入模型。 |
-| 图像生成 provider | Provider 凭据 / 图像 provider 注册表 | `image_generate` 在运行时发现可用生成 provider。 |
+| 图片生成模型 | `agents.list[].models.imageGenerationModel` | 为每个 Agent 选择一个内置 Provider/模型。 |
 | 媒体大小限制 | 运行时 / gateway 限制 | 上传和工具载荷上限取决于具体路由或工具。 |
 
-使用 `xopc image status` 查看当前 manifest-era 图像行为；使用 `xopc image providers` 查看可用生成 provider。
+内置目录包含 OpenAI、Google、阿里云百炼、MiniMax 和 fal。通过 **设置 → 能力 → 图片** 一次完成配置；凭据不会写入 `xopc.json`。
 
 ---
 
@@ -30,9 +30,10 @@ xopc 支持在对话中**接收图片**、通过 **`image` 工具**做**图像�
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/api/image/capabilities` | 图像相关配置快照与 Provider / 模型提示。 |
-| POST | `/api/image/validate-model` | 请求体 `{ "modelRef": "provider/model" }`，校验格式、密钥与模型解析。 |
-| GET / PATCH | `/api/config` | 读取或更新 gateway/runtime 配置。 |
+| GET | `/api/image-generation/catalog` | 列出内置 Provider、模型与凭据状态。 |
+| GET | `/api/agents/:agentId/image-generation` | 读取指定 Agent 的图片生成模型。 |
+| POST | `/api/agents/:agentId/image-generation/setup` | 一次保存可选 API Key 并启用 Provider/模型。 |
+| POST | `/api/image-generation/providers/:providerId/verify` | Provider 支持轻量检查时验证凭据。 |
 
 ---
 

@@ -6,7 +6,6 @@
 
 import { Link, useParams } from 'react-router-dom';
 
-import { ExtensionImageProviderSettings } from '@/features/settings/extension-image-provider-settings';
 import { ExtensionSttProviderSettings } from '@/features/settings/extension-stt-provider-settings';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -18,7 +17,6 @@ import { useExtensions } from './extension-provider';
 export function ExtensionSettingsPage() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
-  const xm = m.extensionImageGen;
   const xs = m.extensionSttMedia;
   const { extensionId, panelId } = useParams<{ extensionId: string; panelId?: string }>();
   const extensions = useExtensions();
@@ -43,9 +41,8 @@ export function ExtensionSettingsPage() {
 
   const hasIframe = Boolean(panel && extension.ui);
   const hasAutoForm = Boolean(extension.hasConfigSchema);
-  const isImageGeneration = extension.kind === 'image-generation';
   const isMediaProvider = extension.kind === 'media-provider';
-  const hasProviderCredentialsUi = isImageGeneration || isMediaProvider;
+  const hasProviderCredentialsUi = isMediaProvider;
 
   if (!hasAutoForm && !hasIframe && !hasProviderCredentialsUi) {
     return (
@@ -60,19 +57,6 @@ export function ExtensionSettingsPage() {
   return (
     <div className="flex w-full flex-col gap-3 px-3 py-8 sm:px-5 xl:px-6">
       <h1 className="text-lg font-semibold text-fg">{title}</h1>
-      {isImageGeneration ? (
-        <div className="flex flex-col gap-2 rounded-lg bg-surface-base px-4 py-3 text-sm">
-          <p className="leading-relaxed text-fg-muted">{xm.banner}</p>
-          <Link
-            to="/settings/capabilities/image"
-            className="w-fit font-medium text-accent hover:underline"
-            title={m.imageModelsSettings.imageModelsLinkTitle}
-          >
-            {xm.openImageModels}
-          </Link>
-        </div>
-      ) : null}
-      {isImageGeneration ? <ExtensionImageProviderSettings extensionId={extensionId} /> : null}
       {isMediaProvider ? (
         <div className="flex flex-col gap-2 rounded-lg bg-surface-base px-4 py-3 text-sm">
           <p className="leading-relaxed text-fg-muted">{xs.banner}</p>

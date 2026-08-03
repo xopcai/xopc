@@ -141,6 +141,30 @@ export function sanitizeSessionTitle(raw: string): string {
   return s;
 }
 
+/** Strip leading reasoning blocks emitted as raw text by some model providers. */
+export function sanitizeGeneratedSessionTitle(raw: string): string {
+  let s = raw.trim();
+
+  while (s) {
+    const opening = s.match(/^<\s*(think|analysis|reasoning)\s*>/i);
+    if (!opening) break;
+
+    const tag = opening[1]?.toLowerCase();
+    if (!tag) return '';
+
+    const remainder = s.slice(opening[0].length);
+    const closing = new RegExp(`<\\s*\\/\\s*${tag}\\s*>`, 'i').exec(remainder);
+    if (!closing) return '';
+
+    s = remainder.slice(closing.index + closing[0].length).trim();
+  }
+
+  s = s.replace(/^(?:<\s*\/\s*(?:think|analysis|reasoning)\s*>\s*)+/i, '').trim();
+  if (/^<\s*\/?\s*(?:think|analysis|reasoning)\s*>$/i.test(s)) return '';
+
+  return sanitizeSessionTitle(s);
+}
+
 export type SessionTitleSource = 'provisional' | 'llm' | 'user';
 
 export function getSessionTitleSource(
@@ -238,7 +262,7 @@ Title:`;
       }
     }
 
-    const cleaned = sanitizeSessionTitle(text);
+    const cleaned = sanitizeGeneratedSessionTitle(text);
     return cleaned.length > 0 ? cleaned : null;
   } catch (err) {
     log.warn({ err }, 'Session title LLM call failed');
@@ -255,7 +279,11 @@ export function shouldRefineSessionTitleWithLlm(
   if (!meta) return false;
   const source = getSessionTitleSource(meta);
   if (source === 'user') return false;
-  if (meta.name?.trim()) return source === 'provisional';
+  if (meta.name?.trim()) {
+    if (source === 'provisional') return true;
+    if (source === 'llm') return sanitizeGeneratedSessionTitle(meta.name).length === 0;
+    return false;
+  }
   return true;
 }
 

@@ -9,7 +9,7 @@
 export type SetupAction = 'add' | 'set' | 'remove' | 'noop';
 
 export interface SetupError {
-  /** Dot path of the offending field, when known (e.g. `providers.openai.apiKey`). */
+  /** Dot path of the offending field, when known (e.g. `providers.openai.baseUrl`). */
   path?: string;
   message: string;
 }

@@ -1,15 +1,10 @@
 import type { Config } from '../../../config/schema.js';
-import { maskSecretLength } from './mask-secret-length.js';
-
 /**
  * Per-vendor slice of {@link Config.providers} safe for GET `/api/config`.
- * Secrets are never sent verbatim; `apiKey` is length-preserving bullets when set, else empty.
  */
 export type SafeProviderAuthEntry = {
-  apiKey: string;
   region?: string;
   baseUrl?: string;
-  imageBaseUrl?: string;
 };
 
 /**
@@ -24,17 +19,12 @@ export function buildSafeProvidersConfigForWeb(
     if (!id) continue;
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
     const o = raw as Record<string, unknown>;
-    const apiKey =
-      typeof o.apiKey === 'string' && o.apiKey.trim() ? maskSecretLength(o.apiKey) : '';
-    const entry: SafeProviderAuthEntry = { apiKey };
+    const entry: SafeProviderAuthEntry = {};
     if (typeof o.region === 'string' && o.region.trim()) {
       entry.region = o.region.trim();
     }
     if (typeof o.baseUrl === 'string' && o.baseUrl.trim()) {
       entry.baseUrl = o.baseUrl.trim();
-    }
-    if (typeof o.imageBaseUrl === 'string' && o.imageBaseUrl.trim()) {
-      entry.imageBaseUrl = o.imageBaseUrl.trim();
     }
     out[id] = entry;
   }

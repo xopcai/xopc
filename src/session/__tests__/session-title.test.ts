@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   fallbackTitleFromMessages,
   provisionalTitleFromUserText,
+  sanitizeGeneratedSessionTitle,
   shouldAutoTitleSessionKey,
   shouldRefineSessionTitleWithLlm,
 } from '../session-title.ts';
@@ -88,6 +89,34 @@ describe('shouldRefineSessionTitleWithLlm', () => {
       false,
     );
     expect(shouldRefineSessionTitleWithLlm({ name: 'Legacy title' })).toBe(false);
+  });
+
+  it('retries finalized LLM titles that only contain a reasoning tag', () => {
+    expect(
+      shouldRefineSessionTitleWithLlm({ name: '<think>', customData: { titleSource: 'llm' } }),
+    ).toBe(true);
+  });
+});
+
+describe('sanitizeGeneratedSessionTitle', () => {
+  it('removes a complete leading think block', () => {
+    expect(
+      sanitizeGeneratedSessionTitle('<think>\nI should summarize this chat.\n</think>\n修复会话标题'),
+    ).toBe('修复会话标题');
+  });
+
+  it('removes consecutive reasoning blocks and title quotes', () => {
+    expect(
+      sanitizeGeneratedSessionTitle(
+        '<analysis>Inspect the request</analysis>\n<reasoning>Choose a title</reasoning>\n"Session title fix"',
+      ),
+    ).toBe('Session title fix');
+  });
+
+  it('rejects unclosed or tag-only reasoning output', () => {
+    expect(sanitizeGeneratedSessionTitle('<think>')).toBe('');
+    expect(sanitizeGeneratedSessionTitle('<think>\nStill reasoning')).toBe('');
+    expect(sanitizeGeneratedSessionTitle('</think>')).toBe('');
   });
 });
 

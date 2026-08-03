@@ -4,8 +4,8 @@ import {
   buildGoogleImageGenerationProvider,
   GOOGLE_DEFAULT_IMAGE_MODEL,
   resolveGoogleBaseUrl,
-} from '../image-generation-provider.js';
-import type { ImageGenerationRequest } from '@xopcai/xopc/agent/image/generation/types.js';
+} from '../google.js';
+import type { ImageGenerationRequest } from '../../types.js';
 
 let savedBaseUrl: string | undefined;
 let savedAltBaseUrl: string | undefined;
@@ -75,7 +75,6 @@ describe('buildGoogleImageGenerationProvider', () => {
   it('exposes id, label, default model, and generate/edit capabilities', () => {
     const p = buildGoogleImageGenerationProvider();
     expect(p.id).toBe('google');
-    expect(p.aliases).toContain('gemini');
     expect(p.label).toBe('Google Gemini');
     expect(p.defaultModel).toBe(GOOGLE_DEFAULT_IMAGE_MODEL);
     expect(p.models?.length ?? 0).toBeGreaterThan(0);
