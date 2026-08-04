@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { Linking, ScrollView, StyleSheet, View } from 'react-native';
 import { Text } from 'react-native-paper';
 
-import { FloatingHeader } from '@/components/FloatingHeader';
+import { NativeScreenHeader } from '@/components/NativeScreenHeader';
 import { useMessages } from '@/i18n/messages';
 
 import { SettingsRow, SettingsSection, useSettingsColors } from './settings-ui';
@@ -17,7 +17,7 @@ export function AboutScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.pageBg }}>
-      <FloatingHeader title={s.about} onBack={() => router.back()} />
+      <NativeScreenHeader title={s.about} onBack={() => router.back()} />
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={styles.scroll}

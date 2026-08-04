@@ -935,6 +935,16 @@ export const zh: MessageBundle = {
     libraryFiles: '文件',
     libraryAutomation: '自动化',
     libraryAgents: '智能体',
+    connectGatewayAction: '连接 Gateway',
+    briefingNeedsYou: '需要你处理',
+    briefingClear: '一切正常',
+    briefingMoving: '{{count}} 件事项正在后台推进',
+    reviewNow: '立即处理',
+    decisionNeedsReview: '查看并选择下一步',
+    decisionCompleted: '已提交决定',
+    decisionFailed: '无法提交决定',
+    approve: '批准',
+    deny: '拒绝',
   },
 
   workPage: {

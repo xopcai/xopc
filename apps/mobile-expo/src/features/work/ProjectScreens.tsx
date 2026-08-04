@@ -5,7 +5,7 @@ import { FlatList, Pressable, ScrollView, StyleSheet, TextInput, View } from 're
 import { ActivityIndicator, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { FloatingHeader } from '../../components/FloatingHeader';
+import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { useMessages } from '../../i18n/messages';
 import { dismissOrHome } from '../../lib/navigation';
 import { queryKeys } from '../../query/keys';
@@ -24,7 +24,7 @@ export function ProjectsScreen() {
   const query = useQuery({ queryKey: queryKeys.projects, queryFn: fetchProjects, enabled: configured });
   return (
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
-      <FloatingHeader title={labels.projectsTitle} onBack={() => dismissOrHome(router)} />
+      <NativeScreenHeader title={labels.projectsTitle} onBack={() => dismissOrHome(router)} />
       {query.isLoading ? <View style={styles.loading}><ActivityIndicator /></View> : <FlatList data={query.data ?? []} keyExtractor={(item) => item.id} contentContainerStyle={styles.list} ListEmptyComponent={<Text style={{ color: colors.text.tertiary }}>{labels.projectsEmpty}</Text>} renderItem={({ item }) => <Pressable onPress={() => router.push(`/projects/${item.id}`)} style={({ pressed }) => [styles.card, { backgroundColor: pressed ? colors.surface.pressed : colors.surface.panel, borderColor: colors.border.default }]}><Text style={[styles.cardTitle, { color: colors.text.primary }]}>{item.name}</Text>{item.description ? <Text numberOfLines={2} style={{ color: colors.text.secondary }}>{item.description}</Text> : null}</Pressable>} />}
     </View>
   );
@@ -42,7 +42,7 @@ export function ProjectDetailScreen() {
   if (overview.isLoading || !overview.data) return <View style={[styles.screen, styles.loading, { backgroundColor: colors.surface.base }]}><ActivityIndicator /></View>;
   return (
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
-      <FloatingHeader title={overview.data.project.name} onBack={() => dismissOrHome(router)} rightActions={[{ icon: 'plus', onPress: () => router.push(`/work/create?projectId=${projectId}`), accessibilityLabel: labels.create }]} />
+      <NativeScreenHeader title={overview.data.project.name} onBack={() => dismissOrHome(router)} rightActions={[{ icon: 'plus', onPress: () => router.push(`/work/create?projectId=${projectId}`), accessibilityLabel: labels.create }]} />
       <ScrollView contentContainerStyle={styles.list}>
         {overview.data.digest ? <View style={[styles.card, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}><Text style={[styles.cardTitle, { color: colors.text.primary }]}>{labels.projectPulse}</Text><Text style={{ color: colors.text.secondary }}>{overview.data.digest.summary}</Text>{overview.data.digest.nextAction ? <Text style={{ color: colors.accent.primary }}>{overview.data.digest.nextAction}</Text> : null}</View> : null}
         <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{labels.projectWork}</Text>
@@ -78,7 +78,7 @@ export function CreateWorkItemScreen() {
   });
   return (
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
-      <FloatingHeader title={labels.create} onBack={() => dismissOrHome(router)} />
+      <NativeScreenHeader title={labels.create} onBack={() => dismissOrHome(router)} />
       <ScrollView contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + spacing.xl }]}>
         <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{labels.titleLabel}</Text>
         <TextInput value={title} onChangeText={setTitle} placeholder={labels.titlePlaceholder} placeholderTextColor={colors.text.tertiary} style={[styles.input, { color: colors.text.primary, borderColor: colors.border.default }]} />

@@ -16,8 +16,13 @@ function isRecord(x: unknown): x is Record<string, unknown> {
   return typeof x === 'object' && x !== null && !Array.isArray(x);
 }
 
+function hasOnlyKeys(value: Record<string, unknown>, allowed: readonly string[]): boolean {
+  return Object.keys(value).every((key) => allowed.includes(key));
+}
+
 function parseAttachment(x: unknown): PendingFollowUpAttachment | null {
   if (!isRecord(x)) return null;
+  if (!hasOnlyKeys(x, ['type', 'mimeType', 'name', 'size', 'workspaceRelativePath', 'durationSeconds'])) return null;
   const type = x.type;
   if (typeof type !== 'string' || !type.trim()) return null;
   const out: PendingFollowUpAttachment = { type: type.trim() };
@@ -31,25 +36,25 @@ function parseAttachment(x: unknown): PendingFollowUpAttachment | null {
   return out;
 }
 
-function parsePendingFollowUps(raw: unknown): PendingFollowUp[] {
-  if (!Array.isArray(raw)) return [];
+function parsePendingFollowUps(raw: unknown): PendingFollowUp[] | null {
+  if (!Array.isArray(raw) || raw.length > 50) return null;
   const out: PendingFollowUp[] = [];
   for (const row of raw) {
-    if (!isRecord(row)) continue;
+    if (!isRecord(row) || !hasOnlyKeys(row, ['id', 'text', 'thinkingLevel', 'attachments'])) return null;
     const id = row.id;
     const text = row.text;
-    if (typeof id !== 'string' || !id.trim()) continue;
-    if (typeof text !== 'string') continue;
+    if (typeof id !== 'string' || !id.trim() || typeof text !== 'string') return null;
     const item: PendingFollowUp = { id: id.trim(), text };
     if (typeof row.thinkingLevel === 'string' && row.thinkingLevel.trim()) {
       item.thinkingLevel = row.thinkingLevel.trim();
     }
     if (Array.isArray(row.attachments)) {
-      const atts = row.attachments.map(parseAttachment).filter(Boolean) as PendingFollowUpAttachment[];
+      const parsedAttachments = row.attachments.map(parseAttachment);
+      if (parsedAttachments.some((attachment) => attachment == null)) return null;
+      const atts = parsedAttachments as PendingFollowUpAttachment[];
       if (atts.length) item.attachments = atts;
     }
     out.push(item);
-    if (out.length >= 50) break;
   }
   return out;
 }
@@ -83,8 +88,9 @@ export function readFollowUpQueueSnapshot(sessionKey: string): FollowUpQueueSnap
     const raw = storage.getString(storageKey(sk));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as unknown;
-    if (!isRecord(parsed)) return null;
+    if (!isRecord(parsed) || parsed.v !== 3 || !hasOnlyKeys(parsed, ['v', 'pending', 'editingId'])) return null;
     const pending = parsePendingFollowUps(parsed.pending);
+    if (!pending) return null;
     const editingId =
       parsed.editingId === null
         ? null

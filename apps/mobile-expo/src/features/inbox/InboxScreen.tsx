@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
@@ -9,7 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BatchActionBar } from '../../components/BatchActionBar';
 import { BatchDeleteConfirmDialog } from '../../components/BatchDeleteConfirmDialog';
 import { AppToast } from '../../components/AppToast';
-import { FloatingHeader } from '../../components/FloatingHeader';
+import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { ListSkeleton } from '../../components/ListSkeleton';
 import { ListSelectionCheckbox } from '../../components/ListSelectionCheckbox';
 import { SwipeableRow, type SwipeAction } from '../../components/SwipeableRow';
@@ -20,6 +20,7 @@ import { useFlatListEndReached } from '../../lib/use-flat-list-end-reached';
 import { useDelayedDelete } from '../../hooks/use-delayed-delete';
 import { useListSelection } from '../../hooks/use-list-selection';
 import { useMessages, t } from '../../i18n/messages';
+import { recordUsageEvent } from '../../product/usage-metrics';
 import { AttachmentFileError, pickAttachmentFromSource, type AttachmentPickSource } from '../chat/attachment-file-io';
 import type { ComposerAttachment } from '../chat/composer.types';
 import { deleteNote, fetchNotes, captureNote, updateNote, type NoteIndexEntry } from '../../query/notes';
@@ -53,6 +54,7 @@ const INBOX_ITEM_HEIGHT = 78;
 
 export function InboxScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ capture?: string }>();
   const queryClient = useQueryClient();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -130,6 +132,7 @@ export function InboxScreen() {
       return captureNoteWithVoice(payload);
     },
     onSuccess: async () => {
+      recordUsageEvent('capture_completed');
       setCaptureText('');
       await invalidateInbox();
     },
@@ -362,7 +365,7 @@ export function InboxScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
-      <FloatingHeader
+      <NativeScreenHeader
         title={selectionMode ? t(li.selectedCount, { count: selectedCount }) : im.title}
         variant={selectionMode ? 'compact' : 'large'}
         onBack={selectionMode ? exitSelectionMode : () => dismissOrHome(router)}
@@ -428,6 +431,7 @@ export function InboxScreen() {
               onAttachmentSource={(source) => void handleAttachmentSource(source)}
               placeholder={im.capturePlaceholder}
               submitting={captureMutation.isPending}
+              autoFocus={params.capture === '1'}
             />
           </View>
         </KeyboardStickyView>

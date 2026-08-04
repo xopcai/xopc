@@ -93,7 +93,7 @@ describe('follow-up-queue-storage', () => {
     expect(snap.pending[0]?.attachments?.[0]?.workspaceRelativePath).toBe('inbound/foo.png');
   });
 
-  it('reads legacy snapshots with extra chip fields', () => {
+  it('rejects snapshots from a different schema version', () => {
     memory.set(
       'xopc.chat.followUpQueue:v1:z',
       JSON.stringify({
@@ -104,9 +104,6 @@ describe('follow-up-queue-storage', () => {
         recentPickedIds: ['code_explain'],
       }),
     );
-    expect(readFollowUpQueueSnapshot('z')).toEqual({
-      pending: [{ id: '1', text: 't' }],
-      editingId: null,
-    });
+    expect(readFollowUpQueueSnapshot('z')).toBeNull();
   });
 });

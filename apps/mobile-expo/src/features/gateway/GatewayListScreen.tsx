@@ -4,7 +4,7 @@ import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Icon, Text } from 'react-native-paper';
 
-import { FloatingHeader } from '@/components/FloatingHeader';
+import { NativeScreenHeader } from '@/components/NativeScreenHeader';
 import {
   SettingsSection,
   useSettingsColors,
@@ -82,7 +82,7 @@ export function GatewayListScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.pageBg }}>
-      <FloatingHeader
+      <NativeScreenHeader
         variant="large"
         title={s.gateway}
         onBack={() => router.back()}

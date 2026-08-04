@@ -27,6 +27,7 @@ export interface QuickCaptureComposerProps {
   placeholder: string;
   disabled?: boolean;
   submitting?: boolean;
+  autoFocus?: boolean;
 }
 
 export function QuickCaptureComposer({
@@ -38,6 +39,7 @@ export function QuickCaptureComposer({
   placeholder,
   disabled = false,
   submitting = false,
+  autoFocus = false,
 }: QuickCaptureComposerProps) {
   const { colors } = useTheme();
   const { chat: cm } = useMessages();
@@ -157,6 +159,7 @@ export function QuickCaptureComposer({
                 blurOnSubmit
                 editable={!disabled && !submitting}
                 textAlignVertical="center"
+                autoFocus={autoFocus}
               />
             </View>
             {renderRightAction()}

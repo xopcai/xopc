@@ -5,7 +5,7 @@ import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-nat
 import { Icon, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { FloatingHeader } from '../../components/FloatingHeader';
+import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { ListSkeleton } from '../../components/ListSkeleton';
 import { dismissOrHome } from '../../lib/navigation';
 import { useFlatListEndReached } from '../../lib/use-flat-list-end-reached';
@@ -46,7 +46,7 @@ export function WorkListScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
-      <FloatingHeader
+      <NativeScreenHeader
         title={labels.title}
         onBack={() => dismissOrHome(router)}
         rightActions={[{ icon: 'plus', onPress: () => router.push('/work/create'), accessibilityLabel: labels.create }]}

@@ -5,9 +5,6 @@ const tokenMemory = new Map<string, string>();
 
 vi.mock('../../storage/mmkv', () => ({
   KEYS: {
-    baseUrl: 'gateway.baseUrl',
-    lanUrl: 'gateway.lanUrl',
-    token: 'gateway.token',
     profiles: 'gateway.profiles',
     activeId: 'gateway.activeId',
     routeWinnerPrefix: 'gateway.routeWinner:',
@@ -73,30 +70,6 @@ function resetStore(): void {
 describe('useGatewayStore', () => {
   beforeEach(() => {
     resetStore();
-  });
-
-  it('migrates legacy single-gateway keys into a profile', () => {
-    memory.set(KEYS.baseUrl, 'https://gw1.example.com/');
-    memory.set(KEYS.lanUrl, 'http://192.168.1.10:18790');
-    memory.set(KEYS.token, 'legacy-token');
-
-    useGatewayStore.getState().hydrateFromStorage();
-
-    const st = useGatewayStore.getState();
-    expect(st.profiles).toHaveLength(1);
-    expect(st.profiles[0]?.baseUrl).toBe('https://gw1.example.com');
-    expect(st.profiles[0]?.lanUrl).toBe('http://192.168.1.10:18790');
-    expect(st.profiles[0]?.token).toBe('legacy-token');
-    expect(tokenMemory.get(st.profiles[0]?.id ?? '')).toBe('legacy-token');
-    expect(st.activeGatewayId).toBe(st.profiles[0]?.id);
-    expect(st.baseUrl).toBe('https://gw1.example.com');
-    expect(st.lanUrl).toBe('http://192.168.1.10:18790');
-    expect(st.activeBaseUrl).toBe('http://192.168.1.10:18790');
-    expect(memory.has(KEYS.profiles)).toBe(true);
-    expect(memory.has(KEYS.baseUrl)).toBe(false);
-    expect(memory.has(KEYS.lanUrl)).toBe(false);
-    expect(memory.has(KEYS.token)).toBe(false);
-    expect(JSON.parse(memory.get(KEYS.profiles) ?? '[]')[0]?.token).toBe('');
   });
 
   it('adds, updates, switches, and removes profiles', () => {
