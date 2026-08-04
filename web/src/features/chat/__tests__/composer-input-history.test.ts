@@ -1,101 +1,76 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  __resetComposerInputHistoryForTests,
+  applyComposerHistoryAppended,
   COMPOSER_INPUT_HISTORY_MAX,
-  COMPOSER_INPUT_HISTORY_MAX_SESSIONS,
-  COMPOSER_INPUT_HISTORY_STORAGE_KEY,
   getComposerInputHistory,
+  loadComposerInputHistory,
   recordComposerInputHistory,
 } from '@/features/chat/composer/composer-input-history';
 
-const SK = 'test-session-key';
-
 beforeEach(() => {
-  localStorage.clear();
+  __resetComposerInputHistoryForTests();
+  vi.restoreAllMocks();
 });
 
 describe('composer-input-history', () => {
-  it('records newest first', () => {
-    recordComposerInputHistory(SK, 'a');
-    recordComposerInputHistory(SK, 'b');
-    expect(getComposerInputHistory(SK)).toEqual(['b', 'a']);
+  it('loads the global history from the gateway', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      items: [{ id: 2, text: 'new', createdAt: 2 }, { id: 1, text: 'old', createdAt: 1 }],
+    }), { status: 200 })));
+    await loadComposerInputHistory();
+    expect(getComposerInputHistory()).toEqual(['new', 'old']);
   });
 
-  it('does not duplicate when same as list head', () => {
-    recordComposerInputHistory(SK, 'x');
-    recordComposerInputHistory(SK, 'x');
-    expect(getComposerInputHistory(SK)).toEqual(['x']);
+  it('updates memory synchronously and persists in the background', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      item: { id: 1, text: 'hello', createdAt: 1 }, inserted: true,
+    }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    recordComposerInputHistory('  hello  ');
+    expect(getComposerInputHistory()).toEqual(['hello']);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
   });
 
-  it('allows repeating an older line after a different line', () => {
-    recordComposerInputHistory(SK, 'a');
-    recordComposerInputHistory(SK, 'b');
-    recordComposerInputHistory(SK, 'a');
-    expect(getComposerInputHistory(SK)).toEqual(['a', 'b', 'a']);
+  it('deduplicates only the current head', () => {
+    applyComposerHistoryAppended({ id: 1, text: 'a', createdAt: 1 });
+    applyComposerHistoryAppended({ id: 2, text: 'b', createdAt: 2 });
+    applyComposerHistoryAppended({ id: 3, text: 'a', createdAt: 3 });
+    applyComposerHistoryAppended({ id: 3, text: 'a', createdAt: 3 });
+    expect(getComposerInputHistory()).toEqual(['a', 'b', 'a']);
   });
 
-  it(`caps at ${COMPOSER_INPUT_HISTORY_MAX} entries`, () => {
-    for (let i = 0; i < 25; i++) {
-      recordComposerInputHistory(SK, `m${i}`);
+  it('does not reorder newer optimistic input when an older acknowledgement arrives', async () => {
+    const fetchMock = vi.fn().mockImplementation(async (_input, init?: RequestInit) => {
+      const text = JSON.parse(String(init?.body)) as { text: string };
+      return new Response(JSON.stringify({
+        item: { id: text.text === 'a' ? 1 : 2, text: text.text, createdAt: 1 },
+      }), { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    recordComposerInputHistory('a');
+    recordComposerInputHistory('b');
+    applyComposerHistoryAppended({ id: 1, text: 'a', createdAt: 1 });
+    expect(getComposerInputHistory()).toEqual(['b', 'a']);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  });
+
+  it(`caps the in-memory cache at ${COMPOSER_INPUT_HISTORY_MAX}`, () => {
+    for (let i = 0; i < 110; i++) {
+      applyComposerHistoryAppended({ id: i + 1, text: `m${i}`, createdAt: i });
     }
-    const list = getComposerInputHistory(SK);
-    expect(list.length).toBe(COMPOSER_INPUT_HISTORY_MAX);
-    expect(list[0]).toBe('m24');
+    expect(getComposerInputHistory()).toHaveLength(COMPOSER_INPUT_HISTORY_MAX);
+    expect(getComposerInputHistory()[0]).toBe('m109');
   });
 
-  it('no-ops without sessionKey', () => {
-    recordComposerInputHistory(null, 'hi');
-    expect(getComposerInputHistory(null)).toEqual([]);
-  });
-
-  it('skips whitespace-only text', () => {
-    recordComposerInputHistory(SK, '   ');
-    expect(getComposerInputHistory(SK)).toEqual([]);
-  });
-
-  it('stores trimmed text', () => {
-    recordComposerInputHistory(SK, '  hello  ');
-    expect(getComposerInputHistory(SK)).toEqual(['hello']);
-  });
-
-  it('returns empty array for corrupt JSON', () => {
-    localStorage.setItem('xopc.composer.inputHistory:test-corrupt', '{not-json');
-    expect(getComposerInputHistory('test-corrupt')).toEqual([]);
-  });
-
-  it('stores all sessions under one aggregate key', () => {
-    recordComposerInputHistory('session-a', 'a');
-    recordComposerInputHistory('session-b', 'b');
-
-    expect(getComposerInputHistory('session-a')).toEqual(['a']);
-    expect(getComposerInputHistory('session-b')).toEqual(['b']);
-    expect(localStorage.getItem(COMPOSER_INPUT_HISTORY_STORAGE_KEY)).toBeTruthy();
-    expect([...Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i))]).toEqual([
-      COMPOSER_INPUT_HISTORY_STORAGE_KEY,
-    ]);
-  });
-
-  it('migrates legacy per-session keys into the aggregate key', () => {
-    localStorage.setItem('xopc.composer.inputHistory:legacy-session', JSON.stringify(['old', 'older']));
-
-    expect(getComposerInputHistory('legacy-session')).toEqual(['old', 'older']);
-    expect(localStorage.getItem('xopc.composer.inputHistory:legacy-session')).toBeNull();
-    expect(localStorage.getItem(COMPOSER_INPUT_HISTORY_STORAGE_KEY)).toBeTruthy();
-  });
-
-  it(`caps aggregate storage at ${COMPOSER_INPUT_HISTORY_MAX_SESSIONS} sessions`, () => {
-    for (let i = 0; i < COMPOSER_INPUT_HISTORY_MAX_SESSIONS + 5; i++) {
-      recordComposerInputHistory(`session-${i}`, `m${i}`);
-    }
-
-    const raw = localStorage.getItem(COMPOSER_INPUT_HISTORY_STORAGE_KEY);
-    expect(raw).toBeTruthy();
-    const parsed = JSON.parse(raw ?? '{}') as { sessions?: Record<string, unknown> };
-    expect(Object.keys(parsed.sessions ?? {})).toHaveLength(COMPOSER_INPUT_HISTORY_MAX_SESSIONS);
-    expect(getComposerInputHistory('session-0')).toEqual([]);
-    expect(getComposerInputHistory(`session-${COMPOSER_INPUT_HISTORY_MAX_SESSIONS + 4}`)).toEqual([
-      `m${COMPOSER_INPUT_HISTORY_MAX_SESSIONS + 4}`,
-    ]);
+  it('does not read or write localStorage', () => {
+    const getItem = vi.spyOn(Storage.prototype, 'getItem');
+    const setItem = vi.spyOn(Storage.prototype, 'setItem');
+    applyComposerHistoryAppended({ id: 1, text: 'a', createdAt: 1 });
+    expect(getComposerInputHistory()).toEqual(['a']);
+    expect(getItem).not.toHaveBeenCalled();
+    expect(setItem).not.toHaveBeenCalled();
   });
 });

@@ -108,8 +108,27 @@ describe('createEditorSubmitHandler', () => {
 
     submit('');
 
-    expect(addToHistory).toHaveBeenCalledWith('Please analyze the attached image.');
+    expect(addToHistory).not.toHaveBeenCalled();
     expect(sendMessage).toHaveBeenCalledWith('Please analyze the attached image.');
+  });
+
+  it('records chat input separately from local shell history', () => {
+    const recordChatHistory = vi.fn();
+    const addToHistory = vi.fn();
+    const submit = createEditorSubmitHandler({
+      editor: { setText: vi.fn(), addToHistory },
+      recordChatHistory,
+      handleCommand: vi.fn(),
+      sendMessage: vi.fn(),
+      handleBangLine: vi.fn(),
+    });
+
+    submit('hello');
+    submit('!pwd');
+
+    expect(recordChatHistory).toHaveBeenCalledOnce();
+    expect(recordChatHistory).toHaveBeenCalledWith('hello');
+    expect(addToHistory).toHaveBeenCalledWith('!pwd');
   });
 });
 
