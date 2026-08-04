@@ -1019,14 +1019,29 @@ export class AgentManager implements AgentInstanceGateway {
 
     const activeProjectContext = buildActiveProjectContextForPrompt(sessionKey);
     const activeSelfVerifyContext = this.getSelfVerifyPromptContext(sessionKey, profile.agentId);
-    const { agent, registeredToolNames } = this.createAgentForProfile(
+    const profileModelRef = profile.primaryModelRef?.trim() || this.defaultModel;
+    const modelManager = this.config.getModelManager?.();
+    const initialModelRef = modelManager?.resolveInitialModelForSession(
       sessionKey,
-      profile,
-      resolvedPath,
-      rt,
-      activeProjectContext,
-      activeSelfVerifyContext,
-    );
+      profileModelRef,
+      profile.fallbacks,
+    ) ?? profileModelRef;
+    let created: { agent: Agent; registeredToolNames: string[] };
+    try {
+      created = this.createAgentForProfile(
+        sessionKey,
+        profile,
+        initialModelRef,
+        resolvedPath,
+        rt,
+        activeProjectContext,
+        activeSelfVerifyContext,
+      );
+    } catch (err) {
+      modelManager?.clearSessionProfileDefault(sessionKey);
+      throw err;
+    }
+    const { agent, registeredToolNames } = created;
 
     this.agents.set(sessionKey, {
       agent,
@@ -1041,9 +1056,6 @@ export class AgentManager implements AgentInstanceGateway {
       activeSelfVerifyContext,
       skillEnvPassthroughKeys: new Set<string>(),
     });
-
-    const modelRef = profile.primaryModelRef?.trim() || this.defaultModel;
-    this.config.getModelManager?.().setSessionProfileDefault(sessionKey, modelRef, profile.fallbacks);
 
     log.debug({ sessionKey, totalAgents: this.agents.size, agentId: profile.agentId }, 'Created new agent instance');
     return agent;
@@ -1235,12 +1247,12 @@ export class AgentManager implements AgentInstanceGateway {
   private createAgentForProfile(
     sessionKey: string,
     profile: EffectiveAgentProfile,
+    modelRef: string,
     resolvedWorkspacePath: string,
     rt: WorkspaceRuntime,
     activeProjectContext?: string,
     activeSelfVerifyContext?: string,
   ): { agent: Agent; registeredToolNames: string[] } {
-    const modelRef = profile.primaryModelRef?.trim() || this.defaultModel;
     const model = this.resolveModelStringToModel(modelRef);
     let agent: Agent | undefined;
 
