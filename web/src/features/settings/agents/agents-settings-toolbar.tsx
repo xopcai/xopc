@@ -1,14 +1,18 @@
-import { Plus, Search } from 'lucide-react';
+import { Layers, Plus, Search } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import type { AgentsSettingsMessages } from '@/i18n/messages';
 
 export type AgentsSettingsToolbarProps = {
-  a: Pick<AgentsSettingsMessages, 'addAgent' | 'addAgentAria' | 'listSearchPlaceholder'>;
+  a: Pick<
+    AgentsSettingsMessages,
+    'addAgent' | 'addAgentAria' | 'capabilityPresetsManage' | 'listSearchPlaceholder'
+  >;
   busy: boolean;
   listSearchQuery: string;
   onListSearchQueryChange: (value: string) => void;
   onAddAgent: () => void;
+  onManageCapabilityPresets: () => void;
 };
 
 export function AgentsSettingsToolbar({
@@ -17,6 +21,7 @@ export function AgentsSettingsToolbar({
   listSearchQuery,
   onListSearchQueryChange,
   onAddAgent,
+  onManageCapabilityPresets,
 }: AgentsSettingsToolbarProps) {
   return (
     <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
@@ -38,6 +43,16 @@ export function AgentsSettingsToolbar({
           className="min-w-0 flex-1 appearance-none border-0 bg-transparent py-0.5 text-sm leading-normal text-fg caret-current placeholder:text-fg-disabled focus:border-0 focus:shadow-none focus:outline-none focus:ring-0 focus-visible:outline-none"
         />
       </label>
+      <Button
+        type="button"
+        variant="secondary"
+        className="shrink-0 gap-2"
+        aria-label={a.capabilityPresetsManage}
+        onClick={onManageCapabilityPresets}
+      >
+        <Layers className="size-4" strokeWidth={1.75} aria-hidden />
+        <span className="hidden xl:inline">{a.capabilityPresetsManage}</span>
+      </Button>
       <Button
         type="button"
         variant="primary"
