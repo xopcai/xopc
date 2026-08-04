@@ -29,6 +29,7 @@ import { normalizeAgentId, parseAgentSessionKey } from '../routing/agent-session
 import type {
   TuiBackend,
   TuiCompactionResult,
+  TuiComposerHistoryItem,
   TuiEvent,
   TuiExportFormat,
   TuiInboundAttachment,
@@ -550,6 +551,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     paddingX: tuiSettings.editorPaddingX,
     autocompleteMaxVisible: tuiSettings.autocompleteMaxVisible,
   });
+  let composerHistoryTexts: string[] = [];
   let editor: EditorComponent = defaultEditor;
   let editorComponentFactory: TuiEditorFactory | undefined;
   const editorContainer = new Container();
@@ -630,6 +632,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       nextEditor.setAutocompleteProvider?.(extensionRuntime.autocompleteProvider);
       copyDefaultEditorAppHandlers(nextEditor);
       editor = nextEditor;
+      for (const text of composerHistoryTexts.slice().reverse()) editor.addToHistory?.(text);
     } else {
       defaultEditor.setText(currentText);
       editor = defaultEditor;
@@ -2226,11 +2229,50 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     tui.requestRender();
   };
 
+  let composerHistory: TuiComposerHistoryItem[] = [];
+  let composerHistoryWriteQueue = Promise.resolve();
+  const applyComposerHistory = (next: TuiComposerHistoryItem[]) => {
+    composerHistory = next.slice(0, 100);
+    composerHistoryTexts = composerHistory.map((item) => item.text);
+    if (editor === defaultEditor) {
+      defaultEditor.replaceHistory(composerHistory.map((item) => item.text));
+      return;
+    }
+    for (const item of composerHistory.slice().reverse()) editor.addToHistory?.(item.text);
+  };
+  const refreshComposerHistory = async () => {
+    try {
+      await composerHistoryWriteQueue;
+      applyComposerHistory(await client.getComposerInputHistory());
+    } catch {
+      // History is an optional convenience; keep the editor responsive when unavailable.
+    }
+  };
+  const recordChatHistory = (value: string) => {
+    const text = value.trim();
+    if (!text) return;
+    editor.addToHistory?.(text);
+    if (composerHistory[0]?.text !== text) {
+      composerHistory = [{ id: 0, text, createdAt: Date.now() }, ...composerHistory].slice(0, 100);
+      composerHistoryTexts = composerHistory.map((item) => item.text);
+    }
+    composerHistoryWriteQueue = composerHistoryWriteQueue
+      .then(async () => {
+        const item = await client.recordComposerInputHistory(text);
+        const optimisticIndex = composerHistory.findIndex(
+          (entry) => entry.id === 0 && entry.text === item.text,
+        );
+        if (optimisticIndex >= 0) composerHistory[optimisticIndex] = item;
+      })
+      .catch(() => {});
+  };
+
   const submitCore = createEditorSubmitHandler({
     editor: {
       setText: (value) => editor.setText(value),
       addToHistory: (value) => editor.addToHistory?.(value),
     },
+    recordChatHistory: (value) => recordChatHistory(value),
     handleCommand,
     sendMessage,
     handleBangLine: runLocalShellLine,
@@ -2270,7 +2312,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
         tui.requestRender();
         return;
       }
-      editor.addToHistory(text);
+      recordChatHistory(text);
       state.messageFollowUpQueue.push(text);
       editor.setText('');
       chatLog.addSystem(
@@ -2551,6 +2593,28 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
 
   client.onEvent = (evt: TuiEvent) => {
     const data = (evt.data ?? {}) as Record<string, unknown>;
+    if (evt.event === 'composer-history.appended') {
+      const item = data as unknown as TuiComposerHistoryItem;
+      if (typeof item.text === 'string' && typeof item.id === 'number') {
+        const optimisticIndex = composerHistory.findIndex(
+          (entry) => entry.id === 0 && entry.text === item.text,
+        );
+        if (optimisticIndex >= 0) {
+          composerHistory[optimisticIndex] = item;
+        } else if (composerHistory[0]?.text !== item.text) {
+          composerHistory = [item, ...composerHistory].slice(0, 100);
+          composerHistoryTexts = composerHistory.map((entry) => entry.text);
+          editor.addToHistory?.(item.text);
+        } else {
+          composerHistory[0] = item;
+        }
+      }
+      return;
+    }
+    if (evt.event === 'composer-history.cleared') {
+      applyComposerHistory([]);
+      return;
+    }
     if (evt.event === 'workflow.run.updated' && handleWorkflowRunUpdated(data)) {
       return;
     }
@@ -2575,6 +2639,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     setConnectionStatus(isLocalMode ? 'local ready' : 'gateway connected');
     touchStreamingActivity();
     void (async () => {
+      await refreshComposerHistory();
       if (opts.openSessionPickerOnStart && !startupSessionPickerOpened) {
         startupSessionPickerOpened = true;
         await openSessionPickerOverlay(pickerSvc, {
@@ -2658,6 +2723,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     } else {
       void loadSessionHistory({ merge: true });
     }
+    void refreshComposerHistory();
     tui.requestRender();
   };
 

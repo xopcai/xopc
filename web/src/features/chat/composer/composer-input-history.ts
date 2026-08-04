@@ -1,152 +1,100 @@
-const MAX_RECENT = 20;
-const MAX_SESSIONS = 200;
-const STORAGE_KEY = 'xopc.composer.inputHistory.v2';
-const LEGACY_STORAGE_PREFIX = 'xopc.composer.inputHistory:';
+import { fetchJson } from '@/lib/fetch';
 
-type ComposerInputHistorySession = {
-  updatedAt: number;
-  items: string[];
+export const COMPOSER_INPUT_HISTORY_MAX = 100;
+
+export type ComposerInputHistoryItem = {
+  id: number;
+  text: string;
+  createdAt: number;
 };
 
-type ComposerInputHistoryStore = {
-  version: 2;
-  sessions: Record<string, ComposerInputHistorySession>;
-};
+let items: ComposerInputHistoryItem[] = [];
+let loadPromise: Promise<void> | null = null;
+let loaded = false;
+let writeQueue = Promise.resolve();
+let mutationVersion = 0;
 
-function getStorage(): Storage | null {
-  try {
-    return typeof globalThis.localStorage === 'undefined' ? null : globalThis.localStorage;
-  } catch {
-    return null;
+function prepend(item: ComposerInputHistoryItem): void {
+  if (items[0]?.text === item.text) {
+    if (item.id > 0) items[0] = item;
+    return;
   }
+  items = [item, ...items].slice(0, COMPOSER_INPUT_HISTORY_MAX);
 }
 
-function emptyStore(): ComposerInputHistoryStore {
-  return { version: 2, sessions: {} };
-}
-
-function sanitizeItems(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter((x): x is string => typeof x === 'string' && x.trim().length > 0).slice(0, MAX_RECENT);
-}
-
-function parseStore(raw: string | null): ComposerInputHistoryStore {
-  if (!raw) return emptyStore();
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return emptyStore();
-    const sessionsValue = (parsed as { sessions?: unknown }).sessions;
-    if (!sessionsValue || typeof sessionsValue !== 'object' || Array.isArray(sessionsValue)) {
-      return emptyStore();
-    }
-    const sessions: Record<string, ComposerInputHistorySession> = {};
-    for (const [key, value] of Object.entries(sessionsValue)) {
-      const sessionKey = key.trim();
-      if (!sessionKey || !value || typeof value !== 'object' || Array.isArray(value)) continue;
-      const items = sanitizeItems((value as { items?: unknown }).items);
-      if (items.length === 0) continue;
-      const rawUpdatedAt = (value as { updatedAt?: unknown }).updatedAt;
-      sessions[sessionKey] = {
-        updatedAt: typeof rawUpdatedAt === 'number' && Number.isFinite(rawUpdatedAt) ? rawUpdatedAt : 0,
-        items,
-      };
-    }
-    return { version: 2, sessions };
-  } catch {
-    return emptyStore();
+function reconcileServerItem(item: ComposerInputHistoryItem): void {
+  const optimisticIndex = items.findIndex((entry) => entry.id === 0 && entry.text === item.text);
+  if (optimisticIndex >= 0) {
+    items[optimisticIndex] = item;
+    return;
   }
+  prepend(item);
 }
 
-function loadStore(storage: Storage): { store: ComposerInputHistoryStore; legacyKeys: string[] } {
-  const store = parseStore(storage.getItem(STORAGE_KEY));
-  const legacyKeys: string[] = [];
-  for (let i = 0; i < storage.length; i++) {
-    const key = storage.key(i);
-    if (!key?.startsWith(LEGACY_STORAGE_PREFIX)) continue;
-    const sessionKey = key.slice(LEGACY_STORAGE_PREFIX.length).trim();
-    if (!sessionKey) continue;
-    legacyKeys.push(key);
-    try {
-      const items = sanitizeItems(JSON.parse(storage.getItem(key) ?? 'null'));
-      if (items.length === 0 || store.sessions[sessionKey]) continue;
-      store.sessions[sessionKey] = {
-        updatedAt: 0,
-        items,
-      };
-    } catch {
-      /* ignore corrupt legacy entries */
-    }
+export function getComposerInputHistory(): string[] {
+  return items.map((item) => item.text);
+}
+
+export function loadComposerInputHistory(force = false): Promise<void> {
+  if (loaded && !force) return Promise.resolve();
+  if (loadPromise) return loadPromise;
+  const versionAtStart = mutationVersion;
+  let retryAfterMutation = false;
+  loadPromise = fetchJson<{ items: ComposerInputHistoryItem[] }>('/api/composer-history')
+    .then((response) => {
+      if (mutationVersion === versionAtStart) {
+        items = response.items.slice(0, COMPOSER_INPUT_HISTORY_MAX);
+        loaded = true;
+      } else {
+        retryAfterMutation = true;
+      }
+    })
+    .catch(() => {})
+    .finally(() => {
+      loadPromise = null;
+      if (retryAfterMutation) {
+        void writeQueue.then(() => loadComposerInputHistory(true));
+      }
+    });
+  return loadPromise;
+}
+
+/** Update the keypress cache immediately, then persist without blocking the composer. */
+export function recordComposerInputHistory(text: string): void {
+  const normalized = text.trim();
+  if (!normalized) return;
+  mutationVersion += 1;
+  prepend({ id: 0, text: normalized, createdAt: Date.now() });
+  writeQueue = writeQueue
+    .then(async () => {
+      const response = await fetchJson<{ item: ComposerInputHistoryItem }>('/api/composer-history', {
+        method: 'POST',
+        body: JSON.stringify({ text: normalized }),
+      });
+      reconcileServerItem(response.item);
+    })
+    .catch(() => {});
+}
+
+export function applyComposerHistoryAppended(detail: unknown): void {
+  if (!detail || typeof detail !== 'object') return;
+  const candidate = detail as Partial<ComposerInputHistoryItem>;
+  if (typeof candidate.id !== 'number' || typeof candidate.text !== 'string' || typeof candidate.createdAt !== 'number') {
+    return;
   }
-  return { store, legacyKeys };
+  mutationVersion += 1;
+  reconcileServerItem({ id: candidate.id, text: candidate.text, createdAt: candidate.createdAt });
 }
 
-function prunedStore(store: ComposerInputHistoryStore): ComposerInputHistoryStore {
-  const entries: Array<[string, ComposerInputHistorySession]> = [];
-  for (const [key, session] of Object.entries(store.sessions)) {
-    const items = sanitizeItems(session.items);
-    if (items.length === 0) continue;
-    entries.push([
-      key,
-      {
-        updatedAt: Number.isFinite(session.updatedAt) ? session.updatedAt : 0,
-        items,
-      },
-    ]);
-  }
-  const sessions = Object.fromEntries(
-    entries.sort((a, b) => b[1].updatedAt - a[1].updatedAt).slice(0, MAX_SESSIONS),
-  );
-  return { version: 2, sessions };
+export function applyComposerHistoryCleared(): void {
+  mutationVersion += 1;
+  items = [];
 }
 
-function nextUpdatedAt(store: ComposerInputHistoryStore): number {
-  const latest = Math.max(0, ...Object.values(store.sessions).map((session) => session.updatedAt));
-  return Math.max(Date.now(), latest + 1);
+export function __resetComposerInputHistoryForTests(): void {
+  items = [];
+  loadPromise = null;
+  loaded = false;
+  writeQueue = Promise.resolve();
+  mutationVersion = 0;
 }
-
-function saveStore(storage: Storage, store: ComposerInputHistoryStore, legacyKeys: string[] = []): void {
-  storage.setItem(STORAGE_KEY, JSON.stringify(prunedStore(store)));
-  for (const key of legacyKeys) {
-    storage.removeItem(key);
-  }
-}
-
-export function getComposerInputHistory(sessionKey: string | null | undefined): string[] {
-  const sk = sessionKey?.trim();
-  const storage = getStorage();
-  if (!sk || !storage) return [];
-  try {
-    const { store, legacyKeys } = loadStore(storage);
-    if (legacyKeys.length > 0) {
-      saveStore(storage, store, legacyKeys);
-    }
-    return store.sessions[sk]?.items.slice(0, MAX_RECENT) ?? [];
-  } catch {
-    return [];
-  }
-}
-
-/** Persist latest user-submitted composer text for this session (max 20, dedupe head). */
-export function recordComposerInputHistory(sessionKey: string | null | undefined, text: string): void {
-  const sk = sessionKey?.trim();
-  const t = text.trim();
-  const storage = getStorage();
-  if (!sk || !t || !storage) return;
-  try {
-    const { store, legacyKeys } = loadStore(storage);
-    const prev = store.sessions[sk]?.items ?? [];
-    const now = nextUpdatedAt(store);
-    const next = [t, ...prev].slice(0, MAX_RECENT);
-    store.sessions[sk] = {
-      updatedAt: now,
-      items: prev[0] === t ? prev : next,
-    };
-    saveStore(storage, store, legacyKeys);
-  } catch {
-    /* ignore quota */
-  }
-}
-
-export const COMPOSER_INPUT_HISTORY_MAX = MAX_RECENT;
-export const COMPOSER_INPUT_HISTORY_STORAGE_KEY = STORAGE_KEY;
-export const COMPOSER_INPUT_HISTORY_MAX_SESSIONS = MAX_SESSIONS;

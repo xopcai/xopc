@@ -17,7 +17,12 @@ import { buildReviewContext, resolveGitRoot } from '../../review/review-git.js';
 import { effectiveWorkspacePathForSession } from '../../session/session-workspace.js';
 import type { ExportFormat } from '../../session/types.js';
 import { SessionIndex } from '../../session/index.js';
-import { getSessionMetadata, openXopcDatabase } from '../../storage/sqlite/index.js';
+import {
+  appendComposerInputHistory,
+  getSessionMetadata,
+  listComposerInputHistory,
+  openXopcDatabase,
+} from '../../storage/sqlite/index.js';
 import { buildWorkflowChildTools } from '../../agent/workflow/workflow-child-tools.js';
 import type { GatewayWorkflowHost } from '../../gateway/gateway-workflow-host.types.js';
 import { WorkflowRunService } from '../../workflows/service/workflow-run-service.js';
@@ -28,6 +33,7 @@ import type {
   HistoryMessage,
   TuiBackend,
   TuiCompactionResult,
+  TuiComposerHistoryItem,
   TuiEvent,
   TuiModelChoice,
   TuiShareRequest,
@@ -98,6 +104,14 @@ export class EmbeddedBackend implements TuiBackend {
 
   get connectionLabel(): string {
     return 'local embedded';
+  }
+
+  async getComposerInputHistory(): Promise<TuiComposerHistoryItem[]> {
+    return listComposerInputHistory();
+  }
+
+  async recordComposerInputHistory(text: string): Promise<TuiComposerHistoryItem> {
+    return appendComposerInputHistory(text).item;
   }
 
   start(): void {

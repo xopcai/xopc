@@ -30,6 +30,13 @@ export {
 } from './connection.js';
 export { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 export {
+  appendComposerInputHistory,
+  clearComposerInputHistory,
+  listComposerInputHistory,
+  COMPOSER_INPUT_HISTORY_LIMIT,
+  type ComposerInputHistoryItem,
+} from './composer-input-history-repository.js';
+export {
   getInteractionState,
   setInteractionState,
   updateInteractionStateFromMessage,

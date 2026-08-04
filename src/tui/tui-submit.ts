@@ -12,6 +12,7 @@ export function createEditorSubmitHandler(params: {
     setText: (value: string) => void;
     addToHistory: (value: string) => void;
   };
+  recordChatHistory?: (value: string) => void;
   handleCommand: (value: string) => void | Promise<void>;
   sendMessage: (value: string) => void | Promise<void>;
   handleBangLine: (value: string) => void | Promise<void>;
@@ -59,7 +60,9 @@ export function createEditorSubmitHandler(params: {
       return;
     }
 
-    params.editor.addToHistory(value);
+    if (rawTrimmed) {
+      (params.recordChatHistory ?? params.editor.addToHistory)(rawTrimmed);
+    }
 
     if (value.startsWith('/')) {
       void params.handleCommand(value);

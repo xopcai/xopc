@@ -10,6 +10,7 @@ import { registerSearchRoutes } from './search.js';
 import { registerMobileRoutes } from './mobile.js';
 import { registerTaskOutcomeRoutes } from './task-outcomes.js';
 import { registerInteractionStateRoutes } from './interaction-state.js';
+import { registerComposerHistoryRoutes } from './composer-history.js';
 import { registerLocalAppsRoutes } from './local-apps.js';
 import { registerWorkDiscoveryRoutes } from './work-discovery.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
@@ -34,6 +35,7 @@ export function registerCoreAuthenticatedRoutes(
   registerMobileRoutes(authenticated, deps);
   registerTaskOutcomeRoutes(authenticated, deps);
   registerInteractionStateRoutes(authenticated, deps);
+  registerComposerHistoryRoutes(authenticated, deps);
 }
 
 export function registerAuthenticatedRoutes(app: Hono, authenticated: Hono, deps: AuthenticatedRouteDeps): void {
