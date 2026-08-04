@@ -42,4 +42,15 @@ describe('applySessionPatchToMetadata', () => {
     const out = applySessionPatchToMetadata(baseMeta(), { name: '  Hello  ' });
     expect(out.name).toBe('Hello');
   });
+
+  it('patches session visibility and project assignment', () => {
+    const out = applySessionPatchToMetadata(baseMeta(), {
+      hiddenFromSessionList: true,
+      projectId: ' project-1 ',
+    });
+    expect(out).toMatchObject({
+      hiddenFromSessionList: true,
+      projectId: 'project-1',
+    });
+  });
 });
