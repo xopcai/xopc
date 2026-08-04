@@ -62,6 +62,19 @@ export class ModelManager {
     }
   }
 
+  /**
+   * Register the profile model and return the model that should initialize the
+   * session agent. An existing per-session override always wins.
+   */
+  resolveInitialModelForSession(
+    sessionKey: string,
+    profileModelRef: string,
+    fallbacks: string[] = [],
+  ): string {
+    this.setSessionProfileDefault(sessionKey, profileModelRef, fallbacks);
+    return this.getModelForSession(sessionKey);
+  }
+
   clearSessionProfileDefault(sessionKey: string): void {
     this.sessionProfileDefaults.delete(sessionKey);
     this.sessionProfileFallbacks.delete(sessionKey);

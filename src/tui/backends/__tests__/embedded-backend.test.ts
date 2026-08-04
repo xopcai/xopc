@@ -6,6 +6,10 @@ const mocks = vi.hoisted(() => {
   const agentStop = vi.fn(async () => undefined);
   const sessionIndexInitialize = vi.fn(async () => undefined);
   const sessionIndexGetStore = vi.fn(() => ({}));
+  const cloudModelRefresh = vi.fn(async () => ({
+    status: 'skipped' as const,
+    reason: 'not_configured' as const,
+  }));
   const agentService = vi.fn(function MockAgentService() {
     return {
       sessionConfig: { patch: sessionConfigPatch },
@@ -21,6 +25,7 @@ const mocks = vi.hoisted(() => {
     sessionConfigPatch,
     sessionIndexInitialize,
     sessionIndexGetStore,
+    cloudModelRefresh,
   };
 });
 
@@ -60,6 +65,12 @@ vi.mock('../../../session/index.js', () => ({
 
 vi.mock('../../../storage/sqlite/index.js', () => ({
   openXopcDatabase: vi.fn(),
+}));
+
+vi.mock('../../../providers/xopc-cloud-model-source.js', () => ({
+  XopcCloudModelSource: class {
+    refresh = mocks.cloudModelRefresh;
+  },
 }));
 
 import { EmbeddedBackend } from '../embedded-backend.js';
@@ -106,6 +117,48 @@ describe('EmbeddedBackend', () => {
       expect.objectContaining({ workingDirectory: '/tmp/project' }),
     );
 
+    backend.stop();
+  });
+
+  it('refreshes XOPC Cloud models before creating the embedded agent', async () => {
+    mocks.cloudModelRefresh.mockImplementationOnce(async () => {
+      expect(mocks.agentService).not.toHaveBeenCalled();
+      return {
+        status: 'updated',
+        modelCount: 1,
+        models: ['deepseek-v4-flash'],
+      };
+    });
+    const backend = new EmbeddedBackend({ config: {} as never });
+
+    await backend.patchSession('agent:coder:tui-cloud-model', {
+      model: 'xopc-cloud/deepseek-v4-flash',
+    });
+
+    expect(mocks.cloudModelRefresh).toHaveBeenCalledTimes(1);
+    expect(mocks.agentService).toHaveBeenCalledTimes(1);
+    backend.stop();
+  });
+
+  it('continues with built-in models when XOPC Cloud refresh fails', async () => {
+    mocks.cloudModelRefresh.mockRejectedValueOnce(new Error('router unavailable'));
+    const backend = new EmbeddedBackend({ config: {} as never });
+
+    await backend.patchSession('agent:coder:tui-cloud-fallback', {
+      model: 'openai/test',
+    });
+
+    expect(mocks.agentService).toHaveBeenCalledTimes(1);
+    backend.stop();
+  });
+
+  it('can refresh cloud models after OAuth login', async () => {
+    const backend = new EmbeddedBackend({ config: {} as never });
+
+    await backend.refreshModels();
+
+    expect(mocks.cloudModelRefresh).toHaveBeenCalledTimes(1);
+    expect(mocks.agentService).not.toHaveBeenCalled();
     backend.stop();
   });
 });

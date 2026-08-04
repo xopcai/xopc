@@ -154,6 +154,7 @@ export class EmbeddedBackend implements TuiBackend {
   }
 
   private async createAgent(config: Config, sessionIndex: SessionIndex): Promise<AgentService> {
+    await this.refreshXopcCloudModels();
     const { AgentService } = await import('../../agent/service.js');
     const workspace = this.workspace || getWorkspacePath(config);
     const modelId = getAgentDefaultModelRef(config);
@@ -179,6 +180,25 @@ export class EmbeddedBackend implements TuiBackend {
     this.agent = agent;
     await agent.start();
     return agent;
+  }
+
+  private async refreshXopcCloudModels(): Promise<void> {
+    try {
+      const { XopcCloudModelSource } = await import('../../providers/xopc-cloud-model-source.js');
+      const result = await new XopcCloudModelSource().refresh();
+      if (result.status === 'updated') {
+        log.info(
+          { modelCount: result.modelCount },
+          `XOPC Cloud model catalog refreshed: ${result.modelCount} models`,
+        );
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      log.warn(
+        { err, errorMessage, phase: 'model_catalog_refresh' },
+        `XOPC Cloud model catalog refresh failed: ${errorMessage}`,
+      );
+    }
   }
 
   stop(): void {
@@ -595,6 +615,10 @@ export class EmbeddedBackend implements TuiBackend {
       provider: model.provider,
       contextWindow: model.contextWindow,
     }));
+  }
+
+  async refreshModels(): Promise<void> {
+    await this.refreshXopcCloudModels();
   }
 
   async resetSession(sessionKey: string): Promise<void> {

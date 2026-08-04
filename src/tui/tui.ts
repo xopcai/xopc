@@ -2119,15 +2119,18 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       getEntry: () => projectTrustStore.getEntry(process.cwd()),
       getSessionDecision: () => projectTrustSessionDecision,
     },
-    runLogin: (provider) =>
-      runTuiOAuthLogin(provider, {
+    runLogin: async (provider) => {
+      await runTuiOAuthLogin(provider, {
         chatLog,
         tui,
         editor,
         openOverlay: openCommandOverlay,
         closeOverlay: closeCommandOverlay,
         keybindings,
-      }),
+      });
+      await client.refreshModels?.();
+      await refreshModelChoices();
+    },
   });
 
   const { runLocalShellLine } = createLocalShellRunner({

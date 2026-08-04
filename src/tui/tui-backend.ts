@@ -278,6 +278,9 @@ export interface TuiBackend {
   /** List available models. */
   listModels(): Promise<TuiModelChoice[]>;
 
+  /** Refresh dynamic model catalogs after credentials change. */
+  refreshModels?(): Promise<void>;
+
   /** Reset / create new session. */
   resetSession(sessionKey: string): Promise<void>;
 
