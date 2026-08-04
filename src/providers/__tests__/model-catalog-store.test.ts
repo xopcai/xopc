@@ -69,6 +69,30 @@ describe('ModelCatalogStore', () => {
     expect(registry.resolve('cloud/removed')).toBeUndefined();
   });
 
+  it('preserves slashes in provider-qualified model IDs', () => {
+    const { store, modelsPath } = createStore();
+    store.saveSource('openrouter', {
+      providerId: 'openrouter',
+      baseUrl: 'https://openrouter.ai/api/v1',
+      api: 'openai-completions',
+      etag: null,
+      recommendedModel: null,
+      lastSuccessAt: 123,
+      models: [{
+        id: 'openai/gpt-5.4',
+        name: 'GPT-5.4',
+        availability: 'available',
+        maxOutputTokens: 8192,
+      }],
+    });
+
+    const registry = new ModelRegistry(modelsPath, store);
+    expect(registry.resolve('openrouter/openai/gpt-5.4')).toMatchObject({
+      provider: 'openrouter',
+      id: 'openai/gpt-5.4',
+    });
+  });
+
   it('retains removed models as unavailable entries', () => {
     const { store } = createStore();
     const source = {
