@@ -13,7 +13,7 @@ import { ActivityIndicator, Icon, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppToast } from '../../components/AppToast';
-import { FloatingHeader } from '../../components/FloatingHeader';
+import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { BatchActionBar } from '../../components/BatchActionBar';
 import { BatchDeleteConfirmDialog } from '../../components/BatchDeleteConfirmDialog';
 import { ListSkeleton } from '../../components/ListSkeleton';
@@ -368,7 +368,7 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
   if (!configured) {
     return (
       <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
-        <FloatingHeader title={pm.title} onBack={embedded ? undefined : handleBack} />
+        <NativeScreenHeader title={pm.title} onBack={embedded ? undefined : handleBack} />
         <View style={styles.center}>
           <Text style={{ opacity: 0.6 }}>{m.sessions.gatewayNotConfigured}</Text>
         </View>
@@ -378,7 +378,7 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
-      <FloatingHeader
+      <NativeScreenHeader
         title={selectionMode ? t(li.selectedCount, { count: selectedCount }) : pm.title}
         variant={selectionMode ? 'compact' : 'large'}
         onBack={selectionMode ? exitSelectionMode : embedded ? undefined : handleBack}

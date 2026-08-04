@@ -5,7 +5,7 @@ import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native
 import { ActivityIndicator, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { FloatingHeader } from '../../components/FloatingHeader';
+import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { useMessages } from '../../i18n/messages';
 import { dismissOrHome } from '../../lib/navigation';
 import { queryKeys } from '../../query/keys';
@@ -44,7 +44,7 @@ export function WorkItemScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
-      <FloatingHeader title={labels.detailTitle} onBack={() => dismissOrHome(router)} />
+      <NativeScreenHeader title={labels.detailTitle} onBack={() => dismissOrHome(router)} />
       {query.isLoading || !item ? <View style={styles.loading}><ActivityIndicator /></View> : (
         <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xl }]}>
           <Text style={[styles.title, { color: colors.text.primary }]}>{item.title}</Text>

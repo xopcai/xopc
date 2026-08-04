@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppToast } from '@/components/AppToast';
 import { useMessages } from '@/i18n/messages';
+import { useReducedMotion } from '@/motion';
 import { radii, spacing, typography, useTheme } from '@/theme';
 
 import type { ContentIntakeIntent, ContentIntakeSource, ContentIntakeType } from './content-intent';
@@ -35,6 +36,7 @@ export function ContentIntakeModal({
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const m = useMessages();
+  const reducedMotion = useReducedMotion();
   const progressRef = useRef(new Animated.Value(0));
   const [closing, setClosing] = useState(false);
 
@@ -46,25 +48,25 @@ export function ContentIntakeModal({
     }
     Animated.timing(progressRef.current, {
       toValue: 1,
-      duration: 180,
+      duration: reducedMotion ? 0 : 180,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
-  }, [visible]);
+  }, [reducedMotion, visible]);
 
   const runAction = useCallback((action: () => void) => {
     if (saving || closing || !intent) return;
     setClosing(true);
     Animated.timing(progressRef.current, {
       toValue: 0,
-      duration: 140,
+      duration: reducedMotion ? 0 : 140,
       easing: Easing.in(Easing.cubic),
       useNativeDriver: true,
     }).start(({ finished }) => {
       setClosing(false);
       if (finished) action();
     });
-  }, [closing, intent, saving]);
+  }, [closing, intent, reducedMotion, saving]);
 
   const disabled = saving || closing;
   const sourceLabel = source === 'share' ? m.contentIntake.sourceShare : m.contentIntake.sourceClipboard;
@@ -74,7 +76,7 @@ export function ContentIntakeModal({
 
   const cardStyle = {
     opacity: progressRef.current,
-    transform: [
+    transform: reducedMotion ? [] : [
       {
         scale: progressRef.current.interpolate({
           inputRange: [0, 1],

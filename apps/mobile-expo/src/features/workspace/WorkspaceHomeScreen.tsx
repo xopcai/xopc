@@ -2,36 +2,30 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import {
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  View,
-} from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Icon, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppToast } from '../../components/AppToast';
-import { FloatingHeader } from '../../components/FloatingHeader';
+import { NativeScreenHeader } from '../../components/NativeScreenHeader';
+import { ListSkeleton } from '../../components/ListSkeleton';
 import { TOAST_BOTTOM_LIFT_ABOVE_BAR, TOAST_DURATION_SHORT } from '../../constants/toast';
-import { openChat, openNoteDetail } from '../../lib/navigation';
-import { useMessages, t } from '../../i18n/messages';
-
-import { queryKeys } from '../../query/keys';
+import { t, useMessages } from '../../i18n/messages';
+import { openNoteDetail } from '../../lib/navigation';
+import { sessionDisplayName } from '../../lib/session-helpers';
+import { recordUsageEvent } from '../../product/usage-metrics';
 import {
   fetchHome,
+  respondToHomeDecision,
   type HomeData,
+  type HomeDecision,
   type HomeGateway,
   type HomeWorkflowRun,
 } from '../../query/home';
-import { createBlankNote, fetchNotes, type NoteIndexEntry } from '../../query/notes';
-import { invalidateSessionLists } from '../../query/workspace-sync';
-import { resolveNoteListTitle } from '../notes/note-title';
-import { noteKindLabel } from '../notes/note-list-display';
-import { createSession, useGatewayConfigured } from '../../query/sessions';
-import { fetchChatAgents, type ChatAgentOption, useEffectiveDefaultAgentId } from '../../query/agents';
-import { useGatewayStore } from '../../stores/gateway-store';
+import { queryKeys } from '../../query/keys';
+import { fetchNotes, type NoteIndexEntry } from '../../query/notes';
+import { useGatewayConfigured } from '../../query/sessions';
+import { usePreferencesStore } from '../../stores/preferences-store';
 import {
   FLOATING_BOTTOM_OFFSET,
   floatingBottomPadding,
@@ -40,25 +34,19 @@ import {
   typography,
   useTheme,
 } from '../../theme';
-import { sessionDisplayName } from '../../lib/session-helpers';
-
+import { resolveNoteListTitle } from '../notes/note-title';
 import { WorkspaceSearchOverlay } from '../search/WorkspaceSearchOverlay';
-import { AgentAvatar } from '../ai/AgentAvatar';
-import { readAgentUsage, sortHomeAgents, touchAgentUsage } from '../ai/agent-usage-cache';
 import { useHomeChatPrefetch } from './use-home-chat-prefetch';
-import { shouldShowHomeAttention } from './home-attention';
 import { useWorkspaceNavigation } from './workspace-navigation-context';
 import { useOptionalWorkspaceTransition } from './workspace-transition-context';
 
-type ContinueItem =
-  | { id: string; kind: 'session'; title: string; meta: string; icon: string; onPress: () => void }
-  | { id: string; kind: 'note'; title: string; meta: string; icon: string; onPress: () => void }
-  | { id: string; kind: 'workflow'; title: string; meta: string; icon: string; onPress: () => void };
-
-const HOME_INBOX_PREVIEW_LIMIT = 50;
-const HOME_INBOX_VISIBLE_PREVIEW_LIMIT = 1;
-const HOME_ATTENTION_WORKFLOW_LIMIT = 2;
-const HOME_ATTENTION_ITEM_LIMIT = 3;
+type ContinueItem = {
+  id: string;
+  title: string;
+  meta: string;
+  icon: string;
+  onPress: () => void;
+};
 
 function iconForNoteKind(kind: NoteIndexEntry['kind']): string {
   if (kind === 'task') return 'checkbox-marked-circle-outline';
@@ -72,67 +60,32 @@ function timeLabel(value: string | number | undefined, hm: ReturnType<typeof use
   if (!value) return hm.recentlyUpdated;
   const timestamp = typeof value === 'number' ? value : Date.parse(value);
   if (!Number.isFinite(timestamp)) return hm.recentlyUpdated;
-  const diffMs = Date.now() - timestamp;
-  if (diffMs < 60_000) return hm.justNow;
-  const minutes = Math.floor(diffMs / 60_000);
+  const minutes = Math.floor((Date.now() - timestamp) / 60_000);
+  if (minutes < 1) return hm.justNow;
   if (minutes < 60) return t(hm.minutesAgo, { n: minutes });
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return t(hm.hoursAgo, { n: hours });
-  const days = Math.floor(hours / 24);
-  return t(hm.daysAgo, { n: days });
+  return t(hm.daysAgo, { n: Math.floor(hours / 24) });
 }
 
 function workflowProgress(run: HomeWorkflowRun, hm: ReturnType<typeof useMessages>['homePage']): string {
-  const total = run.metrics.agentCount;
-  if (total <= 0) return hm.workflowRunning;
-  return t(hm.workflowProgress, { done: run.metrics.doneAgentCount, total });
+  if (run.metrics.agentCount <= 0) return hm.workflowRunning;
+  return t(hm.workflowProgress, {
+    done: run.metrics.doneAgentCount,
+    total: run.metrics.agentCount,
+  });
 }
 
-function workflowAttentionRank(run: HomeWorkflowRun): number {
-  if (run.status === 'failed' || run.status === 'timeout' || run.metrics.errorAgentCount > 0) return 0;
-  if (run.status === 'cancelled') return 1;
-  if (run.status === 'running' || run.status === 'queued') return 2;
-  return 3;
+function decisionIcon(decision: HomeDecision): string {
+  if (decision.kind === 'connector_approval' || decision.kind === 'goal_evidence') return 'shield-check-outline';
+  if (decision.kind === 'workflow_run' || decision.kind === 'automation_run') return 'alert-circle-outline';
+  if (decision.kind === 'goal') return 'target';
+  return decision.reason === 'overdue' ? 'clock-alert-outline' : 'checkbox-marked-circle-outline';
 }
 
-function workflowStatusLabel(run: HomeWorkflowRun, hm: ReturnType<typeof useMessages>['homePage']): string {
-  if (run.status === 'failed') return hm.workflowFailed;
-  if (run.status === 'timeout') return hm.workflowTimeout;
-  if (run.status === 'cancelled') return hm.workflowCancelled;
-  if (run.status === 'queued') return hm.workflowQueued;
-  if (run.status === 'running') return hm.workflowRunning;
-  return hm.workflowNeedsReview;
-}
-
-function workflowAttentionMeta(run: HomeWorkflowRun, hm: ReturnType<typeof useMessages>['homePage']): string {
-  const progress = workflowProgress(run, hm);
-  if (run.metrics.errorAgentCount > 0) {
-    return `${progress} · ${t(hm.workflowErrorCount, { count: run.metrics.errorAgentCount })}`;
-  }
-  return `${progress} · ${workflowStatusLabel(run, hm)}`;
-}
-
-function workflowAttentionBadgeTone(run: HomeWorkflowRun): 'error' | 'warning' | 'info' {
-  if (run.status === 'failed' || run.status === 'timeout' || run.metrics.errorAgentCount > 0) return 'error';
-  if (run.status === 'cancelled') return 'warning';
-  return 'info';
-}
-
-function fallbackHomeData(agentId: string): Pick<HomeData, 'activeAgent' | 'gateway' | 'workflowRuns' | 'nextCronJobs' | 'recentCronRuns'> {
-  return {
-    activeAgent: { id: agentId },
-    gateway: {
-      status: 'unknown',
-      ready: false,
-      httpListening: false,
-      version: '',
-      uptime: 0,
-      tunnel: { state: 'disconnected', publicUrl: null, connected: false },
-    },
-    workflowRuns: { active: [], attention: [], recent: [] },
-    nextCronJobs: [],
-    recentCronRuns: [],
-  };
+function decisionObjectId(decision: HomeDecision): string {
+  const separator = decision.id.indexOf(':');
+  return separator >= 0 ? decision.id.slice(separator + 1) : decision.id;
 }
 
 export function WorkspaceHomeScreen() {
@@ -141,8 +94,7 @@ export function WorkspaceHomeScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const configured = useGatewayConfigured();
-  const activeGatewayId = useGatewayStore((s) => s.activeGatewayId);
-  const defaultAgentId = useEffectiveDefaultAgentId();
+  const language = usePreferencesStore((state) => state.language);
   const {
     openAskAi,
     prefetchAskAiSession,
@@ -153,296 +105,194 @@ export function WorkspaceHomeScreen() {
   } = useWorkspaceNavigation();
   const [searchOpen, setSearchOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
-  const [agentUsage, setAgentUsage] = useState(() => readAgentUsage(activeGatewayId));
 
   useHomeChatPrefetch(configured);
 
-  useEffect(() => {
-    setAgentUsage(readAgentUsage(activeGatewayId));
-  }, [activeGatewayId]);
-
-  useFocusEffect(
-    useCallback(() => {
-      setAgentUsage(readAgentUsage(activeGatewayId));
-    }, [activeGatewayId]),
-  );
+  useFocusEffect(useCallback(() => {
+    recordUsageEvent('home_viewed');
+  }, []));
 
   const homeQuery = useQuery({
-    queryKey: queryKeys.home,
-    queryFn: fetchHome,
-    enabled: configured,
-  });
-
-  const agentsQuery = useQuery({
-    queryKey: queryKeys.agents,
-    queryFn: fetchChatAgents,
+    queryKey: [...queryKeys.home, language],
+    queryFn: () => fetchHome(language),
     enabled: configured,
   });
 
   const home = homeQuery.data;
   const recentlyOpened = home?.recentlyOpened ?? [];
   const needsRecentNotesFallback = configured && !homeQuery.isLoading && recentlyOpened.length === 0;
-
   const recentNotesFallbackQuery = useQuery({
     queryKey: [...queryKeys.notesAll, 'home-preview'] as const,
-    queryFn: () =>
-      fetchNotes({
-        limit: 5,
-        offset: 0,
-        sortBy: 'updatedAt',
-        sortOrder: 'desc',
-      }),
+    queryFn: () => fetchNotes({ limit: 3, offset: 0, sortBy: 'updatedAt', sortOrder: 'desc' }),
     enabled: needsRecentNotesFallback,
     staleTime: 60_000,
   });
-
-  const homeNotes = useMemo(() => {
-    if (recentlyOpened.length > 0) return recentlyOpened.slice(0, 4);
-    return recentNotesFallbackQuery.data?.items.slice(0, 4) ?? [];
-  }, [recentNotesFallbackQuery.data?.items, recentlyOpened]);
-
-  const homeNotesLoading =
-    homeQuery.isLoading || (needsRecentNotesFallback && recentNotesFallbackQuery.isLoading);
-
-  const homeAgents = useMemo(() => {
-    const agents = agentsQuery.data?.items ?? [];
-    return sortHomeAgents(agents, agentUsage, defaultAgentId);
-  }, [agentUsage, agentsQuery.data?.items, defaultAgentId]);
+  const homeNotes = recentlyOpened.length > 0
+    ? recentlyOpened.slice(0, 3)
+    : recentNotesFallbackQuery.data?.items.slice(0, 3) ?? [];
 
   const m = useMessages();
   const hm = m.homePage;
-  const homeDefaults = useMemo(() => fallbackHomeData(defaultAgentId), [defaultAgentId]);
-  const inboxCount = home?.inboxCount ?? 0;
-
-  const inboxPreviewQuery = useQuery({
-    queryKey: [...queryKeys.notes('inbox'), 'home-preview'] as const,
-    queryFn: () =>
-      fetchNotes({
-        status: 'inbox',
-        limit: HOME_INBOX_PREVIEW_LIMIT,
-        offset: 0,
-        sortBy: 'createdAt',
-        sortOrder: 'desc',
-      }),
-    enabled: configured && inboxCount > 0,
-    staleTime: 60_000,
-  });
-
-  const inboxPreviewItems = inboxPreviewQuery.data?.items.slice(0, 2) ?? [];
-  const inboxTodayCount = useMemo(() => {
-    const items = inboxPreviewQuery.data?.items ?? [];
-    const start = new Date();
-    start.setHours(0, 0, 0, 0);
-    return items.filter((item) => item.createdAt >= start.getTime()).length;
-  }, [inboxPreviewQuery.data?.items]);
-
-  const handleNotePress = useCallback((item: NoteIndexEntry) => {
-    openNoteDetail(router, item.id);
-  }, [router]);
 
   const handleSessionPress = useCallback((sessionKey: string) => {
+    recordUsageEvent('home_continue_opened');
     router.push(`/chat/${sessionKey}`);
   }, [router]);
 
-  const refetchHome = homeQuery.refetch;
-  const refetchRecentNotesFallback = recentNotesFallbackQuery.refetch;
-
-  const refreshHomeContent = useCallback(async () => {
-    const result = await refetchHome();
-    const opened = result.data?.recentlyOpened ?? [];
-    if (opened.length === 0) {
-      await refetchRecentNotesFallback();
-    }
-    prefetchAskAiSession();
-  }, [prefetchAskAiSession, refetchHome, refetchRecentNotesFallback]);
-
-  const handleRefresh = useCallback(() => {
-    void refreshHomeContent();
-  }, [refreshHomeContent]);
-
-  const createAgentSessionMutation = useMutation({
-    mutationFn: (agentId: string) => createSession(agentId),
-    onSuccess: (key, agentId) => {
-      touchAgentUsage(activeGatewayId, agentId);
-      invalidateSessionLists(queryClient);
-      openChat(router, key);
-    },
-    onError: (err) => {
-      setToastMessage(err instanceof Error ? err.message : hm.noAgentChatFailed);
-    },
-  });
-
-  const createNoteMutation = useMutation({
-    mutationFn: createBlankNote,
-    onSuccess: async (result) => {
-      await refreshHomeContent();
-      openNoteDetail(router, result.note.id);
-    },
-    onError: (err) => {
-      setToastMessage(err instanceof Error ? err.message : hm.noAgentChatFailed);
-    },
-  });
-
-  const handleCreateNote = useCallback(() => {
-    if (createNoteMutation.isPending) return;
-    createNoteMutation.mutate();
-  }, [createNoteMutation]);
+  const handleNotePress = useCallback((note: NoteIndexEntry) => {
+    recordUsageEvent('home_continue_opened');
+    openNoteDetail(router, note.id);
+  }, [router]);
 
   const continueItems = useMemo<ContinueItem[]>(() => {
-    const activeWorkflows = (home?.workflowRuns.active ?? []).slice(0, 2).map((run) => ({
+    const workflowItems = (home?.workflowRuns.active ?? []).map((run) => ({
       id: `workflow:${run.id}`,
-      kind: 'workflow' as const,
       title: run.title,
       meta: `${hm.workflowItemMeta} · ${workflowProgress(run, hm)}`,
       icon: 'source-branch-sync',
-      onPress: () => {
-        if (run.sessionKey) handleSessionPress(run.sessionKey);
-        else router.push('/automation');
-      },
+      onPress: () => run.sessionKey ? handleSessionPress(run.sessionKey) : router.push('/automation'),
     }));
-    const sessions = (home?.recentSessions ?? []).slice(0, 2).map((session) => ({
+    const sessionItems = (home?.recentSessions ?? []).map((session) => ({
       id: `session:${session.key}`,
-      kind: 'session' as const,
       title: sessionDisplayName(session, m.sessions.untitled),
       meta: `${hm.chatItemMeta} · ${timeLabel(session.updatedAt, hm)}`,
       icon: 'message-processing-outline',
       onPress: () => handleSessionPress(session.key),
     }));
-    const notes = homeNotes.slice(0, 3).map((note) => ({
+    const noteItems = homeNotes.map((note) => ({
       id: `note:${note.id}`,
-      kind: 'note' as const,
       title: resolveNoteListTitle(note, hm.untitled),
       meta: `${hm.noteItemMeta} · ${timeLabel(note.lastOpenedAt ?? note.updatedAt, hm)}`,
       icon: iconForNoteKind(note.kind),
       onPress: () => handleNotePress(note),
     }));
-    return [...activeWorkflows, ...sessions, ...notes].slice(0, 4);
+    return [...workflowItems, ...sessionItems, ...noteItems].slice(0, 3);
   }, [handleNotePress, handleSessionPress, hm, home?.recentSessions, home?.workflowRuns.active, homeNotes, m.sessions.untitled, router]);
+
+  const decisionMutation = useMutation({
+    mutationFn: ({ id: _id, response, answer }: {
+      id: string;
+      response: NonNullable<HomeDecision['response']>;
+      answer: 'approve' | 'deny';
+    }) => respondToHomeDecision(response, answer),
+    onSuccess: () => {
+      recordUsageEvent('home_decision_completed');
+      void queryClient.invalidateQueries({ queryKey: queryKeys.home });
+      setToastMessage(hm.decisionCompleted);
+    },
+    onError: (error) => {
+      setToastMessage(error instanceof Error ? error.message : hm.decisionFailed);
+    },
+  });
+
+  const openDecision = useCallback((decision: HomeDecision) => {
+    recordUsageEvent('home_decision_opened');
+    const objectId = decisionObjectId(decision);
+    if (decision.kind === 'work_item') router.push(`/work/${objectId}`);
+    else if (decision.kind === 'workflow_run' || decision.kind === 'automation_run') router.push('/automation');
+    else router.push('/work');
+  }, [router]);
+
+  const refresh = useCallback(async () => {
+    await homeQuery.refetch();
+    if (needsRecentNotesFallback) await recentNotesFallbackQuery.refetch();
+    prefetchAskAiSession();
+  }, [homeQuery, needsRecentNotesFallback, prefetchAskAiSession, recentNotesFallbackQuery]);
+
+  const capture = useCallback(() => {
+    recordUsageEvent('capture_started');
+    router.push({ pathname: '/inbox', params: { capture: '1' } });
+  }, [router]);
+
+  const askAi = useCallback(() => {
+    recordUsageEvent('ask_ai_started');
+    openAskAi();
+  }, [openAskAi]);
 
   if (!configured) {
     return (
       <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
-        <FloatingHeader
+        <NativeScreenHeader
           showLogo
           title="xopc"
-          searchPlaceholder={hm.searchPlaceholder}
-          onSearchPress={() => setSearchOpen(true)}
           rightIcon="cog-outline"
           onRightPress={() => router.push('/settings')}
         />
         <View style={styles.centerContent}>
           <Icon source="cloud-off-outline" size={42} color={colors.text.tertiary} />
           <Text style={[styles.emptyTitle, { color: colors.text.primary }]}>{hm.connectGatewayTitle}</Text>
-          <Text style={[styles.emptyText, { color: colors.text.tertiary }]}>{hm.connectGatewayHint}</Text>
+          <Text style={[styles.emptyText, { color: colors.text.secondary }]}>{hm.connectGatewayHint}</Text>
+          <Pressable
+            style={[styles.connectButton, { backgroundColor: colors.accent.primary }]}
+            onPress={() => router.push('/settings/gateway')}
+            accessibilityRole="button"
+          >
+            <Text style={[styles.connectButtonText, { color: colors.accent.onPrimary }]}>{hm.connectGatewayAction}</Text>
+          </Pressable>
         </View>
-        <WorkspaceActionDock
-          accessibilityLabel={hm.quickNewNote}
-          disabled={createNoteMutation.isPending}
-          onPress={handleCreateNote}
-        />
-        <WorkspaceSearchOverlay visible={searchOpen} onClose={() => setSearchOpen(false)} />
-        <AppToast
-          visible={!!toastMessage}
-          onDismiss={() => setToastMessage('')}
-          duration={TOAST_DURATION_SHORT}
-          bottomLift={TOAST_BOTTOM_LIFT_ABOVE_BAR}
-        >
-          {toastMessage}
-        </AppToast>
       </View>
     );
   }
 
-  const refreshing = homeQuery.isFetching && !homeQuery.isLoading;
-  const pendingTasks = home?.pendingTasks ?? [];
-  const gateway = home?.gateway ?? homeDefaults.gateway;
-  const attentionWorkflows = home?.workflowRuns.attention ?? [];
-  const showEmptyContinue = !homeQuery.isLoading && !homeNotesLoading && continueItems.length === 0;
-  const nextTask = pendingTasks[0];
-
   return (
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
-      <FloatingHeader
+      <NativeScreenHeader
         showLogo
         title="xopc"
-        searchPlaceholder={hm.searchPlaceholder}
-        onSearchPress={() => setSearchOpen(true)}
-        rightIcon="cog-outline"
-        onRightPress={() => router.push('/settings')}
+        rightActions={[
+          { icon: 'magnify', onPress: () => setSearchOpen(true), accessibilityLabel: m.common.search },
+          { icon: 'cog-outline', onPress: () => router.push('/settings'), accessibilityLabel: m.settings.title },
+        ]}
       />
       <ScrollView
         contentContainerStyle={[
           styles.content,
-          { paddingBottom: floatingBottomPadding(insets.bottom) + FLOATING_BOTTOM_OFFSET + 80 },
+          { paddingBottom: floatingBottomPadding(insets.bottom) + FLOATING_BOTTOM_OFFSET + 88 },
         ]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+        refreshControl={(
+          <RefreshControl
+            refreshing={homeQuery.isFetching && !homeQuery.isLoading}
+            onRefresh={() => void refresh()}
+          />
+        )}
       >
-        {homeQuery.isLoading ? (
-          <View style={styles.loadingCard}>
-            <ActivityIndicator />
-          </View>
+        {homeQuery.isLoading || !home ? (
+          <HomeSkeleton />
         ) : (
           <>
-            <HomeGatewayStatus gateway={gateway} />
-            <ContinueSection
-              items={continueItems}
-              loading={homeNotesLoading}
-              empty={showEmptyContinue}
-              onViewSessions={() => router.push('/sessions')}
+            <HomeGatewayStatus gateway={home.gateway} />
+            <BriefingCard
+              briefing={home.briefing}
+              primaryDecision={home.decisions[0]}
+              onPrimaryPress={openDecision}
             />
-            <AttentionSection
-              inboxCount={inboxCount}
-              inboxTodayCount={inboxTodayCount}
-              inboxPreviewItems={inboxPreviewItems}
-              attentionWorkflows={attentionWorkflows}
-              nextTask={nextTask}
-              onInboxPress={() => router.push('/inbox')}
-              onTaskPress={(note) => handleNotePress(note)}
-              onWorkflowPress={(run) => {
-                if (run.sessionKey) handleSessionPress(run.sessionKey);
-                else router.push('/automation');
+            <DecisionSection
+              decisions={home.decisions.slice(0, 3)}
+              pendingDecisionId={decisionMutation.isPending ? decisionMutation.variables.id : undefined}
+              onOpen={openDecision}
+              onRespond={(decision, answer) => {
+                if (decision.response) decisionMutation.mutate({ id: decision.id, response: decision.response, answer });
               }}
             />
-            <HomeWorkSection
-              items={home?.work?.items ?? []}
-              onOpenWork={() => router.push('/work')}
-              onItemPress={(itemId) => router.push(`/work/${itemId}`)}
-            />
-            <AgentStrip
-              agents={homeAgents}
-              loading={agentsQuery.isLoading}
-              busyAgentId={
-                createAgentSessionMutation.isPending
-                  ? createAgentSessionMutation.variables
-                  : undefined
-              }
-              onAgentPress={(agentId) => {
-                createAgentSessionMutation.mutate(agentId);
-              }}
-            />
+            <ContinueSection items={continueItems} />
             <LibrarySection
+              inboxCount={home.inboxCount}
+              onInbox={() => router.push('/inbox')}
               onNotes={() => router.push('/notes')}
               onSessions={() => router.push('/sessions')}
               onFiles={() => router.push('/files')}
-              onAutomation={() => router.push('/automation')}
-              onAgents={() => router.push('/ai/agents')}
-              onWork={() => router.push('/work')}
-              onProjects={() => router.push('/projects')}
             />
           </>
         )}
       </ScrollView>
-
       <WorkspaceActionDock
-        accessibilityLabel={hm.quickNewNote}
-        disabled={createNoteMutation.isPending}
-        onPress={handleCreateNote}
-        onAskAi={openAskAi}
+        onCapture={capture}
+        onAskAi={askAi}
         askAiPending={isOpeningAskAi}
       />
       <WorkspaceSearchOverlay visible={searchOpen} onClose={() => setSearchOpen(false)} />
       <AppToast
-        visible={!!toastMessage || !!askAiError}
+        visible={Boolean(toastMessage || askAiError)}
         onDismiss={askAiError ? dismissAskAiError : () => setToastMessage('')}
         duration={TOAST_DURATION_SHORT}
         bottomLift={TOAST_BOTTOM_LIFT_ABOVE_BAR}
@@ -454,286 +304,157 @@ export function WorkspaceHomeScreen() {
   );
 }
 
-function HomeGatewayStatus({ gateway }: { gateway: HomeGateway }) {
-  const { colors } = useTheme();
-  const m = useMessages();
-  const hm = m.homePage;
-  if (gateway.ready) return null;
+function HomeSkeleton() {
   return (
-    <View style={[styles.statusBanner, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}>
-      <Icon source="progress-clock" size={16} color={colors.semantic.warning} />
-      <Text style={[styles.statusText, { color: colors.text.secondary }]}>
-        {hm.gatewayStartingStatus}
-      </Text>
+    <View style={styles.skeletonWrap}>
+      <ListSkeleton count={3} />
+      <ListSkeleton count={2} />
     </View>
   );
 }
 
-function agentName(agent: ChatAgentOption): string {
-  return agent.name?.trim() || agent.id;
-}
-
-function AgentStrip({
-  agents,
-  loading,
-  busyAgentId,
-  onAgentPress,
-}: {
-  agents: ChatAgentOption[];
-  loading: boolean;
-  busyAgentId?: string;
-  onAgentPress: (agentId: string) => void;
-}) {
+function HomeGatewayStatus({ gateway }: { gateway: HomeGateway }) {
   const { colors } = useTheme();
   const { homePage: hm } = useMessages();
-  const visibleAgents = agents.slice(0, 6);
-
-  if (loading) {
-    return (
-      <Section title={hm.sectionAgents}>
-        <View style={[styles.agentStripLoading, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}>
-          <ActivityIndicator size="small" />
-        </View>
-      </Section>
-    );
-  }
-
-  if (visibleAgents.length === 0) return null;
-
+  if (gateway.ready) return null;
   return (
-    <Section title={hm.sectionAgents}>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.agentStripContent}
-      >
-        {visibleAgents.map((agent) => {
-          const busy = busyAgentId === agent.id;
-          return (
-            <Pressable
-              key={agent.id}
-              style={[
-                styles.agentPill,
-                { backgroundColor: colors.surface.panel, borderColor: colors.border.default },
-                busy && styles.disabled,
-              ]}
-              onPress={() => onAgentPress(agent.id)}
-              disabled={busy}
-            >
-              {busy ? (
-                <View style={styles.agentPillAvatar}>
-                  <ActivityIndicator size={20} />
-                </View>
-              ) : (
-                <AgentAvatar agentId={agent.id} avatar={agent.avatar} size={52} />
-              )}
-              <Text numberOfLines={1} style={[styles.agentPillName, { color: colors.text.primary }]}>
-                {agentName(agent)}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
-    </Section>
+    <View style={[styles.statusBanner, { backgroundColor: colors.surface.grouped }]}>
+      <Icon source="progress-clock" size={16} color={colors.semantic.warning} />
+      <Text style={[styles.statusText, { color: colors.text.secondary }]}>{hm.gatewayStartingStatus}</Text>
+    </View>
   );
 }
 
-function ContinueSection({
-  items,
-  loading,
-  empty,
-  onViewSessions,
+function BriefingCard({
+  briefing,
+  primaryDecision,
+  onPrimaryPress,
 }: {
-  items: ContinueItem[];
-  loading: boolean;
-  empty: boolean;
-  onViewSessions: () => void;
+  briefing: HomeData['briefing'];
+  primaryDecision?: HomeDecision;
+  onPrimaryPress: (decision: HomeDecision) => void;
 }) {
   const { colors } = useTheme();
   const { homePage: hm } = useMessages();
-
   return (
-    <Section title={hm.sectionContinue} actionLabel={hm.viewSessions} onAction={onViewSessions}>
-      <View style={[styles.panel, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}>
-        {loading ? (
-          <View style={styles.emptyRow}>
-            <ActivityIndicator size="small" />
-          </View>
-        ) : empty ? (
-          <View style={styles.emptyRow}>
-            <Text style={[styles.emptyInlineText, { color: colors.text.tertiary }]}>{hm.noContinueItems}</Text>
-          </View>
-        ) : (
-          items.map((item, index) => (
-            <Pressable key={item.id} style={styles.listRow} onPress={item.onPress}>
-              <View style={[styles.iconBubble, { backgroundColor: colors.accent.selectionBg }]}>
-                <Icon source={item.icon} size={18} color={colors.accent.primary} />
-              </View>
-              <View style={styles.rowCopy}>
-                <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text.primary }]}>{item.title}</Text>
-                <Text numberOfLines={1} style={[styles.rowSubtitle, { color: colors.text.tertiary }]}>{item.meta}</Text>
-              </View>
-              <Icon source="chevron-right" size={18} color={colors.text.tertiary} />
-              {index < items.length - 1 ? (
-                <View style={[styles.rowDivider, { backgroundColor: colors.border.subtle }]} />
-              ) : null}
-            </Pressable>
-          ))
-        )}
+    <View style={[styles.briefingCard, { backgroundColor: colors.surface.panel, borderColor: colors.border.subtle }]}>
+      <View style={[styles.briefingMark, { backgroundColor: colors.accent.soft }]}>
+        <Icon source={primaryDecision ? 'lightning-bolt-outline' : 'check'} size={20} color={colors.accent.primary} />
       </View>
-    </Section>
+      <Text style={[styles.briefingTitle, { color: colors.text.primary }]}>
+        {primaryDecision ? hm.briefingNeedsYou : hm.briefingClear}
+      </Text>
+      <Text style={[styles.briefingSummary, { color: colors.text.secondary }]}>{briefing.summary}</Text>
+      {briefing.progress.movingCount > 0 ? (
+        <Text style={[styles.briefingProgress, { color: colors.text.tertiary }]}>
+          {t(hm.briefingMoving, { count: briefing.progress.movingCount })}
+        </Text>
+      ) : null}
+      {primaryDecision && !primaryDecision.response ? (
+        <Pressable
+          style={({ pressed }) => [
+            styles.briefingAction,
+            { backgroundColor: pressed ? colors.accent.primaryHover : colors.accent.primary },
+          ]}
+          onPress={() => onPrimaryPress(primaryDecision)}
+          accessibilityRole="button"
+        >
+          <Text style={[styles.briefingActionText, { color: colors.accent.onPrimary }]}>{hm.reviewNow}</Text>
+          <Icon source="arrow-right" size={18} color={colors.accent.onPrimary} />
+        </Pressable>
+      ) : null}
+    </View>
   );
 }
 
-function AttentionSection({
-  inboxCount,
-  inboxTodayCount,
-  inboxPreviewItems,
-  attentionWorkflows,
-  nextTask,
-  onInboxPress,
-  onTaskPress,
-  onWorkflowPress,
+function DecisionSection({
+  decisions,
+  pendingDecisionId,
+  onOpen,
+  onRespond,
 }: {
-  inboxCount: number;
-  inboxTodayCount: number;
-  inboxPreviewItems: NoteIndexEntry[];
-  attentionWorkflows: HomeWorkflowRun[];
-  nextTask?: NoteIndexEntry;
-  onInboxPress: () => void;
-  onTaskPress: (note: NoteIndexEntry) => void;
-  onWorkflowPress: (run: HomeWorkflowRun) => void;
+  decisions: HomeDecision[];
+  pendingDecisionId?: string;
+  onOpen: (decision: HomeDecision) => void;
+  onRespond: (decision: HomeDecision, answer: 'approve' | 'deny') => void;
 }) {
   const { colors } = useTheme();
   const { homePage: hm } = useMessages();
-  const nextTaskTitle = nextTask ? resolveNoteListTitle(nextTask, hm.untitled) : null;
-  const workflowItems = [...attentionWorkflows]
-    .sort((a, b) => {
-      const rank = workflowAttentionRank(a) - workflowAttentionRank(b);
-      if (rank !== 0) return rank;
-      return b.createdAtMs - a.createdAtMs;
-    })
-    .slice(0, HOME_ATTENTION_WORKFLOW_LIMIT)
-    .map((workflow) => ({
-      key: `workflow:${workflow.id}`,
-      icon: 'source-branch-sync',
-      title: workflow.title,
-      meta: workflowAttentionMeta(workflow, hm),
-      badge: workflowStatusLabel(workflow, hm),
-      badgeTone: workflowAttentionBadgeTone(workflow),
-      onPress: () => onWorkflowPress(workflow),
-    }));
-  const taskItem = nextTask && nextTaskTitle
-    ? [{
-      key: `task:${nextTask.id}`,
-      icon: 'flag-outline',
-      title: nextTaskTitle,
-      meta: hm.nextTaskHint,
-      badge: hm.taskBadge,
-      badgeTone: 'info' as const,
-      onPress: () => onTaskPress(nextTask),
-    }]
-    : [];
-  const attentionItems = [...workflowItems, ...taskItem].slice(0, HOME_ATTENTION_ITEM_LIMIT);
-
-  if (!shouldShowHomeAttention(inboxCount, attentionItems.length)) return null;
-
+  if (decisions.length === 0) return null;
   return (
     <Section title={hm.sectionAttention}>
-      <InboxPreviewPanel
-        inboxCount={inboxCount}
-        todayCount={inboxTodayCount}
-        items={inboxPreviewItems}
-        onPress={onInboxPress}
-      />
-      {attentionItems.length > 0 ? (
-        <View style={[styles.attentionList, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}>
-          {attentionItems.map((item, index) => (
-            <AttentionItemRow
-              key={item.key}
-              icon={item.icon}
-              title={item.title}
-              meta={item.meta}
-              badge={item.badge}
-              badgeTone={item.badgeTone}
-              showDivider={index < attentionItems.length - 1}
-              onPress={item.onPress}
-            />
-          ))}
-        </View>
-      ) : null}
+      <View style={[styles.groupedList, { backgroundColor: colors.surface.panel }]}>
+        {decisions.map((decision, index) => {
+          const pending = pendingDecisionId === decision.id;
+          return (
+            <View key={decision.id}>
+              <Pressable
+                style={styles.decisionRow}
+                onPress={() => onOpen(decision)}
+                accessibilityRole="button"
+              >
+                <Icon source={decisionIcon(decision)} size={20} color={colors.semantic.warning} />
+                <View style={styles.rowCopy}>
+                  <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text.primary }]}>{decision.title}</Text>
+                  <Text numberOfLines={2} style={[styles.rowSubtitle, { color: colors.text.secondary }]}>
+                    {decision.detail || hm.decisionNeedsReview}
+                  </Text>
+                </View>
+                {!decision.response ? <Icon source="chevron-right" size={18} color={colors.text.tertiary} /> : null}
+              </Pressable>
+              {decision.response ? (
+                <View style={styles.decisionActions}>
+                  <Pressable
+                    style={[styles.decisionButton, { backgroundColor: colors.surface.grouped }]}
+                    onPress={() => onRespond(decision, 'deny')}
+                    disabled={pending}
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: pending, busy: pending }}
+                  >
+                    <Text style={[styles.decisionButtonText, { color: colors.text.secondary }]}>{hm.deny}</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.decisionButton, { backgroundColor: colors.accent.primary }]}
+                    onPress={() => onRespond(decision, 'approve')}
+                    disabled={pending}
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: pending, busy: pending }}
+                  >
+                    {pending ? <ActivityIndicator size={16} color={colors.accent.onPrimary} /> : null}
+                    <Text style={[styles.decisionButtonText, { color: colors.accent.onPrimary }]}>{hm.approve}</Text>
+                  </Pressable>
+                </View>
+              ) : null}
+              {index < decisions.length - 1 ? <View style={[styles.divider, { backgroundColor: colors.border.subtle }]} /> : null}
+            </View>
+          );
+        })}
+      </View>
     </Section>
   );
 }
 
-function AttentionItemRow({
-  icon,
-  title,
-  meta,
-  badge,
-  badgeTone,
-  showDivider,
-  onPress,
-}: {
-  icon: string;
-  title: string;
-  meta: string;
-  badge: string;
-  badgeTone: 'error' | 'warning' | 'info';
-  showDivider: boolean;
-  onPress: () => void;
-}) {
+function ContinueSection({ items }: { items: ContinueItem[] }) {
   const { colors } = useTheme();
-  const badgeColor = badgeTone === 'error'
-    ? colors.semantic.errorBold
-    : badgeTone === 'warning'
-      ? colors.semantic.warning
-      : colors.accent.primary;
-
-  return (
-    <Pressable style={styles.attentionRow} onPress={onPress}>
-      <View style={[styles.iconBubbleSmall, { backgroundColor: colors.surface.input }]}>
-        <Icon source={icon} size={16} color={colors.text.secondary} />
-      </View>
-      <View style={styles.rowCopy}>
-        <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text.primary }]}>{title}</Text>
-        <Text numberOfLines={1} style={[styles.rowSubtitle, { color: colors.text.tertiary }]}>{meta}</Text>
-      </View>
-      <View style={[styles.attentionBadge, { backgroundColor: colors.surface.input }]}>
-        <Text numberOfLines={1} style={[styles.attentionBadgeText, { color: badgeColor }]}>{badge}</Text>
-      </View>
-      <Icon source="chevron-right" size={18} color={colors.text.tertiary} />
-      {showDivider ? <View style={[styles.attentionDivider, { backgroundColor: colors.border.subtle }]} /> : null}
-    </Pressable>
-  );
-}
-
-function HomeWorkSection({
-  items,
-  onOpenWork,
-  onItemPress,
-}: {
-  items: NonNullable<HomeData['work']>['items'];
-  onOpenWork: () => void;
-  onItemPress: (itemId: string) => void;
-}) {
-  const { colors } = useTheme();
-  const { workPage: labels } = useMessages();
+  const { homePage: hm } = useMessages();
   if (items.length === 0) return null;
   return (
-    <Section title={labels.title} actionLabel={labels.title} onAction={onOpenWork}>
-      <View style={[styles.panel, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}>
-        {items.slice(0, 3).map((item, index) => (
-          <Pressable key={item.id} style={styles.listRow} onPress={() => onItemPress(item.id)}>
-            <View style={[styles.iconBubble, { backgroundColor: colors.accent.selectionBg }]}>
-              <Icon source={item.status === 'blocked' || item.status === 'needs_input' ? 'alert-circle-outline' : 'checkbox-marked-circle-outline'} size={18} color={colors.accent.primary} />
-            </View>
+    <Section title={hm.sectionContinue}>
+      <View style={[styles.groupedList, { backgroundColor: colors.surface.panel }]}>
+        {items.map((item, index) => (
+          <Pressable
+            key={item.id}
+            style={styles.listRow}
+            onPress={item.onPress}
+            accessibilityRole="button"
+          >
+            <Icon source={item.icon} size={20} color={colors.accent.primary} />
             <View style={styles.rowCopy}>
               <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text.primary }]}>{item.title}</Text>
-              <Text numberOfLines={1} style={[styles.rowSubtitle, { color: colors.text.tertiary }]}>{item.projectName} · {labels.status[item.status]}</Text>
+              <Text numberOfLines={1} style={[styles.rowSubtitle, { color: colors.text.tertiary }]}>{item.meta}</Text>
             </View>
             <Icon source="chevron-right" size={18} color={colors.text.tertiary} />
-            {index < Math.min(items.length, 3) - 1 ? <View style={[styles.rowDivider, { backgroundColor: colors.border.subtle }]} /> : null}
+            {index < items.length - 1 ? <View style={[styles.rowDivider, { backgroundColor: colors.border.subtle }]} /> : null}
           </Pressable>
         ))}
       </View>
@@ -741,185 +462,90 @@ function HomeWorkSection({
   );
 }
 
-function InboxPreviewPanel({
-  inboxCount,
-  todayCount,
-  items,
-  onPress,
-}: {
-  inboxCount: number;
-  todayCount: number;
-  items: NoteIndexEntry[];
-  onPress: () => void;
-}) {
-  const { colors } = useTheme();
-  const { homePage: hm } = useMessages();
-  const visibleItems = items.slice(0, HOME_INBOX_VISIBLE_PREVIEW_LIMIT);
-  const statusText = inboxCount > 0
-    ? todayCount > 0
-      ? t(hm.inboxPendingTodayCount, { count: inboxCount, today: todayCount })
-      : t(hm.inboxPendingCount, { count: inboxCount })
-    : hm.inboxClearHint;
-
-  return (
-    <Pressable
-      style={[styles.inboxPanel, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}
-      onPress={onPress}
-    >
-      <View style={styles.inboxHeader}>
-        <View style={styles.inboxTitleRow}>
-          <View style={[styles.iconBubble, { backgroundColor: colors.accent.selectionBg }]}>
-            <Icon source={inboxCount > 0 ? 'tray-full' : 'tray'} size={18} color={colors.accent.primary} />
-          </View>
-          <View style={styles.rowCopy}>
-            <Text style={[styles.rowTitle, { color: colors.text.primary }]}>{hm.inboxMetric}</Text>
-            <Text numberOfLines={1} style={[styles.rowSubtitle, { color: colors.text.tertiary }]}>
-              {statusText}
-            </Text>
-          </View>
-        </View>
-        <View style={styles.inboxAction}>
-          <Text style={[styles.openText, { color: colors.accent.primary }]}>{hm.organizeInbox}</Text>
-          <Icon source="chevron-right" size={18} color={colors.accent.primary} />
-        </View>
-      </View>
-
-      {inboxCount > 0 ? (
-        <View style={styles.inboxPreviewList}>
-          {visibleItems.length > 0 ? visibleItems.map((item, index) => (
-            <InboxPreviewItem key={item.id} item={item} showDivider={index < visibleItems.length - 1} />
-          )) : (
-            <Text style={[styles.inboxEmptyHint, { color: colors.text.tertiary }]}>
-              {hm.inboxPreviewLoading}
-            </Text>
-          )}
-        </View>
-      ) : null}
-    </Pressable>
-  );
-}
-
-function InboxPreviewItem({ item, showDivider }: { item: NoteIndexEntry; showDivider: boolean }) {
-  const { colors } = useTheme();
-  const { homePage: hm, notesPage: pm } = useMessages();
-  const title = resolveNoteListTitle(item, hm.untitled);
-  const kind = noteKindLabel(item.kind, pm);
-  const meta = `${kind} · ${timeLabel(item.createdAt, hm)}`;
-
-  return (
-    <View style={styles.inboxPreviewRow}>
-      <View style={[styles.iconBubbleSmall, { backgroundColor: colors.surface.input }]}>
-        <Icon source={iconForNoteKind(item.kind)} size={16} color={colors.text.secondary} />
-      </View>
-      <View style={styles.rowCopy}>
-        <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text.primary }]}>{title}</Text>
-        <Text numberOfLines={1} style={[styles.rowSubtitle, { color: colors.text.tertiary }]}>{meta}</Text>
-      </View>
-      {showDivider ? <View style={[styles.inboxPreviewDivider, { backgroundColor: colors.border.subtle }]} /> : null}
-    </View>
-  );
-}
-
 function LibrarySection({
+  inboxCount,
+  onInbox,
   onNotes,
   onSessions,
   onFiles,
-  onAutomation,
-  onAgents,
-  onWork,
-  onProjects,
 }: {
+  inboxCount: number;
+  onInbox: () => void;
   onNotes: () => void;
   onSessions: () => void;
   onFiles: () => void;
-  onAutomation: () => void;
-  onAgents: () => void;
-  onWork: () => void;
-  onProjects: () => void;
 }) {
-  const { colors } = useTheme();
-  const { homePage: hm, workPage } = useMessages();
+  const { homePage: hm } = useMessages();
   return (
     <Section title={hm.sectionLibrary}>
-      <View style={[styles.libraryGrid, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}>
-        <LibraryButton icon="note-text-outline" label={hm.libraryNotes} onPress={onNotes} />
-        <LibraryButton icon="message-processing-outline" label={hm.librarySessions} onPress={onSessions} />
-        <LibraryButton icon="folder-outline" label={hm.libraryFiles} onPress={onFiles} />
-        <LibraryButton icon="clock-outline" label={hm.libraryAutomation} onPress={onAutomation} />
-        <LibraryButton icon="checkbox-marked-circle-outline" label={workPage.title} onPress={onWork} />
-        <LibraryButton icon="folder-multiple-outline" label={workPage.projectsTitle} onPress={onProjects} />
-        <LibraryButton icon="account-supervisor-outline" label={hm.libraryAgents} onPress={onAgents} last />
-      </View>
+      <LibraryRow icon="tray-arrow-down" label={hm.inboxMetric} value={inboxCount > 0 ? String(inboxCount) : undefined} onPress={onInbox} />
+      <LibraryRow icon="note-text-outline" label={hm.libraryNotes} onPress={onNotes} />
+      <LibraryRow icon="message-processing-outline" label={hm.librarySessions} onPress={onSessions} />
+      <LibraryRow icon="folder-outline" label={hm.libraryFiles} onPress={onFiles} last />
     </Section>
   );
 }
 
-function Section({
-  title,
-  actionLabel,
-  onAction,
-  children,
+function LibraryRow({
+  icon,
+  label,
+  value,
+  onPress,
+  last = false,
 }: {
-  title: string;
-  actionLabel?: string;
-  onAction?: () => void;
-  children: ReactNode;
+  icon: string;
+  label: string;
+  value?: string;
+  onPress: () => void;
+  last?: boolean;
 }) {
-  const { colors } = useTheme();
-  return (
-    <View style={styles.section}>
-      <View style={styles.headerRow}>
-        <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{title}</Text>
-        {actionLabel && onAction ? (
-          <Pressable onPress={onAction} style={styles.headerAction}>
-            <Text style={[styles.openText, { color: colors.accent.primary }]}>{actionLabel}</Text>
-          </Pressable>
-        ) : null}
-      </View>
-      {children}
-    </View>
-  );
-}
-
-function LibraryButton({ icon, label, onPress, last = false }: { icon: string; label: string; onPress: () => void; last?: boolean }) {
   const { colors } = useTheme();
   return (
     <Pressable
       style={({ pressed }) => [
-        styles.libraryButton,
+        styles.libraryRow,
+        { backgroundColor: pressed ? colors.surface.pressed : colors.surface.panel },
         !last && { borderBottomColor: colors.border.subtle, borderBottomWidth: StyleSheet.hairlineWidth },
-        pressed && { backgroundColor: colors.surface.pressed },
       ]}
       onPress={onPress}
+      accessibilityRole="button"
     >
-      <Icon source={icon} size={20} color={colors.accent.primary} />
-      <Text numberOfLines={1} style={[styles.libraryLabel, { color: colors.text.primary }]}>{label}</Text>
+      <Icon source={icon} size={20} color={colors.text.secondary} />
+      <Text style={[styles.libraryLabel, { color: colors.text.primary }]}>{label}</Text>
+      {value ? <Text style={[styles.libraryValue, { color: colors.text.tertiary }]}>{value}</Text> : null}
       <Icon source="chevron-right" size={18} color={colors.text.tertiary} />
     </Pressable>
   );
 }
 
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  const { colors } = useTheme();
+  return (
+    <View style={styles.section}>
+      <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{title}</Text>
+      <View style={styles.sectionBody}>{children}</View>
+    </View>
+  );
+}
+
 function WorkspaceActionDock({
-  accessibilityLabel,
-  disabled,
-  onPress,
+  onCapture,
   onAskAi,
-  askAiPending = false,
+  askAiPending,
 }: {
-  accessibilityLabel: string;
-  disabled: boolean;
-  onPress: () => void;
-  onAskAi?: () => void;
-  askAiPending?: boolean;
+  onCapture: () => void;
+  onAskAi: () => void;
+  askAiPending: boolean;
 }) {
   const { colors } = useTheme();
   const { homePage: hm } = useMessages();
   const insets = useSafeAreaInsets();
   const transition = useOptionalWorkspaceTransition();
   const askAiRef = useRef<View>(null);
+
   useEffect(() => {
-    if (!transition || !onAskAi) return;
-    transition.registerPillMeasurer(async () => new Promise<{ x: number; y: number; width: number; height: number } | null>((resolve) => {
+    if (!transition) return;
+    transition.registerPillMeasurer(async () => new Promise((resolve) => {
       const node = askAiRef.current;
       if (!node) {
         resolve(null);
@@ -929,66 +555,34 @@ function WorkspaceActionDock({
         resolve(width > 0 && height > 0 ? { x, y, width, height } : null);
       });
     }));
-    return () => transition.registerPillMeasurer(null);
-  }, [onAskAi, transition]);
+    return () => transition?.registerPillMeasurer(null);
+  }, [transition]);
 
   return (
-    <View
-      pointerEvents="box-none"
-      style={[
-        styles.centerNewNoteWrap,
-        { paddingBottom: floatingBottomPadding(insets.bottom) + FLOATING_BOTTOM_OFFSET },
-      ]}
-    >
-      <View
-        style={[
-          styles.workspaceDock,
-          { backgroundColor: colors.surface.elevated, borderColor: colors.border.default },
-        ]}
-      >
-        {onAskAi ? (
-          <Pressable
-            ref={askAiRef}
-            style={({ pressed }) => [
-              styles.dockAction,
-              pressed && { backgroundColor: colors.surface.pressed },
-            ]}
-            onPress={onAskAi}
-            disabled={askAiPending}
-            accessibilityRole="button"
-            accessibilityLabel={hm.askAi}
-            accessibilityState={{ disabled: askAiPending, busy: askAiPending }}
-          >
-            {askAiPending ? (
-              <ActivityIndicator size={18} color={colors.accent.primary} />
-            ) : (
-              <Icon source="creation-outline" size={18} color={colors.accent.primary} />
-            )}
-            <Text style={[styles.askAiLabel, { color: colors.text.primary }]}>
-              {askAiPending ? hm.askAiStarting : hm.askAi}
-            </Text>
-          </Pressable>
-        ) : null}
+    <View pointerEvents="box-none" style={[styles.dockWrap, { paddingBottom: floatingBottomPadding(insets.bottom) + FLOATING_BOTTOM_OFFSET }]}>
+      <View style={[styles.dock, { backgroundColor: colors.surface.elevated, borderColor: colors.border.default }]}>
         <Pressable
-          style={({ pressed }) => [
-            styles.dockAction,
-            styles.dockPrimaryAction,
-            { backgroundColor: colors.accent.primary },
-            pressed && { backgroundColor: colors.accent.primaryHover },
-            disabled && styles.disabled,
-          ]}
-          onPress={onPress}
-          disabled={disabled}
+          ref={askAiRef}
+          style={({ pressed }) => [styles.dockSecondary, pressed && { backgroundColor: colors.surface.pressed }]}
+          onPress={onAskAi}
+          disabled={askAiPending}
           accessibilityRole="button"
-          accessibilityLabel={accessibilityLabel}
-          accessibilityState={{ disabled }}
+          accessibilityLabel={hm.askAi}
+          accessibilityState={{ disabled: askAiPending, busy: askAiPending }}
         >
-          {disabled ? (
-            <ActivityIndicator size={20} color={colors.accent.onPrimary} />
-          ) : (
-            <Icon source="note-plus-outline" size={19} color={colors.accent.onPrimary} />
-          )}
-          <Text style={[styles.askAiLabel, { color: colors.accent.onPrimary }]}>{hm.quickNewNote}</Text>
+          {askAiPending
+            ? <ActivityIndicator size={18} color={colors.accent.primary} />
+            : <Icon source="creation-outline" size={19} color={colors.accent.primary} />}
+          <Text style={[styles.dockLabel, { color: colors.text.primary }]}>{hm.askAi}</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.dockPrimary, { backgroundColor: colors.accent.primary }]}
+          onPress={onCapture}
+          accessibilityRole="button"
+          accessibilityLabel={hm.commandCapture}
+        >
+          <Icon source="plus" size={20} color={colors.accent.onPrimary} />
+          <Text style={[styles.dockLabel, { color: colors.accent.onPrimary }]}>{hm.commandCapture}</Text>
         </Pressable>
       </View>
     </View>
@@ -998,232 +592,41 @@ function WorkspaceActionDock({
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   content: { paddingHorizontal: spacing.content, paddingTop: spacing.sm, gap: spacing.section },
-  centerContent: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 10 },
-  emptyTitle: { ...typography.heading, fontWeight: '600' },
-  emptyText: { ...typography.ui, textAlign: 'center' },
-  loadingCard: { minHeight: 180, alignItems: 'center', justifyContent: 'center' },
-  statusBanner: {
-    minHeight: 36,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: radii.full,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
+  centerContent: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xxl, gap: spacing.md },
+  emptyTitle: { ...typography.heading },
+  emptyText: { ...typography.body, textAlign: 'center' },
+  connectButton: { minHeight: 48, borderRadius: radii.xxl, justifyContent: 'center', paddingHorizontal: spacing.xl, marginTop: spacing.sm },
+  connectButtonText: { ...typography.ui, fontWeight: '600' },
+  skeletonWrap: { gap: spacing.section },
+  statusBanner: { minHeight: 36, borderRadius: radii.md, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md },
   statusText: { ...typography.caption, fontWeight: '500' },
+  briefingCard: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.xl, padding: spacing.content, gap: spacing.sm },
+  briefingMark: { width: 40, height: 40, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.xs },
+  briefingTitle: { ...typography.title },
+  briefingSummary: { ...typography.body },
+  briefingProgress: { ...typography.caption },
+  briefingAction: { minHeight: 48, borderRadius: radii.xxl, marginTop: spacing.sm, paddingHorizontal: spacing.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
+  briefingActionText: { ...typography.ui, fontWeight: '600' },
   section: { gap: spacing.md },
-  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  sectionBody: { borderRadius: radii.lg, overflow: 'hidden' },
   sectionTitle: { ...typography.heading },
-  headerAction: { minHeight: 32, justifyContent: 'center' },
-  openText: { ...typography.label, fontWeight: '600' },
-  agentStripLoading: {
-    minHeight: 92,
-    borderRadius: 20,
-    borderWidth: StyleSheet.hairlineWidth,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  agentStripContent: {
-    gap: spacing.md,
-    paddingRight: spacing.lg,
-  },
-  agentPill: {
-    width: 86,
-    minHeight: 96,
-    borderRadius: 20,
-    borderWidth: StyleSheet.hairlineWidth,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.md,
-  },
-  agentPillAvatar: {
-    width: 52,
-    height: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  agentPillName: {
-    ...typography.caption,
-    maxWidth: '100%',
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  panel: {
-    borderRadius: 20,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
-  },
-  panelRow: {
-    minHeight: 64,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    borderRadius: 20,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: spacing.md,
-  },
-  listRow: {
-    minHeight: 64,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.md,
-  },
-  rowDivider: {
-    position: 'absolute',
-    left: 62,
-    right: 0,
-    bottom: 0,
-    height: StyleSheet.hairlineWidth,
-  },
-  iconBubble: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rowCopy: { flex: 1, gap: 2 },
+  groupedList: { borderRadius: radii.lg, overflow: 'hidden' },
+  decisionRow: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
+  decisionActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingBottom: spacing.md },
+  decisionButton: { minWidth: 84, minHeight: 40, borderRadius: radii.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, paddingHorizontal: spacing.md },
+  decisionButtonText: { ...typography.ui, fontWeight: '600' },
+  divider: { height: StyleSheet.hairlineWidth, marginLeft: 52 },
+  listRow: { minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg },
+  rowCopy: { flex: 1, gap: spacing.xxs },
   rowTitle: { ...typography.ui, fontWeight: '600' },
   rowSubtitle: { ...typography.caption },
-  emptyRow: { minHeight: 72, alignItems: 'center', justifyContent: 'center', padding: spacing.md },
-  emptyInlineText: { ...typography.label, fontWeight: '500', textAlign: 'center' },
-  attentionList: {
-    borderRadius: 20,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
-  },
-  attentionRow: {
-    minHeight: 56,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.md,
-  },
-  attentionBadge: {
-    minHeight: 24,
-    maxWidth: 96,
-    borderRadius: radii.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
-  },
-  attentionBadgeText: { ...typography.micro, fontWeight: '600' },
-  attentionDivider: {
-    position: 'absolute',
-    left: 56,
-    right: 0,
-    bottom: 0,
-    height: StyleSheet.hairlineWidth,
-  },
-  inboxPanel: {
-    borderRadius: 20,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: spacing.md,
-    gap: spacing.md,
-  },
-  inboxHeader: {
-    minHeight: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-  },
-  inboxTitleRow: {
-    flex: 1,
-    minWidth: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  inboxAction: {
-    minHeight: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xxs,
-  },
-  inboxPreviewList: {
-    gap: spacing.sm,
-  },
-  inboxPreviewRow: {
-    minHeight: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  iconBubbleSmall: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  inboxPreviewDivider: {
-    position: 'absolute',
-    left: 44,
-    right: 0,
-    bottom: -spacing.xs,
-    height: StyleSheet.hairlineWidth,
-  },
-  inboxEmptyHint: { ...typography.label, fontWeight: '500' },
-  disabled: { opacity: 0.6 },
-  libraryGrid: {
-    borderRadius: radii.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
-  },
-  libraryButton: {
-    width: '100%',
-    minHeight: 54,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.md,
-  },
-  libraryLabel: { ...typography.ui, fontWeight: '500', flex: 1 },
-  centerNewNoteWrap: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  workspaceDock: {
-    width: 252,
-    height: 56,
-    padding: 4,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    shadowColor: '#000',
-    shadowOpacity: 0.07,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
-  },
-  dockAction: {
-    flex: 1,
-    height: 48,
-    borderRadius: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
-  },
-  dockPrimaryAction: {
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 5,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 1,
-  },
-  askAiLabel: { ...typography.ui, fontWeight: '600' },
+  rowDivider: { position: 'absolute', left: 52, right: 0, bottom: 0, height: StyleSheet.hairlineWidth },
+  libraryRow: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg },
+  libraryLabel: { ...typography.ui, flex: 1 },
+  libraryValue: { ...typography.label },
+  dockWrap: { position: 'absolute', left: 0, right: 0, bottom: 0, alignItems: 'center', paddingHorizontal: spacing.content },
+  dock: { minHeight: 58, borderRadius: radii.full, borderWidth: StyleSheet.hairlineWidth, padding: spacing.xs, flexDirection: 'row', gap: spacing.xs },
+  dockSecondary: { minHeight: 48, minWidth: 112, borderRadius: radii.full, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingHorizontal: spacing.lg },
+  dockPrimary: { minHeight: 48, minWidth: 124, borderRadius: radii.full, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingHorizontal: spacing.lg },
+  dockLabel: { ...typography.ui, fontWeight: '600' },
 });

@@ -102,6 +102,24 @@
           "photosPermission": "Allow $(PRODUCT_NAME) to access your photos to attach images in chat.",
           "cameraPermission": "Allow $(PRODUCT_NAME) to use the camera to take photos in chat."
         }
+      ],
+      [
+        "expo-widgets",
+        {
+          "widgets": [
+            {
+              "name": "QuickEntryWidget",
+              "displayName": "xopc Quick Entry",
+              "description": "Capture an item or open your xopc briefing.",
+              "ios": {
+                "supportedFamilies": [
+                  "systemSmall",
+                  "systemMedium"
+                ]
+              }
+            }
+          ]
+        }
       ]
     ],
     "extra": {

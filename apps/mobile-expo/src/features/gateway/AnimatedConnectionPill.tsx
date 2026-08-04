@@ -23,6 +23,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { colors } from '../../theme';
+import { useReducedMotion } from '../../motion';
 import type { ConnectionSeverity } from './connection-state';
 
 const SEVERITY_ORDER: ConnectionSeverity[] = ['ok', 'warn', 'error', 'pending', 'idle'];
@@ -69,18 +70,21 @@ export const AnimatedConnectionPill = memo(function AnimatedConnectionPill({
   children,
   style,
 }: AnimatedConnectionPillProps) {
+  const reducedMotion = useReducedMotion();
   const targetIndex = severityIndex(severity);
   const sv = useSharedValue(targetIndex);
   // 0 → fully visible, 1 → mid-dip. Only flips when severity changes.
   const dip = useSharedValue(0);
 
   useEffect(() => {
-    sv.value = withTiming(targetIndex, TIMING);
-    dip.value = withSequence(
-      withTiming(1, FG_DIP_OUT),
-      withDelay(20, withTiming(0, FG_DIP_IN)),
-    );
-  }, [sv, dip, targetIndex]);
+    sv.value = reducedMotion ? targetIndex : withTiming(targetIndex, TIMING);
+    dip.value = reducedMotion
+      ? 0
+      : withSequence(
+          withTiming(1, FG_DIP_OUT),
+          withDelay(20, withTiming(0, FG_DIP_IN)),
+        );
+  }, [sv, dip, reducedMotion, targetIndex]);
 
   const palette = isDark ? PALETTE_DARK : PALETTE_LIGHT;
   const inputRange = SEVERITY_ORDER.map((_, i) => i);

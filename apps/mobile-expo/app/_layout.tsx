@@ -7,6 +7,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { PaperProvider } from 'react-native-paper';
 
+import '../src/widgets/register-widgets';
+
 import { ClipboardIntakeModal } from '@/features/clipboard-intake/ClipboardIntakeModal';
 import { tryConsumeGatewayDeeplink } from '@/features/gateway/apply-gateway-deeplink';
 import { themedStackScreenOptions } from '@/lib/stack-screen-theme';

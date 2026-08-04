@@ -6,7 +6,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Button, Icon, Text } from 'react-native-paper';
 
-import { FloatingHeader } from '../../components/FloatingHeader';
+import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { useMessages, t } from '../../i18n/messages';
 import { openChat, useDismissOnHardwareBack } from '../../lib/navigation';
 import { fetchChatAgents, type ChatAgentOption } from '../../query/agents';
@@ -71,7 +71,7 @@ export function AgentDetailScreen() {
   if (agentsQuery.isLoading) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.pageBg }}>
-        <FloatingHeader title={am.detailTitle} onBack={() => router.back()} />
+        <NativeScreenHeader title={am.detailTitle} onBack={() => router.back()} />
         <View style={styles.center}>
           <ActivityIndicator size="large" />
         </View>
@@ -82,7 +82,7 @@ export function AgentDetailScreen() {
   if (!configured || agentsQuery.isError || !agent) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.pageBg }}>
-        <FloatingHeader title={am.detailTitle} onBack={() => router.back()} />
+        <NativeScreenHeader title={am.detailTitle} onBack={() => router.back()} />
         <View style={styles.center}>
           <Icon source="robot-off-outline" size={48} color={colors.textMuted} />
           <Text style={[styles.emptyText, { color: colors.textMuted }]}>
@@ -105,7 +105,7 @@ export function AgentDetailScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.pageBg }}>
-      <FloatingHeader title={am.detailTitle} onBack={() => router.back()} />
+      <NativeScreenHeader title={am.detailTitle} onBack={() => router.back()} />
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={styles.scroll}

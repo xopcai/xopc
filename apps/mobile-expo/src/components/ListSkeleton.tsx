@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { useTheme } from '../theme';
+import { radii, spacing, useTheme } from '../theme';
 
 export type ListSkeletonProps = {
   count?: number;
@@ -35,26 +35,24 @@ export const ListSkeleton = memo(function ListSkeleton({
 
 const styles = StyleSheet.create({
   wrap: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    gap: 10,
+    gap: spacing.sm,
   },
   row: {
     minHeight: 78,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 14,
-    padding: 14,
+    borderRadius: radii.lg,
+    padding: spacing.md,
     flexDirection: 'row',
-    gap: 12,
+    gap: spacing.md,
   },
   icon: {
     width: 32,
     height: 32,
-    borderRadius: 10,
+    borderRadius: radii.md,
   },
   copy: {
     flex: 1,
-    gap: 8,
+    gap: spacing.sm,
   },
   lineStrong: {
     width: '62%',

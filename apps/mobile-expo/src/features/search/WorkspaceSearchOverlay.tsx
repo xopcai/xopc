@@ -14,7 +14,6 @@ import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { ActivityIndicator, Icon, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { FloatingHeader } from '../../components/FloatingHeader';
 import { t, useMessages } from '../../i18n/messages';
 import { openNoteDetail } from '../../lib/navigation';
 import { sessionDisplayName } from '../../lib/session-helpers';
@@ -161,7 +160,25 @@ export function WorkspaceSearchOverlay({ visible, onClose }: WorkspaceSearchOver
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
-        <FloatingHeader title={sm.title} onBack={onClose} />
+        <View
+          style={[
+            styles.modalHeader,
+            { paddingTop: insets.top, borderBottomColor: colors.border.subtle },
+          ]}
+        >
+          <Pressable
+            style={styles.headerButton}
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel={m.common.close}
+          >
+            <Icon source="chevron-down" size={26} color={colors.text.primary} />
+          </Pressable>
+          <Text numberOfLines={1} style={[styles.headerTitle, { color: colors.text.primary }]}>
+            {sm.title}
+          </Text>
+          <View style={styles.headerButton} />
+        </View>
 
         <View style={styles.content}>
           {!configured ? (
@@ -239,6 +256,15 @@ export function WorkspaceSearchOverlay({ visible, onClose }: WorkspaceSearchOver
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
+  modalHeader: {
+    minHeight: 56,
+    paddingHorizontal: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '600' },
   content: { flex: 1, minHeight: 0 },
   center: {
     flex: 1,

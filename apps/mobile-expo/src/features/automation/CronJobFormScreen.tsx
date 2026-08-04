@@ -13,7 +13,7 @@ import {
 import { Button, Text, TextInput } from 'react-native-paper';
 
 import { AppToast } from '../../components/AppToast';
-import { FloatingHeader } from '../../components/FloatingHeader';
+import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { TOAST_DURATION_DEFAULT } from '../../constants/toast';
 import { useMessages } from '../../i18n/messages';
 import {
@@ -131,7 +131,7 @@ export function CronJobFormScreen() {
   if (isEdit && jobQuery.isLoading) {
     return (
       <View style={[styles.screen, styles.center, { backgroundColor: screenBg }]}>
-        <FloatingHeader title={title} onBack={() => router.back()} />
+        <NativeScreenHeader title={title} onBack={() => router.back()} />
         <ActivityIndicator size="large" />
       </View>
     );
@@ -140,7 +140,7 @@ export function CronJobFormScreen() {
   if (isEdit && jobQuery.isError) {
     return (
       <View style={[styles.screen, styles.center, { backgroundColor: screenBg }]}>
-        <FloatingHeader title={title} onBack={() => router.back()} />
+        <NativeScreenHeader title={title} onBack={() => router.back()} />
         <Text style={{ color: textSecondary, marginBottom: 12 }}>{pm.loadFailed}</Text>
         <Button mode="outlined" onPress={() => void jobQuery.refetch()}>
           {m.common.retry}
@@ -151,7 +151,7 @@ export function CronJobFormScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: screenBg }]}>
-      <FloatingHeader title={title} onBack={() => router.back()} />
+      <NativeScreenHeader title={title} onBack={() => router.back()} />
 
       <KeyboardAvoidingView
         style={styles.flex}
