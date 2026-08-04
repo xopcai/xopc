@@ -244,7 +244,7 @@ export function FilesScreen() {
   if (!configured) {
     return (
       <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
-        <NativeScreenHeader variant="large" title={labels.title} onBack={() => router.back()} />
+        <NativeScreenHeader title={labels.title} onBack={() => router.back()} />
         <View style={styles.center}>
           <Icon source="cloud-off-outline" size={42} color={colors.text.tertiary} />
           <Text style={[styles.emptyTitle, { color: colors.text.primary }]}>{labels.gatewayRequiredTitle}</Text>
@@ -257,7 +257,6 @@ export function FilesScreen() {
   return (
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
       <NativeScreenHeader
-        variant={currentDir ? 'compact' : 'large'}
         title={labels.title}
         onBack={goBack}
         rightActions={currentFolderEntry ? [

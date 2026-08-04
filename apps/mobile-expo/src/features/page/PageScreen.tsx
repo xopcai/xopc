@@ -24,7 +24,6 @@ import { applyMarkdownPatchResult } from '../notes/markdown/markdown-patch';
 import type {
   EditorCommand,
   EditorCommandInput,
-  NoteEditorMode,
   NoteEditorLabels,
 } from '../notes/editor/editor-protocol';
 import { useNoteTagsStore } from '../../stores/note-tags-store';
@@ -55,7 +54,6 @@ export function PageScreen() {
   const [moreVisible, setMoreVisible] = useState(false);
   const [tagPickerVisible, setTagPickerVisible] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
-  const [noteEditorMode, setNoteEditorMode] = useState<NoteEditorMode>('read');
   const [editorCommand, setEditorCommand] = useState<EditorCommand | null>(null);
   const [aiLoadingKey, setAiLoadingKey] = useState<string | null>(null);
 
@@ -135,15 +133,6 @@ export function PageScreen() {
     setEditorCommand({ id: editorCommandIdRef.current, ...next } as EditorCommand);
   }, []);
 
-  const handleRequestEdit = useCallback(() => {
-    setNoteEditorMode('edit');
-  }, []);
-
-  const handleStartEditing = useCallback(() => {
-    setNoteEditorMode('edit');
-    requestAnimationFrame(() => editorRef.current?.focus('body'));
-  }, []);
-
   const voice = useVoiceCaptureInteraction({
     value: markdownRef.current,
     onChangeText: updateMarkdown,
@@ -167,12 +156,6 @@ export function PageScreen() {
     await flushEditorToDraft();
     await flushSave();
   }, [flushEditorToDraft, flushSave]);
-
-  const handleFinishEditing = useCallback(() => {
-    Keyboard.dismiss();
-    setNoteEditorMode('read');
-    void saveEditorBeforeLeave();
-  }, [saveEditorBeforeLeave]);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
@@ -385,7 +368,7 @@ export function PageScreen() {
   const showLoading = noteQuery.isLoading && !note;
   const showError = noteQuery.isError && !note;
   const showMissing = !showLoading && !showError && (!id || !note);
-  const showViewActions = Boolean(note && id && !keyboardVisible && noteEditorMode === 'read');
+  const showViewActions = Boolean(note && id && !keyboardVisible);
   const wordCount = useMemo(() => countNoteCharacters(markdown), [markdown]);
 
   const viewActionItems = useMemo<NoteViewActionBarItem[]>(() => [
@@ -423,11 +406,6 @@ export function PageScreen() {
       <NoteDetailHeader
         onBack={handleBack}
         backLabel={m.common.back}
-        rightActions={note && id ? [{
-          icon: noteEditorMode === 'edit' ? 'check' : 'pencil-outline',
-          label: noteEditorMode === 'edit' ? pm.done : pm.edit,
-          onPress: noteEditorMode === 'edit' ? handleFinishEditing : handleStartEditing,
-        }] : []}
       />
 
       {showLoading ? (
@@ -461,14 +439,13 @@ export function PageScreen() {
               title={title}
               titlePlaceholder={pm.untitledNote}
               markdown={markdown}
-              mode={noteEditorMode}
+              mode="edit"
               attachmentSrcMap={attachmentSrcMap}
               topCommand={editorCommand}
               labels={labels}
               onChangeTitle={updateTitle}
               onChangeMarkdown={updateMarkdown}
               onRequestAttachment={handleRequestAttachment}
-              onRequestEdit={handleRequestEdit}
               aiActions={aiActions}
               aiLoadingKey={aiLoadingKey}
               onRequestAiAction={handleRequestAiAction}
