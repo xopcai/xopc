@@ -33,6 +33,7 @@ import { fetchWorkDiscoveryOnboarding } from '@/features/work-discovery/api';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import { messages } from '@/i18n/messages';
+import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
 const categoryIcons = {
@@ -77,11 +78,12 @@ export const ChatWelcomeSpotlight = memo(function ChatWelcomeSpotlight({
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const [selectingProjectId, setSelectingProjectId] = useState<string | null>(null);
   const navigate = useNavigate();
+  const token = useGatewayStore((state) => state.token);
   const language = useLocaleStore((state) => state.language);
   const workDiscoveryCopy = messages(language).onboarding.workDiscovery;
 
   useEffect(() => {
-    if (s.contextKind !== 'empty') {
+    if (!token || s.contextKind !== 'empty') {
       setProjectEntryLoaded(true);
       setProjects([]);
       setWorkDiscovery(null);
@@ -99,7 +101,7 @@ export const ChatWelcomeSpotlight = memo(function ChatWelcomeSpotlight({
       setProjectEntryLoaded(true);
     });
     return () => { cancelled = true; };
-  }, [s.contextKind]);
+  }, [s.contextKind, token]);
 
   const selectedCategory = useMemo(
     () => (selectedCategoryIndex == null ? undefined : s.categories[selectedCategoryIndex]),

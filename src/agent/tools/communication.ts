@@ -7,6 +7,15 @@ const log = createLogger('MessageTool');
 
 const MessageSendSchema = Type.Object({
   content: Type.String({ description: 'The message content to send' }),
+  channel: Type.Optional(Type.String({
+    description: 'Configured destination channel (for example weixin or telegram). Defaults to the current channel.',
+  })),
+  chat_id: Type.Optional(Type.String({
+    description: 'Destination chat/peer id. Required when channel is provided.',
+  })),
+  accountId: Type.Optional(Type.String({
+    description: 'Optional account id for a multi-account destination channel.',
+  })),
   mediaUrl: Type.Optional(Type.String({ description: 'URL of the media to send' })),
   mediaType: Type.Optional(Type.Enum({
     photo: 'photo',
@@ -37,6 +46,9 @@ interface MessageContext {
 
 type MessageSendParams = {
   content: string;
+  channel?: string;
+  chat_id?: string;
+  accountId?: string;
   mediaUrl?: string;
   mediaType?: 'photo' | 'video' | 'audio' | 'document';
   replyTo?: string;
@@ -63,7 +75,9 @@ export function createMessageTool(
 ): AgentTool {
   return {
     name: 'send_message',
-    description: `Send a message to the user.
+    description: `Send a message to the current conversation or an explicit configured channel.
+
+For a proactive cross-channel send, provide both \`channel\` and \`chat_id\` (for example \`channel: "weixin"\`). Use \`accountId\` when the destination has multiple configured accounts. Omit destination fields to reply to the current conversation.
 
 TTS (Text-to-Speech) is handled automatically by the system based on configuration:
 - trigger=off: Never use voice
@@ -83,18 +97,31 @@ When TTS is enabled, you may also use the \`text_to_speech\` tool to send a stan
     ): Promise<AgentToolResult<{}>> {
       const p = params as MessageSendParams;
       const ctx = getContext();
-      if (!ctx) {
+      const requestedChannel = p.channel?.trim();
+      const requestedChatId = p.chat_id?.trim();
+      if (Boolean(requestedChannel) !== Boolean(requestedChatId)) {
+        return {
+          content: [{ type: 'text', text: 'Error: channel and chat_id must be provided together' }],
+          details: {},
+        };
+      }
+      if (!ctx && (!requestedChannel || !requestedChatId)) {
         return {
           content: [{ type: 'text', text: 'Error: No active conversation context' }],
           details: {},
         };
       }
 
+      const channel = requestedChannel || ctx!.channel;
+      const chatId = requestedChatId || ctx!.chatId;
+      const accountId = p.accountId?.trim();
+
       try {
         const msg: OutboundMessage = {
-          channel: ctx.channel,
-          chat_id: ctx.chatId,
+          channel,
+          chat_id: chatId,
           content: p.content,
+          ...(accountId ? { metadata: { accountId } } : {}),
           mediaUrl: p.mediaUrl,
           mediaType: p.mediaType,
           replyToMessageId: p.replyTo,
@@ -119,11 +146,11 @@ When TTS is enabled, you may also use the \`text_to_speech\` tool to send a stan
           {
             err: error,
             errorMessage: em,
-            channel: ctx.channel,
-            chatId: ctx.chatId,
+            channel,
+            chatId,
             contentPreview: String(p.content ?? '').slice(0, 100),
           },
-          `send_message: outbound publish failed (${ctx.channel}/${ctx.chatId}): ${em}`,
+          `send_message: outbound publish failed (${channel}/${chatId}): ${em}`,
         );
         return {
           content: [{ type: 'text', text: `❌ Send error: ${error instanceof Error ? error.message : String(error)}` }],

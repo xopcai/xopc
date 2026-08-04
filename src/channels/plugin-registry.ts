@@ -20,7 +20,12 @@ export class ChannelPluginRegistry {
   private readonly plugins = new Map<string, ChannelPlugin>();
 
   register(plugin: ChannelPlugin): void {
-    if (this.plugins.has(plugin.id)) {
+    const current = this.plugins.get(plugin.id);
+    if (current === plugin) {
+      log.debug({ channel: plugin.id }, 'Channel plugin already registered');
+      return;
+    }
+    if (current) {
       log.warn({ channel: plugin.id }, 'Channel plugin already registered, overwriting');
     }
     this.plugins.set(plugin.id, plugin);

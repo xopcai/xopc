@@ -57,7 +57,7 @@ const CORE_TOOL_SUMMARIES: Record<string, string> = {
   web_fetch: 'Fetch and extract readable content from a URL',
   web_extract: 'Extract structured content from a URL',
   browser_use: 'Control the configured browser',
-  send_message: 'Send messages to the current channel',
+  send_message: 'Send messages to the current conversation or an explicit configured channel',
   send_media: 'Send media attachments to the current channel',
   memory_search: 'Semantic search over indexed memory sources',
   memory_get: 'Read specific lines from memory sources returned by search',

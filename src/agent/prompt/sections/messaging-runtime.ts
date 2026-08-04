@@ -10,7 +10,7 @@ export function buildMessagingSection(params: {
   }
   const channelList = params.channels.join(', ');
   const messageToolLine = params.hasSendMessage
-    ? `- Use \`send_message\` for proactive sends + channel actions`
+    ? `- Use \`send_message\` for proactive sends + channel actions; provide \`channel\` and \`chat_id\` together for a cross-channel destination`
     : '- Outbound messaging tools are not available in this session';
 
   return [
