@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
+import { applyDocumentLocale } from '@/i18n/document-locale';
 import { fetchJson } from '@/lib/fetch';
-import { htmlLangAttribute } from '@/lib/locale-default';
 import { apiUrl } from '@/lib/url';
 import {
   getLanguage,
@@ -22,7 +22,7 @@ function isStoredLanguage(value: unknown): value is StoredLanguage {
 
 function applyRendererLanguage(language: StoredLanguage): void {
   persistLanguage(language);
-  document.documentElement.setAttribute('lang', htmlLangAttribute(language));
+  applyDocumentLocale(language);
 }
 
 function syncElectronLanguage(language: StoredLanguage): void {
