@@ -64,6 +64,7 @@ export DEEPSEEK_API_KEY="sk-..."
 
 | Provider id | 凭据路径 |
 |-------------|----------|
+| `xopc-cloud` | 仅 OAuth；使用 `/login xopc-cloud`、`xopc auth login xopc-cloud` 或 Settings → Providers，access token 会自动刷新 |
 | `deepseek` | Settings → Providers、`xopc providers set-key deepseek`、`providers.deepseek` 或 `DEEPSEEK_API_KEY` |
 | `openai` | 已保存 key、配置文件或 `OPENAI_API_KEY` |
 | `anthropic` | OAuth token 或 API Key；环境变量支持 `ANTHROPIC_OAUTH_TOKEN` 与 `ANTHROPIC_API_KEY` |

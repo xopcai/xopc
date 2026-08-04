@@ -11,30 +11,12 @@ import {
   type OAuthLoginCallbacks,
   type OAuthCredentials 
 } from '../../auth/oauth/types.js';
-import {
-  kimiCodingOAuthProvider,
-  minimaxOAuthProvider,
-  minimaxCnOAuthProvider,
-  anthropicOAuthProvider,
-  githubCopilotOAuthProvider,
-  googleGeminiCliOAuthProvider,
-  googleAntigravityOAuthProvider,
-  openaiCodexOAuthProvider,
-} from '../../auth/oauth/index.js';
+import { getOAuthProviderInterfaces } from '../../auth/oauth/registry.js';
 import { CredentialResolver } from '../../auth/credentials.js';
 import { getProviderAuthState, isProviderConfigured } from '../../providers/index.js';
 
 // Static OAuth providers map
-const OAUTH_PROVIDERS: Record<string, OAuthProviderInterface> = {
-  'kimi-coding': kimiCodingOAuthProvider,
-  'minimax': minimaxOAuthProvider,
-  'minimax-cn': minimaxCnOAuthProvider,
-  'anthropic': anthropicOAuthProvider,
-  'github-copilot': githubCopilotOAuthProvider,
-  'google-gemini-cli': googleGeminiCliOAuthProvider,
-  'google-antigravity': googleAntigravityOAuthProvider,
-  'openai-codex': openaiCodexOAuthProvider,
-};
+const OAUTH_PROVIDERS: Record<string, OAuthProviderInterface> = getOAuthProviderInterfaces();
 
 // Simple in-memory cache for OAuth credentials
 const oauthCredentialsCache: Map<string, OAuthCredentials> = new Map();

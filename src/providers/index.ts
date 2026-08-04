@@ -18,6 +18,7 @@ import {
 	type CredentialResolverOptions,
 } from '../auth/credentials.js';
 import { hasProviderAuthOnDiskSync } from '../auth/sync-provider-auth.js';
+import { getOAuthProviderIds } from '../auth/oauth/registry.js';
 import { getApiKeyFromEnv } from './env-keys.js';
 import { EXTENSION_PROVIDER_BASE_URL } from './constants.js';
 import { getSupplementalModels } from './model-supplements.js';
@@ -161,6 +162,10 @@ export function getAllProviders(): string[] {
 
 	for (const plugin of getProviderRegistry().listAll()) {
 		providers.add(plugin.id);
+	}
+
+	for (const provider of getOAuthProviderIds()) {
+		providers.add(provider);
 	}
 
 	return Array.from(providers);
@@ -346,6 +351,7 @@ export interface ProviderMeta {
 }
 
 export const PROVIDER_META: Record<string, ProviderMeta> = {
+  'xopc-cloud': { name: 'XOPC Model Service', category: 'oauth', supportsOAuth: true, supportsApiKey: false },
   'openai': { name: 'OpenAI', category: 'common', supportsApiKey: true },
   'anthropic': { name: 'Anthropic', category: 'common', supportsApiKey: true, supportsOAuth: true },
   'deepseek': { name: 'DeepSeek', category: 'domestic', supportsApiKey: true },
