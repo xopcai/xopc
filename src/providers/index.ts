@@ -22,6 +22,7 @@ import { getOAuthProviderIds } from '../auth/oauth/registry.js';
 import { getApiKeyFromEnv } from './env-keys.js';
 import { EXTENSION_PROVIDER_BASE_URL } from './constants.js';
 import { getSupplementalModels } from './model-supplements.js';
+import { splitProviderModelRef } from './model-ref.js';
 import { getProviderRegistry } from './plugin-registry.js';
 import type { ProviderModelDefinition } from '../extensions/types/providers.js';
 
@@ -94,8 +95,9 @@ export function resolveModel(ref: string): Model<Api> {
 		return customModel;
 	}
 
-	if (trimmedRef.includes('/')) {
-		const [provider, modelId] = trimmedRef.split('/');
+	const qualifiedRef = splitProviderModelRef(trimmedRef);
+	if (qualifiedRef) {
+		const { provider, modelId } = qualifiedRef;
 		const piAiModel = getPiAiModel(provider as any, modelId as any);
 		if (piAiModel) return normalizeProviderModel(piAiModel as Model<Api>);
 
