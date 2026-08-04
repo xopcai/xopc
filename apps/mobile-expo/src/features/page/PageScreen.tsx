@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, AppState, Keyboard, Pressable, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Button, Icon, Snackbar, Text } from 'react-native-paper';
@@ -18,10 +18,6 @@ import {
   type NoteEditorAiAction,
   type NoteEditorBridgeHandle,
 } from '../notes/editor/NoteEditorBridge';
-import {
-  noteEditorModeFromInteraction,
-  type NoteEditorInteractionState,
-} from '../notes/editor/editor-interaction';
 import { countNoteCharacters } from '../notes/note-title';
 import { useVoiceCaptureInteraction } from '../notes/use-voice-capture-interaction';
 import { applyMarkdownPatchResult } from '../notes/markdown/markdown-patch';
@@ -59,7 +55,7 @@ export function PageScreen() {
   const [moreVisible, setMoreVisible] = useState(false);
   const [tagPickerVisible, setTagPickerVisible] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
-  const [noteEditorMode, setNoteEditorMode] = useState<NoteEditorMode>('viewing');
+  const [noteEditorMode, setNoteEditorMode] = useState<NoteEditorMode>('read');
   const [editorCommand, setEditorCommand] = useState<EditorCommand | null>(null);
   const [aiLoadingKey, setAiLoadingKey] = useState<string | null>(null);
 
@@ -67,7 +63,6 @@ export function PageScreen() {
   const editorRef = useRef<NoteEditorBridgeHandle | null>(null);
   const allowNextRemoveRef = useRef(false);
   const savingBeforeLeaveRef = useRef(false);
-  const skipNextFocusCleanupSaveRef = useRef(false);
 
   useEffect(() => {
     hydrateNoteTags();
@@ -81,7 +76,6 @@ export function PageScreen() {
     note,
     noteQuery,
     markdown,
-    editorMarkdown,
     title,
     tags,
     saveState,
@@ -141,8 +135,13 @@ export function PageScreen() {
     setEditorCommand({ id: editorCommandIdRef.current, ...next } as EditorCommand);
   }, []);
 
-  const handleEditorInteractionStateChange = useCallback((state: NoteEditorInteractionState) => {
-    setNoteEditorMode(noteEditorModeFromInteraction(state));
+  const handleRequestEdit = useCallback(() => {
+    setNoteEditorMode('edit');
+  }, []);
+
+  const handleStartEditing = useCallback(() => {
+    setNoteEditorMode('edit');
+    requestAnimationFrame(() => editorRef.current?.focus('body'));
   }, []);
 
   const voice = useVoiceCaptureInteraction({
@@ -169,17 +168,11 @@ export function PageScreen() {
     await flushSave();
   }, [flushEditorToDraft, flushSave]);
 
-  useFocusEffect(
-    useCallback(() => () => {
-      if (skipNextFocusCleanupSaveRef.current) {
-        skipNextFocusCleanupSaveRef.current = false;
-        return;
-      }
-      void (async () => {
-        await saveEditorBeforeLeave();
-      })();
-    }, [saveEditorBeforeLeave]),
-  );
+  const handleFinishEditing = useCallback(() => {
+    Keyboard.dismiss();
+    setNoteEditorMode('read');
+    void saveEditorBeforeLeave();
+  }, [saveEditorBeforeLeave]);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
@@ -203,7 +196,6 @@ export function PageScreen() {
       void (async () => {
         try {
           await saveEditorBeforeLeave();
-          skipNextFocusCleanupSaveRef.current = true;
           allowNextRemoveRef.current = true;
           navigation.dispatch(event.data.action);
         } finally {
@@ -221,7 +213,6 @@ export function PageScreen() {
     void (async () => {
       try {
         await saveEditorBeforeLeave();
-        skipNextFocusCleanupSaveRef.current = true;
         allowNextRemoveRef.current = true;
         dismissOrHome(router);
       } finally {
@@ -394,7 +385,7 @@ export function PageScreen() {
   const showLoading = noteQuery.isLoading && !note;
   const showError = noteQuery.isError && !note;
   const showMissing = !showLoading && !showError && (!id || !note);
-  const showViewActions = Boolean(note && id && !keyboardVisible && noteEditorMode === 'viewing');
+  const showViewActions = Boolean(note && id && !keyboardVisible && noteEditorMode === 'read');
   const wordCount = useMemo(() => countNoteCharacters(markdown), [markdown]);
 
   const viewActionItems = useMemo<NoteViewActionBarItem[]>(() => [
@@ -432,6 +423,11 @@ export function PageScreen() {
       <NoteDetailHeader
         onBack={handleBack}
         backLabel={m.common.back}
+        rightActions={note && id ? [{
+          icon: noteEditorMode === 'edit' ? 'check' : 'pencil-outline',
+          label: noteEditorMode === 'edit' ? pm.done : pm.edit,
+          onPress: noteEditorMode === 'edit' ? handleFinishEditing : handleStartEditing,
+        }] : []}
       />
 
       {showLoading ? (
@@ -464,14 +460,15 @@ export function PageScreen() {
               noteId={id}
               title={title}
               titlePlaceholder={pm.untitledNote}
-              markdown={editorMarkdown}
+              markdown={markdown}
+              mode={noteEditorMode}
               attachmentSrcMap={attachmentSrcMap}
               topCommand={editorCommand}
               labels={labels}
               onChangeTitle={updateTitle}
               onChangeMarkdown={updateMarkdown}
               onRequestAttachment={handleRequestAttachment}
-              onInteractionStateChange={handleEditorInteractionStateChange}
+              onRequestEdit={handleRequestEdit}
               aiActions={aiActions}
               aiLoadingKey={aiLoadingKey}
               onRequestAiAction={handleRequestAiAction}
