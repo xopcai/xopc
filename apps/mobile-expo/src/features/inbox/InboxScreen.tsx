@@ -367,7 +367,6 @@ export function InboxScreen() {
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
       <NativeScreenHeader
         title={selectionMode ? t(li.selectedCount, { count: selectedCount }) : im.title}
-        variant={selectionMode ? 'compact' : 'large'}
         onBack={selectionMode ? exitSelectionMode : () => dismissOrHome(router)}
         rightActions={selectionMode ? undefined : [
           {

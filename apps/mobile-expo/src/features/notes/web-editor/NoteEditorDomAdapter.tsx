@@ -410,14 +410,34 @@ export default function NoteEditorDomAdapter({
     const externalChanged = initialMarkdown !== latestMarkdownRef.current;
     const localClean = !editorDirtyRef.current && latestMarkdownRef.current === lastSentMarkdownRef.current;
     if (contentSeededRef.current && !noteChanged && (!externalChanged || !localClean)) return;
-    contentSeededRef.current = true;
-    noteIdRef.current = noteId;
-    latestMarkdownRef.current = initialMarkdown;
-    lastSentMarkdownRef.current = initialMarkdown;
-    editorDirtyRef.current = false;
-    setEditorMarkdown(editor, initialMarkdown);
-    lastRuntimeStateRef.current = null;
-    emitRuntimeState(editor);
+
+    let cancelled = false;
+    let frame: number | null = null;
+
+    const seedContent = () => {
+      if (cancelled || editor.isDestroyed) return;
+      const initialized = (editor as unknown as { isEditorContentInitialized?: boolean }).isEditorContentInitialized;
+      if (!initialized) {
+        frame = window.requestAnimationFrame(seedContent);
+        return;
+      }
+
+      contentSeededRef.current = true;
+      noteIdRef.current = noteId;
+      latestMarkdownRef.current = initialMarkdown;
+      lastSentMarkdownRef.current = initialMarkdown;
+      editorDirtyRef.current = false;
+      setEditorMarkdown(editor, initialMarkdown);
+      lastRuntimeStateRef.current = null;
+      emitRuntimeState(editor);
+    };
+
+    seedContent();
+
+    return () => {
+      cancelled = true;
+      if (frame !== null) window.cancelAnimationFrame(frame);
+    };
   }, [editor, emitRuntimeState, initialMarkdown, noteId]);
 
   useEffect(() => {

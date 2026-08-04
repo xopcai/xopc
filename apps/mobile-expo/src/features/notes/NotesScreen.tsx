@@ -380,7 +380,6 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
       <NativeScreenHeader
         title={selectionMode ? t(li.selectedCount, { count: selectedCount }) : pm.title}
-        variant={selectionMode ? 'compact' : 'large'}
         onBack={selectionMode ? exitSelectionMode : embedded ? undefined : handleBack}
         onSearchPress={!selectionMode ? () => setSearchOpen((value) => !value) : undefined}
         searchPlaceholder={searchText.trim() || m.common.search}
