@@ -8,6 +8,10 @@ import {
   type ProviderConfig,
 } from '../../../config/models-json.js';
 import type { Config } from '../../../config/schema.js';
+import {
+  getImageGenerationProvider,
+  reloadImageGenerationProviders,
+} from '../../../agent/image/generation/provider-registry.js';
 import { testApiKeyResolution } from '../../../config/resolve-config-value.js';
 import {
   EXTENSION_PROVIDER_BASE_URL,
@@ -39,6 +43,11 @@ import { auditModelReferences } from '../../../providers/model-reference-auditor
 import { getProviderRegistry } from '../../../providers/plugin-registry.js';
 import type { ProviderModelDefinition } from '../../../extensions/types/providers.js';
 import type { GatewayService } from '../../service.js';
+import {
+  deleteCustomImageProvider,
+  listCustomImageProviders,
+  upsertCustomImageProvider,
+} from '../../custom-image-providers.js';
 import {
   getAgentImageGenerationConfig,
   getImageGenerationCatalog,
@@ -166,6 +175,7 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
     // Refresh registry
     const registry = getModelRegistry();
     registry.refresh();
+    reloadImageGenerationProviders(config);
     
     // Emit event
     service.emit('models-json.updated', { 
@@ -185,6 +195,7 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
   authenticated.post('/api/models-json/reload', async (c) => {
     const registry = getModelRegistry();
     registry.refresh();
+    reloadImageGenerationProviders();
     
     const error = registry.getError();
     const models = registry.getAll();
@@ -312,6 +323,194 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
     });
   });
 
+  authenticated.get('/api/image-generation/custom-providers', (c) => {
+    const loaded = loadModelsJson(getModelsJsonPath());
+    if (loaded.error) {
+      return c.json({ ok: false, error: { message: loaded.error } }, 409);
+    }
+    return c.json({
+      ok: true,
+      payload: { providers: listCustomImageProviders(loaded.config) },
+    });
+  });
+
+  authenticated.put(
+    '/api/image-generation/custom-providers/:providerId',
+    strictRateLimitMiddleware,
+    async (c) => {
+      const loaded = loadModelsJson(getModelsJsonPath());
+      if (loaded.error) {
+        return c.json({ ok: false, error: { message: loaded.error } }, 409);
+      }
+      try {
+        const body = await c.req.json();
+        const next = upsertCustomImageProvider(
+          loaded.config,
+          c.req.param('providerId'),
+          body,
+        );
+        const saved = saveModelsJson(getModelsJsonPath(), next);
+        if (!saved.success) {
+          return c.json({ ok: false, error: { message: saved.error } }, 400);
+        }
+        getModelRegistry().refresh();
+        reloadImageGenerationProviders(next);
+        service.emit('models-json.updated', { modelCount: getModelRegistry().getAll().length });
+        return c.json({
+          ok: true,
+          payload: {
+            provider: listCustomImageProviders(next).find(
+              (entry) => entry.providerId === c.req.param('providerId'),
+            ),
+            providers: getImageGenerationCatalog(service.currentConfig as Config),
+          },
+        });
+      } catch (error) {
+        return c.json(
+          { ok: false, error: { message: error instanceof Error ? error.message : String(error) } },
+          400,
+        );
+      }
+    },
+  );
+
+  authenticated.delete(
+    '/api/image-generation/custom-providers/:providerId',
+    strictRateLimitMiddleware,
+    (c) => {
+      const loaded = loadModelsJson(getModelsJsonPath());
+      if (loaded.error) {
+        return c.json({ ok: false, error: { message: loaded.error } }, 409);
+      }
+      try {
+        const next = deleteCustomImageProvider(loaded.config, c.req.param('providerId'));
+        const saved = saveModelsJson(getModelsJsonPath(), next);
+        if (!saved.success) {
+          return c.json({ ok: false, error: { message: saved.error } }, 400);
+        }
+        getModelRegistry().refresh();
+        reloadImageGenerationProviders(next);
+        service.emit('models-json.updated', { modelCount: getModelRegistry().getAll().length });
+        return c.json({
+          ok: true,
+          payload: {
+            deleted: c.req.param('providerId'),
+            providers: getImageGenerationCatalog(service.currentConfig as Config),
+          },
+        });
+      } catch (error) {
+        return c.json(
+          { ok: false, error: { message: error instanceof Error ? error.message : String(error) } },
+          400,
+        );
+      }
+    },
+  );
+
+  authenticated.put(
+    '/api/image-generation/providers/:providerId/credential',
+    strictRateLimitMiddleware,
+    async (c) => {
+      const providerId = c.req.param('providerId').trim();
+      const provider = getImageGenerationProvider(providerId);
+      if (!provider) {
+        return c.json({ ok: false, error: { message: `Unknown image provider: ${providerId}` } }, 404);
+      }
+      if (provider.credentialMode === 'none') {
+        return c.json({ ok: false, error: { message: 'This provider does not use an API key' } }, 400);
+      }
+      const body = await c.req.json().catch(() => null) as Record<string, unknown> | null;
+      const apiKey = typeof body?.apiKey === 'string' ? body.apiKey.trim() : '';
+      if (!apiKey) {
+        return c.json({ ok: false, error: { message: 'API key is required' } }, 400);
+      }
+      await new CredentialResolver().saveApiKey(providerId, apiKey, { profileName: 'default' });
+      return c.json({ ok: true, payload: { providerId, saved: true } });
+    },
+  );
+
+  authenticated.post(
+    '/api/image-generation/providers/:providerId/reveal-api-key',
+    strictRateLimitMiddleware,
+    async (c) => {
+      const providerId = c.req.param('providerId').trim();
+      if (!getImageGenerationProvider(providerId)) {
+        return c.json({ ok: false, error: { message: `Unknown image provider: ${providerId}` } }, 404);
+      }
+      const apiKey = await new CredentialResolver().revealGatewayStoredApiKey(providerId);
+      return c.json({
+        ok: true,
+        payload: { providerId, apiKey: apiKey ?? null, source: apiKey ? 'credential' : 'none' },
+      });
+    },
+  );
+
+  authenticated.delete(
+    '/api/image-generation/providers/:providerId/credential',
+    strictRateLimitMiddleware,
+    async (c) => {
+      const providerId = c.req.param('providerId').trim();
+      if (!getImageGenerationProvider(providerId)) {
+        return c.json({ ok: false, error: { message: `Unknown image provider: ${providerId}` } }, 404);
+      }
+      await new CredentialResolver().deleteProviderCredential(providerId);
+      return c.json({ ok: true, payload: { providerId, deleted: true } });
+    },
+  );
+
+  authenticated.post(
+    '/api/image-generation/providers/:providerId/test',
+    strictRateLimitMiddleware,
+    async (c) => {
+      const providerId = c.req.param('providerId').trim();
+      const provider = getImageGenerationProvider(providerId);
+      if (!provider) {
+        return c.json({ ok: false, error: { message: `Unknown image provider: ${providerId}` } }, 404);
+      }
+      if (!provider.isConfigured({ cfg: service.currentConfig as Config })) {
+        return c.json({ ok: false, error: { message: 'Provider credential is not configured' } }, 400);
+      }
+      const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
+      const modelId = typeof body.modelId === 'string' && body.modelId.trim()
+        ? body.modelId.trim()
+        : provider.defaultModel;
+      if (!provider.models.includes(modelId)) {
+        return c.json({ ok: false, error: { message: `Unknown ${providerId} image model: ${modelId}` } }, 400);
+      }
+      const prompt = typeof body.prompt === 'string' && body.prompt.trim()
+        ? body.prompt.trim()
+        : 'A simple blue circle centered on a white background.';
+      try {
+        const result = await provider.generateImage({
+          provider: providerId,
+          model: modelId,
+          prompt,
+          count: 1,
+          cfg: service.currentConfig as Config,
+          timeoutMs: 120_000,
+        });
+        return c.json({
+          ok: true,
+          payload: {
+            providerId,
+            modelId: result.model ?? modelId,
+            images: result.images.map((image) => ({
+              mimeType: image.mimeType,
+              fileName: image.fileName,
+              dataUrl: `data:${image.mimeType};base64,${image.buffer.toString('base64')}`,
+              ...(image.revisedPrompt ? { revisedPrompt: image.revisedPrompt } : {}),
+            })),
+          },
+        });
+      } catch (error) {
+        return c.json(
+          { ok: false, error: { message: error instanceof Error ? error.message : String(error) } },
+          502,
+        );
+      }
+    },
+  );
+
   authenticated.get('/api/agents/:agentId/image-generation', (c) => {
     try {
       return c.json({
@@ -355,7 +554,8 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
       const previousKey = await resolver.revealGatewayStoredApiKey(prepared.providerId);
       const suppliedKey = typeof body.apiKey === 'string' ? body.apiKey.trim() : '';
       const effectiveKey = suppliedKey || await resolver.resolveApiKey(prepared.providerId);
-      if (!effectiveKey) {
+      const imageProvider = getImageGenerationProvider(prepared.providerId)!;
+      if (imageProvider.credentialMode !== 'none' && !effectiveKey) {
         return c.json({ ok: false, error: { message: 'API key is required' } }, 400);
       }
 

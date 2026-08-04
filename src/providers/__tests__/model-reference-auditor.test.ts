@@ -57,4 +57,43 @@ describe('auditModelReferences', () => {
       },
     ]);
   });
+
+  it('checks image-generation references against the image provider registry', () => {
+    const config = {
+      agents: {
+        capabilityPresets: {
+          images: {
+            models: {
+              imageGenerationModel: {
+                primary: 'minimax/image-01',
+                fallbacks: ['missing/image-model'],
+              },
+            },
+          },
+        },
+        list: [],
+      },
+    } as unknown as Config;
+    const registry = {
+      resolve: () => undefined,
+    } as unknown as ModelRegistry;
+    const catalog = { sources: {} };
+
+    expect(auditModelReferences(config, new Map(), {
+      registry,
+      catalog,
+      resolveImageGenerationModel: (ref) => ref === 'minimax/image-01',
+    })).toEqual([
+      {
+        ref: 'minimax/image-01',
+        availability: 'available',
+        locations: ['agents.capabilityPresets.images.models.imageGenerationModel.primary'],
+      },
+      {
+        ref: 'missing/image-model',
+        availability: 'unavailable',
+        locations: ['agents.capabilityPresets.images.models.imageGenerationModel.fallbacks[0]'],
+      },
+    ]);
+  });
 });

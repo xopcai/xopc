@@ -63,9 +63,15 @@ export interface ImageGenerationProviderConfiguredContext {
 export interface ImageGenerationProvider {
   id: string;
   label: string;
+  source?: 'builtin' | 'custom';
+  credentialMode?: 'api-key' | 'none';
+  documentationUrl?: string;
+  apiKeyUrl?: string;
   defaultModel: string;
   models: string[];
   capabilities: ImageGenerationProviderCapabilities;
+  /** Per-model capability declarations when models on one endpoint differ. */
+  modelCapabilities?: Record<string, ImageGenerationProviderCapabilities>;
   isConfigured(ctx: ImageGenerationProviderConfiguredContext): boolean;
   generateImage(req: ImageGenerationRequest): Promise<ImageGenerationResult>;
 }
@@ -73,9 +79,14 @@ export interface ImageGenerationProvider {
 export interface ImageGenerationProviderSummary {
   id: string;
   label: string;
+  source: 'builtin' | 'custom';
+  credentialMode: 'api-key' | 'none';
+  documentationUrl?: string;
+  apiKeyUrl?: string;
   defaultModel: string;
   models: string[];
   capabilities: ImageGenerationProviderCapabilities;
+  modelCapabilities?: Record<string, ImageGenerationProviderCapabilities>;
 }
 
 // ============================================

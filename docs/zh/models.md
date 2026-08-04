@@ -189,6 +189,48 @@ export DEEPSEEK_API_KEY="sk-..."
 | `google-gemini-cli` | Google Gemini CLI |
 | `google-vertex` | Google Vertex AI |
 
+## 自定义图片生成服务
+
+自定义图片生成只支持一个明确协议：`openai-images`。xopc 会向 `/images/generations` 和 `/images/edits` 发送标准 OpenAI Images 请求，不猜测厂商响应字段，也不执行兼容转换。
+
+```json
+{
+  "providers": {
+    "studio-images": {
+      "baseUrl": "https://images.example.com/v1",
+      "imageGeneration": {
+        "api": "openai-images",
+        "name": "Studio Images",
+        "documentationUrl": "https://images.example.com/docs",
+        "apiKeyUrl": "https://images.example.com/keys",
+        "defaultModel": "image-1",
+        "auth": { "type": "bearer" },
+        "models": [
+          {
+            "id": "image-1",
+            "capabilities": {
+              "generate": { "maxCount": 1, "supportsSize": true },
+              "edit": { "enabled": true, "maxInputImages": 1 }
+            },
+            "defaults": { "size": "1024x1024", "outputFormat": "png" }
+          }
+        ]
+      }
+    }
+  }
+}
+```
+
+`auth.type` 可选 `bearer`、`header`（同时设置 `headerName`）或 `none`。图片服务 API Key 只保存到网关凭据存储，不写入上述图片 Provider 定义；静态 `headers` 也不能包含认证 Header。
+
+私网和回环地址默认阻止。若需要连接可信的本地服务，只列出精确主机名或 IP：
+
+```json
+"network": { "allowedHosts": ["127.0.0.1", "image-server.lan"] }
+```
+
+网关将 OpenAI Images JSON 响应限制为 64 MiB，单张解码图片限制为 32 MiB，单次响应全部图片合计限制为 64 MiB。可在 **设置 → 能力 → 图片** 中添加服务、管理凭据、执行一次真实生成测试，并把模型分配给 Agent。`xopc doctor` 会报告非法定义、被阻止的私网端点和缺失凭据。
+
 ## 服务商配置 {#提供商配置}
 
 | 字段 | 说明 |
@@ -471,6 +513,13 @@ export DEEPSEEK_API_KEY="sk-..."
 | PATCH | `/api/models-json` | 保存 models.json |
 | POST | `/api/models-json/reload` | 热重载 |
 | POST | `/api/models-json/test-api-key` | 测试 API key 解析 |
+| GET | `/api/image-generation/custom-providers` | 列出自定义图片服务（不返回密钥） |
+| PUT | `/api/image-generation/custom-providers/:providerId` | 创建或替换自定义图片服务 |
+| DELETE | `/api/image-generation/custom-providers/:providerId` | 删除自定义图片服务定义 |
+| PUT | `/api/image-generation/providers/:providerId/credential` | 保存图片服务 API Key |
+| POST | `/api/image-generation/providers/:providerId/reveal-api-key` | 查看本机保存的图片服务密钥 |
+| DELETE | `/api/image-generation/providers/:providerId/credential` | 删除图片服务凭据 |
+| POST | `/api/image-generation/providers/:providerId/test` | 执行一次真实图片生成测试 |
 
 ## 故障排除
 

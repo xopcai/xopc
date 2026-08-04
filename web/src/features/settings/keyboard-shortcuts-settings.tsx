@@ -123,6 +123,7 @@ function ShortcutEditor({
             setError(null);
             setRecording(true);
           }}
+          onKeyDown={onKeyDown}
         >
           {k.quickCaptureShortcutChange}
         </button>

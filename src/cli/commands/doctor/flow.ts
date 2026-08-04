@@ -15,6 +15,7 @@ import { checkWorkspaceStatus } from './checks/workspace-status.js';
 import { checkVersionUpdate } from './checks/version-check.js';
 import { checkChannelPlugins } from './checks/channel-plugins.js';
 import { checkMigrations } from './checks/migrations.js';
+import { checkImageProviders } from './checks/image-providers.js';
 
 const DOCTOR_CHECKS: DoctorCheck[] = [
   checkVersionUpdate,
@@ -24,6 +25,7 @@ const DOCTOR_CHECKS: DoctorCheck[] = [
   checkStateIntegrity,
   checkDatabaseSchema,
   checkProviderAuth,
+  checkImageProviders,
   checkChannelConfig,
   checkChannelPairingPending,
   checkSecurityAudit,
