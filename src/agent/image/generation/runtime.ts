@@ -91,8 +91,12 @@ export async function generateImage(
     }
 
     try {
+      const modelCapabilities = provider.modelCapabilities?.[candidate.model];
+      const capabilityProvider = modelCapabilities
+        ? { ...provider, capabilities: modelCapabilities }
+        : provider;
       const sanitized = resolveImageGenerationOverrides({
-        provider,
+        provider: capabilityProvider,
         size: params.size,
         aspectRatio: params.aspectRatio,
         resolution: params.resolution,

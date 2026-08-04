@@ -35,6 +35,7 @@ import { loadConfig, saveConfig as writeConfigToDisk } from '../../config/index.
 import { sanitizeTunnelConfig } from '../../tunnel/tunnel-config.js';
 import { getModelRegistry } from '../../providers/index.js';
 import { disposeAllSessionMcpRuntimes } from '../../agent/mcp/bundle-mcp-tools.js';
+import { reloadImageGenerationProviders } from '../../agent/image/generation/provider-registry.js';
 import { computeBundledExtensionExtensionsPatch } from '../../extensions/bundled-extension-activation.js';
 import { createLogger } from '../../utils/logger.js';
 
@@ -257,6 +258,7 @@ export class GatewayConfigCoordinator {
     log.debug('Reloading models config...');
     this.opts.setConfig(newConfig);
     getModelRegistry().refresh();
+    reloadImageGenerationProviders();
     this.opts.emit('config.reload', { section: 'models' });
     log.debug('Models config reloaded');
   }

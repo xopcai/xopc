@@ -1,16 +1,4 @@
-/**
- * OpenAI-compatible image provider factory.
- *
- * Many image providers (OpenAI, Azure OpenAI, OpenAI-compatible gateways)
- * speak the same `/images/generations` and `/images/edits` REST shape.
- * This factory wraps that wire format on top of shared provider HTTP, normalization,
- * and auth-runtime so vendor modules only need to declare:
- *   - id / models / capabilities
- *   - baseUrl resolution
- *   - apiKey resolution
- *   - optional request body / response transforms
- *
- */
+/** Strict implementation of the OpenAI Images REST protocol. */
 
 import { createLogger } from '../../../utils/logger.js';
 import {
@@ -18,8 +6,10 @@ import {
   postJsonRequest,
   postMultipartRequest,
   privateNetworkPolicyToSsrfGuardOptions,
+  readJsonResponseLimited,
   resolveProviderHttpRequestConfig,
 } from '../../../media-shared/http/index.js';
+import type { PrivateNetworkPolicy, SsrfGuardOptions } from '../../../media-shared/http/index.js';
 import {
   imageAssetFromBase64,
   imageFileExtensionForMimeType,
@@ -34,13 +24,16 @@ import type {
   ImageGenerationSourceImage,
 } from './types.js';
 
-const log = createLogger('ImageGen:OpenAICompat');
+const log = createLogger('ImageGen:OpenAIImages');
 
 const DEFAULT_OUTPUT_MIME = 'image/png';
 const DEFAULT_TIMEOUT_MS = 120_000;
+const MAX_RESPONSE_BYTES = 64 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 32 * 1024 * 1024;
+const MAX_TOTAL_IMAGE_BYTES = 64 * 1024 * 1024;
 
 /** Subset of the official OpenAI image response we map. */
-export interface OpenAiCompatibleImageResponse {
+export interface OpenAiImagesResponse {
   data?: Array<{
     b64_json?: string;
     revised_prompt?: string;
@@ -49,7 +42,7 @@ export interface OpenAiCompatibleImageResponse {
   [k: string]: unknown;
 }
 
-export interface OpenAiCompatibleEndpointResolution {
+export interface OpenAiImagesEndpointResolution {
   /** Base URL without trailing slash, e.g. `https://api.openai.com/v1`. */
   baseUrl: string;
   /** Optional override for the generations sub-path; defaults to `/images/generations`. */
@@ -63,9 +56,11 @@ export interface OpenAiCompatibleEndpointResolution {
    * `Authorization: Bearer <apiKey>` if `apiKey` is present.
    */
   authorization?: { kind: 'none' } | { kind: 'bearer' } | { kind: 'header'; headerName: string };
+  /** Explicit private-host allowlist for this endpoint. Omit to use the global policy. */
+  privateNetworkPolicy?: PrivateNetworkPolicy;
 }
 
-export interface OpenAiCompatibleImageProviderOptions {
+export interface OpenAiImagesProviderOptions {
   id: string;
   label: string;
   defaultModel: string;
@@ -79,39 +74,18 @@ export interface OpenAiCompatibleImageProviderOptions {
   resolveApiKey: (req: ImageGenerationRequest) => string | null | undefined;
 
   /** Resolve endpoint info per-request (region, baseUrl override, Azure deployment, …). */
-  resolveEndpoint: (req: ImageGenerationRequest) => OpenAiCompatibleEndpointResolution;
+  resolveEndpoint: (req: ImageGenerationRequest) => OpenAiImagesEndpointResolution;
 
   /** Default per-call timeout. Combined with provider-level config in provider-http. */
   defaultTimeoutMs?: number;
-
-  /**
-   * Hook to enrich the JSON body sent to `/images/generations`. Mutate the
-   * returned object freely; the factory keeps standard fields stable.
-   */
-  buildGenerateRequestBody?: (
-    req: ImageGenerationRequest,
-    base: Record<string, unknown>,
-  ) => Record<string, unknown>;
-
-  /** Hook to enrich the multipart form for `/images/edits`. */
-  buildEditFormFields?: (
-    req: ImageGenerationRequest,
-    fields: Record<string, string>,
-  ) => Record<string, string>;
-
-  /**
-   * Optional response mapper. Default: `mapDefaultOpenAiResponse`. Vendor
-   * implementations can override to handle non-standard response shapes.
-   */
-  mapResponse?: (raw: unknown, req: ImageGenerationRequest) => GeneratedImageAsset[];
 
   /** Default count clamp. Provider may also enforce via `capabilities.generate.maxCount`. */
   defaultCount?: number;
   defaultSize?: string;
 }
 
-export function createOpenAiCompatibleImageProvider(
-  options: OpenAiCompatibleImageProviderOptions,
+export function createOpenAiImagesProvider(
+  options: OpenAiImagesProviderOptions,
 ): ImageGenerationProvider {
   const defaultMaxCount = options.capabilities.generate?.maxCount ?? 4;
   const defaultCount = options.defaultCount ?? 1;
@@ -138,6 +112,9 @@ export function createOpenAiCompatibleImageProvider(
         ...(endpoint.headers ?? {}),
       };
       applyAuthorizationHeader({ headers, endpoint, apiKey });
+      const ssrfGuardOptions = privateNetworkPolicyToSsrfGuardOptions(
+        endpoint.privateNetworkPolicy,
+      );
 
       const isEdit = (req.inputImages?.length ?? 0) > 0;
       const count = clampCount(req.count, defaultCount, defaultMaxCount);
@@ -154,7 +131,7 @@ export function createOpenAiCompatibleImageProvider(
           count,
           size,
         },
-        `OpenAI-compatible ${isEdit ? 'edit' : 'generate'} request`,
+        `OpenAI Images ${isEdit ? 'edit' : 'generate'} request`,
       );
 
       const responseJson = isEdit
@@ -166,7 +143,7 @@ export function createOpenAiCompatibleImageProvider(
             count,
             size,
             httpDefaults,
-            buildEditFormFields: options.buildEditFormFields,
+            ssrfGuardOptions,
           })
         : await postGenerateRequest({
             providerId: options.id,
@@ -176,10 +153,10 @@ export function createOpenAiCompatibleImageProvider(
             count,
             size,
             httpDefaults,
-            buildGenerateRequestBody: options.buildGenerateRequestBody,
+            ssrfGuardOptions,
           });
 
-      const mapped = (options.mapResponse ?? mapDefaultOpenAiResponse)(responseJson, req);
+      const mapped = mapOpenAiImagesResponse(responseJson, req);
       if (mapped.length === 0) {
         throw new Error(`${options.id} returned no images.`);
       }
@@ -203,24 +180,18 @@ interface PostHelperParams {
   count: number;
   size: string;
   httpDefaults: { timeoutMs?: number };
+  ssrfGuardOptions: SsrfGuardOptions;
 }
 
-async function postGenerateRequest(
-  params: PostHelperParams & {
-    buildGenerateRequestBody?: OpenAiCompatibleImageProviderOptions['buildGenerateRequestBody'];
-  },
-): Promise<unknown> {
-  const baseBody: Record<string, unknown> = {
+async function postGenerateRequest(params: PostHelperParams): Promise<unknown> {
+  const body: Record<string, unknown> = {
     model: params.req.model,
     prompt: params.req.prompt,
     n: params.count,
     size: params.size,
     response_format: 'b64_json',
   };
-  applyOpenAiOptions(baseBody, params.req);
-  const body = params.buildGenerateRequestBody
-    ? params.buildGenerateRequestBody(params.req, baseBody)
-    : baseBody;
+  applyOpenAiOptions(body, params.req);
 
   const timeoutMs = pickTimeoutMsOrFallback(
     params.req.timeoutMs,
@@ -233,16 +204,12 @@ async function postGenerateRequest(
     signal: params.req.signal,
     body,
     headers: params.headers,
-    ...privateNetworkPolicyToSsrfGuardOptions(),
+    ...params.ssrfGuardOptions,
   });
-  return await res.json();
+  return await readJsonResponseLimited(res, MAX_RESPONSE_BYTES);
 }
 
-async function postEditRequest(
-  params: PostHelperParams & {
-    buildEditFormFields?: OpenAiCompatibleImageProviderOptions['buildEditFormFields'];
-  },
-): Promise<unknown> {
+async function postEditRequest(params: PostHelperParams): Promise<unknown> {
   const inputImages = params.req.inputImages ?? [];
   const fields: Record<string, string> = {
     model: params.req.model,
@@ -251,12 +218,8 @@ async function postEditRequest(
     size: params.size,
     response_format: 'b64_json',
   };
-  const merged = params.buildEditFormFields
-    ? params.buildEditFormFields(params.req, fields)
-    : fields;
-
   const form = new FormData();
-  for (const [k, v] of Object.entries(merged)) {
+  for (const [k, v] of Object.entries(fields)) {
     if (typeof v === 'string') form.append(k, v);
   }
   for (let idx = 0; idx < inputImages.length; idx++) {
@@ -286,23 +249,32 @@ async function postEditRequest(
     signal: params.req.signal,
     body: form,
     headers,
-    ...privateNetworkPolicyToSsrfGuardOptions(),
+    ...params.ssrfGuardOptions,
   });
-  return await res.json();
+  return await readJsonResponseLimited(res, MAX_RESPONSE_BYTES);
 }
 
-export function mapDefaultOpenAiResponse(
+export function mapOpenAiImagesResponse(
   raw: unknown,
   req: ImageGenerationRequest,
 ): GeneratedImageAsset[] {
   if (!raw || typeof raw !== 'object') return [];
-  const data = (raw as OpenAiCompatibleImageResponse).data;
+  const data = (raw as OpenAiImagesResponse).data;
   if (!Array.isArray(data)) return [];
   const ext = imageFileExtensionForMimeType(req.outputFormat ? `image/${req.outputFormat}` : DEFAULT_OUTPUT_MIME);
   const out: GeneratedImageAsset[] = [];
+  let totalBytes = 0;
   data.forEach((entry, index) => {
     const b64 = entry?.b64_json;
     if (typeof b64 !== 'string' || b64.length === 0) return;
+    const estimatedBytes = Math.ceil(b64.replace(/\s+/g, '').length * 3 / 4);
+    if (estimatedBytes > MAX_IMAGE_BYTES) {
+      throw new Error(`OpenAI Images response image exceeds ${MAX_IMAGE_BYTES} bytes.`);
+    }
+    totalBytes += estimatedBytes;
+    if (totalBytes > MAX_TOTAL_IMAGE_BYTES) {
+      throw new Error(`OpenAI Images response images exceed ${MAX_TOTAL_IMAGE_BYTES} bytes total.`);
+    }
     const asset = imageAssetFromBase64({
       base64: b64,
       mimeType: req.outputFormat ? `image/${req.outputFormat}` : undefined,
@@ -322,18 +294,28 @@ export function mapDefaultOpenAiResponse(
 
 function applyAuthorizationHeader(params: {
   headers: Record<string, string>;
-  endpoint: OpenAiCompatibleEndpointResolution;
+  endpoint: OpenAiImagesEndpointResolution;
   apiKey: string | null;
 }): void {
   const auth = params.endpoint.authorization ?? { kind: 'bearer' as const };
   if (auth.kind === 'none') return;
   if (!params.apiKey) return;
+  assertHttpHeaderValue(params.apiKey, 'API key');
   if (auth.kind === 'bearer') {
     params.headers['authorization'] = `Bearer ${params.apiKey}`;
     return;
   }
   if (auth.kind === 'header') {
     params.headers[auth.headerName.toLowerCase()] = params.apiKey;
+  }
+}
+
+function assertHttpHeaderValue(value: string, label: string): void {
+  for (let index = 0; index < value.length; index++) {
+    const code = value.charCodeAt(index);
+    if (code > 255 || (code < 32 && code !== 9) || code === 127) {
+      throw new Error(`${label} contains characters that cannot be sent in an HTTP header.`);
+    }
   }
 }
 

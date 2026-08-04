@@ -1,4 +1,4 @@
-import { CheckCircle2, ImageIcon, KeyRound, Loader2, SlidersHorizontal } from 'lucide-react';
+import { ArrowUpRight, CheckCircle2, ImageIcon, KeyRound, Loader2, Plus, Settings2, SlidersHorizontal } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 
@@ -8,20 +8,22 @@ import { SecretInput } from '@/components/ui/secret-input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchGatewayAgents } from '@/features/settings/agents-admin-api';
 import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
+import { CustomImageProviderDialog } from '@/features/settings/custom-image-provider-dialog';
+import {
+  fetchCustomImageProviders,
+  fetchImageCatalog,
+  type CustomImageProvider,
+  type ImageProvider,
+} from '@/features/settings/image-generation-api';
+import { getOrderedApiKeyLinks } from '@/features/settings/provider-enrichment';
+import { revealProviderApiKey } from '@/features/settings/providers-api';
 import { fetchJson } from '@/lib/fetch';
+import { isMaskedSecret } from '@/lib/is-masked-secret';
+import { showToast } from '@/lib/toast';
 import { apiUrl } from '@/lib/url';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
-
-type ImageProvider = {
-  id: string;
-  label: string;
-  defaultModel: string;
-  models: string[];
-  configured: boolean;
-  requiresRegion: boolean;
-};
 
 type AgentImageGeneration = {
   agentId: string;
@@ -34,16 +36,22 @@ type SetupResult = {
   verification: { verified: boolean; supported: boolean; message?: string };
 };
 
+const MASKED_API_KEY = '••••••••••••';
+
 const copy = {
   en: {
     title: 'Image generation',
-    intro: 'Choose an agent and a built-in provider. One action stores the credential and enables the model.',
+    intro: 'Choose an agent and image model, or connect an OpenAI Images service of your own.',
     agent: 'Agent',
     provider: 'Provider',
     model: 'Model',
     apiKey: 'API key',
+    getApiKey: 'Get API key',
     apiKeyHint: 'Stored in the local credential store, never in xopc.json.',
     existingKey: 'A credential or environment variable is already available. Leave this blank to reuse it.',
+    savedKey: 'A credential is saved. Use the eye button to view it, or type a new key to replace it.',
+    revealFailed: 'Unable to load the saved API key.',
+    keyNotRevealable: 'This credential comes from an environment variable or another non-revealable source.',
     region: 'Service region',
     cn: 'China',
     intl: 'International',
@@ -52,7 +60,9 @@ const copy = {
     enable: 'Enable image generation',
     enabling: 'Verifying and enabling…',
     enabled: 'Image generation is ready.',
-    enabledWithoutVerify: 'Image generation is enabled. This provider does not expose a lightweight credential check.',
+    addService: 'Add image service',
+    manageService: 'Manage service',
+    custom: 'Custom',
     current: 'Current',
     configured: 'Credential ready',
     needsKey: 'API key required',
@@ -67,13 +77,17 @@ const copy = {
   },
   zh: {
     title: '图片生成',
-    intro: '选择 Agent 和内置 Provider，一次操作完成凭据保存与模型启用。',
+    intro: '为 Agent 选择图片模型，也可以连接你自己的 OpenAI Images 服务。',
     agent: 'Agent',
     provider: 'Provider',
     model: '模型',
     apiKey: 'API Key',
+    getApiKey: '获取 API Key',
     apiKeyHint: '密钥只保存在本机凭据存储中，不会写入 xopc.json。',
     existingKey: '已有凭据或环境变量；留空即可继续使用。',
+    savedKey: '凭据已保存。点击眼睛可查看，直接输入新密钥可替换。',
+    revealFailed: '无法读取已保存的 API Key。',
+    keyNotRevealable: '当前凭据来自环境变量或其他不可查看的来源。',
     region: '服务地域',
     cn: '中国站',
     intl: '国际站',
@@ -82,7 +96,9 @@ const copy = {
     enable: '启用图片生成',
     enabling: '正在验证并启用…',
     enabled: '图片生成已可用。',
-    enabledWithoutVerify: '图片生成已启用；该 Provider 暂无轻量凭据验证接口。',
+    addService: '添加图片服务',
+    manageService: '管理服务',
+    custom: '自定义',
     current: '当前使用',
     configured: '凭据已就绪',
     needsKey: '需要 API Key',
@@ -96,14 +112,6 @@ const copy = {
     copied: '已复制',
   },
 } as const;
-
-async function fetchCatalog(): Promise<ImageProvider[]> {
-  const response = await fetchJson<{ payload?: { providers?: ImageProvider[] } }>(
-    apiUrl('/api/image-generation/catalog'),
-  );
-  if (!Array.isArray(response.payload?.providers)) throw new Error('Invalid image provider catalog');
-  return response.payload.providers;
-}
 
 async function fetchAgentImageGeneration(agentId: string): Promise<AgentImageGeneration> {
   const response = await fetchJson<{ payload?: AgentImageGeneration }>(
@@ -121,6 +129,12 @@ function providerIdFromModel(model: string | undefined): string | undefined {
 function modelIdFromRef(model: string | undefined): string | undefined {
   const slash = model?.indexOf('/') ?? -1;
   return slash > 0 ? model!.slice(slash + 1) : undefined;
+}
+
+function providerEnrichmentId(providerId: string, region: 'cn' | 'intl'): string {
+  if (providerId === 'minimax') return region === 'cn' ? 'minimax-cn' : 'minimax';
+  if (providerId === 'dashscope') return region === 'cn' ? 'dashscope-cn' : 'dashscope-intl';
+  return providerId;
 }
 
 function ImageSettingsSkeleton() {
@@ -148,7 +162,8 @@ export function ImageModelsSettingsPanel() {
   const [baseUrl, setBaseUrl] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
-  const [success, setSuccess] = useState<string>();
+  const [customDialogOpen, setCustomDialogOpen] = useState(false);
+  const [editingCustomProvider, setEditingCustomProvider] = useState<CustomImageProvider>();
 
   const { data: agents, isLoading: agentsLoading, error: agentsError } = useSWR(
     hasToken ? 'image-generation-agents' : null,
@@ -157,7 +172,12 @@ export function ImageModelsSettingsPanel() {
   );
   const { data: providers, isLoading: providersLoading, error: providersError, mutate: mutateProviders } = useSWR(
     hasToken ? apiUrl('/api/image-generation/catalog') : null,
-    fetchCatalog,
+    fetchImageCatalog,
+    { revalidateOnFocus: false },
+  );
+  const { data: customProviders, isLoading: customProvidersLoading, error: customProvidersError, mutate: mutateCustomProviders } = useSWR(
+    hasToken ? apiUrl('/api/image-generation/custom-providers') : null,
+    fetchCustomImageProviders,
     { revalidateOnFocus: false },
   );
 
@@ -185,15 +205,18 @@ export function ImageModelsSettingsPanel() {
         ? modelIdFromRef(agentConfig.model?.primary) || selected.defaultModel
         : selected.defaultModel,
     );
-    setApiKey('');
+    setApiKey(selected.configured ? MASKED_API_KEY : '');
   }, [agentConfig, providers]);
 
   useEffect(() => {
     setError(undefined);
-    setSuccess(undefined);
   }, [agentId]);
 
   const selectedProvider = providers?.find((provider) => provider.id === providerId);
+  const apiKeyUrl = selectedProvider
+    ? selectedProvider.apiKeyUrl
+      ?? getOrderedApiKeyLinks(providerEnrichmentId(selectedProvider.id, region), language)[0]?.href
+    : undefined;
   const agentOptions = useMemo(
     () => (agents?.agents ?? []).map((agent) => ({
       value: agent.id,
@@ -207,29 +230,56 @@ export function ImageModelsSettingsPanel() {
   );
   const currentRef = agentConfig?.model?.primary;
   const canSubmit = Boolean(
-    agentId && selectedProvider && modelId && (selectedProvider.configured || apiKey.trim()),
+    agentId
+      && selectedProvider
+      && modelId
+      && (selectedProvider.credentialMode === 'none' || selectedProvider.configured || apiKey.trim()),
   );
 
   if (!hasToken) return <p className="text-sm text-fg-muted">{text.connect}</p>;
-  if (agentsLoading || providersLoading || agentConfigLoading) return <ImageSettingsSkeleton />;
-  if (agentsError || providersError || agentConfigError || !providers || !agents) {
+  if (agentsLoading || providersLoading || customProvidersLoading || agentConfigLoading) return <ImageSettingsSkeleton />;
+  if (agentsError || providersError || customProvidersError || agentConfigError || !providers || !agents || !customProviders) {
     return <p className="text-sm text-red-600 dark:text-red-400">{text.loadError}</p>;
   }
 
   const chooseProvider = (provider: ImageProvider) => {
     setProviderId(provider.id);
     setModelId(provider.defaultModel);
-    setApiKey('');
+    setApiKey(provider.configured ? MASKED_API_KEY : '');
     setBaseUrl('');
     setError(undefined);
-    setSuccess(undefined);
+  };
+
+  const openNewCustomProvider = () => {
+    setEditingCustomProvider(undefined);
+    setCustomDialogOpen(true);
+  };
+
+  const openSelectedCustomProvider = () => {
+    const custom = customProviders.find((provider) => provider.providerId === selectedProvider?.id);
+    if (!custom) return;
+    setEditingCustomProvider(custom);
+    setCustomDialogOpen(true);
+  };
+
+  const refreshCustomProviders = async (nextProviderId?: string) => {
+    const [nextCustom, nextCatalog] = await Promise.all([
+      mutateCustomProviders(),
+      mutateProviders(),
+    ]);
+    if (nextProviderId && nextCatalog?.some((provider) => provider.id === nextProviderId)) {
+      const next = nextCatalog.find((provider) => provider.id === nextProviderId)!;
+      setProviderId(next.id);
+      setModelId(next.defaultModel);
+      setApiKey(next.configured ? MASKED_API_KEY : '');
+      setEditingCustomProvider(nextCustom?.find((provider) => provider.providerId === nextProviderId));
+    }
   };
 
   const submit = async () => {
     if (!selectedProvider || !canSubmit) return;
     setSaving(true);
     setError(undefined);
-    setSuccess(undefined);
     try {
       const response = await fetchJson<{ payload?: SetupResult }>(
         apiUrl(`/api/agents/${encodeURIComponent(agentId)}/image-generation/setup`),
@@ -238,7 +288,7 @@ export function ImageModelsSettingsPanel() {
           body: JSON.stringify({
             providerId: selectedProvider.id,
             modelId,
-            ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
+            ...(apiKey.trim() && !isMaskedSecret(apiKey) ? { apiKey: apiKey.trim() } : {}),
             ...(selectedProvider.requiresRegion ? { region } : {}),
             ...(baseUrl.trim() ? { baseUrl: baseUrl.trim() } : {}),
           }),
@@ -249,8 +299,8 @@ export function ImageModelsSettingsPanel() {
         mutateAgentConfig(response.payload.agent, { revalidate: false }),
         mutateProviders(response.payload.providers, { revalidate: false }),
       ]);
-      setApiKey('');
-      setSuccess(response.payload.verification.supported ? text.enabled : text.enabledWithoutVerify);
+      setApiKey(MASKED_API_KEY);
+      showToast({ type: 'success', title: text.enabled });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -282,7 +332,12 @@ export function ImageModelsSettingsPanel() {
       </section>
 
       <section>
-        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-subtle">{text.provider}</h3>
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-fg-subtle">{text.provider}</h3>
+          <Button variant="secondary" className="px-2.5 py-1.5 text-xs" onClick={openNewCustomProvider}>
+            <Plus className="size-4" />{text.addService}
+          </Button>
+        </div>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {providers.map((provider) => {
             const selected = provider.id === providerId;
@@ -292,15 +347,23 @@ export function ImageModelsSettingsPanel() {
                 key={provider.id}
                 type="button"
                 onClick={() => chooseProvider(provider)}
-                className={`rounded-xl border p-4 text-left transition-colors ${selected ? 'border-accent bg-accent/5 ring-1 ring-accent/20' : 'border-edge bg-surface-base hover:border-edge-strong'}`}
+                className={`min-h-24 rounded-xl border p-4 text-left transition-colors ${selected ? 'border-accent bg-accent/5 ring-1 ring-accent/20' : 'border-edge bg-surface-base hover:border-edge-strong'}`}
               >
                 <span className="flex items-center justify-between gap-2">
-                  <span className="font-medium text-fg">{provider.label}</span>
-                  {active ? <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-medium text-accent">{text.current}</span> : null}
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="truncate font-medium text-fg">{provider.label}</span>
+                    {provider.source === 'custom' ? <span className="rounded-full bg-surface-subtle px-2 py-0.5 text-[10px] text-fg-subtle">{text.custom}</span> : null}
+                  </span>
+                  <span
+                    aria-hidden={!active}
+                    className={`shrink-0 rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-medium text-accent ${active ? '' : 'invisible'}`}
+                  >
+                    {text.current}
+                  </span>
                 </span>
                 <span className={`mt-2 flex items-center gap-1.5 text-xs ${provider.configured ? 'text-emerald-600 dark:text-emerald-400' : 'text-fg-muted'}`}>
-                  {provider.configured ? <CheckCircle2 className="size-3.5" /> : <KeyRound className="size-3.5" />}
-                  {provider.configured ? text.configured : text.needsKey}
+                  {provider.configured || provider.credentialMode === 'none' ? <CheckCircle2 className="size-3.5" /> : <KeyRound className="size-3.5" />}
+                  {provider.configured || provider.credentialMode === 'none' ? text.configured : text.needsKey}
                 </span>
               </button>
             );
@@ -337,20 +400,48 @@ export function ImageModelsSettingsPanel() {
             ) : null}
           </div>
 
-          <label className="mt-4 block text-xs font-medium text-fg-muted">
-            {text.apiKey}
+          {selectedProvider.source === 'custom' ? (
+            <div className="mt-4 flex justify-end">
+              <Button variant="secondary" onClick={openSelectedCustomProvider}>
+                <Settings2 className="size-4" />{text.manageService}
+              </Button>
+            </div>
+          ) : null}
+
+          {selectedProvider.credentialMode !== 'none' ? <div className="mt-4">
+            <div className="flex items-center justify-between gap-3">
+              <label htmlFor="image-generation-api-key" className="text-xs font-medium text-fg-muted">
+                {text.apiKey}
+              </label>
+              {apiKeyUrl ? (
+                <a
+                  href={apiKeyUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline"
+                >
+                  {text.getApiKey}
+                  <ArrowUpRight className="size-3.5" aria-hidden="true" />
+                </a>
+              ) : null}
+            </div>
             <SecretInput
+              key={selectedProvider.id}
+              id="image-generation-api-key"
               value={apiKey}
-              onChange={setApiKey}
+              onChange={(next) => setApiKey(isMaskedSecret(apiKey) ? next.replace(/^•+/, '') : next)}
               placeholder={selectedProvider.configured ? text.existingKey : text.needsKey}
               labels={{ show: text.show, hide: text.hide, copy: text.copy, copied: text.copied }}
+              reveal={() => revealProviderApiKey(selectedProvider.id).then((payload) => payload.apiKey)}
+              loadFailedLabel={text.revealFailed}
+              notInConfigFile={text.keyNotRevealable}
               className="mt-1.5"
               autoComplete="new-password"
             />
             <span className="mt-1.5 block font-normal leading-relaxed text-fg-subtle">
-              {selectedProvider.configured ? text.existingKey : text.apiKeyHint}
+              {selectedProvider.configured ? text.savedKey : text.apiKeyHint}
             </span>
-          </label>
+          </div> : null}
 
           <details className="mt-4 rounded-lg border border-edge bg-surface-subtle px-3 py-2.5">
             <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-medium text-fg-muted">
@@ -368,16 +459,28 @@ export function ImageModelsSettingsPanel() {
           </details>
 
           {error ? <p className="mt-4 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-600 dark:text-red-400">{error}</p> : null}
-          {success ? <p className="mt-4 rounded-lg bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-400">{success}</p> : null}
 
           <div className="mt-4 flex justify-end">
             <Button variant="primary" disabled={!canSubmit || saving} onClick={() => void submit()}>
               {saving ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
-              {saving ? text.enabling : text.enable}
+              <span className="grid">
+                <span aria-hidden className="invisible col-start-1 row-start-1">{text.enable}</span>
+                <span aria-hidden className="invisible col-start-1 row-start-1">{text.enabling}</span>
+                <span className="col-start-1 row-start-1">{saving ? text.enabling : text.enable}</span>
+              </span>
             </Button>
           </div>
         </section>
       ) : null}
+
+      <CustomImageProviderDialog
+        open={customDialogOpen}
+        onOpenChange={setCustomDialogOpen}
+        provider={editingCustomProvider}
+        configured={Boolean(editingCustomProvider && providers.find((provider) => provider.id === editingCustomProvider.providerId)?.configured)}
+        language={language}
+        onSaved={refreshCustomProviders}
+      />
     </div>
   );
 }

@@ -52,6 +52,78 @@ export const OpenAICompatSchema = z.union([
 ]);
 
 // ============================================
+// Image Generation Definition
+// ============================================
+
+const ImageGenerationResolutionSchema = z.enum(['1K', '2K', '4K']);
+const ImageGenerationQualitySchema = z.enum(['low', 'medium', 'high', 'auto']);
+const ImageGenerationOutputFormatSchema = z.enum(['png', 'jpeg', 'webp']);
+const ImageGenerationBackgroundSchema = z.enum(['transparent', 'opaque', 'auto']);
+
+export const ImageGenerationCapabilitiesSchema = z.object({
+	generate: z.object({
+		maxCount: z.number().int().positive().optional(),
+		supportsSize: z.boolean().optional(),
+		supportsAspectRatio: z.boolean().optional(),
+		supportsResolution: z.boolean().optional(),
+	}).strict().optional(),
+	edit: z.object({
+		enabled: z.boolean(),
+		maxInputImages: z.number().int().positive().optional(),
+		supportsSize: z.boolean().optional(),
+		supportsAspectRatio: z.boolean().optional(),
+	}).strict().optional(),
+	geometry: z.object({
+		sizes: z.array(z.string().min(1)).optional(),
+		aspectRatios: z.array(z.string().min(1)).optional(),
+		resolutions: z.array(ImageGenerationResolutionSchema).optional(),
+	}).strict().optional(),
+	output: z.object({
+		qualities: z.array(ImageGenerationQualitySchema).optional(),
+		formats: z.array(ImageGenerationOutputFormatSchema).optional(),
+		backgrounds: z.array(ImageGenerationBackgroundSchema).optional(),
+	}).strict().optional(),
+}).strict();
+
+export const ImageGenerationModelSchema = z.object({
+	id: z.string().min(1),
+	name: z.string().min(1).optional(),
+	capabilities: ImageGenerationCapabilitiesSchema,
+	defaults: z.object({
+		count: z.number().int().positive().optional(),
+		size: z.string().min(1).optional(),
+		outputFormat: ImageGenerationOutputFormatSchema.optional(),
+	}).strict().optional(),
+}).strict();
+
+export const ImageGenerationProviderSchema = z.object({
+	api: z.literal('openai-images'),
+	name: z.string().min(1),
+	documentationUrl: z.string().url().optional(),
+	apiKeyUrl: z.string().url().optional(),
+	defaultModel: z.string().min(1),
+	auth: z.discriminatedUnion('type', [
+		z.object({ type: z.literal('bearer') }).strict(),
+		z.object({
+			type: z.literal('header'),
+			headerName: z.string().regex(/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/),
+		}).strict(),
+		z.object({ type: z.literal('none') }).strict(),
+	]),
+	paths: z.object({
+		generations: z.string().startsWith('/').optional(),
+		edits: z.string().startsWith('/').optional(),
+	}).strict().optional(),
+	network: z.object({
+		allowedHosts: z.array(z.string().min(1).refine(
+			(host) => host === host.trim() && !host.includes('://') && !/[/?#]/.test(host),
+			'Use an exact hostname or IP without scheme, port, or path',
+		)).min(1),
+	}).strict().optional(),
+	models: z.array(ImageGenerationModelSchema).min(1),
+}).strict();
+
+// ============================================
 // Model Definition
 // ============================================
 
@@ -126,6 +198,7 @@ export const ProviderConfigSchema = z.object({
 	models: z.array(CustomModelSchema).optional(),
 	modelOverrides: z.record(z.string(), ModelOverrideSchema).optional(),
 	modelDiscovery: z.object({ enabled: z.boolean() }).strict().optional(),
+	imageGeneration: ImageGenerationProviderSchema.optional(),
 });
 
 // ============================================
@@ -145,6 +218,8 @@ export type VercelGatewayRouting = z.infer<typeof VercelGatewayRoutingSchema>;
 export type OpenAICompletionsCompat = z.infer<typeof OpenAICompletionsCompatSchema>;
 export type OpenAIResponsesCompat = z.infer<typeof OpenAIResponsesCompatSchema>;
 export type OpenAICompat = z.infer<typeof OpenAICompatSchema>;
+export type ImageGenerationModelConfig = z.infer<typeof ImageGenerationModelSchema>;
+export type ImageGenerationProviderConfig = z.infer<typeof ImageGenerationProviderSchema>;
 export type CustomModel = z.infer<typeof CustomModelSchema>;
 export type ModelOverride = z.infer<typeof ModelOverrideSchema>;
 export type ProviderConfig = z.infer<typeof ProviderConfigSchema>;
@@ -173,7 +248,7 @@ const PROVIDER_ID_REGEX = /^[a-z0-9]([a-z0-9-_]*[a-z0-9])?$/;
 /** pi-ai KnownProvider ids — overriding in models.json requires baseUrl (see validation below). */
 const RESERVED_PROVIDER_IDS = new Set([
 	'amazon-bedrock', 'anthropic', 'azure-openai-responses', 'cerebras',
-	'cloudflare-ai-gateway', 'cloudflare-workers-ai', 'deepseek', 'fireworks', 'github-copilot',
+	'cloudflare-ai-gateway', 'cloudflare-workers-ai', 'dashscope', 'deepseek', 'fal', 'fireworks', 'github-copilot',
 	'google', 'google-antigravity', 'google-gemini-cli', 'google-vertex', 'groq',
 	'huggingface', 'kimi-coding', 'minimax', 'minimax-cn', 'mistral', 'moonshotai', 'moonshotai-cn',
 	'openai', 'openai-codex', 'opencode', 'opencode-go', 'openrouter',
@@ -235,6 +310,78 @@ export function validateModelsConfig(config: unknown): ValidationResult {
 		const hasModels = providerConfig.models && providerConfig.models.length > 0;
 		const hasModelOverrides = providerConfig.modelOverrides && Object.keys(providerConfig.modelOverrides).length > 0;
 		const hasBaseUrl = !!providerConfig.baseUrl;
+		const imageGeneration = providerConfig.imageGeneration;
+
+		if (imageGeneration) {
+			if (RESERVED_PROVIDER_IDS.has(providerName)) {
+				errors.push({
+					path: `providers.${providerName}.imageGeneration`,
+					message: 'Custom image generation cannot override a built-in provider ID',
+					severity: 'error',
+				});
+			}
+			if (!hasBaseUrl) {
+				errors.push({
+					path: `providers.${providerName}.baseUrl`,
+					message: 'baseUrl is required when defining image generation models',
+					severity: 'error',
+				});
+			}
+
+			const credentialHeaderNames = new Set([
+				'authorization',
+				'proxy-authorization',
+				'cookie',
+				...(imageGeneration.auth.type === 'header'
+					? [imageGeneration.auth.headerName.toLowerCase()]
+					: []),
+			]);
+			for (const headerName of Object.keys(providerConfig.headers ?? {})) {
+				if (credentialHeaderNames.has(headerName.toLowerCase())) {
+					errors.push({
+						path: `providers.${providerName}.headers.${headerName}`,
+						message: 'Credential headers must be stored in the credential store, not models.json',
+						severity: 'error',
+					});
+				}
+			}
+			for (const [headerName, headerValue] of Object.entries(providerConfig.headers ?? {})) {
+				if (!isHttpHeaderValue(headerValue)) {
+					errors.push({
+						path: `providers.${providerName}.headers.${headerName}`,
+						message: 'Header values must contain only HTTP ByteString characters and no control characters',
+						severity: 'error',
+					});
+				}
+			}
+
+			const imageModelIds = new Set<string>();
+			for (let i = 0; i < imageGeneration.models.length; i++) {
+				const model = imageGeneration.models[i];
+				if (model.id.includes('/')) {
+					errors.push({
+						path: `providers.${providerName}.imageGeneration.models[${i}].id`,
+						message: 'Image model ID cannot contain "/" character',
+						severity: 'error',
+					});
+				}
+				if (imageModelIds.has(model.id)) {
+					errors.push({
+						path: `providers.${providerName}.imageGeneration.models[${i}].id`,
+						message: `Duplicate image model ID "${model.id}"`,
+						severity: 'error',
+					});
+				}
+				imageModelIds.add(model.id);
+			}
+			if (!imageModelIds.has(imageGeneration.defaultModel)) {
+				errors.push({
+					path: `providers.${providerName}.imageGeneration.defaultModel`,
+					message: 'defaultModel must reference a configured image generation model',
+					severity: 'error',
+				});
+			}
+		}
 
 		// Custom models require an endpoint. Credentials may live in the auth profile store.
 		if (hasModels) {
@@ -248,7 +395,7 @@ export function validateModelsConfig(config: unknown): ValidationResult {
 		}
 
 		// If no models and no baseUrl and no modelOverrides, apiKey alone is valid (auth for built-in providers)
-		if (!hasModels && !hasBaseUrl && !hasModelOverrides && !providerConfig.apiKey) {
+		if (!hasModels && !hasBaseUrl && !hasModelOverrides && !providerConfig.apiKey && !imageGeneration) {
 			errors.push({
 				path: `providers.${providerName}`,
 				message: 'Must specify baseUrl, modelOverrides, models, or apiKey',
@@ -312,6 +459,14 @@ export function validateModelsConfig(config: unknown): ValidationResult {
 		valid: errors.filter(e => e.severity === 'error').length === 0,
 		errors,
 	};
+}
+
+function isHttpHeaderValue(value: string): boolean {
+	for (let index = 0; index < value.length; index++) {
+		const code = value.charCodeAt(index);
+		if (code > 255 || (code < 32 && code !== 9) || code === 127) return false;
+	}
+	return true;
 }
 
 // ============================================

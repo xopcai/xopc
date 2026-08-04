@@ -221,6 +221,50 @@ Automatic discovery is opt-in for custom OpenAI-compatible providers. XOPC Model
 
 ---
 
+## Custom image generation providers
+
+Custom image generation uses one explicit protocol: `openai-images`. xopc sends the standard OpenAI Images request shapes to `/images/generations` and `/images/edits`; it does not guess vendor response fields or run compatibility transforms.
+
+```json
+{
+  "providers": {
+    "studio-images": {
+      "baseUrl": "https://images.example.com/v1",
+      "imageGeneration": {
+        "api": "openai-images",
+        "name": "Studio Images",
+        "documentationUrl": "https://images.example.com/docs",
+        "apiKeyUrl": "https://images.example.com/keys",
+        "defaultModel": "image-1",
+        "auth": { "type": "bearer" },
+        "models": [
+          {
+            "id": "image-1",
+            "capabilities": {
+              "generate": { "maxCount": 1, "supportsSize": true },
+              "edit": { "enabled": true, "maxInputImages": 1 }
+            },
+            "defaults": { "size": "1024x1024", "outputFormat": "png" }
+          }
+        ]
+      }
+    }
+  }
+}
+```
+
+`auth.type` is `bearer`, `header` (with `headerName`), or `none`. Image API keys are stored through the gateway credential store and are never placed in this image provider definition. Static `headers` cannot contain the authentication header.
+
+Private and loopback endpoints are blocked by default. To trust a local endpoint, list only its exact hostname or IP:
+
+```json
+"network": { "allowedHosts": ["127.0.0.1", "image-server.lan"] }
+```
+
+The gateway limits OpenAI Images JSON responses to 64 MiB, each decoded image to 32 MiB, and all decoded images in one response to 64 MiB. Use **Settings → Capabilities → Images** to add services, manage credentials, run a real generation test, and assign a model to an Agent. `xopc doctor` reports invalid definitions, blocked private endpoints, and missing credentials.
+
+---
+
 ## Model Configuration
 
 | Field | Required | Default | Description |
@@ -492,6 +536,13 @@ Changes are automatically reloaded when you save in the UI. No restart required.
 | PATCH | `/api/models-json` | Save configuration |
 | POST | `/api/models-json/reload` | Hot reload |
 | POST | `/api/models-json/test-api-key` | Test API key resolution |
+| GET | `/api/image-generation/custom-providers` | List custom image providers (no secrets) |
+| PUT | `/api/image-generation/custom-providers/:providerId` | Create or replace a custom image provider |
+| DELETE | `/api/image-generation/custom-providers/:providerId` | Delete a custom image provider definition |
+| PUT | `/api/image-generation/providers/:providerId/credential` | Store an image provider API key |
+| POST | `/api/image-generation/providers/:providerId/reveal-api-key` | Reveal a locally stored image provider key |
+| DELETE | `/api/image-generation/providers/:providerId/credential` | Delete an image provider credential |
+| POST | `/api/image-generation/providers/:providerId/test` | Run one real image generation test |
 
 ---
 

@@ -79,7 +79,14 @@ export function prepareImageGenerationSetup(
     [providerId]: { ...(next.providers?.[providerId] ?? {}), ...connection },
   };
   const entry = next.agents.list[index]!;
-  entry.models.imageGenerationModel = { primary: `${providerId}/${modelId}` };
+  const models = entry.models ?? {
+    defaultRole: resolveEffectiveAgentManifestForAgent(config, agentId).models.defaultRole,
+    roles: {},
+  };
+  entry.models = {
+    ...models,
+    imageGenerationModel: { primary: `${providerId}/${modelId}` },
+  };
 
   const parsed = ConfigSchema.safeParse(next);
   if (!parsed.success) {
