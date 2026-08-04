@@ -2,6 +2,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import {
   ArrowLeft,
   ArrowUpRight,
+  ChevronDown,
   Copy,
   Eye,
   Layers,
@@ -22,7 +23,6 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { fetchSkillsCatalog } from '@/features/settings/agents-admin-api';
 import type { BuiltinToolUiGroupKey } from '@/features/settings/agents/builtin-tool-disable-groups';
-import { TypedModelsEditor } from '@/features/settings/agents/typed-models-editor';
 import {
   cleanTypedModelsForPatch,
   typedModelsRowsFromList,
@@ -38,6 +38,7 @@ import {
   type CapabilityPresetPolicyFields,
   type CapabilityPresetToolPolicy,
 } from '@/features/settings/capability-presets/capability-presets-api';
+import { PresetModelsEditor } from '@/features/settings/capability-presets/preset-models-editor';
 import {
   PresetAdvancedPolicyEditor,
   type PresetAdvancedFieldKey,
@@ -935,32 +936,33 @@ export function CapabilityPresetsSettingsPanel() {
             {activeTab === 'models' ? (
               <SettingsFormSection>
                 <SettingsFormSectionHeader icon={Layers} title={cp.modelsTitle} subtitle={cp.modelsHint} />
-                <TypedModelsEditor
+                <PresetModelsEditor
                   rows={draft.modelRows}
                   onChange={(rows) => setDraft((prev) => ({ ...prev, modelRows: rows }))}
                   disabled={busy}
                   defaultRole={selected?.models?.defaultRole}
                   chat={m.chat}
                   labels={{
-                    id: cp.modelRoleIdLabel,
+                    defaultTitle: cp.modelDefaultTitle,
+                    defaultHint: cp.modelDefaultHint,
+                    defaultBadge: cp.modelDefaultBadge,
+                    roleId: cp.modelRoleIdLabel,
                     description: cp.modelRoleDescriptionLabel,
+                    descriptionPlaceholder: cp.modelRoleDescriptionPlaceholder,
                     primaryModel: cp.modelPrimaryModelLabel,
                     fallbackModels: cp.modelFallbackModelsLabel,
                     addFallback: cp.modelAddFallback,
                     removeFallback: cp.modelRemoveFallback,
                     fallbackPlaceholder: cp.modelFallbackPlaceholder,
                     fallbackEmptyHint: cp.modelFallbackEmptyHint,
-                    add: cp.addModelRole,
-                    remove: cp.removeModelRole,
-                    recommendedTitle: cp.modelRecommendedTitle,
-                    customTitle: cp.modelCustomTitle,
-                    defaultBadge: cp.modelDefaultBadge,
-                    visionBadge: cp.modelVisionBadge,
-                    visionAutoHint: cp.modelVisionAutoHint,
-                    addPurpose: cp.addModelPurpose,
-                    noCustomRoles: cp.noCustomModelRoles,
-                    idPlaceholder: 'deep',
-                    descriptionPlaceholder: cp.modelRoleDescriptionPlaceholder,
+                    moreSettings: cp.modelMoreSettings,
+                    otherRolesTitle: cp.modelOtherRolesTitle,
+                    otherRolesHint: cp.modelOtherRolesHint,
+                    otherRolesEmpty: cp.modelOtherRolesEmpty,
+                    addTaskModel: cp.modelAddTaskModel,
+                    customRole: cp.modelCustomRole,
+                    removeRole: cp.removeModelRole,
+                    roleIdPlaceholder: 'custom-role',
                     roleNames: cp.modelRoleNames,
                     roleDescriptions: cp.modelRoleDescriptions,
                   }}
@@ -1230,58 +1232,79 @@ function ModelAdvancedPolicyEditor(props: {
   };
 
   return (
-    <div className="mt-6 border-t border-edge-subtle pt-5 dark:border-edge">
-      <h4 className="text-sm font-semibold text-fg">{cp.modelAdvancedTitle}</h4>
-      <p className="mt-1 text-xs leading-relaxed text-fg-muted">{cp.modelAdvancedHint}</p>
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <ToolModelPolicyCard
-          title={cp.imageUnderstandingTitle}
-          value={value.imageModel}
-          onChange={(next) => updateModel('imageModel', next)}
-          disabled={disabled}
-          cp={cp}
-        />
-        <ToolModelPolicyCard
-          title={cp.imageGenerationTitle}
-          value={value.imageGenerationModel}
-          onChange={(next) => updateModel('imageGenerationModel', next)}
-          disabled={disabled}
-          cp={cp}
-        />
-      </div>
-      <div className="mt-4 grid gap-3 rounded-lg bg-surface-panel/70 p-3 shadow-surface sm:grid-cols-2">
-        <label className="flex flex-col gap-1.5 text-sm">
-          <span className="font-medium text-fg">{cp.modelAllowFallbacksLabel}</span>
-          <Select
-            value={value.allowFallbacks}
+    <div className="mt-5 grid gap-3 border-t border-edge-subtle pt-5 dark:border-edge">
+      <details className="group rounded-xl border border-edge bg-surface-base">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4">
+          <div className="min-w-0">
+            <h4 className="text-sm font-semibold text-fg">{cp.modelSpecializedTitle}</h4>
+            <p className="mt-1 text-xs leading-relaxed text-fg-muted">
+              {cp.modelSpecializedSummary
+                .replace('{{image}}', value.imageModel.primary || cp.modelNotSet)
+                .replace('{{generation}}', value.imageGenerationModel.primary || cp.modelNotSet)}
+            </p>
+          </div>
+          <ChevronDown className="size-4 shrink-0 text-fg-subtle transition-transform group-open:rotate-180" aria-hidden />
+        </summary>
+        <div className="grid gap-3 border-t border-edge-subtle p-4 dark:border-edge lg:grid-cols-2">
+          <ToolModelPolicyCard
+            title={cp.imageUnderstandingTitle}
+            value={value.imageModel}
+            onChange={(next) => updateModel('imageModel', next)}
             disabled={disabled}
-            onChange={(event) => onChange({
-              ...value,
-              allowFallbacks: event.target.value as ModelAdvancedDraft['allowFallbacks'],
-            })}
-          >
-            <SelectOption value="">{cp.policyInherit}</SelectOption>
-            <SelectOption value="true">{cp.policyEnabled}</SelectOption>
-            <SelectOption value="false">{cp.policyDisabled}</SelectOption>
-          </Select>
-        </label>
-        <label className="flex flex-col gap-1.5 text-sm">
-          <span className="font-medium text-fg">{cp.modelMaxCostTierLabel}</span>
-          <Select
-            value={value.maxCostTier}
+            cp={cp}
+          />
+          <ToolModelPolicyCard
+            title={cp.imageGenerationTitle}
+            value={value.imageGenerationModel}
+            onChange={(next) => updateModel('imageGenerationModel', next)}
             disabled={disabled}
-            onChange={(event) => onChange({
-              ...value,
-              maxCostTier: event.target.value as ModelAdvancedDraft['maxCostTier'],
-            })}
-          >
-            <SelectOption value="">{cp.policyInherit}</SelectOption>
-            <SelectOption value="low">{cp.costTierLow}</SelectOption>
-            <SelectOption value="medium">{cp.costTierMedium}</SelectOption>
-            <SelectOption value="high">{cp.costTierHigh}</SelectOption>
-          </Select>
-        </label>
-      </div>
+            cp={cp}
+          />
+        </div>
+      </details>
+
+      <details className="group rounded-xl border border-edge bg-surface-base">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4">
+          <div className="min-w-0">
+            <h4 className="text-sm font-semibold text-fg">{cp.modelAdvancedTitle}</h4>
+            <p className="mt-1 text-xs leading-relaxed text-fg-muted">{cp.modelAdvancedHint}</p>
+          </div>
+          <ChevronDown className="size-4 shrink-0 text-fg-subtle transition-transform group-open:rotate-180" aria-hidden />
+        </summary>
+        <div className="grid gap-3 border-t border-edge-subtle p-4 dark:border-edge sm:grid-cols-2">
+          <label className="flex flex-col gap-1.5 text-sm">
+            <span className="font-medium text-fg">{cp.modelAllowFallbacksLabel}</span>
+            <Select
+              value={value.allowFallbacks}
+              disabled={disabled}
+              onChange={(event) => onChange({
+                ...value,
+                allowFallbacks: event.target.value as ModelAdvancedDraft['allowFallbacks'],
+              })}
+            >
+              <SelectOption value="">{cp.policyInherit}</SelectOption>
+              <SelectOption value="true">{cp.policyEnabled}</SelectOption>
+              <SelectOption value="false">{cp.policyDisabled}</SelectOption>
+            </Select>
+          </label>
+          <label className="flex flex-col gap-1.5 text-sm">
+            <span className="font-medium text-fg">{cp.modelMaxCostTierLabel}</span>
+            <Select
+              value={value.maxCostTier}
+              disabled={disabled}
+              onChange={(event) => onChange({
+                ...value,
+                maxCostTier: event.target.value as ModelAdvancedDraft['maxCostTier'],
+              })}
+            >
+              <SelectOption value="">{cp.policyInherit}</SelectOption>
+              <SelectOption value="low">{cp.costTierLow}</SelectOption>
+              <SelectOption value="medium">{cp.costTierMedium}</SelectOption>
+              <SelectOption value="high">{cp.costTierHigh}</SelectOption>
+            </Select>
+          </label>
+        </div>
+      </details>
     </div>
   );
 }
@@ -1296,9 +1319,14 @@ function ToolModelPolicyCard(props: {
   const { title, value, onChange, disabled, cp } = props;
   const inputClass = 'rounded-lg border border-edge bg-surface-base px-3 py-2 text-sm text-fg placeholder:text-fg-subtle focus:border-edge-strong focus:outline-none';
   return (
-    <div className="rounded-lg bg-surface-panel/70 p-3 shadow-surface">
-      <div className="text-sm font-medium text-fg">{title}</div>
-      <div className="mt-3 grid gap-3">
+    <div className="rounded-lg bg-surface-panel/70 shadow-surface">
+      <div className="flex items-center justify-between gap-2 px-3 py-2.5">
+        <span className="text-sm font-medium text-fg">{title}</span>
+        <span className="max-w-48 truncate font-mono text-xs text-fg-muted">
+          {value.primary || cp.modelNotSet}
+        </span>
+      </div>
+      <div className="grid gap-3 border-t border-edge-subtle p-3 dark:border-edge">
         <label className="flex flex-col gap-1 text-xs text-fg-muted">
           {cp.modelToolPrimaryLabel}
           <input

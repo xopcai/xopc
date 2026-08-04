@@ -101,6 +101,7 @@ export async function postJsonRequest(
       method: 'POST',
       headers,
       body: JSON.stringify(options.body),
+      redirect: 'error',
     },
   });
   await assertOkOrThrowProviderError(response, options.label);
@@ -123,6 +124,7 @@ export async function postMultipartRequest(
       method: 'POST',
       headers,
       body: options.body,
+      redirect: 'error',
     },
   });
   await assertOkOrThrowProviderError(response, options.label);
@@ -143,10 +145,56 @@ export async function getJsonRequest(
   }
   const response = await fetchWithTimeoutGuarded(url, {
     ...options,
-    init: { method: 'GET', headers },
+    init: { method: 'GET', headers, redirect: 'error' },
   });
   await assertOkOrThrowProviderError(response, options.label);
   return response;
+}
+
+/** Read and parse a JSON response without allowing an unbounded body allocation. */
+export async function readJsonResponseLimited(
+  response: Response,
+  maxBytes: number,
+): Promise<unknown> {
+  if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0) {
+    throw new Error('JSON response byte limit must be a positive safe integer.');
+  }
+  const declaredLength = Number.parseInt(response.headers.get('content-length') ?? '', 10);
+  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+    throw new Error(`Provider JSON response exceeds ${maxBytes} bytes.`);
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('Provider returned an empty JSON response.');
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      if (!value?.byteLength) continue;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel().catch(() => {});
+        throw new Error(`Provider JSON response exceeds ${maxBytes} bytes.`);
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const body = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  try {
+    return JSON.parse(new TextDecoder().decode(body)) as unknown;
+  } catch {
+    throw new Error('Provider returned invalid JSON.');
+  }
 }
 
 /**

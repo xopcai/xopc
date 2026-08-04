@@ -14,8 +14,8 @@ import {
   isProviderApiKeyConfigured,
   resolveAuthProfileForProvider,
 } from '../../../../providers/auth-runtime/index.js';
-import { createOpenAiCompatibleImageProvider } from '../openai-compatible-image-provider.js';
-import type { OpenAiCompatibleEndpointResolution } from '../openai-compatible-image-provider.js';
+import { createOpenAiImagesProvider } from '../openai-images-provider.js';
+import type { OpenAiImagesEndpointResolution } from '../openai-images-provider.js';
 import type {
   ImageGenerationProvider,
   ImageGenerationProviderCapabilities,
@@ -76,7 +76,7 @@ function resolveOpenAiBaseUrl(req: ImageGenerationRequest): string {
   return OPENAI_DEFAULT_BASE_URL;
 }
 
-function buildAzureEndpoint(azure: AzureSettings): OpenAiCompatibleEndpointResolution {
+function buildAzureEndpoint(azure: AzureSettings): OpenAiImagesEndpointResolution {
   const baseUrl = `https://${azure.resource}.openai.azure.com/openai`;
   const query = `?api-version=${encodeURIComponent(azure.apiVersion)}`;
   return {
@@ -88,7 +88,7 @@ function buildAzureEndpoint(azure: AzureSettings): OpenAiCompatibleEndpointResol
 }
 
 export function buildOpenAIImageGenerationProvider(): ImageGenerationProvider {
-  return createOpenAiCompatibleImageProvider({
+  return createOpenAiImagesProvider({
     id: 'openai',
     label: 'OpenAI',
     defaultModel: OPENAI_DEFAULT_IMAGE_MODEL,

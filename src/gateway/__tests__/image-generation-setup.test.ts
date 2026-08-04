@@ -65,6 +65,36 @@ describe('image generation setup', () => {
     expect(JSON.stringify(result.config)).not.toContain('apiKey');
   });
 
+  it('initializes models when the requested agent has no local model config', () => {
+    const config = createConfig();
+    config.agents.capabilityPresets.image = {
+      id: 'image',
+      name: 'Image defaults',
+      models: {
+        defaultRole: 'inherited',
+        roles: { inherited: { model: 'openai/gpt-5-mini' } },
+      },
+    };
+    config.agents.list[1]!.extends = ['image'];
+    delete config.agents.list[1]!.models;
+
+    const result = prepareImageGenerationSetup(config, 'studio', {
+      providerId: 'google',
+      modelId: 'gemini-3.1-flash-image',
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.config.agents.list[1]!.models).toEqual({
+      defaultRole: 'inherited',
+      roles: {},
+      imageGenerationModel: { primary: 'google/gemini-3.1-flash-image' },
+    });
+    expect(getAgentImageGenerationConfig(result.config, 'studio').model?.primary).toBe(
+      'google/gemini-3.1-flash-image',
+    );
+  });
+
   it('requires an explicit region for regional providers', () => {
     const result = prepareImageGenerationSetup(createConfig(), 'main', {
       providerId: 'dashscope',

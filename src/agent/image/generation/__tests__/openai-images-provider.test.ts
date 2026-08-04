@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import * as providerHttp from '../../../../media-shared/http/index.js';
-import { createOpenAiCompatibleImageProvider } from '../openai-compatible-image-provider.js';
+import { createOpenAiImagesProvider } from '../openai-images-provider.js';
 import type {
   ImageGenerationProvider,
   ImageGenerationProviderCapabilities,
@@ -34,8 +34,10 @@ function makeJsonResponse(payload: unknown, init: ResponseInit = { status: 200 }
   });
 }
 
-function buildProvider(overrides?: Partial<Parameters<typeof createOpenAiCompatibleImageProvider>[0]>): ImageGenerationProvider {
-  return createOpenAiCompatibleImageProvider({
+function buildProvider(
+  overrides?: Partial<Parameters<typeof createOpenAiImagesProvider>[0]>,
+): ImageGenerationProvider {
+  return createOpenAiImagesProvider({
     id: 'mock',
     label: 'Mock',
     defaultModel: 'mock-model',
@@ -89,7 +91,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('createOpenAiCompatibleImageProvider', () => {
+describe('createOpenAiImagesProvider', () => {
   it('issues a JSON POST to /images/generations with bearer auth and decodes b64_json', async () => {
     const calls: MockPostCall[] = [];
     stubPostJson(calls);
@@ -163,6 +165,25 @@ describe('createOpenAiCompatibleImageProvider', () => {
     expect(headers['x-custom']).toBe('yes');
   });
 
+  it('passes an explicit private-host allowlist to the HTTP guard', async () => {
+    const calls: MockPostCall[] = [];
+    stubPostJson(calls);
+    const provider = buildProvider({
+      resolveEndpoint: () => ({
+        baseUrl: 'http://image-server.lan/v1',
+        privateNetworkPolicy: { allowHosts: ['image-server.lan'] },
+      }),
+    });
+
+    await provider.generateImage({
+      provider: 'mock',
+      model: 'mock-model',
+      prompt: 'p',
+    } as ImageGenerationRequest);
+
+    expect(calls[0]?.options).toMatchObject({ hostnameAllowlist: ['image-server.lan'] });
+  });
+
   it('forwards quality / outputFormat / background / providerOptions via applyOpenAiOptions', async () => {
     const calls: MockPostCall[] = [];
     stubPostJson(calls);
@@ -222,17 +243,14 @@ describe('createOpenAiCompatibleImageProvider', () => {
     ).rejects.toThrow(/no images/);
   });
 
-  it('uses buildGenerateRequestBody hook to mutate payload', async () => {
-    const calls: MockPostCall[] = [];
-    stubPostJson(calls);
-    const provider = buildProvider({
-      buildGenerateRequestBody: (_req, base) => ({ ...base, watermark: false }),
-    });
-    await provider.generateImage({
-      provider: 'mock',
-      model: 'mock-model',
-      prompt: 'p',
-    } as ImageGenerationRequest);
-    expect((calls[0]?.options as providerHttp.PostJsonRequestOptions).body).toMatchObject({ watermark: false });
+  it('reports a clear error when an API key contains non-ByteString characters', async () => {
+    const provider = buildProvider({ resolveApiKey: () => 'sk-valid→invalid' });
+    await expect(
+      provider.generateImage({
+        provider: 'mock',
+        model: 'mock-model',
+        prompt: 'p',
+      } as ImageGenerationRequest),
+    ).rejects.toThrow('API key contains characters that cannot be sent in an HTTP header');
   });
 });
