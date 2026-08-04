@@ -48,6 +48,54 @@ describe('transcript hygiene', () => {
     expect(stripped).toHaveLength(1);
   });
 
+  it('repairs missing tool results for OpenAI-compatible providers at send time', () => {
+    const assistant: AgentMessage = {
+      role: 'assistant',
+      content: [{ type: 'toolCall', id: 'call-1', name: 'bash', arguments: {} }],
+      stopReason: 'toolUse',
+      timestamp: 1,
+      api: 'openai-completions',
+      provider: 'deepseek',
+      model: 'deepseek-v4-flash',
+      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+    } as AgentMessage;
+    const model = { api: 'openai-completions', provider: 'deepseek', id: 'deepseek-v4-flash' } as Model<Api>;
+
+    const repaired = tryApplySessionTranscriptHygiene([assistant], model);
+
+    expect(repaired).toHaveLength(2);
+    expect(repaired[0]).toMatchObject({ role: 'assistant', content: [expect.objectContaining({ id: 'call1' })] });
+    expect(repaired[1]).toMatchObject({ role: 'toolResult', toolCallId: 'call1', isError: true });
+  });
+
+  it('repairs a delayed tool result that was persisted after a later assistant turn', () => {
+    const assistant = (id: string) => ({
+      role: 'assistant',
+      content: [{ type: 'toolCall', id, name: 'exec_command', arguments: {} }],
+      stopReason: 'toolUse',
+      timestamp: 1,
+    }) as AgentMessage;
+    const result = (id: string) => ({
+      role: 'toolResult', toolCallId: id, toolName: 'exec_command',
+      content: [{ type: 'text', text: 'done' }], isError: false, timestamp: 2,
+    }) as AgentMessage;
+    const model = { api: 'openai-completions', provider: 'deepseek', id: 'deepseek-v4-flash' } as Model<Api>;
+
+    const repaired = tryApplySessionTranscriptHygiene([
+      assistant('call_a'),
+      { role: 'user', content: 'next', timestamp: 2 } as AgentMessage,
+      assistant('call_b'),
+      result('call_a'),
+      result('call_b'),
+    ], model);
+
+    expect(repaired.map((message) => message.role)).toEqual([
+      'assistant', 'toolResult', 'user', 'assistant', 'toolResult',
+    ]);
+    expect(repaired[1]).toMatchObject({ toolCallId: 'calla' });
+    expect(repaired[4]).toMatchObject({ toolCallId: 'callb' });
+  });
+
   it('persistence hygiene keeps thinking blocks on disk (send-time hygiene may still drop them)', () => {
     const assistant: AgentMessage = {
       role: 'assistant',
