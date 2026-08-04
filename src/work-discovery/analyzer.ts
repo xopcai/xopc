@@ -19,6 +19,7 @@ import type {
 
 const MAX_MODEL_CONTEXT_CHARS = 120_000;
 const MAX_PERSONAL_CONTEXT_CHARS = 100_000;
+const WORK_ANALYSIS_MAX_TOKENS = 6_000;
 
 function extractText(content: unknown): string {
   if (typeof content === 'string') return content;
@@ -31,18 +32,39 @@ function extractText(content: unknown): string {
 }
 
 function parseJson(raw: string): Record<string, unknown> | null {
-  const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(raw)?.[1];
+  const candidates: string[] = [];
+  for (const match of raw.matchAll(/```json\s*([\s\S]*?)```/gi)) {
+    if (match[1]) candidates.push(match[1]);
+  }
+  candidates.push(raw.trim());
+  for (const match of raw.matchAll(/```(?:[^\n]*)?\s*([\s\S]*?)```/g)) {
+    if (match[1]) candidates.push(match[1]);
+  }
   const start = raw.indexOf('{');
   const end = raw.lastIndexOf('}');
-  const candidate = fenced ?? (start >= 0 && end > start ? raw.slice(start, end + 1) : raw);
-  try {
-    const value = JSON.parse(candidate) as unknown;
-    return value && typeof value === 'object' && !Array.isArray(value)
-      ? value as Record<string, unknown>
-      : null;
-  } catch {
-    return null;
+  if (start >= 0 && end > start) candidates.push(raw.slice(start, end + 1));
+  for (const candidate of new Set(candidates)) {
+    try {
+      const value = JSON.parse(candidate) as unknown;
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        return value as Record<string, unknown>;
+      }
+    } catch {
+      // Try the next plausible response segment.
+    }
   }
+  return null;
+}
+
+function invalidJsonError(label: string, response: { stopReason?: unknown; errorMessage?: unknown }, raw: string): Error {
+  const outputChars = raw.length;
+  if (response.stopReason === 'length') {
+    return new Error(`${label} response was truncated before completing valid JSON (outputChars=${outputChars})`);
+  }
+  if (response.stopReason === 'error' && typeof response.errorMessage === 'string') {
+    return new Error(`${label} model request failed: ${response.errorMessage}`);
+  }
+  return new Error(`${label} did not return valid JSON (stopReason=${String(response.stopReason)}, outputChars=${outputChars})`);
 }
 
 function strings(value: unknown, max: number): string[] {
@@ -237,12 +259,13 @@ export async function analyzeWorkContext(input: {
   ].join('\n');
   const message: UserMessage = { role: 'user', content: prompt, timestamp: Date.now() };
   const response = await completeWithResolvedCredentials(model, { messages: [message] }, {
-    maxTokens: 2_500,
+    maxTokens: WORK_ANALYSIS_MAX_TOKENS,
     temperature: 0.1,
     signal: input.signal,
   });
-  const parsed = parseJson(extractText(response.content));
-  if (!parsed) throw new Error('Analysis did not return valid JSON');
+  const raw = extractText(response.content);
+  const parsed = parseJson(raw);
+  if (!parsed) throw invalidJsonError('Analysis', response, raw);
 
   const lowConfidence = parsed.lowConfidence === true;
   if (lowConfidence) {
@@ -351,8 +374,9 @@ export async function analyzePersonalContext(input: {
     temperature: 0.1,
     signal: input.signal,
   });
-  const parsed = parseJson(extractText(response.content));
-  if (!parsed) throw new Error('Personal context analysis did not return valid JSON');
+  const raw = extractText(response.content);
+  const parsed = parseJson(raw);
+  if (!parsed) throw invalidJsonError('Personal context analysis', response, raw);
   const profileCandidates = Array.isArray(parsed.profileCandidates)
     ? parsed.profileCandidates
       .map(validateProfileCandidate)
