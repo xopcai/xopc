@@ -845,21 +845,12 @@ xopc config --show
 
 xopc 支持某些服务商的 OAuth 认证：
 
-**Kimi（设备码流程）：**
-```json
-{
-  "providers": {
-    "kimi": {
-      "auth": {
-        "type": "oauth",
-        "clientId": "your-client-id"
-      }
-    }
-  }
-}
+```bash
+xopc auth login xopc-cloud
+xopc auth login openai-codex
 ```
 
-Kimi 使用设备码流程 - CLI 会提示访问 `auth.kimi.com` 并输入代码。
+CLI 会打开或输出服务商授权地址。OAuth 凭据保存在凭据目录中，不写入 `xopc.json` 或 `models.json`。
 
 ### Q: 如何使用环境变量？
 

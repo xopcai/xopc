@@ -443,7 +443,6 @@ export class ModelRegistry {
 			const apiKeyConfigs = new Map<string, string>();
 
 			for (const [providerName, providerConfig] of Object.entries(config.providers)) {
-				if (providerName === 'xopc-cloud') continue;
 				// Apply provider-level baseUrl/headers/apiKey override
 				if (providerConfig.baseUrl || providerConfig.headers || providerConfig.apiKey) {
 					overrides.set(providerName, {
@@ -491,7 +490,6 @@ export class ModelRegistry {
 		const defaults = getDefaultModelValues();
 
 		for (const [providerName, providerConfig] of Object.entries(config.providers)) {
-			if (providerName === 'xopc-cloud') continue;
 			const modelDefs = providerConfig.models ?? [];
 			if (modelDefs.length === 0) continue;
 

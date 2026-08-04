@@ -4,7 +4,7 @@ import { loadModelsJson, type ModelsJsonConfig } from '../config/models-json.js'
 import { getModelCatalogStore, type ModelCatalogStore } from './model-catalog-store.js';
 import { discoverProviderModels, isProviderApiDiscoverable } from './model-discovery.js';
 import { getModelRegistry } from './model-registry.js';
-import { XopcCloudConnectionService } from './xopc-cloud-connection.js';
+import { XopcCloudModelSource } from './xopc-cloud-model-source.js';
 
 const log = createLogger('ModelCatalogSync');
 const DEFAULT_INTERVAL_MS = 6 * 60 * 60_000;
@@ -19,9 +19,9 @@ export interface ModelCatalogSyncStatus {
 }
 
 export class ModelCatalogSyncService {
-  private readonly xopcCloud: XopcCloudConnectionService;
+  private readonly xopcCloud: XopcCloudModelSource;
   private timer: NodeJS.Timeout | null = null;
-  private refreshPromise: Promise<Awaited<ReturnType<XopcCloudConnectionService['refreshCatalog']>>> | null = null;
+  private refreshPromise: Promise<Awaited<ReturnType<XopcCloudModelSource['refresh']>>> | null = null;
   private refreshAllPromise: Promise<{ updatedSources: string[] }> | null = null;
   private status: ModelCatalogSyncStatus = { running: false, refreshing: false };
 
@@ -29,7 +29,7 @@ export class ModelCatalogSyncService {
     private readonly options: {
       intervalMs?: number;
       onUpdated?: (modelCount: number) => void;
-      xopcCloud?: XopcCloudConnectionService;
+      xopcCloud?: XopcCloudModelSource;
       getConfig?: () => Config;
       catalogStore?: ModelCatalogStore;
       loadProviders?: () => ModelsJsonConfig['providers'];
@@ -38,13 +38,7 @@ export class ModelCatalogSyncService {
       getModelCount?: () => number;
     } = {},
   ) {
-    this.xopcCloud = options.xopcCloud ?? new XopcCloudConnectionService();
-    try {
-      const lastSuccessAt = getModelCatalogStore().getSource('xopc-cloud')?.lastSuccessAt;
-      if (lastSuccessAt !== undefined) this.status.lastSuccessAt = lastSuccessAt;
-    } catch {
-      // A fresh successful sync replaces an invalid snapshot.
-    }
+    this.xopcCloud = options.xopcCloud ?? new XopcCloudModelSource();
   }
 
   start(): void {
@@ -73,23 +67,16 @@ export class ModelCatalogSyncService {
     return { ...this.status };
   }
 
-  getXopcCloudConnection(): XopcCloudConnectionService {
-    return this.xopcCloud;
-  }
-
-  refreshNow(): Promise<Awaited<ReturnType<XopcCloudConnectionService['refreshCatalog']>>> {
+  refreshNow(): Promise<Awaited<ReturnType<XopcCloudModelSource['refresh']>>> {
     if (this.refreshPromise) return this.refreshPromise;
     this.status.refreshing = true;
     this.status.lastAttemptAt = Date.now();
-    this.refreshPromise = this.xopcCloud.refreshCatalog()
+    this.refreshPromise = this.xopcCloud.refresh()
       .then((result) => {
         if (result.status === 'updated') {
           this.status.lastSuccessAt = Date.now();
           this.status.lastError = undefined;
           this.options.onUpdated?.(result.modelCount ?? 0);
-        } else if (result.status === 'unchanged') {
-          this.status.lastSuccessAt = Date.now();
-          this.status.lastError = undefined;
         }
         return result;
       })

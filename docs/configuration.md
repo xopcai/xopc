@@ -852,21 +852,12 @@ See [Models Documentation](/models) for details.
 
 xopc supports OAuth authentication for certain providers:
 
-**Kimi (Device Code Flow):**
-```json
-{
-  "providers": {
-    "kimi": {
-      "auth": {
-        "type": "oauth",
-        "clientId": "your-client-id"
-      }
-    }
-  }
-}
+```bash
+xopc auth login xopc-cloud
+xopc auth login openai-codex
 ```
 
-Kimi uses Device Code Flow - the CLI will prompt you to visit `auth.kimi.com` and enter a code.
+The CLI opens or prints the provider authorization URL. OAuth credentials are stored under the credential store, not in `xopc.json` or `models.json`.
 
 ### Q: How to use environment variables?
 

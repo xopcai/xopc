@@ -15,6 +15,7 @@ import type { Config } from '../config/schema.js';
 import { getDefaultAgentId } from '../routing/resolve-route.js';
 
 import type { AuthProfilesFile, ApiKeyProfile, OAuthToken } from './credentials.js';
+import { isOAuthOnlyProvider } from './oauth/registry.js';
 
 function findProfileForProvider(
   file: AuthProfilesFile,
@@ -111,6 +112,7 @@ function readOAuthAccessTokenSync(provider: string): string | undefined {
  */
 export function resolveProviderApiKeySync(provider: string): string | undefined {
   const normalized = provider.toLowerCase();
+  if (isOAuthOnlyProvider(normalized)) return readOAuthAccessTokenSync(normalized);
   const cfg = loadConfig();
   const agentPath = resolveAgentAuthProfilesPath(cfg, getDefaultAgentId(cfg));
   const fromAgent = readApiKeyFromProfilesFile(agentPath, normalized);
@@ -127,6 +129,7 @@ export function resolveProviderApiKeyForAgentSync(
   config?: Config,
 ): string | undefined {
   const normalized = provider.toLowerCase();
+  if (isOAuthOnlyProvider(normalized)) return readOAuthAccessTokenSync(normalized);
   if (agentId?.trim()) {
     const cfg = config ?? loadConfig();
     const fromAgent = readApiKeyFromProfilesFile(
@@ -145,6 +148,7 @@ export function resolveProviderApiKeyForAgentSync(
  * matching async CredentialResolver resolution (excluding env — callers check env separately).
  */
 export function hasProviderAuthOnDiskSync(provider: string): boolean {
+  if (isOAuthOnlyProvider(provider.toLowerCase())) return hasOAuthTokenSync(provider);
   const cfg = loadConfig();
   const agentPath = resolveAgentAuthProfilesPath(cfg, getDefaultAgentId(cfg));
   if (hasApiKeyInProfilesFile(agentPath, provider)) {
