@@ -63,12 +63,8 @@ export function WorkspaceNavigationProvider({ children }: WorkspaceNavigationPro
     dispatchAskAi({ type: 'start' });
 
     void takeNewChatSessionKey(defaultAgentId)
-      .then(async (sessionKey) => {
-        if (transition) {
-          await transition.openAskAi(sessionKey);
-        } else {
-          openChat(router, sessionKey);
-        }
+      .then((sessionKey) => {
+        openChat(router, sessionKey);
         dispatchAskAi({ type: 'succeed' });
       })
       .catch(() => {
@@ -77,7 +73,7 @@ export function WorkspaceNavigationProvider({ children }: WorkspaceNavigationPro
       .finally(() => {
         openingAskAiRef.current = false;
       });
-  }, [defaultAgentId, m.homePage.askAiStartFailed, router, transition]);
+  }, [defaultAgentId, m.homePage.askAiStartFailed, router]);
 
   const retryAskAi = useCallback(() => {
     openAskAi();
