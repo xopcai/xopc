@@ -27,6 +27,7 @@ import { validateModelsConfig, getDefaultModelValues } from '../config/models-js
 import { createLogger } from '../utils/logger.js';
 import { getApiKeyFromEnv } from './env-keys.js';
 import { getModelCatalogStore, type CatalogSource, type ModelCatalogStore } from './model-catalog-store.js';
+import { splitProviderModelRef } from './model-ref.js';
 
 const log = createLogger('ModelRegistry');
 
@@ -233,8 +234,9 @@ export class ModelRegistry {
 	resolve(ref: string): Model<Api> | undefined {
 		this.ensureLoaded();
 		// Handle provider/modelId format
-		if (ref.includes('/')) {
-			const [provider, modelId] = ref.split('/');
+		const qualifiedRef = splitProviderModelRef(ref);
+		if (qualifiedRef) {
+			const { provider, modelId } = qualifiedRef;
 			return this.find(provider, modelId);
 		}
 
