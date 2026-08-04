@@ -385,9 +385,10 @@ export function useAgentsSettingsPanel() {
         listSearchQuery={listSearchQuery}
         onListSearchQueryChange={setListSearchQuery}
         onAddAgent={() => openAddAgentModal()}
+        onManageCapabilityPresets={() => navigate('/settings/capability-presets')}
       />
     ),
-    [a, busy, listSearchQuery, openAddAgentModal],
+    [a, busy, listSearchQuery, navigate, openAddAgentModal],
   );
 
   useLayoutEffect(() => {
@@ -400,12 +401,13 @@ export function useAgentsSettingsPanel() {
       main: (
         <div className="min-w-0">
           <h1 className="truncate text-base font-semibold tracking-tight text-fg">{a.title}</h1>
+          <p className="truncate text-xs text-fg-muted">{a.subtitle}</p>
         </div>
       ),
       end: agentsHeaderEnd,
     });
     return () => clearPageHeader();
-  }, [a.title, agentsHeaderEnd, clearPageHeader, hasToken, setPageHeader]);
+  }, [a.subtitle, a.title, agentsHeaderEnd, clearPageHeader, hasToken, setPageHeader]);
 
   async function onCreate(e: FormEvent) {
     e.preventDefault();
