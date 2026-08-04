@@ -13,6 +13,7 @@ import {
 } from '../orchestration/llm-turn-retry.js';
 import { runAgentTurnWithTimeout, resolveAgentTurnTimeoutMs } from '../orchestration/run-agent-turn-with-timeout.js';
 import { detectToolLoops, type RecentToolCall } from '../orchestration/loop-guard.js';
+import { tryApplySessionTranscriptHygiene } from '../transcript/transcript-hygiene.js';
 import {
   acquireEmbeddedSessionRunner,
   resolveEmbeddedTranscriptInputs,
@@ -127,10 +128,12 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
 
     const streamFnWithXopcExtensions = wrapStreamFnForXopcExtensions(session.agent.streamFunction);
     const loggingStreamFn: typeof session.agent.streamFunction = (streamModel, context, options) => {
-      const recentToolCalls = extractRecentToolCalls(context.messages);
+      const sourceMessages = [...context.messages];
+      const hygienicMessages = tryApplySessionTranscriptHygiene(sourceMessages, streamModel) as typeof sourceMessages;
+      const recentToolCalls = extractRecentToolCalls(hygienicMessages);
       const loopGuard = detectToolLoops(recentToolCalls);
 
-      let effectiveContext = context;
+      let effectiveContext: typeof context = { ...context, messages: hygienicMessages };
       if (loopGuard.injection || loopGuard.hiddenTools.size > 0) {
         const messages = loopGuard.injection
           ? [...context.messages, { role: 'user' as const, content: loopGuard.injection, timestamp: Date.now() }]
@@ -151,6 +154,7 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
           modelRef: `${streamModel.provider}/${streamModel.id}`,
           systemPromptLength: effectiveContext.systemPrompt?.length ?? 0,
           messageCount: effectiveContext.messages.length,
+          transcriptRepaired: hygienicMessages !== sourceMessages,
           toolCount: effectiveContext.tools?.length ?? 0,
           lastUserMessagePreview: getLastUserMessagePreview(effectiveContext.messages),
           loopWarningInjected: !!loopGuard.injection,
