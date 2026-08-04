@@ -19,7 +19,7 @@ describe('buildPairExchangeOrigins', () => {
     ).toEqual(['https://gateway.example.com', 'http://192.168.1.2:18790']);
   });
 
-  it('falls back to LAN-first when baseUrl is plain http (legacy / lan-only deploy)', () => {
+  it('prefers LAN when both pairing origins use plain HTTP', () => {
     expect(
       buildPairExchangeOrigins('http://192.168.1.5:18790', 'http://192.168.1.2:18790'),
     ).toEqual(['http://192.168.1.2:18790', 'http://192.168.1.5:18790']);

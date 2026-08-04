@@ -37,26 +37,11 @@ export function noteToIndexEntry(note: Note): NoteIndexEntry {
   });
 }
 
-function patchHomeRecentlyOpened(prev: HomeData | undefined, entry: NoteIndexEntry): HomeData {
+function patchHomeRecentlyOpened(prev: HomeData | undefined, entry: NoteIndexEntry): HomeData | undefined {
+  if (!prev) return undefined;
   return {
     ...prev,
-    recentlyOpened: prependUnique(prev?.recentlyOpened ?? [], entry, HOME_RECENT_LIMIT),
-    inboxCount: prev?.inboxCount ?? 0,
-    pendingTasks: prev?.pendingTasks ?? [],
-    pendingTaskCount: prev?.pendingTaskCount ?? 0,
-    recentSessions: prev?.recentSessions ?? [],
-    activeAgent: prev?.activeAgent ?? { id: 'main' },
-    gateway: prev?.gateway ?? {
-      status: 'unknown',
-      ready: false,
-      httpListening: false,
-      version: '',
-      uptime: 0,
-      tunnel: { state: 'disconnected', publicUrl: null, connected: false },
-    },
-    workflowRuns: prev?.workflowRuns ?? { active: [], attention: [], recent: [] },
-    nextCronJobs: prev?.nextCronJobs ?? [],
-    recentCronRuns: prev?.recentCronRuns ?? [],
+    recentlyOpened: prependUnique(prev.recentlyOpened, entry, HOME_RECENT_LIMIT),
   };
 }
 
@@ -76,7 +61,10 @@ function noteMatchesListFilters(
 
 /** Insert or bump a note in home + notes list caches without refetching. */
 export function upsertNoteInListCaches(queryClient: QueryClient, entry: NoteIndexEntry): void {
-  queryClient.setQueryData<HomeData>(queryKeys.home, (prev) => patchHomeRecentlyOpened(prev, entry));
+  queryClient.setQueriesData<HomeData>(
+    { queryKey: queryKeys.home },
+    (prev) => patchHomeRecentlyOpened(prev, entry),
+  );
 
   queryClient.setQueriesData<NotesListResult>(
     {

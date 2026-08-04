@@ -935,6 +935,16 @@ export const en = {
     libraryFiles: 'Files',
     libraryAutomation: 'Automation',
     libraryAgents: 'Agents',
+    connectGatewayAction: 'Connect gateway',
+    briefingNeedsYou: 'Your attention',
+    briefingClear: 'All clear',
+    briefingMoving: '{{count}} items moving in the background',
+    reviewNow: 'Review now',
+    decisionNeedsReview: 'Review and choose the next step',
+    decisionCompleted: 'Decision sent',
+    decisionFailed: 'Could not send your decision',
+    approve: 'Approve',
+    deny: 'Deny',
   },
 
   workPage: {

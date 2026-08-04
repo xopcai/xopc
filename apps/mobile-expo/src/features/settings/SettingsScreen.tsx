@@ -3,7 +3,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { Switch } from 'react-native-paper';
 
-import { FloatingHeader } from '@/components/FloatingHeader';
+import { NativeScreenHeader } from '@/components/NativeScreenHeader';
 import {
   connectionKindLabel,
   useGatewayConnectionView,
@@ -82,7 +82,7 @@ export function SettingsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.pageBg }}>
-      <FloatingHeader variant="large" title={s.title} onBack={() => dismissOrHome(router)} />
+      <NativeScreenHeader variant="large" title={s.title} onBack={() => dismissOrHome(router)} />
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={styles.scroll}

@@ -9,7 +9,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { Button, HelperText, Text, TextInput } from 'react-native-paper';
 
 import { AppToast } from '@/components/AppToast';
-import { FloatingHeader } from '@/components/FloatingHeader';
+import { NativeScreenHeader } from '@/components/NativeScreenHeader';
 import { type GatewayProfileForm, gatewayProfileSchema } from '@/config/schema';
 import { TOAST_DURATION_LONG, TOAST_DURATION_SHORT } from '@/constants/toast';
 import { useSettingsColors } from '@/features/settings/settings-ui';
@@ -323,7 +323,7 @@ export function GatewayEditScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.pageBg }}>
-      <FloatingHeader title={isNew ? s.newGateway : s.editGateway} onBack={() => router.back()} />
+      <NativeScreenHeader title={isNew ? s.newGateway : s.editGateway} onBack={() => router.back()} />
       <KeyboardAwareScrollView
         style={{ flex: 1 }}
         contentContainerStyle={styles.scroll}

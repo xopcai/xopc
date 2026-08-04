@@ -111,23 +111,27 @@ function parseProfilesJson(raw: string): GatewayProfile[] | null {
   try {
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return null;
-    return parsed
-      .filter((item): item is GatewayProfile => {
-        return (
-          typeof item === 'object' &&
-          item != null &&
-          typeof (item as GatewayProfile).id === 'string' &&
-          typeof (item as GatewayProfile).baseUrl === 'string'
-        );
-      })
-      .map((profile) => ({
-        ...profile,
-        name: profile.name?.trim() || gatewayProfileNameFromUrl(profile.baseUrl),
-        baseUrl: normalizeBaseUrl(profile.baseUrl),
-        lanUrl: profile.lanUrl ? normalizeBaseUrl(profile.lanUrl) : null,
-        token: typeof profile.token === 'string' ? profile.token.trim() : '',
-        updatedAt: profile.updatedAt ?? Date.now(),
-      }));
+    const fields = ['baseUrl', 'id', 'lanUrl', 'name', 'token', 'updatedAt'];
+    if (!parsed.every((item): item is GatewayProfile => {
+      if (typeof item !== 'object' || item == null) return false;
+      const profile = item as Record<string, unknown>;
+      return (
+        Object.keys(profile).sort().join(',') === fields.join(',') &&
+        typeof profile.id === 'string' && profile.id.trim().length > 0 &&
+        typeof profile.name === 'string' && profile.name.trim().length > 0 &&
+        typeof profile.baseUrl === 'string' && profile.baseUrl.trim().length > 0 &&
+        (profile.lanUrl === null || typeof profile.lanUrl === 'string') &&
+        typeof profile.token === 'string' &&
+        typeof profile.updatedAt === 'number' && Number.isFinite(profile.updatedAt)
+      );
+    })) return null;
+    return parsed.map((profile) => ({
+      ...profile,
+      name: profile.name.trim(),
+      baseUrl: normalizeBaseUrl(profile.baseUrl),
+      lanUrl: profile.lanUrl ? normalizeBaseUrl(profile.lanUrl) : null,
+      token: '',
+    }));
   } catch {
     return null;
   }
@@ -138,15 +142,7 @@ function profileForStorage(profile: GatewayProfile): GatewayProfile {
 }
 
 function hydrateProfileTokens(profiles: GatewayProfile[]): GatewayProfile[] {
-  return profiles.map((profile) => {
-    const secureToken = readGatewayToken(profile.id);
-    const legacyToken = profile.token.trim();
-    const token = secureToken || legacyToken;
-    if (!secureToken && legacyToken) {
-      writeGatewayToken(profile.id, legacyToken);
-    }
-    return { ...profile, token };
-  });
+  return profiles.map((profile) => ({ ...profile, token: readGatewayToken(profile.id) }));
 }
 
 function persistProfiles(profiles: GatewayProfile[], activeGatewayId: string | null): void {
@@ -161,13 +157,6 @@ function persistProfiles(profiles: GatewayProfile[], activeGatewayId: string | n
     storage.delete(KEYS.profiles);
     storage.delete(KEYS.activeId);
   }
-  deleteLegacyGatewayKeys();
-}
-
-function deleteLegacyGatewayKeys(): void {
-  storage.delete(KEYS.baseUrl);
-  storage.delete(KEYS.lanUrl);
-  storage.delete(KEYS.token);
 }
 
 function syncActiveProfileFromFlat(
@@ -291,25 +280,6 @@ export const useGatewayStore = create<GatewayState>((set, get) => ({
         ...flatFieldsFromProfile(activeProfile),
       });
       persistProfiles(profiles, activeGatewayId);
-      return;
-    }
-
-    const legacyBaseUrl = storage.getString(KEYS.baseUrl) ?? '';
-    const legacyLanUrl = storage.getString(KEYS.lanUrl) ?? null;
-    const legacyToken = storage.getString(KEYS.token) ?? '';
-
-    if (legacyBaseUrl.trim()) {
-      const profile = buildGatewayProfile({
-        baseUrl: legacyBaseUrl,
-        lanUrl: legacyLanUrl,
-        token: legacyToken,
-      });
-      set({
-        profiles: [profile],
-        activeGatewayId: profile.id,
-        ...flatFieldsFromProfile(profile),
-      });
-      persistProfiles([profile], profile.id);
       return;
     }
 

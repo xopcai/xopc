@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { ActivityIndicator, Icon, Text } from 'react-native-paper';
 
-import { FloatingHeader } from '../../components/FloatingHeader';
+import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { BottomSheetModal } from '../../components/BottomSheetModal';
 import { AppToast } from '../../components/AppToast';
 import { LIST_DELAY_LONG_PRESS } from '../../constants/list-interaction';
@@ -244,7 +244,7 @@ export function FilesScreen() {
   if (!configured) {
     return (
       <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
-        <FloatingHeader variant="large" title={labels.title} onBack={() => router.back()} />
+        <NativeScreenHeader variant="large" title={labels.title} onBack={() => router.back()} />
         <View style={styles.center}>
           <Icon source="cloud-off-outline" size={42} color={colors.text.tertiary} />
           <Text style={[styles.emptyTitle, { color: colors.text.primary }]}>{labels.gatewayRequiredTitle}</Text>
@@ -256,7 +256,7 @@ export function FilesScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
-      <FloatingHeader
+      <NativeScreenHeader
         variant={currentDir ? 'compact' : 'large'}
         title={labels.title}
         onBack={goBack}

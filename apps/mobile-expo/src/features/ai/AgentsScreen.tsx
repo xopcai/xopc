@@ -7,7 +7,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { ActivityIndicator, Button, Icon, Text } from 'react-native-paper';
 
-import { FloatingHeader } from '../../components/FloatingHeader';
+import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { useMessages } from '../../i18n/messages';
 import { dismissOrHome, openChat, useDismissOnHardwareBack } from '../../lib/navigation';
 import { fetchChatAgents, type ChatAgentOption } from '../../query/agents';
@@ -85,7 +85,7 @@ export function AgentsScreen() {
   if (!configured) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.pageBg }}>
-        <FloatingHeader variant="large" title={am.title} onBack={() => dismissOrHome(router)} />
+        <NativeScreenHeader variant="large" title={am.title} onBack={() => dismissOrHome(router)} />
         <View style={styles.center}>
           <Text style={{ color: colors.textMuted }}>{m.sessions.gatewayNotConfigured}</Text>
         </View>
@@ -96,7 +96,7 @@ export function AgentsScreen() {
   if (agentsQuery.isLoading) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.pageBg }}>
-        <FloatingHeader variant="large" title={am.title} onBack={() => router.back()} />
+        <NativeScreenHeader variant="large" title={am.title} onBack={() => router.back()} />
         <View style={styles.center}>
           <ActivityIndicator size="large" />
         </View>
@@ -107,7 +107,7 @@ export function AgentsScreen() {
   if (agentsQuery.isError) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.pageBg }}>
-        <FloatingHeader variant="large" title={am.title} onBack={() => router.back()} />
+        <NativeScreenHeader variant="large" title={am.title} onBack={() => router.back()} />
         <View style={styles.center}>
           <Text style={[styles.emptyText, { color: colors.textMuted }]}>{am.loadFailed}</Text>
           <Button mode="outlined" onPress={() => void queryClient.invalidateQueries({ queryKey: queryKeys.agents })}>
@@ -121,7 +121,7 @@ export function AgentsScreen() {
   if (agents.length === 0) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.pageBg }}>
-        <FloatingHeader variant="large" title={am.title} onBack={() => router.back()} />
+        <NativeScreenHeader variant="large" title={am.title} onBack={() => router.back()} />
         <View style={styles.center}>
           <Icon source="robot-off-outline" size={48} color={colors.textMuted} />
           <Text style={[styles.emptyText, { color: colors.textMuted }]}>{am.empty}</Text>
@@ -132,7 +132,7 @@ export function AgentsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.pageBg }}>
-      <FloatingHeader variant="large" title={am.title} onBack={() => router.back()} />
+      <NativeScreenHeader variant="large" title={am.title} onBack={() => router.back()} />
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={styles.scroll}

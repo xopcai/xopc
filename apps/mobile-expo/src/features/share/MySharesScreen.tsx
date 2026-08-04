@@ -39,7 +39,7 @@ import {
 import { setAppClipboardStringAsync } from '../clipboard-intake/write-app-clipboard';
 import { useQueryClient } from '@tanstack/react-query';
 
-import { FloatingHeader } from '../../components/FloatingHeader';
+import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { BottomSheetModal } from '../../components/BottomSheetModal';
 
 import { t, useMessages } from '../../i18n/messages';
@@ -110,7 +110,7 @@ export function MySharesScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: palette.bg }]}>
-      <FloatingHeader variant="large" title={pm.title} onBack={() => dismissOrHome(router)} />
+      <NativeScreenHeader variant="large" title={pm.title} onBack={() => dismissOrHome(router)} />
 
       {list.isLoading ? (
         <View style={styles.center}>

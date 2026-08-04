@@ -4,6 +4,7 @@ import type { ImperativeRouter } from 'expo-router';
 import { Platform } from 'react-native';
 
 import { apiFetch } from '../../api/client';
+import { recordUsageEvent } from '../../product/usage-metrics';
 import { KEYS, storage } from '../../storage/mmkv';
 import { useGatewayStore } from '../../stores/gateway-store';
 
@@ -71,7 +72,9 @@ function expoProjectId(): string | undefined {
 
 function navigateNotification(router: ImperativeRouter, data: unknown): void {
   const route = resolveNotificationRoute(data);
-  if (route) router.push(route as never);
+  if (!route) return;
+  recordUsageEvent('notification_opened');
+  router.push(route as never);
 }
 
 async function registerWithGateway(registration: DeviceRegistration): Promise<boolean> {

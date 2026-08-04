@@ -1,9 +1,6 @@
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 
 export const KEYS = {
-  baseUrl: 'gateway.baseUrl',
-  lanUrl: 'gateway.lanUrl',
-  token: 'gateway.token',
   profiles: 'gateway.profiles',
   activeId: 'gateway.activeId',
   routeWinnerPrefix: 'gateway.routeWinner:',
@@ -20,6 +17,7 @@ export const KEYS = {
   mobileInstallationId: 'mobile.installationId',
   notificationsEnabled: 'prefs.notificationsEnabled',
   noteTags: 'prefs.noteTags',
+  usageEvents: 'product.usageEvents',
 } as const;
 
 export type KeyValueStorage = {

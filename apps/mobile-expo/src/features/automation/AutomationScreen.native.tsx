@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import PagerView from 'react-native-pager-view';
 import { Text } from 'react-native-paper';
 
-import { FloatingHeader } from '../../components/FloatingHeader';
+import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { useMessages } from '../../i18n/messages';
 import { dismissOrHome, useDismissOnHardwareBack } from '../../lib/navigation';
 import { useGatewayConfigured } from '../../query/sessions';
@@ -47,7 +47,7 @@ export function AutomationScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: screenBg }]}>
-      <FloatingHeader
+      <NativeScreenHeader
         variant="large"
         title={pm.title}
         onBack={() => dismissOrHome(router)}

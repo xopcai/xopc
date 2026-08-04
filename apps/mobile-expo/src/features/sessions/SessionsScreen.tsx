@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppToast } from '../../components/AppToast';
 import { BatchActionBar } from '../../components/BatchActionBar';
 import { BatchDeleteConfirmDialog } from '../../components/BatchDeleteConfirmDialog';
-import { FloatingHeader } from '../../components/FloatingHeader';
+import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { ListSkeleton } from '../../components/ListSkeleton';
 import { LIST_DELETE_UNDO_MS } from '../../constants/list-interaction';
 import { TOAST_BOTTOM_LIFT_ABOVE_BAR, TOAST_DURATION_SHORT } from '../../constants/toast';
@@ -309,7 +309,7 @@ export function SessionsScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
-      <FloatingHeader
+      <NativeScreenHeader
         title={selectionMode ? t(li.selectedCount, { count: selectedCount }) : sm.title}
         variant={selectionMode ? 'compact' : 'large'}
         onBack={selectionMode ? exitSelectionMode : () => dismissOrHome(router)}
