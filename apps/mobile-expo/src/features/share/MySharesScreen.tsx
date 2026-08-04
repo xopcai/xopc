@@ -110,7 +110,7 @@ export function MySharesScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: palette.bg }]}>
-      <NativeScreenHeader variant="large" title={pm.title} onBack={() => dismissOrHome(router)} />
+      <NativeScreenHeader title={pm.title} onBack={() => dismissOrHome(router)} />
 
       {list.isLoading ? (
         <View style={styles.center}>

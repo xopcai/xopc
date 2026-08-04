@@ -82,7 +82,7 @@ export function SettingsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.pageBg }}>
-      <NativeScreenHeader variant="large" title={s.title} onBack={() => dismissOrHome(router)} />
+      <NativeScreenHeader title={s.title} onBack={() => dismissOrHome(router)} />
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={styles.scroll}

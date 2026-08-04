@@ -14,7 +14,6 @@ type HeaderAction = {
 
 interface NativeScreenHeaderProps {
   title?: string;
-  variant?: 'compact' | 'large';
   showLogo?: boolean;
   onBack?: () => void;
   rightIcon?: string;
@@ -42,7 +41,6 @@ function HeaderIconButton({ action }: { action: HeaderAction }) {
 /** Configures the route's native navigation bar; it renders no in-content chrome. */
 export function NativeScreenHeader({
   title,
-  variant = 'compact',
   showLogo,
   onBack,
   rightIcon,
@@ -66,7 +64,7 @@ export function NativeScreenHeader({
       options={{
         headerShown: true,
         title: title ?? '',
-        headerLargeTitle: variant === 'large',
+        headerLargeTitle: false,
         headerShadowVisible: false,
         headerBackVisible: !onBack,
         headerLeft: onBack

@@ -83,7 +83,6 @@ export function GatewayListScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.pageBg }}>
       <NativeScreenHeader
-        variant="large"
         title={s.gateway}
         onBack={() => router.back()}
         rightActions={[{
