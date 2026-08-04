@@ -10,9 +10,11 @@ import {
   resolveOAuthPath,
 } from '../config/paths.js';
 import type { Config } from '../config/schema.js';
+import { getOAuthProviderDefinition } from './oauth/registry.js';
 
 const log = createLogger('Credentials');
 const warnedExpiredOAuthTokens = new Set<string>();
+const oauthRefreshes = new Map<string, Promise<OAuthToken>>();
 
 // ============================================
 // Types
@@ -80,6 +82,12 @@ export class CredentialResolver {
    */
   async resolveApiKey(provider: string): Promise<string | null> {
     const normalizedProvider = provider.toLowerCase();
+    const oauthDefinition = getOAuthProviderDefinition(normalizedProvider);
+
+    if (oauthDefinition?.oauthOnly) {
+      const token = await this.loadOAuthToken(normalizedProvider);
+      return token?.access ?? null;
+    }
 
     // 1. Try agent private credentials
     if (this.agentId) {
@@ -129,6 +137,10 @@ export class CredentialResolver {
     provider: string,
   ): Promise<'agent' | 'global' | 'oauth' | 'env' | null> {
     const normalizedProvider = provider.toLowerCase();
+
+    if (getOAuthProviderDefinition(normalizedProvider)?.oauthOnly) {
+      return await this.loadOAuthToken(normalizedProvider) ? 'oauth' : null;
+    }
 
     if (this.agentId) {
       const agentKey = await this.loadFromAgentCredentials(normalizedProvider);
@@ -194,6 +206,9 @@ export class CredentialResolver {
     } = {}
   ): Promise<void> {
     const normalizedProvider = provider.toLowerCase();
+    if (getOAuthProviderDefinition(normalizedProvider)?.oauthOnly) {
+      throw new Error(`${normalizedProvider} only supports OAuth credentials`);
+    }
     const profileId = options.profileName
       ? `${normalizedProvider}:${options.profileName}`
       : `${normalizedProvider}:default`;
@@ -234,8 +249,44 @@ export class CredentialResolver {
   async loadOAuthToken(provider: string): Promise<OAuthToken | null> {
     const token = await this.loadOAuthTokenRecord(provider);
     if (!token) return null;
+    const expiresAt = token.expiresAt ?? Number.POSITIVE_INFINITY;
+    if (expiresAt <= Date.now() + 60_000 && token.refresh) {
+      const definition = getOAuthProviderDefinition(provider);
+      if (definition) {
+        let pending = oauthRefreshes.get(provider);
+        if (!pending) {
+          pending = definition.provider.refreshToken({
+            access: token.access,
+            refresh: token.refresh,
+            expires: expiresAt,
+          }).then(async (refreshed) => {
+            const updated: OAuthToken = {
+              ...token,
+              access: definition.provider.getApiKey(refreshed),
+              refresh: refreshed.refresh,
+              expiresAt: refreshed.expires,
+              scope: Array.isArray(refreshed.scope)
+                ? refreshed.scope.filter((value): value is string => typeof value === 'string')
+                : token.scope,
+              updatedAt: new Date().toISOString(),
+            };
+            await this.saveOAuthToken(provider, updated);
+            return updated;
+          }).finally(() => oauthRefreshes.delete(provider));
+          oauthRefreshes.set(provider, pending);
+        }
+        try {
+          return await pending;
+        } catch (err) {
+          if (expiresAt > Date.now()) {
+            log.warn({ err, provider }, 'OAuth refresh failed; using the current access token');
+            return token;
+          }
+        }
+      }
+    }
 
-    if (token.expiresAt && token.expiresAt < Date.now()) {
+    if (expiresAt <= Date.now()) {
       const warnKey = `${provider}:${token.expiresAt}`;
       if (!warnedExpiredOAuthTokens.has(warnKey)) {
         warnedExpiredOAuthTokens.add(warnKey);

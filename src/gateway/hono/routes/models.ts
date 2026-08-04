@@ -36,7 +36,6 @@ import { CredentialResolver } from '../../../auth/credentials.js';
 import { SessionConfigStore } from '../../../session/config-store.js';
 import { getModelCatalogStore } from '../../../providers/model-catalog-store.js';
 import { auditModelReferences } from '../../../providers/model-reference-auditor.js';
-import { XopcCloudHttpError } from '../../../providers/xopc-cloud-connection.js';
 import { getProviderRegistry } from '../../../providers/plugin-registry.js';
 import type { ProviderModelDefinition } from '../../../extensions/types/providers.js';
 import type { GatewayService } from '../../service.js';
@@ -95,52 +94,8 @@ function mapPluginModel(providerId: string, model: ProviderModelDefinition, avai
 }
 
 export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
-  const { service, strictRateLimitMiddleware, xopcCloudPollRateLimitMiddleware } = deps;
+  const { service, strictRateLimitMiddleware } = deps;
   const catalogSync = service.getModelCatalogSync();
-  const xopcCloud = catalogSync.getXopcCloudConnection();
-
-  authenticated.post('/api/models/xopc-cloud/connect', strictRateLimitMiddleware, async (c) => {
-    const body = await c.req.json().catch(() => ({})) as { clientType?: unknown };
-    const clientType = body.clientType === 'electron' || body.clientType === 'cli'
-      ? body.clientType
-      : 'web';
-    try {
-      return c.json({ ok: true, payload: await xopcCloud.start(clientType) }, 201);
-    } catch (error) {
-      return c.json({ ok: false, error: { message: error instanceof Error ? error.message : 'Connection failed' } }, 502);
-    }
-  });
-
-  authenticated.post('/api/models/xopc-cloud/connect/:requestId/poll', xopcCloudPollRateLimitMiddleware, async (c) => {
-    try {
-      const result = await xopcCloud.poll(c.req.param('requestId'));
-      if (result.status === 'pending') return c.json({ ok: true, payload: result }, 202);
-      service.emit('model-catalog.updated', { modelCount: getModelRegistry().getAll().length });
-      return c.json({ ok: true, payload: result });
-    } catch (error) {
-      return c.json({ ok: false, error: { message: error instanceof Error ? error.message : 'Connection failed' } }, 400);
-    }
-  });
-
-  authenticated.post('/api/models/xopc-cloud/refresh', strictRateLimitMiddleware, async (c) => {
-    try {
-      const result = await catalogSync.refreshNow();
-      return c.json({ ok: true, payload: result });
-    } catch (error) {
-      const status = error instanceof XopcCloudHttpError && error.status === 401
-        ? 401
-        : error instanceof XopcCloudHttpError && error.status === 403
-          ? 403
-          : 502;
-      return c.json({
-        ok: false,
-        error: {
-          message: error instanceof Error ? error.message : 'Refresh failed',
-          ...(error instanceof XopcCloudHttpError && error.code ? { code: error.code } : {}),
-        },
-      }, status);
-    }
-  });
 
   authenticated.get('/api/models/catalog/status', (c) => c.json({
     ok: true,

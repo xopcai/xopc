@@ -16,10 +16,10 @@ import { guardSessionManager, type GuardedPiTranscriptManager } from './session-
 import { transformUserMessageForPersistence } from '../inbound/attachment-pipeline.js';
 import { openSqliteHydratingSessionManager } from './sqlite-hydrating-session-manager.js';
 import {
-  applyXopcProviderApiKey,
+  applyEmbeddedProviderCredential,
   createEmbeddedModelRuntime,
-  resolveXopcProviderApiKey,
-} from './xopc-auth-storage.js';
+  resolveEmbeddedProviderApiKeySync,
+} from './model-runtime.js';
 import { wrapStreamFnForXopcExtensions } from './xopc-stream-bridge.js';
 import { xopcToolsToDefinitions } from './xopc-tools-bridge.js';
 import { applySystemPromptOverrideToSession } from './system-prompt-override.js';
@@ -39,7 +39,7 @@ export type EmbeddedRunnerFingerprintInput = {
 };
 
 function providerCredentialRevision(providerId: string): string {
-  const apiKey = resolveXopcProviderApiKey(providerId);
+  const apiKey = resolveEmbeddedProviderApiKeySync(providerId);
   return apiKey ? createHash('sha256').update(apiKey).digest('base64url') : 'none';
 }
 
@@ -280,7 +280,7 @@ export class EmbeddedSessionRunnerPool {
     const toolNames = tools.map((t) => t.name);
 
     const modelRuntime = await createEmbeddedModelRuntime();
-    await applyXopcProviderApiKey(modelRuntime, model.provider);
+    await applyEmbeddedProviderCredential(modelRuntime, model.provider);
 
     const resourceLoader = new DefaultResourceLoader({
       cwd: workspaceDir,

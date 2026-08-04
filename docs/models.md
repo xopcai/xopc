@@ -64,6 +64,7 @@ Important OAuth/API-key cases:
 
 | Provider id | Credential path |
 |-------------|-----------------|
+| `xopc-cloud` | OAuth-only; use `/login xopc-cloud`, `xopc auth login xopc-cloud`, or Settings → Providers. Access tokens refresh automatically. |
 | `deepseek` | API key via Settings → Providers, `xopc providers set-key deepseek`, `providers.deepseek`, or `DEEPSEEK_API_KEY` |
 | `openai` | API key via saved key, config, or `OPENAI_API_KEY` |
 | `anthropic` | OAuth token or API key; env supports `ANTHROPIC_OAUTH_TOKEN` and `ANTHROPIC_API_KEY` |
@@ -202,7 +203,7 @@ Create `~/.xopc/models.json`:
 
 ### Catalog synchronization
 
-The gateway loads the last successful remote catalog snapshot immediately, then refreshes connected sources after startup and every six hours. Network failures keep the previous snapshot. Models missing from a successful response become unavailable and are skipped by runtime fallback selection; xopc does not rewrite agent or session configuration automatically.
+The gateway builds the remote catalog in memory after startup and refreshes it every six hours. Network failures keep the current in-process snapshot. Models missing from a successful response become unavailable and are skipped by runtime fallback selection; xopc does not rewrite agent or session configuration automatically.
 
 Configure the global schedule in `xopc.json`:
 
@@ -216,7 +217,7 @@ Configure the global schedule in `xopc.json`:
 }
 ```
 
-Automatic discovery is opt-in for custom OpenAI-compatible providers. XOPC Model Service synchronization is enabled whenever that service is connected. Remote snapshots are stored separately from `models.json`, so user-defined models and overrides remain explicit configuration.
+Automatic discovery is opt-in for custom OpenAI-compatible providers. XOPC Model Service synchronization runs whenever its OAuth grant is available. Remote snapshots exist only in process memory; `xopc-cloud` cannot be configured in `models.json`.
 
 ---
 

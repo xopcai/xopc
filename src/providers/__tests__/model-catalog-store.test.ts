@@ -13,7 +13,7 @@ function createStore(): { store: ModelCatalogStore; modelsPath: string } {
   const dir = mkdtempSync(join(tmpdir(), 'xopc-model-catalog-'));
   tempDirs.push(dir);
   return {
-    store: new ModelCatalogStore(join(dir, 'catalog.json')),
+    store: new ModelCatalogStore(),
     modelsPath: join(dir, 'models.json'),
   };
 }
@@ -23,7 +23,7 @@ afterEach(() => {
 });
 
 describe('ModelCatalogStore', () => {
-  it('persists a source snapshot', () => {
+  it('keeps an isolated in-memory source snapshot', () => {
     const { store } = createStore();
     store.saveSource('cloud', {
       providerId: 'cloud',
@@ -40,7 +40,13 @@ describe('ModelCatalogStore', () => {
       }],
     });
 
-    expect(store.getSource('cloud')).toMatchObject({ etag: 'v1', recommendedModel: 'model-a' });
+    const snapshot = store.getSource('cloud')!;
+    snapshot.models[0].name = 'Mutated';
+    expect(store.getSource('cloud')).toMatchObject({
+      etag: 'v1',
+      recommendedModel: 'model-a',
+      models: [{ name: 'Model A' }],
+    });
   });
 
   it('only exposes available remote models through the registry', () => {

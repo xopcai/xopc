@@ -205,6 +205,15 @@ export function validateModelsConfig(config: unknown): ValidationResult {
 
 	// Additional validation rules
 	for (const [providerName, providerConfig] of Object.entries(data.providers)) {
+		if (providerName === 'xopc-cloud') {
+			errors.push({
+				path: 'providers.xopc-cloud',
+				message: 'xopc-cloud is managed by OAuth and the runtime model catalog; it cannot be configured in models.json',
+				severity: 'error',
+			});
+			continue;
+		}
+
 		// Validate provider ID format
 		if (!PROVIDER_ID_REGEX.test(providerName)) {
 			errors.push({

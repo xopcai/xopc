@@ -10,7 +10,7 @@ import { fetchConfiguredModelsCached, invalidateConfiguredModelsCache } from '@/
 import { dispatchConfigReload } from '@/features/gateway/dispatch-config-reload';
 import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
 import { OnboardingProviderGrid } from '@/features/onboarding/onboarding-provider-grid';
-import { XopcCloudConnect } from '@/features/settings/models-hub/xopc-cloud-connect';
+import { OAuthProviderConnect } from '@/features/settings/models-hub/oauth-provider-connect';
 import { buildProviderConfigFromPresetProviderId } from '@/features/settings/models/models-settings-lib';
 import { fetchModelsJson, saveModelsJson } from '@/features/settings/models-json-api';
 import { detectBrowserTimezone } from '@/features/settings/agents/agent-profile-markdown';
@@ -338,7 +338,12 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
               </p>
             </div>
             {selectedProvider === 'xopc-cloud' ? (
-              <XopcCloudConnect connected={false} onConnected={() => void finishXopcCloudSetup()} />
+              <OAuthProviderConnect
+                providerId="xopc-cloud"
+                displayName="XOPC Model Service"
+                connected={false}
+                onConnected={() => void finishXopcCloudSetup()}
+              />
             ) : (
               <>
                 {selectedProvider && (() => {

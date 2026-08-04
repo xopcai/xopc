@@ -14,7 +14,6 @@ describe('domestic provider presets', () => {
 
     expect(ids).toEqual(
       expect.arrayContaining([
-        'xopc-cloud',
         'dashscope-cn',
         'dashscope-intl',
         'volcengine-ark',
@@ -53,21 +52,12 @@ describe('domestic provider presets', () => {
     expect(validateModelsConfig(config)).toEqual({ valid: true, errors: [] });
   });
 
-  it('preserves provider-specific compatibility choices', () => {
-    const xopcCloud = getDomesticProviderPreset('xopc-cloud');
+  it('preserves provider-specific endpoint choices', () => {
     const minimax = getDomesticProviderPreset('minimax');
     const ark = getDomesticProviderPreset('volcengine-ark');
 
     expect(minimax).toBeDefined();
-    expect(xopcCloud).toMatchObject({
-      api: 'openai-completions',
-      envVars: ['XOPC_MODEL_API_KEY'],
-      requiresModelDiscovery: true,
-    });
-    expect(providerConfigFromDomesticPreset(xopcCloud!, { apiKey: 'XOPC_MODEL_API_KEY' })).toMatchObject({
-      baseUrl: 'https://router.xopc.ai/v1',
-      models: [],
-    });
+    expect(getDomesticProviderPreset('xopc-cloud')).toBeUndefined();
     expect(providerConfigFromDomesticPreset(minimax!, { apiKey: 'MINIMAX_API_KEY' })).toMatchObject({
       baseUrl: 'https://api.minimax.io/anthropic',
       api: 'anthropic-messages',
@@ -75,6 +65,19 @@ describe('domestic provider presets', () => {
     });
 
     expect(ark?.defaultModel).toBe('ep-your-endpoint-id');
+  });
+
+  it('rejects configuring the OAuth-managed XOPC provider in models.json', () => {
+    expect(validateModelsConfig({
+      providers: {
+        'xopc-cloud': {
+          baseUrl: 'https://router.xopc.ai/v1',
+          api: 'openai-completions',
+          apiKey: 'old-static-key',
+          models: [{ id: 'old-model' }],
+        },
+      },
+    })).toMatchObject({ valid: false });
   });
 
   it('feeds onboarding and provider presentation before a provider is configured', () => {

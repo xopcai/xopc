@@ -6,25 +6,25 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ModelCatalogStore } from '../model-catalog-store.js';
 import { ModelCatalogSyncService } from '../model-catalog-sync-service.js';
-import type { XopcCloudConnectionService } from '../xopc-cloud-connection.js';
+import type { XopcCloudModelSource } from '../xopc-cloud-model-source.js';
 
 describe('ModelCatalogSyncService', () => {
   it('coalesces concurrent refreshes and reports success', async () => {
     let release!: () => void;
     const wait = new Promise<void>((resolve) => { release = resolve; });
-    const refreshCatalog = vi.fn(async () => {
+    const refresh = vi.fn(async () => {
       await wait;
       return { status: 'updated' as const, modelCount: 2 };
     });
     const onUpdated = vi.fn();
     const service = new ModelCatalogSyncService({
-      xopcCloud: { refreshCatalog } as XopcCloudConnectionService,
+      xopcCloud: { refresh } as XopcCloudModelSource,
       onUpdated,
     });
 
     const first = service.refreshNow();
     const second = service.refreshNow();
-    expect(refreshCatalog).toHaveBeenCalledTimes(1);
+    expect(refresh).toHaveBeenCalledTimes(1);
     release();
     await Promise.all([first, second]);
 
@@ -35,7 +35,7 @@ describe('ModelCatalogSyncService', () => {
   it('discovers enabled OpenAI-compatible providers', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'xopc-model-sync-'));
     try {
-      const store = new ModelCatalogStore(join(dir, 'catalog.json'));
+      const store = new ModelCatalogStore();
       const refreshModels = vi.fn();
       let providers = {
         custom: {
@@ -46,8 +46,8 @@ describe('ModelCatalogSyncService', () => {
       };
       const service = new ModelCatalogSyncService({
         xopcCloud: {
-          refreshCatalog: vi.fn(async () => ({ status: 'disconnected' as const })),
-        } as XopcCloudConnectionService,
+          refresh: vi.fn(async () => ({ status: 'skipped' as const, reason: 'not_configured' as const })),
+        } as XopcCloudModelSource,
         catalogStore: store,
         loadProviders: () => providers,
         discoverModels: vi.fn(async () => [{ id: 'model-a', name: 'Model A', source: 'live' as const }]),
