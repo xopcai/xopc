@@ -78,7 +78,6 @@ export function useNoteEditSession({
   onMissingNote,
 }: UseNoteEditSessionArgs) {
   const [markdown, setMarkdown] = useState('');
-  const [editorMarkdown, setEditorMarkdown] = useState('');
   const [title, setTitle] = useState('');
   const [tags, setTags] = useState<string[] | undefined>(undefined);
   const [noteStatus, setNoteStatus] = useState<Note['status']>('processed');
@@ -159,7 +158,6 @@ export function useNoteEditSession({
       seededNoteIdRef.current = note.id;
       dirtyRef.current = false;
       setMarkdown(nextMarkdown);
-      setEditorMarkdown(nextMarkdown);
       setTitle(nextTitle ?? '');
       setTags(nextTags);
       ensureNoteTags(nextTags ?? []);
@@ -331,7 +329,7 @@ export function useNoteEditSession({
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
   }, []);
 
-  const applyDraft = useCallback((draft: NoteEditorDraft) => {
+  const applyDraft = useCallback((draft: NoteEditorDraft, schedule = true) => {
     const titleChanged = draft.title !== titleRef.current;
     const markdownChanged = draft.markdown !== markdownRef.current;
     if (!titleChanged && !markdownChanged) return;
@@ -340,20 +338,21 @@ export function useNoteEditSession({
     titleRef.current = draft.title;
     setSaveState('dirty');
     if (markdownChanged) {
-      setEditorMarkdown(draft.markdown);
       setMarkdown(draft.markdown);
     }
     if (titleChanged) setTitle(draft.title);
-    scheduleSave();
+    if (schedule) scheduleSave();
   }, [scheduleSave]);
 
   const updateMarkdown = useCallback((next: string) => {
-    applyDraft({ title: titleRef.current, markdown: next });
-  }, [applyDraft]);
+    applyDraft({ title: titleRef.current, markdown: next }, false);
+    void flushSave();
+  }, [applyDraft, flushSave]);
 
   const updateTitle = useCallback((next: string) => {
-    applyDraft({ title: next, markdown: markdownRef.current });
-  }, [applyDraft]);
+    applyDraft({ title: next, markdown: markdownRef.current }, false);
+    void flushSave();
+  }, [applyDraft, flushSave]);
 
   const updateTags = useCallback((next: string[] | undefined) => {
     setTags(next);
@@ -367,7 +366,6 @@ export function useNoteEditSession({
     note,
     noteQuery,
     markdown,
-    editorMarkdown,
     title,
     tags,
     noteStatus,

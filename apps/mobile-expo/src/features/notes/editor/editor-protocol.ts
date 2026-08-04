@@ -109,7 +109,7 @@ export type EditorRuntimeState = {
   image: boolean;
 };
 
-export type NoteEditorMode = 'viewing' | 'editing' | 'native_modal';
+export type NoteEditorMode = 'read' | 'edit';
 
 export type EditorEvent =
   | { type: 'ready'; state: EditorRuntimeState }

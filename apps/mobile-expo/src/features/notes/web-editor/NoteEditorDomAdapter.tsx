@@ -8,6 +8,13 @@ import Placeholder from '@tiptap/extension-placeholder';
 import TaskItem from '@tiptap/extension-task-item';
 import TaskList from '@tiptap/extension-task-list';
 import { Markdown } from 'tiptap-markdown';
+import {
+  NOTE_LINK_OPTIONS,
+  NOTE_MARKDOWN_OPTIONS,
+  NOTE_STARTER_KIT_OPTIONS,
+  NOTE_TASK_ITEM_OPTIONS,
+  serializeNoteMarkdown,
+} from '@xopcai/note-editor-core';
 
 import type {
   EditorAttachmentPickSource,
@@ -53,16 +60,16 @@ export interface NoteEditorDomAdapterProps {
   onChangeMarkdown: (markdown: string) => Promise<void>;
   onSelectionChange?: (context: EditorSelectionContext) => Promise<void>;
   onStateChange?: (state: EditorRuntimeState) => Promise<void> | void;
+  onRequestEdit?: () => Promise<void> | void;
   onRequestAttachment: (source: EditorAttachmentPickSource) => Promise<EditorAttachmentPickResult>;
   onFlushDraft?: (requestId: number, draft: NoteEditorDraft) => Promise<void> | void;
 }
 
-const MARKDOWN_SYNC_DELAY_MS = 1000;
+const MARKDOWN_SYNC_DELAY_MS = 700;
 const TITLE_SYNC_DELAY_MS = 250;
 
 function markdownFromEditor(editor: NonNullable<ReturnType<typeof useEditor>>): string {
-  const storage = editor.storage as unknown as { markdown?: { getMarkdown?: () => string } };
-  return storage.markdown?.getMarkdown?.() ?? editor.getText();
+  return serializeNoteMarkdown(editor);
 }
 
 function setEditorMarkdown(
@@ -193,6 +200,7 @@ export default function NoteEditorDomAdapter({
   onChangeMarkdown,
   onSelectionChange,
   onStateChange,
+  onRequestEdit,
   onRequestAttachment,
   onFlushDraft,
 }: NoteEditorDomAdapterProps) {
@@ -217,6 +225,7 @@ export default function NoteEditorDomAdapter({
   const onStateChangeRef = useRef(onStateChange);
   const onFlushDraftRef = useRef(onFlushDraft);
   const handledCommandIdRef = useRef<number | null>(null);
+  const pendingEditPositionRef = useRef<number | 'end' | null>(null);
   const initialBottomInsetRef = useRef(bottomInset);
   const lastRuntimeStateRef = useRef<EditorRuntimeState | null>(null);
 
@@ -286,17 +295,12 @@ export default function NoteEditorDomAdapter({
   const editor = useEditor({
     editable,
     extensions: [
-      StarterKit.configure({
-        heading: { levels: [1, 2, 3, 4] },
-        link: false,
-        underline: false,
-      }),
+      StarterKit.configure(NOTE_STARTER_KIT_OPTIONS),
       CodeBlockLanguage,
       TaskList,
-      TaskItem.configure({ nested: true }),
+      TaskItem.configure(NOTE_TASK_ITEM_OPTIONS),
       Link.configure({
-        autolink: true,
-        openOnClick: false,
+        ...NOTE_LINK_OPTIONS,
         HTMLAttributes: { class: 'xopc-editor-link' },
       }),
       XopcImage.configure({
@@ -307,11 +311,7 @@ export default function NoteEditorDomAdapter({
       Placeholder.configure({
         placeholder: labels.placeholder,
       }),
-      Markdown.configure({
-        html: true,
-        transformCopiedText: true,
-        transformPastedText: true,
-      }),
+      Markdown.configure(NOTE_MARKDOWN_OPTIONS),
     ],
     content: '',
     editorProps: {
@@ -376,6 +376,16 @@ export default function NoteEditorDomAdapter({
   useEffect(() => {
     if (!editor) return;
     editor.setEditable(editable);
+    if (!editable) {
+      pendingEditPositionRef.current = null;
+      focusTargetRef.current = 'none';
+      editor.commands.blur();
+    } else if (pendingEditPositionRef.current !== null) {
+      const position = pendingEditPositionRef.current;
+      pendingEditPositionRef.current = null;
+      focusTargetRef.current = 'body';
+      editor.commands.focus(position);
+    }
     emitRuntimeState(editor);
   }, [editable, editor, emitRuntimeState]);
 
@@ -537,13 +547,21 @@ export default function NoteEditorDomAdapter({
     if (!editor) return;
     const target = event.target as HTMLElement | null;
     if (target?.closest('button, input, textarea, a')) return;
+    if (!editable) {
+      pendingEditPositionRef.current = editor.view.posAtCoords({
+        left: event.clientX,
+        top: event.clientY,
+      })?.pos ?? 'end';
+      void onRequestEdit?.();
+      return;
+    }
     const content = getEditorDom(editor);
     if (!content) return;
     if (target && content.contains(target)) return;
     if (target) {
       editor.commands.focus('end');
     }
-  }, [editor]);
+  }, [editable, editor, onRequestEdit]);
 
   useEffect(() => {
     if (!editor || !command || handledCommandIdRef.current === command.id) return;

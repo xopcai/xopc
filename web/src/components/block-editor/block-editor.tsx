@@ -6,6 +6,13 @@ import TaskItem from '@tiptap/extension-task-item';
 import Placeholder from '@tiptap/extension-placeholder';
 import Link from '@tiptap/extension-link';
 import { Markdown } from 'tiptap-markdown';
+import {
+  NOTE_LINK_OPTIONS,
+  NOTE_MARKDOWN_OPTIONS,
+  NOTE_STARTER_KIT_OPTIONS,
+  NOTE_TASK_ITEM_OPTIONS,
+  serializeNoteMarkdown,
+} from '@xopcai/note-editor-core';
 
 import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
@@ -74,7 +81,7 @@ export function BlockEditor({
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
-        heading: { levels: [1, 2, 3] },
+        ...NOTE_STARTER_KIT_OPTIONS,
         codeBlock: { HTMLAttributes: { class: 'block-editor-code' } },
       }),
       BlockTrailingNode,
@@ -84,7 +91,7 @@ export function BlockEditor({
         HTMLAttributes: { class: 'block-editor-image' },
       }),
       TaskList,
-      TaskItem.configure({ nested: true }),
+      TaskItem.configure(NOTE_TASK_ITEM_OPTIONS),
       Placeholder.configure({
         placeholder: ({ editor: editorInstance, node, pos }) => {
           if (node.type.name !== 'paragraph' || node.content.size > 0) {
@@ -99,15 +106,10 @@ export function BlockEditor({
         includeChildren: true,
       }),
       Link.configure({
-        openOnClick: false,
-        autolink: true,
+        ...NOTE_LINK_OPTIONS,
         HTMLAttributes: { class: 'block-editor-link' },
       }),
-      Markdown.configure({
-        html: true,
-        transformPastedText: true,
-        transformCopiedText: true,
-      }),
+      Markdown.configure(NOTE_MARKDOWN_OPTIONS),
       AudioNode,
       ExtraKeyboardShortcuts,
       SlashCommands.configure({
@@ -116,7 +118,7 @@ export function BlockEditor({
     ],
     content: '',
     onUpdate: ({ editor: editorInstance }) => {
-      const markdownContent = (editorInstance.storage as unknown as { markdown: { getMarkdown: () => string } }).markdown.getMarkdown();
+      const markdownContent = serializeNoteMarkdown(editorInstance);
       latestMarkdownRef.current = markdownContent;
       lastSentMarkdownRef.current = markdownContent;
       onChangeRef.current(markdownContent);
