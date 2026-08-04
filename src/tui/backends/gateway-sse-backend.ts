@@ -1149,19 +1149,30 @@ export class GatewaySseBackend implements TuiBackend {
       throw new Error(json.error ?? `Session config patch failed (${res.status})`);
     }
     const projectId = typeof patch.projectId === 'string' ? patch.projectId.trim() : '';
-    if (projectId) {
+    const hiddenFromSessionList = typeof patch.hiddenFromSessionList === 'boolean'
+      ? patch.hiddenFromSessionList
+      : undefined;
+    const customData = patch.customData && typeof patch.customData === 'object' && !Array.isArray(patch.customData)
+      ? patch.customData as Record<string, unknown>
+      : undefined;
+    if (projectId || hiddenFromSessionList !== undefined || customData !== undefined) {
+      const metadataPatch = {
+        ...(projectId ? { projectId } : {}),
+        ...(hiddenFromSessionList !== undefined ? { hiddenFromSessionList } : {}),
+        ...(customData ? { customData } : {}),
+      };
       const metaRes = await gatewayFetch(
         this.baseUrl,
         `/api/sessions/${encodeURIComponent(sessionKey)}`,
         this.credential,
-        { method: 'PATCH', body: JSON.stringify({ projectId }) },
+        { method: 'PATCH', body: JSON.stringify(metadataPatch) },
       );
       const metaJson = (await metaRes.json().catch(() => ({}))) as {
         ok?: boolean;
         error?: string;
       };
       if (!metaRes.ok || metaJson.ok === false) {
-        throw new Error(metaJson.error ?? `Session project patch failed (${metaRes.status})`);
+        throw new Error(metaJson.error ?? `Session metadata patch failed (${metaRes.status})`);
       }
     }
   }

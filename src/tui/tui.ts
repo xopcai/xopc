@@ -74,6 +74,13 @@ import {
 import { openModelPickerOverlay } from './tui-model-picker.js';
 import { runTuiOAuthLogin } from './tui-oauth-login.js';
 import {
+  cleanupAbandonedTuiSessions,
+  deleteGeneratedTuiSessionIfEmpty,
+  GENERATED_TUI_SESSION_SHELL_PATCH,
+  hideLegacyEmptyTuiSessions,
+  isGeneratedTuiSessionKey,
+} from './tui-empty-session-cleanup.js';
+import {
   createEditorSubmitHandler,
   createSubmitBurstCoalescer,
   shouldEnableWindowsGitBashPasteFallback,
@@ -317,6 +324,13 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   let tuiSettings = loadTuiSettings();
   initTuiTheme({ themeId: opts.theme ?? tuiSettings.theme });
   const state = createInitialState(startup.sessionKey);
+  const generatedStartupSessionKey = !opts.session?.trim() && isGeneratedTuiSessionKey(startup.sessionKey)
+    ? startup.sessionKey
+    : null;
+  const generatedStartupSessionKeys = new Set(
+    generatedStartupSessionKey ? [generatedStartupSessionKey] : [],
+  );
+  let startupSessionHadUserTurn = false;
   const startupWorkingDirectory = resolveStartupWorkingDirectory(opts, isLocalMode);
   const implicitTrustedWorkspace = startupWorkingDirectory ?? (isLocalMode ? process.cwd() : undefined);
   const projectTrustStore = new ProjectTrustStore();
@@ -1230,16 +1244,26 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       clearInterval(streamWatchdogId);
       streamWatchdogId = null;
     }
-    client.stop();
     tui.terminal.setProgress(false);
-    void drainAndStopTuiSafely(tui).then(() => {
+    void (async () => {
+      const removedEmptyStartupSessions = new Set<string>();
+      if (!state.activeRunId) {
+        for (const sessionKey of generatedStartupSessionKeys) {
+          if (sessionKey === state.currentSessionKey && startupSessionHadUserTurn) continue;
+          const removed = await deleteGeneratedTuiSessionIfEmpty(client, sessionKey).catch(() => false);
+          if (removed) removedEmptyStartupSessions.add(sessionKey);
+        }
+      }
+      client.stop();
+      await drainAndStopTuiSafely(tui);
       restoreStdio();
-      if (options?.showResumeHint !== false) {
+      const currentSessionWasRemoved = removedEmptyStartupSessions.has(state.currentSessionKey);
+      if (options?.showResumeHint !== false && !currentSessionWasRemoved) {
         process.stdout.write(`\nTo resume this session: ${formatTuiResumeCommand(opts, state.currentSessionKey)}\n`);
       }
       finishTui?.();
       process.exit(0);
-    });
+    })();
   };
 
   const sessionActions = createSessionActions({
@@ -1305,6 +1329,9 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     startupWorkingDirectoryApplied = true;
     await client.patchSession(state.currentSessionKey, {
       workingDirectory: startupWorkingDirectory,
+      ...(isGeneratedTuiSessionKey(state.currentSessionKey)
+        ? GENERATED_TUI_SESSION_SHELL_PATCH
+        : {}),
     });
     state.sessionInfo.effectiveWorkspacePath = startupWorkingDirectory;
     state.sessionInfo.workingDirectoryLocked = true;
@@ -1328,16 +1355,28 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     if (!opts.agentId?.trim() && currentParsed?.rest && projectAgentId && projectAgentId !== currentAgentId) {
       const targetSessionKey = `agent:${projectAgentId}:${currentParsed.rest}`;
       await setSession(targetSessionKey);
+      if (isGeneratedTuiSessionKey(targetSessionKey)) {
+        generatedStartupSessionKeys.add(targetSessionKey);
+      }
       currentAgentId = projectAgentId;
+      if (isGeneratedTuiSessionKey(state.currentSessionKey)) {
+        await client.patchSession(state.currentSessionKey, GENERATED_TUI_SESSION_SHELL_PATCH);
+      }
       await client.patchSession(state.currentSessionKey, {
         projectId: result.project.id,
         workingDirectory: startupWorkingDirectory,
+        ...(isGeneratedTuiSessionKey(state.currentSessionKey)
+          ? GENERATED_TUI_SESSION_SHELL_PATCH
+          : {}),
       });
       state.sessionInfo.effectiveWorkspacePath = startupWorkingDirectory;
       state.sessionInfo.workingDirectoryLocked = true;
     } else {
       await client.patchSession(state.currentSessionKey, {
         projectId: result.project.id,
+        ...(isGeneratedTuiSessionKey(state.currentSessionKey)
+          ? GENERATED_TUI_SESSION_SHELL_PATCH
+          : {}),
       });
     }
     const verb = result.created ? 'Created project' : 'Using project';
@@ -1852,6 +1891,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     }
 
     chatLog.addUser(userDisplayContentForAttachments(text, attachments));
+    startupSessionHadUserTurn = true;
     sessionSnapshot.appendMessage('user', messageText);
     lastRetryMessageText = messageText;
     markRunSending(state);
@@ -2564,6 +2604,9 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       await refreshSessionInfoWithBorder();
       await refreshModelChoices();
       await loadSessionHistory({ merge: true });
+      void cleanupAbandonedTuiSessions(client, state.currentSessionKey)
+        .then(() => hideLegacyEmptyTuiSessions(client))
+        .catch(() => {});
       showStartupCardOnce();
       void refreshStartupResources().then(() => {
         updateFooter();

@@ -10,6 +10,8 @@ export type SessionPatchBody = {
   /** When true, `tags` replaces the tag list; otherwise tags are union-merged. */
   replaceTags?: boolean;
   customData?: Record<string, unknown>;
+  hiddenFromSessionList?: boolean;
+  projectId?: string;
 };
 
 export function applySessionPatchToMetadata(
@@ -38,6 +40,15 @@ export function applySessionPatchToMetadata(
 
   if (patch.customData !== undefined && typeof patch.customData === 'object' && patch.customData !== null) {
     out.customData = { ...(existing.customData ?? {}), ...patch.customData };
+  }
+
+  if (typeof patch.hiddenFromSessionList === 'boolean') {
+    out.hiddenFromSessionList = patch.hiddenFromSessionList;
+  }
+
+  if (typeof patch.projectId === 'string') {
+    const projectId = patch.projectId.trim();
+    out.projectId = projectId || undefined;
   }
 
   return out;

@@ -500,9 +500,10 @@ export class EmbeddedBackend implements TuiBackend {
   }
 
   async getSessionStats(sessionKey: string): Promise<TuiSessionStats> {
-    if (!this.agent) return computeTuiSessionStats([]);
+    const store = this.agent?.sessionStore ?? this.sessionIndex?.getStore();
+    if (!store) return computeTuiSessionStats([]);
     try {
-      const rows = await this.agent.sessionStore.loadTranscriptRows(sessionKey);
+      const rows = await store.loadTranscriptRows(sessionKey);
       return computeTuiSessionStats(rows);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -564,9 +565,10 @@ export class EmbeddedBackend implements TuiBackend {
   }
 
   async deleteSession(sessionKey: string): Promise<{ ok: boolean }> {
-    if (!this.agent) return { ok: false };
+    const store = this.agent?.sessionStore ?? this.sessionIndex?.getStore();
+    if (!store) return { ok: false };
     try {
-      const ok = await this.agent.sessionStore.deleteSession(sessionKey);
+      const ok = await store.deleteSession(sessionKey);
       return { ok };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -632,11 +634,6 @@ export class EmbeddedBackend implements TuiBackend {
   ): Promise<void> {
     const agent = await this.ensureAgent();
     const projectId = typeof patch.projectId === 'string' ? patch.projectId.trim() : '';
-    if (projectId) {
-      await this.sessionIndexReady;
-      await this.sessionIndex?.getStore().resolveTranscriptPath(sessionKey);
-      new ProjectService().attachSession(sessionKey, projectId);
-    }
     const result = await agent.sessionConfig.patch(sessionKey, {
       model: typeof patch.model === 'string' ? patch.model : undefined,
       thinkingLevel: typeof patch.thinkingLevel === 'string' ? patch.thinkingLevel : undefined,
@@ -646,6 +643,31 @@ export class EmbeddedBackend implements TuiBackend {
     });
     if (!result.ok) {
       throw new Error(result.error);
+    }
+    if (projectId) {
+      await this.sessionIndexReady;
+      await this.sessionIndex?.getStore().resolveTranscriptPath(sessionKey);
+      new ProjectService().attachSession(sessionKey, projectId);
+    }
+    const hiddenFromSessionList = typeof patch.hiddenFromSessionList === 'boolean'
+      ? patch.hiddenFromSessionList
+      : undefined;
+    const customData = patch.customData && typeof patch.customData === 'object' && !Array.isArray(patch.customData)
+      ? patch.customData as Record<string, unknown>
+      : undefined;
+    if (hiddenFromSessionList !== undefined || customData !== undefined) {
+      await this.sessionIndexReady;
+      const store = this.sessionIndex?.getStore();
+      if (store) {
+        await store.resolveTranscriptPath(sessionKey);
+        const existing = getSessionMetadata(sessionKey);
+        if (existing && existing.messageCount === 0) {
+          await store.updateMetadata(sessionKey, {
+            ...(hiddenFromSessionList !== undefined ? { hiddenFromSessionList } : {}),
+            ...(customData ? { customData: { ...(existing.customData ?? {}), ...customData } } : {}),
+          });
+        }
+      }
     }
   }
 
