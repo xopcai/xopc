@@ -4,17 +4,43 @@ import { useNavigate } from 'react-router-dom';
 
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { Button } from '@/components/ui/button';
+import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
 
 import { useUnderstandingActivityStore } from './understanding-activity-store';
 
-export function UnderstandingStatusButton({ floating = false }: { floating?: boolean }) {
+export function UnderstandingStatusButton({
+  floating = false,
+  persistent = false,
+}: {
+  floating?: boolean;
+  persistent?: boolean;
+}) {
   const navigate = useNavigate();
   const language = useLocaleStore((state) => state.language);
   const state = useUnderstandingActivityStore();
-  if (state.status === 'idle') return null;
   const zh = language === 'zh';
+  if (state.status === 'idle') {
+    if (!persistent) return null;
+    const label = messages(language).you.relearn;
+    return (
+      <Button
+        type="button"
+        variant="ghost"
+        className={cn(
+          'relative size-8 rounded-xl p-0',
+          APP_CHROME_NO_DRAG_CLASS,
+          floating && 'fixed right-4 top-3 z-40 bg-surface-panel shadow-surface',
+        )}
+        title={label}
+        aria-label={label}
+        onClick={() => navigate('/onboarding/workspace?new=1')}
+      >
+        <Brain className="size-4 text-accent-fg" aria-hidden />
+      </Button>
+    );
+  }
   const running = state.status === 'running';
   const sourceRows = window.electronAPI?.platform === 'darwin' ? [
     { key: 'apple_notes' as const, label: 'Apple Notes', icon: FileText },
