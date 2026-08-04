@@ -30,6 +30,17 @@ export class CustomEditor extends Editor {
     this.actionHandlers.set(action, handler);
   }
 
+  replaceHistory(itemsNewestFirst: string[]): void {
+    const internals = this as unknown as {
+      history: string[];
+      historyIndex: number;
+      historyDraft: string;
+    };
+    internals.history = itemsNewestFirst.slice(0, 100);
+    internals.historyIndex = -1;
+    internals.historyDraft = '';
+  }
+
   handleInput(data: string): void {
     if (this.onExtensionShortcut?.(data)) {
       return;

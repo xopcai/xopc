@@ -7,7 +7,10 @@ import { useCallback, useEffect, useRef, type MutableRefObject } from 'react';
 
 import { getWireCaretOffset } from '@/features/chat/composer/composer-editor-wire';
 import {
+  applyComposerHistoryAppended,
+  applyComposerHistoryCleared,
   getComposerInputHistory,
+  loadComposerInputHistory,
   recordComposerInputHistory,
 } from '@/features/chat/composer/composer-input-history';
 import type { ResetEditorOptions } from '@/features/chat/composer/composer.types';
@@ -35,12 +38,33 @@ export function useComposerInputHistoryWalk(opts: {
     clearWalk();
   }, [sessionKey, clearWalk]);
 
+  useEffect(() => {
+    void loadComposerInputHistory();
+    const onAppend = (event: Event) => {
+      applyComposerHistoryAppended((event as CustomEvent).detail);
+      clearWalk();
+    };
+    const onClear = () => {
+      applyComposerHistoryCleared();
+      clearWalk();
+    };
+    const onReconnect = () => void loadComposerInputHistory(true);
+    window.addEventListener('composer-history-appended', onAppend);
+    window.addEventListener('composer-history-cleared', onClear);
+    window.addEventListener('gateway-sse-connected', onReconnect);
+    return () => {
+      window.removeEventListener('composer-history-appended', onAppend);
+      window.removeEventListener('composer-history-cleared', onClear);
+      window.removeEventListener('gateway-sse-connected', onReconnect);
+    };
+  }, [clearWalk]);
+
   const onUserTextCommitted = useCallback(
     (text: string) => {
-      recordComposerInputHistory(sessionKey, text);
+      recordComposerInputHistory(text);
       clearWalk();
     },
-    [sessionKey, clearWalk],
+    [clearWalk],
   );
 
   const onWireInputClearWalk = useCallback(
@@ -53,9 +77,7 @@ export function useComposerInputHistoryWalk(opts: {
 
   const tryInputHistoryArrow = useCallback(
     (dir: 'up' | 'down'): boolean => {
-      const sk = sessionKey?.trim();
-      if (!sk) return false;
-      const history = getComposerInputHistory(sk);
+      const history = getComposerInputHistory();
       if (history.length === 0) return false;
 
       const walk = walkRef.current;
@@ -93,7 +115,7 @@ export function useComposerInputHistoryWalk(opts: {
       resetEditor({ nextText: line, caretOffset: line.length, focus: true });
       return true;
     },
-    [sessionKey, editorRef, valueRef, resetEditor],
+    [editorRef, valueRef, resetEditor],
   );
 
   return { onUserTextCommitted, onWireInputClearWalk, tryInputHistoryArrow };

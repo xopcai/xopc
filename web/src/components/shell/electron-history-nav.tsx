@@ -1,39 +1,37 @@
 import { ArrowLeft, ArrowRight } from 'lucide-react';
-import { memo, useEffect, useLayoutEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { memo, useLayoutEffect, useState } from 'react';
+import { useLocation, useNavigate, useNavigationType } from 'react-router-dom';
 
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
+import {
+  advanceElectronHistory,
+  type ElectronHistorySnapshot,
+} from '@/components/shell/electron-history-state';
 import { Button } from '@/components/ui/button';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { isElectron } from '@/lib/electron-env';
 import { useLocaleStore } from '@/stores/locale-store';
 
-function readHistoryIdx(): number {
-  const state = window.history.state;
-  if (state && typeof state === 'object' && 'idx' in state) {
-    const idx = (state as { idx?: unknown }).idx;
-    if (typeof idx === 'number' && Number.isFinite(idx)) return idx;
-  }
-  return 0;
-}
+let sharedHistorySnapshot: ElectronHistorySnapshot | undefined;
 
 function useHashHistoryNavAvailability() {
   const location = useLocation();
-  const [maxIdx, setMaxIdx] = useState(() => readHistoryIdx());
+  const navigationType = useNavigationType();
+  const [snapshot, setSnapshot] = useState(() => {
+    sharedHistorySnapshot = advanceElectronHistory(sharedHistorySnapshot, location.key, navigationType);
+    return sharedHistorySnapshot;
+  });
 
   useLayoutEffect(() => {
-    setMaxIdx((idx) => Math.max(idx, readHistoryIdx()));
-  }, [location.key, location.pathname, location.search, location.hash]);
+    sharedHistorySnapshot = advanceElectronHistory(sharedHistorySnapshot, location.key, navigationType);
+    setSnapshot(sharedHistorySnapshot);
+  }, [location.key, navigationType]);
 
-  useEffect(() => {
-    const onPopState = () => setMaxIdx((idx) => Math.max(idx, readHistoryIdx()));
-    window.addEventListener('popstate', onPopState);
-    return () => window.removeEventListener('popstate', onPopState);
-  }, []);
-
-  const idx = readHistoryIdx();
-  return { canGoBack: idx > 0, canGoForward: idx < maxIdx };
+  return {
+    canGoBack: snapshot.index > 0,
+    canGoForward: snapshot.index < snapshot.entries.length - 1,
+  };
 }
 
 export const ElectronHistoryNav = memo(function ElectronHistoryNav({

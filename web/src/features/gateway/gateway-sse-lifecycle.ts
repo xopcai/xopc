@@ -10,6 +10,7 @@ export function startGatewaySseConnection(credential: string): () => void {
   const conn = new GatewaySseConnection(config, {
     onConnected: () => {
       setSseConnectionState({ connectionState: 'connected', error: null, reconnectAttempt: 0 });
+      window.dispatchEvent(new CustomEvent('gateway-sse-connected'));
     },
     onReconnecting: () => {
       setSseConnectionState({ connectionState: 'reconnecting' });

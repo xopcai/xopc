@@ -11,6 +11,7 @@ import type {
   HistoryMessage,
   TuiBackend,
   TuiCompactionResult,
+  TuiComposerHistoryItem,
   TuiEvent,
   TuiModelChoice,
   TuiShareRequest,
@@ -112,6 +113,23 @@ export class GatewaySseBackend implements TuiBackend {
   getActiveSignal(): AbortSignal | undefined {
     const signal = this.chatAbort?.signal;
     return signal && !signal.aborted ? signal : undefined;
+  }
+
+  async getComposerInputHistory(): Promise<TuiComposerHistoryItem[]> {
+    const res = await gatewayFetch(this.baseUrl, '/api/composer-history', this.credential);
+    if (!res.ok) throw new Error(`Failed to load composer history (${res.status})`);
+    const body = await res.json() as { items?: TuiComposerHistoryItem[] };
+    return body.items ?? [];
+  }
+
+  async recordComposerInputHistory(text: string): Promise<TuiComposerHistoryItem> {
+    const res = await gatewayFetch(this.baseUrl, '/api/composer-history', this.credential, {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    });
+    if (!res.ok) throw new Error(`Failed to save composer history (${res.status})`);
+    const body = await res.json() as { item: TuiComposerHistoryItem };
+    return body.item;
   }
 
   // ── Agent chat (POST /api/agent → SSE response body) ──
