@@ -106,11 +106,12 @@ export class SessionInspector {
     options?: { instructions?: string; force?: boolean },
   ): Promise<CompactionResult> {
     const messages = await this.opts.sessionStore.load(sessionKey);
-    const contextWindow = await this.contextWindowForSession(sessionKey);
+    await this.ensureEffectiveSessionModel(sessionKey);
+    const model = this.opts.modelManager.getResolvedModelForSession(sessionKey);
     const result = await this.opts.sessionStore.compact(
       sessionKey,
       messages,
-      contextWindow,
+      model,
       options?.instructions,
       options?.force ?? true,
     );

@@ -1,6 +1,8 @@
 // Session manager - high-level session management service
 
 import EventEmitter from 'events';
+import type { Api, Model } from '@earendil-works/pi-ai/compat';
+
 import { createLogger } from '../utils/logger.js';
 import { SessionStore } from './store.js';
 import type {
@@ -352,6 +354,14 @@ export class SessionIndex extends EventEmitter {
     return this.store.saveMessages(key, messages, options);
   }
 
+  async deleteUserRound(key: string, userRoundIndex: number) {
+    const result = await this.store.deleteUserRound(key, userRoundIndex);
+    if (result) {
+      this.emit('sessionUpdated', { key });
+    }
+    return result;
+  }
+
   /**
    * Append `kind: 'context'` transcript row (persisted, excluded from {@link loadMessages} / LLM).
    */
@@ -438,11 +448,11 @@ export class SessionIndex extends EventEmitter {
   compact(
     key: string,
     messages: any[],
-    contextWindow: number,
+    model: Model<Api>,
     instructions?: string,
     force?: boolean,
   ): Promise<CompactionResult> {
-    return this.store.compact(key, messages, contextWindow, instructions, force);
+    return this.store.compact(key, messages, model, instructions, force);
   }
 
   /** Compaction stats for a session */

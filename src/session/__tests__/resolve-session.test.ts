@@ -7,11 +7,12 @@ import {
 } from '../reset-policy.js';
 
 describe('resolveSessionResetPolicy', () => {
-  it('defaults to daily resets at 4am local time', () => {
+  it('keeps default reset values inactive until a reset policy is configured', () => {
     const policy = resolveSessionResetPolicy({ resetType: 'direct' });
     expect(policy).toMatchObject({
       mode: 'daily',
       atHour: DEFAULT_RESET_AT_HOUR,
+      configured: false,
     });
   });
 

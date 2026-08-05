@@ -3,7 +3,6 @@ import { type Model, type Api, type UserMessage } from '@earendil-works/pi-ai/co
 
 import { completeWithResolvedCredentials } from '../../providers/model-call.js';
 import { readAgentMessageContent } from './agent-message-access.js';
-import { generateStructuredSummary, formatSummaryAsText, type ConversationSummary } from './summary-generator.js';
 
 export interface CompactionResult {
   summary: string;
@@ -11,7 +10,6 @@ export interface CompactionResult {
   tokensBefore: number;
   tokensAfter: number;
   compacted: boolean;
-  structuredSummary?: ConversationSummary;
   compactedUsage?: {
     input: number;
     output: number;
@@ -22,13 +20,10 @@ export interface CompactionResult {
 
 export interface CompactionConfig {
   enabled: boolean;
-  mode: 'extractive' | 'abstractive' | 'structured';
-  reserveTokens: number;
   triggerThreshold: number;
   minMessagesBeforeCompact: number;
   keepRecentMessages: number;
   summaryMaxTokens: number;
-  evictionWindow: number;
   retentionWindow: number;
   preserveReasoning: boolean;
   accumulateUsage: boolean;
@@ -36,13 +31,10 @@ export interface CompactionConfig {
 
 const DEFAULT_CONFIG: CompactionConfig = {
   enabled: true,
-  mode: 'abstractive',
-  reserveTokens: 8000,
   triggerThreshold: 0.8,
   minMessagesBeforeCompact: 10,
   keepRecentMessages: 10,
-  summaryMaxTokens: 500,
-  evictionWindow: 0.2,
+  summaryMaxTokens: 2000,
   retentionWindow: 6,
   preserveReasoning: true,
   accumulateUsage: true,
@@ -53,18 +45,8 @@ function estimateTokens(text: string): number {
 }
 
 function estimateMessageTokens(msg: AgentMessage): number {
-  let text = '';
   const raw = readAgentMessageContent(msg);
-
-  if (typeof raw === 'string') {
-    text = raw;
-  } else if (Array.isArray(raw)) {
-    text = raw
-      .filter(c => c.type === 'text')
-      .map(c => (c as { text?: string }).text || '')
-      .join('\n');
-  }
-  
+  const text = typeof raw === 'string' ? raw : JSON.stringify(raw ?? '');
   return estimateTokens(text) + 10;
 }
 
@@ -167,7 +149,16 @@ function findNthTurnFromEnd(messages: AgentMessage[], n: number): number {
   return 0;
 }
 
-// Internal: Calculate compaction range
+function findUserTurnAtOrAfter(messages: AgentMessage[], start: number): number {
+  for (let i = Math.max(0, start); i < messages.length; i++) {
+    if (messages[i]?.role === 'user') {
+      return i;
+    }
+  }
+  return Math.max(1, Math.min(start, messages.length - 1));
+}
+
+// Keep complete recent turns and never split an assistant/tool sequence.
 function calculateCompactionRange(
   messages: AgentMessage[],
   config: CompactionConfig
@@ -178,10 +169,12 @@ function calculateCompactionRange(
     return null;
   }
   
-  const evictionEnd = Math.floor(totalMessages * config.evictionWindow);
   const retentionStart = findNthTurnFromEnd(messages, config.retentionWindow);
-  const retentionEnd = retentionStart > 0 ? retentionStart - 1 : 0;
-  const compactionEnd = Math.min(evictionEnd, retentionEnd);
+  const countStart = findUserTurnAtOrAfter(
+    messages,
+    Math.max(1, totalMessages - config.keepRecentMessages),
+  );
+  const compactionEnd = Math.min(retentionStart, countStart);
   
   if (compactionEnd <= 1) {
     return null;
@@ -193,10 +186,7 @@ function calculateCompactionRange(
 export class SessionCompactor {
   private config: CompactionConfig;
   
-  constructor(
-    config?: Partial<CompactionConfig>,
-    private model?: Model<Api>
-  ) {
+  constructor(config?: Partial<CompactionConfig>) {
     this.config = { ...DEFAULT_CONFIG, ...config };
   }
 
@@ -228,6 +218,7 @@ export class SessionCompactor {
 
   async compact(
     messages: AgentMessage[],
+    model: Model<Api>,
     instructions?: string,
     force?: boolean,
   ): Promise<CompactionResult> {
@@ -262,16 +253,20 @@ export class SessionCompactor {
       messagesToSummarize = effectiveMessages.slice(0, range.end);
       keptMessages = effectiveMessages.slice(range.end);
     } else if (force) {
-      const keep = Math.min(
-        this.config.keepRecentMessages,
-        Math.max(1, effectiveMessages.length - 1),
+      const forceEnd = findUserTurnAtOrAfter(
+        effectiveMessages,
+        Math.max(1, effectiveMessages.length - this.config.keepRecentMessages),
       );
-      messagesToSummarize = effectiveMessages.slice(0, effectiveMessages.length - keep);
-      keptMessages = effectiveMessages.slice(-keep);
+      messagesToSummarize = effectiveMessages.slice(0, forceEnd);
+      keptMessages = effectiveMessages.slice(forceEnd);
     } else {
-      const keepRecent = this.config.keepRecentMessages;
-      messagesToSummarize = effectiveMessages.slice(0, -keepRecent);
-      keptMessages = effectiveMessages.slice(-keepRecent);
+      return {
+        summary: '',
+        firstKeptIndex: 0,
+        tokensBefore: this.estimateTotalTokens(effectiveMessages),
+        tokensAfter: this.estimateTotalTokens(effectiveMessages),
+        compacted: false,
+      };
     }
 
     if (messagesToSummarize.length === 0) {
@@ -292,10 +287,7 @@ export class SessionCompactor {
       }
     }
 
-    const summary = await this.generateSummary(messagesToSummarize, instructions);
-    const structuredSummary = this.config.mode === 'structured' 
-      ? generateStructuredSummary(messagesToSummarize)
-      : undefined;
+    const summary = await this.generateSummary(messagesToSummarize, model, instructions);
 
     const tokensBefore = this.estimateTotalTokens(effectiveMessages);
     const summaryTokens = estimateTokens(summary) + 20;
@@ -313,41 +305,37 @@ export class SessionCompactor {
       tokensBefore,
       tokensAfter,
       compacted: true,
-      structuredSummary,
       compactedUsage,
     };
   }
 
-  private async generateSummary(messages: AgentMessage[], instructions?: string): Promise<string> {
-    if (this.model && (this.config.mode === 'abstractive' || this.config.mode === 'structured')) {
-      try {
-        if (this.config.mode === 'structured') {
-          const structured = generateStructuredSummary(messages);
-          return formatSummaryAsText(structured, true);
-        } else {
-          return await this.llmAbstractiveSummary(messages, instructions);
-        }
-      } catch (err) {
-        console.warn('[Compactor] LLM summarization failed, falling back to extractive', err);
-      }
-    }
-
-    return this.extractiveSummary(messages);
+  private generateSummary(
+    messages: AgentMessage[],
+    model: Model<Api>,
+    instructions?: string,
+  ): Promise<string> {
+    return this.llmAbstractiveSummary(messages, model, instructions);
   }
 
-  private async llmAbstractiveSummary(messages: AgentMessage[], instructions?: string): Promise<string> {
-    if (!this.model) {
-      throw new Error('Model not available');
-    }
-
+  private async llmAbstractiveSummary(
+    messages: AgentMessage[],
+    model: Model<Api>,
+    instructions?: string,
+  ): Promise<string> {
     const conversation = this.formatMessages(messages);
     const extra = instructions?.trim()
       ? `\nAdditional focus from the user:\n${instructions.trim()}\n`
       : '';
-    const prompt = `Summarize the following conversation in 2-3 concise sentences. Focus on:
-1. What the user was trying to accomplish
-2. Key decisions, outcomes, or solutions
-3. Any important context that should be preserved
+    const prompt = `Create a durable continuation summary of the conversation below.
+
+This summary will replace the older messages in the model context. Preserve every fact needed to continue accurately, especially:
+- the user's background, identity, relationships, constraints, preferences, and current situation;
+- chronology, goals, decisions, commitments, corrections, negations, and unresolved questions;
+- exact names, paths, identifiers, numbers, dates, and quoted wording when precision matters;
+- tool results and work already completed when they affect what should happen next;
+- emotional or interpersonal context when it changes the meaning of later messages.
+
+Do not infer facts that were not stated. Distinguish the user's statements from the assistant's suggestions. Do not describe this task or mention token limits. Use concise Markdown sections, but prefer completeness over brevity.
 ${extra}
 Conversation:
 ${conversation}
@@ -359,7 +347,7 @@ Summary:`;
 
     try {
       const summaryMessage: UserMessage = { role: 'user', content: prompt, timestamp: Date.now() };
-      const result = await completeWithResolvedCredentials(this.model, {
+      const result = await completeWithResolvedCredentials(model, {
         messages: [summaryMessage]
       }, {
         maxTokens: this.config.summaryMaxTokens,
@@ -371,7 +359,11 @@ Summary:`;
         ? result.content.filter((c: any) => c.type === 'text').map((c: any) => c.text).join('')
         : '';
 
-      return text.trim();
+      const summary = text.trim();
+      if (!summary) {
+        throw new Error('Compaction model returned an empty summary');
+      }
+      return summary;
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {
         throw new Error('LLM summarization timed out after 30 seconds');
@@ -395,27 +387,6 @@ Summary:`;
       .join('\n\n');
   }
 
-  private extractiveSummary(messages: AgentMessage[]): string {
-    const userMessages = messages
-      .filter(m => m.role === 'user')
-      .slice(-5)
-      .map(m => {
-        const raw = readAgentMessageContent(m);
-        if (typeof raw === 'string') return raw;
-        if (Array.isArray(raw)) {
-          return raw
-            .filter(c => c.type === 'text')
-            .map(c => (c as { text?: string }).text || '')
-            .join('\n');
-        }
-        return '';
-      })
-      .filter(t => t.length > 0)
-      .join('; ');
-
-    return `Previous conversation covered: ${userMessages.slice(0, 300)}...`;
-  }
-
   estimateTotalTokens(messages: AgentMessage[]): number {
     return messages.reduce((sum, msg) => sum + estimateMessageTokens(msg), 0);
   }
@@ -430,7 +401,10 @@ Summary:`;
 
     const summaryMessage: AgentMessage & { usage?: MessageUsage } = {
       role: 'user',
-      content: [{ type: 'text', text: `[Previous conversation summary]: ${result.summary}` }],
+      content: [{
+        type: 'text',
+        text: `<conversation_summary>\nThis is a compressed factual record of earlier messages, not a new user message and not a verbatim transcript.\n\n${result.summary}\n</conversation_summary>`,
+      }],
       timestamp: Date.now(),
     };
 
@@ -438,7 +412,7 @@ Summary:`;
       summaryMessage.usage = result.compactedUsage;
     }
 
-    const keptMessages = messages.slice(result.firstKeptIndex);
+    const keptMessages = filterDroppableMessages(messages).slice(result.firstKeptIndex);
     return [summaryMessage, ...keptMessages];
   }
 }

@@ -296,22 +296,13 @@ describe('sqlite repositories', () => {
     expect(projects.getRecentSessions(project.id).map((session) => session.key)).toEqual([visibleKey]);
   });
 
-  it('replaces transcript rows and records compaction entry', () => {
+  it('replaces transcript rows exactly', () => {
     ensureSessionRecord(SESSION_KEY, CWD);
     replaceTranscriptRows(SESSION_KEY, [userMessage('one'), assistantMessage('two')]);
-    replaceTranscriptRows(SESSION_KEY, [userMessage('summary')], {
-      appendCompaction: {
-        at: new Date().toISOString(),
-        summary: 'compacted',
-        firstKeptIndex: 0,
-        tokensBefore: 100,
-        tokensAfter: 20,
-      },
-    });
+    replaceTranscriptRows(SESSION_KEY, [userMessage('replacement')]);
 
     const rows = loadTranscriptRowsForSession(SESSION_KEY);
-    expect(rows).toHaveLength(2);
-    expect((rows[1] as { type?: string }).type).toBe('compaction');
+    expect(rows).toEqual([userMessage('replacement')]);
   });
 
   it('resets session with new session id while keeping session key', () => {

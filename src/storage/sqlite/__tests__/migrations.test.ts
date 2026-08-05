@@ -371,10 +371,10 @@ describe('SQLite migrations', () => {
     `);
     setSchemaVersion(db, 21);
 
-    const finalVersion = applyPendingMigrations(db);
+    const finalVersion = applyPendingMigrations(db, { targetVersion: 59 });
 
-    expect(finalVersion).toBe(XOPC_DB_SCHEMA_VERSION);
-    expect(readSchemaVersion(db)).toBe(XOPC_DB_SCHEMA_VERSION);
+    expect(finalVersion).toBe(59);
+    expect(readSchemaVersion(db)).toBe(59);
     expect(db.prepare(`SELECT automation_id FROM automations WHERE automation_id LIKE 'system-dreaming%'`).get()).toBeUndefined();
     for (const table of [
       'work_items',
@@ -387,6 +387,46 @@ describe('SQLite migrations', () => {
         db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`).get(table),
       ).toBeDefined();
     }
+  });
+
+  it('removes persisted runtime-only messages and unsafe compaction snapshots at v60', () => {
+    const db = openEmptyDb();
+    ensureXopcDatabaseSchema(db);
+    db.exec(`
+      INSERT INTO sessions (
+        session_key, agent_id, session_id, created_at, updated_at, last_accessed_at,
+        message_count, estimated_tokens
+      ) VALUES ('agent:main:webchat:default:direct:cleanup', 'main', 'session-cleanup', 1, 1, 1, 3, 100);
+      INSERT INTO transcripts (session_id, session_key, status, created_at, cwd)
+      VALUES ('session-cleanup', 'agent:main:webchat:default:direct:cleanup', 'active', 1, '/tmp');
+      INSERT INTO transcript_entries VALUES
+        ('entry-normal', 'session-cleanup', 1, 'message', 'user',
+          '{"role":"user","content":"keep"}', 1),
+        ('entry-runtime', 'session-cleanup', 2, 'message', 'user',
+          '{"role":"user","content":"<coding_context>leak</coding_context>","droppable":true}', 2),
+        ('entry-compaction', 'session-cleanup', 3, 'compaction', NULL,
+          '{"type":"compaction","messages":[]}', 3);
+      INSERT INTO transcript_fts (content, session_key, session_id, entry_id) VALUES
+        ('keep', 'agent:main:webchat:default:direct:cleanup', 'session-cleanup', 'entry-normal'),
+        ('leak', 'agent:main:webchat:default:direct:cleanup', 'session-cleanup', 'entry-runtime');
+      INSERT INTO compaction_checkpoints VALUES
+        ('checkpoint-cleanup', 'session-cleanup', 'agent:main:webchat:default:direct:cleanup', 1, 3, 100);
+      INSERT INTO checkpoint_entries VALUES
+        ('checkpoint-cleanup', 1, 'message', 'user', '{"role":"user","content":"leak"}');
+    `);
+    setSchemaVersion(db, 59);
+
+    expect(applyPendingMigrations(db, { targetVersion: 60 })).toBe(60);
+    expect(db.prepare(`SELECT entry_id FROM transcript_entries ORDER BY seq`).all()).toEqual([
+      { entry_id: 'entry-normal' },
+    ]);
+    expect(db.prepare(`SELECT entry_id FROM transcript_fts`).all()).toEqual([
+      { entry_id: 'entry-normal' },
+    ]);
+    expect(db.prepare(`SELECT checkpoint_id FROM compaction_checkpoints`).all()).toEqual([]);
+    expect(db.prepare(`SELECT checkpoint_id FROM checkpoint_entries`).all()).toEqual([]);
+    expect(db.prepare(`SELECT message_count FROM sessions WHERE session_id = 'session-cleanup'`).get())
+      .toEqual({ message_count: 1 });
   });
 
 });

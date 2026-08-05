@@ -520,12 +520,9 @@ export class AgentService {
     };
     const compactionConfig: Partial<CompactionConfig> = {
       enabled: true,
-      mode: 'abstractive',
-      reserveTokens: 8000,
       triggerThreshold: 0.8,
       minMessagesBeforeCompact: 10,
       keepRecentMessages: 10,
-      evictionWindow: 0.2,
       retentionWindow: 6,
     };
     const appCfg = this.config.config;
@@ -1045,7 +1042,14 @@ export class AgentService {
 
     log.info({ sessionKey, reason: prep.stats?.reason, usagePercent: prep.stats?.usagePercent }, 'Session needs compaction');
 
-    const result = await this.sessionStore.compact(sessionKey, messages, contextWindow, undefined, false);
+    const model = this.modelManager.getResolvedModelForSession(sessionKey);
+    const result = await this.sessionStore.compact(
+      sessionKey,
+      messages,
+      model,
+      undefined,
+      false,
+    );
     await this.hookHandler.trigger('after_compaction', {
       messageCount: messages.length,
       tokenCount: result.tokensBefore,

@@ -9,7 +9,6 @@ import type { AuthenticatedRouteDeps } from './deps.js';
 import { createGatewayRouteLogger, logRouteError } from '../lib/route-logger.js';
 import { messagesToClientHistory } from '../../../session/client-history.js';
 import type { SessionType } from '../../../session/types.js';
-import { computeUserRoundDeleteRange } from '../../../session/user-round-delete.js';
 import { deleteMediaUrisNoLongerReferenced } from '../../../media/session-references.js';
 import { respondStartupUnavailable } from '../lib/startup-unavailable.js';
 import type { StartupUnavailableGatewayMethod } from '../../startup-readiness.js';
@@ -748,44 +747,27 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     }
   });
 
-  // DELETE /api/sessions/:key/messages — delete LLM rows by range or by user turn.
-  // `userRoundIndex` (0-based among user messages) removes the user row and every following
-  // assistant / tool / toolResult row until the next user. Prefer this from the web console so
-  // tool loops are not left orphaned after retry/delete.
+  // DELETE /api/sessions/:key/messages — atomically delete one visible user turn from raw rows.
   authenticated.delete('/api/sessions/:key/messages', async (c) => {
     const key = c.req.param('key');
     const body = await c.req.json().catch(() => ({}));
-    const loaded = await service.sessionIndexInstance.loadMessages(key);
-    if (!loaded) {
-      return c.json({ error: 'Session not found' }, 404);
-    }
-
-    let startIndex = typeof body.startIndex === 'number' ? body.startIndex : -1;
-    let count = typeof body.count === 'number' ? body.count : 0;
     const userRoundIndex =
       typeof body.userRoundIndex === 'number' ? body.userRoundIndex : undefined;
-
-    if (userRoundIndex !== undefined) {
-      const range = computeUserRoundDeleteRange(loaded, userRoundIndex);
-      if (!range) {
-        return c.json({ error: 'User round index out of range' }, 400);
-      }
-      startIndex = range.startIndex;
-      count = range.count;
+    if (userRoundIndex === undefined || !Number.isInteger(userRoundIndex) || userRoundIndex < 0) {
+      return c.json({ error: 'userRoundIndex must be a non-negative integer' }, 400);
     }
 
-    if (startIndex < 0 || count <= 0) {
-      return c.json({ error: 'Invalid startIndex or count' }, 400);
+    const result = await service.sessionIndexInstance.deleteUserRound(key, userRoundIndex);
+    if (!result) {
+      return c.json({ error: 'User round index out of range' }, 400);
     }
-    if (startIndex >= loaded.length) {
-      return c.json({ error: 'Index out of range' }, 400);
-    }
-    const deleteCount = Math.min(count, loaded.length - startIndex);
-    const removed = loaded.slice(startIndex, startIndex + deleteCount);
-    const next = loaded.slice(0, startIndex).concat(loaded.slice(startIndex + deleteCount));
-    await service.sessionIndexInstance.saveMessages(key, next);
-    await deleteMediaUrisNoLongerReferenced({ removed, remaining: next });
-    return c.json({ ok: true, deleted: deleteCount });
+    await deleteMediaUrisNoLongerReferenced({
+      removed: result.removedMessages,
+      remaining: result.remainingMessages,
+    });
+    evictEmbeddedSessionRunner(key, 'gateway_user_round_deleted');
+    service.agentService.evictSessionAgent(key);
+    return c.json({ ok: true, deleted: result.deleted });
   });
 
   // POST /api/sessions/:key/reset - Reset session (archive transcript, new session id; keep key + overrides)

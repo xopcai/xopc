@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildSessionContextForLlm,
   isTranscriptBashExecutionEntry,
+  isTranscriptCompactionEntry,
   isTranscriptContextEntry,
   isTranscriptCustomMessageEntry,
   isTranscriptCustomStateEntry,
@@ -21,7 +22,7 @@ describe('session-context-for-llm', () => {
     expect(buildSessionContextForLlm(rows)).toEqual([u]);
   });
 
-  it('buildSessionContextForLlm appends compact coding context from recent coder tools', () => {
+  it('buildSessionContextForLlm keeps completed tool calls without synthesizing user messages', () => {
     const user = { role: 'user', content: [{ type: 'text', text: 'fix tests' }] } as AgentMessage;
     const assistant = {
       role: 'assistant',
@@ -70,53 +71,40 @@ describe('session-context-for-llm', () => {
     } as unknown as AgentMessage;
 
     const messages = buildSessionContextForLlm([user, assistant, planResult, commandResult, patchResult]);
-    const context = messages.at(-1);
 
-    expect(context?.role).toBe('user');
-    const text = JSON.stringify(context?.content);
-    expect(text).toContain('<coding_context>');
-    expect(text).toContain('Plan (P1): completed: Implement | in_progress: Review');
-    expect(text).toContain('Command failed: pnpm test exit=1 hint=Inspect stderr first');
-    expect(text).toContain('Patch applied: src/a.ts (+2/-1)');
+    expect(messages).toEqual([user, assistant, planResult, commandResult, patchResult]);
+    expect(JSON.stringify(messages)).not.toContain('<coding_context>');
   });
 
-  it('buildSessionContextForLlm reads coding tool details from top-level toolResult details', () => {
+  it('buildSessionContextForLlm removes orphaned calls and results', () => {
     const assistant = {
       role: 'assistant',
       content: [
+        { type: 'text', text: 'working' },
         { type: 'tool_use', id: 'cmd-1', name: 'exec_command', input: { cmd: 'pnpm test' } },
-        { type: 'tool_use', id: 'patch-1', name: 'apply_patch', input: {} },
+        { type: 'tool_use', id: 'orphan-call', name: 'apply_patch', input: {} },
       ],
     } as unknown as AgentMessage;
     const commandResult = {
       role: 'toolResult',
       toolCallId: 'cmd-1',
       content: 'Command exited with code 1',
-      details: {
-        command: 'pnpm test',
-        status: 'failed',
-        exitCode: 1,
-        failureHint: 'Inspect stderr first',
-      },
     } as unknown as AgentMessage;
-    const patchResult = {
+    const orphanResult = {
       role: 'toolResult',
-      toolCallId: 'patch-1',
-      content: 'update: src/a.ts (+2/-1)',
-      details: {
-        files: ['src/a.ts'],
-        added: 2,
-        removed: 1,
-        summary: 'update: src/a.ts (+2/-1)',
-      },
+      toolCallId: 'orphan-result',
+      content: 'stale result',
     } as unknown as AgentMessage;
 
-    const messages = buildSessionContextForLlm([assistant, commandResult, patchResult]);
-    const text = JSON.stringify(messages.at(-1)?.content);
+    const messages = buildSessionContextForLlm([orphanResult, assistant, commandResult]);
+    const text = JSON.stringify(messages);
 
-    expect(text).toContain('Command failed: pnpm test exit=1 hint=Inspect stderr first');
-    expect(text).toContain('Patch applied: src/a.ts (+2/-1)');
-    expect(text).not.toContain('Command unknown');
+    expect(messages).toHaveLength(2);
+    expect(text).toContain('cmd-1');
+    expect(text).toContain('working');
+    expect(text).not.toContain('orphan-call');
+    expect(text).not.toContain('orphan-result');
+    expect(text).not.toContain('stale result');
   });
 
   it('buildSessionContextForLlm maps included bash execution rows into user context', () => {
@@ -158,6 +146,62 @@ describe('session-context-for-llm', () => {
     expect(buildSessionContextForLlm([u, branch, compaction])).toEqual([u]);
   });
 
+  it('buildSessionContextForLlm uses the latest append-only compaction boundary', () => {
+    const oldUser = { role: 'user', content: 'old user detail' } as AgentMessage;
+    const oldAssistant = { role: 'assistant', content: 'old answer' } as AgentMessage;
+    const summary = {
+      role: 'user',
+      content: '<conversation_summary>durable old context</conversation_summary>',
+    } as AgentMessage;
+    const kept = { role: 'assistant', content: 'recent answer' } as AgentMessage;
+    const newer = { role: 'user', content: 'new question' } as AgentMessage;
+
+    expect(buildSessionContextForLlm([
+      oldUser,
+      oldAssistant,
+      {
+        type: 'compaction',
+        at: '2026-08-05T00:00:00.000Z',
+        summary: 'durable old context',
+        messages: [summary, kept],
+        firstKeptIndex: 1,
+        tokensBefore: 1000,
+        tokensAfter: 100,
+      },
+      newer,
+    ])).toEqual([summary, kept, newer]);
+  });
+
+  it('buildSessionContextForLlm replaces an earlier compaction boundary on repeated compaction', () => {
+    const firstSummary = { role: 'user', content: 'summary one' } as AgentMessage;
+    const secondSummary = { role: 'user', content: 'summary two' } as AgentMessage;
+    const recent = { role: 'user', content: 'recent' } as AgentMessage;
+
+    expect(buildSessionContextForLlm([
+      { role: 'user', content: 'original' } as AgentMessage,
+      {
+        type: 'compaction',
+        at: '2026-08-05T00:00:00.000Z',
+        summary: 'one',
+        messages: [firstSummary],
+        firstKeptIndex: 1,
+        tokensBefore: 100,
+        tokensAfter: 20,
+      },
+      { role: 'assistant', content: 'between' } as AgentMessage,
+      {
+        type: 'compaction',
+        at: '2026-08-05T01:00:00.000Z',
+        summary: 'two',
+        messages: [secondSummary],
+        firstKeptIndex: 2,
+        tokensBefore: 120,
+        tokensAfter: 25,
+      },
+      recent,
+    ])).toEqual([secondSummary, recent]);
+  });
+
   it('buildSessionContextForLlm drops label audit rows', () => {
     const u = { role: 'user', content: [{ type: 'text', text: 'x' }] } as AgentMessage;
     const label = { type: 'label', targetId: 'u1', label: 'important' } as const;
@@ -197,6 +241,19 @@ describe('session-context-for-llm', () => {
     expect(isTranscriptSummaryMessageEntry({ role: 'branchSummary', summary: 'branch' })).toBe(true);
     expect(isTranscriptSummaryMessageEntry({ role: 'compactionSummary', summary: 'compact' })).toBe(true);
     expect(isTranscriptSummaryMessageEntry({ role: 'custom', customType: 'demo' })).toBe(false);
+  });
+
+  it('isTranscriptCompactionEntry requires a complete context snapshot', () => {
+    expect(isTranscriptCompactionEntry({
+      type: 'compaction',
+      at: '2026-08-05T00:00:00.000Z',
+      summary: 'x',
+      messages: [],
+      firstKeptIndex: 1,
+      tokensBefore: 100,
+      tokensAfter: 10,
+    })).toBe(true);
+    expect(isTranscriptCompactionEntry({ type: 'compaction', summary: 'x' })).toBe(false);
   });
 
   it('isTranscriptLabelEntry', () => {
@@ -297,12 +354,21 @@ describe('session-context-for-llm', () => {
       { type: 'custom', customType: 'state', data: { enabled: true } },
       { role: 'branchSummary', summary: 'branch note', fromId: 'entry-1' },
       { role: 'compactionSummary', summary: 'compact note', tokensBefore: 1000 },
+      {
+        type: 'compaction',
+        at: '2026-08-05T00:00:00.000Z',
+        summary: 'durable summary',
+        messages: [],
+        firstKeptIndex: 1,
+        tokensBefore: 100,
+        tokensAfter: 10,
+      },
       { type: 'label', targetId: 'row-a', label: 'important' },
       { type: 'model_change', provider: 'openai', modelId: 'gpt-5' },
       { type: 'thinking_level_change', thinkingLevel: 'high' },
       { type: 'session_info', name: 'Demo' },
       { foo: 'skip' },
     ] as unknown[]);
-    expect(rows).toHaveLength(11);
+    expect(rows).toHaveLength(12);
   });
 });

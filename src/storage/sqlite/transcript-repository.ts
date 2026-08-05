@@ -4,9 +4,9 @@ import type { DatabaseSync } from 'node:sqlite';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
 import type { CompactionCheckpointDetail, CompactionCheckpointSummary } from '../../session/types.js';
-import type { TranscriptCompactionRecord } from '../../session/transcript-format.js';
 import {
   buildSessionContextForLlm,
+  isRuntimeOnlyTranscriptMessage,
   type TranscriptStoredRow,
 } from '../../session/session-context-for-llm.js';
 import {
@@ -78,6 +78,9 @@ export function appendTranscriptEntry(
   row: TranscriptStoredRow,
   opts?: { sessionId?: string; tokenDelta?: number },
 ): TranscriptEntryRow {
+  if (isRuntimeOnlyTranscriptMessage(row)) {
+    throw new Error('Runtime-only messages cannot be persisted in a session transcript');
+  }
   return runSqliteWriteTransaction((db) => {
     const sessionId = opts?.sessionId ?? readCurrentSessionId(db, sessionKey);
     if (!sessionId) {
@@ -149,8 +152,10 @@ export function loadLlmMessagesForSession(sessionKey: string): AgentMessage[] {
 export function replaceTranscriptRows(
   sessionKey: string,
   rows: TranscriptStoredRow[],
-  opts?: { appendCompaction?: TranscriptCompactionRecord },
 ): void {
+  if (rows.some(isRuntimeOnlyTranscriptMessage)) {
+    throw new Error('Runtime-only messages cannot be persisted in a session transcript');
+  }
   runSqliteWriteTransaction((db) => {
     const sessionId = readCurrentSessionId(db, sessionKey);
     if (!sessionId) {
@@ -160,19 +165,11 @@ export function replaceTranscriptRows(
     db.prepare(`DELETE FROM transcript_fts WHERE session_id = ?`).run(sessionId);
     db.prepare(`DELETE FROM transcript_entries WHERE session_id = ?`).run(sessionId);
 
-    const toWrite = [...rows];
-    if (opts?.appendCompaction) {
-      toWrite.push({
-        type: 'compaction',
-        ...opts.appendCompaction,
-      } as unknown as TranscriptStoredRow);
-    }
-
-    for (const row of toWrite) {
+    for (const row of rows) {
       insertEntry(db, { sessionId, sessionKey, row });
     }
 
-    const llm = buildSessionContextForLlm(toWrite);
+    const llm = buildSessionContextForLlm(rows);
     const now = Date.now();
     const hasUserMessage = llm.some((message) => message.role === 'user');
     const hiddenUpdate = hasUserMessage ? `hidden_from_session_list = 0,` : '';
