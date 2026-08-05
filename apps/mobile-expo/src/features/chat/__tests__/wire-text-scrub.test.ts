@@ -6,6 +6,7 @@ import { extractUserMessageText } from '../composer-send-helpers';
 import {
   collapseExpandedSkillBlockForDisplay,
   stripExpandedAtFileBlocks,
+  stripImageUnderstandingContext,
   stripStartupContextForDisplay,
 } from '../wire-text-scrub';
 
@@ -49,6 +50,19 @@ describe('stripExpandedAtFileBlocks', () => {
   });
 });
 
+describe('stripImageUnderstandingContext', () => {
+  it('removes generated image descriptions from visible user text', () => {
+    const input = '看看这张图\n\n[Image description: A detailed\nmultiline description.]';
+    expect(stripImageUnderstandingContext(input)).toBe('看看这张图');
+  });
+
+  it('removes image-understanding failures from visible user text', () => {
+    const input =
+      '[1 image(s) attached but could not be described: Image model failed: invalid api key]';
+    expect(stripImageUnderstandingContext(input)).toBe('');
+  });
+});
+
 describe('collapseExpandedSkillBlockForDisplay', () => {
   it('collapses SkillManager-style expansion to /skill:name', () => {
     const expanded = `
@@ -78,6 +92,34 @@ Short description.
 });
 
 describe('parseSessionMessages startup context', () => {
+  it('keeps image media without exposing generated image descriptions', () => {
+    const ui = parseSessionMessages([
+      {
+        role: 'user',
+        content: '[Image description: A blue interface.]',
+        media: [
+          {
+            id: 'a1',
+            type: 'photo',
+            uri: 'media://inbound/photo---uuid.jpg',
+            mimeType: 'image/jpeg',
+            name: 'photo.jpg',
+            size: 100,
+          },
+        ],
+        timestamp: 1,
+      },
+    ]);
+
+    expect(ui[0]?.content).toEqual([]);
+    expect(ui[0]?.attachments).toEqual([
+      expect.objectContaining({
+        uri: 'media://inbound/photo---uuid.jpg',
+        mimeType: 'image/jpeg',
+      }),
+    ]);
+  });
+
   it('strips startup prelude from persisted user rows', () => {
     const expanded = `${samplePrelude}\n\n使用 workflow 帮我探索下 /path`;
     const ui = parseSessionMessages([

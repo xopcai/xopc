@@ -5,6 +5,17 @@ import type { TranscriptStoredRow } from '../session-context-for-llm.js';
 import type { Message } from '../types.js';
 
 describe('messagesToClientHistory', () => {
+  const imageMedia = {
+    id: 'photo---id.png',
+    bucket: 'inbound',
+    type: 'image',
+    mimeType: 'image/png',
+    name: 'photo.png',
+    size: 1_024,
+    uri: 'media://inbound/photo---id.png',
+    path: '/state/media/inbound/photo---id.png',
+  };
+
   it('flattens user and assistant text', () => {
     const messages: Message[] = [
       { role: 'user', content: [{ type: 'text', text: 'Hi' }] },
@@ -52,6 +63,42 @@ describe('messagesToClientHistory', () => {
     ];
     const out = messagesToClientHistory(messages, { limit: 2 });
     expect(out.map((m) => m.content)).toEqual(['b', 'c']);
+  });
+
+  it('preserves user image media in flattened message history', () => {
+    const out = messagesToClientHistory([
+      {
+        role: 'user',
+        content: '[Image description: A blue interface.]',
+        media: [imageMedia],
+      },
+    ]);
+
+    expect(out).toEqual([
+      expect.objectContaining({
+        role: 'user',
+        media: [imageMedia],
+      }),
+    ]);
+  });
+
+  it('preserves user image media in persisted transcript history', () => {
+    const rows = [
+      {
+        role: 'user',
+        content: '[Image description: A blue interface.]',
+        media: [imageMedia],
+        timestamp: 100,
+      },
+    ] as unknown as TranscriptStoredRow[];
+
+    expect(transcriptRowsToClientHistory(rows)).toEqual([
+      expect.objectContaining({
+        id: 'row-1',
+        role: 'user',
+        media: [imageMedia],
+      }),
+    ]);
   });
 
   it('preserves original transcript row ids when limiting transcript history', () => {
