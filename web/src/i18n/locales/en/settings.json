@@ -320,6 +320,19 @@
       "loading": "Loading…",
       "noModels": "No models"
     },
+    "xopcCloudAccount": {
+      "title": "XOPC Cloud",
+      "connected": "Connected",
+      "availableCredits": "Available credits",
+      "recentUsage": "Last 7 days",
+      "usageSummary": "{{tokens}} tokens · {{credits}} credits used · {{requests}} requests",
+      "updatedAt": "Updated {{time}}",
+      "purchase": "Purchase credits",
+      "details": "View details",
+      "unavailable": "Account usage is temporarily unavailable.",
+      "retry": "Retry",
+      "zeroBalance": "Your XOPC Cloud credits are exhausted."
+    },
     "addProviderDialog": {
       "title": "Add a provider",
       "searchPlaceholder": "Search providers…",

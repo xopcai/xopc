@@ -320,6 +320,19 @@
       "loading": "加载中…",
       "noModels": "暂无模型"
     },
+    "xopcCloudAccount": {
+      "title": "XOPC Cloud",
+      "connected": "已连接",
+      "availableCredits": "可用额度",
+      "recentUsage": "近 7 天使用",
+      "usageSummary": "{{tokens}} tokens · 消耗 {{credits}} credits · {{requests}} 次请求",
+      "updatedAt": "更新于 {{time}}",
+      "purchase": "购买额度",
+      "details": "查看详情",
+      "unavailable": "暂时无法获取账户用量。",
+      "retry": "重试",
+      "zeroBalance": "XOPC Cloud 额度已用完。"
+    },
     "addProviderDialog": {
       "title": "接入新的服务商",
       "searchPlaceholder": "搜索服务商…",
