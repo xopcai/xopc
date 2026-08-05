@@ -111,6 +111,23 @@ export function loadTranscriptRowsForSession(sessionKey: string): TranscriptStor
   return loadTranscriptRows(sessionId);
 }
 
+export function loadTranscriptHistoryRowsForSession(sessionKey: string): TranscriptStoredRow[] {
+  if (!getCurrentSessionId(sessionKey)) {
+    return [];
+  }
+  const rows = getSqliteDatabase()
+    .prepare(
+      `SELECT e.entry_id, e.session_id, e.seq, e.entry_kind, e.role, e.payload_json, e.created_at
+       FROM transcript_entries e
+       JOIN transcripts t ON t.session_id = e.session_id
+       WHERE t.session_key = ?
+         AND (t.status = 'active' OR t.archive_reason IN ('reset', 'stale'))
+       ORDER BY t.created_at ASC, t.rowid ASC, e.seq ASC`,
+    )
+    .all(sessionKey) as TranscriptEntryRow[];
+  return rows.map(transcriptEntryRowToStoredRow);
+}
+
 export function loadTranscriptRows(sessionId: string): TranscriptStoredRow[] {
   const db = getSqliteDatabase();
   const rows = db
@@ -198,10 +215,10 @@ export function paginateTranscriptMessages(
   options: {
     offset?: number;
     limit?: number;
-    beforeSeq?: number;
-    /** 0-based exclusive end index (legacy cursor from gateway UI). */
-    beforeEndIndex?: number;
+    beforeIndex?: number;
     includeContext?: boolean;
+    /** Include reset/rollover transcripts for read-only conversation history. */
+    includeArchived?: boolean;
   } = {},
 ): {
   rows: TranscriptStoredRow[];
@@ -218,56 +235,54 @@ export function paginateTranscriptMessages(
   const db = getSqliteDatabase();
   const kinds = options.includeContext ? ['message', 'context'] : ['message'];
   const kindPlaceholders = kinds.map(() => '?').join(', ');
+  const includeArchived = options.includeArchived === true;
+  const transcriptWhere = includeArchived
+    ? `t.session_key = ? AND (t.status = 'active' OR t.archive_reason IN ('reset', 'stale'))`
+    : 'e.session_id = ?';
+  const transcriptArg = includeArchived ? sessionKey : sessionId;
 
   const countRow = db
     .prepare(
-      `SELECT COUNT(*) AS total FROM transcript_entries
-       WHERE session_id = ? AND entry_kind IN (${kindPlaceholders})`,
+      `SELECT COUNT(*) AS total
+       FROM transcript_entries e
+       JOIN transcripts t ON t.session_id = e.session_id
+       WHERE ${transcriptWhere} AND e.entry_kind IN (${kindPlaceholders})`,
     )
-    .get(sessionId, ...kinds) as { total: number };
+    .get(transcriptArg, ...kinds) as { total: number };
   const total = countRow.total;
 
   const limit = Math.min(200, Math.max(1, Math.trunc(options.limit ?? 50)));
   const offset = Math.max(0, Math.trunc(options.offset ?? 0));
 
   let rows: TranscriptEntryRow[];
-  if (options.beforeEndIndex !== undefined && Number.isFinite(options.beforeEndIndex)) {
-    const endExclusive = Math.min(total, Math.max(0, Math.trunc(options.beforeEndIndex)));
+  if (options.beforeIndex !== undefined && Number.isFinite(options.beforeIndex)) {
+    const endExclusive = Math.min(total, Math.max(0, Math.trunc(options.beforeIndex)));
     const startInclusive = Math.max(0, endExclusive - limit);
     rows = db
       .prepare(
         `SELECT entry_id, session_id, seq, entry_kind, role, payload_json, created_at
          FROM (
-           SELECT entry_id, session_id, seq, entry_kind, role, payload_json, created_at,
-                  ROW_NUMBER() OVER (ORDER BY seq ASC) - 1 AS idx
-           FROM transcript_entries
-           WHERE session_id = ? AND entry_kind IN (${kindPlaceholders})
+           SELECT e.entry_id, e.session_id, e.seq, e.entry_kind, e.role, e.payload_json, e.created_at,
+                  ROW_NUMBER() OVER (ORDER BY t.created_at ASC, t.rowid ASC, e.seq ASC) - 1 AS idx
+           FROM transcript_entries e
+           JOIN transcripts t ON t.session_id = e.session_id
+           WHERE ${transcriptWhere} AND e.entry_kind IN (${kindPlaceholders})
          )
          WHERE idx >= ? AND idx < ?
-         ORDER BY seq ASC`,
+         ORDER BY idx ASC`,
       )
-      .all(sessionId, ...kinds, startInclusive, endExclusive) as TranscriptEntryRow[];
-  } else if (options.beforeSeq !== undefined && Number.isFinite(options.beforeSeq)) {
-    rows = db
-      .prepare(
-        `SELECT entry_id, session_id, seq, entry_kind, role, payload_json, created_at
-         FROM transcript_entries
-         WHERE session_id = ? AND entry_kind IN (${kindPlaceholders}) AND seq < ?
-         ORDER BY seq DESC
-         LIMIT ?`,
-      )
-      .all(sessionId, ...kinds, options.beforeSeq, limit) as TranscriptEntryRow[];
-    rows.reverse();
+      .all(transcriptArg, ...kinds, startInclusive, endExclusive) as TranscriptEntryRow[];
   } else {
     rows = db
       .prepare(
-        `SELECT entry_id, session_id, seq, entry_kind, role, payload_json, created_at
-         FROM transcript_entries
-         WHERE session_id = ? AND entry_kind IN (${kindPlaceholders})
-         ORDER BY seq DESC
+        `SELECT e.entry_id, e.session_id, e.seq, e.entry_kind, e.role, e.payload_json, e.created_at
+         FROM transcript_entries e
+         JOIN transcripts t ON t.session_id = e.session_id
+         WHERE ${transcriptWhere} AND e.entry_kind IN (${kindPlaceholders})
+         ORDER BY t.created_at DESC, t.rowid DESC, e.seq DESC
          LIMIT ? OFFSET ?`,
       )
-      .all(sessionId, ...kinds, limit, offset) as TranscriptEntryRow[];
+      .all(transcriptArg, ...kinds, limit, offset) as TranscriptEntryRow[];
     rows.reverse();
   }
 

@@ -19,6 +19,7 @@ import {
   listCompactionCheckpoints,
   listSessionMetadata,
   loadLlmMessagesForSession,
+  loadTranscriptHistoryRowsForSession,
   loadTranscriptRowsForSession,
   openXopcDatabase,
   patchSessionMetadata,
@@ -325,6 +326,45 @@ describe('sqlite repositories', () => {
     expect(meta?.sessionId).toBe(reset?.sessionId);
     expect(meta?.messageCount).toBe(0);
     expect(loadTranscriptRowsForSession(SESSION_KEY)).toHaveLength(0);
+  });
+
+  it('paginates archived reset transcripts for read-only conversation history', () => {
+    ensureSessionRecord(SESSION_KEY, CWD);
+    appendTranscriptEntry(SESSION_KEY, userMessage('before reset'));
+    resetSessionRecord(SESSION_KEY, CWD);
+    appendTranscriptEntry(SESSION_KEY, userMessage('after reset'));
+
+    const activeOnly = paginateTranscriptMessages(SESSION_KEY, { limit: 10 });
+    expect(activeOnly.rows.map((row) => (row as AgentMessage).content)).toEqual(['after reset']);
+
+    const fullHistory = paginateTranscriptMessages(SESSION_KEY, {
+      limit: 10,
+      includeArchived: true,
+    });
+    expect(fullHistory.total).toBe(2);
+    expect(fullHistory.rows.map((row) => (row as AgentMessage).content)).toEqual([
+      'before reset',
+      'after reset',
+    ]);
+
+    const tail = paginateTranscriptMessages(SESSION_KEY, {
+      limit: 1,
+      includeArchived: true,
+    });
+    expect(tail.rows.map((row) => (row as AgentMessage).content)).toEqual(['after reset']);
+
+    const older = paginateTranscriptMessages(SESSION_KEY, {
+      limit: 1,
+      beforeIndex: 1,
+      includeArchived: true,
+    });
+    expect(older.rows.map((row) => (row as AgentMessage).content)).toEqual(['before reset']);
+
+    expect(
+      loadTranscriptHistoryRowsForSession(SESSION_KEY).map(
+        (row) => (row as AgentMessage).content,
+      ),
+    ).toEqual(['before reset', 'after reset']);
   });
 
   it('deletes session and cascades config', () => {

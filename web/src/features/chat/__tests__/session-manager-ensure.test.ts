@@ -92,6 +92,7 @@ describe('SessionManager.loadSession', () => {
       .mockResolvedValueOnce(
         jsonResponse({
           session: {
+            key: 'agent:main:webchat:default:direct:chat_long',
             name: 'Long turn',
             messages: [
               {
@@ -107,12 +108,19 @@ describe('SessionManager.loadSession', () => {
               },
             ],
           },
-          pagination: { hasMore: true, nextBeforeCursor: '136' },
+          pagination: {
+            total: 138,
+            limit: 50,
+            offset: 0,
+            hasMore: true,
+            nextBeforeCursor: '136',
+          },
         }),
       )
       .mockResolvedValueOnce(
         jsonResponse({
           session: {
+            key: 'agent:main:webchat:default:direct:chat_long',
             name: 'Long turn',
             messages: [
               {
@@ -134,7 +142,7 @@ describe('SessionManager.loadSession', () => {
               },
             ],
           },
-          pagination: { hasMore: false },
+          pagination: { total: 138, limit: 50, offset: 0, hasMore: false },
         }),
       );
 
@@ -149,5 +157,34 @@ describe('SessionManager.loadSession', () => {
     expect(result.messages[0]?.content).toEqual([
       { type: 'text', text: 'please do the long task' },
     ]);
+  });
+
+  it('rejects history responses without the current pagination contract', async () => {
+    mockedApiFetchWithStartupRetry.mockResolvedValueOnce(
+      jsonResponse({
+        session: {
+          key: 'agent:main:webchat:default:direct:chat_invalid',
+          messages: [],
+        },
+      }),
+    );
+
+    await expect(
+      new SessionManager().loadSession('agent:main:webchat:default:direct:chat_invalid'),
+    ).rejects.toThrow();
+  });
+});
+
+describe('SessionManager.loadTimeline', () => {
+  beforeEach(() => {
+    mockedApiFetchWithStartupRetry.mockReset();
+  });
+
+  it('rejects timeline responses that do not match the current contract', async () => {
+    mockedApiFetchWithStartupRetry.mockResolvedValueOnce(jsonResponse({ ok: true }));
+
+    await expect(
+      new SessionManager().loadTimeline('agent:main:webchat:default:direct:chat_invalid'),
+    ).rejects.toThrow('Invalid session timeline response');
   });
 });

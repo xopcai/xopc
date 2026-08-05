@@ -271,22 +271,24 @@ export const SessionResetByTypeSchema = z
 
 export const SessionScopeSchema = z.enum(['per-sender', 'global']);
 
-export const SessionConfigSchema = z.object({
-  scope: SessionScopeSchema.default('per-sender'),
-  mainKey: z.string().default('main'),
-  dmScope: SessionDmScopeSchema.default('main'),
-  identityLinks: z.record(z.string(), z.array(z.string())).optional(),
-  resetTriggers: z.array(z.string()).optional(),
-  idleMinutes: z.number().int().positive().optional(),
-  reset: SessionResetConfigSchema.optional(),
-  resetByType: SessionResetByTypeSchema.optional(),
-  resetByChannel: z.record(z.string(), SessionResetConfigSchema).optional(),
-  storage: SessionStorageConfigSchema.optional(),
-}).default({
-  scope: 'per-sender',
-  mainKey: 'main',
-  dmScope: 'main',
-});
+export const SessionConfigSchema = z
+  .object({
+    scope: SessionScopeSchema.default('per-sender'),
+    mainKey: z.string().default('main'),
+    dmScope: SessionDmScopeSchema.default('main'),
+    identityLinks: z.record(z.string(), z.array(z.string())).optional(),
+    resetTriggers: z.array(z.string()).optional(),
+    reset: SessionResetConfigSchema.optional(),
+    resetByType: SessionResetByTypeSchema.optional(),
+    resetByChannel: z.record(z.string(), SessionResetConfigSchema).optional(),
+    storage: SessionStorageConfigSchema.optional(),
+  })
+  .strict()
+  .default({
+    scope: 'per-sender',
+    mainKey: 'main',
+    dmScope: 'main',
+  });
 
 /** Channel buckets — shapes validated post-parse by registered channel plugins. */
 export const ChannelsConfigSchema = z.record(z.string(), z.unknown()).default({});

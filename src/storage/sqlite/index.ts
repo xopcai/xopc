@@ -106,6 +106,7 @@ export {
   listCompactionCheckpoints,
   loadCheckpointRows,
   loadLlmMessagesForSession,
+  loadTranscriptHistoryRowsForSession,
   loadTranscriptRows,
   loadTranscriptRowsForSession,
   paginateTranscriptMessages,

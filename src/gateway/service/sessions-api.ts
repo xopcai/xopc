@@ -116,7 +116,7 @@ export class GatewaySessionsApi {
   async getTimeline(key: string) {
     const metadata = await this.opts.sessionIndex.getSessionMetadata(key);
     if (!metadata) return null;
-    const rows = await this.opts.sessionIndex.getStore().loadTranscriptRows(key);
+    const rows = await this.opts.sessionIndex.getStore().loadTranscriptHistoryRows(key);
     return buildSessionTimeline(rows);
   }
 
@@ -126,7 +126,7 @@ export class GatewaySessionsApi {
   ) {
     const metadata = await this.opts.sessionIndex.getSessionMetadata(key);
     if (!metadata) return null;
-    const rows = await this.opts.sessionIndex.getStore().loadTranscriptRows(key);
+    const rows = await this.opts.sessionIndex.getStore().loadTranscriptHistoryRows(key);
     const totalRows = rows.length;
     if (totalRows === 0) {
       return {

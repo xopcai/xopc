@@ -1,4 +1,7 @@
-import { buildSessionHistoryPath } from '@xopcai/gateway-contract';
+import {
+  buildSessionHistoryPath,
+  parseSessionMessagePage,
+} from '@xopcai/gateway-contract';
 
 import type { Message } from '@/features/chat/messages/messages.types';
 import type { SessionInfo } from '@/features/chat/chat.types';
@@ -21,6 +24,39 @@ type SessionAgentConfig = {
   workingDirectoryLocked: boolean;
   workspaceSource: 'project' | 'session_override' | 'agent_default_root' | 'agent_workspace';
 };
+
+function parseSessionAgentConfigResponse(raw: unknown): SessionAgentConfig {
+  if (!raw || typeof raw !== 'object') {
+    throw new Error('Invalid session agent config response');
+  }
+  const response = raw as { ok?: unknown; payload?: unknown };
+  if (response.ok !== true || !response.payload || typeof response.payload !== 'object') {
+    throw new Error('Invalid session agent config response');
+  }
+  const payload = response.payload as Record<string, unknown>;
+  const workspaceSource = payload.workspaceSource;
+  if (
+    typeof payload.thinkingLevel !== 'string' ||
+    typeof payload.model !== 'string' ||
+    typeof payload.reasoningLevel !== 'string' ||
+    typeof payload.effectiveWorkspacePath !== 'string' ||
+    typeof payload.workingDirectoryLocked !== 'boolean' ||
+    (workspaceSource !== 'project' &&
+      workspaceSource !== 'session_override' &&
+      workspaceSource !== 'agent_default_root' &&
+      workspaceSource !== 'agent_workspace')
+  ) {
+    throw new Error('Invalid session agent config response');
+  }
+  return {
+    thinkingLevel: payload.thinkingLevel,
+    model: payload.model,
+    reasoningLevel: payload.reasoningLevel,
+    effectiveWorkspacePath: payload.effectiveWorkspacePath,
+    workingDirectoryLocked: payload.workingDirectoryLocked,
+    workspaceSource,
+  };
+}
 
 const _agentConfigInflight = new Map<string, Promise<SessionAgentConfig>>();
 
@@ -76,10 +112,7 @@ async function readErrorMessage(res: Response): Promise<string> {
 
 /** Session list + history via REST; auth from `apiFetch` (gateway token store). */
 export class SessionManager {
-  /**
-   * All web-console sessions (webchat + legacy gateway source), paginated on the server by
-   * `channel` so we are not limited to the first N rows of the global mixed-channel list.
-   */
+  /** All webchat sessions, paginated by source channel. */
   async loadSessions(): Promise<SessionInfo[]> {
     const pageSize = 100;
     const out: SessionInfo[] = [];
@@ -123,38 +156,7 @@ export class SessionManager {
         apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/agent-config`),
       );
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = (await res.json()) as {
-        payload?: {
-          thinkingLevel?: string;
-          model?: string;
-          reasoningLevel?: string;
-          effectiveWorkspacePath?: string;
-          workingDirectoryLocked?: boolean;
-          workspaceSource?: string;
-        };
-      };
-      const thinkingLevel = data.payload?.thinkingLevel ?? 'medium';
-      const model = typeof data.payload?.model === 'string' ? data.payload.model : '';
-      const reasoningLevel = data.payload?.reasoningLevel ?? 'stream';
-      const effectiveWorkspacePath =
-        typeof data.payload?.effectiveWorkspacePath === 'string'
-          ? data.payload.effectiveWorkspacePath
-          : '';
-      const workingDirectoryLocked = Boolean(data.payload?.workingDirectoryLocked);
-      const workspaceSource: SessionAgentConfig['workspaceSource'] =
-        data.payload?.workspaceSource === 'project' || data.payload?.workspaceSource === 'session_override'
-          ? data.payload.workspaceSource
-        : data.payload?.workspaceSource === 'agent_workspace'
-          ? 'agent_workspace'
-          : 'agent_default_root';
-      return {
-        thinkingLevel,
-        model,
-        reasoningLevel,
-        effectiveWorkspacePath,
-        workingDirectoryLocked,
-        workspaceSource,
-      };
+      return parseSessionAgentConfigResponse(await res.json());
     })().finally(() => {
       _agentConfigInflight.delete(sessionKey);
     });
@@ -198,19 +200,16 @@ export class SessionManager {
           })),
         );
         if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-        return (await res.json()) as {
-          session?: { messages?: unknown[]; name?: string };
-          pagination?: { hasMore?: boolean; nextBeforeCursor?: string };
-        };
+        return parseSessionMessagePage(await res.json());
       };
 
       let data = await loadPage(offset, beforeCursor);
-      let raw = data.session?.messages || [];
+      let raw = data.session.messages;
       let messages = sessionWireToUiMessages(raw);
-      let hasMore = data.pagination?.hasMore ?? raw.length >= INITIAL_HISTORY_PAGE_LIMIT;
-      let nextBeforeCursor = data.pagination?.nextBeforeCursor;
+      let hasMore = data.pagination.hasMore;
+      let nextBeforeCursor = data.pagination.nextBeforeCursor;
       const loadedName =
-        typeof data.session?.name === 'string' && data.session.name.trim()
+        typeof data.session.name === 'string' && data.session.name.trim()
           ? data.session.name.trim()
           : undefined;
       // The history endpoint pages raw transcript rows, while the UI merges many assistant/tool
@@ -226,12 +225,12 @@ export class SessionManager {
         messages[0]?.role === 'assistant'
       ) {
         data = await loadPage(0, nextBeforeCursor);
-        const olderRaw = data.session?.messages || [];
+        const olderRaw = data.session.messages;
         if (olderRaw.length === 0) break;
         raw = [...olderRaw, ...raw];
         messages = sessionWireToUiMessages(raw);
-        hasMore = data.pagination?.hasMore ?? olderRaw.length >= INITIAL_HISTORY_PAGE_LIMIT;
-        nextBeforeCursor = data.pagination?.nextBeforeCursor;
+        hasMore = data.pagination.hasMore;
+        nextBeforeCursor = data.pagination.nextBeforeCursor;
       }
 
       return {
@@ -258,9 +257,13 @@ export class SessionManager {
       );
       if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
       const data = (await res.json()) as {
-        items?: SessionTimelineItem[];
+        ok: true;
+        items: SessionTimelineItem[];
       };
-      return Array.isArray(data.items) ? data.items : [];
+      if (data.ok !== true || !Array.isArray(data.items)) {
+        throw new Error('Invalid session timeline response');
+      }
+      return data.items;
     })().finally(() => {
       _timelineInflight.delete(sessionKey);
     });

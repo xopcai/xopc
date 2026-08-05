@@ -43,6 +43,29 @@ describe('GET /api/sessions/:key/run', () => {
   });
 });
 
+describe('GET /api/sessions/:key/history', () => {
+  it('rejects non-numeric history cursors', async () => {
+    let called = false;
+    const service = {
+      isGatewayReady: () => true,
+      sessions: {
+        getMessagePage: async () => {
+          called = true;
+          return null;
+        },
+      },
+    } as unknown as GatewayService;
+
+    const app = new Hono();
+    registerSessionsRoutes(app, { service });
+
+    const res = await app.request('/api/sessions/test/history?before=cursor_3');
+    expect(res.status).toBe(400);
+    expect(called).toBe(false);
+    await expect(res.json()).resolves.toEqual({ error: 'Invalid session history cursor' });
+  });
+});
+
 describe('/api/sessions/resolve', () => {
   it('resolves sessionId to canonical session key', async () => {
     const sessionKey = 'agent:main:webchat:default:direct:abc';

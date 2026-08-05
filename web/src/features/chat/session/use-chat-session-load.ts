@@ -1,6 +1,5 @@
 import { useCallback, useRef, type RefObject } from 'react';
 
-import { DEFAULT_THINKING } from '@/features/chat/session/chat-session-defaults';
 import type { SessionInfo } from '@/features/chat/chat.types';
 import {
   type Message,
@@ -82,7 +81,7 @@ export function useChatSessionLoad(deps: {
         const cfg = await sessionMgrRef.current.loadSessionAgentConfig(key);
         store().patchSessionMeta(key, {
           model: cfg.model,
-          thinkingLevel: cfg.thinkingLevel || DEFAULT_THINKING,
+          thinkingLevel: cfg.thinkingLevel,
           reasoningLevel: coerceReasoningLevel(cfg.reasoningLevel),
           effectiveWorkspacePath: cfg.effectiveWorkspacePath,
           workingDirectoryLocked: cfg.workingDirectoryLocked,
@@ -196,21 +195,17 @@ export function useChatSessionLoad(deps: {
               return loaded;
             }
             historyBeforeCursorRef.current = nextBeforeCursor ?? null;
-            try {
-              const cfg = await sessionMgrRef.current.loadSessionAgentConfig(k);
-              if (!isStillViewingSession(k)) return loaded;
-              store().patchSessionMeta(k, {
-                model: cfg.model,
-                thinkingLevel: cfg.thinkingLevel || DEFAULT_THINKING,
-                reasoningLevel: coerceReasoningLevel(cfg.reasoningLevel),
-                effectiveWorkspacePath: cfg.effectiveWorkspacePath,
-                workingDirectoryLocked: cfg.workingDirectoryLocked,
-                workspaceSource: cfg.workspaceSource,
-              });
-              void refreshModelThinkingSupport(cfg.model);
-            } catch {
-              /* gateway may be older */
-            }
+            const cfg = await sessionMgrRef.current.loadSessionAgentConfig(k);
+            if (!isStillViewingSession(k)) return loaded;
+            store().patchSessionMeta(k, {
+              model: cfg.model,
+              thinkingLevel: cfg.thinkingLevel,
+              reasoningLevel: coerceReasoningLevel(cfg.reasoningLevel),
+              effectiveWorkspacePath: cfg.effectiveWorkspacePath,
+              workingDirectoryLocked: cfg.workingDirectoryLocked,
+              workspaceSource: cfg.workspaceSource,
+            });
+            void refreshModelThinkingSupport(cfg.model);
             return loaded;
           }
           historyBeforeCursorRef.current = nextBeforeCursor ?? null;

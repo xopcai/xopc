@@ -321,6 +321,10 @@ describe('SessionStore', () => {
         before: '3',
         nextBeforeCursor: '1',
       });
+
+      await expect(
+        store.getMessagePage(key, { before: 'cursor_3', limit: 2 }),
+      ).rejects.toThrow('Invalid session history cursor');
     });
 
     it('should list sessions with channel filter', async () => {

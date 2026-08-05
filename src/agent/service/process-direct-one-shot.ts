@@ -72,6 +72,9 @@ export async function runProcessDirect(
       sessionKey: input.sessionKey,
       body: input.content,
       resetSession: deps.resetSession,
+      // Webchat creates a distinct key per conversation, so implicit channel
+      // rollover would only hide earlier messages from that same chat route.
+      skipImplicitExpiry: channel === 'webchat',
     });
     resetTriggeredAtInit = turn.resetTriggered;
     if (turn.bareReset && turn.ackMessage) {
