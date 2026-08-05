@@ -19,6 +19,7 @@ import { ComposioSessionsAdapter } from './composio-sessions.js';
 import { scopeForComposioAction } from './composio.js';
 import { getConnectorDefinition } from './catalog.js';
 import { getConnectorInstance } from './instances.js';
+import { normalizeConnectedSourceResult } from './connected-source-normalizers.js';
 
 export const COMPOSIO_CONNECTED_SOURCE_TOOLKITS = new Set([
   'gmail',
@@ -36,9 +37,6 @@ export const COMPOSIO_CONNECTED_SOURCE_TOOLKITS = new Set([
   'one_drive',
   'excel',
 ]);
-const EXTERNAL_ID_KEYS = ['id', 'messageId', 'message_id', 'threadId', 'thread_id', 'eventId', 'event_id', 'pageId', 'page_id', 'fileId', 'file_id'];
-const OCCURRED_AT_KEYS = ['occurredAt', 'createdAt', 'created_at', 'date', 'timestamp', 'startTime', 'start_time'];
-const UPDATED_AT_KEYS = ['updatedAt', 'updated_at', 'modifiedTime', 'modified_time'];
 const SENSITIVE_KEY_RE = /(?:^|_)(?:api_?key|token|secret|password|passwd|authorization|credential|private_?key)(?:$|_)/i;
 const INLINE_SECRET_PATTERNS = [
   /\bsk-[A-Za-z0-9_-]{8,}\b/g,
@@ -49,32 +47,6 @@ const INLINE_SECRET_PATTERNS = [
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
-}
-
-function resultRows(value: unknown): unknown[] {
-  if (Array.isArray(value)) return value;
-  const record = asRecord(value);
-  if (!record) return [value];
-  for (const key of ['items', 'messages', 'results', 'events', 'files', 'pages', 'data']) {
-    if (Array.isArray(record[key])) return record[key] as unknown[];
-  }
-  return [value];
-}
-
-function stringField(record: Record<string, unknown> | null, keys: string[]): string | undefined {
-  for (const key of keys) {
-    const value = record?.[key];
-    if (typeof value === 'string' && value.trim()) return value.trim();
-    if (typeof value === 'number' && Number.isFinite(value)) return String(value);
-  }
-  return undefined;
-}
-
-function timestampField(record: Record<string, unknown> | null, keys: string[]): string | undefined {
-  const value = stringField(record, keys);
-  if (!value) return undefined;
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : undefined;
 }
 
 function sanitizeSourceValue(value: unknown, depth = 0): unknown {
@@ -89,18 +61,6 @@ function sanitizeSourceValue(value: unknown, depth = 0): unknown {
     key,
     SENSITIVE_KEY_RE.test(key) ? '[REDACTED]' : sanitizeSourceValue(nested, depth + 1),
   ]));
-}
-
-function itemTypeFor(toolkit: string, actionId: string): string {
-  if (toolkit === 'gmail' || toolkit === 'outlook') return 'email';
-  if (toolkit === 'googlecalendar' || actionId.includes('CALENDAR')) return 'calendar_event';
-  if (toolkit === 'slack' || toolkit === 'microsoft_teams') return 'conversation_message';
-  if (toolkit === 'github') return 'development_activity';
-  if (toolkit === 'linear' || toolkit === 'jira') return 'work_item';
-  if (['googledrive', 'googledocs', 'googlesheets', 'notion', 'one_drive', 'excel'].includes(toolkit)) {
-    return 'document';
-  }
-  return 'connector_item';
 }
 
 type PersonEntitySignal = {
@@ -155,6 +115,13 @@ function peopleSignals(entities: PersonEntitySignal[]): string[] {
   return [...new Set(values)].slice(0, 50);
 }
 
+function connectionIdentities(identity: Record<string, unknown>): string[] {
+  return [...new Set(Object.values(identity)
+    .filter((value): value is string => typeof value === 'string')
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean))];
+}
+
 function resultToSourceItems(input: {
   result: unknown;
   sourceInstanceId: string;
@@ -164,21 +131,27 @@ function resultToSourceItems(input: {
   toolkit: string;
   agentId: string;
   workspaceId: string;
+  connectionIdentity: Record<string, unknown>;
 }): KnowledgeSourceItemInput[] {
-  return resultRows(input.result).slice(0, 200).map((row, index) => {
-    const record = asRecord(row);
+  return normalizeConnectedSourceResult(input).slice(0, 200).map((entity) => {
+    const record = entity.value;
     const people = personEntities(record);
-    const serialized = JSON.stringify(sanitizeSourceValue(row), null, 2) ?? String(row);
+    const ownerIdentities = connectionIdentities(input.connectionIdentity);
+    const observedIdentities = peopleSignals(people).map((value) => value.toLowerCase());
+    const actorAttributed = entity.metadata.actorAttributed === true
+      || input.toolkit === 'gmail'
+      || input.toolkit === 'googlecalendar'
+      || (input.toolkit === 'github' && observedIdentities.some((value) => ownerIdentities.includes(value)));
+    const serialized = JSON.stringify(sanitizeSourceValue(entity.value), null, 2);
     const normalizedText = serialized.length > 8_000 ? `${serialized.slice(0, 8_000)}\n…` : serialized;
     const contentHash = createHash('sha256').update(serialized).digest('hex');
-    const externalId = stringField(record, EXTERNAL_ID_KEYS) ?? `${input.actionId}:${index}`;
     return {
       sourceInstanceId: input.sourceInstanceId,
-      externalId,
-      itemType: itemTypeFor(input.toolkit, input.actionId),
+      externalId: entity.externalId,
+      itemType: entity.itemType,
       authorRole: 'third_party',
-      occurredAt: timestampField(record, OCCURRED_AT_KEYS),
-      sourceUpdatedAt: timestampField(record, UPDATED_AT_KEYS),
+      occurredAt: entity.occurredAt,
+      sourceUpdatedAt: entity.sourceUpdatedAt,
       contentHash,
       normalizedText,
       metadata: {
@@ -190,11 +163,14 @@ function resultToSourceItems(input: {
         personEntities: people,
         agentId: input.agentId,
         workspaceId: input.workspaceId,
+        ...entity.metadata,
+        ownerIdentities,
+        actorAttributed,
       },
       sensitivity: 'personal',
       retentionClass: 'bounded',
       synthesisPipeline: 'connected_knowledge',
-      synthesisStatus: 'pending',
+      synthesisStatus: entity.synthesisStatus,
     };
   });
 }
@@ -243,6 +219,7 @@ class ComposioKnowledgeSourceAdapter implements KnowledgeSourceAdapter {
         toolkit: this.input.toolkit,
         agentId: this.input.agentId,
         workspaceId: this.input.workspaceId,
+        connectionIdentity: this.input.connection.identity,
       }),
       nextCursor: new Date().toISOString(),
       warnings: [],

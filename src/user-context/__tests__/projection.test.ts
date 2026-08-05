@@ -57,7 +57,7 @@ describe('user context projection', () => {
   it('exposes source, stability, and due review without mutating the record', () => {
     const source = record({
       confidence: 0.9,
-      evidence: [{ confidence: 0.9 }, { confidence: 0.8 }],
+      evidence: [{ confidence: 0.9 }, { confidence: 0.8, sourceText: '{"eventCount":3,"activeDays":2,"windowDays":90}' }],
       reviewAfter: new Date(Date.now() - 1_000).toISOString(),
       source: { provider: 'calendar', path: 'calendar://events' },
     });
@@ -65,6 +65,7 @@ describe('user context projection', () => {
     expect(projected.status).toBe('needs_review');
     expect(projected.reviewDue).toBe(true);
     expect(projected.evidenceCount).toBe(2);
+    expect(projected.evidenceBasis).toEqual({ eventCount: 3, activeDays: 2, windowDays: 90 });
     expect(projected.sourcePath).toBe('calendar://events');
     expect(source.status).toBe('active');
   });

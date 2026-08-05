@@ -72,12 +72,14 @@ describe('MemoryManager', () => {
         status: 'candidate',
         sensitivity: 'normal',
         evidence: [{ sessionKey: 'session-1', sourceText: 'The omega checklist prevented a bad promotion.' }],
+        source: { provider: 'composio-gmail', sourceInstanceId: 'gmail-work' },
         scope: { sessionKey: 'session-1' },
       });
 
       expect(write.success).toBe(true);
       expect(write.record?.status).toBe('candidate');
       expect(write.record?.evidence?.[0]?.sourceText).toContain('omega checklist');
+      expect(write.record?.source).toMatchObject({ provider: 'composio-gmail', sourceInstanceId: 'gmail-work' });
 
       const listed = await mgr.list({ scope: { agentId: 'main', workspaceId: stateDir } });
       expect(listed.map((record) => record.id)).toContain(write.record?.id);
