@@ -349,7 +349,7 @@ export class SessionManager {
   /** Delete one user turn (user + assistant/tool rows) or a raw LLM index range. */
   async deleteMessages(
     sessionKey: string,
-    opts: { userRoundIndex: number } | { startIndex: number; count: number },
+    opts: { userRoundIndex: number },
   ): Promise<void> {
     const res = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/messages`), {
       method: 'DELETE',

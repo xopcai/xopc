@@ -112,16 +112,23 @@ describe('initSessionTurn', () => {
     });
   });
 
-  it('keeps a stale session when implicit expiry is disabled', async () => {
+  it('keeps a stale session when no implicit reset policy is configured', async () => {
     mockExistingEntry(Date.now() - 48 * 60 * 60_000);
     const resetSession = vi.fn();
+    const cfg = {
+      ...baseCfg,
+      session: {
+        scope: 'per-sender' as const,
+        mainKey: 'main',
+        dmScope: 'main' as const,
+      },
+    } as Config;
 
     const result = await initSessionTurn({
-      cfg: baseCfg,
+      cfg,
       sessionKey,
-      body: 'continue the same webchat conversation',
+      body: 'continue the same conversation',
       resetSession,
-      skipImplicitExpiry: true,
     });
 
     expect(resetSession).not.toHaveBeenCalled();
@@ -130,23 +137,30 @@ describe('initSessionTurn', () => {
       staleRollover: false,
       isNewSession: false,
       sessionId: 'old-id',
-      bodyStripped: 'continue the same webchat conversation',
+      bodyStripped: 'continue the same conversation',
     });
   });
 
-  it('still honors explicit reset triggers when implicit expiry is disabled', async () => {
+  it('still honors explicit reset triggers without an implicit reset policy', async () => {
     mockExistingEntry(Date.now() - 48 * 60 * 60_000);
     const resetSession = vi.fn().mockResolvedValue({
       sessionId: 'new-id',
       previousSessionId: 'old-id',
     });
+    const cfg = {
+      ...baseCfg,
+      session: {
+        scope: 'per-sender' as const,
+        mainKey: 'main',
+        dmScope: 'main' as const,
+      },
+    } as Config;
 
     const result = await initSessionTurn({
-      cfg: baseCfg,
+      cfg,
       sessionKey,
       body: '/new',
       resetSession,
-      skipImplicitExpiry: true,
     });
 
     expect(resetSession).toHaveBeenCalledOnce();

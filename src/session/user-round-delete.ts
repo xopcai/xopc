@@ -1,47 +1,39 @@
-import type { AgentMessage } from '@earendil-works/pi-agent-core';
+import {
+  isTranscriptCustomMessageEntry,
+  type TranscriptStoredRow,
+} from './session-context-for-llm.js';
 
-function isUserRole(role: string): boolean {
-  return role === 'user';
+function isVisibleUserRow(row: TranscriptStoredRow): boolean {
+  if (isTranscriptCustomMessageEntry(row)) {
+    return row.display !== false;
+  }
+  return (row as { role?: unknown }).role === 'user';
 }
 
-/**
- * LLM transcript range for one user turn: the user row plus every following
- * assistant / tool / toolResult row until the next user (or EOF).
- */
-export function computeUserRoundDeleteRange(
-  messages: readonly AgentMessage[],
+/** Raw transcript range for one UI-visible user turn. */
+export function computeTranscriptUserRoundDeleteRange(
+  rows: readonly TranscriptStoredRow[],
   userRoundIndex: number,
 ): { startIndex: number; count: number } | null {
-  if (userRoundIndex < 0 || messages.length === 0) {
+  if (!Number.isInteger(userRoundIndex) || userRoundIndex < 0 || rows.length === 0) {
     return null;
   }
 
   let userCount = 0;
   let startIndex = -1;
-  for (let i = 0; i < messages.length; i++) {
-    const role = String(messages[i]?.role ?? '');
-    if (!isUserRole(role)) {
-      continue;
-    }
+  for (let index = 0; index < rows.length; index += 1) {
+    if (!isVisibleUserRow(rows[index]!)) continue;
     if (userCount === userRoundIndex) {
-      startIndex = i;
+      startIndex = index;
       break;
     }
     userCount += 1;
   }
-
-  if (startIndex < 0) {
-    return null;
-  }
+  if (startIndex < 0) return null;
 
   let end = startIndex + 1;
-  while (end < messages.length) {
-    const role = String(messages[end]?.role ?? '');
-    if (isUserRole(role)) {
-      break;
-    }
+  while (end < rows.length && !isVisibleUserRow(rows[end]!)) {
     end += 1;
   }
-
   return { startIndex, count: end - startIndex };
 }

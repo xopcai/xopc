@@ -42,7 +42,7 @@ Session metadata, transcript rows, compaction checkpoints, and full-text search 
 
 Channel slash **`/new`** (aliases `/reset`, `/restart`) uses reset semantics, not delete. TUI **`/new`** / **`/reset`** call the same reset API in gateway mode (`POST /api/sessions/:key/reset` via `performSessionReset`).
 
-**Automatic rollover:** At turn start, xopc evaluates `session.reset` (daily at `atHour` or idle via `idleMinutes`) and archives + assigns a new `sessionId` when the session is stale—same as OpenClaw channel `initSessionState`. Configured **`session.resetTriggers`** (default `["/new","/reset"]`) are matched on inbound body before the model runs; bare triggers ack without a turn, `/new hello` resets then continues with `hello`.
+**Automatic rollover:** Automatic rollover is disabled unless `session.reset`, `session.resetByType`, or `session.resetByChannel` explicitly configures it. When configured, xopc evaluates the daily `atHour` or sliding `idleMinutes` boundary at turn start and archives + assigns a new `sessionId` when stale. Configured **`session.resetTriggers`** (default `["/new","/reset"]`) are matched on inbound body before the model runs; bare triggers ack without a turn, `/new hello` resets then continues with `hello`.
 
 **Webchat API:** `POST /api/agent` requires `sessionKey` / `chatId` in `agent:{agentId}:{rest}` form (or omit for `agent:main:main`). Bare `chat_*` ids are rejected; create sessions via `POST /api/sessions`.
 
@@ -237,33 +237,23 @@ interface Message {
 
 ### Compaction
 
-When a session exceeds the context window limit:
+When estimated model input reaches 80% of the active model's context window:
 
-1. Early messages are summarized using LLM
-2. Recent messages are preserved (default: last 10)
-3. System messages are always kept
+1. The resolved session model creates a durable summary of the older complete turns.
+2. At least the latest 10 messages and latest 6 user turns remain verbatim.
+3. xopc appends a compaction boundary containing the exact reduced LLM context. Original transcript rows remain unchanged for display, export, and search.
+4. If summary generation fails or returns empty text, compaction fails closed and the original model context is kept.
 
-Configure in `config.json`:
+Repeated compaction replaces the previous boundary in model input while the on-disk transcript remains append-only.
 
-```json
-{
-  "agents": {
-    "defaults": {
-      "compaction": {
-        "enabled": true,
-        "mode": "abstractive",
-        "triggerThreshold": 0.8,
-        "keepRecentMessages": 10
-      }
-    }
-  }
-}
-```
+Provider input is projected only from canonical transcript rows and compaction boundaries. xopc does not generate
+synthetic `<coding_context>` user messages from old tool results. Incomplete tool calls and orphan tool results are
+removed from provider input as pairs.
 
-**Compaction Modes:**
-- `extractive` - Summarize using key sentences
-- `abstractive` - LLM-based summarization
-- `structured` - Preserve structured data
+Deleting a chat turn operates atomically on raw transcript rows: the selected user row and all assistant, tool,
+tool-result, and audit rows through the next user row are removed together. Existing compaction boundaries are
+invalidated so a deleted turn cannot survive inside a summary snapshot; the next turn compacts the remaining
+authoritative history again when needed.
 
 ### Sliding Window
 
@@ -331,6 +321,7 @@ The gateway exposes sessions under **`/api/sessions`** (authenticated JSON over 
 | Archive / unarchive | `POST /api/sessions/:key/archive` · `POST /api/sessions/:key/unarchive` |
 | Pin / unpin | `POST /api/sessions/:key/pin` · `POST /api/sessions/:key/unpin` |
 | Export | `GET /api/sessions/:key/export` |
+| Delete one user turn | `DELETE /api/sessions/:key/messages` (`userRoundIndex`) |
 | Delete | `DELETE /api/sessions/:key` |
 | Reset (archive + new transcript id) | `POST /api/sessions/:key/reset` |
 

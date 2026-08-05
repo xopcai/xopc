@@ -187,42 +187,7 @@ describe('SessionStore', () => {
       });
     });
 
-    it('should hide compaction summary messages from display history', async () => {
-      const key = 'agent:main:webchat:default:direct:compaction-summary';
-      const messages: any[] = [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: '[Previous conversation summary]: Previous conversation covered: old turns...',
-            },
-          ],
-          timestamp: Date.now(),
-        },
-        { role: 'user', content: 'Visible user message', timestamp: Date.now() + 1 },
-        { role: 'assistant', content: 'Visible assistant message', timestamp: Date.now() + 2 },
-      ];
-
-      await store.saveMessages(key, messages);
-
-      const llmMessages = await store.loadMessages(key);
-      const detail = await store.get(key);
-      const page = await store.getMessagePage(key, { offset: 0, limit: 50 });
-
-      expect(llmMessages).toHaveLength(3);
-      expect(detail?.messages.map((message) => message.content)).toEqual([
-        'Visible user message',
-        'Visible assistant message',
-      ]);
-      expect(page?.session.messages.map((message) => message.content)).toEqual([
-        'Visible user message',
-        'Visible assistant message',
-      ]);
-      expect(page?.pagination.total).toBe(2);
-    });
-
-    it('should hide synthetic coding context from display history', async () => {
+    it('does not derive or persist synthetic coding context', async () => {
       const key = 'agent:main:webchat:default:direct:coding-context-display';
       const messages: any[] = [
         { role: 'user', content: 'inspect repo', timestamp: Date.now() },
@@ -256,14 +221,12 @@ describe('SessionStore', () => {
       const detailText = JSON.stringify(detail?.messages);
       const pageText = JSON.stringify(page?.session.messages);
 
-      expect(llmText).toContain('<coding_context>');
-      expect(llmText).toContain('Command success: git log --oneline -20 exit=0');
+      expect(llmMessages).toHaveLength(3);
       expect(detail?.messages).toHaveLength(3);
       expect(page?.pagination.total).toBe(3);
+      expect(llmText).not.toContain('<coding_context>');
       expect(detailText).not.toContain('<coding_context>');
-      expect(detailText).not.toContain('Command success: git log --oneline -20 exit=0');
       expect(pageText).not.toContain('<coding_context>');
-      expect(pageText).not.toContain('Command success: git log --oneline -20 exit=0');
     });
 
     it('should page messages from the newest tail while preserving chronological order', async () => {
@@ -450,9 +413,11 @@ describe('SessionStore', () => {
         tokensBefore: 9000,
         tokensAfter: 1200,
       });
+      expect(doc?.messages.filter((row) => (row as { role?: string }).role === 'user')).toHaveLength(12);
+      expect(await store.loadMessages(key)).toHaveLength(5);
     });
 
-    it('lists and restores compaction checkpoints', async () => {
+    it('preserves the authoritative transcript while loading compacted LLM context', async () => {
       const key = 'agent:main:telegram:default:direct:cpapi';
       const msgs = Array.from({ length: 12 }, (_, i) => ({
         role: 'user' as const,
@@ -468,11 +433,6 @@ describe('SessionStore', () => {
         compacted: true,
       };
       await store.applyCompaction(key, msgs, result);
-      const list = await store.listCompactionCheckpoints(key);
-      expect(list.length).toBeGreaterThanOrEqual(1);
-      const cpId = list[0]!.id;
-      const detail = await store.getCompactionCheckpointDetail(key, cpId);
-      expect(detail?.messageCount).toBe(msgs.length);
 
       const afterCompact = await store.loadMessages(key);
       const displayAfterCompact = await store.get(key);
@@ -485,10 +445,49 @@ describe('SessionStore', () => {
         msgs.map((message) => message.content),
       );
       expect(displayPageAfterCompact?.pagination.total).toBe(msgs.length);
+      expect(await store.listCompactionCheckpoints(key)).toEqual([]);
+    });
 
-      await store.restoreCompactionCheckpoint(key, cpId);
-      const restored = await store.loadMessages(key);
-      expect(restored.length).toBe(msgs.length);
+    it('deletes a raw user turn and invalidates compaction snapshots', async () => {
+      const key = 'agent:main:webchat:default:direct:delete-compacted-round';
+      const messages: any[] = [
+        { role: 'user', content: 'u0' },
+        { role: 'assistant', content: 'a0' },
+        { role: 'user', content: 'u1' },
+        {
+          role: 'assistant',
+          content: [{ type: 'toolCall', id: 'call-1', name: 'exec_command', arguments: { cmd: 'false' } }],
+        },
+        { role: 'toolResult', toolCallId: 'call-1', content: 'failed' },
+        { role: 'assistant', content: 'a1' },
+        { role: 'user', content: 'u2' },
+        { role: 'assistant', content: 'a2' },
+      ];
+      await store.saveMessages(key, messages);
+      await store.applyCompaction(key, messages, {
+        summary: 'includes deleted turn',
+        firstKeptIndex: 6,
+        tokensBefore: 8000,
+        tokensAfter: 500,
+        compacted: true,
+      });
+
+      const deleted = await store.deleteUserRound(key, 1);
+      const rows = await store.loadTranscriptRows(key);
+      const llm = await store.loadMessages(key);
+
+      expect(deleted?.deleted).toBe(4);
+      expect(rows.some((row) => (row as { type?: string }).type === 'compaction')).toBe(false);
+      expect(llm.map((message) => message.content)).toEqual(['u0', 'a0', 'u2', 'a2']);
+      expect(JSON.stringify(rows)).not.toContain('call-1');
+      expect(JSON.stringify(rows)).not.toContain('includes deleted turn');
+    });
+
+    it('rejects runtime-only messages at the persistence boundary', async () => {
+      const key = 'agent:main:webchat:default:direct:reject-runtime-only';
+      await expect(store.saveMessages(key, [
+        { role: 'user', content: '<coding_context>derived</coding_context>', droppable: true },
+      ] as any[])).rejects.toThrow('Runtime-only messages cannot be persisted');
     });
   });
 
