@@ -350,12 +350,10 @@ html.dark .markdown-code-copy-btn:hover {
   margin: 0 0 0.5em;
 }
 
-.markdown-body.markdown-compact > :last-child {
+/* Only the final rendered block is the end of the complete Markdown document. */
+.markdown-body.markdown-compact:not(.markdown-stream-block) > :last-child,
+.markdown-body.markdown-compact.markdown-stream-tail > :last-child {
   margin-bottom: 0;
-}
-
-.markdown-stream-block:not(.markdown-stream-tail) > :last-child {
-  margin-bottom: 0.75em;
 }
 
 .markdown-stream-tail:empty {
