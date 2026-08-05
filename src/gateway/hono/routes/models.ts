@@ -39,6 +39,10 @@ import { discoverProviderModels, isProviderApiDiscoverable } from '../../../prov
 import { CredentialResolver } from '../../../auth/credentials.js';
 import { SessionConfigStore } from '../../../session/config-store.js';
 import { getModelCatalogStore } from '../../../providers/model-catalog-store.js';
+import {
+  XopcCloudAccountError,
+  XopcCloudAccountService,
+} from '../../../providers/xopc-cloud-account-service.js';
 import { auditModelReferences } from '../../../providers/model-reference-auditor.js';
 import { getProviderRegistry } from '../../../providers/plugin-registry.js';
 import type { ProviderModelDefinition } from '../../../extensions/types/providers.js';
@@ -105,6 +109,7 @@ function mapPluginModel(providerId: string, model: ProviderModelDefinition, avai
 export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service, strictRateLimitMiddleware } = deps;
   const catalogSync = service.getModelCatalogSync();
+  const xopcCloudAccount = new XopcCloudAccountService();
 
   authenticated.get('/api/models/catalog/status', (c) => c.json({
     ok: true,
@@ -128,6 +133,25 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
   authenticated.post('/api/models/catalog/refresh', strictRateLimitMiddleware, async (c) => {
     const result = await catalogSync.refreshAll();
     return c.json({ ok: true, payload: result });
+  });
+
+  authenticated.get('/api/models/xopc-cloud/account-summary', async (c) => {
+    try {
+      const summary = await xopcCloudAccount.getSummary();
+      if (!summary) {
+        return c.json({ ok: false, error: { message: 'XOPC Cloud is not configured' } }, 404);
+      }
+      return c.json({ ok: true, payload: summary });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return c.json({
+        ok: false,
+        error: {
+          message,
+          ...(error instanceof XopcCloudAccountError && error.code ? { code: error.code } : {}),
+        },
+      }, 502);
+    }
   });
 
   // GET /api/models-json - Get models.json configuration

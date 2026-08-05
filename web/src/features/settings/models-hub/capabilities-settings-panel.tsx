@@ -28,6 +28,7 @@ import { ConnectedProvidersGrid, useConnectedProviders } from './connected-provi
 import { revalidateModelsHubCaches } from './models-hub-cache';
 import { ProviderManageDialog } from './provider-manage-dialog';
 import { ModelCatalogStatus } from './model-catalog-status';
+import { XopcCloudAccountCard } from './xopc-cloud-account-card';
 
 interface SectionDefinition {
   id: CapabilitySettingsSectionId;
@@ -53,6 +54,9 @@ export function CapabilitiesSettingsPanel() {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [manageTarget, setManageTarget] = useState<{ providerId: string; isCustom: boolean } | null>(null);
   const providerData = useConnectedProviders();
+  const xopcCloudConfigured = providerData.cards.some(
+    (provider) => provider.id === 'xopc-cloud' && !provider.isCustom,
+  );
 
   useEffect(() => {
     if (capability !== 'models' || searchParams.get('add') !== '1') return;
@@ -141,9 +145,11 @@ export function CapabilitiesSettingsPanel() {
         <LazySectionHost key={section.id} id={section.id} activeSection={capability} hint={section.hint}>
           {section.id === 'models' ? (
             <>
+              {xopcCloudConfigured ? <XopcCloudAccountCard labels={c.xopcCloudAccount} /> : null}
               <ModelCatalogStatus />
               <ConnectedProvidersGrid
                 labels={c.connectedProviders}
+                data={providerData}
                 onAdd={() => setAddDialogOpen(true)}
                 onManage={(providerId, isCustom) => setManageTarget({ providerId, isCustom })}
               />
