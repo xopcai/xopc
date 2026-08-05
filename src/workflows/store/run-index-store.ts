@@ -45,12 +45,7 @@ function rowToSummary(row: WorkflowRunIndexRow): WorkflowRunSummary {
 function resultPreview(view: WorkflowRunView): string | null {
   const result = view.run.result;
   if (result == null) return null;
-  if (typeof result.summary === 'string') return result.summary.slice(0, 500);
-  try {
-    return JSON.stringify(result).slice(0, 500);
-  } catch {
-    return null;
-  }
+  return result.summary.slice(0, 500);
 }
 
 function parentSessionKey(view: WorkflowRunView): string | null {

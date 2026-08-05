@@ -276,7 +276,7 @@ export class WorkflowEngine {
         await appendEvent('phase_completed', { phaseId: currentPhaseId });
       }
       const result = requireWorkflowResultEnvelope(runtimeResult.result);
-      assertWorkflowOutput(definition, result);
+      assertWorkflowOutput(definition, result.data === undefined ? result.summary : result.data);
       await appendEvent('run_completed', { result });
       await this.callHooks((hook) => hook.afterRun?.({ runId, status: 'succeeded' }));
     } catch (err) {
@@ -818,18 +818,7 @@ function buildReplayResultEnvelope(
   const done = results.filter((item) => item.status === 'done').length;
   return {
     summary: `Replay completed for ${done}/${results.length} target${results.length === 1 ? '' : 's'}.`,
-    sections: [
-      {
-        kind: 'json',
-        title: 'Replay targets',
-        value: {
-          sourceRunId: options.sourceRunId,
-          scope: options.replayScope,
-          targets: results,
-        },
-      },
-    ],
-    structuredOutput: {
+    data: {
       replay: {
         sourceRunId: options.sourceRunId,
         scope: options.replayScope,
@@ -886,6 +875,9 @@ function previewWorkflowValue(value: unknown): string | undefined {
   if (typeof value === 'string') {
     return truncate(value, 300);
   }
+  if (isWorkflowResultEnvelope(value)) {
+    return truncate(value.summary, 1_200);
+  }
   try {
     return truncate(JSON.stringify(value), 300);
   } catch {
@@ -917,7 +909,7 @@ function isWorkflowResultEnvelope(value: unknown): value is WorkflowResultEnvelo
     return false;
   }
   const record = value as Partial<WorkflowResultEnvelope>;
-  return typeof record.summary === 'string' && Array.isArray(record.sections);
+  return typeof record.summary === 'string';
 }
 
 function requireWorkflowResultEnvelope(value: unknown): WorkflowResultEnvelope {
@@ -926,7 +918,7 @@ function requireWorkflowResultEnvelope(value: unknown): WorkflowResultEnvelope {
   }
   throw new WorkflowEngineRunError(
     'result_validation_failed',
-    'Workflow output node must return a result envelope with summary and sections.',
+    'Workflow output node must return a result envelope with summary.',
     false,
   );
 }

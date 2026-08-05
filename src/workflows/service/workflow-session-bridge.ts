@@ -206,7 +206,7 @@ export class WorkflowSessionBridge {
     const agentId = view.run.metadata?.agentId?.trim();
     if (!projectId || !agentId) return;
 
-    const summary = view.run.result?.summary?.trim();
+    const summary = view.run.result?.summary.trim();
     const resultText = summary || renderWorkflowText(
       runViewToSnapshot(view),
       view.run.status === 'succeeded',

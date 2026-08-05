@@ -267,11 +267,10 @@ export interface WorkflowNextAction {
 export interface WorkflowResultEnvelope {
   title?: string;
   summary: string;
-  sections: WorkflowResultSection[];
+  sections?: WorkflowResultSection[];
   actions?: WorkflowNextAction[];
   artifacts?: WorkflowArtifactRef[];
   followUps?: WorkflowFollowUp[];
-  structuredOutput?: unknown;
 }
 
 export type WorkflowResultSection =
@@ -286,8 +285,7 @@ export type WorkflowResultSection =
       title: string;
       items: Array<{ title: string; severity?: string; likelihood?: 'low' | 'medium' | 'high'; impact?: string; mitigation?: string }>;
     }
-  | { kind: 'questions'; title: string; items: string[] }
-  | { kind: 'json'; title: string; value: unknown };
+  | { kind: 'questions'; title: string; items: string[] };
 
 export interface WorkflowRun {
   id: string;

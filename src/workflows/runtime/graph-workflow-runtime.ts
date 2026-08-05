@@ -119,16 +119,15 @@ export class GraphWorkflowRuntime implements WorkflowRuntime {
               ? predecessors.map((entry) => entry.value)
               : Object.fromEntries(predecessors.map((entry) => [entry.id, entry.value]));
           } else {
-            const structuredOutput = predecessors.length === 1
+            const outputData = predecessors.length === 1
               ? predecessors[0].value
               : Object.fromEntries(predecessors.map((entry) => [entry.id, entry.value]));
             const summary = node.config.summary
               ? renderTemplate(node.config.summary, options.args, outputs, predecessors, options.goal)
-              : summarizeValue(structuredOutput);
+              : renderResultContent(outputData);
             value = {
               summary,
-              sections: [{ kind: 'json', title: node.config.title ?? 'Workflow result', value: structuredOutput }],
-              structuredOutput,
+              ...(typeof outputData === 'string' ? {} : { data: outputData }),
             };
           }
           outputs.set(node.id, value);
@@ -282,12 +281,12 @@ function createLimiter(limit: number) {
   };
 }
 
-function summarizeValue(value: unknown): string {
-  if (typeof value === 'string') return value.slice(0, 500);
+function renderResultContent(value: unknown): string {
+  if (typeof value === 'string') return value.trim();
   if (value && typeof value === 'object') {
     const record = value as Record<string, unknown>;
-    for (const key of ['summary', 'executiveSummary', 'result', 'answer']) {
-      if (typeof record[key] === 'string') return record[key].slice(0, 500);
+    for (const key of ['content', 'summary', 'executiveSummary', 'result', 'answer']) {
+      if (typeof record[key] === 'string') return record[key].trim();
     }
   }
   return 'Workflow completed.';

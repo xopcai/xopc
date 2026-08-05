@@ -30,7 +30,7 @@ describe('WorkflowEngine graph runtime', () => {
     const runner: WorkflowRuntimeSubagentRunner = {
       async run(prompt, options) {
         options.onProgress?.({ type: 'iteration', count: 1, max: 2 });
-        return `Answer: ${prompt}`;
+        return `## Report\n\n${'Detailed finding. '.repeat(40)}\n\nAnswer: ${prompt}`;
       },
     };
     const definition = buildWorkflowDefinition({
@@ -63,6 +63,11 @@ describe('WorkflowEngine graph runtime', () => {
 
     expect(view.run.status).toBe('succeeded');
     expect(view.run.result?.summary).toContain('Goal=Explain visual workflows; topic=graphs');
+    expect(view.run.result?.summary.length).toBeGreaterThan(500);
+    expect(view.run.result?.sections).toBeUndefined();
+    expect(view.run.result?.data).toBeUndefined();
+    expect(view.nodes.find((node) => node.id === 'output')?.resultPreview).toContain('## Report');
+    expect(view.nodes.find((node) => node.id === 'output')?.resultPreview).not.toContain('{"summary"');
     expect(view.agents[0]).toMatchObject({ nodeId: 'analysis', label: 'Analyze', status: 'done' });
     expect(view.agents[0]?.steps).toHaveLength(1);
     expect(view.nodes).toEqual(expect.arrayContaining([
