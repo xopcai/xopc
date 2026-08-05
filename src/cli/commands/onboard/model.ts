@@ -5,6 +5,7 @@
 import { confirm, input, select } from '@inquirer/prompts';
 
 import { CredentialResolver } from '../../../auth/credentials.js';
+import { listProfilesForProvider } from '../../../auth/profiles/index.js';
 import {
   getModelsJsonPath,
   loadModelsJson,
@@ -41,7 +42,7 @@ import {
   sortModelsForPicker,
   sortProvidersForPicker,
 } from '../../../providers/presentation.js';
-import { listProfilesForProvider } from '../../../auth/profiles/index.js';
+import { XopcCloudModelSource } from '../../../providers/xopc-cloud-model-source.js';
 import { getOAuthProvider } from '../../utils/oauth-providers.js';
 import { runCliOAuthLogin } from '../../utils/oauth-login.js';
 import type { CLIContext } from '../../registry.js';
@@ -124,6 +125,21 @@ function getModelsForProvider(provider: string): ModelChoice[] {
       description: badges || undefined,
     };
   });
+}
+
+export async function refreshOnboardModelCatalogIfNeeded(
+  provider: string,
+  hasCatalogModels: boolean,
+  source?: Pick<XopcCloudModelSource, 'refresh'>,
+): Promise<void> {
+  if (provider !== 'xopc-cloud' || hasCatalogModels) return;
+
+  console.log('\n→ Loading models from XOPC Model Service...');
+  const result = await (source ?? new XopcCloudModelSource()).refresh();
+  if (result.status === 'skipped') {
+    throw new Error('XOPC Model Service credentials are unavailable after OAuth login. Please sign in again.');
+  }
+  console.log(colors.green(`✓ Loaded ${result.modelCount} models`));
 }
 
 function discoveredModelsToChoices(provider: string, models: DiscoveredProviderModel[]): ModelChoice[] {
@@ -534,8 +550,13 @@ export async function setupModel(existingConfig: Config | null, ctx: CLIContext)
     return config;
   }
 
-  const modelChoices = getModelsForProvider(provider);
+  let modelChoices = getModelsForProvider(provider);
+  await refreshOnboardModelCatalogIfNeeded(provider, modelChoices.length > 0);
+  modelChoices = getModelsForProvider(provider);
   if (modelChoices.length === 0) {
+    if (provider === 'xopc-cloud') {
+      throw new Error(`No models are currently available for ${providerName}.`);
+    }
     throw new Error(`No catalog models found for ${providerName}. Add a Custom API provider instead.`);
   }
 
