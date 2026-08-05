@@ -172,6 +172,6 @@ function definitionGraphCopy(language: StoredLanguage) {
         selectHint: 'Select a step to see what it does.',
         yes: 'Yes',
         no: 'No',
-        kind: { input: 'Task input', agent: 'AI work', decision: 'Decision', merge: 'Combine results', output: 'Final result' } satisfies Record<WorkflowNodeKind, string>,
+        kind: { input: 'Task input', agent: 'AI work', decision: 'Decision', merge: 'Combine results', output: 'Deliverable' } satisfies Record<WorkflowNodeKind, string>,
       };
 }

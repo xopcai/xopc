@@ -1,5 +1,6 @@
 import { memo } from 'react';
 
+import { MarkdownView } from '@/components/markdown/markdown-view';
 import type { WorkflowResultEnvelope, WorkflowResultSection } from '@/features/workflows/workflow-api';
 import { cn } from '@/lib/cn';
 
@@ -8,13 +9,7 @@ import { severityTone } from './workflow.utils';
 export type WorkflowResultSummaryLabels = {
   topFindingsHeading: (n: number) => string;
   topRisksHeading: (n: number) => string;
-  executiveSummaryHeading: string;
-  summaryHeading: string;
   openQuestionsHeading: string;
-  conclusionHeading: string;
-  recommendationsHeading: string;
-  nextStepsHeading: string;
-  checklistHeading: string;
   moreSuffix: (n: number) => string;
   emptyResult: string;
 };
@@ -33,20 +28,18 @@ export const WorkflowResultSummary = memo(function WorkflowResultSummary({
   }
 
   return (
-    <div className="space-y-4">
-      <section className="min-w-0">
-        <div className="text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
-          {result.title || labels.summaryHeading}
-        </div>
-        <div className="mt-1 whitespace-pre-wrap break-words text-sm leading-6 text-fg">
-          {result.summary}
-        </div>
-      </section>
+    <article className="min-w-0 space-y-6">
+      {result.title ? <h3 className="text-base font-semibold text-fg">{result.title}</h3> : null}
+      <MarkdownView
+        content={result.summary}
+        className="workflow-result-markdown"
+        openHttpLinksInNewTab
+      />
 
-      {result.sections.map((section, index) => (
+      {(result.sections ?? []).map((section, index) => (
         <WorkflowResultSectionView key={`${section.kind}:${section.title}:${index}`} section={section} labels={labels} />
       ))}
-    </div>
+    </article>
   );
 });
 
@@ -69,23 +62,13 @@ function WorkflowResultSectionView({
   if (section.kind === 'questions') {
     return <StringList heading={section.title || labels.openQuestionsHeading} items={section.items} moreSuffix={labels.moreSuffix} />;
   }
-  return (
-    <details className="group min-w-0 rounded-lg border border-edge-subtle bg-surface-hover/20">
-      <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-fg-muted marker:text-fg-subtle hover:text-fg">
-        {section.title}
-      </summary>
-      <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-edge-subtle bg-surface-hover/30 p-2 font-mono text-xs leading-5 text-fg-muted">
-        {JSON.stringify(section.value, null, 2)}
-      </pre>
-    </details>
-  );
 }
 
 function TextBlock({ heading, text }: { heading: string; text: string }) {
   return (
     <section className="min-w-0">
       <div className="text-[10px] font-medium uppercase tracking-wide text-fg-subtle">{heading}</div>
-      <div className="mt-1 whitespace-pre-wrap break-words text-sm leading-6 text-fg-muted">{text}</div>
+      <MarkdownView content={text} compact className="mt-2" openHttpLinksInNewTab />
     </section>
   );
 }

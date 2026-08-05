@@ -1,19 +1,12 @@
 export interface WorkflowResultEnvelope {
   title?: string;
   summary: string;
-  sections: WorkflowResultSection[];
+  sections?: WorkflowResultSection[];
   actions?: WorkflowNextAction[];
   artifacts?: WorkflowArtifactRef[];
   followUps?: WorkflowFollowUp[];
-  structuredOutput?: unknown;
-}
-
-/** Product-level outcome contract for reusable workflow deliverables. */
-export interface WorkflowOutcome {
-  summary: string;
-  artifacts?: WorkflowArtifactRef[];
-  followUps?: WorkflowFollowUp[];
-  structuredOutput?: unknown;
+  /** Machine-readable workflow output. It is intentionally not rendered as user-facing content. */
+  data?: unknown;
 }
 
 export interface WorkflowFollowUp {
@@ -27,8 +20,7 @@ export type WorkflowResultSection =
   | WorkflowTextSection
   | WorkflowFindingsSection
   | WorkflowRisksSection
-  | WorkflowQuestionsSection
-  | WorkflowJsonSection;
+  | WorkflowQuestionsSection;
 
 export interface WorkflowTextSection {
   kind: 'text';
@@ -52,12 +44,6 @@ export interface WorkflowQuestionsSection {
   kind: 'questions';
   title: string;
   items: string[];
-}
-
-export interface WorkflowJsonSection {
-  kind: 'json';
-  title: string;
-  value: unknown;
 }
 
 export interface WorkflowFinding {
