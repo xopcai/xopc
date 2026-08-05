@@ -28,7 +28,7 @@ import type { WorkflowPhaseRowLabels } from './workflow-phase-row';
 import { ProgressTree } from './workflow-progress-display';
 import { WorkflowResultSummary, type WorkflowResultSummaryLabels } from './workflow-result-summary';
 import type { WorkflowAgentSnapshot } from './workflow.types';
-import { isWorkflowResultEnvelope, stringifyWorkflowResult, workflowBoardHref } from '@/features/workflows/workflow-page.utils';
+import { isWorkflowResultEnvelope, workflowBoardHref, workflowResultToMarkdown } from '@/features/workflows/workflow-page.utils';
 import {
   classifyFailure,
   buildWorkflowFailureContext,
@@ -154,7 +154,7 @@ export const WorkflowCard = memo(function WorkflowCard({
   const [copied, setCopied] = useState(false);
   const handleCopy = useCallback(async () => {
     if (!snapshot || !isWorkflowResultEnvelope(snapshot.result)) return;
-    const text = stringifyWorkflowResult(snapshot.result);
+    const text = workflowResultToMarkdown(snapshot.result);
     const ok = await copyTextToClipboard(text);
     if (!ok) return;
     setCopied(true);

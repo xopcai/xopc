@@ -271,6 +271,56 @@ html.dark .markdown-code-copy-btn:hover {
   margin: 0 0 0.75em;
 }
 
+/* Workflow deliverables use document rhythm instead of chat-bubble density. */
+.markdown-body.workflow-result-markdown {
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--color-fg-muted);
+}
+
+.markdown-body.workflow-result-markdown > :first-child {
+  margin-top: 0;
+}
+
+.markdown-body.workflow-result-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown-body.workflow-result-markdown h1,
+.markdown-body.workflow-result-markdown h2,
+.markdown-body.workflow-result-markdown h3 {
+  color: var(--color-fg);
+}
+
+.markdown-body.workflow-result-markdown table {
+  display: block;
+  overflow-x: auto;
+}
+
+.markdown-body.workflow-status-markdown {
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  color: var(--color-fg-muted);
+}
+
+.markdown-body.workflow-status-markdown > :first-child {
+  margin-top: 0;
+}
+
+.markdown-body.workflow-status-markdown h1,
+.markdown-body.workflow-status-markdown h2,
+.markdown-body.workflow-status-markdown h3 {
+  border-bottom: 0;
+  padding-bottom: 0;
+  font-size: 0.875rem;
+}
+
+.markdown-body.workflow-status-markdown table {
+  display: block;
+  overflow-x: auto;
+  font-size: 0.75rem;
+}
+
 .markdown-body.markdown-note {
   font-size: 0.9375rem;
   line-height: 1.45;

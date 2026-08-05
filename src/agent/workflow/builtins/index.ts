@@ -86,7 +86,7 @@ function createParallelGraph(spec: BuiltinWorkflowSpec): WorkflowGraph {
           maxIterations: 12,
         },
       },
-      { id: 'output', kind: 'output', title: 'Result', position: { x: 1280, y: 260 }, config: { title: 'Final result' } },
+      { id: 'output', kind: 'output', title: 'Deliverable', position: { x: 1280, y: 260 }, config: {} },
     ],
     edges: [
       ...analystNodes.map((node, index) => ({ id: `input-${index + 1}`, source: 'input', target: node.id })),

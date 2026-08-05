@@ -12,14 +12,15 @@ import {
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { MarkdownView } from '@/components/markdown/markdown-view';
+import { Button } from '@/components/ui/button';
+import { PageTabs } from '@/components/ui/page-tabs';
+import { Skeleton } from '@/components/ui/skeleton';
 import { workflowCardLabels } from '@/features/chat/workflow/workflow-card-labels';
 import { ProgressTree, RunningProgressPanel } from '@/features/chat/workflow/workflow-progress-display';
 import { WorkflowResultSummary } from '@/features/chat/workflow/workflow-result-summary';
 import type { WorkflowAgentSnapshot, WorkflowSnapshot } from '@/features/chat/workflow/workflow.types';
 import { formatAgentElapsed, rollupPhases, type PhaseRollup } from '@/features/chat/workflow/workflow.utils';
-import { Button } from '@/components/ui/button';
-import { PageTabs } from '@/components/ui/page-tabs';
-import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/cn';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { messages } from '@/i18n/messages';
@@ -46,7 +47,7 @@ import {
   resolveWorkflowResultForDisplay,
   resolveWorkflowSessionKey,
   statusTone,
-  stringifyWorkflowResult,
+  workflowResultToMarkdown,
   type WorkflowRunDiagnosticItem,
   workflowChatHref,
 } from './workflow-page.utils';
@@ -172,7 +173,7 @@ export function WorkflowRunPanel({
   const diagnostics = useMemo(() => (view ? collectWorkflowRunDiagnostics(view) : []), [view]);
   const resultForDisplay = view ? resolveWorkflowResultForDisplay(view.run.result) : undefined;
   const outcome = resultForDisplay ? resolveWorkflowOutcome(resultForDisplay) : null;
-  const resultText = resultForDisplay ? stringifyWorkflowResult(resultForDisplay) : '';
+  const resultText = resultForDisplay ? workflowResultToMarkdown(resultForDisplay) : '';
   const hasResult = Boolean(resultForDisplay);
 
   const handleCopy = useCallback(async () => {
@@ -289,17 +290,16 @@ export function WorkflowRunPanel({
   const focusNode = view.nodes.find((node) => node.status === 'running')
     ?? view.nodes.find((node) => node.status === 'error')
     ?? [...view.nodes].reverse().find((node) => node.status === 'done');
-  const currentActivity = focusNode
-    ? focusNode.error || focusNode.resultPreview || (language === 'zh'
+  const currentActivityMarkdown = focusNode?.kind === 'output' && !focusNode.error
+    ? resultForDisplay?.summary ?? focusNode.resultPreview
+    : null;
+  const currentActivity = currentActivityMarkdown ?? (focusNode
+    ? focusNode.error || (language === 'zh'
       ? `${focusNode.status === 'running' ? '正在执行' : focusNode.status === 'done' ? '刚刚完成' : '需要处理'}：${focusNode.title}`
       : `${focusNode.status === 'running' ? 'Working on' : focusNode.status === 'done' ? 'Just completed' : 'Needs attention'}: ${focusNode.title}`)
-    : runSummary;
+    : runSummary);
   const hasDiagnostics = diagnostics.length > 0 || Boolean(diagnosticHint);
   const canRepair = (run.status === 'failed' || run.status === 'timeout') && Boolean(onRepairWorkflow);
-  const hasPrimaryActions = Boolean(workflowSessionKey) || canCancel || canRepair;
-  const hasRecoveryActions = view.controls.canRetry || canReplayFailedAgents || canReplayFailedPhases;
-  const hasResultActions = hasResult;
-  const hasAnyActions = hasPrimaryActions || hasRecoveryActions || hasResultActions;
   const visibleActiveTab: WorkflowRunPanelTab =
     activeTab === 'diagnostics' || activeTab === 'debug' ? 'process' : activeTab;
 
@@ -322,7 +322,20 @@ export function WorkflowRunPanel({
                     {diagnosticHint ? <p className="mt-2 text-xs leading-5 text-fg-subtle">{diagnosticHint}</p> : null}
                     <div className={cn('mt-4 rounded-xl border px-3 py-2.5', focusNode?.status === 'error' ? 'border-danger/30 bg-danger/5' : 'border-accent/20 bg-accent-soft/50')}>
                       <div className="text-[11px] font-medium uppercase tracking-wide text-fg-subtle">{language === 'zh' ? '当前状态' : 'Current status'}</div>
-                      <p className="mt-1 text-sm font-medium text-fg">{currentActivity}</p>
+                      {currentActivityMarkdown ? (
+                        <div className="mt-2 max-h-40 overflow-hidden [mask-image:linear-gradient(to_bottom,black_calc(100%-1.5rem),transparent)]">
+                          <MarkdownView
+                            content={currentActivity}
+                            compact
+                            className="workflow-status-markdown"
+                            codeCopy={false}
+                            renderMermaid={false}
+                            openHttpLinksInNewTab
+                          />
+                        </div>
+                      ) : (
+                        <p className="mt-1 text-sm font-medium text-fg">{currentActivity}</p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -350,9 +363,42 @@ export function WorkflowRunPanel({
               {visibleActiveTab === 'result' ? (
                 <section className="mt-5 space-y-4">
                   {hasResult ? (
-                    <div className="rounded-xl border border-edge bg-surface-base/50 p-3">
-                      <WorkflowResultSummary result={resultForDisplay} labels={cardLabels.result} />
-                    </div>
+                    <section className="overflow-hidden rounded-2xl border border-edge bg-surface-base">
+                      <header className="flex flex-col gap-3 border-b border-edge-subtle bg-surface-panel/45 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <h3 className="text-sm font-semibold text-fg">{labels.resultTitle}</h3>
+                          <p className="mt-0.5 text-xs text-fg-subtle">{labels.resultReadyHint}</p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {workflowSessionKey ? (
+                            <Button variant="primary" className="h-8 text-xs" onClick={continueInChat}>
+                              <MessageSquare className="size-3.5" aria-hidden />
+                              {labels.continueInChat}
+                            </Button>
+                          ) : null}
+                          {resultActions.map((action) => (
+                            <Button key={action.id} variant="secondary" className="h-8 text-xs" onClick={() => handleResultAction(action)}>
+                              {action.label}
+                            </Button>
+                          ))}
+                          {!hasEnvelopeCopyAction ? (
+                            <Button variant="secondary" className="h-8 text-xs" onClick={handleCopy}>
+                              {copied ? <Check className="size-3.5" aria-hidden /> : <Copy className="size-3.5" aria-hidden />}
+                              {copied ? labels.copied : labels.copyResult}
+                            </Button>
+                          ) : null}
+                          <Button variant="secondary" className="h-8 text-xs" onClick={handleExport}>
+                            <Download className="size-3.5" aria-hidden />
+                            {labels.exportResult}
+                          </Button>
+                        </div>
+                      </header>
+                      <div className="px-5 py-6 sm:px-8 sm:py-8">
+                        <div className="mx-auto w-full max-w-4xl">
+                          <WorkflowResultSummary result={resultForDisplay} labels={cardLabels.result} />
+                        </div>
+                      </div>
+                    </section>
                   ) : run.status !== 'failed' && run.status !== 'timeout' ? (
                     <div className="rounded-xl border border-dashed border-edge p-4 text-sm text-fg-muted">
                       {labels.noResult}
@@ -360,55 +406,19 @@ export function WorkflowRunPanel({
                   ) : null}
 
                   {(run.status === 'failed' || run.status === 'timeout') ? (
-                    <WorkflowPartialResults view={view} language={language} />
-                  ) : null}
-
-                  {outcome ? (
-                    <WorkflowOutcomePanel
-                      outcome={outcome}
-                      labels={labels}
-                      downloadingArtifactId={downloadingArtifactId}
-                      downloadError={downloadError}
-                      onCopyText={(text) => void copyTextToClipboard(text)}
-                      onDownloadArtifact={(artifact) => void handleDownloadArtifact(artifact)}
-                      onStartFollowUp={handleStartFollowUp}
-                      compact
-                    />
-                  ) : null}
-
-                  {hasAnyActions ? (
-                    <section className="rounded-2xl border border-edge-subtle bg-surface-base/35 p-4">
-                  <h3 className="text-sm font-semibold text-fg">{labels.nextActionsTitle}</h3>
-                  <div className="mt-3 grid gap-3 lg:grid-cols-3">
-                    {hasPrimaryActions ? (
-                      <div className="min-w-0">
-                        <h4 className="text-xs font-medium text-fg-subtle">{labels.primaryActionsTitle}</h4>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {(run.status === 'failed' || run.status === 'timeout') && onRepairWorkflow ? (
+                    <>
+                      <section className="flex flex-col gap-3 rounded-2xl border border-amber-500/25 bg-amber-500/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <h3 className="text-sm font-semibold text-fg">{labels.recoveryActionsTitle}</h3>
+                          <p className="mt-1 text-xs leading-5 text-fg-muted">{diagnosticHint}</p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {canRepair ? (
                             <Button variant="primary" onClick={onRepairWorkflow}>
                               <WandSparkles className="size-4" aria-hidden />
                               {language === 'zh' ? '让 AI 修复' : 'Fix with AI'}
                             </Button>
                           ) : null}
-                          {workflowSessionKey ? (
-                            <Button variant="primary" onClick={continueInChat}>
-                              <MessageSquare className="size-4" aria-hidden />
-                              {labels.continueInChat}
-                            </Button>
-                          ) : null}
-                          {canCancel ? (
-                            <Button variant="secondary" onClick={onCancel} className="text-red-600 dark:text-red-300">
-                              <CircleStop className="size-4" aria-hidden />
-                              {labels.cancel}
-                            </Button>
-                          ) : null}
-                        </div>
-                      </div>
-                    ) : null}
-                    {hasRecoveryActions ? (
-                      <div className="min-w-0">
-                        <h4 className="text-xs font-medium text-fg-subtle">{labels.recoveryActionsTitle}</h4>
-                        <div className="mt-2 flex flex-wrap gap-2">
                           {canReplayFailedAgents ? (
                             <Button variant="secondary" onClick={() => onReplay('failed_agents')}>
                               <RotateCcw className="size-4" aria-hidden />
@@ -428,50 +438,32 @@ export function WorkflowRunPanel({
                             </Button>
                           ) : null}
                         </div>
-                      </div>
-                    ) : null}
-                    {hasResultActions ? (
-                      <div className="min-w-0">
-                        <h4 className="text-xs font-medium text-fg-subtle">{labels.resultActionsTitle}</h4>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {resultActions.map((action) => (
-                            <Button key={action.id} variant="secondary" onClick={() => handleResultAction(action)}>
-                              {action.label}
-                            </Button>
-                          ))}
-                          {!hasEnvelopeCopyAction ? (
-                            <Button variant="secondary" onClick={handleCopy}>
-                              {copied ? <Check className="size-4" aria-hidden /> : <Copy className="size-4" aria-hidden />}
-                              {copied ? labels.copied : labels.copyResult}
-                            </Button>
-                          ) : null}
-                          <Button variant="secondary" onClick={handleExport}>
-                            <Download className="size-4" aria-hidden />
-                            {labels.exportResult}
-                          </Button>
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
-                    </section>
+                      </section>
+                      <WorkflowPartialResults view={view} language={language} />
+                    </>
                   ) : null}
 
-                  {hasDiagnostics ? (
-                    <WorkflowDiagnosticsPanel
-                      diagnostics={diagnostics}
+                  {outcome ? (
+                    <WorkflowOutcomePanel
+                      outcome={outcome}
                       labels={labels}
-                      hint={diagnosticHint}
-                      onOpenAgent={openDiagnosticAgent}
+                      downloadingArtifactId={downloadingArtifactId}
+                      downloadError={downloadError}
+                      onCopyText={(text) => void copyTextToClipboard(text)}
+                      onDownloadArtifact={(artifact) => void handleDownloadArtifact(artifact)}
+                      onStartFollowUp={handleStartFollowUp}
+                      compact
                     />
                   ) : null}
 
-                  <WorkflowReplayLineagePanel
-                    view={view}
-                    comparison={comparison}
-                    labels={labels}
-                    onOpenRunId={onOpenRunId}
-                  />
-                  <WorkflowBindingPanel view={view} labels={labels} />
+                  {canCancel ? (
+                    <div className="flex justify-end">
+                      <Button variant="secondary" onClick={onCancel} className="text-red-600 dark:text-red-300">
+                        <CircleStop className="size-4" aria-hidden />
+                        {labels.cancel}
+                      </Button>
+                    </div>
+                  ) : null}
                 </section>
               ) : null}
 
@@ -510,6 +502,14 @@ export function WorkflowRunPanel({
                     onToggleLogs={() => setLogsExpanded((value) => !value)}
                     onSelectAgent={handleSelectAgent}
                   />
+
+                  <WorkflowReplayLineagePanel
+                    view={view}
+                    comparison={comparison}
+                    labels={labels}
+                    onOpenRunId={onOpenRunId}
+                  />
+                  <WorkflowBindingPanel view={view} labels={labels} />
 
                 </>
               ) : null}
@@ -984,7 +984,7 @@ function WorkflowOutcomePanel({
   onStartFollowUp: (followUp: WorkflowFollowUp) => void;
   compact?: boolean;
 }) {
-  if (!outcome || (!outcome.artifacts.length && !outcome.followUps.length && outcome.structuredOutput === undefined)) {
+  if (!outcome || (!outcome.artifacts.length && !outcome.followUps.length)) {
     if (compact) return null;
     return (
       <section className="mt-5 rounded-xl border border-dashed border-edge p-4 text-sm text-fg-muted">
@@ -1050,18 +1050,6 @@ function WorkflowOutcomePanel({
         </OutcomeCard>
       ) : null}
 
-      {outcome.structuredOutput !== undefined ? (
-        <OutcomeCard title={labels.outcomeStructuredOutput} className="lg:col-span-3">
-          <details className="rounded-lg bg-surface-base">
-            <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-fg-muted hover:text-fg">
-              {labels.outcomeStructuredOutput}
-            </summary>
-            <pre className="max-h-[28rem] min-w-0 overflow-auto whitespace-pre-wrap break-words border-t border-edge-subtle p-3 font-mono text-xs leading-5 text-fg-muted">
-              {stringifyWorkflowResult(outcome.structuredOutput)}
-            </pre>
-          </details>
-        </OutcomeCard>
-      ) : null}
     </div>
   );
 }
@@ -1088,7 +1076,6 @@ interface WorkflowOutcomeView {
   actions: WorkflowNextAction[];
   artifacts: WorkflowArtifactRef[];
   followUps: WorkflowFollowUp[];
-  structuredOutput?: unknown;
 }
 
 function resolveWorkflowOutcome(result: unknown): WorkflowOutcomeView | null {
@@ -1097,8 +1084,8 @@ function resolveWorkflowOutcome(result: unknown): WorkflowOutcomeView | null {
   const actions = Array.isArray(envelope.actions) ? envelope.actions : [];
   const artifacts = Array.isArray(envelope.artifacts) ? envelope.artifacts : [];
   const followUps = Array.isArray(envelope.followUps) ? envelope.followUps : [];
-  if (actions.length === 0 && artifacts.length === 0 && followUps.length === 0 && envelope.structuredOutput === undefined) return null;
-  return { actions, artifacts, followUps, structuredOutput: envelope.structuredOutput };
+  if (actions.length === 0 && artifacts.length === 0 && followUps.length === 0) return null;
+  return { actions, artifacts, followUps };
 }
 
 function resultActionPayloadRecord(payload: unknown): Record<string, unknown> | null {
