@@ -14,7 +14,6 @@ import {
   SessionConfigStore,
   onSessionTranscriptUpdate,
   effectiveWorkspacePathForSession,
-  type CompactionConfig,
   type WindowConfig,
 } from '../session/index.js';
 import { type ThinkLevel } from './transcript/thinking-types.js';
@@ -35,7 +34,7 @@ import { ErrorPatternMatcher } from './tools/error-pattern-matcher.js';
 import { ContextMiddleware, SelfVerifyMiddleware } from './middleware/index.js';
 import { TurnDiffTracker } from './coding/index.js';
 import { LifecycleManager } from './lifecycle/index.js';
-import { CompactionLifecycleHandler } from './lifecycle/handlers/compaction.js';
+import { resolveCompactionPolicy } from './memory/compaction-policy.js';
 
 import {
   MessageRouter,
@@ -254,12 +253,24 @@ export class AgentService {
       agentId: this.agentId,
       get sessionKey() { return this.currentContext?.sessionKey; },
     });
+    this.sessionStore.setCompactionHooks({
+      before: ({ sessionKey, messageCount, tokenCount }) =>
+        this.hookHandler.triggerWithSessionKey(sessionKey, 'before_compaction', {
+          messageCount,
+          tokenCount,
+        }),
+      after: ({ sessionKey, messageCount, tokenCount, compactedCount }) =>
+        this.hookHandler.triggerWithSessionKey(sessionKey, 'after_compaction', {
+          messageCount,
+          tokenCount,
+          compactedCount,
+        }),
+    });
 
     this.progressManager = this.createProgressManager();
     this.initializeReliabilityModules();
 
     this.lifecycleManager = new LifecycleManager();
-    this.initializeLifecycleHandlers();
 
     this.streamManager = new StreamManager();
     this.sessionContextManager = new SessionContextManager();
@@ -494,7 +505,6 @@ export class AgentService {
       setupSessionEventHandling: (sk) => this.setupSessionEventHandling(sk),
       sessionHydrator: this.sessionHydrator,
       getLastAssistantPlainText: (sk) => this.getLastAssistantPlainText(sk),
-      checkAndCompact: (sk, msgs) => this.checkAndCompact(sk, msgs),
       enqueueMaybeAutoTitleAfterPersist: (sk) => this.enqueueMaybeAutoTitleAfterPersist(sk),
       getConfig: () => this.effectiveAppConfig(),
       resetSession: (sk) => this.resetSession(sk),
@@ -518,13 +528,6 @@ export class AgentService {
       keepRecentMessages: 20,
       preserveSystemMessages: true,
     };
-    const compactionConfig: Partial<CompactionConfig> = {
-      enabled: true,
-      triggerThreshold: 0.8,
-      minMessagesBeforeCompact: 10,
-      keepRecentMessages: 10,
-      retentionWindow: 6,
-    };
     const appCfg = this.config.config;
     if (!appCfg) {
       throw new Error('AgentService requires config.config for session store paths');
@@ -534,7 +537,7 @@ export class AgentService {
         config: appCfg,
       },
       windowConfig,
-      compactionConfig,
+      resolveCompactionPolicy(appCfg),
     );
   }
 
@@ -614,20 +617,6 @@ export class AgentService {
 
     // Initialize context middleware for automatic request tracking
     this.contextMiddleware = new ContextMiddleware();
-  }
-
-  private initializeLifecycleHandlers(): void {
-    this.lifecycleManager.on('llm_response', new CompactionLifecycleHandler({
-      minMessages: 20,
-      maxTokens: 8000,
-      preserveReasoning: true,
-      accumulateUsage: true,
-    }));
-
-    log.debug(
-      { handlers: this.lifecycleManager.getRegisteredHandlers() },
-      'Lifecycle handlers initialized'
-    );
   }
 
   setChannelManager(channelManager: ChannelManager): void {
@@ -1033,29 +1022,6 @@ export class AgentService {
     }
 
     this.agentEventHandler.handle(event, currentContext);
-  }
-
-  private async checkAndCompact(sessionKey: string, messages: AgentMessage[]): Promise<void> {
-    const contextWindow = this.getContextWindowForSession(sessionKey);
-    const prep = this.sessionStore.prepareCompaction(sessionKey, messages, contextWindow);
-    if (!prep.needsCompaction) return;
-
-    log.info({ sessionKey, reason: prep.stats?.reason, usagePercent: prep.stats?.usagePercent }, 'Session needs compaction');
-
-    const model = this.modelManager.getResolvedModelForSession(sessionKey);
-    const result = await this.sessionStore.compact(
-      sessionKey,
-      messages,
-      model,
-      undefined,
-      false,
-    );
-    await this.hookHandler.trigger('after_compaction', {
-      messageCount: messages.length,
-      tokenCount: result.tokensBefore,
-      compactedCount: messages.length - result.firstKeptIndex,
-    });
-    log.info({ sessionKey, tokensBefore: result.tokensBefore, tokensAfter: result.tokensAfter }, 'Session compacted');
   }
 
   private getContextWindowForSession(sessionKey: string): number {

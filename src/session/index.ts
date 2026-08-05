@@ -27,11 +27,8 @@ export {
   type ExportFormat,
   type SessionExport,
   type SessionTranscriptSummary,
-  type CompactionCheckpointSummary,
-  type CompactionCheckpointDetail,
+  type CompactionBoundarySummary,
 } from './types.js';
-
-export { normalizeCompactionCheckpointId } from './compaction-checkpoints.js';
 
 export { shouldSkipWebchatInboundByAbortCutoff } from './abort-cutoff.js';
 

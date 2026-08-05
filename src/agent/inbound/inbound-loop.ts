@@ -74,7 +74,6 @@ export interface InboundLoopConfig {
   /** Returns the visible last assistant text used for outbound + persistent-goal hook. */
   getLastAssistantPlainText: (sessionKey: string) => string;
   /** Pre-turn auto-compaction (only used by system messages). */
-  checkAndCompact: (sessionKey: string, messages: AgentMessage[]) => Promise<void>;
   /** Fire-and-forget auto-title (no-ops for cron/heartbeat keys). */
   enqueueMaybeAutoTitleAfterPersist: (sessionKey: string) => void;
   /** Effective merged config snapshot. */
@@ -346,9 +345,6 @@ export class InboundLoop {
 
     await this.cfg.sessionHydrator.workspace(context.sessionKey);
     await this.cfg.sessionHydrator.model(context.sessionKey);
-
-    const messages = await this.cfg.sessionStore.load(context.sessionKey);
-    await this.cfg.checkAndCompact(context.sessionKey, messages);
 
     const systemMessage: AgentMessage = {
       role: 'user',

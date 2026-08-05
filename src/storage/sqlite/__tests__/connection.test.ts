@@ -55,8 +55,6 @@ describe('openXopcDatabase', () => {
         'session_config',
         'transcripts',
         'transcript_entries',
-        'compaction_checkpoints',
-        'checkpoint_entries',
         'automations',
         'automation_runs',
         'focus_watches',
@@ -72,6 +70,8 @@ describe('openXopcDatabase', () => {
         'interaction_states',
       ]),
     );
+    expect(tables).not.toContain('compaction_checkpoints');
+    expect(tables).not.toContain('checkpoint_entries');
   });
 
   it('sets restrictive permissions on database files', () => {

@@ -81,11 +81,16 @@ export interface XopcTranscriptCompactionSummaryEntry {
 export interface XopcTranscriptCompactionEntry {
   type: 'compaction';
   at: string;
+  baseSeq: number;
+  plannerVersion: number;
+  summaryModelRef: string;
+  qualityAudit: 'passed' | 'disabled';
   summary: string;
   messages: AgentMessage[];
   firstKeptIndex: number;
   tokensBefore: number;
   tokensAfter: number;
+  restoredFromCompactionId?: string;
 }
 
 /** Persisted label change for a transcript entry. */
@@ -177,6 +182,12 @@ export function isTranscriptCompactionEntry(x: unknown): x is XopcTranscriptComp
   const row = x as Record<string, unknown>;
   return row.type === 'compaction'
     && typeof row.at === 'string'
+    && typeof row.baseSeq === 'number'
+    && Number.isInteger(row.baseSeq)
+    && typeof row.plannerVersion === 'number'
+    && Number.isInteger(row.plannerVersion)
+    && typeof row.summaryModelRef === 'string'
+    && (row.qualityAudit === 'passed' || row.qualityAudit === 'disabled')
     && typeof row.summary === 'string'
     && Array.isArray(row.messages)
     && typeof row.firstKeptIndex === 'number'

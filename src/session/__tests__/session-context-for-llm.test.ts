@@ -162,6 +162,10 @@ describe('session-context-for-llm', () => {
       {
         type: 'compaction',
         at: '2026-08-05T00:00:00.000Z',
+        baseSeq: 2,
+        plannerVersion: 2,
+        summaryModelRef: 'test/model',
+        qualityAudit: 'passed',
         summary: 'durable old context',
         messages: [summary, kept],
         firstKeptIndex: 1,
@@ -182,6 +186,10 @@ describe('session-context-for-llm', () => {
       {
         type: 'compaction',
         at: '2026-08-05T00:00:00.000Z',
+        baseSeq: 1,
+        plannerVersion: 2,
+        summaryModelRef: 'test/model',
+        qualityAudit: 'passed',
         summary: 'one',
         messages: [firstSummary],
         firstKeptIndex: 1,
@@ -192,6 +200,10 @@ describe('session-context-for-llm', () => {
       {
         type: 'compaction',
         at: '2026-08-05T01:00:00.000Z',
+        baseSeq: 3,
+        plannerVersion: 2,
+        summaryModelRef: 'test/model',
+        qualityAudit: 'passed',
         summary: 'two',
         messages: [secondSummary],
         firstKeptIndex: 2,
@@ -247,12 +259,25 @@ describe('session-context-for-llm', () => {
     expect(isTranscriptCompactionEntry({
       type: 'compaction',
       at: '2026-08-05T00:00:00.000Z',
+      baseSeq: 10,
+      plannerVersion: 2,
+      summaryModelRef: 'test/model',
+      qualityAudit: 'passed',
       summary: 'x',
       messages: [],
       firstKeptIndex: 1,
       tokensBefore: 100,
       tokensAfter: 10,
     })).toBe(true);
+    expect(isTranscriptCompactionEntry({
+      type: 'compaction',
+      at: '2026-08-05T00:00:00.000Z',
+      summary: 'legacy snapshot',
+      messages: [],
+      firstKeptIndex: 1,
+      tokensBefore: 100,
+      tokensAfter: 10,
+    })).toBe(false);
     expect(isTranscriptCompactionEntry({ type: 'compaction', summary: 'x' })).toBe(false);
   });
 
@@ -357,6 +382,10 @@ describe('session-context-for-llm', () => {
       {
         type: 'compaction',
         at: '2026-08-05T00:00:00.000Z',
+        baseSeq: 7,
+        plannerVersion: 2,
+        summaryModelRef: 'test/model',
+        qualityAudit: 'passed',
         summary: 'durable summary',
         messages: [],
         firstKeptIndex: 1,

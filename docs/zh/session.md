@@ -24,11 +24,11 @@ xopc 提供全面的会话管理功能，支持通过 CLI 和 Web UI 管理对�
 | 属性 | 值 |
 |------|-----|
 | 数据库 | `~/.xopc/xopc.db`（SQLite，WAL） |
-| 主要表 | `sessions`、`transcripts`、`transcript_entries`、`session_config`、`compaction_checkpoints`、`transcript_fts`（FTS5） |
+| 主要表 | `sessions`、`transcripts`、`transcript_entries`、`session_config`、`transcript_fts`（FTS5） |
 | 会话级覆盖配置 | SQLite `session_config`（模型、thinking、verbose 等） |
 | 遗留路径 | 旧版可能在 `agents/<agentId>/sessions/` 留有文件；新安装不再向该目录写入 transcript |
 
-会话元数据、transcript 行、压缩检查点与全文检索均存储在 SQLite 中。网关启动时打开数据库（`openXopcDatabase()`）。
+会话元数据、追加式压缩边界、transcript 行与全文检索均存储在 SQLite 中。压缩边界是 `transcript_entries` 中的强类型行。网关启动时打开数据库（`openXopcDatabase()`）。
 
 ---
 
@@ -206,33 +206,15 @@ interface Message {
 
 ### 压缩
 
-当会话超出上下文窗口限制时：
+当完整模型输入达到配置阈值，或活动 transcript 超过字节上限时：
 
-1. 使用 LLM 摘要早期消息
-2. 保留最近消息（默认：最后 10 条）
-3. 始终保留系统消息
+1. 按完整用户轮次与工具调用单元规划压缩范围，不拆分工具调用及其结果。
+2. 使用配置的摘要模型生成分块、结构化摘要，同时原样保留最近轮次与最近 token 尾部。
+3. 质量门检查必需章节与精确标识符；失败时依次尝试配置的候选模型。
+4. 将精简后的模型上下文作为压缩边界追加到 `transcript_entries`；原始 transcript 行继续用于展示、导出和搜索。
+5. 摘要生成或质量检查失败时关闭式失败，不覆盖原始模型上下文。
 
-在 `config.json` 中配置：
-
-```json
-{
-  "agents": {
-    "defaults": {
-      "compaction": {
-        "enabled": true,
-        "mode": "abstractive",
-        "triggerThreshold": 0.8,
-        "keepRecentMessages": 10
-      }
-    }
-  }
-}
-```
-
-**压缩模式：**
-- `extractive` - 使用关键句摘要
-- `abstractive` - 基于 LLM 的摘要
-- `structured` - 保留结构化数据
+重复压缩只会替换模型输入中的有效边界，磁盘 transcript 仍保持追加式。可通过边界 ID 进行逻辑恢复，不删除历史行。
 
 ### 滑动窗口
 

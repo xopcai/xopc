@@ -4,24 +4,6 @@ import { apiUrl } from '@/lib/url';
 
 // --- Nested shapes (align with `src/config/schema.ts`) ---
 
-export type AgentDefaultsCompactionState = {
-  enabled: boolean;
-  mode: 'default' | 'safeguard';
-  reserveTokens: number;
-  triggerThreshold: number;
-  minMessagesBeforeCompact: number;
-  keepRecentMessages: number;
-  evictionWindow: number;
-  retentionWindow: number;
-};
-
-export type AgentDefaultsPruningState = {
-  enabled: boolean;
-  maxToolResultChars: number;
-  headKeepRatio: number;
-  tailKeepRatio: number;
-};
-
 export type AgentDefaultsMemoryState = {
   enabled: boolean;
   useEnhancedSystem: boolean;
@@ -128,8 +110,6 @@ export interface AgentDefaultsState {
   thinkingDefault: string;
   reasoningDefault: string;
   verboseDefault: string;
-  compaction: AgentDefaultsCompactionState;
-  pruning: AgentDefaultsPruningState;
   memory: AgentDefaultsMemoryState;
   sessionSearch: AgentDefaultsSessionSearchState;
   webExtract: AgentDefaultsWebExtractState;
@@ -145,24 +125,6 @@ export interface AgentDefaultsState {
   /** JSON runtime params draft. */
   paramsJson: string;
 }
-
-const DEFAULT_COMPACTION: AgentDefaultsCompactionState = {
-  enabled: true,
-  mode: 'default',
-  reserveTokens: 8000,
-  triggerThreshold: 0.8,
-  minMessagesBeforeCompact: 10,
-  keepRecentMessages: 5,
-  evictionWindow: 0.2,
-  retentionWindow: 6,
-};
-
-const DEFAULT_PRUNING: AgentDefaultsPruningState = {
-  enabled: true,
-  maxToolResultChars: 10000,
-  headKeepRatio: 0.3,
-  tailKeepRatio: 0.3,
-};
 
 const DEFAULT_MEMORY: AgentDefaultsMemoryState = {
   enabled: true,
@@ -379,63 +341,6 @@ function parseBrowserConfig(raw: unknown): BrowserFieldsPick {
   };
 }
 
-function parseCompaction(raw: unknown): AgentDefaultsCompactionState {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return { ...DEFAULT_COMPACTION };
-  }
-  const p = raw as Record<string, unknown>;
-  return {
-    enabled: typeof p.enabled === 'boolean' ? p.enabled : DEFAULT_COMPACTION.enabled,
-    mode: p.mode === 'safeguard' ? 'safeguard' : 'default',
-    reserveTokens:
-      typeof p.reserveTokens === 'number' && Number.isFinite(p.reserveTokens)
-        ? Math.floor(p.reserveTokens)
-        : DEFAULT_COMPACTION.reserveTokens,
-    triggerThreshold:
-      typeof p.triggerThreshold === 'number' && Number.isFinite(p.triggerThreshold)
-        ? p.triggerThreshold
-        : DEFAULT_COMPACTION.triggerThreshold,
-    minMessagesBeforeCompact:
-      typeof p.minMessagesBeforeCompact === 'number' && Number.isFinite(p.minMessagesBeforeCompact)
-        ? Math.floor(p.minMessagesBeforeCompact)
-        : DEFAULT_COMPACTION.minMessagesBeforeCompact,
-    keepRecentMessages:
-      typeof p.keepRecentMessages === 'number' && Number.isFinite(p.keepRecentMessages)
-        ? Math.floor(p.keepRecentMessages)
-        : DEFAULT_COMPACTION.keepRecentMessages,
-    evictionWindow:
-      typeof p.evictionWindow === 'number' && Number.isFinite(p.evictionWindow)
-        ? p.evictionWindow
-        : DEFAULT_COMPACTION.evictionWindow,
-    retentionWindow:
-      typeof p.retentionWindow === 'number' && Number.isFinite(p.retentionWindow)
-        ? Math.floor(p.retentionWindow)
-        : DEFAULT_COMPACTION.retentionWindow,
-  };
-}
-
-function parsePruning(raw: unknown): AgentDefaultsPruningState {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return { ...DEFAULT_PRUNING };
-  }
-  const p = raw as Record<string, unknown>;
-  return {
-    enabled: typeof p.enabled === 'boolean' ? p.enabled : DEFAULT_PRUNING.enabled,
-    maxToolResultChars:
-      typeof p.maxToolResultChars === 'number' && Number.isFinite(p.maxToolResultChars)
-        ? Math.floor(p.maxToolResultChars)
-        : DEFAULT_PRUNING.maxToolResultChars,
-    headKeepRatio:
-      typeof p.headKeepRatio === 'number' && Number.isFinite(p.headKeepRatio)
-        ? p.headKeepRatio
-        : DEFAULT_PRUNING.headKeepRatio,
-    tailKeepRatio:
-      typeof p.tailKeepRatio === 'number' && Number.isFinite(p.tailKeepRatio)
-        ? p.tailKeepRatio
-        : DEFAULT_PRUNING.tailKeepRatio,
-  };
-}
-
 function parseMemory(raw: unknown): AgentDefaultsMemoryState {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return { ...DEFAULT_MEMORY };
@@ -619,8 +524,6 @@ export function parseAgentDefaultsFromConfig(cfg: unknown): AgentDefaultsState {
     thinkingDefault: typeof d.thinkingDefault === 'string' ? d.thinkingDefault : 'medium',
     reasoningDefault: typeof d.reasoningDefault === 'string' ? d.reasoningDefault : 'stream',
     verboseDefault: typeof d.verboseDefault === 'string' ? d.verboseDefault : 'full',
-    compaction: parseCompaction(d.compaction),
-    pruning: parsePruning(d.pruning),
     memory: parseMemory(d.memory),
     sessionSearch: parseSessionSearch(d.sessionSearch),
     webExtract: parseWebExtract(d.webExtract),
