@@ -166,7 +166,9 @@ describe('pre-turn auto-compaction', () => {
     expect(sessionStore.compact).toHaveBeenCalledWith(
       'agent:main:test-session',
       expect.any(Array),
-      128_000,
+      expect.objectContaining({ id: 'test-model' }),
+      undefined,
+      false,
     );
 
     // Agent was evicted for fresh reload

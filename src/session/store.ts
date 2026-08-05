@@ -1,4 +1,5 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
+import type { Api, Model } from '@earendil-works/pi-ai/compat';
 
 import type { Config } from '../config/schema.js';
 import { resolveStateDir } from '../config/paths-state.js';
@@ -10,7 +11,6 @@ import { SlidingWindow, type WindowConfig } from '../agent/memory/window.js';
 import {
   requireXopcDatabase,
   appendTranscriptEntry,
-  captureCompactionCheckpoint,
   deleteSessionRecord,
   ensureSessionRecord,
   estimateTokensFromMessages,
@@ -21,7 +21,6 @@ import {
   listCompactionCheckpoints,
   listSessionMetadata,
   listSessionsByAgent,
-  loadCheckpointRows,
   loadLlmMessagesForSession,
   paginateTranscriptMessages,
   loadTranscriptHistoryRowsForSession,
@@ -36,6 +35,8 @@ import type { TranscriptCompactionRecord, XopcSessionTranscriptV1 } from './tran
 import {
   buildSessionDisplayMessages,
   buildSessionContextForLlm,
+  isTranscriptCompactionEntry,
+  isRuntimeOnlyTranscriptMessage,
   mergeLlmMessagesPreservingContextRows,
   transcriptRowsFromJsonArray,
   type TranscriptStoredRow,
@@ -61,6 +62,7 @@ import type { Message } from './types.js';
 import type { SessionTranscriptUpdate } from './transcript-events.js';
 import { isAppendOnlyLlmTranscriptMessage } from './transcript-stats.js';
 import { transcriptRowsToClientHistory } from './client-history.js';
+import { computeTranscriptUserRoundDeleteRange } from './user-round-delete.js';
 
 const log = createLogger('SessionStore');
 
@@ -210,7 +212,6 @@ export class SessionStore {
         offset: hasBeforeCursor ? undefined : offset,
         beforeIndex: hasBeforeCursor ? parsedBefore : undefined,
         includeContext: true,
-        includeArchived: true,
       });
       const messages = transcriptRowsToClientHistory(page.rows) as unknown as Message[];
       const endIndex = hasBeforeCursor
@@ -391,14 +392,14 @@ export class SessionStore {
     const rows = await this.loadTranscriptRows(key);
     const compactions: TranscriptCompactionRecord[] = [];
     for (const row of rows) {
-      if ((row as { type?: string }).type === 'compaction') {
-        const c = row as unknown as TranscriptCompactionRecord & { type: 'compaction' };
+      if (isTranscriptCompactionEntry(row)) {
         compactions.push({
-          at: c.at ?? new Date().toISOString(),
-          summary: c.summary ?? '',
-          firstKeptIndex: Number(c.firstKeptIndex ?? 0),
-          tokensBefore: c.tokensBefore ?? 0,
-          tokensAfter: (c as { tokensAfter?: number }).tokensAfter ?? 0,
+          at: row.at,
+          summary: row.summary,
+          messages: row.messages,
+          firstKeptIndex: row.firstKeptIndex,
+          tokensBefore: row.tokensBefore,
+          tokensAfter: row.tokensAfter,
         });
       }
     }
@@ -553,6 +554,38 @@ export class SessionStore {
     });
   }
 
+  async deleteUserRound(
+    key: string,
+    userRoundIndex: number,
+  ): Promise<{
+    deleted: number;
+    removedMessages: AgentMessage[];
+    remainingMessages: AgentMessage[];
+  } | null> {
+    return this.runStoreMutation(async () => {
+      requireXopcDatabase();
+      const rows = await this.loadTranscriptRows(key);
+      const canonicalRows = rows.filter(
+        (row) => !isTranscriptCompactionEntry(row) && !isRuntimeOnlyTranscriptMessage(row),
+      );
+      const range = computeTranscriptUserRoundDeleteRange(canonicalRows, userRoundIndex);
+      if (!range) return null;
+
+      const removedRows = canonicalRows.slice(range.startIndex, range.startIndex + range.count);
+      const remainingRows = canonicalRows
+        .slice(0, range.startIndex)
+        .concat(canonicalRows.slice(range.startIndex + range.count));
+      const removedMessages = buildSessionDisplayMessages(removedRows);
+      const remainingMessages = buildSessionDisplayMessages(remainingRows);
+      replaceTranscriptRows(key, remainingRows);
+      return {
+        deleted: removedMessages.length,
+        removedMessages,
+        remainingMessages,
+      };
+    });
+  }
+
   getWindowStats(messages: AgentMessage[]) {
     return this.window.getStats(messages);
   }
@@ -573,17 +606,14 @@ export class SessionStore {
   ): Promise<AgentMessage[]> {
     const compacted = this.compactor.applyCompaction(messages, result);
     return this.runStoreMutation(async () => {
-      const prev = await this.loadTranscriptRows(key);
-      const merged = mergeLlmMessagesPreservingContextRows(prev, compacted);
-      captureCompactionCheckpoint(key);
-      replaceTranscriptRows(key, merged, {
-        appendCompaction: {
-          at: new Date().toISOString(),
-          summary: result.summary,
-          firstKeptIndex: result.firstKeptIndex,
-          tokensBefore: result.tokensBefore,
-          tokensAfter: result.tokensAfter,
-        },
+      appendTranscriptEntry(key, {
+        type: 'compaction',
+        at: new Date().toISOString(),
+        summary: result.summary,
+        messages: compacted,
+        firstKeptIndex: result.firstKeptIndex,
+        tokensBefore: result.tokensBefore,
+        tokensAfter: result.tokensAfter,
       });
       const metadata = await this.getMetadata(key);
       if (metadata) {
@@ -601,12 +631,11 @@ export class SessionStore {
   async compact(
     key: string,
     messages: AgentMessage[],
-    contextWindow: number,
+    model: Model<Api>,
     instructions?: string,
     force?: boolean,
   ): Promise<CompactionResult> {
-    void contextWindow;
-    const result = await this.compactor.compact(messages, instructions, force);
+    const result = await this.compactor.compact(messages, model, instructions, force);
     if (result.compacted) {
       await this.applyCompaction(key, messages, result);
     }
@@ -838,29 +867,7 @@ export class SessionStore {
 
   private async loadDisplayMessages(key: string): Promise<AgentMessage[]> {
     requireXopcDatabase();
-    const checkpoints = listCompactionCheckpoints(key);
-    const rowSets: TranscriptStoredRow[][] = [];
-    for (const checkpoint of [...checkpoints].reverse()) {
-      rowSets.push(loadCheckpointRows(key, checkpoint.id));
-    }
-    rowSets.push(await this.loadTranscriptRows(key));
-
-    const messages: AgentMessage[] = [];
-    const seen = new Set<string>();
-    for (const rows of rowSets) {
-      for (const message of buildSessionDisplayMessages(rows)) {
-        if (this.isCompactionSummaryMessage(message)) {
-          continue;
-        }
-        const identity = this.displayMessageIdentity(message);
-        if (seen.has(identity)) {
-          continue;
-        }
-        seen.add(identity);
-        messages.push(message);
-      }
-    }
-    return messages;
+    return buildSessionDisplayMessages(await this.loadTranscriptRows(key));
   }
 
   private paginateDisplayMessages(
@@ -893,27 +900,8 @@ export class SessionStore {
     };
   }
 
-  private displayMessageIdentity(message: AgentMessage): string {
-    const record = message as unknown as Record<string, unknown>;
-    return JSON.stringify({
-      role: message.role,
-      timestamp: record.timestamp,
-      toolCallId: record.toolCallId ?? record.tool_call_id,
-      toolName: record.toolName,
-      content: this.messageContent(message),
-    });
-  }
-
   private messageContent(msg: AgentMessage): unknown {
     return (msg as { content?: unknown }).content;
-  }
-
-  private isCompactionSummaryMessage(msg: AgentMessage): boolean {
-    if (msg.role !== 'user') {
-      return false;
-    }
-    const text = this.extractTextContent(this.messageContent(msg)).trim();
-    return /^\[Previous conversation summary\]/i.test(text);
   }
 
   private extractTextContent(content: unknown): string {

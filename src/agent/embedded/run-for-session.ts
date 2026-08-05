@@ -299,7 +299,13 @@ async function maybeAutoCompactBeforeTurn(opts: {
   });
 
   try {
-    const result = await sessionStore.compact(sessionKey, messages, contextWindow);
+    const result = await sessionStore.compact(
+      sessionKey,
+      messages,
+      model,
+      undefined,
+      false,
+    );
 
     if (result.compacted) {
       // Evict the cached agent so the next turn reloads from the compacted transcript

@@ -77,6 +77,17 @@ export interface XopcTranscriptCompactionSummaryEntry {
   timestamp?: string | number;
 }
 
+/** Append-only compaction boundary containing the exact LLM context at that point. */
+export interface XopcTranscriptCompactionEntry {
+  type: 'compaction';
+  at: string;
+  summary: string;
+  messages: AgentMessage[];
+  firstKeptIndex: number;
+  tokensBefore: number;
+  tokensAfter: number;
+}
+
 /** Persisted label change for a transcript entry. */
 export interface XopcTranscriptLabelEntry {
   type: 'label';
@@ -124,6 +135,7 @@ export type TranscriptStoredRow =
   | XopcTranscriptCustomStateEntry
   | XopcTranscriptBranchSummaryEntry
   | XopcTranscriptCompactionSummaryEntry
+  | XopcTranscriptCompactionEntry
   | XopcTranscriptLabelEntry
   | XopcTranscriptThinkingLevelChangeEntry
   | XopcTranscriptModelChangeEntry
@@ -160,6 +172,18 @@ export function isTranscriptSummaryMessageEntry(
   return role === 'branchSummary' || role === 'compactionSummary';
 }
 
+export function isTranscriptCompactionEntry(x: unknown): x is XopcTranscriptCompactionEntry {
+  if (!x || typeof x !== 'object') return false;
+  const row = x as Record<string, unknown>;
+  return row.type === 'compaction'
+    && typeof row.at === 'string'
+    && typeof row.summary === 'string'
+    && Array.isArray(row.messages)
+    && typeof row.firstKeptIndex === 'number'
+    && typeof row.tokensBefore === 'number'
+    && typeof row.tokensAfter === 'number';
+}
+
 export function isTranscriptLabelEntry(x: unknown): x is XopcTranscriptLabelEntry {
   if (!x || typeof x !== 'object') return false;
   return (x as Record<string, unknown>).type === 'label';
@@ -174,13 +198,16 @@ export function isTranscriptMetadataEntry(
 }
 
 const LLM_ROLES = new Set(['user', 'assistant', 'system', 'tool', 'toolResult']);
-const CODING_CONTEXT_LOOKBACK = 80;
-const CODING_CONTEXT_MAX_LINES = 24;
 
 function isLikelyAgentMessage(x: unknown): x is AgentMessage {
   if (!x || typeof x !== 'object') return false;
   const role = (x as Record<string, unknown>).role;
   return typeof role === 'string' && LLM_ROLES.has(role);
+}
+
+/** Runtime-derived messages are never authoritative transcript rows. */
+export function isRuntimeOnlyTranscriptMessage(x: unknown): boolean {
+  return isLikelyAgentMessage(x) && (x as unknown as { droppable?: unknown }).droppable === true;
 }
 
 function parseTimestampValue(timestamp: string | number | undefined): number | undefined {
@@ -256,50 +283,6 @@ function stringValue(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
-function parseJsonRecord(value: unknown): Record<string, unknown> | null {
-  if (typeof value !== 'string' || !value.trim()) return null;
-  try {
-    return asRecord(JSON.parse(value));
-  } catch {
-    return null;
-  }
-}
-
-function textFromContent(content: unknown): string {
-  if (typeof content === 'string') return content;
-  if (!Array.isArray(content)) return '';
-  return content
-    .map((part) => {
-      if (typeof part === 'string') return part;
-      const rec = asRecord(part);
-      if (!rec) return '';
-      if (rec.type === 'text' && typeof rec.text === 'string') return rec.text;
-      return '';
-    })
-    .filter(Boolean)
-    .join('');
-}
-
-function toolNameFromBlock(block: Record<string, unknown>): string {
-  const fn = asRecord(block.function);
-  return stringValue(block.name) ?? stringValue(block.toolName) ?? stringValue(fn?.name) ?? 'tool';
-}
-
-function toolArgsFromBlock(block: Record<string, unknown>): Record<string, unknown> {
-  const fn = asRecord(block.function);
-  return (
-    asRecord(block.arguments) ??
-    asRecord(block.args) ??
-    asRecord(block.input) ??
-    asRecord(fn?.arguments) ??
-    parseJsonRecord(block.arguments) ??
-    parseJsonRecord(block.args) ??
-    parseJsonRecord(block.input) ??
-    parseJsonRecord(fn?.arguments) ??
-    {}
-  );
-}
-
 function toolCallIdFromBlock(block: Record<string, unknown>): string | undefined {
   return (
     stringValue(block.id) ??
@@ -318,132 +301,105 @@ function toolResultId(row: AgentMessage): string | undefined {
   );
 }
 
-function extractResultDetails(row: AgentMessage | undefined): Record<string, unknown> | null {
-  if (!row) return null;
-  const topLevelDetails = asRecord((row as unknown as { details?: unknown }).details);
-  if (topLevelDetails) return topLevelDetails;
-
-  const contentText = textFromContent((row as { content?: unknown }).content);
-  if (!contentText.trim()) return null;
-  try {
-    const parsed = JSON.parse(contentText) as unknown;
-    const rec = asRecord(parsed);
-    const details = asRecord(rec?.details);
-    return details ?? rec;
-  } catch {
-    return null;
-  }
-}
-
-function collectToolResults(messages: AgentMessage[]): Map<string, AgentMessage> {
-  const results = new Map<string, AgentMessage>();
-  for (const message of messages) {
-    const role = (message as { role?: unknown }).role;
-    if (role !== 'tool' && role !== 'toolResult') continue;
-    const id = toolResultId(message);
-    if (id) results.set(id, message);
-  }
-  return results;
-}
-
-function extractToolCalls(message: AgentMessage): Array<{ id?: string; name: string; args: Record<string, unknown> }> {
+function toolCallIds(message: AgentMessage): string[] {
+  if (message.role !== 'assistant') return [];
+  const ids: string[] = [];
   const content = (message as { content?: unknown }).content;
-  const calls: Array<{ id?: string; name: string; args: Record<string, unknown> }> = [];
   if (Array.isArray(content)) {
     for (const block of content) {
       const rec = asRecord(block);
       const type = rec ? stringValue(rec.type) : undefined;
       if (!rec || (type !== 'toolCall' && type !== 'tool_use' && type !== 'tool_call')) continue;
-      calls.push({ id: toolCallIdFromBlock(rec), name: toolNameFromBlock(rec), args: toolArgsFromBlock(rec) });
+      const id = toolCallIdFromBlock(rec);
+      if (id) ids.push(id);
     }
   }
-  const toolCalls = (message as { tool_calls?: unknown }).tool_calls;
-  if (Array.isArray(toolCalls)) {
-    for (const call of toolCalls) {
-      const rec = asRecord(call);
-      const fn = asRecord(rec?.function);
-      const name = stringValue(fn?.name) ?? stringValue(rec?.name);
-      if (!rec || !name) continue;
-      calls.push({
-        id: stringValue(rec.id),
-        name,
-        args: parseJsonRecord(fn?.arguments) ?? asRecord(fn?.arguments) ?? {},
-      });
+  const calls = (message as { tool_calls?: unknown }).tool_calls;
+  if (Array.isArray(calls)) {
+    for (const call of calls) {
+      const id = stringValue(asRecord(call)?.id);
+      if (id) ids.push(id);
     }
   }
-  return calls;
+  return ids;
 }
 
-function summarizePlan(details: Record<string, unknown>): string | undefined {
-  const plan = Array.isArray(details.plan) ? details.plan : [];
-  const lines = plan
-    .map((item) => {
-      const rec = asRecord(item);
-      const step = stringValue(rec?.step)?.trim();
-      const status = stringValue(rec?.status)?.trim();
-      return step && status ? `${status}: ${step}` : '';
-    })
-    .filter(Boolean)
-    .slice(0, 8);
-  if (lines.length === 0) return undefined;
-  const explanation = stringValue(details.explanation)?.trim();
-  return `Plan${explanation ? ` (${explanation})` : ''}: ${lines.join(' | ')}`;
-}
+function filterAssistantToolCalls(message: AgentMessage, pairedIds: Set<string>): AgentMessage | null {
+  const record = message as unknown as Record<string, unknown>;
+  const content = record.content;
+  const filteredContent = Array.isArray(content)
+    ? content.filter((block) => {
+        const rec = asRecord(block);
+        const type = rec ? stringValue(rec.type) : undefined;
+        if (!rec || (type !== 'toolCall' && type !== 'tool_use' && type !== 'tool_call')) return true;
+        const id = toolCallIdFromBlock(rec);
+        return id !== undefined && pairedIds.has(id);
+      })
+    : content;
+  const toolCalls = record.tool_calls;
+  const filteredToolCalls = Array.isArray(toolCalls)
+    ? toolCalls.filter((call) => {
+        const id = stringValue(asRecord(call)?.id);
+        return id !== undefined && pairedIds.has(id);
+      })
+    : toolCalls;
 
-function summarizeCommand(args: Record<string, unknown>, details: Record<string, unknown> | null): string {
-  const command = stringValue(details?.command) ?? stringValue(args.cmd) ?? stringValue(args.command) ?? '';
-  const status = stringValue(details?.status) ?? (details?.exitCode === 0 ? 'success' : 'unknown');
-  const exitCode = typeof details?.exitCode === 'number' ? details.exitCode : undefined;
-  const hint = stringValue(details?.failureHint);
-  return [
-    `Command ${status}: ${command || '(unknown command)'}`,
-    exitCode !== undefined ? `exit=${exitCode}` : '',
-    hint ? `hint=${hint}` : '',
-  ].filter(Boolean).join(' ');
-}
-
-function summarizePatch(details: Record<string, unknown> | null): string | undefined {
-  if (!details) return undefined;
-  const files = Array.isArray(details.files)
-    ? details.files.filter((file): file is string => typeof file === 'string' && file.trim().length > 0)
-    : [];
-  const added = typeof details.added === 'number' ? details.added : 0;
-  const removed = typeof details.removed === 'number' ? details.removed : 0;
-  const summary = stringValue(details.summary)?.trim();
-  return `Patch applied: ${files.length ? files.join(', ') : summary || '(files unknown)'} (+${added}/-${removed})`;
-}
-
-function buildCodingContextMessage(messages: AgentMessage[]): AgentMessage | null {
-  const recent = messages.slice(-CODING_CONTEXT_LOOKBACK);
-  const results = collectToolResults(recent);
-  const lines: string[] = [];
-
-  for (const message of recent) {
-    if ((message as { role?: unknown }).role !== 'assistant') continue;
-    for (const call of extractToolCalls(message)) {
-      if (call.name !== 'update_plan' && call.name !== 'exec_command' && call.name !== 'apply_patch') {
-        continue;
-      }
-      const result = call.id ? results.get(call.id) : undefined;
-      const details = extractResultDetails(result);
-      const line = call.name === 'update_plan'
-        ? summarizePlan(details ?? call.args)
-        : call.name === 'exec_command'
-          ? summarizeCommand(call.args, details)
-          : summarizePatch(details);
-      if (line) lines.push(line);
-    }
+  const hadArrayContent = Array.isArray(content);
+  const hadToolCalls = Array.isArray(toolCalls);
+  const hasContent = Array.isArray(filteredContent)
+    ? filteredContent.length > 0
+    : typeof filteredContent === 'string'
+      ? filteredContent.trim().length > 0
+      : filteredContent !== undefined && filteredContent !== null;
+  const hasToolCalls = Array.isArray(filteredToolCalls) && filteredToolCalls.length > 0;
+  if (!hasContent && !hasToolCalls) {
+    return null;
   }
-
-  const uniqueLines = [...new Set(lines)].slice(-CODING_CONTEXT_MAX_LINES);
-  if (uniqueLines.length === 0) return null;
   return {
-    role: 'user',
-    content: [{
-      type: 'text',
-      text: ['<coding_context>', ...uniqueLines.map((line) => `- ${line}`), '</coding_context>'].join('\n'),
-    }],
-  } as AgentMessage;
+    ...record,
+    ...(hadArrayContent ? { content: filteredContent } : {}),
+    ...(hadToolCalls ? { tool_calls: filteredToolCalls } : {}),
+  } as unknown as AgentMessage;
+}
+
+/** Providers require every retained tool call and result to form an ordered pair. */
+function sanitizeToolPairs(messages: AgentMessage[]): AgentMessage[] {
+  const callIndex = new Map<string, number>();
+  const resultIndex = new Map<string, number>();
+  for (let index = 0; index < messages.length; index += 1) {
+    const message = messages[index]!;
+    for (const id of toolCallIds(message)) {
+      if (!callIndex.has(id)) callIndex.set(id, index);
+    }
+    const role = String((message as { role?: unknown }).role ?? '');
+    if (role === 'tool' || role === 'toolResult') {
+      const id = toolResultId(message);
+      if (id && !resultIndex.has(id)) resultIndex.set(id, index);
+    }
+  }
+
+  const pairedIds = new Set<string>();
+  for (const [id, callAt] of callIndex) {
+    const resultAt = resultIndex.get(id);
+    if (resultAt !== undefined && resultAt > callAt) pairedIds.add(id);
+  }
+
+  const out: AgentMessage[] = [];
+  for (const message of messages) {
+    const role = String((message as { role?: unknown }).role ?? '');
+    if (role === 'tool' || role === 'toolResult') {
+      const id = toolResultId(message);
+      if (id && pairedIds.has(id)) out.push(message);
+      continue;
+    }
+    if (message.role === 'assistant') {
+      const filtered = filterAssistantToolCalls(message, pairedIds);
+      if (filtered) out.push(filtered);
+      continue;
+    }
+    out.push(message);
+  }
+  return out;
 }
 
 /**
@@ -472,6 +428,10 @@ export function transcriptRowsFromJsonArray(arr: unknown[]): TranscriptStoredRow
       out.push(x);
       continue;
     }
+    if (isTranscriptCompactionEntry(x)) {
+      out.push(x);
+      continue;
+    }
     if (isTranscriptLabelEntry(x)) {
       out.push(x);
       continue;
@@ -491,10 +451,12 @@ export function transcriptRowsFromJsonArray(arr: unknown[]): TranscriptStoredRow
 export function buildSessionContextForLlm(rows: TranscriptStoredRow[]): AgentMessage[] {
   const out: AgentMessage[] = [];
   for (const r of rows) {
-    if (isTranscriptContextEntry(r)) {
+    if (isTranscriptCompactionEntry(r)) {
+      out.length = 0;
+      out.push(...r.messages);
       continue;
     }
-    if ((r as { type?: string }).type === 'compaction') {
+    if (isTranscriptContextEntry(r)) {
       continue;
     }
     if (isTranscriptBashExecutionEntry(r)) {
@@ -510,9 +472,7 @@ export function buildSessionContextForLlm(rows: TranscriptStoredRow[]): AgentMes
       out.push(r);
     }
   }
-  const codingContext = buildCodingContextMessage(out);
-  if (codingContext) out.push(codingContext);
-  return out;
+  return sanitizeToolPairs(out);
 }
 
 /** Visible chat messages only - no LLM-only audit/context expansion. */

@@ -39,7 +39,6 @@ export type InitSessionTurnOptions = {
   sessionKey: string;
   body?: string;
   resetSession: SessionResetFn;
-  skipImplicitExpiry?: boolean;
 };
 
 export async function initSessionTurn(
@@ -96,8 +95,9 @@ export async function initSessionTurn(
       })
     : { fresh: false };
 
-  const skipImplicit = opts.skipImplicitExpiry ?? false;
-  const staleRollover = Boolean(sessionMetadata && !skipImplicit && !freshness.fresh);
+  const staleRollover = Boolean(
+    sessionMetadata && resetPolicy.configured === true && !freshness.fresh,
+  );
   const needsRollover = triggerMatch.resetTriggered || staleRollover;
 
   let sessionId = sessionMetadata?.sessionId;
