@@ -2,7 +2,7 @@
  * `PATCH /api/config` — tail sections that are each <50 lines:
  *   update / goals / session / gateway.{skillsMarketplaceProvider,
  *   skillsStoreBaseUrl} / providers / providersConfig / stt / tts / tools /
- *   tunnel / bindings / mcp.
+ *   userContext.memory.retention.compaction / tunnel / bindings / mcp.
  *
  * Most of these delegate to a `mergeXxxConfigPatch(config, body) → { ok,
  * message? }` helper that lives next to the schema, so this file is mostly
@@ -29,6 +29,7 @@ import {
 import { mergeSttConfigPatch, mergeTtsConfigPatch } from '../../lib/safe-voice-config.js';
 import { assertGatewayRuntimeConfig } from '../../../runtime-config.js';
 import { resolveGatewayAuth, assertGatewayAuthConfigured } from '../../../auth.js';
+import { ContextCompactionPolicySchema } from '../../../../user-context/config.js';
 import { type PatchResult, PATCH_OK, patchError } from './result.js';
 
 export async function applyMiscPatch(config: Config, body: any): Promise<PatchResult> {
@@ -56,6 +57,45 @@ export async function applyMiscPatch(config: Config, body: any): Promise<PatchRe
     const sessionResult = mergeSessionConfigPatch(config, body.session as Record<string, unknown>);
     if (sessionResult.ok === false) {
       return patchError(sessionResult.message);
+    }
+  }
+
+  if (body.userContext !== undefined) {
+    if (typeof body.userContext !== 'object' || body.userContext === null || Array.isArray(body.userContext)) {
+      return patchError('userContext must be an object');
+    }
+    const userContextPatch = body.userContext as Record<string, unknown>;
+    if (userContextPatch.memory !== undefined) {
+      if (typeof userContextPatch.memory !== 'object'
+        || userContextPatch.memory === null
+        || Array.isArray(userContextPatch.memory)) {
+        return patchError('userContext.memory must be an object');
+      }
+      const memoryPatch = userContextPatch.memory as Record<string, unknown>;
+      if (memoryPatch.retention !== undefined) {
+        if (typeof memoryPatch.retention !== 'object'
+          || memoryPatch.retention === null
+          || Array.isArray(memoryPatch.retention)) {
+          return patchError('userContext.memory.retention must be an object');
+        }
+        const retentionPatch = memoryPatch.retention as Record<string, unknown>;
+        if (retentionPatch.compaction !== undefined) {
+          const parsed = ContextCompactionPolicySchema.safeParse(retentionPatch.compaction);
+          if (!parsed.success) {
+            return patchError(parsed.error.issues.map((issue) => issue.message).join('; '));
+          }
+          config.userContext = {
+            ...config.userContext,
+            memory: {
+              ...config.userContext?.memory,
+              retention: {
+                ...config.userContext?.memory?.retention,
+                compaction: parsed.data,
+              },
+            },
+          };
+        }
+      }
     }
   }
 

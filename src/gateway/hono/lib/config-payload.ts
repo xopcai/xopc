@@ -25,6 +25,7 @@ import { CredentialResolver } from '../../../auth/credentials.js';
 import { loadModelsJson, getModelsJsonPath } from '../../../config/models-json.js';
 import { getAllProviders, isProviderConfigured } from '../../../providers/index.js';
 import { getProviderRegistry } from '../../../providers/plugin-registry.js';
+import { ContextCompactionPolicySchema } from '../../../user-context/config.js';
 import type { GatewayService } from '../../service.js';
 import { safeToolsWebForGet } from '../../config-tools-web.js';
 import { buildSafeProvidersConfigForWeb } from './safe-providers-config.js';
@@ -304,6 +305,15 @@ export async function buildSafeWebConfigPayload(service: GatewayService, options
     browser: buildSafeBrowserConfigForWeb(config.browser),
     goals: resolveGoalsConfigForWeb(config),
     session: resolveSessionConfigForWeb(config),
+    userContext: {
+      memory: {
+        retention: {
+          compaction: ContextCompactionPolicySchema.parse(
+            config.userContext?.memory.retention?.compaction,
+          ),
+        },
+      },
+    },
     tui: {
       defaultAgent: config.tui?.defaultAgent ?? 'coder',
     },
