@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { SecretInput } from '@/components/ui/secret-input';
 import type { ConnectorsSettingsMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+import { isElectron } from '@/lib/electron-env';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { interaction } from '@/lib/interaction';
 
@@ -119,7 +120,8 @@ export function InstallConnectorDialog({
   ] as const;
 
   const submit = useCallback(async () => {
-    const authWindow = isComposioToolkit ? window.open('', '_blank') : null;
+    const electron = isElectron();
+    const authWindow = isComposioToolkit && !electron ? window.open('', '_blank') : null;
     if (authWindow) authWindow.opener = null;
     setComposioSetupError(null);
     onChange({ ...draft, installing: true, error: null, result: null, health: null });
@@ -149,8 +151,14 @@ export function InstallConnectorDialog({
           } else {
             const authorization = await startConnectorAuthorization(connector.id);
             if (!authorization.authorizationUrl) throw new Error('The connection service did not return an authorization URL.');
-            if (authWindow) authWindow.location.href = authorization.authorizationUrl;
-            else window.open(authorization.authorizationUrl, '_blank', 'noopener,noreferrer');
+            if (electron) {
+              const openResult = await window.electronAPI?.shell?.openExternalUrl(authorization.authorizationUrl);
+              if (!openResult?.ok) throw new Error(openResult?.error ?? 'Could not open the system browser.');
+            } else if (authWindow) {
+              authWindow.location.href = authorization.authorizationUrl;
+            } else {
+              window.open(authorization.authorizationUrl, '_blank', 'noopener,noreferrer');
+            }
           }
         }
       } catch (error) {
