@@ -24,6 +24,7 @@ import {
   loadCheckpointRows,
   loadLlmMessagesForSession,
   paginateTranscriptMessages,
+  loadTranscriptHistoryRowsForSession,
   loadTranscriptRowsForSession,
   patchSessionMetadata,
   replaceTranscriptRows,
@@ -199,15 +200,17 @@ export class SessionStore {
 
     const limit = Math.min(200, Math.max(1, Math.trunc(options.limit ?? 50)));
     const offset = Math.max(0, Math.trunc(options.offset ?? 0));
-    const parsedBefore = options.before ? Number.parseInt(options.before, 10) : undefined;
-    const hasBeforeCursor = parsedBefore !== undefined && Number.isFinite(parsedBefore);
+    const parsedBefore =
+      options.before === undefined ? undefined : parseHistoryBeforeIndex(options.before);
+    const hasBeforeCursor = parsedBefore !== undefined;
 
     if (options.includeContextRows) {
       const page = paginateTranscriptMessages(key, {
         limit,
         offset: hasBeforeCursor ? undefined : offset,
-        beforeEndIndex: hasBeforeCursor ? parsedBefore : undefined,
+        beforeIndex: hasBeforeCursor ? parsedBefore : undefined,
         includeContext: true,
+        includeArchived: true,
       });
       const messages = transcriptRowsToClientHistory(page.rows) as unknown as Message[];
       const endIndex = hasBeforeCursor
@@ -237,7 +240,7 @@ export class SessionStore {
     const page = this.paginateDisplayMessages(displayMessages, {
       limit,
       offset: hasBeforeCursor ? undefined : offset,
-      beforeEndIndex: hasBeforeCursor ? parsedBefore : undefined,
+      beforeIndex: hasBeforeCursor ? parsedBefore : undefined,
     });
 
     const session = await this.buildSessionDetail(key, metadata, page.messages, options);
@@ -290,6 +293,11 @@ export class SessionStore {
   async loadTranscriptRows(key: string): Promise<TranscriptStoredRow[]> {
     requireXopcDatabase();
     return loadTranscriptRowsForSession(key);
+  }
+
+  async loadTranscriptHistoryRows(key: string): Promise<TranscriptStoredRow[]> {
+    requireXopcDatabase();
+    return loadTranscriptHistoryRowsForSession(key);
   }
 
   async getMetadata(key: string): Promise<SessionMetadata | null> {
@@ -860,7 +868,7 @@ export class SessionStore {
     options: {
       offset?: number;
       limit?: number;
-      beforeEndIndex?: number;
+      beforeIndex?: number;
     } = {},
   ): { messages: AgentMessage[]; total: number; startIndex: number; endIndex: number } {
     const total = messages.length;
@@ -869,8 +877,8 @@ export class SessionStore {
 
     let startIndex: number;
     let endIndex: number;
-    if (options.beforeEndIndex !== undefined && Number.isFinite(options.beforeEndIndex)) {
-      endIndex = Math.min(total, Math.max(0, Math.trunc(options.beforeEndIndex)));
+    if (options.beforeIndex !== undefined && Number.isFinite(options.beforeIndex)) {
+      endIndex = Math.min(total, Math.max(0, Math.trunc(options.beforeIndex)));
       startIndex = Math.max(0, endIndex - limit);
     } else {
       endIndex = Math.max(0, total - offset);
@@ -1002,4 +1010,15 @@ export class SessionStore {
       return row;
     });
   }
+}
+
+function parseHistoryBeforeIndex(value: string): number {
+  if (!/^(0|[1-9]\d*)$/.test(value)) {
+    throw new Error('Invalid session history cursor');
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed)) {
+    throw new Error('Invalid session history cursor');
+  }
+  return parsed;
 }

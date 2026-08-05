@@ -38,9 +38,14 @@ describe('useChatSessionLoad', () => {
         name: 'Auth failure',
         nextBeforeCursor: null,
       })),
-      loadSessionAgentConfig: vi.fn(async () => {
-        throw new Error('not needed');
-      }),
+      loadSessionAgentConfig: vi.fn(async () => ({
+        model: 'test/model',
+        thinkingLevel: 'medium',
+        reasoningLevel: 'stream',
+        effectiveWorkspacePath: '/tmp/test',
+        workingDirectoryLocked: false,
+        workspaceSource: 'agent_workspace' as const,
+      })),
     } as unknown as SessionManager;
     let loadSessionById: ((key: string, offset?: number) => Promise<Message[] | undefined>) | undefined;
 
