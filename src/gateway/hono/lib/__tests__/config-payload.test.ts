@@ -96,6 +96,64 @@ describe('buildSafeWebConfigPayload', () => {
     });
     expect(payload.gateway.skillsMarketplaceProvider).toBe('store');
     expect(payload.gateway.skillsStoreBaseUrl).toBe('https://store.xopc.ai');
+    expect(payload.userContext.memory.retention.compaction).toMatchObject({
+      enabled: true,
+      triggerThreshold: 0.8,
+      reserveTokens: 8_192,
+      qualityGuard: true,
+    });
+  });
+
+  it('includes the strict global compaction policy for WebUI round trips', async () => {
+    const payload = await buildSafeWebConfigPayload({
+      currentConfig: {
+        agents: { default: 'main', capabilityPresets: {}, list: [] },
+        channels: {},
+        userContext: {
+          memory: {
+            mode: 'readOnly',
+            sources: ['session'],
+            retention: {
+              compaction: {
+                enabled: false,
+                triggerThreshold: 0.7,
+                reserveTokens: 12_000,
+                minMessagesBeforeCompact: 6,
+                keepRecentTokens: 16_000,
+                recentTurnsPreserve: 2,
+                summaryMaxTokens: 1_500,
+                summaryChunkTokens: 18_000,
+                summaryTimeoutMs: 90_000,
+                summaryRetries: 1,
+                qualityGuard: false,
+                model: 'openai/gpt-5',
+                minToolResultKeepChars: 800,
+                maxActiveTranscriptBytes: 3_000_000,
+                postCompactionSections: ['Red Lines'],
+              },
+            },
+          },
+        },
+      },
+    } as never);
+
+    expect(payload.userContext.memory.retention.compaction).toEqual({
+      enabled: false,
+      triggerThreshold: 0.7,
+      reserveTokens: 12_000,
+      minMessagesBeforeCompact: 6,
+      keepRecentTokens: 16_000,
+      recentTurnsPreserve: 2,
+      summaryMaxTokens: 1_500,
+      summaryChunkTokens: 18_000,
+      summaryTimeoutMs: 90_000,
+      summaryRetries: 1,
+      qualityGuard: false,
+      model: 'openai/gpt-5',
+      minToolResultKeepChars: 800,
+      maxActiveTranscriptBytes: 3_000_000,
+      postCompactionSections: ['Red Lines'],
+    });
   });
 });
 

@@ -1,8 +1,10 @@
-import { Database, Loader2 } from 'lucide-react';
+import { Database } from 'lucide-react';
 import { useCallback, useMemo, useReducer, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
+import { useSaveBarRegistration } from '@/features/settings/save-bar/use-save-bar-registration';
 import {
   normalizeSessionConfigFromConfig,
   patchSessionConfig,
@@ -53,16 +55,44 @@ export function SessionConfigSection({ hasToken }: { hasToken: boolean }) {
     },
   });
 
-  const dirty = form && baseline && JSON.stringify(form) !== JSON.stringify(baseline);
+  const dirty = Boolean(form && baseline && JSON.stringify(form) !== JSON.stringify(baseline));
   const update = useCallback((patch: Partial<SessionConfigState>) => {
     dirtyRef.current = true;
     dispatchForm({ type: 'patch', patch });
   }, []);
 
+  const discard = useCallback(() => {
+    dirtyRef.current = false;
+    setError(null);
+    dispatchForm({ type: 'discard' });
+  }, []);
+
+  const save = useCallback(async () => {
+    if (!form) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await patchSessionConfig(form);
+      dirtyRef.current = false;
+      dispatchForm({ type: 'saved', value: form });
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : t.saveError;
+      setError(message);
+      throw new Error(message);
+    } finally {
+      setSaving(false);
+    }
+  }, [form, t.saveError]);
+
+  useSaveBarRegistration({ id: 'session-storage', dirty, saving, save, discard });
+
   if (!hasToken || !form) {
     return isLoading ? (
       <SettingsFormSection>
-        <Loader2 className="size-4 animate-spin text-fg-muted" />
+        <div className="space-y-3" aria-busy>
+          <Skeleton className="h-5 w-40" />
+          <Skeleton className="h-24 w-full rounded-xl" />
+        </div>
       </SettingsFormSection>
     ) : null;
   }
@@ -71,28 +101,14 @@ export function SessionConfigSection({ hasToken }: { hasToken: boolean }) {
     <SettingsFormSection>
       <SettingsFormSectionHeader icon={Database} title={t.title} subtitle={t.hint} />
       <div className="mb-4 flex justify-end gap-2">
-        <Button type="button" variant="secondary" disabled={!dirty || saving} onClick={() => dispatchForm({ type: 'discard' })}>
+        <Button type="button" variant="secondary" disabled={!dirty || saving} onClick={discard}>
           {t.discard}
         </Button>
         <Button
           type="button"
           variant="primary"
           disabled={!dirty || saving}
-          onClick={() => {
-            void (async () => {
-              setSaving(true);
-              setError(null);
-              try {
-                await patchSessionConfig(form);
-                dirtyRef.current = false;
-                dispatchForm({ type: 'saved', value: form });
-              } catch (e) {
-                setError(e instanceof Error ? e.message : t.saveError);
-              } finally {
-                setSaving(false);
-              }
-            })();
-          }}
+          onClick={() => void save().catch(() => {})}
         >
           {saving ? t.saving : t.save}
         </Button>
