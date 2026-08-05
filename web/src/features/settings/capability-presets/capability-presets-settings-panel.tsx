@@ -21,6 +21,8 @@ import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
 import { Select, SelectOption } from '@/components/ui/popover-select';
+import type { ConfiguredModel } from '@/features/chat/api/registry-api';
+import { ModelSelector } from '@/features/chat/model/model-selector';
 import { fetchSkillsCatalog } from '@/features/settings/agents-admin-api';
 import type { BuiltinToolUiGroupKey } from '@/features/settings/agents/builtin-tool-disable-groups';
 import {
@@ -49,10 +51,11 @@ import {
   type PresetSkillMode,
 } from '@/features/settings/capability-presets/preset-skills-policy-editor';
 import { PresetToolsPolicyEditor } from '@/features/settings/capability-presets/preset-tools-policy-editor';
+import { fetchImageCatalog } from '@/features/settings/image-generation-api';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 import { SettingsPageSkeleton } from '@/features/settings/settings-loading-skeleton';
 import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
-import { messages } from '@/i18n/messages';
+import { messages, type ChatMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { ghostIconButton } from '@/lib/interaction';
 import {
@@ -70,7 +73,7 @@ type CapabilityPresetMessages = ReturnType<typeof messages>['capabilityPresetsSe
 
 type ToolModelDraft = {
   primary: string;
-  fallbacks: string;
+  fallbacks: string[];
   timeoutMs: string;
   autoProviderFallback: '' | 'true' | 'false';
 };
@@ -127,13 +130,13 @@ function skillPickFromPreset(preset: CapabilityPresetRow | null): Set<string> {
 }
 
 function emptyToolModelDraft(): ToolModelDraft {
-  return { primary: '', fallbacks: '', timeoutMs: '', autoProviderFallback: '' };
+  return { primary: '', fallbacks: [], timeoutMs: '', autoProviderFallback: '' };
 }
 
 function toolModelDraft(value: NonNullable<CapabilityPresetRow['models']>['imageModel']): ToolModelDraft {
   return {
     primary: value?.primary ?? '',
-    fallbacks: value?.fallbacks?.join('\n') ?? '',
+    fallbacks: [...(value?.fallbacks ?? [])],
     timeoutMs: value?.timeoutMs ? String(value.timeoutMs) : '',
     autoProviderFallback:
       value?.autoProviderFallback === undefined ? '' : value.autoProviderFallback ? 'true' : 'false',
@@ -199,7 +202,7 @@ function draftFromPreset(preset: CapabilityPresetRow | null): Draft {
 function toolModelFromDraft(draft: ToolModelDraft) {
   const primary = draft.primary.trim();
   if (!primary) return undefined;
-  const fallbacks = draft.fallbacks.split(/\r?\n|,/).map((item) => item.trim()).filter(Boolean);
+  const fallbacks = draft.fallbacks.map((item) => item.trim()).filter(Boolean);
   const timeoutMs = draft.timeoutMs.trim() ? Number(draft.timeoutMs) : undefined;
   const autoProviderFallback =
     draft.autoProviderFallback === '' ? undefined : draft.autoProviderFallback === 'true';
@@ -568,7 +571,7 @@ export function CapabilityPresetsSettingsPanel() {
       return;
     }
     for (const model of [draft.modelAdvanced.imageModel, draft.modelAdvanced.imageGenerationModel]) {
-      const refs = [model.primary, ...model.fallbacks.split(/\r?\n|,/)].map((item) => item.trim()).filter(Boolean);
+      const refs = [model.primary, ...model.fallbacks].map((item) => item.trim()).filter(Boolean);
       if (refs.some((ref) => !/^[^/\s]+\/.+/.test(ref))) {
         setLocalError(cp.invalidModelRef);
         setActiveTab('models');
@@ -972,6 +975,7 @@ export function CapabilityPresetsSettingsPanel() {
                   onChange={(modelAdvanced) => setDraft((prev) => ({ ...prev, modelAdvanced }))}
                   disabled={busy}
                   cp={cp}
+                  chat={m.chat}
                 />
               </SettingsFormSection>
             ) : null}
@@ -1225,8 +1229,45 @@ function ModelAdvancedPolicyEditor(props: {
   onChange: (value: ModelAdvancedDraft) => void;
   disabled?: boolean;
   cp: CapabilityPresetMessages;
+  chat: ChatMessages;
 }) {
-  const { value, onChange, disabled, cp } = props;
+  const { value, onChange, disabled, cp, chat } = props;
+  const {
+    data: imageProviders,
+    isLoading: imageModelsLoading,
+    error: imageModelsError,
+  } = useSWR('capability-preset-image-generation-models', fetchImageCatalog, {
+    revalidateOnFocus: false,
+  });
+  const imageGenerationModels = useMemo<ConfiguredModel[]>(
+    () => (imageProviders ?? [])
+      .filter((provider) => provider.configured || provider.credentialMode === 'none')
+      .flatMap((provider) =>
+        provider.models.map((model) => ({
+          id: `${provider.id}/${model}`,
+          name: model,
+          provider: provider.label,
+        })),
+      ),
+    [imageProviders],
+  );
+  const imageGenerationModelIds = useMemo(
+    () => new Set(imageGenerationModels.map((model) => model.id)),
+    [imageGenerationModels],
+  );
+
+  useEffect(() => {
+    if (!imageProviders) return;
+    const current = value.imageGenerationModel;
+    const primary = imageGenerationModelIds.has(current.primary) ? current.primary : '';
+    const fallbacks = current.fallbacks.filter((model) => imageGenerationModelIds.has(model));
+    if (primary === current.primary && fallbacks.length === current.fallbacks.length) return;
+    onChange({
+      ...value,
+      imageGenerationModel: { ...current, primary, fallbacks },
+    });
+  }, [imageGenerationModelIds, imageProviders, onChange, value]);
+
   const updateModel = (key: 'imageModel' | 'imageGenerationModel', next: ToolModelDraft) => {
     onChange({ ...value, [key]: next });
   };
@@ -1252,6 +1293,8 @@ function ModelAdvancedPolicyEditor(props: {
             onChange={(next) => updateModel('imageModel', next)}
             disabled={disabled}
             cp={cp}
+            chat={chat}
+            capabilitiesFilter="vision"
           />
           <ToolModelPolicyCard
             title={cp.imageGenerationTitle}
@@ -1259,6 +1302,15 @@ function ModelAdvancedPolicyEditor(props: {
             onChange={(next) => updateModel('imageGenerationModel', next)}
             disabled={disabled}
             cp={cp}
+            chat={chat}
+            models={imageGenerationModels}
+            modelsLoading={imageModelsLoading}
+            modelsError={imageModelsError}
+            noMatches={cp.modelNoConfiguredImageModels}
+            settingsFooterLink={{
+              label: cp.modelImageSettingsLink,
+              path: '/settings/capabilities/image',
+            }}
           />
         </div>
       </details>
@@ -1277,6 +1329,7 @@ function ModelAdvancedPolicyEditor(props: {
             <Select
               value={value.allowFallbacks}
               disabled={disabled}
+              side="top"
               onChange={(event) => onChange({
                 ...value,
                 allowFallbacks: event.target.value as ModelAdvancedDraft['allowFallbacks'],
@@ -1292,6 +1345,7 @@ function ModelAdvancedPolicyEditor(props: {
             <Select
               value={value.maxCostTier}
               disabled={disabled}
+              side="top"
               onChange={(event) => onChange({
                 ...value,
                 maxCostTier: event.target.value as ModelAdvancedDraft['maxCostTier'],
@@ -1315,9 +1369,37 @@ function ToolModelPolicyCard(props: {
   onChange: (value: ToolModelDraft) => void;
   disabled?: boolean;
   cp: CapabilityPresetMessages;
+  chat: ChatMessages;
+  capabilitiesFilter?: 'vision';
+  models?: ConfiguredModel[];
+  modelsLoading?: boolean;
+  modelsError?: unknown;
+  noMatches?: string;
+  settingsFooterLink?: { label: string; path: string };
 }) {
-  const { title, value, onChange, disabled, cp } = props;
+  const {
+    title,
+    value,
+    onChange,
+    disabled,
+    cp,
+    chat,
+    capabilitiesFilter,
+    models,
+    modelsLoading,
+    modelsError,
+    noMatches,
+    settingsFooterLink,
+  } = props;
   const inputClass = 'rounded-lg border border-edge bg-surface-base px-3 py-2 text-sm text-fg placeholder:text-fg-subtle focus:border-edge-strong focus:outline-none';
+  const updateFallback = (index: number, modelId: string) => {
+    onChange({
+      ...value,
+      fallbacks: value.fallbacks.map((fallback, fallbackIndex) =>
+        fallbackIndex === index ? modelId : fallback,
+      ),
+    });
+  };
   return (
     <div className="rounded-lg bg-surface-panel/70 shadow-surface">
       <div className="flex items-center justify-between gap-2 px-3 py-2.5">
@@ -1327,26 +1409,93 @@ function ToolModelPolicyCard(props: {
         </span>
       </div>
       <div className="grid gap-3 border-t border-edge-subtle p-3 dark:border-edge">
-        <label className="flex flex-col gap-1 text-xs text-fg-muted">
-          {cp.modelToolPrimaryLabel}
-          <input
-            className={cn(inputClass, 'font-mono text-xs')}
-            value={value.primary}
-            disabled={disabled}
-            placeholder="provider/model"
-            onChange={(event) => onChange({ ...value, primary: event.target.value })}
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-xs text-fg-muted">
-          {cp.modelToolFallbacksLabel}
-          <textarea
-            className={cn(inputClass, 'min-h-20 resize-y font-mono text-xs')}
-            value={value.fallbacks}
-            disabled={disabled}
-            placeholder={cp.modelToolFallbacksPlaceholder}
-            onChange={(event) => onChange({ ...value, fallbacks: event.target.value })}
-          />
-        </label>
+        <div className="grid gap-1">
+          <div className="text-xs text-fg-muted">{cp.modelToolPrimaryLabel}</div>
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+            <ModelSelector
+              value={value.primary}
+              disabled={disabled}
+              placeholder={chat.modelPlaceholder}
+              searchPlaceholder={chat.modelSearchPlaceholder}
+              noMatches={noMatches ?? chat.modelNoMatches}
+              models={models}
+              modelsLoading={modelsLoading}
+              modelsError={modelsError}
+              settingsFooterLink={settingsFooterLink}
+              capabilitiesFilter={capabilitiesFilter}
+              className="w-full max-w-none"
+              contentAlign="start"
+              onChange={(modelId) => onChange({ ...value, primary: modelId })}
+            />
+            {value.primary ? (
+              <Button
+                type="button"
+                variant="secondary"
+                className="shrink-0 px-2"
+                disabled={disabled}
+                aria-label={cp.modelClearSelection}
+                onClick={() => onChange({ ...value, primary: '' })}
+              >
+                <X className="size-4" strokeWidth={1.75} />
+              </Button>
+            ) : null}
+          </div>
+        </div>
+        <div className="grid gap-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-xs text-fg-muted">{cp.modelToolFallbacksLabel}</div>
+            <Button
+              type="button"
+              variant="secondary"
+              className="h-7 gap-1 px-2 text-xs"
+              disabled={disabled}
+              onClick={() => onChange({ ...value, fallbacks: [...value.fallbacks, ''] })}
+            >
+              <Plus className="size-3.5" strokeWidth={1.75} />
+              {cp.modelAddFallback}
+            </Button>
+          </div>
+          {value.fallbacks.length > 0 ? (
+            <div className="grid gap-1.5">
+              {value.fallbacks.map((fallback, index) => (
+                <div key={`fallback-${index}`} className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+                  <ModelSelector
+                    value={fallback}
+                    disabled={disabled}
+                    placeholder={cp.modelFallbackPlaceholder}
+                    searchPlaceholder={chat.modelSearchPlaceholder}
+                    noMatches={noMatches ?? chat.modelNoMatches}
+                    models={models}
+                    modelsLoading={modelsLoading}
+                    modelsError={modelsError}
+                    settingsFooterLink={settingsFooterLink}
+                    capabilitiesFilter={capabilitiesFilter}
+                    className="w-full max-w-none"
+                    contentAlign="start"
+                    onChange={(modelId) => updateFallback(index, modelId)}
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="shrink-0 px-2"
+                    disabled={disabled}
+                    aria-label={cp.modelRemoveFallback}
+                    onClick={() => onChange({
+                      ...value,
+                      fallbacks: value.fallbacks.filter((_, fallbackIndex) => fallbackIndex !== index),
+                    })}
+                  >
+                    <Trash2 className="size-4" strokeWidth={1.75} />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-lg bg-surface-base px-3 py-2 text-xs text-fg-muted">
+              {cp.modelFallbackEmptyHint}
+            </div>
+          )}
+        </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="flex flex-col gap-1 text-xs text-fg-muted">
             {cp.toolTimeoutLabel}
@@ -1365,6 +1514,7 @@ function ToolModelPolicyCard(props: {
             <Select
               value={value.autoProviderFallback}
               disabled={disabled}
+              side="top"
               onChange={(event) => onChange({
                 ...value,
                 autoProviderFallback: event.target.value as ToolModelDraft['autoProviderFallback'],

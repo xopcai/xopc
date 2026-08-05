@@ -112,3 +112,11 @@ export function stripInboundFileMachineText(text: string): string {
   out = out.replace(/\s*\[File:[^\]]+\]\s*xopc-path:rel:\S+\s*xopc-path:abs:\S+/g, '');
   return out.replace(/\n{3,}/g, '\n\n').trim();
 }
+
+const IMAGE_UNDERSTANDING_CONTEXT_RE =
+  /(?:\n{2,})?\[(?:Image description:|\d+ image\(s\) attached(?:; no image-capable model is available to describe them\.| but could not be described:))[\s\S]*\]\s*$/;
+
+/** Remove model-only image understanding text from the visible user bubble. */
+export function stripImageUnderstandingContext(text: string): string {
+  return text.replace(IMAGE_UNDERSTANDING_CONTEXT_RE, '').trimEnd();
+}

@@ -110,7 +110,15 @@ export function stripUserMessageForDisplay(text: string): string {
   let out = stripStartupContextForDisplay(text);
   out = stripExpandedAtFileBlocks(out);
   out = stripMediaAttachedClaimCheck(out);
+  out = stripImageUnderstandingContext(out);
   return collapseExpandedSkillBlockForDisplay(out);
+}
+
+const IMAGE_UNDERSTANDING_CONTEXT_RE =
+  /(?:\n{2,})?\[(?:Image description:|\d+ image\(s\) attached(?:; no image-capable model is available to describe them\.| but could not be described:))[\s\S]*\]\s*$/;
+
+export function stripImageUnderstandingContext(text: string): string {
+  return text.replace(IMAGE_UNDERSTANDING_CONTEXT_RE, '').trimEnd();
 }
 
 /** Remove persisted inbound machine lines from bubble text (attachments show separately). */

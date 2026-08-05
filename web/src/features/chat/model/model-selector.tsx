@@ -71,6 +71,9 @@ export function ModelSelector({
   placeholder,
   searchPlaceholder,
   noMatches,
+  models: suppliedModels,
+  modelsLoading,
+  modelsError,
   /** When set, only models matching the capability appear (plus current value if missing). */
   capabilitiesFilter,
   /** Shown under a row that is the current value but fails `capabilitiesFilter` (e.g. not flagged vision). */
@@ -85,6 +88,7 @@ export function ModelSelector({
   popoverContentClassName,
   /** Chat header: footer link to provider (API key) settings. */
   showProviderSettingsFooter,
+  settingsFooterLink,
   onChange,
 }: {
   value: string;
@@ -92,6 +96,10 @@ export function ModelSelector({
   placeholder: string;
   searchPlaceholder: string;
   noMatches: string;
+  /** Optional model source for specialized registries such as image generation. */
+  models?: ConfiguredModel[];
+  modelsLoading?: boolean;
+  modelsError?: unknown;
   capabilitiesFilter?: 'vision';
   outOfFilterNote?: string;
   registryEmptyHint?: string;
@@ -106,6 +114,7 @@ export function ModelSelector({
   /** Optional override merged onto `Popover.Content` (e.g. cron dialog `z-[70]`). Settings shell tiers apply automatically. */
   popoverContentClassName?: string;
   showProviderSettingsFooter?: boolean;
+  settingsFooterLink?: { label: string; path: string };
   onChange: (modelId: string) => void;
 }) {
   const navigate = useNavigate();
@@ -117,10 +126,16 @@ export function ModelSelector({
   const settingsShellLayer = useSettingsShellPopoverLayer();
   const portalContainer = useSettingsShellPopoverPortalContainer();
   const settingsShellPopoverZ = settingsShellPopoverZClass(settingsShellLayer);
+  const footerLink = settingsFooterLink ?? (showProviderSettingsFooter
+    ? { label: m.modelProviderSettingsLink, path: '/settings/capabilities/models' }
+    : undefined);
 
-  const { data: models = [], isLoading, error } = useSWR(CONFIGURED_MODELS_SWR_KEY, fetchConfiguredModelsCached, {
+  const registry = useSWR(suppliedModels ? null : CONFIGURED_MODELS_SWR_KEY, fetchConfiguredModelsCached, {
     revalidateOnFocus: false,
   });
+  const models = suppliedModels ?? registry.data ?? [];
+  const isLoading = suppliedModels ? Boolean(modelsLoading) : registry.isLoading;
+  const error = suppliedModels ? modelsError : registry.error;
 
   const valueTrimmed = value.trim();
   const pickerModels = useMemo(
@@ -236,7 +251,7 @@ export function ModelSelector({
               );
             })}
           </div>
-          {showProviderSettingsFooter ? (
+          {footerLink ? (
             <div className="mt-1 border-t border-edge-subtle pt-1">
               <button
                 type="button"
@@ -246,13 +261,13 @@ export function ModelSelector({
                   'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
                 )}
                 onClick={() => {
-                  navigate('/settings/capabilities/models');
+                  navigate(footerLink.path);
                   setOpen(false);
                   setQuery('');
                 }}
               >
                 <Settings2 className="size-4 shrink-0 opacity-90" aria-hidden />
-                <span className="min-w-0">{m.modelProviderSettingsLink}</span>
+                <span className="min-w-0">{footerLink.label}</span>
               </button>
             </div>
           ) : null}

@@ -9,6 +9,8 @@ export interface ClientHistoryMessage {
   content: string;
   displayIndex?: number;
   rawContent?: string | unknown[];
+  /** Persisted inbound attachment metadata used by chat clients to reload media. */
+  media?: Message['media'];
   timestamp?: number;
   kind?: 'message' | 'compaction' | 'context' | 'bash' | 'custom' | 'branch';
   tokensBefore?: number;
@@ -192,6 +194,7 @@ export function messagesToClientHistory(
       out.push({
         role: m.role,
         content: text,
+        ...(m.media?.length ? { media: m.media } : {}),
         timestamp: parseTimestamp(m.timestamp),
       });
       continue;
@@ -218,6 +221,7 @@ export function messagesToClientHistory(
 type HistoryMessageRow = {
   role: 'system' | 'user' | 'assistant' | 'tool' | 'toolResult';
   content?: string | unknown[];
+  media?: Message['media'];
   timestamp?: string | number;
   tool_call_id?: string;
   toolCallId?: string;
@@ -603,6 +607,7 @@ export function transcriptRowsToClientHistory(
         role: messageRow.role,
         kind: 'message',
         content: flattenMessageContent(messageRow.content ?? ''),
+        ...(messageRow.media?.length ? { media: messageRow.media } : {}),
         ...(displayIndex !== undefined ? { displayIndex } : {}),
         timestamp: parseTimestampValue(messageRow.timestamp),
       });

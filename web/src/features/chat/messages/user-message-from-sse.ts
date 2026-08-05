@@ -18,6 +18,7 @@ export function userMessageFromSsePayload(parsed: Record<string, unknown>): Mess
         role: 'user',
         content: parsed.content,
         media: parsed.media,
+        attachments: parsed.attachments,
         timestamp,
       },
     ]);
