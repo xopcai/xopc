@@ -25,11 +25,11 @@ xopc provides comprehensive session management for conversation history via CLI 
 | Property | Value |
 |----------|-------|
 | Database | `~/.xopc/xopc.db` (SQLite, WAL) |
-| Tables | `sessions`, `transcripts`, `transcript_entries`, `session_config`, `compaction_checkpoints`, `transcript_fts` (FTS5) |
+| Tables | `sessions`, `transcripts`, `transcript_entries`, `session_config`, `transcript_fts` (FTS5) |
 | Per-session overrides | SQLite `session_config` (model, thinking, verbose, …) |
 | Legacy path | `agents/<agentId>/sessions/` may exist from older installs; new installs do not write transcripts there |
 
-Session metadata, transcript rows, compaction checkpoints, and full-text search are stored in SQLite. The gateway opens the database on startup (`openXopcDatabase()`).
+Session metadata, append-only compaction boundaries, transcript rows, and full-text search are stored in SQLite. Compaction boundaries are regular typed rows in `transcript_entries`. The gateway opens the database on startup (`openXopcDatabase()`).
 
 ---
 
@@ -237,12 +237,13 @@ interface Message {
 
 ### Compaction
 
-When estimated model input reaches 80% of the active model's context window:
+When the complete estimated model input reaches the configured threshold, or the active transcript crosses its byte limit:
 
-1. The resolved session model creates a durable summary of the older complete turns.
-2. At least the latest 10 messages and latest 6 user turns remain verbatim.
-3. xopc appends a compaction boundary containing the exact reduced LLM context. Original transcript rows remain unchanged for display, export, and search.
-4. If summary generation fails or returns empty text, compaction fails closed and the original model context is kept.
+1. xopc plans atomic user/tool units and never splits an assistant tool call from its results.
+2. The configured summary model creates a structured, chunked summary while recent turns and a recent-token tail remain verbatim.
+3. Summary quality checks require all sections and exact identifiers; configured fallback models are tried before failure.
+4. xopc appends a compaction boundary containing the exact reduced LLM context. Original transcript rows remain unchanged for display, export, and search.
+5. If summary generation or quality checks fail, compaction fails closed and the original model context is kept.
 
 Repeated compaction replaces the previous boundary in model input while the on-disk transcript remains append-only.
 

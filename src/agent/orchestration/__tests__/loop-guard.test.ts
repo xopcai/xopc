@@ -53,6 +53,27 @@ describe('detectToolLoops', () => {
     expect(result.injection).toBeNull();
   });
 
+  it('does not treat changing tool results as a stalled loop', () => {
+    const calls: RecentToolCall[] = [
+      { name: 'poll_job', params: { id: 'job-1' }, resultPreview: 'running: 10%' },
+      { name: 'poll_job', params: { id: 'job-1' }, resultPreview: 'running: 70%' },
+      { name: 'poll_job', params: { id: 'job-1' }, resultPreview: 'complete' },
+    ];
+    const result = detectToolLoops(calls);
+    expect(result.injection).toBeNull();
+    expect(result.hiddenTools.size).toBe(0);
+  });
+
+  it('blocks repeated calls with the same arguments and result', () => {
+    const calls: RecentToolCall[] = Array.from({ length: 3 }, () => ({
+      name: 'poll_job',
+      params: { id: 'job-1' },
+      resultPreview: 'running: 10%',
+    }));
+    const result = detectToolLoops(calls);
+    expect(result.hiddenTools.has('poll_job')).toBe(true);
+  });
+
   it('should not trigger when different tool is interleaved (breaks consecutive)', () => {
     const calls: RecentToolCall[] = [
       { name: 'find', params: { pattern: '*.ts' } },

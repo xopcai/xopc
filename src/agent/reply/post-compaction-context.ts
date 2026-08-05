@@ -79,14 +79,15 @@ export type PostCompactionContextOptions = {
   agentId?: string;
   nowMs?: number;
   userTimezone?: string;
+  sectionNames?: string[];
+  maxContextChars?: number;
 };
 
 export function readPostCompactionContextFromAgentsMd(
   agentsMdContent: string,
   options?: PostCompactionContextOptions,
 ): string | null {
-  void options;
-  const sectionNames = DEFAULT_POST_COMPACTION_SECTIONS;
+  const sectionNames = options?.sectionNames ?? DEFAULT_POST_COMPACTION_SECTIONS;
 
   if (sectionNames.length === 0) {
     return null;
@@ -105,7 +106,7 @@ export function readPostCompactionContextFromAgentsMd(
     'UTC';
   const nowMs = options?.nowMs ?? Date.now();
   const dateStamp = new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(new Date(nowMs));
-  const maxContextChars = MAX_CONTEXT_CHARS;
+  const maxContextChars = Math.max(1, options?.maxContextChars ?? MAX_CONTEXT_CHARS);
 
   const combined = sections.join('\n\n').replaceAll('YYYY-MM-DD', dateStamp);
   const safeContent =
@@ -140,6 +141,8 @@ export function readPostCompactionContext(params: {
   agentId?: string;
   nowMs?: number;
   userTimezone?: string;
+  sectionNames?: string[];
+  maxContextChars?: number;
 }): string | null {
   const cfg = params.cfg;
   if (!cfg) {
@@ -165,6 +168,8 @@ export function readPostCompactionContext(params: {
       agentId,
       nowMs: params.nowMs,
       userTimezone: params.userTimezone,
+      sectionNames: params.sectionNames,
+      maxContextChars: params.maxContextChars,
     });
   } catch {
     return null;

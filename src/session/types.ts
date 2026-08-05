@@ -195,13 +195,14 @@ export interface SessionExport {
   transcriptRows: TranscriptStoredRow[];
 }
 
-/** On-disk pre-compaction snapshot (OpenClaw-style checkpoint list). */
-export interface CompactionCheckpointSummary {
+/** Append-only context boundary produced by compaction or logical restoration. */
+export interface CompactionBoundarySummary {
   id: string;
-  sizeBytes: number;
-  modifiedAt: string;
-}
-
-export interface CompactionCheckpointDetail extends CompactionCheckpointSummary {
+  seq: number;
+  createdAt: string;
   messageCount: number;
+  tokensBefore: number;
+  tokensAfter: number;
+  summaryPreview: string;
+  restoredFromCompactionId?: string;
 }

@@ -15,6 +15,21 @@ const model = {
   contextWindow: 128_000,
 } as never;
 
+const structuredSummary = `## Decisions
+The user is married, has two children, and is changing jobs.
+## Pending user asks
+None
+## Open TODOs
+None
+## Constraints and rules
+None
+## Exact identifiers
+None
+## Tool operations and results
+None
+## Recent state
+The job change is ongoing.`;
+
 function conversation(): AgentMessage[] {
   return Array.from({ length: 12 }, (_, index) => ({
     role: index % 2 === 0 ? 'user' : 'assistant',
@@ -33,12 +48,12 @@ describe('SessionCompactor', () => {
   it('uses the resolved session model and preserves complete recent turns', async () => {
     vi.mocked(completeWithResolvedCredentials).mockResolvedValueOnce({
       role: 'assistant',
-      content: [{ type: 'text', text: 'The user is married, has two children, and is changing jobs.' }],
+      content: [{ type: 'text', text: structuredSummary }],
     } as never);
     const compactor = new SessionCompactor({
       minMessagesBeforeCompact: 4,
-      keepRecentMessages: 2,
-      retentionWindow: 1,
+      keepRecentTokens: 1,
+      recentTurnsPreserve: 1,
     });
 
     const result = await compactor.compact(conversation(), model, undefined, true);
@@ -62,12 +77,12 @@ describe('SessionCompactor', () => {
   it('does not persist derived droppable context in the compacted snapshot', async () => {
     vi.mocked(completeWithResolvedCredentials).mockResolvedValueOnce({
       role: 'assistant',
-      content: [{ type: 'text', text: 'durable summary' }],
+      content: [{ type: 'text', text: structuredSummary }],
     } as never);
     const compactor = new SessionCompactor({
       minMessagesBeforeCompact: 4,
-      keepRecentMessages: 2,
-      retentionWindow: 1,
+      keepRecentTokens: 1,
+      recentTurnsPreserve: 1,
     });
     const messages = [
       ...conversation(),
@@ -82,10 +97,97 @@ describe('SessionCompactor', () => {
 
   it('fails closed when summary generation fails', async () => {
     vi.mocked(completeWithResolvedCredentials).mockRejectedValueOnce(new Error('model unavailable'));
-    const compactor = new SessionCompactor({ minMessagesBeforeCompact: 4 });
+    const compactor = new SessionCompactor({
+      minMessagesBeforeCompact: 4,
+      keepRecentTokens: 1,
+      recentTurnsPreserve: 1,
+      summaryRetries: 0,
+      qualityGuard: false,
+    });
 
     await expect(compactor.compact(conversation(), model, undefined, true)).rejects.toThrow(
       'model unavailable',
     );
+  });
+
+  it('uses a fallback model when the primary summarizer fails', async () => {
+    vi.mocked(completeWithResolvedCredentials)
+      .mockRejectedValueOnce(new Error('primary unavailable'))
+      .mockResolvedValueOnce({
+        role: 'assistant',
+        content: [{ type: 'text', text: structuredSummary }],
+      } as never);
+    const fallback = { provider: 'fallback', id: 'summary-fallback', contextWindow: 128_000 } as never;
+    const compactor = new SessionCompactor({
+      minMessagesBeforeCompact: 4,
+      keepRecentTokens: 1,
+      recentTurnsPreserve: 1,
+      summaryRetries: 0,
+    });
+
+    const result = await compactor.compact(conversation(), model, undefined, true, {
+      fallbackModels: [fallback],
+    });
+
+    expect(result.compacted).toBe(true);
+    expect(completeWithResolvedCredentials).toHaveBeenNthCalledWith(
+      2,
+      fallback,
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it('repairs a summary that fails the structured quality contract', async () => {
+    vi.mocked(completeWithResolvedCredentials)
+      .mockResolvedValueOnce({
+        role: 'assistant',
+        content: [{ type: 'text', text: 'A short but unstructured summary.' }],
+      } as never)
+      .mockResolvedValueOnce({
+        role: 'assistant',
+        content: [{ type: 'text', text: structuredSummary }],
+      } as never);
+    const compactor = new SessionCompactor({
+      minMessagesBeforeCompact: 4,
+      keepRecentTokens: 1,
+      recentTurnsPreserve: 1,
+      summaryRetries: 0,
+    });
+
+    const result = await compactor.compact(conversation(), model, undefined, true);
+
+    expect(result.summary).toBe(structuredSummary);
+    expect(completeWithResolvedCredentials).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(completeWithResolvedCredentials).mock.calls[1]?.[1]).toEqual(
+      expect.objectContaining({
+        messages: [expect.objectContaining({ content: expect.stringContaining('Quality failures:') })],
+      }),
+    );
+  });
+
+  it('refuses to split a single active user/tool turn during forced compaction', async () => {
+    const compactor = new SessionCompactor({ minMessagesBeforeCompact: 2 });
+    const messages = [
+      { role: 'user', content: 'Run the tool', timestamp: 1 },
+      {
+        role: 'assistant',
+        content: [{ type: 'toolCall', id: 'call-1', name: 'work', arguments: {} }],
+        timestamp: 2,
+      },
+      {
+        role: 'toolResult',
+        toolCallId: 'call-1',
+        toolName: 'work',
+        content: [{ type: 'text', text: 'done' }],
+        isError: false,
+        timestamp: 3,
+      },
+    ] as AgentMessage[];
+
+    const result = await compactor.compact(messages, model, undefined, true);
+
+    expect(result.compacted).toBe(false);
+    expect(completeWithResolvedCredentials).not.toHaveBeenCalled();
   });
 });

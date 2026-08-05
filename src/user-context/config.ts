@@ -2,6 +2,44 @@ import { z } from 'zod';
 
 export const UserMemoryModeSchema = z.enum(['off', 'readOnly', 'confirmWrite', 'auto']);
 
+export const DEFAULT_CONTEXT_COMPACTION_POLICY = {
+  enabled: true,
+  triggerThreshold: 0.8,
+  reserveTokens: 8_192,
+  minMessagesBeforeCompact: 10,
+  keepRecentTokens: 20_000,
+  recentTurnsPreserve: 3,
+  summaryMaxTokens: 2_000,
+  summaryChunkTokens: 24_000,
+  summaryTimeoutMs: 180_000,
+  summaryRetries: 2,
+  qualityGuard: true,
+  minToolResultKeepChars: 1_000,
+  maxActiveTranscriptBytes: 2_000_000,
+  postCompactionSections: ['Session Startup', 'Red Lines'],
+};
+
+export const ContextCompactionPolicySchema = z
+  .object({
+    enabled: z.boolean().default(true),
+    triggerThreshold: z.number().min(0.1).max(0.98).default(0.8),
+    reserveTokens: z.number().int().min(1_024).default(8_192),
+    minMessagesBeforeCompact: z.number().int().min(2).default(10),
+    keepRecentTokens: z.number().int().min(1_000).default(20_000),
+    recentTurnsPreserve: z.number().int().min(1).max(12).default(3),
+    summaryMaxTokens: z.number().int().min(256).default(2_000),
+    summaryChunkTokens: z.number().int().min(1_000).default(24_000),
+    summaryTimeoutMs: z.number().int().min(1_000).max(600_000).default(180_000),
+    summaryRetries: z.number().int().min(0).max(5).default(2),
+    qualityGuard: z.boolean().default(true),
+    model: z.string().min(1).optional(),
+    minToolResultKeepChars: z.number().int().min(200).default(1_000),
+    maxActiveTranscriptBytes: z.number().int().min(64_000).default(2_000_000),
+    postCompactionSections: z.array(z.string().min(1)).max(12).default(['Session Startup', 'Red Lines']),
+  })
+  .strict()
+  .default(DEFAULT_CONTEXT_COMPACTION_POLICY);
+
 export const UserMemoryConfigSchema = z
   .object({
     mode: UserMemoryModeSchema.default('off'),
@@ -19,7 +57,7 @@ export const UserMemoryConfigSchema = z
       .optional(),
     retention: z
       .object({
-        compaction: z.boolean().default(true),
+        compaction: ContextCompactionPolicySchema,
         maxAgeDays: z.number().int().positive().optional(),
         maxItems: z.number().int().positive().optional(),
         maxChars: z.number().int().positive().optional(),

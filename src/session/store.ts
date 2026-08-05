@@ -5,20 +5,26 @@ import type { Config } from '../config/schema.js';
 import { resolveStateDir } from '../config/paths-state.js';
 import { resolveEffectiveAgentProfileForSession } from '../config/agent-profile.js';
 import { readPostCompactionContext } from '../agent/reply/post-compaction-context.js';
+import { resolveCompactionPolicy } from '../agent/memory/compaction-policy.js';
 import { createLogger } from '../utils/logger.js';
-import { SessionCompactor, type CompactionConfig, type CompactionResult } from '../agent/memory/compaction.js';
+import {
+  SessionCompactor,
+  type CompactionConfig,
+  type CompactionExecutionOptions,
+  type CompactionResult,
+} from '../agent/memory/compaction.js';
 import { SlidingWindow, type WindowConfig } from '../agent/memory/window.js';
 import {
   requireXopcDatabase,
+  appendCompactionBoundary,
   appendTranscriptEntry,
   deleteSessionRecord,
   ensureSessionRecord,
   estimateTokensFromMessages,
-  getCompactionCheckpointDetail,
   getGlobalSessionStats,
   getSessionMetadata,
   findSessionKeyBySessionId,
-  listCompactionCheckpoints,
+  listCompactionBoundaries,
   listSessionMetadata,
   listSessionsByAgent,
   loadLlmMessagesForSession,
@@ -28,7 +34,7 @@ import {
   patchSessionMetadata,
   replaceTranscriptRows,
   resetSessionRecord,
-  restoreCompactionCheckpoint,
+  restoreBeforeCompactionBoundary,
   type SessionMetadataSeed,
 } from '../storage/sqlite/index.js';
 import type { TranscriptCompactionRecord, XopcSessionTranscriptV1 } from './transcript-format.js';
@@ -44,7 +50,6 @@ import {
   type XopcTranscriptCustomMessageEntry,
   type XopcTranscriptCustomStateEntry,
 } from './session-context-for-llm.js';
-import { normalizeCompactionCheckpointId } from './compaction-checkpoints.js';
 import type {
   SessionMetadata,
   SessionDetail,
@@ -54,8 +59,7 @@ import type {
   ExportFormat,
   SessionExport,
   SessionTranscriptSummary,
-  CompactionCheckpointSummary,
-  CompactionCheckpointDetail,
+  CompactionBoundarySummary,
 } from './types.js';
 import { SessionStatus } from './types.js';
 import type { Message } from './types.js';
@@ -72,9 +76,31 @@ export interface SessionStoreOptions {
   config: Config;
 }
 
+export interface SessionCompactionHooks {
+  before?: (event: {
+    sessionKey: string;
+    messageCount: number;
+    tokenCount: number;
+  }) => Promise<void> | void;
+  after?: (event: {
+    sessionKey: string;
+    messageCount: number;
+    tokenCount: number;
+    compactedCount: number;
+  }) => Promise<void> | void;
+}
+
+type SessionCompactionHookEvent = {
+  sessionKey: string;
+  messageCount: number;
+  tokenCount: number;
+  compactedCount?: number;
+};
+
 export class SessionStore {
   private window: SlidingWindow;
   private compactor: SessionCompactor;
+  private compactionHooks: SessionCompactionHooks = {};
 
   constructor(
     private options: SessionStoreOptions,
@@ -83,6 +109,31 @@ export class SessionStore {
   ) {
     this.window = new SlidingWindow(windowConfig);
     this.compactor = new SessionCompactor(compactionConfig);
+  }
+
+  setCompactionHooks(hooks: SessionCompactionHooks): void {
+    this.compactionHooks = hooks;
+  }
+
+  private async runCompactionHook(
+    phase: 'before' | 'after',
+    event: SessionCompactionHookEvent,
+  ): Promise<void> {
+    try {
+      if (phase === 'before') {
+        await this.compactionHooks.before?.(event);
+      } else {
+        await this.compactionHooks.after?.({
+          ...event,
+          compactedCount: event.compactedCount ?? 0,
+        });
+      }
+    } catch (err) {
+      log.warn(
+        { err, phase, sessionKey: event.sessionKey },
+        `Session compaction ${phase} hook failed`,
+      );
+    }
   }
 
   private resolveWorkspaceCwd(sessionKey: string): string {
@@ -395,11 +446,16 @@ export class SessionStore {
       if (isTranscriptCompactionEntry(row)) {
         compactions.push({
           at: row.at,
+          baseSeq: row.baseSeq,
+          plannerVersion: row.plannerVersion,
+          summaryModelRef: row.summaryModelRef,
+          qualityAudit: row.qualityAudit,
           summary: row.summary,
           messages: row.messages,
           firstKeptIndex: row.firstKeptIndex,
           tokensBefore: row.tokensBefore,
           tokensAfter: row.tokensAfter,
+          restoredFromCompactionId: row.restoredFromCompactionId,
         });
       }
     }
@@ -590,15 +646,6 @@ export class SessionStore {
     return this.window.getStats(messages);
   }
 
-  needsCompaction(key: string, messages: AgentMessage[], contextWindow: number) {
-    return this.compactor.needsCompaction(messages, contextWindow);
-  }
-
-  prepareCompaction(key: string, messages: AgentMessage[], contextWindow: number) {
-    const result = this.compactor.needsCompaction(messages, contextWindow);
-    return { needsCompaction: result.needed, messages, stats: result };
-  }
-
   async applyCompaction(
     key: string,
     messages: AgentMessage[],
@@ -606,19 +653,18 @@ export class SessionStore {
   ): Promise<AgentMessage[]> {
     const compacted = this.compactor.applyCompaction(messages, result);
     return this.runStoreMutation(async () => {
-      appendTranscriptEntry(key, {
+      appendCompactionBoundary(key, {
         type: 'compaction',
         at: new Date().toISOString(),
+        plannerVersion: result.plannerVersion ?? 2,
+        summaryModelRef: result.summaryModelRef ?? 'unknown',
+        qualityAudit: result.qualityAudit ?? 'disabled',
         summary: result.summary,
         messages: compacted,
         firstKeptIndex: result.firstKeptIndex,
         tokensBefore: result.tokensBefore,
         tokensAfter: result.tokensAfter,
       });
-      const metadata = await this.getMetadata(key);
-      if (metadata) {
-        await this.updateMetadata(key, { compactedCount: metadata.compactedCount + 1 });
-      }
       log.info(
         { key, tokensBefore: result.tokensBefore, tokensAfter: result.tokensAfter, keptMessages: compacted.length },
         'Session compacted',
@@ -634,52 +680,48 @@ export class SessionStore {
     model: Model<Api>,
     instructions?: string,
     force?: boolean,
+    executionOptions?: CompactionExecutionOptions,
   ): Promise<CompactionResult> {
-    const result = await this.compactor.compact(messages, model, instructions, force);
+    const tokenCount = this.estimateTokens(messages);
+    await this.runCompactionHook('before', {
+      sessionKey: key,
+      messageCount: messages.length,
+      tokenCount,
+    });
+    const result = await this.compactor.compact(messages, model, instructions, force, executionOptions);
     if (result.compacted) {
-      await this.applyCompaction(key, messages, result);
+      const compacted = await this.applyCompaction(key, messages, result);
+      await this.runCompactionHook('after', {
+        sessionKey: key,
+        messageCount: compacted.length,
+        tokenCount: result.tokensAfter,
+        compactedCount: Math.max(0, Math.min(messages.length, result.firstKeptIndex)),
+      });
     }
     return result;
   }
 
   async getCompactionStats(key: string) {
-    const metadata = await this.getMetadata(key);
-    if (!metadata) {
-      return undefined;
-    }
+    if (!(await this.getMetadata(key))) return undefined;
+    const boundaries = listCompactionBoundaries(key);
     return {
-      compactionCount: metadata.compactedCount,
-      totalTokensBefore: 0,
-      totalTokensAfter: 0,
-      lastCompactionAt: undefined,
+      compactionCount: boundaries.length,
+      totalTokensBefore: boundaries.reduce((sum, boundary) => sum + boundary.tokensBefore, 0),
+      totalTokensAfter: boundaries.reduce((sum, boundary) => sum + boundary.tokensAfter, 0),
+      lastCompactionAt: boundaries[0]?.createdAt,
     };
   }
 
-  async listCompactionCheckpoints(key: string): Promise<CompactionCheckpointSummary[]> {
+  async listCompactionBoundaries(key: string): Promise<CompactionBoundarySummary[]> {
     requireXopcDatabase();
-    return listCompactionCheckpoints(key);
+    return listCompactionBoundaries(key);
   }
 
-  async getCompactionCheckpointDetail(
-    key: string,
-    checkpointId: string,
-  ): Promise<CompactionCheckpointDetail | null> {
-    requireXopcDatabase();
-    const id = normalizeCompactionCheckpointId(checkpointId);
-    if (!id) {
-      return null;
-    }
-    return getCompactionCheckpointDetail(key, id);
-  }
-
-  async restoreCompactionCheckpoint(key: string, checkpointId: string): Promise<void> {
+  async restoreBeforeCompactionBoundary(key: string, compactionId: string): Promise<void> {
     return this.runStoreMutation(async () => {
       requireXopcDatabase();
-      const id = normalizeCompactionCheckpointId(checkpointId);
-      if (!id) {
-        throw new Error(`Invalid checkpoint id: ${checkpointId}`);
-      }
-      restoreCompactionCheckpoint(key, id);
+      if (!compactionId.trim()) throw new Error('compactionId is required');
+      restoreBeforeCompactionBoundary(key, compactionId);
     });
   }
 
@@ -927,9 +969,11 @@ export class SessionStore {
   }
 
   private async injectPostCompactionContext(key: string): Promise<void> {
+    const policy = resolveCompactionPolicy(this.options.config);
     const contextText = readPostCompactionContext({
       cfg: this.options.config,
       sessionKey: key,
+      sectionNames: policy.postCompactionSections,
     });
     if (!contextText?.trim()) {
       return;

@@ -19,16 +19,6 @@ WHERE entry_id IN (
     )
 );
 
-DELETE FROM checkpoint_entries
-WHERE checkpoint_id IN (
-  SELECT checkpoint_id
-  FROM compaction_checkpoints
-  WHERE session_id IN (SELECT session_id FROM xopc_runtime_transcript_cleanup_sessions)
-);
-
-DELETE FROM compaction_checkpoints
-WHERE session_id IN (SELECT session_id FROM xopc_runtime_transcript_cleanup_sessions);
-
 DELETE FROM transcript_entries
 WHERE session_id IN (SELECT session_id FROM xopc_runtime_transcript_cleanup_sessions)
   AND (

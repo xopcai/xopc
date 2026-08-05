@@ -389,7 +389,7 @@ describe('SQLite migrations', () => {
     }
   });
 
-  it('removes persisted runtime-only messages and unsafe compaction snapshots at v60', () => {
+  it('removes persisted runtime-only messages and unsafe compaction rows at v60', () => {
     const db = openEmptyDb();
     ensureXopcDatabaseSchema(db);
     db.exec(`
@@ -409,10 +409,6 @@ describe('SQLite migrations', () => {
       INSERT INTO transcript_fts (content, session_key, session_id, entry_id) VALUES
         ('keep', 'agent:main:webchat:default:direct:cleanup', 'session-cleanup', 'entry-normal'),
         ('leak', 'agent:main:webchat:default:direct:cleanup', 'session-cleanup', 'entry-runtime');
-      INSERT INTO compaction_checkpoints VALUES
-        ('checkpoint-cleanup', 'session-cleanup', 'agent:main:webchat:default:direct:cleanup', 1, 3, 100);
-      INSERT INTO checkpoint_entries VALUES
-        ('checkpoint-cleanup', 1, 'message', 'user', '{"role":"user","content":"leak"}');
     `);
     setSchemaVersion(db, 59);
 
@@ -423,10 +419,30 @@ describe('SQLite migrations', () => {
     expect(db.prepare(`SELECT entry_id FROM transcript_fts`).all()).toEqual([
       { entry_id: 'entry-normal' },
     ]);
-    expect(db.prepare(`SELECT checkpoint_id FROM compaction_checkpoints`).all()).toEqual([]);
-    expect(db.prepare(`SELECT checkpoint_id FROM checkpoint_entries`).all()).toEqual([]);
     expect(db.prepare(`SELECT message_count FROM sessions WHERE session_id = 'session-cleanup'`).get())
       .toEqual({ message_count: 1 });
+  });
+
+  it('drops legacy checkpoint tables at v61', () => {
+    const db = openEmptyDb();
+    ensureXopcDatabaseSchema(db);
+    db.exec(`
+      CREATE TABLE compaction_checkpoints (
+        checkpoint_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, session_key TEXT NOT NULL,
+        created_at INTEGER NOT NULL, message_count INTEGER NOT NULL, size_bytes INTEGER NOT NULL
+      );
+      CREATE TABLE checkpoint_entries (
+        checkpoint_id TEXT NOT NULL, seq INTEGER NOT NULL, entry_kind TEXT NOT NULL,
+        role TEXT, payload_json TEXT NOT NULL, PRIMARY KEY (checkpoint_id, seq)
+      );
+    `);
+    setSchemaVersion(db, 60);
+
+    expect(applyPendingMigrations(db, { targetVersion: 61 })).toBe(61);
+    const tables = db.prepare(
+      `SELECT name FROM sqlite_master WHERE type = 'table' AND name IN (?, ?) ORDER BY name`,
+    ).all('compaction_checkpoints', 'checkpoint_entries');
+    expect(tables).toEqual([]);
   });
 
 });

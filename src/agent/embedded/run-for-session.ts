@@ -15,6 +15,8 @@ import {
 } from '../mcp/resolve-embedded-mcp-tools.js';
 import { createLogger } from '../../utils/logger.js';
 import { resolveModel } from '../../providers/index.js';
+import { evaluateContextBudget } from '../memory/context-budget.js';
+import { resolveCompactionPolicy } from '../memory/compaction-policy.js';
 
 const log = createLogger('EmbeddedTurnForSession');
 
@@ -96,16 +98,6 @@ export async function runEmbeddedTurnForSession(
   const workspaceDir = agentManager.getResolvedWorkspaceForSession(sessionKey);
   const config = params.getConfig?.();
 
-  // --- Pre-turn automatic compaction ---
-  await maybeAutoCompactBeforeTurn({
-    sessionKey,
-    sessionStore,
-    agentManager,
-    model,
-    config,
-    onEvent: params.onEvent,
-  });
-
   let userMessageForTurn = userMessage;
   if (params.applyStartupContext !== false) {
     userMessageForTurn = await applyStartupContextToUserMessage({
@@ -129,6 +121,21 @@ export async function runEmbeddedTurnForSession(
     });
     const turnTools = mergeTurnTools(tools, mcpResolved.tools);
     try {
+      await maybeAutoCompactBeforeTurn({
+        sessionKey,
+        sessionStore,
+        agentManager,
+        model,
+        config,
+        systemPrompt,
+        userMessage: userMessageForTurn,
+        tools: turnTools,
+        imageCount: params.llmImages?.length ?? 0,
+        fallbackModels: resolvedCandidates.slice(1).map((candidate) => candidate.model),
+        abortSignal: params.abortSignal,
+        onEvent: params.onEvent,
+      });
+
       log.info(
         {
           sessionKey,
@@ -258,53 +265,112 @@ export async function runEmbeddedTurnForSession(
 // Pre-turn automatic compaction
 // ---------------------------------------------------------------------------
 
+function serializedTranscriptBytes(messages: readonly AgentMessage[]): number {
+  return Buffer.byteLength(JSON.stringify(messages), 'utf8');
+}
+
 async function maybeAutoCompactBeforeTurn(opts: {
   sessionKey: string;
   sessionStore: SessionStore;
   agentManager: AgentInstanceGateway;
   model: RunXopcEmbeddedTurnParams['model'];
   config: Config | undefined;
+  systemPrompt: string;
+  userMessage: AgentMessage;
+  tools: RunXopcEmbeddedTurnParams['tools'];
+  imageCount: number;
+  fallbackModels: RunXopcEmbeddedTurnParams['model'][];
+  abortSignal?: AbortSignal;
   onEvent?: (event: EmbeddedStreamEvent) => void;
 }): Promise<void> {
-  const { sessionKey, sessionStore, agentManager, model, config, onEvent } = opts;
-  if (config) {
-    try {
-      if (config.userContext.memory.retention?.compaction === false) {
-        return;
-      }
-    } catch {
-      // Keep compaction enabled when manifest resolution is unavailable.
-    }
-  }
+  const {
+    sessionKey,
+    sessionStore,
+    agentManager,
+    model,
+    config,
+    systemPrompt,
+    userMessage,
+    tools,
+    imageCount,
+    fallbackModels,
+    abortSignal,
+    onEvent,
+  } = opts;
+  const policy = resolveCompactionPolicy(config);
 
   const contextWindow = (model as { contextWindow?: number }).contextWindow ?? 128_000;
   const messages = await sessionStore.load(sessionKey);
-  const prep = sessionStore.prepareCompaction(sessionKey, messages, contextWindow);
+  const activeTranscriptBytes = serializedTranscriptBytes(messages);
+  const byteLimitExceeded =
+    policy.enabled && activeTranscriptBytes > policy.maxActiveTranscriptBytes;
+  const budget = evaluateContextBudget({
+    messages,
+    contextWindow,
+    systemPrompt,
+    currentUserMessage: userMessage,
+    tools,
+    imageCount,
+    triggerThreshold: policy.triggerThreshold,
+    reserveTokens: policy.reserveTokens,
+    minToolResultKeepChars: policy.minToolResultKeepChars,
+    canCompact: messages.length >= policy.minMessagesBeforeCompact,
+  });
 
-  if (!prep.needsCompaction) {
+  if (
+    !byteLimitExceeded &&
+    (budget.route === 'fits' || budget.route === 'truncate_tool_results_only')
+  ) {
     return;
   }
 
+  if (!policy.enabled) {
+    if (budget.estimatedTokens <= budget.hardLimitTokens) return;
+    const fitsAfterToolPruning = budget.estimatedTokens - budget.reducibleToolResultTokens
+      <= budget.hardLimitTokens;
+    if (fitsAfterToolPruning) return;
+    throw new Error(
+      `Context budget exceeded (${budget.estimatedTokens}/${budget.hardLimitTokens} tokens) and compaction is disabled`,
+    );
+  }
+
   log.info(
-    { sessionKey, reason: prep.stats?.reason, usagePercent: prep.stats?.usagePercent, contextWindow },
+    {
+      sessionKey,
+      route: budget.route,
+      estimatedTokens: budget.estimatedTokens,
+      usagePercent: budget.usagePercent,
+      contextWindow,
+      activeTranscriptBytes,
+      maxActiveTranscriptBytes: policy.maxActiveTranscriptBytes,
+      byteLimitExceeded,
+    },
     'Pre-turn auto-compaction triggered',
   );
 
   onEvent?.({
     type: 'compaction',
     status: 'started',
-    tokensBefore: prep.stats?.usagePercent != null
-      ? Math.round((prep.stats.usagePercent as number) * contextWindow)
-      : undefined,
+    tokensBefore: budget.estimatedTokens,
   });
 
   try {
+    let summaryModel = model;
+    let summaryFallbackModels = fallbackModels;
+    if (policy.model) {
+      summaryModel = resolveModel(policy.model) as RunXopcEmbeddedTurnParams['model'];
+      const summaryRef = `${summaryModel.provider}/${summaryModel.id}`;
+      summaryFallbackModels = [model, ...fallbackModels].filter(
+        (candidate) => `${candidate.provider}/${candidate.id}` !== summaryRef,
+      );
+    }
     const result = await sessionStore.compact(
       sessionKey,
       messages,
-      model,
+      summaryModel,
       undefined,
-      false,
+      byteLimitExceeded || budget.estimatedTokens > budget.hardLimitTokens,
+      { fallbackModels: summaryFallbackModels, signal: abortSignal },
     );
 
     if (result.compacted) {
@@ -324,12 +390,24 @@ async function maybeAutoCompactBeforeTurn(opts: {
         summary: result.summary.length > 200 ? `${result.summary.slice(0, 200)}…` : result.summary,
       });
     } else {
+      if (byteLimitExceeded || budget.estimatedTokens > budget.hardLimitTokens) {
+        throw new Error(
+          byteLimitExceeded
+            ? `Active transcript size exceeded (${activeTranscriptBytes}/${policy.maxActiveTranscriptBytes} bytes) but no safe compaction range was available`
+            : `Context budget exceeded (${budget.estimatedTokens}/${budget.hardLimitTokens} tokens) but no safe compaction range was available`,
+        );
+      }
       onEvent?.({ type: 'compaction', status: 'skipped' });
     }
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
-    log.warn({ err, sessionKey }, `Pre-turn auto-compaction failed: ${errorMessage}`);
-    // Non-fatal: let the turn proceed even if compaction fails
+    log.warn(
+      { err, sessionKey, estimatedTokens: budget.estimatedTokens, activeTranscriptBytes },
+      `Pre-turn auto-compaction failed: ${errorMessage}`,
+    );
     onEvent?.({ type: 'compaction', status: 'skipped' });
+    if (byteLimitExceeded || budget.estimatedTokens > budget.hardLimitTokens) {
+      throw err;
+    }
   }
 }

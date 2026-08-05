@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtemp, rm } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -417,6 +417,38 @@ describe('SessionStore', () => {
       expect(await store.loadMessages(key)).toHaveLength(5);
     });
 
+    it('emits unified before and after hooks around a successful compaction', async () => {
+      const key = 'agent:main:telegram:default:direct:hooktest';
+      const messages = Array.from({ length: 12 }, (_, index) => ({
+        role: 'user' as const,
+        content: `line-${index}`,
+      }));
+      await store.saveMessages(key, messages);
+      const before = vi.fn();
+      const after = vi.fn();
+      store.setCompactionHooks({ before, after });
+      vi.spyOn((store as any).compactor, 'compact').mockResolvedValue({
+        summary: 'condensed topic',
+        firstKeptIndex: 8,
+        tokensBefore: 9_000,
+        tokensAfter: 1_200,
+        compacted: true,
+      });
+
+      await store.compact(key, messages, { provider: 'test', id: 'model' } as any);
+
+      expect(before).toHaveBeenCalledWith(expect.objectContaining({
+        sessionKey: key,
+        messageCount: 12,
+      }));
+      expect(after).toHaveBeenCalledWith({
+        sessionKey: key,
+        messageCount: 5,
+        tokenCount: 1_200,
+        compactedCount: 8,
+      });
+    });
+
     it('preserves the authoritative transcript while loading compacted LLM context', async () => {
       const key = 'agent:main:telegram:default:direct:cpapi';
       const msgs = Array.from({ length: 12 }, (_, i) => ({
@@ -445,10 +477,10 @@ describe('SessionStore', () => {
         msgs.map((message) => message.content),
       );
       expect(displayPageAfterCompact?.pagination.total).toBe(msgs.length);
-      expect(await store.listCompactionCheckpoints(key)).toEqual([]);
+      expect(await store.listCompactionBoundaries(key)).toHaveLength(1);
     });
 
-    it('deletes a raw user turn and invalidates compaction snapshots', async () => {
+    it('deletes a raw user turn and invalidates later compaction boundaries', async () => {
       const key = 'agent:main:webchat:default:direct:delete-compacted-round';
       const messages: any[] = [
         { role: 'user', content: 'u0' },

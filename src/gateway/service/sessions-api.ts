@@ -179,18 +179,14 @@ export class GatewaySessionsApi {
     return this.opts.getAgentService().sessionConfig.patch(sessionKey, body);
   }
 
-  // ── Compaction checkpoints ────────────────────────────────────────────
+  // ── Append-only compaction boundaries ────────────────────────────────
 
-  listCompactionCheckpoints(key: string) {
-    return this.opts.sessionIndex.listCompactionCheckpoints(key);
+  listCompactionBoundaries(key: string) {
+    return this.opts.sessionIndex.listCompactionBoundaries(key);
   }
 
-  getCompactionCheckpoint(key: string, checkpointId: string) {
-    return this.opts.sessionIndex.getCompactionCheckpointDetail(key, checkpointId);
-  }
-
-  async restoreCompactionCheckpoint(key: string, checkpointId: string): Promise<void> {
-    await this.opts.sessionIndex.restoreCompactionCheckpoint(key, checkpointId);
+  async restoreBeforeCompactionBoundary(key: string, compactionId: string): Promise<void> {
+    await this.opts.sessionIndex.restoreBeforeCompactionBoundary(key, compactionId);
     this.opts.getAgentService().evictSessionAgent(key);
   }
 

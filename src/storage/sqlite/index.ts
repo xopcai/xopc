@@ -100,18 +100,16 @@ export {
   updateSessionStats,
 } from './session-repository.js';
 export {
+  appendCompactionBoundary,
   appendTranscriptEntry,
-  captureCompactionCheckpoint,
-  getCompactionCheckpointDetail,
-  listCompactionCheckpoints,
-  loadCheckpointRows,
+  listCompactionBoundaries,
   loadLlmMessagesForSession,
   loadTranscriptHistoryRowsForSession,
   loadTranscriptRows,
   loadTranscriptRowsForSession,
   paginateTranscriptMessages,
   replaceTranscriptRows,
-  restoreCompactionCheckpoint,
+  restoreBeforeCompactionBoundary,
 } from './transcript-repository.js';
 export {
   deleteNoteRecord,
