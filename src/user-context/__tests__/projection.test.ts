@@ -250,6 +250,44 @@ describe('user context projection', () => {
     );
   });
 
+  it('projects one account for duplicate technical connections with the same identity', () => {
+    const definitions = [{
+      id: 'composio-github', displayName: 'GitHub', description: 'GitHub access', category: 'data',
+      capabilities: ['context', 'memory_source'],
+    }] as ConnectorDefinition[];
+    const connections = [
+      {
+        id: 'github-old',
+        updatedAt: '2026-07-20T07:00:00.000Z',
+      },
+      {
+        id: 'github-current',
+        updatedAt: '2026-07-21T07:00:00.000Z',
+      },
+    ].map(({ id, updatedAt }) => ({
+      id,
+      connectorId: 'composio-github',
+      provider: 'composio',
+      principalId: 'local-owner',
+      providerConnectionId: `provider-${id}`,
+      identity: { email: 'Owner@Example.com' },
+      status: 'active',
+      isDefault: id === 'github-current',
+      metadata: {},
+      createdAt: '2026-07-20T07:00:00.000Z',
+      updatedAt,
+    })) as ConnectorConnection[];
+
+    const sources = projectPersonalContextSources(definitions, [], { connections });
+
+    expect(sources).toHaveLength(1);
+    expect(sources[0]).toMatchObject({
+      instanceId: 'github-current',
+      accountLabel: 'Owner@Example.com',
+      accountCount: 1,
+    });
+  });
+
   it('attributes cross-source understanding through evidence and exposes learning progress', () => {
     const definitions = [{
       id: 'composio-gmail', displayName: 'Gmail', description: 'Gmail access', category: 'data',

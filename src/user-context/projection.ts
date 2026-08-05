@@ -129,6 +129,39 @@ export function recordsDerivedFromPersonalContextSource(
   ));
 }
 
+function connectionIdentityKey(connection: ConnectorConnection): string {
+  const email = typeof connection.identity.email === 'string'
+    ? connection.identity.email.trim().toLocaleLowerCase()
+    : '';
+  if (email) return `email:${email}`;
+  const username = typeof connection.identity.username === 'string'
+    ? connection.identity.username.trim().toLocaleLowerCase()
+    : '';
+  if (username) return `username:${username}`;
+  return `connection:${connection.id}`;
+}
+
+function selectAccountConnections(connections: ConnectorConnection[]): ConnectorConnection[] {
+  const byIdentity = new Map<string, ConnectorConnection>();
+  for (const connection of connections) {
+    const key = connectionIdentityKey(connection);
+    const current = byIdentity.get(key);
+    if (!current) {
+      byIdentity.set(key, connection);
+      continue;
+    }
+    const currentRank = current.status === 'active' ? 1 : 0;
+    const candidateRank = connection.status === 'active' ? 1 : 0;
+    if (candidateRank > currentRank || (
+      candidateRank === currentRank
+      && connection.updatedAt.localeCompare(current.updatedAt) > 0
+    )) {
+      byIdentity.set(key, connection);
+    }
+  }
+  return [...byIdentity.values()];
+}
+
 export function projectPersonalContextSources(
   definitions: ConnectorDefinition[],
   instances: ConnectorInstance[],
@@ -163,10 +196,11 @@ export function projectPersonalContextSources(
           && connection.status !== 'revoked'
         ));
       const hasActiveAccount = candidateAccounts.some((connection) => connection.status === 'active');
-      const accounts = candidateAccounts
-        .filter((connection) => (
+      const accounts = selectAccountConnections(
+        candidateAccounts.filter((connection) => (
           !hasActiveAccount || !['pending', 'unknown', 'disabled'].includes(connection.status)
-        ))
+        )),
+      )
         .sort((left, right) => {
           const byConnectedAt = (left.connectedAt ?? left.createdAt).localeCompare(right.connectedAt ?? right.createdAt);
           return byConnectedAt || left.id.localeCompare(right.id);
