@@ -132,12 +132,18 @@ export function recordsDerivedFromPersonalContextSource(
 export function projectPersonalContextSources(
   definitions: ConnectorDefinition[],
   instances: ConnectorInstance[],
-  records: MemoryRecord[] = [],
   knowledge: {
     sourceItems?: KnowledgeSourceItem[];
     syncRuns?: KnowledgeSyncRun[];
     connections?: ConnectorConnection[];
     learningJobs?: ConnectorLearningJob[];
+    claimStatsBySource?: Record<string, {
+      evidenceCount: number;
+      provisionalClaims: number;
+      activeClaims: number;
+      resolvedEntities: number;
+      lastEvidenceAt?: string;
+    }>;
   } = {},
 ) {
   const instanceByConnector = new Map<string, ConnectorInstance[]>();
@@ -203,20 +209,10 @@ export function projectPersonalContextSources(
               instances: [] as ConnectorInstance[],
             }];
       return rows.map((row) => {
-      const relatedRecords = row.sourceInstanceId
-        ? records.filter((record) => (
-            record.source.sourceInstanceId === row.sourceInstanceId
-            || record.evidence?.some((evidence) => (
-              evidence.sourceItemId
-              && (knowledge.sourceItems ?? []).some((item) => (
-                item.id === evidence.sourceItemId && item.sourceInstanceId === row.sourceInstanceId
-              ))
-            ))
-          ))
-        : [];
       const sourceItems = row.sourceInstanceId
         ? (knowledge.sourceItems ?? []).filter((item) => item.sourceInstanceId === row.sourceInstanceId)
         : [];
+      const claimStats = row.sourceInstanceId ? knowledge.claimStatsBySource?.[row.sourceInstanceId] : undefined;
       const latestSync = (knowledge.syncRuns ?? [])
         .filter((run) => run.sourceInstanceId === row.sourceInstanceId)
         .sort((left, right) => Date.parse(right.startedAt) - Date.parse(left.startedAt))[0];
@@ -281,7 +277,16 @@ export function projectPersonalContextSources(
           .filter((value): value is string => Boolean(value))
           .sort()
           .at(-1),
-        derivedUnderstandingCount: relatedRecords.length,
+        derivedUnderstandingCount: claimStats?.activeClaims ?? 0,
+        learningFunnel: {
+          indexedItems: sourceItems.filter((item) => !item.deletedAt).length,
+          attributedItems: sourceItems.filter((item) => !item.deletedAt && item.metadata.actorAttributed === true).length,
+          resolvedEntities: claimStats?.resolvedEntities ?? 0,
+          provisionalClaims: claimStats?.provisionalClaims ?? 0,
+          activeClaims: claimStats?.activeClaims ?? 0,
+          evidenceCount: claimStats?.evidenceCount ?? 0,
+          lastEvidenceAt: claimStats?.lastEvidenceAt,
+        },
         knowledgeItemCount: sourceItems.filter((item) => !item.deletedAt).length,
         lastSyncAt: latestSync?.finishedAt ?? latestSync?.startedAt,
         lastSyncStatus: latestSync?.status,

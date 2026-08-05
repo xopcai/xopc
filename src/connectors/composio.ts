@@ -63,6 +63,7 @@ const ADMIN_ACTION_TOKENS = ['DELETE', 'REMOVE', 'REVOKE', 'TRASH', 'ARCHIVE', '
 
 const COMPOSIO_CURATED_ACTIONS: Record<string, Record<string, ComposioScope>> = {
   gmail: {
+    GMAIL_GET_PROFILE: 'read',
     GMAIL_FETCH_EMAILS: 'read',
     GMAIL_GET_EMAIL: 'read',
     GMAIL_LIST_LABELS: 'read',
