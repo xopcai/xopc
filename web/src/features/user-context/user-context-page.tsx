@@ -60,11 +60,13 @@ import {
   updateRelationshipSettings,
   updatePersonalPlaybookRule,
   updateUnderstanding,
+  updateConnectedClaim,
   updateUserContextControls,
   updateUserProfile,
   updateUserProfilePrompt,
   updateUserTrust,
   type InsightSuggestion,
+  type ConnectedClaim,
   type PersonalContextSource,
   type PersonalPlaybook,
   type RelationshipSettingsPatch,
@@ -203,6 +205,57 @@ function UnderstandingCard({
   );
 }
 
+function ConnectedClaimCard({ claim, language, t, busy, onDecision }: {
+  claim: ConnectedClaim;
+  language: 'en' | 'zh';
+  t: ReturnType<typeof messages>['you'];
+  busy: boolean;
+  onDecision: (action: 'confirm' | 'reject') => void;
+}) {
+  const label = typeof claim.value.label === 'string' ? claim.value.label : '';
+  const weekdays = language === 'zh'
+    ? ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
+    : ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const summary = claim.class === 'relationship'
+    ? t.claimRelationship.replace('{{label}}', label)
+    : claim.class === 'project'
+      ? t.claimProject.replace('{{label}}', label)
+      : t.claimRoutine
+          .replace('{{weekday}}', weekdays[Number(claim.value.weekday)] ?? '')
+          .replace('{{hour}}', String(claim.value.hour).padStart(2, '0'));
+  const sources = [...new Set(claim.evidence.map((item) => item.sourceInstanceId))];
+  const needsReview = claim.state === 'provisional' || claim.state === 'stale';
+  return (
+    <article className={cn('rounded-xl border p-3.5', needsReview ? 'border-warning/35 bg-warning-soft/35' : 'border-edge-subtle bg-surface-panel')}>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <span className="text-[11px] font-medium text-fg-subtle">{t.claimClasses[claim.class]}</span>
+          <p className="mt-1 text-sm font-medium leading-6 text-fg">{summary}</p>
+        </div>
+        <span className="rounded-full bg-surface-hover px-2 py-1 text-[11px] text-fg-muted">{t.claimStates[claim.state]}</span>
+      </div>
+      <p className="mt-2 text-xs text-fg-muted">
+        {t.claimEvidence.replace('{{events}}', String(claim.independentEvidenceCount)).replace('{{days}}', String(claim.activeDayCount))}
+      </p>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+        <span className="text-xs text-fg-subtle">{t.observedAt.replace('{{time}}', formatDateTime(claim.lastReinforcedAt, language))}</span>
+        {needsReview ? <div className="flex gap-1">
+          <Button type="button" variant="ghost" className="h-8 px-2" disabled={busy} onClick={() => onDecision('confirm')}><Check className="size-3.5" aria-hidden />{t.confirm}</Button>
+          <Button type="button" variant="ghost" className="h-8 px-2" disabled={busy} onClick={() => onDecision('reject')}><X className="size-3.5" aria-hidden />{t.notTrue}</Button>
+        </div> : null}
+      </div>
+      <details className="mt-2 rounded-lg bg-surface-muted/70 px-3 py-2 text-xs text-fg-muted">
+        <summary className="cursor-pointer font-medium">{t.viewEvidence}</summary>
+        <dl className="mt-2 grid gap-1.5 sm:grid-cols-2">
+          <div><dt className="text-fg-subtle">{t.evidenceSource}</dt><dd className="mt-0.5 break-all">{sources.join(', ')}</dd></div>
+          <div><dt className="text-fg-subtle">{t.evidenceConfidence}</dt><dd className="mt-0.5">{Math.round(claim.confidence * 100)}%</dd></div>
+          <div className="sm:col-span-2"><dt className="text-fg-subtle">{t.evidenceRule}</dt><dd className="mt-0.5">{t.claimRule}</dd></div>
+        </dl>
+      </details>
+    </article>
+  );
+}
+
 function SourceCard({ source, language, t, learningBusy, onConfigure, onLearn, onDisconnect }: { source: PersonalContextSource; language: 'en' | 'zh'; t: ReturnType<typeof messages>['you']; learningBusy: boolean; onConfigure: () => void; onLearn: () => void; onDisconnect: () => void }) {
   const status = !source.installed
     ? t.available
@@ -328,9 +381,11 @@ function SourceCard({ source, language, t, learningBusy, onConfigure, onLearn, o
           {source.lastSyncStatus === 'failed' && source.learning?.status !== 'failed' ? (
             <p className="text-danger">{t.sourceSyncFailed}</p>
           ) : null}
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <div className="rounded-lg bg-surface-muted px-3 py-2"><strong className="block text-base font-semibold text-fg">{source.knowledgeItemCount}</strong><span>{t.sourceKnowledgeMetric}</span></div>
-            <div className="rounded-lg bg-surface-muted px-3 py-2"><strong className="block text-base font-semibold text-fg">{source.derivedUnderstandingCount}</strong><span>{t.sourceUnderstandingMetric}</span></div>
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className="rounded-lg bg-surface-muted px-3 py-2"><strong className="block text-base font-semibold text-fg">{source.learningFunnel.indexedItems}</strong><span>{t.sourceFunnelIndexed}</span></div>
+            <div className="rounded-lg bg-surface-muted px-3 py-2"><strong className="block text-base font-semibold text-fg">{source.learningFunnel.attributedItems}</strong><span>{t.sourceFunnelAttributed}</span></div>
+            <div className="rounded-lg bg-surface-muted px-3 py-2"><strong className="block text-base font-semibold text-fg">{source.learningFunnel.resolvedEntities}</strong><span>{t.sourceFunnelEntities}</span></div>
+            <div className="rounded-lg bg-surface-muted px-3 py-2"><strong className="block text-base font-semibold text-fg">{source.learningFunnel.activeClaims}</strong><span>{t.sourceFunnelClaims}</span></div>
           </div>
         </div>
       ) : null}
@@ -447,6 +502,8 @@ export function UserContextPage() {
   const profile = data?.profile ?? { callName: '', pronouns: '', timezone: '', notes: '' };
   const active = useMemo(() => data?.understanding.filter((item) => item.status === 'active') ?? [], [data]);
   const review = useMemo(() => data?.understanding.filter((item) => item.status !== 'active') ?? [], [data]);
+  const visibleClaims = useMemo(() => data?.connectedClaims.filter((claim) => claim.state !== 'rejected') ?? [], [data]);
+  const reviewClaims = useMemo(() => visibleClaims.filter((claim) => claim.state !== 'active'), [visibleClaims]);
   const grouped = useMemo(() => new Map(FACET_ORDER.map((facet) => [facet, active.filter((item) => item.facet === facet)])), [active]);
   const controls = controlsDraft ?? data?.controls ?? null;
   const connectedSources = data?.sources.filter((source) => source.installed && source.enabled) ?? [];
@@ -468,6 +525,21 @@ export function UserContextPage() {
       showToast({ type: 'error', title: t.supportModeTitle, message: t.saveError });
     } finally {
       setRelationshipSaving(false);
+    }
+  }
+
+  async function decideConnectedClaim(claim: ConnectedClaim, action: 'confirm' | 'reject') {
+    setBusyId(`claim:${claim.id}`);
+    try {
+      const updated = await updateConnectedClaim(claim.id, action);
+      await mutate((current) => current ? {
+        ...current,
+        connectedClaims: current.connectedClaims.map((item) => item.id === updated.id ? updated : item),
+      } : current, { revalidate: false });
+    } catch {
+      showToast({ type: 'error', title: t.connectedClaimsTitle, message: t.saveError });
+    } finally {
+      setBusyId(null);
     }
   }
 
@@ -777,7 +849,7 @@ export function UserContextPage() {
   const tabs = [
     { id: 'overview' as const, label: t.tabs.overview, icon: HeartHandshake },
     { id: 'profile' as const, label: t.tabs.profile, icon: CircleUserRound },
-    { id: 'understanding' as const, label: t.tabs.understanding, icon: Brain, count: review.length || undefined },
+    { id: 'understanding' as const, label: t.tabs.understanding, icon: Brain, count: review.length + reviewClaims.length || undefined },
     { id: 'sources' as const, label: t.tabs.sources, icon: Database },
     { id: 'controls' as const, label: t.tabs.controls, icon: ShieldCheck },
   ];
@@ -823,7 +895,7 @@ export function UserContextPage() {
             <div className="grid gap-3 sm:grid-cols-3">
               <button type="button" className="rounded-xl border border-edge-subtle bg-surface-panel p-3 text-left hover:bg-surface-hover" onClick={() => selectView('understanding')}><span className="text-xl font-semibold text-fg">{active.length}</span><span className="mt-1 block text-xs text-fg-muted">{t.knownSummary}</span></button>
               <button type="button" className="rounded-xl border border-edge-subtle bg-surface-panel p-3 text-left hover:bg-surface-hover" onClick={() => selectView('sources')}><span className="text-xl font-semibold text-fg">{connectedSources.length}</span><span className="mt-1 block text-xs text-fg-muted">{t.connectedSources}</span></button>
-              <button type="button" className="rounded-xl border border-edge-subtle bg-surface-panel p-3 text-left hover:bg-surface-hover" onClick={() => selectView('understanding', 'review')}><span className="text-xl font-semibold text-fg">{review.length}</span><span className="mt-1 block text-xs text-fg-muted">{t.waitingReview}</span></button>
+              <button type="button" className="rounded-xl border border-edge-subtle bg-surface-panel p-3 text-left hover:bg-surface-hover" onClick={() => selectView('understanding', 'review')}><span className="text-xl font-semibold text-fg">{review.length + reviewClaims.length}</span><span className="mt-1 block text-xs text-fg-muted">{t.waitingReview}</span></button>
             </div>
           </section>
 
@@ -909,9 +981,10 @@ export function UserContextPage() {
           </section>
           {data.conflictGroups.some((group) => group.unresolved) ? <section><h2 className="text-base font-semibold text-fg">{t.conflictsTitle}</h2><p className="mt-1 text-sm text-fg-muted">{t.conflictsHint}</p><div className="mt-3 space-y-3">{data.conflictGroups.filter((group) => group.unresolved).map((group) => <div key={group.id} className="divide-y divide-edge overflow-hidden rounded-xl border border-warning/35 bg-warning-soft/25">{group.records.filter((record) => record.storedStatus !== 'archived' && record.storedStatus !== 'rejected').map((record) => <div key={record.id} className="flex flex-wrap items-start justify-between gap-3 px-4 py-3"><div className="min-w-0 flex-1"><p className="text-sm leading-6 text-fg">{record.statement}</p><p className="mt-1 text-xs text-fg-subtle">{originLabel(record, t)} · {formatDateTime(record.updatedAt, language)}</p></div><Button type="button" variant="secondary" className="h-8 shrink-0 px-2.5" disabled={busyId === `conflict:${group.id}`} onClick={() => void resolveConflict(group.id, record.id)}>{t.useThis}</Button></div>)}</div>)}</div></section> : null}
           {data.consentRequests.length > 0 ? <section className="space-y-3"><div><h2 className="text-base font-semibold text-fg">{t.consentTitle}</h2><p className="mt-1 text-sm text-fg-muted">{t.consentHint}</p></div>{data.consentRequests.map((request) => <article key={request.id} className="rounded-2xl border border-accent/25 bg-accent-soft/20 p-4"><p className="text-sm leading-6 text-fg">{request.statement}</p><p className="mt-2 text-xs text-fg-muted">{t.consentPurpose.replace('{{purpose}}', request.purpose)}</p><div className="mt-3 flex flex-wrap justify-end gap-2"><Button type="button" variant="ghost" disabled={busyId === `consent:${request.id}`} onClick={() => void decideConsent(request.id, 'deny')}>{t.consentDeny}</Button><Button type="button" variant="secondary" disabled={busyId === `consent:${request.id}`} onClick={() => void decideConsent(request.id, 'once')}>{t.consentOnce}</Button><Button type="button" variant="secondary" disabled={busyId === `consent:${request.id}`} onClick={() => void decideConsent(request.id, 'session')}>{t.consentSession}</Button><Button type="button" variant="primary" disabled={busyId === `consent:${request.id}`} onClick={() => void decideConsent(request.id, 'always')}>{t.consentAlways}</Button></div></article>)}</section> : null}
-          {review.length > 0 ? <section><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-base font-semibold text-fg">{t.reviewTitle}</h2><p className="mt-1 text-sm text-fg-muted">{t.reviewHint}</p></div><Button type="button" variant="secondary" disabled={busyId === 'understanding:batch'} onClick={() => void confirmAllReview()}>{t.reviewAll}</Button></div><div className="mt-3 grid gap-3 lg:grid-cols-2">{review.map((item) => <UnderstandingCard key={item.id} item={item} language={language} t={t} busy={busyId === item.id} onConfirm={() => void runUnderstandingAction(item, 'confirm')} onReject={() => void runUnderstandingAction(item, 'reject')} onUpdate={(content) => void runUnderstandingAction(item, 'update', content)} onForget={() => setForgetItem(item)} />)}</div></section> : active.length > 0 ? <div className="rounded-2xl border border-success/20 bg-success-soft p-6 text-center"><Check className="mx-auto size-5 text-success" aria-hidden /><h2 className="mt-2 text-sm font-semibold text-fg">{t.nothingToReview}</h2><p className="mt-1 text-sm text-fg-muted">{t.nothingToReviewHint}</p></div> : null}
+          {visibleClaims.length > 0 ? <section><div><h2 className="text-base font-semibold text-fg">{t.connectedClaimsTitle}</h2><p className="mt-1 text-sm text-fg-muted">{t.connectedClaimsHint}</p></div><div className="mt-3 grid gap-3 lg:grid-cols-2">{visibleClaims.map((claim) => <ConnectedClaimCard key={claim.id} claim={claim} language={language} t={t} busy={busyId === `claim:${claim.id}`} onDecision={(action) => void decideConnectedClaim(claim, action)} />)}</div></section> : null}
+          {review.length > 0 ? <section><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-base font-semibold text-fg">{t.reviewTitle}</h2><p className="mt-1 text-sm text-fg-muted">{t.reviewHint}</p></div><Button type="button" variant="secondary" disabled={busyId === 'understanding:batch'} onClick={() => void confirmAllReview()}>{t.reviewAll}</Button></div><div className="mt-3 grid gap-3 lg:grid-cols-2">{review.map((item) => <UnderstandingCard key={item.id} item={item} language={language} t={t} busy={busyId === item.id} onConfirm={() => void runUnderstandingAction(item, 'confirm')} onReject={() => void runUnderstandingAction(item, 'reject')} onUpdate={(content) => void runUnderstandingAction(item, 'update', content)} onForget={() => setForgetItem(item)} />)}</div></section> : active.length > 0 || visibleClaims.some((claim) => claim.state === 'active') ? <div className="rounded-2xl border border-success/20 bg-success-soft p-6 text-center"><Check className="mx-auto size-5 text-success" aria-hidden /><h2 className="mt-2 text-sm font-semibold text-fg">{t.nothingToReview}</h2><p className="mt-1 text-sm text-fg-muted">{t.nothingToReviewHint}</p></div> : null}
           {FACET_ORDER.map((facet) => { const items = grouped.get(facet) ?? []; if (items.length === 0) return null; return <section key={facet}><h2 className="text-sm font-semibold text-fg">{t.facets[facet]}</h2><div className="mt-3 grid gap-3 lg:grid-cols-2">{items.map((item) => <UnderstandingCard key={item.id} item={item} language={language} t={t} busy={busyId === item.id} onConfirm={() => void runUnderstandingAction(item, 'confirm')} onReject={() => void runUnderstandingAction(item, 'reject')} onUpdate={(content) => void runUnderstandingAction(item, 'update', content)} onForget={() => setForgetItem(item)} />)}</div></section>; })}
-          {data.understanding.length === 0 ? <div className="rounded-2xl border border-dashed border-edge p-10 text-center text-sm text-fg-muted">{t.emptyUnderstanding}</div> : null}
+          {data.understanding.length === 0 && visibleClaims.length === 0 ? <div className="rounded-2xl border border-dashed border-edge p-10 text-center text-sm text-fg-muted">{t.emptyUnderstanding}</div> : null}
         </div>
       ) : null}
 

@@ -73,6 +73,8 @@ describe('connected source ingestion', () => {
     const result = await ingestComposioConnectedSource({
       config: {} as Config,
       connectorId: 'composio-gmail',
+      collectionScope: 'messages',
+      streamKind: 'activity',
       actionId: 'GMAIL_FETCH_EMAILS',
       arguments: { query: 'quarterly plan' },
       agentId: 'main',
@@ -119,6 +121,8 @@ describe('connected source ingestion', () => {
     const updated = await ingestComposioConnectedSource({
       config: {} as Config,
       connectorId: 'composio-gmail',
+      collectionScope: 'messages',
+      streamKind: 'activity',
       actionId: 'GMAIL_FETCH_EMAILS',
       arguments: { query: 'quarterly plan' },
       agentId: 'main',
@@ -138,6 +142,8 @@ describe('connected source ingestion', () => {
     const result = await ingestComposioConnectedSource({
       config: {} as Config,
       connectorId: 'composio-gmail',
+      collectionScope: 'messages',
+      streamKind: 'activity',
       actionId: 'GMAIL_FETCH_EMAILS',
       agentId: 'main',
       adapter: { executeWithPolicy } as unknown as ComposioSessionsAdapter,
@@ -156,6 +162,8 @@ describe('connected source ingestion', () => {
     await expect(ingestComposioConnectedSource({
       config: {} as Config,
       connectorId: 'composio-gmail',
+      collectionScope: 'messages',
+      streamKind: 'activity',
       actionId: 'GMAIL_SEND_EMAIL',
       agentId: 'main',
       adapter: {} as ComposioSessionsAdapter,
@@ -193,6 +201,8 @@ describe('connected source ingestion', () => {
     await ingestComposioConnectedSource({
       config: {} as Config,
       connectorId: 'composio-github',
+      collectionScope: 'commits',
+      streamKind: 'activity',
       actionId: 'GITHUB_LIST_COMMITS',
       arguments: { owner: 'xopc-ai', repo: 'xopc' },
       agentId: 'main',
@@ -238,6 +248,8 @@ describe('connected source ingestion', () => {
     const result = await ingestComposioConnectedSource({
       config: {} as Config,
       connectorId: 'composio-github',
+      collectionScope: 'repositories',
+      streamKind: 'inventory',
       actionId: 'GITHUB_LIST_REPOSITORIES_FOR_THE_AUTHENTICATED_USER',
       agentId: 'main',
       adapter: { executeWithPolicy } as unknown as ComposioSessionsAdapter,
@@ -288,6 +300,8 @@ describe('connected source ingestion', () => {
     await ingestComposioConnectedSource({
       config: {} as Config,
       connectorId: 'composio-googlecalendar',
+      collectionScope: 'events',
+      streamKind: 'activity',
       actionId: 'GOOGLECALENDAR_LIST_EVENTS',
       agentId: 'main',
       adapter: { executeWithPolicy } as unknown as ComposioSessionsAdapter,
@@ -335,6 +349,8 @@ describe('connected source ingestion', () => {
     await ingestComposioConnectedSource({
       config: {} as Config,
       connectorId: 'composio-linear',
+      collectionScope: 'issues',
+      streamKind: 'activity',
       actionId: 'LINEAR_LIST_ISSUES',
       agentId: 'main',
       adapter: { executeWithPolicy } as unknown as ComposioSessionsAdapter,

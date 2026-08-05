@@ -11,18 +11,19 @@ import type { KnowledgeSourceAdapter, KnowledgeSourceItemInput, KnowledgeSyncRun
 
 const log = createLogger('KnowledgeIngestion');
 
-function deletionInputs(instanceId: string, snapshotExternalIds: string[] | undefined): KnowledgeSourceItemInput[] {
+function deletionInputs(instanceId: string, collectionScope: string, snapshotExternalIds: string[] | undefined): KnowledgeSourceItemInput[] {
   if (!snapshotExternalIds) return [];
   const seen = new Set(snapshotExternalIds);
   const deletedAt = new Date().toISOString();
   const missing: KnowledgeSourceItemInput[] = [];
   for (let offset = 0; ; offset += 500) {
-    const page = listKnowledgeSourceItems({ sourceInstanceId: instanceId, limit: 500, offset });
+    const page = listKnowledgeSourceItems({ sourceInstanceId: instanceId, collectionScope, limit: 500, offset });
     for (const item of page) {
       if (seen.has(item.externalId)) continue;
       missing.push({
         id: item.id,
         sourceInstanceId: item.sourceInstanceId,
+        collectionScope: item.collectionScope,
         externalId: item.externalId,
         itemType: item.itemType,
         authorRole: item.authorRole,
@@ -44,17 +45,17 @@ function deletionInputs(instanceId: string, snapshotExternalIds: string[] | unde
 }
 
 export interface KnowledgeSourceStateStore {
-  getCursor(instanceId: string): string | undefined;
-  setCursor(instanceId: string, cursor: string | undefined): void;
+  getCursor(instanceId: string, collectionScope: string): string | undefined;
+  setCursor(instanceId: string, collectionScope: string, cursor: string | undefined): void;
 }
 
 export class SqliteKnowledgeSourceStateStore implements KnowledgeSourceStateStore {
-  getCursor(instanceId: string): string | undefined {
-    return getKnowledgeSourceCursor(instanceId);
+  getCursor(instanceId: string, collectionScope: string): string | undefined {
+    return getKnowledgeSourceCursor(instanceId, collectionScope);
   }
 
-  setCursor(instanceId: string, cursor: string | undefined): void {
-    setKnowledgeSourceCursor(instanceId, cursor);
+  setCursor(instanceId: string, collectionScope: string, cursor: string | undefined): void {
+    setKnowledgeSourceCursor(instanceId, collectionScope, cursor);
   }
 }
 
@@ -66,15 +67,16 @@ export class KnowledgeIngestionService {
 
   ingest(params: {
     instanceId: string;
+    collectionScope: string;
     items: KnowledgeSourceItemInput[];
     cursorAfter?: string;
     warnings?: string[];
   }): KnowledgeSyncRun {
-    const cursorBefore = this.state.getCursor(params.instanceId);
+    const cursorBefore = this.state.getCursor(params.instanceId, params.collectionScope);
     const run = startKnowledgeSyncRun({ sourceInstanceId: params.instanceId, cursorBefore });
     try {
       const stored = upsertKnowledgeSourceItems(params.items);
-      this.state.setCursor(params.instanceId, params.cursorAfter);
+      this.state.setCursor(params.instanceId, params.collectionScope, params.cursorAfter);
       return finishKnowledgeSyncRun({
         runId: run.id,
         status: params.warnings?.length ? 'partial' : 'succeeded',
@@ -94,6 +96,7 @@ export class KnowledgeIngestionService {
   async sync(params: {
     adapterKind: string;
     instanceId: string;
+    collectionScope: string;
     windowStart?: string;
     signal?: AbortSignal;
   }): Promise<KnowledgeSyncRun> {
@@ -101,7 +104,7 @@ export class KnowledgeIngestionService {
     if (!adapter) {
       throw new Error(`Knowledge source adapter not found: ${params.adapterKind}`);
     }
-    const cursorBefore = this.state.getCursor(params.instanceId);
+    const cursorBefore = this.state.getCursor(params.instanceId, params.collectionScope);
     const run = startKnowledgeSyncRun({
       sourceInstanceId: params.instanceId,
       cursorBefore,
@@ -112,13 +115,14 @@ export class KnowledgeIngestionService {
     try {
       const pulled = await adapter.pull({
         instanceId: params.instanceId,
+        collectionScope: params.collectionScope,
         cursor: cursorBefore,
         windowStart: params.windowStart,
         signal,
       });
-      const tombstones = deletionInputs(params.instanceId, pulled.snapshotExternalIds);
+      const tombstones = deletionInputs(params.instanceId, params.collectionScope, pulled.snapshotExternalIds);
       const stored = upsertKnowledgeSourceItems([...pulled.items, ...tombstones]);
-      this.state.setCursor(params.instanceId, pulled.nextCursor);
+      this.state.setCursor(params.instanceId, params.collectionScope, pulled.nextCursor);
       const completed = finishKnowledgeSyncRun({
         runId: run.id,
         status: pulled.warnings.length > 0 ? 'partial' : 'succeeded',

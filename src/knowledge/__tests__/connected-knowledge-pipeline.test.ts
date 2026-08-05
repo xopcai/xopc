@@ -41,6 +41,7 @@ describe('ConnectedKnowledgePipeline', () => {
   it('turns normalized source items into active, cited knowledge and daily summaries', async () => {
     const [item] = upsertKnowledgeSourceItems([{
       sourceInstanceId: 'composio:composio-gmail:gmail-work',
+      collectionScope: 'messages',
       externalId: 'message-1',
       itemType: 'gmail:message',
       occurredAt: '2026-07-20T08:30:00.000Z',
@@ -92,6 +93,7 @@ describe('ConnectedKnowledgePipeline', () => {
     const sourceInstanceId = 'composio:composio-notion:notion-personal';
     const [item] = upsertKnowledgeSourceItems([{
       sourceInstanceId,
+      collectionScope: 'pages',
       externalId: 'page-1',
       itemType: 'notion:page',
       occurredAt: '2026-07-19T12:00:00.000Z',
@@ -101,6 +103,7 @@ describe('ConnectedKnowledgePipeline', () => {
       synthesisPipeline: 'connected_knowledge',
     }, {
       sourceInstanceId,
+      collectionScope: 'pages',
       externalId: 'secret-1',
       itemType: 'notion:page',
       contentHash: 'secret-hash',
@@ -115,6 +118,7 @@ describe('ConnectedKnowledgePipeline', () => {
 
     upsertKnowledgeSourceItems([{
       sourceInstanceId,
+      collectionScope: 'pages',
       externalId: 'page-1',
       itemType: 'notion:page',
       occurredAt: '2026-07-19T12:00:00.000Z',
@@ -133,6 +137,7 @@ describe('ConnectedKnowledgePipeline', () => {
 
     upsertKnowledgeSourceItems([{
       sourceInstanceId,
+      collectionScope: 'pages',
       externalId: 'page-1',
       itemType: 'notion:page',
       occurredAt: '2026-07-19T12:00:00.000Z',

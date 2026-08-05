@@ -339,6 +339,7 @@ export class WorkDiscoveryService {
         });
         return {
           sourceInstanceId: 'desktop:calendar',
+          collectionScope: 'events',
           externalId: item.id,
           itemType: 'calendar_event',
           authorRole: 'unknown' as const,

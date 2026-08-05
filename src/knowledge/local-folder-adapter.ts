@@ -55,6 +55,7 @@ export class LocalFolderKnowledgeSourceAdapter implements KnowledgeSourceAdapter
       const externalId = relative(root, canonicalPath).split(sep).join('/');
       items.push({
         sourceInstanceId: input.instanceId,
+        collectionScope: 'files',
         externalId,
         itemType: 'local_file',
         authorRole: 'user',

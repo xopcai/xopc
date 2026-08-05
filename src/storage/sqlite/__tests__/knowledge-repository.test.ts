@@ -40,6 +40,7 @@ describe('knowledge repository', () => {
   it('upserts source items idempotently and persists cursors and evidence', () => {
     const input = {
       sourceInstanceId: 'calendar:personal',
+      collectionScope: 'events',
       externalId: 'event-1',
       itemType: 'calendar_event',
       contentHash: 'hash-1',
@@ -51,8 +52,10 @@ describe('knowledge repository', () => {
     expect(second.unchanged).toBe(1);
     expect(listKnowledgeSourceItems()).toHaveLength(1);
 
-    setKnowledgeSourceCursor('calendar:personal', 'cursor-2');
-    expect(getKnowledgeSourceCursor('calendar:personal')).toBe('cursor-2');
+    setKnowledgeSourceCursor('calendar:personal', 'events', 'cursor-2');
+    setKnowledgeSourceCursor('calendar:personal', 'tasks', 'cursor-3');
+    expect(getKnowledgeSourceCursor('calendar:personal', 'events')).toBe('cursor-2');
+    expect(getKnowledgeSourceCursor('calendar:personal', 'tasks')).toBe('cursor-3');
 
     const record = upsertMemoryRecord({
       providerId: 'local',
@@ -84,6 +87,7 @@ describe('knowledge repository', () => {
   it('records ordered source changes and keeps consumer watermarks monotonic', () => {
     const base = {
       sourceInstanceId: 'mail:work',
+      collectionScope: 'messages',
       externalId: 'message-1',
       itemType: 'email',
       contentHash: 'hash-1',
@@ -103,10 +107,37 @@ describe('knowledge repository', () => {
     expect(getKnowledgeConsumerWatermark('context-index', 'mail:work')).toBe(3);
   });
 
+  it('keeps identical external ids isolated across collection scopes', () => {
+    const base = {
+      sourceInstanceId: 'github:work',
+      externalId: '123',
+      itemType: 'development_activity',
+      contentHash: 'hash-1',
+    };
+    const inventory = upsertKnowledgeSourceItems([{
+      ...base,
+      collectionScope: 'repositories',
+    }]);
+    const activity = upsertKnowledgeSourceItems([{
+      ...base,
+      collectionScope: 'authored-work',
+    }]);
+
+    expect(inventory.created).toBe(1);
+    expect(activity.created).toBe(1);
+    expect(activity.items[0]?.id).not.toBe(inventory.items[0]?.id);
+    expect(listKnowledgeSourceItems({ sourceInstanceId: 'github:work' }))
+      .toEqual(expect.arrayContaining([
+        expect.objectContaining({ collectionScope: 'repositories', externalId: '123' }),
+        expect.objectContaining({ collectionScope: 'authored-work', externalId: '123' }),
+      ]));
+  });
+
   it('claims synthesis work with leases, retries, and ownership checks', () => {
     const [first, second] = upsertKnowledgeSourceItems([
       {
         sourceInstanceId: 'calendar:personal',
+        collectionScope: 'events',
         externalId: 'event-1',
         itemType: 'calendar_event',
         contentHash: 'event-hash-1',
@@ -114,6 +145,7 @@ describe('knowledge repository', () => {
       },
       {
         sourceInstanceId: 'mail:work',
+        collectionScope: 'messages',
         externalId: 'message-1',
         itemType: 'email',
         contentHash: 'mail-hash-1',

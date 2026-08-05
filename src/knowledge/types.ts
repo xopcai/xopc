@@ -10,6 +10,7 @@ export type KnowledgeChangeKind = 'added' | 'modified' | 'deleted';
 export interface KnowledgeSourceItem {
   id: string;
   sourceInstanceId: string;
+  collectionScope: string;
   externalId: string;
   itemType: string;
   authorRole?: KnowledgeAuthorRole;
@@ -46,6 +47,7 @@ export interface KnowledgeSourceChange {
 export interface KnowledgeSourceItemInput {
   id?: string;
   sourceInstanceId: string;
+  collectionScope: string;
   externalId: string;
   itemType: string;
   authorRole?: KnowledgeAuthorRole;
@@ -79,6 +81,7 @@ export interface KnowledgeSyncRun {
 
 export interface KnowledgePullInput {
   instanceId: string;
+  collectionScope: string;
   cursor?: string;
   windowStart?: string;
   signal: AbortSignal;

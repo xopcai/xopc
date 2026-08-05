@@ -8,6 +8,7 @@ import { ConfigSchema } from '../../config/schema.js';
 import {
   closeXopcDatabase,
   listConnectorLearningJobs,
+  getConnectorConnection,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
   upsertConnectorConnection,
@@ -29,7 +30,15 @@ const { ingestComposioConnectedSource } = vi.hoisted(() => ({
 vi.mock('../connected-source-ingestion.js', () => ({ ingestComposioConnectedSource }));
 
 import { startConnectorLearningCoordinator } from '../learning-coordinator.js';
-import { buildConnectorLearningArguments, getConnectorLearningRecipe } from '../learning-recipes.js';
+import { buildConnectorLearningArguments, getConnectorLearningPlan } from '../learning-recipes.js';
+import type { ComposioSessionsAdapter } from '../composio-sessions.js';
+
+const identityAdapter = {
+  executeWithPolicy: vi.fn(async () => ({
+    decision: 'allowed' as const,
+    result: { emailAddress: 'owner@example.com' },
+  })),
+} as unknown as ComposioSessionsAdapter;
 
 describe('connector learning coordinator', () => {
   let stateDir: string;
@@ -77,12 +86,14 @@ describe('connector learning coordinator', () => {
       resolveAgentId: () => 'main',
       getMemoryManager: () => ({ applyUnderstandingCandidates: vi.fn() }) as unknown as MemoryManager,
       initialDelayMs: 60_000,
+      composioAdapter: identityAdapter,
     });
     try {
       const queued = listConnectorLearningJobs({ connectionId: 'gmail-work' })[0];
       expect(queued).toMatchObject({ mode: 'bootstrap', status: 'queued' });
       await coordinator.runNow();
       expect(ingestComposioConnectedSource).toHaveBeenCalledOnce();
+      expect(getConnectorConnection('gmail-work')?.identity).toEqual({ email: 'owner@example.com' });
       const jobs = listConnectorLearningJobs({ connectionId: 'gmail-work' });
       expect(jobs).toEqual(expect.arrayContaining([
         expect.objectContaining({ mode: 'bootstrap', status: 'completed', itemsIndexed: 6 }),
@@ -94,8 +105,13 @@ describe('connector learning coordinator', () => {
   });
 
   it('uses the stored cursor to bound supported incremental reads', () => {
-    const recipe = getConnectorLearningRecipe('gmail')!;
-    expect(buildConnectorLearningArguments(recipe, { cursor: '2026-08-01T00:00:00.000Z' })).toMatchObject({
+    const plan = getConnectorLearningPlan('gmail')!;
+    expect(buildConnectorLearningArguments(
+      plan,
+      plan.streams[0]!,
+      { cursor: '2026-08-01T00:00:00.000Z' },
+      { email: 'owner@example.com' },
+    )).toMatchObject({
       query: `after:${Math.floor(Date.parse('2026-08-01T00:00:00.000Z') / 1_000)} -in:spam -in:trash`,
     });
   });
@@ -111,6 +127,7 @@ describe('connector learning coordinator', () => {
       resolveAgentId: () => 'main',
       getMemoryManager: () => ({ applyUnderstandingCandidates: vi.fn() }) as unknown as MemoryManager,
       initialDelayMs: 60_000,
+      composioAdapter: identityAdapter,
     });
     try {
       await coordinator.runNow();

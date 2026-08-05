@@ -5,17 +5,21 @@ import {
   enqueueConnectorLearningJob,
   listConnectorConnections,
   listConnectorLearningJobs,
+  getConnectorInstallation,
   pruneBoundedKnowledgeSourceItems,
   recoverStaleConnectorLearningJobs,
   setConnectorLearningPaused,
   updateConnectorLearningJob,
+  upsertConnectorConnection,
   type ConnectorLearningJob,
 } from '../storage/sqlite/index.js';
 import { ConnectedUnderstandingPipeline } from '../knowledge/index.js';
 import { createLogger } from '../utils/logger.js';
 import { getConnectorDefinition } from './catalog.js';
+import { ComposioSessionsAdapter } from './composio-sessions.js';
+import { normalizeConnectorIdentity } from './connector-identity.js';
 import { ingestComposioConnectedSource } from './connected-source-ingestion.js';
-import { buildConnectorLearningArguments, getConnectorLearningRecipe } from './learning-recipes.js';
+import { buildConnectorLearningArguments, getConnectorLearningPlan } from './learning-recipes.js';
 
 const log = createLogger('ConnectorLearning');
 const CONNECTED_ACCOUNT_UNAVAILABLE = 'connected_account_unavailable';
@@ -57,11 +61,13 @@ export function startConnectorLearningCoordinator(options: {
   emit?: (type: string, payload: unknown) => void;
   intervalMs?: number;
   initialDelayMs?: number;
+  composioAdapter?: ComposioSessionsAdapter;
 }): ConnectorLearningCoordinator {
   const intervalMs = Math.max(2_000, Math.min(options.intervalMs ?? 10_000, 60_000));
   let timer: NodeJS.Timeout | null = null;
   let running = false;
   let stopped = false;
+  const composioAdapter = options.composioAdapter ?? new ComposioSessionsAdapter();
 
   const publish = (job: ConnectorLearningJob) => options.emit?.('connector.learning.updated', job);
 
@@ -80,7 +86,7 @@ export function startConnectorLearningCoordinator(options: {
     if (!connection) return null;
     const definition = getConnectorDefinition(connection.connectorId);
     if (definition?.runtime.type !== 'composio' || definition.runtime.role !== 'toolkit') return null;
-    if (!getConnectorLearningRecipe(definition.runtime.toolkit)) return null;
+    if (!getConnectorLearningPlan(definition.runtime.toolkit)) return null;
     const sourceInstanceId = `composio:${connection.connectorId}:${connection.id}`;
     const existing = listConnectorLearningJobs({ connectionId: connection.id, limit: 1 });
     const mode = request.mode ?? (existing.length === 0 ? 'bootstrap' : 'incremental');
@@ -122,23 +128,59 @@ export function startConnectorLearningCoordinator(options: {
     if (definition?.runtime.type !== 'composio' || definition.runtime.role !== 'toolkit') {
       throw new Error(`Connector learning is unavailable for ${job.connectorId}.`);
     }
-    const recipe = getConnectorLearningRecipe(definition.runtime.toolkit);
-    if (!recipe) throw new Error(`Connector learning has no recipe for ${definition.runtime.toolkit}.`);
-    const synced = await ingestComposioConnectedSource({
-      config: options.getConfig(),
-      connectorId: job.connectorId,
-      connectionId: job.connectionId,
-      actionId: recipe.actionId,
-      arguments: recipe.arguments,
-      buildArguments: (pull) => buildConnectorLearningArguments(recipe, pull),
-      agentId: job.agentId,
-    });
+    const plan = getConnectorLearningPlan(definition.runtime.toolkit);
+    if (!plan) throw new Error(`Connector learning has no plan for ${definition.runtime.toolkit}.`);
+    let connection = listConnectorConnections().find((candidate) => candidate.id === job.connectionId);
+    if (!connection) throw new Error('Connector account no longer exists.');
+    const installation = getConnectorInstallation(`${job.connectorId}-local-owner`);
+    if (!installation?.enabled) throw new Error('Connector installation is not enabled.');
+    const hasIdentity = Object.values(connection.identity).some((value) => typeof value === 'string' && value.trim());
+    if (plan.identityProbe && (job.mode === 'bootstrap' || !hasIdentity)) {
+      const execution = await composioAdapter.executeWithPolicy({
+        context: { principalId: connection.principalId, toolkits: [plan.toolkit] },
+        installation: { ...installation, maxScope: 'read', confirmationPolicy: 'never' },
+        connection,
+        agentId: job.agentId,
+        action: {
+          connectorId: job.connectorId,
+          actionId: plan.identityProbe.actionId,
+          toolkit: plan.toolkit,
+          scope: 'read',
+          curated: true,
+          cachedAt: new Date().toISOString(),
+        },
+        args: {},
+        confirmed: true,
+      });
+      if (execution.decision !== 'allowed') throw new Error(execution.reason);
+      connection = upsertConnectorConnection({
+        ...connection,
+        identity: normalizeConnectorIdentity(plan.toolkit, execution.result),
+      });
+    }
+    let itemsSeen = 0;
+    let itemsIndexed = 0;
+    for (const stream of plan.streams) {
+      const synced = await ingestComposioConnectedSource({
+        config: options.getConfig(),
+        connectorId: job.connectorId,
+        connectionId: job.connectionId,
+        collectionScope: stream.scope,
+        streamKind: stream.kind,
+        actionId: stream.actionId,
+        arguments: stream.arguments,
+        buildArguments: (pull) => buildConnectorLearningArguments(plan, stream, pull, connection.identity),
+        agentId: job.agentId,
+      });
+      itemsSeen += synced.itemsSeen;
+      itemsIndexed += synced.itemsIndexed;
+    }
     if (listConnectorLearningJobs({ connectionId: job.connectionId, limit: 100 })
       .find((candidate) => candidate.id === job.id)?.status === 'paused') return;
     publish(updateConnectorLearningJob(job.id, {
       phase: 'indexing',
-      itemsDiscovered: synced.itemsSeen,
-      itemsIndexed: synced.itemsIndexed,
+      itemsDiscovered: itemsSeen,
+      itemsIndexed,
     }));
     publish(updateConnectorLearningJob(job.id, { phase: 'deriving' }));
     const understanding = await new ConnectedUnderstandingPipeline(options.getMemoryManager())
@@ -153,9 +195,9 @@ export function startConnectorLearningCoordinator(options: {
     publish(completed);
     pruneBoundedKnowledgeSourceItems(
       job.sourceInstanceId,
-      Date.now() - recipe.bootstrapWindowDays * 24 * 60 * 60_000,
+      Date.now() - plan.bootstrapWindowDays * 24 * 60 * 60_000,
     );
-    const nextRunAt = Date.now() + recipe.intervalMinutes * 60_000;
+    const nextRunAt = Date.now() + plan.intervalMinutes * 60_000;
     enqueueConnection(job.connectionId, {
       mode: 'incremental',
       reason: 'schedule',
