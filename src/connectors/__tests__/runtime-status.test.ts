@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ConnectorConnection, ConnectorInstance } from '../types.js';
-import { projectComposioRuntimeStatus } from '../runtime-status.js';
+import { projectComposioConnectionStatus } from '../runtime-status.js';
 
 function instance(): ConnectorInstance {
   return {
@@ -34,36 +34,28 @@ function connection(status: ConnectorConnection['status']): ConnectorConnection 
   };
 }
 
-describe('projectComposioRuntimeStatus', () => {
-  it('marks an active account with usable tools as ready', () => {
-    const [projected] = projectComposioRuntimeStatus(
-      [instance()],
-      [connection('active')],
-      [{ connectorId: 'composio-gmail', checkedAt: '2026-08-01T09:00:00.000Z', toolCount: 7 }],
-    );
+describe('projectComposioConnectionStatus', () => {
+  it('marks an active account as connected using local connection state', () => {
+    const [projected] = projectComposioConnectionStatus([instance()], [connection('active')]);
     expect(projected).toMatchObject({
       status: 'connected',
       connectionStatus: 'connected',
       authStatus: 'connected',
-      usage: { lastHealthStatus: 'ok', lastToolCount: 7 },
+      lastConnectedAt: '2026-08-01T08:00:00.000Z',
     });
   });
 
-  it('requires attention when tools cannot be loaded', () => {
-    const [projected] = projectComposioRuntimeStatus(
-      [instance()],
-      [connection('active')],
-      [{ connectorId: 'composio-gmail', checkedAt: '2026-08-01T09:00:00.000Z', toolCount: 0 }],
-    );
+  it('projects pending accounts without probing external tools', () => {
+    const [projected] = projectComposioConnectionStatus([instance()], [connection('pending')]);
     expect(projected).toMatchObject({
-      status: 'degraded',
-      connectionStatus: 'connected',
-      usage: { lastHealthStatus: 'tools_list_failed', lastToolCount: 0 },
+      status: 'connecting',
+      connectionStatus: 'connecting',
+      authStatus: 'unknown',
     });
   });
 
   it('requires setup when no account connection exists', () => {
-    const [projected] = projectComposioRuntimeStatus([instance()], [], []);
+    const [projected] = projectComposioConnectionStatus([instance()], []);
     expect(projected).toMatchObject({
       status: 'not_configured',
       connectionStatus: 'disconnected',

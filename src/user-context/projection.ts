@@ -3,6 +3,7 @@ import { effectiveMemoryStatus, resolveMemoryStability } from '../agent/memory/l
 import { classifyMemoryContextOrigin } from '../agent/memory/source-origin.js';
 import type { ConnectorConnection, ConnectorDefinition, ConnectorInstance } from '../connectors/types.js';
 import type { KnowledgeSourceItem, KnowledgeSyncRun } from '../knowledge/types.js';
+import type { ConnectorLearningJob } from '../storage/sqlite/index.js';
 
 export type UserContextFacet =
   | 'basics'
@@ -117,6 +118,7 @@ export function projectPersonalContextSources(
     sourceItems?: KnowledgeSourceItem[];
     syncRuns?: KnowledgeSyncRun[];
     connections?: ConnectorConnection[];
+    learningJobs?: ConnectorLearningJob[];
   } = {},
 ) {
   const instanceByConnector = new Map<string, ConnectorInstance[]>();
@@ -129,11 +131,16 @@ export function projectPersonalContextSources(
     .filter(isPersonalContextConnector)
     .flatMap((definition) => {
       const connected = instanceByConnector.get(definition.id) ?? [];
-      const accounts = (knowledge.connections ?? [])
+      const candidateAccounts = (knowledge.connections ?? [])
         .filter((connection) => (
           connection.provider === 'composio'
           && connection.connectorId === definition.id
           && connection.status !== 'revoked'
+        ));
+      const hasActiveAccount = candidateAccounts.some((connection) => connection.status === 'active');
+      const accounts = candidateAccounts
+        .filter((connection) => (
+          !hasActiveAccount || !['pending', 'unknown', 'disabled'].includes(connection.status)
         ))
         .sort((left, right) => {
           const byConnectedAt = (left.connectedAt ?? left.createdAt).localeCompare(right.connectedAt ?? right.createdAt);
@@ -178,7 +185,15 @@ export function projectPersonalContextSources(
             }];
       return rows.map((row) => {
       const relatedRecords = row.sourceInstanceId
-        ? records.filter((record) => record.source.sourceInstanceId === row.sourceInstanceId)
+        ? records.filter((record) => (
+            record.source.sourceInstanceId === row.sourceInstanceId
+            || record.evidence?.some((evidence) => (
+              evidence.sourceItemId
+              && (knowledge.sourceItems ?? []).some((item) => (
+                item.id === evidence.sourceItemId && item.sourceInstanceId === row.sourceInstanceId
+              ))
+            ))
+          ))
         : [];
       const sourceItems = row.sourceInstanceId
         ? (knowledge.sourceItems ?? []).filter((item) => item.sourceInstanceId === row.sourceInstanceId)
@@ -186,6 +201,16 @@ export function projectPersonalContextSources(
       const latestSync = (knowledge.syncRuns ?? [])
         .filter((run) => run.sourceInstanceId === row.sourceInstanceId)
         .sort((left, right) => Date.parse(right.startedAt) - Date.parse(left.startedAt))[0];
+      const learningJobs = (knowledge.learningJobs ?? [])
+        .filter((job) => job.sourceInstanceId === row.sourceInstanceId)
+        .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
+      const now = Date.now();
+      const nextScheduledLearning = learningJobs
+        .filter((job) => job.status === 'queued' && job.nextRunAt && Date.parse(job.nextRunAt) > now)
+        .sort((left, right) => Date.parse(left.nextRunAt!) - Date.parse(right.nextRunAt!))[0];
+      const latestLearning = learningJobs.find((job) => (
+        job.status !== 'queued' || !job.nextRunAt || Date.parse(job.nextRunAt) <= now
+      )) ?? learningJobs[0];
       const latestHealth = row.instances
         .filter((instance) => instance.usage.lastHealthCheckAt && instance.usage.lastHealthStatus)
         .sort((left, right) => (
@@ -231,6 +256,8 @@ export function projectPersonalContextSources(
           ]),
           latestSync?.finishedAt,
           latestSync?.startedAt,
+          latestLearning?.finishedAt,
+          latestLearning?.startedAt,
         ]
           .filter((value): value is string => Boolean(value))
           .sort()
@@ -240,6 +267,18 @@ export function projectPersonalContextSources(
         lastSyncAt: latestSync?.finishedAt ?? latestSync?.startedAt,
         lastSyncStatus: latestSync?.status,
         lastSyncError: latestSync?.error,
+        learning: latestLearning ? {
+          status: latestLearning.status,
+          phase: latestLearning.phase,
+          itemsDiscovered: latestLearning.itemsDiscovered,
+          itemsIndexed: latestLearning.itemsIndexed,
+          candidatesCreated: latestLearning.candidatesCreated,
+          mode: latestLearning.mode,
+          attemptCount: latestLearning.attemptCount,
+          nextRunAt: nextScheduledLearning?.nextRunAt ?? latestLearning.nextRunAt,
+          error: latestLearning.error,
+          updatedAt: latestLearning.updatedAt,
+        } : undefined,
       };
       });
     })

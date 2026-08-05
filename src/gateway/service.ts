@@ -83,9 +83,9 @@ import { createGatewayStartupTrace, type GatewayStartupTrace } from './startup-t
 import { closeXopcDatabase, openXopcDatabase } from '../storage/sqlite/index.js';
 import { startConnectorSupervisor, type ConnectorSupervisor } from '../connectors/supervisor.js';
 import {
-  startConnectorMemorySyncCoordinator,
-  type ConnectorMemorySyncCoordinator,
-} from '../connectors/memory-sync-coordinator.js';
+  startConnectorLearningCoordinator,
+  type ConnectorLearningCoordinator,
+} from '../connectors/learning-coordinator.js';
 import {
   applyAutomaticVoiceLanguage,
   inferProductLanguageFromEnvironment,
@@ -174,7 +174,7 @@ export class GatewayService {
   private goalNotifications: GoalNotificationService | null = null;
   private mobileNotifications: MobileNotificationService | null = null;
   private connectorSupervisor: ConnectorSupervisor | null = null;
-  private connectorMemorySyncCoordinator: ConnectorMemorySyncCoordinator | null = null;
+  private connectorLearningCoordinator: ConnectorLearningCoordinator | null = null;
   private connectedKnowledgeCoordinator: ConnectedKnowledgeCoordinator | null = null;
   private stopAutomationProductEventBridge: (() => void) | null = null;
   private stopSessionTranscriptAutomationEvents: (() => void) | null = null;
@@ -882,9 +882,11 @@ export class GatewayService {
       getConfig: () => this.config,
       saveConfig: (cfg) => this.saveConfig(cfg),
     });
-    this.connectorMemorySyncCoordinator = startConnectorMemorySyncCoordinator({
+    this.connectorLearningCoordinator = startConnectorLearningCoordinator({
       getConfig: () => this.config,
       resolveAgentId: () => resolveDefaultAgentId(this.config),
+      getMemoryManager: () => this.agentService.getMemoryManager(),
+      emit: (type, payload) => this.emit(type, payload),
     });
     this.connectedKnowledgeCoordinator = startConnectedKnowledgeCoordinator({
       resolvePipelineOptions: () => ({
@@ -1079,8 +1081,8 @@ export class GatewayService {
     this.heartbeatService?.stop();
     this.connectorSupervisor?.stop();
     this.connectorSupervisor = null;
-    this.connectorMemorySyncCoordinator?.stop();
-    this.connectorMemorySyncCoordinator = null;
+    this.connectorLearningCoordinator?.stop();
+    this.connectorLearningCoordinator = null;
     this.connectedKnowledgeCoordinator?.stop();
     this.connectedKnowledgeCoordinator = null;
 
@@ -1383,8 +1385,19 @@ export class GatewayService {
     this.heartbeatService?.requestNow({ reason: opts?.reason ?? 'manual' });
   }
 
-  requestConnectorMemorySync(toolkit?: string): void {
-    void this.connectorMemorySyncCoordinator?.runNow({ toolkit, force: true });
+  requestConnectorLearning(
+    connectionId: string,
+    request?: Parameters<ConnectorLearningCoordinator['enqueueConnection']>[1],
+  ): ReturnType<ConnectorLearningCoordinator['enqueueConnection']> {
+    return this.connectorLearningCoordinator?.enqueueConnection(connectionId, request) ?? null;
+  }
+
+  requestConnectorLearningForToolkit(toolkit: string): ReturnType<ConnectorLearningCoordinator['enqueueToolkit']> {
+    return this.connectorLearningCoordinator?.enqueueToolkit(toolkit) ?? [];
+  }
+
+  setConnectorLearningPaused(connectionId: string, paused: boolean): number {
+    return this.connectorLearningCoordinator?.setPaused(connectionId, paused) ?? 0;
   }
 
   /**

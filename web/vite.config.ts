@@ -11,6 +11,7 @@ import webPkg from './package.json' with { type: 'json' };
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
+const gatewayTarget = 'http://127.0.0.1:18790';
 
 function tryGitSha(): string {
   try {
@@ -67,19 +68,19 @@ export default defineConfig(({ mode }) => ({
     open: false,
     proxy: {
       '/api': {
-        target: 'http://localhost:18790',
+        target: gatewayTarget,
         changeOrigin: true,
       },
       '/health': {
-        target: 'http://localhost:18790',
+        target: gatewayTarget,
         changeOrigin: true,
       },
       '/api/health': {
-        target: 'http://localhost:18790',
+        target: gatewayTarget,
         changeOrigin: true,
       },
       '/status': {
-        target: 'http://localhost:18790',
+        target: gatewayTarget,
         changeOrigin: true,
       },
     },

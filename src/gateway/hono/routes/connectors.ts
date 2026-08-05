@@ -8,14 +8,6 @@ import { getConnectorDefinition, listConnectorCatalog, listConnectorProviders } 
 import { listComposioConnectorCatalog } from '../../../connectors/composio-catalog.js';
 import { composioLogoResponse } from '../../../connectors/composio-logo.js';
 import {
-  syncComposioResultToMemory,
-  syncLocalFolderToMemory,
-} from '../../../connectors/connector-memory-sync.js';
-import {
-  getComposioMemorySyncProfile,
-  updateComposioMemorySyncProfile,
-} from '../../../connectors/memory-sync-profile.js';
-import {
   executeComposioTool,
   configureComposioApiKey,
   getComposioInstallationPolicy,
@@ -36,8 +28,9 @@ import { previewConnectorDefinition, testConnectorInstance } from '../../../conn
 import { installConnector, installConnectorDefinition, uninstallConnector, updateConnectorConfig } from '../../../connectors/install.js';
 import { getConnectorInstance, listConnectorInstances } from '../../../connectors/instances.js';
 import { setConnectorEnabled } from '../../../connectors/lifecycle.js';
-import { projectComposioRuntimeStatus, type ComposioRuntimeProbe } from '../../../connectors/runtime-status.js';
+import { projectComposioConnectionStatus } from '../../../connectors/runtime-status.js';
 import { createConnectorSetupSecretRequest, submitConnectorSetupSecret } from '../../../connectors/setup-secrets.js';
+import { ingestLocalFolderSource } from '../../../connectors/connected-source-ingestion.js';
 import { recordConnectorHealthUsage } from '../../../connectors/usage.js';
 import type { ConnectorDefinition, ConnectorInstallInput } from '../../../connectors/types.js';
 import {
@@ -45,6 +38,7 @@ import {
   getConnectorApproval,
   listConnectorConnections,
   listConnectorApprovals,
+  listConnectorLearningJobs,
 } from '../../../storage/sqlite/index.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
@@ -68,43 +62,13 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     });
   });
 
-  authenticated.get('/api/connectors/installed', async (c) => {
+  authenticated.get('/api/connectors/installed', (c) => {
     const config = service.currentConfig as Config;
     const instances = listConnectorInstances(config);
-    const composioInstances = instances.filter((instance) => (
-      instance.materialized.type === 'composio' && instance.materialized.role === 'toolkit'
-    ));
-    if (composioInstances.length === 0) {
-      return c.json({ ok: true, payload: { instances } });
-    }
-
-    const checkedAt = new Date().toISOString();
-    let connectionError: string | undefined;
-    try {
-      await listComposioConnections();
-    } catch (error) {
-      connectionError = errorMessage(error);
-    }
-    const probes = await Promise.all(
-      [...new Map(composioInstances.map((instance) => [instance.connectorId, instance])).values()]
-        .map(async (instance): Promise<ComposioRuntimeProbe> => {
-          try {
-            const tools = await listComposioTools(instance.materialized.type === 'composio' ? instance.materialized.toolkit : '', config);
-            return {
-              connectorId: instance.connectorId,
-              checkedAt,
-              toolCount: tools.length,
-              ...(connectionError ? { error: connectionError, connectionError: true } : {}),
-            };
-          } catch (error) {
-            return { connectorId: instance.connectorId, checkedAt, error: errorMessage(error) };
-          }
-        }),
-    );
     const connections = listConnectorConnections({ principalId: 'local-owner' });
     return c.json({
       ok: true,
-      payload: { instances: projectComposioRuntimeStatus(instances, connections, probes) },
+      payload: { instances: projectComposioConnectionStatus(instances, connections) },
     });
   });
 
@@ -142,6 +106,37 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     }
   });
 
+  authenticated.get('/api/connectors/learning', (c) => {
+    return c.json({ ok: true, payload: { jobs: listConnectorLearningJobs({ limit: 100 }) } });
+  });
+
+  authenticated.post('/api/connectors/composio/connections/:id/learning', strictRateLimitMiddleware, async (c) => {
+    try {
+      await listComposioConnections();
+      const config = service.currentConfig as Config;
+      if (!config.userContext.memory.sources.includes('connectedSources')) {
+        config.userContext.memory.sources = [...config.userContext.memory.sources, 'connectedSources'];
+        const saved = await service.saveConfig(config);
+        if (!saved.saved) return c.json({ ok: false, error: saved.error }, 500);
+      }
+      const job = service.requestConnectorLearning(c.req.param('id'), { reason: 'manual' });
+      if (!job) return c.json({ ok: false, error: 'The connection is not active or does not support learning.' }, 409);
+      return c.json({ ok: true, payload: { job } }, 202);
+    } catch (error) {
+      return c.json({ ok: false, error: errorMessage(error) }, 400);
+    }
+  });
+
+  authenticated.post('/api/connectors/composio/connections/:id/learning/pause', strictRateLimitMiddleware, (c) => {
+    const changed = service.setConnectorLearningPaused(c.req.param('id'), true);
+    return c.json({ ok: true, payload: { changed } });
+  });
+
+  authenticated.post('/api/connectors/composio/connections/:id/learning/resume', strictRateLimitMiddleware, (c) => {
+    const changed = service.setConnectorLearningPaused(c.req.param('id'), false);
+    return c.json({ ok: true, payload: { changed } });
+  });
+
   authenticated.patch('/api/connectors/composio/connections/:id', strictRateLimitMiddleware, async (c) => {
     const body = await c.req.json().catch(() => ({}));
     const row = body && typeof body === 'object' && !Array.isArray(body) ? body as Record<string, unknown> : {};
@@ -167,7 +162,9 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
 
   authenticated.delete('/api/connectors/composio/connections/:id', strictRateLimitMiddleware, async (c) => {
     try {
-      await revokeComposioConnection(c.req.param('id'));
+      const connectionId = c.req.param('id');
+      await revokeComposioConnection(connectionId);
+      service.setConnectorLearningPaused(connectionId, true);
       return c.json({ ok: true, payload: { revoked: true } });
     } catch (error) {
       return c.json({ ok: false, error: errorMessage(error) }, 400);
@@ -253,7 +250,7 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     const body = await c.req.json().catch(() => ({}));
     try {
       const event = await appendComposioTriggerEvent(service.currentConfig as Config, body);
-      service.requestConnectorMemorySync(event.toolkit);
+      if (event.toolkit) service.requestConnectorLearningForToolkit(event.toolkit);
       return c.json({ ok: true, payload: { event } });
     } catch (error) {
       return c.json({ ok: false, error: errorMessage(error) }, 400);
@@ -274,35 +271,6 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     const query = c.req.query('q') ?? '';
     const limit = Number(c.req.query('limit') ?? '100');
     return c.json({ ok: true, payload: buildConnectedPeopleGraph({ query, limit }) });
-  });
-
-  authenticated.get('/api/connectors/:id/memory-sync-profile', (c) => {
-    const profile = getComposioMemorySyncProfile(service.currentConfig as Config, c.req.param('id'));
-    return c.json({ ok: true, payload: { profile: profile ?? null } });
-  });
-
-  authenticated.patch('/api/connectors/:id/memory-sync-profile', strictRateLimitMiddleware, async (c) => {
-    const body = await c.req.json().catch(() => ({}));
-    const row = body && typeof body === 'object' && !Array.isArray(body) ? body as Record<string, unknown> : {};
-    try {
-      const config = service.currentConfig as Config;
-      const profile = updateComposioMemorySyncProfile(config, c.req.param('id'), {
-        enabled: row.enabled === true,
-        actionId: typeof row.actionId === 'string' ? row.actionId : '',
-        arguments: row.arguments && typeof row.arguments === 'object' && !Array.isArray(row.arguments)
-          ? row.arguments as Record<string, unknown>
-          : {},
-        agentId: typeof row.agentId === 'string' ? row.agentId : '',
-        connectionId: typeof row.connectionId === 'string' ? row.connectionId : undefined,
-        intervalMinutes: Number(row.intervalMinutes),
-        triggerSync: row.triggerSync !== false,
-      });
-      const saved = await service.saveConfig(config);
-      if (!saved.saved) return c.json({ ok: false, error: saved.error }, 500);
-      return c.json({ ok: true, payload: { profile } });
-    } catch (error) {
-      return c.json({ ok: false, error: errorMessage(error) }, 400);
-    }
   });
 
   authenticated.get('/api/connectors/:id', (c) => {
@@ -336,42 +304,6 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
   authenticated.get('/api/connectors/composio/:toolkit/health', async (c) => {
     const health = await inspectComposioConnectorHealth(c.req.param('toolkit'));
     return c.json({ ok: health.status !== 'degraded', payload: { health } });
-  });
-
-  authenticated.post('/api/connectors/:id/memory-sync', strictRateLimitMiddleware, async (c) => {
-    const body = await c.req.json().catch(() => ({}));
-    const row = body && typeof body === 'object' && !Array.isArray(body) ? body as Record<string, unknown> : {};
-    const actionId = typeof row.actionId === 'string' ? row.actionId.trim() : '';
-    const config = service.currentConfig as Config;
-    const agentId = typeof row.agentId === 'string' && row.agentId.trim()
-      ? row.agentId.trim()
-      : resolveDefaultAgentId(config);
-    try {
-      const connectorId = c.req.param('id');
-      const definition = getConnectorDefinition(connectorId);
-      if (definition?.runtime.type === 'memorySource') {
-        const result = await syncLocalFolderToMemory({
-          config,
-          connectorId,
-          agentId,
-        });
-        return c.json({ ok: true, payload: result });
-      }
-      if (!actionId) return c.json({ ok: false, error: 'actionId is required for Composio memory sync.' }, 400);
-      const result = await syncComposioResultToMemory({
-        config,
-        connectorId,
-        actionId,
-        agentId,
-        connectionId: typeof row.connectionId === 'string' ? row.connectionId : undefined,
-        arguments: row.arguments && typeof row.arguments === 'object' && !Array.isArray(row.arguments)
-          ? row.arguments as Record<string, unknown>
-          : {},
-      });
-      return c.json({ ok: true, payload: result });
-    } catch (error) {
-      return c.json({ ok: false, error: errorMessage(error) }, 400);
-    }
   });
 
   authenticated.get('/api/connectors/composio/:toolkit/policy', (c) => {
@@ -524,6 +456,20 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
       return c.json({ ok: true, payload: result });
     } catch (error) {
       return c.json({ ok: false, error: errorMessage(error) }, 500);
+    }
+  });
+
+  authenticated.post('/api/connectors/:id/source-sync', strictRateLimitMiddleware, async (c) => {
+    const config = service.currentConfig as Config;
+    try {
+      const result = await ingestLocalFolderSource({
+        config,
+        connectorId: c.req.param('id'),
+        agentId: resolveDefaultAgentId(config),
+      });
+      return c.json({ ok: true, payload: result });
+    } catch (error) {
+      return c.json({ ok: false, error: errorMessage(error) }, 400);
     }
   });
 
