@@ -10,12 +10,10 @@ import {
   HeartHandshake,
   History,
   Lightbulb,
-  Loader2,
   Pencil,
   Plus,
   ShieldCheck,
   Sparkles,
-  Target,
   Trash2,
   Upload,
   X,
@@ -30,7 +28,6 @@ import { PageTabs } from '@/components/ui/page-tabs';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TimePicker } from '@/components/ui/time-picker';
-import { ConnectorLogo } from '@/features/connectors/components/connector-logo';
 import { setConnectionLearningPaused, startConnectionLearning } from '@/features/connectors/connectors-api';
 import { detectBrowserTimezone } from '@/features/settings/agents/agent-profile-markdown';
 import { UserProfileFieldsEditor } from '@/features/settings/user-profile-fields-editor';
@@ -77,9 +74,9 @@ import {
   type UserTrustLevel,
   type UserUnderstanding,
 } from './user-context-api';
-import { personalContextSourceBranding } from './source-branding';
 import { AboutYouExplainerDialog } from './about-you-explainer-dialog';
 import { SourceDisconnectDialog } from './source-disconnect-dialog';
+import { SourcesPanel } from './sources-panel';
 
 type ViewId = 'overview' | 'profile' | 'understanding' | 'sources' | 'controls';
 
@@ -252,143 +249,6 @@ function ConnectedClaimCard({ claim, language, t, busy, onDecision }: {
           <div className="sm:col-span-2"><dt className="text-fg-subtle">{t.evidenceRule}</dt><dd className="mt-0.5">{t.claimRule}</dd></div>
         </dl>
       </details>
-    </article>
-  );
-}
-
-function SourceCard({ source, language, t, learningBusy, onConfigure, onLearn, onDisconnect }: { source: PersonalContextSource; language: 'en' | 'zh'; t: ReturnType<typeof messages>['you']; learningBusy: boolean; onConfigure: () => void; onLearn: () => void; onDisconnect: () => void }) {
-  const status = !source.installed
-    ? t.available
-    : source.status === 'active' || source.status === 'connected'
-      ? t.connected
-      : source.status === 'pending' || source.status === 'connecting'
-        ? t.sourceStatusPending
-        : source.status === 'expired' || source.status === 'unauthorized'
-          ? t.sourceStatusReconnect
-          : source.status === 'failed' || source.status === 'degraded'
-            ? t.sourceStatusFailed
-            : source.status === 'disabled'
-              ? t.sourceStatusDisabled
-              : t.sourceStatusUnknown;
-  const accountLabel = source.accountLabel ?? (
-    source.accountCount && source.accountCount > 1 && source.accountOrdinal
-      ? t.sourceAccountFallback
-        .replace('{{index}}', String(source.accountOrdinal))
-        .replace('{{count}}', String(source.accountCount))
-      : undefined
-  );
-  const healthStatus = source.lastHealthStatus
-    ? t.sourceHealth.replace('{{status}}', source.lastHealthStatus === 'ok' ? t.healthOk : t.healthIssue)
-    : null;
-  const learningStatus = source.learning?.status === 'failed'
-    ? source.learning.error === 'connected_account_unavailable'
-      ? t.sourceLearningAccountUnavailable
-      : t.sourceLearningFailed
-    : source.learning?.status === 'paused'
-      ? t.sourceLearningPaused
-      : source.learning?.status === 'completed' && source.knowledgeItemCount === 0
-        ? t.sourceLearningNoData
-        : source.learning?.phase === 'queued'
-          ? t.sourceLearningQueued
-          : source.learning?.phase === 'fetching'
-            ? t.sourceLearningFetching
-            : source.learning?.phase === 'indexing'
-              ? t.sourceLearningIndexing.replace('{{count}}', String(source.learning.itemsDiscovered))
-              : source.learning?.phase === 'deriving'
-                ? t.sourceLearningDeriving
-                : source.learning?.phase === 'completed'
-                  ? t.sourceLearningCompleted.replace('{{count}}', String(source.learning.candidatesCreated))
-                  : null;
-  const isActive = source.status === 'active' || source.status === 'connected';
-  const hasLearningData = source.knowledgeItemCount > 0 || source.derivedUnderstandingCount > 0;
-  const canStartLearning = source.installed && Boolean(source.instanceId) && isActive
-    && (
-      source.learning?.status === 'failed'
-      || source.learning?.status === 'paused'
-      || (!hasLearningData && (!source.learning || source.learning.status === 'completed'))
-    );
-  const learningActionLabel = source.learning?.status === 'paused'
-    ? t.sourceLearningResume
-    : source.learning?.status === 'failed'
-      ? t.sourceLearningRetry
-      : t.sourceLearningStart;
-  return (
-    <article
-      role="button"
-      tabIndex={0}
-      aria-label={`${t.manageSources}: ${source.displayName}`}
-      className="cursor-pointer rounded-xl border border-edge-subtle bg-surface-panel p-4 transition-colors hover:border-accent/30 hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-      onClick={onConfigure}
-      onKeyDown={(event) => {
-        if (event.target !== event.currentTarget) return;
-        if (event.key !== 'Enter' && event.key !== ' ') return;
-        event.preventDefault();
-        onConfigure();
-      }}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-start gap-3">
-          <ConnectorLogo connector={{ displayName: source.displayName, branding: personalContextSourceBranding(source) }} size="sm" />
-          <div className="min-w-0"><h3 className="text-sm font-semibold text-fg">{source.displayName}</h3>{accountLabel ? <p className="mt-0.5 truncate text-xs font-medium text-fg-muted">{accountLabel}</p> : null}<p className="mt-1 line-clamp-2 text-xs leading-5 text-fg-muted">{source.description}</p></div>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <span className={cn('rounded-full px-2 py-1 text-[11px] font-medium', isActive ? 'bg-success-soft text-fg' : source.installed ? 'bg-warning-soft text-fg' : 'bg-surface-hover text-fg-muted')}>{status}</span>
-          {source.installed && source.instanceId ? (
-            <Button
-              type="button"
-              variant="ghost"
-              className="h-7 px-2 text-xs text-danger hover:bg-danger-soft hover:text-danger"
-              aria-label={`${t.disconnect}: ${source.displayName}`}
-              onClick={(event) => {
-                event.stopPropagation();
-                onDisconnect();
-              }}
-            >
-              {t.disconnect}
-            </Button>
-          ) : null}
-        </div>
-      </div>
-      <div className="mt-3 flex flex-wrap gap-1.5 text-[11px] text-fg-subtle">
-        {source.access.context ? <span className="rounded-full bg-surface-hover px-2 py-0.5">{t.sourceContext}</span> : null}
-        {source.access.memory ? <span className="rounded-full bg-surface-hover px-2 py-0.5">{t.sourceMemory}</span> : null}
-        {source.access.read ? <span className="rounded-full bg-surface-hover px-2 py-0.5">{t.sourceRead}</span> : null}
-        {source.access.write ? <span className="rounded-full bg-warning-soft px-2 py-0.5 text-fg">{t.sourceWrite}</span> : null}
-      </div>
-      {source.installed ? (
-        <div className="mt-3 border-t border-edge-subtle pt-3 text-xs text-fg-muted">
-          {!isActive ? (
-            <div className="rounded-lg bg-warning-soft px-3 py-2">
-              <p className="font-medium text-fg">{t.sourceConnectionNeedsAttention}</p>
-              <p className="mt-1 leading-5">{t.sourceConnectionNeedsAttentionHint}</p>
-              <Button type="button" variant="secondary" className="mt-2 h-8 px-2" onClick={(event) => { event.stopPropagation(); onConfigure(); }}>
-                {t.sourceConnectionFix}
-              </Button>
-            </div>
-          ) : canStartLearning ? (
-            <div className="rounded-lg border border-accent/20 bg-accent-soft/50 p-3">
-              <p className="font-medium text-fg">{learningStatus ?? t.sourceLearningNotStarted}</p>
-              <p className="mt-1 leading-5 text-fg-muted">{t.sourceLearningNotStartedHint}</p>
-              <Button type="button" variant="secondary" className="mt-2 h-8 px-2" disabled={learningBusy} onClick={(event) => { event.stopPropagation(); onLearn(); }}>
-                {learningBusy ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <Sparkles className="size-3.5" aria-hidden />}
-                {learningActionLabel}
-              </Button>
-            </div>
-          ) : learningStatus ? <p className={source.learning?.status === 'failed' ? 'text-danger' : 'font-medium text-fg'}>{learningStatus}</p> : null}
-          {healthStatus ? <p>{healthStatus}</p> : null}
-          {source.lastActivityAt ? <p className="mt-2">{t.sourceLastUsed.replace('{{time}}', formatDateTime(source.lastActivityAt, language))}</p> : null}
-          {source.lastSyncAt ? <p>{t.sourceLastSync.replace('{{time}}', formatDateTime(source.lastSyncAt, language))}</p> : null}
-          {source.lastSyncStatus === 'failed' && source.learning?.status !== 'failed' ? (
-            <p className="text-danger">{t.sourceSyncFailed}</p>
-          ) : null}
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <div className="rounded-lg bg-surface-muted px-3 py-2"><strong className="block text-base font-semibold text-fg">{source.learningFunnel.indexedItems}</strong><span>{t.sourceFunnelIndexed}</span></div>
-            <div className="rounded-lg bg-surface-muted px-3 py-2"><strong className="block text-base font-semibold text-fg">{source.learningFunnel.attributedItems}</strong><span>{t.sourceFunnelAttributed}</span></div>
-            <div className="rounded-lg bg-surface-muted px-3 py-2"><strong className="block text-base font-semibold text-fg">{source.learningFunnel.resolvedEntities}</strong><span>{t.sourceFunnelEntities}</span></div>
-            <div className="rounded-lg bg-surface-muted px-3 py-2"><strong className="block text-base font-semibold text-fg">{source.learningFunnel.activeClaims}</strong><span>{t.sourceFunnelClaims}</span></div>
-          </div>
-        </div>
-      ) : null}
     </article>
   );
 }
@@ -570,6 +430,24 @@ export function UserContextPage() {
       }
       await mutate();
       showToast({ type: 'success', title: source.displayName, message: t.sourceLearningStarted });
+    } catch (learningError) {
+      showToast({
+        type: 'error',
+        title: source.displayName,
+        message: learningError instanceof Error ? learningError.message : t.sourceLearningStartFailed,
+      });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const pauseSourceLearning = async (source: PersonalContextSource) => {
+    if (!source.instanceId) return;
+    const operationId = `source-learning:${source.instanceId}`;
+    setBusyId(operationId);
+    try {
+      await setConnectionLearningPaused(source.instanceId, true);
+      await mutate();
     } catch (learningError) {
       showToast({
         type: 'error',
@@ -989,12 +867,18 @@ export function UserContextPage() {
       ) : null}
 
       {data && view === 'sources' ? (
-        <div id="you-panel-sources" role="tabpanel" aria-labelledby="you-tab-sources" className="space-y-5">
-          <div className="flex flex-wrap items-start justify-between gap-3"><div><div className="flex flex-wrap items-center gap-2"><h2 className="text-base font-semibold text-fg">{t.sourcesTitle}</h2><ContextBadge>{t.personalContextBadge}</ContextBadge></div></div><Button type="button" variant="primary" onClick={() => navigate('/connectors?tab=connected&personalContext=1')}>{t.manageSources}<ChevronRight className="size-4" aria-hidden /></Button></div>
-          {data.sourceRecommendations.length > 0 ? <section className="rounded-2xl border border-accent/20 bg-accent-soft/25 p-5"><div className="flex flex-wrap items-center gap-2"><h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><Target className="size-4 text-accent" aria-hidden />{t.recommendationsTitle}</h2><ContextBadge>{t.permissionsBeforeConnectBadge}</ContextBadge></div><div className="mt-3 grid gap-2 lg:grid-cols-3">{data.sourceRecommendations.map((item) => <button key={item.sourceId} type="button" className="rounded-xl border border-edge-subtle bg-surface-panel p-3 text-left hover:border-accent/30 hover:bg-surface-hover" onClick={() => openSourceConfiguration({ id: item.sourceId })}><span className="text-sm font-semibold text-fg">{item.sourceName}</span><span className="mt-1 block text-xs leading-5 text-fg-muted">{t.recommendationReason.replace('{{goal}}', item.goalTitle)}</span></button>)}</div></section> : null}
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{data.sources.map((source) => <SourceCard key={`${source.id}:${source.instanceId ?? 'catalog'}`} source={source} language={language} t={t} learningBusy={busyId === `source-learning:${source.instanceId}`} onConfigure={() => openSourceConfiguration(source)} onLearn={() => void runSourceLearning(source)} onDisconnect={() => setDisconnectSource(source)} />)}</div>
-          {data.sources.length === 0 ? <div className="rounded-2xl border border-dashed border-edge p-8 text-center text-sm text-fg-muted">{t.noSources}</div> : null}
-        </div>
+        <SourcesPanel
+          sources={data.sources}
+          language={language}
+          t={t}
+          busyId={busyId}
+          onAddSource={() => navigate('/connectors?personalContext=1')}
+          onLearn={(source) => void runSourceLearning(source)}
+          onPause={(source) => void pauseSourceLearning(source)}
+          onConfigure={openSourceConfiguration}
+          onDisconnect={setDisconnectSource}
+          onViewUnderstanding={() => selectView('understanding')}
+        />
       ) : null}
 
       {data && view === 'controls' && controls ? (
