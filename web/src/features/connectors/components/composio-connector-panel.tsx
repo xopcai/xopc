@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { ConnectorsSettingsMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+import { isElectron } from '@/lib/electron-env';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 
 import {
@@ -136,7 +137,12 @@ export function ComposioConnectorPanel({
     try {
       const result = await startConnectorAuthorization(instance.connectorId);
       if (!result.authorizationUrl) throw new Error('The authorization provider did not return an authorization URL.');
-      window.open(result.authorizationUrl, '_blank', 'noopener,noreferrer');
+      if (isElectron()) {
+        const openResult = await window.electronAPI?.shell?.openExternalUrl(result.authorizationUrl);
+        if (!openResult?.ok) throw new Error(openResult?.error ?? 'Could not open the system browser.');
+      } else {
+        window.open(result.authorizationUrl, '_blank', 'noopener,noreferrer');
+      }
     } catch (authorizeError) {
       setError(authorizeError instanceof Error ? authorizeError.message : String(authorizeError));
     } finally {
