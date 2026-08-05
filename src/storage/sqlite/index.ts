@@ -30,6 +30,18 @@ export {
 } from './connection.js';
 export { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 export {
+  claimNextConnectorLearningJob,
+  enqueueConnectorLearningJob,
+  listConnectorLearningJobs,
+  recoverStaleConnectorLearningJobs,
+  setConnectorLearningPaused,
+  updateConnectorLearningJob,
+  type ConnectorLearningJob,
+  type ConnectorLearningMode,
+  type ConnectorLearningPhase,
+  type ConnectorLearningStatus,
+} from './connector-learning-repository.js';
+export {
   appendComposerInputHistory,
   clearComposerInputHistory,
   listComposerInputHistory,
@@ -176,6 +188,7 @@ export {
   listKnowledgeSourceChanges,
   listKnowledgeSyncRuns,
   listMemoryEvidence,
+  pruneBoundedKnowledgeSourceItems,
   setKnowledgeSourceItemSynthesisStatus,
   setKnowledgeConsumerWatermark,
   setKnowledgeSourceCursor,

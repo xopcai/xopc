@@ -20,7 +20,7 @@ import { scopeForComposioAction } from './composio.js';
 import { getConnectorDefinition } from './catalog.js';
 import { getConnectorInstance } from './instances.js';
 
-export const COMPOSIO_MEMORY_SOURCE_TOOLKITS = new Set([
+export const COMPOSIO_CONNECTED_SOURCE_TOOLKITS = new Set([
   'gmail',
   'googlecalendar',
   'googledrive',
@@ -206,6 +206,7 @@ class ComposioKnowledgeSourceAdapter implements KnowledgeSourceAdapter {
     connectorId: string;
     actionId: string;
     arguments: Record<string, unknown>;
+    buildArguments?: (pull: KnowledgePullInput) => Record<string, unknown>;
     agentId: string;
     connection: ReturnType<typeof listConnectorConnections>[number];
     toolkit: string;
@@ -228,7 +229,7 @@ class ComposioKnowledgeSourceAdapter implements KnowledgeSourceAdapter {
         curated: true,
         cachedAt: new Date().toISOString(),
       },
-      args: this.input.arguments,
+      args: this.input.buildArguments?.(pull) ?? this.input.arguments,
       confirmed: true,
     });
     if (execution.decision !== 'allowed') throw new Error(execution.reason);
@@ -249,26 +250,34 @@ class ComposioKnowledgeSourceAdapter implements KnowledgeSourceAdapter {
   }
 }
 
-export async function syncComposioResultToMemory(input: {
+export async function ingestComposioConnectedSource(input: {
   config: Config;
   connectorId: string;
   actionId: string;
   arguments?: Record<string, unknown>;
+  buildArguments?: (pull: KnowledgePullInput) => Record<string, unknown>;
   agentId: string;
   connectionId?: string;
   adapter?: ComposioSessionsAdapter;
-}): Promise<{ recordId: string; connectorId: string; actionId: string }> {
+}): Promise<{
+  connectorId: string;
+  actionId: string;
+  sourceInstanceId: string;
+  itemsSeen: number;
+  itemsIndexed: number;
+  recordIds: string[];
+}> {
   const definition = getConnectorDefinition(input.connectorId);
   if (definition?.runtime.type !== 'composio' || definition.runtime.role !== 'toolkit') {
-    throw new Error('Memory sync requires a Composio toolkit connector.');
+    throw new Error('Connected source ingestion requires a Composio toolkit connector.');
   }
   const toolkit = definition.runtime.toolkit;
-  if (!COMPOSIO_MEMORY_SOURCE_TOOLKITS.has(toolkit)) {
-    throw new Error(`Memory sync is not supported for the ${toolkit} connector.`);
+  if (!COMPOSIO_CONNECTED_SOURCE_TOOLKITS.has(toolkit)) {
+    throw new Error(`Connected source ingestion is not supported for the ${toolkit} connector.`);
   }
   const risk = scopeForComposioAction(input.actionId);
   if (risk.toolkit !== toolkit || risk.scope !== 'read' || !risk.curated) {
-    throw new Error('Memory sync only accepts a verified read action for the selected connector.');
+    throw new Error('Connected source ingestion only accepts a verified read action for the selected connector.');
   }
   const connectorId = definition.id;
   const installation = getConnectorInstallation(`${connectorId}-local-owner`);
@@ -281,7 +290,7 @@ export async function syncComposioResultToMemory(input: {
   const connection = input.connectionId
     ? activeConnections.find((candidate) => candidate.id === input.connectionId)
     : activeConnections.find((candidate) => candidate.isDefault) ?? activeConnections[0];
-  if (!connection) throw new Error('No active connector account is available for memory sync.');
+  if (!connection) throw new Error('No active connector account is available for connected source ingestion.');
   const adapter = input.adapter ?? new ComposioSessionsAdapter();
   const workspaceId = getWorkspacePath(input.config);
   const sourceInstanceId = `composio:${connectorId}:${connection.id}`;
@@ -290,6 +299,7 @@ export async function syncComposioResultToMemory(input: {
     connection,
     actionId: input.actionId,
     arguments: input.arguments ?? {},
+    buildArguments: input.buildArguments,
     agentId: input.agentId,
     toolkit,
     workspaceId,
@@ -301,20 +311,26 @@ export async function syncComposioResultToMemory(input: {
     instanceId: sourceInstanceId,
   });
   if (syncRun.status === 'failed' || syncRun.status === 'cancelled') {
-    throw new Error(syncRun.error ?? `Connector memory sync ${syncRun.status}.`);
+    throw new Error(syncRun.error ?? `Connected source ingestion ${syncRun.status}.`);
   }
   const pipeline = new ConnectedKnowledgePipeline({ agentId: input.agentId, workspaceId });
-  let recordId: string | undefined;
+  const recordIds: string[] = [];
   for (let batch = 0; batch < 10; batch += 1) {
     const synthesis = await pipeline.processPending(sourceInstanceId);
-    recordId ??= synthesis.recordIds[0];
+    recordIds.push(...synthesis.recordIds);
     if (synthesis.claimed === 0) break;
   }
-  if (!recordId) throw new Error('Connector result did not contain any synthesizable knowledge.');
-  return { recordId, connectorId, actionId: input.actionId };
+  return {
+    connectorId,
+    actionId: input.actionId,
+    sourceInstanceId,
+    itemsSeen: syncRun.itemsSeen,
+    itemsIndexed: syncRun.itemsCreated + syncRun.itemsUpdated,
+    recordIds,
+  };
 }
 
-export async function syncLocalFolderToMemory(input: {
+export async function ingestLocalFolderSource(input: {
   config: Config;
   connectorId: string;
   agentId: string;

@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import type { ToolRouterCreateSessionConfig } from '@composio/core';
 
 import { CredentialResolver } from '../auth/credentials.js';
+import { resolveStateDir } from '../config/paths-state.js';
 import {
   appendConnectorExecutionAudit,
   getConnectorInstallation,
@@ -90,6 +91,7 @@ export type ComposioSessionsClient = {
 export type ComposioSessionContext = {
   principalId: string;
   installationScope?: string;
+  providerPrincipalId?: string;
   toolkits?: string[];
   connectedAccounts?: Record<string, string[]>;
   callbackUrl?: string;
@@ -102,8 +104,7 @@ function stableHash(value: string): string {
 }
 
 function defaultInstallationScope(): string {
-  const configured = process.env.XOPC_STATE_DIR?.trim() || process.env.XOPC_CONFIG_PATH?.trim();
-  return configured ? resolve(configured) : resolve(process.cwd());
+  return resolve(resolveStateDir());
 }
 
 /** Convert local identities to stable opaque Composio user IDs without disclosing user data. */
@@ -201,7 +202,7 @@ export class ComposioSessionsAdapter {
         : {}),
     };
     return client.sessions.create(
-      createComposioPrincipalId(context.principalId, context.installationScope),
+      context.providerPrincipalId ?? createComposioPrincipalId(context.principalId, context.installationScope),
       config,
     );
   }
@@ -231,7 +232,8 @@ export class ComposioSessionsAdapter {
   async authorize(
     context: ComposioSessionContext & { toolkit: string; installationId?: string; alias?: string },
   ): Promise<ComposioAuthorizeResult> {
-    const session = await this.createSession({ ...context, toolkits: [context.toolkit] });
+    const providerPrincipalId = createComposioPrincipalId(context.principalId, context.installationScope);
+    const session = await this.createSession({ ...context, providerPrincipalId, toolkits: [context.toolkit] });
     const request = await session.authorize(context.toolkit, {
       callbackUrl: context.callbackUrl,
       alias: context.alias,
@@ -250,7 +252,7 @@ export class ComposioSessionsAdapter {
       identity: {},
       status: connectionStatus(request.status),
       isDefault: listStoredConnectorConnections({ principalId: context.principalId, connectorId }).length === 0,
-      metadata: { toolkit: context.toolkit },
+      metadata: { toolkit: context.toolkit, providerPrincipalId },
     });
     return {
       toolkit: context.toolkit,
@@ -358,7 +360,15 @@ export class ComposioSessionsAdapter {
       const connectedAccounts = toolkit && input.connection
         ? { [toolkit]: [input.connection.providerConnectionId] }
         : input.context.connectedAccounts;
-      const session = await this.createSession({ ...input.context, connectedAccounts });
+      const providerPrincipalId = input.connection?.metadata.providerPrincipalId;
+      if (input.connection && (typeof providerPrincipalId !== 'string' || !providerPrincipalId.trim())) {
+        throw new Error('Connected account is missing its provider identity. Reconnect the account and try again.');
+      }
+      const session = await this.createSession({
+        ...input.context,
+        connectedAccounts,
+        ...(typeof providerPrincipalId === 'string' ? { providerPrincipalId } : {}),
+      });
       const result = await session.execute(
         input.action.actionId,
         input.args ?? {},

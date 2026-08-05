@@ -690,6 +690,10 @@ export class AgentService {
     this.agentManager.refreshUserProfileContext();
   }
 
+  getMemoryManager() {
+    return this.agentManager.getMemoryManager();
+  }
+
   getModelForSession(sessionKey: string): string {
     return this.modelManager.getModelForSession(sessionKey);
   }
