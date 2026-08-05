@@ -10,11 +10,13 @@ import { listConnectorInstances } from '../../../connectors/instances.js';
 import { uninstallConnector } from '../../../connectors/install.js';
 import { revokeComposioConnection } from '../../../connectors/composio.js';
 import { draftGoalContract, GoalService } from '../../../goals/index.js';
+import { renderUserClaim } from '../../../knowledge/connected-understanding-pipeline.js';
 import { readUserProfileFile, writeUserProfileFile } from '../../agents-admin.js';
 import {
   decideMemoryReferenceConsent,
   deleteMemoryRecord,
   getMemoryRecord,
+  getUserClaim,
   getRelationshipSettings,
   getUserProfilePromptState,
   getUserTrustPolicy,
@@ -25,10 +27,16 @@ import {
   listConnectorConnections,
   listMemoryRecords,
   listMemoryReferenceConsents,
+  listUserClaims,
+  listUserClaimEvidence,
+  listUserClaimStatsBySource,
+  linkUserClaimMemoryRecord,
+  removeUserClaimEvidenceForSource,
   revokeMemoryReferenceConsent,
   runSqliteWriteTransaction,
   setUserProfilePromptState,
   setUserTrustPolicy,
+  setUserClaimDecision,
   updateRelationshipSettings,
   upsertMemoryRecord,
 } from '../../../storage/sqlite/index.js';
@@ -365,11 +373,12 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
     const trustPolicy = getUserTrustPolicy();
     const sourceDefinitions = listConnectorCatalog();
     const sourceInstances = listConnectorInstances(config);
-    const sources = projectPersonalContextSources(sourceDefinitions, sourceInstances, allUserContextRecords, {
+    const sources = projectPersonalContextSources(sourceDefinitions, sourceInstances, {
       sourceItems: listKnowledgeSourceItems({ limit: 500 }),
       syncRuns: listKnowledgeSyncRuns({ limit: 500 }),
       connections: listConnectorConnections({ principalId: 'local-owner' }),
       learningJobs: listConnectorLearningJobs({ limit: 500 }),
+      claimStatsBySource: listUserClaimStatsBySource(),
     });
     const activeGoals = new GoalService().list({
       agentId,
@@ -384,6 +393,10 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
       },
       ...profileBundle,
       understanding: records.map(projectUserContextRecord),
+      connectedClaims: listUserClaims({ agentId, limit: 100 }).map((claim) => ({
+        ...claim,
+        evidence: listUserClaimEvidence(claim.id),
+      })),
       consentRequests: consents.filter((consent) => consent.status === 'pending').flatMap((consent) => {
         const record = recordById.get(consent.recordId);
         return record ? [projectReferenceConsent(consent, record)] : [];
@@ -449,6 +462,53 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
     }
     if (Object.keys(patch).length === 0) return c.json({ error: 'No relationship settings provided' }, 400);
     return c.json({ ok: true, relationship: updateRelationshipSettings(patch) });
+  });
+
+  authenticated.patch('/api/you/claims/:id', deps.strictRateLimitMiddleware, async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const action = body.action === 'confirm' || body.action === 'reject' ? body.action : undefined;
+    if (!action) return c.json({ error: 'Action must be confirm or reject' }, 400);
+    const claim = runSqliteWriteTransaction(() => {
+      const updated = setUserClaimDecision(c.req.param('id'), action === 'confirm' ? 'confirmed' : 'rejected');
+      if (!updated) return updated;
+      const existing = updated.memoryRecordId ? getMemoryRecord(updated.memoryRecordId) : undefined;
+      if (existing) {
+        preserveRecord(existing, {
+          status: action === 'confirm' ? 'active' : 'rejected',
+          ...(action === 'confirm' ? { reviewAfter: nextMemoryReviewAt(existing) } : {}),
+        });
+      } else if (action === 'confirm') {
+        const candidate = renderUserClaim(updated);
+        const evidence = listUserClaimEvidence(updated.id);
+        const record = upsertMemoryRecord({
+          providerId: 'connected-understanding',
+          kind: candidate.kind,
+          sourceAgentId: updated.agentId,
+          content: candidate.content,
+          canonicalKey: candidate.canonicalKey,
+          source: { provider: 'connected-sources' },
+          confidence: 1,
+          status: 'active',
+          sensitivity: candidate.sensitivity,
+          explicitness: 'explicit',
+          durability: candidate.durability,
+          importance: candidate.importance,
+          disclosurePolicy: candidate.disclosurePolicy,
+          tags: [...new Set(['user-understanding', ...(candidate.tags ?? []), 'user-confirmed'])],
+          evidence: evidence.map((item) => ({
+            sourceItemId: item.sourceItemId,
+            relation: item.relation === 'contradicts' ? 'contradicts' : 'supports',
+            observedAt: item.observedAt,
+            confidence: updated.confidence,
+          })),
+          reviewAfter: nextMemoryReviewAt({ durability: candidate.durability, explicitness: 'explicit' }),
+        });
+        linkUserClaimMemoryRecord(updated.id, record.id);
+      }
+      return getUserClaim(updated.id);
+    });
+    if (!claim) return c.json({ error: 'Connected claim not found' }, 404);
+    return c.json({ ok: true, claim: { ...claim, evidence: listUserClaimEvidence(claim.id) } });
   });
 
   authenticated.get('/api/you/profile', async (c) => {
@@ -936,6 +996,7 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
     }
 
     let deletedUnderstandingCount = 0;
+    let deletedClaimCount = 0;
     if (body.deleteDerivedUnderstanding) {
       const sourceInstanceId = connection
         ? `composio:${connection.connectorId}:${connection.id}`
@@ -945,11 +1006,23 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
         sourceInstanceId,
       );
       runSqliteWriteTransaction(() => {
-        for (const record of targets) deleteMemoryRecord(record.id);
+        const claimRemoval = removeUserClaimEvidenceForSource(sourceInstanceId);
+        deletedClaimCount = claimRemoval.deletedClaimCount;
+        const retainedMemoryIds = new Set(claimRemoval.retainedClaims.map((claim) => claim.memoryRecordId));
+        const deleteIds = new Set([
+          ...claimRemoval.deletedMemoryRecordIds,
+          ...targets.filter((record) => !retainedMemoryIds.has(record.id)).map((record) => record.id),
+        ]);
+        for (const recordId of deleteIds) deleteMemoryRecord(recordId);
+        for (const retained of claimRemoval.retainedClaims) {
+          if (retained.state === 'active') continue;
+          const record = getMemoryRecord(retained.memoryRecordId);
+          if (record) preserveRecord(record, { status: retained.state === 'rejected' ? 'rejected' : 'stale' });
+        }
+        deletedUnderstandingCount = deleteIds.size;
       });
-      deletedUnderstandingCount = targets.length;
     }
-    return c.json({ ok: true, deletedUnderstandingCount });
+    return c.json({ ok: true, deletedUnderstandingCount, deletedClaimCount });
   });
 
   authenticated.patch('/api/you/understanding/:id', deps.strictRateLimitMiddleware, async (c) => {

@@ -82,6 +82,15 @@ export type PersonalContextSource = {
   lastActivityAt?: string;
   derivedUnderstandingCount: number;
   knowledgeItemCount: number;
+  learningFunnel: {
+    indexedItems: number;
+    attributedItems: number;
+    resolvedEntities: number;
+    provisionalClaims: number;
+    activeClaims: number;
+    evidenceCount: number;
+    lastEvidenceAt?: string;
+  };
   lastSyncAt?: string;
   lastSyncStatus?: 'running' | 'succeeded' | 'partial' | 'failed' | 'cancelled';
   lastSyncError?: string;
@@ -97,6 +106,26 @@ export type PersonalContextSource = {
     error?: string;
     updatedAt: string;
   };
+};
+
+export type ConnectedClaim = {
+  id: string;
+  class: 'relationship' | 'project' | 'routine';
+  value: Record<string, unknown>;
+  state: 'provisional' | 'active' | 'rejected' | 'stale';
+  userState: 'auto' | 'confirmed' | 'rejected';
+  confidence: number;
+  independentEvidenceCount: number;
+  activeDayCount: number;
+  firstObservedAt: string;
+  lastReinforcedAt: string;
+  evidence: Array<{
+    logicalEventKey: string;
+    sourceItemId: string;
+    sourceInstanceId: string;
+    relation: string;
+    observedAt: string;
+  }>;
 };
 
 export type InsightSuggestion = {
@@ -137,6 +166,7 @@ export type UserContextResponse = {
   profile: UserProfileFields;
   profileSetup: UserProfileSetup;
   understanding: UserUnderstanding[];
+  connectedClaims: ConnectedClaim[];
   consentRequests: ReferenceConsent[];
   referenceGrants: ReferenceConsent[];
   conflictGroups: Array<{
@@ -206,6 +236,14 @@ export function updateRelationshipSettings(
     apiUrl('/api/you/relationship'),
     { method: 'PATCH', body: JSON.stringify(patch) },
   );
+}
+
+export async function updateConnectedClaim(id: string, action: 'confirm' | 'reject'): Promise<ConnectedClaim> {
+  const response = await fetchJson<{ ok: true; claim: ConnectedClaim }>(apiUrl(`/api/you/claims/${encodeURIComponent(id)}`), {
+    method: 'PATCH',
+    body: JSON.stringify({ action }),
+  });
+  return response.claim;
 }
 
 export function setPersonalPlaybookEnabled(id: PersonalPlaybook['id'], enabled: boolean) {

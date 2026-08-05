@@ -125,6 +125,8 @@ function connectionIdentities(identity: Record<string, unknown>): string[] {
 function resultToSourceItems(input: {
   result: unknown;
   sourceInstanceId: string;
+  collectionScope: string;
+  streamKind: 'activity' | 'inventory';
   connectorId: string;
   connectionId: string;
   actionId: string;
@@ -147,6 +149,7 @@ function resultToSourceItems(input: {
     const contentHash = createHash('sha256').update(serialized).digest('hex');
     return {
       sourceInstanceId: input.sourceInstanceId,
+      collectionScope: input.collectionScope,
       externalId: entity.externalId,
       itemType: entity.itemType,
       authorRole: 'third_party',
@@ -170,7 +173,7 @@ function resultToSourceItems(input: {
       sensitivity: 'personal',
       retentionClass: 'bounded',
       synthesisPipeline: 'connected_knowledge',
-      synthesisStatus: entity.synthesisStatus,
+      synthesisStatus: input.streamKind === 'inventory' ? 'ignored' : entity.synthesisStatus,
     };
   });
 }
@@ -180,6 +183,8 @@ class ComposioKnowledgeSourceAdapter implements KnowledgeSourceAdapter {
 
   constructor(private readonly input: {
     connectorId: string;
+    collectionScope: string;
+    streamKind: 'activity' | 'inventory';
     actionId: string;
     arguments: Record<string, unknown>;
     buildArguments?: (pull: KnowledgePullInput) => Record<string, unknown>;
@@ -213,6 +218,8 @@ class ComposioKnowledgeSourceAdapter implements KnowledgeSourceAdapter {
       items: resultToSourceItems({
         result: execution.result,
         sourceInstanceId: pull.instanceId,
+        collectionScope: pull.collectionScope,
+        streamKind: this.input.streamKind,
         connectorId: this.input.connectorId,
         connectionId: this.input.connection.id,
         actionId: this.input.actionId,
@@ -230,6 +237,8 @@ class ComposioKnowledgeSourceAdapter implements KnowledgeSourceAdapter {
 export async function ingestComposioConnectedSource(input: {
   config: Config;
   connectorId: string;
+  collectionScope: string;
+  streamKind: 'activity' | 'inventory';
   actionId: string;
   arguments?: Record<string, unknown>;
   buildArguments?: (pull: KnowledgePullInput) => Record<string, unknown>;
@@ -273,6 +282,8 @@ export async function ingestComposioConnectedSource(input: {
   const sourceInstanceId = `composio:${connectorId}:${connection.id}`;
   const sourceAdapter = new ComposioKnowledgeSourceAdapter({
     connectorId,
+    collectionScope: input.collectionScope,
+    streamKind: input.streamKind,
     connection,
     actionId: input.actionId,
     arguments: input.arguments ?? {},
@@ -286,6 +297,7 @@ export async function ingestComposioConnectedSource(input: {
   const syncRun = await new KnowledgeIngestionService(new Map([[sourceAdapter.kind, sourceAdapter]])).sync({
     adapterKind: sourceAdapter.kind,
     instanceId: sourceInstanceId,
+    collectionScope: input.collectionScope,
   });
   if (syncRun.status === 'failed' || syncRun.status === 'cancelled') {
     throw new Error(syncRun.error ?? `Connected source ingestion ${syncRun.status}.`);
@@ -325,6 +337,7 @@ export async function ingestLocalFolderSource(input: {
   const syncRun = await new KnowledgeIngestionService(new Map([[adapter.kind, adapter]])).sync({
     adapterKind: adapter.kind,
     instanceId: sourceInstanceId,
+    collectionScope: 'files',
   });
   if (syncRun.status === 'failed' || syncRun.status === 'cancelled') {
     throw new Error(syncRun.error ?? `Local folder sync ${syncRun.status}.`);

@@ -116,7 +116,11 @@ function normalizeCalendar(result: unknown): ConnectedSourceEntity[] {
 
 function repositoryName(row: JsonRecord): string | undefined {
   const repository = record(row.repository) ?? record(row.repo);
-  return text(repository, 'full_name', 'name') ?? text(row, 'repository_full_name', 'full_name', 'repo');
+  const explicit = text(repository, 'full_name', 'name') ?? text(row, 'repository_full_name', 'full_name', 'repo');
+  if (explicit) return explicit;
+  const url = text(row, 'repository_url', 'html_url');
+  const match = url?.match(/(?:repos\/|github\.com\/)([^/]+\/[^/#]+)(?:\/|$)/);
+  return match?.[1];
 }
 
 function normalizeGitHub(result: unknown, actionId: string): ConnectedSourceEntity[] {
@@ -151,9 +155,10 @@ function normalizeGitHub(result: unknown, actionId: string): ConnectedSourceEnti
   }
 
   return rows(data, 'commits', 'pull_requests', 'issues', 'items').flatMap((activity) => {
-    const externalId = text(activity, 'id', 'node_id', 'sha', 'number');
-    if (!externalId) return [];
+    const rawId = text(activity, 'id', 'node_id', 'sha', 'number');
+    if (!rawId) return [];
     const subjectKey = repositoryName(activity);
+    const externalId = subjectKey ? `${subjectKey}:${rawId}` : rawId;
     const occurredAt = time(activity.committed_at ?? activity.created_at ?? activity.updated_at);
     return [{
       externalId: `${actionId}:${externalId}`,

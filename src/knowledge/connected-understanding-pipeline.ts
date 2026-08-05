@@ -1,30 +1,23 @@
-import { createHash } from 'node:crypto';
-
 import type { UnderstandingCandidate, UnderstandingReviewResult } from '../agent/memory/understanding/types.js';
 import type { MemoryManager } from '../agent/memory/manager.js';
-import { listKnowledgeSourceItems } from '../storage/sqlite/index.js';
+import {
+  linkUserClaimMemoryRecord,
+  listKnowledgeSourceItems,
+  reinforceUserClaim,
+  resolveUserEntity,
+  type UserClaim,
+  type UserClaimClass,
+} from '../storage/sqlite/index.js';
 import type { KnowledgeSourceItem } from './types.js';
 
-type CandidateWithEvidence = {
-  candidate: UnderstandingCandidate;
-  sourceItemIds: string[];
-  evidenceBasis: { eventCount: number; activeDays: number; windowDays: number };
+export type ClaimObservation = {
+  class: UserClaimClass;
+  key: string;
+  value: Record<string, unknown>;
+  subject?: Parameters<typeof resolveUserEntity>[0];
+  items: KnowledgeSourceItem[];
+  windowDays: number;
 };
-
-function key(kind: UnderstandingCandidate['kind'], value: string): string {
-  return `${kind}:connected:${createHash('sha256').update(value.toLowerCase()).digest('hex').slice(0, 20)}`;
-}
-
-function identityForPerson(value: unknown): { key: string; label: string } | undefined {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
-  const person = value as Record<string, unknown>;
-  const read = (field: string) => typeof person[field] === 'string' ? person[field].trim().slice(0, 160) : '';
-  const name = read('name');
-  const email = read('email');
-  const username = read('username');
-  const identity = email || username || name;
-  return identity ? { key: identity.toLowerCase(), label: name || email || username } : undefined;
-}
 
 function logicalEventKey(item: KnowledgeSourceItem): string | undefined {
   const value = item.metadata.logicalEventKey;
@@ -38,144 +31,167 @@ function eventTime(item: KnowledgeSourceItem): number | undefined {
 }
 
 function recent(items: KnowledgeSourceItem[], days: number): KnowledgeSourceItem[] {
-  const cutoff = Date.now() - days * 86_400_000;
+  const now = Date.now();
+  const cutoff = now - days * 86_400_000;
   return items.filter((item) => {
     const time = eventTime(item);
-    return time !== undefined && time >= cutoff && time <= Date.now() + 300_000 && logicalEventKey(item);
+    return time !== undefined && time >= cutoff && time <= now + 300_000 && logicalEventKey(item);
   });
 }
 
-function eventDay(item: KnowledgeSourceItem): string {
-  return new Date(item.occurredAt!).toISOString().slice(0, 10);
+function person(value: unknown): { name?: string; email?: string; username?: string } | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const row = value as Record<string, unknown>;
+  const read = (field: string) => typeof row[field] === 'string' && row[field].trim()
+    ? row[field].trim().slice(0, 160)
+    : undefined;
+  const result = { name: read('name'), email: read('email'), username: read('username') };
+  return result.name || result.email || result.username ? result : undefined;
 }
 
-function signalConfidence(eventCount: number, activeDays: number): number {
-  return Math.min(0.9, 0.55 + Math.min(eventCount, 8) * 0.03 + Math.min(activeDays, 5) * 0.04);
-}
-
-function relationshipCandidates(items: KnowledgeSourceItem[]): CandidateWithEvidence[] {
-  const evidence = new Map<string, { label: string; events: Map<string, KnowledgeSourceItem> }>();
+function relationshipObservations(items: KnowledgeSourceItem[]): ClaimObservation[] {
+  const grouped = new Map<string, {
+    label: string;
+    handles: Parameters<typeof resolveUserEntity>[0]['handles'];
+    events: Map<string, KnowledgeSourceItem>;
+  }>();
   for (const item of recent(items, 90)) {
     if (item.metadata.actorAttributed !== true) continue;
-    const eventKey = logicalEventKey(item)!;
     const owners = new Set(Array.isArray(item.metadata.ownerIdentities)
-      ? item.metadata.ownerIdentities.filter((value): value is string => typeof value === 'string')
+      ? item.metadata.ownerIdentities.filter((value): value is string => typeof value === 'string').map((value) => value.toLowerCase())
       : []);
-    const people = item.metadata.personEntities;
-    if (!Array.isArray(people)) continue;
-    for (const person of people) {
-      const identity = identityForPerson(person);
-      if (!identity || owners.has(identity.key)) continue;
-      const entry = evidence.get(identity.key) ?? { label: identity.label, events: new Map<string, KnowledgeSourceItem>() };
+    const values = item.metadata.personEntities;
+    if (!Array.isArray(values)) continue;
+    for (const value of values) {
+      const signal = person(value);
+      if (!signal) continue;
+      const strongIdentity = (signal.email ?? signal.username)?.toLowerCase();
+      if (strongIdentity && owners.has(strongIdentity)) continue;
+      const label = signal.name ?? signal.email ?? signal.username!;
+      const handles = [
+        ...(signal.email ? [{ type: 'email' as const, value: signal.email, sourceScope: 'global', verified: true }] : []),
+        ...(signal.username ? [{
+          type: 'provider_user' as const, value: signal.username,
+          sourceScope: String(item.metadata.toolkit ?? item.sourceInstanceId), verified: true,
+        }] : []),
+        ...(signal.name ? [{
+          type: 'display_name' as const, value: signal.name, sourceScope: item.sourceInstanceId, verified: false,
+        }] : []),
+      ];
+      const identityKey = signal.email?.toLowerCase()
+        ?? `${String(item.metadata.toolkit ?? item.sourceInstanceId)}:${signal.username?.toLowerCase() ?? signal.name?.toLowerCase()}`;
+      const entry = grouped.get(identityKey) ?? { label, handles, events: new Map() };
+      const eventKey = logicalEventKey(item)!;
       if (!entry.events.has(eventKey)) entry.events.set(eventKey, item);
-      evidence.set(identity.key, entry);
+      grouped.set(identityKey, entry);
     }
   }
-  return [...evidence.values()]
-    .filter(({ events }) => events.size >= 3 && new Set([...events.values()].map(eventDay)).size >= 2)
+  return [...grouped.values()]
     .sort((left, right) => right.events.size - left.events.size)
+    .slice(0, 8)
+    .map((entry) => ({
+      class: 'relationship',
+      key: 'person',
+      value: { label: entry.label },
+      subject: { type: 'person', canonicalLabel: entry.label, handles: entry.handles },
+      items: [...entry.events.values()],
+      windowDays: 90,
+    }));
+}
+
+function routineObservations(items: KnowledgeSourceItem[]): ClaimObservation[] {
+  const slots = new Map<string, Map<string, KnowledgeSourceItem>>();
+  for (const item of recent(items, 120).filter((candidate) => candidate.itemType === 'calendar_event')) {
+    const date = new Date(item.occurredAt!);
+    const slot = `${date.getUTCDay()}:${date.getUTCHours()}`;
+    const events = slots.get(slot) ?? new Map<string, KnowledgeSourceItem>();
+    const eventKey = logicalEventKey(item)!;
+    if (!events.has(eventKey)) events.set(eventKey, item);
+    slots.set(slot, events);
+  }
+  return [...slots.entries()]
+    .sort((left, right) => right[1].size - left[1].size)
     .slice(0, 4)
-    .map(({ label, events }) => {
-      const rows = [...events.values()];
-      const activeDays = new Set(rows.map(eventDay)).size;
+    .map(([slot, events]) => {
+      const [weekday, hour] = slot.split(':').map(Number);
       return {
-      candidate: {
-        kind: 'relationship',
-        content: `Frequently collaborates with ${label}.`,
-        canonicalKey: key('relationship', label),
-        confidence: signalConfidence(events.size, activeDays),
-        importance: 0.65,
-        explicitness: 'inferred',
-        durability: 'recurring',
-        sensitivity: 'personal',
-        disclosurePolicy: 'ask_before_reference',
-        tags: ['connected-source', 'relationship-signal'],
-      },
-      sourceItemIds: rows.map((item) => item.id).slice(0, 20),
-      evidenceBasis: { eventCount: events.size, activeDays, windowDays: 90 },
-    };
+        class: 'routine' as const,
+        key: `calendar-slot:${slot}`,
+        value: { weekday, hour, timezone: 'UTC' },
+        items: [...events.values()],
+        windowDays: 120,
+      };
     });
 }
 
-function routineCandidates(items: KnowledgeSourceItem[]): CandidateWithEvidence[] {
-  const calendar = recent(items, 120).filter((item) => item.itemType === 'calendar_event');
-  const slots = new Map<string, KnowledgeSourceItem[]>();
-  const seen = new Set<string>();
-  for (const item of calendar) {
-    const eventKey = logicalEventKey(item)!;
-    if (seen.has(eventKey)) continue;
-    seen.add(eventKey);
-    const date = new Date(item.occurredAt!);
-    const slot = `${date.getUTCDay()}:${date.getUTCHours()}`;
-    const rows = slots.get(slot) ?? [];
-    rows.push(item);
-    slots.set(slot, rows);
-  }
-  const best = [...slots.entries()].sort((left, right) => right[1].length - left[1].length)[0];
-  if (!best || best[1].length < 3 || new Set(best[1].map(eventDay)).size < 3) return [];
-  const [weekday, hour] = best[0].split(':').map(Number);
-  const weekdayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][weekday!];
-  return [{
-    candidate: {
-      kind: 'routine',
-      content: `Often has calendar activity on ${weekdayName} around ${String(hour).padStart(2, '0')}:00 UTC.`,
-      canonicalKey: key('routine', best[0]),
-      confidence: Math.min(0.86, 0.62 + best[1].length * 0.03),
-      importance: 0.58,
-      explicitness: 'inferred',
-      durability: 'recurring',
-      sensitivity: 'personal',
-      disclosurePolicy: 'referenceable',
-      tags: ['connected-source', 'calendar-pattern'],
-    },
-    sourceItemIds: best[1].map((item) => item.id).slice(0, 20),
-    evidenceBasis: { eventCount: best[1].length, activeDays: new Set(best[1].map(eventDay)).size, windowDays: 120 },
-  }];
-}
-
-function projectActivityCandidates(items: KnowledgeSourceItem[]): CandidateWithEvidence[] {
-  const grouped = new Map<string, Map<string, KnowledgeSourceItem>>();
+function projectObservations(items: KnowledgeSourceItem[]): ClaimObservation[] {
+  const grouped = new Map<string, { label: string; events: Map<string, KnowledgeSourceItem> }>();
   for (const item of recent(items, 60)) {
     if (item.metadata.observationKind !== 'activity' || item.metadata.actorAttributed !== true) continue;
     const subject = typeof item.metadata.subjectKey === 'string' ? item.metadata.subjectKey.trim() : '';
     if (!subject) continue;
-    const activities = grouped.get(subject) ?? new Map<string, KnowledgeSourceItem>();
-    activities.set(logicalEventKey(item)!, item);
-    grouped.set(subject, activities);
+    const entry = grouped.get(subject.toLowerCase()) ?? { label: subject, events: new Map<string, KnowledgeSourceItem>() };
+    const events = entry.events;
+    const eventKey = logicalEventKey(item)!;
+    if (!events.has(eventKey)) events.set(eventKey, item);
+    grouped.set(subject.toLowerCase(), entry);
   }
-  const candidates: CandidateWithEvidence[] = [];
-  for (const [subject, activities] of grouped) {
-    const rows = [...activities.values()];
-    const activeDays = new Set(rows.map(eventDay)).size;
-    if (rows.length < 3 || activeDays < 2) continue;
-    candidates.push({
-      candidate: {
-        kind: 'project_context',
-        content: `Recently contributed repeatedly to ${subject}.`,
-        canonicalKey: key('project_context', subject),
-        confidence: signalConfidence(rows.length, activeDays),
-        importance: 0.72,
-        explicitness: 'inferred',
-        durability: 'recurring',
-        sensitivity: 'personal',
-        disclosurePolicy: 'referenceable',
-        tags: ['connected-source', 'attributed-project-activity'],
-      },
-      sourceItemIds: rows.map((item) => item.id).slice(0, 20),
-      evidenceBasis: { eventCount: rows.length, activeDays, windowDays: 60 },
+  return [...grouped.entries()]
+    .sort((left, right) => right[1].events.size - left[1].events.size)
+    .slice(0, 8)
+    .map(([, entry]) => {
+      const { label: subject, events } = entry;
+      return {
+        class: 'project' as const,
+        key: 'project',
+        value: { label: subject },
+        subject: {
+          type: 'project' as const,
+          canonicalLabel: subject,
+          handles: [{ type: 'provider_user' as const, value: subject, sourceScope: 'project', verified: true }],
+        },
+        items: [...events.values()],
+        windowDays: 60,
+      };
     });
-  }
-  return candidates.slice(0, 4);
 }
 
-export function deriveConnectedUnderstandingCandidates(items: KnowledgeSourceItem[]): CandidateWithEvidence[] {
+export function deriveConnectedClaimObservations(items: KnowledgeSourceItem[]): ClaimObservation[] {
   const active = items.filter((item) => (
     !item.deletedAt
     && item.synthesisPipeline === 'connected_knowledge'
     && item.sensitivity !== 'secret'
     && item.sensitivity !== 'regulated'
+    && item.metadata.observationKind !== 'inventory'
   ));
-  return [...relationshipCandidates(active), ...routineCandidates(active), ...projectActivityCandidates(active)].slice(0, 12);
+  return [...relationshipObservations(active), ...routineObservations(active), ...projectObservations(active)];
+}
+
+export function renderUserClaim(claim: UserClaim): UnderstandingCandidate {
+  const label = typeof claim.value.label === 'string' ? claim.value.label : '';
+  if (claim.class === 'relationship') {
+    return {
+      kind: 'relationship', content: `Frequently collaborates with ${label}.`, canonicalKey: `claim:${claim.id}`,
+      confidence: claim.confidence, importance: 0.65, explicitness: 'inferred', durability: 'recurring',
+      sensitivity: 'personal', disclosurePolicy: 'ask_before_reference', tags: ['connected-source', 'structured-claim'],
+    };
+  }
+  if (claim.class === 'project') {
+    return {
+      kind: 'project_context', content: `Recently contributed repeatedly to ${label}.`, canonicalKey: `claim:${claim.id}`,
+      confidence: claim.confidence, importance: 0.72, explicitness: 'inferred', durability: 'recurring',
+      sensitivity: 'personal', disclosurePolicy: 'referenceable', tags: ['connected-source', 'structured-claim'],
+    };
+  }
+  const weekday = Number(claim.value.weekday);
+  const hour = Number(claim.value.hour);
+  const weekdayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][weekday] ?? 'Unknown';
+  return {
+    kind: 'routine', content: `Often has calendar activity on ${weekdayName} around ${String(hour).padStart(2, '0')}:00 UTC.`,
+    canonicalKey: `claim:${claim.id}`, confidence: claim.confidence, importance: 0.58,
+    explicitness: 'inferred', durability: 'recurring', sensitivity: 'personal', disclosurePolicy: 'referenceable',
+    tags: ['connected-source', 'structured-claim'],
+  };
 }
 
 export class ConnectedUnderstandingPipeline {
@@ -183,23 +199,41 @@ export class ConnectedUnderstandingPipeline {
 
   async process(sourceInstanceId: string, connectorId: string, agentId: string): Promise<UnderstandingReviewResult> {
     const items = listKnowledgeSourceItems({ sourceInstanceId, includeDeleted: false, limit: 500 });
-    const groups = deriveConnectedUnderstandingCandidates(items);
+    const observations = deriveConnectedClaimObservations(items);
     const totals: UnderstandingReviewResult = {
-      proposed: 0,
-      created: 0,
-      deduplicated: 0,
-      rejected: 0,
-      createdRecords: [],
+      proposed: observations.length, created: 0, deduplicated: 0, rejected: 0, createdRecords: [],
     };
-    for (const group of groups) {
-      const result = await this.memoryManager.applyUnderstandingCandidates([group.candidate], {
+    for (const observation of observations) {
+      const subject = observation.subject ? resolveUserEntity(observation.subject) : undefined;
+      const claim = reinforceUserClaim({
         agentId,
-        sourceItemIds: group.sourceItemIds,
-        sourceText: JSON.stringify(group.evidenceBasis),
+        class: observation.class,
+        key: subject ? `${observation.key}:${subject.id}` : observation.key,
+        subjectEntityId: subject?.id,
+        value: observation.value,
+        evidence: observation.items.map((item) => ({
+          logicalEventKey: logicalEventKey(item)!,
+          sourceItemId: item.id,
+          sourceInstanceId: item.sourceInstanceId,
+          relation: 'supports',
+          observedAt: item.occurredAt!,
+        })),
+      });
+      if (claim.state !== 'active') continue;
+      const result = await this.memoryManager.applyUnderstandingCandidates([renderUserClaim(claim)], {
+        agentId,
+        sourceItemIds: observation.items.map((item) => item.id).slice(0, 20),
+        sourceText: JSON.stringify({
+          claimId: claim.id,
+          independentEvidenceCount: claim.independentEvidenceCount,
+          activeDays: claim.activeDayCount,
+          windowDays: observation.windowDays,
+        }),
         source: { provider: connectorId, sourceInstanceId },
         reviewSource: 'background',
       });
-      totals.proposed += result.proposed;
+      const memoryRecordId = result.createdRecords[0]?.id;
+      if (memoryRecordId) linkUserClaimMemoryRecord(claim.id, memoryRecordId);
       totals.created += result.created;
       totals.deduplicated += result.deduplicated;
       totals.rejected += result.rejected;

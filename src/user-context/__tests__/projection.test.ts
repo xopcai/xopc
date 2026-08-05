@@ -125,10 +125,16 @@ describe('user context projection', () => {
       audit: [{ at: '2026-07-20T09:00:00.000Z', action: 'health_check' }],
     }] as ConnectorInstance[];
 
-    const [source] = projectPersonalContextSources(definitions, instances, [
-      record({ source: { provider: 'calendar', sourceInstanceId: 'calendar-1' } }),
-      record({ id: 'memory-2', source: { provider: 'mail' } }),
-    ]);
+    const [source] = projectPersonalContextSources(definitions, instances, {
+      claimStatsBySource: {
+        'calendar-1': {
+          evidenceCount: 3,
+          provisionalClaims: 0,
+          activeClaims: 1,
+          resolvedEntities: 1,
+        },
+      },
+    });
 
     expect(source).toMatchObject({
       lastHealthCheckAt: '2026-07-20T08:00:00.000Z',
@@ -187,7 +193,7 @@ describe('user context projection', () => {
       createdAt: '2026-07-20T07:00:00.000Z',
       updatedAt: '2026-07-20T07:00:00.000Z',
     }] as ConnectorConnection[];
-    const [source] = projectPersonalContextSources(definitions, [], [], { sourceItems: items, syncRuns, connections });
+    const [source] = projectPersonalContextSources(definitions, [], { sourceItems: items, syncRuns, connections });
 
     expect(source).toMatchObject({
       knowledgeItemCount: 1,
@@ -218,10 +224,23 @@ describe('user context projection', () => {
       createdAt: '2026-07-20T07:00:00.000Z',
       updatedAt: '2026-07-20T07:00:00.000Z',
     })) as ConnectorConnection[];
-    const sources = projectPersonalContextSources(definitions, [], [
-      record({ source: { provider: 'composio-gmail', sourceInstanceId: 'composio:composio-gmail:work' } }),
-      record({ id: 'personal-record', source: { provider: 'composio-gmail', sourceInstanceId: 'composio:composio-gmail:personal' } }),
-    ], { connections });
+    const sources = projectPersonalContextSources(definitions, [], {
+      connections,
+      claimStatsBySource: {
+        'composio:composio-gmail:work': {
+          evidenceCount: 3,
+          provisionalClaims: 0,
+          activeClaims: 1,
+          resolvedEntities: 1,
+        },
+        'composio:composio-gmail:personal': {
+          evidenceCount: 3,
+          provisionalClaims: 0,
+          activeClaims: 1,
+          resolvedEntities: 1,
+        },
+      },
+    });
 
     expect(sources.map((source) => [source.instanceId, source.derivedUnderstandingCount])).toEqual(
       expect.arrayContaining([
@@ -247,19 +266,25 @@ describe('user context projection', () => {
       synthesisPipeline: 'connected_knowledge', synthesisStatus: 'completed', synthesisAttempts: 1,
       createdAt: '2026-08-01T00:00:00.000Z', updatedAt: '2026-08-01T00:00:00.000Z',
     }] as KnowledgeSourceItem[];
-    const crossSource = record({
-      source: { provider: 'connected-sources' },
-      evidence: [{ sourceItemId: 'gmail-item', relation: 'supports' }],
-    });
     const learningJobs = [{
       id: 'job-1', idempotencyKey: 'bootstrap:work:v1', connectorId: 'composio-gmail', connectionId: 'work',
       sourceInstanceId: 'composio:composio-gmail:work', agentId: 'main', mode: 'bootstrap', status: 'running',
       phase: 'deriving', itemsDiscovered: 12, itemsIndexed: 10, candidatesCreated: 1, attemptCount: 1,
       createdAt: '2026-08-01T00:00:00.000Z', updatedAt: '2026-08-01T00:01:00.000Z',
-    }] as Parameters<typeof projectPersonalContextSources>[3]['learningJobs'];
+    }] as Parameters<typeof projectPersonalContextSources>[2]['learningJobs'];
 
-    const [source] = projectPersonalContextSources(definitions, [], [crossSource], {
-      connections, sourceItems, learningJobs,
+    const [source] = projectPersonalContextSources(definitions, [], {
+      connections,
+      sourceItems,
+      learningJobs,
+      claimStatsBySource: {
+        'composio:composio-gmail:work': {
+          evidenceCount: 3,
+          provisionalClaims: 0,
+          activeClaims: 1,
+          resolvedEntities: 1,
+        },
+      },
     });
     expect(source).toMatchObject({
       derivedUnderstandingCount: 1,
@@ -295,9 +320,9 @@ describe('user context projection', () => {
       connectorId: 'composio-gmail', connectionId: 'work', sourceInstanceId: 'composio:composio-gmail:work',
       agentId: 'main', mode: 'incremental', itemsDiscovered: 0, itemsIndexed: 0, candidatesCreated: 0,
       attemptCount: 1, ...job,
-    })) as Parameters<typeof projectPersonalContextSources>[3]['learningJobs'];
+    })) as Parameters<typeof projectPersonalContextSources>[2]['learningJobs'];
 
-    const [source] = projectPersonalContextSources(definitions, [], [], { connections, learningJobs });
+    const [source] = projectPersonalContextSources(definitions, [], { connections, learningJobs });
 
     expect(source.learning).toMatchObject({ status: 'completed', phase: 'completed' });
     expect(source.learning?.error).toBeUndefined();
@@ -326,7 +351,7 @@ describe('user context projection', () => {
       updatedAt: connectedAt,
     })) as ConnectorConnection[];
 
-    const sources = projectPersonalContextSources(definitions, [], [], { connections });
+    const sources = projectPersonalContextSources(definitions, [], { connections });
 
     expect(sources.map((source) => ({
       instanceId: source.instanceId,
@@ -361,7 +386,7 @@ describe('user context projection', () => {
       updatedAt: '2026-08-01T00:00:00.000Z',
     })) as ConnectorConnection[];
 
-    const sources = projectPersonalContextSources(definitions, [], [], { connections });
+    const sources = projectPersonalContextSources(definitions, [], { connections });
 
     expect(sources).toHaveLength(1);
     expect(sources[0]).toMatchObject({ instanceId: 'active', enabled: true, status: 'active' });

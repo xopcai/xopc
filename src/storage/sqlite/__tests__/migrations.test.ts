@@ -143,6 +143,90 @@ describe('SQLite migrations', () => {
     }
   });
 
+  it('upgrades v64 knowledge item identity without losing dependent evidence', () => {
+    const db = openEmptyDb();
+    ensureSchemaMetaTable(db);
+    db.exec(`
+      PRAGMA foreign_keys = ON;
+      CREATE TABLE memory_records (record_id TEXT PRIMARY KEY);
+      CREATE TABLE user_claims (claim_id TEXT PRIMARY KEY);
+      CREATE TABLE knowledge_source_items (
+        item_id TEXT PRIMARY KEY,
+        source_instance_id TEXT NOT NULL,
+        external_id TEXT NOT NULL,
+        item_type TEXT NOT NULL,
+        author_role TEXT,
+        occurred_at INTEGER,
+        source_updated_at INTEGER,
+        content_hash TEXT NOT NULL,
+        normalized_text TEXT,
+        payload_ref TEXT,
+        metadata_json TEXT NOT NULL DEFAULT '{}',
+        sensitivity TEXT NOT NULL DEFAULT 'normal',
+        retention_class TEXT NOT NULL DEFAULT 'bounded',
+        synthesis_status TEXT NOT NULL DEFAULT 'pending',
+        deleted_at INTEGER,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        synthesis_pipeline TEXT NOT NULL DEFAULT 'user_understanding',
+        synthesis_attempts INTEGER NOT NULL DEFAULT 0,
+        synthesis_claimed_at INTEGER,
+        synthesis_claimed_by TEXT,
+        synthesis_error TEXT,
+        collection_scope TEXT NOT NULL DEFAULT 'primary',
+        UNIQUE(source_instance_id, external_id)
+      );
+      CREATE TABLE memory_evidence (
+        evidence_id TEXT PRIMARY KEY, record_id TEXT NOT NULL, source_item_id TEXT,
+        relation TEXT NOT NULL, excerpt TEXT, confidence REAL, observed_at INTEGER, created_at INTEGER NOT NULL,
+        FOREIGN KEY(record_id) REFERENCES memory_records(record_id) ON DELETE CASCADE,
+        FOREIGN KEY(source_item_id) REFERENCES knowledge_source_items(item_id) ON DELETE SET NULL
+      );
+      CREATE TABLE knowledge_source_changes (
+        sequence INTEGER PRIMARY KEY AUTOINCREMENT, change_id TEXT NOT NULL UNIQUE,
+        source_instance_id TEXT NOT NULL, source_item_id TEXT NOT NULL,
+        change_kind TEXT NOT NULL, old_hash TEXT, new_hash TEXT, changed_at INTEGER NOT NULL,
+        FOREIGN KEY(source_item_id) REFERENCES knowledge_source_items(item_id) ON DELETE CASCADE
+      );
+      CREATE TABLE user_claim_evidence (
+        claim_id TEXT NOT NULL, logical_event_key TEXT NOT NULL, source_item_id TEXT NOT NULL,
+        source_instance_id TEXT NOT NULL, relation TEXT NOT NULL, observed_at INTEGER NOT NULL,
+        created_at INTEGER NOT NULL, PRIMARY KEY(claim_id, logical_event_key),
+        FOREIGN KEY(claim_id) REFERENCES user_claims(claim_id) ON DELETE CASCADE,
+        FOREIGN KEY(source_item_id) REFERENCES knowledge_source_items(item_id) ON DELETE CASCADE
+      );
+      INSERT INTO memory_records VALUES ('memory-1');
+      INSERT INTO user_claims VALUES ('claim-1');
+      INSERT INTO knowledge_source_items (
+        item_id, source_instance_id, collection_scope, external_id, item_type, content_hash, created_at, updated_at
+      ) VALUES ('item-1', 'github:work', 'repositories', '123', 'repository', 'hash-1', 1, 1);
+      INSERT INTO memory_evidence VALUES ('evidence-1', 'memory-1', 'item-1', 'supports', NULL, 0.8, 1, 1);
+      INSERT INTO knowledge_source_changes (
+        change_id, source_instance_id, source_item_id, change_kind, changed_at
+      ) VALUES ('change-1', 'github:work', 'item-1', 'added', 1);
+      INSERT INTO user_claim_evidence VALUES ('claim-1', 'event-1', 'item-1', 'github:work', 'supports', 1, 1);
+    `);
+    setSchemaVersion(db, 64);
+
+    expect(applyPendingMigrations(db, { targetVersion: 65 })).toBe(65);
+    expect(db.prepare('SELECT source_item_id FROM memory_evidence').get()).toEqual({ source_item_id: 'item-1' });
+    expect(db.prepare('SELECT source_item_id FROM knowledge_source_changes').get()).toEqual({ source_item_id: 'item-1' });
+    expect(db.prepare('SELECT source_item_id FROM user_claim_evidence').get()).toEqual({ source_item_id: 'item-1' });
+    expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    expect(db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'knowledge_source_state'`).get())
+      .toBeUndefined();
+    expect(db.prepare(`SELECT dflt_value FROM pragma_table_info('knowledge_source_items')
+      WHERE name = 'collection_scope'`).get()).toEqual({ dflt_value: null });
+    const sourceItemsSql = db.prepare(`SELECT sql FROM sqlite_master
+      WHERE type = 'table' AND name = 'knowledge_source_items'`).get() as { sql: string };
+    expect(sourceItemsSql.sql).toContain('UNIQUE(source_instance_id, collection_scope, external_id)');
+    expect(sourceItemsSql.sql).not.toContain('UNIQUE(source_instance_id, external_id)');
+    expect(() => db.prepare(`INSERT INTO knowledge_source_items (
+      item_id, source_instance_id, collection_scope, external_id, item_type, content_hash, created_at, updated_at
+    ) VALUES ('item-2', 'github:work', 'authored-work', '123', 'development_activity', 'hash-2', 2, 2)`).run())
+      .not.toThrow();
+  });
+
   it('upgrades v33 trust policies to allow a global auto default', () => {
     const db = openEmptyDb();
     ensureSchemaMetaTable(db);

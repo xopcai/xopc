@@ -30,6 +30,22 @@ export {
 } from './connection.js';
 export { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 export {
+  getUserClaim,
+  linkUserClaimMemoryRecord,
+  listUserClaimEvidence,
+  listUserClaimStatsBySource,
+  listUserClaims,
+  listUserPeopleGraphRows,
+  removeUserClaimEvidenceForSource,
+  reinforceUserClaim,
+  resolveUserEntity,
+  setUserClaimDecision,
+  type UserClaim,
+  type UserClaimClass,
+  type UserClaimState,
+  type UserEntity,
+} from './user-claims-repository.js';
+export {
   claimNextConnectorLearningJob,
   enqueueConnectorLearningJob,
   listConnectorLearningJobs,

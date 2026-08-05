@@ -142,6 +142,7 @@ export class UserUnderstandingService {
     const contentHash = createHash('sha256').update(sourceText).digest('hex');
     const stored = upsertKnowledgeSourceItems([{
       sourceInstanceId: params.sessionKey ? `session:${params.sessionKey}` : 'session:unknown',
+      collectionScope: 'conversation',
       externalId: contentHash,
       itemType: 'conversation_turn',
       authorRole: 'user',

@@ -15,6 +15,7 @@ import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 type KnowledgeSourceItemRow = {
   item_id: string;
   source_instance_id: string;
+  collection_scope: string;
   external_id: string;
   item_type: string;
   author_role: string | null;
@@ -108,6 +109,7 @@ function sourceItemFromRow(row: KnowledgeSourceItemRow): KnowledgeSourceItem {
   return {
     id: row.item_id,
     sourceInstanceId: row.source_instance_id,
+    collectionScope: row.collection_scope,
     externalId: row.external_id,
     itemType: row.item_type,
     ...(row.author_role ? { authorRole: row.author_role as KnowledgeSourceItem['authorRole'] } : {}),
@@ -251,22 +253,22 @@ export function listKnowledgeSyncRuns(options: {
   return rows.map(syncRunFromRow);
 }
 
-export function getKnowledgeSourceCursor(sourceInstanceId: string): string | undefined {
+export function getKnowledgeSourceCursor(sourceInstanceId: string, collectionScope: string): string | undefined {
   const row = getSqliteDatabase()
-    .prepare(`SELECT cursor FROM knowledge_source_state WHERE source_instance_id = ?`)
-    .get(sourceInstanceId) as { cursor: string | null } | undefined;
+    .prepare(`SELECT cursor FROM knowledge_collection_state WHERE source_instance_id = ? AND collection_scope = ?`)
+    .get(sourceInstanceId, collectionScope) as { cursor: string | null } | undefined;
   return row?.cursor ?? undefined;
 }
 
-export function setKnowledgeSourceCursor(sourceInstanceId: string, cursor: string | undefined): void {
+export function setKnowledgeSourceCursor(sourceInstanceId: string, collectionScope: string, cursor: string | undefined): void {
   runSqliteWriteTransaction((db) => {
     db.prepare(
-      `INSERT INTO knowledge_source_state (source_instance_id, cursor, updated_at)
-       VALUES (?, ?, ?)
-       ON CONFLICT(source_instance_id) DO UPDATE SET
+      `INSERT INTO knowledge_collection_state (source_instance_id, collection_scope, cursor, updated_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(source_instance_id, collection_scope) DO UPDATE SET
          cursor = excluded.cursor,
          updated_at = excluded.updated_at`,
-    ).run(sourceInstanceId, cursor ?? null, Date.now());
+    ).run(sourceInstanceId, collectionScope, cursor ?? null, Date.now());
   });
 }
 
@@ -282,8 +284,8 @@ export function upsertKnowledgeSourceItems(
     for (const input of inputs) {
       const existing = db.prepare(
         `SELECT * FROM knowledge_source_items
-         WHERE source_instance_id = ? AND external_id = ?`,
-      ).get(input.sourceInstanceId, input.externalId) as KnowledgeSourceItemRow | undefined;
+         WHERE source_instance_id = ? AND collection_scope = ? AND external_id = ?`,
+      ).get(input.sourceInstanceId, input.collectionScope, input.externalId) as KnowledgeSourceItemRow | undefined;
       const id = existing?.item_id ?? input.id ?? randomUUID();
       if (existing?.content_hash === input.contentHash && existing.deleted_at === parseTimestamp(input.deletedAt)) {
         unchanged += 1;
@@ -292,13 +294,14 @@ export function upsertKnowledgeSourceItems(
       }
       db.prepare(
         `INSERT INTO knowledge_source_items (
-          item_id, source_instance_id, external_id, item_type, author_role,
+          item_id, source_instance_id, collection_scope, external_id, item_type, author_role,
           occurred_at, source_updated_at, content_hash, normalized_text,
           payload_ref, metadata_json, sensitivity, retention_class,
           synthesis_pipeline, synthesis_status, deleted_at, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(source_instance_id, external_id) DO UPDATE SET
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(source_instance_id, collection_scope, external_id) DO UPDATE SET
           item_type = excluded.item_type,
+          collection_scope = excluded.collection_scope,
           author_role = excluded.author_role,
           occurred_at = excluded.occurred_at,
           source_updated_at = excluded.source_updated_at,
@@ -319,6 +322,7 @@ export function upsertKnowledgeSourceItems(
       ).run(
         id,
         input.sourceInstanceId,
+        input.collectionScope,
         input.externalId,
         input.itemType,
         input.authorRole ?? null,
@@ -419,6 +423,7 @@ export function setKnowledgeConsumerWatermark(
 
 export function listKnowledgeSourceItems(options: {
   sourceInstanceId?: string;
+  collectionScope?: string;
   itemType?: string;
   synthesisStatus?: KnowledgeSynthesisStatus;
   includeDeleted?: boolean;
@@ -430,6 +435,10 @@ export function listKnowledgeSourceItems(options: {
   if (options.sourceInstanceId) {
     where.push('source_instance_id = ?');
     params.push(options.sourceInstanceId);
+  }
+  if (options.collectionScope) {
+    where.push('collection_scope = ?');
+    params.push(options.collectionScope);
   }
   if (options.itemType) {
     where.push('item_type = ?');
