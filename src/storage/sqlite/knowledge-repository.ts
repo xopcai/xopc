@@ -453,6 +453,17 @@ export function listKnowledgeSourceItems(options: {
   return rows.map(sourceItemFromRow);
 }
 
+export function pruneBoundedKnowledgeSourceItems(
+  sourceInstanceId: string,
+  olderThanMs: number,
+): number {
+  return runSqliteWriteTransaction((db) => Number(db.prepare(
+    `DELETE FROM knowledge_source_items
+     WHERE source_instance_id = ? AND retention_class = 'bounded'
+       AND COALESCE(source_updated_at, occurred_at, updated_at) < ?`,
+  ).run(sourceInstanceId, olderThanMs).changes));
+}
+
 export function setKnowledgeSourceItemSynthesisStatus(
   itemIds: string[],
   status: KnowledgeSynthesisStatus,

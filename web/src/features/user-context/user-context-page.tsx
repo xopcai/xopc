@@ -10,6 +10,7 @@ import {
   HeartHandshake,
   History,
   Lightbulb,
+  Loader2,
   Pencil,
   Plus,
   ShieldCheck,
@@ -30,6 +31,7 @@ import { Select, SelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TimePicker } from '@/components/ui/time-picker';
 import { ConnectorLogo } from '@/features/connectors/components/connector-logo';
+import { setConnectionLearningPaused, startConnectionLearning } from '@/features/connectors/connectors-api';
 import { detectBrowserTimezone } from '@/features/settings/agents/agent-profile-markdown';
 import { UserProfileFieldsEditor } from '@/features/settings/user-profile-fields-editor';
 import { messages } from '@/i18n/messages';
@@ -200,8 +202,20 @@ function UnderstandingCard({
   );
 }
 
-function SourceCard({ source, language, t, onConfigure, onDisconnect }: { source: PersonalContextSource; language: 'en' | 'zh'; t: ReturnType<typeof messages>['you']; onConfigure: () => void; onDisconnect: () => void }) {
-  const status = source.installed ? (source.enabled ? t.connected : t.paused) : t.available;
+function SourceCard({ source, language, t, learningBusy, onConfigure, onLearn, onDisconnect }: { source: PersonalContextSource; language: 'en' | 'zh'; t: ReturnType<typeof messages>['you']; learningBusy: boolean; onConfigure: () => void; onLearn: () => void; onDisconnect: () => void }) {
+  const status = !source.installed
+    ? t.available
+    : source.status === 'active' || source.status === 'connected'
+      ? t.connected
+      : source.status === 'pending' || source.status === 'connecting'
+        ? t.sourceStatusPending
+        : source.status === 'expired' || source.status === 'unauthorized'
+          ? t.sourceStatusReconnect
+          : source.status === 'failed' || source.status === 'degraded'
+            ? t.sourceStatusFailed
+            : source.status === 'disabled'
+              ? t.sourceStatusDisabled
+              : t.sourceStatusUnknown;
   const accountLabel = source.accountLabel ?? (
     source.accountCount && source.accountCount > 1 && source.accountOrdinal
       ? t.sourceAccountFallback
@@ -212,6 +226,38 @@ function SourceCard({ source, language, t, onConfigure, onDisconnect }: { source
   const healthStatus = source.lastHealthStatus
     ? t.sourceHealth.replace('{{status}}', source.lastHealthStatus === 'ok' ? t.healthOk : t.healthIssue)
     : null;
+  const learningStatus = source.learning?.status === 'failed'
+    ? source.learning.error === 'connected_account_unavailable'
+      ? t.sourceLearningAccountUnavailable
+      : t.sourceLearningFailed
+    : source.learning?.status === 'paused'
+      ? t.sourceLearningPaused
+      : source.learning?.status === 'completed' && source.knowledgeItemCount === 0
+        ? t.sourceLearningNoData
+        : source.learning?.phase === 'queued'
+          ? t.sourceLearningQueued
+          : source.learning?.phase === 'fetching'
+            ? t.sourceLearningFetching
+            : source.learning?.phase === 'indexing'
+              ? t.sourceLearningIndexing.replace('{{count}}', String(source.learning.itemsDiscovered))
+              : source.learning?.phase === 'deriving'
+                ? t.sourceLearningDeriving
+                : source.learning?.phase === 'completed'
+                  ? t.sourceLearningCompleted.replace('{{count}}', String(source.learning.candidatesCreated))
+                  : null;
+  const isActive = source.status === 'active' || source.status === 'connected';
+  const hasLearningData = source.knowledgeItemCount > 0 || source.derivedUnderstandingCount > 0;
+  const canStartLearning = source.installed && Boolean(source.instanceId) && isActive
+    && (
+      source.learning?.status === 'failed'
+      || source.learning?.status === 'paused'
+      || (!hasLearningData && (!source.learning || source.learning.status === 'completed'))
+    );
+  const learningActionLabel = source.learning?.status === 'paused'
+    ? t.sourceLearningResume
+    : source.learning?.status === 'failed'
+      ? t.sourceLearningRetry
+      : t.sourceLearningStart;
   return (
     <article
       role="button"
@@ -231,7 +277,23 @@ function SourceCard({ source, language, t, onConfigure, onDisconnect }: { source
           <ConnectorLogo connector={{ displayName: source.displayName, branding: personalContextSourceBranding(source) }} size="sm" />
           <div className="min-w-0"><h3 className="text-sm font-semibold text-fg">{source.displayName}</h3>{accountLabel ? <p className="mt-0.5 truncate text-xs font-medium text-fg-muted">{accountLabel}</p> : null}<p className="mt-1 line-clamp-2 text-xs leading-5 text-fg-muted">{source.description}</p></div>
         </div>
-        <span className={cn('shrink-0 rounded-full px-2 py-1 text-[11px] font-medium', source.installed && source.enabled ? 'bg-success-soft text-fg' : 'bg-surface-hover text-fg-muted')}>{status}</span>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className={cn('rounded-full px-2 py-1 text-[11px] font-medium', isActive ? 'bg-success-soft text-fg' : source.installed ? 'bg-warning-soft text-fg' : 'bg-surface-hover text-fg-muted')}>{status}</span>
+          {source.installed && source.instanceId ? (
+            <Button
+              type="button"
+              variant="ghost"
+              className="h-7 px-2 text-xs text-danger hover:bg-danger-soft hover:text-danger"
+              aria-label={`${t.disconnect}: ${source.displayName}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                onDisconnect();
+              }}
+            >
+              {t.disconnect}
+            </Button>
+          ) : null}
+        </div>
       </div>
       <div className="mt-3 flex flex-wrap gap-1.5 text-[11px] text-fg-subtle">
         {source.access.context ? <span className="rounded-full bg-surface-hover px-2 py-0.5">{t.sourceContext}</span> : null}
@@ -240,18 +302,37 @@ function SourceCard({ source, language, t, onConfigure, onDisconnect }: { source
         {source.access.write ? <span className="rounded-full bg-warning-soft px-2 py-0.5 text-fg">{t.sourceWrite}</span> : null}
       </div>
       {source.installed ? (
-        <div className="mt-3 space-y-1 border-t border-edge-subtle pt-3 text-xs text-fg-muted">
+        <div className="mt-3 border-t border-edge-subtle pt-3 text-xs text-fg-muted">
+          {!isActive ? (
+            <div className="rounded-lg bg-warning-soft px-3 py-2">
+              <p className="font-medium text-fg">{t.sourceConnectionNeedsAttention}</p>
+              <p className="mt-1 leading-5">{t.sourceConnectionNeedsAttentionHint}</p>
+              <Button type="button" variant="secondary" className="mt-2 h-8 px-2" onClick={(event) => { event.stopPropagation(); onConfigure(); }}>
+                {t.sourceConnectionFix}
+              </Button>
+            </div>
+          ) : canStartLearning ? (
+            <div className="rounded-lg border border-accent/20 bg-accent-soft/50 p-3">
+              <p className="font-medium text-fg">{learningStatus ?? t.sourceLearningNotStarted}</p>
+              <p className="mt-1 leading-5 text-fg-muted">{t.sourceLearningNotStartedHint}</p>
+              <Button type="button" variant="secondary" className="mt-2 h-8 px-2" disabled={learningBusy} onClick={(event) => { event.stopPropagation(); onLearn(); }}>
+                {learningBusy ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <Sparkles className="size-3.5" aria-hidden />}
+                {learningActionLabel}
+              </Button>
+            </div>
+          ) : learningStatus ? <p className={source.learning?.status === 'failed' ? 'text-danger' : 'font-medium text-fg'}>{learningStatus}</p> : null}
           {healthStatus ? <p>{healthStatus}</p> : null}
-          <p>{source.lastActivityAt ? t.sourceLastUsed.replace('{{time}}', formatDateTime(source.lastActivityAt, language)) : t.sourceNeverUsed}</p>
+          {source.lastActivityAt ? <p className="mt-2">{t.sourceLastUsed.replace('{{time}}', formatDateTime(source.lastActivityAt, language))}</p> : null}
           {source.lastSyncAt ? <p>{t.sourceLastSync.replace('{{time}}', formatDateTime(source.lastSyncAt, language))}</p> : null}
-          {source.lastSyncStatus === 'failed' && source.lastSyncError ? (
-            <p className="text-danger">{t.sourceSyncFailed.replace('{{error}}', source.lastSyncError)}</p>
+          {source.lastSyncStatus === 'failed' && source.learning?.status !== 'failed' ? (
+            <p className="text-danger">{t.sourceSyncFailed}</p>
           ) : null}
-          <p>{t.sourceKnowledgeCount.replace('{{count}}', String(source.knowledgeItemCount))}</p>
-          <p>{t.sourceDerivedCount.replace('{{count}}', String(source.derivedUnderstandingCount))}</p>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <div className="rounded-lg bg-surface-muted px-3 py-2"><strong className="block text-base font-semibold text-fg">{source.knowledgeItemCount}</strong><span>{t.sourceKnowledgeMetric}</span></div>
+            <div className="rounded-lg bg-surface-muted px-3 py-2"><strong className="block text-base font-semibold text-fg">{source.derivedUnderstandingCount}</strong><span>{t.sourceUnderstandingMetric}</span></div>
+          </div>
         </div>
       ) : null}
-      {source.installed && source.instanceId ? <div className="mt-3 flex justify-end border-t border-edge-subtle pt-3"><Button type="button" variant="ghost" className="h-8 px-2 text-danger hover:bg-danger-soft hover:text-danger" onClick={(event) => { event.stopPropagation(); onDisconnect(); }}>{t.disconnect}</Button></div> : null}
     </article>
   );
 }
@@ -370,6 +451,12 @@ export function UserContextPage() {
   const connectedSources = data?.sources.filter((source) => source.installed && source.enabled) ?? [];
   const unhealthySources = connectedSources.filter((source) => ['failed', 'unauthorized', 'degraded', 'not_configured'].includes(source.status));
 
+  useEffect(() => {
+    const refresh = () => { void mutate(); };
+    window.addEventListener('connector-learning-updated', refresh);
+    return () => window.removeEventListener('connector-learning-updated', refresh);
+  }, [mutate]);
+
   async function saveRelationship(patch: RelationshipSettingsPatch) {
     if (!data || relationshipSaving) return;
     setRelationshipSaving(true);
@@ -396,6 +483,29 @@ export function UserContextPage() {
     const params = new URLSearchParams({ connector: source.id });
     if (source.instanceId) params.set('instance', source.instanceId);
     navigate(`/connectors?${params.toString()}`);
+  };
+
+  const runSourceLearning = async (source: PersonalContextSource) => {
+    if (!source.instanceId) return;
+    const operationId = `source-learning:${source.instanceId}`;
+    setBusyId(operationId);
+    try {
+      if (source.learning?.status === 'paused') {
+        await setConnectionLearningPaused(source.instanceId, false);
+      } else {
+        await startConnectionLearning(source.instanceId);
+      }
+      await mutate();
+      showToast({ type: 'success', title: source.displayName, message: t.sourceLearningStarted });
+    } catch (learningError) {
+      showToast({
+        type: 'error',
+        title: source.displayName,
+        message: learningError instanceof Error ? learningError.message : t.sourceLearningStartFailed,
+      });
+    } finally {
+      setBusyId(null);
+    }
   };
 
   useLayoutEffect(() => {
@@ -808,7 +918,7 @@ export function UserContextPage() {
         <div id="you-panel-sources" role="tabpanel" aria-labelledby="you-tab-sources" className="space-y-5">
           <div className="flex flex-wrap items-start justify-between gap-3"><div><div className="flex flex-wrap items-center gap-2"><h2 className="text-base font-semibold text-fg">{t.sourcesTitle}</h2><ContextBadge>{t.personalContextBadge}</ContextBadge></div></div><Button type="button" variant="primary" onClick={() => navigate('/connectors?tab=connected&personalContext=1')}>{t.manageSources}<ChevronRight className="size-4" aria-hidden /></Button></div>
           {data.sourceRecommendations.length > 0 ? <section className="rounded-2xl border border-accent/20 bg-accent-soft/25 p-5"><div className="flex flex-wrap items-center gap-2"><h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><Target className="size-4 text-accent" aria-hidden />{t.recommendationsTitle}</h2><ContextBadge>{t.permissionsBeforeConnectBadge}</ContextBadge></div><div className="mt-3 grid gap-2 lg:grid-cols-3">{data.sourceRecommendations.map((item) => <button key={item.sourceId} type="button" className="rounded-xl border border-edge-subtle bg-surface-panel p-3 text-left hover:border-accent/30 hover:bg-surface-hover" onClick={() => openSourceConfiguration({ id: item.sourceId })}><span className="text-sm font-semibold text-fg">{item.sourceName}</span><span className="mt-1 block text-xs leading-5 text-fg-muted">{t.recommendationReason.replace('{{goal}}', item.goalTitle)}</span></button>)}</div></section> : null}
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{data.sources.map((source) => <SourceCard key={`${source.id}:${source.instanceId ?? 'catalog'}`} source={source} language={language} t={t} onConfigure={() => openSourceConfiguration(source)} onDisconnect={() => setDisconnectSource(source)} />)}</div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{data.sources.map((source) => <SourceCard key={`${source.id}:${source.instanceId ?? 'catalog'}`} source={source} language={language} t={t} learningBusy={busyId === `source-learning:${source.instanceId}`} onConfigure={() => openSourceConfiguration(source)} onLearn={() => void runSourceLearning(source)} onDisconnect={() => setDisconnectSource(source)} />)}</div>
           {data.sources.length === 0 ? <div className="rounded-2xl border border-dashed border-edge p-8 text-center text-sm text-fg-muted">{t.noSources}</div> : null}
         </div>
       ) : null}

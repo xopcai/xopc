@@ -17,10 +17,10 @@ import {
   upsertConnectorInstallation,
 } from '../../storage/sqlite/index.js';
 import type { ComposioSessionsAdapter } from '../composio-sessions.js';
-import { syncComposioResultToMemory, syncLocalFolderToMemory } from '../connector-memory-sync.js';
+import { ingestComposioConnectedSource, ingestLocalFolderSource } from '../connected-source-ingestion.js';
 import { installConnector } from '../install.js';
 
-describe('connector memory sync', () => {
+describe('connected source ingestion', () => {
   let stateDir: string;
 
   beforeEach(() => {
@@ -69,7 +69,7 @@ describe('connector memory sync', () => {
         }],
       },
     }));
-    const result = await syncComposioResultToMemory({
+    const result = await ingestComposioConnectedSource({
       config: {} as Config,
       connectorId: 'composio-gmail',
       actionId: 'GMAIL_FETCH_EMAILS',
@@ -78,7 +78,8 @@ describe('connector memory sync', () => {
       adapter: { executeWithPolicy } as unknown as ComposioSessionsAdapter,
     });
     expect(executeWithPolicy).toHaveBeenCalledOnce();
-    const memory = getMemoryRecord(result.recordId);
+    const [recordId] = result.recordIds;
+    const memory = getMemoryRecord(recordId!);
     expect(memory).toMatchObject({
       kind: 'workspace_fact',
       status: 'active',
@@ -100,7 +101,7 @@ describe('connector memory sync', () => {
         people: ['lead@example.com', 'planning@example.com', 'Planning Team'],
       },
     });
-    expect(listMemoryEvidence(result.recordId)[0]).toMatchObject({
+    expect(listMemoryEvidence(recordId!)[0]).toMatchObject({
       sourceItemId: sourceItem?.id,
       relation: 'derived_from',
     });
@@ -115,7 +116,7 @@ describe('connector memory sync', () => {
       decision: 'allowed' as const,
       result: { messages: [{ subject: 'Quarterly plan approved' }] },
     });
-    const updated = await syncComposioResultToMemory({
+    const updated = await ingestComposioConnectedSource({
       config: {} as Config,
       connectorId: 'composio-gmail',
       actionId: 'GMAIL_FETCH_EMAILS',
@@ -123,14 +124,14 @@ describe('connector memory sync', () => {
       agentId: 'main',
       adapter: { executeWithPolicy } as unknown as ComposioSessionsAdapter,
     });
-    expect(updated.recordId).toBe(result.recordId);
+    expect(updated.recordIds).toEqual([recordId]);
     expect(listKnowledgeSourceItems()).toHaveLength(1);
     expect(listKnowledgeSyncRuns()[0]).toMatchObject({ itemsCreated: 0, itemsUpdated: 1 });
-    expect(getMemoryRecord(updated.recordId)?.content).toContain('Quarterly plan approved');
+    expect(getMemoryRecord(recordId!)?.content).toContain('Quarterly plan approved');
   });
 
   it('rejects write actions from the memory ingestion path', async () => {
-    await expect(syncComposioResultToMemory({
+    await expect(ingestComposioConnectedSource({
       config: {} as Config,
       connectorId: 'composio-gmail',
       actionId: 'GMAIL_SEND_EMAIL',
@@ -164,10 +165,10 @@ describe('connector memory sync', () => {
     });
     const executeWithPolicy = vi.fn(async () => ({
       decision: 'allowed' as const,
-      result: { items: [{ id: 'commit-1', message: 'Ship connector memory sync' }] },
+      result: { items: [{ id: 'commit-1', message: 'Ship connected source learning' }] },
     }));
 
-    await syncComposioResultToMemory({
+    await ingestComposioConnectedSource({
       config: {} as Config,
       connectorId: 'composio-github',
       actionId: 'GITHUB_LIST_COMMITS',
@@ -212,7 +213,7 @@ describe('connector memory sync', () => {
       result: { items: [{ id: 'XOPC-42', title: 'Build the connector knowledge pipeline', assignee: { email: 'owner@example.com' } }] },
     }));
 
-    await syncComposioResultToMemory({
+    await ingestComposioConnectedSource({
       config: {} as Config,
       connectorId: 'composio-linear',
       actionId: 'LINEAR_LIST_ISSUES',
@@ -235,7 +236,7 @@ describe('connector memory sync', () => {
     const config = {} as Config;
     await installConnector(config, 'local-files', { config: { rootPath: notesPath } });
 
-    const result = await syncLocalFolderToMemory({ config, connectorId: 'local-files', agentId: 'main' });
+    const result = await ingestLocalFolderSource({ config, connectorId: 'local-files', agentId: 'main' });
 
     expect(result.recordIds).toHaveLength(1);
     expect(listKnowledgeSourceItems()).toContainEqual(expect.objectContaining({
@@ -249,7 +250,7 @@ describe('connector memory sync', () => {
     });
 
     unlinkSync(join(notesPath, 'profile.md'));
-    await syncLocalFolderToMemory({ config, connectorId: 'local-files', agentId: 'main' });
+    await ingestLocalFolderSource({ config, connectorId: 'local-files', agentId: 'main' });
 
     expect(listKnowledgeSourceItems({ includeDeleted: true })).toContainEqual(expect.objectContaining({
       externalId: 'profile.md',
@@ -262,7 +263,7 @@ describe('connector memory sync', () => {
     writeFileSync(restoredPath, '# Preferences\nThe user prefers concise status updates and weekly summaries.');
     const future = new Date(Date.now() + 1_000);
     utimesSync(restoredPath, future, future);
-    await syncLocalFolderToMemory({ config, connectorId: 'local-files', agentId: 'main' });
+    await ingestLocalFolderSource({ config, connectorId: 'local-files', agentId: 'main' });
 
     expect(listKnowledgeSourceItems()).toContainEqual(expect.objectContaining({
       externalId: 'profile.md',

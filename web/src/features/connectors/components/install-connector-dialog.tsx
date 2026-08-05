@@ -17,10 +17,12 @@ import {
   getComposioSetupStatus,
   installConnector,
   installStoreConnector,
+  startConnectionLearning,
   startConnectorAuthorization,
   testConnector,
   type ConnectorHealthResult,
   type ConnectorInstance,
+  waitForActiveComposioConnection,
 } from '../connectors-api';
 import { ConnectorLogo } from './connector-logo';
 import type { InstallDraft } from './install-connector-draft';
@@ -100,6 +102,7 @@ export function InstallConnectorDialog({
   const [composioSetupLoading, setComposioSetupLoading] = useState(isComposioToolkit);
   const [composioApiKey, setComposioApiKey] = useState('');
   const [composioSetupError, setComposioSetupError] = useState<string | null>(null);
+  const [learnAfterConnect, setLearnAfterConnect] = useState(true);
 
   useEffect(() => {
     if (!isComposioToolkit) return;
@@ -148,6 +151,8 @@ export function InstallConnectorDialog({
             : null;
           if (existingHealth?.status === 'connected') {
             authWindow?.close();
+            const connection = await waitForActiveComposioConnection(composioToolkit!);
+            if (learnAfterConnect) await startConnectionLearning(connection.id);
           } else {
             const authorization = await startConnectorAuthorization(connector.id);
             if (!authorization.authorizationUrl) throw new Error('The connection service did not return an authorization URL.');
@@ -159,6 +164,9 @@ export function InstallConnectorDialog({
             } else {
               window.open(authorization.authorizationUrl, '_blank', 'noopener,noreferrer');
             }
+            const connection = await waitForActiveComposioConnection(composioToolkit!, authorization.connectionId);
+            authWindow?.close();
+            if (learnAfterConnect) await startConnectionLearning(connection.id);
           }
         }
       } catch (error) {
@@ -190,7 +198,7 @@ export function InstallConnectorDialog({
         error: error instanceof Error ? error.message : String(error),
       });
     }
-  }, [composioApiKey, composioConfigured, composioToolkit, connector, draft, isComposioToolkit, onChange, onInstalled]);
+  }, [composioApiKey, composioConfigured, composioToolkit, connector, draft, isComposioToolkit, learnAfterConnect, onChange, onInstalled]);
 
   return (
     <Dialog.Root open onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -198,7 +206,7 @@ export function InstallConnectorDialog({
         <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[60] bg-scrim" />
         <Dialog.Content
           className={cn(
-            'xopc-dialog-content fixed left-1/2 top-1/2 z-[60] flex max-h-[min(100vh-2rem,44rem)] w-[min(100%-2rem,min(92vw,48rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden',
+            'xopc-dialog-content fixed left-1/2 top-1/2 z-[60] flex h-[min(100vh-2rem,44rem)] w-[min(100%-2rem,min(92vw,48rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden',
             'rounded-2xl border border-edge bg-surface-panel shadow-float dark:border-edge',
           )}
         >
@@ -280,6 +288,20 @@ export function InstallConnectorDialog({
               />
               <p className="mt-2 text-[11px] text-fg-subtle">{t.composioSetupStorageHint}</p>
             </section>
+          ) : null}
+          {isComposioToolkit ? (
+            <label className="flex items-start gap-3 rounded-2xl border border-edge bg-surface-base p-4">
+              <input
+                type="checkbox"
+                className="mt-0.5 size-4 accent-accent"
+                checked={learnAfterConnect}
+                onChange={(event) => setLearnAfterConnect(event.currentTarget.checked)}
+              />
+              <span>
+                <span className="block text-sm font-medium text-fg">{t.learnAfterConnect}</span>
+                <span className="mt-1 block text-xs leading-5 text-fg-muted">{t.learnAfterConnectHint}</span>
+              </span>
+            </label>
           ) : null}
           {draft.store ? (
             <section className="rounded-2xl border border-edge bg-surface-base p-4">

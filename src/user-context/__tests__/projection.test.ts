@@ -230,6 +230,78 @@ describe('user context projection', () => {
     );
   });
 
+  it('attributes cross-source understanding through evidence and exposes learning progress', () => {
+    const definitions = [{
+      id: 'composio-gmail', displayName: 'Gmail', description: 'Gmail access', category: 'data',
+      capabilities: ['context', 'memory_source'],
+    }] as ConnectorDefinition[];
+    const connections = [{
+      id: 'work', connectorId: 'composio-gmail', provider: 'composio', principalId: 'local-owner',
+      providerConnectionId: 'provider-work', identity: {}, status: 'active', isDefault: true,
+      metadata: {}, createdAt: '2026-08-01T00:00:00.000Z', updatedAt: '2026-08-01T00:00:00.000Z',
+    }] as ConnectorConnection[];
+    const sourceItems = [{
+      id: 'gmail-item', sourceInstanceId: 'composio:composio-gmail:work', externalId: 'message-1',
+      itemType: 'email', contentHash: 'hash', metadata: {}, sensitivity: 'personal', retentionClass: 'bounded',
+      synthesisPipeline: 'connected_knowledge', synthesisStatus: 'completed', synthesisAttempts: 1,
+      createdAt: '2026-08-01T00:00:00.000Z', updatedAt: '2026-08-01T00:00:00.000Z',
+    }] as KnowledgeSourceItem[];
+    const crossSource = record({
+      source: { provider: 'connected-sources' },
+      evidence: [{ sourceItemId: 'gmail-item', relation: 'supports' }],
+    });
+    const learningJobs = [{
+      id: 'job-1', idempotencyKey: 'bootstrap:work:v1', connectorId: 'composio-gmail', connectionId: 'work',
+      sourceInstanceId: 'composio:composio-gmail:work', agentId: 'main', mode: 'bootstrap', status: 'running',
+      phase: 'deriving', itemsDiscovered: 12, itemsIndexed: 10, candidatesCreated: 1, attemptCount: 1,
+      createdAt: '2026-08-01T00:00:00.000Z', updatedAt: '2026-08-01T00:01:00.000Z',
+    }] as Parameters<typeof projectPersonalContextSources>[3]['learningJobs'];
+
+    const [source] = projectPersonalContextSources(definitions, [], [crossSource], {
+      connections, sourceItems, learningJobs,
+    });
+    expect(source).toMatchObject({
+      derivedUnderstandingCount: 1,
+      learning: { status: 'running', phase: 'deriving', itemsIndexed: 10 },
+    });
+  });
+
+  it('does not let an older learning failure override a newer successful run', () => {
+    const definitions = [{
+      id: 'composio-gmail', displayName: 'Gmail', description: 'Gmail access', category: 'data',
+      capabilities: ['context', 'memory_source'],
+    }] as ConnectorDefinition[];
+    const connections = [{
+      id: 'work', connectorId: 'composio-gmail', provider: 'composio', principalId: 'local-owner',
+      providerConnectionId: 'provider-work', identity: {}, status: 'active', isDefault: true,
+      metadata: {}, createdAt: '2026-08-01T00:00:00.000Z', updatedAt: '2026-08-01T00:00:00.000Z',
+    }] as ConnectorConnection[];
+    const learningJobs = [
+      {
+        id: 'scheduled', idempotencyKey: 'scheduled:work', status: 'queued', phase: 'queued',
+        createdAt: '2026-08-03T00:00:00.000Z', updatedAt: '2026-08-03T00:00:00.000Z',
+        nextRunAt: '2099-01-01T00:00:00.000Z',
+      },
+      {
+        id: 'completed', idempotencyKey: 'manual:work', status: 'completed', phase: 'completed',
+        createdAt: '2026-08-02T00:00:00.000Z', updatedAt: '2026-08-02T00:01:00.000Z',
+      },
+      {
+        id: 'failed', idempotencyKey: 'bootstrap:work', status: 'failed', phase: 'fetching',
+        error: 'connected_account_unavailable', createdAt: '2026-08-01T00:00:00.000Z', updatedAt: '2026-08-01T00:01:00.000Z',
+      },
+    ].map((job) => ({
+      connectorId: 'composio-gmail', connectionId: 'work', sourceInstanceId: 'composio:composio-gmail:work',
+      agentId: 'main', mode: 'incremental', itemsDiscovered: 0, itemsIndexed: 0, candidatesCreated: 0,
+      attemptCount: 1, ...job,
+    })) as Parameters<typeof projectPersonalContextSources>[3]['learningJobs'];
+
+    const [source] = projectPersonalContextSources(definitions, [], [], { connections, learningJobs });
+
+    expect(source.learning).toMatchObject({ status: 'completed', phase: 'completed' });
+    expect(source.learning?.error).toBeUndefined();
+  });
+
   it('numbers multiple Composio accounts when identity labels are unavailable', () => {
     const definitions = [{
       id: 'composio-gmail', displayName: 'Gmail', description: 'Gmail access', category: 'data',
@@ -264,5 +336,33 @@ describe('user context projection', () => {
       { instanceId: 'older', accountLabel: undefined, accountOrdinal: 1, accountCount: 2 },
       { instanceId: 'newer', accountLabel: undefined, accountOrdinal: 2, accountCount: 2 },
     ]);
+  });
+
+  it('hides abandoned pending accounts when an active account exists', () => {
+    const definitions = [{
+      id: 'composio-github', displayName: 'GitHub', description: 'GitHub access', category: 'code',
+      capabilities: ['context', 'memory_source'],
+    }] as ConnectorDefinition[];
+    const connections = [
+      { id: 'pending', status: 'pending' },
+      { id: 'active', status: 'active' },
+    ].map(({ id, status }) => ({
+      id,
+      connectorId: 'composio-github',
+      provider: 'composio',
+      principalId: 'local-owner',
+      providerConnectionId: `provider-${id}`,
+      identity: {},
+      status,
+      isDefault: id === 'active',
+      metadata: {},
+      createdAt: '2026-08-01T00:00:00.000Z',
+      updatedAt: '2026-08-01T00:00:00.000Z',
+    })) as ConnectorConnection[];
+
+    const sources = projectPersonalContextSources(definitions, [], [], { connections });
+
+    expect(sources).toHaveLength(1);
+    expect(sources[0]).toMatchObject({ instanceId: 'active', enabled: true, status: 'active' });
   });
 });

@@ -20,6 +20,7 @@ import {
   getUserTrustPolicy,
   listKnowledgeSourceItems,
   listKnowledgeSyncRuns,
+  listConnectorLearningJobs,
   getConnectorConnection,
   listConnectorConnections,
   listMemoryRecords,
@@ -368,6 +369,7 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
       sourceItems: listKnowledgeSourceItems({ limit: 500 }),
       syncRuns: listKnowledgeSyncRuns({ limit: 500 }),
       connections: listConnectorConnections({ principalId: 'local-owner' }),
+      learningJobs: listConnectorLearningJobs({ limit: 500 }),
     });
     const activeGoals = new GoalService().list({
       agentId,

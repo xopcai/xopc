@@ -10,6 +10,7 @@ import {
   listConnectorExecutionAudit,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
+  upsertConnectorConnection,
   upsertConnectorInstallation,
 } from '../../storage/sqlite/index.js';
 import {
@@ -132,5 +133,50 @@ describe('ComposioSessionsAdapter', () => {
       'allowed',
       'confirmation_required',
     ]);
+  });
+
+  it('executes a connection with the provider identity that owns the account', async () => {
+    const installation = upsertConnectorInstallation({
+      id: 'install-1',
+      connectorId: 'composio-gmail',
+      principalId: 'owner',
+      enabled: true,
+      allowedAgentIds: ['main'],
+      maxScope: 'read',
+      confirmationPolicy: 'never',
+      selectedConnectionIds: [],
+    });
+    const connection = upsertConnectorConnection({
+      id: 'gmail-work',
+      installationId: installation.id,
+      connectorId: installation.connectorId,
+      provider: 'composio',
+      principalId: 'owner',
+      providerConnectionId: 'ca_work',
+      identity: {},
+      status: 'active',
+      isDefault: true,
+      metadata: { toolkit: 'gmail', providerPrincipalId: 'xopc_provider_owner' },
+    });
+    const adapter = new ComposioSessionsAdapter({ clientFactory: async () => client });
+
+    await expect(adapter.executeWithPolicy({
+      context: { principalId: 'owner', installationScope: stateDir },
+      installation,
+      connection,
+      action: {
+        connectorId: installation.connectorId,
+        actionId: 'GMAIL_FETCH_EMAILS',
+        toolkit: 'gmail',
+        scope: 'read',
+        curated: true,
+        cachedAt: new Date().toISOString(),
+      },
+      agentId: 'main',
+      confirmed: true,
+    })).resolves.toMatchObject({ decision: 'allowed' });
+
+    expect(client.sessions.create).toHaveBeenCalledWith('xopc_provider_owner', expect.any(Object));
+    expect(session.execute).toHaveBeenCalledWith('GMAIL_FETCH_EMAILS', {}, { account: 'ca_work' });
   });
 });

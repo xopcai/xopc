@@ -78,21 +78,22 @@ export function normalizeComposioTriggerPayload(payload: unknown, webhookId?: st
   };
 }
 
-export function applyComposioConnectionLifecycleEvent(payload: unknown): void {
+export function applyComposioConnectionLifecycleEvent(payload: unknown): string | undefined {
   const normalized = normalizeComposioTriggerPayload(payload);
-  if (normalized.type !== 'composio.connected_account.expired' && normalized.type !== 'composio.connected_account.deleted') return;
+  if (normalized.type !== 'composio.connected_account.expired' && normalized.type !== 'composio.connected_account.deleted') return undefined;
   const providerConnectionId = readString(normalized.data.id ?? normalized.data.nanoid ?? normalized.data.connected_account_id);
-  if (!providerConnectionId) return;
+  if (!providerConnectionId) return undefined;
   const connection = listConnectorConnections().find((candidate) => (
     candidate.provider === 'composio' && candidate.providerConnectionId === providerConnectionId
   ));
-  if (!connection) return;
+  if (!connection) return undefined;
   upsertConnectorConnection({
     ...connection,
     status: normalized.type.endsWith('.deleted') ? 'revoked' : 'expired',
     isDefault: false,
     lastError: normalized.type.endsWith('.deleted') ? 'Connection was removed in Composio.' : 'Connection expired and requires authorization.',
   });
+  return connection.id;
 }
 
 export async function appendComposioTriggerEvent(config: Config, payload: unknown): Promise<ComposioTriggerArchiveEntry> {

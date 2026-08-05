@@ -171,7 +171,9 @@ export class UserUnderstandingService {
       agentId?: string;
       sessionKey?: string;
       sourceItemId?: string;
+      sourceItemIds?: string[];
       sourceText?: string;
+      source?: MemoryRecord['source'];
       reviewSource?: 'turn' | 'background';
       supersedesRecordIds?: string[];
     },
@@ -205,21 +207,25 @@ export class UserUnderstandingService {
         ? correctionTargets[0]
         : undefined;
       const existing = await this.options.list(key);
-      const evidence: MemoryEvidence = {
-        ...(context.sourceItemId ? { sourceItemId: context.sourceItemId } : {}),
+      const sourceItemIds = [...new Set([
+        ...(context.sourceItemId ? [context.sourceItemId] : []),
+        ...(context.sourceItemIds ?? []),
+      ])];
+      const evidence: MemoryEvidence[] = (sourceItemIds.length ? sourceItemIds : [undefined]).map((sourceItemId) => ({
+        ...(sourceItemId ? { sourceItemId } : {}),
         relation: 'supports',
         ...(context.sessionKey ? { sessionKey: context.sessionKey } : {}),
         ...(evidenceText ? { sourceText: evidenceText } : {}),
         observedAt: new Date().toISOString(),
         confidence: candidate.confidence,
-      };
+      }));
       if (existing[0]) {
         deduplicated += 1;
         recordIds.push(existing[0].id);
-        if (context.sourceItemId) {
+        for (const sourceItemId of sourceItemIds) {
           attachMemoryEvidence({
             recordId: existing[0].id,
-            sourceItemId: context.sourceItemId,
+            sourceItemId,
             relation: 'supports',
             excerpt: evidenceText,
             confidence: candidate.confidence,
@@ -236,7 +242,7 @@ export class UserUnderstandingService {
           : undefined,
         target: candidate.kind === 'preference' ? 'user' : 'memory',
         tags: [...new Set(['user-understanding', ...(candidate.tags ?? [])])],
-        source: { provider: 'user-understanding' },
+        source: context.source ?? { provider: 'user-understanding' },
         confidence: candidate.confidence,
         status: 'candidate',
         sensitivity,
@@ -244,7 +250,7 @@ export class UserUnderstandingService {
         durability: candidate.durability,
         importance: candidate.importance,
         disclosurePolicy: candidate.disclosurePolicy,
-        evidence: [evidence],
+        evidence,
         validFrom: candidate.validFrom,
         validTo: candidate.validTo,
         reviewAfter: nextMemoryReviewAt({
@@ -260,10 +266,10 @@ export class UserUnderstandingService {
           recordIds.push(write.record.id);
           createdRecords.push({ id: write.record.id, content: write.record.content, kind: write.record.kind });
         }
-        if (write.record && context.sourceItemId) {
+        for (const sourceItemId of write.record ? sourceItemIds : []) {
           attachMemoryEvidence({
             recordId: write.record.id,
-            sourceItemId: context.sourceItemId,
+            sourceItemId,
             relation: 'supports',
             excerpt: evidenceText,
             confidence: candidate.confidence,

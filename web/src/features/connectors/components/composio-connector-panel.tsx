@@ -1,4 +1,4 @@
-import { Check, Database, KeyRound, Loader2, RefreshCw, Star, Trash2, X } from 'lucide-react';
+import { Check, KeyRound, Loader2, Pause, Play, RefreshCw, Star, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -11,8 +11,8 @@ import {
   getComposioScope,
   getComposioPolicy,
   getComposioHealth,
-  getComposioMemorySyncProfile,
   listConnectorApprovals,
+  listConnectorLearningJobs,
   listComposioConnections,
   listComposioTools,
   listComposioTriggerEvents,
@@ -20,10 +20,10 @@ import {
   respondConnectorApproval,
   revokeComposioConnection,
   setComposioScope,
+  setConnectionLearningPaused,
   startConnectorAuthorization,
-  syncComposioMemory,
+  startConnectionLearning,
   updateComposioConnection,
-  updateComposioMemorySyncProfile,
   updateComposioPolicy,
   type ComposioConnection,
   type ComposioInstallationPolicy,
@@ -34,6 +34,8 @@ import {
   type ConnectorApproval,
   type ConnectorAgentOption,
   type ConnectorInstance,
+  type ConnectorLearningJob,
+  waitForActiveComposioConnection,
 } from '../connectors-api';
 import { formatConnectorMessage } from '../utils/connector-i18n';
 import { Select, SelectOption } from '@/components/ui/popover-select';
@@ -80,13 +82,8 @@ export function ComposioConnectorPanel({
   const [approvals, setApprovals] = useState<ConnectorApproval[]>([]);
   const [policy, setPolicy] = useState<ComposioInstallationPolicy | null>(null);
   const [agents, setAgents] = useState<ConnectorAgentOption[]>([]);
-  const [memoryAction, setMemoryAction] = useState('');
-  const [memoryArguments, setMemoryArguments] = useState('{}');
-  const [memorySynced, setMemorySynced] = useState<string | null>(null);
-  const [memoryAutoSync, setMemoryAutoSync] = useState(false);
-  const [memoryTriggerSync, setMemoryTriggerSync] = useState(true);
-  const [memoryIntervalMinutes, setMemoryIntervalMinutes] = useState('15');
   const [health, setHealth] = useState<ComposioConnectorHealth | null>(null);
+  const [learningJobs, setLearningJobs] = useState<ConnectorLearningJob[]>([]);
   const [scope, setScope] = useState<ComposioScope>('read');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -96,7 +93,7 @@ export function ComposioConnectorPanel({
     setLoading(true);
     setError(null);
     try {
-      const [nextConnections, nextTools, nextEvents, nextScope, nextApprovals, nextPolicy, nextHealth, nextMemoryProfile] = await Promise.all([
+      const [nextConnections, nextTools, nextEvents, nextScope, nextApprovals, nextPolicy, nextHealth, nextLearningJobs] = await Promise.all([
         listComposioConnections().catch(() => []),
         listComposioTools(toolkit).catch(() => []),
         listComposioTriggerEvents(20).catch(() => []),
@@ -104,7 +101,7 @@ export function ComposioConnectorPanel({
         listConnectorApprovals().catch(() => []),
         getComposioPolicy(toolkit).catch(() => null),
         getComposioHealth(toolkit).catch(() => null),
-        getComposioMemorySyncProfile(instance.connectorId).catch(() => null),
+        listConnectorLearningJobs().catch(() => []),
       ]);
       setConnections(nextConnections.filter((connection) => connection.toolkit.toLowerCase() === toolkit.toLowerCase()));
       setTools(nextTools);
@@ -113,12 +110,8 @@ export function ComposioConnectorPanel({
       setApprovals(nextApprovals.filter((approval) => approval.connectorId === instance.connectorId));
       setPolicy(nextPolicy?.policy ?? null);
       setAgents(nextPolicy?.agents ?? []);
-      setMemoryAction(nextMemoryProfile?.actionId ?? nextTools.find((tool) => tool.scope === 'read' && tool.curated)?.slug ?? '');
-      setMemoryArguments(nextMemoryProfile ? JSON.stringify(nextMemoryProfile.arguments) : '{}');
-      setMemoryAutoSync(nextMemoryProfile?.enabled ?? false);
-      setMemoryTriggerSync(nextMemoryProfile?.triggerSync ?? true);
-      setMemoryIntervalMinutes(String(nextMemoryProfile?.intervalMinutes ?? 15));
       setHealth(nextHealth);
+      setLearningJobs(nextLearningJobs);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : String(loadError));
     } finally {
@@ -143,12 +136,16 @@ export function ComposioConnectorPanel({
       } else {
         window.open(result.authorizationUrl, '_blank', 'noopener,noreferrer');
       }
+      const connection = await waitForActiveComposioConnection(toolkit, result.connectionId);
+      await startConnectionLearning(connection.id);
+      await onChanged?.();
+      await loadComposio();
     } catch (authorizeError) {
       setError(authorizeError instanceof Error ? authorizeError.message : String(authorizeError));
     } finally {
       setLoading(false);
     }
-  }, [instance.connectorId, toolkit]);
+  }, [instance.connectorId, loadComposio, onChanged, toolkit]);
 
   const updateScope = useCallback(async (nextScope: ComposioScope) => {
     if (!toolkit) return;
@@ -204,72 +201,6 @@ export function ComposioConnectorPanel({
       setLoading(false);
     }
   }, [loadComposio]);
-
-  const syncMemory = useCallback(async () => {
-    if (!toolkit || !memoryAction) return;
-    setLoading(true);
-    setError(null);
-    setMemorySynced(null);
-    try {
-      const parsed = JSON.parse(memoryArguments) as unknown;
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error(t.composioMemoryArgumentsObject);
-      const agentId = policy?.allowedAgentIds[0] ?? agents[0]?.id;
-      if (!agentId) throw new Error(t.composioMemoryAgentMissing);
-      const result = await syncComposioMemory({
-        connectorId: instance.connectorId,
-        actionId: memoryAction,
-        agentId,
-        connectionId: connections.find((connection) => connection.isDefault)?.id,
-        arguments: parsed as Record<string, unknown>,
-      });
-      setMemorySynced(result.recordId);
-      await onChanged?.();
-    } catch (syncError) {
-      setError(syncError instanceof Error ? syncError.message : String(syncError));
-    } finally {
-      setLoading(false);
-    }
-  }, [agents, connections, instance.connectorId, memoryAction, memoryArguments, onChanged, policy, t, toolkit]);
-
-  const saveMemoryProfile = useCallback(async () => {
-    if (!toolkit || !memoryAction) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const parsed = JSON.parse(memoryArguments) as unknown;
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error(t.composioMemoryArgumentsObject);
-      const agentId = policy?.allowedAgentIds[0] ?? agents[0]?.id;
-      if (!agentId) throw new Error(t.composioMemoryAgentMissing);
-      const profile = await updateComposioMemorySyncProfile(instance.connectorId, {
-        enabled: memoryAutoSync,
-        actionId: memoryAction,
-        arguments: parsed as Record<string, unknown>,
-        agentId,
-        connectionId: connections.find((connection) => connection.isDefault)?.id,
-        intervalMinutes: Number(memoryIntervalMinutes),
-        triggerSync: memoryTriggerSync,
-      });
-      setMemoryIntervalMinutes(String(profile.intervalMinutes));
-      await onChanged?.();
-    } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : String(saveError));
-    } finally {
-      setLoading(false);
-    }
-  }, [
-    agents,
-    connections,
-    instance.connectorId,
-    memoryAction,
-    memoryArguments,
-    memoryAutoSync,
-    memoryIntervalMinutes,
-    memoryTriggerSync,
-    onChanged,
-    policy,
-    t,
-    toolkit,
-  ]);
 
   if (!toolkit) return null;
   if (instance.materialized.type === 'composio' && instance.materialized.role === 'credential') {
@@ -366,41 +297,6 @@ export function ComposioConnectorPanel({
           </div>
         </div>
       ) : null}
-      {[
-        'gmail', 'googlecalendar', 'googledrive', 'googledocs', 'googlesheets', 'notion',
-        'slack', 'github', 'linear', 'jira', 'outlook', 'microsoft_teams', 'one_drive', 'excel',
-      ].includes(toolkit) && tools.some((tool) => tool.scope === 'read' && tool.curated) ? (
-        <div className="mt-4 rounded-lg border border-edge bg-surface-panel p-3">
-          <div className="flex items-start gap-2">
-            <Database className="mt-0.5 size-4 text-accent" />
-            <div>
-              <p className="text-sm font-medium text-fg">{t.composioMemorySync}</p>
-              <p className="text-xs text-fg-muted">{t.composioMemorySyncHint}</p>
-            </div>
-          </div>
-          <div className="mt-3 flex flex-wrap items-center gap-3">
-            <Button disabled={loading || !memoryAction} onClick={() => void syncMemory()}>
-              {loading ? <Loader2 className="size-4 animate-spin" /> : <Database className="size-4" />}
-              {t.composioSyncNow}
-            </Button>
-          </div>
-          {memorySynced ? <p className="mt-2 text-xs text-emerald-600">{t.composioMemorySyncedSimple}</p> : null}
-          <div className="mt-3 flex flex-wrap items-end gap-3 border-t border-edge-subtle pt-3">
-            <label className="flex items-center gap-2 text-xs text-fg-muted">
-              <input type="checkbox" checked={memoryAutoSync} onChange={(event) => setMemoryAutoSync(event.currentTarget.checked)} />
-              {t.composioMemoryAutoSync}
-            </label>
-            <label className="flex items-center gap-2 text-xs text-fg-muted">
-              <input type="checkbox" checked={memoryTriggerSync} onChange={(event) => setMemoryTriggerSync(event.currentTarget.checked)} />
-              {t.composioMemoryTriggerSync}
-            </label>
-            <Button variant="secondary" disabled={loading || !memoryAction} onClick={() => void saveMemoryProfile()}>
-              {loading ? <Loader2 className="size-4 animate-spin" /> : <Database className="size-4" />}
-              {t.composioMemorySaveSchedule}
-            </Button>
-          </div>
-        </div>
-      ) : null}
       {approvals.length ? (
         <div className="mt-4 space-y-2">
           <p className="text-xs font-medium uppercase tracking-wide text-fg-subtle">{t.composioPendingApprovals}</p>
@@ -428,6 +324,14 @@ export function ComposioConnectorPanel({
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-fg-subtle">{t.composioConnections}</p>
           {connections.length ? connections.map((connection) => (
             <div key={connection.id} className="space-y-2 rounded-lg border border-edge bg-surface-panel p-2">
+              {(() => {
+                const learning = learningJobs.find((job) => job.connectionId === connection.id);
+                return learning ? (
+                  <p className={cn('text-xs', learning.status === 'failed' ? 'text-red-600' : 'text-fg-subtle')}>
+                    {formatConnectorMessage(t.connectorLearningStatus, { status: learning.status, count: String(learning.candidatesCreated) })}
+                  </p>
+                ) : null;
+              })()}
               <div>
                 <p className="truncate font-mono text-xs text-fg">{connection.accountEmail ?? connection.username ?? connection.workspace ?? connection.providerConnectionId}</p>
                 <p className="text-xs text-fg-subtle">{connection.status}{connection.isDefault ? ` · ${t.composioDefaultAccount}` : ''}</p>
@@ -466,6 +370,34 @@ export function ComposioConnectorPanel({
                   }}
                 ><Trash2 className="size-4 text-red-500" /></Button>
               </div>
+              {connection.status === 'active' ? (
+                <div className="flex gap-2">
+                  <Button
+                    variant="secondary"
+                    className="flex-1"
+                    disabled={loading}
+                    onClick={() => void mutateConnection(async () => {
+                      await startConnectionLearning(connection.id);
+                      await onChanged?.();
+                    })}
+                  >
+                    {loading ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+                    {t.composioSyncNow}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    disabled={loading || !learningJobs.some((job) => job.connectionId === connection.id)}
+                    onClick={() => void mutateConnection(async () => {
+                      const paused = learningJobs.find((job) => job.connectionId === connection.id)?.status !== 'paused';
+                      await setConnectionLearningPaused(connection.id, paused);
+                    })}
+                  >
+                    {learningJobs.find((job) => job.connectionId === connection.id)?.status === 'paused'
+                      ? <><Play className="size-4" />{t.connectorLearningResume}</>
+                      : <><Pause className="size-4" />{t.connectorLearningPause}</>}
+                  </Button>
+                </div>
+              ) : null}
             </div>
           )) : <p className="text-xs text-fg-muted">{t.composioConnectionsEmpty}</p>}
         </div>
@@ -481,22 +413,6 @@ export function ComposioConnectorPanel({
                 <SelectOption value="write">{t.composioScopeWrite}</SelectOption>
                 <SelectOption value="admin">{t.composioScopeAdmin}</SelectOption>
               </Select>
-            </label>
-            <label className="block text-xs text-fg-subtle">
-              {t.composioMemoryReadAction}
-              <Select className={cn(inputClass, 'mt-1 h-9 py-1')} value={memoryAction} onChange={(event) => setMemoryAction(event.currentTarget.value)}>
-                {tools.filter((tool) => tool.scope === 'read' && tool.curated).map((tool) => (
-                  <SelectOption key={tool.slug} value={tool.slug}>{tool.name ?? tool.slug}</SelectOption>
-                ))}
-              </Select>
-            </label>
-            <label className="block text-xs text-fg-subtle">
-              {t.composioMemoryArguments}
-              <input className={cn(inputClass, 'mt-1 h-9 py-1 font-mono text-xs')} value={memoryArguments} onChange={(event) => setMemoryArguments(event.currentTarget.value)} />
-            </label>
-            <label className="block text-xs text-fg-subtle">
-              {t.composioMemoryInterval}
-              <input type="number" min={5} max={1440} className={cn(inputClass, 'mt-1 h-9 w-28 py-1')} value={memoryIntervalMinutes} onChange={(event) => setMemoryIntervalMinutes(event.currentTarget.value)} />
             </label>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">

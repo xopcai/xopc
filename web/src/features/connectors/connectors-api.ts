@@ -263,14 +263,15 @@ export type ComposioConnection = {
   lastError?: string;
 };
 
-export type ComposioMemorySyncProfile = {
-  enabled: boolean;
-  actionId: string;
-  arguments: Record<string, unknown>;
-  agentId: string;
-  connectionId?: string;
-  intervalMinutes: number;
-  triggerSync: boolean;
+export type ConnectorLearningJob = {
+  id: string;
+  connectionId: string;
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'paused';
+  phase: 'queued' | 'fetching' | 'indexing' | 'deriving' | 'completed';
+  itemsDiscovered: number;
+  itemsIndexed: number;
+  candidatesCreated: number;
+  error?: string;
   updatedAt: string;
 };
 
@@ -513,6 +514,25 @@ export async function listComposioConnections(): Promise<ComposioConnection[]> {
   return requirePayload(response, 'Could not load Composio connections.').connections;
 }
 
+export async function waitForActiveComposioConnection(
+  toolkit: string,
+  providerConnectionId?: string,
+  timeoutMs = 120_000,
+): Promise<ComposioConnection> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const connection = (await listComposioConnections().catch(() => []))
+      .find((item) => (
+        item.toolkit.toLowerCase() === toolkit.toLowerCase()
+        && item.status === 'active'
+        && (!providerConnectionId || item.providerConnectionId === providerConnectionId)
+      ));
+    if (connection) return connection;
+    await new Promise((resolve) => window.setTimeout(resolve, 2_000));
+  }
+  throw new Error('Connection authorization timed out.');
+}
+
 export async function updateComposioConnection(
   id: string,
   patch: { alias?: string; isDefault?: boolean },
@@ -595,46 +615,36 @@ export async function executeComposioTool(slug: string, args: unknown): Promise<
   return requirePayload(response, 'Could not execute Composio tool.').result;
 }
 
-export async function syncComposioMemory(input: {
-  connectorId: string;
-  actionId: string;
-  agentId: string;
-  connectionId?: string;
-  arguments?: Record<string, unknown>;
-}): Promise<{ recordId: string }> {
-  const response = await fetchJson<ApiEnvelope<{ recordId: string }>>(
-    apiUrl(`/api/connectors/${encodeURIComponent(input.connectorId)}/memory-sync`),
-    { method: 'POST', body: JSON.stringify(input) },
+export async function startConnectionLearning(connectionId: string): Promise<ConnectorLearningJob> {
+  const response = await fetchJson<ApiEnvelope<{ job: ConnectorLearningJob }>>(
+    apiUrl(`/api/connectors/composio/connections/${encodeURIComponent(connectionId)}/learning`),
+    { method: 'POST' },
   );
-  return requirePayload(response, 'Could not sync connector data to memory.');
+  return requirePayload(response, 'Could not start learning from this connection.').job;
 }
 
-export async function getComposioMemorySyncProfile(
-  connectorId: string,
-): Promise<ComposioMemorySyncProfile | null> {
-  const response = await fetchJson<ApiEnvelope<{ profile: ComposioMemorySyncProfile | null }>>(
-    apiUrl(`/api/connectors/${encodeURIComponent(connectorId)}/memory-sync-profile`),
+export async function listConnectorLearningJobs(): Promise<ConnectorLearningJob[]> {
+  const response = await fetchJson<ApiEnvelope<{ jobs: ConnectorLearningJob[] }>>(
+    apiUrl('/api/connectors/learning'),
   );
-  return requirePayload(response, 'Could not load memory sync settings.').profile;
+  return requirePayload(response, 'Could not load connector learning jobs.').jobs;
 }
 
-export async function updateComposioMemorySyncProfile(
-  connectorId: string,
-  profile: Omit<ComposioMemorySyncProfile, 'updatedAt'>,
-): Promise<ComposioMemorySyncProfile> {
-  const response = await fetchJson<ApiEnvelope<{ profile: ComposioMemorySyncProfile }>>(
-    apiUrl(`/api/connectors/${encodeURIComponent(connectorId)}/memory-sync-profile`),
-    { method: 'PATCH', body: JSON.stringify(profile) },
+export async function setConnectionLearningPaused(connectionId: string, paused: boolean): Promise<void> {
+  const action = paused ? 'pause' : 'resume';
+  const response = await fetchJson<ApiEnvelope<{ changed: number }>>(
+    apiUrl(`/api/connectors/composio/connections/${encodeURIComponent(connectionId)}/learning/${action}`),
+    { method: 'POST' },
   );
-  return requirePayload(response, 'Could not save memory sync settings.').profile;
+  requirePayload(response, `Could not ${action} connector learning.`);
 }
 
-export async function syncConnectorMemory(connectorId: string): Promise<{ recordIds: string[] }> {
+export async function syncConnectorSource(connectorId: string): Promise<{ recordIds: string[] }> {
   const response = await fetchJson<ApiEnvelope<{ recordIds: string[] }>>(
-    apiUrl(`/api/connectors/${encodeURIComponent(connectorId)}/memory-sync`),
-    { method: 'POST', body: JSON.stringify({}) },
+    apiUrl(`/api/connectors/${encodeURIComponent(connectorId)}/source-sync`),
+    { method: 'POST' },
   );
-  return requirePayload(response, 'Could not sync connector data to memory.');
+  return requirePayload(response, 'Could not sync connector source.');
 }
 
 export async function fetchConnectedPeopleGraph(query = '', limit = 100): Promise<ConnectedPeopleGraph> {

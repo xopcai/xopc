@@ -193,21 +193,26 @@ export class MemoryManager {
     context: {
       agentId?: string;
       sessionKey?: string;
+      sourceItemId?: string;
+      sourceItemIds?: string[];
       sourceText?: string;
+      source?: MemoryRecord['source'];
       reviewSource?: 'turn' | 'background';
     } = {},
-  ): Promise<void> {
-    const sourceItemId = context.sessionKey
+  ): Promise<import('./understanding/types.js').UnderstandingReviewResult> {
+    const sourceItemId = context.sourceItemId ?? (context.sessionKey
       ? this.lastTurnSourceItem.get(context.sessionKey)
-      : undefined;
-    await this.understanding.applyCandidates(candidates, {
+      : undefined);
+    const result = await this.understanding.applyCandidates(candidates, {
       ...context,
       agentId: context.agentId ?? this.understandingAgentId,
       sourceItemId,
     });
-    if (sourceItemId) {
-      setKnowledgeSourceItemSynthesisStatus([sourceItemId], 'completed');
+    const sourceItemIds = [...new Set([...(sourceItemId ? [sourceItemId] : []), ...(context.sourceItemIds ?? [])])];
+    if (sourceItemIds.length) {
+      setKnowledgeSourceItemSynthesisStatus(sourceItemIds, 'completed');
     }
+    return { ...result, ...(sourceItemId ? { sourceItemId } : {}) };
   }
 
   getAdditionalTools(): AgentTool[] {

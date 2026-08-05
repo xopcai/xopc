@@ -17,7 +17,7 @@ import { interaction } from '@/lib/interaction';
 
 import {
   removeConnector,
-  syncConnectorMemory,
+  syncConnectorSource,
   testConnector,
   updateConnectorConfig,
   type ConnectorDefinition,
@@ -132,8 +132,8 @@ export function InstalledConnectorDetailDialog({
   const [testing, setTesting] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [savingConfig, setSavingConfig] = useState(false);
-  const [syncingMemory, setSyncingMemory] = useState(false);
-  const [memorySyncCount, setMemorySyncCount] = useState<number | null>(null);
+  const [syncingSource, setSyncingSource] = useState(false);
+  const [sourceSyncCount, setSourceSyncCount] = useState<number | null>(null);
   const [health, setHealth] = useState<ConnectorHealthResult | null>(null);
   const [detailTab, setDetailTab] = useState<ConnectorDetailTab>(
     instance.materialized.type === 'mcp' ? 'health' : 'permissions',
@@ -208,18 +208,18 @@ export function InstalledConnectorDetailDialog({
     }
   }, [configDraft, definition, instance.instanceId, onChanged, supportsConfigEdit]);
 
-  const syncMemory = useCallback(async () => {
-    setSyncingMemory(true);
-    setMemorySyncCount(null);
+  const syncSource = useCallback(async () => {
+    setSyncingSource(true);
+    setSourceSyncCount(null);
     setError(null);
     try {
-      const result = await syncConnectorMemory(instance.connectorId);
-      setMemorySyncCount(result.recordIds.length);
+      const result = await syncConnectorSource(instance.connectorId);
+      setSourceSyncCount(result.recordIds.length);
       await onChanged();
     } catch (syncError) {
       setError(syncError instanceof Error ? syncError.message : String(syncError));
     } finally {
-      setSyncingMemory(false);
+      setSyncingSource(false);
     }
   }, [instance.connectorId, onChanged]);
 
@@ -400,16 +400,16 @@ export function InstalledConnectorDetailDialog({
             {instance.materialized.type === 'memorySource' ? (
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-edge bg-surface-base p-3 text-sm">
                 <div>
-                  <p className="font-medium text-fg">{t.memorySourceSync}</p>
+                  <p className="font-medium text-fg">{t.connectedSourceSync}</p>
                   <p className="text-xs text-fg-muted">{definition?.description}</p>
-                  {memorySyncCount !== null ? (
+                  {sourceSyncCount !== null ? (
                     <p className="mt-1 text-xs text-emerald-600">
-                      {formatConnectorMessage(t.memorySourceSynced, { count: String(memorySyncCount) })}
+                      {formatConnectorMessage(t.connectedSourceSynced, { count: String(sourceSyncCount) })}
                     </p>
                   ) : null}
                 </div>
-                <Button disabled={syncingMemory} onClick={() => void syncMemory()}>
-                  {syncingMemory ? <Loader2 className="size-4 animate-spin" /> : <Database className="size-4" />}
+                <Button disabled={syncingSource} onClick={() => void syncSource()}>
+                  {syncingSource ? <Loader2 className="size-4 animate-spin" /> : <Database className="size-4" />}
                   {t.composioSyncNow}
                 </Button>
               </div>

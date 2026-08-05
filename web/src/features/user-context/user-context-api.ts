@@ -84,6 +84,18 @@ export type PersonalContextSource = {
   lastSyncAt?: string;
   lastSyncStatus?: 'running' | 'succeeded' | 'partial' | 'failed' | 'cancelled';
   lastSyncError?: string;
+  learning?: {
+    status: 'queued' | 'running' | 'completed' | 'failed' | 'paused';
+    phase: 'queued' | 'fetching' | 'indexing' | 'deriving' | 'completed';
+    itemsDiscovered: number;
+    itemsIndexed: number;
+    candidatesCreated: number;
+    mode: 'bootstrap' | 'incremental';
+    attemptCount: number;
+    nextRunAt?: string;
+    error?: string;
+    updatedAt: string;
+  };
 };
 
 export type InsightSuggestion = {
