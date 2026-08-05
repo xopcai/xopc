@@ -34,6 +34,7 @@ export interface ConnectedProvidersMessages {
 
 interface ConnectedProvidersGridProps {
   labels: ConnectedProvidersMessages;
+  data: ConnectedProvidersData;
   onAdd: () => void;
   onManage: (providerId: string, isCustom: boolean) => void;
 }
@@ -47,13 +48,15 @@ export interface ConnectedProviderCard {
 }
 
 /** Fetch and merge all provider sources into a unified card list. */
-export function useConnectedProviders(): {
+export interface ConnectedProvidersData {
   cards: ConnectedProviderCard[];
   loading: boolean;
   builtinRows: ProviderRowModel[];
   customConfig: ModelsJsonConfig | null;
   allModels: ConfiguredModel[];
-} {
+}
+
+export function useConnectedProviders(): ConnectedProvidersData {
   const token = useGatewayStore((s) => s.token);
   const hasToken = Boolean(token);
 
@@ -136,8 +139,8 @@ export function useConnectedProviders(): {
   return { cards, loading, builtinRows, customConfig, allModels: models };
 }
 
-export function ConnectedProvidersGrid({ labels, onAdd, onManage }: ConnectedProvidersGridProps) {
-  const { cards, loading } = useConnectedProviders();
+export function ConnectedProvidersGrid({ labels, data, onAdd, onManage }: ConnectedProvidersGridProps) {
+  const { cards, loading } = data;
 
   if (loading) {
     return (
