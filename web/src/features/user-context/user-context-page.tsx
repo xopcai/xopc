@@ -168,7 +168,7 @@ function UnderstandingCard({
             <div className="flex flex-wrap items-center gap-2 text-xs text-fg-subtle">
               <span className="inline-flex items-center gap-1"><Sparkles className="size-3 text-accent" aria-hidden />{originLabel(item, t)}</span>
               <span className="rounded-full bg-surface-hover px-2 py-0.5">{t.stability[item.stability]}</span>
-              {item.evidenceCount > 1 ? <span>{replaceCount(t.evidenceCount, item.evidenceCount)}</span> : null}
+              {item.evidenceCount > 0 ? <span>{replaceCount(t.evidenceCount, item.evidenceCount)}</span> : null}
               {item.latestEvidenceAt ? <span>{t.observedAt.replace('{{time}}', formatDateTime(item.latestEvidenceAt, language))}</span> : null}
             </div>
             <div className="flex flex-wrap items-center gap-1">
@@ -190,6 +190,7 @@ function UnderstandingCard({
               {item.sourcePath ? <div><dt className="text-fg-subtle">{t.evidencePath}</dt><dd className="mt-0.5 break-all text-fg-muted">{item.sourcePath}</dd></div> : null}
               <div><dt className="text-fg-subtle">{t.evidenceUpdated}</dt><dd className="mt-0.5 text-fg-muted">{formatDateTime(item.updatedAt, language)}</dd></div>
               <div><dt className="text-fg-subtle">{t.evidenceSupport}</dt><dd className="mt-0.5 text-fg-muted">{replaceCount(t.evidenceCount, item.evidenceCount)}</dd></div>
+              {item.evidenceBasis ? <div className="sm:col-span-2"><dt className="text-fg-subtle">{t.evidenceRule}</dt><dd className="mt-0.5 text-fg-muted">{t.evidenceRuleValue.replace('{{events}}', String(item.evidenceBasis.eventCount)).replace('{{days}}', String(item.evidenceBasis.activeDays)).replace('{{window}}', String(item.evidenceBasis.windowDays))}</dd></div> : null}
               {item.confidence === undefined ? null : <div><dt className="text-fg-subtle">{t.evidenceConfidence}</dt><dd className="mt-0.5 text-fg-muted">{Math.round(item.confidence * 100)}%</dd></div>}
               {item.validTo ? <div><dt className="text-fg-subtle">{t.evidenceValidUntil}</dt><dd className="mt-0.5 text-fg-muted">{formatDateTime(item.validTo, language)}</dd></div> : null}
               {item.expiresAt ? <div><dt className="text-fg-subtle">{t.evidenceExpires}</dt><dd className="mt-0.5 text-fg-muted">{formatDateTime(item.expiresAt, language)}</dd></div> : null}

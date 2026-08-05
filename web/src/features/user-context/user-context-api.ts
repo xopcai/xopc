@@ -44,6 +44,7 @@ export type UserUnderstanding = {
   reviewAt: string;
   reviewDue: boolean;
   evidenceCount: number;
+  evidenceBasis?: { eventCount: number; activeDays: number; windowDays: number };
   sourcePath?: string;
   latestEvidenceAt?: string;
   validFrom?: string;

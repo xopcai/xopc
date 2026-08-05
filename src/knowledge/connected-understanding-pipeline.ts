@@ -8,6 +8,7 @@ import type { KnowledgeSourceItem } from './types.js';
 type CandidateWithEvidence = {
   candidate: UnderstandingCandidate;
   sourceItemIds: string[];
+  evidenceBasis: { eventCount: number; activeDays: number; windowDays: number };
 };
 
 function key(kind: UnderstandingCandidate['kind'], value: string): string {
@@ -25,29 +26,64 @@ function identityForPerson(value: unknown): { key: string; label: string } | und
   return identity ? { key: identity.toLowerCase(), label: name || email || username } : undefined;
 }
 
+function logicalEventKey(item: KnowledgeSourceItem): string | undefined {
+  const value = item.metadata.logicalEventKey;
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function eventTime(item: KnowledgeSourceItem): number | undefined {
+  if (!item.occurredAt) return undefined;
+  const value = Date.parse(item.occurredAt);
+  return Number.isFinite(value) ? value : undefined;
+}
+
+function recent(items: KnowledgeSourceItem[], days: number): KnowledgeSourceItem[] {
+  const cutoff = Date.now() - days * 86_400_000;
+  return items.filter((item) => {
+    const time = eventTime(item);
+    return time !== undefined && time >= cutoff && time <= Date.now() + 300_000 && logicalEventKey(item);
+  });
+}
+
+function eventDay(item: KnowledgeSourceItem): string {
+  return new Date(item.occurredAt!).toISOString().slice(0, 10);
+}
+
+function signalConfidence(eventCount: number, activeDays: number): number {
+  return Math.min(0.9, 0.55 + Math.min(eventCount, 8) * 0.03 + Math.min(activeDays, 5) * 0.04);
+}
+
 function relationshipCandidates(items: KnowledgeSourceItem[]): CandidateWithEvidence[] {
-  const evidence = new Map<string, { label: string; ids: Set<string> }>();
-  for (const item of items) {
+  const evidence = new Map<string, { label: string; events: Map<string, KnowledgeSourceItem> }>();
+  for (const item of recent(items, 90)) {
+    if (item.metadata.actorAttributed !== true) continue;
+    const eventKey = logicalEventKey(item)!;
+    const owners = new Set(Array.isArray(item.metadata.ownerIdentities)
+      ? item.metadata.ownerIdentities.filter((value): value is string => typeof value === 'string')
+      : []);
     const people = item.metadata.personEntities;
     if (!Array.isArray(people)) continue;
     for (const person of people) {
       const identity = identityForPerson(person);
-      if (!identity) continue;
-      const entry = evidence.get(identity.key) ?? { label: identity.label, ids: new Set<string>() };
-      entry.ids.add(item.id);
+      if (!identity || owners.has(identity.key)) continue;
+      const entry = evidence.get(identity.key) ?? { label: identity.label, events: new Map<string, KnowledgeSourceItem>() };
+      if (!entry.events.has(eventKey)) entry.events.set(eventKey, item);
       evidence.set(identity.key, entry);
     }
   }
   return [...evidence.values()]
-    .filter(({ ids }) => ids.size >= 2)
-    .sort((left, right) => right.ids.size - left.ids.size)
+    .filter(({ events }) => events.size >= 3 && new Set([...events.values()].map(eventDay)).size >= 2)
+    .sort((left, right) => right.events.size - left.events.size)
     .slice(0, 4)
-    .map(({ label, ids }) => ({
+    .map(({ label, events }) => {
+      const rows = [...events.values()];
+      const activeDays = new Set(rows.map(eventDay)).size;
+      return {
       candidate: {
         kind: 'relationship',
         content: `Frequently collaborates with ${label}.`,
         canonicalKey: key('relationship', label),
-        confidence: Math.min(0.9, 0.62 + ids.size * 0.04),
+        confidence: signalConfidence(events.size, activeDays),
         importance: 0.65,
         explicitness: 'inferred',
         durability: 'recurring',
@@ -55,68 +91,20 @@ function relationshipCandidates(items: KnowledgeSourceItem[]): CandidateWithEvid
         disclosurePolicy: 'ask_before_reference',
         tags: ['connected-source', 'relationship-signal'],
       },
-      sourceItemIds: [...ids].slice(0, 20),
-    }));
-}
-
-const PROJECT_FIELDS = new Set(['project', 'project_name', 'repository', 'repo', 'full_name', 'workspace', 'team', 'channel']);
-
-function projectSignals(value: unknown, depth = 0): string[] {
-  if (depth > 4 || !value || typeof value !== 'object') return [];
-  if (Array.isArray(value)) return value.flatMap((item) => projectSignals(item, depth + 1));
-  const record = value as Record<string, unknown>;
-  const signals: string[] = [];
-  for (const [field, nested] of Object.entries(record)) {
-    if (PROJECT_FIELDS.has(field.toLowerCase())) {
-      if (typeof nested === 'string' && nested.trim()) signals.push(nested.trim().slice(0, 160));
-      else if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
-        const row = nested as Record<string, unknown>;
-        const label = [row.full_name, row.name, row.title, row.slug].find((item) => typeof item === 'string');
-        if (typeof label === 'string' && label.trim()) signals.push(label.trim().slice(0, 160));
-      }
-    }
-    signals.push(...projectSignals(nested, depth + 1));
-  }
-  return signals;
-}
-
-function projectCandidates(items: KnowledgeSourceItem[]): CandidateWithEvidence[] {
-  const evidence = new Map<string, { label: string; ids: Set<string> }>();
-  for (const item of items) {
-    let parsed: unknown;
-    try { parsed = item.normalizedText ? JSON.parse(item.normalizedText) : undefined; } catch { parsed = undefined; }
-    for (const label of projectSignals(parsed)) {
-      const normalized = label.toLowerCase();
-      const entry = evidence.get(normalized) ?? { label, ids: new Set<string>() };
-      entry.ids.add(item.id);
-      evidence.set(normalized, entry);
-    }
-  }
-  return [...evidence.values()]
-    .filter(({ ids }) => ids.size >= 2)
-    .sort((left, right) => right.ids.size - left.ids.size)
-    .slice(0, 4)
-    .map(({ label, ids }) => ({
-      candidate: {
-        kind: 'project_context',
-        content: `Current connected work frequently involves ${label}.`,
-        canonicalKey: key('project_context', label),
-        confidence: Math.min(0.9, 0.64 + ids.size * 0.04),
-        importance: 0.72,
-        explicitness: 'inferred',
-        durability: 'recurring',
-        sensitivity: 'personal',
-        disclosurePolicy: 'referenceable',
-        tags: ['user-understanding', 'connected-source', 'project-signal'],
-      },
-      sourceItemIds: [...ids].slice(0, 20),
-    }));
+      sourceItemIds: rows.map((item) => item.id).slice(0, 20),
+      evidenceBasis: { eventCount: events.size, activeDays, windowDays: 90 },
+    };
+    });
 }
 
 function routineCandidates(items: KnowledgeSourceItem[]): CandidateWithEvidence[] {
-  const calendar = items.filter((item) => item.itemType === 'calendar_event' && item.occurredAt);
+  const calendar = recent(items, 120).filter((item) => item.itemType === 'calendar_event');
   const slots = new Map<string, KnowledgeSourceItem[]>();
+  const seen = new Set<string>();
   for (const item of calendar) {
+    const eventKey = logicalEventKey(item)!;
+    if (seen.has(eventKey)) continue;
+    seen.add(eventKey);
     const date = new Date(item.occurredAt!);
     const slot = `${date.getUTCDay()}:${date.getUTCHours()}`;
     const rows = slots.get(slot) ?? [];
@@ -124,7 +112,7 @@ function routineCandidates(items: KnowledgeSourceItem[]): CandidateWithEvidence[
     slots.set(slot, rows);
   }
   const best = [...slots.entries()].sort((left, right) => right[1].length - left[1].length)[0];
-  if (!best || best[1].length < 3) return [];
+  if (!best || best[1].length < 3 || new Set(best[1].map(eventDay)).size < 3) return [];
   const [weekday, hour] = best[0].split(':').map(Number);
   const weekdayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][weekday!];
   return [{
@@ -141,7 +129,43 @@ function routineCandidates(items: KnowledgeSourceItem[]): CandidateWithEvidence[
       tags: ['connected-source', 'calendar-pattern'],
     },
     sourceItemIds: best[1].map((item) => item.id).slice(0, 20),
+    evidenceBasis: { eventCount: best[1].length, activeDays: new Set(best[1].map(eventDay)).size, windowDays: 120 },
   }];
+}
+
+function projectActivityCandidates(items: KnowledgeSourceItem[]): CandidateWithEvidence[] {
+  const grouped = new Map<string, Map<string, KnowledgeSourceItem>>();
+  for (const item of recent(items, 60)) {
+    if (item.metadata.observationKind !== 'activity' || item.metadata.actorAttributed !== true) continue;
+    const subject = typeof item.metadata.subjectKey === 'string' ? item.metadata.subjectKey.trim() : '';
+    if (!subject) continue;
+    const activities = grouped.get(subject) ?? new Map<string, KnowledgeSourceItem>();
+    activities.set(logicalEventKey(item)!, item);
+    grouped.set(subject, activities);
+  }
+  const candidates: CandidateWithEvidence[] = [];
+  for (const [subject, activities] of grouped) {
+    const rows = [...activities.values()];
+    const activeDays = new Set(rows.map(eventDay)).size;
+    if (rows.length < 3 || activeDays < 2) continue;
+    candidates.push({
+      candidate: {
+        kind: 'project_context',
+        content: `Recently contributed repeatedly to ${subject}.`,
+        canonicalKey: key('project_context', subject),
+        confidence: signalConfidence(rows.length, activeDays),
+        importance: 0.72,
+        explicitness: 'inferred',
+        durability: 'recurring',
+        sensitivity: 'personal',
+        disclosurePolicy: 'referenceable',
+        tags: ['connected-source', 'attributed-project-activity'],
+      },
+      sourceItemIds: rows.map((item) => item.id).slice(0, 20),
+      evidenceBasis: { eventCount: rows.length, activeDays, windowDays: 60 },
+    });
+  }
+  return candidates.slice(0, 4);
 }
 
 export function deriveConnectedUnderstandingCandidates(items: KnowledgeSourceItem[]): CandidateWithEvidence[] {
@@ -151,14 +175,14 @@ export function deriveConnectedUnderstandingCandidates(items: KnowledgeSourceIte
     && item.sensitivity !== 'secret'
     && item.sensitivity !== 'regulated'
   ));
-  return [...relationshipCandidates(active), ...routineCandidates(active), ...projectCandidates(active)].slice(0, 12);
+  return [...relationshipCandidates(active), ...routineCandidates(active), ...projectActivityCandidates(active)].slice(0, 12);
 }
 
 export class ConnectedUnderstandingPipeline {
   constructor(private readonly memoryManager: MemoryManager) {}
 
   async process(sourceInstanceId: string, connectorId: string, agentId: string): Promise<UnderstandingReviewResult> {
-    const items = listKnowledgeSourceItems({ includeDeleted: false, limit: 500 });
+    const items = listKnowledgeSourceItems({ sourceInstanceId, includeDeleted: false, limit: 500 });
     const groups = deriveConnectedUnderstandingCandidates(items);
     const totals: UnderstandingReviewResult = {
       proposed: 0,
@@ -168,16 +192,11 @@ export class ConnectedUnderstandingPipeline {
       createdRecords: [],
     };
     for (const group of groups) {
-      const evidenceSources = new Set(items
-        .filter((item) => group.sourceItemIds.includes(item.id))
-        .map((item) => item.sourceInstanceId));
       const result = await this.memoryManager.applyUnderstandingCandidates([group.candidate], {
         agentId,
         sourceItemIds: group.sourceItemIds,
-        sourceText: `Derived from ${group.sourceItemIds.length} connected source items.`,
-        source: evidenceSources.size > 1
-          ? { provider: 'connected-sources' }
-          : { provider: connectorId, sourceInstanceId },
+        sourceText: JSON.stringify(group.evidenceBasis),
+        source: { provider: connectorId, sourceInstanceId },
         reviewSource: 'background',
       });
       totals.proposed += result.proposed;
