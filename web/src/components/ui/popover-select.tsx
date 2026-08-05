@@ -23,10 +23,12 @@ export type SelectChangeEvent = {
 };
 
 type SelectProps = Omit<SelectHTMLAttributes<HTMLSelectElement>, 'children' | 'multiple' | 'onChange' | 'size'> & {
+  align?: 'start' | 'center' | 'end';
   children: ReactNode;
   contentClassName?: string;
   onChange?: (event: SelectChangeEvent) => void;
   placeholder?: string;
+  side?: 'top' | 'bottom' | 'left' | 'right';
   triggerClassName?: string;
 };
 
@@ -256,6 +258,7 @@ function selectWrapperClassName(className?: string) {
 }
 
 export function Select({
+  align,
   children,
   className,
   contentClassName,
@@ -263,6 +266,7 @@ export function Select({
   id,
   onChange,
   placeholder,
+  side,
   triggerClassName,
   value,
   ...rest
@@ -288,6 +292,8 @@ export function Select({
         ariaLabel={rest['aria-label']}
         ariaLabelledBy={rest['aria-labelledby']}
         title={rest.title}
+        side={side}
+        align={align}
         triggerClassName={cn(className, triggerClassName)}
         contentClassName={contentClassName}
         onChange={(nextValue) => onChange?.({ target: { value: nextValue }, currentTarget: { value: nextValue } })}

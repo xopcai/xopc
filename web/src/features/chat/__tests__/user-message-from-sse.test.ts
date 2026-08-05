@@ -6,13 +6,29 @@ import {
   userMessagesEquivalent,
 } from '@/features/chat/messages/user-message-from-sse';
 import type { Message } from '@/features/chat/messages/messages.types';
-import { stripMediaAttachedClaimCheck } from '@/features/chat/messages/wire-text-scrub';
+import {
+  stripImageUnderstandingContext,
+  stripMediaAttachedClaimCheck,
+} from '@/features/chat/messages/wire-text-scrub';
 
 describe('stripMediaAttachedClaimCheck', () => {
   it('removes media claim-check lines from persisted user text', () => {
     const raw =
       'hello\n[media attached: media://inbound/a.png (image/png)]\n[media attached: media://inbound/b.png (image/png, 42 bytes)]';
     expect(stripMediaAttachedClaimCheck(raw)).toBe('hello');
+  });
+});
+
+describe('stripImageUnderstandingContext', () => {
+  it('removes generated image descriptions from visible user text', () => {
+    const raw = '看看这张图\n\n[Image description: A detailed\nmultiline description.]';
+    expect(stripImageUnderstandingContext(raw)).toBe('看看这张图');
+  });
+
+  it('removes image-understanding failures from visible user text', () => {
+    const raw =
+      '[1 image(s) attached but could not be described: Image model failed: invalid api key]';
+    expect(stripImageUnderstandingContext(raw)).toBe('');
   });
 });
 
@@ -33,6 +49,30 @@ describe('userMessageFromSsePayload', () => {
   it('parses user_transcript text shortcut', () => {
     const msg = userMessageFromSsePayload({ text: 'voice line', timestamp: 9 });
     expect(msg?.content[0]).toEqual({ type: 'text', text: 'voice line' });
+  });
+
+  it('keeps image media and hides generated understanding context', () => {
+    const msg = userMessageFromSsePayload({
+      timestamp: 42,
+      content: '[Image description: A blue interface.]',
+      attachments: [
+        {
+          uri: 'media://inbound/x.png',
+          type: 'photo',
+          mimeType: 'image/png',
+          name: 'x.png',
+        },
+      ],
+    });
+
+    expect(msg?.content).toEqual([]);
+    expect(msg?.attachments).toEqual([
+      expect.objectContaining({
+        uri: 'media://inbound/x.png',
+        type: 'image',
+        mimeType: 'image/png',
+      }),
+    ]);
   });
 });
 

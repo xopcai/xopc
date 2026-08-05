@@ -43,6 +43,29 @@ describe('ChatStreamMapper', () => {
     });
   });
 
+  it('maps persisted media to user message attachments', () => {
+    const m = mapper();
+    const [event] = m.map({
+      type: 'user_message',
+      timestamp: 42,
+      content: [{ type: 'text', text: 'see image' }],
+      media: [{ uri: 'media://inbound/x.png', mimeType: 'image/png', name: 'x.png' }],
+    });
+
+    expect(event).toMatchObject({
+      type: 'user_message',
+      payload: {
+        message: {
+          role: 'user',
+          timestamp: 42,
+          attachments: [
+            { uri: 'media://inbound/x.png', mimeType: 'image/png', name: 'x.png' },
+          ],
+        },
+      },
+    });
+  });
+
   it('adds ambient-safe feedback to progress without inferring from its private message', () => {
     const m = mapper();
     const [progress] = m.map({

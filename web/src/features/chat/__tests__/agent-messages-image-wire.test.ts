@@ -8,6 +8,36 @@ import { normalizeAgentMessages } from '@/features/chat/messages/agent-messages'
 import { messageAttachmentsToWire } from '@/features/chat/messages/user-message-plain-text';
 
 describe('normalizeAgentMessages user attachment wire shape', () => {
+  it('shows persisted image media without exposing generated image descriptions', () => {
+    const ui = normalizeAgentMessages([
+      {
+        role: 'user',
+        content: '[Image description: A blue interface.]',
+        media: [
+          {
+            id: 'a1',
+            name: 'photo.jpg',
+            mimeType: 'image/jpeg',
+            type: 'photo',
+            size: 100,
+            uri: 'media://inbound/photo---uuid.jpg',
+            bucket: 'inbound',
+            path: '/tmp/photo.jpg',
+          },
+        ],
+        timestamp: 1,
+      },
+    ]);
+
+    expect(ui[0]?.content).toEqual([]);
+    expect(ui[0]?.attachments).toEqual([
+      expect.objectContaining({
+        type: 'image',
+        uri: 'media://inbound/photo---uuid.jpg',
+      }),
+    ]);
+  });
+
   it('keeps persisted media metadata without inline data', () => {
     const ui = normalizeAgentMessages([
       {

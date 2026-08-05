@@ -3,6 +3,7 @@ import { mimeTypeFromFileName } from './tool-result-file-paths';
 import {
   collapseExpandedSkillBlockForDisplay,
   stripExpandedAtFileBlocks,
+  stripImageUnderstandingContext,
   stripInboundFileMachineText,
   stripStartupContextForDisplay,
 } from './wire-text-scrub';
@@ -112,6 +113,7 @@ export function applyStripToUserContent(
       let stripped = stripStartupContextForDisplay(b.text);
       stripped = stripExpandedAtFileBlocks(stripped);
       stripped = stripInboundFileMachineText(stripped);
+      stripped = stripImageUnderstandingContext(stripped);
       return { ...b, text: collapseExpandedSkillBlockForDisplay(stripped) };
     }
     return b;
