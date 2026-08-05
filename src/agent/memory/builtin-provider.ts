@@ -224,8 +224,8 @@ export class BuiltinMemoryProvider implements MemoryProvider {
         projectId: request.scope?.projectId,
         content: request.content,
         source: {
-          ...(request.source ?? {}),
           provider: this.id,
+          ...(request.source ?? {}),
         },
         confidence: request.confidence,
         tags: request.tags,
@@ -264,9 +264,9 @@ export class BuiltinMemoryProvider implements MemoryProvider {
         sessionKey: request.scope?.sessionKey,
         content: request.content,
         source: {
-          ...(request.source ?? {}),
           provider: this.id,
           path: sourcePathForTarget(target),
+          ...(request.source ?? {}),
         },
         tags: request.tags,
         canonicalKey: request.canonicalKey,

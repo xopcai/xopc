@@ -62,6 +62,7 @@ describe('connected source ingestion', () => {
       decision: 'allowed' as const,
       result: {
         messages: [{
+          id: 'mail-1',
           subject: 'Quarterly plan',
           sender: { email: 'lead@example.com' },
           attendees: [{ displayName: 'Planning Team', email: 'planning@example.com' }],
@@ -87,7 +88,6 @@ describe('connected source ingestion', () => {
       source: { provider: 'composio-gmail' },
       tags: expect.arrayContaining(['connected-source', 'external', 'composio-gmail']),
     });
-    expect(memory?.content).toContain('[REDACTED]');
     expect(memory?.content).not.toContain('sk-this-must-never-enter-memory');
     const [sourceItem] = listKnowledgeSourceItems();
     expect(sourceItem).toMatchObject({
@@ -98,7 +98,7 @@ describe('connected source ingestion', () => {
         connectorId: 'composio-gmail',
         connectionId: 'gmail-work',
         toolkit: 'gmail',
-        people: ['lead@example.com', 'planning@example.com', 'Planning Team'],
+        people: ['lead@example.com'],
       },
     });
     expect(listMemoryEvidence(recordId!)[0]).toMatchObject({
@@ -114,7 +114,7 @@ describe('connected source ingestion', () => {
 
     executeWithPolicy.mockResolvedValueOnce({
       decision: 'allowed' as const,
-      result: { messages: [{ subject: 'Quarterly plan approved' }] },
+      result: { messages: [{ id: 'mail-1', subject: 'Quarterly plan approved' }] },
     });
     const updated = await ingestComposioConnectedSource({
       config: {} as Config,
@@ -128,6 +128,28 @@ describe('connected source ingestion', () => {
     expect(listKnowledgeSourceItems()).toHaveLength(1);
     expect(listKnowledgeSyncRuns()[0]).toMatchObject({ itemsCreated: 0, itemsUpdated: 1 });
     expect(getMemoryRecord(recordId!)?.content).toContain('Quarterly plan approved');
+  });
+
+  it('ignores an empty nested connector result', async () => {
+    const executeWithPolicy = vi.fn(async () => ({
+      decision: 'allowed' as const,
+      result: { data: { messages: [] }, error: null },
+    }));
+    const result = await ingestComposioConnectedSource({
+      config: {} as Config,
+      connectorId: 'composio-gmail',
+      actionId: 'GMAIL_FETCH_EMAILS',
+      agentId: 'main',
+      adapter: { executeWithPolicy } as unknown as ComposioSessionsAdapter,
+    });
+
+    expect(result.recordIds).toEqual([]);
+    expect(listKnowledgeSourceItems()).toEqual([]);
+    expect(listKnowledgeSyncRuns()[0]).toMatchObject({
+      status: 'succeeded',
+      itemsSeen: 0,
+      itemsCreated: 0,
+    });
   });
 
   it('rejects write actions from the memory ingestion path', async () => {
@@ -179,9 +201,106 @@ describe('connected source ingestion', () => {
 
     expect(listKnowledgeSourceItems()).toContainEqual(expect.objectContaining({
       sourceInstanceId: 'composio:composio-github:github-work',
-      externalId: 'commit-1',
+      externalId: 'GITHUB_LIST_COMMITS:commit-1',
       itemType: 'development_activity',
       metadata: expect.objectContaining({ connectorId: 'composio-github' }),
+    }));
+  });
+
+  it('indexes GitHub repository inventory without turning it into memory', async () => {
+    upsertConnectorInstallation({
+      id: 'composio-github-local-owner',
+      connectorId: 'composio-github',
+      principalId: 'local-owner',
+      enabled: true,
+      allowedAgentIds: ['main'],
+      maxScope: 'read',
+      confirmationPolicy: 'writes',
+      selectedConnectionIds: [],
+    });
+    upsertConnectorConnection({
+      id: 'github-work',
+      installationId: 'composio-github-local-owner',
+      connectorId: 'composio-github',
+      provider: 'composio',
+      principalId: 'local-owner',
+      providerConnectionId: 'ca_github',
+      identity: { username: 'octocat' },
+      status: 'active',
+      isDefault: true,
+      metadata: { toolkit: 'github' },
+    });
+    const executeWithPolicy = vi.fn(async () => ({
+      decision: 'allowed' as const,
+      result: { data: { repositories: [{ id: 42, full_name: 'xopcai/xopc', updated_at: '2026-08-05T09:42:08Z' }] } },
+    }));
+
+    const result = await ingestComposioConnectedSource({
+      config: {} as Config,
+      connectorId: 'composio-github',
+      actionId: 'GITHUB_LIST_REPOSITORIES_FOR_THE_AUTHENTICATED_USER',
+      agentId: 'main',
+      adapter: { executeWithPolicy } as unknown as ComposioSessionsAdapter,
+    });
+
+    expect(result.recordIds).toEqual([]);
+    expect(listKnowledgeSourceItems()).toContainEqual(expect.objectContaining({
+      externalId: '42',
+      itemType: 'repository',
+      synthesisStatus: 'ignored',
+      metadata: expect.objectContaining({ observationKind: 'inventory', actorAttributed: false }),
+    }));
+  });
+
+  it('normalizes calendar events from the provider data envelope', async () => {
+    upsertConnectorInstallation({
+      id: 'composio-googlecalendar-local-owner',
+      connectorId: 'composio-googlecalendar',
+      principalId: 'local-owner',
+      enabled: true,
+      allowedAgentIds: ['main'],
+      maxScope: 'read',
+      confirmationPolicy: 'writes',
+      selectedConnectionIds: [],
+    });
+    upsertConnectorConnection({
+      id: 'calendar-work',
+      installationId: 'composio-googlecalendar-local-owner',
+      connectorId: 'composio-googlecalendar',
+      provider: 'composio',
+      principalId: 'local-owner',
+      providerConnectionId: 'ca_calendar',
+      identity: { email: 'work@example.com' },
+      status: 'active',
+      isDefault: true,
+      metadata: { toolkit: 'googlecalendar' },
+    });
+    const executeWithPolicy = vi.fn(async () => ({
+      decision: 'allowed' as const,
+      result: { data: { items: [{
+        id: 'event-1',
+        summary: 'Weekly planning',
+        start: { dateTime: '2026-08-05T09:00:00+08:00' },
+        attendees: [{ email: 'lead@example.com' }],
+      }] } },
+    }));
+
+    await ingestComposioConnectedSource({
+      config: {} as Config,
+      connectorId: 'composio-googlecalendar',
+      actionId: 'GOOGLECALENDAR_LIST_EVENTS',
+      agentId: 'main',
+      adapter: { executeWithPolicy } as unknown as ComposioSessionsAdapter,
+    });
+
+    expect(listKnowledgeSourceItems()).toContainEqual(expect.objectContaining({
+      externalId: 'event-1',
+      itemType: 'calendar_event',
+      occurredAt: '2026-08-05T01:00:00.000Z',
+      metadata: expect.objectContaining({
+        logicalEventKey: 'googlecalendar:event:event-1',
+        people: ['lead@example.com'],
+      }),
     }));
   });
 

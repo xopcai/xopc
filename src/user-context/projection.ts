@@ -62,12 +62,30 @@ export function originForMemoryRecord(record: MemoryRecord): UserContextOrigin {
   return origin === 'told_by_user' ? 'told_by_you' : origin;
 }
 
+function connectedEvidenceBasis(sourceText: string | undefined) {
+  if (!sourceText) return undefined;
+  try {
+    const value = JSON.parse(sourceText) as Record<string, unknown>;
+    const eventCount = Number(value.eventCount);
+    const activeDays = Number(value.activeDays);
+    const windowDays = Number(value.windowDays);
+    if (![eventCount, activeDays, windowDays].every((item) => Number.isInteger(item) && item > 0)) return undefined;
+    return { eventCount, activeDays, windowDays };
+  } catch {
+    return undefined;
+  }
+}
+
 export function projectUserContextRecord(record: MemoryRecord) {
   const lifecycle = resolveMemoryStability(record);
   const latestEvidenceAt = record.evidence
     ?.map((evidence) => evidence.observedAt)
     .filter((value): value is string => Boolean(value))
     .sort()
+    .at(-1);
+  const evidenceBasis = record.evidence
+    ?.map((evidence) => connectedEvidenceBasis(evidence.sourceText))
+    .filter((value): value is NonNullable<ReturnType<typeof connectedEvidenceBasis>> => Boolean(value))
     .at(-1);
   return {
     id: record.id,
@@ -88,6 +106,7 @@ export function projectUserContextRecord(record: MemoryRecord) {
     reviewAt: lifecycle.reviewAt,
     reviewDue: lifecycle.reviewDue,
     evidenceCount: record.evidence?.length ?? 0,
+    evidenceBasis,
     sourcePath: record.source.path,
     latestEvidenceAt,
     validFrom: record.validFrom,
