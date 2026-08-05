@@ -48,6 +48,11 @@ function parseOffset(value: string | undefined): number {
   return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
 }
 
+function isHistoryCursor(value: string): boolean {
+  if (!/^(0|[1-9]\d*)$/.test(value)) return false;
+  return Number.isSafeInteger(Number(value));
+}
+
 function buildDirectSessionMetadata(params: {
   agentId: string;
   source: string;
@@ -322,7 +327,11 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
         ? Math.min(500, Math.max(1, parsedLimit))
         : undefined;
 
-    const before = c.req.query('before')?.trim();
+    const beforeRaw = c.req.query('before');
+    const before = beforeRaw?.trim();
+    if (beforeRaw !== undefined && (!before || !isHistoryCursor(before))) {
+      return c.json({ ok: false, error: 'Invalid session history cursor' }, 400);
+    }
     const offsetRaw = c.req.query('offset');
     const parsedOffset = offsetRaw ? Number.parseInt(offsetRaw, 10) : 0;
     const offset = Number.isFinite(parsedOffset) ? Math.max(0, parsedOffset) : 0;
@@ -353,7 +362,11 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     const key = c.req.param('key');
     const offsetRaw = c.req.query('offset');
     const limitRaw = c.req.query('limit');
-    const before = c.req.query('before')?.trim();
+    const beforeRaw = c.req.query('before');
+    const before = beforeRaw?.trim();
+    if (beforeRaw !== undefined && (!before || !isHistoryCursor(before))) {
+      return c.json({ error: 'Invalid session history cursor' }, 400);
+    }
     const parsedOffset = offsetRaw ? Number.parseInt(offsetRaw, 10) : 0;
     const parsedLimit = limitRaw ? Number.parseInt(limitRaw, 10) : 50;
     const offset = Number.isFinite(parsedOffset) ? Math.max(0, parsedOffset) : 0;

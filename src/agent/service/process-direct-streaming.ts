@@ -293,6 +293,10 @@ export async function* runProcessDirectStreaming(
           sessionKey,
           body: input.content,
           resetSession: deps.resetSession,
+          // A webchat session key already identifies one explicit conversation.
+          // Applying channel-style daily/idle rollover here archives its visible
+          // history behind the same route on the next turn.
+          skipImplicitExpiry: channel === 'webchat',
         });
         resetTriggeredAtInit = turn.resetTriggered;
         if (turn.bareReset && turn.ackMessage) {

@@ -112,6 +112,52 @@ describe('initSessionTurn', () => {
     });
   });
 
+  it('keeps a stale session when implicit expiry is disabled', async () => {
+    mockExistingEntry(Date.now() - 48 * 60 * 60_000);
+    const resetSession = vi.fn();
+
+    const result = await initSessionTurn({
+      cfg: baseCfg,
+      sessionKey,
+      body: 'continue the same webchat conversation',
+      resetSession,
+      skipImplicitExpiry: true,
+    });
+
+    expect(resetSession).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      resetTriggered: false,
+      staleRollover: false,
+      isNewSession: false,
+      sessionId: 'old-id',
+      bodyStripped: 'continue the same webchat conversation',
+    });
+  });
+
+  it('still honors explicit reset triggers when implicit expiry is disabled', async () => {
+    mockExistingEntry(Date.now() - 48 * 60 * 60_000);
+    const resetSession = vi.fn().mockResolvedValue({
+      sessionId: 'new-id',
+      previousSessionId: 'old-id',
+    });
+
+    const result = await initSessionTurn({
+      cfg: baseCfg,
+      sessionKey,
+      body: '/new',
+      resetSession,
+      skipImplicitExpiry: true,
+    });
+
+    expect(resetSession).toHaveBeenCalledOnce();
+    expect(result).toMatchObject({
+      resetTriggered: true,
+      staleRollover: false,
+      isNewSession: true,
+      sessionId: 'new-id',
+    });
+  });
+
   it('strips tail after /reset and does not bare-ack', async () => {
     const resetSession = vi.fn().mockResolvedValue({
       sessionId: 'new-id',
