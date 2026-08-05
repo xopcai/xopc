@@ -52,16 +52,9 @@ function createMockSessionStore(opts: {
 
   return {
     load: vi.fn().mockResolvedValue([
-      { role: 'user', content: 'hello' },
+      { role: 'user', content: opts.needsCompaction ? 'x'.repeat(420_000) : 'hello' },
       { role: 'assistant', content: [{ type: 'text', text: 'hi' }] },
     ] as AgentMessage[]),
-    prepareCompaction: vi.fn().mockReturnValue({
-      needsCompaction: opts.needsCompaction,
-      messages: [],
-      stats: opts.needsCompaction
-        ? { needed: true, reason: 'threshold_exceeded', usagePercent: 0.92 }
-        : { needed: false, reason: 'within_threshold' },
-    }),
     compact: vi.fn().mockResolvedValue(compactResult),
   };
 }
@@ -99,7 +92,24 @@ function configWithCompaction(enabled: boolean) {
   return {
     userContext: {
       memory: {
-        retention: { compaction: enabled },
+        retention: {
+          compaction: {
+            enabled,
+            triggerThreshold: 0.8,
+            reserveTokens: 8_192,
+            minMessagesBeforeCompact: 2,
+            keepRecentTokens: 20_000,
+            recentTurnsPreserve: 3,
+            summaryMaxTokens: 2_000,
+            summaryChunkTokens: 24_000,
+            summaryTimeoutMs: 180_000,
+            summaryRetries: 2,
+            qualityGuard: true,
+            minToolResultKeepChars: 1_000,
+            maxActiveTranscriptBytes: 2_000_000,
+            postCompactionSections: ['Session Startup', 'Red Lines'],
+          },
+        },
       },
     },
     agents: {
@@ -141,7 +151,7 @@ describe('pre-turn auto-compaction', () => {
     runEmbeddedTurnForSession = mod.runEmbeddedTurnForSession;
   });
 
-  it('triggers compaction when prepareCompaction reports needsCompaction=true', async () => {
+  it('triggers compaction when the full context budget crosses the threshold', async () => {
     const sessionStore = createMockSessionStore({ needsCompaction: true });
     const agentManager = createMockAgentManager();
     const modelManager = createMockModelManager();
@@ -153,22 +163,19 @@ describe('pre-turn auto-compaction', () => {
       sessionStore: sessionStore as any,
       agentManager: agentManager as any,
       modelManager: modelManager as any,
+      getConfig: () => configWithCompaction(true) as any,
       onEvent: (e) => events.push(e),
     });
 
     // Compaction was executed
     expect(sessionStore.load).toHaveBeenCalledWith('agent:main:test-session');
-    expect(sessionStore.prepareCompaction).toHaveBeenCalledWith(
-      'agent:main:test-session',
-      expect.any(Array),
-      128_000,
-    );
     expect(sessionStore.compact).toHaveBeenCalledWith(
       'agent:main:test-session',
       expect.any(Array),
       expect.objectContaining({ id: 'test-model' }),
       undefined,
       false,
+      expect.objectContaining({ fallbackModels: [] }),
     );
 
     // Agent was evicted for fresh reload
@@ -216,6 +223,43 @@ describe('pre-turn auto-compaction', () => {
     expect(mockRunXopcEmbeddedTurn).toHaveBeenCalled();
   });
 
+  it('forces compaction when the active transcript exceeds the byte limit', async () => {
+    const sessionStore = createMockSessionStore({
+      needsCompaction: false,
+      compactResult: {
+        compacted: true,
+        tokensBefore: 17_000,
+        tokensAfter: 3_000,
+        summary: 'Byte pressure summary.',
+        firstKeptIndex: 1,
+      },
+    });
+    sessionStore.load.mockResolvedValue([
+      { role: 'user', content: 'x'.repeat(70_000) },
+      { role: 'assistant', content: 'ok' },
+    ] as AgentMessage[]);
+    const config = configWithCompaction(true);
+    config.userContext.memory.retention.compaction.maxActiveTranscriptBytes = 64_000;
+
+    await runEmbeddedTurnForSession({
+      sessionKey: 'agent:main:test-session',
+      userMessage: { role: 'user', content: 'test' } as AgentMessage,
+      sessionStore: sessionStore as any,
+      agentManager: createMockAgentManager() as any,
+      modelManager: createMockModelManager() as any,
+      getConfig: () => config as any,
+    });
+
+    expect(sessionStore.compact).toHaveBeenCalledWith(
+      'agent:main:test-session',
+      expect.any(Array),
+      expect.any(Object),
+      undefined,
+      true,
+      expect.any(Object),
+    );
+  });
+
   it('tries fallback model when the primary embedded turn fails', async () => {
     mockRunXopcEmbeddedTurn
       .mockResolvedValueOnce({ ok: false, errorMessage: 'primary failed' })
@@ -254,7 +298,7 @@ describe('pre-turn auto-compaction', () => {
     }));
   });
 
-  it('respects memory.retention.compaction=false config', async () => {
+  it('respects memory.retention.compaction.enabled=false config', async () => {
     const sessionStore = createMockSessionStore({ needsCompaction: true });
     const agentManager = createMockAgentManager();
     const modelManager = createMockModelManager();
@@ -268,8 +312,6 @@ describe('pre-turn auto-compaction', () => {
       getConfig: () => configWithCompaction(false) as any,
     });
 
-    // Even though prepareCompaction would say yes, we never call it
-    expect(sessionStore.prepareCompaction).not.toHaveBeenCalled();
     expect(sessionStore.compact).not.toHaveBeenCalled();
   });
 
@@ -286,6 +328,7 @@ describe('pre-turn auto-compaction', () => {
       sessionStore: sessionStore as any,
       agentManager: agentManager as any,
       modelManager: modelManager as any,
+      getConfig: () => configWithCompaction(true) as any,
       onEvent: (e) => events.push(e),
     });
 
@@ -301,6 +344,25 @@ describe('pre-turn auto-compaction', () => {
     expect(compactionEvents).toHaveLength(2);
     expect(compactionEvents[0]).toMatchObject({ type: 'compaction', status: 'started' });
     expect(compactionEvents[1]).toMatchObject({ type: 'compaction', status: 'skipped' });
+  });
+
+  it('blocks the provider call when compaction fails above the hard context limit', async () => {
+    const sessionStore = createMockSessionStore({ needsCompaction: true });
+    sessionStore.load.mockResolvedValue([
+      { role: 'user', content: 'x'.repeat(520_000), timestamp: 1 },
+      { role: 'assistant', content: 'previous answer', timestamp: 2 },
+    ] as AgentMessage[]);
+    sessionStore.compact.mockRejectedValue(new Error('summary unavailable'));
+
+    await expect(runEmbeddedTurnForSession({
+      sessionKey: 'agent:main:test-session',
+      userMessage: { role: 'user', content: 'test' } as AgentMessage,
+      sessionStore: sessionStore as any,
+      agentManager: createMockAgentManager() as any,
+      modelManager: createMockModelManager() as any,
+    })).rejects.toThrow('summary unavailable');
+
+    expect(mockRunXopcEmbeddedTurn).not.toHaveBeenCalled();
   });
 
   it('emits skipped when compact returns compacted=false', async () => {
@@ -324,6 +386,7 @@ describe('pre-turn auto-compaction', () => {
       sessionStore: sessionStore as any,
       agentManager: agentManager as any,
       modelManager: modelManager as any,
+      getConfig: () => configWithCompaction(true) as any,
       onEvent: (e) => events.push(e),
     });
 
@@ -350,11 +413,7 @@ describe('pre-turn auto-compaction', () => {
       modelManager: modelManager as any,
     });
 
-    // prepareCompaction receives 200k context window
-    expect(sessionStore.prepareCompaction).toHaveBeenCalledWith(
-      'agent:main:test-session',
-      expect.any(Array),
-      200_000,
-    );
+    expect(sessionStore.load).toHaveBeenCalledWith('agent:main:test-session');
+    expect(sessionStore.compact).not.toHaveBeenCalled();
   });
 });

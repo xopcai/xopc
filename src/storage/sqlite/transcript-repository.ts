@@ -3,11 +3,12 @@ import type { DatabaseSync } from 'node:sqlite';
 
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
-import type { CompactionCheckpointDetail, CompactionCheckpointSummary } from '../../session/types.js';
+import type { CompactionBoundarySummary } from '../../session/types.js';
 import {
   buildSessionContextForLlm,
   isRuntimeOnlyTranscriptMessage,
   type TranscriptStoredRow,
+  type XopcTranscriptCompactionEntry,
 } from '../../session/session-context-for-llm.js';
 import {
   classifyStoredRow,
@@ -18,8 +19,6 @@ import {
 } from './row-mappers.js';
 import { getCurrentSessionId, readCurrentSessionId } from './session-repository.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
-
-const MAX_CHECKPOINTS_PER_TRANSCRIPT = 15;
 
 function nextSeq(db: DatabaseSync, sessionId: string): number {
   const row = db
@@ -106,6 +105,30 @@ export function appendTranscriptEntry(
   });
 }
 
+export function appendCompactionBoundary(
+  sessionKey: string,
+  row: Omit<XopcTranscriptCompactionEntry, 'baseSeq'>,
+): TranscriptEntryRow {
+  return runSqliteWriteTransaction((db) => {
+    const sessionId = readCurrentSessionId(db, sessionKey);
+    if (!sessionId) throw new Error(`Session not found: ${sessionKey}`);
+    const boundary = { ...row, baseSeq: nextSeq(db, sessionId) - 1 };
+    const inserted = insertEntry(db, { sessionId, sessionKey, row: boundary });
+    const now = Date.now();
+    db.prepare(
+      `UPDATE sessions SET
+        message_count = ?,
+        estimated_tokens = ?,
+        compacted_count = compacted_count + 1,
+        updated_at = ?,
+        last_accessed_at = ?,
+        last_interaction_at = ?
+       WHERE session_key = ?`,
+    ).run(boundary.messages.length, boundary.tokensAfter, now, now, now, sessionKey);
+    return inserted;
+  });
+}
+
 export function loadTranscriptRowsForSession(sessionKey: string): TranscriptStoredRow[] {
   const sessionId = getCurrentSessionId(sessionKey);
   if (!sessionId) {
@@ -145,8 +168,22 @@ export function loadTranscriptRows(sessionId: string): TranscriptStoredRow[] {
 }
 
 export function loadLlmMessagesForSession(sessionKey: string): AgentMessage[] {
-  const rows = loadTranscriptRowsForSession(sessionKey);
-  return buildSessionContextForLlm(rows);
+  const sessionId = getCurrentSessionId(sessionKey);
+  if (!sessionId) return [];
+  const rows = getSqliteDatabase()
+    .prepare(
+      `SELECT entry_id, session_id, seq, entry_kind, role, payload_json, created_at
+       FROM transcript_entries
+       WHERE session_id = ?
+         AND seq >= COALESCE(
+           (SELECT MAX(seq) FROM transcript_entries WHERE session_id = ? AND entry_kind = 'compaction'),
+           1
+         )
+       ORDER BY seq ASC`,
+    )
+    .all(sessionId, sessionId) as TranscriptEntryRow[];
+  const activeRows = rows.map(transcriptEntryRowToStoredRow);
+  return buildSessionContextForLlm(activeRows);
 }
 
 export function replaceTranscriptRows(
@@ -184,27 +221,6 @@ export function replaceTranscriptRows(
       WHERE session_key = ?`,
     ).run(llm.length, estimateTokensFromMessages(llm), now, now, now, sessionKey);
   });
-}
-
-export function loadCheckpointRows(sessionKey: string, checkpointId: string): TranscriptStoredRow[] {
-  const db = getSqliteDatabase();
-  const checkpoint = db
-    .prepare(
-      `SELECT checkpoint_id FROM compaction_checkpoints
-       WHERE session_key = ? AND checkpoint_id = ?`,
-    )
-    .get(sessionKey, checkpointId) as { checkpoint_id: string } | undefined;
-  if (!checkpoint) {
-    return [];
-  }
-  const entries = db
-    .prepare(
-      `SELECT payload_json FROM checkpoint_entries
-       WHERE checkpoint_id = ?
-       ORDER BY seq ASC`,
-    )
-    .all(checkpointId) as Array<{ payload_json: string }>;
-  return entries.map((entry) => JSON.parse(entry.payload_json) as TranscriptStoredRow);
 }
 
 export function paginateTranscriptMessages(
@@ -290,178 +306,91 @@ export function paginateTranscriptMessages(
   return { rows: storedRows, messages, total, startSeq, endSeq };
 }
 
-export function captureCompactionCheckpoint(sessionKey: string): string | null {
-  return runSqliteWriteTransaction((db) => {
-    const sessionId = readCurrentSessionId(db, sessionKey);
-    if (!sessionId) {
-      return null;
-    }
+export function listCompactionBoundaries(sessionKey: string): CompactionBoundarySummary[] {
+  const db = getSqliteDatabase();
+  const sessionId = getCurrentSessionId(sessionKey);
+  if (!sessionId) return [];
+  const rows = db
+    .prepare(
+      `SELECT entry_id, seq, payload_json, created_at
+       FROM transcript_entries
+       WHERE session_id = ? AND entry_kind = 'compaction'
+       ORDER BY seq DESC`,
+    )
+    .all(sessionId) as Array<{
+    entry_id: string;
+    seq: number;
+    payload_json: string;
+    created_at: number;
+  }>;
 
-    const entries = db
-      .prepare(
-        `SELECT entry_id, session_id, seq, entry_kind, role, payload_json, created_at
-         FROM transcript_entries WHERE session_id = ? ORDER BY seq ASC`,
-      )
-      .all(sessionId) as TranscriptEntryRow[];
-    if (entries.length === 0) {
-      return null;
-    }
-
-    const checkpointId = randomUUID();
-    const now = Date.now();
-    const messageCount = entries.filter((e) => e.entry_kind === 'message').length;
-    const sizeBytes = entries.reduce((sum, e) => sum + e.payload_json.length, 0);
-
-    db.prepare(
-      `INSERT INTO compaction_checkpoints
-        (checkpoint_id, session_id, session_key, created_at, message_count, size_bytes)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-    ).run(checkpointId, sessionId, sessionKey, now, messageCount, sizeBytes);
-
-    const insertCheckpointEntry = db.prepare(
-      `INSERT INTO checkpoint_entries (checkpoint_id, seq, entry_kind, role, payload_json)
-       VALUES (?, ?, ?, ?, ?)`,
-    );
-    for (const entry of entries) {
-      insertCheckpointEntry.run(
-        checkpointId,
-        entry.seq,
-        entry.entry_kind,
-        entry.role,
-        entry.payload_json,
-      );
-    }
-
-    pruneCompactionCheckpoints(db, sessionId);
-    return checkpointId;
+  return rows.map((row) => {
+    const payload = JSON.parse(row.payload_json) as XopcTranscriptCompactionEntry;
+    return {
+      id: row.entry_id,
+      seq: row.seq,
+      createdAt: new Date(row.created_at).toISOString(),
+      messageCount: payload.messages.length,
+      tokensBefore: payload.tokensBefore,
+      tokensAfter: payload.tokensAfter,
+      summaryPreview: payload.summary.slice(0, 500),
+      restoredFromCompactionId: payload.restoredFromCompactionId,
+    };
   });
 }
 
-function pruneCompactionCheckpoints(db: DatabaseSync, sessionId: string): void {
-  const rows = db
-    .prepare(
-      `SELECT checkpoint_id FROM compaction_checkpoints
-       WHERE session_id = ?
-       ORDER BY created_at ASC`,
-    )
-    .all(sessionId) as Array<{ checkpoint_id: string }>;
-  if (rows.length <= MAX_CHECKPOINTS_PER_TRANSCRIPT) {
-    return;
-  }
-  const toDelete = rows.slice(0, rows.length - MAX_CHECKPOINTS_PER_TRANSCRIPT);
-  const del = db.prepare(`DELETE FROM compaction_checkpoints WHERE checkpoint_id = ?`);
-  for (const row of toDelete) {
-    del.run(row.checkpoint_id);
-  }
-}
-
-export function listCompactionCheckpoints(sessionKey: string): CompactionCheckpointSummary[] {
-  const db = getSqliteDatabase();
-  const rows = db
-    .prepare(
-      `SELECT checkpoint_id, created_at, message_count, size_bytes
-       FROM compaction_checkpoints
-       WHERE session_key = ?
-       ORDER BY created_at DESC`,
-    )
-    .all(sessionKey) as Array<{
-    checkpoint_id: string;
-    created_at: number;
-    message_count: number;
-    size_bytes: number;
-  }>;
-
-  return rows.map((row) => ({
-    id: row.checkpoint_id,
-    sizeBytes: row.size_bytes,
-    modifiedAt: new Date(row.created_at).toISOString(),
-  }));
-}
-
-export function getCompactionCheckpointDetail(
-  sessionKey: string,
-  checkpointId: string,
-): CompactionCheckpointDetail | null {
-  const db = getSqliteDatabase();
-  const row = db
-    .prepare(
-      `SELECT checkpoint_id, created_at, message_count, size_bytes
-       FROM compaction_checkpoints
-       WHERE session_key = ? AND checkpoint_id = ?`,
-    )
-    .get(sessionKey, checkpointId) as
-    | {
-        checkpoint_id: string;
-        created_at: number;
-        message_count: number;
-        size_bytes: number;
-      }
-    | undefined;
-  if (!row) {
-    return null;
-  }
-  return {
-    id: row.checkpoint_id,
-    sizeBytes: row.size_bytes,
-    modifiedAt: new Date(row.created_at).toISOString(),
-    messageCount: row.message_count,
-  };
-}
-
-export function restoreCompactionCheckpoint(sessionKey: string, checkpointId: string): void {
+export function restoreBeforeCompactionBoundary(sessionKey: string, compactionId: string): void {
   runSqliteWriteTransaction((db) => {
     const sessionId = readCurrentSessionId(db, sessionKey);
-    if (!sessionId) {
-      throw new Error(`Session not found: ${sessionKey}`);
-    }
-
-    const checkpoint = db
+    if (!sessionId) throw new Error(`Session not found: ${sessionKey}`);
+    const boundary = db
       .prepare(
-        `SELECT checkpoint_id FROM compaction_checkpoints
-         WHERE session_key = ? AND checkpoint_id = ?`,
+        `SELECT seq FROM transcript_entries
+         WHERE session_id = ? AND entry_id = ? AND entry_kind = 'compaction'`,
       )
-      .get(sessionKey, checkpointId) as { checkpoint_id: string } | undefined;
-    if (!checkpoint) {
-      throw new Error(`Checkpoint not found: ${checkpointId}`);
-    }
-
+      .get(sessionId, compactionId) as { seq: number } | undefined;
+    if (!boundary) throw new Error(`Compaction boundary not found: ${compactionId}`);
     const entries = db
       .prepare(
-        `SELECT seq, entry_kind, role, payload_json
-         FROM checkpoint_entries
-         WHERE checkpoint_id = ?
+        `SELECT entry_id, session_id, seq, entry_kind, role, payload_json, created_at
+         FROM transcript_entries
+         WHERE session_id = ? AND seq < ?
          ORDER BY seq ASC`,
       )
-      .all(checkpointId) as Array<{
-      seq: number;
-      entry_kind: string;
-      role: string | null;
-      payload_json: string;
-    }>;
-
-    db.prepare(`DELETE FROM transcript_fts WHERE session_id = ?`).run(sessionId);
-    db.prepare(`DELETE FROM transcript_entries WHERE session_id = ?`).run(sessionId);
-
-    for (const entry of entries) {
-      const payload = JSON.parse(entry.payload_json) as TranscriptStoredRow;
-      insertEntry(db, {
-        sessionId,
-        sessionKey,
-        row: payload,
-        createdAt: Date.now(),
-      });
+      .all(sessionId, boundary.seq) as TranscriptEntryRow[];
+    const restoredMessages = buildSessionContextForLlm(entries.map(transcriptEntryRowToStoredRow));
+    if (restoredMessages.length === 0) {
+      throw new Error(`No restorable context exists before compaction boundary: ${compactionId}`);
     }
-
-    const llm = buildSessionContextForLlm(entries.map((e) => JSON.parse(e.payload_json) as TranscriptStoredRow));
+    const current = db.prepare(`SELECT estimated_tokens FROM sessions WHERE session_key = ?`)
+      .get(sessionKey) as { estimated_tokens: number };
+    const tokensAfter = estimateTokensFromMessages(restoredMessages);
+    const baseSeq = nextSeq(db, sessionId) - 1;
+    const row: XopcTranscriptCompactionEntry = {
+      type: 'compaction',
+      at: new Date().toISOString(),
+      baseSeq,
+      plannerVersion: 2,
+      summaryModelRef: 'logical-restore',
+      qualityAudit: 'disabled',
+      summary: `Restored the effective context that existed before compaction boundary ${compactionId}.`,
+      messages: restoredMessages,
+      firstKeptIndex: 0,
+      tokensBefore: current.estimated_tokens,
+      tokensAfter,
+      restoredFromCompactionId: compactionId,
+    };
+    insertEntry(db, { sessionId, sessionKey, row });
     const now = Date.now();
     db.prepare(
       `UPDATE sessions SET
         message_count = ?,
         estimated_tokens = ?,
+        compacted_count = compacted_count + 1,
         updated_at = ?,
         last_accessed_at = ?,
         last_interaction_at = ?
       WHERE session_key = ?`,
-    ).run(llm.length, estimateTokensFromMessages(llm), now, now, now, sessionKey);
+    ).run(restoredMessages.length, tokensAfter, now, now, now, sessionKey);
   });
 }

@@ -12,11 +12,10 @@ import {
   deleteSessionConfig,
   deleteSessionRecord,
   ensureSessionRecord,
-  getCompactionCheckpointDetail,
   getGlobalSessionStats,
   getSessionConfig,
   getSessionMetadata,
-  listCompactionCheckpoints,
+  listCompactionBoundaries,
   listSessionMetadata,
   loadLlmMessagesForSession,
   loadTranscriptHistoryRowsForSession,
@@ -26,11 +25,11 @@ import {
   replaceTranscriptRows,
   resetSessionRecord,
   resetXopcDatabaseSingletonForTest,
-  restoreCompactionCheckpoint,
+  restoreBeforeCompactionBoundary,
   setSessionConfig,
   appendTranscriptEntry,
+  appendCompactionBoundary,
   appendMemoryTraceEvent,
-  captureCompactionCheckpoint,
   paginateTranscriptMessages,
   listMemoryRecords,
   listMemoryTraceEvents,
@@ -369,25 +368,31 @@ describe('sqlite repositories', () => {
     expect(getSessionConfig(SESSION_KEY)).toBeNull();
   });
 
-  it('captures and restores compaction checkpoints', () => {
+  it('restores context by appending a logical compaction boundary', () => {
     ensureSessionRecord(SESSION_KEY, CWD);
     replaceTranscriptRows(SESSION_KEY, [userMessage('keep'), assistantMessage('me')]);
+    const boundary = appendCompactionBoundary(SESSION_KEY, {
+      type: 'compaction',
+      at: new Date().toISOString(),
+      plannerVersion: 2,
+      summaryModelRef: 'test/model',
+      qualityAudit: 'passed',
+      summary: 'condensed',
+      messages: [userMessage('summary')],
+      firstKeptIndex: 2,
+      tokensBefore: 100,
+      tokensAfter: 10,
+    });
+    appendTranscriptEntry(SESSION_KEY, userMessage('later'));
 
-    const checkpointId = captureCompactionCheckpoint(SESSION_KEY);
-    expect(checkpointId).toBeTruthy();
-
-    const summaries = listCompactionCheckpoints(SESSION_KEY);
-    expect(summaries).toHaveLength(1);
-
-    const detail = getCompactionCheckpointDetail(SESSION_KEY, checkpointId!);
-    expect(detail?.messageCount).toBe(2);
-
-    replaceTranscriptRows(SESSION_KEY, [userMessage('replaced')]);
-    restoreCompactionCheckpoint(SESSION_KEY, checkpointId!);
+    restoreBeforeCompactionBoundary(SESSION_KEY, boundary.entry_id);
 
     const llm = loadLlmMessagesForSession(SESSION_KEY);
     expect(llm).toHaveLength(2);
     expect((llm[0] as AgentMessage).content).toBe('keep');
+    const boundaries = listCompactionBoundaries(SESSION_KEY);
+    expect(boundaries).toHaveLength(2);
+    expect(boundaries[0]?.restoredFromCompactionId).toBe(boundary.entry_id);
   });
 
   it('computes global session stats', () => {

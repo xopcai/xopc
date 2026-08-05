@@ -1,4 +1,4 @@
-import type { AgentMessage } from '@earendil-works/pi-agent-core';
+import type { Agent, AgentMessage } from '@earendil-works/pi-agent-core';
 import type { Model, Api } from '@earendil-works/pi-ai';
 
 import { createLogger } from '../../utils/logger.js';
@@ -10,6 +10,7 @@ import {
   isAssistantTurnAborted,
   isAssistantTurnFailed,
   maybeRetryTurnAfterTransientLlmFailure,
+  stripTrailingErrorAssistantMessages,
 } from '../orchestration/llm-turn-retry.js';
 import { runAgentTurnWithTimeout, resolveAgentTurnTimeoutMs } from '../orchestration/run-agent-turn-with-timeout.js';
 import { detectToolLoops, type RecentToolCall } from '../orchestration/loop-guard.js';
@@ -19,6 +20,8 @@ import {
   resolveEmbeddedTranscriptInputs,
 } from './session-runner.js';
 import { wrapStreamFnForXopcExtensions } from './xopc-stream-bridge.js';
+import { pruneToolResultsToFit } from '../memory/context-budget.js';
+import { isContextOverflowError } from '../orchestration/context-overflow.js';
 
 const log = createLogger('EmbeddedRun');
 const LOG_PREVIEW_MAX_CHARS = 300;
@@ -43,13 +46,27 @@ function extractTextFromContent(content: unknown): string {
 }
 
 function extractRecentToolCalls(messages: readonly { role?: string; content?: unknown }[]): RecentToolCall[] {
+  const resultByToolCallId = new Map<string, string>();
+  for (const message of messages) {
+    if (message.role !== 'toolResult') continue;
+    const toolCallId = (message as { toolCallId?: unknown }).toolCallId;
+    if (typeof toolCallId !== 'string' || !toolCallId) continue;
+    resultByToolCallId.set(toolCallId, truncateForLog(extractTextFromContent(message.content)));
+  }
+
   const calls: RecentToolCall[] = [];
   for (const message of messages) {
     if (message.role !== 'assistant' || !Array.isArray(message.content)) continue;
     for (const block of message.content) {
       if (block && typeof block === 'object' && (block as { type?: string }).type === 'toolCall') {
-        const toolCall = block as { name: string; arguments: unknown };
-        calls.push({ name: toolCall.name, params: toolCall.arguments });
+        const toolCall = block as { id?: string; name: string; arguments: unknown };
+        calls.push({
+          name: toolCall.name,
+          params: toolCall.arguments,
+          ...(toolCall.id && resultByToolCallId.has(toolCall.id)
+            ? { resultPreview: resultByToolCallId.get(toolCall.id) }
+            : {}),
+        });
       }
     }
   }
@@ -89,6 +106,47 @@ function userMessageToPromptText(message: AgentMessage): string {
       .join('');
   }
   return '';
+}
+
+async function maybeRecoverContextOverflow(params: {
+  agent: Agent;
+  model: Model<Api>;
+  sessionKey: string;
+  sessionStore: RunXopcEmbeddedTurnParams['sessionStore'];
+  onEvent?: RunXopcEmbeddedTurnParams['onEvent'];
+}): Promise<boolean> {
+  const errorMessage = getAssistantTurnErrorMessage(params.agent);
+  if (!errorMessage || !isContextOverflowError(errorMessage)) return false;
+
+  const messages = stripTrailingErrorAssistantMessages(params.agent.state.messages);
+  log.warn(
+    { sessionKey: params.sessionKey, errorMessage, messageCount: messages.length },
+    'Provider rejected the context window; compacting and retrying the same turn',
+  );
+  params.onEvent?.({ type: 'compaction', status: 'started' });
+
+  const result = await params.sessionStore.compact(
+    params.sessionKey,
+    messages,
+    params.model,
+    'Preserve the current pending user request verbatim and retain every fact needed to answer it.',
+    true,
+  );
+  if (!result.compacted) {
+    throw new Error(`Context overflow recovery could not find a safe compaction range: ${errorMessage}`);
+  }
+
+  params.agent.state.messages = await params.sessionStore.load(params.sessionKey);
+  params.onEvent?.({
+    type: 'compaction',
+    status: 'completed',
+    tokensBefore: result.tokensBefore,
+    tokensAfter: result.tokensAfter,
+    summary: result.summary.length > 200 ? `${result.summary.slice(0, 200)}…` : result.summary,
+  });
+  await params.agent.continue();
+  await params.agent.waitForIdle();
+  return true;
 }
 
 export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Promise<RunXopcEmbeddedTurnResult> {
@@ -136,14 +194,38 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
       let effectiveContext: typeof context = { ...context, messages: hygienicMessages };
       if (loopGuard.injection || loopGuard.hiddenTools.size > 0) {
         const messages = loopGuard.injection
-          ? [...context.messages, { role: 'user' as const, content: loopGuard.injection, timestamp: Date.now() }]
-          : context.messages;
+          ? [...hygienicMessages, { role: 'user' as const, content: loopGuard.injection, timestamp: Date.now() }]
+          : hygienicMessages;
 
         const contextTools = loopGuard.hiddenTools.size > 0 && context.tools
           ? context.tools.filter((t) => !loopGuard.hiddenTools.has(t.name))
           : context.tools;
 
         effectiveContext = { ...context, messages, tools: contextTools };
+      }
+
+      const pruned = pruneToolResultsToFit({
+        messages: effectiveContext.messages as AgentMessage[],
+        contextWindow: streamModel.contextWindow ?? 128_000,
+        systemPrompt: effectiveContext.systemPrompt,
+        tools: effectiveContext.tools,
+        canCompact: false,
+      });
+      if (pruned.prunedToolResults > 0) {
+        effectiveContext = {
+          ...effectiveContext,
+          messages: pruned.messages as typeof effectiveContext.messages,
+        };
+        log.warn(
+          {
+            sessionKey,
+            runId,
+            prunedToolResults: pruned.prunedToolResults,
+            estimatedTokens: pruned.evaluation.estimatedTokens,
+            hardLimitTokens: pruned.evaluation.hardLimitTokens,
+          },
+          'Pruned old tool results to fit the model context window',
+        );
       }
 
       log.debug(
@@ -212,6 +294,13 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
           await session.prompt(text, images.length > 0 ? { images } : undefined);
           await session.agent.waitForIdle();
           await maybeRetryTurnAfterTransientLlmFailure(session.agent, { sessionKey, log });
+          await maybeRecoverContextOverflow({
+            agent: session.agent,
+            model: resolvedModel,
+            sessionKey,
+            sessionStore,
+            onEvent,
+          });
         },
         timeoutMs,
       );

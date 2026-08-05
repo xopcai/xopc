@@ -31,6 +31,7 @@ import {
 import { getProjectForSession } from '../../projects/workspace.js';
 import type { SessionStore } from '../../session/store.js';
 import type { CompactionResult } from '../memory/compaction.js';
+import { resolveCompactionPolicy } from '../memory/compaction-policy.js';
 import type { ModelManager } from '../models/index.js';
 import type { AgentInstanceGateway } from '../agent-instance-gateway.js';
 import { runBtwQuery } from '../service/btw-query.js';
@@ -38,6 +39,7 @@ import { formatSessionContextReport } from '../service/session-context-report.js
 import type { ReasoningLevel, VerboseLevel } from '../transcript/thinking-types.js';
 import { createLogger } from '../../utils/logger.js';
 import type { SessionHydrator } from './session-hydrator.js';
+import { resolveModel } from '../../providers/index.js';
 
 const log = createLogger('SessionInspector');
 
@@ -107,13 +109,21 @@ export class SessionInspector {
   ): Promise<CompactionResult> {
     const messages = await this.opts.sessionStore.load(sessionKey);
     await this.ensureEffectiveSessionModel(sessionKey);
-    const model = this.opts.modelManager.getResolvedModelForSession(sessionKey);
+    const policy = resolveCompactionPolicy(this.opts.getConfig());
+    const sessionModel = this.opts.modelManager.getResolvedModelForSession(sessionKey);
+    const model = policy.model ? resolveModel(policy.model) : sessionModel;
+    const primaryRef = `${model.provider}/${model.id}`;
+    const fallbackModels = this.opts.modelManager
+      .getFallbackCandidatesForSession(sessionKey)
+      .map((candidate) => resolveModel(`${candidate.provider}/${candidate.model}`))
+      .filter((candidate) => `${candidate.provider}/${candidate.id}` !== primaryRef);
     const result = await this.opts.sessionStore.compact(
       sessionKey,
       messages,
       model,
       options?.instructions,
       options?.force ?? true,
+      { fallbackModels },
     );
     if (result.compacted) {
       this.opts.agentManager.removeAgent(sessionKey);

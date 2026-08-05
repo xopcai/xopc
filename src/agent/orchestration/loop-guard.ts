@@ -46,19 +46,23 @@ const DEFAULT_CONFIG: LoopGuardConfig = {
  * Stable fingerprint for tool call comparison.
  * Recursively sorts object keys; truncates long string values.
  */
-function fingerprint(toolName: string, params: unknown): string {
-  const normalized = JSON.stringify(params, (_key, value) => {
-    if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+function stableJson(value: unknown): string | undefined {
+  return JSON.stringify(value, (_key, item) => {
+    if (typeof item === 'object' && item !== null && !Array.isArray(item)) {
       return Object.fromEntries(
-        Object.entries(value).sort(([a], [b]) => a.localeCompare(b)),
+        Object.entries(item).sort(([a], [b]) => a.localeCompare(b)),
       );
     }
-    if (typeof value === 'string' && value.length > 200) {
-      return `${value.slice(0, 80)}…[${value.length}]`;
+    if (typeof item === 'string' && item.length > 200) {
+      return `${item.slice(0, 80)}…[${item.length}]`;
     }
-    return value;
+    return item;
   });
-  return `${toolName}::${normalized}`;
+}
+
+function fingerprint(call: RecentToolCall): string {
+  const result = call.resultPreview === undefined ? '' : `::result=${stableJson(call.resultPreview)}`;
+  return `${call.name}::${stableJson(call.params)}${result}`;
 }
 
 /**
@@ -150,13 +154,13 @@ function findConsecutiveRepeats(calls: readonly RecentToolCall[]): ConsecutiveGr
 
   while (index >= 0) {
     const current = calls[index]!;
-    const fp = fingerprint(current.name, current.params);
+    const fp = fingerprint(current);
     let count = 1;
 
     // Walk backward counting identical consecutive calls
     while (index - count >= 0) {
       const prev = calls[index - count]!;
-      if (fingerprint(prev.name, prev.params) !== fp) break;
+      if (fingerprint(prev) !== fp) break;
       count++;
     }
 
@@ -176,7 +180,7 @@ function findConsecutiveRepeats(calls: readonly RecentToolCall[]): ConsecutiveGr
 function countFrequency(calls: readonly RecentToolCall[]): Map<string, number> {
   const map = new Map<string, number>();
   for (const call of calls) {
-    const fp = fingerprint(call.name, call.params);
+    const fp = fingerprint(call);
     map.set(fp, (map.get(fp) ?? 0) + 1);
   }
   return map;

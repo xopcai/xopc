@@ -522,40 +522,29 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     return c.json({ ok: true });
   });
 
-  // GET /api/sessions/:key/compaction/checkpoints — list pre-compaction snapshots (OpenClaw-style)
-  authenticated.get('/api/sessions/:key/compaction/checkpoints', async (c) => {
+  authenticated.get('/api/sessions/:key/compaction/boundaries', async (c) => {
     const key = c.req.param('key');
     const meta = await service.sessionIndexInstance.getSessionMetadata(key);
     if (!meta) {
       return c.json({ ok: false, error: 'Session not found' }, 404);
     }
-    const checkpoints = await service.sessions.listCompactionCheckpoints(key);
-    return c.json({ ok: true, payload: { checkpoints } });
-  });
-
-  authenticated.get('/api/sessions/:key/compaction/checkpoints/:checkpointId', async (c) => {
-    const key = c.req.param('key');
-    const checkpointId = c.req.param('checkpointId');
-    const checkpoint = await service.sessions.getCompactionCheckpoint(key, checkpointId);
-    if (!checkpoint) {
-      return c.json({ ok: false, error: 'Checkpoint not found' }, 404);
-    }
-    return c.json({ ok: true, payload: { checkpoint } });
+    const boundaries = await service.sessions.listCompactionBoundaries(key);
+    return c.json({ ok: true, payload: { boundaries } });
   });
 
   authenticated.post('/api/sessions/:key/compaction/restore', async (c) => {
     const key = c.req.param('key');
     const body = await c.req.json().catch(() => ({}));
-    const checkpointId = typeof body.checkpointId === 'string' ? body.checkpointId.trim() : '';
-    if (!checkpointId) {
-      return c.json({ ok: false, error: 'checkpointId required' }, 400);
+    const compactionId = typeof body.compactionId === 'string' ? body.compactionId.trim() : '';
+    if (!compactionId) {
+      return c.json({ ok: false, error: 'compactionId required' }, 400);
     }
     try {
-      await service.sessions.restoreCompactionCheckpoint(key, checkpointId);
+      await service.sessions.restoreBeforeCompactionBoundary(key, compactionId);
     } catch (err) {
-      logRouteError(log, c, err, 'gateway.route.sessions', { operation: 'restoreCheckpoint', sessionKey: key });
+      logRouteError(log, c, err, 'gateway.route.sessions', { operation: 'restoreCompactionBoundary', sessionKey: key });
       const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes('not found') || msg.includes('Invalid')) {
+      if (msg.includes('not found')) {
         return c.json({ ok: false, error: msg }, 404);
       }
       return c.json({ ok: false, error: msg }, 500);

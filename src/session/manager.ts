@@ -16,7 +16,11 @@ import type {
 } from './types.js';
 import type { SessionMetadataSeed } from '../storage/sqlite/index.js';
 import type { Message } from './types.js';
-import type { CompactionConfig, CompactionResult } from '../agent/memory/compaction.js';
+import type {
+  CompactionConfig,
+  CompactionExecutionOptions,
+  CompactionResult,
+} from '../agent/memory/compaction.js';
 import type { XopcSessionTranscriptV1 } from './transcript-format.js';
 import type { XopcTranscriptContextEntry } from './session-context-for-llm.js';
 import { applySessionPatchToMetadata, type SessionPatchBody } from './patch-metadata.js';
@@ -439,11 +443,6 @@ export class SessionIndex extends EventEmitter {
     return this.store.getWindowStats(messages);
   }
 
-  /** Prepare compaction run */
-  prepareCompaction(key: string, messages: any[], contextWindow: number) {
-    return this.store.prepareCompaction(key, messages, contextWindow);
-  }
-
   /** Compact session messages */
   compact(
     key: string,
@@ -451,8 +450,9 @@ export class SessionIndex extends EventEmitter {
     model: Model<Api>,
     instructions?: string,
     force?: boolean,
+    executionOptions?: CompactionExecutionOptions,
   ): Promise<CompactionResult> {
-    return this.store.compact(key, messages, model, instructions, force);
+    return this.store.compact(key, messages, model, instructions, force, executionOptions);
   }
 
   /** Compaction stats for a session */
@@ -460,17 +460,12 @@ export class SessionIndex extends EventEmitter {
     return this.store.getCompactionStats(key);
   }
 
-  /** List pre-compaction transcript snapshots (newest first). */
-  listCompactionCheckpoints(key: string) {
-    return this.store.listCompactionCheckpoints(key);
+  listCompactionBoundaries(key: string) {
+    return this.store.listCompactionBoundaries(key);
   }
 
-  getCompactionCheckpointDetail(key: string, checkpointId: string) {
-    return this.store.getCompactionCheckpointDetail(key, checkpointId);
-  }
-
-  restoreCompactionCheckpoint(key: string, checkpointId: string) {
-    return this.store.restoreCompactionCheckpoint(key, checkpointId);
+  restoreBeforeCompactionBoundary(key: string, compactionId: string) {
+    return this.store.restoreBeforeCompactionBoundary(key, compactionId);
   }
 
   /** Estimate token usage for messages */

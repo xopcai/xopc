@@ -44,4 +44,22 @@ describe('post-compaction-context', () => {
     expect(result).toContain('Session Startup');
     expect(result).toContain('Red Lines');
   });
+
+  it('uses configured post-compaction sections instead of the defaults', () => {
+    const result = readPostCompactionContextFromAgentsMd(SAMPLE_AGENTS, {
+      sectionNames: ['Every Session'],
+    });
+    expect(result).toContain('Every Session');
+    expect(result).toContain('Read SOUL.md manually');
+    expect(result).not.toContain('Use runtime context first');
+  });
+
+  it('bounds injected context after resolving configured sections', () => {
+    const result = readPostCompactionContextFromAgentsMd(SAMPLE_AGENTS, {
+      sectionNames: ['Every Session'],
+      maxContextChars: 20,
+    });
+    expect(result).toContain('...[truncated]...');
+    expect(result).not.toContain('Read SOUL.md manually');
+  });
 });

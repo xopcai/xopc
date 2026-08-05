@@ -91,25 +91,6 @@ CREATE INDEX IF NOT EXISTS idx_entries_session_seq
 CREATE INDEX IF NOT EXISTS idx_entries_kind
   ON transcript_entries(session_id, entry_kind);
 
-CREATE TABLE IF NOT EXISTS compaction_checkpoints (
-  checkpoint_id    TEXT PRIMARY KEY,
-  session_id       TEXT NOT NULL,
-  session_key      TEXT NOT NULL,
-  created_at       INTEGER NOT NULL,
-  message_count    INTEGER NOT NULL,
-  size_bytes       INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS checkpoint_entries (
-  checkpoint_id   TEXT NOT NULL,
-  seq             INTEGER NOT NULL,
-  entry_kind      TEXT NOT NULL,
-  role            TEXT,
-  payload_json    TEXT NOT NULL,
-  PRIMARY KEY (checkpoint_id, seq),
-  FOREIGN KEY (checkpoint_id) REFERENCES compaction_checkpoints(checkpoint_id) ON DELETE CASCADE
-);
-
 CREATE VIRTUAL TABLE IF NOT EXISTS transcript_fts USING fts5(
   content,
   session_key UNINDEXED,
