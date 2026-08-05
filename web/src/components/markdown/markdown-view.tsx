@@ -20,28 +20,6 @@ import {
 } from './internal-links';
 import './markdown.css';
 
-let externalLinkHookRegistered = false;
-
-function registerExternalMarkdownLinkHook(): void {
-  if (externalLinkHookRegistered || typeof window === 'undefined') return;
-  externalLinkHookRegistered = true;
-  DOMPurify.addHook('afterSanitizeAttributes', (node) => {
-    if (node.tagName !== 'A' || !node.hasAttribute('href')) return;
-    const href = node.getAttribute('href') ?? '';
-    try {
-      const resolved = new URL(href, window.location.href);
-      if (resolved.protocol !== 'http:' && resolved.protocol !== 'https:') return;
-      if (resolved.origin === window.location.origin) return;
-      node.setAttribute('target', '_blank');
-      node.setAttribute('rel', 'noopener noreferrer');
-    } catch {
-      /* invalid URL */
-    }
-  });
-}
-
-registerExternalMarkdownLinkHook();
-
 /** Lucide-style 14px icons for DOM-injected code-copy control (keeps bundle self-contained here). */
 const ICON_COPY_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>';
