@@ -151,4 +151,34 @@ describe('streaming assistant Markdown rendering', () => {
     act(() => vi.advanceTimersByTime(32));
     expect(container.textContent?.trim()).toBe('abcdefghijkl');
   });
+
+  it('renders punctuation-bound strong text through the assistant message pipeline', () => {
+    const text = [
+      '所以问题的根源，可能不是"怎么放下她"，而是**"你现在的孤独感，有没有别的地方可以安放？"**',
+      '',
+      '我先问你一个具体的、不复杂的问题，你如实说就好：',
+    ].join('\n');
+
+    render([{ type: 'text', text }], false);
+
+    const strong = container.querySelector('.markdown-body strong');
+    expect(strong, container.innerHTML).not.toBeNull();
+    expect(strong?.textContent).toBe('"你现在的孤独感，有没有别的地方可以安放？"');
+    expect(container.textContent).not.toContain('**');
+  });
+
+  it('renders punctuation-bound strong text after progressive streaming completes', () => {
+    vi.useFakeTimers();
+    const text = '前文有"普通引号"，而是**"流式完成后也必须加粗。"**';
+
+    render([{ type: 'text', text }], true);
+    for (let step = 0; step < 30; step += 1) {
+      act(() => vi.advanceTimersByTime(48));
+    }
+    render([{ type: 'text', text }], false);
+
+    const strong = container.querySelector('.markdown-body strong');
+    expect(strong?.textContent).toBe('"流式完成后也必须加粗。"');
+    expect(container.textContent).not.toContain('**');
+  });
 });
