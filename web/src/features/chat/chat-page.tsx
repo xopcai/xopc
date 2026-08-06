@@ -1147,7 +1147,14 @@ export function ChatPage() {
                     <div className="mb-3 text-center text-xs text-fg-muted">{m.chat.loadOlder}</div>
                   ) : null}
                   {stream.error ? (
-                    <AgentRunErrorBanner errorText={stream.error} />
+                    <div
+                      className={cn(
+                        'sticky z-20 shrink-0 bg-transparent pe-2',
+                        compactWelcomeLayout ? '-top-5' : '-top-4',
+                      )}
+                    >
+                      <AgentRunErrorBanner errorText={stream.error} />
+                    </div>
                   ) : null}
                   {workflowRunLinks.length > 0 ? (
                     <div className="mb-6 flex flex-col gap-3">
