@@ -108,8 +108,8 @@ function AgentRunErrorCard({ payload }: { payload: AgentRunErrorPayload }) {
 
   const shellClass =
     tone === 'amber'
-      ? 'border-amber-300/60 bg-amber-50/70 dark:border-amber-500/30 dark:bg-amber-500/10'
-      : 'border-red-300/60 bg-red-50/70 dark:border-red-500/30 dark:bg-red-500/10';
+      ? 'border-amber-300/60 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-950'
+      : 'border-red-300/60 bg-red-50 dark:border-red-500/30 dark:bg-red-950';
   const iconShellClass =
     tone === 'amber'
       ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300'
