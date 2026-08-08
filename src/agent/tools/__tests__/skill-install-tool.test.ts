@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createSkillInstallTool } from '../skill-install-tool.js';
+import {
+  createSkillInstallTool,
+  type MarketplaceSkillInstallToolOptions,
+} from '../skill-install-tool.js';
 
 function textPayload(result: Awaited<ReturnType<ReturnType<typeof createSkillInstallTool>['execute']>>) {
   return result.content[0]?.type === 'text' ? result.content[0].text : '';
@@ -14,7 +17,7 @@ describe('skill_install', () => {
       provider: 'clawhub' as const,
       name: 'heygen-com/hyperframes',
       version: '1.0.0',
-      target: 'workspace' as const,
+      target: 'global' as const,
     }));
     const tool = createSkillInstallTool({
       installSkillFromMarketplace,
@@ -24,13 +27,13 @@ describe('skill_install', () => {
     const result = await tool.execute('call-1', {
       provider: 'clawhub',
       name: 'heygen-com/hyperframes',
-      target: 'workspace',
     });
 
     expect(installSkillFromMarketplace).toHaveBeenCalledWith(expect.objectContaining({
       provider: 'clawhub',
       name: 'heygen-com/hyperframes',
       sessionKey: 'agent:main:webchat:test',
+      target: 'global',
     }));
     expect(textPayload(result)).toContain('Installed skill "hyperframes" from clawhub.');
   });
@@ -42,7 +45,7 @@ describe('skill_install', () => {
       source: 'https://github.com/example/demo',
       kind: 'git' as const,
       contentHash: '0123456789abcdef',
-      target: 'workspace' as const,
+      target: 'global' as const,
     }));
     const tool = createSkillInstallTool({ installSkillFromSource });
 
@@ -54,7 +57,29 @@ describe('skill_install', () => {
     expect(installSkillFromSource).toHaveBeenCalledWith(expect.objectContaining({
       source: 'https://github.com/example/demo',
       strictScan: true,
+      target: 'global',
     }));
     expect(textPayload(result)).toContain('Installed skill "demo".');
+  });
+
+  it('uses workspace only when explicitly requested', async () => {
+    const installSkillFromMarketplace = vi.fn(async (opts: MarketplaceSkillInstallToolOptions) => ({
+      skillId: 'demo',
+      path: '/workspace/.xopc/skills/demo',
+      provider: opts.provider,
+      name: opts.name,
+      target: opts.target,
+    }));
+    const tool = createSkillInstallTool({ installSkillFromMarketplace });
+
+    await tool.execute('call-3', {
+      provider: 'store',
+      name: 'demo',
+      target: 'workspace',
+    });
+
+    expect(installSkillFromMarketplace).toHaveBeenCalledWith(expect.objectContaining({
+      target: 'workspace',
+    }));
   });
 });
