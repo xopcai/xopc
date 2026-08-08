@@ -39,6 +39,8 @@ import { AgentToolsFactory } from './tools/factory.js';
 import type {
   SkillInstallToolOptions,
   SkillInstallToolResult,
+  MarketplaceSkillInstallToolOptions,
+  MarketplaceSkillInstallToolResult,
 } from './tools/skill-install-tool.js';
 import {
   createAgentCapabilitySessionState,
@@ -167,6 +169,10 @@ export interface AgentManagerConfig {
   onSkillsUpdated?: (payload: { reason: 'disk' | 'config' }) => void;
   /** Install a managed skill from an explicit source and refresh runtime state. */
   installSkillFromSource?: (opts: SkillInstallToolOptions) => Promise<SkillInstallToolResult>;
+  /** Install a managed skill from Store or ClawHub and refresh runtime state. */
+  installSkillFromMarketplace?: (
+    opts: MarketplaceSkillInstallToolOptions,
+  ) => Promise<MarketplaceSkillInstallToolResult>;
   /** Dynamic workspace verification context injected into the system prompt when edits are pending. */
   getSelfVerifyPromptContext?: (sessionKey: string, agentId?: string) => string;
   /**
@@ -453,6 +459,7 @@ export class AgentManager implements AgentInstanceGateway {
         }
       },
       installSkillFromSource: this.config.installSkillFromSource,
+      installSkillFromMarketplace: this.config.installSkillFromMarketplace,
       getCodeIntelligenceRuntime: (workspace) =>
         this.workspaceRuntimes.getOrCreate(
           workspace,

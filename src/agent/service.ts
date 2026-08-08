@@ -75,6 +75,8 @@ import type { AgentServiceConfig, StreamHandle } from './service.types.js';
 import { PersistentGoalService } from './goals/persistent-goal-service.js';
 import { parseNoteAttachmentTarget } from '../notes/attachment-ref.js';
 import { pullSkillFromSource } from './skills/hub-pull.js';
+import { installSkillFromZip } from './skills/managed-store.js';
+import { removeSkillsLockEntry } from './skills/hub-lock.js';
 import {
   resolveWorkspaceSkillsDir,
   resolveWorkspaceSkillsLockPath,
@@ -83,6 +85,8 @@ import { normalizeSkillInstallTarget } from './skills/install-target.js';
 import type {
   SkillInstallToolOptions,
   SkillInstallToolResult,
+  MarketplaceSkillInstallToolOptions,
+  MarketplaceSkillInstallToolResult,
 } from './tools/skill-install-tool.js';
 
 import {
@@ -302,6 +306,7 @@ export class AgentService {
       getWorkflowRunService: config.getWorkflowRunService,
       onSkillsUpdated: config.onSkillsUpdated,
       installSkillFromSource: (opts) => this.installSkillFromSource(opts),
+      installSkillFromMarketplace: (opts) => this.installSkillFromMarketplace(opts),
       isWorkspaceTrusted: config.isWorkspaceTrusted,
       getSelfVerifyPromptContext: (sessionKey, agentId) => [
         this.selfVerifyMiddleware.getPendingVerificationContext(sessionKey, agentId),
@@ -676,6 +681,39 @@ export class AgentService {
     });
     this.refreshSkillsAfterDiskChange();
     return { ...result, target };
+  }
+
+  async installSkillFromMarketplace(
+    opts: MarketplaceSkillInstallToolOptions,
+  ): Promise<MarketplaceSkillInstallToolResult> {
+    const config = this.effectiveAppConfig();
+    const target = normalizeSkillInstallTarget(opts.target);
+    const workspace =
+      (opts.sessionKey ? this.agentManager.getResolvedWorkspaceForSession(opts.sessionKey) : undefined)
+      || this.workspaceDir;
+    const rootDir = target === 'workspace' ? resolveWorkspaceSkillsDir(workspace) : undefined;
+    const lockPath = target === 'workspace' ? resolveWorkspaceSkillsLockPath(workspace) : undefined;
+    const { downloadFromMarketplace } = await import('./skills/skills-marketplace.js');
+    const downloaded = await downloadFromMarketplace(
+      config,
+      opts.name,
+      opts.version,
+      opts.provider,
+    );
+    const result = installSkillFromZip(downloaded.buffer, {
+      skillId: downloaded.skillId,
+      overwrite: opts.force ?? false,
+      rootDir,
+    });
+    removeSkillsLockEntry(result.skillId, lockPath);
+    this.refreshSkillsAfterDiskChange();
+    return {
+      ...result,
+      provider: opts.provider,
+      name: opts.name,
+      version: downloaded.version,
+      target,
+    };
   }
 
   refreshSkillsAfterSkillConfigChange(): void {
