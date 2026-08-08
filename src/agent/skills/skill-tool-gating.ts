@@ -12,6 +12,7 @@ export const SKILL_TOOLSET_TOOLS: Record<string, readonly string[]> = {
   vision: ['image'],
   image_gen: ['image_generate'],
   skills: ['skills_list', 'skill_view', 'skill_manage'],
+  skill_marketplaces: ['skills_marketplace_search'],
 };
 
 function emptyConditions(c: SkillToolConditions | undefined): boolean {
