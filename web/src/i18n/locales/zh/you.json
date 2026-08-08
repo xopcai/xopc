@@ -14,15 +14,18 @@
     "helpSourcesTitle": "信息来自哪里",
     "helpSourcesBody": "这里只展示能够提供个人上下文的连接。仅用于执行操作的工具仍在 Connector 中管理，连接前会先展示具体权限。",
     "helpControlTitle": "你可以控制什么",
-    "helpControlBody": "你可以随时确认、纠正、删除、导出或停止学习。敏感信息与行动边界遵循“隐私与数据”中的选择，也不会扩大已有权限。",
-    "openPrivacyControls": "隐私与数据",
+    "helpControlBody": "你可以随时确认、纠正、删除、导出或停止学习。敏感信息与行动边界遵循“权限与隐私”中的选择，也不会扩大已有权限。",
+    "openPrivacyControls": "权限与隐私",
     "tabs": {
       "overview": "概览",
-      "profile": "我的资料",
-      "understanding": "对我的了解",
+      "memory": "记住的内容",
+      "collaboration": "如何与你协作",
       "sources": "信息来源",
-      "controls": "隐私与数据"
+      "privacy": "权限与隐私"
     },
+    "memoryTitle": "xopc 记住的内容",
+    "memoryHint": "集中管理你主动填写的信息，以及 xopc 从协作中总结、等待你确认或已经确认的内容。",
+    "sharedAgentsBadge": "所有已启用 Agent 可读取",
     "attentionTitle": "需要你处理",
     "sourceIssues": "{{count}} 个信息来源需要处理",
     "completeProfile": "完善基本信息",
@@ -53,7 +56,7 @@
     "notNow": "暂时不用",
     "playbooksTitle": "xopc 与你的协作方式",
     "affectsAgentsBadge": "影响 Agent 行为",
-    "emptyPlaybooks": "暂时没有协作规则。你可以从上面的结构化入口补充偏好和边界。",
+    "emptyPlaybooks": "暂时没有协作规则。你可以在“记住的内容”中补充偏好和边界。",
     "playbookNames": {
       "communication": "沟通与边界",
       "execution": "做事方式",
@@ -107,6 +110,8 @@
     "addBoundaryHint": "记录需要始终遵守或提前确认的规则。",
     "addCurrentFocus": "添加近期重点",
     "addCurrentFocusHint": "记录现阶段重要、但可能随时间变化的事情。",
+    "addOther": "添加其他内容",
+    "addOtherHint": "记录重要的人、习惯或长期方向。",
     "edit": "编辑",
     "save": "保存",
     "saving": "保存中…",
@@ -120,9 +125,14 @@
     "consentOnce": "仅允许一次",
     "consentSession": "本次对话允许",
     "consentAlways": "以后都允许",
-    "addUnderstanding": "补充一条希望 xopc 了解的事",
-    "addUnderstandingHint": "适合记录偏好、边界、重要的人、习惯或当前重点。",
-    "understandingPlaceholder": "例如：当我需要做选择时，先说明取舍，再给建议。",
+    "understandingPlaceholders": {
+      "preference": "例如：当我需要做选择时，先说明取舍，再给建议。",
+      "boundary": "例如：发送消息、删除内容或产生费用前，必须先征得我的确认。",
+      "relationship": "例如：Alex 是我的项目负责人，涉及发布时间时需要和他确认。",
+      "routine": "例如：每周五下午整理本周进展，并列出下周最重要的三件事。",
+      "current_state": "例如：这个季度我最重要的事情是完成产品的公开发布。",
+      "long_term_goal": "例如：我希望未来两年逐步转向独立产品开发。"
+    },
     "understandingKind": "这属于哪类了解？",
     "understandingKinds": {
       "preference": "偏好",
@@ -183,6 +193,8 @@
     "evidenceExpires": "自动失效时间",
     "supportModeTitle": "你希望 xopc 如何回应",
     "supportModeHint": "选择你偏好的回应方式。自动模式会根据对话，判断你更需要倾听、梳理思路、获得建议，还是推进下一步。",
+    "collaborationTitle": "xopc 如何与你协作",
+    "collaborationHint": "管理回应方式、主动建议、免打扰时间和所有 Agent 都要遵循的协作规则。",
     "proactiveEnabled": "允许主动建议",
     "quietStart": "免打扰开始",
     "quietEnd": "免打扰结束",
@@ -304,6 +316,8 @@
     "waitingReview": "条等待确认",
     "controlTitle": "你始终拥有控制权",
     "controlHint": "决定 xopc 怎样学习，以及怎样处理敏感信息。",
+    "privacyTitle": "权限与隐私",
+    "privacyHint": "分别控制 xopc 可以记住什么、可以引用什么，以及默认可以主动执行到哪一步。",
     "learningMode": "学习方式",
     "learningModes": {
       "off": "不使用记忆",
@@ -322,12 +336,9 @@
       "confirm": "保存或引用敏感信息前，xopc 都会先询问。",
       "allow": "敏感信息只会在与当前任务相关时使用。"
     },
-    "sharing": "在我的助手之间共享",
-    "sharingOptions": {
-      "deny": "仅当前助手使用",
-      "readOnly": "其他助手可以读取",
-      "allow": "其他助手可以使用和更新"
-    },
+    "sharingTitle": "哪些 Agent 可以使用",
+    "sharingHint": "已确认的内容属于你的全局个人上下文，所有已启用 Agent 都可以在与当前任务相关时读取。Agent 不会因此获得新的 Connector 或行动权限。",
+    "autoSaveHint": "更改后自动保存",
     "transferTitle": "导入与导出",
     "exportAction": "导出个人上下文",
     "exporting": "正在导出…",
