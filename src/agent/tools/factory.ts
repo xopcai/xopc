@@ -44,9 +44,12 @@ import {
   createXopcUseTool,
   createDesktopPetTool,
   createSkillInstallTool,
+  createSkillsMarketplaceSearchTool,
   createCodeIntelligenceTools,
   type SkillInstallToolOptions,
   type SkillInstallToolResult,
+  type MarketplaceSkillInstallToolOptions,
+  type MarketplaceSkillInstallToolResult,
 } from './index.js';
 import { createCuratedMemoryTool } from './curated-memory-tool.js';
 import { createSessionSearchTool } from './session-search-tool.js';
@@ -133,6 +136,10 @@ export interface ToolFactoryDeps {
   registerSkillEnvPassthrough?: (names: string[]) => void;
   /** Install managed skills from explicit sources when a capability/tool enables it. */
   installSkillFromSource?: (opts: SkillInstallToolOptions) => Promise<SkillInstallToolResult>;
+  /** Install a managed skill from a built-in marketplace provider. */
+  installSkillFromMarketplace?: (
+    opts: MarketplaceSkillInstallToolOptions,
+  ) => Promise<MarketplaceSkillInstallToolResult>;
   /** Workspace-scoped structural code intelligence runtime. */
   getCodeIntelligenceRuntime?: (workspace: string) => CodeIntelligenceRuntimeLike;
 }
@@ -150,7 +157,7 @@ export interface CreateCoreToolsOptions {
   /** Shared user memories directory used for dreaming state (`user/memories`). */
   dreamingRoot?: string;
   agentId?: string;
-  /** When set, registers `skills_list` and `skill_view` bound to this workspace\'s skills. */
+  /** When set, registers local skill tools plus marketplace discovery for this workspace. */
   getSkillManager?: () => SkillManager;
 }
 
@@ -354,6 +361,17 @@ export class AgentToolsFactory {
             }),
           ]
         : []),
+      createSkillsMarketplaceSearchTool({
+        getConfig: () => this.deps.getConfig?.(),
+        getSkillManager: getSkillMgr,
+      }),
+      ...(this.deps.installSkillFromSource || this.deps.installSkillFromMarketplace
+        ? [createSkillInstallTool({
+            installSkillFromSource: this.deps.installSkillFromSource,
+            installSkillFromMarketplace: this.deps.installSkillFromMarketplace,
+            getSessionKey: () => this.deps.getCurrentContext()?.sessionKey,
+          })]
+        : []),
       readTool,
       ...codeIntelligenceTools,
       writeTool,
@@ -548,12 +566,6 @@ export class AgentToolsFactory {
       if (disabled?.has(toolName) || toolNames.has(toolName)) continue;
       toolNames.add(toolName);
       if (toolName === 'create_desktop_pet') raw.push(createDesktopPetTool() as AgentTool<any, any>);
-      if (toolName === 'skill_install') {
-        raw.push(createSkillInstallTool({
-          installSkillFromSource: this.deps.installSkillFromSource,
-          getSessionKey: () => this.deps.getCurrentContext()?.sessionKey,
-        }) as AgentTool<any, any>);
-      }
     }
     return wrapToolsWithProtection(raw, this.deps.toolExecutorConfig);
   }
@@ -561,7 +573,6 @@ export class AgentToolsFactory {
   getLazyCapabilityToolNames(): string[] {
     return [
       'create_desktop_pet',
-      ...(this.deps.installSkillFromSource ? ['skill_install'] : []),
     ];
   }
 

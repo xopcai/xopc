@@ -24,6 +24,8 @@ export const GATEWAY_BUILTIN_TOOL_IDS = [
   'skills_list',
   'skill_view',
   'skill_manage',
+  'skills_marketplace_search',
+  'skill_install',
   'web_search',
   'web_fetch',
   'web_extract',

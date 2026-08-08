@@ -67,22 +67,51 @@ interface ClawHubSkillListResponse {
   nextCursor: string | null;
 }
 
-interface ClawHubSearchResultItem {
-  score: number;
+export interface ClawHubSearchResultItem {
+  id?: string;
+  score?: number;
   slug: string;
-  displayName: string;
-  summary: string;
-  version: string | null;
-  updatedAt: number;
-  ownerHandle: string;
-  owner: {
+  source?: string;
+  downloads?: number;
+  canonicalUrl?: string;
+  install?: {
+    kind?: string;
+    reference?: string;
+    sourceUrl?: string | null;
+  };
+  links?: { canonical?: string | null; source?: string | null };
+  sourceIdentity?: { owner?: string | null; repo?: string | null };
+  publisher?: { handle?: string | null; displayName?: string | null; avatarUrl?: string | null };
+  metrics?: { bookmarks?: number; updatedAt?: number };
+  trust?: {
+    clawHubVerdict?: string | null;
+    installability?: string | null;
+    upstreamScanners?: Record<string, {
+      status?: string | null;
+      sourceCheckedAt?: string | null;
+      sourceUrl?: string | null;
+    }>;
+  };
+  native?: {
+    skill?: {
+      stats?: { downloads?: number; stars?: number };
+      tags?: Record<string, string>;
+      categories?: string[];
+    };
+  } | null;
+  displayName?: string;
+  summary?: string;
+  version?: string | null;
+  updatedAt?: number;
+  ownerHandle?: string;
+  owner?: {
     handle: string;
     displayName: string;
     image: string | null;
   };
 }
 
-interface ClawHubSearchResponse {
+export interface ClawHubSearchResponse {
   results: ClawHubSearchResultItem[];
 }
 
@@ -193,6 +222,14 @@ async function searchClawHubSkills(query: string, limit?: number): Promise<ClawH
   return (await res.json()) as ClawHubSearchResponse;
 }
 
+/** Public federated search used by the read-only marketplace discovery tool. */
+export async function searchClawHubFederatedSkills(
+  query: string,
+  limit?: number,
+): Promise<ClawHubSearchResponse> {
+  return cachedSearchClawHubSkills(query, limit);
+}
+
 async function getClawHubSkillDetail(slug: string): Promise<ClawHubSkillDetail> {
   const enc = encodeURIComponent(slug.trim());
   const res = await clawHubFetch(`/api/v1/skills/${enc}`);
@@ -223,13 +260,21 @@ async function getClawHubSkillFileText(slug: string, filePath: string, version?:
 }
 
 async function downloadClawHubSkillZip(
-  slug: string,
+  reference: string,
   version?: string,
-): Promise<{ buffer: Buffer; version: string }> {
-  const enc = encodeURIComponent(slug.trim());
-  const sp = version?.trim() ? `?version=${encodeURIComponent(version.trim())}` : '';
+): Promise<{ buffer: Buffer; version: string; slug: string }> {
+  const normalized = reference.trim().replace(/^@/, '');
+  const parts = normalized.split('/').filter(Boolean);
+  const ownerHandle = parts.length === 2 ? parts[0] : undefined;
+  const slug = parts.length === 2 ? parts[1]! : parts.length === 1 ? parts[0]! : '';
+  if (!isValidSkillId(slug) || (ownerHandle && !isValidSkillId(ownerHandle))) {
+    throw new Error(`Invalid ClawHub install reference: ${reference}`);
+  }
+  const sp = new URLSearchParams({ slug });
+  if (ownerHandle) sp.set('ownerHandle', ownerHandle);
+  if (version?.trim()) sp.set('version', version.trim());
   const base = resolveClawHubBaseUrl();
-  const url = `${base}/api/v1/packages/${enc}/download${sp}`;
+  const url = `${base}/api/v1/download?${sp.toString()}`;
   const res = await fetch(url, { redirect: 'follow' });
   if (!res.ok) {
     const body = await res.text().catch(() => '');
@@ -245,7 +290,7 @@ async function downloadClawHubSkillZip(
       `ClawHub download [${slug}] exceeds size limit (${arrayBuf.byteLength} > ${MAX_SKILL_ZIP_BYTES})`,
     );
   }
-  return { buffer: Buffer.from(arrayBuf), version: version?.trim() || 'latest' };
+  return { buffer: Buffer.from(arrayBuf), version: version?.trim() || 'latest', slug };
 }
 
 function pickClawHubDocFilePath(files: ClawHubVersionFile[]): string | null {
@@ -369,20 +414,25 @@ function convertSearchResultToPackageItem(
   enrichment?: ClawHubSkillListItem,
 ): PackageListItem {
   return {
-    id: item.slug,
+    id: item.id ?? item.install?.reference ?? item.slug,
     name: item.displayName || item.slug,
     type: 'skill',
     description: item.summary || '',
-    downloads: enrichment?.stats.downloads ?? 0,
+    downloads: item.downloads ?? item.native?.skill?.stats?.downloads ?? enrichment?.stats.downloads ?? 0,
     author: {
-      username: item.owner?.handle ?? item.ownerHandle ?? 'clawhub',
-      avatarUrl: item.owner?.image ?? null,
+      username:
+        item.publisher?.handle
+        ?? item.sourceIdentity?.owner
+        ?? item.owner?.handle
+        ?? item.ownerHandle
+        ?? 'clawhub',
+      avatarUrl: item.publisher?.avatarUrl ?? item.owner?.image ?? null,
     },
     latestVersion: item.version ?? enrichment?.latestVersion?.version ?? '1.0.0',
-    updatedAt: String(item.updatedAt),
-    categories: enrichment?.metadata?.os ?? [],
-    stars: enrichment?.stats.stars ?? 0,
-    sourceLabel: 'ClawHub',
+    updatedAt: String(item.metrics?.updatedAt ?? item.updatedAt ?? ''),
+    categories: item.native?.skill?.categories ?? enrichment?.metadata?.os ?? [],
+    stars: item.native?.skill?.stats?.stars ?? item.metrics?.bookmarks ?? enrichment?.stats.stars ?? 0,
+    sourceLabel: item.source === 'skills-sh' ? 'skills.sh' : 'ClawHub',
   };
 }
 
@@ -426,9 +476,12 @@ export const clawHubMarketplaceAdapter: SkillsMarketplaceAdapter = {
       if (listSettled.status === 'fulfilled') {
         for (const it of listSettled.value.items) enrichmentBySlug.set(it.slug, it);
       }
-      let rows = searchResponse.value.results.map((r) =>
-        convertSearchResultToPackageItem(r, enrichmentBySlug.get(r.slug)),
-      );
+      // The general ClawHub catalog remains installable through the ClawHub adapter, so
+      // federated skills.sh rows are surfaced only by skills_marketplace_search, where their
+      // canonical source and install reference can be preserved.
+      let rows = searchResponse.value.results
+        .filter((r) => !r.source || r.source === 'clawhub')
+        .map((r) => convertSearchResultToPackageItem(r, enrichmentBySlug.get(r.slug)));
       if (params.sort === 'downloads') {
         rows = [...rows].sort((a, b) => b.downloads - a.downloads);
       } else if (params.sort === 'newest') {
@@ -507,11 +560,10 @@ export const clawHubMarketplaceAdapter: SkillsMarketplaceAdapter = {
   },
 
   async downloadPackage(_config, packageName, version) {
-    const slug = packageName.trim();
-    const result = await downloadClawHubSkillZip(slug, version);
+    const result = await downloadClawHubSkillZip(packageName, version);
     return {
       buffer: result.buffer,
-      skillId: isValidSkillId(slug) ? slug : 'unknown',
+      skillId: result.slug,
       version: result.version,
     };
   },

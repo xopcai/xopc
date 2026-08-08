@@ -62,6 +62,35 @@ describe('AgentToolsFactory', () => {
     ]);
   });
 
+  it('registers marketplace discovery without requiring a CLI or local skill manager', () => {
+    const factory = new AgentToolsFactory({
+      workspace: '/tmp/xopc-tools-factory-test',
+      bus: {} as MessageBus,
+      getCurrentContext: () => null,
+      getConfig: () => ConfigSchema.parse(undefined),
+    });
+
+    expect(factory.createCoreTools().map((tool) => tool.name)).toContain('skills_marketplace_search');
+  });
+
+  it('registers skill_install as a core tool when the runtime provides installation', () => {
+    const factory = new AgentToolsFactory({
+      workspace: '/tmp/xopc-tools-factory-test',
+      bus: {} as MessageBus,
+      getCurrentContext: () => null,
+      installSkillFromSource: async () => ({
+        skillId: 'demo',
+        path: '/tmp/demo',
+        source: 'https://example.com/demo.git',
+        kind: 'git',
+        contentHash: 'abc',
+      }),
+    });
+
+    expect(factory.createCoreTools().map((tool) => tool.name)).toContain('skill_install');
+    expect(factory.getLazyCapabilityToolNames()).not.toContain('skill_install');
+  });
+
   it('registers code intelligence only for configured agent ids', () => {
     const config = ConfigSchema.parse(undefined);
     const codeRuntime = {
