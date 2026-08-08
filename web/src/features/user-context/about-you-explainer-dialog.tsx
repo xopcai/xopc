@@ -12,7 +12,7 @@ type AboutYouExplainerDialogProps = {
   open: boolean;
   t: YouMessages;
   onOpenChange: (open: boolean) => void;
-  onNavigate: (view: 'sources' | 'controls') => void;
+  onNavigate: (view: 'sources' | 'privacy') => void;
 };
 
 export function AboutYouExplainerDialog({
@@ -76,7 +76,7 @@ export function AboutYouExplainerDialog({
             <Button type="button" variant="ghost" onClick={() => { onOpenChange(false); onNavigate('sources'); }}>
               {t.tabs.sources}
             </Button>
-            <Button type="button" variant="secondary" onClick={() => { onOpenChange(false); onNavigate('controls'); }}>
+            <Button type="button" variant="secondary" onClick={() => { onOpenChange(false); onNavigate('privacy'); }}>
               {t.openPrivacyControls}
             </Button>
           </footer>

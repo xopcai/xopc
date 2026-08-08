@@ -14,15 +14,18 @@
     "helpSourcesTitle": "Where it comes from",
     "helpSourcesBody": "Only connections designed to provide personal context appear here. Tools used only to take actions remain under Connectors, and permissions are shown before you connect.",
     "helpControlTitle": "What you control",
-    "helpControlBody": "You can confirm, correct, delete, export, or stop learning at any time. Sensitive context and action boundaries follow the choices under Privacy & data and never expand existing permissions.",
-    "openPrivacyControls": "Privacy & data",
+    "helpControlBody": "You can confirm, correct, delete, export, or stop learning at any time. Sensitive context and action boundaries follow the choices under Permissions & privacy and never expand existing permissions.",
+    "openPrivacyControls": "Permissions & privacy",
     "tabs": {
       "overview": "Overview",
-      "profile": "My profile",
-      "understanding": "What xopc knows",
+      "memory": "Remembered",
+      "collaboration": "How we work",
       "sources": "Sources",
-      "controls": "Privacy & data"
+      "privacy": "Permissions & privacy"
     },
+    "memoryTitle": "What xopc remembers",
+    "memoryHint": "Manage what you entered directly alongside context xopc summarized, is waiting for your review, or you already confirmed.",
+    "sharedAgentsBadge": "Available to all enabled agents",
     "attentionTitle": "Needs your attention",
     "sourceIssues": "{{count}} sources need attention",
     "completeProfile": "Complete your basics",
@@ -53,7 +56,7 @@
     "notNow": "Not now",
     "playbooksTitle": "How xopc works with you",
     "affectsAgentsBadge": "Shapes agent behavior",
-    "emptyPlaybooks": "No collaboration rules yet. Use the structured options above to add preferences and boundaries.",
+    "emptyPlaybooks": "No collaboration rules yet. Add preferences and boundaries under Remembered.",
     "playbookNames": {
       "communication": "Communication & boundaries",
       "execution": "How work gets done",
@@ -107,6 +110,8 @@
     "addBoundaryHint": "Record a rule that should always be followed or confirmed first.",
     "addCurrentFocus": "Add a recent priority",
     "addCurrentFocusHint": "Capture something important now that may change over time.",
+    "addOther": "Add something else",
+    "addOtherHint": "Capture an important person, routine, or long-term direction.",
     "edit": "Edit",
     "save": "Save",
     "saving": "Saving…",
@@ -120,9 +125,14 @@
     "consentOnce": "Allow once",
     "consentSession": "This conversation",
     "consentAlways": "Always allow",
-    "addUnderstanding": "Add something xopc should know",
-    "addUnderstandingHint": "Use this for a preference, boundary, important person, routine, or current priority.",
-    "understandingPlaceholder": "For example: When I’m weighing options, show the tradeoffs before recommending one.",
+    "understandingPlaceholders": {
+      "preference": "For example: When I’m weighing options, show the tradeoffs before recommending one.",
+      "boundary": "For example: Ask before sending messages, deleting content, or spending money.",
+      "relationship": "For example: Alex leads my project, so release timing should be confirmed with them.",
+      "routine": "For example: Every Friday afternoon, summarize progress and list next week's top three priorities.",
+      "current_state": "For example: My most important focus this quarter is completing the public launch.",
+      "long_term_goal": "For example: Over the next two years, I want to move toward independent product development."
+    },
     "understandingKind": "What kind of context is this?",
     "understandingKinds": {
       "preference": "Preference",
@@ -183,6 +193,8 @@
     "evidenceExpires": "Expires",
     "supportModeTitle": "How xopc supports you",
     "supportModeHint": "Choose the response style that feels most useful. Auto adapts between listening, reflection, advice, and action.",
+    "collaborationTitle": "How xopc works with you",
+    "collaborationHint": "Manage response style, proactive suggestions, quiet hours, and collaboration rules every agent should follow.",
     "proactiveEnabled": "Allow proactive suggestions",
     "quietStart": "Quiet hours start",
     "quietEnd": "Quiet hours end",
@@ -304,6 +316,8 @@
     "waitingReview": "waiting for review",
     "controlTitle": "You stay in control",
     "controlHint": "Choose how xopc learns and how carefully sensitive context is handled.",
+    "privacyTitle": "Permissions & privacy",
+    "privacyHint": "Control separately what xopc may remember, what it may reference, and how far it may act by default.",
     "learningMode": "Learning",
     "learningModes": {
       "off": "Don't use memory",
@@ -322,12 +336,9 @@
       "confirm": "xopc asks before saving or referencing sensitive details.",
       "allow": "Sensitive details may be used only when relevant to the current task."
     },
-    "sharing": "Share across my assistants",
-    "sharingOptions": {
-      "deny": "Keep it with this assistant",
-      "readOnly": "Other assistants may read it",
-      "allow": "Other assistants may use and update it"
-    },
+    "sharingTitle": "Which agents can use it",
+    "sharingHint": "Confirmed items are part of your global personal context. Every enabled agent may read them when relevant to the current task. This does not grant new connector or action permissions.",
+    "autoSaveHint": "Changes save automatically",
     "transferTitle": "Import & export",
     "exportAction": "Export personal context",
     "exporting": "Exporting…",
