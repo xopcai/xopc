@@ -69,7 +69,7 @@ const SkillInstallSchema = Type.Object({
     Type.String({ description: 'Optional subdirectory inside the source that contains SKILL.md.' }),
   ),
   skillId: Type.Optional(
-    Type.String({ description: 'Optional target managed skill id under the current workspace .xopc/skills.' }),
+    Type.String({ description: 'Optional target managed skill id under the selected global or workspace skills root.' }),
   ),
   target: Type.Optional(
     Type.Union([
@@ -77,7 +77,7 @@ const SkillInstallSchema = Type.Object({
       Type.Literal('global'),
     ], {
       description:
-        'Install target. Defaults to workspace. Use global only when the user explicitly asks for a global/personal install.',
+        'Install target. Defaults to global (~/.xopc/skills). Use workspace only when the user explicitly asks to scope the skill to the current agent workspace.',
     }),
   ),
   force: Type.Optional(Type.Boolean({ description: 'Replace an existing managed skill with the same id.' })),
@@ -101,7 +101,7 @@ export function createSkillInstallTool(deps: SkillInstallToolDeps): AgentTool {
     async execute(_toolCallId: string, params: any): Promise<AgentToolResult<{}>> {
       const provider = clean(params.provider);
       const name = clean(params.name);
-      const target = isSkillInstallTarget(params.target) ? params.target : undefined;
+      const target = isSkillInstallTarget(params.target) ? params.target : 'global';
       const sessionKey = deps.getSessionKey?.();
 
       if (provider || name) {
@@ -138,7 +138,7 @@ export function createSkillInstallTool(deps: SkillInstallToolDeps): AgentTool {
               text: [
                 `Installed skill "${result.skillId}" from ${result.provider}.`,
                 `Package: ${result.name}${result.version ? `@${result.version}` : ''}`,
-                `Target: ${result.target ?? 'workspace'}`,
+                `Target: ${result.target ?? target}`,
                 `Path: ${result.path}`,
               ].join('\n'),
             }],
@@ -185,7 +185,7 @@ export function createSkillInstallTool(deps: SkillInstallToolDeps): AgentTool {
               type: 'text',
               text: [
                 `Installed skill "${result.skillId}".`,
-                `Target: ${result.target ?? 'workspace'}`,
+                `Target: ${result.target ?? target}`,
                 `Source: ${result.source} (${result.kind})`,
                 `Path: ${result.path}`,
                 `Tree hash: ${result.contentHash.slice(0, 16)}`,

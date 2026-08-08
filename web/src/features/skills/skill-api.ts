@@ -32,7 +32,7 @@ export async function uploadSkillZip(
   if (opts.overwrite) {
     form.append('overwrite', 'true');
   }
-  form.append('target', opts.target ?? 'workspace');
+  form.append('target', opts.target ?? 'global');
 
   const token = useGatewayStore.getState().token;
   const headers = new Headers();
@@ -186,7 +186,7 @@ export async function installMarketplaceSkill(opts: {
   const res = await apiFetch(apiUrl('/api/skills/marketplace/install'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ target: 'workspace', ...opts }),
+    body: JSON.stringify({ target: 'global', ...opts }),
   });
   if (!res.ok) {
     throw new Error(await readSkillApiErrorMessage(res));
@@ -214,7 +214,7 @@ export async function installSkillFromSource(opts: {
   const res = await apiFetch(apiUrl('/api/skills/hub/install'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ target: 'workspace', ...opts }),
+    body: JSON.stringify({ target: 'global', ...opts }),
   });
   if (!res.ok) {
     throw new Error(await readSkillApiErrorMessage(res));

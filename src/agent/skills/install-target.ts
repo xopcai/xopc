@@ -1,7 +1,7 @@
 export type SkillInstallTarget = 'workspace' | 'global';
 
 export function normalizeSkillInstallTarget(value: unknown): SkillInstallTarget {
-  return value === 'global' ? 'global' : 'workspace';
+  return value === 'workspace' ? 'workspace' : 'global';
 }
 
 export function isSkillInstallTarget(value: unknown): value is SkillInstallTarget {
