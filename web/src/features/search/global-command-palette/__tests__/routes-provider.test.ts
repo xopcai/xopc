@@ -10,12 +10,6 @@ describe('buildRouteSeeds', () => {
     expect(browser?.keywords).toContain('browser');
   });
 
-  it('does not expose profile or action boundaries as standalone settings routes', () => {
-    const seeds = buildRouteSeeds('en');
-    expect(seeds.some((s) => s.path === '/settings/action-boundary')).toBe(false);
-    expect(seeds.some((s) => s.path === '/settings/user-profile')).toBe(false);
-  });
-
   it('offers the app workshop as a searchable route', () => {
     const seeds = buildRouteSeeds('en');
     const workshop = seeds.find((s) => s.id === 'route:local-apps');

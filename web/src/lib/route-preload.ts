@@ -65,7 +65,6 @@ function preloadSettingsSection(path: string) {
   if (section === 'overview') return preload(loadSetupStatusPanel);
   if (section === 'appearance') return preload(loadAppearanceSettingsPanel);
   if (section === 'keyboard-shortcuts') return preload(loadKeyboardShortcutsSettingsPanel);
-  if (section === 'user-profile') return preload(loadUserContextPage);
   if (section === 'system') return preload(loadSystemSettingsPanel);
   if (section === 'desktop-pet') return preload(loadDesktopPetSettingsPanel);
   if (section === 'desktop-app') return preload(loadAppManagementSettingsPanel);
