@@ -45,6 +45,6 @@ export async function applyEmbeddedProviderCredential(
   const key = await new CredentialResolver().resolveApiKey(providerId)
     ?? getApiKeySync(providerId);
   if (key && key !== 'extension-managed') {
-    await modelRuntime.setRuntimeApiKey(providerId, key, { allowNetwork: false });
+    await modelRuntime.setRuntimeApiKey(providerId, key);
   }
 }

@@ -25,9 +25,10 @@ export async function processPdf(
   name: string,
 ): Promise<{ extractedText: string; preview?: string }> {
   const pdfjsLib = await ensurePdfWorker();
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
   let pdf: PDFDocumentProxy | null = null;
   try {
-    pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    pdf = await loadingTask.promise;
 
     let extractedText = `<pdf filename="${name}">`;
     const pageTexts = await Promise.all(
@@ -54,9 +55,7 @@ export async function processPdf(
     const preview = await generatePdfPreview(pdf);
     return { extractedText, preview };
   } finally {
-    if (pdf) {
-      pdf.destroy();
-    }
+    await loadingTask.destroy();
   }
 }
 
