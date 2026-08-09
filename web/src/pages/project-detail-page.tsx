@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Popover from '@radix-ui/react-popover';
-import { AlertCircle, Archive, ArrowLeft, Check, ChevronDown, Clock, Copy, File, Folder, FolderPlus, History, LayoutDashboard, ListChecks, MessageSquarePlus, Pause, Pin, PinOff, Play, Plus, RotateCcw, Save, Search, Settings, Square, Target, Trash2, X, Zap, type LucideIcon } from 'lucide-react';
+import { AlertCircle, Archive, ArrowLeft, Check, ChevronDown, Clock, Copy, File, Folder, FolderPlus, History, LayoutDashboard, ListChecks, MessageSquarePlus, Pause, Pin, PinOff, Play, Plus, RotateCcw, Save, Search, Settings, Sparkles, Square, Target, Trash2, X, Zap, type LucideIcon } from 'lucide-react';
 import { type CSSProperties, type FormEvent, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
@@ -49,6 +49,7 @@ import {
   type ProjectStatus,
   type ProjectWithDetails,
 } from '@/features/projects/api';
+import { ProjectSkillsPanel } from '@/features/projects/project-skills-panel';
 import { fetchGatewayAgents, type GatewayAgentRow } from '@/features/settings/agents-admin-api';
 import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
 import { normalizeGoalsConfigFromConfig } from '@/features/settings/goals-config-api';
@@ -79,7 +80,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 
 type WorkTabId = 'work-items' | 'goals' | 'workflows' | 'automations';
-type PrimaryTabId = 'overview' | 'work' | 'files' | 'notes' | 'sessions' | 'activity' | 'settings';
+type PrimaryTabId = 'overview' | 'work' | 'files' | 'notes' | 'skills' | 'sessions' | 'activity' | 'settings';
 type TabId = Exclude<PrimaryTabId, 'work'> | WorkTabId;
 
 const TABS: Array<{ id: TabId; icon: LucideIcon }> = [
@@ -92,6 +93,7 @@ const TABS: Array<{ id: TabId; icon: LucideIcon }> = [
   { id: 'activity', icon: History },
   { id: 'automations', icon: Zap },
   { id: 'notes', icon: File },
+  { id: 'skills', icon: Sparkles },
   { id: 'settings', icon: Settings },
 ];
 
@@ -1502,6 +1504,7 @@ export function ProjectDetailPage() {
     { id: 'work', icon: ListChecks, label: pm.tabs.work },
     { id: 'files', icon: Folder, label: pm.tabs.files },
     { id: 'notes', icon: File, label: pm.tabs.notes },
+    { id: 'skills', icon: Sparkles, label: pm.tabs.skills },
     { id: 'sessions', icon: MessageSquarePlus, label: pm.tabs.sessions },
     { id: 'activity', icon: History, label: pm.tabs.activity },
   ];
@@ -1975,6 +1978,10 @@ export function ProjectDetailPage() {
             listWidthStorageKey={`xopc.projectNotes.listWidth.${project.id}`}
           />
         </section>
+      ) : null}
+
+      {tab === 'skills' ? (
+        <ProjectSkillsPanel projectId={project.id} copy={pm.skills} />
       ) : null}
 
       {tab === 'files' ? (
