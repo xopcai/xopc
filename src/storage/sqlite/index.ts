@@ -30,6 +30,11 @@ export {
 } from './connection.js';
 export { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 export {
+  acknowledgeHomeAttention,
+  isHomeAttentionAcknowledged,
+  type HomeAttentionSubjectKind,
+} from './home-attention-repository.js';
+export {
   getUserClaim,
   linkUserClaimMemoryRecord,
   listUserClaimEvidence,

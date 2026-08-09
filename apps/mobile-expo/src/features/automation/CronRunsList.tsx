@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Button, Chip, Icon, Text } from 'react-native-paper';
 
@@ -11,13 +11,14 @@ import { queryKeys } from '../../query/keys';
 import { useGatewayConfigured } from '../../query/sessions';
 import { spacing, typography, useTheme } from '../../theme';
 
-export function CronRunsList() {
+export function CronRunsList({ highlightedRunId }: { highlightedRunId?: string }) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { colors } = useTheme();
   const configured = useGatewayConfigured();
   const m = useMessages();
   const pm = m.cronRunsPage;
+  const listRef = useRef<FlatList<CronRunRow>>(null);
 
   const runsQuery = useQuery({
     queryKey: queryKeys.cronRunsHistory(RUNS_HISTORY_LIMIT),
@@ -30,6 +31,13 @@ export function CronRunsList() {
   });
 
   const runs = runsQuery.data ?? [];
+
+  useEffect(() => {
+    if (!highlightedRunId) return;
+    const index = runs.findIndex((run) => run.id === highlightedRunId);
+    if (index < 0) return;
+    requestAnimationFrame(() => listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.3 }));
+  }, [highlightedRunId, runs]);
 
   const statusLabel = useMemo(
     () => ({
@@ -113,7 +121,17 @@ export function CronRunsList() {
       );
 
       if (!sessionKey) {
-        return <View style={[styles.card, { backgroundColor: cardBg, borderColor: colors.border.subtle }]}>{card}</View>;
+        return (
+          <View style={[
+            styles.card,
+            {
+              backgroundColor: cardBg,
+              borderColor: item.id === highlightedRunId ? colors.accent.primary : colors.border.subtle,
+            },
+          ]}>
+            {card}
+          </View>
+        );
       }
 
       return (
@@ -121,14 +139,17 @@ export function CronRunsList() {
           onPress={() => openRunChat(item)}
           style={({ pressed }) => [
             styles.card,
-            { backgroundColor: pressed ? colors.surface.pressed : cardBg, borderColor: colors.border.subtle },
+            {
+              backgroundColor: pressed ? colors.surface.pressed : cardBg,
+              borderColor: item.id === highlightedRunId ? colors.accent.primary : colors.border.subtle,
+            },
           ]}
         >
           {card}
         </Pressable>
       );
     },
-    [cardBg, colors.accent.selectionBg, colors.semantic.error, openRunChat, statusColor, statusLabel, textPrimary, textSecondary],
+    [cardBg, colors.accent.primary, colors.accent.selectionBg, colors.semantic.error, highlightedRunId, openRunChat, statusColor, statusLabel, textPrimary, textSecondary],
   );
 
   const listHeader = (
@@ -161,9 +182,13 @@ export function CronRunsList() {
 
   return (
     <FlatList
+      ref={listRef}
       data={runs}
       keyExtractor={(item) => item.id}
       renderItem={renderRun}
+      onScrollToIndexFailed={({ index, averageItemLength }) => {
+        listRef.current?.scrollToOffset({ offset: averageItemLength * index, animated: true });
+      }}
       ListHeaderComponent={listHeader}
       contentContainerStyle={styles.list}
       refreshControl={

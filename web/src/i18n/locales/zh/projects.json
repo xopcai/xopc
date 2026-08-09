@@ -53,8 +53,6 @@
       "decisionKinds": {
         "work_item": "工作事项",
         "goal": "持续目标",
-        "workflow_run": "工作流程",
-        "automation_run": "自动化",
         "connector_approval": "连接器操作",
         "goal_evidence": "完成证据"
       },
@@ -64,11 +62,15 @@
         "blocked": "遇到阻塞",
         "overdue": "已经逾期",
         "due_soon": "即将到期",
-        "run_failed": "执行失败",
         "approval_required": "等待批准"
       },
       "approve": "批准",
       "deny": "拒绝",
+      "attentionRetry": "重试",
+      "attentionView": "查看详情",
+      "attentionAcknowledge": "已知悉",
+      "attentionFailed": "执行失败",
+      "attentionTimeout": "执行超时",
       "winKinds": {
         "work_item": "事项已完成",
         "workflow_run": "流程已完成",

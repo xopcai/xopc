@@ -10,10 +10,9 @@ import type {
   AutomationDeps,
   AutomationRun,
 } from '../domain/types.js';
+import { DEFAULT_AUTOMATION_TIMEOUT_SECONDS } from '../domain/defaults.js';
 
 const log = createLogger('Automation:ActionExecutor');
-
-const DEFAULT_TIMEOUT_MS = 180_000;
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, signal: AbortSignal): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -57,7 +56,7 @@ export class AutomationActionExecutor {
     const timeoutMs =
       (automation.action.timeoutSeconds ?? automation.reliability?.timeoutSeconds ?? 0) > 0
         ? (automation.action.timeoutSeconds ?? automation.reliability?.timeoutSeconds)! * 1000
-        : DEFAULT_TIMEOUT_MS;
+        : DEFAULT_AUTOMATION_TIMEOUT_SECONDS * 1000;
 
     return withTimeout(this.executeWithoutTimeout(automation, run, signal), timeoutMs, signal).catch((err) => {
       const message = err instanceof Error ? err.message : String(err);
