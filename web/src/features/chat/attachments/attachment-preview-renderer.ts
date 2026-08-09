@@ -187,7 +187,7 @@ export async function renderPdfInContainer(
         pendingLoadTask = null;
       }
       if (pdf) {
-        pdf.destroy();
+        void loadingTask.destroy();
         pdf = null;
       }
       container.innerHTML = '';

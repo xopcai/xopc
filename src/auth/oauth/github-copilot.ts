@@ -1,7 +1,7 @@
 /** GitHub Copilot OAuth adapter for pi-ai's provider-auth API. */
 
 import { githubCopilotProvider } from '@earendil-works/pi-ai/providers/github-copilot';
-import type { AuthInteraction, OAuthAuth, OAuthCredential } from '@earendil-works/pi-ai';
+import type { OAuthAuth, OAuthCredential, ProviderAuthInteraction } from '@earendil-works/pi-ai';
 
 import type { OAuthCredentials, OAuthLoginCallbacks, OAuthProviderInterface } from './types.js';
 
@@ -21,9 +21,9 @@ function fromPiCredential({ type: _type, ...credentials }: OAuthCredential): OAu
   return credentials;
 }
 
-function toAuthInteraction(callbacks: OAuthLoginCallbacks): AuthInteraction {
+function toAuthInteraction(callbacks: OAuthLoginCallbacks): ProviderAuthInteraction {
   return {
-    signal: callbacks.signal,
+    signal: callbacks.signal ?? new AbortController().signal,
     async prompt(prompt) {
       if (prompt.type === 'select') {
         return (await callbacks.onSelect({
@@ -61,7 +61,9 @@ export const githubCopilotOAuthProvider: OAuthProviderInterface = {
     return fromPiCredential(await getCopilotOAuth().login(toAuthInteraction(callbacks)));
   },
   async refreshToken(credentials) {
-    return fromPiCredential(await getCopilotOAuth().refresh(toPiCredential(credentials)));
+    return fromPiCredential(
+      await getCopilotOAuth().refresh(toPiCredential(credentials), new AbortController().signal),
+    );
   },
   getApiKey(credentials) {
     return credentials.access;

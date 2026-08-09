@@ -4,7 +4,7 @@ import {
   type LoaderIndicatorOptions,
   ProcessTerminal,
   setKeybindings,
-  TUI,
+  TuiMainScreen,
   type Component,
   type EditorComponent,
   type OverlayHandle,
@@ -407,7 +407,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     tui.requestRender();
   };
 
-  const tui = new TUI(new ProcessTerminal());
+  const tui = new TuiMainScreen(new ProcessTerminal());
   tui.setShowHardwareCursor(tuiSettings.showHardwareCursor);
   tui.setClearOnShrink(tuiSettings.clearOnShrink);
   const dedupeBackspace = createBackspaceDeduper();
