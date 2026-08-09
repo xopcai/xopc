@@ -18,18 +18,20 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { WorkbenchActivity } from '@/features/activity/workbench-activity';
+import {
+  configureFocusMonitor,
+  deleteFocus,
+  fetchFocusCandidates,
+  fetchFocuses,
+  respondToFocusCandidate,
+  updateFocus,
+} from '@/features/focuses/api';
+import { focusCopy } from '@/features/focuses/copy';
+import { FocusCard } from '@/features/focuses/focus-card';
+import type { Focus, FocusCandidate, FocusMonitorKind, FocusStatus } from '@/features/focuses/types';
 import { delegateWork, fetchProjects, type Project } from '@/features/projects/api';
 import {
-  activateFocusTrial,
-  fetchFocuses,
-  pauseFocusWatch,
-  type FocusView,
-} from '@/features/work-discovery/api';
-import {
-  approveProactiveInsight,
   fetchWorkHome,
-  prepareFocusCalendarSignal,
-  respondToProactiveInsight,
   respondToWorkDecision,
   type WorkHomeDecision,
   type WorkHomeItem,
@@ -168,12 +170,14 @@ export function WorkPage() {
   const language = useLocaleStore((state) => state.language);
   const msg = messages(language);
   const t = msg.projectsPage;
+  const focusText = focusCopy(language);
   const navigate = useNavigate();
   const setPageHeader = usePageHeaderStore((state) => state.setPageHeader);
   const clearPageHeader = usePageHeaderStore((state) => state.clearPageHeader);
   const [home, setHome] = useState<WorkHomeResponse | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [focuses, setFocuses] = useState<FocusView[]>([]);
+  const [focuses, setFocuses] = useState<Focus[]>([]);
+  const [focusCandidates, setFocusCandidates] = useState<FocusCandidate[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -183,20 +187,22 @@ export function WorkPage() {
   const [creating, setCreating] = useState(false);
   const [busyDecisionId, setBusyDecisionId] = useState<string | null>(null);
   const [busyFocusId, setBusyFocusId] = useState<string | null>(null);
-  const [busyInsightId, setBusyInsightId] = useState<string | null>(null);
+  const [focusNotice, setFocusNotice] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
     try {
-      const [homeResult, projectsResult, focusResult] = await Promise.all([
+      const [homeResult, projectsResult, focusResult, candidateResult] = await Promise.all([
         fetchWorkHome(language),
         fetchProjects({ limit: 100, sortBy: 'updatedAt', sortOrder: 'desc' }),
         fetchFocuses(),
+        fetchFocusCandidates(),
       ]);
       setHome(homeResult);
       setProjects(projectsResult.items);
       setFocuses(focusResult);
+      setFocusCandidates(candidateResult);
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -206,6 +212,13 @@ export function WorkPage() {
 
   useEffect(() => {
     void load();
+  }, [load]);
+
+  useEffect(() => {
+    const refresh = () => void load();
+    const events = ['focus-created', 'focus-updated', 'focus-deleted', 'focus-monitor-updated', 'focus-run-updated', 'focus-insight-updated', 'focus-candidate-updated'];
+    events.forEach((name) => window.addEventListener(name, refresh));
+    return () => events.forEach((name) => window.removeEventListener(name, refresh));
   }, [load]);
 
   const visibleProjects = useMemo(() => {
@@ -263,50 +276,22 @@ export function WorkPage() {
     }
   }, [load]);
 
-  const toggleFocusWatch = useCallback(async (focus: FocusView, kind: 'progress' | 'intelligence') => {
-    setBusyFocusId(focus.id);
-    setLoadError(null);
-    try {
-      const active = focus.watches.find((watch) => watch.kind === kind && watch.status === 'active');
-      if (active) await pauseFocusWatch(focus.id, active.id);
-      else await activateFocusTrial(focus.id, kind);
-      setFocuses(await fetchFocuses());
-    } catch (err) {
-      setLoadError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusyFocusId(null);
-    }
-  }, []);
-
-  const respondToInsight = useCallback(async (insightId: string, decision: 'approved' | 'dismissed') => {
-    setBusyInsightId(insightId);
-    setLoadError(null);
-    try {
-      if (decision === 'approved') await approveProactiveInsight(insightId);
-      else await respondToProactiveInsight(insightId, 'dismissed');
-      setHome((current) => current ? {
-        ...current,
-        proactiveInsights: current.proactiveInsights.filter((item) => item.id !== insightId),
-      } : current);
-    } catch (err) {
-      setLoadError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusyInsightId(null);
-    }
-  }, []);
-
-  const prepareForCalendarSignal = useCallback(async (focusId: string, signalId: string) => {
+  const performFocusAction = useCallback(async (focusId: string, action: () => Promise<void>, notice = focusText.operationDone) => {
     setBusyFocusId(focusId);
     setLoadError(null);
+    setFocusNotice(null);
     try {
-      await prepareFocusCalendarSignal(focusId, signalId);
-      setFocuses(await fetchFocuses());
+      await action();
+      const [nextFocuses, nextCandidates] = await Promise.all([fetchFocuses(), fetchFocusCandidates()]);
+      setFocuses(nextFocuses);
+      setFocusCandidates(nextCandidates);
+      setFocusNotice(notice);
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusyFocusId(null);
     }
-  }, []);
+  }, [focusText.operationDone]);
 
   useLayoutEffect(() => {
     setPageHeader({
@@ -428,125 +413,18 @@ export function WorkPage() {
             ) : null}
           </section>
 
-          {home.proactiveInsights.length > 0 ? (
-            <section className="rounded-2xl border border-accent/20 bg-accent-soft/20 p-5">
-              <div className="flex flex-wrap items-center gap-2">
-                <Sparkles className="size-4 text-accent" aria-hidden />
-                <h2 className="text-base font-semibold text-fg">{t.workHome.insightsTitle}</h2>
-                <WorkBadge>{t.workHome.insightsBadge}</WorkBadge>
-              </div>
-              <div className="mt-4 space-y-3">
-                {home.proactiveInsights.map((insight) => (
-                  <article key={insight.id} className="rounded-xl border border-edge-subtle bg-surface-panel p-4">
-                    <h3 className="text-sm font-semibold text-fg">{insight.title}</h3>
-                    <p className="mt-2 text-sm leading-6 text-fg-muted">{insight.summary}</p>
-                    <p className="mt-2 text-xs leading-5 text-fg-muted">
-                      <span className="font-medium text-fg">{t.workHome.whyItMatters}: </span>{insight.whyItMatters}
-                    </p>
-                    <p className="mt-2 rounded-lg bg-surface-base px-3 py-2 text-xs leading-5 text-fg-muted">
-                      <span className="font-medium text-fg">{t.workHome.suggestedNext}: </span>{insight.nextAction}
-                    </p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {insight.evidence.map((evidence, index) => (
-                        <span key={`${evidence.label}-${index}`} className="rounded-full border border-edge-subtle px-2 py-1 text-[11px] text-fg-subtle">
-                          {evidence.label}{evidence.source ? ` · ${evidence.source}` : ''}
-                        </span>
-                      ))}
-                    </div>
-                    <div className="mt-3 flex justify-end gap-2 border-t border-edge-subtle pt-3">
-                      <Button type="button" variant="ghost" className="h-8 px-2 text-xs" disabled={busyInsightId === insight.id} onClick={() => void respondToInsight(insight.id, 'dismissed')}>
-                        {t.workHome.dismissInsight}
-                      </Button>
-                      <Button type="button" variant="primary" className="h-8 px-2 text-xs" disabled={busyInsightId === insight.id} onClick={() => void respondToInsight(insight.id, 'approved')}>
-                        {t.workHome.investigateInsight}
-                      </Button>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
-          ) : null}
+          {focusNotice ? <div role="status" className="rounded-xl border border-success/25 bg-success-soft px-4 py-3 text-sm text-success">{focusNotice}</div> : null}
 
-          {home.calendarSignals.length > 0 ? (
-            <section className="rounded-2xl bg-surface-base p-5 shadow-surface">
-              <div className="flex flex-wrap items-center gap-2">
-                <CalendarClock className="size-4 text-accent" aria-hidden />
-                <h2 className="text-base font-semibold text-fg">{t.workHome.relatedCalendarTitle}</h2>
-                <WorkBadge>{t.workHome.relatedCalendarBadge}</WorkBadge>
-              </div>
-              <div className="mt-4 divide-y divide-edge-subtle">
-                {home.calendarSignals.map((signal) => (
-                  <article key={signal.id} className="flex flex-col gap-3 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0">
-                      <h3 className="truncate text-sm font-semibold text-fg">{signal.title}</h3>
-                      <p className="mt-1 text-xs text-fg-muted">{signal.focusTitle} · {formatTime(signal.startsAt, '')}</p>
-                    </div>
-                    <Button type="button" variant="secondary" className="h-8 shrink-0 px-2 text-xs" disabled={busyFocusId === signal.focusId} onClick={() => void prepareForCalendarSignal(signal.focusId, signal.id)}>
-                      {busyFocusId === signal.focusId ? t.workHome.focusWatchUpdating : t.workHome.prepareForEvent}
-                    </Button>
-                  </article>
-                ))}
-              </div>
-            </section>
-          ) : null}
-
-          {focuses.length > 0 ? (
-            <section className="rounded-2xl bg-surface-base p-5 shadow-surface">
+          <section className="rounded-2xl bg-surface-base p-5 shadow-surface">
               <div className="flex flex-wrap items-center gap-2">
                 <Eye className="size-4 text-accent" aria-hidden />
-                <h2 className="text-base font-semibold text-fg">{t.workHome.focusesTitle}</h2>
-                <WorkBadge>{t.workHome.focusesBadge}</WorkBadge>
+                <h2 className="text-base font-semibold text-fg">{focusText.current}</h2>
+                <WorkBadge>{focuses.length.toLocaleString()}</WorkBadge>
               </div>
-              <div className="mt-4 grid gap-3 md:grid-cols-2">
-                {focuses.slice(0, 6).map((focus) => {
-                  const progressActive = focus.watches.some((watch) => watch.kind === 'progress' && watch.status === 'active');
-                  const intelligenceActive = focus.watches.some((watch) => watch.kind === 'intelligence' && watch.status === 'active');
-                  const active = progressActive || intelligenceActive;
-                  return (
-                    <article key={focus.id} className="rounded-xl border border-edge-subtle bg-surface-panel p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <h3 className="truncate text-sm font-semibold text-fg">{focus.title}</h3>
-                          <p className="mt-1 line-clamp-2 text-xs leading-5 text-fg-muted">{focus.summary}</p>
-                        </div>
-                        <span className={`mt-0.5 size-2 shrink-0 rounded-full ${active ? 'bg-success' : 'bg-fg-subtle/40'}`} aria-hidden />
-                      </div>
-                      {focus.blockedReason || focus.nextAction ? (
-                        <p className="mt-3 line-clamp-2 border-t border-edge-subtle pt-3 text-xs leading-5 text-fg-muted">
-                          {focus.blockedReason || focus.nextAction}
-                        </p>
-                      ) : null}
-                      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                        <span className="text-[11px] text-fg-subtle">
-                          {active ? t.workHome.focusWatchActive : t.workHome.focusWatchInactive}
-                        </span>
-                        <div className="flex gap-1">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            className="h-8 px-2 text-xs"
-                            disabled={busyFocusId === focus.id}
-                            onClick={() => void toggleFocusWatch(focus, 'progress')}
-                          >
-                            {busyFocusId === focus.id ? t.workHome.focusWatchUpdating : progressActive ? t.workHome.pauseProgressWatch : t.workHome.startFocusWatch}
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            className="h-8 px-2 text-xs"
-                            disabled={busyFocusId === focus.id}
-                            onClick={() => void toggleFocusWatch(focus, 'intelligence')}
-                          >
-                            {busyFocusId === focus.id ? t.workHome.focusWatchUpdating : intelligenceActive ? t.workHome.pauseNewsWatch : t.workHome.startNewsWatch}
-                          </Button>
-                        </div>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            </section>
-          ) : null}
+              {focuses.length > 0 ? <div className="mt-4 grid gap-3 md:grid-cols-2">{focuses.slice(0, 6).map((focus) => <FocusCard key={focus.id} focus={focus} language={language} busy={busyFocusId === focus.id} onMonitor={(kind: FocusMonitorKind, enabled: boolean) => void performFocusAction(focus.id, async () => { await configureFocusMonitor(focus.id, kind, enabled); }, enabled ? focusText.monitorStarted : focusText.monitorStopped)} onStatus={(status: FocusStatus) => void performFocusAction(focus.id, async () => { await updateFocus(focus.id, { status }); })} onDelete={() => { if (window.confirm(focusText.deleteConfirm)) void performFocusAction(focus.id, () => deleteFocus(focus.id)); }} />)}</div> : <div className="py-8 text-center"><p className="text-sm font-medium text-fg">{focusText.empty}</p><p className="mt-1 text-xs text-fg-muted">{focusText.emptyHint}</p></div>}
+          </section>
+
+          {focusCandidates.length > 0 ? <section className="rounded-2xl border border-dashed border-edge p-5"><h2 className="text-base font-semibold text-fg">{focusText.candidates}</h2><p className="mt-1 text-xs text-fg-muted">{focusText.candidatesHint}</p><div className="mt-4 space-y-2">{focusCandidates.map((candidate) => <article key={candidate.id} className="flex flex-col gap-3 rounded-xl bg-surface-panel p-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><h3 className="text-sm font-semibold text-fg">{candidate.title}</h3><p className="mt-1 line-clamp-2 text-xs leading-5 text-fg-muted">{candidate.summary}</p></div><div className="flex shrink-0 gap-2"><Button variant="ghost" className="h-8 text-xs" disabled={busyFocusId === candidate.id} onClick={() => void performFocusAction(candidate.id, async () => { await respondToFocusCandidate(candidate.id, 'dismiss'); })}>{focusText.dismiss}</Button><Button variant="primary" className="h-8 text-xs" disabled={busyFocusId === candidate.id} onClick={() => void performFocusAction(candidate.id, async () => { await respondToFocusCandidate(candidate.id, 'accept'); })}>{focusText.accept}</Button></div></article>)}</div></section> : null}
 
           {home.work.current.length === 0
             && home.workflowRuns.active.length === 0

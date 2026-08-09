@@ -7,12 +7,12 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useDirectoryPicker } from '@/features/fs/use-directory-picker';
 import { WorkingDirectoryPickerModal } from '@/features/fs/working-directory-picker-modal';
+import { configureFocusMonitor, respondToFocusCandidate } from '@/features/focuses/api';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
 import {
   cancelWorkDiscoveryRun,
-  activateFocusTrial,
   dismissWorkDiscoveryOnboarding,
   discoverWorkDiscoveryCandidates,
   fetchWorkDiscoveryOnboarding,
@@ -23,7 +23,6 @@ import {
   selectWorkDiscoverySuggestion,
   startWorkDiscoveryRun,
   submitWorkDiscoveryRecognitionFeedback,
-  updateWorkUnderstandingThread,
   updateWorkDiscoveryProfile,
   type WorkDiscoveryCandidate,
   type WorkDiscoveryPreview,
@@ -320,9 +319,6 @@ export function WorkDiscoveryPage() {
             status: profileSelection.has(candidate.id) ? 'accepted' as const : 'rejected' as const,
           })))
         : run;
-      await Promise.all((withProfile.result?.workThreads ?? [])
-        .filter((thread) => thread.userStatus === 'unreviewed')
-        .map((thread) => updateWorkUnderstandingThread(thread.id, { decision: 'confirmed' })));
       const next = await submitWorkDiscoveryRecognitionFeedback(withProfile.id, 'confirmed');
       setRun(next);
       replaceBatchRun(next);
@@ -339,14 +335,6 @@ export function WorkDiscoveryPage() {
     setBusy(true);
     setError(null);
     try {
-      const currentThread = run.result?.workThreads?.find((thread) => thread.horizon === 'current')
-        ?? run.result?.workThreads?.[0];
-      if (currentThread) {
-        await updateWorkUnderstandingThread(currentThread.id, {
-          decision: 'corrected',
-          correctedSummary: correction.trim(),
-        });
-      }
       const next = await submitWorkDiscoveryRecognitionFeedback(run.id, decision, correction.trim());
       setRun(next);
       openConversation(next.sessionKey, correction.trim());
@@ -375,7 +363,8 @@ export function WorkDiscoveryPage() {
     setBusy(true);
     setError(null);
     try {
-      await activateFocusTrial(focus.id);
+      const accepted = await respondToFocusCandidate(focus.id, 'accept');
+      if (accepted) await configureFocusMonitor(accepted.id, 'progress', true);
       setWatchActivated(true);
     } catch (cause) {
       setError(errorText(cause));
@@ -807,15 +796,15 @@ export function WorkDiscoveryPage() {
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-fg">
-                      {watchActivated ? copy.focusTrialActive : copy.focusTrialTitle}
+                      {watchActivated ? copy.focusActive : copy.focusTitle}
                     </p>
                     <p className="mt-1 text-xs leading-5 text-fg-muted">
-                      {watchActivated ? copy.focusTrialActiveDescription : copy.focusTrialDescription}
+                      {watchActivated ? copy.focusActiveDescription : copy.focusDescription}
                     </p>
                     {!watchActivated ? (
                       <Button className="mt-3 h-9" variant="secondary" disabled={busy} onClick={() => void activateTrial()}>
                         {busy ? <Loader2 className="size-4 animate-spin" /> : <Eye className="size-4" />}
-                        {copy.activateFocusTrial}
+                        {copy.activateFocus}
                       </Button>
                     ) : null}
                   </div>

@@ -13,7 +13,7 @@ import { loadConfig, saveConfig as writeConfigToDisk } from '../config/index.js'
 import { getWorkspacePath } from '../config/workspace-path-helpers.js';
 import { AutomationService, type AutomationRun } from '../automations/index.js';
 import { onAutomationProductEvent, publishAutomationProductEvent } from '../automations/product-events.js';
-import { FocusService, processFocusAutomationRun, startTrialExpiryReconciler } from '../proactive/index.js';
+import { FocusService, processFocusMonitorRun, startFocusReconciler } from '../focuses/index.js';
 import { buildNoteAgentContext, NotesService, NotesStore } from '../notes/index.js';
 import { buildWorkflowChildTools } from '../agent/workflow/workflow-child-tools.js';
 import { WorkflowRunService } from '../workflows/service/workflow-run-service.js';
@@ -178,7 +178,7 @@ export class GatewayService {
   private connectedKnowledgeCoordinator: ConnectedKnowledgeCoordinator | null = null;
   private stopAutomationProductEventBridge: (() => void) | null = null;
   private stopSessionTranscriptAutomationEvents: (() => void) | null = null;
-  private stopFocusTrialExpiryReconciler: (() => Promise<void>) | null = null;
+  private stopFocusReconciler: (() => Promise<void>) | null = null;
 
   /**
    * Webchat agent invocation surface (`runAgent`, `abortAgentRun`, `steer*`,
@@ -870,7 +870,7 @@ export class GatewayService {
 
     await trace.measure('automations.initialize', () => this.automationService.initialize());
     await trace.measure('dreaming.reconcile', () => this.reconcileDreamingAutomations());
-    this.stopFocusTrialExpiryReconciler = startTrialExpiryReconciler(
+    this.stopFocusReconciler = startFocusReconciler(
       new FocusService(this.automationService),
     );
 
@@ -1113,8 +1113,8 @@ export class GatewayService {
 
     await this.channelManager.stop();
 
-    await this.stopFocusTrialExpiryReconciler?.();
-    this.stopFocusTrialExpiryReconciler = null;
+    await this.stopFocusReconciler?.();
+    this.stopFocusReconciler = null;
     await this.automationService.stop();
     this.stopAutomationProductEventBridge?.();
     this.stopAutomationProductEventBridge = null;
@@ -1626,10 +1626,13 @@ export class GatewayService {
 
   private handleAutomationRunCompleted(run: AutomationRun): void {
     try {
-      const proactive = processFocusAutomationRun(run);
-      this.emit('automation.run.completed', { run, silent: proactive.handled });
-      if (proactive.insight) {
-        this.emit('proactive.insight.created', { insight: proactive.insight });
+      const focusResult = processFocusMonitorRun(run);
+      this.emit('automation.run.completed', { run, silent: focusResult.handled });
+      if (focusResult.handled) {
+        this.emit('focus.run.updated', { automationId: run.automationId, run });
+      }
+      if (focusResult.insight) {
+        this.emit('focus.insight.created', { insight: focusResult.insight });
       }
     } catch (err) {
       log.warn({ err, automationId: run.automationId, runId: run.id }, 'Proactive result processing failed');
