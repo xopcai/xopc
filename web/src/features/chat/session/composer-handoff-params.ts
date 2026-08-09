@@ -22,10 +22,12 @@ export function searchParamsForComposerHandoff(search: string): string {
   const skill = sp.get('skill');
   const slash = sp.get('slash');
   const draft = sp.get('draft');
+  const autoSend = sp.get('autoSend');
   const attachmentHandoff = sp.get('attachmentHandoff');
   if (skill) next.set('skill', skill);
   if (slash) next.set('slash', slash);
   if (draft) next.set('draft', draft);
+  if (autoSend === '1') next.set('autoSend', '1');
   if (attachmentHandoff) next.set('attachmentHandoff', attachmentHandoff);
   const out = next.toString();
   return out ? `?${out}` : '';

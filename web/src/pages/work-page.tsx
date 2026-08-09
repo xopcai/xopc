@@ -29,14 +29,16 @@ import {
 import { focusCopy } from '@/features/focuses/copy';
 import { FocusCard } from '@/features/focuses/focus-card';
 import type { Focus, FocusCandidate, FocusMonitorKind, FocusStatus } from '@/features/focuses/types';
-import { delegateWork, fetchProjects, type Project } from '@/features/projects/api';
+import { fetchProjects, type Project } from '@/features/projects/api';
 import {
   fetchWorkHome,
   respondToWorkDecision,
+  type WorkHomeChat,
   type WorkHomeDecision,
   type WorkHomeItem,
   type WorkHomeResponse,
 } from '@/features/work/work-home-api';
+import { workCopy } from '@/features/work/work-copy';
 import { workflowBoardHref } from '@/features/workflows/workflow-page.utils';
 import { messages } from '@/i18n/messages';
 import { formatMediumDateTime } from '@/lib/date-formatters';
@@ -94,6 +96,21 @@ function WorkItemCard({
           {item.blockedReason || item.nextAction}
         </p>
       ) : null}
+    </Link>
+  );
+}
+
+function WorkChatCard({ chat, statusLabel }: { chat: WorkHomeChat; statusLabel: string }) {
+  return (
+    <Link
+      to={`/chat/${encodeURIComponent(chat.key)}`}
+      className="group block rounded-xl border border-edge-subtle bg-surface-panel p-4 transition-colors hover:bg-surface-hover/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <h3 className="min-w-0 truncate text-sm font-semibold text-fg">{chat.name}</h3>
+        <span className="shrink-0 rounded-full bg-surface-muted px-2 py-0.5 text-[11px] font-medium text-fg-muted">{statusLabel}</span>
+      </div>
+      <p className="mt-2 text-xs text-fg-subtle">{formatTime(chat.updatedAt, '')}</p>
     </Link>
   );
 }
@@ -171,6 +188,7 @@ export function WorkPage() {
   const msg = messages(language);
   const t = msg.projectsPage;
   const focusText = focusCopy(language);
+  const workText = workCopy(language);
   const navigate = useNavigate();
   const setPageHeader = usePageHeaderStore((state) => state.setPageHeader);
   const clearPageHeader = usePageHeaderStore((state) => state.clearPageHeader);
@@ -180,11 +198,9 @@ export function WorkPage() {
   const [focusCandidates, setFocusCandidates] = useState<FocusCandidate[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [createError, setCreateError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [outcome, setOutcome] = useState('');
-  const [creating, setCreating] = useState(false);
   const [busyDecisionId, setBusyDecisionId] = useState<string | null>(null);
   const [busyFocusId, setBusyFocusId] = useState<string | null>(null);
   const [focusNotice, setFocusNotice] = useState<string | null>(null);
@@ -216,7 +232,7 @@ export function WorkPage() {
 
   useEffect(() => {
     const refresh = () => void load();
-    const events = ['focus-created', 'focus-updated', 'focus-deleted', 'focus-monitor-updated', 'focus-run-updated', 'focus-insight-updated', 'focus-candidate-updated'];
+    const events = ['session-created', 'session-updated', 'session-transcript-updated', 'agent-run-started', 'agent-run-ended', 'focus-created', 'focus-updated', 'focus-deleted', 'focus-monitor-updated', 'focus-run-updated', 'focus-insight-updated', 'focus-candidate-updated'];
     events.forEach((name) => window.addEventListener(name, refresh));
     return () => events.forEach((name) => window.removeEventListener(name, refresh));
   }, [load]);
@@ -237,30 +253,22 @@ export function WorkPage() {
     && item.status !== 'blocked'
   )).slice(0, 10) ?? [], [home]);
 
-  const submitCreate = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+  const submitCreate = useCallback((event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmed = outcome.trim();
-    if (!trimmed || creating) return;
-    setCreating(true);
-    setCreateError(null);
-    try {
-      const result = await delegateWork({ outcome: trimmed, uiLocale: language });
-      setOutcome('');
-      setCreateOpen(false);
-      navigate(`/projects/${encodeURIComponent(result.project.id)}`);
-    } catch (err) {
-      setCreateError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setCreating(false);
-    }
-  }, [creating, language, navigate, outcome]);
+    if (!trimmed) return;
+    setOutcome('');
+    setCreateOpen(false);
+    const query = new URLSearchParams({ draft: trimmed, autoSend: '1' });
+    navigate({ pathname: '/chat/new', search: `?${query.toString()}` }, { state: { forceNewChat: true } });
+  }, [navigate, outcome]);
 
   const headerEnd = useMemo(() => (
     <Button type="button" variant="primary" className="h-9 rounded-lg" onClick={() => setCreateOpen(true)}>
       <Plus className="size-4" aria-hidden />
-      {t.workHome.newWork}
+      {workText.newWork}
     </Button>
-  ), [t.workHome.newWork]);
+  ), [workText.newWork]);
 
   const respondToDecision = useCallback(async (item: WorkHomeDecision, decision: 'approve' | 'deny') => {
     if (!item.response) return;
@@ -311,11 +319,7 @@ export function WorkPage() {
     <main className="mx-auto flex w-full max-w-[1200px] flex-1 flex-col gap-7 px-4 py-7 sm:px-6 lg:px-8 lg:py-9">
       <Dialog.Root
         open={createOpen}
-        onOpenChange={(open) => {
-          if (!open && creating) return;
-          setCreateOpen(open);
-          if (!open) setCreateError(null);
-        }}
+        onOpenChange={setCreateOpen}
       >
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
@@ -323,10 +327,10 @@ export function WorkPage() {
             <div className="flex shrink-0 items-start gap-4 border-b border-edge px-5 py-4">
               <div className="min-w-0 flex-1">
                 <Dialog.Title className="text-base font-semibold text-fg">
-                  {t.workHome.delegateTitle}
+                  {workText.dialogTitle}
                 </Dialog.Title>
                 <Dialog.Description className="mt-1 text-sm leading-5 text-fg-muted">
-                  {t.workHome.delegateDescription}
+                  {workText.dialogDescription}
                 </Dialog.Description>
               </div>
               <Dialog.Close asChild>
@@ -336,7 +340,6 @@ export function WorkPage() {
                   className="-mr-2 -mt-1 size-8 shrink-0 rounded-lg p-0"
                   title={t.cancel}
                   aria-label={t.cancel}
-                  disabled={creating}
                 >
                   <X className="size-4" aria-hidden />
                 </Button>
@@ -345,7 +348,7 @@ export function WorkPage() {
             <form onSubmit={submitCreate} className="flex min-h-0 flex-1 flex-col">
               <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-4">
                 <label htmlFor="new-work-outcome" className="mb-2 shrink-0 text-sm font-medium text-fg">
-                  {t.workHome.outcomeLabel}
+                  {workText.intentLabel}
                 </label>
                 <textarea
                   id="new-work-outcome"
@@ -358,9 +361,8 @@ export function WorkPage() {
                       event.currentTarget.form?.requestSubmit();
                     }
                   }}
-                  placeholder={t.workHome.outcomePlaceholder}
+                  placeholder={workText.intentPlaceholder}
                   maxLength={12_000}
-                  disabled={creating}
                   autoFocus
                 />
                 <div className="mt-2 flex shrink-0 items-center justify-between gap-3 text-[11px] text-fg-subtle">
@@ -369,17 +371,12 @@ export function WorkPage() {
                     {outcome.length.toLocaleString()} / {(12_000).toLocaleString()}
                   </span>
                 </div>
-                {createError ? (
-                  <p className="mt-3 rounded-lg bg-danger-soft px-3 py-2 text-xs text-danger" role="alert">
-                    {createError}
-                  </p>
-                ) : null}
               </div>
               <div className="flex shrink-0 justify-end gap-2 border-t border-edge px-5 py-4">
-                <Dialog.Close asChild><Button type="button" variant="ghost" disabled={creating}>{t.cancel}</Button></Dialog.Close>
-                <Button type="submit" variant="primary" className="min-w-32" disabled={creating || !outcome.trim()}>
+                <Dialog.Close asChild><Button type="button" variant="ghost">{t.cancel}</Button></Dialog.Close>
+                <Button type="submit" variant="primary" className="min-w-32" disabled={!outcome.trim()}>
                   <Sparkles className="size-4" aria-hidden />
-                  {creating ? t.workHome.delegating : t.workHome.delegate}
+                  {workText.submit}
                 </Button>
               </div>
             </form>
@@ -402,10 +399,10 @@ export function WorkPage() {
               {home.decisions.length > 0
                 ? interpolate(t.workHome.todaySummary, {
                     attention: home.decisions.length,
-                    moving: home.briefing.progress.movingCount,
+                    moving: home.briefing.progress.movingCount + home.chats.running.length,
                   })
                 : interpolate(t.workHome.todaySummaryClear, {
-                    moving: home.briefing.progress.movingCount,
+                    moving: home.briefing.progress.movingCount + home.chats.running.length,
                   })}
             </h2>
             {home.briefing.summary ? (
@@ -415,20 +412,11 @@ export function WorkPage() {
 
           {focusNotice ? <div role="status" className="rounded-xl border border-success/25 bg-success-soft px-4 py-3 text-sm text-success">{focusNotice}</div> : null}
 
-          <section className="rounded-2xl bg-surface-base p-5 shadow-surface">
-              <div className="flex flex-wrap items-center gap-2">
-                <Eye className="size-4 text-accent" aria-hidden />
-                <h2 className="text-base font-semibold text-fg">{focusText.current}</h2>
-                <WorkBadge>{focuses.length.toLocaleString()}</WorkBadge>
-              </div>
-              {focuses.length > 0 ? <div className="mt-4 grid gap-3 md:grid-cols-2">{focuses.slice(0, 6).map((focus) => <FocusCard key={focus.id} focus={focus} language={language} busy={busyFocusId === focus.id} onMonitor={(kind: FocusMonitorKind, enabled: boolean) => void performFocusAction(focus.id, async () => { await configureFocusMonitor(focus.id, kind, enabled); }, enabled ? focusText.monitorStarted : focusText.monitorStopped)} onStatus={(status: FocusStatus) => void performFocusAction(focus.id, async () => { await updateFocus(focus.id, { status }); })} onDelete={() => { if (window.confirm(focusText.deleteConfirm)) void performFocusAction(focus.id, () => deleteFocus(focus.id)); }} />)}</div> : <div className="py-8 text-center"><p className="text-sm font-medium text-fg">{focusText.empty}</p><p className="mt-1 text-xs text-fg-muted">{focusText.emptyHint}</p></div>}
-          </section>
-
-          {focusCandidates.length > 0 ? <section className="rounded-2xl border border-dashed border-edge p-5"><h2 className="text-base font-semibold text-fg">{focusText.candidates}</h2><p className="mt-1 text-xs text-fg-muted">{focusText.candidatesHint}</p><div className="mt-4 space-y-2">{focusCandidates.map((candidate) => <article key={candidate.id} className="flex flex-col gap-3 rounded-xl bg-surface-panel p-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><h3 className="text-sm font-semibold text-fg">{candidate.title}</h3><p className="mt-1 line-clamp-2 text-xs leading-5 text-fg-muted">{candidate.summary}</p></div><div className="flex shrink-0 gap-2"><Button variant="ghost" className="h-8 text-xs" disabled={busyFocusId === candidate.id} onClick={() => void performFocusAction(candidate.id, async () => { await respondToFocusCandidate(candidate.id, 'dismiss'); })}>{focusText.dismiss}</Button><Button variant="primary" className="h-8 text-xs" disabled={busyFocusId === candidate.id} onClick={() => void performFocusAction(candidate.id, async () => { await respondToFocusCandidate(candidate.id, 'accept'); })}>{focusText.accept}</Button></div></article>)}</div></section> : null}
-
           {home.work.current.length === 0
             && home.workflowRuns.active.length === 0
             && home.decisions.length === 0
+            && home.chats.running.length === 0
+            && home.chats.recent.length === 0
             && home.upcomingAutomations.length === 0
             && focuses.length === 0 ? (
             <section className="rounded-2xl border border-dashed border-edge p-8 text-center">
@@ -437,7 +425,7 @@ export function WorkPage() {
               <p className="mx-auto mt-1 max-w-lg text-sm leading-6 text-fg-muted">{t.workHome.emptyBody}</p>
               <div className="mt-4 flex justify-center gap-2">
                 <Button type="button" variant="primary" onClick={() => navigate('/chat/new')}>{t.workHome.startChat}</Button>
-                <Button type="button" variant="secondary" onClick={() => setCreateOpen(true)}>{t.workHome.startLongWork}</Button>
+                <Button type="button" variant="secondary" onClick={() => setCreateOpen(true)}>{workText.newWork}</Button>
               </div>
             </section>
           ) : null}
@@ -446,7 +434,7 @@ export function WorkPage() {
             <div className="min-w-0 space-y-6">
               {needsYou.length > 0 ? (
                 <section className="rounded-2xl bg-surface-base p-5 shadow-surface">
-                  <div className="flex items-center gap-2"><CircleAlert className="size-4 text-warning" aria-hidden /><h2 className="text-base font-semibold text-fg">{t.workHome.needsYou}</h2></div>
+                  <div className="flex items-center gap-2"><CircleAlert className="size-4 text-warning" aria-hidden /><h2 className="text-base font-semibold text-fg">{workText.needsAttention}</h2><WorkBadge>{needsYou.length.toLocaleString()}</WorkBadge></div>
                   <div className="mt-4 space-y-2">
                     {needsYou.map((item) => (
                       <DecisionCard
@@ -470,8 +458,9 @@ export function WorkPage() {
               )}
 
               <section className="rounded-2xl bg-surface-base p-5 shadow-surface">
-                <div className="flex items-center gap-2"><Clock3 className="size-4 text-fg-subtle" aria-hidden /><h2 className="text-base font-semibold text-fg">{t.workHome.continueTitle}</h2></div>
+                <div className="flex items-center gap-2"><Sparkles className="size-4 text-accent" aria-hidden /><h2 className="text-base font-semibold text-fg">{workText.running}</h2><WorkBadge>{(home.chats.running.length + home.workflowRuns.active.length).toLocaleString()}</WorkBadge></div>
                 <div className="mt-4 divide-y divide-edge-subtle px-1">
+                  {home.chats.running.map((chat) => <div key={chat.key} className="py-1"><WorkChatCard chat={chat} statusLabel={t.workHome.running} /></div>)}
                   {home.workflowRuns.active.map((run) => (
                     <Link key={run.id} to={workflowBoardHref(run.id)} className="flex items-center justify-between gap-3 rounded-lg px-2 py-3 text-sm hover:bg-surface-hover/55">
                       <span className="flex min-w-0 items-center gap-2">
@@ -481,16 +470,21 @@ export function WorkPage() {
                       <span className="shrink-0 text-xs text-fg-subtle">{t.workHome.running}</span>
                     </Link>
                   ))}
-                  {continuing.map((item) => (
-                    <div key={item.id} className="py-1">
-                      <WorkItemCard item={item} statusLabel={msg.projectDetailPage.workItems.statuses[item.status]} />
-                    </div>
-                  ))}
-                  {home.workflowRuns.active.length === 0 && continuing.length === 0 ? (
-                    <p className="py-6 text-center text-sm text-fg-muted">{t.workHome.noCurrentWork}</p>
+                  {home.chats.running.length === 0 && home.workflowRuns.active.length === 0 ? (
+                    <p className="py-6 text-center text-sm text-fg-muted">{workText.emptyRunning}</p>
                   ) : null}
                 </div>
               </section>
+
+              <section className="rounded-2xl bg-surface-base p-5 shadow-surface">
+                <div className="flex items-center gap-2"><Clock3 className="size-4 text-fg-subtle" aria-hidden /><h2 className="text-base font-semibold text-fg">{workText.continue}</h2><WorkBadge>{continuing.length.toLocaleString()}</WorkBadge></div>
+                <div className="mt-4 divide-y divide-edge-subtle px-1">
+                  {continuing.map((item) => <div key={item.id} className="py-1"><WorkItemCard item={item} statusLabel={msg.projectDetailPage.workItems.statuses[item.status]} /></div>)}
+                  {continuing.length === 0 ? <p className="py-6 text-center text-sm text-fg-muted">{workText.emptyContinue}</p> : null}
+                </div>
+              </section>
+
+              {home.chats.recent.length > 0 ? <section className="rounded-2xl bg-surface-base p-5 shadow-surface"><div className="flex items-center gap-2"><h2 className="text-base font-semibold text-fg">{workText.recent}</h2></div><div className="mt-4 grid gap-3 sm:grid-cols-2">{home.chats.recent.slice(0, 6).map((chat) => <WorkChatCard key={chat.key} chat={chat} statusLabel={workText.openChat} />)}</div></section> : null}
             </div>
 
             <aside className="min-w-0 space-y-4" aria-label={t.workHome.nowTitle}>
@@ -520,12 +514,19 @@ export function WorkPage() {
               ) : null}
             </aside>
           </div>
+
+          <section className="rounded-2xl bg-surface-base p-5 shadow-surface">
+            <div className="flex flex-wrap items-center gap-2"><Eye className="size-4 text-accent" aria-hidden /><h2 className="text-base font-semibold text-fg">{workText.focuses}</h2><WorkBadge>{focuses.length.toLocaleString()}</WorkBadge></div>
+            {focuses.length > 0 ? <div className="mt-4 grid gap-3 md:grid-cols-2">{focuses.slice(0, 6).map((focus) => <FocusCard key={focus.id} focus={focus} language={language} busy={busyFocusId === focus.id} onMonitor={(kind: FocusMonitorKind, enabled: boolean) => void performFocusAction(focus.id, async () => { await configureFocusMonitor(focus.id, kind, enabled); }, enabled ? focusText.monitorStarted : focusText.monitorStopped)} onStatus={(status: FocusStatus) => void performFocusAction(focus.id, async () => { await updateFocus(focus.id, { status }); })} onDelete={() => { if (window.confirm(focusText.deleteConfirm)) void performFocusAction(focus.id, () => deleteFocus(focus.id)); }} />)}</div> : <div className="py-8 text-center"><p className="text-sm font-medium text-fg">{focusText.empty}</p><p className="mt-1 text-xs text-fg-muted">{focusText.emptyHint}</p></div>}
+          </section>
+
+          {focusCandidates.length > 0 ? <section className="rounded-2xl border border-dashed border-edge p-5"><h2 className="text-base font-semibold text-fg">{focusText.candidates}</h2><p className="mt-1 text-xs text-fg-muted">{focusText.candidatesHint}</p><div className="mt-4 space-y-2">{focusCandidates.map((candidate) => <article key={candidate.id} className="flex flex-col gap-3 rounded-xl bg-surface-panel p-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><h3 className="text-sm font-semibold text-fg">{candidate.title}</h3><p className="mt-1 line-clamp-2 text-xs leading-5 text-fg-muted">{candidate.summary}</p></div><div className="flex shrink-0 gap-2"><Button variant="ghost" className="h-8 text-xs" disabled={busyFocusId === candidate.id} onClick={() => void performFocusAction(candidate.id, async () => { await respondToFocusCandidate(candidate.id, 'dismiss'); })}>{focusText.dismiss}</Button><Button variant="primary" className="h-8 text-xs" disabled={busyFocusId === candidate.id} onClick={() => void performFocusAction(candidate.id, async () => { await respondToFocusCandidate(candidate.id, 'accept'); })}>{focusText.accept}</Button></div></article>)}</div></section> : null}
         </>
       ) : null}
 
       <section className="border-t border-edge-subtle pt-7">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <h2 className="text-sm font-semibold text-fg">{t.workHome.spacesTitle}</h2>
+          <h2 className="text-sm font-semibold text-fg">{workText.projects}</h2>
           <Link to="/projects" className="text-xs font-medium text-accent hover:underline">{t.management.viewAll}</Link>
         </div>
         {projects.filter((project) => project.status !== 'archived').length > 6 ? <div className="mt-3 flex justify-end">

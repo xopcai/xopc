@@ -193,6 +193,7 @@ export function ChatPage() {
   const skillQuery = searchParams.get('skill')?.trim() ?? '';
   const slashQuery = searchParams.get('slash')?.trim() ?? '';
   const draftQuery = searchParams.get('draft') ?? '';
+  const autoSendQuery = searchParams.get('autoSend') === '1';
   const chatSessionKey = session.decodedKey ?? session.sessionKey;
   const markChatRunViewed = useChatRunPresenceStore((state) => state.markViewed);
   useEffect(() => {
@@ -234,6 +235,7 @@ export function ChatPage() {
   useEffect(() => {
     if (!auth.hasToken) return;
     if (!skillQuery && !slashQuery && !draftQuery) return;
+    if (autoSendQuery) return;
     if (session.showSessionLoading || session.sessionRoutePending) return;
     if (!session.sessionKey) return;
 
@@ -302,6 +304,7 @@ export function ChatPage() {
     skillQuery,
     slashQuery,
     draftQuery,
+    autoSendQuery,
     searchParams,
     session.showSessionLoading,
     session.sessionRoutePending,
@@ -691,6 +694,40 @@ export function ChatPage() {
     },
     [stream.sendMessage],
   );
+
+  useEffect(() => {
+    if (!autoSendQuery || !draftQuery.trim()) return;
+    if (!auth.hasToken || session.showSessionLoading || session.sessionRoutePending) return;
+    if (!session.sessionKey || stream.sending || stream.streaming || msgSlice.items.length > 0) return;
+    const message = buildComposerDraftSeed(skillQuery, draftQuery);
+    if (!message) return;
+    const marker = `${session.sessionKey}:auto-send:${message}`;
+    if (routeComposerSeedMarkerRef.current === marker) return;
+    routeComposerSeedMarkerRef.current = marker;
+    const next = new URLSearchParams(searchParams);
+    next.delete('skill');
+    next.delete('slash');
+    next.delete('draft');
+    next.delete('autoSend');
+    const query = next.toString();
+    navigate({ pathname, search: query ? `?${query}` : '' }, { replace: true });
+    void handleComposerSend(message);
+  }, [
+    auth.hasToken,
+    autoSendQuery,
+    draftQuery,
+    handleComposerSend,
+    msgSlice.items.length,
+    navigate,
+    pathname,
+    searchParams,
+    session.sessionKey,
+    session.sessionRoutePending,
+    session.showSessionLoading,
+    skillQuery,
+    stream.sending,
+    stream.streaming,
+  ]);
   const closeSourceNoteSaveDialog = useCallback(() => {
     pendingSourceNoteSaveRef.current?.reject();
     pendingSourceNoteSaveRef.current = null;
