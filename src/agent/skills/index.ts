@@ -269,7 +269,7 @@ export function loadSkills(options: {
   }
 
   if (workspaceDir) {
-    const discovered = discoverSkills(resolveWorkspaceSkillsDir(workspaceDir), 'workspace');
+    const discovered = loadWorkspaceSkills(workspaceDir);
     diagnostics.push(...discovered.diagnostics);
     const workspaceSkills = discovered.skills;
     for (const skill of workspaceSkills) {
@@ -297,6 +297,16 @@ export function loadSkills(options: {
     skills: merged,
     prompt: formatSkillsForPrompt(merged, skillsConfig),
     diagnostics,
+  };
+}
+
+/** Discover only skills owned by a workspace, without global or bundled skills. */
+export function loadWorkspaceSkills(workspaceDir: string): LoadSkillsResult {
+  const discovered = discoverSkills(resolveWorkspaceSkillsDir(workspaceDir), 'workspace');
+  return {
+    skills: discovered.skills,
+    prompt: formatSkillsForPrompt(discovered.skills),
+    diagnostics: discovered.diagnostics,
   };
 }
 
