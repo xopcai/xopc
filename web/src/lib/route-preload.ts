@@ -2,6 +2,7 @@ export const loadSessionsPage = () => import('@/pages/sessions-page');
 export const loadAutomationsPage = () => import('@/pages/automations-page');
 export const loadBrowserWorkflowsPage = () => import('@/pages/browser-workflows-page');
 export const loadWorkPage = () => import('@/pages/work-page');
+export const loadFocusDetailPage = () => import('@/pages/focus-detail-page');
 export const loadProjectsPage = () => import('@/pages/projects-page');
 export const loadProjectDetailPage = () => import('@/pages/project-detail-page');
 export const loadWorkItemDetailPage = () => import('@/pages/work-item-detail-page');
@@ -90,6 +91,7 @@ export function preloadRouteForPath(to: string) {
   if (path === '/automations') return preload(loadAutomationsPage);
   if (path === '/browser-workflows') return preload(loadBrowserWorkflowsPage);
   if (path === '/work') return preload(loadWorkPage);
+  if (path.startsWith('/work/focuses/')) return preload(loadFocusDetailPage);
   if (path === '/projects') return preload(loadProjectsPage);
   if (path.startsWith('/projects/')) return preload(loadProjectDetailPage);
   if (path.startsWith('/work-items/')) return preload(loadWorkItemDetailPage);

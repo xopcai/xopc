@@ -9,7 +9,5 @@ export * from './investigation-repository.js';
 export * from './investigator.js';
 export * from './incremental.js';
 export * from './incremental-repository.js';
-export * from './governance.js';
 export * from './evaluation.js';
-export * from './thread-repository.js';
 export * from './thread-service.js';

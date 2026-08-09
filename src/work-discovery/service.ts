@@ -19,11 +19,6 @@ import { createLogger } from '../utils/logger.js';
 
 import { analyzePersonalContext, analyzeWorkContext, workDiscoveryResultMarkdown } from './analyzer.js';
 import { discoverWorkCandidates } from './candidate-discovery.js';
-import {
-  deleteWorkUnderstandingDerivedData,
-  getWorkUnderstandingMetrics,
-  getWorkUnderstandingSourceLineage,
-} from './governance.js';
 import { workDiscoveryFingerprintsEqual } from './incremental.js';
 import {
   findActiveWorkDiscoverySourceRefresh,
@@ -36,12 +31,6 @@ import {
   listWorkUnderstandingEvidence,
 } from './investigation-repository.js';
 import { investigateWorkContext } from './investigator.js';
-import {
-  addWorkUnderstandingThreadFeedback,
-  attachWorkUnderstandingThreadEvidence,
-  getWorkUnderstandingThread,
-  listWorkUnderstandingThreads,
-} from './thread-repository.js';
 import { persistWorkThreadsFromDiscovery } from './thread-service.js';
 import {
   createWorkDiscoveryRun,
@@ -154,40 +143,6 @@ export class WorkDiscoveryService {
     return investigation
       ? { investigation, evidence: listWorkUnderstandingEvidence(investigation.id) }
       : null;
-  }
-
-  listWorkThreads(options: { projectId?: string; includeRejected?: boolean; limit?: number } = {}) {
-    return listWorkUnderstandingThreads(options);
-  }
-
-  getWorkThread(id: string) {
-    return getWorkUnderstandingThread(id);
-  }
-
-  getSourceLineage(sourceId: string) {
-    return getWorkUnderstandingSourceLineage(sourceId);
-  }
-
-  deleteSourceDerivedData(sourceId: string) {
-    return deleteWorkUnderstandingDerivedData(sourceId);
-  }
-
-  getUnderstandingMetrics() {
-    return getWorkUnderstandingMetrics();
-  }
-
-  updateWorkThread(input: {
-    id: string;
-    decision: 'confirmed' | 'corrected' | 'rejected' | 'paused' | 'completed';
-    correctedTitle?: string;
-    correctedSummary?: string;
-  }) {
-    return addWorkUnderstandingThreadFeedback({
-      threadId: input.id,
-      decision: input.decision,
-      correctedTitle: input.correctedTitle,
-      correctedSummary: input.correctedSummary,
-    });
   }
 
   async discoverCandidates(signal?: AbortSignal) {
@@ -907,7 +862,7 @@ export class WorkDiscoveryService {
       const observation = correctedIntent
         ? `The user explicitly stated their current intent: ${correctedIntent}`
         : 'The user explicitly confirmed the inferred current work understanding.';
-      const evidence = appendWorkUnderstandingEvidence({
+      appendWorkUnderstandingEvidence({
         investigationId: investigation.id,
         projectId: run.projectId,
         sourceType: 'user_statement',
@@ -917,16 +872,6 @@ export class WorkDiscoveryService {
         observedAt: Date.now(),
         sensitivity: 'normal',
       });
-      const currentThreads = listWorkUnderstandingThreads({ projectId: run.projectId, limit: 50 })
-        .filter((thread) => thread.horizon === 'current')
-        .slice(0, 3);
-      for (const thread of currentThreads) {
-        attachWorkUnderstandingThreadEvidence({
-          threadId: thread.id,
-          evidenceId: evidence.id,
-          projectId: run.projectId,
-        });
-      }
     }
     if (run.source === 'onboarding_selected_directory') {
       setWorkDiscoveryOnboardingState({

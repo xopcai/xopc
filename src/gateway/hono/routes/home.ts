@@ -4,7 +4,6 @@ import { listGatewayAgents } from '../../agents-admin.js';
 import { getTunnelService } from '../../../tunnel/index.js';
 import type { Automation, AutomationRun } from '../../../automations/index.js';
 import { GoalService, type GoalWithDetails } from '../../../goals/index.js';
-import { FocusService, listFocusCalendarSignals, listProactiveInsights } from '../../../proactive/index.js';
 import type { WorkflowRunSummary } from '../../../workflows/domain/index.js';
 import { WorkItemService } from '../../../work-items/index.js';
 import { decideConnectorApproval, listConnectorApprovals } from '../../../storage/sqlite/index.js';
@@ -275,7 +274,6 @@ export function buildHomeBriefing(input: {
 export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service } = deps;
   const goals = new GoalService();
-  const focuses = new FocusService(service.automationServiceInstance);
 
   authenticated.get('/api/home', async (c) => {
     const notes = service.notesServiceInstance;
@@ -288,7 +286,6 @@ export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRoute
     const health = service.getHealth();
     const workItems = new WorkItemService();
     const nowMs = Date.now();
-    const focusViews = focuses.list();
 
     const [
       recentlyOpened,
@@ -302,8 +299,6 @@ export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRoute
       allWorkItems,
       activeGoals,
       connectorApprovals,
-      proactiveInsights,
-      calendarSignals,
     ] = await Promise.all([
       notes.listNotes({ sortBy: 'lastOpenedAt', sortOrder: 'desc', limit: 10 }),
       notes.listNotes({ status: 'inbox', limit: 0 }),
@@ -316,8 +311,6 @@ export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRoute
       Promise.resolve(workItems.listWorkItems({ limit: 100 })),
       Promise.resolve(goals.list({ status: ['active', 'blocked', 'needs_input', 'paused'], limit: 100 })),
       Promise.resolve(listConnectorApprovals({ principalId: 'local-owner', status: 'pending', limit: 100 })),
-      Promise.resolve(listProactiveInsights({ status: ['unread'], limit: 10 })),
-      Promise.resolve(listFocusCalendarSignals(focusViews, nowMs)),
     ]);
     const projectsById = new Map(projects.items.map((project) => [project.id, project]));
     const activeWorkItems = allWorkItems.items
@@ -491,8 +484,6 @@ export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRoute
       },
       briefing,
       decisions,
-      proactiveInsights,
-      calendarSignals,
       work: {
         attentionCount: activeWorkItems.filter((item) => workItemAttentionRank(item, nowMs) < 3).length,
         overdueCount: activeWorkItems.filter((item) => item.dueAt != null && item.dueAt < nowMs).length,
