@@ -45,10 +45,10 @@ export type WorkHomeChat = {
 
 export type WorkHomeDecision = {
   id: string;
-  kind: 'work_item' | 'goal' | 'workflow_run' | 'automation_run' | 'connector_approval' | 'goal_evidence';
+  kind: 'work_item' | 'goal' | 'connector_approval' | 'goal_evidence';
   title: string;
   detail?: string;
-  reason: 'needs_input' | 'in_review' | 'blocked' | 'overdue' | 'due_soon' | 'run_failed' | 'approval_required';
+  reason: 'needs_input' | 'in_review' | 'blocked' | 'overdue' | 'due_soon' | 'approval_required';
   urgency: 'now' | 'soon';
   href: string;
   projectId?: string;
@@ -57,6 +57,18 @@ export type WorkHomeDecision = {
   response?:
     | { kind: 'connector_approval'; approvalId: string }
     | { kind: 'goal_evidence'; goalId: string; requirementId: string };
+};
+
+export type WorkHomeAttention = {
+  id: string;
+  kind: 'automation_run' | 'workflow_run';
+  runId: string;
+  title: string;
+  detail: string;
+  reason: 'run_failed' | 'run_timeout';
+  href: string;
+  updatedAt: number;
+  sessionKey?: string;
 };
 
 export type WorkHomeBriefingWin = {
@@ -82,6 +94,7 @@ export type WorkHomeResponse = {
     nextScheduled?: WorkHomeAutomation;
   };
   decisions: WorkHomeDecision[];
+  attention: WorkHomeAttention[];
   chats: {
     running: WorkHomeChat[];
     recent: WorkHomeChat[];
@@ -96,7 +109,6 @@ export type WorkHomeResponse = {
   };
   workflowRuns: {
     active: WorkHomeWorkflowRun[];
-    attention: WorkHomeWorkflowRun[];
     recent: WorkHomeWorkflowRun[];
   };
   upcomingAutomations: WorkHomeAutomation[];
@@ -114,5 +126,23 @@ export function respondToWorkDecision(
   return fetchJson(apiUrl('/api/home/decisions/respond'), {
     method: 'POST',
     body: JSON.stringify({ ...response, decision }),
+  });
+}
+
+export function acknowledgeWorkAttention(
+  item: Pick<WorkHomeAttention, 'kind' | 'runId'>,
+): Promise<{ ok: true; status: 'acknowledged' }> {
+  return fetchJson(apiUrl('/api/home/attention/acknowledge'), {
+    method: 'POST',
+    body: JSON.stringify(item),
+  });
+}
+
+export function retryWorkAttention(
+  item: Pick<WorkHomeAttention, 'kind' | 'runId'>,
+): Promise<{ ok: true; runId: string; sessionKey?: string }> {
+  return fetchJson(apiUrl('/api/home/attention/retry'), {
+    method: 'POST',
+    body: JSON.stringify(item),
   });
 }

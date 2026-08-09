@@ -54,10 +54,10 @@ export type HomeAutomation = {
 
 export type HomeDecision = {
   id: string;
-  kind: 'work_item' | 'goal' | 'workflow_run' | 'automation_run' | 'connector_approval' | 'goal_evidence';
+  kind: 'work_item' | 'goal' | 'connector_approval' | 'goal_evidence';
   title: string;
   detail?: string;
-  reason: 'needs_input' | 'in_review' | 'blocked' | 'overdue' | 'due_soon' | 'run_failed' | 'approval_required';
+  reason: 'needs_input' | 'in_review' | 'blocked' | 'overdue' | 'due_soon' | 'approval_required';
   urgency: 'now' | 'soon';
   href: string;
   projectId?: string;
@@ -66,6 +66,18 @@ export type HomeDecision = {
   response?:
     | { kind: 'connector_approval'; approvalId: string }
     | { kind: 'goal_evidence'; goalId: string; requirementId: string };
+};
+
+export type HomeAttention = {
+  id: string;
+  kind: 'automation_run' | 'workflow_run';
+  runId: string;
+  title: string;
+  detail: string;
+  reason: 'run_failed' | 'run_timeout';
+  href: string;
+  updatedAt: number;
+  sessionKey?: string;
 };
 
 export type HomeBriefing = {
@@ -124,6 +136,7 @@ type HomeWorkItem = Pick<
 export interface HomeData {
   briefing: HomeBriefing;
   decisions: HomeDecision[];
+  attention: HomeAttention[];
   proactiveInsights: HomeProactiveInsight[];
   calendarSignals: HomeCalendarSignal[];
   recentlyOpened: NoteIndexEntry[];
@@ -135,7 +148,6 @@ export interface HomeData {
   gateway: HomeGateway;
   workflowRuns: {
     active: HomeWorkflowRun[];
-    attention: HomeWorkflowRun[];
     recent: HomeWorkflowRun[];
   };
   work: {
@@ -156,10 +168,10 @@ const decisionResponseSchema = z.discriminatedUnion('kind', [
 
 const decisionSchema = z.object({
   id: z.string(),
-  kind: z.enum(['work_item', 'goal', 'workflow_run', 'automation_run', 'connector_approval', 'goal_evidence']),
+  kind: z.enum(['work_item', 'goal', 'connector_approval', 'goal_evidence']),
   title: z.string(),
   detail: z.string().optional(),
-  reason: z.enum(['needs_input', 'in_review', 'blocked', 'overdue', 'due_soon', 'run_failed', 'approval_required']),
+  reason: z.enum(['needs_input', 'in_review', 'blocked', 'overdue', 'due_soon', 'approval_required']),
   urgency: z.enum(['now', 'soon']),
   href: z.string(),
   projectId: z.string().optional(),
@@ -195,6 +207,17 @@ const actionableHomeSchema = z.object({
     }).optional(),
   }),
   decisions: z.array(decisionSchema),
+  attention: z.array(z.object({
+    id: z.string(),
+    kind: z.enum(['automation_run', 'workflow_run']),
+    runId: z.string(),
+    title: z.string(),
+    detail: z.string(),
+    reason: z.enum(['run_failed', 'run_timeout']),
+    href: z.string(),
+    updatedAt: z.number(),
+    sessionKey: z.string().optional(),
+  })),
   proactiveInsights: z.array(z.object({
     id: z.string(),
     watchId: z.string(),
@@ -252,4 +275,28 @@ export async function respondToHomeDecision(
   });
   if (!res.ok) throw new Error(`Failed to respond to decision: ${res.status}`);
   return res.json() as Promise<{ ok: true; status: string }>;
+}
+
+export async function acknowledgeHomeAttention(
+  item: Pick<HomeAttention, 'kind' | 'runId'>,
+): Promise<{ ok: true; status: 'acknowledged' }> {
+  const res = await apiFetch('/api/home/attention/acknowledge', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(item),
+  });
+  if (!res.ok) throw new Error(`Failed to acknowledge attention item: ${res.status}`);
+  return res.json() as Promise<{ ok: true; status: 'acknowledged' }>;
+}
+
+export async function retryHomeAttention(
+  item: Pick<HomeAttention, 'kind' | 'runId'>,
+): Promise<{ ok: true; runId: string; sessionKey?: string }> {
+  const res = await apiFetch('/api/home/attention/retry', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(item),
+  });
+  if (!res.ok) throw new Error(`Failed to retry attention item: ${res.status}`);
+  return res.json() as Promise<{ ok: true; runId: string; sessionKey?: string }>;
 }

@@ -15,8 +15,11 @@ import { openNoteDetail } from '../../lib/navigation';
 import { sessionDisplayName } from '../../lib/session-helpers';
 import { recordUsageEvent } from '../../product/usage-metrics';
 import {
+  acknowledgeHomeAttention,
   fetchHome,
   respondToHomeDecision,
+  retryHomeAttention,
+  type HomeAttention,
   type HomeData,
   type HomeDecision,
   type HomeGateway,
@@ -78,7 +81,6 @@ function workflowProgress(run: HomeWorkflowRun, hm: ReturnType<typeof useMessage
 
 function decisionIcon(decision: HomeDecision): string {
   if (decision.kind === 'connector_approval' || decision.kind === 'goal_evidence') return 'shield-check-outline';
-  if (decision.kind === 'workflow_run' || decision.kind === 'automation_run') return 'alert-circle-outline';
   if (decision.kind === 'goal') return 'target';
   return decision.reason === 'overdue' ? 'clock-alert-outline' : 'checkbox-marked-circle-outline';
 }
@@ -185,12 +187,33 @@ export function WorkspaceHomeScreen() {
     },
   });
 
+  const attentionMutation = useMutation({
+    mutationFn: async ({ item, action }: { item: HomeAttention; action: 'retry' | 'acknowledge' }) => {
+      if (action === 'retry') await retryHomeAttention(item);
+      else await acknowledgeHomeAttention(item);
+    },
+    onSuccess: (_result, variables) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.home });
+      setToastMessage(variables.action === 'retry' ? hm.attentionRetryStarted : hm.attentionAcknowledged);
+    },
+    onError: (error) => {
+      setToastMessage(error instanceof Error ? error.message : hm.attentionActionFailed);
+    },
+  });
+
   const openDecision = useCallback((decision: HomeDecision) => {
     recordUsageEvent('home_decision_opened');
     const objectId = decisionObjectId(decision);
     if (decision.kind === 'work_item') router.push(`/work/${objectId}`);
-    else if (decision.kind === 'workflow_run' || decision.kind === 'automation_run') router.push('/automation');
     else router.push('/work');
+  }, [router]);
+
+  const openAttention = useCallback((item: HomeAttention) => {
+    if (item.kind === 'workflow_run' && item.sessionKey) {
+      router.push(`/chat/${item.sessionKey}`);
+      return;
+    }
+    router.push({ pathname: '/automation', params: { run: item.runId } });
   }, [router]);
 
   const refresh = useCallback(async () => {
@@ -264,7 +287,14 @@ export function WorkspaceHomeScreen() {
             <BriefingCard
               briefing={home.briefing}
               primaryDecision={home.decisions[0]}
+              needsAttention={home.decisions.length + home.attention.length > 0}
               onPrimaryPress={openDecision}
+            />
+            <AttentionSection
+              items={home.attention.slice(0, 3)}
+              pendingId={attentionMutation.isPending ? attentionMutation.variables.item.id : undefined}
+              onOpen={openAttention}
+              onAction={(item, action) => attentionMutation.mutate({ item, action })}
             />
             <DecisionSection
               decisions={home.decisions.slice(0, 3)}
@@ -328,10 +358,12 @@ function HomeGatewayStatus({ gateway }: { gateway: HomeGateway }) {
 function BriefingCard({
   briefing,
   primaryDecision,
+  needsAttention,
   onPrimaryPress,
 }: {
   briefing: HomeData['briefing'];
   primaryDecision?: HomeDecision;
+  needsAttention: boolean;
   onPrimaryPress: (decision: HomeDecision) => void;
 }) {
   const { colors } = useTheme();
@@ -339,10 +371,10 @@ function BriefingCard({
   return (
     <View style={[styles.briefingCard, { backgroundColor: colors.surface.panel, borderColor: colors.border.subtle }]}>
       <View style={[styles.briefingMark, { backgroundColor: colors.accent.soft }]}>
-        <Icon source={primaryDecision ? 'lightning-bolt-outline' : 'check'} size={20} color={colors.accent.primary} />
+        <Icon source={needsAttention ? 'lightning-bolt-outline' : 'check'} size={20} color={colors.accent.primary} />
       </View>
       <Text style={[styles.briefingTitle, { color: colors.text.primary }]}>
-        {primaryDecision ? hm.briefingNeedsYou : hm.briefingClear}
+        {needsAttention ? hm.briefingNeedsYou : hm.briefingClear}
       </Text>
       <Text style={[styles.briefingSummary, { color: colors.text.secondary }]}>{briefing.summary}</Text>
       {briefing.progress.movingCount > 0 ? (
@@ -364,6 +396,65 @@ function BriefingCard({
         </Pressable>
       ) : null}
     </View>
+  );
+}
+
+function AttentionSection({
+  items,
+  pendingId,
+  onOpen,
+  onAction,
+}: {
+  items: HomeAttention[];
+  pendingId?: string;
+  onOpen: (item: HomeAttention) => void;
+  onAction: (item: HomeAttention, action: 'retry' | 'acknowledge') => void;
+}) {
+  const { colors } = useTheme();
+  const { homePage: hm } = useMessages();
+  if (items.length === 0) return null;
+  return (
+    <Section title={hm.sectionRunIssues}>
+      <View style={[styles.groupedList, { backgroundColor: colors.surface.panel }]}>
+        {items.map((item, index) => {
+          const pending = pendingId === item.id;
+          return (
+            <View key={item.id}>
+              <Pressable style={styles.decisionRow} onPress={() => onOpen(item)} accessibilityRole="button">
+                <Icon source="alert-circle-outline" size={20} color={colors.semantic.error} />
+                <View style={styles.rowCopy}>
+                  <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text.primary }]}>{item.title}</Text>
+                  <Text numberOfLines={3} style={[styles.rowSubtitle, { color: colors.text.secondary }]}>{item.detail}</Text>
+                </View>
+                <Icon source="chevron-right" size={18} color={colors.text.tertiary} />
+              </Pressable>
+              <View style={styles.decisionActions}>
+                <Pressable
+                  style={[styles.decisionButton, { backgroundColor: colors.surface.grouped }]}
+                  onPress={() => onAction(item, 'acknowledge')}
+                  disabled={pending}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: pending, busy: pending }}
+                >
+                  <Text style={[styles.decisionButtonText, { color: colors.text.secondary }]}>{hm.attentionAcknowledge}</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.decisionButton, { backgroundColor: colors.accent.primary }]}
+                  onPress={() => onAction(item, 'retry')}
+                  disabled={pending}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: pending, busy: pending }}
+                >
+                  {pending ? <ActivityIndicator size={16} color={colors.accent.onPrimary} /> : null}
+                  <Text style={[styles.decisionButtonText, { color: colors.accent.onPrimary }]}>{hm.attentionRetry}</Text>
+                </Pressable>
+              </View>
+              {index < items.length - 1 ? <View style={[styles.divider, { backgroundColor: colors.border.subtle }]} /> : null}
+            </View>
+          );
+        })}
+      </View>
+    </Section>
   );
 }
 
@@ -613,7 +704,7 @@ const styles = StyleSheet.create({
   groupedList: { borderRadius: radii.lg, overflow: 'hidden' },
   decisionRow: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
   decisionActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingBottom: spacing.md },
-  decisionButton: { minWidth: 84, minHeight: 40, borderRadius: radii.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, paddingHorizontal: spacing.md },
+  decisionButton: { minWidth: 84, minHeight: 44, borderRadius: radii.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, paddingHorizontal: spacing.md },
   decisionButtonText: { ...typography.ui, fontWeight: '600' },
   divider: { height: StyleSheet.hairlineWidth, marginLeft: 52 },
   listRow: { minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg },
