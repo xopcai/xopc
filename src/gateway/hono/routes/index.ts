@@ -6,6 +6,7 @@ import { registerSessionsRoutes } from './sessions.js';
 import { registerStatusRoutes } from './status.js';
 import { registerMemoryRoutes } from './memory.js';
 import { registerProjectsRoutes } from './projects.js';
+import { registerProjectSkillRoutes } from './project-skills.js';
 import { registerSearchRoutes } from './search.js';
 import { registerMobileRoutes } from './mobile.js';
 import { registerTaskOutcomeRoutes } from './task-outcomes.js';
@@ -30,6 +31,7 @@ export function registerCoreAuthenticatedRoutes(
   registerMemoryRoutes(authenticated, deps);
   registerActivityRoutes(authenticated, deps);
   registerProjectsRoutes(authenticated, deps);
+  registerProjectSkillRoutes(authenticated, deps);
   registerLocalAppsRoutes(authenticated, deps);
   registerWorkDiscoveryRoutes(authenticated, deps);
   registerFocusRoutes(authenticated, deps);
