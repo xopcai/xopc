@@ -303,7 +303,7 @@ export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRoute
       notes.listNotes({ sortBy: 'lastOpenedAt', sortOrder: 'desc', limit: 10 }),
       notes.listNotes({ status: 'inbox', limit: 0 }),
       notes.listNotes({ pendingTasksOnly: true, sortBy: 'createdAt', sortOrder: 'desc', limit: 10 }),
-      sessions.listSessions({ sortBy: 'updatedAt', sortOrder: 'desc', limit: 5 }),
+      sessions.listSessions({ channel: 'webchat', sortBy: 'updatedAt', sortOrder: 'desc', limit: 50 }),
       workflowRunStore.listRunSummaries(20),
       service.automationServiceInstance.list(),
       service.automationServiceInstance.listRuns({ limit: 10 }),
@@ -313,6 +313,14 @@ export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRoute
       Promise.resolve(listConnectorApprovals({ principalId: 'local-owner', status: 'pending', limit: 100 })),
     ]);
     const projectsById = new Map(projects.items.map((project) => [project.id, project]));
+    const workChats = recentSessions.items
+      .filter((session) => (session.messageCount ?? 0) > 0)
+      .map((session) => ({
+        key: session.key,
+        name: session.name || 'Conversation',
+        updatedAt: session.updatedAt,
+        active: sessions.getActiveRun(session.key).active,
+      }));
     const activeWorkItems = allWorkItems.items
       .filter((item) => item.status !== 'done' && item.status !== 'cancelled')
       .sort((left, right) => {
@@ -457,7 +465,7 @@ export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRoute
       inboxCount: inbox.total,
       pendingTasks: pendingTasks.items,
       pendingTaskCount: pendingTasks.total,
-      recentSessions: recentSessions.items,
+      recentSessions: recentSessions.items.slice(0, 5),
       activeAgent: defaultAgent
         ? {
             id: defaultAgent.id,
@@ -484,6 +492,10 @@ export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRoute
       },
       briefing,
       decisions,
+      chats: {
+        running: workChats.filter((chat) => chat.active),
+        recent: workChats.filter((chat) => !chat.active).slice(0, 8),
+      },
       work: {
         attentionCount: activeWorkItems.filter((item) => workItemAttentionRank(item, nowMs) < 3).length,
         overdueCount: activeWorkItems.filter((item) => item.dueAt != null && item.dueAt < nowMs).length,

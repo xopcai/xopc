@@ -91,83 +91,17 @@ describe('project association routes', () => {
     });
   });
 
-  it('delegates an outcome into an evidence-backed goal and queues execution', async () => {
-    const projects = new ProjectService();
-    const enqueueGoalRun = vi.fn(() => ({ id: 'queue-1', status: 'queued' }));
-    const app = registerProjectRouteApp({ projects, enqueueGoalRun } as Partial<GatewayService>);
-
-    const res = await app.request('/api/projects/delegate', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        outcome: '完成第三季度客户研究报告。\n包括访谈、分析和最终汇报。',
-        uiLocale: 'zh',
-      }),
-    });
-
-    expect(res.status).toBe(201);
-    const body = await res.json() as {
-      project: { id: string; name: string; description?: string };
-      goal: {
-        id: string;
-        projectId?: string;
-        contextMessage?: { text: string };
-        contract?: { objective: string; evidencePlan: string[] };
-        checklist: Array<{ text: string }>;
-        evidenceRequirements: Array<{ text: string }>;
-      };
-      execution: { status: string; queueItem?: { id: string } };
-    };
-    expect(body.project.name).toBe('完成第三季度客户研究报告');
-    expect(body.project.description).toContain('包括访谈');
-    expect(body.goal.projectId).toBe(body.project.id);
-    expect(body.goal.contextMessage?.text).toContain('最终汇报');
-    expect(body.goal.contract?.objective).toBe('完成第三季度客户研究报告');
-    expect(body.goal.contract?.evidencePlan.length).toBeGreaterThan(0);
-    expect(body.goal.checklist.length).toBeGreaterThan(0);
-    expect(body.goal.evidenceRequirements.length).toBeGreaterThan(0);
-    expect(body.execution).toEqual(expect.objectContaining({
-      status: 'queued',
-      queueItem: expect.objectContaining({ id: 'queue-1' }),
-    }));
-    expect(enqueueGoalRun).toHaveBeenCalledWith(body.goal.id, { source: 'api' });
-  });
-
-  it('keeps delegated work recoverable when execution cannot be queued', async () => {
-    const projects = new ProjectService();
-    const enqueueGoalRun = vi.fn(() => {
-      throw new Error('queue unavailable');
-    });
-    const app = registerProjectRouteApp({ projects, enqueueGoalRun } as Partial<GatewayService>);
-
-    const res = await app.request('/api/projects/delegate', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ outcome: 'Prepare the launch readiness report', uiLocale: 'en' }),
-    });
-
-    expect(res.status).toBe(201);
-    const body = await res.json() as {
-      project: { id: string };
-      goal: { id: string; projectId?: string };
-      execution: { status: string; warning?: string };
-    };
-    expect(body.execution).toEqual({ status: 'saved', warning: 'queue unavailable' });
-    expect(projects.get(body.project.id)).not.toBeNull();
-    expect(new GoalService().get(body.goal.id)?.projectId).toBe(body.project.id);
-  });
-
-  it('rejects empty delegated outcomes without creating a project', async () => {
+  it('does not expose the removed direct project delegation endpoint', async () => {
     const projects = new ProjectService();
     const app = registerProjectRouteApp({ projects, enqueueGoalRun: vi.fn() } as Partial<GatewayService>);
 
     const res = await app.request('/api/projects/delegate', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ outcome: '   ' }),
+      body: JSON.stringify({ outcome: 'Create a project immediately' }),
     });
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(404);
     expect(projects.list().total).toBe(0);
   });
 

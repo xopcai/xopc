@@ -18,8 +18,8 @@ describe('composer handoff params', () => {
   });
 
   it('preserves both params while resolving a new chat route', () => {
-    expect(searchParamsForComposerHandoff('?skill=build-xopc-local-app&draft=Add+filters&agent=coder'))
-      .toBe('?skill=build-xopc-local-app&draft=Add+filters');
+    expect(searchParamsForComposerHandoff('?skill=build-xopc-local-app&draft=Add+filters&autoSend=1&agent=coder'))
+      .toBe('?skill=build-xopc-local-app&draft=Add+filters&autoSend=1');
   });
 
   it('preserves the attachment handoff but consumes project scope at session creation', () => {

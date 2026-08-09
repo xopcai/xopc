@@ -36,6 +36,13 @@ export type WorkHomeAutomation = {
   nextRunAt: string;
 };
 
+export type WorkHomeChat = {
+  key: string;
+  name: string;
+  updatedAt?: string;
+  active: boolean;
+};
+
 export type WorkHomeDecision = {
   id: string;
   kind: 'work_item' | 'goal' | 'workflow_run' | 'automation_run' | 'connector_approval' | 'goal_evidence';
@@ -75,6 +82,10 @@ export type WorkHomeResponse = {
     nextScheduled?: WorkHomeAutomation;
   };
   decisions: WorkHomeDecision[];
+  chats: {
+    running: WorkHomeChat[];
+    recent: WorkHomeChat[];
+  };
   work: {
     attentionCount: number;
     overdueCount: number;
