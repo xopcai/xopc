@@ -31,8 +31,11 @@ import { FocusCard } from '@/features/focuses/focus-card';
 import type { Focus, FocusCandidate, FocusMonitorKind, FocusStatus } from '@/features/focuses/types';
 import { fetchProjects, type Project } from '@/features/projects/api';
 import {
+  acknowledgeWorkAttention,
   fetchWorkHome,
   respondToWorkDecision,
+  retryWorkAttention,
+  type WorkHomeAttention,
   type WorkHomeChat,
   type WorkHomeDecision,
   type WorkHomeItem,
@@ -156,6 +159,47 @@ function DecisionCard({
   );
 }
 
+function AttentionCard({
+  item,
+  statusLabel,
+  retryLabel,
+  viewLabel,
+  acknowledgeLabel,
+  busy,
+  onView,
+  onRetry,
+  onAcknowledge,
+}: {
+  item: WorkHomeAttention;
+  statusLabel: string;
+  retryLabel: string;
+  viewLabel: string;
+  acknowledgeLabel: string;
+  busy: boolean;
+  onView: () => void;
+  onRetry: () => void;
+  onAcknowledge: () => void;
+}) {
+  return (
+    <article className="rounded-xl border border-danger/25 bg-danger-soft/35 p-3.5">
+      <Link to={item.href} className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+        <div className="flex items-start justify-between gap-3">
+          <h3 className="min-w-0 truncate text-sm font-semibold text-fg">{item.title}</h3>
+          <span className="shrink-0 rounded-full bg-surface-panel/80 px-2 py-0.5 text-[11px] font-medium text-danger">
+            {statusLabel}
+          </span>
+        </div>
+        <p className="mt-2 text-xs leading-5 text-fg-muted">{item.detail}</p>
+      </Link>
+      <div className="mt-3 flex flex-wrap justify-end gap-2 border-t border-danger/15 pt-3">
+        <Button type="button" variant="ghost" className="h-8 px-2" disabled={busy} onClick={onAcknowledge}>{acknowledgeLabel}</Button>
+        <Button type="button" variant="ghost" className="h-8 px-2" disabled={busy} onClick={onView}>{viewLabel}</Button>
+        <Button type="button" variant="primary" className="h-8 px-2" disabled={busy} onClick={onRetry}>{retryLabel}</Button>
+      </div>
+    </article>
+  );
+}
+
 function ProjectCard({ project, openLabel, noDescription }: {
   project: Project;
   openLabel: string;
@@ -202,6 +246,7 @@ export function WorkPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [outcome, setOutcome] = useState('');
   const [busyDecisionId, setBusyDecisionId] = useState<string | null>(null);
+  const [busyAttentionId, setBusyAttentionId] = useState<string | null>(null);
   const [busyFocusId, setBusyFocusId] = useState<string | null>(null);
   const [focusNotice, setFocusNotice] = useState<string | null>(null);
 
@@ -232,7 +277,7 @@ export function WorkPage() {
 
   useEffect(() => {
     const refresh = () => void load();
-    const events = ['session-created', 'session-updated', 'session-transcript-updated', 'agent-run-started', 'agent-run-ended', 'focus-created', 'focus-updated', 'focus-deleted', 'focus-monitor-updated', 'focus-run-updated', 'focus-insight-updated', 'focus-candidate-updated'];
+    const events = ['session-created', 'session-updated', 'session-transcript-updated', 'agent-run-started', 'agent-run-ended', 'automation-run-completed', 'workflow-run-updated', 'workflow-run-error', 'focus-created', 'focus-updated', 'focus-deleted', 'focus-monitor-updated', 'focus-run-updated', 'focus-insight-updated', 'focus-candidate-updated'];
     events.forEach((name) => window.addEventListener(name, refresh));
     return () => events.forEach((name) => window.removeEventListener(name, refresh));
   }, [load]);
@@ -247,6 +292,7 @@ export function WorkPage() {
   }, [projects, search]);
 
   const needsYou = useMemo(() => home?.decisions ?? [], [home]);
+  const attention = useMemo(() => home?.attention ?? [], [home]);
   const continuing = useMemo(() => home?.work.current.filter((item) => (
     item.status !== 'needs_input'
     && item.status !== 'in_review'
@@ -281,6 +327,22 @@ export function WorkPage() {
       setLoadError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusyDecisionId(null);
+    }
+  }, [load]);
+
+  const performAttentionAction = useCallback(async (
+    item: WorkHomeAttention,
+    action: (target: Pick<WorkHomeAttention, 'kind' | 'runId'>) => Promise<unknown>,
+  ) => {
+    setBusyAttentionId(item.id);
+    setLoadError(null);
+    try {
+      await action({ kind: item.kind, runId: item.runId });
+      await load();
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusyAttentionId(null);
     }
   }, [load]);
 
@@ -396,9 +458,9 @@ export function WorkPage() {
           <section className="border-b border-edge-subtle pb-5">
             <p className="text-xs font-medium text-fg-subtle">{t.workHome.briefingTitle}</p>
             <h2 className="mt-1 text-xl font-semibold tracking-tight text-fg">
-              {home.decisions.length > 0
+              {home.decisions.length + home.attention.length > 0
                 ? interpolate(t.workHome.todaySummary, {
-                    attention: home.decisions.length,
+                    attention: home.decisions.length + home.attention.length,
                     moving: home.briefing.progress.movingCount + home.chats.running.length,
                   })
                 : interpolate(t.workHome.todaySummaryClear, {
@@ -415,6 +477,7 @@ export function WorkPage() {
           {home.work.current.length === 0
             && home.workflowRuns.active.length === 0
             && home.decisions.length === 0
+            && home.attention.length === 0
             && home.chats.running.length === 0
             && home.chats.recent.length === 0
             && home.upcomingAutomations.length === 0
@@ -432,6 +495,32 @@ export function WorkPage() {
 
           <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
             <div className="min-w-0 space-y-6">
+              {attention.length > 0 ? (
+                <section className="rounded-2xl bg-surface-base p-5 shadow-surface">
+                  <div className="flex items-center gap-2">
+                    <CircleAlert className="size-4 text-danger" aria-hidden />
+                    <h2 className="text-base font-semibold text-fg">{workText.runAttention}</h2>
+                    <WorkBadge>{attention.length.toLocaleString()}</WorkBadge>
+                  </div>
+                  <div className="mt-4 space-y-2">
+                    {attention.map((item) => (
+                      <AttentionCard
+                        key={item.id}
+                        item={item}
+                        statusLabel={item.reason === 'run_timeout' ? t.workHome.attentionTimeout : t.workHome.attentionFailed}
+                        retryLabel={t.workHome.attentionRetry}
+                        viewLabel={t.workHome.attentionView}
+                        acknowledgeLabel={t.workHome.attentionAcknowledge}
+                        busy={busyAttentionId === item.id}
+                        onView={() => navigate(item.href)}
+                        onRetry={() => void performAttentionAction(item, retryWorkAttention)}
+                        onAcknowledge={() => void performAttentionAction(item, acknowledgeWorkAttention)}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
               {needsYou.length > 0 ? (
                 <section className="rounded-2xl bg-surface-base p-5 shadow-surface">
                   <div className="flex items-center gap-2"><CircleAlert className="size-4 text-warning" aria-hidden /><h2 className="text-base font-semibold text-fg">{workText.needsAttention}</h2><WorkBadge>{needsYou.length.toLocaleString()}</WorkBadge></div>

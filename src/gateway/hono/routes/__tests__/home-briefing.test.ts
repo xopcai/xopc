@@ -17,6 +17,7 @@ describe('home briefing', () => {
           updatedAt: 100,
         },
       ],
+      attention: [],
       activeWorkCount: 2,
       activeWorkflowCount: 1,
       activeGoalCount: 3,
@@ -24,7 +25,7 @@ describe('home briefing', () => {
       nowMs: 200,
     });
 
-    expect(briefing.summary).toBe('有 1 件事等你决定；我正在继续推进 6 件工作。');
+    expect(briefing.summary).toBe('有 1 件事需要你处理；我正在继续推进 6 件工作。');
     expect(briefing.focus).toHaveLength(1);
     expect(briefing.progress).toEqual({
       activeWorkCount: 2,
@@ -38,6 +39,7 @@ describe('home briefing', () => {
     const briefing = buildHomeBriefing({
       locale: 'en',
       decisions: [],
+      attention: [],
       activeWorkCount: 1,
       activeWorkflowCount: 0,
       activeGoalCount: 0,
@@ -53,6 +55,7 @@ describe('home briefing', () => {
     const briefing = buildHomeBriefing({
       locale: 'en',
       decisions: [],
+      attention: [],
       activeWorkCount: 0,
       activeWorkflowCount: 0,
       activeGoalCount: 0,
@@ -61,5 +64,30 @@ describe('home briefing', () => {
     });
 
     expect(briefing.summary).toContain('Hand me an outcome');
+  });
+
+  it('includes run issues in the attention summary without treating them as decisions', () => {
+    const briefing = buildHomeBriefing({
+      locale: 'en',
+      decisions: [],
+      attention: [{
+        id: 'automation_run:run-1',
+        kind: 'automation_run',
+        runId: 'run-1',
+        title: 'Daily report',
+        detail: 'The run exceeded 5 minutes and was stopped.',
+        reason: 'run_timeout',
+        href: '/automations?run=run-1',
+        updatedAt: 100,
+      }],
+      activeWorkCount: 0,
+      activeWorkflowCount: 0,
+      activeGoalCount: 0,
+      wins: [],
+      nowMs: 200,
+    });
+
+    expect(briefing.summary).toBe('1 item needs your attention.');
+    expect(briefing.focus).toEqual([]);
   });
 });

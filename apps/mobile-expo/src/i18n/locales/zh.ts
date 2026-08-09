@@ -882,6 +882,7 @@ export const zh: MessageBundle = {
     untitled: '无标题',
     sectionContinue: '继续',
     sectionAttention: '需要处理',
+    sectionRunIssues: '运行异常',
     sectionActivity: 'Agent 活动',
     sectionAgents: '智能体',
     sectionLibrary: '资料库',
@@ -945,6 +946,11 @@ export const zh: MessageBundle = {
     decisionFailed: '无法提交决定',
     approve: '批准',
     deny: '拒绝',
+    attentionRetry: '重试',
+    attentionAcknowledge: '已知悉',
+    attentionRetryStarted: '已开始重试',
+    attentionAcknowledged: '已知悉该异常',
+    attentionActionFailed: '无法更新该异常',
   },
 
   workPage: {

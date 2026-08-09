@@ -1,5 +1,5 @@
-import { useRouter } from 'expo-router';
-import { useCallback, useRef, useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import PagerView from 'react-native-pager-view';
 import { Text } from 'react-native-paper';
@@ -22,12 +22,14 @@ const TAB_INDEX: Record<AutomationTab, number> = {
 
 export function AutomationScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ run?: string }>();
+  const runId = typeof params.run === 'string' ? params.run.trim() : '';
   useDismissOnHardwareBack(router);
   const { colors } = useTheme();
   const configured = useGatewayConfigured();
   const m = useMessages();
   const pm = m.automationPage;
-  const [tab, setTab] = useState<AutomationTab>('schedules');
+  const [tab, setTab] = useState<AutomationTab>(runId ? 'runs' : 'schedules');
   const pagerRef = useRef<PagerView>(null);
 
   const screenBg = colors.surface.base;
@@ -44,6 +46,10 @@ export function AutomationScreen() {
   const onPageSelected = useCallback((position: number) => {
     setTab(position === 0 ? 'schedules' : 'runs');
   }, []);
+
+  useEffect(() => {
+    if (runId) selectTab('runs');
+  }, [runId, selectTab]);
 
   return (
     <View style={[styles.screen, { backgroundColor: screenBg }]}>
@@ -81,14 +87,14 @@ export function AutomationScreen() {
           <PagerView
             ref={pagerRef}
             style={styles.content}
-            initialPage={TAB_INDEX.schedules}
+            initialPage={TAB_INDEX[runId ? 'runs' : 'schedules']}
             onPageSelected={(e) => onPageSelected(e.nativeEvent.position)}
           >
             <View key="schedules" style={styles.page} collapsable={false}>
               <SchedulesList />
             </View>
             <View key="runs" style={styles.page} collapsable={false}>
-              <CronRunsList />
+              <CronRunsList highlightedRunId={runId || undefined} />
             </View>
           </PagerView>
         </>

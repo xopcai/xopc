@@ -53,8 +53,6 @@
       "decisionKinds": {
         "work_item": "Work item",
         "goal": "Ongoing goal",
-        "workflow_run": "Workflow",
-        "automation_run": "Automation",
         "connector_approval": "Connector action",
         "goal_evidence": "Completion evidence"
       },
@@ -64,11 +62,15 @@
         "blocked": "Blocked",
         "overdue": "Overdue",
         "due_soon": "Due soon",
-        "run_failed": "Run failed",
         "approval_required": "Approval needed"
       },
       "approve": "Approve",
       "deny": "Deny",
+      "attentionRetry": "Retry",
+      "attentionView": "View details",
+      "attentionAcknowledge": "Acknowledge",
+      "attentionFailed": "Run failed",
+      "attentionTimeout": "Run timed out",
       "winKinds": {
         "work_item": "Work completed",
         "workflow_run": "Workflow completed",

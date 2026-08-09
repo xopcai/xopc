@@ -2,22 +2,43 @@ import type { Hono } from 'hono';
 
 import { listGatewayAgents } from '../../agents-admin.js';
 import { getTunnelService } from '../../../tunnel/index.js';
-import type { Automation, AutomationRun } from '../../../automations/index.js';
+import {
+  DEFAULT_AUTOMATION_TIMEOUT_SECONDS,
+  type Automation,
+  type AutomationRun,
+} from '../../../automations/index.js';
 import { GoalService, type GoalWithDetails } from '../../../goals/index.js';
+import {
+  acknowledgeHomeAttention,
+  decideConnectorApproval,
+  isHomeAttentionAcknowledged,
+  listConnectorApprovals,
+  type HomeAttentionSubjectKind,
+} from '../../../storage/sqlite/index.js';
 import type { WorkflowRunSummary } from '../../../workflows/domain/index.js';
 import { WorkItemService } from '../../../work-items/index.js';
-import { decideConnectorApproval, listConnectorApprovals } from '../../../storage/sqlite/index.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
-type HomeDecisionKind = 'work_item' | 'goal' | 'workflow_run' | 'automation_run' | 'connector_approval' | 'goal_evidence';
+type HomeDecisionKind = 'work_item' | 'goal' | 'connector_approval' | 'goal_evidence';
 type HomeDecisionReason =
   | 'needs_input'
   | 'in_review'
   | 'blocked'
   | 'overdue'
   | 'due_soon'
-  | 'run_failed'
   | 'approval_required';
+
+type HomeAttention = {
+  id: string;
+  kind: HomeAttentionSubjectKind;
+  runId: string;
+  title: string;
+  detail: string;
+  reason: 'run_failed' | 'run_timeout';
+  href: string;
+  updatedAt: number;
+  sessionKey?: string;
+};
 
 type HomeDecision = {
   id: string;
@@ -173,6 +194,34 @@ function toHomeAutomationRun(run: AutomationRun): HomeAutomationRun {
   };
 }
 
+function effectiveAutomationTimeoutSeconds(run: AutomationRun, automation?: Automation): number {
+  return run.actionSnapshot.timeoutSeconds
+    ?? automation?.reliability?.timeoutSeconds
+    ?? DEFAULT_AUTOMATION_TIMEOUT_SECONDS;
+}
+
+function attentionDetail(
+  kind: HomeAttentionSubjectKind,
+  status: 'failed' | 'timeout',
+  locale: string | undefined,
+  timeoutSeconds?: number,
+): string {
+  const isChinese = locale?.toLowerCase().startsWith('zh') ?? false;
+  if (status === 'timeout') {
+    const seconds = timeoutSeconds ?? DEFAULT_AUTOMATION_TIMEOUT_SECONDS;
+    const duration = seconds % 60 === 0
+      ? `${seconds / 60} ${isChinese ? '分钟' : seconds === 60 ? 'minute' : 'minutes'}`
+      : `${seconds} ${isChinese ? '秒' : seconds === 1 ? 'second' : 'seconds'}`;
+    return isChinese
+      ? `运行超过 ${duration}，系统已停止本次执行。`
+      : `The run exceeded ${duration} and was stopped.`;
+  }
+  if (isChinese) return kind === 'automation_run' ? '自动化未能完成，请查看详情后重试。' : '工作流未能完成，请查看详情后重试。';
+  return kind === 'automation_run'
+    ? 'The automation did not complete. Review the details and retry.'
+    : 'The workflow did not complete. Review the details and retry.';
+}
+
 function decisionFromGoal(goal: GoalWithDetails, projectName?: string): HomeDecision | null {
   if (goal.status !== 'needs_input' && goal.status !== 'blocked') return null;
   return {
@@ -222,6 +271,7 @@ function decisionFromWorkItem(
 export function buildHomeBriefing(input: {
   locale?: string;
   decisions: HomeDecision[];
+  attention: HomeAttention[];
   activeWorkCount: number;
   activeWorkflowCount: number;
   activeGoalCount: number;
@@ -231,10 +281,15 @@ export function buildHomeBriefing(input: {
 }) {
   const isChinese = input.locale?.toLowerCase().startsWith('zh') ?? false;
   const movingCount = input.activeWorkCount + input.activeWorkflowCount + input.activeGoalCount;
-  const summary = input.decisions.length > 0
+  const attentionCount = input.decisions.length + input.attention.length;
+  const summary = attentionCount > 0
     ? isChinese
-      ? `有 ${input.decisions.length} 件事等你决定；我正在继续推进 ${movingCount} 件工作。`
-      : `${input.decisions.length} ${input.decisions.length === 1 ? 'item needs' : 'items need'} your decision; I’m continuing ${movingCount} in the background.`
+      ? movingCount > 0
+        ? `有 ${attentionCount} 件事需要你处理；我正在继续推进 ${movingCount} 件工作。`
+        : `有 ${attentionCount} 件事需要你处理。`
+      : movingCount > 0
+        ? `${attentionCount} ${attentionCount === 1 ? 'item needs' : 'items need'} your attention; I’m continuing ${movingCount} in the background.`
+        : `${attentionCount} ${attentionCount === 1 ? 'item needs' : 'items need'} your attention.`
     : movingCount > 0
       ? isChinese
         ? `目前没有事情需要你处理；我正在继续推进 ${movingCount} 件工作。`
@@ -267,7 +322,7 @@ export function buildHomeBriefing(input: {
  *   - recentSessions: last 5 active AI sessions (threads)
  *   - activeAgent: default agent identity for this gateway
  *   - gateway: readiness + public tunnel status
- *   - workflowRuns: active / attention / recent workflow runs
+ *   - workflowRuns: active and recent workflow runs
  *   - upcomingAutomations: upcoming enabled automations
  *   - recentAutomationRuns: latest automation executions
  */
@@ -344,7 +399,7 @@ export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRoute
       .filter((run) => run.status === 'queued' || run.status === 'running')
       .slice(0, 5)
       .map(toHomeWorkflowRun);
-    const attentionWorkflowRuns = workflowRuns
+    const failedWorkflowRuns = workflowRuns
       .filter((run) => run.status === 'failed' || run.status === 'timeout')
       .slice(0, 5)
       .map(toHomeWorkflowRun);
@@ -357,6 +412,7 @@ export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRoute
     const latestAutomationRuns = [...automationRuns]
       .sort((left, right) => right.createdAtMs - left.createdAtMs)
       .filter((run, index, all) => all.findIndex((candidate) => candidate.automationId === run.automationId) === index);
+    const automationsById = new Map(automations.map((automation) => [automation.id, automation]));
     const decisions: HomeDecision[] = [
       ...activeWorkItems
         .map((item) => decisionFromWorkItem(item, projectsById.get(item.projectId)?.name ?? 'Project', nowMs))
@@ -364,28 +420,6 @@ export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRoute
       ...activeGoals
         .map((goal) => decisionFromGoal(goal, goal.projectId ? projectsById.get(goal.projectId)?.name : undefined))
         .filter((item): item is HomeDecision => Boolean(item)),
-      ...attentionWorkflowRuns.map((run): HomeDecision => ({
-        id: `workflow:${run.id}`,
-        kind: 'workflow_run',
-        title: run.title,
-        detail: run.status,
-        reason: 'run_failed',
-        urgency: 'now',
-        href: `/workflows?runId=${encodeURIComponent(run.id)}`,
-        updatedAt: run.completedAtMs ?? run.startedAtMs ?? run.createdAtMs,
-      })),
-      ...latestAutomationRuns
-        .filter((run) => run.status === 'failed' || run.status === 'timeout')
-        .map((run): HomeDecision => ({
-          id: `automation:${run.id}`,
-          kind: 'automation_run',
-          title: run.automationName || run.automationId,
-          detail: run.error || run.summary,
-          reason: 'run_failed',
-          urgency: 'now',
-          href: '/automations',
-          updatedAt: run.endedAtMs ?? run.startedAtMs ?? run.createdAtMs,
-        })),
       ...connectorApprovals
         .filter((approval) => Date.parse(approval.expiresAt) > nowMs)
         .map((approval): HomeDecision => ({
@@ -422,6 +456,43 @@ export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRoute
         return urgency || right.updatedAt - left.updatedAt;
       })
       .slice(0, 20);
+    const locale = c.req.query('locale');
+    const attention: HomeAttention[] = [
+      ...failedWorkflowRuns
+        .filter((run) => !isHomeAttentionAcknowledged('workflow_run', run.id))
+        .map((run): HomeAttention => ({
+          id: `workflow_run:${run.id}`,
+          kind: 'workflow_run',
+          runId: run.id,
+          title: run.title,
+          detail: attentionDetail('workflow_run', run.status === 'timeout' ? 'timeout' : 'failed', locale),
+          reason: run.status === 'timeout' ? 'run_timeout' : 'run_failed',
+          href: `/workflows?runId=${encodeURIComponent(run.id)}`,
+          updatedAt: run.completedAtMs ?? run.startedAtMs ?? run.createdAtMs,
+          sessionKey: run.sessionKey,
+        })),
+      ...latestAutomationRuns
+        .filter((run) => run.status === 'failed' || run.status === 'timeout')
+        .filter((run) => !isHomeAttentionAcknowledged('automation_run', run.id))
+        .map((run): HomeAttention => ({
+          id: `automation_run:${run.id}`,
+          kind: 'automation_run',
+          runId: run.id,
+          title: run.automationName || run.automationId,
+          detail: attentionDetail(
+            'automation_run',
+            run.status === 'timeout' ? 'timeout' : 'failed',
+            locale,
+            effectiveAutomationTimeoutSeconds(run, automationsById.get(run.automationId)),
+          ),
+          reason: run.status === 'timeout' ? 'run_timeout' : 'run_failed',
+          href: `/automations?run=${encodeURIComponent(run.id)}`,
+          updatedAt: run.endedAtMs ?? run.startedAtMs ?? run.createdAtMs,
+          sessionKey: run.sessionKey,
+        })),
+    ]
+      .sort((left, right) => right.updatedAt - left.updatedAt)
+      .slice(0, 10);
     const wins: HomeBriefingWin[] = [
       ...recentlyCompletedWorkItems.map((item): HomeBriefingWin => ({
         id: `work:${item.id}`,
@@ -450,8 +521,9 @@ export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRoute
         })),
     ].sort((left, right) => right.completedAt - left.completedAt);
     const briefing = buildHomeBriefing({
-      locale: c.req.query('locale'),
+      locale,
       decisions,
+      attention,
       activeWorkCount: activeWorkItems.filter((item) => item.status === 'in_progress').length,
       activeWorkflowCount: activeWorkflowRuns.length,
       activeGoalCount: activeGoals.filter((goal) => goal.status === 'active').length,
@@ -487,11 +559,11 @@ export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRoute
       },
       workflowRuns: {
         active: activeWorkflowRuns,
-        attention: attentionWorkflowRuns,
         recent: recentWorkflowRuns,
       },
       briefing,
       decisions,
+      attention,
       chats: {
         running: workChats.filter((chat) => chat.active),
         recent: workChats.filter((chat) => !chat.active).slice(0, 8),
@@ -536,5 +608,38 @@ export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRoute
       return c.json({ ok: true, status: updated?.status });
     }
     return c.json({ ok: false, error: 'Unsupported decision kind' }, 400);
+  });
+
+  authenticated.post('/api/home/attention/acknowledge', deps.strictRateLimitMiddleware, async (c) => {
+    const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
+    const kind = body.kind === 'automation_run' || body.kind === 'workflow_run' ? body.kind : undefined;
+    const runId = typeof body.runId === 'string' ? body.runId.trim() : '';
+    if (!kind || !runId) return c.json({ ok: false, error: 'kind and runId are required' }, 400);
+    acknowledgeHomeAttention(kind, runId);
+    return c.json({ ok: true, status: 'acknowledged' });
+  });
+
+  authenticated.post('/api/home/attention/retry', deps.strictRateLimitMiddleware, async (c) => {
+    const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
+    const kind = body.kind === 'automation_run' || body.kind === 'workflow_run' ? body.kind : undefined;
+    const runId = typeof body.runId === 'string' ? body.runId.trim() : '';
+    if (!kind || !runId) return c.json({ ok: false, error: 'kind and runId are required' }, 400);
+
+    if (kind === 'automation_run') {
+      try {
+        const run = await service.automationServiceInstance.rerunFromRun(runId);
+        acknowledgeHomeAttention(kind, runId);
+        return c.json({ ok: true, runId: run.id }, 202);
+      } catch (error) {
+        return c.json({ ok: false, error: error instanceof Error ? error.message : 'Failed to retry automation' }, 400);
+      }
+    }
+
+    const agents = await listGatewayAgents(service.currentConfig);
+    const agentId = agents.defaultId;
+    const result = await service.createWorkflowRunService().retryWorkflowRun({ agentId, runId });
+    if (result.ok === false) return c.json({ ok: false, error: result.message, code: result.code }, result.httpStatus);
+    acknowledgeHomeAttention(kind, runId);
+    return c.json({ ok: true, runId: result.runId, sessionKey: result.sessionKey }, 202);
   });
 }

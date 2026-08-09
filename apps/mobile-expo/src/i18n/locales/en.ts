@@ -882,6 +882,7 @@ export const en = {
     untitled: 'Untitled',
     sectionContinue: 'Continue',
     sectionAttention: 'Needs attention',
+    sectionRunIssues: 'Run issues',
     sectionActivity: 'Agent activity',
     sectionAgents: 'Agents',
     sectionLibrary: 'Library',
@@ -945,6 +946,11 @@ export const en = {
     decisionFailed: 'Could not send your decision',
     approve: 'Approve',
     deny: 'Deny',
+    attentionRetry: 'Retry',
+    attentionAcknowledge: 'Acknowledge',
+    attentionRetryStarted: 'Retry started',
+    attentionAcknowledged: 'Issue acknowledged',
+    attentionActionFailed: 'Could not update this issue',
   },
 
   workPage: {
