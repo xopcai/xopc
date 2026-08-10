@@ -31,7 +31,7 @@ import { createExtensionAwareStreamFn } from '../providers/extension-stream-brid
 import { CredentialResolver } from '../auth/credentials.js';
 import { resolveBundledSkillsDir, resolveStateDir, resolveUserProfilePath } from '../config/paths.js';
 import { extractTextContent } from './context/workspace.js';
-import { buildActiveProjectContextForPrompt } from './context/project-context.js';
+import { buildExecutionScopeContextForPrompt } from './context/execution-scope.js';
 import { clearBootstrapSnapshot, resolveBootstrapContextSync } from './bootstrap/bootstrap-files.js';
 import { loadProjectAgentsContextFile } from './bootstrap/project-agents-context.js';
 import type { EmbeddedContextFile } from './bootstrap/types.js';
@@ -854,7 +854,7 @@ export class AgentManager implements AgentInstanceGateway {
         instance.sessionKey,
         instance.effectiveProfile,
       );
-      instance.activeProjectContext = buildActiveProjectContextForPrompt(instance.sessionKey);
+      instance.activeProjectContext = buildExecutionScopeContextForPrompt(instance.sessionKey);
       instance.activeSelfVerifyContext = this.getSelfVerifyPromptContext(
         instance.sessionKey,
         instance.effectiveProfile.agentId,
@@ -963,7 +963,7 @@ export class AgentManager implements AgentInstanceGateway {
         instance.sessionKey,
         instance.effectiveProfile,
       );
-      instance.activeProjectContext = buildActiveProjectContextForPrompt(instance.sessionKey);
+      instance.activeProjectContext = buildExecutionScopeContextForPrompt(instance.sessionKey);
       instance.activeSelfVerifyContext = this.getSelfVerifyPromptContext(
         instance.sessionKey,
         instance.effectiveProfile.agentId,
@@ -1024,7 +1024,7 @@ export class AgentManager implements AgentInstanceGateway {
       rt.builtinMemoryStore.loadFromDiskSync();
     }
 
-    const activeProjectContext = buildActiveProjectContextForPrompt(sessionKey);
+    const activeProjectContext = buildExecutionScopeContextForPrompt(sessionKey);
     const activeSelfVerifyContext = this.getSelfVerifyPromptContext(sessionKey, profile.agentId);
     const profileModelRef = profile.primaryModelRef?.trim() || this.defaultModel;
     const modelManager = this.config.getModelManager?.();
@@ -1140,7 +1140,7 @@ export class AgentManager implements AgentInstanceGateway {
       this.config.thinkingLevel ??
       'medium';
 
-    const activeProjectContext = buildActiveProjectContextForPrompt(sessionKey);
+    const activeProjectContext = buildExecutionScopeContextForPrompt(sessionKey);
     const activeSelfVerifyContext = this.getSelfVerifyPromptContext(
       sessionKey,
       instance.effectiveProfile.agentId,
@@ -1369,7 +1369,7 @@ export class AgentManager implements AgentInstanceGateway {
   }
 
   private refreshActiveProjectContextIfChanged(instance: AgentInstance): void {
-    const nextProjectContext = buildActiveProjectContextForPrompt(instance.sessionKey);
+    const nextProjectContext = buildExecutionScopeContextForPrompt(instance.sessionKey);
     const nextSelfVerifyContext = this.getSelfVerifyPromptContext(
       instance.sessionKey,
       instance.effectiveProfile.agentId,
@@ -1447,7 +1447,7 @@ export class AgentManager implements AgentInstanceGateway {
         this.config.thinkingLevel ??
         'medium';
 
-      const activeProjectContext = buildActiveProjectContextForPrompt(sessionKey);
+      const activeProjectContext = buildExecutionScopeContextForPrompt(sessionKey);
       const activeSelfVerifyContext = this.getSelfVerifyPromptContext(
         sessionKey,
         instance.effectiveProfile.agentId,

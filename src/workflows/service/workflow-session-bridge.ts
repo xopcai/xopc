@@ -1,14 +1,15 @@
 import { randomUUID } from 'node:crypto';
 
-import type { GatewayWorkflowHost } from '../../gateway/gateway-workflow-host.types.js';
 import { renderWorkflowText } from '../../agent/workflow/snapshot.js';
+import type { GatewayWorkflowHost } from '../../gateway/gateway-workflow-host.types.js';
+import { GoalWorkflowJudge } from '../../goals/index.js';
+import { getProjectWorkspacePathForSession } from '../../projects/workspace.js';
 import type { SessionStore } from '../../session/store.js';
 import { SessionStatus } from '../../session/types.js';
 import { upsertMemoryRecord } from '../../storage/sqlite/index.js';
+import { WorkItemWorkflowJudge } from '../../work-items/index.js';
 import type { WorkflowRunView } from '../domain/index.js';
 import { isTerminalWorkflowRunStatus } from '../domain/index.js';
-import { GoalWorkflowJudge } from '../../goals/index.js';
-import { WorkItemWorkflowJudge } from '../../work-items/index.js';
 
 import { runViewToSnapshot } from './run-view-to-snapshot.js';
 import { buildWorkflowRunSessionKey } from './workflow-session-key.js';
@@ -217,7 +218,7 @@ export class WorkflowSessionBridge {
       providerId: 'workflow-run',
       kind: 'task_lesson',
       sourceAgentId: agentId,
-      workspaceId: this.gateway.currentWorkspacePath,
+      workspaceId: getProjectWorkspacePathForSession(sessionKey) ?? this.gateway.currentWorkspacePath,
       sessionKey,
       projectId,
       content: [

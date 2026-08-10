@@ -287,4 +287,30 @@ describe('goal routes', () => {
     expect(new GoalService().get(goal.id)?.activeSessionKey).toBe(sessionKey);
     expect(projects.listSessionKeys(project.id)).toEqual([sessionKey]);
   });
+
+  it('moves the active goal session when the goal changes projects', async () => {
+    const projects = new ProjectService();
+    const sourceProject = projects.create({ name: 'Source Project' });
+    const targetProject = projects.create({ name: 'Target Project' });
+    ensureSessionRecord(SESSION_KEY, process.cwd());
+    projects.attachSession(SESSION_KEY, sourceProject.id);
+    const goals = new GoalService();
+    const goal = goals.create({
+      title: 'Move project scope',
+      projectId: sourceProject.id,
+      sessionKey: SESSION_KEY,
+    });
+    const app = createApp({ projects });
+
+    const res = await app.request(`/api/goals/${encodeURIComponent(goal.id)}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ projectId: targetProject.id }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(new GoalService().get(goal.id)?.projectId).toBe(targetProject.id);
+    expect(projects.listSessionKeys(sourceProject.id)).toEqual([]);
+    expect(projects.listSessionKeys(targetProject.id)).toEqual([SESSION_KEY]);
+  });
 });
