@@ -250,8 +250,8 @@ export function WorkPage() {
   const [busyFocusId, setBusyFocusId] = useState<string | null>(null);
   const [focusNotice, setFocusNotice] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (showSkeleton = false) => {
+    if (showSkeleton) setLoading(true);
     setLoadError(null);
     try {
       const [homeResult, projectsResult, focusResult, candidateResult] = await Promise.all([
@@ -272,14 +272,29 @@ export function WorkPage() {
   }, [language]);
 
   useEffect(() => {
-    void load();
+    void load(true);
   }, [load]);
 
   useEffect(() => {
-    const refresh = () => void load();
-    const events = ['session-created', 'session-updated', 'session-transcript-updated', 'agent-run-started', 'agent-run-ended', 'automation-run-completed', 'workflow-run-updated', 'workflow-run-error', 'focus-created', 'focus-updated', 'focus-deleted', 'focus-monitor-updated', 'focus-run-updated', 'focus-insight-updated', 'focus-candidate-updated'];
-    events.forEach((name) => window.addEventListener(name, refresh));
-    return () => events.forEach((name) => window.removeEventListener(name, refresh));
+    let refreshTimer: number | undefined;
+    const scheduleRefresh = (delayMs: number) => {
+      if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => {
+        refreshTimer = undefined;
+        void load();
+      }, delayMs);
+    };
+    const refreshSoon = () => scheduleRefresh(100);
+    const refreshAfterSessionSettles = () => scheduleRefresh(750);
+    const immediateEvents = ['session-created', 'agent-run-started', 'agent-run-ended', 'automation-run-completed', 'workflow-run-updated', 'workflow-run-error', 'focus-created', 'focus-updated', 'focus-deleted', 'focus-monitor-updated', 'focus-run-updated', 'focus-insight-updated', 'focus-candidate-updated'];
+    const noisySessionEvents = ['session-updated', 'session-transcript-updated'];
+    immediateEvents.forEach((name) => window.addEventListener(name, refreshSoon));
+    noisySessionEvents.forEach((name) => window.addEventListener(name, refreshAfterSessionSettles));
+    return () => {
+      immediateEvents.forEach((name) => window.removeEventListener(name, refreshSoon));
+      noisySessionEvents.forEach((name) => window.removeEventListener(name, refreshAfterSessionSettles));
+      if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
+    };
   }, [load]);
 
   const visibleProjects = useMemo(() => {

@@ -117,13 +117,16 @@ export function WorkbenchActivity() {
   const runningCount = useMemo(() => items.filter((item) => item.status === 'running').length, [items]);
   const unreadCount = useMemo(() => items.filter((item) => !item.read).length, [items]);
   const visibleItems = expanded ? items : items.slice(0, INITIAL_VISIBLE_ITEMS);
+  const targetKey = useMemo(() => [...new Set(items.flatMap((item) => (
+    item.href && parseActivityTarget(item.href) ? [item.href] : []
+  )))].sort().join('\n'), [items]);
 
   useEffect(() => {
     const controller = new AbortController();
     const targets = new Map(
-      items.flatMap((item) => {
-        const target = parseActivityTarget(item.href);
-        return item.href && target ? [[item.href, target] as const] : [];
+      (targetKey ? targetKey.split('\n') : []).flatMap((href) => {
+        const target = parseActivityTarget(href);
+        return target ? [[href, target] as const] : [];
       }),
     );
     setTargetAvailability(Object.fromEntries([...targets.keys()].map((href) => [href, 'checking'])));
@@ -135,7 +138,7 @@ export function WorkbenchActivity() {
       }),
     ).catch(() => undefined);
     return () => controller.abort();
-  }, [items]);
+  }, [targetKey]);
 
   return (
     <section className="rounded-2xl bg-surface-base p-4 shadow-surface" aria-labelledby="workbench-activity-title">
