@@ -1063,6 +1063,8 @@
     "sourceNoteSaveDialogConfirm": "保存到 Note",
     "sourceNoteSaveDialogSaving": "保存中…",
     "workItemBanner": "正在推进：{{title}}",
+    "scopeProject": "项目",
+    "scopeWorkspace": "工作目录",
     "workItemNextStepAction": "下一步",
     "workItemSummarizeAction": "总结进展",
     "workItemOpenItem": "打开工作项",

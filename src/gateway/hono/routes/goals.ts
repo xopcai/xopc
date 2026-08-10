@@ -596,6 +596,8 @@ export function registerGoalsRoutes(authenticated: Hono, deps: AuthenticatedRout
     let goal = goals.get(goalId);
     if (!goal) return c.json({ ok: false, error: 'Goal not found' }, 404);
     const patch: Parameters<GoalService['update']>[1] = {};
+    let requestedProjectId: string | undefined;
+    let projectChanged = false;
     if (typeof body.title === 'string') patch.title = body.title;
     if ('description' in body) patch.description = typeof body.description === 'string' ? body.description : undefined;
     const priority = parsePriority(body.priority);
@@ -612,10 +614,26 @@ export function registerGoalsRoutes(authenticated: Hono, deps: AuthenticatedRout
       if (nextProjectId && !deps.service.projects.get(nextProjectId)) {
         return c.json({ ok: false, error: 'Project not found' }, 404);
       }
+      requestedProjectId = nextProjectId;
+      projectChanged = nextProjectId !== goal.projectId;
       patch.projectId = nextProjectId;
     }
     const locale = normalizeGoalUiLocale(body.uiLocale);
     if (locale) patch.uiLocale = locale;
+    if (projectChanged && goal.activeSessionKey) {
+      try {
+        if (requestedProjectId) {
+          deps.service.projects.attachSession(goal.activeSessionKey, requestedProjectId);
+        } else {
+          deps.service.projects.detachSession(goal.activeSessionKey);
+        }
+      } catch (error) {
+        return c.json({
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        }, 404);
+      }
+    }
     if (Object.keys(patch).length > 0) {
       goal = goals.update(goalId, patch);
     }

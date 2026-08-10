@@ -4,12 +4,16 @@ import type { AgentTool } from '@earendil-works/pi-agent-core';
 
 import type { BuildChildToolsOptions } from '../../agent/child-agent-factory.js';
 import { publishAutomationProductEvent } from '../../automations/product-events.js';
-import { extractProfileAgentId } from '../../config/agent-profile.js';
+import {
+  extractProfileAgentId,
+  resolveEffectiveAgentProfileForSession,
+} from '../../config/agent-profile.js';
 import { preflightWorkflowConnectors } from '../../connectors/workflow-preflight.js';
 import { resolveModelRef } from '../../config/agent-typed-models.js';
 import type { GatewayWorkflowHost } from '../../gateway/gateway-workflow-host.types.js';
 import { GoalService } from '../../goals/index.js';
 import { resolveModel as resolveModelById } from '../../providers/index.js';
+import { getProjectWorkspacePathForSession } from '../../projects/workspace.js';
 import { DelegateSubagentRunner } from '../../agent/workflow/subagent-runner.js';
 import { CatalogWorkflowDefinitionRegistry } from '../registry/catalog-workflow-definition-registry.js';
 import type { WorkflowDefinitionRegistry } from '../registry/workflow-definition-registry.js';
@@ -140,6 +144,7 @@ export class WorkflowRunService {
       eventStore,
       runStore,
       sessionKey,
+      projectId,
     });
     const limits = resolveWorkflowRunLimits({
       config: this.options.service.currentConfig,
@@ -281,6 +286,7 @@ export class WorkflowRunService {
       eventStore,
       runStore: replayRunStore,
       sessionKey,
+      projectId,
     });
     const limits = resolveWorkflowRunLimits({
       config: this.options.service.currentConfig,
@@ -443,11 +449,20 @@ export class WorkflowRunService {
     eventStore: WorkflowEventStore;
     runStore: WorkflowRunStore;
     sessionKey: string;
+    projectId?: string;
   }): WorkflowEngine {
     const gatewayService = this.options.service;
     const profileAgentId = extractProfileAgentId(params.sessionKey, gatewayService.currentConfig);
+    const agentWorkspace = gatewayService.currentConfig.agents?.list
+      ? resolveEffectiveAgentProfileForSession(
+          gatewayService.currentConfig,
+          params.sessionKey,
+        ).resolvedWorkspacePath
+      : gatewayService.currentWorkspacePath;
+    const workspace = getProjectWorkspacePathForSession(params.sessionKey)
+      ?? agentWorkspace;
     const runner = new DelegateSubagentRunner({
-      workspace: gatewayService.currentWorkspacePath,
+      workspace,
       bus: gatewayService.messageBusInstance,
       agentId: profileAgentId,
       getDefaultModel: () => resolveModelById(gatewayService.agentService.getModelForSession(params.sessionKey)),
@@ -457,7 +472,8 @@ export class WorkflowRunService {
     });
 
     return new WorkflowEngine({
-      cwd: gatewayService.currentWorkspacePath,
+      cwd: workspace,
+      projectId: params.projectId,
       eventStore: params.eventStore,
       runStore: params.runStore,
       runner,

@@ -6,13 +6,22 @@ import {
 } from '../../projects/workspace.js';
 import type { Project } from '../../projects/types.js';
 import { ProjectStore } from '../../projects/project-store.js';
-import { listMemoryRecords } from '../../storage/sqlite/index.js';
+import { listMemoryRecords, searchMemoryRecords } from '../../storage/sqlite/index.js';
 import { sanitizeForPromptLiteral } from '../prompt/sanitize-for-prompt.js';
 
 const MAX_TEXT = 1200;
 const MAX_GOALS = 5;
 const MAX_SESSIONS = 5;
-const MAX_MEMORY = 5;
+const MAX_RECENT_MEMORY = 5;
+const MAX_RELEVANT_MEMORY = 5;
+const MAX_MEMORY = 8;
+
+interface ProjectMemoryRecord {
+  id: string;
+  kind: string;
+  content: string;
+  updatedAt: string;
+}
 
 function truncateText(value: string | undefined, max = MAX_TEXT): string | undefined {
   const trimmed = value?.trim();
@@ -32,7 +41,22 @@ function formatGoal(goal: GoalWithDetails): string {
   return parts.join(' | ');
 }
 
-export function buildActiveProjectContextForPrompt(sessionKey: string): string | undefined {
+function selectProjectMemoryRecords(input: {
+  recent: ProjectMemoryRecord[];
+  relevant: ProjectMemoryRecord[];
+}): ProjectMemoryRecord[] {
+  const selected = new Map<string, ProjectMemoryRecord>();
+  for (const record of [...input.relevant, ...input.recent]) {
+    if (!selected.has(record.id)) selected.set(record.id, record);
+    if (selected.size >= MAX_MEMORY) break;
+  }
+  return [...selected.values()];
+}
+
+export function buildActiveProjectContextForPrompt(
+  sessionKey: string,
+  options: { memoryQuery?: string } = {},
+): string | undefined {
   const project = getProjectForSession(sessionKey);
   if (!project) return undefined;
   const localAppStore = new LocalAppStore();
@@ -47,10 +71,20 @@ export function buildActiveProjectContextForPrompt(sessionKey: string): string |
       limit: MAX_GOALS,
     }),
     recentSessions: new ProjectStore().getRecentSessions(project.id, MAX_SESSIONS),
-    memoryRecords: listMemoryRecords({
-      projectId: project.id,
-      status: 'active',
-      limit: MAX_MEMORY,
+    memoryRecords: selectProjectMemoryRecords({
+      relevant: options.memoryQuery?.trim()
+        ? searchMemoryRecords({
+            query: options.memoryQuery,
+            projectId: project.id,
+            statuses: ['active'],
+            maxResults: MAX_RELEVANT_MEMORY,
+          }).map((result) => result.record)
+        : [],
+      recent: listMemoryRecords({
+        projectId: project.id,
+        status: 'active',
+        limit: MAX_RECENT_MEMORY,
+      }),
     }),
     localApp: localApp ? {
       extensionId: localApp.extensionId,

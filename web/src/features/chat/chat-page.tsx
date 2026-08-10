@@ -8,6 +8,8 @@ import { Select, SelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChatComposer } from '@/features/chat/composer/chat-composer';
 import { ChatGoalBanner } from '@/features/chat/goals/chat-goal-banner';
+import { ChatProjectScopeBar } from '@/features/chat/scope/chat-project-scope-bar';
+import { useChatProjectScope } from '@/features/chat/scope/use-chat-project-scope';
 import { ChatWelcomeSpotlightSkeleton } from '@/features/chat/chat-welcome-spotlight';
 import { ChatPageHeaderRegistration } from '@/features/chat/chat-page-header-registration';
 import { ChatSseStatus } from '@/features/chat/agent-selection/chat-sse-status';
@@ -552,6 +554,7 @@ export function ChatPage() {
 
   const sourceNoteId = workflowMeta?.sourceNoteId ?? null;
   const sourceWorkItemId = workflowMeta?.sourceWorkItemId ?? null;
+  const scopedProject = useChatProjectScope(chatSessionKey);
   useEffect(() => {
     let cancelled = false;
     setSourceNoteLoadedTitle(null);
@@ -1004,6 +1007,14 @@ export function ChatPage() {
       />
 
       <div className="relative mx-auto flex min-h-0 w-full max-w-[calc(var(--max-width-chat)+8rem)] flex-1 flex-col">
+        {scopedProject ? (
+          <ChatProjectScopeBar
+            project={scopedProject}
+            workspace={session.effectiveWorkspacePath}
+            projectLabel={m.chat.scopeProject}
+            workspaceLabel={m.chat.scopeWorkspace}
+          />
+        ) : null}
         {(location.state as { fromAgentEditor?: boolean } | null)?.fromAgentEditor &&
         agents.displayAgentId ? (
           <div className="shrink-0 border-b border-edge-subtle bg-surface-panel/80 px-3 py-1.5 sm:px-5 xl:px-6">

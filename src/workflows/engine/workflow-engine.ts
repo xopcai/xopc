@@ -17,6 +17,7 @@ import type { WorkflowAgentInvocationSnapshot } from '../domain/index.js';
 
 export interface WorkflowEngineOptions {
   cwd: string;
+  projectId?: string;
   eventStore: WorkflowEventStore;
   runStore: WorkflowRunStore;
   runner: WorkflowRuntimeSubagentRunner;
@@ -257,6 +258,7 @@ export class WorkflowEngine {
                 sessionKey,
                 sessionMetadata: {
                   parentSessionKey: this.options.parentSessionKey,
+                  projectId: this.options.projectId,
                   workflowRunId: runId,
                   workflowDefinitionId: definition.id,
                   workflowAgentId: agentId,
@@ -485,6 +487,7 @@ export class WorkflowEngine {
         sessionKey,
         sessionMetadata: {
           parentSessionKey: this.options.parentSessionKey,
+          projectId: this.options.projectId,
           workflowRunId: params.runId,
           workflowDefinitionId: params.definition.id,
           workflowAgentId: target.agentId,

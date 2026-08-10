@@ -120,6 +120,9 @@ export class SystemPromptBuilder {
       if (playbookPrompt) fullPrompt = `${fullPrompt}\n\n${playbookPrompt}`;
       if (interactionPrompt) fullPrompt = `${fullPrompt}\n\n${interactionPrompt}`;
       if (continuityPrompt) fullPrompt = `${fullPrompt}\n\n${continuityPrompt}`;
+      if (options.activeProjectContext?.trim()) {
+        fullPrompt = `${fullPrompt}\n\n${options.activeProjectContext.trim()}`;
+      }
       log.debug({ baseLength: trimmed.length, skillLength: skillPrompt.length, totalLength: fullPrompt.length }, 'System prompt built (override)');
       return fullPrompt;
     }

@@ -1063,6 +1063,8 @@
     "sourceNoteSaveDialogConfirm": "Save to Note",
     "sourceNoteSaveDialogSaving": "Saving…",
     "workItemBanner": "Working on: {{title}}",
+    "scopeProject": "Project",
+    "scopeWorkspace": "Workspace",
     "workItemNextStepAction": "Next step",
     "workItemSummarizeAction": "Summarize",
     "workItemOpenItem": "Open work item",

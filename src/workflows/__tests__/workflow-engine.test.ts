@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import type { SubagentRunOptions } from '../../agent/workflow/types.js';
 import type { Config } from '../../config/schema.js';
 import { buildWorkflowDefinition } from '../domain/definition-utils.js';
 import { WorkflowEngine } from '../engine/workflow-engine.js';
@@ -27,8 +28,10 @@ describe('WorkflowEngine graph runtime', () => {
   });
 
   it('executes graph nodes and projects node ids into the run view', async () => {
+    let capturedOptions: SubagentRunOptions | undefined;
     const runner: WorkflowRuntimeSubagentRunner = {
       async run(prompt, options) {
+        capturedOptions = options;
         options.onProgress?.({ type: 'iteration', count: 1, max: 2 });
         return `## Report\n\n${'Detailed finding. '.repeat(40)}\n\nAnswer: ${prompt}`;
       },
@@ -52,7 +55,13 @@ describe('WorkflowEngine graph runtime', () => {
     const config = {} as Config;
     const eventStore = new WorkflowEventStore(config, 'main');
     const runStore = new WorkflowRunStore(config, 'main', eventStore);
-    const engine = new WorkflowEngine({ cwd: stateDir, eventStore, runStore, runner });
+    const engine = new WorkflowEngine({
+      cwd: stateDir,
+      projectId: 'project-1',
+      eventStore,
+      runStore,
+      runner,
+    });
 
     const view = await engine.startRun(definition, {
       runId: 'run-1',
@@ -70,6 +79,7 @@ describe('WorkflowEngine graph runtime', () => {
     expect(view.nodes.find((node) => node.id === 'output')?.resultPreview).not.toContain('{"summary"');
     expect(view.agents[0]).toMatchObject({ nodeId: 'analysis', label: 'Analyze', status: 'done' });
     expect(view.agents[0]?.steps).toHaveLength(1);
+    expect(capturedOptions?.sessionMetadata?.projectId).toBe('project-1');
     expect(view.nodes).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: 'input', status: 'done' }),
       expect.objectContaining({ id: 'analysis', status: 'done' }),

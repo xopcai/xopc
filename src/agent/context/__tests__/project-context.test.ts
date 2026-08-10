@@ -1,8 +1,23 @@
-import { describe, expect, it } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { GoalWithDetails } from '../../../goals/index.js';
+import { ProjectService } from '../../../projects/index.js';
 import type { Project } from '../../../projects/types.js';
-import { formatActiveProjectContextForPrompt } from '../project-context.js';
+import {
+  closeXopcDatabase,
+  ensureSessionRecord,
+  openXopcDatabase,
+  resetXopcDatabaseSingletonForTest,
+  upsertMemoryRecord,
+} from '../../../storage/sqlite/index.js';
+import {
+  buildActiveProjectContextForPrompt,
+  formatActiveProjectContextForPrompt,
+} from '../project-context.js';
 
 const project: Project = {
   id: 'project-1',
@@ -107,5 +122,56 @@ describe('formatActiveProjectContextForPrompt', () => {
     expect(text).toContain('Latest acceptance: failed | source=1234567890ab | checked=1970-01-01T00:00:01.234Z');
     expect(text).toContain('Acceptance failure: One interactive control needs an accessible name');
     expect(text).toContain('Do not modify installed release artifacts directly');
+  });
+});
+
+describe('buildActiveProjectContextForPrompt', () => {
+  let stateDir: string;
+
+  beforeEach(() => {
+    stateDir = mkdtempSync(join(tmpdir(), 'xopc-project-context-'));
+    resetXopcDatabaseSingletonForTest();
+    openXopcDatabase({ path: join(stateDir, 'xopc.db') });
+  });
+
+  afterEach(() => {
+    closeXopcDatabase();
+    resetXopcDatabaseSingletonForTest();
+    rmSync(stateDir, { recursive: true, force: true });
+  });
+
+  it('keeps objective-relevant project memory alongside recent memory', () => {
+    const projects = new ProjectService();
+    const scopedProject = projects.create({ name: 'Memory Scope Project' });
+    const sessionKey = 'agent:main:webchat:default:direct:project-memory';
+    ensureSessionRecord(sessionKey, process.cwd());
+    projects.attachSession(sessionKey, scopedProject.id);
+    upsertMemoryRecord({
+      id: 'relevant-memory',
+      providerId: 'test',
+      kind: 'task_lesson',
+      sourceAgentId: 'main',
+      projectId: scopedProject.id,
+      content: 'Needlearchitecture uses a single execution scope resolver.',
+      nowMs: 1_000,
+    });
+    for (let index = 0; index < 6; index += 1) {
+      upsertMemoryRecord({
+        id: `recent-memory-${index}`,
+        providerId: 'test',
+        kind: 'session_summary',
+        sourceAgentId: 'main',
+        projectId: scopedProject.id,
+        content: `Recent unrelated project note ${index}.`,
+        nowMs: 2_000 + index,
+      });
+    }
+
+    const text = buildActiveProjectContextForPrompt(sessionKey, {
+      memoryQuery: 'Implement needlearchitecture safely',
+    });
+
+    expect(text).toContain('Needlearchitecture uses a single execution scope resolver.');
+    expect(text).toContain('Recent unrelated project note 5.');
   });
 });

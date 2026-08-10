@@ -148,6 +148,7 @@ export interface SubagentRunOptions<T = unknown> {
   sessionKey?: string;
   sessionMetadata?: {
     parentSessionKey?: string;
+    projectId?: string;
     workflowRunId: string;
     workflowDefinitionId: string;
     workflowAgentId: string;
