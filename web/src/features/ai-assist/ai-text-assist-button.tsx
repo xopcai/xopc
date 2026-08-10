@@ -1,6 +1,14 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { ChevronDown, Eye, RefreshCw, Sparkles, SquarePen, X } from 'lucide-react';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  type MouseEvent,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import { MarkdownView } from '@/components/markdown/markdown-view';
 import { Button } from '@/components/ui/button';
@@ -112,6 +120,8 @@ export function AiTextAssistButton({
   const [draft, setDraft] = useState('');
   const [mode, setMode] = useState<AssistPaneMode>('edit');
   const [thinkingOpen, setThinkingOpen] = useState(true);
+  const [nestedInDialog, setNestedInDialog] = useState(false);
+  const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null);
   const thinkingScrollRef = useRef<HTMLPreElement | null>(null);
   const shouldFollowThinkingRef = useRef(true);
   const { suggestion, thinking, loading, error, generate, reset } = useAiTextAssist();
@@ -167,7 +177,9 @@ export function AiTextAssistButton({
     });
   }, [context, fieldId, fieldLabel, format, generate, intent, locale, scenario]);
 
-  const openAssist = useCallback(() => {
+  const openAssist = useCallback((event: MouseEvent<HTMLButtonElement>) => {
+    setNestedInDialog(Boolean(event.currentTarget.closest('[role="dialog"]')));
+    setPortalContainer(document.querySelector<HTMLElement>('.app-main-surface'));
     setCurrentDraft(value);
     setCurrentMode('preview');
     setDraft('');
@@ -231,9 +243,14 @@ export function AiTextAssistButton({
       </Button>
 
       <Dialog.Root open={open} onOpenChange={(next) => (!next ? close() : setOpen(true))}>
-        <Dialog.Portal>
-          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[80] bg-scrim" />
-          <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 pointer-events-none">
+        <Dialog.Portal container={portalContainer ?? undefined}>
+          <Dialog.Overlay
+            className={cn(
+              'xopc-dialog-overlay absolute inset-0 z-[80]',
+              nestedInDialog ? 'bg-transparent' : 'bg-scrim',
+            )}
+          />
+          <div className="absolute inset-0 z-[80] flex items-center justify-center p-4 pointer-events-none">
             <Dialog.Content
               className="xopc-dialog-content-pane pointer-events-auto flex h-[min(78vh,38rem)] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-popover outline-none"
               onOpenAutoFocus={(event) => event.preventDefault()}

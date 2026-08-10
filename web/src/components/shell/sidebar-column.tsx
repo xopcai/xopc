@@ -139,6 +139,7 @@ export const SidebarColumn = memo(function SidebarColumn() {
           sidebarCollapsed ? 'md:w-0 md:overflow-hidden md:border-0' : 'app-sidebar-expanded-width',
         )}
         aria-hidden={sidebarCollapsed && !mobileNavOpen ? true : undefined}
+        data-collapsed={sidebarCollapsed && !mobileNavOpen ? true : undefined}
         style={
           !sidebarCollapsed
             ? ({
