@@ -54,6 +54,16 @@ describe('buildSystemPrompt prompt modes', () => {
     );
   });
 
+  it('keeps active project scope in none mode', () => {
+    const prompt = buildSystemPrompt('/ws', {
+      promptMode: 'none',
+      activeProjectContext: '# Active Project\n\nProject: xopc',
+    });
+    expect(prompt).toContain('You are a personal AI assistant running inside xopc.');
+    expect(prompt).toContain('# Active Project');
+    expect(prompt).toContain('Project: xopc');
+  });
+
   it('omits full-mode sections in minimal mode but keeps Tooling and Runtime', () => {
     const prompt = buildSystemPrompt('/ws', {
       promptMode: 'minimal',

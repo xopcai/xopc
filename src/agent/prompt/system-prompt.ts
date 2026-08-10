@@ -115,7 +115,10 @@ export function buildSystemPrompt(workspaceDir: string, options: SystemPromptOpt
   } = options;
 
   if (promptMode === 'none') {
-    return 'You are a personal AI assistant running inside xopc.';
+    return joinSections([
+      'You are a personal AI assistant running inside xopc.',
+      activeProjectContext,
+    ]);
   }
 
   const isMinimal = promptMode === 'minimal';
