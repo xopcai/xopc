@@ -399,7 +399,7 @@ html.dark {
       transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
-  .app-sidebar-push[aria-hidden="true"] .app-sidebar-content {
+  .app-sidebar-push[data-collapsed="true"] .app-sidebar-content {
     opacity: 0;
     transform: translate3d(-0.375rem, 0, 0);
   }
