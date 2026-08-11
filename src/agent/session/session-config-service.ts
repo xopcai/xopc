@@ -44,7 +44,10 @@ export interface SessionConfigServiceOptions {
 export interface PatchSessionAgentConfigInput {
   thinkingLevel?: string;
   model?: string | null;
-  reasoningLevel?: string;
+  /** Preferred activity-detail field. `null` clears the session override. */
+  activityDetailLevel?: string | null;
+  /** @deprecated Use activityDetailLevel. */
+  reasoningLevel?: string | null;
   verboseLevel?: string;
   workingDirectory?: string;
 }
@@ -93,12 +96,19 @@ export class SessionConfigService {
       this.opts.agentManager.setThinkingLevel(sessionKey, normalized as ThinkingLevel);
     }
 
-    if (partial.reasoningLevel !== undefined) {
-      const normalized = normalizeReasoningLevel(partial.reasoningLevel);
-      if (!normalized) {
-        return { ok: false, error: 'Invalid reasoning level' };
+    const activityDetailLevel = partial.activityDetailLevel !== undefined
+      ? partial.activityDetailLevel
+      : partial.reasoningLevel;
+    if (activityDetailLevel !== undefined) {
+      if (activityDetailLevel === null) {
+        await this.opts.sessionConfigStore.update(sessionKey, { reasoningLevel: undefined });
+      } else {
+        const normalized = normalizeReasoningLevel(activityDetailLevel);
+        if (!normalized) {
+          return { ok: false, error: 'Invalid activity detail level' };
+        }
+        await this.opts.sessionConfigStore.update(sessionKey, { reasoningLevel: normalized });
       }
-      await this.opts.sessionConfigStore.update(sessionKey, { reasoningLevel: normalized });
     }
 
     if (partial.verboseLevel !== undefined) {

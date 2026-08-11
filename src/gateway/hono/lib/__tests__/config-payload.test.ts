@@ -62,6 +62,18 @@ describe('buildSafeBrowserConfigForWeb', () => {
 });
 
 describe('buildSafeWebConfigPayload', () => {
+  it('includes the Web UI activity detail default', async () => {
+    const payload = await buildSafeWebConfigPayload({
+      currentConfig: {
+        agents: { capabilityPresets: {}, list: [] },
+        channels: {},
+        gateway: { webchat: { activityDetailDefault: 'stream' } },
+      },
+    } as never);
+
+    expect(payload.gateway.webchat.activityDetailDefault).toBe('stream');
+  });
+
   it('includes manifest typed models for config round trips', async () => {
     const payload = await buildSafeWebConfigPayload({
       currentConfig: {

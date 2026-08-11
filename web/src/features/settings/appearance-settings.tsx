@@ -1,4 +1,14 @@
+import { useEffect, useState } from 'react';
+
 import { PreferenceSelectFields } from '@/components/shell/preference-select-fields';
+import { Select, SelectOption } from '@/components/ui/popover-select';
+import { Skeleton } from '@/components/ui/skeleton';
+import type { ReasoningLevel } from '@/features/chat/messages/messages.types';
+import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
+import {
+  normalizeActivityDetailDefault,
+  patchActivityDetailDefault,
+} from '@/features/settings/activity-detail-config-api';
 import { SettingsAdvancedGate } from '@/features/settings/settings-advanced-gate';
 import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
 import { messages } from '@/i18n/messages';
@@ -188,6 +198,57 @@ function ColorSchemeSelector() {
   );
 }
 
+function ActivityDetailDefaultSection() {
+  const language = useLocaleStore((s) => s.language);
+  const a = messages(language).appearanceSettings;
+  const { data, isLoading } = useGatewayConfigSwr(true);
+  const configured = normalizeActivityDetailDefault(data?.payload?.config);
+  const [level, setLevel] = useState<ReasoningLevel>(configured);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(false);
+
+  useEffect(() => setLevel(configured), [configured]);
+
+  const changeLevel = (next: ReasoningLevel) => {
+    const previous = level;
+    setLevel(next);
+    setSaving(true);
+    setError(false);
+    void patchActivityDetailDefault(next)
+      .catch(() => {
+        setLevel(previous);
+        setError(true);
+      })
+      .finally(() => setSaving(false));
+  };
+
+  return (
+    <div className="flex flex-col gap-2 py-3.5 sm:py-4">
+      <div className="min-w-0">
+        <div className="text-sm font-semibold text-fg">{a.activityDetailDefaultTitle}</div>
+        <p className="mt-0.5 text-xs text-fg-muted">{a.activityDetailDefaultDescription}</p>
+      </div>
+      {isLoading ? (
+        <Skeleton className="h-10 w-full rounded-lg sm:max-w-sm" />
+      ) : (
+        <Select
+          value={level}
+          disabled={saving}
+          onChange={(event) => changeLevel(event.target.value as ReasoningLevel)}
+          triggerClassName="sm:max-w-sm"
+        >
+          <SelectOption value="off">{a.activityDetailLevels.off}</SelectOption>
+          <SelectOption value="on">{a.activityDetailLevels.on}</SelectOption>
+          <SelectOption value="stream">{a.activityDetailLevels.stream}</SelectOption>
+        </Select>
+      )}
+      <p className={cn('min-h-4 text-xs', error ? 'text-red-600 dark:text-red-400' : 'text-fg-subtle')}>
+        {error ? a.activityDetailSaveError : saving ? a.activityDetailSaving : a.activityDetailDefaultHint}
+      </p>
+    </div>
+  );
+}
+
 function DeveloperOptionsSection() {
   const language = useLocaleStore((s) => s.language);
   const a = messages(language).appearanceSettings;
@@ -238,6 +299,7 @@ export function AppearanceSettingsPanel() {
         </h2>
         <PreferenceSelectFields variant="page" sections={['theme', 'font']} />
         <ColorSchemeSelector />
+        <ActivityDetailDefaultSection />
       </section>
 
       <SettingsAdvancedGate>

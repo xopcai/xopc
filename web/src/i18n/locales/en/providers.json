@@ -69,6 +69,8 @@
     "oauthProcessingCode": "Processing authorization…",
     "openAuthPage": "Open auth page",
     "cancelOAuth": "Cancel",
+    "deviceCodeLabel": "One-time device code",
+    "deviceCodeHint": "Enter this code on the authorization page. It expires after this login attempt.",
     "pasteRedirectUrl": "Paste full redirect URL (e.g. http://127.0.0.1:…/oauth-callback?code=…&state=…)",
     "submitCode": "Submit",
     "envHint": "API key is set via environment variable. Enter a new key above to override.",

@@ -44,7 +44,9 @@ export interface ComposerToolbarProps {
   modelSupportsThinking: boolean;
   onThinkingChange: (level: string) => void;
   reasoningLevel: ReasoningLevel;
-  onReasoningChange: (level: ReasoningLevel) => void;
+  activityDetailDefault: ReasoningLevel;
+  activityDetailOverride: ReasoningLevel | null;
+  onReasoningChange: (level: ReasoningLevel | null) => void;
 
   voiceActive: boolean;
   voiceReadiness: VoiceReadiness;
@@ -81,6 +83,8 @@ export const ComposerToolbar = memo(function ComposerToolbar({
   modelSupportsThinking,
   onThinkingChange,
   reasoningLevel,
+  activityDetailDefault,
+  activityDetailOverride,
   onReasoningChange,
   voiceActive,
   voiceReadiness,
@@ -215,10 +219,20 @@ export const ComposerToolbar = memo(function ComposerToolbar({
                 <span className="shrink-0 text-fg-muted">{m.activityDetailLabel}</span>
                 <Select
                   className="min-w-0 flex-1 cursor-pointer appearance-none rounded-md bg-surface-hover/80 px-2 py-0.5 text-sm font-medium text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                  value={reasoningLevel}
+                  value={activityDetailOverride ?? 'default'}
                   disabled={disabled}
-                  onChange={(event) => onReasoningChange(event.target.value as ReasoningLevel)}
+                  onChange={(event) => onReasoningChange(
+                    event.target.value === 'default'
+                      ? null
+                      : event.target.value as ReasoningLevel,
+                  )}
                 >
+                  <SelectOption value="default">
+                    {m.activityDetailUseDefault.replace(
+                      '{{level}}',
+                      m.activityDetailLevels[activityDetailDefault],
+                    )}
+                  </SelectOption>
                   {(Object.keys(m.activityDetailLevels) as ReasoningLevel[]).map((level) => (
                     <SelectOption key={level} value={level}>
                       {m.activityDetailLevels[level]}

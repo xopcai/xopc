@@ -68,11 +68,13 @@ export DEEPSEEK_API_KEY="sk-..."
 | `deepseek` | Settings → Providers、`xopc providers set-key deepseek`、`providers.deepseek` 或 `DEEPSEEK_API_KEY` |
 | `openai` | 已保存 key、配置文件或 `OPENAI_API_KEY` |
 | `anthropic` | OAuth token 或 API Key；环境变量支持 `ANTHROPIC_OAUTH_TOKEN` 与 `ANTHROPIC_API_KEY` |
-| `openai-codex` | 正常 Codex 访问为 OAuth-only |
+| `openai-codex` | 正常 Codex 访问为 OAuth-only；本地 Gateway 使用浏览器回调，远端或反向代理 Gateway 自动使用设备码。需要在 ChatGPT 安全设置或工作区设置中启用设备码登录。 |
 | `google-gemini-cli` / `google-antigravity` | 按使用方式选择 OAuth token 或 API Key |
 | `github-copilot` | 视配置使用 GitHub token 环境变量或 OAuth |
 
 小米 MiMo 仍可通过 `xiaomi` 与 `xiaomi-token-plan-*` 使用；选择与你的接口和 token 套餐匹配的 provider id。
+
+远程登录 `openai-codex` 时，请打开页面显示的验证地址并输入一次性设备码。如果设备码不可用，可在 CLI 中选择浏览器登录，将最终的完整 `http://localhost:1455/auth/callback?...` 地址粘贴到提示处，或者通过 SSH 转发 1455 端口。
 
 ## 目录
 

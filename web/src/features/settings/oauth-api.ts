@@ -13,6 +13,8 @@ export interface OAuthSessionStatus {
   status: 'pending' | 'waiting_auth' | 'waiting_code' | 'completed' | 'failed' | 'cancelled';
   authUrl?: string;
   instructions?: string;
+  deviceCode?: string;
+  verificationUri?: string;
   message?: string;
   error?: string;
   expiresAt: number;

@@ -602,10 +602,11 @@
     "sessionNotFoundCta": "Start new conversation",
     "messageMoreActions": "More actions",
     "activityDetailLabel": "Activity",
+    "activityDetailUseDefault": "Use default ({{level}})",
     "activityDetailLevels": {
       "off": "Concise",
-      "on": "Expandable after completion",
-      "stream": "Detailed live"
+      "on": "Collapsed · expandable",
+      "stream": "Live · auto-expanded"
     },
     "thinkingLevelLabel": "Thinking",
     "thinkingUnsupported": "Not supported by this model",

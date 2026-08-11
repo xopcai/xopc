@@ -9,7 +9,12 @@ export {
 export { SessionStore } from './store.js';
 export type { SessionStoreOptions } from './store.js';
 export { SessionConfigStore, resolveThinkingLevel, resolveReasoningLevel, resolveVerboseLevel } from './config-store.js';
-export { resolveEffectiveThinkingLevel, resolveEffectiveReasoningLevel } from './thinking-resolve.js';
+export {
+  DEFAULT_ACTIVITY_DETAIL_LEVEL,
+  resolveConfiguredActivityDetailDefault,
+  resolveEffectiveThinkingLevel,
+  resolveEffectiveReasoningLevel,
+} from './thinking-resolve.js';
 export type { SessionAgentConfig } from './config-types.js';
 export {
   normalizeWorkingDirectoryInput,

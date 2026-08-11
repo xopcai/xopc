@@ -1,13 +1,15 @@
 import type { ReasoningLevel } from '@/features/chat/messages/messages.types';
 
 export const DEFAULT_THINKING = 'medium';
-export const DEFAULT_REASONING: ReasoningLevel = 'stream';
+export const DEFAULT_REASONING: ReasoningLevel = 'on';
 
 export type DefaultSessionMeta = {
   name: string | null;
   model: string;
   thinkingLevel: string;
   reasoningLevel: ReasoningLevel;
+  activityDetailDefault: ReasoningLevel;
+  activityDetailOverride: ReasoningLevel | null;
   modelSupportsThinking: boolean;
   effectiveWorkspacePath: string;
   workingDirectoryLocked: boolean;
@@ -20,6 +22,8 @@ export function defaultSessionMeta(): DefaultSessionMeta {
     model: '',
     thinkingLevel: DEFAULT_THINKING,
     reasoningLevel: DEFAULT_REASONING,
+    activityDetailDefault: DEFAULT_REASONING,
+    activityDetailOverride: null,
     modelSupportsThinking: false,
     effectiveWorkspacePath: '',
     workingDirectoryLocked: false,

@@ -1093,7 +1093,7 @@
   },
   "appearanceSettings": {
     "pageTitle": "Preferences",
-    "subtitle": "Language, appearance, and text size for daily use. Stored in this browser only.",
+    "subtitle": "Language, appearance, text size, and conversation display preferences.",
     "languageTitle": "Language",
     "languageDescription": "Choose the interface language.",
     "themeTitle": "Theme",
@@ -1119,6 +1119,16 @@
     "showDesktopPet": "Show pet",
     "hideDesktopPet": "Hide pet",
     "aboutApp": "About",
+    "activityDetailDefaultTitle": "Default AI activity detail",
+    "activityDetailDefaultDescription": "Choose how new conversations present analysis and tool execution.",
+    "activityDetailDefaultHint": "A conversation-specific choice overrides this default.",
+    "activityDetailSaving": "Saving…",
+    "activityDetailSaveError": "Could not save the activity detail default.",
+    "activityDetailLevels": {
+      "off": "Concise · hide normal activity",
+      "on": "Collapsed · expandable after completion",
+      "stream": "Live · expand while working"
+    },
     "developerGroupTitle": "Developer",
     "developerGroupDescription": "Affects how tool-call results are displayed in chat.",
     "showRawToolDataTitle": "Show tool debugging data",
