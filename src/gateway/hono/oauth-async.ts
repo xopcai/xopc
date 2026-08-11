@@ -120,27 +120,39 @@ function requestLooksRemote(c: Context): boolean {
   return [originHost, forwardedHost, host].some((candidate) => candidate && !isLoopbackHost(candidate));
 }
 
+export function resolveOAuthLoginMethodPreference(params: {
+  requestedMethod?: unknown;
+  supportedMethods?: readonly string[];
+  remote: boolean;
+}): string | undefined {
+  if (typeof params.requestedMethod === 'string' && params.requestedMethod.trim()) {
+    const requested = params.requestedMethod.trim();
+    return !params.supportedMethods || params.supportedMethods.includes(requested) ? requested : undefined;
+  }
+  if (
+    params.remote &&
+    params.supportedMethods?.includes('browser') &&
+    params.supportedMethods.includes('device_code')
+  ) {
+    return 'device_code';
+  }
+  return undefined;
+}
+
 function preferredOAuthLoginMethod(params: {
   provider: string;
   requestedMethod?: unknown;
   c: Context;
   service: GatewayService;
 }): string | undefined {
-  if (typeof params.requestedMethod === 'string' && params.requestedMethod.trim()) {
-    return params.requestedMethod.trim();
-  }
-
-  if (params.provider !== 'openai-codex') {
-    return undefined;
-  }
-
   const publicUrl = resolveReverseProxyPublicUrl(params.service.currentConfig);
   const publicHost = hostWithoutPort(publicUrl ?? undefined);
-  if ((publicHost && !isLoopbackHost(publicHost)) || requestLooksRemote(params.c)) {
-    return 'device_code';
-  }
-
-  return undefined;
+  const remote = Boolean((publicHost && !isLoopbackHost(publicHost)) || requestLooksRemote(params.c));
+  return resolveOAuthLoginMethodPreference({
+    requestedMethod: params.requestedMethod,
+    supportedMethods: OAUTH_PROVIDERS[params.provider]?.loginMethods,
+    remote,
+  });
 }
 
 export function createOAuthAsyncHandler(service: GatewayService) {

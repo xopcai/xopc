@@ -9,8 +9,8 @@ import {
 
 import type { CredentialResolverOptions } from '../auth/credentials.js';
 import { EXTENSION_PROVIDER_BASE_URL } from './constants.js';
-import { getApiKey } from './index.js';
 import { createExtensionAwareStreamFn } from './extension-stream-bridge.js';
+import { getApiKey } from './index.js';
 
 export function isLocalModelBaseUrl(baseUrl: string | undefined): boolean {
   if (!baseUrl) return false;
