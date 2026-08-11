@@ -77,17 +77,18 @@ export function buildAssistantTurnViewModel({
       ? (message.content ?? []).filter((block) => block.type !== 'thinking')
       : (message.content ?? []);
   const flowContent = displayContent.filter((block) => block.type !== 'image');
-  const activityBlocks = filterVisibleSteps(collectTurnActivityBlocks(displayContent));
+  const allActivityBlocks = filterVisibleSteps(collectTurnActivityBlocks(message.content ?? []));
+  const activityBlocks = reasoningLevel === 'off' ? [] : allActivityBlocks;
   const answerStarted = hasAssistantAnswerText(flowContent);
-  const toolBlocks = activityBlocks.filter(
+  const toolBlocks = allActivityBlocks.filter(
     (block): block is ToolUseContent => block.type === 'tool_use',
   );
   const runningTool = [...toolBlocks].reverse().find((tool) => tool.status === 'running');
   const failedToolCount = toolBlocks.filter((tool) => tool.status === 'error').length;
-  const timing = getActivityTiming(activityBlocks);
+  const timing = getActivityTiming(allActivityBlocks);
   const activityActive =
     isStreaming &&
-    activityBlocks.some(
+    allActivityBlocks.some(
       (block) =>
         (block.type === 'thinking' && Boolean(block.streaming)) ||
         (block.type === 'tool_use' && block.status === 'running'),
@@ -104,7 +105,7 @@ export function buildAssistantTurnViewModel({
   } else if (runningTool) {
     state = 'using_tool';
   } else if (
-    activityBlocks.some(
+    allActivityBlocks.some(
       (block) => block.type === 'thinking' && Boolean(block.streaming),
     )
   ) {

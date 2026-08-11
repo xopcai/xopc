@@ -1,6 +1,6 @@
 import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as Popover from '@radix-ui/react-popover';
-import { Check, ChevronDown, ChevronUp, CircleHelp, Copy, FileCode2, FileText, ListTodo, MoreHorizontal, Pencil, RefreshCw, SquarePen, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, CircleAlert, CircleHelp, Copy, FileCode2, FileText, ListTodo, MoreHorizontal, Pencil, RefreshCw, SquarePen, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react';
 
 import type {
   ImageContent,
@@ -77,7 +77,7 @@ export const MessageBubble = memo(function MessageBubble({
   sessionKey,
   isStreaming,
   progress,
-  reasoningLevel = 'stream',
+  reasoningLevel = 'on',
   messageIndex,
   onDeleteRound,
   onRetryUserMessageRound,
@@ -225,7 +225,7 @@ export const MessageBubble = memo(function MessageBubble({
 
   const hasAssistantActivity = Boolean(assistantTurnView?.activity.blocks.length);
   const progressForMeta =
-    (reasoningHidden && progress?.stage === 'thinking') ||
+    reasoningHidden ||
     (isAssistant && hasAssistantActivity)
       ? null
       : progress;
@@ -544,6 +544,17 @@ export const MessageBubble = memo(function MessageBubble({
           )}
         >
           <div className="flex min-w-0 flex-col gap-2">
+            {reasoningLevel === 'off' && (assistantTurnView?.activity.failedCount ?? 0) > 0 ? (
+              <div className="flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2 text-xs text-red-700 dark:text-red-300">
+                <CircleAlert className="size-4 shrink-0" aria-hidden />
+                <span>
+                  {m.chat.activityPartial} · {m.chat.activityFailedCount.replace(
+                    /\{\{count\}\}/g,
+                    String(assistantTurnView?.activity.failedCount ?? 0),
+                  )}
+                </span>
+              </div>
+            ) : null}
             {(displayForFlow?.length ?? 0) > 0 ? (
               <>
                 <div

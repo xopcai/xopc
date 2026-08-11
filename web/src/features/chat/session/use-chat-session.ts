@@ -85,7 +85,9 @@ export function useChatSession() {
   const sessionName = sessionSlice?.name ?? null;
   const sessionModel = sessionSlice?.model ?? '';
   const thinkingLevel = sessionSlice?.thinkingLevel ?? DEFAULT_THINKING;
-  const reasoningLevel = sessionSlice?.reasoningLevel ?? 'stream';
+  const reasoningLevel = sessionSlice?.reasoningLevel ?? 'on';
+  const activityDetailDefault = sessionSlice?.activityDetailDefault ?? 'on';
+  const activityDetailOverride = sessionSlice?.activityDetailOverride ?? null;
   const modelSupportsThinking = sessionSlice?.modelSupportsThinking ?? false;
   const effectiveWorkspacePath = sessionSlice?.effectiveWorkspacePath ?? '';
   const workingDirectoryLocked = sessionSlice?.workingDirectoryLocked ?? false;
@@ -265,6 +267,12 @@ export function useChatSession() {
         model: string;
         thinkingLevel?: string | null;
         reasoningLevel?: string | null;
+        activityDetail?: {
+          default: string;
+          override: string | null;
+          effective: string;
+          source: 'session' | 'default';
+        };
         effectiveWorkspacePath?: string | null;
         workingDirectoryLocked?: boolean;
         workspaceSource?: 'project' | 'session_override' | 'agent_default_root' | 'agent_workspace';
@@ -417,6 +425,8 @@ export function useChatSession() {
       onSessionThinkingLevelChange,
       onSessionReasoningLevelChange,
       reasoningLevel,
+      activityDetailDefault,
+      activityDetailOverride,
       modelSupportsThinking,
       effectiveWorkspacePath,
       workingDirectoryLocked,

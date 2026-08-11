@@ -171,7 +171,8 @@ export class GatewaySessionsApi {
     body: {
       thinkingLevel?: string;
       model?: string | null;
-      reasoningLevel?: string;
+      activityDetailLevel?: string | null;
+      reasoningLevel?: string | null;
       verboseLevel?: string;
       workingDirectory?: string;
     },

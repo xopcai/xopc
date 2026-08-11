@@ -36,7 +36,13 @@ export async function resolveEffectiveThinkingLevel(
   return def as ThinkingLevel;
 }
 
-const REASONING_FALLBACK: ReasoningLevel = 'stream';
+export const DEFAULT_ACTIVITY_DETAIL_LEVEL: ReasoningLevel = 'on';
+
+export function resolveConfiguredActivityDetailDefault(config?: {
+  gateway?: { webchat?: { activityDetailDefault?: ReasoningLevel } };
+}): ReasoningLevel {
+  return config?.gateway?.webchat?.activityDetailDefault ?? DEFAULT_ACTIVITY_DETAIL_LEVEL;
+}
 
 /**
  * Session override > runtime default.
@@ -46,7 +52,7 @@ export async function resolveEffectiveReasoningLevel(
   sessionKey: string,
   agentDefault?: ReasoningLevel,
 ): Promise<ReasoningLevel> {
-  const def = agentDefault ?? REASONING_FALLBACK;
+  const def = agentDefault ?? DEFAULT_ACTIVITY_DETAIL_LEVEL;
   const resolved = await resolveReasoningLevel(sessionConfigStore, sessionKey, def);
   return resolved ?? def;
 }

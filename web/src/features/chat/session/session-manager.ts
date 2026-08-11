@@ -16,10 +16,16 @@ import { upsertWebchatEmptyShellCache } from '@/features/chat/session/webchat-em
 /** `GET /api/sessions?channel=…` filters on {@link SessionMetadata.sourceChannel}. */
 export const WEB_UI_SESSION_SOURCE_CHANNELS = 'webchat';
 
-type SessionAgentConfig = {
+export type SessionAgentConfig = {
   thinkingLevel: string;
   model: string;
   reasoningLevel: string;
+  activityDetail: {
+    default: 'off' | 'on' | 'stream';
+    override: 'off' | 'on' | 'stream' | null;
+    effective: 'off' | 'on' | 'stream';
+    source: 'session' | 'default';
+  };
   effectiveWorkspacePath: string;
   workingDirectoryLocked: boolean;
   workspaceSource: 'project' | 'session_override' | 'agent_default_root' | 'agent_workspace';
@@ -35,6 +41,12 @@ function parseSessionAgentConfigResponse(raw: unknown): SessionAgentConfig {
   }
   const payload = response.payload as Record<string, unknown>;
   const workspaceSource = payload.workspaceSource;
+  const rawActivity = payload.activityDetail;
+  const activity = rawActivity && typeof rawActivity === 'object'
+    ? rawActivity as Record<string, unknown>
+    : null;
+  const isLevel = (value: unknown): value is 'off' | 'on' | 'stream' =>
+    value === 'off' || value === 'on' || value === 'stream';
   if (
     typeof payload.thinkingLevel !== 'string' ||
     typeof payload.model !== 'string' ||
@@ -52,6 +64,23 @@ function parseSessionAgentConfigResponse(raw: unknown): SessionAgentConfig {
     thinkingLevel: payload.thinkingLevel,
     model: payload.model,
     reasoningLevel: payload.reasoningLevel,
+    activityDetail: activity &&
+      isLevel(activity.default) &&
+      (activity.override === null || isLevel(activity.override)) &&
+      isLevel(activity.effective) &&
+      (activity.source === 'session' || activity.source === 'default')
+      ? {
+          default: activity.default,
+          override: activity.override,
+          effective: activity.effective,
+          source: activity.source,
+        }
+      : {
+          default: isLevel(payload.reasoningLevel) ? payload.reasoningLevel : 'on',
+          override: isLevel(payload.reasoningLevel) ? payload.reasoningLevel : null,
+          effective: isLevel(payload.reasoningLevel) ? payload.reasoningLevel : 'on',
+          source: isLevel(payload.reasoningLevel) ? 'session' : 'default',
+        },
     effectiveWorkspacePath: payload.effectiveWorkspacePath,
     workingDirectoryLocked: payload.workingDirectoryLocked,
     workspaceSource,
@@ -167,7 +196,13 @@ export class SessionManager {
 
   async patchSessionAgentConfig(
     sessionKey: string,
-    patch: { thinkingLevel?: string; model?: string | null; reasoningLevel?: string; workingDirectory?: string },
+    patch: {
+      thinkingLevel?: string;
+      model?: string | null;
+      activityDetailLevel?: string | null;
+      reasoningLevel?: string | null;
+      workingDirectory?: string;
+    },
   ): Promise<void> {
     const res = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/agent-config`), {
       method: 'PATCH',

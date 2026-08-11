@@ -1093,7 +1093,7 @@
   },
   "appearanceSettings": {
     "pageTitle": "偏好设置",
-    "subtitle": "语言、界面外观与对话字号等日常使用的显示行为，仅保存在本浏览器。",
+    "subtitle": "语言、界面外观、对话字号与消息展示偏好。",
     "languageTitle": "语言",
     "languageDescription": "选择界面语言。",
     "themeTitle": "主题亮暗",
@@ -1119,6 +1119,16 @@
     "showDesktopPet": "显示宠物",
     "hideDesktopPet": "隐藏宠物",
     "aboutApp": "关于",
+    "activityDetailDefaultTitle": "AI 执行动态默认值",
+    "activityDetailDefaultDescription": "设置新对话默认如何展示分析过程与工具执行。",
+    "activityDetailDefaultHint": "对话内单独选择后，会覆盖此默认值。",
+    "activityDetailSaving": "保存中…",
+    "activityDetailSaveError": "无法保存执行动态默认值。",
+    "activityDetailLevels": {
+      "off": "简洁 · 隐藏正常动态",
+      "on": "收起 · 完成后可展开",
+      "stream": "实时 · 执行时自动展开"
+    },
     "developerGroupTitle": "开发者选项",
     "developerGroupDescription": "影响对话中工具调用结果的展示形式。",
     "showRawToolDataTitle": "显示工具调试数据",

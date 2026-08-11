@@ -40,6 +40,12 @@ export function useChatSessionInit(opts: {
       model: string;
       thinkingLevel?: string | null;
       reasoningLevel?: string | null;
+      activityDetail?: {
+        default: string;
+        override: string | null;
+        effective: string;
+        source: 'session' | 'default';
+      };
       effectiveWorkspacePath?: string | null;
       workingDirectoryLocked?: boolean;
     },

@@ -69,6 +69,8 @@
     "oauthProcessingCode": "正在处理授权…",
     "openAuthPage": "打开授权页",
     "cancelOAuth": "取消",
+    "deviceCodeLabel": "一次性设备码",
+    "deviceCodeHint": "请在授权页面输入此代码，本次登录结束后即失效。",
     "pasteRedirectUrl": "粘贴完整重定向 URL（含 code= 与 state=）",
     "submitCode": "提交",
     "envHint": "API Key 来自环境变量。在上方输入新 Key 可覆盖。",

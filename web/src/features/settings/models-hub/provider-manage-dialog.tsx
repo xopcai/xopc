@@ -193,6 +193,7 @@ function ManageBuiltinProvider({
   const [oauthStatus, setOAuthStatus] = useState<'idle' | 'waiting' | 'waiting_code' | 'success' | 'error'>('idle');
   const [authUrl, setAuthUrl] = useState<string | null>(null);
   const [instructions, setInstructions] = useState<string | null>(null);
+  const [deviceCode, setDeviceCode] = useState<string | null>(null);
   const [codeInput, setCodeInput] = useState('');
   const oauthLoading = oauthStatus === 'waiting' || oauthStatus === 'waiting_code';
 
@@ -233,6 +234,7 @@ function ManageBuiltinProvider({
             setOAuthMessage(status.message ?? null);
             setAuthUrl(status.authUrl ?? null);
             setInstructions(status.instructions ?? null);
+            setDeviceCode(status.deviceCode ?? null);
           } else if (status.status === 'completed') {
             window.clearInterval(intervalId);
             setOAuthStatus('success');
@@ -275,6 +277,9 @@ function ManageBuiltinProvider({
   const startOAuth = async () => {
     setOAuthStatus('waiting');
     setOAuthMessage(providerLabels.oauthStarting);
+    setAuthUrl(null);
+    setInstructions(null);
+    setDeviceCode(null);
     setError(null);
     try {
       const result = await startAsyncOAuthLogin(providerId);
@@ -297,6 +302,7 @@ function ManageBuiltinProvider({
     setOAuthSessionId(null);
     setAuthUrl(null);
     setInstructions(null);
+    setDeviceCode(null);
   };
 
   const submitCode = async () => {
@@ -446,6 +452,15 @@ function ManageBuiltinProvider({
               </div>
             ) : null}
             {instructions ? <p className="text-xs text-fg-muted">{instructions}</p> : null}
+            {deviceCode ? (
+              <div className="rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2">
+                <p className="text-xs text-fg-muted">{providerLabels.deviceCodeLabel}</p>
+                <code className="mt-1 block select-all font-mono text-lg font-semibold tracking-widest text-fg">
+                  {deviceCode}
+                </code>
+                <p className="mt-1 text-xs text-fg-subtle">{providerLabels.deviceCodeHint}</p>
+              </div>
+            ) : null}
             {oauthStatus === 'waiting_code' ? (
               <div className="flex flex-col gap-2 sm:flex-row">
                 <input

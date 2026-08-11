@@ -602,10 +602,11 @@
     "sessionNotFoundCta": "新建对话",
     "messageMoreActions": "更多操作",
     "activityDetailLabel": "执行动态",
+    "activityDetailUseDefault": "跟随默认（{{level}}）",
     "activityDetailLevels": {
       "off": "简洁",
-      "on": "完成后可展开",
-      "stream": "实时详细"
+      "on": "收起 · 完成后可展开",
+      "stream": "实时 · 执行时展开"
     },
     "thinkingLevelLabel": "思考深度",
     "thinkingUnsupported": "当前模型不支持",

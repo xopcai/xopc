@@ -68,11 +68,13 @@ Important OAuth/API-key cases:
 | `deepseek` | API key via Settings → Providers, `xopc providers set-key deepseek`, `providers.deepseek`, or `DEEPSEEK_API_KEY` |
 | `openai` | API key via saved key, config, or `OPENAI_API_KEY` |
 | `anthropic` | OAuth token or API key; env supports `ANTHROPIC_OAUTH_TOKEN` and `ANTHROPIC_API_KEY` |
-| `openai-codex` | OAuth-only for normal Codex access |
+| `openai-codex` | OAuth-only for normal Codex access. Local gateways use the browser callback; remote or reverse-proxied gateways use device code automatically. Device code login must be enabled in ChatGPT security or workspace settings. |
 | `google-gemini-cli` / `google-antigravity` | OAuth token or API key flows, depending on your setup |
 | `github-copilot` | GitHub token via env vars or OAuth, depending on your setup |
 
 Xiaomi MiMo is still available through `xiaomi` and `xiaomi-token-plan-*`; choose the provider id that matches the endpoint and token plan attached to your key.
+
+For remote `openai-codex` login, open the displayed verification page and enter the one-time device code. If device code is unavailable, use browser login from the CLI and paste the full final `http://localhost:1455/auth/callback?...` URL at the prompt, or forward port 1455 over SSH.
 
 ---
 

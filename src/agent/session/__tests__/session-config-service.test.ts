@@ -92,4 +92,42 @@ describe('SessionConfigService project workspace', () => {
     });
     expect(updateSpy).not.toHaveBeenCalled();
   });
+
+  it('stores and clears the activity detail session override', async () => {
+    ensureSessionRecord(SESSION_KEY, process.cwd());
+    const sessionConfigStore = new SessionConfigStore(stateDir, process.cwd());
+    const service = new SessionConfigService({
+      sessionStore: { load: vi.fn(async () => []) } as never,
+      sessionConfigStore,
+      modelManager: {} as never,
+      agentManager: {} as never,
+      getConfig: () => minimalConfig,
+    });
+
+    expect(await service.patch(SESSION_KEY, { activityDetailLevel: 'stream' })).toEqual({ ok: true });
+    expect((await sessionConfigStore.get(SESSION_KEY))?.reasoningLevel).toBe('stream');
+
+    expect(await service.patch(SESSION_KEY, { activityDetailLevel: null })).toEqual({ ok: true });
+    expect((await sessionConfigStore.get(SESSION_KEY))?.reasoningLevel).toBeUndefined();
+  });
+
+  it('prefers the new activity detail field over the legacy field', async () => {
+    ensureSessionRecord(SESSION_KEY, process.cwd());
+    const sessionConfigStore = new SessionConfigStore(stateDir, process.cwd());
+    const service = new SessionConfigService({
+      sessionStore: { load: vi.fn(async () => []) } as never,
+      sessionConfigStore,
+      modelManager: {} as never,
+      agentManager: {} as never,
+      getConfig: () => minimalConfig,
+    });
+
+    const result = await service.patch(SESSION_KEY, {
+      activityDetailLevel: 'off',
+      reasoningLevel: 'stream',
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect((await sessionConfigStore.get(SESSION_KEY))?.reasoningLevel).toBe('off');
+  });
 });

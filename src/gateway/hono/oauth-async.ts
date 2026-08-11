@@ -68,6 +68,7 @@ interface OAuthSession {
 // In-memory session store (could be moved to Redis for production)
 const oauthSessions = new Map<string, OAuthSession>();
 const SESSION_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const SESSION_EXPIRY_GRACE_MS = 30_000;
 
 // Clean up expired sessions periodically
 setInterval(() => {
@@ -194,7 +195,7 @@ export function createOAuthAsyncHandler(service: GatewayService) {
 
     // Start OAuth flow in background
     runOAuthFlow(session, oauthProvider, service).catch(err => {
-      log.error({ sessionId, provider, error: err }, 'Background OAuth flow failed');
+      log.error({ err, sessionId, provider }, 'Background OAuth flow failed');
       session.status = 'failed';
       session.error = err instanceof Error ? err.message : 'OAuth flow failed';
     });
@@ -355,6 +356,12 @@ async function runOAuthFlow(
       session.verificationUri = info.verificationUri;
       session.instructions = `Enter code ${info.userCode}`;
       session.message = `Open ${info.verificationUri} and enter code ${info.userCode}`;
+      if (info.expiresInSeconds) {
+        session.expiresAt = Math.max(
+          session.expiresAt,
+          Date.now() + info.expiresInSeconds * 1_000 + SESSION_EXPIRY_GRACE_MS,
+        );
+      }
     },
     onPrompt: async (prompt: { message: string; deviceCode?: string; verificationUri?: string }) => {
       session.status = 'waiting_code';
@@ -430,7 +437,7 @@ async function runOAuthFlow(
     } else {
       session.status = 'failed';
       session.error = formatOAuthAsyncError(err);
-      log.error({ sessionId: session.id, provider: session.provider, error: err }, 'OAuth login failed');
+      log.error({ err, sessionId: session.id, provider: session.provider }, 'OAuth login failed');
     }
   } finally {
     session.abortController = undefined;

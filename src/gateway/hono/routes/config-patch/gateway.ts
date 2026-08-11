@@ -3,7 +3,7 @@
  *
  * Covers heartbeat, bind/customBindHost/port, tailscale, auth (mode + token +
  * password + rateLimit + trustedProxy), trustedProxies, allowRealIpFallback,
- * dangerouslyAllowHostHeaderOriginFallback, security, share, siteShare, publicUrl,
+ * dangerouslyAllowHostHeaderOriginFallback, security, share, siteShare, publicUrl, webchat,
  * corsOrigins, maxSseConnections, and channelConnectDefer{Mode,Ids,SkipIds}.
  *
  * Validation policy: each subsection that can reject rejects with a 400 and a
@@ -49,6 +49,18 @@ function parseDeferIdList(raw: unknown): string[] | null {
 }
 
 export function applyGatewayPatch(config: Config, body: any): PatchResult {
+  if (body.gateway?.webchat?.activityDetailDefault !== undefined) {
+    const level = body.gateway.webchat.activityDetailDefault;
+    if (level !== 'off' && level !== 'on' && level !== 'stream') {
+      return patchError('gateway.webchat.activityDetailDefault must be off, on, or stream');
+    }
+    const gw = ensureGateway(config);
+    gw.webchat = {
+      ...(gw.webchat ?? { activityDetailDefault: 'on' }),
+      activityDetailDefault: level,
+    };
+  }
+
   if (body.gateway?.heartbeat !== undefined && typeof body.gateway.heartbeat === 'object') {
     const gw = ensureGateway(config);
     if (!gw.heartbeat) {

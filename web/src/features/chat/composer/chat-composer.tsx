@@ -50,6 +50,8 @@ export const ChatComposer = memo(function ChatComposer({
   modelSupportsThinking,
   onThinkingChange,
   reasoningLevel,
+  activityDetailDefault,
+  activityDetailOverride,
   onReasoningChange,
   onSend,
   onAbort,
@@ -95,7 +97,9 @@ export const ChatComposer = memo(function ChatComposer({
   modelSupportsThinking: boolean;
   onThinkingChange: (level: string) => void;
   reasoningLevel: ReasoningLevel;
-  onReasoningChange: (level: ReasoningLevel) => void;
+  activityDetailDefault: ReasoningLevel;
+  activityDetailOverride: ReasoningLevel | null;
+  onReasoningChange: (level: ReasoningLevel | null) => void;
   onSend: (text: string, attachments?: WireAttachment[], thinkingLevel?: string) => void;
   onAbort: () => void;
   onAddPendingFollowUp?: (text: string, attachments?: WireAttachment[]) => void | Promise<void>;
@@ -599,6 +603,8 @@ export const ChatComposer = memo(function ChatComposer({
           modelSupportsThinking={modelSupportsThinking}
           onThinkingChange={onThinkingChange}
           reasoningLevel={reasoningLevel}
+          activityDetailDefault={activityDetailDefault}
+          activityDetailOverride={activityDetailOverride}
           onReasoningChange={onReasoningChange}
           voiceActive={voice.voiceActive}
           voiceReadiness={voice.readiness}

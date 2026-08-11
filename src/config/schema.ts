@@ -516,6 +516,13 @@ export type WorkspaceConfig = z.infer<typeof WorkspaceConfigSchema>;
 
 export const GatewayBindModeSchema = z.enum(['auto', 'loopback', 'lan', 'tailnet', 'custom']);
 
+export const GatewayWebchatConfigSchema = z.object({
+  /** Default visibility of AI execution activity in the Web UI. */
+  activityDetailDefault: z.enum(['off', 'on', 'stream']).default('on'),
+}).default({
+  activityDetailDefault: 'on',
+});
+
 export const GatewayConfigSchema = z.object({
   /** Semantic bind mode. */
   bind: GatewayBindModeSchema.optional(),
@@ -530,6 +537,7 @@ export const GatewayConfigSchema = z.object({
   tls: GatewayTlsSchema.optional(),
   auth: GatewayAuthSchema.optional(),
   heartbeat: HeartbeatConfigSchema.optional(),
+  webchat: GatewayWebchatConfigSchema.optional(),
   maxSseConnections: z.number().optional(),
   corsOrigins: z.array(z.string()).optional(),
   /**
@@ -684,6 +692,9 @@ export const GatewayConfigSchema = z.object({
     enabled: true,
     intervalMs: 1_800_000,
     includeSystemPromptSection: false,
+  },
+  webchat: {
+    activityDetailDefault: 'on',
   },
   maxSseConnections: 100,
   corsOrigins: [],
@@ -1334,6 +1345,9 @@ export const ConfigSchema = z.object({
       enabled: true,
       intervalMs: 1_800_000,
       includeSystemPromptSection: false,
+    },
+    webchat: {
+      activityDetailDefault: 'on' as const,
     },
     maxSseConnections: 100,
     corsOrigins: [],

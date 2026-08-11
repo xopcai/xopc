@@ -11,6 +11,7 @@ import {
 } from '../../channels/attachments/voice-stt-webchat.js';
 import {
   resolveEffectiveReasoningLevel,
+  resolveConfiguredActivityDetailDefault,
   initSessionTurn,
   type SessionConfigStore,
   type SessionStore,
@@ -246,10 +247,15 @@ export async function* runProcessDirectStreaming(
   const context = deps.initDirectStreamingSession(sessionKey, channel, chatId);
 
   const queue = new AsyncQueue<ProcessDirectStreamingSseEvent>();
-  let reasoningLevel: ReasoningLevel = 'stream';
+  let reasoningLevel: ReasoningLevel = channel === 'webchat'
+    ? resolveConfiguredActivityDetailDefault(deps.getConfig())
+    : 'stream';
 
   const pushVisible = (event: ProcessDirectStreamingSseEvent) => {
-    const visible = applyReasoningVisibilityToSseEvent(event, reasoningLevel);
+    // Webchat presentation is client-owned so changing the setting takes effect mid-run.
+    const visible = channel === 'webchat'
+      ? event
+      : applyReasoningVisibilityToSseEvent(event, reasoningLevel);
     if (visible !== null) {
       queue.push(visible);
     }
@@ -318,7 +324,9 @@ export async function* runProcessDirectStreaming(
 
       await hydratePerTurnState(deps, sessionKey, input.thinking);
       {
-        const defReason = 'stream' as ReasoningLevel;
+        const defReason = channel === 'webchat'
+          ? resolveConfiguredActivityDetailDefault(cfg)
+          : 'stream';
         reasoningLevel = await resolveEffectiveReasoningLevel(deps.sessionConfigStore, sessionKey, defReason);
       }
 

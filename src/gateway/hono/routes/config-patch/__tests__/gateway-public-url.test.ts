@@ -25,6 +25,25 @@ function minimalConfig(): Config {
 }
 
 describe('applyGatewayPatch publicUrl', () => {
+  it('persists the Web UI activity detail default', () => {
+    const cfg = minimalConfig();
+    const result = applyGatewayPatch(cfg, {
+      gateway: { webchat: { activityDetailDefault: 'on' } },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(cfg.gateway?.webchat?.activityDetailDefault).toBe('on');
+  });
+
+  it('rejects an invalid Web UI activity detail default', () => {
+    const cfg = minimalConfig();
+    const result = applyGatewayPatch(cfg, {
+      gateway: { webchat: { activityDetailDefault: 'verbose' } },
+    });
+
+    expect(result.ok).toBe(false);
+  });
+
   it('persists site share policy fields', () => {
     const cfg = minimalConfig();
     const result = applyGatewayPatch(cfg, {

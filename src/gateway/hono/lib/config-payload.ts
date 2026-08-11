@@ -286,6 +286,9 @@ export async function buildSafeWebConfigPayload(service: GatewayService, options
         isolatedSession: config.gateway?.heartbeat?.isolatedSession,
         activeHours: config.gateway?.heartbeat?.activeHours,
       },
+      webchat: {
+        activityDetailDefault: config.gateway?.webchat?.activityDetailDefault ?? 'on',
+      },
       maxSseConnections:
         typeof config.gateway?.maxSseConnections === 'number'
           ? config.gateway.maxSseConnections
