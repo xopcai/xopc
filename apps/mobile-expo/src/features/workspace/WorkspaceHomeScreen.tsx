@@ -279,8 +279,13 @@ export function WorkspaceHomeScreen() {
           />
         )}
       >
-        {homeQuery.isLoading || !home ? (
+        {homeQuery.isLoading ? (
           <HomeSkeleton />
+        ) : homeQuery.isError || !home ? (
+          <HomeLoadError
+            onRetry={() => void homeQuery.refetch()}
+            retrying={homeQuery.isFetching}
+          />
         ) : (
           <>
             <HomeGatewayStatus gateway={home.gateway} />
@@ -339,6 +344,28 @@ function HomeSkeleton() {
     <View style={styles.skeletonWrap}>
       <ListSkeleton count={3} />
       <ListSkeleton count={2} />
+    </View>
+  );
+}
+
+function HomeLoadError({ onRetry, retrying }: { onRetry: () => void; retrying: boolean }) {
+  const { colors } = useTheme();
+  const { homePage: hm } = useMessages();
+  return (
+    <View style={styles.loadError}>
+      <Icon source="cloud-alert-outline" size={42} color={colors.text.tertiary} />
+      <Text style={[styles.emptyTitle, { color: colors.text.primary }]}>{hm.loadFailed}</Text>
+      <Text style={[styles.emptyText, { color: colors.text.secondary }]}>{hm.loadFailedHint}</Text>
+      <Pressable
+        style={[styles.retryButton, { backgroundColor: colors.accent.primary }]}
+        onPress={onRetry}
+        disabled={retrying}
+        accessibilityRole="button"
+        accessibilityState={{ disabled: retrying, busy: retrying }}
+      >
+        {retrying ? <ActivityIndicator size={18} color={colors.accent.onPrimary} /> : null}
+        <Text style={[styles.retryButtonText, { color: colors.accent.onPrimary }]}>{hm.retry}</Text>
+      </Pressable>
     </View>
   );
 }
@@ -689,6 +716,9 @@ const styles = StyleSheet.create({
   connectButton: { minHeight: 48, borderRadius: radii.xxl, justifyContent: 'center', paddingHorizontal: spacing.xl, marginTop: spacing.sm },
   connectButtonText: { ...typography.ui, fontWeight: '600' },
   skeletonWrap: { gap: spacing.section },
+  loadError: { minHeight: 280, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xxl, gap: spacing.md },
+  retryButton: { minHeight: 48, borderRadius: radii.xxl, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingHorizontal: spacing.xl, marginTop: spacing.sm },
+  retryButtonText: { ...typography.ui, fontWeight: '600' },
   statusBanner: { minHeight: 36, borderRadius: radii.md, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md },
   statusText: { ...typography.caption, fontWeight: '500' },
   briefingCard: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.xl, padding: spacing.content, gap: spacing.sm },
