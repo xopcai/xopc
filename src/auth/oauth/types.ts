@@ -13,6 +13,8 @@ export type OAuthCredentials = {
 
 export type OAuthProviderId = string;
 
+export type OAuthLoginMethod = 'browser' | 'device_code';
+
 export type OAuthPrompt = {
 	message: string;
 	placeholder?: string;
@@ -61,8 +63,11 @@ export interface OAuthProviderInterface {
 	/** Whether login uses a local callback server and supports manual code input. */
 	usesCallbackServer?: boolean;
 
+	/** Login methods exposed by providers that support more than one OAuth flow. */
+	loginMethods?: readonly OAuthLoginMethod[];
+
 	/** Refresh expired credentials, return updated credentials to persist */
-	refreshToken(credentials: OAuthCredentials): Promise<OAuthCredentials>;
+	refreshToken(credentials: OAuthCredentials, signal?: AbortSignal): Promise<OAuthCredentials>;
 
 	/** Convert credentials to API key string for the provider */
 	getApiKey(credentials: OAuthCredentials): string;
