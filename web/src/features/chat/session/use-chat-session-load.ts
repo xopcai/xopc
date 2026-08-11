@@ -83,6 +83,8 @@ export function useChatSessionLoad(deps: {
           model: cfg.model,
           thinkingLevel: cfg.thinkingLevel,
           reasoningLevel: coerceReasoningLevel(cfg.reasoningLevel),
+          activityDetailDefault: cfg.activityDetail.default,
+          activityDetailOverride: cfg.activityDetail.override,
           effectiveWorkspacePath: cfg.effectiveWorkspacePath,
           workingDirectoryLocked: cfg.workingDirectoryLocked,
           workspaceSource: cfg.workspaceSource,
@@ -201,6 +203,8 @@ export function useChatSessionLoad(deps: {
               model: cfg.model,
               thinkingLevel: cfg.thinkingLevel,
               reasoningLevel: coerceReasoningLevel(cfg.reasoningLevel),
+              activityDetailDefault: cfg.activityDetail.default,
+              activityDetailOverride: cfg.activityDetail.override,
               effectiveWorkspacePath: cfg.effectiveWorkspacePath,
               workingDirectoryLocked: cfg.workingDirectoryLocked,
               workspaceSource: cfg.workspaceSource,
@@ -327,13 +331,26 @@ export function useChatSessionLoad(deps: {
     [sessionKey, sessionMgrRef],
   );
   const onSessionReasoningLevelChange = useCallback(
-    async (level: ReasoningLevel) => {
+    async (level: ReasoningLevel | null) => {
       if (!sessionKey) return;
+      const previous = store().sessions[sessionKey];
+      const effectiveLevel = level ?? previous?.activityDetailDefault ?? 'on';
       try {
         store().setShellError(null);
-        await sessionMgrRef.current.patchSessionAgentConfig(sessionKey, { reasoningLevel: level });
-        store().patchSessionMeta(sessionKey, { reasoningLevel: level });
+        store().patchSessionMeta(sessionKey, {
+          reasoningLevel: effectiveLevel,
+          activityDetailOverride: level,
+        });
+        await sessionMgrRef.current.patchSessionAgentConfig(sessionKey, {
+          activityDetailLevel: level,
+        });
       } catch (e) {
+        if (previous) {
+          store().patchSessionMeta(sessionKey, {
+            reasoningLevel: previous.reasoningLevel,
+            activityDetailOverride: previous.activityDetailOverride,
+          });
+        }
         store().setShellError(e instanceof Error ? e.message : 'Failed to update activity detail');
       }
     },

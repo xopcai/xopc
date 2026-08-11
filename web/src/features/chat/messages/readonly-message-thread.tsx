@@ -8,7 +8,7 @@ export const ReadonlyMessageThread = memo(function ReadonlyMessageThread({
   messages,
   authToken,
   sessionKey,
-  reasoningLevel = 'stream',
+  reasoningLevel = 'on',
   compact = true,
 }: {
   messages: Message[];

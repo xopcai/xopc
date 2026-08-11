@@ -23,6 +23,7 @@ import { resolveDefaultAgentWorkspaceDir } from '../../config/workspace-defaults
 import {
   effectiveWorkspacePathForSession,
   projectWorkspacePath,
+  resolveConfiguredActivityDetailDefault,
   resolveEffectiveReasoningLevel,
   resolveEffectiveThinkingLevel,
   resolveVerboseLevel,
@@ -68,6 +69,12 @@ export interface SessionAgentConfigView {
   thinkingLevel: ThinkingLevel;
   model: string;
   reasoningLevel: ReasoningLevel;
+  activityDetail: {
+    default: ReasoningLevel;
+    override: ReasoningLevel | null;
+    effective: ReasoningLevel;
+    source: 'session' | 'default';
+  };
   verboseLevel: VerboseLevel;
   effectiveWorkspacePath: string;
   workingDirectoryLocked: boolean;
@@ -227,7 +234,7 @@ export class SessionInspector {
 
     const defThink = 'medium';
     const level = await resolveEffectiveThinkingLevel(this.opts.sessionConfigStore, sessionKey, null, defThink);
-    const defReason = 'stream' as ReasoningLevel;
+    const defReason = resolveConfiguredActivityDetailDefault(cfg);
     const reasoningLevel = await resolveEffectiveReasoningLevel(this.opts.sessionConfigStore, sessionKey, defReason);
     const defVerbose = 'full' as VerboseLevel;
     const verboseLevel = await resolveVerboseLevel(this.opts.sessionConfigStore, sessionKey, defVerbose);
@@ -241,6 +248,12 @@ export class SessionInspector {
       thinkingLevel: level,
       model,
       reasoningLevel,
+      activityDetail: {
+        default: defReason,
+        override: sc?.reasoningLevel ?? null,
+        effective: reasoningLevel,
+        source: sc?.reasoningLevel ? 'session' : 'default',
+      },
       verboseLevel,
       effectiveWorkspacePath,
       workingDirectoryLocked: Boolean(projectWorkspace || hasSessionWorkspaceOverride),

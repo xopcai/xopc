@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, ChevronDown, Loader2, XCircle } from 'lucide-react';
 
 import {
@@ -152,17 +152,7 @@ export function AssistantStepsBlock({
   const anyActive = activity.active;
   const failedCount = activity.failedCount;
   const stepsDrawerOpen = activity.expandedByDefault;
-  const prevStepsDrawerOpenRef = useRef(stepsDrawerOpen);
   const [userExpanded, setUserExpanded] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    if (stepsDrawerOpen && !prevStepsDrawerOpenRef.current) {
-      setUserExpanded(null);
-    } else if (!stepsDrawerOpen && prevStepsDrawerOpenRef.current) {
-      setUserExpanded(false);
-    }
-    prevStepsDrawerOpenRef.current = stepsDrawerOpen;
-  }, [stepsDrawerOpen]);
 
   const expanded = userExpanded ?? stepsDrawerOpen;
   const effectiveStartedAt = activity.startedAt ?? null;

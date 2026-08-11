@@ -6,24 +6,46 @@
 
 import { randomBytes } from 'node:crypto';
 import http from 'node:http';
+import { setTimeout as delay } from 'node:timers/promises';
 
 import { generatePKCE } from './pkce.js';
 import type { OAuthCredentials, OAuthLoginCallbacks, OAuthProviderInterface } from './types.js';
 
 const CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann';
-const AUTHORIZE_URL = 'https://auth.openai.com/oauth/authorize';
-const TOKEN_URL = 'https://auth.openai.com/oauth/token';
+const AUTH_BASE_URL = 'https://auth.openai.com';
+const AUTHORIZE_URL = `${AUTH_BASE_URL}/oauth/authorize`;
+const TOKEN_URL = `${AUTH_BASE_URL}/oauth/token`;
+const DEVICE_USER_CODE_URL = `${AUTH_BASE_URL}/api/accounts/deviceauth/usercode`;
+const DEVICE_TOKEN_URL = `${AUTH_BASE_URL}/api/accounts/deviceauth/token`;
+const DEVICE_VERIFICATION_URL = `${AUTH_BASE_URL}/codex/device`;
+const DEVICE_REDIRECT_URI = `${AUTH_BASE_URL}/deviceauth/callback`;
 const CALLBACK_PORT = 1455;
 const CALLBACK_PATH = '/auth/callback';
 const REDIRECT_URI = `http://localhost:${CALLBACK_PORT}${CALLBACK_PATH}`;
 const SCOPE = 'openid profile email offline_access';
 const MANUAL_PROMPT_DELAY_MS = 15_000;
 const TOKEN_REQUEST_TIMEOUT_MS = 30_000;
+const DEVICE_AUTH_TIMEOUT_MS = 15 * 60_000;
 
 type TokenResponseJson = {
   access_token?: string;
   refresh_token?: string;
   expires_in?: number;
+  error?: string;
+  error_description?: string;
+};
+
+type DeviceUserCodeJson = {
+  device_auth_id?: string;
+  user_code?: string;
+  interval?: string | number;
+  error?: string;
+  error_description?: string;
+};
+
+type DeviceTokenJson = {
+  authorization_code?: string;
+  code_verifier?: string;
   error?: string;
   error_description?: string;
 };
@@ -38,6 +60,11 @@ type LocalOAuthServer = {
   waitForCode: () => Promise<CallbackResult>;
   available: boolean;
 };
+
+function requestSignal(signal?: AbortSignal): AbortSignal {
+  const timeout = AbortSignal.timeout(TOKEN_REQUEST_TIMEOUT_MS);
+  return signal ? AbortSignal.any([signal, timeout]) : timeout;
+}
 
 function xopcOAuthHtml(params: { title: string; message: string; tone: 'success' | 'error' }): string {
   const color = params.tone === 'success' ? '#2563eb' : '#dc2626';
@@ -230,7 +257,7 @@ async function postTokenForm(body: URLSearchParams, signal?: AbortSignal): Promi
       Accept: 'application/json',
     },
     body,
-    signal: signal ?? AbortSignal.timeout(TOKEN_REQUEST_TIMEOUT_MS),
+    signal: requestSignal(signal),
   });
 
   const contentType = response.headers.get('content-type') ?? '';
@@ -244,18 +271,110 @@ async function postTokenForm(body: URLSearchParams, signal?: AbortSignal): Promi
   return JSON.parse(text) as TokenResponseJson;
 }
 
-async function exchangeAuthorizationCode(code: string, verifier: string, signal?: AbortSignal): Promise<OAuthCredentials> {
+async function exchangeAuthorizationCode(
+  code: string,
+  verifier: string,
+  signal?: AbortSignal,
+  redirectUri = REDIRECT_URI,
+): Promise<OAuthCredentials> {
   const json = await postTokenForm(
     new URLSearchParams({
       grant_type: 'authorization_code',
       client_id: CLIENT_ID,
       code,
       code_verifier: verifier,
-      redirect_uri: REDIRECT_URI,
+      redirect_uri: redirectUri,
     }),
     signal,
   );
   return normalizeTokenResponse(json);
+}
+
+async function requestDeviceCode(signal?: AbortSignal): Promise<{
+  deviceAuthId: string;
+  userCode: string;
+  intervalMs: number;
+}> {
+  const response = await fetch(DEVICE_USER_CODE_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ client_id: CLIENT_ID }),
+    signal: requestSignal(signal),
+  });
+  const body = await response.json().catch(() => ({})) as DeviceUserCodeJson;
+  if (!response.ok) {
+    if (response.status === 404) {
+      throw new Error('OpenAI Codex device code login is not enabled. Enable it in ChatGPT security or workspace settings, or use browser login.');
+    }
+    throw new Error(body.error_description ?? body.error ?? `OpenAI Codex device code request failed (${response.status})`);
+  }
+
+  if (!body.device_auth_id || !body.user_code) {
+    throw new Error('OpenAI Codex device code response is incomplete');
+  }
+  const intervalSeconds = Number(body.interval);
+  return {
+    deviceAuthId: body.device_auth_id,
+    userCode: body.user_code,
+    intervalMs: Math.max(1, Number.isFinite(intervalSeconds) ? intervalSeconds : 5) * 1_000,
+  };
+}
+
+async function pollDeviceAuthorization(params: {
+  deviceAuthId: string;
+  userCode: string;
+  intervalMs: number;
+  signal?: AbortSignal;
+}): Promise<{ code: string; verifier: string }> {
+  const expiresAt = Date.now() + DEVICE_AUTH_TIMEOUT_MS;
+  while (Date.now() < expiresAt) {
+    if (params.signal?.aborted) {
+      throw params.signal.reason instanceof Error ? params.signal.reason : new Error('OpenAI Codex login cancelled');
+    }
+    const response = await fetch(DEVICE_TOKEN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        device_auth_id: params.deviceAuthId,
+        user_code: params.userCode,
+      }),
+      signal: requestSignal(params.signal),
+    });
+    const body = await response.json().catch(() => ({})) as DeviceTokenJson;
+    if (response.ok) {
+      if (!body.authorization_code || !body.code_verifier) {
+        throw new Error('OpenAI Codex device authorization response is incomplete');
+      }
+      return { code: body.authorization_code, verifier: body.code_verifier };
+    }
+    if (response.status !== 403 && response.status !== 404) {
+      throw new Error(body.error_description ?? body.error ?? `OpenAI Codex device authorization failed (${response.status})`);
+    }
+    const remainingMs = expiresAt - Date.now();
+    await delay(
+      Math.min(params.intervalMs, remainingMs),
+      undefined,
+      params.signal ? { signal: params.signal } : undefined,
+    );
+  }
+  throw new Error('OpenAI Codex device authorization timed out');
+}
+
+async function loginOpenAICodexWithDeviceCode(callbacks: OAuthLoginCallbacks): Promise<OAuthCredentials> {
+  const device = await requestDeviceCode(callbacks.signal);
+  callbacks.onDeviceCode({
+    userCode: device.userCode,
+    verificationUri: DEVICE_VERIFICATION_URL,
+    intervalSeconds: device.intervalMs / 1_000,
+    expiresInSeconds: DEVICE_AUTH_TIMEOUT_MS / 1_000,
+  });
+  const authorization = await pollDeviceAuthorization({ ...device, signal: callbacks.signal });
+  return exchangeAuthorizationCode(
+    authorization.code,
+    authorization.verifier,
+    callbacks.signal,
+    DEVICE_REDIRECT_URI,
+  );
 }
 
 async function refreshAccessToken(refreshToken: string): Promise<OAuthCredentials> {
@@ -308,7 +427,7 @@ function getAccountId(accessToken: string): string | null {
   }
 }
 
-export async function loginOpenAICodex(callbacks: OAuthLoginCallbacks): Promise<OAuthCredentials> {
+async function loginOpenAICodexWithBrowser(callbacks: OAuthLoginCallbacks): Promise<OAuthCredentials> {
   const { verifier, state, url } = await createAuthorizationFlow();
   const server = await startLocalOAuthServer(state);
 
@@ -352,6 +471,19 @@ export async function loginOpenAICodex(callbacks: OAuthLoginCallbacks): Promise<
   }
 }
 
+export async function loginOpenAICodex(callbacks: OAuthLoginCallbacks): Promise<OAuthCredentials> {
+  const method = await callbacks.onSelect({
+    message: 'Choose how to authorize OpenAI Codex',
+    options: [
+      { id: 'browser', label: 'Browser (recommended for this device)' },
+      { id: 'device_code', label: 'Device code (remote or headless)' },
+    ],
+  });
+  return method === 'device_code'
+    ? loginOpenAICodexWithDeviceCode(callbacks)
+    : loginOpenAICodexWithBrowser(callbacks);
+}
+
 export async function refreshOpenAICodexToken(refreshToken: string): Promise<OAuthCredentials> {
   return refreshAccessToken(refreshToken);
 }
@@ -360,6 +492,7 @@ export const openaiCodexOAuthProvider: OAuthProviderInterface = {
   id: 'openai-codex',
   name: 'OpenAI Codex',
   usesCallbackServer: true,
+  loginMethods: ['browser', 'device_code'],
 
   async login(callbacks: OAuthLoginCallbacks): Promise<OAuthCredentials> {
     return loginOpenAICodex(callbacks);

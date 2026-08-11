@@ -17,12 +17,20 @@ describe('patchSessionAgentConfigView', () => {
       model: 'openai/gpt-4o',
       thinkingLevel: 'high',
       reasoningLevel: 'off',
+      activityDetail: {
+        default: 'on',
+        override: 'off',
+        effective: 'off',
+        source: 'session',
+      },
     });
 
     const slice = useChatSessionStore.getState().sessions[sessionKey];
     expect(slice?.model).toBe('openai/gpt-4o');
     expect(slice?.thinkingLevel).toBe('high');
     expect(slice?.reasoningLevel).toBe('off');
+    expect(slice?.activityDetailDefault).toBe('on');
+    expect(slice?.activityDetailOverride).toBe('off');
     expect(slice?.workingDirectoryLocked).toBe(false);
   });
 

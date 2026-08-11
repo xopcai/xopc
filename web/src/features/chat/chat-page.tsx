@@ -1289,6 +1289,8 @@ export function ChatPage() {
                 modelSupportsThinking={session.modelSupportsThinking}
                 onThinkingChange={session.onSessionThinkingLevelChange}
                 reasoningLevel={session.reasoningLevel}
+                activityDetailDefault={session.activityDetailDefault}
+                activityDetailOverride={session.activityDetailOverride}
                 onReasoningChange={session.onSessionReasoningLevelChange}
                 onSend={handleComposerSend}
                 onAbort={stream.abort}

@@ -42,6 +42,12 @@ describe('useChatSessionLoad', () => {
         model: 'test/model',
         thinkingLevel: 'medium',
         reasoningLevel: 'stream',
+        activityDetail: {
+          default: 'on',
+          override: 'stream',
+          effective: 'stream',
+          source: 'session' as const,
+        },
         effectiveWorkspacePath: '/tmp/test',
         workingDirectoryLocked: false,
         workspaceSource: 'agent_workspace' as const,
@@ -79,6 +85,67 @@ describe('useChatSessionLoad', () => {
     });
 
     expect(useChatSessionStore.getState().shellError).toBe('provider_auth_invalid');
+
+    act(() => root.unmount());
+    container.remove();
+  });
+
+  it('applies activity detail optimistically and rolls back when persistence fails', async () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    let rejectPatch: ((error: Error) => void) | undefined;
+    const patchPromise = new Promise<void>((_resolve, reject) => {
+      rejectPatch = reject;
+    });
+    const patchSessionAgentConfig = vi.fn(() => patchPromise);
+    const sessionManager = { patchSessionAgentConfig } as unknown as SessionManager;
+    let changeActivity: ((level: 'off' | 'on' | 'stream' | null) => Promise<void>) | undefined;
+
+    useChatSessionStore.getState().setCommittedSnapshot(sessionKey, { messages: [], hasMore: false });
+    useChatSessionStore.getState().patchSessionMeta(sessionKey, {
+      reasoningLevel: 'on',
+      activityDetailDefault: 'on',
+      activityDetailOverride: null,
+    });
+
+    function Harness() {
+      ({ onSessionReasoningLevelChange: changeActivity } = useChatSessionLoad({
+        sessionMgrRef: { current: sessionManager },
+        routeSessionKeyRef: { current: sessionKey },
+        sendingRef: { current: false },
+        streamingRef: { current: true },
+        activeStreamSessionKeyRef: { current: sessionKey },
+        loadingSessionRef: { current: false },
+        messagesLenRef: { current: 0 },
+        thinkingSupportGenRef: { current: 0 },
+        navigateToSession: vi.fn(),
+        resolveAgentIdForPost: () => 'main',
+        dismissClarifyOnSessionLoad: vi.fn(),
+        detachForNewConversation: vi.fn(),
+        sessionKey,
+        hasMore: false,
+      }));
+      return null;
+    }
+
+    await act(async () => root.render(<Harness />));
+    let pending: Promise<void> | undefined;
+    act(() => {
+      pending = changeActivity?.('stream');
+    });
+    expect(useChatSessionStore.getState().sessions[sessionKey]?.reasoningLevel).toBe('stream');
+    expect(patchSessionAgentConfig).toHaveBeenCalledWith(sessionKey, {
+      activityDetailLevel: 'stream',
+    });
+
+    await act(async () => {
+      rejectPatch?.(new Error('save failed'));
+      await pending;
+    });
+    expect(useChatSessionStore.getState().sessions[sessionKey]?.reasoningLevel).toBe('on');
+    expect(useChatSessionStore.getState().sessions[sessionKey]?.activityDetailOverride).toBeNull();
+    expect(useChatSessionStore.getState().shellError).toBe('save failed');
 
     act(() => root.unmount());
     container.remove();
