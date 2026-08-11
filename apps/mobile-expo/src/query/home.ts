@@ -234,7 +234,7 @@ const actionableHomeSchema = z.object({
     })),
     status: z.enum(['unread', 'read', 'approved', 'dismissed']),
     createdAt: z.number(),
-  })),
+  })).optional().default([]),
   calendarSignals: z.array(z.object({
     id: z.string(),
     focusId: z.string(),
@@ -243,7 +243,7 @@ const actionableHomeSchema = z.object({
     startsAt: z.number(),
     endsAt: z.number().optional(),
     sourceInstanceId: z.string(),
-  })),
+  })).optional().default([]),
 });
 
 function normalizedSessionName(session: SessionListItem): string | undefined {
@@ -254,9 +254,11 @@ export async function fetchHome(language: Language): Promise<HomeData> {
   const res = await apiFetch(`/api/home?locale=${encodeURIComponent(language)}`);
   if (!res.ok) throw new Error(`Failed to fetch home: ${res.status}`);
   const raw = (await res.json()) as HomeData;
-  actionableHomeSchema.parse(raw);
+  const actionable = actionableHomeSchema.parse(raw);
   return {
     ...raw,
+    proactiveInsights: actionable.proactiveInsights,
+    calendarSignals: actionable.calendarSignals,
     recentSessions: raw.recentSessions.map((session) => ({
       ...session,
       name: normalizedSessionName(session),
