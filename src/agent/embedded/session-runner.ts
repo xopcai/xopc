@@ -16,7 +16,6 @@ import { guardSessionManager, type GuardedPiTranscriptManager } from './session-
 import { transformUserMessageForPersistence } from '../inbound/attachment-pipeline.js';
 import { openSqliteHydratingSessionManager } from './sqlite-hydrating-session-manager.js';
 import {
-  applyEmbeddedProviderCredential,
   createEmbeddedModelRuntime,
   resolveEmbeddedProviderApiKeySync,
 } from './model-runtime.js';
@@ -279,8 +278,7 @@ export class EmbeddedSessionRunnerPool {
     const toolDefs = xopcToolsToDefinitions(tools);
     const toolNames = tools.map((t) => t.name);
 
-    const modelRuntime = await createEmbeddedModelRuntime();
-    await applyEmbeddedProviderCredential(modelRuntime, model.provider);
+    const modelRuntime = await createEmbeddedModelRuntime(model.provider);
 
     const resourceLoader = new DefaultResourceLoader({
       cwd: workspaceDir,

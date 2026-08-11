@@ -1,8 +1,7 @@
-import { getCredentialResolver, type CredentialResolver } from '../auth/credentials.js';
 import { getModelCatalogStore, type ModelCatalogStore } from './model-catalog-store.js';
 import { getModelRegistry } from './model-registry.js';
-
-const DEFAULT_ROUTER_URL = 'https://router.xopc.ai/v1';
+import { getProviderAuthService, type ProviderAuthService } from './provider-auth-service.js';
+import { resolveXopcModelRouterUrl } from './xopc-cloud-config.js';
 
 export type XopcCloudModelRefreshResult =
   | { status: 'skipped'; reason: 'not_configured' }
@@ -18,20 +17,20 @@ export class XopcCloudModelError extends Error {
 export class XopcCloudModelSource {
   private readonly fetchImpl: typeof fetch;
   private readonly routerUrl: string;
-  private readonly credentials: Pick<CredentialResolver, 'resolveApiKey'>;
+  private readonly credentials: Pick<ProviderAuthService, 'resolveApiKey'>;
   private readonly catalogStore: ModelCatalogStore;
   private readonly refreshModels: () => void;
 
   constructor(options: {
     fetchImpl?: typeof fetch;
     routerUrl?: string;
-    credentials?: Pick<CredentialResolver, 'resolveApiKey'>;
+    credentials?: Pick<ProviderAuthService, 'resolveApiKey'>;
     catalogStore?: ModelCatalogStore;
     refreshModels?: () => void;
   } = {}) {
     this.fetchImpl = options.fetchImpl ?? fetch;
-    this.routerUrl = (options.routerUrl ?? process.env.XOPC_MODEL_ROUTER_URL ?? DEFAULT_ROUTER_URL).replace(/\/+$/, '');
-    this.credentials = options.credentials ?? getCredentialResolver();
+    this.routerUrl = resolveXopcModelRouterUrl(options.routerUrl);
+    this.credentials = options.credentials ?? getProviderAuthService();
     this.catalogStore = options.catalogStore ?? getModelCatalogStore();
     this.refreshModels = options.refreshModels ?? (() => getModelRegistry().refresh());
   }

@@ -13,7 +13,6 @@ import { getAgentDefaultModelRef, type Config } from '../config/schema.js';
 import { getModelRegistry } from './model-registry.js';
 import {
 	CredentialResolver,
-	resolveApiKey,
 	hasCredentials,
 	type CredentialResolverOptions,
 } from '../auth/credentials.js';
@@ -24,6 +23,7 @@ import { EXTENSION_PROVIDER_BASE_URL } from './constants.js';
 import { getSupplementalModels } from './model-supplements.js';
 import { splitProviderModelRef } from './model-ref.js';
 import { getProviderRegistry } from './plugin-registry.js';
+import { resolveProviderApiKey } from './provider-auth-service.js';
 import type { ProviderModelDefinition } from '../extensions/types/providers.js';
 
 export { EXTENSION_PROVIDER_BASE_URL } from './constants.js';
@@ -179,8 +179,8 @@ export async function getApiKey(
 ): Promise<string | undefined> {
 	if (getProviderRegistry().has(provider)) return 'extension-managed';
 
-	// Use new credential resolver first (checks: agent private > global > oauth > env)
-	const credentialKey = await resolveApiKey(provider, credentialOptions);
+	// Use the shared auth service first so OAuth refresh and persistence stay unified.
+	const credentialKey = await resolveProviderApiKey(provider, credentialOptions);
 	if (credentialKey) {
 		return credentialKey;
 	}

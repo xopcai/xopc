@@ -1,8 +1,7 @@
 import { z } from 'zod';
 
-import { getCredentialResolver, type CredentialResolver } from '../auth/credentials.js';
-
-const DEFAULT_ROUTER_URL = 'https://router.xopc.ai/v1';
+import { getProviderAuthService, type ProviderAuthService } from './provider-auth-service.js';
+import { resolveXopcModelRouterUrl } from './xopc-cloud-config.js';
 
 const accountSummarySchema = z.object({
   balance: z.object({
@@ -37,16 +36,16 @@ export class XopcCloudAccountError extends Error {
 export class XopcCloudAccountService {
   private readonly fetchImpl: typeof fetch;
   private readonly routerUrl: string;
-  private readonly credentials: Pick<CredentialResolver, 'resolveApiKey'>;
+  private readonly credentials: Pick<ProviderAuthService, 'resolveApiKey'>;
 
   constructor(options: {
     fetchImpl?: typeof fetch;
     routerUrl?: string;
-    credentials?: Pick<CredentialResolver, 'resolveApiKey'>;
+    credentials?: Pick<ProviderAuthService, 'resolveApiKey'>;
   } = {}) {
     this.fetchImpl = options.fetchImpl ?? fetch;
-    this.routerUrl = (options.routerUrl ?? process.env.XOPC_MODEL_ROUTER_URL ?? DEFAULT_ROUTER_URL).replace(/\/+$/, '');
-    this.credentials = options.credentials ?? getCredentialResolver();
+    this.routerUrl = resolveXopcModelRouterUrl(options.routerUrl);
+    this.credentials = options.credentials ?? getProviderAuthService();
   }
 
   async getSummary(days: 1 | 7 | 30 = 7): Promise<XopcCloudAccountSummary | null> {
