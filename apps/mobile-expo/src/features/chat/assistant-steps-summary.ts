@@ -33,6 +33,30 @@ export function filterVisibleSteps(
   );
 }
 
+/**
+ * A completed parent message is the authoritative boundary for step activity.
+ * Persisted/replayed content can retain transient streaming flags when a
+ * thinking_end or tool_end event was missed, so settle those flags for render.
+ */
+export function resolveStepBlocksForRender(
+  blocks: Array<ThinkingContent | ToolUseContent>,
+  isMessageStreaming: boolean,
+): Array<ThinkingContent | ToolUseContent> {
+  const effectiveBlocks = isMessageStreaming
+    ? blocks
+    : blocks.map((block) => {
+      if (block.type === 'thinking' && block.streaming) {
+        return { ...block, streaming: false };
+      }
+      if (block.type === 'tool_use' && block.status === 'running') {
+        return { ...block, status: 'done' as const };
+      }
+      return block;
+    });
+
+  return filterVisibleSteps(effectiveBlocks);
+}
+
 export function viewStepsLabel(
   count: number,
   m: { viewSteps_one: string; viewSteps_other: string },

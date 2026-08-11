@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildStepsRoundActiveSummary, buildStepsRoundCompleteSummary, viewStepsLabel } from '../assistant-steps-summary';
+import {
+  buildStepsRoundActiveSummary,
+  buildStepsRoundCompleteSummary,
+  resolveStepBlocksForRender,
+  viewStepsLabel,
+} from '../assistant-steps-summary';
 import type { ThinkingContent, ToolUseContent } from '../messages.types';
 import { getFriendlyToolTitle } from '../tool-friendly-title';
 
@@ -67,6 +72,30 @@ describe('viewStepsLabel', () => {
     expect(viewStepsLabel(3, { viewSteps_one: 'View {{count}} step', viewSteps_other: 'View {{count}} steps' })).toBe(
       'View 3 steps',
     );
+  });
+});
+
+describe('resolveStepBlocksForRender', () => {
+  const activeBlocks: Array<ThinkingContent | ToolUseContent> = [
+    { type: 'thinking', text: 'reasoning', streaming: true },
+    { type: 'tool_use', id: '1', name: 'read_file', status: 'running' },
+  ];
+
+  it('keeps active states while the parent message is streaming', () => {
+    expect(resolveStepBlocksForRender(activeBlocks, true)).toEqual(activeBlocks);
+  });
+
+  it('settles stale active states after the parent message completes', () => {
+    expect(resolveStepBlocksForRender(activeBlocks, false)).toEqual([
+      { type: 'thinking', text: 'reasoning', streaming: false },
+      { type: 'tool_use', id: '1', name: 'read_file', status: 'done' },
+    ]);
+  });
+
+  it('hides an empty stale thinking block after completion', () => {
+    expect(
+      resolveStepBlocksForRender([{ type: 'thinking', text: '', streaming: true }], false),
+    ).toEqual([]);
   });
 });
 
