@@ -13,7 +13,7 @@ import { ActivityIndicator, Icon, Text } from 'react-native-paper';
 import {
   buildStepsRoundActiveSummary,
   buildStepsRoundCompleteSummary,
-  filterVisibleSteps,
+  resolveStepBlocksForRender,
   viewStepsLabel,
 } from './assistant-steps-summary';
 import type { MessageContent, ThinkingContent, ToolUseContent } from './messages.types';
@@ -88,7 +88,10 @@ export const AssistantStepsBlock = memo(function AssistantStepsBlock({
   const language = usePreferencesStore((s) => s.language);
   const { colors, isDark } = useTheme();
 
-  const visibleBlocks = useMemo(() => filterVisibleSteps(blocks), [blocks]);
+  const visibleBlocks = useMemo(
+    () => resolveStepBlocksForRender(blocks, isMessageStreaming),
+    [blocks, isMessageStreaming],
+  );
   const stepCount = visibleBlocks.length;
   const anyActive = isAnyBlockActive(visibleBlocks);
 
