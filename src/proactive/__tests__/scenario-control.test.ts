@@ -18,22 +18,30 @@ describe('proactive scenario control plane', () => {
     service = new ProactiveScenarioService();
   });
 
+  it('enables the three built-in workspace scenarios by default', () => {
+    expect(service.subscriptions().filter((item) => item.enabled).map((item) => item.scenarioKey).sort()).toEqual([
+      'automation_failure_impact',
+      'blocked_work',
+      'project_delivery_risk',
+    ]);
+  });
+
   afterEach(() => {
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
     rmSync(stateDir, { recursive: true, force: true });
   });
 
-  it('seeds only the three product scenarios and creates scoped routes from subscriptions', () => {
+  it('seeds the three product scenarios and supports narrower project routes', () => {
     expect(service.list().map((item) => item.key)).toEqual([
       'automation_failure_impact', 'blocked_work', 'project_delivery_risk',
     ]);
-    expect(service.routes()).toEqual([]);
+    expect(service.routes()).toHaveLength(3);
     service.subscribe({
       scenarioKey: 'project_delivery_risk', workspaceId: 'default',
       scopeKind: 'project', scopeId: 'project-1', enabled: true,
     });
-    expect(service.routes()[0]).toMatchObject({
+    expect(service.routes().find((route) => route.scope.projectId === 'project-1')).toMatchObject({
       key: 'project_delivery_risk', scope: { workspaceId: 'default', projectId: 'project-1' },
     });
   });
@@ -64,6 +72,15 @@ describe('proactive scenario control plane', () => {
   });
 
   it('isolates batches and prompt revisions by subscription', () => {
+    for (const subscription of service.subscriptions()) {
+      service.subscribe({
+        scenarioKey: subscription.scenarioKey,
+        workspaceId: subscription.workspaceId,
+        scopeKind: subscription.scopeKind,
+        scopeId: subscription.scopeId,
+        enabled: false,
+      });
+    }
     const first = service.subscribe({ scenarioKey: 'blocked_work', workspaceId: 'default', scopeKind: 'project', scopeId: 'one', enabled: true });
     const second = service.subscribe({ scenarioKey: 'blocked_work', workspaceId: 'default', scopeKind: 'project', scopeId: 'two', enabled: true });
     expect(service.routes().map((route) => route.subscriptionId).sort()).toEqual([first.id, second.id].sort());

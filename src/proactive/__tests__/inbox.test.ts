@@ -18,18 +18,15 @@ describe('proactive inbox', () => {
     resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: join(stateDir, 'xopc.db') });
     inbox = new ProactiveInboxService();
     const db = getSqliteDatabase();
-    db.prepare(`INSERT INTO proactive_scenario_subscriptions
-      (subscription_id, scenario_key, workspace_id, scope_kind, scope_id, enabled, created_at, updated_at)
-      VALUES ('sub', 'blocked_work', 'default', 'workspace', 'default', 1, '2026-08-13T00:00:00.000Z', '2026-08-13T00:00:00.000Z')`).run();
     db.prepare(`INSERT INTO proactive_signal_batches
       (batch_id, subscription_id, scenario_key, scenario_version, aggregation_key, window_started_at, window_ends_at, ready_at, status, event_count, created_at, updated_at)
-      VALUES ('batch', 'sub', 'blocked_work', 1, 'workspace:default', '2026-08-13T00:00:00.000Z', '2026-08-13T00:01:00.000Z', '2026-08-13T00:01:00.000Z', 'processed', 1, '2026-08-13T00:00:00.000Z', '2026-08-13T00:00:00.000Z')`).run();
+      VALUES ('batch', 'default-blocked-work', 'blocked_work', 1, 'workspace:default', '2026-08-13T00:00:00.000Z', '2026-08-13T00:01:00.000Z', '2026-08-13T00:01:00.000Z', 'processed', 1, '2026-08-13T00:00:00.000Z', '2026-08-13T00:00:00.000Z')`).run();
     db.prepare(`INSERT INTO proactive_runs
       (run_id, batch_id, subscription_id, scenario_key, scenario_version, status, attempt, started_at, completed_at, updated_at)
-      VALUES ('run', 'batch', 'sub', 'blocked_work', 1, 'completed', 1, '2026-08-13T00:00:00.000Z', '2026-08-13T00:00:01.000Z', '2026-08-13T00:00:01.000Z')`).run();
+      VALUES ('run', 'batch', 'default-blocked-work', 'blocked_work', 1, 'completed', 1, '2026-08-13T00:00:00.000Z', '2026-08-13T00:00:01.000Z', '2026-08-13T00:00:01.000Z')`).run();
     db.prepare(`INSERT INTO proactive_insights
       (insight_id, run_id, subscription_id, scenario_key, title, summary, why_now, impact, recommendation, decision_json, urgency, confidence, value_score, evidence_ids_json, created_at)
-      VALUES ('insight', 'run', 'sub', 'blocked_work', 'Needs a decision', 'Blocked', 'Changed now', 'Delivery risk', 'Choose owner',
+      VALUES ('insight', 'run', 'default-blocked-work', 'blocked_work', 'Needs a decision', 'Blocked', 'Changed now', 'Delivery risk', 'Choose owner',
         '{"question":"Who should own this?","options":[{"id":"assign-alice","label":"Assign Alice","consequence":"Alice owns the blocker"},{"id":"assign-bob","label":"Assign Bob","consequence":"Bob owns the blocker"}]}',
         'high', .9, .85, '["event"]', '2026-08-13T00:00:01.000Z')`).run();
   });
