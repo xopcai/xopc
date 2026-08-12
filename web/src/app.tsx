@@ -17,7 +17,6 @@ import {
   loadAutomationsPage,
   loadBrowserWorkflowsPage,
   loadWorkPage,
-  loadFocusDetailPage,
   loadChannelsPage,
   loadConnectorsPage,
   loadGoalDetailPage,
@@ -50,7 +49,6 @@ const SessionsPage = lazy(() => loadSessionsPage().then((m) => ({ default: m.Ses
 const AutomationsPage = lazy(() => loadAutomationsPage().then((m) => ({ default: m.AutomationsPage })));
 const BrowserWorkflowsPage = lazy(() => loadBrowserWorkflowsPage().then((m) => ({ default: m.BrowserWorkflowsPage })));
 const WorkPage = lazy(() => loadWorkPage().then((m) => ({ default: m.WorkPage })));
-const FocusDetailPage = lazy(() => loadFocusDetailPage().then((m) => ({ default: m.FocusDetailPage })));
 const ProjectsPage = lazy(() => loadProjectsPage().then((m) => ({ default: m.ProjectsPage })));
 const ProjectDetailPage = lazy(() => loadProjectDetailPage().then((m) => ({ default: m.ProjectDetailPage })));
 const WorkItemDetailPage = lazy(() => loadWorkItemDetailPage().then((m) => ({ default: m.WorkItemDetailPage })));
@@ -212,14 +210,6 @@ const router = createHashRouter([
         element: (
           <Suspense fallback={<SecondaryRouteFallback />}>
             <WorkPage />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'work/focuses/:focusId',
-        element: (
-          <Suspense fallback={<SecondaryRouteFallback />}>
-            <FocusDetailPage />
           </Suspense>
         ),
       },

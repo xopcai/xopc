@@ -14,7 +14,7 @@ import { registerInteractionStateRoutes } from './interaction-state.js';
 import { registerComposerHistoryRoutes } from './composer-history.js';
 import { registerLocalAppsRoutes } from './local-apps.js';
 import { registerWorkDiscoveryRoutes } from './work-discovery.js';
-import { registerFocusRoutes } from './focuses.js';
+import { registerProactiveRoutes } from './proactive.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import {
   mountAppLazyRoutePrefixes,
@@ -34,7 +34,7 @@ export function registerCoreAuthenticatedRoutes(
   registerProjectSkillRoutes(authenticated, deps);
   registerLocalAppsRoutes(authenticated, deps);
   registerWorkDiscoveryRoutes(authenticated, deps);
-  registerFocusRoutes(authenticated, deps);
+  registerProactiveRoutes(authenticated, deps);
   registerSearchRoutes(authenticated, deps);
   registerMobileRoutes(authenticated, deps);
   registerTaskOutcomeRoutes(authenticated, deps);

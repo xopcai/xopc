@@ -45,15 +45,24 @@ export type WorkHomeChat = {
 
 export type WorkHomeDecision = {
   id: string;
-  kind: 'work_item' | 'goal' | 'connector_approval' | 'goal_evidence';
+  kind: 'agent_judgment' | 'work_item' | 'goal' | 'connector_approval' | 'goal_evidence';
   title: string;
   detail?: string;
-  reason: 'needs_input' | 'in_review' | 'blocked' | 'overdue' | 'due_soon' | 'approval_required';
+  reason: 'needs_input' | 'in_review' | 'blocked' | 'overdue' | 'due_soon' | 'decision_needed' | 'approval_required';
   urgency: 'now' | 'soon';
   href: string;
   projectId?: string;
   projectName?: string;
   updatedAt: number;
+  judgment?: {
+    inboxItemId: string;
+    whyNow: string;
+    impact: string;
+    workDone: string;
+    recommendation: string;
+    confidence: number;
+    decision?: { question: string; options: Array<{ id: string; label: string; consequence: string }> };
+  };
   response?:
     | { kind: 'connector_approval'; approvalId: string }
     | { kind: 'goal_evidence'; goalId: string; requirementId: string };
@@ -135,6 +144,27 @@ export function acknowledgeWorkAttention(
   return fetchJson(apiUrl('/api/home/attention/acknowledge'), {
     method: 'POST',
     body: JSON.stringify(item),
+  });
+}
+
+export function decideAgentJudgment(itemId: string, choice: string): Promise<{ ok: true }> {
+  return fetchJson(apiUrl(`/api/inbox/judgments/${encodeURIComponent(itemId)}/decisions`), {
+    method: 'POST', body: JSON.stringify({ choice }),
+  });
+}
+
+export function transitionAgentJudgment(itemId: string, status: 'read' | 'snoozed' | 'resolved'): Promise<{ ok: true }> {
+  return fetchJson(apiUrl(`/api/inbox/judgments/${encodeURIComponent(itemId)}/transition`), {
+    method: 'POST',
+    body: JSON.stringify(status === 'snoozed'
+      ? { status, snoozedUntil: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() }
+      : status === 'resolved' ? { status, resolution: 'dismissed' } : { status }),
+  });
+}
+
+export function instructAgentJudgment(itemId: string, instruction: string): Promise<{ ok: true; revisionId: string }> {
+  return fetchJson(apiUrl(`/api/inbox/judgments/${encodeURIComponent(itemId)}/instructions`), {
+    method: 'POST', body: JSON.stringify({ instruction }),
   });
 }
 

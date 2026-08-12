@@ -19,13 +19,14 @@ import type { WorkflowRunSummary } from '../../../workflows/domain/index.js';
 import { WorkItemService } from '../../../work-items/index.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
-type HomeDecisionKind = 'work_item' | 'goal' | 'connector_approval' | 'goal_evidence';
+type HomeDecisionKind = 'agent_judgment' | 'work_item' | 'goal' | 'connector_approval' | 'goal_evidence';
 type HomeDecisionReason =
   | 'needs_input'
   | 'in_review'
   | 'blocked'
   | 'overdue'
   | 'due_soon'
+  | 'decision_needed'
   | 'approval_required';
 
 type HomeAttention = {
@@ -51,6 +52,18 @@ type HomeDecision = {
   projectId?: string;
   projectName?: string;
   updatedAt: number;
+  judgment?: {
+    inboxItemId: string;
+    whyNow: string;
+    impact: string;
+    workDone: string;
+    recommendation: string;
+    confidence: number;
+    decision?: {
+      question: string;
+      options: Array<{ id: string; label: string; consequence: string }>;
+    };
+  };
   response?:
     | { kind: 'connector_approval'; approvalId: string }
     | { kind: 'goal_evidence'; goalId: string; requirementId: string };
@@ -413,7 +426,28 @@ export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRoute
       .sort((left, right) => right.createdAtMs - left.createdAtMs)
       .filter((run, index, all) => all.findIndex((candidate) => candidate.automationId === run.automationId) === index);
     const automationsById = new Map(automations.map((automation) => [automation.id, automation]));
+    const proactiveJudgments = service.proactiveInbox.list({ limit: 20 })
+      .filter((item) => item.status === 'unread' || item.status === 'read');
     const decisions: HomeDecision[] = [
+      ...proactiveJudgments.map((item): HomeDecision => ({
+        id: `agent-judgment:${item.id}`,
+        kind: 'agent_judgment',
+        title: item.insight.title,
+        detail: item.insight.summary,
+        reason: 'decision_needed',
+        urgency: item.insight.urgency === 'critical' || item.insight.urgency === 'high' ? 'now' : 'soon',
+        href: `/work?judgment=${encodeURIComponent(item.id)}`,
+        updatedAt: Date.parse(item.updatedAt),
+        judgment: {
+          inboxItemId: item.id,
+          whyNow: item.insight.whyNow,
+          impact: item.insight.impact,
+          workDone: item.insight.workDone,
+          recommendation: item.insight.recommendation,
+          confidence: item.insight.confidence,
+          ...(item.insight.decision ? { decision: item.insight.decision } : {}),
+        },
+      })),
       ...activeWorkItems
         .map((item) => decisionFromWorkItem(item, projectsById.get(item.projectId)?.name ?? 'Project', nowMs))
         .filter((item): item is HomeDecision => Boolean(item)),

@@ -80,6 +80,7 @@ function workflowProgress(run: HomeWorkflowRun, hm: ReturnType<typeof useMessage
 }
 
 function decisionIcon(decision: HomeDecision): string {
+  if (decision.kind === 'agent_judgment') return 'creation-outline';
   if (decision.kind === 'connector_approval' || decision.kind === 'goal_evidence') return 'shield-check-outline';
   if (decision.kind === 'goal') return 'target';
   return decision.reason === 'overdue' ? 'clock-alert-outline' : 'checkbox-marked-circle-outline';
@@ -204,7 +205,8 @@ export function WorkspaceHomeScreen() {
   const openDecision = useCallback((decision: HomeDecision) => {
     recordUsageEvent('home_decision_opened');
     const objectId = decisionObjectId(decision);
-    if (decision.kind === 'work_item') router.push(`/work/${objectId}`);
+    if (decision.kind === 'agent_judgment' && decision.judgment) router.push({ pathname: '/inbox', params: { item: decision.judgment.inboxItemId } });
+    else if (decision.kind === 'work_item') router.push(`/work/${objectId}`);
     else router.push('/work');
   }, [router]);
 

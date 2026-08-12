@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 
 import { createLogger } from '../../utils/logger.js';
+import type { ProactiveSignalPublisher } from '../../proactive/events/publisher.js';
+import { runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
 import {
   computeNextAutomationRunAtMs,
   timerDelayUntil,
@@ -60,6 +62,8 @@ export class AutomationService {
   private deps: AutomationDeps = {};
   private maxConcurrentRuns = DEFAULT_MAX_CONCURRENT_RUNS;
   private readonly activeRuns = new Map<string, AbortController>();
+
+  constructor(private readonly signals?: ProactiveSignalPublisher) {}
 
   setDeps(deps: AutomationDeps): void {
     this.deps = { ...this.deps, ...deps };
@@ -443,14 +447,21 @@ export class AutomationService {
         endedAtMs,
         durationMs: endedAtMs - startedAtMs,
       };
-      saveAutomationRun(run);
-      this.appendRunEvent(run, 'run.completed', `Automation run ${status}`, {
-        status,
-        durationMs: run.durationMs,
-        error,
-      });
       this.activeRuns.delete(initialRun.id);
-      this.finishAutomationRun(automation.id, status, error, endedAtMs);
+      runSqliteWriteTransaction(() => {
+        saveAutomationRun(run);
+        this.appendRunEvent(run, 'run.completed', `Automation run ${status}`, { status, durationMs: run.durationMs, error });
+        this.finishAutomationRun(automation.id, status, error, endedAtMs);
+        if (status === 'failed' || status === 'timeout') {
+          this.signals?.publish({
+            type: 'automation.run_failed.v1', schemaVersion: 1,
+            source: { kind: 'automations', id: automation.id }, subject: { kind: 'automation_run', id: run.id },
+            actor: { kind: 'system' }, scope: { workspaceId: 'default' },
+            occurredAt: new Date(endedAtMs).toISOString(), dedupeKey: `automation_run:${run.id}:failed`,
+            sensitivity: 'personal', payload: { automationId: automation.id, status, error, summary: run.summary, durationMs: run.durationMs },
+          });
+        }
+      });
       try {
         this.deps.onRunCompleted?.(run);
       } catch (err) {

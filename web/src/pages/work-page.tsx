@@ -4,7 +4,6 @@ import {
   CalendarClock,
   CircleAlert,
   Clock3,
-  Eye,
   FolderKanban,
   MessageCircle,
   Plus,
@@ -18,23 +17,15 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { WorkbenchActivity } from '@/features/activity/workbench-activity';
-import {
-  configureFocusMonitor,
-  deleteFocus,
-  fetchFocusCandidates,
-  fetchFocuses,
-  respondToFocusCandidate,
-  updateFocus,
-} from '@/features/focuses/api';
-import { focusCopy } from '@/features/focuses/copy';
-import { FocusCard } from '@/features/focuses/focus-card';
-import type { Focus, FocusCandidate, FocusMonitorKind, FocusStatus } from '@/features/focuses/types';
 import { fetchProjects, type Project } from '@/features/projects/api';
 import {
   acknowledgeWorkAttention,
+  decideAgentJudgment,
   fetchWorkHome,
+  instructAgentJudgment,
   respondToWorkDecision,
   retryWorkAttention,
+  transitionAgentJudgment,
   type WorkHomeAttention,
   type WorkHomeChat,
   type WorkHomeDecision,
@@ -159,6 +150,51 @@ function DecisionCard({
   );
 }
 
+function AgentJudgmentCard({
+  item,
+  labels,
+  busy,
+  onDecide,
+  onSnooze,
+  onDismiss,
+  onInstruct,
+}: {
+  item: WorkHomeDecision;
+  labels: ReturnType<typeof workCopy>;
+  busy: boolean;
+  onDecide: (choice: string) => void;
+  onSnooze: () => void;
+  onDismiss: () => void;
+  onInstruct: (instruction: string) => void;
+}) {
+  const [instruction, setInstruction] = useState('');
+  const judgment = item.judgment!;
+  return (
+    <article className="rounded-xl border border-accent/25 bg-accent-soft/15 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0"><h3 className="text-sm font-semibold text-fg">{item.title}</h3><p className="mt-2 text-xs leading-5 text-fg-muted">{item.detail}</p></div>
+        <Sparkles className="size-4 shrink-0 text-accent" aria-hidden />
+      </div>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        {[[labels.whyNow, judgment.whyNow], [labels.impact, judgment.impact], [labels.workDone, judgment.workDone], [labels.recommendation, judgment.recommendation]].map(([label, value]) => (
+          <div key={label} className="rounded-lg bg-surface-panel/80 p-3"><p className="text-[11px] font-medium text-fg-subtle">{label}</p><p className="mt-1 text-xs leading-5 text-fg">{value}</p></div>
+        ))}
+      </div>
+      {judgment.decision ? <div className="mt-4"><p className="text-sm font-medium text-fg">{judgment.decision.question}</p><div className="mt-2 flex flex-wrap gap-2">{judgment.decision.options.map((option) => (
+        <Button key={option.id} type="button" variant="secondary" className="h-auto min-h-9 flex-col items-start px-3 py-2 text-left" disabled={busy} title={option.consequence} onClick={() => onDecide(option.id)}><span>{option.label}</span><span className="text-[10px] font-normal text-fg-muted">{option.consequence}</span></Button>
+      ))}</div></div> : null}
+      <div className="mt-4 flex flex-wrap gap-2 border-t border-edge-subtle pt-3">
+        <Button type="button" variant="ghost" className="h-8 px-2" disabled={busy} onClick={onSnooze}>{labels.snooze}</Button>
+        <Button type="button" variant="ghost" className="h-8 px-2" disabled={busy} onClick={onDismiss}>{labels.dismiss}</Button>
+      </div>
+      <form className="mt-3 flex gap-2" onSubmit={(event) => { event.preventDefault(); const value = instruction.trim(); if (!value) return; onInstruct(value); setInstruction(''); }}>
+        <input className="min-w-0 flex-1 rounded-lg border border-edge bg-surface-base px-3 py-2 text-xs text-fg outline-none focus:border-accent" value={instruction} onChange={(event) => setInstruction(event.target.value)} placeholder={labels.feedbackPlaceholder} />
+        <Button type="submit" variant="secondary" className="h-9 px-3" disabled={busy || !instruction.trim()}>{labels.applyFeedback}</Button>
+      </form>
+    </article>
+  );
+}
+
 function AttentionCard({
   item,
   statusLabel,
@@ -231,15 +267,12 @@ export function WorkPage() {
   const language = useLocaleStore((state) => state.language);
   const msg = messages(language);
   const t = msg.projectsPage;
-  const focusText = focusCopy(language);
   const workText = workCopy(language);
   const navigate = useNavigate();
   const setPageHeader = usePageHeaderStore((state) => state.setPageHeader);
   const clearPageHeader = usePageHeaderStore((state) => state.clearPageHeader);
   const [home, setHome] = useState<WorkHomeResponse | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [focuses, setFocuses] = useState<Focus[]>([]);
-  const [focusCandidates, setFocusCandidates] = useState<FocusCandidate[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -247,23 +280,17 @@ export function WorkPage() {
   const [outcome, setOutcome] = useState('');
   const [busyDecisionId, setBusyDecisionId] = useState<string | null>(null);
   const [busyAttentionId, setBusyAttentionId] = useState<string | null>(null);
-  const [busyFocusId, setBusyFocusId] = useState<string | null>(null);
-  const [focusNotice, setFocusNotice] = useState<string | null>(null);
 
   const load = useCallback(async (showSkeleton = false) => {
     if (showSkeleton) setLoading(true);
     setLoadError(null);
     try {
-      const [homeResult, projectsResult, focusResult, candidateResult] = await Promise.all([
+      const [homeResult, projectsResult] = await Promise.all([
         fetchWorkHome(language),
         fetchProjects({ limit: 100, sortBy: 'updatedAt', sortOrder: 'desc' }),
-        fetchFocuses(),
-        fetchFocusCandidates(),
       ]);
       setHome(homeResult);
       setProjects(projectsResult.items);
-      setFocuses(focusResult);
-      setFocusCandidates(candidateResult);
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -286,7 +313,7 @@ export function WorkPage() {
     };
     const refreshSoon = () => scheduleRefresh(100);
     const refreshAfterSessionSettles = () => scheduleRefresh(750);
-    const immediateEvents = ['session-created', 'agent-run-started', 'agent-run-ended', 'automation-run-completed', 'workflow-run-updated', 'workflow-run-error', 'focus-created', 'focus-updated', 'focus-deleted', 'focus-monitor-updated', 'focus-run-updated', 'focus-insight-updated', 'focus-candidate-updated'];
+    const immediateEvents = ['session-created', 'agent-run-started', 'agent-run-ended', 'automation-run-completed', 'workflow-run-updated', 'workflow-run-error'];
     const noisySessionEvents = ['session-updated', 'session-transcript-updated'];
     immediateEvents.forEach((name) => window.addEventListener(name, refreshSoon));
     noisySessionEvents.forEach((name) => window.addEventListener(name, refreshAfterSessionSettles));
@@ -345,6 +372,14 @@ export function WorkPage() {
     }
   }, [load]);
 
+  const handleJudgmentAction = useCallback(async (item: WorkHomeDecision, action: () => Promise<unknown>) => {
+    setBusyDecisionId(item.id);
+    setLoadError(null);
+    try { await action(); await load(); }
+    catch (err) { setLoadError(err instanceof Error ? err.message : String(err)); }
+    finally { setBusyDecisionId(null); }
+  }, [load]);
+
   const performAttentionAction = useCallback(async (
     item: WorkHomeAttention,
     action: (target: Pick<WorkHomeAttention, 'kind' | 'runId'>) => Promise<unknown>,
@@ -360,23 +395,6 @@ export function WorkPage() {
       setBusyAttentionId(null);
     }
   }, [load]);
-
-  const performFocusAction = useCallback(async (focusId: string, action: () => Promise<void>, notice = focusText.operationDone) => {
-    setBusyFocusId(focusId);
-    setLoadError(null);
-    setFocusNotice(null);
-    try {
-      await action();
-      const [nextFocuses, nextCandidates] = await Promise.all([fetchFocuses(), fetchFocusCandidates()]);
-      setFocuses(nextFocuses);
-      setFocusCandidates(nextCandidates);
-      setFocusNotice(notice);
-    } catch (err) {
-      setLoadError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusyFocusId(null);
-    }
-  }, [focusText.operationDone]);
 
   useLayoutEffect(() => {
     setPageHeader({
@@ -487,16 +505,13 @@ export function WorkPage() {
             ) : null}
           </section>
 
-          {focusNotice ? <div role="status" className="rounded-xl border border-success/25 bg-success-soft px-4 py-3 text-sm text-success">{focusNotice}</div> : null}
-
           {home.work.current.length === 0
             && home.workflowRuns.active.length === 0
             && home.decisions.length === 0
             && home.attention.length === 0
             && home.chats.running.length === 0
             && home.chats.recent.length === 0
-            && home.upcomingAutomations.length === 0
-            && focuses.length === 0 ? (
+            && home.upcomingAutomations.length === 0 ? (
             <section className="rounded-2xl border border-dashed border-edge p-8 text-center">
               <MessageCircle className="mx-auto size-6 text-accent" aria-hidden />
               <h2 className="mt-3 text-sm font-semibold text-fg">{t.workHome.emptyTitle}</h2>
@@ -540,7 +555,18 @@ export function WorkPage() {
                 <section className="rounded-2xl bg-surface-base p-5 shadow-surface">
                   <div className="flex items-center gap-2"><CircleAlert className="size-4 text-warning" aria-hidden /><h2 className="text-base font-semibold text-fg">{workText.needsAttention}</h2><WorkBadge>{needsYou.length.toLocaleString()}</WorkBadge></div>
                   <div className="mt-4 space-y-2">
-                    {needsYou.map((item) => (
+                    {needsYou.map((item) => item.kind === 'agent_judgment' && item.judgment ? (
+                      <AgentJudgmentCard
+                        key={item.id}
+                        item={item}
+                        labels={workText}
+                        busy={busyDecisionId === item.id}
+                        onDecide={(choice) => void handleJudgmentAction(item, () => decideAgentJudgment(item.judgment!.inboxItemId, choice))}
+                        onSnooze={() => void handleJudgmentAction(item, () => transitionAgentJudgment(item.judgment!.inboxItemId, 'snoozed'))}
+                        onDismiss={() => void handleJudgmentAction(item, () => transitionAgentJudgment(item.judgment!.inboxItemId, 'resolved'))}
+                        onInstruct={(instruction) => void handleJudgmentAction(item, () => instructAgentJudgment(item.judgment!.inboxItemId, instruction))}
+                      />
+                    ) : (
                       <DecisionCard
                         key={item.id}
                         item={item}
@@ -619,12 +645,6 @@ export function WorkPage() {
             </aside>
           </div>
 
-          <section className="rounded-2xl bg-surface-base p-5 shadow-surface">
-            <div className="flex flex-wrap items-center gap-2"><Eye className="size-4 text-accent" aria-hidden /><h2 className="text-base font-semibold text-fg">{workText.focuses}</h2><WorkBadge>{focuses.length.toLocaleString()}</WorkBadge></div>
-            {focuses.length > 0 ? <div className="mt-4 grid gap-3 md:grid-cols-2">{focuses.slice(0, 6).map((focus) => <FocusCard key={focus.id} focus={focus} language={language} busy={busyFocusId === focus.id} onMonitor={(kind: FocusMonitorKind, enabled: boolean) => void performFocusAction(focus.id, async () => { await configureFocusMonitor(focus.id, kind, enabled); }, enabled ? focusText.monitorStarted : focusText.monitorStopped)} onStatus={(status: FocusStatus) => void performFocusAction(focus.id, async () => { await updateFocus(focus.id, { status }); })} onDelete={() => { if (window.confirm(focusText.deleteConfirm)) void performFocusAction(focus.id, () => deleteFocus(focus.id)); }} />)}</div> : <div className="py-8 text-center"><p className="text-sm font-medium text-fg">{focusText.empty}</p><p className="mt-1 text-xs text-fg-muted">{focusText.emptyHint}</p></div>}
-          </section>
-
-          {focusCandidates.length > 0 ? <section className="rounded-2xl border border-dashed border-edge p-5"><h2 className="text-base font-semibold text-fg">{focusText.candidates}</h2><p className="mt-1 text-xs text-fg-muted">{focusText.candidatesHint}</p><div className="mt-4 space-y-2">{focusCandidates.map((candidate) => <article key={candidate.id} className="flex flex-col gap-3 rounded-xl bg-surface-panel p-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><h3 className="text-sm font-semibold text-fg">{candidate.title}</h3><p className="mt-1 line-clamp-2 text-xs leading-5 text-fg-muted">{candidate.summary}</p></div><div className="flex shrink-0 gap-2"><Button variant="ghost" className="h-8 text-xs" disabled={busyFocusId === candidate.id} onClick={() => void performFocusAction(candidate.id, async () => { await respondToFocusCandidate(candidate.id, 'dismiss'); })}>{focusText.dismiss}</Button><Button variant="primary" className="h-8 text-xs" disabled={busyFocusId === candidate.id} onClick={() => void performFocusAction(candidate.id, async () => { await respondToFocusCandidate(candidate.id, 'accept'); })}>{focusText.accept}</Button></div></article>)}</div></section> : null}
         </>
       ) : null}
 

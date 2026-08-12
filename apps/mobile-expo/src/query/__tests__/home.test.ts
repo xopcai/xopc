@@ -63,8 +63,6 @@ describe('fetchHome', () => {
     } as Response);
 
     await expect(fetchHome('en')).resolves.toMatchObject({
-      proactiveInsights: [],
-      calendarSignals: [],
     });
     expect(mockedApiFetch).toHaveBeenCalledWith('/api/home?locale=en');
   });

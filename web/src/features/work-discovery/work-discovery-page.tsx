@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, ChevronDown, ChevronRight, Clock3, Eye, FileText, FolderOpen, GitBranch, Loader2, ShieldCheck, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Clock3, FileText, FolderOpen, GitBranch, Loader2, ShieldCheck, X } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { BrandLogo } from '@/components/shell/brand-logo';
@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useDirectoryPicker } from '@/features/fs/use-directory-picker';
 import { WorkingDirectoryPickerModal } from '@/features/fs/working-directory-picker-modal';
-import { configureFocusMonitor, respondToFocusCandidate } from '@/features/focuses/api';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -57,7 +56,6 @@ export function WorkDiscoveryPage() {
   const [correction, setCorrection] = useState('');
   const [alternativesOpen, setAlternativesOpen] = useState(false);
   const [profileSelection, setProfileSelection] = useState<Set<string>>(() => new Set());
-  const [watchActivated, setWatchActivated] = useState(false);
   const [candidates, setCandidates] = useState<WorkDiscoveryCandidate[]>([]);
   const [selectedCandidatePaths, setSelectedCandidatePaths] = useState<Set<string>>(() => new Set());
   const [batchRuns, setBatchRuns] = useState<WorkDiscoveryRun[]>([]);
@@ -276,7 +274,6 @@ export function WorkDiscoveryPage() {
 
   const selectBatchRun = (next: WorkDiscoveryRun) => {
     setRun(next);
-    setWatchActivated(false);
     setCorrectionOpen(false);
     setAlternativesOpen(false);
     setProfileSelection(new Set(
@@ -352,23 +349,6 @@ export function WorkDiscoveryPage() {
       openConversation(next.sessionKey);
     } catch (cause) {
       setError(errorText(cause));
-      setBusy(false);
-    }
-  };
-
-  const activateTrial = async () => {
-    const focus = run?.result?.workThreads?.find((thread) => thread.horizon === 'current')
-      ?? run?.result?.workThreads?.[0];
-    if (!focus) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const accepted = await respondToFocusCandidate(focus.id, 'accept');
-      if (accepted) await configureFocusMonitor(accepted.id, 'progress', true);
-      setWatchActivated(true);
-    } catch (cause) {
-      setError(errorText(cause));
-    } finally {
       setBusy(false);
     }
   };
@@ -788,29 +768,6 @@ export function WorkDiscoveryPage() {
                 </div>
               </div>
             </article>
-            {run.result.workThreads?.length ? (
-              <div className="mt-5 rounded-xl border border-edge bg-surface-panel p-4">
-                <div className="flex items-start gap-3">
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent-fg">
-                    {watchActivated ? <Check className="size-4" /> : <Eye className="size-4" />}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-fg">
-                      {watchActivated ? copy.focusActive : copy.focusTitle}
-                    </p>
-                    <p className="mt-1 text-xs leading-5 text-fg-muted">
-                      {watchActivated ? copy.focusActiveDescription : copy.focusDescription}
-                    </p>
-                    {!watchActivated ? (
-                      <Button className="mt-3 h-9" variant="secondary" disabled={busy} onClick={() => void activateTrial()}>
-                        {busy ? <Loader2 className="size-4 animate-spin" /> : <Eye className="size-4" />}
-                        {copy.activateFocus}
-                      </Button>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-            ) : null}
             {alternativeSuggestions.length > 0 ? (
               <div className="mt-5 border-t border-edge-subtle pt-4">
                 <button type="button" className="flex w-full items-center justify-between py-2 text-sm font-medium text-fg-muted hover:text-fg" onClick={() => setAlternativesOpen((open) => !open)}>

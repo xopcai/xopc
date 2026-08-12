@@ -57,11 +57,13 @@ describe('openXopcDatabase', () => {
         'transcript_entries',
         'automations',
         'automation_runs',
-        'focus_candidates',
-        'focuses',
-        'focus_monitors',
-        'focus_activities',
-        'focus_insights',
+        'proactive_events',
+        'proactive_signal_batches',
+        'proactive_batch_events',
+        'proactive_scenario_subscriptions',
+        'proactive_runs',
+        'proactive_insights',
+        'proactive_inbox_items',
         'notes',
         'memory_files',
         'memory_chunks',
@@ -75,7 +77,6 @@ describe('openXopcDatabase', () => {
     );
     expect(tables).not.toContain('work_understanding_threads');
     expect(tables).not.toContain('focus_watches');
-    expect(tables).not.toContain('proactive_insights');
     expect(tables).not.toContain('compaction_checkpoints');
     expect(tables).not.toContain('checkpoint_entries');
   });

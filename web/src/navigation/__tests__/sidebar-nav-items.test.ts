@@ -20,7 +20,7 @@ describe('reconcileNavOrder', () => {
     }));
   });
 
-  it('places projects below the user profile in built-in navigation', () => {
+  it('places work before the user profile and projects', () => {
     expect(BUILTIN_NAV_DEFS.slice(0, 3)).toEqual([
       expect.objectContaining({ id: 'builtin:work', to: '/work' }),
       expect.objectContaining({ id: 'builtin:profile', to: '/you' }),

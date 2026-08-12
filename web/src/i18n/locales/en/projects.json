@@ -51,12 +51,14 @@
       "relatedCalendarBadge": "Matched to your focus",
       "prepareForEvent": "Prepare for this",
       "decisionKinds": {
+        "agent_judgment": "AI judgment",
         "work_item": "Work item",
         "goal": "Ongoing goal",
         "connector_approval": "Connector action",
         "goal_evidence": "Completion evidence"
       },
       "decisionReasons": {
+        "decision_needed": "Decision needed",
         "needs_input": "Needs input",
         "in_review": "Ready to review",
         "blocked": "Blocked",
