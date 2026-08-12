@@ -2,6 +2,8 @@ import { changedFieldsFromPatch, emitActivity, systemActivityActor, systemActivi
 import { deleteMediaBuffer, mimeTypeFromMediaPath, saveMediaBuffer } from '../media/store.js';
 import { readMediaReference } from '../media/media-reference.js';
 import type { MediaRef } from '../media/types.js';
+import type { ProactiveSignalPublisher } from '../proactive/events/publisher.js';
+import { runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { WorkItemStore } from './work-item-store.js';
 import type {
   CreateWorkItemUpdateSuggestionInput,
@@ -34,7 +36,7 @@ function attachmentTypeForMediaRef(attachment: WorkItemAttachment): string {
 }
 
 export class WorkItemService {
-  constructor(private readonly store = new WorkItemStore()) {}
+  constructor(private readonly store = new WorkItemStore(), private readonly signals?: ProactiveSignalPublisher) {}
 
   listProjectWorkItems(projectId: string, query: WorkItemListQuery = {}): WorkItemListResult {
     return this.store.list(projectId, query);
@@ -64,37 +66,31 @@ export class WorkItemService {
   }
 
   updateWorkItem(id: string, patch: UpdateWorkItemInput): WorkItem | null {
-    const before = this.store.get(id);
-    if (!before) return null;
-    const after = this.store.update(id, patch);
-    if (!after) return null;
-    if (before.status !== after.status) {
-      this.store.addEvent(id, 'status_changed', { from: before.status, to: after.status });
-    } else {
-      this.store.addEvent(id, 'updated', patch);
-    }
-    if (!before.archivedAt && after.archivedAt) {
-      this.store.addEvent(id, 'archived', { archivedAt: after.archivedAt });
-    }
-    const type = !before.archivedAt && after.archivedAt
-      ? 'work_item.archived'
-      : before.status !== after.status
-        ? 'work_item.status_changed'
-        : 'work_item.updated';
-    emitActivity({
-      type,
-      primaryObject: { kind: 'work_item', id: after.id, title: after.title },
-      actor: systemActivityActor(),
-      source: systemActivitySource(),
-      payload: {
-        changes: changedFieldsFromPatch(patch as Record<string, unknown>),
-        ...(type === 'work_item.status_changed' ? { from: before.status, to: after.status } : {}),
-        ...(type === 'work_item.archived' ? { archivedAt: after.archivedAt } : {}),
-      },
-      scopes: [{ scopeKind: 'project', scopeId: after.projectId, reason: 'object_owner' }],
-      nowMs: after.updatedAt,
+    return runSqliteWriteTransaction(() => {
+      const before = this.store.get(id);
+      if (!before) return null;
+      const after = this.store.update(id, patch);
+      if (!after) return null;
+      if (before.status !== after.status) this.store.addEvent(id, 'status_changed', { from: before.status, to: after.status });
+      else this.store.addEvent(id, 'updated', patch);
+      if (!before.archivedAt && after.archivedAt) this.store.addEvent(id, 'archived', { archivedAt: after.archivedAt });
+      const type = !before.archivedAt && after.archivedAt ? 'work_item.archived'
+        : before.status !== after.status ? 'work_item.status_changed' : 'work_item.updated';
+      const changes = changedFieldsFromPatch(patch as Record<string, unknown>);
+      emitActivity({ type, primaryObject: { kind: 'work_item', id: after.id, title: after.title },
+        actor: systemActivityActor(), source: systemActivitySource(),
+        payload: { changes, ...(type === 'work_item.status_changed' ? { from: before.status, to: after.status } : {}),
+          ...(type === 'work_item.archived' ? { archivedAt: after.archivedAt } : {}) },
+        scopes: [{ scopeKind: 'project', scopeId: after.projectId, reason: 'object_owner' }], nowMs: after.updatedAt });
+      this.signals?.publish({
+        type: before.status !== after.status ? 'work_item.status_changed.v1' : 'work_item.updated.v1', schemaVersion: 1,
+        source: { kind: 'work_items', id: 'local' }, subject: { kind: 'work_item', id: after.id }, actor: { kind: 'system' },
+        scope: { workspaceId: 'default', projectId: after.projectId }, occurredAt: new Date(after.updatedAt).toISOString(),
+        dedupeKey: `work_item:${after.id}:${after.updatedAt}:${createHash('sha256').update(JSON.stringify(patch)).digest('hex')}`,
+        sensitivity: 'personal', payload: { before, after, changes },
+      });
+      return after;
     });
-    return after;
   }
 
   addLink(workItemId: string, input: Omit<WorkItemLink, 'id' | 'workItemId' | 'createdAt'>, eventType: Parameters<WorkItemStore['addEvent']>[1] = 'link_added'): WorkItemLink | null {
@@ -270,3 +266,4 @@ export class WorkItemService {
     return marked;
   }
 }
+import { createHash } from 'node:crypto';

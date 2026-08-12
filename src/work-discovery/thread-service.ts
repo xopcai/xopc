@@ -1,5 +1,3 @@
-import { upsertFocusCandidate } from '../focuses/candidate-repository.js';
-
 import type {
   WorkContextSnapshot,
   WorkDiscoveryResult,
@@ -13,9 +11,7 @@ function confidenceValue(value: WorkUnderstandingThreadCandidate['confidence']):
 }
 
 /**
- * Discovery produces suggestions only. The user turns a suggestion into a Focus explicitly.
- * The legacy thread-shaped return value remains local to the discovery result renderer; it is
- * not a second persisted domain model.
+ * Discovery returns bounded suggestions for the current result only.
  */
 export function persistWorkThreadsFromDiscovery(input: {
   projectId: string;
@@ -33,31 +29,23 @@ export function persistWorkThreadsFromDiscovery(input: {
     });
     if (evidence.length === 0) return [];
     const canonicalKey = `${input.projectId}:${candidate.horizon}:${candidate.topicKey}`.slice(0, 300);
-    const stored = upsertFocusCandidate({
+    const confidence = confidenceValue(candidate.confidence);
+    return [{
+      id: canonicalKey,
       canonicalKey,
       title: candidate.title,
       summary: candidate.summary,
-      confidence: confidenceValue(candidate.confidence),
-      evidence,
-      projectIds: [input.projectId],
-      nowMs,
-    });
-    return [{
-      id: stored.id,
-      canonicalKey,
-      title: stored.title,
-      summary: stored.summary,
       status: candidate.status,
       horizon: candidate.horizon,
-      focusScore: Math.round(stored.confidence * 100),
-      confidence: stored.confidence,
+      focusScore: Math.round(confidence * 100),
+      confidence,
       userStatus: 'unreviewed',
-      projectIds: stored.projectIds,
+      projectIds: [input.projectId],
       evidenceIds: [],
-      firstObservedAt: stored.discoveredAt,
-      lastObservedAt: stored.updatedAt,
-      createdAt: stored.discoveredAt,
-      updatedAt: stored.updatedAt,
+      firstObservedAt: nowMs,
+      lastObservedAt: nowMs,
+      createdAt: nowMs,
+      updatedAt: nowMs,
     }];
   });
 }

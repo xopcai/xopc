@@ -51,12 +51,14 @@
       "relatedCalendarBadge": "匹配关注事项",
       "prepareForEvent": "帮我准备",
       "decisionKinds": {
+        "agent_judgment": "AI 主动判断",
         "work_item": "工作事项",
         "goal": "持续目标",
         "connector_approval": "连接器操作",
         "goal_evidence": "完成证据"
       },
       "decisionReasons": {
+        "decision_needed": "需要你决策",
         "needs_input": "需要补充",
         "in_review": "等待确认",
         "blocked": "遇到阻塞",
