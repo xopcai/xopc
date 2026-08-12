@@ -21,6 +21,15 @@ describe('proactive execution worker', () => {
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
     scenarios = new ProactiveScenarioService();
+    for (const subscription of scenarios.subscriptions()) {
+      scenarios.subscribe({
+        scenarioKey: subscription.scenarioKey,
+        workspaceId: subscription.workspaceId,
+        scopeKind: subscription.scopeKind,
+        scopeId: subscription.scopeId,
+        enabled: false,
+      });
+    }
     scenarios.subscribe({ scenarioKey: 'blocked_work', workspaceId: 'default', scopeKind: 'project', scopeId: 'project-1', enabled: true });
     events = new ProactiveEventService(() => scenarios.routes());
   });

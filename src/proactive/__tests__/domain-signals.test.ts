@@ -32,6 +32,15 @@ describe('proactive domain signals', () => {
     signals = new ProactiveEventService(() => scenarios.routes());
   });
 
+  it('routes an explicit blocked transition only to the blocked-work scenario', () => {
+    const projects = new ProjectService(undefined, signals);
+    const project = projects.create({ name: 'Launch' });
+    const workItems = new WorkItemService(undefined, signals);
+    const item = workItems.createProjectWorkItem(project.id, { title: 'Ship release' });
+    workItems.updateWorkItem(item.id, { status: 'blocked', blockedReason: 'Needs owner decision' });
+    expect(signals.listBatches().filter((batch) => batch.status === 'collecting').map((batch) => batch.scenarioKey)).toEqual(['blocked_work']);
+  });
+
   afterEach(async () => { await automations?.stop(); closeXopcDatabase(); resetXopcDatabaseSingletonForTest(); rmSync(stateDir, { recursive: true, force: true }); });
 
   it('publishes project and work-item changes directly into scoped scenario batches', () => {
@@ -43,7 +52,7 @@ describe('proactive domain signals', () => {
     workItems.updateWorkItem(item.id, { status: 'blocked', blockedReason: 'Security approval' });
     expect(signals.listEvents().map((event) => event.type).sort()).toEqual(['project.updated.v1', 'work_item.status_changed.v1']);
     expect(signals.listBatches().map((batch) => batch.scenarioKey).sort()).toEqual(['blocked_work', 'project_delivery_risk']);
-    expect(signals.listBatches().find((batch) => batch.scenarioKey === 'project_delivery_risk')?.eventCount).toBe(2);
+    expect(signals.listBatches().find((batch) => batch.scenarioKey === 'project_delivery_risk')?.eventCount).toBe(1);
   });
 
   it('publishes terminal automation failure with the completed run as evidence', async () => {
