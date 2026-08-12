@@ -17,7 +17,7 @@ import {
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../../../storage/sqlite/index.js';
-import { WORK_ITEM_ATTACHMENT_MAX_BYTES } from '../../../../work-items/index.js';
+import { WorkItemService, WORK_ITEM_ATTACHMENT_MAX_BYTES } from '../../../../work-items/index.js';
 import type { GatewayService } from '../../../service.js';
 import { registerActivityRoutes } from '../activity.js';
 import { registerProjectsRoutes } from '../projects.js';
@@ -32,7 +32,7 @@ function registerActivityRouteApp(service: Partial<GatewayService>): Hono {
 
 function registerProjectRouteApp(service: Partial<GatewayService>): Hono {
   const app = new Hono();
-  registerProjectsRoutes(app, { service: { currentConfig: ConfigSchema.parse({}), ...service } as GatewayService });
+  registerProjectsRoutes(app, { service: { currentConfig: ConfigSchema.parse({}), workItems: new WorkItemService(), ...service } as GatewayService });
   return app;
 }
 

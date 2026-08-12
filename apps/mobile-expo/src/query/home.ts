@@ -54,15 +54,24 @@ export type HomeAutomation = {
 
 export type HomeDecision = {
   id: string;
-  kind: 'work_item' | 'goal' | 'connector_approval' | 'goal_evidence';
+  kind: 'agent_judgment' | 'work_item' | 'goal' | 'connector_approval' | 'goal_evidence';
   title: string;
   detail?: string;
-  reason: 'needs_input' | 'in_review' | 'blocked' | 'overdue' | 'due_soon' | 'approval_required';
+  reason: 'needs_input' | 'in_review' | 'blocked' | 'overdue' | 'due_soon' | 'decision_needed' | 'approval_required';
   urgency: 'now' | 'soon';
   href: string;
   projectId?: string;
   projectName?: string;
   updatedAt: number;
+  judgment?: {
+    inboxItemId: string;
+    whyNow: string;
+    impact: string;
+    workDone: string;
+    recommendation: string;
+    confidence: number;
+    decision?: { question: string; options: Array<{ id: string; label: string; consequence: string }> };
+  };
   response?:
     | { kind: 'connector_approval'; approvalId: string }
     | { kind: 'goal_evidence'; goalId: string; requirementId: string };
@@ -100,30 +109,6 @@ export type HomeBriefing = {
   nextScheduled?: HomeAutomation;
 };
 
-export type HomeProactiveInsight = {
-  id: string;
-  watchId: string;
-  runId: string;
-  kind: 'progress' | 'staleness' | 'deadline' | 'intelligence';
-  title: string;
-  summary: string;
-  whyItMatters: string;
-  nextAction: string;
-  evidence: Array<{ label: string; source?: string; publishedAt?: string }>;
-  status: 'unread' | 'read' | 'approved' | 'dismissed';
-  createdAt: number;
-};
-
-export type HomeCalendarSignal = {
-  id: string;
-  focusId: string;
-  focusTitle: string;
-  title: string;
-  startsAt: number;
-  endsAt?: number;
-  sourceInstanceId: string;
-};
-
 type HomeWorkItem = Pick<
   WorkItem,
   'id' | 'projectId' | 'title' | 'nextAction' | 'blockedReason' | 'dueAt' | 'completedAt' | 'updatedAt'
@@ -137,8 +122,6 @@ export interface HomeData {
   briefing: HomeBriefing;
   decisions: HomeDecision[];
   attention: HomeAttention[];
-  proactiveInsights: HomeProactiveInsight[];
-  calendarSignals: HomeCalendarSignal[];
   recentlyOpened: NoteIndexEntry[];
   inboxCount: number;
   pendingTasks: NoteIndexEntry[];
@@ -168,15 +151,19 @@ const decisionResponseSchema = z.discriminatedUnion('kind', [
 
 const decisionSchema = z.object({
   id: z.string(),
-  kind: z.enum(['work_item', 'goal', 'connector_approval', 'goal_evidence']),
+  kind: z.enum(['agent_judgment', 'work_item', 'goal', 'connector_approval', 'goal_evidence']),
   title: z.string(),
   detail: z.string().optional(),
-  reason: z.enum(['needs_input', 'in_review', 'blocked', 'overdue', 'due_soon', 'approval_required']),
+  reason: z.enum(['needs_input', 'in_review', 'blocked', 'overdue', 'due_soon', 'decision_needed', 'approval_required']),
   urgency: z.enum(['now', 'soon']),
   href: z.string(),
   projectId: z.string().optional(),
   projectName: z.string().optional(),
   updatedAt: z.number(),
+  judgment: z.object({
+    inboxItemId: z.string(), whyNow: z.string(), impact: z.string(), workDone: z.string(), recommendation: z.string(), confidence: z.number(),
+    decision: z.object({ question: z.string(), options: z.array(z.object({ id: z.string(), label: z.string(), consequence: z.string() })) }).optional(),
+  }).optional(),
   response: decisionResponseSchema.optional(),
 });
 
@@ -218,32 +205,6 @@ const actionableHomeSchema = z.object({
     updatedAt: z.number(),
     sessionKey: z.string().optional(),
   })),
-  proactiveInsights: z.array(z.object({
-    id: z.string(),
-    watchId: z.string(),
-    runId: z.string(),
-    kind: z.enum(['progress', 'staleness', 'deadline', 'intelligence']),
-    title: z.string(),
-    summary: z.string(),
-    whyItMatters: z.string(),
-    nextAction: z.string(),
-    evidence: z.array(z.object({
-      label: z.string(),
-      source: z.string().optional(),
-      publishedAt: z.string().optional(),
-    })),
-    status: z.enum(['unread', 'read', 'approved', 'dismissed']),
-    createdAt: z.number(),
-  })).optional().default([]),
-  calendarSignals: z.array(z.object({
-    id: z.string(),
-    focusId: z.string(),
-    focusTitle: z.string(),
-    title: z.string(),
-    startsAt: z.number(),
-    endsAt: z.number().optional(),
-    sourceInstanceId: z.string(),
-  })).optional().default([]),
 });
 
 function normalizedSessionName(session: SessionListItem): string | undefined {
@@ -254,11 +215,9 @@ export async function fetchHome(language: Language): Promise<HomeData> {
   const res = await apiFetch(`/api/home?locale=${encodeURIComponent(language)}`);
   if (!res.ok) throw new Error(`Failed to fetch home: ${res.status}`);
   const raw = (await res.json()) as HomeData;
-  const actionable = actionableHomeSchema.parse(raw);
+  actionableHomeSchema.parse(raw);
   return {
     ...raw,
-    proactiveInsights: actionable.proactiveInsights,
-    calendarSignals: actionable.calendarSignals,
     recentSessions: raw.recentSessions.map((session) => ({
       ...session,
       name: normalizedSessionName(session),

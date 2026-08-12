@@ -469,7 +469,7 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
   const { service } = deps;
   const activity = new ActivityService();
   const goals = new GoalService();
-  const workItems = new WorkItemService();
+  const workItems = service.workItems;
 
   authenticated.post('/api/projects', async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;

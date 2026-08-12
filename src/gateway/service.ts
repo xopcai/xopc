@@ -13,7 +13,6 @@ import { loadConfig, saveConfig as writeConfigToDisk } from '../config/index.js'
 import { getWorkspacePath } from '../config/workspace-path-helpers.js';
 import { AutomationService, type AutomationRun } from '../automations/index.js';
 import { onAutomationProductEvent, publishAutomationProductEvent } from '../automations/product-events.js';
-import { FocusService, processFocusMonitorRun, startFocusReconciler } from '../focuses/index.js';
 import { buildNoteAgentContext, NotesService, NotesStore } from '../notes/index.js';
 import { buildWorkflowChildTools } from '../agent/workflow/workflow-child-tools.js';
 import { WorkflowRunService } from '../workflows/service/workflow-run-service.js';
@@ -56,6 +55,15 @@ import { ProjectService } from '../projects/index.js';
 import { LocalAppService } from '../local-apps/index.js';
 import { buildWorkItemAgentContext, WorkItemService } from '../work-items/index.js';
 import { createRuntimeBrowserRecipeService, type BrowserRecipeService } from '../browser/recipes/index.js';
+import {
+  ReadonlyProactiveAgentExecutor,
+  listInsights,
+  ProactiveEventService,
+  ProactiveInboxService,
+  ProactiveInboxWorker,
+  ProactiveScenarioService,
+  ProactiveWorker,
+} from '../proactive/index.js';
 
 import { disposeAllSessionMcpRuntimes } from '../agent/mcp/bundle-mcp-tools.js';
 import { getDefaultAgentId } from '../routing/resolve-route.js';
@@ -178,7 +186,6 @@ export class GatewayService {
   private connectedKnowledgeCoordinator: ConnectedKnowledgeCoordinator | null = null;
   private stopAutomationProductEventBridge: (() => void) | null = null;
   private stopSessionTranscriptAutomationEvents: (() => void) | null = null;
-  private stopFocusReconciler: (() => Promise<void>) | null = null;
 
   /**
    * Webchat agent invocation surface (`runAgent`, `abortAgentRun`, `steer*`,
@@ -205,15 +212,31 @@ export class GatewayService {
 
   /** First-class project grouping surface. */
   readonly projects: ProjectService;
+  readonly workItems: WorkItemService;
 
   /** Local user-created apps, their coder projects, previews, and installs. */
   readonly localApps: LocalAppService;
+
+  /** Unified durable event spine for proactive scenarios. */
+  readonly proactiveScenarios = new ProactiveScenarioService();
+  readonly proactive = new ProactiveEventService(() => this.proactiveScenarios.routes());
+  readonly proactiveInbox = new ProactiveInboxService();
+  readonly proactiveInsights = listInsights;
+  readonly proactiveWorker: ProactiveWorker;
+  readonly proactiveInboxWorker: ProactiveInboxWorker;
 
   constructor(private serviceConfig: GatewayServiceConfig = {}) {
     this.bus = new MessageBus();
     this.configPath = serviceConfig.configPath || resolveConfigPath();
     runBootstrapMigrationsSync(this.configPath);
     this.config = loadConfig(this.configPath);
+    this.proactiveWorker = new ProactiveWorker(new ReadonlyProactiveAgentExecutor(() => this.config));
+    this.proactiveInboxWorker = new ProactiveInboxWorker({
+      deliver: async ({ inboxItem }) => {
+        this.sse.emit('proactive.inbox.created', inboxItem);
+        await this.createMobileNotificationService().deliverGatewayEvent('proactive.inbox.created', inboxItem);
+      },
+    });
     let bootstrapConfigChanged = initializeVoiceDefaults(
       this.config,
       inferProductLanguageFromEnvironment(),
@@ -295,11 +318,12 @@ export class GatewayService {
       config: this.config,
     });
 
-    this.automationService = new AutomationService();
+    this.automationService = new AutomationService(this.proactive);
 
     this.notesService = new NotesService(new NotesStore());
 
-    this.projects = new ProjectService();
+    this.projects = new ProjectService(undefined, this.proactive);
+    this.workItems = new WorkItemService(undefined, this.proactive);
 
     this.localApps = new LocalAppService({
       projects: this.projects,
@@ -396,7 +420,7 @@ export class GatewayService {
       getBrowserRecipeService: () => this.browserRecipes,
       getNotesService: () => this.notesService,
       getProjectService: () => this.projects,
-      getWorkItemService: () => new WorkItemService(),
+      getWorkItemService: () => this.workItems,
       getLocalAppService: () => this.localApps,
       getWorkflowRunService: () => this.createWorkflowRunService(),
       sourceContextResolver: async (binding) => {
@@ -410,7 +434,7 @@ export class GatewayService {
           });
         }
         if (binding.kind === 'work_item') {
-          const item = new WorkItemService().getWorkItem(binding.sourceId);
+          const item = this.workItems.getWorkItem(binding.sourceId);
           return item ? await buildWorkItemAgentContext(item) : null;
         }
         return null;
@@ -743,6 +767,8 @@ export class GatewayService {
     openXopcDatabase();
     this.startTime = Date.now();
     this.running = true;
+    this.proactiveWorker.start();
+    this.proactiveInboxWorker.start();
     prepareConfiguredLocalVoiceModel(this.config);
     this.startupTrace = createGatewayStartupTrace();
     this.readiness.markStarting(this.startTime);
@@ -870,9 +896,6 @@ export class GatewayService {
 
     await trace.measure('automations.initialize', () => this.automationService.initialize());
     await trace.measure('dreaming.reconcile', () => this.reconcileDreamingAutomations());
-    this.stopFocusReconciler = startFocusReconciler(
-      new FocusService(this.automationService),
-    );
 
     await this.notesService.initialize();
 
@@ -1064,6 +1087,9 @@ export class GatewayService {
     log.debug('Stopping gateway service...');
     this.readiness.markStarting();
 
+    await this.proactiveWorker.stop();
+    await this.proactiveInboxWorker.stop();
+
     await stopTailscaleExposure().catch((err) => {
       log.warn({ err }, 'Tailscale exposure shutdown failed');
     });
@@ -1113,8 +1139,6 @@ export class GatewayService {
 
     await this.channelManager.stop();
 
-    await this.stopFocusReconciler?.();
-    this.stopFocusReconciler = null;
     await this.automationService.stop();
     this.stopAutomationProductEventBridge?.();
     this.stopAutomationProductEventBridge = null;
@@ -1625,19 +1649,7 @@ export class GatewayService {
   }
 
   private handleAutomationRunCompleted(run: AutomationRun): void {
-    try {
-      const focusResult = processFocusMonitorRun(run);
-      this.emit('automation.run.completed', { run, silent: focusResult.handled });
-      if (focusResult.handled) {
-        this.emit('focus.run.updated', { automationId: run.automationId, run });
-      }
-      if (focusResult.insight) {
-        this.emit('focus.insight.created', { insight: focusResult.insight });
-      }
-    } catch (err) {
-      log.warn({ err, automationId: run.automationId, runId: run.id }, 'Proactive result processing failed');
-      this.emit('automation.run.completed', { run });
-    }
+    this.emit('automation.run.completed', { run });
   }
 
   private startAutomationProductEventBridge(): void {

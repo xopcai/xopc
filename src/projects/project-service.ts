@@ -1,5 +1,7 @@
 import { changedFieldsFromPatch, emitActivity, systemActivityActor, systemActivitySource } from '../activity/emitter.js';
 import { getSessionMetadata } from '../storage/sqlite/index.js';
+import { runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
+import type { ProactiveSignalPublisher } from '../proactive/events/publisher.js';
 import { ProjectStore } from './project-store.js';
 import { bindGoalToProject, listProjectGoalIds, unbindGoalFromProject } from './goal-bind.js';
 import { bindSessionToProject, listProjectSessionKeys, unbindSessionFromProject } from './session-bind.js';
@@ -25,7 +27,7 @@ export type ProjectSuggestion = {
 };
 
 export class ProjectService {
-  constructor(private readonly store = new ProjectStore()) {}
+  constructor(private readonly store = new ProjectStore(), private readonly signals?: ProactiveSignalPublisher) {}
 
   private listAllProjects(): Project[] {
     const items: Project[] = [];
@@ -159,28 +161,33 @@ export class ProjectService {
       }
       patch.workspaceRoot = workspaceRoot;
     }
-    const before = this.store.get(id);
-    const project = this.store.update(id, patch);
-    const changes = changedFieldsFromPatch(patch as Record<string, unknown>, ['createWorkspaceRoot']);
-    const type = before?.status !== project.status
-      ? 'project.status_changed'
-      : before?.workspaceRoot !== project.workspaceRoot
-        ? 'project.workspace_changed'
-        : 'project.updated';
-    emitActivity({
-      type,
-      primaryObject: { kind: 'project', id: project.id, title: project.name },
-      actor: systemActivityActor(),
-      source: systemActivitySource(),
-      payload: {
-        changes,
-        ...(type === 'project.status_changed' ? { from: before?.status, to: project.status } : {}),
-        ...(type === 'project.workspace_changed' ? { from: before?.workspaceRoot, to: project.workspaceRoot } : {}),
-      },
-      scopes: [{ scopeKind: 'project', scopeId: project.id, reason: 'object_owner' }],
-      nowMs: project.updatedAt,
+    return runSqliteWriteTransaction(() => {
+      const before = this.store.get(id);
+      const project = this.store.update(id, patch);
+      const changes = changedFieldsFromPatch(patch as Record<string, unknown>, ['createWorkspaceRoot']);
+      const type = before?.status !== project.status
+        ? 'project.status_changed'
+        : before?.workspaceRoot !== project.workspaceRoot
+          ? 'project.workspace_changed'
+          : 'project.updated';
+      emitActivity({
+        type,
+        primaryObject: { kind: 'project', id: project.id, title: project.name },
+        actor: systemActivityActor(), source: systemActivitySource(),
+        payload: { changes,
+          ...(type === 'project.status_changed' ? { from: before?.status, to: project.status } : {}),
+          ...(type === 'project.workspace_changed' ? { from: before?.workspaceRoot, to: project.workspaceRoot } : {}) },
+        scopes: [{ scopeKind: 'project', scopeId: project.id, reason: 'object_owner' }], nowMs: project.updatedAt,
+      });
+      this.signals?.publish({
+        type: 'project.updated.v1', schemaVersion: 1,
+        source: { kind: 'projects', id: 'local' }, subject: { kind: 'project', id: project.id }, actor: { kind: 'system' },
+        scope: { workspaceId: 'default', projectId: project.id }, occurredAt: new Date(project.updatedAt).toISOString(),
+        dedupeKey: `project:${project.id}:${project.updatedAt}:${createHash('sha256').update(JSON.stringify(patch)).digest('hex')}`,
+        sensitivity: 'personal', payload: { before, after: project, changes },
+      });
+      return project;
     });
-    return project;
   }
 
   pin(id: string): Project {
@@ -253,3 +260,4 @@ export class ProjectService {
     return suggestions.sort((a, b) => b.score - a.score).slice(0, 5);
   }
 }
+import { createHash } from 'node:crypto';

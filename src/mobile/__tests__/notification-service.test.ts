@@ -36,6 +36,19 @@ describe('mobileNotificationEventFromGatewayEvent', () => {
     });
   });
 
+  it('maps a proactive insight to the decision inbox', () => {
+    expect(mobileNotificationEventFromGatewayEvent('proactive.inbox.created', {
+      id: 'inbox-1',
+      insight: { id: 'insight-1', title: 'Delivery risk needs a decision', summary: 'Two blockers now threaten the release.', urgency: 'high' },
+    })).toMatchObject({
+      type: 'proactive.insight',
+      entity: { kind: 'insight', id: 'insight-1' },
+      priority: 'high',
+      deepLink: '/inbox?item=inbox-1',
+      payload: { route: '/inbox?item=inbox-1', inboxItemId: 'inbox-1' },
+    });
+  });
+
   it('ignores unrelated events and invalid status payloads', () => {
     expect(mobileNotificationEventFromGatewayEvent('session.updated', {})).toBeNull();
     expect(mobileNotificationEventFromGatewayEvent('goal.status.updated', {
@@ -44,7 +57,7 @@ describe('mobileNotificationEventFromGatewayEvent', () => {
     })).toBeNull();
     expect(mobileNotificationEventFromGatewayEvent('automation.run.completed', {
       silent: true,
-      run: { id: 'run-2', automationId: 'focus-1', automationName: 'Focus watch', status: 'succeeded' },
+      run: { id: 'run-2', automationId: 'automation-1', automationName: 'Silent run', status: 'succeeded' },
     })).toBeNull();
   });
 });

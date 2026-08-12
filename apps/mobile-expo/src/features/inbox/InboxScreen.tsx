@@ -1,4 +1,4 @@
-import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
@@ -25,7 +25,9 @@ import { AttachmentFileError, pickAttachmentFromSource, type AttachmentPickSourc
 import type { ComposerAttachment } from '../chat/composer.types';
 import { deleteNote, fetchNotes, captureNote, updateNote, type NoteIndexEntry } from '../../query/notes';
 import { queryKeys } from '../../query/keys';
+import { decideAgentJudgment, fetchAgentJudgments, transitionAgentJudgment, type AgentJudgment } from '../../query/judgments';
 import { useGatewayConfigured } from '../../query/sessions';
+import { usePreferencesStore } from '../../stores/preferences-store';
 import { invalidateHomeFeed } from '../../query/workspace-sync';
 import { NOTE_KIND_ICONS } from '../notes/note-list-display';
 import { radii, spacing, typography, useTheme, FLOATING_BOTTOM_OFFSET, floatingBottomPadding } from '../../theme';
@@ -54,7 +56,7 @@ const INBOX_ITEM_HEIGHT = 78;
 
 export function InboxScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ capture?: string }>();
+  const params = useLocalSearchParams<{ capture?: string; item?: string }>();
   const queryClient = useQueryClient();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -64,6 +66,7 @@ export function InboxScreen() {
   const cm = m.chat;
   const li = m.listInteraction;
   const configured = useGatewayConfigured();
+  const language = usePreferencesStore((state) => state.language);
   const [captureText, setCaptureText] = useState('');
   const [snackMsg, setSnackMsg] = useState('');
   const [showBatchDelete, setShowBatchDelete] = useState(false);
@@ -90,6 +93,18 @@ export function InboxScreen() {
     initialPageParam: 0,
     getNextPageParam: (lastPage) => lastPage.hasMore ? lastPage.offset + lastPage.limit : undefined,
     enabled: configured,
+  });
+  const judgmentsQuery = useQuery({ queryKey: queryKeys.judgments, queryFn: fetchAgentJudgments, enabled: configured });
+  const judgmentMutation = useMutation({
+    mutationFn: async (input: { itemId: string; choice?: string; action?: 'snoozed' | 'resolved' }) => {
+      if (input.choice) return decideAgentJudgment(input.itemId, input.choice);
+      return transitionAgentJudgment(input.itemId, input.action!);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.judgments });
+      invalidateHomeFeed(queryClient);
+    },
+    onError: (error) => setSnackMsg(error instanceof Error ? error.message : pm.actionFailed),
   });
 
   const items = useMemo(
@@ -394,16 +409,26 @@ export function InboxScreen() {
               refreshing={inboxQuery.isFetching && !inboxQuery.isLoading && !inboxQuery.isFetchingNextPage}
               onRefresh={() => {
                 void inboxQuery.refetch();
+                void judgmentsQuery.refetch();
               }}
             />
           }
           ListFooterComponent={inboxQuery.isFetchingNextPage ? <View style={styles.footerLoader}><Text style={{ color: colors.text.tertiary }}>{m.common.loading}</Text></View> : null}
-          ListHeaderComponent={
-            <WorkspaceSyncStatusCard
-              onChanged={invalidateInbox}
-              onToast={setSnackMsg}
-            />
-          }
+          ListHeaderComponent={<>
+            {(judgmentsQuery.data?.length ?? 0) > 0 ? <View style={styles.judgmentSection}>
+              <Text style={[styles.judgmentSectionTitle, { color: colors.text.primary }]}>{language === 'zh' ? '需要你判断' : 'Needs your decision'}</Text>
+              {judgmentsQuery.data!.map((judgment) => <AgentJudgmentCard
+                key={judgment.id}
+                item={judgment}
+                highlighted={params.item === judgment.id}
+                language={language}
+                busy={judgmentMutation.isPending && judgmentMutation.variables?.itemId === judgment.id}
+                onChoice={(choice) => judgmentMutation.mutate({ itemId: judgment.id, choice })}
+                onAction={(action) => judgmentMutation.mutate({ itemId: judgment.id, action })}
+              />)}
+            </View> : null}
+            <WorkspaceSyncStatusCard onChanged={invalidateInbox} onToast={setSnackMsg} />
+          </>}
           ListEmptyComponent={
             <View style={styles.emptyWrap}>
               <Icon source="tray" size={42} color={colors.text.tertiary} />
@@ -468,6 +493,27 @@ export function InboxScreen() {
   );
 }
 
+function AgentJudgmentCard({ item, highlighted, language, busy, onChoice, onAction }: {
+  item: AgentJudgment;
+  highlighted: boolean;
+  language: 'en' | 'zh';
+  busy: boolean;
+  onChoice: (choice: string) => void;
+  onAction: (action: 'snoozed' | 'resolved') => void;
+}) {
+  const { colors } = useTheme();
+  return <View style={[styles.judgmentCard, { backgroundColor: colors.surface.panel, borderColor: highlighted ? colors.accent.primary : colors.border.subtle }]}>
+    <View style={styles.judgmentTitleRow}><Icon source="creation-outline" size={20} color={colors.accent.primary} /><Text style={[styles.judgmentTitle, { color: colors.text.primary }]}>{item.insight.title}</Text></View>
+    <Text style={[styles.judgmentSummary, { color: colors.text.secondary }]}>{item.insight.summary}</Text>
+    <Text style={[styles.judgmentLabel, { color: colors.text.tertiary }]}>{language === 'zh' ? 'AI 已检查' : 'AI checked'}</Text>
+    <Text style={[styles.judgmentSummary, { color: colors.text.secondary }]}>{item.insight.workDone}</Text>
+    <Text style={[styles.judgmentLabel, { color: colors.text.tertiary }]}>{language === 'zh' ? '建议' : 'Recommendation'}</Text>
+    <Text style={[styles.judgmentSummary, { color: colors.text.primary }]}>{item.insight.recommendation}</Text>
+    {item.insight.decision ? <View style={styles.judgmentOptions}><Text style={[styles.judgmentQuestion, { color: colors.text.primary }]}>{item.insight.decision.question}</Text>{item.insight.decision.options.map((option) => <Pressable key={option.id} disabled={busy} onPress={() => onChoice(option.id)} style={[styles.judgmentOption, { backgroundColor: colors.accent.soft }]}><Text style={{ color: colors.accent.primary }}>{option.label}</Text><Text style={[styles.judgmentConsequence, { color: colors.text.secondary }]}>{option.consequence}</Text></Pressable>)}</View> : null}
+    <View style={styles.judgmentActions}><Pressable disabled={busy} onPress={() => onAction('snoozed')}><Text style={{ color: colors.text.secondary }}>{language === 'zh' ? '明天再看' : 'Tomorrow'}</Text></Pressable><Pressable disabled={busy} onPress={() => onAction('resolved')}><Text style={{ color: colors.text.secondary }}>{language === 'zh' ? '忽略' : 'Dismiss'}</Text></Pressable></View>
+  </View>;
+}
+
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   bottomBar: {
@@ -476,6 +522,18 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xs,
   },
   listContent: { paddingTop: spacing.sm, paddingBottom: spacing.lg, gap: 0 },
+  judgmentSection: { marginBottom: spacing.md, gap: spacing.sm },
+  judgmentSectionTitle: { ...typography.heading, marginHorizontal: spacing.content },
+  judgmentCard: { marginHorizontal: spacing.content, borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.lg, padding: spacing.md, gap: spacing.xs },
+  judgmentTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  judgmentTitle: { ...typography.body, fontWeight: '700', flex: 1 },
+  judgmentSummary: { ...typography.label, lineHeight: 19 },
+  judgmentLabel: { ...typography.caption, marginTop: spacing.xs },
+  judgmentQuestion: { ...typography.body, fontWeight: '600' },
+  judgmentOptions: { gap: spacing.xs, marginTop: spacing.sm },
+  judgmentOption: { borderRadius: radii.md, padding: spacing.sm, gap: 2 },
+  judgmentConsequence: { ...typography.caption },
+  judgmentActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.lg, marginTop: spacing.sm },
   itemCard: {
     marginHorizontal: spacing.content,
     height: INBOX_ITEM_HEIGHT,

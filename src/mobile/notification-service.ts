@@ -31,6 +31,7 @@ function shouldDeliver(type: MobileNotificationEventType, preferences: {
   if (type === 'goal.needs_input') return preferences.needsInput;
   if (type === 'goal.blocked') return preferences.failed;
   if (type === 'automation.failed') return preferences.automationFailed;
+  if (type === 'proactive.insight') return preferences.needsInput;
   return preferences.completed;
 }
 
@@ -78,6 +79,17 @@ function automationEvent(payload: unknown): Omit<MobileActivityEvent, 'id' | 'cr
   };
 }
 
+function proactiveInsightEvent(payload: unknown): Omit<MobileActivityEvent, 'id' | 'createdAt'> | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const item = payload as { id?: unknown; insight?: { id?: unknown; title?: unknown; summary?: unknown; urgency?: unknown } };
+  if (typeof item.id !== 'string' || typeof item.insight?.id !== 'string' || typeof item.insight.title !== 'string') return null;
+  const route = `/inbox?item=${encodeURIComponent(item.id)}`;
+  return { type: 'proactive.insight', entity: { kind: 'insight', id: item.insight.id },
+    priority: item.insight.urgency === 'high' || item.insight.urgency === 'critical' ? 'high' : 'normal',
+    title: item.insight.title.slice(0, 120), body: typeof item.insight.summary === 'string' ? item.insight.summary.slice(0, 180) : undefined,
+    deepLink: route, payload: { route, inboxItemId: item.id, eventType: 'proactive.insight' } };
+}
+
 /** Converts gateway domain events into a portable mobile activity and push payload. */
 export function mobileNotificationEventFromGatewayEvent(
   type: string,
@@ -85,6 +97,7 @@ export function mobileNotificationEventFromGatewayEvent(
 ): Omit<MobileActivityEvent, 'id' | 'createdAt'> | null {
   if (type === 'goal.status.updated') return goalEvent(payload);
   if (type === 'automation.run.completed') return automationEvent(payload);
+  if (type === 'proactive.inbox.created') return proactiveInsightEvent(payload);
   return null;
 }
 
@@ -117,27 +130,23 @@ export class MobileNotificationService {
   private readonly sent = new Set<string>();
 
   handleGatewayEvent(type: string, payload: unknown): void {
+    void this.deliverGatewayEvent(type, payload).catch((err) => {
+      log.warn({ err, eventType: type }, 'Mobile notification delivery failed');
+    });
+  }
+
+  async deliverGatewayEvent(type: string, payload: unknown): Promise<void> {
     const event = mobileNotificationEventFromGatewayEvent(type, payload);
     if (!event) return;
     const dedupeKey = `${event.type}:${event.entity.kind}:${event.entity.id}:${JSON.stringify(event.payload)}`;
     if (this.sent.has(dedupeKey)) return;
     this.sent.add(dedupeKey);
-    void this.deliver(event)
-      .catch((err) => {
-        log.warn({ err, eventType: event.type, entityId: event.entity.id }, 'Mobile notification delivery failed');
-      })
-      .finally(() => this.sent.delete(dedupeKey));
+    try { await this.deliver(event); } finally { this.sent.delete(dedupeKey); }
   }
 
   private async deliver(input: Omit<MobileActivityEvent, 'id' | 'createdAt'>): Promise<void> {
     const event = createMobileActivityEvent(input);
     const devices = listEnabledMobileDevices().filter((device) => shouldDeliver(event.type, device.preferences));
-    await Promise.all(devices.map(async (device) => {
-      try {
-        await sendExpoPush(device.pushToken, event);
-      } catch (err) {
-        log.warn({ err, eventId: event.id, deviceId: device.id }, 'Mobile push request failed');
-      }
-    }));
+    await Promise.all(devices.map((device) => sendExpoPush(device.pushToken, event)));
   }
 }

@@ -6,7 +6,8 @@ export type MobileNotificationEventType =
   | 'goal.blocked'
   | 'goal.completed'
   | 'automation.failed'
-  | 'automation.completed';
+  | 'automation.completed'
+  | 'proactive.insight';
 
 export type MobileNotificationPreferences = {
   needsInput: boolean;
@@ -31,7 +32,7 @@ export type MobileDevice = {
 export type MobileActivityEvent = {
   id: string;
   type: MobileNotificationEventType;
-  entity: { kind: 'goal' | 'automation'; id: string };
+  entity: { kind: 'goal' | 'automation' | 'insight'; id: string };
   priority: MobileNotificationPriority;
   title: string;
   body?: string;
