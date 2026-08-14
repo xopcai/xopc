@@ -1,4 +1,5 @@
 import {
+  AlertTriangle,
   ArrowLeft,
   BriefcaseBusiness,
   CheckCircle2,
@@ -19,6 +20,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { Select, SelectOption } from '@/components/ui/popover-select';
+import { Skeleton } from '@/components/ui/skeleton';
 import { fetchProject, type ProjectWithDetails } from '@/features/projects/api';
 import {
   createWorkItemGoal,
@@ -72,11 +74,11 @@ function linkHref(link: NonNullable<WorkItem['links']>[number]): string {
   return '#';
 }
 
-function MetaRow({ label, value }: { label: string; value?: string | null }) {
+function PropertyRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="grid gap-1">
-      <dt className="text-xs font-medium text-fg-subtle">{label}</dt>
-      <dd className="min-w-0 break-words text-sm text-fg">{value || '-'}</dd>
+    <div className="grid min-w-0 grid-cols-[5rem_minmax(0,1fr)] items-start gap-3 py-2.5 first:pt-0 last:pb-0">
+      <dt className="text-xs leading-5 text-fg-subtle">{label}</dt>
+      <dd className="min-w-0 overflow-hidden break-words text-sm leading-5 text-fg">{children}</dd>
     </div>
   );
 }
@@ -84,16 +86,17 @@ function MetaRow({ label, value }: { label: string; value?: string | null }) {
 function ActivityList({ events, t }: { events: WorkItemEvent[]; t: WorkItemsMessages }) {
   if (!events.length) {
     return (
-      <div className="rounded-lg bg-surface-panel px-4 py-8 text-center text-sm text-fg-muted shadow-surface">
+      <div className="rounded-lg border border-edge-subtle bg-surface-panel px-4 py-8 text-center text-sm text-fg-muted">
         {t.detail.noActivity}
       </div>
     );
   }
   return (
-    <div className="grid gap-3">
+    <div className="relative grid gap-0 before:absolute before:bottom-3 before:left-[5px] before:top-3 before:w-px before:bg-edge">
       {events.map((event) => (
-        <article key={event.id} className="rounded-lg bg-surface-panel px-4 py-3 shadow-surface">
-          <div className="flex items-center justify-between gap-3">
+        <article key={event.id} className="relative grid grid-cols-[0.75rem_minmax(0,1fr)] gap-3 py-3 first:pt-1">
+          <span className="relative z-10 mt-1.5 size-3 rounded-full border-2 border-surface-base bg-fg-disabled" aria-hidden />
+          <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5">
             <h3 className="text-sm font-medium text-fg">{t.eventTypes[event.type] ?? event.type}</h3>
             <time className="shrink-0 text-xs text-fg-subtle">{formatTime(event.createdAt)}</time>
           </div>
@@ -306,25 +309,11 @@ export function WorkItemDetailPage() {
   ), [item, project, workflowDefinitions]);
 
   const headerEnd = useMemo(() => (
-    <>
-      <Button type="button" variant="ghost" className="h-8 rounded-lg px-2.5 text-xs" onClick={() => void load()}>
-        <RefreshCw className="size-3.5" aria-hidden />
-        <span className="hidden sm:inline">{t.refreshShort}</span>
-      </Button>
-      {item ? (
-        <>
-          <Button type="button" variant="secondary" className="h-8 rounded-lg px-2.5 text-xs" disabled={busy} onClick={handleStartChat}>
-            <MessageSquarePlus className="size-3.5" aria-hidden />
-            <span className="hidden md:inline">{t.detail.startChat}</span>
-          </Button>
-          <Button type="button" variant="secondary" className="h-8 rounded-lg px-2.5 text-xs" disabled={busy} onClick={handleCreateGoal}>
-            <Target className="size-3.5" aria-hidden />
-            <span className="hidden md:inline">{t.detail.createGoal}</span>
-          </Button>
-        </>
-      ) : null}
-    </>
-  ), [busy, handleCreateGoal, handleStartChat, item, load, t.detail.createGoal, t.detail.startChat, t.refreshShort]);
+    <Button type="button" variant="ghost" className="h-8 rounded-lg px-2.5 text-xs" onClick={() => void load()}>
+      <RefreshCw className="size-3.5" aria-hidden />
+      <span className="hidden sm:inline">{t.refreshShort}</span>
+    </Button>
+  ), [load, t.refreshShort]);
 
   useLayoutEffect(() => {
     setPageHeader({
@@ -341,32 +330,30 @@ export function WorkItemDetailPage() {
         <div className="min-w-0">
           <div className="flex min-w-0 items-center gap-2">
             <BriefcaseBusiness className="size-3.5 shrink-0 text-accent-fg" aria-hidden />
-            <h1 className="truncate text-base font-semibold tracking-tight text-fg">
-              {item?.title ?? (loading ? t.detail.loading : t.detail.notFound)}
-            </h1>
+            <span className="truncate text-sm font-medium text-fg">{project?.name || item?.projectId || t.detail.loading}</span>
           </div>
-          {item ? (
-            <p className="truncate text-xs text-fg-muted">
-              {t.statuses[item.status]} · {t.priorities[item.priority]} · {project?.name || item.projectId} · {t.updated}: {formatTime(item.updatedAt)}
-            </p>
-          ) : null}
+          <p className="truncate text-xs text-fg-muted">{t.detail.description}</p>
         </div>
       ),
       end: headerEnd,
     });
     return () => clearPageHeader();
-  }, [clearPageHeader, headerEnd, item, loading, project?.name, projectHref, setPageHeader, t, project]);
+  }, [clearPageHeader, headerEnd, item?.projectId, loading, project?.name, projectHref, setPageHeader, t]);
 
   if (loading) {
     return (
-      <main className="mx-auto flex w-full max-w-[var(--max-width-app-main)] flex-1 flex-col px-3 py-6 sm:px-5 xl:px-6" aria-busy>
-        <div className="h-8 w-40 animate-pulse rounded-md bg-surface-hover" />
-        <div className="mt-5 h-44 animate-pulse rounded-xl bg-surface-hover" />
+      <main className="mx-auto grid w-full max-w-6xl flex-1 gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[minmax(0,1fr)_17rem] lg:px-8" aria-busy>
+        <div className="grid content-start gap-5">
+          <Skeleton className="h-7 w-3/4" />
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-48 w-full" />
+        </div>
+        <Skeleton className="hidden h-72 w-full lg:block" />
       </main>
     );
   }
 
-  if (error || !item) {
+  if (!item) {
     return (
       <main className="mx-auto flex w-full max-w-[var(--max-width-app-main)] flex-1 flex-col px-3 py-6 sm:px-5 xl:px-6">
         <Link to="/projects" className="inline-flex items-center gap-1 text-sm font-medium text-accent hover:text-accent-fg">
@@ -381,198 +368,177 @@ export function WorkItemDetailPage() {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-[var(--max-width-app-main)] flex-1 flex-col px-3 py-5 sm:px-5 xl:px-6">
-      <section className="rounded-lg bg-surface-panel p-4 shadow-surface sm:px-5">
-        <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex min-w-0 items-center gap-2">
-              <BriefcaseBusiness className="size-4 shrink-0 text-accent-fg" aria-hidden />
-              <h1 className="min-w-0 break-words text-lg font-semibold leading-7 text-fg">{item.title}</h1>
+    <main className="mx-auto grid w-full max-w-6xl flex-1 content-start gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[minmax(0,1fr)_17rem] lg:px-8 lg:py-8">
+      <article className="min-w-0 rounded-lg border border-edge-subtle bg-surface-panel p-5 shadow-surface sm:p-7 lg:col-start-1 lg:row-start-1">
+        {error ? (
+          <div className="mb-5 rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-danger">{error}</div>
+        ) : null}
+
+        <h1 className="break-words text-xl font-semibold tracking-tight text-fg">{item.title}</h1>
+
+        <section className="mt-7">
+          <h2 className="text-xs font-medium text-fg-subtle">{t.create.descriptionLabel}</h2>
+          <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-fg-muted">
+            {item.description || t.detail.noDescription}
+          </p>
+        </section>
+
+        {item.blockedReason ? (
+          <section className="mt-7 rounded-lg border border-red-500/20 bg-red-500/[0.06] px-4 py-3.5">
+            <div className="flex items-center gap-2 text-sm font-medium text-red-700 dark:text-red-300">
+              <AlertTriangle className="size-4 shrink-0" aria-hidden />
+              <h2>{t.blockedReason}</h2>
             </div>
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-              <span className={cn('rounded-full px-2 py-0.5 font-medium', statusTone(item.status))}>
-                {t.statuses[item.status]}
-              </span>
-              <span className="rounded-full bg-surface-muted px-2 py-0.5 text-fg-muted">
-                {t.priorities[item.priority]}
-              </span>
-              {item.archivedAt ? <span className="rounded-full bg-surface-muted px-2 py-0.5 text-fg-muted">{t.detail.archived}</span> : null}
-            </div>
-          </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <Button type="button" variant="secondary" className="h-8 rounded-lg px-2.5 text-xs" disabled={busy} onClick={handleStartChat}>
-              <MessageSquarePlus className="size-3.5" aria-hidden />
+            <p className="mt-2 pl-6 text-sm leading-relaxed text-fg">{item.blockedReason}</p>
+          </section>
+        ) : null}
+
+        <section className="mt-7 border-t border-edge-subtle pt-6">
+          <h2 className="text-sm font-semibold text-fg">{t.nextAction}</h2>
+          <p className="mt-2 text-base leading-relaxed text-fg">{item.nextAction || t.noNextAction}</p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button type="button" variant="primary" className="h-9 rounded-lg px-3 text-sm" disabled={busy} onClick={handleStartChat}>
+              <MessageSquarePlus className="size-4" aria-hidden />
               {t.detail.startChat}
             </Button>
-            <Button type="button" variant="secondary" className="h-8 rounded-lg px-2.5 text-xs" disabled={busy} onClick={handleCreateGoal}>
-              <Target className="size-3.5" aria-hidden />
+            <Button type="button" variant="secondary" className="h-9 rounded-lg px-3 text-sm" disabled={busy} onClick={handleCreateGoal}>
+              <Target className="size-4" aria-hidden />
               {t.detail.createGoal}
             </Button>
           </div>
-        </div>
-
-        <dl className="mt-5 grid gap-4 border-t border-edge pt-4 sm:grid-cols-2">
-          <MetaRow label={t.create.descriptionLabel} value={item.description || t.detail.noDescription} />
-          <MetaRow label={t.nextAction} value={item.nextAction || t.noNextAction} />
-          <MetaRow label={t.blockedReason} value={item.blockedReason || t.detail.noBlockedReason} />
-          <MetaRow label={t.updated} value={formatTime(item.updatedAt)} />
-        </dl>
-      </section>
-
-      <div className="mt-4 grid min-h-0 gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
-        <section className="min-w-0">
-          <div className="mb-2 flex items-center gap-2">
-            <FileText className="size-4 text-fg-muted" aria-hidden />
-            <h2 className="text-sm font-semibold text-fg">{t.detail.activity}</h2>
-          </div>
-          <ActivityList events={events} t={t} />
         </section>
 
-        <aside className="grid content-start gap-4">
-          <section className="rounded-lg bg-surface-panel px-4 py-3 shadow-surface">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="inline-flex min-w-0 items-center gap-2 text-sm font-semibold text-fg">
-                <GitBranch className="size-4 shrink-0 text-fg-muted" aria-hidden />
-                <span className="truncate">{t.detail.workflowTitle}</span>
-              </h2>
-            </div>
-            <p className="mt-1 text-xs leading-5 text-fg-muted">{t.detail.workflowHint}</p>
-            <div className="mt-3 grid gap-2">
-              <label className="grid gap-1 text-xs font-medium text-fg-subtle">
-                {t.detail.workflowTemplate}
-                <Select
-                  className="h-9 rounded-md border border-edge bg-surface-base px-2 text-sm font-normal text-fg outline-none focus:border-accent"
-                  value={selectedWorkflowId}
-                  disabled={busy || workflowDefinitions.length === 0}
-                  onChange={(event) => setSelectedWorkflowId(event.target.value)}
-                >
-                  {workflowDefinitions.length === 0 ? <SelectOption value="">{t.detail.noWorkflowTemplates}</SelectOption> : null}
-                  {workflowDefinitions.map((definition) => (
-                    <SelectOption key={definition.id} value={definition.id}>{definition.title}</SelectOption>
-                  ))}
-                </Select>
-              </label>
-              {recommendedWorkflowDefinitions.length ? (
-                <div className="grid gap-1">
-                  <div className="text-xs font-medium text-fg-subtle">{t.detail.recommendedWorkflows}</div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {recommendedWorkflowDefinitions.map((definition) => (
-                      <button
-                        key={definition.id}
-                        type="button"
-                        className={cn(
-                          'min-w-0 rounded-md border px-2 py-1 text-left text-xs transition-colors',
-                          selectedWorkflowId === definition.id
-                            ? 'border-accent bg-accent-soft text-accent-fg'
-                            : 'border-edge bg-surface-base text-fg-muted hover:bg-surface-hover hover:text-fg',
-                        )}
-                        disabled={busy}
-                        onClick={() => setSelectedWorkflowId(definition.id)}
-                      >
-                        <span className="block max-w-48 truncate">{definition.title}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-              <label className="grid gap-1 text-xs font-medium text-fg-subtle">
-                {t.detail.workflowGoal}
-                <textarea
-                  className="min-h-20 resize-y rounded-md border border-edge bg-surface-base p-2 text-sm font-normal text-fg outline-none focus:border-accent"
-                  value={workflowGoal}
-                  disabled={busy}
-                  onChange={(event) => setWorkflowGoal(event.target.value)}
-                />
-              </label>
-              <Button
-                type="button"
-                variant="primary"
-                className="h-9 rounded-lg px-3 text-xs"
-                disabled={busy || !selectedWorkflowId}
-                onClick={handleStartWorkflow}
+        <details className="group mt-6 border-t border-edge-subtle pt-5">
+          <summary className="flex cursor-pointer list-none items-start gap-3 rounded-md px-1 py-1 text-left hover:text-fg [&::-webkit-details-marker]:hidden">
+            <GitBranch className="mt-0.5 size-4 shrink-0 text-fg-muted" aria-hidden />
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-medium text-fg">{t.detail.workflowTitle}</span>
+              <span className="mt-0.5 block text-xs leading-5 text-fg-muted">{t.detail.workflowHint}</span>
+            </span>
+            <span className="mt-0.5 text-xs text-fg-subtle transition-transform group-open:rotate-180" aria-hidden>⌄</span>
+          </summary>
+          <div className="ml-7 mt-4 grid max-w-xl gap-3">
+            <label className="grid gap-1.5 text-xs font-medium text-fg-subtle">
+              {t.detail.workflowTemplate}
+              <Select
+                className="h-9 rounded-md border border-edge bg-surface-base px-2 text-sm font-normal text-fg outline-none focus:border-accent"
+                value={selectedWorkflowId}
+                disabled={busy || workflowDefinitions.length === 0}
+                onChange={(event) => setSelectedWorkflowId(event.target.value)}
               >
-                <Rocket className="size-3.5" aria-hidden />
+                {workflowDefinitions.length === 0 ? <SelectOption value="">{t.detail.noWorkflowTemplates}</SelectOption> : null}
+                {workflowDefinitions.map((definition) => (
+                  <SelectOption key={definition.id} value={definition.id}>{definition.title}</SelectOption>
+                ))}
+              </Select>
+            </label>
+            {recommendedWorkflowDefinitions.length ? (
+              <p className="text-xs text-fg-muted">
+                {t.detail.recommendedWorkflows}: {recommendedWorkflowDefinitions.map((definition) => definition.title).join(' · ')}
+              </p>
+            ) : null}
+            <label className="grid gap-1.5 text-xs font-medium text-fg-subtle">
+              {t.detail.workflowGoal}
+              <textarea
+                className="min-h-20 resize-y rounded-md border border-edge bg-surface-base p-2.5 text-sm font-normal leading-relaxed text-fg outline-none focus:border-accent"
+                value={workflowGoal}
+                disabled={busy}
+                onChange={(event) => setWorkflowGoal(event.target.value)}
+              />
+            </label>
+            <div>
+              <Button type="button" variant="secondary" className="h-9 rounded-lg px-3 text-sm" disabled={busy || !selectedWorkflowId} onClick={handleStartWorkflow}>
+                <Rocket className="size-4" aria-hidden />
                 {t.detail.startWorkflow}
               </Button>
-              {!workflowDefinitions.length ? <p className="text-xs text-fg-muted">{t.detail.noWorkflowTemplates}</p> : null}
             </div>
-          </section>
-          <section className="rounded-lg bg-surface-panel px-4 py-3 shadow-surface">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="inline-flex min-w-0 items-center gap-2 text-sm font-semibold text-fg">
-                <Paperclip className="size-4 shrink-0 text-fg-muted" aria-hidden />
-                <span className="truncate">{t.attachments.title}</span>
-              </h2>
-              <Button type="button" variant="secondary" className="h-8 rounded-lg px-2.5 text-xs" disabled={busy} onClick={() => attachmentInputRef.current?.click()}>
-                <Plus className="size-3.5" aria-hidden />
-                {t.attachments.add}
-              </Button>
-              <input
-                ref={attachmentInputRef}
-                type="file"
-                multiple
-                className="hidden"
-                onChange={(event) => {
-                  void handleAddAttachments(Array.from(event.target.files ?? []));
-                  event.currentTarget.value = '';
-                }}
-              />
-            </div>
-            <div className="mt-3 grid gap-2">
-              {item.attachments?.length ? item.attachments.map((attachment) => (
-                <div key={attachment.id} className="flex min-w-0 items-center gap-2 rounded-md border border-edge bg-surface-base p-2 text-sm">
-                  <FileText className="size-4 shrink-0 text-fg-muted" aria-hidden />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate font-medium text-fg">{attachment.fileName}</div>
-                    <div className="truncate text-xs text-fg-subtle">{attachment.mimeType} · {formatFileSize(attachment.size)}</div>
-                  </div>
-                  <button
-                    type="button"
-                    className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-fg-muted hover:bg-surface-hover hover:text-fg"
-                    title={t.attachments.download}
-                    aria-label={t.attachments.download}
-                    disabled={busy}
-                    onClick={() => void handleDownloadAttachment(attachment)}
-                  >
-                    <Download className="size-3.5" aria-hidden />
-                  </button>
-                  <button
-                    type="button"
-                    className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-fg-muted hover:bg-surface-hover hover:text-danger"
-                    title={t.attachments.remove}
-                    aria-label={t.attachments.remove}
-                    disabled={busy}
-                    onClick={() => void handleRemoveAttachment(attachment)}
-                  >
-                    <Trash2 className="size-3.5" aria-hidden />
-                  </button>
+            {!workflowDefinitions.length ? <p className="text-xs text-fg-muted">{t.detail.noWorkflowTemplates}</p> : null}
+          </div>
+        </details>
+      </article>
+
+      <aside className="min-w-0 self-start rounded-lg border border-edge-subtle bg-surface-panel px-4 py-4 lg:sticky lg:top-20 lg:col-start-2 lg:row-span-2 lg:row-start-1">
+        <section>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-fg-subtle">{t.detail.properties}</h2>
+          <dl className="mt-3 divide-y divide-edge-subtle">
+            <PropertyRow label={t.detail.status}>
+              <span className={cn('inline-flex rounded-full px-2 py-0.5 text-xs font-medium', statusTone(item.status))}>{t.statuses[item.status]}</span>
+            </PropertyRow>
+            <PropertyRow label={t.create.priorityLabel}>{t.priorities[item.priority]}</PropertyRow>
+            <PropertyRow label={t.detail.project}>
+              <Link to={projectHref} className="flex w-full min-w-0 max-w-full items-center gap-1.5 overflow-hidden font-medium text-accent hover:text-accent-fg">
+                <CheckCircle2 className="size-3.5 shrink-0" aria-hidden />
+                <span className="block min-w-0 flex-1 truncate">{project?.name || item.projectId}</span>
+              </Link>
+            </PropertyRow>
+            <PropertyRow label={t.updated}>{formatTime(item.updatedAt)}</PropertyRow>
+            {item.archivedAt ? <PropertyRow label={t.detail.archived}>{formatTime(item.archivedAt)}</PropertyRow> : null}
+          </dl>
+        </section>
+
+        <section className="mt-5 border-t border-edge-subtle pt-4">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="inline-flex min-w-0 items-center gap-2 text-sm font-semibold text-fg">
+              <Paperclip className="size-4 shrink-0 text-fg-muted" aria-hidden />
+              <span className="truncate">{t.attachments.title}</span>
+              {item.attachments?.length ? <span className="text-xs font-normal text-fg-subtle">{item.attachments.length}</span> : null}
+            </h2>
+            <button type="button" className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-fg-muted hover:bg-surface-hover hover:text-fg" disabled={busy} title={t.attachments.add} aria-label={t.attachments.add} onClick={() => attachmentInputRef.current?.click()}>
+              <Plus className="size-4" aria-hidden />
+            </button>
+            <input
+              ref={attachmentInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={(event) => {
+                void handleAddAttachments(Array.from(event.target.files ?? []));
+                event.currentTarget.value = '';
+              }}
+            />
+          </div>
+          <div className="mt-3 grid gap-2">
+            {item.attachments?.length ? item.attachments.map((attachment) => (
+              <div key={attachment.id} className="flex min-w-0 items-center gap-2 rounded-md bg-surface-base px-2 py-2 text-sm">
+                <FileText className="size-4 shrink-0 text-fg-muted" aria-hidden />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-medium text-fg">{attachment.fileName}</div>
+                  <div className="truncate text-xs text-fg-subtle">{formatFileSize(attachment.size)}</div>
                 </div>
-              )) : <p className="text-sm text-fg-muted">{t.attachments.empty}</p>}
-            </div>
-          </section>
-          <section className="rounded-lg bg-surface-panel px-4 py-3 shadow-surface">
-            <h2 className="text-sm font-semibold text-fg">{t.detail.links}</h2>
-            <div className="mt-3 grid gap-1 text-sm">
-              {item.links?.length ? item.links.map((link) => (
-                <Link key={link.id} to={linkHref(link)} className="flex min-w-0 items-center justify-between gap-3 rounded-md px-2 py-1.5 hover:bg-surface-hover">
-                  <span className="min-w-0 truncate text-fg">{link.title || link.targetId}</span>
-                  <span className="inline-flex shrink-0 items-center gap-1 text-xs text-fg-muted">
-                    {t.linkKinds[link.kind]}
-                    <ExternalLink className="size-3.5" aria-hidden />
-                  </span>
-                </Link>
-              )) : <p className="text-sm text-fg-muted">{t.detail.noLinks}</p>}
-            </div>
-          </section>
-          <section className="rounded-lg bg-surface-panel px-4 py-3 shadow-surface">
-            <h2 className="text-sm font-semibold text-fg">{t.detail.project}</h2>
-            <Link to={projectHref} className="mt-2 inline-flex min-w-0 items-center gap-2 text-sm font-medium text-accent hover:text-accent-fg">
-              <CheckCircle2 className="size-4 shrink-0" aria-hidden />
-              <span className="min-w-0 truncate">{project?.name || item.projectId}</span>
-            </Link>
-          </section>
-        </aside>
-      </div>
+                <button type="button" className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-fg-muted hover:bg-surface-hover hover:text-fg" title={t.attachments.download} aria-label={t.attachments.download} disabled={busy} onClick={() => void handleDownloadAttachment(attachment)}>
+                  <Download className="size-3.5" aria-hidden />
+                </button>
+                <button type="button" className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-fg-muted hover:bg-surface-hover hover:text-danger" title={t.attachments.remove} aria-label={t.attachments.remove} disabled={busy} onClick={() => void handleRemoveAttachment(attachment)}>
+                  <Trash2 className="size-3.5" aria-hidden />
+                </button>
+              </div>
+            )) : <p className="text-xs leading-5 text-fg-muted">{t.attachments.empty}</p>}
+          </div>
+        </section>
+
+        <section className="mt-5 border-t border-edge-subtle pt-4">
+          <h2 className="text-sm font-semibold text-fg">{t.detail.links}</h2>
+          <div className="mt-2 grid gap-1 text-sm">
+            {item.links?.length ? item.links.map((link) => (
+              <Link key={link.id} to={linkHref(link)} className="flex min-w-0 items-center justify-between gap-2 rounded-md px-1 py-1.5 hover:bg-surface-hover">
+                <span className="min-w-0 truncate text-fg">{link.title || link.targetId}</span>
+                <span className="inline-flex shrink-0 items-center gap-1 text-xs text-fg-muted">
+                  {t.linkKinds[link.kind]}
+                  <ExternalLink className="size-3.5" aria-hidden />
+                </span>
+              </Link>
+            )) : <p className="text-xs leading-5 text-fg-muted">{t.detail.noLinks}</p>}
+          </div>
+        </section>
+      </aside>
+
+      <section className="min-w-0 lg:col-start-1 lg:row-start-2">
+        <div className="mb-3 flex items-center gap-2">
+          <FileText className="size-4 text-fg-muted" aria-hidden />
+          <h2 className="text-sm font-semibold text-fg">{t.detail.activity}</h2>
+        </div>
+        <ActivityList events={events} t={t} />
+      </section>
     </main>
   );
 }
