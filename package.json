@@ -145,6 +145,8 @@
     "node": ">=22.19.0"
   },
   "dependencies": {
+    "@composio/core": "0.14.1",
+    "@composio/experimental": "0.2.0",
     "@earendil-works/pi-agent-core": "0.84.1",
     "@earendil-works/pi-ai": "0.84.1",
     "@earendil-works/pi-coding-agent": "0.84.1",
@@ -186,20 +188,12 @@
     "zod": "^4.4.3"
   },
   "peerDependencies": {
-    "@composio/core": "0.14.1",
-    "@composio/experimental": "0.2.0",
     "@huggingface/transformers": "3.8.1",
     "@larksuiteoapi/node-sdk": "^1.66.0",
     "playwright-core": "^1.60.0",
     "sherpa-onnx-node": "1.13.4"
   },
   "peerDependenciesMeta": {
-    "@composio/core": {
-      "optional": true
-    },
-    "@composio/experimental": {
-      "optional": true
-    },
     "@huggingface/transformers": {
       "optional": true
     },
@@ -214,8 +208,6 @@
     }
   },
   "devDependencies": {
-    "@composio/core": "0.14.1",
-    "@composio/experimental": "0.2.0",
     "@huggingface/transformers": "3.8.1",
     "@larksuiteoapi/node-sdk": "^1.66.0",
     "@resvg/resvg-js": "^2.6.2",
