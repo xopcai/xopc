@@ -165,8 +165,8 @@ export class ComposioSessionsAdapter {
         ]);
       } catch (cause) {
         throw new Error(
-          'Composio support requires @composio/core and @composio/experimental. '
-          + 'Install them alongside @xopcai/xopc; use npm install -g when xopc is installed globally.',
+          'The xopc installation is missing the bundled Composio runtime. '
+          + 'Reinstall @xopcai/xopc and restart the gateway.',
           { cause },
         );
       }
