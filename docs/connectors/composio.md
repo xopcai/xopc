@@ -14,17 +14,12 @@ The catalog marks each preferred lane. Composio duplicates for native channels o
 
 ## Setup
 
-1. Install the optional runtime next to xopc:
+The Composio runtime is included with xopc; no additional npm packages are required.
 
-   ```bash
-   npm install @composio/core@0.14.0 @composio/experimental@0.2.0
-   ```
-
-   Add `-g` when xopc itself was installed globally.
-2. Install **Composio API Key** from `#/connectors` and save the key.
-3. Install an app such as Gmail, Notion, Slack, or GitHub.
-4. Open the installed connector, choose **Connect OAuth**, and finish authorization in the new tab.
-5. Return to xopc and refresh. Give accounts recognizable aliases, select the default account, choose the maximum read/write/admin scope, and limit access to specific agents when needed.
+1. Install **Composio API Key** from `#/connectors` and save the key.
+2. Install an app such as Gmail, Notion, Slack, or GitHub.
+3. Open the installed connector, choose **Connect OAuth**, and finish authorization in the new tab.
+4. Return to xopc and refresh. Give accounts recognizable aliases, select the default account, choose the maximum read/write/admin scope, and limit access to specific agents when needed.
 
 Toolkit installation is rejected until the Composio project API key is available from the credential store or `XOPC_COMPOSIO_API_KEY` / `COMPOSIO_API_KEY`.
 
