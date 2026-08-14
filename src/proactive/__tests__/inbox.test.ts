@@ -53,11 +53,13 @@ describe('proactive inbox', () => {
   });
 
   it('wakes snoozed items only through explicit maintenance', () => {
-    inbox.project(new Date('2026-08-13T00:00:02.000Z'));
+    const now = new Date();
+    const snoozedUntil = new Date(now.getTime() + 60 * 60_000);
+    inbox.project(now);
     const item = inbox.list()[0]!;
-    inbox.transition(item.id, { status: 'snoozed', snoozedUntil: '2026-08-13T01:00:00.000Z' });
-    expect(inbox.wakeSnoozed(new Date('2026-08-13T00:30:00.000Z'))).toBe(0);
-    expect(inbox.wakeSnoozed(new Date('2026-08-13T01:00:00.000Z'))).toBe(1);
+    inbox.transition(item.id, { status: 'snoozed', snoozedUntil: snoozedUntil.toISOString() });
+    expect(inbox.wakeSnoozed(new Date(now.getTime() + 30 * 60_000))).toBe(0);
+    expect(inbox.wakeSnoozed(snoozedUntil)).toBe(1);
     expect(inbox.list()[0]?.status).toBe('unread');
   });
 });

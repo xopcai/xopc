@@ -30,7 +30,6 @@ import {
 } from '../../../storage/sqlite/index.js';
 import {
   buildWorkItemAgentContext,
-  WorkItemService,
   WORK_ITEM_ATTACHMENT_MAX_BYTES,
   WORK_ITEM_ATTACHMENT_MAX_COUNT,
   type WorkItemPriority,
