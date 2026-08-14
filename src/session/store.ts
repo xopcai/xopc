@@ -97,6 +97,25 @@ type SessionCompactionHookEvent = {
   compactedCount?: number;
 };
 
+export type ModelFallbackPreparation = 'prompt' | 'resume' | 'unsafe';
+
+function isTranscriptMessageRole(row: TranscriptStoredRow | undefined, role: string): boolean {
+  return !!row && typeof row === 'object' && 'role' in row && row.role === role;
+}
+
+function isErrorAssistantRow(row: TranscriptStoredRow | undefined): boolean {
+  return isTranscriptMessageRole(row, 'assistant')
+    && (row as { stopReason?: unknown }).stopReason === 'error';
+}
+
+function transcriptPrefixMatches(
+  expected: readonly TranscriptStoredRow[],
+  current: readonly TranscriptStoredRow[],
+): boolean {
+  if (current.length < expected.length) return false;
+  return expected.every((row, index) => JSON.stringify(row) === JSON.stringify(current[index]));
+}
+
 export class SessionStore {
   private window: SlidingWindow;
   private compactor: SessionCompactor;
@@ -350,6 +369,45 @@ export class SessionStore {
   async loadTranscriptHistoryRows(key: string): Promise<TranscriptStoredRow[]> {
     requireXopcDatabase();
     return loadTranscriptHistoryRowsForSession(key);
+  }
+
+  async prepareModelFallback(
+    key: string,
+    rowsBeforeAttempt: readonly TranscriptStoredRow[],
+  ): Promise<ModelFallbackPreparation> {
+    return this.runStoreMutation(async () => {
+      requireXopcDatabase();
+      const currentRows = loadTranscriptRowsForSession(key);
+      if (!transcriptPrefixMatches(rowsBeforeAttempt, currentRows)) {
+        return 'unsafe';
+      }
+
+      let preparedRows = currentRows;
+      let removedError = false;
+      if (isErrorAssistantRow(preparedRows.at(-1))) {
+        preparedRows = preparedRows.slice(0, -1);
+        removedError = true;
+      }
+
+      const appendedRows = preparedRows.slice(rowsBeforeAttempt.length);
+      const canResume = (
+        appendedRows.length === 1
+        && isTranscriptMessageRole(appendedRows[0], 'user')
+      ) || (
+        removedError
+        && appendedRows.length === 0
+        && isTranscriptMessageRole(preparedRows.at(-1), 'user')
+      );
+
+      if (canResume) {
+        if (removedError) replaceTranscriptRows(key, preparedRows);
+        return 'resume';
+      }
+      if (!removedError && appendedRows.length === 0) {
+        return 'prompt';
+      }
+      return 'unsafe';
+    });
   }
 
   async getMetadata(key: string): Promise<SessionMetadata | null> {

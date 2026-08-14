@@ -56,6 +56,8 @@ function createMockSessionStore(opts: {
       { role: 'assistant', content: [{ type: 'text', text: 'hi' }] },
     ] as AgentMessage[]),
     compact: vi.fn().mockResolvedValue(compactResult),
+    loadTranscriptRows: vi.fn().mockResolvedValue([]),
+    prepareModelFallback: vi.fn().mockResolvedValue('prompt'),
   };
 }
 
@@ -265,6 +267,7 @@ describe('pre-turn auto-compaction', () => {
       .mockResolvedValueOnce({ ok: false, errorMessage: 'primary failed' })
       .mockResolvedValueOnce({ ok: true, lastAssistantText: 'fallback ok' });
     const sessionStore = createMockSessionStore({ needsCompaction: false });
+    sessionStore.prepareModelFallback.mockResolvedValue('resume');
     const agentManager = createMockAgentManager();
     const modelManager = {
       ...createMockModelManager(),
@@ -295,7 +298,9 @@ describe('pre-turn auto-compaction', () => {
     }));
     expect(mockRunXopcEmbeddedTurn).toHaveBeenNthCalledWith(2, expect.objectContaining({
       modelRef: 'fallback/model-b',
+      resumeLastUserMessage: true,
     }));
+    expect(sessionStore.prepareModelFallback).toHaveBeenCalledTimes(1);
   });
 
   it('respects memory.retention.compaction.enabled=false config', async () => {

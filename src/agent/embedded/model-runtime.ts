@@ -6,6 +6,7 @@ import { XopcModelCredentialStore } from '../../auth/model-credential-store.js';
 import { resolveProviderApiKeySync } from '../../auth/sync-provider-auth.js';
 import { resolveModelsJsonPath } from '../../config/paths.js';
 import { getApiKeySync } from '../../providers/index.js';
+import { registerBundledOAuthFlows } from '../../providers/register-bundled-oauth-flows.js';
 import { registerRuntimeProviders } from '../../providers/register-runtime-providers.js';
 
 export function resolveEmbeddedProviderApiKeySync(providerId: string): string | undefined {
@@ -13,6 +14,7 @@ export function resolveEmbeddedProviderApiKeySync(providerId: string): string | 
 }
 
 export async function createEmbeddedModelRuntime(providerId: string): Promise<ModelRuntime> {
+  registerBundledOAuthFlows();
   const resolver = new CredentialResolver();
   const credentials = new XopcModelCredentialStore(resolver);
 

@@ -123,6 +123,34 @@ describe('SessionStore', () => {
   });
 
   describe('message persistence (SQLite)', () => {
+    it('removes a failed assistant row and resumes the persisted user row for model fallback', async () => {
+      const key = 'agent:main:webchat:default:direct:model-fallback';
+      await store.saveMessages(key, [
+        { role: 'user', content: 'previous question', timestamp: 1 },
+        { role: 'assistant', content: 'previous answer', timestamp: 2 },
+      ] as any[]);
+      const rowsBeforeAttempt = await store.loadTranscriptRows(key);
+      await store.appendTranscriptMessage(key, { role: 'user', content: 'ppp', timestamp: 3 });
+      await store.appendTranscriptMessage(key, {
+        role: 'assistant',
+        content: [],
+        stopReason: 'error',
+        errorMessage: 'OAuth auth derivation failed',
+        timestamp: 4,
+      } as any);
+
+      await expect(store.prepareModelFallback(key, rowsBeforeAttempt)).resolves.toBe('resume');
+
+      const rows = await store.loadTranscriptRows(key);
+      expect(rows.map((row) => (row as { role?: string }).role).filter(Boolean)).toEqual([
+        'user',
+        'assistant',
+        'user',
+      ]);
+      expect(rows.filter((row) => (row as { role?: string }).role === 'user')).toHaveLength(2);
+      expect(JSON.stringify(rows)).not.toContain('OAuth auth derivation failed');
+    });
+
     it('includes active transcript cwd in listed metadata', async () => {
       const key = 'agent:main:webchat:default:direct:cwd-list';
       await store.saveMessages(key, [{ role: 'user', content: 'hello', timestamp: Date.now() }]);

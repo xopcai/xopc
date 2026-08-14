@@ -149,16 +149,18 @@ export async function runEmbeddedTurnForSession(
 
       let lastResult: RunXopcEmbeddedTurnResult | undefined;
       let lastError: unknown;
+      let resumeLastUserMessage = false;
       const primaryModelRef = modelRef;
-      const beforeLen = Array.isArray((agent as any).state?.messages)
-        ? (agent as any).state.messages.length
-        : undefined;
 
       for (let i = 0; i < resolvedCandidates.length; i++) {
         const candidate = resolvedCandidates[i]!;
         const candidateModelRef = candidate.ref;
         const isFallbackAttempt = i > 0;
         const candidateModel = candidate.model;
+        const hasNextCandidate = i + 1 < resolvedCandidates.length;
+        const rowsBeforeAttempt = hasNextCandidate
+          ? await sessionStore.loadTranscriptRows(sessionKey)
+          : undefined;
 
         if (typeof mm.applyResolvedModel === 'function') {
           mm.applyResolvedModel(agent, candidateModel, candidateModelRef);
@@ -195,6 +197,7 @@ export async function runEmbeddedTurnForSession(
             timeoutMs: resolveAgentTurnTimeoutMs(config),
             abortSignal: params.abortSignal,
             onEvent: params.onEvent,
+            resumeLastUserMessage,
           });
 
           if (turnResult.ok) {
@@ -215,7 +218,6 @@ export async function runEmbeddedTurnForSession(
           }
 
           lastResult = turnResult;
-          const hasNextCandidate = i + 1 < resolvedCandidates.length;
           log.warn(
             {
               sessionKey,
@@ -235,7 +237,6 @@ export async function runEmbeddedTurnForSession(
           if (err instanceof DOMException && err.name === 'AbortError') {
             throw err;
           }
-          const hasNextCandidate = i + 1 < resolvedCandidates.length;
           log.warn(
             { err, sessionKey, runId, modelRef: candidateModelRef, attempt: i + 1, total: resolvedCandidates.length, hasNextCandidate },
             hasNextCandidate
@@ -244,8 +245,16 @@ export async function runEmbeddedTurnForSession(
           );
         }
 
-        if (beforeLen !== undefined && Array.isArray((agent as any).state?.messages)) {
-          (agent as any).state.messages = (agent as any).state.messages.slice(0, beforeLen);
+        if (hasNextCandidate && rowsBeforeAttempt) {
+          const preparation = await sessionStore.prepareModelFallback(sessionKey, rowsBeforeAttempt);
+          if (preparation === 'unsafe') {
+            log.warn(
+              { sessionKey, runId, modelRef: candidateModelRef, attempt: i + 1 },
+              'Agent model fallback skipped because the failed attempt changed the transcript',
+            );
+            break;
+          }
+          resumeLastUserMessage = preparation === 'resume';
         }
       }
 

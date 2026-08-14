@@ -289,9 +289,13 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
       await runAgentTurnWithTimeout(
         session.agent,
         async () => {
-          const text = userMessageToPromptText(userMessage);
-          const images = params.images ?? [];
-          await session.prompt(text, images.length > 0 ? { images } : undefined);
+          if (params.resumeLastUserMessage) {
+            await session.agent.continue();
+          } else {
+            const text = userMessageToPromptText(userMessage);
+            const images = params.images ?? [];
+            await session.prompt(text, images.length > 0 ? { images } : undefined);
+          }
           await session.agent.waitForIdle();
           await maybeRetryTurnAfterTransientLlmFailure(session.agent, { sessionKey, log });
           await maybeRecoverContextOverflow({

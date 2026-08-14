@@ -63,6 +63,8 @@ export type RunXopcEmbeddedTurnParams = {
   abortSignal?: AbortSignal;
   onEvent?: (event: EmbeddedStreamEvent) => void;
   images?: ImageContent[];
+  /** Continue from the persisted trailing user row instead of appending it again. */
+  resumeLastUserMessage?: boolean;
 };
 
 export type RunXopcEmbeddedTurnResult = {
