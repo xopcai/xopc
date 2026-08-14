@@ -28,6 +28,13 @@ const loadOAuthToken = vi.fn(async (provider: string) =>
     : null,
 );
 const loadOAuthTokenRecord = vi.fn(loadOAuthToken);
+const { registerBunOAuthFlows } = vi.hoisted(() => ({
+  registerBunOAuthFlows: vi.fn(),
+}));
+
+vi.mock('@earendil-works/pi-ai/bun-oauth', () => ({
+  registerBunOAuthFlows,
+}));
 
 vi.mock('../../../auth/credentials.js', () => ({
   CredentialResolver: class {
@@ -54,6 +61,12 @@ import { resolveModelsJsonPath } from '../../../config/paths.js';
 import { getModelCatalogStore, resetModelCatalogStore } from '../../../providers/model-catalog-store.js';
 
 describe('embedded model runtime', () => {
+  it('registers statically bundled OAuth flows before creating the runtime', async () => {
+    await createEmbeddedModelRuntime('openai');
+
+    expect(registerBunOAuthFlows).toHaveBeenCalledTimes(1);
+  });
+
   it('uses xopc credentials with an in-memory model catalog', async () => {
     const createSpy = vi.spyOn(ModelRuntime, 'create').mockResolvedValue({
       registerProvider: vi.fn(),

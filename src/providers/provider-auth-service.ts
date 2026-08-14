@@ -7,6 +7,7 @@ import {
 } from '../auth/credentials.js';
 import { XopcModelCredentialStore } from '../auth/model-credential-store.js';
 import { resolveModelsJsonPath } from '../config/paths.js';
+import { registerBundledOAuthFlows } from './register-bundled-oauth-flows.js';
 import { registerRuntimeProviders } from './register-runtime-providers.js';
 
 type ApiKeyResolver = Pick<CredentialResolver, 'resolveApiKey'>;
@@ -18,6 +19,7 @@ export interface ProviderAuthServiceOptions {
 }
 
 async function createAuthRuntime(credentials: XopcModelCredentialStore): Promise<ModelRuntime> {
+  registerBundledOAuthFlows();
   const runtime = await ModelRuntime.create({
     credentials,
     modelsPath: resolveModelsJsonPath(),

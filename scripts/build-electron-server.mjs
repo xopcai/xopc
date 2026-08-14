@@ -28,7 +28,7 @@ if (!existsSync(entry)) {
 const external = ELECTRON_GATEWAY_EXTERNALS;
 const minify = process.env['XOPC_ELECTRON_SERVER_MINIFY'] !== '0';
 
-await esbuild.build({
+const gatewayBuild = await esbuild.build({
   entryPoints: [entry],
   bundle: true,
   platform: 'node',
@@ -49,7 +49,16 @@ await esbuild.build({
   },
   minify,
   sourcemap: false,
+  metafile: true,
 });
+
+const bundledOpenAiCodexOAuth = Object.keys(gatewayBuild.metafile.inputs).some((input) =>
+  input.endsWith('/@earendil-works/pi-ai/dist/auth/oauth/openai-codex.js'),
+);
+if (!bundledOpenAiCodexOAuth) {
+  console.error('[build-electron-server] OpenAI Codex OAuth flow was not bundled into the gateway.');
+  process.exit(1);
+}
 
 if (!existsSync(voiceRuntimeEntry)) {
   console.error(`[build-electron-server] Missing ${voiceRuntimeEntry}. Run \`pnpm run build\` first.`);
