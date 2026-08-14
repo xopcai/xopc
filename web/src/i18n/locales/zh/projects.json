@@ -387,6 +387,7 @@
       },
       "detail": {
         "description": "围绕这个工作项持续推进，直到完成。",
+        "properties": "属性",
         "status": "状态",
         "actions": "操作",
         "project": "项目",

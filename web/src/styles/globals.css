@@ -429,8 +429,12 @@ html.dark {
   background-size: 100vw 100vh;
 }
 
-.app-chrome-shell .app-chrome-sidebar {
-  background: transparent;
+/* The in-flow desktop rail can reuse the shell background. On mobile the sidebar
+ * becomes a fixed drawer above the page, so it must keep its own opaque chrome. */
+@media (min-width: 768px) {
+  .app-chrome-shell .app-chrome-sidebar {
+    background: transparent;
+  }
 }
 
 .app-main-surface {

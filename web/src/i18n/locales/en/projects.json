@@ -387,6 +387,7 @@
       },
       "detail": {
         "description": "Plan and run the work needed to complete this item.",
+        "properties": "Properties",
         "status": "Status",
         "actions": "Actions",
         "project": "Project",
