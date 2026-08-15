@@ -89,6 +89,7 @@ export {
   getTaskOutcome,
   listTaskOutcomes,
   setTaskOutcomeFeedback,
+  setTaskOutcomeFeedbackByRunId,
   startTaskOutcome,
   summarizeTaskOutcomes,
   updateTaskOutcome,
@@ -96,8 +97,11 @@ export {
   type TaskEvidence,
   type TaskFeedbackOutcome,
   type TaskOutcome,
+  type TaskOutcomeContext,
   type TaskOutcomeMetrics,
+  type TaskOutcomeOrigin,
   type TaskOutcomeStatus,
+  type TaskOutcomeTrigger,
 } from './task-outcome-repository.js';
 export {
   buildDefaultSessionMetadata,

@@ -59,9 +59,19 @@ export const BUILTIN_NAV_DEFS: readonly BuiltinNavDef[] = [
   { id: 'builtin:extensions', to: '/extensions', Icon: Puzzle },
 ] as const;
 
-/** Adjustable visible app-row bounds, excluding "New chat" and "More apps". */
-export const MIN_VISIBLE_NAV_ITEMS = 2;
-export const MAX_VISIBLE_NAV_ITEMS = 4;
+/** Product-level destinations that stay visible; advanced capabilities live under More. */
+export const PRIMARY_NAV_IDS = [
+  'builtin:work',
+  'builtin:profile',
+  'builtin:projects',
+] as const satisfies readonly BuiltinNavId[];
+
+export function isPrimaryNavId(id: string): boolean {
+  return (PRIMARY_NAV_IDS as readonly string[]).includes(id);
+}
+
+export const MIN_VISIBLE_NAV_ITEMS = PRIMARY_NAV_IDS.length;
+export const MAX_VISIBLE_NAV_ITEMS = PRIMARY_NAV_IDS.length;
 
 export type ReconciledNav = {
   visible: NavItem[];
@@ -81,13 +91,19 @@ export type ReconciledNav = {
 export function reconcileNavOrder(
   available: readonly NavItem[],
   storedOrder: readonly string[],
-  visibleLimit = MIN_VISIBLE_NAV_ITEMS,
+  visibleLimit: number = MIN_VISIBLE_NAV_ITEMS,
 ): ReconciledNav {
   const byId = new Map<string, NavItem>();
   for (const item of available) byId.set(item.id, item);
 
   const ordered: NavItem[] = [];
   const seen = new Set<string>();
+  for (const id of PRIMARY_NAV_IDS) {
+    const item = byId.get(id);
+    if (!item) continue;
+    ordered.push(item);
+    seen.add(id);
+  }
   for (const id of storedOrder) {
     const item = byId.get(id);
     if (!item || seen.has(id)) continue;

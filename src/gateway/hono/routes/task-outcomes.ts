@@ -5,10 +5,12 @@ import {
   findTaskOutcomeForAssistant,
   listTaskOutcomes,
   summarizeTaskOutcomes,
+  setTaskOutcomeFeedbackByRunId,
   updateTaskOutcome,
   type TaskContract,
   type TaskEvidence,
 } from '../../../storage/sqlite/index.js';
+import { OutcomeReceiptService } from '../../../work/outcome-receipt-service.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { replayTaskEvaluation } from '../../../agent/outcomes/task-evaluation.js';
 
@@ -48,9 +50,13 @@ function isTaskEvidence(value: unknown): value is TaskEvidence[] {
 }
 
 export function registerTaskOutcomeRoutes(authenticated: Hono, _deps: AuthenticatedRouteDeps): void {
+  const receipts = new OutcomeReceiptService();
+
   authenticated.get('/api/task-outcomes', (c) => {
     const items = listTaskOutcomes({
       sessionKey: c.req.query('sessionKey')?.trim() || undefined,
+      projectId: c.req.query('projectId')?.trim() || undefined,
+      workItemId: c.req.query('workItemId')?.trim() || undefined,
       limit: parseLimit(c.req.query('limit')),
     });
     return c.json({ ok: true, items });
@@ -111,5 +117,39 @@ export function registerTaskOutcomeRoutes(authenticated: Hono, _deps: Authentica
     return outcome
       ? c.json({ ok: true, outcome })
       : c.json({ ok: false, error: 'Task outcome not found' }, 404);
+  });
+
+  authenticated.get('/api/work/outcomes', (c) => {
+    const items = receipts.list({
+      projectId: c.req.query('projectId')?.trim() || undefined,
+      workItemId: c.req.query('workItemId')?.trim() || undefined,
+      sessionKey: c.req.query('sessionKey')?.trim() || undefined,
+      limit: parseLimit(c.req.query('limit')),
+    });
+    return c.json({ ok: true, items });
+  });
+
+  authenticated.get('/api/work/outcomes/:runId', (c) => {
+    const receipt = receipts.get(c.req.param('runId'));
+    return receipt
+      ? c.json({ ok: true, receipt })
+      : c.json({ ok: false, error: 'Outcome receipt not found' }, 404);
+  });
+
+  authenticated.post('/api/work/outcomes/:runId/feedback', _deps.strictRateLimitMiddleware, async (c) => {
+    const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
+    const feedback = body.outcome === 'helpful' || body.outcome === 'not_helpful' ? body.outcome : undefined;
+    if (!feedback) return c.json({ ok: false, error: 'outcome must be helpful or not_helpful' }, 400);
+    const reason = typeof body.reason === 'string' ? body.reason.trim().slice(0, 160) : undefined;
+    const outcome = setTaskOutcomeFeedbackByRunId({
+      runId: c.req.param('runId'),
+      outcome: feedback,
+      reason: reason || undefined,
+      needsCorrection: feedback === 'not_helpful',
+      supportFit: typeof body.supportFit === 'boolean' ? body.supportFit : undefined,
+    });
+    return outcome
+      ? c.json({ ok: true, receipt: receipts.get(outcome.runId) })
+      : c.json({ ok: false, error: 'Outcome receipt not found' }, 404);
   });
 }

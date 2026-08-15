@@ -16,6 +16,7 @@ import { resolveLucideIcon } from '@/features/extensions/extension-nav-icon';
 import type { ExtensionUiInfo } from '@/features/extensions/types';
 
 import {
+  isPrimaryNavId,
   BUILTIN_NAV_DEFS,
   reconcileNavOrder,
   type NavItem,
@@ -213,12 +214,13 @@ export function SidebarNavItems({
 
   function renderRailRow(item: NavItem): ReactNode {
     const dragging = draggingId === item.id;
+    const pinned = isPrimaryNavId(item.id);
     const dropHint = hoverTarget?.id === item.id ? hoverTarget.position : null;
     return (
       <NavLink
         key={item.id}
         to={item.to}
-        draggable
+        draggable={!pinned}
         onDragStart={onDragStart(item.id)}
         onDragEnd={onDragEnd}
         onDragOver={onRowDragOver(item.id)}

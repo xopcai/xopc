@@ -58,11 +58,11 @@ describe('reconcileNavOrder', () => {
     expect(out.overflow).toEqual([]);
   });
 
-  it('honors stored order when items still exist', () => {
+  it('keeps primary product destinations ahead of stored customization', () => {
     const available = [item('builtin:work'), item('builtin:profile')];
     const stored = ['builtin:profile', 'builtin:work'];
     const out = reconcileNavOrder(available, stored);
-    expect(out.visible.map((i) => i.id)).toEqual(stored);
+    expect(out.visible.map((i) => i.id)).toEqual(['builtin:work', 'builtin:profile']);
   });
 
   it('appends new items that are not yet in the stored order', () => {
@@ -79,9 +79,9 @@ describe('reconcileNavOrder', () => {
     expect(out.visible.map((i) => i.id)).toEqual([
       'builtin:skills',
       'builtin:agents',
+      'builtin:automations',
     ]);
     expect(out.overflow.map((i) => i.id)).toEqual([
-      'builtin:automations',
       'builtin:channels',
       'ext:foo:home',
     ]);
@@ -115,7 +115,6 @@ describe('reconcileNavOrder', () => {
     expect(out.hasOverflow).toBe(true);
     expect(out.visible).toHaveLength(MIN_VISIBLE_NAV_ITEMS);
     expect(out.overflow.map((i) => i.id)).toEqual([
-      'builtin:automations',
       'builtin:channels',
       'builtin:notes',
       'builtin:workflows',
@@ -138,9 +137,9 @@ describe('reconcileNavOrder', () => {
     expect(out.visible.map((i) => i.id)).toEqual([
       'builtin:agents',
       'builtin:skills',
+      'builtin:automations',
     ]);
     expect(out.overflow.map((i) => i.id)).toEqual([
-      'builtin:automations',
       'builtin:channels',
       'ext:foo:a',
       'ext:bar:b',
@@ -148,12 +147,12 @@ describe('reconcileNavOrder', () => {
     ]);
   });
 
-  it('reveals up to four apps when the rail is expanded', () => {
+  it('keeps the primary rail at three destinations', () => {
     const available = Array.from({ length: 6 }, (_, i) => item(`builtin:${i}`));
     const out = reconcileNavOrder(available, [], MAX_VISIBLE_NAV_ITEMS);
 
     expect(out.visible).toHaveLength(MAX_VISIBLE_NAV_ITEMS);
-    expect(out.overflow).toHaveLength(2);
+    expect(out.overflow).toHaveLength(3);
     expect(out.hasOverflow).toBe(true);
   });
 

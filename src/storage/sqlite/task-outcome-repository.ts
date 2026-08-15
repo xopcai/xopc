@@ -11,6 +11,18 @@ import {
 
 export type TaskOutcomeStatus = 'running' | 'succeeded' | 'failed' | 'cancelled';
 export type TaskFeedbackOutcome = 'helpful' | 'not_helpful';
+export type TaskOutcomeOrigin = 'chat' | 'goal' | 'workflow' | 'automation' | 'browser' | 'proactive';
+export type TaskOutcomeTrigger = 'user' | 'schedule' | 'webhook' | 'proactive' | 'retry';
+
+export interface TaskOutcomeContext {
+  projectId?: string;
+  goalId?: string;
+  workItemId?: string;
+  origin?: TaskOutcomeOrigin;
+  triggerKind?: TaskOutcomeTrigger;
+  parentRunId?: string;
+  contextTraceId?: string;
+}
 
 export interface TaskContract {
   objective: string;
@@ -38,6 +50,9 @@ export interface TaskOutcome {
   contract?: TaskContract;
   evidence: TaskEvidence[];
   verification: TaskVerification;
+  context: TaskOutcomeContext;
+  nextAction?: string;
+  needsUser: boolean;
   failure?: {
     code: TaskFailureCode;
     phase: TaskFailurePhase;
@@ -75,6 +90,15 @@ type TaskOutcomeRow = {
   failure_code: TaskFailureCode | null;
   failure_phase: TaskFailurePhase | null;
   recovery_action: TaskRecoveryAction | null;
+  project_id: string | null;
+  goal_id: string | null;
+  work_item_id: string | null;
+  origin: TaskOutcomeOrigin | null;
+  trigger_kind: TaskOutcomeTrigger | null;
+  parent_run_id: string | null;
+  next_action: string | null;
+  needs_user: number;
+  context_trace_id: string | null;
 };
 
 export interface TaskOutcomeMetrics {
@@ -114,6 +138,17 @@ function fromRow(row: TaskOutcomeRow): TaskOutcome {
       ...(JSON.parse(row.verification_json) as Omit<TaskVerification, 'status'>),
       status: row.verification_status,
     },
+    context: {
+      ...(row.project_id ? { projectId: row.project_id } : {}),
+      ...(row.goal_id ? { goalId: row.goal_id } : {}),
+      ...(row.work_item_id ? { workItemId: row.work_item_id } : {}),
+      ...(row.origin ? { origin: row.origin } : {}),
+      ...(row.trigger_kind ? { triggerKind: row.trigger_kind } : {}),
+      ...(row.parent_run_id ? { parentRunId: row.parent_run_id } : {}),
+      ...(row.context_trace_id ? { contextTraceId: row.context_trace_id } : {}),
+    },
+    ...(row.next_action ? { nextAction: row.next_action } : {}),
+    needsUser: row.needs_user === 1,
     ...(row.failure_code && row.failure_phase && row.recovery_action ? {
       failure: {
         code: row.failure_code,
@@ -131,22 +166,40 @@ function fromRow(row: TaskOutcomeRow): TaskOutcome {
 const SELECT_COLUMNS = `run_id, session_key, channel, objective, status, summary,
   contract_json, evidence_json, feedback_outcome, feedback_reason,
   needs_correction, support_fit, started_at, completed_at, updated_at,
-  verification_status, verification_json, failure_code, failure_phase, recovery_action`;
+  verification_status, verification_json, failure_code, failure_phase, recovery_action,
+  project_id, goal_id, work_item_id, origin, trigger_kind, parent_run_id,
+  next_action, needs_user, context_trace_id`;
 
 export function startTaskOutcome(input: {
   runId: string;
   sessionKey: string;
   channel: string;
   objective: string;
+  context?: TaskOutcomeContext;
   now?: number;
 }): TaskOutcome {
   const now = input.now ?? Date.now();
   runSqliteWriteTransaction((db) => {
     db.prepare(
       `INSERT INTO task_outcomes (
-        run_id, session_key, channel, objective, status, started_at, updated_at
-      ) VALUES (?, ?, ?, ?, 'running', ?, ?)`,
-    ).run(input.runId, input.sessionKey, input.channel, input.objective, now, now);
+        run_id, session_key, channel, objective, status, started_at, updated_at,
+        project_id, goal_id, work_item_id, origin, trigger_kind, parent_run_id, context_trace_id
+      ) VALUES (?, ?, ?, ?, 'running', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      input.runId,
+      input.sessionKey,
+      input.channel,
+      input.objective,
+      now,
+      now,
+      input.context?.projectId ?? null,
+      input.context?.goalId ?? null,
+      input.context?.workItemId ?? null,
+      input.context?.origin ?? null,
+      input.context?.triggerKind ?? null,
+      input.context?.parentRunId ?? null,
+      input.context?.contextTraceId ?? null,
+    );
   });
   return getTaskOutcome(input.runId)!;
 }
@@ -196,6 +249,9 @@ export function updateTaskOutcome(input: {
   contract?: TaskContract;
   evidence?: TaskEvidence[];
   summary?: string;
+  nextAction?: string | null;
+  needsUser?: boolean;
+  contextTraceId?: string | null;
   now?: number;
 }): TaskOutcome | undefined {
   const current = getTaskOutcome(input.runId);
@@ -204,15 +260,24 @@ export function updateTaskOutcome(input: {
   const contract = input.contract === undefined ? current.contract : input.contract;
   const evidence = input.evidence === undefined ? current.evidence : input.evidence;
   const summary = input.summary === undefined ? current.summary : input.summary;
+  const nextAction = input.nextAction === undefined ? current.nextAction : input.nextAction ?? undefined;
+  const needsUser = input.needsUser === undefined ? current.needsUser : input.needsUser;
+  const contextTraceId = input.contextTraceId === undefined
+    ? current.context.contextTraceId
+    : input.contextTraceId ?? undefined;
   runSqliteWriteTransaction((db) => {
     db.prepare(
       `UPDATE task_outcomes
-       SET contract_json = ?, evidence_json = ?, summary = ?, updated_at = ?
+       SET contract_json = ?, evidence_json = ?, summary = ?, next_action = ?,
+           needs_user = ?, context_trace_id = ?, updated_at = ?
        WHERE run_id = ?`,
     ).run(
       contract ? JSON.stringify(contract) : null,
       JSON.stringify(evidence),
       summary ?? null,
+      nextAction ?? null,
+      Number(needsUser),
+      contextTraceId ?? null,
       now,
       input.runId,
     );
@@ -220,17 +285,15 @@ export function updateTaskOutcome(input: {
   return getTaskOutcome(input.runId);
 }
 
-export function setTaskOutcomeFeedback(input: {
-  sessionKey: string;
-  assistantTimestamp: number;
+type TaskOutcomeFeedbackInput = {
   outcome: TaskFeedbackOutcome;
   reason?: string;
   needsCorrection?: boolean;
   supportFit?: boolean;
   now?: number;
-}): TaskOutcome | undefined {
-  const matched = findTaskOutcomeForAssistant(input.sessionKey, input.assistantTimestamp);
-  if (!matched) return undefined;
+};
+
+function persistTaskOutcomeFeedback(runId: string, input: TaskOutcomeFeedbackInput): TaskOutcome {
   const now = input.now ?? Date.now();
   runSqliteWriteTransaction((db) => {
     db.prepare(
@@ -243,10 +306,25 @@ export function setTaskOutcomeFeedback(input: {
       input.needsCorrection === undefined ? null : Number(input.needsCorrection),
       input.supportFit === undefined ? null : Number(input.supportFit),
       now,
-      matched.runId,
+      runId,
     );
   });
-  return getTaskOutcome(matched.runId);
+  return getTaskOutcome(runId)!;
+}
+
+export function setTaskOutcomeFeedback(input: TaskOutcomeFeedbackInput & {
+  sessionKey: string;
+  assistantTimestamp: number;
+}): TaskOutcome | undefined {
+  const matched = findTaskOutcomeForAssistant(input.sessionKey, input.assistantTimestamp);
+  return matched ? persistTaskOutcomeFeedback(matched.runId, input) : undefined;
+}
+
+export function setTaskOutcomeFeedbackByRunId(input: TaskOutcomeFeedbackInput & {
+  runId: string;
+}): TaskOutcome | undefined {
+  const current = getTaskOutcome(input.runId);
+  return current ? persistTaskOutcomeFeedback(input.runId, input) : undefined;
 }
 
 export function getTaskOutcome(runId: string): TaskOutcome | undefined {
@@ -275,16 +353,29 @@ export function findTaskOutcomeForAssistant(
 
 export function listTaskOutcomes(input: {
   sessionKey?: string;
+  projectId?: string;
+  workItemId?: string;
   limit?: number;
 } = {}): TaskOutcome[] {
   const limit = Math.max(1, Math.min(100, Math.floor(input.limit ?? 50)));
-  const rows = input.sessionKey
-    ? getSqliteDatabase()
-        .prepare(`SELECT ${SELECT_COLUMNS} FROM task_outcomes WHERE session_key = ? ORDER BY started_at DESC LIMIT ?`)
-        .all(input.sessionKey, limit)
-    : getSqliteDatabase()
-        .prepare(`SELECT ${SELECT_COLUMNS} FROM task_outcomes ORDER BY started_at DESC LIMIT ?`)
-        .all(limit);
+  const filters: string[] = [];
+  const values: Array<string | number> = [];
+  if (input.sessionKey) {
+    filters.push('session_key = ?');
+    values.push(input.sessionKey);
+  }
+  if (input.projectId) {
+    filters.push('project_id = ?');
+    values.push(input.projectId);
+  }
+  if (input.workItemId) {
+    filters.push('work_item_id = ?');
+    values.push(input.workItemId);
+  }
+  const where = filters.length > 0 ? `WHERE ${filters.join(' AND ')}` : '';
+  const rows = getSqliteDatabase()
+    .prepare(`SELECT ${SELECT_COLUMNS} FROM task_outcomes ${where} ORDER BY started_at DESC LIMIT ?`)
+    .all(...values, limit);
   return rows.map((row) => fromRow(row as TaskOutcomeRow));
 }
 

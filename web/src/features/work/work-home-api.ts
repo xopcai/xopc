@@ -1,131 +1,41 @@
+import {
+  ConfirmedWorkSchema,
+  WorkIntakeProposalSchema,
+  parseWorkHomeResponse,
+  type ConfirmedWork,
+  type WorkIntakeProposal,
+  type WorkHomeAttention,
+  type WorkHomeChat,
+  type WorkHomeDecision,
+  type WorkHomeItem,
+  type WorkHomeResponse,
+} from '@xopcai/gateway-contract';
+
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
-import type { WorkItemPriority, WorkItemStatus } from '@/features/work-items/api';
+export type { WorkHomeAttention, WorkHomeChat, WorkHomeDecision, WorkHomeItem, WorkHomeResponse };
+export type { ConfirmedWork, WorkIntakeProposal };
 
-export type WorkHomeItem = {
-  id: string;
-  projectId: string;
-  projectName: string;
-  title: string;
-  status: WorkItemStatus;
-  priority: WorkItemPriority;
-  nextAction?: string;
-  blockedReason?: string;
-  dueAt?: number;
-  completedAt?: number;
-  updatedAt: number;
-};
+export async function proposeWorkIntake(objective: string): Promise<WorkIntakeProposal> {
+  const response = await fetchJson<{ proposal?: unknown }>(apiUrl('/api/work/intakes'), {
+    method: 'POST',
+    body: JSON.stringify({ objective }),
+  });
+  return WorkIntakeProposalSchema.parse(response.proposal);
+}
 
-export type WorkHomeWorkflowRun = {
-  id: string;
-  definitionId: string;
-  title: string;
-  status: string;
-  sessionKey?: string;
-  createdAtMs: number;
-  startedAtMs?: number;
-  completedAtMs?: number;
-};
-
-export type WorkHomeAutomation = {
-  id: string;
-  name?: string;
-  trigger: string;
-  action: string;
-  nextRunAt: string;
-};
-
-export type WorkHomeChat = {
-  key: string;
-  name: string;
-  updatedAt?: string;
-  active: boolean;
-};
-
-export type WorkHomeDecision = {
-  id: string;
-  kind: 'agent_judgment' | 'work_item' | 'goal' | 'connector_approval' | 'goal_evidence';
-  title: string;
-  detail?: string;
-  reason: 'needs_input' | 'in_review' | 'blocked' | 'overdue' | 'due_soon' | 'decision_needed' | 'approval_required';
-  urgency: 'now' | 'soon';
-  href: string;
-  projectId?: string;
-  projectName?: string;
-  updatedAt: number;
-  judgment?: {
-    inboxItemId: string;
-    whyNow: string;
-    impact: string;
-    workDone: string;
-    recommendation: string;
-    confidence: number;
-    decision?: { question: string; options: Array<{ id: string; label: string; consequence: string }> };
-  };
-  response?:
-    | { kind: 'connector_approval'; approvalId: string }
-    | { kind: 'goal_evidence'; goalId: string; requirementId: string };
-};
-
-export type WorkHomeAttention = {
-  id: string;
-  kind: 'automation_run' | 'workflow_run';
-  runId: string;
-  title: string;
-  detail: string;
-  reason: 'run_failed' | 'run_timeout';
-  href: string;
-  updatedAt: number;
-  sessionKey?: string;
-};
-
-export type WorkHomeBriefingWin = {
-  id: string;
-  kind: 'work_item' | 'workflow_run' | 'automation_run';
-  title: string;
-  href: string;
-  completedAt: number;
-};
-
-export type WorkHomeResponse = {
-  briefing: {
-    generatedAt: number;
-    summary: string;
-    focus: WorkHomeDecision[];
-    progress: {
-      activeWorkCount: number;
-      activeWorkflowCount: number;
-      activeGoalCount: number;
-      movingCount: number;
-    };
-    wins: WorkHomeBriefingWin[];
-    nextScheduled?: WorkHomeAutomation;
-  };
-  decisions: WorkHomeDecision[];
-  attention: WorkHomeAttention[];
-  chats: {
-    running: WorkHomeChat[];
-    recent: WorkHomeChat[];
-  };
-  work: {
-    attentionCount: number;
-    overdueCount: number;
-    todayCount: number;
-    items: WorkHomeItem[];
-    current: WorkHomeItem[];
-    recentlyCompleted: WorkHomeItem[];
-  };
-  workflowRuns: {
-    active: WorkHomeWorkflowRun[];
-    recent: WorkHomeWorkflowRun[];
-  };
-  upcomingAutomations: WorkHomeAutomation[];
-};
+export async function confirmWorkIntake(proposalId: string): Promise<ConfirmedWork> {
+  const response = await fetchJson<{ work?: unknown }>(apiUrl(`/api/work/intakes/${encodeURIComponent(proposalId)}/confirm`), {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+  return ConfirmedWorkSchema.parse(response.work);
+}
 
 export function fetchWorkHome(locale?: 'en' | 'zh'): Promise<WorkHomeResponse> {
   const suffix = locale ? `?locale=${encodeURIComponent(locale)}` : '';
-  return fetchJson<WorkHomeResponse>(apiUrl(`/api/home${suffix}`));
+  return fetchJson<unknown>(apiUrl(`/api/home${suffix}`)).then(parseWorkHomeResponse);
 }
 
 export function respondToWorkDecision(

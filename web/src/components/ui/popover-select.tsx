@@ -3,7 +3,6 @@ import { Check, ChevronsUpDown } from 'lucide-react';
 import { Children, Fragment, isValidElement, useId, useState, type ReactNode, type SelectHTMLAttributes } from 'react';
 
 import { cn } from '@/lib/cn';
-import { SETTINGS_SHELL_POPOVER_Z } from '@/lib/settings-shell-dialog-layer';
 import { settingsShellPopoverZClass } from '@/lib/settings-shell-layer.utils';
 import {
   useSettingsShellPopoverLayer,
@@ -83,9 +82,7 @@ export function PopoverSelect({
   const [open, setOpen] = useState(false);
   const settingsShellLayer = useSettingsShellPopoverLayer();
   const portalContainer = useSettingsShellPopoverPortalContainer();
-  const popoverZ = settingsShellLayer === 'default'
-    ? SETTINGS_SHELL_POPOVER_Z
-    : settingsShellPopoverZClass(settingsShellLayer);
+  const popoverZ = settingsShellPopoverZClass(settingsShellLayer, portalContainer !== null);
   const selected = options.find((option) => option.value === value);
   const label = selected?.label ?? (value ? `${value} · unavailable` : placeholder);
   let lastGroup: string | undefined;

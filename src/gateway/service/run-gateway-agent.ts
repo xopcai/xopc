@@ -6,6 +6,7 @@ import type { MessageBus } from '../../infra/bus/index.js';
 import { prependEnvelopeTimestamp } from '../../channels/envelope-timestamp.js';
 import { resolveWebchatSessionKey } from '../resolve-webchat-session-key.js';
 import type { SessionIndex } from '../../session/index.js';
+import type { SessionMetadata } from '../../session/types.js';
 import {
   createLogger,
   inboundCorrelationMetadataFromAsyncLogContext,
@@ -14,6 +15,7 @@ import {
 import { shouldSkipWebchatInboundByAbortCutoff } from '../../session/abort-cutoff.js';
 import { parseSessionKey } from '../../routing/session-key.js';
 import { recordExplicitRelationshipFollowUp } from '../../user-context/relationship-continuity.js';
+import { resolveExecutionContext, taskOutcomeContext } from '../../work/execution-context.js';
 import {
   completeTaskOutcome,
   startTaskOutcome,
@@ -89,6 +91,7 @@ export async function *runGatewayAgent(
 
   let webchatSessionKey: string | undefined;
   let webchatSessionId: string | undefined;
+  let webchatMetadata: SessionMetadata | undefined;
   let webchatStaleSkip = false;
   if (channel === 'webchat') {
     const resolved = resolveWebchatSessionKey({ sessionKey: chatId });
@@ -101,6 +104,7 @@ export async function *runGatewayAgent(
       throw new Error('Session not found; create sessions via POST /api/sessions');
     }
     webchatSessionId = meta?.sessionId;
+    webchatMetadata = meta;
     webchatStaleSkip = shouldSkipWebchatInboundByAbortCutoff(meta, runOptions?.clientCreatedAtMs);
     if (!webchatStaleSkip && meta?.abortCutoffTimestamp !== undefined) {
       await sessionIndex
@@ -113,6 +117,7 @@ export async function *runGatewayAgent(
 
   const streamSessionKey = webchatSessionKey ?? chatId;
   if (webchatSessionKey) {
+    if (!webchatMetadata) throw new Error('Session metadata is unavailable');
     const parsedSession = parseSessionKey(webchatSessionKey);
     if (!parsedSession) throw new Error('Resolved webchat session key is invalid');
     updateInteractionStateFromMessage({ sessionKey: webchatSessionKey, message });
@@ -126,6 +131,12 @@ export async function *runGatewayAgent(
       sessionKey: webchatSessionKey,
       channel,
       objective: message.trim(),
+      context: taskOutcomeContext(resolveExecutionContext({
+        runId,
+        sessionKey: webchatSessionKey,
+        channel,
+        metadata: webchatMetadata,
+      })),
     });
     taskOutcomeStarted = true;
   }

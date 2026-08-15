@@ -1,4 +1,5 @@
 import {
+  APP_PORTALED_POPOVER_Z,
   SETTINGS_SHELL_MODAL_POPOVER_Z,
   SETTINGS_SHELL_POPOVER_Z,
 } from '@/lib/settings-shell-dialog-layer';
@@ -6,7 +7,12 @@ import {
 /** Stacking tier for portaled popovers/menus under the settings shell. */
 export type SettingsShellPopoverLayer = 'default' | 'page' | 'modal';
 
-export function settingsShellPopoverZClass(layer: SettingsShellPopoverLayer): string {
+export function settingsShellPopoverZClass(
+  layer: SettingsShellPopoverLayer,
+  portaledWithinLayer = false,
+): string {
+  if (!portaledWithinLayer) return APP_PORTALED_POPOVER_Z;
+
   switch (layer) {
     case 'modal':
       return SETTINGS_SHELL_MODAL_POPOVER_Z;
