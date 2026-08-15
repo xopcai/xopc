@@ -47,6 +47,7 @@ import { useSessionWorkflowRunLinks } from '@/features/workflows/use-session-wor
 import { useWorkflowRunLive } from '@/features/workflows/use-workflow-run-live';
 import { useWorkflowSessionMetadata } from '@/features/workflows/use-workflow-session-metadata';
 import { appendNoteContent, createTaskNote, getNote } from '@/features/notes/notes-api';
+import { withReturnTo } from '@/lib/navigation-return';
 import {
   applyWorkItemUpdateSuggestion,
   createWorkItemUpdateSuggestion,
@@ -1019,6 +1020,7 @@ export function ChatPage() {
             workspace={session.effectiveWorkspacePath}
             projectLabel={m.chat.scopeProject}
             workspaceLabel={m.chat.scopeWorkspace}
+            returnTo={pathname}
           />
         ) : null}
         {(location.state as { fromAgentEditor?: boolean } | null)?.fromAgentEditor &&
@@ -1098,13 +1100,13 @@ export function ChatPage() {
                   <span>{m.chat.workItemSummarizeAction}</span>
                 </button>
                 <Link
-                  to={`/work-items/${encodeURIComponent(sourceWorkItem.id)}`}
+                  to={withReturnTo(`/work-items/${encodeURIComponent(sourceWorkItem.id)}`, pathname)}
                   className="font-medium text-accent transition-colors hover:text-accent-fg"
                 >
                   {m.chat.workItemOpenItem}
                 </Link>
                 <Link
-                  to={`/projects/${encodeURIComponent(sourceWorkItem.projectId)}/work-items`}
+                  to={withReturnTo(`/projects/${encodeURIComponent(sourceWorkItem.projectId)}/work-items`, pathname)}
                   className="font-medium text-fg-muted transition-colors hover:text-fg"
                 >
                   {m.chat.workItemOpenProject}

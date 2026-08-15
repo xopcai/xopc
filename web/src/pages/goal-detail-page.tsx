@@ -33,6 +33,7 @@ import { AutomationSuggestionCard } from '@/features/automations/automation-sugg
 import type { AutomationRun } from '@/features/automations/automation-api';
 import { formatAutomationMessage } from '@/features/automations/automation-explanations';
 import { ProductAutomationFeedback } from '@/features/automations/product-automation-feedback';
+import { safeInternalReturnPath } from '@/lib/navigation-return';
 import { messages } from '@/i18n/messages';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
@@ -618,13 +619,6 @@ function GoalProgressPanel({
   );
 }
 
-function safeGoalReturnPath(value: string | null): string {
-  const path = value?.trim();
-  if (!path || !path.startsWith('/projects/')) return '/goals';
-  if (path.startsWith('//') || path.includes('://')) return '/goals';
-  return path;
-}
-
 async function fetchGoal(goalId: string): Promise<GoalDetail> {
   const res = await fetchJson<{ ok: true; goal: GoalDetail }>(apiUrl(`/api/goals/${encodeURIComponent(goalId)}`));
   return res.goal;
@@ -703,7 +697,11 @@ export function GoalDetailPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const backPath = useMemo(() => safeGoalReturnPath(searchParams.get('returnTo')), [searchParams]);
+  const backPath = useMemo(() => safeInternalReturnPath(
+    searchParams.get('returnTo'),
+    '/goals',
+    ['/projects', '/work-items', '/chat'],
+  ), [searchParams]);
 
   const refresh = useCallback(async () => {
     if (!goalId) return;

@@ -2,7 +2,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import * as Popover from '@radix-ui/react-popover';
 import { AlertCircle, Archive, ArrowLeft, Check, ChevronDown, Clock, Copy, File, Folder, FolderPlus, History, LayoutDashboard, ListChecks, MessageSquarePlus, Pause, Pin, PinOff, Play, Plus, RotateCcw, Save, Search, Settings, Sparkles, Square, Target, Trash2, X, Zap, type LucideIcon } from 'lucide-react';
 import { type CSSProperties, type FormEvent, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { PageTabs } from '@/components/ui/page-tabs';
@@ -76,6 +76,7 @@ import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { formatMediumDateTime } from '@/lib/date-formatters';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
+import { safeInternalReturnPath, withReturnTo } from '@/lib/navigation-return';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 
@@ -653,6 +654,7 @@ function ProjectSwitcher({
 export function ProjectDetailPage() {
   const { projectId = '', tabId, noteId } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const language = useLocaleStore((s) => s.language);
   const msg = messages(language);
   const wd = msg.chat.workingDirectory;
@@ -725,16 +727,22 @@ export function ProjectDetailPage() {
   });
   const defaultTab: TabId = 'overview';
   const tab = noteId ? 'notes' : isProjectTabId(tabId) ? tabId : defaultTab;
-
-  const navigateProjectTab = useCallback((nextTab: TabId) => {
-    if (!projectId) return;
-    navigate(`/projects/${encodeURIComponent(projectId)}/${nextTab}`);
-  }, [navigate, projectId]);
+  const backPath = useMemo(() => safeInternalReturnPath(
+    searchParams.get('returnTo'),
+    '/projects',
+    ['/chat'],
+  ), [searchParams]);
 
   const projectTabHref = useCallback((nextTab: TabId) => {
     if (!projectId) return '/projects';
-    return `/projects/${encodeURIComponent(projectId)}/${nextTab}`;
-  }, [projectId]);
+    const path = `/projects/${encodeURIComponent(projectId)}/${nextTab}`;
+    return backPath === '/projects' ? path : withReturnTo(path, backPath);
+  }, [backPath, projectId]);
+
+  const navigateProjectTab = useCallback((nextTab: TabId) => {
+    if (!projectId) return;
+    navigate(projectTabHref(nextTab));
+  }, [navigate, projectId, projectTabHref]);
 
   const projectGoalHref = useCallback((goalId: string) => {
     const returnTo = projectTabHref('goals');
@@ -767,8 +775,8 @@ export function ProjectDetailPage() {
 
   useEffect(() => {
     if (!projectId || !tabId || isProjectTabId(tabId)) return;
-    navigate(`/projects/${encodeURIComponent(projectId)}/${defaultTab}`, { replace: true });
-  }, [defaultTab, navigate, projectId, tabId]);
+    navigate(projectTabHref(defaultTab), { replace: true });
+  }, [defaultTab, navigate, projectId, projectTabHref, tabId]);
 
   useEffect(() => {
     if (!projectId) return;
@@ -1149,11 +1157,11 @@ export function ProjectDetailPage() {
 
   const headerStart = useMemo(
     () => (
-      <Link to="/projects" className="inline-flex size-9 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover hover:text-fg" aria-label={pm.backToProjects}>
+      <Link to={backPath} className="inline-flex size-9 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover hover:text-fg" aria-label={backPath === '/projects' ? pm.backToProjects : msg.sidebar.back}>
         <ArrowLeft className="size-4" aria-hidden />
       </Link>
     ),
-    [pm.backToProjects],
+    [backPath, msg.sidebar.back, pm.backToProjects],
   );
 
   const headerEnd = useMemo(
@@ -1454,9 +1462,9 @@ export function ProjectDetailPage() {
   if (!project) {
     return (
       <main className="w-full flex-1 p-3 sm:px-5 sm:py-4 xl:px-6">
-        <Link to="/projects" className="inline-flex items-center gap-2 text-sm text-accent-fg hover:underline">
+        <Link to={backPath} className="inline-flex items-center gap-2 text-sm text-accent-fg hover:underline">
           <ArrowLeft className="size-4" aria-hidden />
-          {pm.backToProjects}
+          {backPath === '/projects' ? pm.backToProjects : msg.sidebar.back}
         </Link>
         <p className="mt-6 rounded-lg bg-surface-panel p-4 shadow-surface text-sm text-fg-muted">
           {error || pm.notFound}
@@ -1716,7 +1724,11 @@ export function ProjectDetailPage() {
       {tab === 'work-items' ? (
         <section id="project-panel-work-items" className="flex h-full min-h-0 flex-col" role="tabpanel" aria-labelledby="project-work-tab-work-items">
           <div className="min-h-0 flex-1 overflow-hidden">
-            <WorkItemsPanel projectId={project.id} createRequestKey={createWorkItemRequestKey} />
+            <WorkItemsPanel
+              projectId={project.id}
+              createRequestKey={createWorkItemRequestKey}
+              detailReturnTo={projectTabHref('work-items')}
+            />
           </div>
         </section>
       ) : null}
