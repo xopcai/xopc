@@ -43,5 +43,16 @@ export interface ProactiveAgentExecutor {
 export interface ContextProvider {
   id: string;
   supports(scenarioKey: string): boolean;
-  collect(input: { batchId: string; eventIds: string[]; subscriptionId: string }): Promise<Record<string, unknown>>;
+  collect(input: {
+    scenarioKey: string;
+    batchId: string;
+    eventIds: string[];
+    subscriptionId: string;
+  }): Promise<ResolvedContext>;
+}
+
+export interface ResolvedContext {
+  content: Record<string, unknown>;
+  snapshotContent?: Record<string, unknown>;
+  evidenceIds: string[];
 }

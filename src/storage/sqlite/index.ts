@@ -260,6 +260,12 @@ export {
   type CachedConnectorCatalogEntry,
 } from './connector-repository.js';
 export {
+  getConnectorSyncPolicy,
+  listConnectorSyncPolicies,
+  upsertConnectorSyncPolicy,
+  type ConnectorSyncPolicy,
+} from './connector-sync-policy-repository.js';
+export {
   getUserTrustPolicy,
   setUserTrustPolicy,
 } from './user-trust-repository.js';

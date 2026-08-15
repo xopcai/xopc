@@ -58,10 +58,12 @@ import { createRuntimeBrowserRecipeService, type BrowserRecipeService } from '..
 import {
   ReadonlyProactiveAgentExecutor,
   listInsights,
+  mapProductEventToProactive,
   ProactiveEventService,
   ProactiveInboxService,
   ProactiveInboxWorker,
   ProactiveScenarioService,
+  ProactiveTemporalWorker,
   ProactiveWorker,
 } from '../proactive/index.js';
 
@@ -94,6 +96,7 @@ import {
   startConnectorLearningCoordinator,
   type ConnectorLearningCoordinator,
 } from '../connectors/learning-coordinator.js';
+import { ConnectedSourceChangePublisher } from '../connectors/source-change-publisher.js';
 import {
   applyAutomaticVoiceLanguage,
   inferProductLanguageFromEnvironment,
@@ -183,6 +186,7 @@ export class GatewayService {
   private mobileNotifications: MobileNotificationService | null = null;
   private connectorSupervisor: ConnectorSupervisor | null = null;
   private connectorLearningCoordinator: ConnectorLearningCoordinator | null = null;
+  private connectedSourceChangePublisher: ConnectedSourceChangePublisher | null = null;
   private connectedKnowledgeCoordinator: ConnectedKnowledgeCoordinator | null = null;
   private stopAutomationProductEventBridge: (() => void) | null = null;
   private stopSessionTranscriptAutomationEvents: (() => void) | null = null;
@@ -223,6 +227,7 @@ export class GatewayService {
   readonly proactiveInbox = new ProactiveInboxService();
   readonly proactiveInsights = listInsights;
   readonly proactiveWorker: ProactiveWorker;
+  readonly proactiveTemporalWorker: ProactiveTemporalWorker;
   readonly proactiveInboxWorker: ProactiveInboxWorker;
 
   constructor(private serviceConfig: GatewayServiceConfig = {}) {
@@ -231,6 +236,7 @@ export class GatewayService {
     runBootstrapMigrationsSync(this.configPath);
     this.config = loadConfig(this.configPath);
     this.proactiveWorker = new ProactiveWorker(new ReadonlyProactiveAgentExecutor(() => this.config));
+    this.proactiveTemporalWorker = new ProactiveTemporalWorker(this.proactive);
     this.proactiveInboxWorker = new ProactiveInboxWorker({
       deliver: async ({ inboxItem }) => {
         this.sse.emit('proactive.inbox.created', inboxItem);
@@ -767,7 +773,19 @@ export class GatewayService {
     openXopcDatabase();
     this.startTime = Date.now();
     this.running = true;
+    if (!this.proactiveScenarios.subscriptions('meeting_preparation').some(
+      (subscription) => subscription.workspaceId === this.currentWorkspacePath,
+    )) {
+      this.proactiveScenarios.subscribe({
+        scenarioKey: 'meeting_preparation',
+        workspaceId: this.currentWorkspacePath,
+        scopeKind: 'workspace',
+        scopeId: this.currentWorkspacePath,
+        enabled: true,
+      });
+    }
     this.proactiveWorker.start();
+    this.proactiveTemporalWorker.start();
     this.proactiveInboxWorker.start();
     prepareConfiguredLocalVoiceModel(this.config);
     this.startupTrace = createGatewayStartupTrace();
@@ -911,6 +929,8 @@ export class GatewayService {
       getMemoryManager: () => this.agentService.getMemoryManager(),
       emit: (type, payload) => this.emit(type, payload),
     });
+    this.connectedSourceChangePublisher = new ConnectedSourceChangePublisher(this.proactive);
+    this.connectedSourceChangePublisher.start();
     this.connectedKnowledgeCoordinator = startConnectedKnowledgeCoordinator({
       resolvePipelineOptions: () => ({
         agentId: resolveDefaultAgentId(this.config),
@@ -1088,6 +1108,7 @@ export class GatewayService {
     this.readiness.markStarting();
 
     await this.proactiveWorker.stop();
+    this.proactiveTemporalWorker.stop();
     await this.proactiveInboxWorker.stop();
 
     await stopTailscaleExposure().catch((err) => {
@@ -1109,6 +1130,8 @@ export class GatewayService {
     this.connectorSupervisor = null;
     this.connectorLearningCoordinator?.stop();
     this.connectorLearningCoordinator = null;
+    this.connectedSourceChangePublisher?.stop();
+    this.connectedSourceChangePublisher = null;
     this.connectedKnowledgeCoordinator?.stop();
     this.connectedKnowledgeCoordinator = null;
 
@@ -1656,6 +1679,22 @@ export class GatewayService {
     this.stopAutomationProductEventBridge?.();
     this.stopSessionTranscriptAutomationEvents?.();
     this.stopAutomationProductEventBridge = onAutomationProductEvent((event) => {
+      const proactiveEvent = mapProductEventToProactive({
+        event,
+        workspaceId: this.currentWorkspacePath,
+        defaultAgentId: resolveDefaultAgentId(this.config),
+      });
+      if (proactiveEvent) {
+        try {
+          this.proactive.publish(proactiveEvent);
+        } catch (err) {
+          const em = err instanceof Error ? err.message : String(err);
+          log.warn(
+            { err, eventType: event.type, source: event.source },
+            `Proactive product event publication failed: ${em}`,
+          );
+        }
+      }
       void this.automationService.triggerEvent(event).catch((err) => {
         const em = err instanceof Error ? err.message : String(err);
         log.warn({ err, eventType: event.type, source: event.source }, `Automation product event failed: ${em}`);
