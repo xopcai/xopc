@@ -9,6 +9,7 @@ const SUPPORTED_EVENT_TYPES = new Set([
   'note.updated',
   'workflow.run.completed',
   'session.transcript.updated',
+  'discussion.completed',
 ]);
 
 function stringValue(payload: Record<string, unknown>, key: string): string | undefined {
@@ -33,6 +34,10 @@ function subjectFor(event: AutomationEvent): { kind: string; id: string } | null
   if (event.type === 'session.transcript.updated') {
     const id = stringValue(payload, 'sessionKey');
     return id ? { kind: 'session', id } : null;
+  }
+  if (event.type === 'discussion.completed') {
+    const id = stringValue(payload, 'discussionId');
+    return id ? { kind: 'discussion', id } : null;
   }
   return null;
 }

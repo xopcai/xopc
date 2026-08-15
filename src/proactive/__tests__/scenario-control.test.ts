@@ -34,7 +34,7 @@ describe('proactive scenario control plane', () => {
 
   it('seeds the product scenarios and supports narrower project routes', () => {
     expect(service.list().map((item) => item.key)).toEqual([
-      'automation_failure_impact', 'blocked_work', 'meeting_preparation', 'project_delivery_risk',
+      'automation_failure_impact', 'blocked_work', 'discussion_follow_up', 'meeting_preparation', 'project_delivery_risk',
     ]);
     expect(service.routes()).toHaveLength(3);
     service.subscribe({

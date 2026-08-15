@@ -90,6 +90,9 @@ const ProductOpenPage = lazy(() => loadProductOpenPage().then((m) => ({ default:
 const WorkDiscoveryPage = lazy(() =>
   import('@/features/work-discovery/work-discovery-page').then((m) => ({ default: m.WorkDiscoveryPage })),
 );
+const DiscussionReviewPage = lazy(() =>
+  import('@/pages/discussion-review-page').then((m) => ({ default: m.DiscussionReviewPage })),
+);
 
 function SecondaryRouteFallback() {
   return (
@@ -299,6 +302,14 @@ const router = createHashRouter([
             ),
           },
         ],
+      },
+      {
+        path: 'discussions/:discussionId',
+        element: (
+          <Suspense fallback={<SecondaryRouteFallback />}>
+            <DiscussionReviewPage />
+          </Suspense>
+        ),
       },
       {
         path: 'workflows',

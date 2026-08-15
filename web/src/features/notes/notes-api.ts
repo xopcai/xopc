@@ -129,6 +129,7 @@ export interface NotesListQuery {
   status?: NoteStatus;
   kind?: NoteKind;
   tag?: string;
+  projectId?: string;
   pinned?: boolean;
   search?: string;
   limit?: number;
@@ -142,6 +143,7 @@ export async function listNotes(query: NotesListQuery = {}): Promise<{ items: No
   if (query.status) params.set('status', query.status);
   if (query.kind) params.set('kind', query.kind);
   if (query.tag) params.set('tag', query.tag);
+  if (query.projectId) params.set('projectId', query.projectId);
   if (query.pinned !== undefined) params.set('pinned', String(query.pinned));
   if (query.search) params.set('search', query.search);
   if (query.limit) params.set('limit', String(query.limit));
@@ -166,6 +168,7 @@ export async function createNote(input: {
   title?: string;
   kind?: NoteKind;
   tags?: string[];
+  projectId?: string;
   pinned?: boolean;
   channel?: string;
 }): Promise<Note> {
@@ -176,6 +179,7 @@ export async function createNote(input: {
       title: input.title,
       kind: input.kind,
       tags: input.tags,
+      projectId: input.projectId,
       pinned: input.pinned,
       channel: input.channel ?? 'web',
     }),

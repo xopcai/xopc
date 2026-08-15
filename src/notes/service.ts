@@ -465,6 +465,18 @@ export class NotesService {
     return attachment;
   }
 
+  async removeAttachment(noteId: string, attachmentId: string): Promise<boolean> {
+    const note = await this.store.getNote(noteId);
+    if (!note) return false;
+    const attachment = note.attachments?.find((candidate) => candidate.id === attachmentId);
+    if (!attachment) return false;
+    await this.store.updateNote(noteId, {
+      attachments: note.attachments?.filter((candidate) => candidate.id !== attachmentId) ?? [],
+    });
+    await this.store.deleteAttachmentFile(noteId, attachment.relativePath);
+    return true;
+  }
+
   async getAttachmentPath(noteId: string, attachmentId: string): Promise<{ filePath: string; mimeType: string; fileName: string } | null> {
     const note = await this.store.getNote(noteId);
     if (!note) return null;

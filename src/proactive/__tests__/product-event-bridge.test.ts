@@ -34,4 +34,22 @@ describe('proactive product event bridge', () => {
       defaultAgentId: 'main',
     })).toBeNull();
   });
+
+  it('maps a completed discussion into project-scoped proactive context', () => {
+    expect(mapProductEventToProactive({
+      event: {
+        type: 'discussion.completed',
+        source: 'discussions',
+        occurredAtMs: Date.parse('2026-08-15T02:00:00.000Z'),
+        payload: { discussionId: 'discussion-1', noteId: 'note-1', projectId: 'project-1' },
+      },
+      workspaceId: '/workspace',
+      defaultAgentId: 'main',
+    })).toMatchObject({
+      type: 'discussion.completed.v1',
+      subject: { kind: 'discussion', id: 'discussion-1' },
+      scope: { projectId: 'project-1' },
+      sensitivity: 'personal',
+    });
+  });
 });

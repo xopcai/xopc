@@ -2,6 +2,7 @@ import type { Hono } from 'hono';
 
 import { registerActivityRoutes } from './activity.js';
 import { registerAgentStreamRoutes } from './agent-stream.js';
+import { registerDiscussionRoutes } from './discussions.js';
 import { registerSessionsRoutes } from './sessions.js';
 import { registerStatusRoutes } from './status.js';
 import { registerMemoryRoutes } from './memory.js';
@@ -30,6 +31,7 @@ export function registerCoreAuthenticatedRoutes(
   registerSessionsRoutes(authenticated, deps);
   registerMemoryRoutes(authenticated, deps);
   registerActivityRoutes(authenticated, deps);
+  registerDiscussionRoutes(authenticated, deps);
   registerProjectsRoutes(authenticated, deps);
   registerProjectSkillRoutes(authenticated, deps);
   registerLocalAppsRoutes(authenticated, deps);

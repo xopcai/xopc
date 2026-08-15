@@ -3,7 +3,6 @@
  */
 
 import type { STTConfig } from '../../voice/stt/types.js';
-import { DEFAULT_STT_CONFIG } from '../../voice/stt/types.js';
 import { isSTTAvailable, transcribe } from '../../voice/stt/index.js';
 import {
   decodeInboundAttachmentBase64,
@@ -13,32 +12,6 @@ import {
 } from './inbound-persist.js';
 
 const STT_MAX_BYTES = 25 * 1024 * 1024;
-
-function mergeSttProviders(
-  base: STTConfig['providers'],
-  patch: STTConfig['providers'],
-): STTConfig['providers'] {
-  if (!base && !patch) return undefined;
-  const merged: Record<string, Record<string, unknown>> = { ...(base ?? {}) };
-  for (const [id, slice] of Object.entries(patch ?? {})) {
-    merged[id] = { ...(merged[id] ?? {}), ...slice };
-  }
-  return merged;
-}
-
-export function mergeSttConfigFromAppConfig(
-  stt: Partial<STTConfig> | undefined,
-  toolsMedia?: { models?: STTConfig['sharedModels'] },
-): STTConfig {
-  const p = stt ?? {};
-  return {
-    ...DEFAULT_STT_CONFIG,
-    ...p,
-    providers: mergeSttProviders(DEFAULT_STT_CONFIG.providers, p.providers),
-    fallback: { ...DEFAULT_STT_CONFIG.fallback!, ...p.fallback },
-    ...(toolsMedia?.models?.length ? { sharedModels: toolsMedia.models } : {}),
-  };
-}
 
 export function isVoiceLikeAttachment(att: InboundAttachmentInput | MediaRef): boolean {
   if (att.type === 'voice') return true;

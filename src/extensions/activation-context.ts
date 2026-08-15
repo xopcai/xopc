@@ -3,7 +3,7 @@
  */
 
 import type { Config } from '../config/config-surface.js';
-import { mergeSttConfigFromAppConfig } from '../channels/attachments/voice-stt-webchat.js';
+import { mergeSttConfigFromAppConfig } from '../voice/stt/index.js';
 import { collectSttProviderConfigEntries } from '../voice/stt/config-slice.js';
 import { isSttProviderConfigured } from '../voice/stt/list-providers.js';
 import { collectTtsProviderConfigEntries } from '../voice/tts/config-slice.js';

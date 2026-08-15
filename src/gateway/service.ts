@@ -12,6 +12,7 @@ import { MessageBus, MessageBusShutdownError } from '../infra/bus/index.js';
 import { loadConfig, saveConfig as writeConfigToDisk } from '../config/index.js';
 import { getWorkspacePath } from '../config/workspace-path-helpers.js';
 import { AutomationService, type AutomationRun } from '../automations/index.js';
+import { DiscussionPipeline, DiscussionService, DiscussionWorker } from '../discussions/index.js';
 import { onAutomationProductEvent, publishAutomationProductEvent } from '../automations/product-events.js';
 import { buildNoteAgentContext, NotesService, NotesStore } from '../notes/index.js';
 import { buildWorkflowChildTools } from '../agent/workflow/workflow-child-tools.js';
@@ -217,6 +218,8 @@ export class GatewayService {
   /** First-class project grouping surface. */
   readonly projects: ProjectService;
   readonly workItems: WorkItemService;
+  readonly discussions: DiscussionService;
+  readonly discussionWorker: DiscussionWorker;
 
   /** Local user-created apps, their coder projects, previews, and installs. */
   readonly localApps: LocalAppService;
@@ -330,6 +333,34 @@ export class GatewayService {
 
     this.projects = new ProjectService(undefined, this.proactive);
     this.workItems = new WorkItemService(undefined, this.proactive);
+    const emitDiscussion = (capture: import('../discussions/index.js').DiscussionCapture) => {
+      this.sse.emit('discussion.updated', capture);
+    };
+    this.discussions = new DiscussionService(
+      this.notesService,
+      this.projects,
+      this.workItems,
+      (type, payload) => {
+        this.sse.emit(type, payload);
+        if (type === 'discussion.completed') {
+          const completed = payload as { completedAt?: number };
+          publishAutomationProductEvent({
+            type,
+            source: 'discussions',
+            payload: payload as Record<string, unknown>,
+            occurredAtMs: completed.completedAt,
+          });
+        }
+      },
+    );
+    this.discussionWorker = new DiscussionWorker(
+      new DiscussionPipeline({
+        notes: this.notesService,
+        getConfig: () => this.config,
+        onUpdated: emitDiscussion,
+      }),
+      emitDiscussion,
+    );
 
     this.localApps = new LocalAppService({
       projects: this.projects,
@@ -773,17 +804,7 @@ export class GatewayService {
     openXopcDatabase();
     this.startTime = Date.now();
     this.running = true;
-    if (!this.proactiveScenarios.subscriptions('meeting_preparation').some(
-      (subscription) => subscription.workspaceId === this.currentWorkspacePath,
-    )) {
-      this.proactiveScenarios.subscribe({
-        scenarioKey: 'meeting_preparation',
-        workspaceId: this.currentWorkspacePath,
-        scopeKind: 'workspace',
-        scopeId: this.currentWorkspacePath,
-        enabled: true,
-      });
-    }
+    this.ensureDefaultProactiveScenarioSubscriptions();
     this.proactiveWorker.start();
     this.proactiveTemporalWorker.start();
     this.proactiveInboxWorker.start();
@@ -916,6 +937,7 @@ export class GatewayService {
     await trace.measure('dreaming.reconcile', () => this.reconcileDreamingAutomations());
 
     await this.notesService.initialize();
+    this.discussionWorker.start();
 
     this.ensureHeartbeatService().start(heartbeatRunnerConfigFromConfig(this.config));
 
@@ -986,6 +1008,21 @@ export class GatewayService {
     }
 
     log.debug('Gateway service started');
+  }
+
+  private ensureDefaultProactiveScenarioSubscriptions(): void {
+    for (const scenarioKey of ['meeting_preparation', 'discussion_follow_up']) {
+      if (this.proactiveScenarios.subscriptions(scenarioKey).some(
+        (subscription) => subscription.workspaceId === this.currentWorkspacePath,
+      )) continue;
+      this.proactiveScenarios.subscribe({
+        scenarioKey,
+        workspaceId: this.currentWorkspacePath,
+        scopeKind: 'workspace',
+        scopeId: this.currentWorkspacePath,
+        enabled: true,
+      });
+    }
   }
 
   /** Called when the HTTP listener is bound (before deferred channel work). */
@@ -1108,6 +1145,7 @@ export class GatewayService {
     this.readiness.markStarting();
 
     await this.proactiveWorker.stop();
+    await this.discussionWorker.stop();
     this.proactiveTemporalWorker.stop();
     await this.proactiveInboxWorker.stop();
 

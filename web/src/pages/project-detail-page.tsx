@@ -1969,8 +1969,7 @@ export function ProjectDetailPage() {
             basePath={`/projects/${encodeURIComponent(project.id)}/notes`}
             showLibrary={false}
             allowMediaCapture={false}
-            listTag={`project:${project.id}`}
-            captureTags={[`project:${project.id}`, project.slug]}
+            projectId={project.id}
             listTitle={pm.notes.title}
             listDescription={pm.notes.hint}
             emptyText={pm.notes.emptyTitle}
