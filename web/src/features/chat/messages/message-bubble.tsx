@@ -37,7 +37,6 @@ import {
   AssistantAttachmentList,
   AssistantTurnOutcomes,
 } from '@/features/chat/messages/assistant-turn-outcomes';
-import { ConversationPlanDock } from '@/features/chat/messages/conversation-plan-dock';
 
 const messageActionIconButton = cn(
   'inline-flex size-9 shrink-0 items-center justify-center rounded-lg',
@@ -607,24 +606,6 @@ export const MessageBubble = memo(function MessageBubble({
               </>
             ) : showStreamingCursor ? (
               <span className="inline-block h-3 w-0.5 animate-pulse bg-accent" />
-            ) : null}
-
-            {assistantTurnView?.plan ? (
-              <ConversationPlanDock
-                plan={assistantTurnView.plan}
-                changeSummary={assistantTurnView.changeSummary}
-                isStreaming={isStreaming}
-                labels={{
-                  heading: m.chat.planHeading,
-                  stepProgress: m.chat.planStepProgress,
-                  completedProgress: m.chat.planCompletedProgress,
-                  finished: m.chat.planFinished,
-                  ended: m.chat.planEnded,
-                  planned: m.chat.planPlanned,
-                  filesChangedOne: m.chat.planFilesChanged_one,
-                  filesChangedOther: m.chat.planFilesChanged_other,
-                }}
-              />
             ) : null}
 
             {assistantTurnView ? (

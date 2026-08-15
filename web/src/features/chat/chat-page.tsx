@@ -13,6 +13,8 @@ import { useChatProjectScope } from '@/features/chat/scope/use-chat-project-scop
 import { ChatWelcomeSpotlightSkeleton } from '@/features/chat/chat-welcome-spotlight';
 import { ChatPageHeaderRegistration } from '@/features/chat/chat-page-header-registration';
 import { ChatSseStatus } from '@/features/chat/agent-selection/chat-sse-status';
+import { ConversationPlanDock } from '@/features/chat/messages/conversation-plan-dock';
+import { extractLatestConversationPlan } from '@/features/chat/messages/conversation-plan';
 import { MessageList } from '@/features/chat/messages/message-list';
 import { ScrollToBottomButton } from '@/features/chat/scroll/scroll-to-bottom-button';
 import { useChatScrollViewport } from '@/features/chat/scroll/use-chat-scroll-viewport';
@@ -538,6 +540,10 @@ export function ChatPage() {
   const showConversationLoading = isLoadingHistory;
   const compactWelcomeLayout =
     !showConversationLoading && msgSlice.items.length === 0 && !stream.streaming;
+  const latestConversationPlan = useMemo(
+    () => extractLatestConversationPlan(msgSlice.items),
+    [msgSlice.items],
+  );
   const chatHeadline = useMemo(() => {
     const titleKey =
       session.sessionRoutePending && session.decodedKey ? session.decodedKey : session.sessionKey;
@@ -1272,6 +1278,23 @@ export function ChatPage() {
                 onSubmit={clarify.submitClarifyAnswer}
                 onCancel={clarify.cancelClarifyAnswer}
               />
+              {latestConversationPlan ? (
+                <ConversationPlanDock
+                  plan={latestConversationPlan.plan}
+                  changeSummary={latestConversationPlan.changeSummary}
+                  isStreaming={stream.streaming}
+                  labels={{
+                    heading: m.chat.planHeading,
+                    stepProgress: m.chat.planStepProgress,
+                    completedProgress: m.chat.planCompletedProgress,
+                    finished: m.chat.planFinished,
+                    ended: m.chat.planEnded,
+                    planned: m.chat.planPlanned,
+                    filesChangedOne: m.chat.planFilesChanged_one,
+                    filesChangedOther: m.chat.planFilesChanged_other,
+                  }}
+                />
+              ) : null}
               <ChatComposer
                 disabled={
                   isSessionTransitioning ||

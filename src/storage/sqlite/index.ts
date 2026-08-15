@@ -76,6 +76,13 @@ export {
   type InteractionState,
 } from './interaction-state-repository.js';
 export {
+  getSessionTaskPlan,
+  setSessionTaskPlan,
+  type SessionTaskPlan,
+  type SessionTaskPlanItem,
+  type SessionTaskPlanItemStatus,
+} from './session-task-plan-repository.js';
+export {
   buildRelationshipPrompt,
   getRelationshipSettings,
   isProactiveSupportAllowed,

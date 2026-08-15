@@ -3,8 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   collectConversationChangeSummary,
   extractConversationPlan,
+  extractLatestConversationPlan,
 } from '@/features/chat/messages/conversation-plan';
-import type { MessageContent, ToolUseContent } from '@/features/chat/messages/messages.types';
+import type { Message, MessageContent, ToolUseContent } from '@/features/chat/messages/messages.types';
 
 function tool(
   name: string,
@@ -84,6 +85,68 @@ describe('extractConversationPlan', () => {
 
   it('does not infer plans from ordinary text', () => {
     expect(extractConversationPlan([{ type: 'text', text: '- [ ] not authoritative' }])).toBeNull();
+  });
+
+  it('extracts the latest plan snapshot from the current session', () => {
+    const sessionMessages: Message[] = [
+      {
+        role: 'assistant',
+        content: [tool('todo', {
+          items: [{ id: 'old', content: 'Old task', status: 'in_progress' }],
+        })],
+      },
+      { role: 'user', content: [{ type: 'text', text: 'Continue' }] },
+      {
+        role: 'assistant',
+        content: [
+          tool('todo', {
+            items: [{ id: 'latest', content: 'Latest task', status: 'in_progress' }],
+          }, { id: 'todo-latest' }),
+          tool('apply_patch', { files: ['latest.ts'], added: 4, removed: 1 }),
+        ],
+      },
+    ];
+
+    expect(extractLatestConversationPlan(sessionMessages)).toMatchObject({
+      plan: {
+        source: 'todo',
+        items: [{ id: 'latest', title: 'Latest task', status: 'in_progress' }],
+      },
+      changeSummary: { files: ['latest.ts'], added: 4, removed: 1 },
+    });
+  });
+
+  it('treats an empty latest Todo snapshot as clearing the session plan', () => {
+    const sessionMessages: Message[] = [
+      {
+        role: 'assistant',
+        content: [tool('todo', {
+          items: [{ id: 'stale', content: 'Stale task', status: 'pending' }],
+        })],
+      },
+      {
+        role: 'assistant',
+        content: [tool('todo', { items: [] }, { id: 'todo-clear' })],
+      },
+    ];
+
+    expect(extractLatestConversationPlan(sessionMessages)).toBeNull();
+  });
+
+  it('hides a session plan after every item is completed or cancelled', () => {
+    const sessionMessages: Message[] = [
+      {
+        role: 'assistant',
+        content: [tool('todo', {
+          items: [
+            { id: 'done', content: 'Completed task', status: 'completed' },
+            { id: 'cancelled', content: 'Cancelled task', status: 'cancelled' },
+          ],
+        })],
+      },
+    ];
+
+    expect(extractLatestConversationPlan(sessionMessages)).toBeNull();
   });
 });
 

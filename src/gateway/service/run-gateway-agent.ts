@@ -147,6 +147,18 @@ export async function *runGatewayAgent(
     taskEvidence.push(evidence);
   };
   const captureTaskEvent = (event: ChatStreamEvent): void => {
+    if (event.type === 'task_plan_updated') {
+      taskContract = {
+        objective: message.trim(),
+        deliverables: [],
+        acceptanceCriteria: event.payload.items
+          .filter((item) => item.status !== 'cancelled')
+          .map((item) => item.title),
+        constraints: [],
+        approvalRequired: [],
+      };
+      return;
+    }
     if (event.type === 'turn_plan') {
       taskContract = {
         objective: message.trim(),

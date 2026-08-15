@@ -68,6 +68,7 @@ export function ConversationPlanDock({
   labels: ConversationPlanLabels;
 }) {
   const activeItem = plan.currentIndex != null ? plan.items[plan.currentIndex - 1] : undefined;
+  const allCompleted = plan.items.every((item) => item.status === 'completed');
   const allClosed = plan.items.every(
     (item) => item.status === 'completed' || item.status === 'cancelled',
   );
@@ -75,18 +76,22 @@ export function ConversationPlanDock({
     completed: plan.completedCount,
     total: plan.totalCount,
   });
-  const stateText = allClosed
-    ? labels.finished
-    : activeItem
-      ? replaceCounts(labels.stepProgress, { current: plan.currentIndex ?? 1, total: plan.totalCount })
-      : isStreaming
-        ? labels.planned
-        : labels.ended;
+  let stateText = labels.ended;
+  if (allCompleted) {
+    stateText = labels.finished;
+  } else if (activeItem) {
+    stateText = replaceCounts(labels.stepProgress, {
+      current: plan.currentIndex ?? 1,
+      total: plan.totalCount,
+    });
+  } else if (!allClosed && isStreaming) {
+    stateText = labels.planned;
+  }
   const changes = changeSummaryText(changeSummary, labels);
   const triggerLabel = [stateText, activeItem?.title, changes].filter(Boolean).join(' · ');
 
   return (
-    <div className="flex w-full justify-center py-1">
+    <div className="flex w-full justify-center pb-2 pt-1">
       <Popover.Root>
         <Popover.Trigger asChild>
           <button
@@ -99,7 +104,7 @@ export function ConversationPlanDock({
             )}
             aria-label={`${labels.heading}: ${triggerLabel}`}
           >
-            {allClosed ? (
+            {allCompleted ? (
               <Check className="size-4 shrink-0 text-fg-muted" strokeWidth={2} aria-hidden />
             ) : activeItem ? (
               <CircleDot className="size-4 shrink-0 text-accent" strokeWidth={2} aria-hidden />

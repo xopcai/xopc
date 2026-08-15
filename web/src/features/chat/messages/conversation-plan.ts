@@ -1,4 +1,4 @@
-import type { MessageContent, ToolUseContent } from '@/features/chat/messages/messages.types';
+import type { Message, MessageContent, ToolUseContent } from '@/features/chat/messages/messages.types';
 import { parseToolResult } from '@/features/chat/tool-results/parse-tool-result';
 
 export type ConversationPlanItemStatus =
@@ -24,6 +24,11 @@ export type ConversationChangeSummary = {
   files: string[];
   added: number;
   removed: number;
+};
+
+export type ConversationPlanSnapshot = {
+  plan: ConversationPlan;
+  changeSummary: ConversationChangeSummary | null;
 };
 
 const PLAN_STATUSES = new Set<ConversationPlanItemStatus>([
@@ -77,10 +82,13 @@ function planFromUpdatePlan(details: Record<string, unknown>): ConversationPlan 
   if (!Array.isArray(details.plan)) return null;
   const items = details.plan.flatMap((value, index) => {
     const item = asRecord(value);
+    const id = typeof item?.id === 'string' && item.id.trim()
+      ? item.id.trim()
+      : `update-plan-${index}`;
     const title = typeof item?.step === 'string' ? item.step.trim() : '';
     const status = normalizeStatus(item?.status);
     return title && status
-      ? [{ id: `update-plan-${index}`, title, status }]
+      ? [{ id, title, status }]
       : [];
   });
   const explanation = typeof details.explanation === 'string' && details.explanation.trim()
@@ -103,7 +111,10 @@ function planFromTodo(details: Record<string, unknown>): ConversationPlan | null
   return finalizePlan('todo', undefined, items);
 }
 
-export function extractConversationPlan(content: readonly MessageContent[]): ConversationPlan | null {
+function findConversationPlanSnapshot(content: readonly MessageContent[]): {
+  found: boolean;
+  plan: ConversationPlan | null;
+} {
   for (let index = content.length - 1; index >= 0; index -= 1) {
     const block = content[index];
     if (block.type !== 'tool_use' || block.status === 'error') continue;
@@ -111,15 +122,17 @@ export function extractConversationPlan(content: readonly MessageContent[]): Con
     const details = toolDetails(block);
     if (!details) continue;
     if (name === 'update_plan') {
-      const plan = planFromUpdatePlan(details);
-      if (plan) return plan;
+      return { found: true, plan: planFromUpdatePlan(details) };
     }
     if (name === 'todo') {
-      const plan = planFromTodo(details);
-      if (plan) return plan;
+      return { found: true, plan: planFromTodo(details) };
     }
   }
-  return null;
+  return { found: false, plan: null };
+}
+
+export function extractConversationPlan(content: readonly MessageContent[]): ConversationPlan | null {
+  return findConversationPlanSnapshot(content).plan;
 }
 
 function nonNegativeNumber(value: unknown): number {
@@ -166,4 +179,30 @@ export function collectConversationChangeSummary(
   return files.size > 0 || added > 0 || removed > 0
     ? { files: [...files], added, removed }
     : null;
+}
+
+/** Latest structured plan for the current session. An empty Todo snapshot clears prior state. */
+export function extractLatestConversationPlan(
+  sessionMessages: readonly Message[],
+): ConversationPlanSnapshot | null {
+  for (let messageIndex = sessionMessages.length - 1; messageIndex >= 0; messageIndex -= 1) {
+    const message = sessionMessages[messageIndex];
+    if (message.role !== 'assistant') continue;
+    const snapshot = findConversationPlanSnapshot(message.content ?? []);
+    if (!snapshot.found) continue;
+    if (!snapshot.plan) return null;
+    const hasOpenItem = snapshot.plan.items.some(
+      (item) => item.status === 'pending' || item.status === 'in_progress',
+    );
+    if (!hasOpenItem) return null;
+
+    const contentSincePlan = sessionMessages
+      .slice(messageIndex)
+      .flatMap((entry) => entry.role === 'assistant' ? entry.content ?? [] : []);
+    return {
+      plan: snapshot.plan,
+      changeSummary: collectConversationChangeSummary(contentSincePlan),
+    };
+  }
+  return null;
 }
