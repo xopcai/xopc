@@ -63,7 +63,6 @@ export const BUILTIN_NAV_DEFS: readonly BuiltinNavDef[] = [
 export const PRIMARY_NAV_IDS = [
   'builtin:work',
   'builtin:profile',
-  'builtin:projects',
 ] as const satisfies readonly BuiltinNavId[];
 
 export function isPrimaryNavId(id: string): boolean {
@@ -71,7 +70,7 @@ export function isPrimaryNavId(id: string): boolean {
 }
 
 export const MIN_VISIBLE_NAV_ITEMS = PRIMARY_NAV_IDS.length;
-export const MAX_VISIBLE_NAV_ITEMS = PRIMARY_NAV_IDS.length;
+export const MAX_VISIBLE_NAV_ITEMS = 4;
 
 export type ReconciledNav = {
   visible: NavItem[];

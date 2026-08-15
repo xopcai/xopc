@@ -20,6 +20,12 @@ import {
   hasAssistantAnswerText,
 } from '@/features/chat/messages/turn-activity';
 import {
+  collectConversationChangeSummary,
+  extractConversationPlan,
+  type ConversationChangeSummary,
+  type ConversationPlan,
+} from '@/features/chat/messages/conversation-plan';
+import {
   extractSearchSources,
   type SearchSource,
 } from '@/features/chat/tool-results/search-source-list';
@@ -36,6 +42,8 @@ export interface AssistantTurnViewModel {
   displayContent: MessageContent[];
   flowContent: MessageContent[];
   activity: AssistantTurnActivityPresentation;
+  plan: ConversationPlan | null;
+  changeSummary: ConversationChangeSummary | null;
   answer: {
     started: boolean;
     showStreamingCursor: boolean;
@@ -98,6 +106,8 @@ export function buildAssistantTurnViewModel({
       block.type === 'image' && Boolean(block.source?.data),
   );
   const workspacePaths = collectAssistantWorkspaceOutputPaths(message.content);
+  const plan = extractConversationPlan(message.content ?? []);
+  const changeSummary = collectConversationChangeSummary(message.content ?? []);
 
   let state: AssistantTurnLifecycleState;
   if (!isStreaming) {
@@ -128,6 +138,8 @@ export function buildAssistantTurnViewModel({
         reasoningLevel === 'stream' && isStreaming && !answerStarted,
       ...timing,
     },
+    plan,
+    changeSummary,
     answer: {
       started: answerStarted,
       showStreamingCursor:

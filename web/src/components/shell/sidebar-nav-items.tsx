@@ -1,5 +1,5 @@
 import * as Popover from '@radix-ui/react-popover';
-import { MoreHorizontal } from 'lucide-react';
+import { AudioLines, MoreHorizontal } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import type { DragEvent, ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
@@ -11,6 +11,7 @@ import { cn } from '@/lib/cn';
 import { preloadRouteForPath } from '@/lib/route-preload';
 
 import { useUiExtensions } from '@/features/extensions/extension-provider';
+import { openDiscussionCapture } from '@/features/discussions/discussion-events';
 import { extensionPagePath } from '@/features/extensions/extension-paths';
 import { resolveLucideIcon } from '@/features/extensions/extension-nav-icon';
 import type { ExtensionUiInfo } from '@/features/extensions/types';
@@ -274,6 +275,20 @@ export function SidebarNavItems({
             onOpenAutoFocus={(e) => e.preventDefault()}
           >
             <ul className="flex flex-col gap-0.5" role="list" aria-label={m.sidebar.moreAppsAria}>
+              <li className="contents">
+                <button
+                  type="button"
+                  className={popoverRowClass({ isActive: false }, false, null)}
+                  onClick={() => {
+                    setPopoverOpen(false);
+                    openDiscussionCapture();
+                    onNavigate?.();
+                  }}
+                >
+                  <AudioLines className="size-4 shrink-0 opacity-90" strokeWidth={1.75} aria-hidden />
+                  <span className="truncate">{m.notes.discussionCapture.title}</span>
+                </button>
+              </li>
               {reconciled.overflow.map((item) => {
                 const dragging = draggingId === item.id;
                 const dropHint = hoverTarget?.id === item.id ? hoverTarget.position : null;
