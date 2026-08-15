@@ -6,6 +6,7 @@ export {
 } from './service.js';
 export { analyzeDiscussion } from './analyzer.js';
 export { DiscussionPipeline, mergeDiscussionAnalysisIntoMarkdown } from './pipeline.js';
+export { DiscussionLiveWorker } from './live-worker.js';
 export { DiscussionWorker } from './worker.js';
 export { DISCUSSION_STATUSES } from './types.js';
 export type * from './types.js';

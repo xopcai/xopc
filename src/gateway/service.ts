@@ -12,7 +12,7 @@ import { MessageBus, MessageBusShutdownError } from '../infra/bus/index.js';
 import { loadConfig, saveConfig as writeConfigToDisk } from '../config/index.js';
 import { getWorkspacePath } from '../config/workspace-path-helpers.js';
 import { AutomationService, type AutomationRun } from '../automations/index.js';
-import { DiscussionPipeline, DiscussionService, DiscussionWorker } from '../discussions/index.js';
+import { DiscussionLiveWorker, DiscussionPipeline, DiscussionService, DiscussionWorker } from '../discussions/index.js';
 import { onAutomationProductEvent, publishAutomationProductEvent } from '../automations/product-events.js';
 import { buildNoteAgentContext, NotesService, NotesStore } from '../notes/index.js';
 import { buildWorkflowChildTools } from '../agent/workflow/workflow-child-tools.js';
@@ -220,6 +220,7 @@ export class GatewayService {
   readonly workItems: WorkItemService;
   readonly discussions: DiscussionService;
   readonly discussionWorker: DiscussionWorker;
+  readonly discussionLiveWorker: DiscussionLiveWorker;
 
   /** Local user-created apps, their coder projects, previews, and installs. */
   readonly localApps: LocalAppService;
@@ -339,28 +340,48 @@ export class GatewayService {
     this.discussions = new DiscussionService(
       this.notesService,
       this.projects,
-      this.workItems,
       (type, payload) => {
         this.sse.emit(type, payload);
-        if (type === 'discussion.completed') {
-          const completed = payload as { completedAt?: number };
-          publishAutomationProductEvent({
-            type,
-            source: 'discussions',
-            payload: payload as Record<string, unknown>,
-            occurredAtMs: completed.completedAt,
-          });
-        }
       },
     );
     this.discussionWorker = new DiscussionWorker(
       new DiscussionPipeline({
         notes: this.notesService,
+        projects: this.projects,
         getConfig: () => this.config,
         onUpdated: emitDiscussion,
+        onCompleted: (capture, analysis) => {
+          const payload = {
+            discussionId: capture.id,
+            noteId: capture.noteId,
+            projectId: capture.projectId,
+            completedAt: capture.completedAt,
+            actionCount: analysis.actionItems.length,
+            unownedActionCount: analysis.actionItems.filter((item) => !item.owner).length,
+            undatedActionCount: analysis.actionItems.filter((item) => !item.dueDate).length,
+            riskCount: analysis.risks.length,
+            openQuestionCount: analysis.openQuestions.length,
+          };
+          this.sse.emit('discussion.completed', payload);
+          publishAutomationProductEvent({
+            type: 'discussion.completed',
+            source: 'discussions',
+            payload,
+            occurredAtMs: capture.completedAt,
+          });
+        },
       }),
       emitDiscussion,
     );
+    this.discussionLiveWorker = new DiscussionLiveWorker({
+      notes: this.notesService,
+      projects: this.projects,
+      getConfig: () => this.config,
+      onDiscussionUpdated: emitDiscussion,
+      onTranscriptUpdated: (discussionId, sequence) => {
+        this.sse.emit('discussion.transcript.updated', { discussionId, sequence });
+      },
+    });
 
     this.localApps = new LocalAppService({
       projects: this.projects,
@@ -938,6 +959,7 @@ export class GatewayService {
 
     await this.notesService.initialize();
     this.discussionWorker.start();
+    this.discussionLiveWorker.start();
 
     this.ensureHeartbeatService().start(heartbeatRunnerConfigFromConfig(this.config));
 
@@ -1146,6 +1168,7 @@ export class GatewayService {
 
     await this.proactiveWorker.stop();
     await this.discussionWorker.stop();
+    await this.discussionLiveWorker.stop();
     this.proactiveTemporalWorker.stop();
     await this.proactiveInboxWorker.stop();
 

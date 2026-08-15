@@ -1,14 +1,6 @@
 import type { Note } from '@/features/notes/notes-api';
 
-export type DiscussionStatus =
-  | 'awaiting_upload'
-  | 'queued'
-  | 'transcribing'
-  | 'analyzing'
-  | 'review_required'
-  | 'completed'
-  | 'failed'
-  | 'cancelled';
+export type DiscussionStatus = 'recording' | 'finalizing' | 'completed' | 'failed' | 'cancelled';
 
 export interface DiscussionActionItem {
   id: string;
@@ -18,12 +10,16 @@ export interface DiscussionActionItem {
 }
 
 export interface DiscussionAnalysis {
+  title: string;
   summary: string;
   keyPoints: string[];
   decisions: string[];
   actionItems: DiscussionActionItem[];
   risks: string[];
   openQuestions: string[];
+  projectCandidateId?: string;
+  projectConfidence?: number;
+  projectAlternativeConfidence?: number;
 }
 
 export interface DiscussionCapture {
@@ -32,21 +28,29 @@ export interface DiscussionCapture {
   noteId: string;
   projectId?: string;
   audioAttachmentId?: string;
+  source: 'web' | 'electron';
   status: DiscussionStatus;
-  captureMode: 'solo' | 'conversation';
-  consentConfirmed: boolean;
-  languageHint?: string;
+  processingStage?: 'original_upload' | 'final_transcription' | 'analysis' | 'note_write';
   durationMs?: number;
+  expectedLastSequence?: number;
   mimeType?: string;
   audioSizeBytes?: number;
+  transcriptRaw?: string;
+  transcriptLanguage?: string;
+  sttProvider?: string;
+  analysis?: DiscussionAnalysis;
+  generatedTitle?: string;
+  projectInferenceScore?: number;
+  projectInferenceSource?: 'context' | 'exact_name' | 'model';
+  finalizationRevision: number;
+  attemptCount: number;
   lastErrorCode?: string;
   lastErrorMessage?: string;
-  analysis?: DiscussionAnalysis;
-  review?: DiscussionAnalysis;
-  analysisVersion: number;
-  reviewRevision: number;
+  recordingStartedAt: number;
+  recordingFinishedAt?: number;
   createdAt: number;
   updatedAt: number;
+  completedAt?: number;
   audioDeletedAt?: number;
 }
 
@@ -55,29 +59,58 @@ export interface DiscussionDetail {
   note: Note;
 }
 
-export interface DiscussionCompletion extends DiscussionDetail {
-  createdWorkItemIds: string[];
+export interface DiscussionTranscriptSegment {
+  discussionId: string;
+  sequence: number;
+  audioSha256: string;
+  startedAtMs: number;
+  endedAtMs: number;
+  status: 'uploaded' | 'transcribing' | 'completed' | 'failed';
+  transcript?: string;
+  provider?: string;
+  attemptCount: number;
+  lastError?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface DiscussionTranscript {
+  discussionId: string;
+  segments: DiscussionTranscriptSegment[];
+  text: string;
+}
+
+export interface DiscussionCaptureSettings {
+  consentPolicyVersion: number;
+  consentAcknowledgedAt?: number;
 }
 
 export interface DiscussionDraft {
   id: string;
   projectId?: string;
-  title?: string;
-  language: string;
-  captureMode: 'solo' | 'conversation';
-  consentConfirmed: boolean;
+  serverDiscussionId?: string;
   mimeType: string;
   startedAt: number;
   updatedAt: number;
   durationMs: number;
   chunkCount: number;
+  lastSequence: number;
   state: 'recording' | 'stopped' | 'upload_failed';
-  serverDiscussionId?: string;
 }
 
 export interface DiscussionDraftChunk {
   draftId: string;
   index: number;
   blob: Blob;
+  createdAt: number;
+}
+
+export interface DiscussionLiveSegment {
+  draftId: string;
+  sequence: number;
+  blob: Blob;
+  startedAtMs: number;
+  endedAtMs: number;
+  sha256: string;
   createdAt: number;
 }

@@ -7,6 +7,7 @@ import {
   saveDiscussionDraft,
   saveDiscussionDraftChunk,
 } from './discussion-draft-store';
+import { LivePcmSegmenter, type LivePcmSegment } from './live-pcm-segmenter';
 import type { DiscussionDraft } from './discussion-types';
 
 const MAX_RECORDING_MS = 30 * 60 * 1_000;
@@ -43,7 +44,9 @@ export function useDiscussionRecorder() {
   const [recoverableDrafts, setRecoverableDrafts] = useState<DiscussionDraft[]>([]);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [liveTranscriptionAvailable, setLiveTranscriptionAvailable] = useState(true);
   const recorderRef = useRef<MediaRecorder | null>(null);
+  const segmenterRef = useRef<LivePcmSegmenter | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const draftRef = useRef<DiscussionDraft | null>(null);
   const chunkIndexRef = useRef(0);
@@ -75,7 +78,10 @@ export function useDiscussionRecorder() {
     recorderRef.current = null;
   }, []);
 
-  useEffect(() => () => stopTimersAndStream(), [stopTimersAndStream]);
+  useEffect(() => () => {
+    segmenterRef.current?.cancel();
+    stopTimersAndStream();
+  }, [stopTimersAndStream]);
 
   const persistChunk = useCallback((blob: Blob) => {
     const active = draftRef.current;
@@ -108,6 +114,10 @@ export function useDiscussionRecorder() {
       accumulatedMsRef.current += Date.now() - segmentStartedAtRef.current;
       segmentStartedAtRef.current = 0;
     }
+    const lastSequence = segmenterRef.current
+      ? await segmenterRef.current.stop().catch(() => -1)
+      : -1;
+    segmenterRef.current = null;
     await new Promise<void>((resolve) => {
       recorder.addEventListener('stop', () => resolve(), { once: true });
       recorder.stop();
@@ -120,9 +130,10 @@ export function useDiscussionRecorder() {
       setError('The recording draft could not be recovered.');
       return null;
     }
-    const stopped = {
+    const stopped: DiscussionDraft = {
       ...current,
-      state: 'stopped' as const,
+      state: 'stopped',
+      lastSequence,
       durationMs: Math.min(MAX_RECORDING_MS, Math.max(1_000, accumulatedMsRef.current)),
       updatedAt: Date.now(),
     };
@@ -138,15 +149,12 @@ export function useDiscussionRecorder() {
 
   const start = useCallback(async (input: {
     projectId?: string;
-    title?: string;
-    language: string;
-    captureMode: 'solo' | 'conversation';
-    consentConfirmed: boolean;
-  }) => {
+    onLiveSegment: (draftId: string, segment: LivePcmSegment) => Promise<void> | void;
+  }): Promise<DiscussionDraft | null> => {
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
       setError('Audio recording is not supported in this environment.');
       setPhase('error');
-      return;
+      return null;
     }
     setError(null);
     setPhase('requesting_permission');
@@ -165,15 +173,12 @@ export function useDiscussionRecorder() {
       const nextDraft: DiscussionDraft = {
         id: crypto.randomUUID(),
         ...(input.projectId ? { projectId: input.projectId } : {}),
-        ...(input.title?.trim() ? { title: input.title.trim() } : {}),
-        language: input.language,
-        captureMode: input.captureMode,
-        consentConfirmed: input.consentConfirmed,
         mimeType: recorder.mimeType || selectedMimeType || 'audio/webm',
         startedAt: now,
         updatedAt: now,
         durationMs: 0,
         chunkCount: 0,
+        lastSequence: -1,
         state: 'recording',
       };
       await saveDiscussionDraft(nextDraft);
@@ -184,10 +189,18 @@ export function useDiscussionRecorder() {
       segmentStartedAtRef.current = now;
       persistQueueRef.current = Promise.resolve();
       recorder.ondataavailable = (event) => persistChunk(event.data);
-      recorder.onerror = () => {
-        setError('The microphone stopped unexpectedly. Stop and submit the saved recording.');
-      };
+      recorder.onerror = () => setError('The microphone stopped unexpectedly. Finish to save the recording.');
       recorder.start(5_000);
+      try {
+        segmenterRef.current = await LivePcmSegmenter.start(
+          stream,
+          (segment) => input.onLiveSegment(nextDraft.id, segment),
+        );
+        setLiveTranscriptionAvailable(true);
+      } catch {
+        segmenterRef.current = null;
+        setLiveTranscriptionAvailable(false);
+      }
       setDraft(nextDraft);
       setElapsedMs(0);
       setPhase('recording');
@@ -197,10 +210,14 @@ export function useDiscussionRecorder() {
         ));
       }, 1_000);
       maxTimerRef.current = window.setTimeout(() => void stop(), MAX_RECORDING_MS);
+      return nextDraft;
     } catch (caught) {
+      segmenterRef.current?.cancel();
+      segmenterRef.current = null;
       stopTimersAndStream();
       setError(caught instanceof Error ? caught.message : 'Microphone permission was denied.');
       setPhase('error');
+      return null;
     }
   }, [persistChunk, stop, stopTimersAndStream]);
 
@@ -212,6 +229,7 @@ export function useDiscussionRecorder() {
       setElapsedMs(accumulatedMsRef.current);
     }
     recorderRef.current.pause();
+    segmenterRef.current?.pause();
     setPhase('paused');
   }, []);
 
@@ -219,7 +237,17 @@ export function useDiscussionRecorder() {
     if (recorderRef.current?.state !== 'paused') return;
     segmentStartedAtRef.current = Date.now();
     recorderRef.current.resume();
+    segmenterRef.current?.resume();
     setPhase('recording');
+  }, []);
+
+  const setServerDiscussionId = useCallback(async (serverDiscussionId: string) => {
+    const current = draftRef.current;
+    if (!current) return;
+    const updated = { ...current, serverDiscussionId, updatedAt: Date.now() };
+    draftRef.current = updated;
+    setDraft(updated);
+    await saveDiscussionDraft(updated);
   }, []);
 
   const restore = useCallback(async (candidate: DiscussionDraft) => {
@@ -284,6 +312,7 @@ export function useDiscussionRecorder() {
     recoverableDrafts,
     elapsedMs,
     error,
+    liveTranscriptionAvailable,
     start,
     pause,
     resume,
@@ -293,6 +322,7 @@ export function useDiscussionRecorder() {
     buildFile,
     markUploadFailed,
     reset,
+    setServerDiscussionId,
     refreshRecoverableDrafts,
   };
 }

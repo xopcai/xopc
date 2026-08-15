@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { createLogger } from '../utils/logger.js';
 
 import { claimNextDiscussionCapture, getDiscussionCapture, updateDiscussionCapture } from './repository.js';
-import type { DiscussionCapture, DiscussionFailedStage } from './types.js';
+import type { DiscussionCapture } from './types.js';
 
 const log = createLogger('DiscussionWorker');
 const MAX_ATTEMPTS = 3;
@@ -60,16 +60,15 @@ export class DiscussionWorker {
   private failOrRetry(id: string, error: unknown): void {
     const current = getDiscussionCapture(id);
     if (!current || current.leaseOwner !== this.owner) return;
-    const failedStage: DiscussionFailedStage = current.transcriptRaw ? 'analysis' : 'transcription';
+    const failedStage = current.processingStage ?? 'final_transcription';
     const exhausted = current.attemptCount >= MAX_ATTEMPTS;
     const errorMessage = error instanceof Error ? error.message : String(error);
     const updated = updateDiscussionCapture(id, {
-      status: exhausted ? 'failed' : failedStage === 'analysis' ? 'analyzing' : 'queued',
-      failedStage,
+      status: exhausted ? 'failed' : 'finalizing',
       leaseOwner: undefined,
       leaseExpiresAt: undefined,
       nextAttemptAt: exhausted ? undefined : Date.now() + 2 ** current.attemptCount * 1_000,
-      lastErrorCode: failedStage === 'analysis' ? 'analysis_failed' : 'transcription_failed',
+      lastErrorCode: `${failedStage}_failed`,
       lastErrorMessage: errorMessage.slice(0, 1_000),
     }, [current.status]);
     if (updated) this.onUpdated?.(updated);

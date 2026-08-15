@@ -3,15 +3,27 @@ import { formatApiHttpError } from '@/lib/http-error-message';
 import { apiUrl } from '@/lib/url';
 import { useGatewayStore } from '@/stores/gateway-store';
 
-import type { DiscussionAnalysis, DiscussionCompletion, DiscussionDetail } from './discussion-types';
+import type {
+  DiscussionCaptureSettings,
+  DiscussionDetail,
+  DiscussionTranscript,
+} from './discussion-types';
+
+export function getDiscussionCaptureSettings(): Promise<DiscussionCaptureSettings> {
+  return fetchJson(apiUrl('/api/discussion-capture/settings'));
+}
+
+export function acknowledgeDiscussionConsent(consentPolicyVersion: number): Promise<DiscussionCaptureSettings> {
+  return fetchJson(apiUrl('/api/discussion-capture/settings'), {
+    method: 'PUT',
+    body: JSON.stringify({ consentPolicyVersion }),
+  });
+}
 
 export async function createDiscussion(input: {
   clientRequestId: string;
-  projectId?: string;
-  title?: string;
-  language: string;
-  captureMode: 'solo' | 'conversation';
-  consentConfirmed: boolean;
+  contextProjectId?: string;
+  consentPolicyVersion: number;
   source: 'web' | 'electron';
 }): Promise<DiscussionDetail> {
   return fetchJson<DiscussionDetail>(apiUrl('/api/discussions'), {
@@ -20,45 +32,67 @@ export async function createDiscussion(input: {
   });
 }
 
-export async function getDiscussion(id: string): Promise<DiscussionDetail> {
-  return fetchJson<DiscussionDetail>(apiUrl(`/api/discussions/${encodeURIComponent(id)}`));
+export function getDiscussion(id: string): Promise<DiscussionDetail> {
+  return fetchJson(apiUrl(`/api/discussions/${encodeURIComponent(id)}`));
 }
 
-export async function saveDiscussionReview(
-  id: string,
-  analysis: DiscussionAnalysis,
-  expectedRevision: number,
-): Promise<DiscussionDetail> {
-  return fetchJson<DiscussionDetail>(apiUrl(`/api/discussions/${encodeURIComponent(id)}/review`), {
+export async function getDiscussionForNote(noteId: string): Promise<DiscussionDetail | null> {
+  try {
+    return await fetchJson(apiUrl(`/api/discussions/by-note/${encodeURIComponent(noteId)}`));
+  } catch (error) {
+    if ((error as { status?: number }).status === 404) return null;
+    throw error;
+  }
+}
+
+export function getDiscussionTranscript(id: string): Promise<DiscussionTranscript> {
+  return fetchJson(apiUrl(`/api/discussions/${encodeURIComponent(id)}/transcript`));
+}
+
+export function uploadDiscussionSegment(
+  discussionId: string,
+  sequence: number,
+  input: { blob: Blob; startedAtMs: number; endedAtMs: number; sha256: string },
+): Promise<DiscussionTranscript> {
+  const form = new FormData();
+  form.set('file', input.blob, `segment-${sequence}.wav`);
+  form.set('startedAtMs', String(input.startedAtMs));
+  form.set('endedAtMs', String(input.endedAtMs));
+  form.set('sha256', input.sha256);
+  return fetchJson(apiUrl(`/api/discussions/${encodeURIComponent(discussionId)}/segments/${sequence}`), {
     method: 'PUT',
-    body: JSON.stringify({ analysis, expectedRevision }),
+    body: form,
   });
 }
 
-export async function completeDiscussion(
-  id: string,
-  expectedRevision: number,
-  actionItemIds: string[],
-): Promise<DiscussionCompletion> {
-  return fetchJson<DiscussionCompletion>(apiUrl(`/api/discussions/${encodeURIComponent(id)}/complete`), {
+export function finishDiscussion(
+  discussionId: string,
+  lastSequence: number,
+  durationMs: number,
+): Promise<DiscussionDetail> {
+  return fetchJson(apiUrl(`/api/discussions/${encodeURIComponent(discussionId)}/finish`), {
     method: 'POST',
-    body: JSON.stringify({ expectedRevision, actionItemIds }),
+    body: JSON.stringify({ lastSequence, durationMs }),
   });
 }
 
-export async function retryDiscussion(id: string): Promise<DiscussionDetail> {
-  return fetchJson<DiscussionDetail>(apiUrl(`/api/discussions/${encodeURIComponent(id)}/retry`), {
-    method: 'POST',
-  });
+export function retryDiscussion(id: string): Promise<DiscussionDetail> {
+  return fetchJson(apiUrl(`/api/discussions/${encodeURIComponent(id)}/retry`), { method: 'POST' });
 }
 
-export async function deleteDiscussionAudio(id: string): Promise<DiscussionDetail> {
-  return fetchJson<DiscussionDetail>(apiUrl(`/api/discussions/${encodeURIComponent(id)}/audio`), {
-    method: 'DELETE',
-  });
+export function cancelDiscussion(id: string): Promise<DiscussionDetail> {
+  return fetchJson(apiUrl(`/api/discussions/${encodeURIComponent(id)}/cancel`), { method: 'POST' });
 }
 
-export function uploadDiscussionAudio(
+export function deleteDiscussionAudio(id: string): Promise<DiscussionDetail> {
+  return fetchJson(apiUrl(`/api/discussions/${encodeURIComponent(id)}/audio`), { method: 'DELETE' });
+}
+
+export function unlinkDiscussionProject(id: string): Promise<DiscussionDetail> {
+  return fetchJson(apiUrl(`/api/discussions/${encodeURIComponent(id)}/project`), { method: 'DELETE' });
+}
+
+export function uploadDiscussionRecording(
   discussionId: string,
   file: File,
   durationMs: number,
@@ -66,7 +100,7 @@ export function uploadDiscussionAudio(
 ): Promise<DiscussionDetail> {
   return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest();
-    request.open('POST', apiUrl(`/api/discussions/${encodeURIComponent(discussionId)}/audio`));
+    request.open('PUT', apiUrl(`/api/discussions/${encodeURIComponent(discussionId)}/recording`));
     const token = useGatewayStore.getState().token;
     if (token) request.setRequestHeader('Authorization', `Bearer ${token}`);
     request.responseType = 'json';

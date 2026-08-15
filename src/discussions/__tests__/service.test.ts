@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -7,19 +8,19 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ObjectLinkService } from '../../activity/service.js';
 import { NotesService, NotesStore } from '../../notes/index.js';
 import { ProjectService } from '../../projects/index.js';
-import { WorkItemService } from '../../work-items/index.js';
 import {
   closeXopcDatabase,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../storage/sqlite/index.js';
-import { DiscussionService, DiscussionServiceError } from '../service.js';
+import { DiscussionLiveWorker } from '../live-worker.js';
 import { DiscussionPipeline } from '../pipeline.js';
 import {
   claimNextDiscussionCapture,
   getDiscussionCapture,
   updateDiscussionCapture,
 } from '../repository.js';
+import { DiscussionService, DiscussionServiceError } from '../service.js';
 import { DiscussionWorker } from '../worker.js';
 
 describe('DiscussionService', () => {
@@ -49,115 +50,128 @@ describe('DiscussionService', () => {
     rmSync(stateDir, { recursive: true, force: true });
   });
 
-  it('creates one project-linked voice note for an idempotent request', async () => {
+  function acknowledge(): number {
+    const version = service.settings().consentPolicyVersion;
+    service.acknowledgeConsent(version);
+    return version;
+  }
+
+  async function create(clientRequestId: string, projectId?: string) {
+    const consentPolicyVersion = acknowledge();
+    return service.create({
+      clientRequestId,
+      ...(projectId ? { contextProjectId: projectId } : {}),
+      consentPolicyVersion,
+      source: 'web',
+    });
+  }
+
+  it('requires one policy acknowledgement and creates an idempotent recording note', async () => {
+    const policyVersion = service.settings().consentPolicyVersion;
+    await expect(service.create({
+      clientRequestId: 'draft-no-consent',
+      consentPolicyVersion: policyVersion,
+      source: 'web',
+    })).rejects.toMatchObject<Partial<DiscussionServiceError>>({ code: 'conflict' });
+
+    service.acknowledgeConsent(policyVersion);
     const project = projects.create({ name: 'Latency project' });
     const input = {
       clientRequestId: 'draft-1',
-      projectId: project.id,
-      title: 'Latency review',
-      captureMode: 'conversation' as const,
-      consentConfirmed: true,
+      contextProjectId: project.id,
+      consentPolicyVersion: policyVersion,
       source: 'web' as const,
     };
-
     const first = await service.create(input);
     const second = await service.create(input);
 
     expect(second.discussion.id).toBe(first.discussion.id);
-    expect(first.note.kind).toBe('voice');
-    expect(first.note.tags).toBeUndefined();
-    expect((await notes.listNotes({ projectId: project.id })).items.map((item) => item.id)).toEqual([first.note.id]);
+    expect(first.discussion).toMatchObject({
+      status: 'recording',
+      processingStage: 'original_upload',
+      projectInferenceSource: 'context',
+    });
+    expect(first.note.markdown).toContain('Recording in progress');
     expect(new ObjectLinkService().listForObject({ kind: 'note', id: first.note.id })).toEqual([
-      expect.objectContaining({
-        relation: 'belongs_to',
-        to: expect.objectContaining({ kind: 'project', id: project.id }),
-      }),
+      expect.objectContaining({ relation: 'belongs_to', to: expect.objectContaining({ id: project.id }) }),
     ]);
   });
 
-  it('requires consent for conversation capture and only cancels active work', async () => {
-    await expect(service.create({
-      clientRequestId: 'draft-no-consent',
-      captureMode: 'conversation',
-      consentConfirmed: false,
-      source: 'electron',
-    })).rejects.toMatchObject<Partial<DiscussionServiceError>>({ code: 'invalid_input' });
+  it('stores ordered live segments, transcribes them, and enriches the note once', async () => {
+    const project = projects.create({ name: 'Launch Project' });
+    const created = await create('draft-live');
+    const audio = [Buffer.from('wav-segment-one'), Buffer.from('wav-segment-two')];
+    for (let sequence = 0; sequence < audio.length; sequence += 1) {
+      const buffer = audio[sequence]!;
+      service.uploadSegment({
+        discussionId: created.discussion.id,
+        sequence,
+        file: { buffer, mimeType: 'audio/wav' },
+        startedAtMs: sequence * 19_000,
+        endedAtMs: sequence * 19_000 + 20_000,
+        sha256: createHash('sha256').update(buffer).digest('hex'),
+      });
+    }
 
-    const detail = await service.create({
-      clientRequestId: 'draft-solo',
-      captureMode: 'solo',
-      consentConfirmed: false,
-      source: 'electron',
+    let calls = 0;
+    const worker = new DiscussionLiveWorker({
+      notes,
+      projects,
+      getConfig: () => ({}) as never,
+      transcribeSegment: async () => ({
+        text: calls++ === 0
+          ? 'We discussed the Launch Project release plan and agreed to prepare the final checklist. '
+          : 'final checklist. The release owner will confirm the rollout window tomorrow.',
+        provider: 'test-live-stt',
+      }),
+      enrichTranscript: async () => ({
+        title: 'Launch release plan',
+        projectCandidateId: project.id,
+        projectConfidence: 0.94,
+        projectAlternativeConfidence: 0.1,
+        modelRef: 'test/live',
+      }),
     });
-    const cancelled = await service.cancel(detail.discussion.id);
-    expect(cancelled?.discussion.status).toBe('cancelled');
-    expect((await service.cancel(detail.discussion.id))?.discussion.status).toBe('cancelled');
-  });
+    await worker.tick();
+    await worker.tick();
 
-  it('stores audio once and advances the discussion to the queue', async () => {
-    const created = await service.create({
-      clientRequestId: 'draft-audio',
-      title: 'Audio review',
-      captureMode: 'solo',
-      consentConfirmed: false,
-      source: 'web',
-    });
-    const file = {
-      name: 'discussion.webm',
-      buffer: Buffer.from('synthetic-audio'),
-      mimeType: 'audio/webm;codecs=opus',
-    };
-
-    const uploaded = await service.uploadAudio(created.discussion.id, file, 5_000);
-    const repeated = await service.uploadAudio(created.discussion.id, file, 5_000);
-
-    expect(uploaded?.discussion).toMatchObject({
-      status: 'queued',
-      durationMs: 5_000,
-      audioSizeBytes: file.buffer.length,
-    });
-    expect(repeated?.discussion.audioAttachmentId).toBe(uploaded?.discussion.audioAttachmentId);
-    expect(repeated?.note.attachments).toHaveLength(1);
-    expect(repeated?.note.markdown).toContain('xopc-attachment://notes/');
-
-    await expect(service.deleteAudio(created.discussion.id))
-      .rejects.toMatchObject({ code: 'conflict' });
-    updateDiscussionCapture(created.discussion.id, { status: 'review_required' }, ['queued']);
-    const deleted = await service.deleteAudio(created.discussion.id);
-    expect(deleted?.discussion).toMatchObject({ status: 'review_required' });
-    expect(deleted?.discussion.audioAttachmentId).toBeUndefined();
-    expect(deleted?.discussion.audioDeletedAt).toEqual(expect.any(Number));
-    expect(deleted?.note.attachments).toEqual([]);
-    expect(deleted?.note.markdown).not.toContain('xopc-attachment://notes/');
-    expect(service.metrics()).toMatchObject({
-      total: 1,
-      byStatus: { review_required: 1 },
+    const transcript = service.transcript(created.discussion.id)!;
+    const detail = await service.get(created.discussion.id);
+    expect(transcript.segments.map((segment) => segment.status)).toEqual(['completed', 'completed']);
+    expect(transcript.text.match(/final checklist/g)).toHaveLength(1);
+    expect(detail?.note.title).toBe('Launch release plan');
+    expect(detail?.discussion).toMatchObject({
+      projectId: project.id,
+      projectInferenceSource: 'exact_name',
+      generatedTitle: 'Launch release plan',
     });
   });
 
-  it('claims uploaded audio and writes a reviewable analysis into the note', async () => {
-    const created = await service.create({
-      clientRequestId: 'draft-pipeline',
-      title: 'Release discussion',
-      captureMode: 'solo',
-      consentConfirmed: false,
-      source: 'web',
-    });
-    await service.uploadAudio(created.discussion.id, {
+  it('uses the full recording as authority and completes the note without review', async () => {
+    const project = projects.create({ name: 'Release project' });
+    const created = await create('draft-final', project.id);
+    await service.uploadRecording(created.discussion.id, {
       name: 'release.webm',
       buffer: Buffer.from('synthetic-audio'),
       mimeType: 'audio/webm',
     }, 5_000);
+    const finishing = await service.finish(created.discussion.id, -1, 5_000);
+    expect(finishing?.discussion).toMatchObject({ status: 'finalizing', processingStage: 'final_transcription' });
     const claimed = claimNextDiscussionCapture('worker-1');
-    expect(claimed).toMatchObject({ status: 'transcribing', attemptCount: 1, leaseOwner: 'worker-1' });
-
+    const completedEvents: string[] = [];
     const pipeline = new DiscussionPipeline({
       notes,
+      projects,
       getConfig: () => ({}) as never,
-      transcribeAudio: async () => ({ text: 'We will ship Friday. Lin owns the checklist.', provider: 'test-stt', language: 'en' }),
+      transcribeAudio: async () => ({
+        text: 'We will ship Friday. Lin owns the checklist.',
+        provider: 'test-stt',
+        language: 'en',
+      }),
       analyzeTranscript: async () => ({
         modelRef: 'test/analyzer',
         analysis: {
+          title: 'Friday release decision',
           summary: 'The team agreed to ship Friday.',
           keyPoints: ['Release readiness was reviewed.'],
           decisions: ['Ship on Friday.'],
@@ -166,147 +180,85 @@ describe('DiscussionService', () => {
           openQuestions: [],
         },
       }),
+      onCompleted: (capture) => completedEvents.push(capture.id),
     });
     const completed = await pipeline.process(claimed!, 'worker-1');
     const note = await notes.getNote(created.note.id);
 
-    expect(completed).toMatchObject({
-      status: 'review_required',
-      sttProvider: 'test-stt',
-      analyzerModelRef: 'test/analyzer',
-      analysisVersion: 1,
-    });
+    expect(completed).toMatchObject({ status: 'completed', finalizationRevision: 1, sttProvider: 'test-stt' });
+    expect(note).toMatchObject({ title: 'Friday release decision', status: 'processed' });
     expect(note?.markdown).toContain('## Decisions\n- Ship on Friday.');
-    expect(note?.markdown).toContain('- [ ] Prepare the checklist — Owner: Lin');
     expect(note?.markdown).toContain('## Transcript\nWe will ship Friday.');
-    expect(note?.attachments?.[0]?.transcript).toBe('We will ship Friday. Lin owns the checklist.');
+    expect(note?.attachments?.[0]?.transcript).toContain('We will ship Friday.');
+    expect(completedEvents).toEqual([created.discussion.id]);
+
+    const withoutAudio = await service.deleteAudio(created.discussion.id);
+    const retainedNote = await notes.getNote(created.note.id);
+    expect(withoutAudio?.discussion.audioAttachmentId).toBeUndefined();
+    expect(retainedNote?.attachments).toEqual([]);
+    expect(retainedNote?.markdown).not.toContain('[Discussion audio]');
+    expect(retainedNote?.markdown).toContain('## Transcript\nWe will ship Friday.');
   });
 
-  it('recovers an expired processing lease without double claiming', async () => {
-    const created = await service.create({
-      clientRequestId: 'draft-lease',
-      captureMode: 'solo',
-      consentConfirmed: false,
-      source: 'electron',
-    });
-    await service.uploadAudio(created.discussion.id, {
+  it('recovers an expired finalization lease without double claiming', async () => {
+    const created = await create('draft-lease');
+    await service.uploadRecording(created.discussion.id, {
       name: 'lease.ogg',
       buffer: Buffer.from('synthetic-audio'),
       mimeType: 'audio/ogg',
     }, 5_000);
+    await service.finish(created.discussion.id, -1, 5_000);
 
     const first = claimNextDiscussionCapture('worker-a', 1_000, 500);
     expect(first?.attemptCount).toBe(1);
     expect(claimNextDiscussionCapture('worker-b', 1_200, 500)).toBeNull();
     const recovered = claimNextDiscussionCapture('worker-b', 1_501, 500);
-    expect(recovered).toMatchObject({ leaseOwner: 'worker-b', attemptCount: 2, status: 'transcribing' });
+    expect(recovered).toMatchObject({ leaseOwner: 'worker-b', attemptCount: 2, status: 'finalizing' });
   });
 
-  it('backs off transient failures and stops after three attempts', async () => {
-    const created = await service.create({
-      clientRequestId: 'draft-retry',
-      captureMode: 'solo',
-      consentConfirmed: false,
-      source: 'web',
-    });
-    await service.uploadAudio(created.discussion.id, {
+  it('backs off finalization failures and stops after three attempts', async () => {
+    const created = await create('draft-retry');
+    await service.uploadRecording(created.discussion.id, {
       name: 'retry.wav',
       buffer: Buffer.from('synthetic-audio'),
       mimeType: 'audio/wav',
     }, 5_000);
-    const worker = new DiscussionWorker({
-      process: async () => { throw new Error('provider unavailable'); },
-    });
+    await service.finish(created.discussion.id, -1, 5_000);
+    const worker = new DiscussionWorker({ process: async () => { throw new Error('provider unavailable'); } });
 
     await worker.tick();
     let capture = getDiscussionCapture(created.discussion.id)!;
-    expect(capture).toMatchObject({ status: 'queued', attemptCount: 1, failedStage: 'transcription' });
-    expect(capture.nextAttemptAt).toBeTypeOf('number');
-
-    updateDiscussionCapture(capture.id, { nextAttemptAt: 0 }, ['queued']);
+    expect(capture).toMatchObject({ status: 'finalizing', attemptCount: 1 });
+    updateDiscussionCapture(capture.id, { nextAttemptAt: 0 }, ['finalizing']);
     await worker.tick();
     capture = getDiscussionCapture(capture.id)!;
-    expect(capture).toMatchObject({ status: 'queued', attemptCount: 2 });
-
-    updateDiscussionCapture(capture.id, { nextAttemptAt: 0 }, ['queued']);
+    updateDiscussionCapture(capture.id, { nextAttemptAt: 0 }, ['finalizing']);
     await worker.tick();
     capture = getDiscussionCapture(capture.id)!;
-    expect(capture).toMatchObject({
-      status: 'failed',
-      attemptCount: 3,
-      lastErrorCode: 'transcription_failed',
-    });
-    expect(capture.leaseOwner).toBeUndefined();
+    expect(capture).toMatchObject({ status: 'failed', attemptCount: 3, lastErrorCode: 'final_transcription_failed' });
+
+    expect((await service.retry(capture.id))?.discussion).toMatchObject({ status: 'finalizing', attemptCount: 0 });
   });
 
-  it('saves an optimistic review and converts selected actions exactly once', async () => {
-    const project = projects.create({ name: 'Review project' });
-    const workItems = new WorkItemService();
-    const emitted: Array<{ type: string; payload: unknown }> = [];
-    const reviewService = new DiscussionService(notes, projects, workItems, (type, payload) => {
-      emitted.push({ type, payload });
-    });
-    const created = await reviewService.create({
-      clientRequestId: 'draft-review',
+  it('allows an inferred project association to be undone', async () => {
+    const project = projects.create({ name: 'Undo project' });
+    const created = await create('draft-cleanup');
+    updateDiscussionCapture(created.discussion.id, {
       projectId: project.id,
-      captureMode: 'solo',
-      consentConfirmed: false,
-      source: 'web',
+      projectInferenceScore: 0.9,
+      projectInferenceSource: 'model',
+      status: 'completed',
+    }, ['recording']);
+    new ObjectLinkService().create({
+      id: `discussion:${created.discussion.id}:project`,
+      from: { kind: 'note', id: created.note.id },
+      to: { kind: 'project', id: project.id },
+      relation: 'belongs_to',
+      source: 'agent',
     });
-    await reviewService.uploadAudio(created.discussion.id, {
-      name: 'review.mp4',
-      buffer: Buffer.from('synthetic-audio'),
-      mimeType: 'audio/mp4',
-    }, 5_000);
-    const claimed = claimNextDiscussionCapture('review-worker')!;
-    await new DiscussionPipeline({
-      notes,
-      getConfig: () => ({}) as never,
-      transcribeAudio: async () => ({ text: 'Prepare the launch checklist.', provider: 'test-stt' }),
-      analyzeTranscript: async () => ({
-        modelRef: 'test/analyzer',
-        analysis: {
-          summary: 'Launch planning.',
-          keyPoints: [],
-          decisions: [],
-          actionItems: [{ id: 'launch-checklist', title: 'Prepare launch checklist' }],
-          risks: [],
-          openQuestions: [],
-        },
-      }),
-    }).process(claimed, 'review-worker');
 
-    const reviewInput = {
-      summary: 'Reviewed launch planning.',
-      keyPoints: ['Checklist first.'],
-      decisions: [],
-      actionItems: [{ id: 'launch-checklist', title: 'Prepare the final launch checklist' }],
-      risks: [],
-      openQuestions: [],
-    };
-    const concurrentReviews = await Promise.allSettled([
-      reviewService.saveReview(created.discussion.id, reviewInput, 0),
-      reviewService.saveReview(created.discussion.id, reviewInput, 0),
-    ]);
-    expect(concurrentReviews.map((result) => result.status).sort()).toEqual(['fulfilled', 'rejected']);
-    const reviewed = concurrentReviews.find((result) => result.status === 'fulfilled')?.value;
-    expect(reviewed?.discussion.reviewRevision).toBe(1);
-    await expect(reviewService.saveReview(created.discussion.id, reviewed?.discussion.review, 0))
-      .rejects.toMatchObject({ code: 'conflict' });
-
-    const [first, audioDeleted] = await Promise.all([
-      reviewService.complete(created.discussion.id, 1, ['launch-checklist']),
-      reviewService.deleteAudio(created.discussion.id),
-    ]);
-    const second = await reviewService.complete(created.discussion.id, 1, ['launch-checklist']);
-    expect(first?.discussion.status).toBe('completed');
-    expect(first?.createdWorkItemIds).toHaveLength(1);
-    expect(second?.createdWorkItemIds).toEqual(first?.createdWorkItemIds);
-    expect(workItems.listProjectWorkItems(project.id).items).toHaveLength(1);
-    expect((await notes.getNote(created.note.id))?.status).toBe('processed');
-    expect(audioDeleted?.discussion.audioDeletedAt).toEqual(expect.any(Number));
-    expect(emitted.filter((event) => event.type === 'discussion.completed')).toEqual([
-      expect.objectContaining({ payload: expect.objectContaining({ discussionId: created.discussion.id }) }),
-    ]);
+    const unlinked = await service.unlinkInferredProject(created.discussion.id);
+    expect(unlinked?.discussion.projectId).toBeUndefined();
+    expect(new ObjectLinkService().listForObject({ kind: 'note', id: created.note.id })).toEqual([]);
   });
 });

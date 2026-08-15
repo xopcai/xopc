@@ -229,6 +229,7 @@ export {
 } from './config-repository.js';
 export {
   createObjectLinkRecord,
+  deleteObjectLinkRecord,
   getActivityEventRecord,
   listActivityRecords,
   listObjectActivityRecords,

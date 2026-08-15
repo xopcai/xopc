@@ -1,12 +1,16 @@
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 
+import { ObjectLinkService } from '../activity/service.js';
 import type { Config } from '../config/schema.js';
+import { buildNoteAttachmentRef } from '../notes/attachment-ref.js';
 import type { NotesService } from '../notes/service.js';
+import type { ProjectService } from '../projects/project-service.js';
 import { isSTTAvailable, mergeSttConfigFromAppConfig, transcribe } from '../voice/stt/index.js';
 
 import { analyzeDiscussion } from './analyzer.js';
-import { updateDiscussionCapture } from './repository.js';
+import { acceptRankedProject, findExactProjectMention } from './project-inference.js';
+import { deleteDiscussionSegmentAudio, updateDiscussionCapture } from './repository.js';
 import type { DiscussionAnalysis, DiscussionCapture } from './types.js';
 
 const MANAGED_START = '<!-- xopc:discussion-analysis:start -->';
@@ -20,10 +24,12 @@ export interface DiscussionTranscriptionResult {
 
 export interface DiscussionPipelineDeps {
   notes: NotesService;
+  projects: ProjectService;
   getConfig: () => Config;
   transcribeAudio?: (buffer: Buffer, capture: DiscussionCapture, signal?: AbortSignal) => Promise<DiscussionTranscriptionResult>;
   analyzeTranscript?: (transcript: string, capture: DiscussionCapture, signal?: AbortSignal) => Promise<{ analysis: DiscussionAnalysis; modelRef: string }>;
   onUpdated?: (capture: DiscussionCapture) => void;
+  onCompleted?: (capture: DiscussionCapture, analysis: DiscussionAnalysis) => void;
 }
 
 function list(values: string[]): string {
@@ -68,28 +74,32 @@ export function mergeDiscussionAnalysisIntoMarkdown(
   markdown: string,
   transcript: string,
   analysis: DiscussionAnalysis,
+  audioRef?: string,
 ): string {
   const managed = renderManagedSection(transcript, analysis);
-  const withoutPlaceholders = markdown
-    .replace(/^> Waiting for the discussion recording to be uploaded\.\s*$/gm, '')
-    .replace(/^> Recording uploaded\. Processing will start shortly\.\s*$/gm, '')
+  const withoutPlaceholder = markdown
+    .replace(/^> Recording in progress\. Live transcript will appear here\.\s*$/gm, '')
+    .replace(/^> Finalizing recording\.\.\.\s*$/gm, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
-  const start = withoutPlaceholders.indexOf(MANAGED_START);
-  const end = withoutPlaceholders.indexOf(MANAGED_END);
-  if (start >= 0 && end >= start) {
-    return `${withoutPlaceholders.slice(0, start).trimEnd()}\n\n${managed}${withoutPlaceholders.slice(end + MANAGED_END.length)}`.trim();
-  }
-  return `${withoutPlaceholders}\n\n${managed}`.trim();
+  const start = withoutPlaceholder.indexOf(MANAGED_START);
+  const end = withoutPlaceholder.indexOf(MANAGED_END);
+  const base = start >= 0 && end >= start
+    ? `${withoutPlaceholder.slice(0, start).trimEnd()}\n\n${managed}${withoutPlaceholder.slice(end + MANAGED_END.length)}`.trim()
+    : `${withoutPlaceholder}\n\n${managed}`.trim();
+  return audioRef && !base.includes(`](${audioRef})`) ? `${base}\n\n[Discussion audio](${audioRef})` : base;
 }
 
 export class DiscussionPipeline {
+  private readonly objectLinks = new ObjectLinkService();
+
   constructor(private readonly deps: DiscussionPipelineDeps) {}
 
   async process(capture: DiscussionCapture, owner: string, signal?: AbortSignal): Promise<DiscussionCapture> {
     let current = capture;
     if (!current.transcriptRaw) current = await this.transcribe(current, owner, signal);
-    return this.analyze(current, owner, signal);
+    if (!current.analysis) current = await this.analyze(current, owner, signal);
+    return this.writeNote(current, owner);
   }
 
   private async transcribe(capture: DiscussionCapture, owner: string, signal?: AbortSignal): Promise<DiscussionCapture> {
@@ -103,54 +113,107 @@ export class DiscussionPipeline {
     const transcript = result.text.trim();
     if (!transcript) throw new Error('Discussion transcription produced no text');
     const updated = updateDiscussionCapture(capture.id, {
-      status: 'analyzing',
+      processingStage: 'analysis',
       transcriptRaw: transcript,
       transcriptSha256: createHash('sha256').update(transcript).digest('hex'),
       transcriptLanguage: result.language,
       sttProvider: result.provider,
-      failedStage: undefined,
       lastErrorCode: undefined,
       lastErrorMessage: undefined,
       leaseOwner: owner,
       leaseExpiresAt: Date.now() + 5 * 60_000,
-    }, ['transcribing']);
+    }, ['finalizing']);
     if (!updated) throw new Error('Discussion changed while transcribing');
-    await this.persistAttachmentTranscript(updated, transcript);
     this.deps.onUpdated?.(updated);
     return updated;
   }
 
   private async analyze(capture: DiscussionCapture, owner: string, signal?: AbortSignal): Promise<DiscussionCapture> {
     if (!capture.transcriptRaw) throw new Error('Discussion transcript is missing');
+    const projects = this.deps.projects.list({ status: 'active', limit: 100 }).items;
     const result = this.deps.analyzeTranscript
       ? await this.deps.analyzeTranscript(capture.transcriptRaw, capture, signal)
       : await analyzeDiscussion({
         config: this.deps.getConfig(),
         transcript: capture.transcriptRaw,
-        languageHint: capture.languageHint,
+        projects: projects.map(({ id, name }) => ({ id, name })),
         signal,
       });
+    const analysis = result.analysis;
+    let inferredProject: { id: string; score: number; source: 'exact_name' | 'model' } | undefined;
+    if (!capture.projectId) {
+      const exact = findExactProjectMention(capture.transcriptRaw, projects);
+      const ranked = acceptRankedProject(analysis, projects);
+      if (exact) inferredProject = { id: exact.id, score: 1, source: 'exact_name' };
+      else if (ranked) inferredProject = { ...ranked, source: 'model' };
+    }
+    const updated = updateDiscussionCapture(capture.id, {
+      processingStage: 'note_write',
+      analysis,
+      analysisInputHash: capture.transcriptSha256,
+      analyzerModelRef: result.modelRef,
+      generatedTitle: analysis.title,
+      ...(inferredProject ? {
+        projectId: inferredProject.id,
+        projectInferenceScore: inferredProject.score,
+        projectInferenceSource: inferredProject.source,
+      } : {}),
+      leaseOwner: owner,
+      leaseExpiresAt: Date.now() + 5 * 60_000,
+    }, ['finalizing']);
+    if (!updated) throw new Error('Discussion changed while analyzing');
+    if (inferredProject) this.linkProject(updated, inferredProject.id);
+    this.deps.onUpdated?.(updated);
+    return updated;
+  }
+
+  private async writeNote(capture: DiscussionCapture, owner: string): Promise<DiscussionCapture> {
+    if (!capture.transcriptRaw || !capture.analysis || !capture.audioAttachmentId) {
+      throw new Error('Discussion finalization data is incomplete');
+    }
     const note = await this.deps.notes.getNote(capture.noteId);
     if (!note) throw new Error('Discussion note is missing');
-    await this.deps.notes.updateNote(capture.noteId, {
-      markdown: mergeDiscussionAnalysisIntoMarkdown(note.markdown, capture.transcriptRaw, result.analysis),
-    }, 'ai_edit');
+    const title = capture.analysis.title.trim().slice(0, 200);
+    const audioRef = buildNoteAttachmentRef(capture.noteId, capture.audioAttachmentId);
+    const markdown = mergeDiscussionAnalysisIntoMarkdown(note.markdown, capture.transcriptRaw, capture.analysis, audioRef);
+    const attachments = (note.attachments ?? []).map((attachment) =>
+      attachment.id === capture.audioAttachmentId ? { ...attachment, transcript: capture.transcriptRaw } : attachment,
+    );
+    if (capture.projectId && capture.projectInferenceSource !== 'context') {
+      this.linkProject(capture, capture.projectId);
+    }
+    if (note.title !== title || note.markdown !== markdown || note.status !== 'processed') {
+      await this.deps.notes.updateNote(capture.noteId, { title, markdown, attachments, status: 'processed' }, 'ai_edit');
+    }
+    const now = Date.now();
     const updated = updateDiscussionCapture(capture.id, {
-      status: 'review_required',
-      analysis: result.analysis,
-      analysisVersion: capture.analysisVersion + 1,
-      analysisInputHash: capture.transcriptSha256 ?? createHash('sha256').update(capture.transcriptRaw).digest('hex'),
-      analyzerModelRef: result.modelRef,
+      status: 'completed',
+      processingStage: undefined,
+      finalizationRevision: capture.finalizationRevision + 1,
+      completedAt: now,
       leaseOwner: undefined,
       leaseExpiresAt: undefined,
       nextAttemptAt: undefined,
-      failedStage: undefined,
       lastErrorCode: undefined,
       lastErrorMessage: undefined,
-    }, ['analyzing']);
-    if (!updated) throw new Error('Discussion changed while analyzing');
+    }, ['finalizing']);
+    if (!updated || updated.leaseOwner) throw new Error('Discussion changed while writing the note');
+    deleteDiscussionSegmentAudio(capture.id);
     this.deps.onUpdated?.(updated);
+    this.deps.onCompleted?.(updated, capture.analysis);
     return updated;
+  }
+
+  private linkProject(capture: DiscussionCapture, projectId: string): void {
+    const project = this.deps.projects.get(projectId);
+    if (!project) return;
+    this.objectLinks.create({
+      id: `discussion:${capture.id}:project`,
+      from: { kind: 'note', id: capture.noteId },
+      to: { kind: 'project', id: project.id, title: project.name },
+      relation: 'belongs_to',
+      source: 'agent',
+    });
   }
 
   private async defaultTranscribe(
@@ -163,19 +226,9 @@ export class DiscussionPipeline {
     const sttConfig = mergeSttConfigFromAppConfig(config.tools?.media?.audio, config.tools?.media);
     if (!isSTTAvailable(sttConfig)) throw new Error('STT is not configured');
     return transcribe(buffer, sttConfig, {
-      language: capture.languageHint === 'auto' ? undefined : capture.languageHint,
       mime: attachment.mimeType || capture.mimeType,
       fileName: attachment.fileName,
       signal,
     });
-  }
-
-  private async persistAttachmentTranscript(capture: DiscussionCapture, transcript: string): Promise<void> {
-    const note = await this.deps.notes.getNote(capture.noteId);
-    if (!note || !capture.audioAttachmentId) return;
-    const attachments = (note.attachments ?? []).map((attachment) =>
-      attachment.id === capture.audioAttachmentId ? { ...attachment, transcript } : attachment,
-    );
-    await this.deps.notes.updateNote(capture.noteId, { attachments }, 'ai_edit');
   }
 }

@@ -380,3 +380,9 @@ export function listObjectLinkRecords(object: ActivityObjectRef): ObjectLink[] {
     .all(object.kind, object.id, object.kind, object.id)
     .map((row) => objectLinkFromRow(row as ObjectLinkRow));
 }
+
+export function deleteObjectLinkRecord(id: string): boolean {
+  return runSqliteWriteTransaction((db) => db.prepare(
+    'DELETE FROM object_links WHERE id = ?',
+  ).run(id).changes > 0);
+}

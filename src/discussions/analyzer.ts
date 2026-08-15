@@ -13,6 +13,7 @@ import type { DiscussionAnalysis } from './types.js';
 const MAX_TRANSCRIPT_CHARS = 120_000;
 
 const AnalysisSchema = z.object({
+  title: z.string().trim().min(1).max(200),
   summary: z.string().trim().min(1).max(4_000),
   keyPoints: z.array(z.string().trim().min(1).max(1_000)).max(12).default([]),
   decisions: z.array(z.string().trim().min(1).max(1_000)).max(12).default([]),
@@ -24,6 +25,16 @@ const AnalysisSchema = z.object({
   })).max(20).default([]),
   risks: z.array(z.string().trim().min(1).max(1_000)).max(12).default([]),
   openQuestions: z.array(z.string().trim().min(1).max(1_000)).max(12).default([]),
+  projectCandidateId: z.string().trim().min(1).max(200).optional(),
+  projectConfidence: z.number().min(0).max(1).optional(),
+  projectAlternativeConfidence: z.number().min(0).max(1).optional(),
+});
+
+const LiveEnrichmentSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  projectCandidateId: z.string().trim().min(1).max(200).optional(),
+  projectConfidence: z.number().min(0).max(1).optional(),
+  projectAlternativeConfidence: z.number().min(0).max(1).optional(),
 });
 
 function extractText(content: unknown): string {
@@ -72,6 +83,7 @@ export async function analyzeDiscussion(input: {
   config: Config;
   transcript: string;
   languageHint?: string;
+  projects?: Array<{ id: string; name: string }>;
   signal?: AbortSignal;
 }): Promise<{ analysis: DiscussionAnalysis; modelRef: string }> {
   const modelRef = getAgentDefaultModelRef(input.config);
@@ -82,9 +94,13 @@ export async function analyzeDiscussion(input: {
   const prompt = [
     'Analyze the supplied workplace discussion transcript.',
     'Use only facts explicitly present in the transcript. Do not invent owners, dates, decisions, or commitments.',
-    'Return exactly one JSON object with: summary, keyPoints, decisions, actionItems, risks, openQuestions.',
+    'Return exactly one JSON object with: title, summary, keyPoints, decisions, actionItems, risks, openQuestions, and optional projectCandidateId, projectConfidence, and projectAlternativeConfidence.',
+    'title is a short concrete note title derived from the discussion.',
     'actionItems contains title and optional owner and dueDate. Omit owner or dueDate when not explicit.',
     'Keep unresolved possibilities in openQuestions, not decisions.',
+    input.projects?.length
+      ? `Choose projectCandidateId only from this catalog when the discussion clearly belongs to it; otherwise omit it. projectConfidence is the top probability and projectAlternativeConfidence is the runner-up probability: ${JSON.stringify(input.projects.slice(0, 100))}`
+      : 'Omit projectCandidateId and projectConfidence.',
     `Use ${input.languageHint === 'en' ? 'English' : input.languageHint === 'zh' ? 'Simplified Chinese' : 'the main language of the transcript'} for every user-facing string.`,
     '',
     transcript,
@@ -98,5 +114,35 @@ export async function analyzeDiscussion(input: {
   return {
     modelRef,
     analysis: normalizeDiscussionAnalysis(parseJsonObject(extractText(response.content))),
+  };
+}
+
+export async function enrichLiveDiscussion(input: {
+  config: Config;
+  transcript: string;
+  projects: Array<{ id: string; name: string }>;
+  signal?: AbortSignal;
+}): Promise<z.infer<typeof LiveEnrichmentSchema> & { modelRef: string }> {
+  const modelRef = getAgentDefaultModelRef(input.config);
+  if (!modelRef) throw new Error('No default model configured for discussion enrichment');
+  const transcript = input.transcript.trim().slice(0, 12_000);
+  if (!transcript) throw new Error('Discussion transcript is empty');
+  const prompt = [
+    'Create a short concrete note title for this partial workplace discussion transcript.',
+    'Return exactly one JSON object with title and optional projectCandidateId, projectConfidence, and projectAlternativeConfidence.',
+    'Choose a project only when the transcript clearly belongs to it. Never invent a project id.',
+    `Project catalog: ${JSON.stringify(input.projects.slice(0, 100))}`,
+    '',
+    transcript,
+  ].join('\n');
+  const message: UserMessage = { role: 'user', content: prompt, timestamp: Date.now() };
+  const response = await completeWithResolvedCredentials(
+    resolveModel(modelRef),
+    { messages: [message] },
+    { maxTokens: 400, temperature: 0.1, signal: input.signal },
+  );
+  return {
+    modelRef,
+    ...LiveEnrichmentSchema.parse(parseJsonObject(extractText(response.content))),
   };
 }

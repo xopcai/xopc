@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import {
   createObjectLinkRecord,
+  deleteObjectLinkRecord,
   getActivityEventRecord,
   listActivityRecords,
   listObjectActivityRecords,
@@ -78,5 +79,9 @@ export class ObjectLinkService {
 
   listForObject(object: ActivityObjectRef): ObjectLink[] {
     return listObjectLinkRecords(object);
+  }
+
+  delete(id: string): boolean {
+    return deleteObjectLinkRecord(id);
   }
 }

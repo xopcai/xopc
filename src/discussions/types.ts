@@ -1,17 +1,19 @@
 export const DISCUSSION_STATUSES = [
-  'awaiting_upload',
-  'queued',
-  'transcribing',
-  'analyzing',
-  'review_required',
+  'recording',
+  'finalizing',
   'completed',
   'failed',
   'cancelled',
 ] as const;
 
 export type DiscussionStatus = typeof DISCUSSION_STATUSES[number];
-export type DiscussionCaptureMode = 'solo' | 'conversation';
-export type DiscussionFailedStage = 'transcription' | 'analysis';
+export type DiscussionProcessingStage =
+  | 'original_upload'
+  | 'final_transcription'
+  | 'analysis'
+  | 'note_write';
+export type DiscussionSource = 'web' | 'electron';
+export type DiscussionProjectInferenceSource = 'context' | 'exact_name' | 'model';
 
 export interface DiscussionActionItem {
   id: string;
@@ -21,12 +23,16 @@ export interface DiscussionActionItem {
 }
 
 export interface DiscussionAnalysis {
+  title: string;
   summary: string;
   keyPoints: string[];
   decisions: string[];
   actionItems: DiscussionActionItem[];
   risks: string[];
   openQuestions: string[];
+  projectCandidateId?: string;
+  projectConfidence?: number;
+  projectAlternativeConfidence?: number;
 }
 
 export interface DiscussionCapture {
@@ -35,12 +41,11 @@ export interface DiscussionCapture {
   noteId: string;
   projectId?: string;
   audioAttachmentId?: string;
+  source: DiscussionSource;
   status: DiscussionStatus;
-  failedStage?: DiscussionFailedStage;
-  captureMode: DiscussionCaptureMode;
-  consentConfirmed: boolean;
-  languageHint?: string;
+  processingStage?: DiscussionProcessingStage;
   durationMs?: number;
+  expectedLastSequence?: number;
   mimeType?: string;
   audioSizeBytes?: number;
   audioSha256?: string;
@@ -48,33 +53,61 @@ export interface DiscussionCapture {
   transcriptSha256?: string;
   transcriptLanguage?: string;
   sttProvider?: string;
-  analysis?: unknown;
-  analysisVersion: number;
+  analysis?: DiscussionAnalysis;
   analysisInputHash?: string;
   analyzerModelRef?: string;
-  review?: unknown;
-  reviewRevision: number;
+  generatedTitle?: string;
+  projectInferenceScore?: number;
+  projectInferenceSource?: DiscussionProjectInferenceSource;
+  finalizationRevision: number;
   attemptCount: number;
   nextAttemptAt?: number;
   leaseOwner?: string;
   leaseExpiresAt?: number;
   lastErrorCode?: string;
   lastErrorMessage?: string;
+  recordingStartedAt: number;
+  recordingFinishedAt?: number;
   createdAt: number;
   updatedAt: number;
   completedAt?: number;
-  reviewedAt?: number;
   audioDeletedAt?: number;
+}
+
+export interface DiscussionTranscriptSegment {
+  discussionId: string;
+  sequence: number;
+  audioSha256: string;
+  startedAtMs: number;
+  endedAtMs: number;
+  status: 'uploaded' | 'transcribing' | 'completed' | 'failed';
+  transcript?: string;
+  provider?: string;
+  attemptCount: number;
+  nextAttemptAt?: number;
+  leaseOwner?: string;
+  leaseExpiresAt?: number;
+  lastError?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface DiscussionTranscript {
+  discussionId: string;
+  segments: DiscussionTranscriptSegment[];
+  text: string;
+}
+
+export interface DiscussionCaptureSettings {
+  consentPolicyVersion: number;
+  consentAcknowledgedAt?: number;
 }
 
 export interface CreateDiscussionInput {
   clientRequestId: string;
-  projectId?: string;
-  title?: string;
-  language?: string;
-  captureMode: DiscussionCaptureMode;
-  consentConfirmed: boolean;
-  source: 'web' | 'electron';
+  contextProjectId?: string;
+  consentPolicyVersion: number;
+  source: DiscussionSource;
 }
 
 export interface ListDiscussionsQuery {
@@ -95,15 +128,11 @@ export interface DiscussionListResult {
 export interface DiscussionMetrics {
   total: number;
   byStatus: Record<DiscussionStatus, number>;
-  averageTimeToReviewMs: number | null;
+  averageTimeToFirstTranscriptMs: number | null;
   averageTimeToCompleteMs: number | null;
 }
 
 export interface DiscussionDetail {
   discussion: DiscussionCapture;
   note: import('../notes/types.js').Note;
-}
-
-export interface DiscussionCompletion extends DiscussionDetail {
-  createdWorkItemIds: string[];
 }
