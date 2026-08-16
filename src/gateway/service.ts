@@ -55,6 +55,7 @@ import { MobileNotificationService } from '../mobile/notification-service.js';
 import { ProjectService } from '../projects/index.js';
 import { LocalAppService } from '../local-apps/index.js';
 import { buildWorkItemAgentContext, WorkItemService } from '../work-items/index.js';
+import { OutcomeProjectionService, WorkIntakeService } from '../work/index.js';
 import { createRuntimeBrowserRecipeService, type BrowserRecipeService } from '../browser/recipes/index.js';
 import {
   ReadonlyProactiveAgentExecutor,
@@ -562,7 +563,7 @@ export class GatewayService {
       this.goalRunner = new GoalRunner({
         maxConcurrent: 1,
         defaultMaxRetries: 2,
-        ensureSession: async (goal) => {
+        ensureSession: async (goal, executionContext) => {
           const existing = goal.activeSessionKey?.trim();
           if (existing) return existing;
           const agentId = goal.agentId || getDefaultAgentId(this.config);
@@ -586,6 +587,15 @@ export class GatewayService {
                 peerKind: 'direct',
                 peerId,
               },
+              projectId: goal.projectId,
+              customData: {
+                goalId: goal.id,
+                origin: 'goal',
+                triggerKind: executionContext?.triggerKind ?? 'user',
+                ...(executionContext?.workItemId ? { workItemId: executionContext.workItemId } : {}),
+                ...(executionContext?.contextTraceId ? { contextTraceId: executionContext.contextTraceId } : {}),
+                ...(executionContext?.parentRunId ? { parentRunId: executionContext.parentRunId } : {}),
+              },
             },
           });
           if (goal.projectId) {
@@ -594,6 +604,21 @@ export class GatewayService {
           const { GoalService } = await import('../goals/index.js');
           new GoalService().attachSession(goal.id, sessionKey);
           return sessionKey;
+        },
+        bindExecutionContext: async (sessionKey, goal, executionContext) => {
+          const metadata = await this.sessionIndex.getSessionMetadata(sessionKey);
+          await this.sessionIndex.updateSessionMetadata(sessionKey, {
+            projectId: goal.projectId ?? metadata?.projectId,
+            customData: {
+              ...metadata?.customData,
+              goalId: goal.id,
+              origin: 'goal',
+              triggerKind: executionContext?.triggerKind ?? 'user',
+              ...(executionContext?.workItemId ? { workItemId: executionContext.workItemId } : {}),
+              ...(executionContext?.contextTraceId ? { contextTraceId: executionContext.contextTraceId } : {}),
+              ...(executionContext?.parentRunId ? { parentRunId: executionContext.parentRunId } : {}),
+            },
+          });
         },
         hasActiveRun: (sessionKey) => this.agentRunner.hasActiveRun(sessionKey),
         runTurn: (sessionKey, userTurn) =>
@@ -823,6 +848,12 @@ export class GatewayService {
 
     log.debug('Starting gateway service...');
     openXopcDatabase();
+    new WorkIntakeService(
+      this.projects,
+      this.workItems,
+      { enqueue: (goalId, options) => this.enqueueGoalRun(goalId, options) },
+    ).reconcilePendingExecutions();
+    new OutcomeProjectionService().reconcile();
     this.startTime = Date.now();
     this.running = true;
     this.ensureDefaultProactiveScenarioSubscriptions();

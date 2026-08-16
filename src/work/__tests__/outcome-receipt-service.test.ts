@@ -37,6 +37,7 @@ describe('toOutcomeReceipt', () => {
         status: 'unverified',
         checks: [{ criterion: 'Tests pass', status: 'unverified', evidenceTitles: [] }],
       },
+      completionVerdict: 'partial',
     }));
 
     expect(receipt.status).toBe('partial');

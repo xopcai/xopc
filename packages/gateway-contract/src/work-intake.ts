@@ -1,6 +1,16 @@
 import { z } from 'zod';
 
 export const WorkIntakeClassificationSchema = z.enum(['one_off', 'existing_project', 'new_project']);
+export const WorkExecutionModeSchema = z.enum(['create_only', 'run_now']);
+export const WorkExecutionStatusSchema = z.enum([
+  'not_started',
+  'queued',
+  'running',
+  'retry_waiting',
+  'succeeded',
+  'failed',
+  'skipped',
+]);
 export const MonitoringModeSchema = z.enum(['observe', 'ask_before_action', 'auto_low_risk']);
 export const QuietHoursSchema = z.object({
   startHour: z.number().int().min(0).max(23),
@@ -46,7 +56,27 @@ export const WorkIntakeProposalSchema = z.object({
     mode: MonitoringModeSchema,
     scenarios: z.array(z.string()),
   }),
+  planningContext: z.object({
+    supportMode: z.enum(['efficient', 'coach', 'companion', 'auto']),
+    proactiveEnabled: z.boolean(),
+  }),
   expiresAt: z.number(),
+});
+
+export const WorkIntakeCreateRequestSchema = z.object({
+  idempotencyKey: z.string().min(1).max(200),
+  objective: z.string().min(1).max(12_000),
+  projectId: z.string().min(1).optional(),
+  sessionKey: z.string().min(1).optional(),
+  agentId: z.string().min(1).optional(),
+  monitoringMode: MonitoringModeSchema.optional(),
+});
+
+export const WorkIntakeConfirmRequestSchema = z.object({
+  executionMode: WorkExecutionModeSchema,
+  projectId: z.string().min(1).optional(),
+  projectName: z.string().min(1).optional(),
+  nextAction: z.string().min(1).optional(),
 });
 
 export const ConfirmedWorkSchema = z.object({
@@ -54,12 +84,21 @@ export const ConfirmedWorkSchema = z.object({
   goalId: z.string(),
   workItemId: z.string(),
   sessionKey: z.string().optional(),
+  execution: z.object({
+    mode: WorkExecutionModeSchema,
+    status: WorkExecutionStatusSchema,
+    queueId: z.string().optional(),
+  }),
 });
 
 export type WorkIntakeClassification = z.infer<typeof WorkIntakeClassificationSchema>;
+export type WorkExecutionMode = z.infer<typeof WorkExecutionModeSchema>;
+export type WorkExecutionStatus = z.infer<typeof WorkExecutionStatusSchema>;
 export type MonitoringMode = z.infer<typeof MonitoringModeSchema>;
 export type QuietHours = z.infer<typeof QuietHoursSchema>;
 export type ProjectMonitoringPolicy = z.infer<typeof ProjectMonitoringPolicySchema>;
 export type ProjectMonitoringUpdate = z.infer<typeof ProjectMonitoringUpdateSchema>;
 export type WorkIntakeProposal = z.infer<typeof WorkIntakeProposalSchema>;
+export type WorkIntakeCreateRequest = z.infer<typeof WorkIntakeCreateRequestSchema>;
+export type WorkIntakeConfirmRequest = z.infer<typeof WorkIntakeConfirmRequestSchema>;
 export type ConfirmedWork = z.infer<typeof ConfirmedWorkSchema>;

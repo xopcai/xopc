@@ -10,7 +10,7 @@ import { useMessages } from '../../i18n/messages';
 import { dismissOrHome } from '../../lib/navigation';
 import { queryKeys } from '../../query/keys';
 import { updateNote } from '../../query/notes';
-import { fetchProjectOverview, fetchProjectWorkItems, fetchProjects } from '../../query/work-items';
+import { fetchProjectOperatingView, fetchProjects } from '../../query/work-items';
 import { confirmWorkIntake, proposeWorkIntake } from '../../query/work-intake';
 import { useGatewayConfigured } from '../../query/sessions';
 import { radii, spacing, typography, useTheme } from '../../theme';
@@ -38,16 +38,18 @@ export function ProjectDetailScreen() {
   const configured = useGatewayConfigured();
   const { colors } = useTheme();
   const { workPage: labels } = useMessages();
-  const overview = useQuery({ queryKey: queryKeys.projectOverview(projectId), queryFn: () => fetchProjectOverview(projectId), enabled: configured && !!projectId });
-  const work = useQuery({ queryKey: queryKeys.projectWorkItems(projectId), queryFn: () => fetchProjectWorkItems(projectId, { limit: 10 }), enabled: configured && !!projectId });
-  if (overview.isLoading || !overview.data) return <View style={[styles.screen, styles.loading, { backgroundColor: colors.surface.base }]}><ActivityIndicator /></View>;
+  const view = useQuery({ queryKey: queryKeys.projectOperatingView(projectId), queryFn: () => fetchProjectOperatingView(projectId), enabled: configured && !!projectId });
+  if (view.isLoading || !view.data) return <View style={[styles.screen, styles.loading, { backgroundColor: colors.surface.base }]}><ActivityIndicator /></View>;
   return (
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
-      <NativeScreenHeader title={overview.data.project.name} onBack={() => dismissOrHome(router)} rightActions={[{ icon: 'plus', onPress: () => router.push(`/work/create?projectId=${projectId}`), accessibilityLabel: labels.create }]} />
+      <NativeScreenHeader title={view.data.project.name} onBack={() => dismissOrHome(router)} rightActions={[{ icon: 'plus', onPress: () => router.push(`/work/create?projectId=${projectId}`), accessibilityLabel: labels.create }]} />
       <ScrollView contentContainerStyle={styles.list}>
-        {overview.data.digest ? <View style={[styles.card, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}><Text style={[styles.cardTitle, { color: colors.text.primary }]}>{labels.projectPulse}</Text><Text style={{ color: colors.text.secondary }}>{overview.data.digest.summary}</Text>{overview.data.digest.nextAction ? <Text style={{ color: colors.accent.primary }}>{overview.data.digest.nextAction}</Text> : null}</View> : null}
+        <View style={[styles.card, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}><Text style={[styles.cardTitle, { color: colors.text.primary }]}>{labels.projectPulse}</Text><Text style={{ color: colors.text.secondary }}>{view.data.digest.summary}</Text>{view.data.digest.recommendedAction ? <Text style={{ color: colors.accent.primary }}>{view.data.digest.recommendedAction}</Text> : null}</View>
+        {view.data.desiredOutcomes.length ? <><Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{labels.desiredOutcomes}</Text>{view.data.desiredOutcomes.map((goal) => <View key={goal.id} style={[styles.card, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}><Text style={[styles.cardTitle, { color: colors.text.primary }]}>{goal.title}</Text><Text style={{ color: colors.accent.primary }}>{goal.status}</Text>{goal.nextAction ? <Text style={{ color: colors.text.secondary }}>{goal.nextAction}</Text> : null}</View>)}</> : null}
         <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{labels.projectWork}</Text>
-        {(work.data?.items ?? []).map((item) => <Pressable key={item.id} onPress={() => router.push(`/work/${item.id}`)} style={[styles.card, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}><Text style={[styles.cardTitle, { color: colors.text.primary }]}>{item.title}</Text><Text style={{ color: colors.accent.primary }}>{labels.status[item.status]}</Text>{item.nextAction ? <Text style={{ color: colors.text.secondary }}>{item.nextAction}</Text> : null}</Pressable>)}
+        {view.data.currentActions.map((item) => <Pressable key={item.id} onPress={() => router.push(`/work/${item.id}`)} style={[styles.card, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}><Text style={[styles.cardTitle, { color: colors.text.primary }]}>{item.title}</Text><Text style={{ color: colors.accent.primary }}>{labels.status[item.status as keyof typeof labels.status] ?? item.status}</Text>{item.nextAction ? <Text style={{ color: colors.text.secondary }}>{item.nextAction}</Text> : null}</Pressable>)}
+        {view.data.blockers.length ? <><Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{labels.attention}</Text>{view.data.blockers.map((item) => <View key={item.id} style={[styles.card, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}><Text style={[styles.cardTitle, { color: colors.text.primary }]}>{item.title}</Text>{item.detail ? <Text style={{ color: colors.text.secondary }}>{item.detail}</Text> : null}</View>)}</> : null}
+        {view.data.recentReceipts.length ? <><Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{labels.recentResults}</Text>{view.data.recentReceipts.slice(0, 5).map((receipt) => <View key={receipt.runId} style={[styles.card, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}><Text style={[styles.cardTitle, { color: colors.text.primary }]}>{receipt.objective}</Text><Text style={{ color: colors.accent.primary }}>{receipt.status}</Text><Text style={{ color: colors.text.secondary }}>{receipt.summary}</Text></View>)}</> : null}
       </ScrollView>
     </View>
   );

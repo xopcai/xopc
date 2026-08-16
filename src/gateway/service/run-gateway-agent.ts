@@ -16,6 +16,7 @@ import { shouldSkipWebchatInboundByAbortCutoff } from '../../session/abort-cutof
 import { parseSessionKey } from '../../routing/session-key.js';
 import { recordExplicitRelationshipFollowUp } from '../../user-context/relationship-continuity.js';
 import { resolveExecutionContext, taskOutcomeContext } from '../../work/execution-context.js';
+import { OutcomeProjectionService } from '../../work/outcome-projection-service.js';
 import {
   completeTaskOutcome,
   startTaskOutcome,
@@ -402,11 +403,19 @@ export async function *runGatewayAgent(
         ...(taskContract ? { contract: taskContract } : {}),
         evidence: taskEvidence,
       });
-      completeTaskOutcome({
+      const outcome = completeTaskOutcome({
         runId,
         status: taskOutcomeStatus,
         summary: taskOutcomeSummary,
       });
+      if (outcome) {
+        try {
+          new OutcomeProjectionService().project(outcome);
+        } catch (err) {
+          const errorMessage = err instanceof Error ? err.message : String(err);
+          log.warn({ err, runId }, `Task outcome projection failed: ${errorMessage}`);
+        }
+      }
     }
   }
 }

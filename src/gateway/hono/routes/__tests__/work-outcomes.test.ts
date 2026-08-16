@@ -51,7 +51,7 @@ describe('work outcome receipt routes', () => {
     expect(list.status).toBe(200);
     expect(await list.json()).toMatchObject({
       ok: true,
-      items: [{ runId: 'run-1', status: 'completed', summary: 'Release prepared' }],
+      items: [{ runId: 'run-1', status: 'partial', summary: 'Release prepared' }],
     });
 
     const feedback = await app.request('/api/work/outcomes/run-1/feedback', {
@@ -63,6 +63,17 @@ describe('work outcome receipt routes', () => {
     expect(await feedback.json()).toMatchObject({
       ok: true,
       receipt: { feedback: { outcome: 'helpful' } },
+    });
+
+    const verdict = await app.request('/api/work/outcomes/run-1/verdict', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ verdict: 'achieved' }),
+    });
+    expect(verdict.status).toBe(200);
+    expect(await verdict.json()).toMatchObject({
+      ok: true,
+      receipt: { status: 'completed', completionVerdict: 'achieved' },
     });
   });
 });

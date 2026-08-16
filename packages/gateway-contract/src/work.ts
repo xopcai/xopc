@@ -152,6 +152,30 @@ export const WorkHomeResponseSchema = z.object({
   recentOutcomes: z.array(OutcomeReceiptSchema).default([]),
 }).passthrough();
 
+export const WorkValueMetricsSchema = z.object({
+  intake: z.object({
+    total: z.number(),
+    proposed: z.number(),
+    confirmed: z.number(),
+    expired: z.number(),
+    runNow: z.number(),
+    createOnly: z.number(),
+    queued: z.number(),
+    pendingQueueRecovery: z.number(),
+    confirmationRate: z.number(),
+    queueRate: z.number(),
+  }),
+  outcomes: z.object({
+    total: z.number(),
+    achieved: z.number(),
+    partial: z.number(),
+    notAchieved: z.number(),
+    userCorrected: z.number(),
+    achievementRate: z.number(),
+    correctionRate: z.number(),
+  }),
+});
+
 export type WorkHomeItem = z.infer<typeof WorkHomeItemSchema>;
 export type WorkHomeDecision = z.infer<typeof WorkHomeDecisionSchema>;
 export type WorkHomeAttention = z.infer<typeof WorkHomeAttentionSchema>;
@@ -160,6 +184,7 @@ export type WorkHomeWorkflowRun = z.infer<typeof WorkHomeWorkflowRunSchema>;
 export type WorkHomeChat = z.infer<typeof WorkHomeChatSchema>;
 export type WorkHomeBriefingWin = z.infer<typeof WorkHomeBriefingWinSchema>;
 export type WorkHomeResponse = z.infer<typeof WorkHomeResponseSchema>;
+export type WorkValueMetrics = z.infer<typeof WorkValueMetricsSchema>;
 
 export function parseWorkHomeResponse(value: unknown): WorkHomeResponse {
   return WorkHomeResponseSchema.parse(value);

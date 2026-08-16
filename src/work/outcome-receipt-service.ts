@@ -10,9 +10,9 @@ function receiptStatus(outcome: TaskOutcome): OutcomeReceiptStatus {
   if (outcome.status === 'running') return 'running';
   if (outcome.status === 'cancelled') return 'cancelled';
   if (outcome.needsUser) return 'needs_user';
-  if (outcome.status === 'failed') return 'failed';
-  const hasCriteria = (outcome.contract?.acceptanceCriteria.length ?? 0) > 0;
-  return hasCriteria && outcome.verification.status !== 'passed' ? 'partial' : 'completed';
+  if (outcome.completionVerdict === 'achieved') return 'completed';
+  if (outcome.completionVerdict === 'partial') return 'partial';
+  return 'failed';
 }
 
 function remainingWork(outcome: TaskOutcome): string[] {
@@ -41,6 +41,8 @@ export function toOutcomeReceipt(outcome: TaskOutcome): OutcomeReceipt {
     remainingWork: remainingWork(outcome),
     nextAction: outcome.nextAction,
     needsUser: outcome.needsUser,
+    completionVerdict: outcome.completionVerdict,
+    correctionText: outcome.correctionText,
     contextTraceId: outcome.context.contextTraceId,
     startedAt: outcome.startedAt,
     completedAt: outcome.completedAt,

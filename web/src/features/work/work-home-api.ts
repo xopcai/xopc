@@ -20,7 +20,7 @@ export type { ConfirmedWork, WorkIntakeProposal };
 export async function proposeWorkIntake(objective: string): Promise<WorkIntakeProposal> {
   const response = await fetchJson<{ proposal?: unknown }>(apiUrl('/api/work/intakes'), {
     method: 'POST',
-    body: JSON.stringify({ objective }),
+    body: JSON.stringify({ idempotencyKey: crypto.randomUUID(), objective }),
   });
   return WorkIntakeProposalSchema.parse(response.proposal);
 }
@@ -28,7 +28,7 @@ export async function proposeWorkIntake(objective: string): Promise<WorkIntakePr
 export async function confirmWorkIntake(proposalId: string): Promise<ConfirmedWork> {
   const response = await fetchJson<{ work?: unknown }>(apiUrl(`/api/work/intakes/${encodeURIComponent(proposalId)}/confirm`), {
     method: 'POST',
-    body: JSON.stringify({}),
+    body: JSON.stringify({ executionMode: 'run_now' }),
   });
   return ConfirmedWorkSchema.parse(response.work);
 }

@@ -4,6 +4,7 @@ import {
   getTaskOutcome,
   findTaskOutcomeForAssistant,
   listTaskOutcomes,
+  setTaskCompletionVerdict,
   summarizeTaskOutcomes,
   setTaskOutcomeFeedbackByRunId,
   updateTaskOutcome,
@@ -11,6 +12,7 @@ import {
   type TaskEvidence,
 } from '../../../storage/sqlite/index.js';
 import { OutcomeReceiptService } from '../../../work/outcome-receipt-service.js';
+import { OutcomeProjectionService } from '../../../work/outcome-projection-service.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { replayTaskEvaluation } from '../../../agent/outcomes/task-evaluation.js';
 
@@ -51,6 +53,7 @@ function isTaskEvidence(value: unknown): value is TaskEvidence[] {
 
 export function registerTaskOutcomeRoutes(authenticated: Hono, _deps: AuthenticatedRouteDeps): void {
   const receipts = new OutcomeReceiptService();
+  const projections = new OutcomeProjectionService();
 
   authenticated.get('/api/task-outcomes', (c) => {
     const items = listTaskOutcomes({
@@ -151,5 +154,24 @@ export function registerTaskOutcomeRoutes(authenticated: Hono, _deps: Authentica
     return outcome
       ? c.json({ ok: true, receipt: receipts.get(outcome.runId) })
       : c.json({ ok: false, error: 'Outcome receipt not found' }, 404);
+  });
+
+  authenticated.post('/api/work/outcomes/:runId/verdict', _deps.strictRateLimitMiddleware, async (c) => {
+    const body = await c.req.json().catch(() => null) as Record<string, unknown> | null;
+    const verdict = body?.verdict;
+    if (verdict !== 'achieved' && verdict !== 'partial' && verdict !== 'not_achieved') {
+      return c.json({ ok: false, error: 'verdict must be achieved, partial, or not_achieved' }, 400);
+    }
+    const correctionText = typeof body?.correctionText === 'string'
+      ? body.correctionText.trim().slice(0, 2_000)
+      : undefined;
+    const outcome = setTaskCompletionVerdict({
+      runId: c.req.param('runId'),
+      verdict,
+      correctionText: correctionText || undefined,
+    });
+    if (!outcome) return c.json({ ok: false, error: 'Completed outcome not found' }, 404);
+    const projected = projections.project(outcome);
+    return c.json({ ok: true, receipt: receipts.get(projected.runId) });
   });
 }

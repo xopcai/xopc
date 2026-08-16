@@ -11,6 +11,7 @@ import {
 
 export type TaskOutcomeStatus = 'running' | 'succeeded' | 'failed' | 'cancelled';
 export type TaskFeedbackOutcome = 'helpful' | 'not_helpful';
+export type TaskCompletionVerdict = 'achieved' | 'partial' | 'not_achieved';
 export type TaskOutcomeOrigin = 'chat' | 'goal' | 'workflow' | 'automation' | 'browser' | 'proactive';
 export type TaskOutcomeTrigger = 'user' | 'schedule' | 'webhook' | 'proactive' | 'retry';
 
@@ -53,6 +54,11 @@ export interface TaskOutcome {
   context: TaskOutcomeContext;
   nextAction?: string;
   needsUser: boolean;
+  completionVerdict?: TaskCompletionVerdict;
+  completionVerdictSource?: 'system' | 'user';
+  correctionText?: string;
+  projectionVersion: number;
+  projectedAt?: number;
   failure?: {
     code: TaskFailureCode;
     phase: TaskFailurePhase;
@@ -99,6 +105,11 @@ type TaskOutcomeRow = {
   next_action: string | null;
   needs_user: number;
   context_trace_id: string | null;
+  completion_verdict: TaskCompletionVerdict | null;
+  completion_verdict_source: 'system' | 'user' | null;
+  correction_text: string | null;
+  projection_version: number;
+  projected_at: number | null;
 };
 
 export interface TaskOutcomeMetrics {
@@ -149,6 +160,11 @@ function fromRow(row: TaskOutcomeRow): TaskOutcome {
     },
     ...(row.next_action ? { nextAction: row.next_action } : {}),
     needsUser: row.needs_user === 1,
+    ...(row.completion_verdict ? { completionVerdict: row.completion_verdict } : {}),
+    ...(row.completion_verdict_source ? { completionVerdictSource: row.completion_verdict_source } : {}),
+    ...(row.correction_text ? { correctionText: row.correction_text } : {}),
+    projectionVersion: row.projection_version,
+    ...(row.projected_at === null ? {} : { projectedAt: row.projected_at }),
     ...(row.failure_code && row.failure_phase && row.recovery_action ? {
       failure: {
         code: row.failure_code,
@@ -168,7 +184,8 @@ const SELECT_COLUMNS = `run_id, session_key, channel, objective, status, summary
   needs_correction, support_fit, started_at, completed_at, updated_at,
   verification_status, verification_json, failure_code, failure_phase, recovery_action,
   project_id, goal_id, work_item_id, origin, trigger_kind, parent_run_id,
-  next_action, needs_user, context_trace_id`;
+  next_action, needs_user, context_trace_id, completion_verdict, completion_verdict_source, correction_text,
+  projection_version, projected_at`;
 
 export function startTaskOutcome(input: {
   runId: string;
@@ -221,12 +238,17 @@ export function completeTaskOutcome(input: {
   const failure = input.status === 'succeeded'
     ? undefined
     : diagnoseTaskFailure({ status: input.status, summary: input.summary });
+  const completionVerdict: TaskCompletionVerdict = input.status === 'succeeded'
+    ? verification.status === 'passed' ? 'achieved' : 'partial'
+    : 'not_achieved';
   runSqliteWriteTransaction((db) => {
     db.prepare(
       `UPDATE task_outcomes
        SET status = ?, summary = ?, completed_at = ?, updated_at = ?,
            verification_status = ?, verification_json = ?, failure_code = ?,
-           failure_phase = ?, recovery_action = ?
+           failure_phase = ?, recovery_action = ?, completion_verdict = ?,
+           completion_verdict_source = 'system', correction_text = NULL,
+           projection_version = 0, projected_at = NULL
        WHERE run_id = ?`,
     ).run(
       input.status,
@@ -238,10 +260,68 @@ export function completeTaskOutcome(input: {
       failure?.code ?? null,
       failure?.phase ?? null,
       failure?.recoveryAction ?? null,
+      completionVerdict,
       input.runId,
     );
   });
   return getTaskOutcome(input.runId);
+}
+
+export function setTaskCompletionVerdict(input: {
+  runId: string;
+  verdict: TaskCompletionVerdict;
+  correctionText?: string;
+  now?: number;
+}): TaskOutcome | undefined {
+  const current = getTaskOutcome(input.runId);
+  if (!current || current.status === 'running') return undefined;
+  const now = input.now ?? Date.now();
+  runSqliteWriteTransaction((db) => {
+    db.prepare(
+      `UPDATE task_outcomes
+       SET completion_verdict = ?, completion_verdict_source = 'user', correction_text = ?, projection_version = 0,
+           projected_at = NULL, updated_at = ?
+       WHERE run_id = ?`,
+    ).run(
+      input.verdict,
+      input.correctionText?.trim() || null,
+      now,
+      input.runId,
+    );
+  });
+  return getTaskOutcome(input.runId);
+}
+
+export function markTaskOutcomeProjected(input: {
+  runId: string;
+  projectionVersion: number;
+  now?: number;
+}): TaskOutcome | undefined {
+  const now = input.now ?? Date.now();
+  runSqliteWriteTransaction((db) => {
+    db.prepare(
+      `UPDATE task_outcomes
+       SET projection_version = ?, projected_at = ?, updated_at = ?
+       WHERE run_id = ? AND status != 'running'`,
+    ).run(input.projectionVersion, now, now, input.runId);
+  });
+  return getTaskOutcome(input.runId);
+}
+
+export function listUnprojectedTaskOutcomes(input: {
+  projectionVersion: number;
+  limit?: number;
+}): TaskOutcome[] {
+  const limit = Math.max(1, Math.min(500, Math.floor(input.limit ?? 100)));
+  const rows = getSqliteDatabase()
+    .prepare(
+      `SELECT ${SELECT_COLUMNS} FROM task_outcomes
+       WHERE status != 'running' AND projection_version < ?
+       ORDER BY completed_at ASC
+       LIMIT ?`,
+    )
+    .all(input.projectionVersion, limit) as TaskOutcomeRow[];
+  return rows.map(fromRow);
 }
 
 export function updateTaskOutcome(input: {
@@ -265,11 +345,27 @@ export function updateTaskOutcome(input: {
   const contextTraceId = input.contextTraceId === undefined
     ? current.context.contextTraceId
     : input.contextTraceId ?? undefined;
+  const verification = current.status !== 'running' && current.completionVerdictSource !== 'user'
+    ? verifyTaskCompletion({
+        status: current.status,
+        acceptanceCriteria: contract?.acceptanceCriteria ?? [],
+        evidence,
+      })
+    : current.verification;
+  const completionVerdict = current.status !== 'running' && current.completionVerdictSource !== 'user'
+    ? current.status === 'succeeded'
+      ? verification.status === 'passed' ? 'achieved' : 'partial'
+      : 'not_achieved'
+    : current.completionVerdict;
   runSqliteWriteTransaction((db) => {
     db.prepare(
       `UPDATE task_outcomes
        SET contract_json = ?, evidence_json = ?, summary = ?, next_action = ?,
-           needs_user = ?, context_trace_id = ?, updated_at = ?
+           needs_user = ?, context_trace_id = ?, verification_status = ?,
+           verification_json = ?, completion_verdict = ?,
+           projection_version = CASE WHEN status = 'running' THEN projection_version ELSE 0 END,
+           projected_at = CASE WHEN status = 'running' THEN projected_at ELSE NULL END,
+           updated_at = ?
        WHERE run_id = ?`,
     ).run(
       contract ? JSON.stringify(contract) : null,
@@ -278,6 +374,9 @@ export function updateTaskOutcome(input: {
       nextAction ?? null,
       Number(needsUser),
       contextTraceId ?? null,
+      verification.status,
+      JSON.stringify({ checks: verification.checks }),
+      completionVerdict ?? null,
       now,
       input.runId,
     );

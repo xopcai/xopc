@@ -29,9 +29,9 @@ describe('task outcome work context', () => {
     rmSync(stateDir, { recursive: true, force: true });
   });
 
-  it('persists and filters execution linkage without requiring it for legacy callers', () => {
+  it('persists execution linkage while allowing unrelated chat outcomes', () => {
     ensureSessionRecord('session-linked', stateDir);
-    ensureSessionRecord('session-legacy', stateDir);
+    ensureSessionRecord('session-unlinked', stateDir);
     startTaskOutcome({
       runId: 'run-linked',
       sessionKey: 'session-linked',
@@ -47,8 +47,8 @@ describe('task outcome work context', () => {
       now: 100,
     });
     startTaskOutcome({
-      runId: 'run-legacy',
-      sessionKey: 'session-legacy',
+      runId: 'run-unlinked',
+      sessionKey: 'session-unlinked',
       channel: 'webchat',
       objective: 'Answer a question',
       now: 200,

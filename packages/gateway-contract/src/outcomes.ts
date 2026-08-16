@@ -41,6 +41,8 @@ export const OutcomeReceiptSchema = z.object({
   remainingWork: z.array(z.string()),
   nextAction: z.string().optional(),
   needsUser: z.boolean(),
+  completionVerdict: z.enum(['achieved', 'partial', 'not_achieved']).optional(),
+  correctionText: z.string().optional(),
   contextTraceId: z.string().optional(),
   startedAt: z.number(),
   completedAt: z.number().optional(),

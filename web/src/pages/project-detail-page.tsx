@@ -1,5 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Popover from '@radix-ui/react-popover';
+import type { ProjectOperatingView } from '@xopcai/gateway-contract';
 import { AlertCircle, Archive, ArrowLeft, Check, ChevronDown, Clock, Copy, File, Folder, FolderPlus, History, LayoutDashboard, ListChecks, MessageSquarePlus, Pause, Pin, PinOff, Play, Plus, RotateCcw, Save, Search, Settings, Sparkles, Square, Target, Trash2, X, Zap, type LucideIcon } from 'lucide-react';
 import { type CSSProperties, type FormEvent, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -29,8 +30,9 @@ import {
   deleteProject,
   fetchProjectActivity,
   fetchProjectFiles,
+  fetchProject,
   fetchProjectGoals,
-  fetchProjectOverview,
+  fetchProjectOperatingView,
   fetchProjects,
   fetchProjectSessions,
   saveProjectDigest,
@@ -44,7 +46,6 @@ import {
   type ProjectFileEntry,
   type ProjectFileSearchEntry,
   type ProjectGoal,
-  type ProjectOverview,
   type ProjectSession,
   type ProjectStatus,
   type ProjectWithDetails,
@@ -663,7 +664,7 @@ export function ProjectDetailPage() {
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
   const [project, setProject] = useState<ProjectWithDetails | null>(null);
-  const [overview, setOverview] = useState<ProjectOverview | null>(null);
+  const [operatingView, setOperatingView] = useState<ProjectOperatingView | null>(null);
   const [sessions, setSessions] = useState<ProjectSession[]>([]);
   const [sessionSearchQuery, setSessionSearchQuery] = useState('');
   const [goals, setGoals] = useState<ProjectGoal[]>([]);
@@ -784,16 +785,16 @@ export function ProjectDetailPage() {
     setLoading(true);
     setError(null);
     void Promise.all([
-      fetchProjectOverview(projectId),
+      fetchProject(projectId),
+      fetchProjectOperatingView(projectId),
       fetchProjectSessions(projectId),
       fetchProjectGoals(projectId),
       fetchGatewayAgents().catch(() => null),
     ])
-      .then(([overviewResult, sessionResult, goalResult, agentPayload]) => {
+      .then(([projectResult, operatingViewResult, sessionResult, goalResult, agentPayload]) => {
         if (cancelled) return;
-        const projectResult = overviewResult.project;
         setProject(projectResult);
-        setOverview(overviewResult);
+        setOperatingView(operatingViewResult);
         setSessions(sessionResult);
         setGoals(goalResult);
         const nextAgents = agentPayload?.agents ?? [];
@@ -1060,12 +1061,13 @@ export function ProjectDetailPage() {
 
   const refreshProjectGoals = useCallback(async () => {
     if (!project) return;
-    const [nextOverview, nextGoals] = await Promise.all([
-      fetchProjectOverview(project.id),
+    const [nextProject, nextOperatingView, nextGoals] = await Promise.all([
+      fetchProject(project.id),
+      fetchProjectOperatingView(project.id),
       fetchProjectGoals(project.id),
     ]);
-    setOverview(nextOverview);
-    setProject(nextOverview.project);
+    setOperatingView(nextOperatingView);
+    setProject(nextProject);
     setGoals(nextGoals);
   }, [project]);
 
@@ -1200,7 +1202,6 @@ export function ProjectDetailPage() {
 
   function applyProjectUpdate(updated: Project) {
     setProject((current) => current ? { ...current, ...updated } : null);
-    setOverview((current) => current ? { ...current, project: { ...current.project, ...updated } } : null);
     setSelectedAgentId(updated.defaultAgentId ?? '');
     setDraft((current) => ({
       ...current,
@@ -1473,8 +1474,17 @@ export function ProjectDetailPage() {
     );
   }
 
-  const overviewSessions = overview?.recentSessions.length ? overview.recentSessions : project.recentSessions;
-  const overviewAttentionItems = overview?.attentionItems ?? [];
+  const overviewSessions = sessions.slice(0, 6);
+  const overviewAttentionItems: Array<{
+    id: string;
+    kind: string;
+    title: string;
+    detail?: string;
+    status?: string;
+    href?: string;
+    updatedAt?: number;
+  }> = operatingView?.blockers ?? [];
+  const overviewActions = operatingView?.currentActions ?? [];
   const statusLabel = (status: string) => pm.statuses[status as keyof typeof pm.statuses] ?? status;
   const messageCount = (count: number) => interpolate(pm.common.messages, { count });
   const sessionSearchNeedle = sessionSearchQuery.trim().toLowerCase();
@@ -1593,11 +1603,11 @@ export function ProjectDetailPage() {
                 <div className="min-w-0 flex-1">
                   <h2 className="text-sm font-semibold text-fg">{pm.overview.directionTitle}</h2>
                   <p className="mt-1 max-w-3xl text-sm leading-6 text-fg-muted">
-                    {overview?.digest?.summary || overview?.recommendedAction || project.description || project.brief || pm.overview.directionFallback}
+                    {operatingView?.digest.summary || project.description || project.brief || pm.overview.directionFallback}
                   </p>
-                  {overview?.digest?.nextAction ? (
+                  {operatingView?.digest.recommendedAction ? (
                     <p className="mt-2 max-w-3xl text-sm font-medium leading-6 text-fg">
-                      {interpolate(pm.overview.recommendedNext, { action: overview.digest.nextAction })}
+                      {interpolate(pm.overview.recommendedNext, { action: operatingView.digest.recommendedAction })}
                     </p>
                   ) : null}
                 </div>
@@ -1613,17 +1623,17 @@ export function ProjectDetailPage() {
             <div className="min-w-0 rounded-lg bg-surface-panel shadow-surface">
               <div className="flex items-center justify-between gap-3 border-b border-edge px-4 py-3">
                 <h2 className="text-sm font-semibold text-fg">{pm.overview.nextActions}</h2>
-                <Button type="button" variant="ghost" className="h-8 rounded-lg px-2 py-1 text-xs" onClick={() => setCreateGoalOpen(true)}>
+                <Button type="button" variant="ghost" className="h-8 rounded-lg px-2 py-1 text-xs" onClick={openCreateWorkItem}>
                   <Plus className="size-4" aria-hidden />
-                  {pm.overview.goal}
+                  {pm.workItems.create.header}
                 </Button>
               </div>
               <div className="divide-y divide-edge">
-                {overview?.nextActions.length ? overview.nextActions.map((item) => (
+                {overviewActions.length ? overviewActions.map((item) => (
                   <Link
-                    key={item.goalId}
-                    to={projectGoalHref(item.goalId)}
-                    onClick={onProjectTabLinkClick('goals')}
+                    key={item.id}
+                    to={withReturnTo(`/work-items/${encodeURIComponent(item.id)}`, projectTabHref('overview'))}
+                    onClick={onProjectTabLinkClick('work-items')}
                     className="block px-4 py-3 hover:bg-surface-hover"
                   >
                     <div className="flex min-w-0 items-center justify-between gap-3">
@@ -1639,6 +1649,27 @@ export function ProjectDetailPage() {
                 )}
               </div>
             </div>
+
+            {operatingView?.recentReceipts.length ? (
+              <div className="min-w-0 rounded-lg bg-surface-panel shadow-surface">
+                <div className="border-b border-edge px-4 py-3">
+                  <h2 className="text-sm font-semibold text-fg">{pm.overview.recentResults}</h2>
+                </div>
+                <div className="divide-y divide-edge">
+                  {operatingView.recentReceipts.slice(0, 5).map((receipt) => (
+                    <div key={receipt.runId} className="px-4 py-3">
+                      <div className="flex min-w-0 items-center justify-between gap-3">
+                        <span className="min-w-0 truncate text-sm font-medium text-fg">{receipt.objective}</span>
+                        <span className="shrink-0 rounded-full bg-surface-hover px-2 py-0.5 text-xs text-fg-muted">
+                          {pm.overview.resultStatuses[receipt.status] ?? receipt.status}
+                        </span>
+                      </div>
+                      <p className="mt-1 line-clamp-2 text-sm leading-5 text-fg-muted">{receipt.summary}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <aside className="grid min-w-0 content-start gap-4 xl:min-h-0 xl:overflow-y-auto xl:pr-1 xl:[scrollbar-gutter:stable]">
@@ -1654,7 +1685,7 @@ export function ProjectDetailPage() {
                           <span className="min-w-0 truncate text-sm font-medium text-fg">{item.title}</span>
                         </div>
                         <p className="mt-1 line-clamp-2 text-xs leading-5 text-fg-muted">
-                          {pm.overview.attentionKinds[item.kind] ?? item.kind}
+                          {pm.overview.attentionKinds[item.kind as keyof typeof pm.overview.attentionKinds] ?? item.kind}
                           {item.detail ? ` · ${item.detail}` : item.status ? ` · ${statusLabel(item.status)}` : ''}
                         </p>
                       </>

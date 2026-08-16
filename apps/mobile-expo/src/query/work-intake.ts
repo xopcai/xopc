@@ -18,7 +18,7 @@ export async function proposeWorkIntake(input: {
 }): Promise<WorkIntakeProposal> {
   const res = await apiFetch('/api/work/intakes', {
     method: 'POST',
-    body: JSON.stringify(input),
+    body: JSON.stringify({ ...input, idempotencyKey: crypto.randomUUID() }),
   });
   if (!res.ok) throw await readError(res);
   const body = await res.json() as { proposal?: unknown };
@@ -28,7 +28,7 @@ export async function proposeWorkIntake(input: {
 export async function confirmWorkIntake(proposalId: string): Promise<ConfirmedWork> {
   const res = await apiFetch(`/api/work/intakes/${encodeURIComponent(proposalId)}/confirm`, {
     method: 'POST',
-    body: JSON.stringify({}),
+    body: JSON.stringify({ executionMode: 'run_now' }),
   });
   if (!res.ok) throw await readError(res);
   const body = await res.json() as { work?: unknown };
