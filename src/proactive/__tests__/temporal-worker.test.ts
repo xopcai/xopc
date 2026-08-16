@@ -44,15 +44,20 @@ describe('proactive temporal worker', () => {
     rmSync(stateDir, { recursive: true, force: true });
   });
 
-  function storeMeeting(start: string, sensitivity: 'personal' | 'secret' = 'personal'): void {
+  function storeMeeting(
+    start: string,
+    sensitivity: 'personal' | 'secret' = 'personal',
+    externalId = 'meeting-1',
+    sourceUpdatedAt = '2026-08-15T01:00:00.000Z',
+  ): void {
     upsertKnowledgeSourceItems([{
       sourceInstanceId: 'composio:googlecalendar:calendar-work',
       collectionScope: 'events',
-      externalId: 'meeting-1',
+      externalId,
       itemType: 'calendar_event',
       occurredAt: start,
-      sourceUpdatedAt: '2026-08-15T01:00:00.000Z',
-      contentHash: 'calendar-hash-1',
+      sourceUpdatedAt,
+      contentHash: `calendar-hash-${externalId}`,
       normalizedText: JSON.stringify({ title: 'Launch review', start }),
       metadata: {
         connectorId: 'googlecalendar',
@@ -142,5 +147,47 @@ describe('proactive temporal worker', () => {
     expect(await new ProactiveTemporalWorker(events).tick(new Date('2026-08-15T01:00:00.000Z')))
       .toMatchObject({ scanned: 1, published: 0, skipped: 1 });
     expect(events.listEvents()).toHaveLength(0);
+  });
+
+  it('queries the upcoming window before applying the page limit', async () => {
+    upsertConnectorSyncPolicy({
+      connectionId: 'calendar-work',
+      scanEnabled: true,
+      proactiveEnabled: true,
+    });
+    const farMeetings = Array.from({ length: 500 }, (_, index) => ({
+      sourceInstanceId: 'composio:googlecalendar:calendar-work',
+      collectionScope: 'events',
+      externalId: `far-${index}`,
+      itemType: 'calendar_event',
+      occurredAt: '2026-09-15T02:00:00.000Z',
+      sourceUpdatedAt: '2026-08-16T01:00:00.000Z',
+      contentHash: `far-hash-${index}`,
+      normalizedText: JSON.stringify({ title: `Far meeting ${index}` }),
+      metadata: {
+        connectorId: 'googlecalendar',
+        connectionId: 'calendar-work',
+        workspaceId: '/workspace',
+        agentId: 'main',
+      },
+      sensitivity: 'personal' as const,
+      retentionClass: 'bounded' as const,
+      synthesisPipeline: 'connected_knowledge' as const,
+      synthesisStatus: 'pending' as const,
+    }));
+    upsertKnowledgeSourceItems(farMeetings);
+    storeMeeting(
+      '2026-08-15T02:00:00.000Z',
+      'personal',
+      'upcoming',
+      '2026-08-01T01:00:00.000Z',
+    );
+    const events = new ProactiveEventService(() => []);
+
+    expect(await new ProactiveTemporalWorker(events).tick(new Date('2026-08-15T01:00:00.000Z')))
+      .toMatchObject({ scanned: 1, published: 1, skipped: 0 });
+    expect(events.listEvents()).toEqual([
+      expect.objectContaining({ payload: expect.objectContaining({ window: '2h' }) }),
+    ]);
   });
 });

@@ -5,4 +5,3 @@ export function openDiscussionCapture(projectId?: string): void {
     detail: projectId ? { projectId } : {},
   }));
 }
-

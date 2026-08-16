@@ -117,9 +117,9 @@ export function registerTaskOutcomeRoutes(authenticated: Hono, _deps: Authentica
       ...(body.evidence === undefined ? {} : { evidence: body.evidence }),
       ...(body.summary === undefined ? {} : { summary: body.summary }),
     });
-    return outcome
-      ? c.json({ ok: true, outcome })
-      : c.json({ ok: false, error: 'Task outcome not found' }, 404);
+    if (!outcome) return c.json({ ok: false, error: 'Task outcome not found' }, 404);
+    const projected = outcome.status === 'running' ? outcome : projections.project(outcome);
+    return c.json({ ok: true, outcome: projected });
   });
 
   authenticated.get('/api/work/outcomes', (c) => {

@@ -17,6 +17,7 @@ import { DiscussionLiveWorker } from '../live-worker.js';
 import { DiscussionPipeline } from '../pipeline.js';
 import {
   claimNextDiscussionCapture,
+  claimNextDiscussionTranscriptSegment,
   getDiscussionCapture,
   updateDiscussionCapture,
 } from '../repository.js';
@@ -214,6 +215,28 @@ describe('DiscussionService', () => {
     expect(claimNextDiscussionCapture('worker-b', 1_200, 500)).toBeNull();
     const recovered = claimNextDiscussionCapture('worker-b', 1_501, 500);
     expect(recovered).toMatchObject({ leaseOwner: 'worker-b', attemptCount: 2, status: 'finalizing' });
+  });
+
+  it('recovers an expired live transcription lease before claiming later segments', async () => {
+    const created = await create('draft-live-lease');
+    for (let sequence = 0; sequence < 2; sequence += 1) {
+      const buffer = Buffer.from(`segment-${sequence}`);
+      service.uploadSegment({
+        discussionId: created.discussion.id,
+        sequence,
+        file: { buffer, mimeType: 'audio/wav' },
+        startedAtMs: sequence * 1_000,
+        endedAtMs: (sequence + 1) * 1_000,
+        sha256: createHash('sha256').update(buffer).digest('hex'),
+      });
+    }
+
+    const first = claimNextDiscussionTranscriptSegment('worker-a', 1_000, 500);
+    expect(first).toMatchObject({ sequence: 0, leaseOwner: 'worker-a', attemptCount: 1 });
+    expect(claimNextDiscussionTranscriptSegment('worker-b', 1_200, 500)).toBeNull();
+
+    const recovered = claimNextDiscussionTranscriptSegment('worker-b', 1_501, 500);
+    expect(recovered).toMatchObject({ sequence: 0, leaseOwner: 'worker-b', attemptCount: 2 });
   });
 
   it('backs off finalization failures and stops after three attempts', async () => {

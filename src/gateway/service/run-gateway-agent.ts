@@ -147,27 +147,32 @@ export async function *runGatewayAgent(
     if (taskEvidence.some((item) => item.kind === evidence.kind && item.title === evidence.title)) return;
     taskEvidence.push(evidence);
   };
+  const captureTaskPlan = (items: Array<{ title: string; status: string }>): void => {
+    const activeItems = items.filter((item) => item.status !== 'cancelled');
+    taskContract = {
+      objective: message.trim(),
+      deliverables: [],
+      acceptanceCriteria: activeItems.map((item) => item.title),
+      constraints: [],
+      approvalRequired: [],
+    };
+    for (const item of activeItems) {
+      if (item.status !== 'completed') continue;
+      addTaskEvidence({
+        kind: 'state',
+        title: `Plan item completed: ${item.title}`,
+        summary: 'The agent marked this plan item as completed during the run',
+        verifies: [item.title],
+      });
+    }
+  };
   const captureTaskEvent = (event: ChatStreamEvent): void => {
     if (event.type === 'task_plan_updated') {
-      taskContract = {
-        objective: message.trim(),
-        deliverables: [],
-        acceptanceCriteria: event.payload.items
-          .filter((item) => item.status !== 'cancelled')
-          .map((item) => item.title),
-        constraints: [],
-        approvalRequired: [],
-      };
+      captureTaskPlan(event.payload.items);
       return;
     }
     if (event.type === 'turn_plan') {
-      taskContract = {
-        objective: message.trim(),
-        deliverables: [],
-        acceptanceCriteria: event.payload.plan.map((item) => item.step),
-        constraints: [],
-        approvalRequired: [],
-      };
+      captureTaskPlan(event.payload.plan.map((item) => ({ title: item.step, status: item.status })));
       return;
     }
     if (event.type === 'patch_applied') {

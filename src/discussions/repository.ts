@@ -371,7 +371,8 @@ export function claimNextDiscussionTranscriptSegment(
     const row = db.prepare(
       `SELECT s.* FROM discussion_transcript_segments s
        JOIN discussion_captures d ON d.id = s.discussion_id
-       WHERE s.status = 'uploaded'
+       WHERE (s.status = 'uploaded'
+         OR (s.status = 'transcribing' AND (s.lease_expires_at IS NULL OR s.lease_expires_at <= ?)))
          AND d.status IN ('recording', 'finalizing')
          AND (s.next_attempt_at IS NULL OR s.next_attempt_at <= ?)
          AND NOT EXISTS (
@@ -381,14 +382,16 @@ export function claimNextDiscussionTranscriptSegment(
              AND earlier.status IN ('uploaded', 'transcribing')
          )
        ORDER BY s.created_at ASC, s.sequence ASC LIMIT 1`,
-    ).get(now) as SegmentRow | undefined;
+    ).get(now, now) as SegmentRow | undefined;
     if (!row?.audio_blob) return null;
     const changed = db.prepare(
       `UPDATE discussion_transcript_segments
        SET status = 'transcribing', attempt_count = attempt_count + 1,
-         lease_owner = ?, lease_expires_at = ?, updated_at = ?
-       WHERE discussion_id = ? AND sequence = ? AND status = 'uploaded'`,
-    ).run(owner, now + leaseMs, now, row.discussion_id, row.sequence).changes;
+         next_attempt_at = NULL, lease_owner = ?, lease_expires_at = ?, updated_at = ?
+       WHERE discussion_id = ? AND sequence = ?
+         AND (status = 'uploaded'
+           OR (status = 'transcribing' AND (lease_expires_at IS NULL OR lease_expires_at <= ?)))`,
+    ).run(owner, now + leaseMs, now, row.discussion_id, row.sequence, now).changes;
     if (changed === 0) return null;
     const claimed = db.prepare(
       'SELECT * FROM discussion_transcript_segments WHERE discussion_id = ? AND sequence = ?',

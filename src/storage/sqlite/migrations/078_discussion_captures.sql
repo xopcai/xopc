@@ -62,4 +62,3 @@ CREATE TABLE IF NOT EXISTS discussion_action_conversions (
   FOREIGN KEY (discussion_id) REFERENCES discussion_captures(id) ON DELETE CASCADE,
   FOREIGN KEY (work_item_id) REFERENCES work_items(id) ON DELETE CASCADE
 );
-
