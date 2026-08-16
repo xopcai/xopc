@@ -257,6 +257,17 @@ export function listNoteRecords(
   if (query.pendingTasksOnly) {
     conditions.push(`kind = 'task' AND (task_done IS NULL OR task_done = 0)`);
   }
+  if (query.projectId) {
+    conditions.push(
+      `EXISTS (
+        SELECT 1 FROM object_links
+        WHERE relation = 'belongs_to'
+          AND from_kind = 'note' AND from_id = notes.note_id
+          AND to_kind = 'project' AND to_id = ?
+      )`,
+    );
+    params.push(query.projectId);
+  }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
   const rows = db

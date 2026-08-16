@@ -6,6 +6,7 @@ import {
   listConnectorConnections,
   listConnectorLearningJobs,
   getConnectorInstallation,
+  getConnectorSyncPolicy,
   pruneBoundedKnowledgeSourceItems,
   recoverStaleConnectorLearningJobs,
   setConnectorLearningPaused,
@@ -84,6 +85,8 @@ export function startConnectorLearningCoordinator(options: {
     if (!learningEnabled(config)) return null;
     const connection = listConnectorConnections().find((item) => item.id === connectionId && item.status === 'active');
     if (!connection) return null;
+    const syncPolicy = getConnectorSyncPolicy(connection.id);
+    if (request.reason !== 'manual' && syncPolicy?.scanEnabled === false) return null;
     const definition = getConnectorDefinition(connection.connectorId);
     if (definition?.runtime.type !== 'composio' || definition.runtime.role !== 'toolkit') return null;
     if (!getConnectorLearningPlan(definition.runtime.toolkit)) return null;
@@ -197,7 +200,10 @@ export function startConnectorLearningCoordinator(options: {
       job.sourceInstanceId,
       Date.now() - plan.bootstrapWindowDays * 24 * 60 * 60_000,
     );
-    const nextRunAt = Date.now() + plan.intervalMinutes * 60_000;
+    const syncPolicy = getConnectorSyncPolicy(job.connectionId);
+    if (syncPolicy?.scanEnabled === false) return;
+    const intervalMinutes = syncPolicy?.intervalMinutes ?? plan.intervalMinutes;
+    const nextRunAt = Date.now() + intervalMinutes * 60_000;
     enqueueConnection(job.connectionId, {
       mode: 'incremental',
       reason: 'schedule',

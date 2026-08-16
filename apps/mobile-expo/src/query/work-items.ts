@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ProjectOperatingViewSchema, type ProjectOperatingView } from '@xopcai/gateway-contract';
 
 import { apiFetch } from '../api/client';
 
@@ -137,25 +138,9 @@ export async function fetchProjects(): Promise<Project[]> {
   return parsed.data.items;
 }
 
-export type ProjectOverview = {
-  project: Project;
-  digest?: { status: 'attention' | 'healthy' | 'idle' | 'empty'; summary: string; nextAction?: string };
-  attentionItems?: Array<{ id: string; title: string; detail?: string; status?: string }>;
-  recommendedAction?: string;
-};
-
-export async function fetchProjectOverview(projectId: string): Promise<ProjectOverview> {
-  const res = await apiFetch(`/api/projects/${encodeURIComponent(projectId)}/overview`);
+export async function fetchProjectOperatingView(projectId: string): Promise<ProjectOperatingView> {
+  const res = await apiFetch(`/api/projects/${encodeURIComponent(projectId)}/operating-view`);
   if (!res.ok) throw await readError(res);
-  const parsed = z.object({
-    ok: z.literal(true),
-    overview: z.object({
-      project: projectSchema,
-      digest: z.object({ status: z.enum(['attention', 'healthy', 'idle', 'empty']), summary: z.string(), nextAction: z.string().optional() }).optional(),
-      attentionItems: z.array(z.object({ id: z.string(), title: z.string(), detail: z.string().optional(), status: z.string().optional() })).optional(),
-      recommendedAction: z.string().optional(),
-    }),
-  }).safeParse(await res.json());
-  if (!parsed.success) throw new Error('Invalid project overview response');
-  return parsed.data.overview;
+  const body = await res.json() as { view?: unknown };
+  return ProjectOperatingViewSchema.parse(body.view);
 }

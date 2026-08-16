@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { isElectron } from '@/lib/electron-env';
+import { openDiscussionCapture } from '@/features/discussions/discussion-events';
 import { useSidebarStore } from '@/stores/sidebar-store';
 
 export function ElectronMenuListener() {
@@ -21,7 +22,7 @@ export function ElectronMenuListener() {
     });
 
     const offQuickCapture = api.menu.onQuickCapture(() => {
-      window.dispatchEvent(new CustomEvent('open-quick-capture'));
+      openDiscussionCapture();
     });
 
     const offSidebar = api.menu.onToggleSidebar(() => {

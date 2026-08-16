@@ -13,6 +13,7 @@ import { messages } from '@/i18n/messages';
 import { apiFetch } from '@/lib/fetch';
 import { cn } from '@/lib/cn';
 import { formatMediumDateTime } from '@/lib/date-formatters';
+import { withReturnTo } from '@/lib/navigation-return';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import {
@@ -213,6 +214,7 @@ function visibleSummary(item: WorkItem, t: WorkItemsMessages): string {
 
 function WorkItemCard({
   item,
+  detailReturnTo,
   dragging,
   onOpen,
   onToggleDone,
@@ -221,6 +223,7 @@ function WorkItemCard({
   t,
 }: {
   item: WorkItem;
+  detailReturnTo: string;
   dragging: boolean;
   onOpen: (item: WorkItem) => void;
   onToggleDone: (item: WorkItem) => void;
@@ -272,7 +275,7 @@ function WorkItemCard({
         ) : null}
         {item.links?.length ? <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[11px] text-fg-muted">{item.links.length}</span> : null}
         <Link
-          to={`/work-items/${encodeURIComponent(item.id)}`}
+          to={withReturnTo(`/work-items/${encodeURIComponent(item.id)}`, detailReturnTo)}
           className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium text-accent hover:bg-accent-soft hover:text-accent-fg"
         >
           {t.detail.openItem}
@@ -601,6 +604,7 @@ function WorkItemAttachmentsSection({
 function WorkItemModal({
   mode,
   item,
+  detailReturnTo,
   initialStatus,
   events,
   busy,
@@ -619,6 +623,7 @@ function WorkItemModal({
 }: {
   mode: 'create' | 'detail' | null;
   item: WorkItem | null;
+  detailReturnTo: string;
   initialStatus: WorkItemStatus;
   events: WorkItemEvent[];
   busy: boolean;
@@ -795,7 +800,7 @@ function WorkItemModal({
                         {t.detail.createGoal}
                       </Button>
                       <Button asChild variant="secondary" className="justify-start rounded-lg">
-                        <Link to={`/work-items/${encodeURIComponent(item.id)}`}>
+                        <Link to={withReturnTo(`/work-items/${encodeURIComponent(item.id)}`, detailReturnTo)}>
                           <ExternalLink className="size-4" aria-hidden />
                           {t.detail.openItem}
                         </Link>
@@ -847,7 +852,15 @@ function WorkItemModal({
   );
 }
 
-export function WorkItemsPanel({ projectId, createRequestKey = 0 }: { projectId: string; createRequestKey?: number }) {
+export function WorkItemsPanel({
+  projectId,
+  createRequestKey = 0,
+  detailReturnTo,
+}: {
+  projectId: string;
+  createRequestKey?: number;
+  detailReturnTo: string;
+}) {
   const navigate = useNavigate();
   const language = useLocaleStore((s) => s.language);
   const t = messages(language).projectDetailPage.workItems;
@@ -1026,13 +1039,13 @@ export function WorkItemsPanel({ projectId, createRequestKey = 0 }: { projectId:
       const res = await createWorkItemGoal(item.id);
       updateLocalItem(res.item);
       await openItem(res.item);
-      navigate(`/goals/${encodeURIComponent(res.goal.id)}`);
+      navigate(withReturnTo(`/goals/${encodeURIComponent(res.goal.id)}`, detailReturnTo));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
     }
-  }, [navigate, openItem, updateLocalItem]);
+  }, [detailReturnTo, navigate, openItem, updateLocalItem]);
 
   const startDrag = useCallback((item: WorkItem, event: DragEvent<HTMLElement>) => {
     event.dataTransfer.effectAllowed = 'move';
@@ -1156,6 +1169,7 @@ export function WorkItemsPanel({ projectId, createRequestKey = 0 }: { projectId:
                     <WorkItemCard
                       key={item.id}
                       item={item}
+                      detailReturnTo={detailReturnTo}
                       dragging={draggingItemId === item.id}
                       onOpen={openItem}
                       onToggleDone={toggleDone}
@@ -1202,6 +1216,7 @@ export function WorkItemsPanel({ projectId, createRequestKey = 0 }: { projectId:
       <WorkItemModal
         mode={createOpen ? 'create' : selectedItem ? 'detail' : null}
         item={selectedItem}
+        detailReturnTo={detailReturnTo}
         initialStatus={createStatus}
         events={selectedEvents}
         busy={busy}

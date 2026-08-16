@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { OutcomeReceipt } from '@xopcai/gateway-contract';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
@@ -311,9 +312,17 @@ export function WorkspaceHomeScreen() {
                 if (decision.response) decisionMutation.mutate({ id: decision.id, response: decision.response, answer });
               }}
             />
+            <OutcomeSection
+              items={home.recentOutcomes.slice(0, 3)}
+              onOpen={(receipt) => receipt.projectId
+                ? router.push(`/projects/${receipt.projectId}`)
+                : router.push(`/chat/${receipt.sessionKey}`)}
+            />
             <ContinueSection items={continueItems} />
             <LibrarySection
               inboxCount={home.inboxCount}
+              onWork={() => router.push('/work')}
+              onProjects={() => router.push('/projects')}
               onInbox={() => router.push('/inbox')}
               onNotes={() => router.push('/notes')}
               onSessions={() => router.push('/sessions')}
@@ -582,14 +591,47 @@ function ContinueSection({ items }: { items: ContinueItem[] }) {
   );
 }
 
+function OutcomeSection({
+  items,
+  onOpen,
+}: {
+  items: OutcomeReceipt[];
+  onOpen: (receipt: OutcomeReceipt) => void;
+}) {
+  const { colors } = useTheme();
+  const { homePage: hm } = useMessages();
+  if (items.length === 0) return null;
+  return (
+    <Section title={hm.sectionRecentOutcomes}>
+      <View style={[styles.groupedList, { backgroundColor: colors.surface.panel }]}>
+        {items.map((item, index) => (
+          <Pressable key={item.runId} style={styles.listRow} onPress={() => onOpen(item)} accessibilityRole="button">
+            <Icon source="check-circle-outline" size={20} color={colors.semantic.success} />
+            <View style={styles.rowCopy}>
+              <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text.primary }]}>{item.objective}</Text>
+              <Text numberOfLines={2} style={[styles.rowSubtitle, { color: colors.text.secondary }]}>{item.summary}</Text>
+            </View>
+            <Icon source="chevron-right" size={18} color={colors.text.tertiary} />
+            {index < items.length - 1 ? <View style={[styles.rowDivider, { backgroundColor: colors.border.subtle }]} /> : null}
+          </Pressable>
+        ))}
+      </View>
+    </Section>
+  );
+}
+
 function LibrarySection({
   inboxCount,
+  onWork,
+  onProjects,
   onInbox,
   onNotes,
   onSessions,
   onFiles,
 }: {
   inboxCount: number;
+  onWork: () => void;
+  onProjects: () => void;
   onInbox: () => void;
   onNotes: () => void;
   onSessions: () => void;
@@ -598,6 +640,8 @@ function LibrarySection({
   const { homePage: hm } = useMessages();
   return (
     <Section title={hm.sectionLibrary}>
+      <LibraryRow icon="briefcase-outline" label={hm.libraryWork} onPress={onWork} />
+      <LibraryRow icon="folder-multiple-outline" label={hm.libraryProjects} onPress={onProjects} />
       <LibraryRow icon="tray-arrow-down" label={hm.inboxMetric} value={inboxCount > 0 ? String(inboxCount) : undefined} onPress={onInbox} />
       <LibraryRow icon="note-text-outline" label={hm.libraryNotes} onPress={onNotes} />
       <LibraryRow icon="message-processing-outline" label={hm.librarySessions} onPress={onSessions} />

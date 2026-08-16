@@ -1,8 +1,10 @@
 import * as Dialog from '@radix-ui/react-dialog';
+import type { OutcomeReceipt } from '@xopcai/gateway-contract';
 import {
   ArrowRight,
   CalendarClock,
   CircleAlert,
+  CircleCheck,
   Clock3,
   FolderKanban,
   MessageCircle,
@@ -20,9 +22,11 @@ import { WorkbenchActivity } from '@/features/activity/workbench-activity';
 import { fetchProjects, type Project } from '@/features/projects/api';
 import {
   acknowledgeWorkAttention,
+  confirmWorkIntake,
   decideAgentJudgment,
   fetchWorkHome,
   instructAgentJudgment,
+  proposeWorkIntake,
   respondToWorkDecision,
   retryWorkAttention,
   transitionAgentJudgment,
@@ -31,6 +35,7 @@ import {
   type WorkHomeDecision,
   type WorkHomeItem,
   type WorkHomeResponse,
+  type WorkIntakeProposal,
 } from '@/features/work/work-home-api';
 import { workCopy } from '@/features/work/work-copy';
 import { workflowBoardHref } from '@/features/workflows/workflow-page.utils';
@@ -52,6 +57,31 @@ function formatTime(value: string | number | undefined, fallback: string): strin
 
 function WorkBadge({ children }: { children: string }) {
   return <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[11px] font-medium text-fg-muted">{children}</span>;
+}
+
+function OutcomeReceiptCard({ receipt, evidenceLabel, remainingLabel }: {
+  receipt: OutcomeReceipt;
+  evidenceLabel: string;
+  remainingLabel: string;
+}) {
+  const href = receipt.projectId
+    ? `/projects/${encodeURIComponent(receipt.projectId)}`
+    : `/chat/${encodeURIComponent(receipt.sessionKey)}`;
+  return (
+    <Link to={href} className="block rounded-xl border border-edge-subtle px-3 py-3 hover:bg-surface-hover/55">
+      <div className="flex items-start gap-2">
+        <CircleCheck className="mt-0.5 size-4 shrink-0 text-success" aria-hidden />
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium text-fg">{receipt.objective}</p>
+          <p className="mt-1 line-clamp-2 text-xs leading-5 text-fg-muted">{receipt.summary}</p>
+          <p className="mt-2 text-[11px] text-fg-subtle">
+            {receipt.evidence.length} {evidenceLabel}
+            {receipt.remainingWork.length > 0 ? ` · ${receipt.remainingWork.length} ${remainingLabel}` : ''}
+          </p>
+        </div>
+      </div>
+    </Link>
+  );
 }
 
 function WorkHomeSkeleton() {
@@ -278,6 +308,9 @@ export function WorkPage() {
   const [search, setSearch] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [outcome, setOutcome] = useState('');
+  const [proposal, setProposal] = useState<WorkIntakeProposal | null>(null);
+  const [createBusy, setCreateBusy] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [busyDecisionId, setBusyDecisionId] = useState<string | null>(null);
   const [busyAttentionId, setBusyAttentionId] = useState<string | null>(null);
 
@@ -341,15 +374,43 @@ export function WorkPage() {
     && item.status !== 'blocked'
   )).slice(0, 10) ?? [], [home]);
 
-  const submitCreate = useCallback((event: FormEvent<HTMLFormElement>) => {
+  const submitCreate = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmed = outcome.trim();
     if (!trimmed) return;
-    setOutcome('');
-    setCreateOpen(false);
-    const query = new URLSearchParams({ draft: trimmed, autoSend: '1' });
-    navigate({ pathname: '/chat/new', search: `?${query.toString()}` }, { state: { forceNewChat: true } });
-  }, [navigate, outcome]);
+    setCreateBusy(true);
+    setCreateError(null);
+    try {
+      setProposal(await proposeWorkIntake(trimmed));
+    } catch (error) {
+      setCreateError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setCreateBusy(false);
+    }
+  }, [outcome]);
+
+  const confirmCreate = useCallback(async () => {
+    if (!proposal) return;
+    setCreateBusy(true);
+    setCreateError(null);
+    try {
+      const work = await confirmWorkIntake(proposal.id);
+      setCreateOpen(false);
+      setOutcome('');
+      setProposal(null);
+      await load();
+      navigate(`/projects/${encodeURIComponent(work.projectId)}`);
+    } catch (error) {
+      setCreateError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setCreateBusy(false);
+    }
+  }, [load, navigate, proposal]);
+
+  const resetCreate = useCallback(() => {
+    setProposal(null);
+    setCreateError(null);
+  }, []);
 
   const headerEnd = useMemo(() => (
     <Button type="button" variant="primary" className="h-9 rounded-lg" onClick={() => setCreateOpen(true)}>
@@ -414,7 +475,10 @@ export function WorkPage() {
     <main className="mx-auto flex w-full max-w-[1200px] flex-1 flex-col gap-7 px-4 py-7 sm:px-6 lg:px-8 lg:py-9">
       <Dialog.Root
         open={createOpen}
-        onOpenChange={setCreateOpen}
+        onOpenChange={(open) => {
+          setCreateOpen(open);
+          if (!open) resetCreate();
+        }}
       >
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
@@ -440,7 +504,7 @@ export function WorkPage() {
                 </Button>
               </Dialog.Close>
             </div>
-            <form onSubmit={submitCreate} className="flex min-h-0 flex-1 flex-col">
+            {!proposal ? <form onSubmit={(event) => void submitCreate(event)} className="flex min-h-0 flex-1 flex-col">
               <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-4">
                 <label htmlFor="new-work-outcome" className="mb-2 shrink-0 text-sm font-medium text-fg">
                   {workText.intentLabel}
@@ -469,12 +533,47 @@ export function WorkPage() {
               </div>
               <div className="flex shrink-0 justify-end gap-2 border-t border-edge px-5 py-4">
                 <Dialog.Close asChild><Button type="button" variant="ghost">{t.cancel}</Button></Dialog.Close>
-                <Button type="submit" variant="primary" className="min-w-32" disabled={!outcome.trim()}>
+                <Button type="submit" variant="primary" className="min-w-32" disabled={!outcome.trim() || createBusy}>
                   <Sparkles className="size-4" aria-hidden />
                   {workText.submit}
                 </Button>
               </div>
-            </form>
+            </form> : (
+              <div className="flex min-h-0 flex-1 flex-col">
+                <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+                  <h3 className="text-sm font-semibold text-fg">{workText.proposalTitle}</h3>
+                  <dl className="mt-4 space-y-3 text-sm">
+                    <div className="rounded-xl border border-edge-subtle bg-surface-base p-3">
+                      <dt className="text-xs font-medium text-fg-subtle">{workText.projectLabel}</dt>
+                      <dd className="mt-1 font-medium text-fg">{proposal.suggestedProject.name}</dd>
+                      <dd className="mt-1 text-xs text-fg-muted">
+                        {proposal.classification === 'existing_project' ? workText.existingProject : workText.newProject}
+                      </dd>
+                    </div>
+                    <div className="rounded-xl border border-edge-subtle bg-surface-base p-3">
+                      <dt className="text-xs font-medium text-fg-subtle">{workText.outcomeLabel}</dt>
+                      <dd className="mt-1 leading-6 text-fg">{proposal.suggestedProject.outcome}</dd>
+                    </div>
+                    <div className="rounded-xl border border-edge-subtle bg-surface-base p-3">
+                      <dt className="text-xs font-medium text-fg-subtle">{workText.nextActionLabel}</dt>
+                      <dd className="mt-1 leading-6 text-fg">{proposal.suggestedProject.nextAction}</dd>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 px-1 text-xs text-fg-muted">
+                      <dt>{workText.monitoringLabel}</dt>
+                      <dd>{workText.monitoringModes[proposal.monitoringSuggestion.mode]}</dd>
+                    </div>
+                  </dl>
+                </div>
+                <div className="flex shrink-0 justify-between gap-2 border-t border-edge px-5 py-4">
+                  <Button type="button" variant="ghost" disabled={createBusy} onClick={resetCreate}>{workText.editIntent}</Button>
+                  <Button type="button" variant="primary" className="min-w-36" disabled={createBusy} onClick={() => void confirmCreate()}>
+                    <CircleCheck className="size-4" aria-hidden />
+                    {workText.confirmWork}
+                  </Button>
+                </div>
+              </div>
+            )}
+            {createError ? <p className="shrink-0 border-t border-danger/20 bg-danger-soft px-5 py-2 text-xs text-danger">{createError}</p> : null}
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
@@ -630,6 +729,24 @@ export function WorkPage() {
                       <time className="shrink-0 text-xs text-fg-subtle">{formatTime(automation.nextRunAt, t.never)}</time>
                     </Link>
                   ))}</div>
+                </section>
+              ) : null}
+              {home.recentOutcomes.length > 0 ? (
+                <section className="rounded-2xl bg-surface-base p-4 shadow-surface">
+                  <div className="flex items-center gap-2">
+                    <CircleCheck className="size-4 text-success" aria-hidden />
+                    <h3 className="text-sm font-semibold text-fg">{workText.recentOutcomes}</h3>
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    {home.recentOutcomes.slice(0, 3).map((receipt) => (
+                      <OutcomeReceiptCard
+                        key={receipt.runId}
+                        receipt={receipt}
+                        evidenceLabel={workText.evidenceCount}
+                        remainingLabel={workText.remainingCount}
+                      />
+                    ))}
+                  </div>
                 </section>
               ) : null}
               <WorkbenchActivity />

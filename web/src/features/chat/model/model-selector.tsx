@@ -125,7 +125,7 @@ export function ModelSelector({
   const [query, setQuery] = useState('');
   const settingsShellLayer = useSettingsShellPopoverLayer();
   const portalContainer = useSettingsShellPopoverPortalContainer();
-  const settingsShellPopoverZ = settingsShellPopoverZClass(settingsShellLayer);
+  const settingsShellPopoverZ = settingsShellPopoverZClass(settingsShellLayer, portalContainer !== null);
   const footerLink = settingsFooterLink ?? (showProviderSettingsFooter
     ? { label: m.modelProviderSettingsLink, path: '/settings/capabilities/models' }
     : undefined);

@@ -2,6 +2,7 @@ import type { Hono } from 'hono';
 
 import { registerActivityRoutes } from './activity.js';
 import { registerAgentStreamRoutes } from './agent-stream.js';
+import { registerDiscussionRoutes } from './discussions.js';
 import { registerSessionsRoutes } from './sessions.js';
 import { registerStatusRoutes } from './status.js';
 import { registerMemoryRoutes } from './memory.js';
@@ -14,6 +15,7 @@ import { registerInteractionStateRoutes } from './interaction-state.js';
 import { registerComposerHistoryRoutes } from './composer-history.js';
 import { registerLocalAppsRoutes } from './local-apps.js';
 import { registerWorkDiscoveryRoutes } from './work-discovery.js';
+import { registerWorkRoutes } from './work.js';
 import { registerProactiveRoutes } from './proactive.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import {
@@ -30,10 +32,12 @@ export function registerCoreAuthenticatedRoutes(
   registerSessionsRoutes(authenticated, deps);
   registerMemoryRoutes(authenticated, deps);
   registerActivityRoutes(authenticated, deps);
+  registerDiscussionRoutes(authenticated, deps);
   registerProjectsRoutes(authenticated, deps);
   registerProjectSkillRoutes(authenticated, deps);
   registerLocalAppsRoutes(authenticated, deps);
   registerWorkDiscoveryRoutes(authenticated, deps);
+  registerWorkRoutes(authenticated, deps);
   registerProactiveRoutes(authenticated, deps);
   registerSearchRoutes(authenticated, deps);
   registerMobileRoutes(authenticated, deps);

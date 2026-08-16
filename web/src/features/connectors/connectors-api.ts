@@ -275,6 +275,16 @@ export type ConnectorLearningJob = {
   updatedAt: string;
 };
 
+export type ConnectorSyncPolicy = {
+  connectionId: string;
+  scanEnabled: boolean;
+  proactiveEnabled: boolean;
+  intervalMinutes?: number;
+  allowedScenarioKeys: string[];
+  revision: number;
+  updatedAt: string;
+};
+
 export type ComposioScope = 'read' | 'write' | 'admin';
 
 export type ComposioInstallationPolicy = {
@@ -628,6 +638,24 @@ export async function listConnectorLearningJobs(): Promise<ConnectorLearningJob[
     apiUrl('/api/connectors/learning'),
   );
   return requirePayload(response, 'Could not load connector learning jobs.').jobs;
+}
+
+export async function getConnectorSyncPolicy(connectionId: string): Promise<ConnectorSyncPolicy> {
+  const response = await fetchJson<ApiEnvelope<{ policy: ConnectorSyncPolicy }>>(
+    apiUrl(`/api/connectors/composio/connections/${encodeURIComponent(connectionId)}/sync-policy`),
+  );
+  return requirePayload(response, 'Could not load connector sync policy.').policy;
+}
+
+export async function updateConnectorSyncPolicy(
+  connectionId: string,
+  patch: Partial<Pick<ConnectorSyncPolicy, 'scanEnabled' | 'proactiveEnabled' | 'intervalMinutes' | 'allowedScenarioKeys'>>,
+): Promise<ConnectorSyncPolicy> {
+  const response = await fetchJson<ApiEnvelope<{ policy: ConnectorSyncPolicy }>>(
+    apiUrl(`/api/connectors/composio/connections/${encodeURIComponent(connectionId)}/sync-policy`),
+    { method: 'PATCH', body: JSON.stringify(patch) },
+  );
+  return requirePayload(response, 'Could not update connector sync policy.').policy;
 }
 
 export async function setConnectionLearningPaused(connectionId: string, paused: boolean): Promise<void> {

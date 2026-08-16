@@ -20,6 +20,7 @@ import type { StoredLanguage } from '@/lib/storage';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useAsyncResource } from '@/lib/use-async-resource';
 import { cn } from '@/lib/cn';
+import { withReturnTo } from '@/lib/navigation-return';
 import { showActivity } from '@/stores/activity-store';
 
 import { GoalActions } from './chat-goal-banner-actions';
@@ -236,7 +237,10 @@ function GoalDetailsDialog({
             </div>
             <div className="flex shrink-0 items-center gap-1">
               <Button asChild type="button" variant="ghost" className="h-8 px-2 text-xs">
-                <Link to={`/goals/${encodeURIComponent(goal.id)}`}>
+                <Link to={withReturnTo(
+                  `/goals/${encodeURIComponent(goal.id)}`,
+                  `/chat/${encodeURIComponent(sessionKey)}`,
+                )}>
                   <ExternalLink className="size-3.5" aria-hidden />
                   {t.openFullGoal}
                 </Link>
@@ -395,6 +399,10 @@ function ChatGoalBannerBody({ sessionKey, streaming, sending }: ChatGoalBannerPr
     const previous = observedStatusRef.current;
     observedStatusRef.current = { goalId: goal.id, status: goal.status };
     if (!previous || previous.goalId !== goal.id || previous.status === goal.status) return;
+    const goalHref = withReturnTo(
+      `/goals/${encodeURIComponent(goal.id)}`,
+      `/chat/${encodeURIComponent(sessionKey)}`,
+    );
     if (goal.status === 'done') {
       showActivity({
         tone: 'success',
@@ -402,7 +410,7 @@ function ChatGoalBannerBody({ sessionKey, streaming, sending }: ChatGoalBannerPr
         title: language === 'zh' ? '目标已完成' : 'Goal completed',
         message: goal.title,
         source: language === 'zh' ? '目标' : 'Goal',
-        href: `/goals/${encodeURIComponent(goal.id)}`,
+        href: goalHref,
         dedupeKey: `goal:${goal.id}`,
       });
       return;
@@ -414,7 +422,7 @@ function ChatGoalBannerBody({ sessionKey, streaming, sending }: ChatGoalBannerPr
         title: language === 'zh' ? '目标受阻' : 'Goal blocked',
         message: goal.blockedReason || goal.title,
         source: language === 'zh' ? '目标' : 'Goal',
-        href: `/goals/${encodeURIComponent(goal.id)}`,
+        href: goalHref,
         dedupeKey: `goal:${goal.id}`,
       });
       return;
@@ -426,11 +434,11 @@ function ChatGoalBannerBody({ sessionKey, streaming, sending }: ChatGoalBannerPr
         title: language === 'zh' ? '目标需要你的输入' : 'Goal needs input',
         message: goal.blockedReason || goal.title,
         source: language === 'zh' ? '目标' : 'Goal',
-        href: `/goals/${encodeURIComponent(goal.id)}`,
+        href: goalHref,
         dedupeKey: `goal:${goal.id}`,
       });
     }
-  }, [goal?.id, goal?.status, goal?.updatedAt, goal?.title, goal?.blockedReason]);
+  }, [goal?.id, goal?.status, goal?.updatedAt, goal?.title, goal?.blockedReason, sessionKey]);
 
   useEffect(() => {
     const onSessionUpdated = (e: Event) => {

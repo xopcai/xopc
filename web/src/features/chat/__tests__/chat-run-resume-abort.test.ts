@@ -6,6 +6,7 @@ import {
   pendingAgentRunStorageKey,
   setPendingAgentRun,
 } from '@/features/chat/messages/message-sender';
+import type { MessagingCallbacks } from '@/features/chat/messages/message-sender';
 import { fetchSessionActiveRun, resolveResumeRunId } from '@/features/chat/session/resolve-resume-run-id';
 import { selectDisplayMessages } from '@/features/chat/session/chat-session-view';
 
@@ -225,5 +226,51 @@ describe('MessageSender terminal state', () => {
 
     expect(sender.isStreamingFor(sessionKey)).toBe(false);
     expect(hasPendingAgentRunForChat(sessionKey)).toBe(false);
+  });
+
+  it('delivers an empty canonical task plan as a clear snapshot', async () => {
+    const sender = new MessageSender();
+    const onTaskPlanUpdated = vi.fn();
+    const callbacks: MessagingCallbacks = {
+      onStreamStart: vi.fn(),
+      onToken: vi.fn(),
+      onThinking: vi.fn(),
+      onThinkingEnd: vi.fn(),
+      onToolStart: vi.fn(),
+      onToolEnd: vi.fn(),
+      onProgress: vi.fn(),
+      onTaskPlanUpdated,
+      onResult: vi.fn(),
+      onError: vi.fn(),
+    };
+    vi.stubGlobal('window', {
+      location: { origin: 'http://localhost:3000' },
+      dispatchEvent: vi.fn(),
+    });
+    vi.mocked(apiFetch).mockResolvedValue(
+      new Response(
+        [
+          'event: task_plan_updated',
+          'data: {"payload":{"planId":"session:todo","revision":2,"source":"todo","scope":"session","items":[]}}',
+          '',
+          'event: run_end',
+          'data: {"payload":{}}',
+          '',
+          '',
+        ].join('\n'),
+        { headers: { 'Content-Type': 'text/event-stream' } },
+      ),
+    );
+
+    await sender.send('clear todos', sessionKey, undefined, undefined, callbacks);
+
+    expect(onTaskPlanUpdated).toHaveBeenCalledWith({
+      planId: 'session:todo',
+      revision: 2,
+      source: 'todo',
+      scope: 'session',
+      explanation: undefined,
+      items: [],
+    });
   });
 });

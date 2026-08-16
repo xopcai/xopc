@@ -16,7 +16,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { Select, SelectOption } from '@/components/ui/popover-select';
@@ -40,6 +40,7 @@ import { listWorkflowDefinitions, type WorkflowDefinition } from '@/features/wor
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { formatMediumDateTime } from '@/lib/date-formatters';
+import { safeInternalReturnPath, withReturnTo } from '@/lib/navigation-return';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 
@@ -65,9 +66,9 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)} MB`;
 }
 
-function linkHref(link: NonNullable<WorkItem['links']>[number]): string {
+function linkHref(link: NonNullable<WorkItem['links']>[number], returnTo: string): string {
   if (link.kind === 'chat') return `/chat/${encodeURIComponent(link.targetId)}`;
-  if (link.kind === 'goal') return `/goals/${encodeURIComponent(link.targetId)}`;
+  if (link.kind === 'goal') return withReturnTo(`/goals/${encodeURIComponent(link.targetId)}`, returnTo);
   if (link.kind === 'workflow_run') return `/workflows?run=${encodeURIComponent(link.targetId)}`;
   if (link.kind === 'automation') return `/automations?automationId=${encodeURIComponent(link.targetId)}`;
   if (link.kind === 'note') return `/notes/${encodeURIComponent(link.targetId)}`;
@@ -156,8 +157,10 @@ function rankWorkflowDefinitionsForWorkItem(
 export function WorkItemDetailPage() {
   const { workItemId = '' } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const language = useLocaleStore((s) => s.language);
-  const t = messages(language).projectDetailPage.workItems;
+  const msg = messages(language);
+  const t = msg.projectDetailPage.workItems;
   const [item, setItem] = useState<WorkItem | null>(null);
   const [project, setProject] = useState<ProjectWithDetails | null>(null);
   const [events, setEvents] = useState<WorkItemEvent[]>([]);
@@ -174,6 +177,15 @@ export function WorkItemDetailPage() {
   const projectHref = useMemo(() => (
     item ? `/projects/${encodeURIComponent(item.projectId)}/work-items` : '/projects'
   ), [item]);
+  const backPath = useMemo(() => safeInternalReturnPath(
+    searchParams.get('returnTo'),
+    projectHref,
+    ['/projects', '/chat'],
+  ), [projectHref, searchParams]);
+  const detailPath = useMemo(() => withReturnTo(
+    `/work-items/${encodeURIComponent(workItemId)}`,
+    backPath,
+  ), [backPath, workItemId]);
 
   const load = useCallback(async () => {
     if (!workItemId) return;
@@ -228,13 +240,13 @@ export function WorkItemDetailPage() {
     try {
       const res = await createWorkItemGoal(item.id);
       setItem(res.item);
-      navigate(`/goals/${encodeURIComponent(res.goal.id)}`);
+      navigate(withReturnTo(`/goals/${encodeURIComponent(res.goal.id)}`, detailPath));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
     }
-  }, [item, navigate]);
+  }, [detailPath, item, navigate]);
 
   const refreshEvents = useCallback(async (id: string) => {
     const nextEvents = await fetchWorkItemEvents(id).catch(() => ({ events: [] }));
@@ -319,9 +331,13 @@ export function WorkItemDetailPage() {
     setPageHeader({
       startExtra: (
         <Link
-          to={projectHref}
+          to={backPath}
           className="inline-flex size-9 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover hover:text-fg"
-          aria-label={project?.name ? t.detail.backToProject.replace('{{name}}', project.name) : t.detail.backToProjects}
+          aria-label={backPath.startsWith('/chat')
+            ? msg.sidebar.back
+            : project?.name
+              ? t.detail.backToProject.replace('{{name}}', project.name)
+              : t.detail.backToProjects}
         >
           <ArrowLeft className="size-4" aria-hidden />
         </Link>
@@ -338,7 +354,7 @@ export function WorkItemDetailPage() {
       end: headerEnd,
     });
     return () => clearPageHeader();
-  }, [clearPageHeader, headerEnd, item?.projectId, loading, project?.name, projectHref, setPageHeader, t]);
+  }, [backPath, clearPageHeader, headerEnd, item?.projectId, loading, msg.sidebar.back, project?.name, setPageHeader, t]);
 
   if (loading) {
     return (
@@ -356,9 +372,9 @@ export function WorkItemDetailPage() {
   if (!item) {
     return (
       <main className="mx-auto flex w-full max-w-[var(--max-width-app-main)] flex-1 flex-col px-3 py-6 sm:px-5 xl:px-6">
-        <Link to="/projects" className="inline-flex items-center gap-1 text-sm font-medium text-accent hover:text-accent-fg">
+        <Link to={backPath} className="inline-flex items-center gap-1 text-sm font-medium text-accent hover:text-accent-fg">
           <ArrowLeft className="size-4" aria-hidden />
-          {t.detail.backToProjects}
+          {backPath.startsWith('/chat') ? msg.sidebar.back : t.detail.backToProjects}
         </Link>
         <div className="mt-5 rounded-lg border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger">
           {error || t.detail.notFound}
@@ -520,7 +536,7 @@ export function WorkItemDetailPage() {
           <h2 className="text-sm font-semibold text-fg">{t.detail.links}</h2>
           <div className="mt-2 grid gap-1 text-sm">
             {item.links?.length ? item.links.map((link) => (
-              <Link key={link.id} to={linkHref(link)} className="flex min-w-0 items-center justify-between gap-2 rounded-md px-1 py-1.5 hover:bg-surface-hover">
+              <Link key={link.id} to={linkHref(link, detailPath)} className="flex min-w-0 items-center justify-between gap-2 rounded-md px-1 py-1.5 hover:bg-surface-hover">
                 <span className="min-w-0 truncate text-fg">{link.title || link.targetId}</span>
                 <span className="inline-flex shrink-0 items-center gap-1 text-xs text-fg-muted">
                   {t.linkKinds[link.kind]}

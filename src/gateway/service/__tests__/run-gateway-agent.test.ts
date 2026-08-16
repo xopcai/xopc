@@ -7,6 +7,7 @@ import { AgentRunRelay } from '../../agent-run-relay.js';
 import {
   closeXopcDatabase,
   ensureSessionRecord,
+  listTaskOutcomes,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../../storage/sqlite/index.js';
@@ -125,5 +126,65 @@ describe('runGatewayAgent', () => {
 
     expect(events.some((event) => event.type === 'error')).toBe(true);
     expect(activeWebchatRunBySession.get(sessionKey)).toBe('existing-run');
+  });
+
+  it('links completed plan items to outcome evidence', async () => {
+    const sessionKey = 'agent:main:webchat:default:direct:chat-test';
+    const deps = {
+      config: {},
+      agentService: {
+        resolveUserTimezoneForSession: () => 'UTC',
+        prepareInboundAttachments: async () => undefined,
+        beginInboundTurn: () => {},
+        turnDispatcher: {
+          processDirectStreaming: async function* () {
+            const message = { role: 'assistant', content: [] };
+            yield { type: 'message_start', message };
+            yield {
+              type: 'tool_execution_end',
+              toolCallId: 'plan-1',
+              toolName: 'update_plan',
+              isError: false,
+              result: {
+                content: [{ type: 'text', text: 'plan updated' }],
+                details: {
+                  plan: [{ step: 'Run regression tests', status: 'completed' }],
+                },
+              },
+            };
+            yield { type: 'message_end', message };
+          },
+        },
+        getLastAssistantPlainText: () => 'Done',
+        persistentGoals: { takeStreamOutcome: () => undefined },
+        outboundCoordinator: { emitSessionTurnComplete: async () => {} },
+        endInboundTurn: () => {},
+      },
+      bus: { publishInbound: async () => {} },
+      runRelay: new AgentRunRelay(),
+      runAbortControllers: new Map<string, AbortController>(),
+      activeWebchatRunBySession: new Map<string, string>(),
+      sessionIndex: {
+        getSessionMetadata: async () => ({ sessionId: 'session-test' }),
+        updateSessionMetadata: async () => {},
+      },
+      emit: () => {},
+    } as unknown as RunGatewayAgentDeps;
+
+    for await (const _event of runGatewayAgent(deps, 'verify the change', 'webchat', sessionKey)) {
+      // Consume the stream so the outcome finalizer runs.
+    }
+
+    expect(listTaskOutcomes({ sessionKey })).toEqual([
+      expect.objectContaining({
+        contract: expect.objectContaining({ acceptanceCriteria: ['Run regression tests'] }),
+        evidence: [expect.objectContaining({
+          title: 'Plan item completed: Run regression tests',
+          verifies: ['Run regression tests'],
+        })],
+        verification: expect.objectContaining({ status: 'passed' }),
+        completionVerdict: 'achieved',
+      }),
+    ]);
   });
 });

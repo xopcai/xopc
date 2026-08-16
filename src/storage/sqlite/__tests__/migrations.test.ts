@@ -137,6 +137,21 @@ describe('SQLite migrations', () => {
     try {
       ensureXopcDatabaseSchema(db);
       expect(readSchemaVersion(db)).toBe(XOPC_DB_SCHEMA_VERSION);
+      expect(db.prepare(
+        `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'discussion_captures'`,
+      ).get()).toEqual({ name: 'discussion_captures' });
+      expect(db.prepare(
+        `SELECT scenario_key FROM proactive_scenarios WHERE scenario_key = 'discussion_follow_up'`,
+      ).get()).toEqual({ scenario_key: 'discussion_follow_up' });
+      expect(db.prepare(
+        `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'discussion_action_conversions'`,
+      ).get()).toBeUndefined();
+      expect(db.prepare(
+        `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'discussion_transcript_segments'`,
+      ).get()).toEqual({ name: 'discussion_transcript_segments' });
+      expect(db.prepare(
+        `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'discussion_capture_settings'`,
+      ).get()).toEqual({ name: 'discussion_capture_settings' });
     } finally {
       db.close();
       rmSync(dir, { recursive: true, force: true });

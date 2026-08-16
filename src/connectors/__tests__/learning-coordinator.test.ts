@@ -11,6 +11,7 @@ import {
   getConnectorConnection,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
+  upsertConnectorSyncPolicy,
   upsertConnectorConnection,
   upsertConnectorInstallation,
 } from '../../storage/sqlite/index.js';
@@ -114,6 +115,54 @@ describe('connector learning coordinator', () => {
     )).toMatchObject({
       query: `after:${Math.floor(Date.parse('2026-08-01T00:00:00.000Z') / 1_000)} -in:spam -in:trash`,
     });
+  });
+
+  it('honors per-connection scan enablement and interval', async () => {
+    const config = ConfigSchema.parse({});
+    config.userContext.memory.sources = [...config.userContext.memory.sources, 'connectedSources'];
+    expect(upsertConnectorSyncPolicy({
+      connectionId: 'gmail-work',
+      proactiveEnabled: true,
+      defaultIntervalMinutes: 15,
+    }).intervalMinutes).toBe(15);
+    upsertConnectorSyncPolicy({
+      connectionId: 'gmail-work',
+      scanEnabled: true,
+      intervalMinutes: 5,
+    });
+    const coordinator = startConnectorLearningCoordinator({
+      getConfig: () => config,
+      resolveAgentId: () => 'main',
+      getMemoryManager: () => ({ applyUnderstandingCandidates: vi.fn() }) as unknown as MemoryManager,
+      initialDelayMs: 60_000,
+      composioAdapter: identityAdapter,
+    });
+    try {
+      const before = Date.now();
+      await coordinator.runNow();
+      const incremental = listConnectorLearningJobs({ connectionId: 'gmail-work' })
+        .find((job) => job.mode === 'incremental');
+      const nextRunAt = Date.parse(incremental?.nextRunAt ?? '');
+      expect(nextRunAt).toBeGreaterThanOrEqual(before + 5 * 60_000);
+      expect(nextRunAt).toBeLessThanOrEqual(Date.now() + 5 * 60_000);
+    } finally {
+      coordinator.stop();
+    }
+
+    upsertConnectorSyncPolicy({ connectionId: 'gmail-work', scanEnabled: false });
+    const disabled = startConnectorLearningCoordinator({
+      getConfig: () => config,
+      resolveAgentId: () => 'main',
+      getMemoryManager: () => ({ applyUnderstandingCandidates: vi.fn() }) as unknown as MemoryManager,
+      initialDelayMs: 60_000,
+      composioAdapter: identityAdapter,
+    });
+    try {
+      expect(disabled.enqueueConnection('gmail-work', { reason: 'schedule' })).toBeNull();
+      expect(disabled.enqueueConnection('gmail-work', { reason: 'manual' })).not.toBeNull();
+    } finally {
+      disabled.stop();
+    }
   });
 
   it('stores a safe failure code instead of the provider response body', async () => {

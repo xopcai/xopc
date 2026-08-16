@@ -1,4 +1,4 @@
-import { Check, KeyRound, Loader2, Pause, Play, RefreshCw, Star, Trash2, X } from 'lucide-react';
+import { Check, KeyRound, Loader2, RefreshCw, Star, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,7 @@ import {
   getComposioScope,
   getComposioPolicy,
   getComposioHealth,
+  getConnectorSyncPolicy,
   listConnectorApprovals,
   listConnectorLearningJobs,
   listComposioConnections,
@@ -20,11 +21,11 @@ import {
   respondConnectorApproval,
   revokeComposioConnection,
   setComposioScope,
-  setConnectionLearningPaused,
   startConnectorAuthorization,
   startConnectionLearning,
   updateComposioConnection,
   updateComposioPolicy,
+  updateConnectorSyncPolicy,
   type ComposioConnection,
   type ComposioInstallationPolicy,
   type ComposioConnectorHealth,
@@ -35,6 +36,7 @@ import {
   type ConnectorAgentOption,
   type ConnectorInstance,
   type ConnectorLearningJob,
+  type ConnectorSyncPolicy,
   waitForActiveComposioConnection,
 } from '../connectors-api';
 import { formatConnectorMessage } from '../utils/connector-i18n';
@@ -84,6 +86,7 @@ export function ComposioConnectorPanel({
   const [agents, setAgents] = useState<ConnectorAgentOption[]>([]);
   const [health, setHealth] = useState<ComposioConnectorHealth | null>(null);
   const [learningJobs, setLearningJobs] = useState<ConnectorLearningJob[]>([]);
+  const [syncPolicies, setSyncPolicies] = useState<Record<string, ConnectorSyncPolicy>>({});
   const [scope, setScope] = useState<ComposioScope>('read');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -112,6 +115,16 @@ export function ComposioConnectorPanel({
       setAgents(nextPolicy?.agents ?? []);
       setHealth(nextHealth);
       setLearningJobs(nextLearningJobs);
+      const relevantConnections = nextConnections.filter(
+        (connection) => connection.toolkit.toLowerCase() === toolkit.toLowerCase(),
+      );
+      const policies = await Promise.all(relevantConnections.map(async (connection) => [
+        connection.id,
+        await getConnectorSyncPolicy(connection.id),
+      ] as const).map((promise) => promise.catch(() => null)));
+      setSyncPolicies(Object.fromEntries(policies.filter(
+        (entry): entry is readonly [string, ConnectorSyncPolicy] => entry !== null,
+      )));
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : String(loadError));
     } finally {
@@ -336,6 +349,51 @@ export function ComposioConnectorPanel({
                 <p className="truncate font-mono text-xs text-fg">{connection.accountEmail ?? connection.username ?? connection.workspace ?? connection.providerConnectionId}</p>
                 <p className="text-xs text-fg-subtle">{connection.status}{connection.isDefault ? ` · ${t.composioDefaultAccount}` : ''}</p>
               </div>
+              {syncPolicies[connection.id] ? (
+                <div className="grid gap-2 rounded-lg border border-edge bg-surface-base p-2 sm:grid-cols-3">
+                  <label className="flex items-center gap-2 text-xs text-fg-subtle">
+                    <input
+                      type="checkbox"
+                      checked={syncPolicies[connection.id].scanEnabled}
+                      disabled={loading}
+                      onChange={(event) => void mutateConnection(() => updateConnectorSyncPolicy(
+                        connection.id,
+                        { scanEnabled: event.currentTarget.checked },
+                      ))}
+                    />
+                    {t.connectorScheduledScan}
+                  </label>
+                  <label className="flex items-center gap-2 text-xs text-fg-subtle">
+                    <input
+                      type="checkbox"
+                      checked={syncPolicies[connection.id].proactiveEnabled}
+                      disabled={loading || !syncPolicies[connection.id].scanEnabled}
+                      onChange={(event) => void mutateConnection(() => updateConnectorSyncPolicy(
+                        connection.id,
+                        { proactiveEnabled: event.currentTarget.checked },
+                      ))}
+                    />
+                    {t.connectorProactiveUse}
+                  </label>
+                  <label className="text-xs text-fg-subtle">
+                    {t.connectorScanInterval}
+                    <Select
+                      className={cn(inputClass, 'mt-1 h-8 py-1 text-xs')}
+                      value={String(syncPolicies[connection.id].intervalMinutes ?? 30)}
+                      disabled={loading || !syncPolicies[connection.id].scanEnabled}
+                      onChange={(event) => void mutateConnection(() => updateConnectorSyncPolicy(
+                        connection.id,
+                        { intervalMinutes: Number(event.currentTarget.value) },
+                      ))}
+                    >
+                      <SelectOption value="5">5 {t.connectorMinutes}</SelectOption>
+                      <SelectOption value="15">15 {t.connectorMinutes}</SelectOption>
+                      <SelectOption value="30">30 {t.connectorMinutes}</SelectOption>
+                      <SelectOption value="60">60 {t.connectorMinutes}</SelectOption>
+                    </Select>
+                  </label>
+                </div>
+              ) : null}
               <input
                 className={cn(inputClass, 'h-8 py-1 text-xs')}
                 defaultValue={connection.alias ?? ''}
@@ -371,10 +429,10 @@ export function ComposioConnectorPanel({
                 ><Trash2 className="size-4 text-red-500" /></Button>
               </div>
               {connection.status === 'active' ? (
-                <div className="flex gap-2">
+                <div>
                   <Button
                     variant="secondary"
-                    className="flex-1"
+                    className="w-full"
                     disabled={loading}
                     onClick={() => void mutateConnection(async () => {
                       await startConnectionLearning(connection.id);
@@ -383,18 +441,6 @@ export function ComposioConnectorPanel({
                   >
                     {loading ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
                     {t.composioSyncNow}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    disabled={loading || !learningJobs.some((job) => job.connectionId === connection.id)}
-                    onClick={() => void mutateConnection(async () => {
-                      const paused = learningJobs.find((job) => job.connectionId === connection.id)?.status !== 'paused';
-                      await setConnectionLearningPaused(connection.id, paused);
-                    })}
-                  >
-                    {learningJobs.find((job) => job.connectionId === connection.id)?.status === 'paused'
-                      ? <><Play className="size-4" />{t.connectorLearningResume}</>
-                      : <><Pause className="size-4" />{t.connectorLearningPause}</>}
                   </Button>
                 </div>
               ) : null}

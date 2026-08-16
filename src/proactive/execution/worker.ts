@@ -51,14 +51,22 @@ export class ProactiveWorker {
         const revision = run.promptRevisionId ? getPromptRevision(run.promptRevisionId) ?? undefined : undefined;
         const eventIds = eventIdsForBatch(run.batchId);
         const context = await this.contexts.collect(run.scenarioKey, { batchId: run.batchId, eventIds, subscriptionId: run.subscriptionId });
-        const snapshot = saveSnapshot(run.batchId, context, eventIds);
+        const snapshot = saveSnapshot(
+          run.batchId,
+          context.snapshotContent ?? context.content,
+          context.evidenceIds,
+        );
         attachSnapshot(run.id, snapshot.id);
         const prompt = composeScenarioPrompt({ scenario, ...(revision ? { revision } : {}), runtimeContext: 'Use the read-only inspection tool to examine the authorized evidence.' });
-        const output = await this.executor.execute({ systemPrompt: prompt.platformSafety, userPrompt: prompt.text, authorizedContext: context });
-        const candidate = parseInsightCandidate(output.text, new Set(eventIds));
+        const output = await this.executor.execute({ systemPrompt: prompt.platformSafety, userPrompt: prompt.text, authorizedContext: context.content });
+        const candidate = parseInsightCandidate(output.text, new Set(context.evidenceIds));
         const valuable = isValuableInsight(candidate);
         const insight = finishRun({ run, ...(valuable ? { candidate, valueScore: scoreInsight(candidate) } : {}), rawOutput: output.text, modelRef: output.modelRef });
-        log.info({ runId: run.id, scenarioKey: run.scenarioKey, valuable, insightId: insight?.id }, valuable ? 'Proactive insight created' : 'Proactive output discarded by value gate');
+        const disposition = insight ? 'created' : valuable ? 'duplicate_suppressed' : 'value_gate_discarded';
+        log.info(
+          { runId: run.id, scenarioKey: run.scenarioKey, disposition, insightId: insight?.id },
+          insight ? 'Proactive insight created' : 'Proactive output discarded',
+        );
       } catch (error) {
         const permanent = error instanceof Error && /Pinned scenario/.test(error.message);
         failRun(run, error, !permanent);

@@ -398,7 +398,11 @@ describe('ChatStreamMapper', () => {
       },
     });
 
-    expect(events.map((event) => event.type)).toEqual(['tool_end', 'turn_plan']);
+    expect(events.map((event) => event.type)).toEqual([
+      'tool_end',
+      'turn_plan',
+      'task_plan_updated',
+    ]);
     expect(events[1]).toMatchObject({
       type: 'turn_plan',
       payload: {
@@ -408,6 +412,78 @@ describe('ChatStreamMapper', () => {
           { step: 'Wire event', status: 'completed' },
           { step: 'Run review', status: 'in_progress' },
         ],
+      },
+    });
+    expect(events[2]).toMatchObject({
+      type: 'task_plan_updated',
+      payload: {
+        planId: 'msg_run-1_1:update_plan',
+        revision: expect.any(Number),
+        source: 'update_plan',
+        scope: 'turn',
+        items: [
+          { id: 'step-1', title: 'Wire event', status: 'completed' },
+          { id: 'step-2', title: 'Run review', status: 'in_progress' },
+        ],
+      },
+    });
+  });
+
+  it('emits task_plan_updated for todo', () => {
+    const m = mapper();
+    m.map({ type: 'message_start', message: { role: 'assistant', content: [] } });
+    const events = m.map({
+      type: 'tool_execution_end',
+      toolCallId: 'tc-todo',
+      toolName: 'todo',
+      isError: false,
+      result: {
+        content: [{ type: 'text', text: 'todo updated' }],
+        details: {
+          items: [
+            { id: 'review', content: 'Review changes', status: 'in_progress' },
+            { id: 'ship', content: 'Ship', status: 'pending' },
+          ],
+        },
+      },
+    });
+
+    expect(events.map((event) => event.type)).toEqual(['tool_end', 'task_plan_updated']);
+    expect(events[1]).toMatchObject({
+      type: 'task_plan_updated',
+      payload: {
+        planId: 'sk:todo',
+        revision: expect.any(Number),
+        source: 'todo',
+        scope: 'session',
+        items: [
+          { id: 'review', title: 'Review changes', status: 'in_progress' },
+          { id: 'ship', title: 'Ship', status: 'pending' },
+        ],
+      },
+    });
+  });
+
+  it('emits an empty todo snapshot when the list is cleared', () => {
+    const m = mapper();
+    m.map({ type: 'message_start', message: { role: 'assistant', content: [] } });
+    const events = m.map({
+      type: 'tool_execution_end',
+      toolCallId: 'tc-todo-clear',
+      toolName: 'todo',
+      isError: false,
+      result: {
+        content: [{ type: 'text', text: 'todo cleared' }],
+        details: { items: [] },
+      },
+    });
+
+    expect(events).toHaveLength(2);
+    expect(events[1]).toMatchObject({
+      type: 'task_plan_updated',
+      payload: {
+        source: 'todo',
+        items: [],
       },
     });
   });

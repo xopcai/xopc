@@ -502,39 +502,6 @@ describe('project association routes', () => {
     expect(new GoalService().get(goal.id)?.projectId).toBe(projectB.id);
   });
 
-  it('returns a project overview with active goals and next actions', async () => {
-    const projects = new ProjectService();
-    const project = projects.create({ name: 'Project Overview', brief: 'Move the project forward' });
-    const goals = new GoalService();
-    const goal = goals.create({ title: 'Ship project overview', projectId: project.id });
-    goals.update(goal.id, { nextAction: 'Wire the overview into the project page.' });
-    const app = registerProjectRouteApp({
-      projects,
-      sessions: {
-        getSession: vi.fn(),
-      } as unknown as GatewayService['sessions'],
-    });
-
-    const res = await app.request(`/api/projects/${project.id}/overview`);
-
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as {
-      ok: true;
-      overview: {
-        stats: { goalCount: number; activeGoalCount: number };
-        activeGoals: Array<{ id: string; title: string }>;
-        nextActions: Array<{ goalId: string; nextAction: string }>;
-        recommendedAction?: string;
-      };
-    };
-    expect(body.overview.stats).toMatchObject({ goalCount: 1, activeGoalCount: 1 });
-    expect(body.overview.activeGoals).toEqual([expect.objectContaining({ id: goal.id, title: goal.title })]);
-    expect(body.overview.nextActions).toEqual([
-      expect.objectContaining({ goalId: goal.id, nextAction: 'Wire the overview into the project page.' }),
-    ]);
-    expect(body.overview.recommendedAction).toBe('Wire the overview into the project page.');
-  });
-
   it('creates and lists first-class project work items', async () => {
     const projects = new ProjectService();
     const project = projects.create({ name: 'Workbench Project' });

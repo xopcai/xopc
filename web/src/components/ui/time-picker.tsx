@@ -3,7 +3,6 @@ import { Check, Clock3, X } from 'lucide-react';
 import { useRef, useState, type KeyboardEvent, type RefObject } from 'react';
 
 import { cn } from '@/lib/cn';
-import { SETTINGS_SHELL_POPOVER_Z } from '@/lib/settings-shell-dialog-layer';
 import { settingsShellPopoverZClass } from '@/lib/settings-shell-layer.utils';
 import {
   useSettingsShellPopoverLayer,
@@ -68,9 +67,7 @@ export function TimePicker({
   const minuteRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const settingsShellLayer = useSettingsShellPopoverLayer();
   const portalContainer = useSettingsShellPopoverPortalContainer();
-  const popoverZ = settingsShellLayer === 'default'
-    ? SETTINGS_SHELL_POPOVER_Z
-    : settingsShellPopoverZClass(settingsShellLayer);
+  const popoverZ = settingsShellPopoverZClass(settingsShellLayer, portalContainer !== null);
   const normalizedStep = Math.max(1, Math.min(60, Math.round(minuteStep)));
   const minutes = Array.from({ length: Math.ceil(60 / normalizedStep) }, (_, index) => index * normalizedStep)
     .filter((minute) => minute < 60);

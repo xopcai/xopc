@@ -13,6 +13,8 @@ import { useChatProjectScope } from '@/features/chat/scope/use-chat-project-scop
 import { ChatWelcomeSpotlightSkeleton } from '@/features/chat/chat-welcome-spotlight';
 import { ChatPageHeaderRegistration } from '@/features/chat/chat-page-header-registration';
 import { ChatSseStatus } from '@/features/chat/agent-selection/chat-sse-status';
+import { ConversationPlanDock } from '@/features/chat/messages/conversation-plan-dock';
+import { extractLatestConversationPlan } from '@/features/chat/messages/conversation-plan';
 import { MessageList } from '@/features/chat/messages/message-list';
 import { ScrollToBottomButton } from '@/features/chat/scroll/scroll-to-bottom-button';
 import { useChatScrollViewport } from '@/features/chat/scroll/use-chat-scroll-viewport';
@@ -45,6 +47,7 @@ import { useSessionWorkflowRunLinks } from '@/features/workflows/use-session-wor
 import { useWorkflowRunLive } from '@/features/workflows/use-workflow-run-live';
 import { useWorkflowSessionMetadata } from '@/features/workflows/use-workflow-session-metadata';
 import { appendNoteContent, createTaskNote, getNote } from '@/features/notes/notes-api';
+import { withReturnTo } from '@/lib/navigation-return';
 import {
   applyWorkItemUpdateSuggestion,
   createWorkItemUpdateSuggestion,
@@ -538,6 +541,10 @@ export function ChatPage() {
   const showConversationLoading = isLoadingHistory;
   const compactWelcomeLayout =
     !showConversationLoading && msgSlice.items.length === 0 && !stream.streaming;
+  const latestConversationPlan = useMemo(
+    () => extractLatestConversationPlan(msgSlice.items),
+    [msgSlice.items],
+  );
   const chatHeadline = useMemo(() => {
     const titleKey =
       session.sessionRoutePending && session.decodedKey ? session.decodedKey : session.sessionKey;
@@ -1013,6 +1020,7 @@ export function ChatPage() {
             workspace={session.effectiveWorkspacePath}
             projectLabel={m.chat.scopeProject}
             workspaceLabel={m.chat.scopeWorkspace}
+            returnTo={pathname}
           />
         ) : null}
         {(location.state as { fromAgentEditor?: boolean } | null)?.fromAgentEditor &&
@@ -1092,13 +1100,13 @@ export function ChatPage() {
                   <span>{m.chat.workItemSummarizeAction}</span>
                 </button>
                 <Link
-                  to={`/work-items/${encodeURIComponent(sourceWorkItem.id)}`}
+                  to={withReturnTo(`/work-items/${encodeURIComponent(sourceWorkItem.id)}`, pathname)}
                   className="font-medium text-accent transition-colors hover:text-accent-fg"
                 >
                   {m.chat.workItemOpenItem}
                 </Link>
                 <Link
-                  to={`/projects/${encodeURIComponent(sourceWorkItem.projectId)}/work-items`}
+                  to={withReturnTo(`/projects/${encodeURIComponent(sourceWorkItem.projectId)}/work-items`, pathname)}
                   className="font-medium text-fg-muted transition-colors hover:text-fg"
                 >
                   {m.chat.workItemOpenProject}
@@ -1272,6 +1280,23 @@ export function ChatPage() {
                 onSubmit={clarify.submitClarifyAnswer}
                 onCancel={clarify.cancelClarifyAnswer}
               />
+              {latestConversationPlan ? (
+                <ConversationPlanDock
+                  plan={latestConversationPlan.plan}
+                  changeSummary={latestConversationPlan.changeSummary}
+                  isStreaming={stream.streaming}
+                  labels={{
+                    heading: m.chat.planHeading,
+                    stepProgress: m.chat.planStepProgress,
+                    completedProgress: m.chat.planCompletedProgress,
+                    finished: m.chat.planFinished,
+                    ended: m.chat.planEnded,
+                    planned: m.chat.planPlanned,
+                    filesChangedOne: m.chat.planFilesChanged_one,
+                    filesChangedOther: m.chat.planFilesChanged_other,
+                  }}
+                />
+              ) : null}
               <ChatComposer
                 disabled={
                   isSessionTransitioning ||

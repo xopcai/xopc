@@ -9,6 +9,50 @@ describe('todo tool', () => {
     expect((result.content[0] as { type: string; text: string }).text).toContain('No todos');
   });
 
+  it('hydrates and persists through an injected repository', async () => {
+    const persisted = new Map<string, Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' | 'cancelled' }>>([
+      ['session-a', [{ id: 'existing', content: 'Existing', status: 'pending' }]],
+    ]);
+    const tool = createTodoTool({
+      getSessionKey: () => 'session-a',
+      repository: {
+        read: (sessionKey) => persisted.get(sessionKey) ?? [],
+        write: (sessionKey, items) => persisted.set(sessionKey, items),
+      },
+    });
+
+    const read = await tool.execute('read', {}, undefined);
+    expect(read.details).toEqual({
+      items: [{ id: 'existing', content: 'Existing', status: 'pending' }],
+    });
+
+    await tool.execute('write', {
+      todos: [{ id: 'existing', content: 'Existing', status: 'completed' }],
+      merge: true,
+    }, undefined);
+    expect(persisted.get('session-a')).toEqual([
+      { id: 'existing', content: 'Existing', status: 'completed' },
+    ]);
+  });
+
+  it('falls back to in-memory state while the repository is unavailable', async () => {
+    const tool = createTodoTool({
+      getSessionKey: () => 'session-a',
+      repository: {
+        isAvailable: () => false,
+        read: () => { throw new Error('must not read'); },
+        write: () => { throw new Error('must not write'); },
+      },
+    });
+
+    await tool.execute('write', {
+      todos: [{ id: 'local', content: 'Local', status: 'pending' }],
+    });
+    expect((await tool.execute('read', {})).details).toEqual({
+      items: [{ id: 'local', content: 'Local', status: 'pending' }],
+    });
+  });
+
   it('writes and reads todos', async () => {
     const tool = createTodoTool();
     const writeResult = await tool.execute('test-2', {

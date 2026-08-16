@@ -133,6 +133,37 @@
     "openingChat": "Opening",
     "noThreads": "No discussion threads yet.",
     "noteDiscussionFallback": "Note discussion",
-    "messageCount": "{{count}} messages"
+    "messageCount": "{{count}} messages",
+    "discussionCapture": {
+      "title": "Record discussion",
+      "description": "Start speaking. AI handles the note and project context.",
+      "close": "Close",
+      "consentTitle": "Before your first recording",
+      "consent": "Confirm that you will inform participants or obtain the consent required by your workplace and local rules.",
+      "consentAction": "Confirm and start",
+      "requesting": "Requesting microphone…",
+      "recording": "Recording",
+      "paused": "Recording paused",
+      "pause": "Pause",
+      "resume": "Resume",
+      "stop": "Finish",
+      "finalizing": "Saving and organizing the note…",
+      "openNote": "Open note",
+      "liveTranscript": "Live transcript",
+      "waitingTranscript": "Listening…",
+      "liveUnavailable": "Live text is unavailable; the full transcript will appear after you finish.",
+      "saved": "Discussion saved. AI is organizing the note.",
+      "saveFailed": "Could not finish the recording. The local draft is safe.",
+      "emptyRecording": "The recording contains no audio.",
+      "recoveredTitle": "Unfinished recordings",
+      "recoveredDescription": "A recording is stored safely on this device.",
+      "recover": "Recover",
+      "recovering": "Recovering…",
+      "discard": "Discard",
+      "projectLinked": "AI linked this discussion to a project.",
+      "undo": "Undo",
+      "draftTranscript": "Draft live transcript",
+      "maxDuration": "Maximum 30 minutes"
+    }
   }
 }

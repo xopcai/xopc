@@ -16,11 +16,10 @@ import { type UserMessage } from '@earendil-works/pi-ai/compat';
 import type { Config } from '../../../config/schema.js';
 import { getDefaultModelSync, resolveModel } from '../../../providers/index.js';
 import { completeWithResolvedCredentials } from '../../../providers/model-call.js';
-import { isSTTAvailable, transcribe } from '../../../voice/stt/index.js';
+import { isSTTAvailable, mergeSttConfigFromAppConfig, transcribe } from '../../../voice/stt/index.js';
 import { isTTSAvailable, mergeTtsConfigFromAppConfig, speak } from '../../../voice/tts/index.js';
 import { listTtsProvidersForApi } from '../../../voice/tts/list-providers.js';
 import { listSttProvidersForApi } from '../../../voice/stt/list-providers.js';
-import { mergeSttConfigFromAppConfig } from '../../../channels/attachments/voice-stt-webchat.js';
 import { resolveSttProviderConfigSlice } from '../../../voice/stt/config-slice.js';
 import { resolveTtsProviderConfigSlice } from '../../../voice/tts/config-slice.js';
 import {

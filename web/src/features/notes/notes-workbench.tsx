@@ -23,6 +23,7 @@ import useSWR from 'swr';
 
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { Select, SelectOption } from '@/components/ui/popover-select';
+import { openDiscussionCapture } from '@/features/discussions/discussion-events';
 import { uiPatchReducer } from '@/lib/settings-form-draft';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
@@ -127,8 +128,7 @@ export interface NotesWorkbenchProps {
   managePageHeader?: boolean;
   showLibrary?: boolean;
   allowMediaCapture?: boolean;
-  listTag?: string;
-  captureTags?: string[];
+  projectId?: string;
   listTitle?: string;
   listDescription?: string;
   emptyText?: string;
@@ -146,8 +146,7 @@ export function NotesWorkbench({
   managePageHeader = false,
   showLibrary = true,
   allowMediaCapture = true,
-  listTag,
-  captureTags = [],
+  projectId,
   listTitle,
   listDescription,
   emptyText,
@@ -194,16 +193,16 @@ export function NotesWorkbench({
   const swrKey = useMemo(
     () =>
       hasToken
-        ? ['notes-list', listTag, ui.statusFilter, ui.kindFilter, ui.pinnedOnly]
+        ? ['notes-list', projectId, ui.statusFilter, ui.kindFilter, ui.pinnedOnly]
         : null,
-    [hasToken, listTag, ui.statusFilter, ui.kindFilter, ui.pinnedOnly],
+    [hasToken, projectId, ui.statusFilter, ui.kindFilter, ui.pinnedOnly],
   );
 
   const { data, mutate, isLoading } = useSWR(swrKey, () =>
     listNotes({
       status: ui.statusFilter === 'all' ? undefined : ui.statusFilter,
       kind: ui.kindFilter === 'all' ? undefined : ui.kindFilter,
-      tag: listTag,
+      projectId,
       pinned: ui.pinnedOnly ? true : undefined,
       limit: 100,
       sortBy: 'createdAt',
@@ -220,12 +219,12 @@ export function NotesWorkbench({
   const trimmedSearchQuery = searchQuery.trim();
   const { data: searchData, isLoading: searchLoading } = useSWR(
     hasToken && searchOpen && trimmedSearchQuery
-      ? ['notes-search', listTag, trimmedSearchQuery]
+      ? ['notes-search', projectId, trimmedSearchQuery]
       : null,
     () =>
       listNotes({
         search: trimmedSearchQuery,
-        tag: listTag,
+        projectId,
         limit: 30,
         sortBy: 'updatedAt',
         sortOrder: 'desc',
@@ -403,15 +402,15 @@ export function NotesWorkbench({
 
   const handleCapture = useCallback(
     async (text: string, opts?: { navigate?: boolean }) => {
-      const note = captureTags.length
-        ? await createNote({ markdown: text, kind: 'thought', tags: captureTags, channel: 'web' })
+      const note = projectId
+        ? await createNote({ markdown: text, kind: 'thought', projectId, channel: 'web' })
         : await quickCapture(text, 'web');
       await mutate();
       if (opts?.navigate !== false) {
         navigate(notePath(basePath, note.id));
       }
     },
-    [basePath, captureTags, mutate, navigate],
+    [basePath, mutate, navigate, projectId],
   );
 
   const handleCreateBlankNote = useCallback(async () => {
@@ -421,7 +420,7 @@ export function NotesWorkbench({
       const note = await createNote({
         markdown: '',
         kind: 'thought',
-        tags: captureTags,
+        projectId,
         channel: 'web',
       });
       dispatch({ type: 'patch', patch: initialUi });
@@ -437,7 +436,7 @@ export function NotesWorkbench({
     } finally {
       setCreatingBlankNote(false);
     }
-  }, [basePath, captureTags, creatingBlankNote, mutate, n.createBlankFailed, n.createBlankFailedHint, navigate]);
+  }, [basePath, creatingBlankNote, mutate, n.createBlankFailed, n.createBlankFailedHint, navigate, projectId]);
 
   const handleImagePick = useCallback(() => {
     const input = document.createElement('input');
@@ -768,6 +767,8 @@ export function NotesWorkbench({
             onImagePick={allowMediaCapture ? handleImagePick : undefined}
             onVoiceCapture={allowMediaCapture ? handleVoiceCapture : undefined}
             recordingLabel={n.recording}
+            discussionCaptureLabel={n.discussionCapture.title}
+            onDiscussionCapture={() => openDiscussionCapture(projectId)}
           />
         </div>
       </section>

@@ -1,4 +1,4 @@
-import { Image, Mic, Send, Square } from 'lucide-react';
+import { AudioLines, Image, Mic, Send, Square } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { cn } from '@/lib/cn';
@@ -13,6 +13,8 @@ export type QuickCaptureBarProps = {
   recordingLabel?: string;
   imageDisabled?: boolean;
   voiceDisabled?: boolean;
+  onDiscussionCapture?: () => void;
+  discussionCaptureLabel?: string;
 };
 
 const MAX_RECORDING_MS = 30_000;
@@ -32,6 +34,8 @@ export function QuickCaptureBar({
   recordingLabel = 'Recording…',
   imageDisabled = false,
   voiceDisabled = false,
+  onDiscussionCapture,
+  discussionCaptureLabel = 'Record discussion',
 }: QuickCaptureBarProps) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
@@ -204,6 +208,18 @@ export function QuickCaptureBar({
           {recording ? <Square className="size-4 fill-current" /> : <Mic className="size-4" />}
         </button>
       )}
+      {onDiscussionCapture && !recording ? (
+        <button
+          type="button"
+          onClick={onDiscussionCapture}
+          disabled={busy}
+          className="shrink-0 rounded-lg p-2 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
+          aria-label={discussionCaptureLabel}
+          title={discussionCaptureLabel}
+        >
+          <AudioLines className="size-4" aria-hidden />
+        </button>
+      ) : null}
       {recording ? (
         <span className="min-w-0 flex-1 truncate py-1.5 text-sm text-danger">
           {recordingLabel.replace('{{seconds}}', String(recordingSec))}

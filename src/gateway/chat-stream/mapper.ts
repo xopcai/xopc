@@ -14,6 +14,13 @@ export interface ChatStreamMapperOptions {
 
 type ToolResultEnvelope = { content?: unknown[]; details?: unknown; text?: string };
 
+let lastTaskPlanRevision = 0;
+
+function nextTaskPlanRevision(): number {
+  lastTaskPlanRevision = Math.max(Date.now(), lastTaskPlanRevision + 1);
+  return lastTaskPlanRevision;
+}
+
 export class ChatStreamMapper {
   private assistantIndex = 0;
   private currentAssistantMessageId: string | undefined;
@@ -376,10 +383,36 @@ export class ChatStreamMapper {
         events.push(this.make('patch_applied', { messageId, toolCallId, changes, diff, added, removed }));
       }
     }
-    if (toolName === 'update_plan' && details) {
+    if (toolName === 'update_plan' && details && !event.isError) {
       const plan = extractTurnPlan(details);
       if (plan) {
         events.push(this.make('turn_plan', { messageId, ...plan }));
+        events.push(this.make('task_plan_updated', {
+          messageId,
+          planId: `${messageId}:update_plan`,
+          revision: nextTaskPlanRevision(),
+          source: 'update_plan',
+          scope: 'turn',
+          explanation: plan.explanation,
+          items: plan.plan.map((item, index) => ({
+            id: item.id ?? `step-${index + 1}`,
+            title: item.step,
+            status: item.status,
+          })),
+        }));
+      }
+    }
+    if (toolName === 'todo' && details && !event.isError) {
+      const items = extractTodoItems(details);
+      if (items) {
+        events.push(this.make('task_plan_updated', {
+          messageId,
+          planId: `${this.opts.sessionKey}:todo`,
+          revision: nextTaskPlanRevision(),
+          source: 'todo',
+          scope: 'session',
+          items,
+        }));
       }
     }
     return events;
@@ -521,22 +554,54 @@ function normalizeToolResult(value: unknown): ToolResultEnvelope | undefined {
   };
 }
 
-function extractTurnPlan(details: Record<string, unknown>): { explanation?: string; plan: { step: string; status: 'pending' | 'in_progress' | 'completed' }[] } | undefined {
+function extractTurnPlan(details: Record<string, unknown>): { explanation?: string; plan: { id?: string; step: string; status: 'pending' | 'in_progress' | 'completed' }[] } | undefined {
   const rawPlan = Array.isArray(details.plan) ? details.plan : [];
   const plan = rawPlan
     .map((item) => {
       const rec = asRecord(item);
+      const id = typeof rec?.id === 'string' && rec.id.trim() ? rec.id.trim() : undefined;
       const step = typeof rec?.step === 'string' ? rec.step.trim() : '';
       const status = rec?.status;
       if (!step || (status !== 'pending' && status !== 'in_progress' && status !== 'completed')) {
         return undefined;
       }
-      return { step, status };
+      return { ...(id ? { id } : {}), step, status };
     })
-    .filter((item): item is { step: string; status: 'pending' | 'in_progress' | 'completed' } => Boolean(item));
+    .filter((item): item is { id?: string; step: string; status: 'pending' | 'in_progress' | 'completed' } => Boolean(item));
   if (plan.length === 0) return undefined;
   const explanation = typeof details.explanation === 'string' && details.explanation.trim()
     ? details.explanation.trim()
     : undefined;
   return { explanation, plan };
+}
+
+function extractTodoItems(details: Record<string, unknown>): Array<{
+  id: string;
+  title: string;
+  status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+}> | undefined {
+  if (!Array.isArray(details.items)) return undefined;
+  const items: Array<{
+    id: string;
+    title: string;
+    status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+  }> = [];
+  for (const item of details.items) {
+    const rec = asRecord(item);
+    const id = typeof rec?.id === 'string' ? rec.id.trim() : '';
+    const title = typeof rec?.content === 'string' ? rec.content.trim() : '';
+    const status = rec?.status;
+    if (
+      !id
+      || !title
+      || (status !== 'pending'
+        && status !== 'in_progress'
+        && status !== 'completed'
+        && status !== 'cancelled')
+    ) {
+      continue;
+    }
+    items.push({ id, title, status });
+  }
+  return items;
 }

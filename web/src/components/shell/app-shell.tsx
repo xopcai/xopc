@@ -17,6 +17,7 @@ import { UpdateReminderBar } from '@/features/updater/update-reminder-bar';
 import { useUpdateReminder } from '@/features/updater/use-update-reminder';
 import { GlobalCommandPaletteHost } from '@/features/search/global-command-palette/global-command-palette-host';
 import { GlobalQuickCaptureHost } from '@/features/notes/global-quick-capture';
+import { GlobalDiscussionCaptureHost } from '@/features/discussions/global-discussion-capture';
 import { GatewaySseBridge } from '@/features/gateway/gateway-sse-bridge';
 import { DreamingOverlay } from '@/features/dreaming/dreaming-overlay';
 import { WorkspacePreviewPane } from '@/features/workspace/workspace-preview-pane';
@@ -134,6 +135,7 @@ export function AppShell() {
       <ExtensionNavigateListener />
       <GlobalCommandPaletteHost />
       <GlobalQuickCaptureHost />
+      <GlobalDiscussionCaptureHost />
       <GlobalVoiceInputShortcutHost />
       <GlobalReadAloudPlayer />
       <ToastHost />

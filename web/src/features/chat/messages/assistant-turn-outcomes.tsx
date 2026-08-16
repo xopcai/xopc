@@ -1,5 +1,3 @@
-import { useEffect, useState } from 'react';
-
 import type { MessageAttachment } from '@/features/chat/messages/messages.types';
 import { AttachmentRenderer } from '@/features/chat/attachments/attachment-renderer';
 import {
@@ -9,8 +7,6 @@ import {
 import { SearchSourceList } from '@/features/chat/tool-results/search-source-list';
 import { ToolResultFileLinks } from '@/features/chat/tool-results/tool-result-file-links';
 import { Skeleton } from '@/components/ui/skeleton';
-import { fetchJson } from '@/lib/fetch';
-import { apiUrl } from '@/lib/url';
 
 import type { AssistantTurnViewModel } from './assistant-turn-view-model';
 
@@ -20,48 +16,13 @@ export function AssistantTurnOutcomes({
   sessionKey,
   deliverablesLabel,
   sourcesLabel,
-  assistantTimestamp,
-  isStreaming,
-  taskLabels,
 }: {
   view: AssistantTurnViewModel;
   authToken?: string;
   sessionKey?: string | null;
   deliverablesLabel: string;
   sourcesLabel: string;
-  assistantTimestamp?: number;
-  isStreaming: boolean;
-  taskLabels: {
-    heading: string;
-    objective: string;
-    acceptance: string;
-    evidence: string;
-    verification: string;
-    verificationStates: Record<'passed' | 'failed' | 'unverified', string>;
-    recovery: string;
-  };
 }) {
-  const [taskOutcome, setTaskOutcome] = useState<{
-    objective: string;
-    contract?: { acceptanceCriteria: string[] };
-    evidence: Array<{ title: string; summary: string }>;
-    verification: { status: 'passed' | 'failed' | 'unverified' };
-    failure?: { code: string; phase: string; recoveryAction: string };
-  } | null>(null);
-  useEffect(() => {
-    setTaskOutcome(null);
-    if (!sessionKey || !assistantTimestamp || isStreaming) return;
-    const query = new URLSearchParams({
-      sessionKey,
-      assistantTimestamp: String(assistantTimestamp),
-    });
-    void fetchJson<{ outcome: NonNullable<typeof taskOutcome> }>(
-      apiUrl(`/api/task-outcomes/for-assistant?${query.toString()}`),
-    )
-      .then((result) => setTaskOutcome(result.outcome))
-      .catch(() => setTaskOutcome(null));
-  }, [assistantTimestamp, isStreaming, sessionKey]);
-
   const { workspacePaths, mediaAttachments } = view.deliverables;
   const awaitingDeliverables =
     view.lifecycle.state === 'using_tool' &&
@@ -77,57 +38,6 @@ export function AssistantTurnOutcomes({
 
   return (
     <>
-      {taskOutcome?.contract || taskOutcome?.evidence.length ? (
-        <section className="rounded-lg border border-edge-subtle/60 bg-surface-elevated/20 px-3 py-2.5">
-          <h3 className="mb-2 text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
-            {taskLabels.heading}
-          </h3>
-          <dl className="flex flex-col gap-2 text-xs">
-            <div>
-              <dt className="font-medium text-fg-muted">{taskLabels.objective}</dt>
-              <dd className="mt-0.5 text-fg-secondary">{taskOutcome.objective}</dd>
-            </div>
-            <div>
-              <dt className="font-medium text-fg-muted">{taskLabels.verification}</dt>
-              <dd className="mt-0.5 text-fg-secondary">{taskLabels.verificationStates[taskOutcome.verification.status]}</dd>
-            </div>
-            {taskOutcome.contract?.acceptanceCriteria.length ? (
-              <div>
-                <dt className="font-medium text-fg-muted">{taskLabels.acceptance}</dt>
-                <dd className="mt-0.5">
-                  <ul className="list-disc space-y-0.5 pl-4 text-fg-secondary">
-                    {taskOutcome.contract.acceptanceCriteria.map((criterion) => (
-                      <li key={criterion}>{criterion}</li>
-                    ))}
-                  </ul>
-                </dd>
-              </div>
-            ) : null}
-            {taskOutcome.evidence.length ? (
-              <div>
-                <dt className="font-medium text-fg-muted">{taskLabels.evidence}</dt>
-                <dd className="mt-0.5">
-                  <ul className="space-y-1 text-fg-secondary">
-                    {taskOutcome.evidence.map((evidence) => (
-                      <li key={`${evidence.title}:${evidence.summary}`}>
-                        <span className="font-medium text-fg">{evidence.title}</span>
-                        <span> — {evidence.summary}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </dd>
-              </div>
-            ) : null}
-            {taskOutcome.failure ? (
-              <div>
-                <dt className="font-medium text-fg-muted">{taskLabels.recovery}</dt>
-                <dd className="mt-0.5 text-fg-secondary">{taskOutcome.failure.phase} · {taskOutcome.failure.code} · {taskOutcome.failure.recoveryAction}</dd>
-              </div>
-            ) : null}
-          </dl>
-        </section>
-      ) : null}
-
       {showDeliverables ? (
         <section
           className="rounded-lg border border-edge-subtle/60 bg-surface-elevated/20 px-3 py-2.5"

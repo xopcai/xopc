@@ -4,6 +4,7 @@ import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 export type TurnPlanStatus = 'pending' | 'in_progress' | 'completed';
 
 export interface TurnPlanStep {
+  id?: string;
   step: string;
   status: TurnPlanStatus;
 }
@@ -16,6 +17,7 @@ export interface TurnPlanDetails {
 const VALID_STATUSES = new Set<TurnPlanStatus>(['pending', 'in_progress', 'completed']);
 
 const PlanStepSchema = Type.Object({
+  id: Type.Optional(Type.String({ minLength: 1, description: 'Stable identifier for this step' })),
   step: Type.String({ minLength: 1, description: 'Short task step' }),
   status: Type.Union([
     Type.Literal('pending'),
@@ -39,6 +41,7 @@ function normalizePlan(raw: unknown): TurnPlanStep[] {
   }
   const plan = raw.map((item) => {
     const rec = item && typeof item === 'object' ? item as Record<string, unknown> : {};
+    const id = typeof rec.id === 'string' && rec.id.trim() ? rec.id.trim() : undefined;
     const step = String(rec.step ?? '').trim();
     const statusRaw = String(rec.status ?? '').trim();
     if (!step) {
@@ -47,7 +50,7 @@ function normalizePlan(raw: unknown): TurnPlanStep[] {
     if (!VALID_STATUSES.has(statusRaw as TurnPlanStatus)) {
       throw new Error(`invalid plan status: ${statusRaw || '(empty)'}`);
     }
-    return { step, status: statusRaw as TurnPlanStatus };
+    return { ...(id ? { id } : {}), step, status: statusRaw as TurnPlanStatus };
   });
 
   const active = plan.filter((item) => item.status === 'in_progress');

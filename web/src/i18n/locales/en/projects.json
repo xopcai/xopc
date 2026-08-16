@@ -265,6 +265,15 @@
       "activeGoals": "Active goals",
       "recentWorkflowRuns": "Recent workflow runs",
       "nextActions": "Next actions",
+      "recentResults": "Recent results",
+      "resultStatuses": {
+        "running": "Running",
+        "completed": "Achieved",
+        "partial": "Needs review",
+        "needs_user": "Needs you",
+        "failed": "Not achieved",
+        "cancelled": "Cancelled"
+      },
       "goal": "Goal",
       "recommendedNext": "Next: {{action}}",
       "noNextActions": "No next actions yet. Create a goal or continue the project chat to establish one.",

@@ -6,6 +6,7 @@ import type { MessageBus } from '../../infra/bus/index.js';
 import { prependEnvelopeTimestamp } from '../../channels/envelope-timestamp.js';
 import { resolveWebchatSessionKey } from '../resolve-webchat-session-key.js';
 import type { SessionIndex } from '../../session/index.js';
+import type { SessionMetadata } from '../../session/types.js';
 import {
   createLogger,
   inboundCorrelationMetadataFromAsyncLogContext,
@@ -14,6 +15,8 @@ import {
 import { shouldSkipWebchatInboundByAbortCutoff } from '../../session/abort-cutoff.js';
 import { parseSessionKey } from '../../routing/session-key.js';
 import { recordExplicitRelationshipFollowUp } from '../../user-context/relationship-continuity.js';
+import { resolveExecutionContext, taskOutcomeContext } from '../../work/execution-context.js';
+import { OutcomeProjectionService } from '../../work/outcome-projection-service.js';
 import {
   completeTaskOutcome,
   startTaskOutcome,
@@ -89,6 +92,7 @@ export async function *runGatewayAgent(
 
   let webchatSessionKey: string | undefined;
   let webchatSessionId: string | undefined;
+  let webchatMetadata: SessionMetadata | undefined;
   let webchatStaleSkip = false;
   if (channel === 'webchat') {
     const resolved = resolveWebchatSessionKey({ sessionKey: chatId });
@@ -101,6 +105,7 @@ export async function *runGatewayAgent(
       throw new Error('Session not found; create sessions via POST /api/sessions');
     }
     webchatSessionId = meta?.sessionId;
+    webchatMetadata = meta;
     webchatStaleSkip = shouldSkipWebchatInboundByAbortCutoff(meta, runOptions?.clientCreatedAtMs);
     if (!webchatStaleSkip && meta?.abortCutoffTimestamp !== undefined) {
       await sessionIndex
@@ -113,6 +118,7 @@ export async function *runGatewayAgent(
 
   const streamSessionKey = webchatSessionKey ?? chatId;
   if (webchatSessionKey) {
+    if (!webchatMetadata) throw new Error('Session metadata is unavailable');
     const parsedSession = parseSessionKey(webchatSessionKey);
     if (!parsedSession) throw new Error('Resolved webchat session key is invalid');
     updateInteractionStateFromMessage({ sessionKey: webchatSessionKey, message });
@@ -126,6 +132,12 @@ export async function *runGatewayAgent(
       sessionKey: webchatSessionKey,
       channel,
       objective: message.trim(),
+      context: taskOutcomeContext(resolveExecutionContext({
+        runId,
+        sessionKey: webchatSessionKey,
+        channel,
+        metadata: webchatMetadata,
+      })),
     });
     taskOutcomeStarted = true;
   }
@@ -135,15 +147,32 @@ export async function *runGatewayAgent(
     if (taskEvidence.some((item) => item.kind === evidence.kind && item.title === evidence.title)) return;
     taskEvidence.push(evidence);
   };
+  const captureTaskPlan = (items: Array<{ title: string; status: string }>): void => {
+    const activeItems = items.filter((item) => item.status !== 'cancelled');
+    taskContract = {
+      objective: message.trim(),
+      deliverables: [],
+      acceptanceCriteria: activeItems.map((item) => item.title),
+      constraints: [],
+      approvalRequired: [],
+    };
+    for (const item of activeItems) {
+      if (item.status !== 'completed') continue;
+      addTaskEvidence({
+        kind: 'state',
+        title: `Plan item completed: ${item.title}`,
+        summary: 'The agent marked this plan item as completed during the run',
+        verifies: [item.title],
+      });
+    }
+  };
   const captureTaskEvent = (event: ChatStreamEvent): void => {
+    if (event.type === 'task_plan_updated') {
+      captureTaskPlan(event.payload.items);
+      return;
+    }
     if (event.type === 'turn_plan') {
-      taskContract = {
-        objective: message.trim(),
-        deliverables: [],
-        acceptanceCriteria: event.payload.plan.map((item) => item.step),
-        constraints: [],
-        approvalRequired: [],
-      };
+      captureTaskPlan(event.payload.plan.map((item) => ({ title: item.step, status: item.status })));
       return;
     }
     if (event.type === 'patch_applied') {
@@ -379,11 +408,19 @@ export async function *runGatewayAgent(
         ...(taskContract ? { contract: taskContract } : {}),
         evidence: taskEvidence,
       });
-      completeTaskOutcome({
+      const outcome = completeTaskOutcome({
         runId,
         status: taskOutcomeStatus,
         summary: taskOutcomeSummary,
       });
+      if (outcome) {
+        try {
+          new OutcomeProjectionService().project(outcome);
+        } catch (err) {
+          const errorMessage = err instanceof Error ? err.message : String(err);
+          log.warn({ err, runId }, `Task outcome projection failed: ${errorMessage}`);
+        }
+      }
     }
   }
 }

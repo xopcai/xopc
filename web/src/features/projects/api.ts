@@ -1,3 +1,5 @@
+import { ProjectOperatingViewSchema, type ProjectOperatingView } from '@xopcai/gateway-contract';
+
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import type { WireAttachment } from '@/features/chat/composer/composer.types';
@@ -35,62 +37,6 @@ export type ProjectWithDetails = Project & {
     status: string;
     createdAt: number;
   }>;
-};
-
-export type ProjectOverview = {
-  project: ProjectWithDetails;
-  stats: {
-    sessionCount: number;
-    goalCount: number;
-    activeGoalCount: number;
-    recentWorkflowRunCount: number;
-    staleGoalCount?: number;
-    attentionCount?: number;
-    failedWorkflowRunCount?: number;
-  };
-  activeGoals: ProjectGoal[];
-  blockedGoals: ProjectGoal[];
-  staleGoals?: ProjectGoal[];
-  nextActions: Array<{
-    goalId: string;
-    title: string;
-    nextAction?: string;
-    status: string;
-    updatedAt?: number;
-  }>;
-  attentionItems?: Array<{
-    id: string;
-    kind: 'blocked_goal' | 'stale_goal' | 'failed_workflow';
-    title: string;
-    detail?: string;
-    status?: string;
-    href?: string;
-    updatedAt?: number;
-  }>;
-  timeline?: Array<{
-    id: string;
-    kind: 'session' | 'goal' | 'workflow' | 'memory';
-    title: string;
-    detail?: string;
-    timestamp: number;
-    status?: string;
-    href?: string;
-  }>;
-  digest?: {
-    status: 'healthy' | 'attention' | 'idle' | 'empty';
-    summary: string;
-    nextAction?: string;
-  };
-  failedWorkflowRuns?: Array<{
-    runId: string;
-    definitionId: string;
-    status: string;
-    createdAt: number;
-    errorMessage?: string;
-  }>;
-  recentSessions: ProjectWithDetails['recentSessions'];
-  recentWorkflowRuns: ProjectWithDetails['recentWorkflowRuns'];
-  recommendedAction?: string;
 };
 
 export type ProjectSession = {
@@ -256,11 +202,13 @@ export async function fetchProject(id: string): Promise<ProjectWithDetails> {
   return res.project;
 }
 
-export async function fetchProjectOverview(id: string): Promise<ProjectOverview> {
-  const res = await fetchJson<{ ok: true; overview: ProjectOverview }>(
-    apiUrl(`/api/projects/${encodeURIComponent(id)}/overview`),
+export async function fetchProjectOperatingView(id: string): Promise<ProjectOperatingView> {
+  const response = await fetchJson<unknown>(
+    apiUrl(`/api/projects/${encodeURIComponent(id)}/operating-view`),
   );
-  return res.overview;
+  return ProjectOperatingViewSchema.parse(response && typeof response === 'object'
+    ? (response as { view?: unknown }).view
+    : undefined);
 }
 
 export async function fetchProjectActivity(

@@ -30,7 +30,7 @@ export const queryKeys = {
   workItem: (id: string) => ['work-item', id] as const,
   projectWorkItems: (projectId: string) => ['project', projectId, 'work-items'] as const,
   projects: ['projects'] as const,
-  projectOverview: (id: string) => ['project', id, 'overview'] as const,
+  projectOperatingView: (id: string) => ['project', id, 'operating-view'] as const,
   home: ['home'] as const,
   judgments: ['inbox', 'judgments'] as const,
 };

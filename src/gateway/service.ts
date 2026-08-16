@@ -12,6 +12,7 @@ import { MessageBus, MessageBusShutdownError } from '../infra/bus/index.js';
 import { loadConfig, saveConfig as writeConfigToDisk } from '../config/index.js';
 import { getWorkspacePath } from '../config/workspace-path-helpers.js';
 import { AutomationService, type AutomationRun } from '../automations/index.js';
+import { DiscussionLiveWorker, DiscussionPipeline, DiscussionService, DiscussionWorker } from '../discussions/index.js';
 import { onAutomationProductEvent, publishAutomationProductEvent } from '../automations/product-events.js';
 import { buildNoteAgentContext, NotesService, NotesStore } from '../notes/index.js';
 import { buildWorkflowChildTools } from '../agent/workflow/workflow-child-tools.js';
@@ -54,14 +55,17 @@ import { MobileNotificationService } from '../mobile/notification-service.js';
 import { ProjectService } from '../projects/index.js';
 import { LocalAppService } from '../local-apps/index.js';
 import { buildWorkItemAgentContext, WorkItemService } from '../work-items/index.js';
+import { OutcomeProjectionService, WorkIntakeService } from '../work/index.js';
 import { createRuntimeBrowserRecipeService, type BrowserRecipeService } from '../browser/recipes/index.js';
 import {
   ReadonlyProactiveAgentExecutor,
   listInsights,
+  mapProductEventToProactive,
   ProactiveEventService,
   ProactiveInboxService,
   ProactiveInboxWorker,
   ProactiveScenarioService,
+  ProactiveTemporalWorker,
   ProactiveWorker,
 } from '../proactive/index.js';
 
@@ -94,6 +98,7 @@ import {
   startConnectorLearningCoordinator,
   type ConnectorLearningCoordinator,
 } from '../connectors/learning-coordinator.js';
+import { ConnectedSourceChangePublisher } from '../connectors/source-change-publisher.js';
 import {
   applyAutomaticVoiceLanguage,
   inferProductLanguageFromEnvironment,
@@ -183,6 +188,7 @@ export class GatewayService {
   private mobileNotifications: MobileNotificationService | null = null;
   private connectorSupervisor: ConnectorSupervisor | null = null;
   private connectorLearningCoordinator: ConnectorLearningCoordinator | null = null;
+  private connectedSourceChangePublisher: ConnectedSourceChangePublisher | null = null;
   private connectedKnowledgeCoordinator: ConnectedKnowledgeCoordinator | null = null;
   private stopAutomationProductEventBridge: (() => void) | null = null;
   private stopSessionTranscriptAutomationEvents: (() => void) | null = null;
@@ -213,6 +219,9 @@ export class GatewayService {
   /** First-class project grouping surface. */
   readonly projects: ProjectService;
   readonly workItems: WorkItemService;
+  readonly discussions: DiscussionService;
+  readonly discussionWorker: DiscussionWorker;
+  readonly discussionLiveWorker: DiscussionLiveWorker;
 
   /** Local user-created apps, their coder projects, previews, and installs. */
   readonly localApps: LocalAppService;
@@ -223,6 +232,7 @@ export class GatewayService {
   readonly proactiveInbox = new ProactiveInboxService();
   readonly proactiveInsights = listInsights;
   readonly proactiveWorker: ProactiveWorker;
+  readonly proactiveTemporalWorker: ProactiveTemporalWorker;
   readonly proactiveInboxWorker: ProactiveInboxWorker;
 
   constructor(private serviceConfig: GatewayServiceConfig = {}) {
@@ -231,6 +241,7 @@ export class GatewayService {
     runBootstrapMigrationsSync(this.configPath);
     this.config = loadConfig(this.configPath);
     this.proactiveWorker = new ProactiveWorker(new ReadonlyProactiveAgentExecutor(() => this.config));
+    this.proactiveTemporalWorker = new ProactiveTemporalWorker(this.proactive);
     this.proactiveInboxWorker = new ProactiveInboxWorker({
       deliver: async ({ inboxItem }) => {
         this.sse.emit('proactive.inbox.created', inboxItem);
@@ -324,6 +335,54 @@ export class GatewayService {
 
     this.projects = new ProjectService(undefined, this.proactive);
     this.workItems = new WorkItemService(undefined, this.proactive);
+    const emitDiscussion = (capture: import('../discussions/index.js').DiscussionCapture) => {
+      this.sse.emit('discussion.updated', capture);
+    };
+    this.discussions = new DiscussionService(
+      this.notesService,
+      this.projects,
+      (type, payload) => {
+        this.sse.emit(type, payload);
+      },
+    );
+    this.discussionWorker = new DiscussionWorker(
+      new DiscussionPipeline({
+        notes: this.notesService,
+        projects: this.projects,
+        getConfig: () => this.config,
+        onUpdated: emitDiscussion,
+        onCompleted: (capture, analysis) => {
+          const payload = {
+            discussionId: capture.id,
+            noteId: capture.noteId,
+            projectId: capture.projectId,
+            completedAt: capture.completedAt,
+            actionCount: analysis.actionItems.length,
+            unownedActionCount: analysis.actionItems.filter((item) => !item.owner).length,
+            undatedActionCount: analysis.actionItems.filter((item) => !item.dueDate).length,
+            riskCount: analysis.risks.length,
+            openQuestionCount: analysis.openQuestions.length,
+          };
+          this.sse.emit('discussion.completed', payload);
+          publishAutomationProductEvent({
+            type: 'discussion.completed',
+            source: 'discussions',
+            payload,
+            occurredAtMs: capture.completedAt,
+          });
+        },
+      }),
+      emitDiscussion,
+    );
+    this.discussionLiveWorker = new DiscussionLiveWorker({
+      notes: this.notesService,
+      projects: this.projects,
+      getConfig: () => this.config,
+      onDiscussionUpdated: emitDiscussion,
+      onTranscriptUpdated: (discussionId, sequence) => {
+        this.sse.emit('discussion.transcript.updated', { discussionId, sequence });
+      },
+    });
 
     this.localApps = new LocalAppService({
       projects: this.projects,
@@ -504,7 +563,7 @@ export class GatewayService {
       this.goalRunner = new GoalRunner({
         maxConcurrent: 1,
         defaultMaxRetries: 2,
-        ensureSession: async (goal) => {
+        ensureSession: async (goal, executionContext) => {
           const existing = goal.activeSessionKey?.trim();
           if (existing) return existing;
           const agentId = goal.agentId || getDefaultAgentId(this.config);
@@ -528,6 +587,15 @@ export class GatewayService {
                 peerKind: 'direct',
                 peerId,
               },
+              projectId: goal.projectId,
+              customData: {
+                goalId: goal.id,
+                origin: 'goal',
+                triggerKind: executionContext?.triggerKind ?? 'user',
+                ...(executionContext?.workItemId ? { workItemId: executionContext.workItemId } : {}),
+                ...(executionContext?.contextTraceId ? { contextTraceId: executionContext.contextTraceId } : {}),
+                ...(executionContext?.parentRunId ? { parentRunId: executionContext.parentRunId } : {}),
+              },
             },
           });
           if (goal.projectId) {
@@ -536,6 +604,21 @@ export class GatewayService {
           const { GoalService } = await import('../goals/index.js');
           new GoalService().attachSession(goal.id, sessionKey);
           return sessionKey;
+        },
+        bindExecutionContext: async (sessionKey, goal, executionContext) => {
+          const metadata = await this.sessionIndex.getSessionMetadata(sessionKey);
+          await this.sessionIndex.updateSessionMetadata(sessionKey, {
+            projectId: goal.projectId ?? metadata?.projectId,
+            customData: {
+              ...metadata?.customData,
+              goalId: goal.id,
+              origin: 'goal',
+              triggerKind: executionContext?.triggerKind ?? 'user',
+              ...(executionContext?.workItemId ? { workItemId: executionContext.workItemId } : {}),
+              ...(executionContext?.contextTraceId ? { contextTraceId: executionContext.contextTraceId } : {}),
+              ...(executionContext?.parentRunId ? { parentRunId: executionContext.parentRunId } : {}),
+            },
+          });
         },
         hasActiveRun: (sessionKey) => this.agentRunner.hasActiveRun(sessionKey),
         runTurn: (sessionKey, userTurn) =>
@@ -765,9 +848,17 @@ export class GatewayService {
 
     log.debug('Starting gateway service...');
     openXopcDatabase();
+    new WorkIntakeService(
+      this.projects,
+      this.workItems,
+      { enqueue: (goalId, options) => this.enqueueGoalRun(goalId, options) },
+    ).reconcilePendingExecutions();
+    new OutcomeProjectionService().reconcile();
     this.startTime = Date.now();
     this.running = true;
+    this.ensureDefaultProactiveScenarioSubscriptions();
     this.proactiveWorker.start();
+    this.proactiveTemporalWorker.start();
     this.proactiveInboxWorker.start();
     prepareConfiguredLocalVoiceModel(this.config);
     this.startupTrace = createGatewayStartupTrace();
@@ -898,6 +989,8 @@ export class GatewayService {
     await trace.measure('dreaming.reconcile', () => this.reconcileDreamingAutomations());
 
     await this.notesService.initialize();
+    this.discussionWorker.start();
+    this.discussionLiveWorker.start();
 
     this.ensureHeartbeatService().start(heartbeatRunnerConfigFromConfig(this.config));
 
@@ -911,6 +1004,8 @@ export class GatewayService {
       getMemoryManager: () => this.agentService.getMemoryManager(),
       emit: (type, payload) => this.emit(type, payload),
     });
+    this.connectedSourceChangePublisher = new ConnectedSourceChangePublisher(this.proactive);
+    this.connectedSourceChangePublisher.start();
     this.connectedKnowledgeCoordinator = startConnectedKnowledgeCoordinator({
       resolvePipelineOptions: () => ({
         agentId: resolveDefaultAgentId(this.config),
@@ -966,6 +1061,21 @@ export class GatewayService {
     }
 
     log.debug('Gateway service started');
+  }
+
+  private ensureDefaultProactiveScenarioSubscriptions(): void {
+    for (const scenarioKey of ['meeting_preparation', 'discussion_follow_up']) {
+      if (this.proactiveScenarios.subscriptions(scenarioKey).some(
+        (subscription) => subscription.workspaceId === this.currentWorkspacePath,
+      )) continue;
+      this.proactiveScenarios.subscribe({
+        scenarioKey,
+        workspaceId: this.currentWorkspacePath,
+        scopeKind: 'workspace',
+        scopeId: this.currentWorkspacePath,
+        enabled: true,
+      });
+    }
   }
 
   /** Called when the HTTP listener is bound (before deferred channel work). */
@@ -1088,6 +1198,9 @@ export class GatewayService {
     this.readiness.markStarting();
 
     await this.proactiveWorker.stop();
+    await this.discussionWorker.stop();
+    await this.discussionLiveWorker.stop();
+    this.proactiveTemporalWorker.stop();
     await this.proactiveInboxWorker.stop();
 
     await stopTailscaleExposure().catch((err) => {
@@ -1109,6 +1222,8 @@ export class GatewayService {
     this.connectorSupervisor = null;
     this.connectorLearningCoordinator?.stop();
     this.connectorLearningCoordinator = null;
+    this.connectedSourceChangePublisher?.stop();
+    this.connectedSourceChangePublisher = null;
     this.connectedKnowledgeCoordinator?.stop();
     this.connectedKnowledgeCoordinator = null;
 
@@ -1656,6 +1771,22 @@ export class GatewayService {
     this.stopAutomationProductEventBridge?.();
     this.stopSessionTranscriptAutomationEvents?.();
     this.stopAutomationProductEventBridge = onAutomationProductEvent((event) => {
+      const proactiveEvent = mapProductEventToProactive({
+        event,
+        workspaceId: this.currentWorkspacePath,
+        defaultAgentId: resolveDefaultAgentId(this.config),
+      });
+      if (proactiveEvent) {
+        try {
+          this.proactive.publish(proactiveEvent);
+        } catch (err) {
+          const em = err instanceof Error ? err.message : String(err);
+          log.warn(
+            { err, eventType: event.type, source: event.source },
+            `Proactive product event publication failed: ${em}`,
+          );
+        }
+      }
       void this.automationService.triggerEvent(event).catch((err) => {
         const em = err instanceof Error ? err.message : String(err);
         log.warn({ err, eventType: event.type, source: event.source }, `Automation product event failed: ${em}`);

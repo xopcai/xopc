@@ -28,9 +28,7 @@ function readVisibleAppCount(): number {
       globalThis.localStorage?.getItem(VISIBLE_APP_COUNT_STORAGE_KEY) ?? '',
       10,
     );
-    return Number.isFinite(stored)
-      ? clampVisibleAppCount(stored)
-      : MIN_VISIBLE_NAV_ITEMS;
+    return Number.isFinite(stored) ? clampVisibleAppCount(stored) : MIN_VISIBLE_NAV_ITEMS;
   } catch {
     return MIN_VISIBLE_NAV_ITEMS;
   }
@@ -50,10 +48,7 @@ export function SidebarNav({
 
   useEffect(() => {
     try {
-      globalThis.localStorage?.setItem(
-        VISIBLE_APP_COUNT_STORAGE_KEY,
-        String(visibleAppCount),
-      );
+      globalThis.localStorage?.setItem(VISIBLE_APP_COUNT_STORAGE_KEY, String(visibleAppCount));
     } catch {
       /* ignore quota / private mode */
     }

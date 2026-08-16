@@ -101,6 +101,11 @@ export class TodoStore {
 export interface CreateTodoToolOptions {
   /** Resolve session key for isolated lists; defaults to a single in-memory list. */
   getSessionKey?: () => string | null | undefined;
+  repository?: {
+    isAvailable?: () => boolean;
+    read: (sessionKey: string) => TodoItem[];
+    write: (sessionKey: string, items: TodoItem[]) => void;
+  };
 }
 
 function formatTodoList(items: TodoItem[]): string {
@@ -140,8 +145,18 @@ export function createTodoTool(options?: CreateTodoToolOptions): AgentTool {
   const getSessionKey = options?.getSessionKey ?? (() => 'default');
   const stores = new Map<string, TodoStore>();
 
-  const getStore = (): TodoStore => {
-    const key = resolveSessionKey(getSessionKey);
+  const activeRepository = () => {
+    const repository = options?.repository;
+    return repository && (repository.isAvailable?.() ?? true) ? repository : undefined;
+  };
+
+  const getStore = (key: string): TodoStore => {
+    const repository = activeRepository();
+    if (repository) {
+      const store = new TodoStore();
+      store.write(repository.read(key), false);
+      return store;
+    }
     let s = stores.get(key);
     if (!s) {
       s = new TodoStore();
@@ -176,8 +191,10 @@ export function createTodoTool(options?: CreateTodoToolOptions): AgentTool {
       params: any,
       _signal?: AbortSignal,
     ): Promise<AgentToolResult<{ items: TodoItem[] }>> {
-      const store = getStore();
+      let store: TodoStore | undefined;
       try {
+        const key = resolveSessionKey(getSessionKey);
+        store = getStore(key);
         if ((params as { todos?: unknown }).todos === undefined) {
           const items = store.read();
           const text = items.length === 0 ? 'No todos yet.' : formatTodoList(items);
@@ -189,6 +206,7 @@ export function createTodoTool(options?: CreateTodoToolOptions): AgentTool {
 
         const p = params as { todos: TodoItem[]; merge?: boolean };
         const items = store.write(p.todos, p.merge ?? false);
+        activeRepository()?.write(key, items);
         return {
           content: [{ type: 'text', text: formatTodoList(items) }],
           details: { items },
@@ -197,7 +215,7 @@ export function createTodoTool(options?: CreateTodoToolOptions): AgentTool {
         const message = error instanceof Error ? error.message : String(error);
         return {
           content: [{ type: 'text', text: `Error: ${message}` }],
-          details: { items: store.read() },
+          details: { items: store?.read() ?? [] },
         };
       }
     },

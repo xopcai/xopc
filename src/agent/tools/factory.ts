@@ -91,6 +91,11 @@ import { createGoalEvidenceRecorder } from './goal-evidence-recorder.js';
 import { getAgentCapabilityToolNames } from '../capabilities/index.js';
 import type { CodeIntelligenceRuntimeLike } from '../code-intelligence/index.js';
 import { isCodeIntelligenceEnabledForAgent } from '../code-intelligence/tool-gating.js';
+import {
+  getSessionTaskPlan,
+  isXopcDatabaseOpen,
+  setSessionTaskPlan,
+} from '../../storage/sqlite/index.js';
 
 const log = createLogger('AgentToolsFactory');
 
@@ -341,6 +346,13 @@ export class AgentToolsFactory {
       }),
       createTodoTool({
         getSessionKey: () => this.deps.getCurrentContext()?.sessionKey,
+        repository: {
+          isAvailable: isXopcDatabaseOpen,
+          read: (sessionKey) => getSessionTaskPlan(sessionKey)?.items ?? [],
+          write: (sessionKey, items) => {
+            setSessionTaskPlan({ sessionKey, items });
+          },
+        },
       }),
       createUpdatePlanTool(),
       ...(getSkillMgr

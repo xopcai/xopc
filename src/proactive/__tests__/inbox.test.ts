@@ -4,7 +4,9 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ProjectService } from '../../projects/index.js';
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../storage/sqlite/index.js';
+import { ProjectMonitoringService } from '../../work/index.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { ProactiveInboxService } from '../inbox/service.js';
 import { ProactiveInboxWorker } from '../inbox/worker.js';
@@ -61,5 +63,20 @@ describe('proactive inbox', () => {
     expect(inbox.wakeSnoozed(new Date(now.getTime() + 30 * 60_000))).toBe(0);
     expect(inbox.wakeSnoozed(snoozedUntil)).toBe(1);
     expect(inbox.list()[0]?.status).toBe('unread');
+  });
+
+  it('keeps observed or low-confidence project insights out of the action inbox', () => {
+    const project = new ProjectService().create({ name: 'Launch' });
+    getSqliteDatabase().prepare('UPDATE proactive_signal_batches SET aggregation_key = ? WHERE batch_id = ?')
+      .run(`project:${project.id}`, 'batch');
+    const monitoring = new ProjectMonitoringService();
+    monitoring.configure({ projectId: project.id, mode: 'observe' });
+    expect(inbox.project()).toBe(0);
+
+    monitoring.configure({ projectId: project.id, mode: 'ask_before_action', confidenceThreshold: 0.95 });
+    expect(inbox.project()).toBe(0);
+
+    monitoring.configure({ projectId: project.id, mode: 'ask_before_action', confidenceThreshold: 0.8 });
+    expect(inbox.project()).toBe(1);
   });
 });

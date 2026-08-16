@@ -5,6 +5,7 @@ import { Readable } from 'node:stream';
 import type { Hono } from 'hono';
 import { stream } from 'hono/streaming';
 
+import { ObjectLinkService } from '../../../activity/service.js';
 import { buildSessionKey } from '../../../routing/session-key.js';
 import { agentExists, getDefaultAgentId } from '../../../routing/resolve-route.js';
 import type { CaptureChannel, CaptureSource, Note, NoteKind, NoteStatus, SnapshotTrigger } from '../../../notes/types.js';
@@ -47,6 +48,20 @@ function noteThreadName(note: Note): string {
 
 export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service } = deps;
+  const objectLinks = new ObjectLinkService();
+
+  const linkNoteToProject = (note: Note, projectId: string | undefined): void => {
+    if (!projectId) return;
+    const project = service.projects.get(projectId);
+    if (!project) return;
+    objectLinks.create({
+      id: `note:${note.id}:project:${project.id}`,
+      from: { kind: 'note', id: note.id, title: note.title },
+      to: { kind: 'project', id: project.id, title: project.name },
+      relation: 'belongs_to',
+      source: 'user',
+    });
+  };
 
   // POST /api/notes/quick-capture — minimal text capture
   authenticated.post('/api/notes/quick-capture', async (c) => {
@@ -69,6 +84,7 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
     const status = c.req.query('status') as NoteStatus | undefined;
     const kind = c.req.query('kind') as NoteKind | undefined;
     const tag = c.req.query('tag');
+    const projectId = c.req.query('projectId')?.trim();
     const search = c.req.query('search');
     const pinnedRaw = c.req.query('pinned');
     const limitRaw = c.req.query('limit');
@@ -80,6 +96,7 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
       status: status && VALID_STATUSES.has(status) ? status : undefined,
       kind: kind && VALID_KINDS.has(kind) ? kind : undefined,
       tag: tag || undefined,
+      projectId: projectId || undefined,
       search: search || undefined,
       pinned: pinnedRaw === 'true' ? true : pinnedRaw === 'false' ? false : undefined,
       limit: limitRaw ? parseInt(limitRaw, 10) : undefined,
@@ -106,6 +123,8 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
       const kindRaw = typeof body.kind === 'string' ? body.kind : undefined;
       const tagsRaw = typeof body.tags === 'string' ? body.tags : undefined;
       const source = parseCaptureSource(body as Record<string, unknown>);
+      const projectId = typeof body.projectId === 'string' && body.projectId.trim() ? body.projectId.trim() : undefined;
+      if (projectId && !service.projects.get(projectId)) return c.json({ error: 'Project not found' }, 400);
 
       const note = await service.notesServiceInstance.createNote({
         markdown,
@@ -113,6 +132,7 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
         tags: tagsRaw ? tagsRaw.split(',').map((t) => t.trim()).filter(Boolean) : undefined,
         capturedVia: source,
       });
+      linkNoteToProject(note, projectId);
 
       const file = body.file;
       if (file && typeof file === 'object') {
@@ -156,6 +176,8 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
     const kindRaw = typeof body.kind === 'string' ? body.kind : undefined;
     const tagsRaw = Array.isArray(body.tags) ? body.tags.filter((t: unknown) => typeof t === 'string') : undefined;
     const source = parseCaptureSource(body);
+    const projectId = typeof body.projectId === 'string' && body.projectId.trim() ? body.projectId.trim() : undefined;
+    if (projectId && !service.projects.get(projectId)) return c.json({ error: 'Project not found' }, 400);
 
     const note = await service.notesServiceInstance.createNote({
       title,
@@ -165,6 +187,7 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
       capturedVia: source,
       pinned: body.pinned === true,
     });
+    linkNoteToProject(note, projectId);
     return c.json({ note }, 201);
   });
 

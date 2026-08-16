@@ -13,6 +13,7 @@ import { transcribe } from './transcribe-core.js';
 
 export { transcribe } from './transcribe-core.js';
 export { isSTTAvailable } from './availability.js';
+export { mergeSttConfigFromAppConfig } from './config.js';
 
 /**
  * Single-provider transcription helper. Used by chat-commands /stt so a user

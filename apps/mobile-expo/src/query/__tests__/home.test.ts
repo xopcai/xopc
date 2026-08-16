@@ -25,6 +25,7 @@ function currentGatewayHomeResponse() {
     },
     decisions: [],
     attention: [],
+    chats: { running: [], recent: [] },
     recentlyOpened: [],
     inboxCount: 0,
     pendingTasks: [],
@@ -48,6 +49,7 @@ function currentGatewayHomeResponse() {
       recentlyCompleted: [],
     },
     upcomingAutomations: [],
+    recentOutcomes: [],
   };
 }
 

@@ -601,48 +601,6 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
     return c.json({ ok: true, ...match });
   });
 
-  authenticated.get('/api/projects/:id/overview', async (c) => {
-    const project = service.projects.getWithDetails(c.req.param('id'));
-    if (!project) return c.json({ ok: false, error: 'Project not found' }, 404);
-    const goalIds = service.projects.listGoalIds(project.id, parseLimit(c.req.query('goalLimit'), 100));
-    const projectGoals = goalIds
-      .map((id) => goals.get(id))
-      .filter((goal): goal is GoalWithDetails => Boolean(goal));
-    const loop = buildProjectLoopOverview({
-      project,
-      goals: projectGoals,
-      recentWorkflowRuns: project.recentWorkflowRuns,
-      failedWorkflowRuns: listFailedProjectWorkflowRuns(project.id),
-      memoryRecords: listMemoryRecords({ projectId: project.id, status: 'active', limit: 5 }),
-    });
-    return c.json({
-      ok: true,
-      overview: {
-        project: enrichProjectWorkspace(service, project),
-        stats: {
-          sessionCount: project.sessionCount,
-          goalCount: project.goalCount,
-          activeGoalCount: project.activeGoalCount,
-          recentWorkflowRunCount: project.recentWorkflowRuns.length,
-          staleGoalCount: loop.staleGoals.length,
-          attentionCount: loop.attentionItems.length,
-          failedWorkflowRunCount: loop.failedWorkflowRuns.length,
-        },
-        activeGoals: loop.activeGoals,
-        blockedGoals: loop.blockedGoals,
-        staleGoals: loop.staleGoals,
-        nextActions: loop.nextActions,
-        attentionItems: loop.attentionItems,
-        timeline: loop.timeline,
-        digest: loop.digest,
-        failedWorkflowRuns: loop.failedWorkflowRuns,
-        recentSessions: project.recentSessions,
-        recentWorkflowRuns: project.recentWorkflowRuns,
-        recommendedAction: loop.recommendedAction,
-      },
-    });
-  });
-
   authenticated.get('/api/projects/:id/activity', (c) => {
     const project = service.projects.get(c.req.param('id'));
     if (!project) return c.json({ ok: false, error: 'Project not found' }, 404);
