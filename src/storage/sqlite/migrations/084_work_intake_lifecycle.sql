@@ -10,15 +10,13 @@ CREATE TABLE work_intakes (
   execution_mode TEXT NOT NULL DEFAULT 'run_now' CHECK (execution_mode IN ('create_only', 'run_now')),
   project_id TEXT,
   goal_id TEXT,
-  work_item_id TEXT,
   queue_id TEXT,
   expires_at INTEGER NOT NULL,
   created_at INTEGER NOT NULL,
   confirmed_at INTEGER,
   updated_at INTEGER NOT NULL,
   FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE SET NULL,
-  FOREIGN KEY (goal_id) REFERENCES goals(goal_id) ON DELETE SET NULL,
-  FOREIGN KEY (work_item_id) REFERENCES work_items(id) ON DELETE SET NULL
+  FOREIGN KEY (goal_id) REFERENCES goals(goal_id) ON DELETE SET NULL
 );
 
 CREATE INDEX idx_work_intakes_status_updated

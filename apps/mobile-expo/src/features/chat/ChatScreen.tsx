@@ -30,7 +30,6 @@ import { ChatOverlayDismissHandle } from './ChatOverlayDismissHandle';
 import { ChatStreamNotice } from './ChatStreamNotice';
 import { ClarifyPrompt } from './ClarifyPrompt';
 import { GatewayPickerSheet } from './GatewayPickerSheet';
-import { GoalMissionCard } from './GoalMissionCard';
 import { MessageList } from './MessageList';
 import { MAX_PENDING_FOLLOW_UPS } from './pending-follow-up.types';
 import { appendOlderSessionHistoryPage } from './session-message-parser';
@@ -177,11 +176,6 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
           resumeLabel={m.chat.resumeBanner}
           resumeActionLabel={m.chat.resumeButton}
           onResume={() => { void chat.resume({ background: true }); }}
-        />
-
-        <GoalMissionCard
-          sessionKey={sessionKey}
-          agentBusy={chat.streaming || chat.awaitingSessionRefresh}
         />
 
         <View style={styles.listFill}>

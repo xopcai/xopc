@@ -10,7 +10,7 @@ import { registerProjectsRoutes } from './projects.js';
 import { registerProjectSkillRoutes } from './project-skills.js';
 import { registerSearchRoutes } from './search.js';
 import { registerMobileRoutes } from './mobile.js';
-import { registerTaskOutcomeRoutes } from './task-outcomes.js';
+import { registerExecutionReceiptRoutes } from './execution-receipts.js';
 import { registerInteractionStateRoutes } from './interaction-state.js';
 import { registerComposerHistoryRoutes } from './composer-history.js';
 import { registerLocalAppsRoutes } from './local-apps.js';
@@ -41,7 +41,7 @@ export function registerCoreAuthenticatedRoutes(
   registerProactiveRoutes(authenticated, deps);
   registerSearchRoutes(authenticated, deps);
   registerMobileRoutes(authenticated, deps);
-  registerTaskOutcomeRoutes(authenticated, deps);
+  registerExecutionReceiptRoutes(authenticated, deps);
   registerInteractionStateRoutes(authenticated, deps);
   registerComposerHistoryRoutes(authenticated, deps);
 }

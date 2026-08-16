@@ -29,7 +29,6 @@ const TAB_ICONS: Record<Tab, LucideIcon> = {
   automations: Zap,
   skills: Layers,
   connectors: Plug,
-  goals: Target,
   channels: Plug,
   agents: Users,
   logs: FileText,

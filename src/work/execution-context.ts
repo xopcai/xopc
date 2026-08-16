@@ -1,27 +1,27 @@
 import type { SessionMetadata } from '../session/types.js';
 import type {
-  TaskOutcomeContext,
-  TaskOutcomeOrigin,
-  TaskOutcomeTrigger,
-} from '../storage/sqlite/task-outcome-repository.js';
+  ExecutionReceiptContext,
+  ExecutionReceiptOrigin,
+  ExecutionReceiptTrigger,
+} from '../storage/sqlite/execution-receipt-repository.js';
 
-export interface ExecutionContext extends TaskOutcomeContext {
+export interface ExecutionContext extends ExecutionReceiptContext {
   runId: string;
   sessionKey: string;
   channel: string;
   agentId?: string;
 }
 
-const ORIGINS = new Set<TaskOutcomeOrigin>(['chat', 'goal', 'workflow', 'automation', 'browser', 'proactive']);
-const TRIGGERS = new Set<TaskOutcomeTrigger>(['user', 'schedule', 'webhook', 'proactive', 'retry']);
+const ORIGINS = new Set<ExecutionReceiptOrigin>(['chat', 'goal', 'workflow', 'automation', 'browser', 'proactive']);
+const TRIGGERS = new Set<ExecutionReceiptTrigger>(['user', 'schedule', 'webhook', 'proactive', 'retry']);
 
 function optionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
-function metadataOrigin(metadata: SessionMetadata): TaskOutcomeOrigin {
+function metadataOrigin(metadata: SessionMetadata): ExecutionReceiptOrigin {
   const explicit = optionalString(metadata.customData?.origin);
-  if (explicit && ORIGINS.has(explicit as TaskOutcomeOrigin)) return explicit as TaskOutcomeOrigin;
+  if (explicit && ORIGINS.has(explicit as ExecutionReceiptOrigin)) return explicit as ExecutionReceiptOrigin;
   if (optionalString(metadata.customData?.goalId)) return 'goal';
   if (metadata.sessionType === 'workflow-run' || metadata.sessionType === 'workflow-subagent') return 'workflow';
   if (metadata.sessionType === 'cron') return 'automation';
@@ -30,9 +30,9 @@ function metadataOrigin(metadata: SessionMetadata): TaskOutcomeOrigin {
   return 'chat';
 }
 
-function metadataTrigger(metadata: SessionMetadata): TaskOutcomeTrigger {
+function metadataTrigger(metadata: SessionMetadata): ExecutionReceiptTrigger {
   const explicit = optionalString(metadata.customData?.triggerKind);
-  if (explicit && TRIGGERS.has(explicit as TaskOutcomeTrigger)) return explicit as TaskOutcomeTrigger;
+  if (explicit && TRIGGERS.has(explicit as ExecutionReceiptTrigger)) return explicit as ExecutionReceiptTrigger;
   if (metadata.sessionType === 'cron') return 'schedule';
   if (metadata.sessionType === 'heartbeat') return 'proactive';
   return 'user';
@@ -51,6 +51,7 @@ export function resolveExecutionContext(input: {
     channel: input.channel,
     agentId: input.agentId,
     projectId: input.metadata.projectId,
+    outcomeId: optionalString(input.metadata.customData?.outcomeId),
     goalId: optionalString(input.metadata.customData?.goalId),
     workItemId: optionalString(input.metadata.customData?.workItemId),
     origin: metadataOrigin(input.metadata),
@@ -60,8 +61,9 @@ export function resolveExecutionContext(input: {
   };
 }
 
-export function taskOutcomeContext(context: ExecutionContext): TaskOutcomeContext {
+export function executionReceiptContext(context: ExecutionContext): ExecutionReceiptContext {
   return {
+    outcomeId: context.outcomeId,
     projectId: context.projectId,
     goalId: context.goalId,
     workItemId: context.workItemId,

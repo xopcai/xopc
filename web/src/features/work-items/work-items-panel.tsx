@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { CheckCircle2, Download, ExternalLink, FileText, MessageSquarePlus, MoreHorizontal, Paperclip, Plus, Target, Trash2, X } from 'lucide-react';
+import { CheckCircle2, Download, ExternalLink, FileText, MessageSquarePlus, MoreHorizontal, Paperclip, Plus, Trash2, X } from 'lucide-react';
 import { type DragEvent, type FormEvent, type PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -18,7 +18,6 @@ import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import {
   createWorkItem,
-  createWorkItemGoal,
   deleteWorkItemAttachment,
   downloadWorkItemAttachment,
   fetchProjectWorkItems,
@@ -197,7 +196,6 @@ function AttachmentPreviewThumb({
 
 function linkHref(link: NonNullable<WorkItem['links']>[number]): string {
   if (link.kind === 'chat') return `/chat/${encodeURIComponent(link.targetId)}`;
-  if (link.kind === 'goal') return `/goals/${encodeURIComponent(link.targetId)}`;
   if (link.kind === 'workflow_run') return `/workflows?run=${encodeURIComponent(link.targetId)}`;
   if (link.kind === 'automation') return `/automations?automationId=${encodeURIComponent(link.targetId)}`;
   return '#';
@@ -615,7 +613,6 @@ function WorkItemModal({
   onCreate,
   onSave,
   onStartChat,
-  onCreateGoal,
   onAddAttachments,
   onRemoveAttachment,
   onDownloadAttachment,
@@ -634,7 +631,6 @@ function WorkItemModal({
   onCreate: (input: { title: string; description?: string; priority: WorkItemPriority; status: WorkItemStatus; nextAction?: string; blockedReason?: string; attachments?: File[] }) => void;
   onSave: (item: WorkItem, patch: Parameters<typeof patchWorkItem>[1]) => void;
   onStartChat: (item: WorkItem) => void;
-  onCreateGoal: (item: WorkItem) => void;
   onAddAttachments: (item: WorkItem, files: File[]) => void;
   onRemoveAttachment: (item: WorkItem, attachment: WorkItemAttachment) => void;
   onDownloadAttachment: (item: WorkItem, attachment: WorkItemAttachment) => void;
@@ -794,10 +790,6 @@ function WorkItemModal({
                       <Button type="button" variant="secondary" className="justify-start rounded-lg" disabled={busy} onClick={() => onStartChat(item)}>
                         <MessageSquarePlus className="size-4" aria-hidden />
                         {t.detail.startChat}
-                      </Button>
-                      <Button type="button" variant="secondary" className="justify-start rounded-lg" disabled={busy} onClick={() => onCreateGoal(item)}>
-                        <Target className="size-4" aria-hidden />
-                        {t.detail.createGoal}
                       </Button>
                       <Button asChild variant="secondary" className="justify-start rounded-lg">
                         <Link to={withReturnTo(`/work-items/${encodeURIComponent(item.id)}`, detailReturnTo)}>
@@ -1031,22 +1023,6 @@ export function WorkItemsPanel({
     }
   }, [navigate, openItem, updateLocalItem]);
 
-  const createGoal = useCallback(async (item: WorkItem) => {
-    setBusy(true);
-    setError(null);
-    setNotice(null);
-    try {
-      const res = await createWorkItemGoal(item.id);
-      updateLocalItem(res.item);
-      await openItem(res.item);
-      navigate(withReturnTo(`/goals/${encodeURIComponent(res.goal.id)}`, detailReturnTo));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
-    }
-  }, [detailReturnTo, navigate, openItem, updateLocalItem]);
-
   const startDrag = useCallback((item: WorkItem, event: DragEvent<HTMLElement>) => {
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData(DRAG_TYPE, item.id);
@@ -1233,7 +1209,6 @@ export function WorkItemsPanel({
         onCreate={createItem}
         onSave={(item, patch) => void updateItem(item, patch)}
         onStartChat={startChat}
-        onCreateGoal={createGoal}
         onAddAttachments={(item, files) => void addAttachments(item, files)}
         onRemoveAttachment={(item, attachment) => void removeAttachment(item, attachment)}
         onDownloadAttachment={(item, attachment) => void downloadAttachment(item, attachment)}

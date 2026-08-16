@@ -9,15 +9,9 @@ import type {
   GoalChecklistStatus,
   GoalContextAttachment,
   GoalContextMessage,
-  GoalContract,
-  GoalContractInput,
   GoalEvent,
   GoalEvidence,
-  GoalEvidenceRequirement,
-  GoalEvidenceRequirementStatus,
-  GoalEvidenceReviewSource,
   GoalListQuery,
-  GoalOutcomeMetric,
   GoalPriority,
   GoalRun,
   GoalRunStatus,
@@ -28,6 +22,8 @@ import type {
 
 type GoalRow = {
   goal_id: string;
+  outcome_id: string;
+  outcome_contract_version: number;
   title: string;
   description: string | null;
   status: string;
@@ -112,35 +108,11 @@ type GoalContextRow = {
   updated_at: number;
 };
 
-type GoalContractRow = {
-  goal_id: string;
-  version: number;
-  objective: string;
-  scope_boundary: string | null;
-  evidence_plan_json: string;
-  outcome_metric_json: string | null;
-  created_at: number;
-  updated_at: number;
-};
-
-type GoalEvidenceRequirementRow = {
-  requirement_id: string;
-  goal_id: string;
-  text: string;
-  status: GoalEvidenceRequirementStatus;
-  review_reason: string | null;
-  review_confidence: number | null;
-  reviewed_by: GoalEvidenceReviewSource | null;
-  reviewed_at: number | null;
-  requires_human_approval: number;
-  created_at: number;
-  updated_at: number;
-  sort_order: number;
-};
-
 function goalFromRow(row: GoalRow): Goal {
   return {
     id: row.goal_id,
+    outcomeId: row.outcome_id,
+    outcomeContractVersion: row.outcome_contract_version,
     title: row.title,
     description: row.description ?? undefined,
     status: row.status as GoalStatus,
@@ -247,112 +219,6 @@ function goalContextFromRow(row: GoalContextRow): GoalContextMessage {
   };
 }
 
-function goalContractFromRow(row: GoalContractRow): GoalContract {
-  return {
-    goalId: row.goal_id,
-    version: row.version,
-    objective: row.objective,
-    scopeBoundary: row.scope_boundary ?? undefined,
-    evidencePlan: parseJsonStringArray(row.evidence_plan_json) ?? [],
-    outcomeMetric: parseGoalOutcomeMetric(row.outcome_metric_json),
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
-
-function parseGoalOutcomeMetric(raw: string | null): GoalOutcomeMetric | undefined {
-  const value = parseJsonField(raw);
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
-  const metric = value as Partial<GoalOutcomeMetric>;
-  if (
-    typeof metric.name !== 'string' || !metric.name.trim() ||
-    typeof metric.baselineValue !== 'number' || !Number.isFinite(metric.baselineValue) ||
-    typeof metric.targetValue !== 'number' || !Number.isFinite(metric.targetValue) ||
-    (metric.direction !== 'increase' && metric.direction !== 'decrease')
-  ) return undefined;
-  return {
-    name: metric.name.trim(),
-    baselineValue: metric.baselineValue,
-    targetValue: metric.targetValue,
-    currentValue: typeof metric.currentValue === 'number' && Number.isFinite(metric.currentValue)
-      ? metric.currentValue
-      : undefined,
-    unit: typeof metric.unit === 'string' && metric.unit.trim() ? metric.unit.trim() : undefined,
-    direction: metric.direction,
-    sourceUrl: typeof metric.sourceUrl === 'string' && metric.sourceUrl.trim() ? metric.sourceUrl.trim() : undefined,
-    measuredAt: typeof metric.measuredAt === 'number' && Number.isFinite(metric.measuredAt)
-      ? metric.measuredAt
-      : undefined,
-  };
-}
-
-function normalizeGoalOutcomeMetric(input: GoalContractInput['outcomeMetric']): GoalOutcomeMetric | undefined {
-  if (!input) return undefined;
-  return {
-    name: input.name.trim(),
-    baselineValue: input.baselineValue,
-    targetValue: input.targetValue,
-    currentValue: input.currentValue,
-    unit: input.unit?.trim() || undefined,
-    direction: input.direction ?? (input.targetValue >= input.baselineValue ? 'increase' : 'decrease'),
-    sourceUrl: input.sourceUrl?.trim() || undefined,
-    measuredAt: input.measuredAt,
-  };
-}
-
-function normalizeStringList(items: string[] | undefined, limit = 20): string[] {
-  if (!items) return [];
-  const seen = new Set<string>();
-  const result: string[] = [];
-  for (const item of items) {
-    const text = item.trim();
-    const key = text.toLocaleLowerCase();
-    if (!text || seen.has(key)) continue;
-    seen.add(key);
-    result.push(text);
-    if (result.length >= limit) break;
-  }
-  return result;
-}
-
-function normalizeContract(
-  input: GoalContractInput | undefined,
-  goalId: string,
-  fallbackObjective: string,
-  now: number,
-  version = 1,
-  createdAt = now,
-): GoalContract | undefined {
-  if (!input) return undefined;
-  return {
-    goalId,
-    version,
-    objective: input.objective?.trim() || fallbackObjective,
-    scopeBoundary: input.scopeBoundary?.trim() || undefined,
-    evidencePlan: normalizeStringList(input.evidencePlan),
-    outcomeMetric: normalizeGoalOutcomeMetric(input.outcomeMetric),
-    createdAt,
-    updatedAt: now,
-  };
-}
-
-function insertGoalContract(db: ReturnType<typeof getSqliteDatabase>, contract: GoalContract): void {
-  db.prepare(
-    `INSERT INTO goal_contracts (
-      goal_id, version, objective, scope_boundary, evidence_plan_json, outcome_metric_json, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(
-    contract.goalId,
-    contract.version,
-    contract.objective,
-    contract.scopeBoundary ?? null,
-    JSON.stringify(contract.evidencePlan),
-    contract.outcomeMetric ? JSON.stringify(contract.outcomeMetric) : null,
-    contract.createdAt,
-    contract.updatedAt,
-  );
-}
-
 function eventFromRow(row: EventRow): GoalEvent {
   return {
     id: row.event_id,
@@ -377,58 +243,6 @@ function evidenceFromRow(row: EvidenceRow): GoalEvidence {
     data: parseJsonField(row.data_json),
     createdAt: row.created_at,
   };
-}
-
-function evidenceRequirementFromRow(row: GoalEvidenceRequirementRow, evidenceIds: string[] = []): GoalEvidenceRequirement {
-  return {
-    id: row.requirement_id,
-    goalId: row.goal_id,
-    text: row.text,
-    status: row.status,
-    evidenceIds,
-    reviewReason: row.review_reason ?? undefined,
-    reviewConfidence: row.review_confidence ?? undefined,
-    reviewedBy: row.reviewed_by ?? undefined,
-    reviewedAt: row.reviewed_at ?? undefined,
-    requiresHumanApproval: Boolean(row.requires_human_approval),
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    sortOrder: row.sort_order,
-  };
-}
-
-function syncEvidenceRequirements(
-  db: ReturnType<typeof getSqliteDatabase>,
-  goalId: string,
-  evidencePlan: string[],
-  now: number,
-): void {
-  const existing = db
-    .prepare(`SELECT * FROM goal_evidence_requirements WHERE goal_id = ?`)
-    .all(goalId) as GoalEvidenceRequirementRow[];
-  const byText = new Map(existing.map((item) => [item.text.toLocaleLowerCase(), item]));
-  const desired = new Set(evidencePlan.map((text) => text.toLocaleLowerCase()));
-  for (const item of existing) {
-    if (!desired.has(item.text.toLocaleLowerCase())) {
-      db.prepare(`DELETE FROM goal_evidence_requirements WHERE requirement_id = ?`).run(item.requirement_id);
-    }
-  }
-  for (const [index, text] of evidencePlan.entries()) {
-    const current = byText.get(text.toLocaleLowerCase());
-    if (current) {
-      db.prepare(
-        `UPDATE goal_evidence_requirements
-         SET text = ?, sort_order = ?, updated_at = ?
-         WHERE requirement_id = ?`,
-      ).run(text, index + 1, now, current.requirement_id);
-    } else {
-      db.prepare(
-        `INSERT INTO goal_evidence_requirements (
-          requirement_id, goal_id, text, status, requires_human_approval, created_at, updated_at, sort_order
-        ) VALUES (?, ?, ?, 'pending', 1, ?, ?, ?)`,
-      ).run(randomUUID(), goalId, text, now, now, index + 1);
-    }
-  }
 }
 
 function clampLimit(n: number | undefined, fallback: number): number {
@@ -472,6 +286,8 @@ export class GoalStore {
     const now = Date.now();
     const goal: Goal = {
       id: randomUUID(),
+      outcomeId: input.outcomeId,
+      outcomeContractVersion: input.outcomeContractVersion,
       title: input.title.trim(),
       description: input.description?.trim() || undefined,
       status: 'active',
@@ -488,18 +304,24 @@ export class GoalStore {
       source: input.source ?? 'chat',
       projectId: input.projectId?.trim() || undefined,
     };
-    const contract = normalizeContract(input.contract, goal.id, goal.title, now);
-    const criteria = normalizeStringList(input.contract?.criteria);
-
     runSqliteWriteTransaction((db) => {
+      const contract = db.prepare(
+        `SELECT acceptance_criteria_json
+         FROM outcome_contracts
+         WHERE outcome_id = ? AND version = ?`,
+      ).get(goal.outcomeId, goal.outcomeContractVersion) as { acceptance_criteria_json: string } | undefined;
+      if (!contract) throw new Error('Outcome contract not found');
+      const criteria = parseJsonStringArray(contract.acceptance_criteria_json) ?? [];
       db.prepare(
         `INSERT INTO goals (
-          goal_id, title, description, status, agent_id, priority, deadline_at,
+          goal_id, outcome_id, outcome_contract_version, title, description, status, agent_id, priority, deadline_at,
           created_at, updated_at, active_session_key, judge_model_ref,
           max_turns, turns_used, ui_locale, source, project_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         goal.id,
+        goal.outcomeId,
+        goal.outcomeContractVersion,
         goal.title,
         goal.description ?? null,
         goal.status,
@@ -522,24 +344,20 @@ export class GoalStore {
            VALUES (?, ?, ?)`,
         ).run(goal.id, goal.activeSessionKey, now);
       }
-      if (contract) {
-        insertGoalContract(db, contract);
-        syncEvidenceRequirements(db, goal.id, contract.evidencePlan, now);
-        for (const [index, text] of criteria.entries()) {
-          db.prepare(
-            `INSERT INTO goal_checklist_items (
-              item_id, goal_id, text, status, added_by, added_at, sort_order
-            ) VALUES (?, ?, ?, 'pending', 'user', ?, ?)`,
-          ).run(randomUUID(), goal.id, text, now, index + 1);
-        }
-        insertGoalEvent(db, {
-          goalId: goal.id,
-          kind: 'contract_created',
-          message: contract.objective,
-          data: { version: contract.version, criteriaCount: criteria.length, evidenceCount: contract.evidencePlan.length },
-          createdAt: now,
-        });
+      for (const [index, text] of criteria.entries()) {
+        db.prepare(
+          `INSERT INTO goal_checklist_items (
+            item_id, goal_id, text, status, added_by, added_at, sort_order
+          ) VALUES (?, ?, ?, 'pending', 'user', ?, ?)`,
+        ).run(randomUUID(), goal.id, text, now, index + 1);
       }
+      insertGoalEvent(db, {
+        goalId: goal.id,
+        kind: 'outcome_bound',
+        message: goal.outcomeId,
+        data: { contractVersion: goal.outcomeContractVersion, criteriaCount: criteria.length },
+        createdAt: now,
+      });
       insertGoalEvent(db, { goalId: goal.id, kind: 'created', message: 'Goal created', createdAt: now });
     });
 
@@ -596,75 +414,6 @@ export class GoalStore {
       .prepare(`SELECT * FROM goal_context_messages WHERE goal_id = ?`)
       .get(goalId) as GoalContextRow | undefined;
     return row ? goalContextFromRow(row) : null;
-  }
-
-  getContract(goalId: string): GoalContract | null {
-    const row = getSqliteDatabase()
-      .prepare(`SELECT * FROM goal_contracts WHERE goal_id = ?`)
-      .get(goalId) as GoalContractRow | undefined;
-    return row ? goalContractFromRow(row) : null;
-  }
-
-  setContract(goalId: string, input: GoalContractInput): GoalContract | null {
-    const goal = this.get(goalId);
-    if (!goal) return null;
-    return runSqliteWriteTransaction((db) => {
-      const existing = db
-        .prepare(`SELECT * FROM goal_contracts WHERE goal_id = ?`)
-        .get(goalId) as GoalContractRow | undefined;
-      const now = Date.now();
-      const contract = normalizeContract(
-        {
-          ...input,
-          objective: input.objective ?? existing?.objective,
-          scopeBoundary: input.scopeBoundary ?? existing?.scope_boundary ?? undefined,
-          evidencePlan: input.evidencePlan ?? parseJsonStringArray(existing?.evidence_plan_json ?? null) ?? [],
-          outcomeMetric: input.outcomeMetric === undefined
-            ? parseGoalOutcomeMetric(existing?.outcome_metric_json ?? null)
-            : input.outcomeMetric,
-        },
-        goalId,
-        goal.title,
-        now,
-        (existing?.version ?? 0) + 1,
-        existing?.created_at ?? now,
-      );
-      if (!contract) return null;
-      db.prepare(
-        `INSERT INTO goal_contracts (
-          goal_id, version, objective, scope_boundary, evidence_plan_json, outcome_metric_json, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(goal_id) DO UPDATE SET
-          version = excluded.version,
-          objective = excluded.objective,
-          scope_boundary = excluded.scope_boundary,
-          evidence_plan_json = excluded.evidence_plan_json,
-          outcome_metric_json = excluded.outcome_metric_json,
-          updated_at = excluded.updated_at`,
-      ).run(
-        contract.goalId,
-        contract.version,
-        contract.objective,
-        contract.scopeBoundary ?? null,
-        JSON.stringify(contract.evidencePlan),
-        contract.outcomeMetric ? JSON.stringify(contract.outcomeMetric) : null,
-        contract.createdAt,
-        contract.updatedAt,
-      );
-      syncEvidenceRequirements(db, goalId, contract.evidencePlan, now);
-      insertGoalEvent(db, {
-        goalId,
-        kind: 'contract_updated',
-        message: contract.objective,
-        data: {
-          version: contract.version,
-          evidenceCount: contract.evidencePlan.length,
-          hasOutcomeMetric: Boolean(contract.outcomeMetric),
-        },
-        createdAt: now,
-      });
-      return contract;
-    });
   }
 
   getActiveForSession(sessionKey: string): Goal | null {
@@ -1056,109 +805,6 @@ export class GoalStore {
     const rows = getSqliteDatabase()
       .prepare(`SELECT * FROM goal_evidence WHERE goal_id = ? ORDER BY created_at DESC LIMIT ?`)
       .all(goalId, clampLimit(limit, 100)) as EvidenceRow[];
-    const db = getSqliteDatabase();
-    return rows.map((row) => ({
-      ...evidenceFromRow(row),
-      requirementIds: (db.prepare(
-        `SELECT requirement_id FROM goal_evidence_requirement_links WHERE evidence_id = ? ORDER BY requirement_id`,
-      ).all(row.evidence_id) as Array<{ requirement_id: string }>).map((item) => item.requirement_id),
-    }));
-  }
-
-  listEvidenceRequirements(goalId: string): GoalEvidenceRequirement[] {
-    const db = getSqliteDatabase();
-    const rows = db
-      .prepare(`SELECT * FROM goal_evidence_requirements WHERE goal_id = ? ORDER BY sort_order ASC`)
-      .all(goalId) as GoalEvidenceRequirementRow[];
-    return rows.map((row) => evidenceRequirementFromRow(
-      row,
-      (db.prepare(
-        `SELECT evidence_id FROM goal_evidence_requirement_links WHERE requirement_id = ? ORDER BY created_at ASC`,
-      ).all(row.requirement_id) as Array<{ evidence_id: string }>).map((item) => item.evidence_id),
-    ));
-  }
-
-  linkEvidenceRequirement(input: {
-    goalId: string;
-    requirementId: string;
-    evidenceId: string;
-    linkedBy: 'user' | 'agent' | 'system';
-  }): GoalEvidenceRequirement | null {
-    return runSqliteWriteTransaction((db) => {
-      const requirement = db.prepare(
-        `SELECT * FROM goal_evidence_requirements WHERE requirement_id = ? AND goal_id = ?`,
-      ).get(input.requirementId, input.goalId) as GoalEvidenceRequirementRow | undefined;
-      const evidence = db.prepare(
-        `SELECT evidence_id FROM goal_evidence WHERE evidence_id = ? AND goal_id = ?`,
-      ).get(input.evidenceId, input.goalId) as { evidence_id: string } | undefined;
-      if (!requirement || !evidence) return null;
-      const now = Date.now();
-      db.prepare(
-        `INSERT OR IGNORE INTO goal_evidence_requirement_links (requirement_id, evidence_id, linked_by, created_at)
-         VALUES (?, ?, ?, ?)`,
-      ).run(input.requirementId, input.evidenceId, input.linkedBy, now);
-      db.prepare(
-        `UPDATE goal_evidence_requirements
-         SET status = CASE WHEN status = 'rejected' THEN 'pending' ELSE status END,
-             updated_at = ?
-         WHERE requirement_id = ?`,
-      ).run(now, input.requirementId);
-      insertGoalEvent(db, {
-        goalId: input.goalId,
-        kind: 'evidence_requirement_linked',
-        message: requirement.text,
-        data: { requirementId: input.requirementId, evidenceId: input.evidenceId, linkedBy: input.linkedBy },
-        createdAt: now,
-      });
-      const ids = (db.prepare(
-        `SELECT evidence_id FROM goal_evidence_requirement_links WHERE requirement_id = ? ORDER BY created_at ASC`,
-      ).all(input.requirementId) as Array<{ evidence_id: string }>).map((item) => item.evidence_id);
-      const next = db.prepare(`SELECT * FROM goal_evidence_requirements WHERE requirement_id = ?`)
-        .get(input.requirementId) as GoalEvidenceRequirementRow;
-      return evidenceRequirementFromRow(next, ids);
-    });
-  }
-
-  reviewEvidenceRequirement(input: {
-    goalId: string;
-    requirementId: string;
-    status: GoalEvidenceRequirementStatus;
-    reason: string;
-    confidence?: number;
-    reviewedBy: GoalEvidenceReviewSource;
-  }): GoalEvidenceRequirement | null {
-    return runSqliteWriteTransaction((db) => {
-      const current = db.prepare(
-        `SELECT * FROM goal_evidence_requirements WHERE requirement_id = ? AND goal_id = ?`,
-      ).get(input.requirementId, input.goalId) as GoalEvidenceRequirementRow | undefined;
-      if (!current) return null;
-      const now = Date.now();
-      db.prepare(
-        `UPDATE goal_evidence_requirements
-         SET status = ?, review_reason = ?, review_confidence = ?, reviewed_by = ?, reviewed_at = ?, updated_at = ?
-         WHERE requirement_id = ?`,
-      ).run(
-        input.status,
-        input.reason.trim(),
-        input.confidence ?? null,
-        input.reviewedBy,
-        now,
-        now,
-        input.requirementId,
-      );
-      insertGoalEvent(db, {
-        goalId: input.goalId,
-        kind: input.reviewedBy === 'user' ? 'evidence_requirement_approved' : 'evidence_requirement_reviewed',
-        message: current.text,
-        data: { requirementId: input.requirementId, status: input.status, reason: input.reason.trim(), confidence: input.confidence },
-        createdAt: now,
-      });
-      const ids = (db.prepare(
-        `SELECT evidence_id FROM goal_evidence_requirement_links WHERE requirement_id = ? ORDER BY created_at ASC`,
-      ).all(input.requirementId) as Array<{ evidence_id: string }>).map((item) => item.evidence_id);
-      const next = db.prepare(`SELECT * FROM goal_evidence_requirements WHERE requirement_id = ?`)
-        .get(input.requirementId) as GoalEvidenceRequirementRow;
-      return evidenceRequirementFromRow(next, ids);
-    });
+    return rows.map(evidenceFromRow);
   }
 }

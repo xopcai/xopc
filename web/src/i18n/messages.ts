@@ -8,7 +8,6 @@ export type Tab =
   | 'automations'
   | 'skills'
   | 'connectors'
-  | 'goals'
   | 'channels'
   | 'agents'
   | 'logs'

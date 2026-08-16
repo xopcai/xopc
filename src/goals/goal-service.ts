@@ -8,9 +8,6 @@ import type {
   GoalChecklistAddedBy,
   GoalChecklistStatus,
   GoalContextAttachment,
-  GoalContractInput,
-  GoalEvidenceRequirementStatus,
-  GoalEvidenceReviewSource,
   GoalJudgeDecision,
   GoalListQuery,
   GoalSource,
@@ -34,17 +31,11 @@ function toTerminalStatus(verdict: GoalJudgeDecision['verdict']): GoalStatus {
 
 export interface GoalCompletionReadiness {
   ready: boolean;
-  missingEvidence: string[];
-  pendingApproval: string[];
-  pendingOutcome: string[];
+  pendingCriteria: string[];
 }
 
 function completionReviewReason(readiness: GoalCompletionReadiness): string {
-  const pending = [
-    ...readiness.missingEvidence,
-    ...readiness.pendingApproval,
-    ...readiness.pendingOutcome,
-  ];
+  const pending = readiness.pendingCriteria;
   return pending.length
     ? `Completion review required: ${pending.join('; ')}`
     : 'Completion review required.';
@@ -98,6 +89,8 @@ export class GoalService {
     const sessionKey = input.sessionKey;
     const cfg = input.config?.goals;
     const goal = this.store.create({
+      outcomeId: input.outcomeId,
+      outcomeContractVersion: input.outcomeContractVersion,
       title: normalizeTitle(input.title),
       description: input.description,
       agentId: input.agentId ?? 'main',
@@ -109,7 +102,6 @@ export class GoalService {
       uiLocale: input.uiLocale,
       source: input.source,
       projectId: input.projectId,
-      contract: input.contract,
     });
     publishGoalEvent('goal.created', goal);
     return goal;
@@ -123,8 +115,6 @@ export class GoalService {
       checklist: this.store.listChecklist(goalId),
       latestRun: this.store.listRuns(goalId, 1)[0],
       contextMessage: this.store.getContextMessage(goalId) ?? undefined,
-      contract: this.store.getContract(goalId) ?? undefined,
-      evidenceRequirements: this.store.listEvidenceRequirements(goalId),
     };
   }
 
@@ -139,8 +129,6 @@ export class GoalService {
       checklist: this.store.listChecklist(goal.id),
       latestRun: this.store.listRuns(goal.id, 1)[0],
       contextMessage: this.store.getContextMessage(goal.id) ?? undefined,
-      contract: this.store.getContract(goal.id) ?? undefined,
-      evidenceRequirements: this.store.listEvidenceRequirements(goal.id),
     }));
   }
 
@@ -152,21 +140,6 @@ export class GoalService {
     if (!this.store.get(input.goalId)) return null;
     this.store.setContextMessage(input);
     return this.get(input.goalId);
-  }
-
-  setContract(goalId: string, input: GoalContractInput): GoalWithDetails | null {
-    if (!this.store.get(goalId)) return null;
-    this.store.setContract(goalId, input);
-    if (input.criteria) {
-      this.store.replaceChecklist(
-        goalId,
-        input.criteria
-          .map((text) => text.trim())
-          .filter(Boolean)
-          .map((text) => ({ text, status: 'pending', addedBy: 'user' })),
-      );
-    }
-    return this.get(goalId);
   }
 
   update(goalId: string, patch: Partial<Pick<
@@ -483,49 +456,15 @@ export class GoalService {
     return this.store.listEvidence(goalId, limit);
   }
 
-  listEvidenceRequirements(goalId: string) {
-    return this.store.listEvidenceRequirements(goalId);
-  }
-
-  linkEvidenceRequirement(input: Parameters<GoalStore['linkEvidenceRequirement']>[0]) {
-    return this.store.linkEvidenceRequirement(input);
-  }
-
-  reviewEvidenceRequirement(input: {
-    goalId: string;
-    requirementId: string;
-    status: GoalEvidenceRequirementStatus;
-    reason: string;
-    confidence?: number;
-    reviewedBy: GoalEvidenceReviewSource;
-  }) {
-    return this.store.reviewEvidenceRequirement(input);
-  }
-
   getCompletionReadiness(goalId: string): GoalCompletionReadiness | null {
     const goal = this.get(goalId);
     if (!goal) return null;
-    const required = goal.evidenceRequirements;
-    const missingEvidence = required.filter((item) => item.evidenceIds.length === 0).map((item) => item.text);
-    const pendingApproval = required
-      .filter((item) => item.evidenceIds.length > 0 && item.status !== 'approved')
+    const pendingCriteria = goal.checklist
+      .filter((item) => item.status === 'pending')
       .map((item) => item.text);
-    const metric = goal.contract?.outcomeMetric;
-    const outcomeAchieved = metric?.currentValue != null && (
-      metric.direction === 'increase'
-        ? metric.currentValue >= metric.targetValue
-        : metric.currentValue <= metric.targetValue
-    );
-    const pendingOutcome = metric && !outcomeAchieved
-      ? [metric.currentValue == null
-          ? `${metric.name}: current value is not recorded`
-          : `${metric.name}: current value ${metric.currentValue} has not reached target ${metric.targetValue}`]
-      : [];
     return {
-      ready: missingEvidence.length === 0 && pendingApproval.length === 0 && pendingOutcome.length === 0,
-      missingEvidence,
-      pendingApproval,
-      pendingOutcome,
+      ready: pendingCriteria.length === 0,
+      pendingCriteria,
     };
   }
 }

@@ -7,7 +7,7 @@ import { AgentRunRelay } from '../../agent-run-relay.js';
 import {
   closeXopcDatabase,
   ensureSessionRecord,
-  listTaskOutcomes,
+  listExecutionReceipts,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../../storage/sqlite/index.js';
@@ -128,7 +128,7 @@ describe('runGatewayAgent', () => {
     expect(activeWebchatRunBySession.get(sessionKey)).toBe('existing-run');
   });
 
-  it('links completed plan items to outcome evidence', async () => {
+  it('does not treat completed plan items as verified outcome criteria', async () => {
     const sessionKey = 'agent:main:webchat:default:direct:chat-test';
     const deps = {
       config: {},
@@ -175,15 +175,13 @@ describe('runGatewayAgent', () => {
       // Consume the stream so the outcome finalizer runs.
     }
 
-    expect(listTaskOutcomes({ sessionKey })).toEqual([
+    expect(listExecutionReceipts({ sessionKey })).toEqual([
       expect.objectContaining({
-        contract: expect.objectContaining({ acceptanceCriteria: ['Run regression tests'] }),
         evidence: [expect.objectContaining({
           title: 'Plan item completed: Run regression tests',
-          verifies: ['Run regression tests'],
         })],
-        verification: expect.objectContaining({ status: 'passed' }),
-        completionVerdict: 'achieved',
+        verification: expect.objectContaining({ status: 'unverified' }),
+        completionVerdict: 'partial',
       }),
     ]);
   });

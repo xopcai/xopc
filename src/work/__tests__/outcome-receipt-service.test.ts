@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import type { TaskOutcome } from '../../storage/sqlite/index.js';
+import type { ExecutionReceipt } from '../../storage/sqlite/index.js';
 import { toOutcomeReceipt } from '../outcome-receipt-service.js';
 
-function outcome(patch: Partial<TaskOutcome> = {}): TaskOutcome {
+function outcome(patch: Partial<ExecutionReceipt> = {}): ExecutionReceipt {
   return {
     runId: 'run-1',
     sessionKey: 'session-1',
