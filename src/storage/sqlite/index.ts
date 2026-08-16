@@ -76,6 +76,13 @@ export {
   type InteractionState,
 } from './interaction-state-repository.js';
 export {
+  getSessionTaskPlan,
+  setSessionTaskPlan,
+  type SessionTaskPlan,
+  type SessionTaskPlanItem,
+  type SessionTaskPlanItemStatus,
+} from './session-task-plan-repository.js';
+export {
   buildRelationshipPrompt,
   getRelationshipSettings,
   isProactiveSupportAllowed,
@@ -88,16 +95,24 @@ export {
   findTaskOutcomeForAssistant,
   getTaskOutcome,
   listTaskOutcomes,
+  listUnprojectedTaskOutcomes,
+  markTaskOutcomeProjected,
+  setTaskCompletionVerdict,
   setTaskOutcomeFeedback,
+  setTaskOutcomeFeedbackByRunId,
   startTaskOutcome,
   summarizeTaskOutcomes,
   updateTaskOutcome,
   type TaskContract,
+  type TaskCompletionVerdict,
   type TaskEvidence,
   type TaskFeedbackOutcome,
   type TaskOutcome,
+  type TaskOutcomeContext,
   type TaskOutcomeMetrics,
+  type TaskOutcomeOrigin,
   type TaskOutcomeStatus,
+  type TaskOutcomeTrigger,
 } from './task-outcome-repository.js';
 export {
   buildDefaultSessionMetadata,
@@ -225,6 +240,7 @@ export {
 } from './config-repository.js';
 export {
   createObjectLinkRecord,
+  deleteObjectLinkRecord,
   getActivityEventRecord,
   listActivityRecords,
   listObjectActivityRecords,
@@ -259,6 +275,12 @@ export {
   upsertConnectorInstallation,
   type CachedConnectorCatalogEntry,
 } from './connector-repository.js';
+export {
+  getConnectorSyncPolicy,
+  listConnectorSyncPolicies,
+  upsertConnectorSyncPolicy,
+  type ConnectorSyncPolicy,
+} from './connector-sync-policy-repository.js';
 export {
   getUserTrustPolicy,
   setUserTrustPolicy,

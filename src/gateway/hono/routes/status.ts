@@ -5,8 +5,7 @@ import type { Hono } from 'hono';
 
 import type { Config } from '../../../config/schema.js';
 import { getGatewayAgentEffectiveManifest } from '../../agents-admin.js';
-import { isSTTAvailable } from '../../../voice/stt/index.js';
-import { mergeSttConfigFromAppConfig } from '../../../channels/attachments/voice-stt-webchat.js';
+import { isSTTAvailable, mergeSttConfigFromAppConfig } from '../../../voice/stt/index.js';
 import { getDefaultModelSync, resolveModel } from '../../../providers/index.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 

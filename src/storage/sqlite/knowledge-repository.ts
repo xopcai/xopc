@@ -426,6 +426,9 @@ export function listKnowledgeSourceItems(options: {
   collectionScope?: string;
   itemType?: string;
   synthesisStatus?: KnowledgeSynthesisStatus;
+  occurredAfterMs?: number;
+  occurredBeforeMs?: number;
+  orderBy?: 'recency_desc' | 'occurred_asc';
   includeDeleted?: boolean;
   limit?: number;
   offset?: number;
@@ -448,6 +451,14 @@ export function listKnowledgeSourceItems(options: {
     where.push('synthesis_status = ?');
     params.push(options.synthesisStatus);
   }
+  if (options.occurredAfterMs !== undefined) {
+    where.push('occurred_at > ?');
+    params.push(options.occurredAfterMs);
+  }
+  if (options.occurredBeforeMs !== undefined) {
+    where.push('occurred_at <= ?');
+    params.push(options.occurredBeforeMs);
+  }
   if (!options.includeDeleted) where.push('deleted_at IS NULL');
   const limit = Math.max(1, Math.min(500, options.limit ?? 100));
   const offset = Math.max(0, options.offset ?? 0);
@@ -455,7 +466,9 @@ export function listKnowledgeSourceItems(options: {
     .prepare(
       `SELECT * FROM knowledge_source_items
        ${where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''}
-       ORDER BY COALESCE(source_updated_at, occurred_at, updated_at) DESC
+       ORDER BY ${options.orderBy === 'occurred_asc'
+         ? 'occurred_at ASC, item_id ASC'
+         : 'COALESCE(source_updated_at, occurred_at, updated_at) DESC'}
        LIMIT ? OFFSET ?`,
     )
     .all(...params, limit, offset) as KnowledgeSourceItemRow[];

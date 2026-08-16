@@ -1,4 +1,7 @@
-import { z } from 'zod';
+import {
+  parseWorkHomeResponse,
+  type OutcomeReceipt,
+} from '@xopcai/gateway-contract';
 
 import { apiFetch } from '../api/client';
 import type { Language } from '../stores/preferences-store';
@@ -142,70 +145,8 @@ export interface HomeData {
     recentlyCompleted: HomeWorkItem[];
   };
   upcomingAutomations: HomeAutomation[];
+  recentOutcomes: OutcomeReceipt[];
 }
-
-const decisionResponseSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('connector_approval'), approvalId: z.string() }),
-  z.object({ kind: z.literal('goal_evidence'), goalId: z.string(), requirementId: z.string() }),
-]);
-
-const decisionSchema = z.object({
-  id: z.string(),
-  kind: z.enum(['agent_judgment', 'work_item', 'goal', 'connector_approval', 'goal_evidence']),
-  title: z.string(),
-  detail: z.string().optional(),
-  reason: z.enum(['needs_input', 'in_review', 'blocked', 'overdue', 'due_soon', 'decision_needed', 'approval_required']),
-  urgency: z.enum(['now', 'soon']),
-  href: z.string(),
-  projectId: z.string().optional(),
-  projectName: z.string().optional(),
-  updatedAt: z.number(),
-  judgment: z.object({
-    inboxItemId: z.string(), whyNow: z.string(), impact: z.string(), workDone: z.string(), recommendation: z.string(), confidence: z.number(),
-    decision: z.object({ question: z.string(), options: z.array(z.object({ id: z.string(), label: z.string(), consequence: z.string() })) }).optional(),
-  }).optional(),
-  response: decisionResponseSchema.optional(),
-});
-
-const actionableHomeSchema = z.object({
-  briefing: z.object({
-    generatedAt: z.number(),
-    summary: z.string(),
-    focus: z.array(decisionSchema),
-    progress: z.object({
-      activeWorkCount: z.number(),
-      activeWorkflowCount: z.number(),
-      activeGoalCount: z.number(),
-      movingCount: z.number(),
-    }),
-    wins: z.array(z.object({
-      id: z.string(),
-      kind: z.enum(['work_item', 'workflow_run', 'automation_run']),
-      title: z.string(),
-      href: z.string(),
-      completedAt: z.number(),
-    })),
-    nextScheduled: z.object({
-      id: z.string(),
-      name: z.string().optional(),
-      trigger: z.string(),
-      action: z.string(),
-      nextRunAt: z.string(),
-    }).optional(),
-  }),
-  decisions: z.array(decisionSchema),
-  attention: z.array(z.object({
-    id: z.string(),
-    kind: z.enum(['automation_run', 'workflow_run']),
-    runId: z.string(),
-    title: z.string(),
-    detail: z.string(),
-    reason: z.enum(['run_failed', 'run_timeout']),
-    href: z.string(),
-    updatedAt: z.number(),
-    sessionKey: z.string().optional(),
-  })),
-});
 
 function normalizedSessionName(session: SessionListItem): string | undefined {
   return session.name?.trim() || session.title?.trim() || session.displayName?.trim() || undefined;
@@ -214,11 +155,13 @@ function normalizedSessionName(session: SessionListItem): string | undefined {
 export async function fetchHome(language: Language): Promise<HomeData> {
   const res = await apiFetch(`/api/home?locale=${encodeURIComponent(language)}`);
   if (!res.ok) throw new Error(`Failed to fetch home: ${res.status}`);
-  const raw = (await res.json()) as HomeData;
-  actionableHomeSchema.parse(raw);
+  const raw = await res.json() as unknown;
+  const core = parseWorkHomeResponse(raw);
+  const home = raw as HomeData;
   return {
-    ...raw,
-    recentSessions: raw.recentSessions.map((session) => ({
+    ...home,
+    recentOutcomes: core.recentOutcomes,
+    recentSessions: home.recentSessions.map((session) => ({
       ...session,
       name: normalizedSessionName(session),
     })),

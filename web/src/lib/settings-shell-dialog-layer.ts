@@ -21,3 +21,9 @@ export const SETTINGS_SHELL_POPOVER_Z = 'z-[74]';
 
 /** Popovers/menus opened from controls inside a settings-shell modal (`CONTENT` is z-[76]). */
 export const SETTINGS_SHELL_MODAL_POPOVER_Z = 'z-[77]';
+
+/**
+ * Body-portaled interactive surfaces must clear every app dialog layer. Keep this below
+ * the emergency tooltip tier (`z-[10000]`) while remaining above the highest dialog.
+ */
+export const APP_PORTALED_POPOVER_Z = 'z-[300]';

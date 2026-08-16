@@ -6,11 +6,10 @@ import type { ImageContent } from '@earendil-works/pi-ai';
 import type { Config } from '../config/schema.js';
 import type { AgentSourceContext } from '../agent/source-context/types.js';
 import { getNoteAgentContextRecord, upsertNoteAgentContextRecord } from '../storage/sqlite/index.js';
-import { mergeSttConfigFromAppConfig } from '../channels/attachments/voice-stt-webchat.js';
 import { extractDocumentText } from '../document-understanding/extract.js';
 import { describeImagesWithFallback } from '../agent/image/understanding/runtime.js';
 import { resolveImageModelConfigForTool } from '../agent/image/tool-model-config.js';
-import { isSTTAvailable, transcribe } from '../voice/stt/index.js';
+import { isSTTAvailable, mergeSttConfigFromAppConfig, transcribe } from '../voice/stt/index.js';
 import type { Note, NoteAttachment, SnapshotTrigger } from './types.js';
 
 const MAX_NOTE_MARKDOWN_CHARS = 40_000;

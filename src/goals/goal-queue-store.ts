@@ -23,6 +23,7 @@ type GoalQueueRow = {
 
 type GoalQueuePayload = {
   userTurn?: UserTurnInput;
+  executionContext?: GoalQueueItemSnapshot['executionContext'];
 };
 
 function parsePayload(raw: string): GoalQueuePayload {
@@ -48,6 +49,7 @@ function rowToSnapshot(row: GoalQueueRow): GoalQueueItemSnapshot {
     nextRunAt: row.next_run_at ?? undefined,
     sessionKey: row.session_key ?? undefined,
     userTurn: payload.userTurn,
+    executionContext: payload.executionContext,
     lastError: row.last_error ?? undefined,
     source: row.source,
   };
@@ -57,6 +59,7 @@ export class GoalQueueStore {
   enqueue(input: {
     goalId: string;
     userTurn?: UserTurnInput;
+    executionContext?: GoalQueueItemSnapshot['executionContext'];
     maxRetries: number;
     source: GoalQueueItemSnapshot['source'];
   }): GoalQueueItemSnapshot {
@@ -77,7 +80,10 @@ export class GoalQueueStore {
         queue_id: randomUUID(),
         goal_id: input.goalId,
         status: 'queued',
-        payload_json: JSON.stringify({ userTurn: input.userTurn }),
+        payload_json: JSON.stringify({
+          userTurn: input.userTurn,
+          executionContext: input.executionContext,
+        }),
         attempts: 0,
         max_retries: input.maxRetries,
         enqueued_at: now,

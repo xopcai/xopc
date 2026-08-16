@@ -7,8 +7,8 @@ import { readAgentMessageContent } from '../memory/agent-message-access.js';
 import {
   isVoiceLikeAttachment,
   mergeVoiceTranscriptsIntoUserText,
-  mergeSttConfigFromAppConfig,
 } from '../../channels/attachments/voice-stt-webchat.js';
+import { mergeSttConfigFromAppConfig } from '../../voice/stt/index.js';
 import {
   resolveEffectiveReasoningLevel,
   resolveConfiguredActivityDetailDefault,

@@ -55,15 +55,37 @@ describe('GoalRunner', () => {
     goals.updateChecklist(goal.id, { type: 'add', text: 'The implementation matches the spec.' });
 
     const runTurn = vi.fn(async () => {});
+    const bindExecutionContext = vi.fn(async () => {});
     const runner = new GoalRunner({
       ensureSession: vi.fn(async () => goal.activeSessionKey!),
+      bindExecutionContext,
       hasActiveRun: vi.fn(() => false),
       runTurn,
     });
 
-    runner.enqueue(goal.id);
+    const queued = runner.enqueue(goal.id, {
+      executionContext: {
+        workItemId: 'work-item-1',
+        contextTraceId: 'intake-1',
+        triggerKind: 'user',
+      },
+    });
 
     await vi.waitFor(() => expect(runTurn).toHaveBeenCalledTimes(1));
+    expect(runner.snapshot().find((item) => item.id === queued.id)?.executionContext).toEqual({
+      workItemId: 'work-item-1',
+      contextTraceId: 'intake-1',
+      triggerKind: 'user',
+    });
+    expect(bindExecutionContext).toHaveBeenCalledWith(
+      goal.activeSessionKey,
+      expect.objectContaining({ id: goal.id }),
+      {
+        workItemId: 'work-item-1',
+        contextTraceId: 'intake-1',
+        triggerKind: 'user',
+      },
+    );
     const [sessionKey, userTurn] = runTurn.mock.calls[0]!;
     expect(sessionKey).toBe(goal.activeSessionKey);
     expect(userTurn.text).toContain('Goal:\nShip a multimodal goal that follows the uploaded specification.');

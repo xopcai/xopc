@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
 
@@ -79,22 +79,47 @@ export function attachSnapshot(runId: string, snapshotId: string): void {
 export function finishRun(input: { run: ClaimedRun; candidate?: InsightCandidate; valueScore?: number; rawOutput: string; modelRef?: string }, now = new Date()): ProactiveInsight | null {
   return runSqliteWriteTransaction((db) => {
     const nowIso = now.toISOString();
-    const valuable = Boolean(input.candidate);
+    const subjectScope = (db.prepare(`SELECT DISTINCT e.subject_kind, e.subject_id
+      FROM proactive_batch_events be
+      JOIN proactive_events e ON e.event_id = be.event_id
+      WHERE be.batch_id = ?
+      ORDER BY e.subject_kind, e.subject_id`).all(input.run.batchId) as Row[])
+      .map((row) => `${str(row, 'subject_kind')}:${str(row, 'subject_id')}`);
+    const fingerprint = input.candidate
+      ? createHash('sha256').update([
+        ...subjectScope,
+        ...[
+          input.candidate.title,
+          input.candidate.summary,
+          input.candidate.recommendation,
+        ].map((value) => value.trim().toLowerCase().replace(/\s+/g, ' ')),
+      ].join('\n')).digest('hex')
+      : undefined;
+    const duplicate = fingerprint ? db.prepare(`SELECT 1 FROM proactive_insights
+      WHERE subscription_id = ? AND scenario_key = ? AND content_fingerprint = ? AND created_at >= ? LIMIT 1`)
+      .get(
+        input.run.subscriptionId,
+        input.run.scenarioKey,
+        fingerprint,
+        new Date(now.getTime() - 7 * 24 * 60 * 60_000).toISOString(),
+      ) : undefined;
+    const valuable = Boolean(input.candidate) && !duplicate;
     db.prepare(`UPDATE proactive_runs SET status = ?, raw_output = ?, model_ref = ?, lease_owner = NULL,
       lease_expires_at = NULL, completed_at = ?, updated_at = ? WHERE run_id = ?`)
       .run(valuable ? 'completed' : 'discarded', input.rawOutput.slice(0, 20_000), input.modelRef ?? null, nowIso, nowIso, input.run.id);
     db.prepare(`UPDATE proactive_signal_batches SET status = ?, updated_at = ? WHERE batch_id = ?`)
       .run(valuable ? 'processed' : 'ignored', nowIso, input.run.batchId);
-    if (!input.candidate) return null;
+    if (!input.candidate || duplicate) return null;
     const insight: ProactiveInsight = { ...input.candidate, id: randomUUID(), runId: input.run.id,
       subscriptionId: input.run.subscriptionId, scenarioKey: input.run.scenarioKey, valueScore: input.valueScore ?? 0, createdAt: nowIso };
     db.prepare(`INSERT INTO proactive_insights (insight_id, run_id, subscription_id, scenario_key, title, summary,
-      why_now, impact, recommendation, work_done, decision_json, urgency, confidence, value_score, evidence_ids_json, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      why_now, impact, recommendation, work_done, decision_json, urgency, confidence, value_score,
+      evidence_ids_json, content_fingerprint, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(insight.id, insight.runId, insight.subscriptionId, insight.scenarioKey, insight.title, insight.summary,
         insight.whyNow, insight.impact, insight.recommendation, insight.workDone, insight.decision ? JSON.stringify(insight.decision) : null,
         insight.urgency, insight.confidence, insight.valueScore,
-        JSON.stringify(insight.evidenceIds), insight.createdAt);
+        JSON.stringify(insight.evidenceIds), fingerprint, insight.createdAt);
     return insight;
   });
 }

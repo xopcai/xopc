@@ -164,6 +164,7 @@ export interface NotesListQuery {
   status?: NoteStatus;
   kind?: NoteKind;
   tag?: string;
+  projectId?: string;
   pinned?: boolean;
   search?: string;
   limit?: number;
