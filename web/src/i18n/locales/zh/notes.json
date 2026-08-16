@@ -133,6 +133,37 @@
     "openingChat": "打开中",
     "noThreads": "暂无讨论线程。",
     "noteDiscussionFallback": "Note 讨论",
-    "messageCount": "{{count}} 条消息"
+    "messageCount": "{{count}} 条消息",
+    "discussionCapture": {
+      "title": "录制讨论",
+      "description": "直接开始说，AI 自动整理笔记和项目上下文。",
+      "close": "关闭",
+      "consentTitle": "首次录音前确认",
+      "consent": "请确认你会告知参与者，或已取得工作制度与当地规则要求的录音同意。",
+      "consentAction": "确认并开始",
+      "requesting": "正在请求麦克风…",
+      "recording": "正在录音",
+      "paused": "录音已暂停",
+      "pause": "暂停",
+      "resume": "继续",
+      "stop": "完成",
+      "finalizing": "正在保存并整理笔记…",
+      "openNote": "打开笔记",
+      "liveTranscript": "实时转写",
+      "waitingTranscript": "正在聆听…",
+      "liveUnavailable": "当前环境无法实时转写，完成后仍会生成完整文字。",
+      "saved": "讨论已保存，AI 正在整理笔记。",
+      "saveFailed": "暂时无法完成录音，本地草稿仍然安全。",
+      "emptyRecording": "录音中没有可用音频。",
+      "recoveredTitle": "未完成的录音",
+      "recoveredDescription": "这段录音已安全保存在当前设备中。",
+      "recover": "恢复",
+      "recovering": "正在恢复…",
+      "discard": "丢弃",
+      "projectLinked": "AI 已将这段讨论关联到项目。",
+      "undo": "撤销",
+      "draftTranscript": "实时转写草稿",
+      "maxDuration": "最长 30 分钟"
+    }
   }
 }

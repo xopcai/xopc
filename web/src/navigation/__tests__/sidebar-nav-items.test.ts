@@ -58,11 +58,22 @@ describe('reconcileNavOrder', () => {
     expect(out.overflow).toEqual([]);
   });
 
-  it('honors stored order when items still exist', () => {
+  it('keeps primary product destinations ahead of stored customization', () => {
     const available = [item('builtin:work'), item('builtin:profile')];
     const stored = ['builtin:profile', 'builtin:work'];
     const out = reconcileNavOrder(available, stored);
-    expect(out.visible.map((i) => i.id)).toEqual(stored);
+    expect(out.visible.map((i) => i.id)).toEqual(['builtin:work', 'builtin:profile']);
+  });
+
+  it('keeps only Work and You visible by default', () => {
+    const available = [
+      item('builtin:work'),
+      item('builtin:profile'),
+      item('builtin:projects'),
+    ];
+    const out = reconcileNavOrder(available, []);
+    expect(out.visible.map((i) => i.id)).toEqual(['builtin:work', 'builtin:profile']);
+    expect(out.overflow.map((i) => i.id)).toEqual(['builtin:projects']);
   });
 
   it('appends new items that are not yet in the stored order', () => {
@@ -148,7 +159,7 @@ describe('reconcileNavOrder', () => {
     ]);
   });
 
-  it('reveals up to four apps when the rail is expanded', () => {
+  it('allows the visible rail to expand to four destinations', () => {
     const available = Array.from({ length: 6 }, (_, i) => item(`builtin:${i}`));
     const out = reconcileNavOrder(available, [], MAX_VISIBLE_NAV_ITEMS);
 

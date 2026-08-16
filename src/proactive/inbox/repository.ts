@@ -27,8 +27,14 @@ const SELECT_ITEM = `SELECT i.*, x.subscription_id, x.scenario_key, x.title, x.s
 
 export function projectInsightsToInbox(now = new Date()): number {
   return runSqliteWriteTransaction((db) => {
-    const missing = db.prepare(`SELECT insight_id FROM proactive_insights WHERE insight_id NOT IN
-      (SELECT insight_id FROM proactive_inbox_items) ORDER BY created_at`).all() as { insight_id: string }[];
+    const missing = db.prepare(`SELECT x.insight_id FROM proactive_insights x
+      JOIN proactive_runs r ON r.run_id = x.run_id
+      JOIN proactive_signal_batches b ON b.batch_id = r.batch_id
+      LEFT JOIN project_monitoring_policies p
+        ON b.aggregation_key = 'project:' || p.project_id
+      WHERE x.insight_id NOT IN (SELECT insight_id FROM proactive_inbox_items)
+        AND (p.project_id IS NULL OR (p.mode != 'observe' AND x.confidence >= p.confidence_threshold))
+      ORDER BY x.created_at`).all() as { insight_id: string }[];
     for (const row of missing) {
       const id = randomUUID(); const nowIso = now.toISOString();
       db.prepare(`INSERT INTO proactive_inbox_items (inbox_item_id, insight_id, status, created_at, updated_at)

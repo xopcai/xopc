@@ -93,6 +93,21 @@ export type TurnPlanUpdatedEvent = ChatStreamEnvelope<
     plan: { step: string; status: TurnPlanStatus }[];
   }
 >;
+export type TaskPlanSource = 'update_plan' | 'todo';
+export type TaskPlanScope = 'turn' | 'session';
+export type TaskPlanStatus = TurnPlanStatus | 'cancelled';
+export type TaskPlanUpdatedEvent = ChatStreamEnvelope<
+  'task_plan_updated',
+  {
+    messageId: string;
+    planId: string;
+    revision: number;
+    source: TaskPlanSource;
+    scope: TaskPlanScope;
+    explanation?: string;
+    items: { id: string; title: string; status: TaskPlanStatus }[];
+  }
+>;
 export type TurnDiffEvent = ChatStreamEnvelope<
   'turn_diff',
   { messageId: string; files: string[]; diff: string; added: number; removed: number }
@@ -157,6 +172,7 @@ export type ChatStreamEvent =
   | CommandCompletedEvent
   | PatchAppliedEvent
   | TurnPlanUpdatedEvent
+  | TaskPlanUpdatedEvent
   | TurnDiffEvent
   | ReviewStartEvent
   | ReviewDeltaEvent

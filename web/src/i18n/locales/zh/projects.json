@@ -265,6 +265,15 @@
       "activeGoals": "活跃目标",
       "recentWorkflowRuns": "近期工作流运行",
       "nextActions": "下一步",
+      "recentResults": "最近结果",
+      "resultStatuses": {
+        "running": "执行中",
+        "completed": "已达成",
+        "partial": "待验收",
+        "needs_user": "需要你",
+        "failed": "未达成",
+        "cancelled": "已取消"
+      },
       "goal": "目标",
       "recommendedNext": "下一步：{{action}}",
       "noNextActions": "还没有下一步。可以先创建目标，或继续项目会话来明确方向。",

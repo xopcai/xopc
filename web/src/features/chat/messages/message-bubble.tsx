@@ -618,17 +618,6 @@ export const MessageBubble = memo(function MessageBubble({
                   '{{count}}',
                   String(assistantTurnView.sources.length),
                 )}
-                assistantTimestamp={message.timestamp}
-                isStreaming={isStreaming}
-                taskLabels={{
-                  heading: m.chat.taskOutcomeHeading,
-                  objective: m.chat.taskOutcomeObjective,
-                  acceptance: m.chat.taskOutcomeAcceptance,
-                  evidence: m.chat.taskOutcomeEvidence,
-                  verification: m.chat.taskOutcomeVerification,
-                  verificationStates: m.chat.taskOutcomeVerificationStates,
-                  recovery: m.chat.taskOutcomeRecovery,
-                }}
               />
             ) : null}
 

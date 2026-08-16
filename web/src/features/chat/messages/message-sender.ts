@@ -60,6 +60,19 @@ export type TurnPlanState = {
   plan: { step: string; status: 'pending' | 'in_progress' | 'completed' }[];
 };
 
+export type TaskPlanState = {
+  planId: string;
+  revision: number;
+  source: 'update_plan' | 'todo';
+  scope: 'turn' | 'session';
+  explanation?: string;
+  items: Array<{
+    id: string;
+    title: string;
+    status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+  }>;
+};
+
 export type MessagingCallbacks = {
   onStreamStart: () => void;
   onToken: (delta: string) => void;
@@ -89,6 +102,8 @@ export type MessagingCallbacks = {
   onCompaction?: (state: CompactionState) => void;
   /** Current agent turn plan, emitted by the `update_plan` tool. */
   onTurnPlanUpdated?: (state: TurnPlanState) => void;
+  /** Canonical task plan snapshot emitted by `update_plan` or `todo`. */
+  onTaskPlanUpdated?: (state: TaskPlanState) => void;
   /** Isolated `/review` context lifecycle. */
   onReviewStart?: (payload: { reviewId: string; target: string; stage: 'preparing' | 'reviewing' }) => void;
   onReviewDelta?: (payload: { reviewId: string; delta: string }) => void;
@@ -499,6 +514,28 @@ export class MessageSender {
         }
         break;
       }
+      case 'task_plan_updated': {
+        const items = normalizeTaskPlanItems(payload.items);
+        const source = payload.source === 'todo' ? 'todo' : 'update_plan';
+        const scope = payload.scope === 'session' ? 'session' : 'turn';
+        const planId = typeof payload.planId === 'string' ? payload.planId.trim() : '';
+        const revision = typeof payload.revision === 'number' && Number.isInteger(payload.revision)
+          ? payload.revision
+          : 0;
+        if (planId && revision > 0) {
+          cb?.onTaskPlanUpdated?.({
+            planId,
+            revision,
+            source,
+            scope,
+            explanation: typeof payload.explanation === 'string' && payload.explanation.trim()
+              ? payload.explanation.trim()
+              : undefined,
+            items,
+          });
+        }
+        break;
+      }
       case 'tts_audio':
         cb?.onTtsAudio?.({
           uri: String(payload.uri || ''),
@@ -596,4 +633,27 @@ function normalizeTurnPlan(raw: unknown): TurnPlanState['plan'] {
       return { step, status };
     })
     .filter((item): item is TurnPlanState['plan'][number] => Boolean(item));
+}
+
+function normalizeTaskPlanItems(raw: unknown): TaskPlanState['items'] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((item) => {
+    const rec = item && typeof item === 'object' && !Array.isArray(item)
+      ? item as Record<string, unknown>
+      : undefined;
+    const id = typeof rec?.id === 'string' ? rec.id.trim() : '';
+    const title = typeof rec?.title === 'string' ? rec.title.trim() : '';
+    const status = rec?.status;
+    if (
+      !id
+      || !title
+      || (status !== 'pending'
+        && status !== 'in_progress'
+        && status !== 'completed'
+        && status !== 'cancelled')
+    ) {
+      return [];
+    }
+    return [{ id, title, status }];
+  });
 }

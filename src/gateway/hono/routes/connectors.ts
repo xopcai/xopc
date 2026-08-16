@@ -31,19 +31,29 @@ import { setConnectorEnabled } from '../../../connectors/lifecycle.js';
 import { projectComposioConnectionStatus } from '../../../connectors/runtime-status.js';
 import { createConnectorSetupSecretRequest, submitConnectorSetupSecret } from '../../../connectors/setup-secrets.js';
 import { ingestLocalFolderSource } from '../../../connectors/connected-source-ingestion.js';
+import { getConnectorLearningPlan } from '../../../connectors/learning-recipes.js';
 import { recordConnectorHealthUsage } from '../../../connectors/usage.js';
 import type { ConnectorDefinition, ConnectorInstallInput } from '../../../connectors/types.js';
 import {
   decideConnectorApproval,
+  getConnectorSyncPolicy,
   getConnectorApproval,
   listConnectorConnections,
   listConnectorApprovals,
   listConnectorLearningJobs,
+  upsertConnectorSyncPolicy,
 } from '../../../storage/sqlite/index.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function defaultConnectorSyncInterval(connectorId: string): number {
+  const definition = getConnectorDefinition(connectorId);
+  return definition?.runtime.type === 'composio' && definition.runtime.role === 'toolkit'
+    ? getConnectorLearningPlan(definition.runtime.toolkit)?.intervalMinutes ?? 30
+    : 30;
 }
 
 export function registerConnectorRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
@@ -108,6 +118,75 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
 
   authenticated.get('/api/connectors/learning', (c) => {
     return c.json({ ok: true, payload: { jobs: listConnectorLearningJobs({ limit: 100 }) } });
+  });
+
+  authenticated.get('/api/connectors/composio/connections/:id/sync-policy', (c) => {
+    const connection = listConnectorConnections({ principalId: 'local-owner' })
+      .find((item) => item.id === c.req.param('id'));
+    if (!connection) return c.json({ ok: false, error: 'Connector connection not found.' }, 404);
+    const defaultInterval = defaultConnectorSyncInterval(connection.connectorId);
+    const policy = getConnectorSyncPolicy(connection.id) ?? {
+      connectionId: connection.id,
+      scanEnabled: true,
+      proactiveEnabled: false,
+      intervalMinutes: defaultInterval,
+      allowedScenarioKeys: [],
+      revision: 0,
+      updatedAt: connection.updatedAt,
+    };
+    return c.json({ ok: true, payload: { policy } });
+  });
+
+  authenticated.patch('/api/connectors/composio/connections/:id/sync-policy', strictRateLimitMiddleware, async (c) => {
+    const connectionId = c.req.param('id');
+    const connection = listConnectorConnections({ principalId: 'local-owner' })
+      .find((item) => item.id === connectionId);
+    if (!connection) return c.json({ ok: false, error: 'Connector connection not found.' }, 404);
+    const body = await c.req.json().catch(() => ({}));
+    const row = body && typeof body === 'object' && !Array.isArray(body)
+      ? body as Record<string, unknown>
+      : {};
+    if (row.scanEnabled !== undefined && typeof row.scanEnabled !== 'boolean') {
+      return c.json({ ok: false, error: 'scanEnabled must be a boolean.' }, 400);
+    }
+    if (row.proactiveEnabled !== undefined && typeof row.proactiveEnabled !== 'boolean') {
+      return c.json({ ok: false, error: 'proactiveEnabled must be a boolean.' }, 400);
+    }
+    if (row.intervalMinutes !== undefined
+      && (!Number.isInteger(row.intervalMinutes) || Number(row.intervalMinutes) < 5 || Number(row.intervalMinutes) > 1_440)) {
+      return c.json({ ok: false, error: 'intervalMinutes must be an integer from 5 to 1440.' }, 400);
+    }
+    const allowedScenarioKeys = row.allowedScenarioKeys === undefined
+      ? undefined
+      : Array.isArray(row.allowedScenarioKeys)
+        ? [...new Set(row.allowedScenarioKeys.filter((value): value is string => typeof value === 'string')
+          .map((value) => value.trim()).filter(Boolean))]
+        : null;
+    if (allowedScenarioKeys === null) {
+      return c.json({ ok: false, error: 'allowedScenarioKeys must be an array of strings.' }, 400);
+    }
+    const knownScenarioKeys = new Set(service.proactiveScenarios.list().map((scenario) => scenario.key));
+    if (allowedScenarioKeys?.some((key) => !knownScenarioKeys.has(key))) {
+      return c.json({ ok: false, error: 'allowedScenarioKeys contains an unknown scenario.' }, 400);
+    }
+    const previous = getConnectorSyncPolicy(connectionId);
+    const policy = upsertConnectorSyncPolicy({
+      connectionId,
+      defaultIntervalMinutes: defaultConnectorSyncInterval(connection.connectorId),
+      ...(typeof row.scanEnabled === 'boolean' ? { scanEnabled: row.scanEnabled } : {}),
+      ...(typeof row.proactiveEnabled === 'boolean' ? { proactiveEnabled: row.proactiveEnabled } : {}),
+      ...(typeof row.intervalMinutes === 'number' ? { intervalMinutes: row.intervalMinutes } : {}),
+      ...(allowedScenarioKeys ? { allowedScenarioKeys } : {}),
+    });
+    if (!policy.scanEnabled) {
+      service.setConnectorLearningPaused(connectionId, true);
+    } else if (previous?.scanEnabled === false) {
+      const resumed = service.setConnectorLearningPaused(connectionId, false);
+      if (resumed === 0) {
+        service.requestConnectorLearning(connectionId, { mode: 'incremental', reason: 'schedule' });
+      }
+    }
+    return c.json({ ok: true, payload: { policy } });
   });
 
   authenticated.post('/api/connectors/composio/connections/:id/learning', strictRateLimitMiddleware, async (c) => {

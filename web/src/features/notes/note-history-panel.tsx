@@ -22,7 +22,12 @@ const TRIGGER_ICONS: Record<SnapshotTrigger, typeof Pencil> = {
   restore: ArrowDownToLine,
 };
 
-function triggerLabel(trigger: SnapshotTrigger, n: Record<string, string>): string {
+function triggerLabel(trigger: SnapshotTrigger, n: {
+  triggerEdit: string;
+  triggerAiEdit: string;
+  triggerSync: string;
+  triggerRestore: string;
+}): string {
   const map: Record<SnapshotTrigger, string> = {
     edit: n.triggerEdit,
     ai_edit: n.triggerAiEdit,

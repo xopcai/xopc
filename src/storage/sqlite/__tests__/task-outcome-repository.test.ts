@@ -68,6 +68,7 @@ describe('task outcome repository', () => {
     expect(matched?.runId).toBe('run-1');
     expect(matched?.evidence).toHaveLength(1);
     expect(matched?.verification.status).toBe('passed');
+    expect(matched?.completionVerdict).toBe('achieved');
 
     const rated = setTaskOutcomeFeedback({
       sessionKey,
@@ -112,6 +113,7 @@ describe('task outcome repository', () => {
     });
     const result = completeTaskOutcome({ runId: 'run-unverified', status: 'succeeded', summary: 'Done', now: 3_200 });
     expect(result?.verification).toMatchObject({ status: 'unverified' });
+    expect(result?.completionVerdict).toBe('partial');
   });
 
   it('classifies failures and recommends a changed recovery strategy', () => {
@@ -134,5 +136,6 @@ describe('task outcome repository', () => {
       recoveryAction: 'replan',
     });
     expect(result?.verification.status).toBe('failed');
+    expect(result?.completionVerdict).toBe('not_achieved');
   });
 });

@@ -1,8 +1,9 @@
-import { Mic, StickyNote } from 'lucide-react';
+import { AudioLines, Mic, StickyNote } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { appendTranscriptToDraft } from '@/features/chat/composer/append-transcript-to-draft';
+import { openDiscussionCapture } from '@/features/discussions/discussion-events';
 import { ComposerVoiceInputBar } from '@/features/chat/composer/composer-voice-input-bar';
 import { useComposerVoiceInput } from '@/features/chat/composer/use-composer-voice-input';
 import {
@@ -166,6 +167,18 @@ function GlobalQuickCaptureModal({ onClose }: { onClose: () => void }) {
 
         <div className="flex items-center justify-between border-t border-edge-subtle px-4 py-2">
           <div className="flex flex-wrap items-center gap-3 text-[11px] text-fg-muted">
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-fg-muted hover:bg-surface-hover hover:text-fg disabled:opacity-50"
+              disabled={saving || voice.voiceActive}
+              onClick={() => {
+                onClose();
+                openDiscussionCapture();
+              }}
+            >
+              <AudioLines className="size-3.5" aria-hidden />
+              <span>{n.discussionCapture.title}</span>
+            </button>
             <button
               type="button"
               className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-fg-muted hover:bg-surface-hover hover:text-fg disabled:opacity-50"

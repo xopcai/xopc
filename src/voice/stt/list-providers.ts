@@ -3,11 +3,11 @@
  */
 
 import type { Config } from '../../config/schema.js';
-import { mergeSttConfigFromAppConfig } from '../../channels/attachments/voice-stt-webchat.js';
 import { listMediaUnderstandingProviders } from '../../media-understanding/registry.js';
 import { getVoiceProviderMetadata, type VoiceProviderMetadata } from '../metadata/index.js';
 
 import { resolveSTTProviderConfig } from './factory.js';
+import { mergeSttConfigFromAppConfig } from './config.js';
 import type { STTConfig } from './types.js';
 
 export interface SttProviderListEntry extends VoiceProviderMetadata {

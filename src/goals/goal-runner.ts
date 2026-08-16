@@ -63,6 +63,7 @@ export class GoalRunner {
           }
         : undefined,
       source: options.source ?? 'api',
+      executionContext: options.executionContext,
     });
     this.emit('goal.queue.updated', item);
     this.schedulePump(0);
@@ -119,8 +120,10 @@ export class GoalRunner {
         this.finish(item, 'failed', 'Goal not found');
         return;
       }
-      const sessionKey = activeGoal.activeSessionKey ?? (await this.opts.ensureSession(activeGoal));
+      const sessionKey = activeGoal.activeSessionKey
+        ?? (await this.opts.ensureSession(activeGoal, item.executionContext));
       item = this.store.setSessionKey(item.id, sessionKey) ?? { ...item, sessionKey };
+      await this.opts.bindExecutionContext?.(sessionKey, activeGoal, item.executionContext);
       if (this.opts.hasActiveRun(sessionKey)) {
         this.retry(item, 'Goal session already has an active run');
         return;
