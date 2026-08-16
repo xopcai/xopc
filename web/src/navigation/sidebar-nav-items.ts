@@ -1,4 +1,4 @@
-import { Box, BriefcaseBusiness, Cable, FolderKanban, GitBranch, HeartHandshake, Layers, ListChecks, MonitorPlay, Plug, Puzzle, StickyNote, Users, Zap } from 'lucide-react';
+import { Box, BriefcaseBusiness, Cable, FolderKanban, GitBranch, HeartHandshake, Layers, MonitorPlay, Plug, Puzzle, StickyNote, Users, Zap } from 'lucide-react';
 
 import type { LucideIcon } from '@/features/extensions/extension-nav-icon';
 
@@ -24,7 +24,6 @@ export type BuiltinNavId =
   | 'builtin:localApps'
   | 'builtin:work'
   | 'builtin:projects'
-  | 'builtin:goals'
   | 'builtin:automations'
   | 'builtin:browserWorkflows'
   | 'builtin:notes'
@@ -44,15 +43,14 @@ export type BuiltinNavDef = {
  */
 export const BUILTIN_NAV_DEFS: readonly BuiltinNavDef[] = [
   { id: 'builtin:work', to: '/work', Icon: BriefcaseBusiness },
+  { id: 'builtin:notes', to: '/notes', Icon: StickyNote },
   { id: 'builtin:profile', to: '/you', Icon: HeartHandshake },
   { id: 'builtin:projects', to: '/projects', Icon: FolderKanban },
   { id: 'builtin:automations', to: '/automations', Icon: Zap },
   { id: 'builtin:skills', to: '/skills', Icon: Layers },
   { id: 'builtin:connectors', to: '/connectors', Icon: Cable },
   { id: 'builtin:agents', to: '/agents', Icon: Users },
-  { id: 'builtin:notes', to: '/notes', Icon: StickyNote },
   { id: 'builtin:channels', to: '/channels', Icon: Plug },
-  { id: 'builtin:goals', to: '/goals', Icon: ListChecks },
   { id: 'builtin:workflows', to: '/workflows', Icon: GitBranch },
   { id: 'builtin:browserWorkflows', to: '/browser-workflows', Icon: MonitorPlay },
   { id: 'builtin:localApps', to: '/local-apps', Icon: Box },
@@ -62,6 +60,7 @@ export const BUILTIN_NAV_DEFS: readonly BuiltinNavDef[] = [
 /** Product-level destinations that stay visible; advanced capabilities live under More. */
 export const PRIMARY_NAV_IDS = [
   'builtin:work',
+  'builtin:notes',
   'builtin:profile',
 ] as const satisfies readonly BuiltinNavId[];
 
@@ -70,7 +69,7 @@ export function isPrimaryNavId(id: string): boolean {
 }
 
 export const MIN_VISIBLE_NAV_ITEMS = PRIMARY_NAV_IDS.length;
-export const MAX_VISIBLE_NAV_ITEMS = 4;
+export const MAX_VISIBLE_NAV_ITEMS = PRIMARY_NAV_IDS.length;
 
 export type ReconciledNav = {
   visible: NavItem[];

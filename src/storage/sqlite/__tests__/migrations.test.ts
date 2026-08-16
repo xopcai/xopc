@@ -152,6 +152,19 @@ describe('SQLite migrations', () => {
       expect(db.prepare(
         `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'discussion_capture_settings'`,
       ).get()).toEqual({ name: 'discussion_capture_settings' });
+      expect(db.prepare(
+        `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'execution_receipts'`,
+      ).get()).toEqual({ name: 'execution_receipts' });
+      for (const removedTable of [
+        'task_outcomes',
+        'goal_contracts',
+        'goal_evidence_requirements',
+        'goal_evidence_requirement_links',
+      ]) {
+        expect(db.prepare(
+          `SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`,
+        ).get(removedTable)).toBeUndefined();
+      }
     } finally {
       db.close();
       rmSync(dir, { recursive: true, force: true });

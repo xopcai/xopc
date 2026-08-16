@@ -1,7 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Popover from '@radix-ui/react-popover';
 import type { ProjectOperatingView } from '@xopcai/gateway-contract';
-import { AlertCircle, Archive, ArrowLeft, Check, ChevronDown, Clock, Copy, File, Folder, FolderPlus, History, LayoutDashboard, ListChecks, MessageSquarePlus, Pause, Pin, PinOff, Play, Plus, RotateCcw, Save, Search, Settings, Sparkles, Square, Target, Trash2, X, Zap, type LucideIcon } from 'lucide-react';
+import { AlertCircle, Archive, ArrowLeft, Check, ChevronDown, Clock, Copy, File, Folder, FolderPlus, History, LayoutDashboard, ListChecks, MessageSquarePlus, Pause, Pin, PinOff, Play, Plus, RotateCcw, Save, Search, Settings, Sparkles, Square, Trash2, X, Zap, type LucideIcon } from 'lucide-react';
 import { type CSSProperties, type FormEvent, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
@@ -13,25 +13,19 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { automationApi, type Automation, type AutomationRun } from '@/features/automations/automation-api';
 import { inferMimeTypeFromFileName } from '@/features/chat/attachments/attachment-utils-core';
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
-import { fetchConfiguredModelsCached } from '@/features/chat/api/registry-api';
 import { FileTree } from '@/features/file-tree/file-tree';
 import type { FileTreeAction, TreeEntry } from '@/features/file-tree/file-tree-types';
 import { DirectoryPickerPathField } from '@/features/fs/directory-picker-path-field';
-import { fetchGatewayConfigSwrResponse } from '@/features/gateway/gateway-config-swr';
-import { normalizeChecklist } from '@/features/goals/goal-create-draft';
-import { GoalCreateDialog, type CreateGoalDraft, type GoalCreateOptions } from '@/features/goals/goal-create-dialog';
 import { NotesWorkbench } from '@/features/notes/notes-workbench';
 import {
   archiveProject,
   createProjectBlocker,
   createProjectSession,
-  createProjectGoal,
   createProject,
   deleteProject,
   fetchProjectActivity,
   fetchProjectFiles,
   fetchProject,
-  fetchProjectGoals,
   fetchProjectOperatingView,
   fetchProjects,
   fetchProjectSessions,
@@ -45,7 +39,6 @@ import {
   type ProjectActivityEvent,
   type ProjectFileEntry,
   type ProjectFileSearchEntry,
-  type ProjectGoal,
   type ProjectSession,
   type ProjectStatus,
   type ProjectWithDetails,
@@ -53,7 +46,6 @@ import {
 import { ProjectSkillsPanel } from '@/features/projects/project-skills-panel';
 import { fetchGatewayAgents, type GatewayAgentRow } from '@/features/settings/agents-admin-api';
 import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
-import { normalizeGoalsConfigFromConfig } from '@/features/settings/goals-config-api';
 import {
   cancelWorkflowRun,
   listWorkflowDefinitions,
@@ -81,7 +73,7 @@ import { safeInternalReturnPath, withReturnTo } from '@/lib/navigation-return';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 
-type WorkTabId = 'work-items' | 'goals' | 'workflows' | 'automations';
+type WorkTabId = 'work-items' | 'workflows' | 'automations';
 type PrimaryTabId = 'overview' | 'work' | 'files' | 'notes' | 'skills' | 'sessions' | 'activity' | 'settings';
 type TabId = Exclude<PrimaryTabId, 'work'> | WorkTabId;
 
@@ -89,7 +81,6 @@ const TABS: Array<{ id: TabId; icon: LucideIcon }> = [
   { id: 'overview', icon: LayoutDashboard },
   { id: 'work-items', icon: ListChecks },
   { id: 'sessions', icon: MessageSquarePlus },
-  { id: 'goals', icon: Target },
   { id: 'workflows', icon: Play },
   { id: 'files', icon: Folder },
   { id: 'activity', icon: History },
@@ -99,7 +90,7 @@ const TABS: Array<{ id: TabId; icon: LucideIcon }> = [
   { id: 'settings', icon: Settings },
 ];
 
-const WORK_TAB_IDS = new Set<WorkTabId>(['work-items', 'goals', 'workflows', 'automations']);
+const WORK_TAB_IDS = new Set<WorkTabId>(['work-items', 'workflows', 'automations']);
 
 const PROJECT_TAB_IDS = new Set<TabId>(TABS.map((tab) => tab.id));
 const PROJECT_FILES_PANEL_WIDTH_STORAGE_KEY = 'xopc.projectFiles.panelWidthPx';
@@ -667,7 +658,6 @@ export function ProjectDetailPage() {
   const [operatingView, setOperatingView] = useState<ProjectOperatingView | null>(null);
   const [sessions, setSessions] = useState<ProjectSession[]>([]);
   const [sessionSearchQuery, setSessionSearchQuery] = useState('');
-  const [goals, setGoals] = useState<ProjectGoal[]>([]);
   const [workflowDefinitions, setWorkflowDefinitions] = useState<WorkflowDefinition[]>([]);
   const [workflowRuns, setWorkflowRuns] = useState<WorkflowRunSummary[]>([]);
   const [automations, setAutomations] = useState<Automation[]>([]);
@@ -706,16 +696,8 @@ export function ProjectDetailPage() {
   const [createWorkItemRequestKey, setCreateWorkItemRequestKey] = useState(0);
   const [workflowsLoading, setWorkflowsLoading] = useState(false);
   const [workflowActionBusy, setWorkflowActionBusy] = useState<string | null>(null);
-  const [creatingGoal, setCreatingGoal] = useState(false);
   const [creatingBlocker, setCreatingBlocker] = useState(false);
-  const [createGoalOpen, setCreateGoalOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [createGoalOptions, setCreateGoalOptions] = useState<GoalCreateOptions>({
-    defaultAgentId: '',
-    agents: [],
-    models: [],
-    checklistDecomposePolicy: 'empty_only',
-  });
   const [blockerDraft, setBlockerDraft] = useState({ title: '', reason: '' });
   const [draft, setDraft] = useState({
     name: '',
@@ -745,11 +727,6 @@ export function ProjectDetailPage() {
     navigate(projectTabHref(nextTab));
   }, [navigate, projectId, projectTabHref]);
 
-  const projectGoalHref = useCallback((goalId: string) => {
-    const returnTo = projectTabHref('goals');
-    return `/goals/${encodeURIComponent(goalId)}?returnTo=${encodeURIComponent(returnTo)}`;
-  }, [projectTabHref]);
-
   const replaceProjectHistoryTab = useCallback((nextTab: TabId) => {
     if (!projectId) return;
     navigate(projectTabHref(nextTab), { replace: true });
@@ -766,7 +743,6 @@ export function ProjectDetailPage() {
   }, [replaceProjectHistoryTab]);
 
   const projectTabForHref = useCallback((href: string): TabId => {
-    if (href.startsWith('/goals/')) return 'goals';
     if (href.startsWith('/chat/')) return 'sessions';
     if (href.startsWith('/workflows')) return 'workflows';
     if (href.startsWith('/automations')) return 'automations';
@@ -788,15 +764,13 @@ export function ProjectDetailPage() {
       fetchProject(projectId),
       fetchProjectOperatingView(projectId),
       fetchProjectSessions(projectId),
-      fetchProjectGoals(projectId),
       fetchGatewayAgents().catch(() => null),
     ])
-      .then(([projectResult, operatingViewResult, sessionResult, goalResult, agentPayload]) => {
+      .then(([projectResult, operatingViewResult, sessionResult, agentPayload]) => {
         if (cancelled) return;
         setProject(projectResult);
         setOperatingView(operatingViewResult);
         setSessions(sessionResult);
-        setGoals(goalResult);
         const nextAgents = agentPayload?.agents ?? [];
         setAgents(nextAgents);
         setSelectedAgentId(projectResult.defaultAgentId ?? '');
@@ -820,46 +794,6 @@ export function ProjectDetailPage() {
       cancelled = true;
     };
   }, [projectId]);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function loadGoalCreateOptions() {
-      const [agentsResult, modelsResult, configResult] = await Promise.allSettled([
-        fetchGatewayAgents(),
-        fetchConfiguredModelsCached(),
-        fetchGatewayConfigSwrResponse(),
-      ]);
-      if (cancelled) return;
-      setCreateGoalOptions((prev) => {
-        const globalDefaultAgentId = agentsResult.status === 'fulfilled' ? agentsResult.value.defaultId : prev.defaultAgentId;
-        const defaultAgentId = project?.defaultAgentId || selectedAgentId || globalDefaultAgentId;
-        const nextAgents = agentsResult.status === 'fulfilled' ? agentsResult.value.agents : prev.agents;
-        const models = modelsResult.status === 'fulfilled' ? modelsResult.value : prev.models;
-        const checklistDecomposePolicy = configResult.status === 'fulfilled'
-          ? normalizeGoalsConfigFromConfig(configResult.value.payload?.config).checklistDecomposePolicy
-          : prev.checklistDecomposePolicy;
-        return {
-          defaultAgentId,
-          agents: nextAgents.length ? nextAgents : [{
-            id: defaultAgentId || 'main',
-            workspace: '',
-            profileDir: '',
-            typedModels: { defaultRole: 'deep', preset: [], effective: [] },
-            extends: [],
-            isDefault: true,
-            skills: { preset: [] },
-            tools: { presetDenied: [], entryDisable: [], effectiveDisable: [] },
-          }],
-          models,
-          checklistDecomposePolicy,
-        };
-      });
-    }
-    void loadGoalCreateOptions();
-    return () => {
-      cancelled = true;
-    };
-  }, [project?.defaultAgentId, selectedAgentId]);
 
   const refreshProjectWorkflows = useCallback(async () => {
     if (!project) return;
@@ -1059,51 +993,15 @@ export function ProjectDetailPage() {
     setCreateWorkItemRequestKey((value) => value + 1);
   }, [navigateProjectTab]);
 
-  const refreshProjectGoals = useCallback(async () => {
+  const refreshProjectState = useCallback(async () => {
     if (!project) return;
-    const [nextProject, nextOperatingView, nextGoals] = await Promise.all([
+    const [nextProject, nextOperatingView] = await Promise.all([
       fetchProject(project.id),
       fetchProjectOperatingView(project.id),
-      fetchProjectGoals(project.id),
     ]);
     setOperatingView(nextOperatingView);
     setProject(nextProject);
-    setGoals(nextGoals);
   }, [project]);
-
-  const submitGoal = useCallback(async (goalDraft: CreateGoalDraft) => {
-    if (!project || !goalDraft.title.trim()) return;
-    const maxTurns = Number.parseInt(goalDraft.maxTurns, 10);
-    const deadlineAt = goalDraft.deadline ? new Date(goalDraft.deadline).getTime() : undefined;
-    setCreatingGoal(true);
-    setError(null);
-    try {
-      await createProjectGoal(project.id, {
-        title: goalDraft.title.trim(),
-        description: goalDraft.description.trim() || undefined,
-        attachments: goalDraft.attachments.length ? goalDraft.attachments : undefined,
-        priority: goalDraft.priority,
-        deadlineAt: Number.isFinite(deadlineAt) ? deadlineAt : undefined,
-        maxTurns: Number.isFinite(maxTurns) ? maxTurns : undefined,
-        agentId: goalDraft.agentId.trim() || undefined,
-        judgeModelRef: goalDraft.judgeModelRef.trim() || undefined,
-        contract: {
-          objective: goalDraft.objective.trim() || goalDraft.title.trim(),
-          scopeBoundary: goalDraft.scopeBoundary.trim() || undefined,
-          evidencePlan: normalizeChecklist(goalDraft.evidencePlan),
-          criteria: normalizeChecklist(goalDraft.checklist),
-        },
-      });
-      setCreateGoalOpen(false);
-      navigateProjectTab('goals');
-      await refreshProjectGoals();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      throw err;
-    } finally {
-      setCreatingGoal(false);
-    }
-  }, [navigateProjectTab, project, refreshProjectGoals]);
 
   const submitBlocker = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1116,13 +1014,13 @@ export function ProjectDetailPage() {
         reason: blockerDraft.reason.trim() || undefined,
       });
       setBlockerDraft({ title: '', reason: '' });
-      await refreshProjectGoals();
+      await refreshProjectState();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setCreatingBlocker(false);
     }
-  }, [blockerDraft.reason, blockerDraft.title, project, refreshProjectGoals]);
+  }, [blockerDraft.reason, blockerDraft.title, project, refreshProjectState]);
 
   const retryRun = useCallback(async (run: WorkflowRunSummary) => {
     if (!project) return;
@@ -1528,7 +1426,6 @@ export function ProjectDetailPage() {
   ];
   const workTabItems: Array<{ id: WorkTabId; icon: LucideIcon; label: string }> = [
     { id: 'work-items', icon: ListChecks, label: pm.tabs.workItems },
-    { id: 'goals', icon: Target, label: pm.tabs.goals },
     { id: 'workflows', icon: Play, label: pm.tabs.workflows },
     { id: 'automations', icon: Zap, label: pm.tabs.automations },
   ];
@@ -2290,44 +2187,6 @@ export function ProjectDetailPage() {
         </section>
       ) : null}
 
-      {tab === 'goals' ? (
-        <section id="project-panel-goals" role="tabpanel" aria-labelledby="project-work-tab-goals" className="grid min-h-full content-start gap-3">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h2 className="text-sm font-semibold text-fg">{pm.goals.title}</h2>
-            </div>
-            <Button
-              type="button"
-              variant="primary"
-              className="h-9 rounded-lg px-3"
-              disabled={creatingGoal}
-              onClick={() => setCreateGoalOpen(true)}
-            >
-              <Plus className="size-4" aria-hidden />
-              {pm.goals.new}
-            </Button>
-          </div>
-          <div className="overflow-hidden rounded-lg bg-surface-panel shadow-surface">
-            {goals.length ? goals.map((goal) => (
-              <Link
-                key={goal.id}
-                to={projectGoalHref(goal.id)}
-                onClick={onProjectTabLinkClick('goals')}
-                className="grid gap-1 border-b border-edge px-4 py-3 last:border-b-0 hover:bg-surface-hover"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <span className="min-w-0 truncate text-sm font-medium text-fg">{goal.title}</span>
-                  <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-xs font-medium', statusTone(goal.status))}>
-                    {statusLabel(goal.status)}
-                  </span>
-                </div>
-                <span className="truncate text-xs text-fg-muted">{goal.nextAction || goal.description || pm.goals.noNextAction}</span>
-              </Link>
-            )) : <p className="p-4 text-sm text-fg-muted">{pm.goals.empty}</p>}
-          </div>
-        </section>
-      ) : null}
-
       {tab === 'activity' ? (
         <section id="project-panel-activity" role="tabpanel" aria-labelledby="project-primary-tab-activity" className="grid min-h-full content-start gap-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -2722,16 +2581,6 @@ export function ProjectDetailPage() {
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
-
-      <GoalCreateDialog
-        open={createGoalOpen}
-        t={msg.goalsPage}
-        chat={msg.chat}
-        busy={creatingGoal}
-        options={createGoalOptions}
-        onClose={() => !creatingGoal && setCreateGoalOpen(false)}
-        onCreate={submitGoal}
-      />
 
     </main>
   );

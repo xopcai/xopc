@@ -22,7 +22,7 @@ import {
   appendMemorySignal,
   appendMemoryTraceEvent,
   deleteMemoryRecord,
-  findTaskOutcomeForAssistant,
+  findExecutionReceiptForAssistant,
   findLatestMemoryInjectTrace,
   getMemoryRecord,
   listKnowledgeSourceChanges,
@@ -34,7 +34,7 @@ import {
   searchMemoryRecords,
   setMemoryTraceFeedback,
   setLatestMemoryInjectFeedback,
-  setTaskOutcomeFeedback,
+  setExecutionReceiptFeedback,
   setInteractionState,
   summarizeMemoryRecallFeedback,
   summarizeUserUnderstandingQuality,
@@ -459,7 +459,7 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
       if (!sessionKey || !Number.isFinite(assistantTimestamp) || assistantTimestamp <= 0 || !outcome) {
         return c.json({ error: 'sessionKey, assistantTimestamp, and a valid outcome are required' }, 400);
       }
-      const taskOutcome = setTaskOutcomeFeedback({
+      const executionReceipt = setExecutionReceiptFeedback({
         sessionKey,
         assistantTimestamp,
         outcome,
@@ -493,10 +493,10 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
         },
       });
       return c.json({
-        matched: Boolean(taskOutcome),
+        matched: Boolean(executionReceipt),
         attributedRecordCount: trace?.selectedRecordIds.length ?? 0,
         personalContext: personalContextForTrace(trace),
-        feedback: taskOutcome?.feedback ?? null,
+        feedback: executionReceipt?.feedback ?? null,
         remediation: trace?.remediation ?? null,
       });
     },
@@ -508,16 +508,16 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
     if (!sessionKey || !Number.isFinite(assistantTimestamp) || assistantTimestamp <= 0) {
       return c.json({ error: 'sessionKey and assistantTimestamp are required' }, 400);
     }
-    const taskOutcome = findTaskOutcomeForAssistant(sessionKey, assistantTimestamp);
+    const executionReceipt = findExecutionReceiptForAssistant(sessionKey, assistantTimestamp);
     const trace = findLatestMemoryInjectTrace({
       sessionKey,
       beforeMs: assistantTimestamp,
     });
     return c.json({
-      matched: Boolean(taskOutcome),
+      matched: Boolean(executionReceipt),
       attributedRecordCount: trace?.selectedRecordIds.length ?? 0,
       personalContext: personalContextForTrace(trace),
-      feedback: taskOutcome?.feedback ?? null,
+      feedback: executionReceipt?.feedback ?? null,
     });
   });
 

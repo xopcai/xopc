@@ -1,15 +1,11 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import type { OutcomeReceipt } from '@xopcai/gateway-contract';
+import type { Outcome, OutcomeReceipt } from '@xopcai/gateway-contract';
 import {
-  ArrowRight,
   CalendarClock,
   CircleAlert,
   CircleCheck,
-  Clock3,
-  FolderKanban,
   MessageCircle,
   Plus,
-  Search,
   Sparkles,
   X,
 } from 'lucide-react';
@@ -19,7 +15,6 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { WorkbenchActivity } from '@/features/activity/workbench-activity';
-import { fetchProjects, type Project } from '@/features/projects/api';
 import {
   acknowledgeWorkAttention,
   confirmWorkIntake,
@@ -33,12 +28,10 @@ import {
   type WorkHomeAttention,
   type WorkHomeChat,
   type WorkHomeDecision,
-  type WorkHomeItem,
   type WorkHomeResponse,
   type WorkIntakeProposal,
 } from '@/features/work/work-home-api';
 import { workCopy } from '@/features/work/work-copy';
-import { workflowBoardHref } from '@/features/workflows/workflow-page.utils';
 import { messages } from '@/i18n/messages';
 import { formatMediumDateTime } from '@/lib/date-formatters';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -59,13 +52,32 @@ function WorkBadge({ children }: { children: string }) {
   return <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[11px] font-medium text-fg-muted">{children}</span>;
 }
 
+function OutcomeCard({ outcome, statusLabel }: { outcome: Outcome; statusLabel: string }) {
+  return (
+    <Link
+      to={`/work/${encodeURIComponent(outcome.id)}`}
+      className="group flex items-start justify-between gap-3 rounded-xl border border-edge-subtle bg-surface-panel p-4 transition-colors hover:bg-surface-hover/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+    >
+      <div className="min-w-0">
+        <h3 className="line-clamp-2 text-sm font-semibold text-fg">{outcome.objective}</h3>
+        <p className="mt-2 text-xs text-fg-subtle">{formatTime(outcome.updatedAt, '')}</p>
+      </div>
+      <span className="shrink-0 rounded-full bg-surface-muted px-2 py-0.5 text-[11px] font-medium text-fg-muted">
+        {statusLabel}
+      </span>
+    </Link>
+  );
+}
+
 function OutcomeReceiptCard({ receipt, evidenceLabel, remainingLabel }: {
   receipt: OutcomeReceipt;
   evidenceLabel: string;
   remainingLabel: string;
 }) {
-  const href = receipt.projectId
-    ? `/projects/${encodeURIComponent(receipt.projectId)}`
+  const href = receipt.outcomeId
+    ? `/work/${encodeURIComponent(receipt.outcomeId)}`
+    : receipt.projectId
+      ? `/projects/${encodeURIComponent(receipt.projectId)}`
     : `/chat/${encodeURIComponent(receipt.sessionKey)}`;
   return (
     <Link to={href} className="block rounded-xl border border-edge-subtle px-3 py-3 hover:bg-surface-hover/55">
@@ -91,36 +103,6 @@ function WorkHomeSkeleton() {
       <Skeleton className="h-72 rounded-2xl" />
       <Skeleton className="h-44 rounded-2xl" />
     </div>
-  );
-}
-
-function WorkItemCard({
-  item,
-  statusLabel,
-}: {
-  item: WorkHomeItem;
-  statusLabel: string;
-}) {
-  return (
-    <Link
-      to={`/work-items/${encodeURIComponent(item.id)}`}
-      className="group block rounded-lg px-1 py-2.5 transition-colors hover:bg-surface-hover/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="truncate text-sm font-semibold text-fg">{item.title}</h3>
-          <p className="mt-1 truncate text-xs text-fg-subtle">{item.projectName}</p>
-        </div>
-        <span className="shrink-0 text-xs text-fg-subtle">
-          {statusLabel}
-        </span>
-      </div>
-      {item.blockedReason || item.nextAction ? (
-        <p className="mt-2 line-clamp-2 text-xs leading-5 text-fg-muted">
-          {item.blockedReason || item.nextAction}
-        </p>
-      ) : null}
-    </Link>
   );
 }
 
@@ -266,33 +248,6 @@ function AttentionCard({
   );
 }
 
-function ProjectCard({ project, openLabel, noDescription }: {
-  project: Project;
-  openLabel: string;
-  noDescription: string;
-}) {
-  return (
-    <Link
-      to={`/projects/${encodeURIComponent(project.id)}`}
-      className="group flex min-h-32 flex-col rounded-xl border border-edge-subtle bg-surface-panel p-4 transition-colors hover:bg-surface-hover/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <FolderKanban className="size-4 shrink-0 text-accent" aria-hidden />
-          <h3 className="truncate text-sm font-semibold text-fg">{project.name}</h3>
-        </div>
-        <ArrowRight className="size-4 shrink-0 text-fg-subtle transition-transform group-hover:translate-x-0.5" aria-label={openLabel} />
-      </div>
-      <p className="mt-3 line-clamp-2 text-xs leading-5 text-fg-muted">
-        {project.description || project.brief || noDescription}
-      </p>
-      <p className="mt-auto pt-3 text-[11px] text-fg-subtle">
-        {formatTime(project.lastActiveAt ?? project.updatedAt, '')}
-      </p>
-    </Link>
-  );
-}
-
 export function WorkPage() {
   const language = useLocaleStore((state) => state.language);
   const msg = messages(language);
@@ -302,10 +257,8 @@ export function WorkPage() {
   const setPageHeader = usePageHeaderStore((state) => state.setPageHeader);
   const clearPageHeader = usePageHeaderStore((state) => state.clearPageHeader);
   const [home, setHome] = useState<WorkHomeResponse | null>(null);
-  const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [outcome, setOutcome] = useState('');
   const [proposal, setProposal] = useState<WorkIntakeProposal | null>(null);
@@ -318,12 +271,7 @@ export function WorkPage() {
     if (showSkeleton) setLoading(true);
     setLoadError(null);
     try {
-      const [homeResult, projectsResult] = await Promise.all([
-        fetchWorkHome(language),
-        fetchProjects({ limit: 100, sortBy: 'updatedAt', sortOrder: 'desc' }),
-      ]);
-      setHome(homeResult);
-      setProjects(projectsResult.items);
+      setHome(await fetchWorkHome(language));
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -357,22 +305,8 @@ export function WorkPage() {
     };
   }, [load]);
 
-  const visibleProjects = useMemo(() => {
-    const query = search.trim().toLocaleLowerCase();
-    const active = projects.filter((project) => project.status !== 'archived');
-    if (!query) return active.slice(0, 6);
-    return active.filter((project) => [project.name, project.description, project.brief]
-      .filter(Boolean)
-      .some((value) => value!.toLocaleLowerCase().includes(query)));
-  }, [projects, search]);
-
   const needsYou = useMemo(() => home?.decisions ?? [], [home]);
   const attention = useMemo(() => home?.attention ?? [], [home]);
-  const continuing = useMemo(() => home?.work.current.filter((item) => (
-    item.status !== 'needs_input'
-    && item.status !== 'in_review'
-    && item.status !== 'blocked'
-  )).slice(0, 10) ?? [], [home]);
 
   const submitCreate = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -399,7 +333,7 @@ export function WorkPage() {
       setOutcome('');
       setProposal(null);
       await load();
-      navigate(`/projects/${encodeURIComponent(work.projectId)}`);
+      navigate(`/work/${encodeURIComponent(work.outcomeId)}`);
     } catch (error) {
       setCreateError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -544,24 +478,23 @@ export function WorkPage() {
                   <h3 className="text-sm font-semibold text-fg">{workText.proposalTitle}</h3>
                   <dl className="mt-4 space-y-3 text-sm">
                     <div className="rounded-xl border border-edge-subtle bg-surface-base p-3">
-                      <dt className="text-xs font-medium text-fg-subtle">{workText.projectLabel}</dt>
-                      <dd className="mt-1 font-medium text-fg">{proposal.suggestedProject.name}</dd>
-                      <dd className="mt-1 text-xs text-fg-muted">
-                        {proposal.classification === 'existing_project' ? workText.existingProject : workText.newProject}
-                      </dd>
-                    </div>
-                    <div className="rounded-xl border border-edge-subtle bg-surface-base p-3">
                       <dt className="text-xs font-medium text-fg-subtle">{workText.outcomeLabel}</dt>
-                      <dd className="mt-1 leading-6 text-fg">{proposal.suggestedProject.outcome}</dd>
+                      <dd className="mt-1 leading-6 text-fg">{proposal.objective}</dd>
                     </div>
                     <div className="rounded-xl border border-edge-subtle bg-surface-base p-3">
                       <dt className="text-xs font-medium text-fg-subtle">{workText.nextActionLabel}</dt>
-                      <dd className="mt-1 leading-6 text-fg">{proposal.suggestedProject.nextAction}</dd>
+                      <dd className="mt-1 space-y-1 leading-6 text-fg">
+                        {proposal.outcomeContract.deliverables.map((item) => <p key={item}>· {item}</p>)}
+                      </dd>
                     </div>
-                    <div className="flex items-center justify-between gap-3 px-1 text-xs text-fg-muted">
-                      <dt>{workText.monitoringLabel}</dt>
-                      <dd>{workText.monitoringModes[proposal.monitoringSuggestion.mode]}</dd>
-                    </div>
+                    {proposal.outcomeContract.acceptanceCriteria.length > 0 ? (
+                      <div className="rounded-xl border border-edge-subtle bg-surface-base p-3">
+                        <dt className="text-xs font-medium text-fg-subtle">{workText.confirmWork}</dt>
+                        <dd className="mt-1 space-y-1 leading-6 text-fg">
+                          {proposal.outcomeContract.acceptanceCriteria.map((item) => <p key={item}>· {item}</p>)}
+                        </dd>
+                      </div>
+                    ) : null}
                   </dl>
                 </div>
                 <div className="flex shrink-0 justify-between gap-2 border-t border-edge px-5 py-4">
@@ -604,7 +537,8 @@ export function WorkPage() {
             ) : null}
           </section>
 
-          {home.work.current.length === 0
+          {home.outcomes.running.length === 0
+            && home.outcomes.needsUser.length === 0
             && home.workflowRuns.active.length === 0
             && home.decisions.length === 0
             && home.attention.length === 0
@@ -686,30 +620,22 @@ export function WorkPage() {
                 </p>
               )}
 
-              <section className="rounded-2xl bg-surface-base p-5 shadow-surface">
-                <div className="flex items-center gap-2"><Sparkles className="size-4 text-accent" aria-hidden /><h2 className="text-base font-semibold text-fg">{workText.running}</h2><WorkBadge>{(home.chats.running.length + home.workflowRuns.active.length).toLocaleString()}</WorkBadge></div>
-                <div className="mt-4 divide-y divide-edge-subtle px-1">
-                  {home.chats.running.map((chat) => <div key={chat.key} className="py-1"><WorkChatCard chat={chat} statusLabel={t.workHome.running} /></div>)}
-                  {home.workflowRuns.active.map((run) => (
-                    <Link key={run.id} to={workflowBoardHref(run.id)} className="flex items-center justify-between gap-3 rounded-lg px-2 py-3 text-sm hover:bg-surface-hover/55">
-                      <span className="flex min-w-0 items-center gap-2">
-                        <span className="size-1.5 shrink-0 rounded-full bg-accent" aria-hidden />
-                        <span className="truncate font-medium text-fg">{run.title}</span>
-                      </span>
-                      <span className="shrink-0 text-xs text-fg-subtle">{t.workHome.running}</span>
-                    </Link>
-                  ))}
-                  {home.chats.running.length === 0 && home.workflowRuns.active.length === 0 ? (
-                    <p className="py-6 text-center text-sm text-fg-muted">{workText.emptyRunning}</p>
-                  ) : null}
-                </div>
-              </section>
+              {home.outcomes.needsUser.length > 0 ? (
+                <section className="rounded-2xl bg-surface-base p-5 shadow-surface">
+                  <div className="flex items-center gap-2"><CircleAlert className="size-4 text-warning" aria-hidden /><h2 className="text-base font-semibold text-fg">{workText.needsAttention}</h2><WorkBadge>{home.outcomes.needsUser.length.toLocaleString()}</WorkBadge></div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    {home.outcomes.needsUser.map((item) => <OutcomeCard key={item.id} outcome={item} statusLabel={workText.outcomeStatuses.needs_user} />)}
+                  </div>
+                </section>
+              ) : null}
 
               <section className="rounded-2xl bg-surface-base p-5 shadow-surface">
-                <div className="flex items-center gap-2"><Clock3 className="size-4 text-fg-subtle" aria-hidden /><h2 className="text-base font-semibold text-fg">{workText.continue}</h2><WorkBadge>{continuing.length.toLocaleString()}</WorkBadge></div>
-                <div className="mt-4 divide-y divide-edge-subtle px-1">
-                  {continuing.map((item) => <div key={item.id} className="py-1"><WorkItemCard item={item} statusLabel={msg.projectDetailPage.workItems.statuses[item.status]} /></div>)}
-                  {continuing.length === 0 ? <p className="py-6 text-center text-sm text-fg-muted">{workText.emptyContinue}</p> : null}
+                <div className="flex items-center gap-2"><Sparkles className="size-4 text-accent" aria-hidden /><h2 className="text-base font-semibold text-fg">{workText.running}</h2><WorkBadge>{home.outcomes.running.length.toLocaleString()}</WorkBadge></div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  {home.outcomes.running.map((item) => <OutcomeCard key={item.id} outcome={item} statusLabel={workText.outcomeStatuses.running} />)}
+                  {home.outcomes.running.length === 0 ? (
+                    <p className="py-6 text-center text-sm text-fg-muted">{workText.emptyRunning}</p>
+                  ) : null}
                 </div>
               </section>
 
@@ -765,22 +691,6 @@ export function WorkPage() {
         </>
       ) : null}
 
-      <section className="border-t border-edge-subtle pt-7">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <h2 className="text-sm font-semibold text-fg">{workText.projects}</h2>
-          <Link to="/projects" className="text-xs font-medium text-accent hover:underline">{t.management.viewAll}</Link>
-        </div>
-        {projects.filter((project) => project.status !== 'archived').length > 6 ? <div className="mt-3 flex justify-end">
-          <label className="relative block min-w-0">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-subtle" aria-hidden />
-            <input className="h-9 w-52 rounded-lg border border-edge bg-surface-panel pl-9 pr-3 text-sm text-fg outline-none placeholder:text-fg-muted focus:border-accent" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t.searchPlaceholder} aria-label={t.searchPlaceholder} />
-          </label>
-        </div> : null}
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {visibleProjects.map((project) => <ProjectCard key={project.id} project={project} openLabel={t.workHome.openSpace} noDescription={t.noDescription} />)}
-        </div>
-        {!loading && visibleProjects.length === 0 ? <p className="py-8 text-center text-sm text-fg-muted">{t.workHome.noSpaces}</p> : null}
-      </section>
     </main>
   );
 }

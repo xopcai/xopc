@@ -16,6 +16,7 @@ import {
   NotebookPen,
   Play,
   Settings,
+  Target,
   Workflow,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -26,6 +27,7 @@ import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
 
 const KIND_ICON = {
+  outcome: Target,
   project: FolderKanban,
   note: NotebookPen,
   work_item: ListTodo,
@@ -40,6 +42,7 @@ const KIND_ICON = {
 } satisfies Record<ProductReferenceKind, typeof FileText>;
 
 const KIND_LABELS: Record<ProductReferenceKind, { en: string; zh: string }> = {
+  outcome: { en: 'Outcome', zh: '结果' },
   project: { en: 'Project', zh: '项目' },
   note: { en: 'Note', zh: '笔记' },
   work_item: { en: 'Work item', zh: '工作项' },

@@ -2,7 +2,6 @@ import { createHash, randomUUID } from 'node:crypto';
 
 import type {
   ConfirmedWork,
-  MonitoringMode,
   WorkExecutionMode,
   WorkIntakeProposal,
 } from '@xopcai/gateway-contract';
@@ -12,38 +11,26 @@ import {
   type EnqueueGoalRunOptions,
   type GoalQueueItemSnapshot,
 } from '../goals/index.js';
-import { ProjectService, type Project } from '../projects/index.js';
+import { ProjectService } from '../projects/index.js';
 import {
   getRelationshipSettings,
   getSessionMetadata,
   runSqliteWriteTransaction,
 } from '../storage/sqlite/index.js';
-import { WorkItemService } from '../work-items/index.js';
 import { createLogger } from '../utils/logger.js';
-import { ProjectMonitoringService } from './project-monitoring-service.js';
+import { OutcomeRepository } from './outcome-repository.js';
+import { defineOutcomeContract } from './outcome-contract-definition.js';
 import {
   WorkIntakeRepository,
   type StoredWorkIntake,
 } from './work-intake-repository.js';
 
 const INTAKE_TTL_MS = 15 * 60 * 1000;
-const DEFAULT_NEXT_ACTION = 'Clarify the scope and complete the first verifiable step.';
+const DEFAULT_NEXT_ACTION = 'Complete the first verifiable result.';
 const log = createLogger('WorkIntake');
 
-function compactTitle(value: string): string {
-  const firstLine = value.split(/\r?\n/, 1)[0]?.trim() ?? '';
-  const firstSentence = firstLine.split(/[.!?。！？]/, 1)[0]?.trim() ?? firstLine;
-  return (firstSentence || 'New work').slice(0, 80);
-}
-
-function projectScore(project: Project, objective: string): number {
-  const query = objective.toLocaleLowerCase();
-  const name = project.name.toLocaleLowerCase();
-  let score = query.includes(name) ? 10 : 0;
-  const tokens = name.split(/[^\p{L}\p{N}]+/u).filter((token) => token.length >= 2);
-  score += tokens.filter((token) => query.includes(token)).length * 2;
-  if (project.description && query.includes(project.description.toLocaleLowerCase())) score += 2;
-  return score;
+function outcomeContractDraft(objective: string) {
+  return defineOutcomeContract(objective);
 }
 
 function requestFingerprint(input: {
@@ -51,14 +38,12 @@ function requestFingerprint(input: {
   projectId?: string;
   sessionKey?: string;
   agentId?: string;
-  monitoringMode?: MonitoringMode;
 }): string {
   return createHash('sha256').update(JSON.stringify({
     objective: input.objective.trim(),
     projectId: input.projectId ?? null,
     sessionKey: input.sessionKey ?? null,
     agentId: input.agentId ?? null,
-    monitoringMode: input.monitoringMode ?? null,
   })).digest('hex');
 }
 
@@ -68,12 +53,11 @@ export interface WorkIntakeExecutionPort {
 
 export class WorkIntakeService {
   readonly #goals = new GoalService();
-  readonly #monitoring = new ProjectMonitoringService();
+  readonly #outcomes = new OutcomeRepository();
   readonly #repository = new WorkIntakeRepository();
 
   constructor(
     private readonly projects: ProjectService,
-    private readonly workItems: WorkItemService,
     private readonly execution?: WorkIntakeExecutionPort,
   ) {}
 
@@ -83,7 +67,6 @@ export class WorkIntakeService {
     projectId?: string;
     sessionKey?: string;
     agentId?: string;
-    monitoringMode?: MonitoringMode;
   }): WorkIntakeProposal {
     const fingerprint = requestFingerprint(input);
     const existing = this.#repository.getByIdempotencyKey(input.idempotencyKey);
@@ -97,32 +80,23 @@ export class WorkIntakeService {
     if (!objective) throw new Error('Objective is required');
     const explicitProject = input.projectId ? this.projects.get(input.projectId) : undefined;
     if (input.projectId && !explicitProject) throw new Error('Project not found');
-    const matches = this.projects.list({ status: 'active', limit: 200 }).items
-      .map((project) => ({ project, score: projectScore(project, objective) }))
-      .filter((candidate) => candidate.score > 0)
-      .sort((left, right) => right.score - left.score)
-      .slice(0, 5);
-    const matchedProject = explicitProject ?? (matches[0]?.score >= 4 ? matches[0].project : undefined);
     const relationship = getRelationshipSettings();
+    const contract = outcomeContractDraft(objective);
     const id = randomUUID();
     const proposal: WorkIntakeProposal = {
       id,
       objective,
-      classification: matchedProject ? 'existing_project' : 'new_project',
-      suggestedProject: {
-        id: matchedProject?.id,
-        name: matchedProject?.name ?? compactTitle(objective),
-        outcome: objective,
-        nextAction: DEFAULT_NEXT_ACTION,
-      },
-      possibleProjectMatches: matches.map(({ project, score }) => ({ id: project.id, name: project.name, score })),
-      monitoringSuggestion: {
-        mode: input.monitoringMode ?? (relationship.proactiveEnabled ? 'ask_before_action' : 'observe'),
-        scenarios: ['project_delivery_risk', 'blocked_work'],
-      },
+      ...(explicitProject ? { projectId: explicitProject.id } : {}),
       planningContext: {
         supportMode: relationship.supportMode,
         proactiveEnabled: relationship.proactiveEnabled,
+      },
+      outcomeContract: {
+        objective: contract.objective,
+        deliverables: contract.deliverables,
+        acceptanceCriteria: contract.acceptanceCriteria,
+        constraints: contract.constraints,
+        approvalRequired: contract.approvalRequired,
       },
       expiresAt: Date.now() + INTAKE_TTL_MS,
     };
@@ -143,8 +117,6 @@ export class WorkIntakeService {
     proposalId: string;
     executionMode: WorkExecutionMode;
     projectId?: string;
-    projectName?: string;
-    nextAction?: string;
   }): ConfirmedWork | undefined {
     const intake = this.#repository.get(input.proposalId);
     if (!intake || intake.status === 'expired' || intake.status === 'cancelled') return undefined;
@@ -152,53 +124,47 @@ export class WorkIntakeService {
     if (existing) return this._ensureExecution(intake);
     const proposal = intake.proposal;
     runSqliteWriteTransaction(() => {
-      const selectedProjectId = input.projectId ?? proposal.suggestedProject.id;
+      const selectedProjectId = input.projectId ?? proposal.projectId;
       const existingProject = selectedProjectId ? this.projects.get(selectedProjectId) : undefined;
       if (selectedProjectId && !existingProject) throw new Error('Project not found');
-      const project = existingProject ?? this.projects.create({
-        name: input.projectName?.trim() || proposal.suggestedProject.name,
-        description: proposal.objective,
-        brief: proposal.objective,
-        defaultAgentId: intake.agentId,
+      const contract = proposal.outcomeContract;
+      const outcome = this.#outcomes.create({
+        objective: contract.objective,
+        deliverables: contract.deliverables,
+        acceptanceCriteria: contract.acceptanceCriteria,
+        constraints: contract.constraints,
+        approvalRequired: contract.approvalRequired,
+        createdBy: 'user',
+        links: [
+          ...(existingProject
+            ? [{ kind: 'project' as const, id: existingProject.id, relation: 'contains' }]
+            : []),
+          ...(intake.sessionKey
+            ? [{ kind: 'session' as const, id: intake.sessionKey, relation: 'originated_from' }]
+            : []),
+        ],
       });
-      const nextAction = input.nextAction?.trim() || proposal.suggestedProject.nextAction;
       const goal = this.#goals.create({
-        title: proposal.suggestedProject.outcome,
+        outcomeId: outcome.id,
+        outcomeContractVersion: outcome.latestContractVersion,
+        title: contract.objective,
         description: proposal.objective,
-        projectId: project.id,
+        projectId: existingProject?.id,
         sessionKey: intake.sessionKey,
-        agentId: intake.agentId ?? project.defaultAgentId ?? 'main',
+        agentId: intake.agentId ?? existingProject?.defaultAgentId ?? 'main',
         source: 'api',
       });
-      this.#goals.update(goal.id, { nextAction });
-      const workItem = this.workItems.createProjectWorkItem(project.id, {
-        title: proposal.suggestedProject.outcome,
-        description: proposal.objective,
-        status: 'todo',
-        priority: 'normal',
-        ownerAgentId: intake.agentId ?? project.defaultAgentId,
-        nextAction,
-      });
-      this.workItems.addLink(workItem.id, {
-        kind: 'goal',
-        targetId: goal.id,
-        title: goal.title,
-        statusSnapshot: goal.status,
-      }, 'goal_created');
-      if (intake.sessionKey && getSessionMetadata(intake.sessionKey)) {
-        this.projects.attachSession(intake.sessionKey, project.id);
+      this.#goals.update(goal.id, { nextAction: DEFAULT_NEXT_ACTION });
+      this.#outcomes.addLink(outcome.id, { kind: 'goal', id: goal.id, relation: 'drives' });
+      if (existingProject && intake.sessionKey && getSessionMetadata(intake.sessionKey)) {
+        this.projects.attachSession(intake.sessionKey, existingProject.id);
       }
-      this.#monitoring.configure({
-        projectId: project.id,
-        mode: proposal.monitoringSuggestion.mode,
-        scenarios: proposal.monitoringSuggestion.scenarios,
-      });
       this.#repository.markConfirmed({
         intakeId: proposal.id,
         executionMode: input.executionMode,
-        projectId: project.id,
+        projectId: existingProject?.id,
         goalId: goal.id,
-        workItemId: workItem.id,
+        outcomeId: outcome.id,
         sessionKey: intake.sessionKey,
       });
     });
@@ -221,13 +187,13 @@ export class WorkIntakeService {
     if (intake.status !== 'confirmed') throw new Error('Work intake is not confirmed');
     if (intake.executionMode === 'run_now' && !intake.queueId) {
       try {
-        if (!this.execution || !intake.goalId || !intake.workItemId) {
+        if (!this.execution || !intake.goalId || !intake.outcomeId) {
           throw new Error('Work execution is unavailable');
         }
         const queued = this.execution.enqueue(intake.goalId, {
           source: 'api',
           executionContext: {
-            workItemId: intake.workItemId,
+            outcomeId: intake.outcomeId,
             contextTraceId: intake.proposal.id,
             triggerKind: 'user',
           },
@@ -237,17 +203,12 @@ export class WorkIntakeService {
           sessionKey: queued.sessionKey,
           queueId: queued.id,
         });
-        const item = this.workItems.getWorkItem(intake.workItemId);
-        if (item?.status === 'todo' || item?.status === 'backlog') {
-          this.workItems.updateWorkItem(item.id, { status: 'in_progress' });
-        }
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err);
         log.warn({
           err,
           intakeId: intake.proposal.id,
           goalId: intake.goalId,
-          workItemId: intake.workItemId,
         }, `Work intake was confirmed but execution could not be queued: ${errorMessage}`);
       }
     }

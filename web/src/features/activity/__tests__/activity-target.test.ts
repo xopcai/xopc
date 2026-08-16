@@ -12,8 +12,7 @@ describe('activity targets', () => {
     vi.unstubAllGlobals();
   });
 
-  it('parses goal and encoded session routes', () => {
-    expect(parseActivityTarget('/goals/goal-123')).toEqual({ kind: 'goal', id: 'goal-123' });
+  it('parses encoded session routes', () => {
     expect(parseActivityTarget('/chat/agent%3Amain%3Awebchat%3Adirect%3Achat_1')).toEqual({
       kind: 'session',
       id: 'agent:main:webchat:direct:chat_1',
@@ -22,7 +21,7 @@ describe('activity targets', () => {
 
   it('ignores routes without a target that needs validation', () => {
     expect(parseActivityTarget('/chat/new')).toBeNull();
-    expect(parseActivityTarget('/goals/bad%ZZ')).toBeNull();
+    expect(parseActivityTarget('/work/outcome-1')).toBeNull();
   });
 
   it('marks only a definitive 404 as missing', async () => {
@@ -33,8 +32,8 @@ describe('activity targets', () => {
       .mockRejectedValueOnce(new TypeError('offline'));
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(checkActivityTarget({ kind: 'goal', id: 'gone' })).resolves.toBe('missing');
+    await expect(checkActivityTarget({ kind: 'session', id: 'gone' })).resolves.toBe('missing');
     await expect(checkActivityTarget({ kind: 'session', id: 'temporarily-unavailable' })).resolves.toBe('available');
-    await expect(checkActivityTarget({ kind: 'goal', id: 'offline' })).resolves.toBe('available');
+    await expect(checkActivityTarget({ kind: 'session', id: 'offline' })).resolves.toBe('available');
   });
 });

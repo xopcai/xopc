@@ -3,23 +3,18 @@ import type { Hono } from 'hono';
 import { createWorkflowCatalog } from '../../../agent/workflow/catalog.js';
 import {
   GoalService,
-  draftGoalContract,
-  reviewGoalEvidenceRequirement,
   normalizeGoalUiLocale,
   type GoalChecklistItem,
-  type GoalContractInput,
   type GoalEvent,
   type GoalEvidence,
   type GoalQueueItemSnapshot,
   type GoalRun,
   type GoalStatus,
 } from '../../../goals/index.js';
-import { resolveProjectAgentId } from '../../../projects/index.js';
 import { buildSessionKey, sanitizeSegment } from '../../../routing/session-key.js';
 import { getDefaultAgentId } from '../../../routing/resolve-route.js';
 import type { WorkflowRunSummary } from '../../../workflows/domain/index.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
-import { MAX_CHAT_ATTACHMENTS, MAX_WEBCHAT_ATTACHMENT_FILE_BYTES } from '../../chat-limits.js';
 import type { UserTurnAttachment, UserTurnInput } from '../../user-turn-input.js';
 
 function parseLimit(raw: string | undefined, fallback = 50): number {
@@ -59,60 +54,6 @@ function parsePriority(raw: unknown): 'low' | 'normal' | 'high' | undefined {
   return raw === 'low' || raw === 'normal' || raw === 'high' ? raw : undefined;
 }
 
-function parseGoalContract(raw: unknown): GoalContractInput | null | undefined {
-  if (raw === undefined) return undefined;
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
-  const value = raw as Record<string, unknown>;
-  const list = (candidate: unknown): string[] | undefined => {
-    if (candidate === undefined) return undefined;
-    if (!Array.isArray(candidate) || candidate.some((item) => typeof item !== 'string')) return undefined;
-    return candidate.map((item) => item.trim()).filter(Boolean).slice(0, 20);
-  };
-  const evidencePlan = list(value.evidencePlan);
-  const criteria = list(value.criteria);
-  let outcomeMetric: GoalContractInput['outcomeMetric'];
-  if (value.outcomeMetric === null) {
-    outcomeMetric = null;
-  } else if (value.outcomeMetric !== undefined) {
-    if (!value.outcomeMetric || typeof value.outcomeMetric !== 'object' || Array.isArray(value.outcomeMetric)) return null;
-    const metric = value.outcomeMetric as Record<string, unknown>;
-    if (
-      typeof metric.name !== 'string' || !metric.name.trim() ||
-      typeof metric.baselineValue !== 'number' || !Number.isFinite(metric.baselineValue) ||
-      typeof metric.targetValue !== 'number' || !Number.isFinite(metric.targetValue) ||
-      (metric.currentValue !== undefined && (typeof metric.currentValue !== 'number' || !Number.isFinite(metric.currentValue))) ||
-      (metric.direction !== undefined && metric.direction !== 'increase' && metric.direction !== 'decrease') ||
-      (metric.unit !== undefined && typeof metric.unit !== 'string') ||
-      (metric.sourceUrl !== undefined && typeof metric.sourceUrl !== 'string') ||
-      (metric.measuredAt !== undefined && (typeof metric.measuredAt !== 'number' || !Number.isFinite(metric.measuredAt)))
-    ) return null;
-    outcomeMetric = {
-      name: metric.name.trim(),
-      baselineValue: metric.baselineValue,
-      targetValue: metric.targetValue,
-      currentValue: typeof metric.currentValue === 'number' ? metric.currentValue : undefined,
-      unit: typeof metric.unit === 'string' ? metric.unit.trim() || undefined : undefined,
-      direction: metric.direction === 'increase' || metric.direction === 'decrease' ? metric.direction : undefined,
-      sourceUrl: typeof metric.sourceUrl === 'string' ? metric.sourceUrl.trim() || undefined : undefined,
-      measuredAt: typeof metric.measuredAt === 'number' ? metric.measuredAt : undefined,
-    };
-  }
-  if ((value.evidencePlan !== undefined && !evidencePlan) || (value.criteria !== undefined && !criteria)) return null;
-  if (value.objective !== undefined && typeof value.objective !== 'string') return null;
-  if (value.scopeBoundary !== undefined && typeof value.scopeBoundary !== 'string') return null;
-  return {
-    objective: typeof value.objective === 'string' ? value.objective.trim() : undefined,
-    scopeBoundary: typeof value.scopeBoundary === 'string' ? value.scopeBoundary.trim() : undefined,
-    evidencePlan,
-    criteria,
-    outcomeMetric,
-  };
-}
-
-function maxBase64CharsForBinary(maxBinaryBytes: number): number {
-  return 4 * Math.ceil(maxBinaryBytes / 3);
-}
-
 function parseUserTurnAttachment(raw: unknown): UserTurnAttachment | null {
   if (!raw || typeof raw !== 'object') return null;
   const value = raw as Record<string, unknown>;
@@ -142,20 +83,6 @@ function parseUserTurnInput(raw: unknown): UserTurnInput | undefined {
     : undefined;
   if (!text && !attachments?.length) return undefined;
   return { text, ...(attachments?.length ? { attachments } : {}) };
-}
-
-function validateUserTurnAttachments(attachments: UserTurnAttachment[] | undefined): string | null {
-  if (!attachments?.length) return null;
-  if (attachments.length > MAX_CHAT_ATTACHMENTS) {
-    return `Too many attachments (max ${MAX_CHAT_ATTACHMENTS})`;
-  }
-  const maxDataChars = maxBase64CharsForBinary(MAX_WEBCHAT_ATTACHMENT_FILE_BYTES);
-  for (const attachment of attachments) {
-    if (attachment.data && attachment.data.length > maxDataChars) {
-      return `Attachment exceeds maximum size (${MAX_WEBCHAT_ATTACHMENT_FILE_BYTES} bytes)`;
-    }
-  }
-  return null;
 }
 
 type GoalActivityItem = {
@@ -401,100 +328,6 @@ export function registerGoalsRoutes(authenticated: Hono, deps: AuthenticatedRout
 
   authenticated.get('/api/goals/queue', async (c) => {
     return c.json({ ok: true, queue: deps.service.getGoalQueueSnapshot() });
-  });
-
-  authenticated.post('/api/goals', async (c) => {
-    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
-    const title = typeof body.title === 'string' ? body.title.trim() : '';
-    if (!title) return c.json({ ok: false, error: 'Missing title' }, 400);
-    const contract = parseGoalContract(body.contract);
-    if (contract === null) return c.json({ ok: false, error: 'Invalid goal contract' }, 400);
-
-    const sessionKey = typeof body.sessionKey === 'string' && body.sessionKey.trim() ? body.sessionKey.trim() : undefined;
-    const contextMessage = parseUserTurnInput(body.contextMessage) ?? { text: '' };
-    const attachmentError = validateUserTurnAttachments(contextMessage.attachments);
-    if (attachmentError) return c.json({ ok: false, error: attachmentError }, 400);
-    const preparedContextAttachments = contextMessage.attachments?.length
-      ? await deps.service.agentService.prepareInboundAttachments(sessionKey ?? `goal:${Date.now()}`, contextMessage.attachments)
-      : undefined;
-    const projectId = typeof body.projectId === 'string' && body.projectId.trim() ? body.projectId.trim() : undefined;
-    if (projectId && !deps.service.projects.get(projectId)) {
-      return c.json({ ok: false, error: 'Project not found' }, 404);
-    }
-    const agentId = sessionKey
-      ? (typeof body.agentId === 'string' && body.agentId.trim() ? body.agentId.trim() : undefined)
-      : resolveProjectAgentId({
-        config: cfg(),
-        projects: deps.service.projects,
-        explicitAgentId: typeof body.agentId === 'string' ? body.agentId : undefined,
-        projectId,
-      });
-    const maxTurns =
-      typeof body.maxTurns === 'number' && Number.isFinite(body.maxTurns)
-        ? Math.max(1, Math.min(500, Math.floor(body.maxTurns)))
-        : undefined;
-    const goal = goals.create({
-      title,
-      description: contextMessage.text || undefined,
-      sessionKey,
-      agentId,
-      priority: body.priority === 'low' || body.priority === 'high' ? body.priority : 'normal',
-      deadlineAt: typeof body.deadlineAt === 'number' && Number.isFinite(body.deadlineAt) ? body.deadlineAt : undefined,
-      judgeModelRef: typeof body.judgeModelRef === 'string' ? body.judgeModelRef : undefined,
-      maxTurns,
-      uiLocale: normalizeGoalUiLocale(body.uiLocale),
-      source: body.source === 'cli' || body.source === 'cron' || body.source === 'workflow' || body.source === 'channel' || body.source === 'api'
-        ? body.source
-        : 'chat',
-      projectId,
-      contract,
-      config: cfg(),
-    });
-
-    goals.setContextMessage({
-      goalId: goal.id,
-      text: contextMessage.text,
-      attachments: preparedContextAttachments,
-    });
-
-    return c.json({ ok: true, goal: goals.get(goal.id) });
-  });
-
-  authenticated.post('/api/goals/contract/draft', async (c) => {
-    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
-    const title = typeof body.title === 'string' ? body.title.trim() : '';
-    if (!title) return c.json({ ok: false, error: 'Missing title' }, 400);
-    const parsed = parseGoalContract({ criteria: body.criteria });
-    if (!parsed) return c.json({ ok: false, error: 'Invalid acceptance criteria' }, 400);
-    const modelRef =
-      typeof body.modelRef === 'string' && body.modelRef.trim()
-        ? body.modelRef.trim()
-        : typeof body.judgeModelRef === 'string' && body.judgeModelRef.trim()
-          ? body.judgeModelRef.trim()
-          : cfg()?.goals?.judgeModelRef;
-    const result = await draftGoalContract({
-      title,
-      context: typeof body.context === 'string' ? body.context : undefined,
-      criteria: parsed.criteria,
-      uiLocale: normalizeGoalUiLocale(body.uiLocale),
-      modelRef,
-    });
-    return c.json({ ok: true, ...result });
-  });
-
-  authenticated.get('/api/goals/:goalId/contract', async (c) => {
-    const goal = goals.get(c.req.param('goalId'));
-    if (!goal) return c.json({ ok: false, error: 'Goal not found' }, 404);
-    return c.json({ ok: true, contract: goal.contract ?? null });
-  });
-
-  authenticated.put('/api/goals/:goalId/contract', async (c) => {
-    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
-    const contract = parseGoalContract(body);
-    if (!contract) return c.json({ ok: false, error: 'Invalid goal contract' }, 400);
-    const goal = goals.setContract(c.req.param('goalId'), contract);
-    if (!goal) return c.json({ ok: false, error: 'Goal not found' }, 404);
-    return c.json({ ok: true, goal, contract: goal.contract });
   });
 
   authenticated.get('/api/goals/:goalId/workflow-runs', async (c) => {
@@ -783,10 +616,8 @@ export function registerGoalsRoutes(authenticated: Hono, deps: AuthenticatedRout
     if (readiness && !readiness.ready) {
       return c.json({
         ok: false,
-        error: 'Goal completion evidence is still required',
-        missingEvidence: readiness.missingEvidence,
-        pendingApproval: readiness.pendingApproval,
-        pendingOutcome: readiness.pendingOutcome,
+        error: 'Outcome acceptance criteria are still pending',
+        pendingCriteria: readiness.pendingCriteria,
       }, 409);
     }
     const goal = goals.complete(goalId);
@@ -875,25 +706,15 @@ export function registerGoalsRoutes(authenticated: Hono, deps: AuthenticatedRout
     return c.json({ ok: true, evidence: goals.listEvidence(goalId, parseLimit(c.req.query('limit'), 100)) });
   });
 
-  authenticated.get('/api/goals/:goalId/evidence-requirements', async (c) => {
-    const goalId = c.req.param('goalId');
-    if (!goals.get(goalId)) return c.json({ ok: false, error: 'Goal not found' }, 404);
-    return c.json({ ok: true, requirements: goals.listEvidenceRequirements(goalId) });
-  });
-
   authenticated.post('/api/goals/:goalId/evidence', async (c) => {
     const goalId = c.req.param('goalId');
     if (!goals.get(goalId)) return c.json({ ok: false, error: 'Goal not found' }, 404);
     const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
     const title = typeof body.title === 'string' ? body.title.trim() : '';
     const kind = body.kind;
-    const requirementId = typeof body.requirementId === 'string' ? body.requirementId.trim() : '';
     if (!title) return c.json({ ok: false, error: 'Missing title' }, 400);
     if (kind !== 'file' && kind !== 'diff' && kind !== 'command' && kind !== 'test' && kind !== 'link' && kind !== 'message' && kind !== 'artifact') {
       return c.json({ ok: false, error: 'Invalid evidence kind' }, 400);
-    }
-    if (requirementId && !goals.listEvidenceRequirements(goalId).some((item) => item.id === requirementId)) {
-      return c.json({ ok: false, error: 'Evidence requirement not found' }, 404);
     }
     const evidence = goals.addEvidence({
       goalId,
@@ -904,78 +725,7 @@ export function registerGoalsRoutes(authenticated: Hono, deps: AuthenticatedRout
       uri: typeof body.uri === 'string' ? body.uri : undefined,
       data: body.data,
     });
-    const requirement = requirementId
-      ? goals.linkEvidenceRequirement({ goalId, requirementId, evidenceId: evidence.id, linkedBy: 'user' })
-      : undefined;
-    return c.json({ ok: true, evidence: { ...evidence, requirementIds: requirement ? [requirement.id] : [] }, requirement });
-  });
-
-  authenticated.post('/api/goals/:goalId/evidence-requirements/:requirementId/link', async (c) => {
-    const goalId = c.req.param('goalId');
-    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
-    const evidenceId = typeof body.evidenceId === 'string' ? body.evidenceId.trim() : '';
-    if (!evidenceId) return c.json({ ok: false, error: 'Missing evidence id' }, 400);
-    const requirement = goals.linkEvidenceRequirement({
-      goalId,
-      requirementId: c.req.param('requirementId'),
-      evidenceId,
-      linkedBy: 'user',
-    });
-    if (!requirement) return c.json({ ok: false, error: 'Evidence requirement or evidence not found' }, 404);
-    return c.json({ ok: true, requirement });
-  });
-
-  authenticated.post('/api/goals/:goalId/evidence-requirements/:requirementId/review', async (c) => {
-    const goalId = c.req.param('goalId');
-    const goal = goals.get(goalId);
-    if (!goal) return c.json({ ok: false, error: 'Goal not found' }, 404);
-    const requirement = goal.evidenceRequirements.find((item) => item.id === c.req.param('requirementId'));
-    if (!requirement) return c.json({ ok: false, error: 'Evidence requirement not found' }, 404);
-    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
-    const evidenceById = new Map(goals.listEvidence(goalId, 500).map((item) => [item.id, item]));
-    const review = await reviewGoalEvidenceRequirement({
-      requirement,
-      evidence: requirement.evidenceIds.flatMap((id) => {
-        const item = evidenceById.get(id);
-        return item ? [item] : [];
-      }),
-      modelRef: typeof body.modelRef === 'string' && body.modelRef.trim()
-        ? body.modelRef.trim()
-        : goal.judgeModelRef,
-    });
-    const status = review.verdict === 'approved' ? 'ai_verified' : review.verdict === 'rejected' ? 'rejected' : 'pending';
-    const updated = goals.reviewEvidenceRequirement({
-      goalId,
-      requirementId: requirement.id,
-      status,
-      reason: review.reason,
-      confidence: review.confidence,
-      reviewedBy: review.generated ? 'ai' : 'system',
-    });
-    return c.json({ ok: true, requirement: updated, review });
-  });
-
-  authenticated.post('/api/goals/:goalId/evidence-requirements/:requirementId/approve', async (c) => {
-    const goalId = c.req.param('goalId');
-    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
-    const existing = goals.get(goalId);
-    if (!existing) return c.json({ ok: false, error: 'Goal not found' }, 404);
-    const existingRequirement = existing.evidenceRequirements.find((item) => item.id === c.req.param('requirementId'));
-    if (!existingRequirement) return c.json({ ok: false, error: 'Evidence requirement not found' }, 404);
-    if (existingRequirement.evidenceIds.length === 0) {
-      return c.json({ ok: false, error: 'Link evidence before approving this requirement' }, 409);
-    }
-    const requirement = goals.reviewEvidenceRequirement({
-      goalId,
-      requirementId: c.req.param('requirementId'),
-      status: 'approved',
-      reason: typeof body.reason === 'string' && body.reason.trim()
-        ? body.reason.trim()
-        : 'Approved by a user after reviewing the linked evidence.',
-      reviewedBy: 'user',
-    });
-    if (!requirement) return c.json({ ok: false, error: 'Evidence requirement not found' }, 404);
-    return c.json({ ok: true, requirement });
+    return c.json({ ok: true, evidence });
   });
 
   authenticated.post('/api/goals/:goalId/checklist', async (c) => {

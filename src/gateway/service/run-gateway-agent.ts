@@ -15,16 +15,11 @@ import {
 import { shouldSkipWebchatInboundByAbortCutoff } from '../../session/abort-cutoff.js';
 import { parseSessionKey } from '../../routing/session-key.js';
 import { recordExplicitRelationshipFollowUp } from '../../user-context/relationship-continuity.js';
-import { resolveExecutionContext, taskOutcomeContext } from '../../work/execution-context.js';
-import { OutcomeProjectionService } from '../../work/outcome-projection-service.js';
+import { resolveExecutionContext } from '../../work/execution-context.js';
+import { OutcomeRunCoordinator } from '../../work/outcome-run-coordinator.js';
 import {
-  completeTaskOutcome,
-  startTaskOutcome,
   updateInteractionStateFromMessage,
-  updateTaskOutcome,
-  type TaskContract,
-  type TaskEvidence,
-  type TaskOutcomeStatus,
+  type ExecutionReceiptStatus,
 } from '../../storage/sqlite/index.js';
 
 import { formatAgentRunErrorForClient } from '../../agent/client-error-format.js';
@@ -84,11 +79,9 @@ export async function *runGatewayAgent(
     emit,
   } = deps;
   const sessionIndex = sessionIndexFromDeps;
-  let taskOutcomeStarted = false;
-  let taskOutcomeStatus: Exclude<TaskOutcomeStatus, 'running'> = 'failed';
-  let taskOutcomeSummary = 'Agent run ended unexpectedly';
-  let taskContract: TaskContract | undefined;
-  const taskEvidence: TaskEvidence[] = [];
+  let outcomeRun: OutcomeRunCoordinator | undefined;
+  let executionReceiptStatus: Exclude<ExecutionReceiptStatus, 'running'> = 'failed';
+  let executionReceiptSummary = 'Agent run ended unexpectedly';
 
   let webchatSessionKey: string | undefined;
   let webchatSessionId: string | undefined;
@@ -127,60 +120,31 @@ export async function *runGatewayAgent(
       sourceAgentId: parsedSession.agentId,
       message,
     });
-    startTaskOutcome({
+    const executionContext = resolveExecutionContext({
       runId,
       sessionKey: webchatSessionKey,
       channel,
-      objective: message.trim(),
-      context: taskOutcomeContext(resolveExecutionContext({
-        runId,
-        sessionKey: webchatSessionKey,
-        channel,
-        metadata: webchatMetadata,
-      })),
+      metadata: webchatMetadata,
     });
-    taskOutcomeStarted = true;
+    outcomeRun = OutcomeRunCoordinator.start({
+      runId,
+      context: executionContext,
+      fallbackObjective: message,
+    });
   }
   const mapper = new ChatStreamMapper({ runId, sessionKey: streamSessionKey, channel });
   let registeredActiveWebchatRun = false;
-  const addTaskEvidence = (evidence: TaskEvidence): void => {
-    if (taskEvidence.some((item) => item.kind === evidence.kind && item.title === evidence.title)) return;
-    taskEvidence.push(evidence);
-  };
-  const captureTaskPlan = (items: Array<{ title: string; status: string }>): void => {
-    const activeItems = items.filter((item) => item.status !== 'cancelled');
-    taskContract = {
-      objective: message.trim(),
-      deliverables: [],
-      acceptanceCriteria: activeItems.map((item) => item.title),
-      constraints: [],
-      approvalRequired: [],
-    };
-    for (const item of activeItems) {
-      if (item.status !== 'completed') continue;
-      addTaskEvidence({
-        kind: 'state',
-        title: `Plan item completed: ${item.title}`,
-        summary: 'The agent marked this plan item as completed during the run',
-        verifies: [item.title],
-      });
-    }
-  };
   const captureTaskEvent = (event: ChatStreamEvent): void => {
     if (event.type === 'task_plan_updated') {
-      captureTaskPlan(event.payload.items);
+      outcomeRun?.capturePlan(event.payload.items);
       return;
     }
     if (event.type === 'turn_plan') {
-      captureTaskPlan(event.payload.plan.map((item) => ({ title: item.step, status: item.status })));
+      outcomeRun?.capturePlan(event.payload.plan.map((item) => ({ title: item.step, status: item.status })));
       return;
     }
     if (event.type === 'patch_applied') {
-      addTaskEvidence({
-        kind: 'state',
-        title: 'Changes applied',
-        summary: `${event.payload.added} additions and ${event.payload.removed} removals`,
-      });
+      outcomeRun?.capturePatch(event.payload.added, event.payload.removed);
       return;
     }
     if (
@@ -188,13 +152,7 @@ export async function *runGatewayAgent(
       && event.payload.exitCode === 0
       && /(^|\s)(test|vitest|jest|pytest|lint|typecheck|build)(\s|$|:)/i.test(event.payload.command)
     ) {
-      addTaskEvidence({
-        kind: 'test',
-        title: event.payload.command.slice(0, 120),
-        summary: event.payload.durationMs === undefined
-          ? 'Command completed successfully'
-          : `Command completed successfully in ${event.payload.durationMs} ms`,
-      });
+      outcomeRun?.captureCommand(event.payload.command, event.payload.durationMs);
     }
   };
   const publishStreamEvent = (event: ChatStreamEvent): ChatStreamEvent =>
@@ -203,7 +161,7 @@ export async function *runGatewayAgent(
       : event;
   const emitAndYield = function *(events: ChatStreamEvent[]): Generator<ChatStreamEvent> {
     for (const event of events) {
-      if (taskOutcomeStarted) captureTaskEvent(event);
+      if (outcomeRun) captureTaskEvent(event);
       const relayedEvent = publishStreamEvent(event);
       if (channel === 'webchat') emit('agent.stream', { sessionKey: streamSessionKey, event: relayedEvent });
       yield relayedEvent;
@@ -215,8 +173,8 @@ export async function *runGatewayAgent(
   try {
     if (channel === 'webchat' && webchatSessionKey) {
       if (webchatStaleSkip) {
-        taskOutcomeStatus = 'cancelled';
-        taskOutcomeSummary = 'Stale inbound message skipped';
+        executionReceiptStatus = 'cancelled';
+        executionReceiptSummary = 'Stale inbound message skipped';
         yield* emitAndYield(mapper.end('cancelled', 'Stale inbound after abort (clientCreatedAtMs before cutoff)'));
         runRelay.complete(runId);
         runAbortControllers.delete(runId);
@@ -272,8 +230,8 @@ export async function *runGatewayAgent(
 
         const endStatus = mergedSignal.aborted ? 'cancelled' : 'success';
         const endSummary = mergedSignal.aborted ? 'Interrupted' : 'Message processed successfully';
-        taskOutcomeStatus = mergedSignal.aborted ? 'cancelled' : 'succeeded';
-        taskOutcomeSummary = endSummary;
+        executionReceiptStatus = mergedSignal.aborted ? 'cancelled' : 'succeeded';
+        executionReceiptSummary = endSummary;
         yield* emitAndYield(mapper.end(endStatus, endSummary));
         runRelay.complete(runId);
         try {
@@ -302,8 +260,8 @@ export async function *runGatewayAgent(
           `Agent processing failed: ${em}`,
         );
         streamError = em;
-        taskOutcomeStatus = 'failed';
-        taskOutcomeSummary = em;
+        executionReceiptStatus = 'failed';
+        executionReceiptSummary = em;
         const errorContent = formatAgentRunErrorForClient(streamError);
         yield* emitAndYield(mapper.error(errorContent));
         yield* emitAndYield(mapper.end('error', streamError));
@@ -382,13 +340,13 @@ export async function *runGatewayAgent(
       },
     ]);
     yield* emitAndYield(mapper.end('success', 'Message processed'));
-    taskOutcomeStatus = 'succeeded';
-    taskOutcomeSummary = 'Message processed';
+    executionReceiptStatus = 'succeeded';
+    executionReceiptSummary = 'Message processed';
     return { status: 'ok', summary: 'Message processed' };
   } catch (error) {
     const em = error instanceof Error ? error.message : String(error);
-    taskOutcomeStatus = 'failed';
-    taskOutcomeSummary = em;
+    executionReceiptStatus = 'failed';
+    executionReceiptSummary = em;
     log.error(
       {
         err: error,
@@ -402,24 +360,15 @@ export async function *runGatewayAgent(
     );
     throw error;
   } finally {
-    if (taskOutcomeStarted) {
-      updateTaskOutcome({
-        runId,
-        ...(taskContract ? { contract: taskContract } : {}),
-        evidence: taskEvidence,
-      });
-      const outcome = completeTaskOutcome({
-        runId,
-        status: taskOutcomeStatus,
-        summary: taskOutcomeSummary,
-      });
-      if (outcome) {
-        try {
-          new OutcomeProjectionService().project(outcome);
-        } catch (err) {
-          const errorMessage = err instanceof Error ? err.message : String(err);
-          log.warn({ err, runId }, `Task outcome projection failed: ${errorMessage}`);
-        }
+    if (outcomeRun) {
+      try {
+        outcomeRun.finalize({
+        status: executionReceiptStatus,
+        summary: executionReceiptSummary,
+        });
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        log.warn({ err, runId }, `Outcome run finalization failed: ${errorMessage}`);
       }
     }
   }

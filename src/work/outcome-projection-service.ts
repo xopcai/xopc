@@ -1,85 +1,64 @@
-import { GoalService } from '../goals/index.js';
 import {
-  listUnprojectedTaskOutcomes,
-  markTaskOutcomeProjected,
-  type TaskOutcome,
+  listUnprojectedExecutionReceipts,
+  markExecutionReceiptProjected,
+  type ExecutionReceipt,
 } from '../storage/sqlite/index.js';
-import { WorkItemService } from '../work-items/index.js';
+import { OutcomeRepository } from './outcome-repository.js';
 
-export const TASK_OUTCOME_PROJECTION_VERSION = 1;
+export const EXECUTION_RECEIPT_PROJECTION_VERSION = 4;
+const MAX_AUTONOMOUS_ATTEMPTS = 3;
 
-function remainingAction(outcome: TaskOutcome): string {
-  if (outcome.correctionText) return outcome.correctionText;
-  if (outcome.nextAction) return outcome.nextAction;
-  if (outcome.failure?.recoveryAction === 'request_user_input') return 'Provide the missing approval or information.';
-  if (outcome.failure?.recoveryAction === 'retry_with_changed_strategy') return 'Retry with a changed strategy.';
-  if (outcome.failure?.recoveryAction === 'replan') return 'Revise the plan and address the failed verification.';
-  return 'Review the outcome and decide the next concrete action.';
+function canRecoverAutonomously(outcome: ExecutionReceipt): boolean {
+  return outcome.status === 'failed'
+    && outcome.attempt < MAX_AUTONOMOUS_ATTEMPTS
+    && outcome.failure?.recoveryAction !== 'request_user_input'
+    && outcome.failure?.recoveryAction !== 'none';
 }
 
 export class OutcomeProjectionService {
-  readonly #goals = new GoalService();
-  readonly #workItems = new WorkItemService();
+  readonly #outcomes = new OutcomeRepository();
 
-  project(outcome: TaskOutcome): TaskOutcome {
-    if (outcome.status === 'running' || outcome.projectionVersion >= TASK_OUTCOME_PROJECTION_VERSION) {
+  project(outcome: ExecutionReceipt): ExecutionReceipt {
+    if (outcome.status === 'running' || outcome.projectionVersion >= EXECUTION_RECEIPT_PROJECTION_VERSION) {
       return outcome;
     }
     const verdict = outcome.completionVerdict;
-    const nextAction = remainingAction(outcome);
+    const recovering = canRecoverAutonomously(outcome);
 
-    if (outcome.context.workItemId) {
+    if (outcome.context.outcomeId) {
       if (verdict === 'achieved') {
-        this.#workItems.updateWorkItem(outcome.context.workItemId, {
-          status: 'done',
-          nextAction: null,
-          blockedReason: null,
+        this.#outcomes.updateState({
+          id: outcome.context.outcomeId,
+          userStatus: 'completed',
+          internalStatus: 'completed',
+          latestReceiptRunId: outcome.runId,
         });
       } else if (verdict === 'partial') {
-        this.#workItems.updateWorkItem(outcome.context.workItemId, {
-          status: outcome.needsUser ? 'needs_input' : 'in_review',
-          nextAction,
-          blockedReason: outcome.needsUser ? outcome.summary ?? nextAction : null,
+        this.#outcomes.updateState({
+          id: outcome.context.outcomeId,
+          userStatus: outcome.needsUser ? 'needs_user' : 'running',
+          internalStatus: outcome.needsUser ? 'needs_user' : 'continuing',
+          latestReceiptRunId: outcome.runId,
         });
       } else if (verdict === 'not_achieved') {
-        this.#workItems.updateWorkItem(outcome.context.workItemId, {
-          status: outcome.status === 'cancelled' ? 'cancelled' : 'blocked',
-          nextAction,
-          blockedReason: outcome.summary ?? nextAction,
+        this.#outcomes.updateState({
+          id: outcome.context.outcomeId,
+          userStatus: outcome.status === 'cancelled' ? 'completed' : recovering ? 'running' : 'needs_user',
+          internalStatus: outcome.status === 'cancelled' ? 'cancelled' : recovering ? 'continuing' : 'blocked',
+          latestReceiptRunId: outcome.runId,
         });
       }
     }
 
-    if (outcome.context.goalId) {
-      if (verdict === 'achieved') {
-        this.#goals.update(outcome.context.goalId, { nextAction: undefined, blockedReason: undefined });
-        this.#goals.setStatus(outcome.context.goalId, 'done');
-      } else if (verdict === 'partial') {
-        this.#goals.update(outcome.context.goalId, { nextAction, blockedReason: undefined });
-        this.#goals.setStatus(
-          outcome.context.goalId,
-          outcome.needsUser ? 'needs_input' : 'active',
-          outcome.needsUser ? { reason: outcome.summary ?? nextAction } : undefined,
-        );
-      } else if (verdict === 'not_achieved') {
-        this.#goals.update(outcome.context.goalId, { nextAction });
-        this.#goals.setStatus(
-          outcome.context.goalId,
-          outcome.status === 'cancelled' ? 'paused' : 'blocked',
-          { reason: outcome.summary ?? nextAction },
-        );
-      }
-    }
-
-    return markTaskOutcomeProjected({
+    return markExecutionReceiptProjected({
       runId: outcome.runId,
-      projectionVersion: TASK_OUTCOME_PROJECTION_VERSION,
+      projectionVersion: EXECUTION_RECEIPT_PROJECTION_VERSION,
     }) ?? outcome;
   }
 
   reconcile(limit = 100): number {
-    const pending = listUnprojectedTaskOutcomes({
-      projectionVersion: TASK_OUTCOME_PROJECTION_VERSION,
+    const pending = listUnprojectedExecutionReceipts({
+      projectionVersion: EXECUTION_RECEIPT_PROJECTION_VERSION,
       limit,
     });
     for (const outcome of pending) this.project(outcome);

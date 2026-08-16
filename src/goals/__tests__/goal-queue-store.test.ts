@@ -9,8 +9,8 @@ import {
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../storage/sqlite/index.js';
+import { OutcomeExecutionService } from '../../work/index.js';
 import { GoalQueueStore } from '../goal-queue-store.js';
-import { GoalService } from '../goal-service.js';
 
 describe('GoalQueueStore', () => {
   let stateDir: string;
@@ -22,11 +22,11 @@ describe('GoalQueueStore', () => {
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
     store = new GoalQueueStore();
-    goalId = new GoalService().create({
-      title: 'Persist goal queue',
+    goalId = new OutcomeExecutionService().create({
+      objective: 'Persist goal queue',
       sessionKey: 'agent:main:webchat:default:direct:goal-queue',
       maxTurns: 3,
-    }).id;
+    }).goal.id;
   });
 
   afterEach(() => {

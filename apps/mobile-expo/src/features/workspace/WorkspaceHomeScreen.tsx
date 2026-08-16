@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { OutcomeReceipt } from '@xopcai/gateway-contract';
+import type { Outcome, OutcomeReceipt } from '@xopcai/gateway-contract';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
@@ -312,9 +312,25 @@ export function WorkspaceHomeScreen() {
                 if (decision.response) decisionMutation.mutate({ id: decision.id, response: decision.response, answer });
               }}
             />
+            <OutcomeProgressSection
+              title={hm.sectionOutcomesNeedsYou}
+              items={home.outcomes.needsUser.slice(0, 3)}
+              statusLabel={hm.outcomeStatusNeedsYou}
+              icon="account-alert-outline"
+              onOpen={(item) => router.push(`/outcomes/${item.id}`)}
+            />
+            <OutcomeProgressSection
+              title={hm.sectionOutcomesRunning}
+              items={home.outcomes.running.slice(0, 3)}
+              statusLabel={hm.outcomeStatusRunning}
+              icon="progress-clock"
+              onOpen={(item) => router.push(`/outcomes/${item.id}`)}
+            />
             <OutcomeSection
               items={home.recentOutcomes.slice(0, 3)}
-              onOpen={(receipt) => receipt.projectId
+              onOpen={(receipt) => receipt.outcomeId
+                ? router.push(`/outcomes/${receipt.outcomeId}`)
+                : receipt.projectId
                 ? router.push(`/projects/${receipt.projectId}`)
                 : router.push(`/chat/${receipt.sessionKey}`)}
             />
@@ -581,6 +597,40 @@ function ContinueSection({ items }: { items: ContinueItem[] }) {
             <View style={styles.rowCopy}>
               <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text.primary }]}>{item.title}</Text>
               <Text numberOfLines={1} style={[styles.rowSubtitle, { color: colors.text.tertiary }]}>{item.meta}</Text>
+            </View>
+            <Icon source="chevron-right" size={18} color={colors.text.tertiary} />
+            {index < items.length - 1 ? <View style={[styles.rowDivider, { backgroundColor: colors.border.subtle }]} /> : null}
+          </Pressable>
+        ))}
+      </View>
+    </Section>
+  );
+}
+
+function OutcomeProgressSection({
+  title,
+  items,
+  statusLabel,
+  icon,
+  onOpen,
+}: {
+  title: string;
+  items: Outcome[];
+  statusLabel: string;
+  icon: string;
+  onOpen: (outcome: Outcome) => void;
+}) {
+  const { colors } = useTheme();
+  if (items.length === 0) return null;
+  return (
+    <Section title={title}>
+      <View style={[styles.groupedList, { backgroundColor: colors.surface.panel }]}>
+        {items.map((item, index) => (
+          <Pressable key={item.id} style={styles.listRow} onPress={() => onOpen(item)} accessibilityRole="button">
+            <Icon source={icon} size={20} color={colors.accent.primary} />
+            <View style={styles.rowCopy}>
+              <Text numberOfLines={2} style={[styles.rowTitle, { color: colors.text.primary }]}>{item.objective}</Text>
+              <Text style={[styles.rowSubtitle, { color: colors.text.tertiary }]}>{statusLabel}</Text>
             </View>
             <Icon source="chevron-right" size={18} color={colors.text.tertiary} />
             {index < items.length - 1 ? <View style={[styles.rowDivider, { backgroundColor: colors.border.subtle }]} /> : null}

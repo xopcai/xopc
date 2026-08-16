@@ -7,6 +7,7 @@ import {
 
 import { GoalService, type Goal, type GoalPriority, type GoalStatus } from '../../goals/index.js';
 import { getSessionMetadata } from '../../storage/sqlite/index.js';
+import { OutcomeExecutionService } from '../../work/index.js';
 
 const GoalToolSchema = Type.Object({
   action: Type.Union([
@@ -112,8 +113,8 @@ export function createGoalTool(options: GoalToolOptions = {}): AgentTool<typeof 
         if (!title) return textResult('Error: title is required.');
         const sessionKey = params.sessionKey?.trim() || options.getCurrentSessionKey?.()?.trim();
         const projectId = params.projectId?.trim() || (sessionKey ? getSessionMetadata(sessionKey)?.projectId : undefined);
-        const goal = goals.create({
-          title,
+        const goal = new OutcomeExecutionService().create({
+          objective: title,
           description: params.description,
           agentId: params.agentId,
           sessionKey,
@@ -123,7 +124,7 @@ export function createGoalTool(options: GoalToolOptions = {}): AgentTool<typeof 
           judgeModelRef: params.judgeModelRef,
           maxTurns: params.maxTurns,
           source: 'workflow',
-        });
+        }).goal;
         return textResult(`Created goal ${goal.id}\n${goal.title}`, {
           goal,
           delivery: goalDelivery(goal, 'created'),

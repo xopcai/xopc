@@ -1,6 +1,5 @@
 import { z } from 'zod';
 
-export const WorkIntakeClassificationSchema = z.enum(['one_off', 'existing_project', 'new_project']);
 export const WorkExecutionModeSchema = z.enum(['create_only', 'run_now']);
 export const WorkExecutionStatusSchema = z.enum([
   'not_started',
@@ -40,25 +39,17 @@ export const ProjectMonitoringUpdateSchema = z.object({
 export const WorkIntakeProposalSchema = z.object({
   id: z.string(),
   objective: z.string(),
-  classification: WorkIntakeClassificationSchema,
-  suggestedProject: z.object({
-    id: z.string().optional(),
-    name: z.string(),
-    outcome: z.string(),
-    nextAction: z.string(),
-  }),
-  possibleProjectMatches: z.array(z.object({
-    id: z.string(),
-    name: z.string(),
-    score: z.number(),
-  })),
-  monitoringSuggestion: z.object({
-    mode: MonitoringModeSchema,
-    scenarios: z.array(z.string()),
-  }),
+  projectId: z.string().optional(),
   planningContext: z.object({
     supportMode: z.enum(['efficient', 'coach', 'companion', 'auto']),
     proactiveEnabled: z.boolean(),
+  }),
+  outcomeContract: z.object({
+    objective: z.string(),
+    deliverables: z.array(z.string()),
+    acceptanceCriteria: z.array(z.string()),
+    constraints: z.array(z.string()),
+    approvalRequired: z.array(z.string()),
   }),
   expiresAt: z.number(),
 });
@@ -69,20 +60,17 @@ export const WorkIntakeCreateRequestSchema = z.object({
   projectId: z.string().min(1).optional(),
   sessionKey: z.string().min(1).optional(),
   agentId: z.string().min(1).optional(),
-  monitoringMode: MonitoringModeSchema.optional(),
 });
 
 export const WorkIntakeConfirmRequestSchema = z.object({
   executionMode: WorkExecutionModeSchema,
   projectId: z.string().min(1).optional(),
-  projectName: z.string().min(1).optional(),
-  nextAction: z.string().min(1).optional(),
 });
 
 export const ConfirmedWorkSchema = z.object({
-  projectId: z.string(),
+  outcomeId: z.string(),
+  projectId: z.string().optional(),
   goalId: z.string(),
-  workItemId: z.string(),
   sessionKey: z.string().optional(),
   execution: z.object({
     mode: WorkExecutionModeSchema,
@@ -91,7 +79,6 @@ export const ConfirmedWorkSchema = z.object({
   }),
 });
 
-export type WorkIntakeClassification = z.infer<typeof WorkIntakeClassificationSchema>;
 export type WorkExecutionMode = z.infer<typeof WorkExecutionModeSchema>;
 export type WorkExecutionStatus = z.infer<typeof WorkExecutionStatusSchema>;
 export type MonitoringMode = z.infer<typeof MonitoringModeSchema>;

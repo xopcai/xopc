@@ -2,8 +2,7 @@ import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
 export type ActivityTarget =
-  | { kind: 'goal'; id: string }
-  | { kind: 'session'; id: string };
+  { kind: 'session'; id: string };
 
 export type ActivityTargetAvailability = 'checking' | 'available' | 'missing';
 
@@ -19,11 +18,6 @@ function decodePathSegment(value: string): string | null {
 export function parseActivityTarget(href: string | undefined): ActivityTarget | null {
   if (!href) return null;
   const pathname = href.split(/[?#]/, 1)[0];
-  const goalMatch = /^\/goals\/([^/]+)\/?$/.exec(pathname);
-  if (goalMatch) {
-    const id = decodePathSegment(goalMatch[1]);
-    return id ? { kind: 'goal', id } : null;
-  }
   const sessionMatch = /^\/chat\/([^/]+)\/?$/.exec(pathname);
   if (sessionMatch) {
     const id = decodePathSegment(sessionMatch[1]);
@@ -37,9 +31,7 @@ export async function checkActivityTarget(
   target: ActivityTarget,
   signal?: AbortSignal,
 ): Promise<Exclude<ActivityTargetAvailability, 'checking'>> {
-  const path = target.kind === 'goal'
-    ? `/api/goals/${encodeURIComponent(target.id)}`
-    : `/api/sessions/${encodeURIComponent(target.id)}?limit=1`;
+  const path = `/api/sessions/${encodeURIComponent(target.id)}?limit=1`;
   try {
     const response = await apiFetch(apiUrl(path), { signal });
     return response.status === 404 ? 'missing' : 'available';

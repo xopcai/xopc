@@ -28,7 +28,7 @@ describe('formatCurrentWorkForPrompt', () => {
         status: 'active',
         scopeBoundary: 'Do not modify unrelated UI.',
         acceptanceCriteria: ['Workflow children inherit the project.'],
-        evidencePlan: ['Targeted tests pass.'],
+        deliverables: ['Targeted tests pass.'],
         nextAction: 'Implement the context resolver.',
       },
     };

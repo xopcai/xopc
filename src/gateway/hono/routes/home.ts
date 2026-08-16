@@ -1,6 +1,5 @@
 import type { Hono } from 'hono';
 
-import { GoalService } from '../../../goals/index.js';
 import { listGatewayAgents } from '../../agents-admin.js';
 import {
   acknowledgeHomeAttention,
@@ -14,7 +13,6 @@ export { buildHomeBriefing } from '../../../work/home-query-service.js';
 /** Register the unified work-home read model and its decision actions. */
 export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service } = deps;
-  const goals = new GoalService();
   const home = new WorkHomeQueryService(service);
 
   authenticated.get('/api/home', async (c) => c.json(await home.getSnapshot(c.req.query('locale'))));
@@ -30,20 +28,6 @@ export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRoute
         return c.json({ ok: false, error: `Approval is ${approval.status}` }, 409);
       }
       return c.json({ ok: true, status: approval.status });
-    }
-    if (body.kind === 'goal_evidence' && typeof body.goalId === 'string' && typeof body.requirementId === 'string') {
-      const goal = goals.get(body.goalId);
-      const requirement = goal?.evidenceRequirements.find((item) => item.id === body.requirementId);
-      if (!goal || !requirement) return c.json({ ok: false, error: 'Evidence approval not found' }, 404);
-      if (requirement.evidenceIds.length === 0) return c.json({ ok: false, error: 'Evidence is missing' }, 409);
-      const updated = goals.reviewEvidenceRequirement({
-        goalId: goal.id,
-        requirementId: requirement.id,
-        status: decision === 'approve' ? 'approved' : 'rejected',
-        reason: decision === 'approve' ? 'Approved from the decision inbox.' : 'Rejected from the decision inbox.',
-        reviewedBy: 'user',
-      });
-      return c.json({ ok: true, status: updated?.status });
     }
     return c.json({ ok: false, error: 'Unsupported decision kind' }, 400);
   });

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -7,7 +7,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ActivityService } from '../../../../activity/index.js';
 import { ConfigSchema } from '../../../../config/schema.js';
-import { GoalService } from '../../../../goals/index.js';
 import { ProjectService } from '../../../../projects/index.js';
 import {
   closeXopcDatabase,
@@ -18,6 +17,7 @@ import {
   resetXopcDatabaseSingletonForTest,
 } from '../../../../storage/sqlite/index.js';
 import { WorkItemService, WORK_ITEM_ATTACHMENT_MAX_BYTES } from '../../../../work-items/index.js';
+import { OutcomeExecutionService } from '../../../../work/index.js';
 import type { GatewayService } from '../../../service.js';
 import { registerActivityRoutes } from '../activity.js';
 import { registerProjectsRoutes } from '../projects.js';
@@ -482,26 +482,6 @@ describe('project association routes', () => {
     expect(detachSession).not.toHaveBeenCalled();
   });
 
-  it('does not detach a goal that is no longer attached to the route project', async () => {
-    const projects = new ProjectService();
-    const projectA = projects.create({ name: 'Project A' });
-    const projectB = projects.create({ name: 'Project B' });
-    const goal = new GoalService().create({ title: 'Keep the current project association' });
-    projects.attachGoal(goal.id, projectB.id);
-    const app = registerProjectRouteApp({
-      projects,
-      sessions: {
-        getSession: vi.fn(),
-      } as unknown as GatewayService['sessions'],
-    });
-
-    const res = await app.request(`/api/projects/${projectA.id}/goals/${goal.id}`, { method: 'DELETE' });
-
-    expect(res.status).toBe(409);
-    expect(await res.json()).toEqual({ ok: false, error: 'Goal is not attached to this project' });
-    expect(new GoalService().get(goal.id)?.projectId).toBe(projectB.id);
-  });
-
   it('creates and lists first-class project work items', async () => {
     const projects = new ProjectService();
     const project = projects.create({ name: 'Workbench Project' });
@@ -832,61 +812,10 @@ describe('project association routes', () => {
     ]);
   });
 
-  it('creates a goal from a work item and links it back', async () => {
-    const projects = new ProjectService();
-    const project = projects.create({ name: 'Goal Work Item Project', defaultAgentId: 'coder' });
-    const app = registerProjectRouteApp({ projects });
-    const form = new FormData();
-    form.append('title', 'Implement review flow');
-    form.append('priority', 'high');
-    form.append('file', new File(['goal attachment brief'], 'brief.txt', { type: 'text/plain' }));
-    const create = await app.request(`/api/projects/${project.id}/work-items`, { method: 'POST', body: form });
-    const created = await create.json() as {
-      item: { id: string; attachments: Array<{ id: string; mediaUri: string }> };
-    };
-    const originalAttachment = created.item.attachments[0]!;
-
-    const res = await app.request(`/api/work-items/${created.item.id}/create-goal`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({}),
-    });
-
-    expect(res.status).toBe(201);
-    const body = await res.json() as { ok: boolean; item: Record<string, unknown>; goal: { id: string; title: string; projectId: string } };
-    expect(body.ok).toBe(true);
-    expect(body.goal).toMatchObject({ title: 'Implement review flow', projectId: project.id });
-    expect((body.item.links as Array<Record<string, unknown>>)).toEqual([
-      expect.objectContaining({ kind: 'goal', targetId: body.goal.id }),
-    ]);
-
-    const goal = new GoalService().get(body.goal.id);
-    const snapshot = goal?.contextMessage?.attachments[0];
-    expect(snapshot).toMatchObject({
-      bucket: 'inbound',
-      type: 'document',
-      mimeType: 'text/plain',
-      name: 'brief.txt',
-      size: 'goal attachment brief'.length,
-    });
-    expect(snapshot?.uri).not.toBe(originalAttachment.mediaUri);
-    expect(goal?.contextMessage?.text).toContain(`xopc-media-uri:${snapshot!.uri}`);
-    expect(goal?.contextMessage?.text).not.toContain(`xopc-media-uri:${originalAttachment.mediaUri}`);
-    expect(readFileSync(snapshot!.path, 'utf-8')).toBe('goal attachment brief');
-
-    const remove = await app.request(`/api/work-items/${created.item.id}/attachments/${originalAttachment.id}`, {
-      method: 'DELETE',
-    });
-    expect(remove.status).toBe(200);
-    expect(existsSync(snapshot!.path)).toBe(true);
-    expect(readFileSync(snapshot!.path, 'utf-8')).toBe('goal attachment brief');
-  });
-
   it('updates a stable project digest memory record instead of creating duplicates', async () => {
     const projects = new ProjectService();
     const project = projects.create({ name: 'Digest Project', brief: 'Keep a stable digest' });
-    const goals = new GoalService();
-    goals.create({ title: 'Ship the digest flow', projectId: project.id });
+    new OutcomeExecutionService().create({ objective: 'Ship the digest flow', projectId: project.id });
     const app = registerProjectRouteApp({
       currentConfig: {
         agents: {
@@ -906,7 +835,7 @@ describe('project association routes', () => {
     expect(firstBody.record.id).toBe(`project-digest:${project.id}`);
     expect(firstBody.record.content).toContain('Ship the digest flow');
 
-    goals.create({ title: 'Review the updated digest', projectId: project.id });
+    new OutcomeExecutionService().create({ objective: 'Review the updated digest', projectId: project.id });
     const second = await app.request(`/api/projects/${project.id}/digest-memory`, { method: 'POST' });
     expect(second.status).toBe(201);
     const secondBody = (await second.json()) as { record: { id: string; content: string } };

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { OutcomeReceiptSchema } from './outcomes.js';
+import { OutcomeReceiptSchema, OutcomeSchema } from './outcomes.js';
 
 export const WorkItemStatusSchema = z.enum([
   'backlog',
@@ -55,6 +55,7 @@ export const WorkHomeDecisionSchema = z.object({
     workDone: z.string(),
     recommendation: z.string(),
     confidence: z.number(),
+    valueScore: z.number().min(0).max(1).optional(),
     decision: z.object({
       question: z.string(),
       options: z.array(z.object({
@@ -132,6 +133,17 @@ export const WorkHomeResponseSchema = z.object({
   }),
   decisions: z.array(WorkHomeDecisionSchema),
   attention: z.array(WorkHomeAttentionSchema),
+  attentionPolicy: z.object({
+    visibleDecisionCount: z.number().int().nonnegative(),
+    suppressedDecisionCount: z.number().int().nonnegative(),
+    visibleAttentionCount: z.number().int().nonnegative(),
+    suppressedAttentionCount: z.number().int().nonnegative(),
+  }).default({
+    visibleDecisionCount: 0,
+    suppressedDecisionCount: 0,
+    visibleAttentionCount: 0,
+    suppressedAttentionCount: 0,
+  }),
   chats: z.object({
     running: z.array(WorkHomeChatSchema),
     recent: z.array(WorkHomeChatSchema),
@@ -149,10 +161,20 @@ export const WorkHomeResponseSchema = z.object({
     recent: z.array(WorkHomeWorkflowRunSchema),
   }),
   upcomingAutomations: z.array(WorkHomeAutomationSchema),
+  outcomes: z.object({
+    running: z.array(OutcomeSchema),
+    needsUser: z.array(OutcomeSchema),
+    recentlyCompleted: z.array(OutcomeSchema),
+  }).default({ running: [], needsUser: [], recentlyCompleted: [] }),
   recentOutcomes: z.array(OutcomeReceiptSchema).default([]),
 }).passthrough();
 
 export const WorkValueMetricsSchema = z.object({
+  northStar: z.object({
+    weeklyTrustedProgress: z.number(),
+    weeklyActiveUsers: z.number(),
+    trustedProgressPerWeeklyActiveUser: z.number(),
+  }),
   intake: z.object({
     total: z.number(),
     proposed: z.number(),
@@ -173,6 +195,8 @@ export const WorkValueMetricsSchema = z.object({
     userCorrected: z.number(),
     achievementRate: z.number(),
     correctionRate: z.number(),
+    trusted: z.number(),
+    trustedRate: z.number(),
   }),
 });
 

@@ -23,7 +23,7 @@ type WorkIntakeRow = {
   execution_mode: WorkExecutionMode;
   project_id: string | null;
   goal_id: string | null;
-  work_item_id: string | null;
+  outcome_id: string | null;
   queue_id: string | null;
   expires_at: number;
   created_at: number;
@@ -41,7 +41,7 @@ export interface StoredWorkIntake {
   executionMode: WorkExecutionMode;
   projectId?: string;
   goalId?: string;
-  workItemId?: string;
+  outcomeId?: string;
   queueId?: string;
   createdAt: number;
   confirmedAt?: number;
@@ -59,7 +59,7 @@ function fromRow(row: WorkIntakeRow): StoredWorkIntake {
     executionMode: row.execution_mode,
     ...(row.project_id ? { projectId: row.project_id } : {}),
     ...(row.goal_id ? { goalId: row.goal_id } : {}),
-    ...(row.work_item_id ? { workItemId: row.work_item_id } : {}),
+    ...(row.outcome_id ? { outcomeId: row.outcome_id } : {}),
     ...(row.queue_id ? { queueId: row.queue_id } : {}),
     createdAt: row.created_at,
     ...(row.confirmed_at === null ? {} : { confirmedAt: row.confirmed_at }),
@@ -141,9 +141,9 @@ export class WorkIntakeRepository {
   markConfirmed(input: {
     intakeId: string;
     executionMode: WorkExecutionMode;
-    projectId: string;
+    projectId?: string;
     goalId: string;
-    workItemId: string;
+    outcomeId: string;
     sessionKey?: string;
     queueId?: string;
     now?: number;
@@ -152,14 +152,14 @@ export class WorkIntakeRepository {
     getSqliteDatabase().prepare(
       `UPDATE work_intakes SET
         status = 'confirmed', execution_mode = ?, project_id = ?, goal_id = ?,
-        work_item_id = ?, session_key = COALESCE(?, session_key), queue_id = ?,
+        outcome_id = ?, session_key = COALESCE(?, session_key), queue_id = ?,
         confirmed_at = COALESCE(confirmed_at, ?), updated_at = ?
        WHERE intake_id = ? AND status = 'proposed'`,
     ).run(
       input.executionMode,
-      input.projectId,
+      input.projectId ?? null,
       input.goalId,
-      input.workItemId,
+      input.outcomeId,
       input.sessionKey ?? null,
       input.queueId ?? null,
       now,
@@ -185,7 +185,11 @@ export class WorkIntakeRepository {
   }
 
   toConfirmedWork(stored: StoredWorkIntake): ConfirmedWork | undefined {
-    if (stored.status !== 'confirmed' || !stored.projectId || !stored.goalId || !stored.workItemId) return undefined;
+    if (
+      stored.status !== 'confirmed'
+      || !stored.outcomeId
+      || !stored.goalId
+    ) return undefined;
     const queue = stored.queueId
       ? getSqliteDatabase()
         .prepare('SELECT status, session_key FROM goal_queue WHERE queue_id = ?')
@@ -193,9 +197,9 @@ export class WorkIntakeRepository {
       : undefined;
     const sessionKey = queue?.session_key ?? stored.sessionKey;
     return {
-      projectId: stored.projectId,
+      outcomeId: stored.outcomeId,
+      ...(stored.projectId ? { projectId: stored.projectId } : {}),
       goalId: stored.goalId,
-      workItemId: stored.workItemId,
       ...(sessionKey ? { sessionKey } : {}),
       execution: {
         mode: stored.executionMode,

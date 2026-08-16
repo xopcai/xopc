@@ -99,7 +99,7 @@ export class DiscussionPipeline {
     let current = capture;
     if (!current.transcriptRaw) current = await this.transcribe(current, owner, signal);
     if (!current.analysis) current = await this.analyze(current, owner, signal);
-    return this.writeNote(current, owner);
+    return this.writeNote(current);
   }
 
   private async transcribe(capture: DiscussionCapture, owner: string, signal?: AbortSignal): Promise<DiscussionCapture> {
@@ -167,7 +167,7 @@ export class DiscussionPipeline {
     return updated;
   }
 
-  private async writeNote(capture: DiscussionCapture, owner: string): Promise<DiscussionCapture> {
+  private async writeNote(capture: DiscussionCapture): Promise<DiscussionCapture> {
     if (!capture.transcriptRaw || !capture.analysis || !capture.audioAttachmentId) {
       throw new Error('Discussion finalization data is incomplete');
     }

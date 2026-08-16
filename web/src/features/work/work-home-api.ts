@@ -1,8 +1,13 @@
 import {
   ConfirmedWorkSchema,
+  OutcomeReceiptSchema,
+  OutcomeSchema,
   WorkIntakeProposalSchema,
   parseWorkHomeResponse,
   type ConfirmedWork,
+  type Outcome,
+  type OutcomeAction,
+  type OutcomeReceipt,
   type WorkIntakeProposal,
   type WorkHomeAttention,
   type WorkHomeChat,
@@ -16,6 +21,29 @@ import { apiUrl } from '@/lib/url';
 
 export type { WorkHomeAttention, WorkHomeChat, WorkHomeDecision, WorkHomeItem, WorkHomeResponse };
 export type { ConfirmedWork, WorkIntakeProposal };
+
+export type OutcomeDetail = {
+  outcome: Outcome;
+  receipts: OutcomeReceipt[];
+};
+
+export async function fetchOutcome(outcomeId: string): Promise<OutcomeDetail> {
+  const response = await fetchJson<{ outcome?: unknown; receipts?: unknown }>(
+    apiUrl(`/api/outcomes/${encodeURIComponent(outcomeId)}`),
+  );
+  return {
+    outcome: OutcomeSchema.parse(response.outcome),
+    receipts: OutcomeReceiptSchema.array().parse(response.receipts),
+  };
+}
+
+export async function actOnOutcome(outcomeId: string, action: OutcomeAction): Promise<Outcome> {
+  const response = await fetchJson<{ outcome?: unknown }>(
+    apiUrl(`/api/outcomes/${encodeURIComponent(outcomeId)}/actions`),
+    { method: 'POST', body: JSON.stringify({ action }) },
+  );
+  return OutcomeSchema.parse(response.outcome);
+}
 
 export async function proposeWorkIntake(objective: string): Promise<WorkIntakeProposal> {
   const response = await fetchJson<{ proposal?: unknown }>(apiUrl('/api/work/intakes'), {

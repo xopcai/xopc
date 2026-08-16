@@ -20,6 +20,7 @@ import {
   type ProjectWorkflowRunBrief,
 } from '../../../projects/index.js';
 import { buildSessionKey } from '../../../routing/session-key.js';
+import { OutcomeExecutionService } from '../../../work/index.js';
 import {
   getSqliteDatabase,
   getSessionMetadata,
@@ -29,7 +30,6 @@ import {
   upsertMemoryRecord,
 } from '../../../storage/sqlite/index.js';
 import {
-  buildWorkItemAgentContext,
   WORK_ITEM_ATTACHMENT_MAX_BYTES,
   WORK_ITEM_ATTACHMENT_MAX_COUNT,
   type WorkItemPriority,
@@ -885,40 +885,6 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
     return c.json({ ok: true, session, item: updated }, 201);
   });
 
-  authenticated.post('/api/work-items/:id/create-goal', async (c) => {
-    const item = workItems.getWorkItem(c.req.param('id'));
-    if (!item) return c.json({ ok: false, error: 'Work item not found' }, 404);
-    const project = service.projects.get(item.projectId);
-    if (!project) return c.json({ ok: false, error: 'Project not found' }, 404);
-    const attachments = await workItems.snapshotAttachmentsForGoal(item.id);
-    if (!attachments) return c.json({ ok: false, error: 'Work item not found' }, 404);
-    const context = await buildWorkItemAgentContext(item, { attachments, includeImages: false });
-    const goal = goals.create({
-      title: item.title,
-      description: item.description || item.nextAction,
-      priority: item.priority === 'urgent' ? 'high' : item.priority,
-      agentId: item.ownerAgentId || project.defaultAgentId || undefined,
-      projectId: project.id,
-      source: 'api',
-      config: service.currentConfig,
-    });
-    const goalWithContext = goals.setContextMessage({
-      goalId: goal.id,
-      text: context.text,
-      attachments,
-    }) ?? goal;
-    workItems.addLink(item.id, {
-      kind: 'goal',
-      targetId: goal.id,
-      title: goal.title,
-      statusSnapshot: goal.status,
-    }, 'goal_created');
-    const updated = item.status === 'todo' || item.status === 'backlog'
-      ? workItems.updateWorkItem(item.id, { status: 'in_progress' })
-      : workItems.getWorkItem(item.id);
-    return c.json({ ok: true, goal: goalWithContext, item: updated }, 201);
-  });
-
   authenticated.post('/api/work-items/:id/workflows/run', async (c) => {
     const item = workItems.getWorkItem(c.req.param('id'));
     if (!item) return c.json({ ok: false, error: 'Work item not found' }, 404);
@@ -1045,8 +1011,8 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
     const title = typeof body.title === 'string' ? body.title.trim() : '';
     if (!title) return c.json({ ok: false, error: 'Missing title' }, 400);
     const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
-    const goal = goals.create({
-      title,
+    const goal = new OutcomeExecutionService().create({
+      objective: title,
       description: reason || undefined,
       agentId: resolveProjectAgentId({
         config: service.currentConfig,
@@ -1056,12 +1022,12 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
       priority: body.priority === 'low' || body.priority === 'normal' || body.priority === 'high' ? body.priority : 'high',
       source: 'api',
       projectId: project.id,
-    });
+    }).goal;
     const blocked = goals.setStatus(goal.id, 'blocked', { reason: reason || title });
     if (reason) {
       goals.setContextMessage({ goalId: goal.id, text: reason });
     }
-    return c.json({ ok: true, goal: blocked ?? goals.get(goal.id) }, 201);
+    return c.json({ ok: true, blocker: blocked ?? goals.get(goal.id) }, 201);
   });
 
   authenticated.post('/api/projects/:id/pin', async (c) => {
@@ -1132,15 +1098,6 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
         ok: true,
         sessions: sessions.filter((session) => session && !isHiddenEmptyProjectChatShell(session)),
       });
-    } catch (error) {
-      return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 404);
-    }
-  });
-
-  authenticated.get('/api/projects/:id/goals', async (c) => {
-    try {
-      const ids = service.projects.listGoalIds(c.req.param('id'), parseLimit(c.req.query('limit'), 100));
-      return c.json({ ok: true, goals: ids.map((id) => goals.get(id)).filter(Boolean) });
     } catch (error) {
       return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 404);
     }
@@ -1419,33 +1376,4 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
     return c.json({ ok: true, record }, 201);
   });
 
-  authenticated.post('/api/projects/:id/goals/:goalId', async (c) => {
-    try {
-      service.projects.attachGoal(c.req.param('goalId'), c.req.param('id'));
-      return c.json({ ok: true, goal: goals.get(c.req.param('goalId')) });
-    } catch (error) {
-      return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 404);
-    }
-  });
-
-  authenticated.delete('/api/projects/:id/goals/:goalId', async (c) => {
-    try {
-      const projectId = c.req.param('id');
-      const goalId = c.req.param('goalId');
-      if (!service.projects.get(projectId)) {
-        return c.json({ ok: false, error: 'Project not found' }, 404);
-      }
-      const goal = goals.get(goalId);
-      if (!goal) {
-        return c.json({ ok: false, error: 'Goal not found' }, 404);
-      }
-      if (goal.projectId !== projectId) {
-        return c.json({ ok: false, error: 'Goal is not attached to this project' }, 409);
-      }
-      service.projects.detachGoal(goalId);
-      return c.json({ ok: true });
-    } catch (error) {
-      return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 404);
-    }
-  });
 }

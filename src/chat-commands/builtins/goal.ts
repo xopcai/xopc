@@ -5,6 +5,7 @@
 import { getDefaultAgentId } from '../../routing/resolve-route.js';
 import { GoalService, type GoalWithDetails } from '../../goals/index.js';
 import { getSessionMetadata } from '../../storage/sqlite/index.js';
+import { OutcomeExecutionService } from '../../work/index.js';
 import type { CommandContext, CommandDefinition } from '../types.js';
 import { commandRegistry } from '../registry.js';
 
@@ -85,14 +86,13 @@ const goalCommand: CommandDefinition = {
       };
     }
 
-    const goal = goals.create({
-      title: t,
+    const goal = new OutcomeExecutionService().create({
+      objective: t,
       sessionKey: ctx.sessionKey,
       agentId: getDefaultAgentId(ctx.config),
-      config: ctx.config,
       source: ctx.source === 'cli' ? 'cli' : ctx.source === 'api' ? 'api' : 'channel',
       projectId: getSessionMetadata(ctx.sessionKey)?.projectId,
-    });
+    }).goal;
 
     ctx.persistentGoalApis?.scheduleContinuation(ctx.sessionKey, goal.title);
 

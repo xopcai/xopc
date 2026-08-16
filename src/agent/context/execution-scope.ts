@@ -1,6 +1,7 @@
 import { GoalService, type GoalWithDetails } from '../../goals/index.js';
 import { getSessionMetadata, isXopcDatabaseOpen } from '../../storage/sqlite/index.js';
 import { sanitizeForPromptLiteral } from '../prompt/sanitize-for-prompt.js';
+import { OutcomeRepository } from '../../work/outcome-repository.js';
 
 import { buildActiveProjectContextForPrompt } from './project-context.js';
 
@@ -16,7 +17,7 @@ export type ExecutionObjective =
       status: string;
       scopeBoundary?: string;
       acceptanceCriteria: string[];
-      evidencePlan: string[];
+      deliverables: string[];
       nextAction?: string;
       blockedReason?: string;
     }
@@ -41,15 +42,16 @@ function bounded(value: string | undefined, max = MAX_OBJECTIVE_TEXT): string | 
 }
 
 function goalObjective(goal: GoalWithDetails): ExecutionObjective {
+  const contract = new OutcomeRepository().getContract(goal.outcomeId, goal.outcomeContractVersion);
   return {
     kind: 'goal',
     id: goal.id,
     title: goal.title,
-    objective: goal.contract?.objective?.trim() || goal.title,
+    objective: contract?.objective.trim() || goal.title,
     status: goal.status,
-    scopeBoundary: bounded(goal.contract?.scopeBoundary),
+    scopeBoundary: bounded(contract?.constraints.join('\n')),
     acceptanceCriteria: goal.checklist.slice(0, MAX_CRITERIA).map((item) => item.text),
-    evidencePlan: goal.contract?.evidencePlan.slice(0, MAX_CRITERIA) ?? [],
+    deliverables: contract?.deliverables.slice(0, MAX_CRITERIA) ?? [],
     nextAction: bounded(goal.nextAction),
     blockedReason: bounded(goal.blockedReason),
   };
@@ -112,8 +114,8 @@ export function formatCurrentWorkForPrompt(scope: ExecutionScope): string | unde
     if (objective.acceptanceCriteria.length > 0) {
       lines.push('', '## Acceptance Criteria', ...objective.acceptanceCriteria.map((item) => `- ${sanitizeForPromptLiteral(item)}`));
     }
-    if (objective.evidencePlan.length > 0) {
-      lines.push('', '## Completion Evidence', ...objective.evidencePlan.map((item) => `- ${sanitizeForPromptLiteral(item)}`));
+    if (objective.deliverables.length > 0) {
+      lines.push('', '## Deliverables', ...objective.deliverables.map((item) => `- ${sanitizeForPromptLiteral(item)}`));
     }
     if (objective.nextAction) {
       lines.push('', 'Next action:', sanitizeForPromptLiteral(objective.nextAction));

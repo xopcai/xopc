@@ -1,6 +1,7 @@
 import {
   parseWorkHomeResponse,
   type OutcomeReceipt,
+  type WorkHomeResponse,
 } from '@xopcai/gateway-contract';
 
 import { apiFetch } from '../api/client';
@@ -146,6 +147,7 @@ export interface HomeData {
   };
   upcomingAutomations: HomeAutomation[];
   recentOutcomes: OutcomeReceipt[];
+  outcomes: WorkHomeResponse['outcomes'];
 }
 
 function normalizedSessionName(session: SessionListItem): string | undefined {
@@ -160,6 +162,7 @@ export async function fetchHome(language: Language): Promise<HomeData> {
   const home = raw as HomeData;
   return {
     ...home,
+    outcomes: core.outcomes,
     recentOutcomes: core.recentOutcomes,
     recentSessions: home.recentSessions.map((session) => ({
       ...session,

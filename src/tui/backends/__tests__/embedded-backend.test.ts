@@ -39,7 +39,8 @@ vi.mock('../../../config/index.js', () => ({
   saveConfig: vi.fn(async () => undefined),
 }));
 
-vi.mock('../../../config/schema.js', () => ({
+vi.mock('../../../config/schema.js', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../../../config/schema.js')>(),
   getAgentDefaultModelRef: () => 'openai/test',
 }));
 

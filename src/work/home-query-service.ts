@@ -11,12 +11,15 @@ import {
 import { GoalService, type GoalWithDetails } from '../goals/index.js';
 import {
   isHomeAttentionAcknowledged,
+  getRelationshipSettings,
   listConnectorApprovals,
   type HomeAttentionSubjectKind,
 } from '../storage/sqlite/index.js';
 import type { WorkflowRunSummary } from '../workflows/domain/index.js';
 import { WorkItemService } from '../work-items/index.js';
 import { OutcomeReceiptService } from './outcome-receipt-service.js';
+import { OutcomeRepository } from './outcome-repository.js';
+import { AttentionGovernor } from './attention-governor.js';
 
 type HomeDecision = WorkHomeResponse['decisions'][number];
 type HomeAttention = WorkHomeResponse['attention'][number];
@@ -268,6 +271,8 @@ export function buildHomeBriefing(input: {
 export class WorkHomeQueryService {
   readonly #goals = new GoalService();
   readonly #receipts = new OutcomeReceiptService();
+  readonly #outcomes = new OutcomeRepository();
+  readonly #attentionGovernor = new AttentionGovernor();
 
   constructor(private readonly service: GatewayService) {}
 
@@ -282,6 +287,7 @@ export class WorkHomeQueryService {
     const health = this.service.getHealth();
     const workItems = new WorkItemService();
     const nowMs = Date.now();
+    const outcomes = this.#outcomes.list({ limit: 60 });
 
     const [recentlyOpened, inbox, pendingTasks, recentSessions, workflowRuns, automations,
       automationRuns, projects, allWorkItems, activeGoals, connectorApprovals] = await Promise.all([
@@ -345,7 +351,7 @@ export class WorkHomeQueryService {
     const automationsById = new Map(automations.map((automation) => [automation.id, automation]));
     const proactiveJudgments = this.service.proactiveInbox.list({ limit: 20 })
       .filter((item) => item.status === 'unread' || item.status === 'read');
-    const decisions: HomeDecision[] = [
+    const decisionCandidates: HomeDecision[] = [
       ...proactiveJudgments.map((item): HomeDecision => ({
         id: `agent-judgment:${item.id}`,
         kind: 'agent_judgment',
@@ -362,6 +368,7 @@ export class WorkHomeQueryService {
           workDone: item.insight.workDone,
           recommendation: item.insight.recommendation,
           confidence: item.insight.confidence,
+          valueScore: item.insight.valueScore,
           ...(item.insight.decision ? { decision: item.insight.decision } : {}),
         },
       })),
@@ -384,31 +391,9 @@ export class WorkHomeQueryService {
           updatedAt: Date.parse(approval.createdAt),
           response: { kind: 'connector_approval', approvalId: approval.id },
         })),
-      ...activeGoals.flatMap((goal) => goal.evidenceRequirements
-        .filter((requirement) => requirement.requiresHumanApproval
-          && requirement.evidenceIds.length > 0
-          && (requirement.status === 'pending' || requirement.status === 'ai_verified'))
-        .map((requirement): HomeDecision => ({
-          id: `goal-evidence:${requirement.id}`,
-          kind: 'goal_evidence',
-          title: goal.title,
-          detail: requirement.text,
-          reason: 'approval_required',
-          urgency: 'now',
-          href: `/goals/${encodeURIComponent(goal.id)}`,
-          projectId: goal.projectId,
-          projectName: goal.projectId ? projectsById.get(goal.projectId)?.name : undefined,
-          updatedAt: requirement.updatedAt,
-          response: { kind: 'goal_evidence', goalId: goal.id, requirementId: requirement.id },
-        }))),
-    ]
-      .sort((left, right) => {
-        const urgency = (left.urgency === 'now' ? 0 : 1) - (right.urgency === 'now' ? 0 : 1);
-        return urgency || right.updatedAt - left.updatedAt;
-      })
-      .slice(0, 20);
+    ];
 
-    const attention: HomeAttention[] = [
+    const attentionCandidates: HomeAttention[] = [
       ...failedWorkflowRuns
         .filter((run) => !isHomeAttentionAcknowledged('workflow_run', run.id))
         .map((run): HomeAttention => ({
@@ -441,7 +426,14 @@ export class WorkHomeQueryService {
           updatedAt: run.endedAtMs ?? run.startedAtMs ?? run.createdAtMs,
           sessionKey: run.sessionKey,
         })),
-    ].sort((left, right) => right.updatedAt - left.updatedAt).slice(0, 10);
+    ].sort((left, right) => right.updatedAt - left.updatedAt);
+    const governed = this.#attentionGovernor.project({
+      decisions: decisionCandidates,
+      attention: attentionCandidates,
+      proactiveEnabled: getRelationshipSettings().proactiveEnabled,
+    });
+    const decisions = governed.decisions;
+    const attention = governed.attention;
 
     const wins: HomeBriefingWin[] = [
       ...recentlyCompletedWorkItems.map((item): HomeBriefingWin => ({
@@ -499,6 +491,7 @@ export class WorkHomeQueryService {
       briefing,
       decisions,
       attention,
+      attentionPolicy: governed.policy,
       chats: {
         running: workChats.filter((chat) => chat.active),
         recent: workChats.filter((chat) => !chat.active).slice(0, 8),
@@ -512,6 +505,11 @@ export class WorkHomeQueryService {
         recentlyCompleted: recentlyCompletedWorkItems,
       },
       upcomingAutomations,
+      outcomes: {
+        running: outcomes.filter((outcome) => outcome.userStatus === 'running').slice(0, 20),
+        needsUser: outcomes.filter((outcome) => outcome.userStatus === 'needs_user').slice(0, 20),
+        recentlyCompleted: outcomes.filter((outcome) => outcome.userStatus === 'completed').slice(0, 10),
+      },
       recentOutcomes: this.#receipts.list({ limit: 20 })
         .filter((receipt) => receipt.status !== 'running')
         .slice(0, 8),

@@ -12,6 +12,7 @@ function count(value: number | null | undefined): number {
 
 export class WorkValueMetricsService {
   get(): WorkValueMetrics {
+    const weekStart = Date.now() - 7 * 24 * 60 * 60 * 1000;
     const intake = getSqliteDatabase().prepare(
       `SELECT
         COUNT(*) AS total,
@@ -30,11 +31,22 @@ export class WorkValueMetricsService {
         SUM(CASE WHEN completion_verdict = 'achieved' THEN 1 ELSE 0 END) AS achieved,
         SUM(CASE WHEN completion_verdict = 'partial' THEN 1 ELSE 0 END) AS partial,
         SUM(CASE WHEN completion_verdict = 'not_achieved' THEN 1 ELSE 0 END) AS not_achieved,
-        SUM(CASE WHEN completion_verdict_source = 'user' THEN 1 ELSE 0 END) AS user_corrected
-       FROM task_outcomes
+        SUM(CASE WHEN completion_verdict_source = 'user' THEN 1 ELSE 0 END) AS user_corrected,
+        SUM(CASE WHEN completion_verdict = 'achieved'
+                    AND verification_status = 'passed'
+                    AND completion_verdict_source != 'user'
+                    AND COALESCE(feedback_outcome, 'helpful') != 'not_helpful'
+                  THEN 1 ELSE 0 END) AS trusted,
+        SUM(CASE WHEN updated_at >= ?
+                    AND completion_verdict = 'achieved'
+                    AND verification_status = 'passed'
+                    AND completion_verdict_source != 'user'
+                    AND COALESCE(feedback_outcome, 'helpful') != 'not_helpful'
+                  THEN 1 ELSE 0 END) AS weekly_trusted
+       FROM execution_receipts
        WHERE status != 'running'
          AND (project_id IS NOT NULL OR goal_id IS NOT NULL OR work_item_id IS NOT NULL)`,
-    ).get() as Record<string, number | null>;
+    ).get(weekStart) as Record<string, number | null>;
     const confirmed = count(intake.confirmed);
     const intakeTotal = count(intake.total);
     const runNow = count(intake.run_now);
@@ -42,7 +54,20 @@ export class WorkValueMetricsService {
     const outcomeTotal = count(outcomes.total);
     const achieved = count(outcomes.achieved);
     const userCorrected = count(outcomes.user_corrected);
+    const trusted = count(outcomes.trusted);
+    const weeklyTrustedProgress = count(outcomes.weekly_trusted);
+    const hasWeeklyActivity = getSqliteDatabase().prepare(
+      `SELECT 1 FROM sessions
+       WHERE COALESCE(last_interaction_at, updated_at) >= ?
+       LIMIT 1`,
+    ).get(weekStart) !== undefined;
+    const weeklyActiveUsers = hasWeeklyActivity ? 1 : 0;
     return {
+      northStar: {
+        weeklyTrustedProgress,
+        weeklyActiveUsers,
+        trustedProgressPerWeeklyActiveUser: ratio(weeklyTrustedProgress, weeklyActiveUsers),
+      },
       intake: {
         total: intakeTotal,
         proposed: count(intake.proposed),
@@ -63,6 +88,8 @@ export class WorkValueMetricsService {
         userCorrected,
         achievementRate: ratio(achieved, outcomeTotal),
         correctionRate: ratio(userCorrected, outcomeTotal),
+        trusted,
+        trustedRate: ratio(trusted, outcomeTotal),
       },
     };
   }

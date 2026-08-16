@@ -8,16 +8,21 @@ import { GoalService } from '../../goals/index.js';
 import { ProjectService } from '../../projects/index.js';
 import {
   closeXopcDatabase,
-  completeTaskOutcome,
+  completeExecutionReceipt,
   ensureSessionRecord,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
-  setTaskCompletionVerdict,
-  startTaskOutcome,
-  updateTaskOutcome,
+  setExecutionVerdict,
+  startExecutionReceipt,
+  updateExecutionReceipt,
 } from '../../storage/sqlite/index.js';
 import { WorkItemService } from '../../work-items/index.js';
-import { OutcomeProjectionService } from '../outcome-projection-service.js';
+import { OutcomeExecutionService } from '../outcome-execution-service.js';
+import {
+  OutcomeProjectionService,
+  EXECUTION_RECEIPT_PROJECTION_VERSION,
+} from '../outcome-projection-service.js';
+import { OutcomeRepository } from '../outcome-repository.js';
 import { WorkValueMetricsService } from '../work-value-metrics-service.js';
 
 describe('OutcomeProjectionService', () => {
@@ -36,24 +41,34 @@ describe('OutcomeProjectionService', () => {
     rmSync(stateDir, { recursive: true, force: true });
   });
 
-  it('projects verified completion and user correction into work and goal state', () => {
+  it('projects receipt state only into the canonical outcome', () => {
     const projects = new ProjectService();
     const workItems = new WorkItemService();
-    const goals = new GoalService();
     const project = projects.create({ name: 'Outcome projection' });
-    const goal = goals.create({ title: 'Ship verified work', projectId: project.id });
+    const execution = new OutcomeExecutionService().create({
+      objective: 'Ship verified work',
+      projectId: project.id,
+      acceptanceCriteria: ['Checks pass'],
+    });
+    const goal = execution.goal;
     const workItem = workItems.createProjectWorkItem(project.id, {
       title: 'Ship verified work',
       status: 'in_progress',
     });
-    startTaskOutcome({
+    startExecutionReceipt({
       runId: 'run-projection',
       sessionKey: 'session-projection',
       channel: 'webchat',
       objective: 'Ship verified work',
-      context: { projectId: project.id, goalId: goal.id, workItemId: workItem.id, origin: 'goal' },
+      context: {
+        outcomeId: execution.outcomeId,
+        projectId: project.id,
+        goalId: goal.id,
+        workItemId: workItem.id,
+        origin: 'goal',
+      },
     });
-    updateTaskOutcome({
+    updateExecutionReceipt({
       runId: 'run-projection',
       contract: {
         objective: 'Ship verified work',
@@ -69,31 +84,33 @@ describe('OutcomeProjectionService', () => {
         verifies: ['Checks pass'],
       }],
     });
-    const completed = completeTaskOutcome({
+    const completed = completeExecutionReceipt({
       runId: 'run-projection',
       status: 'succeeded',
       summary: 'Verified work shipped',
     })!;
     const projections = new OutcomeProjectionService();
     const projected = projections.project(completed);
-    expect(projected.projectionVersion).toBe(1);
-    expect(workItems.getWorkItem(workItem.id)?.status).toBe('done');
-    expect(goals.get(goal.id)?.status).toBe('done');
+    expect(projected.projectionVersion).toBe(EXECUTION_RECEIPT_PROJECTION_VERSION);
+    expect(new OutcomeRepository().get(execution.outcomeId)).toMatchObject({
+      userStatus: 'completed',
+      internalStatus: 'completed',
+    });
+    expect(workItems.getWorkItem(workItem.id)?.status).toBe('in_progress');
+    expect(new GoalService().get(goal.id)?.status).toBe('active');
 
-    const corrected = setTaskCompletionVerdict({
+    const corrected = setExecutionVerdict({
       runId: 'run-projection',
       verdict: 'not_achieved',
       correctionText: 'Fix the production rollout before closing.',
     })!;
     projections.project(corrected);
-    expect(workItems.getWorkItem(workItem.id)).toMatchObject({
-      status: 'blocked',
-      nextAction: 'Fix the production rollout before closing.',
+    expect(new OutcomeRepository().get(execution.outcomeId)).toMatchObject({
+      userStatus: 'needs_user',
+      internalStatus: 'blocked',
     });
-    expect(goals.get(goal.id)).toMatchObject({
-      status: 'blocked',
-      nextAction: 'Fix the production rollout before closing.',
-    });
+    expect(workItems.getWorkItem(workItem.id)?.status).toBe('in_progress');
+    expect(new GoalService().get(goal.id)?.status).toBe('active');
     expect(new WorkValueMetricsService().get().outcomes).toMatchObject({
       total: 1,
       achieved: 0,

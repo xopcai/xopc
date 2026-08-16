@@ -6,8 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { closeXopcDatabase, openXopcDatabase } from '../../storage/sqlite/connection.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
-import { GoalService } from '../../goals/goal-service.js';
 import { ProjectService } from '../../projects/project-service.js';
+import { OutcomeExecutionService } from '../../work/index.js';
 import type { WorkflowDefinition } from '../domain/index.js';
 import { WorkflowEventStore } from '../store/event-store.js';
 import { WorkflowRunStore } from '../store/run-store.js';
@@ -259,7 +259,10 @@ describe('WorkflowRunService helpers', () => {
   it('passes the goal project to the workflow session bridge', async () => {
     const definition = createDefinition();
     const project = new ProjectService().create({ name: 'Workflow Goal Project' });
-    const goal = new GoalService().create({ title: 'Run workflow in project', projectId: project.id });
+    const goal = new OutcomeExecutionService().create({
+      objective: 'Run workflow in project',
+      projectId: project.id,
+    }).goal;
     const prepareRunSession = vi.fn(async () => ({
       sessionKey: 'agent:main:workflow:default:run:project-workflow',
     }));

@@ -16,6 +16,7 @@ import {
 } from './product-delivery';
 
 const KIND_ICONS: Record<ProductReferenceKind, string> = {
+  outcome: 'target',
   project: 'folder-outline',
   note: 'notebook-outline',
   work_item: 'checkbox-marked-circle-outline',
@@ -30,6 +31,7 @@ const KIND_ICONS: Record<ProductReferenceKind, string> = {
 };
 
 const KIND_LABELS: Record<ProductReferenceKind, { en: string; zh: string }> = {
+  outcome: { en: 'Outcome', zh: '结果' },
   project: { en: 'Project', zh: '项目' },
   note: { en: 'Note', zh: '笔记' },
   work_item: { en: 'Work item', zh: '工作项' },

@@ -9,6 +9,7 @@ import {
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../storage/sqlite/index.js';
+import { OutcomeExecutionService } from '../../work/index.js';
 import { GoalRunner } from '../goal-runner.js';
 import { GoalService } from '../goal-service.js';
 
@@ -29,15 +30,13 @@ describe('GoalRunner', () => {
 
   it('runs the first goal turn with context text and persisted attachments', async () => {
     const goals = new GoalService();
-    const goal = goals.create({
-      title: 'Ship a multimodal goal',
+    const goal = new OutcomeExecutionService().create({
+      objective: 'Ship a multimodal goal that follows the uploaded specification.',
       sessionKey: 'agent:main:webchat:default:direct:g1',
-      contract: {
-        objective: 'Ship a multimodal goal that follows the uploaded specification.',
-        scopeBoundary: 'Do not change unrelated features.',
-        evidencePlan: ['The implementation is verified against the specification.'],
-      },
-    });
+      constraints: ['Do not change unrelated features.'],
+      deliverables: ['The implementation is verified against the specification.'],
+      acceptanceCriteria: ['The implementation matches the spec.'],
+    }).goal;
     goals.setContextMessage({
       goalId: goal.id,
       text: 'Use the uploaded spec before writing code.',
@@ -52,8 +51,6 @@ describe('GoalRunner', () => {
         path: '/tmp/spec.txt',
       }],
     });
-    goals.updateChecklist(goal.id, { type: 'add', text: 'The implementation matches the spec.' });
-
     const runTurn = vi.fn(async () => {});
     const bindExecutionContext = vi.fn(async () => {});
     const runner = new GoalRunner({
@@ -88,11 +85,11 @@ describe('GoalRunner', () => {
     );
     const [sessionKey, userTurn] = runTurn.mock.calls[0]!;
     expect(sessionKey).toBe(goal.activeSessionKey);
-    expect(userTurn.text).toContain('Goal:\nShip a multimodal goal that follows the uploaded specification.');
-    expect(userTurn.text).toContain('Scope boundary:\nDo not change unrelated features.');
-    expect(userTurn.text).toContain('Expected completion evidence:');
+    expect(userTurn.text).toContain('Outcome:\nShip a multimodal goal that follows the uploaded specification.');
+    expect(userTurn.text).toContain('Constraints:\n- Do not change unrelated features.');
+    expect(userTurn.text).toContain('Deliverables:\n- The implementation is verified against the specification.');
     expect(userTurn.text).toContain('Context:\nUse the uploaded spec before writing code.');
-    expect(userTurn.text).toContain('User-provided acceptance criteria:');
+    expect(userTurn.text).toContain('Acceptance criteria:');
     expect(userTurn.attachments).toEqual([
       expect.objectContaining({
         type: 'document',

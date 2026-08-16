@@ -1,12 +1,12 @@
 import type { OutcomeReceipt, OutcomeReceiptStatus } from '@xopcai/gateway-contract';
 
 import {
-  getTaskOutcome,
-  listTaskOutcomes,
-  type TaskOutcome,
+  getExecutionReceipt,
+  listExecutionReceipts,
+  type ExecutionReceipt,
 } from '../storage/sqlite/index.js';
 
-function receiptStatus(outcome: TaskOutcome): OutcomeReceiptStatus {
+function receiptStatus(outcome: ExecutionReceipt): OutcomeReceiptStatus {
   if (outcome.status === 'running') return 'running';
   if (outcome.status === 'cancelled') return 'cancelled';
   if (outcome.needsUser) return 'needs_user';
@@ -15,7 +15,7 @@ function receiptStatus(outcome: TaskOutcome): OutcomeReceiptStatus {
   return 'failed';
 }
 
-function remainingWork(outcome: TaskOutcome): string[] {
+function remainingWork(outcome: ExecutionReceipt): string[] {
   const incomplete = outcome.verification.checks
     .filter((check) => check.status !== 'passed')
     .map((check) => check.criterion);
@@ -23,9 +23,11 @@ function remainingWork(outcome: TaskOutcome): string[] {
   return incomplete;
 }
 
-export function toOutcomeReceipt(outcome: TaskOutcome): OutcomeReceipt {
+export function toOutcomeReceipt(outcome: ExecutionReceipt): OutcomeReceipt {
   return {
     runId: outcome.runId,
+    ...(outcome.context.outcomeId ? { outcomeId: outcome.context.outcomeId } : {}),
+    ...(outcome.contractVersion ? { contractVersion: outcome.contractVersion } : {}),
     sessionKey: outcome.sessionKey,
     objective: outcome.objective,
     status: receiptStatus(outcome),
@@ -52,11 +54,17 @@ export function toOutcomeReceipt(outcome: TaskOutcome): OutcomeReceipt {
 
 export class OutcomeReceiptService {
   get(runId: string): OutcomeReceipt | undefined {
-    const outcome = getTaskOutcome(runId);
+    const outcome = getExecutionReceipt(runId);
     return outcome ? toOutcomeReceipt(outcome) : undefined;
   }
 
-  list(input: { projectId?: string; workItemId?: string; sessionKey?: string; limit?: number } = {}): OutcomeReceipt[] {
-    return listTaskOutcomes(input).map(toOutcomeReceipt);
+  list(input: {
+    outcomeId?: string;
+    projectId?: string;
+    workItemId?: string;
+    sessionKey?: string;
+    limit?: number;
+  } = {}): OutcomeReceipt[] {
+    return listExecutionReceipts(input).map(toOutcomeReceipt);
   }
 }

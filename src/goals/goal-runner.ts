@@ -4,6 +4,7 @@ import type { EnqueueGoalRunOptions, GoalQueueItemSnapshot, GoalQueueStatus, Goa
 import type { GoalWithDetails } from './types.js';
 import { mediaRefsToUserTurnAttachments, type UserTurnInput } from '../gateway/user-turn-input.js';
 import { createLogger } from '../utils/logger.js';
+import { OutcomeRepository } from '../work/outcome-repository.js';
 
 const log = createLogger('GoalRunner');
 
@@ -13,18 +14,19 @@ function terminalGoalStatus(status: GoalWithDetails['status']): boolean {
 
 function buildInitialGoalTurn(goal: GoalWithDetails): UserTurnInput {
   const context = goal.contextMessage;
-  const parts = [`Goal:\n${goal.contract?.objective || goal.title}`];
-  if (goal.contract?.scopeBoundary) {
-    parts.push(`Scope boundary:\n${goal.contract.scopeBoundary}`);
+  const contract = new OutcomeRepository().getContract(goal.outcomeId, goal.outcomeContractVersion);
+  const parts = [`Outcome:\n${contract?.objective ?? goal.title}`];
+  if (contract?.constraints.length) {
+    parts.push(`Constraints:\n${contract.constraints.map((item) => `- ${item}`).join('\n')}`);
   }
-  if (goal.contract?.evidencePlan.length) {
-    parts.push(`Expected completion evidence:\n${goal.contract.evidencePlan.map((item) => `- ${item}`).join('\n')}`);
+  if (contract?.deliverables.length) {
+    parts.push(`Deliverables:\n${contract.deliverables.map((item) => `- ${item}`).join('\n')}`);
   }
   if (context?.text.trim()) {
     parts.push(`Context:\n${context.text.trim()}`);
   }
   if (goal.checklist.length > 0) {
-    parts.push(`User-provided acceptance criteria:\n${goal.checklist.map((item, index) => `${index + 1}. ${item.text}`).join('\n')}`);
+    parts.push(`Acceptance criteria:\n${goal.checklist.map((item, index) => `${index + 1}. ${item.text}`).join('\n')}`);
   }
   return {
     text: parts.join('\n\n'),

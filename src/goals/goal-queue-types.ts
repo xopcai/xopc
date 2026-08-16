@@ -4,6 +4,7 @@ import type { UserTurnInput } from '../gateway/user-turn-input.js';
 export type GoalQueueStatus = 'queued' | 'running' | 'retry_waiting' | 'succeeded' | 'failed' | 'skipped';
 
 export interface GoalRunExecutionContext {
+  outcomeId?: string;
   workItemId?: string;
   contextTraceId?: string;
   parentRunId?: string;

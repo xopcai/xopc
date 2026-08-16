@@ -17,10 +17,9 @@ import {
   loadAutomationsPage,
   loadBrowserWorkflowsPage,
   loadWorkPage,
+  loadOutcomeDetailPage,
   loadChannelsPage,
   loadConnectorsPage,
-  loadGoalDetailPage,
-  loadGoalsPage,
   loadProjectDetailPage,
   loadProjectsPage,
   loadWorkItemDetailPage,
@@ -49,11 +48,10 @@ const SessionsPage = lazy(() => loadSessionsPage().then((m) => ({ default: m.Ses
 const AutomationsPage = lazy(() => loadAutomationsPage().then((m) => ({ default: m.AutomationsPage })));
 const BrowserWorkflowsPage = lazy(() => loadBrowserWorkflowsPage().then((m) => ({ default: m.BrowserWorkflowsPage })));
 const WorkPage = lazy(() => loadWorkPage().then((m) => ({ default: m.WorkPage })));
+const OutcomeDetailPage = lazy(() => loadOutcomeDetailPage().then((m) => ({ default: m.OutcomeDetailPage })));
 const ProjectsPage = lazy(() => loadProjectsPage().then((m) => ({ default: m.ProjectsPage })));
 const ProjectDetailPage = lazy(() => loadProjectDetailPage().then((m) => ({ default: m.ProjectDetailPage })));
 const WorkItemDetailPage = lazy(() => loadWorkItemDetailPage().then((m) => ({ default: m.WorkItemDetailPage })));
-const GoalsPage = lazy(() => loadGoalsPage().then((m) => ({ default: m.GoalsPage })));
-const GoalDetailPage = lazy(() => loadGoalDetailPage().then((m) => ({ default: m.GoalDetailPage })));
 const NotesPage = lazy(() => loadNotesPage().then((m) => ({ default: m.NotesPage })));
 const WorkflowsPage = lazy(() => loadWorkflowsPage().then((m) => ({ default: m.WorkflowsPage })));
 const WorkflowDetailPage = lazy(() => loadWorkflowsPage().then((m) => ({ default: m.WorkflowDetailPage })));
@@ -157,7 +155,7 @@ const router = createHashRouter([
     path: '/',
     element: <AppShell />,
     children: [
-      { index: true, element: <Navigate to="/chat" replace /> },
+      { index: true, element: <Navigate to="/work" replace /> },
       {
         path: 'open',
         element: (
@@ -214,6 +212,14 @@ const router = createHashRouter([
         ),
       },
       {
+        path: 'work/:outcomeId',
+        element: (
+          <Suspense fallback={<SecondaryRouteFallback />}>
+            <OutcomeDetailPage />
+          </Suspense>
+        ),
+      },
+      {
         path: 'projects',
         children: [
           {
@@ -257,27 +263,6 @@ const router = createHashRouter([
             <WorkItemDetailPage />
           </Suspense>
         ),
-      },
-      {
-        path: 'goals',
-        children: [
-          {
-            index: true,
-            element: (
-              <Suspense fallback={<SecondaryRouteFallback />}>
-                <GoalsPage />
-              </Suspense>
-            ),
-          },
-          {
-            path: ':goalId',
-            element: (
-              <Suspense fallback={<SecondaryRouteFallback />}>
-                <GoalDetailPage />
-              </Suspense>
-            ),
-          },
-        ],
       },
       {
         path: 'notes',
