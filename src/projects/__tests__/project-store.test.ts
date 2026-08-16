@@ -10,6 +10,7 @@ import {
   resetXopcDatabaseSingletonForTest,
 } from '../../storage/sqlite/index.js';
 import { GoalService } from '../../goals/index.js';
+import { OutcomeExecutionService } from '../../work/index.js';
 import { inferSuggestedProjectDefaultAgentId } from '../project-agent-suggestion.js';
 import { inferProjectKind } from '../project-kind.js';
 import { ProjectService } from '../project-service.js';
@@ -275,7 +276,10 @@ describe('ProjectService', () => {
   it('binds sessions and goals without deleting them when project is deleted', () => {
     const project = projects.create({ name: 'Grouped Work' });
     ensureSessionRecord(SESSION_KEY, process.cwd());
-    const goal = new GoalService().create({ title: 'Ship grouped work', sessionKey: SESSION_KEY });
+    const goal = new OutcomeExecutionService().create({
+      objective: 'Ship grouped work',
+      sessionKey: SESSION_KEY,
+    }).goal;
 
     projects.attachSession(SESSION_KEY, project.id);
     projects.attachGoal(goal.id, project.id);

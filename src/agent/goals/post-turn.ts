@@ -5,6 +5,7 @@ import { getAgentDefaultModelRef } from '../../config/schema.js';
 import { resolveEffectiveAgentProfileForSession } from '../../config/agent-profile.js';
 import { GoalService } from '../../goals/index.js';
 import { createLogger } from '../../utils/logger.js';
+import { OutcomeRepository } from '../../work/outcome-repository.js';
 
 import { evaluateAfterTurnHermesLike } from './evaluate-turn.js';
 import { resolveGoalUiLocale } from './goal-locale.js';
@@ -26,12 +27,13 @@ function buildHistoryExcerpt(messages: AgentMessage[], maxChars: number): string
 }
 
 function buildGoalContextText(goal: NonNullable<ReturnType<GoalService['get']>>): string {
-  const lines = [`Title: ${goal.contract?.objective || goal.title}`];
-  if (goal.contract?.scopeBoundary) {
-    lines.push(`Scope boundary:\n${goal.contract.scopeBoundary}`);
+  const contract = new OutcomeRepository().getContract(goal.outcomeId, goal.outcomeContractVersion);
+  const lines = [`Outcome: ${contract?.objective ?? goal.title}`];
+  if (contract?.constraints.length) {
+    lines.push(`Constraints:\n${contract.constraints.map((item) => `- ${item}`).join('\n')}`);
   }
-  if (goal.contract?.evidencePlan.length) {
-    lines.push(`Expected completion evidence:\n${goal.contract.evidencePlan.map((item) => `- ${item}`).join('\n')}`);
+  if (contract?.deliverables.length) {
+    lines.push(`Deliverables:\n${contract.deliverables.map((item) => `- ${item}`).join('\n')}`);
   }
   if (goal.contextMessage?.text.trim()) {
     lines.push(`Context:\n${goal.contextMessage.text.trim()}`);
@@ -177,9 +179,7 @@ export async function handlePersistentGoalPostTurn(opts: {
   });
 
   const completionReadiness = goalService.getCompletionReadiness(goal.id);
-  const executionGaps = completionReadiness
-    ? [...completionReadiness.missingEvidence, ...completionReadiness.pendingOutcome]
-    : [];
+  const executionGaps = completionReadiness?.pendingCriteria ?? [];
   if (decision.verdict === 'done' && executionGaps.length > 0 && decision.newState) {
     const reason = `Completion evidence or outcome still needed: ${executionGaps.join('; ')}`;
     decision = {

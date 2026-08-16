@@ -7,7 +7,6 @@ import { fetchCommandsCached } from '@/features/chat/palette/command-palette-api
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChatComposer } from '@/features/chat/composer/chat-composer';
-import { ChatGoalBanner } from '@/features/chat/goals/chat-goal-banner';
 import { ChatProjectScopeBar } from '@/features/chat/scope/chat-project-scope-bar';
 import { useChatProjectScope } from '@/features/chat/scope/use-chat-project-scope';
 import { ChatWelcomeSpotlightSkeleton } from '@/features/chat/chat-welcome-spotlight';
@@ -1147,13 +1146,6 @@ export function ChatPage() {
               </div>
             ) : null}
           </div>
-        ) : null}
-        {session.sessionKey && !session.showSessionLoading && !session.sessionRoutePending ? (
-          <ChatGoalBanner
-            sessionKey={session.sessionKey}
-            streaming={stream.streaming}
-            sending={stream.sending}
-          />
         ) : null}
         <div className="relative flex min-h-0 min-w-0 flex-1 px-3 sm:px-5 xl:px-6">
           <ChatTimelinePanel

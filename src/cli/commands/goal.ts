@@ -4,6 +4,7 @@ import { loadConfig } from '../../config/loader.js';
 import { closeXopcDatabase, openXopcDatabase } from '../../storage/sqlite/index.js';
 import { GoalService, type GoalEvidence, type GoalWithDetails } from '../../goals/index.js';
 import { ProjectService, resolveProjectAgentId } from '../../projects/index.js';
+import { OutcomeExecutionService } from '../../work/index.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';
 
 type EvidenceKind = GoalEvidence['kind'];
@@ -119,7 +120,7 @@ function createGoalCommand(ctx: CLIContext): Command {
       .option('--project <id-or-slug>', 'Attach the goal to a project')
       .action(async (title, options) => {
         const cfg = loadConfig(ctx.configPath);
-        await withGoals(ctx, async (goals) => {
+        await withGoals(ctx, async (_goals) => {
           const projectId = resolveProjectId(options.project);
           const agentId = options.sessionKey && !options.agentId
             ? undefined
@@ -129,16 +130,15 @@ function createGoalCommand(ctx: CLIContext): Command {
               explicitAgentId: options.agentId,
               projectId,
             });
-          const goal = goals.create({
-            title,
+          const goal = new OutcomeExecutionService().create({
+            objective: title,
             sessionKey: options.sessionKey,
             agentId,
             priority: options.priority === 'low' || options.priority === 'high' ? options.priority : 'normal',
             maxTurns: options.maxTurns ? Number(options.maxTurns) : undefined,
-            config: cfg,
             source: 'cli',
             projectId,
-          });
+          }).goal;
           console.log(`Created goal ${goal.id}`);
           console.log(`  ${goal.title}`);
         });

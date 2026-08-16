@@ -9,7 +9,8 @@ import { listConnectorCatalog } from '../../../connectors/catalog.js';
 import { listConnectorInstances } from '../../../connectors/instances.js';
 import { uninstallConnector } from '../../../connectors/install.js';
 import { revokeComposioConnection } from '../../../connectors/composio.js';
-import { draftGoalContract, GoalService } from '../../../goals/index.js';
+import { GoalService } from '../../../goals/index.js';
+import { defineOutcomeContract, OutcomeExecutionService } from '../../../work/index.js';
 import { renderUserClaim } from '../../../knowledge/connected-understanding-pipeline.js';
 import { readUserProfileFile, writeUserProfileFile } from '../../agents-admin.js';
 import {
@@ -891,23 +892,19 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
 
     const title = existing.content.trim().split(/\r?\n/)[0]!.slice(0, 72);
     const uiLocale = body.uiLocale === 'zh' ? 'zh' : 'en';
-    const contractDraft = await draftGoalContract({
-      title,
-      context: existing.content,
-      uiLocale,
-      modelRef: config.goals?.judgeModelRef,
-    });
+    const contract = defineOutcomeContract(title);
     const goals = new GoalService();
-    const goal = goals.create({
-      title,
+    const goal = new OutcomeExecutionService().create({
+      objective: contract.objective,
       description: existing.content,
+      deliverables: contract.deliverables,
+      acceptanceCriteria: contract.acceptanceCriteria,
+      constraints: contract.constraints,
       agentId: selectedAgentId(config),
       priority: 'normal',
       uiLocale,
       source: 'api',
-      contract: contractDraft.contract,
-      config,
-    });
+    }).goal;
     goals.setContextMessage({ goalId: goal.id, text: existing.content });
     let queued = false;
     try {

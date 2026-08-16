@@ -32,5 +32,6 @@ export const queryKeys = {
   projects: ['projects'] as const,
   projectOperatingView: (id: string) => ['project', id, 'operating-view'] as const,
   home: ['home'] as const,
+  outcome: (id: string) => ['outcome', id] as const,
   judgments: ['inbox', 'judgments'] as const,
 };

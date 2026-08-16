@@ -9,6 +9,7 @@ import {
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../storage/sqlite/index.js';
+import { OutcomeExecutionService } from '../../work/index.js';
 import { GoalNotificationService, type GoalNotificationSendInput } from '../goal-notifications.js';
 import { GoalService } from '../goal-service.js';
 
@@ -66,11 +67,11 @@ describe('GoalNotificationService', () => {
   });
 
   it('notifies linked Telegram sessions for terminal goal status', async () => {
-    const goal = goals.create({
-      title: 'Ship release',
+    const goal = new OutcomeExecutionService().create({
+      objective: 'Ship release',
       sessionKey: 'agent:main:telegram:default:direct:123456',
       maxTurns: 5,
-    });
+    }).goal;
     const done = goals.setStatus(goal.id, 'done');
 
     notifications.handleGatewayEvent('goal.status.updated', {
@@ -90,11 +91,11 @@ describe('GoalNotificationService', () => {
   });
 
   it('notifies fixed targets for queue failures and deduplicates repeated events', async () => {
-    const goal = goals.create({
-      title: 'Investigate deploy',
+    const goal = new OutcomeExecutionService().create({
+      objective: 'Investigate deploy',
       sessionKey: 'agent:main:webchat:default:direct:g1',
       maxTurns: 5,
-    });
+    }).goal;
     config = {
       goals: {
         notifications: {

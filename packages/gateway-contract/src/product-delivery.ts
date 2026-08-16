@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const PRODUCT_DELIVERY_VERSION = 1 as const;
 
 export const ProductReferenceKindSchema = z.enum([
+  'outcome',
   'project',
   'note',
   'work_item',
@@ -101,6 +102,8 @@ export function parseProductDeliveryText(text: string): ProductDeliveryEnvelope 
 export function productReferenceRoute(reference: ProductReference): string | null {
   const id = encodeURIComponent(reference.id);
   switch (reference.kind) {
+    case 'outcome':
+      return `/work/${id}`;
     case 'project':
       return `/projects/${id}`;
     case 'note':

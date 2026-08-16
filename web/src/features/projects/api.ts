@@ -2,7 +2,6 @@ import { ProjectOperatingViewSchema, type ProjectOperatingView } from '@xopcai/g
 
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
-import type { WireAttachment } from '@/features/chat/composer/composer.types';
 
 export type ProjectStatus = 'active' | 'paused' | 'archived';
 export type ProjectKind = 'coding' | 'general' | 'unknown';
@@ -28,8 +27,6 @@ export type Project = {
 
 export type ProjectWithDetails = Project & {
   sessionCount: number;
-  goalCount: number;
-  activeGoalCount: number;
   recentSessions: ProjectSession[];
   recentWorkflowRuns: Array<{
     runId: string;
@@ -52,7 +49,7 @@ export type ProjectSession = {
   projectId?: string;
 };
 
-export type ProjectGoal = {
+export type ProjectBlocker = {
   id: string;
   title: string;
   description?: string;
@@ -151,23 +148,6 @@ export type ProjectActivityResponse = {
   limit: number;
   offset: number;
   hasMore: boolean;
-};
-
-export type CreateProjectGoalInput = {
-  title: string;
-  description?: string;
-  attachments?: WireAttachment[];
-  priority?: 'low' | 'normal' | 'high';
-  deadlineAt?: number;
-  maxTurns?: number;
-  agentId?: string;
-  judgeModelRef?: string;
-  contract?: {
-    objective?: string;
-    scopeBoundary?: string;
-    evidencePlan?: string[];
-    criteria?: string[];
-  };
 };
 
 export type ProjectListResponse = {
@@ -337,19 +317,12 @@ export async function saveProjectDigest(projectId: string): Promise<void> {
   });
 }
 
-export async function createProjectBlocker(projectId: string, input: { title: string; reason?: string }): Promise<ProjectGoal> {
-  const res = await fetchJson<{ ok: true; goal: ProjectGoal }>(apiUrl(`/api/projects/${encodeURIComponent(projectId)}/blockers`), {
+export async function createProjectBlocker(projectId: string, input: { title: string; reason?: string }): Promise<ProjectBlocker> {
+  const res = await fetchJson<{ ok: true; blocker: ProjectBlocker }>(apiUrl(`/api/projects/${encodeURIComponent(projectId)}/blockers`), {
     method: 'POST',
     body: JSON.stringify(input),
   });
-  return res.goal;
-}
-
-export async function fetchProjectGoals(projectId: string): Promise<ProjectGoal[]> {
-  const res = await fetchJson<{ ok: true; goals: ProjectGoal[] }>(
-    apiUrl(`/api/projects/${encodeURIComponent(projectId)}/goals?limit=100`),
-  );
-  return res.goals;
+  return res.blocker;
 }
 
 export async function fetchProjectFiles(projectId: string, path?: string): Promise<ProjectFilesResponse> {
@@ -375,33 +348,4 @@ export async function createProjectSession(projectId: string, agentId?: string):
     body: JSON.stringify({ projectId, ...(agentId ? { agentId } : {}) }),
   });
   return res.session;
-}
-
-export async function createProjectGoal(projectId: string, input: CreateProjectGoalInput): Promise<ProjectGoal> {
-  const res = await fetchJson<{ ok: true; goal: ProjectGoal }>(apiUrl('/api/goals'), {
-    method: 'POST',
-    body: JSON.stringify({
-      title: input.title,
-      projectId,
-      priority: input.priority ?? 'normal',
-      contextMessage: {
-        text: input.description ?? '',
-        attachments: input.attachments?.length ? input.attachments : undefined,
-      },
-      deadlineAt: input.deadlineAt,
-      maxTurns: input.maxTurns,
-      agentId: input.agentId,
-      judgeModelRef: input.judgeModelRef,
-      contract: input.contract,
-      source: 'api',
-    }),
-  });
-  return res.goal;
-}
-
-export async function addProjectGoalChecklistItem(goalId: string, text: string): Promise<void> {
-  await fetchJson(apiUrl(`/api/goals/${encodeURIComponent(goalId)}/checklist`), {
-    method: 'POST',
-    body: JSON.stringify({ text }),
-  });
 }

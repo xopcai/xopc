@@ -592,6 +592,7 @@ export class GatewayService {
                 goalId: goal.id,
                 origin: 'goal',
                 triggerKind: executionContext?.triggerKind ?? 'user',
+                ...(executionContext?.outcomeId ? { outcomeId: executionContext.outcomeId } : {}),
                 ...(executionContext?.workItemId ? { workItemId: executionContext.workItemId } : {}),
                 ...(executionContext?.contextTraceId ? { contextTraceId: executionContext.contextTraceId } : {}),
                 ...(executionContext?.parentRunId ? { parentRunId: executionContext.parentRunId } : {}),
@@ -614,6 +615,7 @@ export class GatewayService {
               goalId: goal.id,
               origin: 'goal',
               triggerKind: executionContext?.triggerKind ?? 'user',
+              ...(executionContext?.outcomeId ? { outcomeId: executionContext.outcomeId } : {}),
               ...(executionContext?.workItemId ? { workItemId: executionContext.workItemId } : {}),
               ...(executionContext?.contextTraceId ? { contextTraceId: executionContext.contextTraceId } : {}),
               ...(executionContext?.parentRunId ? { parentRunId: executionContext.parentRunId } : {}),
@@ -850,7 +852,6 @@ export class GatewayService {
     openXopcDatabase();
     new WorkIntakeService(
       this.projects,
-      this.workItems,
       { enqueue: (goalId, options) => this.enqueueGoalRun(goalId, options) },
     ).reconcilePendingExecutions();
     new OutcomeProjectionService().reconcile();

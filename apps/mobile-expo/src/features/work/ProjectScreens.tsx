@@ -78,10 +78,10 @@ export function CreateWorkItemScreen() {
       if (noteId) await updateNote(noteId, { status: 'processed' });
       void queryClient.invalidateQueries({ queryKey: queryKeys.workItems() });
       void queryClient.invalidateQueries({ queryKey: queryKeys.projects });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.projectWorkItems(work.projectId) });
+      if (work.projectId) void queryClient.invalidateQueries({ queryKey: queryKeys.projectWorkItems(work.projectId) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.home });
       if (noteId) void queryClient.invalidateQueries({ queryKey: queryKeys.notesAll });
-      router.replace(`/projects/${work.projectId}`);
+      router.replace(`/outcomes/${work.outcomeId}`);
     },
   });
   return (
@@ -98,13 +98,11 @@ export function CreateWorkItemScreen() {
           {prepare.error ? <Text style={{ color: colors.text.secondary }}>{prepare.error.message}</Text> : null}
         </> : <>
           <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{labels.confirmPlan}</Text>
-          <View style={[styles.card, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}>
-            <Text style={[styles.cardLabel, { color: colors.text.tertiary }]}>{labels.projectLabel}</Text>
-            <Text style={[styles.cardTitle, { color: colors.text.primary }]}>{proposal.suggestedProject.name}</Text>
+          <View style={[styles.card, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}> 
             <Text style={[styles.cardLabel, { color: colors.text.tertiary }]}>{labels.outcomeLabel}</Text>
-            <Text style={{ color: colors.text.secondary }}>{proposal.suggestedProject.outcome}</Text>
+            <Text style={[styles.cardTitle, { color: colors.text.primary }]}>{proposal.objective}</Text>
             <Text style={[styles.cardLabel, { color: colors.text.tertiary }]}>{labels.firstAction}</Text>
-            <Text style={{ color: colors.text.secondary }}>{proposal.suggestedProject.nextAction}</Text>
+            {proposal.outcomeContract.deliverables.map((item) => <Text key={item} style={{ color: colors.text.secondary }}>· {item}</Text>)}
           </View>
           <Pressable disabled={confirm.isPending} onPress={() => confirm.mutate()} style={({ pressed }) => [styles.createButton, { backgroundColor: colors.accent.primary, opacity: pressed || confirm.isPending ? 0.55 : 1 }]}><Text style={styles.createText}>{labels.confirmAndCreate}</Text></Pressable>
           <Pressable disabled={confirm.isPending} onPress={() => setProposal(null)} style={styles.secondaryButton}><Text style={{ color: colors.text.secondary }}>{labels.editIntent}</Text></Pressable>

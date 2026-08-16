@@ -1,4 +1,4 @@
-import type { ProjectGoal, ProjectSession } from '@/features/projects/api';
+import type { ProjectSession } from '@/features/projects/api';
 import type { StartWorkflowRunResult } from '@/features/workflows/workflow-api';
 import { apiFetch, fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
@@ -210,13 +210,6 @@ export async function patchWorkItem(workItemId: string, patch: {
 
 export async function startWorkItemChat(workItemId: string): Promise<{ ok: true; item: WorkItem; session: ProjectSession }> {
   return fetchJson<{ ok: true; item: WorkItem; session: ProjectSession }>(apiUrl(`/api/work-items/${encodeURIComponent(workItemId)}/start-chat`), {
-    method: 'POST',
-    body: JSON.stringify({}),
-  });
-}
-
-export async function createWorkItemGoal(workItemId: string): Promise<{ ok: true; item: WorkItem; goal: ProjectGoal }> {
-  return fetchJson<{ ok: true; item: WorkItem; goal: ProjectGoal }>(apiUrl(`/api/work-items/${encodeURIComponent(workItemId)}/create-goal`), {
     method: 'POST',
     body: JSON.stringify({}),
   });

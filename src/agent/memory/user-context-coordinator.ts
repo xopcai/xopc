@@ -3,6 +3,7 @@ import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { Config } from '../../config/schema.js';
 import { setLatestMemoryInjectFeedback } from '../../storage/sqlite/index.js';
 import { createLogger } from '../../utils/logger.js';
+import { ContextCompiler } from '../../user-context/context-compiler.js';
 import { UserContextPlanner } from './context/planner.js';
 import type { UserContextPlan } from './context/types.js';
 import type { MemoryManager } from './manager.js';
@@ -26,6 +27,7 @@ export class UserContextCoordinator {
   private readonly userTurn = new Map<string, number>();
   private readonly correctionTargets = new Map<string, string[]>();
   private readonly planner = new UserContextPlanner();
+  private readonly contextCompiler = new ContextCompiler();
 
   constructor(private readonly options: UserContextCoordinatorOptions) {}
 
@@ -75,7 +77,7 @@ export class UserContextCoordinator {
     const turn = (this.userTurn.get(sessionKey) ?? 0) + 1;
     this.userTurn.set(sessionKey, turn);
     if (!shouldPlanUserContextThisTurn(config, turn)) return empty();
-    return this.planner.plan({
+    const plan = await this.planner.plan({
       memoryManager: this.options.getMemoryManagerForSession(sessionKey),
       agentId: this.options.getAgentIdForSession(sessionKey),
       sessionKey,
@@ -83,6 +85,14 @@ export class UserContextCoordinator {
       userMessage,
       excludedRecordIds,
     });
+    if (plan.traceId) {
+      try {
+        this.contextCompiler.capture({ sessionKey, query, plan });
+      } catch (err) {
+        log.debug({ err, sessionKey, traceId: plan.traceId }, 'Context snapshot was not persisted');
+      }
+    }
+    return plan;
   }
 
   async afterTurn(sessionKey: string, userPlainText: string): Promise<import('./understanding/types.js').UnderstandingReviewResult | undefined> {

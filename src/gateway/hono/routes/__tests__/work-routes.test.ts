@@ -15,7 +15,7 @@ import {
   updateRelationshipSettings,
 } from '../../../../storage/sqlite/index.js';
 import { WorkItemService } from '../../../../work-items/index.js';
-import { ProjectMonitoringService } from '../../../../work/index.js';
+import { OutcomeRepository } from '../../../../work/index.js';
 import type { GatewayService } from '../../../service.js';
 import { registerWorkRoutes } from '../work.js';
 
@@ -44,7 +44,7 @@ describe('work orchestration routes', () => {
     rmSync(stateDir, { recursive: true, force: true });
   });
 
-  it('turns a confirmed intent into one project outcome and next action', async () => {
+  it('turns a confirmed intent into one outcome without project or work-item ceremony', async () => {
     const proposed = await app.request('/api/work/intakes', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -57,40 +57,38 @@ describe('work orchestration routes', () => {
     const proposalPayload = await proposed.json() as {
       proposal: {
         id: string;
-        monitoringSuggestion: { mode: string };
         planningContext: { supportMode: string; proactiveEnabled: boolean };
+        outcomeContract: { deliverables: string[]; acceptanceCriteria: string[] };
       };
     };
     const proposal = proposalPayload.proposal;
     expect(proposal).toMatchObject({
-      monitoringSuggestion: { mode: 'observe' },
       planningContext: { supportMode: 'auto', proactiveEnabled: false },
+      outcomeContract: {
+        deliverables: ['Prepare the September product launch'],
+        acceptanceCriteria: expect.arrayContaining([
+          expect.stringContaining('Prepare the September product launch'),
+        ]),
+      },
     });
 
     const confirmed = await app.request(`/api/work/intakes/${proposal.id}/confirm`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        executionMode: 'create_only',
-        nextAction: 'Draft the launch checklist',
-      }),
+      body: JSON.stringify({ executionMode: 'create_only' }),
     });
     expect(confirmed.status).toBe(201);
-    const work = (await confirmed.json()).work as { projectId: string; goalId: string; workItemId: string };
-    expect(projects.get(work.projectId)?.name).toContain('Prepare the September product launch');
+    const work = (await confirmed.json()).work as { outcomeId: string; goalId: string };
+    expect(new OutcomeRepository().get(work.outcomeId)?.objective).toBe('Prepare the September product launch');
     expect(new GoalService().get(work.goalId)).toMatchObject({
-      projectId: work.projectId,
-      nextAction: 'Draft the launch checklist',
+      outcomeId: work.outcomeId,
+      nextAction: 'Complete the first verifiable result.',
+      checklist: expect.arrayContaining([
+        expect.objectContaining({ text: expect.stringContaining('Prepare the September product launch') }),
+      ]),
     });
-    expect(workItems.getWorkItem(work.workItemId)).toMatchObject({
-      projectId: work.projectId,
-      nextAction: 'Draft the launch checklist',
-    });
-    expect(new ProjectMonitoringService().get(work.projectId)).toMatchObject({
-      mode: 'observe',
-      scenarios: ['blocked_work', 'project_delivery_risk'],
-      configured: true,
-    });
+    expect(projects.list({ limit: 20 }).items).toHaveLength(0);
+    expect(workItems.listWorkItems({ limit: 20 }).items).toHaveLength(0);
 
     const metricsResponse = await app.request('/api/work/metrics');
     const metricsPayload = await metricsResponse.json() as { metrics: unknown };
@@ -103,42 +101,6 @@ describe('work orchestration routes', () => {
       },
     });
 
-    const view = await app.request(`/api/projects/${work.projectId}/operating-view`);
-    expect(view.status).toBe(200);
-    expect(await view.json()).toMatchObject({
-      ok: true,
-      view: {
-        project: { id: work.projectId },
-        desiredOutcomes: [{ id: work.goalId }],
-        currentActions: [{ id: work.workItemId }],
-      },
-    });
-
-    const updated = await app.request(`/api/projects/${work.projectId}/monitoring`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        mode: 'auto_low_risk',
-        allowedActions: ['send_reminder'],
-        confidenceThreshold: 0.9,
-      }),
-    });
-    expect(updated.status).toBe(200);
-    expect(await updated.json()).toMatchObject({
-      ok: true,
-      policy: {
-        projectId: work.projectId,
-        mode: 'auto_low_risk',
-        allowedActions: ['send_reminder'],
-        confidenceThreshold: 0.9,
-      },
-    });
-
-    const fetched = await app.request(`/api/projects/${work.projectId}/monitoring`);
-    expect(await fetched.json()).toMatchObject({
-      ok: true,
-      policy: { mode: 'auto_low_risk', configured: true },
-    });
   });
 
   it('enables the default delivery scenarios when monitoring an existing project', async () => {
@@ -171,7 +133,6 @@ describe('work orchestration routes', () => {
     });
     expect(response.status).toBe(201);
     expect((await response.json()).proposal).toMatchObject({
-      monitoringSuggestion: { mode: 'ask_before_action' },
       planningContext: { supportMode: 'efficient', proactiveEnabled: true },
     });
   });
@@ -207,18 +168,17 @@ describe('work orchestration routes', () => {
       confirmationRequest,
     );
     const firstWork = (await firstConfirmation.json()).work as {
-      projectId: string;
+      outcomeId: string;
       goalId: string;
-      workItemId: string;
     };
     const replayedConfirmation = await app.request(
       `/api/work/intakes/${firstProposal.id}/confirm`,
       confirmationRequest,
     );
     expect((await replayedConfirmation.json()).work).toMatchObject(firstWork);
-    expect(projects.list({ limit: 20 }).items).toHaveLength(1);
+    expect(projects.list({ limit: 20 }).items).toHaveLength(0);
     expect(new GoalService().list({ limit: 20 })).toHaveLength(1);
-    expect(workItems.listWorkItems({ limit: 20 }).items).toHaveLength(1);
+    expect(workItems.listWorkItems({ limit: 20 }).items).toHaveLength(0);
   });
 
   it('rejects reuse of an idempotency key for a different objective', async () => {
@@ -248,7 +208,7 @@ describe('work orchestration routes', () => {
   });
 
   it('queues confirmed work immediately with durable execution context', async () => {
-    const enqueueGoalRun = vi.fn((goalId: string, options: unknown) => ({
+    const enqueueGoalRun = vi.fn((goalId: string, _options: unknown) => ({
       id: 'queue-intake-1',
       goalId,
       status: 'queued' as const,
@@ -279,8 +239,8 @@ describe('work orchestration routes', () => {
     });
     expect(confirmed.status).toBe(201);
     const work = (await confirmed.json()).work as {
+      outcomeId: string;
       goalId: string;
-      workItemId: string;
       execution: { mode: string; status: string; queueId?: string };
     };
     expect(work.execution).toEqual({
@@ -291,11 +251,63 @@ describe('work orchestration routes', () => {
     expect(enqueueGoalRun).toHaveBeenCalledWith(work.goalId, {
       source: 'api',
       executionContext: {
-        workItemId: work.workItemId,
+        outcomeId: work.outcomeId,
         contextTraceId: proposal.id,
         triggerKind: 'user',
       },
     });
-    expect(workItems.getWorkItem(work.workItemId)?.status).toBe('in_progress');
+  });
+
+  it('pauses and resumes an outcome without exposing the underlying goal model', async () => {
+    const enqueueGoalRun = vi.fn((goalId: string) => ({
+      id: 'queue-resume-1',
+      goalId,
+      status: 'queued' as const,
+      attempts: 0,
+      maxRetries: 2,
+      enqueuedAt: Date.now(),
+      source: 'api' as const,
+    }));
+    app = new Hono();
+    registerWorkRoutes(app, {
+      service: { projects, workItems, enqueueGoalRun } as unknown as GatewayService,
+      strictRateLimitMiddleware: async (_c, next) => next(),
+    } as never);
+    const proposed = await app.request('/api/work/intakes', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ idempotencyKey: 'outcome-controls-1', objective: 'Finish the outcome safely' }),
+    });
+    const proposalId = ((await proposed.json()) as { proposal: { id: string } }).proposal.id;
+    const confirmed = await app.request(`/api/work/intakes/${proposalId}/confirm`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ executionMode: 'create_only' }),
+    });
+    const work = ((await confirmed.json()) as { work: { outcomeId: string; goalId: string } }).work;
+
+    const paused = await app.request(`/api/outcomes/${work.outcomeId}/actions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'pause' }),
+    });
+    expect(await paused.json()).toMatchObject({
+      ok: true,
+      outcome: { id: work.outcomeId, internalStatus: 'paused' },
+    });
+
+    const resumed = await app.request(`/api/outcomes/${work.outcomeId}/actions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'resume' }),
+    });
+    expect(await resumed.json()).toMatchObject({
+      ok: true,
+      outcome: { id: work.outcomeId, internalStatus: 'continuing' },
+      queued: { id: 'queue-resume-1', goalId: work.goalId },
+    });
+    expect(enqueueGoalRun).toHaveBeenCalledWith(work.goalId, expect.objectContaining({
+      executionContext: expect.objectContaining({ outcomeId: work.outcomeId, triggerKind: 'retry' }),
+    }));
   });
 });
