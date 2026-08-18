@@ -25,10 +25,14 @@ export interface SkillLoadResult {
   diagnostics: SkillDiagnostic[];
 }
 
+export interface SkillManagerOptions {
+  isWorkspaceTrusted?: (workspaceDir: string) => boolean;
+}
+
 export class SkillManager {
   private skillPrompt: string = '';
   private skills: Skill[] = [];
-  private skillLoader = createSkillLoader();
+  private skillLoader: ReturnType<typeof createSkillLoader>;
   private workspace: string;
   private bundledSkillsDir: string;
   private version = 0;
@@ -41,9 +45,10 @@ export class SkillManager {
   private lastReloadOk: boolean | undefined;
   private lastReloadError: string | undefined;
 
-  constructor(workspace: string, bundledSkillsDir?: string) {
+  constructor(workspace: string, bundledSkillsDir?: string, options: SkillManagerOptions = {}) {
     this.workspace = workspace;
     this.bundledSkillsDir = bundledSkillsDir || resolveBundledSkillsDir();
+    this.skillLoader = createSkillLoader({ isWorkspaceTrusted: options.isWorkspaceTrusted });
     this.initialize();
   }
 
@@ -70,8 +75,8 @@ export class SkillManager {
   /**
    * Reload skills from disk
    */
-  reload(): void {
-    this.runReload('disk', () => this.skillLoader.reload());
+  reload(reason: 'disk' | 'trust' = 'disk'): void {
+    this.runReload(reason, () => this.skillLoader.reload());
   }
 
   private runReload(reason: NonNullable<SkillRuntimeStatus['lastReloadReason']>, load: () => LoadSkillsResult): void {
@@ -110,7 +115,9 @@ export class SkillManager {
     this.loadedAt = Date.now();
 
     for (const diag of result.diagnostics) {
-      if (diag.type === 'warning') {
+      if (diag.type === 'skipped') {
+        log.debug({ path: diag.path, message: diag.message }, 'Skill source skipped');
+      } else if (diag.type === 'warning' || diag.type === 'collision') {
         log.warn({ skill: diag.skillName, path: diag.path, message: diag.message }, 'Skill warning');
       } else if (diag.type === 'error') {
         log.error({ skill: diag.skillName, path: diag.path, message: diag.message }, 'Skill error');

@@ -112,6 +112,8 @@
     "cancel": "Cancel",
     "source": {
       "builtin": "Bundled",
+      "agentsGlobal": "Agents (external)",
+      "agentsWorkspace": "Agents (workspace, read-only)",
       "workspace": "Workspace",
       "global": "Global",
       "extra": "Extra"

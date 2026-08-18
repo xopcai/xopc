@@ -112,6 +112,8 @@
     "cancel": "取消",
     "source": {
       "builtin": "内置",
+      "agentsGlobal": "Agents（外部）",
+      "agentsWorkspace": "Agents（工作区，只读）",
       "workspace": "工作区",
       "global": "全局",
       "extra": "扩展"

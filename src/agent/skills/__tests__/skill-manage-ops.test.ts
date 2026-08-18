@@ -5,10 +5,12 @@ import {
   ensureCategorySegment,
   effectiveAgentWritePolicy,
   resolveCreateSkillDir,
+  mutatableSkillOrNull,
   validateSkillMdContent,
   validateSkillNameSegment,
   validateSupportingRelativePath,
 } from '../skill-manage-ops.js';
+import type { Skill } from '../types.js';
 
 describe('validateSkillNameSegment', () => {
   it('rejects invalid', () => {
@@ -84,5 +86,41 @@ describe('skill manage write targets', () => {
     if (result.ok) {
       expect(result.dir.replace(/\\/g, '/')).toBe('C:/work/project/.xopc/skills/demo');
     }
+  });
+
+  it('rejects read-only external skill origins', () => {
+    const skill = {
+      name: 'external',
+      baseDir: '/tmp/.agents/skills/external',
+      source: 'global',
+      origin: {
+        id: 'agents-global',
+        rootDir: '/tmp/.agents/skills',
+        priority: 300,
+        scope: 'global',
+        managed: false,
+        writable: false,
+      },
+    } as Skill;
+
+    expect(mutatableSkillOrNull(skill, '/tmp/workspace', 'both')).toBeNull();
+  });
+
+  it('rejects read-only workspace agents skill origins', () => {
+    const skill = {
+      name: 'project-external',
+      baseDir: '/tmp/workspace/.agents/skills/project-external',
+      source: 'workspace',
+      origin: {
+        id: 'agents-workspace',
+        rootDir: '/tmp/workspace/.agents/skills',
+        priority: 450,
+        scope: 'workspace',
+        managed: false,
+        writable: false,
+      },
+    } as Skill;
+
+    expect(mutatableSkillOrNull(skill, '/tmp/workspace', 'both')).toBeNull();
   });
 });

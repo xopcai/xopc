@@ -118,24 +118,32 @@ install:
 
 技能可以从以下位置加载：
 
-1. **Bundled** - 内置于 XOPC 的技能
-   - 内置技能随 XOPC 安装提供。
-   
-2. **Workspace** - 工作区特定的技能
+1. **XOPC Workspace** - 由 XOPC 管理的工作区技能
    - 位置：`<workspace>/.xopc/skills/`
    - 优先级最高
 
-3. **Global** - 全局技能
+2. **Agents Workspace 兼容源** - 使用通用 agents 目录的项目技能
+   - 位置：`<workspace>/.agents/skills/`
+   - 仅在工作区受信任后以只读方式加载
+
+3. **XOPC Global** - 由 XOPC 管理的全局技能
    - 位置：`~/.xopc/skills/`
 
-4. **Extra** - 额外配置的技能目录
-   - 通过配置文件指定
+4. **Agents Global 兼容源** - 通过通用 agents 目录共享的技能
+   - 位置：`~/.agents/skills/`
+   - 默认启用并以只读方式加载；`skill_manage` 不会修改该目录
+
+5. **Bundled** - 内置于 XOPC 的技能
+   - 内置技能随 XOPC 安装提供。
+
+6. **Extra** - 额外配置的技能目录
+   - 通过 `load.extraDirs` 指定，并以只读方式加载
 
 ### 优先级
 
-Workspace > Global > Bundled
+XOPC Workspace > Agents Workspace > XOPC Global > Agents Global > Bundled > Extra
 
-后加载的技能会覆盖先加载的同名技能。
+多个来源包含同名技能时，高优先级来源胜出，同时 XOPC 会输出冲突诊断。相同来源目录会先按真实路径去重，只加载一次。
 
 ## Skills Hub（Git / 压缩包）
 
@@ -166,7 +174,10 @@ Hub 安装的技能与全局 `~/.xopc/skills/` 规则一致，仍可用 `skills 
 |------|------|
 | `toolGating` | 为 `true`（默认）时，声明了所需工具/扩展的技能在未满足条件前不进入列表；设为 `false` 可关闭门控。 |
 | `agentWritePolicy` | `skill_manage` 可写范围：`global`、`workspace` 或 `both`（默认 `global`）。 |
-| `limits.maxSkillFileBytes` | `skill_view` 单文件最大字节数。 |
+| `load.sources.agentsGlobal.enabled` | 是否以只读兼容源加载 `~/.agents/skills/`（默认 `true`）。 |
+| `load.sources.agentsWorkspace.enabled` | 是否以只读兼容源加载受信任工作区中的 `<workspace>/.agents/skills/`（默认 `true`）。 |
+| `load.extraDirs` | 额外的只读技能目录，作为最低优先级兜底来源。 |
+| `limits.maxSkillFileBytes` | 加载 `SKILL.md` 或读取技能文件时允许的单文件最大字节数。 |
 
 **SKILL.md frontmatter**：`disable-model-invocation: true` 时技能仍保留在磁盘，但从面向模型的列表（`<available_skills>`、`skills_list`、`skill_view` 可见性）中排除。
 
@@ -294,6 +305,17 @@ xopc skills test security --deep
 {
   "toolGating": true,
   "agentWritePolicy": "global",
+  "load": {
+    "sources": {
+      "agentsGlobal": {
+        "enabled": true
+      },
+      "agentsWorkspace": {
+        "enabled": true
+      }
+    },
+    "extraDirs": []
+  },
   "limits": {
     "maxSkillFileBytes": 1048576
   },

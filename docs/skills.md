@@ -118,24 +118,32 @@ install:
 
 Skills can be loaded from these locations:
 
-1. **Bundled** - Skills built into XOPC
-   - Bundled skills ship with the XOPC install.
-   
-2. **Workspace** - Workspace-specific skills
+1. **XOPC workspace** - XOPC-managed workspace skills
    - Location: `<workspace>/.xopc/skills/`
    - Highest priority
 
-3. **Global** - Global skills
+2. **Agents workspace compatibility** - Project-provided skills using the common agents layout
+   - Location: `<workspace>/.agents/skills/`
+   - Loaded read-only only after the workspace is trusted
+
+3. **XOPC global** - XOPC-managed global skills
    - Location: `~/.xopc/skills/`
 
-4. **Extra** - Extra configured skill directories
-   - Specified via config file
+4. **Agents global compatibility** - Skills shared through the common agents layout
+   - Location: `~/.agents/skills/`
+   - Enabled by default and loaded read-only; `skill_manage` never modifies this directory
+
+5. **Bundled** - Skills built into XOPC
+   - Bundled skills ship with the XOPC install.
+
+6. **Extra** - Extra configured skill directories
+   - Specified with `load.extraDirs` and loaded read-only
 
 ### Priority
 
-Workspace > Global > Bundled
+XOPC workspace > Agents workspace > XOPC global > Agents global > Bundled > Extra
 
-Skills loaded later will override earlier ones with the same name.
+When two sources contain the same skill name, the higher-priority source wins and XOPC reports a collision diagnostic. Duplicate source roots are canonicalized and loaded only once.
 
 ## Skills Hub (git / archives)
 
@@ -171,7 +179,10 @@ The agent exposes skill-oriented tools (when a skill manager is wired):
 |-------|---------|
 | `toolGating` | When true (default), skills that declare required tools/extensions are hidden until those tools are registered. Set `false` to ignore gating. |
 | `agentWritePolicy` | Where `skill_manage` may write: `global`, `workspace`, or `both` (default `global`). |
-| `limits.maxSkillFileBytes` | Maximum bytes `skill_view` will read per file. |
+| `load.sources.agentsGlobal.enabled` | Load `~/.agents/skills/` as a read-only compatibility source (default `true`). |
+| `load.sources.agentsWorkspace.enabled` | Load trusted `<workspace>/.agents/skills/` as a read-only compatibility source (default `true`). |
+| `load.extraDirs` | Additional read-only skill roots, used as the lowest-priority fallback. |
+| `limits.maxSkillFileBytes` | Maximum bytes allowed when loading a `SKILL.md` or reading a skill file. |
 
 **SKILL.md frontmatter:**
 
@@ -303,6 +314,17 @@ Skill configuration file is located at `~/.xopc/skills.json`. Optional **top-lev
 {
   "toolGating": true,
   "agentWritePolicy": "global",
+  "load": {
+    "sources": {
+      "agentsGlobal": {
+        "enabled": true
+      },
+      "agentsWorkspace": {
+        "enabled": true
+      }
+    },
+    "extraDirs": []
+  },
   "limits": {
     "maxSkillFileBytes": 1048576
   },

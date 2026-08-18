@@ -4,7 +4,9 @@ import { loadSkills } from '../agent/skills/index.js';
 import type { TuiAutocompleteProvider } from '../extensions/types/tui.js';
 
 /** `@skill` autocomplete from workspace + global + bundled skill directories. */
-export function createSkillsAutocompleteProvider(): TuiAutocompleteProvider {
+export function createSkillsAutocompleteProvider(options: {
+  isWorkspaceTrusted?: (workspaceDir: string) => boolean;
+} = {}): TuiAutocompleteProvider {
   let cached: Array<{ name: string; description?: string }> | null = null;
 
   const refresh = () => {
@@ -14,6 +16,7 @@ export function createSkillsAutocompleteProvider(): TuiAutocompleteProvider {
       workspaceDir,
       builtinDir: resolveBundledSkillsDir(),
       globalDir: resolveStateDir(),
+      workspaceTrust: options.isWorkspaceTrusted?.(workspaceDir) === true ? 'trusted' : 'untrusted',
     });
     cached = result.skills.map((skill) => ({
       name: skill.name,
@@ -39,12 +42,16 @@ export function createSkillsAutocompleteProvider(): TuiAutocompleteProvider {
 }
 
 /** Test helper — build skill list without caching. */
-export function listSkillAutocompleteSuggestions(): Array<{ name: string; description?: string }> {
+export function listSkillAutocompleteSuggestions(options: {
+  isWorkspaceTrusted?: (workspaceDir: string) => boolean;
+} = {}): Array<{ name: string; description?: string }> {
   const config = loadConfig();
+  const workspaceDir = getWorkspacePath(config);
   const result = loadSkills({
-    workspaceDir: getWorkspacePath(config),
+    workspaceDir,
     builtinDir: resolveBundledSkillsDir(),
     globalDir: resolveStateDir(),
+    workspaceTrust: options.isWorkspaceTrusted?.(workspaceDir) === true ? 'trusted' : 'untrusted',
   });
   return result.skills.map((s) => ({
     name: s.name,
