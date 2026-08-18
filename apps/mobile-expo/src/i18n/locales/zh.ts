@@ -282,6 +282,7 @@ export const zh: MessageBundle = {
     followUpQueueMoveDown: '下移',
     followUpQueueSteerNow: '在工具间隙注入引导内容',
     followUpQueueRemove: '从队列移除',
+    followUpStatusInterrupted: '需要重试',
     followUpQueueAttachmentsNote: '含附件的队列项无法使用 ✨ 引导注入，将按顺序作为整条消息发送。',
     followUpQueueMaxReached: '后续问题队列已满（最多 {{max}} 条）。请删除一条或等当前回复结束。',
     takePhoto: '拍照',

@@ -1,21 +1,11 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type MutableRefObject,
-} from 'react';
+import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 
-import { agentSteer } from './follow-up-agent-api';
+import { apiFetch } from '../../api/client';
+import { subscribeGatewayEvent } from '../gateway/gateway-event-bus';
+import { getSessionInputState, submitSessionInput } from './follow-up-agent-api';
 import {
-  clearFollowUpQueueSnapshot,
-  readFollowUpQueueSnapshot,
-  writeFollowUpQueueSnapshot,
-} from './follow-up-queue-storage';
-import type { WireAttachment } from './composer.types';
-import {
-  FOLLOW_UP_AUTO_SEND_IDLE_MS,
   MAX_PENDING_FOLLOW_UPS,
+  projectPendingFollowUps,
   type PendingFollowUp,
 } from './pending-follow-up.types';
 import { newFollowUpRowId } from './follow-up-utils';
@@ -24,297 +14,139 @@ export type ChatFollowUpApi = {
   pendingFollowUps: PendingFollowUp[];
   steeringFollowUpId: string | null;
   editingFollowUpId: string | null;
-  addPendingFollowUp: (content: string, attachments?: PendingFollowUp['attachments']) => void;
+  addPendingFollowUp: (content: string, attachments?: PendingFollowUp['attachments']) => Promise<void>;
   beginEditFollowUp: (id: string) => void;
   cancelEditFollowUp: () => void;
-  commitEditFollowUp: (
-    id: string,
-    content: string,
-    attachments?: PendingFollowUp['attachments'],
-  ) => void;
+  commitEditFollowUp: (id: string, content: string, attachments?: PendingFollowUp['attachments']) => void;
   removePendingFollowUp: (id: string) => void;
   movePendingFollowUp: (id: string, dir: 'up' | 'down') => void;
   reorderPendingFollowUp: (fromIndex: number, toIndex: number) => void;
   steerPendingFollowUp: (id: string) => Promise<void>;
   clearPendingFollowUps: () => void;
-  flushSteeringQueue: (forSessionKey?: string | null) => Promise<void>;
 };
+
+function parseState(value: unknown): { sessionKey: string; revision: number; rows: PendingFollowUp[] } | null {
+  if (!value || typeof value !== 'object') return null;
+  const state = value as Record<string, unknown>;
+  if (typeof state.sessionKey !== 'string' || typeof state.revision !== 'number' || !Array.isArray(state.inputs)) return null;
+  const rows = projectPendingFollowUps(state.inputs);
+  return { sessionKey: state.sessionKey, revision: state.revision, rows };
+}
 
 export function useChatFollowUp(options: {
   sessionKey: string | null;
   sessionKeyRef: MutableRefObject<string | null>;
-  /** True only while SSE send/stream is active (flush guard). */
-  streamActiveRef: MutableRefObject<boolean>;
-  clarifyActiveRef: MutableRefObject<boolean>;
-  sendRef: MutableRefObject<
-    (content: string, attachments?: WireAttachment[]) => Promise<boolean>
-  >;
   onQueueFull?: () => void;
 }): ChatFollowUpApi {
-  const {
-    sessionKey,
-    sessionKeyRef,
-    streamActiveRef,
-    clarifyActiveRef,
-    sendRef,
-    onQueueFull,
-  } = options;
-
+  const { sessionKey, sessionKeyRef, onQueueFull } = options;
   const [pendingFollowUps, setPendingFollowUps] = useState<PendingFollowUp[]>([]);
-  const pendingFollowUpsRef = useRef<PendingFollowUp[]>([]);
+  const rowsRef = useRef<PendingFollowUp[]>([]);
+  const revisionRef = useRef(-1);
   const [steeringFollowUpId, setSteeringFollowUpId] = useState<string | null>(null);
   const [editingFollowUpId, setEditingFollowUpId] = useState<string | null>(null);
-  const editingFollowUpIdRef = useRef<string | null>(null);
-  const followUpPrevSessionRef = useRef<string | null>(null);
 
-  const writeSnapshot = useCallback((sk: string) => {
-    writeFollowUpQueueSnapshot(sk, {
-      pending: structuredClone(pendingFollowUpsRef.current),
-      editingId: editingFollowUpIdRef.current,
-    });
-  }, []);
-
-  useEffect(() => {
-    const prevLoaded = followUpPrevSessionRef.current;
-    if (prevLoaded != null && prevLoaded !== sessionKey) {
-      writeSnapshot(prevLoaded);
-    }
-    followUpPrevSessionRef.current = sessionKey;
-
-    if (!sessionKey) {
-      pendingFollowUpsRef.current = [];
-      setPendingFollowUps([]);
-      setEditingFollowUpId(null);
-      return;
-    }
-
-    const snap = readFollowUpQueueSnapshot(sessionKey);
-    if (snap) {
-      const pending = structuredClone(snap.pending);
-      pendingFollowUpsRef.current = pending;
-      setPendingFollowUps(pending);
-      setEditingFollowUpId(snap.editingId);
-    } else {
-      pendingFollowUpsRef.current = [];
-      setPendingFollowUps([]);
-      setEditingFollowUpId(null);
-    }
-  }, [sessionKey, writeSnapshot]);
-
-  useEffect(() => {
-    if (!sessionKey) return;
-    const t = setTimeout(() => {
-      if (sessionKeyRef.current !== sessionKey) return;
-      writeSnapshot(sessionKey);
-    }, 280);
-    return () => clearTimeout(t);
-  }, [sessionKey, pendingFollowUps, editingFollowUpId, sessionKeyRef, writeSnapshot]);
-
-  const clearPendingFollowUps = useCallback(() => {
-    const key = sessionKeyRef.current;
-    if (key) clearFollowUpQueueSnapshot(key);
-    pendingFollowUpsRef.current = [];
-    setPendingFollowUps([]);
-    setEditingFollowUpId(null);
+  const applyState = useCallback((raw: unknown) => {
+    const parsed = parseState(raw);
+    if (!parsed || parsed.sessionKey !== sessionKeyRef.current || parsed.revision < revisionRef.current) return;
+    revisionRef.current = parsed.revision;
+    rowsRef.current = parsed.rows;
+    setPendingFollowUps(parsed.rows);
+    setEditingFollowUpId((id) => id && parsed.rows.some((row) => row.id === id) ? id : null);
   }, [sessionKeyRef]);
 
-  const flushSteeringQueue = useCallback(async (forSessionKey?: string | null) => {
-    const sk = sessionKeyRef.current;
-    if (forSessionKey != null && forSessionKey !== sk) return;
-    if (!sk) return;
-
-    let q = pendingFollowUpsRef.current;
-    while (q.length > 0 && !q[0].text.trim() && !q[0].attachments?.length) {
-      q = q.slice(1);
-    }
-    if (q.length === 0) {
-      pendingFollowUpsRef.current = [];
-      setPendingFollowUps([]);
-      return;
-    }
-    if (q.length !== pendingFollowUpsRef.current.length) {
-      pendingFollowUpsRef.current = q;
-      setPendingFollowUps(q);
-    }
-
-    const [first, ...rest] = q;
-    const trimmed = first.text?.trim() ?? '';
-    const atts = first.attachments;
-    if (!trimmed && !atts?.length) return;
-
-    if (streamActiveRef.current) return;
-
-    if (editingFollowUpIdRef.current === first.id) {
-      setEditingFollowUpId(null);
-    }
-    pendingFollowUpsRef.current = rest;
-    setPendingFollowUps(rest);
-    await sendRef.current(first.text, atts?.length ? atts : undefined);
-  }, [sendRef, sessionKeyRef, streamActiveRef]);
+  const refresh = useCallback(async (key: string) => {
+    try { applyState(await getSessionInputState(key)); } catch { /* reconnect retries */ }
+  }, [applyState]);
 
   useEffect(() => {
-    if (!sessionKey) return;
-    if (clarifyActiveRef.current) return;
-    if (pendingFollowUps.length === 0) return;
-    if (streamActiveRef.current) return;
-    const first = pendingFollowUps[0];
-    if (!first || (!first.text.trim() && !first.attachments?.length)) return;
-
-    const tid = setTimeout(() => {
-      if (sessionKeyRef.current !== sessionKey) return;
-      if (streamActiveRef.current) return;
-      if (clarifyActiveRef.current) return;
-      void flushSteeringQueue(sessionKey);
-    }, FOLLOW_UP_AUTO_SEND_IDLE_MS);
-    return () => clearTimeout(tid);
-  }, [
-    sessionKey,
-    pendingFollowUps,
-    flushSteeringQueue,
-    streamActiveRef,
-    clarifyActiveRef,
-    sessionKeyRef,
-  ]);
-
-  const addPendingFollowUp = useCallback(
-    (content: string, attachments?: PendingFollowUp['attachments']) => {
-      const trimmed = content.trim();
-      if (!trimmed && !attachments?.length) return;
-      if (pendingFollowUpsRef.current.length >= MAX_PENDING_FOLLOW_UPS) {
-        onQueueFull?.();
-        return;
-      }
-      const row: PendingFollowUp = {
-        id: newFollowUpRowId(),
-        text: trimmed || content,
-        attachments: attachments?.length ? attachments : undefined,
-      };
-      setPendingFollowUps((prev) => {
-        const next = [...prev, row];
-        pendingFollowUpsRef.current = next;
-        return next;
-      });
-    },
-    [onQueueFull],
-  );
-
-  const beginEditFollowUp = useCallback((id: string) => {
-    setEditingFollowUpId(id);
-  }, []);
-
-  const cancelEditFollowUp = useCallback(() => {
+    revisionRef.current = -1;
+    rowsRef.current = [];
+    setPendingFollowUps([]);
     setEditingFollowUpId(null);
-  }, []);
+    if (sessionKey) void refresh(sessionKey);
+  }, [refresh, sessionKey]);
 
-  const commitEditFollowUp = useCallback(
-    (
-      id: string,
-      content: string,
-      attachments?: PendingFollowUp['attachments'],
-    ) => {
-      const trimmed = content.trim();
-      const prev = pendingFollowUpsRef.current;
-      const i = prev.findIndex((r) => r.id === id);
-      if (i < 0) {
-        setEditingFollowUpId(null);
-        return;
-      }
-      if (!trimmed && !attachments?.length) {
-        const next = prev.filter((r) => r.id !== id);
-        pendingFollowUpsRef.current = next;
-        setPendingFollowUps(next);
-        setEditingFollowUpId(null);
-        return;
-      }
-      const next = [...prev];
-      next[i] = {
-        ...next[i],
-        text: trimmed || content,
-        attachments: attachments?.length ? attachments : undefined,
-      };
-      pendingFollowUpsRef.current = next;
-      setPendingFollowUps(next);
-      setEditingFollowUpId(null);
-    },
-    [],
-  );
+  useEffect(() => {
+    const unsubscribeState = subscribeGatewayEvent('session.input-state', applyState);
+    const unsubscribeConnected = subscribeGatewayEvent('gateway.sse-connected', () => {
+      const key = sessionKeyRef.current;
+      if (key) void refresh(key);
+    });
+    return () => {
+      unsubscribeState();
+      unsubscribeConnected();
+    };
+  }, [applyState, refresh, sessionKeyRef]);
+
+  const addPendingFollowUp = useCallback(async (content: string, attachments?: PendingFollowUp['attachments']) => {
+    const key = sessionKeyRef.current;
+    if (!content.trim() && !attachments?.length) return;
+    if (!key) throw new Error('No active session');
+    if (rowsRef.current.length >= MAX_PENDING_FOLLOW_UPS) {
+      onQueueFull?.();
+      throw new Error(`At most ${MAX_PENDING_FOLLOW_UPS} pending messages are allowed`);
+    }
+    applyState(await submitSessionInput(key, { clientMessageId: newFollowUpRowId(), delivery: 'next',
+      content: content.trim() || content, attachments }));
+  }, [applyState, onQueueFull, sessionKeyRef]);
 
   const removePendingFollowUp = useCallback((id: string) => {
-    if (editingFollowUpIdRef.current === id) {
-      setEditingFollowUpId(null);
-    }
-    setPendingFollowUps((prev) => {
-      const next = prev.filter((r) => r.id !== id);
-      pendingFollowUpsRef.current = next;
-      return next;
-    });
-  }, []);
-
-  const movePendingFollowUp = useCallback((id: string, dir: 'up' | 'down') => {
-    setPendingFollowUps((prev) => {
-      const i = prev.findIndex((r) => r.id === id);
-      if (i < 0) return prev;
-      const j = dir === 'up' ? i - 1 : i + 1;
-      if (j < 0 || j >= prev.length) return prev;
-      const next = [...prev];
-      [next[i], next[j]] = [next[j], next[i]];
-      pendingFollowUpsRef.current = next;
-      return next;
-    });
-  }, []);
+    const key = sessionKeyRef.current;
+    const row = rowsRef.current.find((item) => item.id === id);
+    if (!key || !row) return;
+    void apiFetch(`/api/sessions/${encodeURIComponent(key)}/inputs/${encodeURIComponent(id)}?version=${row.version}`, { method: 'DELETE' })
+      .then((res) => res.json()).then((json: { payload?: unknown }) => applyState(json.payload)).catch(() => { void refresh(key); });
+  }, [applyState, refresh, sessionKeyRef]);
 
   const reorderPendingFollowUp = useCallback((fromIndex: number, toIndex: number) => {
-    setPendingFollowUps((prev) => {
-      if (fromIndex < 0 || fromIndex >= prev.length || toIndex < 0 || toIndex >= prev.length) {
-        return prev;
-      }
-      const next = [...prev];
-      const [removed] = next.splice(fromIndex, 1);
-      next.splice(toIndex, 0, removed);
-      pendingFollowUpsRef.current = next;
-      return next;
-    });
-  }, []);
+    const key = sessionKeyRef.current;
+    const row = rowsRef.current[fromIndex];
+    const targetRow = rowsRef.current[toIndex];
+    const queued = rowsRef.current.filter((item) => item.status === 'queued');
+    const position = targetRow ? queued.findIndex((item) => item.id === targetRow.id) : -1;
+    if (!key || row?.status !== 'queued' || targetRow?.status !== 'queued' || position < 0) return;
+    void apiFetch(`/api/sessions/${encodeURIComponent(key)}/inputs/${encodeURIComponent(row.id)}`, {
+      method: 'PATCH', body: JSON.stringify({ version: row.version, position }),
+    }).then((res) => res.json()).then((json: { payload?: unknown }) => applyState(json.payload)).catch(() => { void refresh(key); });
+  }, [applyState, refresh, sessionKeyRef]);
+
+  const commitEditFollowUp = useCallback((id: string, content: string, attachments?: PendingFollowUp['attachments']) => {
+    const key = sessionKeyRef.current;
+    const row = rowsRef.current.find((item) => item.id === id);
+    setEditingFollowUpId(null);
+    if (!key || !row) return;
+    if (!content.trim() && !attachments?.length) { removePendingFollowUp(id); return; }
+    void apiFetch(`/api/sessions/${encodeURIComponent(key)}/inputs/${encodeURIComponent(id)}`, {
+      method: 'PATCH', body: JSON.stringify({ version: row.version, content: content.trim() || content, attachments }),
+    }).then((res) => res.json()).then((json: { payload?: unknown }) => applyState(json.payload)).catch(() => { void refresh(key); });
+  }, [applyState, refresh, removePendingFollowUp, sessionKeyRef]);
 
   const steerPendingFollowUp = useCallback(async (id: string) => {
     const key = sessionKeyRef.current;
-    if (!key) return;
-    const row = pendingFollowUpsRef.current.find((r) => r.id === id);
-    if (!row?.text.trim() || row.attachments?.length) return;
+    const row = rowsRef.current.find((item) => item.id === id);
+    if (!key || !row?.text.trim() || row.attachments?.length) return;
     setSteeringFollowUpId(id);
     try {
-      const ok = await agentSteer(key, row.text.trim());
-      if (ok) {
-        setPendingFollowUps((prev) => {
-          const next = prev.filter((r) => r.id !== id);
-          pendingFollowUpsRef.current = next;
-          return next;
-        });
-        if (editingFollowUpIdRef.current === id) {
-          setEditingFollowUpId(null);
-        }
-      }
-    } finally {
-      setSteeringFollowUpId(null);
-    }
-  }, [sessionKeyRef]);
-
-  pendingFollowUpsRef.current = pendingFollowUps;
-  editingFollowUpIdRef.current = editingFollowUpId;
+      applyState(await submitSessionInput(key, { clientMessageId: newFollowUpRowId(), delivery: 'steer', content: row.text.trim() }));
+      removePendingFollowUp(id);
+    } finally { setSteeringFollowUpId(null); }
+  }, [applyState, removePendingFollowUp, sessionKeyRef]);
 
   return {
-    pendingFollowUps,
-    steeringFollowUpId,
-    editingFollowUpId,
-    addPendingFollowUp,
-    beginEditFollowUp,
-    cancelEditFollowUp,
-    commitEditFollowUp,
-    removePendingFollowUp,
-    movePendingFollowUp,
-    reorderPendingFollowUp,
-    steerPendingFollowUp,
-    clearPendingFollowUps,
-    flushSteeringQueue,
+    pendingFollowUps, steeringFollowUpId, editingFollowUpId, addPendingFollowUp,
+    beginEditFollowUp: setEditingFollowUpId, cancelEditFollowUp: () => setEditingFollowUpId(null),
+    commitEditFollowUp, removePendingFollowUp,
+    movePendingFollowUp: (id, dir) => {
+      const queued = rowsRef.current.filter((row) => row.status === 'queued');
+      const queuedIndex = queued.findIndex((row) => row.id === id);
+      const target = queued[dir === 'up' ? queuedIndex - 1 : queuedIndex + 1];
+      if (queuedIndex < 0 || !target) return;
+      reorderPendingFollowUp(
+        rowsRef.current.findIndex((row) => row.id === id),
+        rowsRef.current.findIndex((row) => row.id === target.id),
+      );
+    },
+    reorderPendingFollowUp, steerPendingFollowUp,
+    clearPendingFollowUps: () => setEditingFollowUpId(null),
   };
 }

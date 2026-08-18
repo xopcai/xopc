@@ -7,8 +7,8 @@ export const MAX_CHAT_ATTACHMENTS = 10;
  */
 export const MAX_WEBCHAT_ATTACHMENT_FILE_BYTES = 32 * 1024 * 1024;
 
-/** Upper bound for `POST /api/agent` JSON body when every slot is a max-sized binary attachment (base64 ~4/3). */
-export function maxWebchatAgentRequestBodyBytes(): number {
+/** Upper bound for a session input request when every attachment is encoded as base64. */
+export function maxSessionInputRequestBodyBytes(): number {
   const rawMax = MAX_WEBCHAT_ATTACHMENT_FILE_BYTES * MAX_CHAT_ATTACHMENTS;
   return Math.ceil((rawMax * 4) / 3) + 1024 * 1024;
 }

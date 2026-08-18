@@ -12,7 +12,6 @@ import {
   inboundCorrelationMetadataFromAsyncLogContext,
   updateAsyncLogContext,
 } from '../../utils/logger.js';
-import { shouldSkipWebchatInboundByAbortCutoff } from '../../session/abort-cutoff.js';
 import { parseSessionKey } from '../../routing/session-key.js';
 import { recordExplicitRelationshipFollowUp } from '../../user-context/relationship-continuity.js';
 import { resolveExecutionContext } from '../../work/execution-context.js';
@@ -58,7 +57,7 @@ export async function *runGatewayAgent(
   chatId: string,
   attachments?: UserTurnAttachment[],
   thinking?: string,
-  runOptions?: { signal?: AbortSignal; clientCreatedAtMs?: number },
+  runOptions?: { signal?: AbortSignal; runId?: string },
 ): AsyncGenerator<RunGatewayAgentYield, { status: string; summary: string }, unknown> {
   const cappedAttachments =
     attachments && attachments.length > MAX_CHAT_ATTACHMENTS
@@ -71,7 +70,7 @@ export async function *runGatewayAgent(
     );
   }
 
-  const runId = crypto.randomUUID();
+  const runId = runOptions?.runId ?? crypto.randomUUID();
   const {
     agentService,
     bus,
@@ -89,7 +88,6 @@ export async function *runGatewayAgent(
   let webchatSessionKey: string | undefined;
   let webchatSessionId: string | undefined;
   let webchatMetadata: SessionMetadata | undefined;
-  let webchatStaleSkip = false;
   if (channel === 'webchat') {
     const resolved = resolveWebchatSessionKey({ sessionKey: chatId });
     if (resolved.ok === false) {
@@ -102,12 +100,6 @@ export async function *runGatewayAgent(
     }
     webchatSessionId = meta?.sessionId;
     webchatMetadata = meta;
-    webchatStaleSkip = shouldSkipWebchatInboundByAbortCutoff(meta, runOptions?.clientCreatedAtMs);
-    if (!webchatStaleSkip && meta?.abortCutoffTimestamp !== undefined) {
-      await sessionIndex
-        .updateSessionMetadata(webchatSessionKey, { abortCutoffTimestamp: undefined })
-        .catch(() => {});
-    }
     runRelay.ensureRun(runId, webchatSessionKey);
     runAbortControllers.set(runId, new AbortController());
   }
@@ -176,18 +168,6 @@ export async function *runGatewayAgent(
 
   try {
     if (channel === 'webchat' && webchatSessionKey) {
-      if (webchatStaleSkip) {
-        executionReceiptStatus = 'cancelled';
-        executionReceiptSummary = 'Stale inbound message skipped';
-        yield* emitAndYield(mapper.end('cancelled', 'Stale inbound after abort (clientCreatedAtMs before cutoff)'));
-        runRelay.complete(runId);
-        runAbortControllers.delete(runId);
-        return {
-          status: 'skipped',
-          summary: 'Stale inbound after abort (clientCreatedAtMs before cutoff)',
-        };
-      }
-
       const sessionKey = webchatSessionKey;
       updateAsyncLogContext({
         sessionKey,

@@ -35,7 +35,6 @@ export {
   type CompactionBoundarySummary,
 } from './types.js';
 
-export { shouldSkipWebchatInboundByAbortCutoff } from './abort-cutoff.js';
 
 export {
   DEFAULT_RESET_AT_HOUR,

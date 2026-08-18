@@ -67,8 +67,13 @@ export const ChatPendingFollowUpStack = memo(function ChatPendingFollowUpStack({
         </span>
       </div>
       {items.map((item, index) => {
-        const canSteer = !item.attachments?.length && item.text.trim().length > 0;
+        const mutable = item.status === 'queued';
+        const removable = mutable || item.status === 'interrupted';
+        const queuedItems = items.filter((row) => row.status === 'queued');
+        const queuedIndex = queuedItems.findIndex((row) => row.id === item.id);
+        const canSteer = removable && !item.attachments?.length && item.text.trim().length > 0;
         const isSteering = steeringBusyId === item.id;
+        const statusText = item.status === 'interrupted' ? m.chat.followUpStatusInterrupted : null;
         let preview = item.text.trim();
         if (!preview && item.attachments?.length) {
           const n0 = item.attachments[0]?.name?.trim();
@@ -80,7 +85,7 @@ export const ChatPendingFollowUpStack = memo(function ChatPendingFollowUpStack({
             key={item.id}
             role="listitem"
             onDragOver={onDragOver}
-            onDrop={disabled ? undefined : onDropRow(index)}
+            onDrop={disabled || !mutable ? undefined : onDropRow(index)}
             className={cn(
               'flex h-7 items-center gap-1 rounded border px-1',
               editingFollowUpId === item.id
@@ -89,14 +94,14 @@ export const ChatPendingFollowUpStack = memo(function ChatPendingFollowUpStack({
             )}
           >
             <div
-              draggable={!disabled}
+              draggable={!disabled && mutable}
               onDragStart={(e) => {
                 e.dataTransfer.setData('text/plain', `${DT_PREFIX}${index}`);
                 e.dataTransfer.effectAllowed = 'move';
               }}
               className={cn(
                 'flex shrink-0 cursor-grab items-center active:cursor-grabbing',
-                disabled && 'cursor-not-allowed opacity-40',
+                (disabled || !mutable) && 'cursor-not-allowed opacity-40',
               )}
               title={m.chat.followUpQueueDrag}
             >
@@ -104,7 +109,7 @@ export const ChatPendingFollowUpStack = memo(function ChatPendingFollowUpStack({
             </div>
             <button
               type="button"
-              disabled={disabled}
+              disabled={disabled || !mutable}
               title={m.chat.followUpQueueClickToEdit}
               aria-label={m.chat.followUpQueueClickToEdit}
               className={cn(
@@ -124,10 +129,15 @@ export const ChatPendingFollowUpStack = memo(function ChatPendingFollowUpStack({
                 <span className="block truncate">{preview}</span>
               )}
             </button>
+            {statusText ? (
+              <span className="shrink-0 rounded bg-surface-panel px-1.5 py-0.5 text-[0.625rem] text-fg-muted">
+                {statusText}
+              </span>
+            ) : null}
             <div className="flex shrink-0 items-center gap-px">
               <button
                 type="button"
-                disabled={disabled || index === 0}
+                disabled={disabled || !mutable || queuedIndex === 0}
                 className={cn(
                   'inline-flex size-6 items-center justify-center rounded text-fg-muted hover:bg-surface-hover hover:text-fg',
                   interaction.press,
@@ -145,7 +155,7 @@ export const ChatPendingFollowUpStack = memo(function ChatPendingFollowUpStack({
               </button>
               <button
                 type="button"
-                disabled={disabled || index >= items.length - 1}
+                disabled={disabled || !mutable || queuedIndex >= queuedItems.length - 1}
                 className={cn(
                   'inline-flex size-6 items-center justify-center rounded text-fg-muted hover:bg-surface-hover hover:text-fg',
                   interaction.press,
@@ -181,7 +191,7 @@ export const ChatPendingFollowUpStack = memo(function ChatPendingFollowUpStack({
               </button>
               <button
                 type="button"
-                disabled={disabled}
+                disabled={disabled || !removable}
                 className={cn(
                   'inline-flex size-6 items-center justify-center rounded text-fg-muted hover:bg-red-500/15 hover:text-red-600 dark:hover:text-red-400',
                   interaction.press,

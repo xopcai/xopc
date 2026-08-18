@@ -1,11 +1,8 @@
 import { streamSSE } from 'hono/streaming';
 import type { Context } from 'hono';
 import type { GatewayService } from '../service.js';
-import { MAX_WEBCHAT_ATTACHMENT_FILE_BYTES } from '../chat-limits.js';
 import { createLogger, updateAsyncLogContext } from '../../utils/logger.js';
 import { stringifySSEData } from './sse-json.js';
-import { resolveWebchatSessionKey } from '../resolve-webchat-session-key.js';
-import type { UserTurnAttachment } from '../user-turn-input.js';
 
 const log = createLogger('Gateway:SSE');
 
@@ -24,207 +21,6 @@ export interface SSEHandlerConfig {
   maxSseConnections?: number;
 }
 
-// Type validation for agent request body
-interface AgentRequestBody {
-  message: string;
-  channel?: string;
-  sessionKey?: string;
-  /** Epoch ms when the client started this send (abort cutoff / stale POST drop). */
-  clientCreatedAtMs?: number;
-  thinking?: string;
-  attachments?: UserTurnAttachment[];
-}
-
-function isValidAgentRequest(body: unknown): body is AgentRequestBody {
-  if (!body || typeof body !== 'object') return false;
-  const b = body as Record<string, unknown>;
-  // Allow empty message if attachments are provided
-  const hasMessage = typeof b.message === 'string';
-  const hasAttachments = Array.isArray(b.attachments) && b.attachments.length > 0;
-  return hasMessage || hasAttachments;
-}
-
-/** Max base64 character length that can decode to `MAX_WEBCHAT_ATTACHMENT_FILE_BYTES`. */
-function maxBase64CharsForBinary(maxBinaryBytes: number): number {
-  return 4 * Math.ceil(maxBinaryBytes / 3);
-}
-
-/**
- * POST /api/agent — Send a message to the agent, stream response via SSE.
- *
- * Request body: { message, channel?, sessionKey, attachments? }
- * Accept: text/event-stream → SSE stream
- * Accept: application/json → wait for full response, return JSON
- *
- * SSE events follow XOPC Chat Stream Protocol v1:
- *   run_start, user_message, user_transcript, assistant_message_start,
- *   assistant_delta, thinking_delta, thinking_end, tool_start, tool_update,
- *   tool_end, review_start, review_delta, review_end, assistant_message_end,
- *   compaction, tts_audio, clarify_request,
- *   run_end, error.
- */
-export function createAgentSSEHandler(config: SSEHandlerConfig) {
-  const { service } = config;
-
-  return async (c: Context) => {
-    const body = await c.req.json().catch(() => null);
-
-    // Input validation
-    if (!isValidAgentRequest(body)) {
-      return c.json({
-        ok: false,
-        error: { code: 'BAD_REQUEST', message: 'Missing required field: message or attachments' }
-      }, 400);
-    }
-
-    const { message, channel = 'webchat', attachments, thinking } = body;
-    const clientCreatedAtMs =
-      typeof body.clientCreatedAtMs === 'number' && Number.isFinite(body.clientCreatedAtMs)
-        ? body.clientCreatedAtMs
-        : undefined;
-    const resolved = resolveWebchatSessionKey({
-      sessionKey: typeof body.sessionKey === 'string' ? body.sessionKey : undefined,
-    });
-    if (resolved.ok === false) {
-      return c.json({
-        ok: false,
-        error: { code: 'BAD_REQUEST', message: resolved.error },
-      }, 400);
-    }
-    const chatId = resolved.sessionKey;
-
-    updateAsyncLogContext({ sessionKey: String(chatId) });
-
-    if (Array.isArray(attachments)) {
-      const maxDataChars = maxBase64CharsForBinary(MAX_WEBCHAT_ATTACHMENT_FILE_BYTES);
-      for (const a of attachments) {
-        if (!a || typeof a !== 'object') continue;
-        const data = (a as { data?: unknown }).data;
-        if (typeof data === 'string' && data.length > maxDataChars) {
-          return c.json(
-            {
-              ok: false,
-              error: {
-                code: 'BAD_REQUEST',
-                message: `Attachment exceeds maximum size (${MAX_WEBCHAT_ATTACHMENT_FILE_BYTES} bytes)`,
-              },
-            },
-            400,
-          );
-        }
-      }
-    }
-
-    const accept = c.req.header('Accept') || '';
-    const wantSSE = accept.includes('text/event-stream');
-
-    const clientAbort = new AbortController();
-    const raw = c.req.raw;
-    // Keep webchat runs alive across transient disconnects (page refresh / tab route switch)
-    // so the client can reattach via /api/agent/resume using runId from `run_start`.
-    // Explicit cancellation still goes through /api/agent/abort.
-    if (channel !== 'webchat') {
-      if (raw.signal.aborted) {
-        clientAbort.abort();
-      } else {
-        raw.signal.addEventListener('abort', () => clientAbort.abort(), { once: true });
-      }
-    }
-
-    // --- Non-streaming fallback: collect everything, return JSON ---
-    if (!wantSSE) {
-      const jsonSessionKey = channel === 'webchat' ? chatId : undefined;
-
-      const generator = service.runAgent(message, channel, chatId, attachments, thinking, {
-        signal: clientAbort.signal,
-        ...(clientCreatedAtMs !== undefined ? { clientCreatedAtMs } : {}),
-      });
-      try {
-        let finalResult: { status: string; summary: string } | undefined;
-        const tokens: string[] = [];
-
-        while (true) {
-          const { done, value } = await generator.next();
-          if (done) {
-            finalResult = value as { status: string; summary: string };
-            break;
-          }
-          const chunk = value as { type: string; payload?: { delta?: unknown } };
-          if (chunk.type === 'assistant_delta' && typeof chunk.payload?.delta === 'string') {
-            tokens.push(chunk.payload.delta);
-          }
-        }
-
-        return c.json({
-          ok: true,
-          payload: {
-            ...finalResult,
-            content: tokens.join(''),
-            ...(jsonSessionKey !== undefined
-              ? { sessionKey: jsonSessionKey, key: jsonSessionKey }
-              : {}),
-          },
-        });
-      } catch (error) {
-        const em = error instanceof Error ? error.message : String(error);
-        log.error(
-          { err: error, errorMessage: em, phase: 'gateway.agent_run', sessionKey: jsonSessionKey, channel },
-          `Agent run failed (JSON mode): ${em}`,
-        );
-        return c.json({
-          ok: false,
-          error: { code: 'INTERNAL_ERROR', message: error instanceof Error ? error.message : 'Unknown error' },
-        }, 500);
-      }
-    }
-
-    // --- SSE streaming ---
-    c.header('X-Accel-Buffering', 'no');
-    return streamSSE(c, async (stream) => {
-      if (channel !== 'webchat') {
-        stream.onAbort(() => {
-          clientAbort.abort();
-        });
-      }
-
-      const generator = service.runAgent(message, channel, chatId, attachments, thinking, {
-        signal: clientAbort.signal,
-        ...(clientCreatedAtMs !== undefined ? { clientCreatedAtMs } : {}),
-      });
-
-      let eventId = 0;
-
-      try {
-        while (true) {
-          const { done, value } = await generator.next();
-
-          if (done) break;
-
-          const chunk = value as { type: string; seq?: unknown };
-          await stream.writeSSE({
-            id: typeof chunk.seq === 'number' ? String(chunk.seq) : String(++eventId),
-            event: chunk.type || 'message',
-            data: stringifySSEData(chunk),
-          });
-        }
-      } catch (error) {
-        log.error({ err: error }, 'Agent run failed (SSE mode)');
-        await stream.writeSSE({
-          id: String(++eventId),
-          event: 'error',
-          data: stringifySSEData({
-            type: 'error',
-            runId: 'unknown',
-            sessionKey: chatId,
-            timestamp: Date.now(),
-            payload: { code: 'INTERNAL_ERROR', message: error instanceof Error ? error.message : 'Unknown error' },
-          }),
-        });
-      }
-    });
-  };
-}
-
 /**
  * POST /api/agent/resume — Re-attach to an in-progress agent run via SSE.
  *
@@ -232,7 +28,7 @@ export function createAgentSSEHandler(config: SSEHandlerConfig) {
  * The relay replays retained buffered events from the beginning and then live-tails
  * until the run completes.
  *
- * SSE events are identical to those from POST /api/agent.
+ * SSE events are the active run's retained and live stream events.
  */
 export function createAgentResumeHandler(config: SSEHandlerConfig) {
   const { service } = config;
@@ -251,7 +47,7 @@ export function createAgentResumeHandler(config: SSEHandlerConfig) {
       return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Missing required field: runId' } }, 400);
     }
 
-    if (!service.runRelay.hasRun(runId)) {
+    if (!service.agentRunner.runRelay.hasRun(runId)) {
       return c.json({ ok: false, error: { code: 'NOT_FOUND', message: 'Run not found or already expired' } }, 404);
     }
 
@@ -259,7 +55,7 @@ export function createAgentResumeHandler(config: SSEHandlerConfig) {
     return streamSSE(c, async (stream) => {
       let eventId = 0;
       try {
-        for await (const event of service.runRelay.subscribe(runId)) {
+        for await (const event of service.agentRunner.runRelay.subscribe(runId)) {
           await stream.writeSSE({
             id: typeof event.seq === 'number' ? String(event.seq) : String(++eventId),
             event: event.type || 'message',

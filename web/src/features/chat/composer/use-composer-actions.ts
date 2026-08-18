@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 
 import type { ComposerDraft, WireAttachment } from '@/features/chat/composer/composer.types';
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
@@ -97,6 +97,7 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
     getAttachmentCount,
     wireAttachmentsPayload,
   };
+  const followUpSubmissionRef = useRef(false);
 
   const send = useCallback(() => {
     if (runBusy) return;
@@ -153,18 +154,28 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
     }
 
     if (!onAddPendingFollowUp) return;
+    if (followUpSubmissionRef.current) return;
     if (pendingFollowUpsCount >= MAX_PENDING_FOLLOW_UPS) {
       showComposerNotification('warning', m.followUpQueueMaxReached, { max: MAX_PENDING_FOLLOW_UPS });
       return;
     }
 
-    await onAddPendingFollowUp(
-      draft.text,
-      draft.attachments.length > 0 ? draft.attachments : undefined,
-    );
-    onUserTextCommitted?.(draft.text);
-    resetEditor();
-    clearAttachments();
+    followUpSubmissionRef.current = true;
+    try {
+      await onAddPendingFollowUp(
+        draft.text,
+        draft.attachments.length > 0 ? draft.attachments : undefined,
+      );
+      onUserTextCommitted?.(draft.text);
+      resetEditor();
+      clearAttachments();
+    } catch (error) {
+      showComposerNotification('error', m.followUpQueueSubmitFailed, {
+        message: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      followUpSubmissionRef.current = false;
+    }
   }, [
     runBusy,
     voiceActive,
@@ -175,6 +186,7 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
     onCommitEditFollowUp,
     getThinkingLevel,
     m.followUpQueueMaxReached,
+    m.followUpQueueSubmitFailed,
     clearEditFollowUpRef,
     onUserTextCommitted,
     resetEditor,

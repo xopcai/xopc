@@ -65,12 +65,10 @@ import { useGatewayHealth } from '../gateway/use-gateway-health';
 import { resolveResumeRunId } from './resolve-resume-run-id';
 
 const STREAMING_RENDER_THROTTLE_MS = 100;
-const FOLLOW_UP_AUTO_SEND_IDLE_MS = 5000;
 const MAX_PENDING_FOLLOW_UPS = 5;
 
 export interface UseChatSessionOptions {
   sessionKey: string;
-  effectiveModelId: string | null;
 }
 
 export interface UseChatSessionReturn {
@@ -114,7 +112,7 @@ export interface UseChatSessionReturn {
 }
 
 export function useChatSession(options: UseChatSessionOptions): UseChatSessionReturn {
-  const { sessionKey, effectiveModelId } = options;
+  const { sessionKey } = options;
 
   const queryClient = useQueryClient();
   const activeGatewayId = useGatewayStore((state) => state.activeGatewayId);
@@ -136,7 +134,6 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
   const autoResumeFailedRef = useRef(false);
   const displayMessagesRef = useRef<Message[]>([]);
   const messageListAtBottomRef = useRef(true);
-  const followUpFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sessionDataUpdatedAtRef = useRef(0);
   const prevGatewayOnlineForStreamRef = useRef(gatewayOnline);
 
@@ -283,9 +280,6 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
   const followUp = useChatFollowUp({
     sessionKey,
     sessionKeyRef: activeSessionKeyRef,
-    streamActiveRef,
-    clarifyActiveRef,
-    sendRef,
     onQueueFull: () => {
       setSnackMsg(t(m.chat.followUpQueueMaxReached, { max: MAX_PENDING_FOLLOW_UPS }));
     },
@@ -514,12 +508,6 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
           flushStreamingMessage();
         }
         finalizeMessage(callbackSessionKey);
-        if (followUpFlushTimerRef.current) {
-          clearTimeout(followUpFlushTimerRef.current);
-        }
-        followUpFlushTimerRef.current = setTimeout(() => {
-          void followUp.flushSteeringQueue(callbackSessionKey);
-        }, FOLLOW_UP_AUTO_SEND_IDLE_MS);
       },
       onError: (msg) => {
         if (!isCurrentSession()) {
@@ -584,7 +572,6 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
           sessionKey,
           buildCallbacks(sessionKey),
           attachments,
-          effectiveModelId ? { modelRef: effectiveModelId } : undefined,
         );
         return true;
       } catch (e) {
@@ -608,7 +595,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
         return false;
       }
     },
-    [sessionKey, streaming, awaitingSessionRefresh, invalidateSessionByKey, clearStreamingMessage, buildCallbacks, effectiveModelId],
+    [sessionKey, streaming, awaitingSessionRefresh, invalidateSessionByKey, clearStreamingMessage, buildCallbacks],
   );
 
   sendRef.current = send;
@@ -647,7 +634,6 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
           payload,
           sessionKey,
           buildCallbacks(sessionKey),
-          effectiveModelId ? { modelRef: effectiveModelId } : undefined,
         );
       } catch (e) {
         if (activeSessionKeyRef.current !== sessionKey) {
@@ -663,7 +649,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
         setProgress(null);
       }
     },
-    [sessionKey, streaming, awaitingSessionRefresh, invalidateSessionByKey, clearStreamingMessage, buildCallbacks, m.chat.voiceSending, effectiveModelId],
+    [sessionKey, streaming, awaitingSessionRefresh, invalidateSessionByKey, clearStreamingMessage, buildCallbacks, m.chat.voiceSending],
   );
 
   // ── Abort ────────────────────────────────────────────────

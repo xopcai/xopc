@@ -1,4 +1,4 @@
-import { useCallback, useRef, type RefObject } from 'react';
+import { useCallback, type RefObject } from 'react';
 
 import { buildSendFailedErrorPayload } from '@/features/chat/messages/agent-run-error-parser';
 import { createAgentStreamMessagingCallbacks, readStreamingBubbleFromStore } from '@/features/chat/messages/agent-stream-messaging-callbacks';
@@ -26,10 +26,7 @@ import {
   provisionalTitleFromUserText,
 } from '@/lib/provisional-session-title';
 import { resolveResumeRunId } from '@/features/chat/session/resolve-resume-run-id';
-import {
-  FOLLOW_UP_AUTO_SEND_IDLE_MS,
-  type PendingFollowUp,
-} from '@/features/chat/follow-up/pending-follow-up.types';
+import type { PendingFollowUp } from '@/features/chat/follow-up/pending-follow-up.types';
 import type { SessionManager } from '@/features/chat/session/session-manager';
 import {
   cloneMessageForRender,
@@ -83,15 +80,12 @@ export function useChatSessionStreaming(deps: {
     pollSessionNameAfterTurn,
   } = deps;
 
-  const flushSteeringQueueRef = useRef(fq.flushSteeringQueue);
-  flushSteeringQueueRef.current = fq.flushSteeringQueue;
-
   const store = () => useChatSessionStore.getState();
   const setShellError = (msg: string) => store().setShellError(msg);
   const clearShellError = () => store().setShellError(null);
 
   const finalizeMessage = useCallback(
-    (opts?: { skipSteeringQueueFlush?: boolean }) => {
+    () => {
       const cacheKey = chatRunManager.activeStreamSessionKey ?? sessionKeyRef.current;
       if (cacheKey && !shouldApplyStreamUpdate(cacheKey)) {
         return;
@@ -115,20 +109,11 @@ export function useChatSessionStreaming(deps: {
       chatRunManager.resetRunTracking();
       fq.dismissClarify();
       void pollSessionNameAfterTurn();
-      if (!opts?.skipSteeringQueueFlush) {
-        const flushFor = cacheKey ?? sessionKeyRef.current;
-        if (flushFor) {
-          window.setTimeout(() => {
-            void flushSteeringQueueRef.current(flushFor);
-          }, FOLLOW_UP_AUTO_SEND_IDLE_MS);
-        }
-      }
       const syncKey = sessionKeyRef.current;
       if (syncKey) {
         window.setTimeout(() => {
           if (sessionKeyRef.current !== syncKey) return;
           if (sendingRef.current || streamingRef.current) return;
-          if (fq.pendingFollowUpsRef.current.length > 0) return;
           void loadSessionById(syncKey, 0);
         }, 400);
       }
@@ -262,7 +247,7 @@ export function useChatSessionStreaming(deps: {
       chatRunManager.abort();
       sendingRef.current = false;
       streamingRef.current = false;
-      finalizeMessage({ skipSteeringQueueFlush: true });
+      finalizeMessage();
       queueMicrotask(() => {
         void sendMessageRef.current(content, attachments, effectiveThinking);
       });
@@ -409,7 +394,7 @@ export function useChatSessionStreaming(deps: {
     if (key) clearChatRunPresence(key);
     sendingRef.current = false;
     streamingRef.current = false;
-    finalizeMessage({ skipSteeringQueueFlush: true });
+    finalizeMessage();
     if (key) {
       window.setTimeout(() => {
         void loadSessionById(key, 0);

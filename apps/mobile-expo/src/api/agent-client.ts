@@ -158,7 +158,7 @@ function sseDispatchOptions(sessionKey: string, sender: AgentMessageSender): Age
 }
 
 /**
- * Streams agent output from `POST /api/agent` (and resume), matching the web gateway console.
+ * Submits a durable session input and attaches to its active run, matching the web console.
  */
 export class AgentMessageSender {
   private _abort?: AbortController;
@@ -348,28 +348,35 @@ export class AgentMessageSender {
     sessionKey: string,
     callbacks?: MessagingCallbacks,
     attachments?: WireAttachment[],
-    options?: { modelRef?: string },
   ): Promise<void> {
     const capped = capAttachments(attachments);
-    const modelRef = options?.modelRef?.trim();
-    return this.send(
-      '/api/agent',
-      {
-        message,
-        sessionKey,
+    const clientMessageId = crypto.randomUUID();
+    const res = await apiFetch(`/api/sessions/${encodeURIComponent(sessionKey)}/inputs`, {
+      method: 'POST',
+      body: JSON.stringify({
+        clientMessageId, delivery: 'next', content: message,
         ...(capped?.length ? { attachments: capped } : {}),
-        ...(modelRef ? { modelRef } : {}),
-        clientCreatedAtMs: Date.now(),
-      },
-      callbacks,
-    );
+      }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null) as { error?: { message?: string } } | null;
+      throw new Error(formatApiHttpError(res.status, res.statusText, body?.error?.message));
+    }
+    const json = await res.json() as { payload?: { state?: {
+      activeRunId?: string; activeInputId?: string;
+      inputs?: Array<{ id: string; clientMessageId: string }>;
+    } } };
+    const state = json.payload?.state;
+    const own = state?.inputs?.find((input) => input.clientMessageId === clientMessageId);
+    if (state?.activeRunId && own?.id === state.activeInputId) {
+      return this.resume(state.activeRunId, sessionKey, callbacks);
+    }
   }
 
   async sendVoiceMessage(
     payload: VoiceMessagePayload,
     sessionKey: string,
     callbacks?: MessagingCallbacks,
-    options?: { modelRef?: string },
   ): Promise<void> {
     const mimeType = payload.mimeType || 'audio/mp4';
     const name = payload.name || (mimeType.includes('mpeg') ? 'voice.mp3' : 'voice.m4a');
@@ -385,7 +392,7 @@ export class AgentMessageSender {
       size,
       ...(durationSeconds != null ? { durationSeconds } : {}),
     };
-    return this.sendMessage('', sessionKey, callbacks, [wire], options);
+    return this.sendMessage('', sessionKey, callbacks, [wire]);
   }
 
   async resume(runId: string, sessionKey: string, callbacks?: MessagingCallbacks): Promise<void> {

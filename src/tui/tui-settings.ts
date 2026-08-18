@@ -6,8 +6,6 @@ import { resolveStateDir } from '../config/paths.js';
 export type TuiThemeId = 'auto' | 'dark' | 'light' | (string & {});
 
 export type DoubleEscapeAction = 'none' | 'tree' | 'fork';
-export type FollowUpMode = 'one-at-a-time' | 'all';
-export type SteeringMode = 'one-at-a-time' | 'all';
 export type TreeFilterMode = 'default' | 'no-tools' | 'user-only' | 'labeled-only' | 'all';
 
 export interface TuiSettings {
@@ -31,10 +29,6 @@ export interface TuiSettings {
   autocompleteMaxVisible: number;
   /** Clear empty terminal rows when rendered content shrinks. */
   clearOnShrink: boolean;
-  /** How queued follow-up messages are delivered after an agent run ends. */
-  followUpMode: FollowUpMode;
-  /** How queued steering messages are delivered across active runs. */
-  steeringMode: SteeringMode;
   /** Default transcript filter when opening `/tree`. */
   treeFilterMode: TreeFilterMode;
 }
@@ -52,8 +46,6 @@ export const DEFAULT_TUI_SETTINGS: TuiSettings = {
   editorPaddingX: 0,
   autocompleteMaxVisible: 5,
   clearOnShrink: false,
-  followUpMode: 'one-at-a-time',
-  steeringMode: 'one-at-a-time',
   treeFilterMode: 'default',
 };
 
@@ -61,14 +53,6 @@ const SETTINGS_PATH = join(resolveStateDir(), 'tui-settings.json');
 
 function isDoubleEscapeAction(value: unknown): value is DoubleEscapeAction {
   return value === 'none' || value === 'tree' || value === 'fork';
-}
-
-function isFollowUpMode(value: unknown): value is FollowUpMode {
-  return value === 'one-at-a-time' || value === 'all';
-}
-
-function isSteeringMode(value: unknown): value is SteeringMode {
-  return value === 'one-at-a-time' || value === 'all';
 }
 
 function isTreeFilterMode(value: unknown): value is TreeFilterMode {
@@ -116,12 +100,6 @@ function normalizeSettings(raw: unknown): TuiSettings {
   }
   if (typeof obj.clearOnShrink === 'boolean') {
     base.clearOnShrink = obj.clearOnShrink;
-  }
-  if (isFollowUpMode(obj.followUpMode)) {
-    base.followUpMode = obj.followUpMode;
-  }
-  if (isSteeringMode(obj.steeringMode)) {
-    base.steeringMode = obj.steeringMode;
   }
   if (isTreeFilterMode(obj.treeFilterMode)) {
     base.treeFilterMode = obj.treeFilterMode;

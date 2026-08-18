@@ -83,6 +83,14 @@ export function createStrictRateLimitMiddleware(deps: StrictRateLimitDeps) {
   });
 }
 
+export function createChatRateLimitMiddleware(deps: StrictRateLimitDeps) {
+  return createClientRateLimitMiddleware(deps, {
+    limiter: () => buckets.chatApi(),
+    exceededMessage: 'Chat API rate limit exceeded',
+    reason: 'chat_rate_limit_exceeded',
+  });
+}
+
 export function createXopcCloudPollRateLimitMiddleware(deps: StrictRateLimitDeps) {
   return createClientRateLimitMiddleware(deps, {
     limiter: () => buckets.xopcCloudPoll(),

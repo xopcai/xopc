@@ -138,9 +138,7 @@ export function isTuiIdle(state: Partial<TuiState>): boolean {
 
 export function hasPendingTuiMessages(state: Partial<TuiState>): boolean {
   return (
-    (state.messageFollowUpQueue?.length ?? 0) > 0 ||
-    (state.steeringQueue?.length ?? 0) > 0 ||
-    (state.compactionQueue?.length ?? 0) > 0
+    (state.pendingInputCount ?? 0) > 0 || (state.compactionQueue?.length ?? 0) > 0
   );
 }
 

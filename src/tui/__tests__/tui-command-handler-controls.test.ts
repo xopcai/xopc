@@ -12,8 +12,6 @@ describe('tui command handler controls', () => {
         currentSessionKey: 'agent:main:main',
         toolsExpanded: false,
         showThinking: false,
-        messageFollowUpQueue: [],
-        steeringQueue: [],
       } as never,
       chatLog: {
         addSystem: () => {},
@@ -53,8 +51,6 @@ it('handles thinking command through native TUI controls', async () => {
         currentSessionKey: 'agent:main:main',
         toolsExpanded: false,
         showThinking: false,
-        messageFollowUpQueue: [],
-        steeringQueue: [],
       } as never,
       chatLog: {
         addSystem: (text: string) => systems.push(text),
@@ -107,8 +103,6 @@ it('handles thinking command through native TUI controls', async () => {
         sessionInfo: { reasoningLevel: 'stream' },
         toolsExpanded: false,
         showThinking: false,
-        messageFollowUpQueue: [],
-        steeringQueue: [],
       } as never,
       chatLog: {
         addSystem: (text: string) => systems.push(text),
@@ -149,8 +143,6 @@ it('handles thinking command through native TUI controls', async () => {
         sessionInfo: { verboseLevel: 'full' },
         toolsExpanded: false,
         showThinking: false,
-        messageFollowUpQueue: [],
-        steeringQueue: [],
       } as never,
       chatLog: {
         addSystem: (text: string) => systems.push(text),
@@ -190,8 +182,6 @@ it('handles thinking command through native TUI controls', async () => {
         currentSessionKey: 'agent:main:main',
         toolsExpanded: false,
         showThinking: false,
-        messageFollowUpQueue: [],
-        steeringQueue: [],
       } as never,
       chatLog: {
         addSystem: () => {},
@@ -225,8 +215,6 @@ it('handles thinking command through native TUI controls', async () => {
         sessionInfo: { displayName: 'Existing name' },
         toolsExpanded: false,
         showThinking: false,
-        messageFollowUpQueue: [],
-        steeringQueue: [],
       } as never,
       chatLog: {
         addSystem: (text: string) => systems.push(text),
@@ -278,8 +266,6 @@ it('handles thinking command through native TUI controls', async () => {
         },
         toolsExpanded: false,
         showThinking: false,
-        messageFollowUpQueue: [],
-        steeringQueue: [],
       } as never,
       chatLog: {
         addSystem: (text: string) => systems.push(text),
@@ -340,8 +326,6 @@ it('handles thinking command through native TUI controls', async () => {
         sessionInfo: {},
         toolsExpanded: false,
         showThinking: false,
-        messageFollowUpQueue: [],
-        steeringQueue: [],
       } as never,
       chatLog: {
         addSystem: (text: string) => systems.push(text),
@@ -438,8 +422,6 @@ it('handles thinking command through native TUI controls', async () => {
         sessionInfo: {},
         toolsExpanded: false,
         showThinking: false,
-        messageFollowUpQueue: [],
-        steeringQueue: [],
       } as never,
       chatLog: {
         addSystem: () => {},
@@ -473,8 +455,6 @@ it('handles thinking command through native TUI controls', async () => {
         sessionInfo: {},
         toolsExpanded: false,
         showThinking: false,
-        messageFollowUpQueue: [],
-        steeringQueue: [],
       } as never,
       chatLog: {
         addSystem: (text: string) => systems.push(text),
@@ -514,8 +494,6 @@ it('handles thinking command through native TUI controls', async () => {
         sessionInfo: {},
         toolsExpanded: false,
         showThinking: false,
-        messageFollowUpQueue: [],
-        steeringQueue: [],
       } as never,
       chatLog: {
         addSystem: (text: string) => systems.push(text),
@@ -551,8 +529,6 @@ it('handles thinking command through native TUI controls', async () => {
         sessionInfo: {},
         toolsExpanded: false,
         showThinking: false,
-        messageFollowUpQueue: [],
-        steeringQueue: [],
       } as never,
       chatLog: {
         addSystem: (text: string) => systems.push(text),
@@ -581,8 +557,6 @@ it('handles thinking command through native TUI controls', async () => {
         sessionInfo: {},
         toolsExpanded: false,
         showThinking: false,
-        messageFollowUpQueue: [],
-        steeringQueue: [],
       } as never,
       chatLog: {
         addSystem: () => {},

@@ -308,15 +308,16 @@ Content-Type: application/json
 }
 ```
 
-### 智能体对话
+### 会话输入
 
 ```http
-POST /api/agent
+POST /api/sessions/:sessionKey/inputs
 Content-Type: application/json
 
 {
-  "message": "What is the weather?",
-  "session": "default"
+  "clientMessageId": "client-125",
+  "delivery": "next",
+  "content": "What is the weather?"
 }
 ```
 
@@ -324,9 +325,11 @@ Content-Type: application/json
 
 ```json
 {
-  "status": "ok",
-  "reply": "The weather is sunny...",
-  "session": "default"
+  "ok": true,
+  "payload": {
+    "effectiveDelivery": "next",
+    "state": { "sessionKey": "...", "revision": 4, "inputs": [] }
+  }
 }
 ```
 
@@ -473,19 +476,19 @@ curl -X POST http://localhost:18790/api/message \
   -H "Content-Type: application/json" \
   -d '{"channel": "telegram", "chat_id": "123", "content": "Hello!"}'
 
-# 智能体对话
-curl -X POST http://localhost:18790/api/agent \
+# 为已有会话加入一条输入
+curl -X POST http://localhost:18790/api/sessions/SESSION_KEY/inputs \
   -H "Content-Type: application/json" \
-  -d '{"message": "What is 2+2?"}'
+  -d '{"clientMessageId":"client-123","delivery":"next","content":"What is 2+2?"}'
 
 # 健康检查
 curl http://localhost:18790/health
 
 # 带认证的请求
-curl -X POST http://localhost:18790/api/agent \
+curl -X POST http://localhost:18790/api/sessions/SESSION_KEY/inputs \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN" \
-  -d '{"message": "Hello"}'
+  -d '{"clientMessageId":"client-124","delivery":"next","content":"Hello"}'
 ```
 
 ### JavaScript/Node.js
@@ -504,11 +507,11 @@ async function sendMessage(content, chatId) {
   return res.json();
 }
 
-async function chatWithAgent(message) {
-  const res = await fetch('http://localhost:18790/api/agent', {
+async function chatWithAgent(sessionKey, message) {
+  const res = await fetch(`http://localhost:18790/api/sessions/${encodeURIComponent(sessionKey)}/inputs`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message })
+    body: JSON.stringify({ clientMessageId: crypto.randomUUID(), delivery: 'next', content: message })
   });
   return res.json();
 }
@@ -518,6 +521,7 @@ async function chatWithAgent(message) {
 
 ```python
 import requests
+import uuid
 
 def send_message(content, chat_id):
     resp = requests.post(
@@ -530,10 +534,10 @@ def send_message(content, chat_id):
     )
     return resp.json()
 
-def chat(message):
+def chat(session_key, message):
     resp = requests.post(
-        'http://localhost:18790/api/agent',
-        json={'message': message}
+        f'http://localhost:18790/api/sessions/{session_key}/inputs',
+        json={'clientMessageId': str(uuid.uuid4()), 'delivery': 'next', 'content': message}
     )
     return resp.json()
 ```

@@ -7,7 +7,13 @@ import {
 
 describe('lazy route bundles', () => {
   it('keeps chat-critical routes off the lazy registry', () => {
-    const paths = ['/api/status', '/api/agent', '/api/events', '/api/sessions', '/api/send'];
+    const paths = [
+      '/api/status',
+      '/api/agent/resume',
+      '/api/events',
+      '/api/sessions/example/inputs',
+      '/api/send',
+    ];
     for (const path of paths) {
       expect(findAuthenticatedLazyRouteBundle(path)).toBeUndefined();
     }

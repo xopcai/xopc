@@ -55,23 +55,11 @@ describe('sanitizeStatusText', () => {
 });
 
 describe('formatQueuedMessageLines', () => {
-  it('renders queued steering and follow-up messages with an edit hint', () => {
-    const state = createInitialState('agent:main:main');
-    state.steeringQueue.push('steer\nnow');
-    state.messageFollowUpQueue.push('follow later');
-
-    const rendered = formatQueuedMessageLines(state, 120, 'Alt+Up').join('\n');
-
-    expect(rendered).toContain('Steering: steer now');
-    expect(rendered).toContain('Follow-up: follow later');
-    expect(rendered).toContain('Alt+Up to edit all queued messages');
-  });
-
   it('renders compaction queued messages as generic queued prompts', () => {
     const state = createInitialState('agent:main:main');
     state.compactionQueue.push('after compact');
 
-    const rendered = formatQueuedMessageLines(state, 120, 'Alt+Up').join('\n');
+    const rendered = formatQueuedMessageLines(state, 120).join('\n');
 
     expect(rendered).toContain('Queued: after compact');
   });
@@ -92,13 +80,13 @@ describe('TuiBottomBar', () => {
     expect(bar.render(120).join('\n')).toContain('50%/100k ctx');
   });
 
-  it('renders queued steering count', () => {
+  it('renders pending input count', () => {
     const state = createInitialState('agent:main:main');
     state.connectionStatus = 'connected';
-    state.steeringQueue.push('steer later');
+    state.pendingInputCount = 1;
     const bar = new TuiBottomBar(() => state, () => 'medium');
 
-    expect(bar.render(120).join('\n')).toContain('S1');
+    expect(bar.render(120).join('\n')).toContain('Q1');
   });
 
   it('renders user-facing active run status', () => {
@@ -126,17 +114,16 @@ describe('TuiBottomBar', () => {
     expect(bar.render(120).join('\n')).toContain('Working');
   });
 
-  it('renders queued message previews below the status line', () => {
+  it('does not render server-owned input contents in the footer', () => {
     const state = createInitialState('agent:main:main');
     state.connectionStatus = 'connected';
-    state.messageFollowUpQueue.push('follow later');
-    const bar = new TuiBottomBar(() => state, () => 'medium', () => 'F');
+    state.pendingInputCount = 1;
+    const bar = new TuiBottomBar(() => state, () => 'medium');
 
     const rendered = bar.render(120).join('\n');
 
     expect(rendered).toContain('Q1');
-    expect(rendered).toContain('Follow-up: follow later');
-    expect(rendered).toContain('F to edit all queued messages');
+    expect(rendered).not.toContain('Follow-up:');
   });
 
   it('renders extension statuses on a separate compact line', () => {

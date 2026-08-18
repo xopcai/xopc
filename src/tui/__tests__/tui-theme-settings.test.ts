@@ -25,8 +25,6 @@ describe('tui settings', () => {
       showThinking: false,
       toolsExpanded: false,
       doubleEscapeAction: 'none',
-      followUpMode: 'one-at-a-time',
-      steeringMode: 'one-at-a-time',
       treeFilterMode: 'default',
       showTerminalProgress: false,
       showStartupHints: true,

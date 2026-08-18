@@ -77,7 +77,7 @@ export interface ExtensionRuntime {
   log: ExtensionLogger;
   sessionManager?: ExtensionSessionManager;
   /**
-   * Queue another webchat agent turn (same as POST /api/agent) after the current run unlocks.
+   * Queue another durable webchat input after the current run unlocks.
    * Only injected in the Gateway process.
    */
   scheduleWebchatContinuation?: (sessionKey: string, message: string) => void;
@@ -100,7 +100,7 @@ export interface ExtensionRuntime {
 export type ExtensionUserMessageContent = string | (TextContent | ImageContent)[];
 
 export interface ExtensionSendUserMessageOptions {
-  deliverAs?: 'steer' | 'followUp';
+  deliverAs?: 'steer' | 'next';
 }
 
 export interface ExtensionCustomMessage<T = unknown> {
@@ -112,7 +112,7 @@ export interface ExtensionCustomMessage<T = unknown> {
 
 export interface ExtensionSendMessageOptions {
   triggerTurn?: boolean;
-  deliverAs?: 'steer' | 'followUp' | 'nextTurn';
+  deliverAs?: 'steer' | 'next' | 'nextTurn';
 }
 
 export interface ExtensionCliRegistration {

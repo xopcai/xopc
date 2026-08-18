@@ -1,8 +1,6 @@
 import {
   useCallback,
   useEffect,
-  useEffectEvent,
-  useLayoutEffect,
   useRef,
   useState,
   type MutableRefObject,
@@ -16,13 +14,8 @@ import {
 } from '@/features/chat/clarify/clarify-prompt-storage';
 import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
 import {
-  clearFollowUpQueueSnapshot,
-  readFollowUpQueueSnapshot,
-  writeFollowUpQueueSnapshot,
-} from '@/features/chat/follow-up/follow-up-queue-storage';
-import {
-  FOLLOW_UP_AUTO_SEND_IDLE_MS,
   MAX_PENDING_FOLLOW_UPS,
+  projectPendingFollowUps,
   type PendingFollowUp,
 } from '@/features/chat/follow-up/pending-follow-up.types';
 import { apiFetch } from '@/lib/fetch';
@@ -41,7 +34,7 @@ export type ChatFollowUpClarifyApi = {
   addPendingFollowUp: (
     content: string,
     attachments?: PendingFollowUp['attachments'],
-  ) => void;
+  ) => Promise<void>;
   beginEditFollowUp: (id: string) => void;
   cancelEditFollowUp: () => void;
   commitEditFollowUp: (
@@ -64,39 +57,27 @@ export type ChatFollowUpClarifyApi = {
   dismissClarifyAndClearPending: () => void;
   onClarifyToolEnd: (chatId: string) => void;
   makeOnClarifyRequest: (chatId: string) => (payload: ClarifyPromptState) => void;
-  /**
-   * Dequeue next pending follow-up and send it (awaits POST+SSE; used after assistant turn finalizes).
-   * When `forChatId` is set, no-op if the user navigated away (avoids dequeuing the wrong session's ref).
-   */
-  flushSteeringQueue: (forChatId?: string | null) => Promise<void>;
 };
 
 export function useChatFollowUpClarify(options: {
   sessionKey: string | null;
   decodedKey: string | undefined;
   sessionKeyRef: MutableRefObject<string | null>;
-  /** Same ref as `sendMessage` guard — must match before dequeuing a follow-up. */
-  activeStreamSessionKeyRef: MutableRefObject<string | null>;
   sendingRef: MutableRefObject<boolean>;
   streamingRef: MutableRefObject<boolean>;
   modelSupportsThinking: boolean;
   thinkingLevel: string;
   shouldApplyStreamUpdate: (streamSessionKey: string) => boolean;
-  sendMessageRef: MutableRefObject<
-    (content: string, attachments?: PendingFollowUp['attachments'], levelOverride?: string) => Promise<void>
-  >;
 }): ChatFollowUpClarifyApi {
   const {
     sessionKey,
     decodedKey,
     sessionKeyRef,
-    activeStreamSessionKeyRef,
     sendingRef,
     streamingRef,
     modelSupportsThinking,
     thinkingLevel,
     shouldApplyStreamUpdate,
-    sendMessageRef,
   } = options;
 
   const [clarifyPrompt, setClarifyPrompt] = useState<ClarifyPromptState | null>(null);
@@ -109,100 +90,54 @@ export function useChatFollowUpClarify(options: {
   const [steeringFollowUpId, setSteeringFollowUpId] = useState<string | null>(null);
   const [editingFollowUpId, setEditingFollowUpId] = useState<string | null>(null);
   const editingFollowUpIdRef = useRef<string | null>(null);
-  const [hydratedQueueKey, setHydratedQueueKey] = useState<string | null>(null);
-
-  /** Last `#/chat/:id` segment (decoded); drives flush-save on sidebar navigation before `sessionKey` catches up. */
-  const followUpPrevDecodedKeyRef = useRef<string | undefined>(undefined);
-  /** Last `sessionKey` from loaded session; flush-save when it changes so debounce cancellation cannot drop data. */
-  const followUpPrevLoadedSessionRef = useRef<string | null>(null);
+  const revisionRef = useRef(-1);
 
   clarifyPromptRef.current = clarifyPrompt;
   pendingFollowUpsRef.current = pendingFollowUps;
   editingFollowUpIdRef.current = editingFollowUpId;
 
-  useLayoutEffect(() => {
-    const prevDecodedRoute = followUpPrevDecodedKeyRef.current;
-    if (prevDecodedRoute != null && prevDecodedRoute !== decodedKey) {
-      writeFollowUpQueueSnapshot(prevDecodedRoute, {
-        pending: structuredClone(pendingFollowUpsRef.current),
-        editingId: editingFollowUpIdRef.current,
-      });
-      if (clarifyPromptRef.current != null) {
-        writeClarifyPromptSnapshot(prevDecodedRoute, clarifyPromptRef.current);
-      }
-      setSteeringFollowUpId(null);
-    }
-    followUpPrevDecodedKeyRef.current = decodedKey;
+  const applyState = useCallback((raw: unknown) => {
+    if (!raw || typeof raw !== 'object') return;
+    const state = raw as { sessionKey?: unknown; revision?: unknown; inputs?: unknown };
+    if (state.sessionKey !== sessionKeyRef.current || typeof state.revision !== 'number' || !Array.isArray(state.inputs)) return;
+    if (state.revision < revisionRef.current) return;
+    const rows = projectPendingFollowUps(state.inputs);
+    revisionRef.current = state.revision;
+    pendingFollowUpsRef.current = rows;
+    setPendingFollowUps(rows);
+    if (editingFollowUpIdRef.current && !rows.some((row) => row.id === editingFollowUpIdRef.current)) setEditingFollowUpId(null);
+  }, [sessionKeyRef]);
 
-    const prevLoadedSession = followUpPrevLoadedSessionRef.current;
-    if (prevLoadedSession != null && prevLoadedSession !== sessionKey) {
-      writeFollowUpQueueSnapshot(prevLoadedSession, {
-        pending: structuredClone(pendingFollowUpsRef.current),
-        editingId: editingFollowUpIdRef.current,
-      });
-      if (clarifyPromptRef.current != null) {
-        writeClarifyPromptSnapshot(prevLoadedSession, clarifyPromptRef.current);
-      }
-    }
-    followUpPrevLoadedSessionRef.current = sessionKey;
+  const refreshState = useCallback(async (key: string) => {
+    const res = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(key)}/input-state`)).catch(() => null);
+    if (!res?.ok || sessionKeyRef.current !== key) return;
+    const json = await res.json().catch(() => null) as { payload?: unknown } | null;
+    applyState(json?.payload);
+  }, [applyState, sessionKeyRef]);
 
-    if (!sessionKey && !decodedKey) {
-      if (
-        pendingFollowUpsRef.current.length > 0 ||
-        editingFollowUpIdRef.current !== null ||
-        hydratedQueueKey !== null
-      ) {
-        pendingFollowUpsRef.current = [];
-        setPendingFollowUps([]);
-        setEditingFollowUpId(null);
-        setHydratedQueueKey(null);
-      }
-      if (clarifyPromptRef.current != null) {
-        setClarifyPrompt(null);
-        setClarifySubmitError(null);
-      }
-      return;
-    }
-
-    const queueKey =
-      sessionKey && decodedKey && sessionKey === decodedKey ? sessionKey : null;
-    if (queueKey != null && queueKey !== hydratedQueueKey) {
-      const snap = readFollowUpQueueSnapshot(queueKey);
-      const pending = snap ? structuredClone(snap.pending) : [];
-      pendingFollowUpsRef.current = pending;
-      setPendingFollowUps(pending);
-      setEditingFollowUpId(snap?.editingId ?? null);
-      setClarifyPrompt(readClarifyPromptSnapshot(queueKey));
-      setClarifySubmitError(null);
-      setHydratedQueueKey(queueKey);
-    }
-
-    if (sessionKey != null && sessionKey !== decodedKey && clarifyPromptRef.current != null) {
-      writeClarifyPromptSnapshot(sessionKey, clarifyPromptRef.current);
-      setClarifyPrompt(null);
-      setClarifySubmitError(null);
-    }
-  }, [sessionKey, decodedKey, hydratedQueueKey]);
-
-  /**
-   * Debounced persist. While `sessionRoutePending`, the in-memory queue still belongs to
-   * `sessionKey` (loaded), not `decodedKey` (URL) — write under `sessionKey` so we do not clobber the target chat.
-   */
   useEffect(() => {
-    const diskKey =
-      sessionKey != null && decodedKey != null && sessionKey !== decodedKey
-        ? sessionKey
-        : (sessionKey ?? decodedKey ?? null);
-    if (!diskKey) return;
-    const t = window.setTimeout(() => {
-      if (sessionKeyRef.current !== diskKey) return;
-      writeFollowUpQueueSnapshot(diskKey, {
-        pending: structuredClone(pendingFollowUpsRef.current),
-        editingId: editingFollowUpIdRef.current,
-      });
-    }, 280);
-    return () => window.clearTimeout(t);
-  }, [sessionKey, decodedKey, pendingFollowUps, editingFollowUpId, sessionKeyRef]);
+    revisionRef.current = -1;
+    pendingFollowUpsRef.current = [];
+    setPendingFollowUps([]);
+    setEditingFollowUpId(null);
+    if (!sessionKey || sessionKey !== decodedKey) return;
+    setClarifyPrompt(readClarifyPromptSnapshot(sessionKey));
+    void refreshState(sessionKey);
+  }, [decodedKey, refreshState, sessionKey]);
+
+  useEffect(() => {
+    const onState = (event: Event) => applyState((event as CustomEvent<unknown>).detail);
+    const onReconnect = () => {
+      const key = sessionKeyRef.current;
+      if (key) void refreshState(key);
+    };
+    window.addEventListener('session-input-state', onState);
+    window.addEventListener('gateway-sse-connected', onReconnect);
+    return () => {
+      window.removeEventListener('session-input-state', onState);
+      window.removeEventListener('gateway-sse-connected', onReconnect);
+    };
+  }, [applyState, refreshState, sessionKeyRef]);
 
   const clearVisibleClarify = useCallback(() => {
     setClarifySubmitError(null);
@@ -230,26 +165,17 @@ export function useChatFollowUpClarify(options: {
   }, [sessionKeyRef]);
 
   const clearPendingFollowUps = useCallback(() => {
-    const key = sessionKeyRef.current;
-    if (key) clearFollowUpQueueSnapshot(key);
-    pendingFollowUpsRef.current = [];
-    setPendingFollowUps([]);
     setEditingFollowUpId(null);
-    setHydratedQueueKey(key);
-  }, [sessionKeyRef]);
+  }, []);
 
   const dismissClarifyAndClearPending = useCallback(() => {
     const key = sessionKeyRef.current;
     if (key) {
-      clearFollowUpQueueSnapshot(key);
       clearClarifyPromptSnapshot(key);
     }
-    pendingFollowUpsRef.current = [];
-    setPendingFollowUps([]);
     setClarifySubmitError(null);
     setClarifyPrompt(null);
     setEditingFollowUpId(null);
-    setHydratedQueueKey(key);
   }, [sessionKeyRef]);
 
   const onClarifyToolEnd = useCallback(
@@ -273,98 +199,39 @@ export function useChatFollowUpClarify(options: {
     [shouldApplyStreamUpdate, sendingRef, streamingRef],
   );
 
-  const flushSteeringQueue = useCallback(async (forChatId?: string | null) => {
-    const routeSk = sessionKeyRef.current;
-    if (forChatId != null && forChatId !== routeSk) {
-      return;
-    }
-    const sk = routeSk;
-    if (!sk) return;
-
-    let q = pendingFollowUpsRef.current;
-    while (q.length > 0 && !q[0].text.trim() && !q[0].attachments?.length) {
-      q = q.slice(1);
-    }
-    if (q.length === 0) {
-      pendingFollowUpsRef.current = [];
-      setPendingFollowUps([]);
-      return;
-    }
-    if (q.length !== pendingFollowUpsRef.current.length) {
-      pendingFollowUpsRef.current = q;
-      setPendingFollowUps(q);
-    }
-
-    const [first, ...rest] = q;
-    const trimmed = first.text?.trim() ?? '';
-    const atts = first.attachments;
-    if (!trimmed && !atts?.length) return;
-
-    // Mirror `sendMessage` early return — never dequeue if send would no-op (drops otherwise).
-    if (
-      activeStreamSessionKeyRef.current === sk &&
-      (sendingRef.current || streamingRef.current)
-    ) {
-      return;
-    }
-
-    if (editingFollowUpIdRef.current === first.id) {
-      setEditingFollowUpId(null);
-    }
-    pendingFollowUpsRef.current = rest;
-    setPendingFollowUps(rest);
-    await sendMessageRef.current(first.text, first.attachments, first.thinkingLevel);
-  }, [sendMessageRef, sessionKeyRef, activeStreamSessionKeyRef, sendingRef, streamingRef]);
-
-  const flushSteeringQueueEvent = useEffectEvent((forChatId?: string | null) => {
-    void flushSteeringQueue(forChatId);
-  });
-
-  /**
-   * After hydration or returning to a chat, resume the auto-send chain if the queue has rows and the
-   * session is idle (covers skipped `finalizeMessage` timeouts when switching chats mid-delay).
-   */
-  useEffect(() => {
-    if (!sessionKey || sessionKey !== decodedKey) return;
-    if (clarifyPrompt) return;
-    if (pendingFollowUps.length === 0) return;
-    if (sendingRef.current || streamingRef.current) return;
-    const first = pendingFollowUps[0];
-    if (!first || (!first.text.trim() && !first.attachments?.length)) return;
-
-    const tid = window.setTimeout(() => {
-      if (sessionKeyRef.current !== sessionKey) return;
-      if (sendingRef.current || streamingRef.current) return;
-      if (clarifyPromptRef.current) return;
-      flushSteeringQueueEvent(sessionKey);
-    }, FOLLOW_UP_AUTO_SEND_IDLE_MS);
-    return () => window.clearTimeout(tid);
-  }, [sessionKey, decodedKey, clarifyPrompt, pendingFollowUps, sendingRef, streamingRef, sessionKeyRef]);
-
   const addPendingFollowUp = useCallback(
-    (
+    async (
       content: string,
       attachments?: PendingFollowUp['attachments'],
     ) => {
       const trimmed = content.trim();
       if (!trimmed && !attachments?.length) return;
       if (pendingFollowUpsRef.current.length >= MAX_PENDING_FOLLOW_UPS) {
-        return;
+        throw new Error(`At most ${MAX_PENDING_FOLLOW_UPS} pending messages are allowed`);
       }
       const effectiveThinking = modelSupportsThinking ? thinkingLevel : 'off';
-      const row: PendingFollowUp = {
-        id: crypto.randomUUID(),
-        text: trimmed || content,
-        attachments: attachments?.length ? attachments : undefined,
-        thinkingLevel: effectiveThinking,
-      };
-      setPendingFollowUps((prev) => {
-        const next = [...prev, row];
-        pendingFollowUpsRef.current = next;
-        return next;
+      const key = sessionKeyRef.current;
+      if (!key) throw new Error('No active session');
+      const res = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(key)}/inputs`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientMessageId: crypto.randomUUID(), delivery: 'next', content: trimmed || content,
+          attachments: attachments?.length ? attachments : undefined, thinking: effectiveThinking,
+        }),
       });
+      const json = await res.json().catch(() => null) as {
+        payload?: { state?: unknown };
+        error?: string | { message?: string };
+      } | null;
+      if (!res.ok) {
+        const message = typeof json?.error === 'string' ? json.error : json?.error?.message;
+        throw new Error(message ?? 'Message was not accepted');
+      }
+      if (!json?.payload?.state) throw new Error('Gateway returned an invalid input state');
+      applyState(json.payload.state);
     },
-    [modelSupportsThinking, thinkingLevel],
+    [applyState, modelSupportsThinking, sessionKeyRef, thinkingLevel],
   );
 
   const beginEditFollowUp = useCallback((id: string) => {
@@ -390,63 +257,74 @@ export function useChatFollowUpClarify(options: {
         return;
       }
       if (!trimmed && !attachments?.length) {
-        const next = prev.filter((r) => r.id !== id);
-        pendingFollowUpsRef.current = next;
-        setPendingFollowUps(next);
+        const key = sessionKeyRef.current;
+        if (key) void apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(key)}/inputs/${encodeURIComponent(id)}?version=${prev[i].version}`), { method: 'DELETE' })
+          .then(async (res) => applyState((await res.json().catch(() => null) as { payload?: unknown } | null)?.payload))
+          .catch(() => { void refreshState(key); });
         setEditingFollowUpId(null);
         return;
       }
-      const next = [...prev];
       const effThinking = modelSupportsThinking ? (levelOverride ?? thinkingLevel) : 'off';
-      next[i] = {
-        ...next[i],
-        text: trimmed || content,
-        attachments: attachments?.length ? attachments : undefined,
-        thinkingLevel: effThinking,
-      };
-      pendingFollowUpsRef.current = next;
-      setPendingFollowUps(next);
       setEditingFollowUpId(null);
+      const key = sessionKeyRef.current;
+      if (!key) return;
+      void apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(key)}/inputs/${encodeURIComponent(id)}`), {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ version: prev[i].version, content: trimmed || content,
+          attachments: attachments?.length ? attachments : undefined, thinking: effThinking }),
+      }).then(async (res) => {
+        const json = await res.json().catch(() => null) as { payload?: unknown } | null;
+        applyState(json?.payload);
+      }).catch(() => { void refreshState(key); });
     },
-    [modelSupportsThinking, thinkingLevel],
+    [applyState, modelSupportsThinking, refreshState, sessionKeyRef, thinkingLevel],
   );
 
   const removePendingFollowUp = useCallback((id: string) => {
     if (editingFollowUpIdRef.current === id) {
       setEditingFollowUpId(null);
     }
-    setPendingFollowUps((prev) => {
-      const next = prev.filter((r) => r.id !== id);
-      pendingFollowUpsRef.current = next;
-      return next;
-    });
-  }, []);
+    const key = sessionKeyRef.current;
+    const row = pendingFollowUpsRef.current.find((item) => item.id === id);
+    if (!key || !row) return;
+    void apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(key)}/inputs/${encodeURIComponent(id)}?version=${row.version}`), {
+      method: 'DELETE',
+    }).then(async (res) => {
+      const json = await res.json().catch(() => null) as { payload?: unknown } | null;
+      applyState(json?.payload);
+    }).catch(() => { void refreshState(key); });
+  }, [applyState, refreshState, sessionKeyRef]);
 
   const movePendingFollowUp = useCallback((id: string, dir: 'up' | 'down') => {
-    setPendingFollowUps((prev) => {
-      const i = prev.findIndex((r) => r.id === id);
-      if (i < 0) return prev;
-      const j = dir === 'up' ? i - 1 : i + 1;
-      if (j < 0 || j >= prev.length) return prev;
-      const next = [...prev];
-      [next[i], next[j]] = [next[j], next[i]];
-      pendingFollowUpsRef.current = next;
-      return next;
-    });
-  }, []);
+    const queued = pendingFollowUpsRef.current.filter((row) => row.status === 'queued');
+    const i = queued.findIndex((row) => row.id === id);
+    if (i < 0) return;
+    const target = dir === 'up' ? i - 1 : i + 1;
+    const key = sessionKeyRef.current;
+    const row = queued[i];
+    if (!key || !row || target < 0 || target >= queued.length) return;
+    void apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(key)}/inputs/${encodeURIComponent(row.id)}`), {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ version: row.version, position: target }),
+    }).then(async (res) => applyState((await res.json().catch(() => null) as { payload?: unknown } | null)?.payload))
+      .catch(() => { void refreshState(key); });
+  }, [applyState, refreshState, sessionKeyRef]);
 
   const reorderPendingFollowUp = useCallback((fromIndex: number, toIndex: number) => {
-    setPendingFollowUps((prev) => {
-      if (fromIndex < 0 || fromIndex >= prev.length || toIndex < 0 || toIndex >= prev.length) {
-        return prev;
-      }
-      const next = [...prev];
-      const [removed] = next.splice(fromIndex, 1);
-      next.splice(toIndex, 0, removed);
-      pendingFollowUpsRef.current = next;
-      return next;
-    });
-  }, []);
+    const key = sessionKeyRef.current;
+    const row = pendingFollowUpsRef.current[fromIndex];
+    const targetRow = pendingFollowUpsRef.current[toIndex];
+    const queued = pendingFollowUpsRef.current.filter((item) => item.status === 'queued');
+    const position = targetRow ? queued.findIndex((item) => item.id === targetRow.id) : -1;
+    if (!key || row?.status !== 'queued' || targetRow?.status !== 'queued' || position < 0) return;
+    void apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(key)}/inputs/${encodeURIComponent(row.id)}`), {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ version: row.version, position }),
+    }).then(async (res) => {
+      const json = await res.json().catch(() => null) as { payload?: unknown } | null;
+      applyState(json?.payload);
+    }).catch(() => { void refreshState(key); });
+  }, [applyState, refreshState, sessionKeyRef]);
 
   const steerPendingFollowUp = useCallback(async (id: string) => {
     const key = sessionKeyRef.current;
@@ -455,27 +333,22 @@ export function useChatFollowUpClarify(options: {
     if (!row?.text.trim() || row.attachments?.length) return;
     setSteeringFollowUpId(id);
     try {
-      const res = await apiFetch(apiUrl('/api/agent/steer'), {
+      const res = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(key)}/inputs`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionKey: key, message: row.text.trim() }),
+        body: JSON.stringify({ clientMessageId: crypto.randomUUID(), delivery: 'steer', content: row.text.trim() }),
       });
       if (res.ok) {
-        setPendingFollowUps((prev) => {
-          const next = prev.filter((r) => r.id !== id);
-          pendingFollowUpsRef.current = next;
-          return next;
-        });
-        if (editingFollowUpIdRef.current === id) {
-          setEditingFollowUpId(null);
-        }
+        const json = await res.json().catch(() => null) as { payload?: { state?: unknown } } | null;
+        applyState(json?.payload?.state);
+        removePendingFollowUp(id);
       }
     } catch {
       /* ignore */
     } finally {
       setSteeringFollowUpId(null);
     }
-  }, [sessionKeyRef]);
+  }, [applyState, removePendingFollowUp, sessionKeyRef]);
 
   const submitClarifyAnswer = useCallback(async (answer: string) => {
     const p = clarifyPromptRef.current;
@@ -553,6 +426,5 @@ export function useChatFollowUpClarify(options: {
     dismissClarifyAndClearPending,
     onClarifyToolEnd,
     makeOnClarifyRequest,
-    flushSteeringQueue,
   };
 }

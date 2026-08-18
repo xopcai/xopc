@@ -39,7 +39,6 @@ export function sanitizeStatusText(text: string): string {
 export function formatQueuedMessageLines(
   state: TuiState,
   width: number,
-  dequeueHint: string,
 ): string[] {
   const lines: string[] = [];
   const add = (label: string, text: string) => {
@@ -50,19 +49,8 @@ export function formatQueuedMessageLines(
     );
   };
 
-  for (const message of state.steeringQueue) {
-    add('Steering', message);
-  }
-  for (const message of state.messageFollowUpQueue) {
-    add('Follow-up', message);
-  }
   for (const message of state.compactionQueue) {
     add('Queued', message);
-  }
-  if (lines.length > 0) {
-    lines.push(
-      truncateToWidth(theme.dim(`↳ ${dequeueHint} to edit all queued messages`), width, theme.dim('…')),
-    );
   }
   return lines;
 }
@@ -102,7 +90,6 @@ export class TuiBottomBar implements Component {
   constructor(
     private readonly getState: () => TuiState,
     private readonly getThinkingDefault: () => string | undefined,
-    private readonly getDequeueHint: () => string = () => 'Alt+Up',
   ) {}
 
   setExtensionLines(lines: string[]): void {
@@ -168,11 +155,8 @@ export class TuiBottomBar implements Component {
     } else if (state.compactionQueue.length > 0) {
       leftParts.push(`C${state.compactionQueue.length}`);
     }
-    if (state.messageFollowUpQueue.length > 0) {
-      leftParts.push(`Q${state.messageFollowUpQueue.length}`);
-    }
-    if (state.steeringQueue.length > 0) {
-      leftParts.push(`S${state.steeringQueue.length}`);
+    if (state.pendingInputCount > 0) {
+      leftParts.push(`Q${state.pendingInputCount}`);
     }
     let statsLeft = leftParts.join(' · ');
 
@@ -221,7 +205,7 @@ export class TuiBottomBar implements Component {
         lines.push(truncateToWidth(theme.dim(statusLine), width, theme.dim('…')));
       }
     }
-    lines.push(...formatQueuedMessageLines(state, width, this.getDequeueHint()));
+    lines.push(...formatQueuedMessageLines(state, width));
     for (const extLine of this.extensionLines) {
       lines.push(truncateToWidth(theme.dim(sanitizeStatusText(extLine)), width, theme.dim('…')));
     }

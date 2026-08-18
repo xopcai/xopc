@@ -34,7 +34,6 @@ export type SessionRow = {
   project_id: string | null;
   routing_json: string | null;
   custom_data_json: string | null;
-  abort_cutoff_timestamp: number | null;
   message_count: number;
   estimated_tokens: number;
   compacted_count: number;
@@ -117,7 +116,6 @@ export function sessionRowToMetadata(sessionKey: string, row: SessionRow): Sessi
     projectId: row.project_id ?? undefined,
     ...(routing ? { routing } : {}),
     ...(customData ? { customData } : {}),
-    abortCutoffTimestamp: row.abort_cutoff_timestamp ?? undefined,
     messageCount: row.message_count,
     estimatedTokens: row.estimated_tokens,
     compactedCount: row.compacted_count,
@@ -163,7 +161,6 @@ export function metadataToSessionInsert(
   projectId: string | null;
   routingJson: string | null;
   customDataJson: string | null;
-  abortCutoffTimestamp: number | null;
   messageCount: number;
   estimatedTokens: number;
   compactedCount: number;
@@ -199,7 +196,6 @@ export function metadataToSessionInsert(
     projectId: metadata.projectId ?? null,
     routingJson: metadata.routing ? JSON.stringify(metadata.routing) : null,
     customDataJson: metadata.customData ? JSON.stringify(metadata.customData) : null,
-    abortCutoffTimestamp: metadata.abortCutoffTimestamp ?? null,
     messageCount: metadata.messageCount,
     estimatedTokens: metadata.estimatedTokens,
     compactedCount: metadata.compactedCount,

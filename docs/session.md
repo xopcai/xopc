@@ -44,7 +44,7 @@ Channel slash **`/new`** (aliases `/reset`, `/restart`) uses reset semantics, no
 
 **Automatic rollover:** Automatic rollover is disabled unless `session.reset`, `session.resetByType`, or `session.resetByChannel` explicitly configures it. When configured, xopc evaluates the daily `atHour` or sliding `idleMinutes` boundary at turn start and archives + assigns a new `sessionId` when stale. Configured **`session.resetTriggers`** (default `["/new","/reset"]`) are matched on inbound body before the model runs; bare triggers ack without a turn, `/new hello` resets then continues with `hello`.
 
-**Webchat API:** `POST /api/agent` requires `sessionKey` / `chatId` in `agent:{agentId}:{rest}` form (or omit for `agent:main:main`). Bare `chat_*` ids are rejected; create sessions via `POST /api/sessions`.
+**Webchat API:** `POST /api/sessions/:sessionKey/inputs` requires an existing `agent:{agentId}:{rest}` session key. Create sessions via `POST /api/sessions`; input creation never creates a session implicitly.
 
 ---
 

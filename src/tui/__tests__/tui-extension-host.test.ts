@@ -282,10 +282,10 @@ describe('ExtensionApi.registerTui', () => {
     );
 
     api.sendUserMessage('hello');
-    api.sendUserMessage('next', { deliverAs: 'followUp' });
+    api.sendUserMessage('next', { deliverAs: 'next' });
 
     expect(sendUserMessage).toHaveBeenNthCalledWith(1, 'hello', undefined);
-    expect(sendUserMessage).toHaveBeenNthCalledWith(2, 'next', { deliverAs: 'followUp' });
+    expect(sendUserMessage).toHaveBeenNthCalledWith(2, 'next', { deliverAs: 'next' });
   });
 
   it('forwards appendEntry to the active runtime when available', () => {
@@ -329,12 +329,12 @@ describe('ExtensionApi.registerTui', () => {
 
     api.sendMessage(
       { customType: 'status-update', content: 'ready', display: true },
-      { triggerTurn: true, deliverAs: 'followUp' },
+      { triggerTurn: true, deliverAs: 'next' },
     );
 
     expect(sendMessage).toHaveBeenCalledWith(
       { customType: 'status-update', content: 'ready', display: true },
-      { triggerTurn: true, deliverAs: 'followUp' },
+      { triggerTurn: true, deliverAs: 'next' },
     );
   });
 });

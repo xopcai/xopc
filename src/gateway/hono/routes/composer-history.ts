@@ -14,7 +14,7 @@ export function registerComposerHistoryRoutes(authenticated: Hono, deps: Authent
     return c.json({ items: listComposerInputHistory() });
   });
 
-  authenticated.post('/api/composer-history', deps.strictRateLimitMiddleware, async (c) => {
+  authenticated.post('/api/composer-history', deps.chatRateLimitMiddleware, async (c) => {
     const body = await c.req.json().catch(() => null);
     const text = body && typeof body === 'object' && typeof body.text === 'string'
       ? body.text.trim()

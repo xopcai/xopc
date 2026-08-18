@@ -141,8 +141,6 @@ it('exposes native usage and context commands', () => {
         sessionInfo: { model: 'gpt-5' },
         toolsExpanded: false,
         showThinking: true,
-        messageFollowUpQueue: [],
-        steeringQueue: [],
       } as never,
       terminal: { columns: 80, rows: 24 },
       renderedLines: ['plain', '\x1b[31mred\x1b[0m'],
@@ -209,8 +207,7 @@ it('exposes native usage and context commands', () => {
       showThinking: true,
       lastCtrlCAt: 0,
       exitRequested: false,
-      messageFollowUpQueue: ['next'],
-      steeringQueue: ['queued steer'],
+      pendingInputCount: 2,
     });
 
     expect(text).toContain('Session Info');
@@ -221,8 +218,7 @@ it('exposes native usage and context commands', () => {
     expect(text).toContain('Reasoning: stream');
     expect(text).toContain('Verbose: full');
     expect(text).toContain('Context: 33%/128k ctx');
-    expect(text).toContain('Queue: 1');
-    expect(text).toContain('Steering Queue: 1');
+    expect(text).toContain('Pending Inputs: 2');
   });
 
   it('formats usage and context details from local TUI state', () => {
@@ -245,8 +241,6 @@ it('exposes native usage and context commands', () => {
       showThinking: false,
       lastCtrlCAt: 0,
       exitRequested: false,
-      messageFollowUpQueue: [],
-      steeringQueue: [],
     };
 
     expect(formatTuiUsageInfo(state)).toContain('Context Usage: 32%/200k ctx');
@@ -324,8 +318,6 @@ it('exposes native usage and context commands', () => {
       showThinking: false,
       lastCtrlCAt: 0,
       exitRequested: false,
-      messageFollowUpQueue: [],
-      steeringQueue: [],
       scopedModelRefs: ['openai/gpt-5'],
       lastEscapeAt: 0,
       progressMessage: null,

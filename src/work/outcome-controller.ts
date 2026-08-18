@@ -186,7 +186,7 @@ export class OutcomeController {
     this.#executions.update(outcomeId, { nextAction: prompt, blockedReason: null });
     this.#outcomes.updateState({ id: outcomeId, userStatus: 'running', internalStatus: 'continuing' });
     return this.execution.enqueue(outcomeId, {
-      userTurn: { text: prompt, clientCreatedAtMs: Date.now() },
+      userTurn: { text: prompt },
       source: 'system',
       executionContext: {
         parentRunId: receipt.runId,

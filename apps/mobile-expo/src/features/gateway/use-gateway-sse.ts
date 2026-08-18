@@ -5,6 +5,7 @@ import { useGatewayStore } from '../../stores/gateway-store';
 import { resolveEffectiveGatewayBaseUrl } from '../../stores/gateway-types';
 
 import { recordConnectionEvent } from './connection-log';
+import { emitGatewayEvent } from './gateway-event-bus';
 import { GatewaySseConnection } from './gateway-sse-connection';
 import { setSseStatus } from './sse-status';
 
@@ -18,6 +19,7 @@ function createGatewaySseConnection(): GatewaySseConnection {
     onConnected: () => {
       setSseStatus('connected');
       recordConnectionEvent({ kind: 'sse', ok: true, message: 'connected' });
+      emitGatewayEvent('gateway.sse-connected', undefined);
     },
     onReconnecting: () => {
       setSseStatus('reconnecting');

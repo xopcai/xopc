@@ -433,10 +433,27 @@ export class EmbeddedBackend implements TuiBackend {
     return { ok: false };
   }
 
-  async steerChat(opts: { sessionKey: string; message: string }): Promise<{ ok: boolean }> {
+  async submitChatInput(opts: { sessionKey: string; message: string; delivery: 'next' | 'steer' }): Promise<{ ok: boolean; effectiveDelivery?: 'next' | 'steer' }> {
     if (!this.agent) return { ok: false };
-    const ok = await this.agent.turnDispatcher.steerWebchatSession(opts.sessionKey, opts.message);
-    return { ok };
+    if (opts.delivery === 'steer') {
+      const ok = await this.agent.turnDispatcher.steerWebchatSession(opts.sessionKey, opts.message);
+      return { ok, effectiveDelivery: ok ? 'steer' : undefined };
+    }
+    const { getEmbeddedRunBySessionKey } = await import('../../agent/embedded/runs.js');
+    const handle = getEmbeddedRunBySessionKey(opts.sessionKey);
+    if (!handle) return { ok: false };
+    await handle.session.followUp(opts.message);
+    return { ok: true, effectiveDelivery: 'next' };
+  }
+
+  async getChatInputState(sessionKey: string) {
+    const { getEmbeddedRunBySessionKey } = await import('../../agent/embedded/runs.js');
+    const handle = getEmbeddedRunBySessionKey(sessionKey);
+    return {
+      sessionKey,
+      revision: 0,
+      inputs: Array.from({ length: handle?.session.pendingMessageCount ?? 0 }, (_, index) => ({ id: String(index), status: 'queued' })),
+    };
   }
 
   async loadHistory(opts: {

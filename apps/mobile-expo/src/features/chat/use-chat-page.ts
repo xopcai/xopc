@@ -113,7 +113,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
   });
 
   const effectiveModelId = resolveEffectiveModelId(modelsQuery.data, localSelectedModelRef);
-  const chatSession = useChatSession({ sessionKey, effectiveModelId });
+  const chatSession = useChatSession({ sessionKey });
   const sessionAgentConfigQuery = useQuery({
     queryKey: queryKeys.sessionAgentConfig(sessionKey),
     queryFn: () => fetchSessionAgentConfig(sessionKey),

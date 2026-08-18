@@ -30,6 +30,21 @@ export {
 } from './connection.js';
 export { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 export {
+  cancelQueuedSessionInput,
+  claimNextSessionInput,
+  findSessionInput,
+  finishSessionInputRun,
+  getSessionInputState,
+  insertSessionInput,
+  mutateQueuedSessionInput,
+  recoverSessionInputState,
+  setSessionInputStatus,
+  type SessionInput,
+  type SessionInputDelivery,
+  type SessionInputState,
+  type SessionInputStatus,
+} from './session-input-repository.js';
+export {
   acknowledgeHomeAttention,
   isHomeAttentionAcknowledged,
   type HomeAttentionSubjectKind,

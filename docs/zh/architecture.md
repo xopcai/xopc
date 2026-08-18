@@ -37,12 +37,12 @@ Gateway；Web 控制台和移动端通过 HTTP/SSE API 与 Gateway 通信；频�
 ### Web Chat
 
 1. Web 控制台由 `web/` 构建，并从 `dist/gateway/static/root` 提供静态文件。
-2. Chat 以 `Accept: text/event-stream` 提交 `POST /api/agent`。
-3. `createAgentSSEHandler` 解析 webchat session key，并调用 `GatewayService.runAgent`。
-4. `GatewayAgentRunner` 驱动 `AgentService.turnDispatcher.processDirectStreaming`。
-5. 内嵌 pi-agent session 运行模型和工具，并把流式事件回传给 SSE。
+2. Chat 使用幂等 client message id 和 `delivery: next | steer` 提交 `POST /api/sessions/:sessionKey/inputs`。
+3. `SessionInputCoordinator` 先把输入持久化到 SQLite 并确定顺序，再返回确认。
+4. `GatewayAgentRunner` 为每个会话只领取一个输入，并驱动 `AgentService.turnDispatcher.processDirectStreaming`。
+5. 内嵌 pi-agent session 运行模型和工具；客户端通过 `/api/agent/resume` 附着到活动运行。
 6. `SessionStore` 将 transcript 行和元数据持久化到 `~/.xopc/xopc.db`。
-7. Gateway 广播事件通过 `/api/events` 更新其它 UI 状态。
+7. 完整、带 revision 的 `session.input-state` 快照和 agent stream 事件通过 `/api/events` 同步到所有客户端。
 
 ### 频道消息
 

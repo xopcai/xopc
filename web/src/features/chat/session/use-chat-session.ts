@@ -157,13 +157,11 @@ export function useChatSession() {
     sessionKey: focusedSessionKey,
     decodedKey,
     sessionKeyRef: focusedSessionKeyRef,
-    activeStreamSessionKeyRef: chatRunSessionKeyRef,
     sendingRef,
     streamingRef,
     modelSupportsThinking,
     thinkingLevel,
     shouldApplyStreamUpdate,
-    sendMessageRef,
   });
 
   const detachForNewConversation = useCallback(() => {

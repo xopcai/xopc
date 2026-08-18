@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { createEditorSubmitHandler, createSubmitBurstCoalescer, shouldEnableWindowsGitBashPasteFallback } from '../tui-submit.js';
-import { drainFollowUpQueue, restoreQueuedMessages } from '../tui-follow-up-queue.js';
 
 describe('createEditorSubmitHandler', () => {
   it('enters shell mode when submitting a bare bang', () => {
@@ -196,47 +195,5 @@ describe('shouldEnableWindowsGitBashPasteFallback', () => {
         env: {},
       }),
     ).toBe(false);
-  });
-});
-
-describe('drainFollowUpQueue', () => {
-  it('drains one message in one-at-a-time mode', () => {
-    const queue = ['first', 'second'];
-    expect(drainFollowUpQueue(queue, 'one-at-a-time')).toBe('first');
-    expect(queue).toEqual(['second']);
-  });
-
-  it('drains all messages as one prompt in all mode', () => {
-    const queue = ['first', 'second'];
-    expect(drainFollowUpQueue(queue, 'all')).toBe('first\n\nsecond');
-    expect(queue).toEqual([]);
-  });
-});
-
-describe('restoreQueuedMessages', () => {
-  it('restores steering and follow-up queues before current editor text', () => {
-    const steeringQueue = ['steer'];
-    const followUpQueue = ['follow'];
-
-    expect(
-      restoreQueuedMessages(
-        { steeringQueue, followUpQueue },
-        'current draft',
-      ),
-    ).toEqual({
-      text: 'steer\n\nfollow\n\ncurrent draft',
-      restoredCount: 2,
-    });
-    expect(steeringQueue).toEqual([]);
-    expect(followUpQueue).toEqual([]);
-  });
-
-  it('returns zero without changing blank current text when queues are empty', () => {
-    expect(
-      restoreQueuedMessages(
-        { steeringQueue: [], followUpQueue: [] },
-        '   ',
-      ),
-    ).toEqual({ text: '', restoredCount: 0 });
   });
 });

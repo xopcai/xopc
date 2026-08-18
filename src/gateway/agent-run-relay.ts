@@ -1,6 +1,6 @@
 /**
  * Multicast buffer for a single web agent run so multiple HTTP SSE consumers can
- * attach (initial POST /api/agent and later POST /api/agent/resume) while one
+ * attach through POST /api/agent/resume while one
  * background pump drains processDirectStreaming.
  */
 

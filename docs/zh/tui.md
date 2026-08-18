@@ -199,5 +199,5 @@ TUI 占用屏幕期间，会对看起来像 **JSON 结构一行一条** 的日�
 
 ## 实现要点
 
-- **网关：** 对话走 `POST /api/agent`（`Accept: text/event-stream`），并维持 `GET /api/events` 等广播类事件；会话与模型与网页控制台共用 REST（`/api/sessions`、`/api/models` 等）。
+- **网关：** 对话通过 `POST /api/sessions/:sessionKey/inputs` 写入持久化输入，通过 `POST /api/agent/resume` 附着到活动输出，并维持 `GET /api/events` 接收广播状态；会话与模型和网页控制台共用 REST。
 - **嵌入式：** 消息经 `AgentService.processDirectStreaming`，事件来自智能体流（`token`、`thinking`、`tool_start`、`tool_end`、`error`、`result` 等）。

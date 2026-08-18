@@ -16,7 +16,6 @@ it('includes model cycle and session picker descriptions', () => {
     expect(text).toContain('Show session tree');
     expect(text).toContain('Fork current session');
     expect(text).toContain('Queue message');
-    expect(text).toContain('Restore queued');
     expect(text).toContain('Toggle session sort mode');
     expect(text).toContain('Rename selected session');
     expect(text).toContain('Save scoped model selection');

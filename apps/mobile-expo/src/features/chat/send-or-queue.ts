@@ -5,7 +5,7 @@ export type SendOrQueueInput = {
   runBusy: boolean;
   pendingCount: number;
   send: (text: string) => void | Promise<boolean | void>;
-  addPendingFollowUp: (text: string) => void;
+  addPendingFollowUp: (text: string) => void | Promise<void>;
   onQueueFull?: () => void;
 };
 
@@ -19,7 +19,7 @@ export function sendOrQueueMessage(input: SendOrQueueInput): void {
       input.onQueueFull?.();
       return;
     }
-    input.addPendingFollowUp(trimmed);
+    void input.addPendingFollowUp(trimmed);
     return;
   }
 
