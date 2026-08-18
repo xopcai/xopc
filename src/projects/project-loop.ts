@@ -104,7 +104,7 @@ export function buildProjectLoopOverview(input: {
       title: goal.title,
       detail: compactText(goal.blockedReason || goal.nextAction || goal.description),
       status: goal.status,
-      href: `/goals/${encodeURIComponent(goal.id)}`,
+      href: `/work/${encodeURIComponent(goal.outcomeId)}`,
       updatedAt: goal.updatedAt,
     })),
     ...staleGoals.map((goal) => ({
@@ -113,7 +113,7 @@ export function buildProjectLoopOverview(input: {
       title: goal.title,
       detail: compactText(goal.nextAction || goal.description || 'Goal has not changed recently.'),
       status: goal.status,
-      href: `/goals/${encodeURIComponent(goal.id)}`,
+      href: `/work/${encodeURIComponent(goal.outcomeId)}`,
       updatedAt: goal.updatedAt,
     })),
     ...failedWorkflowRuns.map((run) => ({
@@ -143,7 +143,7 @@ export function buildProjectLoopOverview(input: {
       detail: compactText(goal.nextAction || goal.blockedReason || goal.description),
       timestamp: goal.updatedAt,
       status: goal.status,
-      href: `/goals/${encodeURIComponent(goal.id)}`,
+      href: `/work/${encodeURIComponent(goal.outcomeId)}`,
     })),
     ...input.recentWorkflowRuns.map((run) => ({
       id: `workflow:${run.runId}`,
