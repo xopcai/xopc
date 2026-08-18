@@ -148,7 +148,7 @@ const ManagedJobSchema = Type.Union([
   Type.Object({ action: Type.Literal('status'), jobId: Type.String() }),
   Type.Object({ action: Type.Literal('list') }),
   Type.Object({ action: Type.Literal('cancel'), jobId: Type.String() }),
-]);
+], { type: 'object' });
 
 function registry(): ManagedJobRegistry {
   return resolveGlobalSingleton(MANAGED_JOB_REGISTRY_KEY, () => new ManagedJobRegistry());
