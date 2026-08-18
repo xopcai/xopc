@@ -6,6 +6,7 @@
 import type { Agent } from '@earendil-works/pi-agent-core';
 
 import type { Config } from '../../config/schema.js';
+import { resolveEffectiveAgentManifestForSession } from '../../config/agent-profile.js';
 
 /** Minimum per-turn timeout (1 minute). */
 export const MIN_AGENT_TURN_TIMEOUT_MS = 60_000;
@@ -16,8 +17,11 @@ export const MAX_AGENT_TURN_TIMEOUT_MS = 4 * 60 * 60 * 1000;
 /** Default per-turn timeout (30 minutes). */
 export const DEFAULT_AGENT_TURN_TIMEOUT_MS = 30 * 60 * 1000;
 
-export function resolveAgentTurnTimeoutMs(_config?: Config): number {
-  return DEFAULT_AGENT_TURN_TIMEOUT_MS;
+export function resolveAgentTurnTimeoutMs(config?: Config, sessionKey?: string): number {
+  if (!config) return DEFAULT_AGENT_TURN_TIMEOUT_MS;
+  const configured = resolveEffectiveAgentManifestForSession(config, sessionKey).runtime?.timeoutMs;
+  if (!configured) return DEFAULT_AGENT_TURN_TIMEOUT_MS;
+  return Math.min(MAX_AGENT_TURN_TIMEOUT_MS, Math.max(MIN_AGENT_TURN_TIMEOUT_MS, configured));
 }
 
 export function isAgentTurnTimeoutError(err: unknown): boolean {

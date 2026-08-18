@@ -108,7 +108,7 @@ function safetyMode(automation: Automation): AutomationSafetyMode {
 function statusClass(status?: AutomationRun['status']) {
   if (status === 'succeeded') return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
   if (status === 'failed' || status === 'timeout') return 'bg-red-500/10 text-red-700 dark:text-red-300';
-  if (status === 'running' || status === 'queued') return 'bg-blue-500/10 text-blue-700 dark:text-blue-300';
+  if (status === 'running' || status === 'queued' || status === 'cancelling') return 'bg-blue-500/10 text-blue-700 dark:text-blue-300';
   return 'bg-surface-hover text-fg-muted';
 }
 
@@ -122,7 +122,7 @@ function formatDuration(ms: number | undefined, labels: AutomationsMessages): st
 }
 
 function isActiveRun(run: AutomationRun): boolean {
-  return run.status === 'running' || run.status === 'queued';
+  return run.status === 'running' || run.status === 'queued' || run.status === 'cancelling';
 }
 
 function needsAttention(run: AutomationRun): boolean {
@@ -1329,7 +1329,7 @@ function RunsList({
               {formatDate(run.createdAtMs, labels, language)} · {run.manual ? labels.trigger.manual : automationTriggerLabel(run.triggerSnapshot, labels, cronLabels, language)}
             </div>
           </div>
-          {run.status === 'running' || run.status === 'queued' ? (
+          {run.status === 'running' || run.status === 'queued' || run.status === 'cancelling' ? (
             <Button
               variant="ghost"
               disabled={busyAction !== null}
@@ -2230,8 +2230,13 @@ function AutomationForm({
           value={form.actionMode}
           onChange={(e) => {
             const actionMode = e.target.value as ActionMode;
+            const currentTimeout = Number.parseInt(form.timeoutSeconds, 10);
+            const usesActionDefault = currentTimeout === 600 || currentTimeout === 1800;
             update({
               actionMode,
+              ...(usesActionDefault
+                ? { timeoutSeconds: actionMode === 'browser_recipe' ? '600' : '1800' }
+                : {}),
               ...(actionMode === 'browser_recipe' ? { safetyMode: 'auto_apply' as const } : {}),
               ...(actionMode === 'workflow' && !form.workflowId.trim() && workflowDefinitions[0]
                 ? {
@@ -2406,6 +2411,15 @@ function AutomationForm({
           <Field label={labels.form.disableAfterFailures}>
             <input className={inputClass} inputMode="numeric" value={form.disableAfterFailures} onChange={(e) => update({ disableAfterFailures: e.target.value })} />
           </Field>
+        </div>
+        <div className="rounded-lg border border-edge bg-surface-muted/40 px-3 py-2.5">
+          <p className="text-xs font-medium text-fg">{labels.form.effectivePolicy}</p>
+          <p className="mt-1 text-xs text-fg-muted">
+            {labels.form.executionDeadline}: {form.timeoutSeconds || '—'}s
+          </p>
+          <p className="mt-0.5 text-xs leading-relaxed text-fg-subtle">
+            {labels.form.downstreamTimeoutHint}
+          </p>
         </div>
       </div>
     </div>

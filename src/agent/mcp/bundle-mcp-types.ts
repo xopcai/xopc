@@ -63,7 +63,12 @@ export type SessionMcpRuntime = {
   acquireLease?: () => () => void;
   getCatalog: () => Promise<McpToolCatalog>;
   markUsed: () => void;
-  callTool: (serverName: string, toolName: string, input: unknown) => Promise<CallToolResult>;
+  callTool: (
+    serverName: string,
+    toolName: string,
+    input: unknown,
+    signal?: AbortSignal,
+  ) => Promise<CallToolResult>;
   dispose: () => Promise<void>;
 };
 

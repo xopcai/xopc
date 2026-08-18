@@ -37,6 +37,7 @@ import {
   saveAutomation,
   saveAutomationRun,
   saveAutomations,
+  touchAutomationRunLease,
 } from '../storage/index.js';
 import { AutomationActionExecutor } from './action-executor.js';
 
@@ -46,6 +47,9 @@ type TimerHandle = ReturnType<typeof setTimeout> & { unref?: () => void };
 
 const DEFAULT_MAX_CONCURRENT_RUNS = 5;
 const MISSED_RUN_STAGGER_MS = 5_000;
+const RUN_HEARTBEAT_INTERVAL_MS = 10_000;
+const RUN_LEASE_DURATION_MS = 30_000;
+const RETRY_BASE_DELAY_MS = 1_000;
 
 export class AutomationAlreadyRunningError extends Error {
   constructor(readonly automationId: string, readonly runningRunId?: string) {
@@ -62,6 +66,8 @@ export class AutomationService {
   private deps: AutomationDeps = {};
   private maxConcurrentRuns = DEFAULT_MAX_CONCURRENT_RUNS;
   private readonly activeRuns = new Map<string, AbortController>();
+  private readonly heartbeatTimers = new Map<string, TimerHandle>();
+  private readonly leaseOwner = `automation-service:${process.pid}:${randomUUID()}`;
 
   constructor(private readonly signals?: ProactiveSignalPublisher) {}
 
@@ -73,6 +79,7 @@ export class AutomationService {
   async initialize(options?: { maxConcurrentRuns?: number }): Promise<void> {
     this.maxConcurrentRuns = Math.max(1, Math.floor(options?.maxConcurrentRuns ?? DEFAULT_MAX_CONCURRENT_RUNS));
     this.stopped = false;
+    await this.recoverInterruptedRuns();
     await this.recomputeNextRuns({ catchUp: true });
     this.armTimer();
     log.info('Automation service initialized');
@@ -87,6 +94,8 @@ export class AutomationService {
     for (const controller of this.activeRuns.values()) {
       controller.abort();
     }
+    for (const timer of this.heartbeatTimers.values()) clearInterval(timer);
+    this.heartbeatTimers.clear();
     log.info('Automation service stopped');
   }
 
@@ -229,7 +238,21 @@ export class AutomationService {
   async cancelRun(runId: string): Promise<boolean> {
     const controller = this.activeRuns.get(runId);
     if (!controller) return false;
-    controller.abort();
+    const now = Date.now();
+    const current = getAutomationRun(runId);
+    if (current && current.status === 'running') {
+      const cancelling: AutomationRun = {
+        ...current,
+        status: 'cancelling',
+        currentPhase: 'cancelling',
+        cancelRequestedAtMs: now,
+      };
+      saveAutomationRun(cancelling);
+      this.appendRunEvent(cancelling, 'run.cancel_requested', 'Automation cancellation requested', {
+        reason: 'user_cancelled',
+      });
+    }
+    controller.abort(new Error('Automation run was cancelled by the user'));
     return true;
   }
 
@@ -266,7 +289,7 @@ export class AutomationService {
         ...automation,
         state: { ...automation.state },
       };
-      if (next.state.runningRunId) {
+      if (next.state.runningRunId && !this.activeRuns.has(next.state.runningRunId)) {
         next.state.lastRunStatus = 'failed';
         next.state.lastError = 'Interrupted by gateway restart';
         next.state.consecutiveFailures = (next.state.consecutiveFailures ?? 0) + 1;
@@ -338,7 +361,9 @@ export class AutomationService {
       actionSnapshot: automation.action,
       manual: opts.manual,
       createdAtMs: now,
+      attemptNumber: 1,
     };
+    run.rootRunId = run.id;
     saveAutomationRun(run);
     this.appendRunEvent(
       run,
@@ -382,21 +407,72 @@ export class AutomationService {
       ...initialRun,
       status: 'running',
       startedAtMs,
+      currentPhase: 'action',
+      heartbeatAtMs: startedAtMs,
+      leaseOwner: this.leaseOwner,
+      leaseExpiresAtMs: startedAtMs + RUN_LEASE_DURATION_MS,
     };
     saveAutomationRun(run);
     this.appendRunEvent(run, 'run.started', 'Automation run started');
+    const heartbeat = setInterval(() => {
+      const now = Date.now();
+      touchAutomationRunLease(
+        run.id,
+        this.leaseOwner,
+        now,
+        now + RUN_LEASE_DURATION_MS,
+      );
+    }, RUN_HEARTBEAT_INTERVAL_MS) as TimerHandle;
+    heartbeat.unref?.();
+    this.heartbeatTimers.set(run.id, heartbeat);
 
     let status: AutomationRunStatus = 'failed';
     let error: string | undefined;
     let activePhase: 'action' | 'after_run' = 'action';
     try {
-      this.appendRunEvent(run, 'action.started', `Running ${automation.action.kind} action`, {
-        actionKind: automation.action.kind,
-        safety: automation.safety ?? { mode: 'auto_apply' },
-      });
-      const outcome = await this.executor.execute(automation, run, controller.signal);
+      const maxAttempts = Math.max(1, (automation.reliability?.retryCount ?? 0) + 1);
+      let outcome: Awaited<ReturnType<AutomationActionExecutor['execute']>>;
+      for (let attempt = 1; ; attempt += 1) {
+        run = { ...run, attemptNumber: attempt };
+        saveAutomationRun(run);
+        this.appendRunEvent(run, 'action.started', `Running ${automation.action.kind} action`, {
+          actionKind: automation.action.kind,
+          safety: automation.safety ?? { mode: 'auto_apply' },
+          attempt,
+          maxAttempts,
+        });
+        outcome = await this.executor.execute(automation, run, controller.signal, {
+          onRunPatch: (patch) => {
+            const previousDeadline = run.deadlineAtMs;
+            run = { ...run, ...patch };
+            saveAutomationRun(run);
+            if (patch.deadlineAtMs !== undefined && patch.deadlineAtMs !== previousDeadline) {
+              this.appendRunEvent(run, 'run.deadline_resolved', 'Automation deadline resolved', {
+                deadlineAtMs: patch.deadlineAtMs,
+                timeoutMs: patch.deadlineAtMs - startedAtMs,
+              });
+            }
+          },
+        });
+        // A timeout consumes the shared automation deadline, so only ordinary
+        // failures can start another attempt within the same run.
+        const retryable = outcome.status === 'failed';
+        if (!retryable || attempt >= maxAttempts || controller.signal.aborted) break;
+        const delayMs = Math.min(RETRY_BASE_DELAY_MS * 2 ** (attempt - 1), 30_000);
+        this.appendRunEvent(run, 'action.retry_scheduled', 'Automation action retry scheduled', {
+          attempt,
+          nextAttempt: attempt + 1,
+          maxAttempts,
+          delayMs,
+          status: outcome.status,
+          error: outcome.error,
+        });
+        await this.waitForRetry(delayMs, controller.signal);
+      }
       status = outcome.status;
       error = outcome.error;
+      const persistedRun = getAutomationRun(run.id);
+      if (persistedRun) run = { ...run, ...persistedRun };
       this.appendRunEvent(
         run,
         status === 'succeeded' ? 'action.completed' : 'action.failed',
@@ -419,26 +495,67 @@ export class AutomationService {
         sessionKey: outcome.sessionKey,
         workflowRunId: outcome.workflowRunId,
         model: outcome.model,
+        deadlineAtMs: outcome.deadlineAtMs ?? run.deadlineAtMs,
+        termination: outcome.termination ?? (status === 'succeeded'
+          ? { reason: 'completed', cancellationConfirmed: true }
+          : status === 'failed'
+            ? { reason: 'failed', cancellationConfirmed: true }
+            : run.termination),
       };
-      if ((automation.safety?.mode ?? 'auto_apply') !== 'auto_apply' && automation.afterRun?.kind === 'webhook') {
+      if (outcome.termination) {
+        const now = Date.now();
+        run = {
+          ...run,
+          currentPhase: 'cancelling',
+          cancelRequestedAtMs: run.cancelRequestedAtMs ?? now,
+          cancelConfirmedAtMs: outcome.termination.cancellationConfirmed ? now : undefined,
+        };
+        this.appendRunEvent(
+          run,
+          outcome.termination.cancellationConfirmed ? 'run.cancel_confirmed' : 'run.cancellation_unconfirmed',
+          outcome.termination.cancellationConfirmed
+            ? 'Automation cancellation confirmed'
+            : 'Automation cancellation was not confirmed within the cleanup grace period',
+          { termination: outcome.termination },
+        );
+      }
+      if ((status === 'timeout' || status === 'cancelled')) {
+        // Cancellation must not start new external work after the action stops.
+      } else if ((automation.safety?.mode ?? 'auto_apply') !== 'auto_apply' && automation.afterRun?.kind === 'webhook') {
         this.appendRunEvent(run, 'after_run.completed', 'After-run webhook skipped by safety mode', {
           safety: automation.safety ?? { mode: 'auto_apply' },
         });
       } else if (automation.afterRun?.kind === 'webhook') {
         activePhase = 'after_run';
+        run = { ...run, currentPhase: 'after_run' };
+        saveAutomationRun(run);
         this.appendRunEvent(run, 'after_run.started', 'Calling after-run webhook', {
           url: automation.afterRun.url,
         });
-        await this.postAfterRunWebhook(automation.afterRun.url, run);
+        await this.postAfterRunWebhook(automation.afterRun.url, run, controller.signal);
         this.appendRunEvent(run, 'after_run.completed', 'After-run webhook completed');
       }
     } catch (err) {
       error = err instanceof Error ? err.message : String(err);
-      status = controller.signal.aborted ? 'cancelled' : 'failed';
+      const deadlineExceeded = run.deadlineAtMs !== undefined && Date.now() >= run.deadlineAtMs;
+      status = controller.signal.aborted ? 'cancelled' : deadlineExceeded ? 'timeout' : 'failed';
       this.appendRunEvent(run, activePhase === 'after_run' ? 'after_run.failed' : 'action.failed', `Automation run ${status}`, {
         error,
       });
-      run = { ...run, status, error };
+      run = {
+        ...run,
+        status,
+        error,
+        termination: {
+          reason: status === 'cancelled'
+            ? 'user_cancelled'
+            : status === 'timeout'
+              ? 'deadline_exceeded'
+              : 'failed',
+          component: activePhase === 'after_run' ? 'automation' : run.termination?.component,
+          cancellationConfirmed: status !== 'cancelled' || controller.signal.aborted,
+        },
+      };
     } finally {
       const endedAtMs = Date.now();
       run = {
@@ -446,8 +563,18 @@ export class AutomationService {
         status,
         endedAtMs,
         durationMs: endedAtMs - startedAtMs,
+        currentPhase: 'completed',
       };
       this.activeRuns.delete(initialRun.id);
+      const heartbeatTimer = this.heartbeatTimers.get(initialRun.id);
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
+      this.heartbeatTimers.delete(initialRun.id);
+      run = {
+        ...run,
+        heartbeatAtMs: endedAtMs,
+        leaseOwner: undefined,
+        leaseExpiresAtMs: undefined,
+      };
       runSqliteWriteTransaction(() => {
         saveAutomationRun(run);
         this.appendRunEvent(run, 'run.completed', `Automation run ${status}`, { status, durationMs: run.durationMs, error });
@@ -468,6 +595,72 @@ export class AutomationService {
         log.warn({ err, automationId: automation.id, runId: run.id }, 'Automation completion hook failed');
       }
     }
+  }
+
+  private async recoverInterruptedRuns(): Promise<void> {
+    const recoverable = listAutomationRuns({ limit: 500 })
+      .filter((run) => run.status === 'queued' || run.status === 'running' || run.status === 'cancelling');
+    for (const run of recoverable) {
+      const automation = getAutomation(run.automationId);
+      if (run.status === 'queued' && automation) {
+        const claimed: Automation = {
+          ...automation,
+          state: { ...automation.state, runningRunId: run.id },
+        };
+        saveAutomation(claimed);
+        this.appendRunEvent(run, 'run.recovered', 'Queued automation run recovered after restart', {
+          previousLeaseOwner: run.leaseOwner,
+        });
+        void this.executeRun(claimed, run).catch((err) => {
+          log.error({ err, runId: run.id }, 'Recovered automation run failed');
+        });
+        continue;
+      }
+
+      const now = Date.now();
+      const status: AutomationRunStatus = run.status === 'cancelling' ? 'cancelled' : 'failed';
+      const error = run.status === 'cancelling'
+        ? 'Cancellation interrupted by gateway restart'
+        : 'Automation execution interrupted by gateway restart';
+      const recovered: AutomationRun = {
+        ...run,
+        status,
+        error,
+        endedAtMs: now,
+        durationMs: run.startedAtMs ? now - run.startedAtMs : undefined,
+        currentPhase: 'completed',
+        heartbeatAtMs: now,
+        leaseOwner: undefined,
+        leaseExpiresAtMs: undefined,
+        termination: {
+          reason: status === 'cancelled' ? 'user_cancelled' : 'failed',
+          component: 'automation',
+          cancellationConfirmed: false,
+        },
+      };
+      saveAutomationRun(recovered);
+      this.appendRunEvent(recovered, 'run.recovered', error, {
+        previousLeaseOwner: run.leaseOwner,
+        previousLeaseExpiresAtMs: run.leaseExpiresAtMs,
+      });
+      this.appendRunEvent(recovered, 'run.completed', `Automation run ${status}`, { status, error });
+      if (automation) this.finishAutomationRun(automation.id, status, error, now);
+    }
+  }
+
+  private waitForRetry(delayMs: number, signal: AbortSignal): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        signal.removeEventListener('abort', onAbort);
+        resolve();
+      }, delayMs);
+      const onAbort = () => {
+        clearTimeout(timer);
+        reject(signal.reason ?? new Error('Automation run was cancelled'));
+      };
+      if (signal.aborted) onAbort();
+      else signal.addEventListener('abort', onAbort, { once: true });
+    });
   }
 
   private appendRunEvent(
@@ -517,11 +710,20 @@ export class AutomationService {
     this.armTimer();
   }
 
-  private async postAfterRunWebhook(url: string, run: AutomationRun): Promise<void> {
+  private async postAfterRunWebhook(
+    url: string,
+    run: AutomationRun,
+    signal: AbortSignal,
+  ): Promise<void> {
+    const remainingMs = run.deadlineAtMs === undefined
+      ? 30_000
+      : Math.max(1, run.deadlineAtMs - Date.now());
+    const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(remainingMs)]);
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ run }),
+      signal: requestSignal,
     });
     if (!response.ok) {
       const text = await response.text().catch(() => '');

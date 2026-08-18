@@ -30,6 +30,8 @@ export type RunEmbeddedForSessionParams = {
   modelManager: ModelManager;
   thinkingOverride?: string | null;
   abortSignal?: AbortSignal;
+  /** Absolute parent deadline. The turn's own timeout is capped to the remaining budget. */
+  deadlineAtMs?: number;
   onEvent?: (event: EmbeddedStreamEvent) => void;
   getConfig?: () => Config | undefined;
   beforeTurn?: () => void | Promise<void>;
@@ -97,6 +99,10 @@ export async function runEmbeddedTurnForSession(
   const thinkingLevel = (params.thinkingOverride as ThinkingLevel | undefined) ?? agent.state.thinkingLevel;
   const workspaceDir = agentManager.getResolvedWorkspaceForSession(sessionKey);
   const config = params.getConfig?.();
+  const configuredTurnTimeoutMs = resolveAgentTurnTimeoutMs(config, sessionKey);
+  const turnTimeoutMs = params.deadlineAtMs === undefined
+    ? configuredTurnTimeoutMs
+    : Math.max(1, Math.min(configuredTurnTimeoutMs, params.deadlineAtMs - Date.now()));
 
   let userMessageForTurn = userMessage;
   if (params.applyStartupContext !== false) {
@@ -194,7 +200,7 @@ export async function runEmbeddedTurnForSession(
             thinkingLevel,
             workspaceDir,
             sessionStore,
-            timeoutMs: resolveAgentTurnTimeoutMs(config),
+            timeoutMs: turnTimeoutMs,
             abortSignal: params.abortSignal,
             onEvent: params.onEvent,
             resumeLastUserMessage,

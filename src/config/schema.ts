@@ -1144,6 +1144,7 @@ export const McpServerSchema = z
     transport: z.enum(['sse', 'streamable-http']).optional(),
     headers: z.record(z.string(), McpConfigScalarSchema).optional(),
     connectionTimeoutMs: z.number().finite().positive().optional(),
+    requestTimeoutMs: z.number().finite().positive().optional(),
   })
   .catchall(z.unknown())
   .superRefine((value, ctx) => {

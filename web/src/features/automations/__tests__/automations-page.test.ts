@@ -173,8 +173,8 @@ describe('automation buildInput', () => {
       kind: 'browser_recipe',
       recipeId: 'collect-title',
       args: { query: 'xopc', limit: 2 },
-      timeoutSeconds: 300,
     });
+    expect(input.reliability?.executionTimeoutSeconds).toBe(1800);
   });
 
   it('suppresses after-run webhooks outside auto-apply mode', () => {

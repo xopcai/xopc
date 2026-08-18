@@ -79,6 +79,12 @@ export interface TurnDispatcherConfig {
 
 export type DirectAttachment = InboundAttachmentInput;
 
+export interface ProcessDirectOptions {
+  signal?: AbortSignal;
+  runId?: string;
+  deadlineAtMs?: number;
+}
+
 export class TurnDispatcher {
   private readonly cfg: TurnDispatcherConfig;
   private readonly log: ContextualLogger;
@@ -94,12 +100,16 @@ export class TurnDispatcher {
     sessionKey = 'agent:main:main',
     attachments?: DirectAttachment[],
     thinking?: string,
+    options?: ProcessDirectOptions,
   ): Promise<string> {
     return runProcessDirect(this.buildOneShotDeps(), {
       content,
       sessionKey,
       attachments,
       thinking,
+      signal: options?.signal,
+      runId: options?.runId,
+      deadlineAtMs: options?.deadlineAtMs,
     });
   }
 

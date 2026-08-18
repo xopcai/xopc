@@ -42,6 +42,7 @@ export type McpServerRow = {
   url: string;
   headers: McpHeaderEntry[];
   connectionTimeoutMs: number | undefined;
+  requestTimeoutMs: number | undefined;
 };
 
 export type McpSettingsState = {
@@ -108,6 +109,9 @@ function rowToServerConfig(row: McpServerRow): Record<string, unknown> {
     if (row.connectionTimeoutMs != null && Number.isFinite(row.connectionTimeoutMs)) {
       config.connectionTimeoutMs = row.connectionTimeoutMs;
     }
+    if (row.requestTimeoutMs != null && Number.isFinite(row.requestTimeoutMs)) {
+      config.requestTimeoutMs = row.requestTimeoutMs;
+    }
     return config;
   }
 
@@ -119,6 +123,9 @@ function rowToServerConfig(row: McpServerRow): Record<string, unknown> {
   if (headers) config.headers = headers;
   if (row.connectionTimeoutMs != null && Number.isFinite(row.connectionTimeoutMs)) {
     config.connectionTimeoutMs = row.connectionTimeoutMs;
+  }
+  if (row.requestTimeoutMs != null && Number.isFinite(row.requestTimeoutMs)) {
+    config.requestTimeoutMs = row.requestTimeoutMs;
   }
   return config;
 }
@@ -151,6 +158,10 @@ function serverConfigToRow(id: string, raw: Record<string, unknown>): McpServerR
       typeof raw.connectionTimeoutMs === 'number' && Number.isFinite(raw.connectionTimeoutMs)
         ? raw.connectionTimeoutMs
         : undefined,
+    requestTimeoutMs:
+      typeof raw.requestTimeoutMs === 'number' && Number.isFinite(raw.requestTimeoutMs)
+        ? raw.requestTimeoutMs
+        : undefined,
   };
 }
 
@@ -166,6 +177,7 @@ export function emptyMcpServerRow(id = ''): McpServerRow {
     url: '',
     headers: [{ key: 'Authorization', value: '' }],
     connectionTimeoutMs: undefined,
+    requestTimeoutMs: undefined,
   };
 }
 
@@ -370,6 +382,19 @@ export function parseConnectionTimeoutSeconds(raw: string): number | undefined {
   if (!trimmed) return undefined;
   const seconds = Number.parseInt(trimmed, 10);
   if (!Number.isFinite(seconds) || seconds < 1 || seconds > 600) return undefined;
+  return seconds * 1000;
+}
+
+export function requestTimeoutSeconds(row: McpServerRow): string {
+  if (row.requestTimeoutMs == null || !Number.isFinite(row.requestTimeoutMs)) return '';
+  return String(Math.round(row.requestTimeoutMs / 1000));
+}
+
+export function parseRequestTimeoutSeconds(raw: string): number | undefined {
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+  const seconds = Number.parseInt(trimmed, 10);
+  if (!Number.isFinite(seconds) || seconds < 1 || seconds > 14_400) return undefined;
   return seconds * 1000;
 }
 

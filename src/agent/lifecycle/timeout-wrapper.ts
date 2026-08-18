@@ -41,6 +41,8 @@ export interface ToolTimeoutConfig {
   toolName: string;
   timeoutMs?: number;
   description?: string;
+  signal?: AbortSignal;
+  onTimeout?: (error: TimeoutError) => void;
 }
 
 /**
@@ -88,6 +90,33 @@ export async function executeWithTimeout<T>(
   let isSettled = false;
 
   return new Promise((resolve, reject) => {
+    const cleanup = () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      config.signal?.removeEventListener('abort', onAbort);
+    };
+    const onAbort = () => {
+      if (isSettled) return;
+      isSettled = true;
+      cleanup();
+      const reason = config.signal?.reason;
+      if (reason instanceof Error) {
+        reject(reason);
+        return;
+      }
+      const error = new Error('Tool execution was aborted');
+      error.name = 'AbortError';
+      reject(error);
+    };
+
+    if (config.signal?.aborted) {
+      onAbort();
+      return;
+    }
+    config.signal?.addEventListener('abort', onAbort, { once: true });
+
     // Set up timeout
     timeoutId = setTimeout(() => {
       if (isSettled) return;
@@ -105,14 +134,23 @@ export async function executeWithTimeout<T>(
         `Tool "${config.toolName}" timed out after ${timeoutMs}ms (elapsed ${executionTime}ms)${desc}`,
       );
 
-      reject(
-        new TimeoutError(
-          config.toolName,
-          timeoutMs,
-          config.description,
-          executionTime
-        )
+      const error = new TimeoutError(
+        config.toolName,
+        timeoutMs,
+        config.description,
+        executionTime,
       );
+      try {
+        config.onTimeout?.(error);
+      } catch (callbackError) {
+        log.warn(
+          { err: callbackError, toolName: config.toolName },
+          'Tool timeout cancellation callback failed',
+        );
+      } finally {
+        cleanup();
+        reject(error);
+      }
     }, timeoutMs);
 
     // Execute operation
@@ -121,10 +159,7 @@ export async function executeWithTimeout<T>(
         if (isSettled) return;
         isSettled = true;
         
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-          timeoutId = null;
-        }
+        cleanup();
         const executionTime = Date.now() - startTime;
 
         log.debug(
@@ -141,10 +176,7 @@ export async function executeWithTimeout<T>(
         if (isSettled) return;
         isSettled = true;
         
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-          timeoutId = null;
-        }
+        cleanup();
         reject(error);
       });
   });

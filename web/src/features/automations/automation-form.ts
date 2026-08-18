@@ -93,7 +93,7 @@ export const initialForm: FormState = {
   browserWorkflowId: '',
   browserWorkflowInputs: {},
   safetyMode: 'suggest_only',
-  timeoutSeconds: '300',
+  timeoutSeconds: '1800',
   afterRunMode: 'none',
   webhookUrl: '',
   disableAfterFailures: '3',
@@ -226,27 +226,18 @@ export function buildInput(
                 ),
               }
             : {}),
-          timeoutSeconds: Math.max(
-            1,
-            Number.parseInt(form.timeoutSeconds, 10) || 300,
-          ),
     };
   } else if (form.actionMode === 'browser_recipe') {
     action = {
       kind: 'browser_recipe',
       recipeId: form.browserWorkflowId.trim(),
       args: form.browserWorkflowInputs,
-      timeoutSeconds: Math.max(1, Number.parseInt(form.timeoutSeconds, 10) || 300),
     };
   } else {
     action = {
       kind: 'agent',
       instruction: form.instruction.trim(),
       ...(form.agentId.trim() ? { agentId: form.agentId.trim() } : {}),
-      timeoutSeconds: Math.max(
-        1,
-        Number.parseInt(form.timeoutSeconds, 10) || 300,
-      ),
     };
   }
 
@@ -263,9 +254,9 @@ export function buildInput(
         ? { kind: 'webhook', url: form.webhookUrl.trim() }
         : { kind: afterRunMode },
     reliability: {
-      timeoutSeconds: Math.max(
+      executionTimeoutSeconds: Math.max(
         1,
-        Number.parseInt(form.timeoutSeconds, 10) || 300,
+        Number.parseInt(form.timeoutSeconds, 10) || 1800,
       ),
       disableAfterConsecutiveFailures: Math.max(
         1,
@@ -437,7 +428,10 @@ export function formFromAutomation(
     action.kind === 'workflow' ? workflowInputRecord(action.input) : {};
   const afterRun = automation.afterRun ?? { kind: 'none' as const };
   const timeoutSeconds =
-    action.timeoutSeconds ?? automation.reliability?.timeoutSeconds ?? 300;
+    automation.reliability?.executionTimeoutSeconds
+    ?? action.timeoutSeconds
+    ?? automation.reliability?.timeoutSeconds
+    ?? (action.kind === 'browser_recipe' ? 600 : 1800);
 
   return {
     ...initialForm,

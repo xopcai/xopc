@@ -21,6 +21,16 @@ type AutomationRunRow = {
   session_key: string | null;
   workflow_run_id: string | null;
   model: string | null;
+  deadline_at_ms: number | null;
+  current_phase: string | null;
+  cancel_requested_at_ms: number | null;
+  cancel_confirmed_at_ms: number | null;
+  termination_json: string | null;
+  heartbeat_at_ms: number | null;
+  lease_owner: string | null;
+  lease_expires_at_ms: number | null;
+  attempt_number: number;
+  root_run_id: string | null;
 };
 
 type AutomationRunEventRow = {
@@ -51,6 +61,16 @@ function rowToRun(row: AutomationRunRow): AutomationRun {
     sessionKey: row.session_key ?? undefined,
     workflowRunId: row.workflow_run_id ?? undefined,
     model: row.model ?? undefined,
+    deadlineAtMs: row.deadline_at_ms ?? undefined,
+    currentPhase: (row.current_phase as AutomationRun['currentPhase']) ?? undefined,
+    cancelRequestedAtMs: row.cancel_requested_at_ms ?? undefined,
+    cancelConfirmedAtMs: row.cancel_confirmed_at_ms ?? undefined,
+    termination: row.termination_json ? JSON.parse(row.termination_json) : undefined,
+    heartbeatAtMs: row.heartbeat_at_ms ?? undefined,
+    leaseOwner: row.lease_owner ?? undefined,
+    leaseExpiresAtMs: row.lease_expires_at_ms ?? undefined,
+    attemptNumber: row.attempt_number,
+    rootRunId: row.root_run_id ?? undefined,
   };
 }
 
@@ -107,8 +127,11 @@ export function saveAutomationRun(run: AutomationRun): void {
       `INSERT OR REPLACE INTO automation_runs (
         run_id, automation_id, automation_name, status, trigger_snapshot_json,
         action_snapshot_json, manual, created_at_ms, started_at_ms, ended_at_ms,
-        duration_ms, summary, error, session_key, workflow_run_id, model
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        duration_ms, summary, error, session_key, workflow_run_id, model,
+        deadline_at_ms, current_phase, cancel_requested_at_ms, cancel_confirmed_at_ms,
+        termination_json, heartbeat_at_ms, lease_owner, lease_expires_at_ms,
+        attempt_number, root_run_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       run.id,
       run.automationId,
@@ -126,9 +149,34 @@ export function saveAutomationRun(run: AutomationRun): void {
       run.sessionKey ?? null,
       run.workflowRunId ?? null,
       run.model ?? null,
+      run.deadlineAtMs ?? null,
+      run.currentPhase ?? null,
+      run.cancelRequestedAtMs ?? null,
+      run.cancelConfirmedAtMs ?? null,
+      run.termination ? JSON.stringify(run.termination) : null,
+      run.heartbeatAtMs ?? null,
+      run.leaseOwner ?? null,
+      run.leaseExpiresAtMs ?? null,
+      run.attemptNumber ?? 1,
+      run.rootRunId ?? run.id,
     );
     trimRuns(db, run.automationId);
   });
+}
+
+export function touchAutomationRunLease(
+  runId: string,
+  leaseOwner: string,
+  heartbeatAtMs: number,
+  leaseExpiresAtMs: number,
+): void {
+  getSqliteDatabase()
+    .prepare(
+      `UPDATE automation_runs
+       SET heartbeat_at_ms = ?, lease_owner = ?, lease_expires_at_ms = ?
+       WHERE run_id = ? AND status IN ('queued', 'running', 'cancelling')`,
+    )
+    .run(heartbeatAtMs, leaseOwner, leaseExpiresAtMs, runId);
 }
 
 export function listAutomationRunEvents(runId: string): AutomationRunEvent[] {
@@ -148,7 +196,10 @@ export function getAutomationRun(runId: string): AutomationRun | null {
     .prepare(
       `SELECT run_id, automation_id, automation_name, status, trigger_snapshot_json,
               action_snapshot_json, manual, created_at_ms, started_at_ms, ended_at_ms,
-              duration_ms, summary, error, session_key, workflow_run_id, model
+              duration_ms, summary, error, session_key, workflow_run_id, model,
+              deadline_at_ms, current_phase, cancel_requested_at_ms, cancel_confirmed_at_ms,
+              termination_json, heartbeat_at_ms, lease_owner, lease_expires_at_ms,
+              attempt_number, root_run_id
        FROM automation_runs
        WHERE run_id = ?`,
     )
@@ -165,7 +216,10 @@ export function listAutomationRuns(options?: {
   const db = getSqliteDatabase();
   const base = `SELECT run_id, automation_id, automation_name, status, trigger_snapshot_json,
                        action_snapshot_json, manual, created_at_ms, started_at_ms, ended_at_ms,
-                       duration_ms, summary, error, session_key, workflow_run_id, model
+                       duration_ms, summary, error, session_key, workflow_run_id, model,
+                       deadline_at_ms, current_phase, cancel_requested_at_ms, cancel_confirmed_at_ms,
+                       termination_json, heartbeat_at_ms, lease_owner, lease_expires_at_ms,
+                       attempt_number, root_run_id
                 FROM automation_runs`;
   let rows: unknown[];
   if (options?.automationId) {
@@ -174,7 +228,10 @@ export function listAutomationRuns(options?: {
     rows = db.prepare(
       `SELECT r.run_id, r.automation_id, r.automation_name, r.status, r.trigger_snapshot_json,
               r.action_snapshot_json, r.manual, r.created_at_ms, r.started_at_ms, r.ended_at_ms,
-              r.duration_ms, r.summary, r.error, r.session_key, r.workflow_run_id, r.model
+              r.duration_ms, r.summary, r.error, r.session_key, r.workflow_run_id, r.model,
+              r.deadline_at_ms, r.current_phase, r.cancel_requested_at_ms, r.cancel_confirmed_at_ms,
+              r.termination_json, r.heartbeat_at_ms, r.lease_owner, r.lease_expires_at_ms,
+              r.attempt_number, r.root_run_id
        FROM automation_runs r
        JOIN automations a ON a.automation_id = r.automation_id
        WHERE a.project_id = ?
@@ -215,6 +272,9 @@ export function listAutomationRunsForProductEvent(options: {
       `SELECT r.run_id, r.automation_id, r.automation_name, r.status, r.trigger_snapshot_json,
               r.action_snapshot_json, r.manual, r.created_at_ms, r.started_at_ms, r.ended_at_ms,
               r.duration_ms, r.summary, r.error, r.session_key, r.workflow_run_id, r.model,
+              r.deadline_at_ms, r.current_phase, r.cancel_requested_at_ms, r.cancel_confirmed_at_ms,
+              r.termination_json, r.heartbeat_at_ms, r.lease_owner, r.lease_expires_at_ms,
+              r.attempt_number, r.root_run_id,
               e.event_id, e.run_id AS event_run_id, e.automation_id AS event_automation_id,
               e.type AS event_type, e.message AS event_message, e.data_json AS event_data_json,
               e.created_at_ms AS event_created_at_ms

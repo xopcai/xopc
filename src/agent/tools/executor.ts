@@ -30,6 +30,9 @@ export interface ToolExecutorConfig {
   /** Default per-tool timeout when the tool does not declare its own `timeoutMs`. */
   defaultTimeoutMs: number;
 
+  /** Per-session policy override resolved from the effective agent manifest. */
+  resolveTimeoutMs?: (toolName: string) => number | undefined;
+
   /** Max retry attempts for tools opted into retry via `idempotent: true`. */
   maxRetries: number;
   /** Initial backoff between retries (passed straight to `withRetry`). */
@@ -70,7 +73,10 @@ function readToolHints(tool: AgentTool<any, any>): XopcToolHints {
 
 function resolveTimeoutMs(tool: AgentTool<any, any>, config: ToolExecutorConfig): number {
   const hints = readToolHints(tool);
-  return hints.timeoutMs ?? config.defaultTimeoutMs;
+  const policyTimeoutMs = config.resolveTimeoutMs?.(tool.name);
+  return policyTimeoutMs && policyTimeoutMs > 0
+    ? policyTimeoutMs
+    : hints.timeoutMs ?? config.defaultTimeoutMs;
 }
 
 /**
@@ -89,21 +95,26 @@ export async function executeToolWithProtection<TDetails>(
   const toolName = tool.name;
   const hints = readToolHints(tool);
 
-  const runOnce = (): Promise<AgentToolResult<TDetails>> =>
-    tool.execute(toolCallId, params, signal, onUpdate);
+  const runOnce = (): Promise<AgentToolResult<TDetails>> => {
+    const controller = new AbortController();
+    const onParentAbort = () => controller.abort(signal?.reason);
+    if (signal?.aborted) onParentAbort();
+    else signal?.addEventListener('abort', onParentAbort, { once: true });
+
+    const execute = () => tool.execute(toolCallId, params, controller.signal, onUpdate);
+    const result = fullConfig.enableTimeout
+      ? executeWithTimeout(execute, {
+          toolName,
+          timeoutMs: resolveTimeoutMs(tool, fullConfig),
+          description: `Executing ${toolName}`,
+          signal,
+          onTimeout: (error) => controller.abort(error),
+        })
+      : execute();
+    return result.finally(() => signal?.removeEventListener('abort', onParentAbort));
+  };
 
   let operation: () => Promise<AgentToolResult<TDetails>> = runOnce;
-
-  if (fullConfig.enableTimeout) {
-    const timeoutMs = resolveTimeoutMs(tool, fullConfig);
-    const inner = operation;
-    operation = () =>
-      executeWithTimeout(inner, {
-        toolName,
-        timeoutMs,
-        description: `Executing ${toolName}`,
-      });
-  }
 
   const shouldRetry = fullConfig.enableRetry && fullConfig.maxRetries > 0 && hints.idempotent;
   if (shouldRetry) {
@@ -112,6 +123,7 @@ export async function executeToolWithProtection<TDetails>(
       withRetry(inner, {
         attempts: fullConfig.maxRetries + 1,
         minDelayMs: fullConfig.retryDelayMs,
+        shouldRetry: (error) => !signal?.aborted && (error as { name?: unknown })?.name !== 'AbortError',
         onRetry: (info) => {
           log.warn(
             { tool: toolName, attempt: info.attempt, delayMs: info.delayMs, error: info.error },
