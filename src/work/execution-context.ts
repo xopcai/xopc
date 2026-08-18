@@ -10,9 +10,10 @@ export interface ExecutionContext extends ExecutionReceiptContext {
   sessionKey: string;
   channel: string;
   agentId?: string;
+  strategy?: string;
 }
 
-const ORIGINS = new Set<ExecutionReceiptOrigin>(['chat', 'goal', 'workflow', 'automation', 'browser', 'proactive']);
+const ORIGINS = new Set<ExecutionReceiptOrigin>(['chat', 'outcome', 'workflow', 'automation', 'browser', 'proactive']);
 const TRIGGERS = new Set<ExecutionReceiptTrigger>(['user', 'schedule', 'webhook', 'proactive', 'retry']);
 
 function optionalString(value: unknown): string | undefined {
@@ -22,7 +23,7 @@ function optionalString(value: unknown): string | undefined {
 function metadataOrigin(metadata: SessionMetadata): ExecutionReceiptOrigin {
   const explicit = optionalString(metadata.customData?.origin);
   if (explicit && ORIGINS.has(explicit as ExecutionReceiptOrigin)) return explicit as ExecutionReceiptOrigin;
-  if (optionalString(metadata.customData?.goalId)) return 'goal';
+  if (optionalString(metadata.customData?.outcomeId)) return 'outcome';
   if (metadata.sessionType === 'workflow-run' || metadata.sessionType === 'workflow-subagent') return 'workflow';
   if (metadata.sessionType === 'cron') return 'automation';
   if (metadata.sessionType === 'heartbeat') return 'proactive';
@@ -52,12 +53,12 @@ export function resolveExecutionContext(input: {
     agentId: input.agentId,
     projectId: input.metadata.projectId,
     outcomeId: optionalString(input.metadata.customData?.outcomeId),
-    goalId: optionalString(input.metadata.customData?.goalId),
     workItemId: optionalString(input.metadata.customData?.workItemId),
     origin: metadataOrigin(input.metadata),
     triggerKind: metadataTrigger(input.metadata),
     parentRunId: optionalString(input.metadata.customData?.parentRunId),
     contextTraceId: optionalString(input.metadata.customData?.contextTraceId),
+    strategy: optionalString(input.metadata.customData?.strategy),
   };
 }
 
@@ -65,7 +66,6 @@ export function executionReceiptContext(context: ExecutionContext): ExecutionRec
   return {
     outcomeId: context.outcomeId,
     projectId: context.projectId,
-    goalId: context.goalId,
     workItemId: context.workItemId,
     origin: context.origin,
     triggerKind: context.triggerKind,

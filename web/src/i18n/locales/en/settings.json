@@ -13,7 +13,6 @@
     "remote-access": "Remote access",
     "shares": "File sharing",
     "dreams": "Background reflection",
-    "goals": "Goal mode",
     "system": "System permissions",
     "desktop-pet": "Pet",
     "desktop-app": "Application data",
@@ -1078,10 +1077,6 @@
     "title": "Scheduled tasks",
     "subtitle": "Global scheduler limits and defaults for all cron jobs.",
     "tasksLink": "Manage tasks and run history →"
-  },
-  "goalsSettingsPage": {
-    "title": "Goal runtime rules",
-    "subtitle": "Configure judging, execution limits, and notification rules for persistent /goal tasks."
   },
   "extensionSttMedia": {
     "banner": "STT credentials are stored in tools.media.audio.providers.<id> (same as Settings → Voice). Use either page — they stay in sync.",

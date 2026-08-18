@@ -1,33 +1,34 @@
 import { describe, expect, it } from 'vitest';
 
-import type { GoalWithDetails } from '../../goals/index.js';
-import { decisionFromGoal } from '../home-query-service.js';
+import type { Outcome } from '@xopcai/gateway-contract';
+import type { OutcomeExecutionState } from '../outcome-execution-state.js';
+import { decisionFromOutcome } from '../home-query-service.js';
 
-function goal(patch: Partial<GoalWithDetails> = {}): GoalWithDetails {
+function outcome(patch: Partial<Outcome> = {}): Outcome {
   return {
-    id: 'goal/1',
-    outcomeId: 'outcome/1',
-    outcomeContractVersion: 1,
-    title: 'Review the blocked outcome',
-    status: 'blocked',
-    agentId: 'main',
-    priority: 'normal',
+    id: 'outcome/1',
+    objective: 'Review the blocked outcome',
+    userStatus: 'needs_user',
+    internalStatus: 'blocked',
+    importance: 'normal',
+    latestContractVersion: 1,
     createdAt: 1,
     updatedAt: 2,
-    maxTurns: 10,
-    turnsUsed: 1,
-    source: 'api',
-    checklist: [],
     ...patch,
   };
 }
 
-describe('decisionFromGoal', () => {
-  it('links goal decisions to the user-facing outcome route', () => {
-    expect(decisionFromGoal(goal())?.href).toBe('/work/outcome%2F1');
+const execution: OutcomeExecutionState = {
+  outcomeId: 'outcome/1', agentId: 'main', priority: 'normal', source: 'api',
+  createdAt: 1, updatedAt: 2, blockedReason: 'Needs approval',
+};
+
+describe('decisionFromOutcome', () => {
+  it('links outcome decisions to the user-facing outcome route', () => {
+    expect(decisionFromOutcome(outcome(), execution)?.href).toBe('/work/outcome%2F1');
   });
 
-  it('omits goals that do not need user input', () => {
-    expect(decisionFromGoal(goal({ status: 'active' }))).toBeNull();
+  it('omits outcomes that do not need user input', () => {
+    expect(decisionFromOutcome(outcome({ userStatus: 'running', internalStatus: 'running' }), execution)).toBeNull();
   });
 });

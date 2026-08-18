@@ -77,7 +77,6 @@ export function mobileProductRoute(reference: ProductReferenceLocator): string {
       return '/files';
     case 'settings':
       return '/settings';
-    case 'goal':
     case 'workflow_definition':
     case 'workflow_run':
     case 'local_app':

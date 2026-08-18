@@ -19,7 +19,6 @@ import {
   type CommandStreamEvent,
 } from '../../chat-commands/index.js';
 import { getAllProviders, getModelsByProvider, getProviderDisplayName } from '../../providers/index.js';
-import type { PersistentGoalApis } from '../goals/persistent-goal-apis.js';
 import type { WorkflowRunServiceLike } from '../../workflows/service/workflow-run-service.types.js';
 import type {
   SkillInstallToolOptions,
@@ -39,7 +38,7 @@ export interface CommandContext {
   chatId: string;
   senderId: string;
   isGroup: boolean;
-  /** From inbound message metadata (thread/account, etc.) for `/goal` continuation routing. */
+  /** From inbound message metadata (thread/account, etc.) for continuation routing. */
   inboundMetadata?: Record<string, unknown>;
 }
 
@@ -79,12 +78,6 @@ export interface CommandHandlerConfig {
     mode: 'list' | 'detail' | 'json',
   ) => Promise<string>;
 
-  getPersistentGoalApisForCommand: (routing: {
-    sessionKey: string;
-    channel: string;
-    chatId: string;
-    inboundMetadata?: Record<string, unknown>;
-  }) => PersistentGoalApis;
   getWorkflowRunService?: () => WorkflowRunServiceLike | undefined;
 }
 
@@ -103,7 +96,6 @@ export class CommandHandler {
   private compactSession?: CommandHandlerConfig['compactSession'];
   private btwQuery?: CommandHandlerConfig['btwQuery'];
   private getSessionContextReport?: CommandHandlerConfig['getSessionContextReport'];
-  private getPersistentGoalApisForCommand: CommandHandlerConfig['getPersistentGoalApisForCommand'];
   private resetSession?: CommandHandlerConfig['resetSession'];
   private getWorkflowRunService?: CommandHandlerConfig['getWorkflowRunService'];
 
@@ -122,7 +114,6 @@ export class CommandHandler {
     this.compactSession = handlerConfig.compactSession;
     this.btwQuery = handlerConfig.btwQuery;
     this.getSessionContextReport = handlerConfig.getSessionContextReport;
-    this.getPersistentGoalApisForCommand = handlerConfig.getPersistentGoalApisForCommand;
     this.resetSession = handlerConfig.resetSession;
     this.getWorkflowRunService = handlerConfig.getWorkflowRunService;
   }
@@ -251,12 +242,6 @@ export class CommandHandler {
       btwQuery: this.btwQuery,
       emitEvent,
       getSessionContextReport: this.getSessionContextReport,
-      persistentGoalApis: this.getPersistentGoalApisForCommand({
-        sessionKey: context.sessionKey,
-        channel: context.channel,
-        chatId: context.chatId,
-        inboundMetadata: context.inboundMetadata,
-      }),
       workflowRunService: this.getWorkflowRunService?.(),
     });
   }

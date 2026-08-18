@@ -325,6 +325,7 @@ export function useChatSessionStreaming(deps: {
           hasMore: false,
           streamingMsg: null,
           progress: null,
+          taskPlan: null,
           sending: false,
           streaming: false,
         }),

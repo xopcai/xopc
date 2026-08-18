@@ -43,6 +43,9 @@ export type RunGatewayAgentDeps = {
   activeWebchatRunBySession: Map<string, string>;
   sessionIndex: SessionIndex;
   emit: (type: string, payload: unknown) => void;
+  onOutcomeFinalized?: (
+    receipt: import('../../storage/sqlite/execution-receipt-repository.js').ExecutionReceipt,
+  ) => void;
 };
 
 /**
@@ -130,6 +133,7 @@ export async function *runGatewayAgent(
       runId,
       context: executionContext,
       fallbackObjective: message,
+      onFinalized: deps.onOutcomeFinalized,
     });
   }
   const mapper = new ChatStreamMapper({ runId, sessionKey: streamSessionKey, channel });
@@ -273,7 +277,7 @@ export async function *runGatewayAgent(
         }
         runAbortControllers.delete(runId);
         const assistantPlainText = agentService.getLastAssistantPlainText(sessionKey);
-        const streamOutcome = agentService.persistentGoals.takeStreamOutcome(sessionKey);
+        const reviewHint = agentService.takeOutcomeReviewStreamHint(sessionKey);
         try {
           await agentService.outboundCoordinator.emitSessionTurnComplete({
             sessionKey,
@@ -283,7 +287,7 @@ export async function *runGatewayAgent(
             assistantPlainText,
             aborted: mergedSignal.aborted,
             ...(streamError !== undefined ? { streamError } : {}),
-            skipPersistentGoalPostTurn: streamOutcome?.skipPersistentGoalPostTurn ?? false,
+            skipOutcomeReview: reviewHint?.skipOutcomeReview ?? false,
             outboundMetadata: {},
           });
         } catch (goalErr) {

@@ -41,21 +41,9 @@ export interface AgentServiceConfig {
    * When omitted, `AgentService` creates its own `SessionStore` (CLI / embedded).
    */
   sessionStore?: SessionStore;
-  /**
-   * Gateway: invoked after `sessionStore.updateMetadata` from built-in `/goal` APIs (store does not emit).
-   * Wire to `sessionManager.emit('sessionUpdated', { key })` so the console refetches.
-   */
   onSessionMetadataUpdated?: (sessionKey: string, patch?: { name?: string }) => void;
-  /** Gateway: transcript JSONL append (goal verdict, slash receipt, background turns). */
+  /** Gateway: transcript append notification. */
   onSessionTranscriptUpdated?: (sessionKey: string) => void;
-  /** Gateway: durable goal status changed after post-turn judge. */
-  onGoalStatusUpdated?: (payload: {
-    goalId: string;
-    sessionKey: string;
-    previousStatus: string;
-    status: string;
-    goal: import('../goals/types.js').GoalWithDetails;
-  }) => void;
   /** Gateway/TUI: local skill catalog changed or skill config toggles changed. */
   onSkillsUpdated?: (payload: { reason: 'disk' | 'config' }) => void;
   /**

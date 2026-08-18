@@ -9,7 +9,6 @@ import { resolve } from 'node:path';
 
 import { evaluateExecPolicy } from '../sandbox/exec-policy.js';
 import { formatSize, truncateTail } from './truncate.js';
-import type { GoalEvidenceRecordInput } from './goal-evidence-recorder.js';
 
 const MAX_COMMAND_TIMEOUT_MS = 300_000;
 const DEFAULT_TIMEOUT_MS = 120_000;
@@ -62,7 +61,6 @@ export interface ExecCommandUpdateDetails {
 export interface CreateExecCommandToolOptions {
   /** Env var names allowed through prepareSafeToolEnv even if they match secret heuristics. */
   getSkillPassthroughEnvVarNames?: () => string[];
-  recordGoalEvidence?: (input: GoalEvidenceRecordInput) => Promise<void> | void;
 }
 
 type ExecCommandParams = {
@@ -295,20 +293,7 @@ export function createExecCommandTool(
             details,
           };
 
-          void Promise.resolve(options?.recordGoalEvidence?.({
-            kind: timedOut || exitCode !== 0 ? 'command' : isLikelyTestCommand(command) ? 'test' : 'command',
-            title: `Command: ${command.slice(0, 120)}`,
-            summary: formatted.text.slice(0, 2000),
-            data: {
-              command,
-              cwd: policy.effectiveCwd,
-              exitCode,
-              durationMs,
-              timedOut,
-              truncated: details.truncated,
-              outputBytes: details.outputBytes,
-            },
-          })).finally(() => resolveTool(result));
+          resolveTool(result);
         };
 
         const abort = () => {

@@ -51,10 +51,10 @@ describe('automation display labels', () => {
     const cronLabels = messages('zh').cron;
     expect(automationTriggerLabel({
       kind: 'event',
-      eventType: 'goal.status_changed',
-      source: 'goals',
+      eventType: 'outcome.status_changed',
+      source: 'outcomes',
       payloadMatch: { status: 'blocked' },
-    }, labels, cronLabels, 'zh')).toBe('当目标变为「阻塞」时运行');
+    }, labels, cronLabels, 'zh')).toBe('当结果变为「阻塞」时运行');
     expect(automationTriggerLabel({
       kind: 'event',
       eventType: 'custom.record.ready',

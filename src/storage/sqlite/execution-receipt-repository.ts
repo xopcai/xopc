@@ -12,13 +12,12 @@ import {
 export type ExecutionReceiptStatus = 'running' | 'succeeded' | 'failed' | 'cancelled';
 export type ExecutionFeedbackOutcome = 'helpful' | 'not_helpful';
 export type ExecutionVerdict = 'achieved' | 'partial' | 'not_achieved';
-export type ExecutionReceiptOrigin = 'chat' | 'goal' | 'workflow' | 'automation' | 'browser' | 'proactive';
+export type ExecutionReceiptOrigin = 'chat' | 'outcome' | 'workflow' | 'automation' | 'browser' | 'proactive';
 export type ExecutionReceiptTrigger = 'user' | 'schedule' | 'webhook' | 'proactive' | 'retry';
 
 export interface ExecutionReceiptContext {
   outcomeId?: string;
   projectId?: string;
-  goalId?: string;
   workItemId?: string;
   origin?: ExecutionReceiptOrigin;
   triggerKind?: ExecutionReceiptTrigger;
@@ -32,6 +31,8 @@ export interface ExecutionContract {
   acceptanceCriteria: string[];
   constraints: string[];
   approvalRequired: string[];
+  assumptions: string[];
+  risks: string[];
 }
 
 export interface ExecutionEvidence {
@@ -40,6 +41,9 @@ export interface ExecutionEvidence {
   summary: string;
   uri?: string;
   verifies?: string[];
+  provenance: 'tool' | 'external' | 'user' | 'judge';
+  strength: 'observed' | 'verified';
+  observedAt: number;
 }
 
 export interface ExecutionReceipt {
@@ -101,7 +105,6 @@ type ExecutionReceiptRow = {
   failure_phase: ExecutionFailurePhase | null;
   recovery_action: ExecutionRecoveryAction | null;
   project_id: string | null;
-  goal_id: string | null;
   work_item_id: string | null;
   origin: ExecutionReceiptOrigin | null;
   trigger_kind: ExecutionReceiptTrigger | null;
@@ -127,10 +130,12 @@ export interface ExecutionReceiptMetrics {
   verified: number;
   helpful: number;
   notHelpful: number;
+  supportFit: number;
   completionRate: number;
   successRate: number;
   verificationRate: number;
   helpfulRate: number;
+  supportFitRate: number;
 }
 
 function fromRow(row: ExecutionReceiptRow): ExecutionReceipt {
@@ -163,7 +168,6 @@ function fromRow(row: ExecutionReceiptRow): ExecutionReceipt {
     context: {
       ...(row.outcome_id ? { outcomeId: row.outcome_id } : {}),
       ...(row.project_id ? { projectId: row.project_id } : {}),
-      ...(row.goal_id ? { goalId: row.goal_id } : {}),
       ...(row.work_item_id ? { workItemId: row.work_item_id } : {}),
       ...(row.origin ? { origin: row.origin } : {}),
       ...(row.trigger_kind ? { triggerKind: row.trigger_kind } : {}),
@@ -195,7 +199,7 @@ const SELECT_COLUMNS = `run_id, session_key, channel, objective, status, summary
   contract_json, evidence_json, feedback_outcome, feedback_reason,
   needs_correction, support_fit, started_at, completed_at, updated_at,
   verification_status, verification_json, failure_code, failure_phase, recovery_action,
-  project_id, goal_id, work_item_id, origin, trigger_kind, parent_run_id,
+  project_id, work_item_id, origin, trigger_kind, parent_run_id,
   next_action, needs_user, context_trace_id, completion_verdict, completion_verdict_source, correction_text,
   projection_version, projected_at, outcome_id, contract_version, attempt, strategy`;
 
@@ -223,9 +227,9 @@ export function startExecutionReceipt(input: {
     db.prepare(
       `INSERT INTO execution_receipts (
         run_id, session_key, channel, objective, status, contract_json, started_at, updated_at,
-        project_id, goal_id, work_item_id, origin, trigger_kind, parent_run_id, context_trace_id,
+        project_id, work_item_id, origin, trigger_kind, parent_run_id, context_trace_id,
         outcome_id, contract_version, attempt, strategy
-      ) VALUES (?, ?, ?, ?, 'running', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, 'running', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       input.runId,
       input.sessionKey,
@@ -235,7 +239,6 @@ export function startExecutionReceipt(input: {
       now,
       now,
       input.context?.projectId ?? null,
-      input.context?.goalId ?? null,
       input.context?.workItemId ?? null,
       input.context?.origin ?? null,
       input.context?.triggerKind ?? null,
@@ -263,6 +266,7 @@ export function completeExecutionReceipt(input: {
     status: input.status,
     acceptanceCriteria: current.contract?.acceptanceCriteria ?? [],
     evidence: current.evidence,
+    startedAt: current.startedAt,
   });
   const failure = input.status === 'succeeded'
     ? undefined
@@ -379,6 +383,7 @@ export function updateExecutionReceipt(input: {
         status: current.status,
         acceptanceCriteria: contract?.acceptanceCriteria ?? [],
         evidence,
+        startedAt: current.startedAt,
       })
     : current.verification;
   const completionVerdict = current.status !== 'running' && current.completionVerdictSource !== 'user'
@@ -521,7 +526,9 @@ export function summarizeExecutionReceipts(): ExecutionReceiptMetrics {
         SUM(CASE WHEN status = 'succeeded' THEN 1 ELSE 0 END) AS succeeded,
         SUM(CASE WHEN verification_status = 'passed' THEN 1 ELSE 0 END) AS verified,
         SUM(CASE WHEN feedback_outcome = 'helpful' THEN 1 ELSE 0 END) AS helpful,
-        SUM(CASE WHEN feedback_outcome = 'not_helpful' THEN 1 ELSE 0 END) AS not_helpful
+        SUM(CASE WHEN feedback_outcome = 'not_helpful' THEN 1 ELSE 0 END) AS not_helpful,
+        SUM(CASE WHEN support_fit = 1 THEN 1 ELSE 0 END) AS support_fit,
+        SUM(CASE WHEN support_fit IS NOT NULL THEN 1 ELSE 0 END) AS support_fit_rated
        FROM execution_receipts`,
     )
     .get() as {
@@ -531,6 +538,8 @@ export function summarizeExecutionReceipts(): ExecutionReceiptMetrics {
       verified: number;
       helpful: number;
       not_helpful: number;
+      support_fit: number;
+      support_fit_rated: number;
     };
   const rated = row.helpful + row.not_helpful;
   return {
@@ -540,9 +549,11 @@ export function summarizeExecutionReceipts(): ExecutionReceiptMetrics {
     verified: row.verified,
     helpful: row.helpful,
     notHelpful: row.not_helpful,
+    supportFit: row.support_fit,
     completionRate: row.total ? row.completed / row.total : 0,
     successRate: row.completed ? row.succeeded / row.completed : 0,
     verificationRate: row.completed ? row.verified / row.completed : 0,
     helpfulRate: rated ? row.helpful / rated : 0,
+    supportFitRate: row.support_fit_rated ? row.support_fit / row.support_fit_rated : 0,
   };
 }

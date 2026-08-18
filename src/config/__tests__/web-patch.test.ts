@@ -2,39 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import type { Config } from '../schema.js';
 import {
-  mergeGoalsConfigPatch,
   mergeGatewaySkillsMarketplacePatch,
   mergeSessionConfigPatch,
   mergeUpdateConfigPatch,
-  resolveGoalsConfigForWeb,
   resolveSessionConfigForWeb,
   resolveUpdateConfigForWeb,
 } from '../web-patch.js';
 
 describe('web-patch merges', () => {
-  it('merges goals config', () => {
-    const config = { goals: { maxTurns: 15 } } as Config;
-    const result = mergeGoalsConfigPatch(config, {
-      judgeModelRef: 'openai/gpt-4o-mini',
-      checklistMode: false,
-      checklistDecomposePolicy: 'supplement_existing',
-      judgeTimeoutMs: 45_000,
-    });
-    expect(result).toEqual({ ok: true });
-    expect(config.goals?.maxTurns).toBe(15);
-    expect(config.goals?.judgeModelRef).toBe('openai/gpt-4o-mini');
-    expect(config.goals?.checklistMode).toBe(false);
-    expect(config.goals?.checklistDecomposePolicy).toBe('supplement_existing');
-    expect(config.goals?.judgeTimeoutMs).toBe(45_000);
-  });
-
-  it('clears goals judgeModelRef when patch sends null', () => {
-    const config = { goals: { judgeModelRef: 'openai/gpt-4o-mini' } } as Config;
-    const result = mergeGoalsConfigPatch(config, { judgeModelRef: null });
-    expect(result).toEqual({ ok: true });
-    expect(config.goals?.judgeModelRef).toBeUndefined();
-  });
-
   it('merges session storage patch', () => {
     const config = { session: { dmScope: 'main' } } as Config;
     const result = mergeSessionConfigPatch(config, {
@@ -115,11 +90,4 @@ describe('web-patch resolve helpers', () => {
     });
   });
 
-  it('resolveGoalsConfigForWeb parses goals schema', () => {
-    expect(
-      resolveGoalsConfigForWeb({
-        goals: { maxTurns: 30, checklistMode: false, checklistDecomposePolicy: 'supplement_existing' },
-      } as Config),
-    ).toMatchObject({ maxTurns: 30, checklistMode: false, checklistDecomposePolicy: 'supplement_existing' });
-  });
 });

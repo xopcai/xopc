@@ -8,7 +8,6 @@ import {
   loadDreamingSettingsPanel,
   loadDesktopPetSettingsPanel,
   loadGatewaySettingsPanel,
-  loadGoalsSettingsPanel,
   loadHeartbeatSettingsPanel,
   loadKeyboardShortcutsSettingsPanel,
   loadCapabilityPresetsSettingsPanel,
@@ -32,7 +31,6 @@ const SECTIONS: SettingsSectionId[] = [
   'heartbeat',
   'remote-access',
   'shares',
-  'goals',
   'dreams',
 ];
 
@@ -59,7 +57,6 @@ const SharesSettingsPanel = lazy(() => loadSharesSettingsPanel().then((m) => ({ 
 const DreamingSettingsPanel = lazy(() =>
   loadDreamingSettingsPanel().then((m) => ({ default: m.DreamingSettingsPanel })),
 );
-const GoalsSettingsPanel = lazy(() => loadGoalsSettingsPanel().then((m) => ({ default: m.GoalsSettingsPanel })));
 const CapabilityPresetsSettingsPanel = lazy(() =>
   loadCapabilityPresetsSettingsPanel().then((m) => ({ default: m.CapabilityPresetsSettingsPanel })),
 );
@@ -141,10 +138,6 @@ export function SettingsPage() {
 
   if (id === 'dreams') {
     return renderLazySection(DreamingSettingsPanel);
-  }
-
-  if (id === 'goals') {
-    return renderLazySection(GoalsSettingsPanel);
   }
 
   return (

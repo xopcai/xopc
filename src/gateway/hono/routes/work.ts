@@ -8,9 +8,10 @@ import {
 } from '@xopcai/gateway-contract';
 
 import { ProjectMonitoringService } from '../../../work/project-monitoring-service.js';
-import { GoalService } from '../../../goals/index.js';
+import { OutcomeExecutionStateRepository } from '../../../work/outcome-execution-state.js';
 import { OutcomeRepository } from '../../../work/outcome-repository.js';
 import { OutcomeReceiptService } from '../../../work/outcome-receipt-service.js';
+import { ModelOutcomeContractPlanner } from '../../../work/outcome-contract-planner.js';
 import { ProjectOperatingViewService } from '../../../work/project-operating-view-service.js';
 import { WorkIntakeService } from '../../../work/work-intake-service.js';
 import { WorkValueMetricsService } from '../../../work/work-value-metrics-service.js';
@@ -19,14 +20,15 @@ import type { AuthenticatedRouteDeps } from './deps.js';
 export function registerWorkRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const intake = new WorkIntakeService(
     deps.service.projects,
-    { enqueue: (goalId, options) => deps.service.enqueueGoalRun(goalId, options) },
+    { enqueue: (outcomeId, options) => deps.service.enqueueOutcome(outcomeId, options) },
+    new ModelOutcomeContractPlanner(() => deps.service.getConfig()),
   );
   const operatingViews = new ProjectOperatingViewService(deps.service.projects, deps.service.workItems);
   const monitoring = new ProjectMonitoringService();
   const metrics = new WorkValueMetricsService();
   const outcomes = new OutcomeRepository();
   const receipts = new OutcomeReceiptService();
-  const goals = new GoalService();
+  const executions = new OutcomeExecutionStateRepository();
 
   authenticated.get('/api/outcomes', (c) => {
     const status = OutcomeUserStatusSchema.safeParse(c.req.query('status'));
@@ -50,34 +52,26 @@ export function registerWorkRoutes(authenticated: Hono, deps: AuthenticatedRoute
     if (!outcome) return c.json({ ok: false, error: 'Outcome not found' }, 404);
     const parsed = OutcomeActionRequestSchema.safeParse(await c.req.json().catch(() => ({})));
     if (!parsed.success) return c.json({ ok: false, error: 'Invalid outcome action' }, 400);
-    const links = outcomes.listLinks(outcome.id);
-    const goalId = links.find((link) => link.kind === 'goal')?.id;
-    const goal = goalId ? goals.get(goalId) : undefined;
+    const execution = executions.get(outcome.id);
     if (parsed.data.action === 'pause') {
-      if (goal && goal.status !== 'done' && goal.status !== 'archived' && goal.status !== 'paused') {
-        goals.pause(goal.id, 'Paused by the user');
-      }
+      executions.update(outcome.id, { blockedReason: 'Paused by the user' });
       return c.json({
         ok: true,
         outcome: outcomes.updateState({ id: outcome.id, userStatus: 'running', internalStatus: 'paused' }),
       });
     }
     if (parsed.data.action === 'cancel') {
-      if (goal && goal.status !== 'done' && goal.status !== 'archived') {
-        goals.pause(goal.id, 'Cancelled by the user');
-      }
+      executions.update(outcome.id, { blockedReason: 'Cancelled by the user' });
       return c.json({
         ok: true,
         outcome: outcomes.updateState({ id: outcome.id, userStatus: 'completed', internalStatus: 'cancelled' }),
       });
     }
-    if (!goal) return c.json({ ok: false, error: 'Outcome has no executable goal' }, 409);
-    if (goal.status === 'done' || goal.status === 'archived') goals.reopen(goal.id);
-    else if (goal.status !== 'active') goals.resume(goal.id);
-    const queued = deps.service.enqueueGoalRun(goal.id, {
+    if (!execution) return c.json({ ok: false, error: 'Outcome has no execution state' }, 409);
+    executions.update(outcome.id, { blockedReason: null });
+    const queued = deps.service.enqueueOutcome(outcome.id, {
       source: 'api',
       executionContext: {
-        outcomeId: outcome.id,
         triggerKind: parsed.data.action === 'resume' ? 'retry' : 'user',
       },
     });
@@ -92,7 +86,7 @@ export function registerWorkRoutes(authenticated: Hono, deps: AuthenticatedRoute
     const parsed = WorkIntakeCreateRequestSchema.safeParse(await c.req.json().catch(() => ({})));
     if (!parsed.success) return c.json({ ok: false, error: 'Invalid work intake request' }, 400);
     try {
-      const proposal = intake.propose({
+      const proposal = await intake.propose({
         ...parsed.data,
       });
       return c.json({ ok: true, proposal }, 201);

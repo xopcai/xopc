@@ -3,16 +3,16 @@ import { describe, expect, it } from 'vitest';
 import { mobileNotificationEventFromGatewayEvent } from '../notification-service.js';
 
 describe('mobileNotificationEventFromGatewayEvent', () => {
-  it('maps an input-needed goal to its active chat session', () => {
-    expect(mobileNotificationEventFromGatewayEvent('goal.status.updated', {
-      goal: { id: 'goal-1', title: 'Approve deployment', activeSessionKey: 'agent:main:chat/1' },
-      status: 'needs_input',
+  it('maps an input-needed outcome to its outcome detail', () => {
+    expect(mobileNotificationEventFromGatewayEvent('outcome.status.updated', {
+      outcome: { id: 'outcome-1', objective: 'Approve deployment' },
+      status: 'needs_user',
     })).toMatchObject({
-      type: 'goal.needs_input',
-      entity: { kind: 'goal', id: 'goal-1' },
+      type: 'outcome.needs_input',
+      entity: { kind: 'outcome', id: 'outcome-1' },
       priority: 'high',
-      deepLink: '/chat/agent%3Amain%3Achat%2F1',
-      payload: { route: '/chat/agent%3Amain%3Achat%2F1' },
+      deepLink: '/work/outcome-1',
+      payload: { route: '/work/outcome-1' },
     });
   });
 
@@ -51,8 +51,8 @@ describe('mobileNotificationEventFromGatewayEvent', () => {
 
   it('ignores unrelated events and invalid status payloads', () => {
     expect(mobileNotificationEventFromGatewayEvent('session.updated', {})).toBeNull();
-    expect(mobileNotificationEventFromGatewayEvent('goal.status.updated', {
-      goalId: 'goal-1',
+    expect(mobileNotificationEventFromGatewayEvent('outcome.status.updated', {
+      outcomeId: 'outcome-1',
       status: 'running',
     })).toBeNull();
     expect(mobileNotificationEventFromGatewayEvent('automation.run.completed', {

@@ -134,13 +134,18 @@ export class InternalObjectContextProvider implements ContextProvider {
     const objects: Record<string, unknown>[] = [];
     const evidenceIds: string[] = [];
     for (const event of eventRows(input.eventIds)) {
-      if (event.subject_kind === 'goal') {
-        const goal = db.prepare(`SELECT goal_id, title, description, status, agent_id, priority,
-          deadline_at, updated_at, next_action, blocked_reason FROM goals WHERE goal_id = ?`)
+      if (event.subject_kind === 'outcome') {
+        const outcome = db.prepare(`SELECT outcomes.outcome_id, outcomes.objective,
+          outcomes.user_status, outcomes.internal_status, outcomes.importance,
+          outcomes.due_at, outcomes.updated_at, outcome_execution_state.agent_id,
+          outcome_execution_state.priority, outcome_execution_state.next_action,
+          outcome_execution_state.blocked_reason FROM outcomes
+          LEFT JOIN outcome_execution_state USING (outcome_id)
+          WHERE outcomes.outcome_id = ?`)
           .get(event.subject_id) as Record<string, unknown> | undefined;
-        if (goal) {
-          const evidenceId = `goal:${event.subject_id}`;
-          objects.push({ evidenceId, kind: 'goal', ...goal });
+        if (outcome) {
+          const evidenceId = `outcome:${event.subject_id}`;
+          objects.push({ evidenceId, kind: 'outcome', ...outcome });
           evidenceIds.push(evidenceId);
         }
       } else if (event.subject_kind === 'note') {
@@ -219,30 +224,34 @@ export class MeetingWorkspaceContextProvider implements ContextProvider {
     const terms = [...new Set(title.toLocaleLowerCase().match(/[\p{L}\p{N}]{2,}/gu) ?? [])].slice(0, 6);
     if (terms.length === 0) return emptyContext();
     const db = getSqliteDatabase();
-    const goalMatches = terms.map(() => `LOWER(COALESCE(title, '') || ' ' || COALESCE(description, '')
-      || ' ' || COALESCE(next_action, '')) LIKE ?`).join(' OR ');
-    const goals = db.prepare(`SELECT goal_id, title, description, status, priority, deadline_at,
-      next_action, blocked_reason, project_id, updated_at FROM goals
-      WHERE status NOT IN ('done', 'archived') AND agent_id = ? AND (${goalMatches})
-      ORDER BY updated_at DESC LIMIT 10`)
+    const outcomeMatches = terms.map(() => `LOWER(COALESCE(outcomes.objective, '') || ' '
+      || COALESCE(outcome_execution_state.next_action, '')) LIKE ?`).join(' OR ');
+    const outcomes = db.prepare(`SELECT outcomes.outcome_id, outcomes.objective,
+      outcomes.user_status, outcomes.internal_status, outcomes.importance, outcomes.due_at,
+      outcomes.updated_at, outcome_execution_state.next_action,
+      outcome_execution_state.blocked_reason, outcome_execution_state.project_id
+      FROM outcomes JOIN outcome_execution_state USING (outcome_id)
+      WHERE outcomes.internal_status NOT IN ('completed', 'cancelled')
+      AND outcome_execution_state.agent_id = ? AND (${outcomeMatches})
+      ORDER BY outcomes.updated_at DESC LIMIT 10`)
       .all(scope.agent_id ?? 'main', ...terms.map((term) => `%${term}%`)) as Array<Record<string, unknown>>;
     const noteMatches = terms.map(() => `LOWER(COALESCE(title, '') || ' ' || COALESCE(snippet, '')) LIKE ?`).join(' OR ');
     const notes = db.prepare(`SELECT note_id, title, kind, status, snippet, tags_json, task_due_at,
       unchecked_task_count, updated_at FROM notes WHERE status NOT IN ('archived', 'trashed')
       AND (${noteMatches}) ORDER BY updated_at DESC LIMIT 10`)
       .all(...terms.map((term) => `%${term}%`)) as Array<Record<string, unknown>>;
-    const goalEvidenceIds = goals.map((goal) => `goal:${String(goal.goal_id)}`);
+    const outcomeEvidenceIds = outcomes.map((outcome) => `outcome:${String(outcome.outcome_id)}`);
     const noteEvidenceIds = notes.map((note) => `note:${String(note.note_id)}`);
     return {
       content: {
-        activeGoals: goals.map((goal, index) => ({ evidenceId: goalEvidenceIds[index], ...goal })),
+        activeOutcomes: outcomes.map((outcome, index) => ({ evidenceId: outcomeEvidenceIds[index], ...outcome })),
         recentNotes: notes.map((note, index) => ({
           evidenceId: noteEvidenceIds[index],
           ...note,
           snippet: boundedText(note.snippet, 1_500),
         })),
       },
-      evidenceIds: [...goalEvidenceIds, ...noteEvidenceIds],
+      evidenceIds: [...outcomeEvidenceIds, ...noteEvidenceIds],
     };
   }
 }

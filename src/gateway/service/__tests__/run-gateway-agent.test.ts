@@ -54,7 +54,7 @@ describe('runGatewayAgent', () => {
           },
         },
         getLastAssistantPlainText: () => '',
-        persistentGoals: { takeStreamOutcome: () => undefined },
+        takeOutcomeReviewStreamHint: () => undefined,
         outboundCoordinator: { emitSessionTurnComplete: async () => {} },
         endInboundTurn: () => {},
       },
@@ -98,9 +98,7 @@ describe('runGatewayAgent', () => {
           },
         },
         getLastAssistantPlainText: () => '',
-        persistentGoals: {
-          takeStreamOutcome: () => undefined,
-        },
+        takeOutcomeReviewStreamHint: () => undefined,
         outboundCoordinator: {
           emitSessionTurnComplete: async () => {},
         },
@@ -156,7 +154,7 @@ describe('runGatewayAgent', () => {
           },
         },
         getLastAssistantPlainText: () => 'Done',
-        persistentGoals: { takeStreamOutcome: () => undefined },
+        takeOutcomeReviewStreamHint: () => undefined,
         outboundCoordinator: { emitSessionTurnComplete: async () => {} },
         endInboundTurn: () => {},
       },

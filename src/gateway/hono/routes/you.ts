@@ -9,8 +9,12 @@ import { listConnectorCatalog } from '../../../connectors/catalog.js';
 import { listConnectorInstances } from '../../../connectors/instances.js';
 import { uninstallConnector } from '../../../connectors/install.js';
 import { revokeComposioConnection } from '../../../connectors/composio.js';
-import { GoalService } from '../../../goals/index.js';
-import { defineOutcomeContract, OutcomeExecutionService } from '../../../work/index.js';
+import {
+  defineOutcomeContract,
+  OutcomeExecutionService,
+  OutcomeExecutionStateRepository,
+  OutcomeRepository,
+} from '../../../work/index.js';
 import { renderUserClaim } from '../../../knowledge/connected-understanding-pipeline.js';
 import { readUserProfileFile, writeUserProfileFile } from '../../agents-admin.js';
 import {
@@ -64,7 +68,7 @@ import {
   recordsDerivedFromPersonalContextSource,
 } from '../../../user-context/projection.js';
 import { prepareUserContextImport } from '../../../user-context/import.js';
-import { buildGoalSourceRecommendations } from '../../../user-context/source-recommendations.js';
+import { buildOutcomeSourceRecommendations } from '../../../user-context/source-recommendations.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 const VISIBLE_STATUSES = new Set<MemoryRecord['status']>(['active', 'candidate', 'needs_review']);
@@ -381,10 +385,11 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
       learningJobs: listConnectorLearningJobs({ limit: 500 }),
       claimStatsBySource: listUserClaimStatsBySource(),
     });
-    const activeGoals = new GoalService().list({
-      agentId,
-      status: ['active', 'paused', 'blocked', 'needs_input'],
-      limit: 20,
+    const activeOutcomes = new OutcomeExecutionStateRepository().list(20).flatMap((execution) => {
+      if (execution.agentId !== agentId) return [];
+      const outcome = new OutcomeRepository().get(execution.outcomeId);
+      if (!outcome || outcome.internalStatus === 'completed' || outcome.internalStatus === 'cancelled') return [];
+      return [{ id: outcome.id, objective: outcome.objective, description: execution.description }];
     });
     return c.json({
       scope: {
@@ -413,12 +418,12 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
       insights: buildInsightSuggestions(records),
       playbooks: buildPersonalPlaybooks(allUserContextRecords),
       sources,
-      sourceRecommendations: buildGoalSourceRecommendations(
+      sourceRecommendations: buildOutcomeSourceRecommendations(
         sourceDefinitions.filter((definition) => (
           definition.capabilities.includes('context') || definition.capabilities.includes('memory_source')
         )),
         new Set(sourceInstances.map((instance) => instance.connectorId)),
-        activeGoals,
+        activeOutcomes,
       ),
       controls: {
         mode: config.userContext.memory.mode,
@@ -893,8 +898,7 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
     const title = existing.content.trim().split(/\r?\n/)[0]!.slice(0, 72);
     const uiLocale = body.uiLocale === 'zh' ? 'zh' : 'en';
     const contract = defineOutcomeContract(title);
-    const goals = new GoalService();
-    const goal = new OutcomeExecutionService().create({
+    const execution = new OutcomeExecutionService().create({
       objective: contract.objective,
       description: existing.content,
       deliverables: contract.deliverables,
@@ -904,11 +908,14 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
       priority: 'normal',
       uiLocale,
       source: 'api',
-    }).goal;
-    goals.setContextMessage({ goalId: goal.id, text: existing.content });
+    });
+    new OutcomeExecutionStateRepository().update(execution.outcomeId, { contextText: existing.content });
     let queued = false;
     try {
-      deps.service.enqueueGoalRun(goal.id, { source: 'api' });
+      deps.service.enqueueOutcome(execution.outcomeId, {
+        source: 'api',
+        executionContext: { triggerKind: 'user' },
+      });
       queued = true;
     } catch {
       queued = false;
@@ -918,8 +925,8 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
     return c.json({
       ok: true,
       status: queued ? 'queued' : 'saved',
-      goal: goals.get(goal.id),
-      href: `/work/${encodeURIComponent(goal.outcomeId)}`,
+      outcomeId: execution.outcomeId,
+      href: `/outcomes/${encodeURIComponent(execution.outcomeId)}`,
     });
   });
 

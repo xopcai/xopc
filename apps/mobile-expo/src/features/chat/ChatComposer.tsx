@@ -45,7 +45,6 @@ import {
   writeComposerDraftSnapshot,
 } from './composer-draft-storage';
 import { useComposerAttachments } from './use-composer-attachments';
-import { EMPTY_CHAT_GOAL_SHORTCUT } from './chat-empty-shortcuts';
 import { MOBILE_COMPOSER_FILL_EVENT } from './mobile-composer-fill';
 import {
   VoiceRecordingOverlay,
@@ -98,7 +97,6 @@ export const ChatComposer = memo(function ChatComposer({
   onPendingFollowUpSteer,
   steeringFollowUpId = null,
   onQueueFull,
-  onPressGoalShortcut,
   overlayShell = false,
 }: {
   sessionKey: string;
@@ -128,7 +126,6 @@ export const ChatComposer = memo(function ChatComposer({
   onPendingFollowUpSteer?: (id: string) => void;
   steeringFollowUpId?: string | null;
   onQueueFull?: () => void;
-  onPressGoalShortcut?: () => void;
   overlayShell?: boolean;
 }) {
   const m = useMessages();
@@ -667,20 +664,8 @@ export const ChatComposer = memo(function ChatComposer({
   );
 
   const renderCaptureRail = () => {
-    const goalLabel = m.chat.emptyShortcuts.goal;
-    const goalDisabled = disabled || streaming;
-
     return (
       <View style={styles.captureRail}>
-        {onPressGoalShortcut
-          ? renderCaptureChip(
-              'goal',
-              EMPTY_CHAT_GOAL_SHORTCUT.icon,
-              goalLabel,
-              onPressGoalShortcut,
-              goalDisabled,
-            )
-          : null}
         {captureItems.map((item) => {
           const itemDisabled = disabled || streaming || att.attachments.length >= att.maxAttachments;
           return renderCaptureChip(item.key, item.icon, item.label, item.onPress, itemDisabled);

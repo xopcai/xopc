@@ -151,13 +151,6 @@ export function buildRouteSeeds(language: StoredLanguage): RouteHitSeed[] {
       keywords: ['automation', 'automations', 'schedule', 'tasks', 'history', 'scheduler'],
     },
     {
-      id: 'route:settings:goals',
-      title: m.nav.settingsGoals,
-      subtitle: r.goalsSettingsSubtitle,
-      path: '/settings/goals',
-      keywords: ['goal', 'checklist', 'judge', '/goal', 'automation'],
-    },
-    {
       id: 'route:settings:dreams',
       title: m.nav.settingsDreams,
       subtitle: r.dreamsSettingsSubtitle,

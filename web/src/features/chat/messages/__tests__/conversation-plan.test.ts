@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   collectConversationChangeSummary,
+  conversationPlanFromTaskPlanState,
+  extractActiveTurnConversationPlan,
   extractConversationPlan,
   extractLatestConversationPlan,
 } from '@/features/chat/messages/conversation-plan';
@@ -147,6 +149,53 @@ describe('extractConversationPlan', () => {
     ];
 
     expect(extractLatestConversationPlan(sessionMessages)).toBeNull();
+  });
+
+  it('does not carry a previous turn plan into the active turn', () => {
+    const sessionMessages: Message[] = [
+      {
+        role: 'assistant',
+        content: [tool('todo', {
+          items: [{ id: 'stale', content: 'Previous turn', status: 'in_progress' }],
+        })],
+      },
+      { role: 'user', content: [{ type: 'text', text: 'Start another turn' }] },
+    ];
+
+    expect(extractActiveTurnConversationPlan(sessionMessages, true)).toBeNull();
+  });
+
+  it('hides the current turn plan as soon as the turn ends', () => {
+    const sessionMessages: Message[] = [
+      { role: 'user', content: [{ type: 'text', text: 'Do work' }] },
+      {
+        role: 'assistant',
+        content: [tool('todo', {
+          items: [{ id: 'active', content: 'Current turn', status: 'in_progress' }],
+        })],
+      },
+    ];
+
+    expect(extractActiveTurnConversationPlan(sessionMessages, true)?.plan.items[0]?.id).toBe('active');
+    expect(extractActiveTurnConversationPlan(sessionMessages, false)).toBeNull();
+  });
+
+  it('adapts canonical task plan events and hides a closed snapshot', () => {
+    const base = {
+      planId: 'session:todo',
+      revision: 1,
+      source: 'todo' as const,
+      scope: 'session' as const,
+    };
+    expect(conversationPlanFromTaskPlanState({
+      ...base,
+      items: [{ id: 'a', title: 'Task', status: 'in_progress' }],
+    })?.items[0]).toEqual({ id: 'a', title: 'Task', status: 'in_progress' });
+    expect(conversationPlanFromTaskPlanState({
+      ...base,
+      revision: 2,
+      items: [{ id: 'a', title: 'Task', status: 'completed' }],
+    })).toBeNull();
   });
 });
 

@@ -12,6 +12,7 @@ import {
 } from './memory-config.js';
 import { isExplicitUnderstandingCorrection } from './understanding/correction.js';
 import { extractAgentUserPlainText } from './user-message-text.js';
+import { assembleOutcomeContext } from '../../work/outcome-context-assembler.js';
 
 const log = createLogger('UserContextCoordinator');
 
@@ -52,10 +53,12 @@ export class UserContextCoordinator {
     });
     const config = this.options.getConfig();
     if (!this.options.isEnabledForSession(sessionKey)) return empty();
-    const query = extractAgentUserPlainText(userMessage);
+    const userQuery = extractAgentUserPlainText(userMessage);
+    const outcomeContext = assembleOutcomeContext(sessionKey, userQuery);
+    const query = outcomeContext.retrievalQuery;
     this.correctionTargets.delete(sessionKey);
     let excludedRecordIds: string[] | undefined;
-    if (isExplicitUnderstandingCorrection(query)) {
+    if (isExplicitUnderstandingCorrection(userQuery)) {
       try {
         const trace = setLatestMemoryInjectFeedback({
           sessionKey,
@@ -84,6 +87,7 @@ export class UserContextCoordinator {
       query,
       userMessage,
       excludedRecordIds,
+      allocation: outcomeContext.allocation,
     });
     if (plan.traceId) {
       try {

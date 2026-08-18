@@ -3,8 +3,8 @@ import type { AutomationEvent } from '../../automations/domain/types.js';
 import type { PublishEventInput } from './types.js';
 
 const SUPPORTED_EVENT_TYPES = new Set([
-  'goal.created',
-  'goal.status_changed',
+  'outcome.created',
+  'outcome.status_changed',
   'note.created',
   'note.updated',
   'workflow.run.completed',
@@ -19,9 +19,9 @@ function stringValue(payload: Record<string, unknown>, key: string): string | un
 
 function subjectFor(event: AutomationEvent): { kind: string; id: string } | null {
   const payload = event.payload ?? {};
-  if (event.type.startsWith('goal.')) {
-    const id = stringValue(payload, 'goalId');
-    return id ? { kind: 'goal', id } : null;
+  if (event.type.startsWith('outcome.')) {
+    const id = stringValue(payload, 'outcomeId');
+    return id ? { kind: 'outcome', id } : null;
   }
   if (event.type.startsWith('note.')) {
     const id = stringValue(payload, 'noteId');

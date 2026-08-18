@@ -18,6 +18,7 @@ export interface ContextSnapshot {
   consentRequests: UserContextPlan['consentRequests'];
   relationshipPolicy: RelationshipSettings;
   estimatedTokens: number;
+  allocation?: UserContextPlan['allocation'];
   outcomeId?: string;
   runId?: string;
   createdAt: number;
@@ -33,6 +34,7 @@ type ContextSnapshotRow = {
   consent_requests_json: string;
   relationship_policy_json: string;
   estimated_tokens: number;
+  allocation_json: string | null;
   outcome_id: string | null;
   run_id: string | null;
   created_at: number;
@@ -49,6 +51,9 @@ function fromRow(row: ContextSnapshotRow): ContextSnapshot {
     consentRequests: JSON.parse(row.consent_requests_json) as UserContextPlan['consentRequests'],
     relationshipPolicy: JSON.parse(row.relationship_policy_json) as RelationshipSettings,
     estimatedTokens: row.estimated_tokens,
+    ...(row.allocation_json
+      ? { allocation: JSON.parse(row.allocation_json) as UserContextPlan['allocation'] }
+      : {}),
     ...(row.outcome_id ? { outcomeId: row.outcome_id } : {}),
     ...(row.run_id ? { runId: row.run_id } : {}),
     createdAt: row.created_at,
@@ -69,8 +74,8 @@ export class ContextCompiler {
         `INSERT INTO context_snapshots (
           snapshot_id, trace_id, session_key, query, selected_items_json,
           rejected_items_json, consent_requests_json, relationship_policy_json,
-          estimated_tokens, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          estimated_tokens, allocation_json, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         id,
         input.plan.traceId,
@@ -81,6 +86,7 @@ export class ContextCompiler {
         JSON.stringify(input.plan.consentRequests),
         JSON.stringify(getRelationshipSettings()),
         input.plan.estimatedTokens,
+        input.plan.allocation ? JSON.stringify(input.plan.allocation) : null,
         now,
       );
     });

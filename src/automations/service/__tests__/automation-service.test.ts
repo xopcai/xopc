@@ -401,7 +401,7 @@ describe('AutomationService', () => {
 
     const completed = runs.find((item) => item.id === queued.id);
     expect(completed?.summary).toContain('Automation safety mode: Suggest only.');
-    expect(completed?.summary).toContain('Do not modify files, notes, goals, workflows, external systems, or persistent state.');
+    expect(completed?.summary).toContain('Do not modify files, notes, Outcomes, workflows, external systems, or persistent state.');
   });
 
   it('does not start workflows in suggest-only safety mode', async () => {
@@ -440,24 +440,24 @@ describe('AutomationService', () => {
       name: 'Goal stalled helper',
       trigger: {
         kind: 'event',
-        eventType: 'goal.status_changed',
-        source: 'goals',
+        eventType: 'outcome.status_changed',
+        source: 'outcomes',
         payloadMatch: { status: 'blocked' },
       },
       action: { kind: 'agent', instruction: 'analyze the blocked goal' },
     });
 
     const ignored = await service.triggerEvent({
-      type: 'goal.status_changed',
-      source: 'goals',
+      type: 'outcome.status_changed',
+      source: 'outcomes',
       payload: { status: 'active' },
     });
     expect(ignored).toHaveLength(0);
 
     const started = await service.triggerEvent({
-      type: 'goal.status_changed',
-      source: 'goals',
-      payload: { status: 'blocked', goalId: 'goal-1' },
+      type: 'outcome.status_changed',
+      source: 'outcomes',
+      payload: { status: 'blocked', outcomeId: 'goal-1' },
     });
     expect(started).toHaveLength(1);
 
@@ -470,20 +470,20 @@ describe('AutomationService', () => {
     const events = await service.listRunEvents(started[0]!.id);
     expect(events[0]).toMatchObject({
       type: 'run.queued',
-      message: 'Event goal.status_changed queued automation',
+      message: 'Event outcome.status_changed queued automation',
     });
 
     const productRuns = await service.listRunsForProductEvent({
-      eventType: 'goal.status_changed',
-      source: 'goals',
-      payloadKey: 'goalId',
+      eventType: 'outcome.status_changed',
+      source: 'outcomes',
+      payloadKey: 'outcomeId',
       payloadValue: 'goal-1',
     });
     expect(productRuns).toHaveLength(1);
     expect(productRuns[0]!.run.id).toBe(started[0]!.id);
     expect(productRuns[0]!.triggerEvent).toMatchObject({
       type: 'run.queued',
-      message: 'Event goal.status_changed queued automation',
+      message: 'Event outcome.status_changed queued automation',
     });
 
     const rerun = await service.rerunFromRun(started[0]!.id);
@@ -492,9 +492,9 @@ describe('AutomationService', () => {
       (items) => items.some((item) => item.id === rerun.id && item.status === 'succeeded'),
     );
     const productRunsAfterRerun = await service.listRunsForProductEvent({
-      eventType: 'goal.status_changed',
-      source: 'goals',
-      payloadKey: 'goalId',
+      eventType: 'outcome.status_changed',
+      source: 'outcomes',
+      payloadKey: 'outcomeId',
       payloadValue: 'goal-1',
     });
     expect(productRunsAfterRerun.map((item) => item.run.id)).toContain(rerun.id);

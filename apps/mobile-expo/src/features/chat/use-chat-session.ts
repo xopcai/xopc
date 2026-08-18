@@ -236,8 +236,6 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
       queryKey: queryKeys.sessionHistory(targetSessionKey, activeGatewayId),
     });
     invalidateSessionLists(queryClient);
-    void queryClient.invalidateQueries({ queryKey: queryKeys.webchatGoal(targetSessionKey) });
-    void queryClient.invalidateQueries({ queryKey: queryKeys.webchatGoalRuns(targetSessionKey, 1) });
   }, [activeGatewayId, queryClient]);
 
   const refreshSessionHeadByKey = useCallback(async (targetSessionKey: string) => {
@@ -255,8 +253,6 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
       (oldData) => mergeLatestSessionHistoryPage(oldData, latestPage),
     );
     invalidateSessionLists(queryClient);
-    void queryClient.invalidateQueries({ queryKey: queryKeys.webchatGoal(targetSessionKey) });
-    void queryClient.invalidateQueries({ queryKey: queryKeys.webchatGoalRuns(targetSessionKey, 1) });
   }, [activeGatewayId, invalidateSessionByKey, queryClient]);
 
   const invalidateSession = useCallback(() => {
@@ -868,10 +864,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     return subscribeGatewayEvent('session-updated', (detail) => {
       const key = (detail as { key?: string }).key;
       if (!key || key !== sessionKey) return;
-      // Avoid invalidating goal queries on every transcript tick while agent is streaming.
       if (streamingRef.current || sendingRef.current || awaitingSessionRefresh) return;
-      void queryClient.invalidateQueries({ queryKey: queryKeys.webchatGoal(sessionKey) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.webchatGoalRuns(sessionKey, 1) });
     });
   }, [queryClient, sessionKey, awaitingSessionRefresh]);
 

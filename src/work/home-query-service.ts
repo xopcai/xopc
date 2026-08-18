@@ -9,7 +9,6 @@ import {
 } from '../automations/index.js';
 import type { AutomationService } from '../automations/service/automation-service.js';
 import type { Config } from '../config/schema.js';
-import { GoalService, type GoalWithDetails } from '../goals/index.js';
 import type { NotesService } from '../notes/service.js';
 import type { ProactiveInboxService } from '../proactive/inbox/service.js';
 import type { ProjectService } from '../projects/project-service.js';
@@ -26,6 +25,7 @@ import { WorkItemService } from '../work-items/index.js';
 import { OutcomeReceiptService } from './outcome-receipt-service.js';
 import { OutcomeRepository } from './outcome-repository.js';
 import { AttentionGovernor } from './attention-governor.js';
+import { OutcomeExecutionStateRepository, type OutcomeExecutionState } from './outcome-execution-state.js';
 
 type HomeDecision = WorkHomeResponse['decisions'][number];
 type HomeAttention = WorkHomeResponse['attention'][number];
@@ -203,19 +203,23 @@ function attentionDetail(
     : 'The workflow did not complete. Review the details and retry.';
 }
 
-export function decisionFromGoal(goal: GoalWithDetails, projectName?: string): HomeDecision | null {
-  if (goal.status !== 'needs_input' && goal.status !== 'blocked') return null;
+export function decisionFromOutcome(
+  outcome: { id: string; objective: string; internalStatus: string; updatedAt: number },
+  execution: OutcomeExecutionState,
+  projectName?: string,
+): HomeDecision | null {
+  if (outcome.internalStatus !== 'needs_user' && outcome.internalStatus !== 'blocked') return null;
   return {
-    id: `goal:${goal.id}`,
-    kind: 'goal',
-    title: goal.title,
-    detail: goal.blockedReason || goal.nextAction,
-    reason: goal.status,
+    id: `outcome:${outcome.id}`,
+    kind: 'outcome',
+    title: outcome.objective,
+    detail: execution.blockedReason || execution.nextAction,
+    reason: outcome.internalStatus === 'needs_user' ? 'needs_input' : 'blocked',
     urgency: 'now',
-    href: `/work/${encodeURIComponent(goal.outcomeId)}`,
-    projectId: goal.projectId,
+    href: `/work/${encodeURIComponent(outcome.id)}`,
+    projectId: execution.projectId,
     projectName,
-    updatedAt: goal.updatedAt,
+    updatedAt: Math.max(outcome.updatedAt, execution.updatedAt),
   };
 }
 
@@ -255,13 +259,13 @@ export function buildHomeBriefing(input: {
   attention: HomeAttention[];
   activeWorkCount: number;
   activeWorkflowCount: number;
-  activeGoalCount: number;
+  activeOutcomeCount: number;
   wins: HomeBriefingWin[];
   nextScheduled?: HomeAutomation;
   nowMs: number;
 }) {
   const isChinese = input.locale?.toLowerCase().startsWith('zh') ?? false;
-  const movingCount = input.activeWorkCount + input.activeWorkflowCount + input.activeGoalCount;
+  const movingCount = input.activeWorkCount + input.activeWorkflowCount + input.activeOutcomeCount;
   const attentionCount = input.decisions.length + input.attention.length;
   const summary = attentionCount > 0
     ? isChinese
@@ -285,7 +289,7 @@ export function buildHomeBriefing(input: {
     progress: {
       activeWorkCount: input.activeWorkCount,
       activeWorkflowCount: input.activeWorkflowCount,
-      activeGoalCount: input.activeGoalCount,
+      activeOutcomeCount: input.activeOutcomeCount,
       movingCount,
     },
     wins: input.wins.slice(0, 5),
@@ -294,7 +298,7 @@ export function buildHomeBriefing(input: {
 }
 
 export class WorkHomeQueryService {
-  readonly #goals = new GoalService();
+  readonly #executions = new OutcomeExecutionStateRepository();
   readonly #receipts = new OutcomeReceiptService();
   readonly #outcomes = new OutcomeRepository();
   readonly #attentionGovernor = new AttentionGovernor();
@@ -315,7 +319,7 @@ export class WorkHomeQueryService {
     const outcomes = this.#outcomes.list({ limit: 60 });
 
     const [recentlyOpened, inbox, pendingTasks, recentSessions, workflowRuns, automations,
-      automationRuns, projects, allWorkItems, activeGoals, connectorApprovals] = await Promise.all([
+      automationRuns, projects, allWorkItems, connectorApprovals] = await Promise.all([
       notes.listNotes({ sortBy: 'lastOpenedAt', sortOrder: 'desc', limit: 10 }),
       notes.listNotes({ status: 'inbox', limit: 0 }),
       notes.listNotes({ pendingTasksOnly: true, sortBy: 'createdAt', sortOrder: 'desc', limit: 10 }),
@@ -325,9 +329,10 @@ export class WorkHomeQueryService {
       this.service.automationServiceInstance.listRuns({ limit: 10 }),
       this.service.projects.list({ limit: 500 }),
       Promise.resolve(workItems.listWorkItems({ limit: 100 })),
-      Promise.resolve(this.#goals.list({ status: ['active', 'blocked', 'needs_input', 'paused'], limit: 100 })),
       Promise.resolve(listConnectorApprovals({ principalId: 'local-owner', status: 'pending', limit: 100 })),
     ]);
+    const executionsByOutcomeId = new Map(this.#executions.list(100).map((execution) => [execution.outcomeId, execution]));
+    const activeOutcomes = outcomes.filter((outcome) => outcome.internalStatus !== 'completed' && outcome.internalStatus !== 'cancelled');
     const projectsById = new Map(projects.items.map((project) => [project.id, project]));
     const workChats = recentSessions.items
       .filter((session) => (session.messageCount ?? 0) > 0)
@@ -400,8 +405,13 @@ export class WorkHomeQueryService {
       ...activeWorkItems
         .map((item) => decisionFromWorkItem(item, projectsById.get(item.projectId)?.name ?? 'Project', nowMs))
         .filter((item): item is HomeDecision => Boolean(item)),
-      ...activeGoals
-        .map((goal) => decisionFromGoal(goal, goal.projectId ? projectsById.get(goal.projectId)?.name : undefined))
+      ...activeOutcomes
+        .map((outcome) => {
+          const execution = executionsByOutcomeId.get(outcome.id);
+          return execution
+            ? decisionFromOutcome(outcome, execution, execution.projectId ? projectsById.get(execution.projectId)?.name : undefined)
+            : null;
+        })
         .filter((item): item is HomeDecision => Boolean(item)),
       ...connectorApprovals
         .filter((approval) => Date.parse(approval.expiresAt) > nowMs)
@@ -489,7 +499,7 @@ export class WorkHomeQueryService {
       attention,
       activeWorkCount: activeWorkItems.filter((item) => item.status === 'in_progress').length,
       activeWorkflowCount: activeWorkflowRuns.length,
-      activeGoalCount: activeGoals.filter((goal) => goal.status === 'active').length,
+      activeOutcomeCount: activeOutcomes.length,
       wins,
       nextScheduled: upcomingAutomations[0],
       nowMs,

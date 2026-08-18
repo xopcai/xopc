@@ -209,6 +209,9 @@ export function createAgentStreamMessagingCallbacks(opts: {
         updateToolDetails(msg.content, toolName, toolCallId, details);
       });
     },
+    onTaskPlanUpdated: (taskPlan) => {
+      store().setSessionTaskPlan(chatId, taskPlan);
+    },
     onReview: ({ review }) => {
       beforeAssistantDelta();
       store().mutateSessionStreaming(chatId, (msg) => {

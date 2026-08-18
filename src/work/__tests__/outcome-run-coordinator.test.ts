@@ -3,12 +3,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { GoalService } from '../../goals/index.js';
 import {
   closeXopcDatabase,
   ensureSessionRecord,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
+  updateExecutionReceipt,
 } from '../../storage/sqlite/index.js';
 import { OutcomeExecutionService } from '../outcome-execution-service.js';
 import { OutcomeRepository } from '../outcome-repository.js';
@@ -29,26 +29,15 @@ describe('OutcomeRunCoordinator', () => {
     rmSync(stateDir, { recursive: true, force: true });
   });
 
-  it('accepts only criteria completed by the independent goal judge', () => {
+  it('accepts only criteria completed by the independent outcome judge', () => {
     const sessionKey = 'agent:main:webchat:default:direct:outcome-run';
     ensureSessionRecord(sessionKey, stateDir);
     const criterion = 'The regression suite passes.';
-    const goals = new GoalService();
     const execution = new OutcomeExecutionService().create({
       objective: 'Ship a verified change',
       agentId: 'main',
-      maxTurns: 10,
       source: 'api',
       acceptanceCriteria: [criterion],
-    });
-    const goal = execution.goal;
-    const checklistItem = goals.get(goal.id)?.checklist[0];
-    expect(checklistItem).toBeDefined();
-    goals.updateChecklist(goal.id, {
-      type: 'mark',
-      itemId: checklistItem!.id,
-      status: 'completed',
-      evidenceSummary: 'A separate judge reviewed the run transcript and test evidence.',
     });
     const outcomeId = execution.outcomeId;
     const coordinator = OutcomeRunCoordinator.start({
@@ -59,12 +48,23 @@ describe('OutcomeRunCoordinator', () => {
         sessionKey,
         channel: 'webchat',
         outcomeId,
-        goalId: goal.id,
-        origin: 'goal',
+        origin: 'outcome',
         triggerKind: 'user',
       },
     });
     coordinator.capturePlan([{ title: criterion, status: 'completed' }]);
+    updateExecutionReceipt({
+      runId: 'run-1',
+      evidence: [{
+        kind: 'state',
+        title: `Independently verified: ${criterion}`,
+        summary: 'A separate judge reviewed the run transcript and test evidence.',
+        verifies: [criterion],
+        provenance: 'judge',
+        strength: 'verified',
+        observedAt: Date.now(),
+      }],
+    });
 
     const receipt = coordinator.finalize({ status: 'succeeded', summary: 'Run completed.' });
 
@@ -99,7 +99,7 @@ describe('OutcomeRunCoordinator', () => {
       sessionKey,
       channel: 'webchat',
       outcomeId: outcome.id,
-      origin: 'goal' as const,
+      origin: 'outcome' as const,
       triggerKind: 'user' as const,
     };
     const first = OutcomeRunCoordinator.start({ runId: 'attempt-1', context, fallbackObjective: outcome.objective });

@@ -50,6 +50,8 @@ export const WorkIntakeProposalSchema = z.object({
     acceptanceCriteria: z.array(z.string()),
     constraints: z.array(z.string()),
     approvalRequired: z.array(z.string()),
+    assumptions: z.array(z.string()),
+    risks: z.array(z.string()),
   }),
   expiresAt: z.number(),
 });
@@ -70,7 +72,6 @@ export const WorkIntakeConfirmRequestSchema = z.object({
 export const ConfirmedWorkSchema = z.object({
   outcomeId: z.string(),
   projectId: z.string().optional(),
-  goalId: z.string(),
   sessionKey: z.string().optional(),
   execution: z.object({
     mode: WorkExecutionModeSchema,

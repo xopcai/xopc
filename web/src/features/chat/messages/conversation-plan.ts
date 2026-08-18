@@ -1,4 +1,5 @@
 import type { Message, MessageContent, ToolUseContent } from '@/features/chat/messages/messages.types';
+import type { TaskPlanState } from '@/features/chat/messages/message-sender';
 import { parseToolResult } from '@/features/chat/tool-results/parse-tool-result';
 
 export type ConversationPlanItemStatus =
@@ -30,6 +31,15 @@ export type ConversationPlanSnapshot = {
   plan: ConversationPlan;
   changeSummary: ConversationChangeSummary | null;
 };
+
+export function conversationPlanFromTaskPlanState(state: TaskPlanState): ConversationPlan | null {
+  const plan = finalizePlan(state.source, state.explanation, state.items.map((item) => ({ ...item })));
+  if (!plan) return null;
+  const hasOpenItem = plan.items.some(
+    (item) => item.status === 'pending' || item.status === 'in_progress',
+  );
+  return hasOpenItem ? plan : null;
+}
 
 const PLAN_STATUSES = new Set<ConversationPlanItemStatus>([
   'pending',
@@ -205,4 +215,20 @@ export function extractLatestConversationPlan(
     };
   }
   return null;
+}
+
+/** Structured plan belonging to the currently active user turn only. */
+export function extractActiveTurnConversationPlan(
+  sessionMessages: readonly Message[],
+  turnActive: boolean,
+): ConversationPlanSnapshot | null {
+  if (!turnActive) return null;
+  let turnStart = -1;
+  for (let index = sessionMessages.length - 1; index >= 0; index -= 1) {
+    if (sessionMessages[index]?.role === 'user') {
+      turnStart = index;
+      break;
+    }
+  }
+  return extractLatestConversationPlan(sessionMessages.slice(turnStart + 1));
 }

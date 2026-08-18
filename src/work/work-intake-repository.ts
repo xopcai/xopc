@@ -22,7 +22,6 @@ type WorkIntakeRow = {
   status: WorkIntakeStatus;
   execution_mode: WorkExecutionMode;
   project_id: string | null;
-  goal_id: string | null;
   outcome_id: string | null;
   queue_id: string | null;
   expires_at: number;
@@ -40,7 +39,6 @@ export interface StoredWorkIntake {
   status: WorkIntakeStatus;
   executionMode: WorkExecutionMode;
   projectId?: string;
-  goalId?: string;
   outcomeId?: string;
   queueId?: string;
   createdAt: number;
@@ -58,7 +56,6 @@ function fromRow(row: WorkIntakeRow): StoredWorkIntake {
     status: row.status,
     executionMode: row.execution_mode,
     ...(row.project_id ? { projectId: row.project_id } : {}),
-    ...(row.goal_id ? { goalId: row.goal_id } : {}),
     ...(row.outcome_id ? { outcomeId: row.outcome_id } : {}),
     ...(row.queue_id ? { queueId: row.queue_id } : {}),
     createdAt: row.created_at,
@@ -142,7 +139,6 @@ export class WorkIntakeRepository {
     intakeId: string;
     executionMode: WorkExecutionMode;
     projectId?: string;
-    goalId: string;
     outcomeId: string;
     sessionKey?: string;
     queueId?: string;
@@ -151,14 +147,13 @@ export class WorkIntakeRepository {
     const now = input.now ?? Date.now();
     getSqliteDatabase().prepare(
       `UPDATE work_intakes SET
-        status = 'confirmed', execution_mode = ?, project_id = ?, goal_id = ?,
+        status = 'confirmed', execution_mode = ?, project_id = ?,
         outcome_id = ?, session_key = COALESCE(?, session_key), queue_id = ?,
         confirmed_at = COALESCE(confirmed_at, ?), updated_at = ?
        WHERE intake_id = ? AND status = 'proposed'`,
     ).run(
       input.executionMode,
       input.projectId ?? null,
-      input.goalId,
       input.outcomeId,
       input.sessionKey ?? null,
       input.queueId ?? null,
@@ -188,18 +183,16 @@ export class WorkIntakeRepository {
     if (
       stored.status !== 'confirmed'
       || !stored.outcomeId
-      || !stored.goalId
     ) return undefined;
     const queue = stored.queueId
       ? getSqliteDatabase()
-        .prepare('SELECT status, session_key FROM goal_queue WHERE queue_id = ?')
+        .prepare('SELECT status, session_key FROM outcome_queue WHERE queue_id = ?')
         .get(stored.queueId) as { status: ConfirmedWork['execution']['status']; session_key: string | null } | undefined
       : undefined;
     const sessionKey = queue?.session_key ?? stored.sessionKey;
     return {
       outcomeId: stored.outcomeId,
       ...(stored.projectId ? { projectId: stored.projectId } : {}),
-      goalId: stored.goalId,
       ...(sessionKey ? { sessionKey } : {}),
       execution: {
         mode: stored.executionMode,

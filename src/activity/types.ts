@@ -3,7 +3,7 @@ export type ActivityObjectKind =
   | 'note'
   | 'work_item'
   | 'session'
-  | 'goal'
+  | 'outcome'
   | 'workflow_run'
   | 'automation';
 
@@ -35,8 +35,8 @@ export type ActivityEventType =
   | 'session.attached_to_project'
   | 'session.detached_from_project'
   | 'session.renamed'
-  | 'goal.created'
-  | 'goal.status_changed'
+  | 'outcome.created'
+  | 'outcome.status_changed'
   | 'workflow_run.started'
   | 'workflow_run.completed'
   | 'automation.run_started'

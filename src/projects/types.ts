@@ -22,8 +22,8 @@ export interface Project {
 
 export interface ProjectWithDetails extends Project {
   sessionCount: number;
-  goalCount: number;
-  activeGoalCount: number;
+  outcomeCount: number;
+  activeOutcomeCount: number;
   recentSessions: Array<{
     key: string;
     name?: string;

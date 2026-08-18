@@ -31,6 +31,8 @@ describe('toOutcomeReceipt', () => {
         acceptanceCriteria: ['Tests pass'],
         constraints: [],
         approvalRequired: [],
+        assumptions: [],
+        risks: [],
       },
       nextAction: 'Run the release job',
       verification: {

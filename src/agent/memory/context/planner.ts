@@ -22,8 +22,8 @@ import type {
   UserContextRejectionReason,
 } from './types.js';
 
-const MAX_CONTEXT_CHARS = 6_000;
-const MAX_RESULTS = 8;
+const DEFAULT_MAX_CONTEXT_CHARS = 12_000;
+const DEFAULT_MAX_RESULTS = 12;
 const BASELINE_KINDS = [
   'boundary',
   'preference',
@@ -114,19 +114,30 @@ export class UserContextPlanner {
     query: string;
     userMessage: AgentMessage;
     excludedRecordIds?: string[];
+    allocation?: UserContextPlan['allocation'];
   }): Promise<UserContextPlan> {
     const traceId = randomUUID();
     const query = params.query.trim();
     if (!query) {
-      return { traceId, modelMessage: params.userMessage, items: [], rejected: [], consentRequests: [], estimatedTokens: 0 };
+      return {
+        traceId,
+        modelMessage: params.userMessage,
+        items: [],
+        rejected: [],
+        consentRequests: [],
+        estimatedTokens: 0,
+        allocation: params.allocation,
+      };
     }
+    const maxResults = params.allocation?.maxResults ?? DEFAULT_MAX_RESULTS;
+    const maxContextChars = params.allocation?.maxChars ?? DEFAULT_MAX_CONTEXT_CHARS;
     const started = Date.now();
     const scope = { userId: 'local-owner', sessionKey: params.sessionKey };
     const [taskResults, baselineLists] = await Promise.all([
       params.memoryManager.search({
         query,
         scope,
-        maxResults: MAX_RESULTS,
+        maxResults,
         minScore: 0.15,
       }).catch(() => []),
       Promise.all(BASELINE_KINDS.map((kind) => (
@@ -161,7 +172,7 @@ export class UserContextPlanner {
       .map((result) => ({ result, score: scoreResult(result, now) }))
       .sort((a, b) => b.score - a.score)
       .filter((entry, index, all) => all.findIndex((candidate) => candidate.result.record.id === entry.result.record.id) === index)
-      .slice(0, MAX_RESULTS);
+      .slice(0, maxResults);
     const items: PlannedUserContextItem[] = [];
     let usedChars = 0;
     for (const { result, score } of ranked) {
@@ -185,7 +196,7 @@ export class UserContextPlanner {
         continue;
       }
       const content = result.snippet.trim();
-      if (usedChars + content.length > MAX_CONTEXT_CHARS) {
+      if (usedChars + content.length > maxContextChars) {
         rejected.push({ recordId: result.record.id, reason: 'budget' });
         continue;
       }
@@ -252,6 +263,7 @@ export class UserContextPlanner {
       rejected,
       consentRequests,
       estimatedTokens: Math.ceil(block.length / 4),
+      allocation: params.allocation,
     };
   }
 }

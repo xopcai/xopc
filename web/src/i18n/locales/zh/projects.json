@@ -1,11 +1,11 @@
 {
   "projectsPage": {
     "title": "工作台",
-    "summary": "{{count}} 个工作空间 · 集中查看跨会话、目标和任务的持续工作",
+    "summary": "{{count}} 个工作空间 · 集中查看跨会话、结果和任务的持续工作",
     "searchPlaceholder": "搜索项目",
     "create": "创建",
     "createTitle": "创建项目",
-    "createDescription": "把相关会话、目标和工作区上下文归到一起，不改变 agent 本身行为。",
+    "createDescription": "把相关会话、结果和工作区上下文归到一起，不改变 agent 本身行为。",
     "projectName": "项目名称",
     "workspaceRoot": "项目工作区",
     "workspacePlaceholder": "Agent 默认工作区",
@@ -53,9 +53,8 @@
       "decisionKinds": {
         "agent_judgment": "AI 主动判断",
         "work_item": "工作事项",
-        "goal": "持续目标",
-        "connector_approval": "连接器操作",
-        "goal_evidence": "完成证据"
+        "outcome": "结果",
+        "connector_approval": "连接器操作"
       },
       "decisionReasons": {
         "decision_needed": "需要你决策",
@@ -175,7 +174,6 @@
       "work": "工作",
       "workItems": "工作事项",
       "sessions": "会话",
-      "goals": "目标",
       "workflows": "工作流",
       "files": "文件",
       "activity": "活动",
@@ -258,11 +256,11 @@
     },
     "overview": {
       "directionTitle": "项目方向",
-      "directionFallback": "补充项目简介或创建目标，让下一步更明确。",
+      "directionFallback": "补充项目简介或定义结果，让下一步更明确。",
       "saveDigest": "保存摘要",
       "savingDigest": "保存中",
       "sessions": "会话",
-      "activeGoals": "活跃目标",
+      "activeOutcomes": "活跃结果",
       "recentWorkflowRuns": "近期工作流运行",
       "nextActions": "下一步",
       "recentResults": "最近结果",
@@ -274,12 +272,12 @@
         "failed": "未达成",
         "cancelled": "已取消"
       },
-      "goal": "目标",
+      "outcome": "结果",
       "recommendedNext": "下一步：{{action}}",
-      "noNextActions": "还没有下一步。可以先创建目标，或继续项目会话来明确方向。",
+      "noNextActions": "还没有下一步。可以先创建结果，或继续项目会话来明确方向。",
       "noNextAction": "尚未设置下一步。",
-      "staleGoals": "停滞目标",
-      "noActiveGoals": "当前项目暂无活跃目标。",
+      "staleOutcomes": "停滞结果",
+      "noActiveOutcomes": "当前项目暂无活跃结果。",
       "recentSessions": "最近会话",
       "noSessions": "暂无会话。",
       "workflowRuns": "工作流运行",
@@ -288,7 +286,7 @@
       "noTimeline": "暂无项目活动。",
       "timelineKinds": {
         "session": "会话",
-        "goal": "目标",
+        "outcome": "结果",
         "workflow": "工作流",
         "memory": "记忆"
       },
@@ -297,11 +295,11 @@
       "noBrief": "暂无简介。",
       "attention": "需关注",
       "attentionKinds": {
-        "blocked_goal": "受阻目标",
-        "stale_goal": "停滞目标",
+        "blocked_outcome": "受阻结果",
+        "stale_outcome": "停滞结果",
         "failed_workflow": "失败工作流"
       },
-      "noBlockedGoals": "暂无受阻目标。",
+      "noBlockedOutcomes": "暂无受阻结果。",
       "blockerTitlePlaceholder": "新增 blocker",
       "blockerReasonPlaceholder": "原因或依赖",
       "addBlocker": "添加 blocker",
@@ -348,7 +346,7 @@
       },
       "linkKinds": {
         "chat": "会话",
-        "goal": "目标",
+        "outcome": "结果",
         "workflow_run": "工作流",
         "automation": "自动化",
         "note": "笔记"
@@ -361,7 +359,7 @@
         "attachment_added": "已添加附件",
         "attachment_removed": "已移除附件",
         "chat_started": "已启动会话",
-        "goal_created": "已创建目标",
+        "outcome_created": "已创建结果",
         "workflow_started": "已启动工作流",
         "automation_added": "已添加自动化",
         "link_added": "已关联记录",
@@ -372,9 +370,9 @@
       },
       "feedback": {
         "createdTitle": "工作项已创建",
-        "createdNext": "下一步可以启动会话推进，或创建目标把它纳入持续跟进。",
+        "createdNext": "下一步可以启动会话推进，或创建结果把它纳入持续跟进。",
         "savedTitle": "修改已保存",
-        "savedNext": "下一步可以启动会话继续处理，或创建目标跟踪后续进展。"
+        "savedNext": "下一步可以启动会话继续处理，或创建结果跟踪后续进展。"
       },
       "create": {
         "short": "新建",
@@ -410,7 +408,7 @@
         "save": "保存修改",
         "openItem": "打开工作项",
         "startChat": "启动会话",
-        "createGoal": "创建目标",
+        "createOutcome": "创建结果",
         "workflowTitle": "任务模板",
         "workflowHint": "用这个工作项的上下文启动工作流，运行记录会回写到关联工作。",
         "workflowTemplate": "模板",
@@ -419,7 +417,7 @@
         "startWorkflow": "启动模板",
         "noWorkflowTemplates": "暂无可用任务模板。",
         "links": "关联工作",
-        "noLinks": "还没有关联会话、目标或运行记录。",
+        "noLinks": "还没有关联会话、结果或运行记录。",
         "activity": "活动记录",
         "noActivity": "暂无活动。"
       }
@@ -435,7 +433,7 @@
       "emptyDefinitions": "暂无可用工作流。",
       "browseAll": "浏览全部工作流",
       "contextTitle": "运行上下文",
-      "contextHint": "项目工作流会继承所选 agent、项目工作区、简介、指令和活跃目标。"
+      "contextHint": "项目工作流会继承所选 agent、项目工作区、简介、指令和活跃结果。"
     },
     "automations": {
       "title": "项目自动化",
@@ -478,8 +476,8 @@
         "work_item.link_added": "工作项已关联记录",
         "session.attached_to_project": "会话已绑定",
         "session.detached_from_project": "会话已解绑",
-        "goal.created": "目标已创建",
-        "goal.status_changed": "目标状态已变更",
+        "outcome.created": "结果已创建",
+        "outcome.status_changed": "结果状态已变更",
         "workflow_run.started": "工作流运行已启动",
         "workflow_run.completed": "工作流运行已完成",
         "automation.run_started": "自动化运行已启动",
@@ -490,7 +488,7 @@
         "note": "笔记",
         "work_item": "工作项",
         "session": "会话",
-        "goal": "目标",
+        "outcome": "结果",
         "workflow_run": "工作流运行",
         "automation": "自动化"
       }
@@ -539,14 +537,14 @@
       "needWorkspace": "先设置项目工作区，才能浏览项目文件。",
       "openSettings": "打开设置",
       "boundaryTitle": "工作区边界",
-      "boundaryHint": "这里只展示项目工作区内的文件。会话、目标和工作流运行也使用同一个根目录。",
+      "boundaryHint": "这里只展示项目工作区内的文件。会话、结果和工作流运行也使用同一个根目录。",
       "nextStepTitle": "下一步",
       "nextStepHint": "需要 agent 检查或修改这个工作区时，可以启动项目工作流。"
     },
     "sessions": {
       "empty": "当前项目暂无会话。",
       "emptyTitle": "还没有项目会话",
-      "emptyDescription": "从页面顶部的新建会话启动后，相关工作、目标和摘要会归在一起。",
+      "emptyDescription": "从页面顶部的新建会话启动后，相关工作、结果和摘要会归在一起。",
       "searchPlaceholder": "搜索会话",
       "clearSearch": "清除会话搜索",
       "noMatches": "没有匹配的会话",
@@ -556,13 +554,6 @@
       "updated": "更新",
       "meta": "{{agent}} · {{messages}}",
       "metaWithTime": "{{agent}} · {{messages}} · {{time}}"
-    },
-    "goals": {
-      "title": "目标",
-      "hint": "从这里创建的目标会保持绑定到当前项目。",
-      "new": "新建目标",
-      "empty": "当前项目暂无目标。",
-      "noNextAction": "尚未设置下一步。"
     },
     "settings": {
       "summaryTitle": "项目设置",
@@ -587,11 +578,11 @@
       "openWorkspace": "打开文件夹",
       "copyWorkspacePath": "复制路径",
       "migrateWorkspace": "迁移工作区",
-      "workspaceMigrationHint": "项目会话、目标、文件、工作流运行和自动化默认使用这个目录。迁移工作区会影响之后的新上下文，历史记录不会自动改写。",
+      "workspaceMigrationHint": "项目会话、结果、文件、工作流运行和自动化默认使用这个目录。迁移工作区会影响之后的新上下文，历史记录不会自动改写。",
       "workspaceMigrationTitle": "迁移项目工作区",
       "workspaceMigrationDescription": "只有在项目确实移动到新目录，或需要改为跟随 Agent 默认工作区时才迁移。",
       "workspaceMigrationFixedHint": "保存为项目自己的固定路径，之后不受 Agent 切换影响。",
-      "workspaceMigrationImpact": "迁移后，后续会话、目标和工作流将使用新目录；原目录中的文件不会移动，历史会话也不会自动改写。",
+      "workspaceMigrationImpact": "迁移后，后续会话、结果和工作流将使用新目录；原目录中的文件不会移动，历史会话也不会自动改写。",
       "workspaceMigrationConfirm": "确认迁移",
       "createdAt": "创建时间",
       "updatedAt": "更新时间",
@@ -607,17 +598,17 @@
       "pinProject": "置顶项目",
       "unpinProject": "取消置顶",
       "archiveTitle": "归档项目",
-      "archiveHint": "归档后项目会从活跃视图移出，但会话、目标和文件关联仍会保留。",
+      "archiveHint": "归档后项目会从活跃视图移出，但会话、结果和文件关联仍会保留。",
       "archiveProject": "归档项目",
       "restoreTitle": "恢复归档项目",
-      "restoreHint": "恢复后项目会回到活跃视图，并可继续创建会话、目标和工作流。",
+      "restoreHint": "恢复后项目会回到活跃视图，并可继续创建会话、结果和工作流。",
       "restoreProject": "恢复项目",
       "dangerTitle": "危险操作",
-      "dangerHint": "移除项目会解除会话、目标、工作流、自动化和记忆的项目分组；本地文件不会被删除。",
+      "dangerHint": "移除项目会解除会话、结果、工作流、自动化和记忆的项目分组；本地文件不会被删除。",
       "projectGuidanceTitle": "项目说明与规则",
-      "projectGuidanceHint": "说明项目背景、目标和处理规则，帮助 Agent 稳定地理解并推进工作。",
+      "projectGuidanceHint": "说明项目背景、意图和处理规则，帮助 Agent 稳定地理解并推进工作。",
       "brief": "项目背景",
-      "briefHint": "提供给 Agent 的项目摘要，帮助它理解目标、范围、现状和关键约束。",
+      "briefHint": "提供给 Agent 的项目摘要，帮助它理解意图、范围、现状和关键约束。",
       "instructions": "Agent 工作指引",
       "instructionsHint": "告诉 Agent 在这个项目中应遵守的偏好、流程和边界。",
       "statuses": {
@@ -625,13 +616,13 @@
         "paused": "已暂停",
         "archived": "已归档"
       },
-      "deleteConfirm": "确定删除项目「{{name}}」？会话和目标会保留，但不再归属该项目。",
+      "deleteConfirm": "确定删除项目「{{name}}」？会话和结果会保留，但不再归属该项目。",
       "deleteConfirmTitle": "删除项目？",
-      "deleteConfirmFallback": "确定删除这个项目？会话和目标会保留，但不再归属该项目。",
+      "deleteConfirmFallback": "确定删除这个项目？会话和结果会保留，但不再归属该项目。",
       "deleteConfirmAction": "删除项目"
     },
     "goalDialog": {
-      "title": "新建项目目标",
+      "title": "新建项目结果",
       "close": "关闭",
       "titleLabel": "标题",
       "descriptionLabel": "描述",

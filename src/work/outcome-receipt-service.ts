@@ -33,7 +33,6 @@ export function toOutcomeReceipt(outcome: ExecutionReceipt): OutcomeReceipt {
     status: receiptStatus(outcome),
     summary: outcome.summary ?? (outcome.status === 'running' ? 'Work is in progress.' : 'Work finished without a summary.'),
     projectId: outcome.context.projectId,
-    goalId: outcome.context.goalId,
     workItemId: outcome.context.workItemId,
     origin: outcome.context.origin,
     triggerKind: outcome.context.triggerKind,

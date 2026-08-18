@@ -49,9 +49,9 @@ describe('mobile product delivery', () => {
   it('maps native and fallback destinations predictably', () => {
     expect(mobileProductRoute(delivery.primary!)).toBe('/work/work%2F1');
     expect(mobileProductRoute({
-      kind: 'goal',
-      id: 'goal-1',
-    })).toBe('/');
+      kind: 'outcome',
+      id: 'outcome-1',
+    })).toBe('/outcomes/outcome-1');
     expect(mobileRouteFromProductDeepLink(productReferenceDeepLink(delivery.primary!)))
       .toBe('/work/work%2F1');
   });

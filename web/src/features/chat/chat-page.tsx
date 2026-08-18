@@ -13,7 +13,10 @@ import { ChatWelcomeSpotlightSkeleton } from '@/features/chat/chat-welcome-spotl
 import { ChatPageHeaderRegistration } from '@/features/chat/chat-page-header-registration';
 import { ChatSseStatus } from '@/features/chat/agent-selection/chat-sse-status';
 import { ConversationPlanDock } from '@/features/chat/messages/conversation-plan-dock';
-import { extractLatestConversationPlan } from '@/features/chat/messages/conversation-plan';
+import {
+  conversationPlanFromTaskPlanState,
+  extractActiveTurnConversationPlan,
+} from '@/features/chat/messages/conversation-plan';
 import { MessageList } from '@/features/chat/messages/message-list';
 import { ScrollToBottomButton } from '@/features/chat/scroll/scroll-to-bottom-button';
 import { useChatScrollViewport } from '@/features/chat/scroll/use-chat-scroll-viewport';
@@ -541,8 +544,16 @@ export function ChatPage() {
   const compactWelcomeLayout =
     !showConversationLoading && msgSlice.items.length === 0 && !stream.streaming;
   const latestConversationPlan = useMemo(
-    () => extractLatestConversationPlan(msgSlice.items),
-    [msgSlice.items],
+    () => {
+      if (stream.taskPlan) {
+        const livePlan = conversationPlanFromTaskPlanState(stream.taskPlan);
+        if (!livePlan) return null;
+        const fallback = extractActiveTurnConversationPlan(msgSlice.items, stream.streaming);
+        return { plan: livePlan, changeSummary: fallback?.changeSummary ?? null };
+      }
+      return extractActiveTurnConversationPlan(msgSlice.items, stream.streaming);
+    },
+    [msgSlice.items, stream.streaming, stream.taskPlan],
   );
   const chatHeadline = useMemo(() => {
     const titleKey =

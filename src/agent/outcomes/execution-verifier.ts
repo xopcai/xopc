@@ -21,11 +21,20 @@ export interface ExecutionFailureDiagnosis {
 export function verifyExecutionCompletion(input: {
   status: 'succeeded' | 'failed' | 'cancelled';
   acceptanceCriteria: string[];
-  evidence: Array<{ title: string; verifies?: string[] }>;
+  startedAt: number;
+  evidence: Array<{
+    title: string;
+    verifies?: string[];
+    strength: 'observed' | 'verified';
+    observedAt: number;
+  }>;
 }): ExecutionVerification {
+  const normalize = (value: string) => value.trim().replace(/\s+/g, ' ').toLocaleLowerCase();
   const checks = input.acceptanceCriteria.map((criterion) => {
     const evidenceTitles = input.evidence
-      .filter((evidence) => evidence.verifies?.includes(criterion))
+      .filter((evidence) => evidence.strength === 'verified')
+      .filter((evidence) => evidence.observedAt >= input.startedAt)
+      .filter((evidence) => evidence.verifies?.some((item) => normalize(item) === normalize(criterion)))
       .map((evidence) => evidence.title);
     return {
       criterion,

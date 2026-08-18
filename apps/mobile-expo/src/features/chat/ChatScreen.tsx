@@ -67,7 +67,6 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
     modelName,
     displayMessages,
     welcomeModel,
-    isEmptyChat,
     composerDisabled,
     composerSuggestion,
     setComposerSuggestion,
@@ -92,7 +91,6 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
     handleAgentSelect,
     handleNewChat,
     handleStarterPrefill,
-    handleGoalShortcutPress,
     handleComposerSend,
     handleUserMessageCopy,
     handleUserMessageEdit,
@@ -250,7 +248,6 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
             sessionKey={sessionKey}
             disabled={composerDisabled}
             streaming={chat.streaming}
-            onPressGoalShortcut={isEmptyChat ? handleGoalShortcutPress : undefined}
             onSend={handleComposerSend}
             keyboardVisible={keyboardVisible}
             onSendVoice={(payload) => void chat.sendVoice(payload)}

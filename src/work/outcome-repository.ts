@@ -12,7 +12,6 @@ import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/
 
 export type OutcomeSubjectKind =
   | 'project'
-  | 'goal'
   | 'work_item'
   | 'session'
   | 'workflow'
@@ -47,6 +46,8 @@ type OutcomeContractRow = {
   acceptance_criteria_json: string;
   constraints_json: string;
   approval_required_json: string;
+  assumptions_json: string;
+  risks_json: string;
   context_snapshot_id: string | null;
   created_by: 'user' | 'system';
   created_at: number;
@@ -67,6 +68,8 @@ function contractFromRow(row: OutcomeContractRow): OutcomeContract {
     acceptanceCriteria: JSON.parse(row.acceptance_criteria_json) as string[],
     constraints: JSON.parse(row.constraints_json) as string[],
     approvalRequired: JSON.parse(row.approval_required_json) as string[],
+    assumptions: JSON.parse(row.assumptions_json) as string[],
+    risks: JSON.parse(row.risks_json) as string[],
     ...(row.context_snapshot_id ? { contextSnapshotId: row.context_snapshot_id } : {}),
     createdBy: row.created_by,
     createdAt: row.created_at,
@@ -97,6 +100,8 @@ export class OutcomeRepository {
     acceptanceCriteria?: string[];
     constraints?: string[];
     approvalRequired?: string[];
+    assumptions?: string[];
+    risks?: string[];
     contextSnapshotId?: string;
     createdBy?: 'user' | 'system';
     importance?: OutcomeImportance;
@@ -119,7 +124,8 @@ export class OutcomeRepository {
         `INSERT INTO outcome_contracts (
           outcome_id, version, objective, deliverables_json, acceptance_criteria_json,
           constraints_json, approval_required_json, context_snapshot_id, created_by, created_at
-        ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          , assumptions_json, risks_json
+        ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         id,
         objective,
@@ -130,6 +136,8 @@ export class OutcomeRepository {
         input.contextSnapshotId ?? null,
         input.createdBy ?? 'system',
         now,
+        JSON.stringify(input.assumptions ?? []),
+        JSON.stringify(input.risks ?? []),
       );
       for (const link of input.links ?? []) {
         this.addLink(id, link, now);
@@ -201,6 +209,8 @@ export class OutcomeRepository {
     acceptanceCriteria: string[];
     constraints: string[];
     approvalRequired: string[];
+    assumptions: string[];
+    risks: string[];
     contextSnapshotId?: string;
     createdBy: 'user' | 'system';
     now?: number;
@@ -216,7 +226,8 @@ export class OutcomeRepository {
         `INSERT INTO outcome_contracts (
           outcome_id, version, objective, deliverables_json, acceptance_criteria_json,
           constraints_json, approval_required_json, context_snapshot_id, created_by, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          , assumptions_json, risks_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         input.outcomeId,
         version,
@@ -228,6 +239,8 @@ export class OutcomeRepository {
         input.contextSnapshotId ?? null,
         input.createdBy,
         now,
+        JSON.stringify(input.assumptions),
+        JSON.stringify(input.risks),
       );
       db.prepare(
         `UPDATE outcomes SET objective = ?, latest_contract_version = ?, updated_at = ?

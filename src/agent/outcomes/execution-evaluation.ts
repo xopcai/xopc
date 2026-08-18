@@ -34,6 +34,7 @@ export function replayExecutionEvaluation(outcomes: ExecutionReceipt[]): Executi
       status: outcome.status,
       acceptanceCriteria: outcome.contract?.acceptanceCriteria ?? [],
       evidence: outcome.evidence,
+      startedAt: outcome.startedAt,
     });
     if (replayed.status !== outcome.verification.status) {
       cases.push({

@@ -13,6 +13,7 @@ export interface InteractionStateSignal {
 
 export function inferInteractionState(message: string): InteractionStateSignal {
   const text = message.trim().toLocaleLowerCase();
+  const emotion = text.match(/(焦虑|难过|委屈|生气|疲惫|累|害怕|孤独|anxious|sad|angry|exhausted|afraid|lonely)/)?.[1];
   if (/你.{0,6}(没|不).{0,6}(理解|懂)|别.{0,4}(建议|说教)|太(啰嗦|冷淡)|you (do not|don't) understand|stop giving (me )?advice|too verbose|too cold/.test(text)) {
     return {
       supportNeed: 'listen',
@@ -34,10 +35,15 @@ export function inferInteractionState(message: string): InteractionStateSignal {
   if (/你建议|怎么办|该怎么|给我建议|what should i do|what do you recommend|advice/.test(text)) {
     return { supportNeed: 'advise', confidence: 0.9, source: 'explicit', repairStatus: 'none' };
   }
-  if (/帮我(做|改|创建|实现|处理|发送)|请(完成|执行)|\b(build|fix|create|implement|send|run)\b/.test(text)) {
-    return { supportNeed: 'act', confidence: 0.85, source: 'explicit', repairStatus: 'none' };
+  if (/帮我.{0,8}(做|改|创建|实现|处理|发送|修好)|请(完成|执行)|\b(build|fix|create|implement|send|run)\b/.test(text)) {
+    return {
+      supportNeed: 'act',
+      ...(emotion ? { emotionHypothesis: emotion } : {}),
+      confidence: 0.85,
+      source: 'explicit',
+      repairStatus: 'none',
+    };
   }
-  const emotion = text.match(/(焦虑|难过|委屈|生气|疲惫|累|害怕|孤独|anxious|sad|angry|exhausted|afraid|lonely)/)?.[1];
   if (emotion) {
     return {
       supportNeed: 'listen',
@@ -55,12 +61,15 @@ export function buildInteractionStatePrompt(signal: InteractionStateSignal): str
     listen: 'Prioritize listening and acknowledgment. Do not rush into advice or an action list.',
     clarify: 'Help the user organize the situation with one focused question at a time.',
     advise: 'Offer a clear recommendation with concise reasoning and practical options.',
-    act: 'Prioritize execution, state the intended outcome, and verify the result.',
+    act: 'Prioritize execution, state the intended outcome, and verify the result. Care must support progress, not replace it.',
     unknown: 'Do not assume the support needed. If it matters, ask one concise question.',
   };
   const lines = ['## Current interaction state', guidance[signal.supportNeed]];
   if (signal.emotionHypothesis) {
     lines.push(`Possible current emotion: ${signal.emotionHypothesis} (confidence ${signal.confidence.toFixed(2)}). Treat this only as a hypothesis.`);
+    if (signal.supportNeed === 'act') {
+      lines.push('Acknowledge the pressure in one natural sentence, then continue doing the work without making the user manage your feelings.');
+    }
   }
   if (signal.repairStatus === 'needed') {
     lines.push('Relationship repair is needed: briefly acknowledge the specific mismatch, do not defend yourself, adjust immediately, and ask at most one concise question.');

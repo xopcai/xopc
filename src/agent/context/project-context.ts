@@ -1,4 +1,3 @@
-import { GoalService, type GoalWithDetails } from '../../goals/index.js';
 import { LocalAppStore } from '../../local-apps/store.js';
 import {
   getProjectForSession,
@@ -8,9 +7,11 @@ import type { Project } from '../../projects/types.js';
 import { ProjectStore } from '../../projects/project-store.js';
 import { listMemoryRecords, searchMemoryRecords } from '../../storage/sqlite/index.js';
 import { sanitizeForPromptLiteral } from '../prompt/sanitize-for-prompt.js';
+import { OutcomeExecutionStateRepository, type OutcomeExecutionState } from '../../work/outcome-execution-state.js';
+import { OutcomeRepository } from '../../work/outcome-repository.js';
 
 const MAX_TEXT = 1200;
-const MAX_GOALS = 5;
+const MAX_OUTCOMES = 5;
 const MAX_SESSIONS = 5;
 const MAX_RECENT_MEMORY = 5;
 const MAX_RELEVANT_MEMORY = 5;
@@ -30,13 +31,18 @@ function truncateText(value: string | undefined, max = MAX_TEXT): string | undef
   return `${trimmed.slice(0, max - 1).trimEnd()}...`;
 }
 
-function formatGoal(goal: GoalWithDetails): string {
-  const parts = [`- ${sanitizeForPromptLiteral(goal.title)}`, `status=${goal.status}`, `priority=${goal.priority}`];
-  if (goal.nextAction?.trim()) {
-    parts.push(`next=${sanitizeForPromptLiteral(truncateText(goal.nextAction, 200) ?? '')}`);
+export interface ProjectOutcomeContext extends OutcomeExecutionState {
+  objective: string;
+  status: string;
+}
+
+function formatOutcome(outcome: ProjectOutcomeContext): string {
+  const parts = [`- ${sanitizeForPromptLiteral(outcome.objective)}`, `status=${outcome.status}`, `priority=${outcome.priority}`];
+  if (outcome.nextAction?.trim()) {
+    parts.push(`next=${sanitizeForPromptLiteral(truncateText(outcome.nextAction, 200) ?? '')}`);
   }
-  if (goal.blockedReason?.trim()) {
-    parts.push(`blocked=${sanitizeForPromptLiteral(truncateText(goal.blockedReason, 200) ?? '')}`);
+  if (outcome.blockedReason?.trim()) {
+    parts.push(`blocked=${sanitizeForPromptLiteral(truncateText(outcome.blockedReason, 200) ?? '')}`);
   }
   return parts.join(' | ');
 }
@@ -65,11 +71,12 @@ export function buildActiveProjectContextForPrompt(
   return formatActiveProjectContextForPrompt({
     project,
     workspacePath: getProjectWorkspacePathForSession(sessionKey) ?? project.workspaceRoot,
-    activeGoals: new GoalService().list({
-      projectId: project.id,
-      status: ['active', 'paused', 'blocked', 'needs_input'],
-      limit: MAX_GOALS,
-    }),
+    activeOutcomes: new OutcomeExecutionStateRepository().listByProject(project.id, MAX_OUTCOMES)
+      .flatMap((execution) => {
+        const outcome = new OutcomeRepository().get(execution.outcomeId);
+        if (!outcome || outcome.internalStatus === 'completed' || outcome.internalStatus === 'cancelled') return [];
+        return [{ ...execution, objective: outcome.objective, status: outcome.internalStatus }];
+      }),
     recentSessions: new ProjectStore().getRecentSessions(project.id, MAX_SESSIONS),
     memoryRecords: selectProjectMemoryRecords({
       relevant: options.memoryQuery?.trim()
@@ -108,7 +115,7 @@ export function buildActiveProjectContextForPrompt(
 export function formatActiveProjectContextForPrompt(input: {
   project: Project;
   workspacePath?: string;
-  activeGoals: GoalWithDetails[];
+  activeOutcomes: ProjectOutcomeContext[];
   recentSessions: Array<{ key: string; name?: string; updatedAt: string; agentId: string }>;
   memoryRecords?: Array<{ kind: string; content: string; updatedAt: string }>;
   localApp?: {
@@ -176,11 +183,11 @@ export function formatActiveProjectContextForPrompt(input: {
     );
   }
 
-  lines.push('', '## Active Goals');
-  if (input.activeGoals.length === 0) {
+  lines.push('', '## Active Outcomes');
+  if (input.activeOutcomes.length === 0) {
     lines.push('- None recorded.');
   } else {
-    lines.push(...input.activeGoals.map(formatGoal));
+    lines.push(...input.activeOutcomes.map(formatOutcome));
   }
 
   lines.push('', '## Recent Project Sessions');

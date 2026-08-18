@@ -72,7 +72,6 @@ export interface NoteAiDeepMeta {
   processedAt: number;
   priority?: 'high' | 'medium' | 'low';
   relatedNoteIds?: string[];
-  relatedGoalId?: string;
   insights?: string;
   catalysis?: NoteCatalysisMeta;
 }

@@ -7,7 +7,6 @@ import { checkFileSafety } from '../prompt/safety.js';
 import { evaluateFilePolicy } from '../sandbox/exec-policy.js';
 import { detectLineEnding, generateDiffString, normalizeToLF, restoreLineEndings } from './edit-diff.js';
 import { resolvePathUnderWorkspace } from './tool-paths.js';
-import type { GoalEvidenceRecordInput } from './goal-evidence-recorder.js';
 
 const ApplyPatchSchema = Type.Object({
   patch: Type.String({
@@ -42,10 +41,6 @@ export interface ApplyPatchDetails {
   diff: string;
   added: number;
   removed: number;
-}
-
-export interface CreateApplyPatchToolOptions {
-  recordGoalEvidence?: (input: GoalEvidenceRecordInput) => Promise<void> | void;
 }
 
 type ParsedPatch =
@@ -327,10 +322,7 @@ async function commitPatchPlan(changes: PlannedPatchChange[]): Promise<void> {
   }
 }
 
-export function createApplyPatchTool(
-  workspace: string,
-  options?: CreateApplyPatchToolOptions,
-): AgentTool {
+export function createApplyPatchTool(workspace: string): AgentTool {
   return {
     name: 'apply_patch',
     label: 'Apply Patch',
@@ -363,18 +355,6 @@ export function createApplyPatchTool(
             return `${change.kind}: ${display} (+${change.added}/-${change.removed})`;
           })
           .join('\n');
-
-        await options?.recordGoalEvidence?.({
-          kind: 'diff',
-          title: `Patch applied: ${changes.length} file${changes.length === 1 ? '' : 's'}`,
-          summary: diff.slice(0, 4000),
-          uri: changes.length === 1 ? changes[0].absoluteMoveTo ?? changes[0].absolutePath : undefined,
-          data: {
-            files,
-            added,
-            removed,
-          },
-        });
 
         return {
           content: [{ type: 'text', text: summary || 'Patch applied.' }],

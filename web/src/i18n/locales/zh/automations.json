@@ -100,7 +100,7 @@
     "draft": {
       "title": "用 AI 起草",
       "subtitle": "描述你想要的结果。xopc 会先起草触发条件、执行动作和安全检查，确认前不会发布。",
-      "placeholder": "例如：当目标变成阻塞状态时，让智能体诊断原因并建议下一步。",
+      "placeholder": "例如：当结果变成阻塞状态时，让智能体诊断原因并建议下一步。",
       "generate": "生成草案",
       "generating": "生成中...",
       "review": "发布前检查",
@@ -129,9 +129,9 @@
       "noteCreatedTitle": "自动跟进笔记",
       "noteCreatedDescription": "创建新笔记后，让 xopc 自动分类并建议下一步行动。",
       "noteCreatedPrompt": "当创建新笔记时，运行智能体对笔记分类、识别有用的后续行动，并总结可能的任务。触发条件使用 notes 来源的 note.created 事件。保持安全：默认只输出简短建议，除非用户后续确认，否则不要自动改写笔记。",
-      "goalBlockedTitle": "自动诊断阻塞",
-      "goalBlockedDescription": "当这个目标被阻塞时，让智能体诊断原因并给出下一步具体行动。",
-      "goalBlockedPrompt": "当目标变为阻塞状态时，运行智能体诊断阻塞原因并给出下一步具体行动。触发条件使用 goals 来源的 goal.status_changed 事件，payloadMatch status=blocked。参考目标标题：{{title}}。除非用户明确配置，否则不要自动修改目标。",
+      "outcomeBlockedTitle": "自动诊断阻塞",
+      "outcomeBlockedDescription": "当这个结果被阻塞时，让智能体诊断原因并给出下一步具体行动。",
+      "outcomeBlockedPrompt": "当结果变为阻塞状态时，运行智能体诊断阻塞原因并给出下一步具体行动。触发条件使用 outcomes 来源的 outcome.status_changed 事件，payloadMatch status=blocked。参考结果目标：{{title}}。除非用户明确配置，否则不要自动修改结果。",
       "workflowFailedTitle": "自动处理失败运行",
       "workflowFailedDescription": "当这个工作流失败时，让 xopc 检查运行记录并起草修复或重试计划。",
       "workflowFailedPrompt": "当工作流运行以 failed 状态结束时，运行智能体检查工作流运行、总结失败原因，并提出恢复计划。触发条件使用 workflows 来源的 workflow.run.completed 事件，payloadMatch status=failed。参考运行 ID：{{runId}}，工作流定义 ID：{{definitionId}}。除非用户明确配置，否则不要自动重试。"
@@ -205,11 +205,11 @@
         "description": "从外部请求触发智能体。",
         "formName": "Webhook 智能体任务"
       },
-      "blockedGoal": {
-        "name": "阻塞目标助手",
-        "description": "当目标变成阻塞状态时，让智能体诊断原因。",
-        "formName": "阻塞目标助手",
-        "instruction": "有一个目标变成阻塞状态。请诊断可能的阻塞原因，并建议下一步具体行动。"
+      "blockedOutcome": {
+        "name": "阻塞结果助手",
+        "description": "当结果变成阻塞状态时，让智能体诊断原因。",
+        "formName": "阻塞结果助手",
+        "instruction": "有一个结果变成阻塞状态。请诊断可能的阻塞原因，并建议下一步具体行动。"
       },
       "noteCreated": {
         "name": "新笔记整理",
@@ -269,7 +269,7 @@
       "interval": "固定间隔",
       "customCron": "自定义 cron",
       "webhook": "Webhook",
-      "goalBlocked": "目标阻塞",
+      "outcomeBlocked": "结果阻塞",
       "noteCreated": "笔记创建",
       "workflowFailed": "工作流失败",
       "sessionUpdated": "会话更新",
@@ -278,7 +278,7 @@
       "onceAt": "在 {time} 运行一次",
       "manualWhen": "仅手动运行",
       "webhookWhen": "收到 Webhook 请求时运行",
-      "goalBlockedWhen": "当目标变为「阻塞」时运行",
+      "outcomeBlockedWhen": "当结果变为「阻塞」时运行",
       "noteCreatedWhen": "创建新笔记时运行",
       "workflowFailedWhen": "工作流运行失败时触发",
       "sessionUpdatedWhen": "会话内容更新时运行"

@@ -378,7 +378,7 @@ function buildSafetyInstruction(automation: Automation, instruction: string): st
     return [
       'Automation safety mode: Suggest only.',
       'Only analyze the situation and produce a concise recommendation.',
-      'Do not modify files, notes, goals, workflows, external systems, or persistent state.',
+      'Do not modify files, notes, Outcomes, workflows, external systems, or persistent state.',
       'If a change seems useful, describe the exact change for the user to review.',
       '',
       instruction,

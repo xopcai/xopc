@@ -27,7 +27,7 @@ Basic shape:
 
 ## Projects
 
-Projects group sessions, work items, goals, workflows, files, and project instructions.
+Projects group sessions, work items, Outcomes, workflows, files, and project instructions.
 
 ### Find projects
 

@@ -5,7 +5,7 @@
  * `AgentService`:
  *  - typing-on / typing-off lifecycle for channels that surface "is typing…"
  *  - final assistant response delivery (silence guard + hook + bus publish)
- *  - cross-cutting `webchat_turn_complete` hook + `/goal` post-turn
+ *  - cross-cutting `webchat_turn_complete` hook + outcome review
  *  - thin pass-through for extension `message_sending` / `message_sent` hooks
  *
  * The class is intentionally framework-agnostic: it pulls everything it needs
@@ -32,11 +32,7 @@ export interface OutboundCoordinatorConfig {
   getConfig: () => Config | undefined;
   /** Resolves the last visible assistant text for a session (in-memory + agent fallback). */
   getLastAssistantPlainText: (sessionKey: string) => string;
-  /**
-   * Run the `/goal` post-turn verdict for a completed user turn. Owned by
-   * `PersistentGoalService`; OutboundCoordinator only forwards.
-   */
-  runPersistentGoalPostTurn: (payload: SessionTurnCompletePayload) => Promise<void>;
+  reviewOutcomeTurn: (payload: SessionTurnCompletePayload) => Promise<void>;
 }
 
 export interface SessionTurnCompletePayload {
@@ -47,7 +43,7 @@ export interface SessionTurnCompletePayload {
   assistantPlainText: string;
   aborted: boolean;
   streamError?: string;
-  skipPersistentGoalPostTurn?: boolean;
+  skipOutcomeReview?: boolean;
   outboundMetadata?: Record<string, unknown>;
 }
 
@@ -57,7 +53,7 @@ export class OutboundCoordinator {
   private readonly streamManager: StreamManager;
   private readonly getConfig: () => Config | undefined;
   private readonly getLastAssistantPlainText: (sessionKey: string) => string;
-  private readonly runPersistentGoalPostTurn: OutboundCoordinatorConfig['runPersistentGoalPostTurn'];
+  private readonly reviewOutcomeTurn: OutboundCoordinatorConfig['reviewOutcomeTurn'];
 
   constructor(config: OutboundCoordinatorConfig) {
     this.bus = config.bus;
@@ -65,7 +61,7 @@ export class OutboundCoordinator {
     this.streamManager = config.streamManager;
     this.getConfig = config.getConfig;
     this.getLastAssistantPlainText = config.getLastAssistantPlainText;
-    this.runPersistentGoalPostTurn = config.runPersistentGoalPostTurn;
+    this.reviewOutcomeTurn = config.reviewOutcomeTurn;
   }
 
   /**
@@ -158,12 +154,7 @@ export class OutboundCoordinator {
     });
   }
 
-  /**
-   * Post-turn hook + `/goal` checklist evaluation. Wired into both the bus-driven
-   * inbound finally block and the webchat direct-stream finally. The goal verdict
-   * itself lives in `PersistentGoalService`; we just trigger the extension hook
-   * here and delegate the `/goal` work.
-   */
+  /** Run extension completion hooks and independently review an attached Outcome. */
   async emitSessionTurnComplete(payload: SessionTurnCompletePayload): Promise<void> {
     await this.hookHandler.triggerWithSessionKey(payload.sessionKey, 'webchat_turn_complete', {
       sessionKey: payload.sessionKey,
@@ -175,7 +166,7 @@ export class OutboundCoordinator {
       ...(payload.streamError !== undefined ? { streamError: payload.streamError } : {}),
     });
 
-    await this.runPersistentGoalPostTurn(payload);
+    await this.reviewOutcomeTurn(payload);
   }
 
   /** Extension hook pass-through (Gateway ChannelManager). */

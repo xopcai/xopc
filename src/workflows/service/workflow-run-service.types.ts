@@ -10,7 +10,7 @@ import type {
 export interface StartWorkflowRunServiceParams {
   agentId: string;
   definitionId: string;
-  goalId?: string;
+  outcomeId?: string;
   parentSessionKey?: string;
   projectId?: string;
   workItemId?: string;

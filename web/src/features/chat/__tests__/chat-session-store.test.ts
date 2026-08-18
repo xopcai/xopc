@@ -26,6 +26,7 @@ const idleSlice = {
   hasMore: false,
   streamingMsg: null,
   progress: null,
+  taskPlan: null,
   sending: false,
   streaming: false,
 };
@@ -193,6 +194,13 @@ describe('useChatSessionStore', () => {
       sending: true,
       streaming: true,
     });
+    useChatSessionStore.getState().setSessionTaskPlan(sessionKey, {
+      planId: `${sessionKey}:todo`,
+      revision: 10,
+      source: 'todo',
+      scope: 'session',
+      items: [{ id: 'last', title: 'Last task', status: 'in_progress' }],
+    });
 
     const historicalRow = useChatSessionStore.getState().sessions[sessionKey].messages[0];
     useChatSessionStore.getState().finalizeStreamingTurn(sessionKey, {
@@ -204,8 +212,37 @@ describe('useChatSessionStore', () => {
     const snap = getChatSessionSnapshot(sessionKey);
     expect(snap?.messages).toHaveLength(2);
     expect(snap?.hasMore).toBe(true);
+    expect(snap?.taskPlan).toBeNull();
     expect(isSessionSliceLive(snap)).toBe(false);
     expect(useChatSessionStore.getState().sessions[sessionKey].messages[0]).toBe(historicalRow);
+  });
+
+  it('keeps the newest canonical task plan revision', () => {
+    useChatSessionStore.getState().initSessionSnapshot(sessionKey, {
+      ...idleSlice,
+      sending: true,
+      streaming: true,
+    });
+    const setTaskPlan = useChatSessionStore.getState().setSessionTaskPlan;
+    setTaskPlan(sessionKey, {
+      planId: `${sessionKey}:todo`,
+      revision: 20,
+      source: 'todo',
+      scope: 'session',
+      items: [{ id: 'last', title: 'Last task', status: 'completed' }],
+    });
+    setTaskPlan(sessionKey, {
+      planId: `${sessionKey}:todo`,
+      revision: 19,
+      source: 'todo',
+      scope: 'session',
+      items: [{ id: 'last', title: 'Last task', status: 'in_progress' }],
+    });
+
+    expect(getChatSessionSnapshot(sessionKey)?.taskPlan).toMatchObject({
+      revision: 20,
+      items: [{ id: 'last', status: 'completed' }],
+    });
   });
 
   it('keeps the live row identity when the persisted snapshot has a different timestamp', () => {

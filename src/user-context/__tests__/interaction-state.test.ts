@@ -2,18 +2,28 @@ import { describe, expect, it } from 'vitest';
 
 import { buildInteractionStatePrompt, inferInteractionState } from '../interaction-state.js';
 
-describe('interaction state inference', () => {
-  it('honors explicit requests to listen over inferred action', () => {
-    expect(inferInteractionState('我不想听建议，只想聊一会儿')).toMatchObject({
-      supportNeed: 'listen',
+describe('interaction state', () => {
+  it('keeps execution primary while acknowledging emotional pressure', () => {
+    const signal = inferInteractionState('我真的很焦虑，帮我把发布问题修好');
+
+    expect(signal).toMatchObject({
+      supportNeed: 'act',
+      emotionHypothesis: '焦虑',
       source: 'explicit',
-      confidence: 0.95,
     });
+    const prompt = buildInteractionStatePrompt(signal);
+    expect(prompt).toContain('continue doing the work');
+    expect(prompt).toContain('Care must support progress');
   });
 
-  it('frames emotion as a low-confidence hypothesis', () => {
-    const signal = inferInteractionState('我最近很焦虑');
-    expect(signal).toMatchObject({ supportNeed: 'listen', source: 'inferred', confidence: 0.55 });
-    expect(buildInteractionStatePrompt(signal)).toContain('Treat this only as a hypothesis');
+  it('treats explicit relationship mismatch as a repair request', () => {
+    const signal = inferInteractionState('你根本没理解我，别再说教了');
+
+    expect(signal).toMatchObject({
+      supportNeed: 'listen',
+      repairStatus: 'needed',
+      source: 'explicit',
+    });
+    expect(buildInteractionStatePrompt(signal)).toContain('do not defend yourself');
   });
 });

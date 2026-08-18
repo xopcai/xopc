@@ -1,10 +1,15 @@
-import { ArrowLeft, CircleCheck, FileCheck2, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, CircleCheck, ChevronDown, ShieldCheck } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { actOnOutcome, fetchOutcome, type OutcomeDetail } from '@/features/work/work-home-api';
+import {
+  actOnOutcome,
+  fetchOutcome,
+  submitOutcomeFeedback,
+  type OutcomeDetail,
+} from '@/features/work/work-home-api';
 import { workCopy } from '@/features/work/work-copy';
 import { formatMediumDateTime } from '@/lib/date-formatters';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -43,6 +48,10 @@ export function OutcomeDetailPage() {
   const [detail, setDetail] = useState<OutcomeDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
+  const [feedbackBusy, setFeedbackBusy] = useState(false);
+  const [showCorrection, setShowCorrection] = useState(false);
+  const [correction, setCorrection] = useState('');
+  const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
 
   const reload = async () => {
     setDetail(await fetchOutcome(outcomeId));
@@ -70,6 +79,28 @@ export function OutcomeDetailPage() {
     }
   };
 
+  const submitFeedback = async (outcome: 'helpful' | 'not_helpful') => {
+    const latest = detail?.receipts[0];
+    if (!latest) return;
+    if (outcome === 'not_helpful' && !showCorrection) {
+      setShowCorrection(true);
+      return;
+    }
+    setFeedbackBusy(true);
+    setError(null);
+    try {
+      await submitOutcomeFeedback(latest.runId, outcome, correction);
+      setFeedbackMessage(outcome === 'helpful' ? copy.feedbackThanks : copy.correctionStarted);
+      setShowCorrection(false);
+      setCorrection('');
+      await reload();
+    } catch {
+      setError(copy.actionFailed);
+    } finally {
+      setFeedbackBusy(false);
+    }
+  };
+
   useLayoutEffect(() => {
     setPageHeader({
       startExtra: (
@@ -94,6 +125,60 @@ export function OutcomeDetailPage() {
         <div className="rounded-xl border border-danger/25 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
       ) : !detail ? <DetailSkeleton /> : (
         <>
+          {detail.receipts[0] ? (
+            <section className="rounded-2xl border border-edge-subtle bg-surface-panel p-5">
+              <p className="text-xs font-medium text-fg-subtle">{copy.latestResult}</p>
+              <h2 className="mt-2 text-base font-semibold text-fg">{detail.receipts[0].summary}</h2>
+              <div className="mt-5 grid gap-5 sm:grid-cols-2">
+                <div>
+                  <h3 className="text-xs font-medium text-fg-subtle">{copy.remainingWork}</h3>
+                  <TextList items={detail.receipts[0].remainingWork} empty={copy.noRemainingWork} />
+                </div>
+                <div>
+                  <h3 className="text-xs font-medium text-fg-subtle">
+                    {detail.receipts[0].needsUser ? copy.yourDecision : copy.nextAction}
+                  </h3>
+                  <p className="mt-2 text-sm leading-6 text-fg">
+                    {detail.receipts[0].nextAction || copy.noDecisionNeeded}
+                  </p>
+                </div>
+              </div>
+
+              {detail.receipts[0].status !== 'running' ? (
+                <div className="mt-5 border-t border-edge-subtle pt-4">
+                  <p className="text-sm font-medium text-fg">{copy.resultFeedback}</p>
+                  {feedbackMessage ? (
+                    <p className="mt-2 text-sm text-success">{feedbackMessage}</p>
+                  ) : (
+                    <>
+                      <div className="mt-3 flex gap-2">
+                        <Button type="button" variant="secondary" disabled={feedbackBusy} onClick={() => void submitFeedback('helpful')}>
+                          {copy.doneWell}
+                        </Button>
+                        <Button type="button" variant="ghost" disabled={feedbackBusy} onClick={() => void submitFeedback('not_helpful')}>
+                          {copy.needsFix}
+                        </Button>
+                      </div>
+                      {showCorrection ? (
+                        <div className="mt-3 space-y-3">
+                          <textarea
+                            value={correction}
+                            onChange={(event) => setCorrection(event.target.value)}
+                            placeholder={copy.correctionPlaceholder}
+                            className="min-h-24 w-full resize-y rounded-xl border border-edge bg-surface px-3 py-2 text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-accent"
+                          />
+                          <Button type="button" variant="primary" disabled={feedbackBusy || !correction.trim()} onClick={() => void submitFeedback('not_helpful')}>
+                            {copy.submitCorrection}
+                          </Button>
+                        </div>
+                      ) : null}
+                    </>
+                  )}
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+
           <section className="rounded-2xl border border-edge-subtle bg-surface-panel p-5">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
@@ -155,11 +240,11 @@ export function OutcomeDetailPage() {
             </div>
           </section>
 
-          <section className="rounded-2xl border border-edge-subtle bg-surface-panel p-5">
-            <div className="flex items-center gap-2">
-              <FileCheck2 className="size-4 text-success" aria-hidden />
-              <h2 className="text-base font-semibold text-fg">{copy.executionReceipts}</h2>
-            </div>
+          <details className="group rounded-2xl border border-edge-subtle bg-surface-panel p-5">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-medium text-fg">
+              <span>{copy.evidenceDetails}</span>
+              <ChevronDown className="size-4 text-fg-muted transition-transform group-open:rotate-180" aria-hidden />
+            </summary>
             {detail.receipts.length === 0 ? (
               <p className="mt-4 text-sm text-fg-muted">{copy.noReceipts}</p>
             ) : (
@@ -177,11 +262,20 @@ export function OutcomeDetailPage() {
                         {copy.verificationStatuses[receipt.verification.status]}
                       </span>
                     </div>
+                    {receipt.evidence.length > 0 ? (
+                      <ul className="mt-3 space-y-2">
+                        {receipt.evidence.map((evidence, index) => (
+                          <li key={`${evidence.title}-${index}`} className="text-xs leading-5 text-fg-muted">
+                            <span className="font-medium text-fg-subtle">{evidence.title}:</span> {evidence.summary}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
                   </article>
                 ))}
               </div>
             )}
-          </section>
+          </details>
         </>
       )}
     </main>
