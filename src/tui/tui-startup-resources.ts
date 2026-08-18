@@ -21,7 +21,11 @@ function uniqueSorted(values: Iterable<string>): string[] {
     .sort((a, b) => a.localeCompare(b));
 }
 
-export function collectTuiStartupResources(config: Config, sessionKey?: string): TuiStartupResources {
+export function collectTuiStartupResources(
+  config: Config,
+  sessionKey?: string,
+  options: { isWorkspaceTrusted?: (workspaceDir: string) => boolean } = {},
+): TuiStartupResources {
   const profile = resolveEffectiveAgentProfileForSession(config, sessionKey);
   const profileDir = resolveAgentProfileDir(config, profile.agentId);
   const workspaceDir = profile.resolvedWorkspacePath || getWorkspacePath(config);
@@ -37,6 +41,7 @@ export function collectTuiStartupResources(config: Config, sessionKey?: string):
     loadSkills({
       workspaceDir,
       builtinDir: resolveBundledSkillsDir() ?? undefined,
+      workspaceTrust: options.isWorkspaceTrusted?.(workspaceDir) === true ? 'trusted' : 'untrusted',
     }).skills
       .filter((skill) => !skill.disableModelInvocation && isSkillEnabled(skill, skillsConfig))
       .map((skill) => skill.name),

@@ -799,6 +799,7 @@ export function openProjectTrustOverlay(svc: PickerServices): void {
     } else {
       svc.setProjectTrustSessionDecision(selected.trusted);
     }
+    svc.onProjectTrustChanged();
     svc.closeOverlay();
     svc.tui.setFocus(svc.editor);
     const scope = selected.savedPath ? `saved for ${selected.savedPath}` : 'this session only';

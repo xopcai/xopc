@@ -95,11 +95,38 @@ export interface SkillConfig {
 export interface SkillsLoadConfig {
   /** Additional skill folders to scan */
   extraDirs?: string[];
+  /** Built-in compatibility sources. */
+  sources?: {
+    /** Read user-installed skills from ~/.agents/skills. Defaults to enabled. */
+    agentsGlobal?: { enabled?: boolean };
+    /** Read project skills from <workspace>/.agents/skills. Defaults to enabled for trusted workspaces. */
+    agentsWorkspace?: { enabled?: boolean };
+  };
   /** Watch skill folders for changes */
   watch?: boolean;
   /** Debounce for the skills watcher (ms) */
   watchDebounceMs?: number;
 }
+
+export type SkillOriginId =
+  | 'extra'
+  | 'bundled'
+  | 'agents-global'
+  | 'agents-workspace'
+  | 'custom-global'
+  | 'xopc-global'
+  | 'xopc-workspace';
+
+export interface SkillSourceDescriptor {
+  id: SkillOriginId;
+  rootDir: string;
+  priority: number;
+  scope: 'builtin' | 'workspace' | 'global' | 'extra';
+  managed: boolean;
+  writable: boolean;
+}
+
+export type SkillOrigin = SkillSourceDescriptor;
 
 export interface SkillsInstallConfig {
   /** Prefer brew for package installation */
@@ -160,6 +187,8 @@ export interface Skill {
   baseDir: string;
   /** Source of the skill */
   source: 'builtin' | 'workspace' | 'global' | 'extra';
+  /** Concrete source root and its management policy. */
+  origin: SkillOrigin;
   /** Disable model invocation for this skill */
   disableModelInvocation: boolean;
   /** Parsed metadata */
@@ -245,7 +274,7 @@ export interface LoadSkillsResult {
 }
 
 export interface SkillDiagnostic {
-  type: 'warning' | 'collision' | 'error';
+  type: 'skipped' | 'warning' | 'collision' | 'error';
   skillName?: string;
   message: string;
   path?: string;
@@ -258,7 +287,7 @@ export interface SkillRuntimeStatus {
   reloadPending: boolean;
   lastReloadStartedAt?: number;
   lastReloadFinishedAt?: number;
-  lastReloadReason?: 'initial' | 'disk' | 'config';
+  lastReloadReason?: 'initial' | 'disk' | 'config' | 'trust';
   lastReloadOk?: boolean;
   lastReloadError?: string;
 }

@@ -33,6 +33,10 @@ Default: `~/.xopc/`
 | `user/MEMORY.md` | Shared user-profile memory edited through memory tools. |
 | `user/memories/` | Shared curated memory and dreaming state used by every agent. |
 
+## External compatibility roots
+
+XOPC also discovers skills from `~/.agents/skills/`. This path is derived from the operating-system home directory and is intentionally unaffected by `XOPC_STATE_DIR`, `XOPC_PROFILE`, or `XOPC_HOME`. It is an external, read-only compatibility source: XOPC may load and watch its `SKILL.md` files, but install, update, and `skill_manage` operations continue to target XOPC-managed global or workspace skill directories.
+
 ## Agent home: `agents/<agentId>/`
 
 Resolved by `resolveAgentHomeDir(config, agentId)`. Typical layout:
@@ -72,6 +76,7 @@ Resolved by `resolveAgentWorkspaceDir(config, agentId)` from the selected agent 
 | `memory/` | Daily or topical notes (`YYYY-MM-DD.md`); `memory_search` / tool cwd. |
 | `media/generated/` | Generated images and similar outputs. |
 | `.xopc/skills/` | Project-local user-authored skills. |
+| `.agents/skills/` | Trusted project compatibility skills; discovered and watched read-only. |
 | *arbitrary files* | `read` / `write` / `edit` tool targets. |
 
 Internal state is **not** written here on new installs. This tree is the only supported layout: persona Markdown and machine state follow the table at top. There is **no** automatic import from older “everything under the markdown workspace” layouts—use `xopc init` for the full state tree, or `xopc setup` / `xopc onboard` for config + profile Markdown seeds, and move any old data yourself if you are upgrading from another fork.

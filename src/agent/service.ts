@@ -664,6 +664,10 @@ export class AgentService {
     this.agentManager.refreshSkillsAfterDiskChange();
   }
 
+  refreshSkillsAfterTrustChange(): void {
+    this.agentManager.refreshSkillsAfterTrustChange();
+  }
+
   async installSkillFromSource(opts: SkillInstallToolOptions): Promise<SkillInstallToolResult> {
     const target = normalizeSkillInstallTarget(opts.target);
     const workspace =

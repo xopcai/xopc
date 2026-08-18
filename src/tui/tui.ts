@@ -2429,6 +2429,9 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     setProjectTrustSessionDecision: (decision: boolean | null) => {
       projectTrustSessionDecision = decision;
     },
+    onProjectTrustChanged: () => {
+      void client.refreshWorkspaceTrust?.();
+    },
     keybindings,
   };
 

@@ -954,8 +954,10 @@ export function useSkillsPage() {
     if (file) setPendingFile(file);
   };
 
-  const sourceLabel = (source: SkillCatalogEntry['source']): string => {
-    switch (source) {
+  const sourceLabel = (skill: SkillCatalogEntry): string => {
+    if (skill.origin === 'agents-global') return sk.source.agentsGlobal;
+    if (skill.origin === 'agents-workspace') return sk.source.agentsWorkspace;
+    switch (skill.source) {
       case 'builtin':
         return sk.source.builtin;
       case 'workspace':
@@ -965,7 +967,7 @@ export function useSkillsPage() {
       case 'extra':
         return sk.source.extra;
       default:
-        return source;
+        return skill.source;
     }
   };
 

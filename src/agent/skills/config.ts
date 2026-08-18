@@ -258,6 +258,36 @@ export function validateSkillConfig(config: SkillsConfig): {
 } {
   const errors: string[] = [];
 
+  const extraDirs = config.load?.extraDirs as unknown;
+  if (
+    extraDirs !== undefined &&
+    (!Array.isArray(extraDirs) || !extraDirs.every((dir) => typeof dir === 'string'))
+  ) {
+    errors.push('load.extraDirs must contain only strings');
+  }
+  const agentsGlobalSource = config.load?.sources?.agentsGlobal as unknown;
+  if (
+    agentsGlobalSource !== undefined &&
+    (typeof agentsGlobalSource !== 'object' ||
+      agentsGlobalSource === null ||
+      Array.isArray(agentsGlobalSource) ||
+      ('enabled' in agentsGlobalSource &&
+        typeof (agentsGlobalSource as { enabled?: unknown }).enabled !== 'boolean'))
+  ) {
+    errors.push('load.sources.agentsGlobal.enabled must be a boolean');
+  }
+  const agentsWorkspaceSource = config.load?.sources?.agentsWorkspace as unknown;
+  if (
+    agentsWorkspaceSource !== undefined &&
+    (typeof agentsWorkspaceSource !== 'object' ||
+      agentsWorkspaceSource === null ||
+      Array.isArray(agentsWorkspaceSource) ||
+      ('enabled' in agentsWorkspaceSource &&
+        typeof (agentsWorkspaceSource as { enabled?: unknown }).enabled !== 'boolean'))
+  ) {
+    errors.push('load.sources.agentsWorkspace.enabled must be a boolean');
+  }
+
   if (config.toolGating !== undefined && typeof config.toolGating !== 'boolean') {
     errors.push('toolGating must be a boolean');
   }

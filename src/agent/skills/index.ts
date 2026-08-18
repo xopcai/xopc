@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync } from 'fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { basename, dirname, join, relative, sep } from 'path';
 import { parseFrontmatter } from '../../markdown/frontmatter.js';
 import { resolveStateDir } from '../../config/paths.js';
@@ -8,12 +8,31 @@ import { formatSkillsForPrompt } from './format-skills-prompt.js';
 import { parseRequiredEnvVarNames } from './required-env-vars.js';
 import { parseSkillMetadata } from './parse-skill-metadata.js';
 import { parseSkillToolConditions } from './skill-tool-gating.js';
-import { resolveWorkspaceSkillsDir } from './workspace-skills-dir.js';
-import type { Skill, SkillDiagnostic, LoadSkillsResult, SkillConfig, SkillsConfig } from './types.js';
+import {
+  resolveSkillSources,
+  resolveWorkspaceSkillSource,
+  type ResolveSkillSourcesOptions,
+} from './skill-sources.js';
+import type {
+  Skill,
+  SkillConfig,
+  SkillDiagnostic,
+  LoadSkillsResult,
+  SkillSourceDescriptor,
+  SkillsConfig,
+} from './types.js';
 
 const log = createLogger('SkillLoader');
 
 const IGNORE_FILES = ['.gitignore', '.ignore', '.fdignore'];
+const DEFAULT_MAX_SKILL_FILE_BYTES = 1024 * 1024;
+
+function resolveMaxSkillFileBytes(skillsConfig: SkillsConfig): number {
+  const configured = skillsConfig.limits?.maxSkillFileBytes;
+  return typeof configured === 'number' && Number.isFinite(configured) && configured > 0
+    ? configured
+    : DEFAULT_MAX_SKILL_FILE_BYTES;
+}
 
 function toPosixPath(p: string): string {
   return p.split(sep).join('/');
@@ -85,9 +104,10 @@ function shouldIgnore(path: string, ignoredPaths: Set<string>): boolean {
 }
 
 function discoverSkills(
-  dir: string,
-  source: 'builtin' | 'workspace' | 'global',
+  source: SkillSourceDescriptor,
+  maxSkillFileBytes: number,
 ): { skills: Skill[]; diagnostics: SkillDiagnostic[] } {
+  const dir = source.rootDir;
   const skills: Skill[] = [];
   const diagnostics: SkillDiagnostic[] = [];
   if (!existsSync(dir)) return { skills, diagnostics };
@@ -118,7 +138,12 @@ function discoverSkills(
           }
 
           if (existsSync(skillMdPath) && !shouldIgnore(skillRelPath, currentIgnoredPaths)) {
-            const { skill, diagnostic } = loadSkillFromFile(skillMdPath, source, dir);
+            const { skill, diagnostic } = loadSkillFromFile(
+              skillMdPath,
+              source,
+              dir,
+              maxSkillFileBytes,
+            );
             if (diagnostic) diagnostics.push(diagnostic);
             if (skill) skills.push(skill);
           }
@@ -164,10 +189,22 @@ function deriveDescriptionFromMarkdown(content: string): string | undefined {
 
 function loadSkillFromFile(
   filePath: string,
-  source: 'builtin' | 'workspace' | 'global',
+  source: SkillSourceDescriptor,
   rootDir?: string,
+  maxSkillFileBytes = DEFAULT_MAX_SKILL_FILE_BYTES,
 ): { skill: Skill | null; diagnostic?: SkillDiagnostic } {
   try {
+    const fileSize = statSync(filePath).size;
+    if (fileSize > maxSkillFileBytes) {
+      return {
+        skill: null,
+        diagnostic: {
+          type: 'error',
+          message: `Skill file exceeds size limit (${fileSize} > ${maxSkillFileBytes} bytes)`,
+          path: filePath,
+        },
+      };
+    }
     const rawContent = readFileSync(filePath, 'utf-8');
     const { frontmatter, content } = parseFrontmatter(rawContent);
     const skillDir = dirname(filePath);
@@ -212,7 +249,8 @@ function loadSkillFromFile(
         category,
         filePath,
         baseDir: skillDir,
-        source,
+        source: source.scope,
+        origin: source,
         disableModelInvocation: frontmatter['disable-model-invocation'] === true,
         metadata,
         toolConditions,
@@ -233,64 +271,38 @@ function loadSkillFromFile(
   }
 }
 
-export function loadSkills(options: {
-  workspaceDir?: string;
-  globalDir?: string;
-  builtinDir?: string;
-  extraDirs?: string[];
+export function loadSkills(options: ResolveSkillSourcesOptions & {
+  /** Dependency-injection override for the ~/.agents/skills compatibility root. */
+  agentsDir?: string;
 }): LoadSkillsResult {
-  const { workspaceDir, builtinDir, extraDirs = [] } = options;
-
+  const skillsConfig = createSkillConfigManager(resolveStateDir()).load();
+  const resolvedSources = resolveSkillSources(options, skillsConfig);
+  const maxSkillFileBytes = resolveMaxSkillFileBytes(skillsConfig);
   const skillMap = new Map<string, Skill>();
-  const diagnostics: SkillDiagnostic[] = [];
+  const diagnostics: SkillDiagnostic[] = [...resolvedSources.diagnostics];
 
-  if (builtinDir) {
-    const discovered = discoverSkills(builtinDir, 'builtin');
+  for (const source of resolvedSources.sources) {
+    const discovered = discoverSkills(source, maxSkillFileBytes);
     diagnostics.push(...discovered.diagnostics);
     for (const skill of discovered.skills) {
-      if (!skillMap.has(skill.name)) {
+      const previous = skillMap.get(skill.name);
+      if (previous) {
+        const winner = skill.origin.priority > previous.origin.priority ? skill : previous;
+        const shadowed = winner === skill ? previous : skill;
+        diagnostics.push({
+          type: 'collision',
+          skillName: skill.name,
+          path: winner.filePath,
+          message:
+            `Skill "${skill.name}" from ${winner.origin.id} (${winner.filePath}) ` +
+            `shadows ${shadowed.origin.id} (${shadowed.filePath})`,
+        });
+      }
+      if (!previous || skill.origin.priority > previous.origin.priority) {
         skillMap.set(skill.name, skill);
       }
     }
   }
-
-  const globalDirs = [
-    options.globalDir,
-    join(resolveStateDir(), 'skills'),
-  ].filter((d): d is string => !!d && existsSync(d));
-
-  for (const dir of globalDirs) {
-    const discovered = discoverSkills(dir, 'global');
-    diagnostics.push(...discovered.diagnostics);
-    for (const skill of discovered.skills) {
-      // Global must win over bundled when names match (Workspace > Global > Bundled).
-      skillMap.set(skill.name, skill);
-    }
-  }
-
-  if (workspaceDir) {
-    const discovered = loadWorkspaceSkills(workspaceDir);
-    diagnostics.push(...discovered.diagnostics);
-    const workspaceSkills = discovered.skills;
-    for (const skill of workspaceSkills) {
-      skillMap.set(skill.name, skill);
-    }
-  }
-
-  // Scan extra directories
-  for (const extraDir of extraDirs) {
-    if (existsSync(extraDir)) {
-      const discovered = discoverSkills(extraDir, 'global');
-      diagnostics.push(...discovered.diagnostics);
-      for (const skill of discovered.skills) {
-        if (!skillMap.has(skill.name)) {
-          skillMap.set(skill.name, skill);
-        }
-      }
-    }
-  }
-
-  const skillsConfig = createSkillConfigManager(resolveStateDir()).load();
   const merged = Array.from(skillMap.values());
 
   return {
@@ -302,7 +314,9 @@ export function loadSkills(options: {
 
 /** Discover only skills owned by a workspace, without global or bundled skills. */
 export function loadWorkspaceSkills(workspaceDir: string): LoadSkillsResult {
-  const discovered = discoverSkills(resolveWorkspaceSkillsDir(workspaceDir), 'workspace');
+  const skillsConfig = createSkillConfigManager(resolveStateDir()).load();
+  const maxSkillFileBytes = resolveMaxSkillFileBytes(skillsConfig);
+  const discovered = discoverSkills(resolveWorkspaceSkillSource(workspaceDir), maxSkillFileBytes);
   return {
     skills: discovered.skills,
     prompt: formatSkillsForPrompt(discovered.skills),
@@ -324,14 +338,18 @@ export interface SkillLoader {
   getEnabledSkills: (config?: Record<string, SkillConfig>) => Skill[];
 }
 
-export function createSkillLoader(): SkillLoader {
+export interface SkillLoaderOptions {
+  /** Re-evaluated on every load so trust changes take effect without recreating the runtime. */
+  isWorkspaceTrusted?: (workspaceDir: string) => boolean;
+}
+
+export function createSkillLoader(options: SkillLoaderOptions = {}): SkillLoader {
   let cachedSkills: Skill[] = [];
   let cachedPrompt: string = '';
   let cachedDiagnostics: SkillDiagnostic[] = [];
   let lastLoadTime = 0;
   let workspaceDir: string | undefined;
   let builtinDir: string | undefined;
-  let extraDirs: string[] = [];
 
   function updateCache(result: LoadSkillsResult): LoadSkillsResult {
     cachedSkills = result.skills;
@@ -341,20 +359,28 @@ export function createSkillLoader(): SkillLoader {
     return result;
   }
 
+  function loadCurrentSkills(): LoadSkillsResult {
+    const workspaceTrust =
+      workspaceDir && options.isWorkspaceTrusted?.(workspaceDir) === true
+        ? 'trusted'
+        : 'untrusted';
+    return loadSkills({ workspaceDir, builtinDir, workspaceTrust });
+  }
+
   return {
     init: (workspace: string, builtin: string | null) => {
       workspaceDir = workspace;
       builtinDir = builtin || undefined;
-      return updateCache(loadSkills({ workspaceDir, builtinDir, extraDirs }));
+      return updateCache(loadCurrentSkills());
     },
     
     load: () => {
-      return updateCache(loadSkills({ workspaceDir, builtinDir, extraDirs }));
+      return updateCache(loadCurrentSkills());
     },
     
     reload: () => {
       log.info('Reloading skills');
-      return updateCache(loadSkills({ workspaceDir, builtinDir, extraDirs }));
+      return updateCache(loadCurrentSkills());
     },
 
     refreshPromptFromConfig: () => {

@@ -51,5 +51,6 @@ export type PickerServices = {
   getProjectTrustStore: () => ProjectTrustStore;
   getProjectTrustSessionDecision: () => boolean | null;
   setProjectTrustSessionDecision: (decision: boolean | null) => void;
+  onProjectTrustChanged: () => void;
   keybindings: KeybindingsManager;
 };

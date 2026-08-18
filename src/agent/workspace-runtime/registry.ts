@@ -43,6 +43,8 @@ export interface WorkspaceRuntimeRegistryOptions {
   bundledSkillsDir: string;
   /** Called after a runtime is first created for a workspace. */
   onRuntimeCreated?: (resolvedPath: string) => void;
+  /** Dynamic project trust lookup used by workspace compatibility skills. */
+  isWorkspaceTrusted?: (resolvedPath: string) => boolean;
 }
 
 export class WorkspaceRuntimeRegistry {
@@ -51,12 +53,14 @@ export class WorkspaceRuntimeRegistry {
   private readonly getConfig: () => Config;
   private readonly bundledSkillsDir: string;
   private readonly onRuntimeCreated?: (resolvedPath: string) => void;
+  private readonly isWorkspaceTrusted?: (resolvedPath: string) => boolean;
   private readonly userContextRuntimes = new UserContextRuntimeRegistry();
 
   constructor(opts: WorkspaceRuntimeRegistryOptions) {
     this.getConfig = opts.getConfig;
     this.bundledSkillsDir = opts.bundledSkillsDir;
     this.onRuntimeCreated = opts.onRuntimeCreated;
+    this.isWorkspaceTrusted = opts.isWorkspaceTrusted;
   }
 
   /** Lazily construct and cache an agent-scoped runtime for a workspace. */
@@ -72,7 +76,9 @@ export class WorkspaceRuntimeRegistry {
     }
 
     const { builtinMemoryStore, memoryManager } = this.userContextRuntimes.getOrCreate(cfg);
-    const skillManager = new SkillManager(resolvedPath, this.bundledSkillsDir);
+    const skillManager = new SkillManager(resolvedPath, this.bundledSkillsDir, {
+      isWorkspaceTrusted: () => this.isWorkspaceTrusted?.(resolvedPath) === true,
+    });
     const systemPromptBuilder = new SystemPromptBuilder({
       workspace: resolvedPath,
       config: cfg,

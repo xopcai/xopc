@@ -156,7 +156,7 @@ export function SkillsPageCatalogContent(p: Props) {
                     </p>
                     <div className="flex flex-wrap gap-1.5 text-[11px] text-fg-subtle">
                       <span className="rounded-md bg-surface-hover/60 px-2 py-0.5 dark:bg-surface-active/50">
-                        {sourceLabel(row.source)}
+                        {sourceLabel(row)}
                       </span>
                       {row.managed ? (
                         <span className="rounded-md bg-surface-hover/60 px-2 py-0.5 dark:bg-surface-active/50">
