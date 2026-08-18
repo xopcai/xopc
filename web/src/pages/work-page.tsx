@@ -17,11 +17,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { WorkbenchActivity } from '@/features/activity/workbench-activity';
 import {
   acknowledgeWorkAttention,
-  confirmWorkIntake,
   decideAgentJudgment,
   fetchWorkHome,
   instructAgentJudgment,
-  proposeWorkIntake,
   respondToWorkDecision,
   retryWorkAttention,
   transitionAgentJudgment,
@@ -29,8 +27,8 @@ import {
   type WorkHomeChat,
   type WorkHomeDecision,
   type WorkHomeResponse,
-  type WorkIntakeProposal,
 } from '@/features/work/work-home-api';
+import { buildWorkChatHandoffUrl } from '@/features/work/work-chat-handoff';
 import { workCopy } from '@/features/work/work-copy';
 import { messages } from '@/i18n/messages';
 import { formatMediumDateTime } from '@/lib/date-formatters';
@@ -261,9 +259,6 @@ export function WorkPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [outcome, setOutcome] = useState('');
-  const [proposal, setProposal] = useState<WorkIntakeProposal | null>(null);
-  const [createBusy, setCreateBusy] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
   const [busyDecisionId, setBusyDecisionId] = useState<string | null>(null);
   const [busyAttentionId, setBusyAttentionId] = useState<string | null>(null);
 
@@ -308,46 +303,14 @@ export function WorkPage() {
   const needsYou = useMemo(() => home?.decisions ?? [], [home]);
   const attention = useMemo(() => home?.attention ?? [], [home]);
 
-  const submitCreate = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+  const submitCreate = useCallback((event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmed = outcome.trim();
     if (!trimmed) return;
-    setCreateBusy(true);
-    setCreateError(null);
-    try {
-      setProposal(await proposeWorkIntake(trimmed));
-    } catch (error) {
-      setCreateError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setCreateBusy(false);
-    }
-  }, [outcome]);
-
-  const confirmCreate = useCallback(async () => {
-    if (!proposal) return;
-    setCreateBusy(true);
-    setCreateError(null);
-    try {
-      const work = await confirmWorkIntake(
-        proposal.id,
-        proposal.executionReadiness.blockingDecision?.id,
-      );
-      setCreateOpen(false);
-      setOutcome('');
-      setProposal(null);
-      await load();
-      navigate(`/work/${encodeURIComponent(work.outcomeId)}`);
-    } catch (error) {
-      setCreateError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setCreateBusy(false);
-    }
-  }, [load, navigate, proposal]);
-
-  const resetCreate = useCallback(() => {
-    setProposal(null);
-    setCreateError(null);
-  }, []);
+    setCreateOpen(false);
+    setOutcome('');
+    navigate(buildWorkChatHandoffUrl(trimmed));
+  }, [navigate, outcome]);
 
   const headerEnd = useMemo(() => (
     <Button type="button" variant="primary" className="h-9 rounded-lg" onClick={() => setCreateOpen(true)}>
@@ -412,10 +375,7 @@ export function WorkPage() {
     <main className="mx-auto flex w-full max-w-[1200px] flex-1 flex-col gap-7 px-4 py-7 sm:px-6 lg:px-8 lg:py-9">
       <Dialog.Root
         open={createOpen}
-        onOpenChange={(open) => {
-          setCreateOpen(open);
-          if (!open) resetCreate();
-        }}
+        onOpenChange={setCreateOpen}
       >
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
@@ -441,7 +401,7 @@ export function WorkPage() {
                 </Button>
               </Dialog.Close>
             </div>
-            {!proposal ? <form onSubmit={(event) => void submitCreate(event)} className="flex min-h-0 flex-1 flex-col">
+            <form onSubmit={submitCreate} className="flex min-h-0 flex-1 flex-col">
               <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-4">
                 <label htmlFor="new-work-outcome" className="mb-2 shrink-0 text-sm font-medium text-fg">
                   {workText.intentLabel}
@@ -470,61 +430,12 @@ export function WorkPage() {
               </div>
               <div className="flex shrink-0 justify-end gap-2 border-t border-edge px-5 py-4">
                 <Dialog.Close asChild><Button type="button" variant="ghost">{t.cancel}</Button></Dialog.Close>
-                <Button type="submit" variant="primary" className="min-w-32" disabled={!outcome.trim() || createBusy}>
+                <Button type="submit" variant="primary" className="min-w-32" disabled={!outcome.trim()}>
                   <Sparkles className="size-4" aria-hidden />
                   {workText.submit}
                 </Button>
               </div>
-            </form> : (
-              <div className="flex min-h-0 flex-1 flex-col">
-                <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-                  <h3 className="text-sm font-semibold text-fg">{workText.proposalTitle}</h3>
-                  <dl className="mt-4 space-y-3 text-sm">
-                    <div className="rounded-xl border border-edge-subtle bg-surface-base p-3">
-                      <dt className="text-xs font-medium text-fg-subtle">{workText.outcomeLabel}</dt>
-                      <dd className="mt-1 leading-6 text-fg">{proposal.objective}</dd>
-                    </div>
-                    <div className="rounded-xl border border-edge-subtle bg-surface-base p-3">
-                      <dt className="text-xs font-medium text-fg-subtle">{workText.nextActionLabel}</dt>
-                      <dd className="mt-1 space-y-1 leading-6 text-fg">
-                        {proposal.outcomeContract.deliverables.map((item) => <p key={item}>· {item}</p>)}
-                      </dd>
-                    </div>
-                    {proposal.outcomeContract.acceptanceCriteria.length > 0 ? (
-                      <div className="rounded-xl border border-edge-subtle bg-surface-base p-3">
-                        <dt className="text-xs font-medium text-fg-subtle">{workText.confirmWork}</dt>
-                        <dd className="mt-1 space-y-1 leading-6 text-fg">
-                          {proposal.outcomeContract.acceptanceCriteria.map((item) => <p key={item}>· {item}</p>)}
-                        </dd>
-                      </div>
-                    ) : null}
-                    {proposal.executionReadiness.blockingDecision ? (
-                      <div className="rounded-xl border border-warning/30 bg-warning-soft/25 p-3">
-                        <dt className="text-xs font-medium text-warning">{workText.blockingDecision}</dt>
-                        <dd className="mt-1 text-sm leading-6 text-fg">
-                          {proposal.executionReadiness.blockingDecision.question}
-                        </dd>
-                        <dd className="mt-2 text-xs leading-5 text-fg-muted">
-                          {proposal.executionReadiness.blockingDecision.recommendation}
-                        </dd>
-                      </div>
-                    ) : (
-                      <p className="text-xs leading-5 text-success">{workText.readyToStart}</p>
-                    )}
-                  </dl>
-                </div>
-                <div className="flex shrink-0 justify-between gap-2 border-t border-edge px-5 py-4">
-                  <Button type="button" variant="ghost" disabled={createBusy} onClick={resetCreate}>{workText.editIntent}</Button>
-                  <Button type="button" variant="primary" className="min-w-36" disabled={createBusy} onClick={() => void confirmCreate()}>
-                    <CircleCheck className="size-4" aria-hidden />
-                    {proposal.executionReadiness.blockingDecision
-                      ? workText.approveAndStart
-                      : workText.confirmWork}
-                  </Button>
-                </div>
-              </div>
-            )}
-            {createError ? <p className="shrink-0 border-t border-danger/20 bg-danger-soft px-5 py-2 text-xs text-danger">{createError}</p> : null}
+            </form>
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
