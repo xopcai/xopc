@@ -15,18 +15,38 @@ import {
   isSkillEnabled,
   scanSkillDirectory,
   formatScanSummary,
+  type LoadSkillsResult,
   type Skill,
 } from '../../agent/skills/index.js';
 import { resolveStateDir, resolveBundledSkillsDir, resolveSkillsLockPath } from '../../config/paths.js';
 import { loadSkillsLock } from '../../agent/skills/hub-lock.js';
 import { pullSkillFromSource, updateSkillFromLock } from '../../agent/skills/hub-pull.js';
+import { ProjectTrustStore } from '../../project-trust/trust-store.js';
 import { register, type CLIContext } from '../registry.js';
 import { createSkillsTestCommand } from './skills-test.js';
 
+export interface WorkspaceSkillCatalogOptions {
+  trustStore?: Pick<ProjectTrustStore, 'get'>;
+  bundledSkillsDir?: string | null;
+}
+
+export function loadWorkspaceSkillCatalog(
+  workspaceDir: string,
+  options: WorkspaceSkillCatalogOptions = {},
+): LoadSkillsResult {
+  const trustStore = options.trustStore ?? new ProjectTrustStore();
+  const loader = createSkillLoader({
+    isWorkspaceTrusted: (resolvedPath) => trustStore.get(resolvedPath) === true,
+  });
+  const bundledSkillsDir = options.bundledSkillsDir === undefined
+    ? resolveBundledSkillsDir()
+    : options.bundledSkillsDir;
+  loader.init(workspaceDir, bundledSkillsDir);
+  return loader.load();
+}
+
 function loadWorkspaceSkillEntries(workspaceDir: string): Array<{ skill: Skill; metadata: Skill['metadata']; enabled: boolean }> {
-  const loader = createSkillLoader();
-  loader.init(workspaceDir, resolveBundledSkillsDir());
-  const result = loader.load();
+  const result = loadWorkspaceSkillCatalog(workspaceDir);
   return result.skills.map(skill => ({
     skill,
     metadata: skill.metadata,
@@ -45,10 +65,8 @@ function createSkillsCommand(ctx: CLIContext): Command {
     .option('-v, --verbose', 'Show detailed information')
     .option('--json', 'Output as JSON')
     .action(async (options) => {
-      const loader = createSkillLoader();
       const workspaceDir = ctx.workspacePath;
-      loader.init(workspaceDir, resolveBundledSkillsDir());
-      const result = loader.load();
+      const result = loadWorkspaceSkillCatalog(workspaceDir);
 
       if (options.json) {
         console.log(JSON.stringify({
@@ -120,9 +138,7 @@ function createSkillsCommand(ctx: CLIContext): Command {
       if (!entry) {
         console.error(`Error: Skill "${skillName}" not found in workspace`);
         console.log('\nAvailable skills:');
-        const loader = createSkillLoader();
-        const result = loader.load();
-        for (const skill of result.skills) {
+        for (const { skill } of entries) {
           console.log(`  - ${skill.name}`);
         }
         process.exit(1);
@@ -229,10 +245,8 @@ function createSkillsCommand(ctx: CLIContext): Command {
     .description('Show skill status')
     .option('--json', 'Output as JSON')
     .action(async (skillName, options) => {
-      const loader = createSkillLoader();
       const workspaceDir = ctx.workspacePath;
-      loader.init(workspaceDir, resolveBundledSkillsDir());
-      const result = loader.load();
+      const result = loadWorkspaceSkillCatalog(workspaceDir);
       const configManager = createSkillConfigManager(resolveStateDir());
       const config = configManager.load();
 
@@ -321,10 +335,8 @@ function createSkillsCommand(ctx: CLIContext): Command {
     .description('Security audit for skills')
     .option('--deep', 'Show detailed findings')
     .action(async (skillName, options) => {
-      const loader = createSkillLoader();
       const workspaceDir = ctx.workspacePath;
-      loader.init(workspaceDir, resolveBundledSkillsDir());
-      const result = loader.load();
+      const result = loadWorkspaceSkillCatalog(workspaceDir);
 
       async function auditSkill(skill: typeof result.skills[0]) {
         const summary = await scanSkillDirectory(skill.baseDir);
