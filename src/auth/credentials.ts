@@ -11,10 +11,11 @@ import {
 } from '../config/paths.js';
 import type { Config } from '../config/schema.js';
 import { getOAuthProviderDefinition } from './oauth/registry.js';
+import type { OAuthCredentials } from './oauth/types.js';
+import { withOAuthProviderLock } from './oauth-provider-lock.js';
 
 const log = createLogger('Credentials');
 const warnedExpiredOAuthTokens = new Set<string>();
-const oauthRefreshes = new Map<string, Promise<OAuthToken>>();
 
 // ============================================
 // Types
@@ -39,6 +40,45 @@ export interface OAuthToken {
   scope?: string[];
   createdAt: string;
   updatedAt: string;
+}
+
+type PersistedOAuthToken = OAuthToken & Record<string, unknown>;
+type OAuthTokenInput = Omit<OAuthToken, 'type' | 'provider' | 'updatedAt'> & Record<string, unknown>;
+
+function toOAuthCredentials(token: OAuthToken): OAuthCredentials {
+  const {
+    type: _type,
+    provider: _provider,
+    expiresAt,
+    createdAt: _createdAt,
+    updatedAt: _updatedAt,
+    ...providerFields
+  } = token as PersistedOAuthToken;
+  return {
+    ...providerFields,
+    access: token.access,
+    refresh: token.refresh ?? '',
+    expires: expiresAt ?? Number.MAX_SAFE_INTEGER,
+  } as OAuthCredentials;
+}
+
+function normalizeLegacyOAuthToken(token: OAuthToken): OAuthToken {
+  if (token.provider !== 'google-gemini-cli' && token.provider !== 'google-antigravity') return token;
+  let access = token.access;
+  let projectId = (token as PersistedOAuthToken).projectId;
+  for (let depth = 0; depth < 5; depth += 1) {
+    try {
+      const legacy = JSON.parse(access) as { token?: unknown; projectId?: unknown };
+      if (typeof legacy.token !== 'string' || !legacy.token) break;
+      access = legacy.token;
+      if (typeof projectId !== 'string' && typeof legacy.projectId === 'string') {
+        projectId = legacy.projectId;
+      }
+    } catch {
+      break;
+    }
+  }
+  return access === token.access ? token : { ...token, access, projectId } as PersistedOAuthToken;
 }
 
 export type CredentialProfile = ApiKeyProfile;
@@ -86,7 +126,7 @@ export class CredentialResolver {
 
     if (oauthDefinition?.oauthOnly) {
       const token = await this.loadOAuthToken(normalizedProvider);
-      return token?.access ?? null;
+      return token ? oauthDefinition.provider.getApiKey(toOAuthCredentials(token)) : null;
     }
 
     // 1. Try agent private credentials
@@ -109,7 +149,9 @@ export class CredentialResolver {
     const oauthToken = await this.loadOAuthToken(normalizedProvider);
     if (oauthToken) {
       log.debug({ provider, source: 'oauth' }, 'Resolved API key from OAuth token');
-      return oauthToken.access;
+      return oauthDefinition
+        ? oauthDefinition.provider.getApiKey(toOAuthCredentials(oauthToken))
+        : oauthToken.access;
     }
 
     // 4. Environment variables (see `src/providers/env-keys.ts`)
@@ -126,8 +168,7 @@ export class CredentialResolver {
    * Check if a provider has credentials configured
    */
   async hasCredentials(provider: string): Promise<boolean> {
-    const key = await this.resolveApiKey(provider);
-    return key !== null;
+    return await this.resolveApiKeySource(provider) !== null;
   }
 
   /**
@@ -139,7 +180,7 @@ export class CredentialResolver {
     const normalizedProvider = provider.toLowerCase();
 
     if (getOAuthProviderDefinition(normalizedProvider)?.oauthOnly) {
-      return await this.loadOAuthToken(normalizedProvider) ? 'oauth' : null;
+      return await this.hasUsableOAuthTokenRecord(normalizedProvider) ? 'oauth' : null;
     }
 
     if (this.agentId) {
@@ -150,7 +191,7 @@ export class CredentialResolver {
     const globalKey = await this.loadFromGlobalCredentials(normalizedProvider);
     if (globalKey) return 'global';
 
-    const oauthToken = await this.loadOAuthToken(normalizedProvider);
+    const oauthToken = await this.hasUsableOAuthTokenRecord(normalizedProvider);
     if (oauthToken) return 'oauth';
 
     if (getApiKeyFromEnv(normalizedProvider)) return 'env';
@@ -247,39 +288,42 @@ export class CredentialResolver {
    * Load OAuth token for a provider.
    */
   async loadOAuthToken(provider: string): Promise<OAuthToken | null> {
-    const token = await this.loadOAuthTokenRecord(provider);
+    const normalizedProvider = provider.toLowerCase();
+    let token = await this.loadOAuthTokenRecord(normalizedProvider);
     if (!token) return null;
-    const expiresAt = token.expiresAt ?? Number.POSITIVE_INFINITY;
+    let expiresAt = token.expiresAt ?? Number.POSITIVE_INFINITY;
     if (expiresAt <= Date.now() + 60_000 && token.refresh) {
-      const definition = getOAuthProviderDefinition(provider);
+      const definition = getOAuthProviderDefinition(normalizedProvider);
       if (definition) {
-        let pending = oauthRefreshes.get(provider);
-        if (!pending) {
-          pending = definition.provider.refreshToken({
-            access: token.access,
-            refresh: token.refresh,
-            expires: expiresAt,
-          }).then(async (refreshed) => {
-            const updated: OAuthToken = {
-              ...token,
-              access: definition.provider.getApiKey(refreshed),
+        try {
+          token = await withOAuthProviderLock(normalizedProvider, async () => {
+            const current = await this.loadOAuthTokenRecord(normalizedProvider);
+            if (!current) return null;
+            const currentExpiresAt = current.expiresAt ?? Number.POSITIVE_INFINITY;
+            if (currentExpiresAt > Date.now() + 60_000 || !current.refresh) return current;
+            const refreshed = await definition.provider.refreshToken(toOAuthCredentials(current));
+            const { expires, ...refreshedFields } = refreshed;
+            const updated = {
+              ...current,
+              ...refreshedFields,
+              access: refreshed.access,
               refresh: refreshed.refresh,
-              expiresAt: refreshed.expires,
+              expiresAt: expires,
               scope: Array.isArray(refreshed.scope)
                 ? refreshed.scope.filter((value): value is string => typeof value === 'string')
-                : token.scope,
+                : current.scope,
               updatedAt: new Date().toISOString(),
-            };
-            await this.saveOAuthToken(provider, updated);
+            } as PersistedOAuthToken;
+            await this.saveOAuthToken(normalizedProvider, updated);
             return updated;
-          }).finally(() => oauthRefreshes.delete(provider));
-          oauthRefreshes.set(provider, pending);
-        }
-        try {
-          return await pending;
+          });
+          if (!token) return null;
+          expiresAt = token.expiresAt ?? Number.POSITIVE_INFINITY;
         } catch (err) {
+          token = await this.loadOAuthTokenRecord(normalizedProvider) ?? token;
+          expiresAt = token.expiresAt ?? Number.POSITIVE_INFINITY;
           if (expiresAt > Date.now()) {
-            log.warn({ err, provider }, 'OAuth refresh failed; using the current access token');
+            log.warn({ err, provider: normalizedProvider }, 'OAuth refresh failed; using the current access token');
             return token;
           }
         }
@@ -298,6 +342,13 @@ export class CredentialResolver {
     return token;
   }
 
+  private async hasUsableOAuthTokenRecord(provider: string): Promise<OAuthToken | null> {
+    const token = await this.loadOAuthTokenRecord(provider);
+    if (!token?.access?.trim()) return null;
+    if (token.expiresAt && token.expiresAt <= Date.now() && !token.refresh?.trim()) return null;
+    return token;
+  }
+
   /**
    * Load the raw OAuth token record, including expired tokens for status UIs.
    */
@@ -307,8 +358,8 @@ export class CredentialResolver {
 
     try {
       const content = await readFile(oauthPath, 'utf-8');
-      const token = JSON.parse(content) as OAuthToken;
-      return token.provider === normalizedProvider ? token : null;
+      const token = JSON.parse(content) as PersistedOAuthToken;
+      return token.provider === normalizedProvider ? normalizeLegacyOAuthToken(token) : null;
     } catch {
       return null;
     }
@@ -343,23 +394,39 @@ export class CredentialResolver {
   }
 
   /**
+   * Save raw provider OAuth credentials without converting them to an API key representation.
+   */
+  async saveOAuthCredentials(provider: string, credentials: OAuthCredentials): Promise<void> {
+    const { access, refresh, expires, scope, ...providerFields } = credentials;
+    await this.saveOAuthToken(provider, {
+      ...providerFields,
+      access,
+      refresh,
+      expiresAt: expires,
+      scope: Array.isArray(scope)
+        ? scope.filter((value): value is string => typeof value === 'string')
+        : undefined,
+      createdAt: new Date().toISOString(),
+    });
+  }
+
+  /**
    * Save OAuth token for a provider.
    */
-  async saveOAuthToken(provider: string, token: Omit<OAuthToken, 'type' | 'provider' | 'updatedAt'>): Promise<void> {
+  async saveOAuthToken(provider: string, token: OAuthTokenInput): Promise<void> {
     const normalizedProvider = provider.toLowerCase();
-    const oauthPath = resolveOAuthPath(normalizedProvider);
-
-    await mkdir(dirname(oauthPath), { recursive: true });
-
-    const fullToken: OAuthToken = {
-      ...token,
-      type: 'oauth',
-      provider: normalizedProvider,
-      updatedAt: new Date().toISOString(),
-    };
-
-    await writeTextAtomic(oauthPath, JSON.stringify(fullToken, null, 2));
-    log.info({ provider: normalizedProvider }, 'Saved OAuth token');
+    await withOAuthProviderLock(normalizedProvider, async () => {
+      const oauthPath = resolveOAuthPath(normalizedProvider);
+      await mkdir(dirname(oauthPath), { recursive: true });
+      const fullToken = {
+        ...token,
+        type: 'oauth',
+        provider: normalizedProvider,
+        updatedAt: new Date().toISOString(),
+      } as PersistedOAuthToken;
+      await writeTextAtomic(oauthPath, JSON.stringify(fullToken, null, 2));
+      log.info({ provider: normalizedProvider }, 'Saved OAuth token');
+    });
   }
 
   /**
@@ -367,9 +434,11 @@ export class CredentialResolver {
    */
   async deleteOAuthToken(provider: string): Promise<void> {
     const normalizedProvider = provider.toLowerCase();
-    const oauthPath = resolveOAuthPath(normalizedProvider);
-    await rm(oauthPath, { force: true });
-    log.info({ provider: normalizedProvider }, 'Deleted OAuth token');
+    await withOAuthProviderLock(normalizedProvider, async () => {
+      const oauthPath = resolveOAuthPath(normalizedProvider);
+      await rm(oauthPath, { force: true });
+      log.info({ provider: normalizedProvider }, 'Deleted OAuth token');
+    });
   }
 
   /**

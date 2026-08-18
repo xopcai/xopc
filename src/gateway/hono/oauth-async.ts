@@ -417,13 +417,7 @@ async function runOAuthFlow(
     setOAuthCredentialsToCache(session.provider, credentials);
 
     const resolver = new CredentialResolver();
-    await resolver.saveOAuthToken(session.provider, {
-      access: oauthProvider.getApiKey(credentials),
-      refresh: credentials.refresh,
-      expiresAt: credentials.expires,
-      scope: Array.isArray(credentials.scope) ? credentials.scope.filter((value): value is string => typeof value === 'string') : undefined,
-      createdAt: new Date().toISOString(),
-    });
+    await resolver.saveOAuthCredentials(session.provider, credentials);
 
     session.status = 'completed';
     session.credentials = credentials;
