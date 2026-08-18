@@ -4,6 +4,8 @@ import { McpHeadersEditor } from '@/features/connectors/mcp/mcp-headers-editor';
 import {
   connectionTimeoutSeconds,
   parseConnectionTimeoutSeconds,
+  parseRequestTimeoutSeconds,
+  requestTimeoutSeconds,
   type McpServerRow,
   type McpTransportKind,
 } from '@/features/connectors/mcp/mcp-config-api';
@@ -171,6 +173,23 @@ export function McpServerFormFields({ row, t, onUpdate, idConflictMessage, varia
             onChange={(e) =>
               onUpdate({
                 connectionTimeoutMs: parseConnectionTimeoutSeconds(e.target.value),
+              })
+            }
+          />
+        </Field>
+      ) : null}
+      {showAdvanced ? (
+        <Field label={t.requestTimeoutLabel} description={t.requestTimeoutHint}>
+          <input
+            type="number"
+            min={1}
+            max={14_400}
+            className={inputClassName()}
+            value={requestTimeoutSeconds(row)}
+            placeholder={t.requestTimeoutPlaceholder}
+            onChange={(e) =>
+              onUpdate({
+                requestTimeoutMs: parseRequestTimeoutSeconds(e.target.value),
               })
             }
           />

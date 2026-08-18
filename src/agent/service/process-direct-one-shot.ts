@@ -59,6 +59,9 @@ export async function runProcessDirect(
     sessionKey: string;
     attachments?: InboundAttachmentInput[];
     thinking?: string;
+    signal?: AbortSignal;
+    runId?: string;
+    deadlineAtMs?: number;
   },
 ): Promise<string> {
   const { channel, chatId } = await deps.resolveSessionEndpoint(input.sessionKey);
@@ -129,7 +132,10 @@ export async function runProcessDirect(
               { ...deps, config: deps.config },
               {
                 sessionKey: input.sessionKey,
+                runId: input.runId,
                 userMessage,
+                abortSignal: input.signal,
+                deadlineAtMs: input.deadlineAtMs,
               },
             ),
         );

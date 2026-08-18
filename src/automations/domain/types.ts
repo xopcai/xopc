@@ -1,7 +1,6 @@
 import type { WorkflowRunInputEnvelope } from '../../workflows/domain/index.js';
 import type {
-  StartWorkflowRunServiceParams,
-  WorkflowRunServiceResult,
+  WorkflowRunServiceLike,
 } from '../../workflows/service/workflow-run-service.types.js';
 
 export type AutomationSchedule =
@@ -53,10 +52,21 @@ export type AutomationAfterRun =
   | { kind: 'webhook'; url: string };
 
 export interface AutomationReliability {
+  /** Overall run deadline. `timeoutSeconds` remains a read-only legacy fallback. */
+  executionTimeoutSeconds?: number;
   timeoutSeconds?: number;
   retryCount?: number;
   maxConcurrentRuns?: number;
   disableAfterConsecutiveFailures?: number;
+}
+
+export type AutomationRunPhase = 'queued' | 'action' | 'after_run' | 'cancelling' | 'completed';
+
+export interface AutomationRunTermination {
+  reason: 'completed' | 'failed' | 'user_cancelled' | 'deadline_exceeded';
+  component?: 'automation' | 'agent_turn' | 'tool' | 'mcp' | 'process';
+  componentName?: string;
+  cancellationConfirmed: boolean;
 }
 
 export type AutomationSafetyMode = 'suggest_only' | 'ask_before_apply' | 'auto_apply';
@@ -93,6 +103,7 @@ export interface Automation {
 export type AutomationRunStatus =
   | 'queued'
   | 'running'
+  | 'cancelling'
   | 'succeeded'
   | 'failed'
   | 'cancelled'
@@ -115,12 +126,28 @@ export interface AutomationRun {
   sessionKey?: string;
   workflowRunId?: string;
   model?: string;
+  deadlineAtMs?: number;
+  currentPhase?: AutomationRunPhase;
+  cancelRequestedAtMs?: number;
+  cancelConfirmedAtMs?: number;
+  termination?: AutomationRunTermination;
+  heartbeatAtMs?: number;
+  leaseOwner?: string;
+  leaseExpiresAtMs?: number;
+  attemptNumber?: number;
+  rootRunId?: string;
 }
 
 export type AutomationRunEventType =
   | 'run.queued'
   | 'run.started'
+  | 'run.deadline_resolved'
+  | 'run.cancel_requested'
+  | 'run.cancel_confirmed'
+  | 'run.cancellation_unconfirmed'
+  | 'run.recovered'
   | 'action.started'
+  | 'action.retry_scheduled'
   | 'action.completed'
   | 'action.failed'
   | 'after_run.started'
@@ -169,15 +196,19 @@ export interface AutomationDeps {
       applyAutomationModelOverride?: (sessionKey: string, model: string | undefined) => Promise<boolean>;
     };
     turnDispatcher?: {
-      processDirect: (message: string, sessionKey: string) => Promise<string>;
+      processDirect: (
+        message: string,
+        sessionKey: string,
+        attachments?: unknown[],
+        thinking?: string,
+        options?: { signal?: AbortSignal; runId?: string; deadlineAtMs?: number },
+      ) => Promise<string>;
     };
     getModelForSession?: (sessionKey: string) => string | undefined;
   };
   getDefaultAgentId?: () => string;
   getProjectWorkspaceRoot?: (projectId: string) => string | undefined;
-  workflowRunService?: {
-    startWorkflowRun(params: StartWorkflowRunServiceParams): Promise<WorkflowRunServiceResult>;
-  };
+  workflowRunService?: WorkflowRunServiceLike;
   browserRecipeService?: {
     runAndWait(recipeId: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<{
       id: string;
@@ -196,4 +227,10 @@ export interface AutomationActionOutcome {
   sessionKey?: string;
   workflowRunId?: string;
   model?: string;
+  deadlineAtMs?: number;
+  termination?: AutomationRunTermination;
+}
+
+export interface AutomationActionExecutionHooks {
+  onRunPatch?: (patch: Partial<AutomationRun>) => void | Promise<void>;
 }

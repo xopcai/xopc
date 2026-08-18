@@ -293,6 +293,7 @@
     "status": {
       "queued": "queued",
       "running": "running",
+      "cancelling": "stopping",
       "succeeded": "succeeded",
       "failed": "failed",
       "cancelled": "cancelled",
@@ -337,7 +338,10 @@
       "webhookUrl": "Webhook URL",
       "reliability": "Reliability",
       "timeoutSeconds": "Timeout seconds",
-      "disableAfterFailures": "Disable after failures"
+      "disableAfterFailures": "Disable after failures",
+      "effectivePolicy": "Effective execution policy",
+      "executionDeadline": "Automation deadline",
+      "downstreamTimeoutHint": "Agent turns, built-in tools, and MCP requests use their effective Agent and connector policies. The earliest deadline always wins."
     },
     "afterRun": {
       "none": "Do nothing",
