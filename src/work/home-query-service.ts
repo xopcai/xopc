@@ -203,7 +203,7 @@ function attentionDetail(
     : 'The workflow did not complete. Review the details and retry.';
 }
 
-function decisionFromGoal(goal: GoalWithDetails, projectName?: string): HomeDecision | null {
+export function decisionFromGoal(goal: GoalWithDetails, projectName?: string): HomeDecision | null {
   if (goal.status !== 'needs_input' && goal.status !== 'blocked') return null;
   return {
     id: `goal:${goal.id}`,
@@ -212,7 +212,7 @@ function decisionFromGoal(goal: GoalWithDetails, projectName?: string): HomeDeci
     detail: goal.blockedReason || goal.nextAction,
     reason: goal.status,
     urgency: 'now',
-    href: `/goals/${encodeURIComponent(goal.id)}`,
+    href: `/work/${encodeURIComponent(goal.outcomeId)}`,
     projectId: goal.projectId,
     projectName,
     updatedAt: goal.updatedAt,
