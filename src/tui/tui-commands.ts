@@ -190,7 +190,6 @@ export function formatTuiHelpText(
   const editorExternal = keyLabel(keybindings, 'app.editor.external', 'Ctrl+G');
   const suspend = keyLabel(keybindings, 'app.suspend', 'Ctrl+Z');
   const followUp = keyLabel(keybindings, 'app.message.followUp', 'Alt+Enter');
-  const dequeue = keyLabel(keybindings, 'app.message.dequeue', 'Alt+Up');
   const pasteImage = keyLabel(keybindings, 'app.clipboard.pasteImage', 'Ctrl+V / Alt+V');
   const clearInput = keyLabel(keybindings, 'app.clear', 'Ctrl+C');
   const exit = keyLabel(keybindings, 'app.exit', 'Ctrl+D');
@@ -228,7 +227,6 @@ export function formatTuiHelpText(
   lines.push(`  ${editorExternal} — Edit draft in $EDITOR`);
   lines.push(`  ${suspend} — Suspend to shell (Unix)`);
   lines.push(`  ${followUp} — Queue follow-up while busy (sends when this reply finishes)`);
-  lines.push(`  ${dequeue} — Restore queued messages to editor`);
   lines.push('  Enter (while busy) — Steer: inject at next tool boundary');
   lines.push(`  ${pasteImage} — Paste image from clipboard`);
   lines.push('  /settings — Theme, thinking display, terminal progress, …');
@@ -751,8 +749,6 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
       chatLog.addSystem(`session ${state.currentSessionKey} reset`);
     } else {
       chatLog.clearAll();
-      state.messageFollowUpQueue.length = 0;
-      state.steeringQueue.length = 0;
       chatLog.addSystem('Session cleared (reset not available in this mode).');
     }
     tui.requestRender();
@@ -1421,8 +1417,6 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
               chatLog.addSystem(`new session: ${state.currentSessionKey}`);
             } else {
               chatLog.clearAll();
-              state.messageFollowUpQueue.length = 0;
-              state.steeringQueue.length = 0;
               chatLog.addSystem('New session requires gateway or local session support.');
             }
             tui.requestRender();
@@ -1455,8 +1449,6 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
         return;
       case 'clear':
         chatLog.clearAll();
-        state.messageFollowUpQueue.length = 0;
-        state.steeringQueue.length = 0;
         chatLog.addSystem('TUI view cleared. Session transcript was not reset.');
         tui.requestRender();
         return;

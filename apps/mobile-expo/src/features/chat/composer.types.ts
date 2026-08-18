@@ -1,4 +1,4 @@
-/** Wire attachment shape for POST /api/agent (keep in sync with gateway + web). */
+/** Wire attachment shape for the session input API (keep in sync with gateway + web). */
 export type WireAttachment = {
   type: string;
   mimeType?: string;

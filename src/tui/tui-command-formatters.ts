@@ -633,8 +633,7 @@ export function formatTuiSessionInfo(state: TuiState, stats?: TuiSessionStats): 
     `Context: ${contextLabel}`,
     `Tools: ${state.toolsExpanded ? 'expanded' : 'collapsed'}`,
     `Thinking Display: ${state.showThinking ? 'on' : 'off'}`,
-    `Queue: ${state.messageFollowUpQueue.length}`,
-    `Steering Queue: ${state.steeringQueue.length}`,
+    `Pending Inputs: ${state.pendingInputCount}`,
     ...formatTuiSessionStatsBlock(stats),
   ].join('\n');
 }

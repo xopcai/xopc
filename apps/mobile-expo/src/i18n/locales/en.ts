@@ -282,6 +282,7 @@ export const en = {
     followUpQueueMoveDown: 'Move down',
     followUpQueueSteerNow: 'Inject as steering (tool boundary)',
     followUpQueueRemove: 'Remove from queue',
+    followUpStatusInterrupted: 'Needs retry',
     followUpQueueAttachmentsNote: 'Rows with attachments cannot use ✨ steer; they send as full messages in order.',
     followUpQueueMaxReached: 'Follow-up queue is full (max {{max}}). Remove one or wait for the run to finish.',
     takePhoto: 'Take photo',

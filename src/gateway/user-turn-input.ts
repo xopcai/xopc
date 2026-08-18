@@ -15,7 +15,6 @@ export interface UserTurnAttachment {
 export interface UserTurnInput {
   text: string;
   attachments?: UserTurnAttachment[];
-  clientCreatedAtMs?: number;
 }
 
 export function mediaRefsToUserTurnAttachments(media: MediaRef[] | undefined): UserTurnAttachment[] | undefined {

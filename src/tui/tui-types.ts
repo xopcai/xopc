@@ -109,10 +109,7 @@ export interface TuiState {
   /** Last Ctrl+C timestamp for double-press exit (see `resolveCtrlCAction`). */
   lastCtrlCAt: number;
   exitRequested: boolean;
-  /** Queued via Alt+Enter while a run is active; flushed FIFO when the run ends. */
-  messageFollowUpQueue: string[];
-  /** Queued Enter-while-busy steering messages after the first in-flight steer. */
-  steeringQueue: string[];
+  pendingInputCount: number;
   /** Ctrl+P cycle filter; `null` = all models from catalog. */
   scopedModelRefs: string[] | null;
   /** Last Escape timestamp for double-press actions. */
@@ -151,8 +148,7 @@ export function createInitialState(sessionKey: string): TuiState {
     showThinking: false,
     lastCtrlCAt: 0,
     exitRequested: false,
-    messageFollowUpQueue: [],
-    steeringQueue: [],
+    pendingInputCount: 0,
     scopedModelRefs: null,
     lastEscapeAt: 0,
     progressMessage: null,

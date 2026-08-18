@@ -342,11 +342,11 @@ export interface TuiReplacementResult {
 export interface TuiReplacedSessionContext extends TuiActionContext {
   sendMessage<T = unknown>(
     message: TuiCustomMessage<T>,
-    options?: { triggerTurn?: boolean; deliverAs?: 'steer' | 'followUp' | 'nextTurn' },
+    options?: { triggerTurn?: boolean; deliverAs?: 'steer' | 'next' | 'nextTurn' },
   ): Promise<void>;
   sendUserMessage(
     content: string | Array<{ type: string; text?: string; [key: string]: unknown }>,
-    options?: { deliverAs?: 'steer' | 'followUp' },
+    options?: { deliverAs?: 'steer' | 'next' },
   ): Promise<void>;
 }
 

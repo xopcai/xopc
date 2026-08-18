@@ -135,6 +135,20 @@ export interface TuiStartupResources {
   connectors: string[];
 }
 
+export interface TuiChatInputState {
+  sessionKey: string;
+  revision: number;
+  inputs: Array<{ id: string; status: string }>;
+}
+
+export function countPendingChatInputs(inputs: readonly unknown[]): number {
+  return inputs.filter((input) => {
+    if (!input || typeof input !== 'object') return false;
+    const status = (input as { status?: unknown }).status;
+    return status === 'queued' || status === 'interrupted';
+  }).length;
+}
+
 export interface TuiWorkspaceFileSearchEntry {
   name: string;
   path: string;
@@ -226,7 +240,8 @@ export interface TuiBackend {
   abortChat(opts: { sessionKey: string; runId: string }): Promise<{ ok: boolean }>;
 
   /** Inject steering text into an active run (tool-boundary delivery). */
-  steerChat(opts: { sessionKey: string; message: string }): Promise<{ ok: boolean }>;
+  submitChatInput(opts: { sessionKey: string; message: string; delivery: 'next' | 'steer' }): Promise<{ ok: boolean; effectiveDelivery?: 'next' | 'steer' }>;
+  getChatInputState(sessionKey: string): Promise<TuiChatInputState>;
 
   /** Start a workflow run directly, without routing through the LLM. */
   startWorkflowRun?(opts: TuiWorkflowRunStartRequest): Promise<TuiWorkflowRunStartResult>;

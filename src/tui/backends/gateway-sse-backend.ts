@@ -1,3 +1,5 @@
+import crypto from 'node:crypto';
+
 import { prependEnvelopeTimestamp } from '../../channels/envelope-timestamp.js';
 import { parseModelRef } from '../../agent/models/selection.js';
 import type { ExportFormat } from '../../session/types.js';
@@ -11,6 +13,7 @@ import type {
   HistoryMessage,
   TuiBackend,
   TuiCompactionResult,
+  TuiChatInputState,
   TuiComposerHistoryItem,
   TuiEvent,
   TuiModelChoice,
@@ -75,7 +78,7 @@ async function gatewayFetch(
 /**
  * TUI backend that communicates with a running xopc gateway via HTTP + SSE.
  *
- * - Agent streaming: `POST /api/agent` with `Accept: text/event-stream`
+ * - Agent input: durable session input REST plus resumable run SSE
  * - Broadcast events: `GET /api/events` via long-lived SSE
  * - REST calls for sessions, models, etc.
  */
@@ -132,148 +135,31 @@ export class GatewaySseBackend implements TuiBackend {
     return body.item;
   }
 
-  // ── Agent chat (POST /api/agent → SSE response body) ──
+  // ── Agent chat ──
 
   async sendChat(opts: ChatSendOptions): Promise<{ runId: string }> {
     this.chatAbort?.abort();
     this.chatAbort = new AbortController();
     const signal = this.chatAbort.signal;
-    const runId = crypto.randomUUID();
-
-    // Fire-and-forget: run the HTTP request + SSE consumption in background
-    // so the TUI event loop stays responsive for keyboard input.
-    void (async () => {
-      try {
-        const res = await gatewayFetch(this.baseUrl, '/api/agent', this.credential, {
-          method: 'POST',
-          headers: { Accept: 'text/event-stream' },
-          body: JSON.stringify({
-            // Prepend envelope timestamp for regular messages so the model knows
-            // the current date/time. Skip for slash commands — parseSlashCommand
-            // requires lines starting with '/'.
-            message: opts.message.trimStart().startsWith('/') ? opts.message : prependEnvelopeTimestamp(opts.message),
-            channel: 'webchat',
-            sessionKey: opts.sessionKey,
-            attachments: opts.attachments,
-            thinking: opts.thinking,
-          }),
-          signal,
-        });
-
-        if (!res.ok) {
-          const body = (await res.json().catch(() => ({}))) as {
-            error?: { message?: string };
-          };
-          this.onEvent?.({
-            event: 'error',
-            data: {
-              type: 'error',
-              runId,
-              sessionKey: opts.sessionKey,
-              timestamp: Date.now(),
-              payload: {
-                code: 'GATEWAY_ERROR',
-                message: body.error?.message ?? `Gateway error: ${res.status}`,
-              },
-            },
-            source: 'agent-response',
-          });
-          return;
-        }
-
-        const contentType = res.headers.get('Content-Type') ?? '';
-
-        if (contentType.includes('text/event-stream') && res.body) {
-          await consumeSSEStream(
-            res.body,
-            (sseEvent) => {
-              if (signal.aborted) return;
-              const data = parseSSEData<Record<string, unknown>>(sseEvent.data);
-              if (!data) return;
-              this.onEvent?.({
-                event: sseEvent.event,
-                data,
-                source: 'agent-response',
-              });
-            },
-            signal,
-          );
-        } else {
-          const json = (await res.json()) as {
-            ok?: boolean;
-            payload?: { content?: string };
-          };
-          if (json.ok && json.payload?.content) {
-            const messageId = `msg_${runId}_1`;
-            const base = {
-              runId,
-              sessionKey: opts.sessionKey,
-              timestamp: Date.now(),
-            };
-            this.onEvent?.({
-              event: 'run_start',
-              data: {
-                ...base,
-                type: 'run_start',
-                payload: { channel: 'webchat' },
-              },
-              source: 'agent-response',
-            });
-            this.onEvent?.({
-              event: 'assistant_message_start',
-              data: {
-                ...base,
-                type: 'assistant_message_start',
-                payload: { messageId },
-              },
-              source: 'agent-response',
-            });
-            this.onEvent?.({
-              event: 'assistant_delta',
-              data: {
-                ...base,
-                type: 'assistant_delta',
-                payload: { messageId, delta: json.payload.content },
-              },
-              source: 'agent-response',
-            });
-            this.onEvent?.({
-              event: 'assistant_message_end',
-              data: {
-                ...base,
-                type: 'assistant_message_end',
-                payload: { messageId },
-              },
-              source: 'agent-response',
-            });
-            this.onEvent?.({
-              event: 'run_end',
-              data: {
-                ...base,
-                type: 'run_end',
-                payload: { status: 'success' },
-              },
-              source: 'agent-response',
-            });
-          }
-        }
-      } catch (error) {
-        if (signal.aborted) return;
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        this.onEvent?.({
-          event: 'error',
-          data: {
-            type: 'error',
-            runId,
-            sessionKey: opts.sessionKey,
-            timestamp: Date.now(),
-            payload: { code: 'NETWORK_ERROR', message: errorMessage },
-          },
-          source: 'agent-response',
-        });
-      }
-    })();
-
+    const clientMessageId = crypto.randomUUID();
+    const res = await gatewayFetch(this.baseUrl, `/api/sessions/${encodeURIComponent(opts.sessionKey)}/inputs`, this.credential, {
+      method: 'POST',
+      body: JSON.stringify({
+        clientMessageId, delivery: 'next',
+        content: opts.message.trimStart().startsWith('/') ? opts.message : prependEnvelopeTimestamp(opts.message),
+        attachments: opts.attachments, thinking: opts.thinking,
+      }),
+      signal,
+    });
+    const json = await res.json().catch(() => null) as {
+      payload?: { state?: { activeRunId?: string; activeInputId?: string; inputs?: Array<{ id: string; clientMessageId: string }> } };
+      error?: { message?: string };
+    } | null;
+    if (!res.ok) throw new Error(json?.error?.message ?? `Gateway error: ${res.status}`);
+    const state = json?.payload?.state;
+    const own = state?.inputs?.find((input) => input.clientMessageId === clientMessageId);
+    const runId = state?.activeRunId ?? crypto.randomUUID();
+    if (state?.activeRunId && own?.id === state.activeInputId) void this.resumeChat({ sessionKey: opts.sessionKey, runId });
     return { runId };
   }
 
@@ -474,21 +360,29 @@ export class GatewaySseBackend implements TuiBackend {
     }
   }
 
-  async steerChat(opts: { sessionKey: string; message: string }): Promise<{ ok: boolean }> {
+  async submitChatInput(opts: { sessionKey: string; message: string; delivery: 'next' | 'steer' }): Promise<{ ok: boolean; effectiveDelivery?: 'next' | 'steer' }> {
     try {
-      const res = await gatewayFetch(this.baseUrl, '/api/agent/steer', this.credential, {
+      const res = await gatewayFetch(this.baseUrl, `/api/sessions/${encodeURIComponent(opts.sessionKey)}/inputs`, this.credential, {
         method: 'POST',
         body: JSON.stringify({
-          sessionKey: opts.sessionKey,
-          message: opts.message,
+          clientMessageId: crypto.randomUUID(),
+          delivery: opts.delivery,
+          content: opts.message,
         }),
       });
       if (!res.ok) return { ok: false };
-      const json = (await res.json()) as { ok?: boolean };
-      return { ok: json.ok === true };
+      const json = (await res.json()) as { ok?: boolean; payload?: { effectiveDelivery?: 'next' | 'steer' } };
+      return { ok: json.ok === true, effectiveDelivery: json.payload?.effectiveDelivery };
     } catch {
       return { ok: false };
     }
+  }
+
+  async getChatInputState(sessionKey: string): Promise<TuiChatInputState> {
+    const res = await gatewayFetch(this.baseUrl, `/api/sessions/${encodeURIComponent(sessionKey)}/input-state`, this.credential);
+    if (!res.ok) throw new Error(`Input state failed (${res.status})`);
+    const json = await res.json() as { payload: TuiChatInputState };
+    return json.payload;
   }
 
   // ── REST helpers ──

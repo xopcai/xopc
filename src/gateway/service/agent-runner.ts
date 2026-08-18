@@ -1,3 +1,5 @@
+import crypto from 'node:crypto';
+
 /**
  * GatewayAgentRunner — webchat agent invocation and the surrounding control
  * surface (abort, steer, clarify-bridge plumbing, scheduled Outcome continuations).
@@ -8,7 +10,6 @@
  *
  *   - `runAgent(message, channel, chatId, ...)` — wraps {@link runGatewayAgent}
  *   - `abortAgentRun(runId)` — POST /api/agent/abort + cleanup
- *   - `steerWebchatAgent(chatId, message)` — Agent.steer queue at tool boundary
  *   - `submitClarifyResponse(requestId, answer)` — UI answers a `clarify` call
  *   - `runScheduledWebchatTurn(sk, userTurn)` — background webchat user turn
  *   - `drainScheduledWebchatContinuation(sk, msg)` — background Outcome continuation
@@ -30,6 +31,7 @@ import { runGatewayAgent } from './run-gateway-agent.js';
 import type { UserTurnAttachment, UserTurnInput } from '../user-turn-input.js';
 import { createLogger } from '../../utils/logger.js';
 import type { ExecutionReceipt } from '../../storage/sqlite/execution-receipt-repository.js';
+import { SessionInputCoordinator, type SubmitSessionInput } from './session-input-coordinator.js';
 
 const log = createLogger('Gateway:AgentRunner');
 
@@ -50,12 +52,51 @@ export class GatewayAgentRunner {
   readonly runRelay = new AgentRunRelay();
   /** Per-run abort for webchat (POST /api/agent/abort or client disconnect). */
   private readonly runAbortControllers = new Map<string, AbortController>();
+  private readonly runCompletions = new Map<string, Promise<void>>();
+  private readonly resolveRunCompletions = new Map<string, () => void>();
   private readonly clarifyBridge = new ClarifyBridge();
   /** Maps webchat session key → active `runId` for `clarify` tool routing. */
   private readonly activeWebchatRunBySession = new Map<string, string>();
+  readonly inputs: SessionInputCoordinator;
 
   constructor(opts: GatewayAgentRunnerOptions) {
     this.opts = opts;
+    this.inputs = new SessionInputCoordinator({
+      sessionExists: async (sessionKey) => Boolean(await opts.sessionIndex.getSessionMetadata(sessionKey)),
+      execute: async (input) => {
+        const generator = this.runAgent(
+          input.content,
+          'webchat',
+          input.sessionKey,
+          input.attachments,
+          input.thinking,
+          { runId: input.runId },
+        );
+        let result: { status: string; summary: string } | undefined;
+        while (true) {
+          const step = await generator.next();
+          if (step.done) {
+            result = step.value;
+            break;
+          }
+        }
+        return result;
+      },
+      prepareAttachments: async (sessionKey, attachments) => {
+        const media = await opts.getAgentService().prepareInboundAttachments(sessionKey, attachments);
+        if (!media?.length) return undefined;
+        return media.map((ref) => ({
+          id: ref.id,
+          type: ref.type,
+          mimeType: ref.mimeType,
+          uri: ref.uri,
+          name: ref.name,
+          size: ref.size,
+        }));
+      },
+      steer: (sessionKey, content) => opts.getAgentService().turnDispatcher.steerWebchatSession(sessionKey, content),
+      emit: opts.emit,
+    });
   }
 
   // ── Read-only accessors (so peers don't get a Map ref) ────────────────
@@ -86,12 +127,18 @@ export class GatewayAgentRunner {
     chatId: string,
     attachments?: UserTurnAttachment[],
     thinking?: string,
-    runOptions?: { signal?: AbortSignal; clientCreatedAtMs?: number },
+    runOptions?: { signal?: AbortSignal; runId?: string },
   ): AsyncGenerator<
     { type: string; [key: string]: unknown },
     { status: string; summary: string },
     unknown
   > {
+    const trackedRunId = runOptions?.runId;
+    if (trackedRunId) {
+      let resolve = () => {};
+      this.runCompletions.set(trackedRunId, new Promise<void>((done) => { resolve = done; }));
+      this.resolveRunCompletions.set(trackedRunId, resolve);
+    }
     const iter = runGatewayAgent(
       {
         config: this.opts.getConfig(),
@@ -112,16 +159,46 @@ export class GatewayAgentRunner {
       runOptions,
     );
 
-    let step = await iter.next();
-    while (!step.done) {
-      yield step.value as unknown as { type: string; [key: string]: unknown };
-      step = await iter.next();
+    try {
+      let step = await iter.next();
+      while (!step.done) {
+        yield step.value as unknown as { type: string; [key: string]: unknown };
+        step = await iter.next();
+      }
+      return step.value;
+    } finally {
+      if (trackedRunId) {
+        this.resolveRunCompletions.get(trackedRunId)?.();
+        this.resolveRunCompletions.delete(trackedRunId);
+        this.runCompletions.delete(trackedRunId);
+      }
     }
-    return step.value;
+  }
+
+  submitSessionInput(input: SubmitSessionInput) {
+    return this.inputs.submit(input);
+  }
+
+  getSessionInputState(sessionKey: string) {
+    return this.inputs.snapshot(sessionKey);
+  }
+
+  updateSessionInput(sessionKey: string, id: string, body: {
+    version: number; content?: string; attachments?: UserTurnAttachment[]; thinking?: string; position?: number;
+  }) {
+    return this.inputs.update(sessionKey, id, body);
+  }
+
+  removeSessionInput(sessionKey: string, id: string, version: number) {
+    return this.inputs.remove(sessionKey, id, version);
+  }
+
+  recoverSessionInputs(): void {
+    this.inputs.recover();
   }
 
   /** Abort an in-flight webchat agent run (matches `runId` from SSE `run_start`). */
-  abortAgentRun(runId: string): boolean {
+  async abortAgentRun(runId: string): Promise<{ aborted: boolean; idle: boolean }> {
     this.clarifyBridge.cancelForRun(runId);
     const keysToMark: string[] = [];
     for (const [sk, id] of this.activeWebchatRunBySession) {
@@ -129,62 +206,28 @@ export class GatewayAgentRunner {
         keysToMark.push(sk);
       }
     }
-    for (const sk of keysToMark) {
-      this.activeWebchatRunBySession.delete(sk);
-    }
     const relaySk = this.runRelay.getSessionKey(runId);
     if (relaySk && !keysToMark.includes(relaySk)) {
       keysToMark.push(relaySk);
     }
     const c = this.runAbortControllers.get(runId);
     if (!c) {
-      return false;
+      return { aborted: false, idle: true };
     }
-    const cutoffTs = Date.now();
+    const completion = this.runCompletions.get(runId);
     for (const sk of keysToMark) {
-      void this.opts.sessionIndex
-        .updateSessionMetadata(sk, { abortCutoffTimestamp: cutoffTs })
-        .catch(() => {});
       void this.opts.sessionIndex
         .appendTranscriptContextEntry(sk, {
           text: 'Webchat agent run aborted',
-          data: { runId, abortCutoffTimestamp: cutoffTs },
+          data: { runId },
         })
         .catch(() => {});
     }
     c.abort();
-    for (const sk of keysToMark) {
-      void import('../../agent/embedded/runs.js').then(({ abortEmbeddedRun }) =>
-        abortEmbeddedRun(sk),
-      );
-    }
-    return true;
-  }
-
-  /**
-   * Queue steering text for an active webchat run (`Agent.steer` /
-   * tool-boundary injection). The caller must pass the session key.
-   */
-  async steerWebchatAgent(
-    sessionKey: string,
-    message: string,
-  ): Promise<
-    { ok: true } | { ok: false; code: 'BAD_REQUEST' | 'NO_ACTIVE_RUN' | 'STEER_FAILED' }
-  > {
-    const trimmed = message.trim();
-    if (!trimmed) {
-      return { ok: false, code: 'BAD_REQUEST' };
-    }
-    if (!this.activeWebchatRunBySession.has(sessionKey)) {
-      return { ok: false, code: 'NO_ACTIVE_RUN' };
-    }
-    const steered = await this.opts
-      .getAgentService()
-      .turnDispatcher.steerWebchatSession(sessionKey, trimmed);
-    if (!steered) {
-      return { ok: false, code: 'STEER_FAILED' };
-    }
-    return { ok: true };
+    const { abortEmbeddedRun } = await import('../../agent/embedded/runs.js');
+    await Promise.all(keysToMark.map((sessionKey) => abortEmbeddedRun(sessionKey).catch(() => false)));
+    await completion;
+    return { aborted: true, idle: true };
   }
 
   /** Deliver a user's answer to a pending `clarify` tool call. */
@@ -194,16 +237,20 @@ export class GatewayAgentRunner {
 
   /** Same execution path as scheduled continuation, but lets callers observe failures. */
   async runScheduledWebchatTurn(sessionKey: string, userTurn: UserTurnInput): Promise<void> {
-    const gen = this.runAgent(userTurn.text, 'webchat', sessionKey, userTurn.attachments, undefined, {
-      clientCreatedAtMs: userTurn.clientCreatedAtMs ?? Date.now(),
+    const clientMessageId = crypto.randomUUID();
+    const accepted = await this.inputs.submit({
+      sessionKey,
+      clientMessageId,
+      delivery: 'next',
+      content: userTurn.text,
+      attachments: userTurn.attachments,
     });
-    for await (const _ of gen) {
-      // Relay + `agent.stream` broadcast; UI attaches via pending runId + resume.
-    }
+    if (accepted.ok === false) throw new Error(`Scheduled session input was rejected: ${accepted.code}`);
+    await this.inputs.waitForCompletion(sessionKey, clientMessageId);
   }
 
   async runScheduledWebchatContinuation(sessionKey: string, message: string): Promise<void> {
-    await this.runScheduledWebchatTurn(sessionKey, { text: message, clientCreatedAtMs: Date.now() });
+    await this.runScheduledWebchatTurn(sessionKey, { text: message });
   }
 
   /** Background drain for extension-initiated webchat turns (`scheduleWebchatContinuation`). */

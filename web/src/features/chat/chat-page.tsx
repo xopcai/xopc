@@ -1322,7 +1322,7 @@ export function ChatPage() {
                 onReasoningChange={session.onSessionReasoningLevelChange}
                 onSend={handleComposerSend}
                 onAbort={stream.abort}
-                onAddPendingFollowUp={(text, atts) => void followUp.addPendingFollowUp(text, atts)}
+                onAddPendingFollowUp={followUp.addPendingFollowUp}
                 onSteeringInterrupt={(text, atts) => void stream.interruptAndSend(text, atts)}
                 pendingFollowUps={followUp.pendingFollowUps}
                 editingFollowUpId={followUp.editingFollowUpId}

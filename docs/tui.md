@@ -273,5 +273,5 @@ While the TUI owns the screen, **JSON log lines** written by the Node logger are
 
 ## Technical notes
 
-- **Gateway path:** chat uses `POST /api/agent` with `Accept: text/event-stream`; the UI also keeps `GET /api/events` for broadcast-style events. Session and model helpers use the same REST surface as the Web UI (`/api/sessions`, `/api/models`, etc.).
+- **Gateway path:** chat writes durable inputs through `POST /api/sessions/:sessionKey/inputs`, attaches to active output through `POST /api/agent/resume`, and keeps `GET /api/events` for broadcast state. Session and model helpers use the same REST surface as the Web UI.
 - **Embedded path:** messages go through `AgentService.processDirectStreaming` and events are derived from the agent stream types (`token`, `thinking`, `tool_start`, `tool_end`, `error`, `result`, …).

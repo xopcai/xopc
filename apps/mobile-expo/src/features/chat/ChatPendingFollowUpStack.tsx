@@ -45,9 +45,14 @@ export const ChatPendingFollowUpStack = memo(function ChatPendingFollowUpStack({
           {items.length}/{MAX_PENDING_FOLLOW_UPS}
         </Text>
       </View>
-      {items.map((item, index) => {
-        const canSteer = !item.attachments?.length && item.text.trim().length > 0;
+      {items.map((item) => {
+        const mutable = item.status === 'queued';
+        const removable = mutable || item.status === 'interrupted';
+        const queuedItems = items.filter((row) => row.status === 'queued');
+        const queuedIndex = queuedItems.findIndex((row) => row.id === item.id);
+        const canSteer = removable && !item.attachments?.length && item.text.trim().length > 0;
         const isSteering = steeringBusyId === item.id;
+        const statusText = item.status === 'interrupted' ? m.chat.followUpStatusInterrupted : null;
         let preview = item.text.trim();
         if (!preview && item.attachments?.length) {
           const n0 = item.attachments[0]?.name?.trim();
@@ -71,7 +76,7 @@ export const ChatPendingFollowUpStack = memo(function ChatPendingFollowUpStack({
             ]}
           >
             <Pressable
-              disabled={disabled}
+              disabled={disabled || !mutable}
               style={styles.previewBtn}
               onPress={() => onEditInComposer(item.id)}
               accessibilityLabel={m.chat.followUpQueueClickToEdit}
@@ -89,17 +94,20 @@ export const ChatPendingFollowUpStack = memo(function ChatPendingFollowUpStack({
                 </Text>
               )}
             </Pressable>
+            {statusText ? (
+              <Text style={[styles.status, { color: muted }]}>{statusText}</Text>
+            ) : null}
             <View style={styles.actions}>
               <Pressable
-                disabled={disabled || index === 0}
+                disabled={disabled || !mutable || queuedIndex === 0}
                 onPress={() => onMove(item.id, 'up')}
                 hitSlop={6}
                 accessibilityLabel={m.chat.followUpQueueMoveUp}
               >
-                <Icon source="chevron-up" size={18} color={disabled || index === 0 ? colors.text.disabled : muted} />
+                <Icon source="chevron-up" size={18} color={disabled || !mutable || queuedIndex === 0 ? colors.text.disabled : muted} />
               </Pressable>
               <Pressable
-                disabled={disabled || index >= items.length - 1}
+                disabled={disabled || !mutable || queuedIndex >= queuedItems.length - 1}
                 onPress={() => onMove(item.id, 'down')}
                 hitSlop={6}
                 accessibilityLabel={m.chat.followUpQueueMoveDown}
@@ -107,7 +115,7 @@ export const ChatPendingFollowUpStack = memo(function ChatPendingFollowUpStack({
                 <Icon
                   source="chevron-down"
                   size={18}
-                  color={disabled || index >= items.length - 1 ? colors.text.disabled : muted}
+                  color={disabled || !mutable || queuedIndex >= queuedItems.length - 1 ? colors.text.disabled : muted}
                 />
               </Pressable>
               <Pressable
@@ -123,7 +131,7 @@ export const ChatPendingFollowUpStack = memo(function ChatPendingFollowUpStack({
                 />
               </Pressable>
               <Pressable
-                disabled={disabled}
+                disabled={disabled || !removable}
                 onPress={() => onRemove(item.id)}
                 hitSlop={6}
                 accessibilityLabel={m.chat.followUpQueueRemove}
@@ -195,6 +203,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
+  },
+  status: {
+    fontSize: 10,
+    lineHeight: 14,
   },
   note: {
     fontSize: 11,

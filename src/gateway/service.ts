@@ -47,7 +47,7 @@ import {
   resolveAgentDir,
   resolveExtensionsDir,
 } from '../config/paths.js';
-import { AgentRunRelay, type RelayEvent } from './agent-run-relay.js';
+import type { RelayEvent } from './agent-run-relay.js';
 import { registerClarifyBridge } from './clarify-runtime.js';
 import { PACKAGE_VERSION } from '../package-version.js';
 import { MobileNotificationService } from '../mobile/notification-service.js';
@@ -204,9 +204,6 @@ export class GatewayService {
    * `activeWebchatRunBySession` + `runAbortControllers` maps.
    */
   readonly agentRunner: GatewayAgentRunner;
-
-  /** Read-only alias re-exported from `agentRunner.runRelay` for legacy callers. */
-  get runRelay(): AgentRunRelay { return this.agentRunner.runRelay; }
 
   /**
    * Session CRUD / search / compaction / tag-archive-pin / stats — the gateway
@@ -647,19 +644,28 @@ export class GatewayService {
     return this.agentRunner.runAgent(...args);
   }
 
-  abortAgentRun(runId: string): boolean {
+  submitSessionInput(...args: Parameters<GatewayAgentRunner['submitSessionInput']>) {
+    return this.agentRunner.submitSessionInput(...args);
+  }
+
+  getSessionInputState(...args: Parameters<GatewayAgentRunner['getSessionInputState']>) {
+    return this.agentRunner.getSessionInputState(...args);
+  }
+
+  updateSessionInput(...args: Parameters<GatewayAgentRunner['updateSessionInput']>) {
+    return this.agentRunner.updateSessionInput(...args);
+  }
+
+  removeSessionInput(...args: Parameters<GatewayAgentRunner['removeSessionInput']>) {
+    return this.agentRunner.removeSessionInput(...args);
+  }
+
+  abortAgentRun(runId: string) {
     return this.agentRunner.abortAgentRun(runId);
   }
 
   getActiveWebchatRunId(sessionKey: string): string | undefined {
     return this.agentRunner.getActiveRunId(sessionKey);
-  }
-
-  steerWebchatAgent(
-    sessionKey: string,
-    message: string,
-  ): ReturnType<GatewayAgentRunner['steerWebchatAgent']> {
-    return this.agentRunner.steerWebchatAgent(sessionKey, message);
   }
 
   submitClarifyResponse(requestId: string, answer: string): boolean {
@@ -840,6 +846,7 @@ export class GatewayService {
     registerClarifyBridge(this.agentRunner.getClarifyBridge());
 
     this.ensureAgentService();
+    this.agentRunner.recoverSessionInputs();
 
     this.channelManager.setOutboundHooks({
       runMessageSending: (to, content, channel) =>

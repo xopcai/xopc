@@ -1,3 +1,5 @@
+import crypto from 'node:crypto';
+
 import type { Config } from '../config/schema.js';
 import { loadConfig } from '../config/loader.js';
 import type {
@@ -232,9 +234,10 @@ export class XopcChannelBridge {
 
   async sendMessage(params: { sessionKey: string; text: string }): Promise<Record<string, unknown>> {
     const client = this.client!;
-    return client.postJson('/api/agent', {
-      sessionKey: params.sessionKey,
-      message: params.text,
+    return client.postJson(`/api/sessions/${encodeURIComponent(params.sessionKey)}/inputs`, {
+      clientMessageId: crypto.randomUUID(),
+      delivery: 'next',
+      content: params.text,
     });
   }
 

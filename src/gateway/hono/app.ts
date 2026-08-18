@@ -11,7 +11,7 @@ import type { GatewayService } from '../service.js';
 import { resolveAllowedBrowserOrigins, resolveGatewayServiceListenPort } from '../host.js';
 import { loadTunnelState } from '../../tunnel/tunnel-state.js';
 import { WORK_ITEM_ATTACHMENT_UPLOAD_BODY_MAX_BYTES } from '../../work-items/index.js';
-import { maxWebchatAgentRequestBodyBytes } from '../chat-limits.js';
+import { maxSessionInputRequestBodyBytes } from '../chat-limits.js';
 import { buildGatewayConsoleCspHeader } from '../security/csp.js';
 import { checkBrowserOrigin } from '../security/origin-check.js';
 import { isLoopbackIpAddress, isTrustedProxyAddress } from '../client-ip.js';
@@ -19,6 +19,7 @@ import { resolveReverseProxyPublicUrl } from '../public-url.js';
 import { auth } from './middleware/auth.js';
 import { operatorScopes } from './middleware/scopes.js';
 import {
+  createChatRateLimitMiddleware,
   createChannelRateLimitMiddleware,
   createStrictRateLimitMiddleware,
   createXopcCloudPollRateLimitMiddleware,
@@ -189,7 +190,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   const SKILL_UPLOAD_BODY_MAX = 10 * 1024 * 1024;
   const NOTE_MEDIA_BODY_MAX = 25 * 1024 * 1024;
   const VOICE_TRANSCRIBE_BODY_MAX = 35 * 1024 * 1024;
-  const WEBCHAT_AGENT_BODY_MAX = maxWebchatAgentRequestBodyBytes();
+  const SESSION_INPUT_BODY_MAX = maxSessionInputRequestBodyBytes();
 
   const isNoteMediaUploadRequest = (path: string, method: string, contentType: string | undefined): boolean => {
     if (method !== 'POST') return false;
@@ -224,8 +225,10 @@ export function createHonoApp(config: HonoAppConfig): Hono {
 
   app.use('/api/*', async (c, next) => {
     const contentType = c.req.header('content-type');
-    const maxSize = c.req.path === '/api/agent'
-      ? WEBCHAT_AGENT_BODY_MAX
+    const isSessionInputRequest = (c.req.method === 'POST' && /^\/api\/sessions\/[^/]+\/inputs$/.test(c.req.path))
+      || (c.req.method === 'PATCH' && /^\/api\/sessions\/[^/]+\/inputs\/[^/]+$/.test(c.req.path));
+    const maxSize = isSessionInputRequest
+      ? SESSION_INPUT_BODY_MAX
       : c.req.path === '/api/skills/upload'
         ? SKILL_UPLOAD_BODY_MAX
         : c.req.path === '/api/voice/transcribe' || c.req.path === '/api/voice/transcriptions'
@@ -274,6 +277,12 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       allowRealIpFallback: service.currentConfig.gateway?.allowRealIpFallback === true,
     }),
   });
+  const chatRateLimitMiddleware = createChatRateLimitMiddleware({
+    getTrustedProxyContext: () => ({
+      trustedProxies: service.currentConfig.gateway?.trustedProxies,
+      allowRealIpFallback: service.currentConfig.gateway?.allowRealIpFallback === true,
+    }),
+  });
   const channelRateLimitMiddleware = createChannelRateLimitMiddleware({
     getTrustedProxyContext: () => ({
       trustedProxies: service.currentConfig.gateway?.trustedProxies,
@@ -295,6 +304,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   registerAuthenticatedRoutes(app, authenticated, {
     service,
     strictRateLimitMiddleware,
+    chatRateLimitMiddleware,
     xopcCloudPollRateLimitMiddleware,
     channelRateLimitMiddleware,
     sseConfig,
