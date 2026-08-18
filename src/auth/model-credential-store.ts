@@ -8,8 +8,7 @@ import {
 } from '@earendil-works/pi-ai';
 
 import { CredentialResolver, type OAuthToken } from './credentials.js';
-
-const providerModificationTails = new Map<string, Promise<void>>();
+import { withOAuthProviderLock } from './oauth-provider-lock.js';
 
 type OAuthCredentialRepository = Pick<
   CredentialResolver,
@@ -64,29 +63,6 @@ function toPersistedToken(
   };
 }
 
-async function serializeProviderModification<T>(
-  providerId: string,
-  operation: () => Promise<T>,
-): Promise<T> {
-  const previous = providerModificationTails.get(providerId) ?? Promise.resolve();
-  let release!: () => void;
-  const gate = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  const tail = previous.catch(() => undefined).then(() => gate);
-  providerModificationTails.set(providerId, tail);
-
-  await previous.catch(() => undefined);
-  try {
-    return await operation();
-  } finally {
-    release();
-    if (providerModificationTails.get(providerId) === tail) {
-      providerModificationTails.delete(providerId);
-    }
-  }
-}
-
 /**
  * ModelRuntime credential store backed by xopc OAuth persistence.
  * API keys remain process-local because their canonical sources are xopc config and environment.
@@ -135,7 +111,7 @@ export class XopcModelCredentialStore implements CredentialStore {
     options?: AuthOperationOptions,
   ): Promise<Credential | undefined> {
     const normalizedProvider = normalizeProviderId(providerId);
-    return serializeProviderModification(normalizedProvider, async () => {
+    return withOAuthProviderLock(normalizedProvider, async () => {
       options?.signal?.throwIfAborted();
       const persisted = await this.repository.loadOAuthTokenRecord(normalizedProvider);
       const current = this.runtimeApiKeys.get(normalizedProvider)
@@ -154,15 +130,15 @@ export class XopcModelCredentialStore implements CredentialStore {
         this.runtimeApiKeys.set(normalizedProvider, updated);
       }
       return updated;
-    });
+    }, { signal: options?.signal });
   }
 
   async delete(providerId: string, options?: AuthOperationOptions): Promise<void> {
     const normalizedProvider = normalizeProviderId(providerId);
-    await serializeProviderModification(normalizedProvider, async () => {
+    await withOAuthProviderLock(normalizedProvider, async () => {
       options?.signal?.throwIfAborted();
       await this.repository.deleteOAuthToken(normalizedProvider);
       this.runtimeApiKeys.delete(normalizedProvider);
-    });
+    }, { signal: options?.signal });
   }
 }

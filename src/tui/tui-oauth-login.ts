@@ -270,15 +270,7 @@ export async function runTuiOAuthLogin(provider: string | undefined, deps: TuiOA
     );
 
     const resolver = new CredentialResolver();
-    await resolver.saveOAuthToken(selectedProvider, {
-      access: config.provider.getApiKey(credentials),
-      refresh: credentials.refresh,
-      expiresAt: credentials.expires,
-      scope: Array.isArray(credentials.scope)
-        ? credentials.scope.filter((value): value is string => typeof value === 'string')
-        : undefined,
-      createdAt: new Date().toISOString(),
-    });
+    await resolver.saveOAuthCredentials(selectedProvider, credentials);
 
     deps.chatLog.addSystem(`OAuth login completed for ${selectedProvider}.`);
   } finally {

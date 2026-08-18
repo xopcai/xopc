@@ -4,6 +4,8 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CredentialResolver } from '../credentials.js';
+import { XopcModelCredentialStore } from '../model-credential-store.js';
+import { getOAuthProviderDefinition, getOAuthProviderIds } from '../oauth/registry.js';
 
 let tempDir: string;
 let previousCredentialsDir: string | undefined;
@@ -32,6 +34,7 @@ describe('CredentialResolver OAuth credentials', () => {
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
     delete process.env.XOPC_CONSOLE_URL;
     if (previousCredentialsDir === undefined) {
@@ -71,6 +74,41 @@ describe('CredentialResolver OAuth credentials', () => {
       scope: ['model:read'],
     });
   });
+
+  it.each(['google-gemini-cli', 'google-antigravity'])(
+    'preserves raw OAuth fields and reads legacy encoded access for %s',
+    async (providerId) => {
+      const resolver = new CredentialResolver();
+      await resolver.saveOAuthCredentials(providerId, {
+        access: 'raw-google-access',
+        refresh: 'google-refresh',
+        expires: Date.now() + 5 * 60_000,
+        projectId: 'project-1',
+      });
+
+      await expect(resolver.loadOAuthTokenRecord(providerId)).resolves.toMatchObject({
+        access: 'raw-google-access',
+        refresh: 'google-refresh',
+        projectId: 'project-1',
+      });
+      await expect(resolver.resolveApiKey(providerId)).resolves.toBe(
+        JSON.stringify({ token: 'raw-google-access', projectId: 'project-1' }),
+      );
+
+      await resolver.saveOAuthToken(providerId, {
+        access: JSON.stringify({
+          token: JSON.stringify({ token: 'legacy-access', projectId: 'legacy-project' }),
+        }),
+        refresh: 'legacy-refresh',
+        expiresAt: Date.now() + 5 * 60_000,
+        createdAt: '2026-08-04T00:00:00.000Z',
+      });
+      await expect(resolver.loadOAuthTokenRecord(providerId)).resolves.toMatchObject({
+        access: 'legacy-access',
+        projectId: 'legacy-project',
+      });
+    },
+  );
 
   it('disconnects both default API key profile and OAuth token for a provider', async () => {
     const resolver = new CredentialResolver();
@@ -123,6 +161,78 @@ describe('CredentialResolver OAuth credentials', () => {
       scope: ['models:read', 'models:invoke', 'offline_access'],
     });
   });
+
+  it('does not refresh OAuth credentials while checking provider status', async () => {
+    process.env.XOPC_CONSOLE_URL = 'https://console.test';
+    const fetchImpl = vi.fn<typeof fetch>();
+    vi.stubGlobal('fetch', fetchImpl);
+    const resolver = new CredentialResolver();
+    await resolver.saveOAuthToken('xopc-cloud', {
+      access: 'expired-access-token',
+      refresh: 'refresh-token-1',
+      expiresAt: Date.now() - 1,
+      createdAt: '2026-08-04T00:00:00.000Z',
+    });
+
+    await expect(resolver.hasCredentials('xopc-cloud')).resolves.toBe(true);
+    await expect(resolver.resolveApiKeySource('xopc-cloud')).resolves.toBe('oauth');
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it.each(getOAuthProviderIds())(
+    'coordinates refreshes across resolver and runtime paths for %s',
+    async (providerId) => {
+      const definition = getOAuthProviderDefinition(providerId);
+      if (!definition) throw new Error(`Missing OAuth provider definition for ${providerId}`);
+      let markRefreshStarted!: () => void;
+      let releaseRefresh!: () => void;
+      const refreshStarted = new Promise<void>((resolve) => {
+        markRefreshStarted = resolve;
+      });
+      const refreshCanFinish = new Promise<void>((resolve) => {
+        releaseRefresh = resolve;
+      });
+      const refreshToken = vi.spyOn(definition.provider, 'refreshToken').mockImplementation(async (current) => {
+        expect(current).toMatchObject({ projectId: 'project-1', accountId: 'account-1' });
+        markRefreshStarted();
+        await refreshCanFinish;
+        return {
+          ...current,
+          access: `access-token-2:${providerId}`,
+          refresh: `refresh-token-2:${providerId}`,
+          expires: Date.now() + 15 * 60_000,
+        };
+      });
+      const resolver = new CredentialResolver();
+      const store = new XopcModelCredentialStore(resolver);
+      await resolver.saveOAuthToken(providerId, {
+        access: `access-token-1:${providerId}`,
+        refresh: `refresh-token-1:${providerId}`,
+        expiresAt: Date.now() - 1,
+        projectId: 'project-1',
+        accountId: 'account-1',
+        createdAt: '2026-08-04T00:00:00.000Z',
+      });
+
+      const resolverRefresh = resolver.loadOAuthToken(providerId);
+      await refreshStarted;
+      const runtimeRefresh = store.modify(providerId, async (current) => {
+        expect(current).toMatchObject({
+          type: 'oauth',
+          access: `access-token-2:${providerId}`,
+          refresh: `refresh-token-2:${providerId}`,
+        });
+        return undefined;
+      });
+      releaseRefresh();
+
+      await expect(Promise.all([resolverRefresh, runtimeRefresh])).resolves.toEqual([
+        expect.objectContaining({ access: `access-token-2:${providerId}` }),
+        expect.objectContaining({ access: `access-token-2:${providerId}` }),
+      ]);
+      expect(refreshToken).toHaveBeenCalledOnce();
+    },
+  );
 
   it('rejects static credentials for the OAuth-only XOPC provider', async () => {
     const resolver = new CredentialResolver();

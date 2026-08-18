@@ -18,6 +18,7 @@ import { createLogger } from '../../utils/logger.js';
 import type { AuthProfile } from './types.js';
 
 const log = createLogger('AuthOAuthRefresh');
+const pendingProfileRefreshes = new Map<string, Promise<AuthProfile>>();
 
 /** Number of ms before {@link AuthProfile.expiresAt} we treat the token as stale. */
 const REFRESH_SKEW_MS = 60_000;
@@ -65,6 +66,24 @@ export async function refreshOAuthProfile(
     throw new Error('refreshOAuthProfile: profile is missing oauthTokenEndpoint');
   }
 
+  const refreshKey = `${profile.provider}\0${profile.profileId}\0${profile.oauthRefreshToken}`;
+  const existing = pendingProfileRefreshes.get(refreshKey);
+  if (existing) return existing;
+
+  let pending: Promise<AuthProfile>;
+  pending = refreshOAuthProfileOnce(profile, options).finally(() => {
+    if (pendingProfileRefreshes.get(refreshKey) === pending) {
+      pendingProfileRefreshes.delete(refreshKey);
+    }
+  });
+  pendingProfileRefreshes.set(refreshKey, pending);
+  return pending;
+}
+
+async function refreshOAuthProfileOnce(
+  profile: AuthProfile,
+  options: OAuthRefreshOptions,
+): Promise<AuthProfile> {
   const body = new URLSearchParams();
   body.set('grant_type', 'refresh_token');
   body.set('refresh_token', profile.oauthRefreshToken);

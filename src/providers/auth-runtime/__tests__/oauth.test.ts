@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { isOAuthAccessTokenExpired, refreshOAuthProfile } from '../oauth.js';
 import type { AuthProfile } from '../types.js';
@@ -63,6 +63,30 @@ describe('refreshOAuthProfile', () => {
       }) as unknown as Response;
     const fresh = await refreshOAuthProfile(baseOauth, { fetcher: fakeFetch });
     expect(fresh.oauthRefreshToken).toBe('r-old');
+  });
+
+  it('coalesces concurrent refreshes for the same rotating token', async () => {
+    let release!: () => void;
+    const canFinish = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const fakeFetch = vi.fn<typeof fetch>(async () => {
+      await canFinish;
+      return {
+        ok: true,
+        json: async () => ({ access_token: 'shared-access', refresh_token: 'shared-refresh', expires_in: 60 }),
+      } as Response;
+    });
+
+    const first = refreshOAuthProfile(baseOauth, { fetcher: fakeFetch });
+    const second = refreshOAuthProfile({ ...baseOauth }, { fetcher: fakeFetch });
+    release();
+
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      expect.objectContaining({ oauthRefreshToken: 'shared-refresh' }),
+      expect.objectContaining({ oauthRefreshToken: 'shared-refresh' }),
+    ]);
+    expect(fakeFetch).toHaveBeenCalledOnce();
   });
 
   it('throws on non-2xx responses with body excerpt in the message', async () => {
