@@ -139,7 +139,7 @@ export function registerExecutionReceiptRoutes(authenticated: Hono, deps: Authen
     const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
     const feedback = body.outcome === 'helpful' || body.outcome === 'not_helpful' ? body.outcome : undefined;
     if (!feedback) return c.json({ ok: false, error: 'outcome must be helpful or not_helpful' }, 400);
-    const reason = typeof body.reason === 'string' ? body.reason.trim().slice(0, 160) : undefined;
+    const reason = typeof body.reason === 'string' ? body.reason.trim().slice(0, 2_000) : undefined;
     let receipt = setExecutionReceiptFeedbackByRunId({
       runId: c.req.param('runId'),
       outcome: feedback,

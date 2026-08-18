@@ -24,6 +24,43 @@ export interface OutcomeContractPlanner {
   plan(input: OutcomeContractPlanningInput): Promise<OutcomeContractDefinition>;
 }
 
+export interface OutcomeIntentReadiness {
+  confidence: number;
+  canStartImmediately: boolean;
+  blockingDecision?: {
+    id: string;
+    question: string;
+    recommendation: string;
+  };
+}
+
+const BLOCKING_DECISION_ID = 'approve-execution-boundaries';
+
+export function assessOutcomeIntent(contract: OutcomeContractDefinition): OutcomeIntentReadiness {
+  const approvals = contract.approvalRequired.map((item) => item.trim()).filter(Boolean);
+  if (approvals.length === 0) {
+    return {
+      confidence: contract.assumptions.length > 0 ? 0.85 : 0.95,
+      canStartImmediately: true,
+    };
+  }
+  const chinese = /[\u3400-\u9fff]/u.test(contract.objective);
+  const boundaries = approvals.join(chinese ? '；' : '; ');
+  return {
+    confidence: 0.75,
+    canStartImmediately: false,
+    blockingDecision: {
+      id: BLOCKING_DECISION_ID,
+      question: chinese
+        ? `是否同意这些必要执行边界：${boundaries}`
+        : `Approve these required execution boundaries: ${boundaries}`,
+      recommendation: chinese
+        ? '如果这些边界符合你的意图，建议批准并立即开始；否则先修改目标。'
+        : 'Approve and start now if these boundaries match your intent; otherwise edit the outcome first.',
+    },
+  };
+}
+
 function extractText(content: unknown): string {
   if (!Array.isArray(content)) return '';
   return content

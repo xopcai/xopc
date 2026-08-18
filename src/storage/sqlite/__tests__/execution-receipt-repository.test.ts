@@ -65,6 +65,13 @@ describe('execution receipt repository', () => {
         strength: 'verified',
         observedAt: 1_500,
       }],
+      judgment: {
+        recommendation: 'Ship the report',
+        reasons: ['The required artifact exists and is verified'],
+        rejectedAlternatives: [{ option: 'Keep editing', reason: 'No acceptance criterion remains' }],
+        uncertainty: 'External readers have not reviewed it yet',
+        confidence: 0.9,
+      },
       now: 1_500,
     });
     completeExecutionReceipt({ runId: 'run-1', status: 'succeeded', summary: 'Done', now: 2_000 });
@@ -74,6 +81,13 @@ describe('execution receipt repository', () => {
     expect(matched?.evidence).toHaveLength(1);
     expect(matched?.verification.status).toBe('passed');
     expect(matched?.completionVerdict).toBe('achieved');
+    expect(matched?.judgment).toEqual({
+      recommendation: 'Ship the report',
+      reasons: ['The required artifact exists and is verified'],
+      rejectedAlternatives: [{ option: 'Keep editing', reason: 'No acceptance criterion remains' }],
+      uncertainty: 'External readers have not reviewed it yet',
+      confidence: 0.9,
+    });
 
     const rated = setExecutionReceiptFeedback({
       sessionKey,

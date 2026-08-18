@@ -15,6 +15,7 @@ import {
   listExecutionReceipts,
   updateExecutionReceipt,
   type ExecutionEvidence,
+  type ExecutionJudgment,
 } from '../../storage/sqlite/index.js';
 import { createLogger } from '../../utils/logger.js';
 import { OutcomeExecutionStateRepository } from '../../work/outcome-execution-state.js';
@@ -39,7 +40,7 @@ export interface OutcomeJudgeDecision {
   completedCriteria: number[];
   needsUser: boolean;
   nextAction?: string;
-  reason: string;
+  judgment: ExecutionJudgment;
 }
 
 function compactHistory(messages: AgentMessage[]): string {
@@ -58,15 +59,42 @@ export function parseOutcomeJudgeDecision(raw: string, criteriaCount: number): O
       .filter((item): item is number => Number.isInteger(item))
       .filter((item) => item >= 0 && item < criteriaCount))]
     : [];
+  const reasons = Array.isArray(value.reasons)
+    ? value.reasons.filter((item): item is string => typeof item === 'string' && Boolean(item.trim()))
+      .map((item) => item.trim()).slice(0, 5)
+    : [];
+  const rejectedAlternatives = Array.isArray(value.rejectedAlternatives)
+    ? value.rejectedAlternatives.flatMap((item) => {
+        if (!item || typeof item !== 'object') return [];
+        const candidate = item as Record<string, unknown>;
+        return typeof candidate.option === 'string' && candidate.option.trim()
+          && typeof candidate.reason === 'string' && candidate.reason.trim()
+          ? [{ option: candidate.option.trim(), reason: candidate.reason.trim() }]
+          : [];
+      }).slice(0, 5)
+    : [];
+  const nextAction = typeof value.nextAction === 'string' && value.nextAction.trim()
+    ? value.nextAction.trim()
+    : undefined;
+  const recommendation = typeof value.recommendation === 'string' && value.recommendation.trim()
+    ? value.recommendation.trim()
+    : nextAction ?? 'Continue gathering verifiable evidence.';
+  const confidence = typeof value.confidence === 'number' && Number.isFinite(value.confidence)
+    ? Math.max(0, Math.min(1, value.confidence))
+    : 0.5;
   return {
     completedCriteria,
     needsUser: value.needsUser === true,
-    ...(typeof value.nextAction === 'string' && value.nextAction.trim()
-      ? { nextAction: value.nextAction.trim() }
-      : {}),
-    reason: typeof value.reason === 'string' && value.reason.trim()
-      ? value.reason.trim()
-      : 'No verified completion evidence was found.',
+    ...(nextAction ? { nextAction } : {}),
+    judgment: {
+      recommendation,
+      reasons: reasons.length > 0 ? reasons : ['No verified completion evidence was found.'],
+      rejectedAlternatives,
+      ...(typeof value.uncertainty === 'string' && value.uncertainty.trim()
+        ? { uncertainty: value.uncertainty.trim() }
+        : {}),
+      confidence,
+    },
   };
 }
 
@@ -132,7 +160,8 @@ export class OutcomeJudgeService {
       'You are an independent outcome verifier. Be strict and evidence-driven.',
       'Mark a criterion complete only when the transcript or latest response directly proves it.',
       'needsUser is true only when a specific decision, permission, credential, or missing fact must come from the user.',
-      'Return only JSON: {"completedCriteria":[0],"needsUser":false,"nextAction":"...","reason":"..."}.',
+      'Make one clear recommendation. Explain the decisive reasons, rejected alternatives, uncertainty, and calibrated confidence.',
+      'Return only JSON: {"completedCriteria":[0],"needsUser":false,"nextAction":"...","recommendation":"...","reasons":["..."],"rejectedAlternatives":[{"option":"...","reason":"..."}],"uncertainty":"...","confidence":0.8}.',
       `Outcome:\n${outcome.objective}`,
       `Acceptance criteria:\n${criteria.map((item, index) => `${index}. ${item}`).join('\n')}`,
       `Latest response:\n${payload.assistantPlainText.slice(-12_000)}`,
@@ -145,7 +174,7 @@ export class OutcomeJudgeService {
       const response = await completeWithResolvedCredentials(
         model,
         { messages: [request] },
-        { apiKey, maxTokens: 500, temperature: 0 },
+        { apiKey, maxTokens: 900, temperature: 0 },
       );
       const modelError = getAssistantMessageErrorReason(response);
       if (modelError) throw new Error(modelError);
@@ -154,7 +183,7 @@ export class OutcomeJudgeService {
       const evidence: ExecutionEvidence[] = decision.completedCriteria.map((index) => ({
         kind: 'state',
         title: `Independently verified: ${criteria[index]}`,
-        summary: decision.reason,
+        summary: decision.judgment.reasons[0]!,
         verifies: [criteria[index]!],
         provenance: 'judge',
         strength: 'verified',
@@ -165,10 +194,11 @@ export class OutcomeJudgeService {
         evidence: [...receipt.evidence, ...evidence],
         nextAction: decision.nextAction ?? null,
         needsUser: decision.needsUser,
+        judgment: decision.judgment,
       });
       this.#states.update(outcomeId, {
         nextAction: decision.nextAction ?? null,
-        blockedReason: decision.needsUser ? decision.reason : null,
+        blockedReason: decision.needsUser ? decision.judgment.recommendation : null,
       });
       this.#outcomes.updateState({
         id: outcomeId,

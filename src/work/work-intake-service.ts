@@ -17,6 +17,7 @@ import { OutcomeRepository } from './outcome-repository.js';
 import { OutcomeExecutionStateRepository } from './outcome-execution-state.js';
 import type { EnqueueOutcomeOptions, OutcomeQueueItem } from './outcome-queue.js';
 import {
+  assessOutcomeIntent,
   DeterministicOutcomeContractPlanner,
   type OutcomeContractPlanner,
 } from './outcome-contract-planner.js';
@@ -90,6 +91,7 @@ export class WorkIntakeService {
       } : {}),
       userContext: `supportMode=${relationship.supportMode}; proactiveEnabled=${relationship.proactiveEnabled}`,
     });
+    const executionReadiness = assessOutcomeIntent(contract);
     const id = randomUUID();
     const proposal: WorkIntakeProposal = {
       id,
@@ -108,6 +110,7 @@ export class WorkIntakeService {
         assumptions: contract.assumptions,
         risks: contract.risks,
       },
+      executionReadiness,
       expiresAt: Date.now() + INTAKE_TTL_MS,
     };
     const stored = this.#repository.create({
@@ -127,12 +130,19 @@ export class WorkIntakeService {
     proposalId: string;
     executionMode: WorkExecutionMode;
     projectId?: string;
+    blockingDecisionId?: string;
   }): ConfirmedWork | undefined {
     const intake = this.#repository.get(input.proposalId);
     if (!intake || intake.status === 'expired' || intake.status === 'cancelled') return undefined;
     const existing = this.#repository.toConfirmedWork(intake);
     if (existing) return this._ensureExecution(intake);
     const proposal = intake.proposal;
+    const blockingDecision = assessOutcomeIntent(proposal.outcomeContract).blockingDecision;
+    if (input.executionMode === 'run_now'
+      && blockingDecision
+      && input.blockingDecisionId !== blockingDecision.id) {
+      throw new Error('The required execution decision must be approved before work can start');
+    }
     runSqliteWriteTransaction(() => {
       const selectedProjectId = input.projectId ?? proposal.projectId;
       const existingProject = selectedProjectId ? this.projects.get(selectedProjectId) : undefined;
@@ -163,6 +173,10 @@ export class WorkIntakeService {
         activeSessionKey: intake.sessionKey,
         agentId: intake.agentId ?? existingProject?.defaultAgentId ?? 'main',
         source: 'api',
+        approvedBoundaries: blockingDecision
+          && input.blockingDecisionId === blockingDecision.id
+          ? contract.approvalRequired
+          : [],
       });
       this.#executions.update(outcome.id, { nextAction: DEFAULT_NEXT_ACTION });
       if (existingProject && intake.sessionKey && getSessionMetadata(intake.sessionKey)) {

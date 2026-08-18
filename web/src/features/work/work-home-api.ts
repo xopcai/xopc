@@ -1,5 +1,6 @@
 import {
   ConfirmedWorkSchema,
+  OutcomeDetailResponseSchema,
   OutcomeReceiptSchema,
   OutcomeSchema,
   WorkIntakeProposalSchema,
@@ -7,6 +8,7 @@ import {
   type ConfirmedWork,
   type Outcome,
   type OutcomeAction,
+  type OutcomeContextManifest,
   type OutcomeReceipt,
   type WorkIntakeProposal,
   type WorkHomeAttention,
@@ -25,22 +27,28 @@ export type { ConfirmedWork, WorkIntakeProposal };
 export type OutcomeDetail = {
   outcome: Outcome;
   receipts: OutcomeReceipt[];
+  contextManifest?: OutcomeContextManifest;
 };
 
 export async function fetchOutcome(outcomeId: string): Promise<OutcomeDetail> {
-  const response = await fetchJson<{ outcome?: unknown; receipts?: unknown }>(
+  const response = OutcomeDetailResponseSchema.parse(await fetchJson<unknown>(
     apiUrl(`/api/outcomes/${encodeURIComponent(outcomeId)}`),
-  );
+  ));
   return {
-    outcome: OutcomeSchema.parse(response.outcome),
-    receipts: OutcomeReceiptSchema.array().parse(response.receipts),
+    outcome: response.outcome,
+    receipts: response.receipts,
+    contextManifest: response.contextManifest,
   };
 }
 
-export async function actOnOutcome(outcomeId: string, action: OutcomeAction): Promise<Outcome> {
+export async function actOnOutcome(
+  outcomeId: string,
+  action: OutcomeAction,
+  approvedBoundaries?: string[],
+): Promise<Outcome> {
   const response = await fetchJson<{ outcome?: unknown }>(
     apiUrl(`/api/outcomes/${encodeURIComponent(outcomeId)}/actions`),
-    { method: 'POST', body: JSON.stringify({ action }) },
+    { method: 'POST', body: JSON.stringify({ action, approvedBoundaries }) },
   );
   return OutcomeSchema.parse(response.outcome);
 }
@@ -68,10 +76,13 @@ export async function proposeWorkIntake(objective: string): Promise<WorkIntakePr
   return WorkIntakeProposalSchema.parse(response.proposal);
 }
 
-export async function confirmWorkIntake(proposalId: string): Promise<ConfirmedWork> {
+export async function confirmWorkIntake(
+  proposalId: string,
+  blockingDecisionId?: string,
+): Promise<ConfirmedWork> {
   const response = await fetchJson<{ work?: unknown }>(apiUrl(`/api/work/intakes/${encodeURIComponent(proposalId)}/confirm`), {
     method: 'POST',
-    body: JSON.stringify({ executionMode: 'run_now' }),
+    body: JSON.stringify({ executionMode: 'run_now', blockingDecisionId }),
   });
   return ConfirmedWorkSchema.parse(response.work);
 }
