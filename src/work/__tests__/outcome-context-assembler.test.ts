@@ -51,5 +51,12 @@ describe('assembleOutcomeContext', () => {
     expect(assembled.retrievalQuery).toContain('Production reports version 2.0.0');
     expect(assembled.retrievalQuery).toContain('Do not expose credentials');
     expect(assembled.retrievalQuery).toContain('Production outage');
+    expect(assembled.manifest).toMatchObject({
+      outcomeId: outcome.id,
+      allocation: 'critical',
+      assumptions: ['Release branch is current'],
+      unresolvedCriteria: ['Production reports version 2.0.0'],
+      sources: [{ kind: 'outcome_contract' }],
+    });
   });
 });

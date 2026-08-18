@@ -15,6 +15,7 @@ import {
 } from '../../../../storage/sqlite/index.js';
 import { WorkItemService } from '../../../../work-items/index.js';
 import { OutcomeExecutionStateRepository, OutcomeRepository } from '../../../../work/index.js';
+import { WorkIntakeService } from '../../../../work/work-intake-service.js';
 import type { GatewayService } from '../../../service.js';
 import { registerWorkRoutes } from '../work.js';
 
@@ -248,6 +249,94 @@ describe('work orchestration routes', () => {
         triggerKind: 'user',
       },
     });
+  });
+
+  it('requires the one blocking decision before starting material work', async () => {
+    const enqueue = vi.fn((outcomeId: string) => ({
+      id: 'queue-approved-intake',
+      outcomeId,
+      status: 'queued' as const,
+      attempts: 0,
+      maxRetries: 2,
+      enqueuedAt: Date.now(),
+      source: 'api' as const,
+    }));
+    const intake = new WorkIntakeService(projects, { enqueue }, {
+      plan: async ({ objective }) => ({
+        objective,
+        deliverables: ['Published release'],
+        acceptanceCriteria: ['Production reports the new version'],
+        constraints: [],
+        approvalRequired: ['Publish to production', 'Use the release budget'],
+        assumptions: [],
+        risks: [],
+      }),
+    });
+    const proposal = await intake.propose({
+      idempotencyKey: 'blocking-decision-intake',
+      objective: 'Ship the release safely',
+    });
+
+    expect(proposal.executionReadiness).toMatchObject({
+      canStartImmediately: false,
+      blockingDecision: { id: 'approve-execution-boundaries' },
+    });
+    expect(() => intake.confirm({
+      proposalId: proposal.id,
+      executionMode: 'run_now',
+    })).toThrow('The required execution decision must be approved');
+    expect(enqueue).not.toHaveBeenCalled();
+
+    const work = intake.confirm({
+      proposalId: proposal.id,
+      executionMode: 'run_now',
+      blockingDecisionId: proposal.executionReadiness.blockingDecision?.id,
+    });
+    expect(work?.execution.status).toBe('queued');
+    expect(enqueue).toHaveBeenCalledOnce();
+  });
+
+  it('cannot bypass execution boundary approval from outcome actions', async () => {
+    const intake = new WorkIntakeService(projects, { enqueue: vi.fn() }, {
+      plan: async ({ objective }) => ({
+        objective,
+        deliverables: ['Published release'],
+        acceptanceCriteria: ['Production reports the new version'],
+        constraints: [],
+        approvalRequired: ['Publish to production'],
+        assumptions: [],
+        risks: [],
+      }),
+    });
+    const proposal = await intake.propose({
+      idempotencyKey: 'action-boundary-intake',
+      objective: 'Publish the release',
+    });
+    const work = intake.confirm({ proposalId: proposal.id, executionMode: 'create_only' });
+    expect(work).toBeDefined();
+
+    const rejected = await app.request(`/api/outcomes/${work!.outcomeId}/actions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'run' }),
+    });
+    expect(rejected.status).toBe(409);
+    expect(await rejected.json()).toMatchObject({
+      error: 'Required execution boundaries must be approved',
+      requiredBoundaries: ['Publish to production'],
+    });
+
+    const approved = await app.request(`/api/outcomes/${work!.outcomeId}/actions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        action: 'run',
+        approvedBoundaries: ['Publish to production'],
+      }),
+    });
+    expect(approved.status).toBe(200);
+    expect(new OutcomeExecutionStateRepository().get(work!.outcomeId)?.approvedBoundaries)
+      .toEqual(['Publish to production']);
   });
 
   it('pauses and resumes an outcome through the outcome model', async () => {

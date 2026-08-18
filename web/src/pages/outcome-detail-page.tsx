@@ -70,7 +70,13 @@ export function OutcomeDetailPage() {
     setActionBusy(true);
     setError(null);
     try {
-      await actOnOutcome(outcomeId, action);
+      await actOnOutcome(
+        outcomeId,
+        action,
+        action === 'run' || action === 'resume'
+          ? detail?.outcome.contract?.approvalRequired
+          : undefined,
+      );
       await reload();
     } catch {
       setError(copy.actionFailed);
@@ -129,6 +135,34 @@ export function OutcomeDetailPage() {
             <section className="rounded-2xl border border-edge-subtle bg-surface-panel p-5">
               <p className="text-xs font-medium text-fg-subtle">{copy.latestResult}</p>
               <h2 className="mt-2 text-base font-semibold text-fg">{detail.receipts[0].summary}</h2>
+              {detail.receipts[0].judgment ? (
+                <div className="mt-4 rounded-xl border border-accent/20 bg-accent-soft/15 p-4">
+                  <p className="text-xs font-medium text-accent-fg">{copy.recommendation}</p>
+                  <p className="mt-1 text-sm font-medium leading-6 text-fg">
+                    {detail.receipts[0].judgment.recommendation}
+                  </p>
+                  <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <p className="text-xs font-medium text-fg-subtle">{copy.judgmentReasons}</p>
+                      <TextList items={detail.receipts[0].judgment.reasons} empty="" />
+                    </div>
+                    {detail.receipts[0].judgment.rejectedAlternatives.length > 0 ? (
+                      <div>
+                        <p className="text-xs font-medium text-fg-subtle">{copy.rejectedAlternatives}</p>
+                        <TextList
+                          items={detail.receipts[0].judgment.rejectedAlternatives.map((item) => `${item.option}: ${item.reason}`)}
+                          empty=""
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                  {detail.receipts[0].judgment.uncertainty ? (
+                    <p className="mt-3 text-xs leading-5 text-fg-muted">
+                      {copy.uncertainty}: {detail.receipts[0].judgment.uncertainty}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
               <div className="mt-5 grid gap-5 sm:grid-cols-2">
                 <div>
                   <h3 className="text-xs font-medium text-fg-subtle">{copy.remainingWork}</h3>
@@ -245,6 +279,25 @@ export function OutcomeDetailPage() {
               <span>{copy.evidenceDetails}</span>
               <ChevronDown className="size-4 text-fg-muted transition-transform group-open:rotate-180" aria-hidden />
             </summary>
+            {detail.contextManifest ? (
+              <section className="mt-4 rounded-xl border border-edge-subtle bg-surface-base p-4">
+                <h3 className="text-sm font-medium text-fg">{copy.contextUsed}</h3>
+                <div className="mt-3 grid gap-4 sm:grid-cols-3">
+                  <div>
+                    <p className="text-xs font-medium text-fg-subtle">{copy.contextSources}</p>
+                    <TextList items={detail.contextManifest.sources.map((source) => source.description)} empty="" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-fg-subtle">{copy.contextAssumptions}</p>
+                    <TextList items={detail.contextManifest.assumptions} empty="—" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-fg-subtle">{copy.unresolvedCriteria}</p>
+                    <TextList items={detail.contextManifest.unresolvedCriteria} empty={copy.noRemainingWork} />
+                  </div>
+                </div>
+              </section>
+            ) : null}
             {detail.receipts.length === 0 ? (
               <p className="mt-4 text-sm text-fg-muted">{copy.noReceipts}</p>
             ) : (

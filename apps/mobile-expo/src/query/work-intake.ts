@@ -25,10 +25,13 @@ export async function proposeWorkIntake(input: {
   return WorkIntakeProposalSchema.parse(body.proposal);
 }
 
-export async function confirmWorkIntake(proposalId: string): Promise<ConfirmedWork> {
+export async function confirmWorkIntake(
+  proposalId: string,
+  blockingDecisionId?: string,
+): Promise<ConfirmedWork> {
   const res = await apiFetch(`/api/work/intakes/${encodeURIComponent(proposalId)}/confirm`, {
     method: 'POST',
-    body: JSON.stringify({ executionMode: 'run_now' }),
+    body: JSON.stringify({ executionMode: 'run_now', blockingDecisionId }),
   });
   if (!res.ok) throw await readError(res);
   const body = await res.json() as { work?: unknown };

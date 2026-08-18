@@ -23,11 +23,15 @@ export async function fetchOutcome(id: string): Promise<OutcomeDetail> {
   };
 }
 
-export async function actOnOutcome(id: string, action: OutcomeAction): Promise<Outcome> {
+export async function actOnOutcome(
+  id: string,
+  action: OutcomeAction,
+  approvedBoundaries?: string[],
+): Promise<Outcome> {
   const response = await apiFetch(`/api/outcomes/${encodeURIComponent(id)}/actions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action }),
+    body: JSON.stringify({ action, approvedBoundaries }),
   });
   if (!response.ok) throw new Error(`Failed to update outcome: ${response.status}`);
   const body = await response.json() as { outcome?: unknown };

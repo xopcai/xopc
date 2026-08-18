@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseOutcomeContractResponse } from '../outcome-contract-planner.js';
+import {
+  assessOutcomeIntent,
+  parseOutcomeContractResponse,
+} from '../outcome-contract-planner.js';
 
 describe('parseOutcomeContractResponse', () => {
   it('keeps verifiable criteria, assumptions, and risks', () => {
@@ -28,5 +31,38 @@ describe('parseOutcomeContractResponse', () => {
 
   it('rejects contracts without checkable criteria', () => {
     expect(parseOutcomeContractResponse('{"objective":"Ship","deliverables":["Release"]}')).toBeUndefined();
+  });
+});
+
+describe('assessOutcomeIntent', () => {
+  const contract = {
+    objective: 'Ship the release safely',
+    deliverables: ['Published release'],
+    acceptanceCriteria: ['Production reports the new version'],
+    constraints: [],
+    approvalRequired: [],
+    assumptions: [],
+    risks: [],
+  };
+
+  it('starts immediately when no material approval is required', () => {
+    expect(assessOutcomeIntent(contract)).toEqual({
+      confidence: 0.95,
+      canStartImmediately: true,
+    });
+  });
+
+  it('collapses all material approvals into one blocking decision', () => {
+    expect(assessOutcomeIntent({
+      ...contract,
+      approvalRequired: ['Publish to production', 'Charge the release budget'],
+    })).toMatchObject({
+      confidence: 0.75,
+      canStartImmediately: false,
+      blockingDecision: {
+        id: 'approve-execution-boundaries',
+        question: expect.stringContaining('Publish to production; Charge the release budget'),
+      },
+    });
   });
 });

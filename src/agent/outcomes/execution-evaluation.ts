@@ -6,6 +6,9 @@ export interface ExecutionEvaluationReplay {
   falseCompletions: number;
   verificationDrift: number;
   supportMismatches: number;
+  recoverySuccessRate: number;
+  judgmentCoverage: number;
+  userInterventionRate: number;
   channelConsistencyGap: number;
   byChannel: Record<string, {
     total: number;
@@ -29,6 +32,10 @@ export function replayExecutionEvaluation(outcomes: ExecutionReceipt[]): Executi
   const cases: ExecutionEvaluationReplay['cases'] = [];
   let falseCompletions = 0;
   let supportMismatches = 0;
+  let recoveryAttempts = 0;
+  let recoverySuccesses = 0;
+  let judgments = 0;
+  let userInterventions = 0;
   for (const outcome of completed) {
     const replayed = verifyExecutionCompletion({
       status: outcome.status,
@@ -45,6 +52,12 @@ export function replayExecutionEvaluation(outcomes: ExecutionReceipt[]): Executi
     }
     if (outcome.status === 'succeeded' && replayed.status !== 'passed') falseCompletions += 1;
     if (outcome.feedback?.supportFit === false) supportMismatches += 1;
+    if (outcome.context.triggerKind === 'retry') {
+      recoveryAttempts += 1;
+      if (outcome.completionVerdict === 'achieved') recoverySuccesses += 1;
+    }
+    if (outcome.judgment) judgments += 1;
+    if (outcome.needsUser) userInterventions += 1;
     const channel = byChannel[outcome.channel] ?? { total: 0, verified: 0, helpful: 0, rated: 0 };
     channel.total += 1;
     if (replayed.status === 'passed') channel.verified += 1;
@@ -62,6 +75,9 @@ export function replayExecutionEvaluation(outcomes: ExecutionReceipt[]): Executi
     falseCompletions,
     verificationDrift: cases.length,
     supportMismatches,
+    recoverySuccessRate: recoveryAttempts ? recoverySuccesses / recoveryAttempts : 0,
+    judgmentCoverage: completed.length ? judgments / completed.length : 0,
+    userInterventionRate: completed.length ? userInterventions / completed.length : 0,
     channelConsistencyGap: verificationRates.length > 1
       ? Math.max(...verificationRates) - Math.min(...verificationRates)
       : 0,
