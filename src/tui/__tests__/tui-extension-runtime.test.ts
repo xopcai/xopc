@@ -15,9 +15,8 @@ it('invokes extension shortcuts with TUI context', async () => {
       currentSessionKey: 'agent:main:main',
       activeRunId: null as string | null,
       isCompacting: false,
+      pendingInputCount: 0,
       activityStatus: 'idle' as 'idle' | 'streaming',
-      messageFollowUpQueue: [] as string[],
-      steeringQueue: [] as string[],
       compactionQueue: [] as string[],
       sessionInfo: {
         modelProvider: 'openai',
@@ -236,7 +235,7 @@ it('invokes extension shortcuts with TUI context', async () => {
     await vi.waitFor(() => expect(setReasoningLevel).toHaveBeenCalledWith('stream'));
     await vi.waitFor(() => expect(setVerboseLevel).toHaveBeenCalledWith('full'));
     state.activeRunId = 'run-1';
-    state.messageFollowUpQueue.push('next');
+    state.pendingInputCount = 1;
     abortController.abort();
     expect(runtime.handleShortcut('x')).toBe(true);
     await vi.waitFor(() => expect(seen).toMatchObject({ idle: false, pendingMessages: true }));
@@ -258,9 +257,8 @@ it('invokes extension shortcuts with TUI context', async () => {
       currentSessionKey: 'agent:main:main',
       activeRunId: null as string | null,
       isCompacting: false,
+      pendingInputCount: 0,
       activityStatus: 'idle' as 'idle' | 'streaming',
-      messageFollowUpQueue: [] as string[],
-      steeringQueue: [] as string[],
       compactionQueue: [] as string[],
       sessionInfo: {
         modelProvider: 'openai',
@@ -393,7 +391,7 @@ it('invokes extension shortcuts with TUI context', async () => {
     expect(() => reloadContext?.mode).toThrow('This extension ctx is stale');
 
     state.activityStatus = 'streaming';
-    state.steeringQueue.push('interrupt');
+    state.pendingInputCount = 1;
     state.sessionInfo.reasoningLevel = 'invalid';
     state.sessionInfo.verboseLevel = 'invalid';
     expect(context?.isIdle()).toBe(false);
@@ -498,8 +496,7 @@ it('invokes extension shortcuts with TUI context', async () => {
       connectionStatus: 'connected',
       activityStatus: 'idle',
       isCompacting: false,
-      messageFollowUpQueue: [],
-      steeringQueue: [],
+      pendingInputCount: 0,
       compactionQueue: [],
       showThinking: true,
       sessionInfo: {},
@@ -582,8 +579,7 @@ it('invokes extension shortcuts with TUI context', async () => {
       connectionStatus: 'connected',
       activityStatus: 'idle',
       isCompacting: false,
-      messageFollowUpQueue: [],
-      steeringQueue: [],
+      pendingInputCount: 0,
       compactionQueue: [],
       showThinking: true,
       sessionInfo: {},

@@ -26,16 +26,17 @@ import { ensureStarterAgentsInitialized } from '../agent/starter-agents.js';
 import { MAX_CHAT_ATTACHMENTS, MAX_WEBCHAT_ATTACHMENT_FILE_BYTES } from '../gateway/chat-limits.js';
 import { resolveTuiSessionKey, resolveTuiStartupSessionKey } from '../routing/resolve-tui-session-key.js';
 import { normalizeAgentId, parseAgentSessionKey } from '../routing/agent-session-key.js';
-import type {
-  TuiBackend,
-  TuiCompactionResult,
-  TuiComposerHistoryItem,
-  TuiEvent,
-  TuiExportFormat,
-  TuiInboundAttachment,
-  TuiModelChoice,
-  TuiShareRequest,
-  TuiStartupResources,
+import {
+  countPendingChatInputs,
+  type TuiBackend,
+  type TuiCompactionResult,
+  type TuiComposerHistoryItem,
+  type TuiEvent,
+  type TuiExportFormat,
+  type TuiInboundAttachment,
+  type TuiModelChoice,
+  type TuiShareRequest,
+  type TuiStartupResources,
 } from './tui-backend.js';
 import { EmbeddedBackend } from './backends/embedded-backend.js';
 import { GatewaySseBackend } from './backends/gateway-sse-backend.js';
@@ -57,7 +58,6 @@ import {
   type TuiImportRequest,
 } from './tui-command-formatters.js';
 import { createLocalShellRunner } from './tui-local-shell.js';
-import { drainFollowUpQueue, restoreQueuedMessages } from './tui-follow-up-queue.js';
 import { createBackspaceDeduper, drainAndStopTuiSafely, resolveCtrlCAction } from './tui-lifecycle.js';
 import {
   openAgentPickerOverlay,
@@ -432,7 +432,6 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   const bottomBar = new TuiBottomBar(
     () => state,
     () => opts.thinking,
-    () => formatKeyIds(keybindings, 'app.message.dequeue', { capitalize: true }),
   );
   const chatLog = new ChatLog(keybindings);
   chatLog.setViewportRowsProvider(() => Math.max(8, tui.terminal.rows - 8));
@@ -527,15 +526,18 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
           return;
         }
         if (state.activeRunId) {
-          if (options?.deliverAs === 'followUp') {
-            state.messageFollowUpQueue.push(controlText);
-            chatLog.addSystem(
-              theme.dim(
-                `Queued extension follow-up (${state.messageFollowUpQueue.length} in queue). ${tuiSettings.followUpMode === 'all' ? 'All queued messages send together when this reply finishes.' : 'Next sends when this reply finishes.'}`,
-              ),
-            );
-            bottomBar.invalidate();
-            tui.requestRender();
+          if (options?.deliverAs === 'next') {
+            void client.submitChatInput({ sessionKey: state.currentSessionKey, message: controlText, delivery: 'next' })
+              .then((result) => {
+                if (!result.ok) throw new Error('Session input was rejected');
+                chatLog.addSystem(theme.dim('Queued as the next message.'));
+                bottomBar.invalidate();
+                tui.requestRender();
+              })
+              .catch((error: unknown) => {
+                chatLog.addSystem(`❌ Failed to queue: ${error instanceof Error ? error.message : String(error)}`);
+                tui.requestRender();
+              });
             return;
           }
           steerMessage(turnText);
@@ -883,8 +885,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       sessionKey: state.currentSessionKey,
       isProjectTrusted: isCurrentProjectTrusted,
       isIdle: () => !state.activeRunId && !state.isCompacting,
-      hasPendingMessages: () =>
-        state.messageFollowUpQueue.length > 0 || state.steeringQueue.length > 0 || state.compactionQueue.length > 0,
+      hasPendingMessages: () => state.compactionQueue.length > 0,
       abort: () => abortActive(),
       shutdown: () => requestExit(),
       compact: (options) =>
@@ -1804,35 +1805,28 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
 
   const isAgentBusy = () => state.activeRunId != null || state.isCompacting || busyStates.has(state.activityStatus);
 
-  let steeringInFlightForRunId: string | null = null;
-
   const sendSteeringToActiveRun = (text: string) => {
-    chatLog.addUser(text);
     touchStreamingActivity();
     tui.requestRender();
     void client
-      .steerChat({ sessionKey: state.currentSessionKey, message: text })
-      .then(({ ok }) => {
+      .submitChatInput({ sessionKey: state.currentSessionKey, message: text, delivery: 'steer' })
+      .then(({ ok, effectiveDelivery }) => {
         if (!ok) {
+          if (!editor.getText().trim()) editor.setText(text);
           chatLog.addSystem(theme.dim(formatSteerUnavailableHint(keybindings)));
         } else {
-          chatLog.addSystem(theme.dim('Steered — message injects at the next tool boundary (pi-style).'));
+          chatLog.addUser(text);
+          chatLog.addSystem(theme.dim(effectiveDelivery === 'steer' ? 'Added to this reply.' : 'Queued as the next message.'));
+          void refreshPendingInputCount();
         }
         tui.requestRender();
       })
       .catch((error: unknown) => {
+        if (!editor.getText().trim()) editor.setText(text);
         const errorMessage = error instanceof Error ? error.message : String(error);
         chatLog.addSystem(theme.dim(`Steer failed: ${errorMessage}`));
         tui.requestRender();
       });
-  };
-
-  const flushSteeringQueue = () => {
-    if (state.exitRequested) return;
-    if (state.activeRunId) return;
-    const next = drainFollowUpQueue(state.steeringQueue, tuiSettings.steeringMode);
-    if (next === undefined) return;
-    sendMessage(next);
   };
 
   const steerMessage = (text: string) => {
@@ -1840,18 +1834,6 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       sendMessage(text);
       return;
     }
-    if (steeringInFlightForRunId === state.activeRunId) {
-      state.steeringQueue.push(text);
-      chatLog.addSystem(
-        theme.dim(
-          `Queued steering (${state.steeringQueue.length} in queue). ${tuiSettings.steeringMode === 'all' ? 'All queued steering sends together after this reply.' : 'Next sends after this reply.'}`,
-        ),
-      );
-      bottomBar.invalidate();
-      tui.requestRender();
-      return;
-    }
-    steeringInFlightForRunId = state.activeRunId;
     sendSteeringToActiveRun(text);
   };
 
@@ -1933,18 +1915,21 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       steerMessage(text);
       return;
     }
-    if (options?.deliverAs === 'followUp') {
-      state.messageFollowUpQueue.push(text);
-      chatLog.addSystem(
-        theme.dim(
-          `Queued follow-up (${state.messageFollowUpQueue.length} in queue). ${tuiSettings.followUpMode === 'all' ? 'All queued messages send together when this reply finishes.' : 'Next sends when this reply finishes.'}`,
-        ),
-      );
-      bottomBar.invalidate();
-      tui.requestRender();
+    if (options?.deliverAs === 'next') {
+      void client.submitChatInput({ sessionKey: state.currentSessionKey, message: text, delivery: 'next' })
+        .then((result) => {
+          if (!result.ok) throw new Error('Session input was rejected');
+          chatLog.addSystem(theme.dim('Queued as the next message.'));
+          bottomBar.invalidate();
+          tui.requestRender();
+        })
+        .catch((error: unknown) => {
+          chatLog.addSystem(`❌ Failed to queue: ${error instanceof Error ? error.message : String(error)}`);
+          tui.requestRender();
+        });
       return;
     }
-    throw new Error('Agent is busy. Use deliverAs: "steer" or "followUp".');
+    throw new Error('Agent is busy. Use deliverAs: "steer" or "next".');
   };
 
   const runCompaction = async (
@@ -2248,6 +2233,18 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       // History is an optional convenience; keep the editor responsive when unavailable.
     }
   };
+  const refreshPendingInputCount = async (sessionKey = state.currentSessionKey) => {
+    try {
+      const inputState = await client.getChatInputState(sessionKey);
+      if (state.currentSessionKey === sessionKey) {
+        state.pendingInputCount = countPendingChatInputs(inputState.inputs);
+      }
+    } catch {
+      if (state.currentSessionKey === sessionKey) state.pendingInputCount = 0;
+    }
+    bottomBar.invalidate();
+    tui.requestRender();
+  };
   const recordChatHistory = (value: string) => {
     const text = value.trim();
     if (!text) return;
@@ -2291,14 +2288,6 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   });
   defaultEditor.onSubmit = submitBurst;
 
-  const flushFollowUpQueue = () => {
-    if (state.exitRequested) return;
-    if (state.activeRunId) return;
-    const next = drainFollowUpQueue(state.messageFollowUpQueue, tuiSettings.followUpMode);
-    if (next === undefined) return;
-    sendMessage(next);
-  };
-
   const handleFollowUp = () => {
     const text = editor.getText().trim();
     if (!text && pendingImageAttachments.length === 0) return;
@@ -2312,44 +2301,29 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
         tui.requestRender();
         return;
       }
-      recordChatHistory(text);
-      state.messageFollowUpQueue.push(text);
-      editor.setText('');
-      chatLog.addSystem(
-        theme.dim(
-          `Queued follow-up (${state.messageFollowUpQueue.length} in queue). ${tuiSettings.followUpMode === 'all' ? 'All queued messages send together when this reply finishes.' : 'Next sends when this reply finishes.'}`,
-        ),
-      );
-      bottomBar.invalidate();
-      tui.requestRender();
+      const sessionKey = state.currentSessionKey;
+      void client.submitChatInput({ sessionKey, message: text, delivery: 'next' })
+        .then(async ({ ok }) => {
+          if (!ok) throw new Error('Gateway did not accept the message');
+          recordChatHistory(text);
+          if (state.currentSessionKey === sessionKey && editor.getText().trim() === text) editor.setText('');
+          chatLog.addSystem(theme.dim('Queued as the next message.'));
+          await refreshPendingInputCount(sessionKey);
+        })
+        .catch((error: unknown) => {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          chatLog.addSystem(theme.dim(`Queue failed: ${errorMessage}`));
+          tui.requestRender();
+        });
       return;
     }
     submitBurst(text);
   };
 
-  const handleDequeue = () => {
-    const restored = restoreQueuedMessages(
-      {
-        steeringQueue: state.steeringQueue,
-        followUpQueue: state.messageFollowUpQueue,
-      },
-      editor.getText(),
-    );
-    if (restored.restoredCount === 0) {
-      chatLog.addStatus(theme.dim('No queued messages to restore.'));
-      tui.requestRender();
-      return;
-    }
-    editor.setText(restored.text);
-    chatLog.addStatus(
-      theme.dim(`Restored ${restored.restoredCount} queued message${restored.restoredCount > 1 ? 's' : ''} to editor.`),
-    );
-    bottomBar.invalidate();
-    tui.requestRender();
-  };
-
   const setSessionKey = (key: string) => {
     state.currentSessionKey = resolveSessionKey(key);
+    state.pendingInputCount = 0;
+    void refreshPendingInputCount(state.currentSessionKey);
     updateAgentFromPicker(key);
   };
 
@@ -2552,7 +2526,6 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     })();
   };
   defaultEditor.onAction('app.message.followUp', handleFollowUp);
-  defaultEditor.onAction('app.message.dequeue', handleDequeue);
 
   streamWatchdogId = setInterval(() => {
     const now = Date.now();
@@ -2566,13 +2539,10 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
 
   const onAgentRunEnded = () => {
     state.progressMessage = null;
-    steeringInFlightForRunId = null;
     void refreshSessionInfoWithBorder().finally(() => {
       updateFooter();
       tui.requestRender();
     });
-    flushSteeringQueue();
-    flushFollowUpQueue();
   };
 
   const handleWorkflowRunUpdated = (data: Record<string, unknown>): boolean => {
@@ -2596,6 +2566,14 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
 
   client.onEvent = (evt: TuiEvent) => {
     const data = (evt.data ?? {}) as Record<string, unknown>;
+    if (evt.event === 'session.input-state') {
+      if (data.sessionKey === state.currentSessionKey && Array.isArray(data.inputs)) {
+        state.pendingInputCount = countPendingChatInputs(data.inputs);
+        bottomBar.invalidate();
+        tui.requestRender();
+      }
+      return;
+    }
     if (evt.event === 'composer-history.appended') {
       const item = data as unknown as TuiComposerHistoryItem;
       if (typeof item.text === 'string' && typeof item.id === 'number') {
@@ -2670,6 +2648,12 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
         chatLog.addSystem(`Project not selected: ${errorMessage}`);
       }
       await refreshSessionInfoWithBorder();
+      try {
+        const inputState = await client.getChatInputState(state.currentSessionKey);
+        state.pendingInputCount = countPendingChatInputs(inputState.inputs);
+      } catch {
+        state.pendingInputCount = 0;
+      }
       await refreshModelChoices();
       await loadSessionHistory({ merge: true });
       void cleanupAbandonedTuiSessions(client, state.currentSessionKey)

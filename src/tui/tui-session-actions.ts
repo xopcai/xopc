@@ -82,8 +82,6 @@ export function createSessionActions(context: SessionActionsContext) {
     lastHistoryKeys = [];
     resetRunStatus(state);
     state.historyLoaded = false;
-    state.messageFollowUpQueue.length = 0;
-    state.steeringQueue.length = 0;
   };
 
   const loadHistory = async (opts?: { merge?: boolean }) => {

@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 
 import {
+  decodeConcreteSessionKey,
   parseRoutedSessionKey,
   resolveViewSessionKey,
 } from '@/features/chat/session/chat-session-view';
@@ -28,7 +29,7 @@ export function useChatSessionRoute() {
 
   const isNewRoute = location.pathname.endsWith('/new');
   const forceNewChat = isNewRoute && isForcedNewChatNavigation(location.state);
-  const decodedKey = sessionKeyParam ? decodeURIComponent(sessionKeyParam) : undefined;
+  const decodedKey = decodeConcreteSessionKey(isNewRoute, sessionKeyParam);
   const routedSessionKey = parseRoutedSessionKey(isNewRoute, decodedKey);
   const viewSessionKey = resolveViewSessionKey(routedSessionKey);
   const routedFocusedSessionKey = isNewRoute ? null : (decodedKey ?? null);

@@ -392,17 +392,18 @@ describe('Gateway Security Fixes', () => {
       // Create a small body (< 1MB)
       const smallBody = { data: 'small payload' };
       
-      const res = await app.request('/api/agent', {
+      const res = await app.request('/api/sessions/agent%3Amain%3Amain/inputs', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer test',
+          'Authorization': 'Bearer test-token',
         },
         body: JSON.stringify(smallBody),
       });
       
       // Should not be 413 (Payload Too Large)
       expect(res.status).not.toBe(413);
+      expect(res.headers.get('X-RateLimit-Remaining')).toBe('179');
     });
 
     it('should allow larger note media uploads through the API body limit', async () => {

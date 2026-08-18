@@ -170,20 +170,6 @@ export class SettingsSelector implements Component {
         values: ['none', 'tree', 'fork'],
       },
       {
-        id: 'follow-up-mode',
-        label: 'Follow-up mode',
-        description: 'Delivery for queued follow-ups after a response ends',
-        currentValue: this.state.followUpMode,
-        values: ['one-at-a-time', 'all'],
-      },
-      {
-        id: 'steering-mode',
-        label: 'Steering mode',
-        description: 'Delivery for queued Enter-while-busy steering messages',
-        currentValue: this.state.steeringMode,
-        values: ['one-at-a-time', 'all'],
-      },
-      {
         id: 'tree-filter-mode',
         label: 'Tree filter',
         description: 'Default filter when opening /tree',
@@ -256,12 +242,6 @@ export class SettingsSelector implements Component {
             break;
           case 'double-escape':
             this.state.doubleEscapeAction = newValue as DoubleEscapeAction;
-            break;
-          case 'follow-up-mode':
-            this.state.followUpMode = newValue as TuiSettings['followUpMode'];
-            break;
-          case 'steering-mode':
-            this.state.steeringMode = newValue as TuiSettings['steeringMode'];
             break;
           case 'tree-filter-mode':
             this.state.treeFilterMode = newValue as TuiSettings['treeFilterMode'];

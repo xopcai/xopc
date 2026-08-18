@@ -162,8 +162,8 @@ describe('useGatewayStore', () => {
       unauthorized: false,
     });
 
-    expect(useGatewayStore.getState().apiUrl('/api/agent')).toBe(
-      'http://192.168.1.44:18790/api/agent',
+    expect(useGatewayStore.getState().apiUrl('/api/sessions/test/inputs')).toBe(
+      'http://192.168.1.44:18790/api/sessions/test/inputs',
     );
   });
 });

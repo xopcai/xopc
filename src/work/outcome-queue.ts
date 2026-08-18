@@ -170,7 +170,6 @@ function initialTurn(outcome: NonNullable<ReturnType<OutcomeRepository['get']>>,
   return {
     text: parts.join('\n\n'),
     attachments: mediaRefsToUserTurnAttachments(state.contextMessage?.attachments),
-    clientCreatedAtMs: Date.now(),
   };
 }
 
@@ -252,7 +251,7 @@ export class OutcomeRunner {
       await this.options.bindExecutionContext?.(sessionKey, outcome.id, this.#states.get(outcome.id) ?? state, item.executionContext);
       if (this.options.hasActiveRun(sessionKey)) return this.retry(item, 'Outcome session already has an active run');
       const userTurn = item.userTurn ?? (state.nextAction
-        ? { text: state.nextAction, clientCreatedAtMs: Date.now() }
+        ? { text: state.nextAction }
         : initialTurn(outcome, state));
       await this.options.runTurn(sessionKey, userTurn);
       this.finish(item, 'succeeded');

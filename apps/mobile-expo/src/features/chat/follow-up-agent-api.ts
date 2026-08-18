@@ -1,16 +1,30 @@
 import { apiFetch } from '../../api/client';
 
-export async function agentSteer(sessionKey: string, message: string): Promise<boolean> {
-  const trimmed = message.trim();
-  if (!trimmed) return false;
-  try {
-    const res = await apiFetch('/api/agent/steer', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionKey, message: trimmed }),
-    });
-    return res.ok;
-  } catch {
-    return false;
+export async function submitSessionInput(sessionKey: string, input: Record<string, unknown>): Promise<unknown> {
+  const res = await apiFetch(`/api/sessions/${encodeURIComponent(sessionKey)}/inputs`, {
+    method: 'POST', body: JSON.stringify(input),
+  });
+  const json = await res.json().catch(() => null) as {
+    payload?: { state?: unknown };
+    error?: string | { message?: string };
+  } | null;
+  if (!res.ok) {
+    const message = typeof json?.error === 'string' ? json.error : json?.error?.message;
+    throw new Error(message ?? 'Message was not accepted');
   }
+  if (!json?.payload?.state) throw new Error('Gateway returned an invalid input state');
+  return json.payload.state;
+}
+
+export async function getSessionInputState(sessionKey: string): Promise<unknown> {
+  const res = await apiFetch(`/api/sessions/${encodeURIComponent(sessionKey)}/input-state`);
+  const json = await res.json().catch(() => null) as {
+    payload?: unknown;
+    error?: string | { message?: string };
+  } | null;
+  if (!res.ok) {
+    const message = typeof json?.error === 'string' ? json.error : json?.error?.message;
+    throw new Error(message ?? 'Input state could not be loaded');
+  }
+  return json?.payload;
 }

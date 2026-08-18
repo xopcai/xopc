@@ -2,23 +2,33 @@ import type { Hono } from 'hono';
 
 import {
   createAgentResumeHandler,
-  createAgentSSEHandler,
   createEventsSSEHandler,
   createSendHandler,
 } from '../sse.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
-import { createGatewayRouteLogger, logRouteWarn } from '../lib/route-logger.js';
+import { MAX_CHAT_ATTACHMENTS, MAX_WEBCHAT_ATTACHMENT_FILE_BYTES } from '../../chat-limits.js';
+import type { UserTurnAttachment } from '../../user-turn-input.js';
 
-const log = createGatewayRouteLogger('AgentStream');
+function validateAttachments(attachments: unknown[] | undefined): string | null {
+  if (!attachments) return null;
+  if (attachments.length > MAX_CHAT_ATTACHMENTS) {
+    return `Too many attachments (maximum ${MAX_CHAT_ATTACHMENTS})`;
+  }
+  const maxBase64Length = 4 * Math.ceil(MAX_WEBCHAT_ATTACHMENT_FILE_BYTES / 3);
+  if (attachments.some((item) => item && typeof item === 'object'
+    && typeof (item as { data?: unknown }).data === 'string'
+    && (item as { data: string }).data.length > maxBase64Length)) {
+    return `Attachment exceeds maximum size (${MAX_WEBCHAT_ATTACHMENT_FILE_BYTES} bytes)`;
+  }
+  return null;
+}
 
 export function registerAgentStreamRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
-  const { service, strictRateLimitMiddleware, sseConfig } = deps;
+  const { service, chatRateLimitMiddleware, sseConfig } = deps;
 
-  authenticated.post('/api/agent', strictRateLimitMiddleware, createAgentSSEHandler(sseConfig));
+  authenticated.post('/api/agent/resume', chatRateLimitMiddleware, createAgentResumeHandler(sseConfig));
 
-  authenticated.post('/api/agent/resume', strictRateLimitMiddleware, createAgentResumeHandler(sseConfig));
-
-  authenticated.post('/api/agent/abort', strictRateLimitMiddleware, async (c) => {
+  authenticated.post('/api/agent/abort', chatRateLimitMiddleware, async (c) => {
     const body = await c.req.json().catch(() => null);
     const runId =
       body && typeof body === 'object' && typeof (body as { runId?: unknown }).runId === 'string'
@@ -30,49 +40,65 @@ export function registerAgentStreamRoutes(authenticated: Hono, deps: Authenticat
         400,
       );
     }
-    const aborted = service.abortAgentRun(runId);
-    return c.json({ ok: true, payload: { aborted } });
+    const result = await service.abortAgentRun(runId);
+    return c.json({ ok: true, payload: result });
   });
 
-  authenticated.post('/api/agent/steer', strictRateLimitMiddleware, async (c) => {
-    const body = await c.req.json().catch(() => null);
-    if (!body || typeof body !== 'object') {
-      return c.json(
-        { ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid JSON body' } },
-        400,
-      );
-    }
-    const sessionKey =
-      typeof (body as { sessionKey?: unknown }).sessionKey === 'string'
-        ? (body as { sessionKey: string }).sessionKey.trim()
-        : '';
-    const message =
-      typeof (body as { message?: unknown }).message === 'string'
-        ? (body as { message: string }).message
-        : '';
-    if (!sessionKey) {
-      return c.json(
-        { ok: false, error: { code: 'BAD_REQUEST', message: 'Missing sessionKey' } },
-        400,
-      );
-    }
-    const result = await service.steerWebchatAgent(sessionKey, message);
-    if (result.ok === false) {
-      logRouteWarn(log, c, `Agent steer failed: ${result.code}`, 'gateway.route.agent', { sessionKey, code: result.code });
-      const code = result.code;
-      const status = code === 'BAD_REQUEST' ? 400 : code === 'NO_ACTIVE_RUN' ? 409 : 500;
-      const msg =
-        code === 'NO_ACTIVE_RUN'
-              ? 'No active agent run for this session'
-          : code === 'STEER_FAILED'
-            ? 'Steer failed'
-            : 'Message required';
-      return c.json({ ok: false, error: { code, message: msg } }, status);
-    }
-    return c.json({ ok: true, payload: { steered: true } });
+  authenticated.get('/api/sessions/:sessionKey/input-state', (c) => {
+    const sessionKey = (c.req.param('sessionKey') ?? '').trim();
+    if (!sessionKey) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Missing sessionKey' } }, 400);
+    return c.json({ ok: true, payload: service.getSessionInputState(sessionKey) });
   });
 
-  authenticated.post('/api/clarify/:requestId', strictRateLimitMiddleware, async (c) => {
+  authenticated.post('/api/sessions/:sessionKey/inputs', chatRateLimitMiddleware, async (c) => {
+    const sessionKey = (c.req.param('sessionKey') ?? '').trim();
+    const body = await c.req.json().catch(() => null) as Record<string, unknown> | null;
+    if (!body || !sessionKey) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid request' } }, 400);
+    const attachments = Array.isArray(body.attachments) ? body.attachments : undefined;
+    const attachmentError = validateAttachments(attachments);
+    if (attachmentError) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: attachmentError } }, 400);
+    const delivery = body.delivery === 'next' || body.delivery === 'steer' ? body.delivery : null;
+    if (!delivery) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Missing delivery' } }, 400);
+    const result = await service.submitSessionInput({
+      sessionKey,
+      clientMessageId: typeof body.clientMessageId === 'string' ? body.clientMessageId : '',
+      delivery,
+      content: typeof body.content === 'string' ? body.content : '',
+      attachments: attachments as UserTurnAttachment[] | undefined,
+      thinking: typeof body.thinking === 'string' ? body.thinking : undefined,
+    });
+    if (result.ok === false) return c.json({ ok: false, error: { code: result.code, message: 'Input was not accepted' } }, result.code === 'QUEUE_FULL' ? 409 : 400);
+    return c.json({ ok: true, payload: result }, 202);
+  });
+
+  authenticated.patch('/api/sessions/:sessionKey/inputs/:inputId', chatRateLimitMiddleware, async (c) => {
+    const sessionKey = (c.req.param('sessionKey') ?? '').trim();
+    const inputId = c.req.param('inputId')?.trim() ?? '';
+    const body = await c.req.json().catch(() => null) as Record<string, unknown> | null;
+    if (!body || typeof body.version !== 'number') return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Missing version' } }, 400);
+    const attachments = Array.isArray(body.attachments) ? body.attachments : undefined;
+    const attachmentError = validateAttachments(attachments);
+    if (attachmentError) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: attachmentError } }, 400);
+    const result = await service.updateSessionInput(sessionKey, inputId, {
+      version: body.version,
+      content: typeof body.content === 'string' ? body.content : undefined,
+      attachments: attachments as UserTurnAttachment[] | undefined,
+      thinking: typeof body.thinking === 'string' ? body.thinking : undefined,
+      position: typeof body.position === 'number' ? body.position : undefined,
+    });
+    return result.ok ? c.json({ ok: true, payload: result.state }) : c.json({ ok: false, error: { code: 'CONFLICT', message: 'Input changed' }, payload: result.state }, 409);
+  });
+
+  authenticated.delete('/api/sessions/:sessionKey/inputs/:inputId', chatRateLimitMiddleware, (c) => {
+    const sessionKey = (c.req.param('sessionKey') ?? '').trim();
+    const inputId = c.req.param('inputId')?.trim() ?? '';
+    const version = Number(c.req.query('version'));
+    if (!Number.isFinite(version)) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Missing version' } }, 400);
+    const result = service.removeSessionInput(sessionKey, inputId, version);
+    return result.ok ? c.json({ ok: true, payload: result.state }) : c.json({ ok: false, error: { code: 'CONFLICT', message: 'Input changed' }, payload: result.state }, 409);
+  });
+
+  authenticated.post('/api/clarify/:requestId', chatRateLimitMiddleware, async (c) => {
     const requestId = c.req.param('requestId')?.trim() ?? '';
     if (!requestId) {
       return c.json(
@@ -106,7 +132,7 @@ export function registerAgentStreamRoutes(authenticated: Hono, deps: Authenticat
     return c.json({ ok: true, payload: { received: true } });
   });
 
-  authenticated.post('/api/send', strictRateLimitMiddleware, createSendHandler(sseConfig));
+  authenticated.post('/api/send', chatRateLimitMiddleware, createSendHandler(sseConfig));
 
   authenticated.get('/api/events', createEventsSSEHandler(sseConfig));
 }

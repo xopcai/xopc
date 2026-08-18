@@ -7,7 +7,7 @@ import { XopcKeybindingsManager } from '../tui-keybindings-file.js';
 import { DEFAULT_TUI_SETTINGS } from '../tui-settings.js';
 
 describe('SettingsSelector', () => {
-  it('shows pi-style follow-up delivery mode', () => {
+  it('shows transcript tree filter mode', () => {
     const selector = new SettingsSelector(DEFAULT_TUI_SETTINGS, {
       onChange: () => {},
       onReloadKeybindings: () => {},
@@ -18,38 +18,8 @@ describe('SettingsSelector', () => {
       selector.handleInput('\x1b[B');
     }
     const rendered = selector.render(160).join('\n');
-    expect(rendered).toContain('Follow-up mode');
-    expect(rendered).toContain('Delivery for queued follow-ups');
-  });
-
-  it('shows pi-style transcript tree filter mode', () => {
-    const selector = new SettingsSelector(DEFAULT_TUI_SETTINGS, {
-      onChange: () => {},
-      onReloadKeybindings: () => {},
-      onCancel: () => {},
-    }, { supportsImages: true });
-
-    for (let i = 0; i < 6; i++) {
-      selector.handleInput('\x1b[B');
-    }
-    const rendered = selector.render(160).join('\n');
     expect(rendered).toContain('Tree filter');
     expect(rendered).toContain('Default filter when opening /tree');
-  });
-
-  it('shows pi-style steering delivery mode', () => {
-    const selector = new SettingsSelector(DEFAULT_TUI_SETTINGS, {
-      onChange: () => {},
-      onReloadKeybindings: () => {},
-      onCancel: () => {},
-    }, { supportsImages: true });
-
-    for (let i = 0; i < 5; i++) {
-      selector.handleInput('\x1b[B');
-    }
-    const rendered = selector.render(160).join('\n');
-    expect(rendered).toContain('Steering mode');
-    expect(rendered).toContain('Delivery for queued Enter-while-busy steering messages');
   });
 
   it('shows the keybindings file path and hotkeys command for reload', () => {
@@ -59,7 +29,7 @@ describe('SettingsSelector', () => {
       onCancel: () => {},
     }, { supportsImages: true });
 
-    for (let i = 0; i < 15; i++) {
+    for (let i = 0; i < 13; i++) {
       selector.handleInput('\x1b[B');
     }
     const rendered = selector.render(160).join('\n');
@@ -75,7 +45,7 @@ describe('SettingsSelector', () => {
       onCancel: () => {},
     }, { supportsImages: true });
 
-    for (let i = 0; i < 13; i++) {
+    for (let i = 0; i < 11; i++) {
       selector.handleInput('\x1b[B');
     }
     const rendered = selector.render(160).join('\n');
@@ -90,7 +60,7 @@ describe('SettingsSelector', () => {
       onCancel: () => {},
     }, { supportsImages: true });
 
-    for (let i = 0; i < 11; i++) {
+    for (let i = 0; i < 9; i++) {
       selector.handleInput('\x1b[B');
     }
     let rendered = selector.render(160).join('\n');
@@ -126,7 +96,7 @@ describe('SettingsSelector', () => {
     const unsupportedText = unsupported.render(160).join('\n');
 
     expect(supportedText).toContain('Show images');
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 8; i++) {
       supported.handleInput('\x1b[B');
     }
     supportedText = supported.render(160).join('\n');

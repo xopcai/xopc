@@ -42,7 +42,6 @@ export type XopcTuiAppKeybinding =
   | 'app.editor.external'
   | 'app.clipboard.pasteImage'
   | 'app.message.followUp'
-  | 'app.message.dequeue'
   | 'app.models.save'
   | 'app.models.enableAll'
   | 'app.models.clearAll'
@@ -85,7 +84,6 @@ declare module '@earendil-works/pi-tui' {
     'app.editor.external': true;
     'app.clipboard.pasteImage': true;
     'app.message.followUp': true;
-    'app.message.dequeue': true;
     'app.models.save': true;
     'app.models.enableAll': true;
     'app.models.clearAll': true;
@@ -214,10 +212,6 @@ export const XOPC_TUI_KEYBINDINGS = {
     defaultKeys: 'alt+enter',
     description: 'Queue message while busy (or submit when idle)',
   },
-  'app.message.dequeue': {
-    defaultKeys: 'alt+up',
-    description: 'Restore queued messages to editor',
-  },
   'app.models.save': {
     defaultKeys: 'ctrl+s',
     description: 'Save scoped model selection',
@@ -279,7 +273,6 @@ export const XOPC_TUI_HOTKEY_ORDER: XopcTuiAppKeybinding[] = [
   'app.editor.external',
   'app.clipboard.pasteImage',
   'app.message.followUp',
-  'app.message.dequeue',
   'app.models.save',
   'app.models.enableAll',
   'app.models.clearAll',

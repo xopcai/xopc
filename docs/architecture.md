@@ -27,7 +27,7 @@ bus, and the agent runtime persists all session state through SQLite.
 | Layer | Main code | Responsibility |
 |-------|-----------|----------------|
 | CLI and service bootstrap | `src/cli/`, `src/daemon/`, `electron/` | Starts foreground gateway, installs or controls a background service, runs CLI/TUI turns, and hosts the Electron shell. |
-| HTTP gateway | `src/gateway/server.ts`, `src/gateway/hono/` | Hono server, auth, CORS/CSRF checks, rate limits, REST routes, `/api/events` broadcast SSE, `/api/agent` streaming SSE, and static Web console serving. |
+| HTTP gateway | `src/gateway/server.ts`, `src/gateway/hono/` | Hono server, auth, CORS/CSRF checks, rate limits, durable session-input REST routes, `/api/events` broadcast SSE, run-resume SSE, and static Web console serving. |
 | Gateway composition root | `src/gateway/service.ts` | Owns `MessageBus`, `ChannelManager`, `AgentService`, `SessionIndex`, automations, notes, projects, goals, workflows, extension loading, Gateway SSE hub, and config hot reload. |
 | Agent runtime | `src/agent/service.ts`, `src/agent/embedded/`, `src/agent/orchestration/` | Builds per-session agents, prompts, tools, memory, skills, MCP tools, model selection, streaming events, compaction, and direct/webchat turn dispatch. |
 | Channels | `src/channels/`, `extensions/telegram`, `extensions/weixin`, `extensions/feishu` | Channel plugins receive external messages, normalize routing/session keys, publish inbound bus messages, and send outbound replies. |
@@ -41,12 +41,12 @@ bus, and the agent runtime persists all session state through SQLite.
 ### Web Chat
 
 1. The Web console is built from `web/` and served from `dist/gateway/static/root`.
-2. Chat submits `POST /api/agent` with `Accept: text/event-stream`.
-3. `createAgentSSEHandler` resolves the webchat session key and calls `GatewayService.runAgent`.
-4. `GatewayAgentRunner` drives `AgentService.turnDispatcher.processDirectStreaming`.
-5. The embedded pi-agent session runs the model/tools and emits stream events back to SSE.
+2. Chat submits `POST /api/sessions/:sessionKey/inputs` with an idempotent client message id and `delivery: next | steer`.
+3. `SessionInputCoordinator` persists and orders the input in SQLite before acknowledging it.
+4. `GatewayAgentRunner` claims one input per session and drives `AgentService.turnDispatcher.processDirectStreaming`.
+5. The embedded pi-agent session runs the model/tools; clients attach to an active run through `/api/agent/resume`.
 6. `SessionStore` persists transcript rows and metadata to `~/.xopc/xopc.db`.
-7. Gateway broadcast events update other UI state through `/api/events`.
+7. Full revisioned `session.input-state` snapshots and agent stream events reach every client through `/api/events`.
 
 ### Channel Message
 

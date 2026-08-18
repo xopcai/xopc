@@ -433,22 +433,17 @@ export function registerBuiltinMethods(router: ExtensionMessageRouter): void {
       targetSessionKey = created.session?.key ?? '';
       if (!targetSessionKey) throw new Error('Session create did not return a session key');
     }
-    const response = await apiFetch(apiUrl('/api/agent'), {
+    const response = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(targetSessionKey)}/inputs`), {
       method: 'POST',
-      headers: { Accept: 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        message,
-        channel: 'webchat',
-        sessionKey: targetSessionKey,
+        clientMessageId: crypto.randomUUID(),
+        delivery: 'next',
+        content: message,
       }),
     });
     if (!response.ok) throw new Error(`Agent request failed: ${response.status}`);
-    const data = (await response.json()) as {
-      payload?: { sessionKey?: string; key?: string };
-      sessionKey?: string;
-    };
-    const fromPayload = data.payload?.sessionKey ?? data.payload?.key;
-    return { sessionKey: fromPayload ?? data.sessionKey ?? targetSessionKey };
+    return { sessionKey: targetSessionKey };
   });
 
   router.registerMethod('config.get', async (extensionId) => {

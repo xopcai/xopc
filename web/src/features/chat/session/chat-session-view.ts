@@ -25,6 +25,15 @@ export function parseRoutedSessionKey(
   return isNewRoute ? 'new' : (decodedKey ?? null);
 }
 
+/** A route placeholder is never a persisted session key. */
+export function decodeConcreteSessionKey(
+  isNewRoute: boolean,
+  sessionKeyParam: string | undefined,
+): string | undefined {
+  if (isNewRoute || !sessionKeyParam) return undefined;
+  return decodeURIComponent(sessionKeyParam);
+}
+
 /** Messages rendered in the message list (committed + optional streaming bubble). */
 export function selectDisplayMessages(params: {
   viewSessionKey: string | null;

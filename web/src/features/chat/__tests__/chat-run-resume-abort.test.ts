@@ -176,8 +176,20 @@ describe('MessageSender terminal state', () => {
           return true;
         }),
       });
-      vi.mocked(apiFetch).mockResolvedValue(
-        new Response(
+      vi.mocked(apiFetch).mockImplementation(async (url, init) => {
+        if (String(url).includes('/inputs')) {
+          const submitted = JSON.parse(String(init?.body)) as { clientMessageId: string };
+          return new Response(JSON.stringify({
+            payload: {
+              state: {
+                activeRunId: 'run-complete',
+                activeInputId: 'input-1',
+                inputs: [{ id: 'input-1', clientMessageId: submitted.clientMessageId }],
+              },
+            },
+          }), { status: 202, headers: { 'Content-Type': 'application/json' } });
+        }
+        return new Response(
           [
             'event: run_start',
             'data: {"runId":"run-complete"}',
@@ -188,8 +200,8 @@ describe('MessageSender terminal state', () => {
             '',
           ].join('\n'),
           { headers: { 'Content-Type': 'text/event-stream' } },
-        ),
-      );
+        );
+      });
 
       if (method === 'send') {
         await sender.send('hello', sessionKey);
@@ -247,8 +259,20 @@ describe('MessageSender terminal state', () => {
       location: { origin: 'http://localhost:3000' },
       dispatchEvent: vi.fn(),
     });
-    vi.mocked(apiFetch).mockResolvedValue(
-      new Response(
+    vi.mocked(apiFetch).mockImplementation(async (url, init) => {
+      if (String(url).includes('/inputs')) {
+        const submitted = JSON.parse(String(init?.body)) as { clientMessageId: string };
+        return new Response(JSON.stringify({
+          payload: {
+            state: {
+              activeRunId: 'run-plan',
+              activeInputId: 'input-plan',
+              inputs: [{ id: 'input-plan', clientMessageId: submitted.clientMessageId }],
+            },
+          },
+        }), { status: 202, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response(
         [
           'event: task_plan_updated',
           'data: {"payload":{"planId":"session:todo","revision":2,"source":"todo","scope":"session","items":[]}}',
@@ -259,8 +283,8 @@ describe('MessageSender terminal state', () => {
           '',
         ].join('\n'),
         { headers: { 'Content-Type': 'text/event-stream' } },
-      ),
-    );
+      );
+    });
 
     await sender.send('clear todos', sessionKey, undefined, undefined, callbacks);
 

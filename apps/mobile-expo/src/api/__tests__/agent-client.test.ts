@@ -57,6 +57,18 @@ describe('AgentMessageSender local detach', () => {
   });
 
   it('drops the local SSE transport without server abort and keeps the pending run', async () => {
+    testState.apiFetch.mockImplementation(async (_path, init) => {
+      const body = JSON.parse(String(init?.body)) as { clientMessageId: string };
+      return new Response(JSON.stringify({
+        payload: {
+          state: {
+            activeRunId: 'run-123',
+            activeInputId: 'input-1',
+            inputs: [{ id: 'input-1', clientMessageId: body.clientMessageId }],
+          },
+        },
+      }), { status: 202, headers: { 'Content-Type': 'application/json' } });
+    });
     testState.consumeAgentSseXhr.mockImplementation((_url, init, _callbacks, opts) => {
       opts.savePendingRunId('session-a', 'run-123');
       return new Promise((_resolve, reject) => {
@@ -71,7 +83,9 @@ describe('AgentMessageSender local detach', () => {
     const sender = new AgentMessageSender();
     const pending = sender.sendMessage('hello', 'session-a');
 
-    expect(testState.memory.get('pending:session-a')).toBe(JSON.stringify({ runId: 'run-123' }));
+    await vi.waitFor(() => {
+      expect(testState.memory.get('pending:session-a')).toBe(JSON.stringify({ runId: 'run-123' }));
+    });
 
     sender.detachLocalStream();
 

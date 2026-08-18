@@ -145,14 +145,14 @@ export type MessagingCallbacks = {
 export class MessageSender {
   private _abort?: AbortController;
   private _sseChatId = '';
-  /** `runId` from the `run_start` event for this POST/resume body; do not clear a newer pending run (scheduled continuation). */
+  /** `runId` from the active resume body; do not clear a newer pending run. */
   private _trackedRunId?: string;
 
   get isSending() {
     return !!this._abort;
   }
 
-  /** Chat id for the in-flight POST `/api/agent` or `/api/agent/resume` body, if any. */
+  /** Chat id for the in-flight session input or `/api/agent/resume` stream, if any. */
   get activeChatId(): string {
     return this._sseChatId;
   }
@@ -177,18 +177,16 @@ export class MessageSender {
         ? attachments.slice(0, MAX_CHAT_ATTACHMENTS)
         : attachments;
 
-    const clientCreatedAtMs = Date.now();
-
-    const res = await apiFetch(apiUrl('/api/agent'), {
+    const clientMessageId = crypto.randomUUID();
+    const res = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(chatId)}/inputs`), {
       method: 'POST',
-      headers: { Accept: 'text/event-stream' },
-        body: JSON.stringify({
-          message: content,
-          channel: 'webchat',
-          sessionKey: chatId,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+          clientMessageId,
+          delivery: 'next',
+          content,
           attachments: capped,
           thinking: thinkingLevel,
-          clientCreatedAtMs,
       }),
       signal: this._abort.signal,
     });
@@ -198,27 +196,16 @@ export class MessageSender {
       throw new Error(formatApiHttpError(res.status, res.statusText, body.error?.message));
     }
 
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-
-    const ct = res.headers.get('Content-Type') || '';
-    if (ct.includes('text/event-stream') && res.body) {
-      const terminal = this._wrapTerminalCallbacks(callbacks);
-      await this._consumeSSE(res.body, terminal.wrapped);
-      // If the HTTP body closed without a `run_end` / `error` event (proxy drop, parse miss, etc.),
-      // the UI would otherwise keep `streaming` true and block the next send — see use-chat-session guard.
-      if (!terminal.sawTerminal && !this._abort?.signal.aborted) {
-        terminal.onMissingTerminal();
-      }
-    } else {
-      const json = (await res.json()) as { ok?: boolean; payload?: { content?: string } };
-      if (json.ok && json.payload?.content) {
-        callbacks?.onToken(json.payload.content);
-        callbacks?.onResult();
-      }
+    const json = await res.json() as {
+      payload?: { state?: { activeRunId?: string; activeInputId?: string; inputs?: Array<{ id: string; clientMessageId: string }> } };
+    };
+    const state = json.payload?.state;
+    const ownInput = state?.inputs?.find((input) => input.clientMessageId === clientMessageId);
+    if (state?.activeRunId && ownInput?.id === state.activeInputId) {
+      await this.resume(state.activeRunId, chatId, callbacks);
+      return;
     }
-
     this._abort = undefined;
-    this._clearPendingRun();
   }
 
   abort(): void {
