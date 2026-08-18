@@ -1,6 +1,5 @@
 import type { ProjectOperatingView } from '@xopcai/gateway-contract';
 
-import { GoalService, type GoalWithDetails } from '../goals/index.js';
 import {
   buildProjectLoopOverview,
   type ProjectService,
@@ -8,9 +7,12 @@ import {
 import type { WorkItemService } from '../work-items/index.js';
 import { OutcomeReceiptService } from './outcome-receipt-service.js';
 import { ProjectMonitoringService } from './project-monitoring-service.js';
+import { OutcomeExecutionStateRepository } from './outcome-execution-state.js';
+import { OutcomeRepository } from './outcome-repository.js';
 
 export class ProjectOperatingViewService {
-  readonly #goals = new GoalService();
+  readonly #outcomes = new OutcomeRepository();
+  readonly #executions = new OutcomeExecutionStateRepository();
   readonly #receipts = new OutcomeReceiptService();
   readonly #monitoring = new ProjectMonitoringService();
 
@@ -22,19 +24,37 @@ export class ProjectOperatingViewService {
   get(projectId: string): ProjectOperatingView | undefined {
     const project = this.projects.getWithDetails(projectId);
     if (!project) return undefined;
-    const goals = this.projects.listGoalIds(project.id, 100)
-      .map((goalId) => this.#goals.get(goalId))
-      .filter((goal): goal is GoalWithDetails => Boolean(goal));
+    const outcomes = this.#executions.listByProject(project.id, 100).flatMap((execution) => {
+      const outcome = this.#outcomes.get(execution.outcomeId);
+      if (!outcome) return [];
+      return [{
+        id: outcome.id,
+        objective: outcome.objective,
+        status: outcome.internalStatus,
+        priority: execution.priority,
+        description: execution.description,
+        nextAction: execution.nextAction,
+        blockedReason: execution.blockedReason,
+        updatedAt: Math.max(outcome.updatedAt, execution.updatedAt),
+      }];
+    });
     const actions = this.workItems.listProjectWorkItems(project.id, { limit: 100 }).items
       .filter((item) => item.status !== 'done' && item.status !== 'cancelled');
     const loop = buildProjectLoopOverview({
       project,
-      goals,
+      outcomes,
       recentWorkflowRuns: project.recentWorkflowRuns,
     });
     return {
       project,
-      desiredOutcomes: goals.filter((goal) => !goal.archivedAt),
+      desiredOutcomes: outcomes.map((outcome) => ({
+        id: outcome.id,
+        title: outcome.objective,
+        status: outcome.status,
+        nextAction: outcome.nextAction,
+        blockedReason: outcome.blockedReason,
+        updatedAt: outcome.updatedAt,
+      })),
       currentActions: actions,
       blockers: loop.attentionItems,
       running: project.recentWorkflowRuns.filter((run) => run.status === 'queued' || run.status === 'running'),

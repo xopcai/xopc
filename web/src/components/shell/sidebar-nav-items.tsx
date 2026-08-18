@@ -141,7 +141,7 @@ export function SidebarNavItems({
 
   const available = useMemo<NavItem[]>(() => {
     const builtins: NavItem[] = BUILTIN_NAV_DEFS.map((def) => {
-      const labelKey = def.id.slice('builtin:'.length) as 'profile' | 'agents' | 'work' | 'projects' | 'localApps' | 'goals' | 'skills' | 'connectors' | 'automations' | 'browserWorkflows' | 'notes' | 'workflows' | 'channels' | 'extensions';
+      const labelKey = def.id.slice('builtin:'.length) as 'profile' | 'agents' | 'work' | 'projects' | 'localApps' | 'skills' | 'connectors' | 'automations' | 'browserWorkflows' | 'notes' | 'workflows' | 'channels' | 'extensions';
       return {
         id: def.id,
         kind: 'builtin',

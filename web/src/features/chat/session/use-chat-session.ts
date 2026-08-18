@@ -81,6 +81,7 @@ export function useChatSession() {
   const streaming = streamLive ? (sessionSlice?.streaming ?? false) : false;
   const sending = streamLive ? (sessionSlice?.sending ?? false) : false;
   const progress = streamLive ? (sessionSlice?.progress ?? null) : null;
+  const taskPlan = streamLive ? (sessionSlice?.taskPlan ?? null) : null;
   const hasMore = sessionSlice?.hasMore ?? false;
   const sessionName = sessionSlice?.name ?? null;
   const sessionModel = sessionSlice?.model ?? '';
@@ -450,6 +451,7 @@ export function useChatSession() {
       streaming,
       sending,
       progress,
+      taskPlan,
       sendMessage,
       abort,
       interruptAndSend,

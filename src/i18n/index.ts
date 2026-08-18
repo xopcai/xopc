@@ -13,18 +13,6 @@ export {
   isServerLocale,
 } from './locale.js';
 export {
-  goalsContinuationChecklistTemplate,
-  goalsContinuationPlainTemplate,
-  goalsEvaluateCopy,
-  goalsJudgeReason,
-  goalsJudgeResponseLanguageNote,
-  goalsChecklistProgressSuffix,
-  goalsMessages,
-  JUDGE_REASON_EN,
-  type GoalsMessages,
-  type JudgeReasonId,
-} from './goals-bundle.js';
-export {
   resolveToolLocale,
   shareToolErrorLine,
   shareToolMessages,

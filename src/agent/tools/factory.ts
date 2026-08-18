@@ -39,7 +39,6 @@ import {
   createDreamingTool,
   createClarifyTool,
   createToolManualTool,
-  createGoalTool,
   createAutomationTool,
   createBrowserRecipeTool,
   createXopcUseTool,
@@ -88,7 +87,6 @@ import { createSkillsListTool, createSkillViewTool } from './skills-tools.js';
 import { createSkillManageTool } from './skill-manage-tool.js';
 import { createTextToSpeechTool } from './tts-tool.js';
 import { mergeTtsConfigFromAppConfig } from '../../voice/tts/merge-config.js';
-import { createGoalEvidenceRecorder } from './goal-evidence-recorder.js';
 import { getAgentCapabilityToolNames } from '../capabilities/index.js';
 import type { CodeIntelligenceRuntimeLike } from '../code-intelligence/index.js';
 import { isCodeIntelligenceEnabledForAgent } from '../code-intelligence/tool-gating.js';
@@ -281,9 +279,6 @@ export class AgentToolsFactory {
     const cfg = this.deps.getConfig?.();
     const dreamingRoot = options?.dreamingRoot ?? (cfg ? resolveDreamingRoot() : workspace);
     const browserEnabled = cfg?.browser?.enabled !== false;
-    const recordGoalEvidence = createGoalEvidenceRecorder({
-      getSessionKey: () => this.deps.getCurrentContext()?.sessionKey,
-    });
     const imageTool = createImageTool({
       config: cfg,
       workspace,
@@ -319,9 +314,8 @@ export class AgentToolsFactory {
     });
     const writeTool = createWriteFileTool(workspace, {
       profileMarkdownRoot: options?.profileMarkdownRoot,
-      recordGoalEvidence,
     });
-    const applyPatchTool = createApplyPatchTool(workspace, { recordGoalEvidence });
+    const applyPatchTool = createApplyPatchTool(workspace);
     const listDir = createListDirTool(workspace);
     const grep = createGrepTool(workspace);
     const find = createFindTool(workspace);
@@ -394,7 +388,6 @@ export class AgentToolsFactory {
       find,
       createExecCommandTool(workspace, {
         getSkillPassthroughEnvVarNames: this.deps.getSkillPassthroughEnvVarNames,
-        recordGoalEvidence,
       }),
       createManagedJobTool(
         workspace,
@@ -497,9 +490,6 @@ export class AgentToolsFactory {
             }),
           ]
         : []),
-      createGoalTool({
-        getCurrentSessionKey: () => this.deps.getCurrentContext()?.sessionKey,
-      }),
       ...(browserEnabled
         ? [
             createBrowserUseTool({

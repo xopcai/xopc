@@ -17,7 +17,6 @@ import {
   Plug,
   Share2,
   Shield,
-  Target,
   Users,
 } from 'lucide-react';
 
@@ -47,7 +46,6 @@ const TAB_ICONS: Record<Tab, LucideIcon> = {
   settingsTunnel: Radio,
   settingsShares: Share2,
   settingsDreams: Moon,
-  settingsGoals: Target,
 };
 
 export function TabIcon({ tab, className }: { tab: Tab; className?: string }) {

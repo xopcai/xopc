@@ -50,12 +50,18 @@ import {
 import { AgentRunRelay, type RelayEvent } from './agent-run-relay.js';
 import { registerClarifyBridge } from './clarify-runtime.js';
 import { PACKAGE_VERSION } from '../package-version.js';
-import { GoalNotificationService, GoalRunner, type EnqueueGoalRunOptions } from '../goals/index.js';
 import { MobileNotificationService } from '../mobile/notification-service.js';
 import { ProjectService } from '../projects/index.js';
 import { LocalAppService } from '../local-apps/index.js';
 import { buildWorkItemAgentContext, WorkItemService } from '../work-items/index.js';
-import { OutcomeProjectionService, WorkIntakeService } from '../work/index.js';
+import {
+  OutcomeController,
+  OutcomeExecutionStateRepository,
+  OutcomeProjectionService,
+  OutcomeRunner,
+  WorkIntakeService,
+  type EnqueueOutcomeOptions,
+} from '../work/index.js';
 import { createRuntimeBrowserRecipeService, type BrowserRecipeService } from '../browser/recipes/index.js';
 import {
   ReadonlyProactiveAgentExecutor,
@@ -183,8 +189,7 @@ export class GatewayService {
   private startupTrace: GatewayStartupTrace | null = null;
   private workflowSessionBridge: WorkflowSessionBridge | null = null;
   private workflowRunServiceInstance: WorkflowRunService | null = null;
-  private goalRunner: GoalRunner | null = null;
-  private goalNotifications: GoalNotificationService | null = null;
+  private outcomeRunner: OutcomeRunner | null = null;
   private mobileNotifications: MobileNotificationService | null = null;
   private connectorSupervisor: ConnectorSupervisor | null = null;
   private connectorLearningCoordinator: ConnectorLearningCoordinator | null = null;
@@ -324,7 +329,7 @@ export class GatewayService {
     this.workspacePath = getWorkspacePath(this.config) || './workspace';
     this.initializeExtensionLoader();
 
-    // Session index + files shared with AgentService for chat transcript and goal execution context.
+    // Session index + files shared with AgentService for chat transcript and Outcome execution context.
     this.sessionIndex = new SessionIndex({
       config: this.config,
     });
@@ -400,6 +405,15 @@ export class GatewayService {
       getChannelManager: () => this.channelManager,
       getConfig: () => this.config,
       emit: (type, payload) => this.sse.emit(type, payload),
+      onOutcomeFinalized: (receipt) => {
+        try {
+          new OutcomeController({
+            enqueue: (outcomeId, options) => this.enqueueOutcome(outcomeId, options),
+          }).handleCompletedRun(receipt);
+        } catch (err) {
+          log.warn({ err, outcomeId: receipt.context.outcomeId, runId: receipt.runId }, 'Outcome continuation could not be queued');
+        }
+      },
     });
 
     this.sessions = new GatewaySessionsApi({
@@ -465,9 +479,6 @@ export class GatewayService {
       onSessionTranscriptUpdated: (sessionKey) => {
         this.emit('session.transcript_updated', { key: sessionKey });
       },
-      onGoalStatusUpdated: (payload) => {
-        this.emit('goal.status.updated', payload);
-      },
       onSkillsUpdated: (payload) => {
         this.emit('config.reload', {
           section: 'skills',
@@ -525,21 +536,6 @@ export class GatewayService {
       onRunCompleted: (run) => this.handleAutomationRunCompleted(run),
     });
 
-    this._agentService.persistentGoals.setWebchatContinuationScheduler((sessionKey, message) => {
-      const scheduleWhenIdle = () => {
-        if (this._agentService!.getInboundTurnDepth(sessionKey) > 0) {
-          setTimeout(scheduleWhenIdle, 50);
-          return;
-        }
-        if (this.agentRunner.hasActiveRun(sessionKey)) {
-          setTimeout(scheduleWhenIdle, 50);
-          return;
-        }
-        void this.agentRunner.drainScheduledWebchatContinuation(sessionKey, message);
-      };
-      queueMicrotask(scheduleWhenIdle);
-    });
-
     return this._agentService;
   }
 
@@ -558,16 +554,16 @@ export class GatewayService {
 
   // ── Webchat agent runner (delegated to GatewayAgentRunner) ────────────
 
-  private createGoalRunner(): GoalRunner {
-    if (!this.goalRunner) {
-      this.goalRunner = new GoalRunner({
+  private createOutcomeRunner(): OutcomeRunner {
+    if (!this.outcomeRunner) {
+      this.outcomeRunner = new OutcomeRunner({
         maxConcurrent: 1,
         defaultMaxRetries: 2,
-        ensureSession: async (goal, executionContext) => {
-          const existing = goal.activeSessionKey?.trim();
+        ensureSession: async (outcomeId, execution, executionContext) => {
+          const existing = execution.activeSessionKey?.trim();
           if (existing) return existing;
-          const agentId = goal.agentId || getDefaultAgentId(this.config);
-          const peerId = `goal-${sanitizeSegment(goal.id) || Date.now()}`;
+          const agentId = execution.agentId || getDefaultAgentId(this.config);
+          const peerId = `outcome-${sanitizeSegment(outcomeId) || Date.now()}`;
           const sessionKey = buildSessionKey({
             agentId,
             source: 'webchat',
@@ -587,38 +583,37 @@ export class GatewayService {
                 peerKind: 'direct',
                 peerId,
               },
-              projectId: goal.projectId,
+              projectId: execution.projectId,
               customData: {
-                goalId: goal.id,
-                origin: 'goal',
+                outcomeId,
+                origin: 'outcome',
                 triggerKind: executionContext?.triggerKind ?? 'user',
-                ...(executionContext?.outcomeId ? { outcomeId: executionContext.outcomeId } : {}),
                 ...(executionContext?.workItemId ? { workItemId: executionContext.workItemId } : {}),
                 ...(executionContext?.contextTraceId ? { contextTraceId: executionContext.contextTraceId } : {}),
                 ...(executionContext?.parentRunId ? { parentRunId: executionContext.parentRunId } : {}),
+                ...(executionContext?.strategy ? { strategy: executionContext.strategy } : {}),
               },
             },
           });
-          if (goal.projectId) {
-            this.projects.attachSession(sessionKey, goal.projectId);
+          if (execution.projectId) {
+            this.projects.attachSession(sessionKey, execution.projectId);
           }
-          const { GoalService } = await import('../goals/index.js');
-          new GoalService().attachSession(goal.id, sessionKey);
+          new OutcomeExecutionStateRepository().update(outcomeId, { activeSessionKey: sessionKey });
           return sessionKey;
         },
-        bindExecutionContext: async (sessionKey, goal, executionContext) => {
+        bindExecutionContext: async (sessionKey, outcomeId, execution, executionContext) => {
           const metadata = await this.sessionIndex.getSessionMetadata(sessionKey);
           await this.sessionIndex.updateSessionMetadata(sessionKey, {
-            projectId: goal.projectId ?? metadata?.projectId,
+            projectId: execution.projectId ?? metadata?.projectId,
             customData: {
               ...metadata?.customData,
-              goalId: goal.id,
-              origin: 'goal',
+              outcomeId,
+              origin: 'outcome',
               triggerKind: executionContext?.triggerKind ?? 'user',
-              ...(executionContext?.outcomeId ? { outcomeId: executionContext.outcomeId } : {}),
               ...(executionContext?.workItemId ? { workItemId: executionContext.workItemId } : {}),
               ...(executionContext?.contextTraceId ? { contextTraceId: executionContext.contextTraceId } : {}),
               ...(executionContext?.parentRunId ? { parentRunId: executionContext.parentRunId } : {}),
+              ...(executionContext?.strategy ? { strategy: executionContext.strategy } : {}),
             },
           });
         },
@@ -628,31 +623,7 @@ export class GatewayService {
         emit: (type, payload) => this.emit(type, payload),
       });
     }
-    return this.goalRunner;
-  }
-
-  private createGoalNotificationService(): GoalNotificationService {
-    if (!this.goalNotifications) {
-      this.goalNotifications = new GoalNotificationService({
-        getConfig: () => this.config,
-        getSessionMetadata: (sessionKey) => this.sessionIndex.getSessionMetadata(sessionKey),
-        send: async (target) => {
-          await this.channelManager.send({
-            channel: target.channel,
-            chat_id: target.chatId,
-            content: target.text,
-            type: 'message',
-            silent: target.silent,
-            metadata: {
-              accountId: target.accountId,
-              threadId: target.threadId,
-              source: 'goal-notification',
-            },
-          });
-        },
-      });
-    }
-    return this.goalNotifications;
+    return this.outcomeRunner;
   }
 
   private createMobileNotificationService(): MobileNotificationService {
@@ -662,12 +633,12 @@ export class GatewayService {
     return this.mobileNotifications;
   }
 
-  enqueueGoalRun(goalId: string, options?: EnqueueGoalRunOptions) {
-    return this.createGoalRunner().enqueue(goalId, options);
+  enqueueOutcome(outcomeId: string, options?: EnqueueOutcomeOptions) {
+    return this.createOutcomeRunner().enqueue(outcomeId, options);
   }
 
-  getGoalQueueSnapshot() {
-    return this.createGoalRunner().snapshot();
+  getOutcomeQueueSnapshot() {
+    return this.createOutcomeRunner().snapshot();
   }
 
   runAgent(
@@ -852,7 +823,7 @@ export class GatewayService {
     openXopcDatabase();
     new WorkIntakeService(
       this.projects,
-      { enqueue: (goalId, options) => this.enqueueGoalRun(goalId, options) },
+      { enqueue: (outcomeId, options) => this.enqueueOutcome(outcomeId, options) },
     ).reconcilePendingExecutions();
     new OutcomeProjectionService().reconcile();
     this.startTime = Date.now();
@@ -1760,7 +1731,6 @@ export class GatewayService {
 
   emit(type: string, payload: unknown): void {
     this.sse.emit(type, payload);
-    this.createGoalNotificationService().handleGatewayEvent(type, payload);
     this.createMobileNotificationService().handleGatewayEvent(type, payload);
   }
 

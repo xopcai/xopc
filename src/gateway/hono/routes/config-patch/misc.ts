@@ -1,6 +1,6 @@
 /**
  * `PATCH /api/config` — tail sections that are each <50 lines:
- *   update / goals / session / gateway.{skillsMarketplaceProvider,
+ *   update / session / gateway.{skillsMarketplaceProvider,
  *   skillsStoreBaseUrl} / providers / providersConfig / stt / tts / tools /
  *   userContext.memory.retention.compaction / tunnel / bindings / mcp.
  *
@@ -22,7 +22,6 @@ import { canonicalizeConfiguredMcpServer } from '../../../../config/mcp-config-n
 import { setTuiDefaultAgentConfig } from '../../../../commands/agents.config.js';
 import {
   mergeGatewaySkillsMarketplacePatch,
-  mergeGoalsConfigPatch,
   mergeSessionConfigPatch,
   mergeUpdateConfigPatch,
 } from '../../../../config/web-patch.js';
@@ -37,16 +36,6 @@ export async function applyMiscPatch(config: Config, body: any): Promise<PatchRe
     const updateResult = mergeUpdateConfigPatch(config, body.update as Record<string, unknown>);
     if (updateResult.ok === false) {
       return patchError(updateResult.message);
-    }
-  }
-
-  if (body.goals !== undefined) {
-    if (typeof body.goals !== 'object' || body.goals === null || Array.isArray(body.goals)) {
-      return patchError('goals must be an object');
-    }
-    const goalsResult = mergeGoalsConfigPatch(config, body.goals as Record<string, unknown>);
-    if (goalsResult.ok === false) {
-      return patchError(goalsResult.message);
     }
   }
 

@@ -14,7 +14,7 @@ export type WorkItemStatus =
   | 'cancelled';
 
 export type WorkItemPriority = 'urgent' | 'high' | 'normal' | 'low';
-export type WorkItemLinkKind = 'chat' | 'goal' | 'workflow_run' | 'automation' | 'note';
+export type WorkItemLinkKind = 'chat' | 'outcome' | 'workflow_run' | 'automation' | 'note';
 export type WorkItemEventType =
   | 'created'
   | 'updated'
@@ -23,7 +23,7 @@ export type WorkItemEventType =
   | 'attachment_added'
   | 'attachment_removed'
   | 'chat_started'
-  | 'goal_created'
+  | 'outcome_created'
   | 'workflow_started'
   | 'automation_added'
   | 'link_added'
@@ -32,7 +32,7 @@ export type WorkItemEventType =
   | 'update_suggestion_applied'
   | 'update_suggestion_dismissed';
 export type WorkItemUpdateSuggestionStatus = 'pending' | 'applied' | 'dismissed';
-export type WorkItemUpdateSuggestionSourceKind = 'chat' | 'goal' | 'workflow_run' | 'automation';
+export type WorkItemUpdateSuggestionSourceKind = 'chat' | 'outcome' | 'workflow_run' | 'automation';
 
 export type WorkItemLink = {
   id: string;

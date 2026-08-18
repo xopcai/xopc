@@ -39,9 +39,9 @@ describe('execution receipt work context', () => {
       objective: 'Ship the release',
       context: {
         projectId: 'project-1',
-        goalId: 'goal-1',
+        outcomeId: 'outcome-1',
         workItemId: 'work-1',
-        origin: 'goal',
+        origin: 'outcome',
         triggerKind: 'user',
       },
       now: 100,
@@ -66,7 +66,7 @@ describe('execution receipt work context', () => {
         runId: 'run-linked',
         context: expect.objectContaining({
           projectId: 'project-1',
-          goalId: 'goal-1',
+          outcomeId: 'outcome-1',
           workItemId: 'work-1',
           contextTraceId: 'trace-1',
         }),

@@ -13,7 +13,6 @@
     "remote-access": "远程访问",
     "shares": "文件分享",
     "dreams": "后台反思",
-    "goals": "目标模式",
     "system": "系统授权",
     "desktop-pet": "宠物",
     "desktop-app": "应用数据",
@@ -1078,10 +1077,6 @@
     "title": "定时任务",
     "subtitle": "调度引擎开关、并发、时区与运行历史保留等全局参数。",
     "tasksLink": "管理任务与运行历史 →"
-  },
-  "goalsSettingsPage": {
-    "title": "目标运行规则",
-    "subtitle": "配置持久目标 /goal 的评判方式、执行限制与通知规则。"
   },
   "extensionSttMedia": {
     "banner": "STT 凭据写入 tools.media.audio.providers.<id>（与「设置 → 语音」相同）。两个入口任选其一，保存后会保持一致。",

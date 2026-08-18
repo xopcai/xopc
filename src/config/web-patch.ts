@@ -2,60 +2,11 @@ import { z } from 'zod';
 
 import type { Config } from './schema.js';
 import {
-  GoalsConfigSchema,
   SessionConfigSchema,
   SessionDmScopeSchema,
   UpdateAutoConfigSchema,
   UpdateConfigSchema,
 } from './schema.js';
-
-const GoalsConfigPatchSchema = z.object({
-  maxTurns: z.number().int().min(1).max(500).optional(),
-  judgeModelRef: z.union([z.string(), z.null()]).optional(),
-  checklistMode: z.boolean().optional(),
-  checklistDecomposePolicy: z.enum(['empty_only', 'supplement_existing']).optional(),
-  maxConsecutiveParseFailures: z.number().int().min(1).max(20).optional(),
-  judgeTimeoutMs: z.number().int().min(5_000).max(120_000).optional(),
-  checklistHistoryChars: z.number().int().min(0).max(100_000).optional(),
-  notifications: z
-    .object({
-      enabled: z.boolean().optional(),
-      includeLinkedSessions: z.boolean().optional(),
-      channels: z.array(z.string().min(1)).optional(),
-      events: z
-        .array(z.enum([
-          'done',
-          'blocked',
-          'needs_input',
-          'queue_failed',
-          'queue_retry',
-          'queue_succeeded',
-          'queue_skipped',
-        ]))
-        .optional(),
-      targets: z
-        .array(z.object({
-          channel: z.string().min(1),
-          chatId: z.string().min(1),
-          accountId: z.string().optional(),
-          threadId: z.union([z.string(), z.number()]).optional(),
-          silent: z.boolean().optional(),
-          events: z
-            .array(z.enum([
-              'done',
-              'blocked',
-              'needs_input',
-              'queue_failed',
-              'queue_retry',
-              'queue_succeeded',
-              'queue_skipped',
-            ]))
-            .optional(),
-        }))
-        .optional(),
-    })
-    .optional(),
-});
 
 const SessionStoragePatchSchema = z.object({
   pruneAfterMs: z.union([z.number().int().min(0), z.null()]).optional(),
@@ -84,36 +35,6 @@ const GatewaySkillsPatchSchema = z.object({
   skillsMarketplaceProvider: z.string().min(1).optional(),
   skillsStoreBaseUrl: z.string().url().optional(),
 });
-
-export function mergeGoalsConfigPatch(
-  config: Config,
-  patch: Record<string, unknown>,
-): { ok: true } | { ok: false; message: string } {
-  const parsed = GoalsConfigPatchSchema.safeParse(patch);
-  if (!parsed.success) {
-    return { ok: false, message: parsed.error.issues.map((i) => i.message).join('; ') };
-  }
-  const currentGoals = GoalsConfigSchema.parse(config.goals ?? {});
-  const goalPatch = { ...parsed.data };
-  if ('judgeModelRef' in patch) {
-    const ref = patch.judgeModelRef;
-    if (ref === null || (typeof ref === 'string' && !ref.trim())) {
-      delete goalPatch.judgeModelRef;
-      delete currentGoals.judgeModelRef;
-    }
-  }
-  config.goals = GoalsConfigSchema.parse({
-    ...currentGoals,
-    ...goalPatch,
-    notifications: goalPatch.notifications
-      ? {
-          ...currentGoals.notifications,
-          ...goalPatch.notifications,
-        }
-      : currentGoals.notifications,
-  });
-  return { ok: true };
-}
 
 export function mergeSessionConfigPatch(
   config: Config,
@@ -188,10 +109,6 @@ export function mergeGatewaySkillsMarketplacePatch(
     config.gateway.skillsStoreBaseUrl = parsed.data.skillsStoreBaseUrl.trim().replace(/\/+$/, '');
   }
   return { ok: true };
-}
-
-export function resolveGoalsConfigForWeb(config: Config) {
-  return GoalsConfigSchema.parse(config.goals ?? {});
 }
 
 export function resolveSessionConfigForWeb(config: Config) {

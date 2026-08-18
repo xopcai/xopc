@@ -31,7 +31,7 @@ export const WorkHomeItemSchema = z.object({
 
 export const WorkHomeDecisionSchema = z.object({
   id: z.string(),
-  kind: z.enum(['agent_judgment', 'work_item', 'goal', 'connector_approval', 'goal_evidence']),
+  kind: z.enum(['agent_judgment', 'work_item', 'outcome', 'connector_approval']),
   title: z.string(),
   detail: z.string().optional(),
   reason: z.enum([
@@ -67,7 +67,6 @@ export const WorkHomeDecisionSchema = z.object({
   }).optional(),
   response: z.discriminatedUnion('kind', [
     z.object({ kind: z.literal('connector_approval'), approvalId: z.string() }),
-    z.object({ kind: z.literal('goal_evidence'), goalId: z.string(), requirementId: z.string() }),
   ]).optional(),
 });
 
@@ -125,7 +124,7 @@ export const WorkHomeResponseSchema = z.object({
     progress: z.object({
       activeWorkCount: z.number(),
       activeWorkflowCount: z.number(),
-      activeGoalCount: z.number(),
+      activeOutcomeCount: z.number(),
       movingCount: z.number(),
     }),
     wins: z.array(WorkHomeBriefingWinSchema),

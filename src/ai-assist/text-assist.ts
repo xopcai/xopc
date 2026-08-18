@@ -1,6 +1,6 @@
 import type { AssistantMessage, UserMessage } from '@earendil-works/pi-ai';
 
-import { getAssistantMessageErrorReason, stripCodeFences } from '../agent/goals/judge.js';
+import { getAssistantMessageErrorReason, stripCodeFences } from '../providers/model-response.js';
 import type { Config } from '../config/schema.js';
 import { getDefaultModelSync, resolveModel } from '../providers/index.js';
 import { createExtensionAwareStreamFn } from '../providers/extension-stream-bridge.js';

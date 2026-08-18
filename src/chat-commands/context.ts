@@ -32,7 +32,6 @@ import { join } from 'path';
 import { effectiveWorkspacePathForSession } from '../session/session-workspace.js';
 import { wrapMarkdownExportAsHtml } from '../session/chat-export.js';
 import type { CompactionResult } from '../agent/memory/compaction.js';
-import type { PersistentGoalApis } from '../agent/goals/persistent-goal-apis.js';
 import type { WorkflowRunServiceLike } from '../workflows/service/workflow-run-service.types.js';
 import { getProjectForSession } from '../projects/workspace.js';
 
@@ -92,7 +91,6 @@ export interface CommandContextDeps {
     mode: 'list' | 'detail' | 'json',
   ) => Promise<string>;
 
-  persistentGoalApis?: PersistentGoalApis;
   workflowRunService?: WorkflowRunServiceLike;
 }
 
@@ -109,7 +107,6 @@ export class CommandContextImpl implements CommandContext {
   readonly abortCurrentTurn?: () => Promise<void>;
   readonly reloadSkills?: () => Promise<void>;
   readonly installSkillFromSource?: CommandContext['installSkillFromSource'];
-  readonly persistentGoalApis?: PersistentGoalApis;
   readonly workflowRunApis?: CommandContext['workflowRunApis'];
 
   private deps: CommandContextDeps;
@@ -144,7 +141,6 @@ export class CommandContextImpl implements CommandContext {
       this.installSkillFromSource = deps.installSkillFromSource;
     }
 
-    this.persistentGoalApis = deps.persistentGoalApis;
     if (deps.workflowRunService) {
       this.workflowRunApis = {
         service: deps.workflowRunService,

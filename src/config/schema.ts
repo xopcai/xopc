@@ -1002,79 +1002,6 @@ export const UpdateAutoConfigSchema = z
   .strict()
   .optional();
 
-/** Persistent `/goal` (Ralph loop) — Hermes-aligned defaults. */
-export const GoalNotificationEventSchema = z.enum([
-  'done',
-  'blocked',
-  'needs_input',
-  'queue_failed',
-  'queue_retry',
-  'queue_succeeded',
-  'queue_skipped',
-]);
-
-export const GoalNotificationTargetSchema = z
-  .object({
-    channel: z.string().min(1),
-    chatId: z.string().min(1),
-    accountId: z.string().optional(),
-    threadId: z.union([z.string(), z.number()]).optional(),
-    silent: z.boolean().optional(),
-    events: z.array(GoalNotificationEventSchema).optional(),
-  })
-  .strict();
-
-export const GoalNotificationsConfigSchema = z
-  .object({
-    enabled: z.boolean().default(false),
-    /** Notify Telegram/Weixin chats bound to the goal activeSessionKey. */
-    includeLinkedSessions: z.boolean().default(true),
-    /** Channels eligible for linked-session notifications. */
-    channels: z.array(z.string().min(1)).default(['telegram', 'weixin']),
-    events: z
-      .array(GoalNotificationEventSchema)
-      .default(['done', 'blocked', 'needs_input', 'queue_failed', 'queue_retry']),
-    targets: z.array(GoalNotificationTargetSchema).default([]),
-  })
-  .strict()
-  .default({
-    enabled: false,
-    includeLinkedSessions: true,
-    channels: ['telegram', 'weixin'],
-    events: ['done', 'blocked', 'needs_input', 'queue_failed', 'queue_retry'],
-    targets: [],
-  });
-
-export const GoalsConfigSchema = z
-  .object({
-    /** Max continuation turns before auto-pause (Hermes default 20). */
-    maxTurns: z.number().int().min(1).max(500).default(20),
-    /** Optional judge model ref; defaults to the active agent model. */
-    judgeModelRef: z.string().optional(),
-    /**
-     * When true (default), first post-turn runs a decomposition judge to build a checklist;
-     * subsequent turns evaluate progress per item (Hermes-style). When false, use legacy freeform judge only.
-     */
-    checklistMode: z.boolean().default(true),
-    /**
-     * empty_only preserves legacy behavior: the first post-turn decomposition runs only when the
-     * goal has no checklist. supplement_existing lets the first post-turn add non-duplicate judge
-     * criteria even when the user supplied initial acceptance criteria.
-     */
-    checklistDecomposePolicy: z.enum(['empty_only', 'supplement_existing']).default('empty_only'),
-    /** Auto-pause after this many consecutive judge JSON/tool parse failures (Hermes default 3). */
-    maxConsecutiveParseFailures: z.number().int().min(1).max(20).default(3),
-    /** Judge LLM call timeout in ms (Hermes uses 60s). */
-    judgeTimeoutMs: z.number().int().min(5_000).max(120_000).default(60_000),
-    /** Max characters of recent transcript JSON passed to the checklist judge as extra context. */
-    checklistHistoryChars: z.number().int().min(0).max(100_000).default(24_000),
-    /** External channel notification policy for durable goal lifecycle events. */
-    notifications: GoalNotificationsConfigSchema,
-  })
-  .strict();
-
-export type GoalsConfig = z.infer<typeof GoalsConfigSchema>;
-
 export const UpdateConfigSchema = z
   .object({
     /** Check for updates on gateway startup. Default true. */
@@ -1237,7 +1164,6 @@ export const ConfigSchema = z.object({
   codeIntelligence: CodeIntelligenceConfigSchema,
   connectors: ConnectorsConfigSchema,
   experimental: ExperimentalConfigSchema,
-  goals: GoalsConfigSchema.optional(),
   extensions: ExtensionsConfigSchema.default({}),
   /** Per-vendor capability provider config (image / audio / video). */
   providers: ProvidersConfigSchema.optional(),
@@ -1379,21 +1305,6 @@ export const ConfigSchema = z.object({
   },
   experimental: {
     workDiscoveryOnboarding: true,
-  },
-  goals: {
-    maxTurns: 20,
-    checklistMode: true,
-    checklistDecomposePolicy: 'empty_only',
-    maxConsecutiveParseFailures: 3,
-    judgeTimeoutMs: 60_000,
-    checklistHistoryChars: 24_000,
-    notifications: {
-      enabled: false,
-      includeLinkedSessions: true,
-      channels: ['telegram', 'weixin'],
-      events: ['done', 'blocked', 'needs_input', 'queue_failed', 'queue_retry'],
-      targets: [],
-    },
   },
   extensions: {
     allow: [],

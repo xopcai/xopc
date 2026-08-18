@@ -18,7 +18,7 @@ function currentGatewayHomeResponse() {
       progress: {
         activeWorkCount: 0,
         activeWorkflowCount: 0,
-        activeGoalCount: 0,
+        activeOutcomeCount: 0,
         movingCount: 0,
       },
       wins: [],

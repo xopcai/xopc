@@ -4,6 +4,8 @@ export interface OutcomeContractDefinition {
   acceptanceCriteria: string[];
   constraints: string[];
   approvalRequired: string[];
+  assumptions: string[];
+  risks: string[];
 }
 
 export function defineOutcomeContract(objectiveInput: string): OutcomeContractDefinition {
@@ -18,5 +20,7 @@ export function defineOutcomeContract(objectiveInput: string): OutcomeContractDe
       : [`Delivered: ${objective}`, 'The result has inspectable evidence and satisfies the user-provided constraints.'],
     constraints: [],
     approvalRequired: [],
+    assumptions: [],
+    risks: [],
   };
 }

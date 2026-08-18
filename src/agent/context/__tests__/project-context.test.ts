@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { GoalWithDetails } from '../../../goals/index.js';
+import type { ProjectOutcomeContext } from '../project-context.js';
 import { ProjectService } from '../../../projects/index.js';
 import type { Project } from '../../../projects/types.js';
 import {
@@ -32,19 +32,16 @@ const project: Project = {
   updatedAt: 2,
 };
 
-function goal(patch: Partial<GoalWithDetails> = {}): GoalWithDetails {
+function outcome(patch: Partial<ProjectOutcomeContext> = {}): ProjectOutcomeContext {
   return {
-    id: 'goal-1',
-    title: 'Finish project context',
-    status: 'active',
+    outcomeId: 'outcome-1',
+    objective: 'Finish project context',
+    status: 'running',
     agentId: 'main',
     priority: 'high',
     createdAt: 1,
     updatedAt: 2,
-    maxTurns: 10,
-    turnsUsed: 0,
     source: 'api',
-    checklist: [],
     ...patch,
   };
 }
@@ -54,7 +51,7 @@ describe('formatActiveProjectContextForPrompt', () => {
     const text = formatActiveProjectContextForPrompt({
       project,
       workspacePath: '/tmp/xopc',
-      activeGoals: [goal({ nextAction: 'Add prompt injection.' })],
+      activeOutcomes: [outcome({ nextAction: 'Add prompt injection.' })],
       recentSessions: [
         {
           key: 'agent:main:webchat:default:direct:s1',
@@ -77,7 +74,7 @@ describe('formatActiveProjectContextForPrompt', () => {
     expect(text).toContain('Workspace root: /tmp/xopc');
     expect(text).toContain('Ship the Project feature.');
     expect(text).toContain('Keep work scoped to Project context.');
-    expect(text).toContain('- Finish project context | status=active | priority=high | next=Add prompt injection.');
+    expect(text).toContain('- Finish project context | status=running | priority=high | next=Add prompt injection.');
     expect(text).toContain('- Project planning | agent=main | updated=2026-07-06T00:00:00.000Z');
     expect(text).toContain('- session_summary | updated=2026-07-06T01:00:00.000Z | Decided to keep Project separate from Agent and Model.');
   });
@@ -85,11 +82,11 @@ describe('formatActiveProjectContextForPrompt', () => {
   it('uses explicit empty markers when there are no goals or sessions', () => {
     const text = formatActiveProjectContextForPrompt({
       project: { ...project, brief: undefined, instructions: undefined },
-      activeGoals: [],
+      activeOutcomes: [],
       recentSessions: [],
     });
 
-    expect(text).toContain('## Active Goals\n- None recorded.');
+    expect(text).toContain('## Active Outcomes\n- None recorded.');
     expect(text).toContain('## Recent Project Sessions\n- None recorded.');
     expect(text).toContain('## Project Memory\n- None recorded.');
   });
@@ -97,7 +94,7 @@ describe('formatActiveProjectContextForPrompt', () => {
   it('tells coder sessions which local-app release is stable', () => {
     const text = formatActiveProjectContextForPrompt({
       project,
-      activeGoals: [],
+      activeOutcomes: [],
       recentSessions: [],
       localApp: {
         extensionId: 'local-reading-list-abcd1234',

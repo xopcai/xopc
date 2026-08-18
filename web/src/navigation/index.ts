@@ -18,7 +18,6 @@ const TAB_TO_SETTINGS_SECTION: Record<
   | 'settingsTunnel'
   | 'settingsShares'
   | 'settingsDreams'
-  | 'settingsGoals'
   | 'skills'
   | 'channels',
   SettingsSectionId
@@ -36,7 +35,6 @@ const TAB_TO_SETTINGS_SECTION: Record<
   settingsTunnel: 'remote-access',
   settingsShares: 'shares',
   settingsDreams: 'dreams',
-  settingsGoals: 'goals',
   skills: 'skills',
   channels: 'channels',
 };
@@ -97,7 +95,7 @@ export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
   },
   {
     id: 'automation',
-    tabs: ['settingsHeartbeat', 'settingsGoals', 'settingsDreams'],
+    tabs: ['settingsHeartbeat', 'settingsDreams'],
   },
   { id: 'diagnostics', tabs: ['sessions', 'logs'] },
 ] as const;
@@ -149,7 +147,6 @@ export function pathForTab(tab: Tab): string {
   if (tab === 'chat') return '/chat';
   if (tab === 'agents') return '/agents';
   if (tab === 'automations') return '/automations';
-  if (tab === 'settingsGoals') return '/settings/goals';
   if (tab === 'settingsKeyboardShortcuts') return '/settings/keyboard-shortcuts';
   if (tab === 'skills') return '/skills';
   if (tab === 'connectors') return '/connectors';

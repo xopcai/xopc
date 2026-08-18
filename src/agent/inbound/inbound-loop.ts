@@ -318,7 +318,7 @@ export class InboundLoop {
                 assistantPlainText,
                 aborted: false,
                 ...(busProcessFailed !== undefined ? { streamError: busProcessFailed } : {}),
-                skipPersistentGoalPostTurn: false,
+                skipOutcomeReview: false,
                 outboundMetadata: {
                   accountId: meta?.accountId,
                   threadId: meta?.threadId,

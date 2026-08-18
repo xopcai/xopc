@@ -27,7 +27,6 @@ export const REGISTRY_COMMAND_MODULES: Record<string, CommandLoader> = {
   gateway: () => import('./commands/gateway.js'),
   session: () => import('./commands/session.js'),
   project: () => import('./commands/project.js'),
-  goal: () => import('./commands/goal.js'),
   config: () => import('./commands/config.js'),
   doctor: () => import('./commands/doctor/index.js'),
   image: () => import('./commands/image.js'),

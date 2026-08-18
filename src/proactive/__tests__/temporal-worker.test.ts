@@ -17,6 +17,7 @@ import { ContextProviderRegistry } from '../execution/context.js';
 import { ProactiveScenarioService } from '../scenarios/service.js';
 import { ProactiveEventService } from '../service.js';
 import { ProactiveTemporalWorker } from '../temporal/worker.js';
+import { OutcomeExecutionService } from '../../work/index.js';
 
 describe('proactive temporal worker', () => {
   let stateDir: string;
@@ -80,10 +81,9 @@ describe('proactive temporal worker', () => {
       allowedScenarioKeys: ['meeting_preparation'],
     });
     storeMeeting('2026-08-15T12:00:00.000Z');
-    getSqliteDatabase().prepare(`INSERT INTO goals (
-      goal_id, title, status, agent_id, priority, created_at, updated_at, max_turns
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
-      .run('goal-1', 'Prepare launch decision', 'active', 'main', 'high', 1, 2, 20);
+    const execution = new OutcomeExecutionService().create({
+      objective: 'Prepare launch decision', agentId: 'main', priority: 'high', source: 'api',
+    });
     const insertNote = getSqliteDatabase().prepare(`INSERT INTO notes (
       note_id, title, kind, status, payload_json, snippet, created_at, updated_at
     ) VALUES (?, ?, 'markdown', 'processed', '{}', ?, ?, ?)`);
@@ -111,13 +111,13 @@ describe('proactive temporal worker', () => {
       items: [expect.objectContaining({ content: expect.stringContaining('Launch review') })],
     });
     expect(context.content.meeting_workspace).toMatchObject({
-      activeGoals: [expect.objectContaining({
-        evidenceId: 'goal:goal-1',
-        title: 'Prepare launch decision',
+      activeOutcomes: [expect.objectContaining({
+        evidenceId: `outcome:${execution.outcomeId}`,
+        objective: 'Prepare launch decision',
       })],
       recentNotes: [expect.objectContaining({ evidenceId: 'note:note-launch' })],
     });
-    expect(context.evidenceIds).toContain('goal:goal-1');
+    expect(context.evidenceIds).toContain(`outcome:${execution.outcomeId}`);
     expect(JSON.stringify(context.content.meeting_workspace)).not.toContain('Private unrelated detail');
   });
 

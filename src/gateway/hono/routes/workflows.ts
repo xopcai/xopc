@@ -32,7 +32,7 @@ interface StartWorkflowRunRequestBody {
   input?: unknown;
   inputEnvelope?: WorkflowRunInputEnvelope;
   goal?: string;
-  goalId?: string;
+  outcomeId?: string;
   projectId?: string;
   workItemId?: string;
   agentId?: string;
@@ -332,7 +332,7 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
     }
 
     const parentSessionKey = body.parentSessionKey?.trim() || undefined;
-    const goalId = body.goalId?.trim();
+    const outcomeId = body.outcomeId?.trim();
     const projectId = body.projectId?.trim();
     if (projectId && !service.projects.get(projectId)) {
       return c.json({ error: 'Project not found' }, 404);
@@ -349,7 +349,7 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
     const result = await workflowRunService.startWorkflowRun({
       agentId,
       definitionId,
-      goalId,
+      outcomeId,
       projectId,
       workItemId: typeof body.workItemId === 'string' ? body.workItemId : undefined,
       input: body.inputEnvelope ? undefined : body.input,
@@ -373,7 +373,7 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
   authenticated.get('/api/workflows/runs', async (c) => {
     const rawLimit = c.req.query('limit');
     const limit = rawLimit ? Number.parseInt(rawLimit, 10) : 50;
-    const goalId = c.req.query('goalId')?.trim();
+    const outcomeId = c.req.query('outcomeId')?.trim();
     const projectId = c.req.query('projectId')?.trim();
     if (projectId && !service.projects.get(projectId)) {
       return c.json({ error: 'Project not found' }, 404);
@@ -388,8 +388,8 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
       })
       : getAgentId(explicitAgentId, service.currentConfig);
     const runStore = workflowRunService.createRunStore(agentId);
-    const runs = goalId
-      ? await runStore.listRunSummariesForGoal(goalId, Number.isFinite(limit) ? limit : 50)
+    const runs = outcomeId
+      ? await runStore.listRunSummariesForOutcome(outcomeId, Number.isFinite(limit) ? limit : 50)
       : await runStore.listRunSummaries(Number.isFinite(limit) ? limit : 50, { projectId });
     return c.json({ runs });
   });

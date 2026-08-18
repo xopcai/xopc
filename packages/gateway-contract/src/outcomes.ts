@@ -25,6 +25,8 @@ export const OutcomeContractSchema = z.object({
   acceptanceCriteria: z.array(z.string()),
   constraints: z.array(z.string()),
   approvalRequired: z.array(z.string()),
+  assumptions: z.array(z.string()),
+  risks: z.array(z.string()),
   contextSnapshotId: z.string().optional(),
   createdBy: z.enum(['user', 'system']),
   createdAt: z.number(),
@@ -67,6 +69,9 @@ export const OutcomeEvidenceSchema = z.object({
   summary: z.string(),
   uri: z.string().optional(),
   verifies: z.array(z.string()).optional(),
+  provenance: z.enum(['tool', 'external', 'user', 'judge']),
+  strength: z.enum(['observed', 'verified']),
+  observedAt: z.number(),
 });
 
 export const OutcomeReceiptSchema = z.object({
@@ -78,7 +83,6 @@ export const OutcomeReceiptSchema = z.object({
   status: OutcomeReceiptStatusSchema,
   summary: z.string(),
   projectId: z.string().optional(),
-  goalId: z.string().optional(),
   workItemId: z.string().optional(),
   origin: z.string().optional(),
   triggerKind: z.string().optional(),

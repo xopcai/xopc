@@ -154,7 +154,7 @@
     "noContextRefs": "没有记录绑定上下文。",
     "contextRefKinds": {
       "project": "项目",
-      "goal": "目标",
+      "outcome": "结果",
       "work_item": "工作项",
       "session": "会话",
       "attachment": "附件",
@@ -165,7 +165,7 @@
     "noWritebackTargets": "没有记录回写目标。",
     "writebackTargetKinds": {
       "project": "项目",
-      "goal": "目标",
+      "outcome": "结果",
       "work_item": "工作项"
     },
     "writebackModes": {

@@ -211,14 +211,6 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     },
   },
   {
-    id: 'goals',
-    match: (path) => startsWithAny(path, ['/api/goals']),
-    load: async () => {
-      const { registerGoalsRoutes } = await import('./goals.js');
-      return { register: registerGoalsRoutes };
-    },
-  },
-  {
     id: 'notes',
     match: (path) => startsWithAny(path, ['/api/notes']),
     load: async () => {

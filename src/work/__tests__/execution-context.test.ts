@@ -30,9 +30,9 @@ describe('resolveExecutionContext', () => {
       metadata: metadata({
         projectId: 'project-1',
         customData: {
-          goalId: 'goal-1',
+          outcomeId: 'goal-1',
           workItemId: 'work-1',
-          origin: 'goal',
+          origin: 'outcome',
           triggerKind: 'retry',
           parentRunId: 'run-0',
         },
@@ -41,9 +41,9 @@ describe('resolveExecutionContext', () => {
 
     expect(context).toMatchObject({
       projectId: 'project-1',
-      goalId: 'goal-1',
+      outcomeId: 'goal-1',
       workItemId: 'work-1',
-      origin: 'goal',
+      origin: 'outcome',
       triggerKind: 'retry',
       parentRunId: 'run-0',
     });

@@ -26,7 +26,6 @@ import { fetchChatModels, resolveEffectiveModelId, setSessionModelRef, fetchSess
 import { queryKeys } from '../../query/keys';
 import { getColors } from '../../theme';
 
-import { EMPTY_CHAT_GOAL_PREFILL } from './chat-empty-shortcuts';
 import { consumeContentChatIntake } from '../content-intake/content-chat-handoff';
 import { setAppClipboardStringAsync } from '../clipboard-intake/write-app-clipboard';
 import { buildUserResendPayload, findPrecedingUserMessage } from './composer-send-helpers';
@@ -359,11 +358,6 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     }
   }, [sessionKey, chatSession, m.chat.maxAttachmentsTruncated]);
 
-  const handleGoalShortcutPress = useCallback(() => {
-    if (bootstrap.bootstrapError && !sessionKey) return;
-    setComposerSuggestion(EMPTY_CHAT_GOAL_PREFILL);
-  }, [bootstrap.bootstrapError, sessionKey]);
-
   const { registerFinalizeHandler } = useWorkspaceNavigation();
 
   const prepareAskAiFromHome = useCallback(() => {
@@ -522,7 +516,6 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     handleNewChat,
     handleStarterSend,
     handleStarterPrefill,
-    handleGoalShortcutPress,
     handleComposerSend,
     handleUserMessageCopy,
     handleUserMessageEdit,

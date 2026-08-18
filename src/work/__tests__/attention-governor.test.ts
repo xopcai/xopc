@@ -51,7 +51,7 @@ describe('AttentionGovernor', () => {
         },
       }),
       decision({ id: 'work', projectId: 'project-1' }),
-      decision({ id: 'goal', kind: 'goal', projectId: 'project-1', updatedAt: 90 }),
+      decision({ id: 'outcome', kind: 'outcome', projectId: 'project-1', updatedAt: 90 }),
       decision({
         id: 'approval',
         kind: 'connector_approval',

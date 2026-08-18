@@ -9,7 +9,7 @@ const ACTIVITY_OBJECT_KINDS = new Set<ActivityObjectKind>([
   'note',
   'work_item',
   'session',
-  'goal',
+  'outcome',
   'workflow_run',
   'automation',
 ]);

@@ -11,7 +11,7 @@ import {
 import { preflightWorkflowConnectors } from '../../connectors/workflow-preflight.js';
 import { resolveModelRef } from '../../config/agent-typed-models.js';
 import type { GatewayWorkflowHost } from '../../gateway/gateway-workflow-host.types.js';
-import { GoalService } from '../../goals/index.js';
+import { OutcomeExecutionStateRepository } from '../../work/outcome-execution-state.js';
 import { resolveModel as resolveModelById } from '../../providers/index.js';
 import { getProjectWorkspacePathForSession } from '../../projects/workspace.js';
 import { DelegateSubagentRunner } from '../../agent/workflow/subagent-runner.js';
@@ -123,7 +123,7 @@ export class WorkflowRunService {
     const goal = params.goal ?? '';
     const projectId =
       params.projectId?.trim() ||
-      (params.goalId ? new GoalService().get(params.goalId)?.projectId : undefined) ||
+      (params.outcomeId ? new OutcomeExecutionStateRepository().get(params.outcomeId)?.projectId : undefined) ||
       (params.parentSessionKey?.trim()
         ? (await this.options.service.sessionIndexInstance.getStore().getMetadata(params.parentSessionKey.trim()))?.projectId
         : undefined);
@@ -166,7 +166,7 @@ export class WorkflowRunService {
       metadata: buildWorkflowRunMetadata({
         definition,
         agentId: params.agentId,
-        goalId: params.goalId,
+        outcomeId: params.outcomeId,
         projectId,
         workItemId: params.workItemId,
         contextRefs: params.contextRefs,
@@ -216,7 +216,7 @@ export class WorkflowRunService {
     return this.startWorkflowRun({
       agentId: params.agentId,
       definitionId: existing.run.definitionId,
-      goalId: existing.run.metadata?.goalId,
+      outcomeId: existing.run.metadata?.outcomeId,
       projectId,
       workItemId: existing.run.metadata?.workItemId,
       contextRefs: existing.run.metadata?.contextRefs,
@@ -307,7 +307,7 @@ export class WorkflowRunService {
       metadata: buildWorkflowRunMetadata({
         definition,
         agentId: params.agentId,
-        goalId: existing.run.metadata?.goalId,
+        outcomeId: existing.run.metadata?.outcomeId,
         projectId,
         workItemId: existing.run.metadata?.workItemId,
         contextRefs: existing.run.metadata?.contextRefs,
@@ -545,7 +545,7 @@ export function buildWorkflowRunInputEnvelope(input: unknown, goal?: string): Wo
 export function buildWorkflowRunMetadata(params: {
   definition: WorkflowDefinition;
   agentId: string;
-  goalId?: string;
+  outcomeId?: string;
   projectId?: string;
   workItemId?: string;
   contextRefs?: WorkflowRunMetadata['contextRefs'];
@@ -557,11 +557,11 @@ export function buildWorkflowRunMetadata(params: {
   idempotencyKey?: string;
   replay?: WorkflowRunReplayMetadata;
 }): WorkflowRunMetadata {
-  const goalId = params.goalId?.trim() || undefined;
+  const outcomeId = params.outcomeId?.trim() || undefined;
   const projectId = params.projectId?.trim() || undefined;
   const workItemId = params.workItemId?.trim() || undefined;
-  const contextRefs = params.contextRefs ?? buildDefaultWorkflowContextRefs({ projectId, goalId, workItemId, source: params.source });
-  const writebackPolicy = params.writebackPolicy ?? buildDefaultWorkflowWritebackPolicy({ projectId, goalId, workItemId });
+  const contextRefs = params.contextRefs ?? buildDefaultWorkflowContextRefs({ projectId, outcomeId, workItemId, source: params.source });
+  const writebackPolicy = params.writebackPolicy ?? buildDefaultWorkflowWritebackPolicy({ projectId, outcomeId, workItemId });
   return {
     sessionKey: params.sessionKey,
     triggerSource: params.source.kind,
@@ -581,19 +581,19 @@ export function buildWorkflowRunMetadata(params: {
     schedule: params.source.kind === 'automation'
       ? { automationId: params.source.automationId, runId: params.source.runId, scheduledAtMs: params.source.scheduledAtMs }
       : undefined,
-    goalId,
+    outcomeId,
   };
 }
 
 function buildDefaultWorkflowContextRefs(params: {
   projectId?: string;
-  goalId?: string;
+  outcomeId?: string;
   workItemId?: string;
   source: WorkflowRunSource;
 }): WorkflowRunMetadata['contextRefs'] {
   const refs: NonNullable<WorkflowRunMetadata['contextRefs']> = [];
   if (params.projectId) refs.push({ kind: 'project', id: params.projectId, role: 'scope' });
-  if (params.goalId) refs.push({ kind: 'goal', id: params.goalId, role: 'objective' });
+  if (params.outcomeId) refs.push({ kind: 'outcome', id: params.outcomeId, role: 'objective' });
   if (params.workItemId) refs.push({ kind: 'work_item', id: params.workItemId, role: 'work_object' });
   if (params.source.kind === 'chat') refs.push({ kind: 'session', id: params.source.sessionKey, role: 'parent_session' });
   return refs;
@@ -601,12 +601,12 @@ function buildDefaultWorkflowContextRefs(params: {
 
 function buildDefaultWorkflowWritebackPolicy(params: {
   projectId?: string;
-  goalId?: string;
+  outcomeId?: string;
   workItemId?: string;
 }): WorkflowRunMetadata['writebackPolicy'] {
   const targets: NonNullable<WorkflowRunMetadata['writebackPolicy']>['targets'] = [];
   if (params.projectId) targets.push({ kind: 'project', id: params.projectId, mode: 'record' });
-  if (params.goalId) targets.push({ kind: 'goal', id: params.goalId, mode: 'evaluate' });
+  if (params.outcomeId) targets.push({ kind: 'outcome', id: params.outcomeId, mode: 'evaluate' });
   if (params.workItemId) targets.push({ kind: 'work_item', id: params.workItemId, mode: 'suggest' });
   return { targets };
 }

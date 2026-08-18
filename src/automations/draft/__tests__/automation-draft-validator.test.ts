@@ -13,8 +13,8 @@ describe('automation draft validator', () => {
         name: 'Blocked goal helper',
         trigger: {
           kind: 'event',
-          eventType: 'goal.status_changed',
-          source: 'goals',
+          eventType: 'outcome.status_changed',
+          source: 'outcomes',
           payloadMatch: { status: 'blocked' },
         },
         action: {
@@ -32,13 +32,13 @@ describe('automation draft validator', () => {
 
     expect(draft.automation.trigger).toMatchObject({
       kind: 'event',
-      eventType: 'goal.status_changed',
+      eventType: 'outcome.status_changed',
     });
 
     const simulation = simulateAutomation(draft.automation);
     expect(simulation).toMatchObject({
       canRunNow: false,
-      triggerSummary: 'Runs on product event goal.status_changed from goals.',
+      triggerSummary: 'Runs on product event outcome.status_changed from outcomes.',
       actionSummary: 'Runs the default agent.',
     });
     expect(simulation.safetyNotes).toContain('Product-event trigger runs automatically when matching xopc events are published.');

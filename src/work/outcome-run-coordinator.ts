@@ -1,6 +1,6 @@
-import { GoalService } from '../goals/index.js';
 import {
   completeExecutionReceipt,
+  getExecutionReceipt,
   startExecutionReceipt,
   updateExecutionReceipt,
   type ExecutionContract,
@@ -13,20 +13,22 @@ import { executionReceiptContext } from './execution-context.js';
 import { OutcomeProjectionService } from './outcome-projection-service.js';
 import { OutcomeRepository } from './outcome-repository.js';
 import { ContextCompiler } from '../user-context/context-compiler.js';
+import { recordOutcomeContextFeedback } from './outcome-context-feedback.js';
 
 export class OutcomeRunCoordinator {
   readonly #evidence: ExecutionEvidence[] = [];
-  readonly #goals = new GoalService();
   readonly #outcomes = new OutcomeRepository();
   readonly #projection = new OutcomeProjectionService();
   readonly #contextCompiler = new ContextCompiler();
   readonly #startedAt = Date.now();
+  readonly #onFinalized?: (receipt: ExecutionReceipt) => void;
   readonly contract?: ExecutionContract;
 
   private constructor(
     readonly runId: string,
     readonly context: ExecutionContext,
     fallbackObjective: string,
+    onFinalized?: (receipt: ExecutionReceipt) => void,
   ) {
     const outcome = context.outcomeId ? this.#outcomes.get(context.outcomeId) : undefined;
     const contract = outcome?.contract;
@@ -36,7 +38,10 @@ export class OutcomeRunCoordinator {
       acceptanceCriteria: contract.acceptanceCriteria,
       constraints: contract.constraints,
       approvalRequired: contract.approvalRequired,
+      assumptions: contract.assumptions,
+      risks: contract.risks,
     } : undefined;
+    this.#onFinalized = onFinalized;
     startExecutionReceipt({
       runId,
       sessionKey: context.sessionKey,
@@ -45,6 +50,7 @@ export class OutcomeRunCoordinator {
       context: executionReceiptContext(context),
       ...(this.contract ? { contract: this.contract } : {}),
       ...(contract ? { contractVersion: contract.version } : {}),
+      ...(context.strategy ? { strategy: context.strategy } : {}),
     });
     if (outcome) {
       this.#outcomes.updateState({
@@ -59,8 +65,14 @@ export class OutcomeRunCoordinator {
     runId: string;
     context: ExecutionContext;
     fallbackObjective: string;
+    onFinalized?: (receipt: ExecutionReceipt) => void;
   }): OutcomeRunCoordinator {
-    return new OutcomeRunCoordinator(input.runId, input.context, input.fallbackObjective);
+    return new OutcomeRunCoordinator(
+      input.runId,
+      input.context,
+      input.fallbackObjective,
+      input.onFinalized,
+    );
   }
 
   addEvidence(evidence: ExecutionEvidence): void {
@@ -75,6 +87,9 @@ export class OutcomeRunCoordinator {
         kind: 'state',
         title: `Plan item completed: ${item.title}`,
         summary: 'The execution agent marked this plan item as completed.',
+        provenance: 'tool',
+        strength: 'observed',
+        observedAt: Date.now(),
       });
     }
   }
@@ -84,6 +99,9 @@ export class OutcomeRunCoordinator {
       kind: 'state',
       title: 'Changes applied',
       summary: `${added} additions and ${removed} removals`,
+      provenance: 'tool',
+      strength: 'observed',
+      observedAt: Date.now(),
     });
   }
 
@@ -95,6 +113,9 @@ export class OutcomeRunCoordinator {
       summary: durationMs === undefined
         ? 'Command completed successfully'
         : `Command completed successfully in ${durationMs} ms`,
+      provenance: 'tool',
+      strength: 'verified',
+      observedAt: Date.now(),
     });
   }
 
@@ -102,7 +123,7 @@ export class OutcomeRunCoordinator {
     status: Exclude<ExecutionReceiptStatus, 'running'>;
     summary: string;
   }): ExecutionReceipt | undefined {
-    const goal = this.context.goalId ? this.#goals.get(this.context.goalId) : undefined;
+    const judgedReceipt = getExecutionReceipt(this.runId);
     const contextSnapshot = this.#contextCompiler.latestForSession(this.context.sessionKey, this.#startedAt);
     if (contextSnapshot) {
       this.#contextCompiler.linkToRun({
@@ -111,29 +132,22 @@ export class OutcomeRunCoordinator {
         runId: this.runId,
       });
     }
-    const criteria = new Set(this.contract?.acceptanceCriteria ?? []);
-    for (const item of goal?.checklist ?? []) {
-      if (item.status !== 'completed' || !criteria.has(item.text)) continue;
-      this.addEvidence({
-        kind: 'state',
-        title: `Independently verified: ${item.text}`,
-        summary: item.evidenceSummary ?? 'The goal judge marked this acceptance criterion complete.',
-        verifies: [item.text],
-      });
+    for (const evidence of judgedReceipt?.evidence ?? []) {
+      this.addEvidence(evidence);
     }
     if (this.context.outcomeId) {
       this.#outcomes.updateState({
         id: this.context.outcomeId,
-        userStatus: goal?.status === 'needs_input' ? 'needs_user' : 'running',
-        internalStatus: goal?.status === 'needs_input' ? 'needs_user' : 'verifying',
+        userStatus: judgedReceipt?.needsUser ? 'needs_user' : 'running',
+        internalStatus: judgedReceipt?.needsUser ? 'needs_user' : 'verifying',
       });
     }
     updateExecutionReceipt({
       runId: this.runId,
       ...(this.contract ? { contract: this.contract } : {}),
       evidence: this.#evidence,
-      nextAction: goal?.nextAction ?? null,
-      needsUser: goal?.status === 'needs_input',
+      nextAction: judgedReceipt?.nextAction ?? null,
+      needsUser: judgedReceipt?.needsUser ?? false,
       contextTraceId: contextSnapshot?.id ?? this.context.contextTraceId ?? null,
     });
     const outcome = completeExecutionReceipt({
@@ -141,6 +155,10 @@ export class OutcomeRunCoordinator {
       status: input.status,
       summary: input.summary,
     });
-    return outcome ? this.#projection.project(outcome) : undefined;
+    if (!outcome) return undefined;
+    const projected = this.#projection.project(outcome);
+    recordOutcomeContextFeedback(projected);
+    this.#onFinalized?.(projected);
+    return projected;
   }
 }

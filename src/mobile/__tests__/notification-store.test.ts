@@ -68,10 +68,10 @@ describe('mobile notification store', () => {
       id: 'device-1', platform: 'ios', pushToken: 'ExponentPushToken[token]', permissions: 'granted',
     });
     const event = createMobileActivityEvent({
-      type: 'goal.blocked',
-      entity: { kind: 'goal', id: 'goal-1' },
+      type: 'outcome.blocked',
+      entity: { kind: 'outcome', id: 'outcome-1' },
       priority: 'high',
-      title: 'Goal blocked',
+      title: 'Outcome blocked',
       deepLink: '/chat/session-1',
       payload: { route: '/chat/session-1' },
     });

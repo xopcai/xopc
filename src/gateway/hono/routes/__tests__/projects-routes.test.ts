@@ -93,7 +93,7 @@ describe('project association routes', () => {
 
   it('does not expose the removed direct project delegation endpoint', async () => {
     const projects = new ProjectService();
-    const app = registerProjectRouteApp({ projects, enqueueGoalRun: vi.fn() } as Partial<GatewayService>);
+    const app = registerProjectRouteApp({ projects } as Partial<GatewayService>);
 
     const res = await app.request('/api/projects/delegate', {
       method: 'POST',
