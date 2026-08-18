@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { renderWorkflowText } from '../../agent/workflow/snapshot.js';
 import type { GatewayWorkflowHost } from '../../gateway/gateway-workflow-host.types.js';
-import { GoalWorkflowJudge } from '../../goals/index.js';
+import { OutcomeWorkflowCoordinator } from '../../work/index.js';
 import { getProjectWorkspacePathForSession } from '../../projects/workspace.js';
 import type { SessionStore } from '../../session/store.js';
 import { SessionStatus } from '../../session/types.js';
@@ -128,11 +128,11 @@ export class WorkflowSessionBridge {
     }
     new WorkItemWorkflowJudge().handleTerminalWorkflowRun({ view });
     this.recordProjectWorkflowMemory(sessionKey, view);
-    await new GoalWorkflowJudge().handleTerminalWorkflowRun({
-      config: this.gateway.currentConfig,
-      view,
-      sessionKey,
-    });
+    if (this.gateway.enqueueOutcome) {
+      new OutcomeWorkflowCoordinator({
+        enqueue: (outcomeId, options) => this.gateway.enqueueOutcome!(outcomeId, options),
+      }).handleTerminalRun(view, sessionKey);
+    }
   }
 
   private async persistTerminalTranscript(sessionKey: string, view: WorkflowRunView): Promise<void> {

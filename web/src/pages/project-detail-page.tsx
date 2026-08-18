@@ -1599,7 +1599,7 @@ export function ProjectDetailPage() {
                   })}
                 </div>
               ) : (
-                <p className="mt-2 text-sm text-fg-muted">{pm.overview.noBlockedGoals}</p>
+                <p className="mt-2 text-sm text-fg-muted">{pm.overview.noBlockedOutcomes}</p>
               )}
               <form onSubmit={submitBlocker} className="mt-4 flex gap-2 border-t border-edge pt-4">
                 <input

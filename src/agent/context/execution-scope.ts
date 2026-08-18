@@ -1,7 +1,7 @@
-import { GoalService, type GoalWithDetails } from '../../goals/index.js';
 import { getSessionMetadata, isXopcDatabaseOpen } from '../../storage/sqlite/index.js';
 import { sanitizeForPromptLiteral } from '../prompt/sanitize-for-prompt.js';
 import { OutcomeRepository } from '../../work/outcome-repository.js';
+import { OutcomeExecutionStateRepository } from '../../work/outcome-execution-state.js';
 
 import { buildActiveProjectContextForPrompt } from './project-context.js';
 
@@ -10,7 +10,7 @@ const MAX_CRITERIA = 12;
 
 export type ExecutionObjective =
   | {
-      kind: 'goal';
+      kind: 'outcome';
       id: string;
       title: string;
       objective: string;
@@ -41,19 +41,23 @@ function bounded(value: string | undefined, max = MAX_OBJECTIVE_TEXT): string | 
   return text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`;
 }
 
-function goalObjective(goal: GoalWithDetails): ExecutionObjective {
-  const contract = new OutcomeRepository().getContract(goal.outcomeId, goal.outcomeContractVersion);
+function outcomeObjective(sessionKey: string): ExecutionObjective | undefined {
+  const execution = new OutcomeExecutionStateRepository().getBySession(sessionKey);
+  if (!execution) return undefined;
+  const outcome = new OutcomeRepository().get(execution.outcomeId);
+  if (!outcome) return undefined;
+  const contract = outcome.contract;
   return {
-    kind: 'goal',
-    id: goal.id,
-    title: goal.title,
-    objective: contract?.objective.trim() || goal.title,
-    status: goal.status,
+    kind: 'outcome',
+    id: outcome.id,
+    title: outcome.objective,
+    objective: contract?.objective.trim() || outcome.objective,
+    status: outcome.internalStatus,
     scopeBoundary: bounded(contract?.constraints.join('\n')),
-    acceptanceCriteria: goal.checklist.slice(0, MAX_CRITERIA).map((item) => item.text),
+    acceptanceCriteria: contract?.acceptanceCriteria.slice(0, MAX_CRITERIA) ?? [],
     deliverables: contract?.deliverables.slice(0, MAX_CRITERIA) ?? [],
-    nextAction: bounded(goal.nextAction),
-    blockedReason: bounded(goal.blockedReason),
+    nextAction: bounded(execution.nextAction),
+    blockedReason: bounded(execution.blockedReason),
   };
 }
 
@@ -85,11 +89,10 @@ function workflowObjective(sessionKey: string): ExecutionObjective | undefined {
 export function resolveExecutionScope(sessionKey: string): ExecutionScope {
   if (!isXopcDatabaseOpen()) return { sessionKey };
   const metadata = getSessionMetadata(sessionKey);
-  const activeGoal = new GoalService().getActiveForSession(sessionKey);
   return {
     sessionKey,
     projectId: metadata?.projectId,
-    objective: activeGoal ? goalObjective(activeGoal) : workflowObjective(sessionKey),
+    objective: outcomeObjective(sessionKey) ?? workflowObjective(sessionKey),
   };
 }
 
@@ -107,7 +110,7 @@ export function formatCurrentWorkForPrompt(scope: ExecutionScope): string | unde
     '## Objective',
     sanitizeForPromptLiteral(objective.objective),
   ];
-  if (objective.kind === 'goal') {
+  if (objective.kind === 'outcome') {
     if (objective.scopeBoundary) {
       lines.push('', '## Scope Boundary', sanitizeForPromptLiteral(objective.scopeBoundary));
     }

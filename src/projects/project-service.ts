@@ -3,7 +3,6 @@ import { getSessionMetadata } from '../storage/sqlite/index.js';
 import { runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import type { ProactiveSignalPublisher } from '../proactive/events/publisher.js';
 import { ProjectStore } from './project-store.js';
-import { bindGoalToProject, listProjectGoalIds, unbindGoalFromProject } from './goal-bind.js';
 import { bindSessionToProject, listProjectSessionKeys, unbindSessionFromProject } from './session-bind.js';
 import type { CreateProjectInput, Project, ProjectListQuery, ProjectListResult, ProjectWithDetails, SidebarProjectListQuery, UpdateProjectInput } from './types.js';
 import {
@@ -216,18 +215,6 @@ export class ProjectService {
 
   listSessionKeys(projectId: string, limit?: number, offset?: number): string[] {
     return listProjectSessionKeys(projectId, limit, offset);
-  }
-
-  attachGoal(goalId: string, projectId: string): void {
-    bindGoalToProject(goalId, projectId);
-  }
-
-  detachGoal(goalId: string): void {
-    unbindGoalFromProject(goalId);
-  }
-
-  listGoalIds(projectId: string, limit?: number, offset?: number): string[] {
-    return listProjectGoalIds(projectId, limit, offset);
   }
 
   suggestProjectsForSession(sessionKey: string): ProjectSuggestion[] {

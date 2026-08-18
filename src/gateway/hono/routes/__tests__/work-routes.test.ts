@@ -6,7 +6,6 @@ import { Hono } from 'hono';
 import { WorkValueMetricsSchema } from '@xopcai/gateway-contract';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { GoalService } from '../../../../goals/index.js';
 import { ProjectService } from '../../../../projects/index.js';
 import {
   closeXopcDatabase,
@@ -15,7 +14,7 @@ import {
   updateRelationshipSettings,
 } from '../../../../storage/sqlite/index.js';
 import { WorkItemService } from '../../../../work-items/index.js';
-import { OutcomeRepository } from '../../../../work/index.js';
+import { OutcomeExecutionStateRepository, OutcomeRepository } from '../../../../work/index.js';
 import type { GatewayService } from '../../../service.js';
 import { registerWorkRoutes } from '../work.js';
 
@@ -33,7 +32,7 @@ describe('work orchestration routes', () => {
     workItems = new WorkItemService();
     app = new Hono();
     registerWorkRoutes(app, {
-      service: { projects, workItems } as GatewayService,
+      service: { projects, workItems, enqueueOutcome: vi.fn() } as unknown as GatewayService,
       strictRateLimitMiddleware: async (_c, next) => next(),
     } as never);
   });
@@ -78,14 +77,10 @@ describe('work orchestration routes', () => {
       body: JSON.stringify({ executionMode: 'create_only' }),
     });
     expect(confirmed.status).toBe(201);
-    const work = (await confirmed.json()).work as { outcomeId: string; goalId: string };
+    const work = (await confirmed.json()).work as { outcomeId: string };
     expect(new OutcomeRepository().get(work.outcomeId)?.objective).toBe('Prepare the September product launch');
-    expect(new GoalService().get(work.goalId)).toMatchObject({
-      outcomeId: work.outcomeId,
+    expect(new OutcomeExecutionStateRepository().get(work.outcomeId)).toMatchObject({
       nextAction: 'Complete the first verifiable result.',
-      checklist: expect.arrayContaining([
-        expect.objectContaining({ text: expect.stringContaining('Prepare the September product launch') }),
-      ]),
     });
     expect(projects.list({ limit: 20 }).items).toHaveLength(0);
     expect(workItems.listWorkItems({ limit: 20 }).items).toHaveLength(0);
@@ -154,7 +149,7 @@ describe('work orchestration routes', () => {
 
     app = new Hono();
     registerWorkRoutes(app, {
-      service: { projects, workItems } as GatewayService,
+      service: { projects, workItems, enqueueOutcome: vi.fn() } as unknown as GatewayService,
       strictRateLimitMiddleware: async (_c, next) => next(),
     } as never);
 
@@ -169,7 +164,6 @@ describe('work orchestration routes', () => {
     );
     const firstWork = (await firstConfirmation.json()).work as {
       outcomeId: string;
-      goalId: string;
     };
     const replayedConfirmation = await app.request(
       `/api/work/intakes/${firstProposal.id}/confirm`,
@@ -177,7 +171,7 @@ describe('work orchestration routes', () => {
     );
     expect((await replayedConfirmation.json()).work).toMatchObject(firstWork);
     expect(projects.list({ limit: 20 }).items).toHaveLength(0);
-    expect(new GoalService().list({ limit: 20 })).toHaveLength(1);
+    expect(new OutcomeRepository().list({ limit: 20 })).toHaveLength(1);
     expect(workItems.listWorkItems({ limit: 20 }).items).toHaveLength(0);
   });
 
@@ -208,9 +202,9 @@ describe('work orchestration routes', () => {
   });
 
   it('queues confirmed work immediately with durable execution context', async () => {
-    const enqueueGoalRun = vi.fn((goalId: string, _options: unknown) => ({
+    const enqueueOutcome = vi.fn((outcomeId: string, _options: unknown) => ({
       id: 'queue-intake-1',
-      goalId,
+      outcomeId,
       status: 'queued' as const,
       attempts: 0,
       maxRetries: 2,
@@ -219,7 +213,7 @@ describe('work orchestration routes', () => {
     }));
     app = new Hono();
     registerWorkRoutes(app, {
-      service: { projects, workItems, enqueueGoalRun } as unknown as GatewayService,
+      service: { projects, workItems, enqueueOutcome } as unknown as GatewayService,
       strictRateLimitMiddleware: async (_c, next) => next(),
     } as never);
 
@@ -240,7 +234,6 @@ describe('work orchestration routes', () => {
     expect(confirmed.status).toBe(201);
     const work = (await confirmed.json()).work as {
       outcomeId: string;
-      goalId: string;
       execution: { mode: string; status: string; queueId?: string };
     };
     expect(work.execution).toEqual({
@@ -248,20 +241,19 @@ describe('work orchestration routes', () => {
       status: 'queued',
       queueId: 'queue-intake-1',
     });
-    expect(enqueueGoalRun).toHaveBeenCalledWith(work.goalId, {
+    expect(enqueueOutcome).toHaveBeenCalledWith(work.outcomeId, {
       source: 'api',
       executionContext: {
-        outcomeId: work.outcomeId,
         contextTraceId: proposal.id,
         triggerKind: 'user',
       },
     });
   });
 
-  it('pauses and resumes an outcome without exposing the underlying goal model', async () => {
-    const enqueueGoalRun = vi.fn((goalId: string) => ({
+  it('pauses and resumes an outcome through the outcome model', async () => {
+    const enqueueOutcome = vi.fn((outcomeId: string) => ({
       id: 'queue-resume-1',
-      goalId,
+      outcomeId,
       status: 'queued' as const,
       attempts: 0,
       maxRetries: 2,
@@ -270,7 +262,7 @@ describe('work orchestration routes', () => {
     }));
     app = new Hono();
     registerWorkRoutes(app, {
-      service: { projects, workItems, enqueueGoalRun } as unknown as GatewayService,
+      service: { projects, workItems, enqueueOutcome } as unknown as GatewayService,
       strictRateLimitMiddleware: async (_c, next) => next(),
     } as never);
     const proposed = await app.request('/api/work/intakes', {
@@ -284,7 +276,7 @@ describe('work orchestration routes', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ executionMode: 'create_only' }),
     });
-    const work = ((await confirmed.json()) as { work: { outcomeId: string; goalId: string } }).work;
+    const work = ((await confirmed.json()) as { work: { outcomeId: string } }).work;
 
     const paused = await app.request(`/api/outcomes/${work.outcomeId}/actions`, {
       method: 'POST',
@@ -304,10 +296,10 @@ describe('work orchestration routes', () => {
     expect(await resumed.json()).toMatchObject({
       ok: true,
       outcome: { id: work.outcomeId, internalStatus: 'continuing' },
-      queued: { id: 'queue-resume-1', goalId: work.goalId },
+      queued: { id: 'queue-resume-1', outcomeId: work.outcomeId },
     });
-    expect(enqueueGoalRun).toHaveBeenCalledWith(work.goalId, expect.objectContaining({
-      executionContext: expect.objectContaining({ outcomeId: work.outcomeId, triggerKind: 'retry' }),
+    expect(enqueueOutcome).toHaveBeenCalledWith(work.outcomeId, expect.objectContaining({
+      executionContext: expect.objectContaining({ triggerKind: 'retry' }),
     }));
   });
 });

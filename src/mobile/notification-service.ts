@@ -14,9 +14,9 @@ import type {
 const log = createLogger('MobileNotifications');
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 
-type GoalPayload = {
-  goal?: { id?: unknown; title?: unknown; activeSessionKey?: unknown };
-  goalId?: unknown;
+type OutcomePayload = {
+  outcome?: { id?: unknown; objective?: unknown };
+  outcomeId?: unknown;
   status?: unknown;
 };
 
@@ -28,35 +28,34 @@ function shouldDeliver(type: MobileNotificationEventType, preferences: {
   completed: boolean;
   automationFailed: boolean;
 }): boolean {
-  if (type === 'goal.needs_input') return preferences.needsInput;
-  if (type === 'goal.blocked') return preferences.failed;
+  if (type === 'outcome.needs_input') return preferences.needsInput;
+  if (type === 'outcome.blocked') return preferences.failed;
   if (type === 'automation.failed') return preferences.automationFailed;
   if (type === 'proactive.insight') return preferences.needsInput;
   return preferences.completed;
 }
 
-function goalEvent(payload: unknown): Omit<MobileActivityEvent, 'id' | 'createdAt'> | null {
+function outcomeEvent(payload: unknown): Omit<MobileActivityEvent, 'id' | 'createdAt'> | null {
   if (!payload || typeof payload !== 'object') return null;
-  const data = payload as GoalPayload;
-  const goal = data.goal;
-  const goalId = typeof goal?.id === 'string' ? goal.id : typeof data.goalId === 'string' ? data.goalId : '';
+  const data = payload as OutcomePayload;
+  const outcome = data.outcome;
+  const outcomeId = typeof outcome?.id === 'string' ? outcome.id : typeof data.outcomeId === 'string' ? data.outcomeId : '';
   const status = typeof data.status === 'string' ? data.status : '';
-  if (!goalId || !['needs_input', 'blocked', 'done'].includes(status)) return null;
-  const type: MobileNotificationEventType = status === 'needs_input'
-    ? 'goal.needs_input'
+  if (!outcomeId || !['needs_user', 'blocked', 'completed'].includes(status)) return null;
+  const type: MobileNotificationEventType = status === 'needs_user'
+    ? 'outcome.needs_input'
     : status === 'blocked'
-      ? 'goal.blocked'
-      : 'goal.completed';
-  const sessionKey = typeof goal?.activeSessionKey === 'string' ? goal.activeSessionKey : '';
-  const route = sessionKey ? `/chat/${encodeURIComponent(sessionKey)}` : '/';
+      ? 'outcome.blocked'
+      : 'outcome.completed';
+  const route = `/work/${encodeURIComponent(outcomeId)}`;
   return {
     type,
-    entity: { kind: 'goal', id: goalId },
-    priority: type === 'goal.needs_input' || type === 'goal.blocked' ? 'high' : 'normal',
-    title: type === 'goal.needs_input' ? 'Action needed' : type === 'goal.blocked' ? 'Goal blocked' : 'Goal completed',
-    body: typeof goal?.title === 'string' ? goal.title.slice(0, 120) : undefined,
+    entity: { kind: 'outcome', id: outcomeId },
+    priority: type === 'outcome.needs_input' || type === 'outcome.blocked' ? 'high' : 'normal',
+    title: type === 'outcome.needs_input' ? 'Action needed' : type === 'outcome.blocked' ? 'Outcome blocked' : 'Outcome completed',
+    body: typeof outcome?.objective === 'string' ? outcome.objective.slice(0, 120) : undefined,
     deepLink: route,
-    payload: { route, goalId, eventType: type },
+    payload: { route, outcomeId, eventType: type },
   };
 }
 
@@ -95,7 +94,7 @@ export function mobileNotificationEventFromGatewayEvent(
   type: string,
   payload: unknown,
 ): Omit<MobileActivityEvent, 'id' | 'createdAt'> | null {
-  if (type === 'goal.status.updated') return goalEvent(payload);
+  if (type === 'outcome.status.updated') return outcomeEvent(payload);
   if (type === 'automation.run.completed') return automationEvent(payload);
   if (type === 'proactive.inbox.created') return proactiveInsightEvent(payload);
   return null;

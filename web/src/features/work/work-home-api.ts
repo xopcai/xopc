@@ -45,6 +45,21 @@ export async function actOnOutcome(outcomeId: string, action: OutcomeAction): Pr
   return OutcomeSchema.parse(response.outcome);
 }
 
+export async function submitOutcomeFeedback(
+  runId: string,
+  outcome: 'helpful' | 'not_helpful',
+  reason?: string,
+): Promise<OutcomeReceipt> {
+  const response = await fetchJson<{ receipt?: unknown }>(
+    apiUrl(`/api/execution-receipts/${encodeURIComponent(runId)}/feedback`),
+    {
+      method: 'POST',
+      body: JSON.stringify({ outcome, reason: reason?.trim() || undefined }),
+    },
+  );
+  return OutcomeReceiptSchema.parse(response.receipt);
+}
+
 export async function proposeWorkIntake(objective: string): Promise<WorkIntakeProposal> {
   const response = await fetchJson<{ proposal?: unknown }>(apiUrl('/api/work/intakes'), {
     method: 'POST',

@@ -12,7 +12,7 @@
  * - Hard upper bound for the same TTL'd slots to bound worst-case memory.
  *
  * Slots whose lifetime is fully owned by explicit lifecycle calls
- * (`inboundTurnDepth`, `directStreamOutcome`, `embeddedStreamText`,
+ * (`inboundTurnDepth`, `outcomeReviewHintBySession`, `embeddedStreamText`,
  * `sessionEventUnsubscribers`) are still cleared via `disposeSession`, but they
  * are NOT subject to TTL — sweeping them would race with their owners.
  */
@@ -23,8 +23,8 @@ const log = createLogger('SessionStateBag');
 
 export type WebchatSsePublisher = (event: { type: string; [key: string]: unknown }) => void;
 
-export interface PersistentGoalStreamOutcome {
-  skipPersistentGoalPostTurn: boolean;
+export interface OutcomeReviewStreamHint {
+  skipOutcomeReview: boolean;
 }
 
 export interface SessionStateBagOptions {
@@ -52,8 +52,8 @@ export class SessionStateBag {
 
   /** Stream text for the in-flight embedded turn (managed by turn). */
   private readonly embeddedStreamText = new Map<string, string>();
-  /** Persistent-goal stream outcome (take-and-delete). */
-  private readonly directStreamOutcome = new Map<string, PersistentGoalStreamOutcome>();
+  /** Outcome review stream state (take-and-delete). */
+  private readonly outcomeReviewHintBySession = new Map<string, OutcomeReviewStreamHint>();
   /** Concurrent inbound turn depth (counter). */
   private readonly inboundTurnDepth = new Map<string, number>();
   /** Agent-event subscription tear-downs (run on dispose). */
@@ -125,15 +125,15 @@ export class SessionStateBag {
     this.embeddedStreamText.delete(sessionKey);
   }
 
-  // ── Persistent-goal stream outcome (take-and-delete) ────────────────────
+  // ── Outcome review hint (take-and-delete) ───────────────────────────────
 
-  recordPersistentGoalStreamOutcome(sessionKey: string, outcome: PersistentGoalStreamOutcome): void {
-    this.directStreamOutcome.set(sessionKey, outcome);
+  recordOutcomeReviewStreamHint(sessionKey: string, outcome: OutcomeReviewStreamHint): void {
+    this.outcomeReviewHintBySession.set(sessionKey, outcome);
   }
 
-  takePersistentGoalStreamOutcome(sessionKey: string): PersistentGoalStreamOutcome | undefined {
-    const v = this.directStreamOutcome.get(sessionKey);
-    this.directStreamOutcome.delete(sessionKey);
+  takeOutcomeReviewStreamHint(sessionKey: string): OutcomeReviewStreamHint | undefined {
+    const v = this.outcomeReviewHintBySession.get(sessionKey);
+    this.outcomeReviewHintBySession.delete(sessionKey);
     return v;
   }
 
@@ -191,7 +191,7 @@ export class SessionStateBag {
     this.webchatPublishers.delete(sessionKey);
     this.lastAssistantText.delete(sessionKey);
     this.embeddedStreamText.delete(sessionKey);
-    this.directStreamOutcome.delete(sessionKey);
+    this.outcomeReviewHintBySession.delete(sessionKey);
     this.inboundTurnDepth.delete(sessionKey);
   }
 
@@ -208,7 +208,7 @@ export class SessionStateBag {
     this.webchatPublishers.clear();
     this.lastAssistantText.clear();
     this.embeddedStreamText.clear();
-    this.directStreamOutcome.clear();
+    this.outcomeReviewHintBySession.clear();
     this.inboundTurnDepth.clear();
 
     if (this.sweepTimer) {
@@ -221,7 +221,7 @@ export class SessionStateBag {
     webchatPublishers: number;
     lastAssistantText: number;
     embeddedStreamText: number;
-    directStreamOutcome: number;
+    outcomeReviewHintBySession: number;
     inboundTurnDepth: number;
     sessionEventUnsubscribers: number;
   } {
@@ -229,7 +229,7 @@ export class SessionStateBag {
       webchatPublishers: this.webchatPublishers.size,
       lastAssistantText: this.lastAssistantText.size,
       embeddedStreamText: this.embeddedStreamText.size,
-      directStreamOutcome: this.directStreamOutcome.size,
+      outcomeReviewHintBySession: this.outcomeReviewHintBySession.size,
       inboundTurnDepth: this.inboundTurnDepth.size,
       sessionEventUnsubscribers: this.sessionEventUnsubscribers.size,
     };

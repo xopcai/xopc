@@ -53,13 +53,13 @@ export interface WorkflowRunMetadata {
   correlation?: WorkflowRunCorrelation;
   origin?: WorkflowRunOrigin;
   schedule?: WorkflowRunScheduleMetadata;
-  goalId?: string;
+  outcomeId?: string;
 }
 
 export type WorkflowRunReplayScope = 'failed_agents' | 'failed_phases';
 
 export interface WorkflowRunContextRef {
-  kind: 'project' | 'goal' | 'work_item' | 'session' | 'attachment' | 'memory';
+  kind: 'project' | 'outcome' | 'work_item' | 'session' | 'attachment' | 'memory';
   id: string;
   role?: string;
   title?: string;
@@ -70,7 +70,7 @@ export interface WorkflowRunWritebackPolicy {
 }
 
 export interface WorkflowRunWritebackTarget {
-  kind: 'project' | 'goal' | 'work_item';
+  kind: 'project' | 'outcome' | 'work_item';
   id: string;
   mode: 'record' | 'suggest' | 'evaluate';
 }

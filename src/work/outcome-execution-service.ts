@@ -1,12 +1,12 @@
 import { runSqliteWriteTransaction } from '../storage/sqlite/index.js';
-import {
-  GoalService,
-  type Goal,
-  type GoalPriority,
-  type GoalSource,
-  type GoalUiLocale,
-} from '../goals/index.js';
 import { OutcomeRepository } from './outcome-repository.js';
+import {
+  OutcomeExecutionStateRepository,
+  type OutcomeExecutionPriority,
+  type OutcomeExecutionSource,
+  type OutcomeExecutionState,
+  type OutcomeUiLocale,
+} from './outcome-execution-state.js';
 
 export interface CreateOutcomeExecutionInput {
   objective: string;
@@ -15,26 +15,26 @@ export interface CreateOutcomeExecutionInput {
   acceptanceCriteria?: string[];
   constraints?: string[];
   approvalRequired?: string[];
+  assumptions?: string[];
+  risks?: string[];
   projectId?: string;
   sessionKey?: string;
   agentId?: string;
-  priority?: GoalPriority;
+  priority?: OutcomeExecutionPriority;
   deadlineAt?: number;
-  judgeModelRef?: string;
-  maxTurns?: number;
-  uiLocale?: GoalUiLocale;
-  source?: GoalSource;
+  uiLocale?: OutcomeUiLocale;
+  source?: OutcomeExecutionSource;
 }
 
 export interface OutcomeExecution {
   outcomeId: string;
   contractVersion: number;
-  goal: Goal;
+  execution: OutcomeExecutionState;
 }
 
 export class OutcomeExecutionService {
-  readonly #goals = new GoalService();
   readonly #outcomes = new OutcomeRepository();
+  readonly #executions = new OutcomeExecutionStateRepository();
 
   create(input: CreateOutcomeExecutionInput): OutcomeExecution {
     const objective = input.objective.trim();
@@ -46,6 +46,9 @@ export class OutcomeExecutionService {
         acceptanceCriteria: input.acceptanceCriteria ?? [],
         constraints: input.constraints ?? [],
         approvalRequired: input.approvalRequired ?? [],
+        assumptions: input.assumptions ?? [],
+        risks: input.risks ?? [],
+        dueAt: input.deadlineAt,
         createdBy: 'user',
         links: [
           ...(input.projectId
@@ -56,26 +59,20 @@ export class OutcomeExecutionService {
             : []),
         ],
       });
-      const goal = this.#goals.create({
+      const execution = this.#executions.create({
         outcomeId: outcome.id,
-        outcomeContractVersion: outcome.latestContractVersion,
-        title: objective,
         description: input.description,
         projectId: input.projectId,
-        sessionKey: input.sessionKey,
+        activeSessionKey: input.sessionKey,
         agentId: input.agentId ?? 'main',
         priority: input.priority,
-        deadlineAt: input.deadlineAt,
-        judgeModelRef: input.judgeModelRef,
-        maxTurns: input.maxTurns,
         uiLocale: input.uiLocale,
         source: input.source,
       });
-      this.#outcomes.addLink(outcome.id, { kind: 'goal', id: goal.id, relation: 'drives' });
       return {
         outcomeId: outcome.id,
         contractVersion: outcome.latestContractVersion,
-        goal,
+        execution,
       };
     });
   }

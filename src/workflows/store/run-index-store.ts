@@ -6,7 +6,7 @@ type WorkflowRunIndexRow = {
   agent_id: string;
   definition_id: string;
   definition_version: string;
-  goal_id: string | null;
+  outcome_id: string | null;
   project_id: string | null;
   session_key: string;
   parent_session_key: string | null;
@@ -63,7 +63,7 @@ export class WorkflowRunIndexStore {
     runSqliteWriteTransaction((db) => {
       db.prepare(
         `INSERT OR REPLACE INTO workflow_runs (
-          run_id, agent_id, definition_id, definition_version, goal_id,
+          run_id, agent_id, definition_id, definition_version, outcome_id,
           project_id, session_key, parent_session_key, status, source_kind, source_json,
           metadata_json, title,
           created_at_ms, started_at_ms, completed_at_ms, metrics_json,
@@ -74,7 +74,7 @@ export class WorkflowRunIndexStore {
         agentId,
         run.definitionId,
         run.definitionVersion,
-        metadata?.goalId ?? null,
+        metadata?.outcomeId ?? null,
         metadata?.projectId ?? null,
         sessionKey,
         parentSessionKey(view),
@@ -93,14 +93,14 @@ export class WorkflowRunIndexStore {
     });
   }
 
-  list(agentId: string, options: { limit?: number; goalId?: string; projectId?: string } = {}): WorkflowRunSummary[] {
+  list(agentId: string, options: { limit?: number; outcomeId?: string; projectId?: string } = {}): WorkflowRunSummary[] {
     const safeLimit = Math.min(500, Math.max(1, Math.floor(options.limit ?? 50)));
     const db = getSqliteDatabase();
     const conditions = ['agent_id = ?'];
     const params: Array<string | number> = [agentId];
-    if (options.goalId) {
-      conditions.push('goal_id = ?');
-      params.push(options.goalId);
+    if (options.outcomeId) {
+      conditions.push('outcome_id = ?');
+      params.push(options.outcomeId);
     }
     if (options.projectId) {
       conditions.push('project_id = ?');

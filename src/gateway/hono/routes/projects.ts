@@ -4,8 +4,6 @@ import * as path from 'node:path';
 
 import { ActivityService } from '../../../activity/index.js';
 import { resolveEffectiveAgentProfile } from '../../../config/agent-profile.js';
-import type { GoalWithDetails } from '../../../goals/index.js';
-import { GoalService } from '../../../goals/index.js';
 import {
   buildProjectLoopOverview,
   inferProjectKind,
@@ -20,7 +18,11 @@ import {
   type ProjectWorkflowRunBrief,
 } from '../../../projects/index.js';
 import { buildSessionKey } from '../../../routing/session-key.js';
-import { OutcomeExecutionService } from '../../../work/index.js';
+import {
+  OutcomeExecutionService,
+  OutcomeExecutionStateRepository,
+  OutcomeRepository,
+} from '../../../work/index.js';
 import {
   getSqliteDatabase,
   getSessionMetadata,
@@ -467,7 +469,6 @@ function projectDigestMemoryRecordId(projectId: string): string {
 export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service } = deps;
   const activity = new ActivityService();
-  const goals = new GoalService();
   const workItems = service.workItems;
 
   authenticated.post('/api/projects', async (c) => {
@@ -800,7 +801,7 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
     const item = workItems.getWorkItem(c.req.param('id'));
     if (!item) return c.json({ ok: false, error: 'Work item not found' }, 404);
     const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
-    const sourceKind = parseEnumValue(body.sourceKind, ['chat', 'goal', 'workflow_run', 'automation'] as const);
+    const sourceKind = parseEnumValue(body.sourceKind, ['chat', 'outcome', 'workflow_run', 'automation'] as const);
     const sourceId = textField(body, 'sourceId')?.trim();
     if (!sourceKind) return c.json({ ok: false, error: 'Invalid sourceKind' }, 400);
     if (!sourceId) return c.json({ ok: false, error: 'sourceId is required' }, 400);
@@ -970,13 +971,23 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
   authenticated.post('/api/projects/:id/digest-memory', async (c) => {
     const project = service.projects.getWithDetails(c.req.param('id'));
     if (!project) return c.json({ ok: false, error: 'Project not found' }, 404);
-    const goalIds = service.projects.listGoalIds(project.id, 100);
-    const projectGoals = goalIds
-      .map((id) => goals.get(id))
-      .filter((goal): goal is GoalWithDetails => Boolean(goal));
+    const projectOutcomes = new OutcomeExecutionStateRepository().listByProject(project.id, 100)
+      .flatMap((execution) => {
+        const outcome = new OutcomeRepository().get(execution.outcomeId);
+        return outcome ? [{
+          id: outcome.id,
+          objective: outcome.objective,
+          status: outcome.internalStatus,
+          priority: execution.priority,
+          description: execution.description,
+          nextAction: execution.nextAction,
+          blockedReason: execution.blockedReason,
+          updatedAt: Math.max(outcome.updatedAt, execution.updatedAt),
+        }] : [];
+      });
     const loop = buildProjectLoopOverview({
       project,
-      goals: projectGoals,
+      outcomes: projectOutcomes,
       recentWorkflowRuns: project.recentWorkflowRuns,
       failedWorkflowRuns: listFailedProjectWorkflowRuns(project.id),
       memoryRecords: listMemoryRecords({ projectId: project.id, status: 'active', limit: 5 }),
@@ -1011,7 +1022,7 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
     const title = typeof body.title === 'string' ? body.title.trim() : '';
     if (!title) return c.json({ ok: false, error: 'Missing title' }, 400);
     const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
-    const goal = new OutcomeExecutionService().create({
+    const execution = new OutcomeExecutionService().create({
       objective: title,
       description: reason || undefined,
       agentId: resolveProjectAgentId({
@@ -1022,12 +1033,17 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
       priority: body.priority === 'low' || body.priority === 'normal' || body.priority === 'high' ? body.priority : 'high',
       source: 'api',
       projectId: project.id,
-    }).goal;
-    const blocked = goals.setStatus(goal.id, 'blocked', { reason: reason || title });
-    if (reason) {
-      goals.setContextMessage({ goalId: goal.id, text: reason });
-    }
-    return c.json({ ok: true, blocker: blocked ?? goals.get(goal.id) }, 201);
+    });
+    new OutcomeExecutionStateRepository().update(execution.outcomeId, {
+      blockedReason: reason || title,
+      ...(reason ? { contextText: reason } : {}),
+    });
+    const blocked = new OutcomeRepository().updateState({
+      id: execution.outcomeId,
+      userStatus: 'needs_user',
+      internalStatus: 'blocked',
+    });
+    return c.json({ ok: true, blocker: blocked }, 201);
   });
 
   authenticated.post('/api/projects/:id/pin', async (c) => {

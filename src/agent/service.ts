@@ -72,7 +72,7 @@ import {
 import type { SkillMarkdownPreviewPayload } from './skills/types.js';
 import type { AgentCapabilityCatalogEntry } from './capabilities/index.js';
 import type { AgentServiceConfig, StreamHandle } from './service.types.js';
-import { PersistentGoalService } from './goals/persistent-goal-service.js';
+import { OutcomeJudgeService } from './outcomes/outcome-judge-service.js';
 import { parseNoteAttachmentTarget } from '../notes/attachment-ref.js';
 import { pullSkillFromSource } from './skills/hub-pull.js';
 import { installSkillFromZip } from './skills/managed-store.js';
@@ -165,12 +165,8 @@ export class AgentService {
    * TUI, CLI, and automations do not need to thread every call through `AgentService`.
    */
   readonly turnDispatcher: TurnDispatcher;
-  /**
-   * `/goal` runtime: continuation scheduling, persistent-goal API factory,
-   * stream-outcome state, post-turn verdict. Public so the gateway can wire
-   * the webchat continuation scheduler and read stream outcomes directly.
-   */
-  readonly persistentGoals: PersistentGoalService;
+  /** Independent acceptance review for the active Outcome after an agent turn. */
+  readonly outcomeJudge: OutcomeJudgeService;
   /**
    * Per-session config writes (model / thinking / reasoning / working directory).
    * Public so REST endpoints and CLI flows can hit it without going through a
@@ -199,7 +195,7 @@ export class AgentService {
 
   /**
    * Unified per-session state container (replaces six ad-hoc Maps). Owns webchat
-   * publishers, last assistant text, embedded stream buffer, persistent-goal stream
+   * publishers, last assistant text, embedded stream buffer, Outcome review stream
    * outcomes, concurrent-turn depth, and event-listener unsubscribers; runs a TTL
    * sweep for slots that have no explicit owner.
    */
@@ -396,7 +392,6 @@ export class AgentService {
       bus,
       sessionStore: this.sessionStore,
       sessionConfigStore: this.sessionConfigStore,
-      getPersistentGoalApisForCommand: (routing) => this.persistentGoals.buildApisForRouting(routing),
       getWorkflowRunService: config.getWorkflowRunService,
       applySessionThinkingLevel: (sessionKey: string, level: ThinkLevel) => {
         this.agentManager.setThinkingLevel(sessionKey, level as ThinkingLevel);
@@ -425,16 +420,10 @@ export class AgentService {
       this.lifecycleManager
     );
 
-    this.persistentGoals = new PersistentGoalService({
-      bus,
+    this.outcomeJudge = new OutcomeJudgeService({
       sessionStore: this.sessionStore,
       modelManager: this.modelManager,
-      sessionState: this.sessionState,
       getConfig: () => this.effectiveAppConfig(),
-      getResolvedWorkspaceForSession: (sk) => this.agentManager.getResolvedWorkspaceForSession(sk),
-      onSessionMetadataUpdated: this.onSessionMetadataUpdated,
-      onGoalStatusUpdated: config.onGoalStatusUpdated,
-      notifyWebchatTranscriptAppend: (sk, text) => this.turnDispatcher.notifyWebchatTranscriptAppend(sk, text),
     });
 
     this.sessionConfig = new SessionConfigService({
@@ -461,7 +450,7 @@ export class AgentService {
       streamManager: this.streamManager,
       getConfig: () => this.effectiveAppConfig(),
       getLastAssistantPlainText: (sk) => this.getLastAssistantPlainText(sk),
-      runPersistentGoalPostTurn: (payload) => this.persistentGoals.runPostTurn(payload),
+      reviewOutcomeTurn: (payload) => this.outcomeJudge.reviewTurn(payload),
     });
 
     this.turnDispatcher = new TurnDispatcher({
@@ -788,6 +777,10 @@ export class AgentService {
 
   getInboundTurnDepth(sessionKey: string): number {
     return this.sessionState.getInboundTurnDepth(sessionKey);
+  }
+
+  takeOutcomeReviewStreamHint(sessionKey: string) {
+    return this.sessionState.takeOutcomeReviewStreamHint(sessionKey);
   }
 
   async start(): Promise<void> {

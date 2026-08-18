@@ -28,4 +28,10 @@ export interface UserContextPlan {
   rejected: Array<{ recordId: string; reason: UserContextRejectionReason }>;
   consentRequests: Array<{ id: string; recordId: string; statement: string; purpose: string }>;
   estimatedTokens: number;
+  allocation?: {
+    profile: 'standard' | 'deep' | 'critical';
+    maxResults: number;
+    maxChars: number;
+    reason: string;
+  };
 }

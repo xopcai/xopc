@@ -14,7 +14,6 @@ import {
   resolvePathUnderWorkspace,
 } from './tool-paths.js';
 import { evaluateFilePolicy } from '../sandbox/exec-policy.js';
-import type { GoalEvidenceRecordInput } from './goal-evidence-recorder.js';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
@@ -28,7 +27,6 @@ type WriteFileParams = { path: string; content: string };
 export interface CreateWriteFileToolOptions {
   /** When set and the path is a bare profile filename (e.g. SOUL.md), write to this root. */
   profileMarkdownRoot?: string;
-  recordGoalEvidence?: (input: GoalEvidenceRecordInput) => Promise<void> | void;
 }
 
 export function createWriteFileTool(
@@ -85,13 +83,6 @@ export function createWriteFileTool(
           : resolvePathUnderWorkspace(p.path, workspace);
         await mkdir(dirname(target), { recursive: true });
         await writeFile(target, p.content, 'utf-8');
-        await options?.recordGoalEvidence?.({
-          kind: 'file',
-          title: `File written: ${target}`,
-          summary: `${contentBytes} bytes written`,
-          uri: target,
-          data: { path: target, size: contentBytes, operation: 'write' },
-        });
         const delivery: ProductDeliveryEnvelope = {
           version: 1,
           operation: 'updated',

@@ -1,11 +1,11 @@
 {
   "projectsPage": {
     "title": "Your work",
-    "summary": "{{count}} workspaces · ongoing work grouped across chats, goals, and tasks",
+    "summary": "{{count}} workspaces · ongoing work grouped across chats, outcomes, and tasks",
     "searchPlaceholder": "Search projects",
     "create": "Create",
     "createTitle": "Create project",
-    "createDescription": "Group related sessions, goals, and workspace context without changing agent behavior.",
+    "createDescription": "Group related sessions, outcomes, and workspace context without changing agent behavior.",
     "projectName": "Project name",
     "workspaceRoot": "Project workspace",
     "workspacePlaceholder": "Agent default workspace",
@@ -53,9 +53,8 @@
       "decisionKinds": {
         "agent_judgment": "AI judgment",
         "work_item": "Work item",
-        "goal": "Ongoing goal",
-        "connector_approval": "Connector action",
-        "goal_evidence": "Completion evidence"
+        "outcome": "Outcome",
+        "connector_approval": "Connector action"
       },
       "decisionReasons": {
         "decision_needed": "Decision needed",
@@ -175,7 +174,6 @@
       "work": "Work",
       "workItems": "Work items",
       "sessions": "Sessions",
-      "goals": "Goals",
       "workflows": "Workflows",
       "files": "Files",
       "activity": "Activity",
@@ -258,11 +256,11 @@
     },
     "overview": {
       "directionTitle": "Project direction",
-      "directionFallback": "Add a brief or create a goal so the next step is clear.",
+      "directionFallback": "Add a brief or define an outcome so the next step is clear.",
       "saveDigest": "Save digest",
       "savingDigest": "Saving",
       "sessions": "Sessions",
-      "activeGoals": "Active goals",
+      "activeOutcomes": "Active outcomes",
       "recentWorkflowRuns": "Recent workflow runs",
       "nextActions": "Next actions",
       "recentResults": "Recent results",
@@ -274,12 +272,12 @@
         "failed": "Not achieved",
         "cancelled": "Cancelled"
       },
-      "goal": "Goal",
+      "outcome": "Outcome",
       "recommendedNext": "Next: {{action}}",
-      "noNextActions": "No next actions yet. Create a goal or continue the project chat to establish one.",
+      "noNextActions": "No next actions yet. Create an outcome or continue the project chat to establish one.",
       "noNextAction": "No next action set.",
-      "staleGoals": "Stale goals",
-      "noActiveGoals": "No active goals in this project.",
+      "staleOutcomes": "Stale outcomes",
+      "noActiveOutcomes": "No active outcomes in this project.",
       "recentSessions": "Recent sessions",
       "noSessions": "No sessions yet.",
       "workflowRuns": "Workflow runs",
@@ -288,7 +286,7 @@
       "noTimeline": "No project activity yet.",
       "timelineKinds": {
         "session": "Session",
-        "goal": "Goal",
+        "outcome": "Outcome",
         "workflow": "Workflow",
         "memory": "Memory"
       },
@@ -297,11 +295,11 @@
       "noBrief": "No brief yet.",
       "attention": "Attention",
       "attentionKinds": {
-        "blocked_goal": "Blocked goal",
-        "stale_goal": "Stale goal",
+        "blocked_outcome": "Blocked outcome",
+        "stale_outcome": "Stale outcome",
         "failed_workflow": "Failed workflow"
       },
-      "noBlockedGoals": "No blocked goals.",
+      "noBlockedOutcomes": "No blocked outcomes.",
       "blockerTitlePlaceholder": "New blocker",
       "blockerReasonPlaceholder": "Reason or dependency",
       "addBlocker": "Add blocker",
@@ -348,7 +346,7 @@
       },
       "linkKinds": {
         "chat": "Chat",
-        "goal": "Goal",
+        "outcome": "Outcome",
         "workflow_run": "Workflow",
         "automation": "Automation",
         "note": "Note"
@@ -361,7 +359,7 @@
         "attachment_added": "Attachment added",
         "attachment_removed": "Attachment removed",
         "chat_started": "Chat started",
-        "goal_created": "Goal created",
+        "outcome_created": "Outcome created",
         "workflow_started": "Workflow started",
         "automation_added": "Automation added",
         "link_added": "Link added",
@@ -372,9 +370,9 @@
       },
       "feedback": {
         "createdTitle": "Work item created",
-        "createdNext": "Next, start a chat to move it forward or create a goal to keep tracking it.",
+        "createdNext": "Next, start a chat to move it forward or create an outcome to keep tracking it.",
         "savedTitle": "Changes saved",
-        "savedNext": "Next, start a chat to continue the work or create a goal to track follow-up."
+        "savedNext": "Next, start a chat to continue the work or create an outcome to track follow-up."
       },
       "create": {
         "short": "New",
@@ -410,7 +408,7 @@
         "save": "Save changes",
         "openItem": "Open item",
         "startChat": "Start chat",
-        "createGoal": "Create goal",
+        "createOutcome": "Create outcome",
         "workflowTitle": "Task template",
         "workflowHint": "Start a workflow with this item as context. The run is linked back to this work item.",
         "workflowTemplate": "Template",
@@ -419,7 +417,7 @@
         "startWorkflow": "Start template",
         "noWorkflowTemplates": "No task templates available.",
         "links": "Linked work",
-        "noLinks": "No linked chats, goals, or runs yet.",
+        "noLinks": "No linked chats, outcomes, or runs yet.",
         "activity": "Activity",
         "noActivity": "No activity yet."
       }
@@ -435,7 +433,7 @@
       "emptyDefinitions": "No workflows available.",
       "browseAll": "Browse all workflows",
       "contextTitle": "Run context",
-      "contextHint": "Project workflow runs inherit the selected agent, project workspace, brief, instructions, and active goals."
+      "contextHint": "Project workflow runs inherit the selected agent, project workspace, brief, instructions, and active outcomes."
     },
     "automations": {
       "title": "Project automations",
@@ -478,8 +476,8 @@
         "work_item.link_added": "Work item link added",
         "session.attached_to_project": "Session attached",
         "session.detached_from_project": "Session detached",
-        "goal.created": "Goal created",
-        "goal.status_changed": "Goal status changed",
+        "outcome.created": "Outcome created",
+        "outcome.status_changed": "Outcome status changed",
         "workflow_run.started": "Workflow run started",
         "workflow_run.completed": "Workflow run completed",
         "automation.run_started": "Automation run started",
@@ -490,7 +488,7 @@
         "note": "Note",
         "work_item": "Work item",
         "session": "Session",
-        "goal": "Goal",
+        "outcome": "Outcome",
         "workflow_run": "Workflow run",
         "automation": "Automation"
       }
@@ -539,14 +537,14 @@
       "needWorkspace": "Set a project workspace before browsing project files.",
       "openSettings": "Open settings",
       "boundaryTitle": "Workspace boundary",
-      "boundaryHint": "Files are listed only from this project workspace. Chats, goals, and workflow runs use the same root.",
+      "boundaryHint": "Files are listed only from this project workspace. Chats, outcomes, and workflow runs use the same root.",
       "nextStepTitle": "Next step",
       "nextStepHint": "Start a project workflow when you need the agent to inspect or modify this workspace."
     },
     "sessions": {
       "empty": "No sessions in this project.",
       "emptyTitle": "No project sessions yet",
-      "emptyDescription": "Start a chat from the page header to keep its work, goals, and summaries together.",
+      "emptyDescription": "Start a chat from the page header to keep its work, outcomes, and summaries together.",
       "searchPlaceholder": "Search sessions",
       "clearSearch": "Clear session search",
       "noMatches": "No matching sessions",
@@ -556,13 +554,6 @@
       "updated": "Updated",
       "meta": "{{agent}} · {{messages}}",
       "metaWithTime": "{{agent}} · {{messages}} · {{time}}"
-    },
-    "goals": {
-      "title": "Goals",
-      "hint": "Goals created here stay attached to this project.",
-      "new": "New goal",
-      "empty": "No goals in this project.",
-      "noNextAction": "No next action set."
     },
     "settings": {
       "summaryTitle": "Project settings",
@@ -587,11 +578,11 @@
       "openWorkspace": "Open folder",
       "copyWorkspacePath": "Copy path",
       "migrateWorkspace": "Move workspace",
-      "workspaceMigrationHint": "Project chats, goals, files, workflow runs, and automations use this folder by default. Moving the workspace affects new context from this point on; history is not rewritten.",
+      "workspaceMigrationHint": "Project chats, outcomes, files, workflow runs, and automations use this folder by default. Moving the workspace affects new context from this point on; history is not rewritten.",
       "workspaceMigrationTitle": "Move project workspace",
       "workspaceMigrationDescription": "Move this only when the project has actually moved to a new folder, or when it should follow the agent's default workspace.",
       "workspaceMigrationFixedHint": "Save a fixed project folder that will not change when the agent changes.",
-      "workspaceMigrationImpact": "After this change, future chats, goals, and workflows will use the new folder. Files in the old folder are not moved, and historical chats are not rewritten.",
+      "workspaceMigrationImpact": "After this change, future chats, outcomes, and workflows will use the new folder. Files in the old folder are not moved, and historical chats are not rewritten.",
       "workspaceMigrationConfirm": "Confirm move",
       "createdAt": "Created",
       "updatedAt": "Updated",
@@ -607,17 +598,17 @@
       "pinProject": "Pin project",
       "unpinProject": "Unpin project",
       "archiveTitle": "Archive project",
-      "archiveHint": "Archived projects leave active views, while linked chats, goals, and files stay attached.",
+      "archiveHint": "Archived projects leave active views, while linked chats, outcomes, and files stay attached.",
       "archiveProject": "Archive project",
       "restoreTitle": "Restore archived project",
-      "restoreHint": "Restoring moves the project back to active views so you can continue chats, goals, and workflows.",
+      "restoreHint": "Restoring moves the project back to active views so you can continue chats, outcomes, and workflows.",
       "restoreProject": "Restore project",
       "dangerTitle": "Danger zone",
-      "dangerHint": "Removing a project ungroups its chats, goals, workflows, automations, and memories. Local files are not deleted.",
+      "dangerHint": "Removing a project ungroups its chats, outcomes, workflows, automations, and memories. Local files are not deleted.",
       "projectGuidanceTitle": "Project guidance and rules",
-      "projectGuidanceHint": "Describe the project background, goals, and handling rules so the agent can understand and advance the work reliably.",
+      "projectGuidanceHint": "Describe the project background, objectives, and handling rules so the agent can understand and advance the work reliably.",
       "brief": "Project background",
-      "briefHint": "A project summary for the agent: goals, scope, current state, and important constraints.",
+      "briefHint": "A project summary for the agent: objectives, scope, current state, and important constraints.",
       "instructions": "Agent working guidance",
       "instructionsHint": "Preferences, process rules, and boundaries the agent should follow in this project.",
       "statuses": {
@@ -625,13 +616,13 @@
         "paused": "Paused",
         "archived": "Archived"
       },
-      "deleteConfirm": "Delete project \"{{name}}\"? Sessions and goals will be left unassigned.",
+      "deleteConfirm": "Delete project \"{{name}}\"? Sessions and outcomes will be left unassigned.",
       "deleteConfirmTitle": "Delete project?",
-      "deleteConfirmFallback": "Delete this project? Sessions and goals will be left unassigned.",
+      "deleteConfirmFallback": "Delete this project? Sessions and outcomes will be left unassigned.",
       "deleteConfirmAction": "Delete project"
     },
     "goalDialog": {
-      "title": "New project goal",
+      "title": "New project outcome",
       "close": "Close",
       "titleLabel": "Title",
       "descriptionLabel": "Description",

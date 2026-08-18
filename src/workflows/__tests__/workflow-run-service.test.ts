@@ -256,13 +256,13 @@ describe('WorkflowRunService helpers', () => {
     expect(prepareRunSession).not.toHaveBeenCalled();
   });
 
-  it('passes the goal project to the workflow session bridge', async () => {
+  it('passes the outcome project to the workflow session bridge', async () => {
     const definition = createDefinition();
-    const project = new ProjectService().create({ name: 'Workflow Goal Project' });
-    const goal = new OutcomeExecutionService().create({
+    const project = new ProjectService().create({ name: 'Workflow Outcome Project' });
+    const execution = new OutcomeExecutionService().create({
       objective: 'Run workflow in project',
       projectId: project.id,
-    }).goal;
+    });
     const prepareRunSession = vi.fn(async () => ({
       sessionKey: 'agent:main:workflow:default:run:project-workflow',
     }));
@@ -283,7 +283,7 @@ describe('WorkflowRunService helpers', () => {
     const result = await service.startWorkflowRun({
       agentId: 'main',
       definitionId: definition.id,
-      goalId: goal.id,
+      outcomeId: execution.outcomeId,
       input: {},
       source: { kind: 'webui' },
     });

@@ -9,18 +9,18 @@ describe('home briefing', () => {
       decisions: [
         {
           id: 'goal:1',
-          kind: 'goal',
+          kind: 'outcome',
           title: '确认发布范围',
           reason: 'needs_input',
           urgency: 'now',
-          href: '/goals/1',
+          href: '/work/1',
           updatedAt: 100,
         },
       ],
       attention: [],
       activeWorkCount: 2,
       activeWorkflowCount: 1,
-      activeGoalCount: 3,
+      activeOutcomeCount: 3,
       wins: [],
       nowMs: 200,
     });
@@ -30,7 +30,7 @@ describe('home briefing', () => {
     expect(briefing.progress).toEqual({
       activeWorkCount: 2,
       activeWorkflowCount: 1,
-      activeGoalCount: 3,
+      activeOutcomeCount: 3,
       movingCount: 6,
     });
   });
@@ -42,7 +42,7 @@ describe('home briefing', () => {
       attention: [],
       activeWorkCount: 1,
       activeWorkflowCount: 0,
-      activeGoalCount: 0,
+      activeOutcomeCount: 0,
       wins: [],
       nowMs: 200,
     });
@@ -58,7 +58,7 @@ describe('home briefing', () => {
       attention: [],
       activeWorkCount: 0,
       activeWorkflowCount: 0,
-      activeGoalCount: 0,
+      activeOutcomeCount: 0,
       wins: [],
       nowMs: 200,
     });
@@ -82,7 +82,7 @@ describe('home briefing', () => {
       }],
       activeWorkCount: 0,
       activeWorkflowCount: 0,
-      activeGoalCount: 0,
+      activeOutcomeCount: 0,
       wins: [],
       nowMs: 200,
     });

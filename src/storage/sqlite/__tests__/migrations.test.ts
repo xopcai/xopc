@@ -160,11 +160,27 @@ describe('SQLite migrations', () => {
         'goal_contracts',
         'goal_evidence_requirements',
         'goal_evidence_requirement_links',
+        'goals',
+        'goal_queue',
+        'goal_checklist_items',
+        'goal_runs',
+        'goal_events',
+        'goal_evidence',
+        'goal_session_links',
+        'goal_context_messages',
       ]) {
         expect(db.prepare(
           `SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`,
         ).get(removedTable)).toBeUndefined();
       }
+      for (const table of ['execution_receipts', 'work_intakes', 'workflow_runs']) {
+        const columns = db.prepare(`SELECT name FROM pragma_table_info(?)`).all(table) as Array<{ name: string }>;
+        expect(columns.map((column) => column.name)).not.toContain('goal_id');
+      }
+      expect(
+        (db.prepare(`SELECT name FROM pragma_table_info('workflow_runs')`).all() as Array<{ name: string }>)
+          .map((column) => column.name),
+      ).toContain('outcome_id');
     } finally {
       db.close();
       rmSync(dir, { recursive: true, force: true });

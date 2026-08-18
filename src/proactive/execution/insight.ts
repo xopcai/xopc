@@ -1,4 +1,4 @@
-import { stripCodeFences } from '../../agent/goals/judge.js';
+import { stripCodeFences } from '../../providers/model-response.js';
 
 import type { InsightCandidate } from './types.js';
 

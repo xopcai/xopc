@@ -58,9 +58,9 @@ export class WorkflowRunStore {
     return this.indexStore.list(this.agentId, { limit: safeLimit, projectId: options.projectId });
   }
 
-  async listRunSummariesForGoal(goalId: string, limit = 50): Promise<WorkflowRunSummary[]> {
+  async listRunSummariesForOutcome(outcomeId: string, limit = 50): Promise<WorkflowRunSummary[]> {
     const safeLimit = Math.min(500, Math.max(1, Math.floor(limit)));
-    return this.indexStore.list(this.agentId, { goalId, limit: safeLimit });
+    return this.indexStore.list(this.agentId, { outcomeId, limit: safeLimit });
   }
 }
 

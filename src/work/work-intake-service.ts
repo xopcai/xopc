@@ -6,11 +6,6 @@ import type {
   WorkIntakeProposal,
 } from '@xopcai/gateway-contract';
 
-import {
-  GoalService,
-  type EnqueueGoalRunOptions,
-  type GoalQueueItemSnapshot,
-} from '../goals/index.js';
 import { ProjectService } from '../projects/index.js';
 import {
   getRelationshipSettings,
@@ -19,7 +14,12 @@ import {
 } from '../storage/sqlite/index.js';
 import { createLogger } from '../utils/logger.js';
 import { OutcomeRepository } from './outcome-repository.js';
-import { defineOutcomeContract } from './outcome-contract-definition.js';
+import { OutcomeExecutionStateRepository } from './outcome-execution-state.js';
+import type { EnqueueOutcomeOptions, OutcomeQueueItem } from './outcome-queue.js';
+import {
+  DeterministicOutcomeContractPlanner,
+  type OutcomeContractPlanner,
+} from './outcome-contract-planner.js';
 import {
   WorkIntakeRepository,
   type StoredWorkIntake,
@@ -28,10 +28,6 @@ import {
 const INTAKE_TTL_MS = 15 * 60 * 1000;
 const DEFAULT_NEXT_ACTION = 'Complete the first verifiable result.';
 const log = createLogger('WorkIntake');
-
-function outcomeContractDraft(objective: string) {
-  return defineOutcomeContract(objective);
-}
 
 function requestFingerprint(input: {
   objective: string;
@@ -48,26 +44,27 @@ function requestFingerprint(input: {
 }
 
 export interface WorkIntakeExecutionPort {
-  enqueue(goalId: string, options: EnqueueGoalRunOptions): GoalQueueItemSnapshot;
+  enqueue(outcomeId: string, options: EnqueueOutcomeOptions): OutcomeQueueItem;
 }
 
 export class WorkIntakeService {
-  readonly #goals = new GoalService();
   readonly #outcomes = new OutcomeRepository();
+  readonly #executions = new OutcomeExecutionStateRepository();
   readonly #repository = new WorkIntakeRepository();
 
   constructor(
     private readonly projects: ProjectService,
     private readonly execution?: WorkIntakeExecutionPort,
+    private readonly contractPlanner: OutcomeContractPlanner = new DeterministicOutcomeContractPlanner(),
   ) {}
 
-  propose(input: {
+  async propose(input: {
     idempotencyKey: string;
     objective: string;
     projectId?: string;
     sessionKey?: string;
     agentId?: string;
-  }): WorkIntakeProposal {
+  }): Promise<WorkIntakeProposal> {
     const fingerprint = requestFingerprint(input);
     const existing = this.#repository.getByIdempotencyKey(input.idempotencyKey);
     if (existing) {
@@ -81,7 +78,18 @@ export class WorkIntakeService {
     const explicitProject = input.projectId ? this.projects.get(input.projectId) : undefined;
     if (input.projectId && !explicitProject) throw new Error('Project not found');
     const relationship = getRelationshipSettings();
-    const contract = outcomeContractDraft(objective);
+    const contract = await this.contractPlanner.plan({
+      objective,
+      ...(explicitProject ? {
+        projectContext: [
+          explicitProject.name,
+          explicitProject.description,
+          explicitProject.brief,
+          explicitProject.instructions,
+        ].filter(Boolean).join('\n'),
+      } : {}),
+      userContext: `supportMode=${relationship.supportMode}; proactiveEnabled=${relationship.proactiveEnabled}`,
+    });
     const id = randomUUID();
     const proposal: WorkIntakeProposal = {
       id,
@@ -97,6 +105,8 @@ export class WorkIntakeService {
         acceptanceCriteria: contract.acceptanceCriteria,
         constraints: contract.constraints,
         approvalRequired: contract.approvalRequired,
+        assumptions: contract.assumptions,
+        risks: contract.risks,
       },
       expiresAt: Date.now() + INTAKE_TTL_MS,
     };
@@ -134,6 +144,8 @@ export class WorkIntakeService {
         acceptanceCriteria: contract.acceptanceCriteria,
         constraints: contract.constraints,
         approvalRequired: contract.approvalRequired,
+        assumptions: contract.assumptions,
+        risks: contract.risks,
         createdBy: 'user',
         links: [
           ...(existingProject
@@ -144,18 +156,15 @@ export class WorkIntakeService {
             : []),
         ],
       });
-      const goal = this.#goals.create({
+      this.#executions.create({
         outcomeId: outcome.id,
-        outcomeContractVersion: outcome.latestContractVersion,
-        title: contract.objective,
         description: proposal.objective,
         projectId: existingProject?.id,
-        sessionKey: intake.sessionKey,
+        activeSessionKey: intake.sessionKey,
         agentId: intake.agentId ?? existingProject?.defaultAgentId ?? 'main',
         source: 'api',
       });
-      this.#goals.update(goal.id, { nextAction: DEFAULT_NEXT_ACTION });
-      this.#outcomes.addLink(outcome.id, { kind: 'goal', id: goal.id, relation: 'drives' });
+      this.#executions.update(outcome.id, { nextAction: DEFAULT_NEXT_ACTION });
       if (existingProject && intake.sessionKey && getSessionMetadata(intake.sessionKey)) {
         this.projects.attachSession(intake.sessionKey, existingProject.id);
       }
@@ -163,7 +172,6 @@ export class WorkIntakeService {
         intakeId: proposal.id,
         executionMode: input.executionMode,
         projectId: existingProject?.id,
-        goalId: goal.id,
         outcomeId: outcome.id,
         sessionKey: intake.sessionKey,
       });
@@ -187,13 +195,12 @@ export class WorkIntakeService {
     if (intake.status !== 'confirmed') throw new Error('Work intake is not confirmed');
     if (intake.executionMode === 'run_now' && !intake.queueId) {
       try {
-        if (!this.execution || !intake.goalId || !intake.outcomeId) {
+        if (!this.execution || !intake.outcomeId) {
           throw new Error('Work execution is unavailable');
         }
-        const queued = this.execution.enqueue(intake.goalId, {
+        const queued = this.execution.enqueue(intake.outcomeId, {
           source: 'api',
           executionContext: {
-            outcomeId: intake.outcomeId,
             contextTraceId: intake.proposal.id,
             triggerKind: 'user',
           },
@@ -208,7 +215,7 @@ export class WorkIntakeService {
         log.warn({
           err,
           intakeId: intake.proposal.id,
-          goalId: intake.goalId,
+          outcomeId: intake.outcomeId,
         }, `Work intake was confirmed but execution could not be queued: ${errorMessage}`);
       }
     }

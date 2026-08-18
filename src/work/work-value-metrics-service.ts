@@ -26,26 +26,42 @@ export class WorkValueMetricsService {
        FROM work_intakes`,
     ).get() as Record<string, number | null>;
     const outcomes = getSqliteDatabase().prepare(
-      `SELECT
-        COUNT(*) AS total,
-        SUM(CASE WHEN completion_verdict = 'achieved' THEN 1 ELSE 0 END) AS achieved,
-        SUM(CASE WHEN completion_verdict = 'partial' THEN 1 ELSE 0 END) AS partial,
-        SUM(CASE WHEN completion_verdict = 'not_achieved' THEN 1 ELSE 0 END) AS not_achieved,
-        SUM(CASE WHEN completion_verdict_source = 'user' THEN 1 ELSE 0 END) AS user_corrected,
-        SUM(CASE WHEN completion_verdict = 'achieved'
-                    AND verification_status = 'passed'
-                    AND completion_verdict_source != 'user'
-                    AND COALESCE(feedback_outcome, 'helpful') != 'not_helpful'
+      `WITH ranked_receipts AS (
+         SELECT execution_receipts.*,
+                ROW_NUMBER() OVER (
+                  PARTITION BY outcome_id
+                  ORDER BY COALESCE(completed_at, updated_at) DESC, started_at DESC
+                ) AS rank
+         FROM execution_receipts
+         WHERE outcome_id IS NOT NULL AND status != 'running'
+       ), latest_receipts AS (
+         SELECT * FROM ranked_receipts WHERE rank = 1
+       )
+       SELECT
+         COUNT(outcomes.outcome_id) AS total,
+         SUM(CASE WHEN latest_receipts.completion_verdict = 'achieved' THEN 1 ELSE 0 END) AS achieved,
+         SUM(CASE WHEN latest_receipts.completion_verdict = 'partial' THEN 1 ELSE 0 END) AS partial,
+         SUM(CASE WHEN latest_receipts.completion_verdict = 'not_achieved' THEN 1 ELSE 0 END) AS not_achieved,
+         SUM(CASE WHEN EXISTS (
+           SELECT 1 FROM execution_receipts correction
+           WHERE correction.outcome_id = outcomes.outcome_id
+             AND correction.completion_verdict_source = 'user'
+         ) THEN 1 ELSE 0 END) AS user_corrected,
+         SUM(CASE WHEN outcomes.internal_status = 'completed'
+                    AND latest_receipts.completion_verdict = 'achieved'
+                    AND latest_receipts.verification_status = 'passed'
+                    AND latest_receipts.completion_verdict_source != 'user'
+                    AND COALESCE(latest_receipts.feedback_outcome, 'helpful') != 'not_helpful'
                   THEN 1 ELSE 0 END) AS trusted,
-        SUM(CASE WHEN updated_at >= ?
-                    AND completion_verdict = 'achieved'
-                    AND verification_status = 'passed'
-                    AND completion_verdict_source != 'user'
-                    AND COALESCE(feedback_outcome, 'helpful') != 'not_helpful'
+         SUM(CASE WHEN outcomes.updated_at >= ?
+                    AND outcomes.internal_status = 'completed'
+                    AND latest_receipts.completion_verdict = 'achieved'
+                    AND latest_receipts.verification_status = 'passed'
+                    AND latest_receipts.completion_verdict_source != 'user'
+                    AND COALESCE(latest_receipts.feedback_outcome, 'helpful') != 'not_helpful'
                   THEN 1 ELSE 0 END) AS weekly_trusted
-       FROM execution_receipts
-       WHERE status != 'running'
-         AND (project_id IS NOT NULL OR goal_id IS NOT NULL OR work_item_id IS NOT NULL)`,
+       FROM outcomes
+       LEFT JOIN latest_receipts ON latest_receipts.outcome_id = outcomes.outcome_id`,
     ).get(weekStart) as Record<string, number | null>;
     const confirmed = count(intake.confirmed);
     const intakeTotal = count(intake.total);

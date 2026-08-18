@@ -6,18 +6,18 @@ describe('proactive product event bridge', () => {
   it('maps supported internal events without inventing object identity', () => {
     expect(mapProductEventToProactive({
       event: {
-        type: 'goal.status_changed',
-        source: 'goals',
+        type: 'outcome.status_changed',
+        source: 'outcomes',
         occurredAtMs: Date.parse('2026-08-15T01:00:00.000Z'),
-        payload: { goalId: 'goal-1', status: 'blocked', agentId: 'main' },
+        payload: { outcomeId: 'outcome-1', status: 'blocked', agentId: 'main' },
       },
       workspaceId: '/workspace',
       defaultAgentId: 'fallback',
     })).toMatchObject({
-      type: 'goal.status_changed.v1',
-      subject: { kind: 'goal', id: 'goal-1' },
+      type: 'outcome.status_changed.v1',
+      subject: { kind: 'outcome', id: 'outcome-1' },
       scope: { workspaceId: '/workspace', agentId: 'main' },
-      dedupeKey: 'product-event:goal.status_changed:goal-1:1786755600000',
+      dedupeKey: 'product-event:outcome.status_changed:outcome-1:1786755600000',
       sensitivity: 'personal',
     });
   });

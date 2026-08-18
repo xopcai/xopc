@@ -6,7 +6,6 @@ export const SIMPLE_MODE_HIDDEN_SETTINGS_TABS = new Set<Tab>([
   'settingsTunnel',
   'settingsShares',
   'settingsHeartbeat',
-  'settingsGoals',
   'settingsDreams',
   'logs',
 ]);
@@ -16,7 +15,6 @@ const SIMPLE_MODE_HIDDEN_SETTINGS_PATH_PREFIXES = [
   '/settings/tunnel',
   '/settings/shares',
   '/settings/heartbeat',
-  '/settings/goals',
   '/settings/dreams',
   '/settings/logs',
   '/settings/extensions/debug',

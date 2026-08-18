@@ -33,7 +33,7 @@ describe('OutcomeRepository', () => {
       objective: 'Ship a verified release',
       acceptanceCriteria: ['Release checks pass'],
       createdBy: 'user',
-      links: [{ kind: 'goal', id: 'goal-1', relation: 'drives' }],
+      links: [{ kind: 'workflow', id: 'workflow-1', relation: 'drives' }],
       now: 100,
     });
 
@@ -44,7 +44,7 @@ describe('OutcomeRepository', () => {
       latestContractVersion: 1,
       contract: { acceptanceCriteria: ['Release checks pass'] },
     });
-    expect(repository.getBySubject('goal', 'goal-1')?.id).toBe('outcome-1');
+    expect(repository.getBySubject('workflow', 'workflow-1')?.id).toBe('outcome-1');
 
     const revised = repository.reviseContract({
       outcomeId: created.id,
@@ -53,6 +53,8 @@ describe('OutcomeRepository', () => {
       acceptanceCriteria: ['Release checks pass', 'Artifact is published'],
       constraints: ['Do not publish without approval'],
       approvalRequired: ['Publish release'],
+      assumptions: ['Release branch is current'],
+      risks: ['Registry outage'],
       createdBy: 'system',
       now: 200,
     });
@@ -62,6 +64,8 @@ describe('OutcomeRepository', () => {
       version: 2,
       deliverables: ['Release artifact'],
       approvalRequired: ['Publish release'],
+      assumptions: ['Release branch is current'],
+      risks: ['Registry outage'],
     });
     expect(repository.getContract(created.id, 1)?.acceptanceCriteria).toEqual(['Release checks pass']);
   });

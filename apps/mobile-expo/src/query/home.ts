@@ -58,7 +58,7 @@ export type HomeAutomation = {
 
 export type HomeDecision = {
   id: string;
-  kind: 'agent_judgment' | 'work_item' | 'goal' | 'connector_approval' | 'goal_evidence';
+  kind: 'agent_judgment' | 'work_item' | 'outcome' | 'connector_approval';
   title: string;
   detail?: string;
   reason: 'needs_input' | 'in_review' | 'blocked' | 'overdue' | 'due_soon' | 'decision_needed' | 'approval_required';
@@ -76,9 +76,7 @@ export type HomeDecision = {
     confidence: number;
     decision?: { question: string; options: Array<{ id: string; label: string; consequence: string }> };
   };
-  response?:
-    | { kind: 'connector_approval'; approvalId: string }
-    | { kind: 'goal_evidence'; goalId: string; requirementId: string };
+  response?: { kind: 'connector_approval'; approvalId: string };
 };
 
 export type HomeAttention = {
@@ -100,7 +98,7 @@ export type HomeBriefing = {
   progress: {
     activeWorkCount: number;
     activeWorkflowCount: number;
-    activeGoalCount: number;
+    activeOutcomeCount: number;
     movingCount: number;
   };
   wins: Array<{

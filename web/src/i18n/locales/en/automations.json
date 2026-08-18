@@ -100,7 +100,7 @@
     "draft": {
       "title": "Draft with AI",
       "subtitle": "Describe the outcome. xopc drafts the trigger, action, and safety review before anything is published.",
-      "placeholder": "Example: When a goal becomes blocked, ask the agent to diagnose why and suggest next steps.",
+      "placeholder": "Example: When an outcome becomes blocked, ask the agent to diagnose why and suggest next steps.",
       "generate": "Generate draft",
       "generating": "Generating...",
       "review": "Review before publishing",
@@ -129,9 +129,9 @@
       "noteCreatedTitle": "Automate note follow-up",
       "noteCreatedDescription": "Have xopc classify new notes and suggest next actions automatically.",
       "noteCreatedPrompt": "When a note is created, run an agent to classify the note, identify useful follow-up actions, and summarize any tasks. Trigger on note.created from notes. Keep it safe: only write a short recommendation unless the user later approves edits.",
-      "goalBlockedTitle": "Automate blocker diagnosis",
-      "goalBlockedDescription": "When this goal gets blocked, ask an agent to diagnose why and propose the next concrete step.",
-      "goalBlockedPrompt": "When a goal becomes blocked, run an agent to diagnose the blocker reason and suggest the next concrete step. Trigger on goal.status_changed from goals with payloadMatch status=blocked. Use the goal title: {{title}}. Do not change the goal automatically unless the user configures that explicitly.",
+      "outcomeBlockedTitle": "Automate blocker diagnosis",
+      "outcomeBlockedDescription": "When this outcome gets blocked, ask an agent to diagnose why and propose the next concrete step.",
+      "outcomeBlockedPrompt": "When an outcome becomes blocked, run an agent to diagnose the blocker reason and suggest the next concrete step. Trigger on outcome.status_changed from outcomes with payloadMatch status=blocked. Use the outcome objective: {{title}}. Do not change the outcome automatically unless the user configures that explicitly.",
       "workflowFailedTitle": "Automate failed-run recovery",
       "workflowFailedDescription": "When this workflow fails, let xopc inspect the run and draft a repair or retry plan.",
       "workflowFailedPrompt": "When a workflow run completes with status failed, run an agent to inspect the workflow run, summarize the failure, and propose a recovery plan. Trigger on workflow.run.completed from workflows with payloadMatch status=failed. Use the run id: {{runId}} and definition id: {{definitionId}}. Do not retry automatically unless the user explicitly configures it."
@@ -205,11 +205,11 @@
         "description": "Trigger an agent from an external request.",
         "formName": "Webhook agent task"
       },
-      "blockedGoal": {
-        "name": "Blocked goal helper",
-        "description": "When a goal becomes blocked, ask an agent to diagnose it.",
-        "formName": "Blocked goal helper",
-        "instruction": "A goal became blocked. Diagnose the likely blocker and suggest the next concrete step."
+      "blockedOutcome": {
+        "name": "Blocked outcome helper",
+        "description": "When an outcome becomes blocked, ask an agent to diagnose it.",
+        "formName": "Blocked outcome helper",
+        "instruction": "An outcome became blocked. Diagnose the likely blocker and suggest the next concrete step."
       },
       "noteCreated": {
         "name": "New note organizer",
@@ -269,7 +269,7 @@
       "interval": "Fixed interval",
       "customCron": "Custom cron",
       "webhook": "Webhook",
-      "goalBlocked": "Goal blocked",
+      "outcomeBlocked": "Outcome blocked",
       "noteCreated": "Note created",
       "workflowFailed": "Workflow failed",
       "sessionUpdated": "Session updated",
@@ -278,7 +278,7 @@
       "onceAt": "Runs once {time}",
       "manualWhen": "Runs manually only",
       "webhookWhen": "Runs when a webhook request arrives",
-      "goalBlockedWhen": "Runs when a goal becomes blocked",
+      "outcomeBlockedWhen": "Runs when an outcome becomes blocked",
       "noteCreatedWhen": "Runs when a note is created",
       "workflowFailedWhen": "Runs when a workflow fails",
       "sessionUpdatedWhen": "Runs when session content changes"

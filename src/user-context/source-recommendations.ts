@@ -1,6 +1,6 @@
 import type { ConnectorDefinition } from '../connectors/types.js';
 
-type GoalSummary = { id: string; title: string; description?: string };
+type OutcomeSummary = { id: string; objective: string; description?: string };
 
 const DOMAINS = [
   ['calendar', 'schedule', 'meeting', 'deadline', 'event', '日历', '日程', '会议', '截止', '预约'],
@@ -10,16 +10,16 @@ const DOMAINS = [
   ['slack', 'teams', 'chat', 'message', '消息', '群聊', '沟通'],
 ] as const;
 
-export function buildGoalSourceRecommendations(
+export function buildOutcomeSourceRecommendations(
   definitions: ConnectorDefinition[],
   installedConnectorIds: Set<string>,
-  goals: GoalSummary[],
+  outcomes: OutcomeSummary[],
 ) {
   const recommendations: Array<{
     sourceId: string;
     sourceName: string;
-    goalId: string;
-    goalTitle: string;
+    outcomeId: string;
+    outcomeTitle: string;
     score: number;
   }> = [];
 
@@ -28,22 +28,22 @@ export function buildGoalSourceRecommendations(
     const sourceText = [definition.id, definition.displayName, definition.description, ...(definition.tags ?? [])]
       .join(' ')
       .toLowerCase();
-    for (const goal of goals) {
-      const goalText = `${goal.title} ${goal.description ?? ''}`.toLowerCase();
+    for (const outcome of outcomes) {
+      const outcomeText = `${outcome.objective} ${outcome.description ?? ''}`.toLowerCase();
       let score = 0;
       for (const keywords of DOMAINS) {
-        if (keywords.some((keyword) => sourceText.includes(keyword)) && keywords.some((keyword) => goalText.includes(keyword))) {
+        if (keywords.some((keyword) => sourceText.includes(keyword)) && keywords.some((keyword) => outcomeText.includes(keyword))) {
           score += 3;
         }
       }
-      const genericTerms = goalText.match(/[a-z][a-z0-9_-]{3,}/g) ?? [];
+      const genericTerms = outcomeText.match(/[a-z][a-z0-9_-]{3,}/g) ?? [];
       score += new Set(genericTerms.filter((term) => sourceText.includes(term))).size;
       if (score > 0) {
         recommendations.push({
           sourceId: definition.id,
           sourceName: definition.displayName,
-          goalId: goal.id,
-          goalTitle: goal.title,
+          outcomeId: outcome.id,
+          outcomeTitle: outcome.objective,
           score,
         });
       }

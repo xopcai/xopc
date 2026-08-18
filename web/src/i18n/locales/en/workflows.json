@@ -154,7 +154,7 @@
     "noContextRefs": "No bound context recorded.",
     "contextRefKinds": {
       "project": "Project",
-      "goal": "Goal",
+      "outcome": "Outcome",
       "work_item": "Work item",
       "session": "Session",
       "attachment": "Attachment",
@@ -165,7 +165,7 @@
     "noWritebackTargets": "No writeback targets recorded.",
     "writebackTargetKinds": {
       "project": "Project",
-      "goal": "Goal",
+      "outcome": "Outcome",
       "work_item": "Work item"
     },
     "writebackModes": {

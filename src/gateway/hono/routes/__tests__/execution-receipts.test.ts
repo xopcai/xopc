@@ -5,7 +5,6 @@ import { join } from 'node:path';
 import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { GoalService } from '../../../../goals/index.js';
 import { ProjectService } from '../../../../projects/index.js';
 import {
   closeXopcDatabase,
@@ -93,7 +92,6 @@ describe('work outcome receipt routes', () => {
       objective: 'Finish route projection',
       projectId: project.id,
     });
-    const goal = execution.goal;
     const workItem = workItems.createProjectWorkItem(project.id, {
       title: 'Finish route projection',
       status: 'in_progress',
@@ -106,9 +104,8 @@ describe('work outcome receipt routes', () => {
       context: {
         outcomeId: execution.outcomeId,
         projectId: project.id,
-        goalId: goal.id,
         workItemId: workItem.id,
-        origin: 'goal',
+        origin: 'outcome',
       },
       now: 300,
     });
@@ -124,7 +121,6 @@ describe('work outcome receipt routes', () => {
       internalStatus: 'continuing',
     });
     expect(workItems.getWorkItem(workItem.id)?.status).toBe('in_progress');
-    expect(new GoalService().get(goal.id)?.status).toBe('active');
 
     const response = await app.request('/api/execution-receipts/run-reproject', {
       method: 'PATCH',
@@ -136,12 +132,17 @@ describe('work outcome receipt routes', () => {
           acceptanceCriteria: ['Checks pass'],
           constraints: [],
           approvalRequired: [],
+          assumptions: [],
+          risks: [],
         },
         evidence: [{
           kind: 'test',
           title: 'Verification suite',
           summary: 'All checks passed',
           verifies: ['Checks pass'],
+          provenance: 'tool',
+          strength: 'verified',
+          observedAt: Date.now(),
         }],
       }),
     });
@@ -158,6 +159,5 @@ describe('work outcome receipt routes', () => {
       internalStatus: 'completed',
     });
     expect(workItems.getWorkItem(workItem.id)?.status).toBe('in_progress');
-    expect(new GoalService().get(goal.id)?.status).toBe('active');
   });
 });

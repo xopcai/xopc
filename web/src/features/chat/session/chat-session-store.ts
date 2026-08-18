@@ -7,6 +7,7 @@ import type {
   ReasoningLevel,
 } from '@/features/chat/messages/messages.types';
 import { hasPendingAgentRunForChat } from '@/features/chat/messages/message-sender';
+import type { TaskPlanState } from '@/features/chat/messages/message-sender';
 import {
   assistantTurnVisuallyEquivalent,
   mergeConsecutiveAssistantMessages,
@@ -44,6 +45,7 @@ export type ChatSessionSlice = {
   hasMore: boolean;
   streamingMsg: Message | null;
   progress: ProgressState | null;
+  taskPlan: TaskPlanState | null;
   sending: boolean;
   streaming: boolean;
 };
@@ -106,6 +108,7 @@ type ChatSessionStoreActions = {
     partial: Partial<Pick<ChatSessionSlice, 'sending' | 'streaming'>>,
   ) => void;
   setSessionProgress: (sessionKey: string, progress: ProgressState | null) => void;
+  setSessionTaskPlan: (sessionKey: string, taskPlan: TaskPlanState) => void;
   mutateSessionStreaming: (
     sessionKey: string,
     mutator: (msg: Message) => void,
@@ -130,9 +133,13 @@ type ChatSessionStoreActions = {
   ) => void;
 };
 
-const IDLE_STREAM: Pick<ChatSessionSlice, 'streamingMsg' | 'progress' | 'sending' | 'streaming'> = {
+const IDLE_STREAM: Pick<
+  ChatSessionSlice,
+  'streamingMsg' | 'progress' | 'taskPlan' | 'sending' | 'streaming'
+> = {
   streamingMsg: null,
   progress: null,
+  taskPlan: null,
   sending: false,
   streaming: false,
 };
@@ -226,6 +233,9 @@ function cloneSlice(slice: ChatSessionSlice): ChatSessionSlice {
     hasMore: slice.hasMore,
     streamingMsg: slice.streamingMsg ? cloneMessageForRender(slice.streamingMsg) : null,
     progress: slice.progress,
+    taskPlan: slice.taskPlan
+      ? { ...slice.taskPlan, items: slice.taskPlan.items.map((item) => ({ ...item })) }
+      : null,
     sending: slice.sending,
     streaming: slice.streaming,
   };
@@ -457,6 +467,7 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
         hasMore,
         streamingMsg: null,
         progress: null,
+        taskPlan: null,
         sending,
         streaming,
       });
@@ -491,6 +502,27 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
           sessions: {
             ...state.sessions,
             [key]: { ...current, progress },
+          },
+        };
+      });
+    },
+
+    setSessionTaskPlan: (sessionKey, taskPlan) => {
+      const key = normalizeKey(sessionKey);
+      if (!key) return;
+      set((state) => {
+        const current = state.sessions[key];
+        if (!current || taskPlan.revision <= (current.taskPlan?.revision ?? 0)) return state;
+        return {
+          sessions: {
+            ...state.sessions,
+            [key]: {
+              ...current,
+              taskPlan: {
+                ...taskPlan,
+                items: taskPlan.items.map((item) => ({ ...item })),
+              },
+            },
           },
         };
       });

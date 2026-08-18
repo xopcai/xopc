@@ -202,8 +202,8 @@ export class TurnDispatcher {
           agentManager: c.agentManager,
           modelManager: c.modelManager,
         }),
-      recordPersistentGoalStreamOutcome: (sk, o) =>
-        c.sessionState.recordPersistentGoalStreamOutcome(sk, o),
+      recordOutcomeReviewStreamHint: (sk, o) =>
+        c.sessionState.recordOutcomeReviewStreamHint(sk, o),
       enqueueProvisionalSessionTitle: (sk, userText) => {
         c.enqueueProvisionalSessionTitle?.(sk, userText);
       },

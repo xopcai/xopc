@@ -31,15 +31,15 @@ Allowed triggers:
 - Schedule interval: { "kind": "schedule", "schedule": { "kind": "interval", "everyMs": 3600000 } }
 - Schedule cron: { "kind": "schedule", "schedule": { "kind": "cron", "expr": "0 9 * * *" } }
 - Webhook: { "kind": "webhook", "secretId": "optional-short-id" }
-- Product event: { "kind": "event", "eventType": "goal.status_changed", "source": "goals", "payloadMatch": { "status": "blocked" } }
+- Product event: { "kind": "event", "eventType": "outcome.status_changed", "source": "outcomes", "payloadMatch": { "status": "blocked" } }
 
 Useful product events:
 - session.message.created
 - session.transcript.updated
 - note.created
 - note.updated
-- goal.created
-- goal.status_changed
+- outcome.created
+- outcome.status_changed
 - workflow.run.completed
 - channel.message.received
 

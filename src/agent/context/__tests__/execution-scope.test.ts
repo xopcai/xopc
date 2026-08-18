@@ -16,13 +16,13 @@ import type { ExecutionScope } from '../execution-scope.js';
 import { formatCurrentWorkForPrompt, resolveExecutionScope } from '../execution-scope.js';
 
 describe('formatCurrentWorkForPrompt', () => {
-  it('keeps the current goal contract visible on every turn', () => {
+  it('keeps the current outcome contract visible on every turn', () => {
     const scope: ExecutionScope = {
-      sessionKey: 'agent:coder:webchat:default:direct:goal-1',
+      sessionKey: 'agent:coder:webchat:default:direct:outcome-1',
       projectId: 'project-1',
       objective: {
-        kind: 'goal',
-        id: 'goal-1',
+        kind: 'outcome',
+        id: 'outcome-1',
         title: 'Ship project scope',
         objective: 'Keep every agent inside the project.',
         status: 'active',
@@ -41,7 +41,7 @@ describe('formatCurrentWorkForPrompt', () => {
     expect(prompt).toContain('Targeted tests pass.');
   });
 
-  it('formats workflow objectives without inventing goal criteria', () => {
+  it('formats workflow objectives without inventing outcome criteria', () => {
     const prompt = formatCurrentWorkForPrompt({
       sessionKey: 'agent:coder:workflow:run-1',
       projectId: 'project-1',

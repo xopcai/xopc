@@ -53,12 +53,17 @@ describe('execution receipt repository', () => {
         acceptanceCriteria: ['The report opens'],
         constraints: [],
         approvalRequired: [],
+        assumptions: [],
+        risks: [],
       },
       evidence: [{
         kind: 'artifact',
         title: 'Report',
         summary: 'Created report.md',
         verifies: ['The report opens'],
+        provenance: 'tool',
+        strength: 'verified',
+        observedAt: 1_500,
       }],
       now: 1_500,
     });
@@ -107,8 +112,17 @@ describe('execution receipt repository', () => {
         acceptanceCriteria: ['Regression tests pass'],
         constraints: [],
         approvalRequired: [],
+        assumptions: [],
+        risks: [],
       },
-      evidence: [{ kind: 'state', title: 'Files changed', summary: 'Patch applied' }],
+      evidence: [{
+        kind: 'state',
+        title: 'Files changed',
+        summary: 'Patch applied',
+        provenance: 'tool',
+        strength: 'observed',
+        observedAt: 3_100,
+      }],
       now: 3_100,
     });
     const result = completeExecutionReceipt({ runId: 'run-unverified', status: 'succeeded', summary: 'Done', now: 3_200 });

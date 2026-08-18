@@ -4,7 +4,6 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { GoalService } from '../../goals/index.js';
 import { ProjectService } from '../../projects/index.js';
 import {
   closeXopcDatabase,
@@ -50,7 +49,6 @@ describe('OutcomeProjectionService', () => {
       projectId: project.id,
       acceptanceCriteria: ['Checks pass'],
     });
-    const goal = execution.goal;
     const workItem = workItems.createProjectWorkItem(project.id, {
       title: 'Ship verified work',
       status: 'in_progress',
@@ -63,9 +61,8 @@ describe('OutcomeProjectionService', () => {
       context: {
         outcomeId: execution.outcomeId,
         projectId: project.id,
-        goalId: goal.id,
         workItemId: workItem.id,
-        origin: 'goal',
+        origin: 'outcome',
       },
     });
     updateExecutionReceipt({
@@ -76,12 +73,17 @@ describe('OutcomeProjectionService', () => {
         acceptanceCriteria: ['Checks pass'],
         constraints: [],
         approvalRequired: [],
+        assumptions: [],
+        risks: [],
       },
       evidence: [{
         kind: 'test',
         title: 'Verification suite',
         summary: 'All checks passed',
         verifies: ['Checks pass'],
+        provenance: 'tool',
+        strength: 'verified',
+        observedAt: Date.now(),
       }],
     });
     const completed = completeExecutionReceipt({
@@ -97,7 +99,6 @@ describe('OutcomeProjectionService', () => {
       internalStatus: 'completed',
     });
     expect(workItems.getWorkItem(workItem.id)?.status).toBe('in_progress');
-    expect(new GoalService().get(goal.id)?.status).toBe('active');
 
     const corrected = setExecutionVerdict({
       runId: 'run-projection',
@@ -110,7 +111,6 @@ describe('OutcomeProjectionService', () => {
       internalStatus: 'blocked',
     });
     expect(workItems.getWorkItem(workItem.id)?.status).toBe('in_progress');
-    expect(new GoalService().get(goal.id)?.status).toBe('active');
     expect(new WorkValueMetricsService().get().outcomes).toMatchObject({
       total: 1,
       achieved: 0,

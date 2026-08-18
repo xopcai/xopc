@@ -14,7 +14,7 @@ import {
   isXopcDatabaseOpen,
   openXopcDatabase,
 } from '../../storage/sqlite/index.js';
-import { GoalService } from '../../goals/index.js';
+import { OutcomeExecutionStateRepository, OutcomeRepository } from '../../work/index.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';
 
 function parseStatus(raw: string | undefined): ProjectStatus | undefined {
@@ -35,11 +35,11 @@ function resolveProject(projects: ProjectService, ref: string): Project | null {
   return projects.get(ref) ?? projects.getBySlug(ref);
 }
 
-function formatProject(project: Project & { sessionCount?: number; goalCount?: number; activeGoalCount?: number }): string {
+function formatProject(project: Project & { sessionCount?: number; outcomeCount?: number; activeOutcomeCount?: number }): string {
   const counts = [
     project.sessionCount != null ? `sessions ${project.sessionCount}` : undefined,
-    project.goalCount != null ? `goals ${project.goalCount}` : undefined,
-    project.activeGoalCount != null ? `active goals ${project.activeGoalCount}` : undefined,
+    project.outcomeCount != null ? `outcomes ${project.outcomeCount}` : undefined,
+    project.activeOutcomeCount != null ? `active outcomes ${project.activeOutcomeCount}` : undefined,
   ].filter(Boolean).join(' | ');
   const lines = [
     `${project.id} [${project.status}] ${project.name}`,
@@ -63,7 +63,6 @@ function createProjectCommand(ctx: CLIContext): Command {
         'xopc project new xopc --workspace ~/develop/github/xopc',
         'xopc project show xopc',
         'xopc project attach-session <session-key> xopc',
-        'xopc project attach-goal <goal-id> xopc',
       ]),
     );
 
@@ -102,7 +101,7 @@ function createProjectCommand(ctx: CLIContext): Command {
       .description('Create a project')
       .argument('<name>', 'Project name')
       .option('--description <text>', 'Project description')
-      .option('--default-agent <id>', 'Default agent id for new project sessions and goals')
+      .option('--default-agent <id>', 'Default agent id for new project sessions and outcomes')
       .option('--workspace <path>', 'Project workspace root')
       .option('--brief <text>', 'Project brief')
       .option('--instructions <text>', 'Project instructions')
@@ -163,7 +162,7 @@ function createProjectCommand(ctx: CLIContext): Command {
       .argument('<project>', 'Project id or slug')
       .option('--name <name>', 'New name')
       .option('--description <text>', 'Project description')
-      .option('--default-agent <id>', 'Default agent id for new project sessions and goals')
+      .option('--default-agent <id>', 'Default agent id for new project sessions and outcomes')
       .option('--clear-default-agent', 'Clear project default agent')
       .option('--status <status>', 'active, paused, or archived')
       .option('--workspace <path>', 'Project workspace root')
@@ -244,36 +243,6 @@ function createProjectCommand(ctx: CLIContext): Command {
   );
 
   cmd.addCommand(
-    new Command('attach-goal')
-      .description('Attach a goal to a project')
-      .argument('<goal-id>', 'Goal id')
-      .argument('<project>', 'Project id or slug')
-      .action(async (goalId, projectRef) => {
-        await withProjects(ctx, (projects) => {
-          const project = resolveProject(projects, projectRef);
-          if (!project) {
-            console.error(`Project not found: ${projectRef}`);
-            process.exit(1);
-          }
-          projects.attachGoal(goalId, project.id);
-          console.log(`Attached goal to ${project.name}`);
-        });
-      }),
-  );
-
-  cmd.addCommand(
-    new Command('detach-goal')
-      .description('Detach a goal from its project')
-      .argument('<goal-id>', 'Goal id')
-      .action(async (goalId) => {
-        await withProjects(ctx, (projects) => {
-          projects.detachGoal(goalId);
-          console.log('Detached goal from project.');
-        });
-      }),
-  );
-
-  cmd.addCommand(
     new Command('sessions')
       .description('List sessions in a project')
       .argument('<project>', 'Project id or slug')
@@ -300,8 +269,8 @@ function createProjectCommand(ctx: CLIContext): Command {
   );
 
   cmd.addCommand(
-    new Command('goals')
-      .description('List goals in a project')
+    new Command('outcomes')
+      .description('List outcomes in a project')
       .argument('<project>', 'Project id or slug')
       .option('--limit <n>', 'Maximum rows', '20')
       .action(async (projectRef, options) => {
@@ -311,13 +280,16 @@ function createProjectCommand(ctx: CLIContext): Command {
             console.error(`Project not found: ${projectRef}`);
             process.exit(1);
           }
-          const goals = new GoalService().list({ projectId: project.id, limit: Number(options.limit) || 20 });
-          if (!goals.length) {
-            console.log('No goals.');
+          const states = new OutcomeExecutionStateRepository();
+          const outcomes = new OutcomeRepository().list({ limit: 200 })
+            .filter((outcome) => states.get(outcome.id)?.projectId === project.id)
+            .slice(0, Number(options.limit) || 20);
+          if (!outcomes.length) {
+            console.log('No outcomes.');
             return;
           }
-          for (const goal of goals) {
-            console.log(`${goal.id} [${goal.status}] ${goal.title}`);
+          for (const outcome of outcomes) {
+            console.log(`${outcome.id} [${outcome.userStatus}] ${outcome.objective}`);
           }
         });
       }),
