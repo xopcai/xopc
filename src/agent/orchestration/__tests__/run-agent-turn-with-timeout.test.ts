@@ -1,39 +1,28 @@
-import { describe, it, expect, vi } from 'vitest';
-import type { Agent } from '@earendil-works/pi-agent-core';
+import { describe, expect, it } from 'vitest';
 
+import { ConfigSchema } from '../../../config/schema.js';
 import {
-  isAgentTurnTimeoutError,
-  runAgentTurnWithTimeout,
+  DEFAULT_AGENT_TURN_TIMEOUT_MS,
+  MAX_AGENT_TURN_TIMEOUT_MS,
+  MIN_AGENT_TURN_TIMEOUT_MS,
+  resolveAgentTurnTimeoutMs,
 } from '../run-agent-turn-with-timeout.js';
 
-describe('runAgentTurnWithTimeout', () => {
-  it('does not abort when runTurn completes before timeout', async () => {
-    const agent = { abort: vi.fn(), waitForIdle: vi.fn() } as unknown as Agent;
-    await runAgentTurnWithTimeout(agent, async () => {}, 60_000);
-    expect(agent.abort).not.toHaveBeenCalled();
-  });
+describe('resolveAgentTurnTimeoutMs', () => {
+  it('reads and clamps the effective agent runtime timeout', () => {
+    const base = ConfigSchema.parse({});
+    const withTimeout = (timeoutMs: number) => ConfigSchema.parse({
+      ...base,
+      agents: {
+        ...base.agents,
+        list: base.agents.list.map((agent) => ({ ...agent, runtime: { timeoutMs } })),
+      },
+    });
 
-  it('aborts and waits for idle when the turn exceeds the deadline', async () => {
-    const agent = {
-      abort: vi.fn(),
-      waitForIdle: vi.fn().mockResolvedValue(undefined),
-    } as unknown as Agent;
-
-    await expect(
-      runAgentTurnWithTimeout(
-        agent,
-        () => new Promise<void>(() => {}),
-        100,
-      ),
-    ).rejects.toThrow(/Agent turn timed out after/);
-    expect(agent.abort).toHaveBeenCalledTimes(1);
-    expect(agent.waitForIdle).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe('isAgentTurnTimeoutError', () => {
-  it('matches timeout errors from this module', () => {
-    expect(isAgentTurnTimeoutError(new Error('Agent turn timed out after 120s'))).toBe(true);
-    expect(isAgentTurnTimeoutError(new Error('other'))).toBe(false);
+    expect(resolveAgentTurnTimeoutMs()).toBe(DEFAULT_AGENT_TURN_TIMEOUT_MS);
+    expect(resolveAgentTurnTimeoutMs(withTimeout(90_000))).toBe(90_000);
+    expect(resolveAgentTurnTimeoutMs(withTimeout(1_000))).toBe(MIN_AGENT_TURN_TIMEOUT_MS);
+    expect(resolveAgentTurnTimeoutMs(withTimeout(MAX_AGENT_TURN_TIMEOUT_MS * 2)))
+      .toBe(MAX_AGENT_TURN_TIMEOUT_MS);
   });
 });

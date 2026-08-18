@@ -255,9 +255,9 @@ export async function materializeBundleMcpToolsForRun(params: {
       label: tool.title ?? tool.toolName,
       description: tool.description || tool.title || tool.fallbackDescription,
       parameters: tool.inputSchema,
-      execute: async (_toolCallId: string, input: unknown) => {
+      execute: async (_toolCallId: string, input: unknown, signal?: AbortSignal) => {
         params.runtime.markUsed();
-        const result = await params.runtime.callTool(tool.serverName, tool.toolName, input);
+        const result = await params.runtime.callTool(tool.serverName, tool.toolName, input, signal);
         return toAgentToolResult({
           serverName: tool.serverName,
           toolName: tool.toolName,

@@ -4,6 +4,7 @@ import type {
   WorkflowRunReplayScope,
   WorkflowRunSource,
   WorkflowRunWritebackPolicy,
+  WorkflowRunView,
 } from '../domain/index.js';
 
 export interface StartWorkflowRunServiceParams {
@@ -78,4 +79,6 @@ export type CancelWorkflowRunResult = CancelWorkflowRunServiceResult | WorkflowR
 /** Minimal surface for agent/automation callers (avoids importing the service class). */
 export interface WorkflowRunServiceLike {
   startWorkflowRun(params: StartWorkflowRunServiceParams): Promise<WorkflowRunServiceResult>;
+  readWorkflowRunView?(agentId: string, runId: string): Promise<WorkflowRunView | null>;
+  cancelWorkflowRun?(params: CancelWorkflowRunServiceParams): Promise<CancelWorkflowRunResult>;
 }

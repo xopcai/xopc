@@ -67,7 +67,7 @@ function formatDate(ms: number, locale: string): string {
 }
 
 function hasActiveRun(items: AutomationProductEventRun[]): boolean {
-  return items.some((item) => item.run.status === 'queued' || item.run.status === 'running');
+  return items.some((item) => ['queued', 'running', 'cancelling'].includes(item.run.status));
 }
 
 function canSuggestRepair(status: AutomationRun['status']): boolean {
@@ -94,7 +94,7 @@ function buildHealth(items: AutomationProductEventRun[]): FeedbackHealth {
   for (const { latest: run, hadAttention } of grouped.values()) {
     if (run.status === 'succeeded') health.succeeded += 1;
     if (run.status === 'succeeded' && hadAttention) health.recovered += 1;
-    if (run.status === 'queued' || run.status === 'running') health.active += 1;
+    if (run.status === 'queued' || run.status === 'running' || run.status === 'cancelling') health.active += 1;
     if (canSuggestRepair(run.status)) {
       health.attention += 1;
       health.latestAttentionRun ??= run;

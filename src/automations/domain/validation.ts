@@ -103,6 +103,7 @@ export const AutomationAfterRunSchema = z.discriminatedUnion('kind', [
 ]);
 
 export const AutomationReliabilitySchema = z.object({
+  executionTimeoutSeconds: z.number().int().min(1).max(86400).optional(),
   timeoutSeconds: z.number().int().min(1).max(86400).optional(),
   retryCount: z.number().int().min(0).max(10).optional(),
   maxConcurrentRuns: z.number().int().min(1).max(20).optional(),
@@ -117,7 +118,7 @@ export const AutomationStateSchema = z.object({
   nextRunAtMs: z.number().int().nonnegative().optional(),
   runningRunId: optionalTrimmedString(100),
   lastRunAtMs: z.number().int().nonnegative().optional(),
-  lastRunStatus: z.enum(['queued', 'running', 'succeeded', 'failed', 'cancelled', 'timeout']).optional(),
+  lastRunStatus: z.enum(['queued', 'running', 'cancelling', 'succeeded', 'failed', 'cancelled', 'timeout']).optional(),
   lastError: z.string().optional(),
   consecutiveFailures: z.number().int().nonnegative().optional(),
 }).strict();

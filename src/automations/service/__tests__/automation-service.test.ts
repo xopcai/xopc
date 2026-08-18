@@ -9,6 +9,7 @@ import {
   resetXopcDatabaseSingletonForTest,
 } from '../../../storage/sqlite/index.js';
 import { AutomationService } from '../automation-service.js';
+import { saveAutomationRun } from '../../storage/automation-run-repository.js';
 
 async function waitFor<T>(read: () => Promise<T> | T, predicate: (value: T) => boolean): Promise<T> {
   const deadline = Date.now() + 2_000;
@@ -79,6 +80,7 @@ describe('AutomationService', () => {
       'run.queued',
       'run.started',
       'action.started',
+      'run.deadline_resolved',
       'action.completed',
       'run.completed',
     ]);
@@ -108,6 +110,81 @@ describe('AutomationService', () => {
       automationId: automation.id,
       status: 'succeeded',
     }));
+  });
+
+  it('aborts the agent turn at the automation deadline and persists the session link', async () => {
+    let receivedSignal: AbortSignal | undefined;
+    service.setDeps({
+      agentService: {
+        turnDispatcher: {
+          processDirect: async (_message, _sessionKey, _attachments, _thinking, options) => {
+            receivedSignal = options?.signal;
+            await new Promise<void>((resolve) => {
+              if (options?.signal?.aborted) resolve();
+              else options?.signal?.addEventListener('abort', () => resolve(), { once: true });
+            });
+            return '';
+          },
+        },
+      },
+    });
+    const automation = await service.create({
+      name: 'Bounded agent run',
+      trigger: { kind: 'manual' },
+      action: { kind: 'agent', instruction: 'wait', timeoutSeconds: 1 },
+    });
+
+    const queued = await service.runNow(automation.id);
+    const linked = await waitFor(
+      () => service.getRun(queued.id),
+      (run) => Boolean(run?.sessionKey && run.deadlineAtMs),
+    );
+    expect(linked?.status).toBe('running');
+
+    const completed = await waitFor(
+      () => service.getRun(queued.id),
+      (run) => run?.status === 'timeout',
+    );
+    expect(receivedSignal?.aborted).toBe(true);
+    expect(completed).toMatchObject({
+      status: 'timeout',
+      currentPhase: 'completed',
+      termination: {
+        reason: 'deadline_exceeded',
+        component: 'automation',
+        cancellationConfirmed: true,
+      },
+    });
+    expect(completed?.cancelConfirmedAtMs).toBeTypeOf('number');
+  });
+
+  it('applies the automation deadline to the after-run webhook', async () => {
+    const fetchMock = vi.fn((_url: string, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true });
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      const automation = await service.create({
+        name: 'Bounded webhook',
+        trigger: { kind: 'manual' },
+        action: { kind: 'agent', instruction: 'finish quickly' },
+        afterRun: { kind: 'webhook', url: 'https://example.com/hook' },
+        reliability: { executionTimeoutSeconds: 1 },
+      });
+
+      const queued = await service.runNow(automation.id);
+      const completed = await waitFor(
+        () => service.getRun(queued.id),
+        (run) => run?.status === 'timeout',
+      );
+      expect(fetchMock).toHaveBeenCalledOnce();
+      expect(completed).toMatchObject({
+        status: 'timeout',
+        termination: { reason: 'deadline_exceeded' },
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('passes workflow run limits to workflow automations', async () => {
@@ -148,6 +225,108 @@ describe('AutomationService', () => {
       concurrency: 3,
       maxSubagents: 5,
     });
+  });
+
+  it('waits for the linked workflow terminal status', async () => {
+    let reads = 0;
+    service.setDeps({
+      workflowRunService: {
+        startWorkflowRun: async () => ({
+          ok: true,
+          runId: 'workflow-run-wait',
+          sessionKey: 'agent:main:webchat:workflow-run-wait',
+        }),
+        readWorkflowRunView: async () => ({
+          run: {
+            id: 'workflow-run-wait',
+            status: ++reads >= 2 ? 'succeeded' : 'running',
+          },
+        } as never),
+      },
+    });
+    const automation = await service.create({
+      name: 'Wait for workflow',
+      trigger: { kind: 'manual' },
+      action: { kind: 'workflow', workflowId: 'review' },
+    });
+
+    const queued = await service.runNow(automation.id);
+    const completed = await waitFor(
+      () => service.getRun(queued.id),
+      (run) => run?.status === 'succeeded',
+    );
+
+    expect(reads).toBeGreaterThanOrEqual(2);
+    expect(completed?.summary).toBe('Workflow run workflow-run-wait completed');
+  });
+
+  it('retries a failed action within the same durable run', async () => {
+    let calls = 0;
+    service.setDeps({
+      agentService: {
+        turnDispatcher: {
+          processDirect: async () => {
+            calls += 1;
+            if (calls === 1) throw new Error('temporary provider failure');
+            return 'recovered';
+          },
+        },
+      },
+    });
+    const automation = await service.create({
+      name: 'Retry provider failure',
+      trigger: { kind: 'manual' },
+      action: { kind: 'agent', instruction: 'try again' },
+      reliability: { retryCount: 1 },
+    });
+
+    const queued = await service.runNow(automation.id);
+    const completed = await waitFor(
+      () => service.getRun(queued.id),
+      (run) => run?.status === 'succeeded',
+    );
+
+    expect(calls).toBe(2);
+    expect(completed).toMatchObject({ status: 'succeeded', attemptNumber: 2, rootRunId: queued.id });
+    expect((await service.listRunEvents(queued.id)).map((event) => event.type))
+      .toContain('action.retry_scheduled');
+  });
+
+  it('reclaims a queued durable run after service restart', async () => {
+    const automation = await service.create({
+      name: 'Recover queued run',
+      trigger: { kind: 'manual' },
+      action: { kind: 'agent', instruction: 'resume after restart' },
+    });
+    const runId = 'queued-before-restart';
+    saveAutomationRun({
+      id: runId,
+      rootRunId: runId,
+      attemptNumber: 1,
+      automationId: automation.id,
+      automationName: automation.name,
+      status: 'queued',
+      triggerSnapshot: automation.trigger,
+      actionSnapshot: automation.action,
+      manual: false,
+      createdAtMs: Date.now(),
+    });
+    await service.update(automation.id, { state: { runningRunId: runId } });
+    await service.stop();
+
+    service = new AutomationService();
+    service.setDeps({
+      getDefaultAgentId: () => 'main',
+      agentService: { turnDispatcher: { processDirect: async () => 'resumed' } },
+    });
+    await service.initialize();
+    const recovered = await waitFor(
+      () => service.getRun(runId),
+      (run) => run?.status === 'succeeded',
+    );
+
+    expect(recovered).toMatchObject({ status: 'succeeded', summary: 'resumed' });
+    expect((await service.listRunEvents(runId)).map((event) => event.type)).toContain('run.recovered');
   });
 
   it('uses the project workspace for project-bound automation actions', async () => {

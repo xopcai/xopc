@@ -50,6 +50,7 @@ export type AutomationAfterRun =
   | { kind: 'webhook'; url: string };
 
 export interface AutomationReliability {
+  executionTimeoutSeconds?: number;
   timeoutSeconds?: number;
   retryCount?: number;
   maxConcurrentRuns?: number;
@@ -89,7 +90,7 @@ export interface AutomationRun {
   id: string;
   automationId: string;
   automationName: string;
-  status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'timeout';
+  status: 'queued' | 'running' | 'cancelling' | 'succeeded' | 'failed' | 'cancelled' | 'timeout';
   triggerSnapshot: AutomationTrigger;
   actionSnapshot: AutomationAction;
   manual: boolean;
@@ -102,6 +103,21 @@ export interface AutomationRun {
   sessionKey?: string;
   workflowRunId?: string;
   model?: string;
+  deadlineAtMs?: number;
+  currentPhase?: 'queued' | 'action' | 'after_run' | 'cancelling' | 'completed';
+  cancelRequestedAtMs?: number;
+  cancelConfirmedAtMs?: number;
+  termination?: {
+    reason: 'completed' | 'failed' | 'user_cancelled' | 'deadline_exceeded';
+    component?: 'automation' | 'agent_turn' | 'tool' | 'mcp' | 'process';
+    componentName?: string;
+    cancellationConfirmed: boolean;
+  };
+  heartbeatAtMs?: number;
+  leaseOwner?: string;
+  leaseExpiresAtMs?: number;
+  attemptNumber?: number;
+  rootRunId?: string;
 }
 
 export interface AutomationRunEvent {
@@ -111,7 +127,13 @@ export interface AutomationRunEvent {
   type:
     | 'run.queued'
     | 'run.started'
+    | 'run.deadline_resolved'
+    | 'run.cancel_requested'
+    | 'run.cancel_confirmed'
+    | 'run.cancellation_unconfirmed'
+    | 'run.recovered'
     | 'action.started'
+    | 'action.retry_scheduled'
     | 'action.completed'
     | 'action.failed'
     | 'after_run.started'

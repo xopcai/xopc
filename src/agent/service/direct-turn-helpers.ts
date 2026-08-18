@@ -127,6 +127,7 @@ export interface RunDirectAgentTurnInput {
   runId?: string;
   userMessage: AgentMessage;
   abortSignal?: AbortSignal;
+  deadlineAtMs?: number;
   sourceImages?: ImageContent[];
   onEvent?: (event: EmbeddedStreamEvent) => void;
 }
@@ -177,6 +178,7 @@ export async function runDirectAgentTurn(
     modelManager: deps.modelManager,
     getConfig: () => deps.config,
     abortSignal: input.abortSignal,
+    deadlineAtMs: input.deadlineAtMs,
     beforeTurn: () => deps.agentManager.beginBackgroundReviewUserTurn(input.sessionKey),
     onEvent: input.onEvent,
   });

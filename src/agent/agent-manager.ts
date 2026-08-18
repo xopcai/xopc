@@ -420,6 +420,14 @@ export class AgentManager implements AgentInstanceGateway {
       getCurrentContext: this.config.getCurrentContext,
       hookRunner: this.config.hookRunner,
       bus: this.config.bus,
+      toolExecutorConfig: {
+        resolveTimeoutMs: (toolName) => {
+          const config = this.mergedConfig();
+          const sessionKey = this.config.getCurrentContext?.()?.sessionKey;
+          return resolveEffectiveAgentProfileForSession(config, sessionKey)
+            .manifest.tools.builtin[toolName]?.limits?.timeoutMs;
+        },
+      },
       getConfig: () => this.mergedConfig(),
       getPrimaryModel: () => this.resolveModelStringToModel(this.pickDefaultModelRef()),
       getMemoryManager: () => this.getCurrentWorkspaceRuntime().memoryManager,
