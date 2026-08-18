@@ -81,10 +81,6 @@ function clampMaxOutputChars(raw: unknown): number {
   return Math.max(1_000, Math.min(500_000, Math.floor(n)));
 }
 
-function isLikelyTestCommand(command: string): boolean {
-  return /\b(test|vitest|jest|pytest|go test|cargo test|npm test|pnpm test|yarn test|typecheck|type-check|lint)\b/i.test(command);
-}
-
 function commandStatus(exitCode: number | null, timedOut: boolean): ExecCommandDetails['status'] {
   if (timedOut) return 'timed_out';
   if (exitCode === 0) return 'success';

@@ -18,6 +18,7 @@ type OutcomeExecutionStateRow = {
   project_id: string | null;
   context_text: string | null;
   context_attachments_json: string;
+  approved_boundaries_json: string;
   created_at: number;
   updated_at: number;
 };
@@ -34,6 +35,7 @@ export interface OutcomeExecutionState {
   source: OutcomeExecutionSource;
   projectId?: string;
   contextMessage?: { text: string; attachments: MediaRef[] };
+  approvedBoundaries: string[];
   createdAt: number;
   updatedAt: number;
 }
@@ -54,6 +56,7 @@ function fromRow(row: OutcomeExecutionStateRow): OutcomeExecutionState {
     ...((row.context_text || attachments.length > 0)
       ? { contextMessage: { text: row.context_text ?? '', attachments } }
       : {}),
+    approvedBoundaries: JSON.parse(row.approved_boundaries_json) as string[],
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -71,6 +74,7 @@ export class OutcomeExecutionStateRepository {
     projectId?: string;
     contextText?: string;
     contextAttachments?: MediaRef[];
+    approvedBoundaries?: string[];
     now?: number;
   }): OutcomeExecutionState {
     const now = input.now ?? Date.now();
@@ -78,8 +82,8 @@ export class OutcomeExecutionStateRepository {
       `INSERT INTO outcome_execution_state (
         outcome_id, description, agent_id, priority, active_session_key,
         ui_locale, source, project_id, context_text, context_attachments_json,
-        created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        approved_boundaries_json, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       input.outcomeId,
       input.description?.trim() || null,
@@ -91,6 +95,7 @@ export class OutcomeExecutionStateRepository {
       input.projectId ?? null,
       input.contextText?.trim() || null,
       JSON.stringify(input.contextAttachments ?? []),
+      JSON.stringify(input.approvedBoundaries ?? []),
       now,
       now,
     );
@@ -133,6 +138,7 @@ export class OutcomeExecutionStateRepository {
     blockedReason?: string | null;
     contextText?: string | null;
     contextAttachments?: MediaRef[];
+    approvedBoundaries?: string[];
   }): OutcomeExecutionState | undefined {
     const current = this.get(outcomeId);
     if (!current) return undefined;
@@ -142,11 +148,12 @@ export class OutcomeExecutionStateRepository {
       blockedReason: patch.blockedReason === undefined ? current.blockedReason : patch.blockedReason?.trim() || undefined,
       contextText: patch.contextText === undefined ? current.contextMessage?.text : patch.contextText?.trim() || undefined,
       contextAttachments: patch.contextAttachments ?? current.contextMessage?.attachments ?? [],
+      approvedBoundaries: patch.approvedBoundaries ?? current.approvedBoundaries,
     };
     getSqliteDatabase().prepare(
       `UPDATE outcome_execution_state SET
         active_session_key = ?, next_action = ?, blocked_reason = ?,
-        context_text = ?, context_attachments_json = ?, updated_at = ?
+        context_text = ?, context_attachments_json = ?, approved_boundaries_json = ?, updated_at = ?
        WHERE outcome_id = ?`,
     ).run(
       next.activeSessionKey ?? null,
@@ -154,6 +161,7 @@ export class OutcomeExecutionStateRepository {
       next.blockedReason ?? null,
       next.contextText ?? null,
       JSON.stringify(next.contextAttachments),
+      JSON.stringify(next.approvedBoundaries),
       Date.now(),
       outcomeId,
     );

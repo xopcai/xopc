@@ -8,6 +8,7 @@ import {
 } from '@xopcai/gateway-contract';
 
 import { ProjectMonitoringService } from '../../../work/project-monitoring-service.js';
+import { getOutcomeContextManifest } from '../../../work/outcome-context-assembler.js';
 import { OutcomeExecutionStateRepository } from '../../../work/outcome-execution-state.js';
 import { OutcomeRepository } from '../../../work/outcome-repository.js';
 import { OutcomeReceiptService } from '../../../work/outcome-receipt-service.js';
@@ -43,7 +44,12 @@ export function registerWorkRoutes(authenticated: Hono, deps: AuthenticatedRoute
   authenticated.get('/api/outcomes/:id', (c) => {
     const outcome = outcomes.get(c.req.param('id'));
     return outcome
-      ? c.json({ ok: true, outcome, receipts: receipts.list({ outcomeId: outcome.id, limit: 100 }) })
+      ? c.json({
+          ok: true,
+          outcome,
+          receipts: receipts.list({ outcomeId: outcome.id, limit: 100 }),
+          contextManifest: getOutcomeContextManifest(outcome.id),
+        })
       : c.json({ ok: false, error: 'Outcome not found' }, 404);
   });
 
@@ -68,7 +74,26 @@ export function registerWorkRoutes(authenticated: Hono, deps: AuthenticatedRoute
       });
     }
     if (!execution) return c.json({ ok: false, error: 'Outcome has no execution state' }, 409);
-    executions.update(outcome.id, { blockedReason: null });
+    const requestedBoundaries = new Set([
+      ...execution.approvedBoundaries,
+      ...(parsed.data.approvedBoundaries ?? []),
+    ]);
+    const requiredBoundaries = outcome.contract?.approvalRequired ?? [];
+    const approvedBoundaries = requiredBoundaries
+      .filter((boundary) => requestedBoundaries.has(boundary));
+    const missingBoundaries = requiredBoundaries
+      .filter((boundary) => !requestedBoundaries.has(boundary));
+    if (missingBoundaries.length > 0) {
+      return c.json({
+        ok: false,
+        error: 'Required execution boundaries must be approved',
+        requiredBoundaries: missingBoundaries,
+      }, 409);
+    }
+    executions.update(outcome.id, {
+      approvedBoundaries,
+      blockedReason: null,
+    });
     const queued = deps.service.enqueueOutcome(outcome.id, {
       source: 'api',
       executionContext: {

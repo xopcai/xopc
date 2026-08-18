@@ -72,7 +72,10 @@ export function CreateWorkItemScreen() {
     onSuccess: setProposal,
   });
   const confirm = useMutation({
-    mutationFn: () => confirmWorkIntake(proposal!.id),
+    mutationFn: () => confirmWorkIntake(
+      proposal!.id,
+      proposal!.executionReadiness.blockingDecision?.id,
+    ),
     onSuccess: async (work) => {
       const noteId = firstParam(params.noteId);
       if (noteId) await updateNote(noteId, { status: 'processed' });
@@ -103,6 +106,11 @@ export function CreateWorkItemScreen() {
             <Text style={[styles.cardTitle, { color: colors.text.primary }]}>{proposal.objective}</Text>
             <Text style={[styles.cardLabel, { color: colors.text.tertiary }]}>{labels.firstAction}</Text>
             {proposal.outcomeContract.deliverables.map((item) => <Text key={item} style={{ color: colors.text.secondary }}>· {item}</Text>)}
+            {proposal.executionReadiness.blockingDecision ? <>
+              <Text style={[styles.cardLabel, { color: colors.text.tertiary }]}>{labels.confirmPlan}</Text>
+              <Text style={{ color: colors.text.primary }}>{proposal.executionReadiness.blockingDecision.question}</Text>
+              <Text style={{ color: colors.text.secondary }}>{proposal.executionReadiness.blockingDecision.recommendation}</Text>
+            </> : null}
           </View>
           <Pressable disabled={confirm.isPending} onPress={() => confirm.mutate()} style={({ pressed }) => [styles.createButton, { backgroundColor: colors.accent.primary, opacity: pressed || confirm.isPending ? 0.55 : 1 }]}><Text style={styles.createText}>{labels.confirmAndCreate}</Text></Pressable>
           <Pressable disabled={confirm.isPending} onPress={() => setProposal(null)} style={styles.secondaryButton}><Text style={{ color: colors.text.secondary }}>{labels.editIntent}</Text></Pressable>

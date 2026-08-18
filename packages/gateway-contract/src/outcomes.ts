@@ -52,7 +52,10 @@ export const OutcomeListResponseSchema = z.object({
 });
 
 export const OutcomeActionSchema = z.enum(['run', 'pause', 'resume', 'cancel']);
-export const OutcomeActionRequestSchema = z.object({ action: OutcomeActionSchema });
+export const OutcomeActionRequestSchema = z.object({
+  action: OutcomeActionSchema,
+  approvedBoundaries: z.array(z.string().min(1)).optional(),
+});
 
 export const OutcomeReceiptStatusSchema = z.enum([
   'running',
@@ -74,6 +77,14 @@ export const OutcomeEvidenceSchema = z.object({
   observedAt: z.number(),
 });
 
+export const OutcomeJudgmentSchema = z.object({
+  recommendation: z.string(),
+  reasons: z.array(z.string()),
+  rejectedAlternatives: z.array(z.object({ option: z.string(), reason: z.string() })),
+  uncertainty: z.string().optional(),
+  confidence: z.number().min(0).max(1),
+});
+
 export const OutcomeReceiptSchema = z.object({
   runId: z.string(),
   outcomeId: z.string().optional(),
@@ -86,6 +97,8 @@ export const OutcomeReceiptSchema = z.object({
   workItemId: z.string().optional(),
   origin: z.string().optional(),
   triggerKind: z.string().optional(),
+  attempt: z.number().int().positive(),
+  strategy: z.string().optional(),
   changes: z.array(OutcomeEvidenceSchema),
   evidence: z.array(OutcomeEvidenceSchema),
   verification: z.object({
@@ -102,6 +115,21 @@ export const OutcomeReceiptSchema = z.object({
   completionVerdict: z.enum(['achieved', 'partial', 'not_achieved']).optional(),
   correctionText: z.string().optional(),
   contextTraceId: z.string().optional(),
+  failure: z.object({
+    code: z.enum([
+      'timeout',
+      'approval_required',
+      'verification_failed',
+      'conflict',
+      'tool_failed',
+      'model_failed',
+      'cancelled',
+      'unknown',
+    ]),
+    phase: z.enum(['planning', 'approval', 'execution', 'verification', 'runtime']),
+    recoveryAction: z.enum(['replan', 'retry_with_changed_strategy', 'request_user_input', 'none']),
+  }).optional(),
+  judgment: OutcomeJudgmentSchema.optional(),
   startedAt: z.number(),
   completedAt: z.number().optional(),
   feedback: z.object({
@@ -110,6 +138,25 @@ export const OutcomeReceiptSchema = z.object({
     needsCorrection: z.boolean().optional(),
     supportFit: z.boolean().optional(),
   }).optional(),
+});
+
+export const OutcomeContextManifestSchema = z.object({
+  outcomeId: z.string(),
+  sources: z.array(z.object({
+    kind: z.enum(['outcome_contract', 'execution_receipt', 'user_correction']),
+    id: z.string(),
+    description: z.string(),
+  })),
+  assumptions: z.array(z.string()),
+  unresolvedCriteria: z.array(z.string()),
+  allocation: z.enum(['deep', 'critical']),
+});
+
+export const OutcomeDetailResponseSchema = z.object({
+  ok: z.literal(true),
+  outcome: OutcomeSchema,
+  receipts: z.array(OutcomeReceiptSchema),
+  contextManifest: OutcomeContextManifestSchema.optional(),
 });
 
 export const OutcomeReceiptListResponseSchema = z.object({
@@ -126,7 +173,10 @@ export type Outcome = z.infer<typeof OutcomeSchema>;
 export type OutcomeListResponse = z.infer<typeof OutcomeListResponseSchema>;
 export type OutcomeAction = z.infer<typeof OutcomeActionSchema>;
 export type OutcomeEvidence = z.infer<typeof OutcomeEvidenceSchema>;
+export type OutcomeJudgment = z.infer<typeof OutcomeJudgmentSchema>;
 export type OutcomeReceipt = z.infer<typeof OutcomeReceiptSchema>;
+export type OutcomeContextManifest = z.infer<typeof OutcomeContextManifestSchema>;
+export type OutcomeDetailResponse = z.infer<typeof OutcomeDetailResponseSchema>;
 export type OutcomeReceiptListResponse = z.infer<typeof OutcomeReceiptListResponseSchema>;
 
 export function parseOutcomeReceipt(value: unknown): OutcomeReceipt {

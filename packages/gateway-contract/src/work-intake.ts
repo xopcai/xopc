@@ -53,6 +53,15 @@ export const WorkIntakeProposalSchema = z.object({
     assumptions: z.array(z.string()),
     risks: z.array(z.string()),
   }),
+  executionReadiness: z.object({
+    confidence: z.number().min(0).max(1),
+    canStartImmediately: z.boolean(),
+    blockingDecision: z.object({
+      id: z.string(),
+      question: z.string(),
+      recommendation: z.string(),
+    }).optional(),
+  }),
   expiresAt: z.number(),
 });
 
@@ -67,6 +76,7 @@ export const WorkIntakeCreateRequestSchema = z.object({
 export const WorkIntakeConfirmRequestSchema = z.object({
   executionMode: WorkExecutionModeSchema,
   projectId: z.string().min(1).optional(),
+  blockingDecisionId: z.string().min(1).optional(),
 });
 
 export const ConfirmedWorkSchema = z.object({

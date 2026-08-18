@@ -155,6 +155,14 @@ describe('SQLite migrations', () => {
       expect(db.prepare(
         `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'execution_receipts'`,
       ).get()).toEqual({ name: 'execution_receipts' });
+      expect(
+        (db.prepare(`SELECT name FROM pragma_table_info('execution_receipts')`).all() as Array<{ name: string }>)
+          .map((column) => column.name),
+      ).toContain('judgment_json');
+      expect(
+        (db.prepare(`SELECT name FROM pragma_table_info('outcome_execution_state')`).all() as Array<{ name: string }>)
+          .map((column) => column.name),
+      ).toContain('approved_boundaries_json');
       for (const removedTable of [
         'task_outcomes',
         'goal_contracts',

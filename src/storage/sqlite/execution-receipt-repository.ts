@@ -46,6 +46,14 @@ export interface ExecutionEvidence {
   observedAt: number;
 }
 
+export interface ExecutionJudgment {
+  recommendation: string;
+  reasons: string[];
+  rejectedAlternatives: Array<{ option: string; reason: string }>;
+  uncertainty?: string;
+  confidence: number;
+}
+
 export interface ExecutionReceipt {
   runId: string;
   sessionKey: string;
@@ -65,6 +73,7 @@ export interface ExecutionReceipt {
   completionVerdict?: ExecutionVerdict;
   completionVerdictSource?: 'system' | 'user';
   correctionText?: string;
+  judgment?: ExecutionJudgment;
   projectionVersion: number;
   projectedAt?: number;
   failure?: {
@@ -121,6 +130,7 @@ type ExecutionReceiptRow = {
   contract_version: number | null;
   attempt: number;
   strategy: string | null;
+  judgment_json: string | null;
 };
 
 export interface ExecutionReceiptMetrics {
@@ -179,6 +189,9 @@ function fromRow(row: ExecutionReceiptRow): ExecutionReceipt {
     ...(row.completion_verdict ? { completionVerdict: row.completion_verdict } : {}),
     ...(row.completion_verdict_source ? { completionVerdictSource: row.completion_verdict_source } : {}),
     ...(row.correction_text ? { correctionText: row.correction_text } : {}),
+    ...(row.judgment_json
+      ? { judgment: JSON.parse(row.judgment_json) as ExecutionJudgment }
+      : {}),
     projectionVersion: row.projection_version,
     ...(row.projected_at === null ? {} : { projectedAt: row.projected_at }),
     ...(row.failure_code && row.failure_phase && row.recovery_action ? {
@@ -201,7 +214,7 @@ const SELECT_COLUMNS = `run_id, session_key, channel, objective, status, summary
   verification_status, verification_json, failure_code, failure_phase, recovery_action,
   project_id, work_item_id, origin, trigger_kind, parent_run_id,
   next_action, needs_user, context_trace_id, completion_verdict, completion_verdict_source, correction_text,
-  projection_version, projected_at, outcome_id, contract_version, attempt, strategy`;
+  projection_version, projected_at, outcome_id, contract_version, attempt, strategy, judgment_json`;
 
 export function startExecutionReceipt(input: {
   runId: string;
@@ -365,6 +378,7 @@ export function updateExecutionReceipt(input: {
   nextAction?: string | null;
   needsUser?: boolean;
   contextTraceId?: string | null;
+  judgment?: ExecutionJudgment | null;
   now?: number;
 }): ExecutionReceipt | undefined {
   const current = getExecutionReceipt(input.runId);
@@ -378,6 +392,7 @@ export function updateExecutionReceipt(input: {
   const contextTraceId = input.contextTraceId === undefined
     ? current.context.contextTraceId
     : input.contextTraceId ?? undefined;
+  const judgment = input.judgment === undefined ? current.judgment : input.judgment ?? undefined;
   const verification = current.status !== 'running' && current.completionVerdictSource !== 'user'
     ? verifyExecutionCompletion({
         status: current.status,
@@ -396,7 +411,7 @@ export function updateExecutionReceipt(input: {
       `UPDATE execution_receipts
        SET contract_json = ?, evidence_json = ?, summary = ?, next_action = ?,
            needs_user = ?, context_trace_id = ?, verification_status = ?,
-           verification_json = ?, completion_verdict = ?,
+           verification_json = ?, completion_verdict = ?, judgment_json = ?,
            projection_version = CASE WHEN status = 'running' THEN projection_version ELSE 0 END,
            projected_at = CASE WHEN status = 'running' THEN projected_at ELSE NULL END,
            updated_at = ?
@@ -411,6 +426,7 @@ export function updateExecutionReceipt(input: {
       verification.status,
       JSON.stringify({ checks: verification.checks }),
       completionVerdict ?? null,
+      judgment ? JSON.stringify(judgment) : null,
       now,
       input.runId,
     );

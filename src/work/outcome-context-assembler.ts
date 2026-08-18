@@ -1,3 +1,5 @@
+import type { OutcomeContextManifest } from '@xopcai/gateway-contract';
+
 import {
   getSessionMetadata,
   isXopcDatabaseOpen,
@@ -16,6 +18,7 @@ export interface AssembledOutcomeContext {
   outcomeId?: string;
   retrievalQuery: string;
   allocation: OutcomeContextAllocation;
+  manifest?: OutcomeContextManifest;
 }
 
 const STANDARD: OutcomeContextAllocation = {
@@ -24,6 +27,42 @@ const STANDARD: OutcomeContextAllocation = {
   maxChars: 12_000,
   reason: 'No active outcome requires expanded context.',
 };
+
+export function getOutcomeContextManifest(outcomeId: string): OutcomeContextManifest | undefined {
+  if (!isXopcDatabaseOpen()) return undefined;
+  const outcome = new OutcomeRepository().get(outcomeId);
+  if (!outcome?.contract) return undefined;
+  const latestReceipt = listExecutionReceipts({ outcomeId, limit: 1 })[0];
+  const unresolvedCriteria = latestReceipt?.verification.checks
+    .filter((check) => check.status !== 'passed')
+    .map((check) => check.criterion) ?? outcome.contract.acceptanceCriteria;
+  const critical = outcome.importance === 'critical'
+    || outcome.contract.risks.length > 0
+    || outcome.contract.approvalRequired.length > 0;
+  return {
+    outcomeId,
+    sources: [
+      {
+        kind: 'outcome_contract',
+        id: `${outcomeId}:${outcome.contract.version}`,
+        description: 'Current outcome contract and completion criteria',
+      },
+      ...(latestReceipt ? [{
+        kind: 'execution_receipt' as const,
+        id: latestReceipt.runId,
+        description: 'Latest execution evidence and verification result',
+      }] : []),
+      ...(latestReceipt?.correctionText ? [{
+        kind: 'user_correction' as const,
+        id: latestReceipt.runId,
+        description: latestReceipt.correctionText,
+      }] : []),
+    ],
+    assumptions: outcome.contract.assumptions,
+    unresolvedCriteria,
+    allocation: critical ? 'critical' : 'deep',
+  };
+}
 
 export function assembleOutcomeContext(sessionKey: string, userQuery: string): AssembledOutcomeContext {
   const query = userQuery.trim();
@@ -67,6 +106,7 @@ export function assembleOutcomeContext(sessionKey: string, userQuery: string): A
           maxChars: 32_000,
           reason: 'An active outcome benefits from complete user and decision context.',
         };
+  const manifest = getOutcomeContextManifest(outcomeId);
   const sections = [
     query,
     `Outcome: ${contract.objective}`,
@@ -82,5 +122,6 @@ export function assembleOutcomeContext(sessionKey: string, userQuery: string): A
     outcomeId,
     retrievalQuery: sections.join('\n'),
     allocation,
+    ...(manifest ? { manifest } : {}),
   };
 }

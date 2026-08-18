@@ -328,7 +328,10 @@ export function WorkPage() {
     setCreateBusy(true);
     setCreateError(null);
     try {
-      const work = await confirmWorkIntake(proposal.id);
+      const work = await confirmWorkIntake(
+        proposal.id,
+        proposal.executionReadiness.blockingDecision?.id,
+      );
       setCreateOpen(false);
       setOutcome('');
       setProposal(null);
@@ -495,13 +498,28 @@ export function WorkPage() {
                         </dd>
                       </div>
                     ) : null}
+                    {proposal.executionReadiness.blockingDecision ? (
+                      <div className="rounded-xl border border-warning/30 bg-warning-soft/25 p-3">
+                        <dt className="text-xs font-medium text-warning">{workText.blockingDecision}</dt>
+                        <dd className="mt-1 text-sm leading-6 text-fg">
+                          {proposal.executionReadiness.blockingDecision.question}
+                        </dd>
+                        <dd className="mt-2 text-xs leading-5 text-fg-muted">
+                          {proposal.executionReadiness.blockingDecision.recommendation}
+                        </dd>
+                      </div>
+                    ) : (
+                      <p className="text-xs leading-5 text-success">{workText.readyToStart}</p>
+                    )}
                   </dl>
                 </div>
                 <div className="flex shrink-0 justify-between gap-2 border-t border-edge px-5 py-4">
                   <Button type="button" variant="ghost" disabled={createBusy} onClick={resetCreate}>{workText.editIntent}</Button>
                   <Button type="button" variant="primary" className="min-w-36" disabled={createBusy} onClick={() => void confirmCreate()}>
                     <CircleCheck className="size-4" aria-hidden />
-                    {workText.confirmWork}
+                    {proposal.executionReadiness.blockingDecision
+                      ? workText.approveAndStart
+                      : workText.confirmWork}
                   </Button>
                 </div>
               </div>

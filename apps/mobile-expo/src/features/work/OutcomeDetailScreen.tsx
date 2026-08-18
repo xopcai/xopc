@@ -22,7 +22,13 @@ export function OutcomeDetailScreen() {
     enabled: Boolean(id),
   });
   const action = useMutation({
-    mutationFn: (value: 'run' | 'pause' | 'resume' | 'cancel') => actOnOutcome(id, value),
+    mutationFn: (value: 'run' | 'pause' | 'resume' | 'cancel') => actOnOutcome(
+      id,
+      value,
+      value === 'run' || value === 'resume'
+        ? query.data?.outcome.contract?.approvalRequired
+        : undefined,
+    ),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.outcome(id) }),
   });
 

@@ -106,6 +106,7 @@ export {
   type ExecutionContract,
   type ExecutionVerdict,
   type ExecutionEvidence,
+  type ExecutionJudgment,
   type ExecutionFeedbackOutcome,
   type ExecutionReceipt,
   type ExecutionReceiptContext,
