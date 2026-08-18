@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { Value } from '@sinclair/typebox/value';
 
 import { createManagedJobTool } from '../managed-job-tool.js';
 
@@ -7,6 +8,17 @@ function text(result: Awaited<ReturnType<ReturnType<typeof createManagedJobTool>
 }
 
 describe('managed_job tool', () => {
+  it('exposes an object-rooted schema while preserving action-specific requirements', () => {
+    const tool = createManagedJobTool(process.cwd(), () => 'session-a');
+
+    expect(tool.parameters).toMatchObject({ type: 'object', anyOf: expect.any(Array) });
+    expect(Value.Check(tool.parameters, { action: 'start', command: 'echo ok' })).toBe(true);
+    expect(Value.Check(tool.parameters, { action: 'start' })).toBe(false);
+    expect(Value.Check(tool.parameters, { action: 'status', jobId: 'job-1' })).toBe(true);
+    expect(Value.Check(tool.parameters, { action: 'status' })).toBe(false);
+    expect(Value.Check(tool.parameters, { action: 'list' })).toBe(true);
+  });
+
   it('starts a job without blocking the tool call and exposes its terminal output', async () => {
     const tool = createManagedJobTool(process.cwd(), () => 'session-a');
     const startedAt = Date.now();
