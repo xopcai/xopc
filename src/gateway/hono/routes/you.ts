@@ -915,7 +915,12 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
     } finally {
       preserveRecord(existing, { tags: [...new Set([...(existing.tags ?? []), INSIGHT_ACCEPTED_TAG])] });
     }
-    return c.json({ ok: true, status: queued ? 'queued' : 'saved', goal: goals.get(goal.id), href: `/goals/${goal.id}` });
+    return c.json({
+      ok: true,
+      status: queued ? 'queued' : 'saved',
+      goal: goals.get(goal.id),
+      href: `/work/${encodeURIComponent(goal.outcomeId)}`,
+    });
   });
 
   authenticated.patch('/api/you/controls', deps.strictRateLimitMiddleware, async (c) => {

@@ -30,6 +30,8 @@ const project: ProjectWithDetails = {
 function goal(patch: Partial<GoalWithDetails>): GoalWithDetails {
   return {
     id: 'goal-1',
+    outcomeId: 'outcome-1',
+    outcomeContractVersion: 1,
     title: 'Ship Project Loop',
     status: 'active',
     agentId: 'main',
@@ -83,6 +85,8 @@ describe('buildProjectLoopOverview', () => {
     expect(overview.attentionItems.map((item) => item.kind)).toEqual(
       expect.arrayContaining(['blocked_goal', 'stale_goal', 'failed_workflow']),
     );
+    expect(overview.attentionItems.find((item) => item.kind === 'blocked_goal')?.href).toBe('/work/outcome-1');
+    expect(overview.timeline.find((item) => item.kind === 'goal')?.href).toBe('/work/outcome-1');
     expect(overview.digest.status).toBe('attention');
     expect(overview.timeline.map((item) => item.kind)).toEqual(
       expect.arrayContaining(['session', 'goal', 'workflow']),
