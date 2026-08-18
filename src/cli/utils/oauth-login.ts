@@ -89,13 +89,7 @@ export async function runCliOAuthLogin(options: RunCliOAuthLoginOptions): Promis
   );
 
   const resolver = new CredentialResolver();
-  await resolver.saveOAuthToken(options.provider, {
-    access: config.provider.getApiKey(credentials),
-    refresh: credentials.refresh,
-    expiresAt: credentials.expires,
-    scope: Array.isArray(credentials.scope) ? credentials.scope.filter((value): value is string => typeof value === 'string') : undefined,
-    createdAt: new Date().toISOString(),
-  });
+  await resolver.saveOAuthCredentials(options.provider, credentials);
 
   return { provider: options.provider, credentials, expires: credentials.expires };
 }

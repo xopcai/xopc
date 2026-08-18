@@ -1,10 +1,16 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { Credential, OAuthCredential } from '@earendil-works/pi-ai';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { OAuthToken } from '../credentials.js';
 import { XopcModelCredentialStore } from '../model-credential-store.js';
 
 type ExtendedOAuthToken = OAuthToken & Record<string, unknown>;
+
+let tempDir: string;
+let previousCredentialsDir: string | undefined;
 
 function oauthToken(overrides: Partial<ExtendedOAuthToken> = {}): ExtendedOAuthToken {
   return {
@@ -51,6 +57,21 @@ function repository(initial: OAuthToken | null = oauthToken()) {
 }
 
 describe('XopcModelCredentialStore', () => {
+  beforeEach(async () => {
+    previousCredentialsDir = process.env.XOPC_CREDENTIALS_DIR;
+    tempDir = await mkdtemp(join(tmpdir(), 'xopc-model-credential-store-'));
+    process.env.XOPC_CREDENTIALS_DIR = join(tempDir, 'credentials');
+  });
+
+  afterEach(async () => {
+    if (previousCredentialsDir === undefined) {
+      delete process.env.XOPC_CREDENTIALS_DIR;
+    } else {
+      process.env.XOPC_CREDENTIALS_DIR = previousCredentialsDir;
+    }
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
   it('maps persisted OAuth tokens to canonical runtime credentials', async () => {
     const store = new XopcModelCredentialStore(repository());
 
