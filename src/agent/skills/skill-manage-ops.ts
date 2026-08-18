@@ -135,7 +135,7 @@ export function mutatableSkillOrNull(
   policy: AgentWritePolicy,
 ): Skill | null {
   if (!skill) return null;
-  if (skill.source === 'builtin' || skill.source === 'extra') return null;
+  if (!skill.origin?.managed || !skill.origin.writable) return null;
   if (!canWriteToPath(skill.baseDir, workspace, policy)) return null;
   return skill;
 }

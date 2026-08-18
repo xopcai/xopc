@@ -179,17 +179,7 @@ export class EmbeddedBackend implements TuiBackend {
       sessionStore: sessionIndex.getStore(),
       getWorkflowRunService: () => this.getWorkflowRunService(),
       extensionRegistry: this.opts?.extensionRegistry,
-      isWorkspaceTrusted: (workspaceDir) => {
-        const explicit = this.opts?.isWorkspaceTrusted?.(workspaceDir);
-        if (explicit !== undefined && explicit !== null) {
-          return explicit;
-        }
-        const implicit = this.opts?.implicitTrustedWorkspace;
-        if (implicit && isPathSameOrInside(implicit, workspaceDir)) {
-          return true;
-        }
-        return undefined;
-      },
+      isWorkspaceTrusted: (workspaceDir) => this.isWorkspaceTrusted(workspaceDir),
     });
     this.agent = agent;
     await agent.start();
@@ -264,8 +254,23 @@ export class EmbeddedBackend implements TuiBackend {
     return this.config ?? this.opts?.config ?? loadConfig();
   }
 
+  private isWorkspaceTrusted(workspaceDir: string): boolean {
+    const explicit = this.opts?.isWorkspaceTrusted?.(workspaceDir);
+    if (explicit !== undefined && explicit !== null) {
+      return explicit;
+    }
+    const implicit = this.opts?.implicitTrustedWorkspace;
+    return Boolean(implicit && isPathSameOrInside(implicit, workspaceDir));
+  }
+
   async getStartupResources(sessionKey: string) {
-    return collectTuiStartupResources(this.activeConfig(), sessionKey);
+    return collectTuiStartupResources(this.activeConfig(), sessionKey, {
+      isWorkspaceTrusted: (workspaceDir) => this.isWorkspaceTrusted(workspaceDir),
+    });
+  }
+
+  refreshWorkspaceTrust(): void {
+    this.agent?.refreshSkillsAfterTrustChange();
   }
 
   async startWorkflowRun(opts: TuiWorkflowRunStartRequest): Promise<TuiWorkflowRunStartResult> {

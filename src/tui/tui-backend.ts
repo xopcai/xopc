@@ -242,6 +242,9 @@ export interface TuiBackend {
   /** Load startup resources shown in `/start` and initial help. */
   getStartupResources?(sessionKey: string): Promise<TuiStartupResources>;
 
+  /** Re-evaluate project-scoped resources after a local trust decision changes. */
+  refreshWorkspaceTrust?(): void | Promise<void>;
+
   /** Fuzzy search files in this session's effective workspace. */
   searchWorkspaceFiles?(
     sessionKey: string,

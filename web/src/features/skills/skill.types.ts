@@ -73,8 +73,10 @@ export interface SkillCatalogEntry {
   /** Category derived from parent directory (e.g. skills/creative/algorithmic-art → 'creative') */
   category?: string;
   source: 'builtin' | 'workspace' | 'global' | 'extra';
+  origin: 'extra' | 'bundled' | 'agents-global' | 'agents-workspace' | 'custom-global' | 'xopc-global' | 'xopc-workspace';
   path: string;
   managed: boolean;
+  writable: boolean;
   /** User toggle (default true). */
   enabled: boolean;
   /** When true, skill is never shown to the model (SKILL.md). */
@@ -84,7 +86,7 @@ export interface SkillCatalogEntry {
 }
 
 export interface SkillDiagnostic {
-  type: 'warning' | 'collision' | 'error';
+  type: 'skipped' | 'warning' | 'collision' | 'error';
   skillName?: string;
   message: string;
   path?: string;
@@ -97,7 +99,7 @@ export interface SkillRuntimeStatus {
   reloadPending: boolean;
   lastReloadStartedAt?: number;
   lastReloadFinishedAt?: number;
-  lastReloadReason?: 'initial' | 'disk' | 'config';
+  lastReloadReason?: 'initial' | 'disk' | 'config' | 'trust';
   lastReloadOk?: boolean;
   lastReloadError?: string;
 }

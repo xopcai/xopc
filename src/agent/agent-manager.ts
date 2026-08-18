@@ -98,8 +98,10 @@ export interface SkillCatalogEntry {
   description: string;
   category?: string;
   source: Skill['source'];
+  origin: Skill['origin']['id'];
   path: string;
   managed: boolean;
+  writable: boolean;
   /** User toggle in ~/.xopc/skills.json (`entries[name].enabled`). Default true. */
   enabled: boolean;
   /** When true, skill is never injected into `<available_skills>` (SKILL.md frontmatter). */
@@ -285,6 +287,7 @@ export class AgentManager implements AgentInstanceGateway {
     this.workspaceRuntimes = new WorkspaceRuntimeRegistry({
       getConfig: () => this.config.config!,
       bundledSkillsDir: resolveBundledSkillsDir(),
+      isWorkspaceTrusted: (resolvedPath) => this.isProjectWorkspaceTrusted(resolvedPath),
       onRuntimeCreated: (resolvedPath) => {
         this.skillFilesystemWatcher.watchWorkspace(resolvedPath);
       },
@@ -743,7 +746,8 @@ export class AgentManager implements AgentInstanceGateway {
     const workspaceRoot = workspaceDir ? resolveWorkspaceSkillsDir(workspaceDir) : '';
     const workspaceManaged = workspaceRoot ? s.source === 'workspace' && base.startsWith(resolve(workspaceRoot) + sep) : false;
     const globalManaged = isUnderManagedSkillsDir(s.baseDir);
-    const managed = globalManaged || workspaceManaged;
+    const managed = s.origin.managed && (globalManaged || workspaceManaged);
+    const writable = managed && s.origin.writable;
     const directoryId = base.split(sep).filter(Boolean).pop() || s.name;
     const enabled = !(skillsConfig.entries?.[s.name]?.enabled === false);
     const hubKey = managed ? basename(base) : '';
@@ -756,8 +760,10 @@ export class AgentManager implements AgentInstanceGateway {
       description: s.description,
       category: s.category,
       source: s.source,
+      origin: s.origin.id,
       path: s.baseDir,
       managed,
+      writable,
       enabled,
       disableModelInvocation: s.disableModelInvocation,
       ...(hub ? { hub } : {}),
@@ -901,7 +907,7 @@ export class AgentManager implements AgentInstanceGateway {
   /**
    * Reload skills from disk and refresh system prompt on all active Agent instances.
    */
-  refreshSkillsAfterDiskChange(source: 'explicit' | 'watch' = 'explicit'): void {
+  refreshSkillsAfterDiskChange(source: 'explicit' | 'watch' | 'trust' = 'explicit'): void {
     const now = Date.now();
     if (source === 'watch' && now - this.lastExplicitSkillDiskRefreshAt < 2500) {
       log.debug({ changedWithinMs: now - this.lastExplicitSkillDiskRefreshAt }, 'Ignoring skill watcher echo after explicit refresh');
@@ -910,6 +916,9 @@ export class AgentManager implements AgentInstanceGateway {
     if (source === 'explicit') {
       this.lastExplicitSkillDiskRefreshAt = now;
     }
+
+    // skills.json may have changed since startup; keep compatibility-source watchers in sync.
+    this.skillFilesystemWatcher.refreshPrimaryWorkspace(this.baseWorkspacePath);
 
     if (this.skillDiskRefreshInProgress) {
       this.skillDiskRefreshPending = true;
@@ -921,7 +930,7 @@ export class AgentManager implements AgentInstanceGateway {
     try {
       do {
         this.skillDiskRefreshPending = false;
-        this.applySkillsAfterDiskChange();
+        this.applySkillsAfterDiskChange(source === 'trust' ? 'trust' : 'disk');
         refreshed = true;
       } while (this.skillDiskRefreshPending);
     } finally {
@@ -931,6 +940,10 @@ export class AgentManager implements AgentInstanceGateway {
     if (refreshed) {
       this.scheduleSkillsUpdated('disk');
     }
+  }
+
+  refreshSkillsAfterTrustChange(): void {
+    this.refreshSkillsAfterDiskChange('trust');
   }
 
   private scheduleSkillsUpdated(reason: 'disk' | 'config'): void {
@@ -944,13 +957,13 @@ export class AgentManager implements AgentInstanceGateway {
     }, 250);
   }
 
-  private applySkillsAfterDiskChange(): void {
+  private applySkillsAfterDiskChange(reason: 'disk' | 'trust' = 'disk'): void {
     const cfg = this.config.config!;
     // Reload every workspace SkillManager first. When there are no active agent sessions
     // (e.g. gateway UI only), the loop below runs zero times — without this, `getSkillCatalog()`
     // and delete flows still see stale in-memory skills after ~/.xopc/skills changes.
     for (const rt of this.workspaceRuntimes.values()) {
-      rt.skillManager.reload();
+      rt.skillManager.reload(reason);
     }
 
     for (const instance of this.agents.values()) {

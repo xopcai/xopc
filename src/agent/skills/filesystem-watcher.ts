@@ -6,18 +6,21 @@ import { resolveSkillsDir, resolveStateDir } from '../../config/paths.js';
 import { createLogger } from '../../utils/logger.js';
 import { createSkillConfigManager } from './config.js';
 import { isManagedSkillTransientDirName } from './managed-store.js';
+import { resolveAgentsSkillsDir, resolveWorkspaceAgentsSkillsDir } from './skill-sources.js';
 import { resolveWorkspaceSkillsDir } from './workspace-skills-dir.js';
 
 const log = createLogger('SkillFilesystemWatcher');
 
 export interface SkillFilesystemWatcherOptions {
   onChange: (event: { reason: 'watch'; changedPath?: string }) => void;
+  /** Dependency-injection override for the ~/.agents/skills compatibility root. */
+  agentsSkillsDir?: string;
 }
 
 type WatchTarget = {
   key: string;
   root: string;
-  kind: 'global' | 'workspace';
+  kind: 'global' | 'agents-global' | 'workspace';
   watcher: FSWatcher;
   timer?: NodeJS.Timeout;
   pendingPath?: string;
@@ -60,27 +63,36 @@ function isSameOrInside(parent: string, child: string): boolean {
 }
 
 function isWorkspaceSkillPath(workspaceRoot: string, candidate: string): boolean {
-  const skillsRoot = resolveWorkspaceSkillsDir(workspaceRoot);
+  const skillsRoots = [
+    resolveWorkspaceSkillsDir(workspaceRoot),
+    resolveWorkspaceAgentsSkillsDir(workspaceRoot),
+  ];
   return (
     candidate === workspaceRoot ||
-    isSameOrInside(skillsRoot, candidate) ||
-    isSameOrInside(candidate, skillsRoot)
+    skillsRoots.some(
+      (skillsRoot) =>
+        isSameOrInside(skillsRoot, candidate) || isSameOrInside(candidate, skillsRoot),
+    )
   );
 }
 
 function isWorkspaceSkillsRoot(workspaceRoot: string, candidate: string): boolean {
-  return candidate === resolveWorkspaceSkillsDir(workspaceRoot);
+  return (
+    candidate === resolveWorkspaceSkillsDir(workspaceRoot) ||
+    candidate === resolveWorkspaceAgentsSkillsDir(workspaceRoot)
+  );
 }
 
 function isSkillMdPath(candidate: string): boolean {
   return path.basename(candidate).toLowerCase() === 'skill.md';
 }
 
-function readWatcherConfig(): { enabled: boolean; debounceMs: number } {
+function readWatcherConfig(): { enabled: boolean; agentsGlobalEnabled: boolean; debounceMs: number } {
   const cfg = createSkillConfigManager(resolveStateDir()).load();
   const rawDebounce = cfg.load?.watchDebounceMs;
   return {
     enabled: cfg.load?.watch !== false,
+    agentsGlobalEnabled: cfg.load?.sources?.agentsGlobal?.enabled !== false,
     debounceMs:
       typeof rawDebounce === 'number' && Number.isFinite(rawDebounce)
         ? Math.max(0, rawDebounce)
@@ -91,15 +103,22 @@ function readWatcherConfig(): { enabled: boolean; debounceMs: number } {
 export class SkillFilesystemWatcher {
   private readonly targets = new Map<string, WatchTarget>();
   private readonly onChange: SkillFilesystemWatcherOptions['onChange'];
+  private readonly agentsSkillsDir: string;
   private disposed = false;
 
   constructor(options: SkillFilesystemWatcherOptions) {
     this.onChange = options.onChange;
+    this.agentsSkillsDir = options.agentsSkillsDir ?? resolveAgentsSkillsDir();
     this.watchGlobalSkillsDir();
+    this.watchAgentsGlobalSkillsDir();
   }
 
   watchGlobalSkillsDir(): void {
     this.watchRoot(resolveSkillsDir(), 'global');
+  }
+
+  watchAgentsGlobalSkillsDir(): void {
+    this.watchRoot(this.agentsSkillsDir, 'agents-global');
   }
 
   watchWorkspace(workspaceDir: string): void {
@@ -110,6 +129,7 @@ export class SkillFilesystemWatcher {
 
   refreshPrimaryWorkspace(workspaceDir: string): void {
     this.watchGlobalSkillsDir();
+    this.watchAgentsGlobalSkillsDir();
     this.watchWorkspace(workspaceDir);
   }
 
@@ -126,11 +146,11 @@ export class SkillFilesystemWatcher {
 
   private watchRoot(root: string, kind: WatchTarget['kind']): void {
     if (this.disposed) return;
-    const { enabled, debounceMs } = readWatcherConfig();
+    const { enabled, agentsGlobalEnabled, debounceMs } = readWatcherConfig();
     const resolvedRoot = normalizePath(root);
     const key = `${kind}:${resolvedRoot}`;
 
-    if (!enabled) {
+    if (!enabled || (kind === 'agents-global' && !agentsGlobalEnabled)) {
       this.unwatch(key);
       return;
     }
@@ -191,8 +211,8 @@ export class SkillFilesystemWatcher {
   }
 
   private scheduleRefresh(target: WatchTarget, changedPath?: string): void {
-    const { enabled, debounceMs } = readWatcherConfig();
-    if (!enabled) {
+    const { enabled, agentsGlobalEnabled, debounceMs } = readWatcherConfig();
+    if (!enabled || (target.kind === 'agents-global' && !agentsGlobalEnabled)) {
       this.unwatch(target.key);
       return;
     }

@@ -55,4 +55,33 @@ describe('SkillManager runtime status', () => {
       }),
     );
   });
+
+  it('re-evaluates workspace trust when skills are reloaded', () => {
+    const workspace = makeWorkspace();
+    const agentsSkillDir = join(workspace, '.agents', 'skills', 'trusted-project-skill');
+    mkdirSync(agentsSkillDir, { recursive: true });
+    writeFileSync(
+      join(agentsSkillDir, 'SKILL.md'),
+      `---\nname: trusted-project-skill\ndescription: Trusted project skill\n---\n\nUse it.\n`,
+    );
+    let trusted = false;
+    const manager = new SkillManager(workspace, undefined, {
+      isWorkspaceTrusted: () => trusted,
+    });
+
+    expect(manager.hasSkill('trusted-project-skill')).toBe(false);
+
+    trusted = true;
+    manager.reload('trust');
+
+    expect(manager.hasSkill('trusted-project-skill')).toBe(true);
+    expect(manager.getStatus()).toEqual(
+      expect.objectContaining({ lastReloadReason: 'trust', lastReloadOk: true }),
+    );
+
+    trusted = false;
+    manager.reload('trust');
+
+    expect(manager.hasSkill('trusted-project-skill')).toBe(false);
+  });
 });
