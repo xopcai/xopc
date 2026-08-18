@@ -1,16 +1,12 @@
 import {
-  ConfirmedWorkSchema,
   OutcomeDetailResponseSchema,
   OutcomeReceiptSchema,
   OutcomeSchema,
-  WorkIntakeProposalSchema,
   parseWorkHomeResponse,
-  type ConfirmedWork,
   type Outcome,
   type OutcomeAction,
   type OutcomeContextManifest,
   type OutcomeReceipt,
-  type WorkIntakeProposal,
   type WorkHomeAttention,
   type WorkHomeChat,
   type WorkHomeDecision,
@@ -22,7 +18,6 @@ import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
 export type { WorkHomeAttention, WorkHomeChat, WorkHomeDecision, WorkHomeItem, WorkHomeResponse };
-export type { ConfirmedWork, WorkIntakeProposal };
 
 export type OutcomeDetail = {
   outcome: Outcome;
@@ -66,25 +61,6 @@ export async function submitOutcomeFeedback(
     },
   );
   return OutcomeReceiptSchema.parse(response.receipt);
-}
-
-export async function proposeWorkIntake(objective: string): Promise<WorkIntakeProposal> {
-  const response = await fetchJson<{ proposal?: unknown }>(apiUrl('/api/work/intakes'), {
-    method: 'POST',
-    body: JSON.stringify({ idempotencyKey: crypto.randomUUID(), objective }),
-  });
-  return WorkIntakeProposalSchema.parse(response.proposal);
-}
-
-export async function confirmWorkIntake(
-  proposalId: string,
-  blockingDecisionId?: string,
-): Promise<ConfirmedWork> {
-  const response = await fetchJson<{ work?: unknown }>(apiUrl(`/api/work/intakes/${encodeURIComponent(proposalId)}/confirm`), {
-    method: 'POST',
-    body: JSON.stringify({ executionMode: 'run_now', blockingDecisionId }),
-  });
-  return ConfirmedWorkSchema.parse(response.work);
 }
 
 export function fetchWorkHome(locale?: 'en' | 'zh'): Promise<WorkHomeResponse> {
