@@ -1,14 +1,19 @@
 import type { WorkHomeResponse } from '@xopcai/gateway-contract';
 
 import { listGatewayAgents } from '../gateway/agents-admin.js';
-import type { GatewayService } from '../gateway/service.js';
 import { getTunnelService } from '../tunnel/index.js';
 import {
   DEFAULT_AUTOMATION_TIMEOUT_SECONDS,
   type Automation,
   type AutomationRun,
 } from '../automations/index.js';
+import type { AutomationService } from '../automations/service/automation-service.js';
+import type { Config } from '../config/schema.js';
 import { GoalService, type GoalWithDetails } from '../goals/index.js';
+import type { NotesService } from '../notes/service.js';
+import type { ProactiveInboxService } from '../proactive/inbox/service.js';
+import type { ProjectService } from '../projects/project-service.js';
+import type { SessionIndex } from '../session/manager.js';
 import {
   isHomeAttentionAcknowledged,
   getRelationshipSettings,
@@ -16,6 +21,7 @@ import {
   type HomeAttentionSubjectKind,
 } from '../storage/sqlite/index.js';
 import type { WorkflowRunSummary } from '../workflows/domain/index.js';
+import type { WorkflowRunService } from '../workflows/service/workflow-run-service.js';
 import { WorkItemService } from '../work-items/index.js';
 import { OutcomeReceiptService } from './outcome-receipt-service.js';
 import { OutcomeRepository } from './outcome-repository.js';
@@ -62,6 +68,25 @@ type HomeSnapshot = WorkHomeResponse & {
   gateway: Record<string, unknown>;
   recentAutomationRuns: HomeAutomationRun[];
 };
+
+interface WorkHomeGatewayPort {
+  readonly notesServiceInstance: NotesService;
+  readonly sessions: Pick<SessionIndex, 'listSessions'> & {
+    getActiveRun(sessionKey: string): { active: boolean; runId?: string };
+  };
+  readonly currentConfig: Config;
+  readonly automationServiceInstance: AutomationService;
+  readonly projects: ProjectService;
+  readonly proactiveInbox: ProactiveInboxService;
+  createWorkflowRunService(): WorkflowRunService;
+  getHealth(): {
+    status: string;
+    ready: boolean;
+    httpListening: boolean;
+    version: string;
+    uptime: number;
+  };
+}
 
 export function workItemAttentionRank(
   item: { status: string; dueAt?: number; priority: string; updatedAt: number },
@@ -274,7 +299,7 @@ export class WorkHomeQueryService {
   readonly #outcomes = new OutcomeRepository();
   readonly #attentionGovernor = new AttentionGovernor();
 
-  constructor(private readonly service: GatewayService) {}
+  constructor(private readonly service: WorkHomeGatewayPort) {}
 
   async getSnapshot(locale?: string): Promise<HomeSnapshot> {
     const notes = this.service.notesServiceInstance;
