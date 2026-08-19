@@ -56,6 +56,18 @@ export const TaskDependencySummarySchema = z.object({
   status: TaskStatusSchema,
 });
 
+export const TaskInputAttachmentSchema = z.object({
+  id: z.string().optional(),
+  type: z.string().trim().min(1),
+  mimeType: z.string().trim().min(1).optional(),
+  data: z.string().min(1).optional(),
+  name: z.string().trim().min(1).optional(),
+  size: z.number().int().nonnegative().optional(),
+  uri: z.string().trim().min(1).optional(),
+}).strict().refine((attachment) => Boolean(attachment.data) !== Boolean(attachment.uri), {
+  message: 'Exactly one of attachment data or uri is required',
+});
+
 export const TaskCreateRequestSchema = z.object({
   requestId: z.string().uuid(),
   mode: TaskCreateModeSchema,
@@ -66,6 +78,7 @@ export const TaskCreateRequestSchema = z.object({
   priority: TaskPrioritySchema.optional(),
   dueAt: z.number().int().nonnegative().optional(),
   dependsOnTaskIds: z.array(z.string().trim().min(1)).default([]),
+  attachments: z.array(TaskInputAttachmentSchema).max(10).default([]),
 }).strict();
 
 export const TaskCreateResponseSchema = z.discriminatedUnion('mode', [
@@ -249,6 +262,7 @@ export type TaskContract = z.infer<typeof TaskContractSchema>;
 export type Task = z.infer<typeof TaskSchema>;
 export type TaskListResponse = z.infer<typeof TaskListResponseSchema>;
 export type TaskCreateMode = z.infer<typeof TaskCreateModeSchema>;
+export type TaskInputAttachment = z.infer<typeof TaskInputAttachmentSchema>;
 export type TaskCreateRequest = z.infer<typeof TaskCreateRequestSchema>;
 export type TaskCreateResponse = z.infer<typeof TaskCreateResponseSchema>;
 export type TaskAction = z.infer<typeof TaskActionSchema>;

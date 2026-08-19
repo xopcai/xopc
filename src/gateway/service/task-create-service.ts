@@ -5,6 +5,8 @@ import type {
 } from '@xopcai/gateway-contract';
 
 import type { Config } from '../../config/schema.js';
+import { persistInboundAttachments } from '../../channels/attachments/inbound-persist.js';
+import type { MediaRef } from '../../media/types.js';
 import type { ProjectService } from '../../projects/project-service.js';
 import { resolveProjectAgentId } from '../../projects/project-agent.js';
 import { TaskCommandService } from '../../tasks/task-command-service.js';
@@ -13,6 +15,7 @@ import { TaskDependencyService } from '../../tasks/task-dependency-service.js';
 import { TaskExecutionService } from '../../tasks/task-execution-service.js';
 import type { EnqueueTaskOptions, TaskQueueItem } from '../../tasks/task-queue.js';
 import { TaskRepository } from '../../tasks/task-repository.js';
+import { MAX_WEBCHAT_ATTACHMENT_FILE_BYTES } from '../chat-limits.js';
 
 export interface TaskCreateDependencies {
   getConfig: () => Config;
@@ -69,13 +72,18 @@ export class TaskCreateService {
       explicitAgentId: input.agentId,
       projectId: input.projectId,
     });
+    const contextAttachments = existingTask
+      ? existingExecution?.contextMessage?.attachments
+      : await persistInboundAttachments(input.attachments, {
+        maxBytes: MAX_WEBCHAT_ATTACHMENT_FILE_BYTES,
+      });
 
     if (input.mode === 'capture') {
-      const task = existingTask ?? this.createTask({ ...input, objective, agentId });
+      const task = existingTask ?? this.createTask({ ...input, objective, agentId }, contextAttachments);
       return { ok: true, mode: 'capture', task };
     }
 
-    const task = existingTask ?? this.createTask({ ...input, objective, agentId });
+    const task = existingTask ?? this.createTask({ ...input, objective, agentId }, contextAttachments);
     if (task.status !== 'pending') {
       return { ok: true, mode: 'start', task, activation: { status: 'already_started' } };
     }
@@ -121,7 +129,7 @@ export class TaskCreateService {
   private createTask(input: TaskCreateRequest & {
     objective: string;
     agentId: string;
-  }): Task {
+  }, contextAttachments?: MediaRef[]): Task {
     const contract = defineTaskContract(input.objective);
     const created = this.#execution.create({
       ...contract,
@@ -132,6 +140,7 @@ export class TaskCreateService {
       deadlineAt: input.dueAt,
       uiLocale: input.locale,
       source: 'api',
+      contextAttachments,
     });
     const task = this.#tasks.get(created.taskId)!;
     return this.#dependencies.replace({

@@ -29,6 +29,7 @@ describe('task routes', () => {
 
   beforeEach(() => {
     stateDir = mkdtempSync(join(tmpdir(), 'xopc-work-routes-'));
+    vi.stubEnv('XOPC_STATE_DIR', stateDir);
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
     projects = new ProjectService();
@@ -51,6 +52,7 @@ describe('task routes', () => {
   afterEach(() => {
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
+    vi.unstubAllEnvs();
     rmSync(stateDir, { recursive: true, force: true });
   });
 
@@ -119,6 +121,37 @@ describe('task routes', () => {
       priority: 'high',
     });
     expect(execution?.activeSessionKey).toBeUndefined();
+  });
+
+  it('persists attached files as task execution context', async () => {
+    const response = await app.request('/api/tasks', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        requestId: '3e042a56-3a7a-4c3c-b81b-8a6d8e74b58d',
+        mode: 'start',
+        objective: 'Review the attached launch brief',
+        attachments: [{
+          type: 'document',
+          mimeType: 'text/plain',
+          name: 'launch-brief.txt',
+          size: 12,
+          data: Buffer.from('Launch brief').toString('base64'),
+        }],
+      }),
+    });
+
+    expect(response.status).toBe(202);
+    const created = TaskCreateResponseSchema.parse(await response.json());
+    const context = new TaskRepository().get(created.task.id)?.execution.contextMessage;
+    expect(context?.text).toBe('');
+    expect(context?.attachments).toHaveLength(1);
+    expect(context?.attachments[0]).toMatchObject({
+      type: 'document',
+      mimeType: 'text/plain',
+      name: 'launch-brief.txt',
+      uri: expect.stringMatching(/^media:\/\/inbound\//),
+    });
   });
 
   it('requires callers to choose capture or start explicitly', async () => {

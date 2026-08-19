@@ -6,22 +6,8 @@ import {
   createSendHandler,
 } from '../sse.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
-import { MAX_CHAT_ATTACHMENTS, MAX_WEBCHAT_ATTACHMENT_FILE_BYTES } from '../../chat-limits.js';
+import { validateWebchatAttachments } from '../../chat-limits.js';
 import type { UserTurnAttachment } from '../../user-turn-input.js';
-
-function validateAttachments(attachments: unknown[] | undefined): string | null {
-  if (!attachments) return null;
-  if (attachments.length > MAX_CHAT_ATTACHMENTS) {
-    return `Too many attachments (maximum ${MAX_CHAT_ATTACHMENTS})`;
-  }
-  const maxBase64Length = 4 * Math.ceil(MAX_WEBCHAT_ATTACHMENT_FILE_BYTES / 3);
-  if (attachments.some((item) => item && typeof item === 'object'
-    && typeof (item as { data?: unknown }).data === 'string'
-    && (item as { data: string }).data.length > maxBase64Length)) {
-    return `Attachment exceeds maximum size (${MAX_WEBCHAT_ATTACHMENT_FILE_BYTES} bytes)`;
-  }
-  return null;
-}
 
 export function registerAgentStreamRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service, chatRateLimitMiddleware, sseConfig } = deps;
@@ -55,7 +41,7 @@ export function registerAgentStreamRoutes(authenticated: Hono, deps: Authenticat
     const body = await c.req.json().catch(() => null) as Record<string, unknown> | null;
     if (!body || !sessionKey) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid request' } }, 400);
     const attachments = Array.isArray(body.attachments) ? body.attachments : undefined;
-    const attachmentError = validateAttachments(attachments);
+    const attachmentError = validateWebchatAttachments(attachments);
     if (attachmentError) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: attachmentError } }, 400);
     const delivery = body.delivery === 'next' || body.delivery === 'steer' ? body.delivery : null;
     if (!delivery) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Missing delivery' } }, 400);
@@ -77,7 +63,7 @@ export function registerAgentStreamRoutes(authenticated: Hono, deps: Authenticat
     const body = await c.req.json().catch(() => null) as Record<string, unknown> | null;
     if (!body || typeof body.version !== 'number') return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Missing version' } }, 400);
     const attachments = Array.isArray(body.attachments) ? body.attachments : undefined;
-    const attachmentError = validateAttachments(attachments);
+    const attachmentError = validateWebchatAttachments(attachments);
     if (attachmentError) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: attachmentError } }, 400);
     const result = await service.updateSessionInput(sessionKey, inputId, {
       version: body.version,

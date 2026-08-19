@@ -319,6 +319,7 @@ export function HomePage() {
         objective: trimmed,
         locale: language,
         dependsOnTaskIds: [],
+        attachments: [],
       });
       if (started.mode !== 'start') throw new Error('Task was not started');
       setCreateOpen(false);

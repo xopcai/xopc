@@ -78,6 +78,7 @@ export function CreateTaskScreen() {
       objective: title.trim(),
       projectId: projectId || undefined,
       dependsOnTaskIds,
+      attachments: [],
     }),
     onSuccess: async (created) => {
       const noteId = firstParam(params.noteId);
