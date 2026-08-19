@@ -23,7 +23,7 @@ This page lists tools the xopc agent can call: read and edit files, run commands
 | Delegation & code (optional) | `delegate_task`, `execute_code` |
 | Multi-agent orchestration | `workflow` — fan-out subagents via a deterministic JS script. See [Dynamic Workflows](workflows.md). |
 | Automations (optional) | `automation` — when the runtime exposes the automation service (typical gateway setup) |
-| MCP (optional) | `serverId__toolName` — from configured MCP servers; disable all with `bundle-mcp` in `tools.disable` |
+| MCP (optional) | `serverId__toolName` — from configured MCP servers; control access with `tools.mcp.servers` or `tools.mcp.tools` in an Agent/capability plan |
 
 Extensions may add further tools.
 

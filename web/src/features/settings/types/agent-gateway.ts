@@ -76,6 +76,8 @@ export type GatewayAgentEffectiveManifestPayload = {
   };
   presetChain?: string[];
   sources: Record<string, string>;
+  overrides?: Array<{ path: string; from: string; to: string }>;
+  locks?: string[];
 };
 
 export type GatewayConfigBinding = {

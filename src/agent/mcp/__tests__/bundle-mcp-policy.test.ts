@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { Config } from '../../../config/schema.js';
 
 import {
+  isMcpToolDenied,
   isMcpToolName,
   parseMcpToolName,
   shouldCreateBundleMcpRuntimeForAttempt,
@@ -19,7 +20,7 @@ describe('bundle-mcp-policy', () => {
     expect(parseMcpToolName('exec_command')).toBeNull();
   });
 
-  it('respects bundle-mcp disable sentinel and configured runtime creation', () => {
+  it('creates a runtime only when MCP is configured', () => {
     const connectorManagedConfig = {
       mcp: {
         servers: {
@@ -32,20 +33,16 @@ describe('bundle-mcp-policy', () => {
     } as Config;
 
     expect(
-      shouldCreateBundleMcpRuntimeForAttempt({
-        cfg: connectorManagedConfig,
-        disabledTools: new Set(['bundle-mcp']),
-      }),
-    ).toBe(false);
-    expect(
-      shouldCreateBundleMcpRuntimeForAttempt({
-        cfg: { mcp: { servers: { demo: { command: 'node' } } } },
-      }),
+      shouldCreateBundleMcpRuntimeForAttempt({ mcp: { servers: { demo: { command: 'node' } } } } as Config),
     ).toBe(true);
-    expect(
-      shouldCreateBundleMcpRuntimeForAttempt({
-        cfg: connectorManagedConfig,
-      }),
-    ).toBe(true);
+    expect(shouldCreateBundleMcpRuntimeForAttempt(connectorManagedConfig)).toBe(true);
+    expect(shouldCreateBundleMcpRuntimeForAttempt()).toBe(false);
+  });
+
+  it('applies server and registered-tool deny policies', () => {
+    expect(isMcpToolDenied('fetch__get', { servers: { fetch: { mode: 'deny' } } })).toBe(true);
+    expect(isMcpToolDenied('fetch__get', { tools: { fetch__get: { mode: 'deny' } } })).toBe(true);
+    expect(isMcpToolDenied('fetch__get', { servers: { fetch: { mode: 'allow' } } })).toBe(false);
+    expect(isMcpToolDenied('exec_command', { tools: { exec_command: { mode: 'deny' } } })).toBe(false);
   });
 });

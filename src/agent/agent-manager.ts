@@ -846,7 +846,7 @@ export class AgentManager implements AgentInstanceGateway {
       loadedAt: rt.skillManager.getLoadedAt(),
       diagnostics: rt.skillManager.getDiagnostics(),
       status: rt.skillManager.getStatus(),
-      ...(entry?.skills.mode === 'allowlist' ? { agentAllowlist: [...(entry.skills.allow ?? [])] } : {}),
+      ...(entry?.skills?.mode === 'allowlist' ? { agentAllowlist: [...(entry.skills.allow ?? [])] } : {}),
       ...(profile.skillsAllowlist !== undefined ? { effectiveAllowlist: [...profile.skillsAllowlist] } : {}),
       skills,
     };

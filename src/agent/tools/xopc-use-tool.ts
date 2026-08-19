@@ -9,7 +9,7 @@ import {
   type ProductReference,
 } from '@xopcai/gateway-contract';
 
-import { runWithActivityContext } from '../../activity/index.js';
+import { ObjectLinkService, runWithActivityContext } from '../../activity/index.js';
 import type { Config } from '../../config/schema.js';
 import type { NoteKind, NotesService, NoteStatus } from '../../notes/index.js';
 import {
@@ -213,6 +213,7 @@ function deliveryForXopcResult(
         summary: deliverySummary(source?.markdown),
         status: deliveryText(source?.status),
         revision: deliveryRevision(source?.localVersion) ?? deliveryRevision(source?.updatedAt),
+        projectId: deliveryText(resultRecord.projectId),
         capabilities: ['open', 'preview', 'edit', 'continue_in_chat', 'share'],
       };
     }
@@ -410,12 +411,14 @@ async function handleNote(
   if (!notes) return { ok: false, error: 'Notes service is unavailable' };
 
   if (command === 'list') {
+    const projectId = currentProjectId(args, deps);
     return {
       ok: true,
       ...(await notes.listNotes({
         status: enumValue(args.status, NOTE_STATUSES),
         kind: enumValue(args.kind, NOTE_KINDS),
         tag: trimString(args.tag),
+        projectId,
         search: trimString(args.search),
         pinned: typeof args.pinned === 'boolean' ? args.pinned : undefined,
         limit: boundedLimit(args.limit),
@@ -423,6 +426,7 @@ async function handleNote(
         sortBy: enumValue(args.sortBy, new Set(['createdAt', 'updatedAt', 'lastOpenedAt'] as const)),
         sortOrder: enumValue(args.sortOrder, new Set(['asc', 'desc'] as const)),
       })),
+      ...(projectId ? { projectId } : {}),
     };
   }
 
@@ -434,6 +438,11 @@ async function handleNote(
   }
 
   if (command === 'create') {
+    const projectId = currentProjectId(args, deps);
+    const projectService = projectId ? deps.getProjectService?.() : undefined;
+    if (projectId && !projectService) return { ok: false, error: 'Project service is unavailable' };
+    const project = projectId ? projectService?.get(projectId) : undefined;
+    if (projectId && !project) return { ok: false, error: `Project not found: ${projectId}` };
     const markdown = typeof args.markdown === 'string' ? args.markdown : trimString(args.content) ?? '';
     const input = {
       title: trimString(args.title),
@@ -443,9 +452,18 @@ async function handleNote(
       capturedVia: { channel: 'web' as const },
       pinned: args.pinned === true,
     };
-    if (dryRun) return { ok: true, dryRun: true, action: 'create_note', input };
+    if (dryRun) return { ok: true, dryRun: true, action: 'create_note', input, projectId };
     const note = await notes.createNote(input);
-    return { ok: true, note };
+    if (project) {
+      new ObjectLinkService().create({
+        id: `note:${note.id}:project:${project.id}`,
+        from: { kind: 'note', id: note.id, title: note.title },
+        to: { kind: 'project', id: project.id, title: project.name },
+        relation: 'belongs_to',
+        source: 'user',
+      });
+    }
+    return { ok: true, note, ...(projectId ? { projectId } : {}) };
   }
 
   if (command === 'append') {

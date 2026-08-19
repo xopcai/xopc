@@ -36,9 +36,9 @@ export type CapabilityPresetPolicyFields = {
   };
   workflows?: Record<string, unknown>;
   boundaries?: {
-    requiresConfirmation: string[];
-    forbidden: string[];
-    escalation: string[];
+    requiresConfirmation?: string[];
+    forbidden?: string[];
+    escalation?: string[];
   };
   runtime?: { maxTurns?: number; timeoutMs?: number; maxToolFailuresPerTurn?: number };
   locks?: string[];
@@ -57,6 +57,20 @@ export type CapabilityPresetsPayload = {
   presets: CapabilityPresetRow[];
   agents: Array<{ id: string; name?: string; extends: string[] }>;
   builtinToolIds: string[];
+};
+
+export type CapabilityPresetUpdateBody = {
+  name?: string;
+  description?: string | null;
+  version?: number;
+} & { [K in keyof CapabilityPresetPolicyFields]?: CapabilityPresetPolicyFields[K] | null };
+
+export type CapabilityPresetPreview = {
+  agents: Array<{
+    agentId: string;
+    agentName?: string;
+    diffs: Array<{ path: string; before?: unknown; after?: unknown }>;
+  }>;
 };
 
 export async function fetchCapabilityPresets(): Promise<CapabilityPresetsPayload> {
@@ -104,11 +118,7 @@ export async function createCapabilityPreset(body: {
 
 export async function updateCapabilityPreset(
   id: string,
-  body: {
-    name?: string;
-    description?: string | null;
-    version?: number;
-  } & { [K in keyof CapabilityPresetPolicyFields]?: CapabilityPresetPolicyFields[K] | null },
+  body: CapabilityPresetUpdateBody,
 ): Promise<CapabilityPresetsPayload> {
   const res = await fetchJson<{ ok?: boolean; payload?: CapabilityPresetsPayload }>(
     apiUrl(`/api/capability-presets/${encodeURIComponent(id)}`),
@@ -124,6 +134,20 @@ export async function updateCapabilityPreset(
     !Array.isArray(res.payload.builtinToolIds)
   ) {
     throw new Error('Invalid update capability preset response');
+  }
+  return res.payload;
+}
+
+export async function previewCapabilityPresetUpdate(
+  id: string,
+  body: CapabilityPresetUpdateBody,
+): Promise<CapabilityPresetPreview> {
+  const res = await fetchJson<{ ok?: boolean; payload?: CapabilityPresetPreview }>(
+    apiUrl(`/api/capability-presets/${encodeURIComponent(id)}/preview`),
+    { method: 'POST', body: JSON.stringify(body) },
+  );
+  if (!Array.isArray(res.payload?.agents)) {
+    throw new Error('Invalid capability preset preview response');
   }
   return res.payload;
 }

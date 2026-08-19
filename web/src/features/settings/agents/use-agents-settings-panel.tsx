@@ -364,7 +364,7 @@ export function useAgentsSettingsPanel() {
       setCreateDescription(sourceDescription);
       setCreateWorkspace(source.workspace);
       setCreateModel(source.model?.primary ?? '');
-      setCreatePresetIds([...source.extends]);
+      setCreatePresetIds(source.extends);
       setCreateModalError(null);
     },
     [a.duplicateName, data, makeAvailableAgentId],

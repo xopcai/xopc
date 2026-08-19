@@ -21,6 +21,7 @@ import {
 } from '../agent/context/workspace.js';
 import { seedAgentProfileMarkdownFiles } from '../agent/context/workspace-seed.js';
 import {
+  resolveCapabilityPresetLayer,
   resolveEffectiveAgentManifest,
   type ResolveManifestResult,
 } from '../agent-manifest/resolver.js';
@@ -142,12 +143,20 @@ export async function listGatewayAgents(
 ): Promise<GatewayAgentsListResponse> {
   const defaultId = resolveDefaultAgentId(cfg);
   const agents: GatewayAgentRow[] = [];
-  const presetSkills: string[] | undefined = undefined;
-  const presetDenied: string[] = [];
-  const presetTypedModels: ReturnType<typeof rolesToTypedModels> = [];
   for (const id of collectAgentIdsForList(cfg)) {
     const profile = resolveEffectiveAgentProfile(cfg, id);
     const entry = listAgentEntries(cfg).find((e) => normalizeAgentId(e.id) === id);
+    const presetLayer = resolveCapabilityPresetLayer({
+      presetIds: entry?.extends,
+      presets: cfg.agents.capabilityPresets,
+      defaultPresetId: cfg.agents.defaultPreset,
+    });
+    const presetSkills =
+      presetLayer.patch.skills?.mode === 'allowlist' ? presetLayer.patch.skills.allow ?? [] : undefined;
+    const presetDenied = Object.entries(presetLayer.patch.tools?.builtin ?? {})
+      .filter(([, policy]) => policy.mode === 'deny')
+      .map(([name]) => name);
+    const presetTypedModels = rolesToTypedModels(presetLayer.patch.models?.roles);
     const model =
       profile.primaryModelRef || profile.fallbacks.length > 0
         ? {
@@ -155,8 +164,8 @@ export async function listGatewayAgents(
             ...(profile.fallbacks.length > 0 ? { fallbacks: profile.fallbacks } : {}),
           }
         : undefined;
-    const entrySkills = entry?.skills.mode === 'allowlist' ? entry.skills.allow ?? [] : undefined;
-    const entryDisable = Object.entries(entry?.tools.builtin ?? {})
+    const entrySkills = entry?.skills?.mode === 'allowlist' ? entry.skills.allow ?? [] : undefined;
+    const entryDisable = Object.entries(entry?.tools?.builtin ?? {})
       .filter(([, policy]) => policy.mode === 'deny')
       .map(([name]) => name);
     const entryTypedModels = rolesToTypedModels(entry?.models?.roles);
@@ -339,7 +348,7 @@ export function prepareCreateAgent(
     ...(effectiveModels ? { models: effectiveModels } : {}),
     ...(body.skills !== undefined
       ? { skills: body.skills.map((s) => String(s).trim()).filter(Boolean) }
-      : cloneSourceEntry?.skills.mode === 'allowlist' && body.cloneFrom
+      : cloneSourceEntry?.skills?.mode === 'allowlist' && body.cloneFrom
         ? { skills: [...(cloneSourceEntry.skills.allow ?? [])] }
         : {}),
     ...(body.tools !== undefined ? { tools: body.tools } : cloneSourceEntry?.tools && body.cloneFrom ? { tools: cloneSourceEntry.tools } : {}),
@@ -434,10 +443,6 @@ export function prepareUpdateAgent(
       identity: { name: agentId, role: 'Agent', language: 'en', tone: 'direct' },
       responsibilities: { primary: ['Help the user complete tasks'] },
       workspace: { root: `~/.xopc/workspace/${agentId}` },
-      tools: { builtin: {} },
-      skills: { mode: 'all' },
-      workflows: {},
-      boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
     }];
     idx = list.length - 1;
   }
@@ -519,7 +524,7 @@ export function prepareUpdateAgent(
 
   if (body.skills !== undefined) {
     if (body.skills === null) {
-      entry.skills = { mode: 'all' };
+      delete entry.skills;
     } else {
       const next = body.skills.map((s) => String(s).trim()).filter(Boolean);
       if (next.length === 0) {
@@ -532,7 +537,7 @@ export function prepareUpdateAgent(
 
   if (body.tools !== undefined) {
     if (body.tools === null) {
-      entry.tools = { builtin: {} };
+      delete entry.tools;
     } else {
       entry.tools = body.tools;
     }
