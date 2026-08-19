@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { APP_CHROME_BAR_CLASS, APP_CHROME_DRAG_CLASS } from '@/components/shell/app-chrome';
@@ -26,11 +26,20 @@ import { GlobalVoiceInputShortcutHost } from '@/features/voice/global-voice-inpu
 import { OnboardingDialog } from '@/components/shell/onboarding-dialog';
 import { TopBannerStack } from '@/components/shell/top-banner-stack';
 import { UnderstandingStatusButton } from '@/features/work-discovery/understanding-status-button';
+import {
+  closeWorkDiscoveryOverlaySearch,
+  isWorkDiscoveryOverlaySearch,
+} from '@/features/work-discovery/work-discovery-navigation';
 import { cn } from '@/lib/cn';
 import { isElectronDarwin } from '@/lib/electron-window-chrome';
+import { loadWorkDiscoveryOverlay } from '@/lib/route-preload';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
+
+const WorkDiscoveryOverlay = lazy(() =>
+  loadWorkDiscoveryOverlay().then((module) => ({ default: module.WorkDiscoveryOverlay })),
+);
 
 /** Align with `ui` `navigate-to-chat` custom event from session manager. */
 function NavigateToChatListener() {
@@ -67,12 +76,34 @@ function ExtensionNavigateListener() {
 
 export function AppShell() {
   const token = useGatewayStore((s) => s.token);
-  const { pathname } = useLocation();
+  const location = useLocation();
+  const { pathname } = location;
+  const navigate = useNavigate();
   const isSettingsRoute = pathname.startsWith('/settings');
   const isWorkDiscoveryRoute = pathname === '/onboarding/workspace';
   const language = useLocaleStore((s) => s.language);
   const updateReminder = useUpdateReminder();
   const previewPath = useWorkspacePreviewStore((s) => s.path);
+  const showWorkDiscoveryOverlay = pathname === '/you' && isWorkDiscoveryOverlaySearch(location.search);
+  const [workDiscoveryOverlayMounted, setWorkDiscoveryOverlayMounted] = useState(showWorkDiscoveryOverlay);
+
+  useEffect(() => {
+    if (showWorkDiscoveryOverlay) setWorkDiscoveryOverlayMounted(true);
+  }, [showWorkDiscoveryOverlay]);
+
+  const closeWorkDiscoveryOverlay = useCallback(() => {
+    navigate(
+      { pathname, search: closeWorkDiscoveryOverlaySearch(location.search) },
+      { replace: true },
+    );
+  }, [location.search, navigate, pathname]);
+  const finishWorkDiscoveryOverlayExit = useCallback(() => {
+    setWorkDiscoveryOverlayMounted(false);
+    if (showWorkDiscoveryOverlay) closeWorkDiscoveryOverlay();
+    window.requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>('[data-work-discovery-trigger]')?.focus({ preventScroll: true });
+    });
+  }, [closeWorkDiscoveryOverlay, showWorkDiscoveryOverlay]);
 
   if (!token) {
     return (
@@ -141,6 +172,14 @@ export function AppShell() {
       <ToastHost />
       <TokenDialog />
       <OnboardingDialog />
+      {workDiscoveryOverlayMounted ? (
+        <Suspense fallback={null}>
+          <WorkDiscoveryOverlay
+            requestedOpen={showWorkDiscoveryOverlay}
+            onExited={finishWorkDiscoveryOverlayExit}
+          />
+        </Suspense>
+      ) : null}
       <div className="app-chrome-shell flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <WindowsTitlebar />
         <TopBannerStack>

@@ -1,14 +1,16 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { Brain, CalendarDays, Check, FileText, Loader2, ListChecks, X } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { Button } from '@/components/ui/button';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+import { loadWorkDiscoveryOverlay, preloadRouteForPath } from '@/lib/route-preload';
 import { useLocaleStore } from '@/stores/locale-store';
 
 import { useUnderstandingActivityStore } from './understanding-activity-store';
+import { openWorkDiscoveryOverlaySearch } from './work-discovery-navigation';
 
 export function UnderstandingStatusButton({
   floating = false,
@@ -18,9 +20,21 @@ export function UnderstandingStatusButton({
   persistent?: boolean;
 }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const language = useLocaleStore((state) => state.language);
   const state = useUnderstandingActivityStore();
   const zh = language === 'zh';
+  const preloadWorkDiscovery = () => {
+    if (persistent) void loadWorkDiscoveryOverlay();
+    else preloadRouteForPath('/onboarding/workspace');
+  };
+  const openWorkDiscovery = () => {
+    if (!persistent) {
+      navigate('/onboarding/workspace?new=1');
+      return;
+    }
+    navigate({ pathname: location.pathname, search: openWorkDiscoveryOverlaySearch(location.search) });
+  };
   if (state.status === 'idle') {
     if (!persistent) return null;
     const label = messages(language).you.relearn;
@@ -35,7 +49,11 @@ export function UnderstandingStatusButton({
         )}
         title={label}
         aria-label={label}
-        onClick={() => navigate('/onboarding/workspace?new=1')}
+        data-work-discovery-trigger
+        onPointerEnter={preloadWorkDiscovery}
+        onPointerDown={preloadWorkDiscovery}
+        onFocus={preloadWorkDiscovery}
+        onClick={openWorkDiscovery}
       >
         <Brain className="size-4 text-accent-fg" aria-hidden />
       </Button>
@@ -79,7 +97,7 @@ export function UnderstandingStatusButton({
             {state.memories.length ? <div className="mt-6"><h3 className="text-sm font-semibold text-fg">{zh ? `新理解到 ${state.memories.length} 条背景` : `${state.memories.length} new insights`}</h3><div className="mt-2 space-y-2">{state.memories.map((memory) => <div key={memory.id} className="rounded-xl bg-surface-base p-3 text-sm leading-6 text-fg"><p>{memory.statement}</p>{memory.status === 'pending' && memory.memoryRecordId ? <div className="mt-2 flex gap-2"><Button type="button" className="px-2.5 py-1.5 text-xs" variant="primary" onClick={() => void state.reviewMemory(memory.memoryRecordId!, true)}>{zh ? '记住' : 'Remember'}</Button><Button type="button" className="px-2.5 py-1.5 text-xs" variant="ghost" onClick={() => void state.reviewMemory(memory.memoryRecordId!, false)}>{zh ? '忽略' : 'Ignore'}</Button></div> : <p className="mt-1 text-xs text-fg-muted">{memory.status === 'accepted' ? (zh ? '已写入长期记忆' : 'Saved to memory') : (zh ? '已忽略' : 'Ignored')}</p>}</div>)}</div></div> : null}
             {state.error ? <p className="mt-4 text-sm text-danger">{state.error}</p> : null}
           </div>
-          {!running ? <div className="flex shrink-0 gap-2 border-t border-edge p-4"><Button type="button" className="flex-1" onClick={() => { state.finish(); navigate('/onboarding/workspace?new=1'); }}>{zh ? '重新理解' : 'Run again'}</Button><Button type="button" variant="primary" className="flex-1" onClick={state.finish}>{zh ? '完成' : 'Done'}</Button></div> : null}
+          {!running ? <div className="flex shrink-0 gap-2 border-t border-edge p-4"><Button type="button" className="flex-1" onPointerEnter={preloadWorkDiscovery} onPointerDown={preloadWorkDiscovery} onFocus={preloadWorkDiscovery} onClick={() => { state.finish(); openWorkDiscovery(); }}>{zh ? '重新理解' : 'Run again'}</Button><Button type="button" variant="primary" className="flex-1" onClick={state.finish}>{zh ? '完成' : 'Done'}</Button></div> : null}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
