@@ -43,9 +43,9 @@ export type BuiltinNavDef = {
  */
 export const BUILTIN_NAV_DEFS: readonly BuiltinNavDef[] = [
   { id: 'builtin:work', to: '/work', Icon: BriefcaseBusiness },
-  { id: 'builtin:notes', to: '/notes', Icon: StickyNote },
-  { id: 'builtin:profile', to: '/you', Icon: HeartHandshake },
   { id: 'builtin:projects', to: '/projects', Icon: FolderKanban },
+  { id: 'builtin:profile', to: '/you', Icon: HeartHandshake },
+  { id: 'builtin:notes', to: '/notes', Icon: StickyNote },
   { id: 'builtin:automations', to: '/automations', Icon: Zap },
   { id: 'builtin:skills', to: '/skills', Icon: Layers },
   { id: 'builtin:connectors', to: '/connectors', Icon: Cable },
@@ -57,19 +57,17 @@ export const BUILTIN_NAV_DEFS: readonly BuiltinNavDef[] = [
   { id: 'builtin:extensions', to: '/extensions', Icon: Puzzle },
 ] as const;
 
-/** Product-level destinations that stay visible; advanced capabilities live under More. */
+/** Product-level destinations shown by default; advanced capabilities live under More. */
 export const PRIMARY_NAV_IDS = [
   'builtin:work',
-  'builtin:notes',
+  'builtin:projects',
   'builtin:profile',
 ] as const satisfies readonly BuiltinNavId[];
 
-export function isPrimaryNavId(id: string): boolean {
-  return (PRIMARY_NAV_IDS as readonly string[]).includes(id);
-}
-
-export const MIN_VISIBLE_NAV_ITEMS = PRIMARY_NAV_IDS.length;
-export const MAX_VISIBLE_NAV_ITEMS = PRIMARY_NAV_IDS.length;
+/** Adjustable visible app-row bounds, excluding "New task" and "More apps". */
+export const MIN_VISIBLE_NAV_ITEMS = 2;
+export const DEFAULT_VISIBLE_NAV_ITEMS = PRIMARY_NAV_IDS.length;
+export const MAX_VISIBLE_NAV_ITEMS = 4;
 
 export type ReconciledNav = {
   visible: NavItem[];
@@ -89,19 +87,13 @@ export type ReconciledNav = {
 export function reconcileNavOrder(
   available: readonly NavItem[],
   storedOrder: readonly string[],
-  visibleLimit: number = MIN_VISIBLE_NAV_ITEMS,
+  visibleLimit: number = DEFAULT_VISIBLE_NAV_ITEMS,
 ): ReconciledNav {
   const byId = new Map<string, NavItem>();
   for (const item of available) byId.set(item.id, item);
 
   const ordered: NavItem[] = [];
   const seen = new Set<string>();
-  for (const id of PRIMARY_NAV_IDS) {
-    const item = byId.get(id);
-    if (!item) continue;
-    ordered.push(item);
-    seen.add(id);
-  }
   for (const id of storedOrder) {
     const item = byId.get(id);
     if (!item || seen.has(id)) continue;
