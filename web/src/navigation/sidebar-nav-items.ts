@@ -42,7 +42,7 @@ export type BuiltinNavDef = {
  * Order here is the *initial* sequence shown to first-time users.
  */
 export const BUILTIN_NAV_DEFS: readonly BuiltinNavDef[] = [
-  { id: 'builtin:home', to: '/home', Icon: Home },
+  { id: 'builtin:home', to: '/', Icon: Home },
   { id: 'builtin:projects', to: '/projects', Icon: FolderKanban },
   { id: 'builtin:profile', to: '/you', Icon: HeartHandshake },
   { id: 'builtin:notes', to: '/notes', Icon: StickyNote },

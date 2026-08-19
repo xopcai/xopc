@@ -114,7 +114,7 @@ export function TaskDetailPage() {
   useLayoutEffect(() => {
     setPageHeader({
       startExtra: (
-        <Link to="/home" className="flex size-9 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover hover:text-fg" aria-label={copy.backToWork}>
+        <Link to="/" className="flex size-9 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover hover:text-fg" aria-label={copy.backToWork}>
           <ArrowLeft className="size-4" aria-hidden />
         </Link>
       ),

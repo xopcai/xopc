@@ -153,7 +153,14 @@ const router = createHashRouter([
     path: '/',
     element: <AppShell />,
     children: [
-      { index: true, element: <Navigate to="/home" replace /> },
+      {
+        index: true,
+        element: (
+          <Suspense fallback={<SecondaryRouteFallback />}>
+            <HomePage />
+          </Suspense>
+        ),
+      },
       {
         path: 'open',
         element: (
@@ -198,14 +205,6 @@ const router = createHashRouter([
         element: (
           <Suspense fallback={<SecondaryRouteFallback />}>
             <UserContextPage />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'home',
-        element: (
-          <Suspense fallback={<SecondaryRouteFallback />}>
-            <HomePage />
           </Suspense>
         ),
       },

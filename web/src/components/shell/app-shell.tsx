@@ -94,7 +94,7 @@ export function AppShell() {
 
   // Key for the content area — changes only on top-level route segment so sub-routes
   // (e.g. /chat/new → /chat/:key) don't re-trigger the enter animation.
-  const routeKey = pathname.split('/')[1] ?? 'root';
+  const routeKey = pathname.split('/')[1] || 'root';
   /** Routes that scroll inside the page (not on this shell wrapper). */
   const routeUsesInternalScroll = routeKey === 'chat' || routeKey === 'notes';
 
