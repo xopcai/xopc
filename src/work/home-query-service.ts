@@ -89,10 +89,10 @@ interface WorkHomeGatewayPort {
 }
 
 export function workItemAttentionRank(
-  item: { status: string; dueAt?: number; priority: string; updatedAt: number },
+  item: { waits: Array<{ resolvedAt?: number }>; dueAt?: number; priority: string; updatedAt: number },
   nowMs: number,
 ): number {
-  if (item.status === 'needs_input' || item.status === 'in_review' || item.status === 'blocked') return 0;
+  if (item.waits.some((wait) => !wait.resolvedAt)) return 0;
   if (item.dueAt != null && item.dueAt < nowMs) return 1;
   if (item.dueAt != null && item.dueAt < nowMs + 24 * 60 * 60 * 1000) return 2;
   if (item.priority === 'urgent') return 3;
@@ -100,18 +100,7 @@ export function workItemAttentionRank(
 }
 
 function toHomeWorkItem(
-  item: {
-    id: string;
-    projectId: string;
-    title: string;
-    status: WorkHomeResponse['work']['current'][number]['status'];
-    priority: WorkHomeResponse['work']['current'][number]['priority'];
-    nextAction?: string;
-    blockedReason?: string;
-    dueAt?: number;
-    completedAt?: number;
-    updatedAt: number;
-  },
+  item: Omit<WorkHomeResponse['work']['current'][number], 'projectName'>,
   projectName: string,
 ) {
   return { ...item, projectName };
@@ -230,8 +219,9 @@ function decisionFromWorkItem(
 ): HomeDecision | null {
   let reason: HomeDecision['reason'] | undefined;
   let urgency: HomeDecision['urgency'] = 'now';
-  if (item.status === 'needs_input' || item.status === 'in_review' || item.status === 'blocked') {
-    reason = item.status;
+  const openWait = item.waits.find((wait) => !wait.resolvedAt);
+  if (openWait) {
+    reason = openWait.kind;
   } else if (item.dueAt != null && item.dueAt < nowMs) {
     reason = 'overdue';
   } else if (item.dueAt != null && item.dueAt < nowMs + 24 * 60 * 60 * 1000) {
@@ -243,7 +233,7 @@ function decisionFromWorkItem(
     id: `work:${item.id}`,
     kind: 'work_item',
     title: item.title,
-    detail: item.blockedReason || item.nextAction,
+    detail: openWait?.reason || item.nextAction?.text,
     reason,
     urgency,
     href: `/work-items/${encodeURIComponent(item.id)}`,
@@ -343,7 +333,7 @@ export class WorkHomeQueryService {
         active: sessions.getActiveRun(session.key).active,
       }));
     const activeWorkItems = allWorkItems.items
-      .filter((item) => item.status !== 'done' && item.status !== 'cancelled')
+      .filter((item) => item.phase !== 'closed')
       .sort((left, right) => {
         const rank = workItemAttentionRank(left, nowMs) - workItemAttentionRank(right, nowMs);
         return rank || right.updatedAt - left.updatedAt;
@@ -356,8 +346,8 @@ export class WorkHomeQueryService {
       .slice(0, 30)
       .map((item) => toHomeWorkItem(item, projectsById.get(item.projectId)?.name ?? 'Project'));
     const recentlyCompletedWorkItems = allWorkItems.items
-      .filter((item) => item.status === 'done')
-      .sort((left, right) => (right.completedAt ?? right.updatedAt) - (left.completedAt ?? left.updatedAt))
+      .filter((item) => item.phase === 'closed' && item.resolution === 'completed')
+      .sort((left, right) => (right.closedAt ?? right.updatedAt) - (left.closedAt ?? left.updatedAt))
       .slice(0, 8)
       .map((item) => toHomeWorkItem(item, projectsById.get(item.projectId)?.name ?? 'Project'));
 
@@ -476,7 +466,7 @@ export class WorkHomeQueryService {
         kind: 'work_item',
         title: item.title,
         href: `/work-items/${encodeURIComponent(item.id)}`,
-        completedAt: item.completedAt ?? item.updatedAt,
+        completedAt: item.closedAt ?? item.updatedAt,
       })),
       ...workflowRuns.filter((run) => run.status === 'succeeded').map((run): HomeBriefingWin => ({
         id: `workflow:${run.id}`,
@@ -497,7 +487,7 @@ export class WorkHomeQueryService {
       locale,
       decisions,
       attention,
-      activeWorkCount: activeWorkItems.filter((item) => item.status === 'in_progress').length,
+      activeWorkCount: activeWorkItems.filter((item) => item.phase === 'executing').length,
       activeWorkflowCount: activeWorkflowRuns.length,
       activeOutcomeCount: activeOutcomes.length,
       wins,

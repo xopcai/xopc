@@ -9,7 +9,7 @@ import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { useMessages } from '../../i18n/messages';
 import { dismissOrHome } from '../../lib/navigation';
 import { queryKeys } from '../../query/keys';
-import { fetchWorkItem, patchWorkItem, type WorkItemStatus } from '../../query/work-items';
+import { executeWorkItemCommand, fetchWorkItem, patchWorkItemMetadata, type WorkItemCommand } from '../../query/work-items';
 import { useGatewayConfigured } from '../../query/sessions';
 import { radii, spacing, typography, useTheme } from '../../theme';
 
@@ -26,21 +26,31 @@ export function WorkItemScreen() {
   const { workPage: labels } = useMessages();
   const query = useQuery({ queryKey: queryKeys.workItem(workItemId), queryFn: () => fetchWorkItem(workItemId), enabled: configured && !!workItemId });
   const [nextAction, setNextAction] = useState('');
-  useEffect(() => setNextAction(query.data?.nextAction ?? ''), [query.data?.nextAction]);
+  useEffect(() => setNextAction(query.data?.item.nextAction?.text ?? ''), [query.data?.item.nextAction?.text]);
   const update = useMutation({
-    mutationFn: (patch: { status?: WorkItemStatus; nextAction?: string | null }) => patchWorkItem(workItemId, patch),
-    onSuccess: (item) => {
-      queryClient.setQueryData(queryKeys.workItem(workItemId), item);
+    mutationFn: (action: { kind: 'metadata'; nextAction: string } | { kind: 'command'; command: WorkItemCommand }) => (
+      action.kind === 'metadata'
+        ? patchWorkItemMetadata(workItemId, query.data!.item.version, {
+            nextAction: action.nextAction.trim() ? { text: action.nextAction.trim(), actor: query.data!.item.nextAction?.actor ?? 'agent' } : null,
+          }).then((item) => ({ item, availableCommands: query.data!.availableCommands }))
+        : executeWorkItemCommand(workItemId, action.command)
+    ),
+    onSuccess: (result) => {
+      queryClient.setQueryData(queryKeys.workItem(workItemId), result);
       void queryClient.invalidateQueries({ queryKey: queryKeys.workItems() });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.projectWorkItems(item.projectId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projectWorkItems(result.item.projectId) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.home });
     },
   });
-  const item = query.data;
-  const primaryStatus: WorkItemStatus | undefined = item?.status === 'todo' || item?.status === 'backlog'
-    ? 'in_progress'
-    : item?.status === 'in_progress' || item?.status === 'in_review' ? 'done' : undefined;
-  const primaryLabel = primaryStatus === 'in_progress' ? labels.start : labels.complete;
+  const item = query.data?.item;
+  const primaryType = (['commit', 'start', 'request_review', 'complete', 'accept', 'reopen'] as const)
+    .find((type) => query.data?.availableCommands.includes(type));
+  const primaryCommand: WorkItemCommand | undefined = item && primaryType
+    ? primaryType === 'request_review'
+      ? { type: primaryType, expectedVersion: item.version, summary: 'Ready for verification.' }
+      : { type: primaryType, expectedVersion: item.version }
+    : undefined;
+  const primaryLabel = primaryType === 'start' || primaryType === 'commit' || primaryType === 'reopen' ? labels.start : labels.complete;
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
@@ -48,15 +58,15 @@ export function WorkItemScreen() {
       {query.isLoading || !item ? <View style={styles.loading}><ActivityIndicator /></View> : (
         <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xl }]}>
           <Text style={[styles.title, { color: colors.text.primary }]}>{item.title}</Text>
-          <Text style={[styles.status, { color: colors.accent.primary }]}>{labels.status[item.status]}</Text>
+          <Text style={[styles.status, { color: colors.accent.primary }]}>{labels.status[item.phase]}</Text>
           {item.description ? <Text style={[styles.description, { color: colors.text.secondary }]}>{item.description}</Text> : null}
           <View style={[styles.section, { borderColor: colors.border.default, backgroundColor: colors.surface.panel }]}>
             <Text style={[styles.label, { color: colors.text.primary }]}>{labels.nextAction}</Text>
             <TextInput value={nextAction} onChangeText={setNextAction} placeholder={labels.nextActionPlaceholder} placeholderTextColor={colors.text.tertiary} style={[styles.input, { color: colors.text.primary, borderColor: colors.border.default }]} multiline />
-            <Pressable disabled={update.isPending} onPress={() => update.mutate({ nextAction: nextAction.trim() || null })} style={({ pressed }) => [styles.button, { backgroundColor: colors.accent.primary, opacity: pressed || update.isPending ? 0.7 : 1 }]}><Text style={styles.buttonText}>{labels.save}</Text></Pressable>
+            <Pressable disabled={update.isPending} onPress={() => update.mutate({ kind: 'metadata', nextAction })} style={({ pressed }) => [styles.button, { backgroundColor: colors.accent.primary, opacity: pressed || update.isPending ? 0.7 : 1 }]}><Text style={styles.buttonText}>{labels.save}</Text></Pressable>
           </View>
-          {item.blockedReason ? <View style={[styles.section, { borderColor: colors.border.default, backgroundColor: colors.surface.panel }]}><Text style={[styles.label, { color: colors.text.primary }]}>{labels.blocked}</Text><Text style={{ color: colors.text.secondary }}>{item.blockedReason}</Text></View> : null}
-          {primaryStatus ? <Pressable disabled={update.isPending} onPress={() => update.mutate({ status: primaryStatus })} style={({ pressed }) => [styles.primaryButton, { backgroundColor: colors.accent.primary, opacity: pressed || update.isPending ? 0.7 : 1 }]}><Text style={styles.buttonText}>{primaryLabel}</Text></Pressable> : null}
+          {item.waits.filter((wait) => !wait.resolvedAt).map((wait) => <View key={wait.id} style={[styles.section, { borderColor: colors.border.default, backgroundColor: colors.surface.panel }]}><Text style={[styles.label, { color: colors.text.primary }]}>{wait.kind}</Text><Text style={{ color: colors.text.secondary }}>{wait.reason}</Text></View>)}
+          {primaryCommand ? <Pressable disabled={update.isPending} onPress={() => update.mutate({ kind: 'command', command: primaryCommand })} style={({ pressed }) => [styles.primaryButton, { backgroundColor: colors.accent.primary, opacity: pressed || update.isPending ? 0.7 : 1 }]}><Text style={styles.buttonText}>{primaryLabel}</Text></Pressable> : null}
         </ScrollView>
       )}
     </View>

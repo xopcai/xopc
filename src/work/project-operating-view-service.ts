@@ -39,7 +39,16 @@ export class ProjectOperatingViewService {
       }];
     });
     const actions = this.workItems.listProjectWorkItems(project.id, { limit: 100 }).items
-      .filter((item) => item.status !== 'done' && item.status !== 'cancelled');
+      .filter((item) => item.phase !== 'closed')
+      .map((item) => ({
+        id: item.id,
+        title: item.title,
+        phase: item.phase,
+        priority: item.priority,
+        nextAction: item.nextAction,
+        waits: item.waits.filter((wait) => !wait.resolvedAt).map(({ kind, reason }) => ({ kind, reason })),
+        updatedAt: item.updatedAt,
+      }));
     const loop = buildProjectLoopOverview({
       project,
       outcomes,

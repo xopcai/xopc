@@ -1,27 +1,40 @@
+import { createHash, randomUUID } from 'node:crypto';
+
+import type { WorkItemCommand, WorkItemCommandProposal } from '@xopcai/gateway-contract';
+
 import { changedFieldsFromPatch, emitActivity, systemActivityActor, systemActivitySource } from '../activity/emitter.js';
-import { deleteMediaBuffer, mimeTypeFromMediaPath, saveMediaBuffer } from '../media/store.js';
 import { readMediaReference } from '../media/media-reference.js';
+import { deleteMediaBuffer, mimeTypeFromMediaPath, saveMediaBuffer } from '../media/store.js';
 import type { ProactiveSignalPublisher } from '../proactive/events/publisher.js';
 import { runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
+import {
+  availableWorkItemCommands,
+  transitionWorkItem,
+  type WorkItemCommandActor,
+} from './lifecycle.js';
 import { WorkItemStore } from './work-item-store.js';
 import type {
-  CreateWorkItemUpdateSuggestionInput,
+  CreateWorkItemCommandProposalInput,
   CreateWorkItemInput,
-  UpdateWorkItemInput,
+  UpdateWorkItemMetadataInput,
   WorkItem,
   WorkItemAttachment,
   WorkItemEvent,
   WorkItemLink,
   WorkItemListQuery,
   WorkItemListResult,
-  WorkItemUpdateSuggestion,
-  WorkItemUpdateSuggestionStatus,
 } from './types.js';
 
 export const WORK_ITEM_ATTACHMENT_MAX_BYTES = 25 * 1024 * 1024;
 export const WORK_ITEM_ATTACHMENT_MAX_COUNT = 10;
 export const WORK_ITEM_ATTACHMENT_UPLOAD_BODY_MAX_BYTES =
   WORK_ITEM_ATTACHMENT_MAX_BYTES * WORK_ITEM_ATTACHMENT_MAX_COUNT + 1024 * 1024;
+
+export interface ExecuteWorkItemCommandContext {
+  actor: WorkItemCommandActor;
+  source: 'web' | 'mobile' | 'agent_tool' | 'workflow' | 'automation' | 'system';
+  requestId: string;
+}
 
 function inferAttachmentType(mimeType: string): WorkItemAttachment['type'] {
   if (mimeType.startsWith('image/')) return 'image';
@@ -42,68 +55,125 @@ export class WorkItemService {
   }
 
   createProjectWorkItem(projectId: string, input: CreateWorkItemInput): WorkItem {
-    const item = this.store.create(projectId, input);
-    this.store.addEvent(item.id, 'created', { title: item.title, status: item.status, priority: item.priority });
-    emitActivity({
-      type: 'work_item.created',
-      primaryObject: { kind: 'work_item', id: item.id, title: item.title },
-      actor: systemActivityActor(),
-      source: systemActivitySource(),
-      payload: { title: item.title, status: item.status, priority: item.priority },
-      scopes: [{ scopeKind: 'project', scopeId: projectId, reason: 'object_owner' }],
-      nowMs: item.createdAt,
+    return runSqliteWriteTransaction(() => {
+      const item = this.store.create(projectId, input);
+      this.store.addEvent(item.id, 'work_item.created', {
+        phase: item.phase,
+        priority: item.priority,
+        completionPolicy: item.completionPolicy,
+      });
+      emitActivity({
+        type: 'work_item.created',
+        primaryObject: { kind: 'work_item', id: item.id, title: item.title },
+        actor: systemActivityActor(),
+        source: systemActivitySource(),
+        payload: { phase: item.phase, priority: item.priority, completionPolicy: item.completionPolicy },
+        scopes: [{ scopeKind: 'project', scopeId: projectId, reason: 'object_owner' }],
+        nowMs: item.createdAt,
+      });
+      return item;
     });
-    return { ...item, links: [] };
   }
 
   getWorkItem(id: string): WorkItem | null {
     return this.store.get(id);
   }
 
-  updateWorkItem(id: string, patch: UpdateWorkItemInput): WorkItem | null {
+  availableCommands(id: string, actor: WorkItemCommandActor): WorkItemCommand['type'][] | null {
+    const item = this.store.get(id);
+    return item ? availableWorkItemCommands(item, actor) : null;
+  }
+
+  updateMetadata(id: string, patch: UpdateWorkItemMetadataInput, expectedVersion: number): WorkItem | null {
     return runSqliteWriteTransaction(() => {
       const before = this.store.get(id);
       if (!before) return null;
-      const after = this.store.update(id, patch);
+      const after = this.store.updateMetadata(id, patch, expectedVersion);
       if (!after) return null;
-      if (before.status !== after.status) this.store.addEvent(id, 'status_changed', { from: before.status, to: after.status });
-      else this.store.addEvent(id, 'updated', patch);
-      if (!before.archivedAt && after.archivedAt) this.store.addEvent(id, 'archived', { archivedAt: after.archivedAt });
-      const type = !before.archivedAt && after.archivedAt ? 'work_item.archived'
-        : before.status !== after.status ? 'work_item.status_changed' : 'work_item.updated';
       const changes = changedFieldsFromPatch(patch as Record<string, unknown>);
-      emitActivity({ type, primaryObject: { kind: 'work_item', id: after.id, title: after.title },
-        actor: systemActivityActor(), source: systemActivitySource(),
-        payload: { changes, ...(type === 'work_item.status_changed' ? { from: before.status, to: after.status } : {}),
-          ...(type === 'work_item.archived' ? { archivedAt: after.archivedAt } : {}) },
-        scopes: [{ scopeKind: 'project', scopeId: after.projectId, reason: 'object_owner' }], nowMs: after.updatedAt });
-      this.signals?.publish({
-        type: before.status !== after.status ? 'work_item.status_changed.v1' : 'work_item.updated.v1', schemaVersion: 1,
-        source: { kind: 'work_items', id: 'local' }, subject: { kind: 'work_item', id: after.id }, actor: { kind: 'system' },
-        scope: { workspaceId: 'default', projectId: after.projectId }, occurredAt: new Date(after.updatedAt).toISOString(),
-        dedupeKey: `work_item:${after.id}:${after.updatedAt}:${createHash('sha256').update(JSON.stringify(patch)).digest('hex')}`,
-        sensitivity: 'personal', payload: { before, after, changes },
-      });
+      this.store.addEvent(id, 'work_item.metadata_updated', { changes, beforeVersion: before.version, afterVersion: after.version });
+      this.publishChange(after, 'work_item.updated.v1', { before, after, changes });
       return after;
     });
   }
 
-  addLink(workItemId: string, input: Omit<WorkItemLink, 'id' | 'workItemId' | 'createdAt'>, eventType: Parameters<WorkItemStore['addEvent']>[1] = 'link_added'): WorkItemLink | null {
-    if (!this.store.get(workItemId)) return null;
-    const link = this.store.addLink({ ...input, workItemId });
-    this.store.addEvent(workItemId, eventType, { kind: link.kind, targetId: link.targetId, title: link.title, statusSnapshot: link.statusSnapshot });
-    const item = this.store.get(workItemId);
-    if (item) {
-      emitActivity({
-        type: 'work_item.link_added',
-        primaryObject: { kind: 'work_item', id: item.id, title: item.title },
-        actor: systemActivityActor(),
-        source: systemActivitySource(),
-        payload: { target: { kind: link.kind, id: link.targetId, title: link.title } },
-        scopes: [{ scopeKind: 'project', scopeId: item.projectId, reason: 'object_owner' }],
-        nowMs: link.createdAt,
+  executeCommand(id: string, command: WorkItemCommand, context: ExecuteWorkItemCommandContext): WorkItem | null {
+    return runSqliteWriteTransaction(() => {
+      const before = this.store.get(id);
+      if (!before) return null;
+      if (command.type === 'wait' && command.wait.kind === 'dependency') {
+        const blockerId = command.wait.blockingWorkItemId!;
+        if (!this.store.get(blockerId)) throw new Error(`Blocking work item not found: ${blockerId}`);
+        if (this.store.wouldCreateDependencyCycle(id, blockerId)) throw new Error('Work item dependency would create a cycle');
+      }
+      const transition = transitionWorkItem(before, command, {
+        actor: context.actor,
+        now: Date.now(),
+        createId: randomUUID,
       });
-    }
+      const after = this.store.saveTransition(transition.item);
+      if (!after) return null;
+      this.store.addEvent(id, transition.eventType as Parameters<WorkItemStore['addEvent']>[1], {
+        requestId: context.requestId,
+        actor: context.actor,
+        source: context.source,
+        before: { phase: before.phase, version: before.version, resolution: before.resolution },
+        after: { phase: after.phase, version: after.version, resolution: after.resolution },
+        ...transition.eventPayload,
+      });
+      this.publishChange(after, 'work_item.lifecycle_changed.v1', { before, after, command: command.type });
+      return after;
+    });
+  }
+
+  setArchived(id: string, archived: boolean, expectedVersion: number): WorkItem | null {
+    return runSqliteWriteTransaction(() => {
+      const item = this.store.setArchived(id, archived, expectedVersion);
+      if (!item) return null;
+      this.store.addEvent(id, archived ? 'work_item.archived' : 'work_item.unarchived', { archivedAt: item.archivedAt });
+      this.publishChange(item, 'work_item.updated.v1', { archivedAt: item.archivedAt });
+      return item;
+    });
+  }
+
+  private publishChange(item: WorkItem, type: string, payload: Record<string, unknown>): void {
+    emitActivity({
+      type,
+      primaryObject: { kind: 'work_item', id: item.id, title: item.title },
+      actor: systemActivityActor(),
+      source: systemActivitySource(),
+      payload,
+      scopes: [{ scopeKind: 'project', scopeId: item.projectId, reason: 'object_owner' }],
+      nowMs: item.updatedAt,
+    });
+    this.signals?.publish({
+      type,
+      schemaVersion: 1,
+      source: { kind: 'work_items', id: 'local' },
+      subject: { kind: 'work_item', id: item.id },
+      actor: { kind: 'system' },
+      scope: { workspaceId: 'default', projectId: item.projectId },
+      occurredAt: new Date(item.updatedAt).toISOString(),
+      dedupeKey: `work_item:${item.id}:${item.version}:${createHash('sha256').update(JSON.stringify(payload)).digest('hex')}`,
+      sensitivity: 'personal',
+      payload,
+    });
+  }
+
+  addLink(
+    workItemId: string,
+    input: Omit<WorkItemLink, 'id' | 'workItemId' | 'createdAt'>,
+  ): WorkItemLink | null {
+    const item = this.store.get(workItemId);
+    if (!item) return null;
+    const link = this.store.addLink({ ...input, workItemId });
+    this.store.addEvent(workItemId, 'work_item.link_added', {
+      kind: link.kind,
+      targetId: link.targetId,
+      title: link.title,
+      statusSnapshot: link.statusSnapshot,
+    });
+    this.publishChange(item, 'work_item.link_added', { target: { kind: link.kind, id: link.targetId, title: link.title } });
     return link;
   }
 
@@ -112,8 +182,7 @@ export class WorkItemService {
   }
 
   listAttachments(workItemId: string): WorkItemAttachment[] | null {
-    if (!this.store.get(workItemId)) return null;
-    return this.store.listAttachments(workItemId);
+    return this.store.get(workItemId) ? this.store.listAttachments(workItemId) : null;
   }
 
   async addAttachment(
@@ -138,7 +207,7 @@ export class WorkItemService {
       fileName: file.name.trim() || saved.id,
       size: saved.size,
     });
-    this.store.addEvent(workItemId, 'attachment_added', {
+    this.store.addEvent(workItemId, 'work_item.attachment_added', {
       attachmentId: attachment.id,
       fileName: attachment.fileName,
       mimeType: attachment.mimeType,
@@ -161,78 +230,39 @@ export class WorkItemService {
     const attachment = this.store.removeAttachment(workItemId, attachmentId);
     if (!attachment) return null;
     await deleteMediaBuffer(attachment.mediaId, 'work-item');
-    this.store.addEvent(workItemId, 'attachment_removed', {
+    this.store.addEvent(workItemId, 'work_item.attachment_removed', {
       attachmentId: attachment.id,
       fileName: attachment.fileName,
-      mimeType: attachment.mimeType,
-      size: attachment.size,
     });
     return attachment;
   }
 
-  createUpdateSuggestion(workItemId: string, input: CreateWorkItemUpdateSuggestionInput): WorkItemUpdateSuggestion | null {
-    const suggestion = this.store.createUpdateSuggestion(workItemId, input);
-    if (!suggestion) return null;
-    this.store.addEvent(workItemId, 'update_suggestion_created', {
-      suggestionId: suggestion.id,
-      sourceKind: suggestion.sourceKind,
-      sourceId: suggestion.sourceId,
-      patch: suggestion.patch,
-      hasProgressNote: Boolean(suggestion.progressNote),
+  createCommandProposal(workItemId: string, input: CreateWorkItemCommandProposalInput): WorkItemCommandProposal | null {
+    const proposal = this.store.createCommandProposal(workItemId, input);
+    if (proposal) this.store.addEvent(workItemId, 'work_item.command_proposed', { proposalId: proposal.id, command: proposal.command.type });
+    return proposal;
+  }
+
+  listCommandProposals(workItemId: string, state?: WorkItemCommandProposal['state']): WorkItemCommandProposal[] {
+    return this.store.listCommandProposals(workItemId, state);
+  }
+
+  executeCommandProposal(id: string, context: ExecuteWorkItemCommandContext): { item: WorkItem; proposal: WorkItemCommandProposal } | null {
+    return runSqliteWriteTransaction(() => {
+      const proposal = this.store.getCommandProposal(id);
+      if (!proposal || proposal.state !== 'pending') return null;
+      const item = this.executeCommand(proposal.workItemId, proposal.command, context);
+      if (!item) return null;
+      const resolved = this.store.resolveCommandProposal(id, 'executed');
+      if (!resolved) return null;
+      this.store.addEvent(item.id, 'work_item.command_proposal_executed', { proposalId: id });
+      return { item, proposal: resolved };
     });
-    return suggestion;
   }
 
-  listUpdateSuggestions(workItemId: string, status?: WorkItemUpdateSuggestionStatus): WorkItemUpdateSuggestion[] {
-    return this.store.listUpdateSuggestions(workItemId, status);
-  }
-
-  applyUpdateSuggestion(id: string): { item: WorkItem; suggestion: WorkItemUpdateSuggestion } | null {
-    const suggestion = this.store.getUpdateSuggestion(id);
-    if (!suggestion || suggestion.status !== 'pending') return null;
-    const before = this.store.get(suggestion.workItemId);
-    if (!before) return null;
-    const patch: UpdateWorkItemInput = {};
-    if (suggestion.patch.status !== undefined) patch.status = suggestion.patch.status;
-    if (suggestion.patch.nextAction !== undefined) patch.nextAction = suggestion.patch.nextAction;
-    if (suggestion.patch.blockedReason !== undefined) patch.blockedReason = suggestion.patch.blockedReason;
-    const item = Object.keys(patch).length > 0
-      ? this.updateWorkItem(suggestion.workItemId, patch)
-      : before;
-    if (!item) return null;
-    if (suggestion.progressNote) {
-      this.store.addEvent(suggestion.workItemId, 'progress_note_added', {
-        sourceKind: suggestion.sourceKind,
-        sourceId: suggestion.sourceId,
-        suggestionId: suggestion.id,
-        text: suggestion.progressNote,
-      });
-    }
-    const marked = this.store.markUpdateSuggestion(id, 'applied');
-    if (!marked) return null;
-    this.store.addEvent(suggestion.workItemId, 'update_suggestion_applied', {
-      suggestionId: suggestion.id,
-      sourceKind: suggestion.sourceKind,
-      sourceId: suggestion.sourceId,
-      patch,
-      previousStatus: before.status,
-      nextStatus: item.status,
-    });
-    return { item, suggestion: marked };
-  }
-
-  dismissUpdateSuggestion(id: string): WorkItemUpdateSuggestion | null {
-    const suggestion = this.store.getUpdateSuggestion(id);
-    if (!suggestion || suggestion.status !== 'pending') return null;
-    const marked = this.store.markUpdateSuggestion(id, 'dismissed');
-    if (marked) {
-      this.store.addEvent(marked.workItemId, 'update_suggestion_dismissed', {
-        suggestionId: marked.id,
-        sourceKind: marked.sourceKind,
-        sourceId: marked.sourceId,
-      });
-    }
-    return marked;
+  rejectCommandProposal(id: string): WorkItemCommandProposal | null {
+    const proposal = this.store.resolveCommandProposal(id, 'rejected');
+    if (proposal) this.store.addEvent(proposal.workItemId, 'work_item.command_proposal_rejected', { proposalId: id });
+    return proposal;
   }
 }
-import { createHash } from 'node:crypto';

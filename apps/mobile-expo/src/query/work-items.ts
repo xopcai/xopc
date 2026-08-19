@@ -1,68 +1,40 @@
+import {
+  ProjectOperatingViewSchema,
+  WorkItemSchema,
+  type ProjectOperatingView,
+  type WorkItem,
+  type WorkItemCommand,
+  type WorkItemCompletionPolicy,
+  type WorkItemNextAction,
+  type WorkItemPhase,
+  type WorkItemPriority,
+} from '@xopcai/gateway-contract';
 import { z } from 'zod';
-import { ProjectOperatingViewSchema, type ProjectOperatingView } from '@xopcai/gateway-contract';
 
 import { apiFetch } from '../api/client';
 
-export const workItemStatuses = ['backlog', 'todo', 'in_progress', 'blocked', 'needs_input', 'in_review', 'done', 'cancelled'] as const;
-export type WorkItemStatus = typeof workItemStatuses[number];
-export const workItemPriorities = ['urgent', 'high', 'normal', 'low'] as const;
-export type WorkItemPriority = typeof workItemPriorities[number];
-
-const workItemSchema = z.object({
-  id: z.string(),
-  projectId: z.string(),
-  title: z.string(),
-  description: z.string().optional(),
-  status: z.enum(workItemStatuses),
-  priority: z.enum(workItemPriorities),
-  ownerAgentId: z.string().optional(),
-  nextAction: z.string().optional(),
-  blockedReason: z.string().optional(),
-  dueAt: z.number().optional(),
-  completedAt: z.number().optional(),
-  archivedAt: z.number().optional(),
-  createdAt: z.number(),
-  updatedAt: z.number(),
-});
-
-export type WorkItem = z.infer<typeof workItemSchema>;
+export type { WorkItem, WorkItemCommand, WorkItemNextAction, WorkItemPhase, WorkItemPriority };
 
 const workItemListSchema = z.object({
   ok: z.literal(true),
-  items: z.array(workItemSchema),
+  items: z.array(WorkItemSchema),
   total: z.number(),
   limit: z.number(),
   offset: z.number(),
   hasMore: z.boolean(),
 });
-
-const projectSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  description: z.string().optional(),
-  status: z.string().optional(),
-  updatedAt: z.number().optional(),
-});
-
+const projectSchema = z.object({ id: z.string(), name: z.string(), description: z.string().optional(), status: z.string().optional(), updatedAt: z.number().optional() });
 export type Project = z.infer<typeof projectSchema>;
 
 export type WorkItemListQuery = {
-  status?: WorkItemStatus[];
+  phase?: WorkItemPhase[];
   priority?: WorkItemPriority[];
   includeArchived?: boolean;
   search?: string;
-  sortBy?: 'updatedAt' | 'createdAt' | 'priority' | 'status';
+  sortBy?: 'updatedAt' | 'createdAt' | 'priority' | 'phase' | 'dueAt';
   sortOrder?: 'asc' | 'desc';
   limit?: number;
   offset?: number;
-};
-
-export type UpdateWorkItemInput = Partial<Pick<WorkItem, 'title' | 'status' | 'priority'>> & {
-  description?: string | null;
-  nextAction?: string | null;
-  blockedReason?: string | null;
-  dueAt?: number | null;
-  archivedAt?: number | null;
 };
 
 async function readError(res: Response): Promise<Error> {
@@ -72,7 +44,7 @@ async function readError(res: Response): Promise<Error> {
 
 function toQueryString(query?: WorkItemListQuery): string {
   const params = new URLSearchParams();
-  if (query?.status?.length) params.set('status', query.status.join(','));
+  if (query?.phase?.length) params.set('phase', query.phase.join(','));
   if (query?.priority?.length) params.set('priority', query.priority.join(','));
   if (query?.includeArchived) params.set('includeArchived', 'true');
   if (query?.search?.trim()) params.set('search', query.search.trim());
@@ -84,63 +56,64 @@ function toQueryString(query?: WorkItemListQuery): string {
   return value ? `?${value}` : '';
 }
 
-export async function fetchWorkItems(query?: WorkItemListQuery) {
-  const res = await apiFetch(`/api/work-items${toQueryString(query)}`);
+async function fetchList(path: string) {
+  const res = await apiFetch(path);
   if (!res.ok) throw await readError(res);
-  const parsed = workItemListSchema.safeParse(await res.json());
-  if (!parsed.success) throw new Error('Invalid work item list response');
-  return parsed.data;
+  return workItemListSchema.parse(await res.json());
 }
 
-export async function fetchProjectWorkItems(projectId: string, query?: WorkItemListQuery) {
-  const res = await apiFetch(`/api/projects/${encodeURIComponent(projectId)}/work-items${toQueryString(query)}`);
-  if (!res.ok) throw await readError(res);
-  const parsed = workItemListSchema.safeParse(await res.json());
-  if (!parsed.success) throw new Error('Invalid project work item list response');
-  return parsed.data;
-}
+export function fetchWorkItems(query?: WorkItemListQuery) { return fetchList(`/api/work-items${toQueryString(query)}`); }
+export function fetchProjectWorkItems(projectId: string, query?: WorkItemListQuery) { return fetchList(`/api/projects/${encodeURIComponent(projectId)}/work-items${toQueryString(query)}`); }
 
-export async function fetchWorkItem(workItemId: string): Promise<WorkItem> {
+export async function fetchWorkItem(workItemId: string): Promise<{ item: WorkItem; availableCommands: WorkItemCommand['type'][] }> {
   const res = await apiFetch(`/api/work-items/${encodeURIComponent(workItemId)}`);
   if (!res.ok) throw await readError(res);
-  const parsed = z.object({ ok: z.literal(true), item: workItemSchema }).safeParse(await res.json());
-  if (!parsed.success) throw new Error('Invalid work item response');
-  return parsed.data.item;
+  const parsed = z.object({ ok: z.literal(true), item: WorkItemSchema, availableCommands: z.array(z.string()) }).parse(await res.json());
+  return { item: parsed.item, availableCommands: parsed.availableCommands as WorkItemCommand['type'][] };
 }
 
-export async function patchWorkItem(workItemId: string, patch: UpdateWorkItemInput): Promise<WorkItem> {
-  const res = await apiFetch(`/api/work-items/${encodeURIComponent(workItemId)}`, {
-    method: 'PATCH',
-    body: JSON.stringify(patch),
-  });
+export async function patchWorkItemMetadata(workItemId: string, expectedVersion: number, patch: {
+  title?: string;
+  description?: string | null;
+  priority?: WorkItemPriority;
+  completionPolicy?: WorkItemCompletionPolicy;
+  nextAction?: WorkItemNextAction | null;
+  dueAt?: number | null;
+}): Promise<WorkItem> {
+  const res = await apiFetch(`/api/work-items/${encodeURIComponent(workItemId)}`, { method: 'PATCH', body: JSON.stringify({ ...patch, expectedVersion }) });
   if (!res.ok) throw await readError(res);
-  const parsed = z.object({ ok: z.literal(true), item: workItemSchema }).safeParse(await res.json());
-  if (!parsed.success) throw new Error('Invalid work item update response');
-  return parsed.data.item;
+  return z.object({ ok: z.literal(true), item: WorkItemSchema }).parse(await res.json()).item;
 }
 
-export async function createWorkItem(projectId: string, input: Pick<WorkItem, 'title'> & Partial<Pick<WorkItem, 'description' | 'status' | 'priority' | 'nextAction' | 'blockedReason' | 'dueAt'>>): Promise<WorkItem> {
-  const res = await apiFetch(`/api/projects/${encodeURIComponent(projectId)}/work-items`, {
-    method: 'POST',
-    body: JSON.stringify(input),
-  });
+export async function executeWorkItemCommand(workItemId: string, command: WorkItemCommand): Promise<{ item: WorkItem; availableCommands: WorkItemCommand['type'][] }> {
+  const res = await apiFetch(`/api/work-items/${encodeURIComponent(workItemId)}/commands`, { method: 'POST', body: JSON.stringify(command) });
   if (!res.ok) throw await readError(res);
-  const parsed = z.object({ ok: z.literal(true), item: workItemSchema }).safeParse(await res.json());
-  if (!parsed.success) throw new Error('Invalid work item create response');
-  return parsed.data.item;
+  const body = await res.json() as { item: unknown; availableCommands: WorkItemCommand['type'][] };
+  return { item: WorkItemSchema.parse(body.item), availableCommands: body.availableCommands };
+}
+
+export async function createWorkItem(projectId: string, input: {
+  title: string;
+  description?: string;
+  initialPhase?: Extract<WorkItemPhase, 'backlog' | 'ready'>;
+  priority?: WorkItemPriority;
+  completionPolicy?: WorkItemCompletionPolicy;
+  nextAction?: WorkItemNextAction;
+  dueAt?: number;
+}): Promise<WorkItem> {
+  const res = await apiFetch(`/api/projects/${encodeURIComponent(projectId)}/work-items`, { method: 'POST', body: JSON.stringify(input) });
+  if (!res.ok) throw await readError(res);
+  return z.object({ ok: z.literal(true), item: WorkItemSchema }).parse(await res.json()).item;
 }
 
 export async function fetchProjects(): Promise<Project[]> {
   const res = await apiFetch('/api/projects?limit=100&sortBy=updatedAt&sortOrder=desc');
   if (!res.ok) throw await readError(res);
-  const parsed = z.object({ ok: z.literal(true), items: z.array(projectSchema) }).safeParse(await res.json());
-  if (!parsed.success) throw new Error('Invalid projects response');
-  return parsed.data.items;
+  return z.object({ ok: z.literal(true), items: z.array(projectSchema) }).parse(await res.json()).items;
 }
 
 export async function fetchProjectOperatingView(projectId: string): Promise<ProjectOperatingView> {
   const res = await apiFetch(`/api/projects/${encodeURIComponent(projectId)}/operating-view`);
   if (!res.ok) throw await readError(res);
-  const body = await res.json() as { view?: unknown };
-  return ProjectOperatingViewSchema.parse(body.view);
+  return ProjectOperatingViewSchema.parse((await res.json() as { view?: unknown }).view);
 }

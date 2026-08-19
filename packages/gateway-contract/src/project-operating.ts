@@ -24,10 +24,14 @@ const OutcomeSummarySchema = z.object({
 const ActionSummarySchema = z.object({
   id: z.string(),
   title: z.string(),
-  status: z.string(),
+  phase: z.enum(['backlog', 'ready', 'executing', 'verifying', 'closed']),
   priority: z.string(),
-  nextAction: z.string().optional(),
-  blockedReason: z.string().optional(),
+  nextAction: z.object({
+    text: z.string(),
+    actor: z.enum(['agent', 'user', 'external', 'system']),
+    dueAt: z.number().optional(),
+  }).optional(),
+  waits: z.array(z.object({ kind: z.string(), reason: z.string() })),
   updatedAt: z.number(),
 });
 

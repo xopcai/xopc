@@ -42,11 +42,11 @@ describe('proactive execution worker', () => {
 
   function publishAndReady(dedupeKey = 'work-1:blocked:1', subjectId = 'work-1'): string {
     const result = events.publish({
-      type: 'work_item.status_changed.v1', schemaVersion: 1,
+      type: 'work_item.lifecycle_changed.v1', schemaVersion: 1,
       source: { kind: 'work_items', id: 'local' }, subject: { kind: 'work_item', id: subjectId },
       actor: { kind: 'user', id: 'user-1' }, scope: { workspaceId: 'default', projectId: 'project-1' },
       occurredAt: '2026-08-13T01:00:00.000Z', dedupeKey, sensitivity: 'personal',
-      payload: { before: { status: 'todo' }, after: { status: 'blocked' } },
+      payload: { command: 'wait', before: { phase: 'executing' }, after: { phase: 'executing' } },
     }, new Date('2026-08-13T01:00:00.000Z'));
     events.markReadyBatches(new Date('2026-08-13T01:20:00.000Z'));
     return result.event.id;
