@@ -13,10 +13,10 @@ import {
   type BrowserWorkflowRunStatus,
 } from './browser-workflow-api';
 import {
-  BrowserWorkflowInputFields,
   browserWorkflowInputsComplete,
   defaultBrowserWorkflowInputs,
-} from './browser-workflow-inputs';
+} from './browser-workflow-input-utils';
+import { BrowserWorkflowInputFields } from './browser-workflow-inputs';
 
 const copy = {
   en: {

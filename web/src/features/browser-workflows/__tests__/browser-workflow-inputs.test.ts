@@ -4,7 +4,7 @@ import type { BrowserWorkflow } from '../browser-workflow-api';
 import {
   browserWorkflowInputsComplete,
   defaultBrowserWorkflowInputs,
-} from '../browser-workflow-inputs';
+} from '../browser-workflow-input-utils';
 
 const workflow: BrowserWorkflow = {
   id: 'order-lookup',

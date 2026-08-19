@@ -43,10 +43,10 @@ import { usePageHeaderStore } from '@/stores/page-header-store';
 import { listWorkflowDefinitions, type WorkflowDefinition } from '@/features/workflows/workflow-api';
 import { browserWorkflowApi, type BrowserWorkflow } from '@/features/browser-workflows/browser-workflow-api';
 import {
-  BrowserWorkflowInputFields,
   browserWorkflowInputsComplete,
   defaultBrowserWorkflowInputs,
-} from '@/features/browser-workflows/browser-workflow-inputs';
+} from '@/features/browser-workflows/browser-workflow-input-utils';
+import { BrowserWorkflowInputFields } from '@/features/browser-workflows/browser-workflow-inputs';
 import { validateWorkflowInputEditorValue } from '@/features/workflows/workflow-input-editor.utils';
 import { WorkflowRunSetupPanel } from '@/features/workflows/workflow-run-setup-panel';
 import {
