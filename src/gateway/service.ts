@@ -509,6 +509,7 @@ export class GatewayService {
       getNotesService: () => this.notesService,
       getProjectService: () => this.projects,
       getLocalAppService: () => this.localApps,
+      enqueueTask: (taskId, options) => this.enqueueTask(taskId, options),
       getWorkflowRunService: () => this.createWorkflowRunService(),
       sourceContextResolver: async (binding) => {
         if (binding.kind === 'note') {

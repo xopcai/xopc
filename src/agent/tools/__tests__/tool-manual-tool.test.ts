@@ -25,6 +25,14 @@ describe('tool_manual tool', () => {
     expect(text).toContain('XOPC Use Tool Manual');
     expect(text).toContain('note.preview_edit');
     expect(text).toContain('project');
+    expect(text).toContain('task.create');
+    expect(text).toContain('update_dependencies');
+    expect(text).toContain('Scope And Tool Routing');
+    expect(text).toContain('Reliable Operation Protocol');
+    expect(text).toContain('Inspect the JSON body\'s `ok` field');
+    expect(text).toContain('Known Capability Gaps');
+    expect(text).toContain('`automation`');
+    expect(text).toContain('`workflow`');
   });
 
   it('returns a clear message for missing manuals', async () => {

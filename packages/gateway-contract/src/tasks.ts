@@ -220,6 +220,17 @@ export const TaskExecutionSummarySchema = z.object({
   updatedAt: z.number(),
 });
 
+export const TaskAttachmentSchema = z.object({
+  taskId: z.string(),
+  id: z.string(),
+  bucket: z.enum(['inbound', 'tts', 'outbound']),
+  type: z.string(),
+  mimeType: z.string(),
+  name: z.string(),
+  size: z.number().int().nonnegative(),
+  uri: z.string(),
+});
+
 export const TaskProgressSchema = z.object({
   completed: z.number().int().nonnegative(),
   total: z.number().int().positive(),
@@ -242,6 +253,7 @@ export const TaskDetailResponseSchema = z.object({
   task: TaskSchema,
   receipts: z.array(TaskReceiptSchema),
   execution: TaskExecutionSummarySchema.optional(),
+  attachments: z.array(TaskAttachmentSchema),
   progress: TaskProgressSchema.optional(),
   attention: TaskAttentionSchema.optional(),
   nextCheckAt: z.number().int().nonnegative().optional(),
@@ -273,6 +285,7 @@ export type TaskJudgment = z.infer<typeof TaskJudgmentSchema>;
 export type TaskReceipt = z.infer<typeof TaskReceiptSchema>;
 export type TaskContextManifest = z.infer<typeof TaskContextManifestSchema>;
 export type TaskExecutionSummary = z.infer<typeof TaskExecutionSummarySchema>;
+export type TaskAttachment = z.infer<typeof TaskAttachmentSchema>;
 export type TaskProgress = z.infer<typeof TaskProgressSchema>;
 export type TaskAttention = z.infer<typeof TaskAttentionSchema>;
 export type TaskDetailResponse = z.infer<typeof TaskDetailResponseSchema>;

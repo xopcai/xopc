@@ -163,6 +163,10 @@ export interface AgentManagerConfig {
   getNotesService?: () => NotesService | undefined;
   getProjectService?: () => ProjectService | undefined;
   getLocalAppService?: () => import('../local-apps/index.js').LocalAppService | undefined;
+  enqueueTask?: (
+    taskId: string,
+    options?: import('../tasks/index.js').EnqueueTaskOptions,
+  ) => import('../tasks/index.js').TaskQueueItem;
   /** Gateway: starts persisted workflow runs (dedicated chat session per run). */
   getWorkflowRunService?: () => import('../workflows/service/workflow-run-service.types.js').WorkflowRunServiceLike | undefined;
   /** Runtime notification for UI/CLI shells that cache skill catalogs. */
@@ -436,6 +440,7 @@ export class AgentManager implements AgentInstanceGateway {
       getNotesService: this.config.getNotesService,
       getProjectService: this.config.getProjectService,
       getLocalAppService: this.config.getLocalAppService,
+      enqueueTask: this.config.enqueueTask,
       getWorkflowRunService: this.config.getWorkflowRunService,
       getSkillIndexingContext: () => {
         const ctx = this.config.getCurrentContext?.();

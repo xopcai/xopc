@@ -39,7 +39,7 @@ export function useAttachmentImageSrc(
     return resolveDataUrlForDisplay(mime, inlinePayload);
   }, [inlinePayload, attachment.mimeType]);
 
-  const requestKey = `${attachment.uri ?? ''}\n${opts.sessionKey ?? ''}`;
+  const requestKey = `${attachment.uri ?? ''}\n${opts.sessionKey ?? ''}\n${attachment.taskId ?? ''}`;
   const [remote, setRemote] = useState<{
     key: string;
     blobUrl?: string;
@@ -61,7 +61,11 @@ export function useAttachmentImageSrc(
     setRemote({ key: requestKey, status: 'loading' });
 
     void (async () => {
-      const result = await fetchMediaUriBlob({ uri: attachment.uri!, sessionKey: opts.sessionKey });
+      const result = await fetchMediaUriBlob({
+        uri: attachment.uri!,
+        sessionKey: opts.sessionKey,
+        taskId: attachment.taskId,
+      });
       if (cancelled) return;
       if (!result.ok) {
         setRemote({ key: requestKey, status: 'error' });
@@ -76,7 +80,7 @@ export function useAttachmentImageSrc(
       cancelled = true;
       if (revoke) URL.revokeObjectURL(revoke);
     };
-  }, [inlineSrc, attachment.uri, isImage, opts.authToken, opts.sessionKey, requestKey]);
+  }, [inlineSrc, attachment.taskId, attachment.uri, isImage, opts.authToken, opts.sessionKey, requestKey]);
 
   const activeRemote = remote?.key === requestKey ? remote : undefined;
   return {

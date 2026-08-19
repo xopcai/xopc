@@ -19,6 +19,7 @@ import {
 } from '../../../../storage/sqlite/index.js';
 import { TaskRepository } from '../../../../tasks/index.js';
 import type { GatewayService } from '../../../service.js';
+import { registerMediaRoutes } from '../media.js';
 import { registerTaskRoutes } from '../tasks.js';
 
 describe('task routes', () => {
@@ -38,7 +39,7 @@ describe('task routes', () => {
       enqueuedAt: Date.now(), source: 'api',
     }));
     app = new Hono();
-    registerTaskRoutes(app, {
+    const routeDeps = {
       service: {
         currentConfig: ConfigSchema.parse({}),
         projects,
@@ -46,7 +47,9 @@ describe('task routes', () => {
         getTaskQueueSnapshot: vi.fn(() => []),
       } as unknown as GatewayService,
       strictRateLimitMiddleware: async (_c, next) => next(),
-    } as never);
+    } as never;
+    registerTaskRoutes(app, routeDeps);
+    registerMediaRoutes(app, routeDeps);
   });
 
   afterEach(() => {
@@ -152,6 +155,27 @@ describe('task routes', () => {
       name: 'launch-brief.txt',
       uri: expect.stringMatching(/^media:\/\/inbound\//),
     });
+    const detail = TaskDetailResponseSchema.parse(
+      await (await app.request(`/api/tasks/${created.task.id}`)).json(),
+    );
+    expect(detail.attachments).toEqual([expect.objectContaining({
+      taskId: created.task.id,
+      type: 'document',
+      mimeType: 'text/plain',
+      name: 'launch-brief.txt',
+      uri: expect.stringMatching(/^media:\/\/inbound\//),
+    })]);
+    expect(detail.attachments[0]).not.toHaveProperty('path');
+    const mediaUrl = `/api/media/read?${new URLSearchParams({
+      uri: detail.attachments[0]!.uri,
+      taskId: created.task.id,
+    })}`;
+    expect((await app.request(mediaUrl)).status).toBe(200);
+    const wrongTaskUrl = `/api/media/read?${new URLSearchParams({
+      uri: detail.attachments[0]!.uri,
+      taskId: 'another-task',
+    })}`;
+    expect((await app.request(wrongTaskUrl)).status).toBe(404);
   });
 
   it('requires callers to choose capture or start explicitly', async () => {
