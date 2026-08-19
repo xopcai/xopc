@@ -51,6 +51,22 @@ export const OutcomeListResponseSchema = z.object({
   items: z.array(OutcomeSchema),
 });
 
+export const OutcomeStartRequestSchema = z.object({
+  requestId: z.string().uuid(),
+  objective: z.string().trim().min(1).max(12_000),
+  projectId: z.string().trim().min(1).optional(),
+  agentId: z.string().trim().min(1).optional(),
+  locale: z.enum(['en', 'zh']).optional(),
+});
+
+export const OutcomeStartResponseSchema = z.object({
+  ok: z.literal(true),
+  accepted: z.literal(true),
+  outcome: OutcomeSchema,
+  sessionKey: z.string().min(1),
+  runId: z.string().min(1).optional(),
+});
+
 export const OutcomeActionSchema = z.enum(['run', 'pause', 'resume', 'cancel']);
 export const OutcomeActionRequestSchema = z.object({
   action: OutcomeActionSchema,
@@ -152,10 +168,19 @@ export const OutcomeContextManifestSchema = z.object({
   allocation: z.enum(['deep', 'critical']),
 });
 
+export const OutcomeExecutionSummarySchema = z.object({
+  sessionKey: z.string().optional(),
+  nextAction: z.string().optional(),
+  blockedReason: z.string().optional(),
+  approvedBoundaries: z.array(z.string()),
+  updatedAt: z.number(),
+});
+
 export const OutcomeDetailResponseSchema = z.object({
   ok: z.literal(true),
   outcome: OutcomeSchema,
   receipts: z.array(OutcomeReceiptSchema),
+  execution: OutcomeExecutionSummarySchema.optional(),
   contextManifest: OutcomeContextManifestSchema.optional(),
 });
 
@@ -171,11 +196,14 @@ export type OutcomeImportance = z.infer<typeof OutcomeImportanceSchema>;
 export type OutcomeContract = z.infer<typeof OutcomeContractSchema>;
 export type Outcome = z.infer<typeof OutcomeSchema>;
 export type OutcomeListResponse = z.infer<typeof OutcomeListResponseSchema>;
+export type OutcomeStartRequest = z.infer<typeof OutcomeStartRequestSchema>;
+export type OutcomeStartResponse = z.infer<typeof OutcomeStartResponseSchema>;
 export type OutcomeAction = z.infer<typeof OutcomeActionSchema>;
 export type OutcomeEvidence = z.infer<typeof OutcomeEvidenceSchema>;
 export type OutcomeJudgment = z.infer<typeof OutcomeJudgmentSchema>;
 export type OutcomeReceipt = z.infer<typeof OutcomeReceiptSchema>;
 export type OutcomeContextManifest = z.infer<typeof OutcomeContextManifestSchema>;
+export type OutcomeExecutionSummary = z.infer<typeof OutcomeExecutionSummarySchema>;
 export type OutcomeDetailResponse = z.infer<typeof OutcomeDetailResponseSchema>;
 export type OutcomeReceiptListResponse = z.infer<typeof OutcomeReceiptListResponseSchema>;
 

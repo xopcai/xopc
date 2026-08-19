@@ -42,6 +42,7 @@ export type RunGatewayAgentDeps = {
   activeWebchatRunBySession: Map<string, string>;
   sessionIndex: SessionIndex;
   emit: (type: string, payload: unknown) => void;
+  prepareOutcome?: (sessionKey: string) => Promise<void>;
   onOutcomeFinalized?: (
     receipt: import('../../storage/sqlite/execution-receipt-repository.js').ExecutionReceipt,
   ) => void;
@@ -107,6 +108,7 @@ export async function *runGatewayAgent(
   const streamSessionKey = webchatSessionKey ?? chatId;
   if (webchatSessionKey) {
     if (!webchatMetadata) throw new Error('Session metadata is unavailable');
+    await deps.prepareOutcome?.(webchatSessionKey);
     const parsedSession = parseSessionKey(webchatSessionKey);
     if (!parsedSession) throw new Error('Resolved webchat session key is invalid');
     updateInteractionStateFromMessage({ sessionKey: webchatSessionKey, message });

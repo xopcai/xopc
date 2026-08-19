@@ -17,6 +17,7 @@ import {
 import {
   decideOutcomeRecovery,
   decideProactiveContinuation,
+  countConsecutiveNoGain,
   OutcomeController,
 } from '../outcome-controller.js';
 import { OutcomeExecutionService } from '../outcome-execution-service.js';
@@ -186,9 +187,37 @@ describe('OutcomeController', () => {
       projectionVersion: 0,
       startedAt: 1,
       updatedAt: 2,
-    }, true);
+    }, 3);
 
     expect(recovery).toEqual({ action: 'continue', strategy: 'apply_user_correction' });
+  });
+
+  it('changes strategy before asking the user after repeated zero-gain runs', () => {
+    const receipt = (runId: string, attempt: number) => ({
+      runId,
+      sessionKey: 'session-controller',
+      channel: 'webchat',
+      objective: 'Prepare the report',
+      status: 'succeeded' as const,
+      attempt,
+      evidence: [],
+      verification: {
+        status: 'failed' as const,
+        checks: [{ criterion: 'The report is verified', status: 'unverified' as const, evidenceTitles: [] }],
+      },
+      context: {},
+      needsUser: false,
+      completionVerdict: 'partial' as const,
+      projectionVersion: 0,
+      startedAt: attempt,
+      updatedAt: attempt,
+    });
+    const recent = [receipt('run-4', 4), receipt('run-3', 3), receipt('run-2', 2), receipt('run-1', 1)];
+
+    expect(countConsecutiveNoGain(recent)).toBe(3);
+    expect(decideOutcomeRecovery(recent[0]!, 1)).toEqual({ action: 'continue', strategy: 'strategy_reset' });
+    expect(decideOutcomeRecovery(recent[0]!, 2)).toEqual({ action: 'continue', strategy: 'independent_research' });
+    expect(decideOutcomeRecovery(recent[0]!, 3)).toMatchObject({ action: 'needs_user' });
   });
 
   it('reopens corrected work and requires fresh evidence', () => {

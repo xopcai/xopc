@@ -1,9 +1,11 @@
 import {
   OutcomeReceiptSchema,
   OutcomeSchema,
+  OutcomeStartResponseSchema,
   type Outcome,
   type OutcomeAction,
   type OutcomeReceipt,
+  type OutcomeStartResponse,
 } from '@xopcai/gateway-contract';
 
 import { apiFetch } from '../api/client';
@@ -12,6 +14,23 @@ export type OutcomeDetail = {
   outcome: Outcome;
   receipts: OutcomeReceipt[];
 };
+
+export async function startOutcome(input: {
+  requestId: string;
+  objective: string;
+  projectId?: string;
+  locale?: 'en' | 'zh';
+}): Promise<OutcomeStartResponse> {
+  const response = await apiFetch('/api/outcomes', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({})) as { error?: string };
+    throw new Error(body.error || `Failed to start outcome: ${response.status}`);
+  }
+  return OutcomeStartResponseSchema.parse(await response.json());
+}
 
 export async function fetchOutcome(id: string): Promise<OutcomeDetail> {
   const response = await apiFetch(`/api/outcomes/${encodeURIComponent(id)}`);

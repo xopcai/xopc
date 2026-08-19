@@ -174,18 +174,6 @@ export const WorkValueMetricsSchema = z.object({
     weeklyActiveUsers: z.number(),
     trustedProgressPerWeeklyActiveUser: z.number(),
   }),
-  intake: z.object({
-    total: z.number(),
-    proposed: z.number(),
-    confirmed: z.number(),
-    expired: z.number(),
-    runNow: z.number(),
-    createOnly: z.number(),
-    queued: z.number(),
-    pendingQueueRecovery: z.number(),
-    confirmationRate: z.number(),
-    queueRate: z.number(),
-  }),
   outcomes: z.object({
     total: z.number(),
     achieved: z.number(),

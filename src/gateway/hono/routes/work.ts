@@ -2,9 +2,8 @@ import type { Hono } from 'hono';
 import {
   ProjectMonitoringUpdateSchema,
   OutcomeActionRequestSchema,
+  OutcomeStartRequestSchema,
   OutcomeUserStatusSchema,
-  WorkIntakeConfirmRequestSchema,
-  WorkIntakeCreateRequestSchema,
 } from '@xopcai/gateway-contract';
 
 import { ProjectMonitoringService } from '../../../work/project-monitoring-service.js';
@@ -12,18 +11,18 @@ import { getOutcomeContextManifest } from '../../../work/outcome-context-assembl
 import { OutcomeExecutionStateRepository } from '../../../work/outcome-execution-state.js';
 import { OutcomeRepository } from '../../../work/outcome-repository.js';
 import { OutcomeReceiptService } from '../../../work/outcome-receipt-service.js';
-import { ModelOutcomeContractPlanner } from '../../../work/outcome-contract-planner.js';
 import { ProjectOperatingViewService } from '../../../work/project-operating-view-service.js';
-import { WorkIntakeService } from '../../../work/work-intake-service.js';
 import { WorkValueMetricsService } from '../../../work/work-value-metrics-service.js';
+import { OutcomeStartService } from '../../service/outcome-start-service.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 export function registerWorkRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
-  const intake = new WorkIntakeService(
-    deps.service.projects,
-    { enqueue: (outcomeId, options) => deps.service.enqueueOutcome(outcomeId, options) },
-    new ModelOutcomeContractPlanner(() => deps.service.getConfig()),
-  );
+  const starter = new OutcomeStartService({
+    getConfig: () => deps.service.currentConfig,
+    projects: deps.service.projects,
+    sessions: deps.service.sessionIndexInstance,
+    submit: (input) => deps.service.submitSessionInput(input),
+  });
   const operatingViews = new ProjectOperatingViewService(deps.service.projects, deps.service.workItems);
   const monitoring = new ProjectMonitoringService();
   const metrics = new WorkValueMetricsService();
@@ -41,16 +40,36 @@ export function registerWorkRoutes(authenticated: Hono, deps: AuthenticatedRoute
     });
   });
 
+  authenticated.post('/api/outcomes', deps.strictRateLimitMiddleware, async (c) => {
+    const parsed = OutcomeStartRequestSchema.safeParse(await c.req.json().catch(() => ({})));
+    if (!parsed.success) return c.json({ ok: false, error: 'Invalid outcome request' }, 400);
+    try {
+      return c.json(await starter.start(parsed.data), 202);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return c.json({ ok: false, error: message }, message === 'Project not found' ? 404 : 409);
+    }
+  });
+
   authenticated.get('/api/outcomes/:id', (c) => {
     const outcome = outcomes.get(c.req.param('id'));
-    return outcome
-      ? c.json({
-          ok: true,
-          outcome,
-          receipts: receipts.list({ outcomeId: outcome.id, limit: 100 }),
-          contextManifest: getOutcomeContextManifest(outcome.id),
-        })
-      : c.json({ ok: false, error: 'Outcome not found' }, 404);
+    if (!outcome) return c.json({ ok: false, error: 'Outcome not found' }, 404);
+    const execution = executions.get(outcome.id);
+    return c.json({
+      ok: true,
+      outcome,
+      receipts: receipts.list({ outcomeId: outcome.id, limit: 100 }),
+      ...(execution ? {
+        execution: {
+          ...(execution.activeSessionKey ? { sessionKey: execution.activeSessionKey } : {}),
+          ...(execution.nextAction ? { nextAction: execution.nextAction } : {}),
+          ...(execution.blockedReason ? { blockedReason: execution.blockedReason } : {}),
+          approvedBoundaries: execution.approvedBoundaries,
+          updatedAt: execution.updatedAt,
+        },
+      } : {}),
+      contextManifest: getOutcomeContextManifest(outcome.id),
+    });
   });
 
   authenticated.post('/api/outcomes/:id/actions', deps.strictRateLimitMiddleware, async (c) => {
@@ -105,35 +124,6 @@ export function registerWorkRoutes(authenticated: Hono, deps: AuthenticatedRoute
       outcome: outcomes.updateState({ id: outcome.id, userStatus: 'running', internalStatus: 'continuing' }),
       queued,
     });
-  });
-
-  authenticated.post('/api/work/intakes', deps.strictRateLimitMiddleware, async (c) => {
-    const parsed = WorkIntakeCreateRequestSchema.safeParse(await c.req.json().catch(() => ({})));
-    if (!parsed.success) return c.json({ ok: false, error: 'Invalid work intake request' }, 400);
-    try {
-      const proposal = await intake.propose({
-        ...parsed.data,
-      });
-      return c.json({ ok: true, proposal }, 201);
-    } catch (error) {
-      return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400);
-    }
-  });
-
-  authenticated.post('/api/work/intakes/:id/confirm', deps.strictRateLimitMiddleware, async (c) => {
-    const parsed = WorkIntakeConfirmRequestSchema.safeParse(await c.req.json().catch(() => ({})));
-    if (!parsed.success) return c.json({ ok: false, error: 'Invalid work intake confirmation' }, 400);
-    try {
-      const work = intake.confirm({
-        proposalId: c.req.param('id'),
-        ...parsed.data,
-      });
-      return work
-        ? c.json({ ok: true, work }, 201)
-        : c.json({ ok: false, error: 'Work intake expired or was not found' }, 404);
-    } catch (error) {
-      return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400);
-    }
   });
 
   authenticated.get('/api/projects/:projectId/operating-view', (c) => {

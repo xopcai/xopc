@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { OutcomeReceiptSchema } from './outcomes.js';
-import { ProjectMonitoringPolicySchema } from './work-intake.js';
+import { ProjectMonitoringPolicySchema } from './project-monitoring.js';
 
 const ProjectSummarySchema = z.object({
   id: z.string(),

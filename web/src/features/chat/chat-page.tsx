@@ -13,6 +13,7 @@ import { ChatWelcomeSpotlightSkeleton } from '@/features/chat/chat-welcome-spotl
 import { ChatPageHeaderRegistration } from '@/features/chat/chat-page-header-registration';
 import { ChatSseStatus } from '@/features/chat/agent-selection/chat-sse-status';
 import { ConversationPlanDock } from '@/features/chat/messages/conversation-plan-dock';
+import { OutcomeSessionBanner } from '@/features/chat/outcome/outcome-session-banner';
 import {
   conversationPlanFromTaskPlanState,
   extractActiveTurnConversationPlan,
@@ -21,6 +22,7 @@ import { MessageList } from '@/features/chat/messages/message-list';
 import { ScrollToBottomButton } from '@/features/chat/scroll/scroll-to-bottom-button';
 import { useChatScrollViewport } from '@/features/chat/scroll/use-chat-scroll-viewport';
 import { useChatSession } from '@/features/chat/session/use-chat-session';
+import { useChatSessionMetadata } from '@/features/chat/session/use-chat-session-metadata';
 import { buildComposerDraftSeed } from '@/features/chat/session/composer-handoff-params';
 import { ChatTimelinePanel } from '@/features/chat/timeline/chat-timeline-panel';
 import { ChatTimelineRail } from '@/features/chat/timeline/chat-timeline-rail';
@@ -47,7 +49,6 @@ import { ProductAutomationFeedback } from '@/features/automations/product-automa
 import { ACTIVE_RUN_STATUSES } from '@/features/workflows/workflow-page.constants';
 import { useSessionWorkflowRunLinks } from '@/features/workflows/use-session-workflow-run-links';
 import { useWorkflowRunLive } from '@/features/workflows/use-workflow-run-live';
-import { useWorkflowSessionMetadata } from '@/features/workflows/use-workflow-session-metadata';
 import { appendNoteContent, createTaskNote, getNote } from '@/features/notes/notes-api';
 import { withReturnTo } from '@/lib/navigation-return';
 import {
@@ -206,9 +207,10 @@ export function ChatPage() {
   useEffect(() => {
     if (chatSessionKey) markChatRunViewed(chatSessionKey);
   }, [chatSessionKey, markChatRunViewed]);
-  const { data: workflowMeta } = useWorkflowSessionMetadata(chatSessionKey);
-  const workflowRunId = workflowMeta?.workflowRunId ?? null;
-  const workflowOwnerAgentId = workflowMeta?.ownerAgentId ?? undefined;
+  const { data: sessionMetadata } = useChatSessionMetadata(chatSessionKey);
+  const workflowRunId = sessionMetadata?.workflowRunId ?? null;
+  const workflowOwnerAgentId = sessionMetadata?.ownerAgentId ?? undefined;
+  const outcomeId = sessionMetadata?.outcomeId ?? null;
   const { view: workflowRunView } = useWorkflowRunLive(workflowRunId, { ownerAgentId: workflowOwnerAgentId });
   const { data: workflowRunLinks = [], mutate: refreshWorkflowRunLinks } =
     useSessionWorkflowRunLinks(chatSessionKey);
@@ -569,8 +571,8 @@ export function ChatPage() {
     m.chat.newSession,
   ]);
 
-  const sourceNoteId = workflowMeta?.sourceNoteId ?? null;
-  const sourceWorkItemId = workflowMeta?.sourceWorkItemId ?? null;
+  const sourceNoteId = sessionMetadata?.sourceNoteId ?? null;
+  const sourceWorkItemId = sessionMetadata?.sourceWorkItemId ?? null;
   const scopedProject = useChatProjectScope(chatSessionKey);
   useEffect(() => {
     let cancelled = false;
@@ -614,7 +616,7 @@ export function ChatPage() {
   }, [sourceWorkItemId]);
 
   const sourceNoteTitle =
-    sourceNoteLoadedTitle || workflowMeta?.sourceNoteTitle || m.chat.sourceNoteFallbackTitle;
+    sourceNoteLoadedTitle || sessionMetadata?.sourceNoteTitle || m.chat.sourceNoteFallbackTitle;
   const welcomeContextState = useWelcomeSuggestionContext({
     enabled:
       auth.hasToken &&
@@ -1215,6 +1217,7 @@ export function ChatPage() {
                       <AgentRunErrorBanner errorText={stream.error} />
                     </div>
                   ) : null}
+                  {outcomeId ? <OutcomeSessionBanner outcomeId={outcomeId} /> : null}
                   {workflowRunLinks.length > 0 ? (
                     <div className="mb-6 flex flex-col gap-3">
                       {workflowRunLinks.map((link) => (

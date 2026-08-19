@@ -7,6 +7,7 @@ export type OutcomeUiLocale = 'en' | 'zh';
 
 type OutcomeExecutionStateRow = {
   outcome_id: string;
+  request_id: string | null;
   description: string | null;
   agent_id: string;
   priority: OutcomeExecutionPriority;
@@ -25,6 +26,7 @@ type OutcomeExecutionStateRow = {
 
 export interface OutcomeExecutionState {
   outcomeId: string;
+  requestId?: string;
   description?: string;
   agentId: string;
   priority: OutcomeExecutionPriority;
@@ -44,6 +46,7 @@ function fromRow(row: OutcomeExecutionStateRow): OutcomeExecutionState {
   const attachments = JSON.parse(row.context_attachments_json) as MediaRef[];
   return {
     outcomeId: row.outcome_id,
+    ...(row.request_id ? { requestId: row.request_id } : {}),
     ...(row.description ? { description: row.description } : {}),
     agentId: row.agent_id,
     priority: row.priority,
@@ -65,6 +68,7 @@ function fromRow(row: OutcomeExecutionStateRow): OutcomeExecutionState {
 export class OutcomeExecutionStateRepository {
   create(input: {
     outcomeId: string;
+    requestId?: string;
     description?: string;
     agentId?: string;
     priority?: OutcomeExecutionPriority;
@@ -80,12 +84,13 @@ export class OutcomeExecutionStateRepository {
     const now = input.now ?? Date.now();
     getSqliteDatabase().prepare(
       `INSERT INTO outcome_execution_state (
-        outcome_id, description, agent_id, priority, active_session_key,
+        outcome_id, request_id, description, agent_id, priority, active_session_key,
         ui_locale, source, project_id, context_text, context_attachments_json,
         approved_boundaries_json, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       input.outcomeId,
+      input.requestId ?? null,
       input.description?.trim() || null,
       input.agentId ?? 'main',
       input.priority ?? 'normal',
@@ -106,6 +111,13 @@ export class OutcomeExecutionStateRepository {
     const row = getSqliteDatabase().prepare(
       'SELECT * FROM outcome_execution_state WHERE outcome_id = ?',
     ).get(outcomeId) as OutcomeExecutionStateRow | undefined;
+    return row ? fromRow(row) : undefined;
+  }
+
+  getByRequestId(requestId: string): OutcomeExecutionState | undefined {
+    const row = getSqliteDatabase().prepare(
+      'SELECT * FROM outcome_execution_state WHERE request_id = ?',
+    ).get(requestId) as OutcomeExecutionStateRow | undefined;
     return row ? fromRow(row) : undefined;
   }
 
