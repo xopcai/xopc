@@ -76,15 +76,14 @@ function ExtensionNavigateListener() {
 
 export function AppShell() {
   const token = useGatewayStore((s) => s.token);
-  const location = useLocation();
-  const { pathname } = location;
+  const { pathname, search } = useLocation();
   const navigate = useNavigate();
   const isSettingsRoute = pathname.startsWith('/settings');
   const isWorkDiscoveryRoute = pathname === '/onboarding/workspace';
   const language = useLocaleStore((s) => s.language);
   const updateReminder = useUpdateReminder();
   const previewPath = useWorkspacePreviewStore((s) => s.path);
-  const showWorkDiscoveryOverlay = pathname === '/you' && isWorkDiscoveryOverlaySearch(location.search);
+  const showWorkDiscoveryOverlay = pathname === '/you' && isWorkDiscoveryOverlaySearch(search);
   const [workDiscoveryOverlayMounted, setWorkDiscoveryOverlayMounted] = useState(showWorkDiscoveryOverlay);
 
   useEffect(() => {
@@ -93,10 +92,10 @@ export function AppShell() {
 
   const closeWorkDiscoveryOverlay = useCallback(() => {
     navigate(
-      { pathname, search: closeWorkDiscoveryOverlaySearch(location.search) },
+      { pathname, search: closeWorkDiscoveryOverlaySearch(search) },
       { replace: true },
     );
-  }, [location.search, navigate, pathname]);
+  }, [navigate, pathname, search]);
   const finishWorkDiscoveryOverlayExit = useCallback(() => {
     setWorkDiscoveryOverlayMounted(false);
     if (showWorkDiscoveryOverlay) closeWorkDiscoveryOverlay();

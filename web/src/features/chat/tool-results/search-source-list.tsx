@@ -2,35 +2,7 @@ import type { ToolUseContent } from '@/features/chat/messages/messages.types';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
-export interface SearchSource {
-  url: string;
-  title: string;
-  snippet?: string;
-}
-
-export function extractSearchSources(blocks: ToolUseContent[]): SearchSource[] {
-  const sources: SearchSource[] = [];
-  for (const block of blocks) {
-    if (!block.name.toLowerCase().includes('search') || block.result == null) continue;
-    try {
-      const parsed =
-        typeof block.result === 'string'
-          ? JSON.parse(block.result)
-          : (block.result as Record<string, unknown>);
-      const results: Array<{ url?: string; title?: string; snippet?: string }> = Array.isArray(parsed)
-        ? parsed
-        : (parsed?.results ?? []);
-      for (const item of results) {
-        if (item.url) {
-          sources.push({ url: item.url, title: item.title ?? item.url, snippet: item.snippet });
-        }
-      }
-    } catch {
-      /* skip unparseable results */
-    }
-  }
-  return sources;
-}
+import { extractSearchSources, type SearchSource } from './search-source-utils';
 
 interface SearchSourceListProps {
   blocks?: Array<{ type: string; [key: string]: unknown }>;

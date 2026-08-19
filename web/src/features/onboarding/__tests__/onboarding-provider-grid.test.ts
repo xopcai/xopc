@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveOnboardingProviders } from '@/features/onboarding/onboarding-provider-grid';
+import { resolveOnboardingProviders } from '@/features/onboarding/onboarding-provider-options';
 import type { ProviderMeta } from '@/features/settings/providers-api';
 
 const providers: ProviderMeta[] = [
