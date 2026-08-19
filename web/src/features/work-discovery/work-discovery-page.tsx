@@ -40,13 +40,19 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export function WorkDiscoveryPage() {
+export function WorkDiscoveryPage({
+  embedded = false,
+  onRequestClose,
+}: {
+  embedded?: boolean;
+  onRequestClose?: () => void;
+} = {}) {
   const language = useLocaleStore((state) => state.language);
   const copy = messages(language).onboarding.workDiscovery;
   const wd = messages(language).chat.workingDirectory;
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const startFresh = searchParams.get('new') === '1';
+  const startFresh = embedded || searchParams.get('new') === '1';
   const [pageState, setPageState] = useState<PageState>('loading');
   const [preview, setPreview] = useState<WorkDiscoveryPreview | null>(null);
   const [run, setRun] = useState<WorkDiscoveryRun | null>(null);
@@ -188,7 +194,8 @@ export function WorkDiscoveryPage() {
       .then(async ({ enabled, state }) => {
         if (cancelled) return;
         if (!enabled) {
-          navigate('/chat', { replace: true });
+          if (onRequestClose) onRequestClose();
+          else navigate('/chat', { replace: true });
           return;
         }
         if (!startFresh && state.activeRunId) {
@@ -209,7 +216,7 @@ export function WorkDiscoveryPage() {
         }
       });
     return () => { cancelled = true; };
-  }, [applyRun, navigate, startFresh]);
+  }, [applyRun, navigate, onRequestClose, startFresh]);
 
   useEffect(() => {
     if (!run || pageState !== 'running' || batchRunning) return;
@@ -244,7 +251,8 @@ export function WorkDiscoveryPage() {
     try {
       await dismissWorkDiscoveryOnboarding();
     } finally {
-      navigate('/chat', { replace: true });
+      if (onRequestClose) onRequestClose();
+      else navigate('/chat', { replace: true });
     }
   };
 
@@ -367,6 +375,7 @@ export function WorkDiscoveryPage() {
   };
 
   const completedBatchRuns = batchRuns.filter((item): item is WorkDiscoveryRun => item?.status === 'completed');
+  const embeddedCandidates = embedded && pageState === 'candidates';
   const batchRunSwitcher = completedBatchRuns.length > 1 ? (
     <div className="mt-6 rounded-xl border border-edge bg-surface-panel p-2">
       <p className="px-2 pb-2 text-xs font-medium text-fg-muted">{copy.analysisResults}</p>
@@ -391,18 +400,26 @@ export function WorkDiscoveryPage() {
   ) : null;
 
   return (
-    <div className="flex min-h-full flex-1 flex-col bg-surface-base">
-      <main className="mx-auto flex w-full max-w-[40rem] flex-1 flex-col px-5 py-10 sm:px-8 sm:py-16">
-        <div className="mb-10 flex items-center justify-center">
-          <BrandLogo className="size-11" />
-        </div>
+    <div className={embedded
+      ? 'flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-surface-base'
+      : 'flex min-h-full flex-1 flex-col bg-surface-base'}>
+      <main className={embedded
+        ? `mx-auto flex h-full min-h-0 w-full max-w-[40rem] flex-1 flex-col px-5 py-7 sm:px-8 sm:py-9 ${embeddedCandidates ? 'overflow-hidden' : 'overflow-y-auto [scrollbar-gutter:stable]'}`
+        : 'mx-auto flex w-full max-w-[40rem] flex-1 flex-col px-5 py-10 sm:px-8 sm:py-16'}>
+        {!embedded ? (
+          <div className="mb-10 flex items-center justify-center">
+            <BrandLogo className="size-11" />
+          </div>
+        ) : null}
 
         {pageState === 'loading' ? (
-          <div className="space-y-5" aria-busy>
-            <Skeleton className="mx-auto h-8 w-64" />
-            <Skeleton className="mx-auto h-4 w-full max-w-lg" />
-            <Skeleton className="mx-auto size-4/5 max-w-md" />
-            <Skeleton className="mt-8 h-12 w-full rounded-xl" />
+          <div className="mx-auto flex min-h-[26rem] w-full max-w-md flex-col items-center" aria-busy>
+            <Skeleton className="h-8 w-64 max-w-full" />
+            <Skeleton className="mt-4 h-4 w-full max-w-sm" />
+            <Skeleton className="mt-2 h-4 w-4/5 max-w-xs" />
+            <Skeleton className="mt-10 h-12 w-full rounded-xl" />
+            <Skeleton className="mt-3 h-11 w-full rounded-xl" />
+            <Skeleton className="mt-5 h-4 w-3/5 max-w-56" />
           </div>
         ) : null}
 
@@ -447,14 +464,19 @@ export function WorkDiscoveryPage() {
         ) : null}
 
         {pageState === 'candidates' ? (
-          <section aria-labelledby="work-discovery-candidates-title">
-            <div className="text-center">
+          <section
+            className={embedded ? 'flex h-full min-h-0 flex-col' : undefined}
+            aria-labelledby="work-discovery-candidates-title"
+          >
+            <div className={embedded ? 'shrink-0 text-center' : 'text-center'}>
               <h1 id="work-discovery-candidates-title" className="text-2xl font-semibold tracking-tight text-fg">
                 {copy.candidatesTitle}
               </h1>
               <p className="mt-3 text-[0.95rem] leading-7 text-fg-muted">{copy.candidatesSubtitle}</p>
             </div>
-            <div className="mt-7 space-y-2">
+            <div className={embedded
+              ? 'mt-5 min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-1 [scrollbar-gutter:stable]'
+              : 'mt-7 space-y-2'}>
               {candidates.map((candidate, index) => {
                 const selected = selectedCandidatePaths.has(candidate.rootPath);
                 return (
@@ -485,28 +507,30 @@ export function WorkDiscoveryPage() {
                 );
               })}
             </div>
-            <div className="mt-5 flex items-start gap-2 rounded-xl border border-edge-subtle bg-surface-panel px-4 py-3 text-xs leading-5 text-fg-muted">
-              <ShieldCheck className="mt-0.5 size-4 shrink-0 text-accent-fg" />
-              <span>{copy.multiFolderPrivacyNote}</span>
+            <div className={embedded ? 'shrink-0 border-t border-edge-subtle pt-4' : undefined}>
+              <div className={`${embedded ? '' : 'mt-5 '}flex items-start gap-2 rounded-xl border border-edge-subtle bg-surface-panel px-4 py-3 text-xs leading-5 text-fg-muted`}>
+                <ShieldCheck className="mt-0.5 size-4 shrink-0 text-accent-fg" />
+                <span>{copy.multiFolderPrivacyNote}</span>
+              </div>
+              {error ? <p className="mt-3 text-sm text-danger" role="alert">{error}</p> : null}
+              <div className={`${embedded ? 'mt-4' : 'mt-7'} flex flex-col gap-3 sm:flex-row-reverse`}>
+                <Button
+                  type="button"
+                  className="h-11 flex-1 bg-accent text-white hover:bg-accent-hover"
+                  disabled={busy || selectedCandidatePaths.size === 0}
+                  onClick={() => void startSelectedCandidates()}
+                >
+                  {busy ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                  {copy.analyzeSelected.replace('{{count}}', String(selectedCandidatePaths.size))}
+                </Button>
+                <Button type="button" variant="secondary" className="h-11 flex-1" disabled={busy} onClick={picker.pick}>
+                  {copy.chooseFolderManually}
+                </Button>
+              </div>
+              <button type="button" className={`${embedded ? 'mt-3' : 'mt-6'} mx-auto block text-sm text-fg-muted hover:text-fg hover:underline`} onClick={() => setPageState('intro')}>
+                {copy.back}
+              </button>
             </div>
-            {error ? <p className="mt-4 text-sm text-danger" role="alert">{error}</p> : null}
-            <div className="mt-7 flex flex-col gap-3 sm:flex-row-reverse">
-              <Button
-                type="button"
-                className="h-11 flex-1 bg-accent text-white hover:bg-accent-hover"
-                disabled={busy || selectedCandidatePaths.size === 0}
-                onClick={() => void startSelectedCandidates()}
-              >
-                {busy ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-                {copy.analyzeSelected.replace('{{count}}', String(selectedCandidatePaths.size))}
-              </Button>
-              <Button type="button" variant="secondary" className="h-11 flex-1" disabled={busy} onClick={picker.pick}>
-                {copy.chooseFolderManually}
-              </Button>
-            </div>
-            <button type="button" className="mx-auto mt-6 block text-sm text-fg-muted hover:text-fg hover:underline" onClick={() => setPageState('intro')}>
-              {copy.back}
-            </button>
           </section>
         ) : null}
 

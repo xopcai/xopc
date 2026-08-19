@@ -1257,6 +1257,41 @@ html.dark .chat-messages::-webkit-scrollbar-thumb:hover {
   animation: xopc-dialog-pane-out 0.2s ease-in both;
 }
 
+/* Route-backed Work Discovery overlay. AppShell and the About You page stay mounted. */
+.xopc-work-discovery-dialog[data-state="open"] {
+  animation: xopc-dialog-content-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.xopc-work-discovery-dialog[data-state="closed"] {
+  animation: xopc-dialog-content-out 0.16s cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+.xopc-work-discovery-dialog[data-state="open"] .xopc-work-discovery-panel {
+  animation: xopc-work-discovery-panel-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.xopc-work-discovery-dialog[data-state="closed"] .xopc-work-discovery-panel {
+  animation: xopc-work-discovery-panel-out 0.16s cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+@keyframes xopc-work-discovery-panel-in {
+  from {
+    transform: translate3d(0, 8px, 0) scale(0.99);
+  }
+  to {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes xopc-work-discovery-panel-out {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(0, 5px, 0) scale(0.992);
+  }
+}
+
 .xopc-drawer-right[data-state="open"] {
   animation: xopc-drawer-right-in 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
