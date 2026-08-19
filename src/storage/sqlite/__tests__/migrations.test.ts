@@ -176,12 +176,13 @@ describe('SQLite migrations', () => {
         'goal_evidence',
         'goal_session_links',
         'goal_context_messages',
+        'work_intakes',
       ]) {
         expect(db.prepare(
           `SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`,
         ).get(removedTable)).toBeUndefined();
       }
-      for (const table of ['execution_receipts', 'work_intakes', 'workflow_runs']) {
+      for (const table of ['execution_receipts', 'workflow_runs']) {
         const columns = db.prepare(`SELECT name FROM pragma_table_info(?)`).all(table) as Array<{ name: string }>;
         expect(columns.map((column) => column.name)).not.toContain('goal_id');
       }

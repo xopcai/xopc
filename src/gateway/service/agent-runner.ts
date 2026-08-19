@@ -44,6 +44,7 @@ export interface GatewayAgentRunnerOptions {
   getConfig: () => Config;
   /** SSE emit (re-used so `runAgent` events broadcast to subscribers). */
   emit: (type: string, payload: unknown) => void;
+  prepareOutcome?: (sessionKey: string) => Promise<void>;
   onOutcomeFinalized?: (receipt: ExecutionReceipt) => void;
 }
 
@@ -149,6 +150,7 @@ export class GatewayAgentRunner {
         activeWebchatRunBySession: this.activeWebchatRunBySession,
         sessionIndex: this.opts.sessionIndex,
         emit: this.opts.emit,
+        prepareOutcome: this.opts.prepareOutcome,
         onOutcomeFinalized: this.opts.onOutcomeFinalized,
       },
       message,

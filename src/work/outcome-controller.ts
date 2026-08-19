@@ -49,7 +49,7 @@ export function decideProactiveContinuation(
 
 export function decideOutcomeRecovery(
   receipt: ExecutionReceipt,
-  stalled: boolean,
+  consecutiveNoGain: number,
 ): OutcomeRecoveryDecision {
   if (receipt.correctionText?.trim()) return { action: 'continue', strategy: 'apply_user_correction' };
   if (receipt.failure?.recoveryAction === 'request_user_input') {
@@ -61,7 +61,20 @@ export function decideOutcomeRecovery(
   if (receipt.failure?.recoveryAction === 'none') {
     return { action: 'stop', reason: receipt.summary?.trim() || 'Execution cannot continue.' };
   }
-  if (stalled) return { action: 'continue', strategy: 'strategy_reset' };
+  if (consecutiveNoGain >= 3) {
+    return {
+      action: 'needs_user',
+      reason: 'Multiple changed approaches produced no new verified evidence. Provide the missing access or fact, revise the outcome, or choose to stop.',
+    };
+  }
+  if (receipt.attempt >= 12) {
+    return {
+      action: 'needs_user',
+      reason: 'The outcome remains incomplete after extensive execution and verification. Review the remaining criteria and choose whether to revise or continue.',
+    };
+  }
+  if (consecutiveNoGain >= 2) return { action: 'continue', strategy: 'independent_research' };
+  if (consecutiveNoGain >= 1) return { action: 'continue', strategy: 'strategy_reset' };
   if (receipt.failure?.recoveryAction === 'replan') {
     return { action: 'continue', strategy: `replan_${receipt.failure.phase}` };
   }
@@ -71,6 +84,33 @@ export function decideOutcomeRecovery(
   if (receipt.attempt >= 3) return { action: 'continue', strategy: 'independent_research' };
   if (receipt.attempt >= 2) return { action: 'continue', strategy: 'changed_approach' };
   return { action: 'continue', strategy: 'close_verification_gaps' };
+}
+
+export function countConsecutiveNoGain(receipts: ExecutionReceipt[]): number {
+  if (receipts.length < 2) return 0;
+  const fingerprint = (receipt: ExecutionReceipt) => JSON.stringify({
+    passedCriteria: receipt.verification.checks
+      .filter((check) => check.status === 'passed')
+      .map((check) => check.criterion)
+      .sort(),
+    verifiedEvidence: receipt.evidence
+      .filter((evidence) => evidence.strength === 'verified')
+      .map((evidence) => [
+        evidence.kind,
+        evidence.title,
+        evidence.summary,
+        evidence.uri ?? '',
+        evidence.verifies?.slice().sort().join('|') ?? '',
+      ].join(':'))
+      .sort(),
+  });
+  const latest = fingerprint(receipts[0]!);
+  let noGain = 0;
+  for (const receipt of receipts.slice(1)) {
+    if (fingerprint(receipt) !== latest) break;
+    noGain += 1;
+  }
+  return noGain;
 }
 
 function continuationPrompt(receipt: ExecutionReceipt, strategy: string): string {
@@ -139,15 +179,8 @@ export class OutcomeController {
       return undefined;
     }
 
-    const recent = listExecutionReceipts({ outcomeId, limit: 3 });
-    const evidenceFingerprints = recent.map((item) => item.evidence
-      .filter((evidence) => evidence.strength === 'verified')
-      .map((evidence) => `${evidence.kind}:${evidence.title}:${evidence.verifies?.join('|') ?? ''}`)
-      .sort()
-      .join('\n'));
-    const stalled = evidenceFingerprints.length >= 2
-      && evidenceFingerprints[0] === evidenceFingerprints[1];
-    const recovery = decideOutcomeRecovery(receipt, stalled);
+    const recent = listExecutionReceipts({ outcomeId, limit: 4 });
+    const recovery = decideOutcomeRecovery(receipt, countConsecutiveNoGain(recent));
     if (recovery.action !== 'continue') {
       this.#executions.update(outcomeId, {
         nextAction: recovery.reason,
@@ -169,7 +202,8 @@ export class OutcomeController {
     const proactive = decideProactiveContinuation({
       scopeRelation: 'same_outcome',
       reversible: receipt.failure?.phase !== 'approval',
-      authorized: (outcome.contract?.approvalRequired ?? []).every((item) => approved.has(item)),
+      authorized: receipt.failure?.phase !== 'approval'
+        || (outcome.contract?.approvalRequired ?? []).every((item) => approved.has(item)),
       confidence: receipt.correctionText ? 1 : receipt.failure ? 0.85 : 0.8,
     });
     if (proactive.action === 'ask') {

@@ -6,6 +6,7 @@ import {
   listExecutionReceipts,
 } from '../storage/sqlite/index.js';
 import { OutcomeRepository } from './outcome-repository.js';
+import { OutcomeExecutionStateRepository } from './outcome-execution-state.js';
 
 export interface OutcomeContextAllocation {
   profile: 'standard' | 'deep' | 'critical';
@@ -124,4 +125,41 @@ export function assembleOutcomeContext(sessionKey: string, userQuery: string): A
     allocation,
     ...(manifest ? { manifest } : {}),
   };
+}
+
+export function buildOutcomeExecutionDirective(sessionKey: string): string {
+  if (!isXopcDatabaseOpen()) return '';
+  const metadata = getSessionMetadata(sessionKey);
+  const outcomeId = typeof metadata?.customData?.outcomeId === 'string'
+    ? metadata.customData.outcomeId.trim()
+    : '';
+  if (!outcomeId) return '';
+  const outcome = new OutcomeRepository().get(outcomeId);
+  if (!outcome?.contract) return '';
+  const execution = new OutcomeExecutionStateRepository().get(outcomeId);
+  const latestReceipt = listExecutionReceipts({ outcomeId, limit: 1 })[0];
+  const remaining = latestReceipt?.verification.checks
+    .filter((check) => check.status !== 'passed')
+    .map((check) => check.criterion) ?? outcome.contract.acceptanceCriteria;
+  const lines = [
+    '<xopc_outcome_execution>',
+    'This conversation is executing a durable user outcome, not merely discussing it.',
+    `Outcome: ${outcome.contract.objective}`,
+    `Deliverables: ${outcome.contract.deliverables.join('; ')}`,
+    `Remaining acceptance criteria: ${remaining.join('; ')}`,
+    outcome.contract.constraints.length ? `Constraints: ${outcome.contract.constraints.join('; ')}` : '',
+    outcome.contract.approvalRequired.length
+      ? `Approval boundaries: ${outcome.contract.approvalRequired.join('; ')}`
+      : '',
+    execution?.approvedBoundaries.length
+      ? `Already approved boundaries: ${execution.approvedBoundaries.join('; ')}`
+      : '',
+    latestReceipt?.correctionText ? `User correction: ${latestReceipt.correctionText}` : '',
+    latestReceipt?.summary ? `Latest result: ${latestReceipt.summary}` : '',
+    'Actively take all safe in-scope steps available. Prefer producing and verifying the result over explaining how to do it.',
+    'Do not claim completion without inspectable evidence for every acceptance criterion.',
+    'Ask the user only when a concrete missing decision, permission, or unavailable fact truly blocks progress. If blocked, state what is done, the blocker, your recommendation, and one decision needed.',
+    '</xopc_outcome_execution>',
+  ];
+  return lines.filter(Boolean).join('\n');
 }
