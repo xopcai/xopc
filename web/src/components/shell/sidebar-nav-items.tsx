@@ -120,10 +120,12 @@ export function SidebarNavItems({
   collapsed = false,
   onNavigate,
   visibleLimit,
+  afterVisible,
 }: {
   collapsed?: boolean;
   onNavigate?: () => void;
   visibleLimit?: number;
+  afterVisible?: ReactNode;
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -233,6 +235,7 @@ export function SidebarNavItems({
       <NavLink
         key={item.id}
         to={item.to}
+        end={item.to === '/'}
         draggable
         onDragStart={onDragStart(item.id)}
         onDragEnd={onDragEnd}
@@ -308,6 +311,7 @@ export function SidebarNavItems({
                   <li key={item.id} className="contents">
                     <NavLink
                       to={item.to}
+                      end={item.to === '/'}
                       draggable
                       onDragStart={onDragStart(item.id)}
                       onDragEnd={onDragEnd}
@@ -338,6 +342,7 @@ export function SidebarNavItems({
   return (
     <>
       {reconciled.visible.map(renderRailRow)}
+      {afterVisible}
       {reconciled.hasOverflow ? renderMoreButton() : null}
     </>
   );

@@ -5,9 +5,9 @@ import { safeInternalReturnPath, withReturnTo } from '../navigation-return';
 describe('navigation return paths', () => {
   it('accepts only the configured internal route families', () => {
     expect(safeInternalReturnPath('/chat/session-1', '/projects', ['/chat'])).toBe('/chat/session-1');
-    expect(safeInternalReturnPath('/projects/p-1/workflows?returnTo=%2Fchat%2Fs-1', '/home', ['/projects', '/chat']))
+    expect(safeInternalReturnPath('/projects/p-1/workflows?returnTo=%2Fchat%2Fs-1', '/', ['/projects', '/chat']))
       .toBe('/projects/p-1/workflows?returnTo=%2Fchat%2Fs-1');
-    expect(safeInternalReturnPath('/projects-old/p-1', '/home', ['/projects'])).toBe('/home');
+    expect(safeInternalReturnPath('/projects-old/p-1', '/', ['/projects'])).toBe('/');
   });
 
   it('rejects external, protocol-relative, and backslash paths', () => {

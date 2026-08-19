@@ -7,7 +7,7 @@ xopc 刻意保持产品模型简单：
 - **Note / Workspace** 保存长期输入材料与交付产物。
 - **Conversation** 是工作开始、推进和请求用户决定的入口。
 
-Home 位于 `#/home`，Projects 位于 `#/projects`，Task 详情位于 `#/tasks/:id`。
+首页位于 `#/`，项目位于 `#/projects`，任务详情位于 `#/tasks/:id`。
 
 ## 什么时候使用哪个对象
 

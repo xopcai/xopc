@@ -11,7 +11,7 @@ function decision(overrides: Partial<HomeDecision>): HomeDecision {
     title: 'Prepare launch',
     reason: 'blocked',
     urgency: 'now',
-    href: '/home',
+    href: '/',
     updatedAt: 100,
     ...overrides,
   };
