@@ -432,11 +432,11 @@ export class SessionStore {
     return this.runStoreMutation(async () => {
       requireXopcDatabase();
       const cwd = this.resolveWorkspaceCwd(key);
-      const outcome = resetSessionRecord(key, cwd);
-      if (outcome) {
-        log.info({ key, ...outcome }, 'Session reset');
+      const task = resetSessionRecord(key, cwd);
+      if (task) {
+        log.info({ key, ...task }, 'Session reset');
       }
-      return outcome;
+      return task;
     });
   }
 

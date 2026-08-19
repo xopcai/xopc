@@ -5,12 +5,11 @@ import { useGatewayStore } from '@/stores/gateway-store';
 
 export interface ChatSessionMetadata {
   workflowRunId: string | null;
-  outcomeId: string | null;
+  taskId: string | null;
   ownerAgentId: string | null;
   sessionType: string | null;
   sourceNoteId: string | null;
   sourceNoteTitle: string | null;
-  sourceWorkItemId: string | null;
 }
 
 /** Read execution bindings from the session's authoritative metadata. */
@@ -25,9 +24,9 @@ export function useChatSessionMetadata(sessionKey: string | null | undefined) {
       const rawRunId = detail.customData?.workflowRunId;
       const workflowRunId =
         typeof rawRunId === 'string' && rawRunId.trim() ? rawRunId.trim() : null;
-      const rawOutcomeId = detail.customData?.outcomeId;
-      const outcomeId =
-        typeof rawOutcomeId === 'string' && rawOutcomeId.trim() ? rawOutcomeId.trim() : null;
+      const rawTaskId = detail.customData?.taskId;
+      const taskId =
+        typeof rawTaskId === 'string' && rawTaskId.trim() ? rawTaskId.trim() : null;
       const sessionType =
         typeof detail.sessionType === 'string' && detail.sessionType.trim()
           ? detail.sessionType.trim()
@@ -44,18 +43,13 @@ export function useChatSessionMetadata(sessionKey: string | null | undefined) {
         sourceBinding?.kind === 'note' && typeof sourceBinding.sourceId === 'string' && sourceBinding.sourceId.trim()
           ? sourceBinding.sourceId.trim()
           : null;
-      const sourceWorkItemId =
-        sourceBinding?.kind === 'work_item' && typeof sourceBinding.sourceId === 'string' && sourceBinding.sourceId.trim()
-          ? sourceBinding.sourceId.trim()
-          : null;
       return {
         workflowRunId,
-        outcomeId,
+        taskId,
         ownerAgentId,
         sessionType,
         sourceNoteId,
         sourceNoteTitle: null,
-        sourceWorkItemId,
       };
     },
     { revalidateOnFocus: false },

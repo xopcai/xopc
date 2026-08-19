@@ -11,7 +11,7 @@ function createMockGatewayService(overrides: Partial<GatewayService>): GatewaySe
     install: vi.fn(),
     uninstall: vi.fn(),
     stop: vi.fn(),
-    restart: vi.fn().mockResolvedValue({ outcome: 'restarted' }),
+    restart: vi.fn().mockResolvedValue({ task: 'restarted' }),
     isLoaded: vi.fn().mockResolvedValue(true),
     readRuntime: vi.fn().mockResolvedValue({ status: 'stopped' }),
     readCommand: vi.fn().mockResolvedValue({
@@ -24,7 +24,7 @@ function createMockGatewayService(overrides: Partial<GatewayService>): GatewaySe
 
 describe('startGatewayService', () => {
   it('starts an installed but unloaded service', async () => {
-    const restart = vi.fn().mockResolvedValue({ outcome: 'restarted' });
+    const restart = vi.fn().mockResolvedValue({ task: 'restarted' });
     const service = createMockGatewayService({
       isLoaded: vi.fn().mockResolvedValue(false),
       restart,
@@ -32,12 +32,12 @@ describe('startGatewayService', () => {
 
     const result = await startGatewayService({ service });
 
-    expect(result.outcome).toBe('started');
+    expect(result.task).toBe('started');
     expect(restart).toHaveBeenCalledWith({ env: process.env });
   });
 
   it('reports missing install only when no command configuration exists', async () => {
-    const restart = vi.fn().mockResolvedValue({ outcome: 'restarted' });
+    const restart = vi.fn().mockResolvedValue({ task: 'restarted' });
     const service = createMockGatewayService({
       isLoaded: vi.fn().mockResolvedValue(false),
       readCommand: vi.fn().mockResolvedValue(null),
@@ -46,7 +46,7 @@ describe('startGatewayService', () => {
 
     const result = await startGatewayService({ service });
 
-    expect(result.outcome).toBe('missing-install');
+    expect(result.task).toBe('missing-install');
     expect(restart).not.toHaveBeenCalled();
   });
 });

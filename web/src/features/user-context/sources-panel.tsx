@@ -165,7 +165,7 @@ function SourceAccountDetail({
 
           <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
             <section>
-              <h3 className="flex items-center gap-2 text-sm font-semibold text-fg"><Brain className="size-4 text-accent" aria-hidden />{t.sourceOutcomeTitle}</h3>
+              <h3 className="flex items-center gap-2 text-sm font-semibold text-fg"><Brain className="size-4 text-accent" aria-hidden />{t.sourceTaskTitle}</h3>
               <p className={cn(
                 'mt-3 rounded-xl border px-4 py-3 text-sm leading-6',
                 presentation.tone === 'attention' ? 'border-warning/30 bg-warning-soft text-fg' : 'border-edge-subtle bg-surface-muted text-fg',

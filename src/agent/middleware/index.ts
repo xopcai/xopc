@@ -9,7 +9,7 @@ export {
   type SelfVerifyConfig,
   type SelfVerifyAgentKind,
   type SelfVerifyState,
-  type VerificationOutcome,
+  type VerificationTask,
   type VerificationRecord,
 } from './self-verify.js';
 

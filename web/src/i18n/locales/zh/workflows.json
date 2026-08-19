@@ -154,8 +154,7 @@
     "noContextRefs": "没有记录绑定上下文。",
     "contextRefKinds": {
       "project": "项目",
-      "outcome": "结果",
-      "work_item": "工作项",
+      "task": "结果",
       "session": "会话",
       "attachment": "附件",
       "memory": "记忆"
@@ -165,8 +164,7 @@
     "noWritebackTargets": "没有记录回写目标。",
     "writebackTargetKinds": {
       "project": "项目",
-      "outcome": "结果",
-      "work_item": "工作项"
+      "task": "结果"
     },
     "writebackModes": {
       "record": "记录",
@@ -369,8 +367,8 @@
     "rawJsonInvalid": "请输入 JSON 对象。",
     "booleanTrue": "是",
     "booleanFalse": "否",
-    "outcomeArtifacts": "产物",
-    "outcomeFollowUps": "后续行动",
+    "taskArtifacts": "产物",
+    "taskFollowUps": "后续行动",
     "downloadArtifact": "下载",
     "downloadingArtifact": "下载中…",
     "startFollowUp": "在 Chat 中打开",

@@ -4,7 +4,7 @@ Use this page as the full map: what runs, setup modes, surfaces, and where to go
 
 If you have not tried xopc yet, start with the **[PC Desktop app](./desktop-app.md)** for the friendliest path, or **[First 5 Minutes](./first-5-minutes.md)** for a terminal-first path — both cover the actual install commands step by step.
 
-Your first run needs only **model → agent → session**. Add a Project / Goal when work must survive across sessions, Notes / Workspace for durable material, and a Workflow / Automation when execution repeats or fans out. See [The Continuous Work Model](./concepts/loops.md) for the complete model.
+Your first run needs only **model → agent → conversation**. xopc creates an Task when work must survive across sessions. Add a Project only for shared context, Notes / Workspace for durable material, and a Workflow / Automation when execution repeats or is event-driven. See [The Task Loop](./concepts/loops.md) for the complete model.
 
 ## What xopc runs
 
@@ -63,7 +63,7 @@ Configuration is stored in `~/.xopc/xopc.json` by default. Override it with `XOP
 | Skills | [Skills](./skills.md) |
 | Extensions | [Extensions](./extensions.md) |
 | Session routing | [Routing system](./routing-system.md) |
-| Projects, goals, and notes | [Projects, Goals, and Notes](./projects-goals-notes.md) |
+| Projects, tasks, and notes | [Projects, Tasks, and Notes](./projects-tasks-notes.md) |
 
 ## Development from source
 

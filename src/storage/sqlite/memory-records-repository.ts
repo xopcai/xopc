@@ -180,10 +180,10 @@ type MemoryTraceRow = {
   created_at: number;
 };
 
-export type MemoryTraceFeedbackOutcome = 'helpful' | 'not_helpful' | 'mixed' | 'irrelevant';
+export type MemoryTraceFeedbackRating = 'helpful' | 'not_helpful' | 'mixed' | 'irrelevant';
 
 export interface MemoryTraceFeedback {
-  outcome: MemoryTraceFeedbackOutcome;
+  rating: MemoryTraceFeedbackRating;
   score?: number;
   reason?: string;
   source?: 'user' | 'evaluator' | 'system';
@@ -336,17 +336,17 @@ function parseMemoryTraceFeedback(json: string): MemoryTraceFeedback | undefined
     const parsed = JSON.parse(json) as unknown;
     if (!parsed || typeof parsed !== 'object') return undefined;
     const obj = parsed as Record<string, unknown>;
-    const outcome = obj.outcome;
+    const rating = obj.rating;
     if (
-      outcome !== 'helpful' &&
-      outcome !== 'not_helpful' &&
-      outcome !== 'mixed' &&
-      outcome !== 'irrelevant'
+      rating !== 'helpful' &&
+      rating !== 'not_helpful' &&
+      rating !== 'mixed' &&
+      rating !== 'irrelevant'
     ) {
       return undefined;
     }
     return {
-      outcome,
+      rating,
       ...(typeof obj.score === 'number' ? { score: obj.score } : {}),
       ...(typeof obj.reason === 'string' ? { reason: obj.reason } : {}),
       ...(obj.source === 'user' || obj.source === 'evaluator' || obj.source === 'system'
@@ -373,7 +373,7 @@ function normalizeMemoryTraceFeedback(
     : undefined;
   const nowIso = new Date(nowMs).toISOString();
   return {
-    outcome: input.outcome,
+    rating: input.rating,
     ...(score != null ? { score } : {}),
     ...(reason ? { reason } : {}),
     ...(input.source ? { source: input.source } : {}),
@@ -1069,7 +1069,7 @@ function reconcileUserUnderstandingFeedback(
   feedback: MemoryTraceFeedback,
   nowMs: number,
 ): MemoryFeedbackRemediationResult | undefined {
-  if (trace.phase !== 'inject' || feedback.outcome !== 'not_helpful') return undefined;
+  if (trace.phase !== 'inject' || feedback.rating !== 'not_helpful') return undefined;
   const explicitCorrection = feedback.source === 'system'
     && feedback.reason === 'detected_explicit_user_correction';
   const evaluatedRecordIds: string[] = [];
@@ -1096,8 +1096,8 @@ function reconcileUserUnderstandingFeedback(
     let notHelpful = 0;
     for (const row of feedbackRows) {
       const recordFeedback = parseMemoryTraceFeedback(row.feedback_json);
-      if (recordFeedback?.outcome === 'helpful') helpful += 1;
-      if (recordFeedback?.outcome === 'not_helpful') notHelpful += 1;
+      if (recordFeedback?.rating === 'helpful') helpful += 1;
+      if (recordFeedback?.rating === 'not_helpful') notHelpful += 1;
     }
     if (!explicitCorrection && (
       notHelpful < USER_UNDERSTANDING_REMEDIATION_POLICY.minNotHelpful
@@ -1243,10 +1243,10 @@ export function summarizeMemoryRecallFeedback(options: {
         scoreTotal: 0,
         scoreCount: 0,
       };
-      if (feedback.outcome === 'helpful') current.helpful += 1;
-      if (feedback.outcome === 'not_helpful') current.notHelpful += 1;
-      if (feedback.outcome === 'mixed') current.mixed += 1;
-      if (feedback.outcome === 'irrelevant') current.irrelevant += 1;
+      if (feedback.rating === 'helpful') current.helpful += 1;
+      if (feedback.rating === 'not_helpful') current.notHelpful += 1;
+      if (feedback.rating === 'mixed') current.mixed += 1;
+      if (feedback.rating === 'irrelevant') current.irrelevant += 1;
       current.total += 1;
       if (typeof feedback.score === 'number') {
         current.scoreTotal += feedback.score;
@@ -1377,10 +1377,10 @@ export function summarizeUserUnderstandingQuality(options: {
       const selected = parseStringArray(row.selected_record_ids_json);
       if (!selected.some((recordId) => understandingRecordIds.has(recordId))) continue;
       recall.total += 1;
-      if (feedback.outcome === 'helpful') recall.helpful += 1;
-      if (feedback.outcome === 'not_helpful') recall.notHelpful += 1;
-      if (feedback.outcome === 'mixed') recall.mixed += 1;
-      if (feedback.outcome === 'irrelevant') recall.irrelevant += 1;
+      if (feedback.rating === 'helpful') recall.helpful += 1;
+      if (feedback.rating === 'not_helpful') recall.notHelpful += 1;
+      if (feedback.rating === 'mixed') recall.mixed += 1;
+      if (feedback.rating === 'irrelevant') recall.irrelevant += 1;
     }
   }
   recall.helpfulRate = metricRate(recall.helpful, recall.total);

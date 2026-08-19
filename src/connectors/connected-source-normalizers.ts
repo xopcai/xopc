@@ -183,14 +183,14 @@ function normalizeGitHub(result: unknown, actionId: string): ConnectedSourceEnti
   });
 }
 
-function normalizeWorkItems(result: unknown, toolkit: string): ConnectedSourceEntity[] {
+function normalizeExternalTasks(result: unknown, toolkit: string): ConnectedSourceEntity[] {
   return rows(payload(result), 'issues', 'items', 'results').flatMap((item) => {
     const externalId = text(item, 'id', 'identifier', 'key');
     if (!externalId) return [];
     const occurredAt = time(item.createdAt ?? item.created_at);
     return [{
       externalId,
-      itemType: 'work_item',
+      itemType: 'external_task',
       occurredAt,
       sourceUpdatedAt: time(item.updatedAt ?? item.updated_at) ?? occurredAt,
       value: compact({
@@ -202,8 +202,8 @@ function normalizeWorkItems(result: unknown, toolkit: string): ConnectedSourceEn
         state: item.state ?? item.status,
       }),
       metadata: {
-        observationKind: 'work_item',
-        logicalEventKey: `${toolkit}:work-item:${externalId}`,
+        observationKind: 'external_task',
+        logicalEventKey: `${toolkit}:task:${externalId}`,
       },
       synthesisStatus: 'pending' as const,
     }];
@@ -219,7 +219,7 @@ export function normalizeConnectedSourceResult(input: {
   if (input.toolkit === 'googlecalendar') return normalizeCalendar(input.result);
   if (input.toolkit === 'github') return normalizeGitHub(input.result, input.actionId);
   if (input.toolkit === 'linear' || input.toolkit === 'jira') {
-    return normalizeWorkItems(input.result, input.toolkit);
+    return normalizeExternalTasks(input.result, input.toolkit);
   }
   return [];
 }

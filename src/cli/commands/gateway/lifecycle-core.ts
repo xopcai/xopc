@@ -267,7 +267,7 @@ export async function runServiceRestart(params: {
         process.stdout.write('\n');
       }
       if (!snapshot.healthy) {
-        fail(`Restart health check failed: ${snapshot.waitOutcome ?? 'timeout'}`, [
+        fail(`Restart health check failed: ${snapshot.waitTask ?? 'timeout'}`, [
           'xopc gateway logs',
         ]);
         return;

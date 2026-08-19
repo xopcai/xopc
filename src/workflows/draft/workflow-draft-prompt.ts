@@ -55,7 +55,7 @@ Shape:
   "name": "lowercase_snake_case",
   "graph": { "schemaVersion": 1, "nodes": [], "edges": [] },
   "manifest": {
-    "title": "Human title", "description": "Outcome in plain language", "version": "1.0.0",
+    "title": "Human title", "description": "Task in plain language", "version": "1.0.0",
     "inputSchema": { "type": "object", "properties": {}, "required": [] },
     "defaults": { "concurrency": 3, "timeoutSec": 1800, "maxSubagents": 8 },
     "permissions": { "network": false, "fileSystem": "read", "approvalRequired": false },

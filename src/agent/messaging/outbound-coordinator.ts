@@ -5,7 +5,7 @@
  * `AgentService`:
  *  - typing-on / typing-off lifecycle for channels that surface "is typing…"
  *  - final assistant response delivery (silence guard + hook + bus publish)
- *  - cross-cutting `webchat_turn_complete` hook + outcome review
+ *  - cross-cutting `webchat_turn_complete` hook + task review
  *  - thin pass-through for extension `message_sending` / `message_sent` hooks
  *
  * The class is intentionally framework-agnostic: it pulls everything it needs
@@ -32,7 +32,7 @@ export interface OutboundCoordinatorConfig {
   getConfig: () => Config | undefined;
   /** Resolves the last visible assistant text for a session (in-memory + agent fallback). */
   getLastAssistantPlainText: (sessionKey: string) => string;
-  reviewOutcomeTurn: (payload: SessionTurnCompletePayload) => Promise<void>;
+  reviewTaskTurn: (payload: SessionTurnCompletePayload) => Promise<void>;
 }
 
 export interface SessionTurnCompletePayload {
@@ -43,7 +43,7 @@ export interface SessionTurnCompletePayload {
   assistantPlainText: string;
   aborted: boolean;
   streamError?: string;
-  skipOutcomeReview?: boolean;
+  skipTaskReview?: boolean;
   outboundMetadata?: Record<string, unknown>;
 }
 
@@ -53,7 +53,7 @@ export class OutboundCoordinator {
   private readonly streamManager: StreamManager;
   private readonly getConfig: () => Config | undefined;
   private readonly getLastAssistantPlainText: (sessionKey: string) => string;
-  private readonly reviewOutcomeTurn: OutboundCoordinatorConfig['reviewOutcomeTurn'];
+  private readonly reviewTaskTurn: OutboundCoordinatorConfig['reviewTaskTurn'];
 
   constructor(config: OutboundCoordinatorConfig) {
     this.bus = config.bus;
@@ -61,7 +61,7 @@ export class OutboundCoordinator {
     this.streamManager = config.streamManager;
     this.getConfig = config.getConfig;
     this.getLastAssistantPlainText = config.getLastAssistantPlainText;
-    this.reviewOutcomeTurn = config.reviewOutcomeTurn;
+    this.reviewTaskTurn = config.reviewTaskTurn;
   }
 
   /**
@@ -154,7 +154,7 @@ export class OutboundCoordinator {
     });
   }
 
-  /** Run extension completion hooks and independently review an attached Outcome. */
+  /** Run extension completion hooks and independently review an attached Task. */
   async emitSessionTurnComplete(payload: SessionTurnCompletePayload): Promise<void> {
     await this.hookHandler.triggerWithSessionKey(payload.sessionKey, 'webchat_turn_complete', {
       sessionKey: payload.sessionKey,
@@ -166,7 +166,7 @@ export class OutboundCoordinator {
       ...(payload.streamError !== undefined ? { streamError: payload.streamError } : {}),
     });
 
-    await this.reviewOutcomeTurn(payload);
+    await this.reviewTaskTurn(payload);
   }
 
   /** Extension hook pass-through (Gateway ChannelManager). */

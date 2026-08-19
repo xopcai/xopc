@@ -230,7 +230,7 @@
     "sourcePreparing": "已连接，正在准备了解这个账号",
     "sourcePausedSummary": "已暂停后台了解",
     "sourceDetailsTitle": "来源详情",
-    "sourceOutcomeTitle": "对你的了解",
+    "sourceTaskTitle": "对你的了解",
     "sourceReliableMetric": "可靠了解",
     "sourcePendingMetric": "待确认了解",
     "sourceRecentRunTitle": "最近一次了解",

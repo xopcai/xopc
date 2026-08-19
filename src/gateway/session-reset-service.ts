@@ -31,8 +31,8 @@ export async function performSessionReset(
 
   await abortEmbeddedRun(key);
 
-  const outcome = await deps.sessionIndex.resetSession(key);
-  if (!outcome) {
+  const task = await deps.sessionIndex.resetSession(key);
+  if (!task) {
     return { ok: false, error: 'Session not found' };
   }
 
@@ -46,13 +46,13 @@ export async function performSessionReset(
   }
 
   log.info(
-    { sessionKey: key, sessionId: outcome.sessionId, previousSessionId: outcome.previousSessionId },
+    { sessionKey: key, sessionId: task.sessionId, previousSessionId: task.previousSessionId },
     'Session reset completed',
   );
 
   return {
     ok: true,
-    sessionId: outcome.sessionId,
-    previousSessionId: outcome.previousSessionId,
+    sessionId: task.sessionId,
+    previousSessionId: task.previousSessionId,
   };
 }

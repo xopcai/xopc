@@ -49,7 +49,7 @@ export interface STTConfig {
   timeoutMs?: number;
 }
 
-export type STTProviderAttemptOutcome = 'success' | 'skipped' | 'failed';
+export type STTProviderAttemptTask = 'success' | 'skipped' | 'failed';
 
 export type STTProviderFailureReason =
   | 'success'
@@ -61,7 +61,7 @@ export type STTProviderFailureReason =
 
 export interface STTProviderAttempt {
   provider: string;
-  outcome: STTProviderAttemptOutcome;
+  task: STTProviderAttemptTask;
   reasonCode: STTProviderFailureReason;
   latencyMs: number;
   error?: string;

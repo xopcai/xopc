@@ -58,7 +58,7 @@ What to look for:
 
 - The current Session retains its conversation and tool-run context; local state and config live under `~/.xopc/` by default.
 - If this is a temporary task, that may be all you need.
-- If the work must continue across sessions, create a Project / Goal in the gateway console and explicitly track status, blockers, and the next action.
+- If the work must continue across sessions, let xopc create an Task; add a Project only when several tasks need shared context.
 - Add Notes / Workspace, a Workflow, or an Automation only when you need durable material or repeated execution.
 
 ## 5. Add only the components you need
@@ -67,7 +67,7 @@ Once the local chat works, grow only where the habit is useful:
 
 | Next step | Add this when | Where to go |
 | --- | --- | --- |
-| Keep one project moving | Status and next actions must survive across sessions | Use Projects / Goals in the gateway console |
+| Keep one result moving | Status and next actions must survive across sessions | Use Home and Tasks in the gateway console |
 | Capture material anywhere | Ideas and updates happen away from the terminal | Use Notes on Web / mobile for text, voice, and attachments |
 | Bring in outside signals | Work already lives in another surface or system | Use channels, gateway APIs, extensions, or MCP |
 | Automate follow-up | Reviews, summaries, or reminders repeat | Use [Automations](./automations.md) and [Workflows](./workflows.md) |
@@ -82,4 +82,4 @@ Common surfaces:
 | Mobile | [mobile app](https://github.com/xopcai/xopc/tree/main/apps/mobile-expo) + QR gateway pairing | Capture notes, ideas, and project updates away from your computer while the agent keeps running on your machine; see [Mobile app](./mobile-app.md) |
 | Messengers | Open `Channels` after the gateway is running | Telegram, WeChat, Feishu/Lark |
 
-For the full guide, continue to [Getting Started](./getting-started.md). To understand how Sessions, Projects, Goals, Workflows, and Automations work together, read [The Continuous Work Model](./concepts/loops.md).
+For the full guide, continue to [Getting Started](./getting-started.md). To understand how Conversations, Tasks, Projects, Workflows, and Automations work together, read [The Task Loop](./concepts/loops.md).

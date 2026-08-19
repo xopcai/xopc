@@ -34,7 +34,7 @@ import {
   buildWorkflowFailureContext,
   extractSnapshot,
   formatDuration,
-  isWorkflowFailureOutcome,
+  isWorkflowFailureTask,
   readErrorText,
   resolveCardStatus,
   rollupPhases,
@@ -189,7 +189,7 @@ export const WorkflowCard = memo(function WorkflowCard({
   }, [navigate, snapshot?.runId]);
 
   // ----- render -----
-  if (isWorkflowFailureOutcome(block) || (status === 'completed' && !snapshot)) {
+  if (isWorkflowFailureTask(block) || (status === 'completed' && !snapshot)) {
     const kind = failureKind ?? classifyFailure(block);
     const failureCtx = buildWorkflowFailureContext(block);
     const failureSnapshot = failureCtx.snapshot;

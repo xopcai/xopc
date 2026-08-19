@@ -2,7 +2,7 @@
  * `xopc voice` — configure text-to-speech (TTS) for outbound messages.
  *
  * Backed by `cfg.messages.tts` per `TTSConfigSchema`. Uses the M1 setup-shared
- * runner so every action emits the same `SetupOutcome` JSON consumed by M2
+ * runner so every action emits the same `SetupTask` JSON consumed by M2
  * skills and the M3 WebUI.
  */
 
@@ -15,7 +15,7 @@ import { register, formatExamples, type CLIContext } from '../registry.js';
 import { colors } from '../utils/colors.js';
 
 import {
-  emitOutcome,
+  emitTask,
   runSetup,
 } from './setup-shared/index.js';
 
@@ -114,7 +114,7 @@ function createVoiceCommand(_ctx: CLIContext): Command {
     )
     .option('--trigger <mode>', `Trigger mode: ${TTS_TRIGGERS.join(' | ')}`)
     .option('--dry-run', 'Show the change without writing', false)
-    .option('--json', 'Emit a single JSON outcome line', false)
+    .option('--json', 'Emit a single JSON task line', false)
     .action(
       async (
         opts: { provider?: string; trigger?: string; dryRun?: boolean; json?: boolean },
@@ -123,7 +123,7 @@ function createVoiceCommand(_ctx: CLIContext): Command {
         const provider = opts.provider as TTSProvider | undefined;
         const trigger = opts.trigger as TTSTrigger | undefined;
         if (provider && !TTS_PROVIDERS.includes(provider)) {
-          emitOutcome(
+          emitTask(
             {
               ok: false,
               action: 'set',
@@ -143,7 +143,7 @@ function createVoiceCommand(_ctx: CLIContext): Command {
           return;
         }
         if (trigger && !TTS_TRIGGERS.includes(trigger)) {
-          emitOutcome(
+          emitTask(
             {
               ok: false,
               action: 'set',
@@ -183,7 +183,7 @@ function createVoiceCommand(_ctx: CLIContext): Command {
     .command('disable')
     .description('Disable TTS')
     .option('--dry-run', 'Show the change without writing', false)
-    .option('--json', 'Emit a single JSON outcome line', false)
+    .option('--json', 'Emit a single JSON task line', false)
     .action(async (opts: { dryRun?: boolean; json?: boolean }, command: Command) => {
       await runSetup({
         configPath: resolveConfigPathFromCommand(command) || undefined!,

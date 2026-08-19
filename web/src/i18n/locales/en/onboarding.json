@@ -102,7 +102,7 @@
       "riskAnalysis": "Analysis only",
       "riskCommand": "May run a command with approval",
       "riskFileWrite": "May propose file changes",
-      "expectedOutcome": "Expected outcome",
+      "expectedTask": "Expected task",
       "startRecommendedAction": "Start",
       "explainFirst": "Explain first",
       "otherDirections": "Other directions",

@@ -36,7 +36,7 @@ export interface MediaUnderstandingModelEntry {
   [key: string]: unknown;
 }
 
-export type MediaUnderstandingDecisionOutcome =
+export type MediaUnderstandingDecisionTask =
   | 'success'
   | 'failed'
   | 'skipped'
@@ -44,7 +44,7 @@ export type MediaUnderstandingDecisionOutcome =
   | 'no-attachment'
   | 'scope-deny';
 
-export type MediaUnderstandingAttemptOutcome = 'success' | 'skipped' | 'failed';
+export type MediaUnderstandingAttemptTask = 'success' | 'skipped' | 'failed';
 
 export type MediaUnderstandingKind =
   | 'audio.transcription'
@@ -87,7 +87,7 @@ export interface MediaUnderstandingModelDecision {
   provider?: string;
   model?: string;
   type: 'provider' | 'cli';
-  outcome: MediaUnderstandingAttemptOutcome;
+  task: MediaUnderstandingAttemptTask;
   reason?: string;
   /** Wall-clock time spent in this provider attempt. */
   latencyMs?: number;
@@ -101,7 +101,7 @@ export interface MediaUnderstandingAttachmentDecision {
 
 export interface MediaUnderstandingDecision {
   capability: MediaCapability;
-  outcome: MediaUnderstandingDecisionOutcome;
+  task: MediaUnderstandingDecisionTask;
   attachments: MediaUnderstandingAttachmentDecision[];
 }
 

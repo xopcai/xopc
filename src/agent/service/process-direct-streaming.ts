@@ -79,9 +79,9 @@ export interface ProcessDirectStreamingDeps {
     prepared: MediaRef[] | undefined,
     sessionKey: string,
   ) => Promise<TranscriptUserMessage>;
-  recordOutcomeReviewStreamHint?: (
+  recordTaskReviewStreamHint?: (
     sessionKey: string,
-    outcome: { skipOutcomeReview: boolean },
+    task: { skipTaskReview: boolean },
   ) => void;
   onTurnComplete?: (sessionKey: string, lastAssistantText?: string) => void;
   enqueueProvisionalSessionTitle?: (sessionKey: string, userText: string) => void;
@@ -402,7 +402,7 @@ export async function* runProcessDirectStreaming(
           pushAssistantReceipt(queue, text, input.runId, slashCommandMetadata);
         } else if (channel === 'webchat') {
           webchatSlashReceipt =
-            'Command finished with no assistant text. An Outcome continuation may still be scheduled automatically.';
+            'Command finished with no assistant text. An Task continuation may still be scheduled automatically.';
           pushAssistantReceipt(queue, webchatSlashReceipt, input.runId);
         }
         const workflowRun = slash.metadata?.workflowRun;
@@ -542,7 +542,7 @@ export async function* runProcessDirectStreaming(
       }
     }
 
-    deps.recordOutcomeReviewStreamHint?.(sessionKey, { skipOutcomeReview: ranSlashCommand });
+    deps.recordTaskReviewStreamHint?.(sessionKey, { skipTaskReview: ranSlashCommand });
   } finally {
     if (channel === 'webchat') {
       deps.unregisterWebchatSsePublisher(sessionKey);

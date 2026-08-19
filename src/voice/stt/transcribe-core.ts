@@ -48,8 +48,8 @@ function classifyFailureReason(reason: string | undefined): STTProviderFailureRe
 function toAttempt(attempt: MediaUnderstandingModelDecision): STTProviderAttempt {
   return {
     provider: attempt.provider ?? 'unknown',
-    outcome: attempt.outcome,
-    reasonCode: attempt.outcome === 'success' ? 'success' : classifyFailureReason(attempt.reason),
+    task: attempt.task,
+    reasonCode: attempt.task === 'success' ? 'success' : classifyFailureReason(attempt.reason),
     latencyMs: attempt.latencyMs ?? 0,
     ...(attempt.reason ? { error: attempt.reason } : {}),
   };
@@ -95,7 +95,7 @@ export async function transcribe(
 
   if (!attachmentDecision?.chosen) {
     log.error({ attempts, attemptedProviders }, 'All STT providers failed');
-    const lastError = attempts.find((a) => a.outcome === 'failed')?.error;
+    const lastError = attempts.find((a) => a.task === 'failed')?.error;
     throw new Error(lastError ?? 'All STT providers failed');
   }
 

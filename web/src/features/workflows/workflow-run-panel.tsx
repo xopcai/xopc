@@ -172,7 +172,7 @@ export function WorkflowRunPanel({
 
   const diagnostics = useMemo(() => (view ? collectWorkflowRunDiagnostics(view) : []), [view]);
   const resultForDisplay = view ? resolveWorkflowResultForDisplay(view.run.result) : undefined;
-  const outcome = resultForDisplay ? resolveWorkflowOutcome(resultForDisplay) : null;
+  const task = resultForDisplay ? resolveWorkflowTask(resultForDisplay) : null;
   const resultText = resultForDisplay ? workflowResultToMarkdown(resultForDisplay) : '';
   const hasResult = Boolean(resultForDisplay);
 
@@ -233,12 +233,12 @@ export function WorkflowRunPanel({
     }
     if (action.kind === 'open_artifact') {
       const artifactId = resultActionReference(action.payload);
-      const artifact = outcome?.artifacts.find((item) => item.id === artifactId || item.name === artifactId);
+      const artifact = task?.artifacts.find((item) => item.id === artifactId || item.name === artifactId);
       if (artifact) void handleDownloadArtifact(artifact);
       return;
     }
     const followUpId = resultActionReference(action.payload);
-    const followUp = outcome?.followUps.find((item) => item.id === followUpId);
+    const followUp = task?.followUps.find((item) => item.id === followUpId);
     if (followUp?.prompt) {
       handleStartFollowUp(followUp);
       return;
@@ -246,7 +246,7 @@ export function WorkflowRunPanel({
     const prompt = resultActionPrompt(action.payload);
     if (!prompt) return;
     handleStartFollowUp({ id: action.id, title: action.label, prompt });
-  }, [handleCopy, handleDownloadArtifact, handleStartFollowUp, outcome?.artifacts, outcome?.followUps]);
+  }, [handleCopy, handleDownloadArtifact, handleStartFollowUp, task?.artifacts, task?.followUps]);
 
   const openDiagnosticAgent = useCallback((agentId: string | number | undefined) => {
     if (!view || agentId == null) return;
@@ -257,7 +257,7 @@ export function WorkflowRunPanel({
     setSelectedAgentId(Number.isFinite(parsed) ? parsed : index + 1);
   }, [view]);
   const workflowSessionKey = view ? resolveWorkflowSessionKeyFromView(view) : null;
-  const resultActions = outcome?.actions.filter((action) => isResultActionAvailable(action, outcome)) ?? [];
+  const resultActions = task?.actions.filter((action) => isResultActionAvailable(action, task)) ?? [];
   const hasEnvelopeCopyAction = resultActions.some((action) => action.kind === 'copy_result');
 
   if (loading) {
@@ -357,7 +357,7 @@ export function WorkflowRunPanel({
                 activeTab={visibleActiveTab}
                 onChange={onTabChange}
                 labels={labels}
-                artifactCount={outcome?.artifacts.length ?? view.artifacts.length}
+                artifactCount={task?.artifacts.length ?? view.artifacts.length}
               />
 
               {visibleActiveTab === 'result' ? (
@@ -443,9 +443,9 @@ export function WorkflowRunPanel({
                     </>
                   ) : null}
 
-                  {outcome ? (
-                    <WorkflowOutcomePanel
-                      outcome={outcome}
+                  {task ? (
+                    <WorkflowTaskPanel
+                      task={task}
                       labels={labels}
                       downloadingArtifactId={downloadingArtifactId}
                       downloadError={downloadError}
@@ -515,8 +515,8 @@ export function WorkflowRunPanel({
               ) : null}
 
               {visibleActiveTab === 'artifacts' ? (
-                <WorkflowOutcomePanel
-                  outcome={outcome}
+                <WorkflowTaskPanel
+                  task={task}
                   labels={labels}
                   downloadingArtifactId={downloadingArtifactId}
                   downloadError={downloadError}
@@ -596,7 +596,7 @@ function WorkflowRunTabs({
   const tabs: Array<{ id: WorkflowRunPanelTab; label: string; count?: number }> = [
     { id: 'result', label: labels.resultTitle },
     { id: 'process', label: labels.process },
-    { id: 'artifacts', label: labels.outcomeArtifacts, count: artifactCount || undefined },
+    { id: 'artifacts', label: labels.taskArtifacts, count: artifactCount || undefined },
   ];
 
   return (
@@ -965,8 +965,8 @@ function WorkflowPartialResults({ view, language }: { view: WorkflowRunView; lan
   );
 }
 
-function WorkflowOutcomePanel({
-  outcome,
+function WorkflowTaskPanel({
+  task,
   labels,
   downloadingArtifactId,
   downloadError,
@@ -975,7 +975,7 @@ function WorkflowOutcomePanel({
   onStartFollowUp,
   compact = false,
 }: {
-  outcome: WorkflowOutcomeView | null;
+  task: WorkflowTaskView | null;
   labels: WorkflowsMessages;
   downloadingArtifactId: string | null;
   downloadError: string | null;
@@ -984,7 +984,7 @@ function WorkflowOutcomePanel({
   onStartFollowUp: (followUp: WorkflowFollowUp) => void;
   compact?: boolean;
 }) {
-  if (!outcome || (!outcome.artifacts.length && !outcome.followUps.length)) {
+  if (!task || (!task.artifacts.length && !task.followUps.length)) {
     if (compact) return null;
     return (
       <section className="mt-5 rounded-xl border border-dashed border-edge p-4 text-sm text-fg-muted">
@@ -995,10 +995,10 @@ function WorkflowOutcomePanel({
 
   return (
     <div className={cn('grid gap-3 lg:grid-cols-3', !compact && 'mt-5')}>
-      {outcome.artifacts.length > 0 ? (
-        <OutcomeCard title={labels.outcomeArtifacts}>
+      {task.artifacts.length > 0 ? (
+        <TaskCard title={labels.taskArtifacts}>
           <ul className="space-y-2">
-            {outcome.artifacts.map((artifact) => (
+            {task.artifacts.map((artifact) => (
               <li key={artifact.id} className="min-w-0 rounded-lg bg-surface-base px-2.5 py-2">
                 <div className="truncate text-sm font-medium text-fg" title={artifact.title ?? artifact.name}>
                   {artifact.title ?? artifact.name}
@@ -1017,13 +1017,13 @@ function WorkflowOutcomePanel({
             ))}
           </ul>
           {downloadError ? <p className="mt-2 text-xs leading-5 text-rose-600 dark:text-rose-400">{downloadError}</p> : null}
-        </OutcomeCard>
+        </TaskCard>
       ) : null}
 
-      {outcome.followUps.length > 0 ? (
-        <OutcomeCard title={labels.outcomeFollowUps}>
+      {task.followUps.length > 0 ? (
+        <TaskCard title={labels.taskFollowUps}>
           <ul className="space-y-2">
-            {outcome.followUps.map((followUp) => (
+            {task.followUps.map((followUp) => (
               <li key={followUp.id} className="rounded-lg bg-surface-base px-2.5 py-2">
                 <div className="text-sm font-medium text-fg">{followUp.title}</div>
                 {followUp.prompt ? (
@@ -1047,7 +1047,7 @@ function WorkflowOutcomePanel({
               </li>
             ))}
           </ul>
-        </OutcomeCard>
+        </TaskCard>
       ) : null}
 
     </div>
@@ -1063,7 +1063,7 @@ function triggerBlobDownload(blob: Blob, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
-function OutcomeCard({ title, children, className }: { title: string; children: ReactNode; className?: string }) {
+function TaskCard({ title, children, className }: { title: string; children: ReactNode; className?: string }) {
   return (
     <section className={cn('min-w-0 rounded-xl border border-edge-subtle bg-surface-base/35 p-3', className)}>
       <h4 className="text-xs font-semibold uppercase tracking-wide text-fg-subtle">{title}</h4>
@@ -1072,13 +1072,13 @@ function OutcomeCard({ title, children, className }: { title: string; children: 
   );
 }
 
-interface WorkflowOutcomeView {
+interface WorkflowTaskView {
   actions: WorkflowNextAction[];
   artifacts: WorkflowArtifactRef[];
   followUps: WorkflowFollowUp[];
 }
 
-function resolveWorkflowOutcome(result: unknown): WorkflowOutcomeView | null {
+function resolveWorkflowTask(result: unknown): WorkflowTaskView | null {
   if (!result || typeof result !== 'object' || Array.isArray(result)) return null;
   const envelope = result as Partial<WorkflowResultEnvelope>;
   const actions = Array.isArray(envelope.actions) ? envelope.actions : [];
@@ -1111,14 +1111,14 @@ function resultActionPrompt(payload: unknown): string | null {
   return null;
 }
 
-function isResultActionAvailable(action: WorkflowNextAction, outcome: WorkflowOutcomeView): boolean {
+function isResultActionAvailable(action: WorkflowNextAction, task: WorkflowTaskView): boolean {
   if (action.kind === 'copy_result') return true;
   const reference = resultActionReference(action.payload);
   if (action.kind === 'open_artifact') {
-    return Boolean(reference && outcome.artifacts.some((item) => item.id === reference || item.name === reference));
+    return Boolean(reference && task.artifacts.some((item) => item.id === reference || item.name === reference));
   }
   if (action.kind === 'start_followup') {
-    return Boolean(resultActionPrompt(action.payload) || (reference && outcome.followUps.some((item) => item.id === reference && item.prompt)));
+    return Boolean(resultActionPrompt(action.payload) || (reference && task.followUps.some((item) => item.id === reference && item.prompt)));
   }
   return Boolean(resultActionPrompt(action.payload));
 }

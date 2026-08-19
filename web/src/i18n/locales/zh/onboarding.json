@@ -102,7 +102,7 @@
       "riskAnalysis": "仅分析",
       "riskCommand": "经确认后可能运行命令",
       "riskFileWrite": "可能提出文件修改",
-      "expectedOutcome": "预期结果",
+      "expectedTask": "预期结果",
       "startRecommendedAction": "开始",
       "explainFirst": "先解释原因",
       "otherDirections": "其他方向",

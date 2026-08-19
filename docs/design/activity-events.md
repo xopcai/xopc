@@ -2,7 +2,7 @@
 
 ## Goal
 
-Activity events provide a product-facing history of meaningful changes across XOPC objects. They are not debug logs and they are not the canonical state store. Object stores such as projects, notes, work items, sessions, goals, workflows, and automations remain authoritative for current state.
+Activity events provide a product-facing history of meaningful changes across XOPC objects. They are not debug logs and they are not the canonical state store. Object stores such as projects, notes, tasks, sessions, goals, workflows, and automations remain authoritative for current state.
 
 The system should answer:
 
@@ -20,7 +20,7 @@ Shows all timeline-worthy activity across the workspace. Useful for recent chang
 
 ### Object Activity
 
-Shows activity for a single object, such as a note, project, work item, goal, session, workflow run, or automation.
+Shows activity for a single object, such as a note, project, task, goal, session, workflow run, or automation.
 
 ### Project Activity
 
@@ -69,7 +69,7 @@ Examples:
   - actor: `user`
   - initiator: `user`
   - source: `gateway_api`
-- Agent updates a work item because the user asked in chat:
+- Agent updates a task because the user asked in chat:
   - actor: `agent`
   - initiator: `user`
   - source: `xopc_use`
@@ -108,7 +108,7 @@ interface ActivityObjectRef {
   kind:
     | 'project'
     | 'note'
-    | 'work_item'
+    | 'task'
     | 'session'
     | 'goal'
     | 'workflow_run'
@@ -134,7 +134,7 @@ interface ActivityScope {
 Scope examples:
 
 - `project.created`: project scope by `object_owner`.
-- `work_item.updated`: project scope by `object_owner`.
+- `task.updated`: project scope by `object_owner`.
 - `note.appended` from a project-bound chat session: project scope by `inherited_session`; session scope by `runtime_context`.
 - `note.created` outside a project session: no project scope; global/object activity only.
 
@@ -177,10 +177,10 @@ interface ObjectLink {
 Initial usage:
 
 - note `belongs_to` project
-- work item `belongs_to` project
+- task `belongs_to` project
 - session `discussed_in` project
 - note `created_from` session
-- work item `created_from` note
+- task `created_from` note
 
 Avoid weak relations such as `mentions` until the UI can explain them well.
 
@@ -205,15 +205,15 @@ Avoid weak relations such as `mentions` until the UI can explain them well.
 | `note.status_changed` | timeline | `from`, `to` |
 | `note.preview_generated` | audit | `instruction`, `operationCount` |
 
-### Work Item
+### Task
 
 | Type | Visibility | Payload |
 |------|------------|---------|
-| `work_item.created` | timeline | `title`, `status`, `priority` |
-| `work_item.updated` | timeline | `changes[]` |
-| `work_item.status_changed` | timeline | `from`, `to` |
-| `work_item.archived` | timeline | `archivedAt` |
-| `work_item.link_added` | timeline | `target` |
+| `task.created` | timeline | `title`, `status`, `priority` |
+| `task.updated` | timeline | `changes[]` |
+| `task.status_changed` | timeline | `from`, `to` |
+| `task.archived` | timeline | `archivedAt` |
+| `task.link_added` | timeline | `target` |
 
 ### Session
 
@@ -378,7 +378,7 @@ Service layer pattern:
 ```ts
 projects.update(id, patch, { activity });
 notes.appendTextToNote(id, content, heading, { activity });
-workItems.updateWorkItem(id, patch, { activity });
+tasks.updateTask(id, patch, { activity });
 ```
 
 `ActivityService.record` handles:
@@ -411,7 +411,7 @@ Examples:
 
 - `project.created`: `Created project "X"`
 - `note.appended`: `Appended "Heading" to note "Y"`
-- `work_item.status_changed`: `Moved "Task" from todo to in_progress`
+- `task.status_changed`: `Moved "Task" from todo to in_progress`
 
 This keeps i18n and future UI changes possible.
 
@@ -427,6 +427,6 @@ This keeps i18n and future UI changes possible.
 1. Add migrations and storage repositories.
 2. Implement `ActivityService`, `ObjectLinkService`, and summary formatter.
 3. Add read APIs for global, object, and project activity.
-4. Add ActivityContext plumbing to ProjectService, NotesService, and WorkItemService.
+4. Add ActivityContext plumbing to ProjectService, NotesService, and TaskService.
 5. Pass context from `xopc_use`, gateway routes, automations, and workflows.
 6. Add project Activity UI.

@@ -4,7 +4,6 @@ import type { SessionManager } from '@/features/chat/session/session-manager';
 import type { WelcomeSuggestionContext, WelcomeSuggestionContextStatus } from '@/features/chat/welcome/welcome-suggestions';
 import { fetchProject, inferProjectDefaults, type Project, type ProjectKind } from '@/features/projects/api';
 import { getSessionDetail } from '@/features/sessions/session-api';
-import type { WorkItem } from '@/features/work-items/api';
 
 type ProjectWithKind = Project & {
   kind?: ProjectKind;
@@ -16,7 +15,6 @@ type UseWelcomeSuggestionContextOptions = {
   sessionKey?: string | null;
   sourceNoteId?: string | null;
   sourceNoteTitle?: string | null;
-  sourceWorkItem?: WorkItem | null;
   sourceContextPending?: boolean;
   sourceContextFailed?: boolean;
   effectiveWorkspacePath?: string | null;
@@ -55,7 +53,6 @@ function contextStateKey({
   sessionKey,
   sourceNoteId,
   sourceNoteTitle,
-  sourceWorkItem,
   sourceContextPending,
   sourceContextFailed,
   effectiveWorkspacePath,
@@ -63,7 +60,6 @@ function contextStateKey({
 }: UseWelcomeSuggestionContextOptions & { attempt: number }): string {
   if (!enabled) return 'disabled';
   if (sourceContextPending) return `pending:${sessionKey ?? ''}`;
-  if (sourceWorkItem) return `work-item:${sourceWorkItem.id}`;
   if (sourceNoteId) return `note:${sourceNoteId}:${sourceNoteTitle?.trim() ?? ''}`;
   if (workingDirectoryLocked && effectiveWorkspacePath?.trim()) {
     return `workspace:${sessionKey ?? ''}:${effectiveWorkspacePath.trim()}`;
@@ -81,21 +77,6 @@ function immediateContextState(
   }
   if (options.sourceContextPending) {
     return { key, context: { kind: 'empty' }, status: 'loading' };
-  }
-  if (options.sourceWorkItem) {
-    return {
-      key,
-      context: {
-        kind: 'workItem',
-        workItemId: options.sourceWorkItem.id,
-        title: options.sourceWorkItem.title,
-        phase: options.sourceWorkItem.phase,
-        waits: options.sourceWorkItem.waits.filter((wait) => !wait.resolvedAt),
-        nextAction: options.sourceWorkItem.nextAction?.text,
-        projectId: options.sourceWorkItem.projectId,
-      },
-      status: 'ready',
-    };
   }
   if (options.sourceNoteId) {
     return {
@@ -127,7 +108,6 @@ export function useWelcomeSuggestionContext({
   sessionKey,
   sourceNoteId,
   sourceNoteTitle,
-  sourceWorkItem,
   sourceContextPending = false,
   sourceContextFailed = false,
   effectiveWorkspacePath,
@@ -141,7 +121,6 @@ export function useWelcomeSuggestionContext({
     sessionKey,
     sourceNoteId,
     sourceNoteTitle,
-    sourceWorkItem,
     sourceContextPending,
     sourceContextFailed,
     effectiveWorkspacePath,
@@ -163,23 +142,6 @@ export function useWelcomeSuggestionContext({
 
     if (sourceContextPending) {
       setState({ key: currentKey, context: { kind: 'empty' }, status: 'loading' });
-      return undefined;
-    }
-
-    if (sourceWorkItem) {
-      setState({
-        key: currentKey,
-        context: {
-          kind: 'workItem',
-          workItemId: sourceWorkItem.id,
-          title: sourceWorkItem.title,
-          phase: sourceWorkItem.phase,
-          waits: sourceWorkItem.waits.filter((wait) => !wait.resolvedAt),
-          nextAction: sourceWorkItem.nextAction?.text,
-          projectId: sourceWorkItem.projectId,
-        },
-        status: 'ready',
-      });
       return undefined;
     }
 
@@ -322,7 +284,6 @@ export function useWelcomeSuggestionContext({
     workingDirectoryLocked,
     sourceNoteId,
     sourceNoteTitle,
-    sourceWorkItem,
   ]);
 
   const visibleState = state.key === currentKey ? state : immediateContextState(currentOptions);

@@ -92,7 +92,7 @@ export async function startGatewayService(params: {
 
   const initialState = await gatherServiceState(service, serviceEnv);
   if (!initialState.installed) {
-    return { outcome: 'missing-install', state: initialState };
+    return { task: 'missing-install', state: initialState };
   }
 
   // Read command to check for repair issues. On macOS, a stopped LaunchAgent can
@@ -100,7 +100,7 @@ export async function startGatewayService(params: {
   const issues = detectStartRepairIssues(initialState.command);
 
   if (issues.length > 0) {
-    return { outcome: 'repair-required', state: initialState, issues };
+    return { task: 'repair-required', state: initialState, issues };
   }
 
   // Start via restart (which handles both cold-start and running scenarios)
@@ -108,7 +108,7 @@ export async function startGatewayService(params: {
   const state = await gatherServiceState(service, serviceEnv);
 
   return {
-    outcome: restartResult.outcome === 'restarted' ? 'started' : 'scheduled',
+    task: restartResult.task === 'restarted' ? 'started' : 'scheduled',
     state,
   };
 }

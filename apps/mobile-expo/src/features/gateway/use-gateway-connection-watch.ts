@@ -6,7 +6,7 @@ import { syncGatewayAfterConnectivityChange } from './gateway-connection-sync';
 import { subscribeNetworkChange } from './network-info';
 import {
   runProbeRound,
-  subscribeProbeOutcome,
+  subscribeProbeTask,
 } from './probe-coordinator';
 
 /**
@@ -25,11 +25,11 @@ export function useGatewayConnectionWatch(enabled: boolean): void {
 
     void runProbeRound('initial');
 
-    const unsubProbe = subscribeProbeOutcome((outcome) => {
-      const winnerUrl = outcome.result.url;
+    const unsubProbe = subscribeProbeTask((task) => {
+      const winnerUrl = task.result.url;
       if (
         winnerUrl &&
-        (outcome.result.winner === 'lan' || outcome.result.winner === 'tunnel') &&
+        (task.result.winner === 'lan' || task.result.winner === 'tunnel') &&
         winnerUrl !== prevUrl
       ) {
         useGatewayStore.setState({ activeBaseUrl: winnerUrl });

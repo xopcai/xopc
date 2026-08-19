@@ -7,7 +7,6 @@ import { GatewayConfigSchema, type Config } from '../../config/schema.js';
 import { buckets } from '../rate-limit/index.js';
 import { resolveEffectiveGatewayPort } from '../host.js';
 import { loadTunnelState } from '../../tunnel/tunnel-state.js';
-import { WORK_ITEM_ATTACHMENT_UPLOAD_BODY_MAX_BYTES } from '../../work-items/index.js';
 
 vi.mock('../../tunnel/tunnel-state.js', () => ({
   loadTunnelState: vi.fn(() => null),
@@ -450,52 +449,6 @@ describe('Gateway Security Fixes', () => {
       expect(res.status).toBe(413);
       const json = await res.json();
       expect(json.maxSize).toBe('25MB');
-    });
-
-    it('should allow larger work item attachment uploads through the API body limit', async () => {
-      const service = createMockService();
-      const app = createHonoApp({ service, token: 'test' });
-      const boundary = '----xopc-work-item-boundary';
-      const body = [
-        `--${boundary}`,
-        'Content-Disposition: form-data; name="file"; filename="brief.txt"',
-        'Content-Type: text/plain',
-        '',
-        'x'.repeat(2 * 1024 * 1024),
-        `--${boundary}--`,
-        '',
-      ].join('\r\n');
-
-      const res = await app.request('/api/work-items/work-1/attachments', {
-        method: 'POST',
-        headers: {
-          'Content-Type': `multipart/form-data; boundary=${boundary}`,
-          Authorization: 'Bearer test',
-          'Content-Length': String(Buffer.byteLength(body)),
-        },
-        body,
-      });
-
-      expect(res.status).not.toBe(413);
-    });
-
-    it('should keep rejecting oversized work item attachment uploads', async () => {
-      const service = createMockService();
-      const app = createHonoApp({ service, token: 'test' });
-
-      const res = await app.request('/api/work-items/work-1/attachments', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'multipart/form-data; boundary=xopc',
-          Authorization: 'Bearer test',
-          'Content-Length': String(WORK_ITEM_ATTACHMENT_UPLOAD_BODY_MAX_BYTES + 1),
-        },
-        body: 'x',
-      });
-
-      expect(res.status).toBe(413);
-      const json = await res.json();
-      expect(json.maxSize).toBe(`${Math.ceil(WORK_ITEM_ATTACHMENT_UPLOAD_BODY_MAX_BYTES / (1024 * 1024))}MB`);
     });
 
     it('should allow larger voice transcription payloads through the API body limit', async () => {

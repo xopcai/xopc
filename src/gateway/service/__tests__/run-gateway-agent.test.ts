@@ -54,7 +54,7 @@ describe('runGatewayAgent', () => {
           },
         },
         getLastAssistantPlainText: () => '',
-        takeOutcomeReviewStreamHint: () => undefined,
+        takeTaskReviewStreamHint: () => undefined,
         outboundCoordinator: { emitSessionTurnComplete: async () => {} },
         endInboundTurn: () => {},
       },
@@ -98,7 +98,7 @@ describe('runGatewayAgent', () => {
           },
         },
         getLastAssistantPlainText: () => '',
-        takeOutcomeReviewStreamHint: () => undefined,
+        takeTaskReviewStreamHint: () => undefined,
         outboundCoordinator: {
           emitSessionTurnComplete: async () => {},
         },
@@ -126,7 +126,7 @@ describe('runGatewayAgent', () => {
     expect(activeWebchatRunBySession.get(sessionKey)).toBe('existing-run');
   });
 
-  it('does not treat completed plan items as verified outcome criteria', async () => {
+  it('does not treat completed plan items as verified task criteria', async () => {
     const sessionKey = 'agent:main:webchat:default:direct:chat-test';
     const deps = {
       config: {},
@@ -154,7 +154,7 @@ describe('runGatewayAgent', () => {
           },
         },
         getLastAssistantPlainText: () => 'Done',
-        takeOutcomeReviewStreamHint: () => undefined,
+        takeTaskReviewStreamHint: () => undefined,
         outboundCoordinator: { emitSessionTurnComplete: async () => {} },
         endInboundTurn: () => {},
       },
@@ -170,7 +170,7 @@ describe('runGatewayAgent', () => {
     } as unknown as RunGatewayAgentDeps;
 
     for await (const _event of runGatewayAgent(deps, 'verify the change', 'webchat', sessionKey)) {
-      // Consume the stream so the outcome finalizer runs.
+      // Consume the stream so the task finalizer runs.
     }
 
     expect(listExecutionReceipts({ sessionKey })).toEqual([

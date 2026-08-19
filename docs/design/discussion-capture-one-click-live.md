@@ -2,7 +2,7 @@
 
 > Status: implementation design for the next discussion-capture iteration.
 
-## 1. Outcome
+## 1. Task
 
 The normal path has exactly two user actions:
 
@@ -388,7 +388,7 @@ Completion is automatic. Users correct results directly in the normal note
 editor; there is no discussion-specific review page or review status.
 
 Do not automatically send messages or assign a human. Initially keep extracted
-actions in the note; enable automatic work-item creation only after internal
+actions in the note; enable automatic task creation only after internal
 data shows acceptable precision and Undo semantics are available.
 
 ## 11. Ordering, idempotency, and concurrency

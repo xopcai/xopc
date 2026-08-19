@@ -3,7 +3,7 @@
  * `useRouteSwitchToast` which fires on automatic LAN↔Cloud race winner
  * changes. This one confirms the user's explicit choice from the
  * long-press menu and, for the 'auto' case, morphs into a micro state
- * machine that tracks the next probe outcome:
+ * machine that tracks the next probe task:
  *
  *   pick auto   → pending spinner + "测试最快路径"
  *               → ok        + "自动 · 选中局域网 (87 ms)"
@@ -17,8 +17,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useMessages } from '../../i18n/messages';
 
 import {
-  subscribeProbeOutcome,
-  type ProbeOutcome,
+  subscribeProbeTask,
+  type ProbeTask,
 } from './probe-coordinator';
 import { subscribeRouteOverride, type RouteOverride } from './route-override';
 
@@ -43,7 +43,7 @@ export function useRouteOverrideToast(): RouteOverrideToast {
   const m = useMessages();
   const copy = m.gateway.routeOverride;
   const [toast, setToast] = useState<RouteOverrideToast>(null);
-  /** When auto was picked, we wait for the next probe outcome. This holds
+  /** When auto was picked, we wait for the next probe task. This holds
    * the toast key so we can morph the existing toast in place instead of
    * stacking a fresh one on top. */
   const awaitingAutoRef = useRef<{ key: number } | null>(null);
@@ -64,11 +64,11 @@ export function useRouteOverrideToast(): RouteOverrideToast {
       pendingTimers.push(timer);
     });
 
-    const unsubProbe = subscribeProbeOutcome((outcome: ProbeOutcome) => {
+    const unsubProbe = subscribeProbeTask((task: ProbeTask) => {
       const awaiting = awaitingAutoRef.current;
       if (!awaiting) return;
       awaitingAutoRef.current = null;
-      setToast({ ...resolveAutoToast(outcome, copy), key: awaiting.key });
+      setToast({ ...resolveAutoToast(task, copy), key: awaiting.key });
     });
 
     return () => {
@@ -118,15 +118,15 @@ function buildOverrideToast(
 }
 
 function resolveAutoToast(
-  outcome: ProbeOutcome,
+  task: ProbeTask,
   copy: OverrideCopy,
 ): Omit<NonNullable<RouteOverrideToast>, 'key'> {
-  if (!outcome.online || outcome.result.winner === 'none') {
+  if (!task.online || task.result.winner === 'none') {
     return { status: 'error', message: copy.appliedAutoFail, icon: 'error' };
   }
-  const latency = outcome.result.latencyMs ?? 0;
+  const latency = task.result.latencyMs ?? 0;
   const formatted = Math.max(0, Math.round(latency));
-  if (outcome.result.winner === 'lan') {
+  if (task.result.winner === 'lan') {
     return {
       status: 'ok',
       message: copy.appliedAutoOkLan.replace('{{latency}}', String(formatted)),

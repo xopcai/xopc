@@ -82,14 +82,14 @@ export async function* coalesceThinkingDeltas(
         continue;
       }
 
-      const outcome = await nextBeforeDeadline(next, deadlineAt);
-      if (outcome.kind === 'timeout') {
+      const task = await nextBeforeDeadline(next, deadlineAt);
+      if (task.kind === 'timeout') {
         yield pending;
         pending = undefined;
         continue;
       }
 
-      const result = outcome.result;
+      const result = task.result;
       if (result.done) {
         yield pending;
         pending = undefined;

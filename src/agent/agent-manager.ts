@@ -61,7 +61,6 @@ import type { AutomationService } from '../automations/index.js';
 import type { SessionStore } from '../session/store.js';
 import type { NotesService } from '../notes/index.js';
 import type { ProjectService } from '../projects/index.js';
-import type { WorkItemService } from '../work-items/index.js';
 import { isValidSkillEnvVarName } from './skills/required-env-vars.js';
 import type { SessionContext } from './session/session-context.js';
 import type {
@@ -163,7 +162,6 @@ export interface AgentManagerConfig {
   /** Gateway: exposes first-class xopc product objects for the `xopc_use` tool. */
   getNotesService?: () => NotesService | undefined;
   getProjectService?: () => ProjectService | undefined;
-  getWorkItemService?: () => WorkItemService | undefined;
   getLocalAppService?: () => import('../local-apps/index.js').LocalAppService | undefined;
   /** Gateway: starts persisted workflow runs (dedicated chat session per run). */
   getWorkflowRunService?: () => import('../workflows/service/workflow-run-service.types.js').WorkflowRunServiceLike | undefined;
@@ -437,7 +435,6 @@ export class AgentManager implements AgentInstanceGateway {
       getBrowserRecipeService: this.config.getBrowserRecipeService,
       getNotesService: this.config.getNotesService,
       getProjectService: this.config.getProjectService,
-      getWorkItemService: this.config.getWorkItemService,
       getLocalAppService: this.config.getLocalAppService,
       getWorkflowRunService: this.config.getWorkflowRunService,
       getSkillIndexingContext: () => {

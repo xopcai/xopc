@@ -61,14 +61,12 @@ export function extractMobileProductDelivery(block: ToolUseContent): ProductDeli
 export function mobileProductRoute(reference: ProductReferenceLocator): string {
   const id = encodeURIComponent(reference.id);
   switch (reference.kind) {
-    case 'outcome':
-      return `/outcomes/${id}`;
+    case 'task':
+      return `/tasks/${id}`;
     case 'project':
       return `/projects/${id}`;
     case 'note':
       return `/items/${id}`;
-    case 'work_item':
-      return `/work/${id}`;
     case 'automation':
       return '/automation';
     case 'session':
@@ -90,10 +88,9 @@ export function mobileRouteFromProductDeepLink(value: string): string | null {
 }
 
 export const MOBILE_NATIVE_PRODUCT_KINDS = new Set<ProductReferenceKind>([
-  'outcome',
+  'task',
   'project',
   'note',
-  'work_item',
   'automation',
   'session',
   'file',

@@ -39,9 +39,9 @@ vi.mock('../../../stores/gateway-store', () => {
 import { raceGatewayRoutes } from '../../../api/connection-strategy';
 import {
   __resetProbeCoordinatorForTests,
-  getLastProbeOutcome,
+  getLastProbeTask,
   runProbeRound,
-  subscribeProbeOutcome,
+  subscribeProbeTask,
 } from '../probe-coordinator';
 
 const mockedRace = vi.mocked(raceGatewayRoutes);
@@ -57,7 +57,7 @@ afterEach(() => {
 });
 
 describe('runProbeRound', () => {
-  it('runs the race once and broadcasts the outcome', async () => {
+  it('runs the race once and broadcasts the task', async () => {
     mockedRace.mockResolvedValue({
       winner: 'lan',
       url: 'http://192.168.1.10:18790',
@@ -67,17 +67,17 @@ describe('runProbeRound', () => {
     });
 
     const listener = vi.fn();
-    const unsub = subscribeProbeOutcome(listener);
+    const unsub = subscribeProbeTask(listener);
 
-    const outcome = await runProbeRound('initial');
-    expect(outcome.online).toBe(true);
-    expect(outcome.result.winner).toBe('lan');
+    const task = await runProbeRound('initial');
+    expect(task.online).toBe(true);
+    expect(task.result.winner).toBe('lan');
     expect(mockedRace).toHaveBeenCalledTimes(1);
     expect(listener).toHaveBeenCalled();
     unsub();
   });
 
-  it('returns the cached outcome within the freshness window', async () => {
+  it('returns the cached task within the freshness window', async () => {
     mockedRace.mockResolvedValue({
       winner: 'tunnel',
       url: 'https://gw.example.com',
@@ -114,8 +114,8 @@ describe('runProbeRound', () => {
       tunnel: { reachable: false, reason: 'timeout' },
     });
 
-    const outcome = await runProbeRound('initial');
-    expect(outcome.online).toBe(false);
-    expect(getLastProbeOutcome()?.online).toBe(false);
+    const task = await runProbeRound('initial');
+    expect(task.online).toBe(false);
+    expect(getLastProbeTask()?.online).toBe(false);
   });
 });

@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { ProjectOutcomeContext } from '../project-context.js';
+import type { ProjectTaskContext } from '../project-context.js';
 import { ProjectService } from '../../../projects/index.js';
 import type { Project } from '../../../projects/types.js';
 import {
@@ -32,9 +32,9 @@ const project: Project = {
   updatedAt: 2,
 };
 
-function outcome(patch: Partial<ProjectOutcomeContext> = {}): ProjectOutcomeContext {
+function task(patch: Partial<ProjectTaskContext> = {}): ProjectTaskContext {
   return {
-    outcomeId: 'outcome-1',
+    taskId: 'task-1',
     objective: 'Finish project context',
     status: 'running',
     agentId: 'main',
@@ -51,7 +51,7 @@ describe('formatActiveProjectContextForPrompt', () => {
     const text = formatActiveProjectContextForPrompt({
       project,
       workspacePath: '/tmp/xopc',
-      activeOutcomes: [outcome({ nextAction: 'Add prompt injection.' })],
+      activeTasks: [task({ nextAction: 'Add prompt injection.' })],
       recentSessions: [
         {
           key: 'agent:main:webchat:default:direct:s1',
@@ -82,11 +82,11 @@ describe('formatActiveProjectContextForPrompt', () => {
   it('uses explicit empty markers when there are no goals or sessions', () => {
     const text = formatActiveProjectContextForPrompt({
       project: { ...project, brief: undefined, instructions: undefined },
-      activeOutcomes: [],
+      activeTasks: [],
       recentSessions: [],
     });
 
-    expect(text).toContain('## Active Outcomes\n- None recorded.');
+    expect(text).toContain('## Active Tasks\n- None recorded.');
     expect(text).toContain('## Recent Project Sessions\n- None recorded.');
     expect(text).toContain('## Project Memory\n- None recorded.');
   });
@@ -94,7 +94,7 @@ describe('formatActiveProjectContextForPrompt', () => {
   it('tells coder sessions which local-app release is stable', () => {
     const text = formatActiveProjectContextForPrompt({
       project,
-      activeOutcomes: [],
+      activeTasks: [],
       recentSessions: [],
       localApp: {
         extensionId: 'local-reading-list-abcd1234',

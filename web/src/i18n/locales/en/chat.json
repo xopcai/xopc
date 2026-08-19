@@ -36,14 +36,11 @@
         "agent": "Better matched to {{agentName}}'s capabilities",
         "project": "Based on the current context for {{projectName}}",
         "note": "Based on the note {{noteTitle}}",
-        "workItem": "Based on the current state of {{workItemTitle}}",
         "blocked": "Prioritizes the current blocker: {{blockedReason}}",
         "nextAction": "Continues the defined next action: {{nextAction}}",
         "directory": "Starts from the current directory: {{path}}"
       },
       "contextPrompts": {
-        "workItemBlocked": "Work item {{workItemTitle}} is blocked by {{blockedReason}}. Analyze the root cause, then propose the smallest executable unblock plan, the information to confirm, and who to ask for help.",
-        "workItemNextAction": "The defined next action for {{workItemTitle}} is {{nextAction}}. Check prerequisites and risks, then break it into an action I can start now.",
         "codingWorkspace": "Start from {{workspaceRoot}} and understand project {{projectName}}. Locate the entrypoints, core modules, and highest-value files to read, then recommend where I should look next."
       },
       "exploreCards": [
@@ -326,7 +323,7 @@
             "description": "Updates, briefs, explanations",
             "scenarios": [
               {
-                "prompt": "Write a project update for “{{projectName}}” covering current outcomes, risks, and support needed."
+                "prompt": "Write a project update for “{{projectName}}” covering current tasks, risks, and support needed."
               },
               {
                 "prompt": "Turn this project into a concise one-page overview."
@@ -379,104 +376,6 @@
               },
               {
                 "prompt": "Extract a prioritized task list from this note."
-              }
-            ]
-          }
-        ]
-      },
-      "workItem": {
-        "headline": "Continue this work item",
-        "tagline": "Summarize status, choose the next step, and check risk.",
-        "contextLabel": "Work item: {{workItemTitle}}",
-        "categories": [
-          {
-            "id": "work-item-progress",
-            "icon": "task",
-            "title": "Summarize progress",
-            "description": "Status, done, blockers",
-            "scenarios": [
-              {
-                "prompt": "Based on work item “{{workItemTitle}}”, summarize current progress, completed work, risks, and blockers."
-              },
-              {
-                "prompt": "Turn this work item into a status update I can share with the team."
-              }
-            ]
-          },
-          {
-            "id": "work-item-next",
-            "icon": "target",
-            "title": "Find next step",
-            "description": "Small action, priority, dependencies",
-            "scenarios": [
-              {
-                "prompt": "Based on work item “{{workItemTitle}}”, identify the smallest executable next step."
-              },
-              {
-                "prompt": "Break down the remaining work for this item and mark priority and dependencies."
-              }
-            ]
-          },
-          {
-            "id": "work-item-risk",
-            "icon": "review",
-            "title": "Identify risks",
-            "description": "Blockers, gaps, acceptance",
-            "scenarios": [
-              {
-                "prompt": "Check work item “{{workItemTitle}}” for missing details, risks, or unclear acceptance criteria."
-              },
-              {
-                "prompt": "List the questions I need to confirm before moving this work item forward."
-              }
-            ]
-          }
-        ]
-      },
-      "workItemBlocked": {
-        "headline": "This work item is blocked",
-        "tagline": "Analyze the cause, then choose an executable path.",
-        "contextLabel": "Work item: {{workItemTitle}}",
-        "categories": [
-          {
-            "id": "work-item-progress",
-            "icon": "task",
-            "title": "Summarize progress",
-            "description": "Status, done, blockers",
-            "scenarios": [
-              {
-                "prompt": "Based on work item “{{workItemTitle}}”, summarize current progress, completed work, risks, and blockers."
-              },
-              {
-                "prompt": "Turn this work item into a status update I can share with the team."
-              }
-            ]
-          },
-          {
-            "id": "work-item-unblock",
-            "icon": "target",
-            "title": "Unblock it",
-            "description": "Cause, options, owner",
-            "scenarios": [
-              {
-                "prompt": "Work item “{{workItemTitle}}” is currently blocked. Analyze the blocker and suggest 3 possible ways forward."
-              },
-              {
-                "prompt": "Help me decide who to ask, what information is missing, and how to move this blocker forward."
-              }
-            ]
-          },
-          {
-            "id": "work-item-risk",
-            "icon": "review",
-            "title": "Identify risks",
-            "description": "Gaps, dependencies, acceptance",
-            "scenarios": [
-              {
-                "prompt": "Check work item “{{workItemTitle}}” for missing details, risks, or unclear acceptance criteria."
-              },
-              {
-                "prompt": "List the questions I need to confirm before moving this work item forward."
               }
             ]
           }
@@ -994,7 +893,7 @@
       "unverified": "Not independently verified"
     },
     "executionReceiptRecovery": "Failure and recovery",
-    "messageOutcomesHeading": "Results from this turn",
+    "messageTasksHeading": "Results from this turn",
     "stepTimelineThinkingStreaming": "Thinking…",
     "stepTimelineThinkingDone": "Thinking complete",
     "stepTimelineToolSearchRunning": "Searching the web…",
@@ -1073,32 +972,8 @@
     "sourceNoteSaveDialogCancel": "Cancel",
     "sourceNoteSaveDialogConfirm": "Save to Note",
     "sourceNoteSaveDialogSaving": "Saving…",
-    "workItemBanner": "Working on: {{title}}",
     "scopeProject": "Project",
     "scopeWorkspace": "Workspace",
-    "workItemNextStepAction": "Next step",
-    "workItemSummarizeAction": "Summarize",
-    "workItemOpenItem": "Open work item",
-    "workItemOpenProject": "Open project",
-    "workItemPriorityLabel": "Priority",
-    "workItemUpdatedLabel": "Updated",
-    "workItemDescriptionLabel": "Description",
-    "workItemNextActionLabel": "Next action",
-    "workItemBlockedLabel": "Blocked",
-    "workItemNoDetails": "No description, next action, or blocker is recorded yet.",
-    "workItemNextStepPrompt": "For the current work item \"{{title}}\", propose the highest-value next step. Be concrete, include acceptance criteria if useful, and call out any work item fields that should be updated.",
-    "workItemSummarizePrompt": "Summarize the current progress for work item \"{{title}}\". Include what changed, current status, blockers, and the next action. Do not modify the work item directly unless I confirm.",
-    "workItemCommandAction": "Propose command",
-    "workItemCommandDrafted": "Command drafted",
-    "workItemCommandFailed": "Failed to execute work item command",
-    "workItemCommandDialogTitle": "Propose work item command",
-    "workItemCommandDialogDescription": "Review the AI-suggested command for \"{{title}}\" before executing it.",
-    "workItemCommandDialogDescriptionFallback": "Review the AI-suggested command before executing it.",
-    "workItemCommandLabel": "Command",
-    "workItemCommandReasonLabel": "Reason",
-    "workItemCommandDialogCancel": "Cancel",
-    "workItemCommandDialogExecute": "Execute command",
-    "workItemCommandDialogExecuting": "Executing…",
     "codeBlockCopy": "Copy",
     "messageCopied": "Copied",
     "mermaidRenderError": "Diagram render failed",

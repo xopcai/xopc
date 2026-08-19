@@ -111,7 +111,6 @@ import packageJson from '../../package.json' with { type: 'json' };
 import { createSessionActions } from './tui-session-actions.js';
 import { createInitialState, type TuiOptions, type TuiResult, type TuiState } from './tui-types.js';
 import { createXopcTuiKeybindingsManager } from './tui-keybindings-file.js';
-import { formatKeyIds } from './format-tui-hotkeys.js';
 import { formatTuiStartupText } from './tui-startup-text.js';
 import { filterModelsForCycle, loadScopedModelRefs, saveScopedModelRefs } from './tui-scoped-models.js';
 import {

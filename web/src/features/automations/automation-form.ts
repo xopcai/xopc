@@ -25,7 +25,7 @@ export type TriggerMode =
   | 'interval'
   | 'cron'
   | 'webhook'
-  | 'outcomeBlocked'
+  | 'taskBlocked'
   | 'noteCreated'
   | 'workflowFailed'
   | 'sessionUpdated'
@@ -132,11 +132,11 @@ export function buildInput(
         ? { secretId: form.webhookSecretId.trim() }
         : {}),
     };
-  } else if (form.triggerMode === 'outcomeBlocked') {
+  } else if (form.triggerMode === 'taskBlocked') {
     trigger = {
       kind: 'event',
-      eventType: 'outcome.status_changed',
-      source: 'outcomes',
+      eventType: 'task.status_changed',
+      source: 'tasks',
       payloadMatch: { status: 'blocked' },
     };
   } else if (form.triggerMode === 'noteCreated') {
@@ -327,11 +327,11 @@ function eventFormState(
 ): Partial<FormState> {
   const payload = trigger.payloadMatch;
   if (
-    trigger.eventType === 'outcome.status_changed' &&
-    trigger.source === 'outcomes' &&
+    trigger.eventType === 'task.status_changed' &&
+    trigger.source === 'tasks' &&
     payload?.status === 'blocked'
   ) {
-    return { triggerMode: 'outcomeBlocked' };
+    return { triggerMode: 'taskBlocked' };
   }
   if (
     trigger.eventType === 'note.created' &&

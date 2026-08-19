@@ -12,7 +12,7 @@ export type AgentStreamResumeOptions = {
 export type TryAgentStreamResume = (opts?: AgentStreamResumeOptions) => void | Promise<void>;
 
 /**
- * Listen for gateway `agent.stream` run_start events (Outcome continuations, scheduled webchat runs)
+ * Listen for gateway `agent.stream` run_start events (Task continuations, scheduled webchat runs)
  * and trigger resume when the active chat is idle.
  */
 export function useAgentStreamResume(opts: {

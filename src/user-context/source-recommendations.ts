@@ -1,6 +1,6 @@
 import type { ConnectorDefinition } from '../connectors/types.js';
 
-type OutcomeSummary = { id: string; objective: string; description?: string };
+type TaskSummary = { id: string; objective: string; description?: string };
 
 const DOMAINS = [
   ['calendar', 'schedule', 'meeting', 'deadline', 'event', '日历', '日程', '会议', '截止', '预约'],
@@ -10,16 +10,16 @@ const DOMAINS = [
   ['slack', 'teams', 'chat', 'message', '消息', '群聊', '沟通'],
 ] as const;
 
-export function buildOutcomeSourceRecommendations(
+export function buildTaskSourceRecommendations(
   definitions: ConnectorDefinition[],
   installedConnectorIds: Set<string>,
-  outcomes: OutcomeSummary[],
+  tasks: TaskSummary[],
 ) {
   const recommendations: Array<{
     sourceId: string;
     sourceName: string;
-    outcomeId: string;
-    outcomeTitle: string;
+    taskId: string;
+    taskTitle: string;
     score: number;
   }> = [];
 
@@ -28,22 +28,22 @@ export function buildOutcomeSourceRecommendations(
     const sourceText = [definition.id, definition.displayName, definition.description, ...(definition.tags ?? [])]
       .join(' ')
       .toLowerCase();
-    for (const outcome of outcomes) {
-      const outcomeText = `${outcome.objective} ${outcome.description ?? ''}`.toLowerCase();
+    for (const task of tasks) {
+      const taskText = `${task.objective} ${task.description ?? ''}`.toLowerCase();
       let score = 0;
       for (const keywords of DOMAINS) {
-        if (keywords.some((keyword) => sourceText.includes(keyword)) && keywords.some((keyword) => outcomeText.includes(keyword))) {
+        if (keywords.some((keyword) => sourceText.includes(keyword)) && keywords.some((keyword) => taskText.includes(keyword))) {
           score += 3;
         }
       }
-      const genericTerms = outcomeText.match(/[a-z][a-z0-9_-]{3,}/g) ?? [];
+      const genericTerms = taskText.match(/[a-z][a-z0-9_-]{3,}/g) ?? [];
       score += new Set(genericTerms.filter((term) => sourceText.includes(term))).size;
       if (score > 0) {
         recommendations.push({
           sourceId: definition.id,
           sourceName: definition.displayName,
-          outcomeId: outcome.id,
-          outcomeTitle: outcome.objective,
+          taskId: task.id,
+          taskTitle: task.objective,
           score,
         });
       }

@@ -381,13 +381,13 @@ export function AutomationsPage() {
         form: { ...initialForm, name: labels.templates.webhookAgent.formName, triggerMode: 'webhook' as const },
       },
       {
-        name: labels.templates.blockedOutcome.name,
-        description: labels.templates.blockedOutcome.description,
+        name: labels.templates.blockedTask.name,
+        description: labels.templates.blockedTask.description,
         form: {
           ...initialForm,
-          name: labels.templates.blockedOutcome.formName,
-          triggerMode: 'outcomeBlocked' as const,
-          instruction: labels.templates.blockedOutcome.instruction,
+          name: labels.templates.blockedTask.formName,
+          triggerMode: 'taskBlocked' as const,
+          instruction: labels.templates.blockedTask.instruction,
         },
       },
       {
@@ -2091,7 +2091,7 @@ function AutomationForm({
           <SelectOption value="interval">{labels.trigger.interval}</SelectOption>
           <SelectOption value="cron">{labels.trigger.customCron}</SelectOption>
           <SelectOption value="webhook">{labels.trigger.webhook}</SelectOption>
-          <SelectOption value="outcomeBlocked">{labels.trigger.outcomeBlocked}</SelectOption>
+          <SelectOption value="taskBlocked">{labels.trigger.taskBlocked}</SelectOption>
           <SelectOption value="noteCreated">{labels.trigger.noteCreated}</SelectOption>
           <SelectOption value="workflowFailed">{labels.trigger.workflowFailed}</SelectOption>
           <SelectOption value="sessionUpdated">{labels.trigger.sessionUpdated}</SelectOption>

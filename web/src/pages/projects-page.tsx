@@ -326,7 +326,7 @@ export function ProjectsPage() {
               <div className="flex shrink-0 justify-end gap-2 border-t border-edge px-5 py-4">
                 <Dialog.Close asChild><Button type="button" variant="ghost">{t.cancel}</Button></Dialog.Close>
                 <Button type="submit" variant="primary" disabled={creating || !name.trim() || !workspaceRoot.trim()}>
-                  {creating ? t.workHome.creating : t.create}
+                  {creating ? t.home.creating : t.create}
                 </Button>
               </div>
             </form>
@@ -361,7 +361,7 @@ export function ProjectsPage() {
       {error ? (
         <div className="flex items-center justify-between gap-3 rounded-xl border border-danger/25 bg-danger-soft px-4 py-3 text-sm text-danger" role="alert">
           <span>{error}</span>
-          <Button type="button" variant="ghost" className="h-8 px-2" onClick={() => void load()}>{t.workHome.retry}</Button>
+          <Button type="button" variant="ghost" className="h-8 px-2" onClick={() => void load()}>{t.home.retry}</Button>
         </div>
       ) : null}
 

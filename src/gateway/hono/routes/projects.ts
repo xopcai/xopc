@@ -1,9 +1,6 @@
 import type { Hono } from 'hono';
-import { randomUUID } from 'node:crypto';
 import { readdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
-
-import { WorkItemCommandSchema, WorkItemNextActionSchema } from '@xopcai/gateway-contract';
 
 import { ActivityService } from '../../../activity/index.js';
 import { resolveEffectiveAgentProfile } from '../../../config/agent-profile.js';
@@ -20,30 +17,17 @@ import {
   type ProjectStatus,
   type ProjectWorkflowRunBrief,
 } from '../../../projects/index.js';
-import { buildSessionKey } from '../../../routing/session-key.js';
 import {
-  OutcomeExecutionService,
-  OutcomeExecutionStateRepository,
-  OutcomeRepository,
-} from '../../../work/index.js';
+  TaskExecutionService,
+  TaskRepository,
+} from '../../../tasks/index.js';
 import {
   getSqliteDatabase,
   getSessionMetadata,
   listMemoryRecords,
   loadTranscriptRowsForSession,
-  type SessionMetadataSeed,
   upsertMemoryRecord,
 } from '../../../storage/sqlite/index.js';
-import {
-  WORK_ITEM_ATTACHMENT_MAX_BYTES,
-  WORK_ITEM_ATTACHMENT_MAX_COUNT,
-  WorkItemTransitionError,
-  type WorkItem,
-  type WorkItemCompletionPolicy,
-  type WorkItemPhase,
-  type WorkItemPriority,
-  type WorkItemService,
-} from '../../../work-items/index.js';
 import { createGatewayRouteLogger } from '../lib/route-logger.js';
 import { parseActivityIncludeRelated, parseActivityQuery } from './activity.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
@@ -109,96 +93,6 @@ function enrichProjectWorkspace<T extends Project>(
   };
 }
 
-function finiteNumberField(value: unknown): number | undefined {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (typeof value === 'string' && value.trim()) {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : undefined;
-  }
-  return undefined;
-}
-
-function collectUploadedFiles(body: Record<string, unknown>): File[] {
-  const raw = body.file ?? body.files ?? body.attachments;
-  const values = Array.isArray(raw) ? raw : raw ? [raw] : [];
-  return values.filter((value): value is File => value instanceof File);
-}
-
-function validateUploadedWorkItemFiles(files: File[]): string | null {
-  if (files.length > WORK_ITEM_ATTACHMENT_MAX_COUNT) {
-    return `Too many attachments (max ${WORK_ITEM_ATTACHMENT_MAX_COUNT})`;
-  }
-  for (const file of files) {
-    if (file.size > WORK_ITEM_ATTACHMENT_MAX_BYTES) {
-      return `Attachment ${JSON.stringify(file.name || 'upload')} exceeds ${Math.floor(WORK_ITEM_ATTACHMENT_MAX_BYTES / (1024 * 1024))}MB limit`;
-    }
-  }
-  return null;
-}
-
-async function uploadedFileToBuffer(file: File): Promise<{ name: string; buffer: Buffer; mimeType: string }> {
-  return {
-    name: file.name || 'upload',
-    buffer: Buffer.from(await file.arrayBuffer()),
-    mimeType: file.type || 'application/octet-stream',
-  };
-}
-
-function parseCsvEnum<T extends string>(raw: string | undefined, values: readonly T[]): T[] | undefined {
-  if (!raw) return undefined;
-  const allowed = new Set(values);
-  const parsed = raw
-    .split(',')
-    .map((item) => item.trim())
-    .filter((item): item is T => allowed.has(item as T));
-  return parsed.length > 0 ? [...new Set(parsed)] : undefined;
-}
-
-function parseEnumValue<T extends string>(raw: unknown, values: readonly T[]): T | undefined {
-  if (typeof raw !== 'string') return undefined;
-  return values.includes(raw as T) ? raw as T : undefined;
-}
-
-const WORK_ITEM_PHASES = ['backlog', 'ready', 'executing', 'verifying', 'closed'] as const satisfies readonly WorkItemPhase[];
-const WORK_ITEM_INITIAL_PHASES = ['backlog', 'ready'] as const;
-const WORK_ITEM_PRIORITIES = ['urgent', 'high', 'normal', 'low'] as const satisfies readonly WorkItemPriority[];
-const WORK_ITEM_COMPLETION_POLICIES = ['automatic', 'agent_verified', 'user_accepted'] as const satisfies readonly WorkItemCompletionPolicy[];
-const WORK_ITEM_PROPOSAL_STATES = ['pending', 'executed', 'rejected', 'expired'] as const;
-
-function nextActionField(body: Record<string, unknown>): WorkItem['nextAction'] | undefined {
-  let value = body.nextAction;
-  if (typeof value === 'string') {
-    try {
-      value = JSON.parse(value);
-    } catch {
-      return undefined;
-    }
-  }
-  const parsed = WorkItemNextActionSchema.safeParse(value);
-  return parsed.success ? parsed.data : undefined;
-}
-
-function ensureExecuting(
-  service: WorkItemService,
-  item: WorkItem,
-  source: 'web' | 'workflow',
-): WorkItem {
-  if (item.archivedAt || item.phase === 'closed' || item.phase === 'verifying') {
-    throw new WorkItemTransitionError('invalid_transition', `Cannot start work from phase ${item.phase}`);
-  }
-  let current = item;
-  if (current.phase === 'backlog') {
-    current = service.executeCommand(current.id, { type: 'commit', expectedVersion: current.version }, {
-      actor: { kind: 'user', id: 'local-owner' }, source, requestId: randomUUID(),
-    })!;
-  }
-  if (current.phase === 'ready') {
-    current = service.executeCommand(current.id, { type: 'start', expectedVersion: current.version }, {
-      actor: { kind: 'user', id: 'local-owner' }, source, requestId: randomUUID(),
-    })!;
-  }
-  return current;
-}
 
 const SKIP_FILE_NAMES = new Set(['.git', 'node_modules']);
 
@@ -417,39 +311,6 @@ function buildSessionSummaryMemoryContent(sessionKey: string, explicitSummary?: 
     : `Session summary for ${sessionKey}: no transcript content available.`;
 }
 
-function buildWorkItemChatSessionMetadata(params: {
-  agentId: string;
-  accountId: string;
-  peerId: string;
-  workItemId: string;
-  title: string;
-  updatedAt: number;
-}): SessionMetadataSeed {
-  return {
-    name: params.title,
-    tags: ['work-item'],
-    sourceChannel: 'webchat',
-    sourceChatId: [params.accountId, 'direct', params.peerId].join(':'),
-    sessionType: 'chat',
-    hiddenFromSessionList: true,
-    routing: {
-      agentId: params.agentId,
-      source: 'webchat',
-      accountId: params.accountId,
-      peerKind: 'direct',
-      peerId: params.peerId,
-    },
-    customData: {
-      genericNewChatShell: false,
-      sourceBinding: {
-        kind: 'work_item',
-        sourceId: params.workItemId,
-        version: String(params.updatedAt),
-        attachedAt: Date.now(),
-      },
-    },
-  };
-}
 
 function listFailedProjectWorkflowRuns(projectId: string, limit = 5): ProjectWorkflowRunBrief[] {
   const rows = getSqliteDatabase()
@@ -504,7 +365,6 @@ function projectDigestMemoryRecordId(projectId: string): string {
 export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service } = deps;
   const activity = new ActivityService();
-  const workItems = service.workItems;
 
   authenticated.post('/api/projects', async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
@@ -648,414 +508,25 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
     return c.json({ ok: true, ...result });
   });
 
-  authenticated.get('/api/projects/:id/work-items', async (c) => {
-    const project = service.projects.get(c.req.param('id'));
-    if (!project) return c.json({ ok: false, error: 'Project not found' }, 404);
-    const result = workItems.listProjectWorkItems(project.id, {
-      phase: parseCsvEnum(c.req.query('phase'), WORK_ITEM_PHASES),
-      priority: parseCsvEnum(c.req.query('priority'), WORK_ITEM_PRIORITIES),
-      includeArchived: c.req.query('includeArchived') === 'true',
-      search: c.req.query('search'),
-      sortBy: c.req.query('sortBy') as 'updatedAt' | 'createdAt' | 'priority' | 'phase' | 'dueAt' | undefined,
-      sortOrder: c.req.query('sortOrder') as 'asc' | 'desc' | undefined,
-      limit: parseLimit(c.req.query('limit')),
-      offset: c.req.query('offset') ? Math.max(0, Number.parseInt(c.req.query('offset')!, 10) || 0) : undefined,
-    });
-    return c.json({ ok: true, ...result });
-  });
-
-  authenticated.post('/api/projects/:id/work-items', async (c) => {
-    const project = service.projects.get(c.req.param('id'));
-    if (!project) return c.json({ ok: false, error: 'Project not found' }, 404);
-    const contentType = c.req.header('content-type') || '';
-    let body: Record<string, unknown>;
-    let files: File[] = [];
-    if (contentType.includes('multipart/form-data')) {
-      try {
-        body = await c.req.parseBody({ all: true }) as Record<string, unknown>;
-      } catch {
-        return c.json({ ok: false, error: 'Invalid multipart body' }, 400);
-      }
-      files = collectUploadedFiles(body);
-    } else {
-      body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
-    }
-    const attachmentError = validateUploadedWorkItemFiles(files);
-    if (attachmentError) return c.json({ ok: false, error: attachmentError }, 413);
-    const title = textField(body, 'title')?.trim();
-    if (!title) return c.json({ ok: false, error: 'Work item title is required' }, 400);
-    const initialPhase = parseEnumValue(body.initialPhase, WORK_ITEM_INITIAL_PHASES);
-    const priority = parseEnumValue(body.priority, WORK_ITEM_PRIORITIES);
-    const completionPolicy = parseEnumValue(body.completionPolicy, WORK_ITEM_COMPLETION_POLICIES);
-    const nextAction = nextActionField(body);
-    const dueAt = finiteNumberField(body.dueAt);
-    if (Object.hasOwn(body, 'initialPhase') && !initialPhase) return c.json({ ok: false, error: 'Invalid initialPhase' }, 400);
-    if (Object.hasOwn(body, 'priority') && !priority) return c.json({ ok: false, error: 'Invalid work item priority' }, 400);
-    if (Object.hasOwn(body, 'completionPolicy') && !completionPolicy) return c.json({ ok: false, error: 'Invalid completionPolicy' }, 400);
-    if (Object.hasOwn(body, 'nextAction') && !nextAction) return c.json({ ok: false, error: 'Invalid nextAction' }, 400);
-    if (Object.hasOwn(body, 'dueAt') && dueAt === undefined && body.dueAt !== null) return c.json({ ok: false, error: 'Invalid dueAt' }, 400);
-    const uploads: Array<{ name: string; buffer: Buffer; mimeType: string }> = [];
-    for (const file of files) {
-      uploads.push(await uploadedFileToBuffer(file));
-    }
-    const item = workItems.createProjectWorkItem(project.id, {
-      title,
-      description: textField(body, 'description'),
-      initialPhase,
-      priority,
-      ownerAgentId: textField(body, 'ownerAgentId') || project.defaultAgentId || undefined,
-      completionPolicy,
-      nextAction,
-      dueAt,
-    });
-    for (const upload of uploads) {
-      await workItems.addAttachment(item.id, upload);
-    }
-    const created = files.length > 0 ? workItems.getWorkItem(item.id) ?? item : item;
-    return c.json({ ok: true, item: created }, 201);
-  });
-
-  authenticated.get('/api/work-items', (c) => {
-    const result = workItems.listWorkItems({
-      phase: parseCsvEnum(c.req.query('phase'), WORK_ITEM_PHASES),
-      priority: parseCsvEnum(c.req.query('priority'), WORK_ITEM_PRIORITIES),
-      includeArchived: c.req.query('includeArchived') === 'true',
-      search: c.req.query('search'),
-      sortBy: c.req.query('sortBy') as 'updatedAt' | 'createdAt' | 'priority' | 'phase' | 'dueAt' | undefined,
-      sortOrder: c.req.query('sortOrder') as 'asc' | 'desc' | undefined,
-      limit: parseLimit(c.req.query('limit')),
-      offset: c.req.query('offset') ? Math.max(0, Number.parseInt(c.req.query('offset')!, 10) || 0) : undefined,
-    });
-    return c.json({ ok: true, ...result });
-  });
-
-  authenticated.get('/api/work-items/:id', async (c) => {
-    const item = workItems.getWorkItem(c.req.param('id'));
-    if (!item) return c.json({ ok: false, error: 'Work item not found' }, 404);
-    return c.json({ ok: true, item, availableCommands: workItems.availableCommands(item.id, { kind: 'user', id: 'local-owner' }) });
-  });
-
-  authenticated.get('/api/work-items/:id/attachments', async (c) => {
-    const attachments = workItems.listAttachments(c.req.param('id'));
-    if (!attachments) return c.json({ ok: false, error: 'Work item not found' }, 404);
-    return c.json({ ok: true, attachments });
-  });
-
-  authenticated.post('/api/work-items/:id/attachments', async (c) => {
-    const item = workItems.getWorkItem(c.req.param('id'));
-    if (!item) return c.json({ ok: false, error: 'Work item not found' }, 404);
-    let body: Record<string, unknown>;
-    try {
-      body = await c.req.parseBody({ all: true }) as Record<string, unknown>;
-    } catch {
-      return c.json({ ok: false, error: 'Invalid multipart body' }, 400);
-    }
-    const files = collectUploadedFiles(body);
-    if (!files.length) return c.json({ ok: false, error: 'Missing file field' }, 400);
-    const attachmentError = validateUploadedWorkItemFiles(files);
-    if (attachmentError) return c.json({ ok: false, error: attachmentError }, 413);
-    const attachments = [];
-    for (const file of files) {
-      const upload = await uploadedFileToBuffer(file);
-      const attachment = await workItems.addAttachment(item.id, upload);
-      if (attachment) attachments.push(attachment);
-    }
-    return c.json({ ok: true, attachments, item: workItems.getWorkItem(item.id) }, 201);
-  });
-
-  authenticated.get('/api/work-items/:id/attachments/:attachmentId/content', async (c) => {
-    const result = await workItems.readAttachment(c.req.param('id'), c.req.param('attachmentId'));
-    if (!result) return c.json({ ok: false, error: 'Attachment not found' }, 404);
-    return new Response(result.buffer, {
-      headers: {
-        'Content-Type': result.attachment.mimeType,
-        'Content-Length': String(result.attachment.size),
-        'Content-Disposition': `inline; filename="${encodeURIComponent(result.attachment.fileName)}"`,
-        'Cache-Control': 'private, max-age=31536000, immutable',
-      },
-    });
-  });
-
-  authenticated.delete('/api/work-items/:id/attachments/:attachmentId', async (c) => {
-    const attachment = await workItems.removeAttachment(c.req.param('id'), c.req.param('attachmentId'));
-    if (!attachment) return c.json({ ok: false, error: 'Attachment not found' }, 404);
-    return c.json({ ok: true, attachment, item: workItems.getWorkItem(c.req.param('id')) });
-  });
-
-  authenticated.patch('/api/work-items/:id', async (c) => {
-    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
-    const expectedVersion = finiteNumberField(body.expectedVersion);
-    const priority = Object.hasOwn(body, 'priority')
-      ? parseEnumValue(body.priority, WORK_ITEM_PRIORITIES)
-      : undefined;
-    const completionPolicy = Object.hasOwn(body, 'completionPolicy')
-      ? parseEnumValue(body.completionPolicy, WORK_ITEM_COMPLETION_POLICIES)
-      : undefined;
-    const nextAction = body.nextAction === null ? null : nextActionField(body);
-    const dueAt = Object.hasOwn(body, 'dueAt')
-      ? (body.dueAt === null ? null : (typeof body.dueAt === 'number' && Number.isFinite(body.dueAt) ? body.dueAt : undefined))
-      : undefined;
-    if (!expectedVersion || !Number.isInteger(expectedVersion)) return c.json({ ok: false, error: 'expectedVersion is required' }, 400);
-    if (priority === undefined && Object.hasOwn(body, 'priority')) return c.json({ ok: false, error: 'Invalid work item priority' }, 400);
-    if (completionPolicy === undefined && Object.hasOwn(body, 'completionPolicy')) return c.json({ ok: false, error: 'Invalid completionPolicy' }, 400);
-    if (nextAction === undefined && Object.hasOwn(body, 'nextAction')) return c.json({ ok: false, error: 'Invalid nextAction' }, 400);
-    if (dueAt === undefined && Object.hasOwn(body, 'dueAt')) return c.json({ ok: false, error: 'Invalid dueAt' }, 400);
-
-    const item = workItems.updateMetadata(c.req.param('id'), {
-      ...(Object.hasOwn(body, 'title') ? { title: textField(body, 'title') ?? '' } : {}),
-      ...(Object.hasOwn(body, 'description') ? { description: optionalTextField(body, 'description') } : {}),
-      ...(Object.hasOwn(body, 'priority') ? { priority } : {}),
-      ...(Object.hasOwn(body, 'ownerAgentId') ? { ownerAgentId: optionalTextField(body, 'ownerAgentId') } : {}),
-      ...(Object.hasOwn(body, 'completionPolicy') ? { completionPolicy } : {}),
-      ...(Object.hasOwn(body, 'nextAction') ? { nextAction } : {}),
-      ...(Object.hasOwn(body, 'dueAt') ? { dueAt } : {}),
-    }, expectedVersion);
-    if (!item) return c.json({ ok: false, error: 'Work item not found or version conflict' }, workItems.getWorkItem(c.req.param('id')) ? 409 : 404);
-    return c.json({ ok: true, item });
-  });
-
-  for (const [pathSuffix, archived] of [['archive', true], ['unarchive', false]] as const) {
-    authenticated.post(`/api/work-items/:id/${pathSuffix}`, async (c) => {
-      const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
-      const expectedVersion = finiteNumberField(body.expectedVersion);
-      if (!expectedVersion || !Number.isInteger(expectedVersion)) return c.json({ ok: false, error: 'expectedVersion is required' }, 400);
-      const item = workItems.setArchived(c.req.param('id'), archived, expectedVersion);
-      if (!item) return c.json({ ok: false, error: 'Work item not found, open, or version conflict' }, workItems.getWorkItem(c.req.param('id')) ? 409 : 404);
-      return c.json({ ok: true, item });
-    });
-  }
-
-  authenticated.post('/api/work-items/:id/commands', async (c) => {
-    const parsed = WorkItemCommandSchema.safeParse(await c.req.json().catch(() => ({})));
-    if (!parsed.success) return c.json({ ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid work item command' }, 400);
-    try {
-      const item = workItems.executeCommand(c.req.param('id'), parsed.data, {
-        actor: { kind: 'user', id: 'local-owner' },
-        source: 'web',
-        requestId: c.req.header('x-request-id') || randomUUID(),
-      });
-      if (!item) return c.json({ ok: false, error: 'Work item not found' }, 404);
-      return c.json({ ok: true, item, availableCommands: workItems.availableCommands(item.id, { kind: 'user', id: 'local-owner' }) });
-    } catch (error) {
-      if (error instanceof WorkItemTransitionError) {
-        return c.json({ ok: false, error: error.message, code: error.code }, error.code === 'version_conflict' ? 409 : 422);
-      }
-      throw error;
-    }
-  });
-
-  authenticated.get('/api/work-items/:id/events', async (c) => {
-    const item = workItems.getWorkItem(c.req.param('id'));
-    if (!item) return c.json({ ok: false, error: 'Work item not found' }, 404);
-    return c.json({ ok: true, events: workItems.listEvents(item.id) });
-  });
-
-  authenticated.get('/api/work-items/:id/command-proposals', async (c) => {
-    const item = workItems.getWorkItem(c.req.param('id'));
-    if (!item) return c.json({ ok: false, error: 'Work item not found' }, 404);
-    const state = parseEnumValue(c.req.query('state'), WORK_ITEM_PROPOSAL_STATES);
-    if (c.req.query('state') && !state) return c.json({ ok: false, error: 'Invalid proposal state' }, 400);
-    return c.json({ ok: true, proposals: workItems.listCommandProposals(item.id, state) });
-  });
-
-  authenticated.post('/api/work-items/:id/command-proposals', async (c) => {
-    const item = workItems.getWorkItem(c.req.param('id'));
-    if (!item) return c.json({ ok: false, error: 'Work item not found' }, 404);
-    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
-    const sourceKind = parseEnumValue(body.sourceKind, ['chat', 'workflow_run', 'automation'] as const);
-    const sourceId = textField(body, 'sourceId')?.trim();
-    if (!sourceKind) return c.json({ ok: false, error: 'Invalid sourceKind' }, 400);
-    if (!sourceId) return c.json({ ok: false, error: 'sourceId is required' }, 400);
-    const command = WorkItemCommandSchema.safeParse(body.command);
-    if (!command.success) return c.json({ ok: false, error: command.error.issues[0]?.message ?? 'Invalid work item command' }, 400);
-    const confidence = typeof body.confidence === 'number' && Number.isFinite(body.confidence)
-      ? Math.max(0, Math.min(1, body.confidence))
-      : undefined;
-    const proposal = workItems.createCommandProposal(item.id, {
-      sourceKind,
-      sourceId,
-      command: command.data,
-      rationale: optionalTextField(body, 'rationale') ?? undefined,
-      confidence,
-    });
-    if (!proposal) return c.json({ ok: false, error: 'Work item not found' }, 404);
-    return c.json({ ok: true, proposal }, 201);
-  });
-
-  authenticated.post('/api/work-item-command-proposals/:id/execute', async (c) => {
-    try {
-      const result = workItems.executeCommandProposal(c.req.param('id'), {
-        actor: { kind: 'user', id: 'local-owner' },
-        source: 'web',
-        requestId: c.req.header('x-request-id') || randomUUID(),
-      });
-      if (!result) return c.json({ ok: false, error: 'Proposal not found or already resolved' }, 404);
-      return c.json({ ok: true, item: result.item, proposal: result.proposal });
-    } catch (error) {
-      if (error instanceof WorkItemTransitionError) {
-        return c.json({ ok: false, error: error.message, code: error.code }, error.code === 'version_conflict' ? 409 : 422);
-      }
-      throw error;
-    }
-  });
-
-  authenticated.post('/api/work-item-command-proposals/:id/reject', async (c) => {
-    const proposal = workItems.rejectCommandProposal(c.req.param('id'));
-    if (!proposal) return c.json({ ok: false, error: 'Proposal not found or already resolved' }, 404);
-    return c.json({ ok: true, proposal });
-  });
-
-  authenticated.post('/api/work-items/:id/start-chat', async (c) => {
-    let item = workItems.getWorkItem(c.req.param('id'));
-    if (!item) return c.json({ ok: false, error: 'Work item not found' }, 404);
-    try {
-      item = ensureExecuting(workItems, item, 'web');
-    } catch (error) {
-      if (error instanceof WorkItemTransitionError) return c.json({ ok: false, error: error.message, code: error.code }, 409);
-      throw error;
-    }
-    const project = service.projects.get(item.projectId);
-    if (!project) return c.json({ ok: false, error: 'Project not found' }, 404);
-    const agentId = resolveProjectAgentId({
-      config: service.currentConfig,
-      projects: service.projects,
-      explicitAgentId: item.ownerAgentId,
-      projectId: project.id,
-    });
-    const peerId = `work_item_${Date.now()}`;
-    const sessionKey = buildSessionKey({
-      agentId,
-      source: 'webchat',
-      accountId: 'default',
-      peerKind: 'direct',
-      peerId,
-    });
-    await service.sessionIndexInstance.saveMessages(sessionKey, [], {
-      metadata: buildWorkItemChatSessionMetadata({
-        agentId,
-        accountId: 'default',
-        peerId,
-        workItemId: item.id,
-        title: item.title,
-        updatedAt: item.updatedAt,
-      }),
-    });
-    service.projects.attachSession(sessionKey, project.id);
-    const session = await service.sessions.getSession(sessionKey);
-    workItems.addLink(item.id, {
-      kind: 'chat',
-      targetId: sessionKey,
-      title: session?.name || item.title,
-      statusSnapshot: session?.status,
-    });
-    const updated = workItems.getWorkItem(item.id);
-    return c.json({ ok: true, session, item: updated }, 201);
-  });
-
-  authenticated.post('/api/work-items/:id/workflows/run', async (c) => {
-    let item = workItems.getWorkItem(c.req.param('id'));
-    if (!item) return c.json({ ok: false, error: 'Work item not found' }, 404);
-    const project = service.projects.get(item.projectId);
-    if (!project) return c.json({ ok: false, error: 'Project not found' }, 404);
-    try {
-      item = ensureExecuting(workItems, item, 'workflow');
-    } catch (error) {
-      if (error instanceof WorkItemTransitionError) return c.json({ ok: false, error: error.message, code: error.code }, 409);
-      throw error;
-    }
-
-    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
-    const definitionId = textField(body, 'definitionId')?.trim();
-    if (!definitionId) return c.json({ ok: false, error: 'Missing definitionId' }, 400);
-
-    const agentId = resolveProjectAgentId({
-      config: service.currentConfig,
-      projects: service.projects,
-      explicitAgentId: item.ownerAgentId,
-      projectId: project.id,
-    });
-    const goalText = textField(body, 'goal')?.trim() || item.nextAction?.text || item.title;
-    const attachments = item.attachments?.map((attachment) => ({
-      id: attachment.id,
-      fileName: attachment.fileName,
-      type: attachment.type,
-      mimeType: attachment.mimeType,
-      size: attachment.size,
-    }));
-    const input = Object.hasOwn(body, 'input') ? body.input : {
-      workItem: {
-        id: item.id,
-        title: item.title,
-        description: item.description,
-        phase: item.phase,
-        priority: item.priority,
-        completionPolicy: item.completionPolicy,
-        nextAction: item.nextAction,
-        waits: item.waits.filter((wait) => !wait.resolvedAt),
-        attachments,
-      },
-      project: {
-        id: project.id,
-        name: project.name,
-        description: project.description,
-        brief: project.brief,
-        instructions: project.instructions,
-        workspaceRoot: project.workspaceRoot,
-      },
-    };
-    const rawTokenBudget = body.tokenBudget;
-    const tokenBudget = rawTokenBudget === null
-      ? null
-      : typeof rawTokenBudget === 'number' && Number.isFinite(rawTokenBudget)
-        ? rawTokenBudget
-        : undefined;
-
-    const result = await service.createWorkflowRunService().startWorkflowRun({
-      agentId,
-      definitionId,
-      projectId: project.id,
-      workItemId: item.id,
-      goal: goalText,
-      input,
-      source: { kind: 'webui' },
-      concurrency: finiteNumberField(body.concurrency),
-      maxSubagents: finiteNumberField(body.maxSubagents),
-      tokenBudget,
-    });
-    if (result.ok === false) {
-      return c.json({ ok: false, error: result.message, code: result.code }, result.httpStatus);
-    }
-
-    workItems.addLink(item.id, {
-      kind: 'workflow_run',
-      targetId: result.runId,
-      title: goalText,
-      statusSnapshot: 'queued',
-    });
-    const updated = workItems.getWorkItem(item.id);
-    return c.json({ ok: true, runId: result.runId, sessionKey: result.sessionKey, item: updated }, 202);
-  });
-
-  authenticated.post('/api/projects/:id/digest-memory', async (c) => {
+ authenticated.post('/api/projects/:id/digest-memory', async (c) => {
     const project = service.projects.getWithDetails(c.req.param('id'));
     if (!project) return c.json({ ok: false, error: 'Project not found' }, 404);
-    const projectOutcomes = new OutcomeExecutionStateRepository().listByProject(project.id, 100)
-      .flatMap((execution) => {
-        const outcome = new OutcomeRepository().get(execution.outcomeId);
-        return outcome ? [{
-          id: outcome.id,
-          objective: outcome.objective,
-          status: outcome.internalStatus,
+    const projectTasks = new TaskRepository().listByProject(project.id, 100)
+      .map((task) => {
+        const execution = task.execution;
+        return {
+          id: task.id,
+          objective: task.objective,
+          status: task.status,
           priority: execution.priority,
-          description: execution.description,
           nextAction: execution.nextAction,
           blockedReason: execution.blockedReason,
-          updatedAt: Math.max(outcome.updatedAt, execution.updatedAt),
-        }] : [];
+          updatedAt: task.updatedAt,
+        };
       });
     const loop = buildProjectLoopOverview({
       project,
-      outcomes: projectOutcomes,
+      tasks: projectTasks,
       recentWorkflowRuns: project.recentWorkflowRuns,
       failedWorkflowRuns: listFailedProjectWorkflowRuns(project.id),
       memoryRecords: listMemoryRecords({ projectId: project.id, status: 'active', limit: 5 }),
@@ -1090,9 +561,8 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
     const title = typeof body.title === 'string' ? body.title.trim() : '';
     if (!title) return c.json({ ok: false, error: 'Missing title' }, 400);
     const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
-    const execution = new OutcomeExecutionService().create({
+    const execution = new TaskExecutionService().create({
       objective: title,
-      description: reason || undefined,
       agentId: resolveProjectAgentId({
         config: service.currentConfig,
         projects: service.projects,
@@ -1101,15 +571,11 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
       priority: body.priority === 'low' || body.priority === 'normal' || body.priority === 'high' ? body.priority : 'high',
       source: 'api',
       projectId: project.id,
+      contextText: reason || undefined,
     });
-    new OutcomeExecutionStateRepository().update(execution.outcomeId, {
+    const blocked = new TaskRepository().update(execution.taskId, {
+      status: 'blocked',
       blockedReason: reason || title,
-      ...(reason ? { contextText: reason } : {}),
-    });
-    const blocked = new OutcomeRepository().updateState({
-      id: execution.outcomeId,
-      userStatus: 'needs_user',
-      internalStatus: 'blocked',
     });
     return c.json({ ok: true, blocker: blocked }, 201);
   });

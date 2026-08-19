@@ -4,7 +4,7 @@
 
 如果你还没有真正跑过 xopc，优先从 [PC 桌面端](./desktop-app.md) 开始；偏终端用户看 [5分钟快速入门](./first-5-minutes.md)。
 
-第一次使用只需要跑通 **模型 → Agent → Session**。当工作需要跨会话恢复时，再使用 Project / Goal；需要收集长期材料时使用 Notes / Workspace；需要重复或并行执行时再增加 Workflow / Automation。完整模型见 [持续工作模型](./concepts/loops.md)。
+第一次使用只需要跑通 **模型 → Agent → Conversation**。需要跨会话持续推进时，xopc 会创建 Task；只有共享上下文时才增加 Project，需要长期材料时使用 Notes / Workspace，需要重复或事件驱动执行时再增加 Workflow / Automation。完整模型见 [Task 闭环](./concepts/loops.md)。
 
 ## xopc 有哪些入口
 
@@ -75,7 +75,7 @@ xopc 是一个包，提供多个使用入口：
 | 技能 | [技能](./skills.md) |
 | 扩展 | [扩展](./extensions.md) |
 | 会话路由 | [Session 路由](./routing-system.md) |
-| 项目、目标与笔记 | [项目、目标与笔记](./projects-goals-notes.md) |
+| Project、Task 与笔记 | [Project、Task 与笔记](./projects-tasks-notes.md) |
 
 ## 从源码开发
 

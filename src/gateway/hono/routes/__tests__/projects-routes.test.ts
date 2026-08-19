@@ -11,13 +11,11 @@ import { ProjectService } from '../../../../projects/index.js';
 import {
   closeXopcDatabase,
   ensureSessionRecord,
-  getSqliteDatabase,
   listMemoryRecords,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../../../storage/sqlite/index.js';
-import { WorkItemService, WORK_ITEM_ATTACHMENT_MAX_BYTES } from '../../../../work-items/index.js';
-import { OutcomeExecutionService } from '../../../../work/index.js';
+import { TaskExecutionService } from '../../../../tasks/index.js';
 import type { GatewayService } from '../../../service.js';
 import { registerActivityRoutes } from '../activity.js';
 import { registerProjectsRoutes } from '../projects.js';
@@ -32,7 +30,7 @@ function registerActivityRouteApp(service: Partial<GatewayService>): Hono {
 
 function registerProjectRouteApp(service: Partial<GatewayService>): Hono {
   const app = new Hono();
-  registerProjectsRoutes(app, { service: { currentConfig: ConfigSchema.parse({}), workItems: new WorkItemService(), ...service } as GatewayService });
+  registerProjectsRoutes(app, { service: { currentConfig: ConfigSchema.parse({}), ...service } as GatewayService });
   return app;
 }
 
@@ -98,7 +96,7 @@ describe('project association routes', () => {
     const res = await app.request('/api/projects/delegate', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ outcome: 'Create a project immediately' }),
+      body: JSON.stringify({ task: 'Create a project immediately' }),
     });
 
     expect(res.status).toBe(404);
@@ -482,360 +480,10 @@ describe('project association routes', () => {
     expect(detachSession).not.toHaveBeenCalled();
   });
 
-  it('creates and lists first-class project work items', async () => {
-    const projects = new ProjectService();
-    const project = projects.create({ name: 'Workbench Project' });
-    const app = registerProjectRouteApp({ projects });
-
-    const create = await app.request(`/api/projects/${project.id}/work-items`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        title: 'Ship login',
-        description: 'Build the project login flow',
-        priority: 'high',
-        initialPhase: 'ready',
-      }),
-    });
-    expect(create.status).toBe(201);
-    const created = await create.json() as { ok: boolean; item: Record<string, unknown> };
-    expect(created.ok).toBe(true);
-    expect(created.item).toMatchObject({
-      title: 'Ship login',
-      description: 'Build the project login flow',
-      priority: 'high',
-      phase: 'ready',
-      projectId: project.id,
-    });
-
-    const res = await app.request(`/api/projects/${project.id}/work-items?sortBy=createdAt&sortOrder=asc`);
-
-    expect(res.status).toBe(200);
-    const body = await res.json() as { ok: boolean; items: Array<Record<string, unknown>>; total: number };
-    expect(body.ok).toBe(true);
-    expect(body.total).toBe(1);
-    expect(body.items).toEqual([expect.objectContaining({
-      id: created.item.id,
-      title: 'Ship login',
-      priority: 'high',
-      phase: 'ready',
-    })]);
-  });
-
-  it('lists work items across projects', async () => {
-    const projects = new ProjectService();
-    const first = projects.create({ name: 'First project' });
-    const second = projects.create({ name: 'Second project' });
-    const app = registerProjectRouteApp({ projects });
-
-    for (const [projectId, title] of [[first.id, 'First item'], [second.id, 'Second item']] as const) {
-      const response = await app.request(`/api/projects/${projectId}/work-items`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ title }),
-      });
-      expect(response.status).toBe(201);
-    }
-
-    const response = await app.request('/api/work-items?sortBy=createdAt&sortOrder=asc');
-    const body = await response.json() as { ok: boolean; total: number; items: Array<{ projectId: string; title: string }> };
-    expect(response.status).toBe(200);
-    expect(body).toMatchObject({ ok: true, total: 2 });
-    expect(body.items).toEqual([
-      expect.objectContaining({ projectId: first.id, title: 'First item' }),
-      expect.objectContaining({ projectId: second.id, title: 'Second item' }),
-    ]);
-  });
-
-  it('creates, reads, and removes work item attachments', async () => {
-    const projects = new ProjectService();
-    const project = projects.create({ name: 'Attachment Project' });
-    const app = registerProjectRouteApp({ projects });
-    const form = new FormData();
-    form.append('title', 'Review attachment');
-    form.append('description', 'Use the attached brief.');
-    form.append('file', new File(['attachment brief'], 'brief.txt', { type: 'text/plain' }));
-
-    const create = await app.request(`/api/projects/${project.id}/work-items`, {
-      method: 'POST',
-      body: form,
-    });
-
-    expect(create.status).toBe(201);
-    const created = await create.json() as {
-      ok: boolean;
-      item: { id: string; attachments: Array<{ id: string; fileName: string; mimeType: string; size: number }> };
-    };
-    expect(created.ok).toBe(true);
-    expect(created.item.attachments).toEqual([
-      expect.objectContaining({
-        fileName: 'brief.txt',
-        mimeType: 'text/plain',
-        size: 'attachment brief'.length,
-      }),
-    ]);
-    const attachmentId = created.item.attachments[0].id;
-
-    const content = await app.request(`/api/work-items/${created.item.id}/attachments/${attachmentId}/content`);
-    expect(content.status).toBe(200);
-    expect(content.headers.get('content-type')).toBe('text/plain');
-    expect(await content.text()).toBe('attachment brief');
-
-    const remove = await app.request(`/api/work-items/${created.item.id}/attachments/${attachmentId}`, {
-      method: 'DELETE',
-    });
-    expect(remove.status).toBe(200);
-    const removed = await remove.json() as { ok: boolean; item: { attachments: unknown[] } };
-    expect(removed.ok).toBe(true);
-    expect(removed.item.attachments).toEqual([]);
-
-    const events = await app.request(`/api/work-items/${created.item.id}/events`);
-    const eventsBody = await events.json() as { events: Array<Record<string, unknown>> };
-    expect(eventsBody.events).toEqual(expect.arrayContaining([
-      expect.objectContaining({ type: 'work_item.attachment_added' }),
-      expect.objectContaining({ type: 'work_item.attachment_removed' }),
-    ]));
-  });
-
-  it('rejects oversized work item attachments before creating the work item', async () => {
-    const projects = new ProjectService();
-    const project = projects.create({ name: 'Attachment Limit Project' });
-    const app = registerProjectRouteApp({ projects });
-    const form = new FormData();
-    form.append('title', 'Too large attachment');
-    form.append('file', new File([new Uint8Array(WORK_ITEM_ATTACHMENT_MAX_BYTES + 1)], 'large.bin'));
-
-    const create = await app.request(`/api/projects/${project.id}/work-items`, {
-      method: 'POST',
-      body: form,
-    });
-
-    expect(create.status).toBe(413);
-    const body = await create.json() as { ok: boolean; error: string };
-    expect(body).toMatchObject({ ok: false });
-    expect(body.error).toContain('exceeds 25MB limit');
-
-    const list = await app.request(`/api/projects/${project.id}/work-items`);
-    const listed = await list.json() as { ok: boolean; total: number };
-    expect(listed.total).toBe(0);
-  });
-
-  it('paginates project work items beyond the source page size', async () => {
-    const projects = new ProjectService();
-    const project = projects.create({ name: 'Large Workbench Project' });
-    for (let index = 0; index < 520; index++) {
-      getSqliteDatabase().prepare(
-        `INSERT INTO work_items (id, project_id, title, phase, priority, completion_policy, version, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).run(`wi-${index}`, project.id, `Large work item ${String(index).padStart(3, '0')}`, 'ready', 'normal', 'agent_verified', 1, index, index);
-    }
-    const app = registerProjectRouteApp({ projects });
-
-    const first = await app.request(`/api/projects/${project.id}/work-items?sortBy=createdAt&sortOrder=asc&limit=20`);
-    const firstBody = await first.json() as { ok: boolean; total: number; items: Array<Record<string, unknown>>; hasMore: boolean };
-    expect(first.status).toBe(200);
-    expect(firstBody.ok).toBe(true);
-    expect(firstBody.total).toBe(520);
-    expect(firstBody.items).toHaveLength(20);
-    expect(firstBody.hasMore).toBe(true);
-
-    const afterSourcePage = await app.request(`/api/projects/${project.id}/work-items?sortBy=createdAt&sortOrder=asc&limit=20&offset=500`);
-    const afterBody = await afterSourcePage.json() as { ok: boolean; total: number; items: Array<Record<string, unknown>>; hasMore: boolean };
-    expect(afterSourcePage.status).toBe(200);
-    expect(afterBody.ok).toBe(true);
-    expect(afterBody.total).toBe(520);
-    expect(afterBody.items).toHaveLength(20);
-    expect(afterBody.hasMore).toBe(false);
-  });
-
-  it('updates metadata and executes lifecycle commands', async () => {
-    const projects = new ProjectService();
-    const project = projects.create({ name: 'Status Project' });
-    const app = registerProjectRouteApp({ projects });
-    const create = await app.request(`/api/projects/${project.id}/work-items`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ title: 'Review implementation', initialPhase: 'ready' }),
-    });
-    const created = await create.json() as { item: { id: string; version: number } };
-
-    const res = await app.request(`/api/work-items/${created.item.id}`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ expectedVersion: created.item.version, priority: 'urgent', dueAt: 1783324340003 }),
-    });
-
-    expect(res.status).toBe(200);
-    const body = await res.json() as { ok: boolean; item: Record<string, unknown> };
-    expect(body.ok).toBe(true);
-    expect(body.item).toMatchObject({
-      id: created.item.id,
-      phase: 'ready',
-      priority: 'urgent',
-      dueAt: 1783324340003,
-    });
-
-    const started = await app.request(`/api/work-items/${created.item.id}/commands`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ type: 'start', expectedVersion: (body.item.version as number) }),
-    });
-    const startedBody = await started.json() as { item: { version: number } };
-    const review = await app.request(`/api/work-items/${created.item.id}/commands`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ type: 'request_review', expectedVersion: startedBody.item.version, summary: 'Ready for verification' }),
-    });
-    expect(review.status).toBe(200);
-
-    const list = await app.request(`/api/projects/${project.id}/work-items?phase=verifying`);
-    const listBody = await list.json() as { items: Array<Record<string, unknown>> };
-    expect(listBody.items).toEqual([expect.objectContaining({ id: created.item.id, phase: 'verifying' })]);
-
-    const events = await app.request(`/api/work-items/${created.item.id}/events`);
-    const eventsBody = await events.json() as { ok: boolean; events: Array<Record<string, unknown>> };
-    expect(eventsBody.ok).toBe(true);
-    expect(eventsBody.events).toEqual(expect.arrayContaining([
-      expect.objectContaining({ type: 'work_item.review_requested' }),
-      expect.objectContaining({ type: 'work_item.metadata_updated' }),
-    ]));
-  });
-
-  it('updates an incomplete work item without binding undefined completedAt', async () => {
-    const projects = new ProjectService();
-    const project = projects.create({ name: 'Edit Project' });
-    const app = registerProjectRouteApp({ projects });
-    const create = await app.request(`/api/projects/${project.id}/work-items`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ title: 'Draft title', priority: 'normal' }),
-    });
-    const created = await create.json() as { item: { id: string; version: number } };
-
-    const res = await app.request(`/api/work-items/${created.item.id}`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ expectedVersion: created.item.version, title: 'Saved title', priority: 'high' }),
-    });
-
-    expect(res.status).toBe(200);
-    const body = await res.json() as { ok: boolean; item: Record<string, unknown> };
-    expect(body.ok).toBe(true);
-    expect(body.item).toMatchObject({
-      id: created.item.id,
-      title: 'Saved title',
-      priority: 'high',
-    });
-    expect(body.item.closedAt).toBeUndefined();
-  });
-
-  it('creates and executes a work item command proposal', async () => {
-    const projects = new ProjectService();
-    const project = projects.create({ name: 'Suggestion Project' });
-    const app = registerProjectRouteApp({ projects });
-    const create = await app.request(`/api/projects/${project.id}/work-items`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ title: 'Keep work item updated', initialPhase: 'ready' }),
-    });
-    const created = await create.json() as { item: { id: string; version: number } };
-
-    const start = await app.request(`/api/work-items/${created.item.id}/commands`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ type: 'start', expectedVersion: created.item.version }),
-    });
-    const started = await start.json() as { item: { version: number } };
-
-    const suggest = await app.request(`/api/work-items/${created.item.id}/command-proposals`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        sourceKind: 'chat',
-        sourceId: 'agent:main:webchat:default:direct:s1',
-        command: {
-          type: 'request_review',
-          expectedVersion: started.item.version,
-          summary: 'Ask the user to verify the result.',
-        },
-      }),
-    });
-
-    expect(suggest.status).toBe(201);
-    const suggested = await suggest.json() as { ok: boolean; proposal: { id: string; state: string } };
-    expect(suggested.ok).toBe(true);
-    expect(suggested.proposal.state).toBe('pending');
-
-    const apply = await app.request(`/api/work-item-command-proposals/${suggested.proposal.id}/execute`, {
-      method: 'POST',
-    });
-
-    expect(apply.status).toBe(200);
-    const applied = await apply.json() as { ok: boolean; item: Record<string, unknown>; proposal: Record<string, unknown> };
-    expect(applied.ok).toBe(true);
-    expect(applied.item).toMatchObject({
-      id: created.item.id,
-      phase: 'verifying',
-    });
-    expect(applied.proposal).toMatchObject({ id: suggested.proposal.id, state: 'executed' });
-
-    const events = await app.request(`/api/work-items/${created.item.id}/events`);
-    const eventsBody = await events.json() as { events: Array<Record<string, unknown>> };
-    expect(eventsBody.events).toEqual(expect.arrayContaining([
-      expect.objectContaining({ type: 'work_item.review_requested' }),
-      expect.objectContaining({ type: 'work_item.command_proposal_executed' }),
-    ]));
-  });
-
-  it('starts a chat from a work item and links it back', async () => {
-    const projects = new ProjectService();
-    const project = projects.create({ name: 'Chat Work Item Project', defaultAgentId: 'coder' });
-    const app = registerProjectRouteApp({
-      projects,
-      currentConfig: {
-        agents: {
-          default: 'main',
-          list: [{ id: 'main', enabled: true }, { id: 'coder', enabled: true }],
-        },
-      },
-      sessionIndexInstance: {
-        saveMessages: vi.fn(async (sessionKey: string) => {
-          ensureSessionRecord(sessionKey, process.cwd());
-        }),
-      } as unknown as GatewayService['sessionIndexInstance'],
-      sessions: {
-        getSession: vi.fn(async (key: string) => ({ key, name: 'Work item chat', status: 'active', projectId: project.id })),
-      } as unknown as GatewayService['sessions'],
-    });
-    const create = await app.request(`/api/projects/${project.id}/work-items`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ title: 'Investigate issue' }),
-    });
-    const created = await create.json() as { item: { id: string } };
-
-    const res = await app.request(`/api/work-items/${created.item.id}/start-chat`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({}),
-    });
-
-    expect(res.status).toBe(201);
-    const body = await res.json() as { ok: boolean; item: Record<string, unknown>; session: { key: string } };
-    expect(body.ok).toBe(true);
-    expect(body.item).toMatchObject({
-      id: created.item.id,
-      phase: 'executing',
-    });
-    expect((body.item.links as Array<Record<string, unknown>>)).toEqual([
-      expect.objectContaining({ kind: 'chat', targetId: body.session.key }),
-    ]);
-  });
-
   it('updates a stable project digest memory record instead of creating duplicates', async () => {
     const projects = new ProjectService();
     const project = projects.create({ name: 'Digest Project', brief: 'Keep a stable digest' });
-    new OutcomeExecutionService().create({ objective: 'Ship the digest flow', projectId: project.id });
+    new TaskExecutionService().create({ objective: 'Ship the digest flow', projectId: project.id });
     const app = registerProjectRouteApp({
       currentConfig: {
         agents: {
@@ -855,7 +503,7 @@ describe('project association routes', () => {
     expect(firstBody.record.id).toBe(`project-digest:${project.id}`);
     expect(firstBody.record.content).toContain('Ship the digest flow');
 
-    new OutcomeExecutionService().create({ objective: 'Review the updated digest', projectId: project.id });
+    new TaskExecutionService().create({ objective: 'Review the updated digest', projectId: project.id });
     const second = await app.request(`/api/projects/${project.id}/digest-memory`, { method: 'POST' });
     expect(second.status).toBe(201);
     const secondBody = (await second.json()) as { record: { id: string; content: string } };

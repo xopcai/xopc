@@ -97,7 +97,7 @@ export function createDelegateTool(deps: DelegateToolDeps): AgentTool {
       'Spawn a sub-agent for an isolated subtask with a fresh conversation (no parent transcript).\n\n' +
       'The sub-agent returns a text summary only — tool traces stay out of your context.\n\n' +
       'WHEN TO USE:\n' +
-      '- Independent work (research, multi-file exploration) where you only need the outcome\n' +
+      '- Independent work (research, multi-file exploration) where you only need the task\n' +
       '- Avoiding context bloat from long intermediate tool output\n\n' +
       'WHEN NOT TO USE:\n' +
       '- Tasks that need this chat history or user clarification\n' +

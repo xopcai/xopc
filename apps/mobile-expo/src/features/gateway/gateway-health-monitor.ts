@@ -1,14 +1,14 @@
 /**
- * Online/offline state derived from probe-coordinator outcomes. Owns its
+ * Online/offline state derived from probe-coordinator tasks. Owns its
  * periodic foreground tick (so the coordinator stays a pure on-demand
  * primitive) and exposes a tiny pub/sub for hooks. Delegates the actual
  * race + caching to the coordinator — no parallel /health pings.
  */
 import {
-  getLastProbeOutcome,
+  getLastProbeTask,
   runProbeRound,
-  subscribeProbeOutcome,
-  type ProbeOutcome,
+  subscribeProbeTask,
+  type ProbeTask,
 } from './probe-coordinator';
 import { PROBE_TIMING } from './probe-timing';
 
@@ -62,8 +62,8 @@ export class GatewayHealthMonitor {
     }
     if (this.intervalId || this.probeUnsub) return;
 
-    const seed = getLastProbeOutcome();
-    if (seed) this.handleOutcome(seed);
+    const seed = getLastProbeTask();
+    if (seed) this.handleTask(seed);
     else void runProbeRound('initial');
 
     // Periodic foreground heartbeat. The coordinator dedupes within its own
@@ -77,7 +77,7 @@ export class GatewayHealthMonitor {
       void runProbeRound('periodic');
     }, PROBE_TIMING.HEALTH_POLL_MS);
 
-    this.probeUnsub = subscribeProbeOutcome((outcome) => this.handleOutcome(outcome));
+    this.probeUnsub = subscribeProbeTask((task) => this.handleTask(task));
 
     const appState = loadAppState();
     if (appState) {
@@ -113,8 +113,8 @@ export class GatewayHealthMonitor {
     for (const listener of this.listeners) listener(online);
   }
 
-  private handleOutcome(outcome: ProbeOutcome): void {
-    if (outcome.online) {
+  private handleTask(task: ProbeTask): void {
+    if (task.online) {
       if (!this.online) this.emit(true);
       this.consecutiveFailures = 0;
       return;
@@ -127,8 +127,8 @@ export class GatewayHealthMonitor {
 
   /** Force an immediate probe (UI button). */
   async checkNow(): Promise<boolean> {
-    const outcome = await runProbeRound('manual', { force: true });
-    return outcome.online;
+    const task = await runProbeRound('manual', { force: true });
+    return task.online;
   }
 }
 

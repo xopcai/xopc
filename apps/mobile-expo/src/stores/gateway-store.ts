@@ -248,11 +248,11 @@ export const useGatewayStore = create<GatewayState>((set, get) => ({
       return '';
     }
     const { runProbeRound } = await import('../features/gateway/probe-coordinator');
-    const outcome = await runProbeRound('settings-saved', { force: true });
-    const winnerUrl = outcome.result.url;
+    const task = await runProbeRound('settings-saved', { force: true });
+    const winnerUrl = task.result.url;
     if (
       winnerUrl &&
-      (outcome.result.winner === 'lan' || outcome.result.winner === 'tunnel')
+      (task.result.winner === 'lan' || task.result.winner === 'tunnel')
     ) {
       const resolved = normalizeBaseUrl(winnerUrl);
       set({ activeBaseUrl: resolved });

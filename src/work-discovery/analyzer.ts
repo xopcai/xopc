@@ -93,8 +93,8 @@ function validateSuggestion(value: unknown, allowedPaths: Set<string>): WorkDisc
   const estimatedMinutes = typeof item.estimatedMinutes === 'number' && Number.isFinite(item.estimatedMinutes)
     ? Math.max(1, Math.min(30, Math.round(item.estimatedMinutes)))
     : 3;
-  const expectedOutcome = typeof item.expectedOutcome === 'string' && item.expectedOutcome.trim()
-    ? item.expectedOutcome.trim().slice(0, 500)
+  const expectedTask = typeof item.expectedTask === 'string' && item.expectedTask.trim()
+    ? item.expectedTask.trim().slice(0, 500)
     : item.title.trim().slice(0, 120);
   const evidence = Array.isArray(item.evidence)
     ? item.evidence.flatMap((raw) => {
@@ -116,7 +116,7 @@ function validateSuggestion(value: unknown, allowedPaths: Set<string>): WorkDisc
     evidence,
     actionPrompt: item.actionPrompt.trim().slice(0, 2_000),
     confidence,
-    expectedOutcome,
+    expectedTask,
     estimatedMinutes,
     risk,
     verification: strings(item.verification, 4).map((entry) => entry.slice(0, 300)),
@@ -235,10 +235,10 @@ export async function analyzeWorkContext(input: {
     'topicKey is a short stable topic identifier. evidenceRefs must use exact relative paths from the snapshot or git://recent-state.',
     'Distinguish one-off recent edits from work sustained across multiple days. Prefer one current thread and only add ongoing or long_term threads when evidence supports them.',
     'For a normal result, suggestions must contain exactly 3 materially different next steps.',
-    'Each suggestion must include actionType, title, rationale, evidence, actionPrompt, confidence, expectedOutcome, estimatedMinutes, risk, and verification.',
+    'Each suggestion must include actionType, title, rationale, evidence, actionPrompt, confidence, expectedTask, estimatedMinutes, risk, and verification.',
     'actionType must be summarize_recent_work, inspect_related_tests, or plan_next_step.',
     'risk must be analysis, command, or file_write. estimatedMinutes is an integer from 1 to 30.',
-    'verification is a short array describing how the user can tell the outcome is real.',
+    'verification is a short array describing how the user can tell the task is real.',
     'Each evidence item contains an optional exact relative path from the snapshot and one concrete observation.',
     'actionPrompt asks the assistant to investigate or continue the step; it does not silently authorize file changes.',
     'If the current objective is unclear or fewer than three credible suggestions exist, set lowConfidence=true, return suggestions=[], and ask one concise contextQuestion.',
@@ -401,7 +401,7 @@ export function workDiscoveryResultMarkdown(result: WorkDiscoveryResult): string
   }
   lines.push('', '## Suggested next steps');
   for (const [index, suggestion] of result.suggestions.entries()) {
-    lines.push('', `### ${index + 1}. ${suggestion.title}`, '', suggestion.rationale, '', `Expected outcome: ${suggestion.expectedOutcome}`, '');
+    lines.push('', `### ${index + 1}. ${suggestion.title}`, '', suggestion.rationale, '', `Expected task: ${suggestion.expectedTask}`, '');
     for (const evidence of suggestion.evidence) {
       lines.push(`- ${evidence.path ? `\`${evidence.path}\`: ` : ''}${evidence.observation}`);
     }

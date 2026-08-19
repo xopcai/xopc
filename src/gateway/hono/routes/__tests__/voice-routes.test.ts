@@ -41,7 +41,7 @@ describe('voice transcription routes', () => {
     transcribe.mockResolvedValue({
       text: 'hello',
       provider: 'openai',
-      attempts: [{ provider: 'openai', outcome: 'success', reasonCode: 'success', latencyMs: 12 }],
+      attempts: [{ provider: 'openai', task: 'success', reasonCode: 'success', latencyMs: 12 }],
       attemptedProviders: ['openai'],
     });
   });

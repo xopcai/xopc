@@ -7,7 +7,7 @@ import { buildRunExplanation, matchesCoverage } from '../automation-explanations
 
 function eventAutomation(
   payloadMatch?: Record<string, string | number | boolean | null>,
-  source = 'outcomes',
+  source = 'tasks',
 ): Automation {
   return {
     id: 'automation-1',
@@ -15,7 +15,7 @@ function eventAutomation(
     enabled: true,
     trigger: {
       kind: 'event',
-      eventType: 'outcome.status_changed',
+      eventType: 'task.status_changed',
       source,
       ...(payloadMatch ? { payloadMatch } : {}),
     },
@@ -29,17 +29,17 @@ function eventAutomation(
 describe('automation explanations', () => {
   it('treats broad event automations as covering a specific product event', () => {
     expect(matchesCoverage(eventAutomation(), {
-      eventType: 'outcome.status_changed',
-      source: 'outcomes',
-      eventPayload: { outcomeId: 'goal-1', status: 'blocked' },
+      eventType: 'task.status_changed',
+      source: 'tasks',
+      eventPayload: { taskId: 'goal-1', status: 'blocked' },
     })).toBe(true);
   });
 
   it('does not treat object-specific payload filters as covering another object', () => {
-    expect(matchesCoverage(eventAutomation({ outcomeId: 'goal-2', status: 'blocked' }), {
-      eventType: 'outcome.status_changed',
-      source: 'outcomes',
-      eventPayload: { outcomeId: 'goal-1', status: 'blocked' },
+    expect(matchesCoverage(eventAutomation({ taskId: 'goal-2', status: 'blocked' }), {
+      eventType: 'task.status_changed',
+      source: 'tasks',
+      eventPayload: { taskId: 'goal-1', status: 'blocked' },
     })).toBe(false);
   });
 
@@ -52,8 +52,8 @@ describe('automation explanations', () => {
       status: 'queued',
       triggerSnapshot: {
         kind: 'event',
-        eventType: 'outcome.status_changed',
-        source: 'outcomes',
+        eventType: 'task.status_changed',
+        source: 'tasks',
         payloadMatch: { status: 'blocked' },
       },
       actionSnapshot: { kind: 'agent', instruction: 'Diagnose blocker' },
@@ -65,19 +65,19 @@ describe('automation explanations', () => {
       runId: 'run-1',
       automationId: 'automation-1',
       type: 'run.queued',
-      message: 'Event outcome.status_changed queued automation',
+      message: 'Event task.status_changed queued automation',
       data: {
         event: {
-          type: 'outcome.status_changed',
-          source: 'outcomes',
-          payload: { outcomeId: 'goal-1', status: 'blocked' },
+          type: 'task.status_changed',
+          source: 'tasks',
+          payload: { taskId: 'goal-1', status: 'blocked' },
         },
       },
       createdAtMs: 1,
     };
 
     expect(buildRunExplanation(run, triggerEvent, labels)).toEqual([
-      'Event outcome.status_changed from outcomes',
+      'Event task.status_changed from tasks',
       'Matched status=blocked',
       'Safety: Auto apply',
       'Runs agent action',

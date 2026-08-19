@@ -59,15 +59,14 @@ import { PACKAGE_VERSION } from '../package-version.js';
 import { MobileNotificationService } from '../mobile/notification-service.js';
 import { ProjectService } from '../projects/index.js';
 import { LocalAppService } from '../local-apps/index.js';
-import { buildWorkItemAgentContext, WorkItemService } from '../work-items/index.js';
 import {
-  OutcomeController,
-  OutcomeExecutionStateRepository,
-  OutcomeProjectionService,
-  OutcomePreparationService,
-  OutcomeRunner,
-  type EnqueueOutcomeOptions,
-} from '../work/index.js';
+  TaskController,
+  TaskRepository,
+  TaskProjectionService,
+  TaskPreparationService,
+  TaskRunner,
+  type EnqueueTaskOptions,
+} from '../tasks/index.js';
 import { createRuntimeBrowserRecipeService, type BrowserRecipeService } from '../browser/recipes/index.js';
 import {
   ReadonlyProactiveAgentExecutor,
@@ -195,7 +194,7 @@ export class GatewayService {
   private startupTrace: GatewayStartupTrace | null = null;
   private workflowSessionBridge: WorkflowSessionBridge | null = null;
   private workflowRunServiceInstance: WorkflowRunService | null = null;
-  private outcomeRunner: OutcomeRunner | null = null;
+  private taskRunner: TaskRunner | null = null;
   private mobileNotifications: MobileNotificationService | null = null;
   private connectorSupervisor: ConnectorSupervisor | null = null;
   private connectorLearningCoordinator: ConnectorLearningCoordinator | null = null;
@@ -226,7 +225,6 @@ export class GatewayService {
 
   /** First-class project grouping surface. */
   readonly projects: ProjectService;
-  readonly workItems: WorkItemService;
   readonly discussions: DiscussionService;
   readonly discussionWorker: DiscussionOrganizerWorker;
   readonly discussionLiveWorker: DiscussionLiveWorker;
@@ -333,7 +331,7 @@ export class GatewayService {
     this.workspacePath = getWorkspacePath(this.config) || './workspace';
     this.initializeExtensionLoader();
 
-    // Session index + files shared with AgentService for chat transcript and Outcome execution context.
+    // Session index + files shared with AgentService for chat transcript and Task execution context.
     this.sessionIndex = new SessionIndex({
       config: this.config,
     });
@@ -343,7 +341,6 @@ export class GatewayService {
     this.notesService = new NotesService(new NotesStore());
 
     this.projects = new ProjectService(undefined, this.proactive);
-    this.workItems = new WorkItemService(undefined, this.proactive);
     const emitDiscussion = (capture: import('../discussions/index.js').DiscussionCapture) => {
       this.sse.emit('discussion.updated', capture);
     };
@@ -426,17 +423,13 @@ export class GatewayService {
       getChannelManager: () => this.channelManager,
       getConfig: () => this.config,
       emit: (type, payload) => this.sse.emit(type, payload),
-      prepareOutcome: (sessionKey) => new OutcomePreparationService({
-        getConfig: () => this.config,
-        projects: this.projects,
-      }).prepare(sessionKey),
-      onOutcomeFinalized: (receipt) => {
+      onTaskFinalized: (receipt) => {
         try {
-          new OutcomeController({
-            enqueue: (outcomeId, options) => this.enqueueOutcome(outcomeId, options),
+          new TaskController({
+            enqueue: (taskId, options) => this.enqueueTask(taskId, options),
           }).handleCompletedRun(receipt);
         } catch (err) {
-          log.warn({ err, outcomeId: receipt.context.outcomeId, runId: receipt.runId }, 'Outcome continuation could not be queued');
+          log.warn({ err, taskId: receipt.context.taskId, runId: receipt.runId }, 'Task continuation could not be queued');
         }
       },
     });
@@ -515,7 +508,6 @@ export class GatewayService {
       getBrowserRecipeService: () => this.browserRecipes,
       getNotesService: () => this.notesService,
       getProjectService: () => this.projects,
-      getWorkItemService: () => this.workItems,
       getLocalAppService: () => this.localApps,
       getWorkflowRunService: () => this.createWorkflowRunService(),
       sourceContextResolver: async (binding) => {
@@ -527,10 +519,6 @@ export class GatewayService {
             notesService: this.notesService,
             config: this.config,
           });
-        }
-        if (binding.kind === 'work_item') {
-          const item = this.workItems.getWorkItem(binding.sourceId);
-          return item ? await buildWorkItemAgentContext(item) : null;
         }
         return null;
       },
@@ -579,16 +567,16 @@ export class GatewayService {
 
   // ── Webchat agent runner (delegated to GatewayAgentRunner) ────────────
 
-  private createOutcomeRunner(): OutcomeRunner {
-    if (!this.outcomeRunner) {
-      this.outcomeRunner = new OutcomeRunner({
+  private createTaskRunner(): TaskRunner {
+    if (!this.taskRunner) {
+      this.taskRunner = new TaskRunner({
         maxConcurrent: 1,
         defaultMaxRetries: 2,
-        ensureSession: async (outcomeId, execution, executionContext) => {
+        ensureSession: async (taskId, execution, executionContext) => {
           const existing = execution.activeSessionKey?.trim();
           if (existing) return existing;
           const agentId = execution.agentId || getDefaultAgentId(this.config);
-          const peerId = `outcome-${sanitizeSegment(outcomeId) || Date.now()}`;
+          const peerId = `task-${sanitizeSegment(taskId) || Date.now()}`;
           const sessionKey = buildSessionKey({
             agentId,
             source: 'webchat',
@@ -610,10 +598,9 @@ export class GatewayService {
               },
               projectId: execution.projectId,
               customData: {
-                outcomeId,
-                origin: 'outcome',
+                taskId,
+                origin: 'task',
                 triggerKind: executionContext?.triggerKind ?? 'user',
-                ...(executionContext?.workItemId ? { workItemId: executionContext.workItemId } : {}),
                 ...(executionContext?.contextTraceId ? { contextTraceId: executionContext.contextTraceId } : {}),
                 ...(executionContext?.parentRunId ? { parentRunId: executionContext.parentRunId } : {}),
                 ...(executionContext?.strategy ? { strategy: executionContext.strategy } : {}),
@@ -623,32 +610,35 @@ export class GatewayService {
           if (execution.projectId) {
             this.projects.attachSession(sessionKey, execution.projectId);
           }
-          new OutcomeExecutionStateRepository().update(outcomeId, { activeSessionKey: sessionKey });
+          new TaskRepository().update(taskId, { activeSessionKey: sessionKey });
           return sessionKey;
         },
-        bindExecutionContext: async (sessionKey, outcomeId, execution, executionContext) => {
+        bindExecutionContext: async (sessionKey, taskId, execution, executionContext) => {
           const metadata = await this.sessionIndex.getSessionMetadata(sessionKey);
           await this.sessionIndex.updateSessionMetadata(sessionKey, {
             projectId: execution.projectId ?? metadata?.projectId,
             customData: {
               ...metadata?.customData,
-              outcomeId,
-              origin: 'outcome',
+              taskId,
+              origin: 'task',
               triggerKind: executionContext?.triggerKind ?? 'user',
-              ...(executionContext?.workItemId ? { workItemId: executionContext.workItemId } : {}),
               ...(executionContext?.contextTraceId ? { contextTraceId: executionContext.contextTraceId } : {}),
               ...(executionContext?.parentRunId ? { parentRunId: executionContext.parentRunId } : {}),
               ...(executionContext?.strategy ? { strategy: executionContext.strategy } : {}),
             },
           });
         },
+        prepareTask: (taskId) => new TaskPreparationService({
+          getConfig: () => this.config,
+          projects: this.projects,
+        }).prepare(taskId),
         hasActiveRun: (sessionKey) => this.agentRunner.hasActiveRun(sessionKey),
         runTurn: (sessionKey, userTurn) =>
           this.agentRunner.runScheduledWebchatTurn(sessionKey, userTurn),
         emit: (type, payload) => this.emit(type, payload),
       });
     }
-    return this.outcomeRunner;
+    return this.taskRunner;
   }
 
   private createMobileNotificationService(): MobileNotificationService {
@@ -658,12 +648,12 @@ export class GatewayService {
     return this.mobileNotifications;
   }
 
-  enqueueOutcome(outcomeId: string, options?: EnqueueOutcomeOptions) {
-    return this.createOutcomeRunner().enqueue(outcomeId, options);
+  enqueueTask(taskId: string, options?: EnqueueTaskOptions) {
+    return this.createTaskRunner().enqueue(taskId, options);
   }
 
-  getOutcomeQueueSnapshot() {
-    return this.createOutcomeRunner().snapshot();
+  getTaskQueueSnapshot() {
+    return this.createTaskRunner().snapshot();
   }
 
   runAgent(
@@ -855,7 +845,7 @@ export class GatewayService {
 
     log.debug('Starting gateway service...');
     openXopcDatabase();
-    new OutcomeProjectionService().reconcile();
+    new TaskProjectionService().reconcile();
     this.startTime = Date.now();
     this.running = true;
     this.ensureDefaultProactiveScenarioSubscriptions();
@@ -1775,6 +1765,9 @@ export class GatewayService {
     this.stopAutomationProductEventBridge?.();
     this.stopSessionTranscriptAutomationEvents?.();
     this.stopAutomationProductEventBridge = onAutomationProductEvent((event) => {
+      if (event.type === 'task.created' || event.type === 'task.status_changed') {
+        this.sse.emit(event.type, event.payload);
+      }
       const proactiveEvent = mapProductEventToProactive({
         event,
         workspaceId: this.currentWorkspacePath,

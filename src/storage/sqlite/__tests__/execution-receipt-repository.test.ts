@@ -92,11 +92,11 @@ describe('execution receipt repository', () => {
     const rated = setExecutionReceiptFeedback({
       sessionKey,
       assistantTimestamp: 2_100,
-      outcome: 'helpful',
+      rating: 'helpful',
       supportFit: true,
       now: 2_200,
     });
-    expect(rated?.feedback).toEqual({ outcome: 'helpful', supportFit: true });
+    expect(rated?.feedback).toEqual({ rating: 'helpful', supportFit: true });
     expect(summarizeExecutionReceipts()).toMatchObject({
       total: 1,
       completed: 1,

@@ -1,6 +1,6 @@
 /**
  * Settings card listing the most recent connection events. Surfaces race
- * outcomes, dual-fire winners, apiFetch failures, and SSE state changes so
+ * tasks, dual-fire winners, apiFetch failures, and SSE state changes so
  * the user has something concrete to copy when reporting a problem and we
  * have something concrete to read.
  */

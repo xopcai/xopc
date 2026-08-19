@@ -34,7 +34,7 @@ type EventSensitivity = 'public' | 'personal' | 'confidential' | 'restricted';
 
 interface EventEnvelope<TPayload = unknown> {
   id: string;
-  type: string;                 // e.g. work_item.status_changed.v1
+  type: string;                 // e.g. task.status_changed.v1
   schemaVersion: number;
   source: { kind: string; id: string; deviceId?: string };
   subject: { kind: string; id: string };
@@ -141,7 +141,7 @@ Every stage is independently retryable and idempotent.
 12. **Persist insight:** store useful analysis independently from its Inbox projection.
 13. **Project Inbox:** create at most one active item for the insight and decision fingerprint.
 14. **Deliver:** enqueue channel-specific deliveries; workers retry independently.
-15. **Learn:** convert user feedback and outcomes into events and evaluation data, not direct prompt mutation.
+15. **Learn:** convert user feedback and tasks into events and evaluation data, not direct prompt mutation.
 
 The pipeline must never hold an open database transaction across context loading or model execution.
 
@@ -204,7 +204,7 @@ Each row identifies Inbox item/insight, channel, target, state, attempts, lease,
 
 ### `proactive_feedback`
 
-Stores useful/not-useful, reason code, optional bounded comment, user action, scenario/prompt revision, and outcome links. Feedback is append-only.
+Stores useful/not-useful, reason code, optional bounded comment, user action, scenario/prompt revision, and task links. Feedback is append-only.
 
 ## 5. State machines
 
@@ -458,7 +458,7 @@ Deliver insight lifecycle, decision records, Inbox projection, snooze worker, ou
 
 ### Stage E — product hardening and cleanup
 
-Harden scenarios, remove experimental scaffolding, and update docs. Review: rollback of new schema/code, dead-code/dependency scan, full test/build suite, and user outcome metrics.
+Harden scenarios, remove experimental scaffolding, and update docs. Review: rollback of new schema/code, dead-code/dependency scan, full test/build suite, and user task metrics.
 
 Each stage requires a written self-review with defects fixed before the next begins. SOLID applies at contracts and dependency direction; KISS and Occam's razor apply by rejecting infrastructure and abstraction that current requirements do not justify.
 

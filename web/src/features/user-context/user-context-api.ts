@@ -180,8 +180,8 @@ export type UserContextResponse = {
   sourceRecommendations: Array<{
     sourceId: string;
     sourceName: string;
-    outcomeId: string;
-    outcomeTitle: string;
+    taskId: string;
+    taskTitle: string;
   }>;
   controls: {
     mode: 'off' | 'readOnly' | 'confirmWrite' | 'auto';

@@ -16,19 +16,19 @@ import type { ExecutionScope } from '../execution-scope.js';
 import { formatCurrentWorkForPrompt, resolveExecutionScope } from '../execution-scope.js';
 
 describe('formatCurrentWorkForPrompt', () => {
-  it('keeps the current outcome contract visible on every turn', () => {
+  it('keeps the current task contract visible on every turn', () => {
     const scope: ExecutionScope = {
-      sessionKey: 'agent:coder:webchat:default:direct:outcome-1',
+      sessionKey: 'agent:coder:webchat:default:direct:task-1',
       projectId: 'project-1',
       objective: {
-        kind: 'outcome',
-        id: 'outcome-1',
+        kind: 'task',
+        id: 'task-1',
         title: 'Ship project scope',
         objective: 'Keep every agent inside the project.',
         status: 'active',
         scopeBoundary: 'Do not modify unrelated UI.',
         acceptanceCriteria: ['Workflow children inherit the project.'],
-        deliverables: ['Targeted tests pass.'],
+        expectedOutputs: ['Targeted tests pass.'],
         nextAction: 'Implement the context resolver.',
       },
     };
@@ -41,7 +41,7 @@ describe('formatCurrentWorkForPrompt', () => {
     expect(prompt).toContain('Targeted tests pass.');
   });
 
-  it('formats workflow objectives without inventing outcome criteria', () => {
+  it('formats workflow objectives without inventing task criteria', () => {
     const prompt = formatCurrentWorkForPrompt({
       sessionKey: 'agent:coder:workflow:run-1',
       projectId: 'project-1',

@@ -2,9 +2,9 @@ export type MobilePlatform = 'ios' | 'android';
 export type MobileNotificationPermission = 'granted' | 'denied' | 'unknown';
 export type MobileNotificationPriority = 'normal' | 'high';
 export type MobileNotificationEventType =
-  | 'outcome.needs_input'
-  | 'outcome.blocked'
-  | 'outcome.completed'
+  | 'task.needs_input'
+  | 'task.blocked'
+  | 'task.completed'
   | 'automation.failed'
   | 'automation.completed'
   | 'proactive.insight';
@@ -32,7 +32,7 @@ export type MobileDevice = {
 export type MobileActivityEvent = {
   id: string;
   type: MobileNotificationEventType;
-  entity: { kind: 'outcome' | 'automation' | 'insight'; id: string };
+  entity: { kind: 'task' | 'automation' | 'insight'; id: string };
   priority: MobileNotificationPriority;
   title: string;
   body?: string;

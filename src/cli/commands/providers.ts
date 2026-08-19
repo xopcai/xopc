@@ -3,7 +3,7 @@
  *
  * This command sits on top of the existing auth-profile store (`xopc auth …`),
  * but presents a setup-style surface — `list / set-key / unset-key / schema` —
- * with the same `SetupOutcome` JSON contract used by other M1 setup commands.
+ * with the same `SetupTask` JSON contract used by other M1 setup commands.
  * Agents (M2 skills) and the WebUI (M3) can consume both shapes uniformly.
  *
  * Capability-provider (image / voice) settings live under `cfg.providers.<id>`
@@ -34,10 +34,10 @@ import { colors } from '../utils/colors.js';
 
 import {
   SETUP_EXIT,
-  emitOutcome,
+  emitTask,
   isPromptCancelled,
   promptSecret,
-  type SetupOutcome,
+  type SetupTask,
 } from './setup-shared/index.js';
 
 type KeyStatus =
@@ -139,10 +139,10 @@ interface MutationOptions {
   json: boolean;
 }
 
-function finalizeProviderOutcome(outcome: SetupOutcome, options: MutationOptions): SetupOutcome {
-  emitOutcome(outcome, options.json);
-  process.exitCode = outcome.ok ? SETUP_EXIT.OK : SETUP_EXIT.ERROR;
-  return outcome;
+function finalizeProviderTask(task: SetupTask, options: MutationOptions): SetupTask {
+  emitTask(task, options.json);
+  process.exitCode = task.ok ? SETUP_EXIT.OK : SETUP_EXIT.ERROR;
+  return task;
 }
 
 function planSetKey(args: {
@@ -169,10 +169,10 @@ async function runSetKey(args: {
   profileId: string;
   key: string;
   options: MutationOptions;
-}): Promise<SetupOutcome> {
+}): Promise<SetupTask> {
   const meta = PROVIDER_META[args.provider];
   if (meta && meta.supportsApiKey === false) {
-    const outcome: SetupOutcome = {
+    const task: SetupTask = {
       ok: false,
       action: 'add',
       domain: 'providers',
@@ -185,7 +185,7 @@ async function runSetKey(args: {
         },
       ],
     };
-    return finalizeProviderOutcome(outcome, args.options);
+    return finalizeProviderTask(task, args.options);
   }
 
   const { existing, willChange } = planSetKey(args);
@@ -193,7 +193,7 @@ async function runSetKey(args: {
   const action = existing ? 'set' : 'add';
 
   if (!willChange) {
-    const outcome: SetupOutcome = {
+    const task: SetupTask = {
       ok: true,
       action: 'noop',
       domain: 'providers',
@@ -203,7 +203,7 @@ async function runSetKey(args: {
       value: { profileId: args.profileId, key: maskKey(args.key) },
       notes: ['Key is unchanged.'],
     };
-    return finalizeProviderOutcome(outcome, args.options);
+    return finalizeProviderTask(task, args.options);
   }
 
   if (!args.options.dryRun) {
@@ -213,7 +213,7 @@ async function runSetKey(args: {
         credential: { type: 'api_key', provider: args.provider, key: args.key },
       });
     } catch (error) {
-      const outcome: SetupOutcome = {
+      const task: SetupTask = {
         ok: false,
         action,
         domain: 'providers',
@@ -222,11 +222,11 @@ async function runSetKey(args: {
         dryRun: false,
         errors: [{ message: (error as Error).message }],
       };
-      return finalizeProviderOutcome(outcome, args.options);
+      return finalizeProviderTask(task, args.options);
     }
   }
 
-  const outcome: SetupOutcome = {
+  const task: SetupTask = {
     ok: true,
     action,
     domain: 'providers',
@@ -235,17 +235,17 @@ async function runSetKey(args: {
     dryRun: args.options.dryRun,
     value: { profileId: args.profileId, key: maskKey(args.key) },
   };
-  return finalizeProviderOutcome(outcome, args.options);
+  return finalizeProviderTask(task, args.options);
 }
 
 async function runUnsetKey(args: {
   provider: string;
   profileId: string;
   options: MutationOptions;
-}): Promise<SetupOutcome> {
+}): Promise<SetupTask> {
   const existing = getProfile(args.profileId);
   if (!existing) {
-    const outcome: SetupOutcome = {
+    const task: SetupTask = {
       ok: true,
       action: 'noop',
       domain: 'providers',
@@ -254,7 +254,7 @@ async function runUnsetKey(args: {
       dryRun: args.options.dryRun,
       notes: [`No profile "${args.profileId}" to remove.`],
     };
-    return finalizeProviderOutcome(outcome, args.options);
+    return finalizeProviderTask(task, args.options);
   }
 
   const changedPaths = [`profiles.${args.profileId}`];
@@ -262,7 +262,7 @@ async function runUnsetKey(args: {
     removeAuthProfile(args.profileId);
   }
 
-  const outcome: SetupOutcome = {
+  const task: SetupTask = {
     ok: true,
     action: 'remove',
     domain: 'providers',
@@ -271,7 +271,7 @@ async function runUnsetKey(args: {
     dryRun: args.options.dryRun,
     value: { profileId: args.profileId, removed: true },
   };
-  return finalizeProviderOutcome(outcome, args.options);
+  return finalizeProviderTask(task, args.options);
 }
 
 function emitSchema(opts: { providerId?: string; json: boolean }): void {
@@ -297,7 +297,7 @@ function emitSchema(opts: { providerId?: string; json: boolean }): void {
           description: 'Optional profile id when managing multiple keys per provider.',
         },
       },
-      outcome: {
+      task: {
         ok: 'boolean',
         action: 'add | set | remove | noop',
         domain: 'providers',
@@ -354,7 +354,7 @@ function createProvidersCommand(_ctx: CLIContext): Command {
     .option('--key <value>', `API key value. ${KEY_OPTION_HINT}`)
     .option('--profile <id>', 'Profile id (default: <provider>:default)')
     .option('--dry-run', 'Show the change without writing', false)
-    .option('--json', 'Emit a single JSON outcome line', false)
+    .option('--json', 'Emit a single JSON task line', false)
     .action(
       async (
         provider: string,
@@ -367,7 +367,7 @@ function createProvidersCommand(_ctx: CLIContext): Command {
             key = await promptSecret(`API key for ${provider}:`);
           } catch (error) {
             if (isPromptCancelled(error)) {
-              const outcome: SetupOutcome = {
+              const task: SetupTask = {
                 ok: false,
                 action: 'set',
                 domain: 'providers',
@@ -376,7 +376,7 @@ function createProvidersCommand(_ctx: CLIContext): Command {
                 dryRun: Boolean(opts.dryRun),
                 errors: [{ message: 'Cancelled by user' }],
               };
-              emitOutcome(outcome, Boolean(opts.json));
+              emitTask(task, Boolean(opts.json));
               process.exitCode = SETUP_EXIT.CANCELLED;
               return;
             }
@@ -397,7 +397,7 @@ function createProvidersCommand(_ctx: CLIContext): Command {
     .description('Remove a provider auth profile')
     .option('--profile <id>', 'Profile id (default: <provider>:default)')
     .option('--dry-run', 'Show the change without writing', false)
-    .option('--json', 'Emit a single JSON outcome line', false)
+    .option('--json', 'Emit a single JSON task line', false)
     .action(
       async (
         provider: string,

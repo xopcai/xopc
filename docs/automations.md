@@ -84,7 +84,7 @@ SQLite tables:
 | Table | Purpose |
 | --- | --- |
 | `automations` | Automation definitions, triggers, actions, reliability, after-run behavior, and state |
-| `automation_runs` | Execution history and outcomes |
+| `automation_runs` | Execution history and tasks |
 
 Automations are database-backed. They are not configured through `xopc.json`.
 

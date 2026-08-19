@@ -408,7 +408,7 @@ export const schtasksService: GatewayService = {
     await schtasksExec(['/run', '/tn', taskName]);
 
     log.info('Scheduled task restarted');
-    return { outcome: 'restarted' };
+    return { task: 'restarted' };
   },
 
   async isLoaded(args: GatewayServiceEnvArgs): Promise<boolean> {

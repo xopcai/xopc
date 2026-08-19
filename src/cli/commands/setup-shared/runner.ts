@@ -4,13 +4,13 @@ import { loadConfig, saveConfig } from '../../../config/index.js';
 import { ConfigSchema, type Config } from '../../../config/schema.js';
 import { diffConfigPaths } from '../../../config/diff.js';
 
-import { emitOutcome } from './output.js';
+import { emitTask } from './output.js';
 import { isPromptCancelled } from './prompts.js';
 import {
   SETUP_EXIT,
   type SetupAction,
   type SetupError,
-  type SetupOutcome,
+  type SetupTask,
   type SetupRunOptions,
 } from './types.js';
 
@@ -39,9 +39,9 @@ export interface SetupMutator {
   action: SetupAction;
   /** Mutates `config` in place (or returns a replacement) and returns it. */
   mutate(config: Config): Config | Promise<Config>;
-  /** Optional masked value to surface in the outcome (for agents / UI). */
+  /** Optional masked value to surface in the task (for agents / UI). */
   resultValue?(config: Config): unknown;
-  /** Optional human-readable notes appended to the outcome. */
+  /** Optional human-readable notes appended to the task. */
   notes?(config: Config): string[];
 }
 
@@ -60,18 +60,18 @@ function zodErrorToSetupErrors(err: ZodError): SetupError[] {
 
 /**
  * Headless setup pipeline — load → clone → mutate → validate(zod) → diff →
- * (write | dry-run) → outcome. Returns the {@link SetupOutcome} without any
+ * (write | dry-run) → task. Returns the {@link SetupTask} without any
  * I/O side effects (no stdout, no `process.exitCode`).
  *
  * Used by CLI setup commands via {@link runSetup}. Keep this side-effect-free
  * so it stays safe to call from tests and other programmatic callers.
  *
- * Custom errors thrown by the mutator surface as `errors[]` on the outcome:
+ * Custom errors thrown by the mutator surface as `errors[]` on the task:
  *   - `SetupValidationError` — explicit `{path?, message}[]` entries
  *   - `ExitPromptError` (from `@inquirer/prompts`) — surfaced as "Cancelled by user"
  *   - any other `Error` — the message is used verbatim
  */
-export async function runSetupHeadless(args: RunSetupArgs): Promise<SetupOutcome> {
+export async function runSetupHeadless(args: RunSetupArgs): Promise<SetupTask> {
   const { configPath, mutator, options } = args;
 
   let before: Config;
@@ -174,22 +174,22 @@ export async function runSetupHeadless(args: RunSetupArgs): Promise<SetupOutcome
 }
 
 /**
- * CLI wrapper around {@link runSetupHeadless}: emits the outcome to stdout
+ * CLI wrapper around {@link runSetupHeadless}: emits the task to stdout
  * (text or single-line JSON) and sets `process.exitCode` to the standard
  * setup exit codes (0 ok / 1 error / 2 cancelled).
  *
  * Use this from CLI command actions; use {@link runSetupHeadless} from any
  * non-CLI caller (HTTP routes, library code, tests).
  */
-export async function runSetup(args: RunSetupArgs): Promise<SetupOutcome> {
-  const outcome = await runSetupHeadless(args);
-  emitOutcome(outcome, args.options.json);
-  if (outcome.ok) {
+export async function runSetup(args: RunSetupArgs): Promise<SetupTask> {
+  const task = await runSetupHeadless(args);
+  emitTask(task, args.options.json);
+  if (task.ok) {
     process.exitCode = SETUP_EXIT.OK;
-  } else if (outcome.errors?.some((e) => /cancelled/i.test(e.message))) {
+  } else if (task.errors?.some((e) => /cancelled/i.test(e.message))) {
     process.exitCode = SETUP_EXIT.CANCELLED;
   } else {
     process.exitCode = SETUP_EXIT.ERROR;
   }
-  return outcome;
+  return task;
 }

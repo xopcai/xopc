@@ -81,7 +81,7 @@ Post-update details are returned on the CLI (`--json`) and in gateway API respon
   "postUpdate": {
     "extensions": {
       "status": "ok",
-      "outcomes": [
+      "tasks": [
         { "extensionId": "my-ext", "status": "updated", "message": "Updated my-ext: 1.0.0 -> 1.0.1." }
       ]
     },

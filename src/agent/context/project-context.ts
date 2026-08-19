@@ -7,11 +7,10 @@ import type { Project } from '../../projects/types.js';
 import { ProjectStore } from '../../projects/project-store.js';
 import { listMemoryRecords, searchMemoryRecords } from '../../storage/sqlite/index.js';
 import { sanitizeForPromptLiteral } from '../prompt/sanitize-for-prompt.js';
-import { OutcomeExecutionStateRepository, type OutcomeExecutionState } from '../../work/outcome-execution-state.js';
-import { OutcomeRepository } from '../../work/outcome-repository.js';
+import { TaskRepository, type TaskRuntime } from '../../tasks/task-repository.js';
 
 const MAX_TEXT = 1200;
-const MAX_OUTCOMES = 5;
+const MAX_TASKS = 5;
 const MAX_SESSIONS = 5;
 const MAX_RECENT_MEMORY = 5;
 const MAX_RELEVANT_MEMORY = 5;
@@ -31,18 +30,18 @@ function truncateText(value: string | undefined, max = MAX_TEXT): string | undef
   return `${trimmed.slice(0, max - 1).trimEnd()}...`;
 }
 
-export interface ProjectOutcomeContext extends OutcomeExecutionState {
+export interface ProjectTaskContext extends TaskRuntime {
   objective: string;
   status: string;
 }
 
-function formatOutcome(outcome: ProjectOutcomeContext): string {
-  const parts = [`- ${sanitizeForPromptLiteral(outcome.objective)}`, `status=${outcome.status}`, `priority=${outcome.priority}`];
-  if (outcome.nextAction?.trim()) {
-    parts.push(`next=${sanitizeForPromptLiteral(truncateText(outcome.nextAction, 200) ?? '')}`);
+function formatTask(task: ProjectTaskContext): string {
+  const parts = [`- ${sanitizeForPromptLiteral(task.objective)}`, `status=${task.status}`, `priority=${task.priority}`];
+  if (task.nextAction?.trim()) {
+    parts.push(`next=${sanitizeForPromptLiteral(truncateText(task.nextAction, 200) ?? '')}`);
   }
-  if (outcome.blockedReason?.trim()) {
-    parts.push(`blocked=${sanitizeForPromptLiteral(truncateText(outcome.blockedReason, 200) ?? '')}`);
+  if (task.blockedReason?.trim()) {
+    parts.push(`blocked=${sanitizeForPromptLiteral(truncateText(task.blockedReason, 200) ?? '')}`);
   }
   return parts.join(' | ');
 }
@@ -71,12 +70,13 @@ export function buildActiveProjectContextForPrompt(
   return formatActiveProjectContextForPrompt({
     project,
     workspacePath: getProjectWorkspacePathForSession(sessionKey) ?? project.workspaceRoot,
-    activeOutcomes: new OutcomeExecutionStateRepository().listByProject(project.id, MAX_OUTCOMES)
-      .flatMap((execution) => {
-        const outcome = new OutcomeRepository().get(execution.outcomeId);
-        if (!outcome || outcome.internalStatus === 'completed' || outcome.internalStatus === 'cancelled') return [];
-        return [{ ...execution, objective: outcome.objective, status: outcome.internalStatus }];
-      }),
+    activeTasks: new TaskRepository().listByProject(project.id, MAX_TASKS)
+      .filter((task) => task.status !== 'completed' && task.status !== 'cancelled')
+      .map((task) => ({
+        ...task.execution,
+        objective: task.objective,
+        status: task.status,
+      })),
     recentSessions: new ProjectStore().getRecentSessions(project.id, MAX_SESSIONS),
     memoryRecords: selectProjectMemoryRecords({
       relevant: options.memoryQuery?.trim()
@@ -115,7 +115,7 @@ export function buildActiveProjectContextForPrompt(
 export function formatActiveProjectContextForPrompt(input: {
   project: Project;
   workspacePath?: string;
-  activeOutcomes: ProjectOutcomeContext[];
+  activeTasks: ProjectTaskContext[];
   recentSessions: Array<{ key: string; name?: string; updatedAt: string; agentId: string }>;
   memoryRecords?: Array<{ kind: string; content: string; updatedAt: string }>;
   localApp?: {
@@ -183,11 +183,11 @@ export function formatActiveProjectContextForPrompt(input: {
     );
   }
 
-  lines.push('', '## Active Outcomes');
-  if (input.activeOutcomes.length === 0) {
+  lines.push('', '## Active Tasks');
+  if (input.activeTasks.length === 0) {
     lines.push('- None recorded.');
   } else {
-    lines.push(...input.activeOutcomes.map(formatOutcome));
+    lines.push(...input.activeTasks.map(formatTask));
   }
 
   lines.push('', '## Recent Project Sessions');

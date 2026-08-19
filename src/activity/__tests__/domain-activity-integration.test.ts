@@ -11,7 +11,6 @@ import {
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../storage/sqlite/index.js';
-import { WorkItemService } from '../../work-items/work-item-service.js';
 import { ActivityService } from '../service.js';
 
 describe('domain activity integration', () => {
@@ -61,33 +60,4 @@ describe('domain activity integration', () => {
     expect(page.items.flatMap((item) => item.scopes)).toEqual([]);
   });
 
-  it('records work item activity in the owning project timeline', () => {
-    const projects = new ProjectService();
-    const workItems = new WorkItemService();
-    const project = projects.create({ name: 'Work Item Activity' });
-    const item = workItems.createProjectWorkItem(project.id, {
-      title: 'Implement activity timeline',
-      initialPhase: 'ready',
-      priority: 'high',
-    });
-    workItems.executeCommand(item.id, { type: 'start', expectedVersion: item.version }, {
-      actor: { kind: 'agent', id: 'main' },
-      source: 'agent_tool',
-      requestId: 'activity-test',
-    });
-    workItems.addLink(item.id, { kind: 'note', targetId: 'note-1', title: 'Research note' });
-
-    const page = activity.listForProject({ projectId: project.id });
-    expect(page.items.map((activityItem) => activityItem.type).sort()).toEqual([
-      'project.created',
-      'work_item.created',
-      'work_item.lifecycle_changed.v1',
-      'work_item.link_added',
-    ]);
-    expect(page.items.find((activityItem) => activityItem.type === 'work_item.lifecycle_changed.v1')?.payload)
-      .toMatchObject({ command: 'start' });
-    expect(page.items.find((activityItem) => activityItem.type === 'work_item.link_added')?.payload).toMatchObject({
-      target: { kind: 'note', id: 'note-1', title: 'Research note' },
-    });
-  });
 });

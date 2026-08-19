@@ -17,8 +17,8 @@ export function summarizeMemoryUseAudit(traces: MemoryTraceEventPayload[]): {
   for (const trace of injects) {
     selectedRecords += trace.selectedRecordIds.length;
     if (trace.skippedReason) skippedReasons[trace.skippedReason] = (skippedReasons[trace.skippedReason] ?? 0) + 1;
-    if (trace.feedback?.outcome === 'helpful') helpful += 1;
-    if (trace.feedback?.outcome === 'not_helpful' || trace.feedback?.outcome === 'irrelevant') notHelpful += 1;
+    if (trace.feedback?.rating === 'helpful') helpful += 1;
+    if (trace.feedback?.rating === 'not_helpful' || trace.feedback?.rating === 'irrelevant') notHelpful += 1;
   }
   return {
     total: traces.length,

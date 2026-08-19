@@ -88,7 +88,7 @@ const MEMORY_SENSITIVITIES = new Set<MemorySensitivity>([
   'regulated',
 ]);
 
-const MEMORY_TRACE_FEEDBACK_OUTCOMES = new Set([
+const MEMORY_TRACE_FEEDBACK_RATINGS = new Set([
   'helpful',
   'not_helpful',
   'mixed',
@@ -395,11 +395,11 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
 
   authenticated.patch('/api/user-context/traces/:traceId/feedback', async (c) => {
     const body = await c.req.json().catch(() => ({}));
-    const outcome = typeof body.outcome === 'string' && MEMORY_TRACE_FEEDBACK_OUTCOMES.has(body.outcome)
-      ? body.outcome
+    const rating = typeof body.rating === 'string' && MEMORY_TRACE_FEEDBACK_RATINGS.has(body.rating)
+      ? body.rating
       : undefined;
-    if (!outcome) {
-      return c.json({ error: 'Missing or invalid required field: outcome' }, 400);
+    if (!rating) {
+      return c.json({ error: 'Missing or invalid required field: rating' }, 400);
     }
     const source = body.source === 'user' || body.source === 'evaluator' || body.source === 'system'
       ? body.source
@@ -407,7 +407,7 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
     const trace = setMemoryTraceFeedback({
       traceId: c.req.param('traceId'),
       feedback: {
-        outcome,
+        rating,
         ...(typeof body.score === 'number' ? { score: body.score } : {}),
         ...(typeof body.reason === 'string' ? { reason: body.reason } : {}),
         ...(source ? { source } : {}),
@@ -450,28 +450,28 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
       const assistantTimestamp = typeof body.assistantTimestamp === 'number'
         ? body.assistantTimestamp
         : Number.NaN;
-      const outcome = body.outcome === 'helpful' || body.outcome === 'not_helpful'
-        ? body.outcome
+      const rating = body.rating === 'helpful' || body.rating === 'not_helpful'
+        ? body.rating
         : undefined;
       const reason = typeof body.reason === 'string'
         ? body.reason.trim().slice(0, 160)
         : '';
-      if (!sessionKey || !Number.isFinite(assistantTimestamp) || assistantTimestamp <= 0 || !outcome) {
-        return c.json({ error: 'sessionKey, assistantTimestamp, and a valid outcome are required' }, 400);
+      if (!sessionKey || !Number.isFinite(assistantTimestamp) || assistantTimestamp <= 0 || !rating) {
+        return c.json({ error: 'sessionKey, assistantTimestamp, and a valid rating are required' }, 400);
       }
       const executionReceipt = setExecutionReceiptFeedback({
         sessionKey,
         assistantTimestamp,
-        outcome,
+        rating,
         reason: reason || undefined,
-        needsCorrection: outcome === 'not_helpful',
-        ...(outcome === 'helpful'
+        needsCorrection: rating === 'not_helpful',
+        ...(rating === 'helpful'
           ? { supportFit: true }
           : reason.includes('tone_mismatch')
             ? { supportFit: false }
             : {}),
       });
-      if (outcome === 'not_helpful' && reason.includes('tone_mismatch')) {
+      if (rating === 'not_helpful' && reason.includes('tone_mismatch')) {
         setInteractionState({
           sessionKey,
           signal: {
@@ -487,7 +487,7 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
         sessionKey,
         beforeMs: assistantTimestamp,
         feedback: {
-          outcome,
+          rating,
           source: 'user',
           reason: reason || 'assistant_response_feedback',
         },

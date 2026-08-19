@@ -14,21 +14,20 @@ import {
   resetXopcDatabaseSingletonForTest,
   startExecutionReceipt,
 } from '../../../../storage/sqlite/index.js';
-import { WorkItemService } from '../../../../work-items/index.js';
-import { OutcomeExecutionService } from '../../../../work/index.js';
-import { OutcomeRepository } from '../../../../work/outcome-repository.js';
+import { TaskExecutionService } from '../../../../tasks/index.js';
+import { TaskRepository } from '../../../../tasks/task-repository.js';
 import {
-  OutcomeProjectionService,
-} from '../../../../work/outcome-projection-service.js';
+  TaskProjectionService,
+} from '../../../../tasks/task-projection-service.js';
 import type { AuthenticatedRouteDeps } from '../deps.js';
 import { registerExecutionReceiptRoutes } from '../execution-receipts.js';
 
-describe('work outcome receipt routes', () => {
+describe('work task receipt routes', () => {
   let stateDir: string;
   let app: Hono;
 
   beforeEach(() => {
-    stateDir = mkdtempSync(join(tmpdir(), 'xopc-work-outcomes-'));
+    stateDir = mkdtempSync(join(tmpdir(), 'xopc-work-tasks-'));
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
     ensureSessionRecord('session-1', stateDir);
@@ -64,12 +63,12 @@ describe('work outcome receipt routes', () => {
     const feedback = await app.request('/api/execution-receipts/run-1/feedback', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ outcome: 'helpful' }),
+      body: JSON.stringify({ rating: 'helpful' }),
     });
     expect(feedback.status).toBe(200);
     expect(await feedback.json()).toMatchObject({
       ok: true,
-      receipt: { feedback: { outcome: 'helpful' } },
+      receipt: { feedback: { rating: 'helpful' } },
     });
 
     const verdict = await app.request('/api/execution-receipts/run-1/verdict', {
@@ -84,31 +83,22 @@ describe('work outcome receipt routes', () => {
     });
   });
 
-  it('reprojects completed outcomes after contract and evidence updates', async () => {
+  it('reprojects completed tasks after contract and evidence updates', async () => {
     const projects = new ProjectService();
-    const workItems = new WorkItemService();
     const project = projects.create({ name: 'Route projection' });
-    const execution = new OutcomeExecutionService().create({
+    const execution = new TaskExecutionService().create({
       objective: 'Finish route projection',
       projectId: project.id,
     });
-    const createdWorkItem = workItems.createProjectWorkItem(project.id, {
-      title: 'Finish route projection',
-      initialPhase: 'ready',
-    });
-    const workItem = workItems.executeCommand(createdWorkItem.id, { type: 'start', expectedVersion: createdWorkItem.version }, {
-      actor: { kind: 'agent', id: 'main' }, source: 'workflow', requestId: 'receipt-test',
-    })!;
     startExecutionReceipt({
       runId: 'run-reproject',
       sessionKey: 'session-1',
       channel: 'webchat',
       objective: 'Finish route projection',
       context: {
-        outcomeId: execution.outcomeId,
+        taskId: execution.taskId,
         projectId: project.id,
-        workItemId: workItem.id,
-        origin: 'outcome',
+        origin: 'task',
       },
       now: 300,
     });
@@ -118,12 +108,10 @@ describe('work outcome receipt routes', () => {
       summary: 'Awaiting verification',
       now: 400,
     })!;
-    new OutcomeProjectionService().project(completed);
-    expect(new OutcomeRepository().get(execution.outcomeId)).toMatchObject({
-      userStatus: 'running',
-      internalStatus: 'continuing',
+    new TaskProjectionService().project(completed);
+    expect(new TaskRepository().get(execution.taskId)).toMatchObject({
+      status: 'running',
     });
-    expect(workItems.getWorkItem(workItem.id)?.phase).toBe('executing');
 
     const response = await app.request('/api/execution-receipts/run-reproject', {
       method: 'PATCH',
@@ -131,7 +119,7 @@ describe('work outcome receipt routes', () => {
       body: JSON.stringify({
         contract: {
           objective: 'Finish route projection',
-          deliverables: [],
+          expectedOutputs: [],
           acceptanceCriteria: ['Checks pass'],
           constraints: [],
           approvalRequired: [],
@@ -157,10 +145,8 @@ describe('work outcome receipt routes', () => {
         completionVerdict: 'achieved',
       },
     });
-    expect(new OutcomeRepository().get(execution.outcomeId)).toMatchObject({
-      userStatus: 'completed',
-      internalStatus: 'completed',
+    expect(new TaskRepository().get(execution.taskId)).toMatchObject({
+      status: 'completed',
     });
-    expect(workItems.getWorkItem(workItem.id)?.phase).toBe('executing');
   });
 });

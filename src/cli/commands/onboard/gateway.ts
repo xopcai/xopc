@@ -90,7 +90,7 @@ async function installAndStartGatewayService(config: Config, _ctx: CLIContext): 
 
   const { startGatewayService } = await import('../../../daemon/service.js');
   const result = await startGatewayService({ service });
-  return result.outcome === 'started' || result.outcome === 'scheduled';
+  return result.task === 'started' || result.task === 'scheduled';
 }
 
 export async function startGatewayNow(config: Config, ctx: CLIContext): Promise<void> {

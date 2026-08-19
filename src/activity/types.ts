@@ -1,9 +1,8 @@
 export type ActivityObjectKind =
   | 'project'
   | 'note'
-  | 'work_item'
   | 'session'
-  | 'outcome'
+  | 'task'
   | 'workflow_run'
   | 'automation';
 
@@ -27,15 +26,11 @@ export type ActivityEventType =
   | 'note.updated'
   | 'note.status_changed'
   | 'note.preview_generated'
-  | 'work_item.created'
-  | 'work_item.updated.v1'
-  | 'work_item.lifecycle_changed.v1'
-  | 'work_item.link_added'
   | 'session.attached_to_project'
   | 'session.detached_from_project'
   | 'session.renamed'
-  | 'outcome.created'
-  | 'outcome.status_changed'
+  | 'task.created'
+  | 'task.status_changed'
   | 'workflow_run.started'
   | 'workflow_run.completed'
   | 'automation.run_started'

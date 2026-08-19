@@ -7,18 +7,17 @@ import {
   type ExecutionRecoveryAction,
   type ExecutionVerification,
   type ExecutionVerificationStatus,
-} from '../../agent/outcomes/execution-verifier.js';
+} from '../../agent/tasks/execution-verifier.js';
 
 export type ExecutionReceiptStatus = 'running' | 'succeeded' | 'failed' | 'cancelled';
-export type ExecutionFeedbackOutcome = 'helpful' | 'not_helpful';
+export type ExecutionFeedbackRating = 'helpful' | 'not_helpful';
 export type ExecutionVerdict = 'achieved' | 'partial' | 'not_achieved';
-export type ExecutionReceiptOrigin = 'chat' | 'outcome' | 'workflow' | 'automation' | 'browser' | 'proactive';
+export type ExecutionReceiptOrigin = 'chat' | 'task' | 'workflow' | 'automation' | 'browser' | 'proactive';
 export type ExecutionReceiptTrigger = 'user' | 'schedule' | 'webhook' | 'proactive' | 'retry';
 
 export interface ExecutionReceiptContext {
-  outcomeId?: string;
+  taskId?: string;
   projectId?: string;
-  workItemId?: string;
   origin?: ExecutionReceiptOrigin;
   triggerKind?: ExecutionReceiptTrigger;
   parentRunId?: string;
@@ -27,7 +26,7 @@ export interface ExecutionReceiptContext {
 
 export interface ExecutionContract {
   objective: string;
-  deliverables: string[];
+  expectedOutputs: string[];
   acceptanceCriteria: string[];
   constraints: string[];
   approvalRequired: string[];
@@ -82,7 +81,7 @@ export interface ExecutionReceipt {
     recoveryAction: ExecutionRecoveryAction;
   };
   feedback?: {
-    outcome: ExecutionFeedbackOutcome;
+    rating: ExecutionFeedbackRating;
     reason?: string;
     needsCorrection?: boolean;
     supportFit?: boolean;
@@ -101,7 +100,7 @@ type ExecutionReceiptRow = {
   summary: string | null;
   contract_json: string | null;
   evidence_json: string;
-  feedback_outcome: ExecutionFeedbackOutcome | null;
+  feedback_rating: ExecutionFeedbackRating | null;
   feedback_reason: string | null;
   needs_correction: number | null;
   support_fit: number | null;
@@ -114,7 +113,6 @@ type ExecutionReceiptRow = {
   failure_phase: ExecutionFailurePhase | null;
   recovery_action: ExecutionRecoveryAction | null;
   project_id: string | null;
-  work_item_id: string | null;
   origin: ExecutionReceiptOrigin | null;
   trigger_kind: ExecutionReceiptTrigger | null;
   parent_run_id: string | null;
@@ -126,7 +124,7 @@ type ExecutionReceiptRow = {
   correction_text: string | null;
   projection_version: number;
   projected_at: number | null;
-  outcome_id: string | null;
+  task_id: string | null;
   contract_version: number | null;
   attempt: number;
   strategy: string | null;
@@ -151,9 +149,9 @@ export interface ExecutionReceiptMetrics {
 function fromRow(row: ExecutionReceiptRow): ExecutionReceipt {
   const contract = row.contract_json ? JSON.parse(row.contract_json) as ExecutionContract : undefined;
   const evidence = JSON.parse(row.evidence_json) as ExecutionEvidence[];
-  const feedback = row.feedback_outcome
+  const feedback = row.feedback_rating
     ? {
-        outcome: row.feedback_outcome,
+        rating: row.feedback_rating,
         ...(row.feedback_reason ? { reason: row.feedback_reason } : {}),
         ...(row.needs_correction === null ? {} : { needsCorrection: row.needs_correction === 1 }),
         ...(row.support_fit === null ? {} : { supportFit: row.support_fit === 1 }),
@@ -176,9 +174,8 @@ function fromRow(row: ExecutionReceiptRow): ExecutionReceipt {
       status: row.verification_status,
     },
     context: {
-      ...(row.outcome_id ? { outcomeId: row.outcome_id } : {}),
+      ...(row.task_id ? { taskId: row.task_id } : {}),
       ...(row.project_id ? { projectId: row.project_id } : {}),
-      ...(row.work_item_id ? { workItemId: row.work_item_id } : {}),
       ...(row.origin ? { origin: row.origin } : {}),
       ...(row.trigger_kind ? { triggerKind: row.trigger_kind } : {}),
       ...(row.parent_run_id ? { parentRunId: row.parent_run_id } : {}),
@@ -209,12 +206,12 @@ function fromRow(row: ExecutionReceiptRow): ExecutionReceipt {
 }
 
 const SELECT_COLUMNS = `run_id, session_key, channel, objective, status, summary,
-  contract_json, evidence_json, feedback_outcome, feedback_reason,
+  contract_json, evidence_json, feedback_rating, feedback_reason,
   needs_correction, support_fit, started_at, completed_at, updated_at,
   verification_status, verification_json, failure_code, failure_phase, recovery_action,
-  project_id, work_item_id, origin, trigger_kind, parent_run_id,
+  project_id, origin, trigger_kind, parent_run_id,
   next_action, needs_user, context_trace_id, completion_verdict, completion_verdict_source, correction_text,
-  projection_version, projected_at, outcome_id, contract_version, attempt, strategy, judgment_json`;
+  projection_version, projected_at, task_id, contract_version, attempt, strategy, judgment_json`;
 
 export function startExecutionReceipt(input: {
   runId: string;
@@ -230,19 +227,19 @@ export function startExecutionReceipt(input: {
 }): ExecutionReceipt {
   const now = input.now ?? Date.now();
   runSqliteWriteTransaction((db) => {
-    const previousAttempt = input.context?.outcomeId
+    const previousAttempt = input.context?.taskId
       ? (db.prepare(
-          'SELECT COALESCE(MAX(attempt), 0) AS attempt FROM execution_receipts WHERE outcome_id = ?',
-        ).get(input.context.outcomeId) as { attempt: number }).attempt
+          'SELECT COALESCE(MAX(attempt), 0) AS attempt FROM execution_receipts WHERE task_id = ?',
+        ).get(input.context.taskId) as { attempt: number }).attempt
       : 0;
     const attempt = input.attempt ?? previousAttempt + 1;
     const strategy = input.strategy ?? (attempt === 1 ? 'primary' : `continuation_${attempt}`);
     db.prepare(
       `INSERT INTO execution_receipts (
         run_id, session_key, channel, objective, status, contract_json, started_at, updated_at,
-        project_id, work_item_id, origin, trigger_kind, parent_run_id, context_trace_id,
-        outcome_id, contract_version, attempt, strategy
-      ) VALUES (?, ?, ?, ?, 'running', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        project_id, origin, trigger_kind, parent_run_id, context_trace_id,
+        task_id, contract_version, attempt, strategy
+      ) VALUES (?, ?, ?, ?, 'running', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       input.runId,
       input.sessionKey,
@@ -252,12 +249,11 @@ export function startExecutionReceipt(input: {
       now,
       now,
       input.context?.projectId ?? null,
-      input.context?.workItemId ?? null,
       input.context?.origin ?? null,
       input.context?.triggerKind ?? null,
       input.context?.parentRunId ?? null,
       input.context?.contextTraceId ?? null,
-      input.context?.outcomeId ?? null,
+      input.context?.taskId ?? null,
       input.contractVersion ?? null,
       attempt,
       strategy,
@@ -435,7 +431,7 @@ export function updateExecutionReceipt(input: {
 }
 
 type ExecutionReceiptFeedbackInput = {
-  outcome: ExecutionFeedbackOutcome;
+  rating: ExecutionFeedbackRating;
   reason?: string;
   needsCorrection?: boolean;
   supportFit?: boolean;
@@ -447,10 +443,10 @@ function persistExecutionReceiptFeedback(runId: string, input: ExecutionReceiptF
   runSqliteWriteTransaction((db) => {
     db.prepare(
       `UPDATE execution_receipts
-       SET feedback_outcome = ?, feedback_reason = ?, needs_correction = ?, support_fit = ?, updated_at = ?
+       SET feedback_rating = ?, feedback_reason = ?, needs_correction = ?, support_fit = ?, updated_at = ?
        WHERE run_id = ?`,
     ).run(
-      input.outcome,
+      input.rating,
       input.reason ?? null,
       input.needsCorrection === undefined ? null : Number(input.needsCorrection),
       input.supportFit === undefined ? null : Number(input.supportFit),
@@ -501,18 +497,17 @@ export function findExecutionReceiptForAssistant(
 }
 
 export function listExecutionReceipts(input: {
-  outcomeId?: string;
+  taskId?: string;
   sessionKey?: string;
   projectId?: string;
-  workItemId?: string;
   limit?: number;
 } = {}): ExecutionReceipt[] {
   const limit = Math.max(1, Math.min(100, Math.floor(input.limit ?? 50)));
   const filters: string[] = [];
   const values: Array<string | number> = [];
-  if (input.outcomeId) {
-    filters.push('outcome_id = ?');
-    values.push(input.outcomeId);
+  if (input.taskId) {
+    filters.push('task_id = ?');
+    values.push(input.taskId);
   }
   if (input.sessionKey) {
     filters.push('session_key = ?');
@@ -521,10 +516,6 @@ export function listExecutionReceipts(input: {
   if (input.projectId) {
     filters.push('project_id = ?');
     values.push(input.projectId);
-  }
-  if (input.workItemId) {
-    filters.push('work_item_id = ?');
-    values.push(input.workItemId);
   }
   const where = filters.length > 0 ? `WHERE ${filters.join(' AND ')}` : '';
   const rows = getSqliteDatabase()
@@ -541,8 +532,8 @@ export function summarizeExecutionReceipts(): ExecutionReceiptMetrics {
         SUM(CASE WHEN status != 'running' THEN 1 ELSE 0 END) AS completed,
         SUM(CASE WHEN status = 'succeeded' THEN 1 ELSE 0 END) AS succeeded,
         SUM(CASE WHEN verification_status = 'passed' THEN 1 ELSE 0 END) AS verified,
-        SUM(CASE WHEN feedback_outcome = 'helpful' THEN 1 ELSE 0 END) AS helpful,
-        SUM(CASE WHEN feedback_outcome = 'not_helpful' THEN 1 ELSE 0 END) AS not_helpful,
+        SUM(CASE WHEN feedback_rating = 'helpful' THEN 1 ELSE 0 END) AS helpful,
+        SUM(CASE WHEN feedback_rating = 'not_helpful' THEN 1 ELSE 0 END) AS not_helpful,
         SUM(CASE WHEN support_fit = 1 THEN 1 ELSE 0 END) AS support_fit,
         SUM(CASE WHEN support_fit IS NOT NULL THEN 1 ELSE 0 END) AS support_fit_rated
        FROM execution_receipts`,

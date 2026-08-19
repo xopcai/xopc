@@ -154,8 +154,7 @@
     "noContextRefs": "No bound context recorded.",
     "contextRefKinds": {
       "project": "Project",
-      "outcome": "Outcome",
-      "work_item": "Work item",
+      "task": "Task",
       "session": "Session",
       "attachment": "Attachment",
       "memory": "Memory"
@@ -165,8 +164,7 @@
     "noWritebackTargets": "No writeback targets recorded.",
     "writebackTargetKinds": {
       "project": "Project",
-      "outcome": "Outcome",
-      "work_item": "Work item"
+      "task": "Task"
     },
     "writebackModes": {
       "record": "record",
@@ -312,7 +310,7 @@
       "argAttendees": "Attendees",
       "argAttendeesPlaceholder": "Who is involved?",
       "argMeetingGoal": "Goal",
-      "argMeetingGoalPlaceholder": "What outcome do you want from this meeting?",
+      "argMeetingGoalPlaceholder": "What task do you want from this meeting?",
       "argWins": "Wins this week",
       "argWinsPlaceholder": "What went well? Ship, revenue, learning…",
       "argBlockers": "Blockers",
@@ -369,8 +367,8 @@
     "rawJsonInvalid": "Enter a JSON object.",
     "booleanTrue": "True",
     "booleanFalse": "False",
-    "outcomeArtifacts": "Artifacts",
-    "outcomeFollowUps": "Follow-ups",
+    "taskArtifacts": "Artifacts",
+    "taskFollowUps": "Follow-ups",
     "downloadArtifact": "Download",
     "downloadingArtifact": "Downloading…",
     "startFollowUp": "Open in Chat",

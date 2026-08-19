@@ -16,7 +16,7 @@ import {
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { ContextProviderRegistry } from '../execution/context.js';
 import { ProactiveEventService } from '../service.js';
-import { OutcomeExecutionService } from '../../work/index.js';
+import { TaskExecutionService } from '../../tasks/index.js';
 
 describe('proactive context resolver', () => {
   let stateDir: string;
@@ -138,12 +138,12 @@ describe('proactive context resolver', () => {
   });
 
   it('resolves internal objects and only referenceable user understanding as evidence', async () => {
-    const execution = new OutcomeExecutionService().create({
+    const execution = new TaskExecutionService().create({
       objective: 'Ship the proactive foundation', agentId: 'main', priority: 'high', source: 'api',
     });
     getSqliteDatabase().prepare(
-      `UPDATE outcomes SET user_status = 'needs_user', internal_status = 'blocked' WHERE outcome_id = ?`,
-    ).run(execution.outcomeId);
+      `UPDATE tasks SET status = 'blocked' WHERE task_id = ?`,
+    ).run(execution.taskId);
     for (const [id, disclosurePolicy] of [
       ['memory-referenceable', 'referenceable'],
       ['memory-guarded', 'ask_before_reference'],
@@ -166,14 +166,14 @@ describe('proactive context resolver', () => {
     }
     const events = new ProactiveEventService(() => []);
     const event = events.publish({
-      type: 'outcome.status_changed.v1',
+      type: 'task.status_changed.v1',
       schemaVersion: 1,
-      source: { kind: 'internal', id: 'outcomes' },
-      subject: { kind: 'outcome', id: execution.outcomeId },
+      source: { kind: 'internal', id: 'tasks' },
+      subject: { kind: 'task', id: execution.taskId },
       actor: { kind: 'system' },
       scope: { workspaceId: '/workspace', agentId: 'main' },
       occurredAt: '2026-08-15T01:00:00.000Z',
-      dedupeKey: `${execution.outcomeId}:blocked`,
+      dedupeKey: `${execution.taskId}:blocked`,
       sensitivity: 'personal',
       payload: { status: 'blocked' },
     }).event;
@@ -185,7 +185,7 @@ describe('proactive context resolver', () => {
     });
     expect(resolved.content.internal_objects).toMatchObject({
       objects: [expect.objectContaining({
-        evidenceId: `outcome:${execution.outcomeId}`,
+        evidenceId: `task:${execution.taskId}`,
         objective: 'Ship the proactive foundation',
       })],
     });
@@ -198,7 +198,7 @@ describe('proactive context resolver', () => {
     expect(JSON.stringify(resolved.content)).not.toContain('Do not reveal this.');
     expect(resolved.evidenceIds).toEqual(expect.arrayContaining([
       event.id,
-      `outcome:${execution.outcomeId}`,
+      `task:${execution.taskId}`,
       'memory:memory-referenceable',
     ]));
   });

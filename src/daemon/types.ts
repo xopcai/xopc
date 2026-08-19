@@ -67,10 +67,10 @@ export interface GatewayServiceState {
 
 // ─── Restart ───
 
-export type GatewayServiceRestartOutcome = 'restarted' | 'scheduled';
+export type GatewayServiceRestartTask = 'restarted' | 'scheduled';
 
 export interface GatewayServiceRestartResult {
-  outcome: GatewayServiceRestartOutcome;
+  task: GatewayServiceRestartTask;
 }
 
 // ─── Start Repair ───
@@ -85,14 +85,14 @@ export interface GatewayServiceStartRepairIssue {
   message: string;
 }
 
-export type GatewayServiceStartOutcome =
+export type GatewayServiceStartTask =
   | 'started'
   | 'scheduled'
   | 'missing-install'
   | 'repair-required';
 
 export interface GatewayServiceStartResult {
-  outcome: GatewayServiceStartOutcome;
+  task: GatewayServiceStartTask;
   state: GatewayServiceState;
   issues?: GatewayServiceStartRepairIssue[];
 }
@@ -147,7 +147,7 @@ export interface GatewayService {
   /** Stop service */
   stop: (args: GatewayServiceControlArgs) => Promise<void>;
 
-  /** Restart service (returns outcome for restart health checks) */
+  /** Restart service (returns task for restart health checks) */
   restart: (args: GatewayServiceControlArgs) => Promise<GatewayServiceRestartResult>;
 
   /** Check if service is loaded/installed */

@@ -15,8 +15,8 @@ const delivery: ProductDeliveryEnvelope = {
   version: 1,
   operation: 'updated',
   primary: {
-    kind: 'work_item',
-    id: 'work/1',
+    kind: 'task',
+    id: 'task/1',
     title: 'Ship inline delivery',
     capabilities: ['open', 'edit', 'continue_in_chat'],
   },
@@ -30,7 +30,7 @@ describe('mobile product delivery', () => {
       name: 'xopc_use',
       status: 'done',
       result: {
-        content: [{ type: 'text', text: 'Updated work item.' }],
+        content: [{ type: 'text', text: 'Updated task.' }],
         details: { delivery },
       },
     })).toEqual(delivery);
@@ -42,17 +42,17 @@ describe('mobile product delivery', () => {
       id: 'tool-2',
       name: 'xopc_use',
       status: 'done',
-      result: appendProductDeliveryText('Updated work item.', delivery),
+      result: appendProductDeliveryText('Updated task.', delivery),
     })).toEqual(delivery);
   });
 
   it('maps native and fallback destinations predictably', () => {
-    expect(mobileProductRoute(delivery.primary!)).toBe('/work/work%2F1');
+    expect(mobileProductRoute(delivery.primary!)).toBe('/tasks/task%2F1');
     expect(mobileProductRoute({
-      kind: 'outcome',
-      id: 'outcome-1',
-    })).toBe('/outcomes/outcome-1');
+      kind: 'task',
+      id: 'task-1',
+    })).toBe('/tasks/task-1');
     expect(mobileRouteFromProductDeepLink(productReferenceDeepLink(delivery.primary!)))
-      .toBe('/work/work%2F1');
+      .toBe('/tasks/task%2F1');
   });
 });

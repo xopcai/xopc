@@ -36,7 +36,7 @@ describe('runSetup pipeline', () => {
     const configPath = makeTempConfig({});
     cleanup.push(configPath);
 
-    const outcome = await runSetup({
+    const task = await runSetup({
       configPath,
       options: { dryRun: false, json: true },
       mutator: {
@@ -55,10 +55,10 @@ describe('runSetup pipeline', () => {
       },
     });
 
-    expect(outcome.ok).toBe(true);
-    expect(outcome.action).toBe('add');
-    expect(outcome.changedPaths.some((p) => p === 'providers' || p.startsWith('providers.'))).toBe(true);
-    expect(outcome.dryRun).toBe(false);
+    expect(task.ok).toBe(true);
+    expect(task.action).toBe('add');
+    expect(task.changedPaths.some((p) => p === 'providers' || p.startsWith('providers.'))).toBe(true);
+    expect(task.dryRun).toBe(false);
     expect(process.exitCode).toBe(0);
 
     const saved = JSON.parse(readFileSync(configPath, 'utf8'));
@@ -70,7 +70,7 @@ describe('runSetup pipeline', () => {
     cleanup.push(configPath);
     const before = readFileSync(configPath, 'utf8');
 
-    const outcome = await runSetup({
+    const task = await runSetup({
       configPath,
       options: { dryRun: true, json: true },
       mutator: {
@@ -85,9 +85,9 @@ describe('runSetup pipeline', () => {
       },
     });
 
-    expect(outcome.ok).toBe(true);
-    expect(outcome.dryRun).toBe(true);
-    expect(outcome.changedPaths.some((p) => p === 'providers' || p.startsWith('providers.'))).toBe(true);
+    expect(task.ok).toBe(true);
+    expect(task.dryRun).toBe(true);
+    expect(task.changedPaths.some((p) => p === 'providers' || p.startsWith('providers.'))).toBe(true);
     expect(readFileSync(configPath, 'utf8')).toBe(before);
   });
 
@@ -97,7 +97,7 @@ describe('runSetup pipeline', () => {
     });
     cleanup.push(configPath);
 
-    const outcome = await runSetup({
+    const task = await runSetup({
       configPath,
       options: { dryRun: false, json: true },
       mutator: {
@@ -112,16 +112,16 @@ describe('runSetup pipeline', () => {
       },
     });
 
-    expect(outcome.ok).toBe(true);
-    expect(outcome.action).toBe('noop');
-    expect(outcome.changedPaths).toHaveLength(0);
+    expect(task.ok).toBe(true);
+    expect(task.action).toBe('noop');
+    expect(task.changedPaths).toHaveLength(0);
   });
 
   it('surfaces SetupValidationError as structured errors', async () => {
     const configPath = makeTempConfig({});
     cleanup.push(configPath);
 
-    const outcome = await runSetup({
+    const task = await runSetup({
       configPath,
       options: { dryRun: false, json: true },
       mutator: {
@@ -136,8 +136,8 @@ describe('runSetup pipeline', () => {
       },
     });
 
-    expect(outcome.ok).toBe(false);
-    expect(outcome.errors?.[0]?.path).toBe('providers.openai');
+    expect(task.ok).toBe(false);
+    expect(task.errors?.[0]?.path).toBe('providers.openai');
     expect(process.exitCode).toBe(1);
   });
 
@@ -146,7 +146,7 @@ describe('runSetup pipeline', () => {
     cleanup.push(configPath);
     const before = readFileSync(configPath, 'utf8');
 
-    const outcome = await runSetup({
+    const task = await runSetup({
       configPath,
       options: { dryRun: false, json: true },
       mutator: {
@@ -163,8 +163,8 @@ describe('runSetup pipeline', () => {
       },
     });
 
-    expect(outcome.ok).toBe(false);
-    expect(outcome.errors?.length).toBeGreaterThan(0);
+    expect(task.ok).toBe(false);
+    expect(task.errors?.length).toBeGreaterThan(0);
     expect(readFileSync(configPath, 'utf8')).toBe(before);
     expect(process.exitCode).toBe(1);
   });

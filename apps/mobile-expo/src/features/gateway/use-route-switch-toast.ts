@@ -10,7 +10,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { useMessages } from '../../i18n/messages';
 
-import { subscribeProbeOutcome, type ProbeOutcome } from './probe-coordinator';
+import { subscribeProbeTask, type ProbeTask } from './probe-coordinator';
 
 export type RouteSwitchToast = { message: string; key: number } | null;
 
@@ -22,8 +22,8 @@ export function useRouteSwitchToast(): RouteSwitchToast {
   const prevWinnerRef = useRef<'lan' | 'tunnel' | 'none' | null>(null);
 
   useEffect(() => {
-    const unsub = subscribeProbeOutcome((outcome: ProbeOutcome) => {
-      const next = outcome.result.winner;
+    const unsub = subscribeProbeTask((task: ProbeTask) => {
+      const next = task.result.winner;
       const prev = prevWinnerRef.current;
       if (prev != null && (next === 'lan' || next === 'tunnel') && prev !== next) {
         if (next === 'tunnel' && prev === 'lan') {

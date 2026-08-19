@@ -169,8 +169,8 @@ export function formatAutomationRelativeDateTime(
 }
 
 function eventTriggerLabel(trigger: Extract<AutomationTrigger, { kind: 'event' }>, labels: AutomationsMessages): string {
-  if (trigger.eventType === 'outcome.status_changed' && trigger.payloadMatch?.status === 'blocked') {
-    return labels.trigger.outcomeBlockedWhen;
+  if (trigger.eventType === 'task.status_changed' && trigger.payloadMatch?.status === 'blocked') {
+    return labels.trigger.taskBlockedWhen;
   }
   if (trigger.eventType === 'note.created') return labels.trigger.noteCreatedWhen;
   if (trigger.eventType === 'workflow.run.completed' && trigger.payloadMatch?.status === 'failed') {

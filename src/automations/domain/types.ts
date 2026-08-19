@@ -220,7 +220,7 @@ export interface AutomationDeps {
   onRunCompleted?: (run: AutomationRun) => void;
 }
 
-export interface AutomationActionOutcome {
+export interface AutomationActionTask {
   status: 'succeeded' | 'failed' | 'timeout' | 'cancelled';
   summary?: string;
   error?: string;

@@ -16,11 +16,11 @@ import { colors } from '../utils/colors.js';
 import {
   SETUP_EXIT,
   SetupValidationError,
-  emitOutcome,
+  emitTask,
   isPromptCancelled,
   promptSecret,
   runSetup,
-  type SetupOutcome,
+  type SetupTask,
 } from './setup-shared/index.js';
 
 const SEARCH_TYPES = ['brave', 'tavily', 'bing', 'searxng'] as const;
@@ -171,7 +171,7 @@ function createSearchCommand(_ctx: CLIContext): Command {
     .option('--key <value>', 'API key (brave / tavily / bing). Prompts securely if omitted.')
     .option('--url <value>', 'SearXNG instance URL (required for type=searxng)')
     .option('--dry-run', 'Show the change without writing', false)
-    .option('--json', 'Emit a single JSON outcome line', false)
+    .option('--json', 'Emit a single JSON task line', false)
     .action(
       async (
         type: string,
@@ -182,7 +182,7 @@ function createSearchCommand(_ctx: CLIContext): Command {
         const json = Boolean(opts.json);
         const t = type.trim().toLowerCase();
         if (!isSearchType(t)) {
-          const outcome: SetupOutcome = {
+          const task: SetupTask = {
             ok: false,
             action: 'add',
             domain: 'search',
@@ -195,7 +195,7 @@ function createSearchCommand(_ctx: CLIContext): Command {
               },
             ],
           };
-          emitOutcome(outcome, json);
+          emitTask(task, json);
           process.exitCode = SETUP_EXIT.ERROR;
           return;
         }
@@ -203,7 +203,7 @@ function createSearchCommand(_ctx: CLIContext): Command {
         const entry: SearchProviderEntry = { type: t };
         if (t === 'searxng') {
           if (!opts.url) {
-            emitOutcome(
+            emitTask(
               {
                 ok: false,
                 action: 'add',
@@ -226,7 +226,7 @@ function createSearchCommand(_ctx: CLIContext): Command {
               key = await promptSecret(`API key for ${t}:`);
             } catch (error) {
               if (isPromptCancelled(error)) {
-                emitOutcome(
+                emitTask(
                   {
                     ok: false,
                     action: 'add',
@@ -267,7 +267,7 @@ function createSearchCommand(_ctx: CLIContext): Command {
     .command('remove <type>')
     .description('Remove a search provider entry')
     .option('--dry-run', 'Show the change without writing', false)
-    .option('--json', 'Emit a single JSON outcome line', false)
+    .option('--json', 'Emit a single JSON task line', false)
     .action(
       async (
         type: string,
@@ -276,7 +276,7 @@ function createSearchCommand(_ctx: CLIContext): Command {
       ) => {
         const t = type.trim().toLowerCase();
         if (!isSearchType(t)) {
-          emitOutcome(
+          emitTask(
             {
               ok: false,
               action: 'remove',

@@ -85,12 +85,12 @@ The validator rejects unknown evidence IDs, observations without evidence, more 
 
 ### User job
 
-“Tell me early when a project commitment is credibly at risk, explain the evidence, and ask me only for decisions that can change the outcome.”
+“Tell me early when a project commitment is credibly at risk, explain the evidence, and ask me only for decisions that can change the task.”
 
 ### Triggers
 
 - project target date, status, owner, or scope changed;
-- milestone or high-priority work item changed status/date/owner;
+- milestone or high-priority task changed status/date/owner;
 - dependency added, removed, blocked, or overdue;
 - material project activity burst after debounce;
 - fallback daily scan for followed projects with an upcoming commitment.
@@ -99,8 +99,8 @@ Routine title/body edits, comments without status implications, and activity ins
 
 ### Context
 
-- project metadata, stated outcome, target dates, owners, status;
-- milestones and open/high-priority work items;
+- project metadata, stated task, target dates, owners, status;
+- milestones and open/high-priority tasks;
 - dependency graph and blocking reasons;
 - recent activity since the previous successful run;
 - prior active project insights and user decisions;
@@ -110,7 +110,7 @@ Context is bounded by project scope, lookback window, record limits, and source 
 
 ### Scenario base analysis
 
-1. Identify a commitment or expected outcome.
+1. Identify a commitment or expected task.
 2. Identify a material change since the previous run.
 3. Test schedule, scope, dependency, capacity, and ownership risk hypotheses.
 4. Reject risks based only on absence of activity unless the project explicitly expects activity in that interval.
@@ -144,7 +144,7 @@ Context is bounded by project scope, lookback window, record limits, and source 
 
 ### Triggers
 
-- work item enters/leaves blocked state;
+- task enters/leaves blocked state;
 - due date, owner, priority, or dependency changes;
 - prerequisite completes or slips;
 - repeated failed attempts or inactivity following an explicit blocked signal;
@@ -152,8 +152,8 @@ Context is bounded by project scope, lookback window, record limits, and source 
 
 ### Context
 
-- target work item and before/after event fields;
-- parent project/outcome and due date;
+- target task and before/after event fields;
+- parent project/task and due date;
 - prerequisites/dependents and their current states;
 - owner/assignee and explicit blocker text;
 - relevant recent activity and sessions;
@@ -200,17 +200,17 @@ Individual retryable attempts remain operational telemetry until policy says use
 
 ### Context
 
-- automation definition, intended outcome, schedule, and owner;
+- automation definition, intended task, schedule, and owner;
 - run attempts, step/tool summaries, bounded errors, and outputs;
 - last successful run and downstream consumers;
-- related project/work items and commitments;
+- related project/tasks and commitments;
 - existing active failure insight and previous recovery decision.
 
 ### Scenario base analysis
 
 1. Classify transient, configuration, authorization, data, dependency, or unknown failure.
 2. Determine what completed and what did not; never assume atomicity.
-3. Connect the failure to a user outcome or explicitly state that no user impact is found.
+3. Connect the failure to a user task or explicitly state that no user impact is found.
 4. Avoid exposing raw secrets/errors; provide a bounded cause.
 5. Offer retry, repair configuration, defer, or investigate only when those options are supported.
 
@@ -271,7 +271,7 @@ These are architecture-stage starting thresholds, not permanent product targets.
 
 Rollout proceeds `historical replay -> shadow -> record-only -> Inbox cohort -> push cohort`.
 
-Primary outcome metrics:
+Primary task metrics:
 
 - useful/not-useful ratio by scenario and prompt revision;
 - decision completion and downstream action completion;

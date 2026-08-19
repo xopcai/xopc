@@ -7,9 +7,8 @@ import type { AuthenticatedRouteDeps } from './deps.js';
 const ACTIVITY_OBJECT_KINDS = new Set<ActivityObjectKind>([
   'project',
   'note',
-  'work_item',
   'session',
-  'outcome',
+  'task',
   'workflow_run',
   'automation',
 ]);

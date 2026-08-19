@@ -110,13 +110,13 @@ export async function dualFireFetch(
     { kind: 'tunnel', url: tunnel, controller: new AbortController(), startedAt: Date.now() },
   ];
 
-  type Outcome =
+  type Task =
     | { ok: true; res: Response; attempt: RouteAttempt }
     | { ok: false; err: unknown; attempt: RouteAttempt };
 
   const fired = attempts.map(
     (attempt) =>
-      new Promise<Outcome>((resolve) => {
+      new Promise<Task>((resolve) => {
         fetch(joinUrl(attempt.url, path), {
           ...init,
           headers,
@@ -129,50 +129,50 @@ export async function dualFireFetch(
 
   return new Promise<Response>((resolveOuter, rejectOuter) => {
     let settled = false;
-    const settledOutcomes: Outcome[] = [];
+    const settledTasks: Task[] = [];
     const timeout = setTimeout(() => {
       if (settled) return;
       settled = true;
       attempts.forEach((a) => a.controller.abort());
-      rejectOuter(buildFailureError(settledOutcomes, attempts));
+      rejectOuter(buildFailureError(settledTasks, attempts));
     }, raceTimeoutMs);
 
     const finishLoss = () => {
-      if (settled || settledOutcomes.length < attempts.length) return;
+      if (settled || settledTasks.length < attempts.length) return;
       settled = true;
       clearTimeout(timeout);
-      const ok2xx = settledOutcomes.find((o) => o.ok && o.res.ok);
+      const ok2xx = settledTasks.find((o) => o.ok && o.res.ok);
       if (ok2xx && ok2xx.ok) {
         recordWinner(activeGatewayId, ok2xx.attempt);
         notifyUnauthorizedIfNeeded(ok2xx.res.status);
         resolveOuter(ok2xx.res);
         return;
       }
-      const okNon2xx = settledOutcomes.find((o) => o.ok);
+      const okNon2xx = settledTasks.find((o) => o.ok);
       if (okNon2xx && okNon2xx.ok) {
         // Both reachable but neither 2xx — pick the first; surface 401 / 5xx.
         notifyUnauthorizedIfNeeded(okNon2xx.res.status);
         resolveOuter(okNon2xx.res);
         return;
       }
-      rejectOuter(buildFailureError(settledOutcomes, attempts));
+      rejectOuter(buildFailureError(settledTasks, attempts));
     };
 
     for (const promise of fired) {
-      promise.then((outcome) => {
+      promise.then((task) => {
         if (settled) return;
-        if (outcome.ok && outcome.res.ok) {
+        if (task.ok && task.res.ok) {
           settled = true;
           clearTimeout(timeout);
           attempts
-            .filter((a) => a !== outcome.attempt)
+            .filter((a) => a !== task.attempt)
             .forEach((a) => a.controller.abort());
-          recordWinner(activeGatewayId, outcome.attempt);
-          notifyUnauthorizedIfNeeded(outcome.res.status);
-          resolveOuter(outcome.res);
+          recordWinner(activeGatewayId, task.attempt);
+          notifyUnauthorizedIfNeeded(task.res.status);
+          resolveOuter(task.res);
           return;
         }
-        settledOutcomes.push(outcome);
+        settledTasks.push(task);
         finishLoss();
       });
     }
@@ -235,16 +235,16 @@ async function singleFetch(
   }
 }
 
-type Outcome =
+type Task =
   | { ok: true; res: Response; attempt: RouteAttempt }
   | { ok: false; err: unknown; attempt: RouteAttempt };
 
 function buildFailureError(
-  outcomes: Outcome[],
+  tasks: Task[],
   attempts: RouteAttempt[],
 ): GatewayConnectivityError {
-  const lan = outcomes.find((o) => o.attempt.kind === 'lan');
-  const tunnel = outcomes.find((o) => o.attempt.kind === 'tunnel');
+  const lan = tasks.find((o) => o.attempt.kind === 'lan');
+  const tunnel = tasks.find((o) => o.attempt.kind === 'tunnel');
 
   const lanRes = lan?.ok ? lan.res : null;
   const tunnelRes = tunnel?.ok ? tunnel.res : null;

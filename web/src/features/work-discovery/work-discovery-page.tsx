@@ -758,8 +758,8 @@ export function WorkDiscoveryPage() {
                     <span className="rounded-full bg-surface-muted px-2.5 py-1 text-fg-muted">{riskLabel(primarySuggestion.risk)}</span>
                   </div>
                   <div className="mt-4 rounded-xl bg-surface-base px-4 py-3">
-                    <p className="text-xs font-medium text-fg-muted">{copy.expectedOutcome}</p>
-                    <p className="mt-1 text-sm leading-6 text-fg">{primarySuggestion.expectedOutcome}</p>
+                    <p className="text-xs font-medium text-fg-muted">{copy.expectedTask}</p>
+                    <p className="mt-1 text-sm leading-6 text-fg">{primarySuggestion.expectedTask}</p>
                   </div>
                   <div className="mt-5 flex flex-wrap gap-2">
                     <Button className="h-10 bg-accent px-4 text-white hover:bg-accent-hover" onClick={() => void handleSuggestion(primarySuggestion, false)}>{copy.startRecommendedAction}</Button>
@@ -779,7 +779,7 @@ export function WorkDiscoveryPage() {
                     {alternativeSuggestions.map((suggestion) => (
                       <button key={suggestion.id} type="button" className="flex w-full items-start gap-3 py-4 text-left" onClick={() => void handleSuggestion(suggestion, true)}>
                         <ChevronRight className="mt-0.5 size-4 shrink-0 text-fg-subtle" />
-                        <span><span className="block text-sm font-medium text-fg">{suggestion.title}</span><span className="mt-1 block text-xs leading-5 text-fg-muted">{suggestion.expectedOutcome}</span></span>
+                        <span><span className="block text-sm font-medium text-fg">{suggestion.title}</span><span className="mt-1 block text-xs leading-5 text-fg-muted">{suggestion.expectedTask}</span></span>
                       </button>
                     ))}
                   </div>

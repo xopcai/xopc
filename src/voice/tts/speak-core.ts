@@ -253,7 +253,7 @@ export async function speak(
     if (typeof resolved.plugin.synthesize !== 'function') {
       attempts.push({
         provider: resolved.providerId,
-        outcome: 'skipped',
+        task: 'skipped',
         reasonCode: 'not_configured',
         latencyMs: Date.now() - startTime,
         error: `Provider "${resolved.providerId}" does not implement synthesize()`,
@@ -278,7 +278,7 @@ export async function speak(
       const durationSeconds = (Date.now() - startTime) / 1000;
       attempts.push({
         provider: resolved.providerId,
-        outcome: 'success',
+        task: 'success',
         reasonCode: 'success',
         latencyMs: Date.now() - startTime,
       });
@@ -312,7 +312,7 @@ export async function speak(
       const errorMsg = error instanceof Error ? error.message : String(error);
       attempts.push({
         provider: resolved.providerId,
-        outcome: 'failed',
+        task: 'failed',
         reasonCode,
         latencyMs,
         error: errorMsg,
@@ -367,7 +367,7 @@ export async function speakWithProvider(
     attempts: [
       {
         provider: providerName,
-        outcome: 'success',
+        task: 'success',
         reasonCode: 'success',
         latencyMs: Date.now() - startTime,
       },

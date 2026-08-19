@@ -28,7 +28,7 @@ bus, and the agent runtime persists all session state through SQLite.
 |-------|-----------|----------------|
 | CLI and service bootstrap | `src/cli/`, `src/daemon/`, `electron/` | Starts foreground gateway, installs or controls a background service, runs CLI/TUI turns, and hosts the Electron shell. |
 | HTTP gateway | `src/gateway/server.ts`, `src/gateway/hono/` | Hono server, auth, CORS/CSRF checks, rate limits, durable session-input REST routes, `/api/events` broadcast SSE, run-resume SSE, and static Web console serving. |
-| Gateway composition root | `src/gateway/service.ts` | Owns `MessageBus`, `ChannelManager`, `AgentService`, `SessionIndex`, automations, notes, projects, goals, workflows, extension loading, Gateway SSE hub, and config hot reload. |
+| Gateway composition root | `src/gateway/service.ts` | Owns `MessageBus`, `ChannelManager`, `AgentService`, `SessionIndex`, tasks, automations, notes, projects, workflows, extension loading, Gateway SSE hub, and config hot reload. |
 | Agent runtime | `src/agent/service.ts`, `src/agent/embedded/`, `src/agent/orchestration/` | Builds per-session agents, prompts, tools, memory, skills, MCP tools, model selection, streaming events, compaction, and direct/webchat turn dispatch. |
 | Channels | `src/channels/`, `extensions/telegram`, `extensions/weixin`, `extensions/feishu` | Channel plugins receive external messages, normalize routing/session keys, publish inbound bus messages, and send outbound replies. |
 | Extension runtime | `src/extensions/`, `extensions/*` | Loads extension manifests and code by activation plan, then registers hooks, tools, channel plugins, gateway methods, and extension UI assets. |
@@ -63,12 +63,13 @@ CLI commands are registered through `src/cli/registry.ts`. The `agent` and `tui`
 commands can run direct turns without the HTTP server, while `gateway` starts the
 same `GatewayService`/Hono stack used by the Web console and mobile app.
 
-### Automations, Goals, Heartbeat, and Workflows
+### Tasks, Automations, Heartbeat, and Workflows
 
-`GatewayService` wires `AutomationService`, `HeartbeatService`, `GoalRunner`,
-`PersistentGoalService`, and `WorkflowRunService` around the same `AgentService`
-and `SessionStore`. Scheduled or event-triggered work is executed as agent turns
-with normal transcript persistence and normal Gateway SSE status events.
+`GatewayService` wires the Task aggregate and execution coordinator,
+`AutomationService`, `HeartbeatService`, and `WorkflowRunService` around the same
+`AgentService` and `SessionStore`. An Task owns the work state; workflows and
+automations are execution capabilities linked to it. Scheduled or event-triggered
+work executes as normal agent turns with transcript persistence and Gateway SSE events.
 
 ## Agent Runtime
 
@@ -79,9 +80,9 @@ composition root for:
 - `ModelManager`: default model, per-session overrides, typed model roles, and resolved model metadata.
 - `TurnDispatcher`: direct, streaming, webchat steering, clarify, and SSE event injection.
 - `AgentOrchestrator`: turn execution, lifecycle events, feedback, persistence, and compaction.
-- `OutboundCoordinator`: final response publishing, channel hooks, and post-turn goal handling.
+- `OutboundCoordinator`: final response publishing and channel hooks.
 - `SessionConfigService`, `SessionHydrator`, and `SessionInspector`: per-session model/thinking/workspace config, hydration, compaction, and context reports.
-- `PersistentGoalService`: `/goal` continuation scheduling and post-turn verdicts.
+- `TaskRunCoordinator` and `TaskRepository`: durable execution, verification, next action, and the single work state machine.
 - Prompt, memory, skills, tools, media, MCP tools, loop guards, self-verify, request limits, and progress feedback modules.
 
 The embedded turn path uses `runXopcEmbeddedTurn`, which acquires or reuses an
@@ -144,8 +145,8 @@ Core authenticated routes are registered first:
 - search.
 
 Additional route groups are mounted through lazy route bundles and include
-agents, automations, browser, channels, connectors/MCP, config, goals, logs,
-models, notes, shares, skills, update, voice, workflows, workspace, and related
+agents, automations, browser, channels, connectors/MCP, config, home, tasks, logs,
+models, notes, projects, shares, skills, update, voice, workflows, workspace, and related
 settings surfaces.
 
 Broadcast events flow through `GatewaySseHub` and `/api/events`. Agent run

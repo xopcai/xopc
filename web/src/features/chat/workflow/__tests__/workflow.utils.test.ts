@@ -9,7 +9,7 @@ import {
   formatAgentElapsed,
   agentElapsedMs,
   formatDuration,
-  isWorkflowFailureOutcome,
+  isWorkflowFailureTask,
   isWorkflowToolBlock,
   resolveCardStatus,
   rollupPhases,
@@ -71,10 +71,10 @@ describe('resolveCardStatus', () => {
   });
 });
 
-describe('isWorkflowFailureOutcome', () => {
+describe('isWorkflowFailureTask', () => {
   it('detects structured graph validation errors', () => {
     expect(
-      isWorkflowFailureOutcome(
+      isWorkflowFailureTask(
         mkBlock({
           status: 'done',
           result: JSON.stringify({

@@ -88,9 +88,8 @@ export type ProjectFileSearchEntry = {
 export type ProjectActivityObjectKind =
   | 'project'
   | 'note'
-  | 'work_item'
   | 'session'
-  | 'outcome'
+  | 'task'
   | 'workflow_run'
   | 'automation';
 

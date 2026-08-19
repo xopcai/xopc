@@ -13,10 +13,10 @@ import {
   type RouteReachabilityInfo,
 } from './check-gateway-routes';
 import {
-  getLastProbeOutcome,
+  getLastProbeTask,
   runProbeRound,
-  subscribeProbeOutcome,
-  type ProbeOutcome,
+  subscribeProbeTask,
+  type ProbeTask,
 } from './probe-coordinator';
 
 function notConfigured(): RouteReachabilityInfo {
@@ -31,19 +31,19 @@ function unreachable(): RouteReachabilityInfo {
   return { status: 'unreachable' };
 }
 
-function fromOutcome(
-  outcome: ProbeOutcome | null,
+function fromTask(
+  task: ProbeTask | null,
   hasLan: boolean,
   hasTunnel: boolean,
 ): GatewayRouteReachability {
-  if (!outcome) {
+  if (!task) {
     return {
       lan: hasLan ? checking() : notConfigured(),
       tunnel: hasTunnel ? checking() : { status: 'unreachable', reason: 'invalid_url' },
     };
   }
-  const lanProbe = outcome.result.lan;
-  const tunnelProbe = outcome.result.tunnel;
+  const lanProbe = task.result.lan;
+  const tunnelProbe = task.result.tunnel;
   return {
     lan: hasLan
       ? lanProbe
@@ -84,12 +84,12 @@ export function useGatewayRouteReachability(enabled: boolean): {
   const hasTunnel = enabled && Boolean(baseUrl.trim());
   const hasLan = Boolean(lanUrl?.trim());
 
-  const [outcome, setOutcome] = useState<ProbeOutcome | null>(() => getLastProbeOutcome());
+  const [task, setTask] = useState<ProbeTask | null>(() => getLastProbeTask());
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!enabled || !baseUrl.trim()) return;
-    const unsub = subscribeProbeOutcome((next) => setOutcome(next));
+    const unsub = subscribeProbeTask((next) => setTask(next));
     void runProbeRound('initial');
     return unsub;
   }, [enabled, baseUrl]);
@@ -111,7 +111,7 @@ export function useGatewayRouteReachability(enabled: boolean): {
   }, []);
 
   return {
-    reachability: fromOutcome(outcome, hasLan, hasTunnel),
+    reachability: fromTask(task, hasLan, hasTunnel),
     checking: busy,
     recheck,
   };

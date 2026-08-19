@@ -108,7 +108,7 @@ describe('understanding correction attribution', () => {
     const previous = listMemoryTraceEvents({ sessionKey, limit: 10 })
       .find((trace) => trace.traceId === previousTraceId);
     expect(previous?.feedback).toMatchObject({
-      outcome: 'not_helpful',
+      rating: 'not_helpful',
       source: 'system',
       reason: 'detected_explicit_user_correction',
     });

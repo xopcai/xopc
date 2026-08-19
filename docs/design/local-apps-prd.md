@@ -65,7 +65,7 @@ Typical jobs include:
 3. **The installed app is stable.** Draft work never replaces a working release until validation succeeds and the user confirms the update.
 4. **Permissions are part of the design.** Show why each permission is needed and highlight only the change on later updates.
 5. **The Project remains reachable.** Every app has a clear “Continue developing” action.
-6. **Technical depth is progressive.** Default views show outcomes and recovery actions; source, diffs, tests, and logs remain available.
+6. **Technical depth is progressive.** Default views show tasks and recovery actions; source, diffs, tests, and logs remain available.
 
 ## End-to-end Journey
 
@@ -145,7 +145,7 @@ Raw logs are collapsed unless a failure requires them. A preview is always ident
 
 ### 5. Review Permissions
 
-Before installation, show a concise permission review grouped by user outcome:
+Before installation, show a concise permission review grouped by user task:
 
 - Saves app data on this device
 - Reads xopc session titles

@@ -19,7 +19,7 @@ const projectRisk: ScenarioRoute = {
   key: 'project_delivery_risk',
   version: 1,
   enabled: true,
-  eventTypes: ['work_item.lifecycle_changed.v1'],
+  eventTypes: ['task.status_changed.v1'],
   condition: { op: 'changed', field: 'payload.status' },
   aggregation: 'project',
   debounceSeconds: 300,
@@ -28,10 +28,10 @@ const projectRisk: ScenarioRoute = {
 
 function event(overrides: Partial<PublishEventInput> = {}): PublishEventInput {
   return {
-    type: 'work_item.lifecycle_changed.v1',
+    type: 'task.status_changed.v1',
     schemaVersion: 1,
-    source: { kind: 'work_items', id: 'local' },
-    subject: { kind: 'work_item', id: 'work-1' },
+    source: { kind: 'tasks', id: 'local' },
+    subject: { kind: 'task', id: 'task-1' },
     actor: { kind: 'user', id: 'user-1' },
     scope: { workspaceId: 'default', projectId: 'project-1' },
     occurredAt: '2026-08-12T02:00:00.000Z',
@@ -79,7 +79,7 @@ describe('proactive event spine', () => {
     const service = new ProactiveEventService(() => [projectRisk]);
     service.publish(event(), new Date('2026-08-12T02:00:01.000Z'));
     service.publish(event({
-      subject: { kind: 'work_item', id: 'work-2' },
+      subject: { kind: 'task', id: 'task-2' },
       dedupeKey: 'work-2:status:1',
     }), new Date('2026-08-12T02:02:00.000Z'));
 
@@ -107,7 +107,7 @@ describe('proactive event spine', () => {
     const service = new ProactiveEventService(() => [projectRisk]);
     service.publish(event(), new Date('2026-08-12T02:00:00.000Z'));
     service.publish(event({
-      subject: { kind: 'work_item', id: 'work-2' },
+      subject: { kind: 'task', id: 'task-2' },
       dedupeKey: 'work-2:status:2',
     }), new Date('2026-08-12T02:31:00.000Z'));
 
@@ -132,7 +132,7 @@ describe('proactive event spine', () => {
 
   it('rejects malformed event types and timestamps before persistence', () => {
     const service = new ProactiveEventService();
-    expect(() => service.publish(event({ type: 'work_item.changed' }))).toThrow(/domain\.event\.vN/);
+    expect(() => service.publish(event({ type: 'task.changed' }))).toThrow(/domain\.event\.vN/);
     expect(() => service.publish(event({ occurredAt: 'not-a-date' }))).toThrow(/ISO timestamp/);
     expect(service.listEvents()).toHaveLength(0);
   });

@@ -18,7 +18,7 @@ describe('memory use audit', () => {
     } satisfies MemoryTraceEventPayload;
     const audit = summarizeMemoryUseAudit([
       { ...base, traceId: 'used', selectedRecordIds: ['memory-1'], feedback: {
-        outcome: 'helpful', source: 'user', createdAt: new Date(0).toISOString(), updatedAt: new Date(0).toISOString(),
+        rating: 'helpful', source: 'user', createdAt: new Date(0).toISOString(), updatedAt: new Date(0).toISOString(),
       } },
       { ...base, traceId: 'skipped', skippedReason: 'no_relevant_memory' },
     ]);

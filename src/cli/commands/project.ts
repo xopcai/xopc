@@ -14,7 +14,7 @@ import {
   isXopcDatabaseOpen,
   openXopcDatabase,
 } from '../../storage/sqlite/index.js';
-import { OutcomeExecutionStateRepository, OutcomeRepository } from '../../work/index.js';
+import { TaskRepository } from '../../tasks/index.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';
 
 function parseStatus(raw: string | undefined): ProjectStatus | undefined {
@@ -35,11 +35,11 @@ function resolveProject(projects: ProjectService, ref: string): Project | null {
   return projects.get(ref) ?? projects.getBySlug(ref);
 }
 
-function formatProject(project: Project & { sessionCount?: number; outcomeCount?: number; activeOutcomeCount?: number }): string {
+function formatProject(project: Project & { sessionCount?: number; taskCount?: number; activeTaskCount?: number }): string {
   const counts = [
     project.sessionCount != null ? `sessions ${project.sessionCount}` : undefined,
-    project.outcomeCount != null ? `outcomes ${project.outcomeCount}` : undefined,
-    project.activeOutcomeCount != null ? `active outcomes ${project.activeOutcomeCount}` : undefined,
+    project.taskCount != null ? `tasks ${project.taskCount}` : undefined,
+    project.activeTaskCount != null ? `active tasks ${project.activeTaskCount}` : undefined,
   ].filter(Boolean).join(' | ');
   const lines = [
     `${project.id} [${project.status}] ${project.name}`,
@@ -101,7 +101,7 @@ function createProjectCommand(ctx: CLIContext): Command {
       .description('Create a project')
       .argument('<name>', 'Project name')
       .option('--description <text>', 'Project description')
-      .option('--default-agent <id>', 'Default agent id for new project sessions and outcomes')
+      .option('--default-agent <id>', 'Default agent id for new project sessions and tasks')
       .option('--workspace <path>', 'Project workspace root')
       .option('--brief <text>', 'Project brief')
       .option('--instructions <text>', 'Project instructions')
@@ -162,7 +162,7 @@ function createProjectCommand(ctx: CLIContext): Command {
       .argument('<project>', 'Project id or slug')
       .option('--name <name>', 'New name')
       .option('--description <text>', 'Project description')
-      .option('--default-agent <id>', 'Default agent id for new project sessions and outcomes')
+      .option('--default-agent <id>', 'Default agent id for new project sessions and tasks')
       .option('--clear-default-agent', 'Clear project default agent')
       .option('--status <status>', 'active, paused, or archived')
       .option('--workspace <path>', 'Project workspace root')
@@ -269,8 +269,8 @@ function createProjectCommand(ctx: CLIContext): Command {
   );
 
   cmd.addCommand(
-    new Command('outcomes')
-      .description('List outcomes in a project')
+    new Command('tasks')
+      .description('List tasks in a project')
       .argument('<project>', 'Project id or slug')
       .option('--limit <n>', 'Maximum rows', '20')
       .action(async (projectRef, options) => {
@@ -280,16 +280,13 @@ function createProjectCommand(ctx: CLIContext): Command {
             console.error(`Project not found: ${projectRef}`);
             process.exit(1);
           }
-          const states = new OutcomeExecutionStateRepository();
-          const outcomes = new OutcomeRepository().list({ limit: 200 })
-            .filter((outcome) => states.get(outcome.id)?.projectId === project.id)
-            .slice(0, Number(options.limit) || 20);
-          if (!outcomes.length) {
-            console.log('No outcomes.');
+          const tasks = new TaskRepository().listByProject(project.id, Number(options.limit) || 20);
+          if (!tasks.length) {
+            console.log('No tasks.');
             return;
           }
-          for (const outcome of outcomes) {
-            console.log(`${outcome.id} [${outcome.userStatus}] ${outcome.objective}`);
+          for (const task of tasks) {
+            console.log(`${task.id} [${task.status}] ${task.objective}`);
           }
         });
       }),

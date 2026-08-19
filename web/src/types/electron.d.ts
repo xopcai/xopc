@@ -182,7 +182,7 @@ export type ClearUserDataResult =
   | { ok: true }
   | { ok: false; error: UninstallErrorCode };
 
-export type PermissionRequestOutcome =
+export type PermissionRequestTask =
   | "granted"
   | "denied"
   | "prompted"
@@ -191,7 +191,7 @@ export type PermissionRequestOutcome =
 
 export type PermissionRequestResult = {
   status: TccTriState;
-  outcome: PermissionRequestOutcome;
+  task: PermissionRequestTask;
 };
 
 export type ElectronMenuItemModel =

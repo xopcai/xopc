@@ -1,6 +1,6 @@
 import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as Popover from '@radix-ui/react-popover';
-import { Check, ChevronDown, ChevronUp, CircleAlert, CircleHelp, Copy, FileCode2, FileText, ListTodo, MoreHorizontal, Pencil, RefreshCw, SquarePen, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, CircleAlert, CircleHelp, Copy, FileCode2, FileText, ListTodo, MoreHorizontal, Pencil, RefreshCw, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react';
 
 import type {
   ImageContent,
@@ -35,8 +35,8 @@ import { buildAssistantTurnViewModel } from '@/features/chat/messages/assistant-
 import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
 import {
   AssistantAttachmentList,
-  AssistantTurnOutcomes,
-} from '@/features/chat/messages/assistant-turn-outcomes';
+  AssistantTurnTasks,
+} from '@/features/chat/messages/assistant-turn-tasks';
 
 const messageActionIconButton = cn(
   'inline-flex size-9 shrink-0 items-center justify-center rounded-lg',
@@ -85,7 +85,6 @@ export const MessageBubble = memo(function MessageBubble({
   deleteRoundDisabled = false,
   onSaveAssistantToSourceNote,
   onExtractAssistantTask,
-  onProposeWorkItemCommand,
   readonly = false,
   density = 'normal',
   suppressAssistantActions = false,
@@ -110,8 +109,6 @@ export const MessageBubble = memo(function MessageBubble({
   onSaveAssistantToSourceNote?: (content: string) => Promise<void> | void;
   /** Create a task Note from this assistant reply for note-bound chat threads. */
   onExtractAssistantTask?: (content: string) => Promise<void> | void;
-  /** Draft a lifecycle command proposal from this assistant reply. */
-  onProposeWorkItemCommand?: (content: string) => Promise<void> | void;
   readonly?: boolean;
   density?: 'normal' | 'compact';
   /** Hide assistant footer actions while the session is receiving live SSE updates. */
@@ -269,8 +266,8 @@ export const MessageBubble = memo(function MessageBubble({
     return extractUserMessagePlainText(message.content);
   }, [isUser, message.content]);
   const [copyFeedback, setCopyFeedback] = useState<'plain' | 'markdown' | 'user' | null>(null);
-  const [assistantActionFeedback, setAssistantActionFeedback] = useState<'save-note' | 'extract-task' | 'work-item-update' | null>(null);
-  const [assistantActionBusy, setAssistantActionBusy] = useState<'save-note' | 'extract-task' | 'work-item-update' | null>(null);
+  const [assistantActionFeedback, setAssistantActionFeedback] = useState<'save-note' | 'extract-task' | null>(null);
+  const [assistantActionBusy, setAssistantActionBusy] = useState<'save-note' | 'extract-task' | null>(null);
   const [responseFeedback, setResponseFeedback] = useState<'helpful' | 'not_helpful' | null>(null);
   const [responseFeedbackLoaded, setResponseFeedbackLoaded] = useState(false);
   const [responseFeedbackBusy, setResponseFeedbackBusy] = useState(false);
@@ -343,22 +340,6 @@ export const MessageBubble = memo(function MessageBubble({
       .finally(() => setAssistantActionBusy(null));
   }, [assistantActionBusy, copyMarkdown, copyPlainText, onExtractAssistantTask]);
 
-  const handleProposeWorkItemCommand = useCallback(() => {
-    if (!copyPlainText && !copyMarkdown) return;
-    if (!onProposeWorkItemCommand || assistantActionBusy) return;
-    setAssistantActionBusy('work-item-update');
-    void Promise.resolve(onProposeWorkItemCommand(copyPlainText || copyMarkdown))
-      .then(() => {
-        setAssistantActionFeedback('work-item-update');
-        window.setTimeout(
-          () => setAssistantActionFeedback((f) => (f === 'work-item-update' ? null : f)),
-          2000,
-        );
-      })
-      .catch(() => undefined)
-      .finally(() => setAssistantActionBusy(null));
-  }, [assistantActionBusy, copyMarkdown, copyPlainText, onProposeWorkItemCommand]);
-
   const handleCopyUserMessage = useCallback(() => {
     if (!userCopyText) return;
     void copyTextToClipboard(userCopyText).then((ok) => {
@@ -369,7 +350,7 @@ export const MessageBubble = memo(function MessageBubble({
   }, [userCopyText]);
 
   const handleResponseFeedback = useCallback((
-    outcome: 'helpful' | 'not_helpful',
+    rating: 'helpful' | 'not_helpful',
     reason?: ResponseFeedbackReason,
   ) => {
     if (!sessionKey || !message.timestamp || responseFeedbackBusy) return;
@@ -379,7 +360,7 @@ export const MessageBubble = memo(function MessageBubble({
     void fetchJson<{
       matched: boolean;
       attributedRecordCount: number;
-      feedback: { outcome?: string } | null;
+      feedback: { rating?: string } | null;
       remediation: { needsReviewRecordIds: string[] } | null;
       personalContext: ResponsePersonalContext[];
     }>(apiUrl('/api/user-context/understanding/response-feedback'), {
@@ -387,7 +368,7 @@ export const MessageBubble = memo(function MessageBubble({
       body: JSON.stringify({
         sessionKey,
         assistantTimestamp: message.timestamp,
-        outcome,
+        rating,
         reason: reason ? `assistant_response_feedback:${reason}` : undefined,
       }),
     })
@@ -396,7 +377,7 @@ export const MessageBubble = memo(function MessageBubble({
           setResponseFeedbackError(true);
           return;
         }
-        setResponseFeedback(outcome);
+        setResponseFeedback(rating);
         setResponseFeedbackReason(reason ?? null);
         setResponsePersonalContext(result.personalContext ?? []);
         setResponseFeedbackPromptOpen(false);
@@ -422,14 +403,14 @@ export const MessageBubble = memo(function MessageBubble({
     });
     void fetchJson<{
       matched: boolean;
-      feedback: { outcome?: string } | null;
+      feedback: { rating?: string } | null;
       personalContext: ResponsePersonalContext[];
     }>(apiUrl(`/api/user-context/understanding/response-feedback?${query.toString()}`))
       .then((result) => {
         setResponsePersonalContext(result.personalContext ?? []);
-        const outcome = result.feedback?.outcome;
-        if (outcome === 'helpful' || outcome === 'not_helpful') {
-          setResponseFeedback(outcome);
+        const rating = result.feedback?.rating;
+        if (rating === 'helpful' || rating === 'not_helpful') {
+          setResponseFeedback(rating);
         }
       })
       .catch(() => undefined)
@@ -609,7 +590,7 @@ export const MessageBubble = memo(function MessageBubble({
             ) : null}
 
             {assistantTurnView ? (
-              <AssistantTurnOutcomes
+              <AssistantTurnTasks
                 view={assistantTurnView}
                 authToken={authToken}
                 sessionKey={sessionKey}
@@ -857,25 +838,6 @@ export const MessageBubble = memo(function MessageBubble({
                         {assistantActionFeedback === 'extract-task'
                           ? m.chat.messageTaskExtracted
                           : m.chat.messageExtractTask}
-                      </button>
-                    </Popover.Close>
-                  ) : null}
-                  {onProposeWorkItemCommand ? (
-                    <Popover.Close asChild>
-                      <button
-                        type="button"
-                        className="flex h-9 w-full items-center gap-2 rounded-lg px-2.5 text-left text-xs text-fg-muted hover:bg-surface-hover hover:text-fg disabled:opacity-40"
-                        onClick={handleProposeWorkItemCommand}
-                        disabled={(!copyPlainText && !copyMarkdown) || assistantActionBusy !== null}
-                      >
-                        {assistantActionFeedback === 'work-item-update' ? (
-                          <Check className="size-4" strokeWidth={1.75} aria-hidden />
-                        ) : (
-                          <SquarePen className="size-4" strokeWidth={1.75} aria-hidden />
-                        )}
-                        {assistantActionFeedback === 'work-item-update'
-                          ? m.chat.workItemCommandDrafted
-                          : m.chat.workItemCommandAction}
                       </button>
                     </Popover.Close>
                   ) : null}

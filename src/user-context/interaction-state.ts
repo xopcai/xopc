@@ -61,7 +61,7 @@ export function buildInteractionStatePrompt(signal: InteractionStateSignal): str
     listen: 'Prioritize listening and acknowledgment. Do not rush into advice or an action list.',
     clarify: 'Help the user organize the situation with one focused question at a time.',
     advise: 'Offer a clear recommendation with concise reasoning and practical options.',
-    act: 'Prioritize execution, state the intended outcome, and verify the result. Care must support progress, not replace it.',
+    act: 'Prioritize execution, state the intended task, and verify the result. Care must support progress, not replace it.',
     unknown: 'Do not assume the support needed. If it matters, ask one concise question.',
   };
   const lines = ['## Current interaction state', guidance[signal.supportNeed]];

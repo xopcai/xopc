@@ -24,7 +24,7 @@ describe('tool_manual tool', () => {
 
     expect(text).toContain('XOPC Use Tool Manual');
     expect(text).toContain('note.preview_edit');
-    expect(text).toContain('work_item');
+    expect(text).toContain('project');
   });
 
   it('returns a clear message for missing manuals', async () => {

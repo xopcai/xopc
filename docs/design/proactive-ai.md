@@ -4,7 +4,7 @@
 
 Proactive AI continuously converts user-authorized work changes into a small number of evidence-backed insights and decisions. The user should not need to monitor every project, task, automation, note, or calendar change; xopc observes approved signals, performs bounded background analysis, and asks for attention only when the user can make a useful decision.
 
-## Product outcome
+## Product task
 
 ```text
 authorized business changes
