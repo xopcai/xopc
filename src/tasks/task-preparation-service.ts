@@ -8,6 +8,20 @@ import {
 } from './task-contract-planner.js';
 import { TaskRepository } from './task-repository.js';
 
+function plannerTaskContext(task: NonNullable<ReturnType<TaskRepository['get']>>): string | undefined {
+  const sections: string[] = [];
+  const contextMessage = task.execution.contextMessage;
+  if (contextMessage?.text.trim()) sections.push(contextMessage.text.trim());
+  if (contextMessage?.attachments.length) {
+    sections.push([
+      'The user already attached the following files. They are durable task inputs and will be available during execution; do not treat them as missing.',
+      ...contextMessage.attachments.map((attachment) =>
+        `- ${attachment.name} (${attachment.mimeType}, ${attachment.size} bytes)`),
+    ].join('\n'));
+  }
+  return sections.length > 0 ? sections.join('\n\n') : undefined;
+}
+
 const log = createLogger('TaskPreparation');
 
 export class TaskPreparationService {
@@ -36,7 +50,7 @@ export class TaskPreparationService {
       const relationship = getRelationshipSettings();
       const contract = await this.#planner.plan({
         objective: task.objective,
-        taskContext: task.execution.contextMessage?.text,
+        taskContext: plannerTaskContext(task),
         projectContext: project ? JSON.stringify({
           name: project.name,
           description: project.description,
@@ -54,9 +68,6 @@ export class TaskPreparationService {
         taskId: task.id,
         ...contract,
         createdBy: 'system',
-      });
-      this.#tasks.update(task.id, {
-        nextAction: contract.acceptanceCriteria[0] ?? contract.expectedOutputs[0] ?? null,
       });
     } catch (error) {
       log.warn({ err: error, taskId: task.id }, 'Task planning kept the initial contract');

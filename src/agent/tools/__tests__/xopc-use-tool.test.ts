@@ -2,7 +2,7 @@ import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ActivityService } from '../../../activity/index.js';
 import { NotesService, NotesStore } from '../../../notes/index.js';
@@ -193,6 +193,125 @@ describe('xopc_use tool', () => {
 
     expect(result.dryRun).toBe(true);
     expect(projects.list({ search: 'Dry Run Project' }).items).toHaveLength(0);
+  });
+
+  it('captures a task by default and returns a task delivery reference', async () => {
+    const project = projects.create({ name: 'Task Project' });
+    const tool = createXopcUseTool({
+      getCurrentAgentId: () => 'main',
+      getCurrentSessionKey: () => SESSION_KEY,
+      getProjectService: () => projects,
+    });
+
+    const result = await tool.execute('call-task-capture', {
+      mode: 'task',
+      command: 'create',
+      args: {
+        objective: 'Prepare the launch checklist',
+        projectId: project.id,
+        priority: 'high',
+      },
+    });
+    const created = parseToolJson(result);
+
+    expect(created).toMatchObject({
+      ok: true,
+      createMode: 'capture',
+      task: {
+        objective: 'Prepare the launch checklist',
+        status: 'pending',
+        priority: 'high',
+      },
+    });
+    expect(result.details.delivery).toMatchObject({
+      operation: 'created',
+      primary: {
+        kind: 'task',
+        id: created.task.id,
+        projectId: project.id,
+        capabilities: expect.arrayContaining(['open', 'run']),
+      },
+    });
+  });
+
+  it('starts and pauses a task through task actions', async () => {
+    const enqueueTask = vi.fn((taskId: string) => ({
+      id: `queue:${taskId}`,
+      taskId,
+      status: 'queued' as const,
+      attempts: 0,
+      maxRetries: 2,
+      enqueuedAt: Date.now(),
+      source: 'api' as const,
+    }));
+    const tool = createXopcUseTool({
+      getCurrentAgentId: () => 'main',
+      getCurrentSessionKey: () => SESSION_KEY,
+      enqueueTask,
+    });
+
+    const startedResult = await tool.execute('call-task-start', {
+      mode: 'task',
+      command: 'create',
+      args: { objective: 'Run the launch review', createMode: 'start' },
+    });
+    const started = parseToolJson(startedResult);
+
+    expect(started.task.status).toBe('planning');
+    expect(started.activation).toMatchObject({ status: 'queued' });
+    expect(enqueueTask).toHaveBeenCalledWith(started.task.id, expect.any(Object));
+
+    const paused = parseToolJson(await tool.execute('call-task-pause', {
+      mode: 'task',
+      command: 'action',
+      args: {
+        taskId: started.task.id,
+        action: 'pause',
+        expectedUpdatedAt: started.task.updatedAt,
+      },
+    }));
+
+    expect(paused).toMatchObject({ ok: true, action: 'pause', task: { status: 'paused' } });
+  });
+
+  it('updates task dependencies with optimistic concurrency', async () => {
+    const tool = createXopcUseTool({
+      getCurrentAgentId: () => 'main',
+      getCurrentSessionKey: () => SESSION_KEY,
+    });
+    const dependency = parseToolJson(await tool.execute('call-dependency', {
+      mode: 'task',
+      command: 'create',
+      args: { objective: 'Approve the research scope' },
+    })).task;
+    const task = parseToolJson(await tool.execute('call-dependent', {
+      mode: 'task',
+      command: 'create',
+      args: { objective: 'Complete the research report' },
+    })).task;
+
+    const updated = parseToolJson(await tool.execute('call-task-dependencies', {
+      mode: 'task',
+      command: 'update_dependencies',
+      args: {
+        taskId: task.id,
+        dependsOnTaskIds: [dependency.id],
+        expectedUpdatedAt: task.updatedAt,
+      },
+    }));
+
+    expect(updated).toMatchObject({
+      ok: true,
+      dependencies: [{ id: dependency.id, status: 'pending' }],
+    });
+    const detail = parseToolJson(await tool.execute('call-task-get', {
+      mode: 'task',
+      command: 'get',
+      args: { taskId: task.id },
+    }));
+    expect(detail.dependencies).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: dependency.id }),
+    ]));
   });
 
   it('creates a local app and returns an inline delivery reference', async () => {

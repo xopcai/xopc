@@ -10,10 +10,11 @@ export type FetchPreviewBlobResult =
 export async function fetchMediaUriBlob(params: {
   uri: string;
   sessionKey?: string | null;
+  taskId?: string | null;
 }): Promise<FetchPreviewBlobResult> {
-  const { uri, sessionKey } = params;
+  const { uri, sessionKey, taskId } = params;
   try {
-    const res = await apiFetch(apiUrl(mediaUriToReadUrl(uri, sessionKey)));
+    const res = await apiFetch(apiUrl(mediaUriToReadUrl(uri, sessionKey, taskId)));
     if (!res.ok) return { ok: false, reason: 'http', status: res.status };
     return { ok: true, blob: await res.blob() };
   } catch (e) {
@@ -24,6 +25,7 @@ export async function fetchMediaUriBlob(params: {
 export async function fetchMediaUriBuffer(params: {
   uri: string;
   sessionKey?: string | null;
+  taskId?: string | null;
 }): Promise<
   | { ok: true; buffer: ArrayBuffer }
   | { ok: false; reason: 'http'; status: number }

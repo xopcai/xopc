@@ -175,15 +175,13 @@
   "projectDetailPage": {
     "tabs": {
       "overview": "概览",
-      "board": "看板",
-      "work": "工作",
-      "sessions": "会话",
-      "workflows": "工作流",
-      "files": "文件",
-      "activity": "活动",
+      "tasks": "任务",
       "automations": "自动化",
+      "progress": "进展",
+      "files": "文件",
       "notes": "笔记",
       "skills": "技能",
+      "sessions": "会话",
       "settings": "设置"
     },
     "skills": {
@@ -215,7 +213,6 @@
       "close": "关闭"
     },
     "navAria": "项目导航",
-    "workNavAria": "项目工作导航",
     "backToProjects": "项目",
     "fallbackTitle": "项目",
     "fallbackContext": "项目上下文",
@@ -263,9 +260,6 @@
       "directionFallback": "补充项目简介或创建任务，让下一步更明确。",
       "saveDigest": "保存摘要",
       "savingDigest": "保存中",
-      "sessions": "会话",
-      "activeTasks": "活跃任务",
-      "recentWorkflowRuns": "近期工作流运行",
       "nextActions": "下一步",
       "recentResults": "最近结果",
       "resultStatuses": {
@@ -276,36 +270,18 @@
         "failed": "未达成",
         "cancelled": "已取消"
       },
-      "task": "任务",
       "recommendedNext": "下一步：{{action}}",
       "noNextActions": "还没有下一步。可以先创建任务，或继续项目会话来明确方向。",
-      "noNextAction": "尚未设置下一步。",
-      "staleTasks": "停滞任务",
-      "noActiveTasks": "当前项目暂无活跃任务。",
       "recentSessions": "最近会话",
       "noSessions": "暂无会话。",
-      "workflowRuns": "工作流运行",
-      "noWorkflowRuns": "暂无工作流运行。",
-      "timeline": "时间线",
-      "noTimeline": "暂无项目活动。",
-      "timelineKinds": {
-        "session": "会话",
-        "task": "任务",
-        "workflow": "工作流",
-        "memory": "记忆"
-      },
-      "workspace": "工作区",
-      "brief": "简介",
-      "noBrief": "暂无简介。",
       "attention": "需关注",
       "attentionKinds": {
         "blocked_task": "受阻任务",
         "stale_task": "停滞任务",
-        "failed_workflow": "失败工作流"
+        "failed_workflow": "执行受阻"
       },
       "noBlockedTasks": "暂无受阻任务。",
       "blockerTitlePlaceholder": "新增 blocker",
-      "blockerReasonPlaceholder": "原因或依赖",
       "addBlocker": "添加 blocker",
       "addingBlocker": "添加中"
     },
@@ -360,41 +336,22 @@
         "done": "已完成"
       }
     },
-    "workflows": {
-      "runsTitle": "项目工作流运行",
-      "runsHint": "从这里启动的运行会使用当前项目上下文和工作区。",
-      "loadingRuns": "正在加载工作流运行…",
-      "runMeta": "{{definitionId}} · {{done}}/{{total}} 个 agent · {{time}}",
-      "emptyRuns": "这个项目和 agent 下还没有工作流运行。",
-      "startTitle": "启动工作流",
-      "startHint": "选择一个工作流，在当前项目内运行。",
-      "emptyDefinitions": "暂无可用工作流。",
-      "browseAll": "浏览全部工作流",
-      "contextTitle": "运行上下文",
-      "contextHint": "项目工作流会继承所选 agent、项目工作区、简介、指令和活跃任务。"
-    },
     "automations": {
       "title": "项目自动化",
-      "hint": "绑定到当前项目的自动化会继承项目工作区上下文。",
-      "loading": "正在加载自动化…",
+      "hint": "让 xopc 按条件或时间持续推进项目；执行方式由系统根据任务和上下文决定。",
       "enabled": "已启用",
       "paused": "已暂停",
-      "run": "运行",
       "pause": "暂停",
       "resume": "恢复",
-      "empty": "当前项目还没有绑定自动化。",
-      "create": "创建自动化",
-      "recentRuns": "最近运行",
-      "emptyRuns": "暂无项目自动化运行记录。",
-      "contextTitle": "自动化上下文",
-      "contextHint": "Agent 自动化默认使用项目工作区；工作流自动化会把当前项目传入工作流运行。"
+      "empty": "当前项目还没有自动化。需要长期跟进时再添加即可。",
+      "create": "添加自动化"
     },
-    "activity": {
-      "title": "项目活动",
-      "count": "{{count}} 条活动",
-      "loading": "正在加载活动…",
-      "empty": "暂无项目活动。",
-      "includeRelated": "包含相关活动",
+    "progress": {
+      "title": "项目进展",
+      "count": "{{count}} 条进展",
+      "loading": "正在加载进展…",
+      "empty": "暂无项目进展。",
+      "includeRelated": "包含相关进展",
       "related": "相关",
       "actor": "操作者",
       "source": "来源",
@@ -411,8 +368,8 @@
         "session.detached_from_project": "会话已解绑",
         "task.created": "任务已创建",
         "task.status_changed": "任务状态已变更",
-        "workflow_run.started": "工作流运行已启动",
-        "workflow_run.completed": "工作流运行已完成",
+        "workflow_run.started": "系统推进已启动",
+        "workflow_run.completed": "系统推进已完成",
         "automation.run_started": "自动化运行已启动",
         "automation.run_completed": "自动化运行已完成"
       },
@@ -421,7 +378,7 @@
         "note": "笔记",
         "session": "会话",
         "task": "任务",
-        "workflow_run": "工作流运行",
+        "workflow_run": "执行记录",
         "automation": "自动化"
       }
     },
@@ -469,14 +426,14 @@
       "needWorkspace": "先设置项目工作区，才能浏览项目文件。",
       "openSettings": "打开设置",
       "boundaryTitle": "工作区边界",
-      "boundaryHint": "这里只展示项目工作区内的文件。会话、任务和工作流运行也使用同一个根目录。",
+      "boundaryHint": "这里只展示项目工作区内的文件。会话、任务和自动推进也使用同一个根目录。",
       "nextStepTitle": "下一步",
-      "nextStepHint": "需要 agent 检查或修改这个工作区时，可以启动项目工作流。"
+      "nextStepHint": "需要 xopc 检查或修改这个工作区时，直接创建任务即可。"
     },
     "sessions": {
       "empty": "当前项目暂无会话。",
       "emptyTitle": "还没有项目会话",
-      "emptyDescription": "从页面顶部的新建会话启动后，相关工作、任务和摘要会归在一起。",
+      "emptyDescription": "从页面顶部新建会话后，相关工作、任务和摘要会归在当前项目。",
       "searchPlaceholder": "搜索会话",
       "clearSearch": "清除会话搜索",
       "noMatches": "没有匹配的会话",
@@ -510,11 +467,11 @@
       "openWorkspace": "打开文件夹",
       "copyWorkspacePath": "复制路径",
       "migrateWorkspace": "迁移工作区",
-      "workspaceMigrationHint": "项目会话、任务、文件、工作流运行和自动化默认使用这个目录。迁移工作区会影响之后的新上下文，历史记录不会自动改写。",
+      "workspaceMigrationHint": "项目会话、任务、文件和自动推进默认使用这个目录。迁移工作区会影响之后的新上下文，历史记录不会自动改写。",
       "workspaceMigrationTitle": "迁移项目工作区",
       "workspaceMigrationDescription": "只有在项目确实移动到新目录，或需要改为跟随 Agent 默认工作区时才迁移。",
       "workspaceMigrationFixedHint": "保存为项目自己的固定路径，之后不受 Agent 切换影响。",
-      "workspaceMigrationImpact": "迁移后，后续会话、任务和工作流将使用新目录；原目录中的文件不会移动，历史会话也不会自动改写。",
+      "workspaceMigrationImpact": "迁移后，后续会话、任务和自动推进将使用新目录；原目录中的文件不会移动，历史会话也不会自动改写。",
       "workspaceMigrationConfirm": "确认迁移",
       "createdAt": "创建时间",
       "updatedAt": "更新时间",
@@ -533,10 +490,10 @@
       "archiveHint": "归档后项目会从活跃视图移出，但会话、任务和文件关联仍会保留。",
       "archiveProject": "归档项目",
       "restoreTitle": "恢复归档项目",
-      "restoreHint": "恢复后项目会回到活跃视图，并可继续创建会话、任务和工作流。",
+      "restoreHint": "恢复后项目会回到活跃视图，并可继续创建会话和推进任务。",
       "restoreProject": "恢复项目",
       "dangerTitle": "危险操作",
-      "dangerHint": "移除项目会解除会话、任务、工作流、自动化和记忆的项目分组；本地文件不会被删除。",
+      "dangerHint": "移除项目会解除会话、任务、执行记录和记忆的项目分组；本地文件不会被删除。",
       "projectGuidanceTitle": "项目说明与规则",
       "projectGuidanceHint": "说明项目背景、意图和处理规则，帮助 Agent 稳定地理解并推进工作。",
       "brief": "项目背景",

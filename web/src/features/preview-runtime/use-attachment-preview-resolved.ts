@@ -95,19 +95,21 @@ export function useAttachmentPreviewResolved({
   const inlinePayload = preview ? getAttachmentBinaryPayload(preview) : undefined;
   const mediaUri = preview?.uri;
   const readMode = readModeForPreviewType(descriptor.type);
-  const fetchEnabled = Boolean(open && mediaUri && !inlinePayload && authToken && readMode === 'binary');
+  const fetchEnabled = Boolean(
+    open && mediaUri && !inlinePayload && authToken && (readMode === 'binary' || readMode === 'text'),
+  );
 
   const gatewayFetch = useAsyncResource(
     async () => {
       const L = messages(language).chat;
-      const result = await fetchMediaUriBuffer({ uri: mediaUri!, sessionKey });
+      const result = await fetchMediaUriBuffer({ uri: mediaUri!, sessionKey, taskId: preview?.taskId });
       if (!result.ok) {
         if (result.reason === 'http') throw new Error(`${L.attachmentPreviewLoadError} (HTTP ${result.status})`);
         throw new Error(result.message);
       }
       return result.buffer;
     },
-    [open, mediaUri, authToken, language, inlinePayload, sessionKey, readMode],
+    [open, mediaUri, authToken, language, inlinePayload, preview?.taskId, sessionKey, readMode],
     { enabled: fetchEnabled, initial: null as ArrayBuffer | null, errorData: null },
   );
 
@@ -125,7 +127,12 @@ export function useAttachmentPreviewResolved({
   }, [fetchEnabled, gatewayFetch.data, gatewayFetch.loading, inlinePayload, readMode]);
 
   const extractedTextRaw = preview ? (extractTextForPreview(preview) ?? '') : '';
-  const textContent = readMode === 'text' ? extractedTextRaw || messages(language).chat.attachmentPreviewNoText : null;
+  const textContent = readMode === 'text'
+    ? extractedTextRaw
+      || (gatewayFetch.data
+        ? new TextDecoder('utf-8', { fatal: false }).decode(new Uint8Array(gatewayFetch.data))
+        : messages(language).chat.attachmentPreviewNoText)
+    : null;
   const hasExtractedText = Boolean(preview?.extractedText);
   const extractedTextTruncated = descriptor.type === 'pptx' && extractedTextRaw.length > PPTX_PREVIEW_MAX_CHARS;
 

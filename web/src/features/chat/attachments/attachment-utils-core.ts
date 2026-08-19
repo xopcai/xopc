@@ -9,10 +9,17 @@ export const EXCEL_PREVIEW_MAX_COLS = 64;
 export const PPTX_PREVIEW_MAX_CHARS = 300_000;
 
 /** Build gateway read URL for a `media://` URI. */
-export function mediaUriToReadUrl(uri: string, sessionKey?: string | null): string {
+export function mediaUriToReadUrl(
+  uri: string,
+  sessionKey?: string | null,
+  taskId?: string | null,
+): string {
   const params = new URLSearchParams({ uri: uri.trim() });
   if (sessionKey?.trim()) {
     params.set('sessionKey', sessionKey.trim());
+  }
+  if (taskId?.trim()) {
+    params.set('taskId', taskId.trim());
   }
   return `/api/media/read?${params.toString()}`;
 }
