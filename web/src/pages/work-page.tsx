@@ -22,13 +22,13 @@ import {
   instructAgentJudgment,
   respondToWorkDecision,
   retryWorkAttention,
+  startOutcome,
   transitionAgentJudgment,
   type WorkHomeAttention,
   type WorkHomeChat,
   type WorkHomeDecision,
   type WorkHomeResponse,
 } from '@/features/work/work-home-api';
-import { buildWorkChatHandoffUrl } from '@/features/work/work-chat-handoff';
 import { workCopy } from '@/features/work/work-copy';
 import { messages } from '@/i18n/messages';
 import { formatMediumDateTime } from '@/lib/date-formatters';
@@ -259,6 +259,9 @@ export function WorkPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [outcome, setOutcome] = useState('');
+  const [createRequestId, setCreateRequestId] = useState(() => crypto.randomUUID());
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [busyDecisionId, setBusyDecisionId] = useState<string | null>(null);
   const [busyAttentionId, setBusyAttentionId] = useState<string | null>(null);
 
@@ -303,14 +306,24 @@ export function WorkPage() {
   const needsYou = useMemo(() => home?.decisions ?? [], [home]);
   const attention = useMemo(() => home?.attention ?? [], [home]);
 
-  const submitCreate = useCallback((event: FormEvent<HTMLFormElement>) => {
+  const submitCreate = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmed = outcome.trim();
-    if (!trimmed) return;
-    setCreateOpen(false);
-    setOutcome('');
-    navigate(buildWorkChatHandoffUrl(trimmed));
-  }, [navigate, outcome]);
+    if (!trimmed || creating) return;
+    setCreating(true);
+    setCreateError(null);
+    try {
+      const started = await startOutcome({ requestId: createRequestId, objective: trimmed, locale: language });
+      setCreateOpen(false);
+      setOutcome('');
+      setCreateRequestId(crypto.randomUUID());
+      navigate(`/chat/${encodeURIComponent(started.sessionKey)}`);
+    } catch (error) {
+      setCreateError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setCreating(false);
+    }
+  }, [createRequestId, creating, language, navigate, outcome]);
 
   const headerEnd = useMemo(() => (
     <Button type="button" variant="primary" className="h-9 rounded-lg" onClick={() => setCreateOpen(true)}>
@@ -375,7 +388,13 @@ export function WorkPage() {
     <main className="mx-auto flex w-full max-w-[1200px] flex-1 flex-col gap-7 px-4 py-7 sm:px-6 lg:px-8 lg:py-9">
       <Dialog.Root
         open={createOpen}
-        onOpenChange={setCreateOpen}
+        onOpenChange={(open) => {
+          if (!creating) setCreateOpen(open);
+          if (open) {
+            setCreateError(null);
+            setCreateRequestId(crypto.randomUUID());
+          }
+        }}
       >
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
@@ -410,7 +429,10 @@ export function WorkPage() {
                   id="new-work-outcome"
                   className="min-h-32 w-full flex-1 resize-none rounded-xl border border-edge bg-surface-base p-3 text-sm font-normal leading-6 text-fg outline-none placeholder:text-fg-subtle focus:border-accent focus:ring-2 focus:ring-accent/20"
                   value={outcome}
-                  onChange={(event) => setOutcome(event.target.value)}
+                  onChange={(event) => {
+                    setOutcome(event.target.value);
+                    setCreateRequestId(crypto.randomUUID());
+                  }}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
                       event.preventDefault();
@@ -427,12 +449,13 @@ export function WorkPage() {
                     {outcome.length.toLocaleString()} / {(12_000).toLocaleString()}
                   </span>
                 </div>
+                {createError ? <p className="mt-3 text-sm text-danger">{createError}</p> : null}
               </div>
               <div className="flex shrink-0 justify-end gap-2 border-t border-edge px-5 py-4">
-                <Dialog.Close asChild><Button type="button" variant="ghost">{t.cancel}</Button></Dialog.Close>
-                <Button type="submit" variant="primary" className="min-w-32" disabled={!outcome.trim()}>
+                <Dialog.Close asChild><Button type="button" variant="ghost" disabled={creating}>{t.cancel}</Button></Dialog.Close>
+                <Button type="submit" variant="primary" className="min-w-32" disabled={!outcome.trim() || creating}>
                   <Sparkles className="size-4" aria-hidden />
-                  {workText.submit}
+                  {creating ? workText.starting : workText.submit}
                 </Button>
               </div>
             </form>

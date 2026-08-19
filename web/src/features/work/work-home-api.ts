@@ -2,11 +2,14 @@ import {
   OutcomeDetailResponseSchema,
   OutcomeReceiptSchema,
   OutcomeSchema,
+  OutcomeStartResponseSchema,
   parseWorkHomeResponse,
   type Outcome,
   type OutcomeAction,
   type OutcomeContextManifest,
+  type OutcomeExecutionSummary,
   type OutcomeReceipt,
+  type OutcomeStartResponse,
   type WorkHomeAttention,
   type WorkHomeChat,
   type WorkHomeDecision,
@@ -19,9 +22,22 @@ import { apiUrl } from '@/lib/url';
 
 export type { WorkHomeAttention, WorkHomeChat, WorkHomeDecision, WorkHomeItem, WorkHomeResponse };
 
+export async function startOutcome(input: {
+  requestId: string;
+  objective: string;
+  projectId?: string;
+  locale?: 'en' | 'zh';
+}): Promise<OutcomeStartResponse> {
+  return OutcomeStartResponseSchema.parse(await fetchJson<unknown>(apiUrl('/api/outcomes'), {
+    method: 'POST',
+    body: JSON.stringify(input),
+  }));
+}
+
 export type OutcomeDetail = {
   outcome: Outcome;
   receipts: OutcomeReceipt[];
+  execution?: OutcomeExecutionSummary;
   contextManifest?: OutcomeContextManifest;
 };
 
@@ -32,6 +48,7 @@ export async function fetchOutcome(outcomeId: string): Promise<OutcomeDetail> {
   return {
     outcome: response.outcome,
     receipts: response.receipts,
+    execution: response.execution,
     contextManifest: response.contextManifest,
   };
 }

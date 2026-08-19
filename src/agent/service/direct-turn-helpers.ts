@@ -25,6 +25,8 @@ import { extractAgentUserPlainText } from '../memory/user-message-text.js';
 import { runEmbeddedTurnForSession } from '../embedded/run-for-session.js';
 import type { EmbeddedStreamEvent } from '../embedded/types.js';
 import { resolveImageHandlingStrategy } from '../image/vision-detection.js';
+import { buildOutcomeExecutionDirective } from '../../work/outcome-context-assembler.js';
+import { prependAgentContext } from '../memory/context/planner.js';
 
 export interface HydratePerTurnStateDeps {
   hydrateSessionWorkspaceFromStore: (sessionKey: string) => Promise<void>;
@@ -151,7 +153,10 @@ export async function runDirectAgentTurn(
     input.userMessage,
     input.sessionKey,
   );
-  const userMessageForModel = userContext.modelMessage;
+  const userMessageForModel = prependAgentContext(
+    userContext.modelMessage,
+    buildOutcomeExecutionDirective(input.sessionKey),
+  );
   if (userContext.consentRequests.length > 0) {
     input.onEvent?.({
       type: 'memory_consent_required',

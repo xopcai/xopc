@@ -89,7 +89,7 @@ function evidenceLabel(item: PlannedUserContextItem): string {
   return 'An inference that may be wrong';
 }
 
-function prependContext(message: AgentMessage, block: string): AgentMessage {
+export function prependAgentContext(message: AgentMessage, block: string): AgentMessage {
   if (!block) return message;
   const prefix = `${block}\n\n`;
   const content = readAgentMessageContent(message);
@@ -258,7 +258,7 @@ export class UserContextPlanner {
     }
     return {
       traceId,
-      modelMessage: prependContext(params.userMessage, block),
+      modelMessage: prependAgentContext(params.userMessage, block),
       items,
       rejected,
       consentRequests,

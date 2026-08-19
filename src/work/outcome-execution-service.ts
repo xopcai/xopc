@@ -10,6 +10,7 @@ import {
 
 export interface CreateOutcomeExecutionInput {
   objective: string;
+  requestId?: string;
   description?: string;
   deliverables?: string[];
   acceptanceCriteria?: string[];
@@ -61,6 +62,7 @@ export class OutcomeExecutionService {
       });
       const execution = this.#executions.create({
         outcomeId: outcome.id,
+        requestId: input.requestId,
         description: input.description,
         projectId: input.projectId,
         activeSessionKey: input.sessionKey,

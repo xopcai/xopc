@@ -58,8 +58,8 @@ import {
   OutcomeController,
   OutcomeExecutionStateRepository,
   OutcomeProjectionService,
+  OutcomePreparationService,
   OutcomeRunner,
-  WorkIntakeService,
   type EnqueueOutcomeOptions,
 } from '../work/index.js';
 import { createRuntimeBrowserRecipeService, type BrowserRecipeService } from '../browser/recipes/index.js';
@@ -402,6 +402,10 @@ export class GatewayService {
       getChannelManager: () => this.channelManager,
       getConfig: () => this.config,
       emit: (type, payload) => this.sse.emit(type, payload),
+      prepareOutcome: (sessionKey) => new OutcomePreparationService({
+        getConfig: () => this.config,
+        projects: this.projects,
+      }).prepare(sessionKey),
       onOutcomeFinalized: (receipt) => {
         try {
           new OutcomeController({
@@ -827,10 +831,6 @@ export class GatewayService {
 
     log.debug('Starting gateway service...');
     openXopcDatabase();
-    new WorkIntakeService(
-      this.projects,
-      { enqueue: (outcomeId, options) => this.enqueueOutcome(outcomeId, options) },
-    ).reconcilePendingExecutions();
     new OutcomeProjectionService().reconcile();
     this.startTime = Date.now();
     this.running = true;
