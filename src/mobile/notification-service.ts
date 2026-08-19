@@ -14,9 +14,9 @@ import type {
 const log = createLogger('MobileNotifications');
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 
-type OutcomePayload = {
-  outcome?: { id?: unknown; objective?: unknown };
-  outcomeId?: unknown;
+type TaskPayload = {
+  task?: { id?: unknown; objective?: unknown };
+  taskId?: unknown;
   status?: unknown;
 };
 
@@ -28,34 +28,34 @@ function shouldDeliver(type: MobileNotificationEventType, preferences: {
   completed: boolean;
   automationFailed: boolean;
 }): boolean {
-  if (type === 'outcome.needs_input') return preferences.needsInput;
-  if (type === 'outcome.blocked') return preferences.failed;
+  if (type === 'task.needs_input') return preferences.needsInput;
+  if (type === 'task.blocked') return preferences.failed;
   if (type === 'automation.failed') return preferences.automationFailed;
   if (type === 'proactive.insight') return preferences.needsInput;
   return preferences.completed;
 }
 
-function outcomeEvent(payload: unknown): Omit<MobileActivityEvent, 'id' | 'createdAt'> | null {
+function taskEvent(payload: unknown): Omit<MobileActivityEvent, 'id' | 'createdAt'> | null {
   if (!payload || typeof payload !== 'object') return null;
-  const data = payload as OutcomePayload;
-  const outcome = data.outcome;
-  const outcomeId = typeof outcome?.id === 'string' ? outcome.id : typeof data.outcomeId === 'string' ? data.outcomeId : '';
+  const data = payload as TaskPayload;
+  const task = data.task;
+  const taskId = typeof task?.id === 'string' ? task.id : typeof data.taskId === 'string' ? data.taskId : '';
   const status = typeof data.status === 'string' ? data.status : '';
-  if (!outcomeId || !['needs_user', 'blocked', 'completed'].includes(status)) return null;
+  if (!taskId || !['needs_user', 'blocked', 'completed'].includes(status)) return null;
   const type: MobileNotificationEventType = status === 'needs_user'
-    ? 'outcome.needs_input'
+    ? 'task.needs_input'
     : status === 'blocked'
-      ? 'outcome.blocked'
-      : 'outcome.completed';
-  const route = `/work/${encodeURIComponent(outcomeId)}`;
+      ? 'task.blocked'
+      : 'task.completed';
+  const route = `/tasks/${encodeURIComponent(taskId)}`;
   return {
     type,
-    entity: { kind: 'outcome', id: outcomeId },
-    priority: type === 'outcome.needs_input' || type === 'outcome.blocked' ? 'high' : 'normal',
-    title: type === 'outcome.needs_input' ? 'Action needed' : type === 'outcome.blocked' ? 'Outcome blocked' : 'Outcome completed',
-    body: typeof outcome?.objective === 'string' ? outcome.objective.slice(0, 120) : undefined,
+    entity: { kind: 'task', id: taskId },
+    priority: type === 'task.needs_input' || type === 'task.blocked' ? 'high' : 'normal',
+    title: type === 'task.needs_input' ? 'Action needed' : type === 'task.blocked' ? 'Task blocked' : 'Task completed',
+    body: typeof task?.objective === 'string' ? task.objective.slice(0, 120) : undefined,
     deepLink: route,
-    payload: { route, outcomeId, eventType: type },
+    payload: { route, taskId, eventType: type },
   };
 }
 
@@ -94,7 +94,7 @@ export function mobileNotificationEventFromGatewayEvent(
   type: string,
   payload: unknown,
 ): Omit<MobileActivityEvent, 'id' | 'createdAt'> | null {
-  if (type === 'outcome.status.updated') return outcomeEvent(payload);
+  if (type === 'task.status.updated') return taskEvent(payload);
   if (type === 'automation.run.completed') return automationEvent(payload);
   if (type === 'proactive.inbox.created') return proactiveInsightEvent(payload);
   return null;

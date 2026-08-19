@@ -21,7 +21,7 @@ describe('activity targets', () => {
 
   it('ignores routes without a target that needs validation', () => {
     expect(parseActivityTarget('/chat/new')).toBeNull();
-    expect(parseActivityTarget('/work/outcome-1')).toBeNull();
+    expect(parseActivityTarget('/work/task-1')).toBeNull();
   });
 
   it('marks only a definitive 404 as missing', async () => {

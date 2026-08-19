@@ -109,7 +109,7 @@ const SCENARIOS: Record<TextAssistScenario, TextAssistScenarioDefinition> = {
   'cron.workflowGoal': {
     id: 'cron.workflowGoal',
     system:
-      'You rewrite goals for workflow runs triggered by cron jobs. The workflow already defines the procedure; the field should define the desired outcome.',
+      'You rewrite goals for workflow runs triggered by cron jobs. The workflow already defines the procedure; the field should define the desired task.',
     userGuidance: [
       'Make the goal concrete, bounded, and easy to verify.',
       'Include success criteria and important constraints when they are implied by the input or context.',
@@ -139,7 +139,7 @@ const SCENARIOS: Record<TextAssistScenario, TextAssistScenarioDefinition> = {
   'workflow.goal': {
     id: 'workflow.goal',
     system:
-      'You rewrite goals for workflow runs started manually by a user. The workflow already defines the procedure; the goal defines the desired outcome for this run.',
+      'You rewrite goals for workflow runs started manually by a user. The workflow already defines the procedure; the goal defines the desired task for this run.',
     userGuidance: [
       'Make the goal concrete, bounded, and easy to verify.',
       'Include success criteria and important constraints when implied by the input or workflow context.',
@@ -169,7 +169,7 @@ const SCENARIOS: Record<TextAssistScenario, TextAssistScenarioDefinition> = {
   'automation.workflowGoal': {
     id: 'automation.workflowGoal',
     system:
-      'You rewrite goals for workflow runs triggered by automations. The workflow defines the procedure; the goal defines the desired outcome.',
+      'You rewrite goals for workflow runs triggered by automations. The workflow defines the procedure; the goal defines the desired task.',
     userGuidance: [
       'Make the goal concrete, bounded, and easy to verify after the run.',
       'Include success criteria and important constraints when implied by the input or context.',

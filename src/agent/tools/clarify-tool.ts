@@ -65,7 +65,7 @@ export function createClarifyTool(deps: ClarifyToolDeps): AgentTool {
       '- Confirming destructive or irreversible actions\n\n' +
       'WHEN NOT TO USE:\n' +
       '- When you can reasonably infer the answer from context\n' +
-      '- For trivial decisions that do not affect the outcome\n' +
+      '- For trivial decisions that do not affect the task\n' +
       '- When the user explicitly said "just do it" or "your choice"\n\n' +
       'TIPS:\n' +
       '- Provide choices when there are clear options (faster for the user)\n' +

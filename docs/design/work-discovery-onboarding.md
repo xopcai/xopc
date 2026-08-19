@@ -274,7 +274,7 @@ Suggested answers may use detected areas, but the user can always type freely. T
 
 ### 6. Failure
 
-Use a concise outcome and recovery:
+Use a concise task and recovery:
 
 - **Folder unavailable**: explain that the path moved or permissions changed; choose again.
 - **Nothing useful found**: allow the user to continue with the folder or choose another one.
@@ -932,7 +932,7 @@ Continuous monitoring remains opt-in and requires its own lifecycle and resource
 
 - Add privacy-safe product metrics.
 - Add feature flag and rollout targeting.
-- Create experiment dashboards for activation and conversation outcomes.
+- Create experiment dashboards for activation and conversation tasks.
 
 ## Test Plan
 

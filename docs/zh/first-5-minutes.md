@@ -58,7 +58,7 @@ xopc 不要求你先搭一套复杂流程。先在当前 Session 中完成一个
 
 - 当前 Session 会保留对话与工具运行上下文，本地状态和配置默认保存在 `~/.xopc/`。
 - 如果它只是一次临时任务，到这里已经足够。
-- 如果需要跨多次会话持续推进，在 Gateway 控制台中为它建立 Project / Goal，显式记录状态、阻塞和下一步。
+- 如果需要跨多次会话持续推进，让 xopc 创建 Task；只有多个 Task 需要共享上下文时才增加 Project。
 - 如果需要长期材料或重复执行，再增加 Notes / Workspace、Workflow 或 Automation；不需要第一天全部配置好。
 
 ## 5. 只增加真正需要的部件
@@ -67,7 +67,7 @@ xopc 不要求你先搭一套复杂流程。先在当前 Session 中完成一个
 
 | 下一步 | 什么时候加 | 从哪里开始 |
 | --- | --- | --- |
-| 持续跟进一个项目 | 状态和下一步需要跨会话保存 | 在 Gateway 控制台使用 Projects / Goals |
+| 持续推进一个结果 | 状态和下一步需要跨会话保存 | 在 Gateway 控制台使用 Home 与 Tasks |
 | 随手记录材料 | 想法和进展经常不在终端里发生 | 使用 Web / 手机端 Notes，支持文字、语音和附件 |
 | 引入外部信号 | 工作已经分散在别的入口或系统里 | 使用频道、gateway API、扩展或 MCP |
 | 自动跟进 | 复盘、摘要、提醒会重复发生 | 使用 [自动化](./automations.md) 和 [工作流](./workflows.md) |
@@ -82,4 +82,4 @@ xopc 不要求你先搭一套复杂流程。先在当前 Session 中完成一个
 | 手机端 | [移动端 App](https://github.com/xopcai/xopc/tree/main/apps/mobile-expo) + 网关扫码配对 | 不在电脑前也能记录文字、语音、图片、附件和项目进展；Agent 仍运行在你的电脑或本地环境里，见 [手机端 App](./mobile-app.md) |
 | 即时通讯 | 启动网关后打开 `频道` 页面 | Telegram、微信、飞书/Lark |
 
-完整说明见 [快速开始](./getting-started.md)。要理解 Session、Project、Goal、Workflow 与 Automation 如何协作，继续看 [持续工作模型](./concepts/loops.md)。
+完整说明见 [快速开始](./getting-started.md)。要理解 Conversation、Task、Project、Workflow 与 Automation 如何协作，继续看 [Task 闭环](./concepts/loops.md)。

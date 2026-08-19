@@ -50,7 +50,6 @@ pnpm run dev:gateway     # start gateway with ~/.xopc-dev and info logs
 | `doctor` | Check installation health and diagnose common issues |
 | `update` | Check for and install xopc updates (extension sync + gateway restart) — see [Updates](./update.md) |
 | `logs` | Manage and query logs |
-| `goal` | Manage durable goals |
 | `project` | Manage long-running projects |
 | `config` | View/edit configuration |
 | `image` | Inspect image runtime behavior and provider availability |
@@ -88,8 +87,7 @@ Use `xopc <command> --help` for option-level details. This table tracks the comm
 | `doctor` | No subcommands |
 | `update` | No subcommands |
 | `logs` | `list`, `query`, `stats`, `tail`, `clean`, `rotate` |
-| `goal` | `list`, `new`, `show`, `pause`, `resume`, `archive`, `runs`, `checklist`, `evidence` |
-| `project` | `list`, `new`, `show`, `update`, `archive`, `attach-session`, `detach-session`, `attach-goal`, `detach-goal`, `sessions`, `goals` |
+| `project` | `list`, `new`, `show`, `update`, `archive`, `attach-session`, `detach-session`, `sessions`, `tasks` |
 | `config` | `get`, `set`, `unset`, `show`, `validate`, `token`, `path` |
 | `image` | `status`, `providers` |
 | `models` | `list`, `status`, `set`, `auth` (`list`, `login`, `paste-api-key`, `logout`) |

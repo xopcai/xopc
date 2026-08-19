@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { closeXopcDatabase, openXopcDatabase } from '../../storage/sqlite/connection.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { ProjectService } from '../../projects/project-service.js';
-import { OutcomeExecutionService } from '../../work/index.js';
+import { TaskExecutionService } from '../../tasks/index.js';
 import type { WorkflowDefinition } from '../domain/index.js';
 import { WorkflowEventStore } from '../store/event-store.js';
 import { WorkflowRunStore } from '../store/run-store.js';
@@ -256,10 +256,10 @@ describe('WorkflowRunService helpers', () => {
     expect(prepareRunSession).not.toHaveBeenCalled();
   });
 
-  it('passes the outcome project to the workflow session bridge', async () => {
+  it('passes the task project to the workflow session bridge', async () => {
     const definition = createDefinition();
-    const project = new ProjectService().create({ name: 'Workflow Outcome Project' });
-    const execution = new OutcomeExecutionService().create({
+    const project = new ProjectService().create({ name: 'Workflow Task Project' });
+    const execution = new TaskExecutionService().create({
       objective: 'Run workflow in project',
       projectId: project.id,
     });
@@ -283,7 +283,7 @@ describe('WorkflowRunService helpers', () => {
     const result = await service.startWorkflowRun({
       agentId: 'main',
       definitionId: definition.id,
-      outcomeId: execution.outcomeId,
+      taskId: execution.taskId,
       input: {},
       source: { kind: 'webui' },
     });

@@ -2,8 +2,6 @@ import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import {
   appendProductDeliveryText,
-  WorkItemCommandSchema,
-  WorkItemNextActionSchema,
   type ProductDeliveryEnvelope,
   type ProductReference,
 } from '@xopcai/gateway-contract';
@@ -17,26 +15,18 @@ import {
   type ProjectService,
   type ProjectStatus,
 } from '../../projects/index.js';
-import type {
-  WorkItemPriority,
-  WorkItemService,
-  WorkItemCompletionPolicy,
-  WorkItemPhase,
-} from '../../work-items/index.js';
 import type { LocalAppService } from '../../local-apps/index.js';
-import { getSessionMetadata } from '../../storage/sqlite/index.js';
 
 const XopcUseToolSchema = Type.Object({
   mode: Type.Union([
     Type.Literal('project'),
     Type.Literal('note'),
-    Type.Literal('work_item'),
     Type.Literal('local_app'),
     Type.Literal('settings'),
   ]),
   command: Type.String({
     description:
-      'Object command. Supports project list/get/create/update/resolve_workspace, note list/get/create/append/update/preview_edit, work_item list/get/create/update_metadata/execute_command/archive/unarchive, local_app list/get/create/validate, and settings open.',
+      'Object command. Supports project list/get/create/update/resolve_workspace, note list/get/create/append/update/preview_edit, local_app list/get/create/validate, and settings open.',
   }),
   args: Type.Optional(Type.Record(Type.String(), Type.Any())),
   dryRun: Type.Optional(Type.Boolean({
@@ -44,7 +34,7 @@ const XopcUseToolSchema = Type.Object({
   })),
 });
 
-export type XopcUseMode = 'project' | 'note' | 'work_item' | 'local_app' | 'settings';
+export type XopcUseMode = 'project' | 'note' | 'local_app' | 'settings';
 
 export interface XopcUseToolInput {
   mode: XopcUseMode;
@@ -59,7 +49,6 @@ export interface XopcUseToolDeps {
   getCurrentSessionKey?: () => string | undefined;
   getNotesService?: () => NotesService | undefined;
   getProjectService?: () => ProjectService | undefined;
-  getWorkItemService?: () => WorkItemService | undefined;
   getLocalAppService?: () => LocalAppService | undefined;
 }
 
@@ -74,10 +63,6 @@ type XopcUseDetails = {
 const PROJECT_STATUSES = new Set<ProjectStatus>(['active', 'paused', 'archived']);
 const NOTE_KINDS = new Set<NoteKind>(['thought', 'todo', 'voice', 'media', 'bookmark', 'mixed', 'task']);
 const NOTE_STATUSES = new Set<NoteStatus>(['inbox', 'processed', 'archived', 'trashed']);
-const WORK_ITEM_PHASES = new Set<WorkItemPhase>(['backlog', 'ready', 'executing', 'verifying', 'closed']);
-const WORK_ITEM_INITIAL_PHASES = new Set<Extract<WorkItemPhase, 'backlog' | 'ready'>>(['backlog', 'ready']);
-const WORK_ITEM_PRIORITIES = new Set<WorkItemPriority>(['urgent', 'high', 'normal', 'low']);
-const WORK_ITEM_COMPLETION_POLICIES = new Set<WorkItemCompletionPolicy>(['automatic', 'agent_verified', 'user_accepted']);
 
 function okText(details: XopcUseDetails): AgentToolResult<XopcUseDetails> {
   const text = JSON.stringify(details.result ?? {}, null, 2);
@@ -119,23 +104,9 @@ function enumValue<T extends string>(value: unknown, allowed: Set<T>): T | undef
   return typeof value === 'string' && allowed.has(value as T) ? value as T : undefined;
 }
 
-function finiteNumber(value: unknown): number | undefined {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (typeof value === 'string' && value.trim()) {
-    const parsed = Number(value);
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  return undefined;
-}
-
 function stringArray(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) return undefined;
   return value.filter((item): item is string => typeof item === 'string');
-}
-
-function nullableNumber(value: unknown): number | null | undefined {
-  if (value === null) return null;
-  return finiteNumber(value);
 }
 
 function ensureArgs(input: XopcUseToolInput): Record<string, unknown> {
@@ -204,21 +175,6 @@ function deliveryForXopcResult(
         capabilities: ['open', 'preview', 'edit', 'continue_in_chat', 'share'],
       };
     }
-  } else if (mode === 'work_item') {
-    source = record(resultRecord.item);
-    const id = deliveryText(source?.id);
-    if (id) {
-      primary = {
-        kind: 'work_item',
-        id,
-        title: deliveryText(source?.title) ?? 'Work item',
-        summary: deliverySummary(source?.description, source?.nextAction),
-        status: deliveryText(source?.status),
-        revision: deliveryRevision(source?.updatedAt),
-        projectId: deliveryText(source?.projectId),
-        capabilities: ['open', 'edit', 'continue_in_chat'],
-      };
-    }
   } else if (mode === 'local_app') {
     source = record(resultRecord.app);
     const id = deliveryText(source?.id);
@@ -260,13 +216,6 @@ function deliveryForXopcResult(
         : 'updated',
     primary,
   };
-}
-
-function currentProjectId(args: Record<string, unknown>, deps: XopcUseToolDeps): string | undefined {
-  const explicit = trimString(args.projectId);
-  if (explicit) return explicit;
-  const sessionKey = trimString(args.sessionKey) ?? deps.getCurrentSessionKey?.();
-  return sessionKey ? getSessionMetadata(sessionKey)?.projectId : undefined;
 }
 
 function projectWorkspaceRootArg(args: Record<string, unknown>): string | undefined {
@@ -474,123 +423,6 @@ async function handleNote(
   return { ok: false, error: `Unsupported note command: ${command}` };
 }
 
-async function handleWorkItem(
-  command: string,
-  args: Record<string, unknown>,
-  deps: XopcUseToolDeps,
-  dryRun: boolean,
-): Promise<unknown> {
-  const workItems = deps.getWorkItemService?.();
-  if (!workItems) return { ok: false, error: 'Work item service is unavailable' };
-
-  if (command === 'list') {
-    const projectId = currentProjectId(args, deps);
-    if (!projectId) return { ok: false, error: 'projectId is required' };
-    return {
-      ok: true,
-      ...workItems.listProjectWorkItems(projectId, {
-        phase: enumValue(args.phase, WORK_ITEM_PHASES),
-        priority: enumValue(args.priority, WORK_ITEM_PRIORITIES),
-        includeArchived: args.includeArchived === true,
-        search: trimString(args.search),
-        sortBy: enumValue(args.sortBy, new Set(['updatedAt', 'createdAt', 'priority', 'phase', 'dueAt'] as const)),
-        sortOrder: enumValue(args.sortOrder, new Set(['asc', 'desc'] as const)),
-        limit: boundedLimit(args.limit),
-        offset: offset(args.offset),
-      }),
-    };
-  }
-
-  if (command === 'get') {
-    const id = trimString(args.workItemId) ?? trimString(args.id);
-    if (!id) return { ok: false, error: 'workItemId is required' };
-    const item = workItems.getWorkItem(id);
-    return item ? { ok: true, item } : { ok: false, error: `Work item not found: ${id}` };
-  }
-
-  if (command === 'create') {
-    const projectId = currentProjectId(args, deps);
-    const title = trimString(args.title);
-    if (!projectId) return { ok: false, error: 'projectId is required' };
-    if (!title) return { ok: false, error: 'title is required' };
-    const input = {
-      title,
-      description: trimString(args.description),
-      initialPhase: enumValue(args.initialPhase, WORK_ITEM_INITIAL_PHASES),
-      priority: enumValue(args.priority, WORK_ITEM_PRIORITIES),
-      ownerAgentId: trimString(args.ownerAgentId),
-      completionPolicy: enumValue(args.completionPolicy, WORK_ITEM_COMPLETION_POLICIES),
-      nextAction: WorkItemNextActionSchema.safeParse(args.nextAction).success
-        ? WorkItemNextActionSchema.parse(args.nextAction)
-        : undefined,
-      dueAt: finiteNumber(args.dueAt),
-    };
-    if (args.initialPhase !== undefined && input.initialPhase === undefined) return { ok: false, error: 'Invalid initialPhase' };
-    if (args.priority !== undefined && input.priority === undefined) return { ok: false, error: 'Invalid work item priority' };
-    if (args.completionPolicy !== undefined && input.completionPolicy === undefined) return { ok: false, error: 'Invalid completionPolicy' };
-    if (args.nextAction !== undefined && input.nextAction === undefined) return { ok: false, error: 'Invalid nextAction' };
-    if (args.dueAt !== undefined && input.dueAt === undefined) return { ok: false, error: 'Invalid dueAt' };
-    if (dryRun) return { ok: true, dryRun: true, action: 'create_work_item', projectId, input };
-    const item = workItems.createProjectWorkItem(projectId, input);
-    return { ok: true, item };
-  }
-
-  if (command === 'update_metadata') {
-    const id = trimString(args.workItemId) ?? trimString(args.id);
-    if (!id) return { ok: false, error: 'workItemId is required' };
-    const expectedVersion = finiteNumber(args.expectedVersion);
-    if (!expectedVersion || !Number.isInteger(expectedVersion)) return { ok: false, error: 'expectedVersion is required' };
-    const dueAt = args.dueAt !== undefined ? nullableNumber(args.dueAt) : undefined;
-    const nextAction = args.nextAction === null
-      ? null
-      : WorkItemNextActionSchema.safeParse(args.nextAction).success
-        ? WorkItemNextActionSchema.parse(args.nextAction)
-        : undefined;
-    const patch = {
-      ...(args.title !== undefined ? { title: trimString(args.title) ?? '' } : {}),
-      ...(args.description !== undefined ? { description: optionalString(args.description) } : {}),
-      ...(args.priority !== undefined ? { priority: enumValue(args.priority, WORK_ITEM_PRIORITIES) } : {}),
-      ...(args.ownerAgentId !== undefined ? { ownerAgentId: optionalString(args.ownerAgentId) } : {}),
-      ...(args.completionPolicy !== undefined ? { completionPolicy: enumValue(args.completionPolicy, WORK_ITEM_COMPLETION_POLICIES) } : {}),
-      ...(args.nextAction !== undefined ? { nextAction } : {}),
-      ...(args.dueAt !== undefined ? { dueAt } : {}),
-    };
-    if (args.priority !== undefined && patch.priority === undefined) return { ok: false, error: 'Invalid work item priority' };
-    if (args.completionPolicy !== undefined && patch.completionPolicy === undefined) return { ok: false, error: 'Invalid completionPolicy' };
-    if (args.nextAction !== undefined && nextAction === undefined) return { ok: false, error: 'Invalid nextAction' };
-    if (args.dueAt !== undefined && dueAt === undefined) return { ok: false, error: 'Invalid dueAt' };
-    if (dryRun) return { ok: true, dryRun: true, action: 'update_work_item_metadata', workItemId: id, expectedVersion, patch };
-    const item = workItems.updateMetadata(id, patch, expectedVersion);
-    return item ? { ok: true, item } : { ok: false, error: `Work item not found or version conflict: ${id}` };
-  }
-
-  if (command === 'execute_command') {
-    const id = trimString(args.workItemId) ?? trimString(args.id);
-    if (!id) return { ok: false, error: 'workItemId is required' };
-    const parsed = WorkItemCommandSchema.safeParse(args);
-    if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid work item command' };
-    if (dryRun) return { ok: true, dryRun: true, action: 'execute_work_item_command', workItemId: id, command: parsed.data };
-    const item = workItems.executeCommand(id, parsed.data, {
-      actor: { kind: 'agent', id: deps.getCurrentAgentId?.() ?? 'agent' },
-      source: 'agent_tool',
-      requestId: `xopc_use:${id}:${parsed.data.expectedVersion}`,
-    });
-    return item ? { ok: true, item } : { ok: false, error: `Work item not found: ${id}` };
-  }
-
-  if (command === 'archive' || command === 'unarchive') {
-    const id = trimString(args.workItemId) ?? trimString(args.id);
-    const expectedVersion = finiteNumber(args.expectedVersion);
-    if (!id) return { ok: false, error: 'workItemId is required' };
-    if (!expectedVersion || !Number.isInteger(expectedVersion)) return { ok: false, error: 'expectedVersion is required' };
-    if (dryRun) return { ok: true, dryRun: true, action: command, workItemId: id, expectedVersion };
-    const item = workItems.setArchived(id, command === 'archive', expectedVersion);
-    return item ? { ok: true, item } : { ok: false, error: `Work item not found, open, or version conflict: ${id}` };
-  }
-
-  return { ok: false, error: `Unsupported work_item command: ${command}` };
-}
-
 async function handleLocalApp(
   command: string,
   args: Record<string, unknown>,
@@ -657,7 +489,7 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
     name: 'xopc_use',
     label: 'XOPC Use',
     description:
-      'Operate first-class xopc objects through one safe entry point. Use for projects, notes, project work items, local apps, and exact settings jump targets instead of editing storage files directly. For non-trivial object changes, load the built-in manual first with tool_manual({ tool: "xopc_use" }).',
+      'Operate first-class xopc objects through one safe entry point. Use for projects, notes, local apps, and exact settings jump targets instead of editing storage files directly. For non-trivial object changes, load the built-in manual first with tool_manual({ tool: "xopc_use" }).',
     parameters: XopcUseToolSchema,
     mutatesWorkspace: true,
     mutationScope: 'external',
@@ -685,9 +517,7 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
               ? await handleProject(command, args, deps, dryRun)
               : mode === 'note'
                 ? await handleNote(command, args, deps, dryRun)
-                : mode === 'work_item'
-                  ? await handleWorkItem(command, args, deps, dryRun)
-                  : mode === 'local_app'
+                : mode === 'local_app'
                     ? await handleLocalApp(command, args, deps, dryRun)
                     : mode === 'settings'
                       ? handleSettings(command, args)

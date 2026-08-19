@@ -160,9 +160,12 @@ describe('SQLite migrations', () => {
           .map((column) => column.name),
       ).toContain('judgment_json');
       expect(
-        (db.prepare(`SELECT name FROM pragma_table_info('outcome_execution_state')`).all() as Array<{ name: string }>)
+        (db.prepare(`SELECT name FROM pragma_table_info('tasks')`).all() as Array<{ name: string }>)
           .map((column) => column.name),
       ).toContain('approved_boundaries_json');
+      expect(db.prepare(
+        `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'outcome_execution_state'`,
+      ).get()).toBeUndefined();
       for (const removedTable of [
         'task_outcomes',
         'goal_contracts',
@@ -177,6 +180,10 @@ describe('SQLite migrations', () => {
         'goal_session_links',
         'goal_context_messages',
         'work_intakes',
+        'outcomes',
+        'outcome_contracts',
+        'outcome_links',
+        'outcome_queue',
       ]) {
         expect(db.prepare(
           `SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`,
@@ -189,7 +196,7 @@ describe('SQLite migrations', () => {
       expect(
         (db.prepare(`SELECT name FROM pragma_table_info('workflow_runs')`).all() as Array<{ name: string }>)
           .map((column) => column.name),
-      ).toContain('outcome_id');
+      ).toContain('task_id');
     } finally {
       db.close();
       rmSync(dir, { recursive: true, force: true });
@@ -305,7 +312,7 @@ describe('SQLite migrations', () => {
     `).get()).toEqual({ default_action_level: 'auto' });
   });
 
-  it('upgrades v35 goal contracts with measurable outcome storage', () => {
+  it('upgrades v35 goal contracts with measurable task storage', () => {
     const db = openEmptyDb();
     ensureSchemaMetaTable(db);
     db.exec(`
@@ -580,6 +587,40 @@ describe('SQLite migrations', () => {
       `SELECT name FROM sqlite_master WHERE type = 'table' AND name IN (?, ?) ORDER BY name`,
     ).all('compaction_checkpoints', 'checkpoint_entries');
     expect(tables).toEqual([]);
+  });
+
+  it('keeps only the Task work model in the current schema', () => {
+    const db = openEmptyDb();
+    ensureXopcDatabaseSchema(db);
+
+    expect(readSchemaVersion(db)).toBe(XOPC_DB_SCHEMA_VERSION);
+    const removedTables = db.prepare(
+      `SELECT name FROM sqlite_master
+       WHERE type = 'table' AND name LIKE 'work_item%'
+       ORDER BY name`,
+    ).all();
+    expect(removedTables).toEqual([]);
+
+    const receiptColumns = db.prepare(`PRAGMA table_info(execution_receipts)`).all() as Array<{ name: string }>;
+    expect(receiptColumns.map((column) => column.name)).not.toContain('work_item_id');
+    expect(receiptColumns.map((column) => column.name)).not.toContain('outcome_id');
+    expect(receiptColumns.map((column) => column.name)).toContain('task_id');
+    expect(receiptColumns.map((column) => column.name)).toContain('feedback_rating');
+    const taskColumns = db.prepare(`PRAGMA table_info(tasks)`).all() as Array<{ name: string }>;
+    expect(taskColumns.map((column) => column.name)).toContain('approved_boundaries_json');
+    expect(taskColumns.map((column) => column.name)).not.toContain('user_status');
+    expect(taskColumns.map((column) => column.name)).not.toContain('internal_status');
+    expect(db.prepare(
+      `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'task_execution_state'`,
+    ).get()).toBeUndefined();
+    expect(db.prepare(
+      `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'task_dependencies'`,
+    ).get()).toEqual({ name: 'task_dependencies' });
+
+    const blockedScenario = db.prepare(
+      `SELECT event_types_json FROM proactive_scenarios WHERE scenario_key = 'blocked_work'`,
+    ).get() as { event_types_json: string };
+    expect(JSON.parse(blockedScenario.event_types_json)).toEqual(['task.status_changed.v1']);
   });
 
 });

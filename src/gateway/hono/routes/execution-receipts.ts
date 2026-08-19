@@ -10,12 +10,12 @@ import {
   type ExecutionContract,
   type ExecutionEvidence,
 } from '../../../storage/sqlite/index.js';
-import { OutcomeReceiptService } from '../../../work/outcome-receipt-service.js';
-import { OutcomeProjectionService } from '../../../work/outcome-projection-service.js';
+import { TaskReceiptService } from '../../../tasks/task-receipt-service.js';
+import { TaskProjectionService } from '../../../tasks/task-projection-service.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
-import { replayExecutionEvaluation } from '../../../agent/outcomes/execution-evaluation.js';
-import { recordOutcomeContextFeedback } from '../../../work/outcome-context-feedback.js';
-import { OutcomeController } from '../../../work/outcome-controller.js';
+import { replayExecutionEvaluation } from '../../../agent/tasks/execution-evaluation.js';
+import { recordTaskContextFeedback } from '../../../tasks/task-context-feedback.js';
+import { TaskController } from '../../../tasks/task-controller.js';
 
 function parseLimit(raw: string | undefined): number | undefined {
   if (!raw) return undefined;
@@ -31,7 +31,7 @@ function isExecutionContract(value: unknown): value is ExecutionContract {
   if (!value || typeof value !== 'object') return false;
   const contract = value as Partial<ExecutionContract>;
   return typeof contract.objective === 'string'
-    && isStringArray(contract.deliverables)
+    && isStringArray(contract.expectedOutputs)
     && isStringArray(contract.acceptanceCriteria)
     && isStringArray(contract.constraints)
     && isStringArray(contract.approvalRequired)
@@ -62,17 +62,16 @@ function isExecutionEvidence(value: unknown): value is ExecutionEvidence[] {
 }
 
 export function registerExecutionReceiptRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
-  const receipts = new OutcomeReceiptService();
-  const projections = new OutcomeProjectionService();
-  const controller = new OutcomeController({
-    enqueue: (outcomeId, options) => deps.service.enqueueOutcome(outcomeId, options),
+  const receipts = new TaskReceiptService();
+  const projections = new TaskProjectionService();
+  const controller = new TaskController({
+    enqueue: (taskId, options) => deps.service.enqueueTask(taskId, options),
   });
 
   authenticated.get('/api/execution-receipts', (c) => {
     const items = receipts.list({
       sessionKey: c.req.query('sessionKey')?.trim() || undefined,
       projectId: c.req.query('projectId')?.trim() || undefined,
-      workItemId: c.req.query('workItemId')?.trim() || undefined,
       limit: parseLimit(c.req.query('limit')),
     });
     return c.json({ ok: true, items });
@@ -137,25 +136,25 @@ export function registerExecutionReceiptRoutes(authenticated: Hono, deps: Authen
 
   authenticated.post('/api/execution-receipts/:runId/feedback', deps.strictRateLimitMiddleware, async (c) => {
     const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
-    const feedback = body.outcome === 'helpful' || body.outcome === 'not_helpful' ? body.outcome : undefined;
-    if (!feedback) return c.json({ ok: false, error: 'outcome must be helpful or not_helpful' }, 400);
+    const feedback = body.rating === 'helpful' || body.rating === 'not_helpful' ? body.rating : undefined;
+    if (!feedback) return c.json({ ok: false, error: 'rating must be helpful or not_helpful' }, 400);
     const reason = typeof body.reason === 'string' ? body.reason.trim().slice(0, 2_000) : undefined;
     let receipt = setExecutionReceiptFeedbackByRunId({
       runId: c.req.param('runId'),
-      outcome: feedback,
+      rating: feedback,
       reason: reason || undefined,
       needsCorrection: feedback === 'not_helpful',
       supportFit: typeof body.supportFit === 'boolean' ? body.supportFit : undefined,
     });
-    if (!receipt) return c.json({ ok: false, error: 'Outcome receipt not found' }, 404);
+    if (!receipt) return c.json({ ok: false, error: 'Task receipt not found' }, 404);
     if (feedback === 'not_helpful' && receipt.status !== 'running') {
       receipt = setExecutionVerdict({
         runId: receipt.runId,
         verdict: 'not_achieved',
-        correctionText: reason || 'The user reported that the outcome was not completed correctly.',
+        correctionText: reason || 'The user reported that the task was not completed correctly.',
       }) ?? receipt;
       const projected = projections.project(receipt);
-      recordOutcomeContextFeedback(projected);
+      recordTaskContextFeedback(projected);
       controller.handleCompletedRun(projected);
     }
     return c.json({ ok: true, receipt: receipts.get(receipt.runId) });
@@ -177,7 +176,7 @@ export function registerExecutionReceiptRoutes(authenticated: Hono, deps: Authen
     });
     if (!receipt) return c.json({ ok: false, error: 'Completed execution receipt not found' }, 404);
     const projected = projections.project(receipt);
-    recordOutcomeContextFeedback(projected);
+    recordTaskContextFeedback(projected);
     controller.handleCompletedRun(projected);
     return c.json({ ok: true, receipt: receipts.get(projected.runId) });
   });

@@ -521,7 +521,7 @@ for backwards-friendly form payloads).
 | `enabled` | boolean | `true` | Enable fallback |
 | `order` | array | `["alibaba", "openai"]` | Fallback order |
 
-On failure, the runtime tries each provider in order and records structured **attempts** (provider, outcome, latency, reason) for diagnostics. All HTTP calls go through the shared `media-shared/http` chassis with **SSRF guard** (`fetchWithTimeoutGuarded`).
+On failure, the runtime tries each provider in order and records structured **attempts** (provider, task, latency, reason) for diagnostics. All HTTP calls go through the shared `media-shared/http` chassis with **SSRF guard** (`fetchWithTimeoutGuarded`).
 
 **Example:**
 ```json

@@ -33,7 +33,7 @@ import { readRouteOverride } from './route-override';
 import { useGatewayStore } from '../../stores/gateway-store';
 import { ensureGatewayUrlScheme } from '../../stores/gateway-types';
 
-export type ProbeOutcome = {
+export type ProbeTask = {
   /** Wall-clock when the round completed. */
   at: number;
   result: RouteRaceResult;
@@ -53,21 +53,21 @@ export type ProbeReason =
 
 const FRESH_TTL_MS = 5_000;
 
-let last: ProbeOutcome | null = null;
-let inFlight: Promise<ProbeOutcome> | null = null;
+let last: ProbeTask | null = null;
+let inFlight: Promise<ProbeTask> | null = null;
 let lastFiredAt = 0;
 
-const listeners = new Set<(outcome: ProbeOutcome) => void>();
+const listeners = new Set<(task: ProbeTask) => void>();
 
-function emit(outcome: ProbeOutcome): void {
-  for (const cb of listeners) cb(outcome);
+function emit(task: ProbeTask): void {
+  for (const cb of listeners) cb(task);
 }
 
-export function getLastProbeOutcome(): ProbeOutcome | null {
+export function getLastProbeTask(): ProbeTask | null {
   return last;
 }
 
-export function subscribeProbeOutcome(cb: (outcome: ProbeOutcome) => void): () => void {
+export function subscribeProbeTask(cb: (task: ProbeTask) => void): () => void {
   listeners.add(cb);
   if (last) cb(last);
   return () => {
@@ -82,12 +82,12 @@ export type RunProbeOptions = {
 
 /**
  * Run a race (or return the in-flight one). Within FRESH_TTL_MS of a recent
- * outcome we skip the network entirely unless `force` is set.
+ * task we skip the network entirely unless `force` is set.
  */
 export async function runProbeRound(
   reason: ProbeReason,
   options: RunProbeOptions = {},
-): Promise<ProbeOutcome> {
+): Promise<ProbeTask> {
   const now = Date.now();
   if (!options.force && last && now - last.at < FRESH_TTL_MS) return last;
   if (inFlight) return inFlight;
@@ -97,7 +97,7 @@ export async function runProbeRound(
 
   const { baseUrl, lanUrl, token, activeGatewayId } = useGatewayStore.getState();
   if (!baseUrl.trim() && !lanUrl?.trim()) {
-    const offline: ProbeOutcome = {
+    const offline: ProbeTask = {
       at: now,
       result: { winner: 'none', url: '', lan: null, tunnel: null },
       online: false,
@@ -108,7 +108,7 @@ export async function runProbeRound(
   }
 
   lastFiredAt = now;
-  inFlight = (async (): Promise<ProbeOutcome> => {
+  inFlight = (async (): Promise<ProbeTask> => {
     try {
       // Manual override: probe ONLY the chosen route. The other side might
       // be misbehaving (split DNS, captive portal) and the user has told us
@@ -144,12 +144,12 @@ export async function runProbeRound(
       } else {
         result = await raceGatewayRoutes(baseUrl, lanUrl ?? undefined, { token });
       }
-      const outcome: ProbeOutcome = {
+      const task: ProbeTask = {
         at: Date.now(),
         result,
         online: result.winner !== 'none',
       };
-      last = outcome;
+      last = task;
 
       if (
         activeGatewayId &&
@@ -166,7 +166,7 @@ export async function runProbeRound(
 
       recordConnectionEvent({
         kind: 'race',
-        ok: outcome.online,
+        ok: task.online,
         url: result.url || undefined,
         route: result.winner === 'none' ? undefined : result.winner,
         reason,
@@ -174,8 +174,8 @@ export async function runProbeRound(
         network: getNetworkSnapshot().key,
       });
 
-      emit(outcome);
-      return outcome;
+      emit(task);
+      return task;
     } finally {
       inFlight = null;
     }

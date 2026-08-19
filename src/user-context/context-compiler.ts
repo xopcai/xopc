@@ -19,7 +19,7 @@ export interface ContextSnapshot {
   relationshipPolicy: RelationshipSettings;
   estimatedTokens: number;
   allocation?: UserContextPlan['allocation'];
-  outcomeId?: string;
+  taskId?: string;
   runId?: string;
   createdAt: number;
 }
@@ -35,7 +35,7 @@ type ContextSnapshotRow = {
   relationship_policy_json: string;
   estimated_tokens: number;
   allocation_json: string | null;
-  outcome_id: string | null;
+  task_id: string | null;
   run_id: string | null;
   created_at: number;
 };
@@ -54,7 +54,7 @@ function fromRow(row: ContextSnapshotRow): ContextSnapshot {
     ...(row.allocation_json
       ? { allocation: JSON.parse(row.allocation_json) as UserContextPlan['allocation'] }
       : {}),
-    ...(row.outcome_id ? { outcomeId: row.outcome_id } : {}),
+    ...(row.task_id ? { taskId: row.task_id } : {}),
     ...(row.run_id ? { runId: row.run_id } : {}),
     createdAt: row.created_at,
   };
@@ -109,10 +109,10 @@ export class ContextCompiler {
     return row ? fromRow(row) : undefined;
   }
 
-  linkToRun(input: { snapshotId: string; outcomeId?: string; runId: string }): ContextSnapshot | undefined {
+  linkToRun(input: { snapshotId: string; taskId?: string; runId: string }): ContextSnapshot | undefined {
     getSqliteDatabase().prepare(
-      `UPDATE context_snapshots SET outcome_id = ?, run_id = ? WHERE snapshot_id = ?`,
-    ).run(input.outcomeId ?? null, input.runId, input.snapshotId);
+      `UPDATE context_snapshots SET task_id = ?, run_id = ? WHERE snapshot_id = ?`,
+    ).run(input.taskId ?? null, input.runId, input.snapshotId);
     return this.get(input.snapshotId);
   }
 }

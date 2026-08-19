@@ -126,11 +126,11 @@ export function createServiceStartCommand(): Command {
       const result = await startGatewayService({ service });
 
       if (options.json) {
-        console.log(JSON.stringify({ ok: result.outcome === 'started', outcome: result.outcome }));
+        console.log(JSON.stringify({ ok: result.task === 'started', task: result.task }));
         return;
       }
 
-      switch (result.outcome) {
+      switch (result.task) {
         case 'started':
           console.log('✅ Gateway service started');
           break;
@@ -147,7 +147,7 @@ export function createServiceStartCommand(): Command {
           process.exit(1);
           break;
         default:
-          console.log(`ℹ️  Service start outcome: ${result.outcome}`);
+          console.log(`ℹ️  Service start task: ${result.task}`);
       }
     });
 }

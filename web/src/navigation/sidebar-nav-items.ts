@@ -1,4 +1,4 @@
-import { Box, BriefcaseBusiness, Cable, FolderKanban, GitBranch, HeartHandshake, Layers, MonitorPlay, Plug, Puzzle, StickyNote, Users, Zap } from 'lucide-react';
+import { Box, Cable, FolderKanban, GitBranch, HeartHandshake, Home, Layers, MonitorPlay, Plug, Puzzle, StickyNote, Users, Zap } from 'lucide-react';
 
 import type { LucideIcon } from '@/features/extensions/extension-nav-icon';
 
@@ -22,7 +22,7 @@ export type BuiltinNavId =
   | 'builtin:skills'
   | 'builtin:connectors'
   | 'builtin:localApps'
-  | 'builtin:work'
+  | 'builtin:home'
   | 'builtin:projects'
   | 'builtin:automations'
   | 'builtin:browserWorkflows'
@@ -42,7 +42,7 @@ export type BuiltinNavDef = {
  * Order here is the *initial* sequence shown to first-time users.
  */
 export const BUILTIN_NAV_DEFS: readonly BuiltinNavDef[] = [
-  { id: 'builtin:work', to: '/work', Icon: BriefcaseBusiness },
+  { id: 'builtin:home', to: '/home', Icon: Home },
   { id: 'builtin:projects', to: '/projects', Icon: FolderKanban },
   { id: 'builtin:profile', to: '/you', Icon: HeartHandshake },
   { id: 'builtin:notes', to: '/notes', Icon: StickyNote },
@@ -59,7 +59,7 @@ export const BUILTIN_NAV_DEFS: readonly BuiltinNavDef[] = [
 
 /** Product-level destinations shown by default; advanced capabilities live under More. */
 export const PRIMARY_NAV_IDS = [
-  'builtin:work',
+  'builtin:home',
   'builtin:projects',
   'builtin:profile',
 ] as const satisfies readonly BuiltinNavId[];

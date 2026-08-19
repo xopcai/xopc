@@ -345,7 +345,7 @@ export const launchdService: GatewayService = {
 
     if (result.exitCode === 0) {
       log.info('LaunchAgent restarted via kickstart');
-      return { outcome: 'restarted' };
+      return { task: 'restarted' };
     }
 
     // Fallback: bootout + bootstrap
@@ -361,7 +361,7 @@ export const launchdService: GatewayService = {
     const bootstrapResult = await launchctl(['bootstrap', domain, plistPath]);
     if (bootstrapResult.exitCode === 0 || bootstrapResult.exitCode === 37) {
       log.info('LaunchAgent restarted via bootout+bootstrap');
-      return { outcome: 'restarted' };
+      return { task: 'restarted' };
     }
 
     throw new Error(

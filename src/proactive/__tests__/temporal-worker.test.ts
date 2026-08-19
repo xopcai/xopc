@@ -17,7 +17,7 @@ import { ContextProviderRegistry } from '../execution/context.js';
 import { ProactiveScenarioService } from '../scenarios/service.js';
 import { ProactiveEventService } from '../service.js';
 import { ProactiveTemporalWorker } from '../temporal/worker.js';
-import { OutcomeExecutionService } from '../../work/index.js';
+import { TaskExecutionService } from '../../tasks/index.js';
 
 describe('proactive temporal worker', () => {
   let stateDir: string;
@@ -81,7 +81,7 @@ describe('proactive temporal worker', () => {
       allowedScenarioKeys: ['meeting_preparation'],
     });
     storeMeeting('2026-08-15T12:00:00.000Z');
-    const execution = new OutcomeExecutionService().create({
+    const execution = new TaskExecutionService().create({
       objective: 'Prepare launch decision', agentId: 'main', priority: 'high', source: 'api',
     });
     const insertNote = getSqliteDatabase().prepare(`INSERT INTO notes (
@@ -111,13 +111,13 @@ describe('proactive temporal worker', () => {
       items: [expect.objectContaining({ content: expect.stringContaining('Launch review') })],
     });
     expect(context.content.meeting_workspace).toMatchObject({
-      activeOutcomes: [expect.objectContaining({
-        evidenceId: `outcome:${execution.outcomeId}`,
+      activeTasks: [expect.objectContaining({
+        evidenceId: `task:${execution.taskId}`,
         objective: 'Prepare launch decision',
       })],
       recentNotes: [expect.objectContaining({ evidenceId: 'note:note-launch' })],
     });
-    expect(context.evidenceIds).toContain(`outcome:${execution.outcomeId}`);
+    expect(context.evidenceIds).toContain(`task:${execution.taskId}`);
     expect(JSON.stringify(context.content.meeting_workspace)).not.toContain('Private unrelated detail');
   });
 

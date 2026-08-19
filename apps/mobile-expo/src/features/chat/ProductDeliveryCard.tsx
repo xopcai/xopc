@@ -16,10 +16,9 @@ import {
 } from './product-delivery';
 
 const KIND_ICONS: Record<ProductReferenceKind, string> = {
-  outcome: 'target',
+  task: 'target',
   project: 'folder-outline',
   note: 'notebook-outline',
-  work_item: 'checkbox-marked-circle-outline',
   workflow_definition: 'source-branch',
   workflow_run: 'play-circle-outline',
   automation: 'robot-outline',
@@ -30,10 +29,9 @@ const KIND_ICONS: Record<ProductReferenceKind, string> = {
 };
 
 const KIND_LABELS: Record<ProductReferenceKind, { en: string; zh: string }> = {
-  outcome: { en: 'Outcome', zh: '结果' },
+  task: { en: 'Task', zh: '结果' },
   project: { en: 'Project', zh: '项目' },
   note: { en: 'Note', zh: '笔记' },
-  work_item: { en: 'Work item', zh: '工作项' },
   workflow_definition: { en: 'Workflow', zh: '工作流' },
   workflow_run: { en: 'Workflow run', zh: '工作流运行' },
   automation: { en: 'Automation', zh: '自动化' },

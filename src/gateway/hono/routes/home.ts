@@ -5,15 +5,15 @@ import {
   acknowledgeHomeAttention,
   decideConnectorApproval,
 } from '../../../storage/sqlite/index.js';
-import { WorkHomeQueryService } from '../../../work/home-query-service.js';
+import { HomeQueryService } from '../../../tasks/home-query-service.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
-export { buildHomeBriefing } from '../../../work/home-query-service.js';
+export { buildHomeBriefing } from '../../../tasks/home-query-service.js';
 
 /** Register the unified work-home read model and its decision actions. */
 export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service } = deps;
-  const home = new WorkHomeQueryService(service);
+  const home = new HomeQueryService(service);
 
   authenticated.get('/api/home', async (c) => c.json(await home.getSnapshot(c.req.query('locale'))));
 

@@ -249,9 +249,9 @@ export function InboxScreen() {
   }, [selectionMode, startSelection, toggleSelected]);
 
   const handleSwipeAction = useCallback((item: NoteIndexEntry, action: SwipeAction) => {
-    if (action.key === 'work') {
+    if (action.key === 'task') {
       router.push({
-        pathname: '/work/create',
+        pathname: '/tasks/create',
         params: { noteId: item.id, title: item.title ?? item.snippet ?? '' },
       });
       return;
@@ -345,7 +345,7 @@ export function InboxScreen() {
     if (selectionMode) return row;
 
     const actions: SwipeAction[] = [
-      { key: 'work', icon: 'checkbox-marked-circle-outline', color: 'blue', label: m.workPage.create },
+      { key: 'task', icon: 'checkbox-marked-circle-outline', color: 'blue', label: m.tasksPage.create },
       { key: 'archive', icon: 'archive-arrow-down-outline', color: 'blue', label: pm.archive },
       { key: 'delete', icon: 'trash-can-outline', color: 'red', label: pm.delete, destructive: true },
     ];
@@ -367,7 +367,7 @@ export function InboxScreen() {
     handleItemPress,
     handleSwipeAction,
     items.length,
-    m.workPage.create,
+    m.tasksPage.create,
     pm.archive,
     pm.delete,
     selectedIds,

@@ -9,7 +9,7 @@ import {
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../storage/sqlite/index.js';
-import { OutcomeExecutionService, OutcomeExecutionStateRepository, OutcomeRepository } from '../../work/index.js';
+import { TaskExecutionService, TaskRepository } from '../../tasks/index.js';
 import { inferSuggestedProjectDefaultAgentId } from '../project-agent-suggestion.js';
 import { inferProjectKind } from '../project-kind.js';
 import { ProjectService } from '../project-service.js';
@@ -272,10 +272,10 @@ describe('ProjectService', () => {
     expect(projects.get(pinned.id)?.pinnedAt).toBeUndefined();
   });
 
-  it('binds sessions and outcomes without deleting them when project is deleted', () => {
+  it('binds sessions and tasks without deleting them when project is deleted', () => {
     const project = projects.create({ name: 'Grouped Work' });
     ensureSessionRecord(SESSION_KEY, process.cwd());
-    const execution = new OutcomeExecutionService().create({
+    const execution = new TaskExecutionService().create({
       objective: 'Ship grouped work',
       sessionKey: SESSION_KEY,
       projectId: project.id,
@@ -285,12 +285,12 @@ describe('ProjectService', () => {
 
     const details = projects.getWithDetails(project.id);
     expect(details?.sessionCount).toBe(1);
-    expect(details?.outcomeCount).toBe(1);
+    expect(details?.taskCount).toBe(1);
     expect(projects.listSessionKeys(project.id)).toEqual([SESSION_KEY]);
 
     projects.delete(project.id);
     expect(projects.get(project.id)).toBeNull();
-    expect(new OutcomeRepository().get(execution.outcomeId)).toBeDefined();
-    expect(new OutcomeExecutionStateRepository().get(execution.outcomeId)?.projectId).toBeUndefined();
+    expect(new TaskRepository().get(execution.taskId)).toBeDefined();
+    expect(new TaskRepository().get(execution.taskId)?.execution.projectId).toBeUndefined();
   });
 });

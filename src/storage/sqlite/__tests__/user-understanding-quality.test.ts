@@ -107,7 +107,7 @@ describe('summarizeUserUnderstandingQuality', () => {
       providerId: 'local',
       selectedRecordIds: [active.id],
       feedback: {
-        outcome: 'helpful',
+        rating: 'helpful',
         source: 'user',
         createdAt: new Date(nowMs).toISOString(),
       },
@@ -152,19 +152,19 @@ describe('summarizeUserUnderstandingQuality', () => {
     const attributed = setLatestMemoryInjectFeedback({
       sessionKey: 'agent:main:webchat:test',
       beforeMs: nowMs - 1_000,
-      feedback: { outcome: 'helpful', source: 'user' },
+      feedback: { rating: 'helpful', source: 'user' },
       nowMs,
     });
     expect(attributed?.traceId).toBe(olderTraceId);
-    expect(attributed?.feedback?.outcome).toBe('helpful');
+    expect(attributed?.feedback?.rating).toBe('helpful');
     const replaced = setLatestMemoryInjectFeedback({
       sessionKey: 'agent:main:webchat:test',
       beforeMs: nowMs - 1_000,
-      feedback: { outcome: 'not_helpful', source: 'user' },
+      feedback: { rating: 'not_helpful', source: 'user' },
       nowMs: nowMs + 1,
     });
     expect(replaced?.traceId).toBe(olderTraceId);
-    expect(replaced?.feedback?.outcome).toBe('not_helpful');
+    expect(replaced?.feedback?.rating).toBe('not_helpful');
 
     const correctionTarget = findLatestMemoryInjectTrace({
       sessionKey: 'agent:main:webchat:test',
@@ -206,7 +206,7 @@ describe('summarizeUserUnderstandingQuality', () => {
 
     const firstUpdate = setMemoryTraceFeedback({
       traceId: firstTraceId,
-      feedback: { outcome: 'not_helpful', source: 'user' },
+      feedback: { rating: 'not_helpful', source: 'user' },
       nowMs,
     });
     expect(firstUpdate?.remediation?.needsReviewRecordIds).toEqual([]);
@@ -214,7 +214,7 @@ describe('summarizeUserUnderstandingQuality', () => {
 
     const secondUpdate = setMemoryTraceFeedback({
       traceId: secondTraceId,
-      feedback: { outcome: 'not_helpful', source: 'user' },
+      feedback: { rating: 'not_helpful', source: 'user' },
       nowMs: nowMs + 1,
     });
     expect(secondUpdate?.remediation?.needsReviewRecordIds).toEqual([record.id]);
@@ -223,7 +223,7 @@ describe('summarizeUserUnderstandingQuality', () => {
 
     const repeated = setMemoryTraceFeedback({
       traceId: secondTraceId,
-      feedback: { outcome: 'not_helpful', source: 'user' },
+      feedback: { rating: 'not_helpful', source: 'user' },
       nowMs: nowMs + 2,
     });
     expect(repeated?.remediation?.needsReviewRecordIds).toEqual([]);

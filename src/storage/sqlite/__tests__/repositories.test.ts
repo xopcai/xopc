@@ -501,7 +501,7 @@ describe('sqlite repositories', () => {
     const updated = setMemoryTraceFeedback({
       traceId,
       feedback: {
-        outcome: 'helpful',
+        rating: 'helpful',
         score: 0.8,
         reason: 'The recalled checklist changed the final answer.',
         source: 'evaluator',
@@ -509,7 +509,7 @@ describe('sqlite repositories', () => {
       nowMs: Date.parse('2026-01-01T00:00:00.000Z'),
     });
 
-    expect(updated?.feedback?.outcome).toBe('helpful');
+    expect(updated?.feedback?.rating).toBe('helpful');
     expect(updated?.feedback?.score).toBe(0.8);
 
     const traces = listMemoryTraceEvents({ sessionKey: SESSION_KEY });
@@ -536,7 +536,7 @@ describe('sqlite repositories', () => {
     });
     setMemoryTraceFeedback({
       traceId: researchTraceId,
-      feedback: { outcome: 'not_helpful', source: 'evaluator' },
+      feedback: { rating: 'not_helpful', source: 'evaluator' },
     });
 
     expect(listMemoryTraceEvents().map((trace) => trace.traceId)).toEqual(expect.arrayContaining([traceId, researchTraceId]));

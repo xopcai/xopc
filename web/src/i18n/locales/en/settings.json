@@ -1257,7 +1257,7 @@
     "sortName": "Sort by name",
     "sortSource": "Sort by source",
     "sortAria": "Connector sort order",
-    "discoverEmpty": "No connectors match these filters. Try another outcome, search, or source.",
+    "discoverEmpty": "No connectors match these filters. Try another task, search, or source.",
     "loadMore": "Load more",
     "connectionsEmpty": "You have no connections yet. Choose one from the catalog to give xopc context or actions.",
     "connectionsSearchEmpty": "No connections match this search.",
@@ -1288,8 +1288,8 @@
       "act": "Take action for you",
       "reach": "Stay connected"
     },
-    "outcomeFilterAria": "Filter connectors by outcome",
-    "outcomeAll": "All outcomes",
+    "taskFilterAria": "Filter connectors by task",
+    "taskAll": "All tasks",
     "connectorBenefitHints": {
       "understand": "Bring in the documents, data, and context that make help more relevant.",
       "act": "Let xopc use the tools where your work already happens.",

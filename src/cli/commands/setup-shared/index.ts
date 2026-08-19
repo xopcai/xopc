@@ -2,7 +2,7 @@ export {
   SETUP_EXIT,
   type SetupAction,
   type SetupError,
-  type SetupOutcome,
+  type SetupTask,
   type SetupRunOptions,
 } from './types.js';
 
@@ -14,5 +14,5 @@ export {
   type RunSetupArgs,
 } from './runner.js';
 
-export { emitOutcome, printJsonOutcome, printTextOutcome } from './output.js';
+export { emitTask, printJsonTask, printTextTask } from './output.js';
 export { promptSecret, isInteractive, isPromptCancelled } from './prompts.js';

@@ -144,7 +144,7 @@ describe('user context projection', () => {
     });
   });
 
-  it('projects connected knowledge volume and the latest sync outcome', () => {
+  it('projects connected knowledge volume and the latest sync task', () => {
     const definitions = [{
       id: 'composio-gmail',
       displayName: 'Gmail',

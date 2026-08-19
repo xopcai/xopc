@@ -18,15 +18,6 @@ export type WelcomeSuggestionContext =
       projectId?: string | null;
     }
   | {
-      kind: 'workItem';
-      workItemId: string;
-      title: string;
-      phase?: string;
-      waits?: Array<{ kind: string; reason: string }>;
-      nextAction?: string | null;
-      projectId?: string | null;
-    }
-  | {
       kind: 'workingDirectory';
       path: string;
     }
@@ -120,14 +111,9 @@ export type WelcomeSpotlightCopy = {
     agent: string;
     project: string;
     note: string;
-    workItem: string;
-    blocked: string;
-    nextAction: string;
     directory: string;
   };
   contextPrompts: {
-    workItemBlocked: string;
-    workItemNextAction: string;
     codingWorkspace: string;
   };
   exploreCards: WelcomeSuggestionCard[];
@@ -137,8 +123,6 @@ export type WelcomeSpotlightCopy = {
   codingWorkspace: SpotlightTemplate;
   generalProject: SpotlightTemplate;
   note: SpotlightTemplate;
-  workItem: SpotlightTemplate;
-  workItemBlocked: SpotlightTemplate;
   workingDirectory: SpotlightTemplate;
 };
 
@@ -181,14 +165,6 @@ function fillSpotlightTemplate(template: SpotlightTemplate, vars: Record<string,
   };
 }
 
-function workItemTemplate(context: Extract<WelcomeSuggestionContext, { kind: 'workItem' }>, copy: WelcomeSpotlightCopy) {
-  return context.waits?.length ? copy.workItemBlocked : copy.workItem;
-}
-
-function firstWaitReason(context: Extract<WelcomeSuggestionContext, { kind: 'workItem' }>): string | undefined {
-  return context.waits?.find((wait) => wait.reason.trim())?.reason.trim();
-}
-
 function inferAgentKind(agent: WelcomeSuggestionAgent | undefined): WelcomeSuggestionAgentKind {
   const id = agent?.id.trim().toLowerCase() ?? '';
   if (BUILTIN_AGENT_KIND[id]) return BUILTIN_AGENT_KIND[id];
@@ -218,7 +194,6 @@ function contextTitle(context: WelcomeSuggestionContext): string {
     case 'generalProject':
       return context.projectName;
     case 'note':
-    case 'workItem':
       return context.title;
     case 'workingDirectory':
     case 'codingWorkspace':
@@ -239,14 +214,6 @@ function contextReason(
     return fillTemplate(copy.reasons.agent, { agentName }) ?? copy.reasons.general;
   }
   switch (context.kind) {
-    case 'workItem':
-      if (firstWaitReason(context)) {
-        return fillTemplate(copy.reasons.blocked, { blockedReason: firstWaitReason(context) }) ?? copy.reasons.general;
-      }
-      if (context.nextAction?.trim()) {
-        return fillTemplate(copy.reasons.nextAction, { nextAction: context.nextAction }) ?? copy.reasons.general;
-      }
-      return fillTemplate(copy.reasons.workItem, { workItemTitle: context.title }) ?? copy.reasons.general;
     case 'codingProject':
     case 'generalProject':
       return fillTemplate(copy.reasons.project, { projectName: context.projectName }) ?? copy.reasons.general;
@@ -272,15 +239,7 @@ function dynamicContextCandidate(
   let promptTemplate = '';
   let vars: Record<string, string | undefined> = {};
 
-  if (context.kind === 'workItem' && firstWaitReason(context)) {
-    categoryId = 'work-item-unblock';
-    promptTemplate = copy.contextPrompts.workItemBlocked;
-    vars = { workItemTitle: context.title, blockedReason: firstWaitReason(context) };
-  } else if (context.kind === 'workItem' && context.nextAction?.trim()) {
-    categoryId = 'work-item-next';
-    promptTemplate = copy.contextPrompts.workItemNextAction;
-    vars = { workItemTitle: context.title, nextAction: context.nextAction };
-  } else if (context.kind === 'codingProject' && context.workspaceRoot?.trim()) {
+  if (context.kind === 'codingProject' && context.workspaceRoot?.trim()) {
     categoryId = 'understand-codebase';
     promptTemplate = copy.contextPrompts.codingWorkspace;
     vars = { projectName: context.projectName, workspaceRoot: context.workspaceRoot };
@@ -303,14 +262,6 @@ function dynamicContextCandidate(
 
 function candidateContextBoost(context: WelcomeSuggestionContext, categoryId: string): number {
   switch (context.kind) {
-    case 'workItem':
-      if (context.waits?.length) {
-        if (categoryId === 'work-item-unblock') return 90;
-        if (categoryId === 'work-item-risk') return 35;
-      }
-      if (context.nextAction?.trim() && categoryId === 'work-item-next') return 80;
-      if (categoryId === 'work-item-progress') return 25;
-      return 0;
     case 'codingProject':
       return categoryId === 'understand-codebase' ? 45 : categoryId === 'implement-feature' ? 30 : 20;
     case 'codingWorkspace':
@@ -429,13 +380,6 @@ export function buildWelcomeSpotlight(
     case 'note':
       template = copy.note;
       vars.noteTitle = context.title;
-      break;
-    case 'workItem':
-      template = workItemTemplate(context, copy);
-      vars.workItemTitle = context.title;
-      vars.status = context.phase;
-      vars.nextAction = context.nextAction ?? undefined;
-      vars.blockedReason = firstWaitReason(context);
       break;
     case 'workingDirectory':
       template = copy.workingDirectory;

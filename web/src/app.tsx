@@ -16,13 +16,12 @@ import {
   loadExtensionsPage,
   loadAutomationsPage,
   loadBrowserWorkflowsPage,
-  loadWorkPage,
-  loadOutcomeDetailPage,
+  loadHomePage,
+  loadTaskDetailPage,
   loadChannelsPage,
   loadConnectorsPage,
   loadProjectDetailPage,
   loadProjectsPage,
-  loadWorkItemDetailPage,
   loadExtensionDebugPage,
   loadExtensionPage,
   loadExtensionSettingsPage,
@@ -47,11 +46,10 @@ import { subscribeSystemTheme, syncThemeAfterHydration, useThemeStore } from '@/
 const SessionsPage = lazy(() => loadSessionsPage().then((m) => ({ default: m.SessionsPage })));
 const AutomationsPage = lazy(() => loadAutomationsPage().then((m) => ({ default: m.AutomationsPage })));
 const BrowserWorkflowsPage = lazy(() => loadBrowserWorkflowsPage().then((m) => ({ default: m.BrowserWorkflowsPage })));
-const WorkPage = lazy(() => loadWorkPage().then((m) => ({ default: m.WorkPage })));
-const OutcomeDetailPage = lazy(() => loadOutcomeDetailPage().then((m) => ({ default: m.OutcomeDetailPage })));
+const HomePage = lazy(() => loadHomePage().then((m) => ({ default: m.HomePage })));
+const TaskDetailPage = lazy(() => loadTaskDetailPage().then((m) => ({ default: m.TaskDetailPage })));
 const ProjectsPage = lazy(() => loadProjectsPage().then((m) => ({ default: m.ProjectsPage })));
 const ProjectDetailPage = lazy(() => loadProjectDetailPage().then((m) => ({ default: m.ProjectDetailPage })));
-const WorkItemDetailPage = lazy(() => loadWorkItemDetailPage().then((m) => ({ default: m.WorkItemDetailPage })));
 const NotesPage = lazy(() => loadNotesPage().then((m) => ({ default: m.NotesPage })));
 const WorkflowsPage = lazy(() => loadWorkflowsPage().then((m) => ({ default: m.WorkflowsPage })));
 const WorkflowDetailPage = lazy(() => loadWorkflowsPage().then((m) => ({ default: m.WorkflowDetailPage })));
@@ -155,7 +153,7 @@ const router = createHashRouter([
     path: '/',
     element: <AppShell />,
     children: [
-      { index: true, element: <Navigate to="/work" replace /> },
+      { index: true, element: <Navigate to="/home" replace /> },
       {
         path: 'open',
         element: (
@@ -204,18 +202,18 @@ const router = createHashRouter([
         ),
       },
       {
-        path: 'work',
+        path: 'home',
         element: (
           <Suspense fallback={<SecondaryRouteFallback />}>
-            <WorkPage />
+            <HomePage />
           </Suspense>
         ),
       },
       {
-        path: 'work/:outcomeId',
+        path: 'tasks/:taskId',
         element: (
           <Suspense fallback={<SecondaryRouteFallback />}>
-            <OutcomeDetailPage />
+            <TaskDetailPage />
           </Suspense>
         ),
       },
@@ -255,14 +253,6 @@ const router = createHashRouter([
             ),
           },
         ],
-      },
-      {
-        path: 'work-items/:workItemId',
-        element: (
-          <Suspense fallback={<SecondaryRouteFallback />}>
-            <WorkItemDetailPage />
-          </Suspense>
-        ),
       },
       {
         path: 'notes',

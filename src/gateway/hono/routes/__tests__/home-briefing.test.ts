@@ -8,30 +8,28 @@ describe('home briefing', () => {
       locale: 'zh-CN',
       decisions: [
         {
-          id: 'goal:1',
-          kind: 'outcome',
+          id: 'task:1',
+          kind: 'task',
           title: '确认发布范围',
           reason: 'needs_input',
           urgency: 'now',
-          href: '/work/1',
+          href: '/tasks/1',
           updatedAt: 100,
         },
       ],
       attention: [],
-      activeWorkCount: 2,
       activeWorkflowCount: 1,
-      activeOutcomeCount: 3,
+      activeTaskCount: 3,
       wins: [],
       nowMs: 200,
     });
 
-    expect(briefing.summary).toBe('有 1 件事需要你处理；我正在继续推进 6 件工作。');
+    expect(briefing.summary).toBe('有 1 件事需要你处理；我正在继续推进 4 件工作。');
     expect(briefing.focus).toHaveLength(1);
     expect(briefing.progress).toEqual({
-      activeWorkCount: 2,
       activeWorkflowCount: 1,
-      activeOutcomeCount: 3,
-      movingCount: 6,
+      activeTaskCount: 3,
+      movingCount: 4,
     });
   });
 
@@ -40,9 +38,8 @@ describe('home briefing', () => {
       locale: 'en',
       decisions: [],
       attention: [],
-      activeWorkCount: 1,
       activeWorkflowCount: 0,
-      activeOutcomeCount: 0,
+      activeTaskCount: 1,
       wins: [],
       nowMs: 200,
     });
@@ -56,14 +53,13 @@ describe('home briefing', () => {
       locale: 'en',
       decisions: [],
       attention: [],
-      activeWorkCount: 0,
       activeWorkflowCount: 0,
-      activeOutcomeCount: 0,
+      activeTaskCount: 0,
       wins: [],
       nowMs: 200,
     });
 
-    expect(briefing.summary).toContain('Hand me an outcome');
+    expect(briefing.summary).toContain('Hand me an task');
   });
 
   it('includes run issues in the attention summary without treating them as decisions', () => {
@@ -80,9 +76,8 @@ describe('home briefing', () => {
         href: '/automations?run=run-1',
         updatedAt: 100,
       }],
-      activeWorkCount: 0,
       activeWorkflowCount: 0,
-      activeOutcomeCount: 0,
+      activeTaskCount: 0,
       wins: [],
       nowMs: 200,
     });

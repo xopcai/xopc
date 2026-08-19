@@ -8,7 +8,7 @@ const discovery = (
 ) => ({ enabled: true, state: { status, activeRunId } });
 
 describe('resolveWelcomeProjectEntryMode', () => {
-  it.each(['codingProject', 'generalProject', 'workingDirectory', 'workItem', 'note'])(
+  it.each(['codingProject', 'generalProject', 'workingDirectory', 'note'])(
     'hides the entry for %s context',
     (contextKind) => {
       expect(

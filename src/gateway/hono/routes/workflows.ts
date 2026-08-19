@@ -32,9 +32,8 @@ interface StartWorkflowRunRequestBody {
   input?: unknown;
   inputEnvelope?: WorkflowRunInputEnvelope;
   goal?: string;
-  outcomeId?: string;
+  taskId?: string;
   projectId?: string;
-  workItemId?: string;
   agentId?: string;
   parentSessionKey?: string;
   source?: WorkflowRunSource;
@@ -156,8 +155,8 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
 
   authenticated.post('/api/workflows/definitions', async (c) => {
     const body = await readJsonBody<SaveWorkflowDefinitionRequestBody>(c.req.raw);
-    if (!Number.isSafeInteger(body.expectedRevision) || body.expectedRevision! < 0) {
-      return c.json({ error: 'expectedRevision is required' }, 400);
+    if (body.expectedRevision !== 0) {
+      return c.json({ error: 'expectedRevision must be 0 when creating a workflow' }, 400);
     }
     const validation = validateWorkflowDefinitionInput({
       name: body.name,
@@ -175,10 +174,9 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
         graph: body.graph!,
         manifest: body.manifest,
         expectedRevision: body.expectedRevision,
-        // Keep revision > 0 compatible with older clients while new clients use PUT for updates.
-        intent: body.expectedRevision === 0 ? 'create' : 'update',
+        intent: 'create',
       });
-      return c.json({ definition }, body.expectedRevision === 0 ? 201 : 200);
+      return c.json({ definition }, 201);
     } catch (err) {
       if (err instanceof WorkflowNameConflictError) {
         return c.json({
@@ -332,7 +330,7 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
     }
 
     const parentSessionKey = body.parentSessionKey?.trim() || undefined;
-    const outcomeId = body.outcomeId?.trim();
+    const taskId = body.taskId?.trim();
     const projectId = body.projectId?.trim();
     if (projectId && !service.projects.get(projectId)) {
       return c.json({ error: 'Project not found' }, 404);
@@ -349,9 +347,8 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
     const result = await workflowRunService.startWorkflowRun({
       agentId,
       definitionId,
-      outcomeId,
+      taskId,
       projectId,
-      workItemId: typeof body.workItemId === 'string' ? body.workItemId : undefined,
       input: body.inputEnvelope ? undefined : body.input,
       inputEnvelope: body.inputEnvelope,
       goal: body.goal,
@@ -373,7 +370,7 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
   authenticated.get('/api/workflows/runs', async (c) => {
     const rawLimit = c.req.query('limit');
     const limit = rawLimit ? Number.parseInt(rawLimit, 10) : 50;
-    const outcomeId = c.req.query('outcomeId')?.trim();
+    const taskId = c.req.query('taskId')?.trim();
     const projectId = c.req.query('projectId')?.trim();
     if (projectId && !service.projects.get(projectId)) {
       return c.json({ error: 'Project not found' }, 404);
@@ -388,8 +385,8 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
       })
       : getAgentId(explicitAgentId, service.currentConfig);
     const runStore = workflowRunService.createRunStore(agentId);
-    const runs = outcomeId
-      ? await runStore.listRunSummariesForOutcome(outcomeId, Number.isFinite(limit) ? limit : 50)
+    const runs = taskId
+      ? await runStore.listRunSummariesForTask(taskId, Number.isFinite(limit) ? limit : 50)
       : await runStore.listRunSummaries(Number.isFinite(limit) ? limit : 50, { projectId });
     return c.json({ runs });
   });

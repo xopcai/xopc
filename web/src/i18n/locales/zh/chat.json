@@ -36,14 +36,11 @@
         "agent": "更贴合 {{agentName}} 的能力",
         "project": "根据项目「{{projectName}}」的当前上下文",
         "note": "根据笔记「{{noteTitle}}」继续推进",
-        "workItem": "根据工作项「{{workItemTitle}}」的当前状态",
         "blocked": "优先处理当前阻塞：{{blockedReason}}",
         "nextAction": "沿用已经明确的下一步：{{nextAction}}",
         "directory": "根据当前目录「{{path}}」开始"
       },
       "contextPrompts": {
-        "workItemBlocked": "工作项「{{workItemTitle}}」当前被「{{blockedReason}}」阻塞。请先分析根因，再给出最小可执行的解除阻塞方案、需要确认的信息和建议求助对象。",
-        "workItemNextAction": "工作项「{{workItemTitle}}」已经明确下一步是「{{nextAction}}」。请检查前置条件和风险，然后把它拆成可以立即开始的行动。",
         "codingWorkspace": "请从目录「{{workspaceRoot}}」开始理解项目「{{projectName}}」，先定位启动入口、核心模块和最值得阅读的文件，再建议我下一步看哪里。"
       },
       "exploreCards": [
@@ -379,104 +376,6 @@
               },
               {
                 "prompt": "从这篇笔记里提取任务清单，并按优先级排序。"
-              }
-            ]
-          }
-        ]
-      },
-      "workItem": {
-        "headline": "继续推进这个工作项",
-        "tagline": "总结状态，确定下一步，检查风险。",
-        "contextLabel": "工作项：{{workItemTitle}}",
-        "categories": [
-          {
-            "id": "work-item-progress",
-            "icon": "task",
-            "title": "总结进展",
-            "description": "状态、已完成、阻塞",
-            "scenarios": [
-              {
-                "prompt": "基于工作项「{{workItemTitle}}」，帮我总结当前进展、已完成事项、风险和阻塞。"
-              },
-              {
-                "prompt": "帮我把这个工作项整理成一段可以同步给团队的状态更新。"
-              }
-            ]
-          },
-          {
-            "id": "work-item-next",
-            "icon": "target",
-            "title": "找下一步",
-            "description": "最小行动、优先级、依赖",
-            "scenarios": [
-              {
-                "prompt": "基于工作项「{{workItemTitle}}」，帮我判断当前最小可执行下一步是什么。"
-              },
-              {
-                "prompt": "帮我拆解这个工作项的后续步骤，并标出优先级和依赖。"
-              }
-            ]
-          },
-          {
-            "id": "work-item-risk",
-            "icon": "review",
-            "title": "识别风险",
-            "description": "阻塞、遗漏、验收标准",
-            "scenarios": [
-              {
-                "prompt": "帮我检查工作项「{{workItemTitle}}」可能有哪些遗漏、风险或未定义清楚的验收标准。"
-              },
-              {
-                "prompt": "如果我要推进这个工作项，请帮我列出需要确认的问题清单。"
-              }
-            ]
-          }
-        ]
-      },
-      "workItemBlocked": {
-        "headline": "这个工作项需要解除阻塞",
-        "tagline": "先分析原因，再确定可执行方案。",
-        "contextLabel": "工作项：{{workItemTitle}}",
-        "categories": [
-          {
-            "id": "work-item-progress",
-            "icon": "task",
-            "title": "总结进展",
-            "description": "状态、已完成、阻塞",
-            "scenarios": [
-              {
-                "prompt": "基于工作项「{{workItemTitle}}」，帮我总结当前进展、已完成事项、风险和阻塞。"
-              },
-              {
-                "prompt": "帮我把这个工作项整理成一段可以同步给团队的状态更新。"
-              }
-            ]
-          },
-          {
-            "id": "work-item-unblock",
-            "icon": "target",
-            "title": "解除阻塞",
-            "description": "原因、方案、求助对象",
-            "scenarios": [
-              {
-                "prompt": "工作项「{{workItemTitle}}」当前被阻塞。请帮我分析阻塞原因，并给出 3 个可尝试的解决方案。"
-              },
-              {
-                "prompt": "帮我判断这个阻塞应该找谁确认、需要什么信息、下一步怎么推进。"
-              }
-            ]
-          },
-          {
-            "id": "work-item-risk",
-            "icon": "review",
-            "title": "识别风险",
-            "description": "遗漏、依赖、验收标准",
-            "scenarios": [
-              {
-                "prompt": "帮我检查工作项「{{workItemTitle}}」可能有哪些遗漏、风险或未定义清楚的验收标准。"
-              },
-              {
-                "prompt": "如果我要推进这个工作项，请帮我列出需要确认的问题清单。"
               }
             ]
           }
@@ -994,7 +893,7 @@
       "unverified": "尚未独立验证"
     },
     "executionReceiptRecovery": "失败与恢复",
-    "messageOutcomesHeading": "本轮成果",
+    "messageTasksHeading": "本轮成果",
     "stepTimelineThinkingStreaming": "正在思考…",
     "stepTimelineThinkingDone": "思考完成",
     "stepTimelineToolSearchRunning": "搜索网络中…",
@@ -1073,32 +972,8 @@
     "sourceNoteSaveDialogCancel": "取消",
     "sourceNoteSaveDialogConfirm": "保存到 Note",
     "sourceNoteSaveDialogSaving": "保存中…",
-    "workItemBanner": "正在推进：{{title}}",
     "scopeProject": "项目",
     "scopeWorkspace": "工作目录",
-    "workItemNextStepAction": "下一步",
-    "workItemSummarizeAction": "总结进展",
-    "workItemOpenItem": "打开工作项",
-    "workItemOpenProject": "打开项目",
-    "workItemPriorityLabel": "优先级",
-    "workItemUpdatedLabel": "更新",
-    "workItemDescriptionLabel": "描述",
-    "workItemNextActionLabel": "下一步",
-    "workItemBlockedLabel": "阻塞",
-    "workItemNoDetails": "暂无描述、下一步或阻塞记录。",
-    "workItemNextStepPrompt": "请围绕当前工作项「{{title}}」给出最高价值的下一步。要求具体可执行；如有必要，请补充验收标准，并明确哪些工作项字段建议更新。",
-    "workItemSummarizePrompt": "请总结当前工作项「{{title}}」的推进情况，包括已经完成/变化的内容、当前状态、阻塞点和下一步。除非我确认，不要直接修改工作项。",
-    "workItemCommandAction": "提议命令",
-    "workItemCommandDrafted": "已生成命令草案",
-    "workItemCommandFailed": "执行工作项命令失败",
-    "workItemCommandDialogTitle": "提议工作项命令",
-    "workItemCommandDialogDescription": "执行前请确认 AI 为「{{title}}」建议的命令。",
-    "workItemCommandDialogDescriptionFallback": "执行前请确认 AI 建议的工作项命令。",
-    "workItemCommandLabel": "命令",
-    "workItemCommandReasonLabel": "原因",
-    "workItemCommandDialogCancel": "取消",
-    "workItemCommandDialogExecute": "执行命令",
-    "workItemCommandDialogExecuting": "执行中…",
     "codeBlockCopy": "复制",
     "messageCopied": "已复制",
     "mermaidRenderError": "图表渲染失败",

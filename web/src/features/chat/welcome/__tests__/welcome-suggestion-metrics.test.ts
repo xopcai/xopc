@@ -16,20 +16,20 @@ describe('welcome suggestion metrics', () => {
   it('stores aggregate affinity without storing prompt content', () => {
     recordWelcomeSuggestionMetric({
       type: 'pick',
-      suggestionId: 'work-item-next:0',
-      categoryId: 'work-item-next',
-      contextKind: 'workItem',
+      suggestionId: 'note-next:0',
+      categoryId: 'note-next',
+      contextKind: 'note',
     });
     recordWelcomeSuggestionMetric({
       type: 'send',
-      suggestionId: 'work-item-next:0',
-      categoryId: 'work-item-next',
-      contextKind: 'workItem',
+      suggestionId: 'note-next:0',
+      categoryId: 'note-next',
+      contextKind: 'note',
       edited: true,
       characterDelta: 12,
     });
 
-    expect(readWelcomeSuggestionAffinity()['work-item-next:0']).toBe(12);
+    expect(readWelcomeSuggestionAffinity()['note-next:0']).toBe(12);
     expect(localStorage.getItem('xopc:chat-welcome-suggestion-metrics:v1')).not.toContain('prompt');
   });
 

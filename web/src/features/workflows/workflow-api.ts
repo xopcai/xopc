@@ -139,10 +139,9 @@ export interface WorkflowRunMetadata {
   triggerSource: string;
   agentId?: string;
   projectId?: string;
-  workItemId?: string;
   contextRefs?: WorkflowRunContextRef[];
   writebackPolicy?: WorkflowRunWritebackPolicy;
-  outcomeId?: string;
+  taskId?: string;
   retryOfRunId?: string;
   replay?: WorkflowRunReplayMetadata;
   definition: WorkflowRunDefinitionSnapshot;
@@ -155,7 +154,7 @@ export interface WorkflowRunMetadata {
 export type WorkflowRunReplayScope = 'failed_agents' | 'failed_phases';
 
 export interface WorkflowRunContextRef {
-  kind: 'project' | 'outcome' | 'work_item' | 'session' | 'attachment' | 'memory';
+  kind: 'project' | 'task' | 'session' | 'attachment' | 'memory';
   id: string;
   role?: string;
   title?: string;
@@ -166,7 +165,7 @@ export interface WorkflowRunWritebackPolicy {
 }
 
 export interface WorkflowRunWritebackTarget {
-  kind: 'project' | 'outcome' | 'work_item';
+  kind: 'project' | 'task';
   id: string;
   mode: 'record' | 'suggest' | 'evaluate';
 }
@@ -406,9 +405,8 @@ export interface WorkflowStats {
 
 export interface StartWorkflowRunOptions {
   definitionId: string;
-  outcomeId?: string;
+  taskId?: string;
   projectId?: string;
-  workItemId?: string;
   goal?: string;
   input?: unknown;
   agentId?: string;
@@ -637,7 +635,7 @@ export async function deleteWorkflowDefinition(id: string): Promise<void> {
 
 export interface WorkflowOwnerAgentOptions {
   ownerAgentId?: string;
-  outcomeId?: string;
+  taskId?: string;
   projectId?: string;
 }
 
@@ -659,8 +657,8 @@ export async function getWorkflowStats(definitionId?: string, options?: Workflow
 export async function listWorkflowRuns(limit = 50, options?: WorkflowOwnerAgentOptions): Promise<WorkflowRunSummary[]> {
   const searchParams = new URLSearchParams({ limit: String(limit) });
   appendOwnerAgentParam(searchParams, options);
-  const outcomeId = options?.outcomeId?.trim();
-  if (outcomeId) searchParams.set('outcomeId', outcomeId);
+  const taskId = options?.taskId?.trim();
+  if (taskId) searchParams.set('taskId', taskId);
   const projectId = options?.projectId?.trim();
   if (projectId) searchParams.set('projectId', projectId);
   const data = await fetchJson<{ runs: WorkflowRunSummary[] }>(apiUrl(`/api/workflows/runs?${searchParams.toString()}`));

@@ -1,14 +1,13 @@
 import {
-  parseWorkHomeResponse,
-  type OutcomeReceipt,
-  type WorkHomeResponse,
+  parseHomeResponse,
+  type TaskReceipt,
+  type HomeResponse,
 } from '@xopcai/gateway-contract';
 
 import { apiFetch } from '../api/client';
 import type { Language } from '../stores/preferences-store';
 import type { NoteIndexEntry } from './notes';
 import type { SessionListItem } from './sessions';
-import type { WorkItem } from './work-items';
 
 export type HomeAgent = {
   id: string;
@@ -58,7 +57,7 @@ export type HomeAutomation = {
 
 export type HomeDecision = {
   id: string;
-  kind: 'agent_judgment' | 'work_item' | 'outcome' | 'connector_approval';
+  kind: 'agent_judgment' | 'task' | 'connector_approval';
   title: string;
   detail?: string;
   reason: 'needs_input' | 'blocked' | 'user_input' | 'user_approval' | 'dependency' | 'external' | 'scheduled' | 'retry' | 'paused' | 'overdue' | 'due_soon' | 'decision_needed' | 'approval_required';
@@ -96,26 +95,18 @@ export type HomeBriefing = {
   summary: string;
   focus: HomeDecision[];
   progress: {
-    activeWorkCount: number;
     activeWorkflowCount: number;
-    activeOutcomeCount: number;
+    activeTaskCount: number;
     movingCount: number;
   };
   wins: Array<{
     id: string;
-    kind: 'work_item' | 'workflow_run' | 'automation_run';
+    kind: 'task' | 'workflow_run' | 'automation_run';
     title: string;
     href: string;
     completedAt: number;
   }>;
   nextScheduled?: HomeAutomation;
-};
-
-type HomeWorkItem = Pick<
-  WorkItem,
-  'id' | 'projectId' | 'title' | 'phase' | 'priority' | 'completionPolicy' | 'nextAction' | 'waits' | 'resolution' | 'dueAt' | 'closedAt' | 'updatedAt'
-> & {
-  projectName: string;
 };
 
 export interface HomeData {
@@ -133,17 +124,9 @@ export interface HomeData {
     active: HomeWorkflowRun[];
     recent: HomeWorkflowRun[];
   };
-  work: {
-    attentionCount: number;
-    overdueCount: number;
-    todayCount: number;
-    items: HomeWorkItem[];
-    current: HomeWorkItem[];
-    recentlyCompleted: HomeWorkItem[];
-  };
   upcomingAutomations: HomeAutomation[];
-  recentOutcomes: OutcomeReceipt[];
-  outcomes: WorkHomeResponse['outcomes'];
+  recentTasks: TaskReceipt[];
+  tasks: HomeResponse['tasks'];
 }
 
 function normalizedSessionName(session: SessionListItem): string | undefined {
@@ -154,12 +137,12 @@ export async function fetchHome(language: Language): Promise<HomeData> {
   const res = await apiFetch(`/api/home?locale=${encodeURIComponent(language)}`);
   if (!res.ok) throw new Error(`Failed to fetch home: ${res.status}`);
   const raw = await res.json() as unknown;
-  const core = parseWorkHomeResponse(raw);
+  const core = parseHomeResponse(raw);
   const home = raw as HomeData;
   return {
     ...home,
-    outcomes: core.outcomes,
-    recentOutcomes: core.recentOutcomes,
+    tasks: core.tasks,
+    recentTasks: core.recentTasks,
     recentSessions: home.recentSessions.map((session) => ({
       ...session,
       name: normalizedSessionName(session),

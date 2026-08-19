@@ -25,7 +25,7 @@ import { extractAgentUserPlainText } from '../memory/user-message-text.js';
 import { runEmbeddedTurnForSession } from '../embedded/run-for-session.js';
 import type { EmbeddedStreamEvent } from '../embedded/types.js';
 import { resolveImageHandlingStrategy } from '../image/vision-detection.js';
-import { buildOutcomeExecutionDirective } from '../../work/outcome-context-assembler.js';
+import { buildTaskExecutionDirective } from '../../tasks/task-context-assembler.js';
 import { prependAgentContext } from '../memory/context/planner.js';
 
 export interface HydratePerTurnStateDeps {
@@ -45,7 +45,7 @@ export async function hydratePerTurnState(
   await deps.applyResolvedThinkingLevel(sessionKey, thinking);
 }
 
-export interface SlashCommandOutcome {
+export interface SlashCommandTask {
   /** True if the input parsed as a registered slash command (handled or not). */
   matched: boolean;
   /** Aggregated user-visible reply text (assistant view). */
@@ -81,7 +81,7 @@ export async function tryRunSlashCommand(
     skipResetCommands?: boolean;
     emitEvent?: (event: CommandStreamEvent) => void | Promise<void>;
   },
-): Promise<SlashCommandOutcome> {
+): Promise<SlashCommandTask> {
   const parsed = parseSlashCommand(content);
   if (!parsed) {
     return { matched: false, aggregatedText: '' };
@@ -155,7 +155,7 @@ export async function runDirectAgentTurn(
   );
   const userMessageForModel = prependAgentContext(
     userContext.modelMessage,
-    buildOutcomeExecutionDirective(input.sessionKey),
+    buildTaskExecutionDirective(input.sessionKey),
   );
   if (userContext.consentRequests.length > 0) {
     input.onEvent?.({

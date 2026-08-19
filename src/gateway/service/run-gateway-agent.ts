@@ -14,8 +14,8 @@ import {
 } from '../../utils/logger.js';
 import { parseSessionKey } from '../../routing/session-key.js';
 import { recordExplicitRelationshipFollowUp } from '../../user-context/relationship-continuity.js';
-import { resolveExecutionContext } from '../../work/execution-context.js';
-import { OutcomeRunCoordinator } from '../../work/outcome-run-coordinator.js';
+import { resolveExecutionContext } from '../../tasks/execution-context.js';
+import { TaskRunCoordinator } from '../../tasks/task-run-coordinator.js';
 import {
   updateInteractionStateFromMessage,
   type ExecutionReceiptStatus,
@@ -42,8 +42,7 @@ export type RunGatewayAgentDeps = {
   activeWebchatRunBySession: Map<string, string>;
   sessionIndex: SessionIndex;
   emit: (type: string, payload: unknown) => void;
-  prepareOutcome?: (sessionKey: string) => Promise<void>;
-  onOutcomeFinalized?: (
+  onTaskFinalized?: (
     receipt: import('../../storage/sqlite/execution-receipt-repository.js').ExecutionReceipt,
   ) => void;
 };
@@ -82,7 +81,7 @@ export async function *runGatewayAgent(
     emit,
   } = deps;
   const sessionIndex = sessionIndexFromDeps;
-  let outcomeRun: OutcomeRunCoordinator | undefined;
+  let taskRun: TaskRunCoordinator | undefined;
   let executionReceiptStatus: Exclude<ExecutionReceiptStatus, 'running'> = 'failed';
   let executionReceiptSummary = 'Agent run ended unexpectedly';
 
@@ -108,7 +107,6 @@ export async function *runGatewayAgent(
   const streamSessionKey = webchatSessionKey ?? chatId;
   if (webchatSessionKey) {
     if (!webchatMetadata) throw new Error('Session metadata is unavailable');
-    await deps.prepareOutcome?.(webchatSessionKey);
     const parsedSession = parseSessionKey(webchatSessionKey);
     if (!parsedSession) throw new Error('Resolved webchat session key is invalid');
     updateInteractionStateFromMessage({ sessionKey: webchatSessionKey, message });
@@ -123,26 +121,26 @@ export async function *runGatewayAgent(
       channel,
       metadata: webchatMetadata,
     });
-    outcomeRun = OutcomeRunCoordinator.start({
+    taskRun = TaskRunCoordinator.start({
       runId,
       context: executionContext,
       fallbackObjective: message,
-      onFinalized: deps.onOutcomeFinalized,
+      onFinalized: deps.onTaskFinalized,
     });
   }
   const mapper = new ChatStreamMapper({ runId, sessionKey: streamSessionKey, channel });
   let registeredActiveWebchatRun = false;
   const captureTaskEvent = (event: ChatStreamEvent): void => {
     if (event.type === 'task_plan_updated') {
-      outcomeRun?.capturePlan(event.payload.items);
+      taskRun?.capturePlan(event.payload.items);
       return;
     }
     if (event.type === 'turn_plan') {
-      outcomeRun?.capturePlan(event.payload.plan.map((item) => ({ title: item.step, status: item.status })));
+      taskRun?.capturePlan(event.payload.plan.map((item) => ({ title: item.step, status: item.status })));
       return;
     }
     if (event.type === 'patch_applied') {
-      outcomeRun?.capturePatch(event.payload.added, event.payload.removed);
+      taskRun?.capturePatch(event.payload.added, event.payload.removed);
       return;
     }
     if (
@@ -150,7 +148,7 @@ export async function *runGatewayAgent(
       && event.payload.exitCode === 0
       && /(^|\s)(test|vitest|jest|pytest|lint|typecheck|build)(\s|$|:)/i.test(event.payload.command)
     ) {
-      outcomeRun?.captureCommand(event.payload.command, event.payload.durationMs);
+      taskRun?.captureCommand(event.payload.command, event.payload.durationMs);
     }
   };
   const publishStreamEvent = (event: ChatStreamEvent): ChatStreamEvent =>
@@ -159,7 +157,7 @@ export async function *runGatewayAgent(
       : event;
   const emitAndYield = function *(events: ChatStreamEvent[]): Generator<ChatStreamEvent> {
     for (const event of events) {
-      if (outcomeRun) captureTaskEvent(event);
+      if (taskRun) captureTaskEvent(event);
       const relayedEvent = publishStreamEvent(event);
       if (channel === 'webchat') emit('agent.stream', { sessionKey: streamSessionKey, event: relayedEvent });
       yield relayedEvent;
@@ -259,7 +257,7 @@ export async function *runGatewayAgent(
         }
         runAbortControllers.delete(runId);
         const assistantPlainText = agentService.getLastAssistantPlainText(sessionKey);
-        const reviewHint = agentService.takeOutcomeReviewStreamHint(sessionKey);
+        const reviewHint = agentService.takeTaskReviewStreamHint(sessionKey);
         try {
           await agentService.outboundCoordinator.emitSessionTurnComplete({
             sessionKey,
@@ -269,7 +267,7 @@ export async function *runGatewayAgent(
             assistantPlainText,
             aborted: mergedSignal.aborted,
             ...(streamError !== undefined ? { streamError } : {}),
-            skipOutcomeReview: reviewHint?.skipOutcomeReview ?? false,
+            skipTaskReview: reviewHint?.skipTaskReview ?? false,
             outboundMetadata: {},
           });
         } catch (goalErr) {
@@ -346,15 +344,15 @@ export async function *runGatewayAgent(
     );
     throw error;
   } finally {
-    if (outcomeRun) {
+    if (taskRun) {
       try {
-        outcomeRun.finalize({
+        taskRun.finalize({
         status: executionReceiptStatus,
         summary: executionReceiptSummary,
         });
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err);
-        log.warn({ err, runId }, `Outcome run finalization failed: ${errorMessage}`);
+        log.warn({ err, runId }, `Task run finalization failed: ${errorMessage}`);
       }
     }
   }

@@ -13,6 +13,7 @@ import {
   startExecutionReceipt,
   updateExecutionReceipt,
 } from '../index.js';
+import { TaskExecutionService } from '../../../tasks/task-execution-service.js';
 
 describe('execution receipt work context', () => {
   let stateDir: string;
@@ -29,9 +30,10 @@ describe('execution receipt work context', () => {
     rmSync(stateDir, { recursive: true, force: true });
   });
 
-  it('persists execution linkage while allowing unrelated chat outcomes', () => {
+  it('persists execution linkage while allowing unrelated chat tasks', () => {
     ensureSessionRecord('session-linked', stateDir);
     ensureSessionRecord('session-unlinked', stateDir);
+    const task = new TaskExecutionService().create({ objective: 'Ship the release' });
     startExecutionReceipt({
       runId: 'run-linked',
       sessionKey: 'session-linked',
@@ -39,9 +41,8 @@ describe('execution receipt work context', () => {
       objective: 'Ship the release',
       context: {
         projectId: 'project-1',
-        outcomeId: 'outcome-1',
-        workItemId: 'work-1',
-        origin: 'outcome',
+        taskId: task.taskId,
+        origin: 'task',
         triggerKind: 'user',
       },
       now: 100,
@@ -66,8 +67,7 @@ describe('execution receipt work context', () => {
         runId: 'run-linked',
         context: expect.objectContaining({
           projectId: 'project-1',
-          outcomeId: 'outcome-1',
-          workItemId: 'work-1',
+          taskId: task.taskId,
           contextTraceId: 'trace-1',
         }),
         nextAction: 'Publish the release',

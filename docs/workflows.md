@@ -18,7 +18,7 @@ This separation keeps the main experience simple: workflow means “how the work
 
 Open `#/workflows`, choose **Create template**, and start in either of two ways:
 
-1. Describe the outcome in natural language. xopc creates a visual draft.
+1. Describe the task in natural language. xopc creates a visual draft.
 2. Add and connect steps directly on the canvas.
 
 The editor uses five user-facing step types:

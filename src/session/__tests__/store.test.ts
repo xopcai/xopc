@@ -164,12 +164,12 @@ describe('SessionStore', () => {
       const key = 'agent:main:webchat:default:direct:reset-test';
       await store.saveMessages(key, [{ role: 'user', content: 'hello', timestamp: Date.now() }]);
       const before = await store.getMetadata(key);
-      const outcome = await store.reset(key);
-      expect(outcome?.previousSessionId).toBe(before?.sessionId);
-      expect(outcome?.sessionId).not.toBe(before?.sessionId);
+      const task = await store.reset(key);
+      expect(task?.previousSessionId).toBe(before?.sessionId);
+      expect(task?.sessionId).not.toBe(before?.sessionId);
       const after = await store.getMetadata(key);
       expect(after?.key).toBe(key);
-      expect(after?.sessionId).toBe(outcome?.sessionId);
+      expect(after?.sessionId).toBe(task?.sessionId);
       expect(await store.loadMessages(key)).toHaveLength(0);
     });
 

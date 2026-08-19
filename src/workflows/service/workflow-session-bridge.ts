@@ -2,12 +2,11 @@ import { randomUUID } from 'node:crypto';
 
 import { renderWorkflowText } from '../../agent/workflow/snapshot.js';
 import type { GatewayWorkflowHost } from '../../gateway/gateway-workflow-host.types.js';
-import { OutcomeWorkflowCoordinator } from '../../work/index.js';
+import { TaskWorkflowCoordinator } from '../../tasks/index.js';
 import { getProjectWorkspacePathForSession } from '../../projects/workspace.js';
 import type { SessionStore } from '../../session/store.js';
 import { SessionStatus } from '../../session/types.js';
 import { upsertMemoryRecord } from '../../storage/sqlite/index.js';
-import { WorkItemWorkflowJudge } from '../../work-items/index.js';
 import type { WorkflowRunView } from '../domain/index.js';
 import { isTerminalWorkflowRunStatus } from '../domain/index.js';
 
@@ -126,11 +125,10 @@ export class WorkflowSessionBridge {
         status: view.run.status,
       });
     }
-    new WorkItemWorkflowJudge().handleTerminalWorkflowRun({ view });
     this.recordProjectWorkflowMemory(sessionKey, view);
-    if (this.gateway.enqueueOutcome) {
-      new OutcomeWorkflowCoordinator({
-        enqueue: (outcomeId, options) => this.gateway.enqueueOutcome!(outcomeId, options),
+    if (this.gateway.enqueueTask) {
+      new TaskWorkflowCoordinator({
+        enqueue: (taskId, options) => this.gateway.enqueueTask!(taskId, options),
       }).handleTerminalRun(view, sessionKey);
     }
   }

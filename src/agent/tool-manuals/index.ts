@@ -20,7 +20,7 @@ const TOOL_MANUALS: Record<string, ToolManual> = {
   xopc_use: {
     toolName: 'xopc_use',
     title: 'XOPC Use Tool Manual',
-    description: 'Usage guide for operating XOPC projects, notes, and project work items.',
+    description: 'Usage guide for operating XOPC projects, notes, and tasks.',
     content: xopcUseManual,
   },
 };

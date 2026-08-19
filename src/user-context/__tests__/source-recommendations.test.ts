@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ConnectorDefinition } from '../../connectors/types.js';
-import { buildOutcomeSourceRecommendations } from '../source-recommendations.js';
+import { buildTaskSourceRecommendations } from '../source-recommendations.js';
 
 function source(id: string, displayName: string, description: string): ConnectorDefinition {
   return {
@@ -19,17 +19,17 @@ function source(id: string, displayName: string, description: string): Connector
   };
 }
 
-describe('outcome source recommendations', () => {
-  it('matches Chinese outcome intent to an available source and excludes installed sources', () => {
+describe('task source recommendations', () => {
+  it('matches Chinese task intent to an available source and excludes installed sources', () => {
     const definitions = [
       source('calendar', 'Calendar', 'Meetings, schedules, and events'),
       source('mail', 'Email', 'Mail and inbox context'),
     ];
-    const outcomes = [{ id: 'outcome-1', objective: '安排下周的客户会议' }];
+    const tasks = [{ id: 'task-1', objective: '安排下周的客户会议' }];
 
-    expect(buildOutcomeSourceRecommendations(definitions, new Set(), outcomes)).toMatchObject([
-      { sourceId: 'calendar', outcomeId: 'outcome-1' },
+    expect(buildTaskSourceRecommendations(definitions, new Set(), tasks)).toMatchObject([
+      { sourceId: 'calendar', taskId: 'task-1' },
     ]);
-    expect(buildOutcomeSourceRecommendations(definitions, new Set(['calendar']), outcomes)).toEqual([]);
+    expect(buildTaskSourceRecommendations(definitions, new Set(['calendar']), tasks)).toEqual([]);
   });
 });

@@ -1,7 +1,6 @@
 import { getSessionMetadata, isXopcDatabaseOpen } from '../../storage/sqlite/index.js';
 import { sanitizeForPromptLiteral } from '../prompt/sanitize-for-prompt.js';
-import { OutcomeRepository } from '../../work/outcome-repository.js';
-import { OutcomeExecutionStateRepository } from '../../work/outcome-execution-state.js';
+import { TaskRepository } from '../../tasks/task-repository.js';
 
 import { buildActiveProjectContextForPrompt } from './project-context.js';
 
@@ -10,14 +9,14 @@ const MAX_CRITERIA = 12;
 
 export type ExecutionObjective =
   | {
-      kind: 'outcome';
+      kind: 'task';
       id: string;
       title: string;
       objective: string;
       status: string;
       scopeBoundary?: string;
       acceptanceCriteria: string[];
-      deliverables: string[];
+      expectedOutputs: string[];
       nextAction?: string;
       blockedReason?: string;
     }
@@ -41,21 +40,20 @@ function bounded(value: string | undefined, max = MAX_OBJECTIVE_TEXT): string | 
   return text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`;
 }
 
-function outcomeObjective(sessionKey: string): ExecutionObjective | undefined {
-  const execution = new OutcomeExecutionStateRepository().getBySession(sessionKey);
-  if (!execution) return undefined;
-  const outcome = new OutcomeRepository().get(execution.outcomeId);
-  if (!outcome) return undefined;
-  const contract = outcome.contract;
+function taskObjective(sessionKey: string): ExecutionObjective | undefined {
+  const task = new TaskRepository().getBySession(sessionKey);
+  if (!task) return undefined;
+  const execution = task.execution;
+  const contract = task.contract;
   return {
-    kind: 'outcome',
-    id: outcome.id,
-    title: outcome.objective,
-    objective: contract?.objective.trim() || outcome.objective,
-    status: outcome.internalStatus,
+    kind: 'task',
+    id: task.id,
+    title: task.objective,
+    objective: contract?.objective.trim() || task.objective,
+    status: task.status,
     scopeBoundary: bounded(contract?.constraints.join('\n')),
     acceptanceCriteria: contract?.acceptanceCriteria.slice(0, MAX_CRITERIA) ?? [],
-    deliverables: contract?.deliverables.slice(0, MAX_CRITERIA) ?? [],
+    expectedOutputs: contract?.expectedOutputs.slice(0, MAX_CRITERIA) ?? [],
     nextAction: bounded(execution.nextAction),
     blockedReason: bounded(execution.blockedReason),
   };
@@ -92,7 +90,7 @@ export function resolveExecutionScope(sessionKey: string): ExecutionScope {
   return {
     sessionKey,
     projectId: metadata?.projectId,
-    objective: outcomeObjective(sessionKey) ?? workflowObjective(sessionKey),
+    objective: taskObjective(sessionKey) ?? workflowObjective(sessionKey),
   };
 }
 
@@ -110,15 +108,15 @@ export function formatCurrentWorkForPrompt(scope: ExecutionScope): string | unde
     '## Objective',
     sanitizeForPromptLiteral(objective.objective),
   ];
-  if (objective.kind === 'outcome') {
+  if (objective.kind === 'task') {
     if (objective.scopeBoundary) {
       lines.push('', '## Scope Boundary', sanitizeForPromptLiteral(objective.scopeBoundary));
     }
     if (objective.acceptanceCriteria.length > 0) {
       lines.push('', '## Acceptance Criteria', ...objective.acceptanceCriteria.map((item) => `- ${sanitizeForPromptLiteral(item)}`));
     }
-    if (objective.deliverables.length > 0) {
-      lines.push('', '## Deliverables', ...objective.deliverables.map((item) => `- ${sanitizeForPromptLiteral(item)}`));
+    if (objective.expectedOutputs.length > 0) {
+      lines.push('', '## Expected outputs', ...objective.expectedOutputs.map((item) => `- ${sanitizeForPromptLiteral(item)}`));
     }
     if (objective.nextAction) {
       lines.push('', 'Next action:', sanitizeForPromptLiteral(objective.nextAction));

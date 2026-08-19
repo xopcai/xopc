@@ -8,7 +8,7 @@ Basic shape:
 
 \`\`\`json
 {
-  "mode": "project | note | work_item | local_app | settings",
+  "mode": "project | note | local_app | settings",
   "command": "list | get | create | update | append | preview_edit | resolve_workspace | validate | open",
   "args": { "...": "..." },
   "dryRun": false
@@ -27,7 +27,7 @@ Basic shape:
 
 ## Projects
 
-Projects group sessions, work items, Outcomes, workflows, files, and project instructions.
+Projects group sessions, Tasks, workflows, files, and project instructions.
 
 ### Find projects
 
@@ -43,7 +43,7 @@ Projects group sessions, work items, Outcomes, workflows, files, and project ins
 
 ### Create a project
 
-Use when the user asks to keep an outcome moving across conversations, or explicitly accepts an offer to do so. The user does not need to say “project”. Do not create one merely because a task is complex: continuity across sessions, files, decisions, or dependencies is the key signal. Include \`workspaceRoot\` when the work maps to a local repository or directory. Include \`brief\` for the desired outcome and \`instructions\` only for durable operating guidance.
+Use when the user asks to keep an task moving across conversations, or explicitly accepts an offer to do so. The user does not need to say “project”. Do not create one merely because a task is complex: continuity across sessions, files, decisions, or dependencies is the key signal. Include \`workspaceRoot\` when the work maps to a local repository or directory. Include \`brief\` for the desired task and \`instructions\` only for durable operating guidance.
 
 \`\`\`json
 {
@@ -157,40 +157,6 @@ Use only when the user clearly wants the canonical note changed. Prefer \`append
 }
 \`\`\`
 
-## Work Items
-
-Work items are project-scoped tasks. If \`projectId\` is omitted, the tool may inherit the current session's project binding.
-
-### Create a work item
-
-\`\`\`json
-{
-  "mode": "work_item",
-  "command": "create",
-  "args": {
-    "projectId": "project_id",
-    "title": "Validate technical feasibility",
-    "description": "Check API, storage, UI, and safety implications.",
-    "priority": "high",
-    "status": "todo"
-  }
-}
-\`\`\`
-
-### Update a work item
-
-\`\`\`json
-{
-  "mode": "work_item",
-  "command": "update",
-  "args": {
-    "workItemId": "work_item_id",
-    "status": "in_progress",
-    "nextAction": "Prototype the xopc_use tool path."
-  }
-}
-\`\`\`
-
 ## Local Apps
 
 Local apps are first-class XOPC extension UIs backed by a project workspace.
@@ -233,6 +199,5 @@ configuration silently; it returns an exact inline jump target.
 
 - \`note.update\` can replace canonical user content. Use \`preview_edit\` first for content rewrites.
 - \`project.update.workspaceRoot\` changes project-file scope. Use \`dryRun\` and ask the user if intent is unclear.
-- \`work_item.update.archivedAt\` hides work from normal active views. Confirm before archiving.
 - If the user asks for deletion, explain that deletion is not exposed through \`xopc_use\` yet.
 `;

@@ -431,7 +431,7 @@ export class AutomationService {
     let activePhase: 'action' | 'after_run' = 'action';
     try {
       const maxAttempts = Math.max(1, (automation.reliability?.retryCount ?? 0) + 1);
-      let outcome: Awaited<ReturnType<AutomationActionExecutor['execute']>>;
+      let task: Awaited<ReturnType<AutomationActionExecutor['execute']>>;
       for (let attempt = 1; ; attempt += 1) {
         run = { ...run, attemptNumber: attempt };
         saveAutomationRun(run);
@@ -441,7 +441,7 @@ export class AutomationService {
           attempt,
           maxAttempts,
         });
-        outcome = await this.executor.execute(automation, run, controller.signal, {
+        task = await this.executor.execute(automation, run, controller.signal, {
           onRunPatch: (patch) => {
             const previousDeadline = run.deadlineAtMs;
             run = { ...run, ...patch };
@@ -456,7 +456,7 @@ export class AutomationService {
         });
         // A timeout consumes the shared automation deadline, so only ordinary
         // failures can start another attempt within the same run.
-        const retryable = outcome.status === 'failed';
+        const retryable = task.status === 'failed';
         if (!retryable || attempt >= maxAttempts || controller.signal.aborted) break;
         const delayMs = Math.min(RETRY_BASE_DELAY_MS * 2 ** (attempt - 1), 30_000);
         this.appendRunEvent(run, 'action.retry_scheduled', 'Automation action retry scheduled', {
@@ -464,13 +464,13 @@ export class AutomationService {
           nextAttempt: attempt + 1,
           maxAttempts,
           delayMs,
-          status: outcome.status,
-          error: outcome.error,
+          status: task.status,
+          error: task.error,
         });
         await this.waitForRetry(delayMs, controller.signal);
       }
-      status = outcome.status;
-      error = outcome.error;
+      status = task.status;
+      error = task.error;
       const persistedRun = getAutomationRun(run.id);
       if (persistedRun) run = { ...run, ...persistedRun };
       this.appendRunEvent(
@@ -480,43 +480,43 @@ export class AutomationService {
           ? `${automation.action.kind} action completed`
           : `${automation.action.kind} action ${status}`,
         {
-          summary: outcome.summary,
-          error: outcome.error,
-          sessionKey: outcome.sessionKey,
-          workflowRunId: outcome.workflowRunId,
-          model: outcome.model,
+          summary: task.summary,
+          error: task.error,
+          sessionKey: task.sessionKey,
+          workflowRunId: task.workflowRunId,
+          model: task.model,
         },
       );
       run = {
         ...run,
         status,
-        summary: outcome.summary,
+        summary: task.summary,
         error,
-        sessionKey: outcome.sessionKey,
-        workflowRunId: outcome.workflowRunId,
-        model: outcome.model,
-        deadlineAtMs: outcome.deadlineAtMs ?? run.deadlineAtMs,
-        termination: outcome.termination ?? (status === 'succeeded'
+        sessionKey: task.sessionKey,
+        workflowRunId: task.workflowRunId,
+        model: task.model,
+        deadlineAtMs: task.deadlineAtMs ?? run.deadlineAtMs,
+        termination: task.termination ?? (status === 'succeeded'
           ? { reason: 'completed', cancellationConfirmed: true }
           : status === 'failed'
             ? { reason: 'failed', cancellationConfirmed: true }
             : run.termination),
       };
-      if (outcome.termination) {
+      if (task.termination) {
         const now = Date.now();
         run = {
           ...run,
           currentPhase: 'cancelling',
           cancelRequestedAtMs: run.cancelRequestedAtMs ?? now,
-          cancelConfirmedAtMs: outcome.termination.cancellationConfirmed ? now : undefined,
+          cancelConfirmedAtMs: task.termination.cancellationConfirmed ? now : undefined,
         };
         this.appendRunEvent(
           run,
-          outcome.termination.cancellationConfirmed ? 'run.cancel_confirmed' : 'run.cancellation_unconfirmed',
-          outcome.termination.cancellationConfirmed
+          task.termination.cancellationConfirmed ? 'run.cancel_confirmed' : 'run.cancellation_unconfirmed',
+          task.termination.cancellationConfirmed
             ? 'Automation cancellation confirmed'
             : 'Automation cancellation was not confirmed within the cleanup grace period',
-          { termination: outcome.termination },
+          { termination: task.termination },
         );
       }
       if ((status === 'timeout' || status === 'cancelled')) {

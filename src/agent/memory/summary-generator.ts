@@ -4,7 +4,7 @@
  * Creates structured summaries that preserve:
  * - User requests and intents
  * - Tool call history (deduplicated by file path)
- * - Key decisions and outcomes
+ * - Key decisions and tasks
  * - Modified files list
  * - Usage statistics
  */

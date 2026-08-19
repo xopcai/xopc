@@ -12,7 +12,7 @@
  * - Hard upper bound for the same TTL'd slots to bound worst-case memory.
  *
  * Slots whose lifetime is fully owned by explicit lifecycle calls
- * (`inboundTurnDepth`, `outcomeReviewHintBySession`, `embeddedStreamText`,
+ * (`inboundTurnDepth`, `taskReviewHintBySession`, `embeddedStreamText`,
  * `sessionEventUnsubscribers`) are still cleared via `disposeSession`, but they
  * are NOT subject to TTL — sweeping them would race with their owners.
  */
@@ -23,8 +23,8 @@ const log = createLogger('SessionStateBag');
 
 export type WebchatSsePublisher = (event: { type: string; [key: string]: unknown }) => void;
 
-export interface OutcomeReviewStreamHint {
-  skipOutcomeReview: boolean;
+export interface TaskReviewStreamHint {
+  skipTaskReview: boolean;
 }
 
 export interface SessionStateBagOptions {
@@ -52,8 +52,8 @@ export class SessionStateBag {
 
   /** Stream text for the in-flight embedded turn (managed by turn). */
   private readonly embeddedStreamText = new Map<string, string>();
-  /** Outcome review stream state (take-and-delete). */
-  private readonly outcomeReviewHintBySession = new Map<string, OutcomeReviewStreamHint>();
+  /** Task review stream state (take-and-delete). */
+  private readonly taskReviewHintBySession = new Map<string, TaskReviewStreamHint>();
   /** Concurrent inbound turn depth (counter). */
   private readonly inboundTurnDepth = new Map<string, number>();
   /** Agent-event subscription tear-downs (run on dispose). */
@@ -125,15 +125,15 @@ export class SessionStateBag {
     this.embeddedStreamText.delete(sessionKey);
   }
 
-  // ── Outcome review hint (take-and-delete) ───────────────────────────────
+  // ── Task review hint (take-and-delete) ───────────────────────────────
 
-  recordOutcomeReviewStreamHint(sessionKey: string, outcome: OutcomeReviewStreamHint): void {
-    this.outcomeReviewHintBySession.set(sessionKey, outcome);
+  recordTaskReviewStreamHint(sessionKey: string, task: TaskReviewStreamHint): void {
+    this.taskReviewHintBySession.set(sessionKey, task);
   }
 
-  takeOutcomeReviewStreamHint(sessionKey: string): OutcomeReviewStreamHint | undefined {
-    const v = this.outcomeReviewHintBySession.get(sessionKey);
-    this.outcomeReviewHintBySession.delete(sessionKey);
+  takeTaskReviewStreamHint(sessionKey: string): TaskReviewStreamHint | undefined {
+    const v = this.taskReviewHintBySession.get(sessionKey);
+    this.taskReviewHintBySession.delete(sessionKey);
     return v;
   }
 
@@ -191,7 +191,7 @@ export class SessionStateBag {
     this.webchatPublishers.delete(sessionKey);
     this.lastAssistantText.delete(sessionKey);
     this.embeddedStreamText.delete(sessionKey);
-    this.outcomeReviewHintBySession.delete(sessionKey);
+    this.taskReviewHintBySession.delete(sessionKey);
     this.inboundTurnDepth.delete(sessionKey);
   }
 
@@ -208,7 +208,7 @@ export class SessionStateBag {
     this.webchatPublishers.clear();
     this.lastAssistantText.clear();
     this.embeddedStreamText.clear();
-    this.outcomeReviewHintBySession.clear();
+    this.taskReviewHintBySession.clear();
     this.inboundTurnDepth.clear();
 
     if (this.sweepTimer) {
@@ -221,7 +221,7 @@ export class SessionStateBag {
     webchatPublishers: number;
     lastAssistantText: number;
     embeddedStreamText: number;
-    outcomeReviewHintBySession: number;
+    taskReviewHintBySession: number;
     inboundTurnDepth: number;
     sessionEventUnsubscribers: number;
   } {
@@ -229,7 +229,7 @@ export class SessionStateBag {
       webchatPublishers: this.webchatPublishers.size,
       lastAssistantText: this.lastAssistantText.size,
       embeddedStreamText: this.embeddedStreamText.size,
-      outcomeReviewHintBySession: this.outcomeReviewHintBySession.size,
+      taskReviewHintBySession: this.taskReviewHintBySession.size,
       inboundTurnDepth: this.inboundTurnDepth.size,
       sessionEventUnsubscribers: this.sessionEventUnsubscribers.size,
     };

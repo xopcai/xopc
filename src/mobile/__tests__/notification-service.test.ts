@@ -3,16 +3,16 @@ import { describe, expect, it } from 'vitest';
 import { mobileNotificationEventFromGatewayEvent } from '../notification-service.js';
 
 describe('mobileNotificationEventFromGatewayEvent', () => {
-  it('maps an input-needed outcome to its outcome detail', () => {
-    expect(mobileNotificationEventFromGatewayEvent('outcome.status.updated', {
-      outcome: { id: 'outcome-1', objective: 'Approve deployment' },
+  it('maps an input-needed task to its task detail', () => {
+    expect(mobileNotificationEventFromGatewayEvent('task.status.updated', {
+      task: { id: 'task-1', objective: 'Approve deployment' },
       status: 'needs_user',
     })).toMatchObject({
-      type: 'outcome.needs_input',
-      entity: { kind: 'outcome', id: 'outcome-1' },
+      type: 'task.needs_input',
+      entity: { kind: 'task', id: 'task-1' },
       priority: 'high',
-      deepLink: '/work/outcome-1',
-      payload: { route: '/work/outcome-1' },
+      deepLink: '/tasks/task-1',
+      payload: { route: '/tasks/task-1' },
     });
   });
 
@@ -51,8 +51,8 @@ describe('mobileNotificationEventFromGatewayEvent', () => {
 
   it('ignores unrelated events and invalid status payloads', () => {
     expect(mobileNotificationEventFromGatewayEvent('session.updated', {})).toBeNull();
-    expect(mobileNotificationEventFromGatewayEvent('outcome.status.updated', {
-      outcomeId: 'outcome-1',
+    expect(mobileNotificationEventFromGatewayEvent('task.status.updated', {
+      taskId: 'task-1',
       status: 'running',
     })).toBeNull();
     expect(mobileNotificationEventFromGatewayEvent('automation.run.completed', {

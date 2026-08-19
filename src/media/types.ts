@@ -1,5 +1,5 @@
 /** Media store bucket — maps to `{stateDir}/media/<bucket>/`. */
-export type MediaBucket = 'inbound' | 'tts' | 'outbound' | 'work-item';
+export type MediaBucket = 'inbound' | 'tts' | 'outbound';
 
 /** Persisted media reference — never includes base64. */
 export interface MediaRef {
