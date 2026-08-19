@@ -11,6 +11,7 @@ import { SidebarFooter } from '@/components/shell/sidebar-footer';
 import { SidebarNavItems } from '@/components/shell/sidebar-nav-items';
 import { SidebarTaskList } from '@/components/shell/sidebar-task-list';
 import {
+  DEFAULT_VISIBLE_NAV_ITEMS,
   MAX_VISIBLE_NAV_ITEMS,
   MIN_VISIBLE_NAV_ITEMS,
 } from '@/navigation/sidebar-nav-items';
@@ -28,9 +29,9 @@ function readVisibleAppCount(): number {
       globalThis.localStorage?.getItem(VISIBLE_APP_COUNT_STORAGE_KEY) ?? '',
       10,
     );
-    return Number.isFinite(stored) ? clampVisibleAppCount(stored) : MIN_VISIBLE_NAV_ITEMS;
+    return Number.isFinite(stored) ? clampVisibleAppCount(stored) : DEFAULT_VISIBLE_NAV_ITEMS;
   } catch {
-    return MIN_VISIBLE_NAV_ITEMS;
+    return DEFAULT_VISIBLE_NAV_ITEMS;
   }
 }
 
@@ -117,7 +118,7 @@ export function SidebarNav({
           <SidebarNavItems
             collapsed={collapsed}
             onNavigate={onNavigate}
-            visibleLimit={collapsed ? MIN_VISIBLE_NAV_ITEMS : visibleAppCount}
+            visibleLimit={collapsed ? DEFAULT_VISIBLE_NAV_ITEMS : visibleAppCount}
           />
         </div>
       </nav>

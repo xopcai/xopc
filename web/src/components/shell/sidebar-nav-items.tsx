@@ -17,7 +17,6 @@ import { resolveLucideIcon } from '@/features/extensions/extension-nav-icon';
 import type { ExtensionUiInfo } from '@/features/extensions/types';
 
 import {
-  isPrimaryNavId,
   BUILTIN_NAV_DEFS,
   reconcileNavOrder,
   type NavItem,
@@ -131,8 +130,7 @@ export function SidebarNavItems({
 
   const uiExtensions = useUiExtensions();
   const order = useNavOrderStore((s) => s.order);
-  const move = useNavOrderStore((s) => s.move);
-  const moveToEnd = useNavOrderStore((s) => s.moveToEnd);
+  const setOrder = useNavOrderStore((s) => s.setOrder);
 
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [hoverTarget, setHoverTarget] = useState<{ id: string; position: 'before' | 'after' } | null>(null);
@@ -157,6 +155,10 @@ export function SidebarNavItems({
   const reconciled = useMemo(
     () => reconcileNavOrder(available, order, visibleLimit),
     [available, order, visibleLimit],
+  );
+  const orderedIds = useMemo(
+    () => [...reconciled.visible, ...reconciled.overflow].map((item) => item.id),
+    [reconciled],
   );
 
   const onDragStart = useCallback((id: string) => (e: DragEvent<HTMLElement>) => {
@@ -188,9 +190,20 @@ export function SidebarNavItems({
       onDragEnd();
       return;
     }
-    move(dragged, id, dropPosition(e));
+    const withoutDragged = orderedIds.filter((itemId) => itemId !== dragged);
+    const targetIndex = withoutDragged.indexOf(id);
+    if (targetIndex === -1) {
+      onDragEnd();
+      return;
+    }
+    const insertIndex = dropPosition(e) === 'before' ? targetIndex : targetIndex + 1;
+    setOrder([
+      ...withoutDragged.slice(0, insertIndex),
+      dragged,
+      ...withoutDragged.slice(insertIndex),
+    ]);
     onDragEnd();
-  }, [move, onDragEnd]);
+  }, [onDragEnd, orderedIds, setOrder]);
 
   const onMoreDragOver = useCallback((e: DragEvent<HTMLElement>) => {
     if (!draggingId) return;
@@ -205,9 +218,9 @@ export function SidebarNavItems({
     e.preventDefault();
     const raw = e.dataTransfer.getData(DRAG_MIME);
     const dragged = parseDragPayload(raw);
-    if (dragged) moveToEnd(dragged);
+    if (dragged) setOrder([...orderedIds.filter((id) => id !== dragged), dragged]);
     onDragEnd();
-  }, [moveToEnd, onDragEnd]);
+  }, [onDragEnd, orderedIds, setOrder]);
 
   const onNavIntent = useCallback((to: string) => {
     preloadRouteForPath(to);
@@ -215,13 +228,12 @@ export function SidebarNavItems({
 
   function renderRailRow(item: NavItem): ReactNode {
     const dragging = draggingId === item.id;
-    const pinned = isPrimaryNavId(item.id);
     const dropHint = hoverTarget?.id === item.id ? hoverTarget.position : null;
     return (
       <NavLink
         key={item.id}
         to={item.to}
-        draggable={!pinned}
+        draggable
         onDragStart={onDragStart(item.id)}
         onDragEnd={onDragEnd}
         onDragOver={onRowDragOver(item.id)}
