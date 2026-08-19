@@ -7,7 +7,7 @@ xopc keeps the product model deliberately small:
 - **Note / Workspace** stores durable input material and artifacts.
 - **Conversation** is the interface where work starts, progresses, and asks for a decision.
 
-Open Home at `#/home`, Projects at `#/projects`, or an Task at `#/tasks/:id`.
+Open Home at `#/`, Projects at `#/projects`, or a Task at `#/tasks/:id`.
 
 ## When to use each object
 

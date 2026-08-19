@@ -1,7 +1,7 @@
 {
   "projectsPage": {
-    "title": "Your work",
-    "summary": "{{count}} workspaces · ongoing work grouped across chats, tasks, and tasks",
+    "title": "Home",
+    "summary": "{{count}} projects · ongoing work grouped across chats and tasks",
     "searchPlaceholder": "Search projects",
     "create": "Create",
     "createTitle": "Create project",
@@ -545,18 +545,6 @@
       "deleteConfirmTitle": "Delete project?",
       "deleteConfirmFallback": "Delete this project? Sessions and tasks will be left unassigned.",
       "deleteConfirmAction": "Delete project"
-    },
-    "goalDialog": {
-      "title": "New project task",
-      "close": "Close",
-      "titleLabel": "Title",
-      "descriptionLabel": "Description",
-      "priorityLabel": "Priority",
-      "priorities": {
-        "low": "Low",
-        "normal": "Normal",
-        "high": "High"
-      }
     },
     "statuses": {
       "active": "active",

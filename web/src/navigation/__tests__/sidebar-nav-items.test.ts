@@ -29,7 +29,7 @@ describe('reconcileNavOrder', () => {
       'builtin:profile',
     ]);
     expect(BUILTIN_NAV_DEFS.slice(0, DEFAULT_VISIBLE_NAV_ITEMS)).toEqual([
-      expect.objectContaining({ id: 'builtin:home', to: '/home' }),
+      expect.objectContaining({ id: 'builtin:home', to: '/' }),
       expect.objectContaining({ id: 'builtin:projects', to: '/projects' }),
       expect.objectContaining({ id: 'builtin:profile', to: '/you' }),
     ]);

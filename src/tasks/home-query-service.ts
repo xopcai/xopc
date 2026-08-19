@@ -303,7 +303,7 @@ export class HomeQueryService {
         detail: item.insight.summary,
         reason: 'decision_needed',
         urgency: item.insight.urgency === 'critical' || item.insight.urgency === 'high' ? 'now' : 'soon',
-        href: `/home?judgment=${encodeURIComponent(item.id)}`,
+        href: `/?judgment=${encodeURIComponent(item.id)}`,
         updatedAt: Date.parse(item.updatedAt),
         judgment: {
           inboxItemId: item.id,

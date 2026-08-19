@@ -85,7 +85,7 @@ export function preloadRouteForPath(to: string) {
   if (path === '/connectors') return preload(loadConnectorsPage);
   if (path === '/automations') return preload(loadAutomationsPage);
   if (path === '/browser-workflows') return preload(loadBrowserWorkflowsPage);
-  if (path === '/home') return preload(loadHomePage);
+  if (path === '/') return preload(loadHomePage);
   if (path.startsWith('/tasks/')) return preload(loadTaskDetailPage);
   if (path === '/projects') return preload(loadProjectsPage);
   if (path.startsWith('/projects/')) return preload(loadProjectDetailPage);
