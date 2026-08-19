@@ -1,6 +1,9 @@
 import type { Hono } from 'hono';
+import { randomUUID } from 'node:crypto';
 import { readdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
+
+import { WorkItemCommandSchema, WorkItemNextActionSchema } from '@xopcai/gateway-contract';
 
 import { ActivityService } from '../../../activity/index.js';
 import { resolveEffectiveAgentProfile } from '../../../config/agent-profile.js';
@@ -34,8 +37,12 @@ import {
 import {
   WORK_ITEM_ATTACHMENT_MAX_BYTES,
   WORK_ITEM_ATTACHMENT_MAX_COUNT,
+  WorkItemTransitionError,
+  type WorkItem,
+  type WorkItemCompletionPolicy,
+  type WorkItemPhase,
   type WorkItemPriority,
-  type WorkItemStatus,
+  type WorkItemService,
 } from '../../../work-items/index.js';
 import { createGatewayRouteLogger } from '../lib/route-logger.js';
 import { parseActivityIncludeRelated, parseActivityQuery } from './activity.js';
@@ -152,18 +159,46 @@ function parseEnumValue<T extends string>(raw: unknown, values: readonly T[]): T
   return values.includes(raw as T) ? raw as T : undefined;
 }
 
-const WORK_ITEM_STATUSES = [
-  'backlog',
-  'todo',
-  'in_progress',
-  'blocked',
-  'needs_input',
-  'in_review',
-  'done',
-  'cancelled',
-] as const satisfies readonly WorkItemStatus[];
+const WORK_ITEM_PHASES = ['backlog', 'ready', 'executing', 'verifying', 'closed'] as const satisfies readonly WorkItemPhase[];
+const WORK_ITEM_INITIAL_PHASES = ['backlog', 'ready'] as const;
 const WORK_ITEM_PRIORITIES = ['urgent', 'high', 'normal', 'low'] as const satisfies readonly WorkItemPriority[];
-const WORK_ITEM_SUGGESTION_STATUSES = ['pending', 'applied', 'dismissed'] as const;
+const WORK_ITEM_COMPLETION_POLICIES = ['automatic', 'agent_verified', 'user_accepted'] as const satisfies readonly WorkItemCompletionPolicy[];
+const WORK_ITEM_PROPOSAL_STATES = ['pending', 'executed', 'rejected', 'expired'] as const;
+
+function nextActionField(body: Record<string, unknown>): WorkItem['nextAction'] | undefined {
+  let value = body.nextAction;
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return undefined;
+    }
+  }
+  const parsed = WorkItemNextActionSchema.safeParse(value);
+  return parsed.success ? parsed.data : undefined;
+}
+
+function ensureExecuting(
+  service: WorkItemService,
+  item: WorkItem,
+  source: 'web' | 'workflow',
+): WorkItem {
+  if (item.archivedAt || item.phase === 'closed' || item.phase === 'verifying') {
+    throw new WorkItemTransitionError('invalid_transition', `Cannot start work from phase ${item.phase}`);
+  }
+  let current = item;
+  if (current.phase === 'backlog') {
+    current = service.executeCommand(current.id, { type: 'commit', expectedVersion: current.version }, {
+      actor: { kind: 'user', id: 'local-owner' }, source, requestId: randomUUID(),
+    })!;
+  }
+  if (current.phase === 'ready') {
+    current = service.executeCommand(current.id, { type: 'start', expectedVersion: current.version }, {
+      actor: { kind: 'user', id: 'local-owner' }, source, requestId: randomUUID(),
+    })!;
+  }
+  return current;
+}
 
 const SKIP_FILE_NAMES = new Set(['.git', 'node_modules']);
 
@@ -617,11 +652,11 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
     const project = service.projects.get(c.req.param('id'));
     if (!project) return c.json({ ok: false, error: 'Project not found' }, 404);
     const result = workItems.listProjectWorkItems(project.id, {
-      status: parseCsvEnum(c.req.query('status'), WORK_ITEM_STATUSES),
+      phase: parseCsvEnum(c.req.query('phase'), WORK_ITEM_PHASES),
       priority: parseCsvEnum(c.req.query('priority'), WORK_ITEM_PRIORITIES),
       includeArchived: c.req.query('includeArchived') === 'true',
       search: c.req.query('search'),
-      sortBy: c.req.query('sortBy') as 'updatedAt' | 'createdAt' | 'priority' | 'status' | undefined,
+      sortBy: c.req.query('sortBy') as 'updatedAt' | 'createdAt' | 'priority' | 'phase' | 'dueAt' | undefined,
       sortOrder: c.req.query('sortOrder') as 'asc' | 'desc' | undefined,
       limit: parseLimit(c.req.query('limit')),
       offset: c.req.query('offset') ? Math.max(0, Number.parseInt(c.req.query('offset')!, 10) || 0) : undefined,
@@ -649,11 +684,15 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
     if (attachmentError) return c.json({ ok: false, error: attachmentError }, 413);
     const title = textField(body, 'title')?.trim();
     if (!title) return c.json({ ok: false, error: 'Work item title is required' }, 400);
-    const status = parseEnumValue(body.status, WORK_ITEM_STATUSES);
+    const initialPhase = parseEnumValue(body.initialPhase, WORK_ITEM_INITIAL_PHASES);
     const priority = parseEnumValue(body.priority, WORK_ITEM_PRIORITIES);
+    const completionPolicy = parseEnumValue(body.completionPolicy, WORK_ITEM_COMPLETION_POLICIES);
+    const nextAction = nextActionField(body);
     const dueAt = finiteNumberField(body.dueAt);
-    if (Object.hasOwn(body, 'status') && !status) return c.json({ ok: false, error: 'Invalid work item status' }, 400);
+    if (Object.hasOwn(body, 'initialPhase') && !initialPhase) return c.json({ ok: false, error: 'Invalid initialPhase' }, 400);
     if (Object.hasOwn(body, 'priority') && !priority) return c.json({ ok: false, error: 'Invalid work item priority' }, 400);
+    if (Object.hasOwn(body, 'completionPolicy') && !completionPolicy) return c.json({ ok: false, error: 'Invalid completionPolicy' }, 400);
+    if (Object.hasOwn(body, 'nextAction') && !nextAction) return c.json({ ok: false, error: 'Invalid nextAction' }, 400);
     if (Object.hasOwn(body, 'dueAt') && dueAt === undefined && body.dueAt !== null) return c.json({ ok: false, error: 'Invalid dueAt' }, 400);
     const uploads: Array<{ name: string; buffer: Buffer; mimeType: string }> = [];
     for (const file of files) {
@@ -662,11 +701,11 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
     const item = workItems.createProjectWorkItem(project.id, {
       title,
       description: textField(body, 'description'),
-      status,
+      initialPhase,
       priority,
       ownerAgentId: textField(body, 'ownerAgentId') || project.defaultAgentId || undefined,
-      nextAction: textField(body, 'nextAction'),
-      blockedReason: textField(body, 'blockedReason'),
+      completionPolicy,
+      nextAction,
       dueAt,
     });
     for (const upload of uploads) {
@@ -678,11 +717,11 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
 
   authenticated.get('/api/work-items', (c) => {
     const result = workItems.listWorkItems({
-      status: parseCsvEnum(c.req.query('status'), WORK_ITEM_STATUSES),
+      phase: parseCsvEnum(c.req.query('phase'), WORK_ITEM_PHASES),
       priority: parseCsvEnum(c.req.query('priority'), WORK_ITEM_PRIORITIES),
       includeArchived: c.req.query('includeArchived') === 'true',
       search: c.req.query('search'),
-      sortBy: c.req.query('sortBy') as 'updatedAt' | 'createdAt' | 'priority' | 'status' | undefined,
+      sortBy: c.req.query('sortBy') as 'updatedAt' | 'createdAt' | 'priority' | 'phase' | 'dueAt' | undefined,
       sortOrder: c.req.query('sortOrder') as 'asc' | 'desc' | undefined,
       limit: parseLimit(c.req.query('limit')),
       offset: c.req.query('offset') ? Math.max(0, Number.parseInt(c.req.query('offset')!, 10) || 0) : undefined,
@@ -693,7 +732,7 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
   authenticated.get('/api/work-items/:id', async (c) => {
     const item = workItems.getWorkItem(c.req.param('id'));
     if (!item) return c.json({ ok: false, error: 'Work item not found' }, 404);
-    return c.json({ ok: true, item });
+    return c.json({ ok: true, item, availableCommands: workItems.availableCommands(item.id, { kind: 'user', id: 'local-owner' }) });
   });
 
   authenticated.get('/api/work-items/:id/attachments', async (c) => {
@@ -745,42 +784,64 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
 
   authenticated.patch('/api/work-items/:id', async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
-    const status = Object.hasOwn(body, 'status')
-      ? parseEnumValue(body.status, WORK_ITEM_STATUSES)
-      : undefined;
+    const expectedVersion = finiteNumberField(body.expectedVersion);
     const priority = Object.hasOwn(body, 'priority')
       ? parseEnumValue(body.priority, WORK_ITEM_PRIORITIES)
       : undefined;
+    const completionPolicy = Object.hasOwn(body, 'completionPolicy')
+      ? parseEnumValue(body.completionPolicy, WORK_ITEM_COMPLETION_POLICIES)
+      : undefined;
+    const nextAction = body.nextAction === null ? null : nextActionField(body);
     const dueAt = Object.hasOwn(body, 'dueAt')
       ? (body.dueAt === null ? null : (typeof body.dueAt === 'number' && Number.isFinite(body.dueAt) ? body.dueAt : undefined))
       : undefined;
-    const archivedAt = Object.hasOwn(body, 'archivedAt')
-      ? (body.archivedAt === null ? null : (typeof body.archivedAt === 'number' && Number.isFinite(body.archivedAt) ? body.archivedAt : undefined))
-      : undefined;
-    if (status === undefined && Object.hasOwn(body, 'status')) return c.json({ ok: false, error: 'Invalid work item status' }, 400);
+    if (!expectedVersion || !Number.isInteger(expectedVersion)) return c.json({ ok: false, error: 'expectedVersion is required' }, 400);
     if (priority === undefined && Object.hasOwn(body, 'priority')) return c.json({ ok: false, error: 'Invalid work item priority' }, 400);
+    if (completionPolicy === undefined && Object.hasOwn(body, 'completionPolicy')) return c.json({ ok: false, error: 'Invalid completionPolicy' }, 400);
+    if (nextAction === undefined && Object.hasOwn(body, 'nextAction')) return c.json({ ok: false, error: 'Invalid nextAction' }, 400);
     if (dueAt === undefined && Object.hasOwn(body, 'dueAt')) return c.json({ ok: false, error: 'Invalid dueAt' }, 400);
-    if (archivedAt === undefined && Object.hasOwn(body, 'archivedAt')) return c.json({ ok: false, error: 'Invalid archivedAt' }, 400);
 
-    const item = workItems.updateWorkItem(c.req.param('id'), {
+    const item = workItems.updateMetadata(c.req.param('id'), {
       ...(Object.hasOwn(body, 'title') ? { title: textField(body, 'title') ?? '' } : {}),
       ...(Object.hasOwn(body, 'description') ? { description: optionalTextField(body, 'description') } : {}),
-      ...(Object.hasOwn(body, 'status') ? { status } : {}),
       ...(Object.hasOwn(body, 'priority') ? { priority } : {}),
       ...(Object.hasOwn(body, 'ownerAgentId') ? { ownerAgentId: optionalTextField(body, 'ownerAgentId') } : {}),
-      ...(Object.hasOwn(body, 'nextAction') ? { nextAction: optionalTextField(body, 'nextAction') } : {}),
-      ...(Object.hasOwn(body, 'blockedReason') ? { blockedReason: optionalTextField(body, 'blockedReason') } : {}),
+      ...(Object.hasOwn(body, 'completionPolicy') ? { completionPolicy } : {}),
+      ...(Object.hasOwn(body, 'nextAction') ? { nextAction } : {}),
       ...(Object.hasOwn(body, 'dueAt') ? { dueAt } : {}),
-      ...(Object.hasOwn(body, 'archivedAt') ? { archivedAt } : {}),
-    });
-    if (!item) return c.json({ ok: false, error: 'Work item not found' }, 404);
+    }, expectedVersion);
+    if (!item) return c.json({ ok: false, error: 'Work item not found or version conflict' }, workItems.getWorkItem(c.req.param('id')) ? 409 : 404);
     return c.json({ ok: true, item });
   });
 
-  authenticated.delete('/api/work-items/:id', async (c) => {
-    const item = workItems.updateWorkItem(c.req.param('id'), { archivedAt: Date.now() });
-    if (!item) return c.json({ ok: false, error: 'Work item not found' }, 404);
-    return c.json({ ok: true, item });
+  for (const [pathSuffix, archived] of [['archive', true], ['unarchive', false]] as const) {
+    authenticated.post(`/api/work-items/:id/${pathSuffix}`, async (c) => {
+      const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+      const expectedVersion = finiteNumberField(body.expectedVersion);
+      if (!expectedVersion || !Number.isInteger(expectedVersion)) return c.json({ ok: false, error: 'expectedVersion is required' }, 400);
+      const item = workItems.setArchived(c.req.param('id'), archived, expectedVersion);
+      if (!item) return c.json({ ok: false, error: 'Work item not found, open, or version conflict' }, workItems.getWorkItem(c.req.param('id')) ? 409 : 404);
+      return c.json({ ok: true, item });
+    });
+  }
+
+  authenticated.post('/api/work-items/:id/commands', async (c) => {
+    const parsed = WorkItemCommandSchema.safeParse(await c.req.json().catch(() => ({})));
+    if (!parsed.success) return c.json({ ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid work item command' }, 400);
+    try {
+      const item = workItems.executeCommand(c.req.param('id'), parsed.data, {
+        actor: { kind: 'user', id: 'local-owner' },
+        source: 'web',
+        requestId: c.req.header('x-request-id') || randomUUID(),
+      });
+      if (!item) return c.json({ ok: false, error: 'Work item not found' }, 404);
+      return c.json({ ok: true, item, availableCommands: workItems.availableCommands(item.id, { kind: 'user', id: 'local-owner' }) });
+    } catch (error) {
+      if (error instanceof WorkItemTransitionError) {
+        return c.json({ ok: false, error: error.message, code: error.code }, error.code === 'version_conflict' ? 409 : 422);
+      }
+      throw error;
+    }
   });
 
   authenticated.get('/api/work-items/:id/events', async (c) => {
@@ -789,63 +850,70 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
     return c.json({ ok: true, events: workItems.listEvents(item.id) });
   });
 
-  authenticated.get('/api/work-items/:id/update-suggestions', async (c) => {
+  authenticated.get('/api/work-items/:id/command-proposals', async (c) => {
     const item = workItems.getWorkItem(c.req.param('id'));
     if (!item) return c.json({ ok: false, error: 'Work item not found' }, 404);
-    const status = parseEnumValue(c.req.query('status'), WORK_ITEM_SUGGESTION_STATUSES);
-    if (c.req.query('status') && !status) return c.json({ ok: false, error: 'Invalid suggestion status' }, 400);
-    return c.json({ ok: true, suggestions: workItems.listUpdateSuggestions(item.id, status) });
+    const state = parseEnumValue(c.req.query('state'), WORK_ITEM_PROPOSAL_STATES);
+    if (c.req.query('state') && !state) return c.json({ ok: false, error: 'Invalid proposal state' }, 400);
+    return c.json({ ok: true, proposals: workItems.listCommandProposals(item.id, state) });
   });
 
-  authenticated.post('/api/work-items/:id/update-suggestions', async (c) => {
+  authenticated.post('/api/work-items/:id/command-proposals', async (c) => {
     const item = workItems.getWorkItem(c.req.param('id'));
     if (!item) return c.json({ ok: false, error: 'Work item not found' }, 404);
     const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
-    const sourceKind = parseEnumValue(body.sourceKind, ['chat', 'outcome', 'workflow_run', 'automation'] as const);
+    const sourceKind = parseEnumValue(body.sourceKind, ['chat', 'workflow_run', 'automation'] as const);
     const sourceId = textField(body, 'sourceId')?.trim();
     if (!sourceKind) return c.json({ ok: false, error: 'Invalid sourceKind' }, 400);
     if (!sourceId) return c.json({ ok: false, error: 'sourceId is required' }, 400);
-    const patchBody = body.patch && typeof body.patch === 'object' && !Array.isArray(body.patch)
-      ? body.patch as Record<string, unknown>
-      : {};
-    const status = Object.hasOwn(patchBody, 'status')
-      ? parseEnumValue(patchBody.status, WORK_ITEM_STATUSES)
-      : undefined;
-    if (Object.hasOwn(patchBody, 'status') && !status) return c.json({ ok: false, error: 'Invalid work item status' }, 400);
+    const command = WorkItemCommandSchema.safeParse(body.command);
+    if (!command.success) return c.json({ ok: false, error: command.error.issues[0]?.message ?? 'Invalid work item command' }, 400);
     const confidence = typeof body.confidence === 'number' && Number.isFinite(body.confidence)
       ? Math.max(0, Math.min(1, body.confidence))
       : undefined;
-    const suggestion = workItems.createUpdateSuggestion(item.id, {
+    const proposal = workItems.createCommandProposal(item.id, {
       sourceKind,
       sourceId,
-      patch: {
-        ...(Object.hasOwn(patchBody, 'status') ? { status } : {}),
-        ...(Object.hasOwn(patchBody, 'nextAction') ? { nextAction: optionalTextField(patchBody, 'nextAction') } : {}),
-        ...(Object.hasOwn(patchBody, 'blockedReason') ? { blockedReason: optionalTextField(patchBody, 'blockedReason') } : {}),
-      },
-      progressNote: optionalTextField(body, 'progressNote') ?? undefined,
+      command: command.data,
       rationale: optionalTextField(body, 'rationale') ?? undefined,
       confidence,
     });
-    if (!suggestion) return c.json({ ok: false, error: 'Work item not found' }, 404);
-    return c.json({ ok: true, suggestion }, 201);
+    if (!proposal) return c.json({ ok: false, error: 'Work item not found' }, 404);
+    return c.json({ ok: true, proposal }, 201);
   });
 
-  authenticated.post('/api/work-item-update-suggestions/:id/apply', async (c) => {
-    const result = workItems.applyUpdateSuggestion(c.req.param('id'));
-    if (!result) return c.json({ ok: false, error: 'Suggestion not found or already resolved' }, 404);
-    return c.json({ ok: true, item: result.item, suggestion: result.suggestion });
+  authenticated.post('/api/work-item-command-proposals/:id/execute', async (c) => {
+    try {
+      const result = workItems.executeCommandProposal(c.req.param('id'), {
+        actor: { kind: 'user', id: 'local-owner' },
+        source: 'web',
+        requestId: c.req.header('x-request-id') || randomUUID(),
+      });
+      if (!result) return c.json({ ok: false, error: 'Proposal not found or already resolved' }, 404);
+      return c.json({ ok: true, item: result.item, proposal: result.proposal });
+    } catch (error) {
+      if (error instanceof WorkItemTransitionError) {
+        return c.json({ ok: false, error: error.message, code: error.code }, error.code === 'version_conflict' ? 409 : 422);
+      }
+      throw error;
+    }
   });
 
-  authenticated.post('/api/work-item-update-suggestions/:id/dismiss', async (c) => {
-    const suggestion = workItems.dismissUpdateSuggestion(c.req.param('id'));
-    if (!suggestion) return c.json({ ok: false, error: 'Suggestion not found or already resolved' }, 404);
-    return c.json({ ok: true, suggestion });
+  authenticated.post('/api/work-item-command-proposals/:id/reject', async (c) => {
+    const proposal = workItems.rejectCommandProposal(c.req.param('id'));
+    if (!proposal) return c.json({ ok: false, error: 'Proposal not found or already resolved' }, 404);
+    return c.json({ ok: true, proposal });
   });
 
   authenticated.post('/api/work-items/:id/start-chat', async (c) => {
-    const item = workItems.getWorkItem(c.req.param('id'));
+    let item = workItems.getWorkItem(c.req.param('id'));
     if (!item) return c.json({ ok: false, error: 'Work item not found' }, 404);
+    try {
+      item = ensureExecuting(workItems, item, 'web');
+    } catch (error) {
+      if (error instanceof WorkItemTransitionError) return c.json({ ok: false, error: error.message, code: error.code }, 409);
+      throw error;
+    }
     const project = service.projects.get(item.projectId);
     if (!project) return c.json({ ok: false, error: 'Project not found' }, 404);
     const agentId = resolveProjectAgentId({
@@ -879,20 +947,21 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
       targetId: sessionKey,
       title: session?.name || item.title,
       statusSnapshot: session?.status,
-    }, 'chat_started');
-    const updated = item.status === 'todo' || item.status === 'backlog'
-      ? workItems.updateWorkItem(item.id, { status: 'in_progress' })
-      : workItems.getWorkItem(item.id);
+    });
+    const updated = workItems.getWorkItem(item.id);
     return c.json({ ok: true, session, item: updated }, 201);
   });
 
   authenticated.post('/api/work-items/:id/workflows/run', async (c) => {
-    const item = workItems.getWorkItem(c.req.param('id'));
+    let item = workItems.getWorkItem(c.req.param('id'));
     if (!item) return c.json({ ok: false, error: 'Work item not found' }, 404);
     const project = service.projects.get(item.projectId);
     if (!project) return c.json({ ok: false, error: 'Project not found' }, 404);
-    if (item.status === 'done' || item.status === 'cancelled' || item.archivedAt) {
-      return c.json({ ok: false, error: 'Work item is not active' }, 409);
+    try {
+      item = ensureExecuting(workItems, item, 'workflow');
+    } catch (error) {
+      if (error instanceof WorkItemTransitionError) return c.json({ ok: false, error: error.message, code: error.code }, 409);
+      throw error;
     }
 
     const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
@@ -905,7 +974,7 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
       explicitAgentId: item.ownerAgentId,
       projectId: project.id,
     });
-    const goalText = textField(body, 'goal')?.trim() || item.nextAction || item.title;
+    const goalText = textField(body, 'goal')?.trim() || item.nextAction?.text || item.title;
     const attachments = item.attachments?.map((attachment) => ({
       id: attachment.id,
       fileName: attachment.fileName,
@@ -918,10 +987,11 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
         id: item.id,
         title: item.title,
         description: item.description,
-        status: item.status,
+        phase: item.phase,
         priority: item.priority,
+        completionPolicy: item.completionPolicy,
         nextAction: item.nextAction,
-        blockedReason: item.blockedReason,
+        waits: item.waits.filter((wait) => !wait.resolvedAt),
         attachments,
       },
       project: {
@@ -961,10 +1031,8 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
       targetId: result.runId,
       title: goalText,
       statusSnapshot: 'queued',
-    }, 'workflow_started');
-    const updated = item.status === 'todo' || item.status === 'backlog'
-      ? workItems.updateWorkItem(item.id, { status: 'in_progress' })
-      : workItems.getWorkItem(item.id);
+    });
+    const updated = workItems.getWorkItem(item.id);
     return c.json({ ok: true, runId: result.runId, sessionKey: result.sessionKey, item: updated }, 202);
   });
 

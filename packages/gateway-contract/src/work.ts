@@ -2,30 +2,166 @@ import { z } from 'zod';
 
 import { OutcomeReceiptSchema, OutcomeSchema } from './outcomes.js';
 
-export const WorkItemStatusSchema = z.enum([
+export const WorkItemPhaseSchema = z.enum([
   'backlog',
-  'todo',
-  'in_progress',
-  'blocked',
-  'needs_input',
-  'in_review',
-  'done',
-  'cancelled',
+  'ready',
+  'executing',
+  'verifying',
+  'closed',
 ]);
 
 export const WorkItemPrioritySchema = z.enum(['urgent', 'high', 'normal', 'low']);
+
+export const WorkItemResolutionSchema = z.enum([
+  'completed',
+  'cancelled',
+  'duplicate',
+  'superseded',
+  'expired',
+  'not_feasible',
+]);
+
+export const WorkItemCompletionPolicySchema = z.enum([
+  'automatic',
+  'agent_verified',
+  'user_accepted',
+]);
+
+export const WorkItemActionActorSchema = z.enum(['agent', 'user', 'external', 'system']);
+
+export const WorkItemNextActionSchema = z.object({
+  text: z.string().trim().min(1),
+  actor: WorkItemActionActorSchema,
+  dueAt: z.number().optional(),
+});
+
+export const WorkItemWaitKindSchema = z.enum([
+  'user_input',
+  'user_approval',
+  'dependency',
+  'external',
+  'scheduled',
+  'retry',
+  'paused',
+]);
+
+export const WorkItemWaitSchema = z.object({
+  id: z.string(),
+  workItemId: z.string(),
+  kind: WorkItemWaitKindSchema,
+  reason: z.string(),
+  resumeAt: z.number().optional(),
+  blockingWorkItemId: z.string().optional(),
+  createdAt: z.number(),
+  resolvedAt: z.number().optional(),
+  resolutionNote: z.string().optional(),
+});
+
+export const WorkItemLinkSchema = z.object({
+  id: z.string(),
+  workItemId: z.string(),
+  kind: z.enum(['chat', 'outcome', 'workflow_run', 'automation', 'note']),
+  targetId: z.string(),
+  title: z.string().optional(),
+  statusSnapshot: z.string().optional(),
+  createdAt: z.number(),
+});
+
+export const WorkItemAttachmentSchema = z.object({
+  id: z.string(),
+  workItemId: z.string(),
+  mediaUri: z.string(),
+  mediaId: z.string(),
+  bucket: z.string(),
+  type: z.enum(['image', 'audio', 'video', 'file']),
+  mimeType: z.string(),
+  fileName: z.string(),
+  size: z.number(),
+  createdAt: z.number(),
+});
+
+export const WorkItemSchema = z.object({
+  id: z.string(),
+  projectId: z.string(),
+  title: z.string(),
+  description: z.string().optional(),
+  priority: WorkItemPrioritySchema,
+  ownerAgentId: z.string().optional(),
+  phase: WorkItemPhaseSchema,
+  completionPolicy: WorkItemCompletionPolicySchema,
+  nextAction: WorkItemNextActionSchema.optional(),
+  waits: z.array(WorkItemWaitSchema),
+  links: z.array(WorkItemLinkSchema),
+  attachments: z.array(WorkItemAttachmentSchema),
+  resolution: WorkItemResolutionSchema.optional(),
+  resolutionReason: z.string().optional(),
+  dueAt: z.number().optional(),
+  startedAt: z.number().optional(),
+  reviewRequestedAt: z.number().optional(),
+  closedAt: z.number().optional(),
+  archivedAt: z.number().optional(),
+  version: z.number().int().positive(),
+  createdAt: z.number(),
+  updatedAt: z.number(),
+});
+
+const ExpectedVersionSchema = z.number().int().positive();
+
+export const WorkItemCommandSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('commit'), expectedVersion: ExpectedVersionSchema }),
+  z.object({ type: z.literal('defer'), expectedVersion: ExpectedVersionSchema, reason: z.string().trim().min(1).optional() }),
+  z.object({ type: z.literal('start'), expectedVersion: ExpectedVersionSchema, nextAction: WorkItemNextActionSchema.optional() }),
+  z.object({ type: z.literal('stop'), expectedVersion: ExpectedVersionSchema, reason: z.string().trim().min(1).optional() }),
+  z.object({ type: z.literal('request_review'), expectedVersion: ExpectedVersionSchema, summary: z.string().trim().min(1) }),
+  z.object({ type: z.literal('request_changes'), expectedVersion: ExpectedVersionSchema, reason: z.string().trim().min(1), nextAction: WorkItemNextActionSchema }),
+  z.object({ type: z.literal('complete'), expectedVersion: ExpectedVersionSchema, summary: z.string().trim().min(1).optional() }),
+  z.object({ type: z.literal('accept'), expectedVersion: ExpectedVersionSchema, note: z.string().trim().min(1).optional() }),
+  z.object({
+    type: z.literal('close'),
+    expectedVersion: ExpectedVersionSchema,
+    resolution: z.enum(['cancelled', 'duplicate', 'superseded', 'expired', 'not_feasible']),
+    reason: z.string().trim().min(1).optional(),
+  }),
+  z.object({ type: z.literal('reopen'), expectedVersion: ExpectedVersionSchema, reason: z.string().trim().min(1).optional() }),
+  z.object({
+    type: z.literal('wait'),
+    expectedVersion: ExpectedVersionSchema,
+    wait: z.object({
+      kind: WorkItemWaitKindSchema,
+      reason: z.string().trim().min(1),
+      resumeAt: z.number().optional(),
+      blockingWorkItemId: z.string().trim().min(1).optional(),
+    }),
+  }),
+  z.object({ type: z.literal('resume'), expectedVersion: ExpectedVersionSchema, waitId: z.string().trim().min(1), note: z.string().trim().min(1).optional() }),
+]);
+
+export const WorkItemCommandProposalSchema = z.object({
+  id: z.string(),
+  workItemId: z.string(),
+  command: WorkItemCommandSchema,
+  sourceKind: z.enum(['chat', 'workflow_run', 'automation']),
+  sourceId: z.string(),
+  rationale: z.string().optional(),
+  confidence: z.number().min(0).max(1).optional(),
+  state: z.enum(['pending', 'executed', 'rejected', 'expired']),
+  createdAt: z.number(),
+  resolvedAt: z.number().optional(),
+});
 
 export const WorkHomeItemSchema = z.object({
   id: z.string(),
   projectId: z.string(),
   projectName: z.string(),
   title: z.string(),
-  status: WorkItemStatusSchema,
+  phase: WorkItemPhaseSchema,
   priority: WorkItemPrioritySchema,
-  nextAction: z.string().optional(),
-  blockedReason: z.string().optional(),
+  completionPolicy: WorkItemCompletionPolicySchema,
+  nextAction: WorkItemNextActionSchema.optional(),
+  waits: z.array(WorkItemWaitSchema),
+  resolution: WorkItemResolutionSchema.optional(),
   dueAt: z.number().optional(),
-  completedAt: z.number().optional(),
+  closedAt: z.number().optional(),
   updatedAt: z.number(),
 });
 
@@ -36,8 +172,14 @@ export const WorkHomeDecisionSchema = z.object({
   detail: z.string().optional(),
   reason: z.enum([
     'needs_input',
-    'in_review',
     'blocked',
+    'user_input',
+    'user_approval',
+    'dependency',
+    'external',
+    'scheduled',
+    'retry',
+    'paused',
     'overdue',
     'due_soon',
     'decision_needed',
@@ -188,6 +330,19 @@ export const WorkValueMetricsSchema = z.object({
 });
 
 export type WorkHomeItem = z.infer<typeof WorkHomeItemSchema>;
+export type WorkItem = z.infer<typeof WorkItemSchema>;
+export type WorkItemPhase = z.infer<typeof WorkItemPhaseSchema>;
+export type WorkItemPriority = z.infer<typeof WorkItemPrioritySchema>;
+export type WorkItemResolution = z.infer<typeof WorkItemResolutionSchema>;
+export type WorkItemCompletionPolicy = z.infer<typeof WorkItemCompletionPolicySchema>;
+export type WorkItemActionActor = z.infer<typeof WorkItemActionActorSchema>;
+export type WorkItemNextAction = z.infer<typeof WorkItemNextActionSchema>;
+export type WorkItemWaitKind = z.infer<typeof WorkItemWaitKindSchema>;
+export type WorkItemWait = z.infer<typeof WorkItemWaitSchema>;
+export type WorkItemLink = z.infer<typeof WorkItemLinkSchema>;
+export type WorkItemAttachment = z.infer<typeof WorkItemAttachmentSchema>;
+export type WorkItemCommand = z.infer<typeof WorkItemCommandSchema>;
+export type WorkItemCommandProposal = z.infer<typeof WorkItemCommandProposalSchema>;
 export type WorkHomeDecision = z.infer<typeof WorkHomeDecisionSchema>;
 export type WorkHomeAttention = z.infer<typeof WorkHomeAttentionSchema>;
 export type WorkHomeAutomation = z.infer<typeof WorkHomeAutomationSchema>;

@@ -494,7 +494,7 @@ describe('project association routes', () => {
         title: 'Ship login',
         description: 'Build the project login flow',
         priority: 'high',
-        status: 'todo',
+        initialPhase: 'ready',
       }),
     });
     expect(create.status).toBe(201);
@@ -504,7 +504,7 @@ describe('project association routes', () => {
       title: 'Ship login',
       description: 'Build the project login flow',
       priority: 'high',
-      status: 'todo',
+      phase: 'ready',
       projectId: project.id,
     });
 
@@ -518,7 +518,7 @@ describe('project association routes', () => {
       id: created.item.id,
       title: 'Ship login',
       priority: 'high',
-      status: 'todo',
+      phase: 'ready',
     })]);
   });
 
@@ -592,8 +592,8 @@ describe('project association routes', () => {
     const events = await app.request(`/api/work-items/${created.item.id}/events`);
     const eventsBody = await events.json() as { events: Array<Record<string, unknown>> };
     expect(eventsBody.events).toEqual(expect.arrayContaining([
-      expect.objectContaining({ type: 'attachment_added' }),
-      expect.objectContaining({ type: 'attachment_removed' }),
+      expect.objectContaining({ type: 'work_item.attachment_added' }),
+      expect.objectContaining({ type: 'work_item.attachment_removed' }),
     ]));
   });
 
@@ -625,9 +625,9 @@ describe('project association routes', () => {
     const project = projects.create({ name: 'Large Workbench Project' });
     for (let index = 0; index < 520; index++) {
       getSqliteDatabase().prepare(
-        `INSERT INTO work_items (id, project_id, title, status, priority, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      ).run(`wi-${index}`, project.id, `Large work item ${String(index).padStart(3, '0')}`, 'todo', 'normal', index, index);
+        `INSERT INTO work_items (id, project_id, title, phase, priority, completion_policy, version, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).run(`wi-${index}`, project.id, `Large work item ${String(index).padStart(3, '0')}`, 'ready', 'normal', 'agent_verified', 1, index, index);
     }
     const app = registerProjectRouteApp({ projects });
 
@@ -648,21 +648,21 @@ describe('project association routes', () => {
     expect(afterBody.hasMore).toBe(false);
   });
 
-  it('updates work item status and writes an event', async () => {
+  it('updates metadata and executes lifecycle commands', async () => {
     const projects = new ProjectService();
     const project = projects.create({ name: 'Status Project' });
     const app = registerProjectRouteApp({ projects });
     const create = await app.request(`/api/projects/${project.id}/work-items`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ title: 'Review implementation' }),
+      body: JSON.stringify({ title: 'Review implementation', initialPhase: 'ready' }),
     });
-    const created = await create.json() as { item: { id: string } };
+    const created = await create.json() as { item: { id: string; version: number } };
 
     const res = await app.request(`/api/work-items/${created.item.id}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ status: 'in_review', priority: 'urgent', dueAt: 1783324340003 }),
+      body: JSON.stringify({ expectedVersion: created.item.version, priority: 'urgent', dueAt: 1783324340003 }),
     });
 
     expect(res.status).toBe(200);
@@ -670,20 +670,34 @@ describe('project association routes', () => {
     expect(body.ok).toBe(true);
     expect(body.item).toMatchObject({
       id: created.item.id,
-      status: 'in_review',
+      phase: 'ready',
       priority: 'urgent',
       dueAt: 1783324340003,
     });
 
-    const list = await app.request(`/api/projects/${project.id}/work-items?status=in_review`);
+    const started = await app.request(`/api/work-items/${created.item.id}/commands`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'start', expectedVersion: (body.item.version as number) }),
+    });
+    const startedBody = await started.json() as { item: { version: number } };
+    const review = await app.request(`/api/work-items/${created.item.id}/commands`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'request_review', expectedVersion: startedBody.item.version, summary: 'Ready for verification' }),
+    });
+    expect(review.status).toBe(200);
+
+    const list = await app.request(`/api/projects/${project.id}/work-items?phase=verifying`);
     const listBody = await list.json() as { items: Array<Record<string, unknown>> };
-    expect(listBody.items).toEqual([expect.objectContaining({ id: created.item.id, status: 'in_review' })]);
+    expect(listBody.items).toEqual([expect.objectContaining({ id: created.item.id, phase: 'verifying' })]);
 
     const events = await app.request(`/api/work-items/${created.item.id}/events`);
     const eventsBody = await events.json() as { ok: boolean; events: Array<Record<string, unknown>> };
     expect(eventsBody.ok).toBe(true);
     expect(eventsBody.events).toEqual(expect.arrayContaining([
-      expect.objectContaining({ type: 'status_changed' }),
+      expect.objectContaining({ type: 'work_item.review_requested' }),
+      expect.objectContaining({ type: 'work_item.metadata_updated' }),
     ]));
   });
 
@@ -696,12 +710,12 @@ describe('project association routes', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ title: 'Draft title', priority: 'normal' }),
     });
-    const created = await create.json() as { item: { id: string } };
+    const created = await create.json() as { item: { id: string; version: number } };
 
     const res = await app.request(`/api/work-items/${created.item.id}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ title: 'Saved title', priority: 'high' }),
+      body: JSON.stringify({ expectedVersion: created.item.version, title: 'Saved title', priority: 'high' }),
     });
 
     expect(res.status).toBe(200);
@@ -712,58 +726,64 @@ describe('project association routes', () => {
       title: 'Saved title',
       priority: 'high',
     });
-    expect(body.item.completedAt).toBeUndefined();
+    expect(body.item.closedAt).toBeUndefined();
   });
 
-  it('creates and applies a work item update suggestion', async () => {
+  it('creates and executes a work item command proposal', async () => {
     const projects = new ProjectService();
     const project = projects.create({ name: 'Suggestion Project' });
     const app = registerProjectRouteApp({ projects });
     const create = await app.request(`/api/projects/${project.id}/work-items`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ title: 'Keep work item updated', status: 'in_progress' }),
+      body: JSON.stringify({ title: 'Keep work item updated', initialPhase: 'ready' }),
     });
-    const created = await create.json() as { item: { id: string } };
+    const created = await create.json() as { item: { id: string; version: number } };
 
-    const suggest = await app.request(`/api/work-items/${created.item.id}/update-suggestions`, {
+    const start = await app.request(`/api/work-items/${created.item.id}/commands`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'start', expectedVersion: created.item.version }),
+    });
+    const started = await start.json() as { item: { version: number } };
+
+    const suggest = await app.request(`/api/work-items/${created.item.id}/command-proposals`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         sourceKind: 'chat',
         sourceId: 'agent:main:webchat:default:direct:s1',
-        patch: {
-          status: 'in_review',
-          nextAction: 'Ask the user to verify the result.',
+        command: {
+          type: 'request_review',
+          expectedVersion: started.item.version,
+          summary: 'Ask the user to verify the result.',
         },
-        progressNote: 'Implemented the first pass and verified the build.',
       }),
     });
 
     expect(suggest.status).toBe(201);
-    const suggested = await suggest.json() as { ok: boolean; suggestion: { id: string; status: string } };
+    const suggested = await suggest.json() as { ok: boolean; proposal: { id: string; state: string } };
     expect(suggested.ok).toBe(true);
-    expect(suggested.suggestion.status).toBe('pending');
+    expect(suggested.proposal.state).toBe('pending');
 
-    const apply = await app.request(`/api/work-item-update-suggestions/${suggested.suggestion.id}/apply`, {
+    const apply = await app.request(`/api/work-item-command-proposals/${suggested.proposal.id}/execute`, {
       method: 'POST',
     });
 
     expect(apply.status).toBe(200);
-    const applied = await apply.json() as { ok: boolean; item: Record<string, unknown>; suggestion: Record<string, unknown> };
+    const applied = await apply.json() as { ok: boolean; item: Record<string, unknown>; proposal: Record<string, unknown> };
     expect(applied.ok).toBe(true);
     expect(applied.item).toMatchObject({
       id: created.item.id,
-      status: 'in_review',
-      nextAction: 'Ask the user to verify the result.',
+      phase: 'verifying',
     });
-    expect(applied.suggestion).toMatchObject({ id: suggested.suggestion.id, status: 'applied' });
+    expect(applied.proposal).toMatchObject({ id: suggested.proposal.id, state: 'executed' });
 
     const events = await app.request(`/api/work-items/${created.item.id}/events`);
     const eventsBody = await events.json() as { events: Array<Record<string, unknown>> };
     expect(eventsBody.events).toEqual(expect.arrayContaining([
-      expect.objectContaining({ type: 'progress_note_added' }),
-      expect.objectContaining({ type: 'update_suggestion_applied' }),
+      expect.objectContaining({ type: 'work_item.review_requested' }),
+      expect.objectContaining({ type: 'work_item.command_proposal_executed' }),
     ]));
   });
 
@@ -805,7 +825,7 @@ describe('project association routes', () => {
     expect(body.ok).toBe(true);
     expect(body.item).toMatchObject({
       id: created.item.id,
-      status: 'in_progress',
+      phase: 'executing',
     });
     expect((body.item.links as Array<Record<string, unknown>>)).toEqual([
       expect.objectContaining({ kind: 'chat', targetId: body.session.key }),

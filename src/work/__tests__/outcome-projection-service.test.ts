@@ -49,10 +49,13 @@ describe('OutcomeProjectionService', () => {
       projectId: project.id,
       acceptanceCriteria: ['Checks pass'],
     });
-    const workItem = workItems.createProjectWorkItem(project.id, {
+    const createdWorkItem = workItems.createProjectWorkItem(project.id, {
       title: 'Ship verified work',
-      status: 'in_progress',
+      initialPhase: 'ready',
     });
+    const workItem = workItems.executeCommand(createdWorkItem.id, { type: 'start', expectedVersion: createdWorkItem.version }, {
+      actor: { kind: 'agent', id: 'main' }, source: 'workflow', requestId: 'projection-test',
+    })!;
     startExecutionReceipt({
       runId: 'run-projection',
       sessionKey: 'session-projection',
@@ -98,7 +101,7 @@ describe('OutcomeProjectionService', () => {
       userStatus: 'completed',
       internalStatus: 'completed',
     });
-    expect(workItems.getWorkItem(workItem.id)?.status).toBe('in_progress');
+    expect(workItems.getWorkItem(workItem.id)?.phase).toBe('executing');
 
     const corrected = setExecutionVerdict({
       runId: 'run-projection',
@@ -110,7 +113,7 @@ describe('OutcomeProjectionService', () => {
       userStatus: 'needs_user',
       internalStatus: 'blocked',
     });
-    expect(workItems.getWorkItem(workItem.id)?.status).toBe('in_progress');
+    expect(workItems.getWorkItem(workItem.id)?.phase).toBe('executing');
     expect(new WorkValueMetricsService().get().outcomes).toMatchObject({
       total: 1,
       achieved: 0,

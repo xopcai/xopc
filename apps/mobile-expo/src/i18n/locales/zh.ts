@@ -952,13 +952,10 @@ export const zh: MessageBundle = {
     editIntent: '返回修改',
     status: {
       backlog: '待规划',
-      todo: '待处理',
-      in_progress: '进行中',
-      blocked: '已阻塞',
-      needs_input: '需要输入',
-      in_review: '待审核',
-      done: '已完成',
-      cancelled: '已取消',
+      ready: '就绪',
+      executing: '执行中',
+      verifying: '验证中',
+      closed: '已关闭',
     },
   },
 

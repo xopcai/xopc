@@ -31,7 +31,7 @@ export const MessageList = memo(function MessageList({
   deleteRoundDisabled,
   onSaveAssistantToSourceNote,
   onExtractAssistantTask,
-  onSuggestWorkItemUpdate,
+  onProposeWorkItemCommand,
 }: {
   messages: Message[];
   authToken?: string;
@@ -52,7 +52,7 @@ export const MessageList = memo(function MessageList({
   deleteRoundDisabled?: boolean;
   onSaveAssistantToSourceNote?: (content: string) => Promise<void> | void;
   onExtractAssistantTask?: (content: string) => Promise<void> | void;
-  onSuggestWorkItemUpdate?: (content: string) => Promise<void> | void;
+  onProposeWorkItemCommand?: (content: string) => Promise<void> | void;
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -119,7 +119,7 @@ export const MessageList = memo(function MessageList({
               deleteRoundDisabled={Boolean(deleteRoundDisabled && isLastUserRow)}
               onSaveAssistantToSourceNote={onSaveAssistantToSourceNote}
               onExtractAssistantTask={onExtractAssistantTask}
-              onSuggestWorkItemUpdate={onSuggestWorkItemUpdate}
+              onProposeWorkItemCommand={onProposeWorkItemCommand}
               // Do not unmount action footers from every prior assistant message
               // when a new reply starts; only the live row has no actions.
               suppressAssistantActions={isStreamRow}

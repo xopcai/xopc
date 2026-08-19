@@ -85,7 +85,7 @@ export const MessageBubble = memo(function MessageBubble({
   deleteRoundDisabled = false,
   onSaveAssistantToSourceNote,
   onExtractAssistantTask,
-  onSuggestWorkItemUpdate,
+  onProposeWorkItemCommand,
   readonly = false,
   density = 'normal',
   suppressAssistantActions = false,
@@ -110,8 +110,8 @@ export const MessageBubble = memo(function MessageBubble({
   onSaveAssistantToSourceNote?: (content: string) => Promise<void> | void;
   /** Create a task Note from this assistant reply for note-bound chat threads. */
   onExtractAssistantTask?: (content: string) => Promise<void> | void;
-  /** Draft a structured work item update from this assistant reply. */
-  onSuggestWorkItemUpdate?: (content: string) => Promise<void> | void;
+  /** Draft a lifecycle command proposal from this assistant reply. */
+  onProposeWorkItemCommand?: (content: string) => Promise<void> | void;
   readonly?: boolean;
   density?: 'normal' | 'compact';
   /** Hide assistant footer actions while the session is receiving live SSE updates. */
@@ -343,11 +343,11 @@ export const MessageBubble = memo(function MessageBubble({
       .finally(() => setAssistantActionBusy(null));
   }, [assistantActionBusy, copyMarkdown, copyPlainText, onExtractAssistantTask]);
 
-  const handleSuggestWorkItemUpdate = useCallback(() => {
+  const handleProposeWorkItemCommand = useCallback(() => {
     if (!copyPlainText && !copyMarkdown) return;
-    if (!onSuggestWorkItemUpdate || assistantActionBusy) return;
+    if (!onProposeWorkItemCommand || assistantActionBusy) return;
     setAssistantActionBusy('work-item-update');
-    void Promise.resolve(onSuggestWorkItemUpdate(copyPlainText || copyMarkdown))
+    void Promise.resolve(onProposeWorkItemCommand(copyPlainText || copyMarkdown))
       .then(() => {
         setAssistantActionFeedback('work-item-update');
         window.setTimeout(
@@ -357,7 +357,7 @@ export const MessageBubble = memo(function MessageBubble({
       })
       .catch(() => undefined)
       .finally(() => setAssistantActionBusy(null));
-  }, [assistantActionBusy, copyMarkdown, copyPlainText, onSuggestWorkItemUpdate]);
+  }, [assistantActionBusy, copyMarkdown, copyPlainText, onProposeWorkItemCommand]);
 
   const handleCopyUserMessage = useCallback(() => {
     if (!userCopyText) return;
@@ -860,12 +860,12 @@ export const MessageBubble = memo(function MessageBubble({
                       </button>
                     </Popover.Close>
                   ) : null}
-                  {onSuggestWorkItemUpdate ? (
+                  {onProposeWorkItemCommand ? (
                     <Popover.Close asChild>
                       <button
                         type="button"
                         className="flex h-9 w-full items-center gap-2 rounded-lg px-2.5 text-left text-xs text-fg-muted hover:bg-surface-hover hover:text-fg disabled:opacity-40"
-                        onClick={handleSuggestWorkItemUpdate}
+                        onClick={handleProposeWorkItemCommand}
                         disabled={(!copyPlainText && !copyMarkdown) || assistantActionBusy !== null}
                       >
                         {assistantActionFeedback === 'work-item-update' ? (
@@ -874,8 +874,8 @@ export const MessageBubble = memo(function MessageBubble({
                           <SquarePen className="size-4" strokeWidth={1.75} aria-hidden />
                         )}
                         {assistantActionFeedback === 'work-item-update'
-                          ? m.chat.workItemUpdateDrafted
-                          : m.chat.workItemUpdateAction}
+                          ? m.chat.workItemCommandDrafted
+                          : m.chat.workItemCommandAction}
                       </button>
                     </Popover.Close>
                   ) : null}

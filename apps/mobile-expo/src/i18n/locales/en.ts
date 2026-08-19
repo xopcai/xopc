@@ -952,13 +952,10 @@ export const en = {
     editIntent: 'Edit intent',
     status: {
       backlog: 'Backlog',
-      todo: 'To do',
-      in_progress: 'In progress',
-      blocked: 'Blocked',
-      needs_input: 'Needs input',
-      in_review: 'In review',
-      done: 'Done',
-      cancelled: 'Cancelled',
+      ready: 'Ready',
+      executing: 'Executing',
+      verifying: 'Verifying',
+      closed: 'Closed',
     },
   },
 

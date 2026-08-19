@@ -32,13 +32,16 @@ describe('proactive domain signals', () => {
     signals = new ProactiveEventService(() => scenarios.routes());
   });
 
-  it('routes an explicit blocked transition only to the blocked-work scenario', () => {
+  it('routes an explicit wait to blocked-work and project-risk scenarios', () => {
     const projects = new ProjectService(undefined, signals);
     const project = projects.create({ name: 'Launch' });
     const workItems = new WorkItemService(undefined, signals);
-    const item = workItems.createProjectWorkItem(project.id, { title: 'Ship release' });
-    workItems.updateWorkItem(item.id, { status: 'blocked', blockedReason: 'Needs owner decision' });
-    expect(signals.listBatches().filter((batch) => batch.status === 'collecting').map((batch) => batch.scenarioKey)).toEqual(['blocked_work']);
+    const item = workItems.createProjectWorkItem(project.id, { title: 'Ship release', initialPhase: 'ready' });
+    workItems.executeCommand(item.id, {
+      type: 'wait', expectedVersion: item.version, wait: { kind: 'user_input', reason: 'Needs owner decision' },
+    }, { actor: { kind: 'agent', id: 'main' }, source: 'agent_tool', requestId: 'test-1' });
+    expect(signals.listBatches().filter((batch) => batch.status === 'collecting').map((batch) => batch.scenarioKey).sort())
+      .toEqual(['blocked_work', 'project_delivery_risk']);
   });
 
   afterEach(async () => { await automations?.stop(); closeXopcDatabase(); resetXopcDatabaseSingletonForTest(); rmSync(stateDir, { recursive: true, force: true }); });
@@ -48,11 +51,13 @@ describe('proactive domain signals', () => {
     const workItems = new WorkItemService(undefined, signals);
     const project = projects.create({ name: 'Launch' });
     projects.update(project.id, { brief: 'Ship before quarter end' });
-    const item = workItems.createProjectWorkItem(project.id, { title: 'Release review', status: 'todo' });
-    workItems.updateWorkItem(item.id, { status: 'blocked', blockedReason: 'Security approval' });
-    expect(signals.listEvents().map((event) => event.type).sort()).toEqual(['project.updated.v1', 'work_item.status_changed.v1']);
+    const item = workItems.createProjectWorkItem(project.id, { title: 'Release review', initialPhase: 'ready' });
+    workItems.executeCommand(item.id, {
+      type: 'wait', expectedVersion: item.version, wait: { kind: 'user_approval', reason: 'Security approval' },
+    }, { actor: { kind: 'agent', id: 'main' }, source: 'agent_tool', requestId: 'test-2' });
+    expect(signals.listEvents().map((event) => event.type).sort()).toEqual(['project.updated.v1', 'work_item.lifecycle_changed.v1']);
     expect(signals.listBatches().map((batch) => batch.scenarioKey).sort()).toEqual(['blocked_work', 'project_delivery_risk']);
-    expect(signals.listBatches().find((batch) => batch.scenarioKey === 'project_delivery_risk')?.eventCount).toBe(1);
+    expect(signals.listBatches().find((batch) => batch.scenarioKey === 'project_delivery_risk')?.eventCount).toBe(2);
   });
 
   it('publishes terminal automation failure with the completed run as evidence', async () => {

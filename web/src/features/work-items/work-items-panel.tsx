@@ -22,7 +22,8 @@ import {
   downloadWorkItemAttachment,
   fetchProjectWorkItems,
   fetchWorkItemEvents,
-  patchWorkItem,
+  executeWorkItemCommand,
+  patchWorkItemMetadata,
   startWorkItemChat,
   uploadWorkItemAttachments,
   workItemAttachmentContentUrl,
@@ -30,7 +31,8 @@ import {
   type WorkItemAttachment,
   type WorkItemEvent,
   type WorkItemPriority,
-  type WorkItemStatus,
+  type WorkItemCommand,
+  type WorkItemPhase,
 } from './api';
 
 type WorkItemsMessages = ReturnType<typeof messages>['projectDetailPage']['workItems'];
@@ -43,14 +45,13 @@ type BoardPanState = {
 };
 
 const DRAG_TYPE = 'application/x-xopc-work-item';
-const BOARD_COLUMNS: WorkItemStatus[] = ['backlog', 'todo', 'in_progress', 'blocked', 'needs_input', 'in_review', 'done'];
+const BOARD_COLUMNS: WorkItemPhase[] = ['backlog', 'ready', 'executing', 'verifying', 'closed'];
 const PRIORITIES: WorkItemPriority[] = ['low', 'normal', 'high', 'urgent'];
 
-function statusTone(status: WorkItemStatus): string {
-  if (status === 'done' || status === 'in_review') return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
-  if (status === 'blocked' || status === 'needs_input') return 'bg-red-500/10 text-red-700 dark:text-red-300';
-  if (status === 'in_progress') return 'bg-accent-soft text-accent-fg';
-  if (status === 'backlog' || status === 'todo') return 'bg-amber-500/10 text-amber-700 dark:text-amber-300';
+function phaseTone(phase: WorkItemPhase): string {
+  if (phase === 'closed' || phase === 'verifying') return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
+  if (phase === 'executing') return 'bg-accent-soft text-accent-fg';
+  if (phase === 'backlog' || phase === 'ready') return 'bg-amber-500/10 text-amber-700 dark:text-amber-300';
   return 'bg-surface-muted text-fg-subtle';
 }
 
@@ -207,7 +208,34 @@ function shouldIgnoreBoardPan(target: EventTarget | null): boolean {
 }
 
 function visibleSummary(item: WorkItem, t: WorkItemsMessages): string {
-  return item.nextAction || item.blockedReason || item.description || t.noNextAction;
+  return item.waits.find((wait) => !wait.resolvedAt)?.reason || item.nextAction?.text || item.description || t.noNextAction;
+}
+
+function commandForPhaseMove(item: WorkItem, target: WorkItemPhase): WorkItemCommand | null {
+  if (item.phase === target) return null;
+  const expectedVersion = item.version;
+  if (item.phase === 'backlog' && target === 'ready') return { type: 'commit', expectedVersion };
+  if (item.phase === 'ready' && target === 'backlog') return { type: 'defer', expectedVersion };
+  if (item.phase === 'ready' && target === 'executing') return { type: 'start', expectedVersion };
+  if (item.phase === 'executing' && target === 'ready') return { type: 'stop', expectedVersion };
+  if (item.phase === 'executing' && target === 'verifying') {
+    return { type: 'request_review', expectedVersion, summary: 'Ready for verification.' };
+  }
+  if (item.phase === 'verifying' && target === 'executing') {
+    return {
+      type: 'request_changes',
+      expectedVersion,
+      reason: 'Continue work after review.',
+      nextAction: item.nextAction ?? { text: 'Address the review feedback.', actor: 'agent' },
+    };
+  }
+  if ((item.phase === 'executing' || item.phase === 'verifying') && target === 'closed') {
+    return item.completionPolicy === 'user_accepted'
+      ? item.phase === 'verifying' ? { type: 'accept', expectedVersion } : null
+      : { type: 'complete', expectedVersion };
+  }
+  if (item.phase === 'closed' && target === 'ready') return { type: 'reopen', expectedVersion };
+  return null;
 }
 
 function WorkItemCard({
@@ -229,7 +257,7 @@ function WorkItemCard({
   onDragEnd: () => void;
   t: WorkItemsMessages;
 }) {
-  const done = item.status === 'done';
+  const done = item.phase === 'closed' && item.resolution === 'completed';
 
   return (
     <article
@@ -261,8 +289,8 @@ function WorkItemCard({
         </button>
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', statusTone(item.status))}>
-          {t.statuses[item.status]}
+        <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', phaseTone(item.phase))}>
+          {t.statuses[item.phase]}
         </span>
         <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[11px] text-fg-muted">{t.priorities[item.priority]}</span>
         {item.attachments?.length ? (
@@ -603,7 +631,7 @@ function WorkItemModal({
   mode,
   item,
   detailReturnTo,
-  initialStatus,
+  initialPhase,
   events,
   busy,
   error,
@@ -621,15 +649,15 @@ function WorkItemModal({
   mode: 'create' | 'detail' | null;
   item: WorkItem | null;
   detailReturnTo: string;
-  initialStatus: WorkItemStatus;
+  initialPhase: Extract<WorkItemPhase, 'backlog' | 'ready'>;
   events: WorkItemEvent[];
   busy: boolean;
   error: string | null;
   notice: WorkItemNotice;
   t: WorkItemsMessages;
   onClose: () => void;
-  onCreate: (input: { title: string; description?: string; priority: WorkItemPriority; status: WorkItemStatus; nextAction?: string; blockedReason?: string; attachments?: File[] }) => void;
-  onSave: (item: WorkItem, patch: Parameters<typeof patchWorkItem>[1]) => void;
+  onCreate: (input: Parameters<typeof createWorkItem>[1]) => void;
+  onSave: (item: WorkItem, patch: Parameters<typeof patchWorkItemMetadata>[2]) => void;
   onStartChat: (item: WorkItem) => void;
   onAddAttachments: (item: WorkItem, files: File[]) => void;
   onRemoveAttachment: (item: WorkItem, attachment: WorkItemAttachment) => void;
@@ -639,33 +667,29 @@ function WorkItemModal({
   const open = mode !== null;
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [status, setStatus] = useState<WorkItemStatus>('todo');
+  const [formInitialPhase, setFormInitialPhase] = useState<Extract<WorkItemPhase, 'backlog' | 'ready'>>('ready');
   const [priority, setPriority] = useState<WorkItemPriority>('normal');
   const [nextAction, setNextAction] = useState('');
-  const [blockedReason, setBlockedReason] = useState('');
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
 
   useEffect(() => {
     if (mode === 'create') {
       setTitle('');
       setDescription('');
-      setStatus(initialStatus);
+      setFormInitialPhase(initialPhase);
       setPriority('normal');
       setNextAction('');
-      setBlockedReason('');
       setPendingFiles([]);
       return;
     }
     if (mode === 'detail' && item) {
       setTitle(item.title);
       setDescription(item.description ?? '');
-      setStatus(item.status);
       setPriority(item.priority);
-      setNextAction(item.nextAction ?? '');
-      setBlockedReason(item.blockedReason ?? '');
+      setNextAction(item.nextAction?.text ?? '');
       setPendingFiles([]);
     }
-  }, [initialStatus, item, mode]);
+  }, [initialPhase, item, mode]);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -676,9 +700,8 @@ function WorkItemModal({
         title: trimmedTitle,
         description: description.trim() || undefined,
         priority,
-        status,
-        nextAction: nextAction.trim() || undefined,
-        blockedReason: blockedReason.trim() || undefined,
+        initialPhase: formInitialPhase,
+        nextAction: nextAction.trim() ? { text: nextAction.trim(), actor: 'agent' } : undefined,
         attachments: pendingFiles,
       });
       return;
@@ -687,10 +710,8 @@ function WorkItemModal({
     onSave(item, {
       title: trimmedTitle,
       description: description.trim() || null,
-      status,
       priority,
-      nextAction: nextAction.trim() || null,
-      blockedReason: blockedReason.trim() || null,
+      nextAction: nextAction.trim() ? { text: nextAction.trim(), actor: item.nextAction?.actor ?? 'agent' } : null,
     });
   }
 
@@ -739,12 +760,12 @@ function WorkItemModal({
                   />
                 </label>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="grid gap-1.5 text-sm">
+                  {mode === 'create' ? <label className="grid gap-1.5 text-sm">
                     <span className="font-medium text-fg-muted">{t.detail.status}</span>
-                    <Select className="h-10 rounded-lg border border-edge bg-surface-base px-3 text-sm text-fg outline-none focus:border-accent" value={status} onChange={(event) => setStatus(event.target.value as WorkItemStatus)}>
-                      {BOARD_COLUMNS.map((value) => <SelectOption key={value} value={value}>{t.statuses[value]}</SelectOption>)}
+                    <Select className="h-10 rounded-lg border border-edge bg-surface-base px-3 text-sm text-fg outline-none focus:border-accent" value={formInitialPhase} onChange={(event) => setFormInitialPhase(event.target.value as Extract<WorkItemPhase, 'backlog' | 'ready'>)}>
+                      {(['backlog', 'ready'] as const).map((value) => <SelectOption key={value} value={value}>{t.statuses[value]}</SelectOption>)}
                     </Select>
-                  </label>
+                  </label> : null}
                   <label className="grid gap-1.5 text-sm">
                     <span className="font-medium text-fg-muted">{t.create.priorityLabel}</span>
                     <Select className="h-10 rounded-lg border border-edge bg-surface-base px-3 text-sm text-fg outline-none focus:border-accent" value={priority} onChange={(event) => setPriority(event.target.value as WorkItemPriority)}>
@@ -773,10 +794,6 @@ function WorkItemModal({
                     <label className="grid gap-1.5 text-sm">
                       <span className="font-medium text-fg-muted">{t.nextAction}</span>
                       <textarea className="min-h-20 rounded-lg border border-edge bg-surface-base px-3 py-2 text-sm text-fg outline-none focus:border-accent" value={nextAction} onChange={(event) => setNextAction(event.target.value)} />
-                    </label>
-                    <label className="grid gap-1.5 text-sm">
-                      <span className={cn('font-medium', status === 'blocked' || status === 'needs_input' ? 'text-red-700 dark:text-red-300' : 'text-fg-muted')}>{t.blockedReason}</span>
-                      <textarea className={cn('min-h-20 rounded-lg border bg-surface-base px-3 py-2 text-sm text-fg outline-none focus:border-accent', status === 'blocked' || status === 'needs_input' ? 'border-red-500/40' : 'border-edge')} value={blockedReason} onChange={(event) => setBlockedReason(event.target.value)} />
                     </label>
                   </>
                 ) : null}
@@ -821,7 +838,7 @@ function WorkItemModal({
                   <div className="mt-2 grid gap-2">
                     {events.length ? events.slice(0, 5).map((event) => (
                       <div key={event.id} className="text-sm">
-                        <div className="font-medium text-fg">{t.eventTypes[event.type] ?? event.type}</div>
+                        <div className="font-medium text-fg">{(t.eventTypes as Record<string, string>)[event.type] ?? event.type}</div>
                         <div className="mt-0.5 text-xs text-fg-subtle">{formatTime(event.createdAt)}</div>
                       </div>
                     )) : <p className="text-sm text-fg-muted">{t.detail.noActivity}</p>}
@@ -864,11 +881,11 @@ export function WorkItemsPanel({
   const [notice, setNotice] = useState<WorkItemNotice>(null);
   const [busy, setBusy] = useState(false);
   const [draggingItemId, setDraggingItemId] = useState<string | null>(null);
-  const [dropStatus, setDropStatus] = useState<WorkItemStatus | null>(null);
+  const [dropPhase, setDropPhase] = useState<WorkItemPhase | null>(null);
   const [isPanningBoard, setIsPanningBoard] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
-  const [createStatus, setCreateStatus] = useState<WorkItemStatus>('todo');
+  const [createPhase, setCreatePhase] = useState<Extract<WorkItemPhase, 'backlog' | 'ready'>>('ready');
   const [selectedItem, setSelectedItem] = useState<WorkItem | null>(null);
   const [selectedEvents, setSelectedEvents] = useState<WorkItemEvent[]>([]);
 
@@ -899,14 +916,14 @@ export function WorkItemsPanel({
     setSelectedEvents([]);
     setError(null);
     setNotice(null);
-    setCreateStatus('todo');
+    setCreatePhase('ready');
     setCreateOpen(true);
   }, [createRequestKey]);
 
-  const boardColumns = useMemo(() => BOARD_COLUMNS.map((status) => ({
-    status,
-    title: t.statuses[status],
-    items: items.filter((item) => item.status === status),
+  const boardColumns = useMemo(() => BOARD_COLUMNS.map((phase) => ({
+    phase,
+    title: t.statuses[phase],
+    items: items.filter((item) => item.phase === phase),
   })), [items, t.statuses]);
 
   const updateLocalItem = useCallback((next: WorkItem) => {
@@ -914,12 +931,12 @@ export function WorkItemsPanel({
     setSelectedItem((current) => current?.id === next.id ? next : current);
   }, []);
 
-  const updateItem = useCallback(async (item: WorkItem, patch: Parameters<typeof patchWorkItem>[1]) => {
+  const updateItem = useCallback(async (item: WorkItem, patch: Parameters<typeof patchWorkItemMetadata>[2]) => {
     setBusy(true);
     setError(null);
     setNotice(null);
     try {
-      const res = await patchWorkItem(item.id, patch);
+      const res = await patchWorkItemMetadata(item.id, item.version, patch);
       if (res.item.archivedAt) {
         setItems((current) => current.filter((candidate) => candidate.id !== res.item.id));
         setSelectedItem(null);
@@ -944,7 +961,7 @@ export function WorkItemsPanel({
     if (res) setSelectedEvents(res.events);
   }, []);
 
-  const createItem = useCallback(async (input: { title: string; description?: string; priority: WorkItemPriority; status: WorkItemStatus; nextAction?: string; blockedReason?: string; attachments?: File[] }) => {
+  const createItem = useCallback(async (input: Parameters<typeof createWorkItem>[1]) => {
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -1029,26 +1046,40 @@ export function WorkItemsPanel({
     setDraggingItemId(item.id);
   }, []);
 
-  const dropOnStatus = useCallback((targetStatus: WorkItemStatus, event: DragEvent<HTMLElement>) => {
+  const dropOnPhase = useCallback((targetPhase: WorkItemPhase, event: DragEvent<HTMLElement>) => {
     event.preventDefault();
     const itemId = event.dataTransfer.getData(DRAG_TYPE) || draggingItemId;
-    setDropStatus(null);
+    setDropPhase(null);
     setDraggingItemId(null);
     const item = items.find((candidate) => candidate.id === itemId);
-    if (!item || item.status === targetStatus) return;
-    void updateItem(item, { status: targetStatus });
-  }, [draggingItemId, items, updateItem]);
+    if (!item) return;
+    const command = commandForPhaseMove(item, targetPhase);
+    if (!command) return;
+    setBusy(true);
+    void executeWorkItemCommand(item.id, command)
+      .then((res) => updateLocalItem(res.item))
+      .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+      .finally(() => setBusy(false));
+  }, [draggingItemId, items, updateLocalItem]);
 
   const toggleDone = useCallback((item: WorkItem) => {
-    void updateItem(item, { status: item.status === 'done' ? 'todo' : 'done' });
-  }, [updateItem]);
+    const command = item.phase === 'closed'
+      ? commandForPhaseMove(item, 'ready')
+      : commandForPhaseMove(item, 'closed');
+    if (!command) return;
+    setBusy(true);
+    void executeWorkItemCommand(item.id, command)
+      .then((res) => updateLocalItem(res.item))
+      .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+      .finally(() => setBusy(false));
+  }, [updateLocalItem]);
 
-  const openCreateForStatus = useCallback((status: WorkItemStatus) => {
+  const openCreateForPhase = useCallback((phase: WorkItemPhase) => {
     setSelectedItem(null);
     setSelectedEvents([]);
     setError(null);
     setNotice(null);
-    setCreateStatus(status);
+    setCreatePhase(phase === 'backlog' ? 'backlog' : 'ready');
     setCreateOpen(true);
   }, []);
 
@@ -1116,22 +1147,22 @@ export function WorkItemsPanel({
           <div className="flex min-h-full min-w-max items-start gap-3 pr-4">
             {boardColumns.map((column) => (
               <section
-                key={column.status}
+                key={column.phase}
                 className={cn(
                   'flex max-h-full w-72 min-w-72 max-w-72 shrink-0 flex-col overflow-y-auto rounded-lg bg-surface-base shadow-surface',
-                  dropStatus === column.status && 'bg-surface-active',
+                  dropPhase === column.phase && 'bg-surface-active',
                 )}
                 aria-label={column.title}
                 onDragOver={(event) => {
                   if (!draggingItemId) return;
                   event.preventDefault();
                   event.dataTransfer.dropEffect = 'move';
-                  setDropStatus(column.status);
+                  setDropPhase(column.phase);
                 }}
                 onDragLeave={(event) => {
-                  if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropStatus(null);
+                  if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropPhase(null);
                 }}
-                onDrop={(event) => dropOnStatus(column.status, event)}
+                onDrop={(event) => dropOnPhase(column.phase, event)}
               >
                 <header className="flex shrink-0 items-center justify-between gap-2 p-3">
                   <div className="flex min-w-0 items-baseline gap-2">
@@ -1152,7 +1183,7 @@ export function WorkItemsPanel({
                       onDragStart={startDrag}
                       onDragEnd={() => {
                         setDraggingItemId(null);
-                        setDropStatus(null);
+                        setDropPhase(null);
                       }}
                       t={t}
                     />
@@ -1172,7 +1203,7 @@ export function WorkItemsPanel({
                       className="inline-flex h-8 w-full items-center justify-center rounded-lg bg-surface-panel/85 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-muted"
                       aria-label={t.create.addToColumn.replace('{{status}}', column.title)}
                       title={t.create.addToColumn.replace('{{status}}', column.title)}
-                      onClick={() => openCreateForStatus(column.status)}
+                      onClick={() => openCreateForPhase(column.phase)}
                     >
                       <Plus className="size-4" aria-hidden />
                     </button>
@@ -1193,7 +1224,7 @@ export function WorkItemsPanel({
         mode={createOpen ? 'create' : selectedItem ? 'detail' : null}
         item={selectedItem}
         detailReturnTo={detailReturnTo}
-        initialStatus={createStatus}
+        initialPhase={createPhase}
         events={selectedEvents}
         busy={busy}
         error={error}
