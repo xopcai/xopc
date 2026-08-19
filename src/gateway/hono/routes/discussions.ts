@@ -119,6 +119,22 @@ export function registerDiscussionRoutes(authenticated: Hono, deps: Authenticate
     }
   });
 
+  authenticated.patch('/api/discussions/:id/segments/:sequence', strictRateLimitMiddleware, async (c) => {
+    const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
+    try {
+      return c.json(service.discussions.correctSegment(
+        c.req.param('id'),
+        Number.parseInt(c.req.param('sequence'), 10),
+        typeof body.displayText === 'string' ? body.displayText : '',
+        Number(body.expectedRevision),
+      ));
+    } catch (error) {
+      const response = errorResponse(error);
+      if (response) return c.json(response.body, response.status);
+      throw error;
+    }
+  });
+
   authenticated.put('/api/discussions/:id/recording', strictRateLimitMiddleware, async (c) => {
     const body = await multipart(c);
     if (!body) return c.json({ error: 'Invalid multipart body' }, 400);
@@ -138,10 +154,10 @@ export function registerDiscussionRoutes(authenticated: Hono, deps: Authenticate
     }
   });
 
-  authenticated.post('/api/discussions/:id/finish', strictRateLimitMiddleware, async (c) => {
+  authenticated.post('/api/discussions/:id/stop', strictRateLimitMiddleware, async (c) => {
     const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
     try {
-      const detail = await service.discussions.finish(
+      const detail = await service.discussions.stop(
         c.req.param('id'),
         Number(body.lastSequence),
         Number(body.durationMs),

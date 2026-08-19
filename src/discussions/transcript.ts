@@ -16,7 +16,7 @@ export function appendTranscriptWithoutOverlap(existing: string, next: string): 
 
 export function assembleDiscussionTranscript(segments: DiscussionTranscriptSegment[]): string {
   return segments.reduce(
-    (text, segment) => appendTranscriptWithoutOverlap(text, segment.transcript ?? ''),
+    (text, segment) => appendTranscriptWithoutOverlap(text, segment.displayText ?? ''),
     '',
   );
 }

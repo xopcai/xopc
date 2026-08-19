@@ -18,7 +18,7 @@ import {
   updateDiscussionCapture,
 } from './repository.js';
 import { assembleDiscussionTranscript } from './transcript.js';
-import type { DiscussionCapture } from './types.js';
+import type { DiscussionCapture, DiscussionTranscriptSegment } from './types.js';
 
 const log = createLogger('DiscussionLiveWorker');
 const MAX_ATTEMPTS = 3;
@@ -30,7 +30,7 @@ export interface DiscussionLiveWorkerDeps {
   getConfig: () => Config;
   transcribeSegment?: (buffer: Buffer, signal?: AbortSignal) => Promise<{ text: string; provider: string }>;
   enrichTranscript?: typeof enrichLiveDiscussion;
-  onTranscriptUpdated?: (discussionId: string, sequence: number) => void;
+  onTranscriptUpdated?: (segment: DiscussionTranscriptSegment) => void;
   onDiscussionUpdated?: (capture: DiscussionCapture) => void;
 }
 
@@ -41,7 +41,11 @@ export class DiscussionLiveWorker {
   private running = false;
   private stoppedWaiters: Array<() => void> = [];
 
-  constructor(private readonly deps: DiscussionLiveWorkerDeps, private readonly intervalMs = 1_000) {}
+  constructor(
+    private readonly deps: DiscussionLiveWorkerDeps,
+    private readonly intervalMs = 1_000,
+    private readonly concurrency = 3,
+  ) {}
 
   start(): void {
     if (this.timer) return;
@@ -61,8 +65,18 @@ export class DiscussionLiveWorker {
     if (this.running) return;
     this.running = true;
     try {
-      const segment = claimNextDiscussionTranscriptSegment(this.owner);
-      if (!segment) return;
+      await Promise.all(Array.from({ length: this.concurrency }, () => this.processOne()));
+    } finally {
+      this.running = false;
+      const waiters = this.stoppedWaiters.splice(0);
+      for (const resolve of waiters) resolve();
+    }
+  }
+
+  private async processOne(): Promise<void> {
+    const segment = claimNextDiscussionTranscriptSegment(this.owner);
+    if (!segment) return;
+    try {
       try {
         const result = this.deps.transcribeSegment
           ? await this.deps.transcribeSegment(segment.audioBuffer)
@@ -75,30 +89,28 @@ export class DiscussionLiveWorker {
           result.provider,
         );
         if (!completed) return;
-        this.deps.onTranscriptUpdated?.(segment.discussionId, segment.sequence);
+        this.deps.onTranscriptUpdated?.(completed);
         await this.enrichOnce(segment.discussionId).catch((error) => {
           log.warn({ err: error, discussionId: segment.discussionId }, 'Live discussion enrichment failed');
         });
       } catch (error) {
         const exhausted = segment.attemptCount >= MAX_ATTEMPTS;
         const message = error instanceof Error ? error.message : String(error);
-        retryOrFailDiscussionTranscriptSegment(
+        const updated = retryOrFailDiscussionTranscriptSegment(
           segment.discussionId,
           segment.sequence,
           this.owner,
           message,
           exhausted,
         );
-        this.deps.onTranscriptUpdated?.(segment.discussionId, segment.sequence);
+        if (updated) this.deps.onTranscriptUpdated?.(updated);
         log.warn(
           { err: error, discussionId: segment.discussionId, sequence: segment.sequence, exhausted },
           `Live discussion transcription failed: ${message}`,
         );
       }
-    } finally {
-      this.running = false;
-      const waiters = this.stoppedWaiters.splice(0);
-      for (const resolve of waiters) resolve();
+    } catch (error) {
+      log.error({ err: error, discussionId: segment.discussionId }, 'Unexpected live transcription worker failure');
     }
   }
 
@@ -129,7 +141,7 @@ export class DiscussionLiveWorker {
         : undefined;
     const note = await this.deps.notes.getNote(capture.noteId);
     if (!note) throw new Error('Discussion note is missing');
-    if (note.title !== enrichment.title) {
+    if (note.title?.startsWith('Discussion ·') && note.title !== enrichment.title) {
       const updatedNote = await this.deps.notes.updateNote(capture.noteId, { title: enrichment.title }, 'ai_edit');
       if (!updatedNote) throw new Error('Discussion note disappeared while applying the live title');
     }
