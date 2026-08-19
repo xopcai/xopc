@@ -1,7 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Popover from '@radix-ui/react-popover';
-import type { ProjectOperatingView } from '@xopcai/gateway-contract';
-import { AlertCircle, Archive, ArrowLeft, Check, ChevronDown, Clock, Copy, File, Folder, FolderPlus, History, LayoutDashboard, ListChecks, MessageSquarePlus, Pause, Pin, PinOff, Play, Plus, RotateCcw, Save, Search, Settings, Sparkles, Square, Trash2, X, Zap, type LucideIcon } from 'lucide-react';
+import type { TaskAction, ProjectOperatingView, ProjectTaskCard } from '@xopcai/gateway-contract';
+import { AlertCircle, Archive, ArrowLeft, Check, ChevronDown, Clock, Columns3, Copy, File, Folder, FolderPlus, History, LayoutDashboard, ListChecks, MessageSquarePlus, Pause, Pin, PinOff, Play, Plus, RotateCcw, Save, Search, Settings, Sparkles, Square, Trash2, X, Zap, type LucideIcon } from 'lucide-react';
 import { type CSSProperties, type FormEvent, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
@@ -13,6 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { automationApi, type Automation, type AutomationRun } from '@/features/automations/automation-api';
 import { inferMimeTypeFromFileName } from '@/features/chat/attachments/attachment-utils-core';
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
+import { actOnTask, createTask } from '@/features/tasks/home-api';
 import { FileTree } from '@/features/file-tree/file-tree';
 import type { FileTreeAction, TreeEntry } from '@/features/file-tree/file-tree-types';
 import { DirectoryPickerPathField } from '@/features/fs/directory-picker-path-field';
@@ -44,6 +45,7 @@ import {
   type ProjectWithDetails,
 } from '@/features/projects/api';
 import { ProjectSkillsPanel } from '@/features/projects/project-skills-panel';
+import { ProjectTaskBoard, type CreateProjectTaskInput } from '@/features/projects/task-board/project-task-board';
 import { fetchGatewayAgents, type GatewayAgentRow } from '@/features/settings/agents-admin-api';
 import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
 import {
@@ -55,7 +57,6 @@ import {
   type WorkflowRunSummary,
 } from '@/features/workflows/workflow-api';
 import { workflowBoardHref } from '@/features/workflows/workflow-page.utils';
-import { WorkItemsPanel } from '@/features/work-items/work-items-panel';
 import { detectPreviewFileType, getPreviewFileName, readModeForPreviewType } from '@/features/preview-runtime';
 import {
   downloadBinaryFile,
@@ -73,13 +74,13 @@ import { safeInternalReturnPath, withReturnTo } from '@/lib/navigation-return';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 
-type WorkTabId = 'work-items' | 'workflows' | 'automations';
-type PrimaryTabId = 'overview' | 'work' | 'files' | 'notes' | 'skills' | 'sessions' | 'activity' | 'settings';
+type WorkTabId = 'workflows' | 'automations';
+type PrimaryTabId = 'overview' | 'board' | 'work' | 'files' | 'notes' | 'skills' | 'sessions' | 'activity' | 'settings';
 type TabId = Exclude<PrimaryTabId, 'work'> | WorkTabId;
 
 const TABS: Array<{ id: TabId; icon: LucideIcon }> = [
   { id: 'overview', icon: LayoutDashboard },
-  { id: 'work-items', icon: ListChecks },
+  { id: 'board', icon: Columns3 },
   { id: 'sessions', icon: MessageSquarePlus },
   { id: 'workflows', icon: Play },
   { id: 'files', icon: Folder },
@@ -90,7 +91,7 @@ const TABS: Array<{ id: TabId; icon: LucideIcon }> = [
   { id: 'settings', icon: Settings },
 ];
 
-const WORK_TAB_IDS = new Set<WorkTabId>(['work-items', 'workflows', 'automations']);
+const WORK_TAB_IDS = new Set<WorkTabId>(['workflows', 'automations']);
 
 const PROJECT_TAB_IDS = new Set<TabId>(TABS.map((tab) => tab.id));
 const PROJECT_FILES_PANEL_WIDTH_STORAGE_KEY = 'xopc.projectFiles.panelWidthPx';
@@ -693,10 +694,10 @@ export function ProjectDetailPage() {
   const [projectActionBusy, setProjectActionBusy] = useState<'pin' | 'archive' | null>(null);
   const [deletingProject, setDeletingProject] = useState(false);
   const [startingChat, setStartingChat] = useState(false);
-  const [createWorkItemRequestKey, setCreateWorkItemRequestKey] = useState(0);
   const [workflowsLoading, setWorkflowsLoading] = useState(false);
   const [workflowActionBusy, setWorkflowActionBusy] = useState<string | null>(null);
   const [creatingBlocker, setCreatingBlocker] = useState(false);
+  const [taskActionBusyId, setTaskActionBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [blockerDraft, setBlockerDraft] = useState({ title: '', reason: '' });
   const [draft, setDraft] = useState({
@@ -794,6 +795,62 @@ export function ProjectDetailPage() {
       cancelled = true;
     };
   }, [projectId]);
+
+  const refreshOperatingView = useCallback(async () => {
+    if (!projectId) return;
+    setOperatingView(await fetchProjectOperatingView(projectId));
+  }, [projectId]);
+
+  useEffect(() => {
+    const refreshForTask = (event: Event) => {
+      const detail = (event as CustomEvent<{ projectId?: string }>).detail;
+      if (detail?.projectId === projectId) void refreshOperatingView();
+    };
+    window.addEventListener('task-created', refreshForTask);
+    window.addEventListener('task-status-changed', refreshForTask);
+    return () => {
+      window.removeEventListener('task-created', refreshForTask);
+      window.removeEventListener('task-status-changed', refreshForTask);
+    };
+  }, [projectId, refreshOperatingView]);
+
+  const performProjectTaskAction = useCallback(async (
+    task: ProjectTaskCard,
+    action: TaskAction,
+  ) => {
+    const previous = operatingView;
+    setTaskActionBusyId(task.id);
+    setError(null);
+    setOperatingView((current) => current ? {
+      ...current,
+      tasks: current.tasks.map((item) => item.id === task.id ? {
+        ...item,
+        lane: action === 'pause' ? 'ready' : 'moving',
+        status: action === 'pause' ? 'paused' : action === 'verify' ? 'verifying' : 'running',
+      } : item),
+    } : current);
+    try {
+      await actOnTask(task.id, action, task.updatedAt);
+      await refreshOperatingView();
+    } catch (err) {
+      setOperatingView(previous);
+      setError(err instanceof Error ? err.message : pm.board.actionFailed);
+    } finally {
+      setTaskActionBusyId(null);
+    }
+  }, [operatingView, pm.board.actionFailed, refreshOperatingView]);
+
+  const createProjectTask = useCallback(async (input: CreateProjectTaskInput) => {
+    if (!projectId) return;
+    setError(null);
+    await createTask({
+      ...input,
+      mode: 'start',
+      projectId,
+      locale: language,
+    });
+    await refreshOperatingView();
+  }, [language, projectId, refreshOperatingView]);
 
   const refreshProjectWorkflows = useCallback(async () => {
     if (!project) return;
@@ -988,11 +1045,6 @@ export function ProjectDetailPage() {
     }
   }, [navigateFromProjectTab, project]);
 
-  const openCreateWorkItem = useCallback(() => {
-    navigateProjectTab('work-items');
-    setCreateWorkItemRequestKey((value) => value + 1);
-  }, [navigateProjectTab]);
-
   const refreshProjectState = useCallback(async () => {
     if (!project) return;
     const [nextProject, nextOperatingView] = await Promise.all([
@@ -1067,17 +1119,13 @@ export function ProjectDetailPage() {
   const headerEnd = useMemo(
     () => project ? (
       <>
-        <Button variant="secondary" className="h-9 rounded-lg" onClick={openCreateWorkItem}>
-          <Plus className="size-4" aria-hidden />
-          {pm.workItems.create.header}
-        </Button>
         <Button variant="primary" className="h-9 rounded-lg" onClick={() => void startChat()} disabled={startingChat}>
           <MessageSquarePlus className="size-4" aria-hidden />
           {pm.common.newChat}
         </Button>
       </>
     ) : null,
-    [openCreateWorkItem, pm.common.newChat, pm.workItems.create.header, project, startChat, startingChat],
+    [pm.common.newChat, project, startChat, startingChat],
   );
 
   useLayoutEffect(() => {
@@ -1382,7 +1430,7 @@ export function ProjectDetailPage() {
     href?: string;
     updatedAt?: number;
   }> = operatingView?.blockers ?? [];
-  const overviewActions = operatingView?.currentActions ?? [];
+  const overviewTasks = operatingView?.tasks.filter((task) => task.lane !== 'done') ?? [];
   const statusLabel = (status: string) => pm.statuses[status as keyof typeof pm.statuses] ?? status;
   const messageCount = (count: number) => interpolate(pm.common.messages, { count });
   const sessionSearchNeedle = sessionSearchQuery.trim().toLowerCase();
@@ -1417,6 +1465,7 @@ export function ProjectDetailPage() {
   const workspaceMigrationCanSubmit = workspaceMigrationChanged && (workspaceMigrationMode === 'follow' || Boolean(workspaceMigrationRoot.trim()));
   const primaryTabItems: Array<{ id: Exclude<PrimaryTabId, 'settings'>; icon: LucideIcon; label: string }> = [
     { id: 'overview', icon: LayoutDashboard, label: pm.tabs.overview },
+    { id: 'board', icon: Columns3, label: pm.tabs.board },
     { id: 'work', icon: ListChecks, label: pm.tabs.work },
     { id: 'files', icon: Folder, label: pm.tabs.files },
     { id: 'notes', icon: File, label: pm.tabs.notes },
@@ -1425,7 +1474,6 @@ export function ProjectDetailPage() {
     { id: 'activity', icon: History, label: pm.tabs.activity },
   ];
   const workTabItems: Array<{ id: WorkTabId; icon: LucideIcon; label: string }> = [
-    { id: 'work-items', icon: ListChecks, label: pm.tabs.workItems },
     { id: 'workflows', icon: Play, label: pm.tabs.workflows },
     { id: 'automations', icon: Zap, label: pm.tabs.automations },
   ];
@@ -1448,7 +1496,7 @@ export function ProjectDetailPage() {
         <PageTabs
           items={primaryTabItems}
           activeTab={activePrimaryTab}
-          onChange={(nextTab) => navigateProjectTab(nextTab === 'work' ? 'work-items' : nextTab)}
+          onChange={(nextTab) => navigateProjectTab(nextTab === 'work' ? 'workflows' : nextTab)}
           ariaLabel={pm.navAria}
           tabIdPrefix="project-primary-tab"
           className="min-w-0 flex-1"
@@ -1485,9 +1533,7 @@ export function ProjectDetailPage() {
       <div
         className={cn(
           'mt-3 min-h-0 flex-1',
-          tab === 'work-items'
-            ? '-mx-3 -mb-3 overflow-hidden sm:-mx-5 sm:-mb-4 xl:-mx-6'
-            : tab === 'overview'
+          tab === 'overview'
               ? 'overflow-y-auto pr-1 [scrollbar-gutter:stable] xl:overflow-hidden xl:pr-0'
               : 'overflow-y-auto pr-1 [scrollbar-gutter:stable]',
         )}
@@ -1520,24 +1566,20 @@ export function ProjectDetailPage() {
             <div className="min-w-0 rounded-lg bg-surface-panel shadow-surface">
               <div className="flex items-center justify-between gap-3 border-b border-edge px-4 py-3">
                 <h2 className="text-sm font-semibold text-fg">{pm.overview.nextActions}</h2>
-                <Button type="button" variant="ghost" className="h-8 rounded-lg px-2 py-1 text-xs" onClick={openCreateWorkItem}>
-                  <Plus className="size-4" aria-hidden />
-                  {pm.workItems.create.header}
-                </Button>
               </div>
               <div className="divide-y divide-edge">
-                {overviewActions.length ? overviewActions.map((item) => (
+                {overviewTasks.length ? overviewTasks.map((item) => (
                   <Link
                     key={item.id}
-                    to={withReturnTo(`/work-items/${encodeURIComponent(item.id)}`, projectTabHref('overview'))}
-                    onClick={onProjectTabLinkClick('work-items')}
+                    to={withReturnTo(`/tasks/${encodeURIComponent(item.id)}`, projectTabHref('overview'))}
+                    onClick={onProjectTabLinkClick('overview')}
                     className="block px-4 py-3 hover:bg-surface-hover"
                   >
                     <div className="flex min-w-0 items-center justify-between gap-3">
                       <span className="min-w-0 truncate text-sm font-medium text-fg">{item.title}</span>
-                      <span className="shrink-0 rounded-full bg-surface-muted px-2 py-0.5 text-xs font-medium text-fg-muted">{item.phase}</span>
+                      <span className="shrink-0 rounded-full bg-surface-muted px-2 py-0.5 text-xs font-medium text-fg-muted">{statusLabel(item.status)}</span>
                     </div>
-                    <p className="mt-1 line-clamp-2 text-sm leading-5 text-fg-muted">{item.nextAction?.text}</p>
+                    <p className="mt-1 line-clamp-2 text-sm leading-5 text-fg-muted">{item.blockedReason || item.nextAction}</p>
                   </Link>
                 )) : (
                   <div className="px-4 py-6 text-sm text-fg-muted">
@@ -1599,7 +1641,7 @@ export function ProjectDetailPage() {
                   })}
                 </div>
               ) : (
-                <p className="mt-2 text-sm text-fg-muted">{pm.overview.noBlockedOutcomes}</p>
+                <p className="mt-2 text-sm text-fg-muted">{pm.overview.noBlockedTasks}</p>
               )}
               <form onSubmit={submitBlocker} className="mt-4 flex gap-2 border-t border-edge pt-4">
                 <input
@@ -1649,16 +1691,15 @@ export function ProjectDetailPage() {
         </section>
       ) : null}
 
-      {tab === 'work-items' ? (
-        <section id="project-panel-work-items" className="flex h-full min-h-0 flex-col" role="tabpanel" aria-labelledby="project-work-tab-work-items">
-          <div className="min-h-0 flex-1 overflow-hidden">
-            <WorkItemsPanel
-              projectId={project.id}
-              createRequestKey={createWorkItemRequestKey}
-              detailReturnTo={projectTabHref('work-items')}
-            />
-          </div>
-        </section>
+      {tab === 'board' ? (
+        <ProjectTaskBoard
+          tasks={operatingView?.tasks ?? []}
+          returnTo={projectTabHref('board')}
+          copy={pm.board}
+          onAction={performProjectTaskAction}
+          onCreate={createProjectTask}
+          actionBusyId={taskActionBusyId}
+        />
       ) : null}
 
       {tab === 'workflows' ? (

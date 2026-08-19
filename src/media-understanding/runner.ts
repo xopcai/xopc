@@ -11,7 +11,7 @@
  *   3. The first provider whose capability call resolves successfully wins;
  *      its output is recorded as `chosen`. Failures are recorded as attempts
  *      and the next provider is tried.
- *   4. When ALL providers for an attachment fail, the attachment outcome is
+ *   4. When ALL providers for an attachment fail, the attachment task is
  *      `failed`; when no provider was even eligible (capability not registered),
  *      it's `disabled`.
  *
@@ -138,7 +138,7 @@ export async function runCapability(
 ): Promise<MediaUnderstandingResult> {
   const eligibleProviders = listProvidersForCapability(options.capability);
 
-  // Capability outcome is 'disabled' when no registered provider implements it.
+  // Capability task is 'disabled' when no registered provider implements it.
   if (eligibleProviders.length === 0) {
     log.debug(
       { capability: options.capability },
@@ -147,7 +147,7 @@ export async function runCapability(
     return {
       decision: {
         capability: options.capability,
-        outcome: 'disabled',
+        task: 'disabled',
         attachments: options.attachments.map((a) => ({
           attachmentIndex: a.attachmentIndex,
           attempts: [],
@@ -159,7 +159,7 @@ export async function runCapability(
 
   if (options.attachments.length === 0) {
     return {
-      decision: { capability: options.capability, outcome: 'no-attachment', attachments: [] },
+      decision: { capability: options.capability, task: 'no-attachment', attachments: [] },
       outputs: [],
     };
   }
@@ -182,7 +182,7 @@ export async function runCapability(
         attempts.push({
           provider: provider.id,
           type: 'provider',
-          outcome: 'skipped',
+          task: 'skipped',
           reason: `provider "${provider.id}" missing method for capability "${options.capability}"`,
         });
         continue;
@@ -192,7 +192,7 @@ export async function runCapability(
         attempts.push({
           provider: provider.id,
           type: 'provider',
-          outcome: 'skipped',
+          task: 'skipped',
           reason: 'caller buildRequest returned undefined (likely missing config)',
         });
         continue;
@@ -209,7 +209,7 @@ export async function runCapability(
           attempts.push({
             provider: provider.id,
             type: 'provider',
-            outcome: 'failed',
+            task: 'failed',
             reason: 'empty transcription/description text',
             model: callResult.model,
             latencyMs: Date.now() - startedAt,
@@ -219,7 +219,7 @@ export async function runCapability(
         chosen = {
           provider: provider.id,
           type: 'provider',
-          outcome: 'success',
+          task: 'success',
           model: callResult.model,
           latencyMs: Date.now() - startedAt,
         };
@@ -249,7 +249,7 @@ export async function runCapability(
         attempts.push({
           provider: provider.id,
           type: 'provider',
-          outcome: 'failed',
+          task: 'failed',
           reason,
           latencyMs: Date.now() - startedAt,
         });
@@ -263,7 +263,7 @@ export async function runCapability(
     });
   }
 
-  const overallOutcome = attachmentDecisions.every((d) => d.chosen)
+  const overallTask = attachmentDecisions.every((d) => d.chosen)
     ? 'success'
     : attachmentDecisions.some((d) => d.chosen)
       ? 'success' // partial success — at least one attachment succeeded
@@ -272,7 +272,7 @@ export async function runCapability(
   return {
     decision: {
       capability: options.capability,
-      outcome: overallOutcome,
+      task: overallTask,
       attachments: attachmentDecisions,
     },
     outputs,

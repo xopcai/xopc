@@ -2,7 +2,7 @@
  * Shared types for `xopc <domain>` setup-style commands (providers / channels / ...).
  *
  * Every setup command runs the same load → mutate → validate → diff → write
- * pipeline, and emits the same structured outcome so agents (M2 skills) and the
+ * pipeline, and emits the same structured task so agents (M2 skills) and the
  * WebUI (M3) can consume results uniformly.
  */
 
@@ -14,7 +14,7 @@ export interface SetupError {
   message: string;
 }
 
-export interface SetupOutcome {
+export interface SetupTask {
   ok: boolean;
   action: SetupAction;
   /** Logical domain — `providers`, `channels.<id>`, etc. */

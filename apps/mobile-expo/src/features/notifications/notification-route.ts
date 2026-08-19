@@ -12,7 +12,7 @@ export function resolveNotificationRoute(data: unknown): string | null {
     route === '/sessions' ||
     route === '/files' ||
     /^\/chat\/[^/?#]+$/.test(route) ||
-    /^\/work\/[^/?#]+$/.test(route)
+    /^\/tasks\/[^/?#]+$/.test(route)
   ) return route;
   return null;
 }

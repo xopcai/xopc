@@ -17,7 +17,7 @@ export {
   SessionStateBag,
   type SessionStateBagOptions,
   type WebchatSsePublisher,
-  type OutcomeReviewStreamHint,
+  type TaskReviewStreamHint,
 } from './session-state-bag.js';
 
 export {

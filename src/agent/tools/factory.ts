@@ -77,7 +77,6 @@ import type { AutomationService } from '../../automations/index.js';
 import type { BrowserRecipeService } from '../../browser/recipes/index.js';
 import type { NotesService } from '../../notes/index.js';
 import type { ProjectService } from '../../projects/index.js';
-import type { WorkItemService } from '../../work-items/index.js';
 import type { LocalAppService } from '../../local-apps/index.js';
 import type { WorkflowRunServiceLike } from '../../workflows/service/workflow-run-service.types.js';
 import { createLogger } from '../../utils/logger.js';
@@ -124,7 +123,6 @@ export interface ToolFactoryDeps {
   /** Gateway: enables the `xopc_use` product-object tool. */
   getNotesService?: () => NotesService | undefined;
   getProjectService?: () => ProjectService | undefined;
-  getWorkItemService?: () => WorkItemService | undefined;
   getLocalAppService?: () => LocalAppService | undefined;
   /** Gateway: starts persisted workflow runs (dedicated chat session per run). */
   getWorkflowRunService?: () => WorkflowRunServiceLike | undefined;
@@ -476,7 +474,6 @@ export class AgentToolsFactory {
         : []),
       ...(this.deps.getProjectService
         || this.deps.getNotesService
-        || this.deps.getWorkItemService
         || this.deps.getLocalAppService
         ? [
             createXopcUseTool({
@@ -485,7 +482,6 @@ export class AgentToolsFactory {
               getCurrentSessionKey: () => this.deps.getCurrentContext()?.sessionKey,
               getNotesService: this.deps.getNotesService,
               getProjectService: this.deps.getProjectService,
-              getWorkItemService: this.deps.getWorkItemService,
               getLocalAppService: this.deps.getLocalAppService,
             }),
           ]

@@ -37,7 +37,7 @@ function validAnalysisJson(): string {
     evidence: [{ path: 'README.md', observation: 'Contains current project notes.' }],
     actionPrompt: `Investigate step ${index}.`,
     confidence: 'medium',
-    expectedOutcome: `Outcome ${index}`,
+    expectedTask: `Task ${index}`,
     estimatedMinutes: 5,
     risk: 'analysis',
     verification: ['Review the result.'],

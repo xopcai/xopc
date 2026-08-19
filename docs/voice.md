@@ -98,7 +98,7 @@ See DashScope docs for current model IDs (`paraformer-v2`, etc.).
 
 ### Fallback chain
 
-If the primary provider errors, xopc tries other providers in `fallback.order`. Each run records a structured **attempt list** (provider, outcome, latency, reason) on the result type used internally — useful for logs and future diagnostics.
+If the primary provider errors, xopc tries other providers in `fallback.order`. Each run records a structured **attempt list** (provider, task, latency, reason) on the result type used internally — useful for logs and future diagnostics.
 
 ```json
 {

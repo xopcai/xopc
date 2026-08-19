@@ -53,7 +53,7 @@ import type { TuiSlashCommandContext, TuiSlashCommandHandler } from '../extensio
 import { provenanceTracker } from '../extensions/security.js';
 import type { ProjectTrustStoreEntry } from '../project-trust/trust-store.js';
 import { providerSupportsOAuth } from '../providers/index.js';
-import { OutcomeExecutionStateRepository, OutcomeRepository } from '../work/index.js';
+import { TaskRepository } from '../tasks/index.js';
 import {
   inferSuggestedProjectDefaultAgentId,
   isValidProjectAgentId,
@@ -586,7 +586,7 @@ function parseProjectNewArgs(parts: string[]): {
   return { name: nameParts.join(' ').trim(), workspaceRoot, projectKind, agentId };
 }
 
-function formatTuiProject(project: Project & { sessionCount?: number; outcomeCount?: number; activeOutcomeCount?: number }): string {
+function formatTuiProject(project: Project & { sessionCount?: number; taskCount?: number; activeTaskCount?: number }): string {
   const lines = [
     `${project.name} [${project.status}]`,
     `ID: ${project.id}`,
@@ -594,7 +594,7 @@ function formatTuiProject(project: Project & { sessionCount?: number; outcomeCou
     `Default agent: ${project.defaultAgentId ?? 'global default'}`,
     project.workspaceRoot ? `Workspace: ${project.workspaceRoot}` : undefined,
     project.sessionCount != null ? `Sessions: ${project.sessionCount}` : undefined,
-    project.outcomeCount != null ? `Outcomes: ${project.outcomeCount} (${project.activeOutcomeCount ?? 0} active)` : undefined,
+    project.taskCount != null ? `Tasks: ${project.taskCount} (${project.activeTaskCount ?? 0} active)` : undefined,
     project.brief ? `Brief: ${project.brief}` : undefined,
   ];
   return lines.filter(Boolean).join('\n');
@@ -692,17 +692,14 @@ function runTuiProjectCommand(state: TuiState, args: string): string {
       return [`Sessions in ${project.name}:`, ...keys.map((key) => `- ${key}`)].join('\n');
     }
 
-    if (subcommand === 'outcomes') {
+    if (subcommand === 'tasks') {
       const ref = parts[1];
       const currentProjectId = getSessionMetadata(state.currentSessionKey)?.projectId;
       const project = ref ? resolveTuiProject(projects, ref) : currentProjectId ? projects.get(currentProjectId) : null;
       if (!project) return ref ? `Project not found: ${ref}` : 'No current project.';
-      const states = new OutcomeExecutionStateRepository();
-      const outcomes = new OutcomeRepository().list({ limit: 200 })
-        .filter((outcome) => states.get(outcome.id)?.projectId === project.id)
-        .slice(0, 20);
-      if (!outcomes.length) return `No outcomes in ${project.name}.`;
-      return [`Outcomes in ${project.name}:`, ...outcomes.map((outcome) => `- ${outcome.id} [${outcome.userStatus}] ${outcome.objective}`)].join('\n');
+      const tasks = new TaskRepository().listByProject(project.id, 20);
+      if (!tasks.length) return `No tasks in ${project.name}.`;
+      return [`Tasks in ${project.name}:`, ...tasks.map((task) => `- ${task.id} [${task.status}] ${task.objective}`)].join('\n');
     }
 
     return [
@@ -716,7 +713,7 @@ function runTuiProjectCommand(state: TuiState, args: string): string {
       '  /project set-agent <agent-id>',
       '  /project clear-agent',
       '  /project sessions [id-or-slug]',
-      '  /project outcomes [id-or-slug]',
+      '  /project tasks [id-or-slug]',
       '  /project archive <id-or-slug>',
     ].join('\n');
   });

@@ -172,8 +172,8 @@ function createUpdateCommand(_ctx: CLIContext): Command {
               console.log(JSON.stringify(apiResult));
             } else {
               console.log(`✅ Updated to v${result.after?.version ?? 'unknown'} (${result.mode})`);
-              const extOutcomes = result.postUpdate?.extensions?.outcomes ?? [];
-              const updatedExt = extOutcomes.filter((o) => o.status === 'updated');
+              const extTasks = result.postUpdate?.extensions?.tasks ?? [];
+              const updatedExt = extTasks.filter((o) => o.status === 'updated');
               if (updatedExt.length > 0) {
                 console.log(`Extensions synced: ${updatedExt.map((o) => o.extensionId).join(', ')}`);
               }

@@ -35,8 +35,8 @@ describe('ActivityService', () => {
 
   it('records activity with stable project and session scopes', () => {
     const event = activity.record({
-      type: 'work_item.created',
-      primaryObject: { kind: 'work_item', id: 'wi-1', title: 'Validate feasibility' },
+      type: 'task.created',
+      primaryObject: { kind: 'task', id: 'task-1', title: 'Validate feasibility' },
       actor: { kind: 'agent', agentId: 'main', sessionKey: 'session-1' },
       initiator: { kind: 'user', id: 'user-1' },
       source: { kind: 'xopc_use', toolCallId: 'tool-1' },
@@ -58,8 +58,8 @@ describe('ActivityService', () => {
     expect(projectPage.items.map((item) => item.id)).toEqual([event.id]);
     expect(projectPage.items[0]?.payload).toEqual({ title: 'Validate feasibility', status: 'todo' });
 
-    const objectPage = activity.listForObject({ object: { kind: 'work_item', id: 'wi-1' } });
-    expect(objectPage.items.map((item) => item.type)).toEqual(['work_item.created']);
+    const objectPage = activity.listForObject({ object: { kind: 'task', id: 'task-1' } });
+    expect(objectPage.items.map((item) => item.type)).toEqual(['task.created']);
   });
 
   it('keeps related project activity separate from stable project activity', () => {

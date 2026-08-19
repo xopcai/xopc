@@ -80,7 +80,7 @@ function assertSafeMediaId(id: string, caller: string): void {
 }
 
 function assertSafeBucket(bucket: string): asserts bucket is MediaBucket {
-  if (bucket !== 'inbound' && bucket !== 'tts' && bucket !== 'outbound' && bucket !== 'work-item') {
+  if (bucket !== 'inbound' && bucket !== 'tts' && bucket !== 'outbound') {
     throw new Error(`Unsupported media bucket: ${JSON.stringify(bucket)}`);
   }
 }

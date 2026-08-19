@@ -24,7 +24,7 @@
       "coding": "编程项目",
       "general": "通用项目"
     },
-    "workHome": {
+    "home": {
       "subtitle": "查看什么正在推进、什么需要你，以及接下来会发生什么。",
       "newWork": "新建工作",
       "briefingTitle": "今日简报",
@@ -52,8 +52,7 @@
       "prepareForEvent": "帮我准备",
       "decisionKinds": {
         "agent_judgment": "AI 主动判断",
-        "work_item": "工作事项",
-        "outcome": "结果",
+        "task": "结果",
         "connector_approval": "连接器操作"
       },
       "decisionReasons": {
@@ -79,7 +78,6 @@
       "attentionFailed": "执行失败",
       "attentionTimeout": "执行超时",
       "winKinds": {
-        "work_item": "事项已完成",
         "workflow_run": "流程已完成",
         "automation_run": "自动化已完成"
       },
@@ -115,8 +113,8 @@
       "spacesTitle": "项目",
       "openSpace": "打开空间",
       "noSpaces": "没有匹配的事项空间。",
-      "outcomeLabel": "你希望持续推进什么？",
-      "outcomePlaceholder": "例如：完成第三季度客户研究报告，包括访谈、分析和最终汇报。",
+      "taskLabel": "你希望持续推进什么？",
+      "taskPlaceholder": "例如：完成第三季度客户研究报告，包括访谈、分析和最终汇报。",
       "delegate": "交给 xopc",
       "delegateTitle": "把这件事交给 xopc",
       "delegateDescription": "描述想要的结果，xopc 会拆解、持续推进并检查完成情况。",
@@ -177,8 +175,8 @@
   "projectDetailPage": {
     "tabs": {
       "overview": "概览",
+      "board": "看板",
       "work": "工作",
-      "workItems": "工作事项",
       "sessions": "会话",
       "workflows": "工作流",
       "files": "文件",
@@ -266,7 +264,7 @@
       "saveDigest": "保存摘要",
       "savingDigest": "保存中",
       "sessions": "会话",
-      "activeOutcomes": "活跃结果",
+      "activeTasks": "活跃结果",
       "recentWorkflowRuns": "近期工作流运行",
       "nextActions": "下一步",
       "recentResults": "最近结果",
@@ -278,12 +276,12 @@
         "failed": "未达成",
         "cancelled": "已取消"
       },
-      "outcome": "结果",
+      "task": "结果",
       "recommendedNext": "下一步：{{action}}",
       "noNextActions": "还没有下一步。可以先创建结果，或继续项目会话来明确方向。",
       "noNextAction": "尚未设置下一步。",
-      "staleOutcomes": "停滞结果",
-      "noActiveOutcomes": "当前项目暂无活跃结果。",
+      "staleTasks": "停滞结果",
+      "noActiveTasks": "当前项目暂无活跃结果。",
       "recentSessions": "最近会话",
       "noSessions": "暂无会话。",
       "workflowRuns": "工作流运行",
@@ -292,7 +290,7 @@
       "noTimeline": "暂无项目活动。",
       "timelineKinds": {
         "session": "会话",
-        "outcome": "结果",
+        "task": "结果",
         "workflow": "工作流",
         "memory": "记忆"
       },
@@ -301,125 +299,58 @@
       "noBrief": "暂无简介。",
       "attention": "需关注",
       "attentionKinds": {
-        "blocked_outcome": "受阻结果",
-        "stale_outcome": "停滞结果",
+        "blocked_task": "受阻结果",
+        "stale_task": "停滞结果",
         "failed_workflow": "失败工作流"
       },
-      "noBlockedOutcomes": "暂无受阻结果。",
+      "noBlockedTasks": "暂无受阻结果。",
       "blockerTitlePlaceholder": "新增 blocker",
       "blockerReasonPlaceholder": "原因或依赖",
       "addBlocker": "添加 blocker",
       "addingBlocker": "添加中"
     },
-    "workItems": {
-      "tab": "工作项",
-      "title": "工作项",
-      "boardAria": "工作项看板",
-      "viewAria": "工作项视图",
-      "views": {
-        "list": "列表",
-        "board": "看板"
-      },
-      "refresh": "刷新工作项",
-      "refreshing": "正在刷新工作项",
-      "refreshShort": "刷新",
-      "empty": "暂无工作项。",
-      "emptyColumn": "这一列暂无工作项。",
-      "loadMore": "加载更多",
-      "noNextAction": "暂无下一步。",
-      "dragToUpdate": "拖拽以移动阶段",
-      "markDone": "标记工作项为已完成",
-      "markTodo": "重新打开工作项",
-      "agent": "Agent",
-      "updated": "更新",
-      "nextAction": "下一步",
-      "statuses": {
-        "backlog": "待整理",
-        "ready": "就绪",
-        "executing": "执行中",
-        "verifying": "验证中",
-        "closed": "已关闭"
-      },
-      "priorities": {
+    "board": {
+      "title": "结果看板",
+      "description": "每张卡片都是 xopc 负责推进的结果，所在列由真实执行状态决定。",
+      "empty": "这里还没有任务",
+      "acceptanceCriteria": "{{count}} 条验收标准",
+      "actionFailed": "任务已发生变化或无法更新，看板已恢复。",
+      "create": "新建任务",
+      "createTitle": "创建任务",
+      "createDescription": "把需要长期跟进的事情放进项目；创建后先留在待推进，直到你让 xopc 开始。",
+      "objective": "任务目标",
+      "objectivePlaceholder": "例如：完成客户研究报告，并验证每一项结论。",
+      "priority": "优先级",
+      "priorityOptions": {
         "low": "低",
         "normal": "普通",
         "high": "高",
-        "urgent": "紧急"
+        "critical": "关键"
       },
-      "linkKinds": {
-        "chat": "会话",
-        "outcome": "结果",
-        "workflow_run": "工作流",
-        "automation": "自动化",
-        "note": "笔记"
+      "dueDate": "截止日期",
+      "dependencies": "前置任务",
+      "dependenciesDescription": "所选任务全部完成后，xopc 才会开始推进当前任务。",
+      "noDependencyCandidates": "项目中还没有可选的其他任务。",
+      "optional": "（可选）",
+      "cancel": "取消",
+      "creating": "创建中…",
+      "createFailed": "任务创建失败。",
+      "actions": {
+        "run": "开始推进",
+        "resume": "继续推进",
+        "pause": "暂时暂停",
+        "verify": "发起验收"
       },
-      "eventTypes": {
-        "work_item.created": "已创建",
-        "work_item.metadata_updated": "元数据已更新",
-        "work_item.committed": "已进入就绪",
-        "work_item.started": "已开始",
-        "work_item.review_requested": "已请求验证",
-        "work_item.completed": "已完成",
-        "work_item.closed": "已关闭",
-        "work_item.reopened": "已重新打开",
-        "work_item.wait_created": "已添加等待",
-        "work_item.wait_resolved": "等待已解除",
-        "work_item.attachment_added": "已添加附件",
-        "work_item.attachment_removed": "已移除附件",
-        "work_item.link_added": "已关联记录"
+      "verification": {
+        "passed": "验收通过",
+        "failed": "验收未通过",
+        "unverified": "尚未验收"
       },
-      "feedback": {
-        "createdTitle": "工作项已创建",
-        "createdNext": "下一步可以启动会话推进，或创建结果把它纳入持续跟进。",
-        "savedTitle": "修改已保存",
-        "savedNext": "下一步可以启动会话继续处理，或创建结果跟踪后续进展。"
-      },
-      "create": {
-        "short": "新建",
-        "header": "新建工作项",
-        "title": "新建工作项",
-        "titleLabel": "标题",
-        "descriptionLabel": "描述",
-        "priorityLabel": "优先级",
-        "cancel": "取消",
-        "submit": "创建",
-        "addToColumn": "在{{status}}中新建工作项"
-      },
-      "attachments": {
-        "title": "附件",
-        "add": "添加附件",
-        "empty": "暂无附件。",
-        "download": "下载附件",
-        "remove": "移除附件"
-      },
-      "detail": {
-        "description": "围绕这个工作项持续推进，直到完成。",
-        "properties": "属性",
-        "status": "状态",
-        "actions": "操作",
-        "project": "项目",
-        "archived": "已归档",
-        "loading": "正在加载工作项…",
-        "notFound": "未找到工作项。",
-        "backToProjects": "返回项目",
-        "backToProject": "返回 {{name}}",
-        "noDescription": "暂无描述。",
-        "noBlockedReason": "暂无阻塞记录。",
-        "save": "保存修改",
-        "openItem": "打开工作项",
-        "startChat": "启动会话",
-        "createOutcome": "创建结果",
-        "workflowTitle": "任务模板",
-        "workflowHint": "用这个工作项的上下文启动工作流，运行记录会回写到关联工作。",
-        "workflowTemplate": "模板",
-        "recommendedWorkflows": "推荐模板",
-        "workflowGoal": "这次要推进的事情",
-        "startWorkflow": "启动模板",
-        "noWorkflowTemplates": "暂无可用任务模板。",
-        "links": "关联工作",
-        "noLinks": "还没有关联会话、结果或运行记录。",
-        "activity": "活动记录",
-        "noActivity": "暂无活动。"
+      "lanes": {
+        "ready": "待推进",
+        "moving": "推进中",
+        "needs_user": "需要你",
+        "done": "已完成"
       }
     },
     "workflows": {
@@ -469,14 +400,10 @@
         "note.appended": "笔记已追加",
         "note.updated": "笔记已更新",
         "note.status_changed": "笔记状态已变更",
-        "work_item.created": "工作项已创建",
-        "work_item.updated.v1": "工作项元数据已更新",
-        "work_item.lifecycle_changed.v1": "工作项生命周期已变更",
-        "work_item.link_added": "工作项已关联记录",
         "session.attached_to_project": "会话已绑定",
         "session.detached_from_project": "会话已解绑",
-        "outcome.created": "结果已创建",
-        "outcome.status_changed": "结果状态已变更",
+        "task.created": "结果已创建",
+        "task.status_changed": "结果状态已变更",
         "workflow_run.started": "工作流运行已启动",
         "workflow_run.completed": "工作流运行已完成",
         "automation.run_started": "自动化运行已启动",
@@ -485,9 +412,8 @@
       "objectKinds": {
         "project": "项目",
         "note": "笔记",
-        "work_item": "工作项",
         "session": "会话",
-        "outcome": "结果",
+        "task": "结果",
         "workflow_run": "工作流运行",
         "automation": "自动化"
       }

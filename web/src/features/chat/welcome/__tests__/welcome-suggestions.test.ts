@@ -75,43 +75,6 @@ describe('buildWelcomeSpotlight', () => {
     ]);
   });
 
-  it('returns default work item cards', () => {
-    const spotlight = build({
-      kind: 'workItem',
-      workItemId: 'w1',
-      title: '补齐 welcome 推荐',
-      phase: 'executing',
-    });
-
-    expect(spotlight.categories).toHaveLength(3);
-    expect(spotlight.categories.map((card) => card.title)).toEqual([
-      '总结进展',
-      '找下一步',
-      '学习新主题',
-    ]);
-  });
-
-  it('switches blocked work item cards to unblock flow', () => {
-    const spotlight = build({
-      kind: 'workItem',
-      workItemId: 'w2',
-      title: '修复构建失败',
-      phase: 'executing',
-      waits: [{ kind: 'external', reason: '缺少权限' }],
-    });
-
-    expect(spotlight.headline).toBe('这个工作项需要解除阻塞');
-    expect(spotlight.primaryRecommendation.title).toBe('解除阻塞');
-    expect(spotlight.primaryRecommendation.prompt).toContain('缺少权限');
-    expect(spotlight.primaryRecommendation.reason).toContain('缺少权限');
-    expect(spotlight.categories).toHaveLength(3);
-    expect(spotlight.categories.map((card) => card.title)).toEqual([
-      '解除阻塞',
-      '总结进展',
-      '学习新主题',
-    ]);
-  });
-
   it('returns working directory cards', () => {
     const spotlight = build({
       kind: 'workingDirectory',
@@ -231,39 +194,11 @@ describe('buildWelcomeSpotlight', () => {
     expect(spotlight.primaryRecommendation.reason).toContain('洞察助手');
   });
 
-  it('continues an explicit work item next action as the primary recommendation', () => {
-    const spotlight = build({
-      kind: 'workItem',
-      workItemId: 'w3',
-      title: '发布欢迎体验',
-      phase: 'executing',
-      nextAction: '补齐移动端回归测试',
-    });
-
-    expect(spotlight.primaryRecommendation.title).toBe('找下一步');
-    expect(spotlight.primaryRecommendation.prompt).toContain('补齐移动端回归测试');
-    expect(spotlight.primaryRecommendation.reason).toContain('补齐移动端回归测试');
-  });
-
   it('uses prior suggestion affinity without overriding explicit context', () => {
     const generic = buildWelcomeSpotlight({ kind: 'empty' }, copy, undefined, {
       affinity: { 'research:0': 35 },
     });
-    const blocked = buildWelcomeSpotlight(
-      {
-        kind: 'workItem',
-        workItemId: 'w4',
-        title: '修复权限',
-        phase: 'executing',
-        waits: [{ kind: 'external', reason: '没有发布权限' }],
-      },
-      copy,
-      undefined,
-      { affinity: { 'work-item-progress:0': 35 } },
-    );
-
     expect(generic.primaryRecommendation.categoryId).toBe('research');
-    expect(blocked.primaryRecommendation.id).toBe('context:work-item-unblock');
   });
 
   it('exposes loading and degraded context labels', () => {
@@ -278,7 +213,6 @@ describe('buildWelcomeSpotlight', () => {
     const contexts: WelcomeSuggestionContext[] = [
       { kind: 'codingProject', projectId: 'p4', projectName: 'xopc', workspaceRoot: '/repo/xopc' },
       { kind: 'note', noteId: 'n4', title: '产品方向' },
-      { kind: 'workItem', workItemId: 'w5', title: '实现探索卡', phase: 'executing' },
       { kind: 'workingDirectory', path: '/tmp/work' },
     ];
 

@@ -134,18 +134,16 @@ export class InternalObjectContextProvider implements ContextProvider {
     const objects: Record<string, unknown>[] = [];
     const evidenceIds: string[] = [];
     for (const event of eventRows(input.eventIds)) {
-      if (event.subject_kind === 'outcome') {
-        const outcome = db.prepare(`SELECT outcomes.outcome_id, outcomes.objective,
-          outcomes.user_status, outcomes.internal_status, outcomes.importance,
-          outcomes.due_at, outcomes.updated_at, outcome_execution_state.agent_id,
-          outcome_execution_state.priority, outcome_execution_state.next_action,
-          outcome_execution_state.blocked_reason FROM outcomes
-          LEFT JOIN outcome_execution_state USING (outcome_id)
-          WHERE outcomes.outcome_id = ?`)
+      if (event.subject_kind === 'task') {
+        const task = db.prepare(`SELECT tasks.task_id, tasks.objective,
+          tasks.status, tasks.priority,
+          tasks.due_at, tasks.updated_at, tasks.agent_id,
+          tasks.next_action, tasks.blocked_reason FROM tasks
+          WHERE tasks.task_id = ?`)
           .get(event.subject_id) as Record<string, unknown> | undefined;
-        if (outcome) {
-          const evidenceId = `outcome:${event.subject_id}`;
-          objects.push({ evidenceId, kind: 'outcome', ...outcome });
+        if (task) {
+          const evidenceId = `task:${event.subject_id}`;
+          objects.push({ evidenceId, kind: 'task', ...task });
           evidenceIds.push(evidenceId);
         }
       } else if (event.subject_kind === 'note') {
@@ -224,34 +222,33 @@ export class MeetingWorkspaceContextProvider implements ContextProvider {
     const terms = [...new Set(title.toLocaleLowerCase().match(/[\p{L}\p{N}]{2,}/gu) ?? [])].slice(0, 6);
     if (terms.length === 0) return emptyContext();
     const db = getSqliteDatabase();
-    const outcomeMatches = terms.map(() => `LOWER(COALESCE(outcomes.objective, '') || ' '
-      || COALESCE(outcome_execution_state.next_action, '')) LIKE ?`).join(' OR ');
-    const outcomes = db.prepare(`SELECT outcomes.outcome_id, outcomes.objective,
-      outcomes.user_status, outcomes.internal_status, outcomes.importance, outcomes.due_at,
-      outcomes.updated_at, outcome_execution_state.next_action,
-      outcome_execution_state.blocked_reason, outcome_execution_state.project_id
-      FROM outcomes JOIN outcome_execution_state USING (outcome_id)
-      WHERE outcomes.internal_status NOT IN ('completed', 'cancelled')
-      AND outcome_execution_state.agent_id = ? AND (${outcomeMatches})
-      ORDER BY outcomes.updated_at DESC LIMIT 10`)
+    const taskMatches = terms.map(() => `LOWER(COALESCE(tasks.objective, '') || ' '
+      || COALESCE(tasks.next_action, '')) LIKE ?`).join(' OR ');
+    const tasks = db.prepare(`SELECT tasks.task_id, tasks.objective,
+      tasks.status, tasks.priority, tasks.due_at,
+      tasks.updated_at, tasks.next_action, tasks.blocked_reason, tasks.project_id
+      FROM tasks
+      WHERE tasks.status NOT IN ('completed', 'cancelled')
+      AND tasks.agent_id = ? AND (${taskMatches})
+      ORDER BY tasks.updated_at DESC LIMIT 10`)
       .all(scope.agent_id ?? 'main', ...terms.map((term) => `%${term}%`)) as Array<Record<string, unknown>>;
     const noteMatches = terms.map(() => `LOWER(COALESCE(title, '') || ' ' || COALESCE(snippet, '')) LIKE ?`).join(' OR ');
     const notes = db.prepare(`SELECT note_id, title, kind, status, snippet, tags_json, task_due_at,
       unchecked_task_count, updated_at FROM notes WHERE status NOT IN ('archived', 'trashed')
       AND (${noteMatches}) ORDER BY updated_at DESC LIMIT 10`)
       .all(...terms.map((term) => `%${term}%`)) as Array<Record<string, unknown>>;
-    const outcomeEvidenceIds = outcomes.map((outcome) => `outcome:${String(outcome.outcome_id)}`);
+    const taskEvidenceIds = tasks.map((task) => `task:${String(task.task_id)}`);
     const noteEvidenceIds = notes.map((note) => `note:${String(note.note_id)}`);
     return {
       content: {
-        activeOutcomes: outcomes.map((outcome, index) => ({ evidenceId: outcomeEvidenceIds[index], ...outcome })),
+        activeTasks: tasks.map((task, index) => ({ evidenceId: taskEvidenceIds[index], ...task })),
         recentNotes: notes.map((note, index) => ({
           evidenceId: noteEvidenceIds[index],
           ...note,
           snippet: boundedText(note.snippet, 1_500),
         })),
       },
-      evidenceIds: [...outcomeEvidenceIds, ...noteEvidenceIds],
+      evidenceIds: [...taskEvidenceIds, ...noteEvidenceIds],
     };
   }
 }
@@ -266,20 +263,23 @@ export class ProjectStateContextProvider implements ContextProvider {
       WHERE e.event_id IN (${input.eventIds.map(() => '?').join(',')}) AND e.project_id IS NOT NULL ORDER BY e.occurred_at DESC LIMIT 1`)
       .get(...input.eventIds) as Record<string, unknown> | undefined;
     if (!project) return emptyContext();
-    const workItems = getSqliteDatabase().prepare(`SELECT id, title, status, priority, owner_agent_id, next_action,
-      blocked_reason, due_at, updated_at FROM work_items WHERE project_id = ? AND archived_at IS NULL
-      ORDER BY CASE status WHEN 'blocked' THEN 0 ELSE 1 END, updated_at DESC LIMIT 100`).all(String(project.project_id));
+    const tasks = getSqliteDatabase().prepare(`SELECT task.task_id, task.objective,
+      task.status, task.priority, task.due_at, task.updated_at, task.next_action, task.blocked_reason
+      FROM tasks task
+      WHERE task.project_id = ? AND task.status NOT IN ('completed', 'cancelled')
+      ORDER BY CASE task.status WHEN 'needs_user' THEN 0 WHEN 'blocked' THEN 1 ELSE 2 END,
+        task.updated_at DESC LIMIT 100`).all(String(project.project_id));
     const projectEvidenceId = `project:${String(project.project_id)}`;
-    const workItemEvidenceIds = (workItems as Array<Record<string, unknown>>)
-      .map((item) => `work-item:${String(item.id)}`);
+    const taskEvidenceIds = (tasks as Array<Record<string, unknown>>)
+      .map((task) => `task:${String(task.task_id)}`);
     return {
       content: {
         project: { evidenceId: projectEvidenceId, ...project },
-        workItems: (workItems as Array<Record<string, unknown>>).map((item, index) => ({
-          evidenceId: workItemEvidenceIds[index], ...item,
+        activeTasks: (tasks as Array<Record<string, unknown>>).map((task, index) => ({
+          evidenceId: taskEvidenceIds[index], ...task,
         })),
       },
-      evidenceIds: [projectEvidenceId, ...workItemEvidenceIds],
+      evidenceIds: [projectEvidenceId, ...taskEvidenceIds],
     };
   }
 }

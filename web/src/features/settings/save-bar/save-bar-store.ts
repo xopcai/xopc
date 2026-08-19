@@ -26,7 +26,7 @@ export interface SaveBarSection {
   id: string;
   dirty: boolean;
   saving: boolean;
-  /** Resolves once the panel's local save completes; returns an outcome. */
+  /** Resolves once the panel's local save completes; returns an task. */
   save: () => Promise<{ ok: boolean; error?: string }>;
   discard: () => void;
 }
@@ -36,7 +36,7 @@ export interface SaveAllFailure {
   error: string;
 }
 
-export interface SaveAllOutcome {
+export interface SaveAllTask {
   ok: boolean;
   saved: number;
   failures: SaveAllFailure[];
@@ -55,7 +55,7 @@ interface State {
 
   registerSection: (section: SaveBarSection) => void;
   unregisterSection: (id: string) => void;
-  saveAll: () => Promise<SaveAllOutcome>;
+  saveAll: () => Promise<SaveAllTask>;
   discardAll: () => void;
 }
 
@@ -106,7 +106,7 @@ export const useSaveBarStore = create<State>((set, get) => ({
     const failures: SaveAllFailure[] = [];
     let saved = 0;
     try {
-      const outcomes = await Promise.all(
+      const tasks = await Promise.all(
         sections.map(async (section) => {
           try {
             const result = await section.save();
@@ -122,7 +122,7 @@ export const useSaveBarStore = create<State>((set, get) => ({
           }
         }),
       );
-      for (const { id, result } of outcomes) {
+      for (const { id, result } of tasks) {
         if (result.ok) saved += 1;
         else failures.push({ id, error: result.error ?? 'Save failed' });
       }

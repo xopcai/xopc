@@ -188,8 +188,8 @@ export class CommandContextImpl implements CommandContext {
     if (this.deps.resetSession) {
       await this.deps.resetSession(this.sessionKey);
     } else if (typeof this.deps.sessionStore.reset === 'function') {
-      const outcome = await this.deps.sessionStore.reset(this.sessionKey);
-      if (!outcome) {
+      const task = await this.deps.sessionStore.reset(this.sessionKey);
+      if (!task) {
         throw new Error('Session not found');
       }
       this.deps.invalidateAgentSession?.(this.sessionKey);

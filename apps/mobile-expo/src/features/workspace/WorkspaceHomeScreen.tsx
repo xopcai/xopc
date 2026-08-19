@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Outcome, OutcomeReceipt } from '@xopcai/gateway-contract';
+import type { Task, TaskReceipt } from '@xopcai/gateway-contract';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
@@ -83,7 +83,7 @@ function workflowProgress(run: HomeWorkflowRun, hm: ReturnType<typeof useMessage
 function decisionIcon(decision: HomeDecision): string {
   if (decision.kind === 'agent_judgment') return 'creation-outline';
   if (decision.kind === 'connector_approval') return 'shield-check-outline';
-  if (decision.kind === 'outcome') return 'target';
+  if (decision.kind === 'task') return 'target';
   return decision.reason === 'overdue' ? 'clock-alert-outline' : 'checkbox-marked-circle-outline';
 }
 
@@ -207,8 +207,8 @@ export function WorkspaceHomeScreen() {
     recordUsageEvent('home_decision_opened');
     const objectId = decisionObjectId(decision);
     if (decision.kind === 'agent_judgment' && decision.judgment) router.push({ pathname: '/inbox', params: { item: decision.judgment.inboxItemId } });
-    else if (decision.kind === 'work_item') router.push(`/work/${objectId}`);
-    else router.push('/work');
+    else if (decision.kind === 'task') router.push(`/tasks/${objectId}`);
+    else router.push('/tasks');
   }, [router]);
 
   const openAttention = useCallback((item: HomeAttention) => {
@@ -312,24 +312,17 @@ export function WorkspaceHomeScreen() {
                 if (decision.response) decisionMutation.mutate({ id: decision.id, response: decision.response, answer });
               }}
             />
-            <OutcomeProgressSection
-              title={hm.sectionOutcomesNeedsYou}
-              items={home.outcomes.needsUser.slice(0, 3)}
-              statusLabel={hm.outcomeStatusNeedsYou}
-              icon="account-alert-outline"
-              onOpen={(item) => router.push(`/outcomes/${item.id}`)}
-            />
-            <OutcomeProgressSection
-              title={hm.sectionOutcomesRunning}
-              items={home.outcomes.running.slice(0, 3)}
-              statusLabel={hm.outcomeStatusRunning}
+            <TaskProgressSection
+              title={hm.sectionTasksRunning}
+              items={home.tasks.running.slice(0, 3)}
+              statusLabel={hm.taskStatusRunning}
               icon="progress-clock"
-              onOpen={(item) => router.push(`/outcomes/${item.id}`)}
+              onOpen={(item) => router.push(`/tasks/${item.id}`)}
             />
-            <OutcomeSection
-              items={home.recentOutcomes.slice(0, 3)}
-              onOpen={(receipt) => receipt.outcomeId
-                ? router.push(`/outcomes/${receipt.outcomeId}`)
+            <TaskSection
+              items={home.recentTasks.slice(0, 3)}
+              onOpen={(receipt) => receipt.taskId
+                ? router.push(`/tasks/${receipt.taskId}`)
                 : receipt.projectId
                 ? router.push(`/projects/${receipt.projectId}`)
                 : router.push(`/chat/${receipt.sessionKey}`)}
@@ -337,7 +330,7 @@ export function WorkspaceHomeScreen() {
             <ContinueSection items={continueItems} />
             <LibrarySection
               inboxCount={home.inboxCount}
-              onWork={() => router.push('/work')}
+              onWork={() => router.push('/tasks')}
               onProjects={() => router.push('/projects')}
               onInbox={() => router.push('/inbox')}
               onNotes={() => router.push('/notes')}
@@ -607,7 +600,7 @@ function ContinueSection({ items }: { items: ContinueItem[] }) {
   );
 }
 
-function OutcomeProgressSection({
+function TaskProgressSection({
   title,
   items,
   statusLabel,
@@ -615,10 +608,10 @@ function OutcomeProgressSection({
   onOpen,
 }: {
   title: string;
-  items: Outcome[];
+  items: Task[];
   statusLabel: string;
   icon: string;
-  onOpen: (outcome: Outcome) => void;
+  onOpen: (task: Task) => void;
 }) {
   const { colors } = useTheme();
   if (items.length === 0) return null;
@@ -641,18 +634,18 @@ function OutcomeProgressSection({
   );
 }
 
-function OutcomeSection({
+function TaskSection({
   items,
   onOpen,
 }: {
-  items: OutcomeReceipt[];
-  onOpen: (receipt: OutcomeReceipt) => void;
+  items: TaskReceipt[];
+  onOpen: (receipt: TaskReceipt) => void;
 }) {
   const { colors } = useTheme();
   const { homePage: hm } = useMessages();
   if (items.length === 0) return null;
   return (
-    <Section title={hm.sectionRecentOutcomes}>
+    <Section title={hm.sectionRecentTasks}>
       <View style={[styles.groupedList, { backgroundColor: colors.surface.panel }]}>
         {items.map((item, index) => (
           <Pressable key={item.runId} style={styles.listRow} onPress={() => onOpen(item)} accessibilityRole="button">

@@ -315,7 +315,7 @@ export const systemdService: GatewayService = {
     const serviceName = resolveServiceName(args.env);
     await systemctlExec(['restart', serviceName]);
     log.info('Systemd service restarted');
-    return { outcome: 'restarted' };
+    return { task: 'restarted' };
   },
 
   async isLoaded(args: GatewayServiceEnvArgs): Promise<boolean> {

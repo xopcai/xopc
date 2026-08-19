@@ -1,0 +1,26 @@
+export interface TaskContractDefinition {
+  objective: string;
+  expectedOutputs: string[];
+  acceptanceCriteria: string[];
+  constraints: string[];
+  approvalRequired: string[];
+  assumptions: string[];
+  risks: string[];
+}
+
+export function defineTaskContract(objectiveInput: string): TaskContractDefinition {
+  const objective = objectiveInput.trim();
+  if (!objective) throw new Error('Objective is required');
+  const chinese = /[\u3400-\u9fff]/u.test(objective);
+  return {
+    objective,
+    expectedOutputs: [objective],
+    acceptanceCriteria: chinese
+      ? [`已交付：${objective}`, '结果有可检查的证据，并满足用户明确提出的约束。']
+      : [`Delivered: ${objective}`, 'The result has inspectable evidence and satisfies the user-provided constraints.'],
+    constraints: [],
+    approvalRequired: [],
+    assumptions: [],
+    risks: [],
+  };
+}

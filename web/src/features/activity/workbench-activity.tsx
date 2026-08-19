@@ -54,7 +54,7 @@ function ActivityRow({
   targetAvailability: ActivityTargetAvailability;
 }) {
   const language = useLocaleStore((state) => state.language);
-  const copy = messages(language).projectsPage.workHome;
+  const copy = messages(language).projectsPage.home;
   const remove = useActivityStore((state) => state.remove);
   const { Icon, className } = TONE_META[item.tone];
 
@@ -108,7 +108,7 @@ function ActivityRow({
 
 export function WorkbenchActivity() {
   const language = useLocaleStore((state) => state.language);
-  const copy = messages(language).projectsPage.workHome;
+  const copy = messages(language).projectsPage.home;
   const items = useActivityStore((state) => state.items);
   const markAllRead = useActivityStore((state) => state.markAllRead);
   const clearFinished = useActivityStore((state) => state.clearFinished);

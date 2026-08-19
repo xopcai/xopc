@@ -1,10 +1,9 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { BriefcaseBusiness, ChevronDown, FileText, Target } from 'lucide-react';
+import { FileText } from 'lucide-react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { fetchCommandsCached } from '@/features/chat/palette/command-palette-api';
-import { Select, SelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChatComposer } from '@/features/chat/composer/chat-composer';
 import { ChatProjectScopeBar } from '@/features/chat/scope/chat-project-scope-bar';
@@ -13,7 +12,7 @@ import { ChatWelcomeSpotlightSkeleton } from '@/features/chat/chat-welcome-spotl
 import { ChatPageHeaderRegistration } from '@/features/chat/chat-page-header-registration';
 import { ChatSseStatus } from '@/features/chat/agent-selection/chat-sse-status';
 import { ConversationPlanDock } from '@/features/chat/messages/conversation-plan-dock';
-import { OutcomeSessionBanner } from '@/features/chat/outcome/outcome-session-banner';
+import { TaskSessionBanner } from '@/features/chat/task/task-session-banner';
 import {
   conversationPlanFromTaskPlanState,
   extractActiveTurnConversationPlan,
@@ -30,7 +29,6 @@ import { ClarifyPrompt } from '@/features/chat/composer/clarify-prompt';
 import { MemoryCaptureReceipt, MemoryConsentPrompt } from '@/features/chat/composer/memory-consent-prompt';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
-import { formatMediumDateTime } from '@/lib/date-formatters';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { wireTextForSlashCommandEntry } from '@/features/chat/palette/slash-command-wire-text';
@@ -50,13 +48,6 @@ import { ACTIVE_RUN_STATUSES } from '@/features/workflows/workflow-page.constant
 import { useSessionWorkflowRunLinks } from '@/features/workflows/use-session-workflow-run-links';
 import { useWorkflowRunLive } from '@/features/workflows/use-workflow-run-live';
 import { appendNoteContent, createTaskNote, getNote } from '@/features/notes/notes-api';
-import { withReturnTo } from '@/lib/navigation-return';
-import {
-  createWorkItemCommandProposal,
-  executeWorkItemCommandProposal,
-  fetchWorkItem,
-  type WorkItem,
-} from '@/features/work-items/api';
 import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-store';
 import { useChatRunPresenceStore } from '@/features/chat/session/chat-run-presence-store';
 import { AgentRunErrorBanner } from '@/features/chat/messages/agent-run-error-banner';
@@ -77,42 +68,6 @@ type SourceNoteSaveDraft = {
   content: string;
 };
 
-type WorkItemCommandDraft = {
-  action: 'request_review' | 'complete' | 'wait_user' | 'wait_external';
-  reason: string;
-  rationale: string;
-};
-
-const WORK_ITEM_ACTION_OPTIONS: WorkItemCommandDraft['action'][] = ['request_review', 'complete', 'wait_user', 'wait_external'];
-
-function compactAssistantText(content: string, max = 1400): string {
-  return content
-    .replace(/```[\s\S]*?```/g, (block) => block.slice(0, 400))
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
-    .slice(0, max)
-    .trim();
-}
-
-function extractLineAfterLabel(text: string, labels: string[]): string {
-  const lines = text.split(/\r?\n/).map((line) => line.replace(/^[-*#>\s]+/, '').trim());
-  for (const line of lines) {
-    for (const label of labels) {
-      const pattern = new RegExp(`^${label}\\s*[:：-]\\s*(.+)$`, 'i');
-      const match = line.match(pattern);
-      if (match?.[1]?.trim()) return match[1].trim();
-    }
-  }
-  return '';
-}
-
-function inferSuggestedAction(text: string): WorkItemCommandDraft['action'] {
-  if (/needs?\s+(user\s+)?input|需要.*(确认|输入|反馈)/i.test(text)) return 'wait_user';
-  if (/blocked|blocker|无法继续|阻塞|卡住/i.test(text)) return 'wait_external';
-  if (/done|completed|已完成|完成了/i.test(text)) return 'complete';
-  return 'request_review';
-}
-
 function welcomePromptWasUsed(original: string, sent: string): boolean {
   const source = original.replace(/\s+/g, '').toLocaleLowerCase();
   const target = sent.replace(/\s+/g, '').toLocaleLowerCase();
@@ -124,16 +79,6 @@ function welcomePromptWasUsed(original: string, sent: string): boolean {
 
 function welcomeExplorationDaySeed(date = new Date()): string {
   return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
-}
-
-function buildWorkItemCommandDraft(content: string): WorkItemCommandDraft {
-  const reason = extractLineAfterLabel(content, ['next action', 'next step', 'blocked reason', 'blocker', '下一步', '后续动作', '阻塞', '阻塞原因'])
-    || compactAssistantText(content, 500);
-  return {
-    action: inferSuggestedAction(content),
-    reason,
-    rationale: '',
-  };
 }
 
 export function ChatPage() {
@@ -157,11 +102,6 @@ export function ChatPage() {
   );
   const [welcomeExplorationOffset, setWelcomeExplorationOffset] = useState(0);
   const [sourceNoteLoadedTitle, setSourceNoteLoadedTitle] = useState<string | null>(null);
-  const [sourceWorkItem, setSourceWorkItem] = useState<WorkItem | null>(null);
-  const [sourceWorkItemLoadState, setSourceWorkItemLoadState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
-  const [workItemContextExpanded, setWorkItemContextExpanded] = useState(false);
-  const [workItemCommandDraft, setWorkItemCommandDraft] = useState<WorkItemCommandDraft | null>(null);
-  const [workItemCommandSubmitting, setWorkItemCommandSubmitting] = useState(false);
   const [sourceNoteSaveDraft, setSourceNoteSaveDraft] = useState<SourceNoteSaveDraft | null>(null);
   const [sourceNoteSaveSubmitting, setSourceNoteSaveSubmitting] = useState(false);
   const [showWelcomeSkeleton, setShowWelcomeSkeleton] = useState(false);
@@ -180,7 +120,7 @@ export function ChatPage() {
   const { data: sessionMetadata } = useChatSessionMetadata(chatSessionKey);
   const workflowRunId = sessionMetadata?.workflowRunId ?? null;
   const workflowOwnerAgentId = sessionMetadata?.ownerAgentId ?? undefined;
-  const outcomeId = sessionMetadata?.outcomeId ?? null;
+  const taskId = sessionMetadata?.taskId ?? null;
   const { view: workflowRunView } = useWorkflowRunLive(workflowRunId, { ownerAgentId: workflowOwnerAgentId });
   const { data: workflowRunLinks = [], mutate: refreshWorkflowRunLinks } =
     useSessionWorkflowRunLinks(chatSessionKey);
@@ -542,7 +482,6 @@ export function ChatPage() {
   ]);
 
   const sourceNoteId = sessionMetadata?.sourceNoteId ?? null;
-  const sourceWorkItemId = sessionMetadata?.sourceWorkItemId ?? null;
   const scopedProject = useChatProjectScope(chatSessionKey);
   useEffect(() => {
     let cancelled = false;
@@ -561,30 +500,6 @@ export function ChatPage() {
     };
   }, [sourceNoteId]);
 
-  useEffect(() => {
-    let cancelled = false;
-    setSourceWorkItem(null);
-    setSourceWorkItemLoadState(sourceWorkItemId ? 'loading' : 'idle');
-    setWorkItemContextExpanded(false);
-    if (!sourceWorkItemId) return undefined;
-    void fetchWorkItem(sourceWorkItemId)
-      .then((result) => {
-        if (!cancelled) {
-          setSourceWorkItem(result.item);
-          setSourceWorkItemLoadState('ready');
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setSourceWorkItem(null);
-          setSourceWorkItemLoadState('error');
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [sourceWorkItemId]);
-
   const sourceNoteTitle =
     sourceNoteLoadedTitle || sessionMetadata?.sourceNoteTitle || m.chat.sourceNoteFallbackTitle;
   const welcomeContextState = useWelcomeSuggestionContext({
@@ -597,9 +512,6 @@ export function ChatPage() {
     sessionKey: chatSessionKey,
     sourceNoteId,
     sourceNoteTitle,
-    sourceWorkItem,
-    sourceContextPending: Boolean(sourceWorkItemId) && sourceWorkItemLoadState === 'loading',
-    sourceContextFailed: Boolean(sourceWorkItemId) && sourceWorkItemLoadState === 'error',
     effectiveWorkspacePath: session.effectiveWorkspacePath,
     workingDirectoryLocked:
       session.workspaceSource === 'session_override' || session.workspaceSource === 'agent_workspace',
@@ -881,71 +793,6 @@ export function ChatPage() {
     stream,
   ]);
 
-  const sendWorkItemPrompt = useCallback((prompt: string) => {
-    if (stream.streaming || stream.sending) {
-      void followUp.addPendingFollowUp(prompt);
-      return;
-    }
-    void stream.sendMessage(prompt);
-  }, [followUp, stream]);
-
-  const handleSummarizeWorkItemProgress = useCallback(() => {
-    if (!sourceWorkItem) return;
-    sendWorkItemPrompt(m.chat.workItemSummarizePrompt.replace('{{title}}', sourceWorkItem.title));
-  }, [m.chat.workItemSummarizePrompt, sendWorkItemPrompt, sourceWorkItem]);
-
-  const handlePlanWorkItemNextStep = useCallback(() => {
-    if (!sourceWorkItem) return;
-    sendWorkItemPrompt(m.chat.workItemNextStepPrompt.replace('{{title}}', sourceWorkItem.title));
-  }, [m.chat.workItemNextStepPrompt, sendWorkItemPrompt, sourceWorkItem]);
-
-  const handleProposeWorkItemCommand = useCallback(
-    async (content: string) => {
-      if (!sourceWorkItem || !chatSessionKey) return;
-      setWorkItemCommandDraft(buildWorkItemCommandDraft(content));
-    },
-    [chatSessionKey, sourceWorkItem],
-  );
-
-  const closeWorkItemCommandDialog = useCallback(() => {
-    setWorkItemCommandDraft(null);
-    setWorkItemCommandSubmitting(false);
-  }, []);
-
-  const handleExecuteWorkItemCommandProposal = useCallback(async () => {
-    if (!sourceWorkItem || !chatSessionKey || !workItemCommandDraft) return;
-    const expectedVersion = sourceWorkItem.version;
-    const reason = workItemCommandDraft.reason.trim() || 'Review the latest chat result.';
-    const command = workItemCommandDraft.action === 'wait_user'
-      ? { type: 'wait' as const, expectedVersion, wait: { kind: 'user_input' as const, reason } }
-      : workItemCommandDraft.action === 'wait_external'
-        ? { type: 'wait' as const, expectedVersion, wait: { kind: 'external' as const, reason } }
-        : workItemCommandDraft.action === 'complete' && sourceWorkItem.completionPolicy !== 'user_accepted'
-          ? { type: 'complete' as const, expectedVersion, summary: reason }
-          : { type: 'request_review' as const, expectedVersion, summary: reason };
-
-    setWorkItemCommandSubmitting(true);
-    try {
-      const proposal = (await createWorkItemCommandProposal(sourceWorkItem.id, {
-        sourceKind: 'chat',
-        sourceId: chatSessionKey,
-        command,
-        rationale: workItemCommandDraft.rationale.trim() || undefined,
-      })).proposal;
-      const result = await executeWorkItemCommandProposal(proposal.id);
-      setSourceWorkItem(result.item);
-      setWorkItemCommandDraft(null);
-    } catch (err) {
-      showToast({
-        type: 'error',
-        title: m.chat.workItemCommandFailed,
-        message: err instanceof Error ? err.message : undefined,
-      });
-    } finally {
-      setWorkItemCommandSubmitting(false);
-    }
-  }, [chatSessionKey, m.chat.workItemCommandFailed, sourceWorkItem, workItemCommandDraft]);
-
   if (!auth.hasToken) {
     return (
       <div className="mx-auto w-full max-w-[var(--max-width-chat)] px-3 py-16 text-center text-sm leading-relaxed text-fg-muted sm:px-5">
@@ -1036,94 +883,6 @@ export function ChatPage() {
             </div>
           </div>
         ) : null}
-        {sourceWorkItem ? (
-          <div className="shrink-0 border-b border-edge-subtle bg-surface-panel/90 px-3 py-1.5 sm:px-5 xl:px-6">
-            <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs text-fg-muted">
-              <button
-                type="button"
-                className="flex min-w-0 items-center gap-2 text-left"
-                onClick={() => setWorkItemContextExpanded((open) => !open)}
-                aria-expanded={workItemContextExpanded}
-              >
-                <BriefcaseBusiness className="size-3.5 shrink-0 text-accent-fg" strokeWidth={1.75} aria-hidden />
-                <span className="min-w-0 truncate">
-                  {m.chat.workItemBanner.replace('{{title}}', sourceWorkItem.title)}
-                </span>
-                <span className="shrink-0 rounded-full bg-surface-muted px-1.5 py-0.5 text-[11px] text-fg-muted">
-                  {sourceWorkItem.phase}
-                </span>
-                <ChevronDown
-                  className={cn('size-3.5 shrink-0 transition-transform', workItemContextExpanded ? 'rotate-180' : '')}
-                  strokeWidth={1.75}
-                  aria-hidden
-                />
-              </button>
-              <div className="flex shrink-0 items-center gap-2">
-                <button
-                  type="button"
-                  className="inline-flex h-7 items-center gap-1.5 rounded-md border border-edge-subtle px-2 font-medium text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
-                  onClick={handlePlanWorkItemNextStep}
-                >
-                  <Target className="size-3.5" strokeWidth={1.75} aria-hidden />
-                  <span>{m.chat.workItemNextStepAction}</span>
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex h-7 items-center gap-1.5 rounded-md border border-edge-subtle px-2 font-medium text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
-                  onClick={handleSummarizeWorkItemProgress}
-                >
-                  <FileText className="size-3.5" strokeWidth={1.75} aria-hidden />
-                  <span>{m.chat.workItemSummarizeAction}</span>
-                </button>
-                <Link
-                  to={withReturnTo(`/work-items/${encodeURIComponent(sourceWorkItem.id)}`, pathname)}
-                  className="font-medium text-accent transition-colors hover:text-accent-fg"
-                >
-                  {m.chat.workItemOpenItem}
-                </Link>
-                <Link
-                  to={withReturnTo(`/projects/${encodeURIComponent(sourceWorkItem.projectId)}/work-items`, pathname)}
-                  className="font-medium text-fg-muted transition-colors hover:text-fg"
-                >
-                  {m.chat.workItemOpenProject}
-                </Link>
-              </div>
-            </div>
-            {workItemContextExpanded ? (
-              <div className="mt-2 grid gap-2 rounded-md border border-edge-subtle bg-surface-base px-3 py-2 text-xs leading-5 text-fg-muted sm:grid-cols-2">
-                <p className="min-w-0">
-                  <span className="font-medium text-fg">{m.chat.workItemPriorityLabel}: </span>
-                  {sourceWorkItem.priority}
-                </p>
-                <p className="min-w-0">
-                  <span className="font-medium text-fg">{m.chat.workItemUpdatedLabel}: </span>
-                  {formatMediumDateTime(new Date(sourceWorkItem.updatedAt))}
-                </p>
-                {sourceWorkItem.description ? (
-                  <p className="min-w-0 sm:col-span-2">
-                    <span className="font-medium text-fg">{m.chat.workItemDescriptionLabel}: </span>
-                    {sourceWorkItem.description}
-                  </p>
-                ) : null}
-                {sourceWorkItem.nextAction ? (
-                  <p className="min-w-0">
-                    <span className="font-medium text-fg">{m.chat.workItemNextActionLabel}: </span>
-                    {sourceWorkItem.nextAction.text}
-                  </p>
-                ) : null}
-                {sourceWorkItem.waits.some((wait) => !wait.resolvedAt) ? (
-                  <p className="min-w-0 sm:col-span-2">
-                    <span className="font-medium text-fg">{m.chat.workItemBlockedLabel}: </span>
-                    {sourceWorkItem.waits.filter((wait) => !wait.resolvedAt).map((wait) => wait.reason).join(' · ')}
-                  </p>
-                ) : null}
-                {!sourceWorkItem.description && !sourceWorkItem.nextAction && !sourceWorkItem.waits.some((wait) => !wait.resolvedAt) ? (
-                  <p className="min-w-0 sm:col-span-2">{m.chat.workItemNoDetails}</p>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
         <div className="relative flex min-h-0 min-w-0 flex-1 px-3 sm:px-5 xl:px-6">
           <ChatTimelinePanel
             items={timeline.items}
@@ -1181,7 +940,7 @@ export function ChatPage() {
                       <AgentRunErrorBanner errorText={stream.error} />
                     </div>
                   ) : null}
-                  {outcomeId ? <OutcomeSessionBanner outcomeId={outcomeId} /> : null}
+                  {taskId ? <TaskSessionBanner taskId={taskId} /> : null}
                   {workflowRunLinks.length > 0 ? (
                     <div className="mb-6 flex flex-col gap-3">
                       {workflowRunLinks.map((link) => (
@@ -1228,7 +987,6 @@ export function ChatPage() {
                     deleteRoundDisabled={stream.streaming || stream.sending}
                     onSaveAssistantToSourceNote={sourceNoteId ? handleSaveAssistantToSourceNote : undefined}
                     onExtractAssistantTask={sourceNoteId ? handleExtractAssistantTask : undefined}
-                    onProposeWorkItemCommand={sourceWorkItem ? handleProposeWorkItemCommand : undefined}
                   />
                 </>
               )}
@@ -1394,82 +1152,6 @@ export function ChatPage() {
         onClick={() => scrollToBottom(true)}
       />
 
-      <Dialog.Root
-        open={workItemCommandDraft !== null}
-        onOpenChange={(open) => {
-          if (!open && !workItemCommandSubmitting) closeWorkItemCommandDialog();
-        }}
-      >
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-[80] bg-scrim backdrop-blur-[1px]" />
-          <Dialog.Content className="fixed right-0 top-0 z-[90] flex h-dvh w-[min(100%,32rem)] flex-col overflow-hidden border-l border-edge bg-surface-panel shadow-popover outline-none">
-            <div className="shrink-0 border-b border-edge-subtle px-5 py-4">
-              <Dialog.Title className="text-base font-semibold text-fg">
-                {m.chat.workItemCommandDialogTitle}
-              </Dialog.Title>
-              <Dialog.Description className="mt-1 text-sm text-fg-muted">
-                {sourceWorkItem
-                  ? m.chat.workItemCommandDialogDescription.replace('{{title}}', sourceWorkItem.title)
-                  : m.chat.workItemCommandDialogDescriptionFallback}
-              </Dialog.Description>
-            </div>
-            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-4">
-              <label className="flex items-start gap-3 rounded-lg border border-edge-subtle bg-surface-base p-3">
-                <span className="flex min-w-0 flex-1 flex-col gap-1.5">
-                  <span className="text-sm font-medium text-fg">{m.chat.workItemCommandLabel}</span>
-                  <Select
-                    value={workItemCommandDraft?.action ?? 'request_review'}
-                    onChange={(event) =>
-                      setWorkItemCommandDraft((draft) => draft ? { ...draft, action: event.target.value as WorkItemCommandDraft['action'] } : draft)
-                    }
-                    disabled={workItemCommandSubmitting}
-                    className="h-9 rounded-lg border border-edge bg-surface-panel px-2 text-sm text-fg outline-none focus:border-accent"
-                  >
-                    {WORK_ITEM_ACTION_OPTIONS.map((action) => (
-                      <SelectOption key={action} value={action}>{action.replace(/_/g, ' ')}</SelectOption>
-                    ))}
-                  </Select>
-                </span>
-              </label>
-
-              <label className="flex items-start gap-3 rounded-lg border border-edge-subtle bg-surface-base p-3">
-                <span className="flex min-w-0 flex-1 flex-col gap-1.5">
-                  <span className="text-sm font-medium text-fg">{m.chat.workItemCommandReasonLabel}</span>
-                  <textarea
-                    value={workItemCommandDraft?.reason ?? ''}
-                    onChange={(event) =>
-                      setWorkItemCommandDraft((draft) => draft ? { ...draft, reason: event.target.value } : draft)
-                    }
-                    disabled={workItemCommandSubmitting}
-                    className="min-h-20 resize-none rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm leading-6 text-fg outline-none focus:border-accent"
-                  />
-                </span>
-              </label>
-
-            </div>
-            <div className="flex shrink-0 justify-end gap-2 border-t border-edge-subtle px-5 py-4">
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={closeWorkItemCommandDialog}
-                disabled={workItemCommandSubmitting}
-              >
-                {m.chat.workItemCommandDialogCancel}
-              </Button>
-              <Button
-                type="button"
-                variant="primary"
-                onClick={() => void handleExecuteWorkItemCommandProposal()}
-                disabled={workItemCommandSubmitting}
-              >
-                {workItemCommandSubmitting
-                  ? m.chat.workItemCommandDialogExecuting
-                  : m.chat.workItemCommandDialogExecute}
-              </Button>
-            </div>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
     </div>
   );
 }

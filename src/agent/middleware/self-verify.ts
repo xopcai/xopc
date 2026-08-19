@@ -38,7 +38,7 @@ const DEFAULT_CONFIG: SelfVerifyConfig = {
   resetOnVerification: true,
 };
 
-export interface VerificationOutcome {
+export interface VerificationTask {
   isError?: boolean;
   result?: unknown;
 }
@@ -136,13 +136,13 @@ export class SelfVerifyMiddleware {
     log.debug({ filePath, editCount: this.getEditCount(filePath, sessionKey), operation }, 'File edit recorded');
   }
 
-  recordVerification(toolName: string, args?: unknown, outcome?: VerificationOutcome, sessionKey?: string): void {
+  recordVerification(toolName: string, args?: unknown, task?: VerificationTask, sessionKey?: string): void {
     const state = this.getState(sessionKey);
     const name = toolName.toLowerCase();
     if (name === 'exec_command') {
-      const command = this.extractExecCommand(args, outcome?.result);
-      const success = this.isSuccessfulExecVerification(outcome);
-      const details = this.extractResultDetails(outcome?.result);
+      const command = this.extractExecCommand(args, task?.result);
+      const success = this.isSuccessfulExecVerification(task);
+      const details = this.extractResultDetails(task?.result);
 
       if (success && this.isDiffReviewCommand(command)) {
         state.diffReviewed = true;
@@ -228,9 +228,9 @@ export class SelfVerifyMiddleware {
       : null;
   }
 
-  private isSuccessfulExecVerification(outcome?: VerificationOutcome): boolean {
-    if (!outcome || outcome.isError) return false;
-    const details = this.extractResultDetails(outcome.result);
+  private isSuccessfulExecVerification(task?: VerificationTask): boolean {
+    if (!task || task.isError) return false;
+    const details = this.extractResultDetails(task.result);
     if (!details) return false;
     if (details.timedOut === true) return false;
     if (details.status === 'success') return true;

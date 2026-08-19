@@ -311,7 +311,7 @@ export class ProjectStore {
   delete(id: string): void {
     runSqliteWriteTransaction((db) => {
       db.prepare(`UPDATE sessions SET project_id = NULL WHERE project_id = ?`).run(id);
-      db.prepare(`UPDATE outcome_execution_state SET project_id = NULL WHERE project_id = ?`).run(id);
+      db.prepare(`UPDATE tasks SET project_id = NULL WHERE project_id = ?`).run(id);
       db.prepare(`UPDATE workflow_runs SET project_id = NULL WHERE project_id = ?`).run(id);
       db.prepare(`UPDATE automations SET project_id = NULL WHERE project_id = ?`).run(id);
       db.prepare(`UPDATE memory_records SET project_id = NULL WHERE project_id = ?`).run(id);
@@ -326,16 +326,14 @@ export class ProjectStore {
       .get(id) as { total: number }).total;
   }
 
-  getOutcomeCount(id: string): number {
-    return (getSqliteDatabase().prepare(`SELECT COUNT(*) AS total FROM outcome_execution_state WHERE project_id = ?`).get(id) as { total: number }).total;
+  getTaskCount(id: string): number {
+    return (getSqliteDatabase().prepare(`SELECT COUNT(*) AS total FROM tasks WHERE project_id = ?`).get(id) as { total: number }).total;
   }
 
-  getActiveOutcomeCount(id: string): number {
+  getActiveTaskCount(id: string): number {
     return (getSqliteDatabase()
-      .prepare(`SELECT COUNT(*) AS total FROM outcome_execution_state
-        JOIN outcomes ON outcomes.outcome_id = outcome_execution_state.outcome_id
-        WHERE outcome_execution_state.project_id = ?
-          AND outcomes.internal_status NOT IN ('completed', 'cancelled')`)
+      .prepare(`SELECT COUNT(*) AS total FROM tasks
+        WHERE project_id = ? AND status NOT IN ('completed', 'cancelled')`)
       .get(id) as { total: number }).total;
   }
 
@@ -370,8 +368,8 @@ export class ProjectStore {
     return {
       ...project,
       sessionCount: this.getSessionCount(id),
-      outcomeCount: this.getOutcomeCount(id),
-      activeOutcomeCount: this.getActiveOutcomeCount(id),
+      taskCount: this.getTaskCount(id),
+      activeTaskCount: this.getActiveTaskCount(id),
       recentSessions: this.getRecentSessions(id),
       recentWorkflowRuns: this.getRecentWorkflowRuns(id),
     };

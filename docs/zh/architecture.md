@@ -25,7 +25,7 @@ Gateway；Web 控制台和移动端通过 HTTP/SSE API 与 Gateway 通信；频�
 |------|----------|------|
 | CLI 与服务启动 | `src/cli/`、`src/daemon/`、`electron/` | 启动前台 Gateway，安装或控制后台服务，运行 CLI/TUI 回合，并承载 Electron shell。 |
 | HTTP Gateway | `src/gateway/server.ts`、`src/gateway/hono/` | Hono 服务、认证、CORS/CSRF 检查、限流、REST 路由、`/api/events` 广播 SSE、`/api/agent` 流式 SSE，以及静态 Web 控制台。 |
-| Gateway 组合根 | `src/gateway/service.ts` | 持有 `MessageBus`、`ChannelManager`、`AgentService`、`SessionIndex`、自动化、笔记、项目、目标、工作流、扩展加载、Gateway SSE Hub 与配置热重载。 |
+| Gateway 组合根 | `src/gateway/service.ts` | 持有 `MessageBus`、`ChannelManager`、`AgentService`、`SessionIndex`、Task、自动化、笔记、项目、工作流、扩展加载、Gateway SSE Hub 与配置热重载。 |
 | 智能体运行时 | `src/agent/service.ts`、`src/agent/embedded/`、`src/agent/orchestration/` | 构建按会话划分的智能体、Prompt、工具、记忆、技能、MCP 工具、模型选择、流事件、压缩与直接/Webchat 回合调度。 |
 | 频道 | `src/channels/`、`extensions/telegram`、`extensions/weixin`、`extensions/feishu` | 频道插件接收外部消息，规范化路由与 session key，发布入站总线消息，并发送出站回复。 |
 | 扩展运行时 | `src/extensions/`、`extensions/*` | 按激活计划加载扩展 manifest 与代码，并注册 hooks、tools、channel plugins、gateway methods 与扩展 UI assets。 |
@@ -59,12 +59,12 @@ CLI 命令通过 `src/cli/registry.ts` 注册。`agent` 和 `tui` 命令可以�
 HTTP 服务直接运行回合；`gateway` 命令启动的则是与 Web 控制台、移动端共用的
 `GatewayService`/Hono 栈。
 
-### 自动化、目标、心跳与工作流
+### Task、自动化、心跳与工作流
 
-`GatewayService` 将 `AutomationService`、`HeartbeatService`、`GoalRunner`、
-`PersistentGoalService` 和 `WorkflowRunService` 连接到同一套 `AgentService`
-与 `SessionStore`。定时或事件触发的工作会作为普通智能体回合执行，正常持久化
-transcript，并通过 Gateway SSE 发送状态事件。
+`GatewayService` 将 Task 聚合与执行协调器、`AutomationService`、
+`HeartbeatService` 和 `WorkflowRunService` 连接到同一套 `AgentService` 与
+`SessionStore`。Task 持有工作状态，Workflow 与 Automation 只是关联的执行能力。
+定时或事件触发的工作作为普通智能体回合执行，持久化 transcript，并发送 Gateway SSE 事件。
 
 ## 智能体运行时
 
@@ -74,9 +74,9 @@ transcript，并通过 Gateway SSE 发送状态事件。
 - `ModelManager`：默认模型、会话级覆盖、typed model roles 与解析后的模型元数据。
 - `TurnDispatcher`：直接回合、流式回合、Webchat steering、clarify 与 SSE 事件注入。
 - `AgentOrchestrator`：回合执行、生命周期事件、反馈、持久化与压缩。
-- `OutboundCoordinator`：最终响应发布、频道 hooks 与回合后的目标处理。
+- `OutboundCoordinator`：最终响应发布与频道 hooks。
 - `SessionConfigService`、`SessionHydrator`、`SessionInspector`：会话级模型/thinking/workspace 配置、hydration、压缩与上下文报告。
-- `PersistentGoalService`：`/goal` continuation 调度与回合后判定。
+- `TaskRunCoordinator` 与 `TaskRepository`：持久执行、验证、下一步和唯一工作状态机。
 - Prompt、记忆、技能、工具、媒体、MCP 工具、loop guard、self-verify、request limit 与进度反馈模块。
 
 内嵌回合路径使用 `runXopcEmbeddedTurn`：它获取或复用 embedded session runner，
@@ -135,7 +135,7 @@ xopc 有两个 MCP 方向：
 - search。
 
 其它路由组通过 lazy route bundles 挂载，包括 agents、automations、browser、
-channels、connectors/MCP、config、goals、logs、models、notes、shares、skills、
+channels、connectors/MCP、config、home、tasks、logs、models、notes、projects、shares、skills、
 update、voice、workflows、workspace 以及相关设置页面。
 
 广播事件通过 `GatewaySseHub` 和 `/api/events` 传递。智能体运行流通过
@@ -178,7 +178,6 @@ update、voice、workflows、workspace 以及相关设置页面。
 
 长期结构性决策记录在 [`docs/adr/`](../adr/README.md)：
 
-- [ADR 0001](../adr/0001-agent-service-decomposition.md) 描述了 AgentService 的拆分，包括 `SessionStateBag`、`OutboundCoordinator`、`TurnDispatcher`、`PersistentGoalService`、`SessionConfigService`、`SessionHydrator`、`SessionInspector` 与 `AgentInstanceGateway` 等协作者。
 
 这些不变量通过 CI 中的 `pnpm run depcheck` 校验。可以运行
 `pnpm run depcheck:graph` 生成当前源码依赖图，输出到 `docs/dependency-graph.mmd`。

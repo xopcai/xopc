@@ -60,7 +60,7 @@ import {
 
 type TabId = 'connected' | 'discover';
 type ConnectorSort = 'name' | 'source';
-type DiscoveryOutcome = 'all' | ConnectorBenefit;
+type DiscoveryTask = 'all' | ConnectorBenefit;
 
 const DISCOVERY_SOURCE_ALL = 'all';
 const DISCOVERY_SOURCE_BUILTIN = 'builtin';
@@ -136,7 +136,7 @@ export function ConnectorsPage() {
   const [discoverSearchQuery, setDiscoverSearchQuery] = useState('');
   const [discoverSource, setDiscoverSource] = useState(DISCOVERY_SOURCE_BUILTIN);
   const [connectorSort, setConnectorSort] = useState<ConnectorSort>('name');
-  const [selectedOutcome, setSelectedOutcome] = useState<DiscoveryOutcome>('all');
+  const [selectedTask, setSelectedTask] = useState<DiscoveryTask>('all');
   const [installDraft, setInstallDraft] = useState<InstallDraft | null>(null);
   const [detailConnector, setDetailConnector] = useState<ConnectorDefinition | null>(null);
   const [detailInstanceId, setDetailInstanceId] = useState<string | null>(null);
@@ -474,18 +474,18 @@ export function ConnectorsPage() {
         : state.registryCatalog
   ), [builtinCatalog, discoverSource, state.registryCatalog]);
   const discoveryCatalog = useMemo(() => {
-    const filtered = selectedOutcome === 'all'
+    const filtered = selectedTask === 'all'
       ? discoverySourceCatalog
-      : discoverySourceCatalog.filter((connector) => connectorBenefitsFor(connector).includes(selectedOutcome));
+      : discoverySourceCatalog.filter((connector) => connectorBenefitsFor(connector).includes(selectedTask));
     return filterAndSortConnectors(filtered, discoverSearchQuery, connectorSort);
-  }, [connectorSort, discoverSearchQuery, discoverySourceCatalog, selectedOutcome]);
-  const availableOutcomes = useMemo(() => CONNECTOR_BENEFIT_ORDER.filter((benefit) => (
+  }, [connectorSort, discoverSearchQuery, discoverySourceCatalog, selectedTask]);
+  const availableTasks = useMemo(() => CONNECTOR_BENEFIT_ORDER.filter((benefit) => (
     discoverySourceCatalog.some((connector) => connectorBenefitsFor(connector).includes(benefit))
   )), [discoverySourceCatalog]);
 
   useEffect(() => {
-    if (selectedOutcome !== 'all' && !availableOutcomes.includes(selectedOutcome)) setSelectedOutcome('all');
-  }, [availableOutcomes, selectedOutcome]);
+    if (selectedTask !== 'all' && !availableTasks.includes(selectedTask)) setSelectedTask('all');
+  }, [availableTasks, selectedTask]);
   const registryCanLoadMore = tab === 'discover'
     && discoverSource !== DISCOVERY_SOURCE_BUILTIN
     && Boolean(registryTotalPages && registryPage < registryTotalPages);
@@ -637,21 +637,21 @@ export function ConnectorsPage() {
 
           {tab === 'discover' && hasToken ? (
             <div className="flex flex-col gap-5">
-              <div className="flex flex-wrap gap-2" role="group" aria-label={cs.outcomeFilterAria}>
-                {(['all', ...availableOutcomes] as DiscoveryOutcome[]).map((outcome) => (
+              <div className="flex flex-wrap gap-2" role="group" aria-label={cs.taskFilterAria}>
+                {(['all', ...availableTasks] as DiscoveryTask[]).map((task) => (
                   <button
-                    key={outcome}
+                    key={task}
                     type="button"
                     className={cn(
                       'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
-                      selectedOutcome === outcome
+                      selectedTask === task
                         ? 'border-accent/40 bg-accent-soft text-accent-fg'
                         : 'border-edge bg-surface-panel text-fg-muted hover:bg-surface-hover hover:text-fg',
                     )}
-                    aria-pressed={selectedOutcome === outcome}
-                    onClick={() => setSelectedOutcome(outcome)}
+                    aria-pressed={selectedTask === task}
+                    onClick={() => setSelectedTask(task)}
                   >
-                    {outcome === 'all' ? cs.outcomeAll : cs.connectorBenefitHeadings[outcome]}
+                    {task === 'all' ? cs.taskAll : cs.connectorBenefitHeadings[task]}
                   </button>
                 ))}
               </div>

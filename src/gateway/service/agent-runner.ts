@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 
 /**
  * GatewayAgentRunner — webchat agent invocation and the surrounding control
- * surface (abort, steer, clarify-bridge plumbing, scheduled Outcome continuations).
+ * surface (abort, steer, clarify-bridge plumbing, scheduled Task continuations).
  *
  * Was 200 lines of `GatewayService` covering seven concerns that all hung off
  * the same handful of fields (`activeWebchatRunBySession`, `runAbortControllers`,
@@ -12,7 +12,7 @@ import crypto from 'node:crypto';
  *   - `abortAgentRun(runId)` — POST /api/agent/abort + cleanup
  *   - `submitClarifyResponse(requestId, answer)` — UI answers a `clarify` call
  *   - `runScheduledWebchatTurn(sk, userTurn)` — background webchat user turn
- *   - `drainScheduledWebchatContinuation(sk, msg)` — background Outcome continuation
+ *   - `drainScheduledWebchatContinuation(sk, msg)` — background Task continuation
  *   - `clarifyForSession({ sessionKey, request })` — clarify-bridge dispatch
  *     used by `gatewayClarify.requestClarification` in AgentService
  *
@@ -44,8 +44,7 @@ export interface GatewayAgentRunnerOptions {
   getConfig: () => Config;
   /** SSE emit (re-used so `runAgent` events broadcast to subscribers). */
   emit: (type: string, payload: unknown) => void;
-  prepareOutcome?: (sessionKey: string) => Promise<void>;
-  onOutcomeFinalized?: (receipt: ExecutionReceipt) => void;
+  onTaskFinalized?: (receipt: ExecutionReceipt) => void;
 }
 
 export class GatewayAgentRunner {
@@ -150,8 +149,7 @@ export class GatewayAgentRunner {
         activeWebchatRunBySession: this.activeWebchatRunBySession,
         sessionIndex: this.opts.sessionIndex,
         emit: this.opts.emit,
-        prepareOutcome: this.opts.prepareOutcome,
-        onOutcomeFinalized: this.opts.onOutcomeFinalized,
+        onTaskFinalized: this.opts.onTaskFinalized,
       },
       message,
       channel,

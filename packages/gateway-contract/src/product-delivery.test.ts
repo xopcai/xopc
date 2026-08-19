@@ -54,5 +54,11 @@ describe('product delivery contract', () => {
       capabilities: ['open'],
     })).toBe('/open?kind=local_app&id=app%2Fwith+spaces');
     expect(productReferenceOpenRoute(delivery.primary!)).toBe('/notes/note%2Fwith%20spaces');
+    expect(productReferenceRoute({
+      kind: 'task',
+      id: 'task/with spaces',
+      title: 'Task',
+      capabilities: ['open'],
+    })).toBe('/tasks/task%2Fwith%20spaces');
   });
 });

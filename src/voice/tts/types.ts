@@ -159,7 +159,7 @@ export interface TtsDirectiveOverrides {
 }
 
 /** Provider attempt result (TTS fallback chain) */
-export type ProviderAttemptOutcome = 'success' | 'skipped' | 'failed';
+export type ProviderAttemptTask = 'success' | 'skipped' | 'failed';
 
 /** Provider failure reason classification */
 export type ProviderFailureReason =
@@ -173,7 +173,7 @@ export type ProviderFailureReason =
 /** Single provider attempt in a TTS fallback chain */
 export interface ProviderAttempt {
   provider: string;
-  outcome: ProviderAttemptOutcome;
+  task: ProviderAttemptTask;
   reasonCode: ProviderFailureReason;
   latencyMs: number;
   error?: string;

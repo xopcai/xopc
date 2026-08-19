@@ -40,7 +40,7 @@ export type ExtensionUpdateLogger = {
 
 export type ExtensionUpdateStatus = 'updated' | 'unchanged' | 'skipped' | 'error';
 
-export type ExtensionUpdateOutcome = {
+export type ExtensionUpdateTask = {
   extensionId: string;
   status: ExtensionUpdateStatus;
   message: string;
@@ -55,7 +55,7 @@ export type ExtensionChannelSyncSummary = {
 
 export type ExtensionPostUpdateResult = {
   status: 'ok' | 'error' | 'skipped';
-  outcomes: ExtensionUpdateOutcome[];
+  tasks: ExtensionUpdateTask[];
   channelSync?: ExtensionChannelSyncSummary;
 };
 
@@ -189,7 +189,7 @@ async function updateSingleExtension(params: {
   lock: ReturnType<typeof getExtensionLockfileManager>;
   timeoutMs?: number;
   logger?: ExtensionUpdateLogger;
-}): Promise<ExtensionUpdateOutcome> {
+}): Promise<ExtensionUpdateTask> {
   const { extensionId, entry, targetDir, storeBase, lock, timeoutMs, logger } = params;
   const currentVersion = readInstalledExtensionVersion(targetDir, extensionId);
 
@@ -287,7 +287,7 @@ export async function updateNpmInstalledExtensions(params: {
   config?: Config;
   timeoutMs?: number;
   logger?: ExtensionUpdateLogger;
-}): Promise<{ outcomes: ExtensionUpdateOutcome[]; status: 'ok' | 'error' | 'skipped' }> {
+}): Promise<{ tasks: ExtensionUpdateTask[]; status: 'ok' | 'error' | 'skipped' }> {
   const logger = params.logger ?? {};
   const config = params.config ?? loadConfig();
   const targetDir = resolveExtensionsDir();
@@ -300,15 +300,15 @@ export async function updateNpmInstalledExtensions(params: {
     : Object.keys(data.extensions);
 
   if (ids.length === 0) {
-    return { outcomes: [], status: 'skipped' };
+    return { tasks: [], status: 'skipped' };
   }
 
-  const outcomes: ExtensionUpdateOutcome[] = [];
+  const tasks: ExtensionUpdateTask[] = [];
   let hasError = false;
 
   for (const extensionId of ids) {
     if (params.skipIds?.has(extensionId)) {
-      outcomes.push({
+      tasks.push({
         extensionId,
         status: 'skipped',
         message: `Skipping "${extensionId}" (channel sync).`,
@@ -318,7 +318,7 @@ export async function updateNpmInstalledExtensions(params: {
 
     const entry = data.extensions[extensionId];
     if (!entry) {
-      outcomes.push({
+      tasks.push({
         extensionId,
         status: 'skipped',
         message: `No lockfile entry for "${extensionId}".`,
@@ -326,7 +326,7 @@ export async function updateNpmInstalledExtensions(params: {
       continue;
     }
 
-    const outcome = await updateSingleExtension({
+    const task = await updateSingleExtension({
       extensionId,
       entry,
       targetDir,
@@ -335,18 +335,18 @@ export async function updateNpmInstalledExtensions(params: {
       timeoutMs: params.timeoutMs,
       logger,
     });
-    outcomes.push(outcome);
-    if (outcome.status === 'error') {
+    tasks.push(task);
+    if (task.status === 'error') {
       hasError = true;
-    } else if (outcome.status === 'updated') {
+    } else if (task.status === 'updated') {
       log.info(
-        { extensionId: outcome.extensionId, nextVersion: outcome.nextVersion },
-        outcome.message,
+        { extensionId: task.extensionId, nextVersion: task.nextVersion },
+        task.message,
       );
     }
   }
 
-  return { outcomes, status: hasError ? 'error' : 'ok' };
+  return { tasks, status: hasError ? 'error' : 'ok' };
 }
 
 export async function runPostUpdateExtensionSync(params: {
@@ -376,7 +376,7 @@ export async function runPostUpdateExtensionSync(params: {
 
   return {
     status: updateResult.status,
-    outcomes: updateResult.outcomes,
+    tasks: updateResult.tasks,
     channelSync: channelSyncResult.summary,
   };
 }

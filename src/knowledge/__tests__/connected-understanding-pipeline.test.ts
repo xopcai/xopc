@@ -56,7 +56,7 @@ describe('connected understanding derivation', () => {
   it('does not treat repeated repository inventories as user activity', () => {
     const observations = deriveConnectedClaimObservations([
       item('github-1', { itemType: 'development_activity', normalizedText: JSON.stringify({ repository: { full_name: 'xopc-ai/xopc' } }) }),
-      item('linear-1', { itemType: 'work_item', normalizedText: JSON.stringify({ project: 'xopc-ai/xopc' }) }),
+      item('linear-1', { itemType: 'external_task', normalizedText: JSON.stringify({ project: 'xopc-ai/xopc' }) }),
     ]);
     expect(observations).toEqual([]);
   });

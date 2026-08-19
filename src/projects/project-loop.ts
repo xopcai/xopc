@@ -11,7 +11,7 @@ export type ProjectWorkflowRunBrief = {
 
 export type ProjectAttentionItem = {
   id: string;
-  kind: 'blocked_outcome' | 'stale_outcome' | 'failed_workflow';
+  kind: 'blocked_task' | 'stale_task' | 'failed_workflow';
   title: string;
   detail?: string;
   status?: string;
@@ -21,7 +21,7 @@ export type ProjectAttentionItem = {
 
 export type ProjectTimelineItem = {
   id: string;
-  kind: 'session' | 'outcome' | 'workflow' | 'memory';
+  kind: 'session' | 'task' | 'workflow' | 'memory';
   title: string;
   detail?: string;
   timestamp: number;
@@ -29,23 +29,22 @@ export type ProjectTimelineItem = {
   href?: string;
 };
 
-export type ProjectOutcome = {
+export type ProjectTask = {
   id: string;
   objective: string;
   status: string;
-  priority: 'low' | 'normal' | 'high';
-  description?: string;
+  priority: 'low' | 'normal' | 'high' | 'critical';
   nextAction?: string;
   blockedReason?: string;
   updatedAt: number;
 };
 
 export type ProjectLoopOverview = {
-  activeOutcomes: ProjectOutcome[];
-  blockedOutcomes: ProjectOutcome[];
-  staleOutcomes: ProjectOutcome[];
+  activeTasks: ProjectTask[];
+  blockedTasks: ProjectTask[];
+  staleTasks: ProjectTask[];
   nextActions: Array<{
-    outcomeId: string;
+    taskId: string;
     title: string;
     nextAction?: string;
     status: string;
@@ -62,11 +61,27 @@ export type ProjectLoopOverview = {
   recommendedAction?: string;
 };
 
-const ACTIVE_OUTCOME_STATUSES = new Set(['captured', 'planning', 'running', 'verifying', 'continuing', 'paused', 'blocked', 'needs_user']);
-const STALE_OUTCOME_STATUSES = new Set(['captured', 'planning', 'running', 'verifying', 'continuing', 'paused']);
+const ACTIVE_TASK_STATUSES = new Set([
+  'pending',
+  'planning',
+  'waiting_dependency',
+  'running',
+  'verifying',
+  'paused',
+  'blocked',
+  'needs_user',
+]);
+const STALE_TASK_STATUSES = new Set([
+  'pending',
+  'planning',
+  'waiting_dependency',
+  'running',
+  'verifying',
+  'paused',
+]);
 const DEFAULT_STALE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
 
-function outcomeUpdatedAtDesc(left: ProjectOutcome, right: ProjectOutcome): number {
+function taskUpdatedAtDesc(left: ProjectTask, right: ProjectTask): number {
   return right.updatedAt - left.updatedAt;
 }
 
@@ -78,7 +93,7 @@ function compactText(value: string | undefined, max = 180): string | undefined {
 
 export function buildProjectLoopOverview(input: {
   project: ProjectWithDetails;
-  outcomes: ProjectOutcome[];
+  tasks: ProjectTask[];
   recentWorkflowRuns: ProjectWorkflowRunBrief[];
   failedWorkflowRuns?: ProjectWorkflowRunBrief[];
   memoryRecords?: MemoryRecord[];
@@ -87,44 +102,44 @@ export function buildProjectLoopOverview(input: {
 }): ProjectLoopOverview {
   const nowMs = input.nowMs ?? Date.now();
   const staleCutoff = nowMs - (input.staleAfterMs ?? DEFAULT_STALE_AFTER_MS);
-  const projectOutcomes = [...input.outcomes].sort(outcomeUpdatedAtDesc);
-  const activeOutcomes = projectOutcomes.filter((outcome) => ACTIVE_OUTCOME_STATUSES.has(outcome.status)).slice(0, 6);
-  const blockedOutcomes = projectOutcomes.filter((outcome) => outcome.status === 'blocked' || outcome.status === 'needs_user').slice(0, 4);
-  const staleOutcomes = projectOutcomes
-    .filter((outcome) => STALE_OUTCOME_STATUSES.has(outcome.status) && outcome.updatedAt < staleCutoff)
+  const projectTasks = [...input.tasks].sort(taskUpdatedAtDesc);
+  const activeTasks = projectTasks.filter((task) => ACTIVE_TASK_STATUSES.has(task.status)).slice(0, 6);
+  const blockedTasks = projectTasks.filter((task) => task.status === 'blocked' || task.status === 'needs_user').slice(0, 4);
+  const staleTasks = projectTasks
+    .filter((task) => STALE_TASK_STATUSES.has(task.status) && task.updatedAt < staleCutoff)
     .slice(0, 5);
-  const nextActions = activeOutcomes
-    .filter((outcome) => outcome.nextAction?.trim())
+  const nextActions = activeTasks
+    .filter((task) => task.nextAction?.trim())
     .slice(0, 5)
-    .map((outcome) => ({
-      outcomeId: outcome.id,
-      title: outcome.objective,
-      nextAction: outcome.nextAction,
-      status: outcome.status,
-      updatedAt: outcome.updatedAt,
+    .map((task) => ({
+      taskId: task.id,
+      title: task.objective,
+      nextAction: task.nextAction,
+      status: task.status,
+      updatedAt: task.updatedAt,
     }));
   const failedWorkflowRuns = (input.failedWorkflowRuns ?? input.recentWorkflowRuns.filter((run) => (
     run.status === 'failed' || run.status === 'timeout' || run.status === 'cancelled'
   ))).slice(0, 5);
 
   const attentionItems: ProjectAttentionItem[] = [
-    ...blockedOutcomes.map((outcome) => ({
-      id: `outcome:${outcome.id}:blocked`,
-      kind: 'blocked_outcome' as const,
-      title: outcome.objective,
-      detail: compactText(outcome.blockedReason || outcome.nextAction || outcome.description),
-      status: outcome.status,
-      href: `/work/${encodeURIComponent(outcome.id)}`,
-      updatedAt: outcome.updatedAt,
+    ...blockedTasks.map((task) => ({
+      id: `task:${task.id}:blocked`,
+      kind: 'blocked_task' as const,
+      title: task.objective,
+      detail: compactText(task.blockedReason || task.nextAction),
+      status: task.status,
+      href: `/tasks/${encodeURIComponent(task.id)}`,
+      updatedAt: task.updatedAt,
     })),
-    ...staleOutcomes.map((outcome) => ({
-      id: `outcome:${outcome.id}:stale`,
-      kind: 'stale_outcome' as const,
-      title: outcome.objective,
-      detail: compactText(outcome.nextAction || outcome.description || 'Outcome has not changed recently.'),
-      status: outcome.status,
-      href: `/work/${encodeURIComponent(outcome.id)}`,
-      updatedAt: outcome.updatedAt,
+    ...staleTasks.map((task) => ({
+      id: `task:${task.id}:stale`,
+      kind: 'stale_task' as const,
+      title: task.objective,
+      detail: compactText(task.nextAction || 'Task has not changed recently.'),
+      status: task.status,
+      href: `/tasks/${encodeURIComponent(task.id)}`,
+      updatedAt: task.updatedAt,
     })),
     ...failedWorkflowRuns.map((run) => ({
       id: `workflow:${run.runId}:failed`,
@@ -146,14 +161,14 @@ export function buildProjectLoopOverview(input: {
       timestamp: Date.parse(session.updatedAt),
       href: `/chat/${encodeURIComponent(session.key)}`,
     })),
-    ...projectOutcomes.slice(0, 8).map((outcome) => ({
-      id: `outcome:${outcome.id}`,
-      kind: 'outcome' as const,
-      title: outcome.objective,
-      detail: compactText(outcome.nextAction || outcome.blockedReason || outcome.description),
-      timestamp: outcome.updatedAt,
-      status: outcome.status,
-      href: `/work/${encodeURIComponent(outcome.id)}`,
+    ...projectTasks.slice(0, 8).map((task) => ({
+      id: `task:${task.id}`,
+      kind: 'task' as const,
+      title: task.objective,
+      detail: compactText(task.nextAction || task.blockedReason),
+      timestamp: task.updatedAt,
+      status: task.status,
+      href: `/tasks/${encodeURIComponent(task.id)}`,
     })),
     ...input.recentWorkflowRuns.map((run) => ({
       id: `workflow:${run.runId}`,
@@ -178,29 +193,29 @@ export function buildProjectLoopOverview(input: {
     .slice(0, 12);
 
   const recommendedAction = nextActions[0]?.nextAction
-    ?? blockedOutcomes[0]?.blockedReason
-    ?? staleOutcomes[0]?.nextAction
-    ?? activeOutcomes[0]?.objective
+    ?? blockedTasks[0]?.blockedReason
+    ?? staleTasks[0]?.nextAction
+    ?? activeTasks[0]?.objective
     ?? (input.project.brief ? 'Open a new chat to continue from the project brief.' : undefined);
 
   const digestStatus =
     attentionItems.length > 0 ? 'attention'
-      : activeOutcomes.length > 0 || input.recentWorkflowRuns.some((run) => run.status === 'running' || run.status === 'queued') ? 'healthy'
+      : activeTasks.length > 0 || input.recentWorkflowRuns.some((run) => run.status === 'running' || run.status === 'queued') ? 'healthy'
         : timeline.length > 0 ? 'idle'
           : 'empty';
   const digestSummary =
     digestStatus === 'attention'
-      ? `${attentionItems.length} item(s) need attention: ${blockedOutcomes.length} blocker(s), ${staleOutcomes.length} stale outcome(s), ${failedWorkflowRuns.length} failed workflow run(s).`
+      ? `${attentionItems.length} item(s) need attention: ${blockedTasks.length} blocker(s), ${staleTasks.length} stale task(s), ${failedWorkflowRuns.length} failed workflow run(s).`
       : digestStatus === 'healthy'
-        ? `${activeOutcomes.length} active outcome(s), ${nextActions.length} next action(s), and ${input.recentWorkflowRuns.length} recent workflow run(s).`
+        ? `${activeTasks.length} active task(s), ${nextActions.length} next action(s), and ${input.recentWorkflowRuns.length} recent workflow run(s).`
         : digestStatus === 'idle'
-          ? 'Recent activity exists, but no active outcome is driving the project.'
+          ? 'Recent activity exists, but no active task is driving the project.'
           : 'No project activity has been recorded yet.';
 
   return {
-    activeOutcomes,
-    blockedOutcomes,
-    staleOutcomes,
+    activeTasks,
+    blockedTasks,
+    staleTasks,
     nextActions,
     attentionItems,
     timeline,

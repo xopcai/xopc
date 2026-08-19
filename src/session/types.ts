@@ -103,7 +103,7 @@ export interface SessionMetadata {
   sourceChannel: string;
   sourceChatId: string;
   customData?: Record<string, unknown>;
-  /** Optional project grouping for sessions, Outcomes, workflows, and related context. */
+  /** Optional project grouping for sessions, Tasks, workflows, and related context. */
   projectId?: string;
   /** Routing metadata */
   routing?: SessionRoutingMeta;

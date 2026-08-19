@@ -13,7 +13,6 @@ import {
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../../storage/sqlite/index.js';
-import { WorkItemService } from '../../../work-items/index.js';
 import type { LocalAppService } from '../../../local-apps/index.js';
 import { createXopcUseTool } from '../xopc-use-tool.js';
 
@@ -28,7 +27,6 @@ describe('xopc_use tool', () => {
   let stateDir: string;
   let projects: ProjectService;
   let notes: NotesService;
-  let workItems: WorkItemService;
   let activity: ActivityService;
 
   beforeEach(async () => {
@@ -39,7 +37,6 @@ describe('xopc_use tool', () => {
     projects = new ProjectService();
     notes = new NotesService(new NotesStore());
     await notes.initialize();
-    workItems = new WorkItemService();
     activity = new ActivityService();
   });
 
@@ -181,26 +178,6 @@ describe('xopc_use tool', () => {
     expect(unchanged?.markdown).toBe('First line\nSecond line');
   });
 
-  it('creates a work item using the current session project binding', async () => {
-    const project = projects.create({ name: 'Bound Project' });
-    projects.attachSession(SESSION_KEY, project.id);
-    const tool = createXopcUseTool({
-      getProjectService: () => projects,
-      getWorkItemService: () => workItems,
-      getCurrentSessionKey: () => SESSION_KEY,
-    });
-
-    const created = parseToolJson(await tool.execute('call-1', {
-      mode: 'work_item',
-      command: 'create',
-      args: { title: 'Implement xopc_use', priority: 'high' },
-    }));
-
-    expect(created.ok).toBe(true);
-    expect(created.item.projectId).toBe(project.id);
-    expect(created.item.title).toBe('Implement xopc_use');
-  });
-
   it('does not mutate on dryRun', async () => {
     const tool = createXopcUseTool({
       getProjectService: () => projects,
@@ -279,21 +256,4 @@ describe('xopc_use tool', () => {
     });
   });
 
-  it('rejects invalid work item dates without creating an item', async () => {
-    const project = projects.create({ name: 'Invalid Date Project' });
-    const tool = createXopcUseTool({
-      getWorkItemService: () => workItems,
-      getCurrentSessionKey: () => SESSION_KEY,
-    });
-
-    const result = parseToolJson(await tool.execute('call-1', {
-      mode: 'work_item',
-      command: 'create',
-      args: { projectId: project.id, title: 'Bad due date', dueAt: 'tomorrow-ish' },
-    }));
-
-    expect(result.ok).toBe(false);
-    expect(result.error).toBe('Invalid dueAt');
-    expect(workItems.listProjectWorkItems(project.id).items).toHaveLength(0);
-  });
 });

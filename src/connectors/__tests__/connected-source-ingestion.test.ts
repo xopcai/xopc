@@ -359,7 +359,7 @@ describe('connected source ingestion', () => {
     expect(listKnowledgeSourceItems()).toContainEqual(expect.objectContaining({
       sourceInstanceId: 'composio:composio-linear:linear-work',
       externalId: 'XOPC-42',
-      itemType: 'work_item',
+      itemType: 'external_task',
       metadata: expect.objectContaining({ people: ['owner@example.com'] }),
     }));
   });

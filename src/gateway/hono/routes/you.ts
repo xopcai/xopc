@@ -10,11 +10,10 @@ import { listConnectorInstances } from '../../../connectors/instances.js';
 import { uninstallConnector } from '../../../connectors/install.js';
 import { revokeComposioConnection } from '../../../connectors/composio.js';
 import {
-  defineOutcomeContract,
-  OutcomeExecutionService,
-  OutcomeExecutionStateRepository,
-  OutcomeRepository,
-} from '../../../work/index.js';
+  defineTaskContract,
+  TaskExecutionService,
+  TaskRepository,
+} from '../../../tasks/index.js';
 import { renderUserClaim } from '../../../knowledge/connected-understanding-pipeline.js';
 import { readUserProfileFile, writeUserProfileFile } from '../../agents-admin.js';
 import {
@@ -68,7 +67,7 @@ import {
   recordsDerivedFromPersonalContextSource,
 } from '../../../user-context/projection.js';
 import { prepareUserContextImport } from '../../../user-context/import.js';
-import { buildOutcomeSourceRecommendations } from '../../../user-context/source-recommendations.js';
+import { buildTaskSourceRecommendations } from '../../../user-context/source-recommendations.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 const VISIBLE_STATUSES = new Set<MemoryRecord['status']>(['active', 'candidate', 'needs_review']);
@@ -385,11 +384,10 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
       learningJobs: listConnectorLearningJobs({ limit: 500 }),
       claimStatsBySource: listUserClaimStatsBySource(),
     });
-    const activeOutcomes = new OutcomeExecutionStateRepository().list(20).flatMap((execution) => {
-      if (execution.agentId !== agentId) return [];
-      const outcome = new OutcomeRepository().get(execution.outcomeId);
-      if (!outcome || outcome.internalStatus === 'completed' || outcome.internalStatus === 'cancelled') return [];
-      return [{ id: outcome.id, objective: outcome.objective, description: execution.description }];
+    const activeTasks = new TaskRepository().list({ limit: 20 }).flatMap((task) => {
+      if (task.execution.agentId !== agentId) return [];
+      if (task.status === 'completed' || task.status === 'cancelled') return [];
+      return [{ id: task.id, objective: task.objective }];
     });
     return c.json({
       scope: {
@@ -418,12 +416,12 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
       insights: buildInsightSuggestions(records),
       playbooks: buildPersonalPlaybooks(allUserContextRecords),
       sources,
-      sourceRecommendations: buildOutcomeSourceRecommendations(
+      sourceRecommendations: buildTaskSourceRecommendations(
         sourceDefinitions.filter((definition) => (
           definition.capabilities.includes('context') || definition.capabilities.includes('memory_source')
         )),
         new Set(sourceInstances.map((instance) => instance.connectorId)),
-        activeOutcomes,
+        activeTasks,
       ),
       controls: {
         mode: config.userContext.memory.mode,
@@ -897,22 +895,21 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
 
     const title = existing.content.trim().split(/\r?\n/)[0]!.slice(0, 72);
     const uiLocale = body.uiLocale === 'zh' ? 'zh' : 'en';
-    const contract = defineOutcomeContract(title);
-    const execution = new OutcomeExecutionService().create({
+    const contract = defineTaskContract(title);
+    const execution = new TaskExecutionService().create({
       objective: contract.objective,
-      description: existing.content,
-      deliverables: contract.deliverables,
+      expectedOutputs: contract.expectedOutputs,
       acceptanceCriteria: contract.acceptanceCriteria,
       constraints: contract.constraints,
       agentId: selectedAgentId(config),
       priority: 'normal',
       uiLocale,
       source: 'api',
+      contextText: existing.content,
     });
-    new OutcomeExecutionStateRepository().update(execution.outcomeId, { contextText: existing.content });
     let queued = false;
     try {
-      deps.service.enqueueOutcome(execution.outcomeId, {
+      deps.service.enqueueTask(execution.taskId, {
         source: 'api',
         executionContext: { triggerKind: 'user' },
       });
@@ -925,8 +922,8 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
     return c.json({
       ok: true,
       status: queued ? 'queued' : 'saved',
-      outcomeId: execution.outcomeId,
-      href: `/outcomes/${encodeURIComponent(execution.outcomeId)}`,
+      taskId: execution.taskId,
+      href: `/tasks/${encodeURIComponent(execution.taskId)}`,
     });
   });
 

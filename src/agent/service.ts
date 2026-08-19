@@ -72,7 +72,7 @@ import {
 import type { SkillMarkdownPreviewPayload } from './skills/types.js';
 import type { AgentCapabilityCatalogEntry } from './capabilities/index.js';
 import type { AgentServiceConfig, StreamHandle } from './service.types.js';
-import { OutcomeJudgeService } from './outcomes/outcome-judge-service.js';
+import { TaskJudgeService } from './tasks/task-judge-service.js';
 import { parseNoteAttachmentTarget } from '../notes/attachment-ref.js';
 import { pullSkillFromSource } from './skills/hub-pull.js';
 import { installSkillFromZip } from './skills/managed-store.js';
@@ -165,8 +165,8 @@ export class AgentService {
    * TUI, CLI, and automations do not need to thread every call through `AgentService`.
    */
   readonly turnDispatcher: TurnDispatcher;
-  /** Independent acceptance review for the active Outcome after an agent turn. */
-  readonly outcomeJudge: OutcomeJudgeService;
+  /** Independent acceptance review for the active Task after an agent turn. */
+  readonly taskJudge: TaskJudgeService;
   /**
    * Per-session config writes (model / thinking / reasoning / working directory).
    * Public so REST endpoints and CLI flows can hit it without going through a
@@ -195,8 +195,8 @@ export class AgentService {
 
   /**
    * Unified per-session state container (replaces six ad-hoc Maps). Owns webchat
-   * publishers, last assistant text, embedded stream buffer, Outcome review stream
-   * outcomes, concurrent-turn depth, and event-listener unsubscribers; runs a TTL
+   * publishers, last assistant text, embedded stream buffer, Task review stream
+   * tasks, concurrent-turn depth, and event-listener unsubscribers; runs a TTL
    * sweep for slots that have no explicit owner.
    */
   private sessionState = new SessionStateBag();
@@ -297,7 +297,6 @@ export class AgentService {
       getBrowserRecipeService: config.getBrowserRecipeService,
       getNotesService: config.getNotesService,
       getProjectService: config.getProjectService,
-      getWorkItemService: config.getWorkItemService,
       getLocalAppService: config.getLocalAppService,
       getWorkflowRunService: config.getWorkflowRunService,
       onSkillsUpdated: config.onSkillsUpdated,
@@ -420,7 +419,7 @@ export class AgentService {
       this.lifecycleManager
     );
 
-    this.outcomeJudge = new OutcomeJudgeService({
+    this.taskJudge = new TaskJudgeService({
       sessionStore: this.sessionStore,
       modelManager: this.modelManager,
       getConfig: () => this.effectiveAppConfig(),
@@ -450,7 +449,7 @@ export class AgentService {
       streamManager: this.streamManager,
       getConfig: () => this.effectiveAppConfig(),
       getLastAssistantPlainText: (sk) => this.getLastAssistantPlainText(sk),
-      reviewOutcomeTurn: (payload) => this.outcomeJudge.reviewTurn(payload),
+      reviewTaskTurn: (payload) => this.taskJudge.reviewTurn(payload),
     });
 
     this.turnDispatcher = new TurnDispatcher({
@@ -779,8 +778,8 @@ export class AgentService {
     return this.sessionState.getInboundTurnDepth(sessionKey);
   }
 
-  takeOutcomeReviewStreamHint(sessionKey: string) {
-    return this.sessionState.takeOutcomeReviewStreamHint(sessionKey);
+  takeTaskReviewStreamHint(sessionKey: string) {
+    return this.sessionState.takeTaskReviewStreamHint(sessionKey);
   }
 
   async start(): Promise<void> {
@@ -966,13 +965,13 @@ export class AgentService {
     const { abortEmbeddedRun } = await import('./embedded/runs.js');
     const { retireSessionMcpRuntimeForSessionKey } = await import('./mcp/bundle-mcp-tools.js');
     await abortEmbeddedRun(key);
-    const outcome = await this.sessionStore.reset(key);
-    if (!outcome) {
+    const task = await this.sessionStore.reset(key);
+    if (!task) {
       return null;
     }
     this.agentManager.removeAgent(key);
     await retireSessionMcpRuntimeForSessionKey({ sessionKey: key, reason: 'session-reset' });
-    return outcome;
+    return task;
   }
 
   /**

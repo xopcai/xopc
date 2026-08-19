@@ -12,7 +12,7 @@ import {
 } from './memory-config.js';
 import { isExplicitUnderstandingCorrection } from './understanding/correction.js';
 import { extractAgentUserPlainText } from './user-message-text.js';
-import { assembleOutcomeContext } from '../../work/outcome-context-assembler.js';
+import { assembleTaskContext } from '../../tasks/task-context-assembler.js';
 
 const log = createLogger('UserContextCoordinator');
 
@@ -54,8 +54,8 @@ export class UserContextCoordinator {
     const config = this.options.getConfig();
     if (!this.options.isEnabledForSession(sessionKey)) return empty();
     const userQuery = extractAgentUserPlainText(userMessage);
-    const outcomeContext = assembleOutcomeContext(sessionKey, userQuery);
-    const query = outcomeContext.retrievalQuery;
+    const taskContext = assembleTaskContext(sessionKey, userQuery);
+    const query = taskContext.retrievalQuery;
     this.correctionTargets.delete(sessionKey);
     let excludedRecordIds: string[] | undefined;
     if (isExplicitUnderstandingCorrection(userQuery)) {
@@ -64,7 +64,7 @@ export class UserContextCoordinator {
           sessionKey,
           requireSelectedRecords: true,
           feedback: {
-            outcome: 'not_helpful',
+            rating: 'not_helpful',
             source: 'system',
             reason: 'detected_explicit_user_correction',
           },
@@ -87,7 +87,7 @@ export class UserContextCoordinator {
       query,
       userMessage,
       excludedRecordIds,
-      allocation: outcomeContext.allocation,
+      allocation: taskContext.allocation,
     });
     if (plan.traceId) {
       try {

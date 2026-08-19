@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ProjectService } from '../../projects/index.js';
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../storage/sqlite/index.js';
-import { ProjectMonitoringService } from '../../work/index.js';
+import { ProjectMonitoringService } from '../../tasks/index.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { ProactiveInboxService } from '../inbox/service.js';
 import { ProactiveInboxWorker } from '../inbox/worker.js';

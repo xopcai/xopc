@@ -12,7 +12,7 @@ export type WorkDiscoverySuggestion = {
   evidence: Array<{ path?: string; observation: string }>;
   actionPrompt: string;
   confidence: 'high' | 'medium' | 'low';
-  expectedOutcome: string;
+  expectedTask: string;
   estimatedMinutes: number;
   risk: 'analysis' | 'command' | 'file_write';
   verification: string[];

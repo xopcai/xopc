@@ -105,16 +105,16 @@ export async function initSessionTurn(
   let isNewSession = false;
 
   if (needsRollover && sessionMetadata?.sessionId) {
-    const outcome = await opts.resetSession(key);
-    if (outcome) {
-      previousSessionId = outcome.previousSessionId;
-      sessionId = outcome.sessionId;
+    const task = await opts.resetSession(key);
+    if (task) {
+      previousSessionId = task.previousSessionId;
+      sessionId = task.sessionId;
       isNewSession = true;
       log.info(
         {
           sessionKey: key,
-          sessionId: outcome.sessionId,
-          previousSessionId: outcome.previousSessionId,
+          sessionId: task.sessionId,
+          previousSessionId: task.previousSessionId,
           resetTriggered: triggerMatch.resetTriggered,
           staleRollover,
           resetType,

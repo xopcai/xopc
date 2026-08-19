@@ -70,7 +70,7 @@ export function buildRelationshipContinuityPrompt(
   if (!due.length) return '';
   return [
     '## Relationship continuity',
-    'The user explicitly asked for these follow-ups. Check in naturally when relevant; do not pretend to know an outcome.',
+    'The user explicitly asked for these follow-ups. Check in naturally when relevant; do not pretend to know an task.',
     ...due.map((record) => `- ${record.content}`),
   ].join('\n');
 }

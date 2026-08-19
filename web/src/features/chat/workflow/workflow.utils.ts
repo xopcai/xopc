@@ -59,7 +59,7 @@ function coerceSnapshot(candidate: unknown): WorkflowSnapshot | null {
 /** Resolve the card status from the tool_use block. */
 export function resolveCardStatus(block: ToolUseContent): WorkflowCardStatus {
   if (block.status === 'running') return 'running';
-  if (isWorkflowFailureOutcome(block)) return 'failed';
+  if (isWorkflowFailureTask(block)) return 'failed';
   if (block.status === 'error') return 'failed';
   return 'completed';
 }
@@ -68,7 +68,7 @@ export function resolveCardStatus(block: ToolUseContent): WorkflowCardStatus {
  * True when the workflow tool returned a failure payload even if the outer
  * tool_use block stayed `done` (the tool resolves errors in-band, not via throw).
  */
-export function isWorkflowFailureOutcome(block: ToolUseContent): boolean {
+export function isWorkflowFailureTask(block: ToolUseContent): boolean {
   if (block.status === 'error') return true;
   const text = readErrorText(block).toLowerCase().trim();
   if (text.startsWith('workflow failed')) return true;

@@ -122,7 +122,7 @@ export {
   type ExecutionVerdict,
   type ExecutionEvidence,
   type ExecutionJudgment,
-  type ExecutionFeedbackOutcome,
+  type ExecutionFeedbackRating,
   type ExecutionReceipt,
   type ExecutionReceiptContext,
   type ExecutionReceiptMetrics,

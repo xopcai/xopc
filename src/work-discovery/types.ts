@@ -189,7 +189,7 @@ export interface WorkDiscoverySuggestion {
   evidence: WorkDiscoveryEvidence[];
   actionPrompt: string;
   confidence: 'high' | 'medium' | 'low';
-  expectedOutcome: string;
+  expectedTask: string;
   estimatedMinutes: number;
   risk: 'analysis' | 'command' | 'file_write';
   verification: string[];

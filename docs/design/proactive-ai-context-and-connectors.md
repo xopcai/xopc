@@ -69,7 +69,7 @@ internal domain events ----------+----> scenario batch
 - Connector Learning already provides bootstrap/incremental modes, durable jobs, retry, pause, and self-scheduling.
 - `ProactiveEventService` already normalizes, deduplicates, persists, routes, and aggregates events.
 - Proactive execution already pins scenario/prompt revisions, stores context snapshots, and runs an isolated read-only Agent.
-- Project, work-item, automation, goal, note, workflow, and session paths already have partial product-event emission points.
+- Project, task, automation, goal, note, workflow, and session paths already have partial product-event emission points.
 
 ### Gaps to close
 
@@ -98,7 +98,7 @@ src/proactive/context/
   providers/
     connected-source.ts
     project.ts
-    work-items.ts
+    tasks.ts
     goals.ts
     notes.ts
     sessions.ts
@@ -294,7 +294,7 @@ Initial mappings:
 | explicit judgment decision | `decision.recorded.v1` |
 | proactive feedback | `proactive.feedback_recorded.v1` |
 
-Projects, work items, and automation failures that already publish directly keep their current durable path.
+Projects, tasks, and automation failures that already publish directly keep their current durable path.
 
 The bridge payload contains identifiers, status transitions, bounded metadata, and hashes. Domain detail remains in the domain repository and is loaded by a provider.
 
@@ -302,7 +302,7 @@ The bridge payload contains identifiers, status transitions, bounded metadata, a
 
 Events are the primary internal path. A low-frequency reconciliation worker protects against imports, migrations, or old write paths that bypass publishers.
 
-Every 6 hours it computes stable hashes for active projects, work items, goals, scheduled automations, and open judgments. A changed hash publishes `domain.snapshot_changed.v1` with an idempotent key containing domain, subject, and hash.
+Every 6 hours it computes stable hashes for active projects, tasks, goals, scheduled automations, and open judgments. A changed hash publishes `domain.snapshot_changed.v1` with an idempotent key containing domain, subject, and hash.
 
 Reconciliation does not invoke a model and does not publish events when hashes are unchanged.
 
@@ -438,8 +438,8 @@ Context:
 
 - calendar source item;
 - attendees and relationship context;
-- linked project, work items, goals, notes, and recent decisions;
-- recent relevant messages and prior meeting outcome;
+- linked project, tasks, goals, notes, and recent decisions;
+- recent relevant messages and prior meeting task;
 - existing active judgment for the same meeting.
 
 Aggregation key: calendar external event identity. A content fingerprint prevents a rescan from creating a second unchanged preparation.
@@ -449,14 +449,14 @@ Aggregation key: calendar external event identity. A content fingerprint prevent
 Triggers:
 
 - commitment fact created/updated;
-- linked goal/work-item status change;
+- linked goal/task status change;
 - commitment due window entered.
 
 Context:
 
 - commitment evidence;
 - owner/counterparty relationship;
-- linked work item or goal;
+- linked task or goal;
 - recent execution and communication state.
 
 Hard gate: no explicit or evidence-backed deadline/obligation means no judgment.
@@ -466,7 +466,7 @@ Hard gate: no explicit or evidence-backed deadline/obligation means no judgment.
 Triggers:
 
 - GitHub/Linear item update;
-- project/work-item update.
+- project/task update.
 
 Context:
 

@@ -7,7 +7,7 @@ import type {
   Automation,
   AutomationAction,
   AutomationActionExecutionHooks,
-  AutomationActionOutcome,
+  AutomationActionTask,
   AutomationDeps,
   AutomationRun,
 } from '../domain/types.js';
@@ -111,7 +111,7 @@ export class AutomationActionExecutor {
     run: AutomationRun,
     signal: AbortSignal,
     hooks: AutomationActionExecutionHooks = {},
-  ): Promise<AutomationActionOutcome> {
+  ): Promise<AutomationActionTask> {
     const configuredTimeoutMs = resolveAutomationTimeoutSeconds(
       automation.action,
       automation.reliability,
@@ -163,7 +163,7 @@ export class AutomationActionExecutor {
     signal: AbortSignal,
     hooks: AutomationActionExecutionHooks,
     deadlineAtMs: number,
-  ): Promise<AutomationActionOutcome> {
+  ): Promise<AutomationActionTask> {
     if (signal.aborted) {
       return { status: 'cancelled', error: 'Automation run was cancelled' };
     }
@@ -181,7 +181,7 @@ export class AutomationActionExecutor {
     action: Extract<AutomationAction, { kind: 'browser_recipe' }>,
     signal: AbortSignal,
     hooks: AutomationActionExecutionHooks,
-  ): Promise<AutomationActionOutcome> {
+  ): Promise<AutomationActionTask> {
     await hooks.onRunPatch?.({ currentPhase: 'action' });
     const safetyMode = automation.safety?.mode ?? 'auto_apply';
     if (safetyMode !== 'auto_apply') {
@@ -212,7 +212,7 @@ export class AutomationActionExecutor {
     signal: AbortSignal,
     hooks: AutomationActionExecutionHooks,
     deadlineAtMs: number,
-  ): Promise<AutomationActionOutcome> {
+  ): Promise<AutomationActionTask> {
     const agentService = this.deps.agentService;
     if (!agentService?.turnDispatcher?.processDirect) {
       return { status: 'failed', error: 'Agent service is not available' };
@@ -268,7 +268,7 @@ export class AutomationActionExecutor {
     run: AutomationRun,
     signal: AbortSignal,
     hooks: AutomationActionExecutionHooks,
-  ): Promise<AutomationActionOutcome> {
+  ): Promise<AutomationActionTask> {
     const safetyMode = automation.safety?.mode ?? 'auto_apply';
     if (safetyMode === 'suggest_only') {
       return {
@@ -378,7 +378,7 @@ function buildSafetyInstruction(automation: Automation, instruction: string): st
     return [
       'Automation safety mode: Suggest only.',
       'Only analyze the situation and produce a concise recommendation.',
-      'Do not modify files, notes, Outcomes, workflows, external systems, or persistent state.',
+      'Do not modify files, notes, Tasks, workflows, external systems, or persistent state.',
       'If a change seems useful, describe the exact change for the user to review.',
       '',
       instruction,

@@ -1288,8 +1288,8 @@
       "act": "替你采取行动",
       "reach": "在常用渠道联系你"
     },
-    "outcomeFilterAria": "按用途筛选连接器",
-    "outcomeAll": "全部",
+    "taskFilterAria": "按用途筛选连接器",
+    "taskAll": "全部",
     "connectorBenefitHints": {
       "understand": "接入文档、数据和上下文，让帮助更贴近你的真实情况。",
       "act": "让 xopc 能在你已经使用的工具里直接推进事情。",

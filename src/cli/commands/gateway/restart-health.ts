@@ -21,7 +21,7 @@ export const DEFAULT_RESTART_HEALTH_ATTEMPTS = Math.ceil(
   DEFAULT_RESTART_HEALTH_TIMEOUT_MS / DEFAULT_RESTART_HEALTH_DELAY_MS,
 );
 
-export type GatewayRestartWaitOutcome =
+export type GatewayRestartWaitTask =
   | 'healthy'
   | 'version-mismatch'
   | 'stale-pids'
@@ -36,7 +36,7 @@ export interface GatewayRestartSnapshot {
   gatewayVersion?: string | null;
   expectedVersion?: string;
   versionMismatch?: { expected: string; actual: string | null };
-  waitOutcome?: GatewayRestartWaitOutcome;
+  waitTask?: GatewayRestartWaitTask;
   elapsedMs?: number;
 }
 
@@ -160,7 +160,7 @@ export async function waitForRestartHealth(params: {
         gatewayVersion,
         expectedVersion,
         versionMismatch: { expected: expectedVersion, actual: gatewayVersion },
-        waitOutcome: 'version-mismatch',
+        waitTask: 'version-mismatch',
         elapsedMs: elapsed,
       };
       onProgress?.(snapshot);
@@ -175,7 +175,7 @@ export async function waitForRestartHealth(params: {
       staleGatewayPids,
       gatewayVersion,
       expectedVersion,
-      waitOutcome: 'healthy',
+      waitTask: 'healthy',
       elapsedMs: elapsed,
     };
     onProgress?.(snapshot);
@@ -190,7 +190,7 @@ export async function waitForRestartHealth(params: {
     runtime: finalRuntime,
     healthy: false,
     staleGatewayPids: [],
-    waitOutcome: 'timeout',
+    waitTask: 'timeout',
     elapsedMs: Date.now() - startedAt,
   };
 

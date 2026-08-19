@@ -16,15 +16,20 @@ function currentGatewayHomeResponse() {
       summary: 'All clear',
       focus: [],
       progress: {
-        activeWorkCount: 0,
         activeWorkflowCount: 0,
-        activeOutcomeCount: 0,
+        activeTaskCount: 0,
         movingCount: 0,
       },
       wins: [],
     },
     decisions: [],
     attention: [],
+    attentionPolicy: {
+      visibleDecisionCount: 0,
+      suppressedDecisionCount: 0,
+      visibleAttentionCount: 0,
+      suppressedAttentionCount: 0,
+    },
     chats: { running: [], recent: [] },
     recentlyOpened: [],
     inboxCount: 0,
@@ -40,16 +45,9 @@ function currentGatewayHomeResponse() {
       tunnel: { state: 'disabled', connected: false },
     },
     workflowRuns: { active: [], recent: [] },
-    work: {
-      attentionCount: 0,
-      overdueCount: 0,
-      todayCount: 0,
-      items: [],
-      current: [],
-      recentlyCompleted: [],
-    },
+    tasks: { running: [] },
     upcomingAutomations: [],
-    recentOutcomes: [],
+    recentTasks: [],
   };
 }
 

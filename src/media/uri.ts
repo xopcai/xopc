@@ -1,6 +1,6 @@
 import type { MediaBucket } from './types.js';
 
-const BUCKETS: ReadonlySet<string> = new Set(['inbound', 'tts', 'outbound', 'work-item']);
+const BUCKETS: ReadonlySet<string> = new Set(['inbound', 'tts', 'outbound']);
 
 export class MediaUriError extends Error {
   constructor(message: string) {
