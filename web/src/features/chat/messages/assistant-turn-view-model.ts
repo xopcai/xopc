@@ -22,7 +22,7 @@ import {
 import {
   extractSearchSources,
   type SearchSource,
-} from '@/features/chat/tool-results/search-source-list';
+} from '@/features/chat/tool-results/search-source-utils';
 
 export type AssistantTurnLifecycleState =
   | 'starting'

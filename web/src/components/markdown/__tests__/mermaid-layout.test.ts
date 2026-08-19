@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { estimateMermaidPlaceholderHeight } from '@/components/markdown/markdown-view';
+import { estimateMermaidPlaceholderHeight } from '@/components/markdown/mermaid-layout';
 
 describe('estimateMermaidPlaceholderHeight', () => {
   it('reserves a bounded frame based on diagram complexity', () => {

@@ -18,6 +18,7 @@ import {
   rewriteXopcSettingsLinksInMarkdown,
   type WorkspaceFileLinkTarget,
 } from './internal-links';
+import { estimateMermaidPlaceholderHeight } from './mermaid-layout';
 import './markdown.css';
 
 /** Lucide-style 14px icons for DOM-injected code-copy control (keeps bundle self-contained here). */
@@ -138,11 +139,6 @@ function mountMarkdownCodeBlocks(root: HTMLElement, labels: { copy: string; copi
 
 function findMermaidCodeBlocks(root: HTMLElement): HTMLElement[] {
   return Array.from(root.querySelectorAll<HTMLElement>('pre code.language-mermaid, pre code.hljs.language-mermaid'));
-}
-
-export function estimateMermaidPlaceholderHeight(code: string): number {
-  const lineCount = Math.max(1, code.trim().split(/\r?\n/).length);
-  return Math.min(360, Math.max(180, 120 + lineCount * 18));
 }
 
 function prepareMermaidShell(code: HTMLElement): HTMLElement | null {
