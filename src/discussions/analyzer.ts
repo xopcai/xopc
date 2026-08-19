@@ -80,14 +80,24 @@ export function normalizeDiscussionOrganization(value: unknown): DiscussionOrgan
     const path = issue?.path.length ? `${issue.path.join('.')}: ` : '';
     throw new Error(`Invalid discussion organization: ${path}${issue?.message ?? 'schema mismatch'}`);
   }
+  const {
+    actionItems,
+    projectCandidateId,
+    projectConfidence,
+    projectAlternativeConfidence,
+    ...organization
+  } = parsed.data;
   return {
-    ...parsed.data,
-    actionItems: parsed.data.actionItems.map((item, index) => ({
+    ...organization,
+    actionItems: actionItems.map((item, index) => ({
       id: item.id ?? actionId(item.title, index),
       title: item.title,
       ...(item.owner ? { owner: item.owner } : {}),
       ...(item.dueDate ? { dueDate: item.dueDate } : {}),
     })),
+    ...(projectCandidateId ? { projectCandidateId } : {}),
+    ...(projectConfidence !== undefined ? { projectConfidence } : {}),
+    ...(projectAlternativeConfidence !== undefined ? { projectAlternativeConfidence } : {}),
   };
 }
 
