@@ -8,11 +8,11 @@ import { getAgentDefaultModelRef } from '../config/schema.js';
 import { resolveModel } from '../providers/index.js';
 import { completeWithResolvedCredentials } from '../providers/model-call.js';
 
-import type { DiscussionAnalysis } from './types.js';
+import type { DiscussionOrganization } from './types.js';
 
 const MAX_TRANSCRIPT_CHARS = 120_000;
 
-const AnalysisSchema = z.object({
+const OrganizationSchema = z.object({
   title: z.string().trim().min(1).max(200),
   summary: z.string().trim().min(1).max(4_000),
   keyPoints: z.array(z.string().trim().min(1).max(1_000)).max(12).default([]),
@@ -54,7 +54,7 @@ function parseJsonObject(raw: string): unknown {
   } catch {
     const start = stripped.indexOf('{');
     const end = stripped.lastIndexOf('}');
-    if (start < 0 || end <= start) throw new Error('Discussion analysis did not return valid JSON');
+    if (start < 0 || end <= start) throw new Error('Discussion organizer did not return valid JSON');
     return JSON.parse(stripped.slice(start, end + 1)) as unknown;
   }
 }
@@ -63,10 +63,10 @@ function actionId(title: string, index: number): string {
   return createHash('sha256').update(`${index}:${title}`).digest('hex').slice(0, 16);
 }
 
-export function normalizeDiscussionAnalysis(value: unknown): DiscussionAnalysis {
-  const parsed = AnalysisSchema.safeParse(value);
+export function normalizeDiscussionOrganization(value: unknown): DiscussionOrganization {
+  const parsed = OrganizationSchema.safeParse(value);
   if (!parsed.success) {
-    throw new Error(`Invalid discussion analysis: ${parsed.error.issues[0]?.message ?? 'schema mismatch'}`);
+    throw new Error(`Invalid discussion organization: ${parsed.error.issues[0]?.message ?? 'schema mismatch'}`);
   }
   return {
     ...parsed.data,
@@ -85,14 +85,14 @@ export async function analyzeDiscussion(input: {
   languageHint?: string;
   projects?: Array<{ id: string; name: string }>;
   signal?: AbortSignal;
-}): Promise<{ analysis: DiscussionAnalysis; modelRef: string }> {
+}): Promise<{ organization: DiscussionOrganization; modelRef: string }> {
   const modelRef = getAgentDefaultModelRef(input.config);
-  if (!modelRef) throw new Error('No default model configured for discussion analysis');
+  if (!modelRef) throw new Error('No default model configured for discussion organization');
   const transcript = input.transcript.trim().slice(0, MAX_TRANSCRIPT_CHARS);
   if (!transcript) throw new Error('Discussion transcript is empty');
 
   const prompt = [
-    'Analyze the supplied workplace discussion transcript.',
+    'Organize the supplied workplace discussion transcript.',
     'Use only facts explicitly present in the transcript. Do not invent owners, dates, decisions, or commitments.',
     'Return exactly one JSON object with: title, summary, keyPoints, decisions, actionItems, risks, openQuestions, and optional projectCandidateId, projectConfidence, and projectAlternativeConfidence.',
     'title is a short concrete note title derived from the discussion.',
@@ -113,7 +113,7 @@ export async function analyzeDiscussion(input: {
   );
   return {
     modelRef,
-    analysis: normalizeDiscussionAnalysis(parseJsonObject(extractText(response.content))),
+    organization: normalizeDiscussionOrganization(parseJsonObject(extractText(response.content))),
   };
 }
 

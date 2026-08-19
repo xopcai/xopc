@@ -12,7 +12,13 @@ import { MessageBus, MessageBusShutdownError } from '../infra/bus/index.js';
 import { loadConfig, saveConfig as writeConfigToDisk } from '../config/index.js';
 import { getWorkspacePath } from '../config/workspace-path-helpers.js';
 import { AutomationService, type AutomationRun } from '../automations/index.js';
-import { DiscussionLiveWorker, DiscussionPipeline, DiscussionService, DiscussionWorker } from '../discussions/index.js';
+import {
+  DiscussionLiveWorker,
+  DiscussionOrganizer,
+  DiscussionOrganizerWorker,
+  DiscussionSealer,
+  DiscussionService,
+} from '../discussions/index.js';
 import { onAutomationProductEvent, publishAutomationProductEvent } from '../automations/product-events.js';
 import { buildNoteAgentContext, NotesService, NotesStore } from '../notes/index.js';
 import { buildWorkflowChildTools } from '../agent/workflow/workflow-child-tools.js';
@@ -222,8 +228,9 @@ export class GatewayService {
   readonly projects: ProjectService;
   readonly workItems: WorkItemService;
   readonly discussions: DiscussionService;
-  readonly discussionWorker: DiscussionWorker;
+  readonly discussionWorker: DiscussionOrganizerWorker;
   readonly discussionLiveWorker: DiscussionLiveWorker;
+  readonly discussionSealer: DiscussionSealer;
 
   /** Local user-created apps, their coder projects, previews, and installs. */
   readonly localApps: LocalAppService;
@@ -347,23 +354,23 @@ export class GatewayService {
         this.sse.emit(type, payload);
       },
     );
-    this.discussionWorker = new DiscussionWorker(
-      new DiscussionPipeline({
+    this.discussionWorker = new DiscussionOrganizerWorker(
+      new DiscussionOrganizer({
         notes: this.notesService,
         projects: this.projects,
         getConfig: () => this.config,
         onUpdated: emitDiscussion,
-        onCompleted: (capture, analysis) => {
+        onCompleted: (capture, organization) => {
           const payload = {
             discussionId: capture.id,
             noteId: capture.noteId,
             projectId: capture.projectId,
             completedAt: capture.completedAt,
-            actionCount: analysis.actionItems.length,
-            unownedActionCount: analysis.actionItems.filter((item) => !item.owner).length,
-            undatedActionCount: analysis.actionItems.filter((item) => !item.dueDate).length,
-            riskCount: analysis.risks.length,
-            openQuestionCount: analysis.openQuestions.length,
+            actionCount: organization.actionItems.length,
+            unownedActionCount: organization.actionItems.filter((item) => !item.owner).length,
+            undatedActionCount: organization.actionItems.filter((item) => !item.dueDate).length,
+            riskCount: organization.risks.length,
+            openQuestionCount: organization.openQuestions.length,
           };
           this.sse.emit('discussion.completed', payload);
           publishAutomationProductEvent({
@@ -381,9 +388,26 @@ export class GatewayService {
       projects: this.projects,
       getConfig: () => this.config,
       onDiscussionUpdated: emitDiscussion,
-      onTranscriptUpdated: (discussionId, sequence) => {
-        this.sse.emit('discussion.transcript.updated', { discussionId, sequence });
+      onTranscriptUpdated: (segment) => {
+        const capture = this.discussions.get(segment.discussionId);
+        const transcript = this.discussions.transcript(segment.discussionId);
+        void capture.then((detail) => {
+          if (!detail || !transcript) return;
+          this.sse.emit('discussion.segment.updated', {
+            discussionId: segment.discussionId,
+            noteId: detail.discussion.noteId,
+            transcriptRevision: transcript.revision,
+            segment,
+            text: transcript.text,
+            stats: transcript.stats,
+          });
+        });
       },
+    });
+    this.discussionSealer = new DiscussionSealer({
+      notes: this.notesService,
+      getConfig: () => this.config,
+      onUpdated: emitDiscussion,
     });
 
     this.localApps = new LocalAppService({
@@ -968,8 +992,9 @@ export class GatewayService {
     await trace.measure('dreaming.reconcile', () => this.reconcileDreamingAutomations());
 
     await this.notesService.initialize();
-    this.discussionWorker.start();
     this.discussionLiveWorker.start();
+    this.discussionSealer.start();
+    this.discussionWorker.start();
 
     this.ensureHeartbeatService().start(heartbeatRunnerConfigFromConfig(this.config));
 
@@ -1178,6 +1203,7 @@ export class GatewayService {
 
     await this.proactiveWorker.stop();
     await this.discussionWorker.stop();
+    await this.discussionSealer.stop();
     await this.discussionLiveWorker.stop();
     this.proactiveTemporalWorker.stop();
     await this.proactiveInboxWorker.stop();

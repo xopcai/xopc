@@ -5,8 +5,9 @@ export {
   DiscussionServiceError,
 } from './service.js';
 export { analyzeDiscussion } from './analyzer.js';
-export { DiscussionPipeline, mergeDiscussionAnalysisIntoMarkdown } from './pipeline.js';
+export { DiscussionOrganizer } from './organizer.js';
 export { DiscussionLiveWorker } from './live-worker.js';
-export { DiscussionWorker } from './worker.js';
+export { DiscussionOrganizerWorker } from './organizer-worker.js';
+export { DiscussionSealer } from './sealer.js';
 export { DISCUSSION_STATUSES } from './types.js';
 export type * from './types.js';

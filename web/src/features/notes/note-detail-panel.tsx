@@ -6,7 +6,7 @@ import useSWR from 'swr';
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { AutomationSuggestionCard } from '@/features/automations/automation-suggestion-card';
 import { ProductAutomationFeedback } from '@/features/automations/product-automation-feedback';
-import { LiveDiscussionTranscript } from '@/features/discussions/live-discussion-transcript';
+import { DiscussionNoteSections } from '@/features/discussions/discussion-note-sections';
 import { messages } from '@/i18n/messages';
 import { showToast } from '@/lib/toast';
 import { cn } from '@/lib/cn';
@@ -562,7 +562,6 @@ function NoteDetailPanelInner({
     <div className="flex h-full min-h-0 gap-3 p-4 sm:px-5">
       {/* Editor */}
       <div className="mx-auto flex min-h-0 min-w-0 w-full max-w-[60rem] flex-1 flex-col">
-        <LiveDiscussionTranscript noteId={noteId} />
         <ProductAutomationFeedback
           eventType="note.created"
           source="notes"
@@ -581,6 +580,7 @@ function NoteDetailPanelInner({
           ref={editorContainerRef}
           className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-edge-subtle bg-surface-panel"
         >
+          <DiscussionNoteSections noteId={noteId} />
           {isPreviewingSnapshot ? (
             <div className="h-full overflow-y-auto px-6 py-4">
               {displayTitle && (

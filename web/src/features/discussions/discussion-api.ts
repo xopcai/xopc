@@ -65,12 +65,12 @@ export function uploadDiscussionSegment(
   });
 }
 
-export function finishDiscussion(
+export function stopDiscussion(
   discussionId: string,
   lastSequence: number,
   durationMs: number,
 ): Promise<DiscussionDetail> {
-  return fetchJson(apiUrl(`/api/discussions/${encodeURIComponent(discussionId)}/finish`), {
+  return fetchJson(apiUrl(`/api/discussions/${encodeURIComponent(discussionId)}/stop`), {
     method: 'POST',
     body: JSON.stringify({ lastSequence, durationMs }),
   });

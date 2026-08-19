@@ -23,8 +23,9 @@ function createApp(overrides: Partial<GatewayService['discussions']> = {}) {
       averageTimeToCompleteMs: null,
     })),
     uploadSegment: vi.fn(),
+    correctSegment: vi.fn(),
     uploadRecording: vi.fn(),
-    finish: vi.fn(),
+    stop: vi.fn(),
     deleteAudio: vi.fn(),
     unlinkInferredProject: vi.fn(),
     retry: vi.fn(),
@@ -107,21 +108,21 @@ describe('discussion routes', () => {
     expect(read.status).toBe(200);
   });
 
-  it('finishes through a sequence fence and removes only explicit audio', async () => {
+  it('stops through a sequence fence and removes only explicit audio', async () => {
     const detail = { discussion: { id: 'discussion-1' }, note: { id: 'note-1' } };
     const { app, discussions } = createApp({
-      finish: vi.fn().mockResolvedValue(detail),
+      stop: vi.fn().mockResolvedValue(detail),
       deleteAudio: vi.fn().mockResolvedValue(detail),
     });
-    const finished = await app.request('/api/discussions/discussion-1/finish', {
+    const stopped = await app.request('/api/discussions/discussion-1/stop', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ lastSequence: 4, durationMs: 90_000 }),
     });
     const deleted = await app.request('/api/discussions/discussion-1/audio', { method: 'DELETE' });
 
-    expect(finished.status).toBe(200);
-    expect(discussions.finish).toHaveBeenCalledWith('discussion-1', 4, 90_000);
+    expect(stopped.status).toBe(200);
+    expect(discussions.stop).toHaveBeenCalledWith('discussion-1', 4, 90_000);
     expect(deleted.status).toBe(200);
     expect(discussions.deleteAudio).toHaveBeenCalledWith('discussion-1');
   });

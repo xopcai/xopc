@@ -1,15 +1,23 @@
 import type { Note } from '@/features/notes/notes-api';
 
-export type DiscussionStatus = 'recording' | 'finalizing' | 'completed' | 'failed' | 'cancelled';
+export type DiscussionStatus =
+  | 'recording'
+  | 'stopping'
+  | 'sealing'
+  | 'organizing'
+  | 'completed'
+  | 'needs_attention'
+  | 'cancelled';
 
 export interface DiscussionActionItem {
   id: string;
   title: string;
   owner?: string;
   dueDate?: string;
+  evidenceSegmentIds?: number[];
 }
 
-export interface DiscussionAnalysis {
+export interface DiscussionOrganization {
   title: string;
   summary: string;
   keyPoints: string[];
@@ -17,9 +25,6 @@ export interface DiscussionAnalysis {
   actionItems: DiscussionActionItem[];
   risks: string[];
   openQuestions: string[];
-  projectCandidateId?: string;
-  projectConfidence?: number;
-  projectAlternativeConfidence?: number;
 }
 
 export interface DiscussionCapture {
@@ -30,33 +35,21 @@ export interface DiscussionCapture {
   audioAttachmentId?: string;
   source: 'web' | 'electron';
   status: DiscussionStatus;
-  processingStage?: 'original_upload' | 'final_transcription' | 'analysis' | 'note_write';
   durationMs?: number;
   expectedLastSequence?: number;
-  mimeType?: string;
-  audioSizeBytes?: number;
-  transcriptRaw?: string;
+  canonicalTranscript?: string;
   transcriptLanguage?: string;
-  sttProvider?: string;
-  analysis?: DiscussionAnalysis;
+  transcriptRevision: number;
   generatedTitle?: string;
-  projectInferenceScore?: number;
   projectInferenceSource?: 'context' | 'exact_name' | 'model';
-  finalizationRevision: number;
-  attemptCount: number;
-  lastErrorCode?: string;
-  lastErrorMessage?: string;
+  failureStage?: string;
+  failureCode?: string;
+  failureMessage?: string;
   recordingStartedAt: number;
-  recordingFinishedAt?: number;
+  recordingStoppedAt?: number;
   createdAt: number;
   updatedAt: number;
   completedAt?: number;
-  audioDeletedAt?: number;
-}
-
-export interface DiscussionDetail {
-  discussion: DiscussionCapture;
-  note: Note;
 }
 
 export interface DiscussionTranscriptSegment {
@@ -65,9 +58,12 @@ export interface DiscussionTranscriptSegment {
   audioSha256: string;
   startedAtMs: number;
   endedAtMs: number;
-  status: 'uploaded' | 'transcribing' | 'completed' | 'failed';
-  transcript?: string;
+  status: 'uploaded' | 'transcribing' | 'confirmed' | 'failed';
+  rawText?: string;
+  displayText?: string;
   provider?: string;
+  revision: number;
+  correctedByUser: boolean;
   attemptCount: number;
   lastError?: string;
   createdAt: number;
@@ -76,8 +72,31 @@ export interface DiscussionTranscriptSegment {
 
 export interface DiscussionTranscript {
   discussionId: string;
+  revision: number;
   segments: DiscussionTranscriptSegment[];
   text: string;
+  stats: {
+    expected?: number;
+    uploaded: number;
+    transcribing: number;
+    confirmed: number;
+    failed: number;
+  };
+}
+
+export interface DiscussionOrganizationRecord {
+  id: string;
+  revision: number;
+  status: 'running' | 'completed' | 'failed';
+  organization?: DiscussionOrganization;
+  errorMessage?: string;
+}
+
+export interface DiscussionDetail {
+  discussion: DiscussionCapture;
+  note: Note;
+  transcript: DiscussionTranscript;
+  organization?: DiscussionOrganizationRecord;
 }
 
 export interface DiscussionCaptureSettings {

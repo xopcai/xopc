@@ -1,7 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 
 import { ObjectLinkService } from '../activity/service.js';
-import { buildNoteAttachmentRef } from '../notes/attachment-ref.js';
 import type { NotesService } from '../notes/service.js';
 import type { ProjectService } from '../projects/project-service.js';
 import { runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
@@ -11,12 +10,14 @@ import {
   acknowledgeDiscussionCaptureConsent,
   createDiscussionCapture,
   createDiscussionTranscriptSegment,
+  correctDiscussionTranscriptSegment,
   deleteDiscussionSegmentAudio,
   getDiscussionCapture,
   getDiscussionCaptureByClientRequestId,
   getDiscussionCaptureByNoteId,
   getDiscussionCaptureSettings,
   getDiscussionMetrics,
+  getLatestDiscussionOrganization,
   getDiscussionTranscriptSegment,
   listDiscussionCaptures,
   listDiscussionTranscriptSegments,
@@ -52,10 +53,6 @@ function isSupportedAudioMimeType(mimeType: string): boolean {
 
 function placeholderTitle(now: number): string {
   return `Discussion · ${new Date(now).toISOString().slice(0, 16).replace('T', ' ')}`;
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 export class DiscussionServiceError extends Error {
@@ -122,7 +119,7 @@ export class DiscussionService {
     const title = placeholderTitle(now);
     const note = await this.notes.createNote({
       title,
-      markdown: `# ${title}\n\n> Recording in progress. Live transcript will appear here.`,
+      markdown: '',
       kind: 'voice',
       capturedVia: { channel: input.source },
     });
@@ -133,9 +130,7 @@ export class DiscussionService {
       ...(project ? { projectId: project.id, projectInferenceScore: 1, projectInferenceSource: 'context' } : {}),
       source: input.source,
       status: 'recording',
-      processingStage: 'original_upload',
-      finalizationRevision: 0,
-      attemptCount: 0,
+      transcriptRevision: 0,
       recordingStartedAt: now,
       createdAt: now,
       updatedAt: now,
@@ -161,7 +156,7 @@ export class DiscussionService {
     const discussion = getDiscussionCapture(capture.id)!;
     log.info({ discussionId: discussion.id, noteId: note.id, projectId: project?.id }, 'Discussion recording started');
     this.emit?.('discussion.updated', discussion);
-    return { discussion, note };
+    return this.detail(discussion);
   }
 
   async get(id: string): Promise<DiscussionDetail | null> {
@@ -183,12 +178,23 @@ export class DiscussionService {
   }
 
   transcript(id: string): DiscussionTranscript | null {
-    if (!getDiscussionCapture(id)) return null;
+    const capture = getDiscussionCapture(id);
+    if (!capture) return null;
     const segments = listDiscussionTranscriptSegments(id);
+    const count = (status: DiscussionTranscript['segments'][number]['status']) =>
+      segments.filter((segment) => segment.status === status).length;
     return {
       discussionId: id,
+      revision: capture.transcriptRevision,
       segments,
-      text: assembleDiscussionTranscript(segments),
+      text: capture.canonicalTranscript ?? assembleDiscussionTranscript(segments),
+      stats: {
+        ...(capture.expectedLastSequence != null ? { expected: capture.expectedLastSequence + 1 } : {}),
+        uploaded: count('uploaded'),
+        transcribing: count('transcribing'),
+        confirmed: count('confirmed'),
+        failed: count('failed'),
+      },
     };
   }
 
@@ -202,8 +208,8 @@ export class DiscussionService {
   }): DiscussionTranscript {
     const capture = getDiscussionCapture(input.discussionId);
     if (!capture) throw new DiscussionServiceError('not_found', 'Discussion not found');
-    if (capture.status !== 'recording') {
-      throw new DiscussionServiceError('conflict', 'Discussion is no longer recording');
+    if (capture.status !== 'recording' && capture.status !== 'stopping') {
+      throw new DiscussionServiceError('conflict', 'Discussion no longer accepts transcript segments');
     }
     if (!Number.isInteger(input.sequence) || input.sequence < 0 || input.sequence > 2_000) {
       throw new DiscussionServiceError('invalid_input', 'Invalid segment sequence');
@@ -238,9 +244,39 @@ export class DiscussionService {
         startedAtMs: Math.round(input.startedAtMs),
         endedAtMs: Math.round(input.endedAtMs),
       });
-      this.emit?.('discussion.transcript.updated', { discussionId: input.discussionId, sequence: input.sequence });
+      const transcript = this.transcript(input.discussionId)!;
+      this.emit?.('discussion.segment.updated', {
+        discussionId: input.discussionId,
+        noteId: capture.noteId,
+        transcriptRevision: transcript.revision,
+        segment: transcript.segments.find((item) => item.sequence === input.sequence),
+        text: transcript.text,
+        stats: transcript.stats,
+      });
     }
     return this.transcript(input.discussionId)!;
+  }
+
+  correctSegment(id: string, sequence: number, displayText: string, expectedRevision: number): DiscussionTranscript {
+    const capture = getDiscussionCapture(id);
+    if (!capture) throw new DiscussionServiceError('not_found', 'Discussion not found');
+    if (capture.status !== 'recording' && capture.status !== 'stopping') {
+      throw new DiscussionServiceError('conflict', 'The sealed transcript cannot be changed');
+    }
+    const text = displayText.trim();
+    if (!text || text.length > 20_000) throw new DiscussionServiceError('invalid_input', 'Invalid transcript text');
+    const segment = correctDiscussionTranscriptSegment(id, sequence, text, expectedRevision);
+    if (!segment) throw new DiscussionServiceError('conflict', 'Transcript segment changed; reload and try again');
+    const transcript = this.transcript(id)!;
+    this.emit?.('discussion.segment.updated', {
+      discussionId: id,
+      noteId: capture.noteId,
+      transcriptRevision: transcript.revision,
+      segment,
+      text: transcript.text,
+      stats: transcript.stats,
+    });
+    return transcript;
   }
 
   async uploadRecording(
@@ -251,7 +287,9 @@ export class DiscussionService {
     return this.enqueueMutation(id, async () => {
       const capture = getDiscussionCapture(id);
       if (!capture) return null;
-      if (capture.status !== 'recording') throw new DiscussionServiceError('conflict', 'Discussion is no longer recording');
+      if (capture.status !== 'recording' && capture.status !== 'stopping') {
+        throw new DiscussionServiceError('conflict', 'Discussion no longer accepts its recording');
+      }
       if (!Number.isFinite(durationMs) || durationMs < 1_000 || durationMs > DISCUSSION_MAX_DURATION_MS) {
         throw new DiscussionServiceError('invalid_input', 'durationMs must be between 1000 and 1800000');
       }
@@ -264,8 +302,6 @@ export class DiscussionService {
         if (capture.audioSha256 === audioSha256) return this.detail(capture);
         throw new DiscussionServiceError('conflict', 'Discussion already has different audio');
       }
-      const noteBefore = await this.notes.getNote(capture.noteId);
-      if (!noteBefore) throw new DiscussionServiceError('not_found', 'Discussion note not found');
       const attachment = await this.notes.addAttachment(capture.noteId, {
         name: file.name.trim().slice(0, 200) || `discussion-${id}.webm`,
         buffer: file.buffer,
@@ -273,39 +309,31 @@ export class DiscussionService {
         duration: Math.round(durationMs / 1_000),
       });
       if (!attachment) throw new DiscussionServiceError('not_found', 'Discussion note not found');
-      const audioRef = buildNoteAttachmentRef(capture.noteId, attachment.id);
       try {
-        if (!noteBefore.markdown.includes(`](${audioRef})`)) {
-          const note = await this.notes.updateNote(capture.noteId, {
-            markdown: `${noteBefore.markdown.trim()}\n\n[Discussion audio](${audioRef})`,
-          });
-          if (!note) throw new DiscussionServiceError('not_found', 'Discussion note not found');
-        }
         const updated = updateDiscussionCapture(id, {
           audioAttachmentId: attachment.id,
           durationMs: Math.round(durationMs),
           mimeType: file.mimeType,
           audioSizeBytes: file.buffer.length,
           audioSha256,
-        }, ['recording']);
+        }, ['recording', 'stopping']);
         if (!updated) throw new DiscussionServiceError('conflict', 'Discussion changed while storing audio');
         this.emit?.('discussion.updated', updated);
         return this.detail(updated);
       } catch (error) {
-        await this.notes.updateNote(capture.noteId, { markdown: noteBefore.markdown }).catch(() => undefined);
         await this.notes.removeAttachment(capture.noteId, attachment.id).catch(() => undefined);
         throw error;
       }
     });
   }
 
-  async finish(id: string, lastSequence: number, durationMs: number): Promise<DiscussionDetail | null> {
+  async stop(id: string, lastSequence: number, durationMs: number): Promise<DiscussionDetail | null> {
     return this.enqueueMutation(id, async () => {
       const capture = getDiscussionCapture(id);
       if (!capture) return null;
-      if (capture.status === 'finalizing' || capture.status === 'completed') return this.detail(capture);
-      if (capture.status !== 'recording') throw new DiscussionServiceError('conflict', 'Discussion cannot be finished');
-      if (!capture.audioAttachmentId) throw new DiscussionServiceError('conflict', 'Original recording has not been uploaded');
+      if (capture.status === 'stopping' || capture.status === 'sealing' || capture.status === 'organizing'
+        || capture.status === 'completed') return this.detail(capture);
+      if (capture.status !== 'recording') throw new DiscussionServiceError('conflict', 'Discussion cannot be stopped');
       if (!Number.isInteger(lastSequence) || lastSequence < -1 || lastSequence > 2_000) {
         throw new DiscussionServiceError('invalid_input', 'Invalid final segment sequence');
       }
@@ -314,15 +342,13 @@ export class DiscussionService {
       }
       const now = Date.now();
       const updated = updateDiscussionCapture(id, {
-        status: 'finalizing',
-        processingStage: 'final_transcription',
+        status: 'stopping',
         expectedLastSequence: lastSequence,
         durationMs: Math.round(durationMs),
-        recordingFinishedAt: now,
-        attemptCount: 0,
-        nextAttemptAt: undefined,
-        lastErrorCode: undefined,
-        lastErrorMessage: undefined,
+        recordingStoppedAt: now,
+        failureStage: undefined,
+        failureCode: undefined,
+        failureMessage: undefined,
       }, ['recording']);
       if (!updated) throw new DiscussionServiceError('conflict', 'Discussion changed while finishing');
       this.emit?.('discussion.updated', updated);
@@ -333,17 +359,16 @@ export class DiscussionService {
   async retry(id: string): Promise<DiscussionDetail | null> {
     const capture = getDiscussionCapture(id);
     if (!capture) return null;
-    if (capture.status !== 'failed') throw new DiscussionServiceError('conflict', 'Only failed discussions can be retried');
+    if (capture.status !== 'needs_attention') {
+      throw new DiscussionServiceError('conflict', 'Only discussions needing attention can be retried');
+    }
     const updated = updateDiscussionCapture(id, {
-      status: 'finalizing',
-      processingStage: capture.processingStage ?? 'final_transcription',
-      attemptCount: 0,
-      nextAttemptAt: undefined,
-      leaseOwner: undefined,
-      leaseExpiresAt: undefined,
-      lastErrorCode: undefined,
-      lastErrorMessage: undefined,
-    }, ['failed']);
+      status: capture.canonicalTranscript ? 'organizing' : 'stopping',
+      ...(!capture.canonicalTranscript ? { recordingStoppedAt: Date.now() } : {}),
+      failureStage: undefined,
+      failureCode: undefined,
+      failureMessage: undefined,
+    }, ['needs_attention']);
     if (!updated) throw new DiscussionServiceError('conflict', 'Discussion changed while retrying');
     this.emit?.('discussion.updated', updated);
     return this.detail(updated);
@@ -353,8 +378,10 @@ export class DiscussionService {
     const capture = getDiscussionCapture(id);
     if (!capture) return null;
     if (capture.status === 'cancelled') return this.detail(capture);
-    if (capture.status !== 'recording') throw new DiscussionServiceError('conflict', 'Only an active recording can be cancelled');
-    const updated = updateDiscussionCapture(id, { status: 'cancelled', processingStage: undefined }, ['recording']);
+    if (capture.status !== 'recording' && capture.status !== 'stopping') {
+      throw new DiscussionServiceError('conflict', 'Only an active recording can be cancelled');
+    }
+    const updated = updateDiscussionCapture(id, { status: 'cancelled' }, ['recording', 'stopping']);
     if (!updated) throw new DiscussionServiceError('conflict', 'Discussion changed while cancelling');
     deleteDiscussionSegmentAudio(id);
     this.emit?.('discussion.updated', updated);
@@ -365,18 +392,10 @@ export class DiscussionService {
     return this.enqueueMutation(id, async () => {
       const capture = getDiscussionCapture(id);
       if (!capture) return null;
-      if (capture.status === 'recording' || capture.status === 'finalizing') {
-        throw new DiscussionServiceError('conflict', 'Audio cannot be deleted while recording or finalizing');
+      if (!['completed', 'needs_attention', 'cancelled'].includes(capture.status)) {
+        throw new DiscussionServiceError('conflict', 'Audio cannot be deleted while discussion processing is active');
       }
       if (!capture.audioAttachmentId) return this.detail(capture);
-      const note = await this.notes.getNote(capture.noteId);
-      if (!note) throw new DiscussionServiceError('not_found', 'Discussion note not found');
-      const audioRef = buildNoteAttachmentRef(capture.noteId, capture.audioAttachmentId);
-      const markdown = note.markdown
-        .replace(new RegExp(`^\\[Discussion audio\\]\\(${escapeRegExp(audioRef)}\\)\\s*$`, 'gm'), '')
-        .replace(/\n{3,}/g, '\n\n')
-        .trim();
-      if (markdown !== note.markdown) await this.notes.updateNote(capture.noteId, { markdown });
       await this.notes.removeAttachment(capture.noteId, capture.audioAttachmentId);
       deleteDiscussionSegmentAudio(id);
       const updated = updateDiscussionCapture(id, {
@@ -409,7 +428,14 @@ export class DiscussionService {
   private async detail(capture: DiscussionCapture): Promise<DiscussionDetail> {
     const note = await this.notes.getNote(capture.noteId);
     if (!note) throw new DiscussionServiceError('not_found', 'Discussion note not found');
-    return { discussion: capture, note };
+    return {
+      discussion: capture,
+      note,
+      transcript: this.transcript(capture.id)!,
+      ...(getLatestDiscussionOrganization(capture.id)
+        ? { organization: getLatestDiscussionOrganization(capture.id)! }
+        : {}),
+    };
   }
 
   private enqueueMutation<T>(id: string, mutation: () => Promise<T>): Promise<T> {

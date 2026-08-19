@@ -1,7 +1,7 @@
 import { encodePcm16Wav, resamplePcm } from '@/features/chat/composer/pcm-wav-recorder';
 
-const SEGMENT_SECONDS = 20;
-const OVERLAP_SECONDS = 1;
+const SEGMENT_SECONDS = 8;
+const OVERLAP_SECONDS = 0.75;
 
 export interface LivePcmSegment {
   sequence: number;
@@ -34,7 +34,8 @@ export class LivePcmSegmenter {
   private lastEndMs = 0;
   private paused = false;
   private stopped = false;
-  private emitTail = Promise.resolve();
+  private readonly pendingEmits = new Set<Promise<void>>();
+  private emitError: unknown;
 
   private constructor(
     private readonly context: AudioContext,
@@ -102,7 +103,8 @@ export class LivePcmSegmenter {
     this.disconnect();
     await this.context.close();
     if (this.bufferedSamples >= this.context.sampleRate / 2) this.emitBuffered(true);
-    await this.emitTail;
+    await Promise.all(this.pendingEmits);
+    if (this.emitError) throw this.emitError;
     return this.sequence - 1;
   }
 
@@ -140,9 +142,13 @@ export class LivePcmSegmenter {
     const sequence = this.sequence++;
     const resampled = resamplePcm(samples, sampleRate);
     const blob = new Blob([encodePcm16Wav(resampled)], { type: 'audio/wav' });
-    this.emitTail = this.emitTail.then(async () => {
+    const pending = (async () => {
       await this.onSegment({ sequence, blob, startedAtMs, endedAtMs, sha256: await sha256(blob) });
+    })().catch((error: unknown) => {
+      this.emitError ??= error;
     });
+    this.pendingEmits.add(pending);
+    void pending.then(() => this.pendingEmits.delete(pending));
   }
 
   private disconnect(): void {

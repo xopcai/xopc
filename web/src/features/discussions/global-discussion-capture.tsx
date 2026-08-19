@@ -13,10 +13,10 @@ import {
   acknowledgeDiscussionConsent,
   cancelDiscussion,
   createDiscussion,
-  finishDiscussion,
   getDiscussion,
   getDiscussionCaptureSettings,
   getDiscussionTranscript,
+  stopDiscussion,
   unlinkDiscussionProject,
   uploadDiscussionRecording,
   uploadDiscussionSegment,
@@ -47,27 +47,49 @@ export function GlobalDiscussionCaptureHost() {
   const [detail, setDetail] = useState<DiscussionDetail | null>(null);
   const [transcript, setTranscript] = useState<DiscussionTranscript | null>(null);
   const [finishing, setFinishing] = useState(false);
+  const [backgroundUploading, setBackgroundUploading] = useState(false);
   const [recovering, setRecovering] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [operationError, setOperationError] = useState<string | null>(null);
   const createPromiseRef = useRef<Promise<DiscussionDetail> | null>(null);
-  const segmentUploadTailRef = useRef(Promise.resolve());
+  const segmentUploadsRef = useRef(new Set<Promise<void>>());
+  const activeSegmentUploadsRef = useRef(0);
+  const segmentUploadWaitersRef = useRef<Array<() => void>>([]);
+
+  const acquireSegmentUploadSlot = useCallback(async () => {
+    if (activeSegmentUploadsRef.current < 2) {
+      activeSegmentUploadsRef.current += 1;
+      return;
+    }
+    await new Promise<void>((resolve) => segmentUploadWaitersRef.current.push(resolve));
+  }, []);
+
+  const releaseSegmentUploadSlot = useCallback(() => {
+    const next = segmentUploadWaitersRef.current.shift();
+    if (next) next();
+    else activeSegmentUploadsRef.current -= 1;
+  }, []);
 
   const uploadLiveSegment = useCallback(async (
     draftId: string,
     segment: { sequence: number; blob: Blob; startedAtMs: number; endedAtMs: number; sha256: string },
   ) => {
     await saveDiscussionLiveSegment({ draftId, ...segment, createdAt: Date.now() });
-    const task = segmentUploadTailRef.current.catch(() => undefined).then(async () => {
-      const created = await createPromiseRef.current;
-      if (!created) throw new Error('Discussion session is unavailable');
-      const next = await uploadDiscussionSegment(created.discussion.id, segment.sequence, segment);
-      await deleteDiscussionLiveSegment(draftId, segment.sequence);
-      setTranscript(next);
-    });
-    segmentUploadTailRef.current = task.catch(() => undefined);
-    await segmentUploadTailRef.current;
-  }, []);
+    const task = (async () => {
+      await acquireSegmentUploadSlot();
+      try {
+        const created = await createPromiseRef.current;
+        if (!created) throw new Error('Discussion session is unavailable');
+        const next = await uploadDiscussionSegment(created.discussion.id, segment.sequence, segment);
+        await deleteDiscussionLiveSegment(draftId, segment.sequence);
+        setTranscript(next);
+      } finally {
+        releaseSegmentUploadSlot();
+      }
+    })();
+    const tracked = task.catch(() => undefined).finally(() => segmentUploadsRef.current.delete(tracked));
+    segmentUploadsRef.current.add(tracked);
+  }, [acquireSegmentUploadSlot, releaseSegmentUploadSlot]);
 
   const retryPendingSegments = useCallback(async (draftId: string, discussionId: string) => {
     const segments = await listDiscussionLiveSegments(draftId);
@@ -151,19 +173,13 @@ export function GlobalDiscussionCaptureHost() {
 
   useEffect(() => {
     const handler = () => void refreshServerState();
-    window.addEventListener('discussion-transcript-updated', handler);
+    window.addEventListener('discussion-segment-updated', handler);
     window.addEventListener('discussion-updated', handler);
     return () => {
-      window.removeEventListener('discussion-transcript-updated', handler);
+      window.removeEventListener('discussion-segment-updated', handler);
       window.removeEventListener('discussion-updated', handler);
     };
   }, [refreshServerState]);
-
-  useEffect(() => {
-    if (!detail || (recorder.phase !== 'recording' && recorder.phase !== 'paused')) return;
-    const timer = window.setInterval(() => void refreshServerState(), 5_000);
-    return () => window.clearInterval(timer);
-  }, [detail, recorder.phase, refreshServerState]);
 
   const confirmConsent = async () => {
     if (consentVersion == null) return;
@@ -184,18 +200,30 @@ export function GlobalDiscussionCaptureHost() {
       if (!stopped) throw new Error(copy.emptyRecording);
       const created = await createPromiseRef.current;
       if (!created) throw new Error(copy.saveFailed);
-      await segmentUploadTailRef.current;
-      const file = await recorder.buildFile();
-      if (!file || file.size === 0) throw new Error(copy.emptyRecording);
-      await uploadDiscussionRecording(created.discussion.id, file, stopped.durationMs, setUploadProgress);
-      const completed = await finishDiscussion(
+      const stopping = await stopDiscussion(
         created.discussion.id,
         stopped.lastSequence,
         stopped.durationMs,
       );
-      setDetail(completed);
-      await recorder.discard(stopped.id);
+      setDetail(stopping);
       showToast({ type: 'success', title: copy.saved });
+      setBackgroundUploading(true);
+      setVisible(false);
+      void (async () => {
+        try {
+          await Promise.all(segmentUploadsRef.current);
+          const file = await recorder.buildFile();
+          if (!file || file.size === 0) throw new Error(copy.emptyRecording);
+          await uploadDiscussionRecording(created.discussion.id, file, stopped.durationMs, setUploadProgress);
+          await recorder.discard(stopped.id);
+          setBackgroundUploading(false);
+        } catch (error) {
+          await recorder.markUploadFailed();
+          setBackgroundUploading(false);
+          setOperationError(error instanceof Error ? error.message : copy.saveFailed);
+          setVisible(true);
+        }
+      })();
     } catch (error) {
       await recorder.markUploadFailed();
       setOperationError(error instanceof Error ? error.message : copy.saveFailed);
@@ -245,26 +273,32 @@ export function GlobalDiscussionCaptureHost() {
       createPromiseRef.current = Promise.resolve(created);
       setDetail(created);
       await recorder.setServerDiscussionId(created.discussion.id);
-      if (created.discussion.status === 'completed' || created.discussion.status === 'finalizing') {
+      if (['stopping', 'sealing', 'organizing', 'completed'].includes(created.discussion.status)) {
+        if (created.discussion.status === 'stopping' && !created.discussion.audioAttachmentId) {
+          const file = await recorder.buildFile();
+          if (!file || file.size === 0) throw new Error(copy.emptyRecording);
+          await retryPendingSegments(candidate.id, created.discussion.id);
+          await uploadDiscussionRecording(created.discussion.id, file, candidate.durationMs, setUploadProgress);
+        }
         await recorder.discard(candidate.id);
         showToast({ type: 'success', title: copy.saved });
         return;
       }
       if (created.discussion.status !== 'recording') {
-        throw new Error(created.discussion.lastErrorMessage ?? copy.saveFailed);
+        throw new Error(created.discussion.failureMessage ?? copy.saveFailed);
       }
       const pendingSegments = await listDiscussionLiveSegments(candidate.id);
       const lastSequence = pendingSegments.reduce(
         (highest, segment) => Math.max(highest, segment.sequence),
         candidate.lastSequence,
       );
+      const durationMs = Math.max(1_000, candidate.durationMs);
+      const stopping = await stopDiscussion(created.discussion.id, lastSequence, durationMs);
+      setDetail(stopping);
       await retryPendingSegments(candidate.id, created.discussion.id);
       const file = await recorder.buildFile();
       if (!file || file.size === 0) throw new Error(copy.emptyRecording);
-      const durationMs = Math.max(1_000, candidate.durationMs);
       await uploadDiscussionRecording(created.discussion.id, file, durationMs, setUploadProgress);
-      const completed = await finishDiscussion(created.discussion.id, lastSequence, durationMs);
-      setDetail(completed);
       await recorder.discard(candidate.id);
       showToast({ type: 'success', title: copy.saved });
     } catch (error) {
@@ -285,6 +319,7 @@ export function GlobalDiscussionCaptureHost() {
   };
 
   if (!visible) {
+    if (backgroundUploading) return null;
     const candidate = recorder.recoverableDrafts[0];
     if (!candidate) return null;
     return (

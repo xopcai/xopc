@@ -163,6 +163,12 @@
       "projectLinked": "AI 已将这段讨论关联到项目。",
       "undo": "撤销",
       "draftTranscript": "实时转写草稿",
+      "fullTranscript": "完整转写",
+      "organization": "AI 整理",
+      "decisions": "决策",
+      "actionItems": "待办",
+      "risks": "风险",
+      "openQuestions": "待确认",
       "maxDuration": "最长 30 分钟"
     }
   }

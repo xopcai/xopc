@@ -1,28 +1,32 @@
 export const DISCUSSION_STATUSES = [
   'recording',
-  'finalizing',
+  'stopping',
+  'sealing',
+  'organizing',
   'completed',
-  'failed',
+  'needs_attention',
   'cancelled',
 ] as const;
 
 export type DiscussionStatus = typeof DISCUSSION_STATUSES[number];
-export type DiscussionProcessingStage =
-  | 'original_upload'
-  | 'final_transcription'
-  | 'analysis'
-  | 'note_write';
 export type DiscussionSource = 'web' | 'electron';
 export type DiscussionProjectInferenceSource = 'context' | 'exact_name' | 'model';
+export type DiscussionFailureStage =
+  | 'segment_upload'
+  | 'segment_transcription'
+  | 'audio_upload'
+  | 'transcript_sealing'
+  | 'organization';
 
 export interface DiscussionActionItem {
   id: string;
   title: string;
   owner?: string;
   dueDate?: string;
+  evidenceSegmentIds?: number[];
 }
 
-export interface DiscussionAnalysis {
+export interface DiscussionOrganization {
   title: string;
   summary: string;
   keyPoints: string[];
@@ -43,36 +47,30 @@ export interface DiscussionCapture {
   audioAttachmentId?: string;
   source: DiscussionSource;
   status: DiscussionStatus;
-  processingStage?: DiscussionProcessingStage;
   durationMs?: number;
   expectedLastSequence?: number;
   mimeType?: string;
   audioSizeBytes?: number;
   audioSha256?: string;
-  transcriptRaw?: string;
-  transcriptSha256?: string;
+  canonicalTranscript?: string;
+  canonicalTranscriptSha256?: string;
   transcriptLanguage?: string;
-  sttProvider?: string;
-  analysis?: DiscussionAnalysis;
-  analysisInputHash?: string;
-  analyzerModelRef?: string;
+  transcriptRevision: number;
   generatedTitle?: string;
   projectInferenceScore?: number;
   projectInferenceSource?: DiscussionProjectInferenceSource;
-  finalizationRevision: number;
-  attemptCount: number;
-  nextAttemptAt?: number;
-  leaseOwner?: string;
-  leaseExpiresAt?: number;
-  lastErrorCode?: string;
-  lastErrorMessage?: string;
+  failureStage?: DiscussionFailureStage;
+  failureCode?: string;
+  failureMessage?: string;
   recordingStartedAt: number;
-  recordingFinishedAt?: number;
+  recordingStoppedAt?: number;
   createdAt: number;
   updatedAt: number;
   completedAt?: number;
   audioDeletedAt?: number;
 }
+
+export type DiscussionTranscriptSegmentStatus = 'uploaded' | 'transcribing' | 'confirmed' | 'failed';
 
 export interface DiscussionTranscriptSegment {
   discussionId: string;
@@ -80,9 +78,16 @@ export interface DiscussionTranscriptSegment {
   audioSha256: string;
   startedAtMs: number;
   endedAtMs: number;
-  status: 'uploaded' | 'transcribing' | 'completed' | 'failed';
-  transcript?: string;
+  status: DiscussionTranscriptSegmentStatus;
+  rawText?: string;
+  displayText?: string;
+  language?: string;
   provider?: string;
+  confidence?: number;
+  speakerLabel?: string;
+  revision: number;
+  correctedByUser: boolean;
+  correctedAt?: number;
   attemptCount: number;
   nextAttemptAt?: number;
   leaseOwner?: string;
@@ -92,10 +97,34 @@ export interface DiscussionTranscriptSegment {
   updatedAt: number;
 }
 
+export interface DiscussionTranscriptStats {
+  expected?: number;
+  uploaded: number;
+  transcribing: number;
+  confirmed: number;
+  failed: number;
+}
+
 export interface DiscussionTranscript {
   discussionId: string;
+  revision: number;
   segments: DiscussionTranscriptSegment[];
   text: string;
+  stats: DiscussionTranscriptStats;
+}
+
+export interface DiscussionOrganizationRecord {
+  id: string;
+  discussionId: string;
+  revision: number;
+  inputTranscriptSha256: string;
+  promptVersion: string;
+  modelRef: string;
+  organization?: DiscussionOrganization;
+  status: 'running' | 'completed' | 'failed';
+  errorMessage?: string;
+  createdAt: number;
+  completedAt?: number;
 }
 
 export interface DiscussionCaptureSettings {
@@ -135,4 +164,6 @@ export interface DiscussionMetrics {
 export interface DiscussionDetail {
   discussion: DiscussionCapture;
   note: import('../notes/types.js').Note;
+  transcript: DiscussionTranscript;
+  organization?: DiscussionOrganizationRecord;
 }
