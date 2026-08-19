@@ -8,6 +8,7 @@ import {
 } from '@xopcai/gateway-contract';
 
 import { ProjectMonitoringService } from '../../../tasks/project-monitoring-service.js';
+import { validateWebchatAttachments } from '../../chat-limits.js';
 import { getTaskContextManifest } from '../../../tasks/task-context-assembler.js';
 import { TaskCommandService } from '../../../tasks/task-command-service.js';
 import {
@@ -51,8 +52,11 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
   });
 
   authenticated.post('/api/tasks', deps.strictRateLimitMiddleware, async (c) => {
-    const parsed = TaskCreateRequestSchema.safeParse(await c.req.json().catch(() => ({})));
+    const body = await c.req.json().catch(() => ({}));
+    const parsed = TaskCreateRequestSchema.safeParse(body);
     if (!parsed.success) return c.json({ ok: false, error: 'Invalid task request' }, 400);
+    const attachmentError = validateWebchatAttachments(parsed.data.attachments);
+    if (attachmentError) return c.json({ ok: false, error: attachmentError }, 400);
     try {
       const created = await creator.create(parsed.data);
       return created.mode === 'capture'
