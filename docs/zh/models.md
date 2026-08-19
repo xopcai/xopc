@@ -26,7 +26,6 @@ xopc 可以直接使用内置 LLM 服务商；只有在添加自定义服务商�
         },
         "tools": { "builtin": {} },
         "skills": { "mode": "all" },
-        "memory": { "mode": "confirmWrite", "sources": ["session"] },
         "workflows": {},
         "boundaries": { "requiresConfirmation": [], "forbidden": [], "escalation": [] }
       }

@@ -176,6 +176,8 @@ Notes are user-owned markdown objects. Treat them as durable user content.
 Kinds are \`thought\`, \`todo\`, \`voice\`, \`media\`, \`bookmark\`, \`mixed\`, and \`task\`.
 Statuses are \`inbox\`, \`processed\`, \`archived\`, and \`trashed\`. A status change is not
 deletion. List sorting supports \`createdAt\`, \`updatedAt\`, or \`lastOpenedAt\`.
+For \`list\` and \`create\`, an explicit \`projectId\` selects the project. When omitted,
+the current session project is inherited when available.
 
 ### Find notes
 
@@ -185,6 +187,9 @@ deletion. List sorting supports \`createdAt\`, \`updatedAt\`, or \`lastOpenedAt\
 
 ### Create a note
 
+Pass \`projectId\` when the target project is explicit. From a project-linked chat it
+may be omitted; XOPC creates the same formal Note → Project relationship.
+
 \`\`\`json
 {
   "mode": "note",
@@ -192,7 +197,8 @@ deletion. List sorting supports \`createdAt\`, \`updatedAt\`, or \`lastOpenedAt\
   "args": {
     "title": "Product direction",
     "markdown": "Initial notes...",
-    "tags": ["product"]
+    "tags": ["product"],
+    "projectId": "project_id"
   }
 }
 \`\`\`

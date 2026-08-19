@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { AgentManifest } from '../../agent-manifest/index.js';
+import type { AgentConfigEntry, AgentManifest } from '../../agent-manifest/index.js';
 import type { Config } from '../../config/schema.js';
 import {
   extractAvatarFromIdentityMarkdown,
@@ -28,6 +28,17 @@ function manifest(id: string, patch: Partial<AgentManifest> = {}): AgentManifest
     skills: { mode: 'all' },
     workflows: {},
     boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
+    ...patch,
+  };
+}
+
+function sparseEntry(id: string, patch: Partial<AgentConfigEntry> = {}): AgentConfigEntry {
+  return {
+    id,
+    enabled: true,
+    identity: { name: id, role: 'Agent', language: 'en', tone: 'direct' },
+    responsibilities: { primary: ['Help'] },
+    workspace: { root: `/tmp/${id}` },
     ...patch,
   };
 }
@@ -154,7 +165,7 @@ describe('agents-admin', () => {
         },
         list: [
           manifest('main'),
-          manifest('coder', {
+          sparseEntry('coder', {
             extends: ['safe-coder'],
             models: {
               defaultRole: 'deep',
@@ -170,11 +181,60 @@ describe('agents-admin', () => {
     expect(r.data.presetChain).toEqual(['default', 'safe-coder']);
     expect(r.data.manifest.tools.builtin.exec_command?.mode).toBe('deny');
     expect(r.data.manifest.tools.builtin.web_search?.mode).toBe('allow');
-    expect(r.data.manifest.skills.mode).toBe('all');
+    expect(r.data.manifest.skills).toEqual({ mode: 'allowlist', allow: ['diagnose'] });
     expect(r.data.manifest.models.roles.deep.model).toBe('anthropic/claude-sonnet-4-5');
     expect(r.data.sources['tools.builtin.exec_command.mode']).toBe('preset:safe-coder@1');
-    expect(r.data.sources['skills.mode']).toBe('agent:coder');
+    expect(r.data.sources['skills.mode']).toBe('preset:safe-coder@1');
     expect(r.data.sources['models.roles.deep.model']).toBe('agent:coder');
+  });
+
+  it('listGatewayAgents reports preset and effective policy summaries', async () => {
+    const cfg = minimalConfig({
+      agents: {
+        default: 'main',
+        defaultPreset: 'default',
+        capabilityPresets: {
+          default: {
+            id: 'default',
+            name: 'Global baseline',
+            version: 1,
+            models: { defaultRole: 'deep', roles: { deep: { model: 'openai/gpt-4.1' } } },
+          },
+          research: {
+            id: 'research',
+            name: 'Research',
+            version: 1,
+            models: { roles: { review: { model: 'openai/gpt-4.1-mini' } } },
+            tools: { builtin: { exec_command: { mode: 'deny' } } },
+            skills: { mode: 'allowlist', allow: ['research'] },
+          },
+        },
+        list: [sparseEntry('main'), sparseEntry('researcher', { extends: ['research'] })],
+      },
+    } as Partial<Config>);
+
+    const researcher = (await listGatewayAgents(cfg)).agents.find((agent) => agent.id === 'researcher');
+    expect(researcher?.typedModels.preset.map((model) => model.id)).toEqual(['deep', 'review']);
+    expect(researcher?.skills.preset).toEqual(['research']);
+    expect(researcher?.tools.presetDenied).toEqual(['exec_command']);
+    expect(researcher?.tools.effectiveDisable).toEqual(['exec_command']);
+  });
+
+  it('prepareUpdateAgent removes local policies when restoring inheritance', () => {
+    const cfg = minimalConfig({
+      agents: {
+        default: 'main',
+        capabilityPresets: {},
+        list: [manifest('main'), manifest('researcher')],
+      },
+    } as Partial<Config>);
+
+    const result = prepareUpdateAgent(cfg, 'researcher', { skills: null, tools: null });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const entry = result.data.nextConfig.agents.list.find((agent) => agent.id === 'researcher');
+    expect(entry?.skills).toBeUndefined();
+    expect(entry?.tools).toBeUndefined();
   });
 
   it('prepareCreateAgent creates a complete manifest entry', () => {

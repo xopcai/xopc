@@ -69,6 +69,8 @@ export function AgentEffectiveCapabilityTab(props: {
   const toolPolicies = Object.entries(manifest?.tools?.builtin ?? {}).sort(([aId], [bId]) => aId.localeCompare(bId));
   const skills = manifest?.skills;
   const boundaries = manifest?.boundaries;
+  const overrides = data?.overrides ?? [];
+  const locks = data?.locks ?? [];
 
   return (
     <SettingsFormSection>
@@ -95,6 +97,55 @@ export function AgentEffectiveCapabilityTab(props: {
               <div className="rounded-lg bg-surface-panel/80 px-3 py-2 text-sm text-fg shadow-surface">
                 {presetChain.length ? presetChain.join(' -> ') : a.effectiveNoPresets}
               </div>
+            </div>
+
+            <div>
+              <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">
+                {a.effectiveOverridesTitle}
+              </h4>
+              {overrides.length > 0 ? (
+                <div className="flex flex-col gap-2">
+                  {overrides.map((override, index) => (
+                    <div
+                      key={`${override.path}-${override.from}-${override.to}-${index}`}
+                      className="grid gap-1 rounded-lg bg-surface-panel/80 px-3 py-2 text-xs shadow-surface sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center"
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate font-mono font-medium text-fg">{override.path}</div>
+                        <div className="mt-1 truncate text-fg-muted">{override.from}</div>
+                      </div>
+                      <span className="text-fg-subtle" aria-hidden>→</span>
+                      <div className="truncate text-fg-muted sm:text-right">{override.to}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="rounded-lg bg-surface-panel/60 px-3 py-2 text-sm text-fg-muted shadow-surface">
+                  {a.effectiveNoOverrides}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">
+                {a.effectiveLocksTitle}
+              </h4>
+              {locks.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {locks.map((path) => (
+                    <span
+                      key={path}
+                      className="rounded-full bg-surface-panel px-2.5 py-1 font-mono text-xs text-fg-muted shadow-surface"
+                    >
+                      {path}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="rounded-lg bg-surface-panel/60 px-3 py-2 text-sm text-fg-muted shadow-surface">
+                  {a.effectiveNoLocks}
+                </p>
+              )}
             </div>
 
             <div>

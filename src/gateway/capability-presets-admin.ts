@@ -4,6 +4,7 @@ import {
   type CapabilityPreset,
 } from '../agent-manifest/schema.js';
 import { linearizePresetIds } from '../agent-manifest/preset-chain.js';
+import { resolveEffectiveAgentManifest } from '../agent-manifest/resolver.js';
 import type { Config } from '../config/schema.js';
 import { GATEWAY_BUILTIN_TOOL_IDS } from './agent-builtin-tools.js';
 
@@ -26,6 +27,18 @@ export type CapabilityPresetsListResponse = {
   presets: CapabilityPresetRow[];
   agents: Array<{ id: string; name?: string; extends: string[] }>;
   builtinToolIds: string[];
+};
+
+export type CapabilityPresetPreviewDiff = {
+  path: string;
+  before?: unknown;
+  after?: unknown;
+};
+
+export type CapabilityPresetPreviewAgent = {
+  agentId: string;
+  agentName?: string;
+  diffs: CapabilityPresetPreviewDiff[];
 };
 
 export type CreateCapabilityPresetBody = {
@@ -63,6 +76,31 @@ function presetMap(cfg: Config): Record<string, CapabilityPreset> {
 
 function normalizePresetId(id: string): string {
   return id.trim().toLowerCase();
+}
+
+function flattenPolicy(value: unknown, path = '', out: Map<string, unknown> = new Map()): Map<string, unknown> {
+  if (Array.isArray(value) || value === null || typeof value !== 'object') {
+    if (path) out.set(path, value);
+    return out;
+  }
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    flattenPolicy(child, path ? `${path}.${key}` : key, out);
+  }
+  return out;
+}
+
+function manifestDiff(before: unknown, after: unknown): CapabilityPresetPreviewDiff[] {
+  const beforeFlat = flattenPolicy(before);
+  const afterFlat = flattenPolicy(after);
+  const paths = new Set([...beforeFlat.keys(), ...afterFlat.keys()]);
+  return [...paths]
+    .filter((path) => JSON.stringify(beforeFlat.get(path)) !== JSON.stringify(afterFlat.get(path)))
+    .sort((a, b) => a.localeCompare(b))
+    .map((path) => ({
+      path,
+      ...(beforeFlat.has(path) ? { before: beforeFlat.get(path) } : {}),
+      ...(afterFlat.has(path) ? { after: afterFlat.get(path) } : {}),
+    }));
 }
 
 function agentUsage(cfg: Config, presetId: string): CapabilityPresetAgentUsage[] {
@@ -147,6 +185,18 @@ function nextConfigWithPresets(
   };
   const agentRefs = validateAgentPresetReferences(nextConfig);
   if (agentRefs.ok === false) return { ok: false, error: agentRefs.error, status: agentRefs.status };
+  for (const agent of nextConfig.agents.list) {
+    try {
+      resolveEffectiveAgentManifest({
+        agent,
+        presets,
+        defaultPresetId: nextConfig.agents.defaultPreset,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { ok: false, error: `agent "${agent.id}" effective manifest is invalid: ${message}`, status: 400 };
+    }
+  }
   return { ok: true, data: { nextConfig } };
 }
 
@@ -219,7 +269,7 @@ export function prepareUpdateCapabilityPreset(
     }
   }
   nextPreset.version = body.version ?? current.version + 1;
-  for (const key of ['extends', 'models', 'tools', 'skills', 'memory', 'workflows', 'boundaries', 'runtime', 'locks'] as const) {
+  for (const key of ['extends', 'models', 'tools', 'skills', 'workflows', 'boundaries', 'runtime', 'locks'] as const) {
     if (body[key] === undefined) continue;
     if (body[key] === null) {
       delete nextPreset[key];
@@ -233,6 +283,37 @@ export function prepareUpdateCapabilityPreset(
     return { ok: false, error: parsed.error.issues[0]?.message ?? 'capability preset is invalid', status: 400 };
   }
   return nextConfigWithPresets(cfg, { ...presets, [presetId]: parsed.data });
+}
+
+export function previewCapabilityPresetUpdate(
+  cfg: Config,
+  presetIdRaw: string,
+  body: UpdateCapabilityPresetBody,
+): CapabilityPresetAdminResult<{ agents: CapabilityPresetPreviewAgent[] }> {
+  const prepared = prepareUpdateCapabilityPreset(cfg, presetIdRaw, body);
+  if (prepared.ok === false) return prepared;
+
+  const agents = cfg.agents.list.flatMap((agent) => {
+    const before = resolveEffectiveAgentManifest({
+      agent,
+      presets: cfg.agents.capabilityPresets,
+      defaultPresetId: cfg.agents.defaultPreset,
+    }).manifest;
+    const after = resolveEffectiveAgentManifest({
+      agent,
+      presets: prepared.data.nextConfig.agents.capabilityPresets,
+      defaultPresetId: prepared.data.nextConfig.agents.defaultPreset,
+    }).manifest;
+    const diffs = manifestDiff(before, after);
+    if (diffs.length === 0) return [];
+    return [{
+      agentId: agent.id,
+      ...(agent.identity.name ? { agentName: agent.identity.name } : {}),
+      diffs,
+    }];
+  });
+
+  return { ok: true, data: { agents } };
 }
 
 export function prepareDeleteCapabilityPreset(

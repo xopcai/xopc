@@ -1,6 +1,12 @@
 import { z } from 'zod';
 
 const IdSchema = z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/);
+const LockPathSchema = z
+  .string()
+  .regex(
+    /^(models|tools|skills|workflows|boundaries|runtime)(?:\.[^.\s]+)*$/,
+    'lock path must target a capability policy field',
+  );
 
 export const DEFAULT_CAPABILITY_PRESET_ID = 'default';
 
@@ -130,6 +136,19 @@ export const ToolPolicySetSchema = z
   .strict()
   .default({ builtin: {} });
 
+export const ToolPolicySetPatchSchema = z
+  .object({
+    builtin: z.record(z.string().min(1), ToolPolicySchema).optional(),
+    mcp: z
+      .object({
+        servers: z.record(z.string().min(1), ToolPolicySchema).optional(),
+        tools: z.record(z.string().min(1), ToolPolicySchema).optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+
 export const SkillPolicySchema = z
   .object({
     mode: z.enum(['all', 'allowlist', 'denylist', 'off']).default('all'),
@@ -138,6 +157,14 @@ export const SkillPolicySchema = z
   })
   .strict()
   .default({ mode: 'all' });
+
+export const SkillPolicyPatchSchema = z
+  .object({
+    mode: z.enum(['all', 'allowlist', 'denylist', 'off']),
+    allow: z.array(z.string().min(1)).optional(),
+    deny: z.array(z.string().min(1)).optional(),
+  })
+  .strict();
 
 export const WorkflowPolicySchema = z
   .object({
@@ -157,6 +184,8 @@ export const WorkflowPolicySchema = z
   .strict()
   .default({});
 
+export const WorkflowPolicyPatchSchema = WorkflowPolicySchema.removeDefault();
+
 export const BoundaryPolicySchema = z
   .object({
     requiresConfirmation: z.array(z.string().min(1)).default([]),
@@ -165,6 +194,14 @@ export const BoundaryPolicySchema = z
   })
   .strict()
   .default({ requiresConfirmation: [], forbidden: [], escalation: [] });
+
+export const BoundaryPolicyPatchSchema = z
+  .object({
+    requiresConfirmation: z.array(z.string().min(1)).optional(),
+    forbidden: z.array(z.string().min(1)).optional(),
+    escalation: z.array(z.string().min(1)).optional(),
+  })
+  .strict();
 
 export const WorkspacePolicySchema = z
   .object({
@@ -225,9 +262,23 @@ export const AgentManifestSchema = z
   })
   .strict();
 
-export const AgentConfigEntrySchema = AgentManifestSchema.extend({
-  models: ModelPolicySchema.optional(),
-}).strict();
+export const AgentConfigEntrySchema = z
+  .object({
+    id: IdSchema,
+    enabled: z.boolean().default(true),
+    extends: z.array(IdSchema).optional(),
+    identity: AgentIdentitySchema,
+    responsibilities: AgentResponsibilitiesSchema,
+    workspace: WorkspacePolicySchema,
+    models: ModelPolicyPatchSchema.optional(),
+    tools: ToolPolicySetPatchSchema.optional(),
+    skills: SkillPolicyPatchSchema.optional(),
+    workflows: WorkflowPolicyPatchSchema.optional(),
+    boundaries: BoundaryPolicyPatchSchema.optional(),
+    runtime: RuntimePolicySchema,
+    prompt: PromptPolicySchema,
+  })
+  .strict();
 
 export const CapabilityPresetSchema = z
   .object({
@@ -237,17 +288,18 @@ export const CapabilityPresetSchema = z
     version: z.number().int().positive().default(1),
     extends: z.array(IdSchema).optional(),
     models: ModelPolicyPatchSchema.optional(),
-    tools: ToolPolicySetSchema.optional(),
-    skills: SkillPolicySchema.optional(),
-    workflows: WorkflowPolicySchema.optional(),
-    boundaries: BoundaryPolicySchema.optional(),
+    tools: ToolPolicySetPatchSchema.optional(),
+    skills: SkillPolicyPatchSchema.optional(),
+    workflows: WorkflowPolicyPatchSchema.optional(),
+    boundaries: BoundaryPolicyPatchSchema.optional(),
     runtime: RuntimePolicySchema,
-    locks: z.array(z.string().min(1)).optional(),
+    locks: z.array(LockPathSchema).optional(),
   })
   .strict();
 
 export type AgentManifest = z.infer<typeof AgentManifestSchema>;
 export type AgentConfigEntry = z.infer<typeof AgentConfigEntrySchema>;
 export type CapabilityPreset = z.infer<typeof CapabilityPresetSchema>;
+export type CapabilityPresetPatch = Omit<CapabilityPreset, 'id' | 'name' | 'description' | 'version' | 'extends' | 'locks'>;
 export type EffectiveAgentManifest = AgentManifest;
 export type ToolPolicy = z.infer<typeof ToolPolicySchema>;

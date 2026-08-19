@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import {
   AgentManifestSchema,
+  CapabilityPresetSchema,
   buildAgentManifestPromptSection,
   resolveEffectiveAgentManifest,
   validateAgentManifest,
   type AgentManifest,
+  type AgentConfigEntry,
   type CapabilityPreset,
 } from '../index.js';
 
@@ -82,6 +84,38 @@ const presets: Record<string, CapabilityPreset> = {
 };
 
 describe('agent manifest resolver', () => {
+  it('inherits skills and partial boundaries from presets when the agent omits them', () => {
+    const agent: AgentConfigEntry = {
+      id: 'researcher',
+      identity: { name: 'Researcher', role: 'Research', language: 'en', tone: 'direct' },
+      responsibilities: { primary: ['Research'] },
+      workspace: { root: '/tmp/researcher' },
+    };
+    const result = resolveEffectiveAgentManifest({
+      agent,
+      defaultPresetId: 'default',
+      presets: {
+        default: {
+          id: 'default',
+          name: 'Default',
+          version: 1,
+          models: { defaultRole: 'deep', roles: { deep: { model: 'openai/gpt-4.1' } } },
+          skills: { mode: 'allowlist', allow: ['research'] },
+          boundaries: { forbidden: ['secrets'] },
+        },
+      },
+    });
+
+    expect(result.manifest.skills).toEqual({ mode: 'allowlist', allow: ['research'] });
+    expect(result.manifest.boundaries).toEqual({
+      requiresConfirmation: [],
+      forbidden: ['secrets'],
+      escalation: [],
+    });
+    expect(result.sources['skills.mode']).toBe('preset:default@1');
+    expect(result.sources['boundaries.forbidden']).toBe('preset:default@1');
+  });
+
   it('merges capability presets then applies agent overrides', () => {
     const result = resolveEffectiveAgentManifest({ agent: baseAgent, presets });
 
@@ -91,6 +125,11 @@ describe('agent manifest resolver', () => {
     expect(result.manifest.tools.builtin.exec_command).toEqual({ mode: 'confirm', scope: 'workspace' });
     expect(result.sources['tools.builtin.read_file.mode']).toBe('preset:code-tools@2');
     expect(result.sources['tools.builtin.exec_command.mode']).toBe('agent:coder');
+    expect(result.overrides).toContainEqual({
+      path: 'tools.builtin.exec_command.mode',
+      from: 'preset:base-safe@1',
+      to: 'agent:coder',
+    });
   });
 
   it('prepends the configured default preset when present', () => {
@@ -179,6 +218,14 @@ describe('agent manifest validator', () => {
       memory: { mode: 'auto', sources: ['session'] },
     });
     expect(parsed.success).toBe(false);
+  });
+
+  it('rejects locks outside capability policy fields', () => {
+    expect(CapabilityPresetSchema.safeParse({
+      id: 'bad-lock',
+      name: 'Bad lock',
+      locks: ['identity.name'],
+    }).success).toBe(false);
   });
 
   it('validates catalogs and default model role', () => {

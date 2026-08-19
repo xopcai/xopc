@@ -4,13 +4,14 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ActivityService } from '../../../activity/index.js';
+import { ActivityService, ObjectLinkService } from '../../../activity/index.js';
 import { NotesService, NotesStore } from '../../../notes/index.js';
 import { ProjectService } from '../../../projects/index.js';
 import {
   closeXopcDatabase,
   ensureSessionRecord,
   openXopcDatabase,
+  patchSessionMetadata,
   resetXopcDatabaseSingletonForTest,
 } from '../../../storage/sqlite/index.js';
 import type { LocalAppService } from '../../../local-apps/index.js';
@@ -152,6 +153,52 @@ describe('xopc_use tool', () => {
     expect(appended.note.markdown).toContain('Initial idea');
     expect(appended.note.markdown).toContain('## Review');
     expect(appended.note.markdown).toContain('Add preview before overwrite.');
+  });
+
+  it('creates and lists notes in the current session project', async () => {
+    const project = projects.create({ name: 'Project Notes' });
+    const otherProject = projects.create({ name: 'Other Notes' });
+    patchSessionMetadata(SESSION_KEY, { projectId: project.id });
+    const tool = createXopcUseTool({
+      getNotesService: () => notes,
+      getProjectService: () => projects,
+      getCurrentSessionKey: () => SESSION_KEY,
+    });
+
+    const createdResult = await tool.execute('call-project-note', {
+      mode: 'note',
+      command: 'create',
+      args: { title: 'Project decision', markdown: 'Keep this with the project.' },
+    });
+    const created = parseToolJson(createdResult);
+    await tool.execute('call-other-project-note', {
+      mode: 'note',
+      command: 'create',
+      args: {
+        title: 'Other project decision',
+        markdown: 'Do not include this in the current project.',
+        projectId: otherProject.id,
+      },
+    });
+
+    expect(created).toMatchObject({ ok: true, projectId: project.id });
+    expect(createdResult.details.delivery).toMatchObject({
+      primary: { kind: 'note', id: created.note.id, projectId: project.id },
+    });
+    expect(new ObjectLinkService().listForObject({ kind: 'note', id: created.note.id })).toEqual([
+      expect.objectContaining({
+        relation: 'belongs_to',
+        to: expect.objectContaining({ kind: 'project', id: project.id }),
+      }),
+    ]);
+
+    const listed = parseToolJson(await tool.execute('call-project-note-list', {
+      mode: 'note',
+      command: 'list',
+      args: {},
+    }));
+    expect(listed.projectId).toBe(project.id);
+    expect(listed.items.map((note: { id: string }) => note.id)).toEqual([created.note.id]);
   });
 
   it('previews a note edit without mutating the note', async () => {
