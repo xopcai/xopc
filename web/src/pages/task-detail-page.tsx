@@ -1,4 +1,4 @@
-import { ArrowLeft, CircleCheck, ChevronDown, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, CircleCheck, ChevronDown, MessageCircle, ShieldCheck } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
@@ -229,6 +229,14 @@ export function TaskDetailPage() {
             </div>
             {!TERMINAL_TASK_STATUSES.has(detail.task.status) ? (
               <div className="mt-5 flex flex-wrap gap-2 border-t border-edge-subtle pt-4">
+                {detail.execution?.sessionKey ? (
+                  <Button asChild variant="secondary">
+                    <Link to={`/chat/${encodeURIComponent(detail.execution.sessionKey)}`}>
+                      <MessageCircle className="size-4" aria-hidden />
+                      {copy.openTaskConversation}
+                    </Link>
+                  </Button>
+                ) : null}
                 {RESUMABLE_TASK_STATUSES.has(detail.task.status) ? (
                   <Button type="button" variant="primary" disabled={actionBusy} onClick={() => void performAction('resume')}>
                     {copy.resumeTask}

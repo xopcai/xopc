@@ -218,9 +218,10 @@ export function createHonoApp(config: HonoAppConfig): Hono {
 
   app.use('/api/*', async (c, next) => {
     const contentType = c.req.header('content-type');
-    const isSessionInputRequest = (c.req.method === 'POST' && /^\/api\/sessions\/[^/]+\/inputs$/.test(c.req.path))
+    const isAttachmentInputRequest = (c.req.method === 'POST' && c.req.path === '/api/tasks')
+      || (c.req.method === 'POST' && /^\/api\/sessions\/[^/]+\/inputs$/.test(c.req.path))
       || (c.req.method === 'PATCH' && /^\/api\/sessions\/[^/]+\/inputs\/[^/]+$/.test(c.req.path));
-    const maxSize = isSessionInputRequest
+    const maxSize = isAttachmentInputRequest
       ? SESSION_INPUT_BODY_MAX
       : c.req.path === '/api/skills/upload'
         ? SKILL_UPLOAD_BODY_MAX
