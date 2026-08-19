@@ -630,13 +630,13 @@ export function NotesWorkbench({
   return (
     <div
       ref={workspaceRef}
-      className="flex h-full min-h-0 w-full flex-1 overflow-hidden bg-surface-panel"
+      className="flex h-full min-h-0 w-full flex-1 overflow-hidden bg-surface-base"
       style={{ '--notes-list-width': `${notesListWidth}px` } as CSSProperties}
     >
       <section
         ref={notesListRef}
         className={cn(
-          'relative flex min-h-0 w-full shrink-0 flex-col overflow-hidden bg-surface-panel',
+          'relative flex min-h-0 w-full shrink-0 flex-col overflow-hidden border-r border-edge bg-surface-rail',
           !resizingList && 'lg:transition-[width] lg:duration-[280ms] lg:ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:lg:transition-none',
           notesListCollapsed ? 'lg:w-0 lg:min-w-0 lg:max-w-0 lg:pointer-events-none' : 'lg:w-[var(--notes-list-width)]',
           selectedNoteId && 'hidden lg:flex',
@@ -786,26 +786,25 @@ export function NotesWorkbench({
         onKeyDown={handleListResizeKeyDown}
         title={n.resizeNotesList}
         className={cn(
-          'group relative hidden shrink-0 cursor-col-resize touch-none select-none items-center justify-center lg:flex',
+          'group relative z-10 hidden shrink-0 cursor-col-resize touch-none select-none items-center justify-center bg-surface-base lg:flex',
           'lg:transition-[width,opacity] lg:duration-[280ms] lg:ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:lg:transition-none',
-          notesListCollapsed ? 'lg:w-0 lg:opacity-0 lg:pointer-events-none' : 'lg:w-3 lg:opacity-100',
+          notesListCollapsed ? 'lg:w-0 lg:opacity-0 lg:pointer-events-none' : 'lg:w-2 lg:opacity-100',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-0',
         )}
       >
         <span
           aria-hidden
           className={cn(
-            'h-8 w-1 rounded-pill opacity-0 transition-[background-color,opacity,transform] duration-150',
-            'bg-edge-strong/55 group-hover:opacity-100 group-focus-visible:opacity-100',
-            'group-hover:scale-y-110 group-focus-visible:scale-y-110',
-            resizingList && 'bg-accent opacity-100 scale-y-125',
+            'h-full w-px bg-edge transition-[background-color,transform] duration-150',
+            'group-hover:bg-accent/70 group-focus-visible:bg-accent',
+            resizingList && 'bg-accent scale-x-[2]',
           )}
         />
       </div>
 
       <section
         className={cn(
-          'relative min-w-0 flex-1 bg-surface-panel',
+          'relative min-w-0 flex-1 bg-surface-base',
           !selectedNoteId && 'hidden lg:flex',
         )}
       >
