@@ -37,6 +37,7 @@ import {
   loadLocalAppWorkbenchPage,
   loadProductOpenPage,
   loadCapabilitiesSettingsPanel,
+  loadWorkDiscoveryPage,
 } from '@/lib/route-preload';
 import { SwrProvider } from '@/providers/swr-provider';
 import { syncFontScaleAfterHydration, useFontScaleStore } from '@/stores/font-scale-store';
@@ -83,9 +84,7 @@ const DesktopPetPage = lazy(() => import('@/pages/desktop-pet').then((m) => ({ d
 const LocalAppsPage = lazy(() => loadLocalAppsPage().then((m) => ({ default: m.LocalAppsPage })));
 const LocalAppWorkbenchPage = lazy(() => loadLocalAppWorkbenchPage().then((m) => ({ default: m.LocalAppWorkbenchPage })));
 const ProductOpenPage = lazy(() => loadProductOpenPage().then((m) => ({ default: m.ProductOpenPage })));
-const WorkDiscoveryPage = lazy(() =>
-  import('@/features/work-discovery/work-discovery-page').then((m) => ({ default: m.WorkDiscoveryPage })),
-);
+const WorkDiscoveryPage = lazy(() => loadWorkDiscoveryPage().then((m) => ({ default: m.WorkDiscoveryPage })));
 
 function SecondaryRouteFallback() {
   return (
