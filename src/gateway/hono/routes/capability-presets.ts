@@ -7,6 +7,7 @@ import {
   prepareCreateCapabilityPreset,
   prepareDeleteCapabilityPreset,
   prepareUpdateCapabilityPreset,
+  previewCapabilityPresetUpdate,
   type CreateCapabilityPresetBody,
   type UpdateCapabilityPresetBody,
 } from '../../capability-presets-admin.js';
@@ -135,6 +136,25 @@ export function registerCapabilityPresetsRoutes(authenticated: Hono, deps: Authe
       return c.json({ ok: false, error: { message: save.error ?? 'save failed' } }, 500);
     }
     return c.json({ ok: true, payload: listCapabilityPresets(service.currentConfig as Config) });
+  });
+
+  authenticated.post('/api/capability-presets/:id/preview', strictRateLimitMiddleware, async (c) => {
+    const id = normalizeAgentId(c.req.param('id') ?? '');
+    let raw: unknown;
+    try {
+      raw = await c.req.json();
+    } catch {
+      return c.json({ ok: false, error: { message: 'Invalid JSON' } }, 400);
+    }
+    const body = parseUpdateBody(raw);
+    if (isParseError(body)) {
+      return c.json({ ok: false, error: { message: body.error } }, 400);
+    }
+    const preview = previewCapabilityPresetUpdate(service.currentConfig as Config, id, body);
+    if (preview.ok === false) {
+      return c.json({ ok: false, error: { message: preview.error } }, preview.status ?? 400);
+    }
+    return c.json({ ok: true, payload: preview.data });
   });
 
   authenticated.delete('/api/capability-presets/:id', strictRateLimitMiddleware, async (c) => {

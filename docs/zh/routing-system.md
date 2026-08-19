@@ -48,7 +48,6 @@ agent:main:cli:direct:cli
         "models": { "defaultRole": "deep", "roles": { "deep": { "model": "anthropic/claude-sonnet-4-5" } } },
         "tools": { "builtin": {} },
         "skills": { "mode": "all" },
-        "memory": { "mode": "off", "sources": ["session"] },
         "workflows": {},
         "boundaries": { "requiresConfirmation": [], "forbidden": [], "escalation": [] }
       },
@@ -60,7 +59,6 @@ agent:main:cli:direct:cli
         "models": { "defaultRole": "deep", "roles": { "deep": { "model": "anthropic/claude-sonnet-4-5" } } },
         "tools": { "builtin": { "shell": { "mode": "confirm", "scope": "workspace" } } },
         "skills": { "mode": "all" },
-        "memory": { "mode": "off", "sources": ["session"] },
         "workflows": {},
         "boundaries": { "requiresConfirmation": [], "forbidden": [], "escalation": [] }
       }

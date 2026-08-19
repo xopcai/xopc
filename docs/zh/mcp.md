@@ -139,25 +139,27 @@ XOPC 支持两类 MCP 能力：
 
 ## 关闭 MCP 工具
 
-**关闭某个智能体配置下的全部 MCP 工具：**
+**按 Agent 拒绝 MCP 工具：**
+
+把 MCP 策略写入 Agent 条目或能力方案。要拒绝某个已配置服务的全部工具：
 
 ```json
 {
   "agents": {
-    "defaults": {
-      "tools": {
-        "disable": ["bundle-mcp"]
+    "capabilityPresets": {
+      "no-fetch": {
+        "id": "no-fetch",
+        "name": "禁用 fetch MCP",
+        "tools": {
+          "mcp": { "servers": { "fetch": { "mode": "deny" } } }
+        }
       }
     }
   }
 }
 ```
 
-也可在 `agents.list` 某一条的 `tools.disable` 里加入 `bundle-mcp`。
-
-**关闭单个 MCP 工具** — 在 `disable` 里写完整工具名，例如 `fetch__browse`。
-
-控制台路径：**设置 → 智能体默认 → 工具**，可关闭 **MCP** 分组或指定工具 id。
+通过 Agent 的 `extends` 列表应用该方案。要拒绝单个 MCP 工具，在 `tools.mcp.tools` 中写完整注册名，例如 `"fetch__browse": { "mode": "deny" }`。同一策略也可直接写在 Agent 条目中。
 
 委托子任务（delegate）**不能** 使用 MCP 工具。
 

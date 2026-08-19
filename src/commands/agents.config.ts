@@ -48,10 +48,6 @@ export function applyAgentConfig(
     identity: params.identity ?? { name: agentId, role: 'Agent', language: 'en', tone: 'direct' },
     responsibilities: { primary: ['Help the user complete tasks'] },
     workspace: { root: `~/.xopc/workspace/${agentId}` },
-    tools: { builtin: {} },
-    skills: { mode: 'all' as const },
-    workflows: {},
-    boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
   };
   const nextEntry: AgentEntry = {
     ...base,
@@ -82,10 +78,6 @@ export function applyAgentConfig(
         identity: { name: resolveDefaultAgentId(cfg), role: 'Agent', language: 'en', tone: 'direct' },
         responsibilities: { primary: ['Help the user complete tasks'] },
         workspace: { root: `~/.xopc/workspace/${resolveDefaultAgentId(cfg)}` },
-        tools: { builtin: {} },
-        skills: { mode: 'all' },
-        workflows: {},
-        boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
       });
     }
     nextList.push(nextEntry);

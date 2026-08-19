@@ -109,29 +109,29 @@ xopc mcp unset fetch
 
 ---
 
-## Disable MCP tools
+## Deny MCP tools for an agent
 
-**All MCP tools** for an agent profile:
+Put MCP policy in an Agent entry or capability preset. To deny every tool from a configured server:
 
 ```json
 {
   "agents": {
-    "defaults": {
-      "tools": {
-        "disable": ["bundle-mcp"]
+    "capabilityPresets": {
+      "no-fetch": {
+        "id": "no-fetch",
+        "name": "No fetch MCP",
+        "tools": {
+          "mcp": { "servers": { "fetch": { "mode": "deny" } } }
+        }
       }
     }
   }
 }
 ```
 
-You can also add `bundle-mcp` to a specific entry in `agents.list[].tools.disable`.
+Apply the plan through the Agent's `extends` list. To deny one MCP tool, put its full registered name under `tools.mcp.tools`, for example `"fetch__browse": { "mode": "deny" }`. The same policy can be set directly on an Agent entry.
 
-**Individual MCP tools** — disable by full registered name, e.g. `fetch__browse`.
-
-In the gateway console: **Settings → Agent defaults → Tools** — disable the **MCP** group or specific tool ids.
-
-Delegate sub-agents cannot use MCP tools (`bundle-mcp` is blocklisted for delegation).
+Delegate sub-agents cannot use MCP tools.
 
 ---
 

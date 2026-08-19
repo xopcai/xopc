@@ -58,12 +58,6 @@ Or create manually:
         "workspace": { "root": "~/.xopc/workspace/main" },
         "tools": { "builtin": {} },
         "skills": { "mode": "all" },
-        "memory": {
-          "mode": "confirmWrite",
-          "sources": ["session", "curated"],
-          "writePolicy": { "curated": "confirm" },
-          "understanding": { "enabled": true, "adaptiveCadence": true, "reviewIntervalTurns": 10 }
-        },
         "workflows": {},
         "boundaries": { "requiresConfirmation": [], "forbidden": [], "escalation": [] }
       }
@@ -97,7 +91,6 @@ Or create manually:
         },
         "tools": { "builtin": {} },
         "skills": { "mode": "all" },
-        "memory": { "mode": "confirmWrite", "sources": ["session"] },
         "workflows": {},
         "boundaries": { "requiresConfirmation": [], "forbidden": [], "escalation": [] }
       }
@@ -181,12 +174,14 @@ Agent configuration is manifest-first. The required runtime entries live in **`a
 |-------|------|-------------|
 | `default` | string | Optional. Default agent id when the session key or API does not specify one. If omitted: first **enabled** manifest in `list`, else `main`. |
 | `defaultPreset` | string | Optional. Global preset id applied before each agent's own `extends`. Defaults to `default` when omitted. Use it only when you want shared baseline capabilities. |
-| `capabilityPresets` | object | Optional. Named reusable policy patches keyed by preset id. Presets may define model roles, tools, skills, memory, workflows, boundaries, runtime limits, and locks. |
+| `capabilityPresets` | object | Optional. Named reusable policy patches keyed by preset id. Presets may define model roles, tools, skills, workflows, boundaries, runtime limits, and locks. |
 | `list` | array | Concrete Agent Capability Manifests. Each entry can be complete on its own, including its own `models`. |
 
 #### `agents.list` entries
 
-Each entry must include **`id`**, **`identity`**, **`responsibilities`**, **`workspace`**, **`tools`**, **`skills`**, **`workflows`**, and **`boundaries`**. Add **`models`** directly to the agent when the agent owns its model roles. Profile Markdown still lives under **`agents/<id>/profile/`** for long-form persona/context files, but the structured manifest is the source of truth for runtime policy. User understanding and memory are configured once in top-level **`userContext`**.
+Each entry must include **`id`**, **`identity`**, **`responsibilities`**, and **`workspace`**. Policy fields are sparse overrides: omit them to inherit from capability presets. The resolved runtime manifest is complete and must contain model roles. Profile Markdown still lives under **`agents/<id>/profile/`** for long-form persona/context files, but the structured manifest is the source of truth for runtime policy. User understanding and memory are configured once in top-level **`userContext`**.
+
+Resolution order is the global preset, inherited preset parents, the agent's listed presets, then the agent entry. Objects merge recursively; arrays and scalar values replace earlier values; omitted fields inherit. Later layers override earlier ones unless an earlier preset locks that policy path.
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -201,7 +196,6 @@ Each entry must include **`id`**, **`identity`**, **`responsibilities`**, **`wor
 | `tools.builtin` | object | Built-in tool policy by tool name: `{ "mode": "allow" | "confirm" | "deny", "scope"?: "readonly" | "workspace" | "unrestricted" }`. |
 | `tools.mcp` | object | Optional MCP server/tool policies. |
 | `skills` | object | Skill visibility policy: `all`, `allowlist`, `denylist`, or `off`. |
-| `memory` | object | Memory mode, sources, write policy, retention, privacy, and optional background user-understanding review policy. |
 | `workflows` | object | Optional default/allowed/suggested workflow policy. |
 | `boundaries` | object | Confirmation, forbidden, and escalation rules. |
 | `runtime` | object | Optional runtime limits (`maxTurns`, `timeoutMs`, `maxToolFailuresPerTurn`). |

@@ -5,7 +5,7 @@ import {
   getOrCreateSessionMcpRuntime,
   materializeBundleMcpToolsForRun,
 } from './bundle-mcp-tools.js';
-import { shouldCreateBundleMcpRuntimeForAttempt } from './bundle-mcp-policy.js';
+import { isMcpToolDenied, shouldCreateBundleMcpRuntimeForAttempt } from './bundle-mcp-policy.js';
 import type { BundleMcpToolRuntime } from './bundle-mcp-types.js';
 
 export type ResolvedEmbeddedMcpTools = {
@@ -26,10 +26,7 @@ export async function resolveEmbeddedMcpToolsForTurn(params: {
   const disabledTools = profile?.tools.denied;
 
   if (
-    !shouldCreateBundleMcpRuntimeForAttempt({
-      cfg: params.cfg,
-      disabledTools,
-    })
+    !shouldCreateBundleMcpRuntimeForAttempt(params.cfg)
   ) {
     return { tools: [], dispose: async () => {} };
   }
@@ -60,6 +57,9 @@ export async function resolveEmbeddedMcpToolsForTurn(params: {
 
   const filtered = materialized.tools.filter((tool) => {
     if (disabledTools?.has(tool.name)) {
+      return false;
+    }
+    if (isMcpToolDenied(tool.name, profile?.manifest.tools.mcp)) {
       return false;
     }
     return true;

@@ -23,7 +23,7 @@
 | 委托与代码（可选） | `delegate_task`, `execute_code` |
 | 多 Agent 编排（可选） | `workflow` — 通过确定性 JS 脚本扇出子 Agent。见 [动态工作流](workflows.md)。 |
 | 自动化（可选） | `automation` — 运行时提供自动化服务（常见为网关） |
-| MCP（可选） | `服务器ID__工具名` — 来自已配置的 MCP 服务；在 `tools.disable` 中加 `bundle-mcp` 可关闭全部 |
+| MCP（可选） | `服务器ID__工具名` — 来自已配置的 MCP 服务；在 Agent/能力方案的 `tools.mcp.servers` 或 `tools.mcp.tools` 中控制访问 |
 
 扩展也可追加工具。
 

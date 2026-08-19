@@ -7,6 +7,7 @@ import {
   prepareCreateCapabilityPreset,
   prepareDeleteCapabilityPreset,
   prepareUpdateCapabilityPreset,
+  previewCapabilityPresetUpdate,
 } from '../capability-presets-admin.js';
 
 function manifest(id: string, patch: Partial<AgentManifest> = {}): AgentManifest {
@@ -40,6 +41,44 @@ function minimalConfig(overrides: Partial<Config> = {}): Config {
 }
 
 describe('capability-presets-admin', () => {
+  it('previews effective per-agent changes without saving', () => {
+    const cfg = minimalConfig({
+      agents: {
+        default: 'main',
+        defaultPreset: 'default',
+        capabilityPresets: {
+          default: {
+            id: 'default',
+            name: 'Global defaults',
+            version: 1,
+            models: { defaultRole: 'deep', roles: { deep: { model: 'openai/gpt-4.1' } } },
+          },
+          research: {
+            id: 'research',
+            name: 'Research',
+            version: 1,
+            tools: { builtin: { exec_command: { mode: 'confirm' } } },
+          },
+        },
+        list: [manifest('main'), manifest('researcher', { extends: ['research'], tools: { builtin: {} } })],
+      },
+    } as Partial<Config>);
+
+    const preview = previewCapabilityPresetUpdate(cfg, 'research', {
+      tools: { builtin: { exec_command: { mode: 'deny' } } },
+    });
+    expect(preview.ok).toBe(true);
+    if (!preview.ok) return;
+    expect(preview.data.agents).toEqual([
+      {
+        agentId: 'researcher',
+        agentName: 'researcher',
+        diffs: [{ path: 'tools.builtin.exec_command.mode', before: 'confirm', after: 'deny' }],
+      },
+    ]);
+    expect(cfg.agents.capabilityPresets.research?.tools?.builtin?.exec_command?.mode).toBe('confirm');
+  });
+
   it('creates and lists capability presets with usage', () => {
     const created = prepareCreateCapabilityPreset(minimalConfig(), {
       id: 'safe-coder',
@@ -230,6 +269,35 @@ describe('capability-presets-admin', () => {
     expect(updated.ok).toBe(false);
     if (updated.ok) return;
     expect(updated.error).toContain('cycle');
+  });
+
+  it('rejects updates that make an affected agent manifest invalid', () => {
+    const cfg = minimalConfig({
+      agents: {
+        default: 'main',
+        defaultPreset: 'default',
+        capabilityPresets: {
+          default: {
+            id: 'default',
+            name: 'Global defaults',
+            version: 1,
+            models: { defaultRole: 'deep', roles: { deep: { model: 'openai/gpt-4.1' } } },
+          },
+        },
+        list: [{
+          id: 'main',
+          enabled: true,
+          identity: { name: 'main', role: 'Agent', language: 'en', tone: 'direct' },
+          responsibilities: { primary: ['Help'] },
+          workspace: { root: '/tmp/main' },
+        }],
+      },
+    } as Partial<Config>);
+
+    const updated = prepareUpdateCapabilityPreset(cfg, 'default', { models: null });
+    expect(updated.ok).toBe(false);
+    if (updated.ok) return;
+    expect(updated.error).toContain('agent "main" effective manifest is invalid');
   });
 
   it('protects presets that are used by agents from deletion', () => {

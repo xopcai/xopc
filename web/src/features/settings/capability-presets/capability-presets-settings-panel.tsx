@@ -35,10 +35,12 @@ import {
   createCapabilityPreset,
   deleteCapabilityPreset,
   fetchCapabilityPresets,
+  previewCapabilityPresetUpdate,
   updateCapabilityPreset,
   type CapabilityPresetRow,
   type CapabilityPresetPolicyFields,
   type CapabilityPresetToolPolicy,
+  type CapabilityPresetUpdateBody,
 } from '@/features/settings/capability-presets/capability-presets-api';
 import { PresetModelsEditor } from '@/features/settings/capability-presets/preset-models-editor';
 import {
@@ -53,7 +55,7 @@ import {
 import { PresetToolsPolicyEditor } from '@/features/settings/capability-presets/preset-tools-policy-editor';
 import { fetchImageCatalog } from '@/features/settings/image-generation-api';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
-import { SettingsPageSkeleton } from '@/features/settings/settings-loading-skeleton';
+import { SettingsListSkeleton, SettingsPageSkeleton } from '@/features/settings/settings-loading-skeleton';
 import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
 import { messages, type ChatMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
@@ -316,6 +318,12 @@ function presetSummary(preset: CapabilityPresetRow, cp: CapabilityPresetMessages
   return parts.join(' · ') || cp.summaryEmpty;
 }
 
+function previewValue(value: unknown): string {
+  if (value === undefined) return '—';
+  if (typeof value === 'string') return value;
+  return JSON.stringify(value);
+}
+
 function emptyDraftPolicyFields() {
   return {
     modelAdvanced: emptyModelAdvancedDraft(),
@@ -481,6 +489,39 @@ export function CapabilityPresetsSettingsPanel() {
       locks: presetComparable?.locks,
     }) ? cp.tabs.advanced : '',
   ].filter(Boolean);
+  const previewBody = useMemo<CapabilityPresetUpdateBody | null>(() => {
+    if (!selected || isNew) return null;
+    try {
+      const policy = policyPayloadFromDraft(draft, selected);
+      return {
+        name: draft.name.trim(),
+        description: draft.description.trim() || null,
+        extends: policy.extends ?? null,
+        models: policy.models ?? null,
+        tools: policy.tools ?? null,
+        skills: policy.skills ?? null,
+        workflows: policy.workflows ?? null,
+        boundaries: policy.boundaries ?? null,
+        runtime: policy.runtime ?? null,
+        locks: policy.locks ?? null,
+      };
+    } catch {
+      return null;
+    }
+  }, [draft, isNew, selected]);
+  const previewKey =
+    activeTab === 'impact' && selected && previewBody
+      ? ['capability-preset-impact-preview', selected.id, JSON.stringify(previewBody)]
+      : null;
+  const {
+    data: impactPreview,
+    error: impactPreviewError,
+    isLoading: impactPreviewLoading,
+  } = useSWR(
+    previewKey,
+    () => previewCapabilityPresetUpdate(selected.id, previewBody!),
+    { revalidateOnFocus: false },
+  );
   const displayError = localError ?? (error instanceof Error ? error.message : null);
   const dialogOpen = searchParams.get('action') === 'new' || Boolean(searchParams.get('preset'));
   const choosingTemplate = searchParams.get('action') === 'new' && selectedStarter === null;
@@ -1072,6 +1113,12 @@ export function CapabilityPresetsSettingsPanel() {
                     inheritanceTitle: cp.advancedInheritanceTitle,
                     inheritanceHint: cp.advancedInheritanceHint,
                     inheritanceEmpty: cp.advancedInheritanceEmpty,
+                    inheritanceApplied: cp.advancedInheritanceApplied,
+                    inheritanceAvailable: cp.advancedInheritanceAvailable,
+                    inheritanceAdd: cp.advancedInheritanceAdd,
+                    inheritanceRemove: cp.advancedInheritanceRemove,
+                    inheritanceMoveUp: cp.advancedInheritanceMoveUp,
+                    inheritanceMoveDown: cp.advancedInheritanceMoveDown,
                     jsonTitle: cp.advancedJsonTitle,
                     jsonHint: cp.advancedJsonHint,
                     fieldLabels: cp.advancedFieldLabels,
@@ -1092,6 +1139,48 @@ export function CapabilityPresetsSettingsPanel() {
                       : cp.changePreviewEmpty}
                   </p>
                 </div>
+                {!isNew ? (
+                  <div className="mb-4">
+                    <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">
+                      {cp.effectiveChangePreviewTitle}
+                    </div>
+                    {impactPreviewLoading ? (
+                      <SettingsListSkeleton rows={2} />
+                    ) : impactPreviewError ? (
+                      <p className="rounded-lg bg-surface-panel/60 px-3 py-2 text-sm text-red-600 shadow-surface dark:text-red-400">
+                        {cp.effectiveChangePreviewError}
+                      </p>
+                    ) : !previewBody ? (
+                      <p className="rounded-lg bg-surface-panel/60 px-3 py-2 text-sm text-fg-muted shadow-surface">
+                        {cp.effectiveChangePreviewInvalid}
+                      </p>
+                    ) : impactPreview?.agents.length ? (
+                      <div className="grid gap-3">
+                        {impactPreview.agents.map((agent) => (
+                          <div key={agent.agentId} className="rounded-lg bg-surface-panel/80 px-3 py-2 shadow-surface">
+                            <div className="text-sm font-medium text-fg">{agent.agentName || agent.agentId}</div>
+                            <div className="mt-2 grid gap-2">
+                              {agent.diffs.map((diff) => (
+                                <div key={diff.path} className="grid gap-1 text-xs sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
+                                  <div className="truncate font-mono text-fg-muted">{diff.path}</div>
+                                  <div className="min-w-0 text-fg">
+                                    <span className="break-all text-fg-muted">{previewValue(diff.before)}</span>
+                                    <span className="px-1.5 text-fg-subtle" aria-hidden>→</span>
+                                    <span className="break-all">{previewValue(diff.after)}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="rounded-lg bg-surface-panel/60 px-3 py-2 text-sm text-fg-muted shadow-surface">
+                        {cp.effectiveChangePreviewEmpty}
+                      </p>
+                    )}
+                  </div>
+                ) : null}
                 {selected?.usage.length ? (
                   <div className="grid gap-2">
                     {selected.usage.map((usage) => (

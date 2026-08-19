@@ -58,12 +58,6 @@ xopc onboard
         "workspace": { "root": "~/.xopc/workspace/main" },
         "tools": { "builtin": {} },
         "skills": { "mode": "all" },
-        "memory": {
-          "mode": "confirmWrite",
-          "sources": ["session", "curated"],
-          "writePolicy": { "curated": "confirm" },
-          "understanding": { "enabled": true, "adaptiveCadence": true, "reviewIntervalTurns": 10 }
-        },
         "workflows": {},
         "boundaries": { "requiresConfirmation": [], "forbidden": [], "escalation": [] }
       }
@@ -97,7 +91,6 @@ xopc onboard
         },
         "tools": { "builtin": {} },
         "skills": { "mode": "all" },
-        "memory": { "mode": "confirmWrite", "sources": ["session"] },
         "workflows": {},
         "boundaries": { "requiresConfirmation": [], "forbidden": [], "escalation": [] }
       }
@@ -181,12 +174,14 @@ xopc onboard
 |------|------|------|
 | `default` | string | 可选。未在会话键/API 中指定 agent 时使用的默认 id。未设置时：取 **`list` 中第一个 enabled 的 id**，否则 **`main`**。 |
 | `defaultPreset` | string | 可选。每个 agent 自身 `extends` 之前应用的全局 preset id。省略时默认 `default`。仅在需要共享基础能力时使用。 |
-| `capabilityPresets` | object | 可选。按 preset id 索引的可复用策略补丁。可包含模型角色、工具、技能、记忆、工作流、边界和运行时限制等。 |
+| `capabilityPresets` | object | 可选。按 preset id 索引的可复用策略补丁。可包含模型角色、工具、技能、工作流、边界、运行时限制和锁定路径。 |
 | `list` | array | 具体的 Agent Capability Manifest。每条可以独立完整配置，包括自己的 `models`。 |
 
 #### `agents.list` 条目
 
-每条至少包含 **`id`**、**`identity`**、**`responsibilities`**、**`workspace`**、**`tools`**、**`skills`**、**`workflows`** 和 **`boundaries`**。当 agent 自己拥有模型角色时，直接在该条目上配置 **`models`**。长文本 profile 仍可放在 **`agents/<id>/profile/`**，但结构化 manifest 是运行时策略的来源。用户理解与记忆只在顶层 **`userContext`** 配置一次。
+每条至少包含 **`id`**、**`identity`**、**`responsibilities`** 和 **`workspace`**。策略字段是稀疏覆盖：省略即从能力方案继承。解析后的运行时 manifest 必须完整并包含模型角色。长文本 profile 仍可放在 **`agents/<id>/profile/`**，但结构化 manifest 是运行时策略的来源。用户理解与记忆只在顶层 **`userContext`** 配置一次。
+
+解析顺序为：全局方案、方案继承的父方案、Agent 列出的方案、Agent 自身。对象递归合并；数组和标量整体替换；省略字段保持继承。后层覆盖前层，除非前层方案锁定了对应策略路径。
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -201,7 +196,6 @@ xopc onboard
 | `tools.builtin` | object | 内置工具策略：`{ "mode": "allow" \| "confirm" \| "deny", "scope"?: "readonly" \| "workspace" \| "unrestricted" }`。 |
 | `tools.mcp` | object | 可选 MCP server/tool 策略。 |
 | `skills` | object | 技能可见性策略：`all`、`allowlist`、`denylist` 或 `off`。 |
-| `memory` | object | 记忆模式、来源、写入策略、保留策略和隐私设置。 |
 | `workflows` | object | 可选的默认/允许/建议工作流策略。 |
 | `boundaries` | object | 需要确认、禁止和升级处理的边界规则。 |
 | `runtime` | object | 可选运行时限制，如 `maxTurns`、`timeoutMs`、`maxToolFailuresPerTurn`。 |

@@ -132,28 +132,33 @@ export function CreateAgentDialog(props: {
             <div className="rounded-lg border border-edge-subtle bg-surface-base p-3 dark:border-edge">
               <div className="text-sm font-medium text-fg">{a.createCapabilityPlansTitle}</div>
               <p className="mt-1 text-xs leading-relaxed text-fg-muted">{a.createCapabilityPlansHint}</p>
-              <div className="mt-2 rounded-md bg-accent/5 px-2.5 py-2 text-xs text-fg-muted">
-                {capabilityPlans.find((plan) => plan.id === defaultPresetId)?.name ?? a.capabilityPresetsGlobalDefault}
-              </div>
+              <label className="mt-2 flex cursor-pointer items-start gap-2 rounded-md bg-accent/5 px-2.5 py-2">
+                <input
+                  type="radio"
+                  name="create-capability-plan"
+                  className="mt-0.5 shrink-0"
+                  checked={selectedCapabilityPlanIds.length === 0}
+                  disabled={busy}
+                  onChange={() => onSelectedCapabilityPlanIdsChange([])}
+                />
+                <span className="text-xs text-fg-muted">
+                  {capabilityPlans.find((plan) => plan.id === defaultPresetId)?.name ?? a.capabilityPresetsGlobalDefault}
+                </span>
+              </label>
               <div className="mt-2 grid gap-2">
                 {capabilityPlans
                   .filter((plan) => plan.id !== defaultPresetId)
                   .map((plan) => {
-                    const checked = selectedCapabilityPlanIds.includes(plan.id);
+                    const checked = selectedCapabilityPlanIds[0] === plan.id;
                     return (
                       <label key={plan.id} className="flex cursor-pointer items-start gap-2 rounded-md bg-surface-panel px-2.5 py-2">
                         <input
-                          type="checkbox"
+                          type="radio"
+                          name="create-capability-plan"
                           className="mt-0.5 shrink-0 rounded border-edge"
                           checked={checked}
                           disabled={busy}
-                          onChange={() =>
-                            onSelectedCapabilityPlanIdsChange(
-                              checked
-                                ? selectedCapabilityPlanIds.filter((id) => id !== plan.id)
-                                : [...selectedCapabilityPlanIds, plan.id],
-                            )
-                          }
+                          onChange={() => onSelectedCapabilityPlanIdsChange([plan.id])}
                         />
                         <span className="min-w-0">
                           <span className="block text-sm font-medium text-fg">{plan.name}</span>

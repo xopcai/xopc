@@ -5,6 +5,7 @@ import {
   DEFAULT_CAPABILITY_PRESET_ID,
   type AgentConfigEntry,
   type CapabilityPreset,
+  type CapabilityPresetPatch,
   type EffectiveAgentManifest,
 } from './schema.js';
 import { linearizePresetIds } from './preset-chain.js';
@@ -13,12 +14,28 @@ export interface ResolveManifestResult {
   manifest: EffectiveAgentManifest;
   presetChain: string[];
   sources: Record<string, string>;
+  overrides: ManifestOverride[];
+  locks: string[];
+}
+
+export interface ManifestOverride {
+  path: string;
+  from: string;
+  to: string;
 }
 
 export interface ResolveManifestParams {
   agent: AgentConfigEntry;
   presets?: Record<string, CapabilityPreset>;
   defaultPresetId?: string;
+}
+
+export interface ResolvePresetLayerResult {
+  patch: CapabilityPresetPatch;
+  presetChain: string[];
+  sources: Record<string, string>;
+  locks: string[];
+  overrides: ManifestOverride[];
 }
 
 type JsonObject = Record<string, unknown>;
@@ -58,7 +75,7 @@ function mergeInto(
     source: string;
     sources: Record<string, string>;
     locks: Set<string>;
-    patchLocks?: readonly string[];
+    overrides: ManifestOverride[];
     basePath?: string;
   },
 ): void {
@@ -71,12 +88,15 @@ function mergeInto(
       mergeInto(target[key] as JsonObject, patchValue, { ...params, basePath: path });
       continue;
     }
+    for (const [sourcePath, previousSource] of Object.entries(params.sources)) {
+      if (sourcePath !== path && !sourcePath.startsWith(`${path}.`)) continue;
+      if (previousSource !== params.source) {
+        params.overrides.push({ path: sourcePath, from: previousSource, to: params.source });
+      }
+      delete params.sources[sourcePath];
+    }
     target[key] = clone(patchValue);
     collectLeafSources(patchValue, params.source, path, params.sources);
-    for (const lock of params.patchLocks ?? []) {
-      const lockPath = pathJoin(path, lock);
-      params.locks.add(lockPath);
-    }
   }
 }
 
@@ -95,42 +115,70 @@ function presetPatch(preset: CapabilityPreset): JsonObject {
 
 export function resolveEffectiveAgentManifest(params: ResolveManifestParams): ResolveManifestResult {
   const agent = AgentConfigEntrySchema.parse(params.agent);
+  const presetLayer = resolveCapabilityPresetLayer({
+    presetIds: agent.extends,
+    presets: params.presets,
+    defaultPresetId: params.defaultPresetId,
+  });
+
+  const merged: JsonObject = clone(presetLayer.patch) as JsonObject;
+  const sources = { ...presetLayer.sources };
+  const locks = new Set(presetLayer.locks);
+  const overrides = [...presetLayer.overrides];
+  const { extends: _extends, ...agentPatch } = agent;
+  mergeInto(merged, agentPatch as JsonObject, {
+    source: `agent:${agent.id}`,
+    sources,
+    locks,
+    overrides,
+  });
+
+  return {
+    manifest: AgentManifestSchema.parse({ ...merged, id: agent.id, enabled: agent.enabled, extends: agent.extends }),
+    presetChain: presetLayer.presetChain,
+    sources,
+    overrides,
+    locks: [...locks],
+  };
+}
+
+export function resolveCapabilityPresetLayer(params: {
+  presetIds?: readonly string[];
+  presets?: Record<string, CapabilityPreset>;
+  defaultPresetId?: string;
+}): ResolvePresetLayerResult {
   const presets = Object.fromEntries(
     Object.entries(params.presets ?? {}).map(([id, preset]) => [id, CapabilityPresetSchema.parse(preset)]),
   );
   const defaultPresetId = params.defaultPresetId ?? DEFAULT_CAPABILITY_PRESET_ID;
   const presetIds = [
     ...(presets[defaultPresetId] ? [defaultPresetId] : []),
-    ...(agent.extends ?? []).filter((id) => id !== defaultPresetId),
+    ...(params.presetIds ?? []).filter((id) => id !== defaultPresetId),
   ];
   const chain = linearizePresetIds(presetIds, presets).map((presetId) => presets[presetId]!);
 
   const merged: JsonObject = {};
   const sources: Record<string, string> = {};
   const locks = new Set<string>();
+  const overrides: ManifestOverride[] = [];
   for (const preset of chain) {
     mergeInto(merged, presetPatch(preset), {
       source: `preset:${preset.id}@${preset.version}`,
       sources,
       locks,
-      patchLocks: preset.locks,
+      overrides,
     });
     for (const lock of preset.locks ?? []) {
       locks.add(lock);
     }
   }
 
-  const { extends: _extends, ...agentPatch } = agent;
-  mergeInto(merged, agentPatch as JsonObject, {
-    source: `agent:${agent.id}`,
-    sources,
-    locks,
-  });
-
   return {
-    manifest: AgentManifestSchema.parse({ ...merged, id: agent.id, enabled: agent.enabled, extends: agent.extends }),
+    patch: merged as CapabilityPresetPatch,
     presetChain: chain.map((preset) => preset.id),
     sources,
+    locks: [...locks],
+    overrides,
   };
 }
 
