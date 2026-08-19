@@ -1,7 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Popover from '@radix-ui/react-popover';
 import type { TaskAction, ProjectOperatingView, ProjectTaskCard } from '@xopcai/gateway-contract';
-import { AlertCircle, Archive, ArrowLeft, Check, ChevronDown, Clock, Columns3, Copy, File, Folder, FolderPlus, History, LayoutDashboard, ListChecks, MessageSquarePlus, Pause, Pin, PinOff, Play, Plus, RotateCcw, Save, Search, Settings, Sparkles, Square, Trash2, X, Zap, type LucideIcon } from 'lucide-react';
+import { AlertCircle, Archive, ArrowLeft, Check, ChevronDown, Clock, Columns3, Copy, File, Folder, FolderPlus, History, LayoutDashboard, MessageSquarePlus, Pause, Pin, PinOff, Play, Plus, RotateCcw, Save, Search, Settings, Sparkles, Trash2, X, Zap, type LucideIcon } from 'lucide-react';
 import { type CSSProperties, type FormEvent, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
@@ -10,7 +10,7 @@ import { PageTabs } from '@/components/ui/page-tabs';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { RefreshButton } from '@/components/ui/refresh-button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { automationApi, type Automation, type AutomationRun } from '@/features/automations/automation-api';
+import { automationApi, type Automation } from '@/features/automations/automation-api';
 import { inferMimeTypeFromFileName } from '@/features/chat/attachments/attachment-utils-core';
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import { actOnTask, createTask } from '@/features/tasks/home-api';
@@ -48,15 +48,6 @@ import { ProjectSkillsPanel } from '@/features/projects/project-skills-panel';
 import { ProjectTaskBoard, type CreateProjectTaskInput } from '@/features/projects/task-board/project-task-board';
 import { fetchGatewayAgents, type GatewayAgentRow } from '@/features/settings/agents-admin-api';
 import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
-import {
-  cancelWorkflowRun,
-  listWorkflowDefinitions,
-  listWorkflowRuns,
-  retryWorkflowRun,
-  type WorkflowDefinition,
-  type WorkflowRunSummary,
-} from '@/features/workflows/workflow-api';
-import { workflowBoardHref } from '@/features/workflows/workflow-page.utils';
 import { detectPreviewFileType, getPreviewFileName, readModeForPreviewType } from '@/features/preview-runtime';
 import {
   downloadBinaryFile,
@@ -74,24 +65,19 @@ import { safeInternalReturnPath, withReturnTo } from '@/lib/navigation-return';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 
-type WorkTabId = 'workflows' | 'automations';
-type PrimaryTabId = 'overview' | 'board' | 'work' | 'files' | 'notes' | 'skills' | 'sessions' | 'activity' | 'settings';
-type TabId = Exclude<PrimaryTabId, 'work'> | WorkTabId;
+type TabId = 'overview' | 'tasks' | 'automations' | 'files' | 'notes' | 'skills' | 'sessions' | 'progress' | 'settings';
 
 const TABS: Array<{ id: TabId; icon: LucideIcon }> = [
   { id: 'overview', icon: LayoutDashboard },
-  { id: 'board', icon: Columns3 },
-  { id: 'sessions', icon: MessageSquarePlus },
-  { id: 'workflows', icon: Play },
-  { id: 'files', icon: Folder },
-  { id: 'activity', icon: History },
+  { id: 'tasks', icon: Columns3 },
   { id: 'automations', icon: Zap },
+  { id: 'files', icon: Folder },
   { id: 'notes', icon: File },
   { id: 'skills', icon: Sparkles },
+  { id: 'sessions', icon: MessageSquarePlus },
+  { id: 'progress', icon: History },
   { id: 'settings', icon: Settings },
 ];
-
-const WORK_TAB_IDS = new Set<WorkTabId>(['workflows', 'automations']);
 
 const PROJECT_TAB_IDS = new Set<TabId>(TABS.map((tab) => tab.id));
 const PROJECT_FILES_PANEL_WIDTH_STORAGE_KEY = 'xopc.projectFiles.panelWidthPx';
@@ -127,10 +113,6 @@ function isProjectTabId(value: string | undefined): value is TabId {
   return Boolean(value && PROJECT_TAB_IDS.has(value as TabId));
 }
 
-function isWorkTab(tab: TabId): tab is WorkTabId {
-  return WORK_TAB_IDS.has(tab as WorkTabId);
-}
-
 function interpolate(template: string, values: Record<string, string | number>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => String(values[key] ?? ''));
 }
@@ -147,13 +129,6 @@ function statusTone(status: string): string {
   if (status === 'done') return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
   if (status === 'paused') return 'bg-amber-500/10 text-amber-700 dark:text-amber-300';
   if (status === 'archived') return 'bg-surface-muted text-fg-subtle';
-  return 'bg-surface-hover text-fg-muted';
-}
-
-function workflowStatusTone(status: string): string {
-  if (status === 'succeeded') return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
-  if (status === 'failed' || status === 'timeout' || status === 'cancelled') return 'bg-red-500/10 text-red-700 dark:text-red-300';
-  if (status === 'running' || status === 'queued') return 'bg-accent-soft text-accent-fg';
   return 'bg-surface-hover text-fg-muted';
 }
 
@@ -659,10 +634,7 @@ export function ProjectDetailPage() {
   const [operatingView, setOperatingView] = useState<ProjectOperatingView | null>(null);
   const [sessions, setSessions] = useState<ProjectSession[]>([]);
   const [sessionSearchQuery, setSessionSearchQuery] = useState('');
-  const [workflowDefinitions, setWorkflowDefinitions] = useState<WorkflowDefinition[]>([]);
-  const [workflowRuns, setWorkflowRuns] = useState<WorkflowRunSummary[]>([]);
   const [automations, setAutomations] = useState<Automation[]>([]);
-  const [automationRuns, setAutomationRuns] = useState<AutomationRun[]>([]);
   const [automationsLoading, setAutomationsLoading] = useState(false);
   const [automationActionBusy, setAutomationActionBusy] = useState<string | null>(null);
   const [projectActivity, setProjectActivity] = useState<ProjectActivityEvent[]>([]);
@@ -694,8 +666,6 @@ export function ProjectDetailPage() {
   const [projectActionBusy, setProjectActionBusy] = useState<'pin' | 'archive' | null>(null);
   const [deletingProject, setDeletingProject] = useState(false);
   const [startingChat, setStartingChat] = useState(false);
-  const [workflowsLoading, setWorkflowsLoading] = useState(false);
-  const [workflowActionBusy, setWorkflowActionBusy] = useState<string | null>(null);
   const [creatingBlocker, setCreatingBlocker] = useState(false);
   const [taskActionBusyId, setTaskActionBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -745,8 +715,6 @@ export function ProjectDetailPage() {
 
   const projectTabForHref = useCallback((href: string): TabId => {
     if (href.startsWith('/chat/')) return 'sessions';
-    if (href.startsWith('/workflows')) return 'workflows';
-    if (href.startsWith('/automations')) return 'automations';
     if (href.startsWith('/notes')) return 'notes';
     return tab;
   }, [tab]);
@@ -845,50 +813,20 @@ export function ProjectDetailPage() {
     setError(null);
     await createTask({
       ...input,
-      mode: 'start',
+      mode: 'capture',
       projectId,
       locale: language,
     });
     await refreshOperatingView();
   }, [language, projectId, refreshOperatingView]);
 
-  const refreshProjectWorkflows = useCallback(async () => {
-    if (!project) return;
-    setWorkflowsLoading(true);
-    setError(null);
-    try {
-      const [definitionsResult, runsResult] = await Promise.all([
-        listWorkflowDefinitions(),
-        listWorkflowRuns(100, {
-          ownerAgentId: selectedAgentId || undefined,
-          projectId: project.id,
-        }),
-      ]);
-      setWorkflowDefinitions(definitionsResult);
-      setWorkflowRuns(runsResult);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setWorkflowsLoading(false);
-    }
-  }, [project, selectedAgentId]);
-
-  useEffect(() => {
-    if (!project) return;
-    void refreshProjectWorkflows();
-  }, [project, refreshProjectWorkflows]);
-
   const refreshProjectAutomations = useCallback(async () => {
     if (!project) return;
     setAutomationsLoading(true);
     setError(null);
     try {
-      const [automationResult, runResult] = await Promise.all([
-        automationApi.list({ projectId: project.id }),
-        automationApi.runs(50, undefined, { projectId: project.id }),
-      ]);
+      const automationResult = await automationApi.list({ projectId: project.id });
       setAutomations(automationResult.automations);
-      setAutomationRuns(runResult.runs);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -920,22 +858,9 @@ export function ProjectDetailPage() {
   }, [project, projectActivityIncludeRelated]);
 
   useEffect(() => {
-    if (tab !== 'activity') return;
+    if (tab !== 'progress') return;
     void refreshProjectActivity();
   }, [refreshProjectActivity, tab]);
-
-  const runAutomation = useCallback(async (automation: Automation) => {
-    setAutomationActionBusy(`run:${automation.id}`);
-    setError(null);
-    try {
-      await automationApi.runNow(automation.id);
-      await refreshProjectAutomations();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setAutomationActionBusy(null);
-    }
-  }, [refreshProjectAutomations]);
 
   const toggleAutomation = useCallback(async (automation: Automation) => {
     setAutomationActionBusy(`toggle:${automation.id}`);
@@ -1073,39 +998,6 @@ export function ProjectDetailPage() {
       setCreatingBlocker(false);
     }
   }, [blockerDraft.reason, blockerDraft.title, project, refreshProjectState]);
-
-  const retryRun = useCallback(async (run: WorkflowRunSummary) => {
-    if (!project) return;
-    setWorkflowActionBusy(`retry:${run.id}`);
-    setError(null);
-    try {
-      const result = await retryWorkflowRun(run.id, {
-        ownerAgentId: selectedAgentId || run.metadata?.agentId,
-        projectId: run.metadata?.projectId || project.id,
-      });
-      await refreshProjectWorkflows();
-      navigateFromProjectTab('workflows', workflowBoardHref(result.runId, {
-        ownerAgentId: selectedAgentId || run.metadata?.agentId || project.defaultAgentId,
-      }));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setWorkflowActionBusy(null);
-    }
-  }, [navigateFromProjectTab, project, refreshProjectWorkflows, selectedAgentId]);
-
-  const cancelRun = useCallback(async (run: WorkflowRunSummary) => {
-    setWorkflowActionBusy(`cancel:${run.id}`);
-    setError(null);
-    try {
-      await cancelWorkflowRun(run.id, { ownerAgentId: selectedAgentId || run.metadata?.agentId });
-      await refreshProjectWorkflows();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setWorkflowActionBusy(null);
-    }
-  }, [refreshProjectWorkflows, selectedAgentId]);
 
   const headerStart = useMemo(
     () => (
@@ -1463,22 +1355,16 @@ export function ProjectDetailPage() {
   const workspaceMigrationValue = workspaceMigrationMode === 'fixed' ? workspaceMigrationRoot.trim() : '';
   const workspaceMigrationChanged = workspaceMigrationValue !== fixedProjectWorkspace;
   const workspaceMigrationCanSubmit = workspaceMigrationChanged && (workspaceMigrationMode === 'follow' || Boolean(workspaceMigrationRoot.trim()));
-  const primaryTabItems: Array<{ id: Exclude<PrimaryTabId, 'settings'>; icon: LucideIcon; label: string }> = [
+  const primaryTabItems: Array<{ id: Exclude<TabId, 'settings'>; icon: LucideIcon; label: string }> = [
     { id: 'overview', icon: LayoutDashboard, label: pm.tabs.overview },
-    { id: 'board', icon: Columns3, label: pm.tabs.board },
-    { id: 'work', icon: ListChecks, label: pm.tabs.work },
+    { id: 'tasks', icon: Columns3, label: pm.tabs.tasks },
+    { id: 'automations', icon: Zap, label: pm.tabs.automations },
     { id: 'files', icon: Folder, label: pm.tabs.files },
     { id: 'notes', icon: File, label: pm.tabs.notes },
     { id: 'skills', icon: Sparkles, label: pm.tabs.skills },
     { id: 'sessions', icon: MessageSquarePlus, label: pm.tabs.sessions },
-    { id: 'activity', icon: History, label: pm.tabs.activity },
+    { id: 'progress', icon: History, label: pm.tabs.progress },
   ];
-  const workTabItems: Array<{ id: WorkTabId; icon: LucideIcon; label: string }> = [
-    { id: 'workflows', icon: Play, label: pm.tabs.workflows },
-    { id: 'automations', icon: Zap, label: pm.tabs.automations },
-  ];
-  const activePrimaryTab: PrimaryTabId = isWorkTab(tab) ? 'work' : tab;
-
   async function copyProjectWorkspacePath() {
     if (!workspaceRootLabel) return;
     const ok = await copyTextToClipboard(workspaceRootLabel);
@@ -1495,8 +1381,8 @@ export function ProjectDetailPage() {
       <div className="flex shrink-0 items-start justify-between gap-3">
         <PageTabs
           items={primaryTabItems}
-          activeTab={activePrimaryTab}
-          onChange={(nextTab) => navigateProjectTab(nextTab === 'work' ? 'workflows' : nextTab)}
+          activeTab={tab}
+          onChange={navigateProjectTab}
           ariaLabel={pm.navAria}
           tabIdPrefix="project-primary-tab"
           className="min-w-0 flex-1"
@@ -1515,20 +1401,6 @@ export function ProjectDetailPage() {
       </div>
 
       {error ? <p className="mt-3 shrink-0 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">{error}</p> : null}
-
-      {isWorkTab(tab) ? (
-        <div className="mt-3 shrink-0 rounded-xl border border-edge-subtle bg-surface-panel px-2 py-1 shadow-surface">
-          <PageTabs
-            items={workTabItems}
-            activeTab={tab}
-            onChange={navigateProjectTab}
-            ariaLabel={pm.workNavAria}
-            tabIdPrefix="project-work-tab"
-            panelIdPrefix="project-panel"
-            buttonClassName="h-8 px-2.5 py-1.5 text-xs"
-          />
-        </div>
-      ) : null}
 
       <div
         className={cn(
@@ -1691,10 +1563,10 @@ export function ProjectDetailPage() {
         </section>
       ) : null}
 
-      {tab === 'board' ? (
+      {tab === 'tasks' ? (
         <ProjectTaskBoard
           tasks={operatingView?.tasks ?? []}
-          returnTo={projectTabHref('board')}
+          returnTo={projectTabHref('tasks')}
           copy={pm.board}
           onAction={performProjectTaskAction}
           onCreate={createProjectTask}
@@ -1702,160 +1574,43 @@ export function ProjectDetailPage() {
         />
       ) : null}
 
-      {tab === 'workflows' ? (
-        <section id="project-panel-workflows" role="tabpanel" aria-labelledby="project-work-tab-workflows" className="grid h-full min-h-[28rem] gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
-          <div className="min-h-0">
-            <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg bg-surface-panel shadow-surface">
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-edge px-4 py-3">
-                <div>
-                  <h2 className="text-sm font-semibold text-fg">{pm.workflows.runsTitle}</h2>
-                  <p className="text-xs text-fg-muted">{pm.workflows.runsHint}</p>
-                </div>
-                <Button type="button" variant="secondary" className="h-9 rounded-lg" onClick={() => void refreshProjectWorkflows()} disabled={workflowsLoading}>
-                  <RotateCcw className="size-4" aria-hidden />
-                  {pm.common.refresh}
-                </Button>
-              </div>
-              <div className="min-h-0 flex-1 divide-y divide-edge overflow-y-auto">
-                {workflowsLoading && workflowRuns.length === 0 ? (
-                  <div className="px-4 py-6 text-sm text-fg-muted">{pm.workflows.loadingRuns}</div>
-                ) : workflowRuns.length ? workflowRuns.map((run) => {
-                  const canCancel = run.status === 'queued' || run.status === 'running';
-                  const canRetry = run.status === 'failed' || run.status === 'timeout' || run.status === 'cancelled';
-                  return (
-                    <div key={run.id} className="grid gap-2 px-4 py-3 hover:bg-surface-hover">
-                      <div className="flex items-center justify-between gap-3">
-                        <button
-                          type="button"
-                          className="min-w-0 truncate text-left text-sm font-medium text-fg hover:text-accent-fg"
-                          onClick={() => navigateFromProjectTab('workflows', workflowBoardHref(run.id, {
-                            ownerAgentId: selectedAgentId || run.metadata?.agentId || project.defaultAgentId,
-                          }))}
-                        >
-                          {run.title || run.definitionId}
-                        </button>
-                        <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-xs font-medium', workflowStatusTone(run.status))}>
-                          {statusLabel(run.status)}
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="truncate text-xs text-fg-muted">
-                          {interpolate(pm.workflows.runMeta, {
-                            definitionId: run.definitionId,
-                            done: run.metrics.doneAgentCount,
-                            total: run.metrics.agentCount,
-                            time: formatDate(run.createdAtMs),
-                          })}
-                        </span>
-                        <div className="flex items-center gap-1.5">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            className="h-8 rounded-lg px-2 py-1 text-xs"
-                            onClick={() => navigateFromProjectTab('workflows', workflowBoardHref(run.id, {
-                              ownerAgentId: selectedAgentId || run.metadata?.agentId || project.defaultAgentId,
-                            }))}
-                          >
-                            {pm.common.open}
-                          </Button>
-                          {canRetry ? (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              className="h-8 rounded-lg px-2 py-1 text-xs"
-                              disabled={workflowActionBusy === `retry:${run.id}`}
-                              onClick={() => void retryRun(run)}
-                            >
-                              <RotateCcw className="size-3.5" aria-hidden />
-                              {pm.common.retry}
-                            </Button>
-                          ) : null}
-                          {canCancel ? (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              className="h-8 rounded-lg px-2 py-1 text-xs"
-                              disabled={workflowActionBusy === `cancel:${run.id}`}
-                              onClick={() => void cancelRun(run)}
-                            >
-                              <Square className="size-3.5" aria-hidden />
-                              {pm.common.cancel}
-                            </Button>
-                          ) : null}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                }) : (
-                  <div className="px-4 py-6 text-sm text-fg-muted">
-                    {pm.workflows.emptyRuns}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <aside className="min-h-0">
-            <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg bg-surface-panel shadow-surface">
-              <div className="shrink-0 border-b border-edge px-4 py-3">
-                <h2 className="text-sm font-semibold text-fg">{pm.workflows.startTitle}</h2>
-                <p className="mt-1 text-xs text-fg-muted">{pm.workflows.startHint}</p>
-              </div>
-              <div className="min-h-0 flex-1 overflow-y-auto p-3">
-                <div className="grid gap-2">
-                {workflowDefinitions.length ? workflowDefinitions.map((definition) => (
-                  <button
-                    key={definition.id}
-                    type="button"
-                    className="grid gap-1 rounded-md bg-surface-base p-3 text-left hover:bg-surface-hover focus:outline-none focus:ring-2 focus:ring-accent/30"
-                    onClick={() => navigate(`/workflows/${definition.id}?projectId=${encodeURIComponent(project.id)}${selectedAgentId ? `&agentId=${encodeURIComponent(selectedAgentId)}` : ''}`)}
-                  >
-                    <span className="flex items-center gap-2 text-sm font-medium text-fg">
-                      <Play className="size-4 text-accent-fg" aria-hidden />
-                      <span className="min-w-0 truncate">{definition.title}</span>
-                    </span>
-                    <span className="line-clamp-2 text-xs leading-5 text-fg-muted">
-                      {definition.description || definition.metadata.whenToUse || definition.name}
-                    </span>
-                  </button>
-                )) : (
-                  <div className="px-1 py-3 text-sm text-fg-muted">{pm.workflows.emptyDefinitions}</div>
-                )}
-                </div>
-              </div>
-            </div>
-          </aside>
-        </section>
-      ) : null}
-
       {tab === 'automations' ? (
-        <section id="project-panel-automations" role="tabpanel" aria-labelledby="project-work-tab-automations" className="grid h-full min-h-[28rem] overflow-hidden gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
-          <div className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg bg-surface-panel shadow-surface">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-edge px-4 py-3">
-              <div>
-                <h2 className="text-sm font-semibold text-fg">{pm.automations.title}</h2>
-                <p className="text-xs text-fg-muted">{pm.automations.hint}</p>
+        <section
+          id="project-panel-automations"
+          role="tabpanel"
+          aria-labelledby="project-primary-tab-automations"
+          className="grid min-h-full content-start gap-4"
+        >
+          <div className="grid gap-4 rounded-lg bg-surface-panel p-4 shadow-surface">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <Zap className="size-4 text-accent-fg" aria-hidden />
+                  <h2 className="text-sm font-semibold text-fg">{pm.automations.title}</h2>
+                </div>
+                <p className="mt-1 text-sm leading-6 text-fg-muted">{pm.automations.hint}</p>
               </div>
-              <div className="flex items-center gap-2">
-                <Button type="button" variant="secondary" className="h-9 rounded-lg" onClick={() => void refreshProjectAutomations()} disabled={automationsLoading}>
-                  <RotateCcw className="size-4" aria-hidden />
+              <div className="flex shrink-0 items-center gap-2">
+                <Button type="button" variant="ghost" className="rounded-lg" onClick={() => void refreshProjectAutomations()} disabled={automationsLoading}>
+                  <RotateCcw className={cn('size-4', automationsLoading && 'animate-spin')} aria-hidden />
                   {pm.common.refresh}
                 </Button>
-                <Button type="button" variant="primary" className="h-9 rounded-lg" onClick={() => navigateFromProjectTab('automations', `/automations?projectId=${encodeURIComponent(project.id)}&action=create`)}>
+                <Button type="button" variant="secondary" className="rounded-lg" onClick={() => navigateFromProjectTab('automations', `/automations?projectId=${encodeURIComponent(project.id)}&action=create`)}>
                   <Plus className="size-4" aria-hidden />
-                  {pm.common.new}
+                  {pm.automations.create}
                 </Button>
               </div>
             </div>
-            <div className="min-h-0 flex-1 divide-y divide-edge overflow-y-auto">
-              {automationsLoading && automations.length === 0 ? (
-                <div className="px-4 py-6 text-sm text-fg-muted">{pm.automations.loading}</div>
-              ) : automations.length ? automations.map((automation) => {
-                const latestRun = automationRuns.find((run) => run.automationId === automation.id);
-                const running = automation.state.runningRunId ? automationRuns.find((run) => run.id === automation.state.runningRunId) : null;
-                return (
-                  <div key={automation.id} className="grid gap-2 px-4 py-3 hover:bg-surface-hover">
-                    <div className="flex items-center justify-between gap-3">
+            {automationsLoading && automations.length === 0 ? (
+              <div className="grid gap-2 md:grid-cols-2" aria-busy>
+                <Skeleton className="h-24 rounded-lg" />
+                <Skeleton className="h-24 rounded-lg" />
+              </div>
+            ) : automations.length ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                {automations.map((automation) => (
+                  <div key={automation.id} className="grid gap-3 rounded-lg border border-edge bg-surface-base p-3">
+                    <div className="flex min-w-0 items-start justify-between gap-3">
                       <button
                         type="button"
                         className="min-w-0 truncate text-left text-sm font-medium text-fg hover:text-accent-fg"
@@ -1867,79 +1622,29 @@ export function ProjectDetailPage() {
                         {automation.enabled ? pm.automations.enabled : pm.automations.paused}
                       </span>
                     </div>
-                    <p className="line-clamp-2 text-sm leading-5 text-fg-muted">{automation.description || automation.action.kind}</p>
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="truncate text-xs text-fg-muted">
-                        {interpolate(pm.common.lastRun, {
-                          trigger: automation.trigger.kind,
-                          action: automation.action.kind,
-                          time: latestRun ? formatDate(latestRun.createdAtMs) : pm.common.never,
-                        })}
-                      </span>
-                      <div className="flex items-center gap-1.5">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          className="h-8 rounded-lg px-2 py-1 text-xs"
-                          disabled={automationActionBusy === `run:${automation.id}` || Boolean(running)}
-                          onClick={() => void runAutomation(automation)}
-                        >
-                          <Play className="size-3.5" aria-hidden />
-                          {pm.automations.run}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          className="h-8 rounded-lg px-2 py-1 text-xs"
-                          disabled={automationActionBusy === `toggle:${automation.id}`}
-                          onClick={() => void toggleAutomation(automation)}
-                        >
-                          {automation.enabled ? <Pause className="size-3.5" aria-hidden /> : <Play className="size-3.5" aria-hidden />}
-                          {automation.enabled ? pm.automations.pause : pm.automations.resume}
-                        </Button>
-                      </div>
+                    <p className="line-clamp-2 text-xs leading-5 text-fg-muted">{automation.description || automation.action.kind}</p>
+                    <div className="flex justify-end gap-2">
+                      <Button type="button" variant="ghost" className="h-8 rounded-lg px-2 text-xs" onClick={() => navigateFromProjectTab('automations', `/automations?automation=${encodeURIComponent(automation.id)}`)}>
+                        {pm.common.open}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="h-8 rounded-lg px-2 text-xs"
+                        disabled={automationActionBusy === `toggle:${automation.id}`}
+                        onClick={() => void toggleAutomation(automation)}
+                      >
+                        {automation.enabled ? <Pause className="size-3.5" aria-hidden /> : <Play className="size-3.5" aria-hidden />}
+                        {automation.enabled ? pm.automations.pause : pm.automations.resume}
+                      </Button>
                     </div>
                   </div>
-                );
-              }) : (
-                <div className="grid gap-3 px-4 py-6 text-sm text-fg-muted">
-                  <p>{pm.automations.empty}</p>
-                  <div>
-                    <Button type="button" variant="secondary" className="rounded-lg" onClick={() => navigateFromProjectTab('automations', `/automations?projectId=${encodeURIComponent(project.id)}&action=create`)}>
-                      <Zap className="size-4" aria-hidden />
-                      {pm.automations.create}
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <p className="rounded-lg border border-dashed border-edge px-3 py-4 text-sm text-fg-muted">{pm.automations.empty}</p>
+            )}
           </div>
-
-          <aside className="grid min-h-0 min-w-0 content-start gap-4 overflow-y-auto pr-1 [scrollbar-gutter:stable]">
-            <div className="rounded-lg bg-surface-panel shadow-surface">
-              <div className="border-b border-edge px-4 py-3">
-                <h2 className="text-sm font-semibold text-fg">{pm.automations.recentRuns}</h2>
-              </div>
-              <div className="divide-y divide-edge">
-                {automationRuns.length ? automationRuns.slice(0, 8).map((run) => (
-                  <div key={run.id} className="px-4 py-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="min-w-0 truncate text-sm font-medium text-fg">{run.automationName}</span>
-                      <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-xs font-medium', workflowStatusTone(run.status))}>{statusLabel(run.status)}</span>
-                    </div>
-                    <p className="mt-1 truncate text-xs text-fg-muted">{formatDate(run.createdAtMs)}</p>
-                  </div>
-                )) : (
-                  <div className="px-4 py-6 text-sm text-fg-muted">{pm.automations.emptyRuns}</div>
-                )}
-              </div>
-            </div>
-            <div className="rounded-lg bg-surface-panel p-4 shadow-surface">
-              <h2 className="text-sm font-semibold text-fg">{pm.automations.contextTitle}</h2>
-              <p className="mt-2 text-sm leading-6 text-fg-muted">{pm.automations.contextHint}</p>
-              <p className="mt-3 break-all text-xs text-fg-subtle">{project.workspaceRoot || project.effectiveWorkspaceRoot || pm.common.defaultWorkspace}</p>
-            </div>
-          </aside>
         </section>
       ) : null}
 
@@ -2169,72 +1874,72 @@ export function ProjectDetailPage() {
           {visibleSessions.length ? (
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {visibleSessions.map((session) => {
-              const updatedAt = formatDate(session.updatedAt);
-              const agentLabel = session.routing?.agentId || session.agentId || pm.common.agent;
-              const sourceLabel = projectSessionSource(session);
-              const title = session.name?.trim() || pm.sessions.fallbackTitle;
-              const messagesLabel = messageCount(session.messageCount ?? 0);
-              return (
-                <Link
-                  key={session.key}
-                  to={`/chat/${encodeURIComponent(session.key)}`}
-                  onClick={onProjectTabLinkClick('sessions')}
-                  className="group flex min-h-[8.75rem] min-w-0 flex-col rounded-lg bg-surface-panel p-4 shadow-surface transition-colors hover:bg-surface-hover/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-                >
-                  <div className="flex min-w-0 items-start gap-3">
-                    <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-base text-fg-muted">
-                      <MessageSquarePlus className="size-4" aria-hidden />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-fg">{title}</h3>
-                        {sourceLabel ? (
-                          <span className="shrink-0 rounded-md bg-surface-base px-2 py-0.5 text-[11px] font-medium leading-5 text-fg-muted">
-                            {sourceLabel}
-                          </span>
-                        ) : null}
+                const updatedAt = formatDate(session.updatedAt);
+                const agentLabel = session.routing?.agentId || session.agentId || pm.common.agent;
+                const sourceLabel = projectSessionSource(session);
+                const title = session.name?.trim() || pm.sessions.fallbackTitle;
+                const messagesLabel = messageCount(session.messageCount ?? 0);
+                return (
+                  <Link
+                    key={session.key}
+                    to={`/chat/${encodeURIComponent(session.key)}`}
+                    onClick={onProjectTabLinkClick('sessions')}
+                    className="group flex min-h-[8.75rem] min-w-0 flex-col rounded-lg bg-surface-panel p-4 shadow-surface transition-colors hover:bg-surface-hover/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                  >
+                    <div className="flex min-w-0 items-start gap-3">
+                      <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-base text-fg-muted">
+                        <MessageSquarePlus className="size-4" aria-hidden />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-fg">{title}</h3>
+                          {sourceLabel ? (
+                            <span className="shrink-0 rounded-md bg-surface-base px-2 py-0.5 text-[11px] font-medium leading-5 text-fg-muted">
+                              {sourceLabel}
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="mt-auto grid gap-2 pt-4 text-xs text-fg-muted">
-                    <div className="flex min-w-0 flex-wrap items-center gap-2">
-                      <span className="min-w-0 max-w-full truncate rounded-md bg-surface-base px-2 py-1">
-                        {pm.sessions.agent}: {agentLabel}
-                      </span>
-                      <span className="rounded-md bg-surface-base px-2 py-1">{messagesLabel}</span>
+                    <div className="mt-auto grid gap-2 pt-4 text-xs text-fg-muted">
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        <span className="min-w-0 max-w-full truncate rounded-md bg-surface-base px-2 py-1">
+                          {pm.sessions.agent}: {agentLabel}
+                        </span>
+                        <span className="rounded-md bg-surface-base px-2 py-1">{messagesLabel}</span>
+                      </div>
+                      {updatedAt ? (
+                        <span className="truncate rounded-md bg-surface-base px-2 py-1">
+                          {pm.sessions.updated}: {updatedAt}
+                        </span>
+                      ) : null}
                     </div>
-                    {updatedAt ? (
-                      <span className="truncate rounded-md bg-surface-base px-2 py-1">
-                        {pm.sessions.updated}: {updatedAt}
-                      </span>
-                    ) : null}
-                  </div>
-                </Link>
-              );
+                  </Link>
+                );
               })}
             </div>
           ) : sessionsSearchMiss ? (
-              <div className="grid gap-1 rounded-lg bg-surface-panel px-4 py-8 text-center shadow-surface">
-                <h3 className="text-sm font-semibold text-fg">{pm.sessions.noMatches}</h3>
+            <div className="grid gap-1 rounded-lg bg-surface-panel px-4 py-8 text-center shadow-surface">
+              <h3 className="text-sm font-semibold text-fg">{pm.sessions.noMatches}</h3>
+            </div>
+          ) : (
+            <div className="grid gap-1 rounded-lg bg-surface-panel px-4 py-8 text-center shadow-surface">
+              <div>
+                <h3 className="text-sm font-semibold text-fg">{pm.sessions.emptyTitle}</h3>
+                <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-fg-muted">{pm.sessions.emptyDescription}</p>
               </div>
-            ) : (
-              <div className="grid gap-1 rounded-lg bg-surface-panel px-4 py-8 text-center shadow-surface">
-                <div>
-                  <h3 className="text-sm font-semibold text-fg">{pm.sessions.emptyTitle}</h3>
-                  <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-fg-muted">{pm.sessions.emptyDescription}</p>
-                </div>
-              </div>
-            )}
+            </div>
+          )}
         </section>
       ) : null}
 
-      {tab === 'activity' ? (
-        <section id="project-panel-activity" role="tabpanel" aria-labelledby="project-primary-tab-activity" className="grid min-h-full content-start gap-3">
+      {tab === 'progress' ? (
+        <section id="project-panel-progress" role="tabpanel" aria-labelledby="project-primary-tab-progress" className="grid min-h-full content-start gap-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-sm font-semibold text-fg">{pm.activity.title}</h2>
+              <h2 className="text-sm font-semibold text-fg">{pm.progress.title}</h2>
               <p className="mt-1 text-sm text-fg-muted">
-                {interpolate(pm.activity.count, { count: projectActivityTotal })}
+                {interpolate(pm.progress.count, { count: projectActivityTotal })}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -2245,7 +1950,7 @@ export function ProjectDetailPage() {
                   onChange={(event) => setProjectActivityIncludeRelated(event.currentTarget.checked)}
                   className="size-4 rounded border-edge text-accent focus:ring-accent/30"
                 />
-                {pm.activity.includeRelated}
+                {pm.progress.includeRelated}
               </label>
               <Button type="button" variant="secondary" className="h-9 rounded-lg px-3" onClick={() => void refreshProjectActivity()} disabled={projectActivityLoading}>
                 <RotateCcw className={cn('size-4', projectActivityLoading && 'animate-spin')} aria-hidden />
@@ -2256,12 +1961,12 @@ export function ProjectDetailPage() {
 
           <div className="overflow-hidden rounded-lg bg-surface-panel shadow-surface">
             {projectActivityLoading && projectActivity.length === 0 ? (
-              <div className="px-4 py-8 text-sm text-fg-muted">{pm.activity.loading}</div>
+              <div className="px-4 py-8 text-sm text-fg-muted">{pm.progress.loading}</div>
             ) : projectActivity.length ? (
               <div className="divide-y divide-edge">
                 {projectActivity.map((activity) => {
-                  const typeLabel = pm.activity.types[activity.type as keyof typeof pm.activity.types] ?? activity.type;
-                  const objectKind = pm.activity.objectKinds[activity.primaryObject.kind] ?? activity.primaryObject.kind;
+                  const typeLabel = pm.progress.types[activity.type as keyof typeof pm.progress.types] ?? activity.type;
+                  const objectKind = pm.progress.objectKinds[activity.primaryObject.kind] ?? activity.primaryObject.kind;
                   const payloadPreview = activityPayloadPreview(activity);
                   const isRelatedOnly = activity.relatedProjects.length > 0
                     && !activity.scopes.some((scope) => scope.scopeKind === 'project' && scope.scopeId === project.id);
@@ -2273,7 +1978,7 @@ export function ProjectDetailPage() {
                             <span className="min-w-0 truncate text-sm font-medium text-fg">{typeLabel}</span>
                             {isRelatedOnly ? (
                               <span className="rounded-full bg-surface-muted px-2 py-0.5 text-xs font-medium text-fg-muted">
-                                {pm.activity.related}
+                                {pm.progress.related}
                               </span>
                             ) : null}
                           </div>
@@ -2290,10 +1995,10 @@ export function ProjectDetailPage() {
                       ) : null}
                       <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-fg-subtle">
                         <span className="rounded-md bg-surface-base px-2 py-1">
-                          {pm.activity.actor}: {activityActorLabel(activity)}
+                          {pm.progress.actor}: {activityActorLabel(activity)}
                         </span>
                         <span className="max-w-full truncate rounded-md bg-surface-base px-2 py-1">
-                          {pm.activity.source}: {activitySourceLabel(activity)}
+                          {pm.progress.source}: {activitySourceLabel(activity)}
                         </span>
                       </div>
                     </article>
@@ -2301,7 +2006,7 @@ export function ProjectDetailPage() {
                 })}
               </div>
             ) : (
-              <div className="px-4 py-8 text-sm text-fg-muted">{pm.activity.empty}</div>
+              <div className="px-4 py-8 text-sm text-fg-muted">{pm.progress.empty}</div>
             )}
           </div>
         </section>

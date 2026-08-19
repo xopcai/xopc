@@ -74,6 +74,78 @@ describe('TaskRunner scheduling', () => {
     expect(runTurn).toHaveBeenCalledOnce();
   });
 
+  it('keeps durable task attachments when planning provides a next action', async () => {
+    const tasks = new TaskRepository();
+    const task = tasks.create({
+      objective: 'Review the attached brief',
+      contextAttachments: [{
+        id: 'brief',
+        bucket: 'inbound',
+        type: 'document',
+        mimeType: 'text/plain',
+        name: 'brief.txt',
+        size: 12,
+        uri: 'media://inbound/brief.txt',
+        path: join(stateDir, 'brief.txt'),
+      }],
+    });
+    const runTurn = vi.fn(async () => undefined);
+    const runner = new TaskRunner({
+      ensureSession: async () => 'agent:main:webchat:default:direct:with-attachment',
+      prepareTask: async (taskId) => {
+        tasks.update(taskId, { nextAction: 'Inspect every attached file' });
+      },
+      hasActiveRun: () => false,
+      runTurn,
+    });
+
+    runner.enqueue(task.id);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(runTurn).toHaveBeenCalledOnce();
+    const userTurn = runTurn.mock.calls[0]?.[1];
+    expect(userTurn?.text).toContain('Task:\nReview the attached brief');
+    expect(userTurn?.text).toContain('Current next action:\nInspect every attached file');
+    expect(userTurn?.attachments).toEqual([expect.objectContaining({
+      id: 'brief',
+      name: 'brief.txt',
+      uri: 'media://inbound/brief.txt',
+    })]);
+  });
+
+  it('keeps durable task attachments on explicit correction turns', async () => {
+    const task = new TaskRepository().create({
+      objective: 'Review the attached brief',
+      contextAttachments: [{
+        id: 'brief',
+        bucket: 'inbound',
+        type: 'document',
+        mimeType: 'text/plain',
+        name: 'brief.txt',
+        size: 12,
+        uri: 'media://inbound/brief.txt',
+        path: join(stateDir, 'brief.txt'),
+      }],
+    });
+    const runTurn = vi.fn(async () => undefined);
+    const runner = new TaskRunner({
+      ensureSession: async () => 'agent:main:webchat:default:direct:correction',
+      hasActiveRun: () => false,
+      runTurn,
+    });
+
+    runner.enqueue(task.id, { userTurn: { text: 'Read the attachment and correct the result.' } });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(runTurn).toHaveBeenCalledWith(
+      'agent:main:webchat:default:direct:correction',
+      expect.objectContaining({
+        text: 'Read the attachment and correct the result.',
+        attachments: [expect.objectContaining({ uri: 'media://inbound/brief.txt' })],
+      }),
+    );
+  });
+
   it('does not execute a scheduled item after the task is paused', async () => {
     const tasks = new TaskRepository();
     const task = tasks.create({ objective: 'Stay paused' });

@@ -205,9 +205,9 @@ export function buildProjectLoopOverview(input: {
           : 'empty';
   const digestSummary =
     digestStatus === 'attention'
-      ? `${attentionItems.length} item(s) need attention: ${blockedTasks.length} blocker(s), ${staleTasks.length} stale task(s), ${failedWorkflowRuns.length} failed workflow run(s).`
+      ? `${attentionItems.length} item(s) need attention: ${blockedTasks.length} blocker(s), ${staleTasks.length} stale task(s), ${failedWorkflowRuns.length} execution issue(s).`
       : digestStatus === 'healthy'
-        ? `${activeTasks.length} active task(s), ${nextActions.length} next action(s), and ${input.recentWorkflowRuns.length} recent workflow run(s).`
+        ? `${activeTasks.length} active task(s) and ${nextActions.length} clear next action(s).`
         : digestStatus === 'idle'
           ? 'Recent activity exists, but no active task is driving the project.'
           : 'No project activity has been recorded yet.';

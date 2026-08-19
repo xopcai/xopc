@@ -12,29 +12,39 @@ import type { DiscussionOrganization } from './types.js';
 
 const MAX_TRANSCRIPT_CHARS = 120_000;
 
+const optionalString = (maxLength: number) => z.preprocess(
+  (value) => value === null ? undefined : value,
+  z.string().trim().min(1).max(maxLength).optional(),
+);
+
+const optionalConfidence = z.preprocess(
+  (value) => value === null ? undefined : value,
+  z.number().min(0).max(1).optional(),
+);
+
 const OrganizationSchema = z.object({
   title: z.string().trim().min(1).max(200),
   summary: z.string().trim().min(1).max(4_000),
   keyPoints: z.array(z.string().trim().min(1).max(1_000)).max(12).default([]),
   decisions: z.array(z.string().trim().min(1).max(1_000)).max(12).default([]),
   actionItems: z.array(z.object({
-    id: z.string().trim().min(1).max(100).optional(),
+    id: optionalString(100),
     title: z.string().trim().min(1).max(500),
-    owner: z.string().trim().min(1).max(200).optional(),
-    dueDate: z.string().trim().min(1).max(100).optional(),
+    owner: optionalString(200),
+    dueDate: optionalString(100),
   })).max(20).default([]),
   risks: z.array(z.string().trim().min(1).max(1_000)).max(12).default([]),
   openQuestions: z.array(z.string().trim().min(1).max(1_000)).max(12).default([]),
-  projectCandidateId: z.string().trim().min(1).max(200).optional(),
-  projectConfidence: z.number().min(0).max(1).optional(),
-  projectAlternativeConfidence: z.number().min(0).max(1).optional(),
+  projectCandidateId: optionalString(200),
+  projectConfidence: optionalConfidence,
+  projectAlternativeConfidence: optionalConfidence,
 });
 
 const LiveEnrichmentSchema = z.object({
   title: z.string().trim().min(1).max(200),
-  projectCandidateId: z.string().trim().min(1).max(200).optional(),
-  projectConfidence: z.number().min(0).max(1).optional(),
-  projectAlternativeConfidence: z.number().min(0).max(1).optional(),
+  projectCandidateId: optionalString(200),
+  projectConfidence: optionalConfidence,
+  projectAlternativeConfidence: optionalConfidence,
 });
 
 function extractText(content: unknown): string {
@@ -66,7 +76,9 @@ function actionId(title: string, index: number): string {
 export function normalizeDiscussionOrganization(value: unknown): DiscussionOrganization {
   const parsed = OrganizationSchema.safeParse(value);
   if (!parsed.success) {
-    throw new Error(`Invalid discussion organization: ${parsed.error.issues[0]?.message ?? 'schema mismatch'}`);
+    const issue = parsed.error.issues[0];
+    const path = issue?.path.length ? `${issue.path.join('.')}: ` : '';
+    throw new Error(`Invalid discussion organization: ${path}${issue?.message ?? 'schema mismatch'}`);
   }
   return {
     ...parsed.data,
@@ -96,7 +108,7 @@ export async function analyzeDiscussion(input: {
     'Use only facts explicitly present in the transcript. Do not invent owners, dates, decisions, or commitments.',
     'Return exactly one JSON object with: title, summary, keyPoints, decisions, actionItems, risks, openQuestions, and optional projectCandidateId, projectConfidence, and projectAlternativeConfidence.',
     'title is a short concrete note title derived from the discussion.',
-    'actionItems contains title and optional owner and dueDate. Omit owner or dueDate when not explicit.',
+    'actionItems contains title and optional owner and dueDate. Omit optional fields rather than returning null when not explicit.',
     'Keep unresolved possibilities in openQuestions, not decisions.',
     input.projects?.length
       ? `Choose projectCandidateId only from this catalog when the discussion clearly belongs to it; otherwise omit it. projectConfidence is the top probability and projectAlternativeConfidence is the runner-up probability: ${JSON.stringify(input.projects.slice(0, 100))}`

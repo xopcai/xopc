@@ -298,6 +298,7 @@ export class AgentService {
       getNotesService: config.getNotesService,
       getProjectService: config.getProjectService,
       getLocalAppService: config.getLocalAppService,
+      enqueueTask: config.enqueueTask,
       getWorkflowRunService: config.getWorkflowRunService,
       onSkillsUpdated: config.onSkillsUpdated,
       installSkillFromSource: (opts) => this.installSkillFromSource(opts),

@@ -2,6 +2,9 @@ import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import {
   appendProductDeliveryText,
+  type TaskAction,
+  type TaskPriority,
+  type TaskStatus,
   type ProductDeliveryEnvelope,
   type ProductReference,
 } from '@xopcai/gateway-contract';
@@ -16,17 +19,30 @@ import {
   type ProjectStatus,
 } from '../../projects/index.js';
 import type { LocalAppService } from '../../local-apps/index.js';
+import { getSessionMetadata } from '../../storage/sqlite/index.js';
+import {
+  defineTaskContract,
+  TaskCommandService,
+  TaskRepository,
+  type EnqueueTaskOptions,
+  type TaskQueueItem,
+} from '../../tasks/index.js';
+import {
+  TaskDependencyError,
+  TaskDependencyService,
+} from '../../tasks/task-dependency-service.js';
 
 const XopcUseToolSchema = Type.Object({
   mode: Type.Union([
     Type.Literal('project'),
     Type.Literal('note'),
+    Type.Literal('task'),
     Type.Literal('local_app'),
     Type.Literal('settings'),
   ]),
   command: Type.String({
     description:
-      'Object command. Supports project list/get/create/update/resolve_workspace, note list/get/create/append/update/preview_edit, local_app list/get/create/validate, and settings open.',
+      'Object command. Supports project list/get/create/update/resolve_workspace, note list/get/create/append/update/preview_edit, task list/get/create/update_dependencies/action, local_app list/get/create/validate, and settings open.',
   }),
   args: Type.Optional(Type.Record(Type.String(), Type.Any())),
   dryRun: Type.Optional(Type.Boolean({
@@ -34,7 +50,7 @@ const XopcUseToolSchema = Type.Object({
   })),
 });
 
-export type XopcUseMode = 'project' | 'note' | 'local_app' | 'settings';
+export type XopcUseMode = 'project' | 'note' | 'task' | 'local_app' | 'settings';
 
 export interface XopcUseToolInput {
   mode: XopcUseMode;
@@ -50,6 +66,7 @@ export interface XopcUseToolDeps {
   getNotesService?: () => NotesService | undefined;
   getProjectService?: () => ProjectService | undefined;
   getLocalAppService?: () => LocalAppService | undefined;
+  enqueueTask?: (taskId: string, options?: EnqueueTaskOptions) => TaskQueueItem;
 }
 
 type XopcUseDetails = {
@@ -63,6 +80,21 @@ type XopcUseDetails = {
 const PROJECT_STATUSES = new Set<ProjectStatus>(['active', 'paused', 'archived']);
 const NOTE_KINDS = new Set<NoteKind>(['thought', 'todo', 'voice', 'media', 'bookmark', 'mixed', 'task']);
 const NOTE_STATUSES = new Set<NoteStatus>(['inbox', 'processed', 'archived', 'trashed']);
+const TASK_STATUSES = new Set<TaskStatus>([
+  'pending',
+  'planning',
+  'waiting_dependency',
+  'running',
+  'verifying',
+  'needs_user',
+  'blocked',
+  'paused',
+  'completed',
+  'cancelled',
+]);
+const TASK_PRIORITIES = new Set<TaskPriority>(['low', 'normal', 'high', 'critical']);
+const TASK_ACTIONS = new Set<TaskAction>(['run', 'pause', 'resume', 'verify', 'cancel']);
+const TASK_CREATE_MODES = new Set(['capture', 'start'] as const);
 
 function okText(details: XopcUseDetails): AgentToolResult<XopcUseDetails> {
   const text = JSON.stringify(details.result ?? {}, null, 2);
@@ -102,6 +134,15 @@ function offset(value: unknown): number | undefined {
 
 function enumValue<T extends string>(value: unknown, allowed: Set<T>): T | undefined {
   return typeof value === 'string' && allowed.has(value as T) ? value as T : undefined;
+}
+
+function finiteNumber(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return undefined;
 }
 
 function stringArray(value: unknown): string[] | undefined {
@@ -175,6 +216,28 @@ function deliveryForXopcResult(
         capabilities: ['open', 'preview', 'edit', 'continue_in_chat', 'share'],
       };
     }
+  } else if (mode === 'task') {
+    source = record(resultRecord.task);
+    const id = deliveryText(source?.id);
+    if (id) {
+      const status = deliveryText(source?.status);
+      const statusCapability: ProductReference['capabilities'][number] | undefined = status === 'pending'
+        ? 'run'
+        : status === 'planning' || status === 'running' || status === 'verifying'
+          ? 'pause'
+          : status === 'paused' || status === 'needs_user' || status === 'blocked'
+            ? 'resume'
+            : undefined;
+      primary = {
+        kind: 'task',
+        id,
+        title: deliveryText(source?.objective) ?? 'Task',
+        status,
+        revision: deliveryRevision(source?.updatedAt),
+        projectId: deliveryText(record(source?.execution)?.projectId),
+        capabilities: ['open', 'continue_in_chat', ...(statusCapability ? [statusCapability] : [])],
+      };
+    }
   } else if (mode === 'local_app') {
     source = record(resultRecord.app);
     const id = deliveryText(source?.id);
@@ -207,7 +270,9 @@ function deliveryForXopcResult(
   if (!primary) return undefined;
   return {
     version: 1,
-    operation: command === 'create'
+    operation: command === 'action' && ['run', 'resume'].includes(deliveryText(resultRecord.action) ?? '')
+      ? 'started'
+      : command === 'create'
       ? 'created'
       : command === 'get' || command === 'resolve_workspace' || mode === 'settings'
         ? 'opened'
@@ -216,6 +281,13 @@ function deliveryForXopcResult(
         : 'updated',
     primary,
   };
+}
+
+function currentProjectId(args: Record<string, unknown>, deps: XopcUseToolDeps): string | undefined {
+  const explicit = trimString(args.projectId);
+  if (explicit) return explicit;
+  const sessionKey = trimString(args.sessionKey) ?? deps.getCurrentSessionKey?.();
+  return sessionKey ? getSessionMetadata(sessionKey)?.projectId : undefined;
 }
 
 function projectWorkspaceRootArg(args: Record<string, unknown>): string | undefined {
@@ -423,6 +495,254 @@ async function handleNote(
   return { ok: false, error: `Unsupported note command: ${command}` };
 }
 
+async function handleTask(
+  command: string,
+  args: Record<string, unknown>,
+  deps: XopcUseToolDeps,
+  dryRun: boolean,
+): Promise<unknown> {
+  const tasks = new TaskRepository();
+  const dependencies = new TaskDependencyService();
+
+  if (command === 'list') {
+    const projectId = currentProjectId(args, deps);
+    const status = enumValue(args.status, TASK_STATUSES);
+    const priority = enumValue(args.priority, TASK_PRIORITIES);
+    const search = trimString(args.search)?.toLocaleLowerCase();
+    const start = offset(args.offset) ?? 0;
+    const limit = boundedLimit(args.limit);
+    const candidates = projectId
+      ? tasks.listByProject(projectId, 200)
+      : tasks.list({ limit: 200 });
+    const matching = candidates.filter((task) =>
+      (!status || task.status === status)
+      && (!priority || task.priority === priority)
+      && (!search || task.objective.toLocaleLowerCase().includes(search))
+    );
+    return {
+      ok: true,
+      items: matching.slice(start, start + limit),
+      total: matching.length,
+      ...(projectId ? { projectId } : {}),
+    };
+  }
+
+  if (command === 'get') {
+    const id = trimString(args.taskId) ?? trimString(args.id);
+    if (!id) return { ok: false, error: 'taskId is required' };
+    const task = tasks.get(id);
+    return task
+      ? {
+          ok: true,
+          task,
+          dependencies: dependencies.listDependencies(id),
+          dependents: dependencies.listDependents(id),
+        }
+      : { ok: false, error: `Task not found: ${id}` };
+  }
+
+  if (command === 'create') {
+    const objective = trimString(args.objective) ?? trimString(args.title);
+    if (!objective) return { ok: false, error: 'objective is required' };
+    const createMode = args.createMode === undefined
+      ? 'capture'
+      : enumValue(args.createMode, TASK_CREATE_MODES);
+    if (!createMode) return { ok: false, error: 'Invalid createMode' };
+    if (createMode === 'start' && !deps.enqueueTask) {
+      return { ok: false, error: 'Task execution service is unavailable' };
+    }
+    const projectId = currentProjectId(args, deps);
+    if (projectId) {
+      const projects = deps.getProjectService?.();
+      if (!projects) return { ok: false, error: 'Project service is unavailable' };
+      if (!projects.get(projectId)) return { ok: false, error: `Project not found: ${projectId}` };
+    }
+    const priority = args.priority === undefined
+      ? undefined
+      : enumValue(args.priority, TASK_PRIORITIES);
+    if (args.priority !== undefined && !priority) return { ok: false, error: 'Invalid task priority' };
+    const dueAt = args.dueAt === undefined ? undefined : finiteNumber(args.dueAt);
+    if (args.dueAt !== undefined && (dueAt === undefined || dueAt < 0)) {
+      return { ok: false, error: 'Invalid dueAt' };
+    }
+    const locale = args.locale === undefined
+      ? undefined
+      : enumValue(args.locale, new Set(['en', 'zh'] as const));
+    if (args.locale !== undefined && !locale) return { ok: false, error: 'Invalid locale' };
+    const dependsOnTaskIds = args.dependsOnTaskIds === undefined
+      ? []
+      : stringArray(args.dependsOnTaskIds);
+    if (!dependsOnTaskIds) return { ok: false, error: 'Invalid dependsOnTaskIds' };
+    const baseContract = defineTaskContract(objective);
+    const contractFields = [
+      'expectedOutputs',
+      'acceptanceCriteria',
+      'constraints',
+      'approvalRequired',
+      'assumptions',
+      'risks',
+    ] as const;
+    const contract = { ...baseContract };
+    for (const field of contractFields) {
+      if (args[field] === undefined) continue;
+      const value = stringArray(args[field]);
+      if (!value) return { ok: false, error: `Invalid ${field}` };
+      contract[field] = value;
+    }
+    const sessionKey = trimString(args.sessionKey) ?? deps.getCurrentSessionKey?.();
+    const input = {
+      ...contract,
+      createdBy: 'user' as const,
+      priority,
+      dueAt,
+      requestId: trimString(args.requestId),
+      agentId: trimString(args.agentId) ?? deps.getCurrentAgentId?.() ?? 'main',
+      uiLocale: locale,
+      source: 'chat' as const,
+      projectId,
+      contextText: trimString(args.contextText),
+      links: [
+        ...(projectId ? [{ kind: 'project' as const, id: projectId, relation: 'contains' }] : []),
+        ...(sessionKey ? [{ kind: 'session' as const, id: sessionKey, relation: 'originated_from' }] : []),
+      ],
+    };
+    if (dryRun) {
+      return { ok: true, dryRun: true, action: 'create_task', createMode, input, dependsOnTaskIds };
+    }
+    let task = tasks.create(input);
+    if (dependsOnTaskIds.length > 0) {
+      task = dependencies.replace({
+        taskId: task.id,
+        dependsOnTaskIds,
+        expectedUpdatedAt: task.updatedAt,
+      });
+    }
+    if (createMode === 'capture') return { ok: true, task, createMode };
+    const activation = new TaskCommandService(deps.enqueueTask!).execute({
+      taskId: task.id,
+      action: 'run',
+      expectedUpdatedAt: task.updatedAt,
+    });
+    if (activation.ok === false) {
+      return activation.reason === 'approval_required'
+        ? {
+            ok: true,
+            task: activation.latest,
+            createMode,
+            activation: {
+              status: 'needs_approval',
+              requiredBoundaries: activation.requiredBoundaries,
+            },
+          }
+        : { ok: false, error: `Task activation failed: ${activation.reason}`, ...activation };
+    }
+    return {
+      ok: true,
+      task: activation.task,
+      createMode,
+      activation: activation.queued
+        ? { status: 'queued', queueId: activation.queued.id }
+        : activation.waitingOn
+          ? { status: 'waiting_dependency', dependencies: activation.waitingOn }
+          : { status: 'started' },
+    };
+  }
+
+  if (command === 'update_dependencies') {
+    const id = trimString(args.taskId) ?? trimString(args.id);
+    const expectedUpdatedAt = finiteNumber(args.expectedUpdatedAt);
+    const dependsOnTaskIds = stringArray(args.dependsOnTaskIds);
+    if (!id) return { ok: false, error: 'taskId is required' };
+    if (expectedUpdatedAt === undefined || !Number.isInteger(expectedUpdatedAt) || expectedUpdatedAt < 0) {
+      return { ok: false, error: 'expectedUpdatedAt is required' };
+    }
+    if (!dependsOnTaskIds) return { ok: false, error: 'dependsOnTaskIds is required' };
+    if (dryRun) {
+      return {
+        ok: true,
+        dryRun: true,
+        action: 'update_task_dependencies',
+        taskId: id,
+        expectedUpdatedAt,
+        dependsOnTaskIds,
+      };
+    }
+    try {
+      const task = dependencies.replace({
+        taskId: id,
+        dependsOnTaskIds,
+        expectedUpdatedAt,
+      });
+      return {
+        ok: true,
+        task,
+        dependencies: dependencies.listDependencies(id),
+        dependents: dependencies.listDependents(id),
+      };
+    } catch (error) {
+      if (!(error instanceof TaskDependencyError)) throw error;
+      return { ok: false, error: error.message, reason: error.code };
+    }
+  }
+
+  if (command === 'action') {
+    const id = trimString(args.taskId) ?? trimString(args.id);
+    const action = enumValue(args.action, TASK_ACTIONS);
+    const expectedUpdatedAt = finiteNumber(args.expectedUpdatedAt);
+    const approvedBoundaries = args.approvedBoundaries === undefined
+      ? undefined
+      : stringArray(args.approvedBoundaries);
+    if (!id) return { ok: false, error: 'taskId is required' };
+    if (!action) return { ok: false, error: 'Invalid task action' };
+    if (expectedUpdatedAt === undefined || !Number.isInteger(expectedUpdatedAt) || expectedUpdatedAt < 0) {
+      return { ok: false, error: 'expectedUpdatedAt is required' };
+    }
+    if (args.approvedBoundaries !== undefined && !approvedBoundaries) {
+      return { ok: false, error: 'Invalid approvedBoundaries' };
+    }
+    if ((action === 'run' || action === 'resume' || action === 'verify') && !deps.enqueueTask) {
+      return { ok: false, error: 'Task execution service is unavailable' };
+    }
+    if (dryRun) {
+      return {
+        ok: true,
+        dryRun: true,
+        action: 'execute_task_action',
+        taskId: id,
+        taskAction: action,
+        expectedUpdatedAt,
+        approvedBoundaries,
+      };
+    }
+    const result = new TaskCommandService(
+      deps.enqueueTask ?? (() => { throw new Error('Task execution service is unavailable'); }),
+    ).execute({ taskId: id, action, expectedUpdatedAt, approvedBoundaries });
+    if (result.ok === false) {
+      return {
+        ok: false,
+        error: result.reason === 'not_found'
+          ? `Task not found: ${id}`
+          : result.reason === 'approval_required'
+            ? 'Required execution boundaries must be approved'
+            : result.reason === 'conflict'
+              ? 'Task changed; refresh and try again'
+              : 'Action is not valid for the current task state',
+        action,
+        ...result,
+      };
+    }
+    return {
+      ok: true,
+      task: result.task,
+      action,
+      ...(result.queued ? { queued: result.queued } : {}),
+      ...(result.waitingOn ? { waitingOn: result.waitingOn } : {}),
+    };
+  }
+
+  return { ok: false, error: `Unsupported task command: ${command}` };
+}
+
 async function handleLocalApp(
   command: string,
   args: Record<string, unknown>,
@@ -489,7 +809,7 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
     name: 'xopc_use',
     label: 'XOPC Use',
     description:
-      'Operate first-class xopc objects through one safe entry point. Use for projects, notes, local apps, and exact settings jump targets instead of editing storage files directly. For non-trivial object changes, load the built-in manual first with tool_manual({ tool: "xopc_use" }).',
+      'Operate first-class xopc objects through one safe entry point. Use for projects, notes, tasks, local apps, and exact settings jump targets instead of editing storage files directly. For non-trivial object changes, load the built-in manual first with tool_manual({ tool: "xopc_use" }).',
     parameters: XopcUseToolSchema,
     mutatesWorkspace: true,
     mutationScope: 'external',
@@ -517,7 +837,9 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
               ? await handleProject(command, args, deps, dryRun)
               : mode === 'note'
                 ? await handleNote(command, args, deps, dryRun)
-                : mode === 'local_app'
+                : mode === 'task'
+                  ? await handleTask(command, args, deps, dryRun)
+                  : mode === 'local_app'
                     ? await handleLocalApp(command, args, deps, dryRun)
                     : mode === 'settings'
                       ? handleSettings(command, args)

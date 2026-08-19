@@ -12,7 +12,7 @@ export function createToolManualTool(): AgentTool<typeof ToolManualSchema, {}> {
     name: 'tool_manual',
     label: '📘 Tool Manual',
     description:
-      'Load built-in usage manuals for complex tools. Use before non-trivial use of tools such as browser_use.',
+      'Load built-in usage manuals for complex tools. Use before non-trivial use of tools such as browser_use or xopc_use.',
     parameters: ToolManualSchema,
     async execute(_toolCallId, params): Promise<AgentToolResult<{}>> {
       const toolName = params.tool.trim();

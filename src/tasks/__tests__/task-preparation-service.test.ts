@@ -44,6 +44,16 @@ describe('TaskPreparationService', () => {
       projectId: project.id,
       sessionKey,
       contextText: 'The launch must preserve the existing billing flow.',
+      contextAttachments: [{
+        id: 'launch-brief',
+        bucket: 'inbound',
+        type: 'document',
+        mimeType: 'text/plain',
+        name: 'launch-brief.txt',
+        size: 12,
+        uri: 'media://inbound/launch-brief.txt',
+        path: join(stateDir, 'launch-brief.txt'),
+      }],
     });
     patchSessionMetadata(sessionKey, { customData: { taskId: created.taskId } });
     const plan = vi.fn(async () => ({
@@ -68,6 +78,7 @@ describe('TaskPreparationService', () => {
     expect(plan).toHaveBeenCalledOnce();
     expect(plan).toHaveBeenCalledWith(expect.objectContaining({
       objective: 'Launch the product',
+      taskContext: expect.stringMatching(/launch must preserve[\s\S]*already attached[\s\S]*launch-brief\.txt/i),
       projectContext: expect.stringContaining('Ship in September'),
       userContext: expect.stringContaining('supportMode'),
     }));
@@ -76,8 +87,7 @@ describe('TaskPreparationService', () => {
       latestContractVersion: 2,
       contract: { acceptanceCriteria: ['Launch package is published and accessible'] },
     });
-    expect(new TaskRepository().get(created.taskId)?.execution.nextAction)
-      .toBe('Launch package is published and accessible');
+    expect(new TaskRepository().get(created.taskId)?.execution.nextAction).toBeUndefined();
     const directive = buildTaskExecutionDirective(sessionKey);
     expect(directive).toContain('durable user task');
     expect(directive).toContain('Launch package is published and accessible');

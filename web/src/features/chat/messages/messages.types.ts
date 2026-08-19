@@ -76,6 +76,7 @@ export type ReviewContent = {
 export type MessageContent = TextContent | ImageContent | ToolUseContent | ThinkingContent | ReviewContent;
 
 export type MessageAttachment = {
+  taskId?: string;
   id?: string;
   name?: string;
   type?: string;

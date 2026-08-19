@@ -175,15 +175,13 @@
   "projectDetailPage": {
     "tabs": {
       "overview": "Overview",
-      "board": "Board",
-      "work": "Work",
-      "sessions": "Sessions",
-      "workflows": "Workflows",
-      "files": "Files",
-      "activity": "Activity",
+      "tasks": "Tasks",
       "automations": "Automations",
+      "progress": "Progress",
+      "files": "Files",
       "notes": "Notes",
       "skills": "Skills",
+      "sessions": "Sessions",
       "settings": "Settings"
     },
     "skills": {
@@ -215,7 +213,6 @@
       "close": "Close"
     },
     "navAria": "Project sections",
-    "workNavAria": "Project work sections",
     "backToProjects": "Projects",
     "fallbackTitle": "Project",
     "fallbackContext": "Project context",
@@ -260,12 +257,9 @@
     },
     "overview": {
       "directionTitle": "Project direction",
-      "directionFallback": "Add a brief or define an task so the next step is clear.",
+      "directionFallback": "Add a brief or define a task so the next step is clear.",
       "saveDigest": "Save digest",
       "savingDigest": "Saving",
-      "sessions": "Sessions",
-      "activeTasks": "Active tasks",
-      "recentWorkflowRuns": "Recent workflow runs",
       "nextActions": "Next actions",
       "recentResults": "Recent results",
       "resultStatuses": {
@@ -276,42 +270,24 @@
         "failed": "Not achieved",
         "cancelled": "Cancelled"
       },
-      "task": "Task",
       "recommendedNext": "Next: {{action}}",
-      "noNextActions": "No next actions yet. Create an task or continue the project chat to establish one.",
-      "noNextAction": "No next action set.",
-      "staleTasks": "Stale tasks",
-      "noActiveTasks": "No active tasks in this project.",
+      "noNextActions": "No next actions yet. Create a task or continue the project chat to establish one.",
       "recentSessions": "Recent sessions",
       "noSessions": "No sessions yet.",
-      "workflowRuns": "Workflow runs",
-      "noWorkflowRuns": "No workflow runs yet.",
-      "timeline": "Timeline",
-      "noTimeline": "No project activity yet.",
-      "timelineKinds": {
-        "session": "Session",
-        "task": "Task",
-        "workflow": "Workflow",
-        "memory": "Memory"
-      },
-      "workspace": "Workspace",
-      "brief": "Brief",
-      "noBrief": "No brief yet.",
       "attention": "Attention",
       "attentionKinds": {
         "blocked_task": "Blocked task",
         "stale_task": "Stale task",
-        "failed_workflow": "Failed workflow"
+        "failed_workflow": "Execution issue"
       },
       "noBlockedTasks": "No blocked tasks.",
       "blockerTitlePlaceholder": "New blocker",
-      "blockerReasonPlaceholder": "Reason or dependency",
       "addBlocker": "Add blocker",
       "addingBlocker": "Adding"
     },
     "board": {
       "title": "Task board",
-      "description": "Every card is an task xopc is responsible for advancing. Columns reflect its real execution state.",
+      "description": "Every card is a task xopc is responsible for advancing. Columns reflect its real execution state.",
       "empty": "No tasks here",
       "acceptanceCriteria": "{{count}} acceptance criteria",
       "actionFailed": "The task changed or could not be updated. The board has been restored.",
@@ -360,41 +336,22 @@
         "done": "Done"
       }
     },
-    "workflows": {
-      "runsTitle": "Project workflow runs",
-      "runsHint": "Runs started here use this project context and workspace.",
-      "loadingRuns": "Loading workflow runs…",
-      "runMeta": "{{definitionId}} · {{done}}/{{total}} agents · {{time}}",
-      "emptyRuns": "No workflow runs for this project and agent yet.",
-      "startTitle": "Start workflow",
-      "startHint": "Pick a workflow to run inside this project.",
-      "emptyDefinitions": "No workflows available.",
-      "browseAll": "Browse all workflows",
-      "contextTitle": "Run context",
-      "contextHint": "Project workflow runs inherit the selected agent, project workspace, brief, instructions, and active tasks."
-    },
     "automations": {
       "title": "Project automations",
-      "hint": "Automations bound to this project inherit its workspace context.",
-      "loading": "Loading automations…",
+      "hint": "Let xopc keep advancing this project on a schedule or condition; the system chooses the execution strategy from the task and context.",
       "enabled": "enabled",
       "paused": "paused",
-      "run": "Run",
       "pause": "Pause",
       "resume": "Resume",
-      "empty": "No automations are bound to this project yet.",
-      "create": "Create automation",
-      "recentRuns": "Recent runs",
-      "emptyRuns": "No project automation runs yet.",
-      "contextTitle": "Automation context",
-      "contextHint": "Agent automations default to this project workspace. Workflow automations pass this project into workflow runs."
+      "empty": "This project has no automations. Add one when work needs ongoing follow-through.",
+      "create": "Add automation"
     },
-    "activity": {
-      "title": "Project activity",
-      "count": "{{count}} events",
-      "loading": "Loading activity…",
-      "empty": "No project activity yet.",
-      "includeRelated": "Include related",
+    "progress": {
+      "title": "Project progress",
+      "count": "{{count}} updates",
+      "loading": "Loading progress…",
+      "empty": "No project progress yet.",
+      "includeRelated": "Include related progress",
       "related": "Related",
       "actor": "Actor",
       "source": "Source",
@@ -411,8 +368,8 @@
         "session.detached_from_project": "Session detached",
         "task.created": "Task created",
         "task.status_changed": "Task status changed",
-        "workflow_run.started": "Workflow run started",
-        "workflow_run.completed": "Workflow run completed",
+        "workflow_run.started": "System advancement started",
+        "workflow_run.completed": "System advancement completed",
         "automation.run_started": "Automation run started",
         "automation.run_completed": "Automation run completed"
       },
@@ -421,7 +378,7 @@
         "note": "Note",
         "session": "Session",
         "task": "Task",
-        "workflow_run": "Workflow run",
+        "workflow_run": "Execution record",
         "automation": "Automation"
       }
     },
@@ -469,14 +426,14 @@
       "needWorkspace": "Set a project workspace before browsing project files.",
       "openSettings": "Open settings",
       "boundaryTitle": "Workspace boundary",
-      "boundaryHint": "Files are listed only from this project workspace. Chats, tasks, and workflow runs use the same root.",
+      "boundaryHint": "Files are listed only from this project workspace. Chats, tasks, and automatic advancement use the same root.",
       "nextStepTitle": "Next step",
-      "nextStepHint": "Start a project workflow when you need the agent to inspect or modify this workspace."
+      "nextStepHint": "Create a task when you want xopc to inspect or modify this workspace."
     },
     "sessions": {
       "empty": "No sessions in this project.",
       "emptyTitle": "No project sessions yet",
-      "emptyDescription": "Start a chat from the page header to keep its work, tasks, and summaries together.",
+      "emptyDescription": "Start a chat from the page header to keep its work, tasks, and summaries in this project.",
       "searchPlaceholder": "Search sessions",
       "clearSearch": "Clear session search",
       "noMatches": "No matching sessions",
@@ -510,11 +467,11 @@
       "openWorkspace": "Open folder",
       "copyWorkspacePath": "Copy path",
       "migrateWorkspace": "Move workspace",
-      "workspaceMigrationHint": "Project chats, tasks, files, workflow runs, and automations use this folder by default. Moving the workspace affects new context from this point on; history is not rewritten.",
+      "workspaceMigrationHint": "Project chats, tasks, files, and automatic advancement use this folder by default. Moving the workspace affects new context from this point on; history is not rewritten.",
       "workspaceMigrationTitle": "Move project workspace",
       "workspaceMigrationDescription": "Move this only when the project has actually moved to a new folder, or when it should follow the agent's default workspace.",
       "workspaceMigrationFixedHint": "Save a fixed project folder that will not change when the agent changes.",
-      "workspaceMigrationImpact": "After this change, future chats, tasks, and workflows will use the new folder. Files in the old folder are not moved, and historical chats are not rewritten.",
+      "workspaceMigrationImpact": "After this change, future chats, tasks, and automatic advancement will use the new folder. Files in the old folder are not moved, and historical chats are not rewritten.",
       "workspaceMigrationConfirm": "Confirm move",
       "createdAt": "Created",
       "updatedAt": "Updated",
@@ -533,10 +490,10 @@
       "archiveHint": "Archived projects leave active views, while linked chats, tasks, and files stay attached.",
       "archiveProject": "Archive project",
       "restoreTitle": "Restore archived project",
-      "restoreHint": "Restoring moves the project back to active views so you can continue chats, tasks, and workflows.",
+      "restoreHint": "Restoring moves the project back to active views so you can continue chats and advance tasks.",
       "restoreProject": "Restore project",
       "dangerTitle": "Danger zone",
-      "dangerHint": "Removing a project ungroups its chats, tasks, workflows, automations, and memories. Local files are not deleted.",
+      "dangerHint": "Removing a project ungroups its chats, tasks, execution records, and memories. Local files are not deleted.",
       "projectGuidanceTitle": "Project guidance and rules",
       "projectGuidanceHint": "Describe the project background, objectives, and handling rules so the agent can understand and advance the work reliably.",
       "brief": "Project background",

@@ -177,17 +177,33 @@ class TaskQueueStore {
   }
 }
 
-function initialTurn(task: NonNullable<ReturnType<TaskRepository['get']>>, state: TaskRuntime): UserTurnInput {
+function taskTurn(task: NonNullable<ReturnType<TaskRepository['get']>>, state: TaskRuntime): UserTurnInput {
   const contract = task.contract;
   const parts = [`Task:\n${task.objective}`];
   if (contract?.expectedOutputs.length) parts.push(`Expected outputs:\n${contract.expectedOutputs.map((item) => `- ${item}`).join('\n')}`);
   if (contract?.acceptanceCriteria.length) parts.push(`Acceptance criteria:\n${contract.acceptanceCriteria.map((item) => `- ${item}`).join('\n')}`);
   if (contract?.constraints.length) parts.push(`Constraints:\n${contract.constraints.map((item) => `- ${item}`).join('\n')}`);
   if (state.contextMessage?.text.trim()) parts.push(`Context:\n${state.contextMessage.text.trim()}`);
+  if (state.nextAction?.trim()) parts.push(`Current next action:\n${state.nextAction.trim()}`);
   return {
     text: parts.join('\n\n'),
     attachments: mediaRefsToUserTurnAttachments(state.contextMessage?.attachments),
   };
+}
+
+function withTaskAttachments(userTurn: UserTurnInput, state: TaskRuntime): UserTurnInput {
+  const durable = mediaRefsToUserTurnAttachments(state.contextMessage?.attachments);
+  if (!durable?.length) return userTurn;
+  const attachments = [...(userTurn.attachments ?? [])];
+  const keys = new Set(attachments.flatMap((attachment) =>
+    [attachment.uri, attachment.id].filter((value): value is string => Boolean(value))));
+  for (const attachment of durable) {
+    const key = attachment.uri ?? attachment.id;
+    if (key && keys.has(key)) continue;
+    attachments.push(attachment);
+    if (key) keys.add(key);
+  }
+  return { ...userTurn, attachments };
 }
 
 export interface TaskRunnerOptions {
@@ -296,9 +312,7 @@ export class TaskRunner {
         return this.finish(item, 'skipped', 'Task requires approval before execution');
       }
       if (this.options.hasActiveRun(sessionKey)) return this.retry(item, 'Task session already has an active run');
-      const userTurn = item.userTurn ?? (state.nextAction
-        ? { text: state.nextAction }
-        : initialTurn(prepared, state));
+      const userTurn = withTaskAttachments(item.userTurn ?? taskTurn(prepared, state), state);
       await this.options.runTurn(sessionKey, userTurn);
       this.finish(item, 'succeeded');
     } catch (error) {

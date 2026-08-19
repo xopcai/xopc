@@ -11,6 +11,7 @@ import {
   type TaskCreateRequest,
   type TaskCreateResponse,
   type TaskExecutionSummary,
+  type TaskAttachment,
   type TaskProgress,
   type TaskAttention,
   type TaskReceipt,
@@ -36,6 +37,7 @@ export type TaskDetail = {
   task: Task;
   receipts: TaskReceipt[];
   execution?: TaskExecutionSummary;
+  attachments: TaskAttachment[];
   progress?: TaskProgress;
   attention?: TaskAttention;
   nextCheckAt?: number;
@@ -52,6 +54,7 @@ export async function fetchTask(taskId: string): Promise<TaskDetail> {
     task: response.task,
     receipts: response.receipts,
     execution: response.execution,
+    attachments: response.attachments,
     progress: response.progress,
     attention: response.attention,
     nextCheckAt: response.nextCheckAt,

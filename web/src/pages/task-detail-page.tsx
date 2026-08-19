@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { AttachmentRenderer } from '@/features/chat/attachments/attachment-renderer';
 import {
   actOnTask,
   fetchTask,
@@ -13,6 +14,7 @@ import {
 import { taskCopy } from '@/features/tasks/task-copy';
 import { formatMediumDateTime } from '@/lib/date-formatters';
 import { useLocaleStore } from '@/stores/locale-store';
+import { useGatewayStore } from '@/stores/gateway-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 
 const TERMINAL_TASK_STATUSES = new Set(['completed', 'cancelled']);
@@ -45,6 +47,7 @@ function TextList({ items, empty }: { items: string[]; empty: string }) {
 export function TaskDetailPage() {
   const { taskId = '' } = useParams();
   const language = useLocaleStore((state) => state.language);
+  const authToken = useGatewayStore((state) => state.token);
   const copy = useMemo(() => taskCopy(language), [language]);
   const setPageHeader = usePageHeaderStore((state) => state.setPageHeader);
   const clearPageHeader = usePageHeaderStore((state) => state.clearPageHeader);
@@ -227,6 +230,16 @@ export function TaskDetailPage() {
                 {copy.taskStatuses[detail.task.status]}
               </span>
             </div>
+            {detail.attachments.length > 0 ? (
+              <div className="mt-5 border-t border-edge-subtle pt-4">
+                <p className="mb-3 text-xs font-medium text-fg-subtle">{copy.attachments}</p>
+                <AttachmentRenderer
+                  attachments={detail.attachments}
+                  authToken={authToken}
+                  sessionKey={detail.execution?.sessionKey}
+                />
+              </div>
+            ) : null}
             {!TERMINAL_TASK_STATUSES.has(detail.task.status) ? (
               <div className="mt-5 flex flex-wrap gap-2 border-t border-edge-subtle pt-4">
                 {detail.execution?.sessionKey ? (
