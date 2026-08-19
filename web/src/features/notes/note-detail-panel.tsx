@@ -561,7 +561,7 @@ function NoteDetailPanelInner({
   return (
     <div className="flex h-full min-h-0 gap-3 p-4 sm:px-5">
       {/* Editor */}
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div className="mx-auto flex min-h-0 min-w-0 w-full max-w-[60rem] flex-1 flex-col">
         <LiveDiscussionTranscript noteId={noteId} />
         <ProductAutomationFeedback
           eventType="note.created"

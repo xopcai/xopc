@@ -46,15 +46,18 @@ export function NoteCard({ note, selected = false, onPress, onPin, onArchive, on
       onClick={() => onPress(note.id)}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onPress(note.id); }}
       className={cn(
-        'group relative flex cursor-pointer flex-col gap-2 rounded-lg px-3 py-2.5',
+        'group relative flex cursor-pointer flex-col gap-2 overflow-hidden rounded-lg px-3 py-2.5',
         'transition-colors duration-150 ease-out',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-rail',
         selected
-          ? 'bg-surface-active hover:bg-surface-active'
-          : 'bg-surface-base hover:bg-surface-hover',
+          ? 'bg-surface-panel hover:bg-surface-panel'
+          : 'bg-transparent hover:bg-surface-panel/70',
       )}
       aria-current={selected ? 'true' : undefined}
     >
+      {selected ? (
+        <span className="pointer-events-none absolute inset-y-2 left-0 w-0.5 rounded-r-pill bg-accent" aria-hidden />
+      ) : null}
       <div className="flex items-start gap-3">
         {note.coverAttachmentId ? (
           <NoteCoverThumbnail noteId={note.id} attachmentId={note.coverAttachmentId} />
