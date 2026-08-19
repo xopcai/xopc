@@ -1535,9 +1535,9 @@ export function ProjectDetailPage() {
                   >
                     <div className="flex min-w-0 items-center justify-between gap-3">
                       <span className="min-w-0 truncate text-sm font-medium text-fg">{item.title}</span>
-                      <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-xs font-medium', statusTone(item.status))}>{statusLabel(item.status)}</span>
+                      <span className="shrink-0 rounded-full bg-surface-muted px-2 py-0.5 text-xs font-medium text-fg-muted">{item.phase}</span>
                     </div>
-                    <p className="mt-1 line-clamp-2 text-sm leading-5 text-fg-muted">{item.nextAction}</p>
+                    <p className="mt-1 line-clamp-2 text-sm leading-5 text-fg-muted">{item.nextAction?.text}</p>
                   </Link>
                 )) : (
                   <div className="px-4 py-6 text-sm text-fg-muted">

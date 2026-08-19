@@ -80,7 +80,7 @@ describe('buildWelcomeSpotlight', () => {
       kind: 'workItem',
       workItemId: 'w1',
       title: '补齐 welcome 推荐',
-      status: 'in_progress',
+      phase: 'executing',
     });
 
     expect(spotlight.categories).toHaveLength(3);
@@ -96,8 +96,8 @@ describe('buildWelcomeSpotlight', () => {
       kind: 'workItem',
       workItemId: 'w2',
       title: '修复构建失败',
-      status: 'blocked',
-      blockedReason: '缺少权限',
+      phase: 'executing',
+      waits: [{ kind: 'external', reason: '缺少权限' }],
     });
 
     expect(spotlight.headline).toBe('这个工作项需要解除阻塞');
@@ -236,7 +236,7 @@ describe('buildWelcomeSpotlight', () => {
       kind: 'workItem',
       workItemId: 'w3',
       title: '发布欢迎体验',
-      status: 'in_progress',
+      phase: 'executing',
       nextAction: '补齐移动端回归测试',
     });
 
@@ -254,8 +254,8 @@ describe('buildWelcomeSpotlight', () => {
         kind: 'workItem',
         workItemId: 'w4',
         title: '修复权限',
-        status: 'blocked',
-        blockedReason: '没有发布权限',
+        phase: 'executing',
+        waits: [{ kind: 'external', reason: '没有发布权限' }],
       },
       copy,
       undefined,
@@ -278,7 +278,7 @@ describe('buildWelcomeSpotlight', () => {
     const contexts: WelcomeSuggestionContext[] = [
       { kind: 'codingProject', projectId: 'p4', projectName: 'xopc', workspaceRoot: '/repo/xopc' },
       { kind: 'note', noteId: 'n4', title: '产品方向' },
-      { kind: 'workItem', workItemId: 'w5', title: '实现探索卡', status: 'in_progress' },
+      { kind: 'workItem', workItemId: 'w5', title: '实现探索卡', phase: 'executing' },
       { kind: 'workingDirectory', path: '/tmp/work' },
     ];
 

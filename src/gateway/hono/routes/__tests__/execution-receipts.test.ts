@@ -92,10 +92,13 @@ describe('work outcome receipt routes', () => {
       objective: 'Finish route projection',
       projectId: project.id,
     });
-    const workItem = workItems.createProjectWorkItem(project.id, {
+    const createdWorkItem = workItems.createProjectWorkItem(project.id, {
       title: 'Finish route projection',
-      status: 'in_progress',
+      initialPhase: 'ready',
     });
+    const workItem = workItems.executeCommand(createdWorkItem.id, { type: 'start', expectedVersion: createdWorkItem.version }, {
+      actor: { kind: 'agent', id: 'main' }, source: 'workflow', requestId: 'receipt-test',
+    })!;
     startExecutionReceipt({
       runId: 'run-reproject',
       sessionKey: 'session-1',
@@ -120,7 +123,7 @@ describe('work outcome receipt routes', () => {
       userStatus: 'running',
       internalStatus: 'continuing',
     });
-    expect(workItems.getWorkItem(workItem.id)?.status).toBe('in_progress');
+    expect(workItems.getWorkItem(workItem.id)?.phase).toBe('executing');
 
     const response = await app.request('/api/execution-receipts/run-reproject', {
       method: 'PATCH',
@@ -158,6 +161,6 @@ describe('work outcome receipt routes', () => {
       userStatus: 'completed',
       internalStatus: 'completed',
     });
-    expect(workItems.getWorkItem(workItem.id)?.status).toBe('in_progress');
+    expect(workItems.getWorkItem(workItem.id)?.phase).toBe('executing');
   });
 });

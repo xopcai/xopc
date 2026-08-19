@@ -67,21 +67,25 @@ describe('domain activity integration', () => {
     const project = projects.create({ name: 'Work Item Activity' });
     const item = workItems.createProjectWorkItem(project.id, {
       title: 'Implement activity timeline',
-      status: 'todo',
+      initialPhase: 'ready',
       priority: 'high',
     });
-    workItems.updateWorkItem(item.id, { status: 'in_progress' });
+    workItems.executeCommand(item.id, { type: 'start', expectedVersion: item.version }, {
+      actor: { kind: 'agent', id: 'main' },
+      source: 'agent_tool',
+      requestId: 'activity-test',
+    });
     workItems.addLink(item.id, { kind: 'note', targetId: 'note-1', title: 'Research note' });
 
     const page = activity.listForProject({ projectId: project.id });
     expect(page.items.map((activityItem) => activityItem.type).sort()).toEqual([
       'project.created',
       'work_item.created',
+      'work_item.lifecycle_changed.v1',
       'work_item.link_added',
-      'work_item.status_changed',
     ]);
-    expect(page.items.find((activityItem) => activityItem.type === 'work_item.status_changed')?.payload)
-      .toMatchObject({ from: 'todo', to: 'in_progress' });
+    expect(page.items.find((activityItem) => activityItem.type === 'work_item.lifecycle_changed.v1')?.payload)
+      .toMatchObject({ command: 'start' });
     expect(page.items.find((activityItem) => activityItem.type === 'work_item.link_added')?.payload).toMatchObject({
       target: { kind: 'note', id: 'note-1', title: 'Research note' },
     });

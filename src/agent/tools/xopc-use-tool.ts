@@ -2,6 +2,8 @@ import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import {
   appendProductDeliveryText,
+  WorkItemCommandSchema,
+  WorkItemNextActionSchema,
   type ProductDeliveryEnvelope,
   type ProductReference,
 } from '@xopcai/gateway-contract';
@@ -18,7 +20,8 @@ import {
 import type {
   WorkItemPriority,
   WorkItemService,
-  WorkItemStatus,
+  WorkItemCompletionPolicy,
+  WorkItemPhase,
 } from '../../work-items/index.js';
 import type { LocalAppService } from '../../local-apps/index.js';
 import { getSessionMetadata } from '../../storage/sqlite/index.js';
@@ -33,7 +36,7 @@ const XopcUseToolSchema = Type.Object({
   ]),
   command: Type.String({
     description:
-      'Object command. Supports project list/get/create/update/resolve_workspace, note list/get/create/append/update/preview_edit, work_item list/get/create/update, local_app list/get/create/validate, and settings open.',
+      'Object command. Supports project list/get/create/update/resolve_workspace, note list/get/create/append/update/preview_edit, work_item list/get/create/update_metadata/execute_command/archive/unarchive, local_app list/get/create/validate, and settings open.',
   }),
   args: Type.Optional(Type.Record(Type.String(), Type.Any())),
   dryRun: Type.Optional(Type.Boolean({
@@ -71,17 +74,10 @@ type XopcUseDetails = {
 const PROJECT_STATUSES = new Set<ProjectStatus>(['active', 'paused', 'archived']);
 const NOTE_KINDS = new Set<NoteKind>(['thought', 'todo', 'voice', 'media', 'bookmark', 'mixed', 'task']);
 const NOTE_STATUSES = new Set<NoteStatus>(['inbox', 'processed', 'archived', 'trashed']);
-const WORK_ITEM_STATUSES = new Set<WorkItemStatus>([
-  'backlog',
-  'todo',
-  'in_progress',
-  'blocked',
-  'needs_input',
-  'in_review',
-  'done',
-  'cancelled',
-]);
+const WORK_ITEM_PHASES = new Set<WorkItemPhase>(['backlog', 'ready', 'executing', 'verifying', 'closed']);
+const WORK_ITEM_INITIAL_PHASES = new Set<Extract<WorkItemPhase, 'backlog' | 'ready'>>(['backlog', 'ready']);
 const WORK_ITEM_PRIORITIES = new Set<WorkItemPriority>(['urgent', 'high', 'normal', 'low']);
+const WORK_ITEM_COMPLETION_POLICIES = new Set<WorkItemCompletionPolicy>(['automatic', 'agent_verified', 'user_accepted']);
 
 function okText(details: XopcUseDetails): AgentToolResult<XopcUseDetails> {
   const text = JSON.stringify(details.result ?? {}, null, 2);
@@ -493,11 +489,11 @@ async function handleWorkItem(
     return {
       ok: true,
       ...workItems.listProjectWorkItems(projectId, {
-        status: enumValue(args.status, WORK_ITEM_STATUSES),
+        phase: enumValue(args.phase, WORK_ITEM_PHASES),
         priority: enumValue(args.priority, WORK_ITEM_PRIORITIES),
         includeArchived: args.includeArchived === true,
         search: trimString(args.search),
-        sortBy: enumValue(args.sortBy, new Set(['updatedAt', 'createdAt', 'priority', 'status'] as const)),
+        sortBy: enumValue(args.sortBy, new Set(['updatedAt', 'createdAt', 'priority', 'phase', 'dueAt'] as const)),
         sortOrder: enumValue(args.sortOrder, new Set(['asc', 'desc'] as const)),
         limit: boundedLimit(args.limit),
         offset: offset(args.offset),
@@ -520,44 +516,76 @@ async function handleWorkItem(
     const input = {
       title,
       description: trimString(args.description),
-      status: enumValue(args.status, WORK_ITEM_STATUSES),
+      initialPhase: enumValue(args.initialPhase, WORK_ITEM_INITIAL_PHASES),
       priority: enumValue(args.priority, WORK_ITEM_PRIORITIES),
       ownerAgentId: trimString(args.ownerAgentId),
-      nextAction: trimString(args.nextAction),
-      blockedReason: trimString(args.blockedReason),
+      completionPolicy: enumValue(args.completionPolicy, WORK_ITEM_COMPLETION_POLICIES),
+      nextAction: WorkItemNextActionSchema.safeParse(args.nextAction).success
+        ? WorkItemNextActionSchema.parse(args.nextAction)
+        : undefined,
       dueAt: finiteNumber(args.dueAt),
     };
-    if (args.status !== undefined && input.status === undefined) return { ok: false, error: 'Invalid work item status' };
+    if (args.initialPhase !== undefined && input.initialPhase === undefined) return { ok: false, error: 'Invalid initialPhase' };
     if (args.priority !== undefined && input.priority === undefined) return { ok: false, error: 'Invalid work item priority' };
+    if (args.completionPolicy !== undefined && input.completionPolicy === undefined) return { ok: false, error: 'Invalid completionPolicy' };
+    if (args.nextAction !== undefined && input.nextAction === undefined) return { ok: false, error: 'Invalid nextAction' };
     if (args.dueAt !== undefined && input.dueAt === undefined) return { ok: false, error: 'Invalid dueAt' };
     if (dryRun) return { ok: true, dryRun: true, action: 'create_work_item', projectId, input };
     const item = workItems.createProjectWorkItem(projectId, input);
     return { ok: true, item };
   }
 
-  if (command === 'update') {
+  if (command === 'update_metadata') {
     const id = trimString(args.workItemId) ?? trimString(args.id);
     if (!id) return { ok: false, error: 'workItemId is required' };
+    const expectedVersion = finiteNumber(args.expectedVersion);
+    if (!expectedVersion || !Number.isInteger(expectedVersion)) return { ok: false, error: 'expectedVersion is required' };
     const dueAt = args.dueAt !== undefined ? nullableNumber(args.dueAt) : undefined;
-    const archivedAt = args.archivedAt !== undefined ? nullableNumber(args.archivedAt) : undefined;
+    const nextAction = args.nextAction === null
+      ? null
+      : WorkItemNextActionSchema.safeParse(args.nextAction).success
+        ? WorkItemNextActionSchema.parse(args.nextAction)
+        : undefined;
     const patch = {
       ...(args.title !== undefined ? { title: trimString(args.title) ?? '' } : {}),
       ...(args.description !== undefined ? { description: optionalString(args.description) } : {}),
-      ...(args.status !== undefined ? { status: enumValue(args.status, WORK_ITEM_STATUSES) } : {}),
       ...(args.priority !== undefined ? { priority: enumValue(args.priority, WORK_ITEM_PRIORITIES) } : {}),
       ...(args.ownerAgentId !== undefined ? { ownerAgentId: optionalString(args.ownerAgentId) } : {}),
-      ...(args.nextAction !== undefined ? { nextAction: optionalString(args.nextAction) } : {}),
-      ...(args.blockedReason !== undefined ? { blockedReason: optionalString(args.blockedReason) } : {}),
+      ...(args.completionPolicy !== undefined ? { completionPolicy: enumValue(args.completionPolicy, WORK_ITEM_COMPLETION_POLICIES) } : {}),
+      ...(args.nextAction !== undefined ? { nextAction } : {}),
       ...(args.dueAt !== undefined ? { dueAt } : {}),
-      ...(args.archivedAt !== undefined ? { archivedAt } : {}),
     };
-    if (args.status !== undefined && patch.status === undefined) return { ok: false, error: 'Invalid work item status' };
     if (args.priority !== undefined && patch.priority === undefined) return { ok: false, error: 'Invalid work item priority' };
+    if (args.completionPolicy !== undefined && patch.completionPolicy === undefined) return { ok: false, error: 'Invalid completionPolicy' };
+    if (args.nextAction !== undefined && nextAction === undefined) return { ok: false, error: 'Invalid nextAction' };
     if (args.dueAt !== undefined && dueAt === undefined) return { ok: false, error: 'Invalid dueAt' };
-    if (args.archivedAt !== undefined && archivedAt === undefined) return { ok: false, error: 'Invalid archivedAt' };
-    if (dryRun) return { ok: true, dryRun: true, action: 'update_work_item', workItemId: id, patch };
-    const item = workItems.updateWorkItem(id, patch);
+    if (dryRun) return { ok: true, dryRun: true, action: 'update_work_item_metadata', workItemId: id, expectedVersion, patch };
+    const item = workItems.updateMetadata(id, patch, expectedVersion);
+    return item ? { ok: true, item } : { ok: false, error: `Work item not found or version conflict: ${id}` };
+  }
+
+  if (command === 'execute_command') {
+    const id = trimString(args.workItemId) ?? trimString(args.id);
+    if (!id) return { ok: false, error: 'workItemId is required' };
+    const parsed = WorkItemCommandSchema.safeParse(args);
+    if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid work item command' };
+    if (dryRun) return { ok: true, dryRun: true, action: 'execute_work_item_command', workItemId: id, command: parsed.data };
+    const item = workItems.executeCommand(id, parsed.data, {
+      actor: { kind: 'agent', id: deps.getCurrentAgentId?.() ?? 'agent' },
+      source: 'agent_tool',
+      requestId: `xopc_use:${id}:${parsed.data.expectedVersion}`,
+    });
     return item ? { ok: true, item } : { ok: false, error: `Work item not found: ${id}` };
+  }
+
+  if (command === 'archive' || command === 'unarchive') {
+    const id = trimString(args.workItemId) ?? trimString(args.id);
+    const expectedVersion = finiteNumber(args.expectedVersion);
+    if (!id) return { ok: false, error: 'workItemId is required' };
+    if (!expectedVersion || !Number.isInteger(expectedVersion)) return { ok: false, error: 'expectedVersion is required' };
+    if (dryRun) return { ok: true, dryRun: true, action: command, workItemId: id, expectedVersion };
+    const item = workItems.setArchived(id, command === 'archive', expectedVersion);
+    return item ? { ok: true, item } : { ok: false, error: `Work item not found, open, or version conflict: ${id}` };
   }
 
   return { ok: false, error: `Unsupported work_item command: ${command}` };

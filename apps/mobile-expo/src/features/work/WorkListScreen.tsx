@@ -15,8 +15,8 @@ import { fetchWorkItems, type WorkItem } from '../../query/work-items';
 import { useGatewayConfigured } from '../../query/sessions';
 import { radii, spacing, typography, useTheme } from '../../theme';
 
-function statusLabel(status: WorkItem['status'], labels: ReturnType<typeof useMessages>['workPage']) {
-  return labels.status[status];
+function phaseLabel(phase: WorkItem['phase'], labels: ReturnType<typeof useMessages>['workPage']) {
+  return labels.status[phase];
 }
 
 export function WorkListScreen() {
@@ -28,7 +28,7 @@ export function WorkListScreen() {
   const query = useInfiniteQuery({
     queryKey: queryKeys.workItems('active'),
     queryFn: ({ pageParam }) => fetchWorkItems({
-      status: ['todo', 'in_progress', 'blocked', 'needs_input', 'in_review'],
+      phase: ['ready', 'executing', 'verifying'],
       sortBy: 'updatedAt',
       sortOrder: 'desc',
       limit: 30,
@@ -66,8 +66,8 @@ export function WorkListScreen() {
               onPress={() => router.push(`/work/${item.id}`)}
               style={({ pressed }) => [styles.card, { backgroundColor: pressed ? colors.surface.pressed : colors.surface.panel, borderColor: colors.border.default }]}
             >
-              <View style={styles.cardTop}><Text numberOfLines={2} style={[styles.title, { color: colors.text.primary }]}>{item.title}</Text><Text style={[styles.status, { color: colors.accent.primary }]}>{statusLabel(item.status, labels)}</Text></View>
-              {item.nextAction ? <Text numberOfLines={2} style={[styles.meta, { color: colors.text.secondary }]}>{item.nextAction}</Text> : null}
+              <View style={styles.cardTop}><Text numberOfLines={2} style={[styles.title, { color: colors.text.primary }]}>{item.title}</Text><Text style={[styles.status, { color: colors.accent.primary }]}>{phaseLabel(item.phase, labels)}</Text></View>
+              {item.nextAction ? <Text numberOfLines={2} style={[styles.meta, { color: colors.text.secondary }]}>{item.nextAction.text}</Text> : null}
               {item.dueAt ? <Text style={[styles.meta, { color: item.dueAt < Date.now() ? colors.text.primary : colors.text.tertiary }]}>{labels.due} · {new Date(item.dueAt).toLocaleDateString()}</Text> : null}
             </Pressable>
           )}

@@ -52,13 +52,10 @@ import { useWorkflowRunLive } from '@/features/workflows/use-workflow-run-live';
 import { appendNoteContent, createTaskNote, getNote } from '@/features/notes/notes-api';
 import { withReturnTo } from '@/lib/navigation-return';
 import {
-  applyWorkItemUpdateSuggestion,
-  createWorkItemUpdateSuggestion,
-  dismissWorkItemUpdateSuggestion,
+  createWorkItemCommandProposal,
+  executeWorkItemCommandProposal,
   fetchWorkItem,
   type WorkItem,
-  type WorkItemStatus,
-  type WorkItemUpdateSuggestion,
 } from '@/features/work-items/api';
 import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-store';
 import { useChatRunPresenceStore } from '@/features/chat/session/chat-run-presence-store';
@@ -80,29 +77,13 @@ type SourceNoteSaveDraft = {
   content: string;
 };
 
-type WorkItemUpdateDraft = {
-  statusEnabled: boolean;
-  status: WorkItemStatus | '';
-  nextActionEnabled: boolean;
-  nextAction: string;
-  blockedReasonEnabled: boolean;
-  blockedReason: string;
-  progressNoteEnabled: boolean;
-  progressNote: string;
+type WorkItemCommandDraft = {
+  action: 'request_review' | 'complete' | 'wait_user' | 'wait_external';
+  reason: string;
   rationale: string;
-  suggestion?: WorkItemUpdateSuggestion;
 };
 
-const WORK_ITEM_STATUS_OPTIONS: WorkItemStatus[] = [
-  'backlog',
-  'todo',
-  'in_progress',
-  'blocked',
-  'needs_input',
-  'in_review',
-  'done',
-  'cancelled',
-];
+const WORK_ITEM_ACTION_OPTIONS: WorkItemCommandDraft['action'][] = ['request_review', 'complete', 'wait_user', 'wait_external'];
 
 function compactAssistantText(content: string, max = 1400): string {
   return content
@@ -125,14 +106,11 @@ function extractLineAfterLabel(text: string, labels: string[]): string {
   return '';
 }
 
-function inferSuggestedStatus(text: string): WorkItemStatus | '' {
-  const lower = text.toLowerCase();
-  if (/needs?\s+(user\s+)?input|需要.*(确认|输入|反馈)/i.test(text)) return 'needs_input';
-  if (/blocked|blocker|无法继续|阻塞|卡住/i.test(text)) return 'blocked';
-  if (/ready\s+for\s+review|in\s+review|等待.*(检查|验收|review)|待验收/i.test(text)) return 'in_review';
-  if (/done|completed|已完成|完成了/i.test(text)) return 'in_review';
-  if (lower.includes('next step') || text.includes('下一步')) return 'in_progress';
-  return '';
+function inferSuggestedAction(text: string): WorkItemCommandDraft['action'] {
+  if (/needs?\s+(user\s+)?input|需要.*(确认|输入|反馈)/i.test(text)) return 'wait_user';
+  if (/blocked|blocker|无法继续|阻塞|卡住/i.test(text)) return 'wait_external';
+  if (/done|completed|已完成|完成了/i.test(text)) return 'complete';
+  return 'request_review';
 }
 
 function welcomePromptWasUsed(original: string, sent: string): boolean {
@@ -148,20 +126,12 @@ function welcomeExplorationDaySeed(date = new Date()): string {
   return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
 }
 
-function buildWorkItemUpdateDraft(content: string): WorkItemUpdateDraft {
-  const progressNote = compactAssistantText(content);
-  const nextAction = extractLineAfterLabel(content, ['next action', 'next step', '下一步', '后续动作']);
-  const blockedReason = extractLineAfterLabel(content, ['blocked reason', 'blocker', '阻塞', '阻塞原因']);
-  const status = inferSuggestedStatus(content);
+function buildWorkItemCommandDraft(content: string): WorkItemCommandDraft {
+  const reason = extractLineAfterLabel(content, ['next action', 'next step', 'blocked reason', 'blocker', '下一步', '后续动作', '阻塞', '阻塞原因'])
+    || compactAssistantText(content, 500);
   return {
-    statusEnabled: Boolean(status),
-    status,
-    nextActionEnabled: Boolean(nextAction),
-    nextAction,
-    blockedReasonEnabled: Boolean(blockedReason),
-    blockedReason,
-    progressNoteEnabled: Boolean(progressNote),
-    progressNote,
+    action: inferSuggestedAction(content),
+    reason,
     rationale: '',
   };
 }
@@ -190,8 +160,8 @@ export function ChatPage() {
   const [sourceWorkItem, setSourceWorkItem] = useState<WorkItem | null>(null);
   const [sourceWorkItemLoadState, setSourceWorkItemLoadState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [workItemContextExpanded, setWorkItemContextExpanded] = useState(false);
-  const [workItemUpdateDraft, setWorkItemUpdateDraft] = useState<WorkItemUpdateDraft | null>(null);
-  const [workItemUpdateSubmitting, setWorkItemUpdateSubmitting] = useState(false);
+  const [workItemCommandDraft, setWorkItemCommandDraft] = useState<WorkItemCommandDraft | null>(null);
+  const [workItemCommandSubmitting, setWorkItemCommandSubmitting] = useState(false);
   const [sourceNoteSaveDraft, setSourceNoteSaveDraft] = useState<SourceNoteSaveDraft | null>(null);
   const [sourceNoteSaveSubmitting, setSourceNoteSaveSubmitting] = useState(false);
   const [showWelcomeSkeleton, setShowWelcomeSkeleton] = useState(false);
@@ -929,58 +899,52 @@ export function ChatPage() {
     sendWorkItemPrompt(m.chat.workItemNextStepPrompt.replace('{{title}}', sourceWorkItem.title));
   }, [m.chat.workItemNextStepPrompt, sendWorkItemPrompt, sourceWorkItem]);
 
-  const handleSuggestWorkItemUpdate = useCallback(
+  const handleProposeWorkItemCommand = useCallback(
     async (content: string) => {
       if (!sourceWorkItem || !chatSessionKey) return;
-      setWorkItemUpdateDraft(buildWorkItemUpdateDraft(content));
+      setWorkItemCommandDraft(buildWorkItemCommandDraft(content));
     },
     [chatSessionKey, sourceWorkItem],
   );
 
-  const closeWorkItemUpdateDialog = useCallback(() => {
-    const suggestion = workItemUpdateDraft?.suggestion;
-    if (suggestion?.status === 'pending') {
-      void dismissWorkItemUpdateSuggestion(suggestion.id).catch(() => undefined);
-    }
-    setWorkItemUpdateDraft(null);
-    setWorkItemUpdateSubmitting(false);
-  }, [workItemUpdateDraft?.suggestion]);
+  const closeWorkItemCommandDialog = useCallback(() => {
+    setWorkItemCommandDraft(null);
+    setWorkItemCommandSubmitting(false);
+  }, []);
 
-  const handleApplyWorkItemUpdate = useCallback(async () => {
-    if (!sourceWorkItem || !chatSessionKey || !workItemUpdateDraft) return;
-    const patch = {
-      ...(workItemUpdateDraft.statusEnabled && workItemUpdateDraft.status ? { status: workItemUpdateDraft.status } : {}),
-      ...(workItemUpdateDraft.nextActionEnabled ? { nextAction: workItemUpdateDraft.nextAction.trim() || null } : {}),
-      ...(workItemUpdateDraft.blockedReasonEnabled ? { blockedReason: workItemUpdateDraft.blockedReason.trim() || null } : {}),
-    };
-    const progressNote = workItemUpdateDraft.progressNoteEnabled
-      ? workItemUpdateDraft.progressNote.trim()
-      : '';
-    if (Object.keys(patch).length === 0 && !progressNote) return;
+  const handleExecuteWorkItemCommandProposal = useCallback(async () => {
+    if (!sourceWorkItem || !chatSessionKey || !workItemCommandDraft) return;
+    const expectedVersion = sourceWorkItem.version;
+    const reason = workItemCommandDraft.reason.trim() || 'Review the latest chat result.';
+    const command = workItemCommandDraft.action === 'wait_user'
+      ? { type: 'wait' as const, expectedVersion, wait: { kind: 'user_input' as const, reason } }
+      : workItemCommandDraft.action === 'wait_external'
+        ? { type: 'wait' as const, expectedVersion, wait: { kind: 'external' as const, reason } }
+        : workItemCommandDraft.action === 'complete' && sourceWorkItem.completionPolicy !== 'user_accepted'
+          ? { type: 'complete' as const, expectedVersion, summary: reason }
+          : { type: 'request_review' as const, expectedVersion, summary: reason };
 
-    setWorkItemUpdateSubmitting(true);
+    setWorkItemCommandSubmitting(true);
     try {
-      const existing = workItemUpdateDraft.suggestion;
-      const suggestion = existing ?? (await createWorkItemUpdateSuggestion(sourceWorkItem.id, {
+      const proposal = (await createWorkItemCommandProposal(sourceWorkItem.id, {
         sourceKind: 'chat',
         sourceId: chatSessionKey,
-        patch,
-        progressNote: progressNote || undefined,
-        rationale: workItemUpdateDraft.rationale.trim() || undefined,
-      })).suggestion;
-      const result = await applyWorkItemUpdateSuggestion(suggestion.id);
+        command,
+        rationale: workItemCommandDraft.rationale.trim() || undefined,
+      })).proposal;
+      const result = await executeWorkItemCommandProposal(proposal.id);
       setSourceWorkItem(result.item);
-      setWorkItemUpdateDraft(null);
+      setWorkItemCommandDraft(null);
     } catch (err) {
       showToast({
         type: 'error',
-        title: m.chat.workItemUpdateFailed,
+        title: m.chat.workItemCommandFailed,
         message: err instanceof Error ? err.message : undefined,
       });
     } finally {
-      setWorkItemUpdateSubmitting(false);
+      setWorkItemCommandSubmitting(false);
     }
-  }, [chatSessionKey, m.chat.workItemUpdateFailed, sourceWorkItem, workItemUpdateDraft]);
+  }, [chatSessionKey, m.chat.workItemCommandFailed, sourceWorkItem, workItemCommandDraft]);
 
   if (!auth.hasToken) {
     return (
@@ -1086,7 +1050,7 @@ export function ChatPage() {
                   {m.chat.workItemBanner.replace('{{title}}', sourceWorkItem.title)}
                 </span>
                 <span className="shrink-0 rounded-full bg-surface-muted px-1.5 py-0.5 text-[11px] text-fg-muted">
-                  {sourceWorkItem.status.replace(/_/g, ' ')}
+                  {sourceWorkItem.phase}
                 </span>
                 <ChevronDown
                   className={cn('size-3.5 shrink-0 transition-transform', workItemContextExpanded ? 'rotate-180' : '')}
@@ -1144,16 +1108,16 @@ export function ChatPage() {
                 {sourceWorkItem.nextAction ? (
                   <p className="min-w-0">
                     <span className="font-medium text-fg">{m.chat.workItemNextActionLabel}: </span>
-                    {sourceWorkItem.nextAction}
+                    {sourceWorkItem.nextAction.text}
                   </p>
                 ) : null}
-                {sourceWorkItem.blockedReason ? (
-                  <p className="min-w-0">
+                {sourceWorkItem.waits.some((wait) => !wait.resolvedAt) ? (
+                  <p className="min-w-0 sm:col-span-2">
                     <span className="font-medium text-fg">{m.chat.workItemBlockedLabel}: </span>
-                    {sourceWorkItem.blockedReason}
+                    {sourceWorkItem.waits.filter((wait) => !wait.resolvedAt).map((wait) => wait.reason).join(' · ')}
                   </p>
                 ) : null}
-                {!sourceWorkItem.description && !sourceWorkItem.nextAction && !sourceWorkItem.blockedReason ? (
+                {!sourceWorkItem.description && !sourceWorkItem.nextAction && !sourceWorkItem.waits.some((wait) => !wait.resolvedAt) ? (
                   <p className="min-w-0 sm:col-span-2">{m.chat.workItemNoDetails}</p>
                 ) : null}
               </div>
@@ -1264,7 +1228,7 @@ export function ChatPage() {
                     deleteRoundDisabled={stream.streaming || stream.sending}
                     onSaveAssistantToSourceNote={sourceNoteId ? handleSaveAssistantToSourceNote : undefined}
                     onExtractAssistantTask={sourceNoteId ? handleExtractAssistantTask : undefined}
-                    onSuggestWorkItemUpdate={sourceWorkItem ? handleSuggestWorkItemUpdate : undefined}
+                    onProposeWorkItemCommand={sourceWorkItem ? handleProposeWorkItemCommand : undefined}
                   />
                 </>
               )}
@@ -1431,9 +1395,9 @@ export function ChatPage() {
       />
 
       <Dialog.Root
-        open={workItemUpdateDraft !== null}
+        open={workItemCommandDraft !== null}
         onOpenChange={(open) => {
-          if (!open && !workItemUpdateSubmitting) closeWorkItemUpdateDialog();
+          if (!open && !workItemCommandSubmitting) closeWorkItemCommandDialog();
         }}
       >
         <Dialog.Portal>
@@ -1441,130 +1405,66 @@ export function ChatPage() {
           <Dialog.Content className="fixed right-0 top-0 z-[90] flex h-dvh w-[min(100%,32rem)] flex-col overflow-hidden border-l border-edge bg-surface-panel shadow-popover outline-none">
             <div className="shrink-0 border-b border-edge-subtle px-5 py-4">
               <Dialog.Title className="text-base font-semibold text-fg">
-                {m.chat.workItemUpdateDialogTitle}
+                {m.chat.workItemCommandDialogTitle}
               </Dialog.Title>
               <Dialog.Description className="mt-1 text-sm text-fg-muted">
                 {sourceWorkItem
-                  ? m.chat.workItemUpdateDialogDescription.replace('{{title}}', sourceWorkItem.title)
-                  : m.chat.workItemUpdateDialogDescriptionFallback}
+                  ? m.chat.workItemCommandDialogDescription.replace('{{title}}', sourceWorkItem.title)
+                  : m.chat.workItemCommandDialogDescriptionFallback}
               </Dialog.Description>
             </div>
             <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-4">
               <label className="flex items-start gap-3 rounded-lg border border-edge-subtle bg-surface-base p-3">
-                <input
-                  type="checkbox"
-                  className="mt-1 size-4"
-                  checked={Boolean(workItemUpdateDraft?.statusEnabled)}
-                  onChange={(event) =>
-                    setWorkItemUpdateDraft((draft) => draft ? { ...draft, statusEnabled: event.target.checked } : draft)
-                  }
-                  disabled={workItemUpdateSubmitting}
-                />
                 <span className="flex min-w-0 flex-1 flex-col gap-1.5">
-                  <span className="text-sm font-medium text-fg">{m.chat.workItemUpdateStatusLabel}</span>
+                  <span className="text-sm font-medium text-fg">{m.chat.workItemCommandLabel}</span>
                   <Select
-                    value={workItemUpdateDraft?.status ?? ''}
+                    value={workItemCommandDraft?.action ?? 'request_review'}
                     onChange={(event) =>
-                      setWorkItemUpdateDraft((draft) => draft ? { ...draft, status: event.target.value as WorkItemStatus | '' } : draft)
+                      setWorkItemCommandDraft((draft) => draft ? { ...draft, action: event.target.value as WorkItemCommandDraft['action'] } : draft)
                     }
-                    disabled={workItemUpdateSubmitting || !workItemUpdateDraft?.statusEnabled}
+                    disabled={workItemCommandSubmitting}
                     className="h-9 rounded-lg border border-edge bg-surface-panel px-2 text-sm text-fg outline-none focus:border-accent"
                   >
-                    <SelectOption value="">{m.chat.workItemUpdateStatusUnchanged}</SelectOption>
-                    {WORK_ITEM_STATUS_OPTIONS.map((status) => (
-                      <SelectOption key={status} value={status}>{status.replace(/_/g, ' ')}</SelectOption>
+                    {WORK_ITEM_ACTION_OPTIONS.map((action) => (
+                      <SelectOption key={action} value={action}>{action.replace(/_/g, ' ')}</SelectOption>
                     ))}
                   </Select>
                 </span>
               </label>
 
               <label className="flex items-start gap-3 rounded-lg border border-edge-subtle bg-surface-base p-3">
-                <input
-                  type="checkbox"
-                  className="mt-1 size-4"
-                  checked={Boolean(workItemUpdateDraft?.nextActionEnabled)}
-                  onChange={(event) =>
-                    setWorkItemUpdateDraft((draft) => draft ? { ...draft, nextActionEnabled: event.target.checked } : draft)
-                  }
-                  disabled={workItemUpdateSubmitting}
-                />
                 <span className="flex min-w-0 flex-1 flex-col gap-1.5">
-                  <span className="text-sm font-medium text-fg">{m.chat.workItemUpdateNextActionLabel}</span>
+                  <span className="text-sm font-medium text-fg">{m.chat.workItemCommandReasonLabel}</span>
                   <textarea
-                    value={workItemUpdateDraft?.nextAction ?? ''}
+                    value={workItemCommandDraft?.reason ?? ''}
                     onChange={(event) =>
-                      setWorkItemUpdateDraft((draft) => draft ? { ...draft, nextAction: event.target.value } : draft)
+                      setWorkItemCommandDraft((draft) => draft ? { ...draft, reason: event.target.value } : draft)
                     }
-                    disabled={workItemUpdateSubmitting || !workItemUpdateDraft?.nextActionEnabled}
+                    disabled={workItemCommandSubmitting}
                     className="min-h-20 resize-none rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm leading-6 text-fg outline-none focus:border-accent"
                   />
                 </span>
               </label>
 
-              <label className="flex items-start gap-3 rounded-lg border border-edge-subtle bg-surface-base p-3">
-                <input
-                  type="checkbox"
-                  className="mt-1 size-4"
-                  checked={Boolean(workItemUpdateDraft?.blockedReasonEnabled)}
-                  onChange={(event) =>
-                    setWorkItemUpdateDraft((draft) => draft ? { ...draft, blockedReasonEnabled: event.target.checked } : draft)
-                  }
-                  disabled={workItemUpdateSubmitting}
-                />
-                <span className="flex min-w-0 flex-1 flex-col gap-1.5">
-                  <span className="text-sm font-medium text-fg">{m.chat.workItemUpdateBlockedReasonLabel}</span>
-                  <textarea
-                    value={workItemUpdateDraft?.blockedReason ?? ''}
-                    onChange={(event) =>
-                      setWorkItemUpdateDraft((draft) => draft ? { ...draft, blockedReason: event.target.value } : draft)
-                    }
-                    disabled={workItemUpdateSubmitting || !workItemUpdateDraft?.blockedReasonEnabled}
-                    className="min-h-20 resize-none rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm leading-6 text-fg outline-none focus:border-accent"
-                  />
-                </span>
-              </label>
-
-              <label className="flex items-start gap-3 rounded-lg border border-edge-subtle bg-surface-base p-3">
-                <input
-                  type="checkbox"
-                  className="mt-1 size-4"
-                  checked={Boolean(workItemUpdateDraft?.progressNoteEnabled)}
-                  onChange={(event) =>
-                    setWorkItemUpdateDraft((draft) => draft ? { ...draft, progressNoteEnabled: event.target.checked } : draft)
-                  }
-                  disabled={workItemUpdateSubmitting}
-                />
-                <span className="flex min-w-0 flex-1 flex-col gap-1.5">
-                  <span className="text-sm font-medium text-fg">{m.chat.workItemUpdateProgressNoteLabel}</span>
-                  <textarea
-                    value={workItemUpdateDraft?.progressNote ?? ''}
-                    onChange={(event) =>
-                      setWorkItemUpdateDraft((draft) => draft ? { ...draft, progressNote: event.target.value } : draft)
-                    }
-                    disabled={workItemUpdateSubmitting || !workItemUpdateDraft?.progressNoteEnabled}
-                    className="min-h-40 resize-none rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm leading-6 text-fg outline-none focus:border-accent"
-                  />
-                </span>
-              </label>
             </div>
             <div className="flex shrink-0 justify-end gap-2 border-t border-edge-subtle px-5 py-4">
               <Button
                 type="button"
                 variant="secondary"
-                onClick={closeWorkItemUpdateDialog}
-                disabled={workItemUpdateSubmitting}
+                onClick={closeWorkItemCommandDialog}
+                disabled={workItemCommandSubmitting}
               >
-                {m.chat.workItemUpdateDialogCancel}
+                {m.chat.workItemCommandDialogCancel}
               </Button>
               <Button
                 type="button"
                 variant="primary"
-                onClick={() => void handleApplyWorkItemUpdate()}
-                disabled={workItemUpdateSubmitting}
+                onClick={() => void handleExecuteWorkItemCommandProposal()}
+                disabled={workItemCommandSubmitting}
               >
-                {workItemUpdateSubmitting
-                  ? m.chat.workItemUpdateDialogApplying
-                  : m.chat.workItemUpdateDialogApply}
+                {workItemCommandSubmitting
+                  ? m.chat.workItemCommandDialogExecuting
+                  : m.chat.workItemCommandDialogExecute}
               </Button>
             </div>
           </Dialog.Content>

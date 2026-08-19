@@ -1,78 +1,52 @@
-export type WorkItemStatus =
-  | 'backlog'
-  | 'todo'
-  | 'in_progress'
-  | 'blocked'
-  | 'needs_input'
-  | 'in_review'
-  | 'done'
-  | 'cancelled';
+import type {
+  WorkItem,
+  WorkItemCommand,
+  WorkItemCommandProposal,
+  WorkItemCompletionPolicy,
+  WorkItemNextAction,
+  WorkItemPhase,
+  WorkItemPriority,
+  WorkItemResolution,
+} from '@xopcai/gateway-contract';
 
-export type WorkItemPriority = 'urgent' | 'high' | 'normal' | 'low';
-
-export type WorkItemLinkKind = 'chat' | 'outcome' | 'workflow_run' | 'automation' | 'note';
+export type {
+  WorkItem,
+  WorkItemActionActor,
+  WorkItemAttachment,
+  WorkItemCommand,
+  WorkItemCommandProposal,
+  WorkItemCompletionPolicy,
+  WorkItemLink,
+  WorkItemNextAction,
+  WorkItemPhase,
+  WorkItemPriority,
+  WorkItemResolution,
+  WorkItemWait,
+  WorkItemWaitKind,
+} from '@xopcai/gateway-contract';
 
 export type WorkItemEventType =
-  | 'created'
-  | 'updated'
-  | 'status_changed'
-  | 'archived'
-  | 'attachment_added'
-  | 'attachment_removed'
-  | 'chat_started'
-  | 'outcome_created'
-  | 'workflow_started'
-  | 'automation_added'
-  | 'link_added'
-  | 'progress_note_added'
-  | 'update_suggestion_created'
-  | 'update_suggestion_applied'
-  | 'update_suggestion_dismissed';
-
-export type WorkItemUpdateSuggestionStatus = 'pending' | 'applied' | 'dismissed';
-export type WorkItemUpdateSuggestionSourceKind = 'chat' | 'outcome' | 'workflow_run' | 'automation';
-
-export interface WorkItem {
-  id: string;
-  projectId: string;
-  title: string;
-  description?: string;
-  status: WorkItemStatus;
-  priority: WorkItemPriority;
-  ownerAgentId?: string;
-  nextAction?: string;
-  blockedReason?: string;
-  dueAt?: number;
-  completedAt?: number;
-  archivedAt?: number;
-  createdAt: number;
-  updatedAt: number;
-  links?: WorkItemLink[];
-  attachments?: WorkItemAttachment[];
-}
-
-export interface WorkItemAttachment {
-  id: string;
-  workItemId: string;
-  mediaUri: string;
-  mediaId: string;
-  bucket: string;
-  type: 'image' | 'audio' | 'video' | 'file';
-  mimeType: string;
-  fileName: string;
-  size: number;
-  createdAt: number;
-}
-
-export interface WorkItemLink {
-  id: string;
-  workItemId: string;
-  kind: WorkItemLinkKind;
-  targetId: string;
-  title?: string;
-  statusSnapshot?: string;
-  createdAt: number;
-}
+  | 'work_item.created'
+  | 'work_item.metadata_updated'
+  | 'work_item.committed'
+  | 'work_item.deferred'
+  | 'work_item.started'
+  | 'work_item.stopped'
+  | 'work_item.review_requested'
+  | 'work_item.changes_requested'
+  | 'work_item.completed'
+  | 'work_item.closed'
+  | 'work_item.reopened'
+  | 'work_item.wait_created'
+  | 'work_item.wait_resolved'
+  | 'work_item.archived'
+  | 'work_item.unarchived'
+  | 'work_item.attachment_added'
+  | 'work_item.attachment_removed'
+  | 'work_item.link_added'
+  | 'work_item.command_proposed'
+  | 'work_item.command_proposal_executed'
+  | 'work_item.command_proposal_rejected';
 
 export interface WorkItemEvent {
   id: string;
@@ -82,36 +56,14 @@ export interface WorkItemEvent {
   createdAt: number;
 }
 
-export interface WorkItemUpdateSuggestion {
-  id: string;
-  workItemId: string;
-  sourceKind: WorkItemUpdateSuggestionSourceKind;
-  sourceId: string;
-  status: WorkItemUpdateSuggestionStatus;
-  patch: Pick<UpdateWorkItemInput, 'status' | 'nextAction' | 'blockedReason'>;
-  progressNote?: string;
-  rationale?: string;
-  confidence?: number;
-  createdAt: number;
-  appliedAt?: number;
-  dismissedAt?: number;
-}
-
-export interface CreateWorkItemUpdateSuggestionInput {
-  sourceKind: WorkItemUpdateSuggestionSourceKind;
-  sourceId: string;
-  patch?: Pick<UpdateWorkItemInput, 'status' | 'nextAction' | 'blockedReason'>;
-  progressNote?: string;
-  rationale?: string;
-  confidence?: number;
-}
-
 export interface WorkItemListQuery {
-  status?: WorkItemStatus | WorkItemStatus[];
+  phase?: WorkItemPhase | WorkItemPhase[];
   priority?: WorkItemPriority | WorkItemPriority[];
+  resolution?: WorkItemResolution | WorkItemResolution[];
+  waitKind?: string | string[];
   includeArchived?: boolean;
   search?: string;
-  sortBy?: 'updatedAt' | 'createdAt' | 'priority' | 'status';
+  sortBy?: 'updatedAt' | 'createdAt' | 'priority' | 'phase' | 'dueAt';
   sortOrder?: 'asc' | 'desc';
   limit?: number;
   offset?: number;
@@ -128,22 +80,28 @@ export interface WorkItemListResult {
 export interface CreateWorkItemInput {
   title: string;
   description?: string;
-  status?: WorkItemStatus;
+  initialPhase?: Extract<WorkItemPhase, 'backlog' | 'ready'>;
   priority?: WorkItemPriority;
   ownerAgentId?: string;
-  nextAction?: string;
-  blockedReason?: string;
+  completionPolicy?: WorkItemCompletionPolicy;
+  nextAction?: WorkItemNextAction;
   dueAt?: number;
 }
 
-export interface UpdateWorkItemInput {
+export interface UpdateWorkItemMetadataInput {
   title?: string;
   description?: string | null;
-  status?: WorkItemStatus;
   priority?: WorkItemPriority;
   ownerAgentId?: string | null;
-  nextAction?: string | null;
-  blockedReason?: string | null;
+  completionPolicy?: WorkItemCompletionPolicy;
+  nextAction?: WorkItemNextAction | null;
   dueAt?: number | null;
-  archivedAt?: number | null;
+}
+
+export interface CreateWorkItemCommandProposalInput {
+  command: WorkItemCommand;
+  sourceKind: WorkItemCommandProposal['sourceKind'];
+  sourceId: string;
+  rationale?: string;
+  confidence?: number;
 }

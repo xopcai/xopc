@@ -21,8 +21,8 @@ export type WelcomeSuggestionContext =
       kind: 'workItem';
       workItemId: string;
       title: string;
-      status?: string;
-      blockedReason?: string | null;
+      phase?: string;
+      waits?: Array<{ kind: string; reason: string }>;
       nextAction?: string | null;
       projectId?: string | null;
     }
@@ -182,8 +182,11 @@ function fillSpotlightTemplate(template: SpotlightTemplate, vars: Record<string,
 }
 
 function workItemTemplate(context: Extract<WelcomeSuggestionContext, { kind: 'workItem' }>, copy: WelcomeSpotlightCopy) {
-  const isBlocked = context.status === 'blocked' || Boolean(context.blockedReason?.trim());
-  return isBlocked ? copy.workItemBlocked : copy.workItem;
+  return context.waits?.length ? copy.workItemBlocked : copy.workItem;
+}
+
+function firstWaitReason(context: Extract<WelcomeSuggestionContext, { kind: 'workItem' }>): string | undefined {
+  return context.waits?.find((wait) => wait.reason.trim())?.reason.trim();
 }
 
 function inferAgentKind(agent: WelcomeSuggestionAgent | undefined): WelcomeSuggestionAgentKind {
@@ -237,8 +240,8 @@ function contextReason(
   }
   switch (context.kind) {
     case 'workItem':
-      if (context.blockedReason?.trim()) {
-        return fillTemplate(copy.reasons.blocked, { blockedReason: context.blockedReason }) ?? copy.reasons.general;
+      if (firstWaitReason(context)) {
+        return fillTemplate(copy.reasons.blocked, { blockedReason: firstWaitReason(context) }) ?? copy.reasons.general;
       }
       if (context.nextAction?.trim()) {
         return fillTemplate(copy.reasons.nextAction, { nextAction: context.nextAction }) ?? copy.reasons.general;
@@ -269,10 +272,10 @@ function dynamicContextCandidate(
   let promptTemplate = '';
   let vars: Record<string, string | undefined> = {};
 
-  if (context.kind === 'workItem' && context.blockedReason?.trim()) {
+  if (context.kind === 'workItem' && firstWaitReason(context)) {
     categoryId = 'work-item-unblock';
     promptTemplate = copy.contextPrompts.workItemBlocked;
-    vars = { workItemTitle: context.title, blockedReason: context.blockedReason };
+    vars = { workItemTitle: context.title, blockedReason: firstWaitReason(context) };
   } else if (context.kind === 'workItem' && context.nextAction?.trim()) {
     categoryId = 'work-item-next';
     promptTemplate = copy.contextPrompts.workItemNextAction;
@@ -301,7 +304,7 @@ function dynamicContextCandidate(
 function candidateContextBoost(context: WelcomeSuggestionContext, categoryId: string): number {
   switch (context.kind) {
     case 'workItem':
-      if (context.blockedReason?.trim() || context.status === 'blocked') {
+      if (context.waits?.length) {
         if (categoryId === 'work-item-unblock') return 90;
         if (categoryId === 'work-item-risk') return 35;
       }
@@ -430,9 +433,9 @@ export function buildWelcomeSpotlight(
     case 'workItem':
       template = workItemTemplate(context, copy);
       vars.workItemTitle = context.title;
-      vars.status = context.status;
+      vars.status = context.phase;
       vars.nextAction = context.nextAction ?? undefined;
-      vars.blockedReason = context.blockedReason ?? undefined;
+      vars.blockedReason = firstWaitReason(context);
       break;
     case 'workingDirectory':
       template = copy.workingDirectory;

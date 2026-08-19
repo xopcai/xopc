@@ -8,7 +8,7 @@ import { apiFetch } from '../api/client';
 import type { Language } from '../stores/preferences-store';
 import type { NoteIndexEntry } from './notes';
 import type { SessionListItem } from './sessions';
-import type { WorkItem, WorkItemPriority, WorkItemStatus } from './work-items';
+import type { WorkItem } from './work-items';
 
 export type HomeAgent = {
   id: string;
@@ -61,7 +61,7 @@ export type HomeDecision = {
   kind: 'agent_judgment' | 'work_item' | 'outcome' | 'connector_approval';
   title: string;
   detail?: string;
-  reason: 'needs_input' | 'in_review' | 'blocked' | 'overdue' | 'due_soon' | 'decision_needed' | 'approval_required';
+  reason: 'needs_input' | 'blocked' | 'user_input' | 'user_approval' | 'dependency' | 'external' | 'scheduled' | 'retry' | 'paused' | 'overdue' | 'due_soon' | 'decision_needed' | 'approval_required';
   urgency: 'now' | 'soon';
   href: string;
   projectId?: string;
@@ -113,11 +113,9 @@ export type HomeBriefing = {
 
 type HomeWorkItem = Pick<
   WorkItem,
-  'id' | 'projectId' | 'title' | 'nextAction' | 'blockedReason' | 'dueAt' | 'completedAt' | 'updatedAt'
+  'id' | 'projectId' | 'title' | 'phase' | 'priority' | 'completionPolicy' | 'nextAction' | 'waits' | 'resolution' | 'dueAt' | 'closedAt' | 'updatedAt'
 > & {
   projectName: string;
-  status: WorkItemStatus;
-  priority: WorkItemPriority;
 };
 
 export interface HomeData {
