@@ -256,20 +256,26 @@ export type ConnectorAuthorizationStartResult = {
 
 export type ComposioConnection = {
   id: string;
+  accountId?: string;
   providerConnectionId: string;
   toolkit: string;
   status: string;
   alias?: string;
   isDefault: boolean;
+  isCurrentAuthorization: boolean;
   accountEmail?: string;
   workspace?: string;
   username?: string;
+  identityKey?: string;
+  workspaceId?: string;
+  userId?: string;
   connectedAt?: string;
   lastError?: string;
 };
 
 export type ConnectorLearningJob = {
   id: string;
+  accountId: string;
   connectionId: string;
   status: 'queued' | 'running' | 'completed' | 'failed' | 'paused';
   phase: 'queued' | 'fetching' | 'indexing' | 'deriving' | 'completed';
@@ -281,7 +287,7 @@ export type ConnectorLearningJob = {
 };
 
 export type ConnectorSyncPolicy = {
-  connectionId: string;
+  accountId: string;
   scanEnabled: boolean;
   proactiveEnabled: boolean;
   intervalMinutes?: number;
@@ -310,8 +316,8 @@ export type ConnectorAgentOption = { id: string; name: string };
 export type ComposioConnectorHealth = {
   toolkit: string;
   status: 'connected' | 'disconnected' | 'reauthorization_required' | 'degraded';
-  activeConnections: number;
-  affectedConnections: number;
+  activeAccounts: number;
+  affectedAccounts: number;
   checkedAt: string;
   message: string;
   recovery: 'none' | 'connect' | 'reconnect' | 'retry';
@@ -630,9 +636,9 @@ export async function executeComposioTool(slug: string, args: unknown): Promise<
   return requirePayload(response, 'Could not execute Composio tool.').result;
 }
 
-export async function startConnectionLearning(connectionId: string): Promise<ConnectorLearningJob> {
+export async function startAccountLearning(accountId: string): Promise<ConnectorLearningJob> {
   const response = await fetchJson<ApiEnvelope<{ job: ConnectorLearningJob }>>(
-    apiUrl(`/api/connectors/composio/connections/${encodeURIComponent(connectionId)}/learning`),
+    apiUrl(`/api/connectors/composio/accounts/${encodeURIComponent(accountId)}/learning`),
     { method: 'POST' },
   );
   return requirePayload(response, 'Could not start learning from this connection.').job;
@@ -645,28 +651,28 @@ export async function listConnectorLearningJobs(): Promise<ConnectorLearningJob[
   return requirePayload(response, 'Could not load connector learning jobs.').jobs;
 }
 
-export async function getConnectorSyncPolicy(connectionId: string): Promise<ConnectorSyncPolicy> {
+export async function getConnectorSyncPolicy(accountId: string): Promise<ConnectorSyncPolicy> {
   const response = await fetchJson<ApiEnvelope<{ policy: ConnectorSyncPolicy }>>(
-    apiUrl(`/api/connectors/composio/connections/${encodeURIComponent(connectionId)}/sync-policy`),
+    apiUrl(`/api/connectors/composio/accounts/${encodeURIComponent(accountId)}/sync-policy`),
   );
   return requirePayload(response, 'Could not load connector sync policy.').policy;
 }
 
 export async function updateConnectorSyncPolicy(
-  connectionId: string,
+  accountId: string,
   patch: Partial<Pick<ConnectorSyncPolicy, 'scanEnabled' | 'proactiveEnabled' | 'intervalMinutes' | 'allowedScenarioKeys'>>,
 ): Promise<ConnectorSyncPolicy> {
   const response = await fetchJson<ApiEnvelope<{ policy: ConnectorSyncPolicy }>>(
-    apiUrl(`/api/connectors/composio/connections/${encodeURIComponent(connectionId)}/sync-policy`),
+    apiUrl(`/api/connectors/composio/accounts/${encodeURIComponent(accountId)}/sync-policy`),
     { method: 'PATCH', body: JSON.stringify(patch) },
   );
   return requirePayload(response, 'Could not update connector sync policy.').policy;
 }
 
-export async function setConnectionLearningPaused(connectionId: string, paused: boolean): Promise<void> {
+export async function setAccountLearningPaused(accountId: string, paused: boolean): Promise<void> {
   const action = paused ? 'pause' : 'resume';
   const response = await fetchJson<ApiEnvelope<{ changed: number }>>(
-    apiUrl(`/api/connectors/composio/connections/${encodeURIComponent(connectionId)}/learning/${action}`),
+    apiUrl(`/api/connectors/composio/accounts/${encodeURIComponent(accountId)}/learning/${action}`),
     { method: 'POST' },
   );
   requirePayload(response, `Could not ${action} connector learning.`);

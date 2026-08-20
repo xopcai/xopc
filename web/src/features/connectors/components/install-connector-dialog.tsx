@@ -17,7 +17,7 @@ import {
   getComposioSetupStatus,
   installConnector,
   installStoreConnector,
-  startConnectionLearning,
+  startAccountLearning,
   startConnectorAuthorization,
   testConnector,
   type ConnectorHealthResult,
@@ -153,7 +153,10 @@ export function InstallConnectorDialog({
           if (existingHealth?.status === 'connected') {
             authWindow?.close();
             const connection = await waitForActiveComposioConnection(composioToolkit!);
-            if (canLearnFromConnection && learnAfterConnect) await startConnectionLearning(connection.id);
+            if (canLearnFromConnection && learnAfterConnect) {
+              if (!connection.accountId) throw new Error('Connector account is unavailable.');
+              await startAccountLearning(connection.accountId);
+            }
           } else {
             const authorization = await startConnectorAuthorization(connector.id);
             if (!authorization.authorizationUrl) throw new Error('The connection service did not return an authorization URL.');
@@ -167,7 +170,10 @@ export function InstallConnectorDialog({
             }
             const connection = await waitForActiveComposioConnection(composioToolkit!, authorization.connectionId);
             authWindow?.close();
-            if (canLearnFromConnection && learnAfterConnect) await startConnectionLearning(connection.id);
+            if (canLearnFromConnection && learnAfterConnect) {
+              if (!connection.accountId) throw new Error('Connector account is unavailable.');
+              await startAccountLearning(connection.accountId);
+            }
           }
         }
       } catch (error) {

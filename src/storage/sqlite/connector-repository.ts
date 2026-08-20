@@ -25,6 +25,7 @@ type InstallationRow = {
 
 type ConnectionRow = {
   id: string;
+  account_id: string | null;
   installation_id: string | null;
   connector_id: string;
   provider: string;
@@ -142,6 +143,7 @@ function installationFromRow(row: InstallationRow): ConnectorInstallationPolicy 
 function connectionFromRow(row: ConnectionRow): ConnectorConnection {
   return {
     id: row.id,
+    accountId: row.account_id ?? undefined,
     installationId: row.installation_id ?? undefined,
     connectorId: row.connector_id,
     provider: row.provider,
@@ -451,17 +453,33 @@ export function upsertConnectorConnection(
 ): ConnectorConnection {
   const now = new Date().toISOString();
   return runSqliteWriteTransaction((db) => {
+    const accountId = input.accountId ?? `account:${input.id}`;
+    db.prepare(`
+      INSERT INTO connector_accounts (
+        id, connector_id, principal_id, identity_json, current_connection_id, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO NOTHING
+    `).run(
+      accountId,
+      input.connectorId,
+      input.principalId,
+      JSON.stringify(input.identity),
+      input.id,
+      input.createdAt ?? now,
+      input.updatedAt ?? now,
+    );
     if (input.isDefault) {
       db.prepare('UPDATE connector_connections SET is_default = 0 WHERE principal_id = ? AND connector_id = ? AND id <> ?')
         .run(input.principalId, input.connectorId, input.id);
     }
     db.prepare(`
       INSERT INTO connector_connections (
-        id, installation_id, connector_id, provider, principal_id, provider_connection_id,
+        id, account_id, installation_id, connector_id, provider, principal_id, provider_connection_id,
         alias, identity_json, status, is_default, connected_at, expires_at, last_error,
         metadata_json, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
+        account_id = excluded.account_id,
         installation_id = excluded.installation_id,
         connector_id = excluded.connector_id,
         provider = excluded.provider,
@@ -478,6 +496,7 @@ export function upsertConnectorConnection(
         updated_at = excluded.updated_at
     `).run(
       input.id,
+      accountId,
       input.installationId ?? null,
       input.connectorId,
       input.provider,

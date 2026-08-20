@@ -28,7 +28,7 @@ import { PageTabs } from '@/components/ui/page-tabs';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TimePicker } from '@/components/ui/time-picker';
-import { setConnectionLearningPaused, startConnectionLearning } from '@/features/connectors/connectors-api';
+import { setAccountLearningPaused, startAccountLearning } from '@/features/connectors/connectors-api';
 import { detectBrowserTimezone } from '@/features/settings/agents/agent-profile-markdown';
 import { UserProfileFieldsEditor } from '@/features/settings/user-profile-fields-editor';
 import { messages } from '@/i18n/messages';
@@ -438,9 +438,9 @@ export function UserContextPage() {
     setBusyId(operationId);
     try {
       if (source.learning?.status === 'paused') {
-        await setConnectionLearningPaused(source.instanceId, false);
+        await setAccountLearningPaused(source.instanceId, false);
       } else {
-        await startConnectionLearning(source.instanceId);
+        await startAccountLearning(source.instanceId);
       }
       await mutate();
       showToast({ type: 'success', title: source.displayName, message: t.sourceLearningStarted });
@@ -460,7 +460,7 @@ export function UserContextPage() {
     const operationId = `source-learning:${source.instanceId}`;
     setBusyId(operationId);
     try {
-      await setConnectionLearningPaused(source.instanceId, true);
+      await setAccountLearningPaused(source.instanceId, true);
       await mutate();
     } catch (learningError) {
       showToast({

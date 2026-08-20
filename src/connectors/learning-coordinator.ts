@@ -5,10 +5,12 @@ import {
   enqueueConnectorLearningJob,
   listConnectorConnections,
   listConnectorLearningJobs,
+  getConnectorAccount,
   getConnectorInstallation,
-  getConnectorSyncPolicy,
+  getConnectorSyncPolicyForConnection,
   pruneBoundedKnowledgeSourceItems,
   recoverStaleConnectorLearningJobs,
+  reconcileConnectorAccount,
   setConnectorLearningPaused,
   updateConnectorLearningJob,
   upsertConnectorConnection,
@@ -18,7 +20,7 @@ import { ConnectedUnderstandingPipeline } from '../knowledge/index.js';
 import { createLogger } from '../utils/logger.js';
 import { getConnectorDefinition } from './catalog.js';
 import { ComposioSessionsAdapter } from './composio-sessions.js';
-import { normalizeConnectorIdentity } from './connector-identity.js';
+import { connectorIdentityKey, normalizeConnectorIdentity } from './connector-identity.js';
 import { ingestComposioConnectedSource } from './connected-source-ingestion.js';
 import { buildConnectorLearningArguments, getConnectorLearningPlan } from './learning-recipes.js';
 
@@ -72,6 +74,10 @@ export function startConnectorLearningCoordinator(options: {
 
   const publish = (job: ConnectorLearningJob) => options.emit?.('connector.learning.updated', job);
 
+  const activeAccountConnections = () => listConnectorConnections()
+    .filter((connection) => connection.status === 'active' && connection.accountId)
+    .filter((connection) => getConnectorAccount(connection.accountId!)?.currentConnectionId === connection.id);
+
   function enqueueConnection(
     connectionId: string,
     request: {
@@ -85,25 +91,27 @@ export function startConnectorLearningCoordinator(options: {
     if (!learningEnabled(config)) return null;
     const connection = listConnectorConnections().find((item) => item.id === connectionId && item.status === 'active');
     if (!connection) return null;
-    const syncPolicy = getConnectorSyncPolicy(connection.id);
+    if (!connection.accountId) throw new Error(`Connector account is missing for connection ${connection.id}.`);
+    const syncPolicy = getConnectorSyncPolicyForConnection(connection.id);
     if (request.reason !== 'manual' && syncPolicy?.scanEnabled === false) return null;
     const definition = getConnectorDefinition(connection.connectorId);
     if (definition?.runtime.type !== 'composio' || definition.runtime.role !== 'toolkit') return null;
     if (!getConnectorLearningPlan(definition.runtime.toolkit)) return null;
-    const sourceInstanceId = `composio:${connection.connectorId}:${connection.id}`;
-    const existing = listConnectorLearningJobs({ connectionId: connection.id, limit: 1 });
+    const sourceInstanceId = `composio:${connection.connectorId}:${connection.accountId}`;
+    const existing = listConnectorLearningJobs({ accountId: connection.accountId, limit: 1 });
     const mode = request.mode ?? (existing.length === 0 ? 'bootstrap' : 'incremental');
     const bucket = Math.floor(Date.now() / 60_000);
     const job = enqueueConnectorLearningJob({
       connectorId: connection.connectorId,
+      accountId: connection.accountId,
       connectionId: connection.id,
       sourceInstanceId,
       agentId: options.resolveAgentId(),
       mode,
       idempotencyKey: request.idempotencyKey
         ?? (mode === 'bootstrap'
-          ? `bootstrap:${connection.id}:v1`
-          : `incremental:${connection.id}:${request.reason ?? 'manual'}:${bucket}`),
+          ? `bootstrap:${connection.accountId}:v1`
+          : `incremental:${connection.accountId}:${request.reason ?? 'manual'}:${bucket}`),
       nextRunAt: request.nextRunAt,
     });
     publish(job);
@@ -113,8 +121,7 @@ export function startConnectorLearningCoordinator(options: {
 
   function enqueueToolkit(toolkit: string): ConnectorLearningJob[] {
     const normalized = toolkit.trim().toLowerCase();
-    return listConnectorConnections()
-      .filter((connection) => connection.status === 'active')
+    return activeAccountConnections()
       .filter((connection) => {
         const definition = getConnectorDefinition(connection.connectorId);
         return definition?.runtime.type === 'composio'
@@ -160,6 +167,19 @@ export function startConnectorLearningCoordinator(options: {
         ...connection,
         identity: normalizeConnectorIdentity(plan.toolkit, execution.result),
       });
+      const identityKey = connectorIdentityKey(plan.toolkit, connection.identity);
+      if (identityKey) {
+        const account = reconcileConnectorAccount({
+          connectionId: connection.id,
+          identityKey,
+          identity: connection.identity,
+        });
+        connection = listConnectorConnections().find((candidate) => candidate.id === connection.id)!;
+        job = updateConnectorLearningJob(job.id, {
+          accountId: account.id,
+          sourceInstanceId: `composio:${connection.connectorId}:${account.id}`,
+        });
+      }
     }
     let itemsSeen = 0;
     let itemsIndexed = 0;
@@ -178,7 +198,7 @@ export function startConnectorLearningCoordinator(options: {
       itemsSeen += synced.itemsSeen;
       itemsIndexed += synced.itemsIndexed;
     }
-    if (listConnectorLearningJobs({ connectionId: job.connectionId, limit: 100 })
+    if (listConnectorLearningJobs({ accountId: job.accountId, limit: 100 })
       .find((candidate) => candidate.id === job.id)?.status === 'paused') return;
     publish(updateConnectorLearningJob(job.id, {
       phase: 'indexing',
@@ -200,15 +220,16 @@ export function startConnectorLearningCoordinator(options: {
       job.sourceInstanceId,
       Date.now() - plan.bootstrapWindowDays * 24 * 60 * 60_000,
     );
-    const syncPolicy = getConnectorSyncPolicy(job.connectionId);
+    const syncPolicy = getConnectorSyncPolicyForConnection(job.connectionId);
     if (syncPolicy?.scanEnabled === false) return;
     const intervalMinutes = syncPolicy?.intervalMinutes ?? plan.intervalMinutes;
     const nextRunAt = Date.now() + intervalMinutes * 60_000;
-    enqueueConnection(job.connectionId, {
+    const account = getConnectorAccount(job.accountId);
+    enqueueConnection(account?.currentConnectionId ?? job.connectionId, {
       mode: 'incremental',
       reason: 'schedule',
       nextRunAt,
-      idempotencyKey: `scheduled:${job.connectionId}:${nextRunAt}`,
+      idempotencyKey: `scheduled:${job.accountId}:${nextRunAt}`,
     });
   }
 
@@ -243,8 +264,8 @@ export function startConnectorLearningCoordinator(options: {
 
   recoverStaleConnectorLearningJobs(Date.now());
   if (learningEnabled(options.getConfig())) {
-    for (const connection of listConnectorConnections().filter((item) => item.status === 'active')) {
-      if (listConnectorLearningJobs({ connectionId: connection.id, limit: 1 }).length === 0) {
+    for (const connection of activeAccountConnections()) {
+      if (listConnectorLearningJobs({ accountId: connection.accountId, limit: 1 }).length === 0) {
         enqueueConnection(connection.id, { reason: 'schedule' });
       }
     }
@@ -261,7 +282,9 @@ export function startConnectorLearningCoordinator(options: {
     enqueueConnection,
     enqueueToolkit,
     setPaused(connectionId, paused) {
-      const changed = setConnectorLearningPaused(connectionId, paused);
+      const accountId = listConnectorConnections().find((connection) => connection.id === connectionId)?.accountId;
+      if (!accountId) return 0;
+      const changed = setConnectorLearningPaused(accountId, paused);
       if (!paused && changed > 0) queueMicrotask(() => void runNow());
       return changed;
     },

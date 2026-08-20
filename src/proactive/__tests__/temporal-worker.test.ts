@@ -75,7 +75,7 @@ describe('proactive temporal worker', () => {
 
   it('publishes each meeting horizon once using durable event deduplication', async () => {
     upsertConnectorSyncPolicy({
-      connectionId: 'calendar-work',
+      accountId: 'account:calendar-work',
       scanEnabled: true,
       proactiveEnabled: true,
       allowedScenarioKeys: ['meeting_preparation'],
@@ -128,7 +128,7 @@ describe('proactive temporal worker', () => {
 
   it('does not emit when proactive connector use is disabled', async () => {
     upsertConnectorSyncPolicy({
-      connectionId: 'calendar-work',
+      accountId: 'account:calendar-work',
       scanEnabled: true,
       proactiveEnabled: false,
     });
@@ -142,7 +142,7 @@ describe('proactive temporal worker', () => {
 
   it('does not emit temporal signals for secret calendar items', async () => {
     upsertConnectorSyncPolicy({
-      connectionId: 'calendar-work',
+      accountId: 'account:calendar-work',
       scanEnabled: true,
       proactiveEnabled: true,
     });
@@ -156,7 +156,7 @@ describe('proactive temporal worker', () => {
 
   it('queries the upcoming window before applying the page limit', async () => {
     upsertConnectorSyncPolicy({
-      connectionId: 'calendar-work',
+      accountId: 'account:calendar-work',
       scanEnabled: true,
       proactiveEnabled: true,
     });

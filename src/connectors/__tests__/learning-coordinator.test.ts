@@ -121,12 +121,12 @@ describe('connector learning coordinator', () => {
     const config = ConfigSchema.parse({});
     config.userContext.memory.sources = [...config.userContext.memory.sources, 'connectedSources'];
     expect(upsertConnectorSyncPolicy({
-      connectionId: 'gmail-work',
+      accountId: 'account:gmail-work',
       proactiveEnabled: true,
       defaultIntervalMinutes: 15,
     }).intervalMinutes).toBe(15);
     upsertConnectorSyncPolicy({
-      connectionId: 'gmail-work',
+      accountId: 'account:gmail-work',
       scanEnabled: true,
       intervalMinutes: 5,
     });
@@ -149,7 +149,7 @@ describe('connector learning coordinator', () => {
       coordinator.stop();
     }
 
-    upsertConnectorSyncPolicy({ connectionId: 'gmail-work', scanEnabled: false });
+    upsertConnectorSyncPolicy({ accountId: 'account:gmail-work', scanEnabled: false });
     const disabled = startConnectorLearningCoordinator({
       getConfig: () => config,
       resolveAgentId: () => 'main',
