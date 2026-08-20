@@ -2,16 +2,16 @@ import type { AutomationEvent } from '../../automations/domain/types.js';
 
 import type { PublishEventInput } from './types.js';
 
-const SUPPORTED_EVENT_TYPES = new Set([
-  'task.created.v2',
-  'task.commanded.v2',
-  'task.phase_changed.v2',
-  'task.attention_required.v2',
-  'note.created',
-  'note.updated',
-  'workflow.run.completed',
-  'session.transcript.updated',
-  'discussion.completed',
+const PROACTIVE_EVENT_TYPE_BY_PRODUCT_EVENT = new Map<string, string>([
+  ['task.created.v2', 'task.created.v2'],
+  ['task.commanded.v2', 'task.commanded.v2'],
+  ['task.phase_changed.v2', 'task.phase_changed.v2'],
+  ['task.attention_required.v2', 'task.attention_required.v2'],
+  ['note.created', 'note.created.v1'],
+  ['note.updated', 'note.updated.v1'],
+  ['workflow.run.completed', 'workflow.run.completed.v1'],
+  ['session.transcript.updated', 'session.transcript.updated.v1'],
+  ['discussion.completed', 'discussion.completed.v1'],
 ]);
 
 function stringValue(payload: Record<string, unknown>, key: string): string | undefined {
@@ -49,7 +49,8 @@ export function mapProductEventToProactive(input: {
   workspaceId: string;
   defaultAgentId: string;
 }): PublishEventInput | null {
-  if (!SUPPORTED_EVENT_TYPES.has(input.event.type)) return null;
+  const proactiveEventType = PROACTIVE_EVENT_TYPE_BY_PRODUCT_EVENT.get(input.event.type);
+  if (!proactiveEventType) return null;
   const subject = subjectFor(input.event);
   if (!subject) return null;
   const payload = input.event.payload ?? {};
@@ -62,7 +63,7 @@ export function mapProductEventToProactive(input: {
   const agentId = stringValue(payload, 'agentId') ?? input.defaultAgentId;
   const projectId = stringValue(payload, 'projectId');
   return {
-    type: input.event.type,
+    type: proactiveEventType,
     schemaVersion: 1,
     source: { kind: 'internal', id: input.event.source ?? 'xopc' },
     subject,
@@ -73,7 +74,7 @@ export function mapProductEventToProactive(input: {
       ...(projectId ? { projectId } : {}),
     },
     occurredAt: new Date(occurredAtMs).toISOString(),
-    dedupeKey: `product-event:${input.event.type}:${subject.id}:${versionId}`,
+    dedupeKey: `product-event:${proactiveEventType}:${subject.id}:${versionId}`,
     sensitivity: 'personal',
     payload,
   };
