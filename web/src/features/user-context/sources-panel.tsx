@@ -23,7 +23,7 @@ import { cn } from '@/lib/cn';
 import { formatMediumDateTime } from '@/lib/date-formatters';
 
 import { personalContextSourceBranding } from './source-branding';
-import type { PersonalContextSource } from './user-context-api';
+import type { PersonalContextSource, SourceRecommendation } from './user-context-api';
 
 type YouMessages = ReturnType<typeof messages>['you'];
 type SourcePresentation = {
@@ -224,10 +224,12 @@ function SourceAccountDetail({
 
 export function SourcesPanel({
   sources,
+  recommendations,
   language,
   t,
   busyId,
   onAddSource,
+  onConnectRecommendation,
   onLearn,
   onPause,
   onConfigure,
@@ -235,10 +237,12 @@ export function SourcesPanel({
   onViewUnderstanding,
 }: {
   sources: PersonalContextSource[];
+  recommendations: SourceRecommendation[];
   language: 'en' | 'zh';
   t: YouMessages;
   busyId: string | null;
   onAddSource: () => void;
+  onConnectRecommendation: (sourceId: string) => void;
   onLearn: (source: PersonalContextSource) => void;
   onPause: (source: PersonalContextSource) => void;
   onConfigure: (source: PersonalContextSource) => void;
@@ -283,6 +287,29 @@ export function SourcesPanel({
         </div>
         <Button type="button" variant="primary" onClick={onAddSource}><Plus className="size-4" aria-hidden />{t.addSource}</Button>
       </div>
+
+      {recommendations.length > 0 ? (
+        <section>
+          <h3 className="text-sm font-semibold text-fg">{t.recommendationsTitle}</h3>
+          <div className="mt-3 grid gap-3 lg:grid-cols-3">
+            {recommendations.map((recommendation) => (
+              <article key={recommendation.sourceId} className="rounded-xl border border-accent/20 bg-accent-soft/20 p-4">
+                <div className="flex items-start gap-3">
+                  <Sparkles className="mt-0.5 size-4 shrink-0 text-accent" aria-hidden />
+                  <div className="min-w-0">
+                    <h4 className="truncate text-sm font-semibold text-fg">{recommendation.sourceName}</h4>
+                    <p className="mt-1 text-xs leading-5 text-fg-muted">{t.recommendationReason.replace('{{goal}}', recommendation.taskTitle)}</p>
+                  </div>
+                </div>
+                <div className="mt-3 flex items-center justify-between gap-2">
+                  <span className="text-[11px] text-fg-subtle">{t.permissionsBeforeConnectBadge}</span>
+                  <Button type="button" variant="secondary" className="h-8 px-2.5" onClick={() => onConnectRecommendation(recommendation.sourceId)}>{t.connectRecommendedSource}</Button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {groups.length > 0 ? (
         <div className="space-y-3">

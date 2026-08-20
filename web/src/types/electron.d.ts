@@ -508,7 +508,7 @@ export interface ElectronPersonalContextSourceResult {
 }
 
 export interface ElectronPersonalContextAPI {
-  scan(): Promise<ElectronPersonalContextSourceResult[]>;
+  scan(sources: ElectronPersonalContextSource[]): Promise<ElectronPersonalContextSourceResult[]>;
 }
 
 export interface ElectronAPI {

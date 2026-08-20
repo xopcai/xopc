@@ -117,6 +117,12 @@
     "saving": "保存中…",
     "cancel": "取消",
     "understandingTitle": "xopc 目前怎样理解你",
+    "understandingScopes": {
+      "global": "所有对话",
+      "session": "当前对话",
+      "project": "项目",
+      "workspace": "工作区"
+    },
     "understandingHint": "能够让未来协作更合适的稳定偏好和上下文。",
     "consentTitle": "允许引用已保存的了解",
     "consentHint": "最近的请求匹配到一条必须由你授权后才能使用的了解。",
@@ -292,6 +298,7 @@
     "recommendationsTitle": "根据当前目标推荐",
     "permissionsBeforeConnectBadge": "连接前确认权限",
     "recommendationReason": "可能有助于“{{goal}}”",
+    "connectRecommendedSource": "查看",
     "noSources": "暂时没有可用的个人信息来源。",
     "trustTitle": "xopc 可以主动到哪一步",
     "trustHint": "选择日常行动的默认边界。具体自动化和连接可以单独授权，但不会悄悄扩大权限。",

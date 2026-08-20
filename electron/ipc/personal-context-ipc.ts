@@ -6,6 +6,8 @@ import { assertTrustedRenderer } from './trusted-renderer.js';
 
 export type PersonalContextSource = 'apple_notes' | 'calendar' | 'reminders';
 
+const PERSONAL_CONTEXT_SOURCES = ['apple_notes', 'calendar', 'reminders'] as const;
+
 export interface PersonalContextItem {
   id: string;
   source: PersonalContextSource;
@@ -121,10 +123,18 @@ async function scanSource(source: PersonalContextSource): Promise<PersonalContex
   }
 }
 
+export function normalizePersonalContextSources(value: unknown): PersonalContextSource[] {
+  if (!Array.isArray(value)) return [];
+  const allowed = new Set<string>(PERSONAL_CONTEXT_SOURCES);
+  return [...new Set(value.filter((source): source is PersonalContextSource => (
+    typeof source === 'string' && allowed.has(source)
+  )))];
+}
+
 export function registerPersonalContextIpc(ipcMain: IpcMain): void {
-  ipcMain.handle('personal-context:scan', async (event) => {
+  ipcMain.handle('personal-context:scan', async (event, requestedSources: unknown) => {
     assertTrustedRenderer(event);
     if (process.platform !== 'darwin') return [] satisfies PersonalContextSourceResult[];
-    return Promise.all((['apple_notes', 'calendar', 'reminders'] as const).map(scanSource));
+    return Promise.all(normalizePersonalContextSources(requestedSources).map(scanSource));
   });
 }

@@ -368,6 +368,14 @@ describe('sqlite repositories', () => {
     expect(getSessionConfig(SESSION_KEY)).toBeNull();
   });
 
+  it('persists the per-session user understanding mode', () => {
+    setSessionConfig(SESSION_KEY, { userContextMode: 'off' }, CWD);
+    expect(getSessionConfig(SESSION_KEY)?.userContextMode).toBe('off');
+
+    setSessionConfig(SESSION_KEY, { userContextMode: 'enabled' }, CWD);
+    expect(getSessionConfig(SESSION_KEY)?.userContextMode).toBe('enabled');
+  });
+
   it('restores context by appending a logical compaction boundary', () => {
     ensureSessionRecord(SESSION_KEY, CWD);
     replaceTranscriptRows(SESSION_KEY, [userMessage('keep'), assistantMessage('me')]);

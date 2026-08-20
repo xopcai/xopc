@@ -61,6 +61,7 @@ import type { AutomationService } from '../automations/index.js';
 import type { SessionStore } from '../session/store.js';
 import type { NotesService } from '../notes/index.js';
 import type { ProjectService } from '../projects/index.js';
+import { getSessionConfig } from '../storage/sqlite/index.js';
 import { isValidSkillEnvVarName } from './skills/required-env-vars.js';
 import type { SessionContext } from './session/session-context.js';
 import type {
@@ -293,10 +294,7 @@ export class AgentManager implements AgentInstanceGateway {
     });
     this.userContext = new UserContextCoordinator({
       getConfig: () => this.config.config,
-      isEnabledForSession: () => Boolean(
-        this.config.config?.userContext.enabled
-        && this.config.config.userContext.memory.mode !== 'off',
-      ),
+      isEnabledForSession: (sessionKey) => this.isUserContextEnabledForSession(sessionKey),
       getAgentIdForSession: (sk) => this.agents.get(sk)?.effectiveProfile.agentId ?? 'main',
       getMemoryManagerForSession: (sk) => this.getMemoryManagerForSession(sk),
       getLastAssistantContent: (sk) => this.getLastAssistantContent(sk),
@@ -313,6 +311,14 @@ export class AgentManager implements AgentInstanceGateway {
       const em = err instanceof Error ? err.message : String(err);
       log.warn({ err, errorMessage: em }, `Credential cache pre-warm failed: ${em}`);
     });
+  }
+
+  private isUserContextEnabledForSession(sessionKey: string): boolean {
+    return Boolean(
+      this.config.config?.userContext.enabled
+      && this.config.config.userContext.memory.mode !== 'off'
+      && getSessionConfig(sessionKey)?.userContextMode !== 'off',
+    );
   }
 
   private computeBaseWorkspacePath(): string {
@@ -523,7 +529,7 @@ export class AgentManager implements AgentInstanceGateway {
    */
   beginBackgroundReviewUserTurn(sessionKey: string): void {
     const inst = this.agents.get(sessionKey);
-    if (!inst) return;
+    if (!inst || !this.isUserContextEnabledForSession(sessionKey)) return;
     this.backgroundReview.beginUserTurn(sessionKey);
   }
 
@@ -533,7 +539,7 @@ export class AgentManager implements AgentInstanceGateway {
    */
   scheduleBackgroundReviewAfterUserTurn(sessionKey: string): void {
     const inst = this.agents.get(sessionKey);
-    if (!inst) return;
+    if (!inst || !this.isUserContextEnabledForSession(sessionKey)) return;
     this.backgroundReview.scheduleAfterUserTurn({
       sessionKey,
       agent: inst.agent,

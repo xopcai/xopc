@@ -68,6 +68,7 @@ import {
   recordsDerivedFromPersonalContextSource,
 } from '../../../user-context/projection.js';
 import { prepareUserContextImport } from '../../../user-context/import.js';
+import { createManualUnderstanding } from '../../../user-context/manual-understanding.js';
 import { buildTaskSourceRecommendations } from '../../../user-context/source-recommendations.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
@@ -417,9 +418,7 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
       playbooks: buildPersonalPlaybooks(allUserContextRecords),
       sources,
       sourceRecommendations: buildTaskSourceRecommendations(
-        sourceDefinitions.filter((definition) => (
-          definition.capabilities.includes('context') || definition.capabilities.includes('memory_source')
-        )),
+        sourceDefinitions,
         new Set(sourceInstances.map((instance) => instance.connectorId)),
         activeTasks,
       ),
@@ -582,33 +581,36 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
     const kind = isUserContextMemoryKind(body.kind) ? body.kind : undefined;
     if (!content || content.length > 5_000) return c.json({ error: 'Understanding content must be 1-5000 characters' }, 400);
     if (!kind) return c.json({ error: 'A valid user understanding kind is required' }, 400);
-    const duplicate = listAllUserContextRecords(ALL_MEMORY_STATUSES)
-      .filter(isUserContextRecord)
-      .find((record) => record.content.trim().toLocaleLowerCase() === content.toLocaleLowerCase());
-    if (duplicate) return c.json({ error: 'This understanding already exists', understanding: projectUserContextRecord(duplicate) }, 409);
+    const scope = body.scope === 'session'
+      ? { type: 'session' as const, sessionKey: typeof body.sessionKey === 'string' ? body.sessionKey.trim() : '' }
+      : body.scope === undefined || body.scope === 'global'
+        ? { type: 'global' as const }
+        : null;
+    if (!scope || (scope.type === 'session' && !scope.sessionKey)) {
+      return c.json({ error: 'scope must be global or a session with sessionKey' }, 400);
+    }
     const sensitivity = MEMORY_SENSITIVITIES.has(body.sensitivity) ? body.sensitivity : 'normal';
     const durability = MEMORY_DURABILITIES.has(body.durability) ? body.durability : 'durable';
     const disclosurePolicy = MEMORY_DISCLOSURE_POLICIES.has(body.disclosurePolicy)
       ? body.disclosurePolicy
       : 'referenceable';
     const config = deps.service.currentConfig as Config;
-    const created = upsertMemoryRecord({
-      providerId: 'local',
-      kind,
-      sourceAgentId: selectedAgentId(config),
+    const result = createManualUnderstanding({
+      agentId: selectedAgentId(config),
       content,
-      source: { provider: 'local', path: 'you://manual' },
-      confidence: 1,
-      tags: ['user-understanding', 'explicit-user-memory'],
-      status: 'active',
+      kind,
+      scope,
       sensitivity,
-      explicitness: 'explicit',
       durability,
-      importance: 0.8,
       disclosurePolicy,
-      reviewAfter: nextMemoryReviewAt({ durability, explicitness: 'explicit' }),
     });
-    return c.json({ understanding: projectUserContextRecord(created) }, 201);
+    if (!result.created) {
+      return c.json({
+        error: 'This understanding already exists in the selected scope',
+        understanding: projectUserContextRecord(result.record),
+      }, 409);
+    }
+    return c.json({ understanding: projectUserContextRecord(result.record) }, 201);
   });
 
   authenticated.get('/api/you/understanding/:id/history', (c) => {
@@ -974,8 +976,11 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
       return c.json({ error: 'Personal context source not found' }, 404);
     }
     const body = await c.req.json().catch(() => ({}));
-    if (typeof body.deleteDerivedUnderstanding !== 'boolean') {
-      return c.json({ error: 'deleteDerivedUnderstanding must be a boolean' }, 400);
+    const understandingPolicy = body.understandingPolicy === 'keep' || body.understandingPolicy === 'delete'
+      ? body.understandingPolicy
+      : undefined;
+    if (!understandingPolicy) {
+      return c.json({ error: 'understandingPolicy must be keep or delete' }, 400);
     }
 
     try {
@@ -992,7 +997,7 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
 
     let deletedUnderstandingCount = 0;
     let deletedClaimCount = 0;
-    if (body.deleteDerivedUnderstanding) {
+    if (understandingPolicy === 'delete') {
       const sourceInstanceId = connection
         ? `composio:${connection.connectorId}:${connection.id}`
         : instanceId;

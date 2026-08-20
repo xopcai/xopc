@@ -121,6 +121,11 @@ export type ConnectorDefinition = {
   source: 'builtin' | 'extension' | 'custom' | 'registry' | 'store';
   capabilities: ConnectorCapability[];
   benefits?: ConnectorBenefit[];
+  understanding?: {
+    mode: 'activity' | 'inventory';
+    bootstrapWindowDays: number;
+    readOnly: true;
+  };
   tags?: string[];
   branding?: ConnectorBranding;
   verificationLevel?: ConnectorVerificationLevel;

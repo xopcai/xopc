@@ -117,6 +117,12 @@
     "saving": "Saving…",
     "cancel": "Cancel",
     "understandingTitle": "How xopc understands you",
+    "understandingScopes": {
+      "global": "All conversations",
+      "session": "This conversation",
+      "project": "Project",
+      "workspace": "Workspace"
+    },
     "understandingHint": "Stable preferences and context that can improve future work.",
     "consentTitle": "Permission to reference saved understanding",
     "consentHint": "A recent request matched an item that xopc must not use until you approve it.",
@@ -292,6 +298,7 @@
     "recommendationsTitle": "Recommended for your current goals",
     "permissionsBeforeConnectBadge": "Permissions shown first",
     "recommendationReason": "May help with “{{goal}}”",
+    "connectRecommendedSource": "Review",
     "noSources": "No personal context sources are available yet.",
     "trustTitle": "How far xopc may act by default",
     "trustHint": "Choose the default boundary for everyday actions. Individual automations and connections can be authorized separately without silently expanding access.",

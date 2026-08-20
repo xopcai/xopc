@@ -9,7 +9,8 @@ function readConfigRow(db: DatabaseSync, sessionKey: string): SessionConfigRow |
   return db
     .prepare(
       `SELECT session_key, thinking_level, reasoning_level, verbose_level, elevated_mode,
-              model_override, provider_override, working_directory_override, response_language, updated_at
+              model_override, provider_override, working_directory_override, response_language,
+              user_context_mode, updated_at
        FROM session_config WHERE session_key = ?`,
     )
     .get(sessionKey) as SessionConfigRow | undefined;
@@ -32,8 +33,8 @@ export function setSessionConfig(sessionKey: string, config: SessionAgentConfig,
     db.prepare(
       `INSERT INTO session_config (
         session_key, thinking_level, reasoning_level, verbose_level, elevated_mode,
-        model_override, provider_override, working_directory_override, response_language, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        model_override, provider_override, working_directory_override, response_language, user_context_mode, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(session_key) DO UPDATE SET
         thinking_level = excluded.thinking_level,
         reasoning_level = excluded.reasoning_level,
@@ -43,6 +44,7 @@ export function setSessionConfig(sessionKey: string, config: SessionAgentConfig,
         provider_override = excluded.provider_override,
         working_directory_override = excluded.working_directory_override,
         response_language = excluded.response_language,
+        user_context_mode = excluded.user_context_mode,
         updated_at = excluded.updated_at`,
     ).run(
       sessionKey,
@@ -54,6 +56,7 @@ export function setSessionConfig(sessionKey: string, config: SessionAgentConfig,
       next.providerOverride ?? null,
       next.workingDirectoryOverride ?? null,
       next.responseLanguage ?? null,
+      next.userContextMode ?? null,
       updatedAt,
     );
     return next;

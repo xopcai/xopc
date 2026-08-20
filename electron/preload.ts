@@ -137,7 +137,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
     },
   },
   personalContext: {
-    scan: () => ipcRenderer.invoke('personal-context:scan'),
+    scan: (sources: Array<'apple_notes' | 'calendar' | 'reminders'>) => (
+      ipcRenderer.invoke('personal-context:scan', sources)
+    ),
   },
   startup: {
     onProgress: (callback: (detail: StartupProgressDetail) => void) => {

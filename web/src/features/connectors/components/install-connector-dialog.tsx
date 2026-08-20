@@ -98,11 +98,12 @@ export function InstallConnectorDialog({
   const composioToolkit = connector.runtime.type === 'composio' && connector.runtime.role === 'toolkit'
     ? connector.runtime.toolkit
     : null;
+  const canLearnFromConnection = connector.understanding != null;
   const [composioConfigured, setComposioConfigured] = useState(!isComposioToolkit);
   const [composioSetupLoading, setComposioSetupLoading] = useState(isComposioToolkit);
   const [composioApiKey, setComposioApiKey] = useState('');
   const [composioSetupError, setComposioSetupError] = useState<string | null>(null);
-  const [learnAfterConnect, setLearnAfterConnect] = useState(true);
+  const [learnAfterConnect, setLearnAfterConnect] = useState(canLearnFromConnection);
 
   useEffect(() => {
     if (!isComposioToolkit) return;
@@ -152,7 +153,7 @@ export function InstallConnectorDialog({
           if (existingHealth?.status === 'connected') {
             authWindow?.close();
             const connection = await waitForActiveComposioConnection(composioToolkit!);
-            if (learnAfterConnect) await startConnectionLearning(connection.id);
+            if (canLearnFromConnection && learnAfterConnect) await startConnectionLearning(connection.id);
           } else {
             const authorization = await startConnectorAuthorization(connector.id);
             if (!authorization.authorizationUrl) throw new Error('The connection service did not return an authorization URL.');
@@ -166,7 +167,7 @@ export function InstallConnectorDialog({
             }
             const connection = await waitForActiveComposioConnection(composioToolkit!, authorization.connectionId);
             authWindow?.close();
-            if (learnAfterConnect) await startConnectionLearning(connection.id);
+            if (canLearnFromConnection && learnAfterConnect) await startConnectionLearning(connection.id);
           }
         }
       } catch (error) {
@@ -198,7 +199,7 @@ export function InstallConnectorDialog({
         error: error instanceof Error ? error.message : String(error),
       });
     }
-  }, [composioApiKey, composioConfigured, composioToolkit, connector, draft, isComposioToolkit, learnAfterConnect, onChange, onInstalled]);
+  }, [canLearnFromConnection, composioApiKey, composioConfigured, composioToolkit, connector, draft, isComposioToolkit, learnAfterConnect, onChange, onInstalled]);
 
   return (
     <Dialog.Root open onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -289,7 +290,7 @@ export function InstallConnectorDialog({
               <p className="mt-2 text-[11px] text-fg-subtle">{t.composioSetupStorageHint}</p>
             </section>
           ) : null}
-          {isComposioToolkit ? (
+          {isComposioToolkit && canLearnFromConnection ? (
             <label className="flex items-start gap-3 rounded-2xl border border-edge bg-surface-base p-4">
               <input
                 type="checkbox"

@@ -318,9 +318,6 @@ export class WorkDiscoveryService {
       && !hasLongVerbatimOverlap(candidate.summary, rawContents));
     const agentId = getDefaultAgentId(this.options.getConfig());
     const profileCandidates = safeProfileCandidates.map((candidate) => {
-      const autoRemember = candidate.confidence === 'high'
-        && candidate.category !== 'focus'
-        && candidate.evidence.length >= 2;
       const record = upsertMemoryRecord({
         providerId: 'local',
         kind: candidate.category === 'preference' ? 'preference' : candidate.category === 'workflow' ? 'routine' : 'derived_insight',
@@ -329,14 +326,14 @@ export class WorkDiscoveryService {
         source: { provider: 'personal-context', path: 'personal-context://onboarding' },
         confidence: candidate.confidence === 'high' ? 0.9 : candidate.confidence === 'medium' ? 0.72 : 0.58,
         tags: ['user-understanding', 'personal-context', `work-discovery:${candidate.category}`],
-        status: autoRemember ? 'active' : 'candidate',
+        status: 'candidate',
         sensitivity: 'normal',
         explicitness: 'inferred',
         durability: candidate.category === 'focus' ? 'ephemeral' : candidate.category === 'workflow' ? 'recurring' : 'durable',
         importance: candidate.category === 'focus' ? 0.75 : 0.65,
         disclosurePolicy: 'referenceable',
       });
-      return { ...candidate, status: autoRemember ? 'accepted' as const : 'pending' as const, memoryRecordId: record.id };
+      return { ...candidate, status: 'pending' as const, memoryRecordId: record.id };
     });
     const investigation = linkedRun ? getWorkUnderstandingInvestigationForRun(linkedRun.id) : null;
     const contextEvidence = investigation
@@ -379,7 +376,6 @@ export class WorkDiscoveryService {
     return {
       profileCandidates,
       workThreads,
-      autoRemembered: profileCandidates.filter((candidate) => candidate.status === 'accepted'),
     };
   }
 
