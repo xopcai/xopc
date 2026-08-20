@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { normalizeEventEnvelope } from '../events/envelope.js';
 import { mapProductEventToProactive } from '../events/product-event-bridge.js';
 
 describe('proactive product event bridge', () => {
@@ -46,10 +47,27 @@ describe('proactive product event bridge', () => {
       workspaceId: '/workspace',
       defaultAgentId: 'main',
     })).toMatchObject({
-      type: 'discussion.completed',
+      type: 'discussion.completed.v1',
       subject: { kind: 'discussion', id: 'discussion-1' },
       scope: { projectId: 'project-1' },
       sensitivity: 'personal',
     });
+  });
+
+  it.each([
+    ['note.created', { noteId: 'note-1' }, 'note.created.v1'],
+    ['note.updated', { noteId: 'note-1' }, 'note.updated.v1'],
+    ['workflow.run.completed', { runId: 'run-1' }, 'workflow.run.completed.v1'],
+    ['session.transcript.updated', { sessionKey: 'session-1' }, 'session.transcript.updated.v1'],
+    ['discussion.completed', { discussionId: 'discussion-1' }, 'discussion.completed.v1'],
+  ])('versions the %s product event for the proactive event envelope', (type, payload, expectedType) => {
+    const mapped = mapProductEventToProactive({
+      event: { type, payload, occurredAtMs: Date.parse('2026-08-15T03:00:00.000Z') },
+      workspaceId: '/workspace',
+      defaultAgentId: 'main',
+    });
+
+    expect(mapped).toMatchObject({ type: expectedType, schemaVersion: 1 });
+    expect(() => normalizeEventEnvelope(mapped!)).not.toThrow();
   });
 });
