@@ -41,7 +41,7 @@ SQLite schema version 37 adds the connected-knowledge delivery layer:
 - explicit `user_understanding` versus `connected_knowledge` pipeline routing, plus synthesis attempts, leases, worker ownership, and bounded errors on `knowledge_source_items`;
 - idempotent `(record, source item, relation)` evidence links.
 
-The normalized tables are the native source of truth for understanding and recall. Existing curated Markdown remains a compatibility projection for explicit `curated_memory` workflows; implicit turn learning and background review no longer write Markdown directly.
+The normalized SQLite tables are the only runtime source of truth for understanding and recall. Runtime memory never reads, writes, scans, or projects Markdown. See [Unified memory and user-understanding architecture](./memory-architecture.md).
 
 ## Background synthesis
 
@@ -56,7 +56,7 @@ Background review is configured once in top-level `userContext`. It is enabled b
   "userContext": {
     "memory": {
       "mode": "confirmWrite",
-      "sources": ["session", "curated"]
+      "sources": ["session", "understanding"]
     },
     "understanding": {
       "enabled": true,

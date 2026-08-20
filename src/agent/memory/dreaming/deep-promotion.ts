@@ -1,110 +1,34 @@
-import fs from 'node:fs/promises';
-import path from 'node:path';
-
 import { createLogger } from '../../../utils/logger.js';
-import { MEMORY_MD_FILENAME } from './constants.js';
 import {
-  loadDreamingStore,
-  saveDreamingStore,
-  withDreamingStoreLock,
-  type DreamingStoreEntry,
-} from './short-term-store.js';
-import {
-  DREAMING_LAST_RUN_FORMAT_VERSION,
-  emptyDeepPhaseSkipped,
-  writeDreamingDeepLastRun,
-  type DreamingDeepLastRun,
-  type DreamingDeepPhaseSkipped,
-} from './last-run.js';
+  appendMemorySignal,
+  appendMemoryTraceEvent,
+  listMemoryRecords,
+  listMemorySignals,
+  setMemoryRecordStatus,
+} from '../../../storage/sqlite/index.js';
 import type { DreamingDeepConfig } from './config.js';
-import type { MemoryManager } from '../manager.js';
-import { activateDreamingPromotion } from './promotion-lifecycle.js';
-import { inferMemorySensitivity } from '../sensitivity.js';
-import {
-  clamp01,
-  compareCandidatesByScore,
-  computeCandidateScore,
-  extractPromotionMarkers,
-  isContaminatedSnippet,
-  isExpiredEntry,
-  isoDay,
-  readFileLines,
-  resolveDeepDefaults,
-  sliceRange,
-  snippetHash,
-} from './utils.js';
+import { resolveDeepDefaults } from './utils.js';
 
 const log = createLogger('Dreaming:Deep');
+const MEMORY_STORE_URI = 'sqlite://memory_records';
 
 export type { DreamingDeepConfig } from './config.js';
 
-export type DreamingPromotionCandidate = DreamingStoreEntry & {
-  avgScore: number;
-  /** Time-decay-adjusted final score used for ranking. */
+type RankedCandidate = {
+  recordId: string;
   score: number;
-  /** Raw recency decay multiplier (0–1). */
-  recencyDecay: number;
+  recallCount: number;
+  uniqueQueries: number;
+  content: string;
 };
 
-
-function markerForPromotion(key: string, hash: string): string {
-  // Quote values to allow spaces/colons in key.
-  return `<!-- xopc-memory-promotion key="${key}" hash="${hash}" -->`;
-}
-
-
-async function rehydrateSnippet(params: {
-  workspaceDir: string;
-  candidate: DreamingPromotionCandidate;
-}): Promise<{ snippet: string; startLine: number; endLine: number } | null> {
-  const fullPath = path.join(params.workspaceDir, params.candidate.path);
-  const lines = await readFileLines(fullPath);
-  if (!lines) return null;
-
-  const startLine = Math.max(1, Math.floor(params.candidate.startLine));
-  const endLine = Math.max(startLine, Math.floor(params.candidate.endLine));
-  const snippet = sliceRange(lines, startLine, endLine);
-  if (!snippet) return null;
-  return { snippet, startLine, endLine };
-}
-
-
-function buildDeepLastRun(base: {
-  runId: string;
-  startedAt: string;
-  finishedAt: string;
-  t0: number;
-  ok: boolean;
-  reason: string;
-  config: DreamingDeepConfig;
-  memoryPath: string;
-  errorMessage?: string;
-  deep: DreamingDeepLastRun['deep'];
-}): DreamingDeepLastRun {
-  const durationMs = Math.max(0, Date.now() - base.t0);
-  return {
-    version: DREAMING_LAST_RUN_FORMAT_VERSION,
-    phase: 'deep',
-    runId: base.runId,
-    startedAt: base.startedAt,
-    finishedAt: base.finishedAt,
-    durationMs,
-    ok: base.ok,
-    reason: base.reason,
-    config: base.config,
-    memoryPath: base.memoryPath,
-    ...(base.errorMessage ? { errorMessage: base.errorMessage } : {}),
-    deep: base.deep,
-  };
-}
-
+/** Consolidate useful candidates from structured recall and injection signals. */
 export async function runDreamingDeepPromotion(params: {
   agentId: string;
   workspaceDir: string;
-  dreamingRoot: string;
   config?: Partial<DreamingDeepConfig>;
   sensitiveWritePolicy?: 'deny' | 'confirm' | 'allow';
-  memoryManager?: MemoryManager;
+  promotionWritePolicy?: 'deny' | 'confirm' | 'allow';
   now?: Date;
 }): Promise<{
   ok: boolean;
@@ -115,270 +39,92 @@ export async function runDreamingDeepPromotion(params: {
 }> {
   const cfg = resolveDeepDefaults(params.config);
   const now = params.now ?? new Date();
-  const startedAt = now.toISOString();
-  const runId = `${startedAt}:${process.pid}:${Math.random().toString(16).slice(2)}`;
-  const memoryPath = path.join(params.dreamingRoot, MEMORY_MD_FILENAME);
-  const t0 = Date.now();
-
-  // Early exit for disabled or zero-limit configurations.
-  const earlyExitReason = !cfg.enabled ? 'dreaming disabled' : cfg.limit === 0 ? 'dreaming limit=0' : null;
-  if (earlyExitReason) {
-    const finishedAt = new Date().toISOString();
-    const empty = emptyDeepPhaseSkipped();
-    await writeDreamingDeepLastRun({
-      dreamingRoot: params.dreamingRoot,
-      lastRun: buildDeepLastRun({
-        runId,
-        startedAt,
-        finishedAt,
-        t0,
-        ok: true,
-        reason: earlyExitReason,
-        config: cfg,
-        memoryPath,
-        deep: { candidatesRanked: 0, applied: 0, skipped: empty },
-      }),
-    }).catch(() => undefined);
-    return { ok: true, reason: earlyExitReason, candidates: 0, applied: 0, memoryPath };
+  const started = Date.now();
+  if (!cfg.enabled || cfg.limit === 0) {
+    const reason = !cfg.enabled ? 'dreaming disabled' : 'dreaming limit=0';
+    trace(params, reason, [], 0, started);
+    return { ok: true, reason, candidates: 0, applied: 0, memoryPath: MEMORY_STORE_URI };
   }
 
   try {
-    const result = await withDreamingStoreLock(params.dreamingRoot, async () => {
-      const { store } = await loadDreamingStore({ dreamingRoot: params.dreamingRoot });
-
-      const nowMs = now.getTime();
-
-      const all = Object.values(store.entries ?? {}).filter((e): e is DreamingStoreEntry => {
-        if (!e || typeof e !== 'object') return false;
-        if (e.promotedAt) return false;
-        if (!e.path || !e.path.startsWith('memory/')) return false;
-        if (e.recallCount < cfg.minRecallCount) return false;
-        // Require minimum unique queries to avoid single-query inflation.
-        if ((e.queryHashes?.length ?? 0) < cfg.minUniqueQueries) return false;
-        // Expire entries older than maxAgeDays since last recall.
-        if (isExpiredEntry(e.lastRecalledAt, nowMs, cfg.maxAgeDays)) return false;
-        const avg = e.recallCount > 0 ? e.totalScore / e.recallCount : 0;
-        return clamp01(avg) >= cfg.minScore;
-      });
-
-      const ranked: DreamingPromotionCandidate[] = all
-        .map((e) => {
-          const { avgScore, score, recencyDecay } = computeCandidateScore(e, nowMs, cfg.recencyHalfLifeDays);
-          return { ...e, avgScore, score, recencyDecay };
-        })
-        .sort(compareCandidatesByScore)
-        .slice(0, cfg.limit);
-
-      if (ranked.length === 0) {
-        const z = emptyDeepPhaseSkipped();
-        return { ok: true, reason: 'no eligible candidates', candidates: 0, applied: 0, memoryPath, skipped: z };
-      }
-
-      const existing = await fs.readFile(memoryPath, 'utf-8').catch((err: unknown) => {
-        if ((err as NodeJS.ErrnoException | undefined)?.code === 'ENOENT') return '';
-        throw err;
-      });
-      const existingMarkers = extractPromotionMarkers(existing);
-
-      const appliedCandidates: Array<{
-        key: string;
-        hash: string;
-        snippet: string;
-        path: string;
-        startLine: number;
-        endLine: number;
-        score: number;
-        recallCount: number;
-        avgScore: number;
-        sensitivity: ReturnType<typeof inferMemorySensitivity>;
-      }> = [];
-
-      const skipped: DreamingDeepPhaseSkipped = emptyDeepPhaseSkipped();
-      for (const candidate of ranked) {
-        if (existingMarkers.keys.has(candidate.key)) {
-          skipped.alreadyPromotedKey += 1;
-          // Treat as already applied; mark promotedAt for idempotency and keep going.
-          const entry = store.entries[candidate.key];
-          if (entry && !entry.promotedAt) {
-            entry.promotedAt = now.toISOString();
-          }
-          continue;
-        }
-        const rehydrated = await rehydrateSnippet({ workspaceDir: params.workspaceDir, candidate });
-        if (!rehydrated) {
-          skipped.rehydrateFailed += 1;
-          continue;
-        }
-        if (isContaminatedSnippet(rehydrated.snippet)) {
-          skipped.contaminated += 1;
-          continue;
-        }
-        const sensitivity = inferMemorySensitivity(rehydrated.snippet);
-        if (sensitivity !== 'normal' && params.sensitiveWritePolicy !== 'allow') {
-          skipped.contaminated += 1;
-          continue;
-        }
-        const hash = snippetHash(rehydrated.snippet);
-        if (existingMarkers.hashes.has(hash)) {
-          skipped.hashDuplicate += 1;
-          // Already promoted (possibly from a different key/line range). Mark promoted for idempotency.
-          const entry = store.entries[candidate.key];
-          if (entry && !entry.promotedAt) {
-            entry.promotedAt = now.toISOString();
-          }
-          continue;
-        }
-        appliedCandidates.push({
-          key: candidate.key,
-          hash,
-          snippet: rehydrated.snippet,
-          path: candidate.path,
-          startLine: rehydrated.startLine,
-          endLine: rehydrated.endLine,
-          score: candidate.score,
-          recallCount: candidate.recallCount,
-          avgScore: candidate.avgScore,
-          sensitivity,
-        });
-      }
-
-      if (appliedCandidates.length === 0) {
-        await saveDreamingStore({ dreamingRoot: params.dreamingRoot, store });
-        return {
-          ok: true,
-          reason: 'candidates were stale or already applied',
-          candidates: ranked.length,
-          applied: 0,
-          memoryPath,
-          skipped,
-        };
-      }
-
-      const day = isoDay(now);
-      const header = existing.trim().length > 0 ? '' : '# Long-Term Memory\n\n';
-      const sectionLines: string[] = ['', `## Promoted From Short-Term Memory (${day})`, ''];
-      for (const c of appliedCandidates) {
-        const src = `${c.path}:${c.startLine}-${c.endLine}`;
-        sectionLines.push(markerForPromotion(c.key, c.hash));
-        sectionLines.push(
-          `- ${c.snippet} [score=${c.score.toFixed(3)} recalls=${c.recallCount} avg=${c.avgScore.toFixed(3)} source=${src}]`,
-        );
-      }
-      sectionLines.push('');
-
-      const next = `${header}${existing.endsWith('\n') || existing.length === 0 ? existing : `${existing}\n`}${sectionLines.join('\n')}`;
-      for (const c of appliedCandidates) {
-        activateDreamingPromotion({
-          agentId: params.agentId,
-          workspaceId: params.workspaceDir,
-          candidateKey: c.key,
-          content: c.snippet,
-          sourcePath: c.path,
-          lineStart: c.startLine,
-          lineEnd: c.endLine,
-          score: c.score,
-          recallCount: c.recallCount,
-          observedAt: now.toISOString(),
-          sensitivity: c.sensitivity,
-        });
-      }
-      await fs.mkdir(path.dirname(memoryPath), { recursive: true });
-      await fs.writeFile(memoryPath, next, 'utf-8');
-
-      const nowIso = now.toISOString();
-      for (const c of appliedCandidates) {
-        params.memoryManager?.recordSignal({
-          source: 'dreaming',
-          recordId: `dreaming:${c.key}`,
-          score: c.score,
-          content: c.snippet,
-          metadata: {
-            path: c.path,
-            startLine: c.startLine,
-            endLine: c.endLine,
-            recallCount: c.recallCount,
-            avgScore: c.avgScore,
-          },
-        });
-        const entry = store.entries[c.key];
-        if (entry) {
-          entry.promotedAt = nowIso;
-          entry.snippet = c.snippet;
-          entry.startLine = c.startLine;
-          entry.endLine = c.endLine;
-        }
-      }
-      store.updatedAt = nowIso;
-      await saveDreamingStore({ dreamingRoot: params.dreamingRoot, store });
-
-      log.info(
-        {
-          workspaceDir: params.workspaceDir,
-          dreamingRoot: params.dreamingRoot,
-          candidates: ranked.length,
-          applied: appliedCandidates.length,
-        },
-        'Dreaming deep promotion complete',
-      );
-
-      return {
-        ok: true,
-        reason: 'applied promotions',
-        candidates: ranked.length,
-        applied: appliedCandidates.length,
-        memoryPath,
-        skipped,
-      };
+    const cutoff = now.getTime() - cfg.maxAgeDays * 86_400_000;
+    const records = listMemoryRecords({
+      providerId: 'local',
+      workspaceId: params.workspaceDir,
+      status: 'candidate',
+      limit: 500,
     });
+    const signals = listMemorySignals({ workspaceId: params.workspaceDir, limit: 500 });
+    const byRecord = new Map<string, typeof signals>();
+    for (const signal of signals) {
+      if (!signal.recordId || Date.parse(signal.createdAt) < cutoff) continue;
+      const group = byRecord.get(signal.recordId) ?? [];
+      group.push(signal);
+      byRecord.set(signal.recordId, group);
+    }
 
-    const finishedAt = new Date().toISOString();
-    const empty = emptyDeepPhaseSkipped();
-    const resultSkipped = 'skipped' in result ? result.skipped : empty;
-    await writeDreamingDeepLastRun({
-      dreamingRoot: params.dreamingRoot,
-      lastRun: buildDeepLastRun({
-        runId,
-        startedAt,
-        finishedAt,
-        t0,
-        ok: result.ok,
-        reason: result.reason,
-        config: cfg,
-        memoryPath: result.memoryPath,
-        deep: {
-          candidatesRanked: result.candidates,
-          applied: result.applied,
-          skipped: resultSkipped,
-        },
-      }),
-    }).catch(() => undefined);
+    const ranked: RankedCandidate[] = records.flatMap((record) => {
+      if ((record.sensitivity ?? 'normal') !== 'normal' && params.sensitiveWritePolicy !== 'allow') return [];
+      const recallSignals = (byRecord.get(record.id) ?? []).filter((signal) =>
+        signal.source === 'search_recall' || signal.source === 'context_injection');
+      const queries = new Set(recallSignals.map((signal) => String(signal.metadata.query ?? '')).filter(Boolean));
+      const avgScore = recallSignals.length
+        ? recallSignals.reduce((sum, signal) => sum + (signal.score ?? 0), 0) / recallSignals.length
+        : 0;
+      const ageDays = Math.max(0, (now.getTime() - Date.parse(record.updatedAt)) / 86_400_000);
+      const score = Math.max(0, Math.min(1, avgScore * Math.pow(0.5, ageDays / cfg.recencyHalfLifeDays)));
+      if (recallSignals.length < cfg.minRecallCount || queries.size < cfg.minUniqueQueries || score < cfg.minScore) return [];
+      return [{ recordId: record.id, score, recallCount: recallSignals.length, uniqueQueries: queries.size, content: record.content }];
+    }).sort((left, right) => right.score - left.score).slice(0, cfg.limit);
 
-    return {
-      ok: result.ok,
-      reason: result.reason,
-      candidates: result.candidates,
-      applied: result.applied,
-      memoryPath: result.memoryPath,
-    };
+    const policy = params.promotionWritePolicy ?? 'deny';
+    let applied = 0;
+    if (policy === 'allow') {
+      for (const candidate of ranked) {
+        if (!setMemoryRecordStatus(candidate.recordId, 'active', now.getTime())) continue;
+        applied += 1;
+        appendMemorySignal({
+          signal: {
+            source: 'dreaming',
+            recordId: candidate.recordId,
+            score: candidate.score,
+            content: candidate.content,
+            metadata: { phase: 'deep', recallCount: candidate.recallCount, uniqueQueries: candidate.uniqueQueries },
+          },
+          providerId: 'local',
+          sourceAgentId: params.agentId,
+          workspaceId: params.workspaceDir,
+        });
+      }
+    }
+    const reason = ranked.length === 0
+      ? 'no eligible candidates'
+      : policy === 'allow'
+        ? 'candidate consolidation complete'
+        : policy === 'confirm'
+          ? 'candidates retained for user review'
+          : 'analysis complete; writes denied by policy';
+    trace(params, reason, ranked.map((candidate) => candidate.recordId), applied, started);
+    log.info({ workspaceDir: params.workspaceDir, candidates: ranked.length, applied, policy }, 'Dreaming deep consolidation complete');
+    return { ok: true, reason, candidates: ranked.length, applied, memoryPath: MEMORY_STORE_URI };
   } catch (err) {
-    const finishedAt = new Date().toISOString();
-    const em = err instanceof Error ? err.message : String(err);
-    const z = emptyDeepPhaseSkipped();
-    await writeDreamingDeepLastRun({
-      dreamingRoot: params.dreamingRoot,
-      lastRun: buildDeepLastRun({
-        runId,
-        startedAt,
-        finishedAt,
-        t0,
-        ok: false,
-        reason: 'error',
-        config: cfg,
-        memoryPath,
-        errorMessage: em,
-        deep: { candidatesRanked: 0, applied: 0, skipped: z },
-      }),
-    }).catch(() => undefined);
-    throw err;
+    const error = err instanceof Error ? err.message : String(err);
+    appendMemoryTraceEvent({
+      phase: 'dreaming_deep', providerId: 'local', sourceAgentId: params.agentId,
+      request: { workspaceId: params.workspaceDir }, error, durationMs: Date.now() - started,
+    });
+    log.error({ err, workspaceDir: params.workspaceDir }, `Dreaming deep consolidation failed: ${error}`);
+    return { ok: false, reason: error, candidates: 0, applied: 0, memoryPath: MEMORY_STORE_URI };
   }
+}
+
+function trace(
+  params: { agentId: string; workspaceDir: string }, reason: string,
+  selectedRecordIds: string[], applied: number, started: number,
+): void {
+  appendMemoryTraceEvent({
+    phase: 'dreaming_deep', providerId: 'local', sourceAgentId: params.agentId,
+    request: { workspaceId: params.workspaceDir, reason, applied },
+    resultCount: selectedRecordIds.length, selectedRecordIds, durationMs: Date.now() - started,
+  });
 }

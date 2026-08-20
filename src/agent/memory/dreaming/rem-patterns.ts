@@ -1,39 +1,17 @@
-import fs from 'node:fs/promises';
-import path from 'node:path';
+import { createHash } from 'node:crypto';
 
 import { createLogger } from '../../../utils/logger.js';
-import { DREAMING_DIR_RELATIVE, DREAMS_MD_FILENAME, MS_PER_DAY } from './constants.js';
+import {
+  appendMemorySignal,
+  appendMemoryTraceEvent,
+  getMemoryRecord,
+  listMemorySignals,
+} from '../../../storage/sqlite/index.js';
 import type { DreamingRemConfig } from './config.js';
-import {
-  bumpEntryPhaseSignal,
-  loadDreamingStore,
-  saveDreamingStore,
-  withDreamingStoreLock,
-  type DreamingStoreEntry,
-} from './short-term-store.js';
-import { isoDay } from './utils.js';
 import { inferMemorySensitivity } from '../sensitivity.js';
-import { activateRemInsight, remPatternKey } from './promotion-lifecycle.js';
-import {
-  DREAMING_LAST_RUN_FORMAT_VERSION,
-  type DreamingRemLastRun,
-} from './last-run.js';
+import { activateRemInsight } from './promotion-lifecycle.js';
 
 const log = createLogger('Dreaming:REM');
-
-// ── Pattern types ──────────────────────────────────────────────────────
-
-type PatternCluster = {
-  representative: DreamingStoreEntry;
-  members: DreamingStoreEntry[];
-  strength: number;
-  /** Shared query hashes across members. */
-  sharedQueries: string[];
-  /** Distinct source files involved. */
-  distinctPaths: string[];
-};
-
-// ── Config defaults ────────────────────────────────────────────────────
 
 function resolveConfig(overrides?: Partial<DreamingRemConfig>): DreamingRemConfig {
   return {
@@ -45,374 +23,100 @@ function resolveConfig(overrides?: Partial<DreamingRemConfig>): DreamingRemConfi
   };
 }
 
-// ── Core REM pattern discovery ─────────────────────────────────────────
-
-/**
- * REM phase: cross-session pattern discovery.
- *
- * Scans the short-term store for entries that share query hashes or
- * appear across multiple indexed memory sources, then clusters them to identify
- * recurring themes/patterns. Bumps `remHits` on touched entries and
- * optionally writes a pattern summary to DREAMS.md.
- *
- * Runs weekly; expensive but insightful.
- */
+/** Discover cross-session patterns from structured usage signals. */
 export async function runRemPatterns(params: {
   agentId: string;
   workspaceDir: string;
-  dreamingRoot: string;
   config?: Partial<DreamingRemConfig>;
   sensitiveWritePolicy?: 'deny' | 'confirm' | 'allow';
   promotionWritePolicy?: 'deny' | 'confirm' | 'allow';
   now?: Date;
-}): Promise<{
-  ok: boolean;
-  reason: string;
-  patternsDiscovered: number;
-  entriesAnalyzed: number;
-}> {
+}): Promise<{ ok: boolean; reason: string; patternsDiscovered: number; entriesAnalyzed: number }> {
   const cfg = resolveConfig(params.config);
   const now = params.now ?? new Date();
-  const startedAt = now.toISOString();
-  const runId = `rem:${startedAt}:${process.pid}`;
-  const startMs = Date.now();
-  const nowMs = now.getTime();
-
+  const started = Date.now();
   if (!cfg.enabled) {
-    await writeLastRun(params.dreamingRoot, {
-      runId, startedAt, cfg, ok: true, reason: 'REM patterns disabled', startMs,
-      rem: { patternsDiscovered: 0, entriesAnalyzed: 0 },
-    });
+    trace(params, 'REM patterns disabled', [], 0, started);
     return { ok: true, reason: 'REM patterns disabled', patternsDiscovered: 0, entriesAnalyzed: 0 };
   }
 
   try {
-    return await withDreamingStoreLock(params.dreamingRoot, async () => {
-    const { store } = await loadDreamingStore({ dreamingRoot: params.dreamingRoot });
-
-    // Filter entries within the lookback window.
-    const cutoffMs = nowMs - cfg.lookbackDays * MS_PER_DAY;
-    const recentEntries = Object.values(store.entries ?? {}).filter(
-      (entry): entry is DreamingStoreEntry => {
-        if (!entry || typeof entry !== 'object') return false;
-        if (!entry.lastRecalledAt) return false;
-        const lastMs = Date.parse(entry.lastRecalledAt);
-        return Number.isFinite(lastMs) && lastMs >= cutoffMs;
-      },
+    const cutoff = now.getTime() - cfg.lookbackDays * 86_400_000;
+    const signals = listMemorySignals({ workspaceId: params.workspaceDir, limit: 500 }).filter((signal) =>
+      signal.recordId && Date.parse(signal.createdAt) >= cutoff
+      && (signal.source === 'search_recall' || signal.source === 'context_injection'),
     );
-
-    if (recentEntries.length < 2) {
-      await writeLastRun(params.dreamingRoot, {
-        runId, startedAt, cfg, ok: true, reason: 'not enough recent entries for pattern analysis', startMs,
-        rem: { patternsDiscovered: 0, entriesAnalyzed: recentEntries.length },
-      });
-      return {
-        ok: true,
-        reason: 'not enough recent entries for pattern analysis',
-        patternsDiscovered: 0,
-        entriesAnalyzed: recentEntries.length,
-      };
+    const groups = new Map<string, Set<string>>();
+    for (const signal of signals) {
+      const query = String(signal.metadata.query ?? '').trim().toLocaleLowerCase();
+      if (!query || !signal.recordId) continue;
+      const queryKey = createHash('sha256').update(query).digest('hex').slice(0, 24);
+      const group = groups.get(queryKey) ?? new Set<string>();
+      group.add(signal.recordId);
+      groups.set(queryKey, group);
     }
-
-    // Discover patterns by clustering entries that share query hashes.
-    const clusters = discoverPatternClusters(recentEntries, cfg.minPatternStrength);
-    const topClusters = clusters
-      .filter((cluster) => {
-        const sensitivity = inferMemorySensitivity(cluster.members.map((member) => member.snippet).join('\n'));
-        return sensitivity === 'normal' || params.sensitiveWritePolicy === 'allow';
-      })
+    const patterns = [...groups.values()]
+      .filter((recordIds) => recordIds.size >= 2)
+      .map((recordIds) => [...recordIds].map((id) => getMemoryRecord(id)).filter((record) => record != null))
+      .filter((records) => records.length >= 2)
+      .map((records) => ({
+        records,
+        strength: Math.min(1, records.length / 4),
+      }))
+      .filter((pattern) => pattern.strength >= cfg.minPatternStrength)
+      .sort((left, right) => right.strength - left.strength)
       .slice(0, cfg.limit);
 
-    // Bump remHits on all entries that belong to a discovered pattern.
-    const touchedKeys = new Set<string>();
-    for (const cluster of topClusters) {
-      for (const member of cluster.members) {
-        if (!touchedKeys.has(member.key)) {
-          touchedKeys.add(member.key);
-          const storeEntry = store.entries[member.key];
-          if (storeEntry) {
-            bumpEntryPhaseSignal(storeEntry, 'remHits');
-          }
-        }
-      }
-    }
-
-    store.updatedAt = now.toISOString();
-    await saveDreamingStore({ dreamingRoot: params.dreamingRoot, store });
-
-    if (params.promotionWritePolicy === 'allow') {
-      for (const cluster of topClusters) {
-        const sensitivity = inferMemorySensitivity(cluster.members.map((member) => member.snippet).join('\n'));
-        activateRemInsight({
+    const policy = params.promotionWritePolicy ?? 'deny';
+    let written = 0;
+    for (const pattern of patterns) {
+      const content = pattern.records.map((record) => record.content).join('\n');
+      const sensitivity = inferMemorySensitivity(content);
+      if (sensitivity !== 'normal' && params.sensitiveWritePolicy !== 'allow') continue;
+      if (policy !== 'deny') {
+        const record = activateRemInsight({
           agentId: params.agentId,
           workspaceId: params.workspaceDir,
-          memberKeys: cluster.members.map((member) => member.key),
-          representative: cluster.representative.snippet,
-          distinctPaths: cluster.distinctPaths,
-          strength: cluster.strength,
+          memberKeys: pattern.records.map((record) => record.id),
+          representative: pattern.records[0]!.content,
+          distinctPaths: pattern.records.map((record) => record.id),
+          strength: pattern.strength,
           observedAt: now.toISOString(),
-          evidence: cluster.members.map((member) => member.snippet),
+          evidence: pattern.records.map((record) => record.content),
           sensitivity,
+          status: policy === 'confirm' ? 'candidate' : 'active',
         });
+        appendMemorySignal({
+          signal: { source: 'dreaming', recordId: record.id, score: pattern.strength, content: record.content, metadata: { phase: 'rem' } },
+          providerId: 'local', sourceAgentId: params.agentId, workspaceId: params.workspaceDir,
+        });
+        written += 1;
       }
     }
-
-    // Write pattern summary to DREAMS.md (append).
-    if (topClusters.length > 0) {
-      await appendPatternSummary(params.dreamingRoot, topClusters, now);
-    }
-
-    log.info(
-      {
-        dreamingRoot: params.dreamingRoot,
-        patterns: topClusters.length,
-        entriesAnalyzed: recentEntries.length,
-        touched: touchedKeys.size,
-      },
-      'REM pattern discovery complete',
-    );
-
-    await writeLastRun(params.dreamingRoot, {
-      runId, startedAt, cfg, ok: true, reason: 'REM patterns complete', startMs,
-      rem: { patternsDiscovered: topClusters.length, entriesAnalyzed: recentEntries.length },
-    });
-
-    return {
-      ok: true,
-      reason: 'REM patterns complete',
-      patternsDiscovered: topClusters.length,
-      entriesAnalyzed: recentEntries.length,
-    };
-    });
+    const selected = patterns.flatMap((pattern) => pattern.records.map((record) => record.id));
+    const reason = patterns.length === 0 ? 'not enough evidence for recurring patterns'
+      : policy === 'deny' ? 'patterns analyzed; writes denied by policy'
+        : policy === 'confirm' ? 'pattern candidates added for user review' : 'REM patterns complete';
+    trace(params, reason, selected, written, started);
+    log.info({ workspaceDir: params.workspaceDir, patterns: patterns.length, written, policy }, 'REM pattern discovery complete');
+    return { ok: true, reason, patternsDiscovered: patterns.length, entriesAnalyzed: new Set(signals.map((signal) => signal.recordId)).size };
   } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
-    log.error({ err, errorMessage, dreamingRoot: params.dreamingRoot }, `REM pattern discovery failed: ${errorMessage}`);
-    await writeLastRun(params.dreamingRoot, {
-      runId, startedAt, cfg, ok: false, reason: `REM error: ${errorMessage}`, startMs,
-      rem: { patternsDiscovered: 0, entriesAnalyzed: 0 }, errorMessage,
-    }).catch(() => undefined);
-    return { ok: false, reason: errorMessage, patternsDiscovered: 0, entriesAnalyzed: 0 };
-  }
-}
-
-// ── Pattern clustering ─────────────────────────────────────────────────
-
-/**
- * Build an inverted index of queryHash → entries, then form clusters
- * where multiple entries share overlapping query hashes. Each cluster's
- * "strength" is the ratio of shared queries to total unique queries.
- */
-function discoverPatternClusters(
-  entries: DreamingStoreEntry[],
-  minStrength: number,
-): PatternCluster[] {
-  // Build inverted index: queryHash → entry keys.
-  const hashToEntries = new Map<string, DreamingStoreEntry[]>();
-  for (const entry of entries) {
-    for (const queryHash of entry.queryHashes ?? []) {
-      const group = hashToEntries.get(queryHash);
-      if (group) {
-        group.push(entry);
-      } else {
-        hashToEntries.set(queryHash, [entry]);
-      }
-    }
-  }
-
-  // Find query hashes that appear in 2+ distinct entries from different paths.
-  const significantHashes: Array<{ hash: string; entries: DreamingStoreEntry[] }> = [];
-  for (const [hash, group] of hashToEntries) {
-    const uniquePaths = new Set(group.map((e) => e.path));
-    if (group.length >= 2 && uniquePaths.size >= 2) {
-      significantHashes.push({ hash, entries: group });
-    }
-  }
-
-  if (significantHashes.length === 0) return [];
-
-  // Merge overlapping groups into clusters using union-find.
-  const keyToCluster = new Map<string, Set<string>>();
-  const keyToEntry = new Map<string, DreamingStoreEntry>();
-
-  for (const entry of entries) {
-    keyToEntry.set(entry.key, entry);
-  }
-
-  for (const { entries: groupEntries } of significantHashes) {
-    const keys = groupEntries.map((e) => e.key);
-    // Find or create the cluster for the first key.
-    let mergedCluster = keyToCluster.get(keys[0]!);
-    if (!mergedCluster) {
-      mergedCluster = new Set<string>();
-      mergedCluster.add(keys[0]!);
-      keyToCluster.set(keys[0]!, mergedCluster);
-    }
-    // Merge all other keys into this cluster.
-    for (const key of keys.slice(1)) {
-      const existingCluster = keyToCluster.get(key);
-      if (existingCluster && existingCluster !== mergedCluster) {
-        for (const existingKey of existingCluster) {
-          mergedCluster.add(existingKey);
-          keyToCluster.set(existingKey, mergedCluster);
-        }
-      } else {
-        mergedCluster.add(key);
-        keyToCluster.set(key, mergedCluster);
-      }
-    }
-  }
-
-  // Deduplicate cluster sets.
-  const seenClusters = new Set<Set<string>>();
-  const rawClusters: Set<string>[] = [];
-  for (const cluster of keyToCluster.values()) {
-    if (!seenClusters.has(cluster) && cluster.size >= 2) {
-      seenClusters.add(cluster);
-      rawClusters.push(cluster);
-    }
-  }
-
-  // Score each cluster.
-  const scoredClusters: PatternCluster[] = [];
-  for (const clusterKeys of rawClusters) {
-    const members: DreamingStoreEntry[] = [];
-    for (const key of clusterKeys) {
-      const entry = keyToEntry.get(key);
-      if (entry) members.push(entry);
-    }
-    if (members.length < 2) continue;
-
-    // Shared queries: hashes that appear in 2+ members.
-    const hashCounts = new Map<string, number>();
-    for (const member of members) {
-      for (const hash of member.queryHashes ?? []) {
-        hashCounts.set(hash, (hashCounts.get(hash) ?? 0) + 1);
-      }
-    }
-    const sharedQueries = [...hashCounts.entries()]
-      .filter(([, count]) => count >= 2)
-      .map(([hash]) => hash);
-
-    const allUniqueHashes = new Set<string>();
-    for (const member of members) {
-      for (const hash of member.queryHashes ?? []) allUniqueHashes.add(hash);
-    }
-
-    const strength = allUniqueHashes.size > 0 ? sharedQueries.length / allUniqueHashes.size : 0;
-    if (strength < minStrength) continue;
-
-    const distinctPaths = [...new Set(members.map((m) => m.path))];
-
-    // Representative: the member with the highest totalSignalCount.
-    const representative = members.reduce((best, current) =>
-      (current.totalSignalCount ?? 0) > (best.totalSignalCount ?? 0) ? current : best,
-    );
-
-    scoredClusters.push({
-      representative,
-      members,
-      strength,
-      sharedQueries,
-      distinctPaths,
+    const reason = err instanceof Error ? err.message : String(err);
+    appendMemoryTraceEvent({
+      phase: 'dreaming_rem', providerId: 'local', sourceAgentId: params.agentId,
+      request: { workspaceId: params.workspaceDir }, error: reason, durationMs: Date.now() - started,
     });
+    return { ok: false, reason, patternsDiscovered: 0, entriesAnalyzed: 0 };
   }
-
-  // Sort by strength descending, then by member count.
-  scoredClusters.sort((a, b) => {
-    if (b.strength !== a.strength) return b.strength - a.strength;
-    return b.members.length - a.members.length;
-  });
-
-  return scoredClusters;
 }
 
-// ── DREAMS.md writer ───────────────────────────────────────────────────
-
-async function appendPatternSummary(
-  dreamingRoot: string,
-  clusters: PatternCluster[],
-  now: Date,
-): Promise<void> {
-  const dreamsPath = path.join(dreamingRoot, DREAMS_MD_FILENAME);
-  const existing = await fs.readFile(dreamsPath, 'utf-8').catch((err: unknown) => {
-    if ((err as NodeJS.ErrnoException)?.code === 'ENOENT') return '';
-    throw err;
+function trace(
+  params: { agentId: string; workspaceDir: string }, reason: string,
+  selectedRecordIds: string[], written: number, started: number,
+): void {
+  appendMemoryTraceEvent({
+    phase: 'dreaming_rem', providerId: 'local', sourceAgentId: params.agentId,
+    request: { workspaceId: params.workspaceDir, reason, written }, resultCount: selectedRecordIds.length,
+    selectedRecordIds, durationMs: Date.now() - started,
   });
-
-  const day = isoDay(now);
-  const lines: string[] = [];
-  const newClusters = clusters.filter((cluster) =>
-    !existing.includes(`xopc-rem-pattern id="${remPatternKey(cluster.members.map((member) => member.key))}"`),
-  );
-  if (newClusters.length === 0) return;
-
-  if (existing.trim().length === 0) {
-    lines.push('# Dream Diary', '');
-  }
-
-  lines.push(`## REM Pattern Discovery — ${day}`, '');
-  lines.push(`*${now.toISOString()}*`, '');
-
-  for (let i = 0; i < newClusters.length; i++) {
-    const cluster = newClusters[i]!;
-    lines.push(`<!-- xopc-rem-pattern id="${remPatternKey(cluster.members.map((member) => member.key))}" -->`);
-    lines.push(
-      `### Pattern ${i + 1}: ${cluster.distinctPaths.length} files, strength=${cluster.strength.toFixed(2)}`,
-    );
-    lines.push('');
-    lines.push(`**Files involved:** ${cluster.distinctPaths.join(', ')}`);
-    lines.push(`**Shared query themes:** ${cluster.sharedQueries.length} overlapping queries`);
-    lines.push(`**Members:** ${cluster.members.length} snippets`);
-    lines.push('');
-    // Include the representative snippet.
-    const rep = cluster.representative;
-    lines.push(`> ${rep.snippet?.slice(0, 200) ?? '(no snippet)'}`);
-    lines.push(`> — ${rep.path}:${rep.startLine}-${rep.endLine}`);
-    lines.push('');
-  }
-
-  lines.push('---', '');
-
-  const separator = existing.trim().length > 0 && !existing.endsWith('\n') ? '\n' : '';
-  const next = `${existing}${separator}${lines.join('\n')}`;
-  await fs.writeFile(dreamsPath, next, 'utf-8');
-}
-
-// ── Last-run writer ────────────────────────────────────────────────────
-
-async function writeLastRun(
-  dreamingRoot: string,
-  params: {
-    runId: string;
-    startedAt: string;
-    cfg: DreamingRemConfig;
-    ok: boolean;
-    reason: string;
-    startMs: number;
-    rem: DreamingRemLastRun['rem'];
-    errorMessage?: string;
-  },
-): Promise<void> {
-  const finishedAt = new Date().toISOString();
-  const durationMs = Math.max(0, Date.now() - params.startMs);
-
-  const lastRun: DreamingRemLastRun = {
-    version: DREAMING_LAST_RUN_FORMAT_VERSION,
-    phase: 'rem',
-    runId: params.runId,
-    startedAt: params.startedAt,
-    finishedAt,
-    durationMs,
-    ok: params.ok,
-    reason: params.reason,
-    config: params.cfg,
-    rem: params.rem,
-    ...(params.errorMessage ? { errorMessage: params.errorMessage } : {}),
-  };
-
-  const lastRunPath = path.join(dreamingRoot, DREAMING_DIR_RELATIVE, 'last-run-rem.json');
-  await fs.mkdir(path.dirname(lastRunPath), { recursive: true });
-  const tmp = `${lastRunPath}.${process.pid}.${Date.now()}.tmp`;
-  await fs.writeFile(tmp, `${JSON.stringify(lastRun, null, 2)}\n`, 'utf-8');
-  await fs.rename(tmp, lastRunPath);
 }

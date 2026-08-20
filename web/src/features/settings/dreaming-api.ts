@@ -3,52 +3,18 @@ import { apiUrl } from '@/lib/url';
 
 export type DreamingPhaseId = 'light' | 'deep' | 'rem';
 
-/** Gateway payload shape for an agent's memories/.dreams/last-run.json. */
-export type DreamingLastRunRecord = {
-  version: 2;
-  phase: 'deep';
-  runId: string;
-  startedAt: string;
-  finishedAt: string;
-  durationMs: number;
-  ok: boolean;
-  reason: string;
-  errorMessage?: string;
-  config: {
-    enabled: boolean;
-    minScore: number;
-    minRecallCount: number;
-    limit: number;
-  };
-  memoryPath: string;
-  deep: {
-    candidatesRanked: number;
-    applied: number;
-    skipped: {
-      alreadyPromotedKey: number;
-      rehydrateFailed: number;
-      contaminated: number;
-      hashDuplicate: number;
-    };
-  };
-};
-
-/** Lightweight last-run payload for light / rem phases. */
-export type PhaseLastRun =
-  | { exists: false }
-  | { exists: true; path: string; raw: unknown };
-
 export type DreamingGatewayStatus = {
   agentId: string;
   memory: Record<string, unknown>;
   workspaceDir: string;
-  memoriesDir: string;
+  dreamingRoot: string;
   config: {
     enabled: boolean;
     frequency: string;
     timezone: string;
+    promotionWritePolicy: { decision: 'allow' | 'confirm' | 'deny'; reason: string };
     phases: {
-      light: { enabled: boolean; cron: string; lookbackDays: number; limit: number; dedupeSimilarity: number };
+      light: { enabled: boolean; cron: string; lookbackDays: number; limit: number };
       deep: { enabled: boolean; cron: string; minScore: number; minRecallCount: number; minUniqueQueries: number; limit: number; recencyHalfLifeDays: number; maxAgeDays: number };
       rem: { enabled: boolean; cron: string; lookbackDays: number; limit: number; minPatternStrength: number };
     };
@@ -56,18 +22,19 @@ export type DreamingGatewayStatus = {
   };
   storePath: string;
   store: {
-    version: number;
-    updatedAt: string;
-    entryCount: number;
-    promotedCount: number;
-    lastPromotedAt: string | null;
+    signalCount: number;
+    dreamingSignalCount: number;
+    lastSignalAt: string | null;
   };
-  lock: | { locked: false } | { locked: true; path: string; content: string; mtimeMs?: number };
-  lastRun:
-    | { exists: false }
-    | { exists: true; path: string; raw: unknown; record: DreamingLastRunRecord | null; parseError: string | null };
-  lightLastRun: PhaseLastRun;
-  remLastRun: PhaseLastRun;
+  traces: Array<{
+    traceId: string;
+    phase: string;
+    resultCount?: number;
+    selectedRecordIds: string[];
+    error?: string;
+    durationMs: number;
+    createdAt: string;
+  }>;
 };
 
 function dreamingQuery(agentId?: string, extra?: Record<string, string | number | undefined>): string {
@@ -93,10 +60,6 @@ export async function fetchDreamingStatus(keyOrAgentId?: string): Promise<Dreami
   return res.payload;
 }
 
-export async function postDreamingAction(action: 'reset_store' | 'clear_lock', agentId?: string): Promise<void> {
-  await fetchJson(apiUrl('/api/dreaming/action'), { method: 'POST', body: JSON.stringify({ action, agentId }) });
-}
-
 export async function postDreamingRunNow(
   phase: DreamingPhaseId = 'deep',
   agentId?: string,
@@ -115,18 +78,13 @@ export async function postDreamingRunNow(
 }
 
 export type DreamingPreviewItem = {
-  key: string;
-  hash: string;
-  snippet: string;
-  path: string;
-  startLine: number;
-  endLine: number;
+  recordId: string;
+  content: string;
   score: number;
   avgScore: number;
   recallCount: number;
+  uniqueQueries: number;
   recencyDecay: number;
-  alreadyPromotedByKey: boolean;
-  alreadyPromotedByHash: boolean;
   skippedReason: string | null;
 };
 

@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os';
 
 import { describe, expect, it } from 'vitest';
 
-import { BuiltinMemoryStore } from '../builtin-memory-store.js';
 import { StubMemoryProvider } from '../stub-memory-provider.js';
 import { MemoryManager } from '../manager.js';
 import { BuiltinMemoryProvider } from '../builtin-provider.js';
@@ -17,14 +16,7 @@ import {
 describe('MemoryManager', () => {
   it('keeps local and multiple external providers for fanout routing', () => {
     const m = new MemoryManager();
-    const store = new BuiltinMemoryStore({
-      workspaceDir: '/tmp',
-      memoriesDir: '/tmp/memories',
-      userMemoryPath: '/tmp/user/MEMORY.md',
-      memoryCharLimit: 100,
-      userCharLimit: 100,
-    });
-    m.addProvider(new BuiltinMemoryProvider(store));
+    m.addProvider(new BuiltinMemoryProvider());
     m.addProvider(new StubMemoryProvider());
     m.addProvider(new StubMemoryProvider());
     const ids = m.providersList.map((p) => p.id);
@@ -32,15 +24,8 @@ describe('MemoryManager', () => {
   });
 
   it('keeps the local provider writable', () => {
-    const store = new BuiltinMemoryStore({
-      workspaceDir: '/tmp',
-      memoriesDir: '/tmp/memories',
-      userMemoryPath: '/tmp/user/MEMORY.md',
-      memoryCharLimit: 100,
-      userCharLimit: 100,
-    });
     const mgr = new MemoryManager();
-    mgr.addProvider(new BuiltinMemoryProvider(store));
+    mgr.addProvider(new BuiltinMemoryProvider());
     const ids = mgr.providersList.map((p) => p.id);
     expect(ids).toContain('local');
     expect(mgr.providersList.find((p) => p.id === 'local')?.capabilities.write).toBe(true);
@@ -51,18 +36,11 @@ describe('MemoryManager', () => {
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
     try {
-      const store = new BuiltinMemoryStore({
-        workspaceDir: stateDir,
-        memoriesDir: join(stateDir, 'memories'),
-        userMemoryPath: join(stateDir, 'user', 'MEMORY.md'),
-        memoryCharLimit: 1000,
-        userCharLimit: 1000,
-      });
       const mgr = new MemoryManager({
         writeStrategy: 'external-only',
         writePolicy: { allowExternalWrites: true, allowedProviderIds: ['stub'] },
       });
-      mgr.addProvider(new BuiltinMemoryProvider(store));
+      mgr.addProvider(new BuiltinMemoryProvider());
       mgr.addProvider(new StubMemoryProvider());
       await mgr.initializeAll('session-1', { workspace: stateDir, agentId: 'main' });
 
@@ -101,15 +79,8 @@ describe('MemoryManager', () => {
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
     try {
-      const store = new BuiltinMemoryStore({
-        workspaceDir: stateDir,
-        memoriesDir: join(stateDir, 'memories'),
-        userMemoryPath: join(stateDir, 'user', 'MEMORY.md'),
-        memoryCharLimit: 1000,
-        userCharLimit: 1000,
-      });
       const mgr = new MemoryManager();
-      mgr.addProvider(new BuiltinMemoryProvider(store));
+      mgr.addProvider(new BuiltinMemoryProvider());
       await mgr.initializeAll('session-2', { workspace: stateDir, agentId: 'main' });
 
       await mgr.syncAll(

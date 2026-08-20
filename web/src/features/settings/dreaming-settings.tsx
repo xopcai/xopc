@@ -1,4 +1,4 @@
-import { Activity, ScanLine, Settings2, Wrench, type LucideIcon } from 'lucide-react';
+import { Activity, ScanLine, Settings2, type LucideIcon } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useReducer, useRef, type ReactNode } from 'react';
 
 import { uiPatchReducer } from '@/lib/settings-form-draft';
@@ -11,7 +11,6 @@ import {
   fetchDreamingEvents,
   fetchDreamingPreview,
   fetchDreamingStatus,
-  postDreamingAction,
   postDreamingRunNow,
   type DreamingEvent,
   type DreamingPhaseId,
@@ -25,7 +24,6 @@ import {
 import { DreamingConfigSection } from '@/features/settings/dreaming-settings-config-section';
 import { DreamingEventsSection } from '@/features/settings/dreaming-settings-events-section';
 import { DreamingHeader } from '@/features/settings/dreaming-settings-header';
-import { DreamingMaintenanceSection } from '@/features/settings/dreaming-settings-maintenance-section';
 import { DreamingPreviewSection } from '@/features/settings/dreaming-settings-preview-section';
 import { DreamingRuntimeSection } from '@/features/settings/dreaming-settings-runtime-section';
 import { fetchGatewayAgents } from '@/features/settings/agents-admin-api';
@@ -39,16 +37,15 @@ import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
 type DreamingSettingsI18n = MessageBundle['dreamingSettings'];
-type DreamingSettingsTabId = 'config' | 'runtime' | 'insights' | 'maintenance';
+type DreamingSettingsTabId = 'config' | 'runtime' | 'insights';
 type DreamingRunAgent = { id: string; name?: string; avatar?: string };
 
-const DREAMING_SETTINGS_TABS: readonly DreamingSettingsTabId[] = ['config', 'runtime', 'insights', 'maintenance'];
+const DREAMING_SETTINGS_TABS: readonly DreamingSettingsTabId[] = ['config', 'runtime', 'insights'];
 
 const DREAMING_SETTINGS_TAB_ICONS: Record<DreamingSettingsTabId, LucideIcon> = {
   config: Settings2,
   runtime: Activity,
   insights: ScanLine,
-  maintenance: Wrench,
 };
 
 function parseDreamingSettingsTab(raw: string | null): DreamingSettingsTabId {
@@ -62,14 +59,14 @@ function dreamingSettingsTabLabel(t: DreamingSettingsI18n, tab: DreamingSettings
   if (tab === 'config') return t.tabConfig;
   if (tab === 'runtime') return t.tabRuntime;
   if (tab === 'insights') return t.tabInsights;
-  return t.tabMaintenance;
+  return t.tabInsights;
 }
 
 function dreamingSettingsTabHint(t: DreamingSettingsI18n, tab: DreamingSettingsTabId): string {
   if (tab === 'config') return t.configTabHint;
   if (tab === 'runtime') return t.runtimeTabHint;
   if (tab === 'insights') return t.insightsTabHint;
-  return t.maintenanceTabHint;
+  return t.insightsTabHint;
 }
 
 type DreamingFormDraft = {
@@ -97,9 +94,6 @@ function dreamingFormReducer(state: DreamingFormDraft, action: DreamingFormActio
 }
 
 type DreamingUi = {
-  actionBusy: null | 'reset_store' | 'clear_lock';
-  actionError: string | null;
-  actionOk: boolean;
   runBusy: boolean;
   runOk: boolean;
   runError: string | null;
@@ -117,9 +111,6 @@ type DreamingUi = {
 };
 
 const initialDreamingUi: DreamingUi = {
-  actionBusy: null,
-  actionError: null,
-  actionOk: false,
   runBusy: false,
   runOk: false,
   runError: null,
@@ -187,8 +178,6 @@ export function DreamingSettingsPanel() {
 
   const [ui, dispatchUi] = useReducer(uiPatchReducer<DreamingUi>, initialDreamingUi);
   const {
-    actionBusy,
-    actionError,
     runBusy,
     runError,
     runPhase,
@@ -244,20 +233,17 @@ export function DreamingSettingsPanel() {
   const errorMessages = useMemo(() => {
     const list: string[] = [];
     if (error) list.push(error instanceof Error ? error.message : String(error));
-    if (actionError) list.push(actionError);
     if (runError) list.push(runError);
     if (previewError) list.push(previewError);
     if (eventsError) list.push(eventsError);
     if (cfgError) list.push(cfgError);
     return list;
-  }, [error, actionError, runError, previewError, eventsError, cfgError]);
+  }, [error, runError, previewError, eventsError, cfgError]);
 
   const doRefresh = useCallback(async () => {
     dispatchUi({
       type: 'patch',
       patch: {
-        actionOk: false,
-        actionError: null,
         runOk: false,
         runError: null,
         cfgOk: false,
@@ -358,27 +344,6 @@ export function DreamingSettingsPanel() {
     },
     [agentOptions, m.agentsSettings, mutate, selectedAgent?.avatar, selectedAgent?.name, selectedAgentId],
   );
-
-  const doAction = useCallback(
-    async (action: 'reset_store' | 'clear_lock') => {
-      dispatchUi({ type: 'patch', patch: { actionBusy: action, actionError: null, actionOk: false } });
-      try {
-        await postDreamingAction(action, selectedAgentId);
-        dispatchUi({ type: 'patch', patch: { actionOk: true } });
-        await mutate();
-      } catch (e) {
-        dispatchUi({
-          type: 'patch',
-          patch: { actionError: e instanceof Error ? e.message : String(e) },
-        });
-      } finally {
-        dispatchUi({ type: 'patch', patch: { actionBusy: null } });
-      }
-    },
-    [mutate, selectedAgentId],
-  );
-
-  const disabled = !hasToken || isLoading || Boolean(actionBusy);
 
   const cfgFromGateway = useMemo(() => {
     const rawCfg = data?.config;
@@ -549,9 +514,6 @@ export function DreamingSettingsPanel() {
         </div>
       </DreamingTabPanel>
 
-      <DreamingTabPanel t={t} id="maintenance" activeTab={activeTab}>
-        <DreamingMaintenanceSection t={t} disabled={disabled} actionBusy={actionBusy} doAction={doAction} />
-      </DreamingTabPanel>
     </SettingsPageFrame>
   );
 }

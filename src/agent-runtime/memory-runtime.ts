@@ -4,10 +4,10 @@ export type MemorySource =
   | 'session'
   | 'userProfile'
   | 'agentProfile'
-  | 'curated'
+  | 'understanding'
   | 'workspace'
   | 'connectedSources';
-export type MemoryWriteTarget = 'userProfile' | 'agentProfile' | 'curated' | 'workspace';
+export type MemoryWriteTarget = 'userProfile' | 'agentProfile' | 'understanding' | 'workspace';
 export type MemoryWriteDecision = 'allow' | 'confirm' | 'deny';
 
 export interface MemoryCandidate {

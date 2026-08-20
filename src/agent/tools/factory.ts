@@ -51,10 +51,8 @@ import {
   type MarketplaceSkillInstallToolOptions,
   type MarketplaceSkillInstallToolResult,
 } from './index.js';
-import { createCuratedMemoryTool } from './curated-memory-tool.js';
 import { createSessionSearchTool } from './session-search-tool.js';
 import type { MemoryManager } from '../memory/manager.js';
-import { shouldRegisterCuratedMemoryTool } from '../memory/memory-config.js';
 import type { SessionStore } from '../../session/store.js';
 import type { GatewayClarifyRequestFn } from './clarify-tool.js';
 import { createImageTool } from './image-tool.js';
@@ -71,7 +69,6 @@ import { createDelegateTool } from './delegate-tool.js';
 import { createWorkflowTool } from './workflow-tool.js';
 import { createWorkflowCatalog } from '../workflow/catalog.js';
 import { resolveDreamingRoot } from '../memory/dreaming/scope.js';
-import { resolveDreamingConfig } from '../memory/dreaming/config.js';
 import { buildSandboxToolMap, createExecuteCodeTool } from './execute-code-tool.js';
 import type { AutomationService } from '../../automations/index.js';
 import type { BrowserRecipeService } from '../../browser/recipes/index.js';
@@ -158,7 +155,7 @@ export interface CreateCoreToolsOptions {
   /** Optional primary model for image tool heuristics. */
   getPrimaryModel?: () => Model<Api>;
   getMemoryManager?: () => MemoryManager;
-  /** Shared user memories directory used for dreaming state (`user/memories`). */
+  /** Operational root for Dreaming event logs. */
   dreamingRoot?: string;
   agentId?: string;
   /** When set, registers local skill tools plus marketplace discovery for this workspace. */
@@ -422,8 +419,6 @@ export class AgentToolsFactory {
       ...(getMemMgr
         ? [
             createMemorySearchTool({
-              workspaceDir: workspace,
-              dreamingRoot,
               getMemoryManager: () => getMemMgr(),
               getScope: () => ({
                 ...(options?.agentId ? { agentId: options.agentId } : {}),
@@ -432,12 +427,8 @@ export class AgentToolsFactory {
                   ? { sessionKey: this.deps.getCurrentContext!()!.sessionKey }
                   : {}),
               }),
-              shouldRecordDreamingRecalls: () =>
-                resolveDreamingConfig(this.deps.getConfig?.(), options?.agentId).enabled,
             }),
             createMemoryGetTool({
-              workspaceDir: workspace,
-              dreamingRoot,
               getMemoryManager: () => getMemMgr(),
               getScope: () => ({
                 ...(options?.agentId ? { agentId: options.agentId } : {}),
@@ -447,11 +438,6 @@ export class AgentToolsFactory {
                   : {}),
               }),
             }),
-          ]
-        : []),
-      ...(getMemMgr && shouldRegisterCuratedMemoryTool(this.deps.getConfig?.())
-        ? [
-            createCuratedMemoryTool(() => getMemMgr()),
           ]
         : []),
       ...(getMemMgr?.().getAdditionalTools() ?? []),

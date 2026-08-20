@@ -188,22 +188,6 @@ export function DreamingConfigSection({
                   }
                 />
               </FieldCell>
-              <FieldCell label={t.configLightDedupe}>
-                <input
-                  type="number"
-                  step="0.01"
-                  min={0}
-                  max={1}
-                  className={numInputClass}
-                  value={cfgForm.light.dedupeSimilarity}
-                  disabled={!hasToken || cfgSaving}
-                  onChange={(e) =>
-                    setCfgForm((prev) =>
-                      prev ? { ...prev, light: { ...prev.light, dedupeSimilarity: Number(e.target.value) } } : prev,
-                    )
-                  }
-                />
-              </FieldCell>
             </PhaseConfigPanel>
 
           <PhaseConfigPanel

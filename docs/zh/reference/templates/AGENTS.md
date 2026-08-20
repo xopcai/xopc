@@ -22,7 +22,7 @@ Do not manually reread startup files unless:
 ## Memory
 
 - Use runtime memory tools for recall.
-- Use curated memory for durable facts and preferences when available.
+- 对持久事实和偏好使用结构化用户理解。
 - Cite only memory sources that a tool actually returns.
 - Keep memory concise, factual, and useful.
 - Do not store secrets unless the user explicitly asks and the storage location is appropriate.

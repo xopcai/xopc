@@ -20,7 +20,7 @@ describe('memory_search dreaming capture', () => {
       search: async () => [{
         record: {
           id: 'memory/note.md#L1-L1',
-          kind: 'curated_note',
+          kind: 'user_note',
           scope: { agentId: 'main' },
           content: 'Keep responses concise.',
           source: { path: 'memory/note.md', lineStart: 1, lineEnd: 1 },

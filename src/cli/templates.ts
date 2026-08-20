@@ -117,7 +117,7 @@ Do not manually reread startup files unless the user asks or the provided contex
 ## Memory
 
 - Use runtime memory tools for recall.
-- Use curated memory for durable facts and preferences when available.
+- Use structured user understanding for durable facts and preferences when available.
 - Cite only memory sources that a tool actually returns.
 
 Write what matters. Text > Brain.

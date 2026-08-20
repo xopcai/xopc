@@ -213,11 +213,11 @@ describe('buildSystemPrompt memory gating', () => {
 
   it('does not instruct agents to invent dated memory markdown files', () => {
     const prompt = buildSystemPrompt('/ws', {
-      toolNames: ['memory_search', 'memory_get', 'curated_memory', 'session_search'],
+      toolNames: ['memory_search', 'memory_get', 'session_search'],
     });
     expect(prompt).toContain('## Memory Recall');
-    expect(prompt).toContain('use `curated_memory`');
-    expect(prompt).toContain('cite only paths and line numbers returned by `memory_search` / `memory_get`');
+    expect(prompt).toContain('structured memory');
+    expect(prompt).toContain('cite only record ids returned by `memory_search` / `memory_get`');
     expect(prompt).not.toContain('memory/YYYY-MM-DD.md');
     expect(prompt).not.toContain('memory/*.md');
     expect(prompt).not.toContain('Daily notes');

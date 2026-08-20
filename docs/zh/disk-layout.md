@@ -30,8 +30,7 @@
 | `bin/`、`tools/` | CLI 包装与工具运行时。 |
 | `models.json` | 可选的自定义模型注册数据。 |
 | `user/PROFILE.md` | 所有 Agent 共享的用户资料。 |
-| `user/MEMORY.md` | 共享的用户资料记忆。 |
-| `user/memories/` | 所有 Agent 共享的托管记忆与 dreaming 状态。 |
+| `user/dreaming/` | Dreaming 运维事件日志；不作为记忆来源。 |
 
 ## 智能体主目录：`agents/<agentId>/`
 

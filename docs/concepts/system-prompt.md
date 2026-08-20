@@ -43,13 +43,12 @@ Agents must not claim they manually read files when startup context was injected
 
 After transcript compaction, xopc may append a context row with excerpts from AGENTS.md sections **Session Startup** and **Red Lines** according to runtime compaction policy.
 
-## Shared memory
+## Shared user context
 
 | Location | In prompt? | Access |
 |----------|------------|--------|
 | `user/PROFILE.md` | Yes | Shared user profile |
-| `user/MEMORY.md` | Via memory snapshot | `curated_memory` tool |
-| `user/memories/` | Via memory snapshot | `curated_memory` and dreaming tools |
+| Structured memory records | Relevant subset only | Context compiler, `memory_search`, `memory_get` |
 | Session history | No | `session_search` when available |
 
 ## Related

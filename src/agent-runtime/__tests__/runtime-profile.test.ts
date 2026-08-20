@@ -139,13 +139,13 @@ describe('memory runtime', () => {
     const runtime = buildMemoryRuntime(UserContextConfigSchema.parse({
       memory: {
         mode: 'confirmWrite',
-        sources: ['session', 'curated'],
-        writePolicy: { curated: 'allow', workspace: 'confirm' },
+        sources: ['session', 'understanding'],
+        writePolicy: { understanding: 'allow', workspace: 'confirm' },
       },
       privacy: { sensitiveWritePolicy: 'confirm' },
     }));
 
-    expect(runtime.checkWrite({ target: 'curated', content: 'Use pnpm', source: 'test' })).toMatchObject({
+    expect(runtime.checkWrite({ target: 'understanding', content: 'Use pnpm', source: 'test' })).toMatchObject({
       decision: 'confirm',
     });
     expect(

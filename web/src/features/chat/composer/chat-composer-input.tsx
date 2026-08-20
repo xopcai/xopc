@@ -12,6 +12,7 @@ import {
 } from '@/features/chat/composer/picker-key-adapter';
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import { collectClipboardFiles, isComposerAcceptableFile } from '@/features/chat/composer/composer-clipboard';
+import { classifyPastedText, type PastedTextAttachment } from '@/features/chat/composer/pasted-text';
 import { syncComposerPlaceholderClass } from '@/features/chat/composer/use-composer-editor';
 import { cn } from '@/lib/cn';
 
@@ -43,6 +44,7 @@ export const ChatComposerInput = memo(function ChatComposerInput({
   onWireInput,
   adjustHeight,
   processFiles,
+  processPastedText,
   setIsComposing,
   kbdRef,
   chatMessages,
@@ -54,6 +56,7 @@ export const ChatComposerInput = memo(function ChatComposerInput({
   onWireInput: (wire: string, caret: number) => void;
   adjustHeight: () => void;
   processFiles: (files: File[]) => Promise<void>;
+  processPastedText: (paste: PastedTextAttachment) => Promise<void>;
   setIsComposing: (v: boolean) => void;
   kbdRef: MutableRefObject<ComposerKbdContext>;
   chatMessages: { clipboardFileTypeUnsupported: string };
@@ -113,6 +116,11 @@ export const ChatComposerInput = memo(function ChatComposerInput({
         const text = cd?.getData('text/plain');
         if (text) {
           e.preventDefault();
+          const pastedText = classifyPastedText(text);
+          if (pastedText) {
+            await processPastedText(pastedText);
+            return;
+          }
           document.execCommand('insertText', false, text);
         }
       }}

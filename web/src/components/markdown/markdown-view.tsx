@@ -30,6 +30,49 @@ const ICON_COPY_SVG =
 const ICON_CHECK_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
 
+const FORBIDDEN_MARKDOWN_TAGS = [
+  'base',
+  'button',
+  'embed',
+  'form',
+  'iframe',
+  'input',
+  'link',
+  'meta',
+  'object',
+  'option',
+  'select',
+  'style',
+  'template',
+  'textarea',
+];
+
+const FORBIDDEN_MARKDOWN_ATTRIBUTES = [
+  'action',
+  'formaction',
+  'id',
+  'name',
+  'srcdoc',
+  'style',
+];
+
+function sanitizeMarkdownHtml(html: string): string {
+  return DOMPurify.sanitize(html, {
+    USE_PROFILES: { html: true },
+    FORBID_TAGS: FORBIDDEN_MARKDOWN_TAGS,
+    FORBID_ATTR: FORBIDDEN_MARKDOWN_ATTRIBUTES,
+  });
+}
+
+function sanitizeMermaidHtml(html: string): string {
+  const withoutRemoteImports = html.replace(/@import\s+url\([^)]*\)\s*;?/gi, '');
+  return DOMPurify.sanitize(withoutRemoteImports, {
+    USE_PROFILES: { html: true, svg: true, svgFilters: true },
+    FORBID_TAGS: ['foreignObject', 'script'],
+    FORBID_ATTR: ['href', 'xlink:href'],
+  });
+}
+
 function getCodeTextFromPre(pre: HTMLPreElement): string {
   return pre.querySelector('code')?.textContent ?? pre.textContent ?? '';
 }
@@ -215,20 +258,7 @@ function MarkdownViewImpl({
     if (!content.trim()) return '';
     const startedAt = streamingMetricsKey ? performance.now() : 0;
     const raw = parseMarkdown(rewriteXopcSettingsLinksInMarkdown(content), breaks ? { breaks: true } : undefined);
-    const sanitized = DOMPurify.sanitize(raw, {
-      USE_PROFILES: { html: true, svg: true },
-      ADD_ATTR: [
-        'viewBox', 'xmlns', 'd', 'fill', 'stroke', 'transform',
-        'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'stroke-dasharray',
-        'x', 'y', 'width', 'height', 'rx', 'ry', 'cx', 'cy', 'r',
-        'x1', 'y1', 'x2', 'y2', 'offset', 'stop-color', 'stop-opacity',
-        'points', 'text-anchor', 'dominant-baseline', 'font-size',
-        'font-family', 'font-weight', 'font-style', 'class', 'id', 'style',
-        'markerWidth', 'markerHeight', 'refX', 'refY', 'orient', 'markerUnits',
-        'text-decoration', 'opacity', 'clip-path', 'mask', 'filter',
-        'preserveAspectRatio', 'xmlns:xlink', 'xlink:href', 'xml:space',
-      ],
-    });
+    const sanitized = sanitizeMarkdownHtml(raw);
     if (streamingMetricsKey) {
       recordStreamingParse(streamingMetricsKey, performance.now() - startedAt);
     }
@@ -273,19 +303,27 @@ function MarkdownViewImpl({
       );
 
     let cancelled = false;
-    void import('./mermaid-render').then(({ renderMermaidBlock }) => {
-      if (cancelled) return;
-      for (const { code, shell } of pending) {
-        if (!code.isConnected || !shell.isConnected) continue;
-        const rendered = renderMermaidBlock(code.textContent ?? '');
-        const template = document.createElement('template');
-        template.innerHTML = rendered.html.trim();
-        const node = template.content.firstElementChild;
-        if (node) {
-          commitMermaidShell(shell, node, rendered.error);
+    void import('./mermaid-render')
+      .then(({ renderMermaidBlock }) => {
+        if (cancelled) return;
+        for (const { code, shell } of pending) {
+          if (!code.isConnected || !shell.isConnected) continue;
+          const rendered = renderMermaidBlock(code.textContent ?? '');
+          const template = document.createElement('template');
+          template.innerHTML = sanitizeMermaidHtml(rendered.html).trim();
+          const node = template.content.firstElementChild;
+          if (node) {
+            commitMermaidShell(shell, node, rendered.error);
+          }
         }
-      }
-    });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        for (const { shell } of pending) {
+          shell.classList.remove('markdown-mermaid-pending');
+          shell.setAttribute('data-mermaid-fallback', '');
+        }
+      });
 
     return () => {
       cancelled = true;
@@ -345,7 +383,7 @@ function MarkdownViewImpl({
   }, [location.pathname, location.search, navigate, onWorkspaceFileOpen]);
 
   return (
-    <div ref={hostRef}>
+    <div ref={hostRef} className="markdown-render-boundary">
       <div
         className={['markdown-body', compact ? 'markdown-compact' : '', className ?? ''].filter(Boolean).join(' ')}
         // safeHtml is sanitized via DOMPurify above; link behavior is applied only after sanitization.

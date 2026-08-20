@@ -16,7 +16,6 @@ export type DreamingLightConfig = {
   cron: string;
   lookbackDays: number;
   limit: number;
-  dedupeSimilarity: number;
 };
 
 export type DreamingDeepConfig = {
@@ -89,7 +88,7 @@ export function resolveDreamingConfig(cfg: Config | undefined, requestedAgentId?
   const enabled = dreaming?.enabled === true && cfg?.userContext.enabled === true && cfg.userContext.memory.mode !== 'off';
   const promotionWritePolicy = cfg
     ? buildMemoryRuntime(cfg.userContext).checkWrite({
-        target: 'curated',
+        target: 'understanding',
         content: 'Dreaming automatic memory promotion',
         source: 'dreaming',
         confidence: 1,
@@ -107,13 +106,12 @@ export function resolveDreamingConfig(cfg: Config | undefined, requestedAgentId?
     cron: trimmedStringOr(lightRaw?.cron, DEFAULT_LIGHT_CRON),
     lookbackDays: toPositiveInt(lightRaw?.lookbackDays, 2),
     limit: toNonNegInt(lightRaw?.limit, 100),
-    dedupeSimilarity: clampScore(Number(lightRaw?.dedupeSimilarity), 0.9),
   };
 
   // ── Deep phase ─────────────────────────────────────────────────────
   const deepRaw = dreaming?.phases?.deep ?? {};
   const deep: DreamingDeepConfig = {
-    enabled: enabled && deepRaw?.enabled !== false && promotionWritePolicy.decision === 'allow',
+    enabled: enabled && deepRaw?.enabled !== false,
     cron: trimmedStringOr(deepRaw?.cron, frequency),
     minScore: clampScore(Number(deepRaw?.minScore), 0.8),
     minRecallCount: toPositiveInt(deepRaw?.minRecallCount, 3),

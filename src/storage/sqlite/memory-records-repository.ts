@@ -195,7 +195,8 @@ export interface AppendMemoryTraceEventInput {
   traceId?: string;
   sessionKey?: string;
   turnId?: string;
-  phase: 'search' | 'read' | 'write' | 'update' | 'delete' | 'sync' | 'inject' | 'test' | 'understanding' | 'remediation';
+  phase: 'search' | 'read' | 'write' | 'update' | 'delete' | 'sync' | 'inject' | 'test' | 'understanding' | 'remediation'
+    | 'dreaming_light' | 'dreaming_deep' | 'dreaming_rem';
   providerId: string;
   sourceAgentId?: string;
   request?: unknown;
@@ -821,6 +822,16 @@ export function deleteMemoryRecord(recordId: string): boolean {
   return runSqliteWriteTransaction((db) => {
     db.prepare(`DELETE FROM memory_records_fts WHERE record_id = ?`).run(recordId);
     const result = db.prepare(`DELETE FROM memory_records WHERE record_id = ?`).run(recordId);
+    return result.changes > 0;
+  });
+}
+
+/** Change lifecycle status without reconstructing or weakening the record's provenance. */
+export function setMemoryRecordStatus(recordId: string, status: MemoryStatus, nowMs = Date.now()): boolean {
+  return runSqliteWriteTransaction((db) => {
+    const result = db.prepare(
+      `UPDATE memory_records SET status = ?, updated_at = ? WHERE record_id = ?`,
+    ).run(status, nowMs, recordId);
     return result.changes > 0;
   });
 }

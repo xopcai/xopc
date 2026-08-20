@@ -1,8 +1,11 @@
-import { FileSpreadsheet, FileText, ImageOff, X } from 'lucide-react';
+import { FileCode2, FileSpreadsheet, FileText, ImageOff, X } from 'lucide-react';
 import { useId } from 'react';
 
 import type { MessageAttachment } from '@/features/chat/messages/messages.types';
-import { getAttachmentBinaryPayload } from '@/features/chat/attachments/attachment-utils-core';
+import {
+  formatFileSize,
+  getAttachmentBinaryPayload,
+} from '@/features/chat/attachments/attachment-utils-core';
 import { useAttachmentImageSrc } from '@/features/chat/attachments/use-attachment-image-src';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
@@ -53,6 +56,18 @@ export function AttachmentTile({
     attachment.name?.toLowerCase().endsWith('.xlsx') ||
     attachment.name?.toLowerCase().endsWith('.xls');
   const displayName = attachment.name ?? 'file';
+  const isPastedText = attachment.type === 'pasted_text';
+  const showPastedTextPill = isPastedText && !showMissingAuthHint;
+  const pastedTextFormat =
+    attachment.mimeType?.split(';', 1)[0]?.trim().toLowerCase() === 'text/html'
+      ? 'HTML'
+      : attachment.mimeType?.split(';', 1)[0]?.trim().toLowerCase() === 'application/json'
+        ? 'JSON'
+        : 'TXT';
+  const pastedTextMeta =
+    typeof attachment.size === 'number'
+      ? `${pastedTextFormat} · ${formatFileSize(attachment.size)}`
+      : pastedTextFormat;
 
   const mainLabel = showMissingAuthHint
     ? `${displayName} — ${m.chat.attachmentPreviewMissingAuth}`
@@ -153,7 +168,7 @@ export function AttachmentTile({
           ) : null}
         </div>
       ) : (
-        <div className="max-w-[14rem]">
+        <div className={cn('max-w-[14rem]', showPastedTextPill && 'inline-flex max-w-full')}>
           <button
             type="button"
             onClick={() => onOpen(attachment)}
@@ -161,20 +176,36 @@ export function AttachmentTile({
             aria-label={mainLabel}
             aria-describedby={showMissingAuthHint ? missingAuthHintId : undefined}
             className={cn(
-              'flex w-full min-w-0 gap-2 rounded-md border border-edge bg-surface-hover px-2 py-1.5 text-left text-xs text-fg-muted hover:bg-surface-active dark:border-edge',
+              'flex min-w-0 border border-edge bg-surface-hover text-left text-xs text-fg-muted hover:bg-surface-active dark:border-edge',
+              showPastedTextPill
+                ? 'w-auto max-w-full items-center gap-1.5 rounded-full px-2.5 py-1'
+                : 'w-full gap-2 rounded-md px-2 py-1.5',
               showMissingAuthHint ? 'items-start' : 'items-center',
               interaction.transition,
               interaction.press,
               interaction.focusRingPanel,
             )}
           >
-            {isExcel ? (
+            {isPastedText ? (
+              <FileCode2
+                className={cn(
+                  'shrink-0 text-accent-fg',
+                  showPastedTextPill ? 'size-3.5' : 'size-8',
+                )}
+                aria-hidden
+              />
+            ) : isExcel ? (
               <FileSpreadsheet className="size-8 shrink-0 text-fg-subtle" aria-hidden />
             ) : (
               <FileText className="size-8 shrink-0 text-fg-subtle" aria-hidden />
             )}
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-fg">{displayName}</span>
+              <span className={cn('truncate text-fg', showPastedTextPill ? 'inline' : 'block')}>
+                {isPastedText ? m.chat.pastedText : displayName}
+              </span>
+              {showPastedTextPill ? (
+                <span className="ml-1 whitespace-nowrap text-fg-subtle">· {pastedTextMeta}</span>
+              ) : null}
               {showMissingAuthHint ? (
                 <span
                   id={missingAuthHintId}

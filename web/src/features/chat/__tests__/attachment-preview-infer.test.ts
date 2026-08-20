@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { normalizeAgentMessages } from '@/features/chat/messages/agent-messages';
 import { inferMimeTypeFromFileName } from '@/features/chat/attachments/attachment-utils-core';
 import { detectPreviewFileType } from '@/features/preview-runtime';
+import { normalizeWireMedia } from '@/features/chat/messages/wire-attachments';
 
 describe('detectPreviewFileType', () => {
   it('detects PDF from extension when mime is application/octet-stream', () => {
@@ -43,5 +44,20 @@ describe('normalizeAgentMessages attachment mime from filename', () => {
     ]);
     const att = ui[0]?.attachments?.[0];
     expect(att?.mimeType).toBe('application/pdf');
+  });
+});
+
+describe('normalizeWireMedia', () => {
+  it('preserves the pasted text attachment type across session hydration', () => {
+    expect(
+      normalizeWireMedia([
+        {
+          type: 'pasted_text',
+          name: 'pasted-text.html',
+          mimeType: 'text/html',
+          uri: 'media://inbound/pasted-text.html',
+        },
+      ])?.[0],
+    ).toMatchObject({ type: 'pasted_text', name: 'pasted-text.html', mimeType: 'text/html' });
   });
 });

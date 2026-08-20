@@ -17,7 +17,7 @@
 | 网页 | `web_search`, `web_fetch`, `web_extract` |
 | 消息与媒体 | `send_message`, `send_media` |
 | 语音（可选） | `text_to_speech` — 在配置中启用 TTS 时注册 |
-| 记忆（可选） | `memory_search`, `memory_get`；配置后可含 `curated_memory`、`session_search` |
+| 记忆（可选） | `memory_search`, `memory_get`；配置后可含 `session_search` |
 | 图像（可选） | `image`, `image_generate` — 需模型与密钥 |
 | 浏览器（可选） | `browser_use`；`browser_recipe` 用于管理已保存的[浏览器自动化](browser-workflows.md) |
 | 委托与代码（可选） | `delegate_task`, `execute_code` |
@@ -257,18 +257,11 @@ TTS 开启时注册。用于需要语音播报的场景；一般仍以文字回�
 
 ### `memory_get`
 
-按文件与片段 id 读取记忆片段。
+读取 `memory_search` 返回的一条结构化记忆记录。
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `file` | string | 是 | 记忆文件名 |
-| `snippet` | string | 是 | 片段标识 |
-
-### `curated_memory`
-
-读写共享托管记忆：共享条目位于 **`user/memories/MEMORY.md`**，用户资料记忆位于 **`user/MEMORY.md`**（章节边界按格式约定）。这些文件与 Agent profile 分离，并由顶层 `userContext` 统一控制。
-
-详见 [配置参考](./configuration.md) 与 [托管记忆](./workspace.md#curated-memory)。
+| `id` | string | 是 | 稳定的记忆记录 id |
 
 ### `session_search`
 

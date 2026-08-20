@@ -1,28 +1,13 @@
 import type { Hono } from 'hono';
-import fs from 'node:fs/promises';
-import path from 'node:path';
-
 import { type Config } from '../../../config/schema.js';
-import {
-  DREAMING_DIR_RELATIVE,
-  DREAMING_LAST_RUN_RELATIVE,
-  SHORT_TERM_PROMOTION_LOCK_RELATIVE,
-  SHORT_TERM_RECALL_STORE_RELATIVE,
-  type DreamingPhaseId,
-} from '../../../agent/memory/dreaming/constants.js';
+import { type DreamingPhaseId } from '../../../agent/memory/dreaming/constants.js';
 import { readDreamingEvents } from '../../../agent/memory/dreaming/events.js';
 import { previewDreamingDeepPromotion } from '../../../agent/memory/dreaming/preview.js';
 import { runLightSweep } from '../../../agent/memory/dreaming/light-sweep.js';
 import { runDreamingDeepPromotion } from '../../../agent/memory/dreaming/deep-promotion.js';
 import { runRemPatterns } from '../../../agent/memory/dreaming/rem-patterns.js';
-import { parseDreamingLastRunFile, type DreamingDeepLastRun } from '../../../agent/memory/dreaming/last-run.js';
 import { resolveDreamingAgentScope, type DreamingAgentScope } from '../../../agent/memory/dreaming/scope.js';
-import {
-  clearStaleDreamingLock,
-  loadDreamingStore,
-  resetDreamingStore,
-  type DreamingStore,
-} from '../../../agent/memory/dreaming/short-term-store.js';
+import { listMemorySignals, listMemoryTraceEvents } from '../../../storage/sqlite/index.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -31,112 +16,6 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 
 function resolveRouteScope(cfg: Config): DreamingAgentScope {
   return resolveDreamingAgentScope(cfg);
-}
-
-async function readLockInfo(dreamingRoot: string): Promise<
-  | { locked: false }
-  | { locked: true; path: string; content: string; mtimeMs?: number }
-> {
-  const lockPath = path.join(dreamingRoot, SHORT_TERM_PROMOTION_LOCK_RELATIVE);
-  try {
-    const [content, st] = await Promise.all([fs.readFile(lockPath, 'utf-8'), fs.stat(lockPath)]);
-    return {
-      locked: true,
-      path: SHORT_TERM_PROMOTION_LOCK_RELATIVE,
-      content: content.trim(),
-      mtimeMs: st.mtimeMs,
-    };
-  } catch (err) {
-    const code = (err as NodeJS.ErrnoException | undefined)?.code;
-    if (code === 'ENOENT') return { locked: false };
-    return { locked: true, path: SHORT_TERM_PROMOTION_LOCK_RELATIVE, content: 'unknown', mtimeMs: undefined };
-  }
-}
-
-async function readLastRun(
-  dreamingRoot: string,
-): Promise<
-  | { exists: false }
-  | {
-      exists: true;
-      path: string;
-      raw: unknown;
-      record: DreamingDeepLastRun | null;
-      parseError: string | null;
-    }
-> {
-  const fullPath = path.join(dreamingRoot, DREAMING_LAST_RUN_RELATIVE);
-  try {
-    const text = await fs.readFile(fullPath, 'utf-8');
-    let raw: unknown;
-    try {
-      raw = JSON.parse(text) as unknown;
-    } catch (parseErr) {
-      return {
-        exists: true,
-        path: DREAMING_LAST_RUN_RELATIVE,
-        raw: null,
-        record: null,
-        parseError: parseErr instanceof Error ? parseErr.message : String(parseErr),
-      };
-    }
-    const record = parseDreamingLastRunFile(raw);
-    return {
-      exists: true,
-      path: DREAMING_LAST_RUN_RELATIVE,
-      raw,
-      record,
-      parseError: record ? null : 'Invalid or unsupported last-run.json (expected v2 deep record).',
-    };
-  } catch (err) {
-    const code = (err as NodeJS.ErrnoException | undefined)?.code;
-    if (code === 'ENOENT') return { exists: false };
-    return {
-      exists: true,
-      path: DREAMING_LAST_RUN_RELATIVE,
-      raw: null,
-      record: null,
-      parseError: err instanceof Error ? err.message : String(err),
-    };
-  }
-}
-
-async function readPhaseLastRun(
-  dreamingRoot: string,
-  filename: string,
-): Promise<{ exists: false } | { exists: true; path: string; raw: unknown }> {
-  const relPath = path.join(DREAMING_DIR_RELATIVE, filename);
-  const fullPath = path.join(dreamingRoot, relPath);
-  try {
-    const text = await fs.readFile(fullPath, 'utf-8');
-    const raw = JSON.parse(text) as unknown;
-    return { exists: true, path: relPath, raw };
-  } catch (err) {
-    const code = (err as NodeJS.ErrnoException | undefined)?.code;
-    if (code === 'ENOENT') return { exists: false };
-    return { exists: false };
-  }
-}
-
-function storeStats(store: DreamingStore): {
-  version: number;
-  updatedAt: string;
-  entryCount: number;
-  promotedCount: number;
-  lastPromotedAt: string | null;
-} {
-  const entries = Object.values(store.entries ?? {});
-  const promoted = entries.filter((e) => typeof e.promotedAt === 'string' && e.promotedAt.trim());
-  const lastPromotedAt = promoted
-    .map((e) => e.promotedAt!)
-    .sort((a, b) => (a < b ? 1 : a > b ? -1 : 0))[0];
-  return {
-    version: store.version,
-    updatedAt: store.updatedAt,
-    entryCount: entries.length,
-    promotedCount: promoted.length,
-    lastPromotedAt: lastPromotedAt ?? null,
-  };
 }
 
 export function registerDreamingRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
@@ -151,15 +30,8 @@ export function registerDreamingRoutes(authenticated: Hono, deps: AuthenticatedR
       const message = err instanceof Error ? err.message : String(err);
       return c.json({ ok: false, error: { message } }, 404);
     }
-    const { store } = await loadDreamingStore({ dreamingRoot: scope.memoriesDir });
-    const lock = await readLockInfo(scope.memoriesDir);
-
-    // Read all three phase last-run files in parallel.
-    const [lastRun, lightLastRun, remLastRun] = await Promise.all([
-      readLastRun(scope.memoriesDir),
-      readPhaseLastRun(scope.memoriesDir, 'last-run-light.json'),
-      readPhaseLastRun(scope.memoriesDir, 'last-run-rem.json'),
-    ]);
+    const signals = listMemorySignals({ workspaceId: scope.workspaceDir, limit: 500 });
+    const traces = listMemoryTraceEvents({ limit: 100 }).filter((trace) => trace.phase.startsWith('dreaming_'));
 
     return c.json({
       ok: true,
@@ -167,14 +39,15 @@ export function registerDreamingRoutes(authenticated: Hono, deps: AuthenticatedR
         agentId: scope.agentId,
         memory: scope.memory,
         workspaceDir: scope.workspaceDir,
-        memoriesDir: scope.memoriesDir,
+        dreamingRoot: scope.dreamingRoot,
         config: scope.config,
-        storePath: path.join(scope.memoriesDir, SHORT_TERM_RECALL_STORE_RELATIVE),
-        store: storeStats(store),
-        lock,
-        lastRun,
-        lightLastRun,
-        remLastRun,
+        storePath: 'sqlite://memory_records',
+        store: {
+          signalCount: signals.length,
+          dreamingSignalCount: signals.filter((signal) => signal.source === 'dreaming').length,
+          lastSignalAt: signals[0]?.createdAt ?? null,
+        },
+        traces,
       },
     });
   });
@@ -194,7 +67,6 @@ export function registerDreamingRoutes(authenticated: Hono, deps: AuthenticatedR
 
     const preview = await previewDreamingDeepPromotion({
       workspaceDir: scope.workspaceDir,
-      dreamingRoot: scope.memoriesDir,
       config: scope.config.deep,
       limit: Number.isFinite(limit) ? limit : 20,
     });
@@ -237,14 +109,12 @@ export function registerDreamingRoutes(authenticated: Hono, deps: AuthenticatedR
         requestedPhase === 'light'
           ? await runLightSweep({
               workspaceDir: scope.workspaceDir,
-              dreamingRoot: scope.memoriesDir,
               config: dreaming.phases.light,
             })
           : requestedPhase === 'rem'
             ? await runRemPatterns({
                 agentId: scope.agentId,
                 workspaceDir: scope.workspaceDir,
-                dreamingRoot: scope.memoriesDir,
                 config: dreaming.phases.rem,
                 sensitiveWritePolicy: cfg.userContext.privacy.sensitiveWritePolicy,
                 promotionWritePolicy: dreaming.promotionWritePolicy.decision,
@@ -252,9 +122,9 @@ export function registerDreamingRoutes(authenticated: Hono, deps: AuthenticatedR
             : await runDreamingDeepPromotion({
                 agentId: scope.agentId,
                 workspaceDir: scope.workspaceDir,
-                dreamingRoot: scope.memoriesDir,
                 config: dreaming.phases.deep,
                 sensitiveWritePolicy: cfg.userContext.privacy.sensitiveWritePolicy,
+                promotionWritePolicy: dreaming.promotionWritePolicy.decision,
               });
 
       service.emit('dreaming.phase.end', {
@@ -278,49 +148,6 @@ export function registerDreamingRoutes(authenticated: Hono, deps: AuthenticatedR
     }
   });
 
-  authenticated.post('/api/dreaming/action', async (c) => {
-    const cfg = service.currentConfig as Config;
-
-    let body: unknown;
-    try {
-      body = await c.req.json();
-    } catch {
-      body = {};
-    }
-    const action = isRecord(body) && typeof body.action === 'string' ? body.action.trim() : '';
-    let scope: DreamingAgentScope;
-    try {
-      scope = resolveRouteScope(cfg);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return c.json({ ok: false, error: { message } }, 404);
-    }
-
-    if (action !== 'reset_store' && action !== 'clear_lock') {
-      return c.json({ ok: false, error: { message: 'Invalid action' } }, 400);
-    }
-
-    if (action === 'reset_store') {
-      await resetDreamingStore({ dreamingRoot: scope.memoriesDir });
-      return c.json({
-        ok: true,
-        payload: { agentId: scope.agentId, reset: true, storePath: path.join(scope.memoriesDir, SHORT_TERM_RECALL_STORE_RELATIVE) },
-      });
-    }
-
-    const lockPath = path.join(scope.memoriesDir, SHORT_TERM_PROMOTION_LOCK_RELATIVE);
-    try {
-      const cleared = await clearStaleDreamingLock(scope.memoriesDir);
-      return c.json({
-        ok: true,
-        payload: { agentId: scope.agentId, cleared, lockPath },
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return c.json({ ok: false, error: { message } }, 409);
-    }
-  });
-
   authenticated.get('/api/dreaming/events', async (c) => {
     const cfg = service.currentConfig as Config;
     let scope: DreamingAgentScope;
@@ -334,7 +161,7 @@ export function registerDreamingRoutes(authenticated: Hono, deps: AuthenticatedR
     const rawLimit = c.req.query('limit');
     const limit = rawLimit ? Math.min(Math.max(Number(rawLimit) || 50, 1), 200) : 50;
 
-    const events = await readDreamingEvents(scope.memoriesDir, limit);
+    const events = await readDreamingEvents(scope.dreamingRoot, limit);
     return c.json({ ok: true, payload: { agentId: scope.agentId, events } });
   });
 }

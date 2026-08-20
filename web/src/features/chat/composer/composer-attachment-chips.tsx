@@ -2,11 +2,13 @@
 // Each chip renders an image thumbnail (for image/*), microphone icon (for
 // voice / audio/*), or a generic file icon, plus name/size and a remove button.
 
-import { File as FileIcon, Mic } from 'lucide-react';
+import { File as FileIcon, FileCode2, Mic } from 'lucide-react';
 
 import type { Attachment } from '@/features/chat/attachments/attachment-utils';
 import { formatFileSize } from '@/features/chat/attachments/attachment-utils';
 import { cn } from '@/lib/cn';
+import { messages } from '@/i18n/messages';
+import { useLocaleStore } from '@/stores/locale-store';
 
 export function ComposerAttachmentChips({
   attachments,
@@ -18,6 +20,8 @@ export function ComposerAttachmentChips({
   topPadded: boolean;
   onRemove: (index: number) => void;
 }) {
+  const language = useLocaleStore((s) => s.language);
+  const m = messages(language).chat;
   if (attachments.length === 0) return null;
   return (
     <div
@@ -39,10 +43,14 @@ export function ComposerAttachmentChips({
             />
           ) : a.type === 'voice' || a.mimeType?.startsWith('audio/') ? (
             <Mic className="size-3.5 shrink-0 text-accent-fg" aria-hidden />
+          ) : a.type === 'pasted_text' ? (
+            <FileCode2 className="size-3.5 shrink-0 text-accent-fg" aria-hidden />
           ) : (
             <FileIcon className="size-3.5 shrink-0 text-fg-muted" />
           )}
-          <span className="min-w-0 flex-1 truncate">{a.name}</span>
+          <span className="min-w-0 flex-1 truncate">
+            {a.type === 'pasted_text' ? m.pastedText : a.name}
+          </span>
           <span className="text-fg-disabled">{formatFileSize(a.size)}</span>
           <button
             type="button"

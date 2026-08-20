@@ -58,7 +58,7 @@ function inferKind(content: string): MemoryKind {
   if (/\b(next time|lesson|failed|error)\b/i.test(content) || /下次|教训|失败|错误/.test(content)) {
     return 'task_lesson';
   }
-  return 'curated_note';
+  return 'user_note';
 }
 
 const SENSITIVITY_RANK: Record<MemorySensitivity, number> = {
@@ -241,7 +241,6 @@ export class UserUnderstandingService {
         scope: context.agentId || context.sessionKey
           ? { userId: 'local-owner', sessionKey: context.sessionKey }
           : undefined,
-        target: candidate.kind === 'preference' ? 'user' : 'memory',
         tags: [...new Set(['user-understanding', ...(candidate.tags ?? [])])],
         source: context.source ?? { provider: 'user-understanding' },
         confidence: candidate.confidence,

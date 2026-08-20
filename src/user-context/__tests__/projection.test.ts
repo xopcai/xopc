@@ -38,7 +38,7 @@ describe('user context projection', () => {
     expect(isUserContextRecord(record({ kind: 'preference' }))).toBe(true);
     expect(isUserContextRecord(record({ kind: 'project_context', tags: ['user-understanding'] }))).toBe(true);
     expect(isUserContextRecord(record({ kind: 'project_context', tags: [] }))).toBe(false);
-    expect(isUserContextRecord(record({ kind: 'curated_note' }))).toBe(false);
+    expect(isUserContextRecord(record({ kind: 'user_note' }))).toBe(false);
   });
 
   it('maps records to human facets and origins', () => {
@@ -99,7 +99,7 @@ describe('user context projection', () => {
     const exact = record({ source: { provider: 'calendar', sourceInstanceId: 'calendar-1' } });
     const similarSource = record({ id: 'memory-2', source: { provider: 'calendar', sourceInstanceId: 'calendar-2' } });
     const otherAgent = record({ id: 'memory-3', source: { provider: 'calendar', sourceInstanceId: 'calendar-1' }, provenance: { sourceAgentId: 'other' } });
-    const operational = record({ id: 'memory-4', kind: 'curated_note', source: { provider: 'calendar', sourceInstanceId: 'calendar-1' } });
+    const operational = record({ id: 'memory-4', kind: 'user_note', source: { provider: 'calendar', sourceInstanceId: 'calendar-1' } });
 
     expect(recordsDerivedFromPersonalContextSource(
       [exact, similarSource, otherAgent, operational],

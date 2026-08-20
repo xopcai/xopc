@@ -13,26 +13,21 @@ import { resolveDreamingConfig } from './config.js';
 export type DreamingAgentScope = {
   agentId: string;
   workspaceDir: string;
-  memoriesDir: string;
-  memoryPath: string;
-  dreamsPath: string;
+  dreamingRoot: string;
   config: DreamingResolvedConfig;
   memory: Config['userContext']['memory'];
 };
 
 export function resolveDreamingRoot(): string {
-  return path.join(resolveUserDir(), 'memories');
+  return path.join(resolveUserDir(), 'dreaming');
 }
 
 export function resolveDreamingAgentScope(config: Config, requestedAgentId?: string | null): DreamingAgentScope {
   const agentId = normalizeAgentId(requestedAgentId || resolveDefaultAgentId(config));
-  const memoriesDir = resolveDreamingRoot();
   return {
     agentId,
     workspaceDir: resolveAgentWorkspaceDir(config, agentId),
-    memoriesDir,
-    memoryPath: path.join(memoriesDir, 'MEMORY.md'),
-    dreamsPath: path.join(memoriesDir, 'DREAMS.md'),
+    dreamingRoot: resolveDreamingRoot(),
     config: resolveDreamingConfig(config, agentId),
     memory: config.userContext.memory,
   };

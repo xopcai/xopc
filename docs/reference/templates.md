@@ -28,7 +28,7 @@ These files are read from the agent profile root and assembled into the agent sy
 
 ## Memory System
 
-Memory is not an agent profile template. Every agent uses the same user-owned stores: **`user/MEMORY.md`** and **`user/memories/MEMORY.md`**. Configure them once through top-level `userContext`; use `memory_search`, `memory_get`, and `curated_memory` at runtime. See [Shared user memory](../workspace.md#curated-memory).
+Memory is not an agent profile template. Every agent uses the same user-owned structured records in SQLite. Configure behavior through top-level `userContext`; use `memory_search` and `memory_get` at runtime. See [Unified memory architecture](../memory-architecture.md).
 
 ## See also
 

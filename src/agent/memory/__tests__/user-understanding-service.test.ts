@@ -83,7 +83,7 @@ describe('UserUnderstandingService', () => {
     const write = vi.fn();
     const service = new UserUnderstandingService({ write, list: vi.fn().mockResolvedValue([]) });
     const result = await service.applyCandidates([{
-      kind: 'curated_note',
+      kind: 'user_note',
       content: 'API key is abcdefgh.',
       confidence: 0.9,
       importance: 0.9,
@@ -101,7 +101,7 @@ describe('UserUnderstandingService', () => {
     const write = vi.fn();
     const service = new UserUnderstandingService({ write, list: vi.fn().mockResolvedValue([]) });
     const result = await service.applyCandidates([{
-      kind: 'curated_note',
+      kind: 'user_note',
       content: 'My API key is sk-abcdefghijk.',
       confidence: 0.9,
       importance: 0.9,

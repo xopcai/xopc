@@ -43,17 +43,17 @@ export function DreamingPreviewSection({ t, hasToken, previewLoading, previewIte
         previewItems.length > 0 ? (
           <div className="space-y-2">
             {previewItems.map((it) => {
-              const src = `${it.path}:${it.startLine}-${it.endLine}`;
               const skipped = it.skippedReason;
               return (
                 <div
-                  key={`${it.key}:${it.hash}:${src}`}
+                  key={it.recordId}
                   className="rounded-lg bg-surface-panel/70 px-2.5 py-2 shadow-surface"
                 >
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-fg-muted">
-                    <span className="font-medium text-fg">{src}</span>
+                    <span className="font-mono font-medium text-fg">{it.recordId}</span>
                     <span>score={it.score.toFixed(3)}</span>
                     <span>recalls={it.recallCount}</span>
+                    <span>queries={it.uniqueQueries}</span>
                     <span>avg={it.avgScore.toFixed(3)}</span>
                     <span>decay={it.recencyDecay?.toFixed(3) ?? '—'}</span>
                     {skipped ? (
@@ -62,7 +62,7 @@ export function DreamingPreviewSection({ t, hasToken, previewLoading, previewIte
                       <span className="text-emerald-600 dark:text-emerald-400">{t.previewEligible}</span>
                     )}
                   </div>
-                  {it.snippet ? <div className="mt-2 text-sm text-fg">{it.snippet}</div> : null}
+                  {it.content ? <div className="mt-2 text-sm text-fg">{it.content}</div> : null}
                 </div>
               );
             })}

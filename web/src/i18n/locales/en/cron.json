@@ -30,7 +30,7 @@
     "systemHeartbeatInterval": "Cadence",
     "systemHeartbeatEvery": "About every {{value}}.",
     "systemDreamingTitle": "Memory consolidation (dreaming)",
-    "systemDreamingHint": "Three-phase background jobs that promote short-term signals into long-term memory. Schedules follow agent memory settings.",
+    "systemDreamingHint": "Three-phase background jobs that observe, consolidate, and discover patterns in structured memory records. Schedules follow user-context settings.",
     "systemDreamingSettingsLink": "Memory & dreams settings",
     "systemDreamingEmpty": "No dreaming cron jobs are registered (dreaming may be disabled or not reconciled yet).",
     "wakeBanner": "Scheduled tasks only run while this device is awake. When the system or display sleeps, runs may be skipped.",

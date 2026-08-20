@@ -1,8 +1,8 @@
 /**
  * WorkspaceRuntimeRegistry — lazy per-workspace cache of agent execution runtimes.
  *
- * Previously these four collaborators (`SkillManager`, `SystemPromptBuilder`,
- * `BuiltinMemoryStore`, `MemoryManager`) were created inline inside
+ * Previously these collaborators (`SkillManager`, `SystemPromptBuilder`,
+ * `MemoryManager`) were created inline inside
  * `AgentManager.getWorkspaceRuntime` and cached in a private Map. They live
  * outside `AgentInstance` because multiple session keys for the same agent may
  * share a workspace. Skill, prompt, and code-intelligence state stays keyed by
@@ -18,7 +18,6 @@
 import type { Config } from '../../config/schema.js';
 import { normalizeAgentId } from '../../routing/agent-session-key.js';
 import { resolveAgentIdForWorkspacePath } from '../agent-scope.js';
-import { BuiltinMemoryStore } from '../memory/builtin-memory-store.js';
 import type { MemoryManager } from '../memory/manager.js';
 import { SkillManager } from '../skills/skill-manager.js';
 import { SystemPromptBuilder } from '../prompt/service-prompt-builder.js';
@@ -31,7 +30,6 @@ const log = createLogger('WorkspaceRuntimeRegistry');
 export interface WorkspaceRuntime {
   skillManager: SkillManager;
   systemPromptBuilder: SystemPromptBuilder;
-  builtinMemoryStore: BuiltinMemoryStore;
   memoryManager: MemoryManager;
   codeIntelligence: CodeIntelligenceRuntime;
 }
@@ -75,7 +73,7 @@ export class WorkspaceRuntimeRegistry {
       return existing;
     }
 
-    const { builtinMemoryStore, memoryManager } = this.userContextRuntimes.getOrCreate(cfg);
+    const { memoryManager } = this.userContextRuntimes.getOrCreate(cfg);
     const skillManager = new SkillManager(resolvedPath, this.bundledSkillsDir, {
       isWorkspaceTrusted: () => this.isWorkspaceTrusted?.(resolvedPath) === true,
     });
@@ -92,7 +90,6 @@ export class WorkspaceRuntimeRegistry {
     const rt: WorkspaceRuntime = {
       skillManager,
       systemPromptBuilder,
-      builtinMemoryStore,
       memoryManager,
       codeIntelligence,
     };
