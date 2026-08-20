@@ -699,6 +699,19 @@ CREATE TABLE workflow_runs (
   FOREIGN KEY (task_run_id) REFERENCES task_runs(run_id) ON DELETE SET NULL
 );
 
+WITH ranked_workflow_task_runs AS (
+  SELECT
+    workflow.run_id AS workflow_run_id,
+    task_run.run_id AS task_run_id,
+    ROW_NUMBER() OVER (
+      PARTITION BY workflow.run_id
+      ORDER BY ABS(task_run.queued_at - workflow.created_at_ms), task_run.run_id
+    ) AS match_rank
+  FROM legacy_workflow_runs workflow
+  LEFT JOIN task_runs task_run
+    ON task_run.task_id = workflow.task_id
+    AND task_run.executor_kind = 'workflow'
+)
 INSERT INTO workflow_runs (
   run_id, agent_id, definition_id, definition_version, task_run_id,
   session_key, parent_session_key, status, source_kind, source_json,
@@ -707,17 +720,15 @@ INSERT INTO workflow_runs (
 )
 SELECT
   workflow.run_id, workflow.agent_id, workflow.definition_id, workflow.definition_version,
-  CASE WHEN workflow.task_id IS NULL THEN NULL ELSE (
-    SELECT task_run.run_id FROM task_runs task_run
-    WHERE task_run.task_id = workflow.task_id
-      AND task_run.executor_kind = 'workflow'
-    ORDER BY ABS(task_run.queued_at - workflow.created_at_ms) ASC LIMIT 1
-  ) END,
+  matched_task_run.task_run_id,
   workflow.session_key, workflow.parent_session_key, workflow.status,
   workflow.source_kind, workflow.source_json, workflow.metadata_json, workflow.title,
   workflow.created_at_ms, workflow.started_at_ms, workflow.completed_at_ms,
   workflow.metrics_json, workflow.result_preview, workflow.error_message, workflow.project_id
-FROM legacy_workflow_runs workflow;
+FROM legacy_workflow_runs workflow
+LEFT JOIN ranked_workflow_task_runs matched_task_run
+  ON matched_task_run.workflow_run_id = workflow.run_id
+  AND matched_task_run.match_rank = 1;
 
 CREATE INDEX idx_workflow_runs_created ON workflow_runs(agent_id, created_at_ms DESC);
 CREATE INDEX idx_workflow_runs_status_created ON workflow_runs(agent_id, status, created_at_ms DESC);
