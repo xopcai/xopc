@@ -34,7 +34,7 @@ xopc 在单一 **状态目录**（“Agent OS” 根）下保存本机状态；�
 | `bin/` | 托管的 CLI 包装（如 `xopc`）。 |
 | `tools/` | 内置工具运行时（例如 `tools/node/current/` 下的 Node/npm）。 |
 | `models.json` | 模型注册表缓存。 |
-| `user/` | 所有 Agent 共享的 `PROFILE.md`、`MEMORY.md`、托管 `memories/` 与 dreaming 状态。 |
+| `user/` | 所有 Agent 共享的 `PROFILE.md` 与 Dreaming 运维事件日志；持久用户理解位于 `xopc.db`。 |
 
 ## 按 Agent：`agents/<agentId>/`
 
@@ -71,15 +71,14 @@ CLI **未**加载到配置文件时，优先 **`XOPC_WORKSPACE`**（主智能体
 
 | 路径 | 作用 |
 |------|------|
-| `memory/` | 按日期或主题的片段（如 `YYYY-MM-DD.md`），配合 memory 类工具使用。 |
 | `.state/` | 机器状态：`workspace.json`（引导种子信息）、`skills-cache.json` 等。 |
 | `.extensions/` | 与工作空间绑定的扩展安装/缓存（扩展加载器使用）。 |
 
-按会话的配置覆盖（SQLite `session_config`）、**入站**附件（`inbound/`）与 **TTS** 缓存（`tts/`）与 **`agents/<agentId>/`**（agent 主目录）或 **`xopc.db`** 相关，不在本 Markdown 树内。托管记忆位于共享 `user/` 目录。
+按会话的配置覆盖（SQLite `session_config`）、**入站**附件（`inbound/`）、**TTS** 缓存（`tts/`）和结构化记忆与 **`agents/<agentId>/`**（agent 主目录）或 **`xopc.db`** 相关，不在本 Markdown 树内。
 
-### 共享用户记忆（`user/`） {#curated-memory}
+### 结构化用户理解
 
-**`user/memories/MEMORY.md`** 保存有上限、以 § 分隔的托管条目与 dreaming 状态；**`user/MEMORY.md`** 保存用户资料记忆。所有 Agent 按顶层 `userContext` 接收相同快照，并通过 **`curated_memory`** 读写最新内容。
+用户理解与 Dreaming 状态统一保存在结构化 SQLite 记忆库中。所有 Agent 通过上下文编译器消费同一套用户所有记录；工作区 Markdown 只是普通文档，不参与运行时记忆。
 
 ## 运行时到底用哪个「工作空间」？
 

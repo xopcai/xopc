@@ -15,7 +15,7 @@ export const BUILTIN_TOOL_UI_GROUPS = [
   { key: 'messaging', toolIds: ['send_message', 'send_media', 'text_to_speech'] as const },
   {
     key: 'memory',
-    toolIds: ['memory_search', 'memory_get', 'curated_memory', 'session_search'] as const,
+    toolIds: ['memory_search', 'memory_get', 'session_search'] as const,
   },
   { key: 'media', toolIds: ['image', 'image_generate', 'read_media', 'create_share'] as const },
   { key: 'web', toolIds: ['web_search', 'web_fetch', 'web_extract', 'browser_use'] as const },

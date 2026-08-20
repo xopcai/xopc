@@ -3,6 +3,25 @@ import { describe, expect, it } from 'vitest';
 import { parseMarkdown } from '@/components/markdown/parse-markdown';
 
 describe('parseMarkdown', () => {
+  it('renders raw HTML as text instead of executable markup', () => {
+    const html = parseMarkdown(
+      '<body><div id="root" class="fixed inset-0" style="position:fixed">content</div></body>',
+    );
+
+    expect(html).toContain('&lt;body&gt;');
+    expect(html).toContain('&lt;div id=&quot;root&quot;');
+    expect(html).not.toContain('<body>');
+    expect(html).not.toContain('<div id="root"');
+  });
+
+  it('keeps fenced HTML code highlighted as code', () => {
+    const html = parseMarkdown('```html\n<div class="demo">safe</div>\n```');
+
+    expect(html).toContain('<pre><code class="hljs language-html">');
+    expect(html).toContain('&lt;');
+    expect(html).not.toContain('<div class="demo">');
+  });
+
   it('renders quoted CJK text as strong without requiring whitespace before the marker', () => {
     const html = parseMarkdown('而是**"你现在的孤独感，有没有别的地方可以安放？"**');
 

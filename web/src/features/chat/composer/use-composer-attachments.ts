@@ -4,6 +4,7 @@ import type { Attachment } from '@/features/chat/attachments/attachment-utils';
 import { formatFileSize, MAX_CHAT_ATTACHMENTS } from '@/features/chat/attachments/attachment-utils';
 import type { WireAttachment } from '@/features/chat/composer/composer.types';
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
+import type { PastedTextAttachment } from '@/features/chat/composer/pasted-text';
 import { MAX_WEBCHAT_ATTACHMENT_FILE_BYTES } from '@/features/chat/constants';
 import type { ChatMessages } from '@/i18n/messages';
 
@@ -19,6 +20,7 @@ export interface UseComposerAttachmentsReturn {
   setIsDragging: (v: boolean) => void;
   fileInputRef: MutableRefObject<HTMLInputElement | null>;
   processFiles: (files: File[]) => Promise<void>;
+  processPastedText: (paste: PastedTextAttachment) => Promise<void>;
   removeAttachment: (index: number) => void;
   clearAttachments: () => void;
   /** Builds wire payload from current attachments ref (stable — no deps on attachments state). */
@@ -57,8 +59,8 @@ export function useComposerAttachments(options: UseComposerAttachmentsOptions): 
     }));
   }, []);
 
-  const processFiles = useCallback(
-    async (files: File[]) => {
+  const appendFiles = useCallback(
+    async (files: File[], typeOverride?: Attachment['type']) => {
       if (files.length === 0) return;
       const remaining = MAX_CHAT_ATTACHMENTS - attachmentsRef.current.length;
       if (remaining <= 0) {
@@ -90,10 +92,20 @@ export function useComposerAttachments(options: UseComposerAttachmentsOptions): 
           }
         }),
       );
-      const next = loaded.filter((a): a is Attachment => a !== null);
+      const next = loaded
+        .filter((a): a is Attachment => a !== null)
+        .map((attachment) => (typeOverride ? { ...attachment, type: typeOverride } : attachment));
       setAttachments((a) => [...a, ...next]);
     },
     [m.attachmentFileTooLarge, m.attachmentLoadFailed, m.maxAttachmentsReached, m.maxAttachmentsTruncated],
+  );
+
+  const processFiles = useCallback((files: File[]) => appendFiles(files), [appendFiles]);
+
+  const processPastedText = useCallback(
+    (paste: PastedTextAttachment) =>
+      appendFiles([new File([paste.text], paste.name, { type: paste.mimeType })], 'pasted_text'),
+    [appendFiles],
   );
 
   return {
@@ -104,6 +116,7 @@ export function useComposerAttachments(options: UseComposerAttachmentsOptions): 
     setIsDragging,
     fileInputRef,
     processFiles,
+    processPastedText,
     removeAttachment,
     clearAttachments,
     wireAttachmentsPayload,

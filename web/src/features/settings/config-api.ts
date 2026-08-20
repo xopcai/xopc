@@ -4,18 +4,6 @@ import { apiUrl } from '@/lib/url';
 
 // --- Nested shapes (align with `src/config/schema.ts`) ---
 
-export type AgentDefaultsMemoryState = {
-  enabled: boolean;
-  useEnhancedSystem: boolean;
-  userProfileEnabled: boolean;
-  provider: '' | 'none' | 'stub';
-  injectionFrequency: '' | 'every-turn' | 'first-turn';
-  memoryCharLimit: number | undefined;
-  userCharLimit: number | undefined;
-  contextCadence: number | undefined;
-  dialecticCadence: number | undefined;
-};
-
 export type AgentDefaultsSessionSearchState = {
   summaryModel: string;
 };
@@ -110,7 +98,6 @@ export interface AgentDefaultsState {
   thinkingDefault: string;
   reasoningDefault: string;
   verboseDefault: string;
-  memory: AgentDefaultsMemoryState;
   sessionSearch: AgentDefaultsSessionSearchState;
   webExtract: AgentDefaultsWebExtractState;
   delegate: AgentDefaultsDelegateState;
@@ -124,18 +111,6 @@ export interface AgentDefaultsState {
   /** JSON runtime params draft. */
   paramsJson: string;
 }
-
-const DEFAULT_MEMORY: AgentDefaultsMemoryState = {
-  enabled: true,
-  useEnhancedSystem: true,
-  userProfileEnabled: true,
-  provider: '',
-  injectionFrequency: '',
-  memoryCharLimit: undefined,
-  userCharLimit: undefined,
-  contextCadence: undefined,
-  dialecticCadence: undefined,
-};
 
 const DEFAULT_SESSION_SEARCH: AgentDefaultsSessionSearchState = {
   summaryModel: '',
@@ -340,44 +315,6 @@ function parseBrowserConfig(raw: unknown): BrowserFieldsPick {
   };
 }
 
-function parseMemory(raw: unknown): AgentDefaultsMemoryState {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return { ...DEFAULT_MEMORY };
-  }
-  const p = raw as Record<string, unknown>;
-  const providerRaw = p.provider;
-  const provider: AgentDefaultsMemoryState['provider'] =
-    providerRaw === 'none' || providerRaw === 'stub' ? providerRaw : '';
-  const inj = p.injectionFrequency;
-  const injectionFrequency: AgentDefaultsMemoryState['injectionFrequency'] =
-    inj === 'every-turn' || inj === 'first-turn' ? inj : '';
-  return {
-    enabled: typeof p.enabled === 'boolean' ? p.enabled : DEFAULT_MEMORY.enabled,
-    useEnhancedSystem:
-      typeof p.useEnhancedSystem === 'boolean' ? p.useEnhancedSystem : DEFAULT_MEMORY.useEnhancedSystem,
-    userProfileEnabled:
-      typeof p.userProfileEnabled === 'boolean' ? p.userProfileEnabled : DEFAULT_MEMORY.userProfileEnabled,
-    provider,
-    injectionFrequency,
-    memoryCharLimit:
-      typeof p.memoryCharLimit === 'number' && p.memoryCharLimit > 0
-        ? Math.floor(p.memoryCharLimit)
-        : undefined,
-    userCharLimit:
-      typeof p.userCharLimit === 'number' && p.userCharLimit > 0
-        ? Math.floor(p.userCharLimit)
-        : undefined,
-    contextCadence:
-      typeof p.contextCadence === 'number' && p.contextCadence >= 1
-        ? Math.floor(p.contextCadence)
-        : undefined,
-    dialecticCadence:
-      typeof p.dialecticCadence === 'number' && p.dialecticCadence >= 1
-        ? Math.floor(p.dialecticCadence)
-        : undefined,
-  };
-}
-
 function parseSessionSearch(raw: unknown): AgentDefaultsSessionSearchState {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return { ...DEFAULT_SESSION_SEARCH };
@@ -523,7 +460,6 @@ export function parseAgentDefaultsFromConfig(cfg: unknown): AgentDefaultsState {
     thinkingDefault: typeof d.thinkingDefault === 'string' ? d.thinkingDefault : 'medium',
     reasoningDefault: typeof d.reasoningDefault === 'string' ? d.reasoningDefault : 'stream',
     verboseDefault: typeof d.verboseDefault === 'string' ? d.verboseDefault : 'full',
-    memory: parseMemory(d.memory),
     sessionSearch: parseSessionSearch(d.sessionSearch),
     webExtract: parseWebExtract(d.webExtract),
     delegate: parseEnabledFlag(d.delegate, false),

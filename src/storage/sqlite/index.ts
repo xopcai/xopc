@@ -163,11 +163,6 @@ export {
   type NoteAgentContextRecord,
 } from './note-agent-context-repository.js';
 export {
-  searchMemoryIndex,
-  syncMemoryIndex,
-  type MemorySearchHit,
-} from './memory-index-repository.js';
-export {
   appendMemorySignal,
   appendMemoryTraceEvent,
   deleteMemoryRecord,
@@ -180,6 +175,7 @@ export {
   listMemoryRecords,
   markMemoryRecordsConflicted,
   searchMemoryRecords,
+  setMemoryRecordStatus,
   setMemoryProviderState,
   setMemoryTraceFeedback,
   setLatestMemoryInjectFeedback,

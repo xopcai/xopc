@@ -578,6 +578,7 @@ export const ChatComposer = memo(function ChatComposer({
               onWireInput={onWireInputClearWalk}
               adjustHeight={editor.adjustHeight}
               processFiles={att.processFiles}
+              processPastedText={att.processPastedText}
               setIsComposing={editor.setIsComposing}
               kbdRef={kbdRef}
               chatMessages={m.chat}

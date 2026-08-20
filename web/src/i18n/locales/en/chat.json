@@ -853,6 +853,7 @@
     "voiceMessage": "Voice",
     "loadOlder": "Loading older messages…",
     "scrollToBottom": "Scroll to bottom",
+    "pastedText": "Pasted text",
     "attachmentPreviewClose": "Close",
     "attachmentPreviewDownload": "Download",
     "attachmentPreviewRemove": "Remove",

@@ -35,6 +35,11 @@ const markdownParser = new Marked(
     },
   }),
   {
+    renderer: {
+      html({ text }) {
+        return escapeHtml(text);
+      },
+    },
     extensions: [
       {
         name: 'punctuationBoundStrong',
@@ -52,6 +57,15 @@ const markdownParser = new Marked(
     ],
   },
 );
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 const UNICODE_PUNCTUATION_RE = /^\p{P}$/u;
 

@@ -11,23 +11,23 @@ function config(memory: UserContextConfig['memory']): Config {
 
 describe('resolveDreamingConfig', () => {
   it.each([
-    ['readOnly mode', { mode: 'readOnly', sources: ['session'], writePolicy: { curated: 'allow' } }],
-    ['confirmWrite mode', { mode: 'confirmWrite', sources: ['session'], writePolicy: { curated: 'allow' } }],
-    ['curated deny', { mode: 'auto', sources: ['session'], writePolicy: { curated: 'deny' } }],
-    ['curated confirm', { mode: 'auto', sources: ['session'], writePolicy: { curated: 'confirm' } }],
-  ] as const)('blocks automatic deep promotion for %s', (_label, memory) => {
+    ['readOnly mode', { mode: 'readOnly', sources: ['session'], writePolicy: { understanding: 'allow' } }],
+    ['confirmWrite mode', { mode: 'confirmWrite', sources: ['session'], writePolicy: { understanding: 'allow' } }],
+    ['understanding deny', { mode: 'auto', sources: ['session'], writePolicy: { understanding: 'deny' } }],
+    ['understanding confirm', { mode: 'auto', sources: ['session'], writePolicy: { understanding: 'confirm' } }],
+  ] as const)('keeps deep analysis enabled for %s', (_label, memory) => {
     const resolved = resolveDreamingConfig(config(memory as UserContextConfig['memory']));
 
     expect(resolved.enabled).toBe(true);
-    expect(resolved.phases.deep.enabled).toBe(false);
+    expect(resolved.phases.deep.enabled).toBe(true);
     expect(resolved.promotionWritePolicy.decision).not.toBe('allow');
   });
 
-  it('allows deep promotion only when curated automatic writes are allowed', () => {
+  it('allows deep promotion only when understanding automatic writes are allowed', () => {
     const resolved = resolveDreamingConfig(config({
       mode: 'auto',
       sources: ['session'],
-      writePolicy: { curated: 'allow' },
+      writePolicy: { understanding: 'allow' },
     }));
 
     expect(resolved.phases.deep.enabled).toBe(true);

@@ -1,11 +1,6 @@
 import type { ReactNode } from 'react';
 
-import {
-  type DreamingLastRunRecord,
-  type PhaseLastRun,
-} from '@/features/settings/dreaming-api';
 import { phasePanelClass } from '@/features/settings/dreaming-settings-shared.styles';
-import { formatDurationMs } from '@/features/settings/dreaming-settings-shared.utils';
 import type { CronSchedulePickerLabels } from '@/features/scheduling/cron/cron-schedule-picker';
 import { ScheduleField } from '@/features/scheduling/schedule-field';
 import type { MessageBundle } from '@/i18n/messages';
@@ -170,65 +165,5 @@ export function PhaseStatusCard({
       </p>
       <p className="text-[0.65rem] leading-snug text-fg-muted">{details}</p>
     </div>
-  );
-}
-
-export function PhaseLastRunBlock({
-  label,
-  lastRun,
-  t,
-}: {
-  label: string;
-  lastRun: PhaseLastRun | undefined;
-  t: DreamingSettingsI18n;
-}) {
-  return (
-    <div className="rounded-lg bg-surface-base/45 p-3">
-      <PanelHeading label={label} className="mb-2" />
-      {lastRun?.exists ? (
-        <details className="group rounded-lg bg-surface-panel/70 shadow-surface">
-          <summary className="cursor-pointer list-none px-2.5 py-1.5 text-xs font-medium text-fg-muted marker:hidden [&::-webkit-details-marker]:hidden">
-            <span className="underline decoration-edge underline-offset-2 group-open:text-fg">{t.lastRunRaw}</span>
-          </summary>
-          <pre className="max-h-40 overflow-auto bg-surface-base/50 p-2.5 text-xs text-fg-muted">
-            {JSON.stringify(lastRun.raw, null, 2)}
-          </pre>
-        </details>
-      ) : (
-        <p className="text-xs text-fg-muted">{t.phaseLastRunEmpty}</p>
-      )}
-    </div>
-  );
-}
-
-export function LastRunStructuredView({ t, r }: { t: DreamingSettingsI18n; r: DreamingLastRunRecord }) {
-  const s = r.deep?.skipped;
-  return (
-    <dl className="grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-3 lg:grid-cols-4">
-      <StatCell label={t.lastRunStatus}>
-        <span className={r.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}>
-          {r.ok ? t.lastRunSuccess : t.lastRunFailure}
-        </span>
-      </StatCell>
-      <StatCell label={t.lastRunDuration}>{formatDurationMs(r.durationMs)}</StatCell>
-      <StatCell label={t.lastRunRanked}>{String(r.deep?.candidatesRanked ?? '—')}</StatCell>
-      <StatCell label={t.lastRunApplied}>{String(r.deep?.applied ?? '—')}</StatCell>
-      <StatCell label={t.lastRunReason} className="col-span-2 sm:col-span-3 lg:col-span-4">
-        <span className="block text-pretty">{r.reason}</span>
-        {r.errorMessage ? (
-          <span className="mt-1 block text-xs text-amber-600 dark:text-amber-400">
-            {`${t.lastRunError}: ${r.errorMessage}`}
-          </span>
-        ) : null}
-      </StatCell>
-      {s ? (
-        <>
-          <StatCell label={t.lastRunSkipKey}>{String(s.alreadyPromotedKey)}</StatCell>
-          <StatCell label={t.lastRunSkipRehydrate}>{String(s.rehydrateFailed)}</StatCell>
-          <StatCell label={t.lastRunSkipContaminated}>{String(s.contaminated)}</StatCell>
-          <StatCell label={t.lastRunSkipHash}>{String(s.hashDuplicate)}</StatCell>
-        </>
-      ) : null}
-    </dl>
   );
 }

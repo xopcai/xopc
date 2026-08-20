@@ -6,7 +6,7 @@ import {
   createSendHandler,
 } from '../sse.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
-import { validateWebchatAttachments } from '../../chat-limits.js';
+import { validateWebchatAttachments, validateWebchatContent } from '../../chat-limits.js';
 import type { UserTurnAttachment } from '../../user-turn-input.js';
 
 export function registerAgentStreamRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
@@ -41,6 +41,9 @@ export function registerAgentStreamRoutes(authenticated: Hono, deps: Authenticat
     const body = await c.req.json().catch(() => null) as Record<string, unknown> | null;
     if (!body || !sessionKey) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid request' } }, 400);
     const attachments = Array.isArray(body.attachments) ? body.attachments : undefined;
+    const content = typeof body.content === 'string' ? body.content : '';
+    const contentError = validateWebchatContent(content);
+    if (contentError) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: contentError } }, 400);
     const attachmentError = validateWebchatAttachments(attachments);
     if (attachmentError) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: attachmentError } }, 400);
     const delivery = body.delivery === 'next' || body.delivery === 'steer' ? body.delivery : null;
@@ -49,7 +52,7 @@ export function registerAgentStreamRoutes(authenticated: Hono, deps: Authenticat
       sessionKey,
       clientMessageId: typeof body.clientMessageId === 'string' ? body.clientMessageId : '',
       delivery,
-      content: typeof body.content === 'string' ? body.content : '',
+      content,
       attachments: attachments as UserTurnAttachment[] | undefined,
       thinking: typeof body.thinking === 'string' ? body.thinking : undefined,
     });
@@ -63,6 +66,10 @@ export function registerAgentStreamRoutes(authenticated: Hono, deps: Authenticat
     const body = await c.req.json().catch(() => null) as Record<string, unknown> | null;
     if (!body || typeof body.version !== 'number') return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Missing version' } }, 400);
     const attachments = Array.isArray(body.attachments) ? body.attachments : undefined;
+    if (body.content !== undefined) {
+      const contentError = validateWebchatContent(body.content);
+      if (contentError) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: contentError } }, 400);
+    }
     const attachmentError = validateWebchatAttachments(attachments);
     if (attachmentError) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: attachmentError } }, 400);
     const result = await service.updateSessionInput(sessionKey, inputId, {

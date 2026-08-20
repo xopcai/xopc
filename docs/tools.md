@@ -17,7 +17,7 @@ This page lists tools the xopc agent can call: read and edit files, run commands
 | Web | `web_search`, `web_fetch`, `web_extract` |
 | Messaging & media | `send_message`, `send_media` |
 | Voice (optional) | `text_to_speech` — when TTS is enabled in config |
-| Memory (optional) | `memory_search`, `memory_get`; `curated_memory`, `session_search` when configured |
+| Memory (optional) | `memory_search`, `memory_get`; `session_search` when configured |
 | Images (optional) | `image`, `image_generate` when models and keys are set |
 | Browser (optional) | `browser_use`; `browser_recipe` for saved [Browser automations](browser-workflows.md) |
 | Delegation & code (optional) | `delegate_task`, `execute_code` |
@@ -257,18 +257,11 @@ Searches indexed memory sources. Use it when answers should use stored notes, pr
 
 ### `memory_get`
 
-Loads a labeled snippet from a memory file.
+Loads one structured memory record returned by `memory_search`.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `file` | string | yes | Memory file name |
-| `snippet` | string | yes | Snippet id |
-
-### `curated_memory`
-
-Read/write shared curated files under **`user/memories/MEMORY.md`** and user-profile memory under **`user/MEMORY.md`** (section boundaries per format). These files are separate from agent profile Markdown and are controlled once by top-level `userContext`.
-
-See [Configuration](configuration.md) and [Curated memory](workspace.md#curated-memory).
+| `id` | string | yes | Stable memory record id |
 
 ### `session_search`
 

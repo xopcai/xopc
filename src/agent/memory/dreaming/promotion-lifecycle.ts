@@ -3,57 +3,6 @@ import { createHash } from 'node:crypto';
 import { upsertMemoryRecord } from '../../../storage/sqlite/index.js';
 import type { MemoryRecord, MemorySensitivity } from '../types.js';
 
-export interface DreamingPromotionInput {
-  agentId: string;
-  workspaceId: string;
-  candidateKey: string;
-  content: string;
-  sourcePath: string;
-  lineStart: number;
-  lineEnd: number;
-  score: number;
-  recallCount: number;
-  observedAt: string;
-  sensitivity: MemorySensitivity;
-}
-
-/** Persist a promoted Dreaming insight as the authoritative structured record. */
-export function activateDreamingPromotion(input: DreamingPromotionInput): MemoryRecord {
-  const stableId = createHash('sha256')
-    .update(`${input.agentId}\0${input.candidateKey}`)
-    .digest('hex')
-    .slice(0, 32);
-  return upsertMemoryRecord({
-    id: `dreaming:${stableId}`,
-    providerId: 'local',
-    kind: 'project_context',
-    sourceAgentId: input.agentId,
-    workspaceId: input.workspaceId,
-    content: input.content,
-    source: {
-      provider: 'dreaming',
-      path: input.sourcePath,
-      lineStart: input.lineStart,
-      lineEnd: input.lineEnd,
-    },
-    confidence: input.score,
-    status: 'active',
-    sensitivity: input.sensitivity,
-    canonicalKey: `dreaming:${input.candidateKey}`,
-    explicitness: 'observed',
-    durability: 'durable',
-    importance: input.score,
-    disclosurePolicy: 'referenceable',
-    evidence: [{
-      relation: 'derived_from',
-      sourceText: input.content,
-      observedAt: input.observedAt,
-      confidence: input.score,
-    }],
-    tags: ['dreaming', 'promoted', `recalls:${input.recallCount}`],
-  });
-}
-
 export interface RemInsightInput {
   agentId: string;
   workspaceId: string;
@@ -64,6 +13,7 @@ export interface RemInsightInput {
   observedAt: string;
   evidence: string[];
   sensitivity: MemorySensitivity;
+  status?: 'active' | 'candidate';
 }
 
 export function remPatternKey(memberKeys: string[]): string {
@@ -81,9 +31,9 @@ export function activateRemInsight(input: RemInsightInput): MemoryRecord {
     sourceAgentId: input.agentId,
     workspaceId: input.workspaceId,
     content,
-    source: { provider: 'dreaming', path: 'DREAMS.md' },
+    source: { provider: 'dreaming' },
     confidence: input.strength,
-    status: 'active',
+    status: input.status ?? 'active',
     sensitivity: input.sensitivity,
     canonicalKey: `dreaming-rem:${patternKey}`,
     explicitness: 'inferred',

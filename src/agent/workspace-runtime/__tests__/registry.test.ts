@@ -42,9 +42,7 @@ describe('WorkspaceRuntimeRegistry', () => {
 
       expect(main).not.toBe(research);
       expect(registry.getOrCreate('/shared', 'main')).toBe(main);
-      expect(main.builtinMemoryStore).toBe(research.builtinMemoryStore);
       expect(main.memoryManager).toBe(research.memoryManager);
-      expect(main.builtinMemoryStore.memoriesDir.replace(/\\/g, '/')).toContain('/user/memories');
     } finally {
       await registry.clearAll();
     }

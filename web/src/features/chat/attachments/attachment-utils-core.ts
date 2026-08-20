@@ -26,7 +26,7 @@ export function mediaUriToReadUrl(
 
 export interface Attachment {
   id?: string;
-  type: 'image' | 'document' | 'voice';
+  type: 'image' | 'document' | 'voice' | 'pasted_text';
   name: string;
   mimeType: string;
   size: number;

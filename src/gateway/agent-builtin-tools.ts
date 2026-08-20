@@ -36,7 +36,6 @@ export const GATEWAY_BUILTIN_TOOL_IDS = [
   'text_to_speech',
   'memory_search',
   'memory_get',
-  'curated_memory',
   'session_search',
   'automation',
   'workflow',

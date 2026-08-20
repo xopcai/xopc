@@ -3,10 +3,8 @@ import { Activity, Loader2, Moon, Sparkles, Sun } from 'lucide-react';
 import { type DreamingGatewayStatus } from '@/features/settings/dreaming-api';
 import {
   PanelHeading,
-  PhaseLastRunBlock,
   PhaseStatusCard,
   StatCell,
-  LastRunStructuredView,
   type DreamingSettingsI18n,
 } from '@/features/settings/dreaming-settings-shared';
 import {
@@ -14,7 +12,7 @@ import {
   sectionHeaderTightClass,
   sectionTightClass,
 } from '@/features/settings/dreaming-settings-shared.styles';
-import { isoShort, lockStatusLabel } from '@/features/settings/dreaming-settings-shared.utils';
+import { isoShort } from '@/features/settings/dreaming-settings-shared.utils';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 import { formatCronExpressionLabel, type ScheduleBadgeLabels } from '@/features/scheduling/cron/format-cron-label';
 import { ScheduleSummary } from '@/features/scheduling/schedule-summary';
@@ -29,8 +27,6 @@ type Props = {
 };
 
 export function DreamingRuntimeSection({ t, data, isLoading, localeTag, scheduleBadgeLabels }: Props) {
-  const lockLabel = data ? lockStatusLabel(data.lock, t) : null;
-
   return (
     <SettingsFormSection className={cn('min-w-0', sectionTightClass)}>
       <SettingsFormSectionHeader
@@ -46,9 +42,7 @@ export function DreamingRuntimeSection({ t, data, isLoading, localeTag, schedule
           <PanelHeading label={t.subsectionSchedule} className="mb-2" />
           <dl className="grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-4">
             <StatCell label={t.enabled}>{data ? (data.config.enabled ? t.on : t.off) : '—'}</StatCell>
-            <StatCell label={t.lock}>
-              <span className={lockLabel?.className}>{lockLabel ? lockLabel.text : '—'}</span>
-            </StatCell>
+            <StatCell label={t.lock}>{data?.config.promotionWritePolicy.decision ?? '—'}</StatCell>
             <StatCell label={t.timezone}>{data ? data.config.timezone || '—' : '—'}</StatCell>
             <StatCell label={t.schedule} className="col-span-2 sm:col-span-2">
               {data ? (
@@ -74,10 +68,10 @@ export function DreamingRuntimeSection({ t, data, isLoading, localeTag, schedule
         <div className={phasePanelClass}>
           <PanelHeading label={t.subsectionStore} className="mb-2" />
           <dl className="grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-4">
-            <StatCell label={t.storeEntries}>{data ? String(data.store.entryCount) : '—'}</StatCell>
-            <StatCell label={t.storePromoted}>{data ? String(data.store.promotedCount) : '—'}</StatCell>
-            <StatCell label={t.storeUpdatedAt}>{data ? isoShort(data.store.updatedAt) : '—'}</StatCell>
-            <StatCell label={t.storeLastPromotedAt}>{data ? isoShort(data.store.lastPromotedAt) : '—'}</StatCell>
+            <StatCell label={t.storeEntries}>{data ? String(data.store.signalCount) : '—'}</StatCell>
+            <StatCell label={t.storePromoted}>{data ? String(data.store.dreamingSignalCount) : '—'}</StatCell>
+            <StatCell label={t.storeUpdatedAt}>{data ? isoShort(data.store.lastSignalAt) : '—'}</StatCell>
+            <StatCell label={t.storeLastPromotedAt}>{data?.storePath ?? '—'}</StatCell>
           </dl>
         </div>
 
@@ -96,7 +90,7 @@ export function DreamingRuntimeSection({ t, data, isLoading, localeTag, schedule
                   scheduleBadgeLabels,
                   { timezone: data.config.timezone || undefined },
                 )}
-                details={`lookback=${data.config.phases.light.lookbackDays}d, limit=${data.config.phases.light.limit}, dedupe=${data.config.phases.light.dedupeSimilarity}`}
+                details={`lookback=${data.config.phases.light.lookbackDays}d, limit=${data.config.phases.light.limit}`}
                 t={t}
               />
               <PhaseStatusCard
@@ -133,39 +127,15 @@ export function DreamingRuntimeSection({ t, data, isLoading, localeTag, schedule
 
         <div className={phasePanelClass}>
           <PanelHeading label={t.subsectionLastRun} className="mb-2" />
-          <p className="mb-2 text-xs text-fg-muted">{t.lastRunBlockHint}</p>
-          {data?.lastRun?.exists ? (
-            <div className="space-y-2">
-              {data.lastRun.parseError ? (
-                <p className="text-sm text-amber-600 dark:text-amber-400" role="alert">
-                  {t.lastRunParseError}
-                  {': '}
-                  {data.lastRun.parseError}
-                </p>
-              ) : null}
-              {data.lastRun.record ? (
-                <div className="rounded-lg bg-surface-panel/70 p-2.5 shadow-surface">
-                  <LastRunStructuredView t={t} r={data.lastRun.record} />
-                </div>
-              ) : null}
-              {data.lastRun.raw !== undefined && data.lastRun.raw !== null ? (
-                <details className="group rounded-lg bg-surface-panel/70 shadow-surface">
-                  <summary className="cursor-pointer list-none px-2.5 py-1.5 text-xs font-medium text-fg-muted marker:hidden [&::-webkit-details-marker]:hidden">
-                    <span className="underline decoration-edge underline-offset-2 group-open:text-fg">{t.lastRunRaw}</span>
-                  </summary>
-                  <pre className="max-h-40 overflow-auto bg-surface-base/50 p-2.5 text-xs text-fg-muted">
-                    {JSON.stringify(data.lastRun.raw, null, 2)}
-                  </pre>
-                </details>
-              ) : null}
-            </div>
+          <p className="mb-2 text-xs text-fg-muted">Structured traces from SQLite.</p>
+          {data?.traces?.length ? (
+            <pre className="max-h-64 overflow-auto rounded-lg bg-surface-base/50 p-2.5 text-xs text-fg-muted">
+              {JSON.stringify(data.traces.slice(0, 10), null, 2)}
+            </pre>
           ) : (
             <p className="text-xs text-fg-muted">{t.lastRunEmpty}</p>
           )}
         </div>
-
-        <PhaseLastRunBlock label={t.subsectionLightLastRun} lastRun={data?.lightLastRun} t={t} />
-        <PhaseLastRunBlock label={t.subsectionRemLastRun} lastRun={data?.remLastRun} t={t} />
       </div>
     </SettingsFormSection>
   );

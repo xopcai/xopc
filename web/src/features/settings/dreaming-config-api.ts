@@ -11,7 +11,6 @@ export type DreamingLightConfigState = {
   cron: string;
   lookbackDays: number;
   limit: number;
-  dedupeSimilarity: number;
 };
 
 export type DreamingDeepConfigState = {
@@ -37,14 +36,6 @@ export type DreamingConfigState = {
   enabled: boolean;
   frequency: string;
   timezone: string;
-  /** @deprecated Use phases.deep.enabled */
-  deepEnabled: boolean;
-  /** @deprecated Use phases.deep.minScore */
-  minScore: number;
-  /** @deprecated Use phases.deep.minRecallCount */
-  minRecallCount: number;
-  /** @deprecated Use phases.deep.limit */
-  limit: number;
   light: DreamingLightConfigState;
   deep: DreamingDeepConfigState;
   rem: DreamingRemConfigState;
@@ -55,7 +46,6 @@ const LIGHT_DEFAULTS: DreamingLightConfigState = {
   cron: '0 */6 * * *',
   lookbackDays: 1,
   limit: 50,
-  dedupeSimilarity: 0.85,
 };
 
 const DEEP_DEFAULTS: DreamingDeepConfigState = {
@@ -81,10 +71,6 @@ const DEFAULTS: DreamingConfigState = {
   enabled: false,
   frequency: '0 3 * * *',
   timezone: '',
-  deepEnabled: true,
-  minScore: 0.8,
-  minRecallCount: 3,
-  limit: 10,
   light: LIGHT_DEFAULTS,
   deep: DEEP_DEFAULTS,
   rem: REM_DEFAULTS,
@@ -107,16 +93,7 @@ function toNum(value: unknown, fallback: number): number {
 }
 
 export function normalizeDreamingFromConfig(config: unknown): DreamingConfigState {
-  const c = isRecord(config) ? config : {};
-  const memory = isRecord(c.memory) ? c.memory : {};
-  const rootDreaming = isRecord(c.dreaming) ? c.dreaming : {};
-  const directDreaming =
-    typeof c.enabled === 'boolean' || typeof c.frequency === 'string' || isRecord(c.phases) ? c : {};
-  const dreaming = isRecord(memory.dreaming)
-    ? memory.dreaming
-    : Object.keys(rootDreaming).length > 0
-      ? rootDreaming
-      : directDreaming;
+  const dreaming = isRecord(config) ? config : {};
   const phases = isRecord(dreaming.phases) ? dreaming.phases : {};
   const lightRaw = isRecord(phases.light) ? phases.light : {};
   const deepRaw = isRecord(phases.deep) ? phases.deep : {};
@@ -126,16 +103,11 @@ export function normalizeDreamingFromConfig(config: unknown): DreamingConfigStat
     enabled: dreaming.enabled === true,
     frequency: typeof dreaming.frequency === 'string' && dreaming.frequency.trim() ? dreaming.frequency.trim() : DEFAULTS.frequency,
     timezone: typeof dreaming.timezone === 'string' ? dreaming.timezone : '',
-    deepEnabled: deepRaw.enabled !== false,
-    minScore: clamp01(typeof deepRaw.minScore === 'number' ? deepRaw.minScore : Number(deepRaw.minScore), DEFAULTS.minScore),
-    minRecallCount: Math.max(1, toInt(deepRaw.minRecallCount, DEFAULTS.minRecallCount)),
-    limit: toInt(deepRaw.limit, DEFAULTS.limit),
     light: {
       enabled: lightRaw.enabled !== false,
       cron: typeof lightRaw.cron === 'string' && lightRaw.cron.trim() ? lightRaw.cron.trim() : LIGHT_DEFAULTS.cron,
       lookbackDays: Math.max(1, toInt(lightRaw.lookbackDays, LIGHT_DEFAULTS.lookbackDays)),
       limit: toInt(lightRaw.limit, LIGHT_DEFAULTS.limit),
-      dedupeSimilarity: clamp01(toNum(lightRaw.dedupeSimilarity, LIGHT_DEFAULTS.dedupeSimilarity), LIGHT_DEFAULTS.dedupeSimilarity),
     },
     deep: {
       enabled: deepRaw.enabled !== false,
@@ -171,10 +143,10 @@ export async function patchDreamingConfig(
       memory: {
         ...(baseMemory ?? {}),
         mode: state.enabled ? 'confirmWrite' : typeof baseMemory?.mode === 'string' ? baseMemory.mode : 'off',
-        sources: Array.isArray(baseMemory?.sources) ? baseMemory.sources : ['session', 'curated', 'workspace'],
+        sources: ['session', 'understanding', 'workspace'],
         writePolicy: isRecord(baseMemory?.writePolicy)
           ? baseMemory.writePolicy
-          : { curated: 'confirm', workspace: 'confirm' },
+          : { understanding: 'confirm', workspace: 'confirm' },
         dreaming: {
           enabled: Boolean(state.enabled),
           ...(freq ? { frequency: freq } : {}),
@@ -185,7 +157,6 @@ export async function patchDreamingConfig(
               ...(state.light.cron.trim() ? { cron: state.light.cron.trim() } : {}),
               lookbackDays: Math.max(1, Math.floor(state.light.lookbackDays)),
               limit: Math.max(0, Math.floor(state.light.limit)),
-              dedupeSimilarity: clamp01(state.light.dedupeSimilarity, LIGHT_DEFAULTS.dedupeSimilarity),
             },
             deep: {
               enabled: Boolean(state.deep.enabled),

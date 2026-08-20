@@ -22,7 +22,7 @@ function config(workspaceDir: string, dreamingEnabled: boolean): Config {
       memory: {
         ...base.userContext.memory,
         mode: 'auto',
-        writePolicy: { ...base.userContext.memory.writePolicy, curated: 'allow' },
+        writePolicy: { ...base.userContext.memory.writePolicy, understanding: 'allow' },
       },
       dreaming: {
         ...base.userContext.dreaming,

@@ -25,7 +25,6 @@ export const DEFAULT_DELEGATE_TOOLS = [
 export const DELEGATE_BLOCKED_TOOLS = new Set([
   'delegate_task',
   'clarify',
-  'curated_memory',
   'send_message',
   'send_media',
   'todo',

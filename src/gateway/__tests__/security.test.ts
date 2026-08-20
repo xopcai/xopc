@@ -173,6 +173,8 @@ describe('Gateway Security Fixes', () => {
       expect(csp).toContain("default-src 'self'");
       expect(csp).toContain("media-src 'self' blob: data:");
       expect(csp).toContain("frame-ancestors 'none'");
+      expect(csp).toContain("frame-src 'none'");
+      expect(csp).toContain("form-action 'self'");
     });
   });
 
