@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ActivityService, ObjectLinkService } from '../../../activity/index.js';
+import { AutomationService } from '../../../automations/index.js';
 import { NotesService, NotesStore } from '../../../notes/index.js';
 import { ProjectService } from '../../../projects/index.js';
 import {
@@ -27,6 +28,7 @@ function parseToolJson(result: Awaited<ReturnType<ReturnType<typeof createXopcUs
 describe('xopc_use tool', () => {
   let stateDir: string;
   let projects: ProjectService;
+  let automations: AutomationService;
   let notes: NotesService;
   let activity: ActivityService;
 
@@ -36,12 +38,15 @@ describe('xopc_use tool', () => {
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
     ensureSessionRecord(SESSION_KEY, stateDir);
     projects = new ProjectService();
+    automations = new AutomationService();
+    await automations.initialize();
     notes = new NotesService(new NotesStore());
     await notes.initialize();
     activity = new ActivityService();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    await automations.stop();
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
     rmSync(stateDir, { recursive: true, force: true });
@@ -93,6 +98,75 @@ describe('xopc_use tool', () => {
       initiator: { kind: 'user', sessionKey: SESSION_KEY },
       source: { kind: 'xopc_use', toolCallId: 'call-2' },
     });
+  });
+
+  it('creates and lists automations in the current session project', async () => {
+    const project = projects.create({ name: 'Automation Project' });
+    const otherProject = projects.create({ name: 'Other Automation Project' });
+    patchSessionMetadata(SESSION_KEY, { projectId: project.id });
+    const tool = createXopcUseTool({
+      getAutomationService: () => automations,
+      getProjectService: () => projects,
+      getCurrentSessionKey: () => SESSION_KEY,
+    });
+
+    const createdResult = await tool.execute('call-project-automation', {
+      mode: 'automation',
+      command: 'create',
+      args: {
+        name: 'Project review',
+        trigger: { kind: 'manual' },
+        action: { kind: 'agent', instruction: 'Review the project.' },
+      },
+    });
+    const created = parseToolJson(createdResult);
+    const other = parseToolJson(await tool.execute('call-other-project-automation', {
+      mode: 'automation',
+      command: 'create',
+      args: {
+        projectId: otherProject.id,
+        automation: {
+          name: 'Other project review',
+          trigger: { kind: 'manual' },
+          action: { kind: 'agent', instruction: 'Review the other project.' },
+        },
+      },
+    }));
+
+    expect(created).toMatchObject({
+      ok: true,
+      projectId: project.id,
+      automation: { projectId: project.id },
+    });
+    expect(other.automation.projectId).toBe(otherProject.id);
+    expect(createdResult.details.delivery).toMatchObject({
+      operation: 'created',
+      primary: {
+        kind: 'automation',
+        id: created.automation.id,
+        projectId: project.id,
+      },
+    });
+
+    const listed = parseToolJson(await tool.execute('call-project-automation-list', {
+      mode: 'automation',
+      command: 'list',
+      args: {},
+    }));
+    expect(listed.projectId).toBe(project.id);
+    expect(listed.items.map((automation: { id: string }) => automation.id)).toEqual([created.automation.id]);
+
+    const missingProject = parseToolJson(await tool.execute('call-missing-project-automation', {
+      mode: 'automation',
+      command: 'create',
+      args: {
+        projectId: 'missing-project',
+        name: 'Invalid project automation',
+        trigger: { kind: 'manual' },
+        action: { kind: 'agent', instruction: 'This must not be created.' },
+      },
+    }));
+    expect(missingProject).toEqual({ ok: false, error: 'Project not found: missing-project' });
   });
 
   it('resolves an existing workspace project', async () => {
