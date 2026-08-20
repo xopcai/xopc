@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import type { TaskAction, TaskInputAttachment, TaskPriority, ProjectTaskCard, ProjectTaskLane } from '@xopcai/gateway-contract';
+import type { TaskPriority, ProjectTaskCard, ProjectTaskLane } from '@xopcai/gateway-contract';
 import { CalendarClock, Check, CheckCircle2, ChevronDown, CircleDot, Link2, ListChecks, Paperclip, Plus, Search, UserRound, X } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -19,6 +19,7 @@ import {
   taskActionForLane,
   primaryTaskAction,
   PROJECT_TASK_LANES,
+  type TaskBoardAction,
 } from './task-board-model';
 
 type BoardCopy = {
@@ -60,7 +61,7 @@ export type CreateProjectTaskInput = {
   priority: TaskPriority;
   dueAt?: number;
   dependsOnTaskIds: string[];
-  attachments: TaskInputAttachment[];
+  attachments: Array<{ name?: string; uri?: string; mimeType?: string; size?: number; data?: string }>;
 };
 
 const LANE_ICONS = {
@@ -82,7 +83,7 @@ function TaskCard({ task, returnTo, copy, busy, onAction, onDragStart }: {
   returnTo: string;
   copy: BoardCopy;
   busy: boolean;
-  onAction: (task: ProjectTaskCard, action: TaskAction) => void;
+  onAction: (task: ProjectTaskCard, action: TaskBoardAction) => void;
   onDragStart: (taskId: string) => void;
 }) {
   const primaryAction = primaryTaskAction(task);
@@ -114,24 +115,10 @@ function TaskCard({ task, returnTo, copy, busy, onAction, onDragStart }: {
             </span>
           ) : null}
         </div>
-        {task.blockedReason || task.nextAction ? (
+        {task.attention[0] ? (
           <p className="mt-2 line-clamp-3 text-xs leading-5 text-fg-muted">
-            {task.blockedReason || task.nextAction}
+            {task.attention[0].summary}
           </p>
-        ) : null}
-        {task.progress ? (
-          <div className="mt-3" aria-label={`${task.progress.completed}/${task.progress.total}`}>
-            <div className="h-1.5 overflow-hidden rounded-full bg-surface-base">
-              <div
-                className="h-full rounded-full bg-accent transition-[width]"
-                style={{ width: `${Math.round((task.progress.completed / task.progress.total) * 100)}%` }}
-              />
-            </div>
-            <div className="mt-1.5 flex items-center justify-between gap-2 text-[11px] text-fg-subtle">
-              <span className="line-clamp-1">{task.progress.currentStep}</span>
-              <span className="shrink-0 tabular-nums">{task.progress.completed}/{task.progress.total}</span>
-            </div>
-          </div>
         ) : null}
         <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-fg-subtle">
           {task.latestVerification ? (
@@ -163,12 +150,12 @@ function TaskCard({ task, returnTo, copy, busy, onAction, onDragStart }: {
           ) : null}
         </div>
       </Link>
-      {primaryAction && primaryAction !== 'cancel' ? (
+      {primaryAction ? (
         <div className="flex items-center gap-3 border-t border-edge-subtle px-3 py-2">
           <button type="button" disabled={busy} onClick={() => onAction(task, primaryAction)} className="text-xs font-medium text-accent-fg hover:underline disabled:cursor-wait disabled:opacity-50">
             {copy.actions[primaryAction]}
           </button>
-          {primaryAction !== 'verify' && task.allowedActions.includes('verify') ? (
+          {primaryAction !== 'verify' && task.allowedCommands.includes('request_review') ? (
             <button type="button" disabled={busy} onClick={() => onAction(task, 'verify')} className="text-xs font-medium text-fg-muted hover:text-fg hover:underline disabled:cursor-wait disabled:opacity-50">
               {copy.actions.verify}
             </button>
@@ -183,7 +170,7 @@ export function ProjectTaskBoard({ tasks, returnTo, copy, onAction, onCreate, ac
   tasks: ProjectTaskCard[];
   returnTo: string;
   copy: BoardCopy;
-  onAction: (task: ProjectTaskCard, action: TaskAction) => Promise<void>;
+  onAction: (task: ProjectTaskCard, action: TaskBoardAction) => Promise<void>;
   onCreate: (input: CreateProjectTaskInput) => Promise<void>;
   actionBusyId?: string | null;
 }) {
@@ -201,12 +188,12 @@ export function ProjectTaskBoard({ tasks, returnTo, copy, onAction, onCreate, ac
   const language = useLocaleStore((state) => state.language);
   const attachmentState = useComposerAttachments({ chat: messages(language).chat });
   const grouped = groupProjectTasks(tasks);
-  const dependencyCandidates = tasks.filter((task) => task.status !== 'cancelled');
+  const dependencyCandidates = tasks.filter((task) => task.phase !== 'closed');
   const normalizedDependencyQuery = dependencyQuery.trim().toLocaleLowerCase();
   const matchingDependencyCandidates = dependencyCandidates
     .filter((task) => !normalizedDependencyQuery || task.title.toLocaleLowerCase().includes(normalizedDependencyQuery))
     .slice(0, 8);
-  const performAction = (task: ProjectTaskCard, action: TaskAction) => {
+  const performAction = (task: ProjectTaskCard, action: TaskBoardAction) => {
     void onAction(task, action);
   };
 

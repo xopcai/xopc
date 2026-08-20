@@ -1,19 +1,20 @@
 import {
   TaskDetailResponseSchema,
   TaskListResponseSchema,
-  TaskSchema,
   TaskCreateResponseSchema,
-  type Task,
-  type TaskAction,
+  type TaskCommand,
   type TaskCreateRequest,
   type TaskCreateResponse,
+  type TaskListResponse,
 } from '@xopcai/gateway-contract';
 
 import { apiFetch } from '../api/client';
 
 export type TaskDetail = ReturnType<typeof TaskDetailResponseSchema.parse>;
 
-export async function fetchTasks(): Promise<Task[]> {
+export type TaskListItem = TaskListResponse['items'][number];
+
+export async function fetchTasks(): Promise<TaskListItem[]> {
   const response = await apiFetch('/api/tasks');
   if (!response.ok) throw new Error(`Failed to fetch tasks: ${response.status}`);
   return TaskListResponseSchema.parse(await response.json()).items;
@@ -37,18 +38,18 @@ export async function fetchTask(id: string): Promise<TaskDetail> {
   return TaskDetailResponseSchema.parse(await response.json());
 }
 
-export async function actOnTask(
+export async function commandTask(
   id: string,
-  action: TaskAction,
-  expectedUpdatedAt: number,
-  approvedBoundaries?: string[],
-): Promise<Task> {
-  const response = await apiFetch(`/api/tasks/${encodeURIComponent(id)}/actions`, {
+  command: TaskCommand,
+  expectedVersion: number,
+): Promise<TaskDetail['task']> {
+  const response = await apiFetch(`/api/tasks/${encodeURIComponent(id)}/commands`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action, expectedUpdatedAt, approvedBoundaries }),
+    body: JSON.stringify({ idempotencyKey: crypto.randomUUID(), expectedVersion, command }),
   });
   if (!response.ok) throw new Error(`Failed to update task: ${response.status}`);
-  const body = await response.json() as { task?: unknown };
-  return TaskSchema.parse(body.task);
+  const body = await response.json() as { task?: TaskDetail['task'] };
+  if (!body.task) throw new Error('Task command returned no task');
+  return body.task;
 }

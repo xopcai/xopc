@@ -3,8 +3,10 @@ import type { AutomationEvent } from '../../automations/domain/types.js';
 import type { PublishEventInput } from './types.js';
 
 const SUPPORTED_EVENT_TYPES = new Set([
-  'task.created',
-  'task.status_changed',
+  'task.created.v2',
+  'task.commanded.v2',
+  'task.phase_changed.v2',
+  'task.attention_required.v2',
   'note.created',
   'note.updated',
   'workflow.run.completed',
@@ -60,7 +62,7 @@ export function mapProductEventToProactive(input: {
   const agentId = stringValue(payload, 'agentId') ?? input.defaultAgentId;
   const projectId = stringValue(payload, 'projectId');
   return {
-    type: `${input.event.type}.v1`,
+    type: input.event.type,
     schemaVersion: 1,
     source: { kind: 'internal', id: input.event.source ?? 'xopc' },
     subject,

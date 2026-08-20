@@ -25,7 +25,7 @@ describe('task source recommendations', () => {
       source('calendar', 'Calendar', 'Meetings, schedules, and events'),
       source('mail', 'Email', 'Mail and inbox context'),
     ];
-    const tasks = [{ id: 'task-1', objective: '安排下周的客户会议' }];
+    const tasks = [{ id: 'task-1', title: '安排下周的客户会议' }];
 
     expect(buildTaskSourceRecommendations(definitions, new Set(), tasks)).toMatchObject([
       { sourceId: 'calendar', taskId: 'task-1' },

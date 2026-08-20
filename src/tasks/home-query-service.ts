@@ -21,8 +21,9 @@ import {
 } from '../storage/sqlite/index.js';
 import type { WorkflowRunSummary } from '../workflows/domain/index.js';
 import type { WorkflowRunService } from '../workflows/service/workflow-run-service.js';
-import { TaskReceiptService } from './task-receipt-service.js';
-import { TaskRepository, type TaskRuntime } from './task-repository.js';
+import { TaskRepository } from './task-repository.js';
+import { TaskRunRepository } from './task-run-repository.js';
+import { TaskReadModelProjector, type TaskReadModel } from './task-read-model-projector.js';
 import { AttentionGovernor } from './attention-governor.js';
 
 type HomeDecision = HomeResponse['decisions'][number];
@@ -114,6 +115,7 @@ function triggerLabel(automation: Automation): string {
 function actionLabel(automation: Automation): string {
   if (automation.action.kind === 'workflow') return `workflow:${automation.action.workflowId}`;
   if (automation.action.kind === 'browser_recipe') return `browser-workflow:${automation.action.recipeId}`;
+  if (automation.action.kind === 'task_command') return `task:${automation.action.command.type}`;
   return automation.action.agentId ? `agent:${automation.action.agentId}` : 'agent';
 }
 
@@ -145,7 +147,7 @@ function toHomeAutomationRun(run: AutomationRun): HomeAutomationRun {
 }
 
 function effectiveAutomationTimeoutSeconds(run: AutomationRun, automation?: Automation): number {
-  return run.actionSnapshot.timeoutSeconds
+  return ('timeoutSeconds' in run.actionSnapshot ? run.actionSnapshot.timeoutSeconds : undefined)
     ?? automation?.reliability?.timeoutSeconds
     ?? DEFAULT_AUTOMATION_TIMEOUT_SECONDS;
 }
@@ -173,22 +175,23 @@ function attentionDetail(
 }
 
 export function decisionFromTask(
-  task: { id: string; objective: string; status: string; updatedAt: number },
-  execution: TaskRuntime,
+  model: TaskReadModel,
   projectName?: string,
 ): HomeDecision | null {
-  if (task.status !== 'needs_user' && task.status !== 'blocked') return null;
+  const item = model.attention[0];
+  if (!item || !['input_required', 'approval_required', 'dependency_blocked'].includes(item.kind)) return null;
+  const task = model.task;
   return {
     id: `task:${task.id}`,
     kind: 'task',
-    title: task.objective,
-    detail: execution.blockedReason || execution.nextAction,
-    reason: task.status === 'needs_user' ? 'needs_input' : 'blocked',
+    title: task.title,
+    detail: item.summary,
+    reason: item.kind === 'input_required' ? 'needs_input' : 'blocked',
     urgency: 'now',
     href: `/tasks/${encodeURIComponent(task.id)}`,
-    projectId: execution.projectId,
+    projectId: task.projectId,
     projectName,
-    updatedAt: Math.max(task.updatedAt, execution.updatedAt),
+    updatedAt: task.updatedAt,
   };
 }
 
@@ -235,8 +238,9 @@ export function buildHomeBriefing(input: {
 }
 
 export class HomeQueryService {
-  readonly #receipts = new TaskReceiptService();
+  readonly #runs = new TaskRunRepository();
   readonly #tasks = new TaskRepository();
+  readonly #projector = new TaskReadModelProjector();
   readonly #attentionGovernor = new AttentionGovernor();
 
   constructor(private readonly service: HomeGatewayPort) {}
@@ -265,7 +269,7 @@ export class HomeQueryService {
       this.service.projects.list({ limit: 500 }),
       Promise.resolve(listConnectorApprovals({ principalId: 'local-owner', status: 'pending', limit: 100 })),
     ]);
-    const activeTasks = tasks.filter((task) => task.status !== 'completed' && task.status !== 'cancelled');
+    const activeTasks = tasks.filter((task) => task.phase !== 'closed');
     const projectsById = new Map(projects.items.map((project) => [project.id, project]));
     const workChats = recentSessions.items
       .filter((session) => (session.messageCount ?? 0) > 0)
@@ -318,9 +322,8 @@ export class HomeQueryService {
       })),
       ...activeTasks
         .map((task) => decisionFromTask(
-          task,
-          task.execution,
-          task.execution.projectId ? projectsById.get(task.execution.projectId)?.name : undefined,
+          this.#projector.project(task),
+          task.projectId ? projectsById.get(task.projectId)?.name : undefined,
         ))
         .filter((item): item is HomeDecision => Boolean(item)),
       ...connectorApprovals
@@ -435,15 +438,13 @@ export class HomeQueryService {
       },
       upcomingAutomations,
       tasks: {
-        running: tasks.filter((task) => (
-          task.status === 'planning'
-          || task.status === 'running'
-          || task.status === 'verifying'
-        )).slice(0, 20),
+        running: tasks.filter((task) => {
+          const state = this.#projector.project(task).operationalState;
+          return state === 'queued' || state === 'running' || state === 'verifying';
+        }).slice(0, 20),
       },
-      recentTasks: this.#receipts.list({ limit: 20 })
-        .filter((receipt) => receipt.status !== 'running')
-        .slice(0, 8),
+      recentTasks: tasks.flatMap((task) => this.#runs.listReceipts(task.id, 3))
+        .sort((a, b) => b.finalizedAt - a.finalizedAt).slice(0, 8),
       recentAutomationRuns: automationRuns.slice(0, 5).map(toHomeAutomationRun),
     };
   }

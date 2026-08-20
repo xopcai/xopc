@@ -15,7 +15,7 @@ import {
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../../../storage/sqlite/index.js';
-import { TaskExecutionService } from '../../../../tasks/index.js';
+import { defineTaskContract, TaskApplicationService } from '../../../../tasks/index.js';
 import type { GatewayService } from '../../../service.js';
 import { registerActivityRoutes } from '../activity.js';
 import { registerProjectsRoutes } from '../projects.js';
@@ -240,6 +240,37 @@ describe('project association routes', () => {
     expect(unpinBody.ok).toBe(true);
     expect(unpinBody.project.id).toBe(project.id);
     expect(unpinBody.project.pinnedAt).toBeUndefined();
+  });
+
+  it('manages milestones and appends project updates through project routes', async () => {
+    const projects = new ProjectService();
+    const project = projects.create({ name: 'Operating Route Project' });
+    const app = registerProjectRouteApp({ projects });
+
+    const milestoneRes = await app.request(`/api/projects/${project.id}/milestones`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title: 'Beta', status: 'active', sortOrder: 1 }),
+    });
+    expect(milestoneRes.status).toBe(201);
+
+    const updateRes = await app.request(`/api/projects/${project.id}/updates`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        health: 'at_risk',
+        summary: 'One external review remains.',
+        risks: ['Review delay'],
+        nextSteps: ['Resolve the review wait'],
+      }),
+    });
+    expect(updateRes.status).toBe(201);
+
+    const detailRes = await app.request(`/api/projects/${project.id}`);
+    const detail = await detailRes.json() as { project: { health: string; milestones: unknown[]; recentUpdates: unknown[] } };
+    expect(detail.project).toMatchObject({ health: 'at_risk' });
+    expect(detail.project.milestones).toHaveLength(1);
+    expect(detail.project.recentUpdates).toHaveLength(1);
   });
 
   it('validates projectId before patching session metadata', async () => {
@@ -483,7 +514,17 @@ describe('project association routes', () => {
   it('updates a stable project digest memory record instead of creating duplicates', async () => {
     const projects = new ProjectService();
     const project = projects.create({ name: 'Digest Project', brief: 'Keep a stable digest' });
-    new TaskExecutionService().create({ objective: 'Ship the digest flow', projectId: project.id });
+    const tasks = new TaskApplicationService();
+    const capture = (title: string) => tasks.create({
+      idempotencyKey: `digest:${title}`,
+      title,
+      projectId: project.id,
+      priority: 'normal',
+      contract: { ...defineTaskContract(title), acceptancePolicy: 'verified_auto', outputDestinations: [] },
+      dependencies: [], context: [], authorityGrants: [],
+      activation: { mode: 'capture', phase: 'backlog' },
+    });
+    capture('Ship the digest flow');
     const app = registerProjectRouteApp({
       currentConfig: {
         agents: {
@@ -503,7 +544,7 @@ describe('project association routes', () => {
     expect(firstBody.record.id).toBe(`project-digest:${project.id}`);
     expect(firstBody.record.content).toContain('Ship the digest flow');
 
-    new TaskExecutionService().create({ objective: 'Review the updated digest', projectId: project.id });
+    capture('Review the updated digest');
     const second = await app.request(`/api/projects/${project.id}/digest-memory`, { method: 'POST' });
     expect(second.status).toBe(201);
     const secondBody = (await second.json()) as { record: { id: string; content: string } };

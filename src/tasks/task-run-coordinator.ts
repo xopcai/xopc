@@ -1,79 +1,68 @@
-import {
-  completeExecutionReceipt,
-  getExecutionReceipt,
-  startExecutionReceipt,
-  updateExecutionReceipt,
-  type ExecutionContract,
-  type ExecutionEvidence,
-  type ExecutionReceipt,
-  type ExecutionReceiptStatus,
-} from '../storage/sqlite/index.js';
+import type { TaskEvidence, TaskRunReceipt } from '@xopcai/gateway-contract';
+
 import type { ExecutionContext } from './execution-context.js';
-import { executionReceiptContext } from './execution-context.js';
-import { TaskProjectionService } from './task-projection-service.js';
+import { TaskApplicationService } from './task-application-service.js';
+import { TaskContextRepository } from './task-context-repository.js';
 import { TaskRepository } from './task-repository.js';
-import { ContextCompiler } from '../user-context/context-compiler.js';
-import { recordTaskContextFeedback } from './task-context-feedback.js';
+import { TaskRunRepository } from './task-run-repository.js';
 
 export class TaskRunCoordinator {
-  readonly #evidence: ExecutionEvidence[] = [];
-  readonly #tasks = new TaskRepository();
-  readonly #projection = new TaskProjectionService();
-  readonly #contextCompiler = new ContextCompiler();
-  readonly #startedAt = Date.now();
-  readonly #onFinalized?: (receipt: ExecutionReceipt) => void;
-  readonly contract?: ExecutionContract;
+  readonly #evidence: TaskEvidence[] = [];
+  readonly #application = new TaskApplicationService();
+  readonly #runs = new TaskRunRepository();
 
-  private constructor(
-    readonly runId: string,
-    readonly context: ExecutionContext,
-    fallbackObjective: string,
-    onFinalized?: (receipt: ExecutionReceipt) => void,
-  ) {
-    const task = context.taskId ? this.#tasks.get(context.taskId) : undefined;
-    const contract = task?.contract;
-    this.contract = contract ? {
-      objective: contract.objective,
-      expectedOutputs: contract.expectedOutputs,
-      acceptanceCriteria: contract.acceptanceCriteria,
-      constraints: contract.constraints,
-      approvalRequired: contract.approvalRequired,
-      assumptions: contract.assumptions,
-      risks: contract.risks,
-    } : undefined;
-    this.#onFinalized = onFinalized;
-    startExecutionReceipt({
-      runId,
-      sessionKey: context.sessionKey,
-      channel: context.channel,
-      objective: task?.objective ?? contract?.objective ?? fallbackObjective.trim(),
-      context: executionReceiptContext(context),
-      ...(this.contract ? { contract: this.contract } : {}),
-      ...(contract ? { contractVersion: contract.version } : {}),
-      ...(context.strategy ? { strategy: context.strategy } : {}),
-    });
-    if (task) {
-      this.#tasks.update(task.id, {
-        status: 'running',
-      });
-    }
-  }
+  private constructor(readonly runId: string) {}
 
   static start(input: {
     runId: string;
     context: ExecutionContext;
     fallbackObjective: string;
-    onFinalized?: (receipt: ExecutionReceipt) => void;
-  }): TaskRunCoordinator {
-    return new TaskRunCoordinator(
-      input.runId,
-      input.context,
-      input.fallbackObjective,
-      input.onFinalized,
-    );
+  }): TaskRunCoordinator | undefined {
+    if (!input.context.taskId) return undefined;
+    const tasks = new TaskRepository();
+    const task = tasks.get(input.context.taskId);
+    if (!task || task.phase === 'closed') return undefined;
+    const runs = new TaskRunRepository();
+    let run = runs.get(input.runId);
+    if (!run) {
+      if (runs.getActiveRoot(task.id)) return undefined;
+      run = runs.create({
+        id: input.runId,
+        taskId: task.id,
+        executorKind: 'agent',
+        executorRef: { agentId: input.context.agentId ?? task.delegateAgentId ?? 'main' },
+        trigger: { kind: input.context.triggerKind },
+        correlationId: input.runId,
+        idempotencyKey: input.runId,
+        contractVersion: task.latestContractVersion,
+        sessionKey: input.context.sessionKey,
+      });
+      if (task.phase !== 'active') {
+        tasks.setLifecycle({ taskId: task.id, expectedVersion: task.version, phase: 'active' });
+      }
+    }
+    if (run.status === 'queued') {
+      const context = new TaskContextRepository();
+      const snapshot = context.captureSnapshot({
+        ownerKind: 'task_run',
+        ownerId: run.id,
+        sessionKey: input.context.sessionKey,
+        query: task.contract?.objective ?? input.fallbackObjective,
+        selectedItems: context.list(task.id),
+        authorizationSnapshot: { grants: context.listActiveGrants(task.id) },
+      });
+      run = runs.start({
+        runId: run.id,
+        expectedVersion: run.version,
+        contextSnapshotId: snapshot.id,
+        policySnapshot: { executorKind: 'agent' },
+        sessionKey: input.context.sessionKey,
+      }) ?? run;
+    }
+    return run.status === 'running' ? new TaskRunCoordinator(run.id) : undefined;
   }
 
-  addEvidence(evidence: ExecutionEvidence): void {
+  addEvidence(evidence: TaskEvidence): void {
     if (this.#evidence.some((item) => item.kind === evidence.kind && item.title === evidence.title)) return;
     this.#evidence.push(evidence);
   }
@@ -81,80 +70,41 @@ export class TaskRunCoordinator {
   capturePlan(items: Array<{ title: string; status: string }>): void {
     for (const item of items) {
       if (item.status !== 'completed') continue;
-      this.addEvidence({
-        kind: 'state',
-        title: `Plan item completed: ${item.title}`,
-        summary: 'The execution agent marked this plan item as completed.',
-        provenance: 'tool',
-        strength: 'observed',
-        observedAt: Date.now(),
-      });
+      this.addEvidence({ kind: 'state', title: `Plan item completed: ${item.title}`,
+        summary: 'The agent completed this plan item.', provenance: 'tool', strength: 'observed', observedAt: Date.now() });
     }
   }
 
   capturePatch(added: number, removed: number): void {
-    this.addEvidence({
-      kind: 'state',
-      title: 'Changes applied',
-      summary: `${added} additions and ${removed} removals`,
-      provenance: 'tool',
-      strength: 'observed',
-      observedAt: Date.now(),
-    });
+    this.addEvidence({ kind: 'state', title: 'Changes applied', summary: `${added} additions and ${removed} removals`,
+      provenance: 'tool', strength: 'observed', observedAt: Date.now() });
   }
 
   captureCommand(command: string, durationMs?: number): void {
     if (!/(^|\s)(test|vitest|jest|pytest|lint|typecheck|build)(\s|$|:)/i.test(command)) return;
-    this.addEvidence({
-      kind: 'test',
-      title: command.slice(0, 120),
-      summary: durationMs === undefined
-        ? 'Command completed successfully'
-        : `Command completed successfully in ${durationMs} ms`,
-      provenance: 'tool',
-      strength: 'verified',
-      observedAt: Date.now(),
-    });
+    this.addEvidence({ kind: 'test', title: command.slice(0, 120),
+      summary: durationMs === undefined ? 'Command completed successfully' : `Command completed successfully in ${durationMs} ms`,
+      provenance: 'tool', strength: 'verified', observedAt: Date.now() });
   }
 
-  finalize(input: {
-    status: Exclude<ExecutionReceiptStatus, 'running'>;
-    summary: string;
-  }): ExecutionReceipt | undefined {
-    const judgedReceipt = getExecutionReceipt(this.runId);
-    const contextSnapshot = this.#contextCompiler.latestForSession(this.context.sessionKey, this.#startedAt);
-    if (contextSnapshot) {
-      this.#contextCompiler.linkToRun({
-        snapshotId: contextSnapshot.id,
-        taskId: this.context.taskId,
-        runId: this.runId,
-      });
-    }
-    for (const evidence of judgedReceipt?.evidence ?? []) {
-      this.addEvidence(evidence);
-    }
-    if (this.context.taskId) {
-      this.#tasks.update(this.context.taskId, {
-        status: judgedReceipt?.needsUser ? 'needs_user' : 'verifying',
-      });
-    }
-    updateExecutionReceipt({
-      runId: this.runId,
-      ...(this.contract ? { contract: this.contract } : {}),
-      evidence: this.#evidence,
-      nextAction: judgedReceipt?.nextAction ?? null,
-      needsUser: judgedReceipt?.needsUser ?? false,
-      contextTraceId: contextSnapshot?.id ?? this.context.contextTraceId ?? null,
+  finalize(input: { status: TaskRunReceipt['status']; summary: string }): void {
+    const run = this.#runs.get(this.runId);
+    if (!run || !['running', 'waiting', 'verifying'].includes(run.status)) return;
+    if (run.status === 'waiting' && this.#runs.listActiveWaits(run.taskId).length > 0) return;
+    this.#application.completeRun({
+      runId: run.id,
+      expectedRunVersion: run.version,
+      receipt: {
+        status: input.status,
+        summary: input.summary,
+        changes: this.#evidence.filter((item) => item.kind === 'state'),
+        evidence: this.#evidence,
+        verification: { status: 'unverified', checks: [] },
+        remainingWork: [],
+        needsUser: false,
+        completionVerdict: input.status === 'succeeded' ? 'achieved' : 'not_achieved',
+        ...(input.status === 'failed' ? { failure: { code: 'agent_run_failed', phase: 'execution', recoveryAction: 'Retry the task run' } } : {}),
+      },
     });
-    const task = completeExecutionReceipt({
-      runId: this.runId,
-      status: input.status,
-      summary: input.summary,
-    });
-    if (!task) return undefined;
-    const projected = this.#projection.project(task);
-    recordTaskContextFeedback(projected);
-    this.#onFinalized?.(projected);
-    return projected;
   }
 }

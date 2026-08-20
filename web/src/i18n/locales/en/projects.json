@@ -153,8 +153,11 @@
     "emptyTitle": "Nothing in progress yet",
     "emptyHint": "Start with a chat. Create a workspace when something grows into ongoing work.",
     "statuses": {
+      "planned": "Planned",
       "active": "Active",
       "paused": "Paused",
+      "completed": "Completed",
+      "cancelled": "Cancelled",
       "archived": "Archived"
     },
     "management": {
@@ -262,6 +265,10 @@
       "savingDigest": "Saving",
       "nextActions": "Next actions",
       "recentResults": "Recent results",
+      "milestones": "Milestones",
+      "noMilestones": "No milestones yet.",
+      "projectUpdates": "Project updates",
+      "noProjectUpdates": "No project updates yet.",
       "resultStatuses": {
         "running": "Running",
         "completed": "Achieved",
@@ -367,7 +374,7 @@
         "session.attached_to_project": "Session attached",
         "session.detached_from_project": "Session detached",
         "task.created": "Task created",
-        "task.status_changed": "Task status changed",
+        "task.phase_changed": "Task phase changed",
         "workflow_run.started": "System advancement started",
         "workflow_run.completed": "System advancement completed",
         "automation.run_started": "Automation run started",
@@ -501,8 +508,11 @@
       "instructions": "Agent working guidance",
       "instructionsHint": "Preferences, process rules, and boundaries the agent should follow in this project.",
       "statuses": {
+        "planned": "Planned",
         "active": "Active",
         "paused": "Paused",
+        "completed": "Completed",
+        "cancelled": "Cancelled",
         "archived": "Archived"
       },
       "deleteConfirm": "Delete project \"{{name}}\"? Sessions and tasks will be left unassigned.",
@@ -511,19 +521,17 @@
       "deleteConfirmAction": "Delete project"
     },
     "statuses": {
+      "planned": "planned",
       "active": "active",
       "paused": "paused",
-      "blocked": "blocked",
-      "needs_input": "needs input",
-      "done": "done",
+      "completed": "completed",
+      "cancelled": "cancelled",
       "archived": "archived",
       "queued": "queued",
       "running": "running",
-      "retry_waiting": "retry waiting",
       "succeeded": "succeeded",
       "failed": "failed",
       "timeout": "timed out",
-      "cancelled": "cancelled",
       "skipped": "skipped"
     }
   }

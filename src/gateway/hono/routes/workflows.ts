@@ -32,7 +32,7 @@ interface StartWorkflowRunRequestBody {
   input?: unknown;
   inputEnvelope?: WorkflowRunInputEnvelope;
   goal?: string;
-  taskId?: string;
+  taskRunId?: string;
   projectId?: string;
   agentId?: string;
   parentSessionKey?: string;
@@ -330,7 +330,7 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
     }
 
     const parentSessionKey = body.parentSessionKey?.trim() || undefined;
-    const taskId = body.taskId?.trim();
+    const taskRunId = body.taskRunId?.trim();
     const projectId = body.projectId?.trim();
     if (projectId && !service.projects.get(projectId)) {
       return c.json({ error: 'Project not found' }, 404);
@@ -347,7 +347,7 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
     const result = await workflowRunService.startWorkflowRun({
       agentId,
       definitionId,
-      taskId,
+      taskRunId,
       projectId,
       input: body.inputEnvelope ? undefined : body.input,
       inputEnvelope: body.inputEnvelope,

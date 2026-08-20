@@ -1,10 +1,12 @@
+import { createHash } from 'node:crypto';
+
 import { changedFieldsFromPatch, emitActivity, systemActivityActor, systemActivitySource } from '../activity/emitter.js';
 import { getSessionMetadata } from '../storage/sqlite/index.js';
 import { runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import type { ProactiveSignalPublisher } from '../proactive/events/publisher.js';
 import { ProjectStore } from './project-store.js';
 import { bindSessionToProject, listProjectSessionKeys, unbindSessionFromProject } from './session-bind.js';
-import type { CreateProjectInput, Project, ProjectListQuery, ProjectListResult, ProjectWithDetails, SidebarProjectListQuery, UpdateProjectInput } from './types.js';
+import type { CreateProjectInput, Project, ProjectHealth, ProjectListQuery, ProjectListResult, ProjectMilestone, ProjectUpdate, ProjectWithDetails, SidebarProjectListQuery, UpdateProjectInput } from './types.js';
 import {
   canonicalWorkspacePath,
   ensureWorkspaceDirectory,
@@ -205,6 +207,37 @@ export class ProjectService {
     return this.store.getWithDetails(id);
   }
 
+  listMilestones(projectId: string): ProjectMilestone[] {
+    return this.store.listMilestones(projectId);
+  }
+
+  createMilestone(projectId: string, input: Parameters<ProjectStore['createMilestone']>[1]): ProjectMilestone {
+    return this.store.createMilestone(projectId, input);
+  }
+
+  updateMilestone(projectId: string, milestoneId: string, input: Parameters<ProjectStore['updateMilestone']>[2]): ProjectMilestone {
+    return this.store.updateMilestone(projectId, milestoneId, input);
+  }
+
+  deleteMilestone(projectId: string, milestoneId: string): boolean {
+    return this.store.deleteMilestone(projectId, milestoneId);
+  }
+
+  listUpdates(projectId: string, limit?: number): ProjectUpdate[] {
+    return this.store.listUpdates(projectId, limit);
+  }
+
+  createUpdate(projectId: string, input: {
+    health: ProjectHealth;
+    summary: string;
+    progress?: string[];
+    risks?: string[];
+    nextSteps?: string[];
+    actor: Record<string, unknown>;
+  }): ProjectUpdate {
+    return this.store.createUpdate(projectId, input);
+  }
+
   attachSession(sessionKey: string, projectId: string): void {
     bindSessionToProject(sessionKey, projectId);
   }
@@ -247,4 +280,3 @@ export class ProjectService {
     return suggestions.sort((a, b) => b.score - a.score).slice(0, 5);
   }
 }
-import { createHash } from 'node:crypto';

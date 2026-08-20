@@ -135,10 +135,16 @@ export class InternalObjectContextProvider implements ContextProvider {
     const evidenceIds: string[] = [];
     for (const event of eventRows(input.eventIds)) {
       if (event.subject_kind === 'task') {
-        const task = db.prepare(`SELECT tasks.task_id, tasks.objective,
-          tasks.status, tasks.priority,
-          tasks.due_at, tasks.updated_at, tasks.agent_id,
-          tasks.next_action, tasks.blocked_reason FROM tasks
+        const task = db.prepare(`SELECT tasks.task_id, tasks.title, tasks.body,
+          tasks.phase, tasks.resolution, tasks.priority,
+          tasks.due_at, tasks.updated_at, tasks.delegate_agent_id,
+          (SELECT kind FROM task_waits
+            WHERE task_waits.task_id = tasks.task_id AND task_waits.status = 'active'
+            ORDER BY task_waits.created_at DESC LIMIT 1) AS wait_kind,
+          (SELECT reason FROM task_waits
+            WHERE task_waits.task_id = tasks.task_id AND task_waits.status = 'active'
+            ORDER BY task_waits.created_at DESC LIMIT 1) AS wait_reason
+          FROM tasks
           WHERE tasks.task_id = ?`)
           .get(event.subject_id) as Record<string, unknown> | undefined;
         if (task) {
@@ -222,16 +228,16 @@ export class MeetingWorkspaceContextProvider implements ContextProvider {
     const terms = [...new Set(title.toLocaleLowerCase().match(/[\p{L}\p{N}]{2,}/gu) ?? [])].slice(0, 6);
     if (terms.length === 0) return emptyContext();
     const db = getSqliteDatabase();
-    const taskMatches = terms.map(() => `LOWER(COALESCE(tasks.objective, '') || ' '
-      || COALESCE(tasks.next_action, '')) LIKE ?`).join(' OR ');
-    const tasks = db.prepare(`SELECT tasks.task_id, tasks.objective,
-      tasks.status, tasks.priority, tasks.due_at,
-      tasks.updated_at, tasks.next_action, tasks.blocked_reason, tasks.project_id
+    const taskMatches = terms.map(() => `LOWER(COALESCE(tasks.title, '') || ' '
+      || COALESCE(tasks.body, '')) LIKE ?`).join(' OR ');
+    const tasks = db.prepare(`SELECT tasks.task_id, tasks.title, tasks.body,
+      tasks.phase, tasks.resolution, tasks.priority, tasks.due_at,
+      tasks.updated_at, tasks.project_id
       FROM tasks
-      WHERE tasks.status NOT IN ('completed', 'cancelled')
-      AND tasks.agent_id = ? AND (${taskMatches})
+      WHERE tasks.phase <> 'closed'
+      AND COALESCE(tasks.delegate_agent_id, ?) = ? AND (${taskMatches})
       ORDER BY tasks.updated_at DESC LIMIT 10`)
-      .all(scope.agent_id ?? 'main', ...terms.map((term) => `%${term}%`)) as Array<Record<string, unknown>>;
+      .all(scope.agent_id ?? 'main', scope.agent_id ?? 'main', ...terms.map((term) => `%${term}%`)) as Array<Record<string, unknown>>;
     const noteMatches = terms.map(() => `LOWER(COALESCE(title, '') || ' ' || COALESCE(snippet, '')) LIKE ?`).join(' OR ');
     const notes = db.prepare(`SELECT note_id, title, kind, status, snippet, tags_json, task_due_at,
       unchecked_task_count, updated_at FROM notes WHERE status NOT IN ('archived', 'trashed')
@@ -263,11 +269,13 @@ export class ProjectStateContextProvider implements ContextProvider {
       WHERE e.event_id IN (${input.eventIds.map(() => '?').join(',')}) AND e.project_id IS NOT NULL ORDER BY e.occurred_at DESC LIMIT 1`)
       .get(...input.eventIds) as Record<string, unknown> | undefined;
     if (!project) return emptyContext();
-    const tasks = getSqliteDatabase().prepare(`SELECT task.task_id, task.objective,
-      task.status, task.priority, task.due_at, task.updated_at, task.next_action, task.blocked_reason
+    const tasks = getSqliteDatabase().prepare(`SELECT task.task_id, task.title, task.body,
+      task.phase, task.resolution, task.priority, task.due_at, task.updated_at
       FROM tasks task
-      WHERE task.project_id = ? AND task.status NOT IN ('completed', 'cancelled')
-      ORDER BY CASE task.status WHEN 'needs_user' THEN 0 WHEN 'blocked' THEN 1 ELSE 2 END,
+      WHERE task.project_id = ? AND task.phase <> 'closed'
+      ORDER BY CASE WHEN EXISTS (
+        SELECT 1 FROM task_waits wait WHERE wait.task_id = task.task_id AND wait.status = 'active'
+      ) THEN 0 ELSE 1 END,
         task.updated_at DESC LIMIT 100`).all(String(project.project_id));
     const projectEvidenceId = `project:${String(project.project_id)}`;
     const taskEvidenceIds = (tasks as Array<Record<string, unknown>>)

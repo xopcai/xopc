@@ -1,6 +1,7 @@
 import { getSessionMetadata, isXopcDatabaseOpen } from '../../storage/sqlite/index.js';
 import { sanitizeForPromptLiteral } from '../prompt/sanitize-for-prompt.js';
 import { TaskRepository } from '../../tasks/task-repository.js';
+import { TaskReadModelProjector } from '../../tasks/task-read-model-projector.js';
 
 import { buildActiveProjectContextForPrompt } from './project-context.js';
 
@@ -43,19 +44,16 @@ function bounded(value: string | undefined, max = MAX_OBJECTIVE_TEXT): string | 
 function taskObjective(sessionKey: string): ExecutionObjective | undefined {
   const task = new TaskRepository().getBySession(sessionKey);
   if (!task) return undefined;
-  const execution = task.execution;
   const contract = task.contract;
   return {
     kind: 'task',
     id: task.id,
-    title: task.objective,
-    objective: contract?.objective.trim() || task.objective,
-    status: task.status,
+    title: task.title,
+    objective: contract?.objective.trim() || task.title,
+    status: `${task.phase}/${new TaskReadModelProjector().project(task).operationalState}`,
     scopeBoundary: bounded(contract?.constraints.join('\n')),
     acceptanceCriteria: contract?.acceptanceCriteria.slice(0, MAX_CRITERIA) ?? [],
     expectedOutputs: contract?.expectedOutputs.slice(0, MAX_CRITERIA) ?? [],
-    nextAction: bounded(execution.nextAction),
-    blockedReason: bounded(execution.blockedReason),
   };
 }
 

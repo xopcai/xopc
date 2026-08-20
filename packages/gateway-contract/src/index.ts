@@ -1,5 +1,7 @@
 export * from './agent-sse.js';
 export * from './tasks.js';
+export * from './task-lifecycle.js';
+export * from './task-runs.js';
 export * from './product-delivery.js';
 export * from './project-monitoring.js';
 export * from './project-operating.js';

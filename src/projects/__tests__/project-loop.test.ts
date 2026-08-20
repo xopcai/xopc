@@ -30,8 +30,9 @@ const project: ProjectWithDetails = {
 function task(patch: Partial<ProjectTask>): ProjectTask {
   return {
     id: 'task-1',
-    objective: 'Ship Project Loop',
-    status: 'running',
+    title: 'Ship Project Loop',
+    phase: 'active',
+    operationalState: 'running',
     priority: 'normal',
     updatedAt: now,
     ...patch,
@@ -45,18 +46,18 @@ describe('buildProjectLoopOverview', () => {
       nowMs: now,
       staleAfterMs: 24 * 60 * 60 * 1000,
       tasks: [
-        task({ id: 'fresh', objective: 'Fresh task', nextAction: 'Keep shipping.', updatedAt: now }),
+        task({ id: 'fresh', title: 'Fresh task', attention: ['Keep shipping.'], updatedAt: now }),
         task({
           id: 'stale',
-          objective: 'Stale task',
-          nextAction: 'Needs review.',
+          title: 'Stale task',
+          attention: ['Needs review.'],
           updatedAt: now - 3 * 24 * 60 * 60 * 1000,
         }),
         task({
           id: 'blocked',
-          objective: 'Blocked task',
-          status: 'blocked',
-          blockedReason: 'Waiting for credentials.',
+          title: 'Blocked task',
+          operationalState: 'blocked',
+          attention: ['Waiting for credentials.'],
           updatedAt: now - 60 * 1000,
         }),
       ],

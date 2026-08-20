@@ -23,14 +23,17 @@ describe('tool_manual tool', () => {
     const text = textOf(result);
 
     expect(text).toContain('XOPC Use Tool Manual');
-    expect(text).toContain('note.preview_edit');
+    expect(text).toContain('preview_edit');
     expect(text).toContain('project');
-    expect(text).toContain('task.create');
+    expect(text).toContain('TaskRuns');
+    expect(text).toContain('expectedVersion');
     expect(text).toContain('update_dependencies');
-    expect(text).toContain('Scope And Tool Routing');
-    expect(text).toContain('Reliable Operation Protocol');
-    expect(text).toContain('Inspect the JSON body\'s `ok` field');
-    expect(text).toContain('Known Capability Gaps');
+    expect(text).toContain('Object routing');
+    expect(text).toContain('Reliable protocol');
+    expect(text).toContain('Inspect the returned JSON `ok` field');
+    expect(text).toContain('Deliberate boundaries');
+    expect(text).toContain('create_milestone');
+    expect(text).toContain('create_update');
     expect(text).toContain('`automation`');
     expect(text).toContain('`workflow`');
   });

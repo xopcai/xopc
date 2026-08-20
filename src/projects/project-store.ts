@@ -5,9 +5,12 @@ import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/
 import type {
   CreateProjectInput,
   Project,
+  ProjectHealth,
   ProjectListQuery,
   ProjectListResult,
+  ProjectMilestone,
   ProjectStatus,
+  ProjectUpdate,
   SidebarProjectListQuery,
   ProjectWithDetails,
   UpdateProjectInput,
@@ -23,6 +26,14 @@ export type ProjectRow = {
   workspace_root: string | null;
   brief: string | null;
   instructions: string | null;
+  outcome: string | null;
+  success_criteria_json: string;
+  scope_json: string;
+  non_goals_json: string;
+  health: string;
+  owner_id: string | null;
+  target_at: number | null;
+  version: number;
   created_at: number;
   updated_at: number;
   last_active_at: number | null;
@@ -52,6 +63,14 @@ function projectFromRow(row: ProjectRow): Project {
     workspaceRoot: row.workspace_root ?? undefined,
     brief: row.brief ?? undefined,
     instructions: row.instructions ?? undefined,
+    outcome: row.outcome ?? undefined,
+    successCriteria: JSON.parse(row.success_criteria_json) as string[],
+    scope: JSON.parse(row.scope_json) as Record<string, unknown>,
+    nonGoals: JSON.parse(row.non_goals_json) as string[],
+    health: row.health as Project['health'],
+    ownerId: row.owner_id ?? undefined,
+    targetAt: row.target_at ?? undefined,
+    version: row.version,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     lastActiveAt: row.last_active_at ?? undefined,
@@ -106,6 +125,9 @@ function projectFtsContent(project: Project): string {
     project.workspaceRoot,
     project.brief,
     project.instructions,
+    project.outcome,
+    ...project.successCriteria,
+    ...project.nonGoals,
     project.defaultAgentId,
   ]
     .filter((value): value is string => Boolean(value?.trim()))
@@ -124,6 +146,117 @@ function syncProjectFts(
 }
 
 export class ProjectStore {
+  listMilestones(projectId: string): ProjectMilestone[] {
+    const rows = getSqliteDatabase().prepare(
+      `SELECT * FROM project_milestones WHERE project_id = ? ORDER BY sort_order, created_at`,
+    ).all(projectId) as Array<Record<string, unknown>>;
+    return rows.map((row) => ({
+      id: String(row.milestone_id),
+      projectId: String(row.project_id),
+      title: String(row.title),
+      description: row.description == null ? undefined : String(row.description),
+      status: row.status as ProjectMilestone['status'],
+      targetAt: row.target_at == null ? undefined : Number(row.target_at),
+      sortOrder: Number(row.sort_order),
+      createdAt: Number(row.created_at),
+      updatedAt: Number(row.updated_at),
+    }));
+  }
+
+  createMilestone(projectId: string, input: {
+    title: string;
+    description?: string;
+    status?: ProjectMilestone['status'];
+    targetAt?: number;
+    sortOrder?: number;
+  }): ProjectMilestone {
+    if (!this.get(projectId)) throw new Error(`Project not found: ${projectId}`);
+    const title = normalizeName(input.title);
+    const now = Date.now();
+    const id = randomUUID();
+    getSqliteDatabase().prepare(
+      `INSERT INTO project_milestones
+        (milestone_id, project_id, title, description, status, target_at, sort_order, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(id, projectId, title, trimOptional(input.description) ?? null, input.status ?? 'planned',
+      input.targetAt ?? null, Math.floor(input.sortOrder ?? 0), now, now);
+    return this.listMilestones(projectId).find((item) => item.id === id)!;
+  }
+
+  updateMilestone(projectId: string, milestoneId: string, input: Partial<{
+    title: string;
+    description: string | null;
+    status: ProjectMilestone['status'];
+    targetAt: number | null;
+    sortOrder: number;
+  }>): ProjectMilestone {
+    const current = this.listMilestones(projectId).find((item) => item.id === milestoneId);
+    if (!current) throw new Error(`Milestone not found: ${milestoneId}`);
+    const next = {
+      ...current,
+      ...(input.title !== undefined ? { title: normalizeName(input.title) } : {}),
+      ...(input.description !== undefined ? { description: nullableText(input.description) ?? undefined } : {}),
+      ...(input.status !== undefined ? { status: input.status } : {}),
+      ...(input.targetAt !== undefined ? { targetAt: input.targetAt ?? undefined } : {}),
+      ...(input.sortOrder !== undefined ? { sortOrder: Math.floor(input.sortOrder) } : {}),
+      updatedAt: Date.now(),
+    };
+    getSqliteDatabase().prepare(
+      `UPDATE project_milestones SET title = ?, description = ?, status = ?, target_at = ?,
+        sort_order = ?, updated_at = ? WHERE milestone_id = ? AND project_id = ?`,
+    ).run(next.title, next.description ?? null, next.status, next.targetAt ?? null,
+      next.sortOrder, next.updatedAt, milestoneId, projectId);
+    return next;
+  }
+
+  deleteMilestone(projectId: string, milestoneId: string): boolean {
+    return getSqliteDatabase().prepare(
+      `DELETE FROM project_milestones WHERE milestone_id = ? AND project_id = ?`,
+    ).run(milestoneId, projectId).changes > 0;
+  }
+
+  listUpdates(projectId: string, limit = 20): ProjectUpdate[] {
+    const rows = getSqliteDatabase().prepare(
+      `SELECT * FROM project_updates WHERE project_id = ? ORDER BY created_at DESC LIMIT ?`,
+    ).all(projectId, clampLimit(limit, 20)) as Array<Record<string, unknown>>;
+    return rows.map((row) => ({
+      id: String(row.update_id),
+      projectId: String(row.project_id),
+      health: row.health as ProjectHealth,
+      summary: String(row.summary),
+      progress: JSON.parse(String(row.progress_json)) as string[],
+      risks: JSON.parse(String(row.risks_json)) as string[],
+      nextSteps: JSON.parse(String(row.next_steps_json)) as string[],
+      actor: JSON.parse(String(row.actor_json)) as Record<string, unknown>,
+      createdAt: Number(row.created_at),
+    }));
+  }
+
+  createUpdate(projectId: string, input: {
+    health: ProjectHealth;
+    summary: string;
+    progress?: string[];
+    risks?: string[];
+    nextSteps?: string[];
+    actor: Record<string, unknown>;
+  }): ProjectUpdate {
+    if (!this.get(projectId)) throw new Error(`Project not found: ${projectId}`);
+    const id = randomUUID();
+    const createdAt = Date.now();
+    const summary = normalizeName(input.summary);
+    runSqliteWriteTransaction((db) => {
+      db.prepare(
+        `INSERT INTO project_updates
+          (update_id, project_id, health, summary, progress_json, risks_json, next_steps_json, actor_json, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).run(id, projectId, input.health, summary, JSON.stringify(input.progress ?? []),
+        JSON.stringify(input.risks ?? []), JSON.stringify(input.nextSteps ?? []), JSON.stringify(input.actor), createdAt);
+      db.prepare(`UPDATE projects SET health = ?, updated_at = ?, version = version + 1 WHERE project_id = ?`)
+        .run(input.health, createdAt, projectId);
+    });
+    return this.listUpdates(projectId, 1)[0]!;
+  }
+
   create(input: CreateProjectInput): Project {
     const now = Date.now();
     const name = normalizeName(input.name);
@@ -138,6 +271,14 @@ export class ProjectStore {
       workspaceRoot: trimOptional(input.workspaceRoot),
       brief: trimOptional(input.brief),
       instructions: trimOptional(input.instructions),
+      outcome: trimOptional(input.outcome),
+      successCriteria: input.successCriteria?.map((item) => item.trim()).filter(Boolean) ?? [],
+      scope: input.scope ?? {},
+      nonGoals: input.nonGoals?.map((item) => item.trim()).filter(Boolean) ?? [],
+      health: input.health ?? 'unknown',
+      ownerId: trimOptional(input.ownerId),
+      targetAt: input.targetAt,
+      version: 1,
       createdAt: now,
       updatedAt: now,
       lastActiveAt: now,
@@ -148,8 +289,10 @@ export class ProjectStore {
       db.prepare(
         `INSERT INTO projects (
           project_id, name, slug, description, status, default_agent_id, workspace_root,
-          brief, instructions, created_at, updated_at, last_active_at, pinned_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          brief, instructions, outcome, success_criteria_json, scope_json, non_goals_json,
+          health, owner_id, target_at, version,
+          created_at, updated_at, last_active_at, pinned_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         project.id,
         project.name,
@@ -160,6 +303,14 @@ export class ProjectStore {
         project.workspaceRoot ?? null,
         project.brief ?? null,
         project.instructions ?? null,
+        project.outcome ?? null,
+        JSON.stringify(project.successCriteria),
+        JSON.stringify(project.scope),
+        JSON.stringify(project.nonGoals),
+        project.health,
+        project.ownerId ?? null,
+        project.targetAt ?? null,
+        project.version,
         project.createdAt,
         project.updatedAt,
         project.lastActiveAt ?? null,
@@ -282,15 +433,25 @@ export class ProjectStore {
       ...(input.workspaceRoot !== undefined ? { workspaceRoot: nullableText(input.workspaceRoot) ?? undefined } : {}),
       ...(input.brief !== undefined ? { brief: nullableText(input.brief) ?? undefined } : {}),
       ...(input.instructions !== undefined ? { instructions: nullableText(input.instructions) ?? undefined } : {}),
+      ...(input.outcome !== undefined ? { outcome: nullableText(input.outcome) ?? undefined } : {}),
+      ...(input.successCriteria !== undefined ? { successCriteria: input.successCriteria.map((item) => item.trim()).filter(Boolean) } : {}),
+      ...(input.scope !== undefined ? { scope: input.scope } : {}),
+      ...(input.nonGoals !== undefined ? { nonGoals: input.nonGoals.map((item) => item.trim()).filter(Boolean) } : {}),
+      ...(input.health !== undefined ? { health: input.health } : {}),
+      ...(input.ownerId !== undefined ? { ownerId: nullableText(input.ownerId) ?? undefined } : {}),
+      ...(input.targetAt !== undefined ? { targetAt: input.targetAt ?? undefined } : {}),
       ...(input.pinnedAt !== undefined ? { pinnedAt: input.pinnedAt ?? undefined } : {}),
       updatedAt: Date.now(),
+      version: before.version + 1,
     } satisfies Project;
 
     runSqliteWriteTransaction((db) => {
-      db.prepare(
+      const updated = db.prepare(
         `UPDATE projects SET
-          name = ?, description = ?, status = ?, default_agent_id = ?, workspace_root = ?, brief = ?, instructions = ?, pinned_at = ?, updated_at = ?
-         WHERE project_id = ?`,
+          name = ?, description = ?, status = ?, default_agent_id = ?, workspace_root = ?, brief = ?, instructions = ?,
+          outcome = ?, success_criteria_json = ?, scope_json = ?, non_goals_json = ?, health = ?, owner_id = ?, target_at = ?,
+          pinned_at = ?, updated_at = ?, version = ?
+         WHERE project_id = ? AND version = ?`,
       ).run(
         next.name,
         next.description ?? null,
@@ -299,10 +460,20 @@ export class ProjectStore {
         next.workspaceRoot ?? null,
         next.brief ?? null,
         next.instructions ?? null,
+        next.outcome ?? null,
+        JSON.stringify(next.successCriteria),
+        JSON.stringify(next.scope),
+        JSON.stringify(next.nonGoals),
+        next.health,
+        next.ownerId ?? null,
+        next.targetAt ?? null,
         next.pinnedAt ?? null,
         next.updatedAt,
+        next.version,
         id,
+        before.version,
       );
+      if (updated.changes !== 1) throw new Error(`Project update conflict: ${id}`);
       syncProjectFts(db, next);
     });
     return this.get(id)!;
@@ -333,7 +504,7 @@ export class ProjectStore {
   getActiveTaskCount(id: string): number {
     return (getSqliteDatabase()
       .prepare(`SELECT COUNT(*) AS total FROM tasks
-        WHERE project_id = ? AND status NOT IN ('completed', 'cancelled')`)
+        WHERE project_id = ? AND phase <> 'closed'`)
       .get(id) as { total: number }).total;
   }
 
@@ -372,6 +543,8 @@ export class ProjectStore {
       activeTaskCount: this.getActiveTaskCount(id),
       recentSessions: this.getRecentSessions(id),
       recentWorkflowRuns: this.getRecentWorkflowRuns(id),
+      milestones: this.listMilestones(id),
+      recentUpdates: this.listUpdates(id),
     };
   }
 

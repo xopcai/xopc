@@ -52,7 +52,7 @@ function bootstrapFreshDatabase(db: DatabaseSync): void {
 /**
  * Ensure schema_meta exists, apply baseline schema.sql on first open, then run pending migrations.
  */
-export function ensureXopcDatabaseSchema(db: DatabaseSync): void {
+export function ensureXopcDatabaseSchema(db: DatabaseSync, options: { databasePath?: string } = {}): void {
   ensureSchemaMetaTable(db);
 
   let currentVersion = readSchemaVersion(db);
@@ -61,5 +61,5 @@ export function ensureXopcDatabaseSchema(db: DatabaseSync): void {
     currentVersion = XOPC_DB_BASELINE_SCHEMA_VERSION;
   }
 
-  applyPendingMigrations(db, { targetVersion: XOPC_DB_SCHEMA_VERSION });
+  applyPendingMigrations(db, { targetVersion: XOPC_DB_SCHEMA_VERSION, databasePath: options.databasePath });
 }

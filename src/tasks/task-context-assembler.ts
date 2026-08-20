@@ -1,17 +1,21 @@
-import type { TaskContextManifest } from '@xopcai/gateway-contract';
-
-import {
-  getSessionMetadata,
-  isXopcDatabaseOpen,
-  listExecutionReceipts,
-} from '../storage/sqlite/index.js';
+import { getSessionMetadata, isXopcDatabaseOpen } from '../storage/sqlite/index.js';
+import { TaskContextRepository } from './task-context-repository.js';
 import { TaskRepository, type TaskAggregate } from './task-repository.js';
+import { TaskRunRepository } from './task-run-repository.js';
 
 export interface TaskContextAllocation {
   profile: 'standard' | 'deep' | 'critical';
   maxResults: number;
   maxChars: number;
   reason: string;
+}
+
+export interface TaskContextManifest {
+  taskId: string;
+  sources: Array<{ kind: string; id: string; description: string }>;
+  assumptions: string[];
+  unresolvedCriteria: string[];
+  allocation: 'deep' | 'critical';
 }
 
 export interface AssembledTaskContext {
@@ -21,102 +25,52 @@ export interface AssembledTaskContext {
   manifest?: TaskContextManifest;
 }
 
-type LatestExecutionReceipt = ReturnType<typeof listExecutionReceipts>[number];
-
 export interface TaskExecutionBrief {
   task: TaskAggregate;
   remainingCriteria: string[];
   allocation: TaskContextAllocation;
   manifest: TaskContextManifest;
-  latestReceipt?: LatestExecutionReceipt;
+  latestReceipt?: ReturnType<TaskRunRepository['getReceipt']>;
 }
 
 const STANDARD: TaskContextAllocation = {
-  profile: 'standard',
-  maxResults: 12,
-  maxChars: 12_000,
+  profile: 'standard', maxResults: 12, maxChars: 12_000,
   reason: 'No active task requires expanded context.',
 };
 
 function taskIdForSession(sessionKey: string): string | undefined {
   const value = getSessionMetadata(sessionKey)?.customData?.taskId;
-  if (typeof value !== 'string') return undefined;
-  return value.trim() || undefined;
-}
-
-function taskAllocation(
-  task: TaskAggregate,
-  latestReceipt: LatestExecutionReceipt | undefined,
-): TaskContextAllocation {
-  const contract = task.contract!;
-  const critical = task.priority === 'critical'
-    || contract.risks.length > 0
-    || contract.approvalRequired.length > 0;
-  if (critical) {
-    return {
-      profile: 'critical',
-      maxResults: 32,
-      maxChars: 64_000,
-      reason: 'The task contains material risk or approval boundaries.',
-    };
-  }
-  const running = task.status === 'running'
-    || latestReceipt?.completionVerdict === 'partial'
-    || latestReceipt?.completionVerdict === 'not_achieved';
-  return running
-    ? {
-        profile: 'deep',
-        maxResults: 24,
-        maxChars: 40_000,
-        reason: 'The task is running after incomplete or failed work.',
-      }
-    : {
-        profile: 'deep',
-        maxResults: 20,
-        maxChars: 32_000,
-        reason: 'An active task benefits from complete user and decision context.',
-      };
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
 export function getTaskExecutionBrief(taskId: string): TaskExecutionBrief | undefined {
   if (!isXopcDatabaseOpen()) return undefined;
   const task = new TaskRepository().get(taskId);
   if (!task?.contract) return undefined;
-  const latestReceipt = listExecutionReceipts({ taskId, limit: 1 })[0];
-  const remainingCriteria = latestReceipt?.verification.checks
-    .filter((check) => check.status !== 'passed')
-    .map((check) => check.criterion) ?? task.contract.acceptanceCriteria;
-  const allocation = taskAllocation(task, latestReceipt);
+  const runs = new TaskRunRepository();
+  const latestRun = runs.getLatestRoot(taskId);
+  const latestReceipt = latestRun ? runs.getReceipt(latestRun.id) : undefined;
+  const remainingCriteria = latestReceipt?.verification.checks.length
+    ? latestReceipt.verification.checks.filter((check) => check.status !== 'passed').map((check) => check.criterion)
+    : task.contract.acceptanceCriteria;
+  const critical = task.priority === 'critical' || task.contract.risks.length > 0
+    || task.contract.approvalRequired.length > 0;
+  const allocation: TaskContextAllocation = critical
+    ? { profile: 'critical', maxResults: 32, maxChars: 64_000, reason: 'Task risk or authority boundaries require full context.' }
+    : { profile: 'deep', maxResults: 20, maxChars: 32_000, reason: 'An active task benefits from complete context.' };
+  const edges = new TaskContextRepository().list(taskId);
   const manifest: TaskContextManifest = {
     taskId,
     sources: [
-      {
-        kind: 'task_contract',
-        id: `${taskId}:${task.contract.version}`,
-        description: 'Current task contract and completion criteria',
-      },
-      ...(latestReceipt ? [{
-        kind: 'execution_receipt' as const,
-        id: latestReceipt.runId,
-        description: 'Latest execution evidence and verification result',
-      }] : []),
-      ...(latestReceipt?.correctionText ? [{
-        kind: 'user_correction' as const,
-        id: latestReceipt.runId,
-        description: latestReceipt.correctionText,
-      }] : []),
+      { kind: 'task_contract', id: `${taskId}:${task.contract.version}`, description: 'Current task contract' },
+      ...edges.map((edge) => ({ kind: edge.targetKind, id: edge.targetId, description: edge.title ?? edge.role })),
+      ...(latestReceipt ? [{ kind: 'task_run_receipt', id: latestReceipt.runId, description: 'Latest run result' }] : []),
     ],
     assumptions: task.contract.assumptions,
     unresolvedCriteria: remainingCriteria,
-    allocation: allocation.profile === 'critical' ? 'critical' : 'deep',
+    allocation: critical ? 'critical' : 'deep',
   };
-  return {
-    task,
-    remainingCriteria,
-    allocation,
-    manifest,
-    ...(latestReceipt ? { latestReceipt } : {}),
-  };
+  return { task, remainingCriteria, allocation, manifest, ...(latestReceipt ? { latestReceipt } : {}) };
 }
 
 export function getTaskContextManifest(taskId: string): TaskContextManifest | undefined {
@@ -132,58 +86,30 @@ export function assembleTaskContext(sessionKey: string, userQuery: string): Asse
   if (!brief) return { taskId, retrievalQuery: query, allocation: STANDARD };
   const { task, latestReceipt, remainingCriteria, allocation, manifest } = brief;
   const contract = task.contract!;
-  const sections = [
-    query,
-    `Task: ${contract.objective}`,
-    task.execution.contextMessage?.text.trim()
-      ? `User-provided context: ${task.execution.contextMessage.text.trim()}`
-      : '',
+  const sections = [query, `Task: ${contract.objective}`,
     contract.expectedOutputs.length ? `Expected outputs: ${contract.expectedOutputs.join('; ')}` : '',
     remainingCriteria.length ? `Remaining acceptance criteria: ${remainingCriteria.join('; ')}` : '',
     contract.constraints.length ? `Constraints: ${contract.constraints.join('; ')}` : '',
-    contract.assumptions.length ? `Assumptions: ${contract.assumptions.join('; ')}` : '',
     contract.risks.length ? `Risks: ${contract.risks.join('; ')}` : '',
-    latestReceipt?.correctionText ? `User correction: ${latestReceipt.correctionText}` : '',
-    latestReceipt?.summary ? `Latest execution result: ${latestReceipt.summary}` : '',
-  ].filter(Boolean);
-  return {
-    taskId,
-    retrievalQuery: sections.join('\n'),
-    allocation,
-    ...(manifest ? { manifest } : {}),
-  };
+    latestReceipt?.summary ? `Latest run: ${latestReceipt.summary}` : ''].filter(Boolean);
+  return { taskId, retrievalQuery: sections.join('\n'), allocation, manifest };
 }
 
 export function buildTaskExecutionDirective(sessionKey: string): string {
-  if (!isXopcDatabaseOpen()) return '';
-  const taskId = taskIdForSession(sessionKey);
-  if (!taskId) return '';
-  const brief = getTaskExecutionBrief(taskId);
+  const taskId = isXopcDatabaseOpen() ? taskIdForSession(sessionKey) : undefined;
+  const brief = taskId ? getTaskExecutionBrief(taskId) : undefined;
   if (!brief) return '';
-  const { task, latestReceipt, remainingCriteria } = brief;
+  const { task, remainingCriteria } = brief;
   const contract = task.contract!;
-  const execution = task.execution;
-  const lines = [
+  return [
     '<xopc_task_execution>',
-    'This conversation is executing a durable user task, not merely discussing it.',
+    'This conversation is executing a durable task.',
     `Task: ${contract.objective}`,
     `Expected outputs: ${contract.expectedOutputs.join('; ')}`,
     `Remaining acceptance criteria: ${remainingCriteria.join('; ')}`,
-    execution.contextMessage?.text.trim() ? `User-provided context: ${execution.contextMessage.text.trim()}` : '',
     contract.constraints.length ? `Constraints: ${contract.constraints.join('; ')}` : '',
-    contract.approvalRequired.length
-      ? `Approval boundaries: ${contract.approvalRequired.join('; ')}`
-      : '',
-    execution.approvedBoundaries.length
-      ? `Already approved boundaries: ${execution.approvedBoundaries.join('; ')}`
-      : '',
-    latestReceipt?.correctionText ? `User correction: ${latestReceipt.correctionText}` : '',
-    latestReceipt?.summary ? `Latest result: ${latestReceipt.summary}` : '',
-    'Actively take all safe in-scope steps available. Prefer producing and verifying the result over explaining how to do it.',
-    'Choose the simplest sufficient capability: use direct tools for one-off work, workflows for repeatable multi-step orchestration, and automation only for recurring or event-driven work.',
-    'Do not claim completion without inspectable evidence for every acceptance criterion.',
-    'Ask the user only when a concrete missing decision, permission, or unavailable fact truly blocks progress. If blocked, state what is done, the blocker, your recommendation, and one decision needed.',
+    contract.approvalRequired.length ? `Authority required: ${contract.approvalRequired.join('; ')}` : '',
+    'Take safe in-scope steps and produce inspectable evidence. Do not claim completion without verification.',
     '</xopc_task_execution>',
-  ];
-  return lines.filter(Boolean).join('\n');
+  ].filter(Boolean).join('\n');
 }

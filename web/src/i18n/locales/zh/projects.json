@@ -153,8 +153,11 @@
     "emptyTitle": "还没有正在推进的事",
     "emptyHint": "先从一次对话开始；当事情需要持续推进时，再把它收进工作空间。",
     "statuses": {
+      "planned": "计划中",
       "active": "活跃",
       "paused": "已暂停",
+      "completed": "已完成",
+      "cancelled": "已取消",
       "archived": "已归档"
     },
     "management": {
@@ -262,6 +265,10 @@
       "savingDigest": "保存中",
       "nextActions": "下一步",
       "recentResults": "最近结果",
+      "milestones": "里程碑",
+      "noMilestones": "暂无里程碑。",
+      "projectUpdates": "项目更新",
+      "noProjectUpdates": "暂无项目更新。",
       "resultStatuses": {
         "running": "执行中",
         "completed": "已达成",
@@ -367,7 +374,7 @@
         "session.attached_to_project": "会话已绑定",
         "session.detached_from_project": "会话已解绑",
         "task.created": "任务已创建",
-        "task.status_changed": "任务状态已变更",
+        "task.phase_changed": "任务阶段已变更",
         "workflow_run.started": "系统推进已启动",
         "workflow_run.completed": "系统推进已完成",
         "automation.run_started": "自动化运行已启动",
@@ -501,8 +508,11 @@
       "instructions": "Agent 工作指引",
       "instructionsHint": "告诉 Agent 在这个项目中应遵守的偏好、流程和边界。",
       "statuses": {
+        "planned": "计划中",
         "active": "活跃",
         "paused": "已暂停",
+        "completed": "已完成",
+        "cancelled": "已取消",
         "archived": "已归档"
       },
       "deleteConfirm": "确定删除项目「{{name}}」？会话和任务会保留，但不再归属该项目。",
@@ -511,19 +521,17 @@
       "deleteConfirmAction": "删除项目"
     },
     "statuses": {
+      "planned": "计划中",
       "active": "活跃",
       "paused": "已暂停",
-      "blocked": "受阻",
-      "needs_input": "需要输入",
-      "done": "完成",
+      "completed": "已完成",
+      "cancelled": "已取消",
       "archived": "已归档",
       "queued": "排队中",
       "running": "运行中",
-      "retry_waiting": "等待重试",
       "succeeded": "已成功",
       "failed": "失败",
       "timeout": "已超时",
-      "cancelled": "已取消",
       "skipped": "已跳过"
     }
   }

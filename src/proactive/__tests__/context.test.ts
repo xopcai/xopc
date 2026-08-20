@@ -16,7 +16,7 @@ import {
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { ContextProviderRegistry } from '../execution/context.js';
 import { ProactiveEventService } from '../service.js';
-import { TaskExecutionService } from '../../tasks/index.js';
+import { defineTaskContract, TaskApplicationService } from '../../tasks/index.js';
 
 describe('proactive context resolver', () => {
   let stateDir: string;
@@ -138,12 +138,14 @@ describe('proactive context resolver', () => {
   });
 
   it('resolves internal objects and only referenceable user understanding as evidence', async () => {
-    const execution = new TaskExecutionService().create({
-      objective: 'Ship the proactive foundation', agentId: 'main', priority: 'high', source: 'api',
+    const created = new TaskApplicationService().create({
+      idempotencyKey: 'proactive-context-task',
+      title: 'Ship the proactive foundation', priority: 'high',
+      contract: { ...defineTaskContract('Ship the proactive foundation'), acceptancePolicy: 'verified_auto', outputDestinations: [] },
+      dependencies: [], context: [], authorityGrants: [], activation: { mode: 'capture', phase: 'backlog' },
     });
-    getSqliteDatabase().prepare(
-      `UPDATE tasks SET status = 'blocked' WHERE task_id = ?`,
-    ).run(execution.taskId);
+    if (!created.ok) throw new Error('Expected task');
+    const taskId = created.model.task.id;
     for (const [id, disclosurePolicy] of [
       ['memory-referenceable', 'referenceable'],
       ['memory-guarded', 'ask_before_reference'],
@@ -166,16 +168,16 @@ describe('proactive context resolver', () => {
     }
     const events = new ProactiveEventService(() => []);
     const event = events.publish({
-      type: 'task.status_changed.v1',
+      type: 'task.attention_required.v2',
       schemaVersion: 1,
       source: { kind: 'internal', id: 'tasks' },
-      subject: { kind: 'task', id: execution.taskId },
+      subject: { kind: 'task', id: taskId },
       actor: { kind: 'system' },
       scope: { workspaceId: '/workspace', agentId: 'main' },
       occurredAt: '2026-08-15T01:00:00.000Z',
-      dedupeKey: `${execution.taskId}:blocked`,
+      dedupeKey: `${taskId}:blocked`,
       sensitivity: 'personal',
-      payload: { status: 'blocked' },
+      payload: { reason: 'blocked' },
     }).event;
 
     const resolved = await new ContextProviderRegistry().collect('blocked_work', {
@@ -185,8 +187,8 @@ describe('proactive context resolver', () => {
     });
     expect(resolved.content.internal_objects).toMatchObject({
       objects: [expect.objectContaining({
-        evidenceId: `task:${execution.taskId}`,
-        objective: 'Ship the proactive foundation',
+        evidenceId: `task:${taskId}`,
+        title: 'Ship the proactive foundation',
       })],
     });
     expect(resolved.content.user_understanding).toMatchObject({
@@ -198,7 +200,7 @@ describe('proactive context resolver', () => {
     expect(JSON.stringify(resolved.content)).not.toContain('Do not reveal this.');
     expect(resolved.evidenceIds).toEqual(expect.arrayContaining([
       event.id,
-      `task:${execution.taskId}`,
+      `task:${taskId}`,
       'memory:memory-referenceable',
     ]));
   });

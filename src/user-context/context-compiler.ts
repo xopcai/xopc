@@ -11,7 +11,9 @@ import {
 export interface ContextSnapshot {
   id: string;
   traceId: string;
-  sessionKey: string;
+  ownerKind: 'session';
+  ownerId: string;
+  sessionKey?: string;
   query: string;
   selectedItems: UserContextPlan['items'];
   rejectedItems: UserContextPlan['rejected'];
@@ -19,15 +21,15 @@ export interface ContextSnapshot {
   relationshipPolicy: RelationshipSettings;
   estimatedTokens: number;
   allocation?: UserContextPlan['allocation'];
-  taskId?: string;
-  runId?: string;
   createdAt: number;
 }
 
 type ContextSnapshotRow = {
   snapshot_id: string;
   trace_id: string;
-  session_key: string;
+  owner_kind: 'session';
+  owner_id: string;
+  session_key: string | null;
   query: string;
   selected_items_json: string;
   rejected_items_json: string;
@@ -35,8 +37,6 @@ type ContextSnapshotRow = {
   relationship_policy_json: string;
   estimated_tokens: number;
   allocation_json: string | null;
-  task_id: string | null;
-  run_id: string | null;
   created_at: number;
 };
 
@@ -44,7 +44,9 @@ function fromRow(row: ContextSnapshotRow): ContextSnapshot {
   return {
     id: row.snapshot_id,
     traceId: row.trace_id,
-    sessionKey: row.session_key,
+    ownerKind: row.owner_kind,
+    ownerId: row.owner_id,
+    ...(row.session_key ? { sessionKey: row.session_key } : {}),
     query: row.query,
     selectedItems: JSON.parse(row.selected_items_json) as UserContextPlan['items'],
     rejectedItems: JSON.parse(row.rejected_items_json) as UserContextPlan['rejected'],
@@ -54,8 +56,6 @@ function fromRow(row: ContextSnapshotRow): ContextSnapshot {
     ...(row.allocation_json
       ? { allocation: JSON.parse(row.allocation_json) as UserContextPlan['allocation'] }
       : {}),
-    ...(row.task_id ? { taskId: row.task_id } : {}),
-    ...(row.run_id ? { runId: row.run_id } : {}),
     createdAt: row.created_at,
   };
 }
@@ -72,13 +72,14 @@ export class ContextCompiler {
     runSqliteWriteTransaction((db) => {
       db.prepare(
         `INSERT INTO context_snapshots (
-          snapshot_id, trace_id, session_key, query, selected_items_json,
+          snapshot_id, trace_id, owner_kind, owner_id, session_key, query, selected_items_json,
           rejected_items_json, consent_requests_json, relationship_policy_json,
           estimated_tokens, allocation_json, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, 'session', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         id,
         input.plan.traceId,
+        input.sessionKey,
         input.sessionKey,
         input.query.trim(),
         JSON.stringify(input.plan.items),
@@ -109,10 +110,4 @@ export class ContextCompiler {
     return row ? fromRow(row) : undefined;
   }
 
-  linkToRun(input: { snapshotId: string; taskId?: string; runId: string }): ContextSnapshot | undefined {
-    getSqliteDatabase().prepare(
-      `UPDATE context_snapshots SET task_id = ?, run_id = ? WHERE snapshot_id = ?`,
-    ).run(input.taskId ?? null, input.runId, input.snapshotId);
-    return this.get(input.snapshotId);
-  }
 }

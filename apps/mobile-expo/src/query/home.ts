@@ -1,6 +1,6 @@
 import {
   parseHomeResponse,
-  type TaskReceipt,
+  type TaskRunReceipt,
   type HomeResponse,
 } from '@xopcai/gateway-contract';
 
@@ -125,7 +125,7 @@ export interface HomeData {
     recent: HomeWorkflowRun[];
   };
   upcomingAutomations: HomeAutomation[];
-  recentTasks: TaskReceipt[];
+  recentTasks: TaskRunReceipt[];
   tasks: HomeResponse['tasks'];
 }
 

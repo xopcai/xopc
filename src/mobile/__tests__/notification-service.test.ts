@@ -4,9 +4,9 @@ import { mobileNotificationEventFromGatewayEvent } from '../notification-service
 
 describe('mobileNotificationEventFromGatewayEvent', () => {
   it('maps an input-needed task to its task detail', () => {
-    expect(mobileNotificationEventFromGatewayEvent('task.status.updated', {
-      task: { id: 'task-1', objective: 'Approve deployment' },
-      status: 'needs_user',
+    expect(mobileNotificationEventFromGatewayEvent('task.attention_required.v2', {
+      task: { id: 'task-1', title: 'Approve deployment' },
+      reason: 'user_input',
     })).toMatchObject({
       type: 'task.needs_input',
       entity: { kind: 'task', id: 'task-1' },
@@ -51,9 +51,10 @@ describe('mobileNotificationEventFromGatewayEvent', () => {
 
   it('ignores unrelated events and invalid status payloads', () => {
     expect(mobileNotificationEventFromGatewayEvent('session.updated', {})).toBeNull();
-    expect(mobileNotificationEventFromGatewayEvent('task.status.updated', {
+    expect(mobileNotificationEventFromGatewayEvent('task.phase_changed.v2', {
       taskId: 'task-1',
-      status: 'running',
+      from: 'ready',
+      to: 'active',
     })).toBeNull();
     expect(mobileNotificationEventFromGatewayEvent('automation.run.completed', {
       silent: true,

@@ -37,7 +37,7 @@ export function ProjectDetailScreen() {
   const projectId = firstParam(id);
   const configured = useGatewayConfigured();
   const { colors } = useTheme();
-  const { tasksPage: labels, homePage } = useMessages();
+  const { tasksPage: labels } = useMessages();
   const view = useQuery({ queryKey: queryKeys.projectOperatingView(projectId), queryFn: () => fetchProjectOperatingView(projectId), enabled: configured && !!projectId });
   if (view.isLoading || !view.data) return <View style={[styles.screen, styles.loading, { backgroundColor: colors.surface.base }]}><ActivityIndicator /></View>;
   return (
@@ -45,9 +45,9 @@ export function ProjectDetailScreen() {
       <NativeScreenHeader title={view.data.project.name} onBack={() => dismissOrHome(router)} rightActions={[{ icon: 'plus', onPress: () => router.push(`/tasks/create?projectId=${projectId}`), accessibilityLabel: labels.create }]} />
       <ScrollView contentContainerStyle={styles.list}>
         <View style={[styles.card, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}><Text style={[styles.cardTitle, { color: colors.text.primary }]}>{labels.projectPulse}</Text><Text style={{ color: colors.text.secondary }}>{view.data.digest.summary}</Text>{view.data.digest.recommendedAction ? <Text style={{ color: colors.accent.primary }}>{view.data.digest.recommendedAction}</Text> : null}</View>
-        {view.data.tasks.length ? <><Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{labels.tasks}</Text>{view.data.tasks.map((task) => <Pressable key={task.id} onPress={() => router.push(`/tasks/${task.id}`)} style={[styles.card, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}><Text style={[styles.cardTitle, { color: colors.text.primary }]}>{task.title}</Text><Text style={{ color: colors.accent.primary }}>{({ pending: homePage.taskStatusPending, planning: homePage.taskStatusPlanning, waiting_dependency: homePage.taskStatusWaitingDependency, running: homePage.taskStatusRunning, verifying: homePage.taskStatusVerifying, needs_user: homePage.taskStatusNeedsYou, blocked: homePage.taskStatusBlocked, paused: homePage.taskStatusPaused, completed: homePage.taskStatusCompleted, cancelled: homePage.taskStatusCancelled } as const)[task.status]}</Text>{task.blockedReason || task.nextAction ? <Text style={{ color: colors.text.secondary }}>{task.blockedReason || task.nextAction}</Text> : null}</Pressable>)}</> : null}
+        {view.data.tasks.length ? <><Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{labels.tasks}</Text>{view.data.tasks.map((task) => <Pressable key={task.id} onPress={() => router.push(`/tasks/${task.id}`)} style={[styles.card, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}><Text style={[styles.cardTitle, { color: colors.text.primary }]}>{task.title}</Text><Text style={{ color: colors.accent.primary }}>{task.phase} · {task.operationalState}</Text>{task.attention[0] ? <Text style={{ color: colors.text.secondary }}>{task.attention[0].summary}</Text> : null}</Pressable>)}</> : null}
         {view.data.blockers.length ? <><Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{labels.attention}</Text>{view.data.blockers.map((item) => <View key={item.id} style={[styles.card, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}><Text style={[styles.cardTitle, { color: colors.text.primary }]}>{item.title}</Text>{item.detail ? <Text style={{ color: colors.text.secondary }}>{item.detail}</Text> : null}</View>)}</> : null}
-        {view.data.recentReceipts.length ? <><Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{labels.recentResults}</Text>{view.data.recentReceipts.slice(0, 5).map((receipt) => <View key={receipt.runId} style={[styles.card, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}><Text style={[styles.cardTitle, { color: colors.text.primary }]}>{receipt.objective}</Text><Text style={{ color: colors.accent.primary }}>{receipt.status}</Text><Text style={{ color: colors.text.secondary }}>{receipt.summary}</Text></View>)}</> : null}
+        {view.data.recentReceipts.length ? <><Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{labels.recentResults}</Text>{view.data.recentReceipts.slice(0, 5).map((receipt) => <View key={receipt.runId} style={[styles.card, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}><Text style={[styles.cardTitle, { color: colors.text.primary }]}>{receipt.summary}</Text><Text style={{ color: colors.accent.primary }}>{receipt.status} · {receipt.verification.status}</Text></View>)}</> : null}
       </ScrollView>
     </View>
   );
@@ -73,12 +73,25 @@ export function CreateTaskScreen() {
   });
   const create = useMutation({
     mutationFn: () => createTask({
-      requestId,
-      mode: 'start',
-      objective: title.trim(),
+      idempotencyKey: requestId,
+      title: title.trim(),
       projectId: projectId || undefined,
-      dependsOnTaskIds,
-      attachments: [],
+      priority: 'normal',
+      contract: {
+        objective: title.trim(),
+        expectedOutputs: [],
+        acceptanceCriteria: [],
+        constraints: [],
+        approvalRequired: [],
+        assumptions: [],
+        risks: [],
+        acceptancePolicy: 'manual',
+        outputDestinations: [],
+      },
+      dependencies: dependsOnTaskIds,
+      context: [],
+      authorityGrants: [],
+      activation: { mode: 'start', executor: { kind: 'agent', agentId: 'main' } },
     }),
     onSuccess: async (created) => {
       const noteId = firstParam(params.noteId);
@@ -105,7 +118,7 @@ export function CreateTaskScreen() {
             <>
               <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{labels.dependencies}</Text>
               <Text style={[styles.help, { color: colors.text.secondary }]}>{labels.dependenciesDescription}</Text>
-              {(projectTasks.data?.tasks ?? []).filter((task) => task.status !== 'cancelled').map((task) => {
+              {(projectTasks.data?.tasks ?? []).filter((task) => task.phase !== 'closed').map((task) => {
                 const selected = dependsOnTaskIds.includes(task.id);
                 return (
                   <Pressable

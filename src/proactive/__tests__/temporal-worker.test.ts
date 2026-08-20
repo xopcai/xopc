@@ -17,7 +17,7 @@ import { ContextProviderRegistry } from '../execution/context.js';
 import { ProactiveScenarioService } from '../scenarios/service.js';
 import { ProactiveEventService } from '../service.js';
 import { ProactiveTemporalWorker } from '../temporal/worker.js';
-import { TaskExecutionService } from '../../tasks/index.js';
+import { defineTaskContract, TaskApplicationService } from '../../tasks/index.js';
 
 describe('proactive temporal worker', () => {
   let stateDir: string;
@@ -81,9 +81,14 @@ describe('proactive temporal worker', () => {
       allowedScenarioKeys: ['meeting_preparation'],
     });
     storeMeeting('2026-08-15T12:00:00.000Z');
-    const execution = new TaskExecutionService().create({
-      objective: 'Prepare launch decision', agentId: 'main', priority: 'high', source: 'api',
+    const created = new TaskApplicationService().create({
+      idempotencyKey: 'meeting-preparation-task',
+      title: 'Prepare launch decision', priority: 'high', delegateAgentId: 'main',
+      contract: { ...defineTaskContract('Prepare launch decision'), acceptancePolicy: 'verified_auto', outputDestinations: [] },
+      dependencies: [], context: [], authorityGrants: [], activation: { mode: 'capture', phase: 'ready' },
     });
+    if (!created.ok) throw new Error('Expected task');
+    const taskId = created.model.task.id;
     const insertNote = getSqliteDatabase().prepare(`INSERT INTO notes (
       note_id, title, kind, status, payload_json, snippet, created_at, updated_at
     ) VALUES (?, ?, 'markdown', 'processed', '{}', ?, ?, ?)`);
@@ -112,12 +117,12 @@ describe('proactive temporal worker', () => {
     });
     expect(context.content.meeting_workspace).toMatchObject({
       activeTasks: [expect.objectContaining({
-        evidenceId: `task:${execution.taskId}`,
-        objective: 'Prepare launch decision',
+        evidenceId: `task:${taskId}`,
+        title: 'Prepare launch decision',
       })],
       recentNotes: [expect.objectContaining({ evidenceId: 'note:note-launch' })],
     });
-    expect(context.evidenceIds).toContain(`task:${execution.taskId}`);
+    expect(context.evidenceIds).toContain(`task:${taskId}`);
     expect(JSON.stringify(context.content.meeting_workspace)).not.toContain('Private unrelated detail');
   });
 

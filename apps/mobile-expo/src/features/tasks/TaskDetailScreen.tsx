@@ -6,12 +6,9 @@ import { Button, Icon, Text } from 'react-native-paper';
 import { ListSkeleton } from '../../components/ListSkeleton';
 import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { useMessages } from '../../i18n/messages';
-import { actOnTask, fetchTask } from '../../query/tasks';
+import { commandTask, fetchTask } from '../../query/tasks';
 import { queryKeys } from '../../query/keys';
 import { radii, spacing, typography, useTheme } from '../../theme';
-
-const TERMINAL_TASK_STATUSES = new Set(['completed', 'cancelled']);
-const RESUMABLE_TASK_STATUSES = new Set(['paused', 'needs_user', 'blocked']);
 
 export function TaskDetailScreen() {
   const router = useRouter();
@@ -24,31 +21,21 @@ export function TaskDetailScreen() {
     queryFn: () => fetchTask(id),
     enabled: Boolean(id),
   });
-  const action = useMutation({
-    mutationFn: (value: 'run' | 'pause' | 'resume' | 'cancel') => actOnTask(
-      id,
-      value,
-      query.data?.task.updatedAt ?? 0,
-      value === 'run' || value === 'resume'
-        ? query.data?.task.contract?.approvalRequired
-        : undefined,
+  const command = useMutation({
+    mutationFn: (value: import('@xopcai/gateway-contract').TaskCommand) => commandTask(
+      id, value, query.data?.task.version ?? 0,
     ),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.task(id) }),
   });
 
-  const statusLabels = {
-    pending: hm.taskStatusPending,
-    planning: hm.taskStatusPlanning,
-    waiting_dependency: hm.taskStatusWaitingDependency,
-    running: hm.taskStatusRunning,
-    verifying: hm.taskStatusVerifying,
-    needs_user: hm.taskStatusNeedsYou,
-    blocked: hm.taskStatusBlocked,
-    paused: hm.taskStatusPaused,
-    completed: hm.taskStatusCompleted,
-    cancelled: hm.taskStatusCancelled,
+  const phaseLabels = {
+    backlog: hm.taskStatusPending,
+    ready: hm.taskStatusPlanning,
+    active: hm.taskStatusRunning,
+    review: hm.taskStatusVerifying,
+    closed: hm.taskStatusCompleted,
   } as const;
-  const statusLabel = query.data ? statusLabels[query.data.task.status] : '';
+  const phaseLabel = query.data ? phaseLabels[query.data.task.phase] : '';
   const verificationLabels = {
     passed: hm.verificationPassed,
     failed: hm.verificationFailed,
@@ -57,37 +44,38 @@ export function TaskDetailScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
-      <NativeScreenHeader title={query.data?.task.objective ?? ''} onBack={() => router.back()} />
+      <NativeScreenHeader title={query.data?.task.title ?? ''} onBack={() => router.back()} />
       <ScrollView contentContainerStyle={styles.content}>
         {query.isLoading ? <ListSkeleton count={3} /> : query.isError || !query.data ? (
           <Text style={[styles.empty, { color: colors.semantic.error }]}>{hm.taskLoadFailed}</Text>
         ) : (
           <>
             <View style={[styles.card, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}>
-              <Text style={[styles.eyebrow, { color: colors.accent.primary }]}>{statusLabel}</Text>
-              <Text style={[styles.title, { color: colors.text.primary }]}>{query.data.task.objective}</Text>
-              {!TERMINAL_TASK_STATUSES.has(query.data.task.status) ? (
+              <Text style={[styles.eyebrow, { color: colors.accent.primary }]}>{phaseLabel} · {query.data.operationalState}</Text>
+              <Text style={[styles.title, { color: colors.text.primary }]}>{query.data.task.title}</Text>
+              {query.data.task.body ? <Text style={[styles.body, { color: colors.text.secondary }]}>{query.data.task.body}</Text> : null}
+              {query.data.task.phase !== 'closed' ? (
                 <View style={styles.actions}>
-                  {RESUMABLE_TASK_STATUSES.has(query.data.task.status) ? (
-                    <Button mode="contained" disabled={action.isPending} onPress={() => action.mutate('resume')}>
+                  {query.data.waits.length > 0 ? (
+                    <Button mode="contained" disabled={command.isPending} onPress={() => command.mutate({ type: 'resolve_wait', waitId: query.data!.waits[0]!.id })}>
                       {hm.taskResume}
                     </Button>
-                  ) : query.data.task.status === 'pending' ? (
-                    <Button mode="contained" disabled={action.isPending} onPress={() => action.mutate('run')}>
+                  ) : query.data.allowedCommands.includes('start') ? (
+                    <Button mode="contained" disabled={command.isPending} onPress={() => command.mutate({ type: 'start', executor: { kind: 'agent', agentId: query.data!.task.delegateAgentId ?? 'main' } })}>
                       {hm.taskRun}
                     </Button>
-                  ) : query.data.task.status !== 'waiting_dependency' ? (
-                    <Button mode="outlined" disabled={action.isPending} onPress={() => action.mutate('pause')}>
+                  ) : query.data.allowedCommands.includes('add_wait') ? (
+                    <Button mode="outlined" disabled={command.isPending} onPress={() => command.mutate({ type: 'add_wait', wait: { kind: 'paused', reason: 'Paused by user', condition: {} } })}>
                       {hm.taskPause}
                     </Button>
                   ) : null}
-                  <Button mode="text" disabled={action.isPending} onPress={() => action.mutate('cancel')}>
+                  <Button mode="text" disabled={command.isPending} onPress={() => command.mutate({ type: 'close', resolution: 'cancelled' })}>
                     {hm.taskCancel}
                   </Button>
                 </View>
               ) : null}
-              {action.isError ? <Text style={[styles.meta, { color: colors.semantic.error }]}>{hm.taskActionFailed}</Text> : null}
-              {query.data.nextCheckAt ? <Text style={[styles.meta, { color: colors.accent.primary }]}>{hm.taskNextCheck}: {new Date(query.data.nextCheckAt).toLocaleString()}</Text> : null}
+              {command.isError ? <Text style={[styles.meta, { color: colors.semantic.error }]}>{hm.taskActionFailed}</Text> : null}
+              {query.data.task.dueAt ? <Text style={[styles.meta, { color: colors.accent.primary }]}>{hm.taskNextCheck}: {new Date(query.data.task.dueAt).toLocaleString()}</Text> : null}
             </View>
 
             {query.data.dependencies.length > 0 || query.data.dependents.length > 0 ? (
@@ -95,29 +83,19 @@ export function TaskDetailScreen() {
                 <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{hm.taskRelations}</Text>
                 {query.data.dependencies.length > 0 ? <Text style={[styles.subheading, { color: colors.text.secondary }]}>{hm.taskDependencies}</Text> : null}
                 {query.data.dependencies.map((dependency) => (
-                  <Text key={dependency.id} onPress={() => router.push(`/tasks/${dependency.id}`)} style={[styles.body, { color: colors.accent.primary }]}>• {dependency.objective} · {statusLabels[dependency.status]}</Text>
+                  <Text key={dependency.id} onPress={() => router.push(`/tasks/${dependency.id}`)} style={[styles.body, { color: colors.accent.primary }]}>• {dependency.title} · {phaseLabels[dependency.phase]}</Text>
                 ))}
                 {query.data.dependents.length > 0 ? <Text style={[styles.subheading, { color: colors.text.secondary }]}>{hm.taskDependents}</Text> : null}
                 {query.data.dependents.map((dependent) => (
-                  <Text key={dependent.id} onPress={() => router.push(`/tasks/${dependent.id}`)} style={[styles.body, { color: colors.accent.primary }]}>• {dependent.objective} · {statusLabels[dependent.status]}</Text>
+                  <Text key={dependent.id} onPress={() => router.push(`/tasks/${dependent.id}`)} style={[styles.body, { color: colors.accent.primary }]}>• {dependent.title} · {phaseLabels[dependent.phase]}</Text>
                 ))}
               </View>
             ) : null}
 
-            {query.data.progress ? (
+            {query.data.attention.length > 0 ? (
               <View style={[styles.card, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}>
-                <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{hm.taskCurrentPlan} · {query.data.progress.completed}/{query.data.progress.total}</Text>
-                {query.data.progress.items.map((item) => (
-                  <View key={item.id} style={styles.row}>
-                    <Icon source={item.status === 'completed' ? 'check-circle' : item.status === 'in_progress' ? 'progress-clock' : 'circle-outline'} size={18} color={item.status === 'completed' ? colors.semantic.success : colors.accent.primary} />
-                    <Text style={[styles.body, styles.rowText, { color: colors.text.primary }]}>{item.title}</Text>
-                  </View>
-                ))}
-                {query.data.attention ? <Text style={[styles.body, { color: colors.semantic.warning }]}>{query.data.attention.summary}</Text> : null}
-              </View>
-            ) : query.data.attention ? (
-              <View style={[styles.card, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}>
-                <Text style={[styles.body, { color: colors.semantic.warning }]}>{query.data.attention.summary}</Text>
+                <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{hm.taskCurrentPlan}</Text>
+                {query.data.attention.map((item, index) => <Text key={`${item.kind}-${index}`} style={[styles.body, { color: colors.semantic.warning }]}>{item.summary}</Text>)}
               </View>
             ) : null}
 

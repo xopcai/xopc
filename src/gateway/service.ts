@@ -60,13 +60,13 @@ import { MobileNotificationService } from '../mobile/notification-service.js';
 import { ProjectService } from '../projects/index.js';
 import { LocalAppService } from '../local-apps/index.js';
 import {
-  TaskController,
   TaskRepository,
-  TaskProjectionService,
-  TaskPreparationService,
-  TaskRunner,
-  type EnqueueTaskOptions,
+  TaskApplicationService,
+  TaskOutboxDispatcher,
 } from '../tasks/index.js';
+import { TaskContextRepository } from '../tasks/task-context-repository.js';
+import { TaskRunDispatcher } from '../tasks/task-run-dispatcher.js';
+import { TaskSignalService } from '../tasks/task-signal-service.js';
 import { createRuntimeBrowserRecipeService, type BrowserRecipeService } from '../browser/recipes/index.js';
 import {
   ReadonlyProactiveAgentExecutor,
@@ -194,7 +194,8 @@ export class GatewayService {
   private startupTrace: GatewayStartupTrace | null = null;
   private workflowSessionBridge: WorkflowSessionBridge | null = null;
   private workflowRunServiceInstance: WorkflowRunService | null = null;
-  private taskRunner: TaskRunner | null = null;
+  private taskRunDispatcher: TaskRunDispatcher | null = null;
+  private taskRunDispatchTimer: ReturnType<typeof setInterval> | null = null;
   private mobileNotifications: MobileNotificationService | null = null;
   private connectorSupervisor: ConnectorSupervisor | null = null;
   private connectorLearningCoordinator: ConnectorLearningCoordinator | null = null;
@@ -423,15 +424,6 @@ export class GatewayService {
       getChannelManager: () => this.channelManager,
       getConfig: () => this.config,
       emit: (type, payload) => this.sse.emit(type, payload),
-      onTaskFinalized: (receipt) => {
-        try {
-          new TaskController({
-            enqueue: (taskId, options) => this.enqueueTask(taskId, options),
-          }).handleCompletedRun(receipt);
-        } catch (err) {
-          log.warn({ err, taskId: receipt.context.taskId, runId: receipt.runId }, 'Task continuation could not be queued');
-        }
-      },
     });
 
     this.sessions = new GatewaySessionsApi({
@@ -509,7 +501,7 @@ export class GatewayService {
       getNotesService: () => this.notesService,
       getProjectService: () => this.projects,
       getLocalAppService: () => this.localApps,
-      enqueueTask: (taskId, options) => this.enqueueTask(taskId, options),
+      dispatchTaskRuns: () => this.dispatchTaskRuns(),
       getWorkflowRunService: () => this.createWorkflowRunService(),
       sourceContextResolver: async (binding) => {
         if (binding.kind === 'note') {
@@ -547,6 +539,17 @@ export class GatewayService {
       getProjectWorkspaceRoot: (projectId) => this.projects.get(projectId)?.workspaceRoot,
       workflowRunService: this.createWorkflowRunService(),
       browserRecipeService: this.browserRecipes,
+      executeTaskCommand: ({ taskId, idempotencyKey, command }) => {
+        const task = new TaskRepository().get(taskId);
+        if (!task) return { ok: false, reason: 'not_found' };
+        const result = new TaskApplicationService().execute({
+          taskId, idempotencyKey, expectedVersion: task.version, command,
+          actor: { kind: 'system', id: 'automation' },
+        });
+        if (result.ok && result.runId) this.dispatchTaskRuns();
+        if (result.ok === false) return { ok: false, reason: result.reason };
+        return { ok: true, ...(result.runId ? { runId: result.runId } : {}) };
+      },
       onRunCompleted: (run) => this.handleAutomationRunCompleted(run),
     });
 
@@ -568,15 +571,13 @@ export class GatewayService {
 
   // ── Webchat agent runner (delegated to GatewayAgentRunner) ────────────
 
-  private createTaskRunner(): TaskRunner {
-    if (!this.taskRunner) {
-      this.taskRunner = new TaskRunner({
-        maxConcurrent: 1,
-        defaultMaxRetries: 2,
-        ensureSession: async (taskId, execution, executionContext) => {
-          const existing = execution.activeSessionKey?.trim();
-          if (existing) return existing;
-          const agentId = execution.agentId || getDefaultAgentId(this.config);
+  private createTaskRunDispatcher(): TaskRunDispatcher {
+    if (!this.taskRunDispatcher) {
+      this.taskRunDispatcher = new TaskRunDispatcher({
+        workerId: 'gateway-agent',
+        ensureSession: async (taskId, runId, requestedAgentId) => {
+          const task = new TaskRepository().require(taskId);
+          const agentId = requestedAgentId || task.delegateAgentId || getDefaultAgentId(this.config);
           const peerId = `task-${sanitizeSegment(taskId) || Date.now()}`;
           const sessionKey = buildSessionKey({
             agentId,
@@ -585,8 +586,8 @@ export class GatewayService {
             peerKind: 'direct',
             peerId,
           });
-          await this.sessionIndex.saveMessages(sessionKey, [], {
-            metadata: {
+          if (!await this.sessionIndex.getSessionMetadata(sessionKey)) {
+            await this.sessionIndex.saveMessages(sessionKey, [], { metadata: {
               sourceChannel: 'webchat',
               sourceChatId: `default:direct:${peerId}`,
               sessionType: 'chat',
@@ -597,49 +598,26 @@ export class GatewayService {
                 peerKind: 'direct',
                 peerId,
               },
-              projectId: execution.projectId,
+              projectId: task.projectId,
               customData: {
                 taskId,
                 origin: 'task',
-                triggerKind: executionContext?.triggerKind ?? 'user',
-                ...(executionContext?.contextTraceId ? { contextTraceId: executionContext.contextTraceId } : {}),
-                ...(executionContext?.parentRunId ? { parentRunId: executionContext.parentRunId } : {}),
-                ...(executionContext?.strategy ? { strategy: executionContext.strategy } : {}),
+                triggerKind: 'user',
+                taskRunId: runId,
               },
-            },
-          });
-          if (execution.projectId) {
-            this.projects.attachSession(sessionKey, execution.projectId);
+            } });
           }
-          new TaskRepository().update(taskId, { activeSessionKey: sessionKey });
+          if (task.projectId) this.projects.attachSession(sessionKey, task.projectId);
+          new TaskContextRepository().linkSession({ taskId, sessionKey, role: 'execution' });
           return sessionKey;
         },
-        bindExecutionContext: async (sessionKey, taskId, execution, executionContext) => {
-          const metadata = await this.sessionIndex.getSessionMetadata(sessionKey);
-          await this.sessionIndex.updateSessionMetadata(sessionKey, {
-            projectId: execution.projectId ?? metadata?.projectId,
-            customData: {
-              ...metadata?.customData,
-              taskId,
-              origin: 'task',
-              triggerKind: executionContext?.triggerKind ?? 'user',
-              ...(executionContext?.contextTraceId ? { contextTraceId: executionContext.contextTraceId } : {}),
-              ...(executionContext?.parentRunId ? { parentRunId: executionContext.parentRunId } : {}),
-              ...(executionContext?.strategy ? { strategy: executionContext.strategy } : {}),
-            },
-          });
+        runAgent: async (runId, sessionKey, message) => {
+          const stream = this.agentRunner.runAgent(message, 'webchat', sessionKey, undefined, undefined, { runId });
+          while (!(await stream.next()).done) { /* streamed through SSE */ }
         },
-        prepareTask: (taskId) => new TaskPreparationService({
-          getConfig: () => this.config,
-          projects: this.projects,
-        }).prepare(taskId),
-        hasActiveRun: (sessionKey) => this.agentRunner.hasActiveRun(sessionKey),
-        runTurn: (sessionKey, userTurn) =>
-          this.agentRunner.runScheduledWebchatTurn(sessionKey, userTurn),
-        emit: (type, payload) => this.emit(type, payload),
       });
     }
-    return this.taskRunner;
+    return this.taskRunDispatcher;
   }
 
   private createMobileNotificationService(): MobileNotificationService {
@@ -649,12 +627,11 @@ export class GatewayService {
     return this.mobileNotifications;
   }
 
-  enqueueTask(taskId: string, options?: EnqueueTaskOptions) {
-    return this.createTaskRunner().enqueue(taskId, options);
-  }
-
-  getTaskQueueSnapshot() {
-    return this.createTaskRunner().snapshot();
+  dispatchTaskRuns(): void {
+    new TaskSignalService().tick();
+    new TaskOutboxDispatcher(publishAutomationProductEvent).drain();
+    this.createTaskRunDispatcher().dispatch();
+    void this.createWorkflowRunService().dispatchTaskRuns();
   }
 
   runAgent(
@@ -846,9 +823,10 @@ export class GatewayService {
 
     log.debug('Starting gateway service...');
     openXopcDatabase();
-    new TaskProjectionService().reconcile();
     this.startTime = Date.now();
     this.running = true;
+    this.taskRunDispatchTimer = setInterval(() => this.dispatchTaskRuns(), 1_000);
+    this.taskRunDispatchTimer.unref?.();
     this.ensureDefaultProactiveScenarioSubscriptions();
     this.proactiveWorker.start();
     this.proactiveTemporalWorker.start();
@@ -969,6 +947,17 @@ export class GatewayService {
       getDefaultAgentId: () => getDefaultAgentId(this.config),
       workflowRunService: this.createWorkflowRunService(),
       browserRecipeService: this.browserRecipes,
+      executeTaskCommand: ({ taskId, idempotencyKey, command }) => {
+        const task = new TaskRepository().get(taskId);
+        if (!task) return { ok: false, reason: 'not_found' };
+        const result = new TaskApplicationService().execute({
+          taskId, idempotencyKey, expectedVersion: task.version, command,
+          actor: { kind: 'system', id: 'automation' },
+        });
+        if (result.ok && result.runId) this.dispatchTaskRuns();
+        if (result.ok === false) return { ok: false, reason: result.reason };
+        return { ok: true, ...(result.runId ? { runId: result.runId } : {}) };
+      },
       onRunCompleted: (run) => this.handleAutomationRunCompleted(run),
     });
     this.startAutomationProductEventBridge();
@@ -1198,6 +1187,10 @@ export class GatewayService {
     await this.discussionLiveWorker.stop();
     this.proactiveTemporalWorker.stop();
     await this.proactiveInboxWorker.stop();
+    if (this.taskRunDispatchTimer) {
+      clearInterval(this.taskRunDispatchTimer);
+      this.taskRunDispatchTimer = null;
+    }
 
     await stopTailscaleExposure().catch((err) => {
       log.warn({ err }, 'Tailscale exposure shutdown failed');
@@ -1766,7 +1759,7 @@ export class GatewayService {
     this.stopAutomationProductEventBridge?.();
     this.stopSessionTranscriptAutomationEvents?.();
     this.stopAutomationProductEventBridge = onAutomationProductEvent((event) => {
-      if (event.type === 'task.created' || event.type === 'task.status_changed') {
+      if (event.type.startsWith('task.')) {
         this.sse.emit(event.type, event.payload);
       }
       const proactiveEvent = mapProductEventToProactive({

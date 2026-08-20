@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Task, TaskReceipt } from '@xopcai/gateway-contract';
+import type { Task, TaskRunReceipt } from '@xopcai/gateway-contract';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
@@ -321,11 +321,7 @@ export function WorkspaceHomeScreen() {
             />
             <TaskSection
               items={home.recentTasks.slice(0, 3)}
-              onOpen={(receipt) => receipt.taskId
-                ? router.push(`/tasks/${receipt.taskId}`)
-                : receipt.projectId
-                ? router.push(`/projects/${receipt.projectId}`)
-                : router.push(`/chat/${receipt.sessionKey}`)}
+              onOpen={() => router.push('/tasks')}
             />
             <ContinueSection items={continueItems} />
             <LibrarySection
@@ -622,7 +618,7 @@ function TaskProgressSection({
           <Pressable key={item.id} style={styles.listRow} onPress={() => onOpen(item)} accessibilityRole="button">
             <Icon source={icon} size={20} color={colors.accent.primary} />
             <View style={styles.rowCopy}>
-              <Text numberOfLines={2} style={[styles.rowTitle, { color: colors.text.primary }]}>{item.objective}</Text>
+              <Text numberOfLines={2} style={[styles.rowTitle, { color: colors.text.primary }]}>{item.title}</Text>
               <Text style={[styles.rowSubtitle, { color: colors.text.tertiary }]}>{statusLabel}</Text>
             </View>
             <Icon source="chevron-right" size={18} color={colors.text.tertiary} />
@@ -638,8 +634,8 @@ function TaskSection({
   items,
   onOpen,
 }: {
-  items: TaskReceipt[];
-  onOpen: (receipt: TaskReceipt) => void;
+  items: TaskRunReceipt[];
+  onOpen: (receipt: TaskRunReceipt) => void;
 }) {
   const { colors } = useTheme();
   const { homePage: hm } = useMessages();
@@ -651,7 +647,7 @@ function TaskSection({
           <Pressable key={item.runId} style={styles.listRow} onPress={() => onOpen(item)} accessibilityRole="button">
             <Icon source="check-circle-outline" size={20} color={colors.semantic.success} />
             <View style={styles.rowCopy}>
-              <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text.primary }]}>{item.objective}</Text>
+              <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text.primary }]}>{item.summary}</Text>
               <Text numberOfLines={2} style={[styles.rowSubtitle, { color: colors.text.secondary }]}>{item.summary}</Text>
             </View>
             <Icon source="chevron-right" size={18} color={colors.text.tertiary} />

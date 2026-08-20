@@ -3,7 +3,32 @@ import { ProjectOperatingViewSchema, type ProjectOperatingView } from '@xopcai/g
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
-export type ProjectStatus = 'active' | 'paused' | 'archived';
+export type ProjectStatus = 'planned' | 'active' | 'paused' | 'completed' | 'cancelled' | 'archived';
+export type ProjectHealth = 'unknown' | 'on_track' | 'at_risk' | 'off_track';
+
+export type ProjectMilestone = {
+  id: string;
+  projectId: string;
+  title: string;
+  description?: string;
+  status: 'planned' | 'active' | 'completed' | 'cancelled';
+  targetAt?: number;
+  sortOrder: number;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type ProjectUpdate = {
+  id: string;
+  projectId: string;
+  health: ProjectHealth;
+  summary: string;
+  progress: string[];
+  risks: string[];
+  nextSteps: string[];
+  actor: Record<string, unknown>;
+  createdAt: number;
+};
 export type ProjectKind = 'coding' | 'general' | 'unknown';
 export type ProjectKindSelection = 'auto' | 'coding' | 'general';
 
@@ -19,6 +44,14 @@ export type Project = {
   effectiveWorkspaceRoot?: string;
   brief?: string;
   instructions?: string;
+  outcome?: string;
+  successCriteria: string[];
+  scope: Record<string, unknown>;
+  nonGoals: string[];
+  health: ProjectHealth;
+  ownerId?: string;
+  targetAt?: number;
+  version: number;
   createdAt: string;
   updatedAt: string;
   lastActiveAt?: string;
@@ -34,6 +67,8 @@ export type ProjectWithDetails = Project & {
     status: string;
     createdAt: number;
   }>;
+  milestones: ProjectMilestone[];
+  recentUpdates: ProjectUpdate[];
 };
 
 export type ProjectSession = {
@@ -214,6 +249,13 @@ export async function createProject(input: {
   projectKind?: ProjectKindSelection;
   brief?: string;
   instructions?: string;
+  outcome?: string;
+  successCriteria?: string[];
+  scope?: Record<string, unknown>;
+  nonGoals?: string[];
+  health?: ProjectHealth;
+  ownerId?: string;
+  targetAt?: number;
 }): Promise<Project> {
   const res = await fetchJson<{ ok: true; project: Project }>(apiUrl('/api/projects'), {
     method: 'POST',
@@ -252,7 +294,7 @@ export async function inferProjectDefaults(input: {
 
 export async function updateProject(
   id: string,
-  input: Partial<Pick<Project, 'name' | 'description' | 'status' | 'defaultAgentId' | 'workspaceRoot' | 'brief' | 'instructions'>> & {
+  input: Partial<Pick<Project, 'name' | 'description' | 'status' | 'defaultAgentId' | 'workspaceRoot' | 'brief' | 'instructions' | 'outcome' | 'successCriteria' | 'scope' | 'nonGoals' | 'health' | 'ownerId' | 'targetAt'>> & {
     createWorkspaceRoot?: boolean;
   },
 ): Promise<Project> {

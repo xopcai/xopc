@@ -28,20 +28,20 @@ const project: Project = {
   workspaceRoot: '/tmp/xopc',
   brief: 'Ship the Project feature.',
   instructions: 'Keep work scoped to Project context.',
+  successCriteria: [],
+  scope: {},
+  nonGoals: [],
+  health: 'on_track',
+  version: 1,
   createdAt: 1,
   updatedAt: 2,
 };
 
 function task(patch: Partial<ProjectTaskContext> = {}): ProjectTaskContext {
   return {
-    taskId: 'task-1',
-    objective: 'Finish project context',
-    status: 'running',
-    agentId: 'main',
+    title: 'Finish project context',
+    state: 'active/running',
     priority: 'high',
-    createdAt: 1,
-    updatedAt: 2,
-    source: 'api',
     ...patch,
   };
 }
@@ -51,7 +51,7 @@ describe('formatActiveProjectContextForPrompt', () => {
     const text = formatActiveProjectContextForPrompt({
       project,
       workspacePath: '/tmp/xopc',
-      activeTasks: [task({ nextAction: 'Add prompt injection.' })],
+      activeTasks: [task()],
       recentSessions: [
         {
           key: 'agent:main:webchat:default:direct:s1',
@@ -74,7 +74,7 @@ describe('formatActiveProjectContextForPrompt', () => {
     expect(text).toContain('Workspace root: /tmp/xopc');
     expect(text).toContain('Ship the Project feature.');
     expect(text).toContain('Keep work scoped to Project context.');
-    expect(text).toContain('- Finish project context | status=running | priority=high | next=Add prompt injection.');
+    expect(text).toContain('- Finish project context | state=active/running | priority=high');
     expect(text).toContain('- Project planning | agent=main | updated=2026-07-06T00:00:00.000Z');
     expect(text).toContain('- session_summary | updated=2026-07-06T01:00:00.000Z | Decided to keep Project separate from Agent and Model.');
   });

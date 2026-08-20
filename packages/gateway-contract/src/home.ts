@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { TaskReceiptSchema, TaskSchema } from './tasks.js';
+import { TaskRunReceiptSchema, TaskSchema } from './tasks.js';
 
 export const HomeDecisionSchema = z.object({
   id: z.string(),
@@ -133,7 +133,7 @@ export const HomeResponseSchema = z.object({
   tasks: z.object({
     running: z.array(TaskSchema),
   }).default({ running: [] }),
-  recentTasks: z.array(TaskReceiptSchema).default([]),
+  recentTasks: z.array(TaskRunReceiptSchema).default([]),
 });
 
 export const TaskValueMetricsSchema = z.object({

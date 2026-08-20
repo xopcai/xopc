@@ -14,7 +14,7 @@ export function resolveAutomationTimeoutSeconds(
   reliability?: { executionTimeoutSeconds?: number; timeoutSeconds?: number },
 ): number {
   return reliability?.executionTimeoutSeconds
-    ?? action.timeoutSeconds
+    ?? ('timeoutSeconds' in action ? action.timeoutSeconds : undefined)
     ?? reliability?.timeoutSeconds
     ?? defaultAutomationTimeoutSeconds(action);
 }

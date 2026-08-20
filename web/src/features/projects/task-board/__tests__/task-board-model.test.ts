@@ -8,11 +8,14 @@ function card(id: string, lane: ProjectTaskCard['lane']): ProjectTaskCard {
     id,
     title: id,
     lane,
-    status: lane === 'done' ? 'completed' : 'pending',
+    phase: lane === 'done' ? 'closed' : lane === 'ready' ? 'ready' : 'active',
+    ...(lane === 'done' ? { resolution: 'done' as const } : {}),
+    operationalState: lane === 'moving' ? 'running' : lane === 'needs_user' ? 'waiting' : 'idle',
     priority: 'normal',
     blockedBy: [],
     acceptanceCriteriaCount: 0,
-    allowedActions: [],
+    attention: [],
+    allowedCommands: [],
     updatedAt: 1,
   };
 }
@@ -29,8 +32,8 @@ describe('project task board model', () => {
   });
 
   it('turns lane changes into domain commands instead of status writes', () => {
-    const pending: ProjectTaskCard = { ...card('pending', 'ready'), allowedActions: ['run', 'cancel'] };
-    const running: ProjectTaskCard = { ...card('running', 'moving'), allowedActions: ['pause', 'verify', 'cancel'] };
+    const pending: ProjectTaskCard = { ...card('pending', 'ready'), allowedCommands: ['start', 'close'] };
+    const running: ProjectTaskCard = { ...card('running', 'moving'), allowedCommands: ['add_wait', 'request_review', 'close'] };
     expect(taskActionForLane(pending, 'moving')).toBe('run');
     expect(taskActionForLane(running, 'ready')).toBe('pause');
     expect(taskActionForLane(running, 'done')).toBe('verify');

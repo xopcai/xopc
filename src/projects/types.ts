@@ -1,6 +1,7 @@
 import type { PaginatedResult } from '../session/types.js';
 
-export type ProjectStatus = 'active' | 'paused' | 'archived';
+export type ProjectStatus = 'planned' | 'active' | 'paused' | 'completed' | 'cancelled' | 'archived';
+export type ProjectHealth = 'unknown' | 'on_track' | 'at_risk' | 'off_track';
 
 export interface Project {
   id: string;
@@ -14,6 +15,14 @@ export interface Project {
   effectiveWorkspaceRoot?: string;
   brief?: string;
   instructions?: string;
+  outcome?: string;
+  successCriteria: string[];
+  scope: Record<string, unknown>;
+  nonGoals: string[];
+  health: ProjectHealth;
+  ownerId?: string;
+  targetAt?: number;
+  version: number;
   createdAt: number;
   updatedAt: number;
   lastActiveAt?: number;
@@ -36,6 +45,8 @@ export interface ProjectWithDetails extends Project {
     status: string;
     createdAt: number;
   }>;
+  milestones: ProjectMilestone[];
+  recentUpdates: ProjectUpdate[];
 }
 
 export interface ProjectListQuery {
@@ -66,6 +77,13 @@ export interface CreateProjectInput {
   projectKind?: string;
   brief?: string;
   instructions?: string;
+  outcome?: string;
+  successCriteria?: string[];
+  scope?: Record<string, unknown>;
+  nonGoals?: string[];
+  health?: ProjectHealth;
+  ownerId?: string;
+  targetAt?: number;
 }
 
 export interface UpdateProjectInput {
@@ -78,6 +96,37 @@ export interface UpdateProjectInput {
   brief?: string | null;
   instructions?: string | null;
   pinnedAt?: number | null;
+  outcome?: string | null;
+  successCriteria?: string[];
+  scope?: Record<string, unknown>;
+  nonGoals?: string[];
+  health?: ProjectHealth;
+  ownerId?: string | null;
+  targetAt?: number | null;
+}
+
+export interface ProjectMilestone {
+  id: string;
+  projectId: string;
+  title: string;
+  description?: string;
+  status: 'planned' | 'active' | 'completed' | 'cancelled';
+  targetAt?: number;
+  sortOrder: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ProjectUpdate {
+  id: string;
+  projectId: string;
+  health: ProjectHealth;
+  summary: string;
+  progress: string[];
+  risks: string[];
+  nextSteps: string[];
+  actor: Record<string, unknown>;
+  createdAt: number;
 }
 
 export type ProjectListResult = PaginatedResult<Project>;

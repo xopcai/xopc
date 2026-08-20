@@ -52,7 +52,7 @@ export interface WorkflowRunMetadata {
   correlation?: WorkflowRunCorrelation;
   origin?: WorkflowRunOrigin;
   schedule?: WorkflowRunScheduleMetadata;
-  taskId?: string;
+  taskRunId?: string;
 }
 
 export type WorkflowRunReplayScope = 'failed_agents' | 'failed_phases';

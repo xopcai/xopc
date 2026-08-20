@@ -7,7 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { closeXopcDatabase, openXopcDatabase } from '../../storage/sqlite/connection.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { ProjectService } from '../../projects/project-service.js';
-import { TaskExecutionService } from '../../tasks/index.js';
+import { TaskRepository } from '../../tasks/task-repository.js';
+import { TaskRunRepository } from '../../tasks/task-run-repository.js';
 import type { WorkflowDefinition } from '../domain/index.js';
 import { WorkflowEventStore } from '../store/event-store.js';
 import { WorkflowRunStore } from '../store/run-store.js';
@@ -259,13 +260,27 @@ describe('WorkflowRunService helpers', () => {
   it('passes the task project to the workflow session bridge', async () => {
     const definition = createDefinition();
     const project = new ProjectService().create({ name: 'Workflow Task Project' });
-    const execution = new TaskExecutionService().create({
-      objective: 'Run workflow in project',
-      projectId: project.id,
+    const task = new TaskRepository().create({
+      title: 'Run workflow in project', objective: 'Run workflow in project', projectId: project.id,
+      expectedOutputs: [], acceptanceCriteria: [], constraints: [], approvalRequired: [], assumptions: [], risks: [],
+      acceptancePolicy: 'manual', outputDestinations: [], createdBy: { kind: 'user' },
     });
-    const prepareRunSession = vi.fn(async () => ({
-      sessionKey: 'agent:main:workflow:default:run:project-workflow',
-    }));
+    const taskRun = new TaskRunRepository().create({
+      taskId: task.id, executorKind: 'workflow', executorRef: { workflowId: definition.id },
+      trigger: { kind: 'user' }, correlationId: 'workflow-project', idempotencyKey: 'workflow-project',
+      contractVersion: task.latestContractVersion,
+    });
+    const prepareRunSession = vi.fn(async () => {
+      const sessionKey = 'agent:main:workflow:default:run:project-workflow';
+      const now = Date.now();
+      getSqliteDatabase().prepare(
+        `INSERT INTO sessions (
+          session_key, agent_id, session_id, created_at, updated_at, last_accessed_at,
+          source_channel, source_chat_id, project_id
+        ) VALUES (?, 'main', ?, ?, ?, ?, 'workflow', ?, ?)`,
+      ).run(sessionKey, 'project-workflow', now, now, now, 'project-workflow', project.id);
+      return { sessionKey };
+    });
     const service = new WorkflowRunService({
       service: createGatewayHostStub(),
       sessionBridge: { prepareRunSession } as never,
@@ -283,7 +298,7 @@ describe('WorkflowRunService helpers', () => {
     const result = await service.startWorkflowRun({
       agentId: 'main',
       definitionId: definition.id,
-      taskId: execution.taskId,
+      taskRunId: taskRun.id,
       input: {},
       source: { kind: 'webui' },
     });

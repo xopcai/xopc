@@ -135,9 +135,9 @@ export function buildInput(
   } else if (form.triggerMode === 'taskBlocked') {
     trigger = {
       kind: 'event',
-      eventType: 'task.status_changed',
+      eventType: 'task.attention_required.v2',
       source: 'tasks',
-      payloadMatch: { status: 'blocked' },
+      payloadMatch: { reason: 'blocked' },
     };
   } else if (form.triggerMode === 'noteCreated') {
     trigger = { kind: 'event', eventType: 'note.created', source: 'notes' };
@@ -327,9 +327,9 @@ function eventFormState(
 ): Partial<FormState> {
   const payload = trigger.payloadMatch;
   if (
-    trigger.eventType === 'task.status_changed' &&
+    trigger.eventType === 'task.attention_required.v2' &&
     trigger.source === 'tasks' &&
-    payload?.status === 'blocked'
+    payload?.reason === 'blocked'
   ) {
     return { triggerMode: 'taskBlocked' };
   }
