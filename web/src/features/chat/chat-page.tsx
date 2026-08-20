@@ -48,6 +48,7 @@ import { ACTIVE_RUN_STATUSES } from '@/features/workflows/workflow-page.constant
 import { useSessionWorkflowRunLinks } from '@/features/workflows/use-session-workflow-run-links';
 import { useWorkflowRunLive } from '@/features/workflows/use-workflow-run-live';
 import { appendNoteContent, createTaskNote, getNote } from '@/features/notes/notes-api';
+import { withDetailReturnTo } from '@/lib/navigation-return';
 import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-store';
 import { useChatRunPresenceStore } from '@/features/chat/session/chat-run-presence-store';
 import { AgentRunErrorBanner } from '@/features/chat/messages/agent-run-error-banner';
@@ -874,7 +875,7 @@ export function ChatPage() {
                   <span>{m.chat.sourceNoteDigestAction}</span>
                 </button>
                 <Link
-                  to={`/notes/${encodeURIComponent(sourceNoteId)}`}
+                  to={withDetailReturnTo(`/notes/${encodeURIComponent(sourceNoteId)}`, `${location.pathname}${location.search}`)}
                   className="font-medium text-accent transition-colors hover:text-accent-fg"
                 >
                   {m.chat.sourceNoteOpen}
