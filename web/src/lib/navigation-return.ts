@@ -23,3 +23,14 @@ export function withReturnTo(path: string, returnTo?: string | null): string {
   const separator = base.includes('?') ? '&' : '?';
   return `${base}${separator}returnTo=${encodeURIComponent(target)}${hash}`;
 }
+
+const RETURN_AWARE_DETAIL_PREFIXES = ['/notes/', '/tasks/', '/projects/'] as const;
+
+/** Adds an origin only to detail routes whose pages know how to consume it. */
+export function withDetailReturnTo(path: string, returnTo?: string | null): string {
+  const routePath = path.split(/[?#]/, 1)[0] ?? '';
+  if (!RETURN_AWARE_DETAIL_PREFIXES.some((prefix) => routePath.startsWith(prefix))) return path;
+  const query = path.slice(routePath.length).split('#', 1)[0];
+  if (new URLSearchParams(query.startsWith('?') ? query.slice(1) : query).has('returnTo')) return path;
+  return withReturnTo(path, returnTo);
+}
