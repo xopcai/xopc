@@ -1,13 +1,14 @@
 import type { TaskCommand, TaskPhase } from '@xopcai/gateway-contract';
 import { ArrowLeft, CircleCheck, ExternalLink, Play, Pause, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { commandTask, fetchTask, submitTaskFeedback, type TaskDetail } from '@/features/tasks/home-api';
 import { taskCopy } from '@/features/tasks/task-copy';
 import { formatMediumDateTime } from '@/lib/date-formatters';
+import { safeInternalReturnPath, withReturnTo } from '@/lib/navigation-return';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
@@ -30,6 +31,7 @@ function TextList({ items, empty }: { items: string[]; empty: string }) {
 
 export function TaskDetailPage() {
   const { taskId = '' } = useParams();
+  const [searchParams] = useSearchParams();
   const language = useLocaleStore((state) => state.language);
   const token = useGatewayStore((state) => state.token);
   const copy = useMemo(() => taskCopy(language), [language]);
@@ -38,6 +40,11 @@ export function TaskDetailPage() {
   const [detail, setDetail] = useState<TaskDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const returnPath = useMemo(() => safeInternalReturnPath(
+    searchParams.get('returnTo'),
+    '/',
+    ['/projects', '/chat', '/notes', '/tasks'],
+  ), [searchParams]);
 
   useEffect(() => {
     let active = true;
@@ -62,12 +69,12 @@ export function TaskDetailPage() {
 
   useLayoutEffect(() => {
     setPageHeader({
-      startExtra: <Link to="/" className="flex size-9 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover" aria-label={copy.backToWork}><ArrowLeft className="size-4" /></Link>,
+      startExtra: <Link to={returnPath} className="flex size-9 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover" aria-label={copy.backToWork}><ArrowLeft className="size-4" /></Link>,
       main: detail ? <div className="min-w-0"><h1 className="truncate text-base font-semibold text-fg">{detail.task.title}</h1><p className="text-xs text-fg-muted">{phaseLabel(detail.task.phase, language)} · {detail.operationalState}</p></div> : null,
       end: null,
     });
     return clearPageHeader;
-  }, [clearPageHeader, copy.backToWork, detail, language, setPageHeader]);
+  }, [clearPageHeader, copy.backToWork, detail, language, returnPath, setPageHeader]);
 
   if (error && !detail) return <div className="mx-auto max-w-3xl p-6 text-sm text-danger">{error}</div>;
   if (!detail) return <div className="mx-auto max-w-4xl p-4 sm:p-6"><DetailSkeleton /></div>;
@@ -100,7 +107,7 @@ export function TaskDetailPage() {
         <section className="rounded-2xl border border-edge bg-surface-panel p-5"><h3 className="font-medium text-fg">{copy.expectedOutputs}</h3><div className="mt-4"><TextList items={detail.task.contract?.expectedOutputs ?? []} empty={copy.noDefinition} /></div></section>
       </div>
 
-      {(detail.dependencies.length > 0 || detail.dependents.length > 0) ? <section className="rounded-2xl border border-edge bg-surface-panel p-5"><h3 className="font-medium text-fg">{copy.taskRelations}</h3><div className="mt-4 grid gap-4 sm:grid-cols-2"><div><p className="mb-2 text-xs text-fg-muted">{copy.dependencies}</p>{detail.dependencies.map((task) => <Link key={task.id} to={`/tasks/${task.id}`} className="block text-sm text-accent hover:underline">{task.title} · {phaseLabel(task.phase, language)}</Link>)}</div><div><p className="mb-2 text-xs text-fg-muted">{copy.dependents}</p>{detail.dependents.map((task) => <Link key={task.id} to={`/tasks/${task.id}`} className="block text-sm text-accent hover:underline">{task.title} · {phaseLabel(task.phase, language)}</Link>)}</div></div></section> : null}
+      {(detail.dependencies.length > 0 || detail.dependents.length > 0) ? <section className="rounded-2xl border border-edge bg-surface-panel p-5"><h3 className="font-medium text-fg">{copy.taskRelations}</h3><div className="mt-4 grid gap-4 sm:grid-cols-2"><div><p className="mb-2 text-xs text-fg-muted">{copy.dependencies}</p>{detail.dependencies.map((task) => <Link key={task.id} to={withReturnTo(`/tasks/${task.id}`, returnPath)} className="block text-sm text-accent hover:underline">{task.title} · {phaseLabel(task.phase, language)}</Link>)}</div><div><p className="mb-2 text-xs text-fg-muted">{copy.dependents}</p>{detail.dependents.map((task) => <Link key={task.id} to={withReturnTo(`/tasks/${task.id}`, returnPath)} className="block text-sm text-accent hover:underline">{task.title} · {phaseLabel(task.phase, language)}</Link>)}</div></div></section> : null}
 
       <section className="rounded-2xl border border-edge bg-surface-panel p-5"><h3 className="font-medium text-fg">{copy.executionReceipts}</h3>{detail.receipts.length === 0 ? <p className="mt-4 text-sm text-fg-muted">{copy.noReceipts}</p> : <div className="mt-4 space-y-4">{detail.receipts.map((receipt) => <article key={receipt.runId} className="border-t border-edge pt-4 first:border-0 first:pt-0"><div className="flex items-center justify-between gap-3"><p className="font-medium text-fg">{receipt.summary}</p><span className="text-xs text-fg-muted">{receipt.status} · {receipt.verification.status}</span></div>{receipt.nextAction ? <p className="mt-2 text-sm text-fg-muted">{receipt.nextAction}</p> : null}<div className="mt-3 flex gap-2"><Button className="px-2 py-1 text-xs" variant="secondary" onClick={() => void submitTaskFeedback(receipt.runId, 'helpful')}>{copy.doneWell}</Button><Button className="px-2 py-1 text-xs" variant="ghost" onClick={() => void submitTaskFeedback(receipt.runId, 'not_helpful')}>{copy.needsFix}</Button>{receipt.evidence[0]?.uri ? <a className="ml-auto inline-flex items-center gap-1 text-xs text-accent" href={receipt.evidence[0].uri}><ExternalLink className="size-3" />{copy.evidenceDetails}</a> : null}</div></article>)}</div>}</section>
       {latestReceipt?.needsUser ? <p className="text-sm text-warning">{latestReceipt.nextAction ?? copy.noDecisionNeeded}</p> : null}

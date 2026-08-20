@@ -17,11 +17,12 @@ import {
   Target,
   Workflow,
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { dispatchFillChatComposer } from '@/features/chat/composer/fill-composer-dispatch';
 import { cn } from '@/lib/cn';
+import { withDetailReturnTo } from '@/lib/navigation-return';
 import { useLocaleStore } from '@/stores/locale-store';
 
 const KIND_ICON = {
@@ -68,6 +69,7 @@ function continuePrompt(reference: ProductReference, language: 'en' | 'zh'): str
 export function ProductDeliveryCard({ delivery }: { delivery: ProductDeliveryEnvelope }) {
   const reference = delivery.primary;
   const navigate = useNavigate();
+  const location = useLocation();
   const storedLanguage = useLocaleStore((state) => state.language);
   const language = storedLanguage === 'zh' ? 'zh' : 'en';
   if (!reference) return null;
@@ -79,7 +81,7 @@ export function ProductDeliveryCard({ delivery }: { delivery: ProductDeliveryEnv
   const isFailure = delivery.operation === 'failed';
 
   const open = () => {
-    if (route) navigate(route);
+    if (route) navigate(withDetailReturnTo(route, `${location.pathname}${location.search}`));
   };
 
   return (

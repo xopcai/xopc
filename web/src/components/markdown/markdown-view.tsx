@@ -1,11 +1,13 @@
 import DOMPurify from 'dompurify';
 import { memo, useLayoutEffect, useMemo, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   parseProductReferenceDeepLink,
   productReferenceOpenRoute,
 } from '@xopcai/gateway-contract';
 
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
+import { withDetailReturnTo } from '@/lib/navigation-return';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -201,6 +203,8 @@ function MarkdownViewImpl({
   renderMermaid = true,
   streamingMetricsKey,
 }: MarkdownViewProps) {
+  const location = useLocation();
+  const navigate = useNavigate();
   const language = useLocaleStore((s) => s.language);
   const labels = useMemo(() => {
     const m = messages(language).chat;
@@ -311,17 +315,17 @@ function MarkdownViewImpl({
 
       const href = anchor.getAttribute('href') ?? '';
       const productReference = parseProductReferenceDeepLink(href);
-      if (productReference) {
-        const route = productReferenceOpenRoute({
+      const productRoute = productReference
+        ? productReferenceOpenRoute({
           ...productReference,
           title: productReference.id,
           capabilities: ['open'],
-        });
-        if (route) {
-          event.preventDefault();
-          window.location.hash = `#${route}`;
-          return;
-        }
+        })
+        : href.startsWith('#/') ? href.slice(1) : null;
+      if (productRoute) {
+        event.preventDefault();
+        navigate(withDetailReturnTo(productRoute, `${location.pathname}${location.search}`));
+        return;
       }
       const fileTarget = onWorkspaceFileOpen ? parseWorkspaceFileLinkTarget(href) : null;
       if (fileTarget && onWorkspaceFileOpen) {
@@ -338,7 +342,7 @@ function MarkdownViewImpl({
 
     el.addEventListener('click', onClick);
     return () => el.removeEventListener('click', onClick);
-  }, [onWorkspaceFileOpen]);
+  }, [location.pathname, location.search, navigate, onWorkspaceFileOpen]);
 
   return (
     <div ref={hostRef}>
