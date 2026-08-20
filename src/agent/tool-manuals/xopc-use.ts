@@ -7,7 +7,7 @@ Load this manual before a non-trivial mutation.
 
 \`\`\`json
 {
-  "mode": "project | note | task | task_run | local_app | settings",
+  "mode": "project | automation | note | task | task_run | local_app | settings",
   "command": "...",
   "args": {},
   "dryRun": false
@@ -22,16 +22,16 @@ complete successfully while the product command returns \`ok: false\`.
 | Object | Tool |
 | --- | --- |
 | Project, milestone, project update | \`xopc_use\` mode \`project\` |
+| Automation | \`xopc_use\` mode \`automation\` |
 | Task intent and lifecycle | \`xopc_use\` mode \`task\` |
 | Task execution attempt, receipt, events and waits | \`xopc_use\` mode \`task_run\` |
 | Note | \`xopc_use\` mode \`note\` |
 | Local app | \`xopc_use\` mode \`local_app\` |
 | Settings jump target | \`xopc_use\` mode \`settings\` |
-| Automation | dedicated \`automation\` tool |
 | Workflow run | dedicated \`workflow\` tool; pass \`taskId\` to link it to a Task |
 | Session, memory, skill, connected app or workspace file | its dedicated tool |
 
-Do not emulate Workflow or Automation APIs through \`xopc_use\`. A Task is durable intent;
+Do not emulate Workflow APIs through \`xopc_use\`. A Task is durable intent;
 a TaskRun is one execution attempt; a WorkflowRun is a procedure execution and may belong
 to a TaskRun. Never treat these three objects as interchangeable.
 
@@ -144,6 +144,46 @@ Project updates are append-only progress snapshots. They also update Project hea
 \`\`\`
 
 Use \`list_updates\` with \`projectId\` and optional \`limit\`. Updates cannot be edited.
+
+## Automations
+
+Commands: \`list\`, \`get\`, \`create\`, \`update\`, \`delete\`, \`run\`, \`pause\`,
+\`resume\`, and \`history\`.
+
+Automation \`create\` automatically uses the current session Project when \`projectId\` is
+omitted. An explicit \`projectId\` takes precedence and is validated before mutation. Use an
+explicit id when creating for a Project other than the current session Project.
+
+### Create in the current Project
+
+\`trigger\` and \`action\` use the same shapes as the Automation product API.
+
+\`\`\`json
+{
+  "mode": "automation",
+  "command": "create",
+  "args": {
+    "name": "Daily project review",
+    "trigger": { "kind": "schedule", "schedule": { "kind": "cron", "expr": "0 9 * * 1-5", "tz": "Asia/Shanghai" } },
+    "action": { "kind": "agent", "instruction": "Review the current project and summarize risks." }
+  }
+}
+\`\`\`
+
+To override the inherited Project, add \`"projectId": "project_id"\` to \`args\`.
+The create payload may also be nested under \`args.automation\`; top-level \`args.projectId\`
+has precedence.
+
+### List and history
+
+\`list\` and unqualified \`history\` inherit the current session Project. Pass an explicit
+\`projectId\` to query another Project. Pass \`automationId\` to \`history\` for one Automation.
+
+### Update and operate
+
+Use \`automationId\` for \`get\`, \`update\`, \`delete\`, \`run\`, \`pause\`, and \`resume\`.
+For \`update\`, patch fields may be direct args or nested under \`args.patch\`. Supplying a new
+\`projectId\` reassigns the Automation after validating the target Project.
 
 ## Tasks
 
