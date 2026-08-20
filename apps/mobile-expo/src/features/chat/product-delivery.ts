@@ -58,7 +58,7 @@ export function extractMobileProductDelivery(block: ToolUseContent): ProductDeli
     ?? fromRecord(block.result);
 }
 
-export function mobileProductRoute(reference: ProductReferenceLocator): string {
+export function mobileProductRoute(reference: ProductReferenceLocator & { projectId?: string }): string | null {
   const id = encodeURIComponent(reference.id);
   switch (reference.kind) {
     case 'task':
@@ -75,10 +75,11 @@ export function mobileProductRoute(reference: ProductReferenceLocator): string {
       return '/files';
     case 'settings':
       return '/settings';
-    case 'workflow_definition':
     case 'workflow_run':
+      return `/workflows/runs/${id}${reference.projectId ? `?projectId=${encodeURIComponent(reference.projectId)}` : ''}`;
+    case 'workflow_definition':
     case 'local_app':
-      return '/';
+      return null;
   }
 }
 
@@ -95,4 +96,5 @@ export const MOBILE_NATIVE_PRODUCT_KINDS = new Set<ProductReferenceKind>([
   'session',
   'file',
   'settings',
+  'workflow_run',
 ]);

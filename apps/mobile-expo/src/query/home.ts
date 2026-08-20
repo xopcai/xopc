@@ -7,7 +7,6 @@ import {
 import { apiFetch } from '../api/client';
 import type { Language } from '../stores/preferences-store';
 import type { NoteIndexEntry } from './notes';
-import type { SessionListItem } from './sessions';
 
 export type HomeAgent = {
   id: string;
@@ -117,7 +116,7 @@ export interface HomeData {
   inboxCount: number;
   pendingTasks: NoteIndexEntry[];
   pendingTaskCount: number;
-  recentSessions: SessionListItem[];
+  chats: HomeResponse['chats'];
   activeAgent: HomeAgent;
   gateway: HomeGateway;
   workflowRuns: {
@@ -129,10 +128,6 @@ export interface HomeData {
   tasks: HomeResponse['tasks'];
 }
 
-function normalizedSessionName(session: SessionListItem): string | undefined {
-  return session.name?.trim() || session.title?.trim() || session.displayName?.trim() || undefined;
-}
-
 export async function fetchHome(language: Language): Promise<HomeData> {
   const res = await apiFetch(`/api/home?locale=${encodeURIComponent(language)}`);
   if (!res.ok) throw new Error(`Failed to fetch home: ${res.status}`);
@@ -140,13 +135,20 @@ export async function fetchHome(language: Language): Promise<HomeData> {
   const core = parseHomeResponse(raw);
   const home = raw as HomeData;
   return {
-    ...home,
+    briefing: home.briefing,
+    decisions: home.decisions,
+    attention: home.attention,
+    recentlyOpened: home.recentlyOpened,
+    inboxCount: home.inboxCount,
+    pendingTasks: home.pendingTasks,
+    pendingTaskCount: home.pendingTaskCount,
+    chats: core.chats,
+    activeAgent: home.activeAgent,
+    gateway: home.gateway,
+    workflowRuns: home.workflowRuns,
+    upcomingAutomations: home.upcomingAutomations,
     tasks: core.tasks,
     recentTasks: core.recentTasks,
-    recentSessions: home.recentSessions.map((session) => ({
-      ...session,
-      name: normalizedSessionName(session),
-    })),
   };
 }
 

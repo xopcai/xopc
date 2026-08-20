@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
+import { type Href, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
@@ -14,22 +14,30 @@ import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { ActivityIndicator, Icon, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { t, useMessages } from '../../i18n/messages';
-import { openNoteDetail } from '../../lib/navigation';
-import { sessionDisplayName } from '../../lib/session-helpers';
+import { ListSkeleton } from '../../components/ListSkeleton';
+import { useMessages } from '../../i18n/messages';
+import { fetchChatAgents } from '../../query/agents';
 import { queryKeys } from '../../query/keys';
-import { fetchNotes, type NoteIndexEntry } from '../../query/notes';
-import { fetchSessionsList, type SessionListItem, useGatewayConfigured } from '../../query/sessions';
+import { searchMobileWorkspace, type MobileSearchHit } from '../../query/search';
+import { useGatewayConfigured } from '../../query/sessions';
 import { useTheme, FLOATING_BOTTOM_OFFSET, floatingBottomPadding } from '../../theme';
 import { listSyncJournalEntries } from '../../sync/sync-journal';
 
 import { shouldPreserveWorkspaceSearch } from './workspace-search-recovery';
-import { aggregateWorkspaceSearchResults, pendingDraftSearchResults } from './workspace-search-aggregator';
+import { pendingDraftSearchResults } from './workspace-search-aggregator';
 
 type SearchResult =
-  | { id: string; type: 'note'; note: NoteIndexEntry }
-  | { id: string; type: 'session'; session: SessionListItem }
-  | { id: string; type: 'draft'; title: string; snippet?: string };
+  | MobileSearchHit
+  | { id: string; kind: 'draft'; title: string; subtitle?: string; route: '/inbox'; updatedAt?: number };
+
+const RESULT_ICONS: Record<SearchResult['kind'], string> = {
+  note: 'note-text-outline',
+  session: 'message-processing-outline',
+  project: 'folder-outline',
+  task: 'target',
+  workflow_run: 'source-branch',
+  draft: 'cloud-upload-outline',
+};
 
 interface WorkspaceSearchOverlayProps {
   visible: boolean;
@@ -47,11 +55,21 @@ export function WorkspaceSearchOverlay({ visible, onClose }: WorkspaceSearchOver
   const inputRef = useRef<TextInput>(null);
   const searchTextRef = useRef(searchText);
   const query = searchText.trim();
-  const searchEnabled = visible && configured && query.length > 0;
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const searchEnabled = visible && configured && debouncedQuery.length > 0;
 
   useEffect(() => {
     searchTextRef.current = searchText;
   }, [searchText]);
+
+  useEffect(() => {
+    if (!query) {
+      setDebouncedQuery('');
+      return;
+    }
+    const timer = setTimeout(() => setDebouncedQuery(query), 250);
+    return () => clearTimeout(timer);
+  }, [query]);
 
   useEffect(() => {
     if (!visible) {
@@ -62,77 +80,45 @@ export function WorkspaceSearchOverlay({ visible, onClose }: WorkspaceSearchOver
     return () => clearTimeout(timer);
   }, [visible]);
 
-  const notesQuery = useQuery({
-    queryKey: [...queryKeys.notesAll, 'search', query],
-    queryFn: () => fetchNotes({ search: query, limit: 50, sortBy: 'updatedAt', sortOrder: 'desc' }),
-    enabled: searchEnabled,
+  const agents = useQuery({
+    queryKey: queryKeys.agents,
+    queryFn: fetchChatAgents,
+    enabled: visible && configured,
   });
-
-  const sessionsQuery = useQuery({
-    queryKey: queryKeys.sessions(query),
-    queryFn: () => fetchSessionsList({ search: query, limit: 50, channel: null }),
-    enabled: searchEnabled,
+  const searchQuery = useQuery({
+    queryKey: queryKeys.workspaceSearch(debouncedQuery),
+    queryFn: () => searchMobileWorkspace({
+      query: debouncedQuery,
+      agentIds: agents.data?.items.map((agent) => agent.id) ?? [],
+    }),
+    enabled: searchEnabled && Boolean(agents.data),
   });
 
   const results = useMemo<SearchResult[]>(() => {
-    if (!query) return [];
-    const noteResults = (notesQuery.data?.items ?? []).map((note) => ({
-      id: `note:${note.id}`,
-      type: 'note' as const,
-      note,
+    if (!debouncedQuery) return [];
+    const drafts: SearchResult[] = pendingDraftSearchResults(listSyncJournalEntries(), debouncedQuery).map((draft) => ({
+      id: draft.id,
+      kind: 'draft',
+      title: draft.title,
+      subtitle: draft.snippet,
+      route: '/inbox',
+      updatedAt: draft.updatedAt,
     }));
-    const sessionResults = (sessionsQuery.data?.items ?? []).map((session) => ({
-      id: `session:${session.key}`,
-      type: 'session' as const,
-      session,
-    }));
-    const byId = new Map<string, SearchResult>([...noteResults, ...sessionResults].map((result) => [result.id, result]));
-    const drafts = pendingDraftSearchResults(listSyncJournalEntries(), query).map((draft) => ({ id: draft.id, type: 'draft' as const, title: draft.title, snippet: draft.snippet }));
-    drafts.forEach((draft) => byId.set(draft.id, draft));
-    return aggregateWorkspaceSearchResults([
-      noteResults.map((result) => ({
-        id: result.id,
-        type: result.type,
-        title: result.note.title ?? result.note.snippet ?? '',
-        updatedAt: result.note.updatedAt,
-        score: 1,
-      })),
-      sessionResults.map((result) => ({
-        id: result.id,
-        type: result.type,
-        title: sessionDisplayName(result.session, m.sessions.untitled),
-        updatedAt: Date.parse(result.session.updatedAt),
-        score: 1,
-      })),
-      pendingDraftSearchResults(listSyncJournalEntries(), query),
-    ]).flatMap((result) => byId.get(result.id) ?? []);
-  }, [m.sessions.untitled, notesQuery.data?.items, query, sessionsQuery.data?.items]);
+    return [...(searchQuery.data ?? []), ...drafts]
+      .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
+  }, [debouncedQuery, searchQuery.data]);
 
-  const isLoading = notesQuery.isLoading || sessionsQuery.isLoading;
-  const isSearching = notesQuery.isFetching || sessionsQuery.isFetching;
+  const isLoading = agents.isLoading || searchQuery.isLoading;
+  const isSearching = searchQuery.isFetching;
 
   const openResult = useCallback((item: SearchResult) => {
     onClose();
-    if (item.type === 'note') {
-      openNoteDetail(router, item.note.id);
-      return;
-    }
-    if (item.type === 'draft') {
-      router.push('/inbox');
-      return;
-    }
-    router.push(`/chat/${item.session.key}`);
+    router.push(item.route as Href);
   }, [onClose, router]);
 
   const renderItem = useCallback(({ item }: { item: SearchResult }) => {
-    const isNote = item.type === 'note';
-    const isDraft = item.type === 'draft';
-    const title = isNote
-      ? item.note.snippet || sm.emptyNoteTitle
-      : isDraft ? item.title : sessionDisplayName(item.session, m.sessions.untitled);
-    const meta = isNote
-      ? sm.noteMeta
-      : isDraft ? sm.noteMeta : t(sm.sessionMessages, { count: item.session.messageCount });
+    const title = item.title || sm.emptyNoteTitle;
+    const meta = item.subtitle ? `${sm.kind[item.kind]} · ${item.subtitle}` : sm.kind[item.kind];
 
     return (
       <Pressable
@@ -144,9 +130,10 @@ export function WorkspaceSearchOverlay({ visible, onClose }: WorkspaceSearchOver
           },
         ]}
         onPress={() => openResult(item)}
+        accessibilityRole="button"
       >
         <View style={[styles.iconBubble, { backgroundColor: colors.accent.selectionBg }]}>
-          <Icon source={isNote || isDraft ? 'note-text-outline' : 'message-processing-outline'} size={18} color={colors.accent.primary} />
+          <Icon source={RESULT_ICONS[item.kind]} size={18} color={colors.accent.primary} />
         </View>
         <View style={styles.resultText}>
           <Text numberOfLines={2} style={[styles.resultTitle, { color: colors.text.primary }]}>{title}</Text>
@@ -155,7 +142,7 @@ export function WorkspaceSearchOverlay({ visible, onClose }: WorkspaceSearchOver
         <Icon source="chevron-right" size={18} color={colors.text.tertiary} />
       </Pressable>
     );
-  }, [colors, m.sessions.untitled, openResult, sm.emptyNoteTitle, sm.noteMeta, sm.sessionMessages]);
+  }, [colors, openResult, sm.emptyNoteTitle, sm.kind]);
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
@@ -194,8 +181,14 @@ export function WorkspaceSearchOverlay({ visible, onClose }: WorkspaceSearchOver
               <Text style={[styles.emptyHint, { color: colors.text.tertiary }]}>{sm.idleHint}</Text>
             </View>
           ) : isLoading ? (
+            <ListSkeleton count={6} />
+          ) : agents.isError || searchQuery.isError ? (
             <View style={styles.center}>
-              <ActivityIndicator />
+              <Icon source="alert-circle-outline" size={40} color={colors.semantic.error} />
+              <Text style={[styles.emptyTitle, { color: colors.text.primary }]}>{sm.searchFailed}</Text>
+              <Pressable accessibilityRole="button" onPress={() => void (agents.isError ? agents.refetch() : searchQuery.refetch())}>
+                <Text style={{ color: colors.accent.primary }}>{sm.retry}</Text>
+              </Pressable>
             </View>
           ) : (
             <FlatList
@@ -240,9 +233,10 @@ export function WorkspaceSearchOverlay({ visible, onClose }: WorkspaceSearchOver
                 returnKeyType="search"
                 autoCapitalize="none"
                 autoCorrect={false}
+                accessibilityLabel={sm.placeholder}
               />
               {searchText.length > 0 && (
-                <Pressable onPress={() => setSearchText('')} hitSlop={8}>
+                <Pressable accessibilityRole="button" accessibilityLabel={sm.clearSearch} onPress={() => setSearchText('')} hitSlop={8}>
                   <Icon source="close-circle" size={20} color={colors.text.tertiary} />
                 </Pressable>
               )}

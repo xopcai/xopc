@@ -69,8 +69,9 @@ export function useChatPageBootstrap(deps: ChatBootstrapDeps): ChatBootstrapResu
       activeSessionKeyRef.current = '';
     }
 
-    autoSessionAttemptedRef.current = true;
     const agentId = resolveEffectiveDefaultAgentId(agentsData, localDefaultAgentId);
+    if (!agentId) return;
+    autoSessionAttemptedRef.current = true;
     setCreatingInitialSession(true);
     setBootstrapError(null);
 

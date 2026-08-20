@@ -385,7 +385,7 @@ export function InboxScreen() {
         onBack={selectionMode ? exitSelectionMode : () => dismissOrHome(router)}
         rightActions={selectionMode ? undefined : [
           {
-            icon: 'auto-fix',
+            icon: 'filter-variant',
             onPress: () => setOrganizeOpen(true),
             accessibilityLabel: im.aiOrganizeTitle,
           },
