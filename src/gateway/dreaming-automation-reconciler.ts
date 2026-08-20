@@ -3,15 +3,16 @@ import type { DreamingAgentScope } from '../agent/memory/dreaming/scope.js';
 import type { DreamingResolvedConfig } from '../agent/memory/dreaming/config.js';
 import { resolveDreamingAgentScope } from '../agent/memory/dreaming/scope.js';
 import {
-  DREAMING_CRON_NAME,
-  DREAMING_CRON_TAG,
-  DREAMING_LIGHT_CRON_NAME,
+  DREAMING_AUTOMATION_TAG,
+  DREAMING_DEEP_AUTOMATION_NAME,
+  DREAMING_LIGHT_AUTOMATION_NAME,
   DREAMING_LIGHT_SWEEP_TOKEN,
-  DREAMING_REM_CRON_NAME,
+  DREAMING_REM_AUTOMATION_NAME,
   DREAMING_REM_SWEEP_TOKEN,
   DREAMING_SWEEP_TOKEN,
   type DreamingPhaseId,
 } from '../agent/memory/dreaming/constants.js';
+import { compileDreamingSchedule } from '../agent/memory/dreaming/schedule.js';
 import type { AutomationService } from '../automations/index.js';
 import type { Automation, AutomationAction, AutomationTrigger } from '../automations/domain/types.js';
 
@@ -24,17 +25,17 @@ type DreamingAutomationSpec = {
 const DREAMING_AUTOMATIONS: readonly DreamingAutomationSpec[] = [
   {
     phase: 'light',
-    name: DREAMING_LIGHT_CRON_NAME,
+    name: DREAMING_LIGHT_AUTOMATION_NAME,
     token: DREAMING_LIGHT_SWEEP_TOKEN,
   },
   {
     phase: 'deep',
-    name: DREAMING_CRON_NAME,
+    name: DREAMING_DEEP_AUTOMATION_NAME,
     token: DREAMING_SWEEP_TOKEN,
   },
   {
     phase: 'rem',
-    name: DREAMING_REM_CRON_NAME,
+    name: DREAMING_REM_AUTOMATION_NAME,
     token: DREAMING_REM_SWEEP_TOKEN,
   },
 ];
@@ -47,7 +48,7 @@ export type DreamingAutomationReconcileResult = {
 
 function phaseDescription(phase: DreamingPhaseId): string {
   const label = phase === 'light' ? 'Light sweep' : phase === 'deep' ? 'Deep promotion' : 'REM pattern discovery';
-  return `${label} for memory dreaming. ${DREAMING_CRON_TAG}`;
+  return `${label} for memory dreaming. ${DREAMING_AUTOMATION_TAG}`;
 }
 
 function buildTrigger(config: DreamingResolvedConfig, phase: DreamingPhaseId): AutomationTrigger {
@@ -56,8 +57,8 @@ function buildTrigger(config: DreamingResolvedConfig, phase: DreamingPhaseId): A
     kind: 'schedule',
     schedule: {
       kind: 'cron',
-      expr: phaseConfig.cron,
-      ...(config.timezone ? { tz: config.timezone } : {}),
+      expr: compileDreamingSchedule(phaseConfig.schedule),
+      tz: config.timezone,
     },
   };
 }

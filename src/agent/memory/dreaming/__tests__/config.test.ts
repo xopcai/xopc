@@ -19,6 +19,8 @@ describe('resolveDreamingConfig', () => {
 
     expect(resolved.enabled).toBe(true);
     expect(resolved.phases.deep.enabled).toBe(true);
+    expect(resolved.phases.deep.schedule).toEqual({ kind: 'daily', time: '03:00' });
+    expect(resolved.timezone).toBeTruthy();
     expect(resolved.mode).not.toBe('off');
   });
 

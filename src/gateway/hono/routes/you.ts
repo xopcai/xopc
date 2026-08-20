@@ -4,10 +4,12 @@ import { randomUUID } from 'node:crypto';
 import { resolveDefaultAgentId } from '../../../agent/agent-scope.js';
 import type { MemoryRecord } from '../../../agent/memory/types.js';
 import { nextMemoryReviewAt, resolveMemoryStability } from '../../../agent/memory/lifecycle.js';
+import { resolveDreamingSettings } from '../../../agent/memory/dreaming/config.js';
 import { runDreamingPhase } from '../../../agent/memory/dreaming/runner.js';
+import { nextDreamingRunTimes } from '../../../agent/memory/dreaming/schedule.js';
 import { resolveDreamingAgentScope } from '../../../agent/memory/dreaming/scope.js';
 import type { Config } from '../../../config/schema.js';
-import { UserContextConfigSchema } from '../../../user-context/config.js';
+import { DreamingSettingsSchema, UserContextConfigSchema } from '../../../user-context/config.js';
 import { listConnectorCatalog } from '../../../connectors/catalog.js';
 import { listConnectorInstances } from '../../../connectors/instances.js';
 import { uninstallConnector } from '../../../connectors/install.js';
@@ -505,27 +507,58 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
   authenticated.get('/api/you/dreaming', (c) => {
     const config = deps.service.currentConfig as Config;
     const scope = resolveDreamingAgentScope(config);
+    const settings = resolveDreamingSettings(config);
     const signals = listMemorySignals({ workspaceId: scope.workspaceDir, limit: 500 });
     return c.json({
       agentId: scope.agentId,
-      config: scope.config,
+      settings,
+      config: {
+        ...scope.config,
+        phases: {
+          light: {
+            ...scope.config.phases.light,
+            nextRunsAt: nextDreamingRunTimes(scope.config.phases.light.schedule, scope.config.timezone),
+          },
+          deep: {
+            ...scope.config.phases.deep,
+            nextRunsAt: nextDreamingRunTimes(scope.config.phases.deep.schedule, scope.config.timezone),
+          },
+          rem: {
+            ...scope.config.phases.rem,
+            nextRunsAt: nextDreamingRunTimes(scope.config.phases.rem.schedule, scope.config.timezone),
+          },
+        },
+      },
       readiness: scope.readiness,
       runs: listDreamingRuns({ agentId: scope.agentId, limit: 50 }),
       signalCount: signals.filter((signal) => signal.source === 'dreaming').length,
     });
   });
 
-  authenticated.patch('/api/you/dreaming', deps.strictRateLimitMiddleware, async (c) => {
+  authenticated.put('/api/you/dreaming', deps.strictRateLimitMiddleware, async (c) => {
     const config = deps.service.currentConfig as Config;
     const body = await c.req.json().catch(() => ({}));
+    const settings = DreamingSettingsSchema.safeParse(body);
+    if (!settings.success) return c.json({ error: settings.error.issues[0]?.message ?? 'Invalid Dreaming settings' }, 400);
+    const currentPhases = config.userContext.dreaming.phases ?? {};
     const parsed = UserContextConfigSchema.safeParse({
       ...config.userContext,
-      dreaming: { ...config.userContext.dreaming, mode: body.mode },
+      dreaming: {
+        ...config.userContext.dreaming,
+        mode: settings.data.mode,
+        timezone: settings.data.timezone,
+        phases: {
+          light: { ...currentPhases.light, ...settings.data.phases.light },
+          deep: { ...currentPhases.deep, ...settings.data.phases.deep },
+          rem: { ...currentPhases.rem, ...settings.data.phases.rem },
+        },
+      },
     });
-    if (!parsed.success) return c.json({ error: parsed.error.issues[0]?.message ?? 'Invalid Dreaming mode' }, 400);
+    if (!parsed.success) return c.json({ error: parsed.error.issues[0]?.message ?? 'Invalid Dreaming settings' }, 400);
     const saved = await deps.service.saveConfig({ ...config, userContext: parsed.data });
     if (!saved.saved) return c.json({ error: saved.error ?? 'save failed' }, 500);
-    return c.json({ config: resolveDreamingAgentScope(deps.service.currentConfig as Config).config });
+    const savedConfig = deps.service.currentConfig as Config;
+    return c.json({ settings: resolveDreamingSettings(savedConfig) });
   });
 
   authenticated.get('/api/you/readiness', (c) => {

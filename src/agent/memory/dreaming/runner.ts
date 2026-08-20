@@ -20,7 +20,10 @@ export async function runDreamingPhase(input: {
   const scope = resolveDreamingAgentScope(input.config);
   const resolved = scope.config;
   if (resolved.mode === 'off') throw new Error('Dreaming is off');
-  if (!resolved.phases[input.phase].enabled) throw new Error(`Dreaming ${input.phase} phase is disabled`);
+  if (input.triggerKind === 'schedule' && !resolved.phases[input.phase].enabled) {
+    throw new Error(`Dreaming ${input.phase} schedule is disabled`);
+  }
+  const forceManualRun = input.triggerKind === 'manual';
 
   const run = startDreamingRun({
     agentId: scope.agentId,
@@ -34,14 +37,18 @@ export async function runDreamingPhase(input: {
   try {
     let result: Record<string, unknown>;
     if (input.phase === 'light') {
-      result = await runLightSweep({ runId: run.runId, workspaceDir: scope.workspaceDir, config: resolved.phases.light });
+      result = await runLightSweep({
+        runId: run.runId,
+        workspaceDir: scope.workspaceDir,
+        config: { ...resolved.phases.light, enabled: forceManualRun || resolved.phases.light.enabled },
+      });
     } else if (input.phase === 'deep') {
       result = await runDreamingDeepPromotion({
         runId: run.runId,
         mode: resolved.mode,
         agentId: scope.agentId,
         workspaceDir: scope.workspaceDir,
-        config: resolved.phases.deep,
+        config: { ...resolved.phases.deep, enabled: forceManualRun || resolved.phases.deep.enabled },
         sensitiveWritePolicy: input.config.userContext.privacy.sensitiveWritePolicy,
       });
     } else {
@@ -50,7 +57,7 @@ export async function runDreamingPhase(input: {
         mode: resolved.mode,
         agentId: scope.agentId,
         workspaceDir: scope.workspaceDir,
-        config: resolved.phases.rem,
+        config: { ...resolved.phases.rem, enabled: forceManualRun || resolved.phases.rem.enabled },
         sensitiveWritePolicy: input.config.userContext.privacy.sensitiveWritePolicy,
       });
     }

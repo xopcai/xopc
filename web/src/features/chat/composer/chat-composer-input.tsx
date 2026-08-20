@@ -72,7 +72,7 @@ export const ChatComposerInput = memo(function ChatComposerInput({
       suppressContentEditableWarning
       spellCheck
       className={cn(
-        'composer-input box-border m-0 max-h-32 min-h-10 w-full overflow-y-auto border-0 bg-transparent px-0 py-2 text-[0.9375rem] leading-6 text-fg focus:outline-none focus:ring-0 disabled:opacity-50',
+        'composer-input box-border m-0 max-h-32 min-h-16 w-full overflow-y-auto border-0 bg-transparent px-0 py-2 text-[0.9375rem] leading-6 text-fg focus:outline-none focus:ring-0 disabled:opacity-50',
         'composer-input-empty',
       )}
       data-placeholder={placeholder}

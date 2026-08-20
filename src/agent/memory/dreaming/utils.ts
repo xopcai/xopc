@@ -1,9 +1,10 @@
 import type { DreamingDeepConfig } from './config.js';
 import {
-  DEFAULT_DEEP_CRON,
   DEFAULT_MAX_AGE_DAYS,
   DEFAULT_RECENCY_HALF_LIFE_DAYS,
 } from './constants.js';
+
+export type DeepExecutionConfig = Omit<DreamingDeepConfig, 'schedule'>;
 
 function toPositiveInt(value: unknown, fallback: number): number {
   const num = Number(value);
@@ -24,10 +25,9 @@ function clampScore(value: number, fallback: number): number {
   return Math.max(0, Math.min(1, value));
 }
 
-export function resolveDeepDefaults(overrides?: Partial<DreamingDeepConfig>): DreamingDeepConfig {
+export function resolveDeepDefaults(overrides?: Partial<DeepExecutionConfig>): DeepExecutionConfig {
   return {
     enabled: overrides?.enabled !== false,
-    cron: typeof overrides?.cron === 'string' && overrides.cron.trim() ? overrides.cron.trim() : DEFAULT_DEEP_CRON,
     minScore: clampScore(Number(overrides?.minScore), 0.8),
     minRecallCount: toPositiveInt(overrides?.minRecallCount, 3),
     minUniqueQueries: toPositiveInt(overrides?.minUniqueQueries, 3),

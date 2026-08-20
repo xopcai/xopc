@@ -653,6 +653,7 @@ function SidebarInboxSection({
   loadingMore,
   isCollapsed,
   onToggleCollapsed,
+  onCreateChat,
   onLoadMore,
   activeSessionKey,
   onNavigate,
@@ -672,6 +673,7 @@ function SidebarInboxSection({
   loadingMore: boolean;
   isCollapsed: boolean;
   onToggleCollapsed: () => void;
+  onCreateChat: () => void;
   onLoadMore: () => void;
   activeSessionKey?: string;
   onNavigate?: () => void;
@@ -694,22 +696,37 @@ function SidebarInboxSection({
 
   return (
     <section className="flex flex-col gap-0.5" aria-label={sb.inboxHeading}>
-      <button
-        type="button"
-        className="flex items-center gap-1 px-2 pb-1 text-[11px] font-medium uppercase tracking-wide text-fg-subtle transition-colors hover:text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
-        onClick={onToggleCollapsed}
-        aria-expanded={!isCollapsed}
-      >
-        {sb.inboxHeading}
-        <ChevronDown
+      <div className="group flex min-w-0 items-center pb-1">
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 items-center gap-1 px-2 text-[11px] font-medium uppercase tracking-wide text-fg-subtle transition-colors hover:text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
+          onClick={onToggleCollapsed}
+          aria-expanded={!isCollapsed}
+        >
+          {sb.inboxHeading}
+          <ChevronDown
+            className={cn(
+              'size-3.5 transition-transform duration-150 ease-out',
+              isCollapsed && '-rotate-90',
+            )}
+            strokeWidth={1.75}
+            aria-hidden
+          />
+        </button>
+        <button
+          type="button"
           className={cn(
-            'size-3.5 transition-transform duration-150 ease-out',
-            isCollapsed && '-rotate-90',
+            'flex size-7 shrink-0 items-center justify-center rounded-lg text-fg-subtle transition-opacity hover:bg-surface-hover hover:text-fg-muted',
+            'opacity-0 group-hover:opacity-100 focus:opacity-100',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
           )}
-          strokeWidth={1.75}
-          aria-hidden
-        />
-      </button>
+          onClick={onCreateChat}
+          title={defaultUnnamedTitle}
+          aria-label={defaultUnnamedTitle}
+        >
+          <Plus className="size-3.5" strokeWidth={1.75} aria-hidden />
+        </button>
+      </div>
       <div className={cn('ml-3 flex flex-col gap-0.5', isCollapsed && 'hidden')}>
         {unpinnedSessions.map((session) => {
           const sessionAgentId = resolveSessionAgentId(session, defaultAgentId);
@@ -1332,6 +1349,10 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
               loadingMore={loadingInboxMore}
               isCollapsed={inboxCollapsed}
               onToggleCollapsed={() => setInboxCollapsed((value) => !value)}
+              onCreateChat={() => {
+                navigate('/chat/new');
+                onNavigate?.();
+              }}
               onLoadMore={loadMoreInbox}
               activeSessionKey={activeSessionKey}
               onNavigate={onNavigate}
