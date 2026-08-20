@@ -20,7 +20,7 @@ export interface EffectiveAgentProfile {
   thinkingDefault?: ThinkLevel;
   reasoningDefault?: ReasoningLevel;
   verboseDefault?: VerboseLevel;
-  systemPromptOverride?: string;
+  customInstructions?: string;
   skillsAllowlist?: string[];
   tools: EffectiveAgentTools;
   params: Record<string, unknown>;
@@ -80,7 +80,7 @@ export function resolveEffectiveAgentProfile(config: Config, agentId: string): E
     resolvedWorkspacePath: resolveAgentWorkspaceDir(config, manifest.id),
     primaryModelRef: defaultModel?.trim() || undefined,
     fallbacks: (defaultRoleModel?.fallbacks ?? []).map((ref) => ref.trim()).filter(Boolean),
-    systemPromptOverride: manifest.prompt?.customInstructions,
+    customInstructions: manifest.prompt?.customInstructions,
     skillsAllowlist,
     tools: { denied: new Set(deniedTools) },
     params: {},

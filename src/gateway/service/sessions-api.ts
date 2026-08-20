@@ -175,6 +175,7 @@ export class GatewaySessionsApi {
       reasoningLevel?: string | null;
       verboseLevel?: string;
       workingDirectory?: string;
+      responseLanguage?: string | null;
     },
   ) {
     return this.opts.getAgentService().sessionConfig.patch(sessionKey, body);

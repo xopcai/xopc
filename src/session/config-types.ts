@@ -4,6 +4,7 @@ import type {
   ThinkLevel,
   VerboseLevel,
 } from '../agent/transcript/thinking-types.js';
+import type { ResponseLanguage } from '../i18n/response-language.js';
 
 /**
  * Session-level agent configuration persisted in SQLite.
@@ -17,5 +18,6 @@ export interface SessionAgentConfig {
   modelOverride?: string;
   providerOverride?: string;
   workingDirectoryOverride?: string;
+  responseLanguage?: ResponseLanguage;
   updatedAt?: number;
 }

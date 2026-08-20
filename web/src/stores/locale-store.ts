@@ -31,14 +31,19 @@ function syncElectronLanguage(language: StoredLanguage): void {
   });
 }
 
-function syncGatewayVoiceLanguage(language: StoredLanguage): void {
+function syncGatewayLanguage(language: StoredLanguage): void {
   if (!useGatewayStore.getState().token) return;
-  void fetchJson(apiUrl('/api/voice/language'), {
-    method: 'POST',
-    body: JSON.stringify({ language }),
-  }).catch(() => {
-    /* Language sync must never block or interrupt the settings experience. */
-  });
+  const requests = [
+    fetchJson(apiUrl('/api/voice/language'), {
+      method: 'POST',
+      body: JSON.stringify({ language }),
+    }),
+    fetchJson(apiUrl('/api/user-context/preferences'), {
+      method: 'PATCH',
+      body: JSON.stringify({ responseLanguage: language === 'zh' ? 'zh-CN' : 'en' }),
+    }),
+  ];
+  void Promise.allSettled(requests);
 }
 
 export const useLocaleStore = create<LocaleState>((set) => ({
@@ -47,15 +52,15 @@ export const useLocaleStore = create<LocaleState>((set) => ({
     applyRendererLanguage(language);
     set({ language });
     syncElectronLanguage(language);
-    syncGatewayVoiceLanguage(language);
+    syncGatewayLanguage(language);
   },
 }));
 
 export function syncElectronLocaleAfterHydration(): () => void {
-  syncGatewayVoiceLanguage(useLocaleStore.getState().language);
+  syncGatewayLanguage(useLocaleStore.getState().language);
   const offGateway = useGatewayStore.subscribe((state, previous) => {
     if (state.token && state.token !== previous.token) {
-      syncGatewayVoiceLanguage(useLocaleStore.getState().language);
+      syncGatewayLanguage(useLocaleStore.getState().language);
     }
   });
   const api = window.electronAPI?.locale;
@@ -72,7 +77,7 @@ export function syncElectronLocaleAfterHydration(): () => void {
       if (disposed || !isStoredLanguage(language)) return;
       applyRendererLanguage(language);
       useLocaleStore.setState({ language });
-      syncGatewayVoiceLanguage(language);
+      syncGatewayLanguage(language);
     });
   }
 
@@ -80,7 +85,7 @@ export function syncElectronLocaleAfterHydration(): () => void {
     if (disposed || !isStoredLanguage(language)) return;
     applyRendererLanguage(language);
     useLocaleStore.setState({ language });
-    syncGatewayVoiceLanguage(language);
+    syncGatewayLanguage(language);
   });
   return () => {
     disposed = true;

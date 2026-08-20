@@ -149,10 +149,13 @@ export function createDelegateTool(deps: DelegateToolDeps): AgentTool {
         };
       }
 
+      const ctx = deps.getCurrentContext?.() ?? null;
+      const parentSessionKey = ctx?.sessionKey;
       const childOptions: DelegateChildHandleOptions = {
         workspace: deps.workspace,
         goal: p.goal,
         context: p.context,
+        requesterSessionKey: parentSessionKey,
         allowedToolNames: allowedNames,
         maxIterations,
         model,
@@ -163,8 +166,6 @@ export function createDelegateTool(deps: DelegateToolDeps): AgentTool {
       };
 
       // Sub-agent lifecycle hook (parity surface for channel thread bindings).
-      const ctx = deps.getCurrentContext?.() ?? null;
-      const parentSessionKey = ctx?.sessionKey;
       let childSessionKey: string | undefined;
       try {
         if (deps.hookRunner && parentSessionKey) {

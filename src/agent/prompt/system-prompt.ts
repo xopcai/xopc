@@ -7,6 +7,7 @@
  */
 
 import type { EmbeddedContextFile } from '../bootstrap/types.js';
+import type { ResponseLanguage } from '../../i18n/response-language.js';
 import { buildActionTrustPrompt, type UserTrustLevel } from '../../user-context/trust-policy.js';
 import { PROMPT_CACHE_BOUNDARY, splitPromptCacheBoundary } from './cache-boundary.js';
 import type { ProviderSystemPromptContribution } from './contribution.js';
@@ -44,6 +45,7 @@ import {
   buildWorkspaceSection,
   type RuntimeInfoInput,
 } from './sections/workspace-runtime.js';
+import { buildResponseLanguageSection } from './sections/response-language.js';
 import { buildOverridablePromptSection } from './system-prompt-params.js';
 import type { MemoryCitationsMode, PromptMode, SilentReplyPromptMode } from './types.js';
 
@@ -79,6 +81,8 @@ export interface SystemPromptOptions {
   includeProblemSolving?: boolean;
   includeToneSection?: boolean;
   actionTrustLevel?: UserTrustLevel;
+  responseLanguage?: ResponseLanguage;
+  customInstructions?: string;
 }
 
 function joinSections(sections: Array<string | undefined>): string {
@@ -112,11 +116,17 @@ export function buildSystemPrompt(workspaceDir: string, options: SystemPromptOpt
     includeProblemSolving = true,
     includeToneSection = true,
     actionTrustLevel,
+    responseLanguage = 'auto',
+    customInstructions,
   } = options;
 
   if (promptMode === 'none') {
     return joinSections([
       'You are a personal AI assistant running inside xopc.',
+      customInstructions?.trim()
+        ? `<custom_instructions>\n${customInstructions.trim()}\n</custom_instructions>`
+        : undefined,
+      buildResponseLanguageSection(responseLanguage),
       activeProjectContext,
     ]);
   }
@@ -138,6 +148,10 @@ export function buildSystemPrompt(workspaceDir: string, options: SystemPromptOpt
 
   const stableSections: string[] = [
     'You are a personal AI assistant running inside xopc.',
+    ...(customInstructions?.trim()
+      ? [`<custom_instructions>\n${customInstructions.trim()}\n</custom_instructions>`]
+      : []),
+    buildResponseLanguageSection(responseLanguage),
     buildToolingSection({ toolNames, toolSummaries }),
     buildOverridablePromptSection({
       override: sectionOverrides.tool_call_style,
