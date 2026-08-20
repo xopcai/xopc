@@ -1,28 +1,31 @@
 import type { SessionMetadata } from '../session/types.js';
-import type {
-  ExecutionReceiptContext,
-  ExecutionReceiptOrigin,
-  ExecutionReceiptTrigger,
-} from '../storage/sqlite/execution-receipt-repository.js';
+export type ExecutionOrigin = 'chat' | 'task' | 'workflow' | 'automation' | 'browser' | 'proactive';
+export type ExecutionTrigger = 'user' | 'schedule' | 'webhook' | 'proactive' | 'retry';
 
-export interface ExecutionContext extends ExecutionReceiptContext {
+export interface ExecutionContext {
   runId: string;
   sessionKey: string;
   channel: string;
   agentId?: string;
   strategy?: string;
+  taskId?: string;
+  projectId?: string;
+  origin: ExecutionOrigin;
+  triggerKind: ExecutionTrigger;
+  parentRunId?: string;
+  contextTraceId?: string;
 }
 
-const ORIGINS = new Set<ExecutionReceiptOrigin>(['chat', 'task', 'workflow', 'automation', 'browser', 'proactive']);
-const TRIGGERS = new Set<ExecutionReceiptTrigger>(['user', 'schedule', 'webhook', 'proactive', 'retry']);
+const ORIGINS = new Set<ExecutionOrigin>(['chat', 'task', 'workflow', 'automation', 'browser', 'proactive']);
+const TRIGGERS = new Set<ExecutionTrigger>(['user', 'schedule', 'webhook', 'proactive', 'retry']);
 
 function optionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
-function metadataOrigin(metadata: SessionMetadata): ExecutionReceiptOrigin {
+function metadataOrigin(metadata: SessionMetadata): ExecutionOrigin {
   const explicit = optionalString(metadata.customData?.origin);
-  if (explicit && ORIGINS.has(explicit as ExecutionReceiptOrigin)) return explicit as ExecutionReceiptOrigin;
+  if (explicit && ORIGINS.has(explicit as ExecutionOrigin)) return explicit as ExecutionOrigin;
   if (optionalString(metadata.customData?.taskId)) return 'task';
   if (metadata.sessionType === 'workflow-run' || metadata.sessionType === 'workflow-subagent') return 'workflow';
   if (metadata.sessionType === 'cron') return 'automation';
@@ -31,9 +34,9 @@ function metadataOrigin(metadata: SessionMetadata): ExecutionReceiptOrigin {
   return 'chat';
 }
 
-function metadataTrigger(metadata: SessionMetadata): ExecutionReceiptTrigger {
+function metadataTrigger(metadata: SessionMetadata): ExecutionTrigger {
   const explicit = optionalString(metadata.customData?.triggerKind);
-  if (explicit && TRIGGERS.has(explicit as ExecutionReceiptTrigger)) return explicit as ExecutionReceiptTrigger;
+  if (explicit && TRIGGERS.has(explicit as ExecutionTrigger)) return explicit as ExecutionTrigger;
   if (metadata.sessionType === 'cron') return 'schedule';
   if (metadata.sessionType === 'heartbeat') return 'proactive';
   return 'user';
@@ -58,16 +61,5 @@ export function resolveExecutionContext(input: {
     parentRunId: optionalString(input.metadata.customData?.parentRunId),
     contextTraceId: optionalString(input.metadata.customData?.contextTraceId),
     strategy: optionalString(input.metadata.customData?.strategy),
-  };
-}
-
-export function executionReceiptContext(context: ExecutionContext): ExecutionReceiptContext {
-  return {
-    taskId: context.taskId,
-    projectId: context.projectId,
-    origin: context.origin,
-    triggerKind: context.triggerKind,
-    parentRunId: context.parentRunId,
-    contextTraceId: context.contextTraceId,
   };
 }

@@ -10,4 +10,6 @@ export type ApplyMigrationsOptions = {
   migrationsDir?: string;
   /** Target schema version. Defaults to {@link XOPC_DB_SCHEMA_VERSION}. */
   targetVersion?: number;
+  /** Database file path used to create the mandatory pre-v100 backup. */
+  databasePath?: string;
 };

@@ -15,9 +15,11 @@ const log = createLogger('MobileNotifications');
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 
 type TaskPayload = {
-  task?: { id?: unknown; objective?: unknown };
+  task?: { id?: unknown; title?: unknown };
   taskId?: unknown;
-  status?: unknown;
+  reason?: unknown;
+  to?: unknown;
+  resolution?: unknown;
 };
 
 type ExpoPushResult = { status?: string; details?: { error?: string } };
@@ -40,20 +42,22 @@ function taskEvent(payload: unknown): Omit<MobileActivityEvent, 'id' | 'createdA
   const data = payload as TaskPayload;
   const task = data.task;
   const taskId = typeof task?.id === 'string' ? task.id : typeof data.taskId === 'string' ? data.taskId : '';
-  const status = typeof data.status === 'string' ? data.status : '';
-  if (!taskId || !['needs_user', 'blocked', 'completed'].includes(status)) return null;
-  const type: MobileNotificationEventType = status === 'needs_user'
-    ? 'task.needs_input'
-    : status === 'blocked'
-      ? 'task.blocked'
-      : 'task.completed';
+  if (!taskId) return null;
+  const type: MobileNotificationEventType | undefined = data.reason === 'blocked'
+    ? 'task.blocked'
+    : typeof data.reason === 'string'
+      ? 'task.needs_input'
+      : data.to === 'closed' && data.resolution === 'done'
+        ? 'task.completed'
+        : undefined;
+  if (!type) return null;
   const route = `/tasks/${encodeURIComponent(taskId)}`;
   return {
     type,
     entity: { kind: 'task', id: taskId },
     priority: type === 'task.needs_input' || type === 'task.blocked' ? 'high' : 'normal',
     title: type === 'task.needs_input' ? 'Action needed' : type === 'task.blocked' ? 'Task blocked' : 'Task completed',
-    body: typeof task?.objective === 'string' ? task.objective.slice(0, 120) : undefined,
+    body: typeof task?.title === 'string' ? task.title.slice(0, 120) : undefined,
     deepLink: route,
     payload: { route, taskId, eventType: type },
   };
@@ -94,7 +98,7 @@ export function mobileNotificationEventFromGatewayEvent(
   type: string,
   payload: unknown,
 ): Omit<MobileActivityEvent, 'id' | 'createdAt'> | null {
-  if (type === 'task.status.updated') return taskEvent(payload);
+  if (type === 'task.attention_required.v2' || type === 'task.phase_changed.v2') return taskEvent(payload);
   if (type === 'automation.run.completed') return automationEvent(payload);
   if (type === 'proactive.inbox.created') return proactiveInsightEvent(payload);
   return null;

@@ -173,6 +173,19 @@ export class AutomationActionExecutor {
     if (automation.action.kind === 'browser_recipe') {
       return this.executeBrowserRecipe(automation, automation.action, signal, hooks);
     }
+    if (automation.action.kind === 'task_command') {
+      await hooks.onRunPatch?.({ currentPhase: 'action' });
+      const execute = this.deps.executeTaskCommand;
+      if (!execute) return { status: 'failed', error: 'Task command executor is unavailable' };
+      const result = execute({
+        taskId: automation.action.taskId,
+        idempotencyKey: `automation:${automation.id}:${run.id}`,
+        command: automation.action.command,
+      });
+      return result.ok
+        ? { status: 'succeeded', summary: result.runId ? `TaskRun ${result.runId} queued` : 'Task command applied' }
+        : { status: 'failed', error: result.reason ?? 'Task command failed' };
+    }
     return this.executeAgent(automation, automation.action, run, signal, hooks, deadlineAtMs);
   }
 

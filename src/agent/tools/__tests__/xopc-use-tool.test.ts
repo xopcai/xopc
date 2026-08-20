@@ -114,6 +114,63 @@ describe('xopc_use tool', () => {
     expect(result.match.created).toBe(false);
   });
 
+  it('operates project goals, milestones, and immutable updates', async () => {
+    const tool = createXopcUseTool({
+      getCurrentAgentId: () => 'main',
+      getCurrentSessionKey: () => SESSION_KEY,
+      getProjectService: () => projects,
+    });
+    const created = parseToolJson(await tool.execute('call-project-create', {
+      mode: 'project',
+      command: 'create',
+      args: {
+        name: 'Launch',
+        outcome: 'Ship the release',
+        successCriteria: ['Production is healthy'],
+        scope: { surface: 'gateway' },
+        nonGoals: ['Rewrite unrelated modules'],
+        health: 'on_track',
+      },
+    })).project;
+
+    expect(created).toMatchObject({
+      outcome: 'Ship the release',
+      successCriteria: ['Production is healthy'],
+      scope: { surface: 'gateway' },
+      health: 'on_track',
+    });
+
+    const milestone = parseToolJson(await tool.execute('call-milestone', {
+      mode: 'project',
+      command: 'create_milestone',
+      args: { projectId: created.id, title: 'Release candidate', status: 'active' },
+    })).milestone;
+    expect(milestone).toMatchObject({ title: 'Release candidate', status: 'active' });
+
+    const update = parseToolJson(await tool.execute('call-project-update', {
+      mode: 'project',
+      command: 'create_update',
+      args: {
+        projectId: created.id,
+        health: 'at_risk',
+        summary: 'One blocker remains',
+        risks: ['Release gate is pending'],
+      },
+    })).update;
+    expect(update).toMatchObject({ health: 'at_risk', summary: 'One blocker remains' });
+
+    const detail = parseToolJson(await tool.execute('call-project-get', {
+      mode: 'project',
+      command: 'get',
+      args: { projectId: created.id },
+    }));
+    expect(detail.project).toMatchObject({
+      health: 'at_risk',
+      milestones: [expect.objectContaining({ id: milestone.id })],
+      recentUpdates: [expect.objectContaining({ id: update.id })],
+    });
+  });
+
   it('accepts path as a project workspace alias', async () => {
     const workspaceRoot = mkdtempSync(join(stateDir, 'workspace-'));
     const tool = createXopcUseTool({
@@ -265,8 +322,8 @@ describe('xopc_use tool', () => {
       ok: true,
       createMode: 'capture',
       task: {
-        objective: 'Prepare the launch checklist',
-        status: 'pending',
+        title: 'Prepare the launch checklist',
+        phase: 'backlog',
         priority: 'high',
       },
     });
@@ -276,25 +333,92 @@ describe('xopc_use tool', () => {
         kind: 'task',
         id: created.task.id,
         projectId: project.id,
-        capabilities: expect.arrayContaining(['open', 'run']),
+        capabilities: expect.arrayContaining(['open', 'edit']),
       },
     });
+
+    const context = parseToolJson(await tool.execute('call-task-context', {
+      mode: 'task',
+      command: 'add_context',
+      args: {
+        taskId: created.task.id,
+        targetKind: 'file',
+        targetId: '/workspace/launch.md',
+        role: 'input',
+        title: 'Launch plan',
+        pinned: true,
+      },
+    }));
+    expect(context).toMatchObject({
+      ok: true,
+      edge: {
+        taskId: created.task.id,
+        targetKind: 'file',
+        targetId: '/workspace/launch.md',
+        role: 'input',
+        pinned: true,
+      },
+    });
+
+    const detail = parseToolJson(await tool.execute('call-task-with-context', {
+      mode: 'task',
+      command: 'get',
+      args: { taskId: created.task.id },
+    }));
+    expect(detail.context).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: context.edge.id, title: 'Launch plan' }),
+    ]));
   });
 
-  it('starts and pauses a task through task actions', async () => {
-    const enqueueTask = vi.fn((taskId: string) => ({
-      id: `queue:${taskId}`,
-      taskId,
-      status: 'queued' as const,
-      attempts: 0,
-      maxRetries: 2,
-      enqueuedAt: Date.now(),
-      source: 'api' as const,
-    }));
+  it('cancels a TaskRun with optimistic concurrency and records a receipt', async () => {
     const tool = createXopcUseTool({
       getCurrentAgentId: () => 'main',
       getCurrentSessionKey: () => SESSION_KEY,
-      enqueueTask,
+      dispatchTaskRuns: vi.fn(),
+    });
+    const started = parseToolJson(await tool.execute('call-start-for-cancel', {
+      mode: 'task',
+      command: 'create',
+      args: { objective: 'Prepare a disposable draft', createMode: 'start' },
+    }));
+    const before = parseToolJson(await tool.execute('call-read-before-cancel', {
+      mode: 'task_run',
+      command: 'get',
+      args: { runId: started.runId },
+    }));
+
+    const cancelledResult = await tool.execute('call-cancel-run', {
+      mode: 'task_run',
+      command: 'cancel',
+      args: {
+        runId: started.runId,
+        expectedVersion: before.run.version,
+        reason: 'The user no longer needs the draft',
+      },
+    });
+    const cancelled = parseToolJson(cancelledResult);
+
+    expect(cancelled).toMatchObject({
+      ok: true,
+      run: { id: started.runId, status: 'cancelled' },
+      receipt: {
+        status: 'cancelled',
+        summary: 'The user no longer needs the draft',
+        completionVerdict: 'not_achieved',
+      },
+    });
+    expect(cancelledResult.details.delivery).toMatchObject({
+      operation: 'updated',
+      primary: { kind: 'task', id: started.task.id, status: 'cancelled' },
+    });
+  });
+
+  it('starts a task and adds a wait through typed commands', async () => {
+    const dispatchTaskRuns = vi.fn();
+    const tool = createXopcUseTool({
+      getCurrentAgentId: () => 'main',
+      getCurrentSessionKey: () => SESSION_KEY,
+      dispatchTaskRuns,
     });
 
     const startedResult = await tool.execute('call-task-start', {
@@ -304,21 +428,60 @@ describe('xopc_use tool', () => {
     });
     const started = parseToolJson(startedResult);
 
-    expect(started.task.status).toBe('planning');
-    expect(started.activation).toMatchObject({ status: 'queued' });
-    expect(enqueueTask).toHaveBeenCalledWith(started.task.id, expect.any(Object));
+    expect(started.task.phase).toBe('active');
+    expect(started.operationalState).toBe('queued');
+    expect(started.runId).toBeTypeOf('string');
+    expect(dispatchTaskRuns).toHaveBeenCalledOnce();
 
     const paused = parseToolJson(await tool.execute('call-task-pause', {
       mode: 'task',
-      command: 'action',
+      command: 'command',
       args: {
         taskId: started.task.id,
-        action: 'pause',
-        expectedUpdatedAt: started.task.updatedAt,
+        type: 'add_wait',
+        expectedVersion: started.task.version,
+        commandArgs: { wait: { kind: 'paused', reason: 'Pause', condition: {} } },
       },
     }));
 
-    expect(paused).toMatchObject({ ok: true, action: 'pause', task: { status: 'paused' } });
+    expect(paused).toMatchObject({
+      ok: true,
+      command: { type: 'add_wait' },
+      task: { phase: 'active' },
+      operationalState: 'waiting',
+    });
+
+    const taskDetail = parseToolJson(await tool.execute('call-task-detail', {
+      mode: 'task',
+      command: 'get',
+      args: { taskId: started.task.id },
+    }));
+    expect(taskDetail.model).toMatchObject({ operationalState: 'waiting' });
+
+    const runList = parseToolJson(await tool.execute('call-task-runs', {
+      mode: 'task_run',
+      command: 'list',
+      args: { taskId: started.task.id },
+    }));
+    expect(runList).toMatchObject({
+      ok: true,
+      items: [expect.objectContaining({ id: started.runId, taskId: started.task.id })],
+      activeWaits: [expect.objectContaining({ kind: 'paused' })],
+    });
+
+    const runDetail = parseToolJson(await tool.execute('call-task-run', {
+      mode: 'task_run',
+      command: 'get',
+      args: { runId: started.runId },
+    }));
+    expect(runDetail).toMatchObject({
+      ok: true,
+      run: { id: started.runId, taskId: started.task.id },
+      activeWaits: [expect.objectContaining({ kind: 'paused' })],
+    });
+    expect(runDetail.events).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'task_run.wait_created' }),
+    ]));
   });
 
   it('updates task dependencies with optimistic concurrency', async () => {
@@ -343,13 +506,13 @@ describe('xopc_use tool', () => {
       args: {
         taskId: task.id,
         dependsOnTaskIds: [dependency.id],
-        expectedUpdatedAt: task.updatedAt,
+        expectedVersion: task.version,
       },
     }));
 
     expect(updated).toMatchObject({
       ok: true,
-      dependencies: [{ id: dependency.id, status: 'pending' }],
+      dependencies: [{ id: dependency.id, phase: 'backlog' }],
     });
     const detail = parseToolJson(await tool.execute('call-task-get', {
       mode: 'task',

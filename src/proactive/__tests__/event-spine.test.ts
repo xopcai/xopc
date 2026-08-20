@@ -19,7 +19,7 @@ const projectRisk: ScenarioRoute = {
   key: 'project_delivery_risk',
   version: 1,
   enabled: true,
-  eventTypes: ['task.status_changed.v1'],
+  eventTypes: ['task.attention_required.v2'],
   condition: { op: 'changed', field: 'payload.status' },
   aggregation: 'project',
   debounceSeconds: 300,
@@ -28,7 +28,7 @@ const projectRisk: ScenarioRoute = {
 
 function event(overrides: Partial<PublishEventInput> = {}): PublishEventInput {
   return {
-    type: 'task.status_changed.v1',
+    type: 'task.attention_required.v2',
     schemaVersion: 1,
     source: { kind: 'tasks', id: 'local' },
     subject: { kind: 'task', id: 'task-1' },

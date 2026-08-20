@@ -131,7 +131,7 @@
       "noteCreatedPrompt": "When a note is created, run an agent to classify the note, identify useful follow-up actions, and summarize any tasks. Trigger on note.created from notes. Keep it safe: only write a short recommendation unless the user later approves edits.",
       "taskBlockedTitle": "Automate blocker diagnosis",
       "taskBlockedDescription": "When this task gets blocked, ask an agent to diagnose why and propose the next concrete step.",
-      "taskBlockedPrompt": "When an task becomes blocked, run an agent to diagnose the blocker reason and suggest the next concrete step. Trigger on task.status_changed from tasks with payloadMatch status=blocked. Use the task objective: {{title}}. Do not change the task automatically unless the user configures that explicitly.",
+      "taskBlockedPrompt": "When a task requires attention because it is blocked, run an agent to diagnose the blocker and suggest the next concrete step. Trigger on task.attention_required.v2 from tasks with payloadMatch reason=blocked. Use the task title: {{title}}. Do not change the task automatically unless the user configures that explicitly.",
       "workflowFailedTitle": "Automate failed-run recovery",
       "workflowFailedDescription": "When this workflow fails, let xopc inspect the run and draft a repair or retry plan.",
       "workflowFailedPrompt": "When a workflow run completes with status failed, run an agent to inspect the workflow run, summarize the failure, and propose a recovery plan. Trigger on workflow.run.completed from workflows with payloadMatch status=failed. Use the run id: {{runId}} and definition id: {{definitionId}}. Do not retry automatically unless the user explicitly configures it."

@@ -131,7 +131,7 @@
       "noteCreatedPrompt": "当创建新笔记时，运行智能体对笔记分类、识别有用的后续行动，并总结可能的任务。触发条件使用 notes 来源的 note.created 事件。保持安全：默认只输出简短建议，除非用户后续确认，否则不要自动改写笔记。",
       "taskBlockedTitle": "自动诊断阻塞",
       "taskBlockedDescription": "当这个结果被阻塞时，让智能体诊断原因并给出下一步具体行动。",
-      "taskBlockedPrompt": "当结果变为阻塞状态时，运行智能体诊断阻塞原因并给出下一步具体行动。触发条件使用 tasks 来源的 task.status_changed 事件，payloadMatch status=blocked。参考结果目标：{{title}}。除非用户明确配置，否则不要自动修改结果。",
+      "taskBlockedPrompt": "当任务因阻塞需要关注时，运行智能体诊断原因并给出下一步具体行动。触发条件使用 tasks 来源的 task.attention_required.v2 事件，payloadMatch reason=blocked。参考任务标题：{{title}}。除非用户明确配置，否则不要自动修改任务。",
       "workflowFailedTitle": "自动处理失败运行",
       "workflowFailedDescription": "当这个工作流失败时，让 xopc 检查运行记录并起草修复或重试计划。",
       "workflowFailedPrompt": "当工作流运行以 failed 状态结束时，运行智能体检查工作流运行、总结失败原因，并提出恢复计划。触发条件使用 workflows 来源的 workflow.run.completed 事件，payloadMatch status=failed。参考运行 ID：{{runId}}，工作流定义 ID：{{definitionId}}。除非用户明确配置，否则不要自动重试。"

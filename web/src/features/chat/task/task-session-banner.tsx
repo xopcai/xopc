@@ -1,4 +1,4 @@
-import type { TaskStatus } from '@xopcai/gateway-contract';
+import type { TaskOperationalState, TaskPhase } from '@xopcai/gateway-contract';
 import { ExternalLink, Target } from 'lucide-react';
 import { memo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
@@ -10,13 +10,9 @@ import { cn } from '@/lib/cn';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
-const TERMINAL_STATUSES = new Set<TaskStatus>(['completed', 'cancelled']);
-const NEEDS_USER_STATUSES = new Set<TaskStatus>(['needs_user', 'blocked']);
-
-function statusClass(status: TaskStatus): string {
-  if (status === 'completed') return 'border-success/35 text-success';
-  if (NEEDS_USER_STATUSES.has(status)) return 'border-warning/40 text-warning';
-  if (status === 'cancelled' || status === 'paused') return 'border-edge text-fg-muted';
+function statusClass(phase: TaskPhase, operationalState: TaskOperationalState): string {
+  if (phase === 'closed') return 'border-success/35 text-success';
+  if (operationalState === 'waiting' || operationalState === 'blocked') return 'border-warning/40 text-warning';
   return 'border-accent/40 text-accent';
 }
 
@@ -34,7 +30,7 @@ export const TaskSessionBanner = memo(function TaskSessionBanner({
     () => fetchTask(taskId),
     {
       revalidateOnFocus: true,
-      refreshInterval: (latest) => latest && !TERMINAL_STATUSES.has(latest.task.status)
+      refreshInterval: (latest) => latest && latest.task.phase !== 'closed'
         ? 2_000
         : 0,
     },
@@ -46,7 +42,7 @@ export const TaskSessionBanner = memo(function TaskSessionBanner({
       'agent-run-started',
       'agent-run-ended',
       'session-transcript-updated',
-      'task-queue-updated',
+      'task-run-updated',
     ];
     for (const event of events) window.addEventListener(event, refresh);
     return () => {
@@ -56,18 +52,15 @@ export const TaskSessionBanner = memo(function TaskSessionBanner({
 
   if (!data) return null;
 
-  const { task, execution } = data;
+  const { task, operationalState } = data;
   const latestReceipt = data.receipts[0];
-  const status = task.status;
-  const needsUser = NEEDS_USER_STATUSES.has(status);
-  const isActive = !TERMINAL_STATUSES.has(status)
-    && !NEEDS_USER_STATUSES.has(status)
-    && status !== 'paused';
+  const needsUser = data.attention.length > 0;
+  const isActive = task.phase !== 'closed' && ['queued', 'running', 'verifying'].includes(operationalState);
   const detail = needsUser
-    ? execution?.blockedReason ?? latestReceipt?.nextAction ?? latestReceipt?.summary
-    : status === 'completed'
+    ? data.attention[0]?.summary ?? latestReceipt?.nextAction ?? latestReceipt?.summary
+    : task.phase === 'closed'
       ? latestReceipt?.summary
-      : execution?.nextAction ?? latestReceipt?.nextAction ?? latestReceipt?.summary ?? copy.noDecisionNeeded;
+      : latestReceipt?.nextAction ?? latestReceipt?.summary ?? copy.noDecisionNeeded;
   const verifiedEvidenceCount = latestReceipt?.evidence
     .filter((item) => item.strength === 'verified').length ?? 0;
 
@@ -87,8 +80,8 @@ export const TaskSessionBanner = memo(function TaskSessionBanner({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-medium text-fg-muted">{copy.taskProgress.title}</span>
-            <span className={cn('rounded-full border px-1.5 py-0.5 text-[10px] font-medium', statusClass(status))}>
-              {copy.taskProgress.statuses[status]}
+            <span className={cn('rounded-full border px-1.5 py-0.5 text-[10px] font-medium', statusClass(task.phase, operationalState))}>
+              {task.phase} · {operationalState}
             </span>
             {verifiedEvidenceCount > 0 ? (
               <span className="text-[11px] text-fg-muted">
@@ -96,7 +89,7 @@ export const TaskSessionBanner = memo(function TaskSessionBanner({
               </span>
             ) : null}
           </div>
-          <p className="mt-1 text-sm font-medium leading-5 text-fg">{task.objective}</p>
+          <p className="mt-1 text-sm font-medium leading-5 text-fg">{task.title}</p>
           {detail ? <p className="mt-1 line-clamp-2 text-xs leading-5 text-fg-muted">{detail}</p> : null}
         </div>
         <Link

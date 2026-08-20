@@ -1,4 +1,6 @@
-import type { TaskAction, ProjectTaskCard, ProjectTaskLane } from '@xopcai/gateway-contract';
+import type { ProjectTaskCard, ProjectTaskLane } from '@xopcai/gateway-contract';
+
+export type TaskBoardAction = 'run' | 'resume' | 'pause' | 'verify';
 
 export const PROJECT_TASK_LANES: ProjectTaskLane[] = ['ready', 'moving', 'needs_user', 'done'];
 
@@ -16,14 +18,18 @@ export function groupProjectTasks(
 export function taskActionForLane(
   task: ProjectTaskCard,
   targetLane: ProjectTaskLane,
-): TaskAction | undefined {
-  if (targetLane === 'ready' && task.allowedActions.includes('pause')) return 'pause';
-  if (targetLane === 'moving' && task.allowedActions.includes('run')) return 'run';
-  if (targetLane === 'moving' && task.allowedActions.includes('resume')) return 'resume';
-  if (targetLane === 'done' && task.allowedActions.includes('verify')) return 'verify';
+): TaskBoardAction | undefined {
+  if (targetLane === 'ready' && task.allowedCommands.includes('add_wait')) return 'pause';
+  if (targetLane === 'moving' && task.allowedCommands.includes('start')) return 'run';
+  if (targetLane === 'moving' && task.allowedCommands.includes('resolve_wait')) return 'resume';
+  if (targetLane === 'done' && task.allowedCommands.includes('request_review')) return 'verify';
   return undefined;
 }
 
-export function primaryTaskAction(task: ProjectTaskCard): TaskAction | undefined {
-  return task.allowedActions.find((action) => action !== 'cancel');
+export function primaryTaskAction(task: ProjectTaskCard): TaskBoardAction | undefined {
+  if (task.allowedCommands.includes('start')) return 'run';
+  if (task.allowedCommands.includes('resolve_wait')) return 'resume';
+  if (task.allowedCommands.includes('request_review')) return 'verify';
+  if (task.allowedCommands.includes('add_wait')) return 'pause';
+  return undefined;
 }

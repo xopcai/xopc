@@ -15,13 +15,13 @@ export class TaskValueMetricsService {
     const weekStart = Date.now() - 7 * 24 * 60 * 60 * 1000;
     const tasks = getSqliteDatabase().prepare(
       `WITH ranked_receipts AS (
-         SELECT execution_receipts.*,
+         SELECT receipt.*, run.task_id,
                 ROW_NUMBER() OVER (
-                  PARTITION BY task_id
-                  ORDER BY COALESCE(completed_at, updated_at) DESC, started_at DESC
+                  PARTITION BY run.task_id
+                  ORDER BY receipt.finalized_at DESC
                 ) AS rank
-         FROM execution_receipts
-         WHERE task_id IS NOT NULL AND status != 'running'
+         FROM task_run_receipts receipt
+         JOIN task_runs run ON run.run_id = receipt.run_id
        ), latest_receipts AS (
          SELECT * FROM ranked_receipts WHERE rank = 1
        )
@@ -31,22 +31,22 @@ export class TaskValueMetricsService {
          SUM(CASE WHEN latest_receipts.completion_verdict = 'partial' THEN 1 ELSE 0 END) AS partial,
          SUM(CASE WHEN latest_receipts.completion_verdict = 'not_achieved' THEN 1 ELSE 0 END) AS not_achieved,
          SUM(CASE WHEN EXISTS (
-           SELECT 1 FROM execution_receipts correction
-           WHERE correction.task_id = tasks.task_id
-             AND correction.completion_verdict_source = 'user'
+           SELECT 1 FROM task_run_feedback feedback
+           JOIN task_runs feedback_run ON feedback_run.run_id = feedback.run_id
+           WHERE feedback_run.task_id = tasks.task_id AND feedback.needs_correction = 1
          ) THEN 1 ELSE 0 END) AS user_corrected,
-         SUM(CASE WHEN tasks.status = 'completed'
+         SUM(CASE WHEN tasks.phase = 'closed' AND tasks.resolution = 'done'
                     AND latest_receipts.completion_verdict = 'achieved'
-                    AND latest_receipts.verification_status = 'passed'
-                    AND latest_receipts.completion_verdict_source != 'user'
-                    AND COALESCE(latest_receipts.feedback_rating, 'helpful') != 'not_helpful'
+                    AND json_extract(latest_receipts.verification_json, '$.status') = 'passed'
+                    AND NOT EXISTS (SELECT 1 FROM task_run_feedback feedback
+                      WHERE feedback.run_id = latest_receipts.run_id AND feedback.rating = 'not_helpful')
                   THEN 1 ELSE 0 END) AS trusted,
          SUM(CASE WHEN tasks.updated_at >= ?
-                    AND tasks.status = 'completed'
+                    AND tasks.phase = 'closed' AND tasks.resolution = 'done'
                     AND latest_receipts.completion_verdict = 'achieved'
-                    AND latest_receipts.verification_status = 'passed'
-                    AND latest_receipts.completion_verdict_source != 'user'
-                    AND COALESCE(latest_receipts.feedback_rating, 'helpful') != 'not_helpful'
+                    AND json_extract(latest_receipts.verification_json, '$.status') = 'passed'
+                    AND NOT EXISTS (SELECT 1 FROM task_run_feedback feedback
+                      WHERE feedback.run_id = latest_receipts.run_id AND feedback.rating = 'not_helpful')
                   THEN 1 ELSE 0 END) AS weekly_trusted
        FROM tasks
        LEFT JOIN latest_receipts ON latest_receipts.task_id = tasks.task_id`,

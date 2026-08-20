@@ -9,7 +9,7 @@ import {
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../storage/sqlite/index.js';
-import { TaskExecutionService, TaskRepository } from '../../tasks/index.js';
+import { TaskApplicationService, TaskRepository } from '../../tasks/index.js';
 import { inferSuggestedProjectDefaultAgentId } from '../project-agent-suggestion.js';
 import { inferProjectKind } from '../project-kind.js';
 import { ProjectService } from '../project-service.js';
@@ -42,6 +42,60 @@ describe('ProjectService', () => {
     expect(second.slug).toBe('xopc-project-2');
     expect(projects.getBySlug('xopc-project')?.id).toBe(first.id);
     expect(projects.list({ search: 'xopc' }).total).toBe(2);
+  });
+
+  it('stores the project outcome, scope, health, and optimistic version', () => {
+    const project = projects.create({
+      name: 'Outcome project',
+      outcome: 'Launch the new task system',
+      successCriteria: ['All task runs are traceable'],
+      scope: { product: 'tasks' },
+      nonGoals: ['Legacy compatibility'],
+      health: 'on_track',
+      ownerId: 'user-1',
+      targetAt: 123_456,
+    });
+    expect(project).toMatchObject({
+      outcome: 'Launch the new task system',
+      successCriteria: ['All task runs are traceable'],
+      scope: { product: 'tasks' },
+      nonGoals: ['Legacy compatibility'],
+      health: 'on_track',
+      ownerId: 'user-1',
+      targetAt: 123_456,
+      version: 1,
+    });
+    expect(projects.update(project.id, { health: 'at_risk' }))
+      .toMatchObject({ health: 'at_risk', version: 2 });
+  });
+
+  it('stores milestones and immutable project updates in the project detail', () => {
+    const project = projects.create({ name: 'Operating project' });
+    const milestone = projects.createMilestone(project.id, {
+      title: 'Public beta',
+      targetAt: 500,
+      sortOrder: 2,
+    });
+    const completed = projects.updateMilestone(project.id, milestone.id, { status: 'completed' });
+    const update = projects.createUpdate(project.id, {
+      health: 'at_risk',
+      summary: 'Beta depends on one external review.',
+      progress: ['Execution boundary shipped'],
+      risks: ['External review pending'],
+      nextSteps: ['Resolve review wait'],
+      actor: { kind: 'user', id: 'user-1' },
+    });
+
+    expect(completed.status).toBe('completed');
+    expect(update).toMatchObject({ health: 'at_risk', risks: ['External review pending'] });
+    expect(projects.getWithDetails(project.id)).toMatchObject({
+      health: 'at_risk',
+      version: 2,
+      milestones: [{ id: milestone.id, status: 'completed' }],
+      recentUpdates: [{ id: update.id }],
+    });
+    expect(projects.deleteMilestone(project.id, milestone.id)).toBe(true);
+    expect(projects.listMilestones(project.id)).toEqual([]);
   });
 
   it('searches projects through the project FTS index', () => {
@@ -275,11 +329,18 @@ describe('ProjectService', () => {
   it('binds sessions and tasks without deleting them when project is deleted', () => {
     const project = projects.create({ name: 'Grouped Work' });
     ensureSessionRecord(SESSION_KEY, process.cwd());
-    const execution = new TaskExecutionService().create({
-      objective: 'Ship grouped work',
-      sessionKey: SESSION_KEY,
+    const created = new TaskApplicationService().create({
+      idempotencyKey: 'grouped-work',
+      title: 'Ship grouped work',
       projectId: project.id,
+      priority: 'normal',
+      contract: {
+        objective: 'Ship grouped work', expectedOutputs: [], acceptanceCriteria: [], constraints: [],
+        approvalRequired: [], assumptions: [], risks: [], acceptancePolicy: 'manual', outputDestinations: [],
+      },
+      dependencies: [], context: [], authorityGrants: [], activation: { mode: 'capture', phase: 'backlog' },
     });
+    if (!created.ok) throw new Error('Expected task creation');
 
     projects.attachSession(SESSION_KEY, project.id);
 
@@ -290,7 +351,7 @@ describe('ProjectService', () => {
 
     projects.delete(project.id);
     expect(projects.get(project.id)).toBeNull();
-    expect(new TaskRepository().get(execution.taskId)).toBeDefined();
-    expect(new TaskRepository().get(execution.taskId)?.execution.projectId).toBeUndefined();
+    expect(new TaskRepository().get(created.model.task.id)).toBeDefined();
+    expect(new TaskRepository().get(created.model.task.id)?.projectId).toBeUndefined();
   });
 });

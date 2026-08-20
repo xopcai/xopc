@@ -1,4 +1,5 @@
 import type { WorkflowRunInputEnvelope } from '../../workflows/domain/index.js';
+import type { TaskCommand } from '@xopcai/gateway-contract';
 import type {
   WorkflowRunServiceLike,
 } from '../../workflows/service/workflow-run-service.types.js';
@@ -44,6 +45,11 @@ export type AutomationAction =
       recipeId: string;
       args?: Record<string, unknown>;
       timeoutSeconds?: number;
+    }
+  | {
+      kind: 'task_command';
+      taskId: string;
+      command: TaskCommand;
     };
 
 export type AutomationAfterRun =
@@ -218,6 +224,11 @@ export interface AutomationDeps {
     }>;
   };
   onRunCompleted?: (run: AutomationRun) => void;
+  executeTaskCommand?: (input: {
+    taskId: string;
+    idempotencyKey: string;
+    command: TaskCommand;
+  }) => { ok: boolean; reason?: string; runId?: string };
 }
 
 export interface AutomationActionTask {

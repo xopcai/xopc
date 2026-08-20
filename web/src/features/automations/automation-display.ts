@@ -169,7 +169,7 @@ export function formatAutomationRelativeDateTime(
 }
 
 function eventTriggerLabel(trigger: Extract<AutomationTrigger, { kind: 'event' }>, labels: AutomationsMessages): string {
-  if (trigger.eventType === 'task.status_changed' && trigger.payloadMatch?.status === 'blocked') {
+  if (trigger.eventType === 'task.attention_required.v2' && trigger.payloadMatch?.reason === 'blocked') {
     return labels.trigger.taskBlockedWhen;
   }
   if (trigger.eventType === 'note.created') return labels.trigger.noteCreatedWhen;

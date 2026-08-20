@@ -699,7 +699,7 @@ function runTuiProjectCommand(state: TuiState, args: string): string {
       if (!project) return ref ? `Project not found: ${ref}` : 'No current project.';
       const tasks = new TaskRepository().listByProject(project.id, 20);
       if (!tasks.length) return `No tasks in ${project.name}.`;
-      return [`Tasks in ${project.name}:`, ...tasks.map((task) => `- ${task.id} [${task.status}] ${task.objective}`)].join('\n');
+      return [`Tasks in ${project.name}:`, ...tasks.map((task) => `- ${task.id} [${task.phase}] ${task.title}`)].join('\n');
     }
 
     return [

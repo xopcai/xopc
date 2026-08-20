@@ -22,7 +22,6 @@ import {
   appendMemorySignal,
   appendMemoryTraceEvent,
   deleteMemoryRecord,
-  findExecutionReceiptForAssistant,
   findLatestMemoryInjectTrace,
   getMemoryRecord,
   listKnowledgeSourceChanges,
@@ -34,7 +33,6 @@ import {
   searchMemoryRecords,
   setMemoryTraceFeedback,
   setLatestMemoryInjectFeedback,
-  setExecutionReceiptFeedback,
   setInteractionState,
   summarizeMemoryRecallFeedback,
   summarizeUserUnderstandingQuality,
@@ -459,18 +457,6 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
       if (!sessionKey || !Number.isFinite(assistantTimestamp) || assistantTimestamp <= 0 || !rating) {
         return c.json({ error: 'sessionKey, assistantTimestamp, and a valid rating are required' }, 400);
       }
-      const executionReceipt = setExecutionReceiptFeedback({
-        sessionKey,
-        assistantTimestamp,
-        rating,
-        reason: reason || undefined,
-        needsCorrection: rating === 'not_helpful',
-        ...(rating === 'helpful'
-          ? { supportFit: true }
-          : reason.includes('tone_mismatch')
-            ? { supportFit: false }
-            : {}),
-      });
       if (rating === 'not_helpful' && reason.includes('tone_mismatch')) {
         setInteractionState({
           sessionKey,
@@ -493,10 +479,10 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
         },
       });
       return c.json({
-        matched: Boolean(executionReceipt),
+        matched: Boolean(trace),
         attributedRecordCount: trace?.selectedRecordIds.length ?? 0,
         personalContext: personalContextForTrace(trace),
-        feedback: executionReceipt?.feedback ?? null,
+        feedback: trace?.feedback ?? null,
         remediation: trace?.remediation ?? null,
       });
     },
@@ -508,16 +494,15 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
     if (!sessionKey || !Number.isFinite(assistantTimestamp) || assistantTimestamp <= 0) {
       return c.json({ error: 'sessionKey and assistantTimestamp are required' }, 400);
     }
-    const executionReceipt = findExecutionReceiptForAssistant(sessionKey, assistantTimestamp);
     const trace = findLatestMemoryInjectTrace({
       sessionKey,
       beforeMs: assistantTimestamp,
     });
     return c.json({
-      matched: Boolean(executionReceipt),
+      matched: Boolean(trace),
       attributedRecordCount: trace?.selectedRecordIds.length ?? 0,
       personalContext: personalContextForTrace(trace),
-      feedback: executionReceipt?.feedback ?? null,
+      feedback: trace?.feedback ?? null,
     });
   });
 

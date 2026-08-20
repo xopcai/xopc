@@ -1,12 +1,13 @@
 import { z } from 'zod';
 
 import {
-  TaskActionSchema,
+  TaskAttentionItemSchema,
+  TaskDependencySummarySchema,
+  TaskOperationalStateSchema,
+  TaskPhaseSchema,
   TaskPrioritySchema,
-  TaskStatusSchema,
-  TaskAttentionSchema,
-  TaskProgressSchema,
-  TaskReceiptSchema,
+  TaskResolutionSchema,
+  TaskRunReceiptSchema,
 } from './tasks.js';
 import { ProjectMonitoringPolicySchema } from './project-monitoring.js';
 
@@ -25,23 +26,17 @@ export const ProjectTaskCardSchema = z.object({
   id: z.string(),
   title: z.string(),
   lane: ProjectTaskLaneSchema,
-  status: TaskStatusSchema,
+  phase: TaskPhaseSchema,
+  resolution: TaskResolutionSchema.optional(),
+  operationalState: TaskOperationalStateSchema,
   priority: TaskPrioritySchema,
   dueAt: z.number().optional(),
-  nextAction: z.string().optional(),
-  blockedReason: z.string().optional(),
-  activeSessionKey: z.string().optional(),
   acceptanceCriteriaCount: z.number().int().nonnegative(),
   latestVerification: z.enum(['passed', 'failed', 'unverified']).optional(),
   nextCheckAt: z.number().int().nonnegative().optional(),
-  progress: TaskProgressSchema.optional(),
-  attention: TaskAttentionSchema.optional(),
-  blockedBy: z.array(z.object({
-    id: z.string(),
-    objective: z.string(),
-    status: TaskStatusSchema,
-  })).default([]),
-  allowedActions: z.array(TaskActionSchema),
+  attention: z.array(TaskAttentionItemSchema).default([]),
+  blockedBy: z.array(TaskDependencySummarySchema).default([]),
+  allowedCommands: z.array(z.string()),
   updatedAt: z.number(),
 });
 
@@ -62,7 +57,7 @@ export const ProjectOperatingViewSchema = z.object({
     status: z.string(),
     createdAt: z.number(),
   })),
-  recentReceipts: z.array(TaskReceiptSchema),
+  recentReceipts: z.array(TaskRunReceiptSchema),
   digest: z.object({
     health: z.enum(['healthy', 'attention', 'idle', 'empty']),
     summary: z.string(),

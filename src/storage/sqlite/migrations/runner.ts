@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { chmodSync, existsSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -19,9 +19,23 @@ const log = createLogger('Sqlite:Migrations');
 export const XOPC_DB_BASELINE_SCHEMA_VERSION = 11;
 
 /** Latest schema version this release supports (increment when adding migrations). */
-export const XOPC_DB_SCHEMA_VERSION = 99;
+export const XOPC_DB_SCHEMA_VERSION = 100;
 
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
+
+function backupBeforeTaskCutover(db: DatabaseSync, databasePath: string): string {
+  db.exec('PRAGMA wal_checkpoint(FULL)');
+  const backupPath = `${databasePath}.pre-v100-${Date.now()}.bak`;
+  const quotedPath = backupPath.replaceAll("'", "''");
+  db.exec(`VACUUM INTO '${quotedPath}'`);
+  chmodSync(backupPath, 0o600);
+  return backupPath;
+}
+
+function writeMigrationReport(backupPath: string, report: Record<string, unknown>): void {
+  const reportPath = `${backupPath}.report.json`;
+  writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 });
+}
 
 export function resolveMigrationsDir(override?: string): string {
   if (override) {
@@ -84,6 +98,7 @@ export function applyPendingMigrations(
   }
 
   const migrations = discoverSqlMigrations(resolveMigrationsDir(options.migrationsDir));
+  let cutoverBackupPath: string | undefined;
 
   while (currentVersion < targetVersion) {
     const nextVersion = currentVersion + 1;
@@ -91,8 +106,34 @@ export function applyPendingMigrations(
     if (!migration) {
       throw new DatabaseSchemaMigrationGapError(currentVersion, targetVersion, nextVersion);
     }
-    applySingleMigration(db, migration);
+    if (nextVersion === 100 && options.databasePath && options.databasePath !== ':memory:') {
+      cutoverBackupPath = backupBeforeTaskCutover(db, options.databasePath);
+    }
+    try {
+      applySingleMigration(db, migration);
+    } catch (error) {
+      if (cutoverBackupPath && nextVersion === 100) {
+        writeMigrationReport(cutoverBackupPath, {
+          fromVersion: currentVersion,
+          targetVersion: nextVersion,
+          status: 'failed',
+          rollback: 'transaction',
+          error: error instanceof Error ? error.message : String(error),
+          occurredAt: new Date().toISOString(),
+        });
+      }
+      throw error;
+    }
     currentVersion = nextVersion;
+    if (cutoverBackupPath && currentVersion === 100) {
+      writeMigrationReport(cutoverBackupPath, {
+        fromVersion: 99,
+        targetVersion: 100,
+        status: 'succeeded',
+        backupPath: cutoverBackupPath,
+        occurredAt: new Date().toISOString(),
+      });
+    }
   }
 
   return currentVersion;

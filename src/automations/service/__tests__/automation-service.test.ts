@@ -112,6 +112,33 @@ describe('AutomationService', () => {
     }));
   });
 
+  it('executes a typed task command with a stable automation idempotency key', async () => {
+    const executeTaskCommand = vi.fn(() => ({ ok: true as const, runId: 'task-run-1' }));
+    service.setDeps({ executeTaskCommand });
+    const automation = await service.create({
+      name: 'Start durable task',
+      trigger: { kind: 'manual' },
+      action: {
+        kind: 'task_command',
+        taskId: 'task-1',
+        command: { type: 'start', executor: { kind: 'agent', agentId: 'main' } },
+      },
+    });
+
+    const queued = await service.runNow(automation.id);
+    const completed = await waitFor(
+      () => service.getRun(queued.id),
+      (run) => run?.status === 'succeeded',
+    );
+
+    expect(completed?.summary).toBe('TaskRun task-run-1 queued');
+    expect(executeTaskCommand).toHaveBeenCalledWith({
+      taskId: 'task-1',
+      idempotencyKey: `automation:${automation.id}:${queued.id}`,
+      command: { type: 'start', executor: { kind: 'agent', agentId: 'main' } },
+    });
+  });
+
   it('aborts the agent turn at the automation deadline and persists the session link', async () => {
     let receivedSignal: AbortSignal | undefined;
     service.setDeps({
@@ -440,24 +467,24 @@ describe('AutomationService', () => {
       name: 'Goal stalled helper',
       trigger: {
         kind: 'event',
-        eventType: 'task.status_changed',
+        eventType: 'task.attention_required.v2',
         source: 'tasks',
-        payloadMatch: { status: 'blocked' },
+        payloadMatch: { reason: 'blocked' },
       },
       action: { kind: 'agent', instruction: 'analyze the blocked goal' },
     });
 
     const ignored = await service.triggerEvent({
-      type: 'task.status_changed',
+      type: 'task.attention_required.v2',
       source: 'tasks',
-      payload: { status: 'active' },
+      payload: { reason: 'informational' },
     });
     expect(ignored).toHaveLength(0);
 
     const started = await service.triggerEvent({
-      type: 'task.status_changed',
+      type: 'task.attention_required.v2',
       source: 'tasks',
-      payload: { status: 'blocked', taskId: 'goal-1' },
+      payload: { reason: 'blocked', taskId: 'goal-1' },
     });
     expect(started).toHaveLength(1);
 
@@ -470,11 +497,11 @@ describe('AutomationService', () => {
     const events = await service.listRunEvents(started[0]!.id);
     expect(events[0]).toMatchObject({
       type: 'run.queued',
-      message: 'Event task.status_changed queued automation',
+      message: 'Event task.attention_required.v2 queued automation',
     });
 
     const productRuns = await service.listRunsForProductEvent({
-      eventType: 'task.status_changed',
+      eventType: 'task.attention_required.v2',
       source: 'tasks',
       payloadKey: 'taskId',
       payloadValue: 'goal-1',
@@ -483,7 +510,7 @@ describe('AutomationService', () => {
     expect(productRuns[0]!.run.id).toBe(started[0]!.id);
     expect(productRuns[0]!.triggerEvent).toMatchObject({
       type: 'run.queued',
-      message: 'Event task.status_changed queued automation',
+      message: 'Event task.attention_required.v2 queued automation',
     });
 
     const rerun = await service.rerunFromRun(started[0]!.id);
@@ -492,7 +519,7 @@ describe('AutomationService', () => {
       (items) => items.some((item) => item.id === rerun.id && item.status === 'succeeded'),
     );
     const productRunsAfterRerun = await service.listRunsForProductEvent({
-      eventType: 'task.status_changed',
+      eventType: 'task.attention_required.v2',
       source: 'tasks',
       payloadKey: 'taskId',
       payloadValue: 'goal-1',

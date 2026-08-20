@@ -51,9 +51,9 @@ describe('automation display labels', () => {
     const cronLabels = messages('zh').cron;
     expect(automationTriggerLabel({
       kind: 'event',
-      eventType: 'task.status_changed',
+      eventType: 'task.attention_required.v2',
       source: 'tasks',
-      payloadMatch: { status: 'blocked' },
+      payloadMatch: { reason: 'blocked' },
     }, labels, cronLabels, 'zh')).toBe('当结果变为「阻塞」时运行');
     expect(automationTriggerLabel({
       kind: 'event',

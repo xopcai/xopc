@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -70,10 +70,15 @@ describe('openXopcDatabase', () => {
         'local_apps',
         'local_app_releases',
         'local_app_acceptance_runs',
-        'execution_receipts',
         'tasks',
         'task_contracts',
-        'task_links',
+        'task_runs',
+        'task_run_events',
+        'task_run_receipts',
+        'task_waits',
+        'context_edges',
+        'task_authority_grants',
+        'domain_outbox',
         'context_snapshots',
         'relationship_settings',
         'interaction_states',
@@ -92,6 +97,18 @@ describe('openXopcDatabase', () => {
     expect(existsSync(dbPath)).toBe(true);
     if (process.platform !== 'win32') {
       expect(statSync(dbPath).mode & 0o777).toBe(0o600);
+    }
+  });
+
+  it('creates a pre-cutover backup and migration report for schema 100', () => {
+    openXopcDatabase({ path: dbPath });
+    const files = readdirSync(stateDir);
+    const backup = files.find((name) => name.startsWith('xopc.db.pre-v100-') && name.endsWith('.bak'));
+    expect(backup).toBeTypeOf('string');
+    const report = JSON.parse(readFileSync(join(stateDir, `${backup}.report.json`), 'utf8')) as Record<string, unknown>;
+    expect(report).toMatchObject({ fromVersion: 99, targetVersion: 100, status: 'succeeded' });
+    if (process.platform !== 'win32') {
+      expect(statSync(join(stateDir, backup!)).mode & 0o777).toBe(0o600);
     }
   });
 

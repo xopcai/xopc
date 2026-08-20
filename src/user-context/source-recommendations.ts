@@ -1,6 +1,6 @@
 import type { ConnectorDefinition } from '../connectors/types.js';
 
-type TaskSummary = { id: string; objective: string; description?: string };
+type TaskSummary = { id: string; title: string; body?: string };
 
 const DOMAINS = [
   ['calendar', 'schedule', 'meeting', 'deadline', 'event', '日历', '日程', '会议', '截止', '预约'],
@@ -29,7 +29,7 @@ export function buildTaskSourceRecommendations(
       .join(' ')
       .toLowerCase();
     for (const task of tasks) {
-      const taskText = `${task.objective} ${task.description ?? ''}`.toLowerCase();
+      const taskText = `${task.title} ${task.body ?? ''}`.toLowerCase();
       let score = 0;
       for (const keywords of DOMAINS) {
         if (keywords.some((keyword) => sourceText.includes(keyword)) && keywords.some((keyword) => taskText.includes(keyword))) {
@@ -43,7 +43,7 @@ export function buildTaskSourceRecommendations(
           sourceId: definition.id,
           sourceName: definition.displayName,
           taskId: task.id,
-          taskTitle: task.objective,
+          taskTitle: task.title,
           score,
         });
       }

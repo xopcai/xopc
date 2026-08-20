@@ -6,18 +6,18 @@ describe('proactive product event bridge', () => {
   it('maps supported internal events without inventing object identity', () => {
     expect(mapProductEventToProactive({
       event: {
-        type: 'task.status_changed',
+        type: 'task.attention_required.v2',
         source: 'tasks',
         occurredAtMs: Date.parse('2026-08-15T01:00:00.000Z'),
-        payload: { taskId: 'task-1', status: 'blocked', agentId: 'main' },
+        payload: { taskId: 'task-1', reason: 'blocked', agentId: 'main' },
       },
       workspaceId: '/workspace',
       defaultAgentId: 'fallback',
     })).toMatchObject({
-      type: 'task.status_changed.v1',
+      type: 'task.attention_required.v2',
       subject: { kind: 'task', id: 'task-1' },
       scope: { workspaceId: '/workspace', agentId: 'main' },
-      dedupeKey: 'product-event:task.status_changed:task-1:1786755600000',
+      dedupeKey: 'product-event:task.attention_required.v2:task-1:1786755600000',
       sensitivity: 'personal',
     });
   });
@@ -46,7 +46,7 @@ describe('proactive product event bridge', () => {
       workspaceId: '/workspace',
       defaultAgentId: 'main',
     })).toMatchObject({
-      type: 'discussion.completed.v1',
+      type: 'discussion.completed',
       subject: { kind: 'discussion', id: 'discussion-1' },
       scope: { projectId: 'project-1' },
       sensitivity: 'personal',

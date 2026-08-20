@@ -126,11 +126,7 @@ export class WorkflowSessionBridge {
       });
     }
     this.recordProjectWorkflowMemory(sessionKey, view);
-    if (this.gateway.enqueueTask) {
-      new TaskWorkflowCoordinator({
-        enqueue: (taskId, options) => this.gateway.enqueueTask!(taskId, options),
-      }).handleTerminalRun(view, sessionKey);
-    }
+    new TaskWorkflowCoordinator().handleTerminalRun(view);
   }
 
   private async persistTerminalTranscript(sessionKey: string, view: WorkflowRunView): Promise<void> {

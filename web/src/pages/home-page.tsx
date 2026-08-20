@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import type { Task, TaskReceipt } from '@xopcai/gateway-contract';
+import type { Task, TaskRunReceipt } from '@xopcai/gateway-contract';
 import {
   CalendarClock,
   CircleAlert,
@@ -57,7 +57,7 @@ function TaskCard({ task, statusLabel }: { task: Task; statusLabel: string }) {
       className="group flex items-start justify-between gap-3 rounded-xl border border-edge-subtle bg-surface-panel p-4 transition-colors hover:bg-surface-hover/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
       <div className="min-w-0">
-        <h3 className="line-clamp-2 text-sm font-semibold text-fg">{task.objective}</h3>
+        <h3 className="line-clamp-2 text-sm font-semibold text-fg">{task.title}</h3>
         <p className="mt-2 text-xs text-fg-subtle">{formatTime(task.updatedAt, '')}</p>
       </div>
       <span className="shrink-0 rounded-full bg-surface-muted px-2 py-0.5 text-[11px] font-medium text-fg-muted">
@@ -67,22 +67,17 @@ function TaskCard({ task, statusLabel }: { task: Task; statusLabel: string }) {
   );
 }
 
-function TaskReceiptCard({ receipt, evidenceLabel, remainingLabel }: {
-  receipt: TaskReceipt;
+function TaskRunReceiptCard({ receipt, evidenceLabel, remainingLabel }: {
+  receipt: TaskRunReceipt;
   evidenceLabel: string;
   remainingLabel: string;
 }) {
-  const href = receipt.taskId
-    ? `/tasks/${encodeURIComponent(receipt.taskId)}`
-    : receipt.projectId
-      ? `/projects/${encodeURIComponent(receipt.projectId)}`
-    : `/chat/${encodeURIComponent(receipt.sessionKey)}`;
   return (
-    <Link to={href} className="block rounded-xl border border-edge-subtle px-3 py-3 hover:bg-surface-hover/55">
+    <div className="block rounded-xl border border-edge-subtle px-3 py-3">
       <div className="flex items-start gap-2">
         <CircleCheck className="mt-0.5 size-4 shrink-0 text-success" aria-hidden />
         <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-fg">{receipt.objective}</p>
+          <p className="truncate text-sm font-medium text-fg">{receipt.summary}</p>
           <p className="mt-1 line-clamp-2 text-xs leading-5 text-fg-muted">{receipt.summary}</p>
           <p className="mt-2 text-[11px] text-fg-subtle">
             {receipt.evidence.length} {evidenceLabel}
@@ -90,7 +85,7 @@ function TaskReceiptCard({ receipt, evidenceLabel, remainingLabel }: {
           </p>
         </div>
       </div>
-    </Link>
+    </div>
   );
 }
 
@@ -314,14 +309,26 @@ export function HomePage() {
     setCreateError(null);
     try {
       const started = await createTask({
-        requestId: createRequestId,
-        mode: 'start',
-        objective: trimmed,
+        idempotencyKey: createRequestId,
+        title: trimmed,
         locale: language,
-        dependsOnTaskIds: [],
-        attachments: [],
+        priority: 'normal',
+        contract: {
+          objective: trimmed,
+          expectedOutputs: [],
+          acceptanceCriteria: [],
+          constraints: [],
+          approvalRequired: [],
+          assumptions: [],
+          risks: [],
+          acceptancePolicy: 'manual',
+          outputDestinations: [],
+        },
+        dependencies: [],
+        context: [],
+        authorityGrants: [],
+        activation: { mode: 'start', executor: { kind: 'agent', agentId: 'main' } },
       });
-      if (started.mode !== 'start') throw new Error('Task was not started');
       setCreateOpen(false);
       setTask('');
       setCreateRequestId(crypto.randomUUID());
@@ -615,7 +622,7 @@ export function HomePage() {
                   </div>
                   <div className="mt-3 space-y-2">
                     {home.recentTasks.slice(0, 3).map((receipt) => (
-                      <TaskReceiptCard
+                      <TaskRunReceiptCard
                         key={receipt.runId}
                         receipt={receipt}
                         evidenceLabel={copy.evidenceCount}

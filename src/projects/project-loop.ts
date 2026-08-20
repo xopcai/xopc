@@ -31,11 +31,11 @@ export type ProjectTimelineItem = {
 
 export type ProjectTask = {
   id: string;
-  objective: string;
-  status: string;
+  title: string;
+  phase: 'backlog' | 'ready' | 'active' | 'review' | 'closed';
+  operationalState: 'idle' | 'queued' | 'running' | 'waiting' | 'verifying' | 'blocked';
   priority: 'low' | 'normal' | 'high' | 'critical';
-  nextAction?: string;
-  blockedReason?: string;
+  attention?: string[];
   updatedAt: number;
 };
 
@@ -61,24 +61,6 @@ export type ProjectLoopOverview = {
   recommendedAction?: string;
 };
 
-const ACTIVE_TASK_STATUSES = new Set([
-  'pending',
-  'planning',
-  'waiting_dependency',
-  'running',
-  'verifying',
-  'paused',
-  'blocked',
-  'needs_user',
-]);
-const STALE_TASK_STATUSES = new Set([
-  'pending',
-  'planning',
-  'waiting_dependency',
-  'running',
-  'verifying',
-  'paused',
-]);
 const DEFAULT_STALE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
 
 function taskUpdatedAtDesc(left: ProjectTask, right: ProjectTask): number {
@@ -103,19 +85,19 @@ export function buildProjectLoopOverview(input: {
   const nowMs = input.nowMs ?? Date.now();
   const staleCutoff = nowMs - (input.staleAfterMs ?? DEFAULT_STALE_AFTER_MS);
   const projectTasks = [...input.tasks].sort(taskUpdatedAtDesc);
-  const activeTasks = projectTasks.filter((task) => ACTIVE_TASK_STATUSES.has(task.status)).slice(0, 6);
-  const blockedTasks = projectTasks.filter((task) => task.status === 'blocked' || task.status === 'needs_user').slice(0, 4);
+  const activeTasks = projectTasks.filter((task) => task.phase !== 'closed').slice(0, 6);
+  const blockedTasks = projectTasks.filter((task) => task.operationalState === 'blocked' || task.operationalState === 'waiting').slice(0, 4);
   const staleTasks = projectTasks
-    .filter((task) => STALE_TASK_STATUSES.has(task.status) && task.updatedAt < staleCutoff)
+    .filter((task) => task.phase !== 'closed' && task.updatedAt < staleCutoff)
     .slice(0, 5);
   const nextActions = activeTasks
-    .filter((task) => task.nextAction?.trim())
+    .filter((task) => task.attention?.[0]?.trim())
     .slice(0, 5)
     .map((task) => ({
       taskId: task.id,
-      title: task.objective,
-      nextAction: task.nextAction,
-      status: task.status,
+      title: task.title,
+      nextAction: task.attention?.[0],
+      status: `${task.phase}/${task.operationalState}`,
       updatedAt: task.updatedAt,
     }));
   const failedWorkflowRuns = (input.failedWorkflowRuns ?? input.recentWorkflowRuns.filter((run) => (
@@ -126,18 +108,18 @@ export function buildProjectLoopOverview(input: {
     ...blockedTasks.map((task) => ({
       id: `task:${task.id}:blocked`,
       kind: 'blocked_task' as const,
-      title: task.objective,
-      detail: compactText(task.blockedReason || task.nextAction),
-      status: task.status,
+      title: task.title,
+      detail: compactText(task.attention?.[0]),
+      status: `${task.phase}/${task.operationalState}`,
       href: `/tasks/${encodeURIComponent(task.id)}`,
       updatedAt: task.updatedAt,
     })),
     ...staleTasks.map((task) => ({
       id: `task:${task.id}:stale`,
       kind: 'stale_task' as const,
-      title: task.objective,
-      detail: compactText(task.nextAction || 'Task has not changed recently.'),
-      status: task.status,
+      title: task.title,
+      detail: compactText(task.attention?.[0] || 'Task has not changed recently.'),
+      status: `${task.phase}/${task.operationalState}`,
       href: `/tasks/${encodeURIComponent(task.id)}`,
       updatedAt: task.updatedAt,
     })),
@@ -164,10 +146,10 @@ export function buildProjectLoopOverview(input: {
     ...projectTasks.slice(0, 8).map((task) => ({
       id: `task:${task.id}`,
       kind: 'task' as const,
-      title: task.objective,
-      detail: compactText(task.nextAction || task.blockedReason),
+      title: task.title,
+      detail: compactText(task.attention?.[0]),
       timestamp: task.updatedAt,
-      status: task.status,
+      status: `${task.phase}/${task.operationalState}`,
       href: `/tasks/${encodeURIComponent(task.id)}`,
     })),
     ...input.recentWorkflowRuns.map((run) => ({
@@ -193,9 +175,9 @@ export function buildProjectLoopOverview(input: {
     .slice(0, 12);
 
   const recommendedAction = nextActions[0]?.nextAction
-    ?? blockedTasks[0]?.blockedReason
-    ?? staleTasks[0]?.nextAction
-    ?? activeTasks[0]?.objective
+    ?? blockedTasks[0]?.attention?.[0]
+    ?? staleTasks[0]?.attention?.[0]
+    ?? activeTasks[0]?.title
     ?? (input.project.brief ? 'Open a new chat to continue from the project brief.' : undefined);
 
   const digestStatus =

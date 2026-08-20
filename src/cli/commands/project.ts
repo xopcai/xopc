@@ -286,7 +286,7 @@ function createProjectCommand(ctx: CLIContext): Command {
             return;
           }
           for (const task of tasks) {
-            console.log(`${task.id} [${task.status}] ${task.objective}`);
+            console.log(`${task.id} [${task.phase}] ${task.title}`);
           }
         });
       }),
