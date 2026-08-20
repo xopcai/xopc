@@ -16,6 +16,7 @@ import type {
 import { resolveDefaultAgentId } from '../../../agent/agent-scope.js';
 import type { Config } from '../../../config/schema.js';
 import { UserContextConfigSchema } from '../../../user-context/config.js';
+import { ResponseLanguageSchema } from '../../../i18n/response-language.js';
 import { LOCAL_USER_ID } from '../../../user-context/owner.js';
 import type { KnowledgeSynthesisStatus } from '../../../knowledge/types.js';
 import {
@@ -194,7 +195,25 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
     }
     const save = await deps.service.saveConfig({ ...cfg, userContext: parsed.data });
     if (!save.saved) return c.json({ error: save.error ?? 'save failed' }, 500);
+    deps.service.refreshUserProfileContext();
     return c.json({ userContext: (deps.service.currentConfig as Config).userContext });
+  });
+
+  authenticated.patch('/api/user-context/preferences', deps.strictRateLimitMiddleware, async (c) => {
+    const cfg = deps.service.currentConfig as Config;
+    const body = await c.req.json().catch(() => ({}));
+    const responseLanguage = ResponseLanguageSchema.safeParse(body.responseLanguage);
+    if (!responseLanguage.success) {
+      return c.json({ error: 'Invalid responseLanguage' }, 400);
+    }
+    const userContext = UserContextConfigSchema.parse({
+      ...cfg.userContext,
+      preferences: { responseLanguage: responseLanguage.data },
+    });
+    const save = await deps.service.saveConfig({ ...cfg, userContext });
+    if (!save.saved) return c.json({ error: save.error ?? 'save failed' }, 500);
+    deps.service.refreshUserProfileContext();
+    return c.json({ preferences: userContext.preferences });
   });
 
   authenticated.get('/api/user-context/memories', (c) => {

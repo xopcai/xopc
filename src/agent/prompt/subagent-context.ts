@@ -1,4 +1,5 @@
 import { NO_REPLY } from '../../heartbeat/tokens.js';
+import type { ResponseLanguage } from '../../i18n/response-language.js';
 import { buildSystemPrompt } from './system-prompt.js';
 
 export function buildSubagentContextSection(params: {
@@ -91,11 +92,13 @@ export function buildSubagentSystemPrompt(params: {
   requesterSessionKey?: string;
   childSessionKey?: string;
   toolNames?: string[];
+  responseLanguage?: ResponseLanguage;
 }): string {
   const extra = buildSubagentContextSection(params);
   return buildSystemPrompt(params.workspace ?? '.', {
     promptMode: 'minimal',
     toolNames: params.toolNames,
+    responseLanguage: params.responseLanguage,
     extraSystemPrompt: extra,
   });
 }
