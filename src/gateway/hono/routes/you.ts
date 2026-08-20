@@ -34,7 +34,7 @@ import {
   listKnowledgeSourceItems,
   listKnowledgeSyncRuns,
   listConnectorLearningJobs,
-  getConnectorConnection,
+  getConnectorAccount,
   listConnectorConnections,
   listMemoryRecords,
   listMemorySignals,
@@ -1120,13 +1120,17 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
     const config = deps.service.currentConfig as Config;
     const instanceId = c.req.param('instanceId');
     const installedInstances = listConnectorInstances(config);
-    const connection = getConnectorConnection(instanceId);
+    const account = getConnectorAccount(instanceId);
+    const accountConnections = account
+      ? listConnectorConnections({ principalId: account.principalId, connectorId: account.connectorId })
+        .filter((connection) => connection.accountId === account.id)
+      : [];
     const instance = installedInstances.find((item) => item.instanceId === instanceId);
-    const connectorId = connection?.connectorId ?? instance?.connectorId;
+    const connectorId = account?.connectorId ?? instance?.connectorId;
     const definition = connectorId
       ? listConnectorCatalog().find((item) => item.id === connectorId)
       : undefined;
-    if ((!instance && !connection) || !definition || !definition.capabilities.some((capability) => (
+    if ((!instance && !account) || !definition || !definition.capabilities.some((capability) => (
       capability === 'context' || capability === 'memory_source'
     ))) {
       return c.json({ error: 'Personal context source not found' }, 404);
@@ -1140,8 +1144,10 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
     }
 
     try {
-      if (connection) {
-        await revokeComposioConnection(connection.id);
+      if (account) {
+        for (const connection of accountConnections.filter((candidate) => candidate.status !== 'revoked')) {
+          await revokeComposioConnection(connection.id);
+        }
       } else if (instance) {
         uninstallConnector(config, instance.instanceId);
         const saved = await deps.service.saveConfig(config);
@@ -1154,8 +1160,8 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
     let deletedUnderstandingCount = 0;
     let deletedClaimCount = 0;
     if (understandingPolicy === 'delete') {
-      const sourceInstanceId = connection
-        ? `composio:${connection.connectorId}:${connection.id}`
+      const sourceInstanceId = account
+        ? `composio:${account.connectorId}:${account.id}`
         : instanceId;
       const targets = recordsDerivedFromPersonalContextSource(
         listAllUserContextRecords(ALL_MEMORY_STATUSES),

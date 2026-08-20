@@ -36,6 +36,7 @@ import { recordConnectorHealthUsage } from '../../../connectors/usage.js';
 import type { ConnectorDefinition, ConnectorInstallInput } from '../../../connectors/types.js';
 import {
   decideConnectorApproval,
+  getConnectorAccount,
   getConnectorSyncPolicy,
   getConnectorApproval,
   listConnectorConnections,
@@ -120,28 +121,28 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     return c.json({ ok: true, payload: { jobs: listConnectorLearningJobs({ limit: 100 }) } });
   });
 
-  authenticated.get('/api/connectors/composio/connections/:id/sync-policy', (c) => {
-    const connection = listConnectorConnections({ principalId: 'local-owner' })
-      .find((item) => item.id === c.req.param('id'));
-    if (!connection) return c.json({ ok: false, error: 'Connector connection not found.' }, 404);
-    const defaultInterval = defaultConnectorSyncInterval(connection.connectorId);
-    const policy = getConnectorSyncPolicy(connection.id) ?? {
-      connectionId: connection.id,
+  authenticated.get('/api/connectors/composio/accounts/:id/sync-policy', (c) => {
+    const account = getConnectorAccount(c.req.param('id'));
+    if (!account || account.principalId !== 'local-owner') {
+      return c.json({ ok: false, error: 'Connector account not found.' }, 404);
+    }
+    const policy = getConnectorSyncPolicy(account.id) ?? {
+      accountId: account.id,
       scanEnabled: true,
       proactiveEnabled: false,
-      intervalMinutes: defaultInterval,
+      intervalMinutes: defaultConnectorSyncInterval(account.connectorId),
       allowedScenarioKeys: [],
       revision: 0,
-      updatedAt: connection.updatedAt,
+      updatedAt: account.updatedAt,
     };
     return c.json({ ok: true, payload: { policy } });
   });
 
-  authenticated.patch('/api/connectors/composio/connections/:id/sync-policy', strictRateLimitMiddleware, async (c) => {
-    const connectionId = c.req.param('id');
-    const connection = listConnectorConnections({ principalId: 'local-owner' })
-      .find((item) => item.id === connectionId);
-    if (!connection) return c.json({ ok: false, error: 'Connector connection not found.' }, 404);
+  authenticated.patch('/api/connectors/composio/accounts/:id/sync-policy', strictRateLimitMiddleware, async (c) => {
+    const account = getConnectorAccount(c.req.param('id'));
+    if (!account || account.principalId !== 'local-owner') {
+      return c.json({ ok: false, error: 'Connector account not found.' }, 404);
+    }
     const body = await c.req.json().catch(() => ({}));
     const row = body && typeof body === 'object' && !Array.isArray(body)
       ? body as Record<string, unknown>
@@ -169,18 +170,19 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     if (allowedScenarioKeys?.some((key) => !knownScenarioKeys.has(key))) {
       return c.json({ ok: false, error: 'allowedScenarioKeys contains an unknown scenario.' }, 400);
     }
-    const previous = getConnectorSyncPolicy(connectionId);
+    const previous = getConnectorSyncPolicy(account.id);
     const policy = upsertConnectorSyncPolicy({
-      connectionId,
-      defaultIntervalMinutes: defaultConnectorSyncInterval(connection.connectorId),
+      accountId: account.id,
+      defaultIntervalMinutes: defaultConnectorSyncInterval(account.connectorId),
       ...(typeof row.scanEnabled === 'boolean' ? { scanEnabled: row.scanEnabled } : {}),
       ...(typeof row.proactiveEnabled === 'boolean' ? { proactiveEnabled: row.proactiveEnabled } : {}),
       ...(typeof row.intervalMinutes === 'number' ? { intervalMinutes: row.intervalMinutes } : {}),
       ...(allowedScenarioKeys ? { allowedScenarioKeys } : {}),
     });
-    if (!policy.scanEnabled) {
+    const connectionId = account.currentConnectionId;
+    if (connectionId && !policy.scanEnabled) {
       service.setConnectorLearningPaused(connectionId, true);
-    } else if (previous?.scanEnabled === false) {
+    } else if (connectionId && previous?.scanEnabled === false) {
       const resumed = service.setConnectorLearningPaused(connectionId, false);
       if (resumed === 0) {
         service.requestConnectorLearning(connectionId, { mode: 'incremental', reason: 'schedule' });
@@ -189,30 +191,40 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     return c.json({ ok: true, payload: { policy } });
   });
 
-  authenticated.post('/api/connectors/composio/connections/:id/learning', strictRateLimitMiddleware, async (c) => {
+  authenticated.post('/api/connectors/composio/accounts/:id/learning', strictRateLimitMiddleware, async (c) => {
     try {
       await listComposioConnections();
+      const account = getConnectorAccount(c.req.param('id'));
+      if (!account || account.principalId !== 'local-owner' || !account.currentConnectionId) {
+        return c.json({ ok: false, error: 'Connector account has no usable authorization.' }, 409);
+      }
       const config = service.currentConfig as Config;
       if (!config.userContext.memory.sources.includes('connectedSources')) {
         config.userContext.memory.sources = [...config.userContext.memory.sources, 'connectedSources'];
         const saved = await service.saveConfig(config);
         if (!saved.saved) return c.json({ ok: false, error: saved.error }, 500);
       }
-      const job = service.requestConnectorLearning(c.req.param('id'), { reason: 'manual' });
-      if (!job) return c.json({ ok: false, error: 'The connection is not active or does not support learning.' }, 409);
+      const job = service.requestConnectorLearning(account.currentConnectionId, { reason: 'manual' });
+      if (!job) return c.json({ ok: false, error: 'The account is not active or does not support learning.' }, 409);
       return c.json({ ok: true, payload: { job } }, 202);
     } catch (error) {
       return c.json({ ok: false, error: errorMessage(error) }, 400);
     }
   });
 
-  authenticated.post('/api/connectors/composio/connections/:id/learning/pause', strictRateLimitMiddleware, (c) => {
-    const changed = service.setConnectorLearningPaused(c.req.param('id'), true);
+  authenticated.post('/api/connectors/composio/accounts/:id/learning/pause', strictRateLimitMiddleware, (c) => {
+    const account = getConnectorAccount(c.req.param('id'));
+    const changed = account?.currentConnectionId
+      ? service.setConnectorLearningPaused(account.currentConnectionId, true)
+      : 0;
     return c.json({ ok: true, payload: { changed } });
   });
 
-  authenticated.post('/api/connectors/composio/connections/:id/learning/resume', strictRateLimitMiddleware, (c) => {
-    const changed = service.setConnectorLearningPaused(c.req.param('id'), false);
+  authenticated.post('/api/connectors/composio/accounts/:id/learning/resume', strictRateLimitMiddleware, (c) => {
+    const account = getConnectorAccount(c.req.param('id'));
+    const changed = account?.currentConnectionId
+      ? service.setConnectorLearningPaused(account.currentConnectionId, false)
+      : 0;
     return c.json({ ok: true, payload: { changed } });
   });
 
@@ -243,7 +255,6 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     try {
       const connectionId = c.req.param('id');
       await revokeComposioConnection(connectionId);
-      service.setConnectorLearningPaused(connectionId, true);
       return c.json({ ok: true, payload: { revoked: true } });
     } catch (error) {
       return c.json({ ok: false, error: errorMessage(error) }, 400);

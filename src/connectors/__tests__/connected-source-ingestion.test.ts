@@ -93,7 +93,7 @@ describe('connected source ingestion', () => {
     expect(memory?.content).not.toContain('sk-this-must-never-enter-memory');
     const [sourceItem] = listKnowledgeSourceItems();
     expect(sourceItem).toMatchObject({
-      sourceInstanceId: 'composio:composio-gmail:gmail-work',
+      sourceInstanceId: 'composio:composio-gmail:account:gmail-work',
       itemType: 'email',
       synthesisStatus: 'completed',
       metadata: {
@@ -108,7 +108,7 @@ describe('connected source ingestion', () => {
       relation: 'derived_from',
     });
     expect(listKnowledgeSyncRuns()[0]).toMatchObject({
-      sourceInstanceId: 'composio:composio-gmail:gmail-work',
+      sourceInstanceId: 'composio:composio-gmail:account:gmail-work',
       status: 'succeeded',
       itemsSeen: 1,
       itemsCreated: 1,
@@ -210,7 +210,7 @@ describe('connected source ingestion', () => {
     });
 
     expect(listKnowledgeSourceItems()).toContainEqual(expect.objectContaining({
-      sourceInstanceId: 'composio:composio-github:github-work',
+      sourceInstanceId: 'composio:composio-github:account:github-work',
       externalId: 'GITHUB_LIST_COMMITS:commit-1',
       itemType: 'development_activity',
       metadata: expect.objectContaining({ connectorId: 'composio-github' }),
@@ -357,7 +357,7 @@ describe('connected source ingestion', () => {
     });
 
     expect(listKnowledgeSourceItems()).toContainEqual(expect.objectContaining({
-      sourceInstanceId: 'composio:composio-linear:linear-work',
+      sourceInstanceId: 'composio:composio-linear:account:linear-work',
       externalId: 'XOPC-42',
       itemType: 'external_task',
       metadata: expect.objectContaining({ people: ['owner@example.com'] }),

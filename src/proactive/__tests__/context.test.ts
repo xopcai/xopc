@@ -46,7 +46,7 @@ describe('proactive context resolver', () => {
 
   it('hydrates connected content only while the current policy authorizes the scenario', async () => {
     upsertConnectorSyncPolicy({
-      connectionId: 'connection-1',
+      accountId: 'account:connection-1',
       scanEnabled: true,
       proactiveEnabled: true,
       allowedScenarioKeys: ['blocked_work'],
@@ -107,7 +107,7 @@ describe('proactive context resolver', () => {
     expect(allowed.evidenceIds).toContain(`source-item:${sourceItemId}`);
 
     upsertConnectorSyncPolicy({
-      connectionId: 'connection-1',
+      accountId: 'account:connection-1',
       allowedScenarioKeys: ['meeting_preparation'],
     });
     const revoked = await resolver.collect('blocked_work', {
@@ -120,7 +120,7 @@ describe('proactive context resolver', () => {
     expect(revoked.evidenceIds).not.toContain(`source-item:${sourceItemId}`);
 
     upsertConnectorSyncPolicy({
-      connectionId: 'connection-1',
+      accountId: 'account:connection-1',
       allowedScenarioKeys: ['blocked_work'],
     });
     upsertKnowledgeSourceItems([{

@@ -1,6 +1,10 @@
 import { CredentialResolver } from '../auth/credentials.js';
 import type { Config } from '../config/schema.js';
 import {
+  getConnectorAccount,
+  refreshConnectorAccountCurrent,
+} from '../storage/sqlite/connector-account-repository.js';
+import {
   getConnectorConnection,
   getConnectorInstallation,
   listConnectorConnections as listStoredConnectorConnections,
@@ -13,23 +17,57 @@ import {
   COMPOSIO_TOOLKIT_DISPLAY_NAMES,
   connectorDefinitionFromComposioToolkit,
 } from './composio-catalog.js';
+import { connectorIdentityKey } from './connector-identity.js';
 import { ComposioSessionsAdapter } from './composio-sessions.js';
 import { consumeConnectorSetupSecretRef } from './setup-secrets.js';
-import type { ConnectorConfirmationPolicy, ConnectorDefinition, ConnectorInstallationPolicy } from './types.js';
+import type {
+  ConnectorConfirmationPolicy,
+  ConnectorConnection,
+  ConnectorDefinition,
+  ConnectorInstallationPolicy,
+} from './types.js';
 
 export type ComposioConnection = {
   id: string;
+  accountId?: string;
   providerConnectionId: string;
   toolkit: string;
   status: string;
   alias?: string;
   isDefault: boolean;
+  isCurrentAuthorization: boolean;
   accountEmail?: string;
   workspace?: string;
   username?: string;
+  identityKey?: string;
+  workspaceId?: string;
+  userId?: string;
   connectedAt?: string;
   lastError?: string;
 };
+
+function toComposioConnection(connection: ConnectorConnection): ComposioConnection {
+  const toolkit = toolkitFromConnectionMetadata(connection);
+  const account = connection.accountId ? getConnectorAccount(connection.accountId) : undefined;
+  return {
+    id: connection.id,
+    accountId: connection.accountId,
+    providerConnectionId: connection.providerConnectionId,
+    toolkit,
+    status: connection.status,
+    alias: connection.alias,
+    isDefault: connection.isDefault,
+    isCurrentAuthorization: account?.currentConnectionId === connection.id,
+    accountEmail: typeof connection.identity.email === 'string' ? connection.identity.email : undefined,
+    workspace: typeof connection.identity.workspace === 'string' ? connection.identity.workspace : undefined,
+    username: typeof connection.identity.username === 'string' ? connection.identity.username : undefined,
+    identityKey: connectorIdentityKey(toolkit, connection.identity),
+    workspaceId: typeof connection.identity.workspaceId === 'string' ? connection.identity.workspaceId : undefined,
+    userId: typeof connection.identity.userId === 'string' ? connection.identity.userId : undefined,
+    connectedAt: connection.connectedAt,
+    lastError: connection.lastError,
+  };
+}
 
 export type ComposioScope = 'read' | 'write' | 'admin';
 
@@ -45,8 +83,8 @@ export type ComposioTool = {
 export type ComposioConnectorHealth = {
   toolkit: string;
   status: 'connected' | 'disconnected' | 'reauthorization_required' | 'degraded';
-  activeConnections: number;
-  affectedConnections: number;
+  activeAccounts: number;
+  affectedAccounts: number;
   checkedAt: string;
   message: string;
   recovery: 'none' | 'connect' | 'reconnect' | 'retry';
@@ -93,6 +131,7 @@ const COMPOSIO_CURATED_ACTIONS: Record<string, Record<string, ComposioScope>> = 
     NOTION_UPDATE_PAGE: 'write',
   },
   slack: {
+    SLACK_TEST_AUTH: 'read',
     SLACK_LIST_CHANNELS: 'read',
     SLACK_FETCH_CONVERSATION_HISTORY: 'read',
     SLACK_SENDS_A_MESSAGE_TO_A_SLACK_CHANNEL: 'write',
@@ -300,21 +339,13 @@ export async function configureComposioApiKey(apiKey: string, resolver = new Cre
 export async function listComposioConnections(resolver = new CredentialResolver()): Promise<ComposioConnection[]> {
   const adapter = new ComposioSessionsAdapter({ resolver });
   await adapter.syncConnections({ principalId: LOCAL_OWNER_PRINCIPAL });
-  return listStoredConnectorConnections({ principalId: LOCAL_OWNER_PRINCIPAL })
-    .filter((connection) => connection.provider === 'composio')
-    .map((connection) => ({
-      id: connection.id,
-      providerConnectionId: connection.providerConnectionId,
-      toolkit: toolkitFromConnectionMetadata(connection),
-      status: connection.status,
-      alias: connection.alias,
-      isDefault: connection.isDefault,
-      accountEmail: typeof connection.identity.email === 'string' ? connection.identity.email : undefined,
-      workspace: typeof connection.identity.workspace === 'string' ? connection.identity.workspace : undefined,
-      username: typeof connection.identity.username === 'string' ? connection.identity.username : undefined,
-      connectedAt: connection.connectedAt,
-      lastError: connection.lastError,
-    }));
+  const connections = listStoredConnectorConnections({ principalId: LOCAL_OWNER_PRINCIPAL })
+    .filter((connection) => connection.provider === 'composio');
+  for (const accountId of new Set(connections.flatMap((connection) => connection.accountId ? [connection.accountId] : []))) {
+    refreshConnectorAccountCurrent(accountId);
+  }
+  return connections
+    .map(toComposioConnection);
 }
 
 export async function inspectComposioConnectorHealth(toolkit: string, resolver = new CredentialResolver()): Promise<ComposioConnectorHealth> {
@@ -322,25 +353,36 @@ export async function inspectComposioConnectorHealth(toolkit: string, resolver =
   try {
     const all = await listComposioConnections(resolver);
     const connections = all.filter((connection) => connection.toolkit.toLowerCase() === normalizedToolkit);
-    const activeConnections = connections.filter((connection) => connection.status === 'active').length;
-    const affectedConnections = connections.filter((connection) => connection.status === 'expired' || connection.status === 'failed').length;
-    if (activeConnections > 0) {
+    const byAccount = new Map<string, ComposioConnection[]>();
+    for (const connection of connections) {
+      const accountId = connection.accountId ?? connection.id;
+      byAccount.set(accountId, [...(byAccount.get(accountId) ?? []), connection]);
+    }
+    const accountStatuses = [...byAccount.values()];
+    const activeAccounts = accountStatuses.filter(
+      (authorizations) => authorizations.some((connection) => connection.status === 'active'),
+    ).length;
+    const affectedAccounts = accountStatuses.filter((authorizations) => (
+      !authorizations.some((connection) => connection.status === 'active')
+      && authorizations.some((connection) => connection.status === 'expired' || connection.status === 'failed')
+    )).length;
+    if (activeAccounts > 0) {
       return {
         toolkit: normalizedToolkit,
         status: 'connected',
-        activeConnections,
-        affectedConnections,
+        activeAccounts,
+        affectedAccounts,
         checkedAt: new Date().toISOString(),
-        message: `${activeConnections} active account connection${activeConnections === 1 ? '' : 's'}.`,
+        message: `${activeAccounts} connected account${activeAccounts === 1 ? '' : 's'}.`,
         recovery: 'none',
       };
     }
-    if (affectedConnections > 0) {
+    if (affectedAccounts > 0) {
       return {
         toolkit: normalizedToolkit,
         status: 'reauthorization_required',
-        activeConnections: 0,
-        affectedConnections,
+        activeAccounts: 0,
+        affectedAccounts,
         checkedAt: new Date().toISOString(),
         message: 'The account connection expired or failed and must be authorized again.',
         recovery: 'reconnect',
@@ -349,8 +391,8 @@ export async function inspectComposioConnectorHealth(toolkit: string, resolver =
     return {
       toolkit: normalizedToolkit,
       status: 'disconnected',
-      activeConnections: 0,
-      affectedConnections: 0,
+      activeAccounts: 0,
+      affectedAccounts: 0,
       checkedAt: new Date().toISOString(),
       message: 'No active account is connected.',
       recovery: 'connect',
@@ -360,8 +402,8 @@ export async function inspectComposioConnectorHealth(toolkit: string, resolver =
     return {
       toolkit: normalizedToolkit,
       status: 'degraded',
-      activeConnections: 0,
-      affectedConnections: 0,
+      activeAccounts: 0,
+      affectedAccounts: 0,
       checkedAt: new Date().toISOString(),
       message: failure.message,
       recovery: 'retry',
@@ -439,19 +481,7 @@ export function updateComposioConnection(
     isDefault: patch.isDefault ?? connection.isDefault,
   });
   const updated = getConnectorConnection(id)!;
-  return {
-    id: updated.id,
-    providerConnectionId: updated.providerConnectionId,
-    toolkit: toolkitFromConnectionMetadata(updated),
-    status: updated.status,
-    alias: updated.alias,
-    isDefault: updated.isDefault,
-    accountEmail: typeof updated.identity.email === 'string' ? updated.identity.email : undefined,
-    workspace: typeof updated.identity.workspace === 'string' ? updated.identity.workspace : undefined,
-    username: typeof updated.identity.username === 'string' ? updated.identity.username : undefined,
-    connectedAt: updated.connectedAt,
-    lastError: updated.lastError,
-  };
+  return toComposioConnection(updated);
 }
 
 export async function refreshComposioConnection(id: string, resolver = new CredentialResolver()): Promise<void> {
@@ -468,6 +498,7 @@ export async function revokeComposioConnection(id: string, resolver = new Creden
     throw new Error('Composio connection not found.');
   }
   await new ComposioSessionsAdapter({ resolver }).revokeConnection(connection);
+  if (connection.accountId) refreshConnectorAccountCurrent(connection.accountId);
 }
 
 export async function startComposioAuthorize(connectorId: string, toolkit: string, resolver = new CredentialResolver()): Promise<{ toolkit: string; connectUrl: string; connectionId?: string }> {

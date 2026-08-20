@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   closeXopcDatabase,
+  listConnectorAccounts,
   listConnectorConnections,
   listConnectorExecutionAudit,
   openXopcDatabase,
@@ -90,6 +91,38 @@ describe('ComposioSessionsAdapter', () => {
       alias: 'Work',
       status: 'pending',
     });
+  });
+
+  it('groups provider authorizations that resolve to the same account identity', async () => {
+    client.connectedAccounts.list = vi.fn(async () => ({
+      items: [
+        {
+          id: 'ca_old',
+          status: 'ACTIVE',
+          createdAt: '2026-08-01T00:00:00.000Z',
+          toolkit: { slug: 'gmail' },
+          connectionData: { emailAddress: 'owner@example.com' },
+        },
+        {
+          id: 'ca_new',
+          status: 'ACTIVE',
+          createdAt: '2026-08-02T00:00:00.000Z',
+          toolkit: { slug: 'gmail' },
+          connectionData: { emailAddress: 'OWNER@example.com' },
+        },
+      ],
+    }));
+    const adapter = new ComposioSessionsAdapter({ clientFactory: async () => client });
+
+    const connections = await adapter.syncConnections({ principalId: 'owner', installationScope: stateDir });
+
+    expect(new Set(connections.map((connection) => connection.accountId)).size).toBe(1);
+    expect(listConnectorAccounts({ principalId: 'owner', connectorId: 'composio-gmail' })).toEqual([
+      expect.objectContaining({
+        identityKey: 'gmail:owner@example.com',
+        currentConnectionId: 'composio-ca_new',
+      }),
+    ]);
   });
 
   it('does not execute writes before confirmation and audits both decisions', async () => {
