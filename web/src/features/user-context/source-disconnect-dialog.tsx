@@ -19,10 +19,10 @@ export function SourceDisconnectDialog({
   language: 'en' | 'zh';
   busy: boolean;
   onOpenChange: (open: boolean) => void;
-  onConfirm: (deleteDerivedUnderstanding: boolean) => void;
+  onConfirm: (understandingPolicy: 'keep' | 'delete') => void;
 }) {
   const t = messages(language).you;
-  const [deleteDerived, setDeleteDerived] = useState(false);
+  const [understandingPolicy, setUnderstandingPolicy] = useState<'keep' | 'delete'>('keep');
   const accountLabel = source?.accountLabel ?? (
     source?.accountCount && source.accountCount > 1 && source.accountOrdinal
       ? t.sourceAccountFallback
@@ -32,7 +32,7 @@ export function SourceDisconnectDialog({
   );
 
   useEffect(() => {
-    if (source) setDeleteDerived(false);
+    if (source) setUnderstandingPolicy('keep');
   }, [source]);
 
   return (
@@ -61,19 +61,19 @@ export function SourceDisconnectDialog({
             </div>
             <button
               type="button"
-              aria-pressed={!deleteDerived}
-              onClick={() => setDeleteDerived(false)}
-              className={cn('flex w-full items-start gap-3 rounded-xl border p-4 text-left', !deleteDerived ? 'border-accent/40 bg-accent-soft/35' : 'border-edge-subtle hover:bg-surface-hover')}
+              aria-pressed={understandingPolicy === 'keep'}
+              onClick={() => setUnderstandingPolicy('keep')}
+              className={cn('flex w-full items-start gap-3 rounded-xl border p-4 text-left', understandingPolicy === 'keep' ? 'border-accent/40 bg-accent-soft/35' : 'border-edge-subtle hover:bg-surface-hover')}
             >
               <Database className="mt-0.5 size-4 shrink-0 text-accent" aria-hidden />
               <span><span className="block text-sm font-semibold text-fg">{t.disconnectKeepTitle}</span><span className="mt-1 block text-xs leading-5 text-fg-muted">{t.disconnectKeepBody}</span></span>
             </button>
             <button
               type="button"
-              aria-pressed={deleteDerived}
-              onClick={() => setDeleteDerived(true)}
+              aria-pressed={understandingPolicy === 'delete'}
+              onClick={() => setUnderstandingPolicy('delete')}
               disabled={!source?.derivedUnderstandingCount}
-              className={cn('flex w-full items-start gap-3 rounded-xl border p-4 text-left disabled:cursor-not-allowed disabled:opacity-55', deleteDerived ? 'border-danger/40 bg-danger-soft' : 'border-edge-subtle hover:bg-surface-hover')}
+              className={cn('flex w-full items-start gap-3 rounded-xl border p-4 text-left disabled:cursor-not-allowed disabled:opacity-55', understandingPolicy === 'delete' ? 'border-danger/40 bg-danger-soft' : 'border-edge-subtle hover:bg-surface-hover')}
             >
               <Trash2 className="mt-0.5 size-4 shrink-0 text-danger" aria-hidden />
               <span><span className="block text-sm font-semibold text-fg">{t.disconnectDeleteTitle}</span><span className="mt-1 block text-xs leading-5 text-fg-muted">{t.disconnectDeleteBody.replace('{{count}}', String(source?.derivedUnderstandingCount ?? 0))}</span></span>
@@ -82,7 +82,7 @@ export function SourceDisconnectDialog({
 
           <div className="flex shrink-0 justify-end gap-2 border-t border-edge-subtle px-5 py-4">
             <Dialog.Close asChild><Button type="button" variant="ghost" disabled={busy}>{t.cancel}</Button></Dialog.Close>
-            <Button type="button" variant="secondary" className={deleteDerived ? 'border-danger/35 text-danger hover:bg-danger-soft' : undefined} disabled={busy} onClick={() => onConfirm(deleteDerived)}>
+            <Button type="button" variant="secondary" className={understandingPolicy === 'delete' ? 'border-danger/35 text-danger hover:bg-danger-soft' : undefined} disabled={busy} onClick={() => onConfirm(understandingPolicy)}>
               <Unplug className="size-4" aria-hidden />{busy ? t.disconnecting : t.disconnectAction}
             </Button>
           </div>

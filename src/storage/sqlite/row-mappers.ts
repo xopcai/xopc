@@ -64,6 +64,7 @@ export type SessionConfigRow = {
   provider_override: string | null;
   working_directory_override: string | null;
   response_language: string | null;
+  user_context_mode: string | null;
   updated_at: number;
 };
 
@@ -217,6 +218,7 @@ export function sessionConfigRowToConfig(row: SessionConfigRow): SessionAgentCon
     ...(row.provider_override ? { providerOverride: row.provider_override } : {}),
     ...(row.working_directory_override ? { workingDirectoryOverride: row.working_directory_override } : {}),
     ...(row.response_language ? { responseLanguage: row.response_language as SessionAgentConfig['responseLanguage'] } : {}),
+    ...(row.user_context_mode ? { userContextMode: row.user_context_mode as SessionAgentConfig['userContextMode'] } : {}),
     updatedAt: row.updated_at,
   };
 }

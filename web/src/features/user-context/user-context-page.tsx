@@ -161,6 +161,7 @@ function UnderstandingCard({
           <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2 text-xs text-fg-subtle">
               <span className="inline-flex items-center gap-1"><Sparkles className="size-3 text-accent" aria-hidden />{originLabel(item, t)}</span>
+              <span className="rounded-full bg-surface-hover px-2 py-0.5">{t.understandingScopes[item.scope.type]}</span>
               <span className="rounded-full bg-surface-hover px-2 py-0.5">{t.stability[item.stability]}</span>
               {item.evidenceCount > 0 ? <span>{replaceCount(t.evidenceCount, item.evidenceCount)}</span> : null}
               {item.latestEvidenceAt ? <span>{t.observedAt.replace('{{time}}', formatDateTime(item.latestEvidenceAt, language))}</span> : null}
@@ -680,17 +681,17 @@ export function UserContextPage() {
     finally { setTrustSaving(false); setPendingTrustLevel(null); }
   }
 
-  async function confirmDisconnectSource(deleteDerivedUnderstanding: boolean) {
+  async function confirmDisconnectSource(understandingPolicy: 'keep' | 'delete') {
     if (!disconnectSource?.instanceId || disconnecting) return;
     setDisconnecting(true);
     try {
-      const result = await disconnectPersonalContextSource(disconnectSource.instanceId, deleteDerivedUnderstanding);
+      const result = await disconnectPersonalContextSource(disconnectSource.instanceId, understandingPolicy);
       setDisconnectSource(null);
       await mutate();
       showToast({
         type: 'success',
         title: t.sourcesTitle,
-        message: deleteDerivedUnderstanding
+        message: understandingPolicy === 'delete'
           ? t.disconnectDeleted.replace('{{count}}', String(result.deletedUnderstandingCount))
           : t.disconnectSuccess,
       });
@@ -915,10 +916,12 @@ export function UserContextPage() {
       {data && view === 'sources' ? (
         <SourcesPanel
           sources={data.sources}
+          recommendations={data.sourceRecommendations}
           language={language}
           t={t}
           busyId={busyId}
           onAddSource={() => navigate('/connectors?personalContext=1')}
+          onConnectRecommendation={(sourceId) => navigate(`/connectors?personalContext=1&connector=${encodeURIComponent(sourceId)}&returnTo=%2Fyou%3Ftab%3Dsources`)}
           onLearn={(source) => void runSourceLearning(source)}
           onPause={(source) => void pauseSourceLearning(source)}
           onConfigure={openSourceConfiguration}
@@ -946,7 +949,7 @@ export function UserContextPage() {
       <ConfirmDialog open={forgetItem !== null} title={t.forgetTitle} description={t.forgetBody} confirmLabel={t.forget} cancelLabel={t.cancel} destructive onConfirm={() => void confirmForget()} onCancel={() => setForgetItem(null)} />
       <ConfirmDialog open={pendingTrustLevel === 'auto'} title={t.autoConfirmTitle} description={t.autoConfirmBody} confirmLabel={t.autoConfirmAction} cancelLabel={t.cancel} onConfirm={() => void selectTrustLevel('auto')} onCancel={() => setPendingTrustLevel(null)} />
       <ConfirmDialog open={pendingImportFile !== null} title={t.importConfirmTitle} description={t.importConfirmBody.replace('{{name}}', pendingImportFile?.name ?? '')} confirmLabel={t.importConfirmAction} cancelLabel={t.cancel} onConfirm={() => { const file = pendingImportFile; setPendingImportFile(null); void uploadUserContext(file); }} onCancel={cancelImport} />
-      <SourceDisconnectDialog source={disconnectSource} language={language} busy={disconnecting} onOpenChange={(open) => { if (!open) setDisconnectSource(null); }} onConfirm={(deleteDerivedUnderstanding) => void confirmDisconnectSource(deleteDerivedUnderstanding)} />
+      <SourceDisconnectDialog source={disconnectSource} language={language} busy={disconnecting} onOpenChange={(open) => { if (!open) setDisconnectSource(null); }} onConfirm={(understandingPolicy) => void confirmDisconnectSource(understandingPolicy)} />
       <AboutYouExplainerDialog open={helpOpen} t={t} onOpenChange={setHelpOpen} onNavigate={selectView} />
     </main>
   );

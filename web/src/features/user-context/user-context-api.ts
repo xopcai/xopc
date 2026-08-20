@@ -33,6 +33,7 @@ export type UserUnderstanding = {
   status: 'active' | 'candidate' | 'needs_review' | 'stale';
   origin: UserContextOrigin;
   sourceName: string;
+  scope: { type: 'global' | 'session' | 'project' | 'workspace'; id?: string };
   updatedAt: string;
   sensitivity: 'normal' | 'personal' | 'secret' | 'regulated';
   explicitness: 'explicit' | 'observed' | 'inferred';
@@ -108,6 +109,13 @@ export type PersonalContextSource = {
   };
 };
 
+export type SourceRecommendation = {
+  sourceId: string;
+  sourceName: string;
+  taskId: string;
+  taskTitle: string;
+};
+
 export type ConnectedClaim = {
   id: string;
   class: 'relationship' | 'project' | 'routine';
@@ -177,12 +185,7 @@ export type UserContextResponse = {
   insights: InsightSuggestion[];
   playbooks: PersonalPlaybook[];
   sources: PersonalContextSource[];
-  sourceRecommendations: Array<{
-    sourceId: string;
-    sourceName: string;
-    taskId: string;
-    taskTitle: string;
-  }>;
+  sourceRecommendations: SourceRecommendation[];
   controls: {
     mode: 'off' | 'readOnly' | 'confirmWrite' | 'auto';
     sensitiveWritePolicy: 'deny' | 'confirm' | 'allow';
@@ -317,6 +320,8 @@ export function forgetUnderstanding(id: string): Promise<{ ok: true }> {
 export function createUnderstanding(input: {
   content: string;
   kind: string;
+  scope?: 'global' | 'session';
+  sessionKey?: string;
   sensitivity?: UserUnderstanding['sensitivity'];
   durability?: UserUnderstanding['durability'];
   disclosurePolicy?: UserUnderstanding['disclosurePolicy'];
@@ -363,11 +368,11 @@ export function revokeReferenceConsent(id: string): Promise<{ ok: true }> {
 
 export function disconnectPersonalContextSource(
   instanceId: string,
-  deleteDerivedUnderstanding: boolean,
+  understandingPolicy: 'keep' | 'delete',
 ): Promise<{ ok: true; deletedUnderstandingCount: number }> {
   return fetchJson(apiUrl(`/api/you/sources/${encodeURIComponent(instanceId)}`), {
     method: 'DELETE',
-    body: JSON.stringify({ deleteDerivedUnderstanding }),
+    body: JSON.stringify({ understandingPolicy }),
   });
 }
 

@@ -24,6 +24,7 @@ export function buildTaskSourceRecommendations(
   }> = [];
 
   for (const definition of definitions) {
+    if (definition.understanding?.mode !== 'activity') continue;
     if (installedConnectorIds.has(definition.id)) continue;
     const sourceText = [definition.id, definition.displayName, definition.description, ...(definition.tags ?? [])]
       .join(' ')
