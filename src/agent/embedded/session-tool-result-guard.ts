@@ -89,12 +89,14 @@ export interface InstallSessionToolResultGuardResult {
   flushPendingToolResults: () => void;
   clearPendingToolResults: () => void;
   getPendingIds: () => string[];
+  setActiveTurnId: (turnId: string | null) => void;
 }
 
 /** Idempotent wrapper that also adds the helper methods consumers expect. */
 export type GuardedPiTranscriptManager = SessionManager & {
   flushPendingToolResults?: () => void;
   clearPendingToolResults?: () => void;
+  setActiveTurnId?: (turnId: string | null) => void;
 };
 
 /**
@@ -112,6 +114,7 @@ export function installSessionToolResultGuard(
     flushPendingToolResults: () => guard.flushPending(),
     clearPendingToolResults: () => guard.clearPending(),
     getPendingIds: () => guard.getPendingIds(),
+    setActiveTurnId: (turnId) => guard.setActiveTurnId(turnId),
   };
 }
 
@@ -156,6 +159,7 @@ export function guardSessionManager(
   const tagged = sessionManager as GuardedPiTranscriptManager;
   tagged.flushPendingToolResults = result.flushPendingToolResults;
   tagged.clearPendingToolResults = result.clearPendingToolResults;
+  tagged.setActiveTurnId = result.setActiveTurnId;
   return tagged;
 }
 
@@ -491,6 +495,7 @@ class ToolResultGuard {
   private readonly originalAppend: SessionManager['appendMessage'];
   private readonly allowSyntheticToolResults: boolean;
   private readonly maxToolResultChars: number;
+  private activeTurnId: string | null = null;
 
   constructor(sessionManager: SessionManager, opts: ToolResultGuardOptions) {
     this.sessionManager = sessionManager;
@@ -506,6 +511,16 @@ class ToolResultGuard {
     this.sessionManager.appendMessage = bound as SessionManager['appendMessage'];
   }
 
+  setActiveTurnId(turnId: string | null): void {
+    this.activeTurnId = normalizeOptionalString(turnId) ?? null;
+  }
+
+  private withActiveTurnId(message: AgentMessage): AgentMessage {
+    return this.activeTurnId
+      ? ({ ...message, turnId: this.activeTurnId } as unknown as AgentMessage)
+      : message;
+  }
+
   flushPending(): void {
     if (this.pending.size() === 0) {
       return;
@@ -518,7 +533,7 @@ class ToolResultGuard {
           text: this.opts.missingToolResultText,
         });
         const flushed = this.applyBeforeWriteHook(
-          this.persistToolResult(this.persistMessage(synthetic), {
+          this.persistToolResult(this.withActiveTurnId(this.persistMessage(synthetic)), {
             toolCallId: id,
             toolName: name,
             isSynthetic: true,
@@ -599,7 +614,7 @@ class ToolResultGuard {
       // Apply hard size cap before persistence to prevent oversized tool results
       // from consuming the entire context window on subsequent LLM calls.
       const capped = capToolResultForPersistence(
-        this.persistMessage(normalizedToolResult),
+        this.withActiveTurnId(this.persistMessage(normalizedToolResult)),
         this.maxToolResultChars,
       );
       const persisted = this.applyBeforeWriteHook(
@@ -652,7 +667,9 @@ class ToolResultGuard {
       this.flushPending();
     }
 
-    const finalMessage = this.applyBeforeWriteHook(this.persistMessage(nextMessage));
+    const finalMessage = this.applyBeforeWriteHook(
+      this.withActiveTurnId(this.persistMessage(nextMessage)),
+    );
     if (!finalMessage) {
       return undefined;
     }

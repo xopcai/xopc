@@ -6,6 +6,8 @@ import {
   appendMemoryTraceEvent,
   getMemoryRecord,
   listMemorySignals,
+  recordDreamingDecision,
+  type DreamingActiveMode,
 } from '../../../storage/sqlite/index.js';
 import type { DreamingRemConfig } from './config.js';
 import { inferMemorySensitivity } from '../sensitivity.js';
@@ -26,10 +28,11 @@ function resolveConfig(overrides?: Partial<DreamingRemConfig>): DreamingRemConfi
 /** Discover cross-session patterns from structured usage signals. */
 export async function runRemPatterns(params: {
   agentId: string;
+  runId: string;
+  mode: DreamingActiveMode;
   workspaceDir: string;
   config?: Partial<DreamingRemConfig>;
   sensitiveWritePolicy?: 'deny' | 'confirm' | 'allow';
-  promotionWritePolicy?: 'deny' | 'confirm' | 'allow';
   now?: Date;
 }): Promise<{ ok: boolean; reason: string; patternsDiscovered: number; entriesAnalyzed: number }> {
   const cfg = resolveConfig(params.config);
@@ -67,13 +70,24 @@ export async function runRemPatterns(params: {
       .sort((left, right) => right.strength - left.strength)
       .slice(0, cfg.limit);
 
-    const policy = params.promotionWritePolicy ?? 'deny';
+    // REM creates new inferred beliefs, so even automatic mode requires user review.
+    const canPropose = params.mode !== 'observe';
     let written = 0;
     for (const pattern of patterns) {
       const content = pattern.records.map((record) => record.content).join('\n');
       const sensitivity = inferMemorySensitivity(content);
-      if (sensitivity !== 'normal' && params.sensitiveWritePolicy !== 'allow') continue;
-      if (policy !== 'deny') {
+      if (sensitivity !== 'normal' && params.sensitiveWritePolicy !== 'allow') {
+        recordDreamingDecision({ runId: params.runId, action: 'skip', reasonCode: 'sensitive_write_blocked', score: pattern.strength });
+        continue;
+      }
+      recordDreamingDecision({
+        runId: params.runId,
+        action: canPropose ? 'propose' : 'observe',
+        reasonCode: 'rem_pattern_threshold_met',
+        score: pattern.strength,
+        evidence: { memberRecordIds: pattern.records.map((record) => record.id) },
+      });
+      if (canPropose) {
         const record = activateRemInsight({
           agentId: params.agentId,
           workspaceId: params.workspaceDir,
@@ -84,7 +98,7 @@ export async function runRemPatterns(params: {
           observedAt: now.toISOString(),
           evidence: pattern.records.map((record) => record.content),
           sensitivity,
-          status: policy === 'confirm' ? 'candidate' : 'active',
+          status: 'candidate',
         });
         appendMemorySignal({
           signal: { source: 'dreaming', recordId: record.id, score: pattern.strength, content: record.content, metadata: { phase: 'rem' } },
@@ -95,10 +109,9 @@ export async function runRemPatterns(params: {
     }
     const selected = patterns.flatMap((pattern) => pattern.records.map((record) => record.id));
     const reason = patterns.length === 0 ? 'not enough evidence for recurring patterns'
-      : policy === 'deny' ? 'patterns analyzed; writes denied by policy'
-        : policy === 'confirm' ? 'pattern candidates added for user review' : 'REM patterns complete';
+      : canPropose ? 'pattern candidates added for user review' : 'patterns analyzed in observe mode';
     trace(params, reason, selected, written, started);
-    log.info({ workspaceDir: params.workspaceDir, patterns: patterns.length, written, policy }, 'REM pattern discovery complete');
+    log.info({ workspaceDir: params.workspaceDir, patterns: patterns.length, written, canPropose }, 'REM pattern discovery complete');
     return { ok: true, reason, patternsDiscovered: patterns.length, entriesAnalyzed: new Set(signals.map((signal) => signal.recordId)).size };
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);

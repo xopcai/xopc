@@ -1,8 +1,7 @@
-import path from 'node:path';
-
 // ── Phase identifiers ──────────────────────────────────────────────────
 
 export type DreamingPhaseId = 'light' | 'deep' | 'rem';
+export const DREAMING_ALGORITHM_VERSION = 'structured-v1';
 
 export const DREAMING_PHASES: readonly DreamingPhaseId[] = ['light', 'deep', 'rem'] as const;
 
@@ -30,8 +29,3 @@ export const DEFAULT_REM_CRON = '0 5 * * 0';
 
 export const DEFAULT_RECENCY_HALF_LIFE_DAYS = 14;
 export const DEFAULT_MAX_AGE_DAYS = 30;
-
-// ── Operational event log ──────────────────────────────────────────────
-
-export const DREAMING_DIR_RELATIVE = '.dreams';
-export const DREAMING_EVENTS_LOG_RELATIVE = path.join(DREAMING_DIR_RELATIVE, 'events.jsonl');

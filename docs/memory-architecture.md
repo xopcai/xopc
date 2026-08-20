@@ -100,7 +100,7 @@ Dreaming 和质量评估只消费这套统一 signal，不维护自己的召回�
 
 ### 4.4 反馈闭环
 
-回答与最近一次 inject trace 绑定。用户的“有帮助、不相关、错误、冒犯、过时”反馈归因到具体 record：
+回答通过稳定 `turnId` 与唯一 inject trace 绑定，不按时间猜测。用户的“有帮助、不相关、错误、冒犯、过时”反馈分为回答级与记录级：
 
 - 有帮助：提高使用质量分；
 - 不相关：降低召回权重；
@@ -110,7 +110,9 @@ Dreaming 和质量评估只消费这套统一 signal，不维护自己的召回�
 
 ## 5. Dreaming
 
-Dreaming 是确定性的后台记忆巩固管线，不是另一次无约束聊天，也不依赖模型“自由联想”。三个阶段共享 `memory_records`、`memory_signals` 和 `memory_trace_events`。
+Dreaming 是确定性的后台记忆巩固管线，不是另一次无约束聊天，也不依赖模型“自由联想”。三个阶段共享 `memory_records` 和 `memory_signals`，每次运行及逐条决策写入 `dreaming_runs`、`dreaming_decisions`。
+
+运行模式只有 `off`、`observe`、`review`、`automatic`。`automatic` 是请求权限，不是无条件写权限；系统根据最近反馈、记录错误、敏感反馈和 Dreaming 失败率计算 readiness，未达门槛时实际执行自动降级为 `review`。REM 产生新的推断，因此即使在 automatic 下也始终进入审核。
 
 ### 5.1 Light：观察与去重
 
@@ -188,7 +190,7 @@ REM 的输出必须包含成员 record ids 和 evidence，不能输出不可解�
 - provider 插件返回统一 `MemoryRecord`/citation，不得绕开 manager 直接注入 prompt。
 - `memory_get` 只接受 record id；`memory_search` 返回稳定 record id。
 - 更新和删除只接受 record id。
-- Dreaming 的状态和结果通过 SQLite trace 查询；事件 JSONL 仅用于运维日志，不参与产品状态或记忆决策。
+- Dreaming 的状态、结果和逐条理由只通过 SQLite run/decision ledger 查询，不维护文件事件日志。
 - 记忆 schema 变化通过正式 migration 完成，不在运行时猜测旧格式。
 
 ## 10. 竞品取舍
@@ -201,6 +203,8 @@ REM 的输出必须包含成员 record ids 和 evidence，不能输出不可解�
 xopc 的选择是：保留 OpenClaw 的可观察 Dreaming 产品模型，吸收 OpenHuman 的长期行动连续性，但以结构化 record、evidence、signal、scope 和 lifecycle 作为底座。用户可编辑性通过产品视图和显式导出提供，不让 Markdown 成为运行时数据库。
 
 ## 11. 持续优化机制
+
+下一阶段的可执行产品和技术设计见 [用户理解可信闭环](./design/user-understanding-confidence-loop.md)。
 
 ### 11.1 离线评测集
 
@@ -219,11 +223,8 @@ xopc 的选择是：保留 OpenClaw 的可观察 Dreaming 产品模型，吸收 
 
 所有回答绑定 context trace，用户反馈才能归因到具体记录。线上只做可回滚的阈值和排序实验，不自动改变安全、scope 或披露规则。Dreaming 的晋升后帮助率、撤销率和纠正率需要按版本持续跟踪。
 
-### 11.3 技术演进顺序
+### 11.3 当前演进顺序
 
-1. 先补齐 record detail、Inbox、冲突/替代和用户反馈归因；
-2. 再建设时序评测集和发布门禁；
-3. 然后优化 hybrid retrieval、reranker 和动态预算；
-4. 最后扩展连接器 evidence 与跨任务模式发现。
+稳定 turn 归因、规范化反馈、Dreaming ledger、统一 `/you` 和 automatic readiness gate 已落地。后续只在同一数据面上推进：扩充脱敏 episode 数据集、优化 hybrid retrieval/reranker 与动态预算，再扩展连接器 evidence 和跨任务模式发现。
 
 任何阶段都不恢复文件式运行时记忆；导入和导出是显式数据操作，不是兼容读取路径。

@@ -4,6 +4,8 @@ import { randomUUID } from 'node:crypto';
 import { resolveDefaultAgentId } from '../../../agent/agent-scope.js';
 import type { MemoryRecord } from '../../../agent/memory/types.js';
 import { nextMemoryReviewAt, resolveMemoryStability } from '../../../agent/memory/lifecycle.js';
+import { runDreamingPhase } from '../../../agent/memory/dreaming/runner.js';
+import { resolveDreamingAgentScope } from '../../../agent/memory/dreaming/scope.js';
 import type { Config } from '../../../config/schema.js';
 import { UserContextConfigSchema } from '../../../user-context/config.js';
 import { listConnectorCatalog } from '../../../connectors/catalog.js';
@@ -21,6 +23,8 @@ import {
   decideMemoryReferenceConsent,
   deleteMemoryRecord,
   getMemoryRecord,
+  getDreamingRun,
+  getMemoryTurnFeedback,
   getUserClaim,
   getRelationshipSettings,
   getUserProfilePromptState,
@@ -31,6 +35,9 @@ import {
   getConnectorConnection,
   listConnectorConnections,
   listMemoryRecords,
+  listMemorySignals,
+  listDreamingRuns,
+  listDreamingDecisions,
   listMemoryReferenceConsents,
   listUserClaims,
   listUserClaimEvidence,
@@ -42,6 +49,8 @@ import {
   setUserProfilePromptState,
   setUserTrustPolicy,
   setUserClaimDecision,
+  setInteractionState,
+  setMemoryTurnFeedback,
   updateRelationshipSettings,
   upsertMemoryRecord,
 } from '../../../storage/sqlite/index.js';
@@ -73,6 +82,9 @@ import { buildTaskSourceRecommendations } from '../../../user-context/source-rec
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 const VISIBLE_STATUSES = new Set<MemoryRecord['status']>(['active', 'candidate', 'needs_review']);
+const FEEDBACK_RATINGS = new Set([
+  'helpful', 'not_helpful', 'mixed', 'irrelevant', 'incorrect', 'outdated', 'sensitive',
+]);
 const ACTIONABLE_INSIGHT_KINDS = new Set<MemoryRecord['kind']>([
   'routine',
   'commitment',
@@ -433,6 +445,117 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
         autoRequiresExplicitOptIn: true,
       },
     });
+  });
+
+  authenticated.get('/api/you/feedback/:turnId', (c) => {
+    const trace = getMemoryTurnFeedback(c.req.param('turnId'));
+    if (!trace) return c.json({ error: 'Turn context not found' }, 404);
+    const personalContext = trace.selectedRecordIds
+      .map((id) => getMemoryRecord(id))
+      .filter((record): record is MemoryRecord => Boolean(record) && isUserContextRecord(record))
+      .map(projectUserContextRecord);
+    return c.json({ trace, personalContext });
+  });
+
+  authenticated.put('/api/you/feedback/:turnId', deps.strictRateLimitMiddleware, async (c) => {
+    const body = await c.req.json().catch(() => null);
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return c.json({ error: 'Invalid feedback' }, 400);
+    }
+    const input = body as Record<string, unknown>;
+    if (typeof input.rating !== 'string' || !FEEDBACK_RATINGS.has(input.rating)) {
+      return c.json({ error: 'Invalid rating' }, 400);
+    }
+    const records = Array.isArray(input.records)
+      ? input.records.flatMap((value) => {
+          if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
+          const item = value as Record<string, unknown>;
+          if (typeof item.recordId !== 'string' || typeof item.rating !== 'string' || !FEEDBACK_RATINGS.has(item.rating)) return [];
+          return [{
+            recordId: item.recordId,
+            rating: item.rating as Parameters<typeof setMemoryTurnFeedback>[0]['rating'],
+            ...(typeof item.reasonCode === 'string' ? { reasonCode: item.reasonCode } : {}),
+            ...(typeof item.note === 'string' ? { note: item.note } : {}),
+          }];
+        })
+      : undefined;
+    const trace = setMemoryTurnFeedback({
+      turnId: c.req.param('turnId'),
+      rating: input.rating as Parameters<typeof setMemoryTurnFeedback>[0]['rating'],
+      source: 'user',
+      ...(typeof input.score === 'number' ? { score: input.score } : {}),
+      ...(typeof input.reasonCode === 'string' ? { reasonCode: input.reasonCode } : {}),
+      ...(typeof input.note === 'string' ? { note: input.note } : {}),
+      ...(records ? { records } : {}),
+    });
+    if (!trace) return c.json({ error: 'Turn context not found' }, 404);
+    if (trace.sessionKey && input.rating === 'not_helpful' && input.reasonCode === 'tone_mismatch') {
+      setInteractionState({
+        sessionKey: trace.sessionKey,
+        signal: { supportNeed: 'unknown', confidence: 1, source: 'explicit', repairStatus: 'needed', repairReason: 'tone_mismatch' },
+      });
+    }
+    const personalContext = trace.selectedRecordIds
+      .map((id) => getMemoryRecord(id))
+      .filter((record): record is MemoryRecord => Boolean(record) && isUserContextRecord(record))
+      .map(projectUserContextRecord);
+    return c.json({ trace, personalContext });
+  });
+
+  authenticated.get('/api/you/dreaming', (c) => {
+    const config = deps.service.currentConfig as Config;
+    const scope = resolveDreamingAgentScope(config);
+    const signals = listMemorySignals({ workspaceId: scope.workspaceDir, limit: 500 });
+    return c.json({
+      agentId: scope.agentId,
+      config: scope.config,
+      readiness: scope.readiness,
+      runs: listDreamingRuns({ agentId: scope.agentId, limit: 50 }),
+      signalCount: signals.filter((signal) => signal.source === 'dreaming').length,
+    });
+  });
+
+  authenticated.patch('/api/you/dreaming', deps.strictRateLimitMiddleware, async (c) => {
+    const config = deps.service.currentConfig as Config;
+    const body = await c.req.json().catch(() => ({}));
+    const parsed = UserContextConfigSchema.safeParse({
+      ...config.userContext,
+      dreaming: { ...config.userContext.dreaming, mode: body.mode },
+    });
+    if (!parsed.success) return c.json({ error: parsed.error.issues[0]?.message ?? 'Invalid Dreaming mode' }, 400);
+    const saved = await deps.service.saveConfig({ ...config, userContext: parsed.data });
+    if (!saved.saved) return c.json({ error: saved.error ?? 'save failed' }, 500);
+    return c.json({ config: resolveDreamingAgentScope(deps.service.currentConfig as Config).config });
+  });
+
+  authenticated.get('/api/you/readiness', (c) => {
+    return c.json(resolveDreamingAgentScope(deps.service.currentConfig as Config).readiness);
+  });
+
+  authenticated.post('/api/you/dreaming/runs', deps.strictRateLimitMiddleware, async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const phase = body.phase === 'light' || body.phase === 'deep' || body.phase === 'rem'
+      ? body.phase
+      : 'deep';
+    try {
+      const result = await runDreamingPhase({
+        config: deps.service.currentConfig as Config,
+        phase,
+        triggerKind: 'manual',
+      });
+      return c.json(result);
+    } catch (error) {
+      return c.json({ error: error instanceof Error ? error.message : String(error) }, 400);
+    }
+  });
+
+  authenticated.get('/api/you/dreaming/runs/:runId', (c) => {
+    const scope = resolveDreamingAgentScope(deps.service.currentConfig as Config);
+    const run = getDreamingRun(c.req.param('runId'));
+    if (!run || run.agentId !== scope.agentId || run.workspaceId !== scope.workspaceDir) {
+      return c.json({ error: 'Dreaming run not found' }, 404);
+    }
+    return c.json({ run, decisions: listDreamingDecisions(run.runId) });
   });
 
   authenticated.patch('/api/you/relationship', deps.strictRateLimitMiddleware, async (c) => {

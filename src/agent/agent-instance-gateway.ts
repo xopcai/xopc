@@ -54,6 +54,7 @@ export interface AgentInstanceGateway {
   prepareUserTurnContext(
     userMessage: AgentMessage,
     sessionKey: string,
+    turnId: string,
   ): Promise<import('./memory/context/types.js').UserContextPlan>;
 
   /** Post-turn: sync external memory providers, queue next prefetch. */

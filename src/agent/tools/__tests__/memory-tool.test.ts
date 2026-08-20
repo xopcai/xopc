@@ -1,21 +1,21 @@
-import { access, mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { SHORT_TERM_RECALL_STORE_RELATIVE } from '../../memory/dreaming/constants.js';
 import type { MemoryManager } from '../../memory/manager.js';
 import { createMemorySearchTool } from '../memory-tool.js';
 
-describe('memory_search dreaming capture', () => {
+describe('memory_search recall signals', () => {
   let root: string | undefined;
 
   afterEach(async () => {
     if (root) await rm(root, { recursive: true, force: true });
   });
 
-  it('does not collect recall evidence when dreaming is disabled', async () => {
+  it('records unified recall evidence independently of Dreaming mode', async () => {
     root = await mkdtemp(join(tmpdir(), 'xopc-memory-tool-'));
+    const recordSignal = vi.fn();
     const manager = {
       search: async () => [{
         record: {
@@ -41,17 +41,20 @@ describe('memory_search dreaming capture', () => {
           lineEnd: 1,
         },
       }],
-      recordSignal: () => undefined,
+      recordSignal,
     } as unknown as MemoryManager;
     const tool = createMemorySearchTool({
       workspaceDir: root,
-      dreamingRoot: root,
       getMemoryManager: () => manager,
       shouldRecordDreamingRecalls: () => false,
     });
 
     await tool.execute('call-1', { query: 'response style' });
 
-    await expect(access(join(root, SHORT_TERM_RECALL_STORE_RELATIVE))).rejects.toThrow();
+    expect(recordSignal).toHaveBeenCalledWith(expect.objectContaining({
+      source: 'search_recall',
+      recordId: 'memory/note.md#L1-L1',
+      score: 0.9,
+    }));
   });
 });

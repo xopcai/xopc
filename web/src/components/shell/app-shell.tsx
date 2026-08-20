@@ -19,7 +19,6 @@ import { GlobalCommandPaletteHost } from '@/features/search/global-command-palet
 import { GlobalQuickCaptureHost } from '@/features/notes/global-quick-capture';
 import { GlobalDiscussionCaptureHost } from '@/features/discussions/global-discussion-capture';
 import { GatewaySseBridge } from '@/features/gateway/gateway-sse-bridge';
-import { DreamingOverlay } from '@/features/dreaming/dreaming-overlay';
 import { WorkspacePreviewPane } from '@/features/workspace/workspace-preview-pane';
 import { GlobalReadAloudPlayer } from '@/features/voice/global-read-aloud-player';
 import { GlobalVoiceInputShortcutHost } from '@/features/voice/global-voice-input-shortcut-host';
@@ -158,7 +157,6 @@ export function AppShell() {
         {language === 'zh' ? '跳到主要内容' : 'Skip to main content'}
       </a>
       <GatewaySseBridge />
-      <DreamingOverlay />
       <DesktopNotificationBridge />
       <ElectronMenuListener />
       <NavigateToChatListener />

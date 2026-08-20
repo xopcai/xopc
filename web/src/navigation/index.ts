@@ -17,7 +17,6 @@ const TAB_TO_SETTINGS_SECTION: Record<
   | 'settingsHeartbeat'
   | 'settingsTunnel'
   | 'settingsShares'
-  | 'settingsDreams'
   | 'skills'
   | 'channels',
   SettingsSectionId
@@ -34,7 +33,6 @@ const TAB_TO_SETTINGS_SECTION: Record<
   settingsHeartbeat: 'heartbeat',
   settingsTunnel: 'remote-access',
   settingsShares: 'shares',
-  settingsDreams: 'dreams',
   skills: 'skills',
   channels: 'channels',
 };
@@ -95,7 +93,7 @@ export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
   },
   {
     id: 'automation',
-    tabs: ['settingsHeartbeat', 'settingsDreams'],
+    tabs: ['settingsHeartbeat'],
   },
   { id: 'diagnostics', tabs: ['sessions', 'logs'] },
 ] as const;

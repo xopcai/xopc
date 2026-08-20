@@ -10,7 +10,6 @@ import {
   Keyboard,
   Layers,
   MessageSquare,
-  Moon,
   Package,
   Palette,
   PawPrint,
@@ -45,7 +44,6 @@ const TAB_ICONS: Record<Tab, LucideIcon> = {
   settingsHeartbeat: Heart,
   settingsTunnel: Radio,
   settingsShares: Share2,
-  settingsDreams: Moon,
 };
 
 export function TabIcon({ tab, className }: { tab: Tab; className?: string }) {

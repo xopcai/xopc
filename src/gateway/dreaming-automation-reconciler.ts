@@ -1,5 +1,6 @@
 import type { Config } from '../config/schema.js';
-import { resolveDreamingConfig, type DreamingResolvedConfig } from '../agent/memory/dreaming/config.js';
+import type { DreamingAgentScope } from '../agent/memory/dreaming/scope.js';
+import type { DreamingResolvedConfig } from '../agent/memory/dreaming/config.js';
 import { resolveDreamingAgentScope } from '../agent/memory/dreaming/scope.js';
 import {
   DREAMING_CRON_NAME,
@@ -65,8 +66,7 @@ function dreamingAutomationId(phase: DreamingPhaseId): string {
   return `system-user-context-dreaming:${phase}`;
 }
 
-function buildAction(config: Config, token: string): AutomationAction {
-  const scope = resolveDreamingAgentScope(config);
+function buildAction(scope: DreamingAgentScope, token: string): AutomationAction {
   return {
     kind: 'agent',
     agentId: scope.agentId,
@@ -102,7 +102,8 @@ export async function reconcileDreamingAutomations(params: {
   const { config, automationService } = params;
   const result: DreamingAutomationReconcileResult = { created: [], updated: [], disabled: [] };
 
-  const resolved = resolveDreamingConfig(config);
+  const scope = resolveDreamingAgentScope(config);
+  const resolved = scope.config;
 
   for (const spec of DREAMING_AUTOMATIONS) {
     const id = dreamingAutomationId(spec.phase);
@@ -122,7 +123,7 @@ export async function reconcileDreamingAutomations(params: {
       description: phaseDescription(spec.phase),
       enabled,
       trigger: buildTrigger(resolved, spec.phase),
-      action: buildAction(config, spec.token),
+      action: buildAction(scope, spec.token),
     };
 
     if (!current) {

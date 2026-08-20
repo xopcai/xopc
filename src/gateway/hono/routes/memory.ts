@@ -21,7 +21,6 @@ import {
   appendMemorySignal,
   appendMemoryTraceEvent,
   deleteMemoryRecord,
-  findLatestMemoryInjectTrace,
   getMemoryRecord,
   listKnowledgeSourceChanges,
   listKnowledgeSourceItems,
@@ -30,9 +29,6 @@ import {
   listMemorySignals,
   listMemoryTraceEvents,
   searchMemoryRecords,
-  setMemoryTraceFeedback,
-  setLatestMemoryInjectFeedback,
-  setInteractionState,
   summarizeMemoryRecallFeedback,
   summarizeUserUnderstandingQuality,
   upsertMemoryRecord,
@@ -85,13 +81,6 @@ const MEMORY_SENSITIVITIES = new Set<MemorySensitivity>([
   'regulated',
 ]);
 
-const MEMORY_TRACE_FEEDBACK_RATINGS = new Set([
-  'helpful',
-  'not_helpful',
-  'mixed',
-  'irrelevant',
-]);
-
 const KNOWLEDGE_SYNTHESIS_STATUSES = new Set<KnowledgeSynthesisStatus>([
   'pending', 'processing', 'completed', 'failed', 'ignored',
 ]);
@@ -133,18 +122,8 @@ function parseEnum<T extends string>(raw: unknown, allowed: Set<T>): T | undefin
   return typeof raw === 'string' && allowed.has(raw as T) ? raw as T : undefined;
 }
 
-function personalContextForTrace(trace: { selectedRecordIds: string[] } | null | undefined) {
-  return (trace?.selectedRecordIds ?? [])
-    .map((recordId) => getMemoryRecord(recordId))
-    .filter((record): record is NonNullable<typeof record> => Boolean(record) && isUserContextRecord(record))
-    .filter((record) => record.sensitivity !== 'secret' && record.sensitivity !== 'regulated')
-    .filter((record) => record.disclosurePolicy !== 'silent')
-    .map(projectUserContextRecord)
-    .map(({ id, statement, facet, origin, sourceName }) => ({ id, statement, facet, origin, sourceName }));
-}
-
 export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
-  authenticated.get('/api/user-context/providers', async (c) => {
+  authenticated.get('/api/you/providers', async (c) => {
     const cfg = deps.service.currentConfig as Config;
     const plugins = await discoverMemoryPlugins(cfg);
     return c.json({
@@ -179,12 +158,12 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
     });
   });
 
-  authenticated.get('/api/user-context/config', (c) => {
+  authenticated.get('/api/you/config', (c) => {
     const cfg = deps.service.currentConfig as Config;
     return c.json({ userContext: cfg.userContext });
   });
 
-  authenticated.put('/api/user-context/config', deps.strictRateLimitMiddleware, async (c) => {
+  authenticated.put('/api/you/config', deps.strictRateLimitMiddleware, async (c) => {
     const cfg = deps.service.currentConfig as Config;
     const body = await c.req.json().catch(() => ({}));
     const parsed = UserContextConfigSchema.safeParse(body);
@@ -197,7 +176,7 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
     return c.json({ userContext: (deps.service.currentConfig as Config).userContext });
   });
 
-  authenticated.patch('/api/user-context/preferences', deps.strictRateLimitMiddleware, async (c) => {
+  authenticated.patch('/api/you/preferences', deps.strictRateLimitMiddleware, async (c) => {
     const cfg = deps.service.currentConfig as Config;
     const body = await c.req.json().catch(() => ({}));
     const responseLanguage = ResponseLanguageSchema.safeParse(body.responseLanguage);
@@ -214,7 +193,7 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
     return c.json({ preferences: userContext.preferences });
   });
 
-  authenticated.get('/api/user-context/memories', (c) => {
+  authenticated.get('/api/you/memories', (c) => {
     if (c.req.query('agentId')) return c.json({ error: 'agentId is not supported' }, 400);
     const records = listMemoryRecords({
       providerId: c.req.query('providerId') || undefined,
@@ -229,7 +208,7 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
     return c.json({ records });
   });
 
-  authenticated.post('/api/user-context/memories/search', async (c) => {
+  authenticated.post('/api/you/memories/search', async (c) => {
     const body = await c.req.json().catch(() => ({}));
     const query = typeof body.query === 'string' ? body.query.trim() : '';
     if (!query) {
@@ -256,7 +235,7 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
     return c.json({ results: records });
   });
 
-  authenticated.post('/api/user-context/memories', async (c) => {
+  authenticated.post('/api/you/memories', async (c) => {
     const body = await c.req.json().catch(() => ({}));
     const kind = parseKind(body.kind);
     const content = typeof body.content === 'string' ? body.content.trim() : '';
@@ -300,7 +279,7 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
     return c.json({ record }, 201);
   });
 
-  authenticated.put('/api/user-context/memories/:id', async (c) => {
+  authenticated.put('/api/you/memories/:id', async (c) => {
     const existing = getMemoryRecord(c.req.param('id'));
     if (!existing) return c.json({ error: 'Memory record not found' }, 404);
     if (c.req.query('agentId')) return c.json({ error: 'agentId is not supported' }, 400);
@@ -339,7 +318,7 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
     return c.json({ record });
   });
 
-  authenticated.delete('/api/user-context/memories/:id', (c) => {
+  authenticated.delete('/api/you/memories/:id', (c) => {
     const existing = getMemoryRecord(c.req.param('id'));
     if (c.req.query('agentId')) return c.json({ error: 'agentId is not supported' }, 400);
     if (!existing || existing.scope.userId !== LOCAL_USER_ID) return c.json({ error: 'Memory record not found' }, 404);
@@ -348,7 +327,7 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
     return c.json({ ok: true });
   });
 
-  authenticated.get('/api/user-context/signals', (c) => {
+  authenticated.get('/api/you/signals', (c) => {
     if (c.req.query('agentId')) return c.json({ error: 'agentId is not supported' }, 400);
     const signals = listMemorySignals({
       recordId: c.req.query('recordId') || undefined,
@@ -390,7 +369,7 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
     return c.json({ syncRuns });
   });
 
-  authenticated.get('/api/user-context/traces', (c) => {
+  authenticated.get('/api/you/traces', (c) => {
     const traces = listMemoryTraceEvents({
       providerId: c.req.query('providerId') || undefined,
       sessionKey: c.req.query('sessionKey') || undefined,
@@ -400,7 +379,7 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
     return c.json({ traces });
   });
 
-  authenticated.get('/api/user-context/memory-use-audit', (c) => {
+  authenticated.get('/api/you/memory-use-audit', (c) => {
     const traces = listMemoryTraceEvents({
       sessionKey: c.req.query('sessionKey') || undefined,
       limit: parseLimit(c.req.query('limit')),
@@ -408,31 +387,7 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
     return c.json({ audit: summarizeMemoryUseAudit(traces) });
   });
 
-  authenticated.patch('/api/user-context/traces/:traceId/feedback', async (c) => {
-    const body = await c.req.json().catch(() => ({}));
-    const rating = typeof body.rating === 'string' && MEMORY_TRACE_FEEDBACK_RATINGS.has(body.rating)
-      ? body.rating
-      : undefined;
-    if (!rating) {
-      return c.json({ error: 'Missing or invalid required field: rating' }, 400);
-    }
-    const source = body.source === 'user' || body.source === 'evaluator' || body.source === 'system'
-      ? body.source
-      : undefined;
-    const trace = setMemoryTraceFeedback({
-      traceId: c.req.param('traceId'),
-      feedback: {
-        rating,
-        ...(typeof body.score === 'number' ? { score: body.score } : {}),
-        ...(typeof body.reason === 'string' ? { reason: body.reason } : {}),
-        ...(source ? { source } : {}),
-      },
-    });
-    if (!trace) return c.json({ error: 'Memory trace not found' }, 404);
-    return c.json({ trace });
-  });
-
-  authenticated.get('/api/user-context/feedback-summary', (c) => {
+  authenticated.get('/api/you/feedback-summary', (c) => {
     const summaries = summarizeMemoryRecallFeedback({
       recordId: c.req.query('recordId') || undefined,
       providerId: c.req.query('providerId') || undefined,
@@ -442,7 +397,7 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
     return c.json({ summaries });
   });
 
-  authenticated.get('/api/user-context/quality', (c) => {
+  authenticated.get('/api/you/quality', (c) => {
     const cfg = deps.service.currentConfig as Config;
     const metrics = summarizeUserUnderstandingQuality({
       windowDays: parseWindowDays(c.req.query('windowDays')),
@@ -456,74 +411,7 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
     return c.json({ metrics, cadence });
   });
 
-  authenticated.patch(
-    '/api/user-context/understanding/response-feedback',
-    deps.strictRateLimitMiddleware,
-    async (c) => {
-      const body = await c.req.json().catch(() => ({}));
-      const sessionKey = typeof body.sessionKey === 'string' ? body.sessionKey.trim() : '';
-      const assistantTimestamp = typeof body.assistantTimestamp === 'number'
-        ? body.assistantTimestamp
-        : Number.NaN;
-      const rating = body.rating === 'helpful' || body.rating === 'not_helpful'
-        ? body.rating
-        : undefined;
-      const reason = typeof body.reason === 'string'
-        ? body.reason.trim().slice(0, 160)
-        : '';
-      if (!sessionKey || !Number.isFinite(assistantTimestamp) || assistantTimestamp <= 0 || !rating) {
-        return c.json({ error: 'sessionKey, assistantTimestamp, and a valid rating are required' }, 400);
-      }
-      if (rating === 'not_helpful' && reason.includes('tone_mismatch')) {
-        setInteractionState({
-          sessionKey,
-          signal: {
-            supportNeed: 'unknown',
-            confidence: 1,
-            source: 'explicit',
-            repairStatus: 'needed',
-            repairReason: reason,
-          },
-        });
-      }
-      const trace = setLatestMemoryInjectFeedback({
-        sessionKey,
-        beforeMs: assistantTimestamp,
-        feedback: {
-          rating,
-          source: 'user',
-          reason: reason || 'assistant_response_feedback',
-        },
-      });
-      return c.json({
-        matched: Boolean(trace),
-        attributedRecordCount: trace?.selectedRecordIds.length ?? 0,
-        personalContext: personalContextForTrace(trace),
-        feedback: trace?.feedback ?? null,
-        remediation: trace?.remediation ?? null,
-      });
-    },
-  );
-
-  authenticated.get('/api/user-context/understanding/response-feedback', (c) => {
-    const sessionKey = c.req.query('sessionKey')?.trim() ?? '';
-    const assistantTimestamp = Number(c.req.query('assistantTimestamp'));
-    if (!sessionKey || !Number.isFinite(assistantTimestamp) || assistantTimestamp <= 0) {
-      return c.json({ error: 'sessionKey and assistantTimestamp are required' }, 400);
-    }
-    const trace = findLatestMemoryInjectTrace({
-      sessionKey,
-      beforeMs: assistantTimestamp,
-    });
-    return c.json({
-      matched: Boolean(trace),
-      attributedRecordCount: trace?.selectedRecordIds.length ?? 0,
-      personalContext: personalContextForTrace(trace),
-      feedback: trace?.feedback ?? null,
-    });
-  });
-
-  authenticated.post('/api/user-context/signals', async (c) => {
+  authenticated.post('/api/you/signals', async (c) => {
     const body = await c.req.json().catch(() => ({}));
     const source = typeof body.source === 'string' ? body.source : '';
     if (!source) return c.json({ error: 'Missing required field: source' }, 400);
@@ -543,7 +431,7 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
     return c.json({ signalId }, 201);
   });
 
-  authenticated.post('/api/user-context/providers/:id/test', deps.strictRateLimitMiddleware, async (c) => {
+  authenticated.post('/api/you/providers/:id/test', deps.strictRateLimitMiddleware, async (c) => {
     const providerId = c.req.param('id');
     const cfg = deps.service.currentConfig as Config;
     const workspace = deps.service.currentWorkspacePath;

@@ -183,6 +183,7 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
     });
 
     const { session, reused } = runner;
+    runner.piSm.setActiveTurnId?.(runId);
 
     const streamFnWithXopcExtensions = wrapStreamFnForXopcExtensions(session.agent.streamFunction);
     const loggingStreamFn: typeof session.agent.streamFunction = (streamModel, context, options) => {
@@ -337,6 +338,7 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
     } catch {
       /* ignore */
     }
+    runner?.piSm.setActiveTurnId?.(null);
     runner?.release();
   }
 }

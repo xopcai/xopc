@@ -8,10 +8,14 @@ import {
   appendMemorySignal,
   closeXopcDatabase,
   getMemoryRecord,
+  finishDreamingRun,
+  listDreamingDecisions,
+  listDreamingRuns,
   listMemoryRecords,
   listMemorySignals,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
+  startDreamingRun,
   upsertMemoryRecord,
 } from '../../../../storage/sqlite/index.js';
 import { runDreamingDeepPromotion } from '../deep-promotion.js';
@@ -40,7 +44,9 @@ describe('structured Dreaming', () => {
       id: 'light-record', providerId: 'local', kind: 'preference', sourceAgentId: 'main',
       workspaceId: workspaceDir, content: 'Prefer concise design reviews.', status: 'active', importance: 0.8,
     });
+    const run = startDreamingRun({ agentId: 'main', workspaceId: workspaceDir, phase: 'light', mode: 'observe', triggerKind: 'manual', algorithmVersion: 'test-v1', configSnapshot: {} });
     const result = await runLightSweep({
+      runId: run.runId,
       workspaceDir,
       config: { enabled: true, lookbackDays: 2, limit: 100 },
     });
@@ -48,6 +54,11 @@ describe('structured Dreaming', () => {
     expect(listMemorySignals({ recordId: record.id })).toEqual(expect.arrayContaining([
       expect.objectContaining({ source: 'dreaming', metadata: expect.objectContaining({ phase: 'light' }) }),
     ]));
+    finishDreamingRun({ runId: run.runId, ok: result.ok, reason: result.reason, metrics: result });
+    expect(listDreamingRuns({ workspaceId: workspaceDir })[0]).toMatchObject({ status: 'completed', mode: 'observe', phase: 'light' });
+    expect(listDreamingDecisions(run.runId)).toEqual([
+      expect.objectContaining({ recordId: record.id, action: 'observe', reasonCode: 'recent_record_staged' }),
+    ]);
   });
 
   it('promotes a candidate in Deep from unified recall signals', async () => {
@@ -61,16 +72,21 @@ describe('structured Dreaming', () => {
         signal: { source: 'context_injection', recordId: 'deep-candidate', score: 0.95, metadata: { query } },
       });
     }
+    const run = startDreamingRun({ agentId: 'main', workspaceId: workspaceDir, phase: 'deep', mode: 'automatic', triggerKind: 'manual', algorithmVersion: 'test-v1', configSnapshot: {} });
     const result = await runDreamingDeepPromotion({
-      agentId: 'main', workspaceDir, promotionWritePolicy: 'allow',
+      runId: run.runId,
+      agentId: 'main', workspaceDir, mode: 'automatic',
       config: { enabled: true, minScore: 0.8, minRecallCount: 3, minUniqueQueries: 3, limit: 10, recencyHalfLifeDays: 14, maxAgeDays: 30 },
     });
     expect(result.applied).toBe(1);
     expect(getMemoryRecord('deep-candidate')?.status).toBe('active');
     expect(result.memoryPath).toBe('sqlite://memory_records');
+    expect(listDreamingDecisions(run.runId)).toEqual([
+      expect.objectContaining({ recordId: 'deep-candidate', action: 'activate', reasonCode: 'deep_evidence_threshold_met' }),
+    ]);
   });
 
-  it('creates reviewable REM insights when writes require confirmation', async () => {
+  it('keeps REM insights reviewable even in automatic mode', async () => {
     for (const [id, content] of [['rem-a', 'Use short review notes.'], ['rem-b', 'Keep design reviews concise.']]) {
       upsertMemoryRecord({ id, providerId: 'local', kind: 'preference', sourceAgentId: 'main', workspaceId: workspaceDir, content, status: 'active' });
       appendMemorySignal({
@@ -79,7 +95,8 @@ describe('structured Dreaming', () => {
       });
     }
     const result = await runRemPatterns({
-      agentId: 'main', workspaceDir, promotionWritePolicy: 'confirm',
+      runId: startDreamingRun({ agentId: 'main', workspaceId: workspaceDir, phase: 'rem', mode: 'automatic', triggerKind: 'manual', algorithmVersion: 'test-v1', configSnapshot: {} }).runId,
+      agentId: 'main', workspaceDir, mode: 'automatic',
       config: { enabled: true, lookbackDays: 7, limit: 10, minPatternStrength: 0.5 },
     });
     expect(result.patternsDiscovered).toBe(1);
