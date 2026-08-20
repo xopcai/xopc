@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { ResponseLanguageSchema } from '../i18n/response-language.js';
+
 export const UserMemoryModeSchema = z.enum(['off', 'readOnly', 'confirmWrite', 'auto']);
 
 export const DEFAULT_CONTEXT_COMPACTION_POLICY = {
@@ -153,6 +155,12 @@ export const UserContextDreamingSchema = z
 export const UserContextConfigSchema = z
   .object({
     enabled: z.boolean().default(true),
+    preferences: z
+      .object({
+        responseLanguage: ResponseLanguageSchema.default('auto'),
+      })
+      .strict()
+      .default({ responseLanguage: 'auto' }),
     memory: UserMemoryConfigSchema,
     understanding: UserUnderstandingConfigSchema,
     privacy: UserContextPrivacySchema,
@@ -162,6 +170,7 @@ export const UserContextConfigSchema = z
   .strict()
   .default({
     enabled: true,
+    preferences: { responseLanguage: 'auto' },
     memory: { mode: 'confirmWrite', sources: ['session', 'curated'], writePolicy: { curated: 'confirm' } },
     understanding: {
       enabled: true,

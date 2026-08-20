@@ -17,16 +17,14 @@ import { buildPersonalPlaybookPrompt } from '../../user-context/personal-playboo
 import { buildInteractionStatePrompt } from '../../user-context/interaction-state.js';
 import { buildRelationshipContinuityPrompt } from '../../user-context/relationship-continuity.js';
 import { parseSessionKey } from '../../routing/session-key.js';
-import {
-  buildActionTrustPrompt,
-  DEFAULT_USER_TRUST_LEVEL,
-} from '../../user-context/trust-policy.js';
+import { DEFAULT_USER_TRUST_LEVEL } from '../../user-context/trust-policy.js';
 import type { EmbeddedContextFile } from '../bootstrap/types.js';
 import type { SkillManager } from '../skills/skill-manager.js';
 import { buildSystemPrompt as buildBaseSystemPrompt } from './system-prompt.js';
 import { resolveSystemPromptBuildParams } from './system-prompt-params.js';
 import type { PromptMode, SilentReplyPromptMode } from './types.js';
 import type { ProviderSystemPromptContribution } from './contribution.js';
+import { resolveResponseLanguageForSession } from './response-language.js';
 import { mergeTtsConfigFromAppConfig } from '../../voice/tts/merge-config.js';
 import { buildTtsSystemPromptHint } from '../../voice/tts/directives.js';
 import { createLogger } from '../../utils/logger.js';
@@ -37,7 +35,7 @@ export interface SystemPromptBuildOptions {
   externalMemoryInstructions?: string;
   workspaceOverride?: string;
   profileMarkdownPathRoot?: string;
-  systemPromptOverride?: string;
+  customInstructions?: string;
   skillPromptText?: string;
   skillAllowlist?: string[];
   registeredToolNames?: string[];
@@ -93,40 +91,6 @@ export class SystemPromptBuilder {
       : '';
     const continuityPrompt = buildRelationshipContinuityPrompt(activeMemories);
     const interactionPrompt = interactionState ? buildInteractionStatePrompt(interactionState) : '';
-    if (options.systemPromptOverride?.trim()) {
-      const skillPrompt =
-        options.skillPromptText !== undefined
-          ? options.skillPromptText
-          : this.skillManager.getPromptForSkillAllowlist(
-              options.skillAllowlist,
-              options.registeredToolNames,
-            );
-      const trimmed = options.systemPromptOverride.trim();
-      let fullPrompt = skillPrompt.trim() ? `${trimmed}\n\n${skillPrompt}` : trimmed;
-      const ttsMerged = mergeTtsConfigFromAppConfig(this.config.messages?.tts);
-      const reg = options.registeredToolNames ?? [];
-      const ttsHint = buildTtsSystemPromptHint({
-        enabled: ttsMerged.enabled,
-        trigger: ttsMerged.trigger,
-        maxTextLength: ttsMerged.maxTextLength,
-        modelOverrides: ttsMerged.modelOverrides,
-        textToSpeechTool: ttsMerged.enabled && reg.includes('text_to_speech'),
-      });
-      if (ttsHint?.trim()) {
-        fullPrompt = `${fullPrompt}\n\n## Voice (TTS)\n\n${ttsHint.trim()}`;
-      }
-      fullPrompt = `${fullPrompt}\n\n${buildActionTrustPrompt(actionTrustLevel)}`;
-      if (relationshipPrompt) fullPrompt = `${fullPrompt}\n\n${relationshipPrompt}`;
-      if (playbookPrompt) fullPrompt = `${fullPrompt}\n\n${playbookPrompt}`;
-      if (interactionPrompt) fullPrompt = `${fullPrompt}\n\n${interactionPrompt}`;
-      if (continuityPrompt) fullPrompt = `${fullPrompt}\n\n${continuityPrompt}`;
-      if (options.activeProjectContext?.trim()) {
-        fullPrompt = `${fullPrompt}\n\n${options.activeProjectContext.trim()}`;
-      }
-      log.debug({ baseLength: trimmed.length, skillLength: skillPrompt.length, totalLength: fullPrompt.length }, 'System prompt built (override)');
-      return fullPrompt;
-    }
-
     const heartbeatEnabled = this.config.gateway?.heartbeat?.includeSystemPromptSection ?? false;
     const userTimezone = this.extractTimezone(contextFiles);
 
@@ -139,6 +103,7 @@ export class SystemPromptBuilder {
       modelOverrides: ttsMerged.modelOverrides,
       textToSpeechTool: ttsMerged.enabled && reg.includes('text_to_speech'),
     });
+    const responseLanguage = resolveResponseLanguageForSession(this.config, options.sessionKey);
 
     const resolved = resolveSystemPromptBuildParams(this.config, {
       workspaceDir: ws,
@@ -187,6 +152,8 @@ export class SystemPromptBuilder {
       includeProblemSolving: resolved.includeProblemSolving,
       includeToneSection: resolved.includeToneSection,
       actionTrustLevel,
+      responseLanguage,
+      customInstructions: options.customInstructions,
     });
 
     const skillPrompt =

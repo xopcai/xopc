@@ -774,7 +774,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     getAllProviders().filter((provider) => isProviderConfiguredSync(provider)).length;
 
   const getExtensionSystemPrompt = () =>
-    resolveEffectiveAgentProfileForSession(config, state.currentSessionKey).systemPromptOverride ?? '';
+    resolveEffectiveAgentProfileForSession(config, state.currentSessionKey).customInstructions ?? '';
 
   const waitForTuiIdle = async () => {
     while (

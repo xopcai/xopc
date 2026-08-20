@@ -1175,6 +1175,7 @@ export const ConfigSchema = z.object({
 }).default({
   userContext: {
     enabled: true,
+    preferences: { responseLanguage: 'auto' },
     memory: {
       mode: 'confirmWrite',
       sources: ['session', 'curated'],

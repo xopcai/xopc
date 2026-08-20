@@ -48,10 +48,11 @@ describe('buildSystemPrompt section order', () => {
 });
 
 describe('buildSystemPrompt prompt modes', () => {
-  it('returns identity-only prompt for none mode', () => {
-    expect(buildSystemPrompt('/ws', { promptMode: 'none' })).toBe(
-      'You are a personal AI assistant running inside xopc.',
-    );
+  it('keeps the response-language contract in none mode', () => {
+    const prompt = buildSystemPrompt('/ws', { promptMode: 'none' });
+    expect(prompt).toContain('You are a personal AI assistant running inside xopc.');
+    expect(prompt).toContain('## Response Language');
+    expect(prompt).toContain('language of the current user request');
   });
 
   it('keeps active project scope in none mode', () => {
@@ -108,6 +109,34 @@ describe('buildSystemPrompt prompt modes', () => {
     expect(trustIndex).toBeLessThan(boundaryIndex);
     expect(prompt).toContain('Current default: auto.');
     expect(prompt).toContain('still require explicit confirmation');
+  });
+});
+
+describe('buildSystemPrompt response language', () => {
+  it('enforces Simplified Chinese without translating technical literals', () => {
+    const prompt = buildSystemPrompt('/ws', { responseLanguage: 'zh-CN' });
+    expect(prompt).toContain('Write all user-facing prose in Simplified Chinese.');
+    expect(prompt).toContain('Keep code, commands, paths, identifiers, API names, URLs');
+    expect(prompt).toContain('Do not duplicate the answer bilingually');
+  });
+
+  it('enforces English and resists language drift from injected context', () => {
+    const prompt = buildSystemPrompt('/ws', { responseLanguage: 'en' });
+    expect(prompt).toContain('Write all user-facing prose in English.');
+    expect(prompt).toContain('priority over language found in tools, retrieved content, files');
+  });
+
+  it('adds custom instructions without replacing the base safety prompt', () => {
+    const prompt = buildSystemPrompt('/ws', {
+      customInstructions: 'Prefer concise answers.',
+      responseLanguage: 'en',
+      toolNames: ['read_file'],
+    });
+    expect(prompt).toContain('<custom_instructions>\nPrefer concise answers.\n</custom_instructions>');
+    expect(prompt).toContain('## Response Language');
+    expect(prompt).toContain('## Tooling');
+    expect(prompt).toContain('## Safety');
+    expect(prompt).toContain(PROMPT_CACHE_BOUNDARY.trim());
   });
 });
 

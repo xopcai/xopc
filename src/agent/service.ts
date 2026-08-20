@@ -104,6 +104,8 @@ import {
   type MediaRef,
 } from '../channels/attachments/inbound-persist.js';
 import { applyConfigOverrides } from '../config/runtime-overrides.js';
+import { analyzeResponseLanguage } from '../i18n/language-consistency.js';
+import { resolveResponseLanguageForSession } from './prompt/response-language.js';
 
 export type { AgentServiceConfig, AgentContext, StreamHandle } from './service.types.js';
 
@@ -330,6 +332,26 @@ export class AgentService {
       if (e.isError) return;
       const changedPaths = readChangedPathsFromToolEnd(e.toolName, e.args, e.result);
       this.agentManager.markCodeIntelligenceDirty(context.sessionKey, changedPaths);
+    });
+    this.agentEventHandler.registerListener('message_end', (event, context) => {
+      const message = (event as Extract<AgentEvent, { type: 'message_end' }>).message;
+      if (message.role !== 'assistant') return;
+      const text = assistantMessageText(message);
+      const expected = resolveResponseLanguageForSession(
+        this.effectiveAppConfig(),
+        context.sessionKey,
+      );
+      const analysis = analyzeResponseLanguage(text, expected);
+      const fields = {
+        phase: 'response_language_check',
+        sessionKey: context.sessionKey,
+        ...analysis,
+      };
+      if (analysis.compliant) {
+        log.debug(fields, 'Assistant response language check passed');
+      } else {
+        log.warn(fields, 'Assistant response language did not match the active preference');
+      }
     });
 
     // Wire the workflow progress broker into the session event bus. Channel

@@ -18,6 +18,7 @@ import { mkdir } from 'node:fs/promises';
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
 
 import type { Config } from '../../config/schema.js';
+import { ResponseLanguageSchema } from '../../i18n/response-language.js';
 import { normalizeWorkingDirectoryInput } from '../../session/index.js';
 import type { SessionConfigStore, SessionStore } from '../../session/index.js';
 import {
@@ -50,6 +51,7 @@ export interface PatchSessionAgentConfigInput {
   reasoningLevel?: string | null;
   verboseLevel?: string;
   workingDirectory?: string;
+  responseLanguage?: string | null;
 }
 
 export interface PatchSessionAgentConfigResult {
@@ -117,6 +119,19 @@ export class SessionConfigService {
         return { ok: false, error: 'Invalid verbose level' };
       }
       await this.opts.sessionConfigStore.update(sessionKey, { verboseLevel: normalized });
+    }
+
+    if (partial.responseLanguage !== undefined) {
+      if (partial.responseLanguage === null) {
+        await this.opts.sessionConfigStore.update(sessionKey, { responseLanguage: undefined });
+      } else {
+        const parsed = ResponseLanguageSchema.safeParse(partial.responseLanguage);
+        if (!parsed.success) {
+          return { ok: false, error: 'Invalid response language' };
+        }
+        await this.opts.sessionConfigStore.update(sessionKey, { responseLanguage: parsed.data });
+      }
+      this.opts.agentManager.removeAgent(sessionKey);
     }
 
     if (partial.workingDirectory !== undefined) {

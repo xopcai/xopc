@@ -26,11 +26,13 @@ describe('buildSubagentSystemPrompt', () => {
       goal: 'Summarize README',
       workspace: '/workspace/main',
       toolNames: ['read_file', 'grep'],
+      responseLanguage: 'zh-CN',
     });
     expect(prompt).toContain('## Tooling');
     expect(prompt).toContain('- read_file:');
     expect(prompt).not.toContain('## Memory Recall');
     expect(prompt).toContain('## Subagent Context');
     expect(prompt).toContain('Summarize README');
+    expect(prompt).toContain('Write all user-facing prose in Simplified Chinese.');
   });
 });

@@ -107,6 +107,7 @@ export class DelegateSubagentRunner implements SubagentRunner {
     const childOptions: DelegateChildHandleOptions = {
       workspace: this.deps.workspace,
       goal: fullPrompt,
+      requesterSessionKey: opts.sessionMetadata?.parentSessionKey,
       allowedToolNames: allowed,
       maxIterations: opts.maxIterations ?? DEFAULT_MAX_ITERATIONS,
       model,

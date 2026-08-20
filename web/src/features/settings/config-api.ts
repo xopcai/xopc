@@ -115,7 +115,6 @@ export interface AgentDefaultsState {
   webExtract: AgentDefaultsWebExtractState;
   delegate: AgentDefaultsDelegateState;
   executeCode: AgentDefaultsExecuteCodeState;
-  systemPromptOverride: string;
   /** Agent skill allowlist draft. */
   skillsAllowlist: string[];
   /** Built-in tool deny list draft. */
@@ -529,7 +528,6 @@ export function parseAgentDefaultsFromConfig(cfg: unknown): AgentDefaultsState {
     webExtract: parseWebExtract(d.webExtract),
     delegate: parseEnabledFlag(d.delegate, false),
     executeCode: parseEnabledFlag(d.executeCode, false),
-    systemPromptOverride: typeof d.systemPromptOverride === 'string' ? d.systemPromptOverride : '',
     skillsAllowlist: parseStringList(d.skills),
     toolsDisable: (() => {
       const t = d.tools;

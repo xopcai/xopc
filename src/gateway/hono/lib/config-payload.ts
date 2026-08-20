@@ -307,6 +307,7 @@ export async function buildSafeWebConfigPayload(service: GatewayService, options
     browser: buildSafeBrowserConfigForWeb(config.browser),
     session: resolveSessionConfigForWeb(config),
     userContext: {
+      preferences: config.userContext?.preferences ?? { responseLanguage: 'auto' },
       memory: {
         retention: {
           compaction: ContextCompactionPolicySchema.parse(

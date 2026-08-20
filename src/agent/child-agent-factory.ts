@@ -24,11 +24,7 @@ import type { ToolExecutorConfig } from './tools/executor.js';
 const log = createLogger('delegate-child');
 
 import { buildSubagentSystemPrompt } from './prompt/subagent-context.js';
-
-/** @deprecated Use buildSubagentSystemPrompt */
-export function buildChildSystemPrompt(goal: string, context?: string, workspace?: string): string {
-  return buildSubagentSystemPrompt({ goal, context, workspace });
-}
+import { resolveResponseLanguageForSession } from './prompt/response-language.js';
 
 export interface BuildChildToolsOptions {
   workspace: string;
@@ -57,6 +53,7 @@ export interface DelegateChildHandleOptions {
   workspace: string;
   goal: string;
   context?: string;
+  requesterSessionKey?: string;
   allowedToolNames: string[];
   maxIterations: number;
   model: Model<Api>;
@@ -127,6 +124,10 @@ export function createDelegateChildHandle(options: DelegateChildHandleOptions): 
         context: options.context,
         workspace: options.workspace,
         toolNames: filteredTools.map((t) => t.name),
+        responseLanguage: resolveResponseLanguageForSession(
+          options.getConfig(),
+          options.requesterSessionKey,
+        ),
       }),
       model: options.model,
       thinkingLevel: 'low' as ThinkingLevel,

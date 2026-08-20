@@ -5,6 +5,8 @@
  * Thinking-level labels for transcript hygiene.
  */
 
+import type { ResponseLanguage } from '../../i18n/response-language.js';
+
 // ============================================
 // Thinking Levels
 // ============================================
@@ -69,6 +71,8 @@ export interface SessionAgentConfig {
   providerOverride?: string;
   /** Per-session markdown workspace root override (immutable once set) */
   workingDirectoryOverride?: string;
+  /** Preferred language for user-visible responses in this session. */
+  responseLanguage?: ResponseLanguage;
 }
 
 // ============================================
