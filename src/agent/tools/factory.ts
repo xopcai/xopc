@@ -474,7 +474,8 @@ export class AgentToolsFactory {
       ...(browserEnabled && this.deps.getBrowserRecipeService
         ? [createBrowserRecipeTool({ getBrowserRecipeService: this.deps.getBrowserRecipeService })]
         : []),
-      ...(this.deps.getProjectService
+      ...(this.deps.getAutomationService
+        || this.deps.getProjectService
         || this.deps.getNotesService
         || this.deps.getLocalAppService
         || this.deps.dispatchTaskRuns
@@ -483,6 +484,7 @@ export class AgentToolsFactory {
               getConfig: () => this.deps.getConfig?.(),
               getCurrentAgentId: () => options.agentId,
               getCurrentSessionKey: () => this.deps.getCurrentContext()?.sessionKey,
+              getAutomationService: this.deps.getAutomationService,
               getNotesService: this.deps.getNotesService,
               getProjectService: this.deps.getProjectService,
               getLocalAppService: this.deps.getLocalAppService,

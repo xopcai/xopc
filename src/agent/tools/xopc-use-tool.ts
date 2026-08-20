@@ -12,6 +12,11 @@ import {
 } from '@xopcai/gateway-contract';
 
 import { ObjectLinkService, runWithActivityContext } from '../../activity/index.js';
+import {
+  CreateAutomationSchema,
+  UpdateAutomationSchema,
+  type AutomationService,
+} from '../../automations/index.js';
 import type { Config } from '../../config/schema.js';
 import type { NoteKind, NotesService, NoteStatus } from '../../notes/index.js';
 import {
@@ -40,6 +45,7 @@ import {
 const XopcUseToolSchema = Type.Object({
   mode: Type.Union([
     Type.Literal('project'),
+    Type.Literal('automation'),
     Type.Literal('note'),
     Type.Literal('task'),
     Type.Literal('task_run'),
@@ -48,7 +54,7 @@ const XopcUseToolSchema = Type.Object({
   ]),
   command: Type.String({
     description:
-      'Object command. Supports project list/get/create/update/resolve_workspace/list_milestones/create_milestone/update_milestone/list_updates/create_update, note list/get/create/append/update/preview_edit, task list/get/create/update_dependencies/add_context/remove_context/command, task_run list/get/cancel, local_app list/get/create/validate, and settings open.',
+      'Object command. Supports project list/get/create/update/resolve_workspace/list_milestones/create_milestone/update_milestone/list_updates/create_update, automation list/get/create/update/delete/run/pause/resume/history, note list/get/create/append/update/preview_edit, task list/get/create/update_dependencies/add_context/remove_context/command, task_run list/get/cancel, local_app list/get/create/validate, and settings open.',
   }),
   args: Type.Optional(Type.Record(Type.String(), Type.Any())),
   dryRun: Type.Optional(Type.Boolean({
@@ -56,7 +62,7 @@ const XopcUseToolSchema = Type.Object({
   })),
 });
 
-export type XopcUseMode = 'project' | 'note' | 'task' | 'task_run' | 'local_app' | 'settings';
+export type XopcUseMode = 'project' | 'automation' | 'note' | 'task' | 'task_run' | 'local_app' | 'settings';
 
 export interface XopcUseToolInput {
   mode: XopcUseMode;
@@ -69,6 +75,7 @@ export interface XopcUseToolDeps {
   getConfig?: () => Config | undefined;
   getCurrentAgentId?: () => string | undefined;
   getCurrentSessionKey?: () => string | undefined;
+  getAutomationService?: () => AutomationService | undefined;
   getNotesService?: () => NotesService | undefined;
   getProjectService?: () => ProjectService | undefined;
   getLocalAppService?: () => LocalAppService | undefined;
@@ -211,6 +218,22 @@ function deliveryForXopcResult(
         capabilities: ['open', 'edit', 'continue_in_chat'],
       };
     }
+  } else if (mode === 'automation') {
+    source = record(resultRecord.automation);
+    const id = deliveryText(source?.id);
+    if (id) {
+      const enabled = source?.enabled === true;
+      primary = {
+        kind: 'automation',
+        id,
+        title: deliveryText(source?.name) ?? 'Automation',
+        summary: deliverySummary(source?.description),
+        status: enabled ? 'enabled' : 'paused',
+        revision: deliveryRevision(source?.updatedAtMs),
+        projectId: deliveryText(source?.projectId),
+        capabilities: ['open', 'edit', 'continue_in_chat', 'run', enabled ? 'pause' : 'resume'],
+      };
+    }
   } else if (mode === 'note') {
     source = record(resultRecord.note);
     const id = deliveryText(source?.id);
@@ -292,7 +315,8 @@ function deliveryForXopcResult(
   if (!primary) return undefined;
   return {
     version: 1,
-    operation: mode === 'task' && deliveryText(resultRecord.runId)
+    operation: (mode === 'task' && deliveryText(resultRecord.runId))
+      || (mode === 'automation' && command === 'run')
       ? 'started'
       : command === 'create'
       ? 'created'
@@ -310,6 +334,23 @@ function currentProjectId(args: Record<string, unknown>, deps: XopcUseToolDeps):
   if (explicit) return explicit;
   const sessionKey = trimString(args.sessionKey) ?? deps.getCurrentSessionKey?.();
   return sessionKey ? getSessionMetadata(sessionKey)?.projectId : undefined;
+}
+
+function automationPayload(args: Record<string, unknown>, key: 'automation' | 'patch'): Record<string, unknown> {
+  return record(args[key]) ?? args;
+}
+
+function pickDefined(source: Record<string, unknown>, fields: readonly string[]): Record<string, unknown> {
+  return Object.fromEntries(fields
+    .filter((field) => source[field] !== undefined)
+    .map((field) => [field, source[field]]));
+}
+
+function automationProjectError(projectId: string | undefined, deps: XopcUseToolDeps): string | undefined {
+  if (!projectId) return undefined;
+  const projects = deps.getProjectService?.();
+  if (!projects) return 'Project service is unavailable';
+  return projects.get(projectId) ? undefined : `Project not found: ${projectId}`;
 }
 
 function projectWorkspaceRootArg(args: Record<string, unknown>): string | undefined {
@@ -524,6 +565,106 @@ async function handleProject(
   }
 
   return { ok: false, error: `Unsupported project command: ${command}` };
+}
+
+async function handleAutomation(
+  command: string,
+  args: Record<string, unknown>,
+  deps: XopcUseToolDeps,
+  dryRun: boolean,
+): Promise<unknown> {
+  const automations = deps.getAutomationService?.();
+  if (!automations) return { ok: false, error: 'Automation service is unavailable' };
+
+  if (command === 'list') {
+    const projectId = currentProjectId(args, deps);
+    const projectError = automationProjectError(projectId, deps);
+    if (projectError) return { ok: false, error: projectError };
+    return {
+      ok: true,
+      items: await automations.list({ projectId }),
+      ...(projectId ? { projectId } : {}),
+    };
+  }
+
+  if (command === 'get') {
+    const id = trimString(args.automationId) ?? trimString(args.id);
+    if (!id) return { ok: false, error: 'automationId is required' };
+    const automation = await automations.get(id);
+    return automation ? { ok: true, automation } : { ok: false, error: `Automation not found: ${id}` };
+  }
+
+  if (command === 'create') {
+    const source = automationPayload(args, 'automation');
+    const explicitProjectId = trimString(args.projectId) ?? trimString(source.projectId);
+    const projectId = explicitProjectId ?? currentProjectId({}, deps);
+    const projectError = automationProjectError(projectId, deps);
+    if (projectError) return { ok: false, error: projectError };
+    const input = CreateAutomationSchema.parse({
+      ...pickDefined(source, [
+        'id', 'name', 'description', 'enabled', 'trigger', 'action', 'safety', 'afterRun', 'reliability', 'state',
+      ]),
+      ...(projectId ? { projectId } : {}),
+    });
+    if (dryRun) return { ok: true, dryRun: true, action: 'create_automation', input, projectId };
+    const automation = await automations.create(input);
+    return { ok: true, automation, ...(projectId ? { projectId } : {}) };
+  }
+
+  if (command === 'update') {
+    const id = trimString(args.automationId) ?? trimString(args.id);
+    if (!id) return { ok: false, error: 'automationId is required' };
+    const source = automationPayload(args, 'patch');
+    const patch = UpdateAutomationSchema.parse(pickDefined(source, [
+      'name', 'description', 'projectId', 'enabled', 'trigger', 'action', 'safety', 'afterRun', 'reliability', 'state',
+    ]));
+    const projectError = automationProjectError(patch.projectId, deps);
+    if (projectError) return { ok: false, error: projectError };
+    if (dryRun) return { ok: true, dryRun: true, action: 'update_automation', automationId: id, patch };
+    const automation = await automations.update(id, patch);
+    return automation ? { ok: true, automation } : { ok: false, error: `Automation not found: ${id}` };
+  }
+
+  if (command === 'history') {
+    const automationId = trimString(args.automationId) ?? trimString(args.id);
+    const projectId = automationId ? undefined : currentProjectId(args, deps);
+    const projectError = automationProjectError(projectId, deps);
+    if (projectError) return { ok: false, error: projectError };
+    return {
+      ok: true,
+      items: await automations.listRuns({
+        automationId,
+        projectId,
+        limit: boundedLimit(args.limit, 20, 50),
+      }),
+      ...(projectId ? { projectId } : {}),
+    };
+  }
+
+  if (!['delete', 'run', 'pause', 'resume'].includes(command)) {
+    return { ok: false, error: `Unsupported automation command: ${command}` };
+  }
+
+  const id = trimString(args.automationId) ?? trimString(args.id);
+  if (!id) return { ok: false, error: 'automationId is required' };
+  const current = await automations.get(id);
+  if (!current) return { ok: false, error: `Automation not found: ${id}` };
+  if (dryRun) {
+    return { ok: true, dryRun: true, action: `${command}_automation`, automationId: id, automation: current };
+  }
+
+  if (command === 'delete') {
+    return { ok: true, removed: await automations.remove(id), automation: current };
+  }
+  if (command === 'run') {
+    return { ok: true, automation: current, run: await automations.runNow(id) };
+  }
+  if (command === 'pause' || command === 'resume') {
+    const automation = command === 'pause' ? await automations.pause(id) : await automations.resume(id);
+    return automation ? { ok: true, automation } : { ok: false, error: `Automation not found: ${id}` };
+  }
+
+  return { ok: false, error: `Automation command failed: ${command}` };
 }
 
 async function handleNote(
@@ -1051,7 +1192,7 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
     name: 'xopc_use',
     label: 'XOPC Use',
     description:
-      'Operate first-class xopc objects through one safe entry point. Use for projects, notes, tasks, TaskRuns, local apps, and exact settings jump targets instead of editing storage files directly. For non-trivial object changes, load the built-in manual first with tool_manual({ tool: "xopc_use" }).',
+      'Operate first-class xopc objects through one safe entry point. Use for projects, automations, notes, tasks, TaskRuns, local apps, and exact settings jump targets instead of editing storage files directly. For non-trivial object changes, load the built-in manual first with tool_manual({ tool: "xopc_use" }).',
     parameters: XopcUseToolSchema,
     mutatesWorkspace: true,
     mutationScope: 'external',
@@ -1077,8 +1218,10 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
           async () =>
             mode === 'project'
               ? await handleProject(command, args, deps, dryRun)
-              : mode === 'note'
-                ? await handleNote(command, args, deps, dryRun)
+              : mode === 'automation'
+                ? await handleAutomation(command, args, deps, dryRun)
+                : mode === 'note'
+                  ? await handleNote(command, args, deps, dryRun)
                 : mode === 'task'
                   ? await handleTask(command, args, deps, dryRun)
                   : mode === 'task_run'
