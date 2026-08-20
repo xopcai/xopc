@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   closeXopcDatabase,
+  ensureSessionRecord,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
   updateRelationshipSettings,
@@ -18,6 +19,7 @@ describe('ContextCompiler', () => {
     stateDir = mkdtempSync(join(tmpdir(), 'xopc-context-compiler-'));
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
+    ensureSessionRecord('agent:main:webchat:default:direct:context-test', stateDir);
   });
 
   afterEach(() => {
@@ -53,11 +55,13 @@ describe('ContextCompiler', () => {
 
     expect(snapshot).toMatchObject({
       traceId: 'trace-context-1',
+      ownerKind: 'session',
+      ownerId: 'agent:main:webchat:default:direct:context-test',
       estimatedTokens: 24,
       relationshipPolicy: { supportMode: 'coach', proactiveEnabled: true },
       selectedItems: [{ recordId: 'preference-1', origin: 'told_by_user' }],
       rejectedItems: [{ recordId: 'secret-1', reason: 'sensitive' }],
     });
-    expect(compiler.latestForSession(snapshot.sessionKey, 100)?.id).toBe(snapshot.id);
+    expect(compiler.latestForSession(snapshot.sessionKey!, 100)?.id).toBe(snapshot.id);
   });
 });

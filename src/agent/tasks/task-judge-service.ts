@@ -11,14 +11,11 @@ import {
 } from '../../providers/model-response.js';
 import { getApiKey, resolveModel } from '../../providers/index.js';
 import type { SessionStore } from '../../session/store.js';
-import {
-  listExecutionReceipts,
-  updateExecutionReceipt,
-  type ExecutionEvidence,
-  type ExecutionJudgment,
-} from '../../storage/sqlite/index.js';
+import type { TaskEvidence, TaskJudgment } from '@xopcai/gateway-contract';
 import { createLogger } from '../../utils/logger.js';
 import { TaskRepository } from '../../tasks/task-repository.js';
+import { TaskRunRepository } from '../../tasks/task-run-repository.js';
+import { TaskApplicationService } from '../../tasks/task-application-service.js';
 import type { ModelManager } from '../models/index.js';
 
 const log = createLogger('TaskJudge');
@@ -39,7 +36,7 @@ export interface TaskJudgeDecision {
   completedCriteria: number[];
   needsUser: boolean;
   nextAction?: string;
-  judgment: ExecutionJudgment;
+  judgment: TaskJudgment;
 }
 
 function compactHistory(messages: AgentMessage[]): string {
@@ -111,6 +108,8 @@ function resolveJudgeModel(
 
 export class TaskJudgeService {
   readonly #tasks = new TaskRepository();
+  readonly #runs = new TaskRunRepository();
+  readonly #application = new TaskApplicationService();
 
   constructor(private readonly options: {
     sessionStore: SessionStore;
@@ -128,12 +127,8 @@ export class TaskJudgeService {
 
     const task = this.#tasks.get(taskId);
     if (!task?.contract) return;
-    const receipt = listExecutionReceipts({
-      sessionKey: payload.sessionKey,
-      taskId,
-      limit: 1,
-    })[0];
-    if (!receipt || receipt.status !== 'running') return;
+    const run = this.#runs.getActiveRoot(taskId);
+    if (!run || run.status !== 'running' || run.sessionKey !== payload.sessionKey) return;
 
     let runtimeModel: string | undefined;
     try {
@@ -160,7 +155,7 @@ export class TaskJudgeService {
       'needsUser is true only when a specific decision, permission, credential, or missing fact must come from the user.',
       'Make one clear recommendation. Explain the decisive reasons, rejected alternatives, uncertainty, and calibrated confidence.',
       'Return only JSON: {"completedCriteria":[0],"needsUser":false,"nextAction":"...","recommendation":"...","reasons":["..."],"rejectedAlternatives":[{"option":"...","reason":"..."}],"uncertainty":"...","confidence":0.8}.',
-      `Task:\n${task.objective}`,
+      `Task:\n${task.contract.objective}`,
       `Acceptance criteria:\n${criteria.map((item, index) => `${index}. ${item}`).join('\n')}`,
       `Latest response:\n${payload.assistantPlainText.slice(-12_000)}`,
       `Recent transcript:\n${history}`,
@@ -178,7 +173,7 @@ export class TaskJudgeService {
       if (modelError) throw new Error(modelError);
       const decision = parseTaskJudgeDecision(extractAssistantText(response.content), criteria.length);
       const now = Date.now();
-      const evidence: ExecutionEvidence[] = decision.completedCriteria.map((index) => ({
+      const evidence: TaskEvidence[] = decision.completedCriteria.map((index) => ({
         kind: 'state',
         title: `Independently verified: ${criteria[index]}`,
         summary: decision.judgment.reasons[0]!,
@@ -187,17 +182,37 @@ export class TaskJudgeService {
         strength: 'verified',
         observedAt: now,
       }));
-      updateExecutionReceipt({
-        runId: receipt.runId,
-        evidence: [...receipt.evidence, ...evidence],
-        nextAction: decision.nextAction ?? null,
-        needsUser: decision.needsUser,
-        judgment: decision.judgment,
-      });
-      this.#tasks.update(taskId, {
-        status: decision.needsUser ? 'needs_user' : 'verifying',
-        nextAction: decision.nextAction ?? null,
-        blockedReason: decision.needsUser ? decision.judgment.recommendation : null,
+      if (decision.needsUser) {
+        this.#runs.createWait({
+          taskId,
+          taskRunId: run.id,
+          kind: 'user_input',
+          reason: decision.judgment.recommendation,
+          condition: { question: decision.nextAction ?? decision.judgment.recommendation },
+        });
+        this.#runs.setStatus({ runId: run.id, expectedVersion: run.version, from: ['running'], to: 'waiting' });
+        return;
+      }
+      const checks = criteria.map((criterion, index) => ({
+        criterion,
+        status: decision.completedCriteria.includes(index) ? 'passed' as const : 'unverified' as const,
+        evidenceTitles: evidence.filter((item) => item.verifies?.includes(criterion)).map((item) => item.title),
+      }));
+      const passed = checks.every((check) => check.status === 'passed');
+      this.#application.completeRun({
+        runId: run.id,
+        expectedRunVersion: run.version,
+        receipt: {
+          status: 'succeeded',
+          summary: payload.assistantPlainText.slice(-2_000) || 'Agent run completed',
+          changes: [], evidence,
+          verification: { status: passed ? 'passed' : 'unverified', checks },
+          remainingWork: checks.filter((check) => check.status !== 'passed').map((check) => check.criterion),
+          ...(decision.nextAction ? { nextAction: decision.nextAction } : {}),
+          needsUser: false,
+          completionVerdict: passed ? 'achieved' : 'partial',
+          judgment: decision.judgment,
+        },
       });
     } catch (error) {
       log.warn({ err: error, taskId, sessionKey: payload.sessionKey }, 'Task review failed');

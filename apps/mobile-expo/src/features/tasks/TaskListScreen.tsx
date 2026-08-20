@@ -24,18 +24,13 @@ export function TaskListScreen() {
     queryFn: fetchTasks,
     enabled: configured,
   });
-  const items = (query.data ?? []).filter((item) => item.status !== 'completed' && item.status !== 'cancelled');
-  const statusLabels = {
-    pending: homePage.taskStatusPending,
-    planning: homePage.taskStatusPlanning,
-    waiting_dependency: homePage.taskStatusWaitingDependency,
-    running: homePage.taskStatusRunning,
-    verifying: homePage.taskStatusVerifying,
-    needs_user: homePage.taskStatusNeedsYou,
-    blocked: homePage.taskStatusBlocked,
-    paused: homePage.taskStatusPaused,
-    completed: homePage.taskStatusCompleted,
-    cancelled: homePage.taskStatusCancelled,
+  const items = (query.data ?? []).filter((item) => item.task.phase !== 'closed');
+  const phaseLabels = {
+    backlog: homePage.taskStatusPending,
+    ready: homePage.taskStatusPlanning,
+    active: homePage.taskStatusRunning,
+    review: homePage.taskStatusVerifying,
+    closed: homePage.taskStatusCompleted,
   } as const;
 
   return (
@@ -48,17 +43,18 @@ export function TaskListScreen() {
       {query.isLoading ? <ListSkeleton count={7} /> : (
         <FlatList
           data={items}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => item.task.id}
           contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xl }]}
           refreshControl={<RefreshControl refreshing={query.isFetching} onRefresh={() => void query.refetch()} />}
           ListEmptyComponent={<View style={styles.empty}><Icon source="target" size={40} color={colors.text.tertiary} /><Text style={{ color: colors.text.tertiary }}>{labels.empty}</Text></View>}
           renderItem={({ item }) => (
             <Pressable
-              onPress={() => router.push(`/tasks/${item.id}`)}
+              onPress={() => router.push(`/tasks/${item.task.id}`)}
               style={({ pressed }) => [styles.card, { backgroundColor: pressed ? colors.surface.pressed : colors.surface.panel, borderColor: colors.border.default }]}
             >
-              <View style={styles.cardTop}><Text numberOfLines={2} style={[styles.title, { color: colors.text.primary }]}>{item.objective}</Text><Text style={[styles.status, { color: colors.accent.primary }]}>{statusLabels[item.status]}</Text></View>
-              {item.dueAt ? <Text style={[styles.meta, { color: item.dueAt < Date.now() ? colors.text.primary : colors.text.tertiary }]}>{labels.due} · {new Date(item.dueAt).toLocaleDateString()}</Text> : null}
+              <View style={styles.cardTop}><Text numberOfLines={2} style={[styles.title, { color: colors.text.primary }]}>{item.task.title}</Text><Text style={[styles.status, { color: colors.accent.primary }]}>{phaseLabels[item.task.phase]}</Text></View>
+              <Text style={[styles.meta, { color: colors.text.tertiary }]}>{item.operationalState}</Text>
+              {item.task.dueAt ? <Text style={[styles.meta, { color: item.task.dueAt < Date.now() ? colors.text.primary : colors.text.tertiary }]}>{labels.due} · {new Date(item.task.dueAt).toLocaleDateString()}</Text> : null}
             </Pressable>
           )}
         />

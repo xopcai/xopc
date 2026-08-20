@@ -153,16 +153,16 @@ describe('SQLite migrations', () => {
         `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'discussion_capture_settings'`,
       ).get()).toEqual({ name: 'discussion_capture_settings' });
       expect(db.prepare(
-        `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'execution_receipts'`,
-      ).get()).toEqual({ name: 'execution_receipts' });
+        `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'task_run_receipts'`,
+      ).get()).toEqual({ name: 'task_run_receipts' });
       expect(
-        (db.prepare(`SELECT name FROM pragma_table_info('execution_receipts')`).all() as Array<{ name: string }>)
+        (db.prepare(`SELECT name FROM pragma_table_info('task_run_receipts')`).all() as Array<{ name: string }>)
           .map((column) => column.name),
       ).toContain('judgment_json');
       expect(
         (db.prepare(`SELECT name FROM pragma_table_info('tasks')`).all() as Array<{ name: string }>)
           .map((column) => column.name),
-      ).toContain('approved_boundaries_json');
+      ).toContain('phase');
       expect(db.prepare(
         `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'outcome_execution_state'`,
       ).get()).toBeUndefined();
@@ -189,14 +189,14 @@ describe('SQLite migrations', () => {
           `SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`,
         ).get(removedTable)).toBeUndefined();
       }
-      for (const table of ['execution_receipts', 'workflow_runs']) {
+      for (const table of ['task_run_receipts', 'workflow_runs']) {
         const columns = db.prepare(`SELECT name FROM pragma_table_info(?)`).all(table) as Array<{ name: string }>;
         expect(columns.map((column) => column.name)).not.toContain('goal_id');
       }
       expect(
         (db.prepare(`SELECT name FROM pragma_table_info('workflow_runs')`).all() as Array<{ name: string }>)
           .map((column) => column.name),
-      ).toContain('task_id');
+      ).toContain('task_run_id');
     } finally {
       db.close();
       rmSync(dir, { recursive: true, force: true });
@@ -601,15 +601,18 @@ describe('SQLite migrations', () => {
     ).all();
     expect(removedTables).toEqual([]);
 
-    const receiptColumns = db.prepare(`PRAGMA table_info(execution_receipts)`).all() as Array<{ name: string }>;
-    expect(receiptColumns.map((column) => column.name)).not.toContain('work_item_id');
-    expect(receiptColumns.map((column) => column.name)).not.toContain('outcome_id');
-    expect(receiptColumns.map((column) => column.name)).toContain('task_id');
-    expect(receiptColumns.map((column) => column.name)).toContain('feedback_rating');
+    expect(db.prepare(
+      `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'execution_receipts'`,
+    ).get()).toBeUndefined();
+    const receiptColumns = db.prepare(`PRAGMA table_info(task_run_receipts)`).all() as Array<{ name: string }>;
+    expect(receiptColumns.map((column) => column.name)).toContain('run_id');
+    expect(receiptColumns.map((column) => column.name)).not.toContain('task_id');
+    expect(receiptColumns.map((column) => column.name)).not.toContain('feedback_rating');
     const taskColumns = db.prepare(`PRAGMA table_info(tasks)`).all() as Array<{ name: string }>;
-    expect(taskColumns.map((column) => column.name)).toContain('approved_boundaries_json');
-    expect(taskColumns.map((column) => column.name)).not.toContain('user_status');
-    expect(taskColumns.map((column) => column.name)).not.toContain('internal_status');
+    expect(taskColumns.map((column) => column.name)).toContain('phase');
+    expect(taskColumns.map((column) => column.name)).toContain('resolution');
+    expect(taskColumns.map((column) => column.name)).not.toContain('status');
+    expect(taskColumns.map((column) => column.name)).not.toContain('approved_boundaries_json');
     expect(db.prepare(
       `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'task_execution_state'`,
     ).get()).toBeUndefined();
@@ -620,7 +623,9 @@ describe('SQLite migrations', () => {
     const blockedScenario = db.prepare(
       `SELECT event_types_json FROM proactive_scenarios WHERE scenario_key = 'blocked_work'`,
     ).get() as { event_types_json: string };
-    expect(JSON.parse(blockedScenario.event_types_json)).toEqual(['task.status_changed.v1']);
+    expect(JSON.parse(blockedScenario.event_types_json)).toEqual([
+      'task.attention_required.v2',
+    ]);
   });
 
 });

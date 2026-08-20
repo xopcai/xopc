@@ -15,7 +15,7 @@ function eventAutomation(
     enabled: true,
     trigger: {
       kind: 'event',
-      eventType: 'task.status_changed',
+      eventType: 'task.attention_required.v2',
       source,
       ...(payloadMatch ? { payloadMatch } : {}),
     },
@@ -29,17 +29,17 @@ function eventAutomation(
 describe('automation explanations', () => {
   it('treats broad event automations as covering a specific product event', () => {
     expect(matchesCoverage(eventAutomation(), {
-      eventType: 'task.status_changed',
+      eventType: 'task.attention_required.v2',
       source: 'tasks',
-      eventPayload: { taskId: 'goal-1', status: 'blocked' },
+      eventPayload: { taskId: 'goal-1', reason: 'blocked' },
     })).toBe(true);
   });
 
   it('does not treat object-specific payload filters as covering another object', () => {
-    expect(matchesCoverage(eventAutomation({ taskId: 'goal-2', status: 'blocked' }), {
-      eventType: 'task.status_changed',
+    expect(matchesCoverage(eventAutomation({ taskId: 'goal-2', reason: 'blocked' }), {
+      eventType: 'task.attention_required.v2',
       source: 'tasks',
-      eventPayload: { taskId: 'goal-1', status: 'blocked' },
+      eventPayload: { taskId: 'goal-1', reason: 'blocked' },
     })).toBe(false);
   });
 
@@ -52,9 +52,9 @@ describe('automation explanations', () => {
       status: 'queued',
       triggerSnapshot: {
         kind: 'event',
-        eventType: 'task.status_changed',
+        eventType: 'task.attention_required.v2',
         source: 'tasks',
-        payloadMatch: { status: 'blocked' },
+        payloadMatch: { reason: 'blocked' },
       },
       actionSnapshot: { kind: 'agent', instruction: 'Diagnose blocker' },
       manual: false,
@@ -65,20 +65,20 @@ describe('automation explanations', () => {
       runId: 'run-1',
       automationId: 'automation-1',
       type: 'run.queued',
-      message: 'Event task.status_changed queued automation',
+      message: 'Event task.attention_required.v2 queued automation',
       data: {
         event: {
-          type: 'task.status_changed',
+          type: 'task.attention_required.v2',
           source: 'tasks',
-          payload: { taskId: 'goal-1', status: 'blocked' },
+          payload: { taskId: 'goal-1', reason: 'blocked' },
         },
       },
       createdAtMs: 1,
     };
 
     expect(buildRunExplanation(run, triggerEvent, labels)).toEqual([
-      'Event task.status_changed from tasks',
-      'Matched status=blocked',
+      'Event task.attention_required.v2 from tasks',
+      'Matched reason=blocked',
       'Safety: Auto apply',
       'Runs agent action',
     ]);

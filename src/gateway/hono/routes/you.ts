@@ -1,4 +1,5 @@
 import type { Hono } from 'hono';
+import { randomUUID } from 'node:crypto';
 
 import { resolveDefaultAgentId } from '../../../agent/agent-scope.js';
 import type { MemoryRecord } from '../../../agent/memory/types.js';
@@ -11,7 +12,7 @@ import { uninstallConnector } from '../../../connectors/install.js';
 import { revokeComposioConnection } from '../../../connectors/composio.js';
 import {
   defineTaskContract,
-  TaskExecutionService,
+  TaskApplicationService,
   TaskRepository,
 } from '../../../tasks/index.js';
 import { renderUserClaim } from '../../../knowledge/connected-understanding-pipeline.js';
@@ -385,9 +386,8 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
       claimStatsBySource: listUserClaimStatsBySource(),
     });
     const activeTasks = new TaskRepository().list({ limit: 20 }).flatMap((task) => {
-      if (task.execution.agentId !== agentId) return [];
-      if (task.status === 'completed' || task.status === 'cancelled') return [];
-      return [{ id: task.id, objective: task.objective }];
+      if (task.delegateAgentId !== agentId || task.phase === 'closed') return [];
+      return [{ id: task.id, title: task.title, body: task.body }];
     });
     return c.json({
       scope: {
@@ -896,34 +896,23 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
     const title = existing.content.trim().split(/\r?\n/)[0]!.slice(0, 72);
     const uiLocale = body.uiLocale === 'zh' ? 'zh' : 'en';
     const contract = defineTaskContract(title);
-    const execution = new TaskExecutionService().create({
-      objective: contract.objective,
-      expectedOutputs: contract.expectedOutputs,
-      acceptanceCriteria: contract.acceptanceCriteria,
-      constraints: contract.constraints,
-      agentId: selectedAgentId(config),
-      priority: 'normal',
-      uiLocale,
-      source: 'api',
-      contextText: existing.content,
+    const created = new TaskApplicationService().create({
+      idempotencyKey: randomUUID(), title, body: existing.content,
+      priority: 'normal', delegateAgentId: selectedAgentId(config), locale: uiLocale,
+      contract: { ...contract, acceptancePolicy: 'verified_auto', outputDestinations: [] },
+      dependencies: [],
+      context: [{ targetKind: 'memory', targetId: existing.id, role: 'input', pinned: true, retrievalPolicy: {}, metadata: {} }],
+      authorityGrants: [],
+      activation: { mode: 'start', executor: { kind: 'agent', agentId: selectedAgentId(config) } },
     });
-    let queued = false;
-    try {
-      deps.service.enqueueTask(execution.taskId, {
-        source: 'api',
-        executionContext: { triggerKind: 'user' },
-      });
-      queued = true;
-    } catch {
-      queued = false;
-    } finally {
-      preserveRecord(existing, { tags: [...new Set([...(existing.tags ?? []), INSIGHT_ACCEPTED_TAG])] });
-    }
+    if (created.ok === false) return c.json({ ok: false, error: created.reason }, 409);
+    if (created.runId) deps.service.dispatchTaskRuns();
+    preserveRecord(existing, { tags: [...new Set([...(existing.tags ?? []), INSIGHT_ACCEPTED_TAG])] });
     return c.json({
       ok: true,
-      status: queued ? 'queued' : 'saved',
-      taskId: execution.taskId,
-      href: `/tasks/${encodeURIComponent(execution.taskId)}`,
+      status: created.runId ? 'queued' : 'saved',
+      taskId: created.model.task.id,
+      href: `/tasks/${encodeURIComponent(created.model.task.id)}`,
     });
   });
 

@@ -1,67 +1,47 @@
 import type { WorkflowRunView } from '../workflows/domain/index.js';
-import {
-  completeExecutionReceipt,
-  startExecutionReceipt,
-  updateExecutionReceipt,
-} from '../storage/sqlite/index.js';
-import { TaskController, type TaskExecutionPort } from './task-controller.js';
-import { TaskProjectionService } from './task-projection-service.js';
-import { TaskRepository } from './task-repository.js';
+import { TaskApplicationService } from './task-application-service.js';
+import { TaskRunRepository } from './task-run-repository.js';
 
 export class TaskWorkflowCoordinator {
-  readonly #tasks = new TaskRepository();
-  readonly #projection = new TaskProjectionService();
+  readonly #runs = new TaskRunRepository();
+  readonly #application = new TaskApplicationService();
 
-  constructor(private readonly execution: TaskExecutionPort) {}
-
-  handleTerminalRun(view: WorkflowRunView, sessionKey: string): void {
-    const taskId = view.run.metadata?.taskId?.trim();
-    if (!taskId) return;
-    const task = this.#tasks.get(taskId);
-    if (!task?.contract) return;
-    const runId = `workflow:${view.run.id}`;
-    const contract = {
-      objective: task.contract.objective,
-      expectedOutputs: task.contract.expectedOutputs,
-      acceptanceCriteria: task.contract.acceptanceCriteria,
-      constraints: task.contract.constraints,
-      approvalRequired: task.contract.approvalRequired,
-      assumptions: task.contract.assumptions,
-      risks: task.contract.risks,
-    };
-    startExecutionReceipt({
-      runId,
-      sessionKey,
-      channel: 'workflow',
-      objective: task.objective,
-      contract,
-      contractVersion: task.contract.version,
-      context: {
-        taskId,
-        projectId: view.run.metadata?.projectId,
-        origin: 'workflow',
-        triggerKind: 'user',
+  handleTerminalRun(view: WorkflowRunView): void {
+    const taskRunId = view.run.metadata?.taskRunId?.trim();
+    if (!taskRunId) return;
+    const run = this.#runs.get(taskRunId);
+    if (!run || !['running', 'waiting', 'verifying'].includes(run.status)) return;
+    const succeeded = view.run.status === 'succeeded';
+    const summary = view.run.result?.summary || view.run.error?.message || `Workflow ${view.run.status}`;
+    const workflowId = typeof run.executorRef.workflowId === 'string'
+      ? run.executorRef.workflowId
+      : view.run.definitionId;
+    this.#application.completeRun({
+      runId: run.id,
+      expectedRunVersion: run.version,
+      terminalCode: succeeded ? undefined : 'workflow_failed',
+      terminalMessage: succeeded ? undefined : summary,
+      receipt: {
+        status: succeeded ? 'succeeded' : 'failed',
+        summary,
+        changes: [],
+        evidence: [{
+          kind: 'artifact',
+          title: `Workflow ${view.run.definitionId} ${view.run.status}`,
+          summary,
+          uri: `workflow:${view.run.id}`,
+          provenance: 'tool',
+          strength: 'observed',
+          observedAt: Date.now(),
+        }],
+        verification: { status: 'unverified', checks: [] },
+        remainingWork: succeeded ? [] : [workflowId],
+        needsUser: false,
+        completionVerdict: succeeded ? 'achieved' : 'not_achieved',
+        ...(succeeded ? {} : {
+          failure: { code: 'workflow_failed', phase: 'workflow', recoveryAction: 'Retry the TaskRun' },
+        }),
       },
     });
-    updateExecutionReceipt({
-      runId,
-      evidence: [{
-        kind: 'artifact',
-        title: `Workflow ${view.run.definitionId} ${view.run.status}`,
-        summary: view.run.result?.summary || view.run.error?.message || view.run.status,
-        uri: `workflow:${view.run.id}`,
-        provenance: 'tool',
-        strength: 'observed',
-        observedAt: Date.now(),
-      }],
-    });
-    const receipt = completeExecutionReceipt({
-      runId,
-      status: view.run.status === 'succeeded' ? 'succeeded' : 'failed',
-      summary: view.run.result?.summary || view.run.error?.message || `Workflow ${view.run.status}`,
-    });
-    if (!receipt) return;
-    const projected = this.#projection.project(receipt);
-    new TaskController(this.execution).handleCompletedRun(projected);
   }
 }

@@ -2,13 +2,8 @@ import type { TaskDependencySummary } from '@xopcai/gateway-contract';
 
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 
+import { TaskReadModelProjector } from './task-read-model-projector.js';
 import { TaskRepository, type TaskAggregate } from './task-repository.js';
-
-type DependencyRow = {
-  id: string;
-  objective: string;
-  status: TaskDependencySummary['status'];
-};
 
 export type TaskDependencyErrorCode =
   | 'not_found'
@@ -23,57 +18,48 @@ export class TaskDependencyError extends Error {
   }
 }
 
-function toSummary(row: DependencyRow): TaskDependencySummary {
-  return { id: row.id, objective: row.objective, status: row.status };
-}
-
 export class TaskDependencyService {
   readonly #tasks = new TaskRepository();
+  readonly #projector = new TaskReadModelProjector();
 
   listDependencies(taskId: string): TaskDependencySummary[] {
-    const rows = getSqliteDatabase().prepare(
-      `SELECT dependency.task_id AS id, dependency.objective, dependency.status
-       FROM task_dependencies edge
-       JOIN tasks dependency ON dependency.task_id = edge.depends_on_task_id
-       WHERE edge.task_id = ?
-       ORDER BY edge.created_at ASC, dependency.task_id ASC`,
-    ).all(taskId) as DependencyRow[];
-    return rows.map(toSummary);
+    return this.listRelated(
+      `SELECT depends_on_task_id AS task_id FROM task_dependencies
+       WHERE task_id = ? ORDER BY created_at ASC, depends_on_task_id ASC`,
+      taskId,
+    );
   }
 
   listDependents(taskId: string): TaskDependencySummary[] {
-    const rows = getSqliteDatabase().prepare(
-      `SELECT dependent.task_id AS id, dependent.objective, dependent.status
-       FROM task_dependencies edge
-       JOIN tasks dependent ON dependent.task_id = edge.task_id
-       WHERE edge.depends_on_task_id = ?
-       ORDER BY edge.created_at ASC, dependent.task_id ASC`,
-    ).all(taskId) as DependencyRow[];
-    return rows.map(toSummary);
+    return this.listRelated(
+      `SELECT task_id FROM task_dependencies
+       WHERE depends_on_task_id = ? ORDER BY created_at ASC, task_id ASC`,
+      taskId,
+    );
   }
 
   listBlocking(taskId: string): TaskDependencySummary[] {
-    return this.listDependencies(taskId).filter((dependency) => dependency.status !== 'completed');
+    return this.listDependencies(taskId).filter((dependency) =>
+      dependency.phase !== 'closed' || dependency.resolution !== 'done');
   }
 
   listReadyDependents(taskId: string): TaskAggregate[] {
     const rows = getSqliteDatabase().prepare(
-      `SELECT dependent.task_id AS id
+      `SELECT dependent.task_id
        FROM task_dependencies completed_edge
        JOIN tasks dependent ON dependent.task_id = completed_edge.task_id
        WHERE completed_edge.depends_on_task_id = ?
-         AND dependent.status = 'waiting_dependency'
+         AND dependent.phase <> 'closed'
          AND NOT EXISTS (
-           SELECT 1
-           FROM task_dependencies edge
+           SELECT 1 FROM task_dependencies edge
            JOIN tasks dependency ON dependency.task_id = edge.depends_on_task_id
            WHERE edge.task_id = dependent.task_id
-             AND dependency.status <> 'completed'
+             AND NOT (dependency.phase = 'closed' AND dependency.resolution = 'done')
          )
        ORDER BY dependent.created_at ASC`,
-    ).all(taskId) as Array<{ id: string }>;
+    ).all(taskId) as Array<{ task_id: string }>;
     return rows.flatMap((row) => {
-      const task = this.#tasks.get(row.id);
+      const task = this.#tasks.get(row.task_id);
       return task ? [task] : [];
     });
   }
@@ -81,7 +67,7 @@ export class TaskDependencyService {
   replace(input: {
     taskId: string;
     dependsOnTaskIds: string[];
-    expectedUpdatedAt: number;
+    expectedVersion: number;
     now?: number;
   }): TaskAggregate {
     const dependencyIds = [...new Set(input.dependsOnTaskIds.map((id) => id.trim()).filter(Boolean))];
@@ -91,16 +77,15 @@ export class TaskDependencyService {
 
     runSqliteWriteTransaction((db) => {
       const task = db.prepare(
-        'SELECT updated_at FROM tasks WHERE task_id = ?',
-      ).get(input.taskId) as { updated_at: number } | undefined;
+        'SELECT version, updated_at FROM tasks WHERE task_id = ?',
+      ).get(input.taskId) as { version: number; updated_at: number } | undefined;
       if (!task) throw new TaskDependencyError('not_found', 'Task not found');
-      if (task.updated_at !== input.expectedUpdatedAt) {
+      if (task.version !== input.expectedVersion) {
         throw new TaskDependencyError('conflict', 'Task changed before its dependencies were saved');
       }
 
       for (const dependencyId of dependencyIds) {
-        const exists = db.prepare('SELECT 1 FROM tasks WHERE task_id = ?').get(dependencyId);
-        if (!exists) {
+        if (!db.prepare('SELECT 1 FROM tasks WHERE task_id = ?').get(dependencyId)) {
           throw new TaskDependencyError('invalid_dependency', `Dependency task not found: ${dependencyId}`);
         }
       }
@@ -117,8 +102,9 @@ export class TaskDependencyService {
          SELECT 1 FROM dependencies WHERE task_id = ? LIMIT 1`,
       );
       const insert = db.prepare(
-        `INSERT INTO task_dependencies (task_id, depends_on_task_id, created_at)
-         VALUES (?, ?, ?)`,
+        `INSERT INTO task_dependencies (
+          task_id, depends_on_task_id, dependency_kind, created_at
+        ) VALUES (?, ?, 'blocks', ?)`,
       );
       const now = Math.max(input.now ?? Date.now(), task.updated_at + 1);
       for (const dependencyId of dependencyIds) {
@@ -127,9 +113,20 @@ export class TaskDependencyService {
         }
         insert.run(input.taskId, dependencyId, now);
       }
-      db.prepare('UPDATE tasks SET updated_at = ? WHERE task_id = ?').run(now, input.taskId);
+      db.prepare(
+        `UPDATE tasks SET version = version + 1, updated_at = ?
+         WHERE task_id = ? AND version = ?`,
+      ).run(now, input.taskId, input.expectedVersion);
     });
 
-    return this.#tasks.get(input.taskId)!;
+    return this.#tasks.require(input.taskId);
+  }
+
+  private listRelated(sql: string, taskId: string): TaskDependencySummary[] {
+    const rows = getSqliteDatabase().prepare(sql).all(taskId) as Array<{ task_id: string }>;
+    return rows.flatMap((row) => {
+      const summary = this.#projector.summary(row.task_id);
+      return summary ? [summary] : [];
+    });
   }
 }

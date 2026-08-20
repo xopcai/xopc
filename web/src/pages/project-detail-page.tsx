@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Popover from '@radix-ui/react-popover';
-import type { TaskAction, ProjectOperatingView, ProjectTaskCard } from '@xopcai/gateway-contract';
+import type { ProjectOperatingView, ProjectTaskCard, TaskCommand } from '@xopcai/gateway-contract';
 import { AlertCircle, Archive, ArrowLeft, Check, ChevronDown, Clock, Columns3, Copy, File, Folder, FolderPlus, History, LayoutDashboard, MessageSquarePlus, Pause, Pin, PinOff, Play, Plus, RotateCcw, Save, Search, Settings, Sparkles, Trash2, X, Zap, type LucideIcon } from 'lucide-react';
 import { type CSSProperties, type FormEvent, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -13,7 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { automationApi, type Automation } from '@/features/automations/automation-api';
 import { inferMimeTypeFromFileName } from '@/features/chat/attachments/attachment-utils-core';
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
-import { actOnTask, createTask } from '@/features/tasks/home-api';
+import { commandTask, createTask, fetchTask } from '@/features/tasks/home-api';
 import { FileTree } from '@/features/file-tree/file-tree';
 import type { FileTreeAction, TreeEntry } from '@/features/file-tree/file-tree-types';
 import { DirectoryPickerPathField } from '@/features/fs/directory-picker-path-field';
@@ -46,6 +46,7 @@ import {
 } from '@/features/projects/api';
 import { ProjectSkillsPanel } from '@/features/projects/project-skills-panel';
 import { ProjectTaskBoard, type CreateProjectTaskInput } from '@/features/projects/task-board/project-task-board';
+import type { TaskBoardAction } from '@/features/projects/task-board/task-board-model';
 import { fetchGatewayAgents, type GatewayAgentRow } from '@/features/settings/agents-admin-api';
 import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
 import { detectPreviewFileType, getPreviewFileName, readModeForPreviewType } from '@/features/preview-runtime';
@@ -774,34 +775,35 @@ export function ProjectDetailPage() {
       const detail = (event as CustomEvent<{ projectId?: string }>).detail;
       if (detail?.projectId === projectId) void refreshOperatingView();
     };
-    window.addEventListener('task-created', refreshForTask);
-    window.addEventListener('task-status-changed', refreshForTask);
+    window.addEventListener('task-created-v2', refreshForTask);
+    window.addEventListener('task-commanded-v2', refreshForTask);
+    window.addEventListener('task-phase-changed-v2', refreshForTask);
     return () => {
-      window.removeEventListener('task-created', refreshForTask);
-      window.removeEventListener('task-status-changed', refreshForTask);
+      window.removeEventListener('task-created-v2', refreshForTask);
+      window.removeEventListener('task-commanded-v2', refreshForTask);
+      window.removeEventListener('task-phase-changed-v2', refreshForTask);
     };
   }, [projectId, refreshOperatingView]);
 
   const performProjectTaskAction = useCallback(async (
     task: ProjectTaskCard,
-    action: TaskAction,
+    action: TaskBoardAction,
   ) => {
-    const previous = operatingView;
     setTaskActionBusyId(task.id);
     setError(null);
-    setOperatingView((current) => current ? {
-      ...current,
-      tasks: current.tasks.map((item) => item.id === task.id ? {
-        ...item,
-        lane: action === 'pause' ? 'ready' : 'moving',
-        status: action === 'pause' ? 'paused' : action === 'verify' ? 'verifying' : 'running',
-      } : item),
-    } : current);
     try {
-      await actOnTask(task.id, action, task.updatedAt);
+      const detail = await fetchTask(task.id);
+      const command: TaskCommand = action === 'run'
+        ? { type: 'start', executor: { kind: 'agent', agentId: detail.task.delegateAgentId ?? 'main' } }
+        : action === 'pause'
+          ? { type: 'add_wait', wait: { kind: 'paused', reason: 'Paused by user', condition: {} } }
+          : action === 'verify'
+            ? { type: 'request_review' }
+            : { type: 'resolve_wait', waitId: detail.waits[0]?.id ?? '' };
+      if (command.type === 'resolve_wait' && !command.waitId) throw new Error('No active wait to resolve');
+      await commandTask(task.id, command, detail.task.version);
       await refreshOperatingView();
     } catch (err) {
-      setOperatingView(previous);
       setError(err instanceof Error ? err.message : pm.board.actionFailed);
     } finally {
       setTaskActionBusyId(null);
@@ -812,10 +814,39 @@ export function ProjectDetailPage() {
     if (!projectId) return;
     setError(null);
     await createTask({
-      ...input,
-      mode: 'capture',
+      idempotencyKey: input.requestId,
+      title: input.objective,
       projectId,
+      priority: input.priority,
+      dueAt: input.dueAt,
       locale: language,
+      contract: {
+        objective: input.objective,
+        expectedOutputs: [],
+        acceptanceCriteria: [],
+        constraints: [],
+        approvalRequired: [],
+        assumptions: [],
+        risks: [],
+        acceptancePolicy: 'manual',
+        outputDestinations: [],
+      },
+      dependencies: input.dependsOnTaskIds,
+      context: input.attachments.map((attachment, index) => ({
+        targetKind: 'file' as const,
+        targetId: attachment.uri ?? attachment.name ?? `attachment-${index + 1}`,
+        role: 'input' as const,
+        title: attachment.name,
+        pinned: true,
+        retrievalPolicy: {},
+        metadata: {
+          mimeType: attachment.mimeType,
+          size: attachment.size,
+          data: attachment.data,
+        },
+      })),
+      authorityGrants: [],
+      activation: { mode: 'capture', phase: 'backlog' },
     });
     await refreshOperatingView();
   }, [language, projectId, refreshOperatingView]);
@@ -1418,7 +1449,7 @@ export function ProjectDetailPage() {
                 <div className="min-w-0 flex-1">
                   <h2 className="text-sm font-semibold text-fg">{pm.overview.directionTitle}</h2>
                   <p className="mt-1 max-w-3xl text-sm leading-6 text-fg-muted">
-                    {operatingView?.digest.summary || project.description || project.brief || pm.overview.directionFallback}
+                    {project.outcome || operatingView?.digest.summary || project.description || project.brief || pm.overview.directionFallback}
                   </p>
                   {operatingView?.digest.recommendedAction ? (
                     <p className="mt-2 max-w-3xl text-sm font-medium leading-6 text-fg">
@@ -1449,9 +1480,9 @@ export function ProjectDetailPage() {
                   >
                     <div className="flex min-w-0 items-center justify-between gap-3">
                       <span className="min-w-0 truncate text-sm font-medium text-fg">{item.title}</span>
-                      <span className="shrink-0 rounded-full bg-surface-muted px-2 py-0.5 text-xs font-medium text-fg-muted">{statusLabel(item.status)}</span>
+                      <span className="shrink-0 rounded-full bg-surface-muted px-2 py-0.5 text-xs font-medium text-fg-muted">{item.phase} · {item.operationalState}</span>
                     </div>
-                    <p className="mt-1 line-clamp-2 text-sm leading-5 text-fg-muted">{item.blockedReason || item.nextAction}</p>
+                    {item.attention[0] ? <p className="mt-1 line-clamp-2 text-sm leading-5 text-fg-muted">{item.attention[0].summary}</p> : null}
                   </Link>
                 )) : (
                   <div className="px-4 py-6 text-sm text-fg-muted">
@@ -1470,17 +1501,45 @@ export function ProjectDetailPage() {
                   {operatingView.recentReceipts.slice(0, 5).map((receipt) => (
                     <div key={receipt.runId} className="px-4 py-3">
                       <div className="flex min-w-0 items-center justify-between gap-3">
-                        <span className="min-w-0 truncate text-sm font-medium text-fg">{receipt.objective}</span>
+                        <span className="min-w-0 truncate text-sm font-medium text-fg">{receipt.summary}</span>
                         <span className="shrink-0 rounded-full bg-surface-hover px-2 py-0.5 text-xs text-fg-muted">
-                          {pm.overview.resultStatuses[receipt.status] ?? receipt.status}
+                          {receipt.status} · {receipt.verification.status}
                         </span>
                       </div>
-                      <p className="mt-1 line-clamp-2 text-sm leading-5 text-fg-muted">{receipt.summary}</p>
                     </div>
                   ))}
                 </div>
               </div>
             ) : null}
+
+            <div className="grid min-w-0 gap-4 md:grid-cols-2">
+              <div className="rounded-lg bg-surface-panel shadow-surface">
+                <div className="border-b border-edge px-4 py-3">
+                  <h2 className="text-sm font-semibold text-fg">{pm.overview.milestones}</h2>
+                </div>
+                <div className="divide-y divide-edge">
+                  {project.milestones.length ? project.milestones.map((milestone) => (
+                    <div key={milestone.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                      <span className="min-w-0 truncate text-sm font-medium text-fg">{milestone.title}</span>
+                      <span className="shrink-0 text-xs text-fg-muted">{milestone.status}</span>
+                    </div>
+                  )) : <p className="px-4 py-5 text-sm text-fg-muted">{pm.overview.noMilestones}</p>}
+                </div>
+              </div>
+              <div className="rounded-lg bg-surface-panel shadow-surface">
+                <div className="border-b border-edge px-4 py-3">
+                  <h2 className="text-sm font-semibold text-fg">{pm.overview.projectUpdates}</h2>
+                </div>
+                <div className="divide-y divide-edge">
+                  {project.recentUpdates.length ? project.recentUpdates.slice(0, 3).map((update) => (
+                    <div key={update.id} className="px-4 py-3">
+                      <p className="text-sm leading-5 text-fg">{update.summary}</p>
+                      <p className="mt-1 text-xs text-fg-muted">{update.health}</p>
+                    </div>
+                  )) : <p className="px-4 py-5 text-sm text-fg-muted">{pm.overview.noProjectUpdates}</p>}
+                </div>
+              </div>
+            </div>
           </div>
 
           <aside className="grid min-w-0 content-start gap-4 xl:min-h-0 xl:overflow-y-auto xl:pr-1 xl:[scrollbar-gutter:stable]">

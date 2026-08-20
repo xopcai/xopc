@@ -6,6 +6,7 @@ import { messagesReferenceMediaUri } from '../../../media/session-references.js'
 import { parseMediaUri } from '../../../media/uri.js';
 import { mimeTypeFromMediaPath } from '../../../media/store.js';
 import { TaskRepository } from '../../../tasks/task-repository.js';
+import { TaskContextRepository } from '../../../tasks/task-context-repository.js';
 import { createGatewayRouteLogger } from '../lib/route-logger.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
@@ -31,9 +32,9 @@ export function registerMediaRoutes(authenticated: Hono, deps: AuthenticatedRout
           parsed.uri,
         ) || pendingTranscriptReferencesMediaUri(sessionKey, parsed.uri)
         : false;
-      const taskReferencesUri = taskId
-        ? tasks.get(taskId)?.execution.contextMessage?.attachments
-          .some((attachment) => attachment.uri === parsed.uri) === true
+      const taskReferencesUri = taskId && tasks.get(taskId)
+        ? new TaskContextRepository().list(taskId)
+          .some((edge) => edge.targetKind === 'file' && edge.targetId === parsed.uri)
         : false;
       if (!sessionReferencesUri && !taskReferencesUri) {
         return c.json({ ok: false, error: { message: 'Not found' } }, 404);

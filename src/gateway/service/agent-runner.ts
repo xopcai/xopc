@@ -30,7 +30,6 @@ import { ClarifyBridge, type ClarifyBridgeRequest } from '../clarify-bridge.js';
 import { runGatewayAgent } from './run-gateway-agent.js';
 import type { UserTurnAttachment, UserTurnInput } from '../user-turn-input.js';
 import { createLogger } from '../../utils/logger.js';
-import type { ExecutionReceipt } from '../../storage/sqlite/execution-receipt-repository.js';
 import { SessionInputCoordinator, type SubmitSessionInput } from './session-input-coordinator.js';
 
 const log = createLogger('Gateway:AgentRunner');
@@ -44,7 +43,6 @@ export interface GatewayAgentRunnerOptions {
   getConfig: () => Config;
   /** SSE emit (re-used so `runAgent` events broadcast to subscribers). */
   emit: (type: string, payload: unknown) => void;
-  onTaskFinalized?: (receipt: ExecutionReceipt) => void;
 }
 
 export class GatewayAgentRunner {
@@ -149,7 +147,6 @@ export class GatewayAgentRunner {
         activeWebchatRunBySession: this.activeWebchatRunBySession,
         sessionIndex: this.opts.sessionIndex,
         emit: this.opts.emit,
-        onTaskFinalized: this.opts.onTaskFinalized,
       },
       message,
       channel,

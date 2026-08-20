@@ -106,31 +106,6 @@ export {
   type SupportMode,
 } from './relationship-settings-repository.js';
 export {
-  completeExecutionReceipt,
-  findExecutionReceiptForAssistant,
-  getExecutionReceipt,
-  listExecutionReceipts,
-  listUnprojectedExecutionReceipts,
-  markExecutionReceiptProjected,
-  setExecutionVerdict,
-  setExecutionReceiptFeedback,
-  setExecutionReceiptFeedbackByRunId,
-  startExecutionReceipt,
-  summarizeExecutionReceipts,
-  updateExecutionReceipt,
-  type ExecutionContract,
-  type ExecutionVerdict,
-  type ExecutionEvidence,
-  type ExecutionJudgment,
-  type ExecutionFeedbackRating,
-  type ExecutionReceipt,
-  type ExecutionReceiptContext,
-  type ExecutionReceiptMetrics,
-  type ExecutionReceiptOrigin,
-  type ExecutionReceiptStatus,
-  type ExecutionReceiptTrigger,
-} from './execution-receipt-repository.js';
-export {
   buildDefaultSessionMetadata,
   type SessionMetadataSeed,
 } from './session-metadata.js';

@@ -18,8 +18,8 @@ import { resolveExecutionContext } from '../../tasks/execution-context.js';
 import { TaskRunCoordinator } from '../../tasks/task-run-coordinator.js';
 import {
   updateInteractionStateFromMessage,
-  type ExecutionReceiptStatus,
 } from '../../storage/sqlite/index.js';
+import type { TaskRunReceipt } from '@xopcai/gateway-contract';
 
 import { formatAgentRunErrorForClient } from '../../agent/client-error-format.js';
 
@@ -42,9 +42,6 @@ export type RunGatewayAgentDeps = {
   activeWebchatRunBySession: Map<string, string>;
   sessionIndex: SessionIndex;
   emit: (type: string, payload: unknown) => void;
-  onTaskFinalized?: (
-    receipt: import('../../storage/sqlite/execution-receipt-repository.js').ExecutionReceipt,
-  ) => void;
 };
 
 /**
@@ -82,8 +79,8 @@ export async function *runGatewayAgent(
   } = deps;
   const sessionIndex = sessionIndexFromDeps;
   let taskRun: TaskRunCoordinator | undefined;
-  let executionReceiptStatus: Exclude<ExecutionReceiptStatus, 'running'> = 'failed';
-  let executionReceiptSummary = 'Agent run ended unexpectedly';
+  let taskRunStatus: TaskRunReceipt['status'] = 'failed';
+  let taskRunSummary = 'Agent run ended unexpectedly';
 
   let webchatSessionKey: string | undefined;
   let webchatSessionId: string | undefined;
@@ -125,7 +122,6 @@ export async function *runGatewayAgent(
       runId,
       context: executionContext,
       fallbackObjective: message,
-      onFinalized: deps.onTaskFinalized,
     });
   }
   const mapper = new ChatStreamMapper({ runId, sessionKey: streamSessionKey, channel });
@@ -214,8 +210,8 @@ export async function *runGatewayAgent(
 
         const endStatus = mergedSignal.aborted ? 'cancelled' : 'success';
         const endSummary = mergedSignal.aborted ? 'Interrupted' : 'Message processed successfully';
-        executionReceiptStatus = mergedSignal.aborted ? 'cancelled' : 'succeeded';
-        executionReceiptSummary = endSummary;
+        taskRunStatus = mergedSignal.aborted ? 'cancelled' : 'succeeded';
+        taskRunSummary = endSummary;
         yield* emitAndYield(mapper.end(endStatus, endSummary));
         runRelay.complete(runId);
         try {
@@ -244,8 +240,8 @@ export async function *runGatewayAgent(
           `Agent processing failed: ${em}`,
         );
         streamError = em;
-        executionReceiptStatus = 'failed';
-        executionReceiptSummary = em;
+        taskRunStatus = 'failed';
+        taskRunSummary = em;
         const errorContent = formatAgentRunErrorForClient(streamError);
         yield* emitAndYield(mapper.error(errorContent));
         yield* emitAndYield(mapper.end('error', streamError));
@@ -324,13 +320,13 @@ export async function *runGatewayAgent(
       },
     ]);
     yield* emitAndYield(mapper.end('success', 'Message processed'));
-    executionReceiptStatus = 'succeeded';
-    executionReceiptSummary = 'Message processed';
+    taskRunStatus = 'succeeded';
+    taskRunSummary = 'Message processed';
     return { status: 'ok', summary: 'Message processed' };
   } catch (error) {
     const em = error instanceof Error ? error.message : String(error);
-    executionReceiptStatus = 'failed';
-    executionReceiptSummary = em;
+    taskRunStatus = 'failed';
+    taskRunSummary = em;
     log.error(
       {
         err: error,
@@ -347,8 +343,8 @@ export async function *runGatewayAgent(
     if (taskRun) {
       try {
         taskRun.finalize({
-        status: executionReceiptStatus,
-        summary: executionReceiptSummary,
+        status: taskRunStatus,
+        summary: taskRunSummary,
         });
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err);

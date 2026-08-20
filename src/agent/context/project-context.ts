@@ -7,7 +7,8 @@ import type { Project } from '../../projects/types.js';
 import { ProjectStore } from '../../projects/project-store.js';
 import { listMemoryRecords, searchMemoryRecords } from '../../storage/sqlite/index.js';
 import { sanitizeForPromptLiteral } from '../prompt/sanitize-for-prompt.js';
-import { TaskRepository, type TaskRuntime } from '../../tasks/task-repository.js';
+import { TaskRepository } from '../../tasks/task-repository.js';
+import { TaskReadModelProjector } from '../../tasks/task-read-model-projector.js';
 
 const MAX_TEXT = 1200;
 const MAX_TASKS = 5;
@@ -30,19 +31,14 @@ function truncateText(value: string | undefined, max = MAX_TEXT): string | undef
   return `${trimmed.slice(0, max - 1).trimEnd()}...`;
 }
 
-export interface ProjectTaskContext extends TaskRuntime {
-  objective: string;
-  status: string;
+export interface ProjectTaskContext {
+  title: string;
+  state: string;
+  priority: string;
 }
 
 function formatTask(task: ProjectTaskContext): string {
-  const parts = [`- ${sanitizeForPromptLiteral(task.objective)}`, `status=${task.status}`, `priority=${task.priority}`];
-  if (task.nextAction?.trim()) {
-    parts.push(`next=${sanitizeForPromptLiteral(truncateText(task.nextAction, 200) ?? '')}`);
-  }
-  if (task.blockedReason?.trim()) {
-    parts.push(`blocked=${sanitizeForPromptLiteral(truncateText(task.blockedReason, 200) ?? '')}`);
-  }
+  const parts = [`- ${sanitizeForPromptLiteral(task.title)}`, `state=${task.state}`, `priority=${task.priority}`];
   return parts.join(' | ');
 }
 
@@ -71,11 +67,11 @@ export function buildActiveProjectContextForPrompt(
     project,
     workspacePath: getProjectWorkspacePathForSession(sessionKey) ?? project.workspaceRoot,
     activeTasks: new TaskRepository().listByProject(project.id, MAX_TASKS)
-      .filter((task) => task.status !== 'completed' && task.status !== 'cancelled')
+      .filter((task) => task.phase !== 'closed')
       .map((task) => ({
-        ...task.execution,
-        objective: task.objective,
-        status: task.status,
+        priority: task.priority,
+        title: task.contract?.objective ?? task.title,
+        state: `${task.phase}/${new TaskReadModelProjector().project(task).operationalState}`,
       })),
     recentSessions: new ProjectStore().getRecentSessions(project.id, MAX_SESSIONS),
     memoryRecords: selectProjectMemoryRecords({

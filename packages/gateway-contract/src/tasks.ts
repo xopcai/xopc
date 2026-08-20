@@ -1,19 +1,33 @@
 import { z } from 'zod';
 
-export const TaskStatusSchema = z.enum([
-  'pending',
-  'planning',
-  'waiting_dependency',
-  'running',
-  'verifying',
-  'needs_user',
-  'blocked',
-  'paused',
-  'completed',
-  'cancelled',
-]);
+import {
+  TaskAttentionItemSchema,
+  TaskOperationalStateSchema,
+  TaskPhaseSchema,
+  TaskResolutionSchema,
+  TaskWaitSchema,
+} from './task-lifecycle.js';
+import { TaskRunSchema } from './task-runs.js';
+
+export {
+  TaskAttentionItemSchema,
+  TaskOperationalStateSchema,
+  TaskPhaseSchema,
+  TaskResolutionSchema,
+  TaskWaitSchema,
+} from './task-lifecycle.js';
 
 export const TaskPrioritySchema = z.enum(['low', 'normal', 'high', 'critical']);
+export const TaskAcceptancePolicySchema = z.enum([
+  'verified_auto',
+  'verified_then_review',
+  'manual',
+]);
+
+export const ActorRefSchema = z.object({
+  kind: z.enum(['user', 'agent', 'system', 'integration']),
+  id: z.string().optional(),
+});
 
 export const TaskContractSchema = z.object({
   taskId: z.string(),
@@ -25,107 +39,86 @@ export const TaskContractSchema = z.object({
   approvalRequired: z.array(z.string()),
   assumptions: z.array(z.string()),
   risks: z.array(z.string()),
-  contextSnapshotId: z.string().optional(),
-  createdBy: z.enum(['user', 'system']),
-  createdAt: z.number(),
+  acceptancePolicy: TaskAcceptancePolicySchema,
+  outputDestinations: z.array(z.record(z.string(), z.unknown())),
+  createdBy: ActorRefSchema,
+  createdAt: z.number().int().nonnegative(),
 });
 
 export const TaskSchema = z.object({
   id: z.string(),
-  objective: z.string(),
-  status: TaskStatusSchema,
+  title: z.string(),
+  body: z.string().optional(),
+  phase: TaskPhaseSchema,
+  resolution: TaskResolutionSchema.optional(),
   priority: TaskPrioritySchema,
-  dueAt: z.number().optional(),
+  dueAt: z.number().int().nonnegative().optional(),
+  projectId: z.string().optional(),
+  milestoneId: z.string().optional(),
+  parentTaskId: z.string().optional(),
+  ownerId: z.string().optional(),
+  delegateAgentId: z.string().optional(),
+  source: z.string(),
+  locale: z.enum(['en', 'zh']).optional(),
   latestContractVersion: z.number().int().positive(),
-  latestReceiptRunId: z.string().optional(),
+  version: z.number().int().positive(),
   contract: TaskContractSchema.optional(),
-  createdAt: z.number(),
-  updatedAt: z.number(),
+  createdAt: z.number().int().nonnegative(),
+  updatedAt: z.number().int().nonnegative(),
+  closedAt: z.number().int().nonnegative().optional(),
+}).superRefine((task, context) => {
+  if ((task.phase === 'closed') !== Boolean(task.resolution)) {
+    context.addIssue({
+      code: 'custom',
+      path: ['resolution'],
+      message: 'Closed tasks require a resolution and open tasks cannot have one',
+    });
+  }
 });
 
-export const TaskListResponseSchema = z.object({
-  ok: z.literal(true),
-  items: z.array(TaskSchema),
+export const TaskContextRoleSchema = z.enum([
+  'input',
+  'reference',
+  'constraint',
+  'deliverable',
+  'evidence',
+]);
+
+export const TaskContextEdgeSchema = z.object({
+  id: z.string(),
+  taskId: z.string(),
+  targetKind: z.enum([
+    'document', 'file', 'url', 'session', 'memory', 'task', 'artifact', 'source',
+  ]),
+  targetId: z.string(),
+  role: TaskContextRoleSchema,
+  title: z.string().optional(),
+  pinned: z.boolean(),
+  retrievalPolicy: z.record(z.string(), z.unknown()),
+  metadata: z.record(z.string(), z.unknown()),
+  createdBy: ActorRefSchema,
+  createdAt: z.number().int().nonnegative(),
+  updatedAt: z.number().int().nonnegative(),
 });
 
-export const TaskCreateModeSchema = z.enum(['capture', 'start']);
+export const TaskAuthorityGrantSchema = z.object({
+  id: z.string(),
+  taskId: z.string(),
+  capability: z.string(),
+  scope: z.record(z.string(), z.unknown()),
+  grantedBy: ActorRefSchema,
+  grantedAt: z.number().int().nonnegative(),
+  expiresAt: z.number().int().nonnegative().optional(),
+  revokedAt: z.number().int().nonnegative().optional(),
+});
 
 export const TaskDependencySummarySchema = z.object({
   id: z.string(),
-  objective: z.string(),
-  status: TaskStatusSchema,
+  title: z.string(),
+  phase: TaskPhaseSchema,
+  resolution: TaskResolutionSchema.optional(),
+  operationalState: TaskOperationalStateSchema,
 });
-
-export const TaskInputAttachmentSchema = z.object({
-  id: z.string().optional(),
-  type: z.string().trim().min(1),
-  mimeType: z.string().trim().min(1).optional(),
-  data: z.string().min(1).optional(),
-  name: z.string().trim().min(1).optional(),
-  size: z.number().int().nonnegative().optional(),
-  uri: z.string().trim().min(1).optional(),
-}).strict().refine((attachment) => Boolean(attachment.data) !== Boolean(attachment.uri), {
-  message: 'Exactly one of attachment data or uri is required',
-});
-
-export const TaskCreateRequestSchema = z.object({
-  requestId: z.string().uuid(),
-  mode: TaskCreateModeSchema,
-  objective: z.string().trim().min(1).max(12_000),
-  projectId: z.string().trim().min(1).optional(),
-  agentId: z.string().trim().min(1).optional(),
-  locale: z.enum(['en', 'zh']).optional(),
-  priority: TaskPrioritySchema.optional(),
-  dueAt: z.number().int().nonnegative().optional(),
-  dependsOnTaskIds: z.array(z.string().trim().min(1)).default([]),
-  attachments: z.array(TaskInputAttachmentSchema).max(10).default([]),
-}).strict();
-
-export const TaskCreateResponseSchema = z.discriminatedUnion('mode', [
-  z.object({
-    ok: z.literal(true),
-    mode: z.literal('capture'),
-    task: TaskSchema,
-  }),
-  z.object({
-    ok: z.literal(true),
-    mode: z.literal('start'),
-    task: TaskSchema,
-    activation: z.discriminatedUnion('status', [
-      z.object({ status: z.literal('queued'), queueId: z.string().min(1) }),
-      z.object({ status: z.literal('already_started') }),
-      z.object({
-        status: z.literal('waiting_dependency'),
-        dependencies: z.array(TaskDependencySummarySchema),
-      }),
-      z.object({
-        status: z.literal('needs_approval'),
-        requiredBoundaries: z.array(z.string().min(1)),
-      }),
-    ]),
-  }),
-]);
-
-export const TaskActionSchema = z.enum(['run', 'pause', 'resume', 'verify', 'cancel']);
-export const TaskActionRequestSchema = z.object({
-  action: TaskActionSchema,
-  expectedUpdatedAt: z.number().int().nonnegative(),
-  approvedBoundaries: z.array(z.string().min(1)).optional(),
-}).strict();
-
-export const TaskDependencyUpdateRequestSchema = z.object({
-  dependsOnTaskIds: z.array(z.string().trim().min(1)),
-  expectedUpdatedAt: z.number().int().nonnegative(),
-}).strict();
-
-export const TaskReceiptStatusSchema = z.enum([
-  'running',
-  'completed',
-  'partial',
-  'needs_user',
-  'failed',
-  'cancelled',
-]);
 
 export const TaskEvidenceSchema = z.object({
   kind: z.enum(['artifact', 'test', 'state', 'source']),
@@ -135,7 +128,7 @@ export const TaskEvidenceSchema = z.object({
   verifies: z.array(z.string()).optional(),
   provenance: z.enum(['tool', 'external', 'user', 'judge']),
   strength: z.enum(['observed', 'verified']),
-  observedAt: z.number(),
+  observedAt: z.number().int().nonnegative(),
 });
 
 export const TaskJudgmentSchema = z.object({
@@ -146,19 +139,10 @@ export const TaskJudgmentSchema = z.object({
   confidence: z.number().min(0).max(1),
 });
 
-export const TaskReceiptSchema = z.object({
+export const TaskRunReceiptSchema = z.object({
   runId: z.string(),
-  taskId: z.string().optional(),
-  contractVersion: z.number().int().positive().optional(),
-  sessionKey: z.string(),
-  objective: z.string(),
-  status: TaskReceiptStatusSchema,
+  status: z.enum(['succeeded', 'failed', 'cancelled']),
   summary: z.string(),
-  projectId: z.string().optional(),
-  origin: z.string().optional(),
-  triggerKind: z.string().optional(),
-  attempt: z.number().int().positive(),
-  strategy: z.string().optional(),
   changes: z.array(TaskEvidenceSchema),
   evidence: z.array(TaskEvidenceSchema),
   verification: z.object({
@@ -173,124 +157,184 @@ export const TaskReceiptSchema = z.object({
   nextAction: z.string().optional(),
   needsUser: z.boolean(),
   completionVerdict: z.enum(['achieved', 'partial', 'not_achieved']).optional(),
-  correctionText: z.string().optional(),
-  contextTraceId: z.string().optional(),
   failure: z.object({
-    code: z.enum([
-      'timeout',
-      'approval_required',
-      'verification_failed',
-      'conflict',
-      'tool_failed',
-      'model_failed',
-      'cancelled',
-      'unknown',
-    ]),
-    phase: z.enum(['planning', 'approval', 'execution', 'verification', 'runtime']),
-    recoveryAction: z.enum(['replan', 'retry_with_changed_strategy', 'request_user_input', 'none']),
+    code: z.string(),
+    phase: z.string(),
+    recoveryAction: z.string(),
   }).optional(),
   judgment: TaskJudgmentSchema.optional(),
-  startedAt: z.number(),
-  completedAt: z.number().optional(),
-  feedback: z.object({
-    rating: z.enum(['helpful', 'not_helpful']),
-    reason: z.string().optional(),
-    needsCorrection: z.boolean().optional(),
-    supportFit: z.boolean().optional(),
-  }).optional(),
+  contextTraceId: z.string().optional(),
+  finalizedAt: z.number().int().nonnegative(),
 });
 
-export const TaskContextManifestSchema = z.object({
-  taskId: z.string(),
-  sources: z.array(z.object({
-    kind: z.enum(['task_contract', 'execution_receipt', 'user_correction']),
-    id: z.string(),
-    description: z.string(),
-  })),
-  assumptions: z.array(z.string()),
-  unresolvedCriteria: z.array(z.string()),
-  allocation: z.enum(['deep', 'critical']),
+export const TaskExecutorSelectionSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('agent'), agentId: z.string().min(1) }),
+  z.object({
+    kind: z.literal('workflow'),
+    workflowId: z.string().min(1),
+    workflowVersion: z.string().min(1).optional(),
+    input: z.unknown().optional(),
+  }),
+  z.object({ kind: z.literal('human'), actorId: z.string().min(1) }),
+  z.object({ kind: z.literal('external'), provider: z.string().min(1), config: z.unknown() }),
+]);
+
+export const TaskContractInputSchema = TaskContractSchema.omit({
+  taskId: true,
+  version: true,
+  createdBy: true,
+  createdAt: true,
 });
 
-export const TaskExecutionSummarySchema = z.object({
-  sessionKey: z.string().optional(),
-  nextAction: z.string().optional(),
-  blockedReason: z.string().optional(),
-  approvedBoundaries: z.array(z.string()),
-  updatedAt: z.number(),
+export const TaskContextInputSchema = TaskContextEdgeSchema.omit({
+  id: true,
+  taskId: true,
+  createdBy: true,
+  createdAt: true,
+  updatedAt: true,
 });
 
-export const TaskAttachmentSchema = z.object({
-  taskId: z.string(),
-  id: z.string(),
-  bucket: z.enum(['inbound', 'tts', 'outbound']),
-  type: z.string(),
-  mimeType: z.string(),
-  name: z.string(),
-  size: z.number().int().nonnegative(),
-  uri: z.string(),
+export const TaskCreateRequestSchema = z.object({
+  idempotencyKey: z.string().trim().min(1).max(200),
+  title: z.string().trim().min(1).max(500),
+  body: z.string().trim().max(50_000).optional(),
+  projectId: z.string().trim().min(1).optional(),
+  milestoneId: z.string().trim().min(1).optional(),
+  parentTaskId: z.string().trim().min(1).optional(),
+  priority: TaskPrioritySchema.default('normal'),
+  dueAt: z.number().int().nonnegative().optional(),
+  ownerId: z.string().trim().min(1).optional(),
+  delegateAgentId: z.string().trim().min(1).optional(),
+  locale: z.enum(['en', 'zh']).optional(),
+  contract: TaskContractInputSchema,
+  dependencies: z.array(z.string().trim().min(1)).default([]),
+  context: z.array(TaskContextInputSchema).default([]),
+  authorityGrants: z.array(z.object({
+    capability: z.string().min(1),
+    scope: z.record(z.string(), z.unknown()).default({}),
+    expiresAt: z.number().int().nonnegative().optional(),
+  })).default([]),
+  activation: z.discriminatedUnion('mode', [
+    z.object({ mode: z.literal('capture'), phase: z.enum(['backlog', 'ready']).default('backlog') }),
+    z.object({
+      mode: z.literal('start'),
+      executor: TaskExecutorSelectionSchema,
+      scheduleAt: z.number().int().nonnegative().optional(),
+    }),
+  ]),
+}).strict();
+
+export const TaskPatchRequestSchema = z.object({
+  expectedVersion: z.number().int().positive(),
+  title: z.string().trim().min(1).max(500).optional(),
+  body: z.string().trim().max(50_000).nullable().optional(),
+  projectId: z.string().trim().min(1).nullable().optional(),
+  milestoneId: z.string().trim().min(1).nullable().optional(),
+  parentTaskId: z.string().trim().min(1).nullable().optional(),
+  priority: TaskPrioritySchema.optional(),
+  dueAt: z.number().int().nonnegative().nullable().optional(),
+  ownerId: z.string().trim().min(1).nullable().optional(),
+  delegateAgentId: z.string().trim().min(1).nullable().optional(),
+}).strict();
+
+const TaskWaitInputSchema = z.object({
+  kind: z.enum([
+    'dependency', 'user_input', 'approval', 'external_event',
+    'scheduled_time', 'retry_backoff', 'paused',
+  ]),
+  reason: z.string().min(1),
+  condition: z.record(z.string(), z.unknown()).default({}),
+  resumeAt: z.number().int().nonnegative().optional(),
 });
 
-export const TaskProgressSchema = z.object({
-  completed: z.number().int().nonnegative(),
-  total: z.number().int().positive(),
-  currentStep: z.string().optional(),
+export const TaskCommandSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('mark_ready') }),
+  z.object({
+    type: z.literal('start'),
+    executor: TaskExecutorSelectionSchema,
+    scheduleAt: z.number().int().nonnegative().optional(),
+  }),
+  z.object({ type: z.literal('request_review') }),
+  z.object({ type: z.literal('close'), resolution: TaskResolutionSchema }),
+  z.object({ type: z.literal('reopen'), phase: z.enum(['ready', 'active']) }),
+  z.object({ type: z.literal('add_wait'), wait: TaskWaitInputSchema }),
+  z.object({ type: z.literal('resolve_wait'), waitId: z.string(), resolution: z.unknown().optional() }),
+  z.object({ type: z.literal('delegate'), agentId: z.string().optional() }),
+  z.object({ type: z.literal('revise_contract'), contract: TaskContractInputSchema }),
+]);
+
+export const TaskCommandRequestSchema = z.object({
+  idempotencyKey: z.string().trim().min(1).max(200),
+  expectedVersion: z.number().int().positive(),
+  command: TaskCommandSchema,
+}).strict();
+
+export const TaskDependencyUpdateRequestSchema = z.object({
+  dependsOnTaskIds: z.array(z.string().trim().min(1)),
+  expectedVersion: z.number().int().positive(),
+}).strict();
+
+export const TaskListResponseSchema = z.object({
+  ok: z.literal(true),
   items: z.array(z.object({
-    id: z.string(),
-    title: z.string(),
-    status: z.enum(['pending', 'in_progress', 'completed', 'cancelled']),
+    task: TaskSchema,
+    operationalState: TaskOperationalStateSchema,
+    attention: z.array(TaskAttentionItemSchema),
   })),
-  updatedAt: z.number(),
 });
 
-export const TaskAttentionSchema = z.object({
-  kind: z.enum(['input', 'approval', 'dependency']),
-  summary: z.string(),
+export const TaskCreateResponseSchema = z.object({
+  ok: z.literal(true),
+  task: TaskSchema,
+  operationalState: TaskOperationalStateSchema,
+  run: TaskRunSchema.optional(),
 });
 
 export const TaskDetailResponseSchema = z.object({
   ok: z.literal(true),
   task: TaskSchema,
-  receipts: z.array(TaskReceiptSchema),
-  execution: TaskExecutionSummarySchema.optional(),
-  attachments: z.array(TaskAttachmentSchema),
-  progress: TaskProgressSchema.optional(),
-  attention: TaskAttentionSchema.optional(),
-  nextCheckAt: z.number().int().nonnegative().optional(),
+  operationalState: TaskOperationalStateSchema,
+  attention: z.array(TaskAttentionItemSchema),
+  waits: z.array(TaskWaitSchema),
+  runs: z.array(TaskRunSchema),
+  receipts: z.array(TaskRunReceiptSchema),
+  context: z.array(TaskContextEdgeSchema),
+  authorityGrants: z.array(TaskAuthorityGrantSchema),
   dependencies: z.array(TaskDependencySummarySchema),
   dependents: z.array(TaskDependencySummarySchema),
-  contextManifest: TaskContextManifestSchema.optional(),
+  allowedCommands: z.array(z.string()),
 });
 
-export const TaskReceiptListResponseSchema = z.object({
+export const TaskRunReceiptListResponseSchema = z.object({
   ok: z.literal(true),
-  items: z.array(TaskReceiptSchema),
+  items: z.array(TaskRunReceiptSchema),
 });
 
-export type TaskReceiptStatus = z.infer<typeof TaskReceiptStatusSchema>;
-export type TaskStatus = z.infer<typeof TaskStatusSchema>;
 export type TaskPriority = z.infer<typeof TaskPrioritySchema>;
+export type TaskAcceptancePolicy = z.infer<typeof TaskAcceptancePolicySchema>;
+export type ActorRef = z.infer<typeof ActorRefSchema>;
 export type TaskContract = z.infer<typeof TaskContractSchema>;
 export type Task = z.infer<typeof TaskSchema>;
-export type TaskListResponse = z.infer<typeof TaskListResponseSchema>;
-export type TaskCreateMode = z.infer<typeof TaskCreateModeSchema>;
-export type TaskInputAttachment = z.infer<typeof TaskInputAttachmentSchema>;
-export type TaskCreateRequest = z.infer<typeof TaskCreateRequestSchema>;
-export type TaskCreateResponse = z.infer<typeof TaskCreateResponseSchema>;
-export type TaskAction = z.infer<typeof TaskActionSchema>;
-export type TaskDependencyUpdateRequest = z.infer<typeof TaskDependencyUpdateRequestSchema>;
+export type TaskContextRole = z.infer<typeof TaskContextRoleSchema>;
+export type TaskContextEdge = z.infer<typeof TaskContextEdgeSchema>;
+export type TaskAuthorityGrant = z.infer<typeof TaskAuthorityGrantSchema>;
 export type TaskDependencySummary = z.infer<typeof TaskDependencySummarySchema>;
 export type TaskEvidence = z.infer<typeof TaskEvidenceSchema>;
 export type TaskJudgment = z.infer<typeof TaskJudgmentSchema>;
-export type TaskReceipt = z.infer<typeof TaskReceiptSchema>;
-export type TaskContextManifest = z.infer<typeof TaskContextManifestSchema>;
-export type TaskExecutionSummary = z.infer<typeof TaskExecutionSummarySchema>;
-export type TaskAttachment = z.infer<typeof TaskAttachmentSchema>;
-export type TaskProgress = z.infer<typeof TaskProgressSchema>;
-export type TaskAttention = z.infer<typeof TaskAttentionSchema>;
+export type TaskRunReceipt = z.infer<typeof TaskRunReceiptSchema>;
+export type TaskExecutorSelection = z.infer<typeof TaskExecutorSelectionSchema>;
+export type TaskContractInput = z.infer<typeof TaskContractInputSchema>;
+export type TaskContextInput = z.infer<typeof TaskContextInputSchema>;
+export type TaskCreateRequest = z.infer<typeof TaskCreateRequestSchema>;
+export type TaskPatchRequest = z.infer<typeof TaskPatchRequestSchema>;
+export type TaskCommand = z.infer<typeof TaskCommandSchema>;
+export type TaskCommandRequest = z.infer<typeof TaskCommandRequestSchema>;
+export type TaskDependencyUpdateRequest = z.infer<typeof TaskDependencyUpdateRequestSchema>;
+export type TaskListResponse = z.infer<typeof TaskListResponseSchema>;
+export type TaskCreateResponse = z.infer<typeof TaskCreateResponseSchema>;
 export type TaskDetailResponse = z.infer<typeof TaskDetailResponseSchema>;
-export type TaskReceiptListResponse = z.infer<typeof TaskReceiptListResponseSchema>;
+export type TaskRunReceiptListResponse = z.infer<typeof TaskRunReceiptListResponseSchema>;
 
-export function parseTaskReceipt(value: unknown): TaskReceipt {
-  return TaskReceiptSchema.parse(value);
+export function parseTaskRunReceipt(value: unknown): TaskRunReceipt {
+  return TaskRunReceiptSchema.parse(value);
 }

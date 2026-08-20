@@ -6,7 +6,7 @@ type WorkflowRunIndexRow = {
   agent_id: string;
   definition_id: string;
   definition_version: string;
-  task_id: string | null;
+  task_run_id: string | null;
   project_id: string | null;
   session_key: string;
   parent_session_key: string | null;
@@ -63,7 +63,7 @@ export class WorkflowRunIndexStore {
     runSqliteWriteTransaction((db) => {
       db.prepare(
         `INSERT OR REPLACE INTO workflow_runs (
-          run_id, agent_id, definition_id, definition_version, task_id,
+          run_id, agent_id, definition_id, definition_version, task_run_id,
           project_id, session_key, parent_session_key, status, source_kind, source_json,
           metadata_json, title,
           created_at_ms, started_at_ms, completed_at_ms, metrics_json,
@@ -74,7 +74,7 @@ export class WorkflowRunIndexStore {
         agentId,
         run.definitionId,
         run.definitionVersion,
-        metadata?.taskId ?? null,
+        metadata?.taskRunId ?? null,
         metadata?.projectId ?? null,
         sessionKey,
         parentSessionKey(view),
@@ -96,18 +96,20 @@ export class WorkflowRunIndexStore {
   list(agentId: string, options: { limit?: number; taskId?: string; projectId?: string } = {}): WorkflowRunSummary[] {
     const safeLimit = Math.min(500, Math.max(1, Math.floor(options.limit ?? 50)));
     const db = getSqliteDatabase();
-    const conditions = ['agent_id = ?'];
+    const conditions = ['workflow.agent_id = ?'];
     const params: Array<string | number> = [agentId];
     if (options.taskId) {
-      conditions.push('task_id = ?');
+      conditions.push('task_run.task_id = ?');
       params.push(options.taskId);
     }
     if (options.projectId) {
-      conditions.push('project_id = ?');
+      conditions.push('workflow.project_id = ?');
       params.push(options.projectId);
     }
     const rows = db
-      .prepare(`SELECT * FROM workflow_runs WHERE ${conditions.join(' AND ')} ORDER BY created_at_ms DESC LIMIT ?`)
+      .prepare(`SELECT workflow.* FROM workflow_runs workflow
+        LEFT JOIN task_runs task_run ON task_run.run_id = workflow.task_run_id
+        WHERE ${conditions.join(' AND ')} ORDER BY workflow.created_at_ms DESC LIMIT ?`)
       .all(...params, safeLimit);
     return (rows as WorkflowRunIndexRow[]).map(rowToSummary);
   }

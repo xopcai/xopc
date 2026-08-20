@@ -36,9 +36,9 @@ const WorkflowToolSchema = Type.Object({
       description: 'Optional goal or task description for this workflow run (defaults to user intent in chat).',
     }),
   ),
-  taskId: Type.Optional(
+  taskRunId: Type.Optional(
     Type.String({
-      description: 'Optional Task id. When set, terminal workflow output advances that task.',
+      description: 'Optional TaskRun id. When set, the workflow executes and finalizes that run.',
     }),
   ),
 });
@@ -47,7 +47,7 @@ export type WorkflowToolInput = {
   name?: string;
   args?: unknown;
   goal?: string;
-  taskId?: string;
+  taskRunId?: string;
 };
 
 export interface WorkflowToolDeps {
@@ -105,11 +105,11 @@ export function createWorkflowTool(deps: WorkflowToolDeps): AgentTool {
       const agentId = extractProfileAgentId(parentSessionKey, config);
 
       const goal = params.goal?.trim() || '';
-      const taskId = params.taskId?.trim();
+      const taskRunId = params.taskRunId?.trim();
       const source = parentSessionKey
         ? ({ kind: 'chat' as const, sessionKey: parentSessionKey })
         : ({ kind: 'api' as const });
-      const inputEnvelope = taskId
+      const inputEnvelope = taskRunId
         ? {
             payload: params.args ?? {},
             ...(goal ? { goal } : {}),
@@ -121,7 +121,7 @@ export function createWorkflowTool(deps: WorkflowToolDeps): AgentTool {
           agentId,
           definitionId,
           goal,
-          taskId,
+          taskRunId,
           input: inputEnvelope ? undefined : params.args,
           inputEnvelope,
           parentSessionKey,

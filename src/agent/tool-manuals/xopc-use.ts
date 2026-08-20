@@ -1,130 +1,67 @@
 export const xopcUseManual = `# XOPC Use Tool Manual
 
-## Overview
+## Purpose
 
-\`xopc_use\` is the unified tool for operating XOPC product objects. Use it instead of editing storage files or database rows directly.
-
-Basic shape:
+\`xopc_use\` operates first-class XOPC product objects without editing SQLite or product files directly.
+Load this manual before a non-trivial mutation.
 
 \`\`\`json
 {
-  "mode": "project | note | task | local_app | settings",
-  "command": "list | get | create | update | append | preview_edit | resolve_workspace | update_dependencies | action | validate | open",
-  "args": { "...": "..." },
+  "mode": "project | note | task | task_run | local_app | settings",
+  "command": "...",
+  "args": {},
   "dryRun": false
 }
 \`\`\`
 
-## Scope And Tool Routing
+Send one object command per call. Inspect the returned JSON \`ok\` field; a tool call can
+complete successfully while the product command returns \`ok: false\`.
 
-\`xopc_use\` owns the product objects in the first five rows below. Other objects are
-first-class XOPC objects too, but already have dedicated tools. Do not force them
-through \`xopc_use\` or imitate their APIs with file/database edits.
+## Object routing
 
-| User intent or object | Correct tool | Notes |
-| --- | --- | --- |
-| Project | \`xopc_use\` with \`mode: "project"\` | Metadata, workspace resolution, and durable project context. |
-| Note | \`xopc_use\` with \`mode: "note"\` | Durable user-owned Markdown content. |
-| Task | \`xopc_use\` with \`mode: "task"\` | Durable outcome lifecycle, dependencies, and execution actions. |
-| Local app | \`xopc_use\` with \`mode: "local_app"\` | Discover, create, inspect, and validate app records. |
-| Settings destination | \`xopc_use\` with \`mode: "settings"\` | Produces a jump target; it does not mutate configuration. |
-| Automation | \`automation\` | Recurring, scheduled, webhook, or product-event execution. |
-| Workflow run | \`workflow\` | Starts a saved multi-agent workflow in a linked session. |
-| Workflow definition | Product workflow editor | Definition CRUD is not exposed through \`xopc_use\`; \`workflow\` only starts runs. |
-| Session | \`session_search\` / \`session_status\` | Search or inspect conversation state; continue through the linked chat. |
-| Workspace file | \`read_file\`, \`write_file\`, \`apply_patch\` | Use \`create_share\` only when a user-facing share is requested. |
-| Memory | \`memory_search\`, \`memory_get\`, \`curated_memory\` | Memory is governed context, not a note substitute. |
-| Skill | \`skills_list\`, \`skill_view\`, \`skill_manage\`, \`skill_install\` | Skills change agent capability, not product content. |
-| Connected app | \`composio_search\`, then \`composio_execute\` | Discover the exact external action schema before execution. |
+| Object | Tool |
+| --- | --- |
+| Project, milestone, project update | \`xopc_use\` mode \`project\` |
+| Task intent and lifecycle | \`xopc_use\` mode \`task\` |
+| Task execution attempt, receipt, events and waits | \`xopc_use\` mode \`task_run\` |
+| Note | \`xopc_use\` mode \`note\` |
+| Local app | \`xopc_use\` mode \`local_app\` |
+| Settings jump target | \`xopc_use\` mode \`settings\` |
+| Automation | dedicated \`automation\` tool |
+| Workflow run | dedicated \`workflow\` tool; pass \`taskId\` to link it to a Task |
+| Session, memory, skill, connected app or workspace file | its dedicated tool |
 
-### Choose the object before choosing the command
+Do not emulate Workflow or Automation APIs through \`xopc_use\`. A Task is durable intent;
+a TaskRun is one execution attempt; a WorkflowRun is a procedure execution and may belong
+to a TaskRun. Never treat these three objects as interchangeable.
 
-- Use a **note** when the requested result is reference material or user-owned prose.
-- Use a **task** when there is an outcome to execute, track, block, resume, or verify.
-- Use a **project** when work must retain shared context across multiple tasks, sessions,
-  files, or decisions.
-- Use an **automation** when execution should recur or be triggered later. A task with a
-  due date is not an automation.
-- Use a **workflow** when a saved multi-agent procedure should run now. A workflow run
-  may be linked to a Task by passing \`taskId\` to the dedicated \`workflow\` tool.
-- A note with \`kind: "task"\` is still a note. It does not gain Task lifecycle,
-  dependency, execution, or verification behavior.
+## Reliable protocol
 
-## Supported Command Matrix
+1. Use \`list\` then \`get\` when an id is unknown.
+2. Read the current \`version\` before a Task mutation.
+3. Use \`dryRun: true\` for broad Project changes or uncertain mutations.
+4. Mutate once with the exact id and current concurrency token.
+5. Verify the returned object and preserve any “Open in xopc” delivery link.
+6. On a conflict, read again and reconsider the operation; do not blindly retry.
 
-| Mode | Commands | Mutating commands |
-| --- | --- | --- |
-| \`project\` | \`list\`, \`get\`, \`create\`, \`update\`, \`resolve_workspace\` | \`create\`, \`update\`; \`resolve_workspace\` only when \`autoCreate: true\` creates a project. |
-| \`note\` | \`list\`, \`get\`, \`create\`, \`append\`, \`preview_edit\`, \`update\` | \`create\`, \`append\`, \`update\`; \`preview_edit\` is preview-only. |
-| \`task\` | \`list\`, \`get\`, \`create\`, \`update_dependencies\`, \`action\` | \`create\`, \`update_dependencies\`, \`action\`. |
-| \`local_app\` | \`list\`, \`get\`, \`create\`, \`validate\` | \`create\`; validation does not install or activate. |
-| \`settings\` | \`open\` | None; returns a product reference only. |
-
-Unsupported commands must not be guessed. In particular, \`delete\`, project pinning,
-note history restore, task contract revision, and local-app installation are not
-currently exposed by \`xopc_use\`.
-
-## General Rules
-
-- Use \`list\` or \`get\` first when the target object is ambiguous.
-- Use \`dryRun: true\` before a broad or risky change.
-- Prefer additive operations over destructive replacement.
-- Do not invent ids. If an id is not known, search/list first.
-- Do not attempt delete/archive workflows through this tool unless the command is explicitly supported.
-- For non-trivial note rewrites, use \`note.preview_edit\` before \`note.update\`.
-- Preserve the returned “Open in xopc” link in channel replies so the user can jump directly into the delivered object.
-
-- Load this manual before a non-trivial \`xopc_use\` mutation.
-- Send one object command per call. Do not invent batch payloads.
-- Inspect the JSON body's \`ok\` field. A completed tool call can still return
-  \`{ "ok": false, ... }\` for a product-level failure.
-- Treat \`updatedAt\` and \`dueAt\` as Unix epoch milliseconds. Never substitute an ISO
-  date string where a numeric timestamp is required.
-- Array fields must be arrays of strings. An empty array intentionally clears the
-  corresponding collection; omission preserves a value when the command supports patches.
-- \`id\` is accepted as an alias on single-object commands, but prefer the explicit
-  \`projectId\`, \`noteId\`, \`taskId\`, or \`localAppId\` field in generated calls.
-
-## Reliable Operation Protocol
-
-For any mutation that depends on existing state:
-
-1. **Identify** the object kind using the routing table above.
-2. **Resolve** the exact object with \`list\` when the id is unknown, then \`get\` it.
-3. **Check** current status, project scope, revision/timestamp, and user authority.
-4. **Preview** with \`dryRun: true\` for broad project changes or destructive-looking
-   replacements. For note rewrites, use \`preview_edit\` instead.
-5. **Mutate once** with the exact id and latest concurrency token when required.
-6. **Verify** from the returned object. Call \`get\` again if downstream behavior or a
-   conflict makes the final state uncertain.
-7. **Deliver** the product link and report pending approval, dependency waiting, or
-   other non-terminal state accurately.
-
-Do not blindly retry create operations after a timeout or uncertain response. Search
-for the intended object first so a retry does not create a duplicate.
+Timestamps are Unix epoch milliseconds. Array fields are arrays of strings. Omission
+preserves a patchable field; an empty array intentionally clears it. Prefer explicit
+\`projectId\`, \`taskId\`, \`runId\`, \`noteId\`, and \`localAppId\` fields over \`id\`.
 
 ## Projects
 
-Projects group sessions, Tasks, workflows, files, and project instructions.
+Commands: \`list\`, \`get\`, \`create\`, \`update\`, \`resolve_workspace\`,
+\`list_milestones\`, \`create_milestone\`, \`update_milestone\`, \`list_updates\`,
+and \`create_update\`.
 
-Project statuses are \`active\`, \`paused\`, and \`archived\`. List sorting supports
-\`updatedAt\`, \`createdAt\`, or \`name\`, with \`asc\` or \`desc\` order.
+Project statuses: \`planned\`, \`active\`, \`paused\`, \`completed\`, \`cancelled\`,
+\`archived\`. Health values: \`unknown\`, \`on_track\`, \`at_risk\`, \`off_track\`.
 
-### Find projects
+A Project defines a bounded goal. Its durable planning fields are \`outcome\`,
+\`successCriteria\`, \`scope\`, \`nonGoals\`, \`ownerId\`, \`targetAt\`, and \`health\`.
+Use \`brief\` for a concise description and \`instructions\` for durable operating guidance.
 
-\`\`\`json
-{ "mode": "project", "command": "list", "args": { "search": "release", "limit": 10 } }
-\`\`\`
-
-### Read project detail
-
-\`\`\`json
-{ "mode": "project", "command": "get", "args": { "projectId": "project_id" } }
-\`\`\`
-
-### Create a project
-
-Use when the user asks to keep a task moving across conversations, or explicitly accepts an offer to do so. The user does not need to say “project”. Do not create one merely because a task is complex: continuity across sessions, files, decisions, or dependencies is the key signal. Include \`workspaceRoot\` when the work maps to a local repository or directory. Include \`brief\` for the desired outcome and \`instructions\` only for durable operating guidance.
+### Create
 
 \`\`\`json
 {
@@ -132,16 +69,18 @@ Use when the user asks to keep a task moving across conversations, or explicitly
   "command": "create",
   "args": {
     "name": "AI Product Research",
-    "workspaceRoot": "/path/to/repo",
-    "brief": "Explore demand and feasibility for an AI product.",
-    "instructions": "Keep decisions and open questions current."
+    "outcome": "Choose a validated product direction",
+    "successCriteria": ["Ten customer interviews", "Decision recorded"],
+    "scope": { "market": "developer tools" },
+    "nonGoals": ["Build the production product"],
+    "health": "on_track",
+    "targetAt": 1760000000000,
+    "workspaceRoot": "/path/to/repo"
   }
 }
 \`\`\`
 
-### Update a project
-
-Use for metadata, brief, status, or instructions. Use \`dryRun\` first when changing \`workspaceRoot\` or broad instructions.
+### Update
 
 \`\`\`json
 {
@@ -150,144 +89,80 @@ Use for metadata, brief, status, or instructions. Use \`dryRun\` first when chan
   "args": {
     "projectId": "project_id",
     "status": "active",
-    "instructions": "Prioritize safe previews before changing notes."
+    "health": "at_risk",
+    "successCriteria": ["Ten interviews", "Evidence-backed decision"]
   }
 }
 \`\`\`
 
-### Resolve workspace
+### Resolve a workspace
 
-Use when a file path or current working directory should be mapped to a project.
-Keep \`autoCreate: false\` for discovery. Set it to \`true\` only when project creation is
-already authorized; otherwise a lookup can unexpectedly become a mutation.
+Use \`autoCreate: false\` for lookup. Set it to true only when creating a Project is authorized.
+
+\`\`\`json
+{ "mode": "project", "command": "resolve_workspace", "args": { "workspacePath": "/path/to/repo", "autoCreate": false } }
+\`\`\`
+
+### Milestones
+
+Milestone statuses: \`planned\`, \`active\`, \`completed\`, \`cancelled\`.
 
 \`\`\`json
 {
   "mode": "project",
-  "command": "resolve_workspace",
-  "args": { "workspacePath": "/path/to/repo", "autoCreate": false }
-}
-\`\`\`
-
-## Notes
-
-Notes are user-owned markdown objects. Treat them as durable user content.
-
-Kinds are \`thought\`, \`todo\`, \`voice\`, \`media\`, \`bookmark\`, \`mixed\`, and \`task\`.
-Statuses are \`inbox\`, \`processed\`, \`archived\`, and \`trashed\`. A status change is not
-deletion. List sorting supports \`createdAt\`, \`updatedAt\`, or \`lastOpenedAt\`.
-For \`list\` and \`create\`, an explicit \`projectId\` selects the project. When omitted,
-the current session project is inherited when available.
-
-### Find notes
-
-\`\`\`json
-{ "mode": "note", "command": "list", "args": { "search": "pricing", "limit": 10 } }
-\`\`\`
-
-### Create a note
-
-Pass \`projectId\` when the target project is explicit. From a project-linked chat it
-may be omitted; XOPC creates the same formal Note → Project relationship.
-
-\`\`\`json
-{
-  "mode": "note",
-  "command": "create",
+  "command": "create_milestone",
   "args": {
-    "title": "Product direction",
-    "markdown": "Initial notes...",
-    "tags": ["product"],
-    "projectId": "project_id"
+    "projectId": "project_id",
+    "title": "Finish discovery",
+    "status": "active",
+    "targetAt": 1760000000000,
+    "sortOrder": 10
   }
 }
 \`\`\`
 
-### Append to a note
+Use \`list_milestones\` with \`projectId\`. Use \`update_milestone\` with both
+\`projectId\` and \`milestoneId\`. Milestone deletion is intentionally not exposed.
 
-Prefer append when preserving original user notes and adding AI output.
+### Immutable project updates
+
+Project updates are append-only progress snapshots. They also update Project health.
 
 \`\`\`json
 {
-  "mode": "note",
-  "command": "append",
+  "mode": "project",
+  "command": "create_update",
   "args": {
-    "noteId": "note_id",
-    "heading": "AI synthesis",
-    "content": "Key points..."
+    "projectId": "project_id",
+    "health": "on_track",
+    "summary": "Discovery is complete",
+    "progress": ["Interviewed ten users"],
+    "risks": ["Pricing remains unvalidated"],
+    "nextSteps": ["Run pricing tests"]
   }
 }
 \`\`\`
 
-### Preview an edit
-
-Use before rewriting or restructuring a note.
-
-\`\`\`json
-{
-  "mode": "note",
-  "command": "preview_edit",
-  "args": {
-    "noteId": "note_id",
-    "instruction": "Summarize this as action items"
-  }
-}
-\`\`\`
-
-### Update a note
-
-Use only when the user clearly wants the canonical note changed. Prefer \`append\` or \`preview_edit\` otherwise.
-
-\`\`\`json
-{
-  "mode": "note",
-  "command": "update",
-  "args": {
-    "noteId": "note_id",
-    "status": "processed",
-    "tags": ["product", "validated"]
-  }
-}
-\`\`\`
-
-When replacing \`markdown\`, first read the current note and preserve content the user
-did not ask to remove. \`preview_edit\` creates a proposed patch but does not apply it;
-there is no \`apply_preview\` command, so an approved result must be applied with an
-explicit \`update\`.
+Use \`list_updates\` with \`projectId\` and optional \`limit\`. Updates cannot be edited.
 
 ## Tasks
 
-Tasks are durable outcomes that xopc can plan, execute, and verify. They replace the
-legacy WorkItem model. New tasks are captured in \`pending\` state by default; start
-them immediately only when the user explicitly asks xopc to begin execution.
+Commands: \`list\`, \`get\`, \`create\`, \`update_dependencies\`, \`add_context\`,
+\`remove_context\`, and \`command\`.
 
-### Find tasks
+Task phases are \`backlog\`, \`ready\`, \`active\`, \`review\`, and \`closed\`.
+Operational state is projected separately as \`idle\`, \`queued\`, \`running\`, \`waiting\`,
+\`verifying\`, \`succeeded\`, \`failed\`, or \`cancelled\`. Never send either value as a
+free-form status update.
 
-\`projectId\` is optional. When omitted, the current session project is used when available.
-This contextual default is intentional. From a project-linked chat, omission does not
-mean “all projects”. Status filters accept \`pending\`, \`planning\`,
-\`waiting_dependency\`, \`running\`, \`verifying\`, \`needs_user\`, \`blocked\`, \`paused\`,
-\`completed\`, or \`cancelled\`; priorities are \`low\`, \`normal\`, \`high\`, and \`critical\`.
+\`task.get\` returns the Task, its projected \`model\`, dependencies, dependents, context,
+authority grants, TaskRuns, receipts, and waits.
+The projected model is the correct source for current operational state and attention items.
 
-\`\`\`json
-{ "mode": "task", "command": "list", "args": { "projectId": "project_id", "status": "pending", "limit": 20 } }
-\`\`\`
+### Capture or start
 
-### Read task detail
-
-The result includes the task plus its dependencies and dependents.
-
-\`\`\`json
-{ "mode": "task", "command": "get", "args": { "taskId": "task_id" } }
-\`\`\`
-
-### Capture a task
-
-\`createMode\` defaults to \`capture\`. Use \`start\` only when immediate execution is
-part of the user's request. Optional contract fields include \`expectedOutputs\`,
-\`acceptanceCriteria\`, \`constraints\`, \`approvalRequired\`, \`assumptions\`, and \`risks\`.
-Use a numeric epoch-millisecond \`dueAt\`. When the current chat belongs to a project,
-the new task inherits that project unless an explicit \`projectId\` is supplied.
+\`createMode\` defaults to \`capture\`, which creates a backlog Task without executing it.
+Use \`start\` only when immediate execution is intended.
 
 \`\`\`json
 {
@@ -298,14 +173,15 @@ the new task inherits that project unless an explicit \`projectId\` is supplied.
     "projectId": "project_id",
     "createMode": "capture",
     "priority": "high",
+    "expectedOutputs": ["Research report"],
+    "acceptanceCriteria": ["Sources are cited"],
+    "constraints": ["Do not contact customers without approval"],
     "dependsOnTaskIds": []
   }
 }
 \`\`\`
 
-### Update dependencies
-
-Read the task first and pass its current \`updatedAt\` as \`expectedUpdatedAt\`.
+### Dependencies
 
 \`\`\`json
 {
@@ -313,119 +189,145 @@ Read the task first and pass its current \`updatedAt\` as \`expectedUpdatedAt\`.
   "command": "update_dependencies",
   "args": {
     "taskId": "task_id",
-    "dependsOnTaskIds": ["dependency_task_id"],
-    "expectedUpdatedAt": 1760000000000
+    "expectedVersion": 3,
+    "dependsOnTaskIds": ["dependency_task_id"]
   }
 }
 \`\`\`
 
-### Advance task state
+### Context links
 
-Supported actions are \`run\`, \`pause\`, \`resume\`, \`verify\`, and \`cancel\`.
-Always use the latest \`updatedAt\`; a stale value is rejected instead of overwriting
-newer state. Supply \`approvedBoundaries\` only after the user has approved them.
-
-Action guidance:
-
-- \`run\`: start a captured \`pending\` Task.
-- \`pause\`: stop active planning, running, or verification without cancelling the Task.
-- \`resume\`: continue a paused/blocked/user-waiting Task when its blocker is resolved.
-- \`verify\`: request verification only from a state where verification is valid.
-- \`cancel\`: terminal cancellation; do not use it as a substitute for pause.
-
-If an action returns \`approval_required\`, show the returned required boundaries and
-wait for explicit approval. Then read the Task again and submit only the boundaries
-the user approved. If it returns \`waiting_dependency\`, do not repeatedly call \`run\`;
-report the blocking Tasks and wait for them to complete.
+Use \`add_context\` to link a document, file, URL, session, memory, Task, artifact, or source
+as \`input\`, \`reference\`, \`constraint\`, \`deliverable\`, or \`evidence\` context.
 
 \`\`\`json
 {
   "mode": "task",
-  "command": "action",
+  "command": "add_context",
   "args": {
     "taskId": "task_id",
-    "action": "run",
-    "expectedUpdatedAt": 1760000000000
+    "targetKind": "file",
+    "targetId": "/path/to/spec.md",
+    "role": "input",
+    "title": "Product specification",
+    "pinned": true,
+    "retrievalPolicy": {},
+    "metadata": {}
   }
 }
 \`\`\`
 
-## Local Apps
+Use \`remove_context\` with \`taskId\` and the exact \`edgeId\` returned by \`task.get\`.
+Do not add authority grants through this tool; an Agent must not authorize itself.
 
-Local apps are first-class XOPC extension UIs backed by a project workspace.
+### Typed lifecycle commands
+
+Every command requires \`taskId\`, the Task's current \`expectedVersion\`, a \`type\`, and
+type-specific fields inside \`commandArgs\`.
+
+Supported command types:
+
+- \`mark_ready\`
+- \`start\`: \`{ "executor": { "kind": "agent", "agentId": "main" } }\`
+- \`request_review\`
+- \`close\`: \`{ "resolution": "done | cancelled | duplicate | wont_do" }\`
+- \`reopen\`: \`{ "phase": "ready | active" }\`
+- \`add_wait\`: \`{ "wait": { "kind": "dependency | approval | input | schedule | external | paused", "reason": "...", "condition": {} } }\`
+- \`resolve_wait\`: \`{ "waitId": "wait_id", "resolution": {} }\`
+- \`delegate\`: \`{ "agentId": "agent_id" }\`
+- \`revise_contract\`: \`{ "contract": { ...complete contract... } }\`
 
 \`\`\`json
 {
-  "mode": "local_app",
-  "command": "create",
+  "mode": "task",
+  "command": "command",
   "args": {
-    "name": "Research Hub",
-    "idea": "Keep product research sources and decisions together.",
-    "description": "A compact local research workspace."
+    "taskId": "task_id",
+    "expectedVersion": 3,
+    "type": "start",
+    "commandArgs": {
+      "executor": { "kind": "agent", "agentId": "main" }
+    }
   }
 }
 \`\`\`
 
-Use \`list\`, \`get\`, and \`validate\` to inspect an existing app. Installation,
-activation, rollback, and uninstall remain explicit product UI operations because
-they change the extension runtime.
+Contract revision is replacement, not a patch. Read the Task and preserve all contract fields
+the user did not ask to change. Resolve a wait through \`resolve_wait\`; do not directly mutate
+a TaskRun or manufacture a phase transition.
 
-## Settings
+## TaskRuns
 
-Use settings references when the user must review credentials, privacy, gateway,
-appearance, agent browser, or another configuration surface. This does not change
-configuration silently; it returns an exact inline jump target.
+TaskRun inspection is read-only except for explicit cancellation. Other execution state is
+controlled by Task commands and the runtime coordinator.
+
+### List attempts for a Task
+
+\`\`\`json
+{ "mode": "task_run", "command": "list", "args": { "taskId": "task_id", "limit": 20 } }
+\`\`\`
+
+The result contains run attempts, finalized receipts, and active waits.
+
+### Inspect one attempt
+
+\`\`\`json
+{ "mode": "task_run", "command": "get", "args": { "runId": "run_id" } }
+\`\`\`
+
+The result contains the TaskRun, its receipt when terminal, ordered events, and active Task waits.
+
+### Cancel an attempt
+
+Read the run first, then pass its current version. Cancellation creates a terminal receipt.
 
 \`\`\`json
 {
-  "mode": "settings",
-  "command": "open",
-  "args": {
-    "section": "credentials",
-    "title": "Provider credentials",
-    "summary": "Add the API key required by the selected model."
-  }
+  "mode": "task_run",
+  "command": "cancel",
+  "args": { "runId": "run_id", "expectedVersion": 2, "reason": "User cancelled execution" }
 }
 \`\`\`
 
-## Safety
+Do not guess commands such as retry, force-complete, heartbeat, or transition; they are not Agent APIs.
 
-- \`note.update\` can replace canonical user content. Use \`preview_edit\` first for content rewrites.
-- \`project.update.workspaceRoot\` changes project-file scope. Use \`dryRun\` and ask the user if intent is unclear.
-- \`task.create\` defaults to capture. Do not use \`createMode: \"start\"\` unless immediate execution is intended.
-- Task actions use optimistic concurrency. Read the task again after a conflict instead of retrying with a stale timestamp.
-- If the user asks for deletion, explain that deletion is not exposed through \`xopc_use\` yet.
+## Notes
 
-## Error Recovery
+Commands: \`list\`, \`get\`, \`create\`, \`append\`, \`preview_edit\`, and \`update\`.
+Use Notes for durable prose and reference material, not as a Task substitute. Prefer \`append\`
+when preserving user content. Use \`preview_edit\` before a canonical rewrite.
 
-| Result | Correct recovery |
+\`\`\`json
+{ "mode": "note", "command": "create", "args": { "title": "Decision", "markdown": "...", "projectId": "project_id" } }
+\`\`\`
+
+\`\`\`json
+{ "mode": "note", "command": "append", "args": { "noteId": "note_id", "heading": "AI synthesis", "content": "..." } }
+\`\`\`
+
+## Local apps and settings
+
+Local app commands are \`list\`, \`get\`, \`create\`, and \`validate\`. Installation,
+activation, rollback, and uninstall remain product runtime operations.
+
+Settings supports only \`open\` and returns an exact product jump target without changing config.
+
+## Error recovery
+
+| Result | Recovery |
 | --- | --- |
-| \`Service is unavailable\` | Do not retry in a loop. Explain that the capability is unavailable in this runtime or use the dedicated tool listed in the routing table. |
-| \`not found\` | Re-list in the intended project/scope; do not guess a replacement id. |
-| \`conflict\` / “Task changed” | Call \`task.get\`, inspect the latest state, then decide whether the original intent still applies before using the new \`updatedAt\`. |
-| \`approval_required\` | Present the exact required boundaries and wait for user approval. Never infer approval from the original task request. |
-| invalid task state | Read the Task and choose an action valid for its current state; do not force a status with storage edits. |
-| dependency cycle or invalid dependency | Read dependencies/dependents, correct the graph, and resubmit once with the latest \`updatedAt\`. |
-| unsupported command | Use the dedicated tool or product UI from the routing table; do not synthesize an undocumented command. |
+| service unavailable | Stop retrying and report the unavailable capability. |
+| not found | Re-list in the intended scope; do not invent another id. |
+| conflict | Read the current object and reassess using its latest version. |
+| waiting | Inspect the Task projection and TaskRun waits; resolve only the real blocker. |
+| invalid command or state | Read the object and use only a documented transition. |
+| unsupported operation | Use the dedicated tool or product UI; never write storage directly. |
 
-## Known Capability Gaps
+## Deliberate boundaries
 
-These are real product capabilities visible elsewhere in XOPC but not yet exposed by
-\`xopc_use\`. Treat them as roadmap gaps, not undocumented commands:
-
-- **Task:** revise objective/contract, priority, due date, or execution context after
-  creation; inspect receipts/context manifest/metrics; configure project monitoring.
-- **Project:** pin/unpin, manage linked sessions and project goals, inspect operating
-  view/activity, and project-scoped file operations.
-- **Note:** delete, move, toggle completion, restore history, media management,
-  catalysis, discussion threads, and note-to-Task conversion.
-- **Local app:** update metadata and perform install/activate/rollback/uninstall.
-- **Workflow definition/run:** definition CRUD, validation/drafting, run listing,
-  cancellation, and comparison. Starting a run is already covered by \`workflow\`.
-- **Session product actions:** rename, pin, archive, reset, fork, and export are not
-  owned by \`xopc_use\`.
-
-Prioritize future additions that preserve domain validation, optimistic concurrency,
-activity attribution, and product delivery links. Do not expose raw repository writes
-merely to make the command matrix larger.
+- Project deletion and milestone deletion are not Agent APIs.
+- TaskRun mutation is internal to execution coordination except for optimistic cancellation.
+- Project updates are immutable.
+- Workflow and Automation operations remain in their dedicated tools.
+- Only the documented Task and TaskRun commands are valid; do not infer hidden aliases.
 `;

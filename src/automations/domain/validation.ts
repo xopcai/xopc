@@ -1,5 +1,6 @@
 import { CronExpressionParser } from 'cron-parser';
 import { z } from 'zod';
+import { TaskCommandSchema } from '@xopcai/gateway-contract';
 
 const nonEmptyString = z.string().trim().min(1);
 
@@ -90,6 +91,11 @@ export const AutomationActionSchema = z.discriminatedUnion('kind', [
     recipeId: nonEmptyString.max(100),
     args: z.record(z.string(), z.unknown()).optional(),
     timeoutSeconds: z.number().int().min(1).max(86400).optional(),
+  }).strict(),
+  z.object({
+    kind: z.literal('task_command'),
+    taskId: nonEmptyString.max(200),
+    command: TaskCommandSchema,
   }).strict(),
 ]);
 

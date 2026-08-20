@@ -1,4 +1,5 @@
 import type { Hono } from 'hono';
+import { randomUUID } from 'node:crypto';
 import { readdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
@@ -18,7 +19,9 @@ import {
   type ProjectWorkflowRunBrief,
 } from '../../../projects/index.js';
 import {
-  TaskExecutionService,
+  TaskApplicationService,
+  defineTaskContract,
+  TaskReadModelProjector,
   TaskRepository,
 } from '../../../tasks/index.js';
 import {
@@ -36,7 +39,10 @@ import { FILE_SEARCH_MAX_LIMIT, fuzzySearchWorkspaceFiles } from '../../workspac
 const log = createGatewayRouteLogger('Projects');
 
 function parseProjectStatus(raw: unknown): ProjectStatus | undefined {
-  return raw === 'active' || raw === 'paused' || raw === 'archived' ? raw : undefined;
+  return raw === 'planned' || raw === 'active' || raw === 'paused'
+    || raw === 'completed' || raw === 'cancelled' || raw === 'archived'
+    ? raw
+    : undefined;
 }
 
 function parseLimit(raw: string | undefined, fallback = 50): number | undefined {
@@ -66,6 +72,42 @@ function optionalTextField(body: Record<string, unknown>, key: string): string |
   if (!(key in body)) return undefined;
   const value = body[key];
   return typeof value === 'string' ? value : null;
+}
+
+function stringListField(body: Record<string, unknown>, key: string): string[] | undefined {
+  const value = body[key];
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) {
+    throw new Error(`${key} must be an array of strings`);
+  }
+  return value.map((item) => item.trim()).filter(Boolean);
+}
+
+function objectField(body: Record<string, unknown>, key: string): Record<string, unknown> | undefined {
+  const value = body[key];
+  if (value === undefined) return undefined;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`${key} must be an object`);
+  return value as Record<string, unknown>;
+}
+
+function optionalNumberField(body: Record<string, unknown>, key: string): number | null | undefined {
+  const value = body[key];
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error(`${key} must be a finite number`);
+  return value;
+}
+
+function projectHealth(value: unknown): 'unknown' | 'on_track' | 'at_risk' | 'off_track' | undefined {
+  return value === 'unknown' || value === 'on_track' || value === 'at_risk' || value === 'off_track'
+    ? value
+    : undefined;
+}
+
+function milestoneStatus(value: unknown): 'planned' | 'active' | 'completed' | 'cancelled' | undefined {
+  return value === 'planned' || value === 'active' || value === 'completed' || value === 'cancelled'
+    ? value
+    : undefined;
 }
 
 function resolveEffectiveWorkspaceRoot(
@@ -395,6 +437,13 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
         projectKind: textField(body, 'projectKind'),
         brief: textField(body, 'brief'),
         instructions: textField(body, 'instructions'),
+        outcome: textField(body, 'outcome'),
+        successCriteria: stringListField(body, 'successCriteria'),
+        scope: objectField(body, 'scope'),
+        nonGoals: stringListField(body, 'nonGoals'),
+        health: projectHealth(body.health),
+        ownerId: textField(body, 'ownerId'),
+        targetAt: optionalNumberField(body, 'targetAt') ?? undefined,
       });
       return c.json({ ok: true, project: enrichProjectWorkspace(service, project) }, 201);
     } catch (error) {
@@ -513,14 +562,14 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
     if (!project) return c.json({ ok: false, error: 'Project not found' }, 404);
     const projectTasks = new TaskRepository().listByProject(project.id, 100)
       .map((task) => {
-        const execution = task.execution;
+        const model = new TaskReadModelProjector().project(task);
         return {
           id: task.id,
-          objective: task.objective,
-          status: task.status,
-          priority: execution.priority,
-          nextAction: execution.nextAction,
-          blockedReason: execution.blockedReason,
+          title: task.title,
+          phase: task.phase,
+          operationalState: model.operationalState,
+          attention: model.attention.map((item) => item.summary),
+          priority: task.priority,
           updatedAt: task.updatedAt,
         };
       });
@@ -561,23 +610,25 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
     const title = typeof body.title === 'string' ? body.title.trim() : '';
     if (!title) return c.json({ ok: false, error: 'Missing title' }, 400);
     const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
-    const execution = new TaskExecutionService().create({
-      objective: title,
-      agentId: resolveProjectAgentId({
+    const agentId = resolveProjectAgentId({
         config: service.currentConfig,
         projects: service.projects,
         projectId: project.id,
-      }),
+    });
+    const contract = defineTaskContract(title);
+    const created = new TaskApplicationService().create({
+      idempotencyKey: randomUUID(), title, projectId: project.id, delegateAgentId: agentId,
       priority: body.priority === 'low' || body.priority === 'normal' || body.priority === 'high' ? body.priority : 'high',
-      source: 'api',
-      projectId: project.id,
-      contextText: reason || undefined,
+      contract: { ...contract, acceptancePolicy: 'manual', outputDestinations: [] },
+      dependencies: [], context: [], authorityGrants: [], activation: { mode: 'capture', phase: 'ready' },
     });
-    const blocked = new TaskRepository().update(execution.taskId, {
-      status: 'blocked',
-      blockedReason: reason || title,
+    if (created.ok === false) return c.json({ ok: false, error: created.reason }, 409);
+    const blocked = new TaskApplicationService().execute({
+      taskId: created.model.task.id, expectedVersion: created.model.task.version,
+      idempotencyKey: randomUUID(),
+      command: { type: 'add_wait', wait: { kind: 'paused', reason: reason || title, condition: {} } },
     });
-    return c.json({ ok: true, blocker: blocked }, 201);
+    return c.json({ ok: true, blocker: blocked.ok ? blocked.model : created.model }, 201);
   });
 
   authenticated.post('/api/projects/:id/pin', async (c) => {
@@ -604,11 +655,90 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
     return c.json({ ok: true, project: enrichProjectWorkspace(service, project) });
   });
 
+  authenticated.get('/api/projects/:id/milestones', (c) => {
+    const project = service.projects.get(c.req.param('id'));
+    if (!project) return c.json({ ok: false, error: 'Project not found' }, 404);
+    return c.json({ ok: true, items: service.projects.listMilestones(project.id) });
+  });
+
+  authenticated.post('/api/projects/:id/milestones', async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+    const title = textField(body, 'title')?.trim();
+    if (!title) return c.json({ ok: false, error: 'Missing title' }, 400);
+    if (body.status !== undefined && !milestoneStatus(body.status)) {
+      return c.json({ ok: false, error: 'Invalid milestone status' }, 400);
+    }
+    try {
+      const milestone = service.projects.createMilestone(c.req.param('id'), {
+        title,
+        description: textField(body, 'description'),
+        status: milestoneStatus(body.status),
+        targetAt: optionalNumberField(body, 'targetAt') ?? undefined,
+        sortOrder: optionalNumberField(body, 'sortOrder') ?? undefined,
+      });
+      return c.json({ ok: true, milestone }, 201);
+    } catch (error) {
+      return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400);
+    }
+  });
+
+  authenticated.patch('/api/projects/:id/milestones/:milestoneId', async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+    if (body.status !== undefined && !milestoneStatus(body.status)) {
+      return c.json({ ok: false, error: 'Invalid milestone status' }, 400);
+    }
+    try {
+      const milestone = service.projects.updateMilestone(c.req.param('id'), c.req.param('milestoneId'), {
+        ...(textField(body, 'title') !== undefined ? { title: textField(body, 'title')! } : {}),
+        ...(optionalTextField(body, 'description') !== undefined ? { description: optionalTextField(body, 'description') } : {}),
+        ...(body.status !== undefined ? { status: milestoneStatus(body.status)! } : {}),
+        ...(body.targetAt !== undefined ? { targetAt: optionalNumberField(body, 'targetAt') } : {}),
+        ...(body.sortOrder !== undefined ? { sortOrder: optionalNumberField(body, 'sortOrder')! } : {}),
+      });
+      return c.json({ ok: true, milestone });
+    } catch (error) {
+      return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 404);
+    }
+  });
+
+  authenticated.delete('/api/projects/:id/milestones/:milestoneId', (c) => {
+    const deleted = service.projects.deleteMilestone(c.req.param('id'), c.req.param('milestoneId'));
+    return deleted ? c.json({ ok: true }) : c.json({ ok: false, error: 'Milestone not found' }, 404);
+  });
+
+  authenticated.get('/api/projects/:id/updates', (c) => {
+    const project = service.projects.get(c.req.param('id'));
+    if (!project) return c.json({ ok: false, error: 'Project not found' }, 404);
+    return c.json({ ok: true, items: service.projects.listUpdates(project.id, parseLimit(c.req.query('limit'), 20)) });
+  });
+
+  authenticated.post('/api/projects/:id/updates', async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+    const summary = textField(body, 'summary')?.trim();
+    const health = projectHealth(body.health);
+    if (!summary || !health) return c.json({ ok: false, error: 'Missing summary or valid health' }, 400);
+    try {
+      const update = service.projects.createUpdate(c.req.param('id'), {
+        health,
+        summary,
+        progress: stringListField(body, 'progress'),
+        risks: stringListField(body, 'risks'),
+        nextSteps: stringListField(body, 'nextSteps'),
+        actor: objectField(body, 'actor') ?? { kind: 'user' },
+      });
+      return c.json({ ok: true, update }, 201);
+    } catch (error) {
+      return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400);
+    }
+  });
+
   authenticated.patch('/api/projects/:id', async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
     const status = parseProjectStatus(body.status);
     const defaultAgentPatch = optionalTextField(body, 'defaultAgentId');
     const defaultAgentId = defaultAgentPatch === undefined ? undefined : normalizeProjectAgentId(defaultAgentPatch);
+    if (body.status !== undefined && !status) return c.json({ ok: false, error: 'Invalid project status' }, 400);
+    if (body.health !== undefined && !projectHealth(body.health)) return c.json({ ok: false, error: 'Invalid project health' }, 400);
     if (defaultAgentId && !isValidProjectAgentId(service.currentConfig, defaultAgentId)) {
       return c.json({ ok: false, error: 'Default agent not found' }, 400);
     }
@@ -622,6 +752,13 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
         createWorkspaceRoot: body.createWorkspaceRoot === true,
         ...(optionalTextField(body, 'brief') !== undefined ? { brief: optionalTextField(body, 'brief') } : {}),
         ...(optionalTextField(body, 'instructions') !== undefined ? { instructions: optionalTextField(body, 'instructions') } : {}),
+        ...(optionalTextField(body, 'outcome') !== undefined ? { outcome: optionalTextField(body, 'outcome') } : {}),
+        ...(body.successCriteria !== undefined ? { successCriteria: stringListField(body, 'successCriteria')! } : {}),
+        ...(body.scope !== undefined ? { scope: objectField(body, 'scope')! } : {}),
+        ...(body.nonGoals !== undefined ? { nonGoals: stringListField(body, 'nonGoals')! } : {}),
+        ...(body.health !== undefined ? { health: projectHealth(body.health)! } : {}),
+        ...(optionalTextField(body, 'ownerId') !== undefined ? { ownerId: optionalTextField(body, 'ownerId') } : {}),
+        ...(body.targetAt !== undefined ? { targetAt: optionalNumberField(body, 'targetAt') } : {}),
       });
       return c.json({ ok: true, project: enrichProjectWorkspace(service, project) });
     } catch (error) {

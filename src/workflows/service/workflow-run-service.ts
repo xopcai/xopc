@@ -12,6 +12,10 @@ import { preflightWorkflowConnectors } from '../../connectors/workflow-preflight
 import { resolveModelRef } from '../../config/agent-typed-models.js';
 import type { GatewayWorkflowHost } from '../../gateway/gateway-workflow-host.types.js';
 import { TaskRepository } from '../../tasks/task-repository.js';
+import { TaskContextRepository } from '../../tasks/task-context-repository.js';
+import { TaskRunRepository } from '../../tasks/task-run-repository.js';
+import { TaskApplicationService } from '../../tasks/task-application-service.js';
+import { getDefaultAgentId } from '../../routing/resolve-route.js';
 import { resolveModel as resolveModelById } from '../../providers/index.js';
 import { getProjectWorkspacePathForSession } from '../../projects/workspace.js';
 import { DelegateSubagentRunner } from '../../agent/workflow/subagent-runner.js';
@@ -71,6 +75,44 @@ export class WorkflowRunService {
     this.definitionRegistry = options.definitionRegistry ?? new CatalogWorkflowDefinitionRegistry();
   }
 
+  async dispatchTaskRuns(): Promise<void> {
+    const runs = new TaskRunRepository();
+    while (true) {
+      const run = runs.claimNext({
+        owner: 'gateway-workflow',
+        leaseMs: 60_000,
+        executorKind: 'workflow',
+      });
+      if (!run) return;
+      const workflowId = typeof run.executorRef.workflowId === 'string' ? run.executorRef.workflowId : '';
+      const result = workflowId
+        ? await this.startWorkflowRun({
+            agentId: getDefaultAgentId(this.options.service.currentConfig),
+            definitionId: workflowId,
+            taskRunId: run.id,
+            input: run.executorRef.input,
+            source: { kind: 'api', requestId: run.correlationId, idempotencyKey: run.idempotencyKey },
+            idempotencyKey: run.idempotencyKey,
+          })
+        : { ok: false as const, message: 'Workflow executor is missing workflowId' };
+      if (result.ok === false) {
+        const current = runs.require(run.id);
+        new TaskApplicationService().completeRun({
+          runId: current.id,
+          expectedRunVersion: current.version,
+          terminalCode: 'workflow_start_failed',
+          terminalMessage: result.message,
+          receipt: {
+            status: 'failed', summary: result.message, changes: [], evidence: [],
+            verification: { status: 'unverified', checks: [] }, remainingWork: [workflowId],
+            needsUser: false, completionVerdict: 'not_achieved',
+            failure: { code: 'workflow_start_failed', phase: 'dispatch', recoveryAction: 'Fix the workflow and retry' },
+          },
+        });
+      }
+    }
+  }
+
   async startWorkflowRun(params: StartWorkflowRunServiceParams): Promise<WorkflowRunServiceResult> {
     const definition = await this.loadDefinition(params.definitionId);
     if (!definition) {
@@ -121,9 +163,10 @@ export class WorkflowRunService {
 
     const runId = randomUUID();
     const goal = params.goal ?? '';
+    const linkedTaskRun = params.taskRunId ? new TaskRunRepository().get(params.taskRunId) : undefined;
     const projectId =
       params.projectId?.trim() ||
-      (params.taskId ? new TaskRepository().get(params.taskId)?.execution.projectId : undefined) ||
+      (linkedTaskRun ? new TaskRepository().get(linkedTaskRun.taskId)?.projectId : undefined) ||
       (params.parentSessionKey?.trim()
         ? (await this.options.service.sessionIndexInstance.getStore().getMetadata(params.parentSessionKey.trim()))?.projectId
         : undefined);
@@ -136,6 +179,27 @@ export class WorkflowRunService {
       parentSessionKey: params.parentSessionKey,
       projectId,
     });
+    if (linkedTaskRun?.status === 'queued') {
+      const context = new TaskContextRepository();
+      const task = new TaskRepository().require(linkedTaskRun.taskId);
+      const snapshot = context.captureSnapshot({
+        ownerKind: 'task_run',
+        ownerId: linkedTaskRun.id,
+        sessionKey,
+        query: task.contract?.objective ?? task.title,
+        selectedItems: context.list(task.id),
+        authorizationSnapshot: { grants: context.listActiveGrants(task.id) },
+      });
+      const started = new TaskRunRepository().start({
+        runId: linkedTaskRun.id,
+        expectedVersion: linkedTaskRun.version,
+        contextSnapshotId: snapshot.id,
+        policySnapshot: { executorKind: 'workflow', definitionId: params.definitionId },
+        sessionKey,
+      });
+      if (!started) throw new Error('TaskRun changed before workflow execution started');
+      context.linkSession({ taskId: task.id, sessionKey, role: 'execution' });
+    }
     const source = normalizeWorkflowRunSourceForSession(params.source, sessionKey, params.parentSessionKey);
     const abortController = new AbortController();
     const eventStore = new WorkflowEventStore(this.options.service.currentConfig, params.agentId);
@@ -166,7 +230,7 @@ export class WorkflowRunService {
       metadata: buildWorkflowRunMetadata({
         definition,
         agentId: params.agentId,
-        taskId: params.taskId,
+        taskRunId: params.taskRunId,
         projectId,
         contextRefs: params.contextRefs,
         writebackPolicy: params.writebackPolicy,
@@ -215,7 +279,7 @@ export class WorkflowRunService {
     return this.startWorkflowRun({
       agentId: params.agentId,
       definitionId: existing.run.definitionId,
-      taskId: existing.run.metadata?.taskId,
+      taskRunId: existing.run.metadata?.taskRunId,
       projectId,
       contextRefs: existing.run.metadata?.contextRefs,
       writebackPolicy: existing.run.metadata?.writebackPolicy,
@@ -305,7 +369,7 @@ export class WorkflowRunService {
       metadata: buildWorkflowRunMetadata({
         definition,
         agentId: params.agentId,
-        taskId: existing.run.metadata?.taskId,
+        taskRunId: existing.run.metadata?.taskRunId,
         projectId,
         contextRefs: existing.run.metadata?.contextRefs,
         writebackPolicy: existing.run.metadata?.writebackPolicy,
@@ -542,7 +606,7 @@ export function buildWorkflowRunInputEnvelope(input: unknown, goal?: string): Wo
 export function buildWorkflowRunMetadata(params: {
   definition: WorkflowDefinition;
   agentId: string;
-  taskId?: string;
+  taskRunId?: string;
   projectId?: string;
   contextRefs?: WorkflowRunMetadata['contextRefs'];
   writebackPolicy?: WorkflowRunMetadata['writebackPolicy'];
@@ -553,7 +617,8 @@ export function buildWorkflowRunMetadata(params: {
   idempotencyKey?: string;
   replay?: WorkflowRunReplayMetadata;
 }): WorkflowRunMetadata {
-  const taskId = params.taskId?.trim() || undefined;
+  const taskRunId = params.taskRunId?.trim() || undefined;
+  const taskId = taskRunId ? new TaskRunRepository().get(taskRunId)?.taskId : undefined;
   const projectId = params.projectId?.trim() || undefined;
   const contextRefs = params.contextRefs ?? buildDefaultWorkflowContextRefs({ projectId, taskId, source: params.source });
   const writebackPolicy = params.writebackPolicy ?? buildDefaultWorkflowWritebackPolicy({ projectId, taskId });
@@ -575,7 +640,7 @@ export function buildWorkflowRunMetadata(params: {
     schedule: params.source.kind === 'automation'
       ? { automationId: params.source.automationId, runId: params.source.runId, scheduledAtMs: params.source.scheduledAtMs }
       : undefined,
-    taskId,
+    taskRunId,
   };
 }
 
