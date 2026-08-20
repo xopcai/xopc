@@ -119,6 +119,7 @@ export function mergeConsecutiveAssistantMessages(messages: Message[]): Message[
       prev.content = mergeAssistantContentFragments(prev.content, m.content);
       if (m.timestamp != null) prev.timestamp = m.timestamp;
       if (m.renderKey) prev.renderKey = m.renderKey;
+      if (m.turnId) prev.turnId = m.turnId;
       if (m.progressiveRender) prev.progressiveRender = true;
       if (m.usage) prev.usage = m.usage;
       if (m.attachments?.length) {
@@ -306,6 +307,7 @@ function buildUserMessage(m: WireMessage): Message {
 
   return {
     role: 'user',
+    ...(m.turnId ? { turnId: m.turnId } : {}),
     content: blocks,
     attachments: wireAttachmentsFromMessage(m),
     timestamp: typeof m.timestamp === 'number' ? m.timestamp : parseTs(m.timestamp),
@@ -318,6 +320,7 @@ function buildAssistantMessage(m: WireMessage): Message {
   appendReviewFromMetadata(content, m.metadata);
   return {
     role: 'assistant',
+    ...(m.turnId ? { turnId: m.turnId } : {}),
     content,
     attachments: wireAttachmentsFromMessage(m),
     timestamp: typeof m.timestamp === 'number' ? m.timestamp : parseTs(m.timestamp),

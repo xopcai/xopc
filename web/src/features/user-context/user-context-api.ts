@@ -438,3 +438,52 @@ export function importUserContext(payload: unknown): Promise<{ ok: true; importe
     body: JSON.stringify(payload),
   });
 }
+
+export type DreamingMode = 'off' | 'observe' | 'review' | 'automatic';
+export type DreamingRun = {
+  runId: string;
+  phase: 'light' | 'deep' | 'rem';
+  mode: Exclude<DreamingMode, 'off'>;
+  status: 'running' | 'completed' | 'failed';
+  reason?: string;
+  metrics: Record<string, unknown>;
+  startedAt: string;
+  completedAt?: string;
+};
+export type DreamingResponse = {
+  agentId: string;
+  config: {
+    requestedMode: DreamingMode;
+    mode: DreamingMode;
+    enabled: boolean;
+    writeDisposition: 'none' | 'candidate' | 'active';
+    automaticReady: boolean;
+    downgradeReason?: 'memory_policy' | 'quality_gate';
+    phases: Record<'light' | 'deep' | 'rem', { enabled: boolean; cron: string }>;
+  };
+  readiness: {
+    ready: boolean;
+    reasons: string[];
+    metrics: {
+      evaluatedTurns: number;
+      helpfulRate: number | null;
+      recordErrorRate: number | null;
+      dreamingRuns: number;
+      dreamingFailureRate: number | null;
+    };
+  };
+  runs: DreamingRun[];
+  signalCount: number;
+};
+
+export function fetchDreaming(): Promise<DreamingResponse> {
+  return fetchJson(apiUrl('/api/you/dreaming'));
+}
+
+export function updateDreamingMode(mode: DreamingMode): Promise<Pick<DreamingResponse, 'config'>> {
+  return fetchJson(apiUrl('/api/you/dreaming'), { method: 'PATCH', body: JSON.stringify({ mode }) });
+}
+
+export function runDreaming(phase: DreamingRun['phase']): Promise<{ run: DreamingRun; result: Record<string, unknown> }> {
+  return fetchJson(apiUrl('/api/you/dreaming/runs'), { method: 'POST', body: JSON.stringify({ phase }) });
+}

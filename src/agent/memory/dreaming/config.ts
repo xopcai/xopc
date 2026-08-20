@@ -1,5 +1,5 @@
 import type { Config } from '../../../config/schema.js';
-import { buildMemoryRuntime, type MemoryWriteCheckResult } from '../../../agent-runtime/memory-runtime.js';
+import type { DreamingMode } from '../../../storage/sqlite/index.js';
 import {
   DEFAULT_DEEP_CRON,
   DEFAULT_LIGHT_CRON,
@@ -38,16 +38,18 @@ export type DreamingRemConfig = {
 };
 
 export type DreamingResolvedConfig = {
+  requestedMode: DreamingMode;
+  mode: DreamingMode;
   enabled: boolean;
-  promotionWritePolicy: MemoryWriteCheckResult;
-  frequency: string;
+  writeDisposition: 'none' | 'candidate' | 'active';
+  automaticReady: boolean;
+  downgradeReason?: 'memory_policy' | 'quality_gate';
   timezone?: string;
   phases: {
     light: DreamingLightConfig;
     deep: DreamingDeepConfig;
     rem: DreamingRemConfig;
   };
-  deep: DreamingDeepConfig;
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────
@@ -81,22 +83,26 @@ function optionalTrimmedString(value: unknown): string | undefined {
 
 // ── Resolver ───────────────────────────────────────────────────────────
 
-/** Resolve the full three-phase dreaming config from an agent manifest. */
-export function resolveDreamingConfig(cfg: Config | undefined, requestedAgentId?: string | null): DreamingResolvedConfig {
-  void requestedAgentId;
+/** Resolve the full three-phase dreaming config and its effective write authority. */
+export function resolveDreamingConfig(
+  cfg: Config | undefined,
+  options: { automaticReady?: boolean } = {},
+): DreamingResolvedConfig {
   const dreaming = cfg?.userContext.dreaming;
-  const enabled = dreaming?.enabled === true && cfg?.userContext.enabled === true && cfg.userContext.memory.mode !== 'off';
-  const promotionWritePolicy = cfg
-    ? buildMemoryRuntime(cfg.userContext).checkWrite({
-        target: 'understanding',
-        content: 'Dreaming automatic memory promotion',
-        source: 'dreaming',
-        confidence: 1,
-        sensitive: false,
-      })
-    : { decision: 'deny' as const, reason: 'user context configuration is unavailable' };
-
-  const frequency = trimmedStringOr(dreaming?.frequency, DEFAULT_DEEP_CRON);
+  const requestedMode = dreaming?.mode ?? 'off';
+  const memoryMode = cfg?.userContext.memory.mode ?? 'off';
+  const automaticReady = options.automaticReady === true;
+  const mode: DreamingMode = cfg?.userContext.enabled !== true || memoryMode === 'off'
+    ? 'off'
+    : memoryMode === 'readOnly'
+      ? (requestedMode === 'off' ? 'off' : 'observe')
+      : memoryMode === 'confirmWrite' && requestedMode === 'automatic'
+        ? 'review'
+        : requestedMode === 'automatic' && !automaticReady
+          ? 'review'
+          : requestedMode;
+  const enabled = mode !== 'off';
+  const writeDisposition = mode === 'automatic' ? 'active' : mode === 'review' ? 'candidate' : 'none';
   const timezone = optionalTrimmedString(dreaming?.timezone);
 
   // ── Light phase ────────────────────────────────────────────────────
@@ -112,7 +118,7 @@ export function resolveDreamingConfig(cfg: Config | undefined, requestedAgentId?
   const deepRaw = dreaming?.phases?.deep ?? {};
   const deep: DreamingDeepConfig = {
     enabled: enabled && deepRaw?.enabled !== false,
-    cron: trimmedStringOr(deepRaw?.cron, frequency),
+    cron: trimmedStringOr(deepRaw?.cron, DEFAULT_DEEP_CRON),
     minScore: clampScore(Number(deepRaw?.minScore), 0.8),
     minRecallCount: toPositiveInt(deepRaw?.minRecallCount, 3),
     minUniqueQueries: toPositiveInt(deepRaw?.minUniqueQueries, 3),
@@ -132,12 +138,16 @@ export function resolveDreamingConfig(cfg: Config | undefined, requestedAgentId?
   };
 
   return {
+    requestedMode,
+    mode,
     enabled,
-    promotionWritePolicy,
-    frequency,
+    writeDisposition,
+    automaticReady,
+    ...(requestedMode === 'automatic' && mode !== 'automatic'
+      ? { downgradeReason: memoryMode === 'confirmWrite' || memoryMode === 'readOnly' ? 'memory_policy' as const : 'quality_gate' as const }
+      : {}),
     ...(timezone ? { timezone } : {}),
     phases: { light, deep, rem },
-    deep,
   };
 }
 

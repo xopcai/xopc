@@ -2,6 +2,7 @@
 
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChunkedContent } from '@/features/chat/messages/message-content-renderer';
@@ -63,20 +64,22 @@ describe('streaming assistant Markdown rendering', () => {
   ) {
     act(() => {
       root.render(
-        <ChunkedContent
-          content={content}
-          isUser={false}
-          isAssistantMessageStreaming={streaming}
-          toolLabels={emptyLabels}
-          stepLabels={stepLabels}
-          clusterLabels={{ done: {} as never, ing: {} as never, join: {} as never }}
-          cardLabels={{} as never}
-          imagePreviewLabel=""
-          onImagePreview={undefined}
-          sessionKey={null}
-          workflowOptions={{ labels: {} as never }}
-          progressiveRender={progressiveRender}
-        />,
+        <MemoryRouter>
+          <ChunkedContent
+            content={content}
+            isUser={false}
+            isAssistantMessageStreaming={streaming}
+            toolLabels={emptyLabels}
+            stepLabels={stepLabels}
+            clusterLabels={{ done: {} as never, ing: {} as never, join: {} as never }}
+            cardLabels={{} as never}
+            imagePreviewLabel=""
+            onImagePreview={undefined}
+            sessionKey={null}
+            workflowOptions={{ labels: {} as never }}
+            progressiveRender={progressiveRender}
+          />
+        </MemoryRouter>,
       );
     });
   }

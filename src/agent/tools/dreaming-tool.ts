@@ -2,14 +2,19 @@ import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 
 import type { Config } from '../../config/schema.js';
-import { listMemorySignals, listMemoryTraceEvents } from '../../storage/sqlite/index.js';
+import {
+  getMemoryReadiness,
+  isXopcDatabaseOpen,
+  listDreamingRuns,
+  listMemorySignals,
+} from '../../storage/sqlite/index.js';
+import { evaluateMemoryReadiness } from '../../user-context/memory-readiness.js';
 import { resolveDreamingConfig } from '../memory/dreaming/config.js';
 
 const DreamingSchema = Type.Object({ action: Type.Literal('status') });
 
 export interface DreamingToolDeps {
   getWorkspace: () => string;
-  getDreamingRoot: () => string;
   getConfig: () => Config | undefined;
   getAgentId?: () => string | undefined;
 }
@@ -22,19 +27,30 @@ export function createDreamingTool(deps: DreamingToolDeps): AgentTool {
     parameters: DreamingSchema,
     async execute(): Promise<AgentToolResult<{}>> {
       const agentId = deps.getAgentId?.();
-      const resolved = resolveDreamingConfig(deps.getConfig(), agentId);
       const workspaceId = deps.getWorkspace();
+      const readiness = agentId && isXopcDatabaseOpen()
+        ? getMemoryReadiness({ agentId, workspaceId })
+        : evaluateMemoryReadiness({
+            evaluatedTurns: 0,
+            helpfulTurns: 0,
+            recordFeedback: 0,
+            recordErrors: 0,
+            sensitiveFeedback: 0,
+            dreamingRuns: 0,
+            dreamingFailures: 0,
+          });
+      const resolved = resolveDreamingConfig(deps.getConfig(), { automaticReady: readiness.ready });
       const signals = listMemorySignals({ workspaceId, limit: 500 });
-      const traces = listMemoryTraceEvents({ sourceAgentId: agentId, limit: 100 })
-        .filter((trace) => trace.phase.startsWith('dreaming_'));
+      const runs = listDreamingRuns({ agentId, workspaceId, limit: 20 });
       const text = JSON.stringify({
-        enabled: resolved.enabled,
+        mode: resolved.mode,
         phases: resolved.phases,
-        promotionWritePolicy: resolved.promotionWritePolicy,
+        writeDisposition: resolved.writeDisposition,
+        readiness,
         storage: 'sqlite://memory_records',
         signalCount: signals.length,
         dreamingSignalCount: signals.filter((signal) => signal.source === 'dreaming').length,
-        lastRun: traces[0] ?? null,
+        lastRun: runs[0] ?? null,
       }, null, 2);
       return { content: [{ type: 'text', text }], details: {} };
     },

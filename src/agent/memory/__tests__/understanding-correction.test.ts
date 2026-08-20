@@ -80,6 +80,7 @@ describe('understanding correction attribution', () => {
     });
     const previousTraceId = appendMemoryTraceEvent({
       phase: 'inject',
+      turnId: 'previous-turn',
       providerId: 'user-understanding',
       sessionKey,
       selectedRecordIds: ['preference-1'],
@@ -102,16 +103,20 @@ describe('understanding correction attribution', () => {
 
     await coordinator.prepare({
       role: 'user',
+      content: [{ type: 'text', text: '普通问题' }],
+    } as AgentMessage, sessionKey, 'previous-turn');
+    await coordinator.prepare({
+      role: 'user',
       content: [{ type: 'text', text: '你记错了我的偏好，我需要详细回答。' }],
-    } as AgentMessage, sessionKey);
+    } as AgentMessage, sessionKey, 'correction-turn');
 
     const previous = listMemoryTraceEvents({ sessionKey, limit: 10 })
       .find((trace) => trace.traceId === previousTraceId);
-    expect(previous?.feedback).toMatchObject({
-      rating: 'not_helpful',
+    expect(previous?.feedback).toEqual(expect.arrayContaining([expect.objectContaining({
+      rating: 'incorrect',
       source: 'system',
-      reason: 'detected_explicit_user_correction',
-    });
+      reasonCode: 'detected_explicit_user_correction',
+    })]));
     expect(getMemoryRecord('preference-1')).toMatchObject({
       status: 'needs_review',
       confidence: 0.7,

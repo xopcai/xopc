@@ -116,14 +116,6 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     },
   },
   {
-    id: 'dreaming',
-    match: (path) => startsWithAny(path, ['/api/dreaming']),
-    load: async () => {
-      const { registerDreamingRoutes } = await import('./dreaming.js');
-      return { register: registerDreamingRoutes };
-    },
-  },
-  {
     id: 'image-generation',
     match: (path) =>
       startsWithAny(path, ['/api/image-generation']) ||

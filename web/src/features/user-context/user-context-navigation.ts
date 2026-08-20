@@ -1,10 +1,11 @@
-export type UserContextViewId = 'overview' | 'memory' | 'collaboration' | 'sources' | 'privacy';
+export type UserContextViewId = 'overview' | 'memory' | 'collaboration' | 'sources' | 'dreaming' | 'privacy';
 
 const USER_CONTEXT_VIEW_IDS = new Set<UserContextViewId>([
   'overview',
   'memory',
   'collaboration',
   'sources',
+  'dreaming',
   'privacy',
 ]);
 

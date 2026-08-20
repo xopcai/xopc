@@ -41,6 +41,12 @@ SQLite schema version 37 adds the connected-knowledge delivery layer:
 - explicit `user_understanding` versus `connected_knowledge` pipeline routing, plus synthesis attempts, leases, worker ownership, and bounded errors on `knowledge_source_items`;
 - idempotent `(record, source item, relation)` evidence links.
 
+SQLite schema versions 104–106 finalize the online learning loop:
+
+- stable `turnId` linkage and normalized response/record feedback;
+- auditable Dreaming runs and per-record decisions;
+- reproducible Dreaming execution through algorithm versions and immutable config snapshots.
+
 The normalized SQLite tables are the only runtime source of truth for understanding and recall. Runtime memory never reads, writes, scans, or projects Markdown. See [Unified memory and user-understanding architecture](./memory-architecture.md).
 
 ## Background synthesis
@@ -73,14 +79,14 @@ Set `understanding.enabled` to `false` when model cost or data policy requires d
 
 With `adaptiveCadence` enabled, the configured interval is the fastest allowed cadence. xopc doubles the interval when the candidate inbox is backlogged, at least 10 review decisions have a low acceptance rate, or at least 10 recall ratings show low helpfulness. It never increases review frequency above the configured interval.
 
-Quality is available from `GET /api/user-context/quality?windowDays=30` and the About You page. The response includes the candidate funnel, current record states, acceptance rate, recall helpfulness, and the effective cadence decision.
+Quality is available from `GET /api/you/quality?windowDays=30`. Automatic Dreaming readiness is available from `GET /api/you/readiness` and the About You page.
 
 ## Response feedback attribution
 
-Completed assistant responses expose helpful / needs-improvement controls. The gateway resolves feedback by `sessionKey` and the assistant response timestamp to the most recent preceding `inject` trace, then updates that trace idempotently. This attributes feedback only to understanding records actually selected for that response; responses without selected understanding can retain feedback without affecting understanding quality.
+Completed assistant responses expose helpful / needs-improvement controls. Every model turn has a stable `turnId` carried by context planning, traces, transcript rows, SSE, and the web message. The gateway resolves feedback by that exact id and updates it idempotently; it never guesses from timestamps.
 
-- `GET /api/user-context/understanding/response-feedback` resolves existing feedback for a response.
-- `PATCH /api/user-context/understanding/response-feedback` records or replaces `helpful` / `not_helpful` feedback.
+- `GET /api/you/feedback/:turnId` resolves existing response-level and record-level feedback.
+- `PUT /api/you/feedback/:turnId` records or replaces feedback for the exact turn.
 
 Explicit corrections such as “你记错了我的偏好” or “I never said that about me” conservatively mark the previous selected-understanding trace as not helpful before planning the correction turn. Generic task feedback such as “the command failed” does not affect understanding quality. Correction traces store only a fixed reason code, not the user's correction text.
 
@@ -94,7 +100,7 @@ Feedback remediation is deliberately conservative:
 4. A concrete correction such as “你记错了我的偏好，我更喜欢详细解释” creates a new `candidate` linked with `supersedesRecordId`. A pure denial creates no replacement content.
 5. The old record remains `needs_review` until the replacement is explicitly approved. Activating the replacement archives the old record and closes its validity interval.
 
-`PATCH /api/user-context/understanding/response-feedback` includes a `remediation` result when feedback evaluation runs. The chat UI acknowledges when related understanding has been paused and queued for review.
+`PUT /api/you/feedback/:turnId` includes a `remediation` result when feedback evaluation runs. The chat UI acknowledges when related understanding has been paused and queued for review.
 
 ## Connected sources
 
@@ -114,7 +120,11 @@ The gateway exposes read-only operational views:
 - `GET /api/knowledge/source-items`
 - `GET /api/knowledge/source-changes?afterSequence=...`
 - `GET /api/knowledge/sync-runs`
-- `/api/user-context/memories`, `/api/user-context/traces`, and trace feedback endpoints
+- `/api/you/memories`, `/api/you/traces`, and turn feedback endpoints
+
+## Dreaming and automatic-write readiness
+
+Dreaming is managed from the Dreaming tab under About You. `off`, `observe`, `review`, and `automatic` are the only modes. Every phase writes a structured run and decision ledger in SQLite. The effective mode is capped by the global memory policy and by the automatic-write readiness gate. A requested automatic mode is downgraded to review until recent feedback and Dreaming reliability meet the published thresholds. REM insights always remain reviewable because they create new inferred beliefs.
 
 ## Safety defaults
 

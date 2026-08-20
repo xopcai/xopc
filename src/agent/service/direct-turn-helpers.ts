@@ -148,10 +148,12 @@ export async function runDirectAgentTurn(
   deps: RunDirectAgentTurnDeps,
   input: RunDirectAgentTurnInput,
 ): Promise<RunDirectAgentTurnResult> {
+  const turnId = input.runId ?? crypto.randomUUID();
   const userPlain = extractAgentUserPlainText(input.userMessage);
   const userContext = await deps.agentManager.prepareUserTurnContext(
     input.userMessage,
     input.sessionKey,
+    turnId,
   );
   const userMessageForModel = prependAgentContext(
     userContext.modelMessage,
@@ -160,7 +162,7 @@ export async function runDirectAgentTurn(
   if (userContext.consentRequests.length > 0) {
     input.onEvent?.({
       type: 'memory_consent_required',
-      runId: input.runId,
+      runId: turnId,
       requests: userContext.consentRequests,
     });
   }
@@ -175,7 +177,7 @@ export async function runDirectAgentTurn(
 
   const result = await runEmbeddedTurnForSession({
     sessionKey: input.sessionKey,
-    runId: input.runId ?? crypto.randomUUID(),
+    runId: turnId,
     userMessage: userMessageForModel,
     llmImages,
     sessionStore: deps.sessionStore,
@@ -190,7 +192,7 @@ export async function runDirectAgentTurn(
 
   const understandingReview = await deps.agentManager.afterAgentTurn(input.sessionKey, userPlain);
   if (understandingReview?.createdRecords.length) {
-    input.onEvent?.({ type: 'memory_captured', runId: input.runId, records: understandingReview.createdRecords });
+    input.onEvent?.({ type: 'memory_captured', runId: turnId, records: understandingReview.createdRecords });
   }
   deps.agentManager.scheduleBackgroundReviewAfterUserTurn(input.sessionKey);
 

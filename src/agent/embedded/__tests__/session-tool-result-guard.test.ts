@@ -13,6 +13,7 @@ describe('session-tool-result-guard', () => {
     const sm = guardSessionManager(SessionManager.inMemory(process.cwd()), {
       sessionKey: 'agent:main:test',
     });
+    sm.setActiveTurnId?.('turn-123');
     sm.appendMessage({
       role: 'user',
       content: 'hello',
@@ -44,6 +45,7 @@ describe('session-tool-result-guard', () => {
     expect(updates.some((update) => (update?.message as { role?: string })?.role === 'user')).toBe(true);
     expect(updates.some((update) => (update?.message as { role?: string })?.role === 'assistant')).toBe(true);
     expect(updates.some((update) => (update?.message as { role?: string })?.role === 'toolResult')).toBe(true);
+    expect(updates.every((update) => (update?.message as { turnId?: string })?.turnId === 'turn-123')).toBe(true);
     unsubscribe();
   });
 

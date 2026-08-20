@@ -74,7 +74,7 @@ export type TaskPlanState = {
 };
 
 export type MessagingCallbacks = {
-  onStreamStart: () => void;
+  onStreamStart: (turnId: string) => void;
   onToken: (delta: string) => void;
   onThinking: (content: string, isDelta: boolean) => void;
   onThinkingEnd: () => void;
@@ -395,7 +395,7 @@ export class MessageSender {
           this._trackedRunId = parsed.runId;
           setPendingAgentRun(this._sseChatId, parsed.runId);
         }
-        cb?.onStreamStart();
+        if (typeof parsed.runId === 'string') cb?.onStreamStart(parsed.runId);
         break;
       case 'user_message': {
         const userMsg = userMessageFromSsePayload(payload.message as Record<string, unknown>);
@@ -412,7 +412,7 @@ export class MessageSender {
         break;
       }
       case 'assistant_message_start':
-        cb?.onStreamStart();
+        if (typeof parsed.runId === 'string') cb?.onStreamStart(parsed.runId);
         break;
       case 'assistant_delta':
         if (typeof payload.delta === 'string' && payload.delta) cb?.onToken(payload.delta);

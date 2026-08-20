@@ -156,10 +156,12 @@ export function createAgentStreamMessagingCallbacks(opts: {
     onWorkflowRunStarted: () => {
       window.dispatchEvent(new CustomEvent('workflow-run-started-from-chat', { detail: { sessionKey: chatId } }));
     },
-    onStreamStart: () => {
+    onStreamStart: (turnId) => {
       markChatRunRunning(chatId);
       beforeAssistantDelta();
-      store().mutateSessionStreaming(chatId, () => {});
+      store().mutateSessionStreaming(chatId, (message) => {
+        message.turnId = turnId;
+      });
       store().setSessionFlags(chatId, { streaming: true });
     },
     onToken: (delta) => {

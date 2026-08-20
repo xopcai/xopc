@@ -4,7 +4,9 @@ import {
   appendMemoryTraceEvent,
   listMemoryRecords,
   listMemorySignals,
+  recordDreamingDecision,
   setMemoryRecordStatus,
+  type DreamingActiveMode,
 } from '../../../storage/sqlite/index.js';
 import type { DreamingDeepConfig } from './config.js';
 import { resolveDeepDefaults } from './utils.js';
@@ -25,10 +27,11 @@ type RankedCandidate = {
 /** Consolidate useful candidates from structured recall and injection signals. */
 export async function runDreamingDeepPromotion(params: {
   agentId: string;
+  runId: string;
+  mode: DreamingActiveMode;
   workspaceDir: string;
   config?: Partial<DreamingDeepConfig>;
   sensitiveWritePolicy?: 'deny' | 'confirm' | 'allow';
-  promotionWritePolicy?: 'deny' | 'confirm' | 'allow';
   now?: Date;
 }): Promise<{
   ok: boolean;
@@ -77,10 +80,19 @@ export async function runDreamingDeepPromotion(params: {
       return [{ recordId: record.id, score, recallCount: recallSignals.length, uniqueQueries: queries.size, content: record.content }];
     }).sort((left, right) => right.score - left.score).slice(0, cfg.limit);
 
-    const policy = params.promotionWritePolicy ?? 'deny';
+    const policy = params.mode === 'automatic' ? 'allow' : params.mode === 'review' ? 'confirm' : 'deny';
     let applied = 0;
-    if (policy === 'allow') {
-      for (const candidate of ranked) {
+    for (const candidate of ranked) {
+      const action = policy === 'allow' ? 'activate' : policy === 'confirm' ? 'propose' : 'observe';
+      recordDreamingDecision({
+        runId: params.runId,
+        recordId: candidate.recordId,
+        action,
+        reasonCode: 'deep_evidence_threshold_met',
+        score: candidate.score,
+        evidence: { recallCount: candidate.recallCount, uniqueQueries: candidate.uniqueQueries },
+      });
+      if (policy === 'allow') {
         if (!setMemoryRecordStatus(candidate.recordId, 'active', now.getTime())) continue;
         applied += 1;
         appendMemorySignal({

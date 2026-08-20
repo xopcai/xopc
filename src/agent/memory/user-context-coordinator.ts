@@ -1,7 +1,7 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
 import type { Config } from '../../config/schema.js';
-import { setLatestMemoryInjectFeedback } from '../../storage/sqlite/index.js';
+import { setMemoryTurnFeedback } from '../../storage/sqlite/index.js';
 import { createLogger } from '../../utils/logger.js';
 import { ContextCompiler } from '../../user-context/context-compiler.js';
 import { UserContextPlanner } from './context/planner.js';
@@ -26,6 +26,7 @@ export interface UserContextCoordinatorOptions {
 
 export class UserContextCoordinator {
   private readonly userTurn = new Map<string, number>();
+  private readonly lastTurnId = new Map<string, string>();
   private readonly correctionTargets = new Map<string, string[]>();
   private readonly planner = new UserContextPlanner();
   private readonly contextCompiler = new ContextCompiler();
@@ -34,15 +35,17 @@ export class UserContextCoordinator {
 
   forgetSession(sessionKey: string): void {
     this.userTurn.delete(sessionKey);
+    this.lastTurnId.delete(sessionKey);
     this.correctionTargets.delete(sessionKey);
   }
 
   clear(): void {
     this.userTurn.clear();
+    this.lastTurnId.clear();
     this.correctionTargets.clear();
   }
 
-  async prepare(userMessage: AgentMessage, sessionKey: string): Promise<UserContextPlan> {
+  async prepare(userMessage: AgentMessage, sessionKey: string, turnId: string): Promise<UserContextPlan> {
     const empty = (): UserContextPlan => ({
       traceId: '',
       modelMessage: userMessage,
@@ -56,22 +59,34 @@ export class UserContextCoordinator {
     const userQuery = extractAgentUserPlainText(userMessage);
     const taskContext = assembleTaskContext(sessionKey, userQuery);
     const query = taskContext.retrievalQuery;
+    const previousTurnId = this.lastTurnId.get(sessionKey);
+    this.lastTurnId.set(sessionKey, turnId);
     this.correctionTargets.delete(sessionKey);
     let excludedRecordIds: string[] | undefined;
-    if (isExplicitUnderstandingCorrection(userQuery)) {
+    if (previousTurnId && isExplicitUnderstandingCorrection(userQuery)) {
       try {
-        const trace = setLatestMemoryInjectFeedback({
-          sessionKey,
-          requireSelectedRecords: true,
-          feedback: {
-            rating: 'not_helpful',
-            source: 'system',
-            reason: 'detected_explicit_user_correction',
-          },
+        const trace = setMemoryTurnFeedback({
+          turnId: previousTurnId,
+          rating: 'incorrect',
+          source: 'system',
+          reasonCode: 'detected_explicit_user_correction',
         });
         if (trace?.selectedRecordIds.length) {
           this.correctionTargets.set(sessionKey, trace.selectedRecordIds);
           excludedRecordIds = trace.selectedRecordIds;
+          if (trace.selectedRecordIds.length === 1) {
+            setMemoryTurnFeedback({
+              turnId: previousTurnId,
+              rating: 'incorrect',
+              source: 'system',
+              reasonCode: 'detected_explicit_user_correction',
+              records: [{
+                recordId: trace.selectedRecordIds[0]!,
+                rating: 'incorrect',
+                reasonCode: 'detected_explicit_user_correction',
+              }],
+            });
+          }
         }
       } catch (err) {
         log.debug({ err, sessionKey }, 'Understanding correction feedback was not persisted');
@@ -84,6 +99,7 @@ export class UserContextCoordinator {
       memoryManager: this.options.getMemoryManagerForSession(sessionKey),
       agentId: this.options.getAgentIdForSession(sessionKey),
       sessionKey,
+      turnId,
       query,
       userMessage,
       excludedRecordIds,

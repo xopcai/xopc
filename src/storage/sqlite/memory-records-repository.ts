@@ -175,20 +175,47 @@ type MemoryTraceRow = {
   selected_record_ids_json: string;
   skipped_reason: string | null;
   error: string | null;
-  feedback_json: string;
   duration_ms: number;
   created_at: number;
 };
 
-export type MemoryTraceFeedbackRating = 'helpful' | 'not_helpful' | 'mixed' | 'irrelevant';
+type MemoryFeedbackRow = {
+  feedback_id: string;
+  trace_id: string;
+  turn_id: string;
+  record_id: string | null;
+  level: 'response' | 'record';
+  rating: MemoryFeedbackRating;
+  score: number | null;
+  reason_code: string | null;
+  note: string | null;
+  source: 'user' | 'evaluator' | 'system';
+  created_at: number;
+  updated_at: number;
+};
 
-export interface MemoryTraceFeedback {
-  rating: MemoryTraceFeedbackRating;
+export type MemoryFeedbackRating =
+  | 'helpful'
+  | 'not_helpful'
+  | 'mixed'
+  | 'irrelevant'
+  | 'incorrect'
+  | 'outdated'
+  | 'sensitive';
+
+export interface MemoryFeedback {
+  feedbackId: string;
+  traceId: string;
+  turnId: string;
+  level: 'response' | 'record';
+  recordId?: string;
+  rating: MemoryFeedbackRating;
   score?: number;
-  reason?: string;
-  source?: 'user' | 'evaluator' | 'system';
+  reasonCode?: string;
+  note?: string;
+  source: 'user' | 'evaluator' | 'system';
   createdAt: string;
-  updatedAt?: string;
+  updatedAt: string;
 }
 
 export interface AppendMemoryTraceEventInput {
@@ -204,32 +231,25 @@ export interface AppendMemoryTraceEventInput {
   selectedRecordIds?: string[];
   skippedReason?: string;
   error?: string;
-  feedback?: MemoryTraceFeedback;
   durationMs?: number;
   nowMs?: number;
 }
 
-export interface SetMemoryTraceFeedbackInput {
-  traceId: string;
-  feedback: Omit<MemoryTraceFeedback, 'createdAt' | 'updatedAt'> & {
-    createdAt?: string;
-    updatedAt?: string;
-  };
+export interface SetMemoryTurnFeedbackInput {
+  turnId: string;
+  rating: MemoryFeedbackRating;
+  score?: number;
+  reasonCode?: string;
+  note?: string;
+  source?: MemoryFeedback['source'];
+  records?: Array<{
+    recordId: string;
+    rating: MemoryFeedbackRating;
+    reasonCode?: string;
+    note?: string;
+  }>;
   nowMs?: number;
 }
-
-export interface SetLatestMemoryInjectFeedbackInput {
-  sessionKey: string;
-  beforeMs?: number;
-  requireSelectedRecords?: boolean;
-  feedback: SetMemoryTraceFeedbackInput['feedback'];
-  nowMs?: number;
-}
-
-export type FindLatestMemoryInjectTraceInput = Pick<
-  SetLatestMemoryInjectFeedbackInput,
-  'sessionKey' | 'beforeMs' | 'requireSelectedRecords'
->;
 
 export interface MemoryTraceEventPayload {
   traceId: string;
@@ -242,7 +262,7 @@ export interface MemoryTraceEventPayload {
   selectedRecordIds: string[];
   skippedReason?: string;
   error?: string;
-  feedback?: MemoryTraceFeedback;
+  feedback: MemoryFeedback[];
   remediation?: MemoryFeedbackRemediationResult;
   durationMs: number;
   createdAt: string;
@@ -332,59 +352,31 @@ function parseEvidence(json: string): MemoryRecord['evidence'] {
   }
 }
 
-function parseMemoryTraceFeedback(json: string): MemoryTraceFeedback | undefined {
-  try {
-    const parsed = JSON.parse(json) as unknown;
-    if (!parsed || typeof parsed !== 'object') return undefined;
-    const obj = parsed as Record<string, unknown>;
-    const rating = obj.rating;
-    if (
-      rating !== 'helpful' &&
-      rating !== 'not_helpful' &&
-      rating !== 'mixed' &&
-      rating !== 'irrelevant'
-    ) {
-      return undefined;
-    }
-    return {
-      rating,
-      ...(typeof obj.score === 'number' ? { score: obj.score } : {}),
-      ...(typeof obj.reason === 'string' ? { reason: obj.reason } : {}),
-      ...(obj.source === 'user' || obj.source === 'evaluator' || obj.source === 'system'
-        ? { source: obj.source }
-        : {}),
-      createdAt: typeof obj.createdAt === 'string' ? obj.createdAt : new Date(0).toISOString(),
-      ...(typeof obj.updatedAt === 'string' ? { updatedAt: obj.updatedAt } : {}),
-    };
-  } catch {
-    return undefined;
-  }
-}
-
-function normalizeMemoryTraceFeedback(
-  input: SetMemoryTraceFeedbackInput['feedback'],
-  nowMs = Date.now(),
-  existing?: MemoryTraceFeedback,
-): MemoryTraceFeedback {
-  const score = typeof input.score === 'number'
-    ? Math.max(-1, Math.min(1, input.score))
-    : undefined;
-  const reason = typeof input.reason === 'string' && input.reason.trim()
-    ? input.reason.trim().slice(0, 1000)
-    : undefined;
-  const nowIso = new Date(nowMs).toISOString();
+function memoryFeedbackRowToPayload(row: MemoryFeedbackRow): MemoryFeedback {
   return {
-    rating: input.rating,
-    ...(score != null ? { score } : {}),
-    ...(reason ? { reason } : {}),
-    ...(input.source ? { source: input.source } : {}),
-    createdAt: input.createdAt ?? existing?.createdAt ?? nowIso,
-    updatedAt: input.updatedAt ?? nowIso,
+    feedbackId: row.feedback_id,
+    traceId: row.trace_id,
+    turnId: row.turn_id,
+    level: row.level,
+    ...(row.record_id ? { recordId: row.record_id } : {}),
+    rating: row.rating,
+    ...(row.score != null ? { score: row.score } : {}),
+    ...(row.reason_code ? { reasonCode: row.reason_code } : {}),
+    ...(row.note ? { note: row.note } : {}),
+    source: row.source,
+    createdAt: new Date(row.created_at).toISOString(),
+    updatedAt: new Date(row.updated_at).toISOString(),
   };
 }
 
+function listFeedbackForTrace(traceId: string): MemoryFeedback[] {
+  const rows = getSqliteDatabase().prepare(
+    `SELECT * FROM memory_feedback WHERE trace_id = ? ORDER BY level, updated_at DESC`,
+  ).all(traceId) as MemoryFeedbackRow[];
+  return rows.map(memoryFeedbackRowToPayload);
+}
+
 function memoryTraceRowToPayload(row: MemoryTraceRow): MemoryTraceEventPayload {
-  const feedback = parseMemoryTraceFeedback(row.feedback_json);
   return {
     traceId: row.trace_id,
     ...(row.session_key ? { sessionKey: row.session_key } : {}),
@@ -396,7 +388,7 @@ function memoryTraceRowToPayload(row: MemoryTraceRow): MemoryTraceEventPayload {
     selectedRecordIds: parseStringArray(row.selected_record_ids_json),
     ...(row.skipped_reason ? { skippedReason: row.skipped_reason } : {}),
     ...(row.error ? { error: row.error } : {}),
-    ...(feedback ? { feedback } : {}),
+    feedback: listFeedbackForTrace(row.trace_id),
     durationMs: row.duration_ms,
     createdAt: new Date(row.created_at).toISOString(),
   };
@@ -978,16 +970,13 @@ export function setMemoryProviderState(providerId: string, scopeKey: string, sta
 export function appendMemoryTraceEvent(input: AppendMemoryTraceEventInput): string {
   const id = input.traceId ?? randomUUID();
   const now = input.nowMs ?? Date.now();
-  const feedback = input.feedback
-    ? normalizeMemoryTraceFeedback(input.feedback, now)
-    : undefined;
   runSqliteWriteTransaction((db) => {
     db.prepare(
       `INSERT INTO memory_trace_events (
         trace_id, session_key, turn_id, phase, provider_id, request_json,
-        result_count, selected_record_ids_json, skipped_reason, error, feedback_json, duration_ms, created_at,
+        result_count, selected_record_ids_json, skipped_reason, error, duration_ms, created_at,
         user_id, source_agent_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       id,
       input.sessionKey ?? null,
@@ -999,7 +988,6 @@ export function appendMemoryTraceEvent(input: AppendMemoryTraceEventInput): stri
       JSON.stringify(input.selectedRecordIds ?? []),
       input.skippedReason ?? null,
       input.error ?? null,
-      JSON.stringify(feedback ?? {}),
       Math.max(0, Math.floor(input.durationMs ?? 0)),
       now,
       LOCAL_USER_ID,
@@ -1049,73 +1037,39 @@ export function listMemoryTraceEvents(options: {
   return rows.map(memoryTraceRowToPayload);
 }
 
-export function setMemoryTraceFeedback(input: SetMemoryTraceFeedbackInput): MemoryTraceEventPayload | null {
-  const existing = getSqliteDatabase()
-    .prepare(`SELECT * FROM memory_trace_events WHERE trace_id = ?`)
-    .get(input.traceId) as MemoryTraceRow | undefined;
-  if (!existing) {
-    return null;
-  }
-  const nowMs = input.nowMs ?? Date.now();
-  const feedback = normalizeMemoryTraceFeedback(
-    input.feedback,
-    nowMs,
-    parseMemoryTraceFeedback(existing.feedback_json),
-  );
-  let remediation: MemoryFeedbackRemediationResult | undefined;
-  runSqliteWriteTransaction((db) => {
-    db.prepare(`UPDATE memory_trace_events SET feedback_json = ? WHERE trace_id = ?`)
-      .run(JSON.stringify(feedback), input.traceId);
-    remediation = reconcileUserUnderstandingFeedback(db, existing, feedback, nowMs);
-  });
-  return {
-    ...memoryTraceRowToPayload({ ...existing, feedback_json: JSON.stringify(feedback) }),
-    ...(remediation ? { remediation } : {}),
-  };
-}
-
 function reconcileUserUnderstandingFeedback(
   db: ReturnType<typeof getSqliteDatabase>,
   trace: MemoryTraceRow,
-  feedback: MemoryTraceFeedback,
+  recordFeedback: readonly MemoryFeedbackRow[],
   nowMs: number,
 ): MemoryFeedbackRemediationResult | undefined {
-  if (trace.phase !== 'inject' || feedback.rating !== 'not_helpful') return undefined;
-  const explicitCorrection = feedback.source === 'system'
-    && feedback.reason === 'detected_explicit_user_correction';
+  if (trace.phase !== 'inject' || recordFeedback.length === 0) return undefined;
   const evaluatedRecordIds: string[] = [];
   const needsReviewRecordIds: string[] = [];
   const actions: Array<Record<string, unknown>> = [];
+  const selected = new Set(parseStringArray(trace.selected_record_ids_json));
 
-  for (const recordId of new Set(parseStringArray(trace.selected_record_ids_json))) {
+  for (const feedback of recordFeedback) {
+    const recordId = feedback.record_id;
+    if (!recordId || !selected.has(recordId)) continue;
     const record = db.prepare(
       `SELECT * FROM memory_records
-       WHERE record_id = ?
-         AND status = 'active'
+       WHERE record_id = ? AND status = 'active'
          AND tags_json LIKE '%\"user-understanding\"%'`,
     ).get(recordId) as MemoryRecordRow | undefined;
     if (!record) continue;
     evaluatedRecordIds.push(recordId);
-    const feedbackRows = db.prepare(
-      `SELECT trace.feedback_json
-       FROM memory_trace_events AS trace
-       JOIN json_each(trace.selected_record_ids_json) AS selected
-         ON selected.value = ?
-       WHERE trace.phase = 'inject'`,
-    ).all(recordId) as Array<{ feedback_json: string }>;
-    let helpful = 0;
-    let notHelpful = 0;
-    for (const row of feedbackRows) {
-      const recordFeedback = parseMemoryTraceFeedback(row.feedback_json);
-      if (recordFeedback?.rating === 'helpful') helpful += 1;
-      if (recordFeedback?.rating === 'not_helpful') notHelpful += 1;
-    }
+    const rows = db.prepare(
+      `SELECT rating FROM memory_feedback WHERE record_id = ?`,
+    ).all(recordId) as Array<{ rating: MemoryFeedbackRating }>;
+    const helpful = rows.filter((row) => row.rating === 'helpful').length;
+    const notHelpful = rows.filter((row) => row.rating !== 'helpful' && row.rating !== 'mixed').length;
+    const explicitCorrection = feedback.source === 'system'
+      && feedback.reason_code === 'detected_explicit_user_correction';
     if (!explicitCorrection && (
-      notHelpful < USER_UNDERSTANDING_REMEDIATION_POLICY.minNotHelpful
-      || notHelpful <= helpful
-    )) {
-      continue;
-    }
+      notHelpful < USER_UNDERSTANDING_REMEDIATION_POLICY.minNotHelpful || notHelpful <= helpful
+    )) continue;
+
     const nextConfidence = record.confidence == null
       ? null
       : Math.round(Math.max(0.1, record.confidence - USER_UNDERSTANDING_REMEDIATION_POLICY.confidencePenalty) * 1000) / 1000;
@@ -1126,81 +1080,79 @@ function reconcileUserUnderstandingFeedback(
     ).run(nextConfidence, nowMs, nowMs, recordId);
     if (update.changes === 0) continue;
     needsReviewRecordIds.push(recordId);
-    actions.push({
-      recordId,
-      previousStatus: record.status,
-      nextStatus: 'needs_review',
-      previousConfidence: record.confidence,
-      nextConfidence,
-      helpful,
-      notHelpful,
-    });
+    actions.push({ recordId, previousStatus: record.status, nextStatus: 'needs_review', previousConfidence: record.confidence, nextConfidence, helpful, notHelpful });
   }
 
-  const result: MemoryFeedbackRemediationResult = {
-    triggerTraceId: trace.trace_id,
-    evaluatedRecordIds,
-    needsReviewRecordIds,
-  };
+  const result = { triggerTraceId: trace.trace_id, evaluatedRecordIds, needsReviewRecordIds };
   if (needsReviewRecordIds.length > 0) {
     db.prepare(
       `INSERT INTO memory_trace_events (
         trace_id, session_key, turn_id, phase, provider_id, request_json,
         result_count, selected_record_ids_json, skipped_reason, error,
-        feedback_json, duration_ms, created_at
-      ) VALUES (?, ?, ?, 'remediation', 'user-understanding', ?, ?, ?, NULL, NULL, '{}', 0, ?)`,
+        duration_ms, created_at, user_id, source_agent_id
+      ) VALUES (?, ?, ?, 'remediation', 'user-understanding', ?, ?, ?, NULL, NULL, 0, ?, ?, ?)`,
     ).run(
-      randomUUID(),
-      trace.session_key,
-      trace.turn_id,
-      JSON.stringify({
-        triggerTraceId: trace.trace_id,
-        reason: explicitCorrection
-          ? 'explicit_user_correction'
-          : 'repeated_not_helpful_feedback',
-        policy: USER_UNDERSTANDING_REMEDIATION_POLICY,
-        actions,
-      }),
-      needsReviewRecordIds.length,
-      JSON.stringify(needsReviewRecordIds),
-      nowMs,
+      randomUUID(), trace.session_key, trace.turn_id,
+      JSON.stringify({ triggerTraceId: trace.trace_id, reason: 'record_feedback_threshold', policy: USER_UNDERSTANDING_REMEDIATION_POLICY, actions }),
+      needsReviewRecordIds.length, JSON.stringify(needsReviewRecordIds), nowMs,
+      LOCAL_USER_ID, trace.source_agent_id,
     );
   }
   return result;
 }
 
-export function findLatestMemoryInjectTrace(
-  input: FindLatestMemoryInjectTraceInput,
-): MemoryTraceEventPayload | null {
-  const where = [
-    `session_key = ?`,
-    `phase = 'inject'`,
-    `created_at <= ?`,
-  ];
-  const row = getSqliteDatabase()
-    .prepare(
-      `SELECT * FROM memory_trace_events
-       WHERE ${where.join(' AND ')}
-       ORDER BY created_at DESC
-       LIMIT 1`,
-    )
-    .get(input.sessionKey, input.beforeMs ?? Date.now()) as MemoryTraceRow | undefined;
-  if (!row) return null;
-  const trace = memoryTraceRowToPayload(row);
-  if (input.requireSelectedRecords && trace.selectedRecordIds.length === 0) return null;
-  return trace;
+export function setMemoryTurnFeedback(input: SetMemoryTurnFeedbackInput): MemoryTraceEventPayload | null {
+  const turnId = input.turnId.trim();
+  if (!turnId) return null;
+  const trace = getSqliteDatabase().prepare(
+    `SELECT * FROM memory_trace_events WHERE turn_id = ? AND phase = 'inject'`,
+  ).get(turnId) as MemoryTraceRow | undefined;
+  if (!trace) return null;
+  const nowMs = input.nowMs ?? Date.now();
+  const source = input.source ?? 'user';
+  const selected = new Set(parseStringArray(trace.selected_record_ids_json));
+  const records = (input.records ?? []).filter((item) => selected.has(item.recordId));
+  let remediation: MemoryFeedbackRemediationResult | undefined;
+
+  runSqliteWriteTransaction((db) => {
+    const upsert = db.prepare(
+      `INSERT INTO memory_feedback (
+        feedback_id, trace_id, turn_id, record_id, level, rating, score,
+        reason_code, note, source, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT DO UPDATE SET rating = excluded.rating, score = excluded.score,
+        reason_code = excluded.reason_code, note = excluded.note, updated_at = excluded.updated_at`,
+    );
+    upsert.run(
+      randomUUID(), trace.trace_id, turnId, null, 'response', input.rating,
+      typeof input.score === 'number' ? Math.max(-1, Math.min(1, input.score)) : null,
+      input.reasonCode?.trim().slice(0, 200) || null,
+      input.note?.trim().slice(0, 2000) || null,
+      source, nowMs, nowMs,
+    );
+    for (const item of records) {
+      upsert.run(
+        randomUUID(), trace.trace_id, turnId, item.recordId, 'record', item.rating,
+        null, item.reasonCode?.trim().slice(0, 200) || null,
+        item.note?.trim().slice(0, 2000) || null,
+        source, nowMs, nowMs,
+      );
+    }
+    const rows = db.prepare(
+      `SELECT * FROM memory_feedback WHERE trace_id = ? AND level = 'record' AND source = ?`,
+    ).all(trace.trace_id, source) as MemoryFeedbackRow[];
+    remediation = reconcileUserUnderstandingFeedback(db, trace, rows, nowMs);
+  });
+  return { ...memoryTraceRowToPayload(trace), ...(remediation ? { remediation } : {}) };
 }
 
-export function setLatestMemoryInjectFeedback(
-  input: SetLatestMemoryInjectFeedbackInput,
-): MemoryTraceEventPayload | null {
-  const row = findLatestMemoryInjectTrace(input);
-  if (!row) return null;
-  return setMemoryTraceFeedback({
-    traceId: row.traceId,
-    feedback: input.feedback,
-    nowMs: input.nowMs,
-  });
+export function getMemoryTurnFeedback(turnId: string): MemoryTraceEventPayload | null {
+  const normalized = turnId.trim();
+  if (!normalized) return null;
+  const trace = getSqliteDatabase().prepare(
+    `SELECT * FROM memory_trace_events WHERE turn_id = ? AND phase = 'inject'`,
+  ).get(normalized) as MemoryTraceRow | undefined;
+  return trace ? memoryTraceRowToPayload(trace) : null;
 }
 
 export function summarizeMemoryRecallFeedback(options: {
@@ -1227,22 +1179,17 @@ export function summarizeMemoryRecallFeedback(options: {
     params.push(options.sessionKey);
   }
   const limit = Math.max(1, Math.min(5000, options.limit ?? 1000));
-  const rows = getSqliteDatabase()
-    .prepare(
-      `SELECT * FROM memory_trace_events
-       WHERE ${where.join(' AND ')}
-       ORDER BY created_at DESC
-       LIMIT ?`,
-    )
-    .all(...params, limit) as MemoryTraceRow[];
+  const rows = getSqliteDatabase().prepare(
+    `SELECT feedback.* FROM memory_feedback AS feedback
+     JOIN memory_trace_events AS trace ON trace.trace_id = feedback.trace_id
+     WHERE feedback.level = 'record' AND ${where.map((clause) => `trace.${clause}`).join(' AND ')}
+     ORDER BY feedback.updated_at DESC LIMIT ?`,
+  ).all(...params, limit) as MemoryFeedbackRow[];
 
   const summaries = new Map<string, MemoryRecallFeedbackSummary & { scoreTotal: number; scoreCount: number }>();
   for (const row of rows) {
-    const feedback = parseMemoryTraceFeedback(row.feedback_json);
-    if (!feedback) continue;
-    const recordIds = parseStringArray(row.selected_record_ids_json);
-    for (const recordId of recordIds) {
-      if (options.recordId && recordId !== options.recordId) continue;
+    const recordId = row.record_id;
+    if (!recordId || (options.recordId && recordId !== options.recordId)) continue;
       const current = summaries.get(recordId) ?? {
         recordId,
         helpful: 0,
@@ -1254,19 +1201,18 @@ export function summarizeMemoryRecallFeedback(options: {
         scoreTotal: 0,
         scoreCount: 0,
       };
-      if (feedback.rating === 'helpful') current.helpful += 1;
-      if (feedback.rating === 'not_helpful') current.notHelpful += 1;
-      if (feedback.rating === 'mixed') current.mixed += 1;
-      if (feedback.rating === 'irrelevant') current.irrelevant += 1;
+      if (row.rating === 'helpful') current.helpful += 1;
+      if (row.rating === 'not_helpful' || row.rating === 'incorrect' || row.rating === 'outdated' || row.rating === 'sensitive') current.notHelpful += 1;
+      if (row.rating === 'mixed') current.mixed += 1;
+      if (row.rating === 'irrelevant') current.irrelevant += 1;
       current.total += 1;
-      if (typeof feedback.score === 'number') {
-        current.scoreTotal += feedback.score;
+      if (typeof row.score === 'number') {
+        current.scoreTotal += row.score;
         current.scoreCount += 1;
         current.averageScore = current.scoreTotal / current.scoreCount;
       }
-      current.lastFeedbackAt ??= feedback.updatedAt ?? feedback.createdAt;
+      current.lastFeedbackAt ??= new Date(row.updated_at).toISOString();
       summaries.set(recordId, current);
-    }
   }
 
   return [...summaries.values()]
@@ -1379,19 +1325,19 @@ export function summarizeUserUnderstandingQuality(options: {
   };
   if (understandingRecordIds.size > 0) {
     const recallRows = db.prepare(
-      `SELECT selected_record_ids_json, feedback_json FROM memory_trace_events
-       WHERE phase IN ('search', 'inject') AND created_at >= ?`,
-    ).all(sinceMs) as Array<{ selected_record_ids_json: string; feedback_json: string }>;
+      `SELECT feedback.rating, trace.selected_record_ids_json
+       FROM memory_feedback AS feedback
+       JOIN memory_trace_events AS trace ON trace.trace_id = feedback.trace_id
+       WHERE feedback.level = 'response' AND trace.phase IN ('search', 'inject')
+         AND feedback.updated_at >= ?`,
+    ).all(sinceMs) as Array<{ rating: MemoryFeedbackRating; selected_record_ids_json: string }>;
     for (const row of recallRows) {
-      const feedback = parseMemoryTraceFeedback(row.feedback_json);
-      if (!feedback) continue;
-      const selected = parseStringArray(row.selected_record_ids_json);
-      if (!selected.some((recordId) => understandingRecordIds.has(recordId))) continue;
+      if (!parseStringArray(row.selected_record_ids_json).some((id) => understandingRecordIds.has(id))) continue;
       recall.total += 1;
-      if (feedback.rating === 'helpful') recall.helpful += 1;
-      if (feedback.rating === 'not_helpful') recall.notHelpful += 1;
-      if (feedback.rating === 'mixed') recall.mixed += 1;
-      if (feedback.rating === 'irrelevant') recall.irrelevant += 1;
+      if (row.rating === 'helpful') recall.helpful += 1;
+      if (row.rating === 'not_helpful' || row.rating === 'incorrect' || row.rating === 'outdated' || row.rating === 'sensitive') recall.notHelpful += 1;
+      if (row.rating === 'mixed') recall.mixed += 1;
+      if (row.rating === 'irrelevant') recall.irrelevant += 1;
     }
   }
   recall.helpfulRate = metricRate(recall.helpful, recall.total);

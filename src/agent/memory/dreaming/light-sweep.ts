@@ -3,6 +3,7 @@ import {
   appendMemoryTraceEvent,
   listMemoryRecords,
   listMemorySignals,
+  recordDreamingDecision,
 } from '../../../storage/sqlite/index.js';
 import type { DreamingLightConfig } from './config.js';
 
@@ -17,6 +18,7 @@ function resolveConfig(overrides?: Partial<DreamingLightConfig>): DreamingLightC
 
 /** Stage recent structured records as consolidation observations. */
 export async function runLightSweep(params: {
+  runId: string;
   workspaceDir: string;
   config?: Partial<DreamingLightConfig>;
   now?: Date;
@@ -46,7 +48,10 @@ export async function runLightSweep(params: {
     ).map((signal) => signal.recordId).filter((id): id is string => Boolean(id)));
     let newSignals = 0;
     for (const record of records) {
-      if (staged.has(record.id)) continue;
+      if (staged.has(record.id)) {
+        recordDreamingDecision({ runId: params.runId, recordId: record.id, action: 'skip', reasonCode: 'already_staged' });
+        continue;
+      }
       appendMemorySignal({
         signal: {
           source: 'dreaming',
@@ -60,6 +65,7 @@ export async function runLightSweep(params: {
         workspaceId: params.workspaceDir,
       });
       newSignals += 1;
+      recordDreamingDecision({ runId: params.runId, recordId: record.id, action: 'observe', reasonCode: 'recent_record_staged', score: record.importance });
     }
     const deduped = records.length - newSignals;
     trace(params.workspaceDir, 'light sweep complete', newSignals, records.map((record) => record.id), started);

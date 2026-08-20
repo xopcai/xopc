@@ -34,7 +34,7 @@ import {
   listMemoryRecords,
   listMemoryTraceEvents,
   searchMemoryRecords,
-  setMemoryTraceFeedback,
+  setMemoryTurnFeedback,
   summarizeMemoryRecallFeedback,
   upsertMemoryRecord,
 } from '../index.js';
@@ -495,10 +495,12 @@ describe('sqlite repositories', () => {
   });
 
   it('records memory trace feedback and summarizes recall quality by record', () => {
+    upsertMemoryRecord({ id: 'memory-record-1', providerId: 'local', kind: 'preference', sourceAgentId: 'main', content: 'Use the migration checklist.' });
     const traceId = appendMemoryTraceEvent({
       sourceAgentId: 'main',
       sessionKey: SESSION_KEY,
-      phase: 'search',
+      phase: 'inject',
+      turnId: 'turn-main',
       providerId: 'local',
       request: { query: 'migration checklist' },
       resultCount: 1,
@@ -506,22 +508,21 @@ describe('sqlite repositories', () => {
       durationMs: 12,
     });
 
-    const updated = setMemoryTraceFeedback({
-      traceId,
-      feedback: {
-        rating: 'helpful',
-        score: 0.8,
-        reason: 'The recalled checklist changed the final answer.',
-        source: 'evaluator',
-      },
+    const updated = setMemoryTurnFeedback({
+      turnId: 'turn-main',
+      rating: 'helpful',
+      score: 0.8,
+      reasonCode: 'changed_final_answer',
+      source: 'evaluator',
+      records: [{ recordId: 'memory-record-1', rating: 'helpful', note: 'The recalled checklist changed the final answer.' }],
       nowMs: Date.parse('2026-01-01T00:00:00.000Z'),
     });
 
-    expect(updated?.feedback?.rating).toBe('helpful');
-    expect(updated?.feedback?.score).toBe(0.8);
+    expect(updated?.feedback.find((item) => item.level === 'response')?.rating).toBe('helpful');
+    expect(updated?.feedback.find((item) => item.level === 'response')?.score).toBe(0.8);
 
     const traces = listMemoryTraceEvents({ sessionKey: SESSION_KEY });
-    expect(traces[0]?.feedback?.reason).toContain('changed the final answer');
+    expect(traces[0]?.feedback.find((item) => item.level === 'record')?.note).toContain('changed the final answer');
 
     const summaries = summarizeMemoryRecallFeedback({ recordId: 'memory-record-1' });
     expect(summaries[0]).toMatchObject({
@@ -529,22 +530,26 @@ describe('sqlite repositories', () => {
       helpful: 1,
       notHelpful: 0,
       total: 1,
-      averageScore: 0.8,
+      averageScore: null,
     });
 
+    upsertMemoryRecord({ id: 'research-memory-record', providerId: 'local', kind: 'preference', sourceAgentId: 'research', content: 'Research preference.' });
     const researchTraceId = appendMemoryTraceEvent({
       sourceAgentId: 'research',
       sessionKey: 'agent:research:webchat:default:dm:test-user',
-      phase: 'search',
+      phase: 'inject',
+      turnId: 'turn-research',
       providerId: 'local',
       request: { query: 'migration checklist' },
       resultCount: 1,
       selectedRecordIds: ['research-memory-record'],
       durationMs: 9,
     });
-    setMemoryTraceFeedback({
-      traceId: researchTraceId,
-      feedback: { rating: 'not_helpful', source: 'evaluator' },
+    setMemoryTurnFeedback({
+      turnId: 'turn-research',
+      rating: 'not_helpful',
+      source: 'evaluator',
+      records: [{ recordId: 'research-memory-record', rating: 'not_helpful' }],
     });
 
     expect(listMemoryTraceEvents().map((trace) => trace.traceId)).toEqual(expect.arrayContaining([traceId, researchTraceId]));

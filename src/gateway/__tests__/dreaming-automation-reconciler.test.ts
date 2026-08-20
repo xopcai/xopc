@@ -26,7 +26,7 @@ function config(workspaceDir: string, dreamingEnabled: boolean): Config {
       },
       dreaming: {
         ...base.userContext.dreaming,
-        enabled: dreamingEnabled,
+        mode: dreamingEnabled ? 'automatic' : 'off',
         timezone: 'Asia/Shanghai',
         phases: {
           light: { enabled: true, cron: '0 */6 * * *' },

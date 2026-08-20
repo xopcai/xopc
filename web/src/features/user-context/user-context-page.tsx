@@ -10,6 +10,7 @@ import {
   HeartHandshake,
   History,
   Lightbulb,
+  Moon,
   Pencil,
   ShieldCheck,
   Sparkles,
@@ -74,6 +75,7 @@ import {
   type UserUnderstanding,
 } from './user-context-api';
 import { AboutYouExplainerDialog } from './about-you-explainer-dialog';
+import { DreamingPanel } from './dreaming-panel';
 import { SourceDisconnectDialog } from './source-disconnect-dialog';
 import { SourcesPanel } from './sources-panel';
 import { userContextViewFromTab, type UserContextViewId } from './user-context-navigation';
@@ -749,6 +751,7 @@ export function UserContextPage() {
     { id: 'memory' as const, label: t.tabs.memory, icon: Brain, count: review.length + reviewClaims.length || undefined },
     { id: 'collaboration' as const, label: t.tabs.collaboration, icon: BookOpen },
     { id: 'sources' as const, label: t.tabs.sources, icon: Database },
+    { id: 'dreaming' as const, label: t.tabs.dreaming, icon: Moon },
     { id: 'privacy' as const, label: t.tabs.privacy, icon: ShieldCheck },
   ];
 
@@ -929,6 +932,8 @@ export function UserContextPage() {
           onViewUnderstanding={() => selectView('memory')}
         />
       ) : null}
+
+      {data && view === 'dreaming' ? <DreamingPanel language={language} /> : null}
 
       {data && view === 'privacy' && controls ? (
         <div id="you-panel-privacy" role="tabpanel" aria-labelledby="you-tab-privacy" className="space-y-6">

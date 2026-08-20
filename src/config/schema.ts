@@ -1194,7 +1194,7 @@ export const ConfigSchema = z.object({
       writeStrategy: 'local-first',
       allowExternalWrites: false,
     },
-    dreaming: { enabled: false },
+    dreaming: { mode: 'off' },
   },
   agents: {
     default: 'main',
