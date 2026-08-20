@@ -34,7 +34,7 @@ These are shared across agents unless noted.
 | `bin/` | Managed CLI shim (e.g. `xopc`). |
 | `tools/` | Bundled tool runtimes (e.g. `tools/node/current/` for Node/npm used by tools). |
 | `models.json` | Cached model registry data. |
-| `user/` | Shared `PROFILE.md`, `MEMORY.md`, curated `memories/`, and dreaming state for all agents. |
+| `user/` | Shared `PROFILE.md` and operational Dreaming event logs; durable understanding lives in `xopc.db`. |
 
 ## Per-agent tree: `agents/<agentId>/`
 
@@ -71,15 +71,14 @@ Other root Markdown files (for example `CONTEXT.md` or `SKILLS.md`) are optional
 
 | Path | Role |
 |------|------|
-| `memory/` | Dated or topical memory snippets (e.g. `YYYY-MM-DD.md`); used with memory tools. |
 | `.state/` | Machine state: `workspace.json` (profile Markdown seed metadata), `skills-cache.json`, etc. |
 | `.extensions/` | Per-workspace extension install/cache paths (when used by the extension loader). |
 
-Per-session overrides (SQLite `session_config`), **inbound** blobs (`inbound/`), and **TTS** cache (`tts/`) relate to **`agents/<agentId>/`** (agent home) or **`xopc.db`**, not under this Markdown tree. Curated memory lives under the shared `user/` tree.
+Per-session overrides (SQLite `session_config`), **inbound** blobs (`inbound/`), **TTS** cache (`tts/`), and structured memory relate to **`agents/<agentId>/`** (agent home) or **`xopc.db`**, not under this Markdown tree.
 
-### Shared user memory (`user/`) {#curated-memory}
+### Structured user understanding
 
-**`user/memories/MEMORY.md`** holds bounded curated notes and dreaming state; **`user/MEMORY.md`** holds user-profile memory. Every agent receives the same frozen snapshot according to top-level `userContext`, and can update live files through **`curated_memory`**.
+User understanding and Dreaming state live in the structured SQLite memory store. Every agent consumes the same user-owned records through the context compiler; workspace Markdown files are ordinary documents and are never treated as runtime memory.
 
 ## Which path is “the” workspace at runtime?
 

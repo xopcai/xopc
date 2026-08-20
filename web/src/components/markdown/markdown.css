@@ -3,6 +3,13 @@
 
 /* Markdown body — tokens aligned with `web` @theme + design system */
 
+.markdown-render-boundary {
+  min-width: 0;
+  isolation: isolate;
+  contain: layout paint;
+  overflow-wrap: anywhere;
+}
+
 .markdown-body {
   font-size: 0.9375rem;
   line-height: 1.5;

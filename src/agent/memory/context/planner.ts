@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
 import {
+  appendMemorySignal,
   appendMemoryTraceEvent,
   consumeMemoryReferenceConsent,
   ensureMemoryReferenceConsentRequest,
@@ -233,6 +234,20 @@ export class UserContextPlanner {
       : '';
     const block = [buildUserContextBlock(sections.join('\n\n')), consentNotice].filter(Boolean).join('\n\n');
     try {
+      for (const item of items) {
+        appendMemorySignal({
+          signal: {
+            source: 'context_injection',
+            recordId: item.recordId,
+            score: item.score,
+            content: item.content,
+            metadata: { traceId, query },
+          },
+          providerId: 'local',
+          sourceAgentId: params.agentId,
+          sessionKey: params.sessionKey,
+        });
+      }
       appendMemoryTraceEvent({
         traceId,
         phase: 'inject',

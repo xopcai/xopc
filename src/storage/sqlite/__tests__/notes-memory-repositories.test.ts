@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -8,9 +8,7 @@ import {
   closeXopcDatabase,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
-  searchMemoryIndex,
   searchMemoryRecords,
-  syncMemoryIndex,
   upsertMemoryRecord,
   upsertNoteRecord,
   listNoteRecords,
@@ -20,14 +18,6 @@ import {
 
 describe('sqlite notes and memory repositories', () => {
   let stateDir: string;
-
-  function todayMemoryFileName(): string {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}.md`;
-  }
 
   beforeEach(() => {
     stateDir = mkdtempSync(join(tmpdir(), 'xopc-notes-memory-'));
@@ -67,27 +57,6 @@ describe('sqlite notes and memory repositories', () => {
 
     expect(deleteNoteRecord('note-1')).toBe(true);
     expect(getNoteRecord('note-1')).toBeNull();
-  });
-
-  it('indexes memory markdown and returns FTS hits', () => {
-    const workspaceDir = join(stateDir, 'workspace');
-    const memoryDir = join(workspaceDir, 'memory');
-    mkdirSync(memoryDir, { recursive: true });
-    const dailyFileName = todayMemoryFileName();
-    const dailyPath = join(memoryDir, dailyFileName);
-    writeFileSync(dailyPath, '# Daily\nproject-phoenix launch checklist\n');
-
-    syncMemoryIndex({ userId: 'local-owner', workspaceDir });
-    const hits = searchMemoryIndex({
-      userId: 'local-owner',
-      query: 'phoenix',
-      maxResults: 5,
-      minScore: 0.01,
-    });
-
-    expect(hits.length).toBeGreaterThan(0);
-    expect(hits[0].path).toContain(`memory/${dailyFileName}`);
-    expect(hits[0].lines).toContain('phoenix');
   });
 
   it('recalls memory from a longer natural-language query and preserves rank order', () => {

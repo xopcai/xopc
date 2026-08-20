@@ -179,7 +179,6 @@ const PROFILE_SYSTEM_MARKDOWN_NAME_LOWER = new Set(
     'TOOLS.md',
     'AGENTS.md',
     'HEARTBEAT.md',
-    'MEMORY.md',
   ].map((f) => f.toLowerCase()),
 );
 

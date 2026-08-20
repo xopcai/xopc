@@ -2,6 +2,7 @@
 
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { MarkdownView } from '@/components/markdown/markdown-view';
@@ -21,10 +22,12 @@ function renderMarkdown(openHttpLinksInNewTab: boolean): HTMLDivElement {
   const root = createRoot(container);
   act(() => {
     root.render(
-      <MarkdownView
-        content="[Example](https://example.com)"
-        openHttpLinksInNewTab={openHttpLinksInNewTab}
-      />,
+      <MemoryRouter>
+        <MarkdownView
+          content="[Example](https://example.com)"
+          openHttpLinksInNewTab={openHttpLinksInNewTab}
+        />
+      </MemoryRouter>,
     );
   });
   mounted.push({ container, unmount: () => root.unmount() });

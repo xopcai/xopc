@@ -56,6 +56,7 @@ describe('ChatComposerInput contextual suggestion', () => {
           onWireInput={() => {}}
           adjustHeight={() => {}}
           processFiles={async () => {}}
+          processPastedText={async () => {}}
           setIsComposing={() => {}}
           kbdRef={kbdRef}
           chatMessages={{ clipboardFileTypeUnsupported: '不支持的文件类型' }}

@@ -9,7 +9,7 @@ describe('normalizeDreamingFromConfig', () => {
       frequency: '0 3 * * *',
       timezone: 'Asia/Shanghai',
       phases: {
-        light: { enabled: true, cron: '0 */6 * * *', lookbackDays: 2, limit: 100, dedupeSimilarity: 0.9 },
+        light: { enabled: true, cron: '0 */6 * * *', lookbackDays: 2, limit: 100 },
         deep: {
           enabled: true,
           cron: '30 2 * * *',

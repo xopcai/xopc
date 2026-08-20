@@ -1,8 +1,6 @@
 import type { Hono } from 'hono';
 
-import { BuiltinMemoryStore } from '../../../agent/memory/builtin-memory-store.js';
 import { createMemoryManagerFromConfig } from '../../../agent/memory/create-memory-manager.js';
-import { resolveBuiltinMemoryStoreConfig } from '../../../agent/memory/memory-config.js';
 import { discoverMemoryPlugins } from '../../../agent/memory/plugin-discovery.js';
 import { resolveAdaptiveUnderstandingCadence } from '../../../agent/memory/understanding/quality.js';
 import type {
@@ -55,7 +53,7 @@ const MEMORY_KINDS = new Set<MemoryKind>([
   'open_question',
   'milestone',
   'current_state',
-  'curated_note',
+  'user_note',
   'workspace_fact',
   'daily_note',
   'session_summary',
@@ -549,8 +547,7 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
     const providerId = c.req.param('id');
     const cfg = deps.service.currentConfig as Config;
     const workspace = deps.service.currentWorkspacePath;
-    const store = new BuiltinMemoryStore(resolveBuiltinMemoryStoreConfig(workspace, cfg));
-    const manager = createMemoryManagerFromConfig(workspace, store, cfg);
+    const manager = createMemoryManagerFromConfig(cfg);
     await manager.initializeAll(`memory-provider-test-${Date.now()}`, { workspace, agentId: resolveDefaultAgentId(cfg) });
     const provider = manager.providersList.find((p) => p.id === providerId);
     if (!provider) return c.json({ providerId, available: false, checks: [{ name: 'load', ok: false, message: 'Provider not loaded' }] }, 404);

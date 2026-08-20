@@ -1,7 +1,6 @@
 // Memory search tools for xopc agent
 import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
-import { recordDreamingRecalls } from '../memory/dreaming/short-term-store.js';
 import type { MemoryManager } from '../memory/manager.js';
 import type { MemoryScope } from '../memory/types.js';
 
@@ -17,20 +16,17 @@ const MemorySearchSchema = Type.Object({
 type MemorySearchParams = { query: string; maxResults?: number; minScore?: number };
 
 export interface MemoryToolOptions {
-  workspaceDir: string;
-  dreamingRoot: string;
   getMemoryManager: () => MemoryManager;
   getScope?: () => Partial<MemoryScope>;
-  shouldRecordDreamingRecalls?: () => boolean;
 }
 
 export function createMemorySearchTool(options: MemoryToolOptions): AgentTool {
-  const { dreamingRoot, getMemoryManager } = options;
+  const { getMemoryManager } = options;
   return {
     name: 'memory_search',
     label: '🔍 Memory Search',
     description:
-      'Mandatory recall step: search indexed profile, curated, and session memory sources before answering questions about prior work, decisions, dates, people, preferences, or todos; returns top snippets with source path + lines.',
+      'Search structured user-understanding records before answering questions about prior work, decisions, dates, people, preferences, or todos; returns ranked snippets with stable record ids.',
     parameters: MemorySearchSchema,
 
     async execute(
@@ -55,41 +51,18 @@ export function createMemorySearchTool(options: MemoryToolOptions): AgentTool {
             content: result.snippet,
             metadata: {
               providerId: result.citation.providerId,
-              path: result.citation.path,
-              lineStart: result.citation.lineStart,
-              lineEnd: result.citation.lineEnd,
+              query,
             },
           });
-        }
-        // Dreaming: record short-term recall evidence from memory_search.
-        if (options.shouldRecordDreamingRecalls?.() !== false) {
-          void recordDreamingRecalls({
-            dreamingRoot,
-            query,
-            matches: results.map((entry) => ({
-              file: entry.citation.path ?? entry.record.source.path ?? entry.record.id,
-              lines: entry.snippet,
-              score: entry.score,
-              lineNumbers:
-                entry.citation.lineStart != null
-                  ? [entry.citation.lineStart, entry.citation.lineEnd ?? entry.citation.lineStart]
-                  : [],
-            })),
-          }).catch(() => {});
         }
         const withCitations = results.map((entry) => ({
           id: entry.record.id,
           ownerAgentId: entry.record.provenance.sourceAgentId,
           kind: entry.record.kind,
-          file: entry.citation.path ?? entry.record.source.path,
-          lines: entry.snippet,
+          content: entry.snippet,
           score: entry.score,
-          lineNumbers:
-            entry.citation.lineStart != null
-              ? [entry.citation.lineStart, entry.citation.lineEnd ?? entry.citation.lineStart]
-              : [],
-          citation: `${entry.citation.path ?? entry.record.id}${entry.citation.lineStart != null ? `#L${entry.citation.lineStart}${entry.citation.lineEnd && entry.citation.lineEnd !== entry.citation.lineStart ? `-L${entry.citation.lineEnd}` : ''}` : ''}`,
-          snippet: `${entry.snippet.trim()}\n\nSource: ${entry.citation.path ?? entry.record.id}${entry.citation.lineStart != null ? `#L${entry.citation.lineStart}${entry.citation.lineEnd && entry.citation.lineEnd !== entry.citation.lineStart ? `-L${entry.citation.lineEnd}` : ''}` : ''}`,
+          citation: entry.record.id,
+          snippet: `${entry.snippet.trim()}\n\nMemory record: ${entry.record.id}`,
         }));
 
         return {
@@ -111,19 +84,17 @@ export function createMemorySearchTool(options: MemoryToolOptions): AgentTool {
 // Memory Get Tool
 // =============================================================================
 const MemoryGetSchema = Type.Object({
-  path: Type.String(),
-  from: Type.Optional(Type.Number()),
-  lines: Type.Optional(Type.Number()),
+  id: Type.String(),
 });
 
-type MemoryGetParams = { path: string; from?: number; lines?: number };
+type MemoryGetParams = { id: string };
 
 export function createMemoryGetTool(options: MemoryToolOptions): AgentTool {
   const { getMemoryManager } = options;
   return {
     name: 'memory_get',
     label: '📄 Memory Get',
-    description: 'Safe snippet read from a source path returned by memory_search, with optional from/lines; pull only the needed lines and keep context small.',
+    description: 'Read one structured memory record by an id returned from memory_search.',
     parameters: MemoryGetSchema,
 
     async execute(
@@ -131,24 +102,22 @@ export function createMemoryGetTool(options: MemoryToolOptions): AgentTool {
       params: any,
       _signal?: AbortSignal,
     ): Promise<AgentToolResult<{}>> {
-      const { path, from, lines } = params as MemoryGetParams;
+      const { id } = params as MemoryGetParams;
 
       try {
         const result = await getMemoryManager().read({
-          path,
-          from,
-          lines,
+          id,
           scope: options.getScope?.(),
         });
         if (!result) {
           return {
-            content: [{ type: 'text', text: `File not found: ${path}` }],
-            details: { path, text: '' },
+            content: [{ type: 'text', text: `Memory record not found: ${id}` }],
+            details: { id, text: '' },
           };
         }
         return {
           content: [{ type: 'text', text: result.record.content }],
-          details: { path, text: result.record.content, lineNumbers: result.lineNumbers },
+          details: { id, record: result.record },
         };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

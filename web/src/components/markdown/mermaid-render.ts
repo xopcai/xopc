@@ -42,26 +42,3 @@ function escapeHtml(text: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 }
-
-/** Reverse the HTML-entity escaping that marked applies inside code blocks. */
-function unescapeHtml(text: string): string {
-  return text
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"');
-}
-
-/**
- * Post-process marked HTML output: replace `<pre><code class="language-mermaid">`
- * blocks with rendered SVG diagrams.
- *
- * This is intentionally a post-process step (not a marked renderer override)
- * so it doesn't conflict with `markedHighlight`'s code hook.
- */
-export function replaceMermaidBlocks(html: string): string {
-  return html.replace(
-    /<pre><code class="(?:hljs\s+)?language-mermaid">([\s\S]*?)<\/code><\/pre>/g,
-    (_, code) => renderMermaidBlock(unescapeHtml(code)).html,
-  );
-}

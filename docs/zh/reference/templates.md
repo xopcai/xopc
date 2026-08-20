@@ -28,7 +28,7 @@ xopc 使用 **profile Markdown** 模板定义智能体行为与知识。执行 `
 
 ## 记忆系统
 
-记忆不属于 Agent profile 模板。所有 Agent 使用同一份用户存储：**`user/MEMORY.md`** 与 **`user/memories/MEMORY.md`**。通过顶层 `userContext` 统一配置，并在运行时使用 `memory_search`、`memory_get` 和 `curated_memory`。见 [共享用户记忆](../workspace.md#curated-memory)。
+记忆不属于 Agent profile 模板。所有 Agent 使用 SQLite 中同一套用户所有的结构化记录。通过顶层 `userContext` 配置，并在运行时使用 `memory_search` 和 `memory_get`。见 [统一记忆架构](../memory-architecture.md)。
 
 ## 编辑建议
 

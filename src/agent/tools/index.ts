@@ -32,7 +32,6 @@ export {
   createMemoryGetTool,
   type MemoryToolOptions,
 } from './memory-tool.js';
-export { createCuratedMemoryTool } from './curated-memory-tool.js';
 export { createSessionSearchTool } from './session-search-tool.js';
 
 // Grep and Find tools

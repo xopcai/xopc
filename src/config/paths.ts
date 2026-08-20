@@ -55,7 +55,6 @@ export const WORKSPACE_FILES = {
 } as const;
 
 export const USER_PROFILE_FILENAME = 'PROFILE.md';
-export const USER_MEMORY_FILENAME = 'MEMORY.md';
 
 // ============================================
 // Path Resolution Functions
@@ -90,11 +89,6 @@ export function resolveUserDir(): string {
 /** Global human/user profile Markdown (`~/.xopc/user/PROFILE.md`). */
 export function resolveUserProfilePath(): string {
   return join(resolveUserDir(), USER_PROFILE_FILENAME);
-}
-
-/** Global human/user long-term memory Markdown (`~/.xopc/user/MEMORY.md`). */
-export function resolveUserMemoryPath(): string {
-  return join(resolveUserDir(), USER_MEMORY_FILENAME);
 }
 
 /**

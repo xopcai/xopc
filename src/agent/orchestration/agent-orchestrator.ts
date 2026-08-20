@@ -141,7 +141,6 @@ export class AgentOrchestrator {
         if (content.includes(DREAMING_LIGHT_SWEEP_TOKEN)) {
           const result = await runLightSweep({
             workspaceDir: scope.workspaceDir,
-            dreamingRoot: scope.memoriesDir,
             config: resolved.phases.light,
           });
           const event: DreamingEvent = {
@@ -149,12 +148,11 @@ export class AgentOrchestrator {
             ok: result.ok, reason: result.reason, durationMs: Date.now() - t0,
             scannedEntries: result.scannedEntries, newSignals: result.newSignals, deduped: result.deduped,
           };
-          await appendDreamingEvent(scope.memoriesDir, event);
+          await appendDreamingEvent(scope.dreamingRoot, event);
         } else if (content.includes(DREAMING_REM_SWEEP_TOKEN)) {
           const result = await runRemPatterns({
             agentId: scope.agentId,
             workspaceDir: scope.workspaceDir,
-            dreamingRoot: scope.memoriesDir,
             config: resolved.phases.rem,
             sensitiveWritePolicy: cfg.userContext.privacy.sensitiveWritePolicy,
             promotionWritePolicy: resolved.promotionWritePolicy.decision,
@@ -164,22 +162,21 @@ export class AgentOrchestrator {
             ok: result.ok, reason: result.reason, durationMs: Date.now() - t0,
             patternsDiscovered: result.patternsDiscovered, entriesAnalyzed: result.entriesAnalyzed,
           };
-          await appendDreamingEvent(scope.memoriesDir, event);
+          await appendDreamingEvent(scope.dreamingRoot, event);
         } else {
           const result = await runDreamingDeepPromotion({
             agentId: scope.agentId,
             workspaceDir: scope.workspaceDir,
-            dreamingRoot: scope.memoriesDir,
             config: resolved.phases.deep,
             sensitiveWritePolicy: cfg.userContext.privacy.sensitiveWritePolicy,
-            memoryManager: this.agentManager.getMemoryManagerForSession(sessionKey),
+            promotionWritePolicy: resolved.promotionWritePolicy.decision,
           });
           const event: DreamingEvent = {
             timestamp: new Date().toISOString(), phase: 'deep',
             ok: result.ok, reason: result.reason, durationMs: Date.now() - t0,
             candidates: result.candidates, applied: result.applied,
           };
-          await appendDreamingEvent(scope.memoriesDir, event);
+          await appendDreamingEvent(scope.dreamingRoot, event);
         }
         return;
       }

@@ -1,15 +1,11 @@
 import type { Config } from '../config/schema.js';
-import { resolveUserDir } from '../config/paths.js';
-import { BuiltinMemoryStore } from '../agent/memory/builtin-memory-store.js';
 import { createMemoryManagerFromConfig } from '../agent/memory/create-memory-manager.js';
-import { resolveBuiltinMemoryStoreConfig } from '../agent/memory/memory-config.js';
 import type { MemoryManager } from '../agent/memory/manager.js';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('UserContextRuntimeRegistry');
 
 export interface UserContextRuntime {
-  builtinMemoryStore: BuiltinMemoryStore;
   memoryManager: MemoryManager;
 }
 
@@ -19,13 +15,8 @@ export class UserContextRuntimeRegistry {
 
   getOrCreate(config: Config): UserContextRuntime {
     if (this.runtime) return this.runtime;
-    const userContextRoot = resolveUserDir();
-    const builtinMemoryStore = new BuiltinMemoryStore(
-      resolveBuiltinMemoryStoreConfig(userContextRoot, config),
-    );
     this.runtime = {
-      builtinMemoryStore,
-      memoryManager: createMemoryManagerFromConfig(userContextRoot, builtinMemoryStore, config),
+      memoryManager: createMemoryManagerFromConfig(config),
     };
     return this.runtime;
   }

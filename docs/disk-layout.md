@@ -30,8 +30,7 @@ Default: `~/.xopc/`
 | `bin/`, `tools/` | Managed CLI shim and tool runtimes. |
 | `models.json` | Optional custom model registry data. |
 | `user/PROFILE.md` | Shared user profile loaded by every agent. |
-| `user/MEMORY.md` | Shared user-profile memory edited through memory tools. |
-| `user/memories/` | Shared curated memory and dreaming state used by every agent. |
+| `user/dreaming/` | Operational Dreaming event logs; not a memory source. |
 
 ## External compatibility roots
 

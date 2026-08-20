@@ -77,7 +77,6 @@ import { basename, resolve, sep } from 'node:path';
 
 import {
   isMemorySubsystemEnabled,
-  shouldRegisterCuratedMemoryTool,
 } from './memory/memory-config.js';
 import type { MemoryManager } from './memory/manager.js';
 import { resolveDreamingRoot } from './memory/dreaming/scope.js';
@@ -1044,10 +1043,6 @@ export class AgentManager implements AgentInstanceGateway {
       void rt.memoryManager
         .initializeAll(sessionKey, { workspace: resolvedPath, agentId: profile.agentId })
         .catch((err) => log.warn({ err, sessionKey }, 'memory initializeAll failed'));
-    }
-
-    if (isMemorySubsystemEnabled(cfg) && shouldRegisterCuratedMemoryTool(cfg)) {
-      rt.builtinMemoryStore.loadFromDiskSync();
     }
 
     const activeProjectContext = buildExecutionScopeContextForPrompt(sessionKey);

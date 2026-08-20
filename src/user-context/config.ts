@@ -46,13 +46,13 @@ export const UserMemoryConfigSchema = z
   .object({
     mode: UserMemoryModeSchema.default('off'),
     sources: z
-      .array(z.enum(['session', 'userProfile', 'agentProfile', 'curated', 'workspace', 'connectedSources']))
+      .array(z.enum(['session', 'userProfile', 'agentProfile', 'understanding', 'workspace', 'connectedSources']))
       .default(['session']),
     writePolicy: z
       .object({
         userProfile: z.enum(['deny', 'confirm', 'allow']).optional(),
         agentProfile: z.enum(['deny', 'confirm', 'allow']).optional(),
-        curated: z.enum(['deny', 'confirm', 'allow']).optional(),
+        understanding: z.enum(['deny', 'confirm', 'allow']).optional(),
         workspace: z.enum(['deny', 'confirm', 'allow']).optional(),
       })
       .strict()
@@ -130,7 +130,6 @@ export const UserContextDreamingSchema = z
         light: DreamingPhaseSchema.extend({
           lookbackDays: z.number().int().positive().optional(),
           limit: z.number().int().nonnegative().optional(),
-          dedupeSimilarity: z.number().min(0).max(1).optional(),
         }).strict().optional(),
         deep: DreamingPhaseSchema.extend({
           minScore: z.number().min(0).max(1).optional(),
@@ -171,7 +170,7 @@ export const UserContextConfigSchema = z
   .default({
     enabled: true,
     preferences: { responseLanguage: 'auto' },
-    memory: { mode: 'confirmWrite', sources: ['session', 'curated'], writePolicy: { curated: 'confirm' } },
+    memory: { mode: 'confirmWrite', sources: ['session', 'understanding'], writePolicy: { understanding: 'confirm' } },
     understanding: {
       enabled: true,
       adaptiveCadence: true,

@@ -1,29 +1,3 @@
-/**
- * Curated Markdown compatibility store:
- * - shared memories: `~/.xopc/user/memories/MEMORY.md`
- * - user profile: `~/.xopc/user/MEMORY.md`
- */
-
-export interface MemoryStoreConfig {
-  workspaceDir: string;
-  /** Absolute path to the shared user memories directory. */
-  memoriesDir: string;
-  /** Absolute path to global user memory (`~/.xopc/user/MEMORY.md`). */
-  userMemoryPath: string;
-  /** Max chars for MEMORY.md entries (excluding delimiter overhead in limit check uses joined body). */
-  memoryCharLimit: number;
-  /** Max chars for global user memory entries. */
-  userCharLimit: number;
-  /** When false, global user memory is not loaded into the snapshot or shown in the system prompt. */
-  userProfileEnabled?: boolean;
-}
-
-/** Frozen at session start; not updated when tools mutate disk mid-session. */
-export interface MemorySnapshot {
-  memory: string;
-  user: string;
-}
-
 export type MemoryKind =
   | 'user_profile'
   | 'preference'
@@ -36,7 +10,7 @@ export type MemoryKind =
   | 'open_question'
   | 'milestone'
   | 'current_state'
-  | 'curated_note'
+  | 'user_note'
   | 'workspace_fact'
   | 'daily_note'
   | 'session_summary'
@@ -145,23 +119,18 @@ export interface MemorySearchResult {
 }
 
 export interface MemoryReadRequest {
-  id?: string;
-  path?: string;
-  from?: number;
-  lines?: number;
+  id: string;
   scope?: Partial<MemoryScope>;
 }
 
 export interface MemoryReadResult {
   record: MemoryRecord;
-  lineNumbers?: { start: number; end: number };
 }
 
 export interface MemoryListRequest {
   kind?: MemoryKind;
   status?: MemoryStatus;
   canonicalKey?: string;
-  target?: 'memory' | 'user';
   scope?: Partial<MemoryScope>;
 }
 
@@ -170,7 +139,6 @@ export interface MemoryWriteRequest {
   content: string;
   canonicalKey?: string;
   scope?: Partial<MemoryScope>;
-  target?: 'memory' | 'user';
   tags?: string[];
   source?: MemoryRecord['source'];
   confidence?: number;
@@ -187,23 +155,17 @@ export interface MemoryWriteRequest {
   expiresAt?: string;
   supersedesRecordId?: string;
   conflictGroupId?: string;
-  approved?: boolean;
 }
 
 export interface MemoryUpdateRequest {
-  id?: string;
-  matchText?: string;
+  id: string;
   content: string;
   scope?: Partial<MemoryScope>;
-  target?: 'memory' | 'user';
-  approved?: boolean;
 }
 
 export interface MemoryDeleteRequest {
-  id?: string;
-  matchText?: string;
+  id: string;
   scope?: Partial<MemoryScope>;
-  target?: 'memory' | 'user';
 }
 
 export interface MemoryWriteResult {
@@ -244,18 +206,12 @@ export type MemorySyncEvent =
       sessionId?: string;
     }
   | {
-      type: 'write';
-      action: 'add' | 'replace' | 'remove';
-      target?: 'memory' | 'user';
-      content: string;
-    }
-  | {
       type: 'signal';
       signal: MemorySignal;
     };
 
 export interface MemorySignal {
-  source: 'search_recall' | 'session_summary' | 'explicit_remember' | 'background_review' | 'dreaming';
+  source: 'search_recall' | 'context_injection' | 'session_summary' | 'explicit_remember' | 'background_review' | 'dreaming';
   recordId?: string;
   score?: number;
   content?: string;

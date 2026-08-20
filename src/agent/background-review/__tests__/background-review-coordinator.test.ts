@@ -19,7 +19,7 @@ function config(memory: UserContextConfig['memory'], understanding?: Partial<Use
 }
 
 describe('BackgroundReviewCoordinator', () => {
-  it('schedules understanding by cadence without a curated-memory tool dependency', async () => {
+  it('schedules understanding by cadence without a storage mutation tool dependency', async () => {
     const cfg = config({
       mode: 'confirmWrite',
       sources: ['session'],

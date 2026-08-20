@@ -31,30 +31,7 @@ export const DEFAULT_REM_CRON = '0 5 * * 0';
 export const DEFAULT_RECENCY_HALF_LIFE_DAYS = 14;
 export const DEFAULT_MAX_AGE_DAYS = 30;
 
-// ── Scoring weights ────────────────────────────────────────────────────
-
-/** Milliseconds in one day (used for time-decay calculations). */
-export const MS_PER_DAY = 86_400_000;
-
-/** Weight applied to recall-count reinforcement (logarithmic boost). */
-export const REINFORCEMENT_WEIGHT = 0.12;
-
-/** Weight applied to signal-diversity bonus. */
-export const DIVERSITY_WEIGHT = 0.08;
-
-/** Number of signal dimensions used for diversity calculation. */
-export const DIVERSITY_DIMENSION_COUNT = 4;
-
-// ── File paths ─────────────────────────────────────────────────────────
+// ── Operational event log ──────────────────────────────────────────────
 
 export const DREAMING_DIR_RELATIVE = '.dreams';
-export const SHORT_TERM_RECALL_STORE_RELATIVE = path.join(DREAMING_DIR_RELATIVE, 'short-term-recall.json');
-export const SHORT_TERM_PROMOTION_LOCK_RELATIVE = path.join(
-  DREAMING_DIR_RELATIVE,
-  'short-term-promotion.lock',
-);
-export const DREAMING_LAST_RUN_RELATIVE = path.join(DREAMING_DIR_RELATIVE, 'last-run.json');
 export const DREAMING_EVENTS_LOG_RELATIVE = path.join(DREAMING_DIR_RELATIVE, 'events.jsonl');
-
-export const MEMORY_MD_FILENAME = 'MEMORY.md';
-export const DREAMS_MD_FILENAME = 'DREAMS.md';

@@ -1178,8 +1178,8 @@ export const ConfigSchema = z.object({
     preferences: { responseLanguage: 'auto' },
     memory: {
       mode: 'confirmWrite',
-      sources: ['session', 'curated'],
-      writePolicy: { curated: 'confirm' },
+      sources: ['session', 'understanding'],
+      writePolicy: { understanding: 'confirm' },
     },
     understanding: {
       enabled: true,

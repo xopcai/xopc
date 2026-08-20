@@ -41,7 +41,6 @@ export interface MemoryWritePolicy {
   allowExternalWrites?: boolean;
   allowedProviderIds?: string[];
   autoWriteKinds?: MemoryKind[];
-  requireUserProfileApproval?: boolean;
 }
 
 export class MemoryManager {
@@ -49,8 +48,8 @@ export class MemoryManager {
   private toolToProvider = new Map<string, MemoryProvider>();
   private readonly routing: Required<MemoryRoutingOptions>;
   private readonly loadProviders?: () => Promise<MemoryProvider[]>;
-  private readonly writePolicy: Required<Pick<MemoryWritePolicy, 'allowExternalWrites' | 'requireUserProfileApproval'>> &
-    Omit<MemoryWritePolicy, 'allowExternalWrites' | 'requireUserProfileApproval'>;
+  private readonly writePolicy: Required<Pick<MemoryWritePolicy, 'allowExternalWrites'>> &
+    Omit<MemoryWritePolicy, 'allowExternalWrites'>;
   private pluginProvidersLoaded = false;
   private readonly understanding: UserUnderstandingService;
   private readonly lastTurnSourceItem = new Map<string, string>();
@@ -65,7 +64,6 @@ export class MemoryManager {
     this.loadProviders = options.loadProviders;
     this.writePolicy = {
       allowExternalWrites: options.writePolicy?.allowExternalWrites ?? false,
-      requireUserProfileApproval: options.writePolicy?.requireUserProfileApproval ?? false,
       allowedProviderIds: options.writePolicy?.allowedProviderIds,
       autoWriteKinds: options.writePolicy?.autoWriteKinds,
     };
@@ -103,9 +101,7 @@ export class MemoryManager {
     return [...this.providers];
   }
 
-  /**
-   * Non-builtin static instructions (builtin uses curated snapshot in system prompt builder).
-   */
+  /** Static instructions contributed by external memory providers. */
   buildExternalSystemPrompt(): string {
     const blocks: string[] = [];
     for (const p of this.providers) {
@@ -358,19 +354,6 @@ export class MemoryManager {
     return true;
   }
 
-  onMemoryWrite(action: 'add' | 'replace' | 'remove', target: 'memory' | 'user', content: string): void {
-    for (const p of this.providers) {
-      if (p.capabilities.local) {
-        continue;
-      }
-      try {
-        p.sync?.({ type: 'write', action, target, content });
-      } catch (err) {
-        log.debug({ err, id: p.id }, 'memory write sync failed');
-      }
-    }
-  }
-
   recordSignal(signal: MemorySignal): void {
     for (const p of this.providers) {
       const started = Date.now();
@@ -551,19 +534,6 @@ export class MemoryManager {
         this.writePolicy.autoWriteKinds.length > 0 &&
         !this.writePolicy.autoWriteKinds.includes(writeRequest.kind)
       ) {
-        return false;
-      }
-      if (
-        this.writePolicy.requireUserProfileApproval &&
-        writeRequest.kind === 'user_profile' &&
-        !writeRequest.approved
-      ) {
-        return false;
-      }
-    }
-    if (operation === 'update' && this.writePolicy.requireUserProfileApproval) {
-      const updateRequest = request as MemoryUpdateRequest;
-      if (updateRequest.target === 'user' && !updateRequest.approved) {
         return false;
       }
     }
