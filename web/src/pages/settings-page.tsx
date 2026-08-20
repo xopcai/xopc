@@ -5,7 +5,6 @@ import { messages } from '@/i18n/messages';
 import {
   loadAppManagementSettingsPanel,
   loadAppearanceSettingsPanel,
-  loadDreamingSettingsPanel,
   loadDesktopPetSettingsPanel,
   loadGatewaySettingsPanel,
   loadHeartbeatSettingsPanel,
@@ -31,7 +30,6 @@ const SECTIONS: SettingsSectionId[] = [
   'heartbeat',
   'remote-access',
   'shares',
-  'dreams',
 ];
 
 const SetupStatusPanel = lazy(() => loadSetupStatusPanel().then((m) => ({ default: m.SetupStatusPanel })));
@@ -54,9 +52,6 @@ const HeartbeatSettingsPanel = lazy(() =>
 );
 const RemoteAccessHub = lazy(() => loadRemoteAccessHub().then((m) => ({ default: m.RemoteAccessHub })));
 const SharesSettingsPanel = lazy(() => loadSharesSettingsPanel().then((m) => ({ default: m.SharesSettingsPanel })));
-const DreamingSettingsPanel = lazy(() =>
-  loadDreamingSettingsPanel().then((m) => ({ default: m.DreamingSettingsPanel })),
-);
 const CapabilityPresetsSettingsPanel = lazy(() =>
   loadCapabilityPresetsSettingsPanel().then((m) => ({ default: m.CapabilityPresetsSettingsPanel })),
 );
@@ -134,10 +129,6 @@ export function SettingsPage() {
 
   if (id === 'shares') {
     return renderLazySection(SharesSettingsPanel);
-  }
-
-  if (id === 'dreams') {
-    return renderLazySection(DreamingSettingsPanel);
   }
 
   return (

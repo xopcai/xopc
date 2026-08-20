@@ -5,8 +5,9 @@
  * to response generation.
  */
 
+import { randomUUID } from 'node:crypto';
+
 import type { Config } from '../../config/schema.js';
-import { resolveEffectiveAgentProfileForSession } from '../../config/agent-profile.js';
 import type { InboundMessage } from '../../infra/bus/index.js';
 import type { SessionConfigStore, SessionStore } from '../../session/index.js';
 import type { SessionHydrator } from '../session/index.js';
@@ -34,11 +35,7 @@ import {
   DREAMING_LIGHT_SWEEP_TOKEN,
   DREAMING_REM_SWEEP_TOKEN,
 } from '../memory/dreaming/constants.js';
-import { runDreamingDeepPromotion } from '../memory/dreaming/deep-promotion.js';
-import { appendDreamingEvent, type DreamingEvent } from '../memory/dreaming/events.js';
-import { runLightSweep } from '../memory/dreaming/light-sweep.js';
-import { runRemPatterns } from '../memory/dreaming/rem-patterns.js';
-import { resolveDreamingAgentScope } from '../memory/dreaming/scope.js';
+import { runDreamingPhase } from '../memory/dreaming/runner.js';
 
 const log = createLogger('AgentOrchestrator');
 
@@ -133,51 +130,10 @@ export class AgentOrchestrator {
           log.warn({ sessionKey }, 'Dreaming sweep skipped: config unavailable');
           return;
         }
-        const profile = resolveEffectiveAgentProfileForSession(cfg, sessionKey);
-        const scope = resolveDreamingAgentScope(cfg, profile.agentId);
-        const resolved = scope.config;
-        const t0 = Date.now();
-
-        if (content.includes(DREAMING_LIGHT_SWEEP_TOKEN)) {
-          const result = await runLightSweep({
-            workspaceDir: scope.workspaceDir,
-            config: resolved.phases.light,
-          });
-          const event: DreamingEvent = {
-            timestamp: new Date().toISOString(), phase: 'light',
-            ok: result.ok, reason: result.reason, durationMs: Date.now() - t0,
-            scannedEntries: result.scannedEntries, newSignals: result.newSignals, deduped: result.deduped,
-          };
-          await appendDreamingEvent(scope.dreamingRoot, event);
-        } else if (content.includes(DREAMING_REM_SWEEP_TOKEN)) {
-          const result = await runRemPatterns({
-            agentId: scope.agentId,
-            workspaceDir: scope.workspaceDir,
-            config: resolved.phases.rem,
-            sensitiveWritePolicy: cfg.userContext.privacy.sensitiveWritePolicy,
-            promotionWritePolicy: resolved.promotionWritePolicy.decision,
-          });
-          const event: DreamingEvent = {
-            timestamp: new Date().toISOString(), phase: 'rem',
-            ok: result.ok, reason: result.reason, durationMs: Date.now() - t0,
-            patternsDiscovered: result.patternsDiscovered, entriesAnalyzed: result.entriesAnalyzed,
-          };
-          await appendDreamingEvent(scope.dreamingRoot, event);
-        } else {
-          const result = await runDreamingDeepPromotion({
-            agentId: scope.agentId,
-            workspaceDir: scope.workspaceDir,
-            config: resolved.phases.deep,
-            sensitiveWritePolicy: cfg.userContext.privacy.sensitiveWritePolicy,
-            promotionWritePolicy: resolved.promotionWritePolicy.decision,
-          });
-          const event: DreamingEvent = {
-            timestamp: new Date().toISOString(), phase: 'deep',
-            ok: result.ok, reason: result.reason, durationMs: Date.now() - t0,
-            candidates: result.candidates, applied: result.applied,
-          };
-          await appendDreamingEvent(scope.dreamingRoot, event);
-        }
+        const phase = content.includes(DREAMING_LIGHT_SWEEP_TOKEN)
+          ? 'light'
+          : content.includes(DREAMING_REM_SWEEP_TOKEN) ? 'rem' : 'deep';
+        await runDreamingPhase({ config: cfg, phase, triggerKind: 'schedule' });
         return;
       }
     }
@@ -217,9 +173,11 @@ export class AgentOrchestrator {
       setPendingTranscriptUserMessage(sessionKey, userMessage);
 
       const userPlainForMemory = extractAgentUserPlainText(userMessage);
+      const turnId = randomUUID();
       const userContext = await this.agentManager.prepareUserTurnContext(
         userMessage,
         sessionKey,
+        turnId,
       );
       const userMessageForModel = userContext.modelMessage;
 
@@ -234,6 +192,7 @@ export class AgentOrchestrator {
         try {
           return await runEmbeddedTurnForSession({
             sessionKey,
+            runId: turnId,
             userMessage: userMessageForModel,
             llmImages: llmTurn.images,
             sessionStore: this.sessionStore,

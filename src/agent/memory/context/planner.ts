@@ -112,6 +112,7 @@ export class UserContextPlanner {
     memoryManager: MemoryManager;
     agentId: string;
     sessionKey: string;
+    turnId: string;
     query: string;
     userMessage: AgentMessage;
     excludedRecordIds?: string[];
@@ -241,7 +242,7 @@ export class UserContextPlanner {
             recordId: item.recordId,
             score: item.score,
             content: item.content,
-            metadata: { traceId, query },
+            metadata: { traceId, turnId: params.turnId, query },
           },
           providerId: 'local',
           sourceAgentId: params.agentId,
@@ -253,6 +254,7 @@ export class UserContextPlanner {
         phase: 'inject',
         providerId: 'user-understanding',
         sessionKey: params.sessionKey,
+        turnId: params.turnId,
         request: {
           query,
           rejected,

@@ -68,7 +68,6 @@ import { createBrowserUseTool } from './browser/tool/browser-use-tool.js';
 import { createDelegateTool } from './delegate-tool.js';
 import { createWorkflowTool } from './workflow-tool.js';
 import { createWorkflowCatalog } from '../workflow/catalog.js';
-import { resolveDreamingRoot } from '../memory/dreaming/scope.js';
 import { buildSandboxToolMap, createExecuteCodeTool } from './execute-code-tool.js';
 import type { AutomationService } from '../../automations/index.js';
 import type { BrowserRecipeService } from '../../browser/recipes/index.js';
@@ -155,8 +154,6 @@ export interface CreateCoreToolsOptions {
   /** Optional primary model for image tool heuristics. */
   getPrimaryModel?: () => Model<Api>;
   getMemoryManager?: () => MemoryManager;
-  /** Operational root for Dreaming event logs. */
-  dreamingRoot?: string;
   agentId?: string;
   /** When set, registers local skill tools plus marketplace discovery for this workspace. */
   getSkillManager?: () => SkillManager;
@@ -274,7 +271,6 @@ export class AgentToolsFactory {
     const primary = getPrimary?.();
     const modelHasVision = primary?.input?.includes('image') ?? false;
     const cfg = this.deps.getConfig?.();
-    const dreamingRoot = options?.dreamingRoot ?? (cfg ? resolveDreamingRoot() : workspace);
     const browserEnabled = cfg?.browser?.enabled !== false;
     const imageTool = createImageTool({
       config: cfg,
@@ -321,7 +317,6 @@ export class AgentToolsFactory {
       createSessionStatusTool(),
       createDreamingTool({
         getWorkspace: () => workspace,
-        getDreamingRoot: () => dreamingRoot,
         getConfig: () => this.deps.getConfig?.(),
         getAgentId: () => options?.agentId,
       }),
@@ -538,7 +533,6 @@ export class AgentToolsFactory {
                   workspace: childOpts.workspace,
                   getPrimaryModel: () => childOpts.model,
                   agentId: options?.agentId ?? childOpts.agentId,
-                  dreamingRoot: options?.dreamingRoot,
                   disabledTools: new Set(['extensions']),
                 });
               },

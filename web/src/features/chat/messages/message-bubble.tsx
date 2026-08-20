@@ -353,41 +353,35 @@ export const MessageBubble = memo(function MessageBubble({
     rating: 'helpful' | 'not_helpful',
     reason?: ResponseFeedbackReason,
   ) => {
-    if (!sessionKey || !message.timestamp || responseFeedbackBusy) return;
+    if (!message.turnId || responseFeedbackBusy) return;
     setResponseFeedbackBusy(true);
     setResponseFeedbackLoaded(true);
     setResponseFeedbackError(false);
     void fetchJson<{
-      matched: boolean;
-      attributedRecordCount: number;
-      feedback: { rating?: string } | null;
-      remediation: { needsReviewRecordIds: string[] } | null;
+      trace: {
+        feedback: Array<{ level: string; rating: string; source: string }>;
+        remediation?: { needsReviewRecordIds: string[] };
+      };
       personalContext: ResponsePersonalContext[];
-    }>(apiUrl('/api/user-context/understanding/response-feedback'), {
-      method: 'PATCH',
+    }>(apiUrl(`/api/you/feedback/${encodeURIComponent(message.turnId)}`), {
+      method: 'PUT',
       body: JSON.stringify({
-        sessionKey,
-        assistantTimestamp: message.timestamp,
         rating,
-        reason: reason ? `assistant_response_feedback:${reason}` : undefined,
+        reasonCode: reason,
       }),
     })
       .then((result) => {
-        if (!result.matched) {
-          setResponseFeedbackError(true);
-          return;
-        }
         setResponseFeedback(rating);
         setResponseFeedbackReason(reason ?? null);
         setResponsePersonalContext(result.personalContext ?? []);
         setResponseFeedbackPromptOpen(false);
-        if (result.remediation?.needsReviewRecordIds.length) {
+        if (result.trace.remediation?.needsReviewRecordIds.length) {
           setResponseFeedbackRemediated(true);
         }
       })
       .catch(() => setResponseFeedbackError(true))
       .finally(() => setResponseFeedbackBusy(false));
-  }, [message.timestamp, responseFeedbackBusy, sessionKey]);
+  }, [message.turnId, responseFeedbackBusy]);
 
   const repairResponseFeedback = useCallback(() => {
     if (!responseFeedbackReason) return;
@@ -395,20 +389,15 @@ export const MessageBubble = memo(function MessageBubble({
   }, [m.chat.messageFeedbackRepairPrompts, responseFeedbackReason]);
 
   const loadResponseFeedback = useCallback(() => {
-    if (!sessionKey || !message.timestamp || responseFeedbackLoaded || responseFeedbackBusy) return;
+    if (!message.turnId || responseFeedbackLoaded || responseFeedbackBusy) return;
     setResponseFeedbackBusy(true);
-    const query = new URLSearchParams({
-      sessionKey,
-      assistantTimestamp: String(message.timestamp),
-    });
     void fetchJson<{
-      matched: boolean;
-      feedback: { rating?: string } | null;
+      trace: { feedback: Array<{ level: string; rating: string; source: string }> };
       personalContext: ResponsePersonalContext[];
-    }>(apiUrl(`/api/user-context/understanding/response-feedback?${query.toString()}`))
+    }>(apiUrl(`/api/you/feedback/${encodeURIComponent(message.turnId)}`))
       .then((result) => {
         setResponsePersonalContext(result.personalContext ?? []);
-        const rating = result.feedback?.rating;
+        const rating = result.trace.feedback.find((item) => item.level === 'response' && item.source === 'user')?.rating;
         if (rating === 'helpful' || rating === 'not_helpful') {
           setResponseFeedback(rating);
         }
@@ -418,7 +407,7 @@ export const MessageBubble = memo(function MessageBubble({
         setResponseFeedbackLoaded(true);
         setResponseFeedbackBusy(false);
       });
-  }, [message.timestamp, responseFeedbackBusy, responseFeedbackLoaded, sessionKey]);
+  }, [message.turnId, responseFeedbackBusy, responseFeedbackLoaded]);
 
   const openDeleteConfirm = useCallback(() => {
     if (messageIndex == null || !onDeleteRound) return;

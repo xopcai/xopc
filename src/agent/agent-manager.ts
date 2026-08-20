@@ -79,7 +79,6 @@ import {
   isMemorySubsystemEnabled,
 } from './memory/memory-config.js';
 import type { MemoryManager } from './memory/manager.js';
-import { resolveDreamingRoot } from './memory/dreaming/scope.js';
 import { UserContextCoordinator } from './memory/user-context-coordinator.js';
 import type { UserContextPlan } from './memory/context/types.js';
 import { WorkspaceRuntimeRegistry, type WorkspaceRuntime } from './workspace-runtime/registry.js';
@@ -510,8 +509,9 @@ export class AgentManager implements AgentInstanceGateway {
   prepareUserTurnContext(
     userMessage: AgentMessage,
     sessionKey: string,
+    turnId: string,
   ): Promise<UserContextPlan> {
-    return this.userContext.prepare(userMessage, sessionKey);
+    return this.userContext.prepare(userMessage, sessionKey, turnId);
   }
 
   /**
@@ -1285,12 +1285,10 @@ export class AgentManager implements AgentInstanceGateway {
     let agent: Agent | undefined;
 
     const contextFiles = this.resolveContextFilesForSession(sessionKey, profile);
-    const dreamingRoot = resolveDreamingRoot();
     const tools = this.toolsFactory.createAllTools({
       workspace: resolvedWorkspacePath,
       profileMarkdownRoot: resolveAgentProfileDir(this.config.config!, profile.agentId),
       agentId: profile.agentId,
-      dreamingRoot,
       disabledTools: profile.tools.denied,
       getPrimaryModel: () => (agent?.state.model as Model<Api> | undefined) ?? model,
       getMemoryManager: () => rt.memoryManager,

@@ -7,14 +7,16 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   appendMemoryTraceEvent,
   closeXopcDatabase,
-  findLatestMemoryInjectTrace,
+  getMemoryTurnFeedback,
   getMemoryRecord,
+  getMemoryReadiness,
   listMemoryTraceEvents,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
+  startDreamingRun,
+  finishDreamingRun,
   summarizeUserUnderstandingQuality,
-  setMemoryTraceFeedback,
-  setLatestMemoryInjectFeedback,
+  setMemoryTurnFeedback,
   upsertMemoryRecord,
 } from '../index.js';
 
@@ -104,15 +106,12 @@ describe('summarizeUserUnderstandingQuality', () => {
     });
     appendMemoryTraceEvent({
       phase: 'inject',
+      turnId: 'quality-turn',
       providerId: 'local',
       selectedRecordIds: [active.id],
-      feedback: {
-        rating: 'helpful',
-        source: 'user',
-        createdAt: new Date(nowMs).toISOString(),
-      },
       nowMs,
     });
+    setMemoryTurnFeedback({ turnId: 'quality-turn', rating: 'helpful', source: 'user', nowMs });
 
     const metrics = summarizeUserUnderstandingQuality({ nowMs, windowDays: 30 });
 
@@ -132,10 +131,11 @@ describe('summarizeUserUnderstandingQuality', () => {
     expect(metrics.recall).toMatchObject({ total: 1, helpful: 1, helpfulRate: 1 });
   });
 
-  it('attributes response feedback to the latest inject trace before the assistant timestamp', () => {
+  it('attributes response feedback by stable turn id', () => {
     const nowMs = Date.UTC(2026, 6, 16);
     const olderTraceId = appendMemoryTraceEvent({
       phase: 'inject',
+      turnId: 'older-turn',
       providerId: 'user-understanding',
       sessionKey: 'agent:main:webchat:test',
       selectedRecordIds: ['memory-1'],
@@ -143,40 +143,66 @@ describe('summarizeUserUnderstandingQuality', () => {
     });
     appendMemoryTraceEvent({
       phase: 'inject',
+      turnId: 'newer-turn',
       providerId: 'user-understanding',
       sessionKey: 'agent:main:webchat:test',
       selectedRecordIds: [],
       nowMs,
     });
 
-    const attributed = setLatestMemoryInjectFeedback({
-      sessionKey: 'agent:main:webchat:test',
-      beforeMs: nowMs - 1_000,
-      feedback: { rating: 'helpful', source: 'user' },
+    const attributed = setMemoryTurnFeedback({
+      turnId: 'older-turn',
+      rating: 'helpful',
+      source: 'user',
       nowMs,
     });
     expect(attributed?.traceId).toBe(olderTraceId);
-    expect(attributed?.feedback?.rating).toBe('helpful');
-    const replaced = setLatestMemoryInjectFeedback({
-      sessionKey: 'agent:main:webchat:test',
-      beforeMs: nowMs - 1_000,
-      feedback: { rating: 'not_helpful', source: 'user' },
+    expect(attributed?.feedback[0]?.rating).toBe('helpful');
+    const replaced = setMemoryTurnFeedback({
+      turnId: 'older-turn',
+      rating: 'not_helpful',
+      source: 'user',
       nowMs: nowMs + 1,
     });
     expect(replaced?.traceId).toBe(olderTraceId);
-    expect(replaced?.feedback?.rating).toBe('not_helpful');
+    expect(replaced?.feedback[0]?.rating).toBe('not_helpful');
+    expect(getMemoryTurnFeedback('newer-turn')?.traceId).not.toBe(olderTraceId);
+  });
 
-    const correctionTarget = findLatestMemoryInjectTrace({
-      sessionKey: 'agent:main:webchat:test',
-      beforeMs: nowMs + 1,
-      requireSelectedRecords: true,
+  it('opens the automatic-write gate only after enough healthy feedback and runs', () => {
+    const nowMs = Date.UTC(2026, 6, 16);
+    for (let index = 0; index < 20; index += 1) {
+      appendMemoryTraceEvent({
+        phase: 'inject',
+        turnId: `ready-turn-${index}`,
+        providerId: 'local',
+        sourceAgentId: 'main',
+        nowMs: nowMs - index,
+      });
+      setMemoryTurnFeedback({
+        turnId: `ready-turn-${index}`,
+        rating: index < 16 ? 'helpful' : 'mixed',
+        nowMs: nowMs - index,
+      });
+    }
+    for (let index = 0; index < 10; index += 1) {
+      const run = startDreamingRun({
+        agentId: 'main',
+        workspaceId: '/tmp/main',
+        phase: 'light',
+        mode: 'review',
+        algorithmVersion: 'test-v1',
+        configSnapshot: {},
+        nowMs: nowMs - index,
+      });
+      finishDreamingRun({ runId: run.runId, ok: true, reason: 'completed', nowMs: nowMs - index });
+    }
+
+    expect(getMemoryReadiness({ agentId: 'main', workspaceId: '/tmp/main', nowMs })).toMatchObject({
+      ready: true,
+      reasons: [],
+      metrics: { evaluatedTurns: 20, helpfulRate: 0.8, dreamingRuns: 10, dreamingFailureRate: 0 },
     });
-    expect(correctionTarget).toBeNull();
-    expect(findLatestMemoryInjectTrace({
-      sessionKey: 'agent:main:webchat:test',
-      beforeMs: nowMs - 1_000,
-      requireSelectedRecords: true,
-    })?.traceId).toBe(olderTraceId);
   });
 
   it('moves an active understanding to review only after repeated net-negative feedback', () => {
@@ -193,37 +219,45 @@ describe('summarizeUserUnderstandingQuality', () => {
     });
     const firstTraceId = appendMemoryTraceEvent({
       phase: 'inject',
+      turnId: 'first-turn',
       providerId: 'local',
       selectedRecordIds: [record.id],
       nowMs: nowMs - 2_000,
     });
     const secondTraceId = appendMemoryTraceEvent({
       phase: 'inject',
+      turnId: 'second-turn',
       providerId: 'local',
       selectedRecordIds: [record.id],
       nowMs: nowMs - 1_000,
     });
 
-    const firstUpdate = setMemoryTraceFeedback({
-      traceId: firstTraceId,
-      feedback: { rating: 'not_helpful', source: 'user' },
+    const firstUpdate = setMemoryTurnFeedback({
+      turnId: 'first-turn',
+      rating: 'not_helpful',
+      source: 'user',
+      records: [{ recordId: record.id, rating: 'incorrect' }],
       nowMs,
     });
     expect(firstUpdate?.remediation?.needsReviewRecordIds).toEqual([]);
     expect(getMemoryRecord(record.id)?.status).toBe('active');
 
-    const secondUpdate = setMemoryTraceFeedback({
-      traceId: secondTraceId,
-      feedback: { rating: 'not_helpful', source: 'user' },
+    const secondUpdate = setMemoryTurnFeedback({
+      turnId: 'second-turn',
+      rating: 'not_helpful',
+      source: 'user',
+      records: [{ recordId: record.id, rating: 'incorrect' }],
       nowMs: nowMs + 1,
     });
     expect(secondUpdate?.remediation?.needsReviewRecordIds).toEqual([record.id]);
     expect(getMemoryRecord(record.id)).toMatchObject({ status: 'needs_review', confidence: 0.7 });
     expect(listMemoryTraceEvents({ phase: 'remediation' })).toHaveLength(1);
 
-    const repeated = setMemoryTraceFeedback({
-      traceId: secondTraceId,
-      feedback: { rating: 'not_helpful', source: 'user' },
+    const repeated = setMemoryTurnFeedback({
+      turnId: 'second-turn',
+      rating: 'not_helpful',
+      source: 'user',
+      records: [{ recordId: record.id, rating: 'incorrect' }],
       nowMs: nowMs + 2,
     });
     expect(repeated?.remediation?.needsReviewRecordIds).toEqual([]);

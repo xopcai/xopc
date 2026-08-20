@@ -122,8 +122,7 @@ const DreamingPhaseSchema = z
 
 export const UserContextDreamingSchema = z
   .object({
-    enabled: z.boolean().default(false),
-    frequency: z.string().min(1).optional(),
+    mode: z.enum(['off', 'observe', 'review', 'automatic']).default('off'),
     timezone: z.string().optional(),
     phases: z
       .object({
@@ -149,7 +148,7 @@ export const UserContextDreamingSchema = z
       .optional(),
   })
   .strict()
-  .default({ enabled: false });
+  .default({ mode: 'off' });
 
 export const UserContextConfigSchema = z
   .object({
@@ -184,7 +183,7 @@ export const UserContextConfigSchema = z
       writeStrategy: 'local-first',
       allowExternalWrites: false,
     },
-    dreaming: { enabled: false },
+    dreaming: { mode: 'off' },
   });
 
 export type UserContextConfig = z.infer<typeof UserContextConfigSchema>;
