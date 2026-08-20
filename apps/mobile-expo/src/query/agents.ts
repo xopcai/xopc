@@ -128,45 +128,27 @@ export function resolveEffectiveDefaultAgentId(
   payload: ChatAgentsPayload | undefined,
   localOverride: string | null,
 ): string {
-  const gatewayDefault = payload?.defaultId?.trim().toLowerCase() || 'main';
   const items = payload?.items ?? [];
   const override = localOverride?.trim().toLowerCase();
   if (override && items.some((a) => a.id === override)) return override;
-  return gatewayDefault;
+  const gatewayDefault = payload?.defaultId?.trim().toLowerCase();
+  if (gatewayDefault && items.some((agent) => agent.id === gatewayDefault)) return gatewayDefault;
+  return items[0]?.id ?? '';
 }
 
 export async function setGatewayDefaultAgent(agentId: string): Promise<boolean> {
   const id = agentId.trim().toLowerCase();
-  const body = JSON.stringify({ agentId: id });
-  const attempts: Array<() => Promise<Response>> = [
-    () =>
-      apiFetch('/api/agents/default', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body,
-      }),
-    () =>
-      apiFetch(`/api/agents/${encodeURIComponent(id)}/default`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      }),
-    () =>
-      apiFetch('/api/agents', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ defaultId: id }),
-      }),
-  ];
-
-  for (const attempt of attempts) {
-    const res = await attempt();
-    if (res.ok) return true;
-    if (res.status !== 404 && res.status !== 405 && res.status !== 501) {
-      const errBody = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
-      throw new Error(formatApiHttpError(res.status, res.statusText, errBody.error?.message));
-    }
+  if (!id) throw new Error('Agent id is required');
+  const res = await apiFetch(`/api/agents/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ setDefault: true }),
+  });
+  if (!res.ok) {
+    const errBody = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+    throw new Error(formatApiHttpError(res.status, res.statusText, errBody.error?.message));
   }
-  return false;
+  return true;
 }
 
 /** Effective default agent id (local override when set, else gateway). */
@@ -195,7 +177,7 @@ export async function fetchChatAgents(): Promise<ChatAgentsPayload> {
   const data = await res.json();
   const parsed = agentsResponseSchema.safeParse(data);
   if (!parsed.success) {
-    return { defaultId: 'main', items: [{ id: 'main', typedModels: emptyTypedModels, skills: emptySkills, tools: emptyTools }], builtinToolIds: [] };
+    throw new Error('Gateway returned an invalid agents response');
   }
   const { defaultId, agents, builtinToolIds } = parsed.data.payload;
   const items: ChatAgentOption[] = agents
@@ -217,10 +199,12 @@ export async function fetchChatAgents(): Promise<ChatAgentsPayload> {
         tools: toolsInfo(raw.tools),
       };
     });
-  const payload: ChatAgentsPayload =
-    items.length === 0
-      ? { defaultId: defaultId.trim().toLowerCase(), items: [{ id: 'main', typedModels: emptyTypedModels, skills: emptySkills, tools: emptyTools }], builtinToolIds: [] }
-      : { defaultId: defaultId.trim().toLowerCase(), items, builtinToolIds: builtinToolIds ?? [] };
+  if (items.length === 0) throw new Error('Gateway returned no enabled agents');
+  const payload: ChatAgentsPayload = {
+    defaultId: defaultId.trim().toLowerCase(),
+    items,
+    builtinToolIds: builtinToolIds ?? [],
+  };
 
   writeCachedAgents(useGatewayStore.getState().activeGatewayId, payload);
   return payload;

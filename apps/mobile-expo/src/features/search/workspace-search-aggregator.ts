@@ -1,6 +1,6 @@
 export type WorkspaceSearchResult = {
   id: string;
-  type: 'note' | 'session' | 'file' | 'automation' | 'draft';
+  type: 'note' | 'session' | 'project' | 'task' | 'workflow_run' | 'file' | 'automation' | 'draft';
   title: string;
   snippet?: string;
   updatedAt?: number;
