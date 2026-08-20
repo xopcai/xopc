@@ -8,6 +8,7 @@ const ProjectSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
   status: z.string().optional(),
+  defaultAgentId: z.string().optional(),
   updatedAt: z.number().optional(),
 });
 

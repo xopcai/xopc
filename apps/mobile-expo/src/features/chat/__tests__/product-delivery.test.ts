@@ -54,5 +54,14 @@ describe('mobile product delivery', () => {
     })).toBe('/tasks/task-1');
     expect(mobileRouteFromProductDeepLink(productReferenceDeepLink(delivery.primary!)))
       .toBe('/tasks/task%2F1');
+    const workflow = {
+      kind: 'workflow_run' as const,
+      id: 'run-1',
+      title: 'Run',
+      projectId: 'project/1',
+      capabilities: ['open' as const],
+    };
+    expect(mobileProductRoute(workflow)).toBe('/workflows/runs/run-1?projectId=project%2F1');
+    expect(mobileRouteFromProductDeepLink(productReferenceDeepLink(workflow))).toBe('/workflows/runs/run-1');
   });
 });

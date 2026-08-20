@@ -13,7 +13,6 @@ import { ListSkeleton } from '../../components/ListSkeleton';
 import { TOAST_BOTTOM_LIFT_ABOVE_BAR, TOAST_DURATION_SHORT } from '../../constants/toast';
 import { t, useMessages } from '../../i18n/messages';
 import { openNoteDetail } from '../../lib/navigation';
-import { sessionDisplayName } from '../../lib/session-helpers';
 import { recordUsageEvent } from '../../product/usage-metrics';
 import {
   acknowledgeHomeAttention,
@@ -154,11 +153,11 @@ export function WorkspaceHomeScreen() {
       title: run.title,
       meta: `${hm.workflowItemMeta} · ${workflowProgress(run, hm)}`,
       icon: 'source-branch-sync',
-      onPress: () => run.sessionKey ? handleSessionPress(run.sessionKey) : router.push('/automation'),
+      onPress: () => run.sessionKey ? handleSessionPress(run.sessionKey) : router.push(`/workflows/runs/${run.id}`),
     }));
-    const sessionItems = (home?.recentSessions ?? []).map((session) => ({
+    const sessionItems = (home?.chats.recent ?? []).map((session) => ({
       id: `session:${session.key}`,
-      title: sessionDisplayName(session, m.sessions.untitled),
+      title: session.name || m.sessions.untitled,
       meta: `${hm.chatItemMeta} · ${timeLabel(session.updatedAt, hm)}`,
       icon: 'message-processing-outline',
       onPress: () => handleSessionPress(session.key),
@@ -171,7 +170,7 @@ export function WorkspaceHomeScreen() {
       onPress: () => handleNotePress(note),
     }));
     return [...workflowItems, ...sessionItems, ...noteItems].slice(0, 3);
-  }, [handleNotePress, handleSessionPress, hm, home?.recentSessions, home?.workflowRuns.active, homeNotes, m.sessions.untitled, router]);
+  }, [handleNotePress, handleSessionPress, hm, home?.chats.recent, home?.workflowRuns.active, homeNotes, m.sessions.untitled, router]);
 
   const decisionMutation = useMutation({
     mutationFn: ({ id: _id, response, answer }: {
@@ -423,6 +422,16 @@ function BriefingCard({
       {briefing.progress.movingCount > 0 ? (
         <Text style={[styles.briefingProgress, { color: colors.text.tertiary }]}>
           {t(hm.briefingMoving, { count: briefing.progress.movingCount })}
+        </Text>
+      ) : null}
+      {briefing.wins[0] ? (
+        <Text style={[styles.briefingProgress, { color: colors.semantic.success }]}>
+          {t(hm.briefingLatestWin, { title: briefing.wins[0].title })}
+        </Text>
+      ) : null}
+      {briefing.nextScheduled ? (
+        <Text style={[styles.briefingProgress, { color: colors.text.tertiary }]}>
+          {t(hm.briefingNextScheduled, { title: briefing.nextScheduled.name ?? briefing.nextScheduled.id })}
         </Text>
       ) : null}
       {primaryDecision && !primaryDecision.response ? (

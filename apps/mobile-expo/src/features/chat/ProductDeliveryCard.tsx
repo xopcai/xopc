@@ -62,15 +62,17 @@ export const ProductDeliveryCard = memo(function ProductDeliveryCard({
   if (!reference) return null;
 
   const hasNativeDestination = MOBILE_NATIVE_PRODUCT_KINDS.has(reference.kind);
-  const canOpen = reference.capabilities.includes('open');
-  const canContinue = reference.capabilities.includes('continue_in_chat');
   const destination = mobileProductRoute(reference);
+  const canOpen = reference.capabilities.includes('open') && destination !== null;
+  const canContinue = reference.capabilities.includes('continue_in_chat');
   const statusText = [
     OPERATION_LABELS[delivery.operation][language],
     reference.status,
   ].filter(Boolean).join(' · ');
 
-  const open = () => router.push(destination as Href);
+  const open = () => {
+    if (destination) router.push(destination as Href);
+  };
   const continueInChat = () => {
     const text = language === 'zh'
       ? `继续处理${KIND_LABELS[reference.kind].zh}「${reference.title}」（ID: ${reference.id}）：`
@@ -120,9 +122,9 @@ export const ProductDeliveryCard = memo(function ProductDeliveryCard({
               {reference.summary}
             </Text>
           ) : null}
-          {!hasNativeDestination && canOpen ? (
+          {!hasNativeDestination && reference.capabilities.includes('open') ? (
             <Text variant="labelSmall" style={[styles.fallback, { color: colors.text.tertiary }]}>
-              {language === 'zh' ? '移动端暂未提供详情页，将打开工作台' : 'Opens the workspace on mobile'}
+              {language === 'zh' ? '移动端暂未提供详情页，可继续在对话中处理' : 'Continue in chat to work with this item'}
             </Text>
           ) : null}
         </View>

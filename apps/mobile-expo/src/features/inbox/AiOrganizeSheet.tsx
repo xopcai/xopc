@@ -38,6 +38,7 @@ export function AiOrganizeSheet({
   return (
     <BottomSheetModal visible={visible} onDismiss={onDismiss} title={im.aiOrganizeTitle}>
       <View style={styles.list}>
+        <Text style={[styles.hint, { color: colors.text.tertiary }]}>{im.aiOrganizeHint}</Text>
         {suggestions.length === 0 ? (
           <View style={[styles.emptyCard, { borderColor: colors.border.default }]}>
             <Text style={[styles.emptyText, { color: colors.text.tertiary }]}>{im.aiOrganizeEmpty}</Text>
@@ -98,6 +99,7 @@ const styles = StyleSheet.create({
     ...typography.label,
     textAlign: 'center',
   },
+  hint: { ...typography.caption },
   card: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radii.xl,

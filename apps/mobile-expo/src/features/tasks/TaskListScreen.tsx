@@ -46,9 +46,22 @@ export function TaskListScreen() {
           keyExtractor={(item) => item.task.id}
           contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xl }]}
           refreshControl={<RefreshControl refreshing={query.isFetching} onRefresh={() => void query.refetch()} />}
+          ListHeaderComponent={(
+            <View style={styles.destinations}>
+              <Pressable accessibilityRole="button" onPress={() => router.push('/projects')} style={[styles.destination, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}>
+                <Icon source="folder-outline" size={22} color={colors.accent.primary} />
+                <Text style={[styles.destinationLabel, { color: colors.text.primary }]}>{labels.browseProjects}</Text>
+              </Pressable>
+              <Pressable accessibilityRole="button" onPress={() => router.push('/workflows')} style={[styles.destination, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}>
+                <Icon source="source-branch" size={22} color={colors.accent.primary} />
+                <Text style={[styles.destinationLabel, { color: colors.text.primary }]}>{labels.workflowRuns}</Text>
+              </Pressable>
+            </View>
+          )}
           ListEmptyComponent={<View style={styles.empty}><Icon source="target" size={40} color={colors.text.tertiary} /><Text style={{ color: colors.text.tertiary }}>{labels.empty}</Text></View>}
           renderItem={({ item }) => (
             <Pressable
+              accessibilityRole="button"
               onPress={() => router.push(`/tasks/${item.task.id}`)}
               style={({ pressed }) => [styles.card, { backgroundColor: pressed ? colors.surface.pressed : colors.surface.panel, borderColor: colors.border.default }]}
             >
@@ -69,4 +82,7 @@ const styles = StyleSheet.create({
   cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
   title: { ...typography.body, flex: 1, fontWeight: '600' }, status: { ...typography.caption, fontWeight: '600' },
   meta: { ...typography.caption }, empty: { alignItems: 'center', gap: spacing.sm, padding: spacing.xl },
+  destinations: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm },
+  destination: { flex: 1, minHeight: 72, borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.lg, padding: spacing.md, gap: spacing.sm },
+  destinationLabel: { ...typography.label },
 });

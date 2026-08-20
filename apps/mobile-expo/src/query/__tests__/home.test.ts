@@ -35,7 +35,6 @@ function currentGatewayHomeResponse() {
     inboxCount: 0,
     pendingTasks: [],
     pendingTaskCount: 0,
-    recentSessions: [],
     activeAgent: { id: 'main' },
     gateway: {
       status: 'running',
@@ -62,8 +61,14 @@ describe('fetchHome', () => {
       json: async () => currentGatewayHomeResponse(),
     } as Response);
 
-    await expect(fetchHome('en')).resolves.toMatchObject({
+    const home = await fetchHome('en');
+
+    expect(home).toMatchObject({
+      briefing: { summary: 'All clear' },
+      chats: { running: [], recent: [] },
+      tasks: { running: [] },
     });
+    expect(home).not.toHaveProperty('recentSessions');
     expect(mockedApiFetch).toHaveBeenCalledWith('/api/home?locale=en');
   });
 });
