@@ -46,6 +46,11 @@ export type ConnectorDefinition = {
   source: string;
   capabilities: ConnectorCapability[];
   benefits?: Array<'understand' | 'act' | 'reach'>;
+  understanding?: {
+    mode: 'activity' | 'inventory';
+    bootstrapWindowDays: number;
+    readOnly: true;
+  };
   tags?: string[];
   branding?: {
     logoUrl?: string;

@@ -1,3 +1,5 @@
+import type { ConnectorDefinition } from './types.js';
+
 export type ConnectorIdentityProbe = {
   actionId: string;
 };
@@ -104,6 +106,18 @@ const PLANS: Record<string, ConnectorLearningPlan> = {
 
 export function getConnectorLearningPlan(toolkit: string): ConnectorLearningPlan | undefined {
   return PLANS[toolkit.trim().toLowerCase()];
+}
+
+export function connectorUnderstandingCapability(
+  toolkit: string,
+): ConnectorDefinition['understanding'] | undefined {
+  const plan = getConnectorLearningPlan(toolkit);
+  if (!plan) return undefined;
+  return {
+    mode: plan.streams.some((stream) => stream.kind === 'activity') ? 'activity' : 'inventory',
+    bootstrapWindowDays: plan.bootstrapWindowDays,
+    readOnly: true,
+  };
 }
 
 export function listConnectorLearningPlans(): ConnectorLearningPlan[] {

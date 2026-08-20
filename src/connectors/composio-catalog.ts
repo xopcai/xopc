@@ -4,6 +4,7 @@ import {
 } from '../storage/sqlite/connector-repository.js';
 import { ComposioSessionsAdapter, type ComposioToolkitCatalogItem } from './composio-sessions.js';
 import { composioIntegrationStrategy } from './integration-strategy.js';
+import { connectorUnderstandingCapability } from './learning-recipes.js';
 import type { ConnectorBenefit, ConnectorCategory, ConnectorDefinition, ConnectorVerificationLevel } from './types.js';
 
 const CATALOG_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
@@ -84,23 +85,6 @@ export const COMPOSIO_TOOLKIT_DISPLAY_NAMES: Record<ComposioAgentReadyToolkit, s
 
 const RECOMMENDED = new Set<string>(COMPOSIO_RECOMMENDED_TOOLKITS);
 const AGENT_READY = new Set<string>(COMPOSIO_AGENT_READY_TOOLKITS);
-const PERSONAL_CONTEXT_TOOLKITS = new Set([
-  'gmail',
-  'googlecalendar',
-  'googledrive',
-  'googledocs',
-  'googlesheets',
-  'notion',
-  'slack',
-  'github',
-  'linear',
-  'jira',
-  'outlook',
-  'microsoft_teams',
-  'one_drive',
-  'excel',
-]);
-
 const LOCAL_TOOLKIT_LOGO_FILE_NAMES: Readonly<Record<string, string>> = {
   googlecalendar: 'google-calendar',
   googledocs: 'google-docs',
@@ -159,11 +143,9 @@ const COMMUNICATION_TOOLKITS = new Set([
   'gmail', 'outlook', 'slack', 'microsoft_teams', 'discord', 'telegram', 'whatsapp', 'twitter',
 ]);
 
-function benefitsForToolkit(slug: string): ConnectorBenefit[] {
+function benefitsForToolkit(slug: string, hasUnderstanding: boolean): ConnectorBenefit[] {
   const benefits: ConnectorBenefit[] = ['act'];
-  if (PERSONAL_CONTEXT_TOOLKITS.has(slug) || DOC_TOOLKITS.has(slug) || DATA_TOOLKITS.has(slug)) {
-    benefits.unshift('understand');
-  }
+  if (hasUnderstanding) benefits.unshift('understand');
   if (COMMUNICATION_TOOLKITS.has(slug)) benefits.push('reach');
   return benefits;
 }
@@ -182,7 +164,8 @@ function verificationForToolkit(slug: string): ConnectorVerificationLevel {
 
 export function connectorDefinitionFromComposioToolkit(item: ComposioToolkitCatalogItem): ConnectorDefinition {
   const slug = item.slug.trim().toLowerCase();
-  const knowledgeCapabilities = PERSONAL_CONTEXT_TOOLKITS.has(slug)
+  const understanding = connectorUnderstandingCapability(slug);
+  const knowledgeCapabilities = understanding
     ? ['context', 'memory_source'] as const
     : [];
   return {
@@ -197,7 +180,8 @@ export function connectorDefinitionFromComposioToolkit(item: ComposioToolkitCata
     capabilities: item.isNoAuth
       ? ['tools', 'events', 'workflows', ...knowledgeCapabilities]
       : ['tools', 'auth.oauth', 'events', 'workflows', ...knowledgeCapabilities],
-    benefits: benefitsForToolkit(slug),
+    benefits: benefitsForToolkit(slug, Boolean(understanding)),
+    understanding,
     tags: ['composio', slug, verificationForToolkit(slug)],
     branding: {
       logoUrl: composioLogoUrl(slug),

@@ -1,6 +1,6 @@
 import { Loader2, Users } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { PageTabs } from '@/components/ui/page-tabs';
@@ -107,6 +107,10 @@ function uniqueConnectors(connectors: ConnectorDefinition[]): ConnectorDefinitio
   ));
 }
 
+function safeReturnPath(value: string | null): string {
+  return value?.startsWith('/') && !value.startsWith('//') ? value : '/you?tab=sources';
+}
+
 export function ConnectorsPage() {
   const language = useLocaleStore((state) => state.language);
   const m = messages(language);
@@ -114,9 +118,14 @@ export function ConnectorsPage() {
   const mcp = m.mcpSettings;
   const token = useGatewayStore((state) => state.token);
   const hasToken = Boolean(token);
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const personalContextIntent = searchParams.get('personalContext') === '1';
+  const personalContextReturnPath = safeReturnPath(searchParams.get('returnTo'));
   const requestedTab = searchParams.get('tab');
-  const [tab, setTab] = useState<TabId>(requestedTab === 'connected' ? 'connected' : 'discover');
+  const [tab, setTab] = useState<TabId>(
+    !personalContextIntent && requestedTab === 'connected' ? 'connected' : 'discover',
+  );
   const initialTabResolvedRef = useRef(false);
   const [state, setState] = useState<LoadState>({
     catalog: [],
@@ -133,10 +142,14 @@ export function ConnectorsPage() {
   const [connectedSearchQuery, setConnectedSearchQuery] = useState('');
   const [peopleSearchQuery, setPeopleSearchQuery] = useState('');
   const [peopleSearching, setPeopleSearching] = useState(false);
-  const [discoverSearchQuery, setDiscoverSearchQuery] = useState('');
-  const [discoverSource, setDiscoverSource] = useState(DISCOVERY_SOURCE_BUILTIN);
+  const [discoverSearchQuery, setDiscoverSearchQuery] = useState(
+    personalContextIntent ? searchParams.get('connector') ?? '' : '',
+  );
+  const [discoverSource, setDiscoverSource] = useState(
+    personalContextIntent ? COMPOSIO_CONNECTOR_SOURCE : DISCOVERY_SOURCE_BUILTIN,
+  );
   const [connectorSort, setConnectorSort] = useState<ConnectorSort>('name');
-  const [selectedTask, setSelectedTask] = useState<DiscoveryTask>('all');
+  const [selectedTask, setSelectedTask] = useState<DiscoveryTask>(personalContextIntent ? 'understand' : 'all');
   const [installDraft, setInstallDraft] = useState<InstallDraft | null>(null);
   const [detailConnector, setDetailConnector] = useState<ConnectorDefinition | null>(null);
   const [detailInstanceId, setDetailInstanceId] = useState<string | null>(null);
@@ -218,9 +231,9 @@ export function ConnectorsPage() {
 
   useEffect(() => {
     if (initialTabResolvedRef.current || state.loading || (hasToken && !mcpSettings)) return;
-    setTab(installedCount > 0 ? 'connected' : 'discover');
+    setTab(personalContextIntent ? 'discover' : installedCount > 0 ? 'connected' : 'discover');
     initialTabResolvedRef.current = true;
-  }, [hasToken, installedCount, mcpSettings, state.loading]);
+  }, [hasToken, installedCount, mcpSettings, personalContextIntent, state.loading]);
 
   const selectTab = useCallback((nextTab: TabId) => {
     initialTabResolvedRef.current = true;
@@ -343,7 +356,7 @@ export function ConnectorsPage() {
       const definition = connectorDefinitionsById.get(connectorId);
       if (!definition) return;
       initialTabResolvedRef.current = true;
-      setDiscoverSource(DISCOVERY_SOURCE_BUILTIN);
+      setDiscoverSource(personalContextIntent ? COMPOSIO_CONNECTOR_SOURCE : DISCOVERY_SOURCE_BUILTIN);
       setDiscoverSearchQuery('');
       setDetailConnector(definition);
       setTab('discover');
@@ -352,10 +365,9 @@ export function ConnectorsPage() {
     const nextParams = new URLSearchParams(searchParams);
     nextParams.delete('connector');
     nextParams.delete('instance');
-    nextParams.delete('personalContext');
     nextParams.set('tab', instance ? 'connected' : 'discover');
     setSearchParams(nextParams, { replace: true });
-  }, [connectorDefinitionsById, searchParams, setSearchParams, state.instances, state.loading]);
+  }, [connectorDefinitionsById, personalContextIntent, searchParams, setSearchParams, state.instances, state.loading]);
 
   const openStoreInstall = useCallback(async (packageName: string) => {
     setStorePlanLoading(true);
@@ -474,11 +486,14 @@ export function ConnectorsPage() {
         : state.registryCatalog
   ), [builtinCatalog, discoverSource, state.registryCatalog]);
   const discoveryCatalog = useMemo(() => {
+    const sourceCatalog = personalContextIntent
+      ? discoverySourceCatalog.filter((connector) => connector.understanding?.mode === 'activity')
+      : discoverySourceCatalog;
     const filtered = selectedTask === 'all'
-      ? discoverySourceCatalog
-      : discoverySourceCatalog.filter((connector) => connectorBenefitsFor(connector).includes(selectedTask));
+      ? sourceCatalog
+      : sourceCatalog.filter((connector) => connectorBenefitsFor(connector).includes(selectedTask));
     return filterAndSortConnectors(filtered, discoverSearchQuery, connectorSort);
-  }, [connectorSort, discoverSearchQuery, discoverySourceCatalog, selectedTask]);
+  }, [connectorSort, discoverSearchQuery, discoverySourceCatalog, personalContextIntent, selectedTask]);
   const availableTasks = useMemo(() => CONNECTOR_BENEFIT_ORDER.filter((benefit) => (
     discoverySourceCatalog.some((connector) => connectorBenefitsFor(connector).includes(benefit))
   )), [discoverySourceCatalog]);
@@ -508,6 +523,23 @@ export function ConnectorsPage() {
       <div className="flex w-full flex-col gap-6 px-3 py-6 sm:px-5 xl:px-6">
         {!hasToken ? (
           <p className="rounded-xl border border-edge bg-surface-panel px-4 py-3 text-sm text-fg-muted">{cs.tokenHint}</p>
+        ) : null}
+
+        {personalContextIntent ? (
+          <div className="flex flex-col gap-3 rounded-xl border border-accent/25 bg-accent-soft px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-fg">{cs.personalContextTitle}</p>
+              <p className="mt-1 text-xs leading-5 text-fg-muted">{cs.personalContextHint}</p>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              className="shrink-0"
+              onClick={() => navigate(personalContextReturnPath)}
+            >
+              {cs.personalContextDone}
+            </Button>
+          </div>
         ) : null}
 
         <section className="flex flex-col gap-4">
@@ -637,7 +669,7 @@ export function ConnectorsPage() {
 
           {tab === 'discover' && hasToken ? (
             <div className="flex flex-col gap-5">
-              <div className="flex flex-wrap gap-2" role="group" aria-label={cs.taskFilterAria}>
+              {!personalContextIntent ? <div className="flex flex-wrap gap-2" role="group" aria-label={cs.taskFilterAria}>
                 {(['all', ...availableTasks] as DiscoveryTask[]).map((task) => (
                   <button
                     key={task}
@@ -654,7 +686,7 @@ export function ConnectorsPage() {
                     {task === 'all' ? cs.taskAll : cs.connectorBenefitHeadings[task]}
                   </button>
                 ))}
-              </div>
+              </div> : null}
 
               <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
                 <ConnectorSearchField
@@ -663,16 +695,19 @@ export function ConnectorsPage() {
                   placeholder={cs.discoverSearchPlaceholder}
                   className="max-w-xl"
                 />
-                <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:ml-auto lg:w-[26rem]">
-                  <PopoverSelect
-                    value={discoverSource}
-                    options={sourceOptions}
-                    placeholder={cs.discoverSourceAll}
-                    allowEmpty={false}
-                    ariaLabel={cs.registrySourceAria}
-                    triggerClassName="h-9 bg-surface-panel text-xs"
-                    onChange={setDiscoverSource}
-                  />
+                <div className={cn(
+                  'grid min-w-0 grid-cols-1 gap-2 lg:ml-auto',
+                  personalContextIntent ? 'lg:w-52' : 'sm:grid-cols-2 lg:w-[26rem]',
+                )}>
+                  {!personalContextIntent ? <PopoverSelect
+                      value={discoverSource}
+                      options={sourceOptions}
+                      placeholder={cs.discoverSourceAll}
+                      allowEmpty={false}
+                      ariaLabel={cs.registrySourceAria}
+                      triggerClassName="h-9 bg-surface-panel text-xs"
+                      onChange={setDiscoverSource}
+                    /> : null}
                   <PopoverSelect
                     value={connectorSort}
                     options={[

@@ -12,7 +12,7 @@ import {
 } from './api';
 
 type ActivityStatus = 'idle' | 'running' | 'review_ready' | 'completed' | 'partial';
-type SourceStatus = 'idle' | 'running' | 'completed' | 'denied' | 'failed';
+type SourceStatus = 'idle' | 'running' | 'completed' | 'denied' | 'failed' | 'skipped';
 
 type UnderstandingActivityState = {
   status: ActivityStatus;
@@ -26,15 +26,23 @@ type UnderstandingActivityState = {
   setDrawerOpen: (open: boolean) => void;
   finish: () => void;
   updateDirectoryRun: (run: WorkDiscoveryRun) => void;
-  scanPersonalContext: (runId: string) => Promise<void>;
+  scanPersonalContext: (runId: string, selectedSources: ElectronPersonalContextSource[]) => Promise<void>;
   reviewMemory: (memoryRecordId: string, accepted: boolean) => Promise<void>;
 };
 
 const initialSources = { apple_notes: 'idle', calendar: 'idle', reminders: 'idle' } as const;
 const initialCounts = { apple_notes: 0, calendar: 0, reminders: 0 };
 
-function sourceMap(results: ElectronPersonalContextSourceResult[]): Record<ElectronPersonalContextSource, SourceStatus> {
-  const next: Record<ElectronPersonalContextSource, SourceStatus> = { ...initialSources };
+function sourceMap(
+  results: ElectronPersonalContextSourceResult[],
+  selectedSources: ElectronPersonalContextSource[],
+): Record<ElectronPersonalContextSource, SourceStatus> {
+  const selected = new Set(selectedSources);
+  const next: Record<ElectronPersonalContextSource, SourceStatus> = {
+    apple_notes: selected.has('apple_notes') ? 'running' : 'skipped',
+    calendar: selected.has('calendar') ? 'running' : 'skipped',
+    reminders: selected.has('reminders') ? 'running' : 'skipped',
+  };
   for (const result of results) next[result.source] = result.status;
   return next;
 }
@@ -104,21 +112,26 @@ export const useUnderstandingActivityStore = create<UnderstandingActivityState>(
         : directoryStatus === 'failed' && personalDone ? 'partial' : 'running',
     });
   },
-  scanPersonalContext: async (runId) => {
+  scanPersonalContext: async (runId, selectedSources) => {
     if (window.electronAPI?.platform !== 'darwin') return;
     const scan = window.electronAPI?.personalContext?.scan;
     if (!scan) return;
+    const selected = new Set(selectedSources);
     set({
       status: 'running',
-      sources: { apple_notes: 'running', calendar: 'running', reminders: 'running' },
+      sources: {
+        apple_notes: selected.has('apple_notes') ? 'running' : 'skipped',
+        calendar: selected.has('calendar') ? 'running' : 'skipped',
+        reminders: selected.has('reminders') ? 'running' : 'skipped',
+      },
       itemCounts: { ...initialCounts },
       memories: [],
       threads: [],
       error: undefined,
     });
     try {
-      const results = await scan();
-      const sources = sourceMap(results);
+      const results = await scan(selectedSources);
+      const sources = sourceMap(results, selectedSources);
       const itemCounts = { ...initialCounts };
       for (const result of results) itemCounts[result.source] = result.items.length;
       const items = results.flatMap((result) => result.status === 'completed' ? result.items : []);
@@ -128,12 +141,15 @@ export const useUnderstandingActivityStore = create<UnderstandingActivityState>(
         : { profileCandidates: [], workThreads: [] };
       const memories = understanding.profileCandidates;
       const hasFailure = Object.values(sources).some((status) => status === 'denied' || status === 'failed');
+      const directoryDone = get().directoryStatus === 'completed';
       set({
         sources,
         itemCounts,
         memories,
         threads: understanding.workThreads,
-        status: memories.some((memory) => memory.status === 'pending')
+        status: !directoryDone
+          ? 'running'
+          : memories.some((memory) => memory.status === 'pending')
           ? 'review_ready'
           : hasFailure ? 'partial' : 'completed',
       });

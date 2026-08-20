@@ -16,6 +16,7 @@ import { registerContextCommands } from './builtins/context.js';
 import { registerWorkflowCommands } from './builtins/workflow.js';
 import { registerReviewCommand } from './builtins/review.js';
 import { registerSkillCommand } from './builtins/skill.js';
+import { registerUnderstandingCommands } from './builtins/understanding.js';
 import { registerAgentEditCommand } from './agent-edit.js';
 
 // Types
@@ -73,6 +74,7 @@ export { registerContextCommands } from './builtins/context.js';
 export { registerWorkflowCommands } from './builtins/workflow.js';
 export { registerReviewCommand } from './builtins/review.js';
 export { registerSkillCommand } from './builtins/skill.js';
+export { registerUnderstandingCommands } from './builtins/understanding.js';
 export { registerAgentEditCommand } from './agent-edit.js';
 
 /**
@@ -89,5 +91,6 @@ export function initializeCommands(): void {
   registerWorkflowCommands();
   registerReviewCommand();
   registerSkillCommand();
+  registerUnderstandingCommands();
   registerAgentEditCommand();
 }

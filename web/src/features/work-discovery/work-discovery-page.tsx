@@ -8,7 +8,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useDirectoryPicker } from '@/features/fs/use-directory-picker';
 import { WorkingDirectoryPickerModal } from '@/features/fs/working-directory-picker-modal';
 import { messages } from '@/i18n/messages';
+import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
+import type { ElectronPersonalContextSource } from '@/types/electron';
 
 import {
   cancelWorkDiscoveryRun,
@@ -67,7 +69,20 @@ export function WorkDiscoveryPage({
   const [batchRuns, setBatchRuns] = useState<WorkDiscoveryRun[]>([]);
   const [batchRunning, setBatchRunning] = useState(false);
   const [batchPosition, setBatchPosition] = useState({ current: 0, total: 0 });
+  const [selectedPersonalSources, setSelectedPersonalSources] = useState<Set<ElectronPersonalContextSource>>(
+    () => new Set(),
+  );
   const stopBatchRef = useRef(false);
+  const isDarwin = window.electronAPI?.platform === 'darwin';
+
+  const togglePersonalSource = (source: ElectronPersonalContextSource) => {
+    setSelectedPersonalSources((current) => {
+      const next = new Set(current);
+      if (next.has(source)) next.delete(source);
+      else next.add(source);
+      return next;
+    });
+  };
 
   const applyRun = useCallback((next: WorkDiscoveryRun) => {
     useUnderstandingActivityStore.getState().updateDirectoryRun(next);
@@ -146,7 +161,7 @@ export function WorkDiscoveryPage({
           trackBatchRun(next, index, total);
           if (!personalContextStarted) {
             personalContextStarted = true;
-            void useUnderstandingActivityStore.getState().scanPersonalContext(next.id);
+            void useUnderstandingActivityStore.getState().scanPersonalContext(next.id, [...selectedPersonalSources]);
           }
         },
         onError: (cause, candidate, index) => {
@@ -266,7 +281,7 @@ export function WorkDiscoveryPage({
       await grantWorkDiscoveryDirectory(preview.canonicalRootPath);
       const next = await startWorkDiscoveryRun(preview.canonicalRootPath);
       applyRun(next);
-      void useUnderstandingActivityStore.getState().scanPersonalContext(next.id);
+      void useUnderstandingActivityStore.getState().scanPersonalContext(next.id, [...selectedPersonalSources]);
     } catch (cause) {
       setError(errorText(cause));
       setPageState('consent');
@@ -432,6 +447,43 @@ export function WorkDiscoveryPage({
               <p className="mx-auto mt-3 max-w-[34rem] text-[0.95rem] leading-7 text-fg-muted">{copy.subtitle}</p>
             </div>
             <div className="mx-auto mt-9 w-full max-w-md">
+              {isDarwin ? (
+                <div className="mb-5 rounded-xl border border-edge bg-surface-panel p-3 text-left">
+                  <p className="text-sm font-medium text-fg">{copy.personalSourcesTitle}</p>
+                  <p className="mt-1 text-xs leading-5 text-fg-muted">{copy.personalSourcesSubtitle}</p>
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    {([
+                      ['apple_notes', copy.sourceAppleNotes],
+                      ['calendar', copy.sourceCalendar],
+                      ['reminders', copy.sourceReminders],
+                    ] as const).map(([source, label]) => {
+                      const selected = selectedPersonalSources.has(source);
+                      return (
+                        <button
+                          key={source}
+                          type="button"
+                          className={cn(
+                            'flex min-h-16 flex-col items-center justify-center gap-1 rounded-lg border px-2 py-2 text-xs font-medium transition-colors',
+                            selected
+                              ? 'border-accent/40 bg-accent-soft text-accent-fg'
+                              : 'border-edge bg-surface-base text-fg-muted hover:bg-surface-hover hover:text-fg',
+                          )}
+                          aria-pressed={selected}
+                          onClick={() => togglePersonalSource(source)}
+                        >
+                          <span className={cn(
+                            'flex size-4 items-center justify-center rounded-full border',
+                            selected ? 'border-accent bg-accent text-white' : 'border-edge',
+                          )}>
+                            {selected ? <Check className="size-3" aria-hidden /> : null}
+                          </span>
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
               <Button
                 type="button"
                 className="h-12 w-full gap-2 bg-accent text-white hover:bg-accent-hover"
@@ -455,6 +507,13 @@ export function WorkDiscoveryPage({
                 <ShieldCheck className="mt-0.5 size-4 shrink-0 text-accent-fg" />
                 <span>{copy.quickScanNote}</span>
               </div>
+              <button
+                type="button"
+                className="mt-4 text-sm font-medium text-accent-fg hover:underline"
+                onClick={() => navigate('/connectors?personalContext=1&returnTo=%2Fonboarding%2Fworkspace')}
+              >
+                {copy.connectCloudSource}
+              </button>
               {error ? <p className="mt-4 text-sm text-danger" role="alert">{error}</p> : null}
             </div>
             <button type="button" className="mx-auto mt-auto pt-10 text-sm text-fg-muted hover:text-fg hover:underline" onClick={() => void skip()} disabled={busy}>

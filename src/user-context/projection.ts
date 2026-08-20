@@ -95,6 +95,13 @@ export function projectUserContextRecord(record: MemoryRecord) {
     status: effectiveMemoryStatus(record),
     origin: originForMemoryRecord(record),
     sourceName: record.source.provider ?? 'local',
+    scope: record.scope.sessionKey
+      ? { type: 'session' as const, id: record.scope.sessionKey }
+      : record.scope.projectId
+        ? { type: 'project' as const, id: record.scope.projectId }
+        : record.scope.workspaceId
+          ? { type: 'workspace' as const, id: record.scope.workspaceId }
+          : { type: 'global' as const },
     updatedAt: record.updatedAt,
     sensitivity: record.sensitivity ?? 'normal',
     explicitness: record.explicitness,

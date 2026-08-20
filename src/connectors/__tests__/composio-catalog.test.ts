@@ -70,10 +70,9 @@ describe('Composio agent-ready catalog', () => {
     });
   });
 
-  it('marks first-phase understanding sources as personal context', () => {
+  it('marks only connectors with implemented learning plans as personal context', () => {
     for (const slug of [
-      'gmail', 'googlecalendar', 'googledrive', 'googledocs', 'googlesheets', 'notion', 'slack', 'github', 'linear', 'jira',
-      'outlook', 'microsoft_teams', 'one_drive', 'excel',
+      'gmail', 'googlecalendar', 'googledrive', 'notion', 'slack', 'github', 'linear',
     ]) {
       const definition = connectorDefinitionFromComposioToolkit({
         slug,
@@ -83,6 +82,11 @@ describe('Composio agent-ready catalog', () => {
       });
       expect(definition.capabilities).toEqual(expect.arrayContaining(['context', 'memory_source']));
     }
+    const outlook = connectorDefinitionFromComposioToolkit({
+      slug: 'outlook', name: 'Outlook', isNoAuth: false, connected: false,
+    });
+    expect(outlook.capabilities).not.toContain('memory_source');
+    expect(outlook.benefits).not.toContain('understand');
   });
 
   it('describes user benefits explicitly and allows one app in multiple filters', () => {
@@ -93,6 +97,24 @@ describe('Composio agent-ready catalog', () => {
     expect(gmail.benefits).toEqual(['understand', 'act', 'reach']);
     expect(github.benefits).toEqual(['understand', 'act']);
     expect(todoist.benefits).toEqual(['act']);
+  });
+
+  it('publishes only implemented read-only understanding plans as onboarding-ready', () => {
+    const definition = (slug: string) => connectorDefinitionFromComposioToolkit({
+      slug,
+      name: slug,
+      isNoAuth: false,
+      connected: false,
+    });
+
+    expect(definition('gmail').understanding).toEqual({
+      mode: 'activity',
+      bootstrapWindowDays: 30,
+      readOnly: true,
+    });
+    expect(definition('github').understanding?.mode).toBe('activity');
+    expect(definition('googledrive').understanding?.mode).toBe('inventory');
+    expect(definition('outlook').understanding).toBeUndefined();
   });
 
   it('gives every built-in Composio connector a logo', () => {
