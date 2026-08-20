@@ -113,17 +113,64 @@ export const UserContextProviderRoutingSchema = z
     allowExternalWrites: false,
   });
 
+const DreamingIntervalHoursSchema = z.union([
+  z.literal(1), z.literal(2), z.literal(3), z.literal(4),
+  z.literal(6), z.literal(8), z.literal(12), z.literal(24),
+]);
+const DreamingTimeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Expected time in HH:mm format');
+
+export const DreamingScheduleSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('interval'),
+    everyHours: DreamingIntervalHoursSchema,
+    minute: z.number().int().min(0).max(59),
+  }).strict(),
+  z.object({
+    kind: z.literal('daily'),
+    time: DreamingTimeSchema,
+  }).strict(),
+  z.object({
+    kind: z.literal('weekly'),
+    weekday: z.number().int().min(0).max(6),
+    time: DreamingTimeSchema,
+  }).strict(),
+]);
+
+const DreamingEditablePhaseSchema = z.object({
+  enabled: z.boolean(),
+  schedule: DreamingScheduleSchema,
+}).strict();
+
+export const DreamingSettingsSchema = z.object({
+  mode: z.enum(['off', 'observe', 'review', 'automatic']),
+  timezone: z.string().min(1).refine(isValidTimeZone, 'Invalid IANA timezone'),
+  phases: z.object({
+    light: DreamingEditablePhaseSchema,
+    deep: DreamingEditablePhaseSchema,
+    rem: DreamingEditablePhaseSchema,
+  }).strict(),
+}).strict();
+
+function isValidTimeZone(value: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en', { timeZone: value }).format();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const DreamingPhaseSchema = z
   .object({
     enabled: z.boolean().optional(),
-    cron: z.string().min(1).optional(),
+    schedule: DreamingScheduleSchema.optional(),
   })
   .strict();
 
 export const UserContextDreamingSchema = z
   .object({
     mode: z.enum(['off', 'observe', 'review', 'automatic']).default('off'),
-    timezone: z.string().optional(),
+    timezone: z.string().min(1).refine(isValidTimeZone, 'Invalid IANA timezone').optional(),
     phases: z
       .object({
         light: DreamingPhaseSchema.extend({
@@ -187,3 +234,5 @@ export const UserContextConfigSchema = z
   });
 
 export type UserContextConfig = z.infer<typeof UserContextConfigSchema>;
+export type DreamingSchedule = z.infer<typeof DreamingScheduleSchema>;
+export type DreamingSettings = z.infer<typeof DreamingSettingsSchema>;

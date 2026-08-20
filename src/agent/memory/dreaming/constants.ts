@@ -5,25 +5,19 @@ export const DREAMING_ALGORITHM_VERSION = 'structured-v1';
 
 export const DREAMING_PHASES: readonly DreamingPhaseId[] = ['light', 'deep', 'rem'] as const;
 
-// ── Sweep tokens (used in cron payloads to trigger each phase) ─────────
+// ── Sweep tokens (used in automation payloads to trigger each phase) ──
 
 export const DREAMING_SWEEP_TOKEN = '__xopc_memory_dreaming_sweep__';
 export const DREAMING_LIGHT_SWEEP_TOKEN = '__xopc_memory_dreaming_light_sweep__';
 export const DREAMING_REM_SWEEP_TOKEN = '__xopc_memory_dreaming_rem_sweep__';
 
-// ── Cron job metadata ──────────────────────────────────────────────────
+// ── Managed automation metadata ───────────────────────────────────────
 
-export const DREAMING_CRON_TAG = '[managed-by=xopc.memory.dreaming]';
+export const DREAMING_AUTOMATION_TAG = '[managed-by=xopc.memory.dreaming]';
 
-export const DREAMING_CRON_NAME = 'Memory Dreaming - Deep Promotion';
-export const DREAMING_LIGHT_CRON_NAME = 'Memory Dreaming - Light Sweep';
-export const DREAMING_REM_CRON_NAME = 'Memory Dreaming - REM Patterns';
-
-// ── Default cron schedules ─────────────────────────────────────────────
-
-export const DEFAULT_DEEP_CRON = '0 3 * * *';
-export const DEFAULT_LIGHT_CRON = '0 */6 * * *';
-export const DEFAULT_REM_CRON = '0 5 * * 0';
+export const DREAMING_DEEP_AUTOMATION_NAME = 'Memory Dreaming - Deep Promotion';
+export const DREAMING_LIGHT_AUTOMATION_NAME = 'Memory Dreaming - Light Sweep';
+export const DREAMING_REM_AUTOMATION_NAME = 'Memory Dreaming - REM Patterns';
 
 // ── Time-decay defaults ────────────────────────────────────────────────
 

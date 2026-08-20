@@ -29,9 +29,9 @@ function config(workspaceDir: string, dreamingEnabled: boolean): Config {
         mode: dreamingEnabled ? 'automatic' : 'off',
         timezone: 'Asia/Shanghai',
         phases: {
-          light: { enabled: true, cron: '0 */6 * * *' },
-          deep: { enabled: true, cron: '0 3 * * *', minScore: 0.8, minRecallCount: 3, limit: 10 },
-          rem: { enabled: false, cron: '0 5 * * 0' },
+          light: { enabled: true, schedule: { kind: 'interval', everyHours: 6, minute: 0 } },
+          deep: { enabled: true, schedule: { kind: 'daily', time: '03:00' }, minScore: 0.8, minRecallCount: 3, limit: 10 },
+          rem: { enabled: false, schedule: { kind: 'weekly', weekday: 0, time: '05:00' } },
         },
       },
     },
@@ -103,7 +103,10 @@ describe('reconcileDreamingAutomations', () => {
     expect(rem?.enabled).toBe(false);
 
     const nextConfig = config(workspaceDir, true);
-    nextConfig.userContext.dreaming.phases.deep = { ...nextConfig.userContext.dreaming.phases.deep, cron: '30 2 * * *' };
+    nextConfig.userContext.dreaming.phases.deep = {
+      ...nextConfig.userContext.dreaming.phases.deep,
+      schedule: { kind: 'daily', time: '02:30' },
+    };
     nextConfig.userContext.dreaming.phases.rem = { ...nextConfig.userContext.dreaming.phases.rem, enabled: true };
     const updated = await reconcileDreamingAutomations({
       config: nextConfig,

@@ -15,10 +15,11 @@ import { activateRemInsight } from './promotion-lifecycle.js';
 
 const log = createLogger('Dreaming:REM');
 
-function resolveConfig(overrides?: Partial<DreamingRemConfig>): DreamingRemConfig {
+type RemExecutionConfig = Pick<DreamingRemConfig, 'enabled' | 'lookbackDays' | 'limit' | 'minPatternStrength'>;
+
+function resolveConfig(overrides?: Partial<RemExecutionConfig>): RemExecutionConfig {
   return {
     enabled: overrides?.enabled === true,
-    cron: typeof overrides?.cron === 'string' ? overrides.cron : '0 5 * * 0',
     lookbackDays: Math.max(1, Math.floor(Number(overrides?.lookbackDays) || 7)),
     limit: Math.max(0, Math.floor(Number(overrides?.limit) || 10)),
     minPatternStrength: Math.max(0, Math.min(1, Number(overrides?.minPatternStrength) || 0.75)),
@@ -31,7 +32,7 @@ export async function runRemPatterns(params: {
   runId: string;
   mode: DreamingActiveMode;
   workspaceDir: string;
-  config?: Partial<DreamingRemConfig>;
+  config?: Partial<RemExecutionConfig>;
   sensitiveWritePolicy?: 'deny' | 'confirm' | 'allow';
   now?: Date;
 }): Promise<{ ok: boolean; reason: string; patternsDiscovered: number; entriesAnalyzed: number }> {
