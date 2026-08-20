@@ -137,6 +137,7 @@ export function recordsDerivedFromPersonalContextSource(
 }
 
 function connectionIdentityKey(connection: ConnectorConnection): string {
+  if (connection.accountId) return `account:${connection.accountId}`;
   const email = typeof connection.identity.email === 'string'
     ? connection.identity.email.trim().toLocaleLowerCase()
     : '';
@@ -214,8 +215,10 @@ export function projectPersonalContextSources(
         });
       const rows = accounts.length > 0
         ? accounts.map((connection, index) => ({
-            instanceId: connection.id,
-            sourceInstanceId: `composio:${definition.id}:${connection.id}`,
+            instanceId: connection.accountId,
+            sourceInstanceId: connection.accountId
+              ? `composio:${definition.id}:${connection.accountId}`
+              : undefined,
             accountLabel: connection.alias
               ?? (typeof connection.identity.email === 'string' ? connection.identity.email : undefined)
               ?? (typeof connection.identity.username === 'string' ? connection.identity.username : undefined),

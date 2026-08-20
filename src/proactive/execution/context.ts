@@ -1,5 +1,5 @@
 import { listMemoryRecords } from '../../storage/sqlite/memory-records-repository.js';
-import { getConnectorSyncPolicy } from '../../storage/sqlite/connector-sync-policy-repository.js';
+import { getConnectorSyncPolicyForConnection } from '../../storage/sqlite/connector-sync-policy-repository.js';
 import { getKnowledgeSourceItem } from '../../storage/sqlite/knowledge-repository.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { wrapExternalContent } from '../../gateway/security/external-content.js';
@@ -50,7 +50,7 @@ function authorizedConnectedSourceItem(event: EventRow, scenarioKey: string) {
   if (item.sensitivity === 'secret' || item.sensitivity === 'regulated') return null;
   if (item.metadata.workspaceId !== event.workspace_id) return null;
   if (event.agent_id && item.metadata.agentId && item.metadata.agentId !== event.agent_id) return null;
-  const policy = getConnectorSyncPolicy(connectionId);
+  const policy = getConnectorSyncPolicyForConnection(connectionId);
   const scenarioAllowed = !policy?.allowedScenarioKeys.length
     || policy.allowedScenarioKeys.includes(scenarioKey);
   return policy?.scanEnabled && policy.proactiveEnabled && scenarioAllowed ? item : null;

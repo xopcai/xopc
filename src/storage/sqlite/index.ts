@@ -275,7 +275,14 @@ export {
   type CachedConnectorCatalogEntry,
 } from './connector-repository.js';
 export {
+  getConnectorAccount,
+  listConnectorAccounts,
+  refreshConnectorAccountCurrent,
+  reconcileConnectorAccount,
+} from './connector-account-repository.js';
+export {
   getConnectorSyncPolicy,
+  getConnectorSyncPolicyForConnection,
   listConnectorSyncPolicies,
   upsertConnectorSyncPolicy,
   type ConnectorSyncPolicy,

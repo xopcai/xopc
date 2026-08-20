@@ -1,8 +1,9 @@
 import type { MemorySensitivity } from '../agent/memory/types.js';
 import { ProactiveEventService } from '../proactive/service.js';
 import type { EventSensitivity } from '../proactive/events/types.js';
+import { getConnectorAccount } from '../storage/sqlite/connector-account-repository.js';
 import { listConnectorConnections } from '../storage/sqlite/connector-repository.js';
-import { getConnectorSyncPolicy } from '../storage/sqlite/connector-sync-policy-repository.js';
+import { getConnectorSyncPolicyForConnection } from '../storage/sqlite/connector-sync-policy-repository.js';
 import {
   getKnowledgeConsumerWatermark,
   getKnowledgeSourceItem,
@@ -58,9 +59,13 @@ export class ConnectedSourceChangePublisher {
     const total: SourceChangePublishResult = { published: 0, skipped: 0, sources: 0 };
     try {
       const connections = listConnectorConnections({ principalId: 'local-owner' })
-        .filter((connection) => connection.status === 'active');
+        .filter((connection) => (
+          connection.status === 'active'
+          && connection.accountId
+          && getConnectorAccount(connection.accountId)?.currentConnectionId === connection.id
+        ));
       for (const connection of connections) {
-        const sourceInstanceId = `composio:${connection.connectorId}:${connection.id}`;
+        const sourceInstanceId = `composio:${connection.connectorId}:${connection.accountId}`;
         try {
           const result = this.publishSource(sourceInstanceId, connection.id);
           total.published += result.published;
@@ -81,7 +86,7 @@ export class ConnectedSourceChangePublisher {
   }
 
   private publishSource(sourceInstanceId: string, connectionId: string): SourceChangePublishResult {
-    const policy = getConnectorSyncPolicy(connectionId);
+    const policy = getConnectorSyncPolicyForConnection(connectionId);
     let watermark = getKnowledgeConsumerWatermark(CONSUMER_ID, sourceInstanceId);
     const changes = listKnowledgeSourceChanges({ sourceInstanceId, afterSequence: watermark, limit: 250 });
     let published = 0;

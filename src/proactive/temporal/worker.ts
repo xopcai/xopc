@@ -1,4 +1,4 @@
-import { getConnectorSyncPolicy } from '../../storage/sqlite/connector-sync-policy-repository.js';
+import { getConnectorSyncPolicyForConnection } from '../../storage/sqlite/connector-sync-policy-repository.js';
 import { listKnowledgeSourceItems } from '../../storage/sqlite/knowledge-repository.js';
 import { createLogger } from '../../utils/logger.js';
 import { ProactiveEventService } from '../service.js';
@@ -70,7 +70,7 @@ export class ProactiveTemporalWorker {
           const agentId = metadataString(item.metadata, 'agentId');
           const startMs = item.occurredAt ? Date.parse(item.occurredAt) : Number.NaN;
           const window = meetingWindow(startMs, nowMs);
-          const policy = connectionId ? getConnectorSyncPolicy(connectionId) : undefined;
+          const policy = connectionId ? getConnectorSyncPolicyForConnection(connectionId) : undefined;
           const scenarioAllowed = !policy?.allowedScenarioKeys.length
             || policy.allowedScenarioKeys.includes(MEETING_SCENARIO);
           if (!connectionId || !workspaceId || !connectorId || !window

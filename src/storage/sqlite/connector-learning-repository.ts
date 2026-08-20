@@ -10,6 +10,7 @@ export type ConnectorLearningJob = {
   id: string;
   idempotencyKey: string;
   connectorId: string;
+  accountId: string;
   connectionId: string;
   sourceInstanceId: string;
   agentId: string;
@@ -32,6 +33,7 @@ type JobRow = {
   job_id: string;
   idempotency_key: string;
   connector_id: string;
+  account_id: string;
   connection_id: string;
   source_instance_id: string;
   agent_id: string;
@@ -59,6 +61,7 @@ function fromRow(row: JobRow): ConnectorLearningJob {
     id: row.job_id,
     idempotencyKey: row.idempotency_key,
     connectorId: row.connector_id,
+    accountId: row.account_id,
     connectionId: row.connection_id,
     sourceInstanceId: row.source_instance_id,
     agentId: row.agent_id,
@@ -80,6 +83,7 @@ function fromRow(row: JobRow): ConnectorLearningJob {
 
 export function enqueueConnectorLearningJob(input: {
   connectorId: string;
+  accountId: string;
   connectionId: string;
   sourceInstanceId: string;
   agentId: string;
@@ -92,12 +96,12 @@ export function enqueueConnectorLearningJob(input: {
   runSqliteWriteTransaction((db) => {
     db.prepare(
       `INSERT INTO connector_learning_jobs (
-        job_id, idempotency_key, connector_id, connection_id, source_instance_id,
+        job_id, idempotency_key, connector_id, account_id, connection_id, source_instance_id,
         agent_id, mode, status, phase, next_run_at, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'queued', 'queued', ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued', 'queued', ?, ?, ?)
       ON CONFLICT(idempotency_key) DO NOTHING`,
     ).run(
-      randomUUID(), input.idempotencyKey, input.connectorId, input.connectionId,
+      randomUUID(), input.idempotencyKey, input.connectorId, input.accountId, input.connectionId,
       input.sourceInstanceId, input.agentId, input.mode, input.nextRunAt ?? now, now, now,
     );
   });
@@ -139,20 +143,20 @@ export function recoverStaleConnectorLearningJobs(staleBeforeMs: number, nowMs =
   ).run(nowMs, nowMs, nowMs, staleBeforeMs).changes));
 }
 
-export function setConnectorLearningPaused(connectionId: string, paused: boolean, nowMs = Date.now()): number {
+export function setConnectorLearningPaused(accountId: string, paused: boolean, nowMs = Date.now()): number {
   return runSqliteWriteTransaction((db) => Number(db.prepare(
     paused
       ? `UPDATE connector_learning_jobs SET status = 'paused', next_run_at = NULL, updated_at = ?
-         WHERE connection_id = ? AND status IN ('queued', 'failed', 'running')`
+         WHERE account_id = ? AND status IN ('queued', 'failed', 'running')`
       : `UPDATE connector_learning_jobs SET status = 'queued', next_run_at = ?, updated_at = ?
-         WHERE connection_id = ? AND status = 'paused'`,
-  ).run(...(paused ? [nowMs, connectionId] : [nowMs, nowMs, connectionId])).changes));
+         WHERE account_id = ? AND status = 'paused'`,
+  ).run(...(paused ? [nowMs, accountId] : [nowMs, nowMs, accountId])).changes));
 }
 
 export function updateConnectorLearningJob(
   id: string,
   patch: Partial<Pick<ConnectorLearningJob,
-    'status' | 'phase' | 'itemsDiscovered' | 'itemsIndexed' | 'candidatesCreated' | 'error'>> & {
+    'accountId' | 'sourceInstanceId' | 'status' | 'phase' | 'itemsDiscovered' | 'itemsIndexed' | 'candidatesCreated' | 'error'>> & {
     nextRunAt?: number | null;
     finished?: boolean;
     nowMs?: number;
@@ -167,6 +171,8 @@ export function updateConnectorLearningJob(
     values.push(value);
   };
   add('status', patch.status);
+  add('account_id', patch.accountId);
+  add('source_instance_id', patch.sourceInstanceId);
   add('phase', patch.phase);
   add('items_discovered', patch.itemsDiscovered);
   add('items_indexed', patch.itemsIndexed);
@@ -186,12 +192,14 @@ export function updateConnectorLearningJob(
 
 export function listConnectorLearningJobs(options: {
   sourceInstanceId?: string;
+  accountId?: string;
   connectionId?: string;
   limit?: number;
 } = {}): ConnectorLearningJob[] {
   const clauses: string[] = [];
   const values: Array<string | number> = [];
   if (options.sourceInstanceId) { clauses.push('source_instance_id = ?'); values.push(options.sourceInstanceId); }
+  if (options.accountId) { clauses.push('account_id = ?'); values.push(options.accountId); }
   if (options.connectionId) { clauses.push('connection_id = ?'); values.push(options.connectionId); }
   const limit = Math.max(1, Math.min(options.limit ?? 100, 500));
   const rows = getSqliteDatabase().prepare(

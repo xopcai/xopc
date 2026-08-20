@@ -87,6 +87,139 @@ function highlightPlainSlice(text: string, q: string): ReactNode {
   );
 }
 
+const PaletteOptionRow = memo(function PaletteOptionRow({
+  item,
+  index,
+  selectedIndex,
+  showHighlight,
+  filterQuery,
+  currentAgentId,
+  currentBadgeLabel,
+  runBusy,
+  pendingFollowUpsCount,
+  maxPendingFollowUps,
+  queueBadgeLabel,
+  queueFullBadgeLabel,
+  queueFullTooltip,
+  skillUnavailableLabel,
+  skillAgentDeniedLabel,
+  onSelectItem,
+}: {
+  item: PaletteItem;
+  index: number;
+  selectedIndex: number;
+  showHighlight: boolean;
+  filterQuery: string;
+  currentAgentId?: string;
+  currentBadgeLabel: string;
+  runBusy: boolean;
+  pendingFollowUpsCount: number;
+  maxPendingFollowUps: number;
+  queueBadgeLabel: string;
+  queueFullBadgeLabel: string;
+  queueFullTooltip: string;
+  skillUnavailableLabel: string;
+  skillAgentDeniedLabel: string;
+  onSelectItem: (item: PaletteItem) => void;
+}) {
+  const isSkill = item.kind === 'skill';
+  const isAgent = item.kind === 'agent';
+  const icon = isAgent ? (
+    <AgentAvatarDisplay
+      agentId={item.name}
+      avatar={item.avatar}
+      size={18}
+      className="size-[18px] shrink-0"
+    />
+  ) : isSkill ? (
+    <Sparkles className="size-3 shrink-0 text-accent-fg" aria-hidden />
+  ) : (
+    <Zap className="size-3 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
+  );
+  // Agents render as `name` (no leading slash); skills/commands keep the leading slash.
+  const nameLine = isAgent ? (
+    showHighlight ? (
+      <>{highlightFuzzyName(item.name, filterQuery)}</>
+    ) : (
+      <span className="text-fg">{item.name}</span>
+    )
+  ) : showHighlight ? (
+    <>
+      <span className="text-fg">/</span>
+      {highlightFuzzyName(item.name, filterQuery)}
+    </>
+  ) : (
+    <span className="text-fg">/{item.name}</span>
+  );
+  const isCurrentAgent =
+    isAgent && currentAgentId != null && currentAgentId.length > 0 && item.name === currentAgentId;
+  const isUnavailableSkill = isSkill && item.availability?.status !== 'available';
+  const streamContext = { runBusy, pendingFollowUpsCount, maxPendingFollowUps };
+  const willQueue = commandRowWillQueue(item, streamContext);
+  const isDisabled = commandRowDisabled(item, streamContext);
+
+  let trailingBadge: ReactNode = null;
+  if (isCurrentAgent) {
+    trailingBadge = (
+      <span
+        className="ml-1 shrink-0 rounded bg-accent-soft px-1 py-px text-[0.6rem] font-medium leading-none text-accent-fg"
+        aria-label={currentBadgeLabel}
+      >
+        {currentBadgeLabel}
+      </span>
+    );
+  } else if (isUnavailableSkill) {
+    trailingBadge = (
+      <span
+        className="ml-1 shrink-0 rounded bg-surface-hover px-1 py-px text-[0.6rem] font-medium leading-none text-fg-muted"
+        aria-label={item.availability?.reason ?? 'unavailable'}
+      >
+        {item.availability?.status === 'agent-denied' ? skillAgentDeniedLabel : skillUnavailableLabel}
+      </span>
+    );
+  } else if (isDisabled) {
+    trailingBadge = (
+      <span
+        className="ml-1 shrink-0 rounded bg-red-100 px-1 py-px text-[0.6rem] font-medium leading-none text-red-700 dark:bg-red-900/40 dark:text-red-300"
+        aria-label={queueFullBadgeLabel}
+      >
+        {queueFullBadgeLabel}
+      </span>
+    );
+  } else if (willQueue) {
+    trailingBadge = (
+      <span
+        className="ml-1 shrink-0 rounded bg-surface-hover px-1 py-px text-[0.6rem] font-medium leading-none text-fg-muted"
+        aria-label={queueBadgeLabel}
+      >
+        {queueBadgeLabel}
+      </span>
+    );
+  }
+
+  return (
+    <PaletteRow
+      item={item}
+      icon={icon}
+      selected={selectedIndex === index}
+      id={`palette-${index}`}
+      nameLine={nameLine}
+      descriptionLine={
+        item.description
+          ? showHighlight
+            ? highlightPlainSlice(item.description, filterQuery)
+            : item.description
+          : null
+      }
+      dimCategoryBadge={showHighlight}
+      trailingBadge={trailingBadge}
+      disabled={isDisabled}
+      disabledTooltip={isDisabled ? queueFullTooltip : undefined}
+      onSelect={() => onSelectItem(item)}
+    />
+  );
+});
+
 export const CommandPalette = memo(function CommandPalette({
   open,
   anchorRef,
@@ -217,104 +350,21 @@ export const CommandPalette = memo(function CommandPalette({
   const sectionHeaderClass =
     'mb-1.5 px-2.5 pt-2.5 text-[0.6rem] font-medium uppercase leading-none tracking-wide text-fg-muted';
 
-  const streamCtx = { runBusy, pendingFollowUpsCount, maxPendingFollowUps };
-
-  const renderOptionRow = (item: PaletteItem, i: number) => {
-    const isSkill = item.kind === 'skill';
-    const isAgent = item.kind === 'agent';
-    const icon = isAgent ? (
-      <AgentAvatarDisplay
-        agentId={item.name}
-        avatar={item.avatar}
-        size={18}
-        className="size-[18px] shrink-0"
-      />
-    ) : isSkill ? (
-      <Sparkles className="size-3 shrink-0 text-accent-fg" aria-hidden />
-    ) : (
-      <Zap className="size-3 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
-    );
-    // Agents render as `name` (no leading slash); skills/commands keep the leading slash.
-    const nameLine = isAgent ? (
-      showHighlight ? (
-        <>{highlightFuzzyName(item.name, filterQuery)}</>
-      ) : (
-        <span className="text-fg">{item.name}</span>
-      )
-    ) : showHighlight ? (
-      <>
-        <span className="text-fg">/</span>
-        {highlightFuzzyName(item.name, filterQuery)}
-      </>
-    ) : (
-      <span className="text-fg">/{item.name}</span>
-    );
-    const isCurrentAgent =
-      isAgent && currentAgentId != null && currentAgentId.length > 0 && item.name === currentAgentId;
-    const isUnavailableSkill = isSkill && item.availability?.status !== 'available';
-    const willQueue = commandRowWillQueue(item, streamCtx);
-    const isDisabled = commandRowDisabled(item, streamCtx);
-
-    let trailingBadge: ReactNode = null;
-    if (isCurrentAgent) {
-      trailingBadge = (
-        <span
-          className="ml-1 shrink-0 rounded bg-accent-soft px-1 py-px text-[0.6rem] font-medium leading-none text-accent-fg"
-          aria-label={currentBadgeLabel}
-        >
-          {currentBadgeLabel}
-        </span>
-      );
-    } else if (isUnavailableSkill) {
-      trailingBadge = (
-        <span
-          className="ml-1 shrink-0 rounded bg-surface-hover px-1 py-px text-[0.6rem] font-medium leading-none text-fg-muted"
-          aria-label={item.availability?.reason ?? 'unavailable'}
-        >
-          {item.availability?.status === 'agent-denied' ? skillAgentDeniedLabel : skillUnavailableLabel}
-        </span>
-      );
-    } else if (isDisabled) {
-      trailingBadge = (
-        <span
-          className="ml-1 shrink-0 rounded bg-red-100 px-1 py-px text-[0.6rem] font-medium leading-none text-red-700 dark:bg-red-900/40 dark:text-red-300"
-          aria-label={queueFullBadgeLabel}
-        >
-          {queueFullBadgeLabel}
-        </span>
-      );
-    } else if (willQueue) {
-      trailingBadge = (
-        <span
-          className="ml-1 shrink-0 rounded bg-surface-hover px-1 py-px text-[0.6rem] font-medium leading-none text-fg-muted"
-          aria-label={queueBadgeLabel}
-        >
-          {queueBadgeLabel}
-        </span>
-      );
-    }
-
-    return (
-      <PaletteRow
-        item={item}
-        icon={icon}
-        selected={selectedIndex === i}
-        id={`palette-${i}`}
-        nameLine={nameLine}
-        descriptionLine={
-          item.description
-            ? showHighlight
-              ? highlightPlainSlice(item.description, filterQuery)
-              : item.description
-            : null
-        }
-        dimCategoryBadge={showHighlight}
-        trailingBadge={trailingBadge}
-        disabled={isDisabled}
-        disabledTooltip={isDisabled ? queueFullTooltip : undefined}
-        onSelect={() => onSelectItem(item)}
-      />
-    );
+  const optionRowProps = {
+    selectedIndex,
+    showHighlight,
+    filterQuery,
+    currentAgentId,
+    currentBadgeLabel,
+    runBusy,
+    pendingFollowUpsCount,
+    maxPendingFollowUps,
+    queueBadgeLabel,
+    queueFullBadgeLabel,
+    queueFullTooltip,
+    skillUnavailableLabel,
+    skillAgentDeniedLabel,
+    onSelectItem,
   };
 
   const listBody =
@@ -328,7 +378,7 @@ export const CommandPalette = memo(function CommandPalette({
               {skillsLabel}
             </div>
             {items.slice(0, skillRowCount).map((item, j) => (
-              <Fragment key={item.id}>{renderOptionRow(item, j)}</Fragment>
+              <PaletteOptionRow key={item.id} item={item} index={j} {...optionRowProps} />
             ))}
             {groupedSkillsShowMoreLabel ? (
               <button
@@ -353,9 +403,16 @@ export const CommandPalette = memo(function CommandPalette({
             <div className={sectionHeaderClass} aria-hidden>
               {commandsLabel}
             </div>
-            {items.slice(skillRowCount, skillRowCount + commandRowCount).map((item, j) => (
-              <Fragment key={item.id}>{renderOptionRow(item, skillRowCount + j)}</Fragment>
-            ))}
+            {items
+              .slice(skillRowCount, skillRowCount + commandRowCount)
+              .map((item, j) => (
+                <PaletteOptionRow
+                  key={item.id}
+                  item={item}
+                  index={skillRowCount + j}
+                  {...optionRowProps}
+                />
+              ))}
             {groupedCommandsShowMoreLabel ? (
               <button
                 type="button"
@@ -379,11 +436,16 @@ export const CommandPalette = memo(function CommandPalette({
             <div className={sectionHeaderClass} aria-hidden>
               {agentsLabel}
             </div>
-            {items.slice(skillRowCount + commandRowCount).map((item, j) => (
-              <Fragment key={item.id}>
-                {renderOptionRow(item, skillRowCount + commandRowCount + j)}
-              </Fragment>
-            ))}
+            {items
+              .slice(skillRowCount + commandRowCount)
+              .map((item, j) => (
+                <PaletteOptionRow
+                  key={item.id}
+                  item={item}
+                  index={skillRowCount + commandRowCount + j}
+                  {...optionRowProps}
+                />
+              ))}
             {groupedAgentsShowMoreLabel ? (
               <button
                 type="button"
@@ -400,7 +462,9 @@ export const CommandPalette = memo(function CommandPalette({
         ) : null}
       </>
     ) : (
-      items.map((item, i) => <Fragment key={item.id}>{renderOptionRow(item, i)}</Fragment>)
+      items.map((item, i) => (
+        <PaletteOptionRow key={item.id} item={item} index={i} {...optionRowProps} />
+      ))
     );
 
   const shell = (

@@ -32,5 +32,52 @@ export function normalizeConnectorIdentity(toolkit: string, result: unknown): Co
   if (toolkit === 'gmail') {
     return { email: text(row, ['emailAddress', 'email']) };
   }
+  if (toolkit === 'slack') {
+    return {
+      enterpriseId: text(row, ['enterprise_id', 'enterpriseId']),
+      workspaceId: text(row, ['team_id', 'teamId']),
+      workspace: text(row, ['team', 'team_name', 'workspace']),
+      userId: text(row, ['user_id', 'userId']),
+      username: text(row, ['user', 'username', 'user_name']),
+      botUserId: text(row, ['bot_id', 'botId', 'bot_user_id']),
+    };
+  }
   throw new Error(`Identity normalization is not defined for ${toolkit}.`);
+}
+
+export function connectorIdentityKey(
+  toolkit: string,
+  identity: Record<string, unknown>,
+): string | undefined {
+  const normalizedToolkit = toolkit.trim().toLowerCase();
+  if (normalizedToolkit === 'slack') {
+    const workspaceId = text(identity, ['workspaceId', 'teamId', 'team_id']);
+    const subjectId = text(identity, ['userId', 'user_id', 'botUserId', 'bot_user_id']);
+    if (!workspaceId || !subjectId) return undefined;
+    const enterpriseId = text(identity, ['enterpriseId', 'enterprise_id']) ?? '-';
+    return `slack:${enterpriseId}:${workspaceId}:${subjectId}`;
+  }
+  if (normalizedToolkit === 'gmail') {
+    const email = text(identity, ['email']);
+    return email ? `gmail:${email.toLowerCase()}` : undefined;
+  }
+  if (normalizedToolkit === 'github') {
+    const username = text(identity, ['username']);
+    return username ? `github:${username.toLowerCase()}` : undefined;
+  }
+  return undefined;
+}
+
+export function mergeConnectorIdentity(
+  toolkit: string,
+  current: Record<string, unknown>,
+  incoming: Record<string, unknown>,
+): Record<string, unknown> {
+  const normalizedToolkit = toolkit.trim().toLowerCase();
+  if (!['gmail', 'github', 'slack'].includes(normalizedToolkit)) {
+    return { ...current, ...incoming };
+  }
+  const normalized = Object.fromEntries(Object.entries(normalizeConnectorIdentity(normalizedToolkit, incoming))
+    .filter(([, value]) => value !== undefined && value !== null && value !== ''));
+  return { ...current, ...incoming, ...normalized };
 }

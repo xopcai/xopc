@@ -7,11 +7,14 @@ import { CredentialResolver } from '../auth/credentials.js';
 import { resolveStateDir } from '../config/paths-state.js';
 import {
   appendConnectorExecutionAudit,
+  getConnectorConnection,
   getConnectorInstallation,
   listConnectorConnections as listStoredConnectorConnections,
   upsertConnectorConnection,
 } from '../storage/sqlite/connector-repository.js';
+import { reconcileConnectorAccount } from '../storage/sqlite/connector-account-repository.js';
 import { createLogger } from '../utils/logger.js';
+import { connectorIdentityKey, mergeConnectorIdentity } from './connector-identity.js';
 import { evaluateConnectorExecutionPolicy } from './policy.js';
 import type {
   ConnectorActionMetadata,
@@ -282,21 +285,31 @@ export class ComposioSessionsAdapter {
       const identity = row.connectionData && typeof row.connectionData === 'object' && !Array.isArray(row.connectionData)
         ? row.connectionData as Record<string, unknown>
         : {};
-      synced.push(upsertConnectorConnection({
+      const connection = upsertConnectorConnection({
         id: existing?.id ?? `composio-${providerConnectionId}`,
+        accountId: existing?.accountId,
         installationId: existing?.installationId,
         connectorId,
         provider: 'composio',
         principalId: context.principalId,
         providerConnectionId,
         alias: existing?.alias,
-        identity,
+        identity: mergeConnectorIdentity(toolkit, existing?.identity ?? {}, identity),
         status: connectionStatus(readString(row, ['status'])),
         isDefault: existing?.isDefault ?? false,
         connectedAt: readString(row, ['createdAt', 'created_at']),
         lastError: readString(row, ['lastError', 'last_error']),
         metadata: { toolkit, providerPrincipalId },
-      }));
+      });
+      const identityKey = connectorIdentityKey(toolkit, connection.identity);
+      if (identityKey) {
+        reconcileConnectorAccount({
+          connectionId: connection.id,
+          identityKey,
+          identity: connection.identity,
+        });
+      }
+      synced.push(getConnectorConnection(connection.id)!);
     }
     return synced;
   }

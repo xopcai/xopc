@@ -167,6 +167,7 @@ export type ConnectorConnectionStatus =
 
 export type ConnectorConnection = {
   id: string;
+  accountId?: string;
   installationId?: string;
   connectorId: string;
   provider: string;
@@ -180,6 +181,17 @@ export type ConnectorConnection = {
   expiresAt?: string;
   lastError?: string;
   metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ConnectorAccount = {
+  id: string;
+  connectorId: string;
+  principalId: string;
+  identityKey?: string;
+  identity: Record<string, unknown>;
+  currentConnectionId?: string;
   createdAt: string;
   updatedAt: string;
 };

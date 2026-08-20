@@ -54,6 +54,7 @@ export function ProjectSkillsPanel({ projectId, copy }: { projectId: string; cop
   const [skillsRoot, setSkillsRoot] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [installingMarketplaceSkill, setInstallingMarketplaceSkill] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [installMode, setInstallMode] = useState<'marketplace' | 'source' | null>(null);
   const [preview, setPreview] = useState<ProjectSkill | null>(null);
@@ -105,8 +106,9 @@ export function ProjectSkillsPanel({ projectId, copy }: { projectId: string; cop
     };
   }, [installMode, marketplacePage, marketplaceQuery]);
 
-  async function runInstall(action: () => Promise<unknown>) {
+  async function runInstall(action: () => Promise<unknown>, marketplaceSkill?: string) {
     setBusy(true);
+    setInstallingMarketplaceSkill(marketplaceSkill ?? null);
     setError('');
     try {
       await action();
@@ -117,6 +119,7 @@ export function ProjectSkillsPanel({ projectId, copy }: { projectId: string; cop
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
+      setInstallingMarketplaceSkill(null);
     }
   }
 
@@ -250,6 +253,7 @@ export function ProjectSkillsPanel({ projectId, copy }: { projectId: string; cop
                       const provider = row.providerId ?? marketplacePayload.provider;
                       const packageName = marketplacePackageRequestName(row, provider);
                       const installed = items.some((item) => item.id === row.id || item.id === packageName || item.name === row.name);
+                      const installing = installingMarketplaceSkill === packageName;
                       return (
                         <article key={`${provider ?? 'default'}:${row.id}`} className="group flex min-h-32 gap-3 rounded-lg border border-edge bg-surface-base p-3">
                           <SkillCardIcon name={row.name} className="size-10" />
@@ -263,11 +267,12 @@ export function ProjectSkillsPanel({ projectId, copy }: { projectId: string; cop
                                 className="h-8 px-2.5 text-xs"
                                 variant={installed ? 'secondary' : 'primary'}
                                 disabled={busy || installed}
-                                onClick={() => void runInstall(() => installProjectSkillFromMarketplace(projectId, packageName, {
-                                  provider,
-                                }))}
+                                onClick={() => void runInstall(
+                                  () => installProjectSkillFromMarketplace(projectId, packageName, { provider }),
+                                  packageName,
+                                )}
                               >
-                                {installed ? copy.marketplaceInstalled : busy ? copy.installing : copy.install}
+                                {installed ? copy.marketplaceInstalled : installing ? copy.installing : copy.install}
                               </Button>
                             </div>
                           </div>

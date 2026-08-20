@@ -277,9 +277,10 @@ export async function ingestComposioConnectedSource(input: {
     ? activeConnections.find((candidate) => candidate.id === input.connectionId)
     : activeConnections.find((candidate) => candidate.isDefault) ?? activeConnections[0];
   if (!connection) throw new Error('No active connector account is available for connected source ingestion.');
+  if (!connection.accountId) throw new Error('The connector authorization is not assigned to an account.');
   const adapter = input.adapter ?? new ComposioSessionsAdapter();
   const workspaceId = getWorkspacePath(input.config);
-  const sourceInstanceId = `composio:${connectorId}:${connection.id}`;
+  const sourceInstanceId = `composio:${connectorId}:${connection.accountId}`;
   const sourceAdapter = new ComposioKnowledgeSourceAdapter({
     connectorId,
     collectionScope: input.collectionScope,

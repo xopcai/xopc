@@ -47,7 +47,7 @@ describe('connected source change publisher', () => {
     sensitivity: 'personal' | 'secret' = 'personal',
   ) {
     return {
-      sourceInstanceId: 'composio:gmail:connection-1',
+      sourceInstanceId: 'composio:gmail:account:connection-1',
       collectionScope: 'messages',
       externalId: 'message-1',
       itemType: 'message',
@@ -70,7 +70,7 @@ describe('connected source change publisher', () => {
   }
 
   it('publishes one durable event per actual source change without raw content', async () => {
-    upsertConnectorSyncPolicy({ connectionId: 'connection-1', proactiveEnabled: true });
+    upsertConnectorSyncPolicy({ accountId: 'account:connection-1', proactiveEnabled: true });
     upsertKnowledgeSourceItems([sourceItem('hash-1')], Date.parse('2026-08-15T01:00:00.000Z'));
     upsertKnowledgeSourceItems([sourceItem('hash-1')], Date.parse('2026-08-15T01:01:00.000Z'));
     upsertKnowledgeSourceItems([sourceItem('hash-2')], Date.parse('2026-08-15T01:02:00.000Z'));
@@ -95,19 +95,19 @@ describe('connected source change publisher', () => {
   });
 
   it('advances the independent watermark while proactive use is disabled', async () => {
-    upsertConnectorSyncPolicy({ connectionId: 'connection-1', proactiveEnabled: false });
+    upsertConnectorSyncPolicy({ accountId: 'account:connection-1', proactiveEnabled: false });
     upsertKnowledgeSourceItems([sourceItem('hash-1')]);
     const events = new ProactiveEventService(() => []);
     const publisher = new ConnectedSourceChangePublisher(events);
 
     expect(await publisher.runNow()).toMatchObject({ published: 0, skipped: 1 });
-    upsertConnectorSyncPolicy({ connectionId: 'connection-1', proactiveEnabled: true });
+    upsertConnectorSyncPolicy({ accountId: 'account:connection-1', proactiveEnabled: true });
     expect(await publisher.runNow()).toMatchObject({ published: 0, skipped: 0 });
     expect(events.listEvents()).toHaveLength(0);
   });
 
   it('does not publish secret source content into the proactive event spine', async () => {
-    upsertConnectorSyncPolicy({ connectionId: 'connection-1', proactiveEnabled: true });
+    upsertConnectorSyncPolicy({ accountId: 'account:connection-1', proactiveEnabled: true });
     upsertKnowledgeSourceItems([sourceItem('hash-secret', undefined, 'secret')]);
     const events = new ProactiveEventService(() => []);
 

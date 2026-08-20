@@ -1,7 +1,7 @@
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 
 export type ConnectorSyncPolicy = {
-  connectionId: string;
+  accountId: string;
   scanEnabled: boolean;
   proactiveEnabled: boolean;
   intervalMinutes?: number;
@@ -11,7 +11,7 @@ export type ConnectorSyncPolicy = {
 };
 
 type PolicyRow = {
-  connection_id: string;
+  account_id: string;
   scan_enabled: number;
   proactive_enabled: number;
   interval_minutes: number | null;
@@ -33,7 +33,7 @@ function stringArray(value: string): string[] {
 
 function fromRow(row: PolicyRow): ConnectorSyncPolicy {
   return {
-    connectionId: row.connection_id,
+    accountId: row.account_id,
     scanEnabled: row.scan_enabled === 1,
     proactiveEnabled: row.proactive_enabled === 1,
     ...(row.interval_minutes == null ? {} : { intervalMinutes: row.interval_minutes }),
@@ -43,22 +43,33 @@ function fromRow(row: PolicyRow): ConnectorSyncPolicy {
   };
 }
 
-export function getConnectorSyncPolicy(connectionId: string): ConnectorSyncPolicy | undefined {
+export function getConnectorSyncPolicy(accountId: string): ConnectorSyncPolicy | undefined {
   const row = getSqliteDatabase().prepare(
-    'SELECT * FROM connector_sync_policies WHERE connection_id = ?',
-  ).get(connectionId) as PolicyRow | undefined;
+    'SELECT * FROM connector_sync_policies WHERE account_id = ?',
+  ).get(accountId) as PolicyRow | undefined;
+  return row ? fromRow(row) : undefined;
+}
+
+export function getConnectorSyncPolicyForConnection(connectionId: string): ConnectorSyncPolicy | undefined {
+  const row = getSqliteDatabase().prepare(`
+    SELECT connector_sync_policies.*
+    FROM connector_sync_policies
+    JOIN connector_connections
+      ON connector_connections.account_id = connector_sync_policies.account_id
+    WHERE connector_connections.id = ?
+  `).get(connectionId) as PolicyRow | undefined;
   return row ? fromRow(row) : undefined;
 }
 
 export function listConnectorSyncPolicies(): ConnectorSyncPolicy[] {
   const rows = getSqliteDatabase().prepare(
-    'SELECT * FROM connector_sync_policies ORDER BY connection_id ASC',
+    'SELECT * FROM connector_sync_policies ORDER BY account_id ASC',
   ).all() as PolicyRow[];
   return rows.map(fromRow);
 }
 
 export function upsertConnectorSyncPolicy(input: {
-  connectionId: string;
+  accountId: string;
   scanEnabled?: boolean;
   proactiveEnabled?: boolean;
   intervalMinutes?: number | null;
@@ -66,7 +77,7 @@ export function upsertConnectorSyncPolicy(input: {
   allowedScenarioKeys?: string[];
   nowMs?: number;
 }): ConnectorSyncPolicy {
-  const current = getConnectorSyncPolicy(input.connectionId);
+  const current = getConnectorSyncPolicy(input.accountId);
   const now = input.nowMs ?? Date.now();
   const intervalMinutes = input.intervalMinutes === null
     ? null
@@ -83,10 +94,10 @@ export function upsertConnectorSyncPolicy(input: {
   runSqliteWriteTransaction((db) => {
     db.prepare(
       `INSERT INTO connector_sync_policies (
-        connection_id, scan_enabled, proactive_enabled, interval_minutes,
+        account_id, scan_enabled, proactive_enabled, interval_minutes,
         allowed_scenario_keys_json, revision, updated_at
       ) VALUES (?, ?, ?, ?, ?, 1, ?)
-      ON CONFLICT(connection_id) DO UPDATE SET
+      ON CONFLICT(account_id) DO UPDATE SET
         scan_enabled = excluded.scan_enabled,
         proactive_enabled = excluded.proactive_enabled,
         interval_minutes = excluded.interval_minutes,
@@ -94,7 +105,7 @@ export function upsertConnectorSyncPolicy(input: {
         revision = connector_sync_policies.revision + 1,
         updated_at = excluded.updated_at`,
     ).run(
-      input.connectionId,
+      input.accountId,
       (input.scanEnabled ?? current?.scanEnabled ?? true) ? 1 : 0,
       (input.proactiveEnabled ?? current?.proactiveEnabled ?? false) ? 1 : 0,
       intervalMinutes,
@@ -102,5 +113,5 @@ export function upsertConnectorSyncPolicy(input: {
       now,
     );
   });
-  return getConnectorSyncPolicy(input.connectionId)!;
+  return getConnectorSyncPolicy(input.accountId)!;
 }

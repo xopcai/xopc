@@ -58,6 +58,7 @@ describe('connector learning repository', () => {
   it('enqueues idempotently and advances a durable job', () => {
     const input = {
       connectorId: 'composio-gmail',
+      accountId: 'account:gmail-work',
       connectionId: 'gmail-work',
       sourceInstanceId: 'composio:composio-gmail:gmail-work',
       agentId: 'main',
@@ -87,6 +88,7 @@ describe('connector learning repository', () => {
   it('recovers interrupted work and supports pause and resume', () => {
     const job = enqueueConnectorLearningJob({
       connectorId: 'composio-gmail',
+      accountId: 'account:gmail-work',
       connectionId: 'gmail-work',
       sourceInstanceId: 'composio:composio-gmail:gmail-work',
       agentId: 'main',
@@ -97,9 +99,9 @@ describe('connector learning repository', () => {
     claimNextConnectorLearningJob(1_000);
     expect(recoverStaleConnectorLearningJobs(1_001, 2_000)).toBe(1);
     expect(listConnectorLearningJobs()[0]).toMatchObject({ status: 'failed' });
-    expect(setConnectorLearningPaused('gmail-work', true, 3_000)).toBe(1);
+    expect(setConnectorLearningPaused('account:gmail-work', true, 3_000)).toBe(1);
     expect(listConnectorLearningJobs()[0]).toMatchObject({ status: 'paused' });
-    expect(setConnectorLearningPaused('gmail-work', false, 4_000)).toBe(1);
+    expect(setConnectorLearningPaused('account:gmail-work', false, 4_000)).toBe(1);
     expect(claimNextConnectorLearningJob(4_000)?.id).toBe(job.id);
   });
 });

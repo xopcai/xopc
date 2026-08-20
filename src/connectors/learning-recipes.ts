@@ -76,6 +76,7 @@ const PLANS: Record<string, ConnectorLearningPlan> = {
   },
   slack: {
     toolkit: 'slack',
+    identityProbe: { actionId: 'SLACK_TEST_AUTH' },
     streams: [{ scope: 'channels', actionId: 'SLACK_LIST_CHANNELS', kind: 'inventory', arguments: {} }],
     bootstrapWindowDays: 30,
     intervalMinutes: 15,

@@ -246,7 +246,7 @@ function MarkdownViewImpl({
   renderMermaid = true,
   streamingMetricsKey,
 }: MarkdownViewProps) {
-  const location = useLocation();
+  const routeLocation = useLocation();
   const navigate = useNavigate();
   const language = useLocaleStore((s) => s.language);
   const labels = useMemo(() => {
@@ -362,7 +362,7 @@ function MarkdownViewImpl({
         : href.startsWith('#/') ? href.slice(1) : null;
       if (productRoute) {
         event.preventDefault();
-        navigate(withDetailReturnTo(productRoute, `${location.pathname}${location.search}`));
+        navigate(withDetailReturnTo(productRoute, `${routeLocation.pathname}${routeLocation.search}`));
         return;
       }
       const fileTarget = onWorkspaceFileOpen ? parseWorkspaceFileLinkTarget(href) : null;
@@ -380,7 +380,7 @@ function MarkdownViewImpl({
 
     el.addEventListener('click', onClick);
     return () => el.removeEventListener('click', onClick);
-  }, [location.pathname, location.search, navigate, onWorkspaceFileOpen]);
+  }, [routeLocation.pathname, routeLocation.search, navigate, onWorkspaceFileOpen]);
 
   return (
     <div ref={hostRef} className="markdown-render-boundary">
