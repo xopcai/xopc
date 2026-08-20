@@ -7,10 +7,11 @@ import {
 } from '../../../storage/sqlite/index.js';
 import type { DreamingLightConfig } from './config.js';
 
-function resolveConfig(overrides?: Partial<DreamingLightConfig>): DreamingLightConfig {
+type LightExecutionConfig = Pick<DreamingLightConfig, 'enabled' | 'lookbackDays' | 'limit'>;
+
+function resolveConfig(overrides?: Partial<LightExecutionConfig>): LightExecutionConfig {
   return {
     enabled: overrides?.enabled === true,
-    cron: typeof overrides?.cron === 'string' ? overrides.cron : '0 */6 * * *',
     lookbackDays: Math.max(1, Math.floor(Number(overrides?.lookbackDays) || 2)),
     limit: Math.max(0, Math.floor(Number(overrides?.limit) || 100)),
   };
@@ -20,7 +21,7 @@ function resolveConfig(overrides?: Partial<DreamingLightConfig>): DreamingLightC
 export async function runLightSweep(params: {
   runId: string;
   workspaceDir: string;
-  config?: Partial<DreamingLightConfig>;
+  config?: Partial<LightExecutionConfig>;
   now?: Date;
 }): Promise<{
   ok: boolean;

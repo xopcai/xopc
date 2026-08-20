@@ -440,6 +440,15 @@ export function importUserContext(payload: unknown): Promise<{ ok: true; importe
 }
 
 export type DreamingMode = 'off' | 'observe' | 'review' | 'automatic';
+export type DreamingSchedule =
+  | { kind: 'interval'; everyHours: 1 | 2 | 3 | 4 | 6 | 8 | 12 | 24; minute: number }
+  | { kind: 'daily'; time: string }
+  | { kind: 'weekly'; weekday: number; time: string };
+export type DreamingSettings = {
+  mode: DreamingMode;
+  timezone: string;
+  phases: Record<'light' | 'deep' | 'rem', { enabled: boolean; schedule: DreamingSchedule }>;
+};
 export type DreamingRun = {
   runId: string;
   phase: 'light' | 'deep' | 'rem';
@@ -452,6 +461,7 @@ export type DreamingRun = {
 };
 export type DreamingResponse = {
   agentId: string;
+  settings: DreamingSettings;
   config: {
     requestedMode: DreamingMode;
     mode: DreamingMode;
@@ -459,7 +469,12 @@ export type DreamingResponse = {
     writeDisposition: 'none' | 'candidate' | 'active';
     automaticReady: boolean;
     downgradeReason?: 'memory_policy' | 'quality_gate';
-    phases: Record<'light' | 'deep' | 'rem', { enabled: boolean; cron: string }>;
+    timezone: string;
+    phases: Record<'light' | 'deep' | 'rem', {
+      enabled: boolean;
+      schedule: DreamingSchedule;
+      nextRunsAt: string[];
+    }>;
   };
   readiness: {
     ready: boolean;
@@ -480,8 +495,8 @@ export function fetchDreaming(): Promise<DreamingResponse> {
   return fetchJson(apiUrl('/api/you/dreaming'));
 }
 
-export function updateDreamingMode(mode: DreamingMode): Promise<Pick<DreamingResponse, 'config'>> {
-  return fetchJson(apiUrl('/api/you/dreaming'), { method: 'PATCH', body: JSON.stringify({ mode }) });
+export function updateDreamingSettings(settings: DreamingSettings): Promise<Pick<DreamingResponse, 'settings'>> {
+  return fetchJson(apiUrl('/api/you/dreaming'), { method: 'PUT', body: JSON.stringify(settings) });
 }
 
 export function runDreaming(phase: DreamingRun['phase']): Promise<{ run: DreamingRun; result: Record<string, unknown> }> {

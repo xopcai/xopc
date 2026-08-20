@@ -1,26 +1,25 @@
 import type { Config } from '../../../config/schema.js';
 import type { DreamingMode } from '../../../storage/sqlite/index.js';
+import type { DreamingSchedule, DreamingSettings } from '../../../user-context/config.js';
 import {
-  DEFAULT_DEEP_CRON,
-  DEFAULT_LIGHT_CRON,
   DEFAULT_MAX_AGE_DAYS,
   DEFAULT_RECENCY_HALF_LIFE_DAYS,
-  DEFAULT_REM_CRON,
   type DreamingPhaseId,
 } from './constants.js';
+import { DEFAULT_DREAMING_SCHEDULES, resolveDreamingTimezone } from './schedule.js';
 
 // ── Phase config types ─────────────────────────────────────────────────
 
 export type DreamingLightConfig = {
   enabled: boolean;
-  cron: string;
+  schedule: DreamingSchedule;
   lookbackDays: number;
   limit: number;
 };
 
 export type DreamingDeepConfig = {
   enabled: boolean;
-  cron: string;
+  schedule: DreamingSchedule;
   minScore: number;
   minRecallCount: number;
   minUniqueQueries: number;
@@ -31,7 +30,7 @@ export type DreamingDeepConfig = {
 
 export type DreamingRemConfig = {
   enabled: boolean;
-  cron: string;
+  schedule: DreamingSchedule;
   lookbackDays: number;
   limit: number;
   minPatternStrength: number;
@@ -44,7 +43,7 @@ export type DreamingResolvedConfig = {
   writeDisposition: 'none' | 'candidate' | 'active';
   automaticReady: boolean;
   downgradeReason?: 'memory_policy' | 'quality_gate';
-  timezone?: string;
+  timezone: string;
   phases: {
     light: DreamingLightConfig;
     deep: DreamingDeepConfig;
@@ -73,15 +72,29 @@ function toNonNegInt(value: unknown, fallback: number): number {
   return floored >= 0 ? floored : fallback;
 }
 
-function trimmedStringOr(value: unknown, fallback: string): string {
-  return typeof value === 'string' && value.trim() ? value.trim() : fallback;
-}
-
-function optionalTrimmedString(value: unknown): string | undefined {
-  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
-}
-
 // ── Resolver ───────────────────────────────────────────────────────────
+
+export function resolveDreamingSettings(cfg: Config | undefined): DreamingSettings {
+  const dreaming = cfg?.userContext.dreaming;
+  return {
+    mode: dreaming?.mode ?? 'off',
+    timezone: resolveDreamingTimezone(dreaming?.timezone),
+    phases: {
+      light: {
+        enabled: dreaming?.phases?.light?.enabled !== false,
+        schedule: dreaming?.phases?.light?.schedule ?? DEFAULT_DREAMING_SCHEDULES.light,
+      },
+      deep: {
+        enabled: dreaming?.phases?.deep?.enabled !== false,
+        schedule: dreaming?.phases?.deep?.schedule ?? DEFAULT_DREAMING_SCHEDULES.deep,
+      },
+      rem: {
+        enabled: dreaming?.phases?.rem?.enabled !== false,
+        schedule: dreaming?.phases?.rem?.schedule ?? DEFAULT_DREAMING_SCHEDULES.rem,
+      },
+    },
+  };
+}
 
 /** Resolve the full three-phase dreaming config and its effective write authority. */
 export function resolveDreamingConfig(
@@ -89,7 +102,8 @@ export function resolveDreamingConfig(
   options: { automaticReady?: boolean } = {},
 ): DreamingResolvedConfig {
   const dreaming = cfg?.userContext.dreaming;
-  const requestedMode = dreaming?.mode ?? 'off';
+  const settings = resolveDreamingSettings(cfg);
+  const requestedMode = settings.mode;
   const memoryMode = cfg?.userContext.memory.mode ?? 'off';
   const automaticReady = options.automaticReady === true;
   const mode: DreamingMode = cfg?.userContext.enabled !== true || memoryMode === 'off'
@@ -103,13 +117,13 @@ export function resolveDreamingConfig(
           : requestedMode;
   const enabled = mode !== 'off';
   const writeDisposition = mode === 'automatic' ? 'active' : mode === 'review' ? 'candidate' : 'none';
-  const timezone = optionalTrimmedString(dreaming?.timezone);
+  const timezone = settings.timezone;
 
   // ── Light phase ────────────────────────────────────────────────────
   const lightRaw = dreaming?.phases?.light ?? {};
   const light: DreamingLightConfig = {
-    enabled: enabled && lightRaw?.enabled !== false,
-    cron: trimmedStringOr(lightRaw?.cron, DEFAULT_LIGHT_CRON),
+    enabled: enabled && settings.phases.light.enabled,
+    schedule: settings.phases.light.schedule,
     lookbackDays: toPositiveInt(lightRaw?.lookbackDays, 2),
     limit: toNonNegInt(lightRaw?.limit, 100),
   };
@@ -117,8 +131,8 @@ export function resolveDreamingConfig(
   // ── Deep phase ─────────────────────────────────────────────────────
   const deepRaw = dreaming?.phases?.deep ?? {};
   const deep: DreamingDeepConfig = {
-    enabled: enabled && deepRaw?.enabled !== false,
-    cron: trimmedStringOr(deepRaw?.cron, DEFAULT_DEEP_CRON),
+    enabled: enabled && settings.phases.deep.enabled,
+    schedule: settings.phases.deep.schedule,
     minScore: clampScore(Number(deepRaw?.minScore), 0.8),
     minRecallCount: toPositiveInt(deepRaw?.minRecallCount, 3),
     minUniqueQueries: toPositiveInt(deepRaw?.minUniqueQueries, 3),
@@ -130,8 +144,8 @@ export function resolveDreamingConfig(
   // ── REM phase ──────────────────────────────────────────────────────
   const remRaw = dreaming?.phases?.rem ?? {};
   const rem: DreamingRemConfig = {
-    enabled: enabled && remRaw?.enabled !== false,
-    cron: trimmedStringOr(remRaw?.cron, DEFAULT_REM_CRON),
+    enabled: enabled && settings.phases.rem.enabled,
+    schedule: settings.phases.rem.schedule,
     lookbackDays: toPositiveInt(remRaw?.lookbackDays, 7),
     limit: toNonNegInt(remRaw?.limit, 10),
     minPatternStrength: clampScore(Number(remRaw?.minPatternStrength), 0.75),
@@ -146,14 +160,9 @@ export function resolveDreamingConfig(
     ...(requestedMode === 'automatic' && mode !== 'automatic'
       ? { downgradeReason: memoryMode === 'confirmWrite' || memoryMode === 'readOnly' ? 'memory_policy' as const : 'quality_gate' as const }
       : {}),
-    ...(timezone ? { timezone } : {}),
+    timezone,
     phases: { light, deep, rem },
   };
-}
-
-/** Get the cron expression for a specific phase from resolved config. */
-export function getPhaseCron(config: DreamingResolvedConfig, phase: DreamingPhaseId): string {
-  return config.phases[phase].cron;
 }
 
 /** Check if a specific phase is enabled (global + phase-level). */

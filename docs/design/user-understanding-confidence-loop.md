@@ -187,9 +187,15 @@ active ── 有效期结束/长期未强化 ──> stale
       "mode": "observe",
       "timezone": "Asia/Shanghai",
       "phases": {
-        "light": { "cron": "0 */6 * * *", "lookbackDays": 2, "limit": 100 },
+        "light": {
+          "enabled": true,
+          "schedule": { "kind": "interval", "everyHours": 6, "minute": 0 },
+          "lookbackDays": 2,
+          "limit": 100
+        },
         "deep": {
-          "cron": "0 3 * * *",
+          "enabled": true,
+          "schedule": { "kind": "daily", "time": "03:00" },
           "minScore": 0.8,
           "minRecallCount": 3,
           "minUniqueQueries": 3,
@@ -197,12 +203,20 @@ active ── 有效期结束/长期未强化 ──> stale
           "maxAgeDays": 30,
           "limit": 10
         },
-        "rem": { "cron": "0 5 * * 0", "lookbackDays": 30, "minPatternStrength": 0.75, "limit": 10 }
+        "rem": {
+          "enabled": true,
+          "schedule": { "kind": "weekly", "weekday": 0, "time": "05:00" },
+          "lookbackDays": 30,
+          "minPatternStrength": 0.75,
+          "limit": 10
+        }
       }
     }
   }
 }
 ```
+
+产品与配置只使用结构化 `schedule`。Cron 仅在托管 Automation 注册边界临时编译，不持久化、不回传给用户，也不接受自由输入。
 
 `mode`：
 

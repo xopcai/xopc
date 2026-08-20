@@ -114,6 +114,8 @@ Dreaming 是确定性的后台记忆巩固管线，不是另一次无约束聊�
 
 运行模式只有 `off`、`observe`、`review`、`automatic`。`automatic` 是请求权限，不是无条件写权限；系统根据最近反馈、记录错误、敏感反馈和 Dreaming 失败率计算 readiness，未达门槛时实际执行自动降级为 `review`。REM 产生新的推断，因此即使在 automatic 下也始终进入审核。
 
+运行计划使用 `interval`、`daily`、`weekly` 三种结构化 schedule，并绑定 IANA 时区。产品展示自然语言计划和未来运行时间；底层调度表达式只在 Automation reconciliation 边界生成，不作为配置或 API 事实源。
+
 ### 5.1 Light：观察与去重
 
 - 周期扫描最近更新的结构化记录；
