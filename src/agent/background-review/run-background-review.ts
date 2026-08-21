@@ -4,6 +4,7 @@ import type { Api, Model } from '@earendil-works/pi-ai';
 import type { Config } from '../../config/schema.js';
 import { resolveProviderApiKeySync } from '../../auth/sync-provider-auth.js';
 import { getApiKeySync } from '../../providers/index.js';
+import { isDurableUnderstandingCandidate } from '../../user-context/understandingQuality.js';
 import { createExtensionAwareStreamFn } from '../../providers/extension-stream-bridge.js';
 import { createLogger } from '../../utils/logger.js';
 
@@ -60,7 +61,7 @@ function lastAssistantText(agent: Agent): string {
   return '';
 }
 
-function parseUnderstandingCandidates(raw: string): UnderstandingCandidate[] {
+export function parseUnderstandingCandidates(raw: string): UnderstandingCandidate[] {
   const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(raw)?.[1];
   const start = raw.indexOf('{');
   const end = raw.lastIndexOf('}');
@@ -74,6 +75,8 @@ function parseUnderstandingCandidates(raw: string): UnderstandingCandidate[] {
       const item = value as Record<string, unknown>;
       if (!ALLOWED_UNDERSTANDING_KINDS.has(item.kind as UnderstandingCandidate['kind'])) continue;
       if (typeof item.content !== 'string' || item.content.trim().length < 4) continue;
+      const kind = item.kind as UnderstandingCandidate['kind'];
+      if (!isDurableUnderstandingCandidate(kind, item.content)) continue;
       const confidence = typeof item.confidence === 'number' ? item.confidence : 0.65;
       const importance = typeof item.importance === 'number' ? item.importance : 0.5;
       const durability = item.durability === 'ephemeral' || item.durability === 'recurring'
@@ -86,7 +89,7 @@ function parseUnderstandingCandidates(raw: string): UnderstandingCandidate[] {
         ? item.disclosurePolicy
         : 'referenceable';
       output.push({
-        kind: item.kind as UnderstandingCandidate['kind'],
+        kind,
         content: item.content.trim(),
         confidence: Math.max(0, Math.min(1, confidence)),
         importance: Math.max(0, Math.min(1, importance)),

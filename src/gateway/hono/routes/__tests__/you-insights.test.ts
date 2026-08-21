@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import type { MemoryRecord } from '../../../../agent/memory/types.js';
-import { buildInsightSuggestions, buildPersonalPlaybooks, buildRoutineAutomationDraftHref } from '../you.js';
+import {
+  buildActionableInsightSuggestions,
+  USER_CONFIRMED_MEMORY_TAG,
+} from '../../../../user-context/actionableInsights.js';
+import { buildPersonalPlaybooks, buildRoutineAutomationDraftHref } from '../you.js';
 
 function record(patch: Partial<MemoryRecord> = {}): MemoryRecord {
   return {
@@ -22,36 +26,61 @@ function record(patch: Partial<MemoryRecord> = {}): MemoryRecord {
     evidence: [{ sourceText: 'week one' }, { sourceText: 'week two' }],
     createdAt: '2026-07-01T00:00:00.000Z',
     updatedAt: '2026-07-10T00:00:00.000Z',
-    tags: ['user-understanding'],
+    tags: ['user-understanding', USER_CONFIRMED_MEMORY_TAG],
     ...patch,
   };
 }
 
 describe('insight action suggestions', () => {
   it('suggests action only for stable, actionable understanding', () => {
-    expect(buildInsightSuggestions([record()])).toEqual([
+    expect(buildActionableInsightSuggestions([record()], [])).toEqual([
       expect.objectContaining({
         id: 'memory-1',
         action: 'make_repeatable',
         evidenceCount: 2,
       }),
     ]);
-    expect(buildInsightSuggestions([record({ evidence: [], confidence: 0.2, importance: 0.1 })])).toEqual([]);
+    expect(buildActionableInsightSuggestions([record({ tags: ['user-understanding'] })], [])).toEqual([]);
   });
 
   it('does not repeat accepted or dismissed suggestions', () => {
-    expect(buildInsightSuggestions([record({ tags: ['user-understanding', 'insight-action:accepted'] })])).toEqual([]);
-    expect(buildInsightSuggestions([record({ tags: ['user-understanding', 'insight-action:dismissed'] })])).toEqual([]);
+    expect(buildActionableInsightSuggestions([record({ tags: ['user-understanding', USER_CONFIRMED_MEMORY_TAG, 'insight-action:accepted'] })], [])).toEqual([]);
+    expect(buildActionableInsightSuggestions([record({ tags: ['user-understanding', USER_CONFIRMED_MEMORY_TAG, 'insight-action:dismissed'] })], [])).toEqual([]);
   });
 
   it('turns durable goals into progress suggestions', () => {
-    expect(buildInsightSuggestions([record({ kind: 'long_term_goal', explicitness: 'explicit', evidence: [] })])[0]).toEqual(
+    expect(buildActionableInsightSuggestions([record({ kind: 'long_term_goal', explicitness: 'explicit', evidence: [] })], [])[0]).toEqual(
       expect.objectContaining({ action: 'start_progress' }),
     );
   });
 
+  it('does not treat commitments or clause fragments as task suggestions', () => {
+    expect(buildActionableInsightSuggestions([
+      record({ id: 'commitment', kind: 'commitment', content: 'Update the project note tomorrow.' }),
+      record({ id: 'fragment-1', kind: 'long_term_goal', content: '并且将现状更新进来' }),
+      record({ id: 'fragment-2', kind: 'long_term_goal', content: '事项，汇总并更新到项目 note。' }),
+      record({ id: 'fragment-3', kind: 'long_term_goal', content: '调查下问题' }),
+      record({ id: 'deferred', kind: 'long_term_goal', content: '这个方向暂时不用开始推进' }),
+    ], [])).toEqual([]);
+  });
+
+  it('deduplicates similar insights and goals already represented by open tasks', () => {
+    const duplicate = record({
+      id: 'goal-2',
+      kind: 'long_term_goal',
+      content: '系统学习 Rust，并完成一个可发布的命令行工具。',
+    });
+    expect(buildActionableInsightSuggestions([
+      record({ id: 'goal-1', kind: 'long_term_goal', content: '系统学习 Rust，并完成一个可发布的命令行工具' }),
+      duplicate,
+    ], [])).toHaveLength(1);
+    expect(buildActionableInsightSuggestions([duplicate], [
+      '系统学习 Rust，并完成一个可发布的命令行工具',
+    ])).toEqual([]);
+  });
+
   it('proposes learned execution patterns for explicit approval', () => {
-    expect(buildInsightSuggestions([record({ kind: 'task_lesson', explicitness: 'observed' })])[0]).toEqual(
+    expect(buildActionableInsightSuggestions([record({ kind: 'task_lesson', explicitness: 'observed' })], [])[0]).toEqual(
       expect.objectContaining({ action: 'add_playbook' }),
     );
   });
