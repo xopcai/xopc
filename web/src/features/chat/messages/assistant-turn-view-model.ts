@@ -78,7 +78,9 @@ export function buildAssistantTurnViewModel({
       : (message.content ?? []);
   const flowContent = displayContent.filter((block) => block.type !== 'image');
   const allActivityBlocks = filterVisibleSteps(collectTurnActivityBlocks(message.content ?? []));
-  const activityBlocks = reasoningLevel === 'off' ? [] : allActivityBlocks;
+  const activityBlocks = reasoningLevel === 'off'
+    ? allActivityBlocks.filter((block): block is ToolUseContent => block.type === 'tool_use')
+    : allActivityBlocks;
   const answerStarted = hasAssistantAnswerText(flowContent);
   const toolBlocks = allActivityBlocks.filter(
     (block): block is ToolUseContent => block.type === 'tool_use',

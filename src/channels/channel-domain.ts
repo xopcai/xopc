@@ -4,9 +4,6 @@
 
 import type { MessageBus } from '../infra/bus/index.js';
 import type { Config } from '../config/schema.js';
-import type { ProgressStage } from '../agent/lifecycle/progress.js';
-
-export type { ProgressStage } from '../agent/lifecycle/progress.js';
 
 export type ChatType = 'direct' | 'group' | 'channel' | 'thread';
 
@@ -88,8 +85,6 @@ export interface ChannelSendResult {
 
 export interface ChannelStreamHandle {
   update: (text: string) => void;
-  updateProgress?: (text: string, stage: ProgressStage, detail?: string) => void;
-  setProgress?: (stage: ProgressStage, detail?: string) => void;
   end: () => Promise<void>;
   abort: () => Promise<void>;
   messageId: () => number | undefined;

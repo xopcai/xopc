@@ -18,6 +18,7 @@ import {
   appendTextDelta,
   appendToolStart,
   completeTool,
+  finishTextSegment,
   finalizeStreamingThinking,
   startThinkingSegment,
   startReview,
@@ -164,14 +165,20 @@ export function createAgentStreamMessagingCallbacks(opts: {
       });
       store().setSessionFlags(chatId, { streaming: true });
     },
-    onToken: (delta) => {
+    onToken: (delta, messageId) => {
       beforeAssistantDelta();
       store().mutateSessionStreaming(chatId, (msg) => {
-        appendTextDelta(msg.content, delta);
+        appendTextDelta(msg.content, delta, messageId);
       });
       if (shouldApplyStreamUpdate(chatId)) {
         store().setSessionFlags(chatId, { streaming: true });
       }
+    },
+    onAssistantMessageEnd: (messageId, presentation) => {
+      beforeAssistantDelta();
+      store().mutateSessionStreaming(chatId, (msg) => {
+        finishTextSegment(msg.content, messageId, presentation);
+      });
     },
     onThinking: (c, isDelta) => {
       beforeAssistantDelta();
@@ -260,20 +267,24 @@ export function createAgentStreamMessagingCallbacks(opts: {
     },
     onCompaction: (state: CompactionState) => {
       if (!shouldApplyStreamUpdate(chatId)) return;
+      const m = messages(useLocaleStore.getState().language).chat;
       if (state.status === 'started') {
         store().setSessionProgress(chatId, {
           stage: 'compaction',
-          message: 'Compacting context…',
+          message: m.compactingContext,
           timestamp: Date.now(),
         });
       } else if (state.status === 'completed') {
         const saved =
           state.tokensBefore && state.tokensAfter
-            ? ` (${Math.round((state.tokensBefore - state.tokensAfter) / 1000)}k tokens freed)`
+            ? ` (${m.contextTokensFreed.replace(
+                '{{count}}',
+                String(Math.round((state.tokensBefore - state.tokensAfter) / 1000)),
+              )})`
             : '';
         store().setSessionProgress(chatId, {
           stage: 'compaction',
-          message: `Context compacted${saved}`,
+          message: `${m.contextCompacted}${saved}`,
           timestamp: Date.now(),
         });
       } else {

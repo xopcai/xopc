@@ -13,9 +13,6 @@ import { SessionContextManager, SessionLifecycleManager } from '../session/index
 // Test orchestration layer
 import { AgentOrchestrator, AgentEventHandler } from '../orchestration/index.js';
 
-// Test feedback layer
-import { FeedbackCoordinator } from '../feedback/index.js';
-
 // Test skills layer
 import { SkillManager } from '../skills/skill-manager.js';
 
@@ -51,12 +48,6 @@ describe('Refactored AgentService Modules', () => {
 
     it('should export AgentEventHandler', () => {
       expect(AgentEventHandler).toBeDefined();
-    });
-  });
-
-  describe('Feedback Layer', () => {
-    it('should export FeedbackCoordinator', () => {
-      expect(FeedbackCoordinator).toBeDefined();
     });
   });
 

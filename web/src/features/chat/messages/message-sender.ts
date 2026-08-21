@@ -77,7 +77,11 @@ export type TaskPlanState = {
 
 export type MessagingCallbacks = {
   onStreamStart: (turnId: string) => void;
-  onToken: (delta: string) => void;
+  onToken: (delta: string, messageId?: string) => void;
+  onAssistantMessageEnd?: (
+    messageId: string,
+    presentation: 'narration' | 'answer',
+  ) => void;
   onThinking: (content: string, isDelta: boolean) => void;
   onThinkingEnd: () => void;
   onToolStart: (
@@ -419,14 +423,30 @@ export class MessageSender {
         if (typeof parsed.runId === 'string') cb?.onStreamStart(parsed.runId);
         break;
       case 'assistant_delta':
-        if (typeof payload.delta === 'string' && payload.delta) cb?.onToken(payload.delta);
+        if (typeof payload.delta === 'string' && payload.delta) {
+          cb?.onToken(
+            payload.delta,
+            typeof payload.messageId === 'string' ? payload.messageId : undefined,
+          );
+        }
         break;
       case 'thinking_delta':
         if (typeof payload.delta === 'string' && payload.delta) cb?.onThinking(payload.delta, true);
         break;
       case 'thinking_end':
+        cb?.onThinkingEnd();
+        break;
       case 'assistant_message_end':
         cb?.onThinkingEnd();
+        if (
+          typeof payload.messageId === 'string'
+          && (payload.presentation === 'narration' || payload.presentation === 'answer')
+        ) {
+          cb?.onAssistantMessageEnd?.(
+            payload.messageId,
+            payload.presentation,
+          );
+        }
         break;
       case 'tool_start': {
         const toolName = String(payload.toolName || 'unknown');

@@ -30,7 +30,7 @@ describe('buildAssistantTurnViewModel', () => {
     expect(view.lifecycle.activeTool?.name).toBe('read_file');
   });
 
-  it('hides normal execution activity in concise mode while retaining failure state', () => {
+  it('keeps tool activity visible in concise mode while hiding reasoning', () => {
     const view = buildAssistantTurnViewModel({
       message: assistantMessage([
         { type: 'thinking', text: 'private analysis', streaming: false },
@@ -49,7 +49,7 @@ describe('buildAssistantTurnViewModel', () => {
     });
 
     expect(view.displayContent.some((block) => block.type === 'thinking')).toBe(false);
-    expect(view.activity.blocks).toHaveLength(0);
+    expect(view.activity.blocks).toHaveLength(1);
     expect(view.activity.hasTool).toBe(true);
     expect(view.activity.failedCount).toBe(1);
     expect(view.activity.expandedByDefault).toBe(false);
