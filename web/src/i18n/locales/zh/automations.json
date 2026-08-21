@@ -30,7 +30,14 @@
       "showDetails": "展开",
       "hideDetails": "收起",
       "eventData": "详情",
-      "repairPatch": "修复内容"
+      "repairPatch": "修复内容",
+      "moreActions": "更多操作"
+    },
+    "filters": {
+      "status": "按状态筛选",
+      "all": "全部",
+      "active": "已启用",
+      "search": "搜索自动化"
     },
     "events": {
       "manualQueued": "手动运行已加入队列",
@@ -58,12 +65,6 @@
     "system": {
       "title": "系统自动化"
     },
-    "createMenu": {
-      "draft": "用 AI 起草",
-      "template": "从模板创建",
-      "blank": "空白创建",
-      "templatesTitle": "选择模板"
-    },
     "dashboard": {
       "activity": "运行结果",
       "activityDescription": "先看每次自动化产出了什么，需要时再进入对话查看过程。",
@@ -74,6 +75,9 @@
       "result": "结果",
       "runHistory": "运行历史",
       "runHistoryDescription": "查看历史运行，并进入每次运行关联的会话或工作流。",
+      "allRuns": "运行记录",
+      "backToAutomations": "返回自动化",
+      "runCenterDescription": "跨自动化查看执行状态；选择一条记录进入结果与诊断。",
       "openSession": "打开会话",
       "runNow": "立即运行",
       "pause": "暂停",
@@ -111,7 +115,10 @@
       "editTitle": "编辑自动化草案",
       "edit": "编辑草案",
       "publish": "发布",
-      "approval": "我已检查需要确认的风险，并确认发布这条自动化。"
+      "approval": "我已检查需要确认的风险，并确认发布这条自动化。",
+      "suggestions": "从常用场景开始",
+      "suggestionsDescription": "选择后仍可调整所有设置。",
+      "advancedCreate": "高级创建"
     },
     "repair": {
       "title": "修复建议",
@@ -220,10 +227,12 @@
     },
     "empty": {
       "automations": "暂无自动化",
+      "filtered": "没有符合条件的自动化",
       "runs": "暂无运行记录",
       "events": "暂无时间线事件"
     },
     "info": {
+      "task": "要做什么",
       "when": "触发",
       "run": "执行",
       "safety": "安全",
@@ -301,6 +310,8 @@
       "notRun": "未运行"
     },
     "form": {
+      "advanced": "高级设置",
+      "advancedDescription": "安全、输出和可靠性",
       "name": "名称",
       "description": "描述",
       "trigger": "触发",
