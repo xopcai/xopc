@@ -2,11 +2,13 @@ import {
   ENDPOINT_PROTOCOL_VERSION,
   canonicalJson,
   endpointHelloSigningPayload,
+  endpointToolContentSchema,
   parseServerEndpointMessage,
   type ClientEndpointMessage,
   type EndpointAvailability,
   type EndpointHelloPayload,
   type EndpointKind,
+  type EndpointToolContent,
   type EndpointToolDescriptor,
   type ServerEndpointMessage,
 } from '@xopcai/endpoint-tools-protocol';
@@ -46,8 +48,16 @@ async function revision(descriptor: EndpointToolDescriptor): Promise<string> {
 }
 
 export interface EndpointToolExecutionResult {
-  text: string;
+  content: EndpointToolContent[];
   afterSend?: () => void;
+}
+
+export interface EndpointToolExecutionContext {
+  uploadFile(file: {
+    name: string;
+    mimeType: string;
+    bytes: Uint8Array;
+  }): Promise<Extract<EndpointToolContent, { type: 'file' }>>;
 }
 
 export interface EndpointToolHostConfig {
@@ -56,7 +66,11 @@ export interface EndpointToolHostConfig {
   displayName: string;
   appVersion: string;
   tools: readonly EndpointToolDescriptor[];
-  execute(toolName: string, args: Record<string, unknown>): Promise<EndpointToolExecutionResult>;
+  execute(
+    toolName: string,
+    args: Record<string, unknown>,
+    context: EndpointToolExecutionContext,
+  ): Promise<EndpointToolExecutionResult>;
   confirmReenrollment(): Promise<boolean>;
 }
 
@@ -251,7 +265,7 @@ export class EndpointToolHost {
   ): Promise<void> {
     const {
       invocationId, toolName, arguments: args, descriptorRevision,
-      confirmationRequired, deadlineAt,
+      confirmationRequired, deadlineAt, uploadGrant,
     } = message.payload;
     this.sendOn(socket, 'tool.received', { invocationId });
     const descriptor = this.config.tools.find((tool) => tool.name === toolName);
@@ -283,9 +297,11 @@ export class EndpointToolHost {
           return;
         }
       }
-      const result = await this.config.execute(toolName, args);
+      const result = await this.config.execute(toolName, args, {
+        uploadFile: (file) => this.uploadFile(uploadGrant, file),
+      });
       if (!this.ensureExecutable(socket, invocationId, descriptor, deadlineAt)) return;
-      this.sendOn(socket, 'tool.result', { invocationId, content: [{ type: 'text', text: result.text }] });
+      this.sendOn(socket, 'tool.result', { invocationId, content: result.content });
       if (result.afterSend) {
         window.setTimeout(() => {
           if (
@@ -300,16 +316,62 @@ export class EndpointToolHost {
       }
     } catch (error) {
       const invalid = error instanceof TypeError;
-      const denied = error instanceof DOMException && error.name === 'NotAllowedError';
+      const userDenied = error instanceof DOMException && error.name === 'AbortError';
+      const permissionDenied = error instanceof DOMException && error.name === 'NotAllowedError';
       this.sendError(
         socket,
         invocationId,
-        invalid ? 'INVALID_ARGUMENTS' : denied ? 'PERMISSION_DENIED' : 'PROTOCOL_ERROR',
+        invalid
+          ? 'INVALID_ARGUMENTS'
+          : userDenied
+            ? 'USER_DENIED'
+            : permissionDenied
+              ? 'PERMISSION_DENIED'
+              : 'PROTOCOL_ERROR',
         error instanceof Error ? error.message : String(error),
       );
     } finally {
       this.cancelled.delete(invocationId);
     }
+  }
+
+  private async uploadFile(
+    grant: Extract<ServerEndpointMessage, { type: 'tool.invoke' }>['payload']['uploadGrant'],
+    file: { name: string; mimeType: string; bytes: Uint8Array },
+  ): Promise<Extract<EndpointToolContent, { type: 'file' }>> {
+    if (!grant || !this.endpointId) throw new Error('Endpoint file upload grant is unavailable');
+    if (
+      !file.name
+      || file.name.length > 255
+      || !file.mimeType
+      || file.mimeType.length > 255
+      || file.bytes.byteLength > grant.maxBytes
+      || grant.expiresAt <= Date.now()
+    ) {
+      throw new TypeError('Endpoint file is invalid');
+    }
+    const url = new URL(apiUrl(grant.path), window.location.href);
+    url.searchParams.set('name', file.name);
+    const body = file.bytes.buffer.slice(
+      file.bytes.byteOffset,
+      file.bytes.byteOffset + file.bytes.byteLength,
+    ) as ArrayBuffer;
+    const response = await apiFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': file.mimeType,
+        'x-endpoint-id': this.endpointId,
+        'x-endpoint-upload-token': grant.token,
+      },
+      body,
+    });
+    const json = await response.json().catch(() => null) as { payload?: unknown; error?: { message?: string } } | null;
+    if (!response.ok) throw new Error(json?.error?.message ?? `Endpoint file upload failed: ${response.status}`);
+    const parsed = endpointToolContentSchema.safeParse(json?.payload);
+    if (!parsed.success || parsed.data.type !== 'file') {
+      throw new Error('Endpoint file upload returned an invalid response');
+    }
+    return parsed.data;
   }
 
   private ensureExecutable(

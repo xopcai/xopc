@@ -29,13 +29,8 @@ function supportsRemoteNotifications(): boolean {
 
 let notificationHandlerConfigured = false;
 
-async function loadNotifications(): Promise<NotificationsModule | null> {
-  if (!supportsRemoteNotifications()) return null;
-  try {
-    return await import('expo-notifications');
-  } catch {
-    return null;
-  }
+async function loadNotifications(): Promise<NotificationsModule> {
+  return import('expo-notifications');
 }
 
 function ensureNotificationHandler(Notifications: NotificationsModule): void {
@@ -92,8 +87,9 @@ async function registerWithGateway(registration: DeviceRegistration): Promise<bo
 }
 
 async function buildRegistration(requestPermission: boolean): Promise<DeviceRegistration | null> {
+  if (!supportsRemoteNotifications()) return null;
   const Notifications = await loadNotifications();
-  if (!Notifications || !Device.isDevice) return null;
+  if (!Device.isDevice) return null;
   ensureNotificationHandler(Notifications);
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync('xopc-default', {
@@ -140,6 +136,28 @@ export async function disableMobileNotifications(): Promise<void> {
   }
 }
 
+/** Shows a local notification without requesting system permission. */
+export async function showLocalMobileNotification(title: string, body: string): Promise<void> {
+  const Notifications = await loadNotifications();
+  ensureNotificationHandler(Notifications);
+  const permission = await Notifications.getPermissionsAsync();
+  if (notificationPermission(permission.status) !== 'granted') {
+    const error = new Error('Mobile notification permission is not granted');
+    error.name = 'NotAllowedError';
+    throw error;
+  }
+  if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync('xopc-default', {
+      name: 'xopc',
+      importance: Notifications.AndroidImportance.DEFAULT,
+    });
+  }
+  await Notifications.scheduleNotificationAsync({
+    content: { title, body },
+    trigger: null,
+  });
+}
+
 export function subscribeToMobileNotifications(router: ImperativeRouter): () => void {
   if (!supportsRemoteNotifications()) return () => {};
 
@@ -149,7 +167,7 @@ export function subscribeToMobileNotifications(router: ImperativeRouter): () => 
 
   void (async () => {
     const Notifications = await loadNotifications();
-    if (!active || !Notifications) return;
+    if (!active) return;
     ensureNotificationHandler(Notifications);
 
     const response = await Notifications.getLastNotificationResponseAsync();

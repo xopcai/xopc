@@ -7,6 +7,7 @@
     "capability-presets": "能力方案",
     "connectors": "连接器",
     "channels": "消息通道",
+    "devices": "设备与工具",
     "gateway": "网关",
     "heartbeat": "心跳",
     "tunnel": "远程访问",
@@ -21,6 +22,40 @@
   },
   "settingsPage": {
     "comingSoon": "设置 · {{title}}（即将推出）。"
+  },
+  "endpointToolsSettings": {
+    "title": "设备与工具",
+    "subtitle": "查看已登记端点、开放工具、权限以及最近调用。",
+    "refresh": "刷新",
+    "loadError": "无法加载端点管理数据。",
+    "registered": "已登记身份",
+    "online": "在线端点",
+    "recentCalls": "最近调用",
+    "devicesTitle": "已登记设备",
+    "devicesHint": "一次对话只能使用发起该轮对话的端点所提供的工具。",
+    "noDevices": "尚未登记设备。",
+    "lastSeen": "最近在线",
+    "never": "从未",
+    "noPermissions": "未声明权限",
+    "revoke": "撤销",
+    "revoking": "正在撤销…",
+    "revokeTitle": "撤销端点身份？",
+    "revokeDescription": "撤销「{{name}}」并断开其全部在线端点？该设备再次登记时必须由用户明确确认。",
+    "revokeError": "无法撤销该端点身份，请重试。",
+    "cancel": "取消",
+    "callsTitle": "最近工具调用",
+    "callsHint": "审计记录只保存参数哈希，不在这里保存原始参数。",
+    "noCalls": "尚无端点工具调用。",
+    "status": {
+      "online": "在线",
+      "offline": "离线",
+      "revoked": "已撤销",
+      "foreground": "前台",
+      "background": "后台",
+      "running": "执行中",
+      "succeeded": "成功",
+      "failed": "失败"
+    }
   },
   "userProfileSettings": {
     "title": "关于你",

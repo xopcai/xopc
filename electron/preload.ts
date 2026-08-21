@@ -101,6 +101,17 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.invoke("file:open-dir-dialog", options) as Promise<
         string | null
       >,
+    pickEndpointFile: () =>
+      ipcRenderer.invoke("file:pick-endpoint-file") as Promise<{
+        name: string;
+        mimeType: string;
+        size: number;
+        dataBase64: string;
+      } | null>,
+    saveEndpointText: (input: { suggestedName: string; content: string }) =>
+      ipcRenderer.invoke("file:save-endpoint-text", input) as Promise<
+        { saved: true; name: string } | { saved: false }
+      >,
     watchFile: (filePath: string, callback: (content: string) => void) => {
       const handler = (
         _: unknown,
@@ -433,6 +444,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.invoke("system-settings:request-accessibility"),
     requestNotifications: () =>
       ipcRenderer.invoke("system-settings:request-notifications"),
+    showEndpointNotification: (input: { title: string; body: string }) =>
+      ipcRenderer.invoke("system-settings:show-endpoint-notification", input),
     requestScreen: () => ipcRenderer.invoke("system-settings:request-screen"),
     getUninstallInfo: () =>
       ipcRenderer.invoke("system-settings:get-uninstall-info"),

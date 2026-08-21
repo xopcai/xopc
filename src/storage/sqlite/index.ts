@@ -102,6 +102,7 @@ export {
   bindEndpointPrincipal,
   createEndpointPrincipal,
   getEndpointPrincipal,
+  listEndpointPrincipals,
   revokeEndpointPrincipal,
   touchEndpointPrincipal,
   type EndpointPrincipal,

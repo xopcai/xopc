@@ -50,7 +50,7 @@ function fixture(focused = true) {
     readyState: 1,
     send: (value: string) => sent.push(value),
   } as unknown as WebSocket;
-  const execute = vi.fn(async () => ({ text: 'done' }));
+  const execute = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'done' }] }));
   const host = new EndpointToolHost({
     kind: 'web', platform: 'web', displayName: 'Browser', appVersion: '1',
     tools: [descriptor], execute, confirmReenrollment: async () => false,
@@ -111,7 +111,7 @@ describe('EndpointToolHost execution guards', () => {
     let finishExecution: (() => void) | undefined;
     const { execute, host, sent, socket } = fixture();
     execute.mockImplementation(() => new Promise((resolve) => {
-      finishExecution = () => resolve({ text: 'done' });
+      finishExecution = () => resolve({ content: [{ type: 'text', text: 'done' }] });
     }));
     const invocation = host.invoke(invokeMessage('cancelled-running', Date.now() + 10_000), socket);
     await Promise.resolve();

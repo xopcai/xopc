@@ -4,6 +4,7 @@ import type { Hono } from 'hono';
 import {
   createEndpointPrincipal,
   getEndpointPrincipal,
+  listEndpointPrincipals,
   revokeEndpointPrincipal,
   listEndpointToolInvocationAudits,
 } from '../../../storage/sqlite/index.js';
@@ -46,6 +47,22 @@ export function registerEndpointToolRoutes(
   authenticated: Hono,
   deps: AuthenticatedRouteDeps,
 ): void {
+  authenticated.get('/api/endpoint-tools/principals', (c) => {
+    const endpointsByPrincipal = new Map<string, ReturnType<typeof deps.service.endpointTools.registry.list>>();
+    for (const endpoint of deps.service.endpointTools.registry.list()) {
+      const endpoints = endpointsByPrincipal.get(endpoint.principalId) ?? [];
+      endpoints.push(endpoint);
+      endpointsByPrincipal.set(endpoint.principalId, endpoints);
+    }
+    return c.json({
+      ok: true,
+      payload: listEndpointPrincipals().map(({ publicKey: _publicKey, ...principal }) => ({
+        ...principal,
+        endpoints: endpointsByPrincipal.get(principal.id) ?? [],
+      })),
+    });
+  });
+
   authenticated.post('/api/endpoint-tools/principals', async (c) => {
     const parsed = endpointPrincipalRegistrationSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) {

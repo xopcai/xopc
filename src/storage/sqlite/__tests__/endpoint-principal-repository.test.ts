@@ -9,6 +9,7 @@ import {
   bindEndpointPrincipal,
   createEndpointPrincipal,
   getEndpointPrincipal,
+  listEndpointPrincipals,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
   revokeEndpointPrincipal,
@@ -47,6 +48,7 @@ describe('endpoint principal repository', () => {
     expect(revokeEndpointPrincipal(created.id, 5678)).toBe(true);
     expect(revokeEndpointPrincipal(created.id, 9999)).toBe(false);
     expect(getEndpointPrincipal(created.id)?.revokedAt).toBe(5678);
+    expect(listEndpointPrincipals()).toEqual([expect.objectContaining({ id: created.id, revokedAt: 5678 })]);
   });
 
   it('does not overwrite an existing identity', () => {
