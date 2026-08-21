@@ -1,17 +1,12 @@
 import {
-  consumeAgentSseResponse,
-  consumeAgentSseXhr,
-  isEventStreamResponse,
-  shouldUseXhrForAgentSse,
-  type AgentSseCallbacks,
-  type AgentSseDispatchOptions,
-} from '@xopcai/gateway-sse-client';
+  dispatchAgentStreamEvent,
+  type AgentStreamCallbacks,
+  type AgentStreamDispatchOptions,
+} from '@xopcai/agent-stream-client';
 
 import {
   apiFetch,
-  buildAgentSseHeaders,
   formatApiHttpError,
-  notifyUnauthorizedIfNeeded,
 } from './client';
 import { readUriAsBase64 } from '../features/chat/attachment-file-io';
 import { capAttachments } from '../features/chat/chat-limits';
@@ -22,11 +17,11 @@ import {
   setPendingAgentRun,
 } from '../features/gateway/pending-agent-run';
 import { isTransientNetworkError } from '../features/chat/network-errors';
-import { useGatewayStore } from '../stores/gateway-store';
 import { pendingRunStorageKey, storage } from '../storage/mmkv';
 import { waitForMobileEndpointTurnClaim } from '../features/endpoint-tools/turn-claim';
+import { subscribeMobileRealtimeTopic } from '../features/gateway/use-gateway-realtime';
 
-export type MessagingCallbacks = AgentSseCallbacks;
+export type MessagingCallbacks = AgentStreamCallbacks;
 
 export type VoiceMessagePayload = {
   uri: string;
@@ -148,9 +143,9 @@ function wrapTerminalCallbacks(cb?: MessagingCallbacks): {
   };
 }
 
-function sseDispatchOptions(sessionKey: string, sender: AgentMessageSender): AgentSseDispatchOptions {
+function streamDispatchOptions(sessionKey: string, sender: AgentMessageSender): AgentStreamDispatchOptions {
   return {
-    sseSessionKey: sessionKey,
+    sessionKey: sessionKey,
     savePendingRunId: (sessionKey, runId) => {
       sender.trackPendingRunId(runId);
       setPendingAgentRun(sessionKey, runId);
@@ -163,18 +158,19 @@ function sseDispatchOptions(sessionKey: string, sender: AgentMessageSender): Age
  */
 export class AgentMessageSender {
   private _abort?: AbortController;
-  private _sseSessionKey = '';
+  private _sessionKey = '';
   /** `runId` from the `run_start` event for this POST/resume; do not clear a newer pending run. */
   private _trackedRunId?: string;
   /** Local transport teardown for resume/recovery — do not abort the server run or clear pending runId. */
   private _localDetach = false;
+  private _streamCleanup?: () => void;
 
   get isSending() {
     return !!this._abort;
   }
 
   isStreamingFor(sessionKey: string): boolean {
-    return !!this._abort && this._sseSessionKey === sessionKey;
+    return !!this._abort && this._sessionKey === sessionKey;
   }
 
   trackPendingRunId(runId: string): void {
@@ -183,107 +179,18 @@ export class AgentMessageSender {
   }
 
   /**
-   * Drop the in-flight SSE transport without notifying the server or clearing the pending runId.
-   * Used when the connection stalls and we need to reconnect via `/api/agent/resume`.
+   * Detach the local run-topic listener without notifying the server or clearing the pending runId.
+   * Used when the connection stalls and the shared realtime client must reattach.
    */
   detachLocalStream(): void {
     if (!this._abort) return;
     this._localDetach = true;
     const abortController = this._abort;
     abortController.abort();
+    this._streamCleanup?.();
+    this._streamCleanup = undefined;
     if (this._abort === abortController) {
       this._abort = undefined;
-    }
-  }
-
-  async send(
-    path: string,
-    body: Record<string, unknown>,
-    callbacks?: MessagingCallbacks,
-  ): Promise<void> {
-    this._abort = new AbortController();
-    const abortController = this._abort;
-    const sessionKey = typeof body.sessionKey === 'string' ? body.sessionKey : '';
-    if (!sessionKey) {
-      throw new Error('Missing sessionKey');
-    }
-    this._sseSessionKey = sessionKey;
-
-    const mergedBody = {
-      ...body,
-      channel: 'webchat',
-    };
-    const bodyJson = JSON.stringify(mergedBody);
-    const terminal = wrapTerminalCallbacks(callbacks);
-    const opts = sseDispatchOptions(this._sseSessionKey, this);
-
-    try {
-      if (shouldUseXhrForAgentSse()) {
-        const result = await consumeAgentSseXhr(
-          useGatewayStore.getState().apiUrl(path),
-          {
-            method: 'POST',
-            headers: buildAgentSseHeaders(),
-            body: bodyJson,
-            signal: abortController.signal,
-          },
-          terminal.wrapped,
-          opts,
-        );
-        notifyUnauthorizedIfNeeded(result.status);
-        if (!result.ok) {
-          const errBody = parseApiErrorBody(result.responseText);
-          throw new Error(formatApiHttpError(result.status, result.statusText, errBody));
-        }
-      } else {
-        const res = await apiFetch(path, {
-          method: 'POST',
-          headers: { Accept: 'text/event-stream' },
-          body: bodyJson,
-          signal: abortController.signal,
-        });
-
-        if (!res.ok) {
-          const errBody = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
-          throw new Error(formatApiHttpError(res.status, res.statusText, errBody.error?.message));
-        }
-
-        await Promise.resolve();
-
-        if (isEventStreamResponse(res)) {
-          await consumeAgentSseResponse(res, terminal.wrapped, opts);
-        } else {
-          const json = (await res.json()) as { ok?: boolean; payload?: { content?: string } };
-          if (json.ok && json.payload?.content) {
-            callbacks?.onToken(json.payload.content);
-            callbacks?.onResult();
-          }
-        }
-      }
-
-      if (!terminal.sawTerminal && !abortController.signal.aborted) {
-        terminal.onMissingTerminal();
-      }
-    } catch (e) {
-      this._preservePendingRunForRecovery(
-        e,
-        abortController.signal.aborted,
-        terminal.sawTerminal,
-        this._localDetach,
-      );
-      if (this._localDetach) return;
-      throw e;
-    } finally {
-      const localDetach = this._localDetach;
-      this._localDetach = false;
-      if (terminal.sawTerminal || (abortController.signal.aborted && !localDetach)) {
-        this._clearPendingRun();
-      } else if (localDetach) {
-        this._rePersistPendingRunAfterDetach();
-      }
-      if (this._abort === abortController) {
-        this._abort = undefined;
-      }
     }
   }
 
@@ -291,13 +198,15 @@ export class AgentMessageSender {
     this._notifyServerAbort();
     this._forceClearPendingRun();
     this._abort?.abort();
+    this._streamCleanup?.();
+    this._streamCleanup = undefined;
     this._abort = undefined;
   }
 
   private _notifyServerAbort(): void {
-    if (!this._sseSessionKey) return;
+    if (!this._sessionKey) return;
     try {
-      const raw = storage.getString(pendingRunStorageKey(this._sseSessionKey));
+      const raw = storage.getString(pendingRunStorageKey(this._sessionKey));
       if (!raw) return;
       const parsed = JSON.parse(raw) as { runId?: string };
       if (typeof parsed.runId !== 'string' || !parsed.runId) return;
@@ -312,7 +221,7 @@ export class AgentMessageSender {
   }
 
   private _forceClearPendingRun(): void {
-    const sessionKey = this._sseSessionKey;
+    const sessionKey = this._sessionKey;
     if (!sessionKey) return;
     try {
       storage.delete(pendingRunStorageKey(sessionKey));
@@ -324,7 +233,7 @@ export class AgentMessageSender {
   }
 
   private _clearPendingRun(): void {
-    const sessionKey = this._sseSessionKey;
+    const sessionKey = this._sessionKey;
     if (!sessionKey) return;
     try {
       const key = pendingRunStorageKey(sessionKey);
@@ -405,67 +314,49 @@ export class AgentMessageSender {
     this._trackedRunId = undefined;
     this._abort = new AbortController();
     const abortController = this._abort;
-    this._sseSessionKey = sessionKey;
+    this._sessionKey = sessionKey;
     this.trackPendingRunId(runId);
+    setPendingAgentRun(sessionKey, runId);
     const terminal = wrapTerminalCallbacks(callbacks);
-    const opts = sseDispatchOptions(sessionKey, this);
-    const bodyJson = JSON.stringify({ runId, sessionKey });
+    const opts = streamDispatchOptions(sessionKey, this);
+    let preservePending = false;
 
     try {
-      if (shouldUseXhrForAgentSse()) {
-        const result = await consumeAgentSseXhr(
-          useGatewayStore.getState().apiUrl('/api/agent/resume'),
-          {
-            method: 'POST',
-            headers: buildAgentSseHeaders(),
-            body: bodyJson,
-            signal: abortController.signal,
+      await new Promise<void>((resolve, reject) => {
+        let settled = false;
+        const finish = (error?: Error) => {
+          if (settled) return;
+          settled = true;
+          this._streamCleanup?.();
+          this._streamCleanup = undefined;
+          if (error) reject(error);
+          else resolve();
+        };
+        this._streamCleanup = subscribeMobileRealtimeTopic(`run:${runId}`, {
+          onEvent: (message) => {
+            const event = message.data && typeof message.data === 'object'
+              ? { ...(message.data as Record<string, unknown>), seq: message.seq }
+              : { type: message.event, seq: message.seq, payload: message.data };
+            dispatchAgentStreamEvent(message.event, JSON.stringify(event), terminal.wrapped, opts);
+            if (message.event === 'run_end' || message.event === 'error') finish();
           },
-          terminal.wrapped,
-          opts,
-        );
-        notifyUnauthorizedIfNeeded(result.status);
-        if (!result.ok) {
-          const errBody = parseApiErrorBody(result.responseText);
-          throw new Error(formatApiHttpError(result.status, result.statusText, errBody));
-        }
-      } else {
-        const res = await apiFetch('/api/agent/resume', {
-          method: 'POST',
-          headers: { Accept: 'text/event-stream' },
-          body: bodyJson,
-          signal: abortController.signal,
-        });
-
-        if (!res.ok) {
-          const errBody = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
-          throw new Error(formatApiHttpError(res.status, res.statusText, errBody.error?.message));
-        }
-
-        if (isEventStreamResponse(res)) {
-          await consumeAgentSseResponse(res, terminal.wrapped, opts);
-        }
-      }
-
-      if (!terminal.sawTerminal && !abortController.signal.aborted) {
-        terminal.onMissingTerminal();
-      }
+          onGap: () => finish(new Error('Run not found or realtime replay expired')),
+        }, 0);
+        abortController.signal.addEventListener('abort', () => finish(), { once: true });
+      });
     } catch (e) {
-      this._preservePendingRunForRecovery(
-        e,
-        abortController.signal.aborted,
-        terminal.sawTerminal,
-        this._localDetach,
-      );
+      const message = e instanceof Error ? e.message : String(e);
+      preservePending = this._localDetach
+        || (!abortController.signal.aborted && isTransientNetworkError(message));
       if (this._localDetach) return;
       throw e;
     } finally {
       const localDetach = this._localDetach;
       this._localDetach = false;
-      if (terminal.sawTerminal || (abortController.signal.aborted && !localDetach)) {
-        this._clearPendingRun();
-      } else if (localDetach) {
+      if (localDetach || preservePending) {
         this._rePersistPendingRunAfterDetach();
+      } else {
+        this._clearPendingRun();
       }
       if (this._abort === abortController) {
         this._abort = undefined;
@@ -474,7 +365,7 @@ export class AgentMessageSender {
   }
 
   private _rePersistPendingRunAfterDetach(): void {
-    const sessionKey = this._sseSessionKey;
+    const sessionKey = this._sessionKey;
     const runId =
       this._trackedRunId?.trim() ||
       (sessionKey ? readPendingAgentRunId(sessionKey) : null) ||
@@ -484,32 +375,4 @@ export class AgentMessageSender {
     }
   }
 
-  private _preservePendingRunForRecovery(
-    error: unknown,
-    aborted: boolean,
-    sawTerminal: boolean,
-    localDetach = false,
-  ): void {
-    if ((aborted && !localDetach) || sawTerminal) return;
-    const message = error instanceof Error ? error.message : String(error);
-    if (!isTransientNetworkError(message)) return;
-    const sessionKey = this._sseSessionKey;
-    const runId =
-      this._trackedRunId?.trim() ||
-      (sessionKey ? readPendingAgentRunId(sessionKey) : null) ||
-      undefined;
-    if (sessionKey && runId) {
-      setPendingAgentRun(sessionKey, runId);
-    }
-  }
-}
-
-function parseApiErrorBody(responseText?: string): string | undefined {
-  if (!responseText?.trim()) return undefined;
-  try {
-    const body = JSON.parse(responseText) as { error?: { message?: string } };
-    return body.error?.message;
-  } catch {
-    return undefined;
-  }
 }

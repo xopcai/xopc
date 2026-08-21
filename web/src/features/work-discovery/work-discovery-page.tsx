@@ -241,7 +241,7 @@ export function WorkDiscoveryPage({
         const next = await fetchWorkDiscoveryRun(run.id);
         if (!cancelled) applyRun(next);
       } catch {
-        // The next poll or gateway SSE event can recover.
+        // The next poll or gateway realtime event can recover.
       }
     };
     const timer = window.setInterval(() => void refresh(), 1_200);

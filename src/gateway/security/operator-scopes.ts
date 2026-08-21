@@ -65,7 +65,7 @@ const ROUTE_SCOPE_REQUIREMENTS: ReadonlyArray<{ prefix: string; scope: OperatorS
   { prefix: '/api/models', scope: READ_SCOPE },
   { prefix: '/api/logs', scope: READ_SCOPE },
   { prefix: '/api/doctor', scope: READ_SCOPE },
-  { prefix: '/api/events', scope: READ_SCOPE },
+  { prefix: '/api/realtime', scope: READ_SCOPE },
 ];
 
 /** Scope hierarchy: admin > write > read. */

@@ -25,7 +25,7 @@ export function useGatewayHealth(): { gatewayOnline: boolean } {
       setGatewayOnline(true);
       if (wasOfflineRef.current) {
         wasOfflineRef.current = false;
-        syncGatewayAfterConnectivityChange({ invalidateQueries: true, reconnectSse: true });
+        syncGatewayAfterConnectivityChange({ invalidateQueries: true, reconnectRealtime: true });
       }
     });
   }, [configured]);

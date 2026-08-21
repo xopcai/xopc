@@ -8,7 +8,7 @@ The logger module provides:
 - Automatic log rotation and cleanup
 - Graceful shutdown with log flushing
 - Configuration via `XOPC_*` environment variables
-- File query, SSE live stream, and gateway Log Manager UI
+- File query, realtime live stream, and gateway Log Manager UI
 
 ---
 

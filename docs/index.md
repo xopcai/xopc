@@ -45,8 +45,8 @@ features:
   - title: 🤖 Multi-agent routing
     details: Route different contexts to different agents — each with its own model, workspace, tools, and system prompt.
     link: /routing-system
-  - title: 🌐 HTTP/SSE gateway
-    details: REST JSON APIs plus Server-Sent Events for streaming; the same React console in browser and Electron.
+  - title: 🌐 HTTP/realtime gateway
+    details: REST JSON APIs plus one authenticated realtime WebSocket; the same React console in browser and Electron.
     link: /gateway
   - title: 🛠️ Type-safe tools
     details: TypeBox schemas for built-in and custom tools — web search, browser (Playwright, opt-in), file ops, and more.

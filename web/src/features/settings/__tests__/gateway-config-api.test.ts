@@ -10,7 +10,6 @@ import {
 import {
   DEFAULT_AUTH_RATE_LIMIT,
   DEFAULT_GATEWAY_PORT,
-  DEFAULT_MAX_SSE_CONNECTIONS,
   DEFAULT_TRUSTED_PROXY,
 } from '../gateway-settings.types';
 
@@ -112,7 +111,6 @@ describe('normalizeGatewayFromConfig', () => {
     expect(state.allowRealIpFallback).toBe(false);
     expect(state.dangerouslyAllowHostHeaderOriginFallback).toBe(false);
     expect(state.securityStrict).toBe(false);
-    expect(state.maxSseConnections).toBe(DEFAULT_MAX_SSE_CONNECTIONS);
     expect(state.channelConnectDeferMode).toBe('auto');
     expect(state.channelConnectDeferIds).toEqual([]);
     expect(state.channelConnectDeferSkipIds).toEqual([]);

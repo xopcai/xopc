@@ -26,7 +26,6 @@ const fakeConfig = {
     port: 18790,
     auth: { mode: 'token' as const },
     heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
-    maxSseConnections: 100,
     corsOrigins: [],
   },
 };

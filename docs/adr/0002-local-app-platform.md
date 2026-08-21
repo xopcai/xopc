@@ -25,7 +25,7 @@ xopc already provides most runtime and shell primitives needed by Local Apps:
 - dynamic sidebar collection and ordering;
 - sandboxed iframe hosting with CSP and `postMessage` routing;
 - an extension UI SDK for theme, storage, sessions, agent requests, events, notifications, and navigation;
-- Gateway REST and SSE surfaces.
+- Gateway REST and realtime WebSocket surfaces.
 
 These primitives do not currently form a user-facing authoring lifecycle. There is no stable Local App identity linking a Project to an installed extension, no draft-versus-installed boundary, no application release history, and no safe default runtime for AI-generated backend logic.
 
@@ -157,7 +157,7 @@ installed -> disabled -> installed
 
 Build and deployment state are recorded separately. A Local App can be `installed` while its latest build is `failed`.
 
-Every transition emits an activity event and, when useful to connected clients, an SSE event.
+Every transition emits an activity event and, when useful to connected clients, a realtime event.
 
 ## Build and Release Pipeline
 
@@ -289,7 +289,7 @@ The precise route modules may follow existing Hono conventions. The product cont
 | `POST` | `/api/local-apps/:id/disable` | Disable an installed app |
 | `DELETE` | `/api/local-apps/:id` | Remove deployment, with explicit data/Project choices |
 
-Mutating operations accept idempotency keys. Long-running operations return an operation id and stream progress through the existing Gateway SSE hub.
+Mutating operations accept idempotency keys. Long-running operations return an operation id and publish progress through the unified realtime broker.
 
 Recommended events:
 
@@ -394,4 +394,3 @@ Before this ADR moves to Accepted, implementation planning must demonstrate:
 - Project, app, release, and storage identities survive rename and update;
 - uninstall, Project deletion, and app-data deletion remain separate explicit actions;
 - the coder can reproduce a build from recorded source revision, skill version, and build metadata.
-

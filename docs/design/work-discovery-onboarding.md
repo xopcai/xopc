@@ -399,7 +399,7 @@ The implementation should reuse these existing capabilities:
 - normal Project session creation;
 - embedded agent turn/session infrastructure;
 - SQLite transcript storage and session hydration;
-- gateway broadcast SSE for progress notifications;
+- gateway realtime topics for progress notifications;
 - existing Chat welcome context and suggestion entry points;
 - semantic Web UI tokens and project-owned controls.
 
@@ -445,7 +445,7 @@ The exact file split may follow nearby repository conventions, but probing, anal
 - recording product activity;
 - marking onboarding complete when results are available or the user chooses to continue without them.
 
-The Web client does not keep an invisible `/api/agent` SSE request open. Analysis is a gateway-owned job so navigation and reload do not terminate it.
+The Web client does not own an invisible per-run HTTP stream. Analysis is a gateway-owned job so navigation and reload do not terminate it.
 
 ## API Design
 
@@ -561,7 +561,7 @@ work-discovery.failed
 work-discovery.canceled
 ```
 
-Event payloads contain `runId`, `projectId`, `sessionKey`, `status`, and `stage`; completed events may include the validated result. The Web SSE bridge converts dotted event names to hyphenated window events using the existing convention.
+Event payloads contain `runId`, `projectId`, `sessionKey`, `status`, and `stage`; completed events may include the validated result. The Web realtime bridge converts dotted event names to hyphenated window events using the existing convention.
 
 ## Local Probe and Scan Policy
 

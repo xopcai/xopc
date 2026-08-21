@@ -54,7 +54,6 @@ function minimalConfig(overrides: Partial<Config> = {}): Config {
       port: 18790,
       auth: { mode: 'token' },
       heartbeat: { enabled: true, intervalMs: 60_000 },
-      maxSseConnections: 100,
       corsOrigins: [],
     },
     tools: { web: { search: { maxResults: 5, providers: [] } } },

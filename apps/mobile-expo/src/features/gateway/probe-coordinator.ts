@@ -9,7 +9,7 @@
  *
  * The coordinator runs ONE race at a time, dedupes concurrent callers within
  * a small window, and broadcasts the structured result to anyone who
- * subscribes (UI, SSE swap, online/offline state). The probe is paused while
+ * subscribes (UI, realtime swap, online/offline state). The probe is paused while
  * the app is in the background to save battery and respects a configurable
  * cool-down so back-to-back triggers (foreground + network change + focus)
  * collapse to a single round-trip.
@@ -45,7 +45,7 @@ export type ProbeReason =
   | 'initial'
   | 'foreground'
   | 'network-change'
-  | 'sse-degraded'
+  | 'realtime-degraded'
   | 'manual'
   | 'settings-saved'
   | 'tunnel-qr-sync'

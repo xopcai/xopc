@@ -20,7 +20,7 @@ export type ToolUseContent = {
   type: 'tool_use';
   id: string;
   /**
-   * Server-assigned tool call id from SSE `tool_start`. Optional because
+   * Server-assigned tool call id from run `tool_start`. Optional because
    * historical / rehydrated transcripts may not have it. Used to route
    * `tool_update` snapshots back to the right block when multiple workflows
    * (or tools) run in the same assistant turn.
@@ -38,7 +38,7 @@ export type ToolUseContent = {
   result?: string | unknown;
   /**
    * Live structured details streamed from the tool while it's still running
-   * (SSE `tool_update`). Only populated for tools that call `onUpdate` with
+   * (run `tool_update`). Only populated for tools that call `onUpdate` with
    * a structured `details` payload — today that's the `workflow` tool. The
    * WorkflowCard reads this first and falls back to `result` after `tool_end`.
    */

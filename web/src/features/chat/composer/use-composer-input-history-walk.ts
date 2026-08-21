@@ -51,11 +51,11 @@ export function useComposerInputHistoryWalk(opts: {
     const onReconnect = () => void loadComposerInputHistory(true);
     window.addEventListener('composer-history-appended', onAppend);
     window.addEventListener('composer-history-cleared', onClear);
-    window.addEventListener('gateway-sse-connected', onReconnect);
+    window.addEventListener('gateway-realtime-connected', onReconnect);
     return () => {
       window.removeEventListener('composer-history-appended', onAppend);
       window.removeEventListener('composer-history-cleared', onClear);
-      window.removeEventListener('gateway-sse-connected', onReconnect);
+      window.removeEventListener('gateway-realtime-connected', onReconnect);
     };
   }, [clearWalk]);
 

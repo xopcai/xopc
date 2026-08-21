@@ -24,5 +24,5 @@ export function streamRetryDelayMs(attempt: number): number {
 
 export const STREAM_RECOVERY_MAX_ATTEMPTS = 8;
 export const STREAM_RECOVERY_WAIT_FOR_RUN_MS = 45_000;
-/** No SSE activity while streaming — treat as a stalled connection. */
+/** No run activity while streaming — treat as a stalled connection. */
 export const STREAM_STALL_MS = 25_000;

@@ -10,10 +10,6 @@ export function markRunEvent(
   source: TuiEventSource,
   nowMs = Date.now(),
 ): void {
-  const directStreamRunId =
-    (source === 'agent-response' || source === 'agent-resume') && runId
-      ? runId
-      : state.runStatus.directStreamRunId;
   const isStartingNewRun =
     phase !== 'idle' &&
     state.runStatus.phase === 'idle' &&
@@ -28,7 +24,6 @@ export function markRunEvent(
     ...state.runStatus,
     phase,
     runId,
-    directStreamRunId,
     source,
     lastEvent: event,
     startedAt,
@@ -42,7 +37,6 @@ export function markRunSending(state: TuiState, nowMs = Date.now()): void {
     ...state.runStatus,
     phase: 'sending',
     runId: null,
-    directStreamRunId: null,
     lastCompletedRunId: null,
     source: 'unknown',
     lastEvent: 'send',
@@ -91,7 +85,6 @@ export function resetRunStatus(state: TuiState): void {
     ...state.runStatus,
     phase: 'idle',
     runId: null,
-    directStreamRunId: null,
     lastCompletedRunId: null,
     lastEvent: null,
     startedAt: null,

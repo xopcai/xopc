@@ -27,7 +27,7 @@
 
 ## Project Overview
 
-**xopc** (`@xopcai/xopc`) is a personal AI assistant on Node.js + TypeScript: CLI, HTTP/SSE **gateway** (REST + Server-Sent Events), and a **React** gateway console (`web/`). Channels (e.g. Telegram) load as extensions; additional backends appear in config/registry as the project evolves.
+**xopc** (`@xopcai/xopc`) is a personal AI assistant on Node.js + TypeScript: CLI, HTTP/realtime **gateway** (REST + WebSocket), and a **React** gateway console (`web/`). Channels (e.g. Telegram) load as extensions; additional backends appear in config/registry as the project evolves.
 
 | Metric | Value |
 |--------|-------|
@@ -71,9 +71,9 @@ Examples: `pnpm run dev -- agent -i` · `pnpm run dev -- agent -m "Hello"`
 |------|------|
 | `agent/` | `AgentService`, tools, memory, orchestration (core entry files at root; helpers grouped under `context/`, `lifecycle/`, `prompt/`, `transcript/` — transcript hygiene, thinking-level types, etc.) |
 | `agent/mcp/` | Outbound bundle-MCP: session runtimes, transports, tool materialize (`server__tool` names) |
-| `mcp/` | Inbound channel bridge (`xopc mcp serve`) — stdio MCP server + gateway REST/SSE client |
+| `mcp/` | Inbound channel bridge (`xopc mcp serve`) — stdio MCP server + gateway REST/realtime client |
 | `channels/` | `ChannelPlugin`, manager, inbound/outbound, `attachments/`, `plugins/bundled.ts` |
-| `gateway/` | HTTP + SSE server, API for UI; `heartbeat/` keep-alive service |
+| `gateway/` | HTTP + realtime WebSocket server, API for UI; `heartbeat/` keep-alive service |
 | `cli/` | Commands (self-registration via `registry`) |
 | `config/` | Schema, loader, paths |
 | `providers/` | `resolveModel`, API keys, pi-ai bridge |
@@ -83,7 +83,7 @@ Examples: `pnpm run dev -- agent -i` · `pnpm run dev -- agent -m "Hello"`
 
 Also present (follow local patterns): `auth/`, `automations/`, `chat-commands/` (in-chat slash commands), `daemon/`, `routing/`, `voice/stt/`, `voice/tts/`, `utils/` (`logger.ts` barrel → `logger/` implementation + `helpers.ts`), `markdown/`, `errors/`, etc.
 
-**Gateway console (`web/`)** — React SPA (Vite + Tailwind v4): hash router, REST + SSE to the gateway, Zustand + SWR. Production build outputs to `dist/gateway/static/root` (same static root the gateway serves).
+**Gateway console (`web/`)** — React SPA (Vite + Tailwind v4): hash router, REST + realtime WebSocket to the gateway, Zustand + SWR. Production build outputs to `dist/gateway/static/root` (same static root the gateway serves).
 
 **Extensions (`extensions/`)** — optional add-ons; **Telegram / Weixin** channel *sources* live in `extensions/telegram` and `extensions/weixin` but are **`private`** workspace packages (not published). **`tsdown`** (Rolldown) **unbundle** mode emits `dist/src/**` and `dist/extensions/**` in one pass. Wiring: `src/generated/bundled-channel-plugins.ts` (`pnpm run generate:bundled-channels`) and `src/channels/plugins/bundled.ts`.
 
@@ -144,7 +144,7 @@ log.error({ err, requestId, phase: 'outbound_consume' }, `Outbound pipeline fail
 
 ### Request correlation (gateway / agent)
 
-HTTP and SSE paths attach context via **`runWithLogContext` / `updateAsyncLogContext`** (`src/utils/logger/context.ts`) and gateway middleware (`src/gateway/hono/middleware/log-context.ts`). Prefer keeping **`requestId`** (and related keys) in async context so logs tie to a single API call without threading an argument through every function.
+HTTP and request-stream paths attach context via **`runWithLogContext` / `updateAsyncLogContext`** (`src/utils/logger/context.ts`) and gateway middleware (`src/gateway/hono/middleware/log-context.ts`). Prefer keeping **`requestId`** (and related keys) in async context so logs tie to a single API call without threading an argument through every function.
 
 ### Reference
 
@@ -221,7 +221,7 @@ import { DraftStreamManager } from '@xopcai/xopc/channels/telegram/draft-stream.
 | `userContext` | Global user understanding, memory, privacy, provider routing, and dreaming settings shared by every agent |
 | `agents.list` | Agent Capability Manifests: identity, responsibilities, workspace, model roles, tools, skills, workflows, boundaries |
 | `channels` | Telegram and other channel configs |
-| `gateway` | HTTP + SSE |
+| `gateway` | HTTP + realtime WebSocket |
 | `mcp` | Outbound MCP server registry (`mcp.servers`) + session idle TTL |
 | `extensions` | Enable/disable extensions |
 
@@ -332,8 +332,8 @@ cd web && pnpm run build                  # → ../dist/gateway/static/root (gat
 **Gateway integration:**
 
 - **REST:** same origin `fetch` via `apiUrl('/api/...')`; 401 → `gateway-store` `onUnauthorized`.
-- **Agent streaming:** `POST /api/agent` with `Accept: text/event-stream`, response body parsed as SSE (not WebSocket). See `web/src/features/chat/`.
-- **Broadcast SSE:** `GET /api/events` via `EventSource` (optional `?token=`); bridge in `web/src/features/gateway/gateway-sse-bridge.tsx` + `dispatch-sse-event.ts`. Dots in event names become hyphenated `window` events (e.g. `config.reload` → `config-reload`).
+- **Agent streaming:** submit input with `POST /api/sessions/:sessionKey/inputs`, then subscribe to `run:<runId>` on the shared realtime connection. See `web/src/features/chat/`.
+- **Realtime events:** issue a one-time ticket with `POST /api/realtime/tickets`, then connect to `WS /api/realtime/v1/ws`; the bridge lives in `web/src/features/gateway/gateway-realtime-bridge.tsx`. Dots in event names become hyphenated `window` events (e.g. `config.reload` → `config-reload`).
 - **Navigate to chat from other pages:** `window.dispatchEvent(new CustomEvent('navigate-to-chat', { detail: { sessionKey } }))` — handled in `AppShell`.
 
 **Design system:** Follow **[docs/design/ui-design-system.md](./docs/design/ui-design-system.md)** — calm slate neutrals, **blue** only for primary actions / links / AI hints; prefer borders over heavy shadows in dark mode; short copy. Implement with **`web/src/styles/globals.css`** semantic tokens (`bg-surface-*`, `text-fg*`, `border-edge`, `accent`, etc.) and Tailwind utilities—do not add a second token system under `web/` unless extending `@theme` there.
@@ -366,7 +366,7 @@ cd web && pnpm run build                  # → ../dist/gateway/static/root (gat
 | `@xopc/...` not found | `pnpm run build` |
 | Tests timeout | API keys / network for live calls |
 | Bad config | JSON syntax of `~/.xopc/xopc.json` |
-| Console unreachable | Gateway running; browser origin matches gateway URL (REST/SSE) |
+| Console unreachable | Gateway running; browser origin matches gateway URL (REST/WebSocket) |
 | `package-lock.json` | Remove; use pnpm only |
 | Telegram silent | Token, BotFather, policies |
 | No logs in console | `XOPC_LOG_LEVEL`, file logging flags |

@@ -50,8 +50,8 @@ describe('connection-log', () => {
   it('notifies subscribers on every record and clear', () => {
     const fn = vi.fn();
     const unsub = subscribeConnectionEvents(fn);
-    recordConnectionEvent({ kind: 'sse', ok: true });
-    recordConnectionEvent({ kind: 'sse', ok: false, message: 'boom' });
+    recordConnectionEvent({ kind: 'realtime', ok: true });
+    recordConnectionEvent({ kind: 'realtime', ok: false, message: 'boom' });
     clearConnectionEvents();
     unsub();
     expect(fn).toHaveBeenCalled();

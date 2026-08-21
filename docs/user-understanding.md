@@ -83,7 +83,7 @@ Quality is available from `GET /api/you/quality?windowDays=30`. Automatic Dreami
 
 ## Response feedback attribution
 
-Completed assistant responses expose helpful / needs-improvement controls. Every model turn has a stable `turnId` carried by context planning, traces, transcript rows, SSE, and the web message. The gateway resolves feedback by that exact id and updates it idempotently; it never guesses from timestamps.
+Completed assistant responses expose helpful / needs-improvement controls. Every model turn has a stable `turnId` carried by context planning, traces, transcript rows, realtime events, and the web message. The gateway resolves feedback by that exact id and updates it idempotently; it never guesses from timestamps.
 
 - `GET /api/you/feedback/:turnId` resolves existing response-level and record-level feedback.
 - `PUT /api/you/feedback/:turnId` records or replaces feedback for the exact turn.

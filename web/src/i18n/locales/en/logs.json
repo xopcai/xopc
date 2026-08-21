@@ -15,7 +15,7 @@
     "refresh": "Refresh",
     "autoRefresh": "Auto refresh",
     "pause": "Pause",
-    "liveHint": "Streaming via SSE",
+    "liveHint": "Streaming via realtime WebSocket",
     "logFiles": "Log files",
     "filesEmpty": "No log files on disk",
     "loadMore": "Load more",

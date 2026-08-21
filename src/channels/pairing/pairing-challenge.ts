@@ -19,7 +19,7 @@ export type IssuePairingChallengeParams = {
 
 /**
  * OpenClaw-style pairing: mint or refresh a pending code; notify the user only on new codes.
- * Repeat DMs refresh lastSeenAt and broadcast SSE without re-sending the bot message.
+ * Repeat DMs refresh lastSeenAt and publish realtime status without re-sending the bot message.
  */
 export async function issuePairingChallenge(params: IssuePairingChallengeParams): Promise<{
   created: boolean;

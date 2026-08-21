@@ -28,7 +28,6 @@ function createApp() {
   registerVoiceRoutes(app, {
     service: { currentConfig: config, syncVoiceLanguage },
     strictRateLimitMiddleware: async (_c, next) => next(),
-    sseConfig: {},
   } as never);
   return app;
 }

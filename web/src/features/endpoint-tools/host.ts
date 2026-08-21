@@ -3,7 +3,6 @@ import {
   canonicalJson,
   endpointHelloSigningPayload,
   endpointToolContentSchema,
-  parseServerEndpointMessage,
   type ClientEndpointMessage,
   type EndpointAvailability,
   type EndpointHelloPayload,
@@ -12,7 +11,12 @@ import {
   type EndpointToolDescriptor,
   type ServerEndpointMessage,
 } from '@xopcai/endpoint-tools-protocol';
+import type { RealtimeEndpointBinding } from '@xopcai/realtime-client';
 
+import {
+  attachGatewayRealtimeEndpoint,
+  sendGatewayEndpointMessage,
+} from '@/features/gateway/gateway-realtime';
 import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import {
@@ -34,12 +38,6 @@ function availability(): EndpointAvailability {
   return document.visibilityState === 'visible' && document.hasFocus()
     ? 'foreground'
     : 'background';
-}
-
-function websocketUrl(): string {
-  const url = new URL(apiUrl('/api/endpoint-tools/v1/ws'), window.location.href);
-  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-  return url.href;
 }
 
 async function revision(descriptor: EndpointToolDescriptor): Promise<string> {
@@ -74,11 +72,16 @@ export interface EndpointToolHostConfig {
   confirmReenrollment(): Promise<boolean>;
 }
 
+interface EndpointChannel {
+  readonly readyState: number;
+  send(data: string): void;
+}
+
 export class EndpointToolHost {
-  private socket?: WebSocket;
+  private channel?: EndpointChannel;
   private reconnectTimer?: number;
-  private heartbeatTimer?: number;
   private connectPromise?: Promise<void>;
+  private detachRealtime?: () => void;
   private stopped = false;
   private registrationBlocked = false;
   private endpointId?: string;
@@ -104,9 +107,9 @@ export class EndpointToolHost {
     document.removeEventListener('visibilitychange', this.onVisibilityChange);
     window.removeEventListener('token-saved', this.onTokenSaved);
     window.clearTimeout(this.reconnectTimer);
-    window.clearInterval(this.heartbeatTimer);
-    this.socket?.close(1000, 'Web endpoint host stopped');
-    this.socket = undefined;
+    this.detachRealtime?.();
+    this.detachRealtime = undefined;
+    this.channel = undefined;
     clearEndpointTurnClaim(this.turnToken);
     this.turnToken = undefined;
     this.endpointId = undefined;
@@ -115,7 +118,7 @@ export class EndpointToolHost {
 
   private readonly onTokenSaved = () => {
     this.registrationBlocked = false;
-    if (!this.socket || this.socket.readyState === WebSocket.CLOSED) void this.connect();
+    void this.connect();
   };
 
   private readonly onVisibilityChange = () => {
@@ -132,7 +135,7 @@ export class EndpointToolHost {
   }
 
   private async connectOnce(allowIdentityRotation: boolean): Promise<void> {
-    if (this.stopped || this.registrationBlocked || this.socket?.readyState === WebSocket.OPEN) return;
+    if (this.stopped || this.registrationBlocked) return;
     window.clearTimeout(this.reconnectTimer);
     try {
       const identity = await getOrCreateEndpointIdentity(this.config.kind);
@@ -174,21 +177,33 @@ export class EndpointToolHost {
       }
       if (this.stopped) return;
 
-      const socket = new WebSocket(websocketUrl());
-      this.socket = socket;
-      socket.onopen = () => void this.sendHello(identity);
-      socket.onmessage = (event) => void this.handleMessage(event.data, socket);
-      socket.onclose = () => {
-        window.clearInterval(this.heartbeatTimer);
-        if (this.socket === socket) {
-          this.socket = undefined;
+      const binding: RealtimeEndpointBinding = {
+        createHello: () => this.createHello(identity),
+        onReady: ({ endpointId, turnToken }) => {
+          this.endpointId = endpointId;
+          this.turnToken = turnToken;
+          publishEndpointTurnClaim(endpointId, turnToken);
+          this.channel = {
+            readyState: 1,
+            send: (data) => {
+              const message = JSON.parse(data) as ClientEndpointMessage;
+              this.realtimeSend(message);
+            },
+          };
+        },
+        onMessage: (message) => {
+          const channel = this.channel;
+          if (channel) void this.handleMessage(message, channel);
+        },
+        onDisconnected: () => {
+          this.channel = undefined;
           clearEndpointTurnClaim(this.turnToken);
           this.turnToken = undefined;
           cancelAllEndpointConfirmations();
-        }
-        this.scheduleReconnect();
+        },
       };
-      socket.onerror = () => socket.close();
+      this.detachRealtime?.();
+      this.detachRealtime = attachGatewayRealtimeEndpoint(binding);
     } catch {
       this.scheduleReconnect();
     }
@@ -202,9 +217,9 @@ export class EndpointToolHost {
     }, RECONNECT_DELAY_MS);
   }
 
-  private async sendHello(
+  private async createHello(
     identity: Awaited<ReturnType<typeof getOrCreateEndpointIdentity>>,
-  ): Promise<void> {
+  ): Promise<EndpointHelloPayload> {
     const endpointId = getEndpointId(identity.principalId);
     this.endpointId = endpointId;
     const unsigned: EndpointHelloPayload = {
@@ -222,68 +237,44 @@ export class EndpointToolHost {
       tools: [...this.config.tools],
     };
     const signature = await signEndpointPayload(identity.privateKey, endpointHelloSigningPayload(unsigned));
-    this.send('endpoint.hello', { ...unsigned, signature });
+    return { ...unsigned, signature };
   }
 
-  private async handleMessage(raw: unknown, socket: WebSocket): Promise<void> {
-    if (this.socket !== socket) return;
-    if (typeof raw !== 'string') {
-      socket.close(4400, 'Binary endpoint frames are not supported');
-      return;
-    }
-    let message: ServerEndpointMessage;
-    try {
-      message = parseServerEndpointMessage(JSON.parse(raw));
-    } catch {
-      socket.close(4400, 'Invalid endpoint protocol frame');
-      return;
-    }
-    if (message.type === 'endpoint.ready') {
-      if (!this.endpointId) {
-        socket.close(4400, 'Endpoint connection state is invalid');
-        return;
-      }
-      this.turnToken = message.payload.turnToken;
-      publishEndpointTurnClaim(this.endpointId, message.payload.turnToken);
-      window.clearInterval(this.heartbeatTimer);
-      this.heartbeatTimer = window.setInterval(() => {
-        this.send('endpoint.heartbeat', { availability: availability() });
-      }, message.payload.heartbeatIntervalMs);
-      return;
-    }
+  private async handleMessage(message: ServerEndpointMessage, channel: EndpointChannel): Promise<void> {
+    if (this.channel !== channel) return;
     if (message.type === 'tool.cancel') {
       this.cancelled.add(message.payload.invocationId);
       settleEndpointConfirmation(message.payload.invocationId, false);
       return;
     }
-    await this.invoke(message, socket);
+    await this.invoke(message, channel);
   }
 
   private async invoke(
     message: Extract<ServerEndpointMessage, { type: 'tool.invoke' }>,
-    socket: WebSocket,
+    channel: EndpointChannel,
   ): Promise<void> {
     const {
       invocationId, toolName, arguments: args, descriptorRevision,
       confirmationRequired, deadlineAt, uploadGrant,
     } = message.payload;
-    this.sendOn(socket, 'tool.received', { invocationId });
+    this.sendOn(channel, 'tool.received', { invocationId });
     const descriptor = this.config.tools.find((tool) => tool.name === toolName);
     if (!descriptor) {
-      this.sendError(socket, invocationId, 'TOOL_NOT_FOUND', 'Endpoint tool is not registered');
+      this.sendError(channel, invocationId, 'TOOL_NOT_FOUND', 'Endpoint tool is not registered');
       return;
     }
     if (this.revisionByTool.get(toolName) !== descriptorRevision) {
-      this.sendError(socket, invocationId, 'TOOL_REVISION_MISMATCH', 'Endpoint tool contract changed');
+      this.sendError(channel, invocationId, 'TOOL_REVISION_MISMATCH', 'Endpoint tool contract changed');
       return;
     }
     const localConfirmationRequired = descriptor.confirmation === 'always' || descriptor.effect !== 'read';
     if (confirmationRequired !== localConfirmationRequired) {
-      this.sendError(socket, invocationId, 'PROTOCOL_ERROR', 'Endpoint confirmation policy mismatch');
+      this.sendError(channel, invocationId, 'PROTOCOL_ERROR', 'Endpoint confirmation policy mismatch');
       return;
     }
     try {
-      if (!this.ensureExecutable(socket, invocationId, descriptor, deadlineAt)) return;
+      if (!this.ensureExecutable(channel, invocationId, descriptor, deadlineAt)) return;
       if (localConfirmationRequired) {
         const allowed = await requestEndpointConfirmation({
           invocationId,
@@ -291,22 +282,22 @@ export class EndpointToolHost {
           args,
           deadlineAt,
         });
-        if (!this.ensureExecutable(socket, invocationId, descriptor, deadlineAt)) return;
+        if (!this.ensureExecutable(channel, invocationId, descriptor, deadlineAt)) return;
         if (!allowed) {
-          this.sendError(socket, invocationId, 'USER_DENIED', 'User denied the endpoint tool call');
+          this.sendError(channel, invocationId, 'USER_DENIED', 'User denied the endpoint tool call');
           return;
         }
       }
       const result = await this.config.execute(toolName, args, {
         uploadFile: (file) => this.uploadFile(uploadGrant, file),
       });
-      if (!this.ensureExecutable(socket, invocationId, descriptor, deadlineAt)) return;
-      this.sendOn(socket, 'tool.result', { invocationId, content: result.content });
+      if (!this.ensureExecutable(channel, invocationId, descriptor, deadlineAt)) return;
+      this.sendOn(channel, 'tool.result', { invocationId, content: result.content });
       if (result.afterSend) {
         window.setTimeout(() => {
           if (
-            this.socket === socket
-            && socket.readyState === WebSocket.OPEN
+            this.channel === channel
+            && channel.readyState === 1
             && Date.now() < deadlineAt
             && (!descriptor.requiresForeground || availability() === 'foreground')
           ) {
@@ -319,7 +310,7 @@ export class EndpointToolHost {
       const userDenied = error instanceof DOMException && error.name === 'AbortError';
       const permissionDenied = error instanceof DOMException && error.name === 'NotAllowedError';
       this.sendError(
-        socket,
+        channel,
         invocationId,
         invalid
           ? 'INVALID_ARGUMENTS'
@@ -375,42 +366,42 @@ export class EndpointToolHost {
   }
 
   private ensureExecutable(
-    socket: WebSocket,
+    channel: EndpointChannel,
     invocationId: string,
     descriptor: EndpointToolDescriptor,
     deadlineAt: number,
   ): boolean {
-    if (this.socket !== socket || socket.readyState !== WebSocket.OPEN) return false;
+    if (this.channel !== channel || channel.readyState !== 1) return false;
     if (this.cancelled.delete(invocationId)) {
-      this.sendOn(socket, 'tool.cancelled', { invocationId });
+      this.sendOn(channel, 'tool.cancelled', { invocationId });
       return false;
     }
     if (Date.now() >= deadlineAt) {
-      this.sendError(socket, invocationId, 'TOOL_TIMEOUT', 'Endpoint tool deadline expired');
+      this.sendError(channel, invocationId, 'TOOL_TIMEOUT', 'Endpoint tool deadline expired');
       return false;
     }
     if (descriptor.requiresForeground && availability() !== 'foreground') {
-      this.sendError(socket, invocationId, 'ENDPOINT_NOT_FOREGROUND', 'Endpoint is not foreground');
+      this.sendError(channel, invocationId, 'ENDPOINT_NOT_FOREGROUND', 'Endpoint is not foreground');
       return false;
     }
     return true;
   }
 
   private sendError(
-    socket: WebSocket,
+    channel: EndpointChannel,
     invocationId: string,
     code: Extract<ClientEndpointMessage, { type: 'tool.error' }>['payload']['code'],
     message: string,
   ): void {
-    this.sendOn(socket, 'tool.error', { invocationId, code, message });
+    this.sendOn(channel, 'tool.error', { invocationId, code, message });
   }
 
   private send<T extends ClientEndpointMessage['type']>(
     type: T,
     payload: Extract<ClientEndpointMessage, { type: T }>['payload'],
   ): void {
-    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
-    this.socket.send(JSON.stringify({
+    if (!this.channel || this.channel.readyState !== 1) return;
+    this.channel.send(JSON.stringify({
       protocolVersion: ENDPOINT_PROTOCOL_VERSION,
       messageId: crypto.randomUUID(),
       type,
@@ -420,17 +411,21 @@ export class EndpointToolHost {
   }
 
   private sendOn<T extends ClientEndpointMessage['type']>(
-    socket: WebSocket,
+    channel: EndpointChannel,
     type: T,
     payload: Extract<ClientEndpointMessage, { type: T }>['payload'],
   ): void {
-    if (socket.readyState !== WebSocket.OPEN) return;
-    socket.send(JSON.stringify({
+    if (channel.readyState !== 1) return;
+    channel.send(JSON.stringify({
       protocolVersion: ENDPOINT_PROTOCOL_VERSION,
       messageId: crypto.randomUUID(),
       type,
       sentAt: Date.now(),
       payload,
     }));
+  }
+
+  private realtimeSend(message: ClientEndpointMessage): void {
+    if (this.channel) sendGatewayEndpointMessage(message);
   }
 }

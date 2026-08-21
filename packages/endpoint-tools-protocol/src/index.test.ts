@@ -1,21 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  ENDPOINT_PROTOCOL_VERSION,
   canonicalJson,
+  endpointHelloPayloadSchema,
   endpointHelloSigningPayload,
   endpointTurnClaimSchema,
   turnOriginSchema,
-  parseClientEndpointMessage,
-  parseJsonFrame,
 } from './index.js';
 
 const hello = {
-  protocolVersion: ENDPOINT_PROTOCOL_VERSION,
-  messageId: 'a2d61f69-0a10-42cc-b5e5-8d68556ecb5d',
-  type: 'endpoint.hello' as const,
-  sentAt: 1,
-  payload: {
     principalId: 'browser-profile',
     endpointId: 'tab-1',
     connectionInstanceId: 'bf1a9f36-caf1-41a7-8d22-e1d6e6b4bb55',
@@ -42,16 +35,15 @@ const hello = {
       idempotent: true,
       resultKinds: ['text' as const],
     }],
-  },
 };
 
 describe('endpoint tool protocol', () => {
-  it('accepts a strict hello message', () => {
-    expect(parseClientEndpointMessage(hello)).toEqual(hello);
+  it('accepts a strict endpoint identity', () => {
+    expect(endpointHelloPayloadSchema.parse(hello)).toEqual(hello);
   });
 
   it('rejects unknown wire fields', () => {
-    expect(() => parseClientEndpointMessage({ ...hello, unexpectedField: true })).toThrow();
+    expect(() => endpointHelloPayloadSchema.parse({ ...hello, unexpectedField: true })).toThrow();
   });
 
   it('canonicalizes object keys recursively', () => {
@@ -64,14 +56,9 @@ describe('endpoint tool protocol', () => {
   });
 
   it('excludes the signature from the signed hello payload', () => {
-    const signed = endpointHelloSigningPayload(hello.payload);
+    const signed = endpointHelloSigningPayload(hello);
     expect(signed).not.toContain('signed-message-value');
     expect(signed).toContain('browser-profile');
-  });
-
-  it('enforces the JSON frame byte limit', () => {
-    expect(parseJsonFrame('{"ok":true}')).toEqual({ ok: true });
-    expect(() => parseJsonFrame(`"${'x'.repeat(256 * 1024)}"`)).toThrow(/exceeds/);
   });
 
   it('requires an explicit, strict turn origin', () => {

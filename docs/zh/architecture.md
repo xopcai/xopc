@@ -16,7 +16,7 @@
 桌面版打开 draw.io 源文件，然后重新导出图片。
 
 运行时，Gateway 进程是主要组合根。CLI/TUI 与 Electron shell 可以启动或访问
-Gateway；Web 控制台和移动端通过 HTTP/SSE API 与 Gateway 通信；频道扩展通过
+Gateway；Web 控制台和移动端通过 HTTP 与统一实时 WebSocket API 和 Gateway 通信；频道扩展通过
 进程内消息总线发布入站消息；智能体运行时通过 SQLite 持久化会话状态。
 
 ## 运行时组成
@@ -24,8 +24,8 @@ Gateway；Web 控制台和移动端通过 HTTP/SSE API 与 Gateway 通信；频�
 | 层级 | 主要代码 | 责任 |
 |------|----------|------|
 | CLI 与服务启动 | `src/cli/`、`src/daemon/`、`electron/` | 启动前台 Gateway，安装或控制后台服务，运行 CLI/TUI 回合，并承载 Electron shell。 |
-| HTTP Gateway | `src/gateway/server.ts`、`src/gateway/hono/` | Hono 服务、认证、CORS/CSRF 检查、限流、REST 路由、`/api/events` 广播 SSE、`/api/agent` 流式 SSE，以及静态 Web 控制台。 |
-| Gateway 组合根 | `src/gateway/service.ts` | 持有 `MessageBus`、`ChannelManager`、`AgentService`、`SessionIndex`、Task、自动化、笔记、项目、工作流、扩展加载、Gateway SSE Hub 与配置热重载。 |
+| HTTP 与实时 Gateway | `src/gateway/server.ts`、`src/gateway/hono/`、`src/realtime/` | Hono REST 服务、认证、CORS/CSRF 检查、限流、统一实时 WebSocket，以及静态 Web 控制台。 |
+| Gateway 组合根 | `src/gateway/service.ts` | 持有 `MessageBus`、`ChannelManager`、`AgentService`、`SessionIndex`、Task、自动化、笔记、项目、工作流、扩展加载、实时 broker 与配置热重载。 |
 | 智能体运行时 | `src/agent/service.ts`、`src/agent/embedded/`、`src/agent/orchestration/` | 构建按会话划分的智能体、Prompt、工具、记忆、技能、MCP 工具、模型选择、流事件、压缩与直接/Webchat 回合调度。 |
 | 频道 | `src/channels/`、`extensions/telegram`、`extensions/weixin`、`extensions/feishu` | 频道插件接收外部消息，规范化路由与 session key，发布入站总线消息，并发送出站回复。 |
 | 扩展运行时 | `src/extensions/`、`extensions/*` | 按激活计划加载扩展 manifest 与代码，并注册 hooks、tools、channel plugins、gateway methods 与扩展 UI assets。 |
@@ -40,9 +40,9 @@ Gateway；Web 控制台和移动端通过 HTTP/SSE API 与 Gateway 通信；频�
 2. Chat 使用幂等 client message id 和 `delivery: next | steer` 提交 `POST /api/sessions/:sessionKey/inputs`。
 3. `SessionInputCoordinator` 先把输入持久化到 SQLite 并确定顺序，再返回确认。
 4. `GatewayAgentRunner` 为每个会话只领取一个输入，并驱动 `AgentService.turnDispatcher.processDirectStreaming`。
-5. 内嵌 pi-agent session 运行模型和工具；客户端通过 `/api/agent/resume` 附着到活动运行。
+5. 内嵌 pi-agent session 运行模型和工具；客户端通过 `/api/realtime/v1/ws` 订阅 `run:<runId>`。
 6. `SessionStore` 将 transcript 行和元数据持久化到 `~/.xopc/xopc.db`。
-7. 完整、带 revision 的 `session.input-state` 快照和 agent stream 事件通过 `/api/events` 同步到所有客户端。
+7. 带 revision 的会话事件与有序 agent stream 事件通过实时 topic 同步；REST 仍是快照来源。
 
 ### 频道消息
 
@@ -64,7 +64,7 @@ HTTP 服务直接运行回合；`gateway` 命令启动的则是与 Web 控制台
 `GatewayService` 将 Task 聚合与执行协调器、`AutomationService`、
 `HeartbeatService` 和 `WorkflowRunService` 连接到同一套 `AgentService` 与
 `SessionStore`。Task 持有工作状态，Workflow 与 Automation 只是关联的执行能力。
-定时或事件触发的工作作为普通智能体回合执行，持久化 transcript，并发送 Gateway SSE 事件。
+定时或事件触发的工作作为普通智能体回合执行，持久化 transcript，并发送实时事件。
 
 ## 智能体运行时
 
@@ -72,7 +72,7 @@ HTTP 服务直接运行回合；`gateway` 命令启动的则是与 Web 控制台
 
 - `AgentManager`：按会话维护内嵌 pi-agent 实例。
 - `ModelManager`：默认模型、会话级覆盖、typed model roles 与解析后的模型元数据。
-- `TurnDispatcher`：直接回合、流式回合、Webchat steering、clarify 与 SSE 事件注入。
+- `TurnDispatcher`：直接回合、流式回合、Webchat steering、clarify 与 stream 事件注入。
 - `AgentOrchestrator`：回合执行、生命周期事件、反馈、持久化与压缩。
 - `OutboundCoordinator`：最终响应发布与频道 hooks。
 - `SessionConfigService`、`SessionHydrator`、`SessionInspector`：会话级模型/thinking/workspace 配置、hydration、压缩与上下文报告。
@@ -119,7 +119,7 @@ Gateway 也支持就绪后再进行 deferred extension loading，因此并不是
 xopc 有两个 MCP 方向：
 
 - 智能体出站 MCP：`src/agent/mcp/` 维护会话级目录与传输，由统一外部工具网关按需搜索、描述和执行 MCP 工具。
-- 入站频道 MCP：`src/mcp/` 提供 stdio MCP server，通过 `XopcChannelBridge` 回连 Gateway REST/SSE API，让外部 MCP clients 可以查看 conversations、读取 messages、发送消息、poll events 和响应 approvals。
+- 入站频道 MCP：`src/mcp/` 提供 stdio MCP server，通过 `XopcChannelBridge` 回连 Gateway REST/实时 API，让外部 MCP clients 可以查看 conversations、读取 messages、发送消息、poll events 和响应 approvals。
 
 两者边界不同：出站 MCP 扩展智能体可调用能力；入站 MCP 将一部分 xopc/频道能力暴露给外部工具。
 
@@ -138,8 +138,7 @@ xopc 有两个 MCP 方向：
 channels、connectors/MCP、config、home、tasks、logs、models、notes、projects、shares、skills、
 update、voice、workflows、workspace 以及相关设置页面。
 
-广播事件通过 `GatewaySseHub` 和 `/api/events` 传递。智能体运行流通过
-`/api/agent` 与 `/api/agent/resume` 传递。
+持久消息通过 `src/realtime/` 的 broker 和 `/api/realtime/v1/ws` 传递。
 
 ## 构建与分发
 

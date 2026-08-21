@@ -48,7 +48,8 @@ src/                         Feature、组件、API、query、theme、store
 src/theme/                   设计 token 与 Paper theme 映射
 src/i18n/                    本地化消息包
 src/storage/                 MMKV 与 fallback 存储
-../../packages/gateway-sse-client/ gateway SSE 解析工作区包
+../../packages/realtime-client/    共享实时 WebSocket client
+../../packages/agent-stream-client/ agent stream 事件分发器
 plugins/                     Expo config plugins
 app.json                     Expo 原生配置
 eas.json                     EAS 构建 profile
@@ -84,9 +85,9 @@ pnpm run dev:mobile
 | `pnpm run ios:mobile` | 构建并运行 iOS |
 | `pnpm -C apps/mobile-expo run ios:no-proxy` | 清空代理环境变量后构建并运行 iOS |
 | `pnpm run mobile:lint` | 对 `app` 和 `src` 运行 ESLint |
-| `pnpm run mobile:typecheck` | 类型检查 App 与 SSE 工作区包 |
+| `pnpm run mobile:typecheck` | 类型检查 App 与实时通信工作区包 |
 | `pnpm run mobile:test` | 运行 Vitest 测试 |
-| `pnpm run mobile:test:sse` | 运行 SSE client 测试 |
+| `pnpm run mobile:test:stream` | 运行 agent stream client 测试 |
 
 ## 配置 Gateway
 
@@ -253,10 +254,10 @@ pnpm run mobile:typecheck
 pnpm run mobile:test
 ```
 
-如果改动了 `packages/gateway-sse-client`，还需要运行：
+如果改动了 `packages/agent-stream-client`，还需要运行：
 
 ```bash
-pnpm run mobile:test:sse
+pnpm run mobile:test:stream
 ```
 
 ## License

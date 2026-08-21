@@ -3,23 +3,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const testState = vi.hoisted(() => ({
   memory: new Map<string, string>(),
   apiFetch: vi.fn(),
-  consumeAgentSseXhr: vi.fn(),
-}));
-
-vi.mock('@xopcai/gateway-sse-client', () => ({
-  consumeAgentSseResponse: vi.fn(),
-  consumeAgentSseXhr: testState.consumeAgentSseXhr,
-  isEventStreamResponse: vi.fn(() => true),
-  shouldUseXhrForAgentSse: vi.fn(() => true),
+  unsubscribe: vi.fn(),
+  realtimeListener: undefined as undefined | { onGap?: () => void },
 }));
 
 vi.mock('../client', () => ({
   apiFetch: testState.apiFetch,
-  buildAgentSseHeaders: vi.fn(() => ({ Accept: 'text/event-stream' })),
   formatApiHttpError: vi.fn((status: number, statusText: string, message?: string) =>
     message ? `${status} ${statusText}: ${message}` : `${status} ${statusText}`,
   ),
   notifyUnauthorizedIfNeeded: vi.fn(),
+}));
+
+vi.mock('../../features/gateway/use-gateway-realtime', () => ({
+  subscribeMobileRealtimeTopic: vi.fn((_topic: string, listener: { onGap?: () => void }) => {
+    testState.realtimeListener = listener;
+    return testState.unsubscribe;
+  }),
 }));
 
 vi.mock('../../features/chat/attachment-file-io', () => ({
@@ -58,7 +58,8 @@ describe('AgentMessageSender local detach', () => {
   beforeEach(() => {
     testState.memory.clear();
     testState.apiFetch.mockReset();
-    testState.consumeAgentSseXhr.mockReset();
+    testState.unsubscribe.mockReset();
+    testState.realtimeListener = undefined;
     publishMobileEndpointTurnClaim('mobile-test', 'test-turn-token');
   });
 
@@ -66,7 +67,7 @@ describe('AgentMessageSender local detach', () => {
     clearMobileEndpointTurnClaim();
   });
 
-  it('drops the local SSE transport without server abort and keeps the pending run', async () => {
+  it('detaches from a run topic without server abort and keeps the pending run', async () => {
     testState.apiFetch.mockImplementation(async (_path, init) => {
       const body = JSON.parse(String(init?.body)) as { clientMessageId: string };
       return new Response(JSON.stringify({
@@ -79,17 +80,6 @@ describe('AgentMessageSender local detach', () => {
         },
       }), { status: 202, headers: { 'Content-Type': 'application/json' } });
     });
-    testState.consumeAgentSseXhr.mockImplementation((_url, init, _callbacks, opts) => {
-      opts.savePendingRunId('session-a', 'run-123');
-      return new Promise((_resolve, reject) => {
-        init.signal.addEventListener('abort', () => {
-          const err = new Error('Aborted');
-          err.name = 'AbortError';
-          reject(err);
-        });
-      });
-    });
-
     const sender = new AgentMessageSender();
     const pending = sender.sendMessage('hello', 'session-a');
 
@@ -105,5 +95,16 @@ describe('AgentMessageSender local detach', () => {
       expect.anything(),
     );
     expect(testState.memory.get('pending:session-a')).toBe(JSON.stringify({ runId: 'run-123' }));
+  });
+
+  it('clears an expired run after a replay gap', async () => {
+    const sender = new AgentMessageSender();
+    const pending = sender.resume('run-expired', 'session-a');
+
+    await vi.waitFor(() => expect(testState.realtimeListener).toBeDefined());
+    testState.realtimeListener?.onGap?.();
+
+    await expect(pending).rejects.toThrow('realtime replay expired');
+    expect(testState.memory.get('pending:session-a')).toBeUndefined();
   });
 });

@@ -406,8 +406,6 @@
     "securityAuditRemediation": "修复：",
     "advancedSection": "高级",
     "advancedSectionHint": "运行时限制与频道启动顺序。保存后需重启网关生效。",
-    "maxSseConnections": "最大 SSE 连接数",
-    "maxSseConnectionsHint": "并发 Server-Sent Events 客户端上限（如 `GET /api/events`）。默认 100。",
     "channelConnectDeferMode": "频道连接延后",
     "channelConnectDeferModeAuto": "自动（按插件默认）",
     "channelConnectDeferModeOff": "关闭（监听前先启动全部频道）",

@@ -406,8 +406,6 @@
     "securityAuditRemediation": "Fix:",
     "advancedSection": "Advanced",
     "advancedSectionHint": "Runtime limits and channel startup ordering. Restart the gateway after saving.",
-    "maxSseConnections": "Max SSE connections",
-    "maxSseConnectionsHint": "Upper bound for concurrent Server-Sent Events clients (`GET /api/events` and similar). Default 100.",
     "channelConnectDeferMode": "Channel connect defer",
     "channelConnectDeferModeAuto": "Auto (plugin default)",
     "channelConnectDeferModeOff": "Off (start all channels before listen)",

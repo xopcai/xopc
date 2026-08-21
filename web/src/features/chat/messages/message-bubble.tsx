@@ -113,7 +113,7 @@ export const MessageBubble = memo(function MessageBubble({
   onExtractAssistantTask?: (content: string) => Promise<void> | void;
   readonly?: boolean;
   density?: 'normal' | 'compact';
-  /** Hide assistant footer actions while the session is receiving live SSE updates. */
+  /** Hide assistant footer actions while the session is receiving live run updates. */
   suppressAssistantActions?: boolean;
 }) {
   const language = useLocaleStore((s) => s.language);

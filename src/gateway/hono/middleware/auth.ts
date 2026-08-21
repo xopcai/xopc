@@ -48,23 +48,18 @@ function extractTokenFromHeader(authHeader: string | null): string | null {
 
 /**
  * SECURITY: query-string tokens leak into server logs, Referer headers, and
- * browser history. We accept them only where the `Authorization` header cannot
- * be set — SSE/WebSocket (`EventSource`) and `<img>` subresource loads for agent
- * avatars. Note media uses Bearer-authenticated blob fetch in the gateway console.
+ * browser history. We accept them only for agent avatar `<img>` loads, where an
+ * Authorization header cannot be set. Realtime WebSocket authentication uses a
+ * one-time ticket acquired over authenticated HTTP.
  */
 function extractTokenFromQuery(url: string): string | null {
   return new URL(url).searchParams.get('token');
 }
 
-const QUERY_TOKEN_ALLOWED_PATHS = new Set(['/api/events', '/api/ws']);
-
 const AGENT_AVATAR_GET_PATH = /^\/api\/agents\/[^/]+\/avatar$/;
 
 /** Exported for gateway security tests. */
 export function isQueryTokenAllowedPath(path: string, method: string): boolean {
-  if (QUERY_TOKEN_ALLOWED_PATHS.has(path) || path.startsWith('/api/events')) {
-    return true;
-  }
   if (method === 'GET' && AGENT_AVATAR_GET_PATH.test(path)) {
     return true;
   }

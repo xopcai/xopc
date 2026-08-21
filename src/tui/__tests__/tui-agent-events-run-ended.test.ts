@@ -29,15 +29,14 @@ describe('dispatchAgentEvent lifecycle', () => {
     const tui = { requestRender: vi.fn() };
     const setActivityStatus = vi.fn();
 
-    dispatchAgentEvent('run_start', envelope('run_start', 'r1', { channel: 'webchat' }), state, chatLog as never, tui as never, setActivityStatus, undefined, undefined, undefined, 'agent-response');
-    dispatchAgentEvent('assistant_message_start', envelope('assistant_message_start', 'r1', { messageId: 'm1' }), state, chatLog as never, tui as never, setActivityStatus, undefined, undefined, undefined, 'agent-response');
-    dispatchAgentEvent('assistant_delta', envelope('assistant_delta', 'r1', { messageId: 'm1', delta: 'hello' }), state, chatLog as never, tui as never, setActivityStatus, undefined, undefined, undefined, 'agent-response');
+    dispatchAgentEvent('run_start', envelope('run_start', 'r1', { channel: 'webchat' }), state, chatLog as never, tui as never, setActivityStatus, undefined, undefined, undefined, 'realtime-run');
+    dispatchAgentEvent('assistant_message_start', envelope('assistant_message_start', 'r1', { messageId: 'm1' }), state, chatLog as never, tui as never, setActivityStatus, undefined, undefined, undefined, 'realtime-run');
+    dispatchAgentEvent('assistant_delta', envelope('assistant_delta', 'r1', { messageId: 'm1', delta: 'hello' }), state, chatLog as never, tui as never, setActivityStatus, undefined, undefined, undefined, 'realtime-run');
 
     expect(state.activeRunId).toBe('r1');
     expect(state.runStatus.phase).toBe('streaming');
     expect(state.runStatus.runId).toBe('r1');
-    expect(state.runStatus.directStreamRunId).toBe('r1');
-    expect(state.runStatus.source).toBe('agent-response');
+    expect(state.runStatus.source).toBe('realtime-run');
     expect(state.runStatus.lastEvent).toBe('assistant_delta');
     expect(chatLog.updateAssistant).toHaveBeenCalledWith(
       expect.objectContaining({ role: 'assistant', content: [expect.objectContaining({ type: 'text', text: 'hello' })] }),
@@ -77,25 +76,13 @@ describe('dispatchAgentEvent lifecycle', () => {
 });
 
 describe('dispatchAgentEvent de-duplication', () => {
-  it('skips duplicate broadcast stream events for a run owned by the direct stream', () => {
-    const state = createInitialState('sk');
-    state.activeRunId = 'r1';
-    state.runStatus = { ...state.runStatus, phase: 'streaming', runId: 'r1', directStreamRunId: 'r1', source: 'agent-response' };
-    const chatLog = { updateAssistant: vi.fn() };
-
-    dispatchAgentEvent('assistant_delta', envelope('assistant_delta', 'r1', { messageId: 'm1', delta: 'duplicate' }), state, chatLog as never, { requestRender: vi.fn() } as never, vi.fn(), vi.fn(), undefined, undefined, 'broadcast');
-
-    expect(chatLog.updateAssistant).not.toHaveBeenCalled();
-    expect(state.runStatus.source).toBe('agent-response');
-  });
-
-  it('skips duplicate sequenced events across sources', () => {
+  it('skips duplicate sequenced realtime run events', () => {
     const state = createInitialState('sk');
     state.activeRunId = 'r1';
     const chatLog = { updateAssistant: vi.fn() };
 
-    dispatchAgentEvent('assistant_delta', envelope('assistant_delta', 'r1', { messageId: 'm1', delta: 'hello' }, 2), state, chatLog as never, { requestRender: vi.fn() } as never, vi.fn(), undefined, undefined, undefined, 'agent-response');
-    dispatchAgentEvent('assistant_delta', envelope('assistant_delta', 'r1', { messageId: 'm1', delta: 'hello' }, 2), state, chatLog as never, { requestRender: vi.fn() } as never, vi.fn(), undefined, undefined, undefined, 'broadcast');
+    dispatchAgentEvent('assistant_delta', envelope('assistant_delta', 'r1', { messageId: 'm1', delta: 'hello' }, 2), state, chatLog as never, { requestRender: vi.fn() } as never, vi.fn(), undefined, undefined, undefined, 'realtime-run');
+    dispatchAgentEvent('assistant_delta', envelope('assistant_delta', 'r1', { messageId: 'm1', delta: 'hello' }, 2), state, chatLog as never, { requestRender: vi.fn() } as never, vi.fn(), undefined, undefined, undefined, 'realtime-run');
 
     expect(chatLog.updateAssistant).toHaveBeenCalledTimes(1);
   });

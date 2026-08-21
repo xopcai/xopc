@@ -13,7 +13,7 @@ type TunnelEventSink = { emit(type: string, payload: unknown): void };
 
 let tunnelSseWired = false;
 
-/** Publish `tunnel.status` on gateway SSE when tunnel lifecycle changes. */
+/** Publish `tunnel.status` on the gateway realtime topic when tunnel lifecycle changes. */
 export function wireTunnelEventsToGateway(service: TunnelEventSink): void {
   if (tunnelSseWired) return;
   tunnelSseWired = true;

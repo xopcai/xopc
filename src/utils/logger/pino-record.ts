@@ -1,5 +1,5 @@
 /**
- * Shared Pino JSON record → LogEntry conversion for file query and live SSE.
+ * Shared Pino JSON record → LogEntry conversion for file query and live realtime delivery.
  */
 
 import type { LogEntry, LogLevel } from './types.js';

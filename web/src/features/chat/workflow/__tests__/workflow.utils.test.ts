@@ -121,7 +121,7 @@ describe('extractSnapshot', () => {
     expect(extractSnapshot(mkBlock({ result }))).toBeNull();
   });
 
-  it('parses SSE envelope with details', () => {
+  it('parses a run envelope with details', () => {
     const snap = mkSnapshot();
     const result = JSON.stringify({
       content: [{ type: 'text', text: 'done' }],

@@ -21,7 +21,7 @@ For the full field reference, see [Configuration](../configuration.md). For task
 | `bindings` | Route inbound channels/peers to agents |
 | `session` | Session scope, identity links, reset behavior |
 | `channels` | Telegram, Weixin, Feishu, and extension channel config |
-| `gateway` | HTTP/SSE gateway host, port, auth, CORS, remote access |
+| `gateway` | HTTP/realtime gateway host, port, auth, CORS, remote access |
 | `browser` | Browser automation backend, URL policy, timeout behavior |
 | `tools` | Web search and other tool-level settings |
 | `messages` / `tts` | Outbound message and text-to-speech settings |

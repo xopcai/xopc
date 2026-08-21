@@ -14,7 +14,7 @@ xopc gateway --port 18790
 
 ## 功能
 
-- ✅ 通过网关聊天（REST；agent 回复通过 `/api/agent` 的 **SSE** 流式返回）
+- ✅ 通过网关聊天（REST 持久化输入；agent 回复通过 `run:<runId>` 实时 topic 返回）
 - ✅ 会话管理（`#/sessions`）
 - ✅ 设置（模型、网关 Token、语音等）
 - ✅ 日志查看

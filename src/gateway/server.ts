@@ -11,7 +11,6 @@ import { resolveGatewayBindHost, resolveGatewayListenHosts } from '../config/gat
 import { resolveGatewayListenPlan } from './listen.js';
 import { GatewayService } from './service.js';
 import { createHonoApp } from './hono/app.js';
-import { closeAllEventStreams } from './hono/sse.js';
 import { handleSiteShareUpgrade } from '../share/site-share-router.js';
 
 export interface GatewayServerConfig {
@@ -94,7 +93,7 @@ export class GatewayServer {
       };
       inner.on('upgrade', (req, socket, head) => {
         try {
-          if (this.service.endpointTools.handleUpgrade(req, socket, head)) return;
+          if (this.service.realtime.handleUpgrade(req, socket, head)) return;
           if (handleSiteShareUpgrade(this.service, req, socket, head)) return;
           socket.destroy();
         } catch (err) {
@@ -143,9 +142,6 @@ export class GatewayServer {
 
   async stop(): Promise<void> {
     console.log('[GatewayServer] Stopping gateway server...');
-
-    closeAllEventStreams();
-    this.service.endpointTools.close();
 
     const closeServer = async (server: ServerType | undefined) => {
       if (!server) {

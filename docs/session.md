@@ -280,7 +280,7 @@ To prevent memory issues:
 ### Sessions Not Loading in Web UI
 
 1. Check gateway is running: `xopc gateway status`
-2. In the browser devtools **Network** tab, confirm REST calls to `/api/sessions` succeed and, if the UI uses live updates, that **`GET /api/events`** (SSE) stays connected
+2. In browser devtools **Network**, confirm `/api/sessions` REST calls succeed and one **`/api/realtime/v1/ws`** WebSocket stays connected
 3. Check for errors in gateway logs
 
 ### Session store issues
@@ -307,7 +307,7 @@ Check gateway logs and confirm `~/.xopc/xopc.db` exists and is writable.
 
 ## API Reference
 
-The gateway exposes sessions under **`/api/sessions`** (authenticated JSON over HTTP). There is **no WebSocket** surface for the console; live UI updates use **SSE** on **`GET /api/events`** where applicable.
+The gateway exposes session snapshots and commands under **`/api/sessions`** (authenticated JSON over HTTP). Live updates and run output use the authenticated **`/api/realtime/v1/ws`** WebSocket.
 
 ### Gateway HTTP routes (summary)
 

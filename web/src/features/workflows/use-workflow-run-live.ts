@@ -6,7 +6,7 @@ import { useGatewayStore } from '@/stores/gateway-store';
 import { getWorkflowRun, type WorkflowRunView } from './workflow-api';
 import { ACTIVE_RUN_STATUSES } from './workflow-page.constants';
 
-/** Live workflow run view for a dedicated workflow chat session (SSE + polling fallback). */
+/** Live workflow run view for a dedicated workflow chat session (realtime + polling fallback). */
 export function useWorkflowRunLive(runId: string | null | undefined, options?: { ownerAgentId?: string }) {
   const token = useGatewayStore((s) => s.token);
   const hasToken = Boolean(token);

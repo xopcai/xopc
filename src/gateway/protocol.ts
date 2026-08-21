@@ -1,8 +1,7 @@
 /**
- * Gateway protocol types — Streamable HTTP / SSE transport.
+ * Gateway HTTP protocol types.
  *
  * All client → server communication uses standard HTTP (POST/GET/PATCH/DELETE).
- * Server → client streaming uses SSE (text/event-stream).
  */
 
 // ---------- HTTP response envelope ----------
@@ -16,14 +15,6 @@ export interface ApiResponse<T = unknown> {
 export interface ApiError {
   code: string;
   message: string;
-}
-
-// ---------- SSE event shape ----------
-
-export interface SSEEvent {
-  id: string;
-  event: string;        // e.g. "run_start", "assistant_delta", "tool_end", "config.reload"
-  data: unknown;
 }
 
 // ---------- Gateway config ----------

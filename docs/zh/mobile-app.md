@@ -76,7 +76,7 @@ pnpm run dev:mobile
 | `pnpm run android:mobile` / `pnpm run ios:mobile` | 开发构建 |
 | `pnpm -C apps/mobile-expo run android:release` | Android release APK |
 | `pnpm run mobile:typecheck` | TypeScript 检查 |
-| `pnpm run mobile:test:sse` | SSE client 测试 |
+| `pnpm run mobile:test:stream` | Agent stream client 测试 |
 
 `react-native-mmkv` 使用原生代码。Expo Go 可用内存存储兜底运行，但持久化设置需要 development build 或 standalone build。
 

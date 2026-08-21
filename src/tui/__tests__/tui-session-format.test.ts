@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { GatewaySseBackend } from '../backends/gateway-sse-backend.js';
+import { GatewayRealtimeBackend } from '../backends/gateway-realtime-backend.js';
 import {
   formatSessionAge,
   formatSessionPickerDescription,
@@ -79,7 +79,7 @@ describe('sessionMetadataToTuiItem', () => {
   });
 });
 
-describe('GatewaySseBackend session list mapping', () => {
+describe('GatewayRealtimeBackend session list mapping', () => {
   it('carries cwd into TUI session items for remote session scope/search parity', async () => {
     const fetchMock = vi.fn(
       async () =>
@@ -102,7 +102,7 @@ describe('GatewaySseBackend session list mapping', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const backend = new GatewaySseBackend({
+    const backend = new GatewayRealtimeBackend({
       url: 'http://gateway.test',
       credential: { kind: 'token', value: 'tok' },
     });
@@ -146,7 +146,7 @@ describe('GatewaySseBackend session list mapping', () => {
       ),
     );
 
-    const backend = new GatewaySseBackend({ url: 'http://gateway.test' });
+    const backend = new GatewayRealtimeBackend({ url: 'http://gateway.test' });
     await expect(backend.listModels()).resolves.toEqual([
       {
         id: 'gpt-5',

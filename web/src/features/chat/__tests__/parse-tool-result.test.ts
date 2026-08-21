@@ -8,7 +8,7 @@ describe('parseToolResult', () => {
     expect(parseToolResult(undefined)).toEqual({ details: null, text: '', isStructured: false });
   });
 
-  it('parses serialized SSE envelope JSON with content and details', () => {
+  it('parses serialized run envelope JSON with content and details', () => {
     const raw = JSON.stringify({
       content: [{ type: 'text', text: 'File edited: /tmp/foo.ts' }],
       details: { diff: '--- a\n+++ b\n@@\n+x\n', fuzzyMatchUsed: false },

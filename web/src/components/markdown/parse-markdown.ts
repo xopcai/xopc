@@ -169,7 +169,7 @@ const REFERENCE_DEFINITION_RE = /^(?: {0,3})\[[^\]]+\]:\s+\S+/m;
 
 /**
  * Freeze completed top-level Markdown tokens while the final token is still
- * receiving SSE deltas. Reference-style links intentionally fall back to one
+ * receiving streaming deltas. Reference-style links intentionally fall back to one
  * tail because their definitions can affect earlier tokens.
  */
 export function splitStreamingMarkdownBlocks(text: string): StreamingMarkdownBlocks {

@@ -27,7 +27,6 @@ import { formatAgentRunErrorForClient } from '../../agent/client-error-format.js
 import { ChatStreamMapper } from '../chat-stream/mapper.js';
 import { coalesceThinkingDeltas } from '../chat-stream/thinking-delta-coalescer.js';
 import type { ChatStreamEvent } from '../chat-stream/protocol.js';
-import type { AgentRunRelay } from '../agent-run-relay.js';
 import { MAX_CHAT_ATTACHMENTS } from '../chat-limits.js';
 import type { UserTurnAttachment } from '../user-turn-input.js';
 const log = createLogger('Gateway:Service');
@@ -38,11 +37,12 @@ export type RunGatewayAgentDeps = {
   config: Config;
   agentService: AgentService;
   bus: MessageBus;
-  runRelay: AgentRunRelay;
   runAbortControllers: Map<string, AbortController>;
   activeWebchatRunBySession: Map<string, string>;
   sessionIndex: SessionIndex;
   emit: (type: string, payload: unknown) => void;
+  publishRealtime: (topic: string, event: string, data: unknown) => void;
+  completeRealtimeTopic: (topic: string) => void;
 };
 
 /**
@@ -73,11 +73,12 @@ export async function *runGatewayAgent(
   const {
     agentService,
     bus,
-    runRelay,
     runAbortControllers,
     activeWebchatRunBySession,
     sessionIndex: sessionIndexFromDeps,
     emit,
+    publishRealtime,
+    completeRealtimeTopic,
   } = deps;
   const sessionIndex = sessionIndexFromDeps;
   let taskRun: TaskRunCoordinator | undefined;
@@ -99,7 +100,6 @@ export async function *runGatewayAgent(
     }
     webchatSessionId = meta?.sessionId;
     webchatMetadata = meta;
-    runRelay.ensureRun(runId, webchatSessionKey);
     runAbortControllers.set(runId, new AbortController());
   }
 
@@ -149,16 +149,16 @@ export async function *runGatewayAgent(
       taskRun?.captureCommand(event.payload.command, event.payload.durationMs);
     }
   };
-  const publishStreamEvent = (event: ChatStreamEvent): ChatStreamEvent =>
-    channel === 'webchat'
-      ? ((runRelay.publish(runId, event as unknown as import('../agent-run-relay.js').RelayEvent) as unknown as ChatStreamEvent | undefined) ?? event)
-      : event;
   const emitAndYield = function *(events: ChatStreamEvent[]): Generator<ChatStreamEvent> {
     for (const event of events) {
       if (taskRun) captureTaskEvent(event);
-      const relayedEvent = publishStreamEvent(event);
-      if (channel === 'webchat') emit('agent.stream', { sessionKey: streamSessionKey, event: relayedEvent });
-      yield relayedEvent;
+      if (channel === 'webchat') {
+        publishRealtime(`run:${runId}`, event.type, event);
+        if (event.type === 'run_start') {
+          publishRealtime('sessions', 'run.started', { sessionKey: streamSessionKey, runId });
+        }
+      }
+      yield event;
     }
   };
 
@@ -216,7 +216,7 @@ export async function *runGatewayAgent(
         taskRunStatus = mergedSignal.aborted ? 'cancelled' : 'succeeded';
         taskRunSummary = endSummary;
         yield* emitAndYield(mapper.end(endStatus, endSummary));
-        runRelay.complete(runId);
+        completeRealtimeTopic(`run:${runId}`);
         try {
           const metaAfter = await sessionIndex.getSessionMetadata(sessionKey);
           if (metaAfter?.name) {
@@ -248,7 +248,7 @@ export async function *runGatewayAgent(
         const errorContent = formatAgentRunErrorForClient(streamError);
         yield* emitAndYield(mapper.error(errorContent));
         yield* emitAndYield(mapper.end('error', streamError));
-        runRelay.complete(runId);
+        completeRealtimeTopic(`run:${runId}`);
         return { status: 'error', summary: streamError };
       } finally {
         if (registeredActiveWebchatRun && activeWebchatRunBySession.get(sessionKey) === runId) {

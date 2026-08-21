@@ -40,24 +40,9 @@ const STREAM_TOUCH_EVENTS = new Set([
   'progress',
 ]);
 
-const DIRECT_RESPONSE_OWNED_EVENTS = new Set([...STREAM_TOUCH_EVENTS, 'run_end', 'error']);
-
 function resolveEventRunId(data: Record<string, unknown>, state: TuiState): string | null {
   if (typeof data.runId === 'string' && data.runId) return data.runId;
   return state.activeRunId ?? state.runStatus.runId ?? state.runStatus.lastCompletedRunId;
-}
-
-export function shouldSkipDuplicateBroadcastEvent(
-  event: string,
-  data: Record<string, unknown>,
-  state: TuiState,
-  source: TuiEventSource,
-): boolean {
-  if (source !== 'broadcast') return false;
-  if (!DIRECT_RESPONSE_OWNED_EVENTS.has(event)) return false;
-  const directRunId = state.runStatus.directStreamRunId;
-  if (!directRunId) return false;
-  return resolveEventRunId(data, state) === directRunId;
 }
 
 function streamEventKey(data: Record<string, unknown>, state: TuiState): string | null {
@@ -72,7 +57,7 @@ function shouldSkipSeenStreamEvent(
   state: TuiState,
   source: TuiEventSource,
 ): boolean {
-  if (source !== 'agent-response' && source !== 'agent-resume' && source !== 'broadcast') return false;
+  if (source !== 'realtime-run') return false;
   const key = streamEventKey(data, state);
   if (!key) return false;
   if (seenStreamEventKeys.has(key)) return true;
@@ -220,7 +205,6 @@ export function dispatchAgentEvent(
   source: TuiEventSource = 'unknown',
 ): void {
   if (shouldSkipSeenStreamEvent(data, state, source)) return;
-  if (shouldSkipDuplicateBroadcastEvent(event, data, state, source)) return;
 
   if (STREAM_TOUCH_EVENTS.has(event)) touchStreamingActivity?.();
 

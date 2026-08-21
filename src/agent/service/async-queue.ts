@@ -2,7 +2,7 @@
  * Async FIFO queue with `for await` support.
  *
  * Replaces the ad-hoc `eventQueue + resolveWaiting` single-slot pattern that
- * the streaming direct turn used to manage SSE events. The previous pattern was
+ * the streaming direct turn used to manage run events. The previous pattern was
  * lossy if two pushes landed before the single waiter resumed; this queue keeps
  * the buffer growing until consumed, and closes cleanly so the iterator drains.
  */

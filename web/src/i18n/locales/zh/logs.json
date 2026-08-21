@@ -15,7 +15,7 @@
     "refresh": "刷新",
     "autoRefresh": "自动刷新",
     "pause": "暂停",
-    "liveHint": "通过 SSE 实时推送",
+    "liveHint": "通过实时 WebSocket 推送",
     "logFiles": "日志文件",
     "filesEmpty": "磁盘上暂无日志文件",
     "loadMore": "加载更多",

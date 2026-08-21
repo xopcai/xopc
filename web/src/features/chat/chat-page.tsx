@@ -10,7 +10,7 @@ import { ChatProjectScopeBar } from '@/features/chat/scope/chat-project-scope-ba
 import { useChatProjectScope } from '@/features/chat/scope/use-chat-project-scope';
 import { ChatWelcomeSpotlightSkeleton } from '@/features/chat/chat-welcome-spotlight';
 import { ChatPageHeaderRegistration } from '@/features/chat/chat-page-header-registration';
-import { ChatSseStatus } from '@/features/chat/agent-selection/chat-sse-status';
+import { ChatRealtimeStatus } from '@/features/chat/agent-selection/chat-realtime-status';
 import { ConversationPlanDock } from '@/features/chat/messages/conversation-plan-dock';
 import { TaskSessionBanner } from '@/features/chat/task/task-session-banner';
 import {
@@ -812,7 +812,7 @@ export function ChatPage() {
   if (sessionError?.code === 'session_not_found') {
     return (
       <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-surface-panel">
-        <ChatSseStatus />
+        <ChatRealtimeStatus />
         <ChatPageHeaderRegistration
           chatHeadline={m.chat.sessionNotFoundTitle}
           chatAgents={agents.chatAgents?.items ?? []}
@@ -832,7 +832,7 @@ export function ChatPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-surface-panel">
-      <ChatSseStatus />
+      <ChatRealtimeStatus />
 
       <ChatPageHeaderRegistration
         chatHeadline={chatHeadline}

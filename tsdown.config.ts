@@ -38,6 +38,11 @@ export default defineConfig({
   minify: 'dce-only',
   deps: {
     neverBundle: ['@vscode/ripgrep', 'silk-wasm', 'playwright-core'],
-    alwaysBundle: ['@xopcai/gateway-contract'],
+    alwaysBundle: [
+      '@xopcai/endpoint-tools-protocol',
+      '@xopcai/gateway-contract',
+      '@xopcai/realtime-client',
+      '@xopcai/realtime-protocol',
+    ],
   },
 });

@@ -39,7 +39,7 @@ import {
   type TuiStartupResources,
 } from './tui-backend.js';
 import { EmbeddedBackend } from './backends/embedded-backend.js';
-import { GatewaySseBackend } from './backends/gateway-sse-backend.js';
+import { GatewayRealtimeBackend } from './backends/gateway-realtime-backend.js';
 import {
   clearSeenStreamEvents,
   clearSeenStreamEventsForRun,
@@ -385,7 +385,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
         implicitTrustedWorkspace,
         isWorkspaceTrusted: () => projectTrustSessionDecision,
       })
-    : new GatewaySseBackend({
+    : new GatewayRealtimeBackend({
         url: opts.url ?? 'http://localhost:3120',
         credential: opts.credential,
       });
@@ -2664,7 +2664,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
         tui.requestRender();
       });
       if (state.activeRunId) {
-        void recoverActiveRunFromHistory('broadcast reconnect');
+        void recoverActiveRunFromHistory('realtime reconnect');
       }
       updateHeader();
       updateFooter();
@@ -2685,7 +2685,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     } else {
       const hint =
         wasConnected || state.historyLoaded
-          ? ` (${reason}). Reconnecting broadcast stream…`
+          ? ` (${reason}). Reconnecting realtime stream…`
           : `. Ensure gateway is running (xopc gateway) or use --local.`;
       setConnectionStatus(`disconnected${hint}`);
       if (!wasConnected && !state.historyLoaded) {
@@ -2705,7 +2705,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     );
     setConnectionStatus(`event gap: expected ${info.expected}, got ${info.received}`);
     if (state.activeRunId) {
-      void recoverActiveRunFromHistory('broadcast event gap');
+      void recoverActiveRunFromHistory('realtime event gap');
     } else {
       void loadSessionHistory({ merge: true });
     }

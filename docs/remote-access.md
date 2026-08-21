@@ -233,8 +233,7 @@ server {
     proxy_set_header   X-Forwarded-Proto https;
     proxy_set_header   Upgrade $http_upgrade;
     proxy_set_header   Connection "upgrade";
-    proxy_buffering    off;               # SSE: disable response buffering
-    proxy_read_timeout 3600s;             # long-lived SSE / WS
+    proxy_read_timeout 3600s;             # long-lived WebSocket
   }
 }
 ```
@@ -244,8 +243,8 @@ server {
 | Requirement | Why |
 |---|---|
 | **System-trusted TLS cert** (Let's Encrypt / commercial CA) | Mobile apps reject self-signed certs (iOS ATS, Android default config). Self-signed is **not supported in v1**. |
-| `proxy_buffering off` (nginx) / `flush_interval -1` (Caddy) | SSE streams (`/api/events`, `/api/agent/stream`) must flush immediately. |
-| Long idle timeout (≥ 60s, ideally hours) | Chat and event streams stay open. |
+| WebSocket upgrade forwarding | `/api/realtime/v1/ws` requires HTTP/1.1 upgrade headers. |
+| Long idle timeout (≥ 60s, ideally hours) | The realtime connection stays open. |
 | Do **not** strip `Authorization` header | The gateway authenticates with its own Bearer token. |
 | `/health` and `/api/tunnel/pair/ping` must be reachable | Used for mobile preflight + the "Test" button in the UI. |
 

@@ -44,8 +44,8 @@ features:
   - title: 🤖 多 Agent 路由
     details: 不同场景路由到不同 Agent——各自模型、工作区、工具与系统提示词，上下文完全隔离。
     link: /zh/routing-system
-  - title: 🌐 HTTP/SSE 网关
-    details: REST JSON API 与 SSE 流式更新；浏览器与 Electron 内为同一套 React 控制台。
+  - title: 🌐 HTTP/实时通信网关
+    details: REST JSON API 与统一实时 WebSocket；浏览器与 Electron 内为同一套 React 控制台。
     link: /zh/gateway
   - title: 🛠️ 类型安全工具
     details: TypeBox 定义内置与自定义工具——网页搜索、浏览器（Playwright，按需开启）、文件操作等。

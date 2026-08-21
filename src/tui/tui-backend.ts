@@ -23,7 +23,7 @@ export interface TuiInboundAttachment {
   uri?: string;
 }
 
-/** SSE event from the agent stream or broadcast channel. */
+/** Event from an agent run or gateway topic. */
 export interface TuiEvent {
   event: string;
   data: unknown;
@@ -199,7 +199,7 @@ export interface TuiTranscriptTreeEntry {
 }
 
 /**
- * Abstraction over the gateway (SSE) or embedded agent backend.
+ * Abstraction over the realtime gateway or embedded agent backend.
  *
  * Both implementations expose the same surface so the TUI core stays
  * transport-agnostic.
@@ -212,10 +212,10 @@ export interface TuiBackend {
   onEvent?: (evt: TuiEvent) => void;
   onConnected?: () => void;
   onDisconnected?: (reason: string) => void;
-  /** Broadcast SSE sequence gap (if the gateway emits `gap` events). */
+  /** Realtime sequence gap. */
   onGap?: (info: { expected: number; received: number }) => void;
 
-  /** Start the backend (open SSE streams / start agent service). */
+  /** Start the backend connection or embedded agent service. */
   start(): void;
 
   /** Stop the backend. */

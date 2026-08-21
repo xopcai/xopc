@@ -518,7 +518,7 @@ export interface WebchatTurnCompleteEvent extends HookContext {
   inboundUserText: string;
   /** Last assistant visible text after persistence (may be empty). */
   assistantPlainText: string;
-  /** User aborted the HTTP/SSE run. */
+  /** User aborted the realtime run. */
   aborted: boolean;
   /** Set when the direct stream threw before normal completion. */
   streamError?: string;

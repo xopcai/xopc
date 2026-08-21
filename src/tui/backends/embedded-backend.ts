@@ -237,7 +237,7 @@ export class EmbeddedBackend implements TuiBackend {
         this.onEvent?.({
           event,
           data: payload,
-          source: 'broadcast',
+          source: 'embedded',
         });
       },
     };

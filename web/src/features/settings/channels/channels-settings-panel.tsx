@@ -31,7 +31,10 @@ import { ChannelSettingsShell } from './channel-settings-shell';
 import { ChannelsPageHeaderActions } from './channels-page-header-actions';
 import { ChannelsSettingsDialogFooter } from './channels-settings-dialog-footer';
 import { useChannelCatalog, type ChannelCatalogEntry, type ChannelSetupIssue, type ChannelSetupStatus } from './use-channel-catalog';
-import { parseChannelStatusSseDetail, useChannelStatusSse } from './use-channel-status-sse';
+import {
+  parseChannelStatusRealtimeDetail,
+  useChannelStatusRealtime,
+} from './use-channel-status-realtime';
 
 function configSwrKey(channelId: string | null): string | null {
   return channelId ? apiUrl(`/api/channels/${encodeURIComponent(channelId)}/config`) : null;
@@ -655,10 +658,10 @@ export function ChannelsSettingsPanel() {
     await Promise.all([catalog.mutate(), mutateRuntimeStatuses()]);
   }, [catalog, mutateRuntimeStatuses]);
   const onChannelStatusEvent = useCallback((detail: unknown) => {
-    const next = parseChannelStatusSseDetail(detail);
+    const next = parseChannelStatusRealtimeDetail(detail);
     if (next) void mutateRuntimeStatuses(next, false);
   }, [mutateRuntimeStatuses]);
-  useChannelStatusSse(onChannelStatusEvent, hasToken);
+  useChannelStatusRealtime(onChannelStatusEvent, hasToken);
 
   const headerEnd = useMemo(
     () => hasToken ? (

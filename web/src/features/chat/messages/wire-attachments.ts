@@ -1,4 +1,4 @@
-// Attachment metadata normalization for session API / SSE / persisted transcripts.
+// Attachment metadata normalization for session API / realtime / persisted transcripts.
 
 import { inferMimeTypeFromFileName } from '@/features/chat/attachments/attachment-utils-core';
 import type { Message, MessageAttachment } from '@/features/chat/messages/messages.types';

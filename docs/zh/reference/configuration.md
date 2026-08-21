@@ -21,7 +21,7 @@
 | `bindings` | 将入站 channel / peer 路由到 agent |
 | `session` | 会话 scope、identity links、reset 行为 |
 | `channels` | Telegram、微信、飞书和扩展 channel 配置 |
-| `gateway` | HTTP/SSE gateway host、port、auth、CORS、远程访问 |
+| `gateway` | HTTP/实时通信 gateway host、port、auth、CORS、远程访问 |
 | `browser` | 浏览器自动化后端、URL 策略、超时 |
 | `tools` | Web search 和其它工具级设置 |
 | `messages` / `tts` | 出站消息和 TTS 设置 |

@@ -42,7 +42,6 @@ export interface GatewaySettingsState {
   dangerouslyAllowHostHeaderOriginFallback: boolean;
   /** When true, non-loopback binds require explicit gateway.auth.rateLimit. */
   securityStrict: boolean;
-  maxSseConnections: number;
   channelConnectDeferMode: GatewayChannelConnectDeferMode;
   channelConnectDeferIds: string[];
   channelConnectDeferSkipIds: string[];
@@ -56,7 +55,6 @@ export interface GatewaySettingsState {
 }
 
 export const DEFAULT_GATEWAY_PORT = 18790;
-export const DEFAULT_MAX_SSE_CONNECTIONS = 100;
 export const MAX_CHANNEL_DEFER_LIST_SIZE = 24;
 
 export const DEFAULT_AUTH_RATE_LIMIT: GatewayAuthRateLimitState = {

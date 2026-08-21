@@ -1,6 +1,6 @@
 /**
  * Rolling buffer of the last N connection events — race tasks, dual-fire
- * winners, apiFetch failures, SSE state changes. Surfaced in settings so the
+ * winners, apiFetch failures, and realtime state changes. Surfaced in settings so the
  * user can copy them when reporting a problem, and used for any in-app
  * "what happened, why" diagnostics.
  *
@@ -16,7 +16,7 @@ export type ConnectionEventKind =
   | 'race'
   | 'dualFire'
   | 'apiFetch'
-  | 'sse'
+  | 'realtime'
   | 'state';
 
 export type ConnectionEvent = {

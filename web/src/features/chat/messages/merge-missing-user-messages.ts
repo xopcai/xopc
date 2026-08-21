@@ -3,7 +3,7 @@ import type { Message } from '@/features/chat/messages/messages.types';
 import { isUiUserMessage } from '@/features/chat/messages/user-round-index';
 
 /**
- * When another device sends a user turn, the passive client may be mid-SSE resume with a
+ * When another device sends a user turn, the passive client may be mid-realtime resume with a
  * stale committed prefix. Append only user rows the server has that we lack (by count).
  */
 export function mergeMissingUserMessagesFromServer(local: Message[], server: Message[]): Message[] {

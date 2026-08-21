@@ -1,11 +1,14 @@
 import crypto from 'node:crypto';
+import { createRequire } from 'node:module';
+
+import { RealtimeClient, type RealtimeWebSocket } from '@xopcai/realtime-client';
+import type { RealtimeEventPayload } from '@xopcai/realtime-protocol';
 
 import type { Config } from '../config/schema.js';
 import { loadConfig } from '../config/loader.js';
 import type {
   ApprovalDecision,
   ApprovalKind,
-  ClaudeChannelMode,
   ConversationDescriptor,
   PendingApproval,
   QueueEvent,
@@ -18,11 +21,11 @@ import {
   resolveGatewayHttpBaseUrl,
   type GatewayHttpClient,
 } from './gateway-http-client.js';
-import { loadUndiciRuntimeDeps } from '../infra/undici-fetch.js';
 import { createLogger } from '../utils/logger.js';
-import { gatewayCredentialAuthorization, type GatewayCredential } from '../gateway/credential.js';
+import type { GatewayCredential } from '../gateway/credential.js';
 
 const log = createLogger('Mcp:Bridge');
+const { WebSocket } = createRequire(import.meta.url)('ws') as typeof import('ws');
 
 const QUEUE_LIMIT = 1000;
 
@@ -32,21 +35,16 @@ export class XopcChannelBridge {
   private readonly pendingApprovals = new Map<string, PendingApproval>();
   private cursor = 0;
   private closed = false;
-  private eventsAbort: AbortController | null = null;
+  private readonly realtimeClientId = `mcp-${crypto.randomUUID()}`;
+  private realtime: RealtimeClient | null = null;
 
   constructor(
     private readonly cfg: Config,
     private readonly params: {
       gatewayUrl?: string;
       gatewayCredential?: GatewayCredential;
-      claudeChannelMode: ClaudeChannelMode;
-      verbose: boolean;
     },
   ) {}
-
-  setServer(_server: unknown): void {
-    void _server;
-  }
 
   async start(): Promise<void> {
     log.info({ phase: 'mcp.bridge.connect' }, 'MCP channel bridge starting');
@@ -55,104 +53,65 @@ export class XopcChannelBridge {
       gatewayUrl: this.params.gatewayUrl,
       gatewayCredential: this.params.gatewayCredential,
     });
-    this.connectEvents();
+    this.connectRealtime();
   }
 
   async close(): Promise<void> {
     log.info({ phase: 'mcp.bridge.connect', queueSize: this.queue.length }, 'MCP channel bridge closing');
     this.closed = true;
-    this.eventsAbort?.abort();
-    this.eventsAbort = null;
+    this.realtime?.disconnect();
+    this.realtime = null;
     this.queue.length = 0;
     this.pendingApprovals.clear();
   }
 
-  private connectEvents(): void {
-    if (this.closed) {
-      return;
-    }
-    this.eventsAbort?.abort();
-    const abort = new AbortController();
-    this.eventsAbort = abort;
+  private connectRealtime(): void {
+    if (this.closed) return;
     const baseUrl = resolveGatewayHttpBaseUrl(this.cfg, this.params.gatewayUrl);
-    void this.runEventsLoop(baseUrl, this.params.gatewayCredential, abort.signal);
+    this.realtime?.disconnect();
+    this.realtime = new RealtimeClient({
+      clientId: this.realtimeClientId,
+      clientKind: 'mcp',
+      getWebSocketUrl: () => {
+        const url = new URL(baseUrl);
+        url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+        url.pathname = '/api/realtime/v1/ws';
+        url.search = '';
+        url.hash = '';
+        return url.toString();
+      },
+      issueTicket: async () => {
+        const response = await this.client!.postJson<{
+          payload?: { ticket?: string };
+          error?: { message?: string };
+        }>('/api/realtime/tickets', {
+          clientId: this.realtimeClientId,
+          clientKind: 'mcp',
+        });
+        if (!response.payload?.ticket) {
+          throw new Error(response.error?.message ?? 'Realtime ticket response is invalid');
+        }
+        return response.payload.ticket;
+      },
+      createWebSocket: (url) => new WebSocket(url) as unknown as RealtimeWebSocket,
+      onEvent: (event) => this.handleRealtimeEvent(event),
+      onStateChange: (state, error) => {
+        if (state === 'error') {
+          log.warn({ errorMessage: error, phase: 'mcp.bridge.realtime', baseUrl }, `Gateway realtime connection failed: ${error ?? 'unknown error'}`);
+        }
+      },
+    });
+    this.realtime.subscribe('gateway');
+    this.realtime.subscribe('sessions');
+    this.realtime.connect();
   }
 
-  private async runEventsLoop(
-    baseUrl: string,
-    credential: GatewayCredential | undefined,
-    signal: AbortSignal,
-  ): Promise<void> {
-    const url = new URL(`${baseUrl}/api/events`);
-    const authorization = gatewayCredentialAuthorization(credential);
-    try {
-      const res = await loadUndiciRuntimeDeps().fetch(url.toString(), {
-        headers: {
-          Accept: 'text/event-stream',
-          ...(authorization ? { Authorization: authorization } : {}),
-        },
-        signal,
-      });
-      if (!res.ok || !res.body) {
-        log.warn(
-          {
-            phase: 'mcp.bridge.sse',
-            status: res.status,
-            baseUrl,
-          },
-          `Gateway events SSE connect failed: HTTP ${res.status}`,
-        );
-        return;
-      }
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      while (!this.closed && !signal.aborted) {
-        const { done, value } = await reader.read();
-        if (done) {
-          break;
-        }
-        buffer += decoder.decode(value, { stream: true });
-        let splitAt = buffer.indexOf('\n\n');
-        while (splitAt >= 0) {
-          this.handleSseChunk(buffer.slice(0, splitAt));
-          buffer = buffer.slice(splitAt + 2);
-          splitAt = buffer.indexOf('\n\n');
-        }
-      }
-    } catch (err) {
-      const em = err instanceof Error ? err.message : String(err);
-      if (!signal.aborted && !this.closed) {
-        log.warn({ err, errorMessage: em, phase: 'mcp.bridge.sse', baseUrl }, `Gateway events SSE disconnected: ${em}`);
-      }
-    }
-    if (!this.closed && !signal.aborted) {
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      if (!this.closed) {
-        this.connectEvents();
-      }
-    }
-  }
-
-  private handleSseChunk(chunk: string): void {
-    let eventName = 'message';
-    let data = '';
-    for (const line of chunk.split('\n')) {
-      if (line.startsWith('event:')) {
-        eventName = line.slice(6).trim();
-      } else if (line.startsWith('data:')) {
-        data += line.slice(5).trim();
-      }
-    }
-    if (!data) {
-      return;
-    }
-    try {
-      const parsed = JSON.parse(data) as Record<string, unknown>;
-      this.enqueueFromBroadcast({ type: eventName, ...parsed });
-    } catch {
-      this.enqueueFromBroadcast({ type: eventName, raw: data });
-    }
+  private handleRealtimeEvent(event: RealtimeEventPayload): void {
+    if (event.topic !== 'gateway' && event.topic !== 'sessions') return;
+    const data = event.data && typeof event.data === 'object' && !Array.isArray(event.data)
+      ? event.data as Record<string, unknown>
+      : { raw: event.data };
+    this.enqueueFromBroadcast({ ...data, type: event.event });
   }
 
   private enqueueFromBroadcast(data: Record<string, unknown>): void {

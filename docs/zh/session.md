@@ -240,7 +240,7 @@ interface Message {
 ### Web UI 无法加载会话
 
 1. 检查 gateway 是否运行：`xopc gateway status`
-2. 在浏览器开发者工具 **Network** 中确认对 `/api/sessions` 的 REST 请求是否成功；若界面依赖实时推送，再确认 **`GET /api/events`**（SSE）是否保持连接
+2. 在浏览器开发者工具 **Network** 中确认 `/api/sessions` REST 请求成功，并且 **`/api/realtime/v1/ws`** WebSocket 保持连接
 3. 检查 gateway 日志中的错误
 
 ### 会话存储异常
@@ -267,7 +267,7 @@ xopc session list --limit 1000
 
 ## API 参考
 
-网关在 **`/api/sessions`** 下提供会话相关的 **HTTP JSON API**（需认证）。控制台没有用于会话的 **WebSocket**；需要实时推送时使用 **`GET /api/events`** 的 **SSE**。
+网关在 **`/api/sessions`** 下提供会话快照与命令的 **HTTP JSON API**（需认证）；实时更新与运行输出使用 **`/api/realtime/v1/ws`** WebSocket。
 
 ### 网关 HTTP 路由（摘要）
 

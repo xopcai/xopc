@@ -404,7 +404,7 @@ No destructive reset happens before an approved migration commit.
 - Automation execution/runs, model resolution, agent tooling, and read-only boundaries.
 - SQLite migrations, transaction helpers, repository patterns, and gateway lifecycle.
 - Existing source-consent adapters and personal-context authorization state.
-- SSE broadcasting, Expo push adapter, device preferences, and useful UI primitives.
+- Realtime broadcasting, Expo push adapter, device preferences, and useful UI primitives.
 - Focus insight evidence, feedback, snooze, and investigation concepts where their behavior matches the generic model.
 - Existing tests as regression evidence until replacement coverage exists.
 

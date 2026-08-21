@@ -66,7 +66,7 @@ export type AgentStreamFqCallbacks = {
 };
 
 /**
- * Shared SSE handlers for {@link MessageSender.send} and {@link MessageSender.resume}.
+ * Shared run-event handlers for {@link MessageSender.send} and {@link MessageSender.resume}.
  * Stream UI updates go to {@link useChatSessionStore} only; focused view subscribes via Zustand.
  */
 export function createAgentStreamMessagingCallbacks(opts: {

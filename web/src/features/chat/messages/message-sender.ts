@@ -3,13 +3,14 @@ import type { ToolActivity } from '@xopcai/gateway-contract';
 import { buildSendFailedErrorPayload } from '@/features/chat/messages/agent-run-error-parser';
 import type { WireAttachment } from '@/features/chat/composer/composer.types';
 import type { Message, ProgressState } from '@/features/chat/messages/messages.types';
-import { userMessageFromSsePayload } from '@/features/chat/messages/user-message-from-sse';
+import { userMessageFromStreamPayload } from '@/features/chat/messages/user-message-from-stream';
 import { MAX_CHAT_ATTACHMENTS } from '@/features/chat/constants';
 import { dispatchPendingAgentRunChanged } from '@/features/chat/follow-up/pending-agent-run-events';
 import { apiFetch } from '@/lib/fetch';
 import { waitForEndpointTurnClaim } from '@/features/endpoint-tools/turn-claim';
 import { formatApiHttpError } from '@/lib/http-error-message';
 import { apiUrl } from '@/lib/url';
+import { subscribeRealtimeTopic } from '@/features/gateway/gateway-realtime';
 
 export function pendingAgentRunStorageKey(chatId: string): string {
   return `xopc:pendingRun:${chatId}`;
@@ -27,7 +28,7 @@ export function hasPendingAgentRunForChat(chatId: string): boolean {
   }
 }
 
-/** Persist run id for sidebar + `tryResumeAgentRun` (POST body or gateway `/api/events` `agent.stream`). */
+/** Persist a run id for sidebar recovery and `tryResumeAgentRun`. */
 export function setPendingAgentRun(chatId: string, runId: string): void {
   const id = runId.trim();
   if (!id) return;
@@ -148,26 +149,26 @@ export type MessagingCallbacks = {
 };
 
 /**
- * POST `/api/agent` with `Accept: text/event-stream` and consume SSE from the response body
- * (SSE events on the HTTP response body).
+ * Submit durable session inputs and consume their run over the shared realtime connection.
  */
 export class MessageSender {
   private _abort?: AbortController;
-  private _sseChatId = '';
+  private _chatId = '';
   /** `runId` from the active resume body; do not clear a newer pending run. */
   private _trackedRunId?: string;
+  private _streamCleanup?: () => void;
 
   get isSending() {
     return !!this._abort;
   }
 
-  /** Chat id for the in-flight session input or `/api/agent/resume` stream, if any. */
+  /** Chat id for the in-flight session input or run-topic subscription, if any. */
   get activeChatId(): string {
-    return this._sseChatId;
+    return this._chatId;
   }
 
   isStreamingFor(chatId: string): boolean {
-    return !!this._abort && this._sseChatId === chatId;
+    return !!this._abort && this._chatId === chatId;
   }
 
   async send(
@@ -179,7 +180,7 @@ export class MessageSender {
   ): Promise<void> {
     this._trackedRunId = undefined;
     this._abort = new AbortController();
-    this._sseChatId = chatId;
+    this._chatId = chatId;
 
     const capped =
       attachments && attachments.length > MAX_CHAT_ATTACHMENTS
@@ -222,17 +223,19 @@ export class MessageSender {
   abort(): void {
     this._notifyServerAbort();
     this._abort?.abort();
+    this._streamCleanup?.();
+    this._streamCleanup = undefined;
     this._abort = undefined;
     this._clearPendingRun();
   }
 
   /** Best-effort server-side abort (runId) so the agent stops even if the HTTP signal is flaky. */
   private _notifyServerAbort(): void {
-    if (!this._sseChatId) {
+    if (!this._chatId) {
       return;
     }
     try {
-      const raw = sessionStorage.getItem(pendingAgentRunStorageKey(this._sseChatId));
+      const raw = sessionStorage.getItem(pendingAgentRunStorageKey(this._chatId));
       if (!raw) {
         return;
       }
@@ -253,32 +256,32 @@ export class MessageSender {
   async resume(runId: string, chatId: string, callbacks?: MessagingCallbacks): Promise<boolean> {
     this._trackedRunId = undefined;
     this._abort = new AbortController();
-    this._sseChatId = chatId;
+    this._chatId = chatId;
 
-    const res = await apiFetch(apiUrl('/api/agent/resume'), {
-      method: 'POST',
-      headers: { Accept: 'text/event-stream' },
-      body: JSON.stringify({ runId, sessionKey: chatId }),
-      signal: this._abort.signal,
+    this._trackedRunId = runId;
+    setPendingAgentRun(chatId, runId);
+    const terminal = this._wrapTerminalCallbacks(callbacks);
+    const resumed = await new Promise<boolean>((resolve) => {
+      let settled = false;
+      const finish = (value: boolean) => {
+        if (settled) return;
+        settled = true;
+        this._streamCleanup?.();
+        this._streamCleanup = undefined;
+        resolve(value);
+      };
+      this._streamCleanup = subscribeRealtimeTopic(`run:${runId}`, {
+        onEvent: (message) => {
+          const event = message.data && typeof message.data === 'object'
+            ? { ...(message.data as Record<string, unknown>), seq: message.seq }
+            : { type: message.event, seq: message.seq, payload: message.data };
+          this._dispatchStreamEvent(message.event, event, terminal.wrapped);
+          if (message.event === 'run_end' || message.event === 'error') finish(true);
+        },
+        onGap: () => finish(false),
+      }, 0);
+      this._abort?.signal.addEventListener('abort', () => finish(false), { once: true });
     });
-
-    if (!res.ok) {
-      this._clearPendingRun();
-      this._abort = undefined;
-      return false;
-    }
-
-    const ct = res.headers.get('Content-Type') || '';
-    let resumed = false;
-    if (ct.includes('text/event-stream') && res.body) {
-      resumed = true;
-      const terminal = this._wrapTerminalCallbacks(callbacks);
-      await this._consumeSSE(res.body, terminal.wrapped);
-      if (!terminal.sawTerminal && !this._abort?.signal.aborted) {
-        terminal.onMissingTerminal();
-      }
-    }
-
     this._abort = undefined;
     this._clearPendingRun();
     return resumed;
@@ -323,7 +326,7 @@ export class MessageSender {
   }
 
   private _clearPendingRun(): void {
-    const chatId = this._sseChatId;
+    const chatId = this._chatId;
     if (chatId) {
       try {
         const key = pendingAgentRunStorageKey(chatId);
@@ -344,77 +347,26 @@ export class MessageSender {
     this._trackedRunId = undefined;
   }
 
-  private async _consumeSSE(body: ReadableStream<Uint8Array>, callbacks?: MessagingCallbacks): Promise<void> {
-    const reader = body
-      .pipeThrough(new TextDecoderStream() as unknown as ReadableWritablePair<string, Uint8Array>)
-      .getReader();
-    let buf = '';
-    let evtType = '';
-    let evtData = '';
-
-    const readChunk = async (): Promise<void> => {
-      const { done, value } = await reader.read();
-      if (done) {
-        if (evtData) this._dispatchSSE(evtType || 'message', evtData, callbacks);
-        return;
-      }
-      buf += value;
-
-      const lines = buf.split('\n');
-      buf = lines.pop() ?? '';
-      for (const rawLine of lines) {
-        let line = rawLine.replace(/\r$/, '');
-
-        if (line.startsWith('event:')) {
-          evtData = '';
-          evtType = line.slice(6).trim();
-        } else if (line.startsWith('data:')) {
-          const payload = line.startsWith('data: ') ? line.slice(6) : line.slice(5);
-          evtData += (evtData ? '\n' : '') + payload;
-        } else if (line === '' && evtData) {
-          this._dispatchSSE(evtType || 'message', evtData, callbacks);
-          evtType = '';
-          evtData = '';
-        }
-      }
-      await readChunk();
-    };
-
-    try {
-      await readChunk();
-    } finally {
-      reader.releaseLock();
-    }
-  }
-
-  private _dispatchSSE(event: string, data: string, cb?: MessagingCallbacks): void {
-    let parsed: Record<string, unknown>;
-    try {
-      parsed = JSON.parse(data) as Record<string, unknown>;
-    } catch {
-      if (event === 'run_end') cb?.onResult();
-      return;
-    }
-
+  private _dispatchStreamEvent(event: string, parsed: Record<string, unknown>, cb?: MessagingCallbacks): void {
     const payload = (parsed.payload && typeof parsed.payload === 'object'
       ? parsed.payload
       : {}) as Record<string, unknown>;
 
     switch (event) {
       case 'run_start':
-        if (typeof parsed.runId === 'string' && this._sseChatId) {
+        if (typeof parsed.runId === 'string' && this._chatId) {
           this._trackedRunId = parsed.runId;
-          setPendingAgentRun(this._sseChatId, parsed.runId);
+          setPendingAgentRun(this._chatId, parsed.runId);
         }
         if (typeof parsed.runId === 'string') cb?.onStreamStart(parsed.runId);
         break;
       case 'user_message': {
-        const userMsg = userMessageFromSsePayload(payload.message as Record<string, unknown>);
+        const userMsg = userMessageFromStreamPayload(payload.message as Record<string, unknown>);
         if (userMsg) cb?.onUserMessage?.(userMsg);
         break;
       }
       case 'user_transcript': {
-        const userMsg = userMessageFromSsePayload({
+        const userMsg = userMessageFromStreamPayload({
           text: payload.text,
           media: payload.media,
           timestamp: parsed.timestamp,
@@ -582,9 +534,9 @@ export class MessageSender {
         const requests = Array.isArray(payload.requests)
           ? payload.requests.filter((request): request is Record<string, unknown> => Boolean(request) && typeof request === 'object')
           : [];
-        if (requests.length > 0 && this._sseChatId) {
+        if (requests.length > 0 && this._chatId) {
           window.dispatchEvent(new CustomEvent('memory-consent-required', {
-            detail: { sessionKey: this._sseChatId, requests },
+            detail: { sessionKey: this._chatId, requests },
           }));
         }
         break;
@@ -593,9 +545,9 @@ export class MessageSender {
         const records = Array.isArray(payload.records)
           ? payload.records.filter((record): record is Record<string, unknown> => Boolean(record) && typeof record === 'object')
           : [];
-        if (records.length > 0 && this._sseChatId) {
+        if (records.length > 0 && this._chatId) {
           window.dispatchEvent(new CustomEvent('memory-captured', {
-            detail: { sessionKey: this._sseChatId, records },
+            detail: { sessionKey: this._chatId, records },
           }));
         }
         break;

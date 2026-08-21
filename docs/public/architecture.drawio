@@ -14,10 +14,10 @@
         <mxCell id="clientsGroup" value="Clients and entry surfaces" style="swimlane;html=1;rounded=0;whiteSpace=wrap;fillColor=#f8fafc;strokeColor=#94a3b8;fontStyle=1;startSize=28;" vertex="1" parent="1">
           <mxGeometry x="40" y="100" width="260" height="720" as="geometry" />
         </mxCell>
-        <mxCell id="webConsole" value="Web console SPA&lt;br&gt;React/Vite, hash routes&lt;br&gt;REST + SSE" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#2563eb;" vertex="1" parent="clientsGroup">
+        <mxCell id="webConsole" value="Web console SPA&lt;br&gt;React/Vite, hash routes&lt;br&gt;REST + realtime WS" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#2563eb;" vertex="1" parent="clientsGroup">
           <mxGeometry x="30" y="50" width="200" height="72" as="geometry" />
         </mxCell>
-        <mxCell id="mobileApp" value="Mobile app&lt;br&gt;Gateway REST/SSE client" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#2563eb;" vertex="1" parent="clientsGroup">
+        <mxCell id="mobileApp" value="Mobile app&lt;br&gt;Gateway REST/realtime client" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#2563eb;" vertex="1" parent="clientsGroup">
           <mxGeometry x="30" y="140" width="200" height="58" as="geometry" />
         </mxCell>
         <mxCell id="cliTui" value="CLI / TUI&lt;br&gt;xopc agent, tui, gateway" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e0f2fe;strokeColor=#0284c7;" vertex="1" parent="clientsGroup">
@@ -42,10 +42,10 @@
         <mxCell id="gatewayGroup" value="Gateway process" style="swimlane;html=1;rounded=0;whiteSpace=wrap;fillColor=#ffffff;strokeColor=#64748b;fontStyle=1;startSize=28;" vertex="1" parent="1">
           <mxGeometry x="340" y="100" width="720" height="720" as="geometry" />
         </mxCell>
-        <mxCell id="hono" value="Hono HTTP app&lt;br&gt;auth, CORS/CSRF, body limits, rate limits&lt;br&gt;static Web UI, REST, /api/events SSE, /api/agent SSE" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e0f2fe;strokeColor=#0284c7;" vertex="1" parent="gatewayGroup">
+        <mxCell id="hono" value="Hono + realtime&lt;br&gt;auth, CORS/CSRF, body limits, rate limits&lt;br&gt;static Web UI, REST, /api/realtime/v1/ws" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e0f2fe;strokeColor=#0284c7;" vertex="1" parent="gatewayGroup">
           <mxGeometry x="40" y="50" width="640" height="78" as="geometry" />
         </mxCell>
-        <mxCell id="gatewayService" value="GatewayService&lt;br&gt;composition root and lifecycle&lt;br&gt;config hot reload, readiness, SSE hub" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ede9fe;strokeColor=#7c3aed;fontStyle=1;" vertex="1" parent="gatewayGroup">
+        <mxCell id="gatewayService" value="GatewayService&lt;br&gt;composition root and lifecycle&lt;br&gt;config hot reload, readiness, realtime broker" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ede9fe;strokeColor=#7c3aed;fontStyle=1;" vertex="1" parent="gatewayGroup">
           <mxGeometry x="235" y="165" width="250" height="82" as="geometry" />
         </mxCell>
         <mxCell id="messageBus" value="MessageBus&lt;br&gt;inbound queue + outbound queue&lt;br&gt;in-process EventEmitter" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef9c3;strokeColor=#ca8a04;" vertex="1" parent="gatewayGroup">
@@ -115,10 +115,10 @@
           <mxGeometry x="40" y="165" width="440" height="66" as="geometry" />
         </mxCell>
 
-        <mxCell id="e1" value="HTTP REST + SSE" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#2563eb;endArrow=block;endFill=1;" edge="1" parent="1" source="webConsole" target="hono">
+        <mxCell id="e1" value="HTTP REST + realtime WS" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#2563eb;endArrow=block;endFill=1;" edge="1" parent="1" source="webConsole" target="hono">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e2" value="HTTP REST + SSE" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#2563eb;endArrow=block;endFill=1;" edge="1" parent="1" source="mobileApp" target="hono">
+        <mxCell id="e2" value="HTTP REST + realtime WS" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#2563eb;endArrow=block;endFill=1;" edge="1" parent="1" source="mobileApp" target="hono">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="e3" value="starts or calls" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0284c7;endArrow=block;endFill=1;" edge="1" parent="1" source="cliTui" target="gatewayService">
@@ -130,7 +130,7 @@
         <mxCell id="e5" value="channel events" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#16a34a;endArrow=block;endFill=1;" edge="1" parent="1" source="externalChannels" target="channelManager">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e6" value="Gateway REST/SSE bridge" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#d97706;endArrow=block;endFill=1;" edge="1" parent="1" source="mcpClients" target="hono">
+        <mxCell id="e6" value="Gateway REST/realtime bridge" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#d97706;endArrow=block;endFill=1;" edge="1" parent="1" source="mcpClients" target="hono">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="e7" value="WS bridge" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#db2777;endArrow=block;endFill=1;" edge="1" parent="1" source="browserExt" target="gatewayService">

@@ -12,7 +12,6 @@ describe('notes routes', () => {
         notesServiceInstance: { quickCapture },
       },
       strictRateLimitMiddleware: async (_c, next) => next(),
-      sseConfig: {},
     } as never);
 
     const res = await app.request('/api/notes/quick-capture', {
@@ -41,7 +40,6 @@ describe('notes routes', () => {
         },
       },
       strictRateLimitMiddleware: async (_c, next) => next(),
-      sseConfig: {},
     } as never);
 
     const res = await app.request('/api/notes/missing-note', {
@@ -92,7 +90,6 @@ describe('notes routes', () => {
         },
       },
       strictRateLimitMiddleware: async (_c, next) => next(),
-      sseConfig: {},
     } as never);
 
     const res = await app.request('/api/notes/note-1/chat', {

@@ -131,15 +131,3 @@ export async function apiFetch(path: string, init?: ApiFetchOptions): Promise<Re
 }
 
 export { notifyUnauthorizedIfNeeded };
-
-export function buildAgentSseHeaders(): Record<string, string> {
-  const { token } = useGatewayStore.getState();
-  const headers: Record<string, string> = {
-    Accept: 'text/event-stream',
-    'Content-Type': 'application/json',
-  };
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-  return headers;
-}
