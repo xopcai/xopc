@@ -217,14 +217,14 @@ describe('summarizeUserUnderstandingQuality', () => {
       confidence: 0.9,
       nowMs: nowMs - 10_000,
     });
-    const firstTraceId = appendMemoryTraceEvent({
+    appendMemoryTraceEvent({
       phase: 'inject',
       turnId: 'first-turn',
       providerId: 'local',
       selectedRecordIds: [record.id],
       nowMs: nowMs - 2_000,
     });
-    const secondTraceId = appendMemoryTraceEvent({
+    appendMemoryTraceEvent({
       phase: 'inject',
       turnId: 'second-turn',
       providerId: 'local',

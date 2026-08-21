@@ -33,7 +33,6 @@ import {
   summarizeUserUnderstandingQuality,
   upsertMemoryRecord,
 } from '../../../storage/sqlite/index.js';
-import { isUserContextRecord, projectUserContextRecord } from '../../../user-context/projection.js';
 import { summarizeMemoryUseAudit } from '../../../user-context/memory-use-audit.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
