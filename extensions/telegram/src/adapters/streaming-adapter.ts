@@ -7,7 +7,6 @@ import type {
   ChannelStreamingAdapter,
 } from '@xopcai/xopc/channels/plugin-types.js';
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
-import type { ProgressStage } from '@xopcai/xopc/agent/lifecycle/progress.js';
 import type { TelegramAccountManager } from '../account-manager.js';
 import { createTelegramDraftStream } from '../draft-stream.js';
 import { renderTelegramHtmlText } from '../format.js';
@@ -189,9 +188,6 @@ export function createTelegramStreamingAdapter(
       return {
         update,
         updateReasoning,
-        updateProgress: (text, stage, detail) =>
-          draft.updateWithProgress(text, stage as ProgressStage, detail),
-        setProgress: (stage, detail) => draft.setProgress(stage as ProgressStage, detail),
         end,
         abort,
         messageId: () => draft.messageId(),

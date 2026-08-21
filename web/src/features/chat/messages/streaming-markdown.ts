@@ -145,7 +145,12 @@ export function mergeConsecutiveTextBlocks(content: MessageContent[]): MessageCo
   const out: MessageContent[] = [];
   for (const block of content) {
     const previous = out[out.length - 1];
-    if (block.type === 'text' && previous?.type === 'text') {
+    if (
+      block.type === 'text'
+      && previous?.type === 'text'
+      && block.segmentId === previous.segmentId
+      && block.presentation === previous.presentation
+    ) {
       previous.text = `${previous.text ?? ''}${block.text ?? ''}`;
       continue;
     }

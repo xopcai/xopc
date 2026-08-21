@@ -131,6 +131,31 @@ describe('ChatStreamMapper', () => {
     expect(firstDelta).toMatchObject({ type: 'assistant_delta', payload: { messageId: 'msg_run-1_1', delta: 'h' } });
     expect(secondDelta).toMatchObject({ type: 'assistant_delta', payload: { messageId: 'msg_run-1_1', delta: 'i' } });
     expect(end.map((e) => e.type)).toEqual(['thinking_end', 'assistant_message_end']);
+    expect(end.at(-1)).toMatchObject({
+      type: 'assistant_message_end',
+      payload: { presentation: 'answer' },
+    });
+  });
+
+  it('marks text accompanying a tool call as narration', () => {
+    const m = mapper();
+    m.map({ type: 'message_start', message: { role: 'assistant', content: [] } });
+
+    const events = m.map({
+      type: 'message_end',
+      message: {
+        role: 'assistant',
+        content: [
+          { type: 'text', text: 'I will inspect the project first. More detail follows.' },
+          { type: 'toolCall', id: 'call-1', name: 'read_file', arguments: {} },
+        ],
+      },
+    });
+
+    expect(events.at(-1)).toMatchObject({
+      type: 'assistant_message_end',
+      payload: { presentation: 'narration' },
+    });
   });
 
   it('uses text_delta as the only live text source when the message snapshot is ahead', () => {

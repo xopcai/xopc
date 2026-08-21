@@ -467,6 +467,12 @@ function mergeAssistantContent(m: WireMessage): MessageContent[] {
       result,
     );
   }
+  const presentation = blocks.some((block) => block.type === 'tool_use')
+    ? 'narration'
+    : 'answer';
+  for (const block of blocks) {
+    if (block.type === 'text') block.presentation = presentation;
+  }
   return blocks;
 }
 

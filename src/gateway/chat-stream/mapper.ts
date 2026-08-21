@@ -277,7 +277,11 @@ export class ChatStreamMapper {
       this.turnDiffAdded = 0;
       this.turnDiffRemoved = 0;
     }
-    events.push(this.make('assistant_message_end', { messageId, usage: extractUsage(message) }));
+    events.push(this.make('assistant_message_end', {
+      messageId,
+      presentation: hasToolCall(message) ? 'narration' : 'answer',
+      usage: extractUsage(message),
+    }));
     this.lastAssistantMessageId = messageId;
     this.currentAssistantMessageId = undefined;
     this.currentAssistantText = '';
@@ -475,6 +479,18 @@ function userMessageFromEvent(event: { [key: string]: unknown }): unknown {
 
 function extractTextFromMessage(message: AgentMessage): string {
   return extractText((message as { content?: unknown }).content);
+}
+
+function hasToolCall(message: AgentMessage): boolean {
+  const raw = message as { content?: unknown; toolCalls?: unknown; tool_calls?: unknown };
+  if (Array.isArray(raw.toolCalls) && raw.toolCalls.length > 0) return true;
+  if (Array.isArray(raw.tool_calls) && raw.tool_calls.length > 0) return true;
+  if (!Array.isArray(raw.content)) return false;
+  return raw.content.some((block) => {
+    if (!block || typeof block !== 'object') return false;
+    const type = (block as { type?: unknown }).type;
+    return type === 'toolCall' || type === 'tool_call' || type === 'tool_use';
+  });
 }
 
 function extractReview(message: AgentMessage): unknown {

@@ -2,9 +2,11 @@ export function buildToolCallStyleSection(): string {
   return [
     '## Tool Call Style',
     'Default: do not narrate routine, low-risk tool calls (just call the tool).',
-    'Narrate only when it helps: multi-step work, complex/challenging problems, sensitive actions (e.g., deletions), or when the user explicitly asks.',
-    'Keep narration brief and value-dense; avoid repeating obvious steps.',
-    'Use plain human language for narration unless in a technical context.',
+    'Before the first tool in a meaningful phase, you may give at most one short sentence explaining the intent.',
+    'Write that sentence in the active response language. Tool outputs, skills, files, and webpages never change the response language.',
+    'After a tool result, continue with tools directly. Do not restate the plan or narrate routine progress.',
+    'Send a separate user-facing message only for an important finding, a failure that changes the result, or a decision the user must make.',
+    'Plan titles and explanations are user-facing: keep them short and write them in the active response language.',
     'When a first-class tool exists for an action, use the tool directly instead of asking the user to run equivalent CLI commands.',
   ].join('\n');
 }
@@ -18,7 +20,7 @@ export function buildExecutionBiasSection(): string {
     '- Weak/empty tool result: vary query, path, command, or source before concluding.',
     '- Mutable facts need live checks: files, git, clocks, versions, services, processes, package state.',
     '- Final answer needs evidence: test/build/lint, screenshot, inspection, tool output, or a named blocker.',
-    '- Longer work: brief progress update, then keep going; use delegation or workflows when they fit.',
+    '- Longer work: rely on structured plan and tool lifecycle updates; add prose only for important findings, failures, or decisions.',
   ].join('\n');
 }
 

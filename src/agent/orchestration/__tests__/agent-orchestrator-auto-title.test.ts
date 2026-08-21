@@ -5,8 +5,6 @@ import { AgentOrchestrator } from '../agent-orchestrator.js';
 import type { InboundMessage } from '../../../infra/bus/index.js';
 import type { SessionStore } from '../../../session/index.js';
 import type { ModelManager } from '../../models/index.js';
-import type { AgentEventHandler } from '../agent-event-handler.js';
-import type { FeedbackCoordinator } from '../../feedback/feedback-coordinator.js';
 import type { AgentManager } from '../../agent-manager.js';
 import type { SessionConfigStore } from '../../../session/index.js';
 import type { SessionContext } from '../../session/session-context.js';
@@ -21,8 +19,6 @@ describe('AgentOrchestrator enqueueAutoTitle', () => {
   let mockAgentManager: Partial<AgentManager>;
   let mockSessionStore: Partial<SessionStore>;
   let mockModelManager: Partial<ModelManager>;
-  let mockEventHandler: Partial<AgentEventHandler>;
-  let mockFeedbackCoordinator: Partial<FeedbackCoordinator>;
   let mockSessionConfigStore: Partial<SessionConfigStore>;
   let mockSessionHydrator: Partial<SessionHydrator>;
   let enqueueAutoTitle: ReturnType<typeof vi.fn>;
@@ -70,15 +66,6 @@ describe('AgentOrchestrator enqueueAutoTitle', () => {
       ]),
     };
 
-    mockEventHandler = { handle: vi.fn() };
-
-    mockFeedbackCoordinator = {
-      startTask: vi.fn(),
-      endTask: vi.fn(),
-      setContext: vi.fn(),
-      clearContext: vi.fn(),
-    };
-
     mockSessionConfigStore = {
       get: vi.fn().mockResolvedValue(undefined),
     };
@@ -95,8 +82,6 @@ describe('AgentOrchestrator enqueueAutoTitle', () => {
       agentManager: mockAgentManager as AgentManager,
       sessionStore: mockSessionStore as SessionStore,
       modelManager: mockModelManager as ModelManager,
-      eventHandler: mockEventHandler as AgentEventHandler,
-      feedbackCoordinator: mockFeedbackCoordinator as FeedbackCoordinator,
       sessionConfigStore: mockSessionConfigStore as SessionConfigStore,
       sessionHydrator: mockSessionHydrator as SessionHydrator,
       getThinkingDefault: () => undefined,
@@ -130,8 +115,6 @@ describe('AgentOrchestrator enqueueAutoTitle', () => {
       agentManager: mockAgentManager as AgentManager,
       sessionStore: mockSessionStore as SessionStore,
       modelManager: mockModelManager as ModelManager,
-      eventHandler: mockEventHandler as AgentEventHandler,
-      feedbackCoordinator: mockFeedbackCoordinator as FeedbackCoordinator,
       sessionConfigStore: mockSessionConfigStore as SessionConfigStore,
       sessionHydrator: mockSessionHydrator as SessionHydrator,
       getThinkingDefault: () => undefined,

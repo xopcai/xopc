@@ -1,17 +1,12 @@
 /**
- * Stream Manager - Manages stream handles for progress updates
+ * Stream Manager - Manages channel response streams.
  *
- * Handles creation and lifecycle of stream handles for sending progress updates
- * and streaming responses.
+ * Handles creation and lifecycle of stream handles for streaming responses.
  */
-
-import type { ProgressStage } from '../lifecycle/progress.js';
 
 export interface StreamHandle {
   update: (text: string) => void;
   updateReasoning?: (text: string) => void;
-  updateProgress?: (text: string, stage: ProgressStage, detail?: string) => void;
-  setProgress?: (stage: ProgressStage, detail?: string) => void;
   end: () => Promise<void>;
   abort: () => Promise<void>;
   messageId: () => number | undefined;
@@ -103,21 +98,4 @@ export class StreamManager {
     return this.currentHandle?.messageId();
   }
 
-  /**
-   * Update progress via the stream handle
-   */
-  updateProgress(text: string, stage: ProgressStage, detail?: string): void {
-    if (this.currentHandle?.updateProgress) {
-      this.currentHandle.updateProgress(text, stage, detail);
-    }
-  }
-
-  /**
-   * Set progress stage via the stream handle
-   */
-  setProgress(stage: ProgressStage, detail?: string): void {
-    if (this.currentHandle?.setProgress) {
-      this.currentHandle.setProgress(stage, detail);
-    }
-  }
 }

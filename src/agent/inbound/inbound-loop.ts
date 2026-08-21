@@ -35,7 +35,6 @@ import type {
   SessionLifecycleManager,
   SessionStateBag,
 } from '../session/index.js';
-import type { FeedbackCoordinator } from '../feedback/index.js';
 import type { HookHandler } from '../lifecycle/hook-handler.js';
 import type { SessionStore } from '../../session/store.js';
 import { initSessionTurn } from '../../session/init-session-turn.js';
@@ -57,7 +56,6 @@ export interface InboundLoopConfig {
   messageRouter: MessageRouter;
   commandHandler: CommandHandler;
   sessionContextManager: SessionContextManager;
-  feedbackCoordinator: FeedbackCoordinator;
   agentManager: AgentManager;
   sessionLifecycleManager: SessionLifecycleManager;
   agentOrchestrator: AgentOrchestrator;
@@ -200,8 +198,6 @@ export class InboundLoop {
       });
 
       await this.cfg.sessionContextManager.runWith(sessionContext, async () => {
-        this.cfg.feedbackCoordinator.setContext(sessionContext);
-
         // `subscribeToSession` requires an Agent instance; without this the first inbound never
         // registers `message_update` streaming (second turn behaved differently).
         this.cfg.agentManager.getOrCreateAgent(sessionContext.sessionKey);
@@ -333,8 +329,6 @@ export class InboundLoop {
             }
             this.cfg.sessionState.endInboundTurn(sessionContext.sessionKey);
           }
-          this.cfg.feedbackCoordinator.endTask();
-          this.cfg.feedbackCoordinator.clearContext();
         }
       });
     });

@@ -2,7 +2,7 @@
  * Agent Event Handler — coordinates listeners on pi-agent events.
  *
  * Previously a single god-handler with ten manager fields and one `switch`. Now a
- * thin façade around {@link SessionEventBus}: each concern (progress, lifecycle
+ * thin façade around {@link SessionEventBus}: each concern (lifecycle
  * hooks, tool-chain recording, error tracking, self-verify, etc.) registers its
  * own listener at construction time, and external code can add new listeners via
  * {@link AgentEventHandler.registerListener} without modifying this file (OCP).
@@ -15,7 +15,6 @@
 
 import type { AgentEvent } from '@earendil-works/pi-agent-core';
 import type { SessionContext } from '../session/session-context.js';
-import type { ProgressFeedbackManager } from '../lifecycle/progress.js';
 import type { ToolErrorTracker } from '../tools/error-tracker.js';
 import type { RequestLimiter } from '../models/request-limiter.js';
 import type { LifecycleManager } from '../lifecycle/index.js';
@@ -82,39 +81,10 @@ export class SessionEventBus {
 
 // ── Built-in listener installers ───────────────────────────────────────────
 
-function installProgressListener(bus: SessionEventBus, progressManager: ProgressFeedbackManager): void {
-  bus.on('agent_start', () => {
-    log.debug('Agent turn started');
-    progressManager.startTask();
-  });
-  bus.on('turn_start', () => {
-    log.debug('Turn started');
-    progressManager.onTurnStart();
-  });
-  bus.on('tool_execution_start', (event) => {
-    const e = event as Extract<AgentEvent, { type: 'tool_execution_start' }>;
-    log.debug({ tool: e.toolName, args: e.args }, 'Tool execution started');
-    progressManager.onToolStart(e.toolName, e.args || {});
-  });
-  bus.on('tool_execution_update', (event) => {
-    const e = event as Extract<AgentEvent, { type: 'tool_execution_update' }>;
-    progressManager.onToolUpdate(e.toolName, e.partialResult);
-  });
-  bus.on('tool_execution_end', (event) => {
-    const e = event as Extract<AgentEvent, { type: 'tool_execution_end' }>;
-    log.debug({ tool: e.toolName, isError: e.isError }, 'Tool execution complete');
-    progressManager.onToolEnd(e.toolName, e.result, e.isError);
-  });
-  bus.on('agent_end', () => {
-    progressManager.endTask();
-  });
-}
-
 function installRequestLimitListener(
   bus: SessionEventBus,
   deps: {
     requestLimiter: RequestLimiter;
-    progressManager: ProgressFeedbackManager;
     lifecycleManager: LifecycleManager;
   },
 ): void {
@@ -141,14 +111,6 @@ function installRequestLimitListener(
           `Lifecycle emit llm_request failed: ${em}`,
         );
       });
-
-    deps.progressManager.onRequestLimitStatus(
-      result.count,
-      result.limit,
-      result.remaining,
-      result.isWarning,
-      result.shouldStop,
-    );
 
     if (result.shouldStop) {
       log.error(
@@ -240,8 +202,8 @@ function installLifecycleHookListener(bus: SessionEventBus, lifecycleManager: Li
 
 function installSystemReminderListener(bus: SessionEventBus, systemReminder: SystemReminder): void {
   // MUTATES `event.result` so downstream listeners (tool-chain, error-tracking) see
-  // the decorated text. Must run AFTER progress + lifecycle hooks (they consume the
-  // original) and BEFORE tool-chain + error-tracking.
+  // the decorated text. Must run AFTER lifecycle hooks (they consume the original)
+  // and BEFORE tool-chain + error-tracking.
   bus.on('tool_execution_end', (event) => {
     const e = event as Extract<AgentEvent, { type: 'tool_execution_end' }> & { result: unknown };
     e.result = systemReminder.appendToResult(e.result, e.toolName);
@@ -446,7 +408,6 @@ function installTurnDiffTrackerListener(bus: SessionEventBus, turnDiffTracker: T
 // ── Public façade ───────────────────────────────────────────────────────────
 
 export interface AgentEventHandlerConfig {
-  progressManager: ProgressFeedbackManager;
   errorTracker: ToolErrorTracker;
   requestLimiter: RequestLimiter;
   lifecycleManager: LifecycleManager;
@@ -473,10 +434,8 @@ export class AgentEventHandler {
     // Order matters for `tool_execution_end`: SystemReminder mutates `event.result`
     // and ToolChain + ErrorTracking depend on the mutated value. Keep these in this
     // exact sequence.
-    installProgressListener(this.bus, config.progressManager);
     installRequestLimitListener(this.bus, {
       requestLimiter: config.requestLimiter,
-      progressManager: config.progressManager,
       lifecycleManager: config.lifecycleManager,
     });
     installLifecycleHookListener(this.bus, config.lifecycleManager);

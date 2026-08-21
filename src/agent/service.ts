@@ -23,7 +23,6 @@ import { extractTextContent } from './context/workspace.js';
 import { SessionTracker } from './session/tracker.js';
 import { ModelManager } from './models/index.js';
 import { initializeCommands } from '../chat-commands/index.js';
-import { ProgressFeedbackManager } from './lifecycle/progress.js';
 import { HookHandler } from './lifecycle/hook-handler.js';
 import { ToolErrorTracker } from './tools/error-tracker.js';
 import { RequestLimiter } from './models/request-limiter.js';
@@ -62,7 +61,6 @@ import {
   getWorkflowProgressBroker,
   type BrokerListenerHandle,
 } from './workflow/index.js';
-import { FeedbackCoordinator } from './feedback/index.js';
 import {
   AgentManager,
   type AgentSkillAvailabilityPayload,
@@ -138,7 +136,6 @@ export class AgentService {
   private config: AgentServiceConfig;
   private sessionTracker: SessionTracker;
   private modelManager: ModelManager;
-  private progressManager: ProgressFeedbackManager;
   private hookHandler: HookHandler;
   private lifecycleManager: LifecycleManager;
   private errorTracker: ToolErrorTracker;
@@ -192,7 +189,6 @@ export class AgentService {
   private agentOrchestrator: AgentOrchestrator;
   private agentEventHandler: AgentEventHandler;
   private workflowProgressBrokerHandle: BrokerListenerHandle | null = null;
-  private feedbackCoordinator: FeedbackCoordinator;
   private agentManager: AgentManager;
 
   /**
@@ -269,18 +265,12 @@ export class AgentService {
         }),
     });
 
-    this.progressManager = this.createProgressManager();
     this.initializeReliabilityModules();
 
     this.lifecycleManager = new LifecycleManager();
 
     this.streamManager = new StreamManager();
     this.sessionContextManager = new SessionContextManager();
-    this.feedbackCoordinator = new FeedbackCoordinator({
-      progressManager: this.progressManager,
-      bus,
-    });
-
     this.agentManager = new AgentManager({
       workspace: config.workspace,
       model: config.model,
@@ -313,7 +303,6 @@ export class AgentService {
     });
 
     this.agentEventHandler = new AgentEventHandler({
-      progressManager: this.progressManager,
       errorTracker: this.errorTracker,
       requestLimiter: this.requestLimiter,
       lifecycleManager: this.lifecycleManager,
@@ -376,8 +365,6 @@ export class AgentService {
       agentManager: this.agentManager,
       sessionStore: this.sessionStore,
       modelManager: this.modelManager,
-      eventHandler: this.agentEventHandler,
-      feedbackCoordinator: this.feedbackCoordinator,
       sessionConfigStore: this.sessionConfigStore,
       sessionHydrator: this.sessionHydrator,
       getConfig: () => this.effectiveAppConfig(),
@@ -509,7 +496,6 @@ export class AgentService {
       messageRouter: this.messageRouter,
       commandHandler: this.commandHandler,
       sessionContextManager: this.sessionContextManager,
-      feedbackCoordinator: this.feedbackCoordinator,
       agentManager: this.agentManager,
       sessionLifecycleManager: this.sessionLifecycleManager,
       agentOrchestrator: this.agentOrchestrator,
@@ -567,17 +553,6 @@ export class AgentService {
         warn: (msg: string) => log.warn({ hook: true }, msg),
         error: (msg: string) => log.error({ hook: true }, msg),
       },
-    });
-  }
-
-  private createProgressManager(): ProgressFeedbackManager {
-    return new ProgressFeedbackManager({
-      level: 'normal',
-      showThinking: true,
-      streamToolProgress: true,
-      heartbeatEnabled: true,
-      heartbeatIntervalMs: 20000,
-      longTaskThresholdMs: 30000,
     });
   }
 
@@ -772,12 +747,10 @@ export class AgentService {
 
   setStreamHandle(handle: StreamHandle): void {
     this.streamManager.setHandle(handle);
-    this.feedbackCoordinator.setStreamHandle(handle);
   }
 
   clearStreamHandle(): void {
     this.streamManager.clearHandle();
-    this.feedbackCoordinator.endTask();
   }
 
   /** Last assistant visible plain text for a session (e.g. after a webchat stream). */
@@ -916,7 +889,6 @@ export class AgentService {
     // overwritten or cleared by the next direct turn (each direct turn calls
     // `initSessionContext` first), so there is no cross-session leak in practice.
     this.sessionContextManager.enter(context);
-    this.feedbackCoordinator.setContext(context);
     this.agentManager.getOrCreateAgent(sessionKey);
     this.setupSessionEventHandling(sessionKey);
 
@@ -960,10 +932,8 @@ export class AgentService {
 
   private endDirectRequestContext(): void {
     // `sessionContextManager` is ALS-backed: the context for the current async
-    // chain drops automatically when the chain unwinds. The feedback
-    // coordinator + context middleware still use singleton state, so clear
-    // them explicitly here.
-    this.feedbackCoordinator.clearContext();
+    // chain drops automatically when the chain unwinds. Context middleware
+    // still uses singleton state, so clear it explicitly here.
     this.contextMiddleware.onResponse();
   }
 

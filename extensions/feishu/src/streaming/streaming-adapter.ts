@@ -319,10 +319,7 @@ export function createFeishuStreamingAdapter(getConfig: () => Config): ChannelSt
         },
         messageId: () => undefined,
         skipFinalOutbound: () => Boolean(messageId) && editedAtLeastOnce,
-        updateProgress: undefined,
-        setProgress: undefined,
       };
     },
   };
 }
-

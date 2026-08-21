@@ -51,6 +51,10 @@ import {
 } from '@/components/markdown/streaming-render-metrics';
 import { useProgressiveStreamingMarkdown } from '@/features/chat/messages/use-progressive-streaming-markdown';
 import type { AssistantTurnActivityPresentation } from '@/features/chat/messages/assistant-turn-view-model';
+import {
+  assistantTextForDisplay,
+  isAssistantNarration,
+} from '@/features/chat/messages/assistant-text-presentation';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
@@ -433,8 +437,10 @@ function renderTextOrImageBlock(
       );
     }
 
+    const visibleText = assistantTextForDisplay(block);
+
     // Intercept upstream "No API key found" messages rendered as assistant text
-    const providerPayload = parseProviderSetupRequired(block.text ?? '');
+    const providerPayload = parseProviderSetupRequired(visibleText ?? '');
     if (providerPayload) {
       return (
         <div key={key} className="min-w-0">
@@ -446,7 +452,7 @@ function renderTextOrImageBlock(
     return (
       <div key={key} className="markdown-content min-w-0">
         <ChatMarkdownView
-          content={block.text}
+          content={visibleText}
           compact
           sessionKey={sessionKey}
           projectId={projectId}
@@ -565,6 +571,7 @@ export function ChunkedContent({
   const nodes: ReactNode[] = [];
   const activityBlocks = isUser ? [] : (assistantActivity?.blocks ?? []);
   let activityRendered = false;
+  let narrationRendered = false;
   let i = 0;
   let imageOrdinal = 0;
   while (i < renderContent.length) {
@@ -593,6 +600,17 @@ export function ChunkedContent({
       }
       i++;
     } else {
+      if (
+        !isUser
+        && b.type === 'text'
+        && isAssistantNarration(b)
+      ) {
+        if (narrationRendered) {
+          i++;
+          continue;
+        }
+        narrationRendered = true;
+      }
       const imgIdx = b.type === 'image' ? imageOrdinal++ : 0;
       const el = renderTextOrImageBlock(
         b,
