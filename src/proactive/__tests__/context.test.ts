@@ -13,7 +13,6 @@ import {
   upsertKnowledgeSourceItems,
   upsertMemoryRecord,
 } from '../../storage/sqlite/index.js';
-import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { ContextProviderRegistry } from '../execution/context.js';
 import { ProactiveEventService } from '../service.js';
 import { defineTaskContract, TaskApplicationService } from '../../tasks/index.js';

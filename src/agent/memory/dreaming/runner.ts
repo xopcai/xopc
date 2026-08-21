@@ -5,7 +5,6 @@ import {
   type DreamingPhase,
   type DreamingRun,
 } from '../../../storage/sqlite/index.js';
-import { resolveDreamingConfig } from './config.js';
 import { DREAMING_ALGORITHM_VERSION } from './constants.js';
 import { runDreamingDeepPromotion } from './deep-promotion.js';
 import { runLightSweep } from './light-sweep.js';
