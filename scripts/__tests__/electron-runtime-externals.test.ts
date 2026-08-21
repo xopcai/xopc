@@ -13,6 +13,7 @@ import {
 describe('electron-runtime-externals', () => {
   it('keeps only unavoidable node_modules deps in packaged runtime', () => {
     expect(ELECTRON_PACKAGED_DEPENDENCIES).toEqual([
+      'ws',
       'silk-wasm',
       '@huggingface/transformers',
       'onnxruntime-common',
@@ -31,6 +32,7 @@ describe('electron-runtime-externals', () => {
       version: '0.0.0',
       dependencies: {
         hono: '^4.0.0',
+        ws: '^8.21.0',
         'silk-wasm': '^3.7.1',
         '@huggingface/transformers': '3.8.1',
         'onnxruntime-common': '1.21.0',
@@ -41,6 +43,7 @@ describe('electron-runtime-externals', () => {
       },
     });
     expect(Object.keys(minimal.dependencies)).toEqual([
+      'ws',
       'silk-wasm',
       '@huggingface/transformers',
       'onnxruntime-common',
@@ -55,6 +58,7 @@ describe('electron-runtime-externals', () => {
       name: '@xopcai/xopc',
       version: '0.0.0',
       dependencies: {
+        ws: '^8.21.0',
         'silk-wasm': '^3.7.1',
       },
       devDependencies: {
@@ -64,6 +68,7 @@ describe('electron-runtime-externals', () => {
       },
     });
     expect(minimal.dependencies).toEqual({
+      ws: '^8.21.0',
       'silk-wasm': '^3.7.1',
       '@huggingface/transformers': '3.8.1',
       'onnxruntime-common': '1.21.0',
@@ -78,6 +83,7 @@ describe('electron-runtime-externals', () => {
         name: '@xopcai/xopc',
         version: '0.0.0',
         dependencies: {
+          ws: '^8.21.0',
           'silk-wasm': '^3.7.1',
           '@huggingface/transformers': '3.8.1',
           'onnxruntime-common': '1.21.0',
@@ -87,6 +93,7 @@ describe('electron-runtime-externals', () => {
       repoRoot,
     );
     expect(minimal.dependencies).toEqual({
+      ws: resolveInstalledPackageVersion(repoRoot, 'ws'),
       'silk-wasm': resolveInstalledPackageVersion(repoRoot, 'silk-wasm'),
       '@huggingface/transformers': resolveInstalledPackageVersion(repoRoot, '@huggingface/transformers'),
       'onnxruntime-common': resolveInstalledPackageVersion(repoRoot, 'onnxruntime-common'),
@@ -126,6 +133,7 @@ describe('electron-runtime-externals', () => {
       name: 'x',
       version: '0.0.0',
       dependencies: {
+        ws: '^8.21.0',
         'silk-wasm': '^3.7.1',
         '@huggingface/transformers': '3.8.1',
         'onnxruntime-common': '1.21.0',

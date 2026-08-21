@@ -1,6 +1,7 @@
 import { ExtensionErrorCode, type ThemeInfo } from '@xopcai/extension-ui-sdk';
 
 import { apiFetch } from '@/lib/fetch';
+import { waitForEndpointTurnClaim } from '@/features/endpoint-tools/turn-claim';
 import { apiUrl } from '@/lib/url';
 import type { ToastDetail } from '@/lib/toast';
 import { showActivity } from '@/stores/activity-store';
@@ -433,6 +434,7 @@ export function registerBuiltinMethods(router: ExtensionMessageRouter): void {
       targetSessionKey = created.session?.key ?? '';
       if (!targetSessionKey) throw new Error('Session create did not return a session key');
     }
+    const origin = await waitForEndpointTurnClaim();
     const response = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(targetSessionKey)}/inputs`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -440,6 +442,7 @@ export function registerBuiltinMethods(router: ExtensionMessageRouter): void {
         clientMessageId: crypto.randomUUID(),
         delivery: 'next',
         content: message,
+        origin,
       }),
     });
     if (!response.ok) throw new Error(`Agent request failed: ${response.status}`);

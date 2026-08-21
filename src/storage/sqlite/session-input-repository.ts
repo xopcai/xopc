@@ -1,4 +1,5 @@
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
+import { turnOriginSchema, type TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 
 export type SessionInputDelivery = 'next' | 'steer';
 export type SessionInputStatus =
@@ -15,6 +16,7 @@ export type SessionInput = {
   content: string;
   attachments?: unknown[];
   thinking?: string;
+  origin: TurnOrigin;
   position: number;
   targetRunId?: string;
   runId?: string;
@@ -36,7 +38,7 @@ type InputRow = {
   id: string; session_key: string; client_message_id: string;
   requested_delivery: SessionInputDelivery; effective_delivery: SessionInputDelivery;
   status: SessionInputStatus; content: string; attachments_json: string | null;
-  thinking: string | null; position: number; target_run_id: string | null;
+  thinking: string | null; origin_json: string; position: number; target_run_id: string | null;
   run_id: string | null; version: number; error: string | null;
   created_at_ms: number; updated_at_ms: number;
 };
@@ -48,6 +50,7 @@ function mapInput(row: InputRow): SessionInput {
     status: row.status, content: row.content,
     attachments: row.attachments_json ? JSON.parse(row.attachments_json) as unknown[] : undefined,
     thinking: row.thinking ?? undefined, position: row.position,
+    origin: turnOriginSchema.parse(JSON.parse(row.origin_json)),
     targetRunId: row.target_run_id ?? undefined, runId: row.run_id ?? undefined,
     version: row.version, error: row.error ?? undefined,
     createdAtMs: row.created_at_ms, updatedAtMs: row.updated_at_ms,
@@ -55,7 +58,7 @@ function mapInput(row: InputRow): SessionInput {
 }
 
 const SELECT_INPUTS = `SELECT id, session_key, client_message_id, requested_delivery,
-  effective_delivery, status, content, attachments_json, thinking, position,
+  effective_delivery, status, content, attachments_json, thinking, origin_json, position,
   target_run_id, run_id, version, error, created_at_ms, updated_at_ms
   FROM session_inputs`;
 
@@ -99,7 +102,7 @@ export function insertSessionInput(input: {
   id: string; sessionKey: string; clientMessageId: string;
   requestedDelivery: SessionInputDelivery; effectiveDelivery: SessionInputDelivery;
   status: 'queued' | 'injecting'; content: string; attachments?: unknown[];
-  thinking?: string; targetRunId?: string;
+  thinking?: string; origin: TurnOrigin; targetRunId?: string;
 }): SessionInput {
   return runSqliteWriteTransaction((db) => {
     const existing = db.prepare(`${SELECT_INPUTS} WHERE session_key = ? AND client_message_id = ?`)
@@ -111,12 +114,13 @@ export function insertSessionInput(input: {
       .get(input.sessionKey) as { value: number };
     db.prepare(`INSERT INTO session_inputs(id, session_key, client_message_id,
       requested_delivery, effective_delivery, status, content, attachments_json,
-      thinking, position, target_run_id, version, created_at_ms, updated_at_ms)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`)
+      thinking, origin_json, position, target_run_id, version, created_at_ms, updated_at_ms)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`)
       .run(input.id, input.sessionKey, input.clientMessageId, input.requestedDelivery,
         input.effectiveDelivery, input.status, input.content,
         input.attachments ? JSON.stringify(input.attachments) : null,
-        input.thinking ?? null, max.value + 1, input.targetRunId ?? null, now, now);
+        input.thinking ?? null, JSON.stringify(input.origin), max.value + 1,
+        input.targetRunId ?? null, now, now);
     bumpRevision(db, input.sessionKey);
     return mapInput(db.prepare(`${SELECT_INPUTS} WHERE id = ?`).get(input.id) as InputRow);
   });

@@ -14,6 +14,7 @@ import {
 describe('SessionInputCoordinator', () => {
   let dir: string;
   const sessionKey = 'agent:main:webchat:default:direct:test';
+  const origin = { type: 'channel' as const, channel: 'webchat' };
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'xopc-input-coordinator-'));
@@ -42,10 +43,10 @@ describe('SessionInputCoordinator', () => {
     });
 
     const first = await coordinator.submit({
-      sessionKey, clientMessageId: 'client-1', delivery: 'next', content: 'one',
+      sessionKey, clientMessageId: 'client-1', delivery: 'next', content: 'one', origin,
     });
     const second = await coordinator.submit({
-      sessionKey, clientMessageId: 'client-2', delivery: 'next', content: 'two',
+      sessionKey, clientMessageId: 'client-2', delivery: 'next', content: 'two', origin,
     });
 
     expect(first.ok).toBe(true);
@@ -76,12 +77,12 @@ describe('SessionInputCoordinator', () => {
       emit: () => {},
     });
 
-    await coordinator.submit({ sessionKey, clientMessageId: 'active', delivery: 'next', content: 'active' });
+    await coordinator.submit({ sessionKey, clientMessageId: 'active', delivery: 'next', content: 'active', origin });
     const fallback = await coordinator.submit({
-      sessionKey, clientMessageId: 'steer-retry', delivery: 'steer', content: 'guide',
+      sessionKey, clientMessageId: 'steer-retry', delivery: 'steer', content: 'guide', origin,
     });
     const duplicate = await coordinator.submit({
-      sessionKey, clientMessageId: 'steer-retry', delivery: 'steer', content: 'duplicate',
+      sessionKey, clientMessageId: 'steer-retry', delivery: 'steer', content: 'duplicate', origin,
     });
 
     expect(fallback.ok && fallback.effectiveDelivery).toBe('next');
@@ -104,9 +105,9 @@ describe('SessionInputCoordinator', () => {
       emit: () => {},
     });
 
-    await coordinator.submit({ sessionKey, clientMessageId: 'active', delivery: 'next', content: 'active' });
+    await coordinator.submit({ sessionKey, clientMessageId: 'active', delivery: 'next', content: 'active', origin });
     const steered = await coordinator.submit({
-      sessionKey, clientMessageId: 'steer-1', delivery: 'steer', content: 'adjust',
+      sessionKey, clientMessageId: 'steer-1', delivery: 'steer', content: 'adjust', origin,
     });
 
     expect(steered.ok && steered.effectiveDelivery).toBe('steer');

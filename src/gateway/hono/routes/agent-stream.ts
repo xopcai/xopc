@@ -1,3 +1,4 @@
+import { endpointTurnClaimSchema } from '@xopcai/endpoint-tools-protocol';
 import type { Hono } from 'hono';
 
 import {
@@ -48,6 +49,11 @@ export function registerAgentStreamRoutes(authenticated: Hono, deps: Authenticat
     if (attachmentError) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: attachmentError } }, 400);
     const delivery = body.delivery === 'next' || body.delivery === 'steer' ? body.delivery : null;
     if (!delivery) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Missing delivery' } }, 400);
+    const origin = endpointTurnClaimSchema.safeParse(body.origin);
+    if (!origin.success) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid endpoint origin' } }, 400);
+    if (!service.endpointTools.registry.verifyTurnClaim(origin.data.endpointId, origin.data.token)) {
+      return c.json({ ok: false, error: { code: 'INVALID_ENDPOINT', message: 'Endpoint connection is not active' } }, 401);
+    }
     const result = await service.submitSessionInput({
       sessionKey,
       clientMessageId: typeof body.clientMessageId === 'string' ? body.clientMessageId : '',
@@ -55,6 +61,7 @@ export function registerAgentStreamRoutes(authenticated: Hono, deps: Authenticat
       content,
       attachments: attachments as UserTurnAttachment[] | undefined,
       thinking: typeof body.thinking === 'string' ? body.thinking : undefined,
+      origin: { type: 'endpoint', endpointId: origin.data.endpointId },
     });
     if (result.ok === false) return c.json({ ok: false, error: { code: result.code, message: 'Input was not accepted' } }, result.code === 'QUEUE_FULL' ? 409 : 400);
     return c.json({ ok: true, payload: result }, 202);

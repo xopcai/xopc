@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   hasPendingAgentRunForChat,
@@ -9,6 +9,10 @@ import {
 import type { MessagingCallbacks } from '@/features/chat/messages/message-sender';
 import { fetchSessionActiveRun, resolveResumeRunId } from '@/features/chat/session/resolve-resume-run-id';
 import { selectDisplayMessages } from '@/features/chat/session/chat-session-view';
+import {
+  clearEndpointTurnClaim,
+  publishEndpointTurnClaim,
+} from '@/features/endpoint-tools/turn-claim';
 
 vi.mock('@/lib/fetch', () => ({
   apiFetch: vi.fn(),
@@ -160,6 +164,11 @@ describe('MessageSender terminal state', () => {
       },
       clear: () => storage.clear(),
     });
+    publishEndpointTurnClaim('web-test', 'test-turn-token');
+  });
+
+  afterEach(() => {
+    clearEndpointTurnClaim();
   });
 
   it.each(['send', 'resume'] as const)(

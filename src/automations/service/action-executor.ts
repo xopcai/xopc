@@ -262,6 +262,7 @@ export class AutomationActionExecutor {
     const response = await agentService.turnDispatcher.processDirect(
       buildSafetyInstruction(automation, action.instruction),
       sessionKey,
+      { type: 'system', source: 'automation' },
       undefined,
       undefined,
       { signal, runId: run.id, deadlineAtMs },
