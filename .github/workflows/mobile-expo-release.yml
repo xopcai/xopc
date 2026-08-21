@@ -60,8 +60,8 @@ jobs:
       - name: Test mobile Expo app
         run: pnpm run mobile:test
 
-      - name: Test gateway SSE client
-        run: pnpm run mobile:test:sse
+      - name: Test agent stream client
+        run: pnpm run mobile:test:stream
 
   build:
     name: EAS build
