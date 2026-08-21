@@ -14,12 +14,14 @@ export function AssistantTurnTasks({
   view,
   authToken,
   sessionKey,
+  projectId,
   deliverablesLabel,
   sourcesLabel,
 }: {
   view: AssistantTurnViewModel;
   authToken?: string;
   sessionKey?: string | null;
+  projectId?: string | null;
   deliverablesLabel: string;
   sourcesLabel: string;
 }) {
@@ -57,7 +59,7 @@ export function AssistantTurnTasks({
               </div>
             ) : null}
             {workspacePaths.length > 0 ? (
-              <ToolResultFileLinks paths={workspacePaths} sessionKey={sessionKey} />
+              <ToolResultFileLinks paths={workspacePaths} sessionKey={sessionKey} projectId={projectId} />
             ) : null}
             {mediaAttachments.length > 0 ? (
               <AttachmentRenderer

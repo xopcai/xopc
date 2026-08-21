@@ -271,6 +271,7 @@ function ChatMarkdownView({
   content,
   compact,
   sessionKey,
+  projectId,
   streaming = false,
   animateInitialContent = false,
   onProgressiveRenderComplete,
@@ -278,6 +279,7 @@ function ChatMarkdownView({
   content: string;
   compact?: boolean;
   sessionKey?: string | null;
+  projectId?: string | null;
   streaming?: boolean;
   animateInitialContent?: boolean;
   onProgressiveRenderComplete?: () => void;
@@ -326,13 +328,16 @@ function ChatMarkdownView({
   const openFile = useCallback(
     (target: WorkspaceFileLinkTarget) => {
       if (target.kind === 'workspace-relative') {
-        setPreview(target.path, target.line);
+        setPreview(target.path, target.line, projectId);
         setResolution(null);
         return;
       }
 
       setResolution({ status: 'loading', target });
-      void resolveWorkspaceFileReference(target.path, { sessionKey: sessionKey?.trim() || undefined })
+      void resolveWorkspaceFileReference(target.path, {
+        projectId: projectId?.trim() || undefined,
+        sessionKey: sessionKey?.trim() || undefined,
+      })
         .then((ref) => {
           if (!ref) {
             setResolution({
@@ -343,7 +348,7 @@ function ChatMarkdownView({
             return;
           }
           if (ref.scope === 'workspace' && ref.workspaceRelativePath) {
-            setPreview(ref.workspaceRelativePath, target.line);
+            setPreview(ref.workspaceRelativePath, target.line, projectId);
             setResolution(null);
             return;
           }
@@ -357,7 +362,7 @@ function ChatMarkdownView({
           });
         });
     },
-    [fileReferenceMessages.resolveFailedDescription, sessionKey, setPreview],
+    [fileReferenceMessages.resolveFailedDescription, projectId, sessionKey, setPreview],
   );
 
   return (
@@ -412,6 +417,7 @@ function renderTextOrImageBlock(
   onImagePreview?: (block: ImageContent, index: number) => void,
   contentIndex?: number,
   sessionKey?: string | null,
+  projectId?: string | null,
   animateInitialContent?: boolean,
   onProgressiveRenderComplete?: () => void,
 ) {
@@ -443,6 +449,7 @@ function renderTextOrImageBlock(
           content={block.text}
           compact
           sessionKey={sessionKey}
+          projectId={projectId}
           streaming={isAssistantMessageStreaming}
           animateInitialContent={animateInitialContent}
           onProgressiveRenderComplete={onProgressiveRenderComplete}
@@ -501,6 +508,7 @@ export function ChunkedContent({
   imagePreviewLabel,
   onImagePreview,
   sessionKey,
+  projectId,
   workflowOptions,
   assistantActivity,
   progressiveRender = false,
@@ -547,6 +555,7 @@ export function ChunkedContent({
   imagePreviewLabel: string;
   onImagePreview: ((block: ImageContent, index: number) => void) | undefined;
   sessionKey: string | null | undefined;
+  projectId?: string | null;
   workflowOptions: AssistantActivityWorkflowOptions;
   assistantActivity?: AssistantTurnActivityPresentation;
   progressiveRender?: boolean;
@@ -594,6 +603,7 @@ export function ChunkedContent({
         onImagePreview,
         b.type === 'image' ? imgIdx : i,
         sessionKey,
+        projectId,
         progressiveRender,
         onProgressiveRenderComplete,
       );

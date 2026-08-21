@@ -209,9 +209,13 @@ export async function resolveWorkspaceFileReference(
   const projectUrl = projectFileUrl(options, 'resolve-reference', path);
   if (projectUrl) {
     const res = await apiFetch(projectUrl);
-    if (!res.ok) return null;
-    const data = (await res.json()) as { ok?: boolean; payload?: WorkspaceFileReference };
-    return data.ok && data.payload ? data.payload : null;
+    const data = (await res.json().catch(() => null)) as {
+      ok?: boolean;
+      payload?: WorkspaceFileReference;
+      error?: { message?: string };
+    } | null;
+    if (!res.ok) throw new Error(data?.error?.message || `File reference resolution failed (HTTP ${res.status})`);
+    return data?.ok && data.payload ? data.payload : null;
   }
   const params = new URLSearchParams({ path });
   const sk = options?.sessionKey?.trim();
@@ -222,9 +226,13 @@ export async function resolveWorkspaceFileReference(
     if (aid) params.set('agentId', aid);
   }
   const res = await apiFetch(apiUrl(`/api/workspace/editor/resolve-reference?${params.toString()}`));
-  if (!res.ok) return null;
-  const data = (await res.json()) as { ok?: boolean; payload?: WorkspaceFileReference };
-  return data.ok && data.payload ? data.payload : null;
+  const data = (await res.json().catch(() => null)) as {
+    ok?: boolean;
+    payload?: WorkspaceFileReference;
+    error?: { message?: string };
+  } | null;
+  if (!res.ok) throw new Error(data?.error?.message || `File reference resolution failed (HTTP ${res.status})`);
+  return data?.ok && data.payload ? data.payload : null;
 }
 
 export async function resolveFileReferenceAction(

@@ -75,6 +75,7 @@ export const MessageBubble = memo(function MessageBubble({
   message,
   authToken,
   sessionKey,
+  projectId,
   isStreaming,
   progress,
   reasoningLevel = 'on',
@@ -92,6 +93,7 @@ export const MessageBubble = memo(function MessageBubble({
   message: Message;
   authToken?: string;
   sessionKey?: string | null;
+  projectId?: string | null;
   isStreaming: boolean;
   progress: ProgressState | null;
   reasoningLevel?: ReasoningLevel;
@@ -555,6 +557,7 @@ export const MessageBubble = memo(function MessageBubble({
                     imagePreviewLabel={m.chat.attachmentPreviewImage}
                     onImagePreview={openInlineImagePreview}
                     sessionKey={sessionKey}
+                    projectId={projectId}
                     workflowOptions={{
                       labels: workflowCardLabels(language),
                     }}
@@ -591,6 +594,7 @@ export const MessageBubble = memo(function MessageBubble({
                 view={assistantTurnView}
                 authToken={authToken}
                 sessionKey={sessionKey}
+                projectId={projectId}
                 deliverablesLabel={m.chat.messageArtifactsHeading}
                 sourcesLabel={m.chat.searchSourcesHeading.replace(
                   '{{count}}',

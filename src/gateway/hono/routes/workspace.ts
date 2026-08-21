@@ -35,6 +35,7 @@ import {
   type FileReferenceLocationKind,
   type FileReferenceScope,
 } from '../../file-reference-registry.js';
+import { classifyFileReferenceFsError } from '../../file-reference-errors.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import type { GatewayService } from '../../service.js';
 
@@ -412,13 +413,25 @@ export function registerWorkspaceRoutes(authenticated: Hono, deps: Authenticated
     }
 
     let st: Awaited<ReturnType<typeof stat>> | null = null;
+    let statError: unknown = null;
     try {
       st = await stat(candidate);
-    } catch {
-      st = null;
+    } catch (err) {
+      statError = err;
     }
 
     if (!st) {
+      const failure = classifyFileReferenceFsError(statError);
+      if (failure.code !== 'FILE_NOT_FOUND') {
+        log.warn(
+          { err: statError, sessionKey, workspaceRoot, candidate, errorCode: failure.code },
+          `Workspace file reference access failed: ${failure.message}`,
+        );
+        return c.json(
+          { ok: false, error: { code: failure.code, message: failure.message } },
+          failure.status === 403 ? 403 : 500,
+        );
+      }
       // Always include the resolved candidate so the UI's "Copy path" yields
       // something actionable ("I looked here, no file"). Without this, bare
       // workspace-relative mentions fall back to the `rel:<path>` UI sentinel.

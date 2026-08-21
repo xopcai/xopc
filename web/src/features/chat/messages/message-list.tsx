@@ -16,6 +16,7 @@ export const MessageList = memo(function MessageList({
   messages: list,
   authToken,
   sessionKey,
+  projectId,
   streaming,
   progress,
   reasoningLevel,
@@ -35,6 +36,7 @@ export const MessageList = memo(function MessageList({
   messages: Message[];
   authToken?: string;
   sessionKey?: string | null;
+  projectId?: string | null;
   streaming: boolean;
   progress: ProgressState | null;
   reasoningLevel: ReasoningLevel;
@@ -105,6 +107,7 @@ export const MessageList = memo(function MessageList({
               message={msg}
               authToken={authToken}
               sessionKey={sessionKey}
+              projectId={projectId}
               isStreaming={isStreamRow}
               progress={isStreamRow ? progress : null}
               reasoningLevel={reasoningLevel}
