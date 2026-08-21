@@ -1,11 +1,7 @@
 import { z } from 'zod';
 
 export const ENDPOINT_PROTOCOL_VERSION = 1 as const;
-export const ENDPOINT_MAX_JSON_FRAME_BYTES = 256 * 1024;
 export const ENDPOINT_MAX_FILE_BYTES = 25 * 1024 * 1024;
-export const ENDPOINT_HELLO_TIMEOUT_MS = 5_000;
-export const ENDPOINT_HEARTBEAT_INTERVAL_MS = 15_000;
-export const ENDPOINT_HEARTBEAT_TIMEOUT_MS = 45_000;
 export const ENDPOINT_INVOCATION_RECEIPT_TIMEOUT_MS = 3_000;
 export const ENDPOINT_MAX_CONCURRENT_INVOCATIONS = 4;
 
@@ -73,14 +69,6 @@ export const endpointHelloPayloadSchema = z.strictObject({
   tools: z.array(endpointToolDescriptorSchema).max(100),
 });
 
-export const endpointReadyPayloadSchema = z.strictObject({
-  connectionId: z.uuid(),
-  turnToken: turnTokenSchema,
-  heartbeatIntervalMs: z.literal(ENDPOINT_HEARTBEAT_INTERVAL_MS),
-  heartbeatTimeoutMs: z.literal(ENDPOINT_HEARTBEAT_TIMEOUT_MS),
-  maxConcurrentInvocations: z.literal(ENDPOINT_MAX_CONCURRENT_INVOCATIONS),
-});
-
 export const toolInvokePayloadSchema = z.strictObject({
   invocationId: z.uuid(),
   toolCallId: identifierSchema,
@@ -146,8 +134,6 @@ const envelope = <TType extends string, TPayload extends z.ZodType>(
 });
 
 export const clientEndpointMessageSchema = z.discriminatedUnion('type', [
-  envelope('endpoint.hello', endpointHelloPayloadSchema),
-  envelope('endpoint.heartbeat', z.strictObject({ availability: endpointAvailabilitySchema })),
   envelope('endpoint.availability_changed', z.strictObject({ availability: endpointAvailabilitySchema })),
   envelope('tool.received', invocationPayloadSchema),
   envelope('tool.progress', z.strictObject({
@@ -169,7 +155,6 @@ export const clientEndpointMessageSchema = z.discriminatedUnion('type', [
 ]);
 
 export const serverEndpointMessageSchema = z.discriminatedUnion('type', [
-  envelope('endpoint.ready', endpointReadyPayloadSchema),
   envelope('tool.invoke', toolInvokePayloadSchema),
   envelope('tool.cancel', toolCancelPayloadSchema),
 ]);
@@ -187,22 +172,6 @@ export type EndpointToolErrorCode = z.infer<typeof endpointToolErrorCodeSchema>;
 export type TurnOrigin = z.infer<typeof turnOriginSchema>;
 export type EndpointTurnOrigin = z.infer<typeof endpointTurnOriginSchema>;
 export type EndpointTurnClaim = z.infer<typeof endpointTurnClaimSchema>;
-
-export function parseClientEndpointMessage(value: unknown): ClientEndpointMessage {
-  return clientEndpointMessageSchema.parse(value);
-}
-
-export function parseServerEndpointMessage(value: unknown): ServerEndpointMessage {
-  return serverEndpointMessageSchema.parse(value);
-}
-
-export function parseJsonFrame(text: string): unknown {
-  const bytes = new TextEncoder().encode(text).byteLength;
-  if (bytes > ENDPOINT_MAX_JSON_FRAME_BYTES) {
-    throw new Error(`Endpoint frame exceeds ${ENDPOINT_MAX_JSON_FRAME_BYTES} bytes`);
-  }
-  return JSON.parse(text) as unknown;
-}
 
 export function canonicalJson(value: unknown): string {
   if (value === null) return 'null';

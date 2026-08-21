@@ -26,7 +26,7 @@ export function isWorkflowToolBlock(block: ToolUseContent): boolean {
  * Extract a {@link WorkflowSnapshot} from a tool_use block.
  *
  * Lookup order:
- *   1. `block.details` — live SSE `tool_update` payload (P4-A). Available
+ *   1. `block.details` — live run `tool_update` payload (P4-A). Available
  *      while the tool is still running, so the card can render the live
  *      progress tree before `tool_end` arrives.
  *   2. `block.result` — final tool_end envelope. Wins after completion

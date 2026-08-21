@@ -401,7 +401,7 @@ data shows acceptable precision and Undo semantics are available.
 - Segment workers use SQLite leases and compare-and-set status transitions.
 - Final note write is guarded by `analysis_input_hash` and
   `finalization_revision`.
-- SSE is invalidation only; the database is authoritative.
+- Realtime delivery is invalidation only; the database is authoritative.
 
 ## 12. Failure behavior
 
@@ -419,7 +419,7 @@ data shows acceptable precision and Undo semantics are available.
 ## 13. Privacy and security
 
 - Never log segment audio, transcript text, or model prompt contents.
-- Keep live SSE payloads text-free.
+- Keep live realtime payloads text-free.
 - Validate authentication, MIME, duration, sequence bounds, and per-segment
   size on every endpoint.
 - Conversation consent is a versioned user acknowledgement, never an AI claim.
@@ -469,7 +469,7 @@ Every phase has the same exit gate before the next phase starts:
 ### Phase B — Live transcript projection
 
 - Add AudioWorklet WAV segmentation and IndexedDB upload queue.
-- Add segment API, repository, lease worker, and text-free SSE invalidation.
+- Add segment API, repository, lease worker, and text-free realtime invalidation.
 - Render persisted live transcript inside the Note page without Markdown churn.
 - Test offline ordering, duplicate segments, gaps, restart, and provider failure.
 

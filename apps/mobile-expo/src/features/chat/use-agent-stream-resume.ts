@@ -12,7 +12,7 @@ export type AgentStreamResumeOptions = {
 export type TryAgentStreamResume = (opts?: AgentStreamResumeOptions) => void | Promise<void>;
 
 /**
- * Listen for gateway `agent.stream` run_start events (Task continuations, scheduled webchat runs)
+ * Listen for session run lifecycle events (Task continuations, scheduled webchat runs)
  * and trigger resume when the active chat is idle.
  */
 export function useAgentStreamResume(opts: {
@@ -29,23 +29,19 @@ export function useAgentStreamResume(opts: {
   streamingRef.current = streaming;
 
   useEffect(() => {
-    return subscribeGatewayEvent('agent-stream', (detail) => {
-      const d = detail as { sessionKey?: string; event?: { type?: string; runId?: string } };
-      if (!d?.sessionKey) return;
-      const inner = d.event;
-      if (!inner || inner.type !== 'run_start' || typeof inner.runId !== 'string' || !inner.runId.trim()) {
-        return;
-      }
+    return subscribeGatewayEvent('run-started', (detail) => {
+      const event = detail as { sessionKey?: string; runId?: string };
+      if (!event.sessionKey || !event.runId?.trim()) return;
 
-      setPendingAgentRun(d.sessionKey, inner.runId);
+      setPendingAgentRun(event.sessionKey, event.runId);
 
-      if (activeSessionKeyRef.current !== d.sessionKey) return;
+      if (activeSessionKeyRef.current !== event.sessionKey) return;
       const sender = senderRef.current;
-      if (sender.isStreamingFor(d.sessionKey)) return;
+      if (sender.isStreamingFor(event.sessionKey)) return;
 
       queueMicrotask(() => {
-        if (activeSessionKeyRef.current !== d.sessionKey) return;
-        if (senderRef.current.isStreamingFor(d.sessionKey)) return;
+        if (activeSessionKeyRef.current !== event.sessionKey) return;
+        if (senderRef.current.isStreamingFor(event.sessionKey)) return;
         void tryResumeRef.current({ background: true });
       });
     });

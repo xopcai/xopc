@@ -68,7 +68,7 @@ Start with a local assistant using your own model keys. When the work becomes du
 | **Runtime & ownership** | Self-hosted gateway, local state, BYOK, cloud and local models | You control data, cost, deployment, and availability |
 | **Durable state** | Persistent sessions, projects, goals, notes, workspaces, and shared user memory | Resume work without reconstructing it every time |
 | **Execution & initiative** | Tools, skills, subagents, observable workflows, and scheduled/manual/webhook automations | Move from advice to execution, review, and follow-up |
-| **Access everywhere** | CLI, TUI, web, desktop, iOS/Android, Telegram, WeChat, Feishu/Lark, and HTTP/SSE APIs | Use one system wherever the work happens |
+| **Access everywhere** | CLI, TUI, web, desktop, iOS/Android, Telegram, WeChat, Feishu/Lark, and HTTP/realtime APIs | Use one system wherever the work happens |
 
 These pieces are composable rather than a fixed funnel: work on code in the terminal, dictate a note on mobile, inspect goals and failed runs from a project, generate a daily digest with an automation, then resume the same session from any surface.
 

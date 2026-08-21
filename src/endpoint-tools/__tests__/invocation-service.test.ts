@@ -1,14 +1,16 @@
 import crypto from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
-import type { WebSocket } from 'ws';
-
 import type { EndpointHelloPayload } from '@xopcai/endpoint-tools-protocol';
 
 import {
   EndpointInvocationService,
   EndpointToolExecutionError,
 } from '../invocation-service.js';
-import { EndpointRegistry, endpointToolRevision } from '../registry.js';
+import {
+  EndpointRegistry,
+  endpointToolRevision,
+  type EndpointTransport,
+} from '../registry.js';
 
 function fixture() {
   const sent: string[] = [];
@@ -16,7 +18,7 @@ function fixture() {
     readyState: 1,
     send: (value: string) => sent.push(value),
     close: vi.fn(),
-  } as unknown as WebSocket;
+  } satisfies EndpointTransport;
   const descriptor = {
     name: 'web.clipboard.write',
     title: 'Write clipboard',
@@ -52,6 +54,13 @@ function fixture() {
 }
 
 describe('EndpointInvocationService', () => {
+  it('tracks only the current endpoint connection', () => {
+    const { registry } = fixture();
+
+    expect(registry.isCurrentConnection('endpoint-1', 'connection-1')).toBe(true);
+    expect(registry.isCurrentConnection('endpoint-1', 'stale-connection')).toBe(false);
+  });
+
   it('completes a received endpoint invocation', async () => {
     const { sent, descriptor, service } = fixture();
     const promise = service.invoke({

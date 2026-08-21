@@ -21,7 +21,6 @@ export type PetFeedback = {
 
 export interface ChatStreamEnvelope<TType extends string, TPayload> {
   type: TType;
-  seq?: number;
   runId: string;
   sessionKey: string;
   timestamp: number;

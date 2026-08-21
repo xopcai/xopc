@@ -40,7 +40,7 @@ describe('buildSetupStatusSnapshot', () => {
   it('marks required steps incomplete when provider and model are missing', () => {
     const snapshot = buildSetupStatusSnapshot({
       hasToken: true,
-      sseConnected: true,
+      realtimeConnected: true,
       config: { ...configWithGlobalModel(''), providers: {} },
       skillCount: 0,
       labels,
@@ -54,7 +54,7 @@ describe('buildSetupStatusSnapshot', () => {
   it('marks required steps complete when gateway, provider, and model are set', () => {
     const snapshot = buildSetupStatusSnapshot({
       hasToken: true,
-      sseConnected: true,
+      realtimeConnected: true,
       config: {
         ...configWithGlobalModel('openai/gpt-4o'),
         providers: { openai: '***' },
@@ -71,7 +71,7 @@ describe('buildSetupStatusSnapshot', () => {
   it('uses provider meta ratio in detail when available', () => {
     const snapshot = buildSetupStatusSnapshot({
       hasToken: true,
-      sseConnected: true,
+      realtimeConnected: true,
       config: {
         ...configWithGlobalModel('openai/gpt-4o'),
         providers: { openai: '***' },
@@ -89,7 +89,7 @@ describe('buildSetupStatusSnapshot', () => {
   it('does not count channel catalog metadata as configured', () => {
     const snapshot = buildSetupStatusSnapshot({
       hasToken: true,
-      sseConnected: true,
+      realtimeConnected: true,
       config: {
         channels: {
           telegram: {
@@ -111,7 +111,7 @@ describe('buildSetupStatusSnapshot', () => {
   it('counts actual channel config from catalog payload', () => {
     const snapshot = buildSetupStatusSnapshot({
       hasToken: true,
-      sseConnected: true,
+      realtimeConnected: true,
       config: {
         channels: {
           telegram: {
@@ -131,7 +131,7 @@ describe('buildSetupStatusSnapshot', () => {
   it('promotes doctor failures into blocking issues', () => {
     const snapshot = buildSetupStatusSnapshot({
       hasToken: true,
-      sseConnected: true,
+      realtimeConnected: true,
       config: {
         ...configWithGlobalModel('openai/gpt-4o'),
         providers: { openai: '***' },

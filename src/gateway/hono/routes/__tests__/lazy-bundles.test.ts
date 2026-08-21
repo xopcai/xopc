@@ -9,8 +9,7 @@ describe('lazy route bundles', () => {
   it('keeps chat-critical routes off the lazy registry', () => {
     const paths = [
       '/api/status',
-      '/api/agent/resume',
-      '/api/events',
+      '/api/realtime/tickets',
       '/api/sessions/example/inputs',
       '/api/send',
     ];
@@ -21,7 +20,7 @@ describe('lazy route bundles', () => {
 
   it('maps admin routes to lazy bundles', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/config')?.id).toBe('config');
-    expect(findAuthenticatedLazyRouteBundle('/api/logs/stream')?.id).toBe('logs');
+    expect(findAuthenticatedLazyRouteBundle('/api/logs')?.id).toBe('logs');
     expect(findAuthenticatedLazyRouteBundle('/api/extensions')?.id).toBe('auth-registry-extensions');
     expect(findAuthenticatedLazyRouteBundle('/api/automations/abc')?.id).toBe('automations');
     expect(findAuthenticatedLazyRouteBundle('/api/capabilities/connectors')?.id).toBe('capabilities');

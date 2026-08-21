@@ -1,19 +1,12 @@
 import { endpointTurnClaimSchema } from '@xopcai/endpoint-tools-protocol';
 import type { Hono } from 'hono';
 
-import {
-  createAgentResumeHandler,
-  createEventsSSEHandler,
-  createSendHandler,
-} from '../sse.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { validateWebchatAttachments, validateWebchatContent } from '../../chat-limits.js';
 import type { UserTurnAttachment } from '../../user-turn-input.js';
 
 export function registerAgentStreamRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
-  const { service, chatRateLimitMiddleware, sseConfig } = deps;
-
-  authenticated.post('/api/agent/resume', chatRateLimitMiddleware, createAgentResumeHandler(sseConfig));
+  const { service, chatRateLimitMiddleware } = deps;
 
   authenticated.post('/api/agent/abort', chatRateLimitMiddleware, async (c) => {
     const body = await c.req.json().catch(() => null);
@@ -132,7 +125,24 @@ export function registerAgentStreamRoutes(authenticated: Hono, deps: Authenticat
     return c.json({ ok: true, payload: { received: true } });
   });
 
-  authenticated.post('/api/send', chatRateLimitMiddleware, createSendHandler(sseConfig));
-
-  authenticated.get('/api/events', createEventsSSEHandler(sseConfig));
+  authenticated.post('/api/send', chatRateLimitMiddleware, async (c) => {
+    const body = await c.req.json().catch(() => null) as Record<string, unknown> | null;
+    const channel = typeof body?.channel === 'string' ? body.channel : '';
+    const chatId = typeof body?.chatId === 'string' ? body.chatId : '';
+    const content = typeof body?.content === 'string' ? body.content : '';
+    if (!channel || !chatId || !content) {
+      return c.json({
+        ok: false,
+        error: { code: 'BAD_REQUEST', message: 'Missing required fields: channel, chatId, content' },
+      }, 400);
+    }
+    try {
+      return c.json({ ok: true, payload: await service.sendMessage(channel, chatId, content) });
+    } catch (error) {
+      return c.json({
+        ok: false,
+        error: { code: 'INTERNAL_ERROR', message: error instanceof Error ? error.message : 'Unknown error' },
+      }, 500);
+    }
+  });
 }

@@ -76,7 +76,7 @@ Useful commands from the repository root:
 | `pnpm run android:mobile` / `pnpm run ios:mobile` | Development builds |
 | `pnpm -C apps/mobile-expo run android:release` | Android release APK |
 | `pnpm run mobile:typecheck` | TypeScript check |
-| `pnpm run mobile:test:sse` | SSE client tests |
+| `pnpm run mobile:test:stream` | Agent stream client tests |
 
 `react-native-mmkv` uses native code. Expo Go can run the app with in-memory fallback storage, but persistent settings require a development or standalone build.
 

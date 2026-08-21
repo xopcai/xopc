@@ -68,7 +68,7 @@ export class GatewayHealthMonitor {
 
     // Periodic foreground heartbeat. The coordinator dedupes within its own
     // freshness window, so this stays cheap when other triggers (network
-    // change, focus, SSE failures) recently fired a probe. We skip ticks
+    // change, focus, realtime failures) recently fired a probe. We skip ticks
     // entirely when the app is backgrounded — RN may keep the timer alive
     // for some interval, but the function exits early so we don't burn
     // battery probing while the user can't see the result.

@@ -71,7 +71,7 @@ describe('useProgressiveStreamingMarkdown', () => {
     expect(container.textContent).toBe('abcdefghijkl');
   });
 
-  it('keeps draining pending text after the SSE stream ends', () => {
+  it('keeps draining pending text after the realtime stream ends', () => {
     act(() => root.render(<Harness content="abcdefghijklmnopqr" streaming />));
     act(() => root.render(<Harness content="abcdefghijklmnopqr" streaming={false} />));
     expect(container.textContent).toBe('');

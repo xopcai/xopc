@@ -92,7 +92,7 @@ function closeStreamingThinkingIfAny(content: MessageContent[]): void {
   }
 }
 
-/** Start a new reasoning segment (e.g. SSE `thinking` with status `started`). */
+/** Start a new reasoning segment (e.g. run `thinking` with status `started`). */
 export function startThinkingSegment(content: MessageContent[]): void {
   const last = content[content.length - 1];
   if (last?.type === 'thinking' && last.streaming) {
@@ -128,7 +128,7 @@ export function finalizeStreamingThinking(content: MessageContent[]): void {
 
 /**
  * Mark any `tool_use` still `running` as `done` when the turn commits.
- * Matches persisted session after refresh: SSE `tool_end` can be missed (parse edge cases)
+ * Matches persisted session after refresh: run `tool_end` can be missed (parse edge cases)
  * or `toolName` may not match `completeTool`'s strict equality vs `tool_start`.
  */
 export function finalizeRunningTools(content: MessageContent[]): void {
@@ -337,7 +337,7 @@ export function completeTool(
  * Write structured `details` onto a still-running tool_use block. Matches by
  * toolCallId when provided (most reliable), otherwise falls back to the most
  * recent running block with the same tool name. Silently no-ops when no
- * matching block exists — the SSE stream can race ahead of the tool_start the
+ * matching block exists — the realtime stream can race ahead of the tool_start the
  * resume path missed, and we'd rather drop an update than crash.
  */
 export function updateToolDetails(

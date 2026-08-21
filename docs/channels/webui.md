@@ -14,7 +14,7 @@ Open `http://localhost:18790` in your browser (or your configured bind address).
 
 ## Features
 
-- ✅ Chat via the gateway (REST; agent replies stream with **SSE** on `/api/agent`)
+- ✅ Chat via the gateway (durable REST inputs; agent replies stream through `run:<runId>` realtime topics)
 - ✅ Session management (`#/sessions`, sidebar task list)
 - ✅ Settings (models, gateway token, voice, etc.)
 - ✅ Log viewer

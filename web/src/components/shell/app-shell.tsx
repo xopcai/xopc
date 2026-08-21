@@ -19,7 +19,7 @@ import { useUpdateReminder } from '@/features/updater/use-update-reminder';
 import { GlobalCommandPaletteHost } from '@/features/search/global-command-palette/global-command-palette-host';
 import { GlobalQuickCaptureHost } from '@/features/notes/global-quick-capture';
 import { GlobalDiscussionCaptureHost } from '@/features/discussions/global-discussion-capture';
-import { GatewaySseBridge } from '@/features/gateway/gateway-sse-bridge';
+import { GatewayRealtimeBridge } from '@/features/gateway/gateway-realtime-bridge';
 import { WorkspacePreviewPane } from '@/features/workspace/workspace-preview-pane';
 import { GlobalReadAloudPlayer } from '@/features/voice/global-read-aloud-player';
 import { GlobalVoiceInputShortcutHost } from '@/features/voice/global-voice-input-shortcut-host';
@@ -132,7 +132,7 @@ export function AppShell() {
     return (
       <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-surface-base">
         <EndpointToolBridge />
-        <GatewaySseBridge />
+        <GatewayRealtimeBridge />
         <ElectronMenuListener />
         <ToastHost />
         <WindowsTitlebar />
@@ -159,7 +159,7 @@ export function AppShell() {
       >
         {language === 'zh' ? '跳到主要内容' : 'Skip to main content'}
       </a>
-      <GatewaySseBridge />
+      <GatewayRealtimeBridge />
       <DesktopNotificationBridge />
       <ElectronMenuListener />
       <NavigateToChatListener />

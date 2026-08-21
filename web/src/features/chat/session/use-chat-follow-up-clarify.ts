@@ -133,10 +133,10 @@ export function useChatFollowUpClarify(options: {
       if (key) void refreshState(key);
     };
     window.addEventListener('session-input-state', onState);
-    window.addEventListener('gateway-sse-connected', onReconnect);
+    window.addEventListener('gateway-realtime-connected', onReconnect);
     return () => {
       window.removeEventListener('session-input-state', onState);
-      window.removeEventListener('gateway-sse-connected', onReconnect);
+      window.removeEventListener('gateway-realtime-connected', onReconnect);
     };
   }, [applyState, refreshState, sessionKeyRef]);
 

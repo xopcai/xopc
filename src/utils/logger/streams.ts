@@ -40,7 +40,7 @@ function createLogStream(filePath: string): ReturnType<typeof createWriteStream>
   return createWriteStream(filePath, { flags: 'a', encoding: 'utf-8' });
 }
 
-/** Push parsed Pino lines to live SSE subscribers when any are connected. */
+/** Push parsed Pino lines to live realtime subscribers when any are connected. */
 function createLiveEmitStream(): DestinationStream {
   return new Writable({
     write(chunk, _encoding, callback) {

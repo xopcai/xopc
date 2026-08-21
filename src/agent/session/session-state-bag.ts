@@ -21,7 +21,7 @@ import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('SessionStateBag');
 
-export type WebchatSsePublisher = (event: { type: string; [key: string]: unknown }) => void;
+export type WebchatStreamPublisher = (event: { type: string; [key: string]: unknown }) => void;
 
 export interface TaskReviewStreamHint {
   skipTaskReview: boolean;
@@ -45,8 +45,8 @@ const DEFAULT_MAX_ENTRIES = 5_000;
 type Touched<V> = { value: V; touchedAt: number };
 
 export class SessionStateBag {
-  /** Webchat SSE publisher (register/unregister + TTL fallback). */
-  private readonly webchatPublishers = new Map<string, Touched<WebchatSsePublisher>>();
+  /** Webchat run publisher (register/unregister + TTL fallback). */
+  private readonly webchatPublishers = new Map<string, Touched<WebchatStreamPublisher>>();
   /** Last assistant plain text (TTL + LRU). */
   private readonly lastAssistantText = new Map<string, Touched<string>>();
 
@@ -80,7 +80,7 @@ export class SessionStateBag {
 
   // ── Webchat publishers ──────────────────────────────────────────────────
 
-  registerWebchatPublisher(sessionKey: string, publisher: WebchatSsePublisher): void {
+  registerWebchatPublisher(sessionKey: string, publisher: WebchatStreamPublisher): void {
     this.webchatPublishers.set(sessionKey, { value: publisher, touchedAt: this.now() });
     this.enforceCap(this.webchatPublishers, 'webchatPublishers');
   }
@@ -89,7 +89,7 @@ export class SessionStateBag {
     this.webchatPublishers.delete(sessionKey);
   }
 
-  getWebchatPublisher(sessionKey: string): WebchatSsePublisher | undefined {
+  getWebchatPublisher(sessionKey: string): WebchatStreamPublisher | undefined {
     const entry = this.webchatPublishers.get(sessionKey);
     if (!entry) return undefined;
     entry.touchedAt = this.now();

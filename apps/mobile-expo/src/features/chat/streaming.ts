@@ -1,5 +1,5 @@
 /**
- * Streaming helpers for building assistant messages from SSE events.
+ * Streaming helpers for building assistant messages from realtime run events.
  * Ported from web/src/features/chat/streaming.ts — kept in sync.
  */
 

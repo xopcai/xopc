@@ -32,13 +32,6 @@ export interface TuiResult {
   exitReason: TuiExitReason;
 }
 
-/** Parsed SSE event from the stream. */
-export interface ParsedSSEEvent {
-  event: string;
-  data: string;
-  id?: string;
-}
-
 /** Activity status for the TUI status bar. */
 export type ActivityStatus =
   | 'idle'
@@ -51,7 +44,7 @@ export type ActivityStatus =
   | 'recovering'
   | 'aborting';
 
-export type TuiEventSource = 'agent-response' | 'agent-resume' | 'broadcast' | 'embedded' | 'unknown';
+export type TuiEventSource = 'realtime-run' | 'realtime' | 'embedded' | 'unknown';
 
 export type TuiRunPhase =
   | 'idle'
@@ -67,7 +60,6 @@ export type TuiRunPhase =
 export interface TuiRunStatus {
   phase: TuiRunPhase;
   runId: string | null;
-  directStreamRunId: string | null;
   lastCompletedRunId: string | null;
   source: TuiEventSource;
   lastEvent: string | null;
@@ -114,7 +106,7 @@ export interface TuiState {
   scopedModelRefs: string[] | null;
   /** Last Escape timestamp for double-press actions. */
   lastEscapeAt: number;
-  /** Human-readable progress from SSE `progress` events. */
+  /** Human-readable progress from run `progress` events. */
   progressMessage: string | null;
   /** Session compaction in flight (local /compact handler). */
   isCompacting: boolean;
@@ -131,7 +123,6 @@ export function createInitialState(sessionKey: string): TuiState {
     runStatus: {
       phase: 'idle',
       runId: null,
-      directStreamRunId: null,
       lastCompletedRunId: null,
       source: 'unknown',
       lastEvent: null,

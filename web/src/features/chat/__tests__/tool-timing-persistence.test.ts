@@ -16,7 +16,7 @@ function firstTool(content: MessageContent[]): ToolUseContent {
 }
 
 describe('tool activity timing', () => {
-  it('keeps SSE lifecycle timestamps on the live tool block', () => {
+  it('keeps run lifecycle timestamps on the live tool block', () => {
     const content: MessageContent[] = [];
     appendToolStart(content, 'web_search', { query: 'xopc' }, 'call-1', 1_000);
     completeTool(content, 'web_search', false, 'ok', 'call-1', 3_750);

@@ -1,5 +1,5 @@
 // Tool-result wire shapes diverge by ingestion path:
-//   - Live SSE: serialized JSON of the agent's full `{ content, details }` object.
+//   - Live run: serialized JSON of the agent's full `{ content, details }` object.
 //   - History rehydration (agent-messages.ts): only `content[].text` concatenated.
 // All structured cards must therefore tolerate either form: try to JSON-parse
 // for `details`/`content` first, fall back to the raw text otherwise.

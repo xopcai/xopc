@@ -534,7 +534,6 @@ export const GatewayConfigSchema = z.object({
   auth: GatewayAuthSchema.optional(),
   heartbeat: HeartbeatConfigSchema.optional(),
   webchat: GatewayWebchatConfigSchema.optional(),
-  maxSseConnections: z.number().optional(),
   corsOrigins: z.array(z.string()).optional(),
   /**
    * Reverse-proxy publicly reachable URL (e.g. `https://gateway.example.com`).
@@ -692,7 +691,6 @@ export const GatewayConfigSchema = z.object({
   webchat: {
     activityDetailDefault: 'on',
   },
-  maxSseConnections: 100,
   corsOrigins: [],
   skillsMarketplaceProvider: 'store',
   skillsStoreBaseUrl: 'https://store.xopc.ai',
@@ -1269,7 +1267,6 @@ export const ConfigSchema = z.object({
     webchat: {
       activityDetailDefault: 'on' as const,
     },
-    maxSseConnections: 100,
     corsOrigins: [],
     skillsMarketplaceProvider: 'store',
     skillsStoreBaseUrl: 'https://store.xopc.ai',

@@ -48,7 +48,8 @@ src/                         Features, components, API, query, theme, stores
 src/theme/                   Design tokens and Paper theme mapping
 src/i18n/                    Localized message bundles
 src/storage/                 MMKV and fallback storage
-../../packages/gateway-sse-client/ Workspace package for gateway SSE parsing
+../../packages/realtime-client/    Shared realtime WebSocket client
+../../packages/agent-stream-client/ Agent stream event dispatcher
 plugins/                     Expo config plugins
 app.json                     Expo native configuration
 eas.json                     EAS build profiles
@@ -84,9 +85,9 @@ Common scripts:
 | `pnpm run ios:mobile` | Build and run iOS |
 | `pnpm -C apps/mobile-expo run ios:no-proxy` | Build and run iOS with proxy variables cleared |
 | `pnpm run mobile:lint` | Run ESLint on `app` and `src` |
-| `pnpm run mobile:typecheck` | Type-check the app and SSE workspace package |
+| `pnpm run mobile:typecheck` | Type-check the app and realtime workspace packages |
 | `pnpm run mobile:test` | Run the Vitest suite |
-| `pnpm run mobile:test:sse` | Run SSE client tests |
+| `pnpm run mobile:test:stream` | Run agent stream client tests |
 
 ## Configure the Gateway
 
@@ -253,10 +254,10 @@ pnpm run mobile:typecheck
 pnpm run mobile:test
 ```
 
-If you changed `packages/gateway-sse-client`, also run:
+If you changed `packages/agent-stream-client`, also run:
 
 ```bash
-pnpm run mobile:test:sse
+pnpm run mobile:test:stream
 ```
 
 ## License

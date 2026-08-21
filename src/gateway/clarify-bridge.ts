@@ -1,4 +1,4 @@
-import type { AgentRunRelay, RelayEvent } from './agent-run-relay.js';
+export type ClarifyStreamEvent = { type: string } & Record<string, unknown>;
 import { createPetFeedback } from './chat-stream/pet-feedback.js';
 import { createLogger } from '../utils/logger.js';
 
@@ -15,10 +15,9 @@ export interface ClarifyBridgeRequest {
 
 export interface StartClarifyRequestOptions {
   sessionKey: string;
-  /** Present for in-flight webchat runs (SSE + relay). */
+  /** Present for in-flight webchat runs. */
   runId?: string;
-  relay: AgentRunRelay;
-  publishSse?: (event: RelayEvent) => void;
+  publishStream?: (event: ClarifyStreamEvent) => void;
   request: ClarifyBridgeRequest;
   /** e.g. Telegram inline keyboard + prompt message */
   deliver?: (ctx: {
@@ -46,7 +45,7 @@ export class ClarifyBridge {
   private pendingFreeTextBySession = new Map<string, string>();
 
   startRequest(opts: StartClarifyRequestOptions): Promise<string> {
-    const { sessionKey, runId, relay, publishSse, request, deliver } = opts;
+    const { sessionKey, runId, publishStream, request, deliver } = opts;
     const requestId = crypto.randomUUID();
     const hasChoices = Array.isArray(request.choices) && request.choices.length >= 2;
     const needsFreeText = !hasChoices;
@@ -79,7 +78,7 @@ export class ClarifyBridge {
         this.pendingFreeTextBySession.set(sessionKey, requestId);
       }
 
-      const payload: RelayEvent = {
+      const payload: ClarifyStreamEvent = {
         type: 'clarify_request',
         requestId,
         question: request.question,
@@ -88,13 +87,10 @@ export class ClarifyBridge {
         petFeedback: createPetFeedback('clarify'),
       };
 
-      if (runId) {
-        relay.publish(runId, payload);
-      }
       try {
-        publishSse?.(payload);
+        if (runId) publishStream?.(payload);
       } catch (err) {
-        log.warn({ err, requestId }, 'clarify SSE publish failed');
+        log.warn({ err, requestId }, 'Clarify stream publication failed');
       }
 
       if (deliver) {

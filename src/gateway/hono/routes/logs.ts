@@ -164,12 +164,4 @@ export function registerLogsRoutes(authenticated: Hono, _deps: AuthenticatedRout
     const { getLogLevel } = await import('../../../utils/logger.js');
     return c.json({ level: getLogLevel() });
   });
-
-  // ========== Real-time Log Streaming (SSE) ==========
-
-  // GET /api/logs/stream - Stream logs in real-time via SSE
-  authenticated.get('/api/logs/stream', async (c) => {
-    const { createLogSSEHandler } = await import('../../../utils/logger/log-stream.js');
-    return createLogSSEHandler()(c);
-  });
 }

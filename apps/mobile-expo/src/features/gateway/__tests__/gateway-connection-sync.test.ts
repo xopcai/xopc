@@ -17,8 +17,8 @@ vi.mock('../../../query/keys', () => ({
   },
 }));
 
-vi.mock('../use-gateway-sse', () => ({
-  getSharedGatewaySseConnection: () => ({ reconnect }),
+vi.mock('../use-gateway-realtime', () => ({
+  getSharedGatewayRealtimeClient: () => ({ reconnect }),
 }));
 
 vi.mock('../../../stores/gateway-store', () => ({

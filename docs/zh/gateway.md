@@ -409,7 +409,8 @@ GET /health
 | GET | `/api/image-generation/catalog` | 内置图片生成 Provider 目录（需认证） |
 | GET | `/api/agents/:agentId/image-generation` | Agent 图片生成模型（需认证） |
 | POST | `/api/agents/:agentId/image-generation/setup` | 保存凭据并启用图片模型（需认证） |
-| GET | `/api/events` | Server-Sent Events 广播（需认证），包含 **`agent.stream`** 等事件，供网页控制台与扩展 iframe 消费 |
+| POST | `/api/realtime/tickets` | 创建短期、单次使用的实时连接 ticket（需认证） |
+| WS | `/api/realtime/v1/ws` | 统一实时 topic 与端工具通信 |
 | GET | `/api/extensions` | 列出已发现扩展（含可选 `ui` 摘要）（需认证） |
 | GET | `/api/extensions/:id` | 扩展详情与完整 manifest（需认证） |
 | GET | `/api/extensions/:id/assets/*` | 扩展 UI 静态资源（HTML/JS/CSS；严格 CSP）（需认证） |
@@ -422,7 +423,7 @@ GET /health
 
 `GET` / `PATCH` **`/api/config`**（需认证）会返回智能体默认项，其中包括 **`imageModel`**、**`imageGenerationModel`** 以及 **`imageModelFallbacks`**、**`imageGenerationModelFallbacks`**；`PATCH` 对图像字段支持与对话 **`model`** 相同的 **`{ primary, fallbacks }`** 对象形式。详见 [图像与视觉](image-multimodal.md)。
 
-**扩展 UI：** manifest **`ui`**、**`@xopcai/extension-ui-sdk`**、`/api/events` 转发与权限说明见 [扩展系统 — 网关控制台：扩展 UI](extensions.md#gateway-extension-ui)。
+**扩展 UI：** manifest **`ui`**、**`@xopcai/extension-ui-sdk`**、实时事件转发与权限说明见 [扩展系统 — 网关控制台：扩展 UI](extensions.md#gateway-extension-ui)。
 
 ## 错误响应
 

@@ -178,7 +178,7 @@ describe('pre-turn auto-compaction', () => {
     // Agent was evicted for fresh reload
     expect(agentManager.removeAgent).toHaveBeenCalledWith('agent:main:test-session');
 
-    // SSE events emitted in order: started → completed
+    // Run events emitted in order: started → completed
     const compactionEvents = events.filter((e) => e.type === 'compaction');
     expect(compactionEvents).toHaveLength(2);
     expect(compactionEvents[0]).toMatchObject({ type: 'compaction', status: 'started' });
@@ -339,7 +339,7 @@ describe('pre-turn auto-compaction', () => {
     // Agent was NOT evicted (compaction failed)
     expect(agentManager.removeAgent).not.toHaveBeenCalled();
 
-    // SSE emits started then skipped (due to error)
+    // Run stream emits started then skipped (due to error)
     const compactionEvents = events.filter((e) => e.type === 'compaction');
     expect(compactionEvents).toHaveLength(2);
     expect(compactionEvents[0]).toMatchObject({ type: 'compaction', status: 'started' });

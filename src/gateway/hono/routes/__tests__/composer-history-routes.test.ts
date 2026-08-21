@@ -26,7 +26,6 @@ describe('composer history routes', () => {
       service: { emit },
       strictRateLimitMiddleware: async (_c, next) => next(),
       chatRateLimitMiddleware: async (_c, next) => next(),
-      sseConfig: {},
     } as never);
   });
 

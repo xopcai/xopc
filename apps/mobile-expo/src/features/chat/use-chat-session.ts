@@ -893,7 +893,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     triggerStreamRecovery();
   }, [gatewayOnline, sessionKey, streaming, pendingRunId, triggerStreamRecovery]);
 
-  // Detect stalled SSE
+  // Detect a stalled realtime run
   useEffect(() => {
     if (!streaming || !sessionKey) return;
     const interval = setInterval(() => {

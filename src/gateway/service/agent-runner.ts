@@ -26,7 +26,7 @@ import type { MessageBus } from '../../infra/bus/index.js';
 import type { AgentService } from '../../agent/service.js';
 import type { ChannelManager } from '../../channels/manager.js';
 import type { SessionIndex } from '../../session/index.js';
-import { AgentRunRelay, type RelayEvent } from '../agent-run-relay.js';
+import type { ClarifyStreamEvent } from '../clarify-bridge.js';
 import { ClarifyBridge, type ClarifyBridgeRequest } from '../clarify-bridge.js';
 import { runGatewayAgent } from './run-gateway-agent.js';
 import type { UserTurnAttachment, UserTurnInput } from '../user-turn-input.js';
@@ -42,13 +42,14 @@ export interface GatewayAgentRunnerOptions {
   getAgentService: () => AgentService;
   getChannelManager: () => ChannelManager;
   getConfig: () => Config;
-  /** SSE emit (re-used so `runAgent` events broadcast to subscribers). */
+  /** Publish low-frequency gateway state changes. */
   emit: (type: string, payload: unknown) => void;
+  publishRealtime: (topic: string, event: string, data: unknown) => void;
+  completeRealtimeTopic: (topic: string) => void;
 }
 
 export class GatewayAgentRunner {
   private readonly opts: GatewayAgentRunnerOptions;
-  readonly runRelay = new AgentRunRelay();
   /** Per-run abort for webchat (POST /api/agent/abort or client disconnect). */
   private readonly runAbortControllers = new Map<string, AbortController>();
   private readonly runCompletions = new Map<string, Promise<void>>();
@@ -145,11 +146,12 @@ export class GatewayAgentRunner {
         config: this.opts.getConfig(),
         agentService: this.opts.getAgentService(),
         bus: this.opts.bus,
-        runRelay: this.runRelay,
         runAbortControllers: this.runAbortControllers,
         activeWebchatRunBySession: this.activeWebchatRunBySession,
         sessionIndex: this.opts.sessionIndex,
         emit: this.opts.emit,
+        publishRealtime: this.opts.publishRealtime,
+        completeRealtimeTopic: this.opts.completeRealtimeTopic,
       },
       message,
       channel,
@@ -198,7 +200,7 @@ export class GatewayAgentRunner {
     this.inputs.recover();
   }
 
-  /** Abort an in-flight webchat agent run (matches `runId` from SSE `run_start`). */
+  /** Abort an in-flight webchat agent run. */
   async abortAgentRun(runId: string): Promise<{ aborted: boolean; idle: boolean }> {
     this.clarifyBridge.cancelForRun(runId);
     const keysToMark: string[] = [];
@@ -206,10 +208,6 @@ export class GatewayAgentRunner {
       if (id === runId) {
         keysToMark.push(sk);
       }
-    }
-    const relaySk = this.runRelay.getSessionKey(runId);
-    if (relaySk && !keysToMark.includes(relaySk)) {
-      keysToMark.push(relaySk);
     }
     const c = this.runAbortControllers.get(runId);
     if (!c) {
@@ -268,21 +266,21 @@ export class GatewayAgentRunner {
 
   /**
    * Resolve clarify-bridge config for `sessionKey`: who delivers the question
-   * (webchat SSE, Telegram message, or both), then start the bridge request.
+   * (webchat stream, Telegram message, or both), then start the bridge request.
    * Rejects when neither path is available (e.g. CLI without webchat or TG).
    *
-   * `publishSseFor(runId)` is the bridge into AgentService's
-   * `turnDispatcher.enqueueWebchatSseEvent`. We take it as a callback so the
+   * `publishStreamFor(runId)` is the bridge into AgentService's
+   * `turnDispatcher.enqueueWebchatStreamEvent`. We take it as a callback so the
    * runner does not import AgentService statically.
    */
   async requestClarification(opts: {
     sessionKey: string;
     request: ClarifyBridgeRequest;
-    publishSseFor: (runId: string) => (e: RelayEvent) => void;
+    publishStreamFor: (runId: string) => (event: ClarifyStreamEvent) => void;
   }): Promise<string> {
-    const { sessionKey, request, publishSseFor } = opts;
+    const { sessionKey, request, publishStreamFor } = opts;
     const runId = this.activeWebchatRunBySession.get(sessionKey);
-    const publishSse = runId ? publishSseFor(runId) : undefined;
+    const publishStream = runId ? publishStreamFor(runId) : undefined;
     const metadata = await this.opts.sessionIndex.getSessionMetadata(sessionKey).catch(() => null);
     const routing = metadata?.routing;
     const deliver =
@@ -303,8 +301,7 @@ export class GatewayAgentRunner {
     return this.clarifyBridge.startRequest({
       sessionKey,
       runId,
-      relay: this.runRelay,
-      publishSse,
+      publishStream,
       request,
       deliver,
     });

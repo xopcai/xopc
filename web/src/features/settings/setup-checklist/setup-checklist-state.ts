@@ -217,7 +217,7 @@ function buildDiagnosticSignals(input: {
 
 export function buildSetupStatusSnapshot(input: {
   hasToken: boolean;
-  sseConnected: boolean;
+  realtimeConnected: boolean;
   config: unknown;
   skillCount: number;
   providerMeta?: { configured: number; total: number } | null;
@@ -246,7 +246,7 @@ export function buildSetupStatusSnapshot(input: {
     providerMetaConfigured > 0 || providerCount > 0;
   const defaultModel = readDefaultModel(input.config);
   const defaultModelConfigured = defaultModel.length > 0;
-  const gatewayConnected = input.hasToken && input.sseConnected;
+  const gatewayConnected = input.hasToken && input.realtimeConnected;
   const channelConfigured = isAnyChannelConfigured(input.config);
   const skillInstalled = input.skillCount > 0;
   const doctorChecks = input.doctorChecks ?? [];
