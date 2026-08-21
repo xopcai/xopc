@@ -7,7 +7,7 @@ import type { TuiToolContentBlock } from './tui-tool-result.js';
 const MAX_ARG_VALUE_LENGTH = 120;
 const MAX_PATH_LABEL_LENGTH = 72;
 
-export type ToolSummaryKind = 'read' | 'search' | 'exec' | 'mcp' | 'generic';
+export type ToolSummaryKind = 'read' | 'search' | 'exec' | 'generic';
 
 export interface ToolSummaryContext {
   toolName: string;
@@ -43,7 +43,6 @@ export function getToolSummaryKind(toolName: string): ToolSummaryKind {
   if (isReadStyleTool(toolName)) return 'read';
   if (isSearchStyleTool(toolName)) return 'search';
   if (isExecStyleTool(toolName)) return 'exec';
-  if (isMcpStyleTool(toolName)) return 'mcp';
   return 'generic';
 }
 
@@ -81,15 +80,7 @@ export function isExecStyleTool(toolName: string): boolean {
   ].includes(base);
 }
 
-export function isMcpStyleTool(toolName: string): boolean {
-  return toolName.includes('__');
-}
-
 export function displayToolName(toolName: string): string {
-  const parts = toolName.split('__');
-  if (parts.length === 2 && parts[0] && parts[1]) {
-    return `${parts[0]}.${parts[1]}`;
-  }
   return toolName;
 }
 
@@ -120,8 +111,6 @@ export function formatCollapsedToolSummary(ctx: ToolSummaryContext): string {
       return formatSearchSummary(ctx.output, ctx.expandKey);
     case 'exec':
       return formatExecSummary(ctx.output, ctx.details, ctx.isError, ctx.expandKey);
-    case 'mcp':
-      return formatMcpSummary(ctx.output, ctx.content, ctx.expandKey);
     case 'generic':
       return '';
   }
@@ -187,7 +176,7 @@ function commandFromArgs(args: unknown): string | null {
 }
 
 function baseToolName(toolName: string): string {
-  return toolName.split(/__|\./).pop()?.toLowerCase() ?? toolName.toLowerCase();
+  return toolName.split('.').pop()?.toLowerCase() ?? toolName.toLowerCase();
 }
 
 function firstFiniteNumber(...values: unknown[]): number | null {
@@ -250,26 +239,6 @@ function formatExecSummary(
     : `exit ${parsed.exitCode}`;
   const rowLabel = rows === 1 ? '1 output line' : `${rows} output lines`;
   return `${exit}; ${rowLabel}; ${expandKey} to expand`;
-}
-
-function formatMcpSummary(
-  output: string,
-  content: TuiToolContentBlock[] | undefined,
-  expandKey: string,
-): string {
-  if (content?.length) {
-    const counts = new Map<string, number>();
-    for (const block of content) {
-      counts.set(block.type, (counts.get(block.type) ?? 0) + 1);
-    }
-    const label = [...counts.entries()]
-      .map(([type, count]) => `${count} ${type}`)
-      .join(', ');
-    return `${label}; ${expandKey} to expand`;
-  }
-  const rows = nonBlankLines(output).length;
-  const rowLabel = rows === 1 ? '1 result line' : `${rows} result lines`;
-  return `${rowLabel}; ${expandKey} to expand`;
 }
 
 function parseExecDetails(details: unknown): {

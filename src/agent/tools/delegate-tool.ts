@@ -6,6 +6,7 @@ import {
   type BuildChildToolsOptions,
   type DelegateChildHandleOptions,
 } from '../child-agent-factory.js';
+import { EXTERNAL_TOOL_NAMES } from '../external-tools/index.js';
 
 const DEFAULT_MAX_ITERATIONS = 30;
 
@@ -37,7 +38,9 @@ export const DELEGATE_BLOCKED_TOOLS = new Set([
   'skill_manage',
   'skills_marketplace_search',
   'skill_install',
-  'bundle-mcp',
+  EXTERNAL_TOOL_NAMES.search,
+  EXTERNAL_TOOL_NAMES.describe,
+  EXTERNAL_TOOL_NAMES.execute,
   'managed_job',
 ]);
 

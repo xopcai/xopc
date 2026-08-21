@@ -37,6 +37,7 @@ export class ExtensionRegistryImpl implements ExtensionRegistry {
   services = new Map<string, ExtensionService>();
   gatewayMethods = new Map<string, GatewayMethodHandler>();
   tools: Map<string, AgentTool<any, any>> = new Map();
+  private toolExtensionIds = new Map<string, string>();
   channelPlugins: ChannelPlugin[] = [];
   private cliRegistrations: ExtensionCliRegistration[] = [];
   private reloadRegistrations: ExtensionReloadRegistration[] = [];
@@ -121,15 +122,17 @@ export class ExtensionRegistryImpl implements ExtensionRegistry {
   }
 
   // Tools
-  addTool(tool: any): void {
+  addTool(tool: any, extensionId: string): void {
     if (this.tools.has(tool.name)) {
       log.warn({ tool: tool.name }, `Tool already registered, overwriting`);
     }
     this.tools.set(tool.name, tool);
+    this.toolExtensionIds.set(tool.name, extensionId);
   }
 
   removeTool(name: string): void {
     this.tools.delete(name);
+    this.toolExtensionIds.delete(name);
   }
 
   getTools(): Map<string, any> {
@@ -138,6 +141,10 @@ export class ExtensionRegistryImpl implements ExtensionRegistry {
 
   getTool(name: string): any | undefined {
     return this.tools.get(name);
+  }
+
+  getToolExtensionId(name: string): string | undefined {
+    return this.toolExtensionIds.get(name);
   }
 
   getAllTools(): any[] {

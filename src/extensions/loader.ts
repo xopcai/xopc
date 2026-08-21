@@ -645,7 +645,7 @@ export class ExtensionLoader {
       const apiImpl = api as unknown as { _getTools: () => Map<string, AgentTool> };
       const extensionTools = apiImpl._getTools();
       for (const tool of extensionTools.values()) {
-        this.registry.addTool(tool);
+        this.registry.addTool(tool, config.id);
       }
 
       this.extensionInstances.set(config.id, api);

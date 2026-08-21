@@ -9,10 +9,6 @@ import { resolveAgentTurnTimeoutMs } from '../orchestration/run-agent-turn-with-
 import { runXopcEmbeddedTurn } from './run-turn.js';
 import type { EmbeddedStreamEvent, RunXopcEmbeddedTurnParams, RunXopcEmbeddedTurnResult } from './types.js';
 import { applyStartupContextToUserMessage } from '../reply/apply-turn-user-enrichment.js';
-import {
-  mergeTurnTools,
-  resolveEmbeddedMcpToolsForTurn,
-} from '../mcp/resolve-embedded-mcp-tools.js';
 import { createLogger } from '../../utils/logger.js';
 import { resolveModel } from '../../providers/index.js';
 import { evaluateContextBudget } from '../memory/context-budget.js';
@@ -39,8 +35,6 @@ export type RunEmbeddedForSessionParams = {
   startupAction?: 'new' | 'reset';
   forceStartupContext?: boolean;
   applyStartupContext?: boolean;
-  /** When true, dispose session MCP runtime after this turn completes. */
-  cleanupBundleMcpOnRunEnd?: boolean;
 };
 
 export async function runEmbeddedTurnForSession(
@@ -118,15 +112,6 @@ export async function runEmbeddedTurnForSession(
   }
 
   const result = await (async () => {
-    const mcpResolved = await resolveEmbeddedMcpToolsForTurn({
-      sessionKey,
-      workspaceDir,
-      cfg: config,
-      baseTools: tools,
-      cleanupOnTurnEnd: params.cleanupBundleMcpOnRunEnd === true,
-    });
-    const turnTools = mergeTurnTools(tools, mcpResolved.tools);
-    try {
       await maybeAutoCompactBeforeTurn({
         sessionKey,
         sessionStore,
@@ -135,7 +120,7 @@ export async function runEmbeddedTurnForSession(
         config,
         systemPrompt,
         userMessage: userMessageForTurn,
-        tools: turnTools,
+        tools,
         imageCount: params.llmImages?.length ?? 0,
         fallbackModels: resolvedCandidates.slice(1).map((candidate) => candidate.model),
         abortSignal: params.abortSignal,
@@ -195,7 +180,7 @@ export async function runEmbeddedTurnForSession(
             images: params.llmImages,
             model: candidateModel,
             modelRef: candidateModelRef,
-            tools: turnTools,
+            tools,
             systemPrompt,
             thinkingLevel,
             workspaceDir,
@@ -268,9 +253,6 @@ export async function runEmbeddedTurnForSession(
       if (lastError instanceof Error) throw lastError;
       if (lastError != null) throw new Error(String(lastError));
       return { ok: false, errorMessage: 'No model candidates available' };
-    } finally {
-      await mcpResolved.dispose().catch(() => {});
-    }
   })();
 
   return result;

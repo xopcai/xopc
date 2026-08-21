@@ -118,7 +118,7 @@ Gateway 也支持就绪后再进行 deferred extension loading，因此并不是
 
 xopc 有两个 MCP 方向：
 
-- 智能体出站 MCP：`src/agent/mcp/` 将配置的 MCP server tools、resources 与 prompts materialize 成智能体工具。Transport 包括 stdio 和 HTTP。
+- 智能体出站 MCP：`src/agent/mcp/` 维护会话级目录与传输，由统一外部工具网关按需搜索、描述和执行 MCP 工具。
 - 入站频道 MCP：`src/mcp/` 提供 stdio MCP server，通过 `XopcChannelBridge` 回连 Gateway REST/SSE API，让外部 MCP clients 可以查看 conversations、读取 messages、发送消息、poll events 和响应 approvals。
 
 两者边界不同：出站 MCP 扩展智能体可调用能力；入站 MCP 将一部分 xopc/频道能力暴露给外部工具。

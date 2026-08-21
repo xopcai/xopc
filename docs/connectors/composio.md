@@ -23,11 +23,11 @@ The Composio runtime is included with xopc; no additional npm packages are requi
 
 Toolkit installation is rejected until the Composio project API key is available from the credential store or `XOPC_COMPOSIO_API_KEY` / `COMPOSIO_API_KEY`.
 
-Agents receive three tools:
-
-- `composio_search` discovers exact actions and schemas only for installed, allowed apps.
-- `composio_connect` creates an authorization link without claiming authorization completed.
-- `composio_execute` executes a cached exact action contract. Write and admin actions follow the connector confirmation policy.
+Composio participates in the shared external-tool gateway. Agents use `xopc_tool_search`,
+`xopc_tool_describe`, and `xopc_tool_execute`; no Composio-specific tools are added to the
+model context. Search returns compact action references, describe loads an exact contract,
+and execute preserves the connector confirmation policy. Account authorization is exposed
+as a catalog action and never claims authorization completed until it is checked again.
 
 Approvals are one-time, expire after ten minutes, and are bound to the principal, session, action, account, and a deterministic hash of the arguments. Changing an argument invalidates the approval.
 

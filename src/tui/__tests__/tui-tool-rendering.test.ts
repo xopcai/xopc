@@ -469,8 +469,8 @@ describe('tui tool renderers', () => {
     expect(rendered).not.toContain('src/file-70.ts');
   });
 
-  it('renders MCP-style tool names and content block summaries', () => {
-    const component = tool('github__get_issue', { owner: 'xopc', repo: 'xopc', number: 42 });
+  it('keeps namespaced tool names intact and renders generic content blocks', () => {
+    const component = tool('github.get_issue', { owner: 'xopc', repo: 'xopc', number: 42 });
     component.updateResult({
       content: [
         { type: 'text', text: 'issue body' },
@@ -480,8 +480,9 @@ describe('tui tool renderers', () => {
 
     const rendered = stripAnsi(component.render(120).join('\n'));
     expect(rendered).toContain('Called github.get_issue');
-    expect(rendered).toContain('1 text, 1 image; Ctrl+O to expand');
-    expect(rendered).not.toContain('issue body');
+    expect(rendered).toContain('preview');
+    expect(rendered).toContain('issue body');
+    expect(rendered).toContain('[image:image/png]');
   });
 
   it('compacts long read paths in narrow tool rows', () => {

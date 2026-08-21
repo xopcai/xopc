@@ -3,7 +3,7 @@ import type { Hono } from 'hono';
 import {
   listBundleMcpServerCapabilitiesForGateway,
   listBundleMcpServerToolsForGateway,
-} from '../../../agent/mcp/bundle-mcp-materialize.js';
+} from '../../../agent/mcp/bundle-mcp-gateway.js';
 import { loadMergedBundleMcpConfig } from '../../../agent/mcp/bundle-mcp-config.js';
 import { canonicalizeConfiguredMcpServer, normalizeConfiguredMcpServers } from '../../../config/mcp-config-normalize.js';
 import { getWorkspacePath } from '../../../config/workspace-path-helpers.js';

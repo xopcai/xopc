@@ -291,7 +291,7 @@ export function createSessionMcpRuntime(params: {
                 serverName,
                 safeServerName,
               },
-              `bundle-mcp: server key "${serverName}" registered as "${safeServerName}" for provider-safe tool names`,
+              `bundle-mcp: server key "${serverName}" uses policy namespace "${safeServerName}"`,
             );
           }
 

@@ -22,9 +22,9 @@ XOPC supports **outbound bundle-MCP**: the agent connects to external MCP server
 ## How it works
 
 1. You define MCP servers under `mcp.servers` in `~/.xopc/xopc.json` (or your `XOPC_CONFIG` path).
-2. On an agent turn, XOPC starts (or reuses) a **per-session MCP runtime**, connects to each server, and lists tools.
-3. Tools are registered as **`serverId__toolName`** (double underscore). Example: server id `fetch` with tool `browse` → `fetch__browse`.
-4. The model can call these tools like any other built-in tool. Tool descriptions come from the MCP server (with sensible fallbacks when missing).
+2. When the agent searches external tools, XOPC starts (or reuses) a **per-session MCP runtime**, connects to each server, and reads its catalog.
+3. The model always sees only `xopc_tool_search`, `xopc_tool_describe`, and `xopc_tool_execute`; MCP definitions are never injected into the model tool list.
+4. Search returns compact references, describe loads an exact schema on demand, and execute validates that schema and its revision before calling the MCP server.
 
 **Transport types**
 
@@ -69,7 +69,7 @@ Add an `mcp` block to your config file:
 | Field | Description |
 |-------|-------------|
 | `sessionIdleTtlMs` | Idle eviction for per-session MCP client runtimes. Default **10 minutes** (`600000` ms). Set **`0`** to disable idle eviction. |
-| `servers` | Map of **server id** → server definition. The id becomes the tool name prefix (`id__tool`). |
+| `servers` | Map of **server id** → server definition. The id becomes the catalog namespace. |
 
 ### stdio server fields
 
@@ -129,7 +129,7 @@ Put MCP policy in an Agent entry or capability preset. To deny every tool from a
 }
 ```
 
-Apply the plan through the Agent's `extends` list. To deny one MCP tool, put its full registered name under `tools.mcp.tools`, for example `"fetch__browse": { "mode": "deny" }`. The same policy can be set directly on an Agent entry.
+Apply the plan through the Agent's `extends` list. To deny one MCP tool, use its stable policy id under `tools.mcp.tools`, for example `"mcp:fetch:browse": { "mode": "deny" }`. Policy ids are not model-visible tools. The same policy can be set directly on an Agent entry.
 
 Delegate sub-agents cannot use MCP tools.
 
@@ -150,7 +150,7 @@ Each server is shown as a **collapsible card** (collapsed by default after save 
 | UI area | Maps to config |
 |---------|----------------|
 | Server type | `transport` (stdio / SSE / Streamable HTTP) |
-| Server name | Key in `mcp.servers` (tool prefix) |
+| Server name | Key in `mcp.servers` (catalog namespace) |
 | Server URL | `url` (HTTP transports) |
 | Headers | Key/value editor → `headers` (supports paste JSON or `Key: Value` lines) |
 | Timeout (seconds) | `connectionTimeoutMs` |
@@ -159,7 +159,7 @@ Each server is shown as a **collapsible card** (collapsed by default after save 
 **Actions**
 
 - **Test** — connects with the current form values (including unsaved edits), lists tools, and shows the tool count on the card.
-- **View all** — opens a searchable dialog with tool short name, description (truncated with hover tooltip), and full `serverId__toolName`.
+- **View all** — opens a searchable dialog with tool short name, description (truncated with hover tooltip), and stable policy id.
 - **Remove** — deletes the server from the form (persist with **Save**).
 - **Add server** — new card starts **expanded** for editing.
 
@@ -188,7 +188,7 @@ Tool entries include:
 
 ```json
 {
-  "name": "fetch__browse",
+  "name": "mcp:fetch:browse",
   "shortName": "browse",
   "description": "Fetch a URL and return readable content"
 }
@@ -229,7 +229,7 @@ Restart or hot-reload config after changing extensions or user MCP entries.
 
 MCP runtimes are **scoped per session key** (conversation / agent context):
 
-- Created on first tool materialization for that session.
+- Created on first external-tool catalog access for that session.
 - Reused until idle TTL expires or the runtime is torn down.
 - Disposed on: gateway shutdown, `mcp.*` config hot reload, session delete, agent evict, isolated automation run completion.
 

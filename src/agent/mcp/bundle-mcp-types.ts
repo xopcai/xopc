@@ -1,12 +1,6 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { JsonSchemaType } from "@modelcontextprotocol/sdk/validation/types.js";
 import type { Config } from "../../config/schema.js";
-import type { AgentTool as AnyAgentTool } from "@earendil-works/pi-agent-core";
-
-export type BundleMcpToolRuntime = {
-  tools: AnyAgentTool[];
-  dispose: () => Promise<void>;
-};
 
 export type McpServerCatalog = {
   serverName: string;

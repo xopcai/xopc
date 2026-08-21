@@ -1,6 +1,7 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 
 import type { BuildChildToolsOptions } from '../child-agent-factory.js';
+import { EXTERNAL_TOOL_NAMES } from '../external-tools/index.js';
 import { AgentToolsFactory } from '../tools/factory.js';
 
 /** Builds the tool set for workflow child agents (wired from gateway to avoid cycles). */
@@ -17,6 +18,10 @@ export function buildWorkflowChildTools(childOptions: BuildChildToolsOptions): A
     workspace: childOptions.workspace,
     getPrimaryModel: () => childOptions.model,
     agentId: childOptions.agentId,
-    disabledTools: new Set(['extensions']),
+    disabledTools: new Set([
+      EXTERNAL_TOOL_NAMES.search,
+      EXTERNAL_TOOL_NAMES.describe,
+      EXTERNAL_TOOL_NAMES.execute,
+    ]),
   });
 }

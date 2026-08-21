@@ -24,11 +24,6 @@ vi.mock('../../reply/apply-turn-user-enrichment.js', () => ({
   applyStartupContextToUserMessage: ({ userMessage }: { userMessage: AgentMessage }) => userMessage,
 }));
 
-vi.mock('../../mcp/resolve-embedded-mcp-tools.js', () => ({
-  resolveEmbeddedMcpToolsForTurn: async () => ({ tools: [], dispose: async () => {} }),
-  mergeTurnTools: (base: unknown[]) => base,
-}));
-
 vi.mock('../../../providers/index.js', () => ({
   resolveModel: (modelRef: string) => {
     const [provider, id] = modelRef.split('/');

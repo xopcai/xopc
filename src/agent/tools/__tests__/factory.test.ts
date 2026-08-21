@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import type { AgentTool } from '@earendil-works/pi-agent-core';
 
 import { ConfigSchema, type Config } from '../../../config/schema.js';
 import type { MessageBus } from '../../../infra/bus/index.js';
+import { ExtensionRegistryImpl } from '../../../extensions/extension-registry-impl.js';
 import {
   createAgentCapabilitySessionState,
   getAgentCapabilityToolNames,
@@ -71,6 +73,31 @@ describe('AgentToolsFactory', () => {
     });
 
     expect(factory.createCoreTools().map((tool) => tool.name)).toContain('skills_marketplace_search');
+  });
+
+  it('exposes exactly three stable gateway tools instead of external tool definitions', () => {
+    const extensionRegistry = new ExtensionRegistryImpl();
+    extensionRegistry.addTool({
+      name: 'extension_demo',
+      description: 'An extension tool that must stay out of the model tool list.',
+      parameters: { type: 'object' },
+      execute: async () => ({ content: [{ type: 'text', text: 'ok' }], details: {} }),
+    } as AgentTool, 'demo');
+    const factory = new AgentToolsFactory({
+      workspace: '/tmp/xopc-tools-factory-test',
+      bus: {} as MessageBus,
+      getCurrentContext: () => null,
+      extensionRegistry,
+    });
+
+    const names = factory.createAllTools().map((tool) => tool.name);
+    expect(names.filter((name) => name.startsWith('xopc_tool_'))).toEqual([
+      'xopc_tool_search',
+      'xopc_tool_describe',
+      'xopc_tool_execute',
+    ]);
+    expect(names).not.toContain('extension_demo');
+    expect(names.some((name) => name.startsWith('composio_'))).toBe(false);
   });
 
   it('registers skill_install as a core tool when the runtime provides installation', () => {

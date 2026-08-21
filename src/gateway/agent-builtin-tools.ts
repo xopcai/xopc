@@ -1,3 +1,5 @@
+import { EXTERNAL_TOOL_NAMES } from '../agent/external-tools/index.js';
+
 /**
  * Built-in agent tool `name` values for gateway admin UI (disable toggles).
  * Extension tools are not listed; users can still add arbitrary strings in config.
@@ -45,8 +47,9 @@ export const GATEWAY_BUILTIN_TOOL_IDS = [
   'image_generate',
   'create_desktop_pet',
   'browser_use',
-  'extensions',
-  'bundle-mcp',
+  EXTERNAL_TOOL_NAMES.search,
+  EXTERNAL_TOOL_NAMES.describe,
+  EXTERNAL_TOOL_NAMES.execute,
 ] as const;
 
 export type GatewayBuiltinToolId = (typeof GATEWAY_BUILTIN_TOOL_IDS)[number];
