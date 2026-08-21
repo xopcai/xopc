@@ -1,6 +1,7 @@
 # Publish @xopcai/extension-ui-sdk when packages/extension-ui-sdk/package.json "version" changes on main.
 # Manual: gh workflow run npm-publish-extension-ui-sdk.yml --ref main
-# Requires NPM_TOKEN secret with publish access (same as root npm-publish workflow).
+# Uses npm Trusted Publishing (GitHub Actions OIDC); configure the package's
+# trusted publisher for xopcai/xopc and this workflow filename on npmjs.com.
 
 name: npm Publish extension-ui-sdk
 
@@ -114,5 +115,3 @@ jobs:
         if: steps.version.outputs.changed == 'true'
         run: pnpm publish --access public --no-git-checks --tag ${{ steps.npm-tag.outputs.tag }}
         working-directory: packages/extension-ui-sdk
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
