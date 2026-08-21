@@ -47,6 +47,7 @@
     },
     "plugins": [
       "./plugins/with-android-maven-mirrors",
+      "./plugins/with-android-proguard-rules",
       "./plugins/with-android-share-intake",
       "./plugins/with-ios-cocoapods-mirror",
       "./plugins/with-ios-share-intake",
