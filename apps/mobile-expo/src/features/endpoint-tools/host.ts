@@ -3,10 +3,12 @@ import {
   ENDPOINT_PROTOCOL_VERSION,
   canonicalJson,
   endpointHelloSigningPayload,
+  endpointToolContentSchema,
   parseServerEndpointMessage,
   type ClientEndpointMessage,
   type EndpointAvailability,
   type EndpointHelloPayload,
+  type EndpointToolContent,
   type EndpointToolDescriptor,
   type ServerEndpointMessage,
 } from '@xopcai/endpoint-tools-protocol';
@@ -32,6 +34,14 @@ import { executeMobileEndpointTool, MOBILE_ENDPOINT_TOOLS } from './tools';
 const RECONNECT_DELAY_MS = 2_000;
 const ARGUMENT_PREVIEW_LIMIT = 600;
 const confirmationByInvocationId = new Map<string, (allowed: boolean) => void>();
+
+export interface MobileEndpointToolExecutionContext {
+  uploadFile(file: {
+    name: string;
+    mimeType: string;
+    bytes: Uint8Array;
+  }): Promise<Extract<EndpointToolContent, { type: 'file' }>>;
+}
 
 function availability(): EndpointAvailability {
   return AppState.currentState === 'active' ? 'foreground' : 'background';
@@ -281,7 +291,7 @@ export class MobileEndpointToolHost {
   ): Promise<void> {
     const {
       invocationId, toolName, arguments: args, descriptorRevision,
-      confirmationRequired, deadlineAt,
+      confirmationRequired, deadlineAt, uploadGrant,
     } = message.payload;
     this.sendOn(socket, 'tool.received', { invocationId });
     const descriptor = MOBILE_ENDPOINT_TOOLS.find((tool) => tool.name === toolName);
@@ -308,19 +318,66 @@ export class MobileEndpointToolHost {
           return;
         }
       }
-      const text = await executeMobileEndpointTool(toolName, args);
+      const result = await executeMobileEndpointTool(toolName, args, {
+        uploadFile: (file) => this.uploadFile(uploadGrant, file),
+      });
       if (!this.ensureExecutable(socket, invocationId, descriptor, deadlineAt)) return;
-      this.sendOn(socket, 'tool.result', { invocationId, content: [{ type: 'text', text }] });
+      this.sendOn(socket, 'tool.result', { invocationId, content: result.content });
     } catch (error) {
       this.sendError(
         socket,
         invocationId,
-        error instanceof TypeError ? 'INVALID_ARGUMENTS' : 'PROTOCOL_ERROR',
+        error instanceof TypeError
+          ? 'INVALID_ARGUMENTS'
+          : error instanceof Error && error.name === 'AbortError'
+            ? 'USER_DENIED'
+            : error instanceof Error && error.name === 'NotAllowedError'
+              ? 'PERMISSION_DENIED'
+              : 'PROTOCOL_ERROR',
         error instanceof Error ? error.message : String(error),
       );
     } finally {
       this.cancelled.delete(invocationId);
     }
+  }
+
+  private async uploadFile(
+    grant: Extract<ServerEndpointMessage, { type: 'tool.invoke' }>['payload']['uploadGrant'],
+    file: { name: string; mimeType: string; bytes: Uint8Array },
+  ): Promise<Extract<EndpointToolContent, { type: 'file' }>> {
+    if (!grant || !this.endpointId) throw new Error('Mobile file upload grant is unavailable');
+    if (
+      !file.name
+      || file.name.length > 255
+      || !file.mimeType
+      || file.mimeType.length > 255
+      || file.bytes.byteLength > grant.maxBytes
+      || grant.expiresAt <= Date.now()
+    ) {
+      throw new TypeError('Mobile file is invalid');
+    }
+    const query = new URLSearchParams({ name: file.name });
+    const body = file.bytes.buffer.slice(
+      file.bytes.byteOffset,
+      file.bytes.byteOffset + file.bytes.byteLength,
+    ) as ArrayBuffer;
+    const response = await apiFetch(`${grant.path}?${query.toString()}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': file.mimeType,
+        'x-endpoint-id': this.endpointId,
+        'x-endpoint-upload-token': grant.token,
+      },
+      body,
+      timeoutMs: 120_000,
+    });
+    const json = await response.json().catch(() => null) as { payload?: unknown; error?: { message?: string } } | null;
+    if (!response.ok) throw new Error(json?.error?.message ?? `Mobile file upload failed: ${response.status}`);
+    const parsed = endpointToolContentSchema.safeParse(json?.payload);
+    if (!parsed.success || parsed.data.type !== 'file') {
+      throw new Error('Mobile file upload returned an invalid response');
+    }
+    return parsed.data;
   }
 
   private ensureExecutable(

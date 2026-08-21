@@ -38,6 +38,8 @@ export const loadRemoteAccessHub = () => import('@/features/remote-access/remote
 export const loadSharesSettingsPanel = () => import('@/features/shares/shares-settings');
 export const loadCapabilityPresetsSettingsPanel = () =>
   import('@/features/settings/capability-presets/capability-presets-settings-panel');
+export const loadEndpointToolsManagementSettings = () =>
+  import('@/features/endpoint-tools/management-settings');
 
 type RouteLoader = () => Promise<unknown>;
 
@@ -68,6 +70,7 @@ function preloadSettingsSection(path: string) {
   if (section === 'desktop-app') return preload(loadAppManagementSettingsPanel);
   if (section.startsWith('capabilities/')) return preload(loadCapabilitiesSettingsPanel);
   if (section === 'gateway') return preload(loadGatewaySettingsPanel);
+  if (section === 'devices') return preload(loadEndpointToolsManagementSettings);
   if (section === 'heartbeat') return preload(loadHeartbeatSettingsPanel);
   if (section === 'tunnel' || section === 'remote-access') return preload(loadRemoteAccessHub);
   if (section === 'shares') return preload(loadSharesSettingsPanel);

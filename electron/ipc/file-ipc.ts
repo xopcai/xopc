@@ -4,16 +4,41 @@ import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 
 import { spawn } from 'node:child_process';
 
 import { type IpcMain, app, dialog, shell } from 'electron';
+import { ENDPOINT_MAX_FILE_BYTES } from '@xopcai/endpoint-tools-protocol';
 
 import { assertTrustedRenderer } from './trusted-renderer.js';
 
 const SUPPORTED_EXTENSIONS = new Set(['.md', '.txt', '.json', '.ts', '.js']);
+const ENDPOINT_SAVE_TEXT_MAX_BYTES = 200 * 1024;
+const MIME_TYPE_BY_EXTENSION: Record<string, string> = {
+  '.csv': 'text/csv',
+  '.gif': 'image/gif',
+  '.html': 'text/html',
+  '.jpeg': 'image/jpeg',
+  '.jpg': 'image/jpeg',
+  '.json': 'application/json',
+  '.md': 'text/markdown',
+  '.pdf': 'application/pdf',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.txt': 'text/plain',
+  '.webp': 'image/webp',
+  '.xml': 'application/xml',
+  '.zip': 'application/zip',
+};
 
 export interface FileEntry {
   name: string;
   path: string;
   isDirectory: boolean;
 }
+
+export type EndpointPickedFile = {
+  name: string;
+  mimeType: string;
+  size: number;
+  dataBase64: string;
+};
 
 const watchers = new Map<string, ReturnType<typeof fsWatch>>();
 
@@ -645,6 +670,57 @@ export function registerFileIpc(ipcMain: IpcMain, options: FileIpcOptions = {}):
       ...(defaultPath ? { defaultPath } : {}),
     });
     return res.canceled ? null : res.filePaths[0] ?? null;
+  });
+
+  ipcMain.handle('file:pick-endpoint-file', async (event): Promise<EndpointPickedFile | null> => {
+    assertTrustedRenderer(event);
+    const res = await dialog.showOpenDialog({
+      title: 'Choose a file for xopc',
+      properties: ['openFile'],
+    });
+    const filePath = res.filePaths[0];
+    if (res.canceled || !filePath) return null;
+    const metadata = await stat(filePath);
+    if (!metadata.isFile()) throw new Error('Selected path is not a file');
+    if (metadata.size > ENDPOINT_MAX_FILE_BYTES) {
+      throw new Error(`Selected file exceeds ${ENDPOINT_MAX_FILE_BYTES} bytes`);
+    }
+    const bytes = await readFile(filePath);
+    if (bytes.byteLength > ENDPOINT_MAX_FILE_BYTES) {
+      throw new Error(`Selected file exceeds ${ENDPOINT_MAX_FILE_BYTES} bytes`);
+    }
+    const name = basename(filePath);
+    return {
+      name,
+      mimeType: MIME_TYPE_BY_EXTENSION[extname(name).toLowerCase()] ?? 'application/octet-stream',
+      size: bytes.byteLength,
+      dataBase64: bytes.toString('base64'),
+    };
+  });
+
+  ipcMain.handle('file:save-endpoint-text', async (event, input: unknown) => {
+    assertTrustedRenderer(event);
+    if (!input || typeof input !== 'object') throw new Error('Invalid file save request');
+    const { suggestedName, content } = input as { suggestedName?: unknown; content?: unknown };
+    if (
+      typeof suggestedName !== 'string'
+      || !suggestedName
+      || suggestedName === '.'
+      || suggestedName === '..'
+      || suggestedName.length > 255
+      || basename(suggestedName) !== suggestedName
+      || typeof content !== 'string'
+      || Buffer.byteLength(content, 'utf8') > ENDPOINT_SAVE_TEXT_MAX_BYTES
+    ) {
+      throw new Error('Invalid file save request');
+    }
+    const res = await dialog.showSaveDialog({
+      title: 'Save file from xopc',
+      defaultPath: suggestedName,
+    });
+    if (res.canceled || !res.filePath) return { saved: false as const };
+    await writeFile(res.filePath, content, 'utf8');
+    return { saved: true as const, name: basename(res.filePath) };
   });
 
   ipcMain.handle('shell:open-path', async (event, filePath: string) => {

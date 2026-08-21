@@ -62,4 +62,38 @@ describe('endpoint tool principal routes', () => {
       error: { code: 'PRINCIPAL_REVOKED' },
     });
   });
+
+  it('lists persisted principals with only their active endpoint snapshots', async () => {
+    const principal = createEndpointPrincipal({
+      id: crypto.randomUUID(),
+      displayName: 'Desktop',
+      kind: 'desktop',
+      platform: 'darwin',
+      publicKey: 'private-management-key',
+    });
+    const endpoint = {
+      principalId: principal.id,
+      endpointId: `${principal.id}:desktop`,
+      connectionId: crypto.randomUUID(),
+      displayName: principal.displayName,
+      kind: principal.kind,
+      platform: principal.platform,
+      appVersion: '1',
+      availability: 'foreground',
+      lastHeartbeatAt: Date.now(),
+      tools: [],
+    };
+    const app = new Hono();
+    registerEndpointToolRoutes(app, {
+      service: { endpointTools: { registry: { list: () => [endpoint] } } },
+    } as unknown as AuthenticatedRouteDeps);
+
+    const response = await app.request('/api/endpoint-tools/principals');
+    expect(response.status).toBe(200);
+    const body = await response.text();
+    expect(JSON.parse(body)).toMatchObject({
+      payload: [{ id: principal.id, endpoints: [{ endpointId: endpoint.endpointId }] }],
+    });
+    expect(body).not.toContain('private-management-key');
+  });
 });

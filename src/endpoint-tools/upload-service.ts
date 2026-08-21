@@ -2,10 +2,13 @@ import crypto from 'node:crypto';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import type { EndpointToolContent } from '@xopcai/endpoint-tools-protocol';
+import {
+  ENDPOINT_MAX_FILE_BYTES,
+  type EndpointToolContent,
+} from '@xopcai/endpoint-tools-protocol';
 
 const GRANT_TTL_MS = 5 * 60_000;
-export const ENDPOINT_UPLOAD_MAX_BYTES = 25 * 1024 * 1024;
+export const ENDPOINT_UPLOAD_MAX_BYTES = ENDPOINT_MAX_FILE_BYTES;
 const DEFAULT_MAX_FILES = 8;
 
 interface UploadGrantRecord {

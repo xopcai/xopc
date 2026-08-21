@@ -7,6 +7,7 @@ import {
   loadAppearanceSettingsPanel,
   loadDesktopPetSettingsPanel,
   loadGatewaySettingsPanel,
+  loadEndpointToolsManagementSettings,
   loadHeartbeatSettingsPanel,
   loadKeyboardShortcutsSettingsPanel,
   loadCapabilityPresetsSettingsPanel,
@@ -27,6 +28,7 @@ const SECTIONS: SettingsSectionId[] = [
   'desktop-app',
   'capability-presets',
   'gateway',
+  'devices',
   'heartbeat',
   'remote-access',
   'shares',
@@ -54,6 +56,9 @@ const RemoteAccessHub = lazy(() => loadRemoteAccessHub().then((m) => ({ default:
 const SharesSettingsPanel = lazy(() => loadSharesSettingsPanel().then((m) => ({ default: m.SharesSettingsPanel })));
 const CapabilityPresetsSettingsPanel = lazy(() =>
   loadCapabilityPresetsSettingsPanel().then((m) => ({ default: m.CapabilityPresetsSettingsPanel })),
+);
+const EndpointToolsManagementSettings = lazy(() =>
+  loadEndpointToolsManagementSettings().then((m) => ({ default: m.EndpointToolsManagementSettings })),
 );
 
 function SettingsSectionFallback() {
@@ -117,6 +122,10 @@ export function SettingsPage() {
 
   if (id === 'gateway') {
     return renderLazySection(GatewaySettingsPanel);
+  }
+
+  if (id === 'devices') {
+    return renderLazySection(EndpointToolsManagementSettings);
   }
 
   if (id === 'heartbeat') {

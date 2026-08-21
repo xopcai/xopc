@@ -32,6 +32,8 @@ type ElectronShellPreferences = {
   notificationAuthStatus?: TccTriState;
 };
 
+type EndpointNotificationInput = { title: string; body: string };
+
 const defaultPrefs: ElectronShellPreferences = {
   keepAwakePreferred: false,
   notifyEnabled: true,
@@ -133,6 +135,24 @@ async function persistNotificationAuthStatus(status: TccTriState): Promise<void>
 
 function notificationAccessState(): TccTriState {
   return prefs.notificationAuthStatus ?? 'unknown';
+}
+
+function parseEndpointNotificationInput(input: unknown): EndpointNotificationInput | undefined {
+  if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).length !== 2) {
+    return undefined;
+  }
+  const { title, body } = input as { title?: unknown; body?: unknown };
+  if (
+    typeof title !== 'string'
+    || !title.trim()
+    || title.length > 120
+    || typeof body !== 'string'
+    || !body.trim()
+    || body.length > 500
+  ) {
+    return undefined;
+  }
+  return { title, body };
 }
 
 function mapMediaStatusWhenAvailable(type: 'microphone' | 'screen' | 'camera'): TccTriState {
@@ -628,6 +648,24 @@ export function registerSystemSettingsIpc(
     assertTrustedRenderer(event);
     return requestNotificationAccess();
   });
+
+  ipcMain.handle(
+    'system-settings:show-endpoint-notification',
+    (event, input: unknown): { ok: true } | { ok: false; error: string } => {
+      assertTrustedRenderer(event);
+      const notificationInput = parseEndpointNotificationInput(input);
+      if (!notificationInput) return { ok: false, error: 'INVALID_ARGUMENTS' };
+      if (!prefs.notifyEnabled) return { ok: false, error: 'NOTIFICATIONS_DISABLED' };
+      if (!Notification.isSupported()) return { ok: false, error: 'NOTIFICATIONS_UNSUPPORTED' };
+      if (!isShellNotificationGranted()) return { ok: false, error: 'PERMISSION_DENIED' };
+      try {
+        new Notification({ ...notificationInput, silent: !prefs.notifySoundEnabled }).show();
+        return { ok: true };
+      } catch {
+        return { ok: false, error: 'NOTIFICATION_FAILED' };
+      }
+    },
+  );
 
   ipcMain.handle('system-settings:request-screen', async (event): Promise<PermissionRequestResult> => {
     assertTrustedRenderer(event);

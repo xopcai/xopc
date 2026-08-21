@@ -65,6 +65,13 @@ export function getEndpointPrincipal(id: string): EndpointPrincipal | undefined 
   return row ? fromRow(row) : undefined;
 }
 
+export function listEndpointPrincipals(): EndpointPrincipal[] {
+  const rows = getSqliteDatabase()
+    .prepare('SELECT * FROM endpoint_principals ORDER BY created_at DESC')
+    .all() as unknown as EndpointPrincipalRow[];
+  return rows.map(fromRow);
+}
+
 export function touchEndpointPrincipal(id: string, seenAt = Date.now()): void {
   getSqliteDatabase()
     .prepare('UPDATE endpoint_principals SET last_seen_at = ? WHERE id = ? AND revoked_at IS NULL')

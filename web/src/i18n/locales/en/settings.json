@@ -7,6 +7,7 @@
     "capability-presets": "Capability plans",
     "connectors": "Connectors",
     "channels": "Channels",
+    "devices": "Devices & tools",
     "gateway": "Gateway",
     "heartbeat": "Heartbeat",
     "tunnel": "Remote access",
@@ -21,6 +22,40 @@
   },
   "settingsPage": {
     "comingSoon": "Settings · {{title}} (coming soon)."
+  },
+  "endpointToolsSettings": {
+    "title": "Devices & tools",
+    "subtitle": "Review enrolled endpoints, exposed tools, permissions, and recent calls.",
+    "refresh": "Refresh",
+    "loadError": "Could not load endpoint management data.",
+    "registered": "Registered identities",
+    "online": "Online endpoints",
+    "recentCalls": "Recent calls",
+    "devicesTitle": "Enrolled devices",
+    "devicesHint": "Only tools from the endpoint that started a turn are available to that turn.",
+    "noDevices": "No devices are enrolled yet.",
+    "lastSeen": "Last seen",
+    "never": "Never",
+    "noPermissions": "No declared permissions",
+    "revoke": "Revoke",
+    "revoking": "Revoking…",
+    "revokeTitle": "Revoke endpoint identity?",
+    "revokeDescription": "Revoke {{name}} and disconnect all of its active endpoints? Re-enrollment requires an explicit confirmation on that device.",
+    "revokeError": "Could not revoke this endpoint identity. Try again.",
+    "cancel": "Cancel",
+    "callsTitle": "Recent tool calls",
+    "callsHint": "Arguments are represented by hashes in the audit log; raw values are not stored here.",
+    "noCalls": "No endpoint tool calls yet.",
+    "status": {
+      "online": "Online",
+      "offline": "Offline",
+      "revoked": "Revoked",
+      "foreground": "Foreground",
+      "background": "Background",
+      "running": "Running",
+      "succeeded": "Succeeded",
+      "failed": "Failed"
+    }
   },
   "userProfileSettings": {
     "title": "About you",

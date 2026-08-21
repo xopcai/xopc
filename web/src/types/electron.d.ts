@@ -9,6 +9,16 @@ export interface ElectronFileAPI {
     dirPath: string,
   ): Promise<Array<{ name: string; path: string; isDirectory: boolean }>>;
   openDirectory(options?: ElectronOpenDirectoryOptions): Promise<string | null>;
+  pickEndpointFile(): Promise<{
+    name: string;
+    mimeType: string;
+    size: number;
+    dataBase64: string;
+  } | null>;
+  saveEndpointText(input: {
+    suggestedName: string;
+    content: string;
+  }): Promise<{ saved: true; name: string } | { saved: false }>;
   watchFile(filePath: string, callback: (content: string) => void): void;
 }
 
@@ -479,6 +489,10 @@ export interface ElectronSystemSettingsAPI {
   requestMicrophone(): Promise<PermissionRequestResult>;
   requestAccessibility(): Promise<PermissionRequestResult>;
   requestNotifications(): Promise<PermissionRequestResult>;
+  showEndpointNotification(input: {
+    title: string;
+    body: string;
+  }): Promise<{ ok: true } | { ok: false; error: string }>;
   requestScreen(): Promise<PermissionRequestResult>;
   getUninstallInfo(): Promise<UninstallInfo>;
   clearUserData(): Promise<ClearUserDataResult>;
