@@ -1,6 +1,7 @@
 import { nextMemoryReviewAt } from '../agent/memory/lifecycle.js';
 import type { MemoryKind, MemoryRecord } from '../agent/memory/types.js';
 import { listMemoryRecords, upsertMemoryRecord } from '../storage/sqlite/index.js';
+import { USER_CONFIRMED_MEMORY_TAG } from './actionableInsights.js';
 import { isUserContextRecord } from './projection.js';
 
 export type ManualUnderstandingScope =
@@ -59,7 +60,7 @@ export function createManualUnderstanding(input: {
     content: input.content,
     source: { provider: 'local', path: 'you://manual' },
     confidence: 1,
-    tags: ['user-understanding', 'explicit-user-memory'],
+    tags: ['user-understanding', 'explicit-user-memory', USER_CONFIRMED_MEMORY_TAG],
     status: 'active',
     sensitivity: input.sensitivity,
     explicitness: 'explicit',

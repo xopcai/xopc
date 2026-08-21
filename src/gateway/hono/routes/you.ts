@@ -1,9 +1,8 @@
 import type { Hono } from 'hono';
-import { randomUUID } from 'node:crypto';
 
 import { resolveDefaultAgentId } from '../../../agent/agent-scope.js';
 import type { MemoryRecord } from '../../../agent/memory/types.js';
-import { nextMemoryReviewAt, resolveMemoryStability } from '../../../agent/memory/lifecycle.js';
+import { nextMemoryReviewAt } from '../../../agent/memory/lifecycle.js';
 import { resolveDreamingSettings } from '../../../agent/memory/dreaming/config.js';
 import { runDreamingPhase } from '../../../agent/memory/dreaming/runner.js';
 import { nextDreamingRunTimes } from '../../../agent/memory/dreaming/schedule.js';
@@ -14,11 +13,8 @@ import { listConnectorCatalog } from '../../../connectors/catalog.js';
 import { listConnectorInstances } from '../../../connectors/instances.js';
 import { uninstallConnector } from '../../../connectors/install.js';
 import { revokeComposioConnection } from '../../../connectors/composio.js';
-import {
-  defineTaskContract,
-  TaskApplicationService,
-  TaskRepository,
-} from '../../../tasks/index.js';
+import { TaskRepository } from '../../../tasks/index.js';
+import { TaskContextRepository } from '../../../tasks/task-context-repository.js';
 import { renderUserClaim } from '../../../knowledge/connected-understanding-pipeline.js';
 import { readUserProfileFile, writeUserProfileFile } from '../../agents-admin.js';
 import {
@@ -81,21 +77,18 @@ import {
 import { prepareUserContextImport } from '../../../user-context/import.js';
 import { createManualUnderstanding } from '../../../user-context/manual-understanding.js';
 import { buildTaskSourceRecommendations } from '../../../user-context/source-recommendations.js';
+import {
+  buildActionableInsightSuggestions,
+  INSIGHT_ACCEPTED_TAG,
+  INSIGHT_DISMISSED_TAG,
+  USER_CONFIRMED_MEMORY_TAG,
+} from '../../../user-context/actionableInsights.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 const VISIBLE_STATUSES = new Set<MemoryRecord['status']>(['active', 'candidate', 'needs_review']);
 const FEEDBACK_RATINGS = new Set([
   'helpful', 'not_helpful', 'mixed', 'irrelevant', 'incorrect', 'outdated', 'sensitive',
 ]);
-const ACTIONABLE_INSIGHT_KINDS = new Set<MemoryRecord['kind']>([
-  'routine',
-  'commitment',
-  'long_term_goal',
-  'derived_insight',
-  'task_lesson',
-]);
-const INSIGHT_ACCEPTED_TAG = 'insight-action:accepted';
-const INSIGHT_DISMISSED_TAG = 'insight-action:dismissed';
 const PLAYBOOK_IDS = ['communication', 'execution', 'routines'] as const;
 type PlaybookId = typeof PLAYBOOK_IDS[number];
 const PLAYBOOK_SUPPORT_NEEDS = new Set(['listen', 'clarify', 'advise', 'act', 'unknown']);
@@ -266,32 +259,6 @@ export function buildPersonalPlaybooks(records: MemoryRecord[]) {
   });
 }
 
-export function buildInsightSuggestions(records: MemoryRecord[]) {
-  return records
-    .filter((record) => record.status === 'active')
-    .filter((record) => ACTIONABLE_INSIGHT_KINDS.has(record.kind))
-    .filter((record) => !record.tags?.includes(INSIGHT_ACCEPTED_TAG) && !record.tags?.includes(INSIGHT_DISMISSED_TAG))
-    .filter((record) => {
-      const stability = resolveMemoryStability(record);
-      return record.explicitness === 'explicit' || (record.evidence?.length ?? 0) >= 2 || stability.band === 'strong';
-    })
-    .sort((left, right) => right.importance - left.importance || Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
-    .slice(0, 5)
-    .map((record) => ({
-      id: record.id,
-      insight: record.content,
-      kind: record.kind,
-      action: record.kind === 'routine'
-        ? 'make_repeatable' as const
-        : record.kind === 'task_lesson' || record.kind === 'derived_insight'
-          ? 'add_playbook' as const
-          : 'start_progress' as const,
-      evidenceCount: record.evidence?.length ?? 0,
-      confidence: record.confidence,
-      sourceName: record.source.provider ?? 'local',
-    }));
-}
-
 export function buildRoutineAutomationDraftHref(record: Pick<MemoryRecord, 'id' | 'content'>): string {
   const params = new URLSearchParams({
     draft: record.content,
@@ -400,9 +367,11 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
       learningJobs: listConnectorLearningJobs({ limit: 500 }),
       claimStatsBySource: listUserClaimStatsBySource(),
     });
-    const activeTasks = new TaskRepository().list({ limit: 20 }).flatMap((task) => {
-      if (task.delegateAgentId !== agentId || task.phase === 'closed') return [];
-      return [{ id: task.id, title: task.title, body: task.body }];
+    const openTasks = new TaskRepository().list({ limit: 500 }).filter((task) => (
+      task.delegateAgentId === agentId && task.phase !== 'closed'
+    ));
+    const activeTasks = openTasks.slice(0, 20).map((task) => {
+      return { id: task.id, title: task.title, body: task.body };
     });
     return c.json({
       scope: {
@@ -428,7 +397,10 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
         return record ? [projectReferenceConsent(consent, record)] : [];
       }),
       conflictGroups: buildConflictGroups(allUserContextRecords),
-      insights: buildInsightSuggestions(records),
+      insights: buildActionableInsightSuggestions(
+        records,
+        openTasks.map((task) => [task.title, task.body].filter(Boolean).join('\n')),
+      ).map((insight) => ({ ...insight, delegateAgentId: agentId })),
       playbooks: buildPersonalPlaybooks(allUserContextRecords),
       sources,
       sourceRecommendations: buildTaskSourceRecommendations(
@@ -653,7 +625,7 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
           durability: candidate.durability,
           importance: candidate.importance,
           disclosurePolicy: candidate.disclosurePolicy,
-          tags: [...new Set(['user-understanding', ...(candidate.tags ?? []), 'user-confirmed'])],
+          tags: [...new Set(['user-understanding', ...(candidate.tags ?? []), USER_CONFIRMED_MEMORY_TAG])],
           evidence: evidence.map((item) => ({
             sourceItemId: item.sourceItemId,
             relation: item.relation === 'contradicts' ? 'contradicts' : 'supports',
@@ -812,7 +784,10 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
         if (action === 'forget') deleteMemoryRecord(id);
         else preserveRecord(record, {
           status: action === 'confirm' ? 'active' : 'rejected',
-          ...(action === 'confirm' ? { reviewAfter: nextMemoryReviewAt(record) } : {}),
+          ...(action === 'confirm' ? {
+            reviewAfter: nextMemoryReviewAt(record),
+            tags: [...new Set([...(record.tags ?? []), USER_CONFIRMED_MEMORY_TAG])],
+          } : {}),
         });
         updatedCount += 1;
       }
@@ -832,7 +807,11 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
     runSqliteWriteTransaction(() => {
       for (const record of group) {
         preserveRecord(record, record.id === winnerId
-          ? { status: 'active', reviewAfter: nextMemoryReviewAt(record) }
+          ? {
+              status: 'active',
+              reviewAfter: nextMemoryReviewAt(record),
+              tags: [...new Set([...(record.tags ?? []), USER_CONFIRMED_MEMORY_TAG])],
+            }
           : { status: 'archived', validTo: record.validTo ?? now });
       }
     });
@@ -1008,70 +987,66 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
     });
   });
 
-  authenticated.patch('/api/you/insights/:id', deps.strictRateLimitMiddleware, async (c) => {
+  authenticated.post('/api/you/insights/:id/apply', deps.strictRateLimitMiddleware, async (c) => {
     const config = deps.service.currentConfig as Config;
     const existing = editableRecord(c.req.param('id'));
-    if (!existing || existing.status !== 'active' || !ACTIONABLE_INSIGHT_KINDS.has(existing.kind)) {
-      return c.json({ error: 'Insight not found' }, 404);
+    const suggestion = existing ? buildActionableInsightSuggestions([existing], [])[0] : undefined;
+    if (!existing || !suggestion) return c.json({ error: 'Insight not found' }, 404);
+    if (suggestion.action === 'start_progress') {
+      return c.json({ error: 'Progress insights must be reviewed as task drafts' }, 400);
     }
-    const body = await c.req.json().catch(() => ({}));
-    const action = typeof body.action === 'string' ? body.action : '';
-    if (action === 'dismiss') {
-      preserveRecord(existing, { tags: [...new Set([...(existing.tags ?? []), INSIGHT_DISMISSED_TAG])] });
-      return c.json({ ok: true, status: 'dismissed' });
-    }
-    if (action === 'complete' && existing.kind === 'routine') {
-      preserveRecord(existing, { tags: [...new Set([...(existing.tags ?? []), INSIGHT_ACCEPTED_TAG])] });
-      return c.json({ ok: true, status: 'saved' });
-    }
-    if (action !== 'apply') return c.json({ error: 'Action must be apply, complete, or dismiss' }, 400);
 
     if (existing.kind === 'routine') {
+      preserveRecord(existing, { tags: [...new Set([...(existing.tags ?? []), INSIGHT_ACCEPTED_TAG])] });
       return c.json({ ok: true, status: 'drafting', href: buildRoutineAutomationDraftHref(existing) });
     }
 
-    if (existing.kind === 'task_lesson' || existing.kind === 'derived_insight') {
-      upsertMemoryRecord({
-        providerId: 'local',
-        kind: 'task_lesson',
-        sourceAgentId: selectedAgentId(config),
-        content: existing.content,
-        source: { provider: 'local', path: 'you://insight-proposal' },
-        confidence: 1,
-        tags: ['user-understanding', PLAYBOOK_RULE_TAG, `${PLAYBOOK_ORDER_PREFIX}1000`],
-        status: 'active',
-        sensitivity: existing.sensitivity,
-        explicitness: 'explicit',
-        durability: 'durable',
-        importance: existing.importance,
-        disclosurePolicy: existing.disclosurePolicy,
-        evidence: existing.evidence,
-      });
-      preserveRecord(existing, { tags: [...new Set([...(existing.tags ?? []), INSIGHT_ACCEPTED_TAG])] });
-      return c.json({ ok: true, status: 'saved' });
-    }
-
-    const title = existing.content.trim().split(/\r?\n/)[0]!.slice(0, 72);
-    const uiLocale = body.uiLocale === 'zh' ? 'zh' : 'en';
-    const contract = defineTaskContract(title);
-    const created = new TaskApplicationService().create({
-      idempotencyKey: randomUUID(), title, body: existing.content,
-      priority: 'normal', delegateAgentId: selectedAgentId(config), locale: uiLocale,
-      contract: { ...contract, acceptancePolicy: 'verified_auto', outputDestinations: [] },
-      dependencies: [],
-      context: [{ targetKind: 'memory', targetId: existing.id, role: 'input', pinned: true, retrievalPolicy: {}, metadata: {} }],
-      authorityGrants: [],
-      activation: { mode: 'start', executor: { kind: 'agent', agentId: selectedAgentId(config) } },
+    upsertMemoryRecord({
+      providerId: 'local',
+      kind: 'task_lesson',
+      sourceAgentId: selectedAgentId(config),
+      content: existing.content,
+      source: { provider: 'local', path: 'you://insight-proposal' },
+      confidence: 1,
+      tags: [
+        'user-understanding',
+        USER_CONFIRMED_MEMORY_TAG,
+        PLAYBOOK_RULE_TAG,
+        `${PLAYBOOK_ORDER_PREFIX}1000`,
+      ],
+      status: 'active',
+      sensitivity: existing.sensitivity,
+      explicitness: 'explicit',
+      durability: 'durable',
+      importance: existing.importance,
+      disclosurePolicy: existing.disclosurePolicy,
+      evidence: existing.evidence,
     });
-    if (created.ok === false) return c.json({ ok: false, error: created.reason }, 409);
-    if (created.runId) deps.service.dispatchTaskRuns();
     preserveRecord(existing, { tags: [...new Set([...(existing.tags ?? []), INSIGHT_ACCEPTED_TAG])] });
-    return c.json({
-      ok: true,
-      status: created.runId ? 'queued' : 'saved',
-      taskId: created.model.task.id,
-      href: `/tasks/${encodeURIComponent(created.model.task.id)}`,
-    });
+    return c.json({ ok: true, status: 'saved' });
+  });
+
+  authenticated.delete('/api/you/insights/:id', deps.strictRateLimitMiddleware, (c) => {
+    const existing = editableRecord(c.req.param('id'));
+    const suggestion = existing ? buildActionableInsightSuggestions([existing], [])[0] : undefined;
+    if (!existing || !suggestion) return c.json({ error: 'Insight not found' }, 404);
+    preserveRecord(existing, { tags: [...new Set([...(existing.tags ?? []), INSIGHT_DISMISSED_TAG])] });
+    return c.json({ ok: true, status: 'dismissed' });
+  });
+
+  authenticated.post('/api/you/insights/:id/complete', deps.strictRateLimitMiddleware, async (c) => {
+    const existing = editableRecord(c.req.param('id'));
+    const suggestion = existing ? buildActionableInsightSuggestions([existing], [])[0] : undefined;
+    if (!existing || suggestion?.action !== 'start_progress') return c.json({ error: 'Insight not found' }, 404);
+    const body = await c.req.json().catch(() => ({}));
+    const taskId = typeof body.taskId === 'string' ? body.taskId.trim() : '';
+    const task = taskId ? new TaskRepository().get(taskId) : null;
+    const linked = task && new TaskContextRepository().list(task.id).some((edge) => (
+      edge.targetKind === 'memory' && edge.targetId === existing.id
+    ));
+    if (!task || !linked) return c.json({ error: 'A linked task draft is required' }, 400);
+    preserveRecord(existing, { tags: [...new Set([...(existing.tags ?? []), INSIGHT_ACCEPTED_TAG])] });
+    return c.json({ ok: true, status: 'saved', taskId: task.id });
   });
 
   authenticated.patch('/api/you/controls', deps.strictRateLimitMiddleware, async (c) => {
@@ -1197,6 +1172,7 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
         understanding: projectUserContextRecord(preserveRecord(existing, {
           status: 'active',
           reviewAfter: nextMemoryReviewAt(existing),
+          tags: [...new Set([...(existing.tags ?? []), USER_CONFIRMED_MEMORY_TAG])],
         })),
       });
     }
@@ -1216,7 +1192,12 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
         content,
         source: { provider: 'local' },
         confidence: 1,
-        tags: [...new Set([...(existing.tags ?? []), 'user-understanding', 'explicit-user-correction'])],
+        tags: [...new Set([
+          ...(existing.tags ?? []),
+          'user-understanding',
+          'explicit-user-correction',
+          USER_CONFIRMED_MEMORY_TAG,
+        ])],
         status: 'active',
         sensitivity: existing.sensitivity,
         explicitness: 'explicit',

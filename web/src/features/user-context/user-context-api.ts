@@ -144,6 +144,7 @@ export type InsightSuggestion = {
   evidenceCount: number;
   confidence?: number;
   sourceName: string;
+  delegateAgentId: string;
 };
 
 export type PersonalPlaybook = {
@@ -290,13 +291,23 @@ export function rollbackPersonalPlaybookRule(id: PersonalPlaybook['id'], ruleId:
   });
 }
 
-export function updateInsightSuggestion(
+export function applyInsightSuggestion(
   id: string,
-  input: { action: 'apply' | 'complete' | 'dismiss'; uiLocale?: 'en' | 'zh' },
-): Promise<{ ok: true; status: 'queued' | 'saved' | 'dismissed' | 'drafting'; href?: string }> {
-  return fetchJson(apiUrl(`/api/you/insights/${encodeURIComponent(id)}`), {
-    method: 'PATCH',
-    body: JSON.stringify(input),
+): Promise<{ ok: true; status: 'saved' | 'drafting'; href?: string }> {
+  return fetchJson(apiUrl(`/api/you/insights/${encodeURIComponent(id)}/apply`), { method: 'POST' });
+}
+
+export function dismissInsightSuggestion(id: string): Promise<{ ok: true; status: 'dismissed' }> {
+  return fetchJson(apiUrl(`/api/you/insights/${encodeURIComponent(id)}`), { method: 'DELETE' });
+}
+
+export function completeInsightTaskDraft(
+  id: string,
+  taskId: string,
+): Promise<{ ok: true; status: 'saved'; taskId: string }> {
+  return fetchJson(apiUrl(`/api/you/insights/${encodeURIComponent(id)}/complete`), {
+    method: 'POST',
+    body: JSON.stringify({ taskId }),
   });
 }
 

@@ -52,8 +52,15 @@
     "insightActions": {
       "make_repeatable": "Make it repeatable",
       "add_playbook": "Add to my playbook",
-      "start_progress": "Start moving it"
+      "start_progress": "Review task draft"
     },
+    "insightDraftTitle": "Review task draft",
+    "insightDraftDescription": "Confirm the title and context before saving. The task goes to the backlog and does not start an agent.",
+    "insightTaskTitleLabel": "Task title",
+    "insightTaskBodyLabel": "Task context",
+    "insightTaskContextHint": "This confirmed understanding is pinned to the task as context for later review and execution.",
+    "insightCreateDraft": "Save task draft",
+    "insightCreatingDraft": "Saving…",
     "notNow": "Not now",
     "playbooksTitle": "How xopc works with you",
     "affectsAgentsBadge": "Shapes agent behavior",

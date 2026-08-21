@@ -470,7 +470,11 @@ describe('tui tool renderers', () => {
   });
 
   it('keeps namespaced tool names intact and renders generic content blocks', () => {
-    const component = tool('github.get_issue', { owner: 'xopc', repo: 'xopc', number: 42 });
+    const component = tool(
+      'github.get_issue',
+      { owner: 'xopc', repo: 'xopc', number: 42 },
+      { showImages: false },
+    );
     component.updateResult({
       content: [
         { type: 'text', text: 'issue body' },
