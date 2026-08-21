@@ -38,7 +38,6 @@ import { agentListDisplayName } from '@/features/settings/agents/agent-display-n
 import { messages, type MessageBundle } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import type { StoredLanguage } from '@/lib/storage';
-import { showToast } from '@/lib/toast';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 import { listWorkflowDefinitions, type WorkflowDefinition } from '@/features/workflows/workflow-api';
@@ -465,7 +464,6 @@ export function AutomationsPage() {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setError(message);
-      showToast({ type: 'error', title: labels.feedback.actionFailed, message });
     } finally {
       setRefreshBusy(false);
     }
@@ -564,7 +562,6 @@ export function AutomationsPage() {
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         setError(message);
-        showToast({ type: 'error', title: labels.feedback.actionFailed, message });
       } finally {
         setBusyAction(null);
       }
@@ -596,7 +593,6 @@ export function AutomationsPage() {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setError(message);
-      showToast({ type: 'error', title: labels.feedback.actionFailed, message });
     }
   }
 
@@ -610,7 +606,6 @@ export function AutomationsPage() {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setError(message);
-      showToast({ type: 'error', title: labels.feedback.actionFailed, message });
       return false;
     } finally {
       setBusyAction(null);

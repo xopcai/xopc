@@ -3,13 +3,14 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { cn } from '@/lib/cn';
-import type { ToastType } from '@/lib/toast';
 import { useLocaleStore } from '@/stores/locale-store';
 
 export const COMPOSER_NOTICE_EVENT = 'xopc-composer-notice';
 
+export type ComposerNoticeType = 'info' | 'success' | 'warning' | 'error';
+
 export type ComposerNoticeDetail = {
-  type: ToastType;
+  type: ComposerNoticeType;
   message: string;
   duration?: number;
   href?: string;

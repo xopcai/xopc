@@ -8,15 +8,25 @@ export interface RelationshipFollowUpRequest {
   reviewAfter?: string;
 }
 
+const CHINESE_FOLLOW_UP_PATTERN = /^(?:请|记得|麻烦|帮我)?\s*(?:明天|下周|之后|到时候)?\s*(?:提醒我|问问我|跟进一下|跟进)(?:关于)?[：:，,\s]*(.+)$/;
+const ENGLISH_FOLLOW_UP_PATTERN = /^(?:please\s+)?(?:remember to\s+)?(?:(?:tomorrow|next week|later)\s+)?(?:follow up with me|check in with me|ask me)(?: about)?[,\s:]+(.+)$/i;
+
+function normalizeFollowUpSubject(value: string | undefined): string | null {
+  const subject = value?.trim();
+  if (!subject || subject.length > 240) return null;
+  if (/^(?:的|地|得|以及|并且|和|与|、|，|。|；|：)/.test(subject)) return null;
+  return subject;
+}
+
 export function extractExplicitRelationshipFollowUp(
   message: string,
   nowMs = Date.now(),
 ): RelationshipFollowUpRequest | null {
   const text = message.trim();
-  const match = text.match(/(?:请|记得)?(?:明天|下周|之后|到时候)?(?:提醒我|问问我|跟进一下|跟进)(?:关于)?[：:，,\s]*(.+)/)
-    ?? text.match(/(?:remember to )?(?:follow up with me|check in with me|ask me)(?: about)?[,:\s]+(.+)/i);
-  const subject = match?.[1]?.trim();
-  if (!subject || subject.length > 240) return null;
+  const match = text.match(CHINESE_FOLLOW_UP_PATTERN)
+    ?? text.match(ENGLISH_FOLLOW_UP_PATTERN);
+  const subject = normalizeFollowUpSubject(match?.[1]);
+  if (!subject) return null;
   const delayMs = /明天|tomorrow/i.test(text)
     ? 24 * 60 * 60 * 1_000
     : /下周|next week/i.test(text)

@@ -562,27 +562,6 @@ html.dark {
   }
 }
 
-@keyframes toast-enter {
-  from {
-    opacity: 0;
-    transform: translate(6px, 6px) translateZ(0);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) translateZ(0);
-  }
-}
-
-.toast-enter {
-  animation: toast-enter 200ms cubic-bezier(0.25, 0.1, 0.25, 1) both;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .toast-enter {
-    animation: none;
-  }
-}
-
 @keyframes settings-sheet-enter {
   from {
     opacity: 0.85;

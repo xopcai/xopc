@@ -3,7 +3,6 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { APP_CHROME_BAR_CLASS, APP_CHROME_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { GatewayConnectLanding } from '@/components/shell/gateway-connect-landing';
-import { ToastHost } from '@/components/ui/toast-host';
 import { PrimaryAppHeader } from '@/components/shell/primary-app-header';
 import { SidebarColumn } from '@/components/shell/sidebar-column';
 import { WorkspaceColumn } from '@/components/shell/workspace-column';
@@ -134,7 +133,6 @@ export function AppShell() {
         <EndpointToolBridge />
         <GatewayRealtimeBridge />
         <ElectronMenuListener />
-        <ToastHost />
         <WindowsTitlebar />
         <UnderstandingStatusButton floating />
         {isElectronDarwin() ? (
@@ -169,7 +167,6 @@ export function AppShell() {
       <GlobalDiscussionCaptureHost />
       <GlobalVoiceInputShortcutHost />
       <GlobalReadAloudPlayer />
-      <ToastHost />
       <TokenDialog />
       <OnboardingDialog />
       {workDiscoveryOverlayMounted ? (

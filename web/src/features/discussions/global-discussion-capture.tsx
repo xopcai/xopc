@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { isElectron } from '@/lib/electron-env';
-import { showToast } from '@/lib/toast';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -206,7 +205,6 @@ export function GlobalDiscussionCaptureHost() {
         stopped.durationMs,
       );
       setDetail(stopping);
-      showToast({ type: 'success', title: copy.saved });
       setBackgroundUploading(true);
       setVisible(false);
       void (async () => {
@@ -281,7 +279,6 @@ export function GlobalDiscussionCaptureHost() {
           await uploadDiscussionRecording(created.discussion.id, file, candidate.durationMs, setUploadProgress);
         }
         await recorder.discard(candidate.id);
-        showToast({ type: 'success', title: copy.saved });
         return;
       }
       if (created.discussion.status !== 'recording') {
@@ -300,7 +297,6 @@ export function GlobalDiscussionCaptureHost() {
       if (!file || file.size === 0) throw new Error(copy.emptyRecording);
       await uploadDiscussionRecording(created.discussion.id, file, durationMs, setUploadProgress);
       await recorder.discard(candidate.id);
-      showToast({ type: 'success', title: copy.saved });
     } catch (error) {
       await recorder.markUploadFailed();
       setOperationError(error instanceof Error ? error.message : copy.saveFailed);

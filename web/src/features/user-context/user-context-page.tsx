@@ -13,13 +13,14 @@ import {
   Lightbulb,
   Moon,
   Pencil,
+  Plus,
   ShieldCheck,
   Sparkles,
   Trash2,
   Upload,
   X,
 } from 'lucide-react';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
@@ -36,7 +37,7 @@ import { createTask } from '@/features/tasks/home-api';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { formatMediumDateTime } from '@/lib/date-formatters';
-import { showToast } from '@/lib/toast';
+import { InlineActionFeedback, type ActionFeedback } from '@/components/ui/inline-action-feedback';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 import {
@@ -89,7 +90,7 @@ type UnderstandingKind = 'preference' | 'boundary' | 'relationship' | 'routine' 
 type InsightTaskDraft = { insight: InsightSuggestion; title: string; body: string };
 
 const FACET_ORDER: UserContextFacet[] = ['collaboration', 'priorities', 'boundaries', 'people', 'current', 'basics'];
-const OTHER_UNDERSTANDING_KINDS = ['relationship', 'routine', 'long_term_goal'] as const;
+const UNDERSTANDING_KINDS: UnderstandingKind[] = ['preference', 'boundary', 'current_state', 'relationship', 'routine', 'long_term_goal'];
 const inputClass = 'w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-accent/50 focus:ring-2 focus:ring-accent/20';
 
 function replaceCount(template: string, count: number): string {
@@ -119,9 +120,23 @@ function UserContextSkeleton() {
 }
 
 function originLabel(item: UserUnderstanding, t: ReturnType<typeof messages>['you']): string {
+  if (item.origin === 'connected_source' && /personal[-_\s]?context/i.test(item.sourceName)) {
+    return t.origins.observed;
+  }
   return item.origin === 'connected_source'
     ? t.origins.connected_source.replace('{{source}}', item.sourceName)
     : t.origins[item.origin];
+}
+
+function humanizeUnderstandingStatement(statement: string, language: 'en' | 'zh'): string {
+  const value = statement.trim();
+  if (language !== 'zh') return value;
+  return value.replace(/^用户(?=当前|通常|倾向|偏好|希望|喜欢|重视|关注|正在|是|在|的)/, '你');
+}
+
+function isSummaryReady(statement: string): boolean {
+  const value = statement.trim();
+  return value.length >= 6 && !/^[的地得了着过和与及、，。；：]/.test(value);
 }
 
 function UnderstandingCard({
@@ -164,14 +179,11 @@ function UnderstandingCard({
         </div>
       ) : (
         <>
-          <p className="text-sm leading-6 text-fg">{item.statement}</p>
+          <p className="text-sm leading-6 text-fg">{humanizeUnderstandingStatement(item.statement, language)}</p>
           <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2 text-xs text-fg-subtle">
               <span className="inline-flex items-center gap-1"><Sparkles className="size-3 text-accent" aria-hidden />{originLabel(item, t)}</span>
-              <span className="rounded-full bg-surface-hover px-2 py-0.5">{t.understandingScopes[item.scope.type]}</span>
-              <span className="rounded-full bg-surface-hover px-2 py-0.5">{t.stability[item.stability]}</span>
-              {item.evidenceCount > 0 ? <span>{replaceCount(t.evidenceCount, item.evidenceCount)}</span> : null}
-              {item.latestEvidenceAt ? <span>{t.observedAt.replace('{{time}}', formatDateTime(item.latestEvidenceAt, language))}</span> : null}
+              {item.stability !== 'strong' ? <span className="rounded-full bg-surface-hover px-2 py-0.5">{t.stability[item.stability]}</span> : null}
             </div>
             <div className="flex flex-wrap items-center gap-1">
               {needsReview ? (
@@ -181,8 +193,6 @@ function UnderstandingCard({
                 </>
               ) : null}
               <Button type="button" variant="ghost" className="h-8 px-2" disabled={busy} onClick={() => setEditing(true)}><Pencil className="size-3.5" aria-hidden />{t.change}</Button>
-              <Button type="button" variant="ghost" className="h-8 px-2" disabled={historyLoading} onClick={() => { if (history) { setHistory(null); return; } setHistoryLoading(true); void fetchUnderstandingHistory(item.id).then((result) => setHistory(result.history)).finally(() => setHistoryLoading(false)); }}><History className="size-3.5" aria-hidden />{t.history}</Button>
-              <Button type="button" variant="ghost" className="h-8 px-2" disabled={busy} onClick={onForget}><Trash2 className="size-3.5" aria-hidden />{t.forget}</Button>
             </div>
           </div>
           <details className="mt-2 rounded-lg bg-surface-muted/70 px-3 py-2 text-xs text-fg-muted">
@@ -197,6 +207,10 @@ function UnderstandingCard({
               {item.validTo ? <div><dt className="text-fg-subtle">{t.evidenceValidUntil}</dt><dd className="mt-0.5 text-fg-muted">{formatDateTime(item.validTo, language)}</dd></div> : null}
               {item.expiresAt ? <div><dt className="text-fg-subtle">{t.evidenceExpires}</dt><dd className="mt-0.5 text-fg-muted">{formatDateTime(item.expiresAt, language)}</dd></div> : null}
             </dl>
+            <div className="mt-3 flex flex-wrap justify-end gap-1 border-t border-edge-subtle pt-2">
+              <Button type="button" variant="ghost" className="h-8 px-2" disabled={historyLoading} onClick={() => { if (history) { setHistory(null); return; } setHistoryLoading(true); void fetchUnderstandingHistory(item.id).then((result) => setHistory(result.history)).finally(() => setHistoryLoading(false)); }}><History className="size-3.5" aria-hidden />{t.history}</Button>
+              <Button type="button" variant="ghost" className="h-8 px-2 text-danger" disabled={busy} onClick={onForget}><Trash2 className="size-3.5" aria-hidden />{t.forget}</Button>
+            </div>
           </details>
           {history ? <div className="mt-2 space-y-2 border-t border-edge pt-2"><p className="text-xs font-medium text-fg-muted">{t.historyTitle}</p>{history.map((version) => <div key={version.id} className="flex items-start justify-between gap-3 text-xs"><p className="min-w-0 text-fg-muted">{version.statement}</p><span className="shrink-0 text-fg-subtle">{formatDateTime(version.updatedAt, language)}</span></div>)}</div> : null}
         </>
@@ -343,7 +357,6 @@ export function UserContextPage() {
   const [addingUnderstanding, setAddingUnderstanding] = useState(false);
   const [understandingDraft, setUnderstandingDraft] = useState('');
   const [understandingKind, setUnderstandingKind] = useState<UnderstandingKind>('preference');
-  const [choosingOtherUnderstanding, setChoosingOtherUnderstanding] = useState(false);
   const [forgetItem, setForgetItem] = useState<UserUnderstanding | null>(null);
   const [profileEditing, setProfileEditing] = useState(false);
   const [profileDraft, setProfileDraft] = useState<UserProfileFields | null>(null);
@@ -363,16 +376,24 @@ export function UserContextPage() {
   const [pendingMemorySection, setPendingMemorySection] = useState<MemorySection | null>(null);
   const [insightTaskDraft, setInsightTaskDraft] = useState<InsightTaskDraft | null>(null);
   const [creatingInsightTask, setCreatingInsightTask] = useState(false);
+  const [actionFeedback, setActionFeedback] = useState<ActionFeedback | null>(null);
   const profileCardRef = useRef<HTMLElement | null>(null);
   const reviewSectionRef = useRef<HTMLDivElement | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
+
+  const showFeedback = useCallback((feedback: { type: ActionFeedback['tone']; title: string; message?: string }) => {
+    setActionFeedback({ tone: feedback.type, title: feedback.title, message: feedback.message });
+  }, []);
 
   const profile = data?.profile ?? { callName: '', pronouns: '', timezone: '', notes: '' };
   const active = useMemo(() => data?.understanding.filter((item) => item.status === 'active') ?? [], [data]);
   const review = useMemo(() => data?.understanding.filter((item) => item.status !== 'active') ?? [], [data]);
   const visibleClaims = useMemo(() => data?.connectedClaims.filter((claim) => claim.state !== 'rejected') ?? [], [data]);
   const reviewClaims = useMemo(() => visibleClaims.filter((claim) => claim.state !== 'active'), [visibleClaims]);
-  const grouped = useMemo(() => new Map(FACET_ORDER.map((facet) => [facet, active.filter((item) => item.facet === facet)])), [active]);
+  const grouped = useMemo(() => new Map(FACET_ORDER.map((facet) => [facet, active.filter((item) => item.facet === facet && isSummaryReady(item.statement))])), [active]);
+  const summaryUnderstandings = useMemo(() => active.filter((item) => isSummaryReady(item.statement)).slice(0, 3), [active]);
+  const incompleteUnderstandings = useMemo(() => active.filter((item) => !isSummaryReady(item.statement)), [active]);
+  const memoryReviewCount = review.length + reviewClaims.length;
   const controls = controlsDraft ?? data?.controls ?? null;
   const connectedSources = data?.sources.filter((source) => source.installed && source.enabled) ?? [];
   const unhealthySources = connectedSources.filter((source) => ['failed', 'unauthorized', 'degraded', 'not_configured'].includes(source.status));
@@ -399,9 +420,9 @@ export function UserContextPage() {
     try {
       const result = await updateRelationshipSettings(patch);
       await mutate({ ...data, relationship: result.relationship }, { revalidate: false });
-      showToast({ type: 'success', title: t.collaborationTitle, message: t.saved });
+      showFeedback({ type: 'success', title: t.collaborationTitle, message: t.saved });
     } catch {
-      showToast({ type: 'error', title: t.supportModeTitle, message: t.saveError });
+      showFeedback({ type: 'error', title: t.supportModeTitle, message: t.saveError });
     } finally {
       setRelationshipSaving(false);
     }
@@ -416,7 +437,7 @@ export function UserContextPage() {
         connectedClaims: current.connectedClaims.map((item) => item.id === updated.id ? updated : item),
       } : current, { revalidate: false });
     } catch {
-      showToast({ type: 'error', title: t.connectedClaimsTitle, message: t.saveError });
+      showFeedback({ type: 'error', title: t.connectedClaimsTitle, message: t.saveError });
     } finally {
       setBusyId(null);
     }
@@ -450,9 +471,9 @@ export function UserContextPage() {
         await startAccountLearning(source.instanceId);
       }
       await mutate();
-      showToast({ type: 'success', title: source.displayName, message: t.sourceLearningStarted });
+      showFeedback({ type: 'success', title: source.displayName, message: t.sourceLearningStarted });
     } catch (learningError) {
-      showToast({
+      showFeedback({
         type: 'error',
         title: source.displayName,
         message: learningError instanceof Error ? learningError.message : t.sourceLearningStartFailed,
@@ -470,7 +491,7 @@ export function UserContextPage() {
       await setAccountLearningPaused(source.instanceId, true);
       await mutate();
     } catch (learningError) {
-      showToast({
+      showFeedback({
         type: 'error',
         title: source.displayName,
         message: learningError instanceof Error ? learningError.message : t.sourceLearningStartFailed,
@@ -506,7 +527,7 @@ export function UserContextPage() {
       } : current, { revalidate: false });
       void mutate();
     }
-    catch { showToast({ type: 'error', title: t.title, message: t.saveError }); }
+    catch { showFeedback({ type: 'error', title: t.title, message: t.saveError }); }
     finally { setBusyId(null); }
   }
 
@@ -515,9 +536,9 @@ export function UserContextPage() {
     try {
       await decideReferenceConsent(id, decision);
       await mutate();
-      showToast({ type: 'success', title: t.title, message: t.saved });
+      showFeedback({ type: 'success', title: t.title, message: t.saved });
     } catch {
-      showToast({ type: 'error', title: t.title, message: t.saveError });
+      showFeedback({ type: 'error', title: t.title, message: t.saveError });
     } finally {
       setBusyId(null);
     }
@@ -531,11 +552,10 @@ export function UserContextPage() {
       await createUnderstanding({ content, kind: understandingKind });
       setUnderstandingDraft('');
       setAddingUnderstanding(false);
-      setChoosingOtherUnderstanding(false);
       await mutate();
-      showToast({ type: 'success', title: t.understandingTitle, message: t.saved });
+      showFeedback({ type: 'success', title: t.understandingTitle, message: t.saved });
     } catch {
-      showToast({ type: 'error', title: t.understandingTitle, message: t.saveError });
+      showFeedback({ type: 'error', title: t.understandingTitle, message: t.saveError });
     } finally {
       setBusyId(null);
     }
@@ -548,7 +568,7 @@ export function UserContextPage() {
       await batchUpdateUnderstanding(review.map((item) => item.id), 'confirm');
       await mutate();
     } catch {
-      showToast({ type: 'error', title: t.reviewTitle, message: t.saveError });
+      showFeedback({ type: 'error', title: t.reviewTitle, message: t.saveError });
     } finally {
       setBusyId(null);
     }
@@ -560,7 +580,7 @@ export function UserContextPage() {
       await resolveUnderstandingConflict(groupId, winnerId);
       await mutate();
     } catch {
-      showToast({ type: 'error', title: t.conflictsTitle, message: t.saveError });
+      showFeedback({ type: 'error', title: t.conflictsTitle, message: t.saveError });
     } finally {
       setBusyId(null);
     }
@@ -572,7 +592,7 @@ export function UserContextPage() {
       await revokeReferenceConsent(id);
       await mutate();
     } catch {
-      showToast({ type: 'error', title: t.grantsTitle, message: t.saveError });
+      showFeedback({ type: 'error', title: t.grantsTitle, message: t.saveError });
     } finally {
       setBusyId(null);
     }
@@ -586,7 +606,7 @@ export function UserContextPage() {
   async function dismissInsight(item: InsightSuggestion) {
     setBusyId(`insight:${item.id}`);
     try { await dismissInsightSuggestion(item.id); await mutate(); }
-    catch { showToast({ type: 'error', title: t.insightsTitle, message: t.saveError }); }
+    catch { showFeedback({ type: 'error', title: t.insightsTitle, message: t.saveError }); }
     finally { setBusyId(null); }
   }
 
@@ -601,7 +621,7 @@ export function UserContextPage() {
       await mutate();
       if (result.href) navigate(result.href);
     } catch {
-      showToast({ type: 'error', title: t.insightsTitle, message: t.saveError });
+      showFeedback({ type: 'error', title: t.insightsTitle, message: t.saveError });
     } finally {
       setBusyId(null);
     }
@@ -650,7 +670,7 @@ export function UserContextPage() {
       await mutate();
       navigate(`/tasks/${encodeURIComponent(created.task.id)}`);
     } catch {
-      showToast({ type: 'error', title: t.insightDraftTitle, message: t.saveError });
+      showFeedback({ type: 'error', title: t.insightDraftTitle, message: t.saveError });
     } finally {
       setCreatingInsightTask(false);
     }
@@ -659,7 +679,7 @@ export function UserContextPage() {
   async function togglePlaybook(item: PersonalPlaybook) {
     setBusyId(`playbook:${item.id}`);
     try { await setPersonalPlaybookEnabled(item.id, !item.enabled); await mutate(); }
-    catch { showToast({ type: 'error', title: t.playbooksTitle, message: t.saveError }); }
+    catch { showFeedback({ type: 'error', title: t.playbooksTitle, message: t.saveError }); }
     finally { setBusyId(null); }
   }
 
@@ -672,7 +692,7 @@ export function UserContextPage() {
       await action();
       await mutate();
     } catch {
-      showToast({ type: 'error', title: t.playbooksTitle, message: t.saveError });
+      showFeedback({ type: 'error', title: t.playbooksTitle, message: t.saveError });
     } finally {
       setBusyId(null);
     }
@@ -691,7 +711,7 @@ export function UserContextPage() {
       } : current, { revalidate: false });
       void mutate();
     }
-    catch { showToast({ type: 'error', title: t.title, message: t.saveError }); }
+    catch { showFeedback({ type: 'error', title: t.title, message: t.saveError }); }
     finally { setBusyId(null); }
   }
 
@@ -699,7 +719,7 @@ export function UserContextPage() {
     if (!profileDraft) return;
     setProfileSaving(true);
     try { const saved = await updateUserProfile(profileDraft); setProfileEditing(false); setProfileDraft(null); await mutate((current) => current ? { ...current, ...saved } : current, { revalidate: false }); }
-    catch { showToast({ type: 'error', title: t.title, message: t.saveError }); }
+    catch { showFeedback({ type: 'error', title: t.title, message: t.saveError }); }
     finally { setProfileSaving(false); }
   }
 
@@ -708,7 +728,7 @@ export function UserContextPage() {
     if (!callName || profilePromptSaving) return;
     setProfilePromptSaving(true);
     try { const saved = await updateUserProfile({ callName, timezone: profile.timezone || detectBrowserTimezone() }); await mutate((current) => current ? { ...current, ...saved } : current, { revalidate: false }); }
-    catch { showToast({ type: 'error', title: t.title, message: t.saveError }); }
+    catch { showFeedback({ type: 'error', title: t.title, message: t.saveError }); }
     finally { setProfilePromptSaving(false); }
   }
 
@@ -719,7 +739,7 @@ export function UserContextPage() {
       const saved = await updateUserProfilePrompt('snooze');
       await mutate((current) => current ? { ...current, profileSetup: saved.profileSetup } : current, { revalidate: false });
     } catch {
-      showToast({ type: 'error', title: t.title, message: t.saveError });
+      showFeedback({ type: 'error', title: t.title, message: t.saveError });
     } finally {
       setProfilePromptSaving(false);
     }
@@ -731,16 +751,14 @@ export function UserContextPage() {
     openMemorySection('profile');
   }
 
-  function startUnderstanding(kind: UnderstandingKind, chooseOther = false) {
+  function startUnderstanding(kind: UnderstandingKind) {
     setUnderstandingKind(kind);
-    setChoosingOtherUnderstanding(chooseOther);
     setAddingUnderstanding(true);
     selectView('memory');
   }
 
   function cancelUnderstanding() {
     setAddingUnderstanding(false);
-    setChoosingOtherUnderstanding(false);
     setUnderstandingDraft('');
   }
 
@@ -748,16 +766,16 @@ export function UserContextPage() {
     if (controlsSaving) return;
     setControlsDraft(next);
     setControlsSaving(true);
-    try { const saved = await updateUserContextControls(next); setControlsDraft(saved); await mutate(); showToast({ type: 'success', title: t.privacyTitle, message: t.saved }); }
-    catch { setControlsDraft(null); showToast({ type: 'error', title: t.privacyTitle, message: t.saveError }); }
+    try { const saved = await updateUserContextControls(next); setControlsDraft(saved); await mutate(); showFeedback({ type: 'success', title: t.privacyTitle, message: t.saved }); }
+    catch { setControlsDraft(null); showFeedback({ type: 'error', title: t.privacyTitle, message: t.saveError }); }
     finally { setControlsSaving(false); }
   }
 
   async function selectTrustLevel(level: UserTrustLevel) {
     if (trustSaving || level === data?.trust.defaultActionLevel) return;
     setTrustSaving(true);
-    try { const trust = await updateUserTrust(level); await mutate((current) => current ? { ...current, trust } : current, { revalidate: false }); showToast({ type: 'success', title: t.trustTitle, message: t.saved }); }
-    catch { showToast({ type: 'error', title: t.trustTitle, message: t.saveError }); }
+    try { const trust = await updateUserTrust(level); await mutate((current) => current ? { ...current, trust } : current, { revalidate: false }); showFeedback({ type: 'success', title: t.trustTitle, message: t.saved }); }
+    catch { showFeedback({ type: 'error', title: t.trustTitle, message: t.saveError }); }
     finally { setTrustSaving(false); setPendingTrustLevel(null); }
   }
 
@@ -768,7 +786,7 @@ export function UserContextPage() {
       const result = await disconnectPersonalContextSource(disconnectSource.instanceId, understandingPolicy);
       setDisconnectSource(null);
       await mutate();
-      showToast({
+      showFeedback({
         type: 'success',
         title: t.sourcesTitle,
         message: understandingPolicy === 'delete'
@@ -776,7 +794,7 @@ export function UserContextPage() {
           : t.disconnectSuccess,
       });
     } catch {
-      showToast({ type: 'error', title: t.sourcesTitle, message: t.saveError });
+      showFeedback({ type: 'error', title: t.sourcesTitle, message: t.saveError });
     } finally {
       setDisconnecting(false);
     }
@@ -794,7 +812,7 @@ export function UserContextPage() {
       link.click();
       URL.revokeObjectURL(url);
     } catch {
-      showToast({ type: 'error', title: t.transferTitle, message: t.saveError });
+      showFeedback({ type: 'error', title: t.transferTitle, message: t.saveError });
     } finally {
       setTransferBusy(null);
     }
@@ -809,9 +827,9 @@ export function UserContextPage() {
       const result = await importUserContext(payload);
       await mutate();
       openMemorySection('review');
-      showToast({ type: 'success', title: t.transferTitle, message: t.importSuccess.replace('{{count}}', String(result.importedCount)).replace('{{skipped}}', String(result.skippedCount)) });
+      showFeedback({ type: 'success', title: t.transferTitle, message: t.importSuccess.replace('{{count}}', String(result.importedCount)).replace('{{skipped}}', String(result.skippedCount)) });
     } catch {
-      showToast({ type: 'error', title: t.transferTitle, message: t.importError });
+      showFeedback({ type: 'error', title: t.transferTitle, message: t.importError });
     } finally {
       if (importInputRef.current) importInputRef.current.value = '';
       setPendingImportFile(null);
@@ -852,6 +870,7 @@ export function UserContextPage() {
         />
       </div>
       {isLoading ? <UserContextSkeleton /> : error || !data ? <div className="rounded-2xl border border-danger/25 bg-danger-soft p-5 text-sm text-danger">{t.loadError}</div> : null}
+      <InlineActionFeedback feedback={actionFeedback} />
 
       {data && view === 'overview' ? (
         <div id="you-panel-overview" role="tabpanel" aria-labelledby="you-tab-overview" className="space-y-4">
@@ -894,12 +913,71 @@ export function UserContextPage() {
 
       {data && view === 'memory' ? (
         <div id="you-panel-memory" role="tabpanel" aria-labelledby="you-tab-memory" className="space-y-6">
-          <section>
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-base font-semibold text-fg">{t.memoryTitle}</h2>
-              <ContextBadge>{t.sharedAgentsBadge}</ContextBadge>
+          <section className="relative overflow-hidden rounded-2xl border border-accent/20 bg-gradient-to-br from-accent-soft/55 via-surface-base to-surface-panel p-5 sm:p-6">
+            <div className="relative">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="flex size-8 items-center justify-center rounded-full bg-accent-soft text-accent"><HeartHandshake className="size-4" aria-hidden /></span>
+                <h2 className="text-xl font-semibold tracking-tight text-fg">{t.memoryTitle}</h2>
+                <ContextBadge>{t.sharedAgentsBadge}</ContextBadge>
+              </div>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-fg-muted">{t.memoryHint}</p>
+
+              {summaryUnderstandings.length > 0 ? (
+                <div className="mt-5 space-y-2.5">
+                  {summaryUnderstandings.map((item) => (
+                    <div key={item.id} className="flex items-start gap-3 rounded-xl border border-edge-subtle/80 bg-surface-base/65 px-4 py-3 backdrop-blur-sm">
+                      <Sparkles className="mt-1 size-3.5 shrink-0 text-accent" aria-hidden />
+                      <p className="text-sm leading-6 text-fg">{humanizeUnderstandingStatement(item.statement, language)}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : <p className="mt-5 rounded-xl border border-dashed border-edge px-4 py-5 text-sm leading-6 text-fg-muted">{t.emptyUnderstanding}</p>}
+
+              <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-edge-subtle/80 pt-4">
+                <p className="max-w-xl text-xs leading-5 text-fg-muted">{t.memoryUseHint}</p>
+                {memoryReviewCount > 0 ? (
+                  <Button type="button" variant="secondary" onClick={() => openMemorySection('review')}>{replaceCount(t.reviewCount, memoryReviewCount)}<ChevronRight className="size-4" aria-hidden /></Button>
+                ) : <span className="inline-flex items-center gap-1.5 text-xs font-medium text-success"><Check className="size-3.5" aria-hidden />{t.upToDate}</span>}
+              </div>
             </div>
-            <p className="mt-1 max-w-2xl text-sm leading-6 text-fg-muted">{t.memoryHint}</p>
+          </section>
+
+          {data.conflictGroups.some((group) => group.unresolved) ? <section><h2 className="text-base font-semibold text-fg">{t.conflictsTitle}</h2><p className="mt-1 text-sm text-fg-muted">{t.conflictsHint}</p><div className="mt-3 space-y-3">{data.conflictGroups.filter((group) => group.unresolved).map((group) => <div key={group.id} className="divide-y divide-edge overflow-hidden rounded-xl border border-warning/35 bg-warning-soft/25">{group.records.filter((record) => record.storedStatus !== 'archived' && record.storedStatus !== 'rejected').map((record) => <div key={record.id} className="flex flex-wrap items-start justify-between gap-3 px-4 py-3"><div className="min-w-0 flex-1"><p className="text-sm leading-6 text-fg">{humanizeUnderstandingStatement(record.statement, language)}</p><p className="mt-1 text-xs text-fg-subtle">{originLabel(record, t)} · {formatDateTime(record.updatedAt, language)}</p></div><Button type="button" variant="secondary" className="h-8 shrink-0 px-2.5" disabled={busyId === `conflict:${group.id}`} onClick={() => void resolveConflict(group.id, record.id)}>{t.useThis}</Button></div>)}</div>)}</div></section> : null}
+          {data.consentRequests.length > 0 ? <section className="space-y-3"><div><h2 className="text-base font-semibold text-fg">{t.consentTitle}</h2><p className="mt-1 text-sm text-fg-muted">{t.consentHint}</p></div>{data.consentRequests.map((request) => <article key={request.id} className="rounded-2xl border border-accent/25 bg-accent-soft/20 p-4"><p className="text-sm leading-6 text-fg">{request.statement}</p><p className="mt-2 text-xs text-fg-muted">{t.consentPurpose.replace('{{purpose}}', request.purpose)}</p><div className="mt-3 flex flex-wrap justify-end gap-2"><Button type="button" variant="ghost" disabled={busyId === `consent:${request.id}`} onClick={() => void decideConsent(request.id, 'deny')}>{t.consentDeny}</Button><Button type="button" variant="secondary" disabled={busyId === `consent:${request.id}`} onClick={() => void decideConsent(request.id, 'once')}>{t.consentOnce}</Button><Button type="button" variant="secondary" disabled={busyId === `consent:${request.id}`} onClick={() => void decideConsent(request.id, 'session')}>{t.consentSession}</Button><Button type="button" variant="primary" disabled={busyId === `consent:${request.id}`} onClick={() => void decideConsent(request.id, 'always')}>{t.consentAlways}</Button></div></article>)}</section> : null}
+
+          <div ref={reviewSectionRef} className="space-y-6 scroll-mt-6">
+            {visibleClaims.length > 0 ? <section><div><h2 className="text-base font-semibold text-fg">{t.connectedClaimsTitle}</h2><p className="mt-1 text-sm text-fg-muted">{t.connectedClaimsHint}</p></div><div className="mt-3 grid gap-3 lg:grid-cols-2">{visibleClaims.map((claim) => <ConnectedClaimCard key={claim.id} claim={claim} language={language} t={t} busy={busyId === `claim:${claim.id}`} onDecision={(action) => void decideConnectedClaim(claim, action)} />)}</div></section> : null}
+            {review.length > 0 ? <section className="rounded-2xl border border-warning/30 bg-warning-soft/20 p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-base font-semibold text-fg">{t.reviewTitle}</h2><p className="mt-1 text-sm text-fg-muted">{t.reviewHint}</p></div><Button type="button" variant="secondary" disabled={busyId === 'understanding:batch'} onClick={() => void confirmAllReview()}>{t.reviewAll}</Button></div><div className="mt-4 grid gap-3 lg:grid-cols-2">{review.map((item) => <UnderstandingCard key={item.id} item={item} language={language} t={t} busy={busyId === item.id} onConfirm={() => void runUnderstandingAction(item, 'confirm')} onReject={() => void runUnderstandingAction(item, 'reject')} onUpdate={(content) => void runUnderstandingAction(item, 'update', content)} onForget={() => setForgetItem(item)} />)}</div></section> : null}
+            {incompleteUnderstandings.length > 0 ? <section className="rounded-2xl border border-warning/25 bg-warning-soft/15 p-5"><div><h2 className="text-base font-semibold text-fg">{t.incompleteMemoryTitle}</h2><p className="mt-1 text-sm leading-6 text-fg-muted">{t.incompleteMemoryHint}</p></div><div className="mt-4 space-y-3">{incompleteUnderstandings.map((item) => <UnderstandingCard key={item.id} item={item} language={language} t={t} busy={busyId === item.id} onConfirm={() => void runUnderstandingAction(item, 'confirm')} onReject={() => void runUnderstandingAction(item, 'reject')} onUpdate={(content) => void runUnderstandingAction(item, 'update', content)} onForget={() => setForgetItem(item)} />)}</div></section> : null}
+          </div>
+
+          <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5">
+            <div>
+              <h2 className="text-base font-semibold text-fg">{t.structuredContextTitle}</h2>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-fg-muted">{t.structuredContextHint}</p>
+            </div>
+            {!addingUnderstanding ? (
+              <div className="mt-4">
+                <button type="button" className="flex w-full items-center gap-3 rounded-xl border border-edge bg-surface-panel px-4 py-3 text-left text-sm text-fg-muted transition-colors hover:border-accent/35 hover:bg-surface-hover" onClick={() => startUnderstanding('preference')}>
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent"><Plus className="size-4" aria-hidden /></span>
+                  <span>{t.memoryComposerPlaceholder}</span>
+                </button>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button type="button" className="rounded-full border border-edge-subtle bg-surface-panel px-3 py-1.5 text-xs text-fg-muted hover:border-accent/30 hover:text-fg" onClick={() => startUnderstanding('preference')}>{t.addPreference}</button>
+                  <button type="button" className="rounded-full border border-edge-subtle bg-surface-panel px-3 py-1.5 text-xs text-fg-muted hover:border-accent/30 hover:text-fg" onClick={() => startUnderstanding('boundary')}>{t.addBoundary}</button>
+                  <button type="button" className="rounded-full border border-edge-subtle bg-surface-panel px-3 py-1.5 text-xs text-fg-muted hover:border-accent/30 hover:text-fg" onClick={() => startUnderstanding('current_state')}>{t.addCurrentFocus}</button>
+                  <button type="button" className="rounded-full border border-edge-subtle bg-surface-panel px-3 py-1.5 text-xs text-fg-muted hover:border-accent/30 hover:text-fg" onClick={() => startUnderstanding('relationship')}>{t.addOther}</button>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-4 rounded-xl border border-accent/25 bg-surface-panel p-4">
+                <textarea className={cn(inputClass, 'min-h-24 resize-y')} value={understandingDraft} onChange={(event) => setUnderstandingDraft(event.target.value)} placeholder={t.understandingPlaceholders[understandingKind]} autoFocus />
+                <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
+                  <label className="grid min-w-48 gap-1 text-xs font-medium text-fg-muted">{t.understandingKind}<Select value={understandingKind} onChange={(event) => setUnderstandingKind(event.target.value as UnderstandingKind)}>{UNDERSTANDING_KINDS.map((value) => <SelectOption key={value} value={value}>{t.understandingKinds[value]}</SelectOption>)}</Select></label>
+                  <div className="flex gap-2"><Button type="button" variant="ghost" onClick={cancelUnderstanding}>{t.cancel}</Button><Button type="button" variant="primary" disabled={!understandingDraft.trim() || busyId === 'understanding:new'} onClick={() => void addUnderstanding()}>{t.memoryComposerAction}</Button></div>
+                </div>
+              </div>
+            )}
           </section>
 
           <section ref={profileCardRef} id="you-profile-card" className="rounded-2xl border border-edge-subtle bg-surface-base p-5">
@@ -919,42 +997,7 @@ export function UserContextPage() {
               <dl className="mt-5 grid gap-4 sm:grid-cols-2"><div><dt className="text-xs text-fg-subtle">{t.callName}</dt><dd className="mt-1 text-sm text-fg">{profile.callName || '—'}</dd></div><div><dt className="text-xs text-fg-subtle">{t.timezone}</dt><dd className="mt-1 text-sm text-fg">{profile.timezone || '—'}</dd></div><div><dt className="text-xs text-fg-subtle">{t.pronouns}</dt><dd className="mt-1 text-sm text-fg">{profile.pronouns || '—'}</dd></div><div className="sm:col-span-2"><dt className="text-xs text-fg-subtle">{t.notes}</dt><dd className="mt-1 whitespace-pre-wrap text-sm leading-6 text-fg">{profile.notes || '—'}</dd></div></dl>
             )}
           </section>
-
-          <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5">
-            <h2 className="text-base font-semibold text-fg">{t.structuredContextTitle}</h2>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <button type="button" aria-pressed={addingUnderstanding && !choosingOtherUnderstanding && understandingKind === 'preference'} className={cn('rounded-xl border bg-surface-panel p-4 text-left transition-colors hover:border-accent/30 hover:bg-surface-hover', addingUnderstanding && !choosingOtherUnderstanding && understandingKind === 'preference' ? 'border-accent/40 bg-accent-soft/20' : 'border-edge-subtle')} onClick={() => startUnderstanding('preference')}><span className="text-sm font-semibold text-fg">{t.addPreference}</span><span className="mt-1 block text-xs leading-5 text-fg-muted">{t.addPreferenceHint}</span></button>
-              <button type="button" aria-pressed={addingUnderstanding && !choosingOtherUnderstanding && understandingKind === 'boundary'} className={cn('rounded-xl border bg-surface-panel p-4 text-left transition-colors hover:border-accent/30 hover:bg-surface-hover', addingUnderstanding && !choosingOtherUnderstanding && understandingKind === 'boundary' ? 'border-accent/40 bg-accent-soft/20' : 'border-edge-subtle')} onClick={() => startUnderstanding('boundary')}><span className="text-sm font-semibold text-fg">{t.addBoundary}</span><span className="mt-1 block text-xs leading-5 text-fg-muted">{t.addBoundaryHint}</span></button>
-              <button type="button" aria-pressed={addingUnderstanding && !choosingOtherUnderstanding && understandingKind === 'current_state'} className={cn('rounded-xl border bg-surface-panel p-4 text-left transition-colors hover:border-accent/30 hover:bg-surface-hover', addingUnderstanding && !choosingOtherUnderstanding && understandingKind === 'current_state' ? 'border-accent/40 bg-accent-soft/20' : 'border-edge-subtle')} onClick={() => startUnderstanding('current_state')}><span className="text-sm font-semibold text-fg">{t.addCurrentFocus}</span><span className="mt-1 block text-xs leading-5 text-fg-muted">{t.addCurrentFocusHint}</span></button>
-              <button type="button" aria-pressed={addingUnderstanding && choosingOtherUnderstanding} className={cn('rounded-xl border bg-surface-panel p-4 text-left transition-colors hover:border-accent/30 hover:bg-surface-hover', addingUnderstanding && choosingOtherUnderstanding ? 'border-accent/40 bg-accent-soft/20' : 'border-edge-subtle')} onClick={() => startUnderstanding('relationship', true)}><span className="text-sm font-semibold text-fg">{t.addOther}</span><span className="mt-1 block text-xs leading-5 text-fg-muted">{t.addOtherHint}</span></button>
-            </div>
-            {addingUnderstanding ? (
-              <div className="mt-4 rounded-xl border border-edge bg-surface-panel p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <h3 className="text-sm font-semibold text-fg">{choosingOtherUnderstanding ? t.addOther : understandingKind === 'preference' ? t.addPreference : understandingKind === 'boundary' ? t.addBoundary : t.addCurrentFocus}</h3>
-                    <p className="mt-1 text-xs leading-5 text-fg-muted">{choosingOtherUnderstanding ? t.addOtherHint : understandingKind === 'preference' ? t.addPreferenceHint : understandingKind === 'boundary' ? t.addBoundaryHint : t.addCurrentFocusHint}</p>
-                  </div>
-                  {!choosingOtherUnderstanding ? <ContextBadge>{t.understandingKinds[understandingKind]}</ContextBadge> : null}
-                </div>
-                <textarea className={cn(inputClass, 'mt-3 min-h-24 resize-y')} value={understandingDraft} onChange={(event) => setUnderstandingDraft(event.target.value)} placeholder={t.understandingPlaceholders[understandingKind]} autoFocus />
-                <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
-                  {choosingOtherUnderstanding ? (
-                    <label className="grid min-w-48 gap-1 text-xs font-medium text-fg-muted">{t.understandingKind}<Select value={understandingKind} onChange={(event) => setUnderstandingKind(event.target.value as UnderstandingKind)}>{OTHER_UNDERSTANDING_KINDS.map((value) => <SelectOption key={value} value={value}>{t.understandingKinds[value]}</SelectOption>)}</Select></label>
-                  ) : <span />}
-                  <div className="flex gap-2"><Button type="button" variant="ghost" onClick={cancelUnderstanding}>{t.cancel}</Button><Button type="button" variant="primary" disabled={!understandingDraft.trim() || busyId === 'understanding:new'} onClick={() => void addUnderstanding()}>{t.add}</Button></div>
-                </div>
-              </div>
-            ) : null}
-          </section>
-          {data.conflictGroups.some((group) => group.unresolved) ? <section><h2 className="text-base font-semibold text-fg">{t.conflictsTitle}</h2><p className="mt-1 text-sm text-fg-muted">{t.conflictsHint}</p><div className="mt-3 space-y-3">{data.conflictGroups.filter((group) => group.unresolved).map((group) => <div key={group.id} className="divide-y divide-edge overflow-hidden rounded-xl border border-warning/35 bg-warning-soft/25">{group.records.filter((record) => record.storedStatus !== 'archived' && record.storedStatus !== 'rejected').map((record) => <div key={record.id} className="flex flex-wrap items-start justify-between gap-3 px-4 py-3"><div className="min-w-0 flex-1"><p className="text-sm leading-6 text-fg">{record.statement}</p><p className="mt-1 text-xs text-fg-subtle">{originLabel(record, t)} · {formatDateTime(record.updatedAt, language)}</p></div><Button type="button" variant="secondary" className="h-8 shrink-0 px-2.5" disabled={busyId === `conflict:${group.id}`} onClick={() => void resolveConflict(group.id, record.id)}>{t.useThis}</Button></div>)}</div>)}</div></section> : null}
-          {data.consentRequests.length > 0 ? <section className="space-y-3"><div><h2 className="text-base font-semibold text-fg">{t.consentTitle}</h2><p className="mt-1 text-sm text-fg-muted">{t.consentHint}</p></div>{data.consentRequests.map((request) => <article key={request.id} className="rounded-2xl border border-accent/25 bg-accent-soft/20 p-4"><p className="text-sm leading-6 text-fg">{request.statement}</p><p className="mt-2 text-xs text-fg-muted">{t.consentPurpose.replace('{{purpose}}', request.purpose)}</p><div className="mt-3 flex flex-wrap justify-end gap-2"><Button type="button" variant="ghost" disabled={busyId === `consent:${request.id}`} onClick={() => void decideConsent(request.id, 'deny')}>{t.consentDeny}</Button><Button type="button" variant="secondary" disabled={busyId === `consent:${request.id}`} onClick={() => void decideConsent(request.id, 'once')}>{t.consentOnce}</Button><Button type="button" variant="secondary" disabled={busyId === `consent:${request.id}`} onClick={() => void decideConsent(request.id, 'session')}>{t.consentSession}</Button><Button type="button" variant="primary" disabled={busyId === `consent:${request.id}`} onClick={() => void decideConsent(request.id, 'always')}>{t.consentAlways}</Button></div></article>)}</section> : null}
-          <div ref={reviewSectionRef} className="space-y-6 scroll-mt-6">
-            {visibleClaims.length > 0 ? <section><div><h2 className="text-base font-semibold text-fg">{t.connectedClaimsTitle}</h2><p className="mt-1 text-sm text-fg-muted">{t.connectedClaimsHint}</p></div><div className="mt-3 grid gap-3 lg:grid-cols-2">{visibleClaims.map((claim) => <ConnectedClaimCard key={claim.id} claim={claim} language={language} t={t} busy={busyId === `claim:${claim.id}`} onDecision={(action) => void decideConnectedClaim(claim, action)} />)}</div></section> : null}
-            {review.length > 0 ? <section><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-base font-semibold text-fg">{t.reviewTitle}</h2><p className="mt-1 text-sm text-fg-muted">{t.reviewHint}</p></div><Button type="button" variant="secondary" disabled={busyId === 'understanding:batch'} onClick={() => void confirmAllReview()}>{t.reviewAll}</Button></div><div className="mt-3 grid gap-3 lg:grid-cols-2">{review.map((item) => <UnderstandingCard key={item.id} item={item} language={language} t={t} busy={busyId === item.id} onConfirm={() => void runUnderstandingAction(item, 'confirm')} onReject={() => void runUnderstandingAction(item, 'reject')} onUpdate={(content) => void runUnderstandingAction(item, 'update', content)} onForget={() => setForgetItem(item)} />)}</div></section> : active.length > 0 || visibleClaims.some((claim) => claim.state === 'active') ? <div className="rounded-2xl border border-success/20 bg-success-soft p-6 text-center"><Check className="mx-auto size-5 text-success" aria-hidden /><h2 className="mt-2 text-sm font-semibold text-fg">{t.nothingToReview}</h2><p className="mt-1 text-sm text-fg-muted">{t.nothingToReviewHint}</p></div> : null}
-          </div>
-          {FACET_ORDER.map((facet) => { const items = grouped.get(facet) ?? []; if (items.length === 0) return null; return <section key={facet}><h2 className="text-sm font-semibold text-fg">{t.facets[facet]}</h2><div className="mt-3 grid gap-3 lg:grid-cols-2">{items.map((item) => <UnderstandingCard key={item.id} item={item} language={language} t={t} busy={busyId === item.id} onConfirm={() => void runUnderstandingAction(item, 'confirm')} onReject={() => void runUnderstandingAction(item, 'reject')} onUpdate={(content) => void runUnderstandingAction(item, 'update', content)} onForget={() => setForgetItem(item)} />)}</div></section>; })}
-          {data.understanding.length === 0 && visibleClaims.length === 0 ? <div className="rounded-2xl border border-dashed border-edge p-10 text-center text-sm text-fg-muted">{t.emptyUnderstanding}</div> : null}
+          {FACET_ORDER.map((facet) => { const items = grouped.get(facet) ?? []; if (items.length === 0) return null; return <section key={facet} className="rounded-2xl border border-edge-subtle bg-surface-base p-5"><div className="flex items-center justify-between gap-3"><h2 className="text-base font-semibold text-fg">{t.facets[facet]}</h2><ContextBadge>{replaceCount(t.memorySectionCount, items.length)}</ContextBadge></div><div className="mt-4 grid gap-3 lg:grid-cols-2">{items.map((item) => <UnderstandingCard key={item.id} item={item} language={language} t={t} busy={busyId === item.id} onConfirm={() => void runUnderstandingAction(item, 'confirm')} onReject={() => void runUnderstandingAction(item, 'reject')} onUpdate={(content) => void runUnderstandingAction(item, 'update', content)} onForget={() => setForgetItem(item)} />)}</div></section>; })}
         </div>
       ) : null}
 

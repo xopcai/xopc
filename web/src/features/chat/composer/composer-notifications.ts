@@ -1,13 +1,13 @@
-import { COMPOSER_NOTICE_EVENT, type ComposerNoticeDetail } from '@/features/chat/composer/composer-context-notice';
-import { showToast, type ToastType } from '@/lib/toast';
+import { COMPOSER_NOTICE_EVENT, type ComposerNoticeDetail, type ComposerNoticeType } from '@/features/chat/composer/composer-context-notice';
+import { showActivity } from '@/stores/activity-store';
 
 /**
- * Keep chat feedback beside the composer. Non-chat callers retain a restrained
- * transient fallback until they adopt control-level feedback.
+ * Keep chat feedback beside the composer. Non-chat callers record persistent
+ * feedback in the activity center until their owning surface handles it inline.
  * Supports `{{key}}` template interpolation.
  */
 export function showComposerNotification(
-  level: ToastType,
+  level: ComposerNoticeType,
   template: string,
   params?: Record<string, string | number>,
   options?: { duration?: number; href?: string },
@@ -31,5 +31,10 @@ export function showComposerNotification(
     return;
   }
 
-  showToast({ type: level, title: message, duration: options?.duration ?? 2500 });
+  showActivity({
+    tone: level,
+    title: message,
+    href: options?.href,
+    dedupeKey: `action-feedback:${level}:${message}`,
+  });
 }

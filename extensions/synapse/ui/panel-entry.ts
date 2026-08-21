@@ -205,6 +205,7 @@ function injectCSS() {
     .mo-c .mo-btns { display:flex;gap:8px;justify-content:flex-end;margin-top:4px; }
     .mo-c .mo-btns button { padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;border:1px solid var(--s-bd);background:var(--s-pn);color:var(--s-fg);cursor:pointer; }
     .mo-c .mo-btns button.pri { background:var(--s-ac);color:#fff;border-color:var(--s-ac); }
+    .mo-c .mo-error { margin:-2px 0 10px;color:#DC2626;font-size:12px;line-height:1.5; }
     .empty { display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:48px 24px;gap:16px;height:100%; }
     .empty .bi { font-size:48px; }
     .empty h1 { font-size:22px;font-weight:700; }
@@ -221,8 +222,6 @@ function injectCSS() {
     .empty .links { display:flex;gap:12px;font-size:12px; }
     .empty .links a { color:var(--s-ac);text-decoration:none;cursor:pointer; }
     .empty .links a:hover { text-decoration:underline; }
-    .toast { position:fixed;top:12px;left:50%;transform:translateX(-50%) translateY(-20px);background:var(--s-pn);border:1px solid var(--s-g);border-radius:10px;padding:8px 16px;box-shadow:0 4px 12px rgba(0,0,0,.08);opacity:0;transition:all .35s;z-index:200;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;pointer-events:none;backdrop-filter:blur(12px); }
-    .toast.show { opacity:1;transform:translateX(-50%) translateY(0); }
     ::-webkit-scrollbar { width:3px;height:3px; }
     ::-webkit-scrollbar-track { background:transparent; }
     ::-webkit-scrollbar-thumb { background:var(--s-bs);border-radius:2px; }
@@ -343,26 +342,11 @@ function renderDock() {
 function renderAll() { renderBoard(); renderDecisions(); renderActivity(); renderDock(); }
 
 /* ═══════════════════════════════════
-   Toast
-   ═══════════════════════════════════ */
-let toastTimer: ReturnType<typeof setTimeout>;
-function showToast(msg: string) {
-  const el = document.getElementById('tt');
-  const tx = document.getElementById('ttx');
-  if (!el || !tx) return;
-  tx.textContent = msg;
-  el.classList.add('show');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(()=>el.classList.remove('show'),2000);
-}
-
-/* ═══════════════════════════════════
    Actions
    ═══════════════════════════════════ */
-function resolveDecision(id: number, msg: string) {
+function resolveDecision(id: number, _msg: string) {
   const el = document.getElementById('dc_'+id);
   if (el) el.classList.add('rs');
-  showToast(msg);
   setTimeout(()=>{
     state.decisions = state.decisions.filter(d=>d.i!==id);
     renderAll();
@@ -439,6 +423,19 @@ function showModal(html: string) {
   return mo;
 }
 
+function showModalError(mo: HTMLElement, message: string) {
+  const container = mo.querySelector('.mo-c');
+  if (!container) return;
+  let error = container.querySelector<HTMLElement>('.mo-error');
+  if (!error) {
+    error = document.createElement('p');
+    error.className = 'mo-error';
+    error.setAttribute('role', 'alert');
+    container.querySelector('.mo-btns')?.before(error);
+  }
+  error.textContent = message;
+}
+
 function createTask() {
   const mo = showModal(`
     <div class="mo-c">
@@ -453,12 +450,12 @@ function createTask() {
     </div>`);
   mo.querySelector('#mtSubmit')!.addEventListener('click', () => {
     const t = (mo.querySelector('#mtTitle') as HTMLInputElement).value.trim();
-    if (!t) { showToast('⚠️ 请输入标题'); return; }
+    if (!t) { showModalError(mo, '请输入标题'); return; }
     const d = (mo.querySelector('#mtDesc') as HTMLTextAreaElement).value.trim();
     const pr = (mo.querySelector('#mtPriority') as HTMLSelectElement).value as 'p0'|'p1'|'p2';
     state.cards.push({ i:newId(), c:0, t, l:pr, d:d||'无描述', ag:[{ic:'💡',n:'tech-lead',s:'idle',p:0}], tg:[], pr:0 });
     state.activity.unshift({ t: nowTime(), x:`📋 手动创建「${escapeHtml(t)}」`, nb:true });
-    mo.remove(); renderAll(); showToast('✅ 任务已创建');
+    mo.remove(); renderAll();
   });
 }
 
@@ -475,7 +472,7 @@ function createIntent() {
     </div>`);
   mo.querySelector('#miSubmit')!.addEventListener('click', () => {
     const txt = (mo.querySelector('#miText') as HTMLTextAreaElement).value.trim();
-    if (!txt) { showToast('⚠️ 请输入描述'); return; }
+    if (!txt) { showModalError(mo, '请输入描述'); return; }
     mo.remove();
     const title = txt.length>20 ? txt.slice(0,20)+'...' : txt;
     state.activity.unshift({ t:nowTime(), x:`@michael 创建意图「${escapeHtml(title)}」`, nb:true });
@@ -483,7 +480,7 @@ function createIntent() {
     const tl = state.agents.find(a=>a.id==='tl');
     if (tl) { tl.status='active'; tl.narrative=`正在分析「${title}」...`; }
     state.activity.unshift({ t:nowTime(), x:`@tech-lead 开始拆解「${escapeHtml(title)}」`, nb:true });
-    renderAll(); showToast('🤖 @tech-lead 正在拆解...');
+    renderAll();
     // Simulate: after 3s, add sub-tasks
     setTimeout(()=>{
       state.cards.push({ i:newId(), c:0, t:'后端 API 开发', l:'p1', d:'基于意图拆解的后端任务', ag:[{ic:'🖥',n:'dev-backend',s:'idle',p:0}], tg:['后端'], pr:0 });
@@ -542,7 +539,7 @@ window['__synapse_moveCard'] = (cardId: number, toCol: number) => {
   card.c = toCol as Card['c'];
   if (toCol === 3) { card.pr = 100; card.ag.forEach(a => { a.s = 'done'; a.p = 100; }); }
   state.activity.unshift({ t:nowTime(), x:`🔄 「${escapeHtml(card.t)}」已移至 ${['待办','进行中','审查中','已完成'][toCol]}`, nb:true });
-  renderAll(); showToast(`✅ 已移至 ${['待办','进行中','审查中','已完成'][toCol]}`);
+  renderAll();
 };
 
 /* ═══════════════════════════════════
@@ -569,7 +566,6 @@ function buildHTML() {
       </div>
     </div></div>
     <div class="dw"><div class="dk" id="ad"></div></div>
-    <div class="toast" id="tt"><span id="ttx">已记录</span></div>
     <div class="dc"><button id="db" onclick="window.__synapse_toggleDemo()">▶️ 自动演示</button></div>
   `;
   document.body.appendChild(app);

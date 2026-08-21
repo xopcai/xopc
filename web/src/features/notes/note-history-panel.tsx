@@ -3,7 +3,6 @@ import { useCallback, useState } from 'react';
 import useSWR from 'swr';
 
 import { cn } from '@/lib/cn';
-import { showToast } from '@/lib/toast';
 import { useLocaleStore } from '@/stores/locale-store';
 import { messages } from '@/i18n/messages';
 
@@ -57,16 +56,18 @@ export function NoteHistoryPanel({ noteId, activeTimestamp, onSelect, onClose, o
 
   const [restoring, setRestoring] = useState(false);
   const [confirmTimestamp, setConfirmTimestamp] = useState<number | null>(null);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
 
   const handleRestore = useCallback(
     async (timestamp: number) => {
       setRestoring(true);
+      setRestoreError(null);
       try {
         await restoreNoteSnapshot(noteId, timestamp);
         setConfirmTimestamp(null);
         onRestored();
       } catch {
-        showToast({ type: 'error', title: n.restoreFailed });
+        setRestoreError(n.restoreFailed);
       } finally {
         setRestoring(false);
       }
@@ -93,6 +94,7 @@ export function NoteHistoryPanel({ noteId, activeTimestamp, onSelect, onClose, o
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
+        {restoreError ? <p className="border-b border-danger/20 bg-danger-soft px-4 py-2 text-xs text-danger" role="alert">{restoreError}</p> : null}
         {!entries?.length ? (
           <div className="px-4 py-8 text-center">
             <p className="text-sm font-medium text-fg-muted">{n.historyEmpty}</p>
