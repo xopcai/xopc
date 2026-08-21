@@ -102,6 +102,7 @@ describe('AgentOrchestrator enqueueAutoTitle', () => {
       chatId: '999',
       senderId: '1',
       isGroup: false,
+      origin: { type: 'channel', channel: 'telegram' },
     };
 
     await orchestrator.process(msg, context);
@@ -134,6 +135,7 @@ describe('AgentOrchestrator enqueueAutoTitle', () => {
       chatId: '999',
       senderId: '1',
       isGroup: false,
+      origin: { type: 'channel', channel: 'telegram' },
     };
 
     await expect(orchestrator.process(msg, context)).resolves.toBeUndefined();

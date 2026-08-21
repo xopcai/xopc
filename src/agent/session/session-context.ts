@@ -17,6 +17,8 @@
 
 import { AsyncLocalStorage } from 'node:async_hooks';
 
+import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
+
 import type { InboundMessage } from '../../infra/bus/index.js';
 
 export interface SessionContext {
@@ -25,6 +27,7 @@ export interface SessionContext {
   chatId: string;
   senderId: string;
   isGroup: boolean;
+  origin: TurnOrigin;
   model?: string;
   metadata?: Record<string, unknown>;
 }
@@ -70,6 +73,7 @@ export class SessionContextManager {
       chatId: msg.chat_id,
       senderId: (metadata.senderId as string) || '',
       isGroup: (metadata.isGroup as boolean) || false,
+      origin: { type: 'channel', channel: msg.channel },
       model: metadata.model as string | undefined,
       metadata,
     };

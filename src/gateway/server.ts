@@ -94,9 +94,11 @@ export class GatewayServer {
       };
       inner.on('upgrade', (req, socket, head) => {
         try {
-          handleSiteShareUpgrade(this.service, req, socket, head);
+          if (this.service.endpointTools.handleUpgrade(req, socket, head)) return;
+          if (handleSiteShareUpgrade(this.service, req, socket, head)) return;
+          socket.destroy();
         } catch (err) {
-          console.error('[GatewayServer] site-share upgrade error:', err);
+          console.error('[GatewayServer] WebSocket upgrade error:', err);
           try {
             socket.destroy();
           } catch {
@@ -143,6 +145,7 @@ export class GatewayServer {
     console.log('[GatewayServer] Stopping gateway server...');
 
     closeAllEventStreams();
+    this.service.endpointTools.close();
 
     const closeServer = async (server: ServerType | undefined) => {
       if (!server) {

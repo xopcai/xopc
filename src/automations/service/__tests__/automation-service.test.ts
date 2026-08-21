@@ -144,7 +144,7 @@ describe('AutomationService', () => {
     service.setDeps({
       agentService: {
         turnDispatcher: {
-          processDirect: async (_message, _sessionKey, _attachments, _thinking, options) => {
+          processDirect: async (_message, _sessionKey, _origin, _attachments, _thinking, options) => {
             receivedSignal = options?.signal;
             await new Promise<void>((resolve) => {
               if (options?.signal?.aborted) resolve();

@@ -20,6 +20,7 @@ import {
 describe('session input repository', () => {
   let dir: string;
   const sessionKey = 'agent:main:webchat:default:direct:test';
+  const origin = { type: 'endpoint' as const, endpointId: 'endpoint-test' };
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'xopc-session-input-'));
@@ -36,15 +37,15 @@ describe('session input repository', () => {
   it('deduplicates client retries and serializes execution per session', () => {
     const first = insertSessionInput({
       id: 'server-1', sessionKey, clientMessageId: 'client-1',
-      requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', content: 'one',
+      requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', content: 'one', origin,
     });
     const retry = insertSessionInput({
       id: 'server-other', sessionKey, clientMessageId: 'client-1',
-      requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', content: 'duplicate',
+      requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', content: 'duplicate', origin,
     });
     insertSessionInput({
       id: 'server-2', sessionKey, clientMessageId: 'client-2',
-      requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', content: 'two',
+      requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', content: 'two', origin,
     });
 
     expect(retry.id).toBe(first.id);
@@ -57,7 +58,7 @@ describe('session input repository', () => {
   it('uses row versions for edits and cancellation', () => {
     const row = insertSessionInput({
       id: 'server-1', sessionKey, clientMessageId: 'client-1',
-      requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', content: 'before',
+      requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', content: 'before', origin,
     });
     expect(mutateQueuedSessionInput({ sessionKey, id: row.id, version: 99, content: 'bad' })).toBe(false);
     expect(mutateQueuedSessionInput({
@@ -73,11 +74,11 @@ describe('session input repository', () => {
   it('keeps queued work and exposes uncertain in-flight work after restart', () => {
     insertSessionInput({
       id: 'running', sessionKey, clientMessageId: 'running-client',
-      requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', content: 'running',
+      requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', content: 'running', origin,
     });
     insertSessionInput({
       id: 'queued', sessionKey, clientMessageId: 'queued-client',
-      requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', content: 'queued',
+      requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', content: 'queued', origin,
     });
     claimNextSessionInput(sessionKey, 'run-1');
 

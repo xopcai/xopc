@@ -2,17 +2,21 @@ import type { Config } from '../../config/schema.js';
 import type { ExtensionHookRunner } from '../../extensions/index.js';
 import type { ExtensionRegistry } from '../../extensions/types/index.js';
 import type { MemoryManager } from '../memory/manager.js';
+import type { EndpointToolRuntime } from '../../endpoint-tools/index.js';
 import type { ToolExecutorConfig } from '../tools/executor.js';
 import { ComposioToolProvider } from './composio-provider.js';
 import { ExtensionToolProvider } from './extension-provider.js';
 import { createExternalToolGatewayTools } from './gateway-tools.js';
 import { McpToolProvider } from './mcp-provider.js';
 import { MemoryToolProvider } from './memory-provider.js';
+import { EndpointToolProvider } from './endpoint-provider.js';
+import type { ExternalToolProvider, ExternalToolTurnContext } from './types.js';
 
 export interface DefaultExternalToolGatewayDeps {
   workspace: string;
   getConfig: () => Config | undefined;
-  getCurrentContext: () => { channel: string; chatId: string; sessionKey: string } | null;
+  getCurrentContext: () => ExternalToolTurnContext | null;
+  endpointTools?: EndpointToolRuntime;
   agentId?: string;
   extensionRegistry?: ExtensionRegistry;
   disabledTools?: Set<string>;
@@ -22,7 +26,7 @@ export interface DefaultExternalToolGatewayDeps {
 }
 
 export function createDefaultExternalToolGatewayTools(deps: DefaultExternalToolGatewayDeps) {
-  return createExternalToolGatewayTools([
+  const providers: ExternalToolProvider[] = [
     new McpToolProvider({
       workspace: deps.workspace,
       getConfig: deps.getConfig,
@@ -50,7 +54,14 @@ export function createDefaultExternalToolGatewayTools(deps: DefaultExternalToolG
       hookRunner: deps.hookRunner,
       toolExecutorConfig: deps.toolExecutorConfig,
     }),
-  ]);
+  ];
+  if (deps.endpointTools) {
+    providers.push(new EndpointToolProvider({
+      runtime: deps.endpointTools,
+      getCurrentContext: deps.getCurrentContext,
+    }));
+  }
+  return createExternalToolGatewayTools(providers);
 }
 
 export { ExternalToolService } from './service.js';

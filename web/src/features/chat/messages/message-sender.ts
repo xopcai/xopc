@@ -7,6 +7,7 @@ import { userMessageFromSsePayload } from '@/features/chat/messages/user-message
 import { MAX_CHAT_ATTACHMENTS } from '@/features/chat/constants';
 import { dispatchPendingAgentRunChanged } from '@/features/chat/follow-up/pending-agent-run-events';
 import { apiFetch } from '@/lib/fetch';
+import { waitForEndpointTurnClaim } from '@/features/endpoint-tools/turn-claim';
 import { formatApiHttpError } from '@/lib/http-error-message';
 import { apiUrl } from '@/lib/url';
 
@@ -186,6 +187,7 @@ export class MessageSender {
         : attachments;
 
     const clientMessageId = crypto.randomUUID();
+    const origin = await waitForEndpointTurnClaim(this._abort.signal);
     const res = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(chatId)}/inputs`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -195,6 +197,7 @@ export class MessageSender {
           content,
           attachments: capped,
           thinking: thinkingLevel,
+          origin,
       }),
       signal: this._abort.signal,
     });

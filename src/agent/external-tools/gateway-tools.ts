@@ -46,7 +46,7 @@ export function createExternalToolGatewayTools(providers: ExternalToolProvider[]
   const searchTool: AgentTool<typeof ToolSearchSchema, Record<string, unknown>> = {
     name: EXTERNAL_TOOL_NAMES.search,
     label: '🔎 External Tool Search',
-    description: 'Search MCP, connected-app, extension, and remote-memory tools. Use concise English capability keywords. Returns compact references only; call xopc_tool_describe before execution.',
+    description: 'Search MCP, connected-app, extension, remote-memory, and current-endpoint tools. Use concise English capability keywords. Returns compact references only; call xopc_tool_describe before execution.',
     parameters: ToolSearchSchema,
     async execute(_toolCallId, params) {
       return textResult(await service.search(params));

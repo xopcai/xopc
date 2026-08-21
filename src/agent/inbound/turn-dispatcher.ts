@@ -15,6 +15,8 @@
  * in their own classes and are unit-testable.
  */
 
+import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
+
 import type { Config } from '../../config/schema.js';
 import type { ContextualLogger } from '../../utils/logger/types.js';
 
@@ -61,7 +63,12 @@ export interface TurnDispatcherConfig {
   requireConfig: () => Config;
   resolveSessionEndpoint: (sessionKey: string) => Promise<{ channel: string; chatId: string }>;
   /** Establish per-session context (also creates the Agent + subscribes to events). */
-  initSessionContext: (sessionKey: string, channel: string, chatId: string) => SessionContext;
+  initSessionContext: (
+    sessionKey: string,
+    channel: string,
+    chatId: string,
+    origin: TurnOrigin,
+  ) => SessionContext;
   /** Per-session config hydration: workspace, model, thinking. */
   sessionHydrator: SessionHydrator;
   prepareInboundAttachments: (
@@ -97,7 +104,8 @@ export class TurnDispatcher {
   /** One-shot direct turn (CLI / embedded TUI). */
   processDirect(
     content: string,
-    sessionKey = 'agent:main:main',
+    sessionKey: string,
+    origin: TurnOrigin,
     attachments?: DirectAttachment[],
     thinking?: string,
     options?: ProcessDirectOptions,
@@ -105,6 +113,7 @@ export class TurnDispatcher {
     return runProcessDirect(this.buildOneShotDeps(), {
       content,
       sessionKey,
+      origin,
       attachments,
       thinking,
       signal: options?.signal,
@@ -116,7 +125,8 @@ export class TurnDispatcher {
   /** Streaming direct turn (webchat SSE / CLI streaming). */
   async *processDirectStreaming(
     content: string,
-    sessionKey = 'agent:main:main',
+    sessionKey: string,
+    origin: TurnOrigin,
     attachments?: DirectAttachment[],
     thinking?: string,
     options?: { signal?: AbortSignal; runId?: string },
@@ -124,6 +134,7 @@ export class TurnDispatcher {
     yield* runProcessDirectStreaming(this.buildStreamingDeps(), {
       content,
       sessionKey,
+      origin,
       attachments,
       thinking,
       signal: options?.signal,
@@ -243,8 +254,8 @@ export class TurnDispatcher {
       log: this.log,
       config: cfg,
       resolveSessionEndpoint: c.resolveSessionEndpoint,
-      initSessionContext: (sk, channel, chatId) => {
-        void c.initSessionContext(sk, channel, chatId);
+      initSessionContext: (sk, channel, chatId, origin) => {
+        void c.initSessionContext(sk, channel, chatId, origin);
       },
       hydrateSessionWorkspaceFromStore: (sk) => c.sessionHydrator.workspace(sk),
       hydrateSessionModelFromStore: (sk) => c.sessionHydrator.model(sk),

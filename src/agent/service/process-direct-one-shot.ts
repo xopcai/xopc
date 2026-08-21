@@ -1,4 +1,5 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
+import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 
 import type { CommandHandler } from '../messaging/command-handler.js';
 import type { AgentInstanceGateway } from '../agent-instance-gateway.js';
@@ -30,7 +31,12 @@ export type RunProcessDirectDeps = {
   log: ProcessDirectStreamLog;
   config: Config;
   resolveSessionEndpoint: (sessionKey: string) => Promise<{ channel: string; chatId: string }>;
-  initSessionContext: (sessionKey: string, channel: string, chatId: string) => void;
+  initSessionContext: (
+    sessionKey: string,
+    channel: string,
+    chatId: string,
+    origin: TurnOrigin,
+  ) => void;
   hydrateSessionWorkspaceFromStore: (sessionKey: string) => Promise<void>;
   hydrateSessionModelFromStore: (sessionKey: string) => Promise<void>;
   agentManager: AgentInstanceGateway;
@@ -57,6 +63,7 @@ export async function runProcessDirect(
   input: {
     content: string;
     sessionKey: string;
+    origin: TurnOrigin;
     attachments?: InboundAttachmentInput[];
     thinking?: string;
     signal?: AbortSignal;
@@ -65,7 +72,7 @@ export async function runProcessDirect(
   },
 ): Promise<string> {
   const { channel, chatId } = await deps.resolveSessionEndpoint(input.sessionKey);
-  deps.initSessionContext(input.sessionKey, channel, chatId);
+  deps.initSessionContext(input.sessionKey, channel, chatId, input.origin);
 
   try {
     let turnBody = input.content;

@@ -1,8 +1,14 @@
 import { apiFetch } from '../../api/client';
+import { waitForMobileEndpointTurnClaim } from '../endpoint-tools/turn-claim';
 
 export async function submitSessionInput(sessionKey: string, input: Record<string, unknown>): Promise<unknown> {
+  const origin = await waitForMobileEndpointTurnClaim();
   const res = await apiFetch(`/api/sessions/${encodeURIComponent(sessionKey)}/inputs`, {
-    method: 'POST', body: JSON.stringify(input),
+    method: 'POST',
+    body: JSON.stringify({
+      ...input,
+      origin,
+    }),
   });
   const json = await res.json().catch(() => null) as {
     payload?: { state?: unknown };

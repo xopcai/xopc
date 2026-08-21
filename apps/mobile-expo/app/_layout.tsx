@@ -29,6 +29,7 @@ import {
 } from '@/stores/preferences-store';
 import { useNoteTagsStore } from '@/stores/note-tags-store';
 import { mobileRouteFromProductDeepLink } from '@/features/chat/product-delivery';
+import { useMobileEndpointTools } from '@/features/endpoint-tools/use-mobile-endpoint-tools';
 
 export default function RootLayout() {
   const router = useRouter();
@@ -46,6 +47,7 @@ export default function RootLayout() {
   useGatewayConnectionWatch(configured);
   useWorkspaceSyncFlush(configured);
   useMobileNotifications(router);
+  useMobileEndpointTools();
 
   const isDark = resolvedTheme === 'dark';
   const paperTheme = useMemo(() => createPaperTheme(isDark), [isDark]);

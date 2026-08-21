@@ -186,6 +186,7 @@ export class InboundLoop {
         chatId: context.chatId,
         senderId: context.senderId || '',
         isGroup: context.isGroup || false,
+        origin: { type: 'channel', channel: context.channel },
         metadata: {
           transcribedVoice: msg.metadata?.transcribedVoice === true,
         },

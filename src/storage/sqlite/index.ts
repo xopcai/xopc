@@ -99,6 +99,20 @@ export {
   type ComposerInputHistoryItem,
 } from './composer-input-history-repository.js';
 export {
+  bindEndpointPrincipal,
+  createEndpointPrincipal,
+  getEndpointPrincipal,
+  revokeEndpointPrincipal,
+  touchEndpointPrincipal,
+  type EndpointPrincipal,
+} from './endpoint-principal-repository.js';
+export {
+  finishEndpointToolInvocationAudit,
+  listEndpointToolInvocationAudits,
+  startEndpointToolInvocationAudit,
+  type EndpointToolInvocationAudit,
+} from './endpoint-tool-invocation-repository.js';
+export {
   getInteractionState,
   setInteractionState,
   updateInteractionStateFromMessage,

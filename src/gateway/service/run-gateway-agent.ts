@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 
 import type { AgentService } from '../../agent/service.js';
 import type { Config } from '../../config/schema.js';
@@ -52,6 +53,7 @@ export async function *runGatewayAgent(
   message: string,
   channel: string,
   chatId: string,
+  origin: TurnOrigin,
   attachments?: UserTurnAttachment[],
   thinking?: string,
   runOptions?: { signal?: AbortSignal; runId?: string },
@@ -194,6 +196,7 @@ export async function *runGatewayAgent(
         const eventStream = agentService.turnDispatcher.processDirectStreaming(
           stampedMessage,
           sessionKey,
+          origin,
           prepared,
           thinking,
           { signal: mergedSignal, runId },

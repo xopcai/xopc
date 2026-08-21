@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const testState = vi.hoisted(() => ({
   memory: new Map<string, string>(),
@@ -35,6 +35,7 @@ vi.mock('../../stores/gateway-store', () => ({
 }));
 
 vi.mock('../../storage/mmkv', () => ({
+  KEYS: { endpointId: 'endpoint:id' },
   storage: {
     getString: (key: string) => testState.memory.get(key),
     set: (key: string, value: string | number | boolean) => {
@@ -48,12 +49,21 @@ vi.mock('../../storage/mmkv', () => ({
 }));
 
 import { AgentMessageSender } from '../agent-client';
+import {
+  clearMobileEndpointTurnClaim,
+  publishMobileEndpointTurnClaim,
+} from '../../features/endpoint-tools/turn-claim';
 
 describe('AgentMessageSender local detach', () => {
   beforeEach(() => {
     testState.memory.clear();
     testState.apiFetch.mockReset();
     testState.consumeAgentSseXhr.mockReset();
+    publishMobileEndpointTurnClaim('mobile-test', 'test-turn-token');
+  });
+
+  afterEach(() => {
+    clearMobileEndpointTurnClaim();
   });
 
   it('drops the local SSE transport without server abort and keeps the pending run', async () => {

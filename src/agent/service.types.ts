@@ -9,12 +9,14 @@ import type { ProjectService } from '../projects/index.js';
 import type { LocalAppService } from '../local-apps/index.js';
 import type { GatewayClarifyRequestFn } from './tools/clarify-tool.js';
 import type { AgentSourceContextResolver } from './source-context/types.js';
+import type { EndpointToolRuntime } from '../endpoint-tools/index.js';
 
 export interface AgentServiceConfig {
   workspace: string;
   model?: string;
   config?: Config;
   extensionRegistry?: ExtensionRegistry;
+  endpointTools?: EndpointToolRuntime;
   maxRequestsPerTurn?: number;
   maxToolFailuresPerTurn?: number;
   maxTaskDurationMs?: number;

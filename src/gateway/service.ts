@@ -121,6 +121,7 @@ import {
   startConnectedKnowledgeCoordinator,
   type ConnectedKnowledgeCoordinator,
 } from '../knowledge/index.js';
+import { EndpointToolRuntime } from '../endpoint-tools/index.js';
 
 export type {
   GatewayChannelStartupPhase1Metrics,
@@ -161,6 +162,8 @@ export class GatewayService {
   private auth: ResolvedGatewayAuth;
 
   private readonly sse = new GatewaySseHub();
+
+  readonly endpointTools = new EndpointToolRuntime();
 
   getConfig(): Config {
     return this.config;
@@ -496,6 +499,7 @@ export class GatewayService {
         });
       },
       extensionRegistry: this.extensionLoader?.getRegistry(),
+      endpointTools: this.endpointTools,
       getAutomationService: () => this.automationService,
       getBrowserRecipeService: () => this.browserRecipes,
       getNotesService: () => this.notesService,
@@ -612,7 +616,15 @@ export class GatewayService {
           return sessionKey;
         },
         runAgent: async (runId, sessionKey, message) => {
-          const stream = this.agentRunner.runAgent(message, 'webchat', sessionKey, undefined, undefined, { runId });
+          const stream = this.agentRunner.runAgent(
+            message,
+            'webchat',
+            sessionKey,
+            { type: 'system', source: 'workflow' },
+            undefined,
+            undefined,
+            { runId },
+          );
           while (!(await stream.next()).done) { /* streamed through SSE */ }
         },
       });
@@ -1180,6 +1192,7 @@ export class GatewayService {
 
     log.debug('Stopping gateway service...');
     this.readiness.markStarting();
+    this.endpointTools.close();
 
     await this.proactiveWorker.stop();
     await this.discussionWorker.stop();
@@ -1734,7 +1747,11 @@ export class GatewayService {
 
   /** Process a message directly through the agent (for CLI mode). */
   async processDirect(content: string, sessionKey = 'agent:main:main'): Promise<string> {
-    return this.agentService.turnDispatcher.processDirect(content, sessionKey);
+    return this.agentService.turnDispatcher.processDirect(
+      content,
+      sessionKey,
+      { type: 'system', source: 'internal' },
+    );
   }
 
   // ========== SSE Event System ==========

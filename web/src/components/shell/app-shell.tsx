@@ -11,6 +11,7 @@ import { TokenDialog } from '@/components/shell/token-dialog';
 import { WindowsTitlebar } from '@/components/shell/windows-titlebar';
 import { DesktopNotificationBridge } from '@/features/electron/desktop-notification-bridge';
 import { ElectronGatewayExitBanner } from '@/features/electron/electron-gateway-exit-banner';
+import { EndpointToolBridge } from '@/features/endpoint-tools/endpoint-tool-bridge';
 import { ElectronMenuListener } from '@/features/electron/electron-menu-listener';
 import { GatewayRestartBanner } from '@/features/gateway/gateway-restart-banner';
 import { UpdateReminderBar } from '@/features/updater/update-reminder-bar';
@@ -130,6 +131,7 @@ export function AppShell() {
   if (isWorkDiscoveryRoute) {
     return (
       <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-surface-base">
+        <EndpointToolBridge />
         <GatewaySseBridge />
         <ElectronMenuListener />
         <ToastHost />
@@ -150,6 +152,7 @@ export function AppShell() {
 
   return (
     <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-surface-base">
+      <EndpointToolBridge />
       <a
         href="#app-main-content"
         className="sr-only z-[80] rounded-lg bg-surface-panel px-3 py-2 text-sm text-fg shadow-elevated focus:not-sr-only focus:absolute focus:left-4 focus:top-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"

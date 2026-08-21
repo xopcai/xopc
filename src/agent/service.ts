@@ -276,6 +276,7 @@ export class AgentService {
       model: config.model,
       config: config.config,
       extensionRegistry: config.extensionRegistry,
+      endpointTools: config.endpointTools,
       hookRunner: this.hookRunner,
       bus,
       getCurrentContext: () => this.sessionContextManager.getContext(),
@@ -477,7 +478,8 @@ export class AgentService {
         return c;
       },
       resolveSessionEndpoint: (sk) => this.resolveSessionEndpoint(sk),
-      initSessionContext: (sk, channel, chatId) => this.initSessionContext(sk, channel, chatId),
+      initSessionContext: (sk, channel, chatId, origin) =>
+        this.initSessionContext(sk, channel, chatId, origin),
       sessionHydrator: this.sessionHydrator,
       prepareInboundAttachments: (sk, att) => this.prepareInboundAttachments(sk, att),
       enqueueMaybeAutoTitleAfterPersist: (sk) => this.enqueueMaybeAutoTitleAfterPersist(sk),
@@ -864,6 +866,7 @@ export class AgentService {
     sessionKey: string,
     channel: string,
     chatId: string,
+    origin: import('@xopcai/endpoint-tools-protocol').TurnOrigin,
     senderId = '',
   ): SessionContext {
     const context: SessionContext = {
@@ -872,6 +875,7 @@ export class AgentService {
       chatId,
       senderId,
       isGroup: false,
+      origin,
     };
 
     this.contextMiddleware.onRequest({
