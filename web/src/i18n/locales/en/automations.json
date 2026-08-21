@@ -30,7 +30,14 @@
       "showDetails": "Expand",
       "hideDetails": "Collapse",
       "eventData": "Details",
-      "repairPatch": "Patch"
+      "repairPatch": "Patch",
+      "moreActions": "More actions"
+    },
+    "filters": {
+      "status": "Filter by status",
+      "all": "All",
+      "active": "Active",
+      "search": "Search automations"
     },
     "events": {
       "manualQueued": "Manual run queued",
@@ -58,12 +65,6 @@
     "system": {
       "title": "System automations"
     },
-    "createMenu": {
-      "draft": "Draft with AI",
-      "template": "From template",
-      "blank": "Blank automation",
-      "templatesTitle": "Choose a template"
-    },
     "dashboard": {
       "activity": "Run results",
       "activityDescription": "Start with what each automation produced, then open its conversation when you need the process.",
@@ -74,6 +75,9 @@
       "result": "Result",
       "runHistory": "Run history",
       "runHistoryDescription": "Review previous runs and open the session or workflow behind each result.",
+      "allRuns": "Run history",
+      "backToAutomations": "Back to automations",
+      "runCenterDescription": "Review execution across automations, then open a run for results and diagnostics.",
       "openSession": "Open session",
       "runNow": "Run now",
       "pause": "Pause",
@@ -111,7 +115,10 @@
       "editTitle": "Edit automation draft",
       "edit": "Edit draft",
       "publish": "Publish",
-      "approval": "I reviewed the required confirmations and want to publish this automation."
+      "approval": "I reviewed the required confirmations and want to publish this automation.",
+      "suggestions": "Start from a common use case",
+      "suggestionsDescription": "You can adjust every setting before publishing.",
+      "advancedCreate": "Advanced create"
     },
     "repair": {
       "title": "Repair suggestion",
@@ -220,10 +227,12 @@
     },
     "empty": {
       "automations": "No automations",
+      "filtered": "No matching automations",
       "runs": "No runs yet",
       "events": "No timeline events yet"
     },
     "info": {
+      "task": "What it does",
       "when": "When",
       "run": "Run",
       "safety": "Safety",
@@ -301,6 +310,8 @@
       "notRun": "not run"
     },
     "form": {
+      "advanced": "Advanced settings",
+      "advancedDescription": "Safety, delivery, and reliability",
       "name": "Name",
       "description": "Description",
       "trigger": "Trigger",
