@@ -54,7 +54,7 @@ async function main() {
 
   const b3 = document.createElement('button');
   b3.type = 'button';
-  b3.textContent = 'Toast';
+  b3.textContent = 'Record activity';
   b3.onclick = async () => {
     await client.ui.showNotification({ type: 'success', title: 'Hello settings', message: 'Saved from SDK.' });
   };

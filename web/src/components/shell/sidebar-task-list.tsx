@@ -201,7 +201,7 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
       setMenuOpen(false);
       void mutate();
     } catch {
-      /* optional toast */
+      // Preserve the current sidebar state when the action fails.
     }
   };
 
@@ -1046,7 +1046,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
       setRenameKey(null);
       refreshSidebar();
     } catch {
-      /* optional toast */
+      // Preserve the current sidebar state when the action fails.
     }
   };
 
@@ -1058,7 +1058,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
       }
       refreshSidebar();
     } catch {
-      /* optional toast */
+      // Preserve the current sidebar state when the action fails.
     }
   };
 
@@ -1077,7 +1077,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
       refreshSidebar();
       window.dispatchEvent(new CustomEvent('project-updated', { detail: { id: renameProjectId } }));
     } catch {
-      /* optional toast */
+      // Preserve the current sidebar state when the action fails.
     }
   };
 
@@ -1090,7 +1090,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
       refreshSidebar();
       window.dispatchEvent(new CustomEvent('project-updated', { detail: { id: project.id } }));
     } catch {
-      /* optional toast */
+      // Preserve the current sidebar state when the action fails.
     }
   }, [navigate, pathname, refreshSidebar]);
 
@@ -1104,7 +1104,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
       refreshSidebar();
       window.dispatchEvent(new CustomEvent('project-updated', { detail: { id: project.id } }));
     } catch {
-      /* optional toast */
+      // Preserve the current sidebar state when the action fails.
     }
   }, [refreshSidebar]);
 
@@ -1117,7 +1117,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
       refreshSidebar();
       window.dispatchEvent(new CustomEvent('project-updated', { detail: { id: projectId } }));
     } catch {
-      /* optional toast */
+      // Preserve the current sidebar state when the action fails.
     }
   };
 
@@ -1229,7 +1229,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
       navigate(`/chat/${encodeURIComponent(session.key)}`);
       onNavigate?.();
     } catch {
-      /* optional toast */
+      // Preserve the current sidebar state when the action fails.
     }
   }, [defaultAgentId, navigate, onNavigate, refreshSidebar]);
 

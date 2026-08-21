@@ -19,7 +19,6 @@ import useSWR from 'swr';
 import { Button } from '@/components/ui/button';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
-import { showToast } from '@/lib/toast';
 import { useLocaleStore } from '@/stores/locale-store';
 
 import {
@@ -228,6 +227,7 @@ export function ProductAutomationFeedback({
     limit,
   ];
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const { data, mutate } = useSWR(
     eventType && (!payloadKey || payloadValue !== undefined) ? swrKey : null,
     () => automationApi.productEventRuns({ eventType, source, payloadKey, payloadValue, limit }),
@@ -249,15 +249,12 @@ export function ProductAutomationFeedback({
     action: () => Promise<unknown>,
   ) => {
     setBusyAction(actionKey);
+    setActionError(null);
     try {
       await action();
       await mutate();
     } catch (error) {
-      showToast({
-        type: 'error',
-        title: labels.feedback.actionFailed,
-        message: error instanceof Error ? error.message : String(error),
-      });
+      setActionError(error instanceof Error ? error.message : String(error));
     } finally {
       setBusyAction(null);
     }
@@ -265,16 +262,13 @@ export function ProductAutomationFeedback({
 
   const suggestRepair = async (run: AutomationRun) => {
     setBusyAction(`${run.id}:repair`);
+    setActionError(null);
     try {
       const result = await automationApi.repairDraft(run.id, { language });
       setRepairDrafts((current) => ({ ...current, [run.id]: result.repair }));
       setRepairApprovals((current) => ({ ...current, [run.id]: false }));
     } catch (error) {
-      showToast({
-        type: 'error',
-        title: labels.feedback.actionFailed,
-        message: error instanceof Error ? error.message : String(error),
-      });
+      setActionError(error instanceof Error ? error.message : String(error));
     } finally {
       setBusyAction(null);
     }
@@ -282,6 +276,7 @@ export function ProductAutomationFeedback({
 
   const applyRepair = async (run: AutomationRun, repair: AutomationRepairDraft, rerunAfterApply = false) => {
     setBusyAction(rerunAfterApply ? `${run.id}:applyAndRerun` : `${run.id}:applyRepair`);
+    setActionError(null);
     try {
       await automationApi.update(run.automationId, repair.patch);
       if (rerunAfterApply) {
@@ -299,11 +294,7 @@ export function ProductAutomationFeedback({
         return next;
       });
     } catch (error) {
-      showToast({
-        type: 'error',
-        title: labels.feedback.actionFailed,
-        message: error instanceof Error ? error.message : String(error),
-      });
+      setActionError(error instanceof Error ? error.message : String(error));
     } finally {
       setBusyAction(null);
     }
@@ -329,6 +320,7 @@ export function ProductAutomationFeedback({
         primaryRepairBusy={primaryRepairBusy}
         onPrimaryRepair={primaryRepairRun ? () => void suggestRepair(primaryRepairRun) : undefined}
       />
+      {actionError ? <p className="mb-2 rounded-md border border-danger/25 bg-danger-soft px-2.5 py-2 text-xs text-danger" role="alert">{labels.feedback.actionFailed}: {actionError}</p> : null}
       <ul className="grid gap-2">
         {items.map(({ run, triggerEvent }) => {
           const latestRun = latestRunByAutomation.get(run.automationId);

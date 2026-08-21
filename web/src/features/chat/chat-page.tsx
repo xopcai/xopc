@@ -54,7 +54,7 @@ import { useChatRunPresenceStore } from '@/features/chat/session/chat-run-presen
 import { AgentRunErrorBanner } from '@/features/chat/messages/agent-run-error-banner';
 import { parseAgentRunError } from '@/features/chat/messages/agent-run-error-parser';
 import { agentsAppDetailPath } from '@/features/settings/agents/agents-app-path';
-import { showToast } from '@/lib/toast';
+import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import { showActivity } from '@/stores/activity-store';
 import { Button } from '@/components/ui/button';
 
@@ -105,6 +105,7 @@ export function ChatPage() {
   const [sourceNoteLoadedTitle, setSourceNoteLoadedTitle] = useState<string | null>(null);
   const [sourceNoteSaveDraft, setSourceNoteSaveDraft] = useState<SourceNoteSaveDraft | null>(null);
   const [sourceNoteSaveSubmitting, setSourceNoteSaveSubmitting] = useState(false);
+  const [sourceNoteSaveError, setSourceNoteSaveError] = useState<string | null>(null);
   const [showWelcomeSkeleton, setShowWelcomeSkeleton] = useState(false);
 
   const { auth, session, messages: msgSlice, timeline, stream, followUp, clarify, agents } = useChatSession();
@@ -717,6 +718,7 @@ export function ChatPage() {
     if (!content) return;
 
     setSourceNoteSaveSubmitting(true);
+    setSourceNoteSaveError(null);
     try {
       await appendNoteContent(pending.sourceNoteId, content, heading);
       window.dispatchEvent(
@@ -732,11 +734,7 @@ export function ChatPage() {
       pendingSourceNoteSaveRef.current = null;
       setSourceNoteSaveDraft(null);
     } catch (err) {
-      showToast({
-        type: 'error',
-        title: m.chat.sourceNoteSaveFailed,
-        message: err instanceof Error ? err.message : undefined,
-      });
+      setSourceNoteSaveError(err instanceof Error ? err.message : m.chat.sourceNoteSaveFailed);
     } finally {
       setSourceNoteSaveSubmitting(false);
     }
@@ -758,11 +756,7 @@ export function ChatPage() {
           sourceSessionKey: chatSessionKey,
         });
       } catch (err) {
-        showToast({
-          type: 'error',
-          title: m.chat.sourceNoteTaskFailed,
-          message: err instanceof Error ? err.message : undefined,
-        });
+        showComposerNotification('error', err instanceof Error ? err.message : m.chat.sourceNoteTaskFailed);
         throw err;
       }
     },
@@ -1104,6 +1098,7 @@ export function ChatPage() {
               </Dialog.Description>
             </div>
             <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-4">
+              {sourceNoteSaveError ? <p className="rounded-lg border border-danger/25 bg-danger-soft px-3 py-2 text-sm text-danger" role="alert">{m.chat.sourceNoteSaveFailed}: {sourceNoteSaveError}</p> : null}
               <label className="flex flex-col gap-1.5 text-sm font-medium text-fg">
                 <span>{m.chat.sourceNoteSaveDialogHeadingLabel}</span>
                 <input

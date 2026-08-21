@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatMediumDateTime } from '@/lib/date-formatters';
-import { showToast } from '@/lib/toast';
 import { DreamingScheduleDialog } from './dreaming-schedule-dialog';
 import { formatDreamingRunTime, formatDreamingSchedule, formatTimezone } from './dreaming-schedule-format';
 import {
@@ -44,6 +43,7 @@ export function DreamingPanel({ language }: { language: 'en' | 'zh' }) {
   const { data, error, isLoading, mutate } = useSWR('/api/you/dreaming', fetchDreaming);
   const [busy, setBusy] = useState<string | null>(null);
   const [editingPhase, setEditingPhase] = useState<Phase | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   if (isLoading) return <Skeleton className="h-64 rounded-2xl" />;
   if (error || !data) return <div className="rounded-2xl border border-danger/25 bg-danger-soft p-5 text-sm text-danger">{zh ? '无法加载 Dreaming 状态' : 'Could not load Dreaming status'}</div>;
 
@@ -64,12 +64,13 @@ export function DreamingPanel({ language }: { language: 'en' | 'zh' }) {
 
   const saveSettings = async (settings: DreamingSettings, busyKey: string) => {
     setBusy(busyKey);
+    setActionError(null);
     try {
       await updateDreamingSettings(settings);
       await mutate();
       return true;
     } catch (cause) {
-      showToast({ type: 'error', title: 'Dreaming', message: cause instanceof Error ? cause.message : String(cause) });
+      setActionError(cause instanceof Error ? cause.message : String(cause));
       return false;
     } finally {
       setBusy(null);
@@ -78,11 +79,12 @@ export function DreamingPanel({ language }: { language: 'en' | 'zh' }) {
 
   const run = async (phase: Phase) => {
     setBusy(`run:${phase}`);
+    setActionError(null);
     try {
       await runDreaming(phase);
       await mutate();
     } catch (cause) {
-      showToast({ type: 'error', title: 'Dreaming', message: cause instanceof Error ? cause.message : String(cause) });
+      setActionError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setBusy(null);
     }
@@ -97,6 +99,8 @@ export function DreamingPanel({ language }: { language: 'en' | 'zh' }) {
         <h2 className="flex items-center gap-2 text-base font-semibold text-fg"><Moon className="size-4 text-accent" aria-hidden />Dreaming</h2>
         <p className="mt-1 max-w-2xl text-sm leading-6 text-fg-muted">{zh ? '在空闲时整理已有证据、发现模式，并用可审计的方式提出或应用长期理解。' : 'Consolidates existing evidence during idle time, discovers patterns, and records every proposal or change.'}</p>
       </section>
+
+      {actionError ? <p className="rounded-xl border border-danger/25 bg-danger-soft px-4 py-3 text-sm text-danger" role="alert">{actionError}</p> : null}
 
       <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5">
         <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_16rem]">

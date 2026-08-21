@@ -386,6 +386,7 @@
     .mo-c .mo-btns { display:flex;gap:8px;justify-content:flex-end;margin-top:4px; }
     .mo-c .mo-btns button { padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;border:1px solid var(--s-bd);background:var(--s-pn);color:var(--s-fg);cursor:pointer; }
     .mo-c .mo-btns button.pri { background:var(--s-ac);color:#fff;border-color:var(--s-ac); }
+    .mo-c .mo-error { margin:-2px 0 10px;color:#DC2626;font-size:12px;line-height:1.5; }
     .empty { display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:48px 24px;gap:16px;height:100%; }
     .empty .bi { font-size:48px; }
     .empty h1 { font-size:22px;font-weight:700; }
@@ -402,8 +403,6 @@
     .empty .links { display:flex;gap:12px;font-size:12px; }
     .empty .links a { color:var(--s-ac);text-decoration:none;cursor:pointer; }
     .empty .links a:hover { text-decoration:underline; }
-    .toast { position:fixed;top:12px;left:50%;transform:translateX(-50%) translateY(-20px);background:var(--s-pn);border:1px solid var(--s-g);border-radius:10px;padding:8px 16px;box-shadow:0 4px 12px rgba(0,0,0,.08);opacity:0;transition:all .35s;z-index:200;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;pointer-events:none;backdrop-filter:blur(12px); }
-    .toast.show { opacity:1;transform:translateX(-50%) translateY(0); }
     ::-webkit-scrollbar { width:3px;height:3px; }
     ::-webkit-scrollbar-track { background:transparent; }
     ::-webkit-scrollbar-thumb { background:var(--s-bs);border-radius:2px; }
@@ -530,20 +529,9 @@
     renderActivity();
     renderDock();
   }
-  var toastTimer;
-  function showToast(msg) {
-    const el = document.getElementById("tt");
-    const tx = document.getElementById("ttx");
-    if (!el || !tx) return;
-    tx.textContent = msg;
-    el.classList.add("show");
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => el.classList.remove("show"), 2e3);
-  }
   function resolveDecision(id, msg) {
     const el = document.getElementById("dc_" + id);
     if (el) el.classList.add("rs");
-    showToast(msg);
     setTimeout(() => {
       state.decisions = state.decisions.filter((d) => d.i !== id);
       renderAll();
@@ -626,6 +614,18 @@
     document.body.appendChild(mo);
     return mo;
   }
+  function showModalError(mo, message) {
+    const container = mo.querySelector(".mo-c");
+    if (!container) return;
+    let error = container.querySelector(".mo-error");
+    if (!error) {
+      error = document.createElement("p");
+      error.className = "mo-error";
+      error.setAttribute("role", "alert");
+      container.querySelector(".mo-btns")?.before(error);
+    }
+    error.textContent = message;
+  }
   function createTask() {
     const mo = showModal(`
     <div class="mo-c">
@@ -641,7 +641,7 @@
     mo.querySelector("#mtSubmit").addEventListener("click", () => {
       const t = mo.querySelector("#mtTitle").value.trim();
       if (!t) {
-        showToast("\u26A0\uFE0F \u8BF7\u8F93\u5165\u6807\u9898");
+        showModalError(mo, "\u8BF7\u8F93\u5165\u6807\u9898");
         return;
       }
       const d = mo.querySelector("#mtDesc").value.trim();
@@ -650,7 +650,6 @@
       state.activity.unshift({ t: nowTime(), x: `\u{1F4CB} \u624B\u52A8\u521B\u5EFA\u300C${t}\u300D`, nb: true });
       mo.remove();
       renderAll();
-      showToast("\u2705 \u4EFB\u52A1\u5DF2\u521B\u5EFA");
     });
   }
   function createIntent() {
@@ -667,7 +666,7 @@
     mo.querySelector("#miSubmit").addEventListener("click", () => {
       const txt = mo.querySelector("#miText").value.trim();
       if (!txt) {
-        showToast("\u26A0\uFE0F \u8BF7\u8F93\u5165\u63CF\u8FF0");
+        showModalError(mo, "\u8BF7\u8F93\u5165\u63CF\u8FF0");
         return;
       }
       mo.remove();
@@ -681,7 +680,6 @@
       }
       state.activity.unshift({ t: nowTime(), x: `<span class="hl">@tech-lead</span> \u5F00\u59CB\u62C6\u89E3\u300C${title}\u300D`, nb: true });
       renderAll();
-      showToast("\u{1F916} @tech-lead \u6B63\u5728\u62C6\u89E3...");
       setTimeout(() => {
         state.cards.push({ i: newId(), c: 0, t: "\u540E\u7AEF API \u5F00\u53D1", l: "p1", d: "\u57FA\u4E8E\u610F\u56FE\u62C6\u89E3\u7684\u540E\u7AEF\u4EFB\u52A1", ag: [{ ic: "\u{1F5A5}", n: "dev-backend", s: "idle", p: 0 }], tg: ["\u540E\u7AEF"], pr: 0 });
         state.cards.push({ i: newId(), c: 0, t: "\u524D\u7AEF UI \u5B9E\u73B0", l: "p1", d: "\u57FA\u4E8E\u610F\u56FE\u62C6\u89E3\u7684\u524D\u7AEF\u4EFB\u52A1", ag: [{ ic: "\u{1F3A8}", n: "frontend", s: "idle", p: 0 }], tg: ["\u524D\u7AEF"], pr: 0 });
@@ -729,7 +727,6 @@
       </div>
     </div></div>
     <div class="dw"><div class="dk" id="ad"></div></div>
-    <div class="toast" id="tt"><span id="ttx">\u5DF2\u8BB0\u5F55</span></div>
     <div class="dc"><button id="db" onclick="window.__synapse_toggleDemo()">\u25B6\uFE0F \u81EA\u52A8\u6F14\u793A</button></div>
   `;
     document.body.appendChild(app);
