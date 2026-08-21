@@ -24,6 +24,7 @@ import {
 import { isTransientNetworkError } from '../features/chat/network-errors';
 import { useGatewayStore } from '../stores/gateway-store';
 import { pendingRunStorageKey, storage } from '../storage/mmkv';
+import { waitForMobileEndpointTurnClaim } from '../features/endpoint-tools/turn-claim';
 
 export type MessagingCallbacks = AgentSseCallbacks;
 
@@ -351,10 +352,12 @@ export class AgentMessageSender {
   ): Promise<void> {
     const capped = capAttachments(attachments);
     const clientMessageId = crypto.randomUUID();
+    const origin = await waitForMobileEndpointTurnClaim();
     const res = await apiFetch(`/api/sessions/${encodeURIComponent(sessionKey)}/inputs`, {
       method: 'POST',
       body: JSON.stringify({
         clientMessageId, delivery: 'next', content: message,
+        origin,
         ...(capped?.length ? { attachments: capped } : {}),
       }),
     });

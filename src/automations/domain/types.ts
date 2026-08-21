@@ -1,5 +1,6 @@
 import type { WorkflowRunInputEnvelope } from '../../workflows/domain/index.js';
 import type { TaskCommand } from '@xopcai/gateway-contract';
+import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 import type {
   WorkflowRunServiceLike,
 } from '../../workflows/service/workflow-run-service.types.js';
@@ -205,6 +206,7 @@ export interface AutomationDeps {
       processDirect: (
         message: string,
         sessionKey: string,
+        origin: TurnOrigin,
         attachments?: unknown[],
         thinking?: string,
         options?: { signal?: AbortSignal; runId?: string; deadlineAtMs?: number },

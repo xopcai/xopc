@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 
 import type { UserTurnAttachment } from '../user-turn-input.js';
 import {
@@ -26,6 +27,7 @@ export type SubmitSessionInput = {
   content: string;
   attachments?: UserTurnAttachment[];
   thinking?: string;
+  origin: TurnOrigin;
 };
 
 export class SessionInputCoordinator {
@@ -40,6 +42,7 @@ export class SessionInputCoordinator {
       content: string;
       attachments?: UserTurnAttachment[];
       thinking?: string;
+      origin: TurnOrigin;
     }) => Promise<{ status: string; summary: string }>;
     prepareAttachments: (
       sessionKey: string,
@@ -100,7 +103,8 @@ export class SessionInputCoordinator {
 
     const attachments = await this.deps.prepareAttachments(sessionKey, input.attachments);
     const runtime = this.snapshot(sessionKey);
-    const canSteer = input.delivery === 'steer'
+    const canSteer = input.origin.type !== 'endpoint'
+      && input.delivery === 'steer'
       && runtime.activeRunId !== undefined
       && !attachments?.length;
     const effectiveDelivery: SessionInputDelivery = canSteer ? 'steer' : 'next';
@@ -114,6 +118,7 @@ export class SessionInputCoordinator {
       content,
       attachments,
       thinking: input.thinking,
+      origin: input.origin,
       targetRunId: canSteer ? runtime.activeRunId : undefined,
     });
 
@@ -148,6 +153,7 @@ export class SessionInputCoordinator {
             content: input.content,
             attachments: input.attachments as UserTurnAttachment[] | undefined,
             thinking: input.thinking,
+            origin: input.origin,
           });
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);

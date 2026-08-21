@@ -15,6 +15,7 @@ export const KEYS = {
   defaultAgentId: 'prefs.defaultAgentId',
   selectedModelRef: 'prefs.selectedModelRef',
   mobileInstallationId: 'mobile.installationId',
+  endpointId: 'endpointTools.endpointId',
   notificationsEnabled: 'prefs.notificationsEnabled',
   noteTags: 'prefs.noteTags',
   usageEvents: 'product.usageEvents',

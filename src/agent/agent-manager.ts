@@ -142,6 +142,7 @@ export interface AgentManagerConfig {
   model?: string;
   config?: Config;
   extensionRegistry?: ExtensionRegistry;
+  endpointTools?: import('../endpoint-tools/index.js').EndpointToolRuntime;
   hookRunner?: import('../extensions/index.js').ExtensionHookRunner;
   bus: MessageBus;
   getCurrentContext: () => SessionContext | null;
@@ -419,6 +420,7 @@ export class AgentManager implements AgentInstanceGateway {
     return {
       workspace: this.baseWorkspacePath,
       extensionRegistry: this.config.extensionRegistry,
+      endpointTools: this.config.endpointTools,
       getCurrentContext: this.config.getCurrentContext,
       hookRunner: this.config.hookRunner,
       bus: this.config.bus,

@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 
 /**
  * GatewayAgentRunner — webchat agent invocation and the surrounding control
@@ -66,6 +67,7 @@ export class GatewayAgentRunner {
           input.content,
           'webchat',
           input.sessionKey,
+          input.origin,
           input.attachments,
           input.thinking,
           { runId: input.runId },
@@ -123,6 +125,7 @@ export class GatewayAgentRunner {
     message: string,
     channel: string,
     chatId: string,
+    origin: TurnOrigin,
     attachments?: UserTurnAttachment[],
     thinking?: string,
     runOptions?: { signal?: AbortSignal; runId?: string },
@@ -151,6 +154,7 @@ export class GatewayAgentRunner {
       message,
       channel,
       chatId,
+      origin,
       attachments,
       thinking,
       runOptions,
@@ -241,6 +245,7 @@ export class GatewayAgentRunner {
       delivery: 'next',
       content: userTurn.text,
       attachments: userTurn.attachments,
+      origin: { type: 'system', source: 'workflow' },
     });
     if (accepted.ok === false) throw new Error(`Scheduled session input was rejected: ${accepted.code}`);
     await this.inputs.waitForCompletion(sessionKey, clientMessageId);

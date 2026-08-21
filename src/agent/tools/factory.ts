@@ -11,6 +11,8 @@ import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { Model, Api } from '@earendil-works/pi-ai';
 import type { Page } from 'playwright-core';
 import type { Config } from '../../config/schema.js';
+import type { EndpointToolRuntime } from '../../endpoint-tools/index.js';
+import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 import type { ExtensionRegistry } from '../../extensions/types/index.js';
 import { resolveDefaultAgentId } from '../agent-scope.js';
 import {
@@ -103,7 +105,8 @@ const CLARIFY_SUPPORTED_CHANNELS = new Set(['webchat', 'telegram', 'cli']);
 export interface ToolFactoryDeps {
   workspace: string;
   extensionRegistry?: ExtensionRegistry;
-  getCurrentContext: () => { channel: string; chatId: string; sessionKey: string } | null;
+  getCurrentContext: () => { channel: string; chatId: string; sessionKey: string; origin: TurnOrigin } | null;
+  endpointTools?: EndpointToolRuntime;
   hookRunner?: import('../../extensions/index.js').ExtensionHookRunner;
   bus: MessageBus;
   toolExecutorConfig?: Partial<ToolExecutorConfig>;
@@ -303,6 +306,7 @@ export class AgentToolsFactory {
       workspace,
       getConfig: () => this.deps.getConfig?.(),
       getCurrentContext: this.deps.getCurrentContext,
+      endpointTools: this.deps.endpointTools,
       agentId,
       extensionRegistry: this.deps.extensionRegistry,
       disabledTools: disabled,

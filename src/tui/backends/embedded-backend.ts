@@ -392,6 +392,7 @@ export class EmbeddedBackend implements TuiBackend {
         const stream = agent.turnDispatcher.processDirectStreaming(
           messageForAgent,
           opts.sessionKey,
+          { type: 'system', source: 'cli' },
           opts.attachments,
           opts.thinking,
           { signal, runId },

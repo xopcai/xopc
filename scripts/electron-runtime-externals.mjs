@@ -15,6 +15,7 @@ export const ELECTRON_GATEWAY_EXTERNALS = [
 
 /** Real node_modules packages required by the packaged gateway/extensions. */
 export const ELECTRON_PACKAGED_DEPENDENCIES = [
+  'ws',
   'silk-wasm',
   '@huggingface/transformers',
   'onnxruntime-common',

@@ -19,6 +19,7 @@ import {
   type PendingFollowUp,
 } from '@/features/chat/follow-up/pending-follow-up.types';
 import { apiFetch } from '@/lib/fetch';
+import { waitForEndpointTurnClaim } from '@/features/endpoint-tools/turn-claim';
 import { apiUrl } from '@/lib/url';
 
 export type ChatFollowUpClarifyApi = {
@@ -212,12 +213,14 @@ export function useChatFollowUpClarify(options: {
       const effectiveThinking = modelSupportsThinking ? thinkingLevel : 'off';
       const key = sessionKeyRef.current;
       if (!key) throw new Error('No active session');
+      const origin = await waitForEndpointTurnClaim();
       const res = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(key)}/inputs`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           clientMessageId: crypto.randomUUID(), delivery: 'next', content: trimmed || content,
           attachments: attachments?.length ? attachments : undefined, thinking: effectiveThinking,
+        origin,
         }),
       });
       const json = await res.json().catch(() => null) as {

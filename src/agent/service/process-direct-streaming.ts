@@ -1,5 +1,6 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { ImageContent } from '@earendil-works/pi-ai';
+import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 
 import type { Config } from '../../config/schema.js';
 import type { InboundAttachmentInput, MediaRef } from '../../channels/attachments/inbound-persist.js';
@@ -55,6 +56,7 @@ export interface ProcessDirectStreamingDeps {
     sessionKey: string,
     channel: string,
     chatId: string,
+    origin: TurnOrigin,
   ) => SessionContext;
   registerWebchatSsePublisher: (
     sessionKey: string,
@@ -99,6 +101,7 @@ export interface ProcessDirectStreamingDeps {
 export interface ProcessDirectStreamingInput {
   content: string;
   sessionKey?: string;
+  origin: TurnOrigin;
   attachments?: DirectStreamInboundAttachment[];
   thinking?: string;
   signal?: AbortSignal;
@@ -244,7 +247,7 @@ export async function* runProcessDirectStreaming(
 ): AsyncGenerator<ProcessDirectStreamingSseEvent, void, unknown> {
   const sessionKey = input.sessionKey ?? 'agent:main:main';
   const { channel, chatId } = await deps.resolveSessionEndpoint(sessionKey);
-  const context = deps.initDirectStreamingSession(sessionKey, channel, chatId);
+  const context = deps.initDirectStreamingSession(sessionKey, channel, chatId, input.origin);
 
   const queue = new AsyncQueue<ProcessDirectStreamingSseEvent>();
   let reasoningLevel: ReasoningLevel = channel === 'webchat'

@@ -71,7 +71,13 @@ describe('runGatewayAgent', () => {
     } as unknown as RunGatewayAgentDeps;
 
     const events = [];
-    for await (const item of runGatewayAgent(deps, 'hello', 'webchat', sessionKey)) events.push(item);
+    for await (const item of runGatewayAgent(
+      deps,
+      'hello',
+      'webchat',
+      sessionKey,
+      { type: 'system', source: 'internal' },
+    )) events.push(item);
 
     const thinkingEvents = events.filter((item) => item.type === 'thinking_delta');
     expect(thinkingEvents).toHaveLength(1);
@@ -117,7 +123,13 @@ describe('runGatewayAgent', () => {
     } as unknown as RunGatewayAgentDeps;
 
     const events = [];
-    for await (const event of runGatewayAgent(deps, 'hello', 'webchat', sessionKey)) {
+    for await (const event of runGatewayAgent(
+      deps,
+      'hello',
+      'webchat',
+      sessionKey,
+      { type: 'system', source: 'internal' },
+    )) {
       events.push(event);
     }
 

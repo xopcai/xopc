@@ -2,8 +2,9 @@ import type {
   AgentToolResult,
   AgentToolUpdateCallback,
 } from '@earendil-works/pi-agent-core';
+import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 
-export const EXTERNAL_TOOL_SOURCES = ['mcp', 'composio', 'extension', 'memory'] as const;
+export const EXTERNAL_TOOL_SOURCES = ['mcp', 'composio', 'extension', 'memory', 'endpoint'] as const;
 
 export type ExternalToolSource = (typeof EXTERNAL_TOOL_SOURCES)[number];
 
@@ -28,6 +29,13 @@ export interface ExternalToolExecutionContext {
   toolCallId: string;
   signal?: AbortSignal;
   onUpdate?: AgentToolUpdateCallback<Record<string, unknown>>;
+}
+
+export interface ExternalToolTurnContext {
+  channel: string;
+  chatId: string;
+  sessionKey: string;
+  origin: TurnOrigin;
 }
 
 export interface ExternalToolProvider {
