@@ -1129,7 +1129,7 @@ function AutomationList({
             type="button"
             key={automation.id}
             className={cn(
-              'block w-full px-3 py-3 text-left outline-none hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
+              'block w-full p-3 text-left outline-none hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
               selectedAutomationId === automation.id && 'bg-surface-hover',
             )}
             onClick={() => onOpenDetails(automation.id)}
@@ -1635,7 +1635,7 @@ function AutomationDetails({
             ) : (
               <div className="divide-y divide-edge-subtle overflow-hidden rounded-xl border border-edge-subtle bg-surface-base">
                 {runs.slice(0, 8).map((run) => (
-                  <button key={run.id} type="button" className="block w-full px-3 py-3 text-left hover:bg-surface-hover" onClick={() => onSelectRun(run.id)}>
+                  <button key={run.id} type="button" className="block w-full p-3 text-left hover:bg-surface-hover" onClick={() => onSelectRun(run.id)}>
                     <div className="flex min-w-0 items-center justify-between gap-3">
                       <div className="flex min-w-0 items-center gap-2">
                         {run.status === 'succeeded' ? <CheckCircle2 className="size-4 shrink-0 text-emerald-600 dark:text-emerald-300" /> : <Activity className="size-4 shrink-0 text-fg-muted" />}

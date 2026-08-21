@@ -26,7 +26,7 @@ function isAudioAtt(att: MessageAttachment): boolean {
 }
 
 /**
- * Inline voice playback — compact chip nests in user tinted bubble; default matches panel typography (DESIGN.md).
+ * Inline voice playback: compact chip nests in user tinted bubble; default matches panel typography (DESIGN.md).
  */
 export function VoiceMessageBar({
   att,
@@ -141,14 +141,14 @@ export function VoiceMessageBar({
   const awaitingMeta = Boolean(src && !durationReady);
 
   const timeCaptionEl = !src ? (
-    <span className="tabular-nums tracking-tight text-fg-subtle">— / —</span>
+    <span className="tabular-nums tracking-tight text-fg-subtle">-- / --</span>
   ) : (
     <span className="tabular-nums tracking-tight text-fg-muted" aria-live="polite">
       <span>{formatDur(current)}</span>
       <span className="mx-0.5 text-fg-subtle">/</span>
       {!durationReady ? (
         <span className="text-fg-subtle" title={m.chat.voiceAwaitingMeta}>
-          —
+          --
         </span>
       ) : (
         <span>{formatDur(duration)}</span>
