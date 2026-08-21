@@ -1,6 +1,7 @@
 import type {
   MarketplacePackageItem,
   SkillCatalogEntry,
+  SkillDiagnostic,
   SkillInstallSpecApi,
 } from '@/features/skills/skill.types';
 
@@ -50,6 +51,12 @@ export function marketplacePackageRequestName(
 
 export function interpolate(template: string, params: Record<string, string | number>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => String(params[key] ?? ''));
+}
+
+export function displayableSkillDiagnostics(
+  diagnostics: SkillDiagnostic[],
+): SkillDiagnostic[] {
+  return diagnostics.filter((diagnostic) => diagnostic.type !== 'collision');
 }
 
 export function installSpecSummary(spec: SkillInstallSpecApi): string {
