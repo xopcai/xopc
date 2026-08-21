@@ -10,6 +10,7 @@ import type {
 } from '@/features/settings/agents-admin-api';
 import type { CapabilityPresetRow } from '@/features/settings/capability-presets/capability-presets-api';
 import type { AgentsSettingsMessages, ChatMessages, MessageBundle } from '@/i18n/messages';
+import type { AutosaveStatus } from '@/lib/use-autosave';
 
 import { AgentDangerZoneTab } from './tabs/agent-advanced-tab';
 import { AgentAdvancedPanel } from './tabs/agent-advanced-panel';
@@ -39,6 +40,7 @@ export type AgentsEditorPanelContentProps = {
   setEditDescription: (v: string) => void;
   editWorkspace: string;
   setEditWorkspace: (v: string) => void;
+  onSaveWorkspace: (workspace: string) => Promise<void>;
   editModel: string;
   defaultModel: string;
   defaultWorkspace: string;
@@ -59,6 +61,11 @@ export type AgentsEditorPanelContentProps = {
     handleSoulContentChange: (content: string) => void;
     setAvatarDialogOpen: (open: boolean) => void;
     toggleSoulPreviewMode: () => void;
+    autosave: {
+      status: AutosaveStatus;
+      error: string | null;
+      onBlurCapture: () => void;
+    };
   };
   filesLoading: boolean;
   files: Awaited<ReturnType<typeof fetchAgentProfileFiles>> | null;
@@ -73,11 +80,11 @@ export type AgentsEditorPanelContentProps = {
   profileEditorNonce: number;
   toolEntryDisable: Set<string>;
   setToolEntryDisable: Dispatch<SetStateAction<Set<string>>>;
-  onSaveTools: () => void;
+  onSaveTools: (disabledIds: string[]) => Promise<void>;
   onClearToolsEntry: () => void;
   modelRows: AgentTypedModelRow[];
   setModelRows: Dispatch<SetStateAction<AgentTypedModelRow[]>>;
-  onSaveModels: () => void;
+  onSaveModels: (rows: AgentTypedModelRow[]) => Promise<void>;
   onClearModelsEntry: () => void;
   skillsCatalogLoading: boolean;
   catalogForPick: SkillCatalogRow[];
@@ -85,7 +92,7 @@ export type AgentsEditorPanelContentProps = {
   setSkillsInherit: (v: boolean) => void;
   skillsPick: Set<string>;
   setSkillsPick: Dispatch<SetStateAction<Set<string>>>;
-  onSaveSkills: () => void;
+  onSaveSkills: (snapshot: { inherit: boolean; skills: string[] }) => Promise<void>;
   bindingsLoading: boolean;
   agentBindings: GatewayConfigBinding[];
   bindChannelStatuses: ChannelStatus[];
@@ -119,6 +126,7 @@ export function AgentsEditorPanelContent({
   setEditDescription,
   editWorkspace,
   setEditWorkspace,
+  onSaveWorkspace,
   editModel,
   defaultModel,
   defaultWorkspace,
@@ -215,6 +223,7 @@ export function AgentsEditorPanelContent({
           handleSoulContentChange={overviewProfile.handleSoulContentChange}
           setAvatarDialogOpen={overviewProfile.setAvatarDialogOpen}
           toggleSoulPreviewMode={overviewProfile.toggleSoulPreviewMode}
+          autosave={overviewProfile.autosave}
         />
       </div>
     );
@@ -251,6 +260,7 @@ export function AgentsEditorPanelContent({
         busy={busy}
         editWorkspace={editWorkspace}
         setEditWorkspace={setEditWorkspace}
+        onSaveWorkspace={onSaveWorkspace}
         modelRows={modelRows}
         setModelRows={setModelRows}
         onSaveModels={onSaveModels}

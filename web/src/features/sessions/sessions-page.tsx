@@ -21,7 +21,6 @@ import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api
 import { SessionCard, type SessionCardAction } from '@/features/sessions/session-card';
 import { agentAvatarFromOptions, resolveSessionAgentId } from '@/features/sessions/session-agent-resolve';
 import { ContextCompactionConfigSection } from '@/features/settings/context-compaction-config-section';
-import { SaveBarControls } from '@/features/settings/save-bar/save-bar-controls';
 import { SessionConfigSection } from '@/features/settings/session-config-section';
 import { SessionDetailDrawer } from '@/features/sessions/session-detail-drawer';
 import {
@@ -547,7 +546,6 @@ export function SessionsPage() {
 
         <SessionsTabPanel s={s} id="settings" activeTab={activeTab} plain>
           <div className="space-y-4">
-            <SaveBarControls />
             <ContextCompactionConfigSection hasToken={hasToken} />
             <SessionConfigSection hasToken={hasToken} />
           </div>

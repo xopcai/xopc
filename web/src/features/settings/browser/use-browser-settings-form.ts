@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useReducer, useRef, useState } from 'react';
+import { useCallback, useMemo, useReducer, useRef } from 'react';
 
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import {
@@ -9,6 +9,7 @@ import {
 import type { MessageBundle } from '@/i18n/messages';
 import { createFormDraftReducer, syncFormDraftFromParsed } from '@/lib/settings-form-draft';
 import { useGatewayStore } from '@/stores/gateway-store';
+import { useAutosave, type AutosaveStatus } from '@/lib/use-autosave';
 
 export type UseAgentDefaultsFormResult = {
   hasToken: boolean;
@@ -16,13 +17,9 @@ export type UseAgentDefaultsFormResult = {
   fetchError: string | null;
   form: AgentDefaultsState | null;
   update: (patch: Partial<AgentDefaultsState>) => void;
-  dirty: boolean;
-  saving: boolean;
-  saveOk: boolean;
+  autosaveStatus: AutosaveStatus;
   error: string | null;
-  setError: (e: string | null) => void;
-  save: () => Promise<boolean>;
-  discard: () => void;
+  onBlurCapture: () => void;
   mutate: ReturnType<typeof useGatewayConfigSwr>['mutate'];
 };
 
@@ -30,7 +27,6 @@ const agentDefaultsFormReducer = createFormDraftReducer<AgentDefaultsState>();
 
 export function useAgentDefaultsForm(
   a: MessageBundle['agentSettings'],
-  _options: { saveScope?: 'browser' } = {},
 ): UseAgentDefaultsFormResult {
   const token = useGatewayStore((st) => st.token);
   const hasToken = Boolean(token);
@@ -38,10 +34,9 @@ export function useAgentDefaultsForm(
   const [formDraft, dispatchForm] = useReducer(agentDefaultsFormReducer, { form: null, baseline: null });
   const form = formDraft.form;
   const baseline = formDraft.baseline;
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [saveOk, setSaveOk] = useState(false);
   const dirtyRef = useRef(false);
+  const formRef = useRef(form);
+  formRef.current = form;
   const trackedParsedRef = useRef<AgentDefaultsState | null>(null);
 
   const { data, error: swrError, isLoading, mutate } = useGatewayConfigSwr(hasToken);
@@ -74,36 +69,22 @@ export function useAgentDefaultsForm(
 
   const update = useCallback((patch: Partial<AgentDefaultsState>) => {
     dirtyRef.current = true;
-    setSaveOk(false);
     dispatchForm({ type: 'patch', patch });
   }, []);
 
-  const save = useCallback(async (): Promise<boolean> => {
-    if (!form || saving) return false;
-    setSaving(true);
-    setError(null);
-    setSaveOk(false);
+  const save = useCallback(async (snapshot: AgentDefaultsState) => {
     try {
-      await patchBrowserSettings(form);
-      dirtyRef.current = false;
-      dispatchForm({ type: 'saved', value: form });
-      setSaveOk(true);
-      void mutate();
-      return true;
+      await patchBrowserSettings(snapshot);
+      dispatchForm({ type: 'saved', value: snapshot });
+      dirtyRef.current = Boolean(
+        formRef.current && JSON.stringify(formRef.current) !== JSON.stringify(snapshot),
+      );
     } catch (e) {
-      setError(e instanceof Error ? e.message : a.saveError);
-      return false;
-    } finally {
-      setSaving(false);
+      throw new Error(e instanceof Error ? e.message : a.saveError);
     }
-  }, [a.saveError, form, mutate, saving]);
+  }, [a.saveError]);
 
-  const discard = useCallback(() => {
-    dirtyRef.current = false;
-    dispatchForm({ type: 'discard' });
-    setSaveOk(false);
-    setError(null);
-  }, []);
+  const autosave = useAutosave({ value: form, dirty, onSave: save });
 
   return {
     hasToken,
@@ -111,13 +92,9 @@ export function useAgentDefaultsForm(
     fetchError,
     form,
     update,
-    dirty,
-    saving,
-    saveOk,
-    error,
-    setError,
-    save,
-    discard,
+    autosaveStatus: autosave.status,
+    error: autosave.error,
+    onBlurCapture: autosave.onBlurCapture,
     mutate,
   };
 }

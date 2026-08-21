@@ -2,7 +2,6 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 
-import { Button } from '@/components/ui/button';
 import type { AgentsSettingsMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { ghostIconButton } from '@/lib/interaction';
@@ -20,12 +19,6 @@ export function AgentsEditorModal(props: {
   subtitle: string;
   panel: AgentPanel;
   onPanelChange: (p: AgentPanel) => void;
-  onFooterSave: () => void;
-  footerSaveDisabled: boolean;
-  /** Brief "Saved" flash after a successful save. */
-  footerSavedFlash?: boolean;
-  showFooter?: boolean;
-  busy: boolean;
   children: ReactNode;
 }) {
   const {
@@ -36,11 +29,6 @@ export function AgentsEditorModal(props: {
     subtitle,
     panel,
     onPanelChange,
-    onFooterSave,
-    footerSaveDisabled,
-    footerSavedFlash,
-    showFooter = true,
-    busy,
     children,
   } = props;
   const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(null);
@@ -89,27 +77,6 @@ export function AgentsEditorModal(props: {
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4 sm:pl-2 sm:pr-5">
                 {children}
               </div>
-              {showFooter ? (
-                <div className="flex shrink-0 flex-col gap-1 border-t border-edge-subtle px-4 py-3 dark:border-edge sm:flex-row sm:items-center sm:justify-end sm:gap-3">
-                  {footerSavedFlash ? (
-                    <p className="order-2 text-center text-xs font-medium text-green-600 sm:order-1 sm:mr-auto sm:text-left dark:text-green-400">
-                      ✓ {a.personaSaved}
-                    </p>
-                  ) : footerSaveDisabled ? (
-                    <p className="order-2 text-center text-xs text-fg-muted sm:order-1 sm:mr-auto sm:text-left">
-                      {a.footerSaveNotApplicable}
-                    </p>
-                  ) : null}
-                  <Button
-                    type="button"
-                    className="order-1 w-full sm:order-2 sm:w-auto"
-                    disabled={busy || footerSaveDisabled}
-                    onClick={() => void onFooterSave()}
-                  >
-                    {a.save}
-                  </Button>
-                </div>
-              ) : null}
             </div>
           </div>
           </SettingsShellLayerProvider>

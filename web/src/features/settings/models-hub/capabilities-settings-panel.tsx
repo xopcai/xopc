@@ -5,8 +5,6 @@ import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-r
 import { Button } from '@/components/ui/button';
 import { PageTabs } from '@/components/ui/page-tabs';
 import { ImageModelsSettingsPanel } from '@/features/settings/image-models-settings';
-import { SaveBarControls } from '@/features/settings/save-bar/save-bar-controls';
-import { useSaveBarStore } from '@/features/settings/save-bar/save-bar-store';
 import {
   SettingsPageFrame,
   SettingsPageHeader,
@@ -49,7 +47,6 @@ export function CapabilitiesSettingsPanel() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { capability } = useParams<{ capability: string }>();
-  const registeredSaveSections = useSaveBarStore((s) => s.sections);
 
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [manageTarget, setManageTarget] = useState<{ providerId: string; isCustom: boolean } | null>(null);
@@ -66,15 +63,6 @@ export function CapabilitiesSettingsPanel() {
     setSearchParams(next, { replace: true });
   }, [capability, searchParams, setSearchParams]);
 
-  const unsavedIndicator = (sectionId: string) =>
-    registeredSaveSections.get(sectionId)?.dirty ? (
-      <span
-        className="size-1.5 rounded-full bg-amber-500"
-        aria-label={c.unsavedChanges}
-        title={c.unsavedChanges}
-      />
-    ) : undefined;
-
   const sections: readonly SectionDefinition[] = [
     { id: 'models', icon: Plug, label: c.tabs.models, hint: c.modelsHint },
     {
@@ -82,21 +70,18 @@ export function CapabilitiesSettingsPanel() {
       icon: ImageIcon,
       label: c.tabs.image,
       hint: c.imageHint,
-      suffix: unsavedIndicator('image-models'),
     },
     {
       id: 'voice',
       icon: Mic,
       label: c.tabs.voice,
       hint: c.voiceHint,
-      suffix: unsavedIndicator('voice'),
     },
     {
       id: 'search',
       icon: Search,
       label: c.tabs.search,
       hint: c.searchHint,
-      suffix: unsavedIndicator('search'),
     },
   ];
 
@@ -130,7 +115,6 @@ export function CapabilitiesSettingsPanel() {
         )}
       />
 
-      <SaveBarControls />
 
       <PageTabs
         items={sections}

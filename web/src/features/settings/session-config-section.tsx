@@ -1,10 +1,9 @@
 import { Database } from 'lucide-react';
-import { useCallback, useMemo, useReducer, useRef, useState } from 'react';
+import { useCallback, useMemo, useReducer, useRef } from 'react';
 
-import { Button } from '@/components/ui/button';
+import { AutosaveStatus } from '@/components/ui/autosave-status';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
-import { useSaveBarRegistration } from '@/features/settings/save-bar/use-save-bar-registration';
 import {
   normalizeSessionConfigFromConfig,
   patchSessionConfig,
@@ -17,6 +16,7 @@ import { createFormDraftReducer, syncFormDraftFromParsed } from '@/lib/settings-
 import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
+import { useAutosave } from '@/lib/use-autosave';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 
 function inputClassName(): string {
@@ -39,9 +39,9 @@ export function SessionConfigSection({ hasToken }: { hasToken: boolean }) {
   const [formDraft, dispatchForm] = useReducer(sessionFormReducer, { form: null, baseline: null });
   const form = formDraft.form;
   const baseline = formDraft.baseline;
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const dirtyRef = useRef(false);
+  const formRef = useRef(form);
+  formRef.current = form;
   const trackedParsedRef = useRef<SessionConfigState | null>(null);
 
   syncFormDraftFromParsed({
@@ -61,30 +61,19 @@ export function SessionConfigSection({ hasToken }: { hasToken: boolean }) {
     dispatchForm({ type: 'patch', patch });
   }, []);
 
-  const discard = useCallback(() => {
-    dirtyRef.current = false;
-    setError(null);
-    dispatchForm({ type: 'discard' });
-  }, []);
-
-  const save = useCallback(async () => {
-    if (!form) return;
-    setSaving(true);
-    setError(null);
+  const save = useCallback(async (snapshot: SessionConfigState) => {
     try {
-      await patchSessionConfig(form);
-      dirtyRef.current = false;
-      dispatchForm({ type: 'saved', value: form });
+      await patchSessionConfig(snapshot);
+      dispatchForm({ type: 'saved', value: snapshot });
+      dirtyRef.current = Boolean(
+        formRef.current && JSON.stringify(formRef.current) !== JSON.stringify(snapshot),
+      );
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : t.saveError;
-      setError(message);
-      throw new Error(message);
-    } finally {
-      setSaving(false);
+      throw new Error(cause instanceof Error ? cause.message : t.saveError);
     }
-  }, [form, t.saveError]);
+  }, [t.saveError]);
 
-  useSaveBarRegistration({ id: 'session-storage', dirty, saving, save, discard });
+  const autosave = useAutosave({ value: form, dirty, onSave: save });
 
   if (!hasToken || !form) {
     return isLoading ? (
@@ -98,22 +87,8 @@ export function SessionConfigSection({ hasToken }: { hasToken: boolean }) {
   }
 
   return (
-    <SettingsFormSection>
-      <SettingsFormSectionHeader icon={Database} title={t.title} subtitle={t.hint} />
-      <div className="mb-4 flex justify-end gap-2">
-        <Button type="button" variant="secondary" disabled={!dirty || saving} onClick={discard}>
-          {t.discard}
-        </Button>
-        <Button
-          type="button"
-          variant="primary"
-          disabled={!dirty || saving}
-          onClick={() => void save().catch(() => {})}
-        >
-          {saving ? t.saving : t.save}
-        </Button>
-      </div>
-      {error ? <p className="mb-3 text-sm text-red-600 dark:text-red-400">{error}</p> : null}
+    <SettingsFormSection onBlurCapture={autosave.onBlurCapture}>
+      <SettingsFormSectionHeader icon={Database} title={t.title} subtitle={t.hint} trailing={<AutosaveStatus status={autosave.status} error={autosave.error} />} />
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="sm:col-span-2">
           <label className="mb-1 block text-sm font-medium text-fg">{t.dmScope}</label>

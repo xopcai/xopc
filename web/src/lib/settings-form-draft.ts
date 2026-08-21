@@ -11,7 +11,6 @@ export type FormDraftAction<T> =
   | { type: 'reset' }
   | { type: 'sync'; value: T }
   | { type: 'patch'; patch: Partial<T> }
-  | { type: 'discard' }
   | { type: 'saved'; value: T }
   | { type: 'set-form'; updater: (prev: T) => T };
 
@@ -29,13 +28,14 @@ export function createFormDraftReducer<T extends object>() {
       }
       case 'patch':
         return { ...state, form: state.form ? { ...state.form, ...action.patch } : null };
-      case 'discard':
-        return state.baseline
-          ? { form: structuredClone(state.baseline), baseline: state.baseline }
-          : state;
       case 'saved': {
         const snapshot = structuredClone(action.value);
-        return { form: snapshot, baseline: structuredClone(snapshot) };
+        const current = state.form;
+        const hasNewerEdits = current !== null && JSON.stringify(current) !== JSON.stringify(action.value);
+        return {
+          form: hasNewerEdits ? current : snapshot,
+          baseline: structuredClone(snapshot),
+        };
       }
       case 'set-form':
         return state.form ? { ...state, form: action.updater(state.form) } : state;

@@ -21,7 +21,7 @@ export function AgentCapabilitiesTab(props: {
   busy: boolean;
   toolEntryDisable: Set<string>;
   setToolEntryDisable: Dispatch<SetStateAction<Set<string>>>;
-  onSaveTools: () => void;
+  onSaveTools: (disabledIds: string[]) => Promise<void>;
   onClearToolsEntry: () => void;
   skillsCatalogLoading: boolean;
   catalogForPick: SkillCatalogRow[];
@@ -29,7 +29,7 @@ export function AgentCapabilitiesTab(props: {
   setSkillsInherit: (value: boolean) => void;
   skillsPick: Set<string>;
   setSkillsPick: Dispatch<SetStateAction<Set<string>>>;
-  onSaveSkills: () => void;
+  onSaveSkills: (snapshot: { inherit: boolean; skills: string[] }) => Promise<void>;
 }) {
   const [activeTab, setActiveTab] = useState<CapabilityTab>('tools');
   const { a } = props;

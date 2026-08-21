@@ -2,10 +2,12 @@ import { FolderCog } from 'lucide-react';
 import type { Dispatch, SetStateAction } from 'react';
 
 import { DirectoryPickerPathField } from '@/features/fs/directory-picker-path-field';
+import { AutosaveStatus } from '@/components/ui/autosave-status';
 import type { GatewayAgentRow } from '@/features/settings/agents-admin-api';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 import type { AgentsSettingsMessages, ChatMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+import { useAutosave } from '@/lib/use-autosave';
 
 import { agentsSettingsInputClass } from '../utils';
 import type { AgentTypedModelRow } from '../typed-models-lib';
@@ -18,9 +20,10 @@ export function AgentRuntimeTab(props: {
   busy: boolean;
   editWorkspace: string;
   setEditWorkspace: (value: string) => void;
+  onSaveWorkspace: (workspace: string) => Promise<void>;
   modelRows: AgentTypedModelRow[];
   setModelRows: Dispatch<SetStateAction<AgentTypedModelRow[]>>;
-  onSaveModels: () => void;
+  onSaveModels: (rows: AgentTypedModelRow[]) => Promise<void>;
   onClearModelsEntry: () => void;
 }) {
   const {
@@ -30,19 +33,28 @@ export function AgentRuntimeTab(props: {
     busy,
     editWorkspace,
     setEditWorkspace,
+    onSaveWorkspace,
     modelRows,
     setModelRows,
     onSaveModels,
     onClearModelsEntry,
   } = props;
 
+  const workspaceDirty = editWorkspace.trim() !== selected.workspace;
+  const workspaceAutosave = useAutosave({
+    value: editWorkspace,
+    dirty: workspaceDirty,
+    onSave: onSaveWorkspace,
+  });
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto">
-      <SettingsFormSection>
+      <SettingsFormSection onBlurCapture={workspaceAutosave.onBlurCapture}>
         <SettingsFormSectionHeader
           icon={FolderCog}
           title={a.runtimeWorkspaceTitle}
           subtitle={a.runtimeWorkspaceHint}
+          trailing={<AutosaveStatus status={workspaceAutosave.status} error={workspaceAutosave.error} />}
         />
         <label className="flex flex-col gap-1.5 text-sm">
           <span className="font-medium text-fg">{a.workspacePath}</span>
@@ -66,7 +78,6 @@ export function AgentRuntimeTab(props: {
           setModelRows={setModelRows}
           onSaveModels={onSaveModels}
           onClearModelsEntry={onClearModelsEntry}
-          hideInlineSave
         />
       </section>
     </div>

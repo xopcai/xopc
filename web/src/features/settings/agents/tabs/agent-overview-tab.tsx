@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom';
 import { MarkdownEditor } from '@/components/markdown/markdown-editor';
 import { MarkdownView } from '@/components/markdown/markdown-view';
 import { Select, SelectOption } from '@/components/ui/popover-select';
+import { AutosaveStatus } from '@/components/ui/autosave-status';
 import type { GatewayAgentRow } from '@/features/settings/agents-admin-api';
 import type { OverviewProfileDraft } from '@/features/settings/agents/hooks/use-agent-overview-profile-markdown';
 import { SettingsPanelSkeleton } from '@/features/settings/settings-loading-skeleton';
@@ -19,6 +20,7 @@ import {
 } from '@/lib/settings-shell-dialog-layer';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useThemeStore } from '@/stores/theme-store';
+import type { AutosaveStatus as AutosaveState } from '@/lib/use-autosave';
 
 import { AgentAvatarDisplay } from '../agent-avatar-display';
 import { AgentAvatarPicker } from '../agent-avatar-picker';
@@ -44,6 +46,11 @@ export function AgentOverviewTab(props: {
   handleSoulContentChange: (content: string) => void;
   setAvatarDialogOpen: (open: boolean) => void;
   toggleSoulPreviewMode: () => void;
+  autosave: {
+    status: AutosaveState;
+    error: string | null;
+    onBlurCapture: () => void;
+  };
 }) {
   const {
     a,
@@ -60,6 +67,7 @@ export function AgentOverviewTab(props: {
     handleSoulContentChange,
     setAvatarDialogOpen,
     toggleSoulPreviewMode,
+    autosave,
   } = props;
 
   const language = useLocaleStore((s) => s.language);
@@ -85,13 +93,14 @@ export function AgentOverviewTab(props: {
   const avatarDialogOpen = profileDraft.avatarDialogOpen;
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-8" onBlurCapture={autosave.onBlurCapture}>
       {/* ===== Section 1: Basic Identity ===== */}
       <SettingsFormSection>
         <SettingsFormSectionHeader
           icon={Sparkles}
           title={a.personaSectionIdentity}
           subtitle={a.personaSectionIdentityHint}
+          trailing={<AutosaveStatus status={autosave.status} error={autosave.error} />}
           iconLeading={
             <AgentAvatarDisplay
               agentId={selected.id}
