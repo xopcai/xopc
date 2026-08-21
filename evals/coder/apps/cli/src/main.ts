@@ -53,13 +53,6 @@ const { values } = parseArgs({
 
 const store = new EvalStore(values.db!);
 
-const CBM_TOOLS = new Set([
-  'code_search',
-  'code_read_symbol',
-  'code_trace',
-  'code_impact',
-  'code_architecture',
-]);
 const DIRECT_DISCOVERY_TOOLS = new Set(['grep', 'find', 'read_file', 'list_dir']);
 
 function toolNameFromPayload(value: unknown, depth = 0): string | undefined {
@@ -75,19 +68,17 @@ function toolNameFromPayload(value: unknown, depth = 0): string | undefined {
 
 function traceStats(runId: string): {
   tools: number;
-  cbmTools: number;
   directDiscoveryTools: number;
   modelRequests: number;
 } {
   const detail = store.getRun(runId);
-  const stats = { tools: 0, cbmTools: 0, directDiscoveryTools: 0, modelRequests: 0 };
+  const stats = { tools: 0, directDiscoveryTools: 0, modelRequests: 0 };
   for (const event of detail?.events ?? []) {
     if (event.type === 'model.request') stats.modelRequests += 1;
     if (event.type !== 'tool.started') continue;
     stats.tools += 1;
     try {
       const name = toolNameFromPayload(JSON.parse(String(event.payload_json)));
-      if (name && CBM_TOOLS.has(name)) stats.cbmTools += 1;
       if (name && DIRECT_DISCOVERY_TOOLS.has(name)) stats.directDiscoveryTools += 1;
     } catch {
       // Malformed third-party events still count as tool calls.
@@ -115,7 +106,6 @@ interface VariantStats {
   score: number;
   durationMs: number;
   tools: number;
-  cbmTools: number;
   directDiscoveryTools: number;
   modelRequests: number;
   outcomes: Map<string, boolean>;
@@ -132,7 +122,6 @@ function collectVariantStats(runs: Array<Record<string, unknown>>): Map<string, 
       score: 0,
       durationMs: 0,
       tools: 0,
-      cbmTools: 0,
       directDiscoveryTools: 0,
       modelRequests: 0,
       outcomes: new Map<string, boolean>(),
@@ -149,7 +138,6 @@ function collectVariantStats(runs: Array<Record<string, unknown>>): Map<string, 
     }
     const trace = traceStats(String(run.id));
     current.tools += trace.tools;
-    current.cbmTools += trace.cbmTools;
     current.directDiscoveryTools += trace.directDiscoveryTools;
     current.modelRequests += trace.modelRequests;
     const rawVariantId = String(run.variant_id);
@@ -214,7 +202,7 @@ try {
     const detail = store.getExperiment(values['experiment-id']);
     if (!detail) throw new Error(`Experiment not found: ${values['experiment-id']}`);
     const variants = collectVariantStats(detail.runs);
-    console.log('VARIANT\tPASS\tRATE\tPASS_CI95\tAVG_SCORE\tAVG_DURATION_MS\tAVG_TOOLS\tAVG_CBM_TOOLS\tAVG_DIRECT_DISCOVERY\tAVG_MODEL_REQUESTS');
+    console.log('VARIANT\tPASS\tRATE\tPASS_CI95\tAVG_SCORE\tAVG_DURATION_MS\tAVG_TOOLS\tAVG_DIRECT_DISCOVERY\tAVG_MODEL_REQUESTS');
     for (const [id, value] of variants) {
       const [low, high] = wilsonInterval(value.passed, value.runs);
       console.log([
@@ -225,7 +213,6 @@ try {
         (value.score / value.runs).toFixed(3),
         Math.round(value.durationMs / value.runs),
         (value.tools / value.runs).toFixed(1),
-        (value.cbmTools / value.runs).toFixed(1),
         (value.directDiscoveryTools / value.runs).toFixed(1),
         (value.modelRequests / value.runs).toFixed(1),
       ].join('\t'));

@@ -48,7 +48,6 @@ export function buildEvalRuntimeIdentity(
   const models = asRecord(manifest.models);
   const tools = asRecord(manifest.tools);
   const skills = manifest.skills ?? [];
-  const codeIntelligence = config.codeIntelligence;
   return {
     ok: true,
     payload: {
@@ -65,12 +64,6 @@ export function buildEvalRuntimeIdentity(
       systemPromptConfigHash: contentHash(manifest.systemPrompt ?? null),
       toolPolicyHash: contentHash(tools),
       skillPolicyHash: contentHash(skills),
-      codeIntelligence: {
-        enabled: codeIntelligence?.enabled === true,
-        configuredForAgent: codeIntelligence?.agentIds?.includes(agentId) === true,
-        indexMode: codeIntelligence?.indexMode ?? null,
-        configHash: contentHash(codeIntelligence ?? null),
-      },
       presetChain: effective.data.sources,
     },
   };

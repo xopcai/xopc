@@ -497,7 +497,6 @@
     "toolsLockedByPreset": "blocked by shared settings",
     "toolsDisableGroups": {
       "unknown": "Custom ids (not in built-in list)",
-      "code-intelligence": "Code intelligence",
       "workspace": "Workspace & search",
       "execution": "Execution",
       "web": "Web",
@@ -509,11 +508,6 @@
       "misc": "Other built-ins"
     },
     "toolDescriptions": {
-      "code_search": "Search indexed symbols, definitions, implementations, routes, and types.",
-      "code_read_symbol": "Read exact source for a symbol returned by code search.",
-      "code_trace": "Trace callers, callees, data flow, and cross-service paths.",
-      "code_impact": "Map git changes to affected symbols and blast radius.",
-      "code_architecture": "Summarize packages, boundaries, layers, entry points, hotspots, and clusters.",
       "read_file": "Read text and small files inside the agent workspace (paths are restricted to the workspace sandbox).",
       "write_file": "Create new files or overwrite existing ones under the workspace.",
       "apply_patch": "Apply strict multi-file patches for focused source changes.",

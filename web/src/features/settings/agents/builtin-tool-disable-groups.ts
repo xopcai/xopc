@@ -4,10 +4,6 @@
  */
 export const BUILTIN_TOOL_UI_GROUPS = [
   {
-    key: 'code-intelligence',
-    toolIds: ['code_search', 'code_read_symbol', 'code_trace', 'code_impact', 'code_architecture'] as const,
-  },
-  {
     key: 'workspace',
     toolIds: ['read_file', 'write_file', 'apply_patch', 'list_dir', 'grep', 'find'] as const,
   },

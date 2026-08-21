@@ -26,7 +26,6 @@
 | `tools` | Web search 和其它工具级设置 |
 | `messages` / `tts` | 出站消息和 TTS 设置 |
 | `mcp` | 出站 MCP server registry |
-| `codeIntelligence` | 为指定 agent 托管本地代码库索引；参见[代码智能](../code-intelligence.md) |
 | `extensions` | 扩展开关和扩展专属配置 |
 
 ## Agent 配置

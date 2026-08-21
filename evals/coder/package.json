@@ -11,12 +11,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "eval": "tsx apps/cli/src/main.ts",
-    "xopc:prepare": "tsx scripts/prepare-xopc-cbm-config.ts",
-    "xopc:pilot-checks": "tsx scripts/check-xopc-cbm-hidden.ts",
-    "xopc:fixture-check": "tsx scripts/check-xopc-cbm-fixtures.ts",
-    "github:experiment": "tsx scripts/prepare-github-experiment.ts",
     "web": "tsx apps/web/src/server.ts",
-    "smoke": "vitest run tests/runner.test.ts tests/xopc-adapter.test.ts tests/sandbox.test.ts && pnpm run xopc:pilot-checks",
+    "smoke": "vitest run tests/runner.test.ts tests/xopc-adapter.test.ts tests/sandbox.test.ts",
     "check": "pnpm run typecheck && pnpm test"
   },
   "devDependencies": {

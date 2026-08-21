@@ -8,8 +8,8 @@ import {
 
 describe('tool summary classification', () => {
   it('classifies namespaced catalog tools in dot form', () => {
-    expect(isReadStyleTool('codebase-memory-mcp.get_code_snippet')).toBe(true);
-    expect(isSearchStyleTool('codebase-memory-mcp.search_graph')).toBe(true);
-    expect(getToolSummaryKind('codebase-memory-mcp.trace_path')).toBe('search');
+    expect(isReadStyleTool('filesystem.read_file')).toBe(true);
+    expect(isSearchStyleTool('filesystem.file_search')).toBe(true);
+    expect(getToolSummaryKind('runner.exec_command')).toBe('exec');
   });
 });

@@ -167,7 +167,6 @@ Windows 源码安装：`& ([scriptblock]::Create((irm https://xopc.ai/install.ps
 - 🏠 **运行在你的环境里** — 配置与本地状态默认在 **`~/.xopc/`**；你决定如何部署、备份和远程访问。
 - 🔑 **使用自己的密钥** — OpenAI、Anthropic、Google、DeepSeek、Ollama、LM Studio、vLLM 等 **20+** 厂商；云端和本地模型可混用。
 - ⚙️ **能执行，也能主动触发** — 工具和工作流负责执行；自动化用定时、手动或 webhook 触发 Agent 与工作流。
-- 🧭 **代码图谱增强编码** — `coder` agent 使用托管的本地代码库索引完成符号搜索、源码确认、调用追踪、变更影响与架构分析；图覆盖不足时回退到直接读取源码。
 - 📡 **同一个运行时，多种入口** — 桌面、终端、网页、手机与 IM 共享 Agent、会话和项目状态。
 - 🧩 **能力边界可配置** — 每个 Agent 可以拥有独立的身份、模型角色、工作区、工具策略、技能、记忆与边界，并通过扩展继续增加能力。
 
@@ -251,7 +250,6 @@ xopc extensions dev ./my-extension
 | [CLI](https://xopcai.github.io/xopc/zh/cli) | 命令与参数 |
 | [频道](https://xopcai.github.io/xopc/zh/channels) | Telegram、微信、飞书 |
 | [架构](https://xopcai.github.io/xopc/zh/architecture) | 整体结构 |
-| [代码智能](https://xopcai.github.io/xopc/zh/code-intelligence) | `coder` agent 的托管本地代码知识图 |
 | [工作流](https://xopcai.github.io/xopc/zh/workflows) | 扇出子 Agent、看板、脚本 |
 
 更多：[工具](https://xopcai.github.io/xopc/zh/tools) · [移动端 App](https://xopcai.github.io/xopc/zh/mobile-app) · [语音](https://xopcai.github.io/xopc/zh/voice) · [远程访问](https://xopcai.github.io/xopc/zh/remote-access)
@@ -299,7 +297,6 @@ pnpm run build && pnpm test && pnpm run lint
 ## 致谢
 
 - 大模型接入：[@earendil-works/pi-ai](https://github.com/earendil-works/pi-mono) · 运行时：[@earendil-works/pi-agent-core](https://github.com/earendil-works/pi-mono)
-- 代码智能：[codebase-memory-mcp](https://github.com/DeusData/codebase-memory-mcp)，作为托管的本地知识图集成，用于理解代码库
 - 用户理解：受 [OpenWiki](https://github.com/langchain-ai/openwiki) 从证据沉淀知识的思想启发，在 XOPC 中重新实现为带治理合成和逐轮上下文规划的原生能力，详见[用户理解](./docs/user-understanding.md)
 - 灵感来自 [openclaw/openclaw](https://github.com/openclaw/openclaw) 与 [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent)
 
