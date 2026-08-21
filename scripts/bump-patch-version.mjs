@@ -32,20 +32,28 @@ const files = [
 
 const versionKeyRe = (v) => new RegExp(`^([ \\t]*"version"\\s*:\\s*)"${v.replaceAll('.', '\\.')}"`, 'm');
 
+const pendingUpdates = [];
+
 for (const rel of files) {
   const abs = join(root, rel);
   const raw = readFileSync(abs, 'utf8');
-  const re = versionKeyRe(current);
-  if (!re.test(raw)) {
-    throw new Error(`${rel}: missing "version": "${current}" (must match root before bump)`);
+  const currentRe = versionKeyRe(current);
+  const nextRe = versionKeyRe(next);
+  const alreadyNext = nextRe.test(raw);
+  if (!currentRe.test(raw) && !alreadyNext) {
+    throw new Error(`${rel}: version must be "${current}" or "${next}" before bump`);
   }
-  const updated = raw.replace(re, `$1"${next}"`);
+  const updated = alreadyNext ? raw : raw.replace(currentRe, `$1"${next}"`);
   const reNext = versionKeyRe(next);
   const reNextGlobal = new RegExp(reNext.source, `${reNext.flags}g`);
   const matches = updated.match(reNextGlobal);
   if (!matches || matches.length !== 1) {
     throw new Error(`${rel}: expected exactly one bumped version field`);
   }
+  pendingUpdates.push({ abs, updated });
+}
+
+for (const { abs, updated } of pendingUpdates) {
   writeFileSync(abs, updated);
 }
 
