@@ -56,7 +56,7 @@ describe('buildTuiTranscriptTree', () => {
           {
             type: 'toolCall',
             id: 't1',
-            name: 'server__custom',
+            name: 'server.custom',
             arguments: { query: 'alpha beta gamma delta epsilon zeta', mode: 'full' },
           },
         ],
@@ -64,10 +64,10 @@ describe('buildTuiTranscriptTree', () => {
       { role: 'toolResult', toolCallId: 't1', content: 'custom result' },
     ] as never);
 
-    expect(entries[1]?.preview).toBe('[server__custom: {"query":"alpha beta gamma delta epsilon...]');
-    expect(entries[2]?.toolCallPreview).toBe('[server__custom: {"query":"alpha beta gamma delta epsilon...]');
+    expect(entries[1]?.preview).toBe('[server.custom: {"query":"alpha beta gamma delta epsilon...]');
+    expect(entries[2]?.toolCallPreview).toBe('[server.custom: {"query":"alpha beta gamma delta epsilon...]');
     expect(formatTuiTranscriptTreeEntryDisplayText(entries[2]!)).toBe(
-      '[server__custom: {"query":"alpha beta gamma delta epsilon...]',
+      '[server.custom: {"query":"alpha beta gamma delta epsilon...]',
     );
   });
 

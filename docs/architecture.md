@@ -127,7 +127,7 @@ extension code is loaded before the HTTP server starts listening.
 
 xopc has two MCP directions:
 
-- Outbound MCP for the agent: `src/agent/mcp/` materializes configured MCP server tools, resources, and prompts into agent tools. Transports include stdio and HTTP.
+- Outbound MCP for the agent: `src/agent/mcp/` maintains per-session catalogs and transports; the shared external-tool gateway discovers, describes, and executes MCP tools on demand.
 - Inbound channel MCP: `src/mcp/` exposes a stdio MCP server that talks back to the gateway REST/SSE API through `XopcChannelBridge`, allowing external MCP clients to inspect conversations, read messages, send messages, poll events, and respond to approvals.
 
 These are intentionally separate: outbound MCP extends what the agent can call,

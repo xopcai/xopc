@@ -48,7 +48,6 @@ import {
   type AgentCapabilityCatalogEntry,
   type AgentCapabilitySessionState,
 } from './capabilities/index.js';
-import { parseMcpToolName } from './mcp/bundle-mcp-policy.js';
 import {
   disposeAllSessionMcpRuntimes,
   retireSessionMcpRuntimeForSessionKey,
@@ -1368,14 +1367,11 @@ export class AgentManager implements AgentInstanceGateway {
         if (!this.config.hookRunner) {
           return undefined;
         }
-        const parsed = parseMcpToolName(toolName);
         const hookResult = await this.config.hookRunner.runBeforeToolCall(
           toolName,
           (args ?? {}) as Record<string, unknown>,
           {
             sessionKey,
-            isMcpTool: parsed !== null,
-            mcpServerId: parsed?.serverId,
           },
         );
         if (!hookResult.allowed) {

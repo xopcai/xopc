@@ -11,7 +11,12 @@ import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { Model, Api } from '@earendil-works/pi-ai';
 import type { Page } from 'playwright-core';
 import type { Config } from '../../config/schema.js';
+import type { ExtensionRegistry } from '../../extensions/types/index.js';
 import { resolveDefaultAgentId } from '../agent-scope.js';
+import {
+  createDefaultExternalToolGatewayTools,
+  EXTERNAL_TOOL_NAMES,
+} from '../external-tools/index.js';
 import type { MessageBus } from '../../infra/bus/index.js';
 import {
   createReadFileTool,
@@ -26,7 +31,6 @@ import {
   createWebFetchTool,
   createWebExtractTool,
   createMessageTool,
-  createComposioTools,
   createSendMediaTool,
   createReadMediaTool,
   createCreateShareTool,
@@ -98,7 +102,7 @@ const CLARIFY_SUPPORTED_CHANNELS = new Set(['webchat', 'telegram', 'cli']);
 
 export interface ToolFactoryDeps {
   workspace: string;
-  extensionRegistry?: any;
+  extensionRegistry?: ExtensionRegistry;
   getCurrentContext: () => { channel: string; chatId: string; sessionKey: string } | null;
   hookRunner?: import('../../extensions/index.js').ExtensionHookRunner;
   bus: MessageBus;
@@ -295,12 +299,18 @@ export class AgentToolsFactory {
         })
       : [];
 
-    const composioTools = createComposioTools({
+    const externalTools = createDefaultExternalToolGatewayTools({
+      workspace,
       getConfig: () => this.deps.getConfig?.(),
       getCurrentContext: this.deps.getCurrentContext,
       agentId,
+      extensionRegistry: this.deps.extensionRegistry,
+      disabledTools: disabled,
+      hookRunner: this.deps.hookRunner,
+      toolExecutorConfig: this.deps.toolExecutorConfig,
+      getMemoryManager: getMemMgr,
     });
-    const optionalTools = [imageTool, imageGenerateTool, ...composioTools].filter((t) => t != null) as any[];
+    const optionalTools = [imageTool, imageGenerateTool].filter((t) => t != null) as any[];
 
     const readTool = createReadFileTool(workspace, {
       profileMarkdownRoot: options?.profileMarkdownRoot,
@@ -342,6 +352,7 @@ export class AgentToolsFactory {
         },
       }),
       createUpdatePlanTool(),
+      ...externalTools,
       ...(getSkillMgr
         ? [
             createSkillsListTool({
@@ -435,7 +446,6 @@ export class AgentToolsFactory {
             }),
           ]
         : []),
-      ...(getMemMgr?.().getAdditionalTools() ?? []),
       ...(this.deps.getSessionStore && getPrimary
         ? [
             createSessionSearchTool({
@@ -533,7 +543,11 @@ export class AgentToolsFactory {
                   workspace: childOpts.workspace,
                   getPrimaryModel: () => childOpts.model,
                   agentId: options?.agentId ?? childOpts.agentId,
-                  disabledTools: new Set(['extensions']),
+                  disabledTools: new Set([
+                    EXTERNAL_TOOL_NAMES.search,
+                    EXTERNAL_TOOL_NAMES.describe,
+                    EXTERNAL_TOOL_NAMES.execute,
+                  ]),
                 });
               },
             }),
@@ -568,18 +582,7 @@ export class AgentToolsFactory {
 
   createAllTools(coreOptions?: CreateCoreToolsOptions): AgentTool<any, any>[] {
     const coreTools = this.createCoreTools(coreOptions);
-    const disableExtensions = coreOptions?.disabledTools?.has('extensions');
-
-    let bundled: AgentTool<any, any>[];
-    if (!this.deps.extensionRegistry || disableExtensions) {
-      bundled = coreTools;
-    } else {
-      const extensionTools = this.deps.extensionRegistry.getAllTools();
-      log.info({ count: extensionTools.length }, 'Loaded extension tools');
-      bundled = [...coreTools, ...extensionTools];
-    }
-
-    const wrapped = wrapToolsWithProtection(bundled, this.deps.toolExecutorConfig);
+    const wrapped = wrapToolsWithProtection(coreTools, this.deps.toolExecutorConfig);
 
     const executeEnabled = false && !coreOptions?.disabledTools?.has('execute_code');
 
