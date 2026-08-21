@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import useSWR from 'swr';
 
-import { Button } from '@/components/ui/button';
+import { AutosaveStatus } from '@/components/ui/autosave-status';
 import { FieldLabel } from '@/features/settings/channels/field-primitives';
 import { SettingsPanelSkeleton } from '@/features/settings/settings-loading-skeleton';
 import {
@@ -22,6 +22,7 @@ import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { Select, SelectOption } from '@/components/ui/popover-select';
+import { useAutosave } from '@/lib/use-autosave';
 
 const GROQ_MODELS = [
   { id: 'whisper-large-v3-turbo', name: 'Whisper Large v3 Turbo' },
@@ -127,35 +128,31 @@ function ExtensionSttProviderSettingsBody({
 
   const dirtyRef = useRef(false);
   const [localDraft, setLocalDraft] = useState<SttCredSlice | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [_savedFlash, setSavedFlash] = useState(false);
 
   const credDraft = localDraft ?? savedSlice;
+  const draftRef = useRef(credDraft);
+  draftRef.current = credDraft;
   const credBaseline = savedSlice;
 
   const dirty =
     credDraft.apiKey !== credBaseline.apiKey || credDraft.model !== credBaseline.model;
 
-  const handleSave = useCallback(async () => {
-    setSaving(true);
-    setError(null);
-    try {
+  const handleSave = useCallback(async (snapshot: SttCredSlice) => {
       const next: VoiceSettingsState = structuredClone(voiceSettings);
       next.stt.enabled = true;
       if (providerId === 'alibaba') {
         next.stt.provider = 'alibaba';
-        next.stt.alibaba = { ...next.stt.alibaba, apiKey: credDraft.apiKey, model: credDraft.model };
+        next.stt.alibaba = { ...next.stt.alibaba, apiKey: snapshot.apiKey, model: snapshot.model };
       } else if (providerId === 'openai') {
         next.stt.provider = 'openai';
-        next.stt.openai = { ...next.stt.openai, apiKey: credDraft.apiKey, model: credDraft.model };
+        next.stt.openai = { ...next.stt.openai, apiKey: snapshot.apiKey, model: snapshot.model };
       } else {
         next.stt.providers = {
           ...(next.stt.providers ?? {}),
           [providerId]: {
             ...(next.stt.providers?.[providerId] ?? {}),
-            apiKey: credDraft.apiKey,
-            model: credDraft.model,
+            apiKey: snapshot.apiKey,
+            model: snapshot.model,
           },
         };
         if (!next.stt.provider || next.stt.provider === 'alibaba' || next.stt.provider === 'openai') {
@@ -164,20 +161,16 @@ function ExtensionSttProviderSettingsBody({
       }
       await patchVoiceSettings(next);
       await mutateVoice(next, false);
-      dirtyRef.current = false;
-      setLocalDraft(null);
-      setSavedFlash(true);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setSaving(false);
-    }
-  }, [credDraft.apiKey, credDraft.model, mutateVoice, providerId, voiceSettings]);
+      dirtyRef.current = JSON.stringify(draftRef.current) !== JSON.stringify(snapshot);
+      setLocalDraft((current) => current && JSON.stringify(current) === JSON.stringify(snapshot) ? null : current);
+  }, [mutateVoice, providerId, voiceSettings]);
+
+  const autosave = useAutosave({ value: credDraft, dirty, onSave: handleSave });
 
   const modelOptions = providerId === 'groq' ? GROQ_MODELS : [{ id: credDraft.model, name: credDraft.model }];
 
   return (
-    <div className="flex flex-col gap-4 rounded-xl bg-surface-base p-4">
+    <div className="flex flex-col gap-4 rounded-xl bg-surface-base p-4" onBlurCapture={autosave.onBlurCapture}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-sm font-semibold text-fg">{xs.credentialsTitle}</h2>
@@ -185,16 +178,19 @@ function ExtensionSttProviderSettingsBody({
             {xs.credentialsHint.replace('{providerId}', providerId)}
           </p>
         </div>
-        <span
-          className={cn(
-            'rounded-full px-2 py-0.5 text-xs font-medium',
-            configured
-              ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-              : 'bg-amber-500/10 text-amber-800 dark:text-amber-200',
-          )}
-        >
-          {configured ? xs.configured : xs.notConfigured}
-        </span>
+        <div className="flex flex-wrap items-center gap-2">
+          <AutosaveStatus status={autosave.status} error={autosave.error} />
+          <span
+            className={cn(
+              'rounded-full px-2 py-0.5 text-xs font-medium',
+              configured
+                ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                : 'bg-amber-500/10 text-amber-800 dark:text-amber-200',
+            )}
+          >
+            {configured ? xs.configured : xs.notConfigured}
+          </span>
+        </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -211,7 +207,6 @@ function ExtensionSttProviderSettingsBody({
                 const base = prev ?? savedSlice;
                 return { ...base, apiKey: next };
               });
-              setError(null);
             }}
             labels={apiKeyLabels}
             placeholder={providerId === 'groq' ? 'gsk_...' : 'sk-...'}
@@ -233,7 +228,7 @@ function ExtensionSttProviderSettingsBody({
                   const base = prev ?? savedSlice;
                   return { ...base, model: e.target.value };
                 });
-                setError(null);
+                autosave.saveNow({ ...credDraft, model: e.target.value });
               }}
             >
               {modelOptions.map((entry) => (
@@ -252,38 +247,12 @@ function ExtensionSttProviderSettingsBody({
                   const base = prev ?? savedSlice;
                   return { ...base, model: e.target.value };
                 });
-                setError(null);
               }}
             />
           )}
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        {error ? <span className="text-xs text-red-600 dark:text-red-400">{error}</span> : null}
-        <Button
-          type="button"
-          variant="ghost"
-          className="h-8 text-xs"
-          disabled={!dirty || saving}
-          onClick={() => {
-            dirtyRef.current = false;
-            setLocalDraft(null);
-            setError(null);
-          }}
-        >
-          {v.discard}
-        </Button>
-        <Button
-          type="button"
-          variant="primary"
-          className="h-8 text-xs"
-          disabled={!dirty || saving}
-          onClick={() => void handleSave()}
-        >
-          {saving ? v.saving : v.save}
-        </Button>
-      </div>
     </div>
   );
 }

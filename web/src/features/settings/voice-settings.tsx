@@ -3,8 +3,8 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type Rea
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
+import { AutosaveStatus } from '@/components/ui/autosave-status';
 import { SecretInput } from '@/components/ui/secret-input';
-import { useSaveBarRegistration } from '@/features/settings/save-bar/use-save-bar-registration';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import { SettingsPanelSkeleton } from '@/features/settings/settings-loading-skeleton';
 import {
@@ -33,6 +33,7 @@ import { selectFieldMaxWidthClass, selectTriggerClass, settingsInputFocusClass }
 import { cn } from '@/lib/cn';
 import { DEFAULT_SECRET_INPUT_LABELS } from '@/lib/secret-input-labels';
 import { messages, type VoiceSettingsMessages } from '@/i18n/messages';
+import { useAutosave } from '@/lib/use-autosave';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { Select, SelectOption } from '@/components/ui/popover-select';
@@ -255,7 +256,6 @@ type VoiceFormAction =
   | { type: 'reset' }
   | { type: 'sync'; value: VoiceSettingsState }
   | { type: 'update'; updater: (prev: VoiceSettingsState | null) => VoiceSettingsState | null }
-  | { type: 'discard' }
   | { type: 'saved'; value: VoiceSettingsState };
 
 function voiceFormReducer(state: VoiceFormDraft, action: VoiceFormAction): VoiceFormDraft {
@@ -268,13 +268,13 @@ function voiceFormReducer(state: VoiceFormDraft, action: VoiceFormAction): Voice
     }
     case 'update':
       return { ...state, form: action.updater(state.form) };
-    case 'discard':
-      return state.baseline
-        ? { form: structuredClone(state.baseline), baseline: state.baseline }
-        : state;
     case 'saved': {
       const snapshot = structuredClone(action.value);
-      return { form: snapshot, baseline: structuredClone(snapshot) };
+      const hasNewerEdits = state.form !== null && JSON.stringify(state.form) !== JSON.stringify(action.value);
+      return {
+        form: hasNewerEdits ? state.form : snapshot,
+        baseline: structuredClone(snapshot),
+      };
     }
   }
 }
@@ -290,9 +290,9 @@ export function VoiceSettingsPanel() {
   const form = formDraft.form;
   const baseline = formDraft.baseline;
   const [models, setModels] = useState<VoiceModelsPayload | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const dirtyRef = useRef(false);
+  const formRef = useRef(form);
+  formRef.current = form;
   const trackedVoiceSyncRef = useRef<{
     parsed: VoiceSettingsState | null;
     models: VoiceModelsPayload | null | undefined;
@@ -573,29 +573,19 @@ export function VoiceSettingsPanel() {
     [],
   );
 
-  const save = useCallback(async () => {
-    if (!form || saving) return;
-    setSaving(true);
-    setError(null);
+  const save = useCallback(async (snapshot: VoiceSettingsState) => {
     try {
-      await patchVoiceSettings(form);
-      dispatchForm({ type: 'saved', value: form });
-      dirtyRef.current = false;
+      await patchVoiceSettings(snapshot);
+      dispatchForm({ type: 'saved', value: snapshot });
+      dirtyRef.current = Boolean(
+        formRef.current && JSON.stringify(formRef.current) !== JSON.stringify(snapshot),
+      );
     } catch (e) {
-      setError(e instanceof Error ? e.message : v.saveError);
-    } finally {
-      setSaving(false);
+      throw new Error(e instanceof Error ? e.message : v.saveError);
     }
-  }, [form, saving, v.saveError]);
+  }, [v.saveError]);
 
-  const discard = useCallback(() => {
-    if (!baseline) return;
-    dirtyRef.current = false;
-    dispatchForm({ type: 'discard' });
-    setError(null);
-  }, [baseline]);
-
-  useSaveBarRegistration({ id: 'voice', dirty, saving, save, discard });
+  const autosave = useAutosave({ value: form, dirty, onSave: save });
 
   if (!hasToken) {
     return (
@@ -614,7 +604,7 @@ export function VoiceSettingsPanel() {
   if (!form || models === null) {
     return (
       <div className="flex flex-col gap-3">
-        <p className="text-sm text-fg-muted">{error ?? fetchError ?? v.loadError}</p>
+        <p className="text-sm text-fg-muted">{fetchError ?? v.loadError}</p>
         <Button
           type="button"
           variant="secondary"
@@ -635,8 +625,9 @@ export function VoiceSettingsPanel() {
   const apiKeyLabels = voiceApiKeyLabels(v);
 
   return (
-    <div className="flex flex-col gap-4">
-      {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
+    <div className="flex flex-col gap-4" onBlurCapture={autosave.onBlurCapture}>
+      <div className="flex justify-end"><AutosaveStatus status={autosave.status} error={autosave.error} /></div>
+      {autosave.error ? <p className="text-sm text-red-600 dark:text-red-400">{autosave.error}</p> : null}
 
       <div className="flex flex-col gap-4">
         <VoiceLanguageSection

@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import { Pencil } from 'lucide-react';
-import type { ReactNode } from 'react';
+import type { FocusEventHandler, ReactNode } from 'react';
 
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
@@ -10,12 +10,14 @@ export function SettingsFormSection({
   children,
   className,
   id,
+  onBlurCapture,
 }: {
   children: ReactNode;
   className?: string;
   id?: string;
+  onBlurCapture?: FocusEventHandler<HTMLElement>;
 }) {
-  return <section id={id} className={cn(settingsFormSectionClassName(), className)}>{children}</section>;
+  return <section id={id} className={cn(settingsFormSectionClassName(), className)} onBlurCapture={onBlurCapture}>{children}</section>;
 }
 
 const settingsSectionHeaderIconShellClass =

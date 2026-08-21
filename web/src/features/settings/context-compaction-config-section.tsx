@@ -3,6 +3,7 @@ import { useCallback, useMemo, useReducer, useRef, useState } from 'react';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
+import { AutosaveStatus } from '@/components/ui/autosave-status';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   CONFIGURED_MODELS_SWR_KEY,
@@ -17,7 +18,6 @@ import {
   type ContextCompactionConfigState,
   validateContextCompactionConfig,
 } from '@/features/settings/context-compaction-config-api';
-import { useSaveBarRegistration } from '@/features/settings/save-bar/use-save-bar-registration';
 import { SettingsAdvancedGate } from '@/features/settings/settings-advanced-gate';
 import {
   SettingsFormSection,
@@ -29,6 +29,7 @@ import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { interaction } from '@/lib/interaction';
 import { createFormDraftReducer, syncFormDraftFromParsed } from '@/lib/settings-form-draft';
 import { useLocaleStore } from '@/stores/locale-store';
+import { useAutosave } from '@/lib/use-autosave';
 
 type PresetId = 'balanced' | 'preserve' | 'early' | 'custom';
 
@@ -179,10 +180,10 @@ export function ContextCompactionConfigSection({ hasToken }: { hasToken: boolean
     [data],
   );
   const [draft, dispatch] = useReducer(formReducer, { form: null, baseline: null });
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [sectionDraft, setSectionDraft] = useState('');
   const dirtyRef = useRef(false);
+  const formRef = useRef(draft.form);
+  formRef.current = draft.form;
   const trackedParsedRef = useRef<ContextCompactionConfigState | null>(null);
 
   syncFormDraftFromParsed({
@@ -201,15 +202,7 @@ export function ContextCompactionConfigSection({ hasToken }: { hasToken: boolean
   const dirty = Boolean(form && baseline && JSON.stringify(form) !== JSON.stringify(baseline));
   const update = useCallback((patch: Partial<ContextCompactionConfigState>) => {
     dirtyRef.current = true;
-    setError(null);
     dispatch({ type: 'patch', patch });
-  }, []);
-
-  const discard = useCallback(() => {
-    dirtyRef.current = false;
-    setError(null);
-    setSectionDraft('');
-    dispatch({ type: 'discard' });
   }, []);
 
   const fieldLabel = useCallback((field: keyof ContextCompactionConfigState): string => {
@@ -233,35 +226,26 @@ export function ContextCompactionConfigSection({ hasToken }: { hasToken: boolean
     return labels[field];
   }, [t]);
 
-  const save = useCallback(async () => {
-    if (!form) return;
-    const invalidField = validateContextCompactionConfig(form);
-    if (invalidField) {
-      const message = t.invalidValue.replace('{{field}}', fieldLabel(invalidField));
-      setError(message);
-      throw new Error(message);
-    }
-    setSaving(true);
-    setError(null);
+  const save = useCallback(async (snapshot: ContextCompactionConfigState) => {
     try {
-      await patchContextCompactionConfig(form);
-      dirtyRef.current = false;
-      dispatch({ type: 'saved', value: form });
+      await patchContextCompactionConfig(snapshot);
+      dispatch({ type: 'saved', value: snapshot });
+      dirtyRef.current = Boolean(
+        formRef.current && JSON.stringify(formRef.current) !== JSON.stringify(snapshot),
+      );
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : t.saveError;
-      setError(message);
-      throw new Error(message);
-    } finally {
-      setSaving(false);
+      throw new Error(cause instanceof Error ? cause.message : t.saveError);
     }
-  }, [fieldLabel, form, t.invalidValue, t.saveError]);
+  }, [t.saveError]);
 
-  useSaveBarRegistration({
-    id: 'context-compaction',
+  const autosave = useAutosave({
+    value: form,
     dirty,
-    saving,
-    save,
-    discard,
+    onSave: save,
+    validate: (snapshot) => {
+      const invalidField = validateContextCompactionConfig(snapshot);
+      return invalidField ? t.invalidValue.replace('{{field}}', fieldLabel(invalidField)) : null;
+    },
   });
 
   if (!hasToken || !form) {
@@ -317,29 +301,28 @@ export function ContextCompactionConfigSection({ hasToken }: { hasToken: boolean
   };
 
   return (
-    <SettingsFormSection>
+    <SettingsFormSection onBlurCapture={autosave.onBlurCapture}>
       <SettingsFormSectionHeader
         icon={Minimize2}
         title={t.title}
         subtitle={t.hint}
         trailing={(
-          <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-fg">
-            <input
-              type="checkbox"
-              className="ui-checkbox"
-              checked={form.enabled}
-              onChange={(event) => update({ enabled: event.target.checked })}
-            />
-            {form.enabled ? t.enabled : t.disabled}
-          </label>
+          <div className="flex items-center gap-3">
+            <AutosaveStatus status={autosave.status} error={autosave.error} />
+            <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-fg">
+              <input
+                type="checkbox"
+                className="ui-checkbox"
+                checked={form.enabled}
+                onChange={(event) => update({ enabled: event.target.checked })}
+              />
+              {form.enabled ? t.enabled : t.disabled}
+            </label>
+          </div>
         )}
       />
 
-      {error ? (
-        <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300" role="alert">
-          {error}
-        </p>
-      ) : null}
+      {autosave.error ? <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300" role="alert">{autosave.error}</p> : null}
 
       {!form.enabled ? (
         <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
@@ -638,19 +621,6 @@ export function ContextCompactionConfigSection({ hasToken }: { hasToken: boolean
         </SettingsAdvancedGate>
       </fieldset>
 
-      <div className="mt-5 flex justify-end gap-2">
-        <Button type="button" variant="secondary" disabled={!dirty || saving} onClick={discard}>
-          {t.discard}
-        </Button>
-        <Button
-          type="button"
-          variant="primary"
-          disabled={!dirty || saving}
-          onClick={() => void save().catch(() => {})}
-        >
-          {saving ? t.saving : t.save}
-        </Button>
-      </div>
     </SettingsFormSection>
   );
 }

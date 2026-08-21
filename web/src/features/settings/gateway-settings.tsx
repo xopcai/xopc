@@ -42,7 +42,6 @@ import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { secretInputLabelsFromGateway } from '@/lib/secret-input-labels';
 import { interaction } from '@/lib/interaction';
-import { showToast } from '@/lib/toast';
 import { messages, type GatewaySettingsMessages } from '@/i18n/messages';
 import { docsGuidePageUrl } from '@/navigation';
 import {
@@ -381,17 +380,12 @@ export function GatewaySettingsPanel() {
       if (res.ok) {
         window.dispatchEvent(new Event('gateway-restart-initiated'));
       } else {
-        showToast({
-          type: 'error',
-          title: g.restartGatewayFailed,
-          message: res.message ?? '',
-        });
+        dispatchUi({ type: 'patch', patch: { error: res.message || g.restartGatewayFailed } });
       }
     } catch (e) {
-      showToast({
-        type: 'error',
-        title: g.restartGatewayFailed,
-        message: e instanceof Error ? e.message : String(e),
+      dispatchUi({
+        type: 'patch',
+        patch: { error: e instanceof Error ? e.message : String(e) },
       });
     } finally {
       dispatchUi({ type: 'patch', patch: { restarting: false } });

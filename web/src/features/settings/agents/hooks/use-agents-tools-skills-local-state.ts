@@ -28,7 +28,6 @@ export function useAgentsToolsSkillsLocalState(options: {
   const [skillsPick, setSkillsPick] = useState<Set<string>>(() => new Set());
   const [skillsInherit, setSkillsInherit] = useState(true);
   const [modelRows, setModelRows] = useState<AgentTypedModelRow[]>(() => []);
-  const [modelsResetRequested, setModelsResetRequested] = useState(false);
 
   if (trackedSyncRef.current !== syncKey) {
     trackedSyncRef.current = syncKey;
@@ -40,12 +39,10 @@ export function useAgentsToolsSkillsLocalState(options: {
     }
     if (selected && panel === 'runtime') {
       setModelRows(typedModelsRowsFromList(selected.typedModels.effective));
-      setModelsResetRequested(false);
     }
   }
 
   const setModelRowsDraft: Dispatch<SetStateAction<AgentTypedModelRow[]>> = (next) => {
-    setModelsResetRequested(false);
     setModelRows(next);
   };
 
@@ -59,7 +56,5 @@ export function useAgentsToolsSkillsLocalState(options: {
     modelRows,
     setModelRows: setModelRowsDraft,
     replaceModelRows: setModelRows,
-    modelsResetRequested,
-    setModelsResetRequested,
   };
 }

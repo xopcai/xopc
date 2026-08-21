@@ -6,6 +6,7 @@ import { useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
+import { AutosaveStatus } from '@/components/ui/autosave-status';
 import { PageTabs, type PageTabItem } from '@/components/ui/page-tabs';
 import { getSessionChatIds, type ChannelStatus, type SessionChatId } from '@/features/settings/channel-recipient-api';
 import { formatRecipientOptionLabel } from '@/features/settings/channel-recipient-api';
@@ -19,8 +20,6 @@ import {
 } from '@/features/settings/heartbeat-config-api';
 import { fetchHeartbeatMdSwr, heartbeatMdSwrKey } from '@/features/settings/heartbeat-md-swr';
 import type { HeartbeatSettingsState } from '@/features/settings/heartbeat-settings.types';
-import { SaveBarControls } from '@/features/settings/save-bar/save-bar-controls';
-import { useSaveBarRegistration } from '@/features/settings/save-bar/use-save-bar-registration';
 import {
   SettingsPageFrame,
   SettingsPageHeader,
@@ -36,6 +35,7 @@ import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useAsyncResource } from '@/lib/use-async-resource';
 import { Select, SelectOption } from '@/components/ui/popover-select';
+import { useAutosave } from '@/lib/use-autosave';
 
 function inputClassName(): string {
   return cn(
@@ -97,7 +97,6 @@ type HeartbeatFormAction =
   | { type: 'reset' }
   | { type: 'sync'; value: HeartbeatSettingsState }
   | { type: 'patch'; patch: Partial<HeartbeatSettingsState> }
-  | { type: 'discard' }
   | { type: 'saved'; value: HeartbeatSettingsState };
 
 function heartbeatFormReducer(state: HeartbeatFormDraft, action: HeartbeatFormAction): HeartbeatFormDraft {
@@ -110,13 +109,12 @@ function heartbeatFormReducer(state: HeartbeatFormDraft, action: HeartbeatFormAc
     }
     case 'patch':
       return { ...state, form: state.form ? { ...state.form, ...action.patch } : null };
-    case 'discard':
-      return state.baseline
-        ? { form: structuredClone(state.baseline), baseline: state.baseline }
-        : state;
     case 'saved': {
       const snapshot = structuredClone(action.value);
-      return { form: snapshot, baseline: structuredClone(snapshot) };
+      const form = state.form && JSON.stringify(state.form) !== JSON.stringify(action.value)
+        ? state.form
+        : snapshot;
+      return { form, baseline: structuredClone(snapshot) };
     }
   }
 }
@@ -127,7 +125,6 @@ type HeartbeatDocAction =
   | { type: 'reset' }
   | { type: 'sync'; value: string }
   | { type: 'set'; value: string }
-  | { type: 'discard' }
   | { type: 'saved'; value: string };
 
 function heartbeatDocReducer(state: HeartbeatDocDraft, action: HeartbeatDocAction): HeartbeatDocDraft {
@@ -138,10 +135,8 @@ function heartbeatDocReducer(state: HeartbeatDocDraft, action: HeartbeatDocActio
       return { doc: action.value, baseline: action.value };
     case 'set':
       return { ...state, doc: action.value };
-    case 'discard':
-      return { ...state, doc: state.baseline };
     case 'saved':
-      return { doc: action.value, baseline: action.value };
+      return { doc: state.doc === action.value ? action.value : state.doc, baseline: action.value };
   }
 }
 
@@ -165,16 +160,12 @@ function workspacePathFromConfig(cfg: unknown): string {
 }
 
 type HeartbeatUi = {
-  saving: boolean;
-  error: string | null;
   triggerLoading: boolean;
   triggerOk: boolean;
   triggerError: string | null;
 };
 
 const initialHeartbeatUi: HeartbeatUi = {
-  saving: false,
-  error: null,
   triggerLoading: false,
   triggerOk: false,
   triggerError: null,
@@ -210,9 +201,13 @@ export function HeartbeatSettingsPanel() {
   const doc = docDraft.doc;
   const docBaseline = docDraft.baseline;
   const [ui, dispatchUi] = useReducer(uiPatchReducer<HeartbeatUi>, initialHeartbeatUi);
-  const { saving, error, triggerLoading, triggerOk, triggerError } = ui;
+  const { triggerLoading, triggerOk, triggerError } = ui;
   const configDirtyRef = useRef(false);
   const docDirtyRef = useRef(false);
+  const formRef = useRef(form);
+  const docRef = useRef(doc);
+  formRef.current = form;
+  docRef.current = doc;
 
   const {
     data: cfgData,
@@ -324,39 +319,26 @@ export function HeartbeatSettingsPanel() {
 
   const dirty = dirtyConfig || dirtyDoc;
 
-  const discard = useCallback(() => {
-    dispatchForm({ type: 'discard' });
-    dispatchDoc({ type: 'discard' });
-    configDirtyRef.current = false;
-    docDirtyRef.current = false;
-    dispatchUi({ type: 'patch', patch: { error: null } });
-  }, []);
+  const autosaveValue = useMemo(() => form ? ({ form, doc, saveConfig: dirtyConfig, saveDoc: dirtyDoc }) : null, [dirtyConfig, dirtyDoc, doc, form]);
 
-  const save = useCallback(async () => {
-    if (!form || saving) return;
-    dispatchUi({ type: 'patch', patch: { saving: true, error: null } });
+  const save = useCallback(async (snapshot: NonNullable<typeof autosaveValue>) => {
     try {
-      if (dirtyConfig) {
-        await patchHeartbeatSettings(form);
-        dispatchForm({ type: 'saved', value: form });
-        configDirtyRef.current = false;
+      if (snapshot.saveConfig) {
+        await patchHeartbeatSettings(snapshot.form);
+        dispatchForm({ type: 'saved', value: snapshot.form });
+        configDirtyRef.current = Boolean(formRef.current && JSON.stringify(formRef.current) !== JSON.stringify(snapshot.form));
       }
-      if (dirtyDoc) {
-        await putHeartbeatMd(doc);
-        dispatchDoc({ type: 'saved', value: doc });
-        docDirtyRef.current = false;
+      if (snapshot.saveDoc) {
+        await putHeartbeatMd(snapshot.doc);
+        dispatchDoc({ type: 'saved', value: snapshot.doc });
+        docDirtyRef.current = docRef.current !== snapshot.doc;
       }
     } catch (e) {
-      const fallback = dirtyConfig ? h.saveConfigError : h.saveDocError;
-      const message = e instanceof Error ? e.message : fallback;
-      dispatchUi({ type: 'patch', patch: { error: message } });
-      throw new Error(message);
-    } finally {
-      dispatchUi({ type: 'patch', patch: { saving: false } });
+      throw new Error(e instanceof Error ? e.message : snapshot.saveConfig ? h.saveConfigError : h.saveDocError);
     }
-  }, [dirtyConfig, dirtyDoc, doc, form, h.saveConfigError, h.saveDocError, saving]);
+  }, [h.saveConfigError, h.saveDocError]);
 
-  useSaveBarRegistration({ id: 'heartbeat', dirty, saving, save, discard });
+  const autosave = useAutosave({ value: autosaveValue, dirty, onSave: save, delayMs: dirtyDoc ? 900 : 500 });
 
   if (!hasToken) {
     return (
@@ -378,7 +360,7 @@ export function HeartbeatSettingsPanel() {
   if (!form) {
     return (
       <SettingsPageFrame gap="gap-3" padding="px-3 py-8 sm:px-5 xl:px-6">
-        <p className="text-sm text-fg-muted">{error ?? fetchError ?? h.loadError}</p>
+        <p className="text-sm text-fg-muted">{fetchError ?? h.loadError}</p>
         <Button
           type="button"
           variant="secondary"
@@ -395,8 +377,9 @@ export function HeartbeatSettingsPanel() {
 
   return (
     <SettingsPageFrame
-      aria-busy={saving}
+      aria-busy={autosave.status === 'saving'}
       data-has-baseline={baseline ? '1' : '0'}
+      onBlurCapture={autosave.onBlurCapture}
     >
       <SettingsPageHeader
         title={m.settingsSections.heartbeat}
@@ -405,6 +388,7 @@ export function HeartbeatSettingsPanel() {
         docsLabel={h.docsLink}
         actions={
           <>
+          <AutosaveStatus status={autosave.status} error={autosave.error} />
           <Button
             type="button"
             variant="secondary"
@@ -424,15 +408,13 @@ export function HeartbeatSettingsPanel() {
         }
       />
 
-      <SaveBarControls />
-
       {workspacePath ? (
         <p className="text-xs text-fg-subtle">
           {h.workspaceLabel}: <span className="font-mono text-fg-muted">{workspacePath}</span>
         </p>
       ) : null}
 
-      {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
+      {autosave.error ? <p className="text-sm text-red-600 dark:text-red-400">{autosave.error}</p> : null}
       {triggerError ? <p className="text-sm text-red-600 dark:text-red-400">{triggerError}</p> : null}
 
       <HeartbeatSettingsTabNav h={h} activeTab={activeTab} onChange={setActiveTab} />

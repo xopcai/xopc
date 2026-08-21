@@ -1,7 +1,8 @@
 import { Ban, Plus, Search, Trash2 } from 'lucide-react';
-import { useCallback, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useReducer, useRef, type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { AutosaveStatus } from '@/components/ui/autosave-status';
 import { SecretInput, type SecretInputLabels } from '@/components/ui/secret-input';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import {
@@ -11,7 +12,6 @@ import {
   type SearchProviderRow,
   type WebSearchSettingsState,
 } from '@/features/settings/web-search-config-api';
-import { useSaveBarRegistration } from '@/features/settings/save-bar/use-save-bar-registration';
 import { SettingsAdvancedGate } from '@/features/settings/settings-advanced-gate';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 import { SettingsPanelSkeleton } from '@/features/settings/settings-loading-skeleton';
@@ -23,6 +23,7 @@ import { createFormDraftReducer, syncFormDraftFromParsed } from '@/lib/settings-
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { Select, SelectOption } from '@/components/ui/popover-select';
+import { useAutosave } from '@/lib/use-autosave';
 
 function Field({
   label,
@@ -74,9 +75,9 @@ export function WebSearchSettingsPanel() {
   const [formDraft, dispatchForm] = useReducer(webSearchFormReducer, { form: null, baseline: null });
   const form = formDraft.form;
   const baseline = formDraft.baseline;
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const dirtyRef = useRef(false);
+  const formRef = useRef(form);
+  formRef.current = form;
   const trackedParsedRef = useRef<WebSearchSettingsState | null>(null);
 
   const { data, error: swrError, isLoading, mutate } = useGatewayConfigSwr(hasToken);
@@ -114,29 +115,19 @@ export function WebSearchSettingsPanel() {
     dispatchForm({ type: 'patch', patch });
   }, []);
 
-  const save = useCallback(async () => {
-    if (!form || saving) return;
-    setSaving(true);
-    setError(null);
+  const save = useCallback(async (snapshot: WebSearchSettingsState) => {
     try {
-      await patchWebSearchSettings(form);
-      dirtyRef.current = false;
-      dispatchForm({ type: 'saved', value: form });
+      await patchWebSearchSettings(snapshot);
+      dispatchForm({ type: 'saved', value: snapshot });
+      dirtyRef.current = Boolean(
+        formRef.current && JSON.stringify(formRef.current) !== JSON.stringify(snapshot),
+      );
     } catch (e) {
-      setError(e instanceof Error ? e.message : w.saveError);
-    } finally {
-      setSaving(false);
+      throw new Error(e instanceof Error ? e.message : w.saveError);
     }
-  }, [form, saving, w.saveError]);
+  }, [w.saveError]);
 
-  const discard = useCallback(() => {
-    if (!baseline) return;
-    dirtyRef.current = false;
-    dispatchForm({ type: 'discard' });
-    setError(null);
-  }, [baseline]);
-
-  useSaveBarRegistration({ id: 'search', dirty, saving, save, discard });
+  const autosave = useAutosave({ value: form, dirty, onSave: save });
 
   if (!hasToken) {
     return (
@@ -153,7 +144,7 @@ export function WebSearchSettingsPanel() {
   if (!form) {
     return (
       <div className="flex flex-col gap-3">
-        <p className="text-sm text-fg-muted">{error ?? fetchError ?? w.loadError}</p>
+        <p className="text-sm text-fg-muted">{fetchError ?? w.loadError}</p>
         <Button type="button" variant="secondary" onClick={() => void mutate()}>
           {logs.refresh}
         </Button>
@@ -162,11 +153,11 @@ export function WebSearchSettingsPanel() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
+    <div className="flex flex-col gap-4" onBlurCapture={autosave.onBlurCapture}>
+      {autosave.error ? <p className="text-sm text-red-600 dark:text-red-400">{autosave.error}</p> : null}
 
       <SettingsFormSection>
-        <SettingsFormSectionHeader icon={Search} title={w.sectionRegion} subtitle={w.sectionRegionHint} />
+        <SettingsFormSectionHeader icon={Search} title={w.sectionRegion} subtitle={w.sectionRegionHint} trailing={<AutosaveStatus status={autosave.status} error={autosave.error} />} />
         <div className="flex max-w-md flex-col gap-4">
           <Field label={w.regionLabel} description={w.regionDesc}>
             <Select

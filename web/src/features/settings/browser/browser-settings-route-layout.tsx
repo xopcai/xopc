@@ -2,6 +2,7 @@ import { Cpu } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { AutosaveStatus } from '@/components/ui/autosave-status';
 import { SettingsPageSkeleton } from '@/features/settings/settings-loading-skeleton';
 import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
 import { messages } from '@/i18n/messages';
@@ -59,26 +60,12 @@ export function AgentDefaultsRouteLayout(props: {
   }
 
   return (
-    <SettingsPageFrame gap="gap-6">
+    <SettingsPageFrame gap="gap-6" onBlurCapture={vm.onBlurCapture}>
       <SettingsPageHeader
         title={pageTitle}
         subtitle={!tabbed ? intro : undefined}
         meta={<p className="mt-1 text-xs text-fg-subtle">{a.sectionDesc}</p>}
-        actions={
-          <>
-          {vm.saveOk && !vm.dirty ? (
-            <span className="text-sm text-fg-muted" role="status">
-              {a.saved}
-            </span>
-          ) : null}
-          <Button type="button" variant="secondary" disabled={!vm.dirty || vm.saving} onClick={vm.discard}>
-            {a.discard}
-          </Button>
-          <Button type="button" variant="primary" disabled={!vm.dirty || vm.saving} onClick={() => void vm.save()}>
-            {vm.saving ? a.saving : a.save}
-          </Button>
-          </>
-        }
+        actions={<AutosaveStatus status={vm.autosaveStatus} error={vm.error} />}
       />
 
       {vm.error ? (

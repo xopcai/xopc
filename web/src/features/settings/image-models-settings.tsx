@@ -19,7 +19,6 @@ import { getOrderedApiKeyLinks } from '@/features/settings/provider-enrichment';
 import { revealProviderApiKey } from '@/features/settings/providers-api';
 import { fetchJson } from '@/lib/fetch';
 import { isMaskedSecret } from '@/lib/is-masked-secret';
-import { showToast } from '@/lib/toast';
 import { apiUrl } from '@/lib/url';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -162,6 +161,7 @@ export function ImageModelsSettingsPanel() {
   const [baseUrl, setBaseUrl] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
+  const [saved, setSaved] = useState(false);
   const [customDialogOpen, setCustomDialogOpen] = useState(false);
   const [editingCustomProvider, setEditingCustomProvider] = useState<CustomImageProvider>();
 
@@ -280,6 +280,7 @@ export function ImageModelsSettingsPanel() {
     if (!selectedProvider || !canSubmit) return;
     setSaving(true);
     setError(undefined);
+    setSaved(false);
     try {
       const response = await fetchJson<{ payload?: SetupResult }>(
         apiUrl(`/api/agents/${encodeURIComponent(agentId)}/image-generation/setup`),
@@ -300,7 +301,7 @@ export function ImageModelsSettingsPanel() {
         mutateProviders(response.payload.providers, { revalidate: false }),
       ]);
       setApiKey(MASKED_API_KEY);
-      showToast({ type: 'success', title: text.enabled });
+      setSaved(true);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -458,6 +459,7 @@ export function ImageModelsSettingsPanel() {
             </label>
           </details>
 
+          {saved ? <p className="mt-4 rounded-lg bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300" role="status">{text.enabled}</p> : null}
           {error ? <p className="mt-4 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-600 dark:text-red-400">{error}</p> : null}
 
           <div className="mt-4 flex justify-end">
