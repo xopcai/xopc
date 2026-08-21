@@ -477,14 +477,6 @@ export class AgentManager implements AgentInstanceGateway {
       },
       installSkillFromSource: this.config.installSkillFromSource,
       installSkillFromMarketplace: this.config.installSkillFromMarketplace,
-      getCodeIntelligenceRuntime: (workspace) =>
-        this.workspaceRuntimes.getOrCreate(
-          workspace,
-          resolveEffectiveAgentProfileForSession(
-            this.config.config!,
-            this.config.getCurrentContext?.()?.sessionKey,
-          ).agentId,
-        ).codeIntelligence,
     };
   }
 
@@ -494,18 +486,6 @@ export class AgentManager implements AgentInstanceGateway {
 
   getMemoryManagerForSession(sessionKey: string): MemoryManager {
     return this.getWorkspaceRuntimeForSession(sessionKey).memoryManager;
-  }
-
-  markCodeIntelligenceDirty(sessionKey: string, paths: readonly string[]): void {
-    if (paths.length === 0) return;
-    const instance = this.agents.get(sessionKey);
-    const config = this.config.config?.codeIntelligence;
-    if (
-      !instance ||
-      !config?.enabled ||
-      !config.agentIds.includes(instance.effectiveProfile.agentId)
-    ) return;
-    this.getWorkspaceRuntimeForSession(sessionKey).codeIntelligence.markDirty(paths);
   }
 
   /** Build the bounded, policy-filtered context used for this model turn. */
@@ -1297,12 +1277,6 @@ export class AgentManager implements AgentInstanceGateway {
       getMemoryManager: () => rt.memoryManager,
       getSkillManager: () => rt.skillManager,
     });
-    if (
-      this.config.config?.codeIntelligence?.enabled &&
-      this.config.config.codeIntelligence.agentIds.includes(profile.agentId)
-    ) {
-      void rt.codeIntelligence.prime().catch(() => {});
-    }
     const registeredToolNames = tools.map((t) => t.name);
 
     const thinkingLevel =

@@ -497,7 +497,6 @@
     "toolsLockedByPreset": "已被共享配置阻止",
     "toolsDisableGroups": {
       "unknown": "自定义（不在内置列表）",
-      "code-intelligence": "代码智能",
       "workspace": "工作区与搜索",
       "execution": "执行",
       "web": "网络",
@@ -509,11 +508,6 @@
       "misc": "其他内置"
     },
     "toolDescriptions": {
-      "code_search": "搜索已索引的符号、定义、实现、路由和类型。",
-      "code_read_symbol": "读取代码搜索返回符号的精确源码。",
-      "code_trace": "追踪调用方、被调用方、数据流和跨服务路径。",
-      "code_impact": "将 Git 变更映射到受影响符号和影响范围。",
-      "code_architecture": "汇总包、边界、分层、入口、热点和图聚类。",
       "read_file": "读取工作区内的文本与小文件（路径限制在工作区沙箱内）。",
       "write_file": "在工作区创建新文件或覆盖已有文件。",
       "apply_patch": "应用严格的多文件补丁，用于聚焦修改源码。",

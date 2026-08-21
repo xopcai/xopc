@@ -14,10 +14,10 @@ describe('streaming tool updates', () => {
   it('completes a running tool by toolCallId before falling back to tool name', () => {
     const content: MessageContent[] = [];
 
-    appendToolStart(content, 'codebase-memory-mcp.get_code_snippet', { qualified_name: 'first' }, 'call-1', 1_000);
-    appendToolStart(content, 'codebase-memory-mcp.get_code_snippet', { qualified_name: 'second' }, 'call-2', 1_100);
+    appendToolStart(content, 'read_file', { path: 'first.ts' }, 'call-1', 1_000);
+    appendToolStart(content, 'read_file', { path: 'second.ts' }, 'call-2', 1_100);
 
-    completeTool(content, 'codebase-memory-mcp.get_code_snippet', false, 'first result', 'call-1', 1_500);
+    completeTool(content, 'read_file', false, 'first result', 'call-1', 1_500);
 
     expect(content).toMatchObject([
       { type: 'tool_use', toolCallId: 'call-1', status: 'done', result: 'first result' },

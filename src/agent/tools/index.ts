@@ -120,7 +120,6 @@ export {
 } from './skill-install-tool.js';
 export { createToolManualTool } from './tool-manual-tool.js';
 export { createDesktopPetTool, type DesktopPetCreateDetails } from './desktop-pet-tool.js';
-export { createCodeIntelligenceTools } from '../code-intelligence/tools.js';
 export { createManagedJobTool } from './managed-job-tool.js';
 
 export { createImageTool, resolveImageModelConfigForTool } from './image-tool.js';

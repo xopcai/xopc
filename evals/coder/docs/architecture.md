@@ -15,7 +15,7 @@ Every result is identified by:
 - Variant id, adapter, model, reasoning, and configuration
 - Agent build or deployment selected by the adapter
 - Effective runtime model and hashes of the xopc manifest, prompt configuration,
-  tool policy, skill policy, and code-intelligence configuration
+  tool policy, and skill policy
 - Run id and repetition
 
 Container image digests and dependency lock hashes should be added when container sandboxing is enabled.
@@ -38,4 +38,4 @@ SQLite contains experiment, run, event, score, artifact metadata, and annotation
 
 ## Fair comparisons
 
-Baseline and candidate variants use separate repository clones. Model budgets, repository commits, environment policy, and graders are identical. The xopc adapter creates a fresh public session and binds its `workingDirectory` to that clone before the first turn. CBM or other index caches must be explicitly classified as cold or warm and applied equally to each variant.
+Baseline and candidate variants use separate repository clones. Model budgets, repository commits, environment policy, and graders are identical. The xopc adapter creates a fresh public session and binds its `workingDirectory` to that clone before the first turn. Shared caches must be classified as cold or warm and applied equally to each variant.

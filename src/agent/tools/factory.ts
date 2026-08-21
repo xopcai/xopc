@@ -51,7 +51,6 @@ import {
   createDesktopPetTool,
   createSkillInstallTool,
   createSkillsMarketplaceSearchTool,
-  createCodeIntelligenceTools,
   type SkillInstallToolOptions,
   type SkillInstallToolResult,
   type MarketplaceSkillInstallToolOptions,
@@ -89,8 +88,6 @@ import { createSkillManageTool } from './skill-manage-tool.js';
 import { createTextToSpeechTool } from './tts-tool.js';
 import { mergeTtsConfigFromAppConfig } from '../../voice/tts/merge-config.js';
 import { getAgentCapabilityToolNames } from '../capabilities/index.js';
-import type { CodeIntelligenceRuntimeLike } from '../code-intelligence/index.js';
-import { isCodeIntelligenceEnabledForAgent } from '../code-intelligence/tool-gating.js';
 import {
   getSessionTaskPlan,
   isXopcDatabaseOpen,
@@ -147,8 +144,6 @@ export interface ToolFactoryDeps {
   installSkillFromMarketplace?: (
     opts: MarketplaceSkillInstallToolOptions,
   ) => Promise<MarketplaceSkillInstallToolResult>;
-  /** Workspace-scoped structural code intelligence runtime. */
-  getCodeIntelligenceRuntime?: (workspace: string) => CodeIntelligenceRuntimeLike;
 }
 
 export interface CreateCoreToolsOptions {
@@ -290,17 +285,7 @@ export class AgentToolsFactory {
       workspace,
       agentId: options?.agentId ?? (cfg ? resolveDefaultAgentId(cfg) : 'main'),
     });
-    const codeIntelligenceConfig = cfg?.codeIntelligence;
     const agentId = options?.agentId;
-    const codeIntelligenceEnabled = isCodeIntelligenceEnabledForAgent(
-      codeIntelligenceConfig,
-      agentId,
-    );
-    const codeIntelligenceTools = codeIntelligenceEnabled && this.deps.getCodeIntelligenceRuntime
-      ? createCodeIntelligenceTools({
-          getRuntime: () => this.deps.getCodeIntelligenceRuntime!(workspace),
-        })
-      : [];
 
     const externalTools = createDefaultExternalToolGatewayTools({
       workspace,
@@ -387,7 +372,6 @@ export class AgentToolsFactory {
           })]
         : []),
       readTool,
-      ...codeIntelligenceTools,
       writeTool,
       applyPatchTool,
       listDir,

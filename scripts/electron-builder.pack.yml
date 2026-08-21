@@ -48,12 +48,6 @@ extraResources:
     filter:
       - rg
       - rg.exe
-  - from: _pack-resources/cbm
-    to: bin
-    filter:
-      - codebase-memory-mcp
-      - codebase-memory-mcp.exe
-      - codebase-memory-mcp.manifest.json
   - from: _pack-resources/voice-hotkey
     to: bin
     filter:

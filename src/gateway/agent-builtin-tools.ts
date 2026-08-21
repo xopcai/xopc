@@ -5,11 +5,6 @@ import { EXTERNAL_TOOL_NAMES } from '../agent/external-tools/index.js';
  * Extension tools are not listed; users can still add arbitrary strings in config.
  */
 export const GATEWAY_BUILTIN_TOOL_IDS = [
-  'code_search',
-  'code_read_symbol',
-  'code_trace',
-  'code_impact',
-  'code_architecture',
   'read_file',
   'write_file',
   'apply_patch',

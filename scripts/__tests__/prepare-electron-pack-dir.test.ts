@@ -92,8 +92,6 @@ describe('prepare-electron-pack-dir', () => {
     expect(existsSync(join(packDir, 'node_modules/onnxruntime-node/bin/napi-v3'))).toBe(true);
     expect(existsSync(join(packDir, 'node_modules/@vscode/ripgrep'))).toBe(false);
     expect(existsSync(join(packDir, '_pack-resources/rg'))).toBe(true);
-    expect(existsSync(join(packDir, '_pack-resources/cbm'))).toBe(true);
-    expect(existsSync(join(packDir, '_pack-resources/cbm/codebase-memory-mcp.manifest.json'))).toBe(true);
     if (process.platform === 'darwin' || process.platform === 'win32') {
       const helperName = process.platform === 'win32' ? 'voice-hotkey-helper.exe' : 'voice-hotkey-helper';
       expect(existsSync(join(packDir, '_pack-resources/voice-hotkey', helperName))).toBe(true);

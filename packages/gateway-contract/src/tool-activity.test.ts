@@ -4,12 +4,12 @@ import { resolveToolActivity, toolActivityId } from './tool-activity.js';
 
 describe('tool activity contract', () => {
   it('resolves explicit built-in and namespaced tool ids', () => {
-    expect(toolActivityId('codebase-memory-mcp__search_graph')).toBe('search_graph');
+    expect(toolActivityId('filesystem__read_file')).toBe('read_file');
     expect(resolveToolActivity('memory_search', 'running')).toMatchObject({
       category: 'memory', action: 'search', source: 'memory', sensitivity: 'personal', status: 'running',
     });
-    expect(resolveToolActivity('codebase-memory-mcp__search_graph', 'completed')).toMatchObject({
-      category: 'code', action: 'search', source: 'workspace', status: 'completed',
+    expect(resolveToolActivity('filesystem__read_file', 'completed')).toMatchObject({
+      category: 'file', action: 'read', source: 'workspace', status: 'completed',
     });
   });
 

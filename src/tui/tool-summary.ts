@@ -48,7 +48,7 @@ export function getToolSummaryKind(toolName: string): ToolSummaryKind {
 
 export function isReadStyleTool(toolName: string): boolean {
   const base = baseToolName(toolName);
-  return ['read', 'read_file', 'memory_get', 'get_code_snippet', 'prepare_diff'].includes(base);
+  return ['read', 'read_file', 'memory_get', 'prepare_diff'].includes(base);
 }
 
 export function isSearchStyleTool(toolName: string): boolean {
@@ -58,13 +58,8 @@ export function isSearchStyleTool(toolName: string): boolean {
     'grep',
     'rg',
     'ripgrep',
-    'search_code',
     'file_search',
     'list_files',
-    'search_graph',
-    'query_graph',
-    'trace_path',
-    'get_architecture',
   ].includes(base);
 }
 

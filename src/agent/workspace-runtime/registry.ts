@@ -5,11 +5,11 @@
  * `MemoryManager`) were created inline inside
  * `AgentManager.getWorkspaceRuntime` and cached in a private Map. They live
  * outside `AgentInstance` because multiple session keys for the same agent may
- * share a workspace. Skill, prompt, and code-intelligence state stays keyed by
- * agent and workspace, while memory comes from one process-wide user context.
+ * share a workspace. Skill and prompt state stays keyed by agent and workspace,
+ * while memory comes from one process-wide user context.
  *
  * Extracted so:
- *   - `AgentManager` no longer juggles four sibling caches.
+ *   - `AgentManager` no longer owns workspace-scoped runtime caches.
  *   - Hot-reload teardown (`clearAll`) shuts down the shared user context once.
  *   - Future per-workspace runtimes (e.g. embedding store, vector cache) plug in
  *     through `getOrCreate` without touching `AgentManager`.
@@ -21,17 +21,12 @@ import { resolveAgentIdForWorkspacePath } from '../agent-scope.js';
 import type { MemoryManager } from '../memory/manager.js';
 import { SkillManager } from '../skills/skill-manager.js';
 import { SystemPromptBuilder } from '../prompt/service-prompt-builder.js';
-import { CodeIntelligenceRuntime } from '../code-intelligence/index.js';
-import { createLogger } from '../../utils/logger.js';
 import { UserContextRuntimeRegistry } from '../../user-context/runtime.js';
-
-const log = createLogger('WorkspaceRuntimeRegistry');
 
 export interface WorkspaceRuntime {
   skillManager: SkillManager;
   systemPromptBuilder: SystemPromptBuilder;
   memoryManager: MemoryManager;
-  codeIntelligence: CodeIntelligenceRuntime;
 }
 
 export interface WorkspaceRuntimeRegistryOptions {
@@ -82,16 +77,10 @@ export class WorkspaceRuntimeRegistry {
       config: cfg,
       skillManager,
     });
-    const codeIntelligence = new CodeIntelligenceRuntime({
-      workspace: resolvedPath,
-      getConfig: this.getConfig,
-    });
-
     const rt: WorkspaceRuntime = {
       skillManager,
       systemPromptBuilder,
       memoryManager,
-      codeIntelligence,
     };
     this.runtimes.set(runtimeKey, rt);
     if (!this.notifiedWorkspacePaths.has(resolvedPath)) {
@@ -111,16 +100,8 @@ export class WorkspaceRuntimeRegistry {
    * Used by `AgentManager.updateAgentDefaults` and `AgentManager.dispose`.
    */
   async clearAll(): Promise<void> {
-    const toShutdown = [...this.runtimes.values()];
     this.runtimes.clear();
     this.notifiedWorkspacePaths.clear();
-    await Promise.allSettled([
-      this.userContextRuntimes.clear(),
-      ...toShutdown.map((rt) =>
-        rt.codeIntelligence.dispose().catch((err) => {
-          log.warn({ err }, 'codeIntelligence.dispose failed');
-        }),
-      ),
-    ]);
+    await this.userContextRuntimes.clear();
   }
 }
