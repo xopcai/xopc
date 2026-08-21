@@ -22,6 +22,7 @@ import type {
   MessageContent,
   ReviewContent,
 } from '@/features/chat/messages/messages.types';
+import type { MemoryActivityLabels } from '@/features/chat/messages/memory-activity';
 import type {
   StepsClusterDoneLabels,
   StepsClusterIngLabels,
@@ -515,6 +516,9 @@ export function ChunkedContent({
     viewSteps_one: string;
     viewSteps_other: string;
     searchedWeb: string;
+    searchedMemory: string;
+    searchedCode: string;
+    searched: string;
     readFile: string;
     stepDetails: string;
     runCommand: string;
@@ -532,6 +536,7 @@ export function ChunkedContent({
     rawThinking: string;
     toolRunning: string;
     toolError: string;
+    memoryActivity: MemoryActivityLabels;
   };
   clusterLabels: {
     done: StepsClusterDoneLabels;

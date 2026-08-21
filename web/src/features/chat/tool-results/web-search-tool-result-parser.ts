@@ -1,3 +1,5 @@
+import { resolveToolActivity } from '@xopcai/gateway-contract';
+
 export type WebSearchResultLink = { url: string; title: string };
 
 function hostnameFromUrl(url: string): string {
@@ -64,6 +66,6 @@ export function extractWebSearchLinksFromToolResult(resultText: string): WebSear
 }
 
 export function isWebSearchToolName(name: string): boolean {
-  const n = name.trim().toLowerCase();
-  return n === 'web_search' || n === 'brave_search';
+  const activity = resolveToolActivity(name, 'running');
+  return activity.category === 'web' && activity.action === 'search';
 }

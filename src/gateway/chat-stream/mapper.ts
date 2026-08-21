@@ -1,4 +1,5 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
+import { resolveToolActivity } from '@xopcai/gateway-contract';
 
 import type { EmbeddedStreamEvent } from '../../agent/embedded/types.js';
 import { createPetFeedback } from './pet-feedback.js';
@@ -296,6 +297,7 @@ export class ChatStreamMapper {
         toolCallId,
         toolName,
         args: event.args,
+        activity: resolveToolActivity(toolName, 'running'),
       }),
     ];
     if (toolName === 'exec_command') {
@@ -354,6 +356,7 @@ export class ChatStreamMapper {
         toolCallId,
         toolName,
         status: event.isError ? 'error' : 'success',
+        activity: resolveToolActivity(toolName, event.isError ? 'failed' : 'completed', result),
         result,
         errorMessage: event.isError ? result?.text : undefined,
       }),

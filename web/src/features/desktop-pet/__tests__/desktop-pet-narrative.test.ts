@@ -40,7 +40,7 @@ describe('desktop pet narrative', () => {
     expect(desktopPetActionForPhase('reading')).toBe('read');
     expect(desktopPetActionForPhase('editing')).toBe('create');
     expect(desktopPetActionForPhase('browsing')).toBe('research');
-    expect(desktopPetActionForPhase('running', 'exec_command')).toBe('execute');
+    expect(desktopPetActionForPhase('running')).toBe('execute');
   });
 
   it('builds concise tool tips with safe target context', () => {

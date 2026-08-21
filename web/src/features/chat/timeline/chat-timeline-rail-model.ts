@@ -1,4 +1,5 @@
 import type { SessionTimelineItem } from '@/features/chat/session/session-manager';
+import { getFriendlyToolTitle } from '@/features/chat/messages/tool-friendly-title';
 import { stripEnvelopeTimestampPrefix } from '@/features/chat/messages/user-message-plain-text';
 
 export type ChatTimelineLabels = {
@@ -8,6 +9,9 @@ export type ChatTimelineLabels = {
   toolCount_one: string;
   toolCount_other: string;
   searchedWeb: string;
+  searchedMemory: string;
+  searchedCode: string;
+  searched: string;
   readFile: string;
   runCommand: string;
   listDirectory: string;
@@ -53,18 +57,7 @@ function compactUserTurnPreview(text: string | undefined, max: number): string {
 }
 
 function toolLabel(name: string, labels: ChatTimelineLabels): string {
-  const normalized = name.toLowerCase().replace(/[-.]/g, '_');
-  if (normalized.includes('search')) return labels.searchedWeb;
-  if (normalized.includes('read')) return labels.readFile;
-  if (normalized.includes('bash') || normalized.includes('shell') || normalized.includes('command')) {
-    return labels.runCommand;
-  }
-  if (normalized === 'ls' || normalized.includes('list')) return labels.listDirectory;
-  if (normalized.includes('write') || normalized.includes('save')) return labels.writeFile;
-  if (normalized.includes('edit') || normalized.includes('patch')) return labels.editFile;
-  if (normalized.includes('open')) return labels.openUrl;
-  if (normalized.includes('fetch')) return labels.fetchUrl;
-  return labels.unknownTool.replace('{{name}}', name);
+  return getFriendlyToolTitle(name, labels);
 }
 
 function outlineEventTone(kind: SessionTimelineItem['kind']): TimelineEventSummary['tone'] | null {
