@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { DatabaseSync } from 'node:sqlite';
 
 import type {
   KnowledgeSourceChange,
@@ -72,6 +73,9 @@ type MemoryEvidenceRow = {
   excerpt: string | null;
   confidence: number | null;
   observed_at: number | null;
+  session_key: string | null;
+  turn_id: string | null;
+  tool_call_id: string | null;
   created_at: number;
 };
 
@@ -580,28 +584,35 @@ export function completeKnowledgeSourceItemSynthesis(input: {
   });
 }
 
-export function attachMemoryEvidence(input: {
+export interface AttachMemoryEvidenceInput {
   recordId: string;
   sourceItemId?: string;
   relation?: MemoryEvidenceRelation;
   excerpt?: string;
   confidence?: number;
   observedAt?: string;
+  sessionKey?: string;
+  turnId?: string;
+  toolCallId?: string;
   nowMs?: number;
-}): MemoryEvidence {
+}
+
+function upsertMemoryEvidenceRow(db: DatabaseSync, input: AttachMemoryEvidenceInput): MemoryEvidence {
   let evidenceId: string = randomUUID();
   const now = input.nowMs ?? Date.now();
   const observedAt = parseTimestamp(input.observedAt);
-  runSqliteWriteTransaction((db) => {
-    db.prepare(
+  db.prepare(
       `INSERT INTO memory_evidence (
         evidence_id, record_id, source_item_id, relation, excerpt,
-        confidence, observed_at, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        confidence, observed_at, session_key, turn_id, tool_call_id, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT DO UPDATE SET
         excerpt = COALESCE(excluded.excerpt, memory_evidence.excerpt),
         confidence = MAX(COALESCE(memory_evidence.confidence, 0), COALESCE(excluded.confidence, 0)),
-        observed_at = MAX(COALESCE(memory_evidence.observed_at, 0), COALESCE(excluded.observed_at, 0))`,
+        observed_at = MAX(COALESCE(memory_evidence.observed_at, 0), COALESCE(excluded.observed_at, 0)),
+        session_key = COALESCE(memory_evidence.session_key, excluded.session_key),
+        turn_id = COALESCE(memory_evidence.turn_id, excluded.turn_id),
+        tool_call_id = COALESCE(memory_evidence.tool_call_id, excluded.tool_call_id)`,
     ).run(
       evidenceId,
       input.recordId,
@@ -610,24 +621,56 @@ export function attachMemoryEvidence(input: {
       input.excerpt ?? null,
       input.confidence ?? null,
       observedAt,
+      input.sessionKey ?? null,
+      input.turnId ?? null,
+      input.toolCallId ?? null,
       now,
     );
-    if (input.sourceItemId) {
-      const stored = db.prepare(
-        `SELECT evidence_id FROM memory_evidence
-         WHERE record_id = ? AND source_item_id = ? AND relation = ?`,
-      ).get(input.recordId, input.sourceItemId, input.relation ?? 'supports') as { evidence_id: string } | undefined;
-      evidenceId = stored?.evidence_id ?? evidenceId;
-    }
-  });
+  if (input.sourceItemId) {
+    const stored = db.prepare(
+      `SELECT evidence_id FROM memory_evidence
+       WHERE record_id = ? AND source_item_id = ? AND relation = ?`,
+    ).get(input.recordId, input.sourceItemId, input.relation ?? 'supports') as { evidence_id: string } | undefined;
+    evidenceId = stored?.evidence_id ?? evidenceId;
+  }
   return {
     evidenceId,
     ...(input.sourceItemId ? { sourceItemId: input.sourceItemId } : {}),
     relation: input.relation ?? 'supports',
     ...(input.excerpt ? { sourceText: input.excerpt } : {}),
     ...(input.confidence != null ? { confidence: input.confidence } : {}),
+    ...(input.sessionKey ? { sessionKey: input.sessionKey } : {}),
+    ...(input.turnId ? { turnId: input.turnId } : {}),
+    ...(input.toolCallId ? { toolCallId: input.toolCallId } : {}),
     ...(observedAt != null ? { observedAt: new Date(observedAt).toISOString() } : {}),
   };
+}
+
+export function attachMemoryEvidence(input: AttachMemoryEvidenceInput): MemoryEvidence {
+  return runSqliteWriteTransaction((db) => upsertMemoryEvidenceRow(db, input));
+}
+
+export function replaceMemoryEvidenceForRecord(
+  db: DatabaseSync,
+  recordId: string,
+  evidence: MemoryEvidence[],
+  nowMs = Date.now(),
+): void {
+  db.prepare(`DELETE FROM memory_evidence WHERE record_id = ?`).run(recordId);
+  for (const item of evidence) {
+    upsertMemoryEvidenceRow(db, {
+      recordId,
+      sourceItemId: item.sourceItemId,
+      relation: item.relation,
+      excerpt: item.sourceText,
+      confidence: item.confidence,
+      observedAt: item.observedAt,
+      sessionKey: item.sessionKey,
+      turnId: item.turnId,
+      toolCallId: item.toolCallId,
+      nowMs,
+    });
+  }
 }
 
 export function deleteMemoryEvidenceForRecord(
@@ -652,6 +695,35 @@ export function listMemoryEvidence(recordId: string): MemoryEvidence[] {
     relation: row.relation as MemoryEvidenceRelation,
     ...(row.excerpt ? { sourceText: row.excerpt } : {}),
     ...(row.confidence != null ? { confidence: row.confidence } : {}),
+    ...(row.session_key ? { sessionKey: row.session_key } : {}),
+    ...(row.turn_id ? { turnId: row.turn_id } : {}),
+    ...(row.tool_call_id ? { toolCallId: row.tool_call_id } : {}),
     ...(timestampToIso(row.observed_at) ? { observedAt: timestampToIso(row.observed_at) } : {}),
   }));
+}
+
+export function listMemoryEvidenceForRecords(recordIds: string[]): Map<string, MemoryEvidence[]> {
+  const uniqueIds = [...new Set(recordIds.filter(Boolean))];
+  const output = new Map<string, MemoryEvidence[]>();
+  if (uniqueIds.length === 0) return output;
+  const placeholders = uniqueIds.map(() => '?').join(', ');
+  const rows = getSqliteDatabase()
+    .prepare(`SELECT * FROM memory_evidence WHERE record_id IN (${placeholders}) ORDER BY created_at ASC`)
+    .all(...uniqueIds) as MemoryEvidenceRow[];
+  for (const row of rows) {
+    const group = output.get(row.record_id) ?? [];
+    group.push({
+      evidenceId: row.evidence_id,
+      ...(row.source_item_id ? { sourceItemId: row.source_item_id } : {}),
+      relation: row.relation as MemoryEvidenceRelation,
+      ...(row.excerpt ? { sourceText: row.excerpt } : {}),
+      ...(row.confidence != null ? { confidence: row.confidence } : {}),
+      ...(row.session_key ? { sessionKey: row.session_key } : {}),
+      ...(row.turn_id ? { turnId: row.turn_id } : {}),
+      ...(row.tool_call_id ? { toolCallId: row.tool_call_id } : {}),
+      ...(timestampToIso(row.observed_at) ? { observedAt: timestampToIso(row.observed_at) } : {}),
+    });
+    output.set(row.record_id, group);
+  }
+  return output;
 }

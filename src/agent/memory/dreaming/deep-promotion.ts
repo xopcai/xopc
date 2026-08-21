@@ -21,6 +21,8 @@ type RankedCandidate = {
   score: number;
   recallCount: number;
   uniqueQueries: number;
+  evidenceCount: number;
+  evidenceSessions: number;
   content: string;
 };
 
@@ -53,7 +55,7 @@ export async function runDreamingDeepPromotion(params: {
     const cutoff = now.getTime() - cfg.maxAgeDays * 86_400_000;
     const records = listMemoryRecords({
       providerId: 'local',
-      workspaceId: params.workspaceDir,
+      visibleToWorkspaceId: params.workspaceDir,
       status: 'candidate',
       limit: 500,
     });
@@ -71,13 +73,31 @@ export async function runDreamingDeepPromotion(params: {
       const recallSignals = (byRecord.get(record.id) ?? []).filter((signal) =>
         signal.source === 'search_recall' || signal.source === 'context_injection');
       const queries = new Set(recallSignals.map((signal) => String(signal.metadata.query ?? '')).filter(Boolean));
+      const evidence = record.evidence ?? [];
+      const evidenceKeys = new Set(evidence.map((item) => item.sourceItemId ?? item.sourceText).filter(Boolean));
+      const evidenceSessions = new Set(evidence.map((item) => item.sessionKey).filter(Boolean));
       const avgScore = recallSignals.length
         ? recallSignals.reduce((sum, signal) => sum + (signal.score ?? 0), 0) / recallSignals.length
         : 0;
       const ageDays = Math.max(0, (now.getTime() - Date.parse(record.updatedAt)) / 86_400_000);
-      const score = Math.max(0, Math.min(1, avgScore * Math.pow(0.5, ageDays / cfg.recencyHalfLifeDays)));
-      if (recallSignals.length < cfg.minRecallCount || queries.size < cfg.minUniqueQueries || score < cfg.minScore) return [];
-      return [{ recordId: record.id, score, recallCount: recallSignals.length, uniqueQueries: queries.size, content: record.content }];
+      const recency = Math.pow(0.5, ageDays / cfg.recencyHalfLifeDays);
+      const hasDiverseEvidence = evidenceKeys.size >= 2 && evidenceSessions.size >= 2;
+      const hasDiverseUsage = recallSignals.length >= cfg.minRecallCount && queries.size >= cfg.minUniqueQueries;
+      const evidenceScore = Math.min(1, evidenceKeys.size / 3);
+      const usageScore = Math.min(1, avgScore);
+      const score = Math.max(0, Math.min(1,
+        Math.max(hasDiverseEvidence ? evidenceScore : 0, hasDiverseUsage ? usageScore : 0) * recency,
+      ));
+      if ((!hasDiverseEvidence && !hasDiverseUsage) || score < cfg.minScore) return [];
+      return [{
+        recordId: record.id,
+        score,
+        recallCount: recallSignals.length,
+        uniqueQueries: queries.size,
+        evidenceCount: evidenceKeys.size,
+        evidenceSessions: evidenceSessions.size,
+        content: record.content,
+      }];
     }).sort((left, right) => right.score - left.score).slice(0, cfg.limit);
 
     const policy = params.mode === 'automatic' ? 'allow' : params.mode === 'review' ? 'confirm' : 'deny';
@@ -90,7 +110,12 @@ export async function runDreamingDeepPromotion(params: {
         action,
         reasonCode: 'deep_evidence_threshold_met',
         score: candidate.score,
-        evidence: { recallCount: candidate.recallCount, uniqueQueries: candidate.uniqueQueries },
+        evidence: {
+          recallCount: candidate.recallCount,
+          uniqueQueries: candidate.uniqueQueries,
+          evidenceCount: candidate.evidenceCount,
+          evidenceSessions: candidate.evidenceSessions,
+        },
       });
       if (policy === 'allow') {
         if (!setMemoryRecordStatus(candidate.recordId, 'active', now.getTime())) continue;

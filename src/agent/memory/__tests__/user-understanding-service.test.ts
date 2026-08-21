@@ -42,7 +42,7 @@ describe('UserUnderstandingService', () => {
       content: '我更喜欢详细解释。',
       status: 'candidate',
       supersedesRecordId: 'old-preference',
-      scope: { userId: 'local-owner', sessionKey: 'session-1' },
+      scope: { userId: 'local-owner' },
       tags: expect.arrayContaining(['explicit-user-correction']),
     }));
   });
@@ -77,6 +77,27 @@ describe('UserUnderstandingService', () => {
 
     expect(result).toMatchObject({ proposed: 1, created: 0, deduplicated: 1, rejected: 0 });
     expect(write).not.toHaveBeenCalled();
+  });
+
+  it('scopes durable user beliefs globally and workspace facts locally', async () => {
+    const write = vi.fn().mockResolvedValue({ success: true, record: { id: 'created' } });
+    const service = new UserUnderstandingService({ write, list: vi.fn().mockResolvedValue([]) });
+    const base = {
+      confidence: 0.9,
+      importance: 0.8,
+      explicitness: 'explicit' as const,
+      durability: 'durable' as const,
+      sensitivity: 'normal' as const,
+      disclosurePolicy: 'referenceable' as const,
+    };
+    await service.applyCandidates([
+      { ...base, kind: 'preference', content: 'Prefer concise answers.' },
+      { ...base, kind: 'workspace_fact', content: 'This workspace uses pnpm.' },
+    ], { sessionKey: 'session-a', workspaceId: '/workspace/a' });
+
+    expect(write.mock.calls[0]?.[0].scope).toEqual({ userId: 'local-owner' });
+    expect(write.mock.calls[1]?.[0].scope).toEqual({ userId: 'local-owner', workspaceId: '/workspace/a' });
+    expect(write.mock.calls[0]?.[0].evidence[0].sessionKey).toBe('session-a');
   });
 
   it('rejects secret candidates before provider writes', async () => {

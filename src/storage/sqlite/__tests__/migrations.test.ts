@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -595,23 +595,23 @@ describe('SQLite migrations', () => {
     db.exec(`
       INSERT INTO memory_records (
         record_id, provider_id, kind, user_id, source_agent_id, content,
-        source_json, confidence, tags_json, status, sensitivity, evidence_json,
+        source_json, confidence, tags_json, status, sensitivity,
         explicitness, durability, importance, disclosure_policy, created_at, updated_at
       ) VALUES (
         'profile-memory', 'personal-context', 'preference', 'local-owner', 'main',
         'The user prefers local-first products.',
         '{"provider":"personal-context"}', 0.9, '["user-understanding"]',
-        'active', 'normal', '[]', 'inferred', 'durable', 0.7, 'referenceable', 1, 1
+        'active', 'normal', 'inferred', 'durable', 0.7, 'referenceable', 1, 1
       ), (
         'connected-memory', 'connected-understanding', 'user_profile', 'local-owner', 'main',
         'The user works on xopc.',
         '{"provider":"connected-sources"}', 0.9, '["user-understanding"]',
-        'active', 'normal', '[]', 'explicit', 'durable', 0.8, 'referenceable', 1, 1
+        'active', 'normal', 'explicit', 'durable', 0.8, 'referenceable', 1, 1
       ), (
         'external-memory', 'external-provider', 'preference', 'local-owner', 'main',
         'An external provider owns this record.',
         '{"provider":"external-provider"}', 0.9, '["user-understanding"]',
-        'active', 'normal', '[]', 'explicit', 'durable', 0.8, 'referenceable', 1, 1
+        'active', 'normal', 'explicit', 'durable', 0.8, 'referenceable', 1, 1
       );
       INSERT INTO memory_records_fts (
         content, record_id, provider_id, kind, user_id, source_agent_id, workspace_id
@@ -639,6 +639,61 @@ describe('SQLite migrations', () => {
       .toEqual({ provider_id: 'external-provider' });
     expect(db.prepare(`SELECT provider_id FROM memory_records_fts WHERE record_id = 'external-memory'`).get())
       .toEqual({ provider_id: 'external-provider' });
+  });
+
+  it('backfills normalized evidence attribution before dropping legacy JSON', () => {
+    const db = openEmptyDb();
+    db.exec(`
+      CREATE TABLE memory_records (
+        record_id TEXT PRIMARY KEY,
+        evidence_json TEXT NOT NULL DEFAULT '[]',
+        created_at INTEGER NOT NULL
+      );
+      CREATE TABLE knowledge_source_items (item_id TEXT PRIMARY KEY);
+      CREATE TABLE memory_evidence (
+        evidence_id TEXT PRIMARY KEY,
+        record_id TEXT NOT NULL,
+        source_item_id TEXT,
+        relation TEXT NOT NULL,
+        excerpt TEXT,
+        confidence REAL,
+        observed_at INTEGER,
+        created_at INTEGER NOT NULL
+      );
+    `);
+    db.prepare(`INSERT INTO knowledge_source_items (item_id) VALUES (?)`).run('source-1');
+    db.prepare(`INSERT INTO memory_records (record_id, evidence_json, created_at) VALUES (?, ?, ?)`).run(
+      'memory-1',
+      JSON.stringify([{
+        sourceItemId: 'source-1',
+        relation: 'supports',
+        sessionKey: 'session-1',
+        turnId: 'turn-1',
+        toolCallId: 'tool-1',
+        observedAt: '2026-08-21T10:00:00.000Z',
+      }]),
+      1,
+    );
+    db.prepare(`INSERT INTO memory_evidence (
+      evidence_id, record_id, source_item_id, relation, created_at
+    ) VALUES (?, ?, ?, ?, ?)`).run('evidence-1', 'memory-1', 'source-1', 'supports', 1);
+    writeFileSync(
+      join(migrationsDir, '002_memory_evidence_single_source.sql'),
+      readFileSync(join(process.cwd(), 'src/storage/sqlite/migrations/113_memory_evidence_single_source.sql'), 'utf8'),
+    );
+    ensureSchemaMetaTable(db);
+    setSchemaVersion(db, 1);
+
+    expect(applyPendingMigrations(db, { migrationsDir, targetVersion: 2 })).toBe(2);
+    expect(db.prepare(`SELECT session_key, turn_id, tool_call_id, observed_at FROM memory_evidence`).get())
+      .toEqual({
+        session_key: 'session-1',
+        turn_id: 'turn-1',
+        tool_call_id: 'tool-1',
+        observed_at: Date.parse('2026-08-21T10:00:00.000Z'),
+      });
+    const columns = db.prepare(`PRAGMA table_info(memory_records)`).all() as Array<{ name: string }>;
+    expect(columns.map((column) => column.name)).not.toContain('evidence_json');
   });
 
   it('keeps only the Task work model in the current schema', () => {

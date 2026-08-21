@@ -11,9 +11,14 @@ import type {
   MemorySignal,
   MemoryStatus,
 } from '../../agent/memory/types.js';
-import { buildFts5SearchQuery, fts5RankToScore, memoryLexicalSimilarity } from './fts.js';
+import { buildFts5SearchQuery, fts5RankToScore, memoryLexicalSimilarity, memoryVectorSimilarity } from './fts.js';
 import { LOCAL_USER_ID } from '../../user-context/owner.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
+import {
+  listMemoryEvidence,
+  listMemoryEvidenceForRecords,
+  replaceMemoryEvidenceForRecord,
+} from './knowledge-repository.js';
 
 type MemoryRecordRow = {
   record_id: string;
@@ -30,7 +35,6 @@ type MemoryRecordRow = {
   tags_json: string;
   status: string;
   sensitivity: string;
-  evidence_json: string;
   canonical_key: string | null;
   explicitness: string;
   durability: string;
@@ -94,6 +98,10 @@ export interface ListMemoryRecordsOptions {
   visibleToProjectId?: string;
   /** Return only records that are not scoped to a project. */
   unscopedProjectOnly?: boolean;
+  /** Include global records plus records visible to this workspace. */
+  visibleToWorkspaceId?: string;
+  /** Return only records that are not scoped to a workspace. */
+  unscopedWorkspaceOnly?: boolean;
   kind?: MemoryKind;
   status?: MemoryStatus;
   canonicalKey?: string;
@@ -115,6 +123,8 @@ export interface SearchMemoryRecordsOptions {
   visibleToProjectId?: string;
   /** Return only records that are not scoped to a project. */
   unscopedProjectOnly?: boolean;
+  visibleToWorkspaceId?: string;
+  unscopedWorkspaceOnly?: boolean;
   providerId?: string;
   kinds?: MemoryKind[];
   statuses?: MemoryStatus[];
@@ -340,18 +350,6 @@ function parseStringArray(json: string): string[] {
   }
 }
 
-function parseEvidence(json: string): MemoryRecord['evidence'] {
-  try {
-    const parsed = JSON.parse(json) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((item): item is NonNullable<MemoryRecord['evidence']>[number] =>
-      Boolean(item) && typeof item === 'object',
-    );
-  } catch {
-    return [];
-  }
-}
-
 function memoryFeedbackRowToPayload(row: MemoryFeedbackRow): MemoryFeedback {
   return {
     feedbackId: row.feedback_id,
@@ -413,7 +411,7 @@ function parseSource(json: string): MemoryRecord['source'] {
   }
 }
 
-function rowToRecord(row: MemoryRecordRow): MemoryRecord {
+function rowToRecord(row: MemoryRecordRow, evidence: MemoryRecord['evidence'] = []): MemoryRecord {
   return {
     id: row.record_id,
     providerId: row.provider_id,
@@ -435,7 +433,7 @@ function rowToRecord(row: MemoryRecordRow): MemoryRecord {
     durability: row.durability as MemoryDurability,
     importance: row.importance,
     disclosurePolicy: row.disclosure_policy as MemoryDisclosurePolicy,
-    evidence: parseEvidence(row.evidence_json),
+    evidence,
     ...(timestampToIso(row.valid_from) ? { validFrom: timestampToIso(row.valid_from) } : {}),
     ...(timestampToIso(row.valid_to) ? { validTo: timestampToIso(row.valid_to) } : {}),
     ...(timestampToIso(row.review_after) ? { reviewAfter: timestampToIso(row.review_after) } : {}),
@@ -446,6 +444,11 @@ function rowToRecord(row: MemoryRecordRow): MemoryRecord {
     updatedAt: new Date(row.updated_at).toISOString(),
     tags: parseStringArray(row.tags_json),
   };
+}
+
+function rowsToRecords(rows: MemoryRecordRow[]): MemoryRecord[] {
+  const evidenceByRecord = listMemoryEvidenceForRecords(rows.map((row) => row.record_id));
+  return rows.map((row) => rowToRecord(row, evidenceByRecord.get(row.record_id) ?? []));
 }
 
 function upsertMemoryRecordFts(
@@ -484,10 +487,10 @@ export function upsertMemoryRecord(input: UpsertMemoryRecordInput): MemoryRecord
       `INSERT INTO memory_records (
         record_id, provider_id, kind, user_id, source_agent_id, workspace_id, session_key, project_id,
         content, source_json, confidence, tags_json, status, sensitivity,
-        evidence_json, canonical_key, explicitness, durability, importance,
+        canonical_key, explicitness, durability, importance,
         disclosure_policy, valid_from, valid_to, review_after, expires_at,
         supersedes_record_id, conflict_group_id, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(record_id) DO UPDATE SET
         provider_id = excluded.provider_id,
         kind = excluded.kind,
@@ -502,7 +505,6 @@ export function upsertMemoryRecord(input: UpsertMemoryRecordInput): MemoryRecord
         tags_json = excluded.tags_json,
         status = excluded.status,
         sensitivity = excluded.sensitivity,
-        evidence_json = excluded.evidence_json,
         canonical_key = excluded.canonical_key,
         explicitness = excluded.explicitness,
         durability = excluded.durability,
@@ -530,7 +532,6 @@ export function upsertMemoryRecord(input: UpsertMemoryRecordInput): MemoryRecord
       JSON.stringify(input.tags ?? []),
       status,
       sensitivity,
-      JSON.stringify(input.evidence ?? []),
       input.canonicalKey ?? null,
       explicitness,
       durability,
@@ -546,6 +547,9 @@ export function upsertMemoryRecord(input: UpsertMemoryRecordInput): MemoryRecord
       now,
     );
     upsertMemoryRecordFts(db, { ...input, id });
+    if (input.evidence) {
+      replaceMemoryEvidenceForRecord(db, id, input.evidence, now);
+    }
     if (input.supersedesRecordId && input.supersedesRecordId !== id) {
       const target = db.prepare(`SELECT 1 FROM memory_records WHERE record_id = ?`)
         .get(input.supersedesRecordId);
@@ -580,6 +584,8 @@ export function upsertMemoryRecord(input: UpsertMemoryRecordInput): MemoryRecord
     }
   });
 
+  const storedEvidence = input.evidence ?? listMemoryEvidence(id);
+
   return {
     id,
     providerId: input.providerId,
@@ -601,7 +607,7 @@ export function upsertMemoryRecord(input: UpsertMemoryRecordInput): MemoryRecord
     durability,
     importance,
     disclosurePolicy,
-    evidence: input.evidence ?? [],
+    evidence: storedEvidence,
     ...(validFrom != null ? { validFrom: new Date(validFrom).toISOString() } : {}),
     ...(validTo != null ? { validTo: new Date(validTo).toISOString() } : {}),
     ...(reviewAfter != null ? { reviewAfter: new Date(reviewAfter).toISOString() } : {}),
@@ -618,7 +624,7 @@ export function getMemoryRecord(recordId: string): MemoryRecord | null {
   const row = getSqliteDatabase()
     .prepare(`SELECT * FROM memory_records WHERE record_id = ?`)
     .get(recordId) as MemoryRecordRow | undefined;
-  return row ? rowToRecord(row) : null;
+  return row ? rowToRecord(row, listMemoryEvidence(recordId)) : null;
 }
 
 export function hasUnresolvedMemoryConflict(conflictGroupId: string): boolean {
@@ -650,6 +656,12 @@ export function listMemoryRecords(options: ListMemoryRecordsOptions = {}): Memor
   if (options.workspaceId) {
     where.push('workspace_id = ?');
     params.push(options.workspaceId);
+  }
+  if (options.visibleToWorkspaceId) {
+    where.push('(workspace_id IS NULL OR workspace_id = ?)');
+    params.push(options.visibleToWorkspaceId);
+  } else if (options.unscopedWorkspaceOnly) {
+    where.push('workspace_id IS NULL');
   }
   if (options.projectId) {
     where.push('project_id = ?');
@@ -689,7 +701,7 @@ export function listMemoryRecords(options: ListMemoryRecordsOptions = {}): Memor
        LIMIT ? OFFSET ?`,
     )
     .all(...params, limit, offset) as MemoryRecordRow[];
-  return rows.map(rowToRecord);
+  return rowsToRecords(rows);
 }
 
 export function searchMemoryRecords(options: SearchMemoryRecordsOptions): MemorySearchResult[] {
@@ -709,6 +721,12 @@ export function searchMemoryRecords(options: SearchMemoryRecordsOptions): Memory
   if (options.workspaceId) {
     filters.push('f.workspace_id = ?');
     params.push(options.workspaceId);
+  }
+  if (options.visibleToWorkspaceId) {
+    filters.push('(r.workspace_id IS NULL OR r.workspace_id = ?)');
+    params.push(options.visibleToWorkspaceId);
+  } else if (options.unscopedWorkspaceOnly) {
+    filters.push('r.workspace_id IS NULL');
   }
   if (options.projectId) {
     filters.push('r.project_id = ?');
@@ -753,8 +771,7 @@ export function searchMemoryRecords(options: SearchMemoryRecordsOptions): Memory
     )
     .all(...params, maxResults * 3) as MemoryRecordSearchRow[];
 
-  if (rows.length === 0) {
-    const fallbackRecords = listMemoryRecords({
+  const candidateRecords = listMemoryRecords({
       providerId: options.providerId,
       userId: options.userId,
       sourceAgentId: options.sourceAgentId,
@@ -764,39 +781,26 @@ export function searchMemoryRecords(options: SearchMemoryRecordsOptions): Memory
       unscopedSessionOnly: options.unscopedSessionOnly,
       visibleToProjectId: options.visibleToProjectId,
       unscopedProjectOnly: options.unscopedProjectOnly,
+      visibleToWorkspaceId: options.visibleToWorkspaceId,
+      unscopedWorkspaceOnly: options.unscopedWorkspaceOnly,
       limit: 500,
     }).filter((record) =>
       statuses.includes(record.status ?? 'active')
       && (!options.kinds?.length || options.kinds.includes(record.kind)),
     );
-    return fallbackRecords
-      .map((record) => ({
+  const byId = new Map<string, MemorySearchResult>();
+  const candidateById = new Map(candidateRecords.map((record) => [record.id, record]));
+  const missingRows = rows.filter((row) => !candidateById.has(row.record_id));
+  const missingEvidence = listMemoryEvidenceForRecords(missingRows.map((row) => row.record_id));
+  if (rows.length > 0) {
+    const bestRank = Math.min(...rows.map((row) => row.rank));
+    const worstRank = Math.max(...rows.map((row) => row.rank));
+    for (const row of rows) {
+      const record = candidateById.get(row.record_id)
+        ?? rowToRecord(row, missingEvidence.get(row.record_id) ?? []);
+      byId.set(record.id, {
         record,
-        score: memoryLexicalSimilarity(options.query, record.content),
-        snippet: record.content,
-        citation: {
-          providerId: record.providerId,
-          recordId: record.id,
-          path: record.source.path,
-          lineStart: record.source.lineStart,
-          lineEnd: record.source.lineEnd,
-          createdAt: record.createdAt,
-        },
-      }))
-      .filter((result) => result.score >= minScore)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, maxResults);
-  }
-
-  const bestRank = Math.min(...rows.map((row) => row.rank));
-  const worstRank = Math.max(...rows.map((row) => row.rank));
-  return rows
-    .map((row) => {
-      const record = rowToRecord(row);
-      const score = fts5RankToScore(row.rank, bestRank, worstRank);
-      return {
-        record,
-        score,
+        score: fts5RankToScore(row.rank, bestRank, worstRank) * 0.65,
         snippet: record.content,
         citation: {
           providerId: row.provider_id,
@@ -806,9 +810,33 @@ export function searchMemoryRecords(options: SearchMemoryRecordsOptions): Memory
           lineEnd: record.source.lineEnd,
           createdAt: record.createdAt,
         },
-      };
-    })
+      });
+    }
+  }
+  for (const record of candidateRecords) {
+    const vector = memoryVectorSimilarity(options.query, record.content);
+    const lexical = memoryLexicalSimilarity(options.query, record.content);
+    const existing = byId.get(record.id);
+    const score = existing
+      ? Math.min(1, existing.score + vector * 0.25 + lexical * 0.1)
+      : Math.max(vector, lexical);
+    byId.set(record.id, existing ? { ...existing, score } : {
+        record,
+        score,
+        snippet: record.content,
+        citation: {
+          providerId: record.providerId,
+          recordId: record.id,
+          path: record.source.path,
+          lineStart: record.source.lineStart,
+          lineEnd: record.source.lineEnd,
+          createdAt: record.createdAt,
+        },
+      });
+  }
+  return [...byId.values()]
     .filter((result) => result.score >= minScore)
+    .sort((left, right) => right.score - left.score)
     .slice(0, maxResults);
 }
 

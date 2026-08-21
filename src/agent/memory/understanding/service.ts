@@ -2,7 +2,6 @@ import { createHash, randomUUID } from 'node:crypto';
 
 import {
   appendMemoryTraceEvent,
-  attachMemoryEvidence,
   markMemoryRecordsConflicted,
   upsertKnowledgeSourceItems,
 } from '../../../storage/sqlite/index.js';
@@ -123,7 +122,29 @@ export function extractExplicitUnderstandingCandidates(userContent: string): Und
 
 export interface UserUnderstandingServiceOptions {
   write: (request: MemoryWriteRequest) => Promise<MemoryWriteResult>;
-  list: (canonicalKey: string) => Promise<MemoryRecord[]>;
+  list: (canonicalKey: string, scope: MemoryWriteRequest['scope']) => Promise<MemoryRecord[]>;
+  attachEvidence?: (recordId: string, evidence: MemoryEvidence) => void;
+}
+
+function scopeForCandidate(
+  candidate: UnderstandingCandidate,
+  context: { sessionKey?: string; workspaceId?: string; projectId?: string },
+): MemoryWriteRequest['scope'] {
+  const base = { userId: 'local-owner' };
+  if (candidate.durability === 'ephemeral') {
+    return { ...base, ...(context.sessionKey ? { sessionKey: context.sessionKey } : {}) };
+  }
+  if (candidate.kind === 'project_context') {
+    return {
+      ...base,
+      ...(context.workspaceId ? { workspaceId: context.workspaceId } : {}),
+      ...(context.projectId ? { projectId: context.projectId } : {}),
+    };
+  }
+  if (candidate.kind === 'workspace_fact' || candidate.kind === 'task_lesson') {
+    return { ...base, ...(context.workspaceId ? { workspaceId: context.workspaceId } : {}) };
+  }
+  return base;
 }
 
 export class UserUnderstandingService {
@@ -134,6 +155,8 @@ export class UserUnderstandingService {
     userContent: string;
     assistantContent: string;
     sessionKey?: string;
+    workspaceId?: string;
+    projectId?: string;
     correctionTargetRecordIds?: string[];
   }): Promise<UnderstandingReviewResult> {
     const candidates = extractExplicitUnderstandingCandidates(params.userContent);
@@ -158,6 +181,8 @@ export class UserUnderstandingService {
     const result = await this.applyCandidates(candidates, {
       agentId: params.agentId,
       sessionKey: params.sessionKey,
+      workspaceId: params.workspaceId,
+      projectId: params.projectId,
       sourceItemId,
       sourceText: params.userContent,
       reviewSource: 'turn',
@@ -171,6 +196,8 @@ export class UserUnderstandingService {
     context: {
       agentId?: string;
       sessionKey?: string;
+      workspaceId?: string;
+      projectId?: string;
       sourceItemId?: string;
       sourceItemIds?: string[];
       sourceText?: string;
@@ -207,7 +234,8 @@ export class UserUnderstandingService {
       const supersedesRecordId = correctionTargets.length === 1
         ? correctionTargets[0]
         : undefined;
-      const existing = await this.options.list(key);
+      const scope = scopeForCandidate(candidate, context);
+      const existing = await this.options.list(key, scope);
       const sourceItemIds = [...new Set([
         ...(context.sourceItemId ? [context.sourceItemId] : []),
         ...(context.sourceItemIds ?? []),
@@ -223,14 +251,8 @@ export class UserUnderstandingService {
       if (existing[0]) {
         deduplicated += 1;
         recordIds.push(existing[0].id);
-        for (const sourceItemId of sourceItemIds) {
-          attachMemoryEvidence({
-            recordId: existing[0].id,
-            sourceItemId,
-            relation: 'supports',
-            excerpt: evidenceText,
-            confidence: candidate.confidence,
-          });
+        for (const item of evidence) {
+          this.options.attachEvidence?.(existing[0].id, item);
         }
         continue;
       }
@@ -238,9 +260,8 @@ export class UserUnderstandingService {
         kind: candidate.kind,
         content,
         canonicalKey: key,
-        scope: context.agentId || context.sessionKey
-          ? { userId: 'local-owner', sessionKey: context.sessionKey }
-          : undefined,
+        scope,
+        sourceAgentId: context.agentId,
         tags: [...new Set(['user-understanding', ...(candidate.tags ?? [])])],
         source: context.source ?? { provider: 'user-understanding' },
         confidence: candidate.confidence,
@@ -265,15 +286,6 @@ export class UserUnderstandingService {
         if (write.record) {
           recordIds.push(write.record.id);
           createdRecords.push({ id: write.record.id, content: write.record.content, kind: write.record.kind });
-        }
-        for (const sourceItemId of write.record ? sourceItemIds : []) {
-          attachMemoryEvidence({
-            recordId: write.record.id,
-            sourceItemId,
-            relation: 'supports',
-            excerpt: evidenceText,
-            confidence: candidate.confidence,
-          });
         }
       } else {
         rejected += 1;
