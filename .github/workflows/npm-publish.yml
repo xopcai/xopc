@@ -1,5 +1,6 @@
 # Publish @xopcai/xopc to npm when a version tag is pushed.
-# Requires NPM_TOKEN secret with publish access.
+# Uses npm Trusted Publishing (GitHub Actions OIDC); configure the package's
+# trusted publisher for xopcai/xopc and this workflow filename on npmjs.com.
 
 name: npm Publish
 
@@ -60,5 +61,3 @@ jobs:
 
       - name: Publish to npm
         run: pnpm publish --no-git-checks --tag ${{ steps.npm-tag.outputs.tag }}
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
