@@ -9,7 +9,10 @@ import { SkillsPageDetailDialog } from '@/features/skills/skills-page-detail-dia
 import { SkillsPageInstallDialog } from '@/features/skills/skills-page-install-dialog';
 import { SkillsPageMarketplaceContent } from '@/features/skills/skills-page-marketplace-content';
 import type { CatalogStatusFilter, SourceFilter } from '@/features/skills/skills-page.constants';
-import { interpolate } from '@/features/skills/skills-page.utils';
+import {
+  displayableSkillDiagnostics,
+  interpolate,
+} from '@/features/skills/skills-page.utils';
 import type { SkillsPageVm } from '@/features/skills/use-skills-page';
 import { cn } from '@/lib/cn';
 import { usePageHeaderStore } from '@/stores/page-header-store';
@@ -42,6 +45,7 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
     aggregatedTabCounts,
     aggregatedProviderStatus,
   } = vm;
+  const visibleSkillDiagnostics = displayableSkillDiagnostics(skillDiagnostics);
 
   if (!hasToken) {
     return (
@@ -54,15 +58,9 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
     );
   }
 
-  const installedStats = {
-    total: builtinTabStats.total + userTabStats.total,
-    ready: builtinTabStats.enabled + userTabStats.enabled,
-    needsAttention:
-      builtinTabStats.total + userTabStats.total - builtinTabStats.enabled - userTabStats.enabled,
-    added: userTabStats.total,
-  };
+  const installedCount = builtinTabStats.total + userTabStats.total;
   const mainTabItems = [
-    { id: 'installed' as const, label: sk.tabInstalled, count: installedStats.total },
+    { id: 'installed' as const, label: sk.tabInstalled, count: installedCount },
     { id: 'marketplace' as const, label: sk.tabDiscover },
   ];
   const resultTabItems = (['all', ...registeredProviders.map((rp) => rp.id)] as string[]).map((id) => {
@@ -109,17 +107,17 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
             {error}
           </div>
         ) : null}
-        {skillDiagnostics.length > 0 ? (
+        {visibleSkillDiagnostics.length > 0 ? (
           <div
             className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200"
             role="status"
           >
             <div className="font-medium">
-              {interpolate(sk.diagnosticsTitle, { count: skillDiagnostics.length })}
+              {interpolate(sk.diagnosticsTitle, { count: visibleSkillDiagnostics.length })}
             </div>
             <p className="mt-1 text-xs opacity-80">{sk.diagnosticsHint}</p>
             <ul className="mt-1 space-y-1">
-              {skillDiagnostics.slice(0, 3).map((diag, index) => (
+              {visibleSkillDiagnostics.slice(0, 3).map((diag, index) => (
                 <li key={`${diag.path ?? diag.skillName ?? 'diagnostic'}-${index}`} className="truncate">
                   {diag.type}: {diag.message}
                 </li>
@@ -200,46 +198,6 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
                 </div>
               </div>
 
-              <div className="grid gap-2 sm:grid-cols-3" aria-label={sk.installedHeading}>
-                <button
-                  type="button"
-                  className={cn(
-                    'rounded-xl border border-edge-subtle bg-surface-base p-3 text-left transition-colors hover:bg-surface-hover',
-                    catalogStatusFilter === 'enabled' && 'border-emerald-500/40 bg-emerald-500/5',
-                  )}
-                  aria-pressed={catalogStatusFilter === 'enabled'}
-                  onClick={() => setCatalogStatusFilter((value) => value === 'enabled' ? 'all' : 'enabled')}
-                >
-                  <div className="text-xl font-semibold tabular-nums text-success">{installedStats.ready}</div>
-                  <div className="mt-1 text-xs text-fg-muted">{sk.summaryReady}</div>
-                </button>
-                <button
-                  type="button"
-                  className={cn(
-                    'rounded-xl border border-edge-subtle bg-surface-base p-3 text-left transition-colors hover:bg-surface-hover',
-                    catalogStatusFilter === 'disabled' && 'border-amber-500/50 bg-amber-500/5',
-                  )}
-                  aria-pressed={catalogStatusFilter === 'disabled'}
-                  onClick={() => setCatalogStatusFilter((value) => value === 'disabled' ? 'all' : 'disabled')}
-                >
-                  <div className={cn('text-xl font-semibold tabular-nums', installedStats.needsAttention > 0 ? 'text-warning' : 'text-fg')}>
-                    {installedStats.needsAttention}
-                  </div>
-                  <div className="mt-1 text-xs text-fg-muted">{sk.summaryNeedsAttention}</div>
-                </button>
-                <button
-                  type="button"
-                  className={cn(
-                    'rounded-xl border border-edge-subtle bg-surface-base p-3 text-left transition-colors hover:bg-surface-hover',
-                    sourceFilter === 'installed' && 'border-accent/40 bg-accent/5',
-                  )}
-                  aria-pressed={sourceFilter === 'installed'}
-                  onClick={() => setSourceFilter((value) => value === 'installed' ? 'all' : 'installed')}
-                >
-                  <div className="text-xl font-semibold tabular-nums text-fg">{installedStats.added}</div>
-                  <div className="mt-1 text-xs text-fg-muted">{sk.summaryAdded}</div>
-                </button>
-              </div>
             </>
           ) : (
             <>

@@ -414,7 +414,10 @@ function convertSearchResultToPackageItem(
   enrichment?: ClawHubSkillListItem,
 ): PackageListItem {
   return {
-    id: item.id ?? item.install?.reference ?? item.slug,
+    // Federated search ids (for example `clawhub:<opaque-id>`) identify the
+    // search row, but cannot be passed to ClawHub's download endpoint. Keep the
+    // installable owner/slug reference as the package id consumed by the UI.
+    id: item.install?.reference ?? item.slug,
     name: item.displayName || item.slug,
     type: 'skill',
     description: item.summary || '',
