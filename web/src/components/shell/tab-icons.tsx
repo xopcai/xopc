@@ -16,6 +16,7 @@ import {
   Plug,
   Share2,
   Shield,
+  Smartphone,
   Users,
 } from 'lucide-react';
 
@@ -41,6 +42,7 @@ const TAB_ICONS: Record<Tab, LucideIcon> = {
   settingsCapabilityPresets: Layers,
   settingsChannels: Plug,
   settingsGateway: Globe,
+  settingsDevices: Smartphone,
   settingsHeartbeat: Heart,
   settingsTunnel: Radio,
   settingsShares: Share2,

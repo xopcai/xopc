@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 export const ENDPOINT_PROTOCOL_VERSION = 1 as const;
 export const ENDPOINT_MAX_JSON_FRAME_BYTES = 256 * 1024;
+export const ENDPOINT_MAX_FILE_BYTES = 25 * 1024 * 1024;
 export const ENDPOINT_HELLO_TIMEOUT_MS = 5_000;
 export const ENDPOINT_HEARTBEAT_INTERVAL_MS = 15_000;
 export const ENDPOINT_HEARTBEAT_TIMEOUT_MS = 45_000;
