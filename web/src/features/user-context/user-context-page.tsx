@@ -1,3 +1,4 @@
+import * as Dialog from '@radix-ui/react-dialog';
 import {
   Brain,
   BookOpen,
@@ -18,7 +19,7 @@ import {
   Upload,
   X,
 } from 'lucide-react';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
@@ -31,6 +32,7 @@ import { TimePicker } from '@/components/ui/time-picker';
 import { setAccountLearningPaused, startAccountLearning } from '@/features/connectors/connectors-api';
 import { detectBrowserTimezone } from '@/features/settings/agents/agent-profile-markdown';
 import { UserProfileFieldsEditor } from '@/features/settings/user-profile-fields-editor';
+import { createTask } from '@/features/tasks/home-api';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { formatMediumDateTime } from '@/lib/date-formatters';
@@ -46,6 +48,9 @@ import {
   decideReferenceConsent,
   exportUserContext,
   fetchUnderstandingHistory,
+  applyInsightSuggestion,
+  completeInsightTaskDraft,
+  dismissInsightSuggestion,
   disconnectPersonalContextSource,
   forgetUnderstanding,
   importUserContext,
@@ -53,7 +58,6 @@ import {
   revokeReferenceConsent,
   rollbackPersonalPlaybookRule,
   setPersonalPlaybookEnabled,
-  updateInsightSuggestion,
   updateRelationshipSettings,
   updatePersonalPlaybookRule,
   updateUnderstanding,
@@ -82,6 +86,7 @@ import { userContextViewFromTab, type UserContextViewId } from './user-context-n
 
 type MemorySection = 'profile' | 'review';
 type UnderstandingKind = 'preference' | 'boundary' | 'relationship' | 'routine' | 'current_state' | 'long_term_goal';
+type InsightTaskDraft = { insight: InsightSuggestion; title: string; body: string };
 
 const FACET_ORDER: UserContextFacet[] = ['collaboration', 'priorities', 'boundaries', 'people', 'current', 'basics'];
 const OTHER_UNDERSTANDING_KINDS = ['relationship', 'routine', 'long_term_goal'] as const;
@@ -356,6 +361,8 @@ export function UserContextPage() {
   const [disconnecting, setDisconnecting] = useState(false);
   const [transferBusy, setTransferBusy] = useState<'export' | 'import' | null>(null);
   const [pendingMemorySection, setPendingMemorySection] = useState<MemorySection | null>(null);
+  const [insightTaskDraft, setInsightTaskDraft] = useState<InsightTaskDraft | null>(null);
+  const [creatingInsightTask, setCreatingInsightTask] = useState(false);
   const profileCardRef = useRef<HTMLElement | null>(null);
   const reviewSectionRef = useRef<HTMLDivElement | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
@@ -571,11 +578,82 @@ export function UserContextPage() {
     }
   }
 
-  async function runInsightAction(item: InsightSuggestion, action: 'apply' | 'dismiss') {
+  function openInsightTaskDraft(item: InsightSuggestion) {
+    const title = item.insight.split(/\r?\n/).find((line) => line.trim())?.trim().slice(0, 72) ?? item.insight.slice(0, 72);
+    setInsightTaskDraft({ insight: item, title, body: item.insight });
+  }
+
+  async function dismissInsight(item: InsightSuggestion) {
     setBusyId(`insight:${item.id}`);
-    try { const result = await updateInsightSuggestion(item.id, { action, uiLocale: language }); await mutate(); if (action === 'apply' && result.href) navigate(result.href); }
+    try { await dismissInsightSuggestion(item.id); await mutate(); }
     catch { showToast({ type: 'error', title: t.insightsTitle, message: t.saveError }); }
     finally { setBusyId(null); }
+  }
+
+  async function runInsightAction(item: InsightSuggestion) {
+    if (item.action === 'start_progress') {
+      openInsightTaskDraft(item);
+      return;
+    }
+    setBusyId(`insight:${item.id}`);
+    try {
+      const result = await applyInsightSuggestion(item.id);
+      await mutate();
+      if (result.href) navigate(result.href);
+    } catch {
+      showToast({ type: 'error', title: t.insightsTitle, message: t.saveError });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function submitInsightTaskDraft(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!insightTaskDraft || creatingInsightTask) return;
+    const title = insightTaskDraft.title.trim();
+    const body = insightTaskDraft.body.trim();
+    if (!title || !body) return;
+    setCreatingInsightTask(true);
+    try {
+      const created = await createTask({
+        idempotencyKey: `you-insight:${insightTaskDraft.insight.id}`,
+        title,
+        body,
+        delegateAgentId: insightTaskDraft.insight.delegateAgentId,
+        locale: language,
+        priority: 'normal',
+        contract: {
+          objective: body,
+          expectedOutputs: [],
+          acceptanceCriteria: [],
+          constraints: [],
+          approvalRequired: [],
+          assumptions: [],
+          risks: [],
+          acceptancePolicy: 'manual',
+          outputDestinations: [],
+        },
+        dependencies: [],
+        context: [{
+          targetKind: 'memory',
+          targetId: insightTaskDraft.insight.id,
+          role: 'input',
+          pinned: true,
+          retrievalPolicy: {},
+          metadata: { source: 'you-insight' },
+        }],
+        authorityGrants: [],
+        activation: { mode: 'capture', phase: 'backlog' },
+      });
+      await completeInsightTaskDraft(insightTaskDraft.insight.id, created.task.id);
+      setInsightTaskDraft(null);
+      await mutate();
+      navigate(`/tasks/${encodeURIComponent(created.task.id)}`);
+    } catch {
+      showToast({ type: 'error', title: t.insightDraftTitle, message: t.saveError });
+    } finally {
+      setCreatingInsightTask(false);
+    }
   }
 
   async function togglePlaybook(item: PersonalPlaybook) {
@@ -800,7 +878,7 @@ export function UserContextPage() {
             </div>
           </section>
 
-          {data.insights.length > 0 ? <section className="rounded-2xl border border-accent/15 bg-surface-base p-5"><div className="flex flex-wrap items-center gap-2"><h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><Lightbulb className="size-4 text-accent" aria-hidden />{t.insightsTitle}</h2><ContextBadge>{t.confirmedContextBadge}</ContextBadge></div><div className="mt-4 grid gap-3 lg:grid-cols-2">{data.insights.map((item) => <article key={item.id} className="rounded-xl border border-edge-subtle bg-surface-panel p-4"><p className="text-sm leading-6 text-fg">{item.insight}</p><p className="mt-2 text-xs text-fg-subtle">{item.evidenceCount > 1 ? replaceCount(t.insightEvidence, item.evidenceCount) : t.insightReason}</p><div className="mt-3 flex justify-end gap-2"><Button type="button" variant="ghost" className="h-8 px-2" disabled={busyId === `insight:${item.id}`} onClick={() => void runInsightAction(item, 'dismiss')}>{t.notNow}</Button><Button type="button" variant="primary" className="h-8 px-2" disabled={busyId === `insight:${item.id}`} onClick={() => void runInsightAction(item, 'apply')}>{t.insightActions[item.action]}</Button></div></article>)}</div></section> : null}
+          {data.insights.length > 0 ? <section className="rounded-2xl border border-accent/15 bg-surface-base p-5"><div className="flex flex-wrap items-center gap-2"><h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><Lightbulb className="size-4 text-accent" aria-hidden />{t.insightsTitle}</h2><ContextBadge>{t.confirmedContextBadge}</ContextBadge></div><div className="mt-4 grid gap-3 lg:grid-cols-2">{data.insights.map((item) => <article key={item.id} className="rounded-xl border border-edge-subtle bg-surface-panel p-4"><p className="text-sm leading-6 text-fg">{item.insight}</p><p className="mt-2 text-xs text-fg-subtle">{item.evidenceCount > 1 ? replaceCount(t.insightEvidence, item.evidenceCount) : t.insightReason}</p><div className="mt-3 flex justify-end gap-2"><Button type="button" variant="ghost" className="h-8 px-2" disabled={busyId === `insight:${item.id}`} onClick={() => void dismissInsight(item)}>{t.notNow}</Button><Button type="button" variant="primary" className="h-8 px-2" disabled={busyId === `insight:${item.id}`} onClick={() => void runInsightAction(item)}>{t.insightActions[item.action]}</Button></div></article>)}</div></section> : null}
 
           <div className="grid gap-4 lg:grid-cols-2">
             <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5">
@@ -950,6 +1028,58 @@ export function UserContextPage() {
           <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5"><h2 className="text-base font-semibold text-fg">{t.transferTitle}</h2><div className="mt-4 flex flex-wrap gap-2"><Button type="button" variant="secondary" disabled={transferBusy !== null} onClick={() => void downloadUserContext()}><Download className="size-4" aria-hidden />{transferBusy === 'export' ? t.exporting : t.exportAction}</Button><Button type="button" variant="secondary" disabled={transferBusy !== null} onClick={() => importInputRef.current?.click()}><Upload className="size-4" aria-hidden />{transferBusy === 'import' ? t.importing : t.importAction}</Button><input ref={importInputRef} type="file" accept="application/json,.json" className="sr-only" onChange={(event) => setPendingImportFile(event.target.files?.[0] ?? null)} /></div></section>
         </div>
       ) : null}
+
+      <Dialog.Root
+        open={insightTaskDraft !== null}
+        onOpenChange={(open) => { if (!open && !creatingInsightTask) setInsightTaskDraft(null); }}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-[90] flex h-[min(38rem,calc(100dvh-1.5rem))] w-[min(42rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float focus:outline-none">
+            <div className="flex shrink-0 items-start gap-4 border-b border-edge px-5 py-4">
+              <div className="min-w-0 flex-1">
+                <Dialog.Title className="text-base font-semibold text-fg">{t.insightDraftTitle}</Dialog.Title>
+                <Dialog.Description className="mt-1 text-sm leading-5 text-fg-muted">{t.insightDraftDescription}</Dialog.Description>
+              </div>
+              <Dialog.Close asChild>
+                <Button type="button" variant="ghost" className="-mr-2 -mt-1 size-8 shrink-0 rounded-lg p-0" disabled={creatingInsightTask} aria-label={t.close}>
+                  <X className="size-4" aria-hidden />
+                </Button>
+              </Dialog.Close>
+            </div>
+            <form onSubmit={submitInsightTaskDraft} className="flex min-h-0 flex-1 flex-col">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+                <label className="grid gap-2 text-sm font-medium text-fg">
+                  {t.insightTaskTitleLabel}
+                  <input
+                    className={inputClass}
+                    value={insightTaskDraft?.title ?? ''}
+                    maxLength={500}
+                    onChange={(event) => setInsightTaskDraft((current) => current ? { ...current, title: event.target.value } : null)}
+                    autoFocus
+                  />
+                </label>
+                <label className="grid gap-2 text-sm font-medium text-fg">
+                  {t.insightTaskBodyLabel}
+                  <textarea
+                    className={cn(inputClass, 'min-h-56 resize-none leading-6')}
+                    value={insightTaskDraft?.body ?? ''}
+                    maxLength={50_000}
+                    onChange={(event) => setInsightTaskDraft((current) => current ? { ...current, body: event.target.value } : null)}
+                  />
+                </label>
+                <p className="text-xs leading-5 text-fg-subtle">{t.insightTaskContextHint}</p>
+              </div>
+              <div className="flex shrink-0 justify-end gap-2 border-t border-edge px-5 py-4">
+                <Dialog.Close asChild><Button type="button" variant="ghost" disabled={creatingInsightTask}>{t.cancel}</Button></Dialog.Close>
+                <Button type="submit" variant="primary" disabled={creatingInsightTask || !insightTaskDraft?.title.trim() || !insightTaskDraft.body.trim()}>
+                  {creatingInsightTask ? t.insightCreatingDraft : t.insightCreateDraft}
+                </Button>
+              </div>
+            </form>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
 
       <ConfirmDialog open={forgetItem !== null} title={t.forgetTitle} description={t.forgetBody} confirmLabel={t.forget} cancelLabel={t.cancel} destructive onConfirm={() => void confirmForget()} onCancel={() => setForgetItem(null)} />
       <ConfirmDialog open={pendingTrustLevel === 'auto'} title={t.autoConfirmTitle} description={t.autoConfirmBody} confirmLabel={t.autoConfirmAction} cancelLabel={t.cancel} onConfirm={() => void selectTrustLevel('auto')} onCancel={() => setPendingTrustLevel(null)} />

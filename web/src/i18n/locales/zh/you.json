@@ -52,8 +52,15 @@
     "insightActions": {
       "make_repeatable": "让它变得可重复",
       "add_playbook": "加入我的协作剧本",
-      "start_progress": "开始推进"
+      "start_progress": "查看任务草稿"
     },
+    "insightDraftTitle": "检查任务草稿",
+    "insightDraftDescription": "确认标题和上下文后再保存。任务会进入待办，不会自动启动 Agent。",
+    "insightTaskTitleLabel": "任务标题",
+    "insightTaskBodyLabel": "任务上下文",
+    "insightTaskContextHint": "这条已确认的了解会作为固定上下文关联到任务，方便后续查看和执行。",
+    "insightCreateDraft": "保存任务草稿",
+    "insightCreatingDraft": "正在保存…",
     "notNow": "暂时不用",
     "playbooksTitle": "xopc 与你的协作方式",
     "affectsAgentsBadge": "影响 Agent 行为",
