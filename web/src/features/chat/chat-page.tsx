@@ -975,6 +975,7 @@ export function ChatPage() {
                     messages={msgSlice.items}
                     authToken={token ?? undefined}
                     sessionKey={session.decodedKey ?? session.sessionKey}
+                    projectId={scopedProject?.id}
                     streaming={stream.streaming}
                     progress={stream.progress}
                     reasoningLevel={session.reasoningLevel}

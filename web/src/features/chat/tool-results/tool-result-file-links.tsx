@@ -13,6 +13,7 @@ import {
   type FileReferenceScope,
   type ImportFileReferenceResult,
   type WorkspaceFileReference,
+  type WorkspaceEditorRequestOptions,
 } from '@/features/workspace/workspace-api';
 import { SETTINGS_SHELL_CONTENT_Z, SETTINGS_SHELL_OVERLAY_Z } from '@/lib/settings-shell-dialog-layer';
 import { messages } from '@/i18n/messages';
@@ -30,11 +31,13 @@ import { isImageMimeType, looksLikeAbsoluteFilePath } from './tool-result-file-p
 function InlineWorkspaceImageThumb({
   workspaceRel,
   sessionKey,
+  projectId,
   onOpen,
   className,
 }: {
   workspaceRel: string;
   sessionKey?: string | null;
+  projectId?: string | null;
   onOpen: () => void;
   className?: string;
 }) {
@@ -44,9 +47,10 @@ function InlineWorkspaceImageThumb({
     let cancelled = false;
     void (async () => {
       try {
-        const blob = await fetchWorkspaceFileBlob(workspaceRel, {
-          sessionKey: sessionKey?.trim() || undefined,
-        });
+        const options: WorkspaceEditorRequestOptions = projectId?.trim()
+          ? { projectId: projectId.trim() }
+          : { sessionKey: sessionKey?.trim() || undefined };
+        const blob = await fetchWorkspaceFileBlob(workspaceRel, options);
         if (cancelled) return;
         const u = URL.createObjectURL(blob);
         revoke = u;
@@ -59,7 +63,7 @@ function InlineWorkspaceImageThumb({
       cancelled = true;
       if (revoke) URL.revokeObjectURL(revoke);
     };
-  }, [workspaceRel, sessionKey]);
+  }, [workspaceRel, sessionKey, projectId]);
 
   if (!url) return null;
   return (
@@ -402,9 +406,11 @@ function ImportToWorkspaceDialog({
 export function ToolResultFileLinks({
   paths,
   sessionKey,
+  projectId,
 }: {
   paths: ExtractedFilePath[];
   sessionKey?: string | null;
+  projectId?: string | null;
 }) {
   const setPreview = useWorkspacePreviewStore((s) => s.setPath);
   const [refOverrides, setRefOverrides] = useState<Record<string, WorkspaceFileReference | null>>({});
@@ -413,6 +419,11 @@ export function ToolResultFileLinks({
     [paths],
   );
   const trimmedSessionKey = sessionKey?.trim() || undefined;
+  const trimmedProjectId = projectId?.trim() || undefined;
+  const requestOptions = useMemo<WorkspaceEditorRequestOptions>(
+    () => trimmedProjectId ? { projectId: trimmedProjectId } : { sessionKey: trimmedSessionKey },
+    [trimmedProjectId, trimmedSessionKey],
+  );
 
   const refsResource = useAsyncResource(
     async () => {
@@ -427,23 +438,23 @@ export function ToolResultFileLinks({
           // tool-result `/Users/.../acp-demo/index.html` that lives outside the workspace).
           let ref: WorkspaceFileReference | null = null;
           if (p.workspaceRelativePath) {
-            ref = await resolveWorkspaceFileReference(p.workspaceRelativePath, { sessionKey: trimmedSessionKey });
+            ref = await resolveWorkspaceFileReference(p.workspaceRelativePath, requestOptions);
             const exhausted = ref && (ref.scope === 'missing' || ref.scope === 'invalid');
             if (exhausted && hasRealAbs) {
-              const absRef = await resolveWorkspaceFileReference(p.absolutePath, { sessionKey: trimmedSessionKey });
+              const absRef = await resolveWorkspaceFileReference(p.absolutePath, requestOptions);
               if (absRef && absRef.scope !== 'missing' && absRef.scope !== 'invalid') {
                 ref = absRef;
               }
             }
           } else {
-            ref = await resolveWorkspaceFileReference(p.absolutePath, { sessionKey: trimmedSessionKey });
+            ref = await resolveWorkspaceFileReference(p.absolutePath, requestOptions);
           }
           next[p.absolutePath] = ref;
         }),
       );
       return next;
     },
-    [pathsKey, trimmedSessionKey],
+    [pathsKey, requestOptions],
     {
       enabled: paths.length > 0,
       initial: null,
@@ -491,7 +502,8 @@ export function ToolResultFileLinks({
                 key={p.absolutePath}
                 workspaceRel={rel}
                 sessionKey={sessionKey}
-                onOpen={() => setPreview(rel)}
+                projectId={projectId}
+                onOpen={() => setPreview(rel, null, projectId)}
               />
             );
           })}
@@ -505,7 +517,7 @@ export function ToolResultFileLinks({
               <button
                 key={p.absolutePath}
                 type="button"
-                onClick={() => setPreview(rel)}
+                onClick={() => setPreview(rel, null, projectId)}
                 className={cn(
                   'inline-flex max-w-full items-center gap-1.5 rounded-md bg-accent-soft/40 px-2 py-1 text-left text-xs text-accent-fg',
                   'max-w-xs transition-colors hover:bg-accent-soft/60',
@@ -548,7 +560,7 @@ export function ToolResultFileLinks({
                     errorCode: undefined,
                   } as WorkspaceFileReference,
                 }));
-                setPreview(result.workspaceRelativePath);
+                setPreview(result.workspaceRelativePath, null, projectId);
               }}
             />
           ))}

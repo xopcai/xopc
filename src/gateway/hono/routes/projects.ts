@@ -32,6 +32,7 @@ import {
   upsertMemoryRecord,
 } from '../../../storage/sqlite/index.js';
 import { createGatewayRouteLogger } from '../lib/route-logger.js';
+import { classifyFileReferenceFsError } from '../../file-reference-errors.js';
 import { parseActivityIncludeRelated, parseActivityQuery } from './activity.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { FILE_SEARCH_MAX_LIMIT, fuzzySearchWorkspaceFiles } from '../../workspace-file-search.js';
@@ -919,6 +920,7 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
       return c.json({ ok: false, error: { code: 'PROJECT_WORKSPACE_RESOLUTION_FAILED', message: resolved.error } }, resolved.status as 400);
     }
     let st: Awaited<ReturnType<typeof stat>> | null = null;
+    let statError: unknown = null;
     let absolutePath = resolved.absolutePath;
     try {
       absolutePath = await realpath(resolved.absolutePath);
@@ -929,11 +931,22 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
         }, 400);
       }
       st = await stat(absolutePath);
-    } catch {
-      st = null;
+    } catch (err) {
+      statError = err;
     }
     const displayName = path.basename(rawPath);
     if (!st) {
+      const failure = classifyFileReferenceFsError(statError);
+      if (failure.code !== 'FILE_NOT_FOUND') {
+        log.warn(
+          { err: statError, projectId: resolved.projectId, workspaceRoot: resolved.root, candidate: resolved.absolutePath, errorCode: failure.code },
+          `Project file reference access failed: ${failure.message}`,
+        );
+        return c.json(
+          { ok: false, error: { code: failure.code, message: failure.message } },
+          failure.status === 403 ? 403 : 500,
+        );
+      }
       return c.json({
         ok: true,
         payload: {
