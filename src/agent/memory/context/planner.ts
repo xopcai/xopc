@@ -125,6 +125,8 @@ export class UserContextPlanner {
     memoryManager: MemoryManager;
     agentId: string;
     sessionKey: string;
+    workspaceId: string;
+    taskId?: string;
     turnId: string;
     query: string;
     userMessage: AgentMessage;
@@ -147,7 +149,7 @@ export class UserContextPlanner {
     const maxResults = params.allocation?.maxResults ?? DEFAULT_MAX_RESULTS;
     const maxContextChars = params.allocation?.maxChars ?? DEFAULT_MAX_CONTEXT_CHARS;
     const started = Date.now();
-    const scope = { userId: 'local-owner', sessionKey: params.sessionKey };
+    const scope = { userId: 'local-owner', workspaceId: params.workspaceId, sessionKey: params.sessionKey };
     const selfSummary = isUserSelfSummaryQuery(query);
     const baselineKinds = selfSummary ? USER_CONTEXT_MEMORY_KINDS : BASELINE_KINDS;
     const [searchedResults, baselineLists] = await Promise.all([
@@ -169,7 +171,11 @@ export class UserContextPlanner {
       .flat()
       .filter((record) => !taskIds.has(record.id))
       .filter((record) => isUserContextRecord(record))
-      .filter((record) => selfSummary || record.kind === 'boundary' || record.explicitness === 'explicit' || record.importance >= 0.7)
+      .filter((record) => selfSummary
+        || record.kind === 'boundary'
+        || ((record.kind === 'preference' || record.kind === 'tool_preference')
+          ? !record.scope.workspaceId && !record.scope.projectId && !record.scope.sessionKey && record.explicitness === 'explicit'
+          : record.explicitness === 'explicit' || record.importance >= 0.7))
       .map((record) => ({
         record,
         score: record.kind === 'boundary' ? 0.7 : selfSummary ? 0.6 : 0.42,
@@ -261,11 +267,17 @@ export class UserContextPlanner {
             recordId: item.recordId,
             score: item.score,
             content: item.content,
-            metadata: { traceId, turnId: params.turnId, query },
+            metadata: {
+              traceId,
+              turnId: params.turnId,
+              query,
+              ...(params.taskId ? { taskId: params.taskId } : {}),
+            },
           },
           providerId: 'local',
           sourceAgentId: params.agentId,
           sessionKey: params.sessionKey,
+          workspaceId: params.workspaceId,
         });
       }
       appendMemoryTraceEvent({

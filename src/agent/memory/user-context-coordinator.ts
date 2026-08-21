@@ -20,6 +20,8 @@ export interface UserContextCoordinatorOptions {
   getConfig: () => Config | undefined;
   isEnabledForSession: (sessionKey: string) => boolean;
   getAgentIdForSession: (sessionKey: string) => string;
+  getWorkspaceIdForSession?: (sessionKey: string) => string;
+  getProjectIdForSession?: (sessionKey: string) => string | undefined;
   getMemoryManagerForSession: (sessionKey: string) => MemoryManager;
   getLastAssistantContent: (sessionKey: string) => string | null;
 }
@@ -99,11 +101,13 @@ export class UserContextCoordinator {
       memoryManager: this.options.getMemoryManagerForSession(sessionKey),
       agentId: this.options.getAgentIdForSession(sessionKey),
       sessionKey,
+      workspaceId: this.options.getWorkspaceIdForSession?.(sessionKey) ?? '',
       turnId,
       query,
       userMessage,
       excludedRecordIds,
       allocation: taskContext.allocation,
+      taskId: taskContext.taskId,
     });
     if (plan.traceId) {
       try {
@@ -128,6 +132,8 @@ export class UserContextCoordinator {
         {
           agentId: this.options.getAgentIdForSession(sessionKey),
           sessionId: sessionKey,
+          workspaceId: this.options.getWorkspaceIdForSession?.(sessionKey),
+          projectId: this.options.getProjectIdForSession?.(sessionKey),
           correctionTargetRecordIds,
         },
       );

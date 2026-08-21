@@ -59,7 +59,7 @@ describe('MemoryManager', () => {
       expect(write.record?.evidence?.[0]?.sourceText).toContain('omega checklist');
       expect(write.record?.source).toMatchObject({ provider: 'composio-gmail', sourceInstanceId: 'gmail-work' });
 
-      const listed = await mgr.list({ scope: { agentId: 'main', workspaceId: stateDir } });
+      const listed = await mgr.list({ scope: { workspaceId: stateDir, sessionKey: 'session-1' } });
       expect(listed.map((record) => record.id)).toContain(write.record?.id);
 
       const recalled = await mgr.search({
@@ -89,7 +89,7 @@ describe('MemoryManager', () => {
         { sessionId: 'session-2' },
       );
 
-      const listed = await mgr.list({ scope: { agentId: 'main', workspaceId: stateDir } });
+      const listed = await mgr.list({ scope: { workspaceId: stateDir, sessionKey: 'session-2' } });
       const candidate = listed.find((record) => record.content.includes('pnpm'));
       expect(candidate?.status).toBe('candidate');
       expect(candidate?.tags).toContain('user-understanding');
@@ -102,6 +102,39 @@ describe('MemoryManager', () => {
         scope: { agentId: 'main', workspaceId: stateDir },
       });
       expect(recalled).toHaveLength(0);
+    } finally {
+      closeXopcDatabase();
+      resetXopcDatabaseSingletonForTest();
+      rmSync(stateDir, { recursive: true, force: true });
+    }
+  });
+
+  it('uses immutable session context for background workspace candidates', async () => {
+    const stateDir = mkdtempSync(join(tmpdir(), 'xopc-memory-background-scope-'));
+    resetXopcDatabaseSingletonForTest();
+    openXopcDatabase({ path: join(stateDir, 'xopc.db') });
+    try {
+      const mgr = new MemoryManager();
+      mgr.addProvider(new BuiltinMemoryProvider());
+      await mgr.initializeAll('session-background', { workspace: stateDir, agentId: 'research' });
+
+      const result = await mgr.applyUnderstandingCandidates([{
+        kind: 'project_context',
+        content: 'This project releases from the main branch.',
+        confidence: 0.9,
+        importance: 0.8,
+        explicitness: 'inferred',
+        durability: 'durable',
+        sensitivity: 'normal',
+        disclosurePolicy: 'referenceable',
+      }], { sessionKey: 'session-background', reviewSource: 'background' });
+
+      const record = await mgr.read({
+        id: result.createdRecords[0]!.id,
+        scope: { userId: 'local-owner', workspaceId: stateDir },
+      });
+      expect(record?.record.scope).toMatchObject({ workspaceId: stateDir });
+      expect(record?.record.provenance.sourceAgentId).toBe('research');
     } finally {
       closeXopcDatabase();
       resetXopcDatabaseSingletonForTest();

@@ -61,3 +61,39 @@ export function memoryLexicalSimilarity(query: string, content: string): number 
   }
   return (2 * shared) / (queryFeatures.size + contentFeatures.size);
 }
+
+const VECTOR_SIZE = 128;
+
+function featureVector(raw: string): Float64Array {
+  const vector = new Float64Array(VECTOR_SIZE);
+  const normalized = raw.normalize('NFKC').toLocaleLowerCase();
+  const features = [
+    ...(normalized.match(/[\p{L}\p{N}_]+/gu) ?? []).map((term) => `w:${term}`),
+    ...[...normalized].map((char, index, chars) => chars.slice(index, index + 3).join(''))
+      .filter((value) => value.trim().length >= 2)
+      .map((value) => `c:${value}`),
+  ];
+  for (const feature of features) {
+    let hash = 2166136261;
+    for (const char of feature) hash = Math.imul(hash ^ char.codePointAt(0)!, 16777619);
+    const index = (hash >>> 0) % VECTOR_SIZE;
+    vector[index] += (hash & 1) === 0 ? 1 : -1;
+  }
+  return vector;
+}
+
+/** Local deterministic embedding used to complement FTS without network or model coupling. */
+export function memoryVectorSimilarity(query: string, content: string): number {
+  const left = featureVector(query);
+  const right = featureVector(content);
+  let dot = 0;
+  let leftNorm = 0;
+  let rightNorm = 0;
+  for (let index = 0; index < VECTOR_SIZE; index += 1) {
+    dot += left[index]! * right[index]!;
+    leftNorm += left[index]! ** 2;
+    rightNorm += right[index]! ** 2;
+  }
+  if (leftNorm === 0 || rightNorm === 0) return 0;
+  return Math.max(0, dot / Math.sqrt(leftNorm * rightNorm));
+}

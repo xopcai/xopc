@@ -7,6 +7,7 @@ import { getApiKeySync } from '../../providers/index.js';
 import { isDurableUnderstandingCandidate } from '../../user-context/understandingQuality.js';
 import { createExtensionAwareStreamFn } from '../../providers/extension-stream-bridge.js';
 import { createLogger } from '../../utils/logger.js';
+import { getSessionMetadata } from '../../storage/sqlite/index.js';
 
 import { extractTextContent } from '../context/workspace.js';
 import type { MemoryManager } from '../memory/manager.js';
@@ -136,9 +137,11 @@ async function runUnderstandingReview(params: RunBackgroundReviewParams): Promis
   }
   if (isAssistantTurnAborted(reviewAgent) || isAssistantTurnFailed(reviewAgent)) return;
   const candidates = parseUnderstandingCandidates(lastAssistantText(reviewAgent));
+  const projectId = getSessionMetadata(sessionKey)?.projectId;
   await memoryManager.applyUnderstandingCandidates(candidates, {
     agentId: settings.agentId,
     sessionKey,
+    ...(projectId ? { projectId } : {}),
     sourceText: 'Background review of the current session transcript',
     reviewSource: 'background',
   });

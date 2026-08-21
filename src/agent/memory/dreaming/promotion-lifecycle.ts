@@ -7,7 +7,7 @@ export interface RemInsightInput {
   agentId: string;
   workspaceId: string;
   memberKeys: string[];
-  representative: string;
+  summary: string;
   distinctPaths: string[];
   strength: number;
   observedAt: string;
@@ -23,7 +23,7 @@ export function remPatternKey(memberKeys: string[]): string {
 /** Persist a REM cluster as a stable, recallable derived insight. */
 export function activateRemInsight(input: RemInsightInput): MemoryRecord {
   const patternKey = remPatternKey(input.memberKeys);
-  const content = `Recurring context across ${input.distinctPaths.length} memory sources: ${input.representative}`;
+  const content = input.summary;
   return upsertMemoryRecord({
     id: `dreaming-rem:${input.agentId}:${patternKey}`,
     providerId: 'local',

@@ -97,6 +97,8 @@ describe('understanding correction attribution', () => {
       getConfig: () => undefined,
       isEnabledForSession: () => true,
       getAgentIdForSession: () => 'main',
+      getWorkspaceIdForSession: () => '/workspace/project',
+      getProjectIdForSession: () => 'project-1',
       getMemoryManagerForSession: () => memoryManager,
       getLastAssistantContent: () => null,
     });
@@ -126,7 +128,13 @@ describe('understanding correction attribution', () => {
     expect(captureTurnUnderstanding).toHaveBeenCalledWith(
       '你记错了我的偏好，我需要详细回答。',
       '',
-      { agentId: 'main', sessionId: sessionKey, correctionTargetRecordIds: ['preference-1'] },
+      {
+        agentId: 'main',
+        sessionId: sessionKey,
+        workspaceId: '/workspace/project',
+        projectId: 'project-1',
+        correctionTargetRecordIds: ['preference-1'],
+      },
     );
   });
 });

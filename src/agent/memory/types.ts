@@ -141,6 +141,10 @@ export interface MemoryWriteRequest {
   content: string;
   canonicalKey?: string;
   scope?: Partial<MemoryScope>;
+  /** Agent that produced this record. This is request data, never provider state. */
+  sourceAgentId?: string;
+  writeTarget?: 'userProfile' | 'agentProfile' | 'understanding' | 'workspace';
+  confirmed?: boolean;
   tags?: string[];
   source?: MemoryRecord['source'];
   confidence?: number;

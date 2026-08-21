@@ -60,7 +60,7 @@ import type { AutomationService } from '../automations/index.js';
 import type { SessionStore } from '../session/store.js';
 import type { NotesService } from '../notes/index.js';
 import type { ProjectService } from '../projects/index.js';
-import { getSessionConfig } from '../storage/sqlite/index.js';
+import { getSessionConfig, getSessionMetadata } from '../storage/sqlite/index.js';
 import { isValidSkillEnvVarName } from './skills/required-env-vars.js';
 import type { SessionContext } from './session/session-context.js';
 import type {
@@ -294,6 +294,8 @@ export class AgentManager implements AgentInstanceGateway {
       getConfig: () => this.config.config,
       isEnabledForSession: (sessionKey) => this.isUserContextEnabledForSession(sessionKey),
       getAgentIdForSession: (sk) => this.agents.get(sk)?.effectiveProfile.agentId ?? 'main',
+      getWorkspaceIdForSession: (sk) => this.getResolvedWorkspaceForSession(sk),
+      getProjectIdForSession: (sk) => getSessionMetadata(sk)?.projectId,
       getMemoryManagerForSession: (sk) => this.getMemoryManagerForSession(sk),
       getLastAssistantContent: (sk) => this.getLastAssistantContent(sk),
     });

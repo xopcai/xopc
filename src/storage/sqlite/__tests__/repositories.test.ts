@@ -13,6 +13,7 @@ import {
   deleteSessionRecord,
   ensureSessionRecord,
   getGlobalSessionStats,
+  getMemoryRecord,
   getSessionConfig,
   getSessionMetadata,
   listCompactionBoundaries,
@@ -460,6 +461,31 @@ describe('sqlite repositories', () => {
     const results = searchMemoryRecords({ query: 'zeta migration checklist', workspaceId: CWD, projectId: 'project-memory' });
     expect(results[0]?.record.id).toBe(candidate.id);
     expect(results[0]?.record.status).toBe('active');
+  });
+
+  it('rolls back record updates when evidence replacement fails', () => {
+    upsertMemoryRecord({
+      id: 'atomic-memory',
+      providerId: 'local',
+      kind: 'preference',
+      sourceAgentId: 'main',
+      content: 'Keep the original evidence.',
+      evidence: [{ sourceText: 'Original observation.' }],
+    });
+
+    expect(() => upsertMemoryRecord({
+      id: 'atomic-memory',
+      providerId: 'local',
+      kind: 'preference',
+      sourceAgentId: 'main',
+      content: 'This update must roll back.',
+      evidence: [{ sourceItemId: 'missing-source-item', sourceText: 'Invalid observation.' }],
+    })).toThrow();
+
+    expect(getMemoryRecord('atomic-memory')).toMatchObject({
+      content: 'Keep the original evidence.',
+      evidence: [expect.objectContaining({ sourceText: 'Original observation.' })],
+    });
   });
 
   it('limits session-scoped memory visibility to the active session', () => {

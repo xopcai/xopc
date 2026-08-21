@@ -1,5 +1,5 @@
 import { normalizeAgentId } from '../../routing/agent-session-key.js';
-import type { MemoryProvider, MemoryProviderInitOptions } from './provider.js';
+import type { MemoryProvider } from './provider.js';
 import {
   appendMemorySignal,
   deleteMemoryRecord,
@@ -35,24 +35,18 @@ export class BuiltinMemoryProvider implements MemoryProvider {
     update: true,
     delete: true,
     keywordSearch: true,
-    semanticSearch: false,
-    hybridSearch: false,
+    semanticSearch: true,
+    hybridSearch: true,
     citations: true,
     sync: false,
     local: true,
   };
 
-  private workspaceDir = '';
-  private agentId = 'main';
-
   isAvailable(): boolean {
     return true;
   }
 
-  async initialize(_sessionId: string, options?: MemoryProviderInitOptions): Promise<void> {
-    this.workspaceDir = options?.workspace ?? options?.agentWorkspace ?? this.workspaceDir;
-    this.agentId = normalizeAgentId(String(options?.agentId ?? this.agentId));
-  }
+  async initialize(): Promise<void> {}
 
   systemPromptBlock(): string {
     return '';
@@ -65,17 +59,38 @@ export class BuiltinMemoryProvider implements MemoryProvider {
   }
 
   async search(request: MemorySearchRequest): Promise<MemorySearchResult[]> {
-    return searchMemoryRecords({
+    const options = {
         query: request.query,
         visibleToSessionKey: request.scope?.sessionKey,
         unscopedSessionOnly: request.scope?.sessionKey == null,
         visibleToProjectId: request.scope?.projectId,
         unscopedProjectOnly: request.scope?.projectId == null,
+        visibleToWorkspaceId: request.scope?.workspaceId,
+        unscopedWorkspaceOnly: request.scope?.workspaceId == null,
         providerId: this.id,
         kinds: request.kinds,
         maxResults: request.maxResults,
         minScore: request.minScore,
-      })
+      };
+    const [active, shadow] = [
+      searchMemoryRecords(options),
+      searchMemoryRecords({ ...options, statuses: ['candidate'], maxResults: Math.min(5, request.maxResults ?? 5) }),
+    ];
+    for (const result of shadow) {
+      appendMemorySignal({
+        signal: {
+          source: 'search_recall',
+          recordId: result.record.id,
+          score: result.score,
+          metadata: { query: request.query, shadow: true },
+        },
+        providerId: this.id,
+        sourceAgentId: result.record.provenance.sourceAgentId,
+        workspaceId: request.scope?.workspaceId,
+        sessionKey: request.scope?.sessionKey,
+      });
+    }
+    return active
       .filter((result) => this.canReadRecord(result.record, request.scope))
       .sort((left, right) => right.score - left.score)
       .slice(0, request.maxResults ?? 5);
@@ -94,7 +109,8 @@ export class BuiltinMemoryProvider implements MemoryProvider {
   async list(request: MemoryListRequest): Promise<MemoryRecord[]> {
     const records = listMemoryRecords({
       providerId: this.id,
-      workspaceId: request.scope?.workspaceId ?? this.workspaceDir,
+      visibleToWorkspaceId: request.scope?.workspaceId,
+      unscopedWorkspaceOnly: request.scope?.workspaceId == null,
       visibleToSessionKey: request.scope?.sessionKey,
       visibleToProjectId: request.scope?.projectId,
       kind: request.kind,
@@ -109,8 +125,8 @@ export class BuiltinMemoryProvider implements MemoryProvider {
     const record = upsertMemoryRecord({
         providerId: this.id,
         kind: request.kind,
-        sourceAgentId: this.agentId,
-        workspaceId: request.scope?.workspaceId ?? this.workspaceDir,
+        sourceAgentId: normalizeAgentId(request.sourceAgentId ?? 'main'),
+        workspaceId: request.scope?.workspaceId,
         sessionKey: request.scope?.sessionKey,
         projectId: request.scope?.projectId,
         content: request.content,
@@ -194,8 +210,12 @@ export class BuiltinMemoryProvider implements MemoryProvider {
     appendMemorySignal({
       signal: event.signal,
       providerId: this.id,
-      sourceAgentId: this.agentId,
-      workspaceId: this.workspaceDir,
+      sourceAgentId: typeof event.signal.metadata?.agentId === 'string'
+        ? normalizeAgentId(event.signal.metadata.agentId)
+        : 'main',
+      workspaceId: typeof event.signal.metadata?.workspaceId === 'string'
+        ? event.signal.metadata.workspaceId
+        : undefined,
       sessionKey:
         typeof event.signal.metadata?.sessionKey === 'string'
           ? event.signal.metadata.sessionKey
@@ -208,6 +228,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
   private canReadRecord(record: MemoryRecord, scope: MemoryReadRequest['scope']): boolean {
     if (record.scope.sessionKey && record.scope.sessionKey !== scope?.sessionKey) return false;
     if (record.scope.projectId && record.scope.projectId !== scope?.projectId) return false;
+    if (record.scope.workspaceId && record.scope.workspaceId !== scope?.workspaceId) return false;
     return true;
   }
 }

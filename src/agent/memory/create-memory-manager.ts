@@ -4,6 +4,7 @@ import { isMemorySubsystemEnabled } from './memory-config.js';
 import { MemoryManager, type MemoryManagerOptions } from './manager.js';
 import type { MemoryKind } from './types.js';
 import { loadMemoryPluginProviders } from './plugin-discovery.js';
+import { buildMemoryRuntime } from '../../agent-runtime/memory-runtime.js';
 
 export type MemoryProviderId = 'none' | 'stub';
 
@@ -14,6 +15,7 @@ export function createMemoryManagerFromConfig(
   const enabled = isMemorySubsystemEnabled(config);
   const mgr = new MemoryManager({
     ...routing,
+    ...(config ? { memoryRuntime: buildMemoryRuntime(config.userContext) } : {}),
     ...(enabled ? { loadProviders: () => loadMemoryPluginProviders({ config }) } : {}),
   });
   mgr.addProvider(new BuiltinMemoryProvider());
