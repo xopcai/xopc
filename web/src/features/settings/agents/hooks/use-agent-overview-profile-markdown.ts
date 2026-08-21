@@ -12,6 +12,7 @@ import {
   saveAgentProfileFileContent,
 } from '@/features/settings/agents-admin-api';
 import { useAsyncResource } from '@/lib/use-async-resource';
+import { useAutosave } from '@/lib/use-autosave';
 
 import {
   type IdentityFields,
@@ -87,6 +88,8 @@ export function useAgentOverviewProfileMarkdown(options: {
   }
 
   const draft = localDraft ?? (loaded ? draftFromLoaded(loaded) : null);
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
 
   const dirty = useMemo(() => {
     if (!draft) return false;
@@ -157,23 +160,33 @@ export function useAgentOverviewProfileMarkdown(options: {
     patchDraft((prev) => ({ ...prev, soulPreviewMode: !prev.soulPreviewMode }));
   }, [patchDraft]);
 
-  const saveProfileMarkdown = useCallback(async () => {
+  const saveProfileMarkdown = useCallback(async (snapshot?: OverviewProfileDraft) => {
     const id = agentIdRef.current;
-    if (!id || !draft) return;
+    const savingDraft = snapshot ?? draftRef.current;
+    if (!id || !savingDraft) return;
     await Promise.all([
-      saveAgentProfileFileContent(id, 'IDENTITY.md', serializeIdentityMarkdown(draft.identity)),
-      saveAgentProfileFileContent(id, 'SOUL.md', draft.soulCustomContent),
+      saveAgentProfileFileContent(id, 'IDENTITY.md', serializeIdentityMarkdown(savingDraft.identity)),
+      saveAgentProfileFileContent(id, 'SOUL.md', savingDraft.soulCustomContent),
     ]);
-    dirtyRef.current = false;
     setLocalDraft((prev) => {
-      const current = prev ?? draft;
+      const current = prev ?? savingDraft;
+      dirtyRef.current =
+        JSON.stringify(current.identity) !== JSON.stringify(savingDraft.identity) ||
+        current.soulCustomContent !== savingDraft.soulCustomContent;
       return {
         ...current,
-        identityBaseline: JSON.stringify(current.identity),
-        soulBaseline: current.soulCustomContent,
+        identityBaseline: JSON.stringify(savingDraft.identity),
+        soulBaseline: savingDraft.soulCustomContent,
       };
     });
-  }, [draft]);
+  }, []);
+
+  const autosave = useAutosave({
+    value: draft,
+    dirty,
+    enabled,
+    onSave: saveProfileMarkdown,
+  });
 
   useLayoutEffect(() => {
     if (!saveRef) return;
@@ -187,6 +200,7 @@ export function useAgentOverviewProfileMarkdown(options: {
     profileMarkdownLoading,
     draft,
     dirty,
+    autosave,
     updateIdentity,
     handleSoulTemplateChange,
     handleSoulContentChange,

@@ -9,7 +9,6 @@ import { revealProviderApiKey } from '@/features/settings/providers-api';
 import { cn } from '@/lib/cn';
 import { isMaskedSecret } from '@/lib/is-masked-secret';
 import { SETTINGS_SHELL_CONTENT_Z, SETTINGS_SHELL_OVERLAY_Z } from '@/lib/settings-shell-dialog-layer';
-import { showToast } from '@/lib/toast';
 
 import {
   deleteCustomImageProvider,
@@ -119,6 +118,7 @@ export function CustomImageProviderDialog({
   const [busy, setBusy] = useState<'save' | 'test' | 'delete'>();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string>();
+  const [feedback, setFeedback] = useState<string>();
   const [preview, setPreview] = useState<string>();
 
   useEffect(() => {
@@ -138,6 +138,7 @@ export function CustomImageProviderDialog({
     setHeaders(Object.entries(provider?.headers ?? {}).map(([key, value]) => `${key}: ${value}`).join('\n'));
     setModels(image?.models.map(modelDraft) ?? [modelDraft()]);
     setDefaultModel(image?.defaultModel ?? '');
+    setFeedback(undefined);
     setBusy(undefined);
     setConfirmDelete(false);
     setError(undefined);
@@ -232,23 +233,23 @@ export function CustomImageProviderDialog({
   };
 
   const save = async () => {
-    setBusy('save'); setError(undefined);
+    setBusy('save'); setError(undefined); setFeedback(undefined);
     try {
       await persist();
       setApiKey(authType === 'none' ? '' : '••••••••••••');
-      showToast({ type: 'success', title: text.saved });
+      setFeedback(text.saved);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally { setBusy(undefined); }
   };
 
   const test = async () => {
-    setBusy('test'); setError(undefined); setPreview(undefined);
+    setBusy('test'); setError(undefined); setFeedback(undefined); setPreview(undefined);
     try {
       const built = await persist();
       const result = await testImageProvider(built.providerId, built.input.imageGeneration.defaultModel);
       setPreview(result.images[0]?.dataUrl);
-      showToast({ type: 'success', title: text.testReady });
+      setFeedback(text.testReady);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally { setBusy(undefined); }
@@ -261,7 +262,6 @@ export function CustomImageProviderDialog({
     try {
       await deleteCustomImageProvider(provider.providerId);
       await onSaved();
-      showToast({ type: 'success', title: text.deleted });
       onOpenChange(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -305,6 +305,7 @@ export function CustomImageProviderDialog({
             </section>
 
             {preview ? <section className="rounded-lg border border-edge bg-surface-base p-3"><div className="mb-2 flex items-center gap-2 text-sm font-medium text-fg"><Eye className="size-4" />{text.testReady}</div><img src={preview} alt="Generated provider test" className="max-h-72 rounded-lg object-contain" /></section> : null}
+            {feedback ? <p className="rounded-lg bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300" role="status">{feedback}</p> : null}
             {error ? <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-600 dark:text-red-400">{error}</p> : null}
           </div>
 

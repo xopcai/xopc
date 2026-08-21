@@ -1,14 +1,14 @@
-import { useCallback, useMemo, useReducer, useRef, useState } from 'react';
+import { useCallback, useMemo, useReducer, useRef } from 'react';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
+import { AutosaveStatus } from '@/components/ui/autosave-status';
 import { extractObjectDefaults } from '@/components/ui/schema-form-utils';
 import { SchemaForm, type JsonSchema } from '@/components/ui/schema-form';
 import { apiFetch, fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
-import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
-import { useLocaleStore } from '@/stores/locale-store';
+import { useAutosave } from '@/lib/use-autosave';
 
 type ExtensionDetailResponse = {
   manifest: { configSchema?: JsonSchema };
@@ -17,19 +17,13 @@ type ExtensionDetailResponse = {
 type ExtensionSettingsDraft = {
   localValues: Record<string, unknown>;
   isDirty: boolean;
-  saving: boolean;
-  saveError: string | null;
-  saveSuccess: boolean;
 };
 
 type ExtensionSettingsAction =
   | { type: 'sync'; value: Record<string, unknown> }
   | { type: 'change'; value: Record<string, unknown> }
-  | { type: 'discard'; value: Record<string, unknown> }
   | { type: 'reset-defaults'; value: Record<string, unknown> }
-  | { type: 'save-start' }
-  | { type: 'save-success'; value: Record<string, unknown> }
-  | { type: 'save-error'; message: string };
+  | { type: 'saved'; value: Record<string, unknown> };
 
 function extensionSettingsReducer(
   state: ExtensionSettingsDraft,
@@ -37,32 +31,19 @@ function extensionSettingsReducer(
 ): ExtensionSettingsDraft {
   switch (action.type) {
     case 'sync':
-      return { ...state, localValues: action.value, isDirty: false, saveError: null };
+      return { localValues: action.value, isDirty: false };
     case 'change':
-      return { ...state, localValues: action.value, isDirty: true, saveError: null, saveSuccess: false };
-    case 'discard':
-      return { ...state, localValues: action.value, isDirty: false, saveError: null };
+      return { localValues: action.value, isDirty: true };
     case 'reset-defaults':
-      return { ...state, localValues: action.value, isDirty: true, saveError: null, saveSuccess: false };
-    case 'save-start':
-      return { ...state, saving: true, saveError: null };
-    case 'save-success':
-      return {
-        ...state,
-        localValues: action.value,
-        isDirty: false,
-        saving: false,
-        saveSuccess: true,
-        saveError: null,
-      };
-    case 'save-error':
-      return { ...state, saving: false, saveError: action.message };
+      return { localValues: action.value, isDirty: true };
+    case 'saved':
+      return JSON.stringify(state.localValues) === JSON.stringify(action.value)
+        ? { localValues: state.localValues, isDirty: false }
+        : state;
   }
 }
 
 export function ExtensionAutoSettings({ extensionId }: { extensionId: string }) {
-  const language = useLocaleStore((s) => s.language);
-  const a = messages(language).agentSettings;
   const hasToken = useGatewayStore((s) => Boolean(s.token));
   const { data: detail, error: detailError } = useSWR(
     hasToken && extensionId ? `ext-detail-${extensionId}` : null,
@@ -91,13 +72,11 @@ export function ExtensionAutoSettings({ extensionId }: { extensionId: string }) 
   const [draft, dispatch] = useReducer(extensionSettingsReducer, {
     localValues: {},
     isDirty: false,
-    saving: false,
-    saveError: null,
-    saveSuccess: false,
   });
-  const [_saveSuccessFlash, setSaveSuccessFlash] = useState(false);
 
   const dirtyRef = useRef(false);
+  const valuesRef = useRef(draft.localValues);
+  valuesRef.current = draft.localValues;
   const trackedSavedRef = useRef(savedValues);
   if (!dirtyRef.current && trackedSavedRef.current !== savedValues) {
     trackedSavedRef.current = savedValues;
@@ -109,37 +88,28 @@ export function ExtensionAutoSettings({ extensionId }: { extensionId: string }) 
     dispatch({ type: 'change', value: next });
   }, []);
 
-  const handleDiscard = useCallback(() => {
-    dirtyRef.current = false;
-    dispatch({ type: 'discard', value: savedValues });
-  }, [savedValues]);
-
   const handleResetDefaults = useCallback(() => {
     if (!schema || schema.type !== 'object') return;
     dirtyRef.current = true;
     dispatch({ type: 'reset-defaults', value: { ...extractObjectDefaults(schema) } });
   }, [schema]);
 
-  const handleSave = useCallback(async () => {
+  const handleSave = useCallback(async (snapshot: Record<string, unknown>) => {
     if (!extensionId) return;
-    dispatch({ type: 'save-start' });
-    try {
-      const res = await apiFetch(
-        apiUrl(`/api/extensions/${encodeURIComponent(extensionId)}/config`),
-        { method: 'PATCH', body: JSON.stringify(draft.localValues) },
-      );
-      if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
-        throw new Error(body.error?.message ?? res.statusText);
-      }
-      await mutateConfig(draft.localValues, false);
-      dirtyRef.current = false;
-      dispatch({ type: 'save-success', value: draft.localValues });
-      setSaveSuccessFlash(true);
-    } catch (e) {
-      dispatch({ type: 'save-error', message: e instanceof Error ? e.message : String(e) });
+    const res = await apiFetch(
+      apiUrl(`/api/extensions/${encodeURIComponent(extensionId)}/config`),
+      { method: 'PATCH', body: JSON.stringify(snapshot) },
+    );
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+      throw new Error(body.error?.message ?? res.statusText);
     }
-  }, [draft.localValues, extensionId, mutateConfig]);
+    await mutateConfig(snapshot, false);
+    dispatch({ type: 'saved', value: snapshot });
+    dirtyRef.current = JSON.stringify(valuesRef.current) !== JSON.stringify(snapshot);
+  }, [extensionId, mutateConfig]);
+
+  const autosave = useAutosave({ value: draft.localValues, dirty: draft.isDirty, onSave: handleSave });
 
   if (!hasToken) {
     return null;
@@ -159,20 +129,11 @@ export function ExtensionAutoSettings({ extensionId }: { extensionId: string }) 
   }
 
   return (
-    <div className="mb-6 flex flex-col gap-3 rounded-xl bg-surface-base p-4">
+    <div className="mb-6 flex flex-col gap-3 rounded-xl bg-surface-base p-4" onBlurCapture={autosave.onBlurCapture}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-semibold text-fg">Configuration</h2>
         <div className="flex flex-wrap items-center gap-2">
-          {draft.saveError ? <span className="text-xs text-red-600 dark:text-red-400">{draft.saveError}</span> : null}
-          <Button
-            type="button"
-            variant="ghost"
-            className="h-8 text-xs"
-            disabled={!draft.isDirty}
-            onClick={handleDiscard}
-          >
-            {a.discard}
-          </Button>
+          <AutosaveStatus status={autosave.status} error={autosave.error} />
           <Button
             type="button"
             variant="ghost"
@@ -181,18 +142,9 @@ export function ExtensionAutoSettings({ extensionId }: { extensionId: string }) 
           >
             Reset to defaults
           </Button>
-          <Button
-            type="button"
-            variant="primary"
-            className="h-8 text-xs"
-            disabled={!draft.isDirty || draft.saving}
-            onClick={() => void handleSave()}
-          >
-            {draft.saving ? a.saving : a.save}
-          </Button>
         </div>
       </div>
-      <SchemaForm schema={schema} values={draft.localValues} onChange={onChange} disabled={draft.saving} />
+      <SchemaForm schema={schema} values={draft.localValues} onChange={onChange} />
     </div>
   );
 }

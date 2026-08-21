@@ -6,6 +6,7 @@ import { type CSSProperties, type FormEvent, type MouseEvent, type PointerEvent 
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
+import { AutosaveStatus } from '@/components/ui/autosave-status';
 import { PageTabs } from '@/components/ui/page-tabs';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { RefreshButton } from '@/components/ui/refresh-button';
@@ -63,6 +64,7 @@ import { cn } from '@/lib/cn';
 import { formatMediumDateTime } from '@/lib/date-formatters';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { safeInternalReturnPath, withReturnTo } from '@/lib/navigation-return';
+import { useAutosave } from '@/lib/use-autosave';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 
@@ -86,6 +88,24 @@ const PROJECT_FILES_PANEL_WIDTH_DEFAULT = 320;
 const PROJECT_FILES_PANEL_WIDTH_MIN = 220;
 const PROJECT_FILES_PANEL_WIDTH_MAX = 560;
 type WorkspaceMigrationMode = 'follow' | 'fixed';
+type ProjectSettingsDraft = {
+  name: string;
+  description: string;
+  status: ProjectStatus;
+  defaultAgentId: string;
+  workspaceRoot: string;
+  brief: string;
+  instructions: string;
+};
+
+function projectSettingsDirty(draft: ProjectSettingsDraft, project: Project): boolean {
+  return draft.name !== project.name
+    || draft.description !== (project.description ?? '')
+    || draft.status !== project.status
+    || draft.defaultAgentId !== (project.defaultAgentId ?? '')
+    || draft.brief !== (project.brief ?? '')
+    || draft.instructions !== (project.instructions ?? '');
+}
 
 function clampProjectFilesPanelWidth(px: number): number {
   return Math.min(PROJECT_FILES_PANEL_WIDTH_MAX, Math.max(PROJECT_FILES_PANEL_WIDTH_MIN, Math.round(px)));
@@ -671,7 +691,7 @@ export function ProjectDetailPage() {
   const [taskActionBusyId, setTaskActionBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [blockerDraft, setBlockerDraft] = useState({ title: '', reason: '' });
-  const [draft, setDraft] = useState({
+  const [draft, setDraft] = useState<ProjectSettingsDraft>({
     name: '',
     description: '',
     status: 'active' as ProjectStatus,
@@ -680,6 +700,7 @@ export function ProjectDetailPage() {
     brief: '',
     instructions: '',
   });
+  const draftRef = useRef(draft);
   const defaultTab: TabId = 'overview';
   const tab = noteId ? 'notes' : isProjectTabId(tabId) ? tabId : defaultTab;
   const backPath = useMemo(() => safeInternalReturnPath(
@@ -744,7 +765,7 @@ export function ProjectDetailPage() {
         const nextAgents = agentPayload?.agents ?? [];
         setAgents(nextAgents);
         setSelectedAgentId(projectResult.defaultAgentId ?? '');
-        setDraft({
+        const loadedDraft: ProjectSettingsDraft = {
           name: projectResult.name,
           description: projectResult.description ?? '',
           status: projectResult.status,
@@ -752,7 +773,9 @@ export function ProjectDetailPage() {
           workspaceRoot: projectResult.workspaceRoot ?? '',
           brief: projectResult.brief ?? '',
           instructions: projectResult.instructions ?? '',
-        });
+        };
+        draftRef.current = loadedDraft;
+        setDraft(loadedDraft);
       })
       .catch((err) => {
         if (!cancelled) setError(err instanceof Error ? err.message : String(err));
@@ -1072,34 +1095,35 @@ export function ProjectDetailPage() {
   function applyProjectUpdate(updated: Project) {
     setProject((current) => current ? { ...current, ...updated } : null);
     setSelectedAgentId(updated.defaultAgentId ?? '');
-    setDraft((current) => ({
-      ...current,
-      name: updated.name,
-      description: updated.description ?? '',
-      status: updated.status,
-      defaultAgentId: updated.defaultAgentId ?? '',
-      workspaceRoot: updated.workspaceRoot ?? '',
-      brief: updated.brief ?? '',
-      instructions: updated.instructions ?? '',
-    }));
     window.dispatchEvent(new CustomEvent('project-updated', { detail: { id: updated.id } }));
   }
 
-  async function submitProjectSave() {
-    if (!project || !draft.name.trim()) return;
-    setSaving(true);
+  async function submitProjectSave(snapshot: ProjectSettingsDraft = draftRef.current) {
+    if (!project || !projectSettingsDirty(snapshot, project)) return;
     setError(null);
     setMissingWorkspaceRoot(null);
     try {
       const updated = await updateProject(project.id, {
-        name: draft.name.trim(),
-        status: draft.status,
-        description: draft.description,
-        defaultAgentId: draft.defaultAgentId,
-        brief: draft.brief,
-        instructions: draft.instructions,
+        name: snapshot.name.trim(),
+        status: snapshot.status,
+        description: snapshot.description,
+        defaultAgentId: snapshot.defaultAgentId,
+        brief: snapshot.brief,
+        instructions: snapshot.instructions,
       });
       applyProjectUpdate(updated);
+      const currentDraft = draftRef.current;
+      const normalizedDraft: ProjectSettingsDraft = {
+        ...currentDraft,
+        name: currentDraft.name === snapshot.name ? updated.name : currentDraft.name,
+        description: currentDraft.description === snapshot.description ? (updated.description ?? '') : currentDraft.description,
+        status: currentDraft.status === snapshot.status ? updated.status : currentDraft.status,
+        defaultAgentId: currentDraft.defaultAgentId === snapshot.defaultAgentId ? (updated.defaultAgentId ?? '') : currentDraft.defaultAgentId,
+        brief: currentDraft.brief === snapshot.brief ? (updated.brief ?? '') : currentDraft.brief,
+        instructions: currentDraft.instructions === snapshot.instructions ? (updated.instructions ?? '') : currentDraft.instructions,
+      };
+      draftRef.current = normalizedDraft;
+      setDraft(normalizedDraft);
     } catch (err) {
       const missingRoot = getMissingWorkspaceRoot(err);
       if (missingRoot) {
@@ -1107,14 +1131,20 @@ export function ProjectDetailPage() {
       } else {
         setError(err instanceof Error ? err.message : String(err));
       }
-    } finally {
-      setSaving(false);
+      throw err;
     }
   }
 
   function saveProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    void submitProjectSave();
+    projectAutosave.flush();
+  }
+
+  function updateProjectDraft(patch: Partial<ProjectSettingsDraft>, saveImmediately = false) {
+    const next = { ...draftRef.current, ...patch };
+    draftRef.current = next;
+    setDraft(next);
+    if (saveImmediately) projectAutosave.saveNow(next);
   }
 
   const openWorkspaceMigration = useCallback(() => {
@@ -1138,6 +1168,7 @@ export function ProjectDetailPage() {
         ...(options.createWorkspaceRoot ? { createWorkspaceRoot: true } : {}),
       });
       applyProjectUpdate(updated);
+      updateProjectDraft({ workspaceRoot: updated.workspaceRoot ?? '' });
       setWorkspaceMigrationOpen(false);
       setMissingWorkspaceRoot(null);
     } catch (err) {
@@ -1174,6 +1205,7 @@ export function ProjectDetailPage() {
     try {
       const updated = project.status === 'archived' ? await restoreProject(project.id) : await archiveProject(project.id);
       applyProjectUpdate(updated);
+      updateProjectDraft({ status: updated.status });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -1325,6 +1357,14 @@ export function ProjectDetailPage() {
     }
   }, [projectId, tab]);
 
+  const projectConfigDirty = Boolean(project && projectSettingsDirty(draft, project));
+  const projectAutosave = useAutosave({
+    value: project ? draft : null,
+    dirty: projectConfigDirty,
+    onSave: submitProjectSave,
+    validate: (snapshot) => snapshot.name.trim() ? null : pm.settings.nameRequired,
+  });
+
   if (loading) {
     return <main className="w-full flex-1 p-3 text-sm text-fg-muted sm:px-5 sm:py-4 xl:px-6">{pm.loading}</main>;
   }
@@ -1372,7 +1412,7 @@ export function ProjectDetailPage() {
     })
     : sessions;
   const sessionsSearchMiss = sessions.length > 0 && visibleSessions.length === 0;
-  const selectedAgentLabel = agents.find((agent) => agent.id === draft.defaultAgentId)?.name || draft.defaultAgentId || pm.settings.globalDefaultAgent;
+  const selectedAgentLabel = agents.find((agent) => agent.id === project.defaultAgentId)?.name || project.defaultAgentId || pm.settings.globalDefaultAgent;
   const selectedDraftAgent = agents.find((agent) => agent.id === draft.defaultAgentId);
   const fixedProjectWorkspace = project.workspaceRoot?.trim() || '';
   const projectIsArchived = project.status === 'archived';
@@ -1428,6 +1468,7 @@ export function ProjectDetailPage() {
         >
           <Settings className="size-4" aria-hidden />
           {pm.tabs.settings}
+          {projectConfigDirty ? <span className="size-1.5 rounded-full bg-amber-500" aria-label={pm.settings.unsavedChanges} /> : null}
         </Button>
       </div>
 
@@ -2072,159 +2113,154 @@ export function ProjectDetailPage() {
       ) : null}
 
       {tab === 'settings' ? (
-        <form id="project-panel-settings" role="tabpanel" aria-labelledby="project-primary-tab-settings" onSubmit={saveProject} className="grid min-h-full content-start gap-4">
-          <section className="grid gap-3 rounded-lg bg-surface-panel p-4 shadow-surface">
-            <div className="flex min-w-0 items-start justify-between gap-3">
-              <div className="min-w-0">
-                <h2 className="text-sm font-semibold text-fg">{pm.settings.summaryTitle}</h2>
-                <p className="mt-1 text-sm leading-6 text-fg-muted">{pm.settings.summaryHint}</p>
-              </div>
-              <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-xs font-medium', statusTone(draft.status))}>
+        <form id="project-panel-settings" role="tabpanel" aria-labelledby="project-primary-tab-settings" onSubmit={saveProject} onBlurCapture={projectAutosave.onBlurCapture} className="grid min-h-full content-start gap-4 pb-1">
+          <section className="flex min-w-0 items-start justify-between gap-3 rounded-lg bg-surface-panel p-4 shadow-surface">
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-fg">{pm.settings.summaryTitle}</h2>
+              <p className="mt-1 max-w-3xl text-sm leading-6 text-fg-muted">{pm.settings.summaryHint}</p>
+            </div>
+            <div className="flex shrink-0 flex-col items-end gap-2">
+              <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium', statusTone(draft.status))}>
                 {pm.settings.statuses[draft.status]}
               </span>
-            </div>
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-              <SettingsMetaItem label={pm.settings.workspaceRoot} value={workspaceRootLabel} mono />
-              <SettingsMetaItem label={pm.settings.defaultAgent} value={selectedAgentLabel} />
-              <SettingsMetaItem label={pm.settings.pinState} value={projectIsPinned ? pm.settings.pinned : pm.settings.notPinned} />
-              <SettingsMetaItem label={pm.settings.createdAt} value={formatDate(project.createdAt) || pm.common.never} />
-              <SettingsMetaItem label={pm.settings.updatedAt} value={formatDate(project.updatedAt) || pm.common.never} />
+              <AutosaveStatus status={projectAutosave.status} error={projectAutosave.error} />
             </div>
           </section>
 
-          <section className="grid gap-4 rounded-lg bg-surface-panel p-4 shadow-surface">
-            <div>
-              <h2 className="text-sm font-semibold text-fg">{pm.settings.detailsTitle}</h2>
-            </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              <Field label={pm.settings.name}>
-                <input className={inputClass()} value={draft.name} onChange={(event) => setDraft((d) => ({ ...d, name: event.target.value }))} />
-              </Field>
-              <Field label={pm.settings.defaultAgent}>
-                <Select className={inputClass()} value={draft.defaultAgentId} onChange={(event) => setDraft((d) => ({ ...d, defaultAgentId: event.target.value }))}>
-                  <SelectOption value="">{pm.settings.globalDefaultAgent}</SelectOption>
-                  {agents.map((agent) => (
-                    <SelectOption key={agent.id} value={agent.id}>
-                      {agentListDisplayName(agent, msg.agentsSettings)}
-                    </SelectOption>
-                  ))}
-                </Select>
-              </Field>
-              <Field label={pm.settings.status}>
-                {projectIsArchived ? (
-                  <div className="grid min-h-10 content-center rounded-md border border-edge bg-surface-muted px-3 text-sm text-fg-muted">
-                    {pm.settings.statuses.archived}
-                  </div>
-                ) : (
-                  <Select className={inputClass()} value={draft.status === 'archived' ? 'active' : draft.status} onChange={(event) => setDraft((d) => ({ ...d, status: event.target.value as ProjectStatus }))}>
-                    <SelectOption value="active">{pm.settings.statuses.active}</SelectOption>
-                    <SelectOption value="paused">{pm.settings.statuses.paused}</SelectOption>
-                  </Select>
-                )}
-              </Field>
-              <Field label={pm.settings.description} hint={pm.settings.descriptionHint}>
-                <textarea className={inputClass(true)} value={draft.description} onChange={(event) => setDraft((d) => ({ ...d, description: event.target.value }))} />
-              </Field>
-            </div>
-          </section>
+          <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+            <div className="grid gap-4">
+              <section className="grid gap-4 rounded-lg bg-surface-panel p-4 shadow-surface">
+                <div>
+                  <h2 className="text-sm font-semibold text-fg">{pm.settings.detailsTitle}</h2>
+                  <p className="mt-1 text-sm leading-6 text-fg-muted">{pm.settings.detailsHint}</p>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Field label={pm.settings.name}>
+                    <input className={inputClass()} value={draft.name} onChange={(event) => updateProjectDraft({ name: event.target.value })} />
+                  </Field>
+                  <Field label={pm.settings.defaultAgent}>
+                    <Select className={inputClass()} value={draft.defaultAgentId} onChange={(event) => updateProjectDraft({ defaultAgentId: event.target.value }, true)}>
+                      <SelectOption value="">{pm.settings.globalDefaultAgent}</SelectOption>
+                      {agents.map((agent) => (
+                        <SelectOption key={agent.id} value={agent.id}>
+                          {agentListDisplayName(agent, msg.agentsSettings)}
+                        </SelectOption>
+                      ))}
+                    </Select>
+                  </Field>
+                  <Field label={pm.settings.status}>
+                    {projectIsArchived ? (
+                      <div className="grid min-h-10 content-center rounded-md border border-edge bg-surface-muted px-3 text-sm text-fg-muted">
+                        {pm.settings.statuses.archived}
+                      </div>
+                    ) : (
+                      <Select className={inputClass()} value={draft.status === 'archived' ? 'active' : draft.status} onChange={(event) => updateProjectDraft({ status: event.target.value as ProjectStatus }, true)}>
+                        <SelectOption value="active">{pm.settings.statuses.active}</SelectOption>
+                        <SelectOption value="paused">{pm.settings.statuses.paused}</SelectOption>
+                      </Select>
+                    )}
+                  </Field>
+                  <Field label={pm.settings.description} hint={pm.settings.descriptionHint}>
+                    <textarea className={inputClass(true)} value={draft.description} onChange={(event) => updateProjectDraft({ description: event.target.value })} />
+                  </Field>
+                </div>
+              </section>
 
-          <section className="grid gap-4 rounded-lg bg-surface-panel p-4 shadow-surface">
-            <div className="grid gap-2 text-sm">
-              <span className="font-medium text-fg-muted">{pm.settings.workspaceRoot}</span>
-              <div className="grid gap-3 rounded-md border border-edge bg-surface-base p-3">
-                <div className="flex min-w-0 flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-md bg-surface-muted px-2 py-0.5 text-xs font-medium text-fg-muted">
-                        {projectFollowsAgentWorkspace ? pm.settings.workspaceModeFollow : pm.settings.workspaceModeFixed}
-                      </span>
-                    </div>
-                    <div className="mt-2 break-all font-mono text-xs leading-5 text-fg" title={workspaceRootLabel}>
-                      {workspaceRootLabel}
-                    </div>
+              <section className="grid gap-4 rounded-lg bg-surface-panel p-4 shadow-surface">
+                <div>
+                  <h2 className="text-sm font-semibold text-fg">{pm.settings.projectGuidanceTitle}</h2>
+                  <p className="mt-1 text-sm leading-6 text-fg-muted">{pm.settings.projectGuidanceHint}</p>
+                </div>
+                <Field label={pm.settings.brief} hint={pm.settings.briefHint}>
+                  <textarea className={inputClass(true)} value={draft.brief} onChange={(event) => updateProjectDraft({ brief: event.target.value })} />
+                </Field>
+                <Field label={pm.settings.instructions} hint={pm.settings.instructionsHint}>
+                  <textarea className={inputClass(true)} value={draft.instructions} onChange={(event) => updateProjectDraft({ instructions: event.target.value })} />
+                </Field>
+              </section>
+            </div>
+
+            <aside className="grid gap-4 xl:sticky xl:top-0">
+              <section className="grid gap-3 rounded-lg bg-surface-panel p-4 shadow-surface">
+                <div>
+                  <h2 className="text-sm font-semibold text-fg">{pm.settings.workspaceRoot}</h2>
+                  <p className="mt-1 text-xs leading-5 text-fg-subtle">{pm.settings.workspaceIndependentHint}</p>
+                </div>
+                <div className="grid gap-3 rounded-md border border-edge bg-surface-base p-3">
+                  <span className="w-fit rounded-md bg-surface-muted px-2 py-0.5 text-xs font-medium text-fg-muted">
+                    {projectFollowsAgentWorkspace ? pm.settings.workspaceModeFollow : pm.settings.workspaceModeFixed}
+                  </span>
+                  <div className="break-all font-mono text-xs leading-5 text-fg" title={workspaceRootLabel}>
+                    {workspaceRootLabel}
                   </div>
-                  <div className="flex shrink-0 flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <Button type="button" variant="ghost" className="rounded-lg" onClick={() => void copyProjectWorkspacePath()}>
                       <Copy className="size-4" aria-hidden />
                       {pm.settings.copyWorkspacePath}
                     </Button>
                     <WorkspaceOpenLocationMenu workspacePath={workspaceRootLabel} />
-                    <Button type="button" variant="ghost" className="rounded-lg" onClick={openWorkspaceMigration}>
+                    <Button type="button" variant="secondary" className="rounded-lg" onClick={openWorkspaceMigration}>
                       <FolderPlus className="size-4" aria-hidden />
                       {pm.settings.migrateWorkspace}
                     </Button>
                   </div>
                 </div>
-                <p className="text-xs leading-5 text-fg-subtle">{pm.settings.workspaceMigrationHint}</p>
-              </div>
-            </div>
-          </section>
+              </section>
 
-          <section className="grid gap-4 rounded-lg bg-surface-panel p-4 shadow-surface">
-            <div>
-              <h2 className="text-sm font-semibold text-fg">{pm.settings.projectGuidanceTitle}</h2>
-              <p className="mt-1 text-sm leading-6 text-fg-muted">{pm.settings.projectGuidanceHint}</p>
-            </div>
-            <Field label={pm.settings.brief} hint={pm.settings.briefHint}>
-              <textarea className={inputClass(true)} value={draft.brief} onChange={(event) => setDraft((d) => ({ ...d, brief: event.target.value }))} />
-            </Field>
-            <Field label={pm.settings.instructions} hint={pm.settings.instructionsHint}>
-              <textarea className={inputClass(true)} value={draft.instructions} onChange={(event) => setDraft((d) => ({ ...d, instructions: event.target.value }))} />
-            </Field>
-          </section>
-
-          <section className="grid gap-4 rounded-lg bg-surface-panel p-4 shadow-surface">
-            <div>
-              <h2 className="text-sm font-semibold text-fg">{pm.settings.managementTitle}</h2>
-              <p className="mt-1 text-sm leading-6 text-fg-muted">{pm.settings.managementHint}</p>
-            </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="grid gap-3 rounded-md border border-edge bg-surface-base p-3">
-                <div className="min-w-0">
-                  <h3 className="text-sm font-medium text-fg">{projectIsPinned ? pm.settings.pinnedTitle : pm.settings.pinTitle}</h3>
-                  <p className="mt-1 text-xs leading-5 text-fg-subtle">{pm.settings.pinHint}</p>
+              <section className="grid gap-3 rounded-lg bg-surface-panel p-4 shadow-surface">
+                <h2 className="text-sm font-semibold text-fg">{pm.settings.currentProjectTitle}</h2>
+                <div className="grid gap-2">
+                  <SettingsMetaItem label={pm.settings.defaultAgent} value={selectedAgentLabel} />
+                  <SettingsMetaItem label={pm.settings.pinState} value={projectIsPinned ? pm.settings.pinned : pm.settings.notPinned} />
+                  <div className="grid grid-cols-2 gap-2">
+                    <SettingsMetaItem label={pm.settings.createdAt} value={formatDate(project.createdAt) || pm.common.never} />
+                    <SettingsMetaItem label={pm.settings.updatedAt} value={formatDate(project.updatedAt) || pm.common.never} />
+                  </div>
                 </div>
-                <Button type="button" variant="ghost" className="w-fit rounded-lg" disabled={projectActionBusy === 'pin'} onClick={() => void toggleProjectPin()}>
-                  {projectIsPinned ? <PinOff className="size-4" aria-hidden /> : <Pin className="size-4" aria-hidden />}
-                  {projectIsPinned ? pm.settings.unpinProject : pm.settings.pinProject}
-                </Button>
-              </div>
-              <div className="grid gap-3 rounded-md border border-edge bg-surface-base p-3">
-                <div className="min-w-0">
-                  <h3 className="text-sm font-medium text-fg">{projectIsArchived ? pm.settings.restoreTitle : pm.settings.archiveTitle}</h3>
-                  <p className="mt-1 text-xs leading-5 text-fg-subtle">{projectIsArchived ? pm.settings.restoreHint : pm.settings.archiveHint}</p>
+              </section>
+
+              <section className="grid gap-4 rounded-lg bg-surface-panel p-4 shadow-surface">
+                <div>
+                  <h2 className="text-sm font-semibold text-fg">{pm.settings.managementTitle}</h2>
+                  <p className="mt-1 text-xs leading-5 text-fg-subtle">{pm.settings.managementHint}</p>
                 </div>
-                <Button
-                  type="button"
-                  variant={projectIsArchived ? 'primary' : 'ghost'}
-                  className="w-fit rounded-lg"
-                  disabled={projectActionBusy === 'archive'}
-                  onClick={() => void toggleProjectArchive()}
-                >
-                  {projectIsArchived ? <RotateCcw className="size-4" aria-hidden /> : <Archive className="size-4" aria-hidden />}
-                  {projectIsArchived ? pm.settings.restoreProject : pm.settings.archiveProject}
+                <div className="grid gap-3">
+                  <div className="grid gap-3 rounded-md border border-edge bg-surface-base p-3">
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-medium text-fg">{projectIsPinned ? pm.settings.pinnedTitle : pm.settings.pinTitle}</h3>
+                      <p className="mt-1 text-xs leading-5 text-fg-subtle">{pm.settings.pinHint}</p>
+                    </div>
+                    <Button type="button" variant="ghost" className="w-fit rounded-lg" disabled={projectActionBusy === 'pin'} onClick={() => void toggleProjectPin()}>
+                      {projectIsPinned ? <PinOff className="size-4" aria-hidden /> : <Pin className="size-4" aria-hidden />}
+                      {projectIsPinned ? pm.settings.unpinProject : pm.settings.pinProject}
+                    </Button>
+                  </div>
+                  <div className="grid gap-3 rounded-md border border-edge bg-surface-base p-3">
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-medium text-fg">{projectIsArchived ? pm.settings.restoreTitle : pm.settings.archiveTitle}</h3>
+                      <p className="mt-1 text-xs leading-5 text-fg-subtle">{projectIsArchived ? pm.settings.restoreHint : pm.settings.archiveHint}</p>
+                    </div>
+                    <Button type="button" variant={projectIsArchived ? 'primary' : 'ghost'} className="w-fit rounded-lg" disabled={projectActionBusy === 'archive'} onClick={() => void toggleProjectArchive()}>
+                      {projectIsArchived ? <RotateCcw className="size-4" aria-hidden /> : <Archive className="size-4" aria-hidden />}
+                      {projectIsArchived ? pm.settings.restoreProject : pm.settings.archiveProject}
+                    </Button>
+                  </div>
+                </div>
+              </section>
+
+              <section className="grid gap-3 rounded-lg border border-red-500/20 bg-red-500/5 p-4">
+                <div>
+                  <h2 className="text-sm font-semibold text-red-700 dark:text-red-300">{pm.settings.dangerTitle}</h2>
+                  <p className="mt-1 text-xs leading-5 text-red-700/80 dark:text-red-200/80">{pm.settings.dangerHint}</p>
+                </div>
+                <Button type="button" variant="ghost" className="w-fit text-red-600 hover:bg-red-500/10 hover:text-red-700 focus-visible:ring-red-500 dark:text-red-400 dark:hover:text-red-300" onClick={() => setDeleteConfirmOpen(true)}>
+                  <Trash2 className="size-4" aria-hidden />
+                  {pm.settings.deleteConfirmAction}
                 </Button>
-              </div>
-            </div>
-          </section>
-
-          <section className="grid gap-3 rounded-lg border border-red-500/20 bg-red-500/5 p-4">
-            <div>
-              <h2 className="text-sm font-semibold text-red-700 dark:text-red-300">{pm.settings.dangerTitle}</h2>
-              <p className="mt-1 text-sm leading-6 text-red-700/80 dark:text-red-200/80">{pm.settings.dangerHint}</p>
-            </div>
-            <Button type="button" variant="ghost" className="w-fit text-red-600 hover:bg-red-500/10 hover:text-red-700 focus-visible:ring-red-500 dark:text-red-400 dark:hover:text-red-300" onClick={() => setDeleteConfirmOpen(true)}>
-              <Trash2 className="size-4" aria-hidden />
-              {pm.settings.deleteConfirmAction}
-            </Button>
-          </section>
-
-          <div className="flex flex-wrap justify-end gap-2 border-t border-edge pt-4">
-            <Button type="submit" variant="primary" disabled={saving || !draft.name.trim()}>
-              <Save className="size-4" aria-hidden />
-              {pm.common.save}
-            </Button>
+              </section>
+            </aside>
           </div>
+
         </form>
       ) : null}
       </div>

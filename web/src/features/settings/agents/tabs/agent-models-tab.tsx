@@ -3,13 +3,20 @@ import type { Dispatch, SetStateAction } from 'react';
 import { Link } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
+import { AutosaveStatus } from '@/components/ui/autosave-status';
 import type { GatewayAgentRow } from '@/features/settings/agents-admin-api';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 import type { AgentsSettingsMessages, ChatMessages } from '@/i18n/messages';
 import { capabilitySettingsPath } from '@/navigation';
+import { useAutosave } from '@/lib/use-autosave';
 
 import { TypedModelsEditor } from '../typed-models-editor';
-import { formatTypedModelsSummary, type AgentTypedModelRow } from '../typed-models-lib';
+import {
+  cleanTypedModelsForPatch,
+  formatTypedModelsSummary,
+  typedModelsRowsFromList,
+  type AgentTypedModelRow,
+} from '../typed-models-lib';
 
 export function AgentModelsTab(props: {
   a: AgentsSettingsMessages;
@@ -18,9 +25,8 @@ export function AgentModelsTab(props: {
   busy: boolean;
   modelRows: AgentTypedModelRow[];
   setModelRows: Dispatch<SetStateAction<AgentTypedModelRow[]>>;
-  onSaveModels: () => void;
+  onSaveModels: (rows: AgentTypedModelRow[]) => Promise<void>;
   onClearModelsEntry: () => void;
-  hideInlineSave?: boolean;
 }) {
   const {
     a,
@@ -31,8 +37,12 @@ export function AgentModelsTab(props: {
     setModelRows,
     onSaveModels,
     onClearModelsEntry,
-    hideInlineSave,
   } = props;
+
+  const baselineRows = typedModelsRowsFromList(selected.typedModels.effective);
+  const dirty = JSON.stringify(cleanTypedModelsForPatch(modelRows)?.roles ?? {}) !==
+    JSON.stringify(cleanTypedModelsForPatch(baselineRows)?.roles ?? {});
+  const autosave = useAutosave({ value: modelRows, dirty, onSave: onSaveModels });
 
   return (
     <SettingsFormSection className="flex min-h-0 flex-1 flex-col">
@@ -41,6 +51,7 @@ export function AgentModelsTab(props: {
         icon={Layers}
         title={a.modelsTabTitle}
         subtitle={a.modelsTabHint}
+        trailing={<AutosaveStatus status={autosave.status} error={autosave.error} />}
       />
       <div className="mb-4 grid gap-2 rounded-lg bg-surface-panel/60 p-3 text-xs text-fg-muted shadow-surface">
         <div>
@@ -85,11 +96,6 @@ export function AgentModelsTab(props: {
         />
       </div>
       <div className="mt-4 flex shrink-0 flex-wrap gap-2">
-        {!hideInlineSave ? (
-          <Button type="button" disabled={busy} onClick={() => void onSaveModels()}>
-            {a.modelsSave}
-          </Button>
-        ) : null}
         <Button type="button" variant="secondary" disabled={busy} onClick={() => void onClearModelsEntry()}>
           {a.modelsResetInherit}
         </Button>

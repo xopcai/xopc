@@ -38,7 +38,7 @@ export function AgentBrowserSettingsPage() {
   const agentSettings = messageBundle.agentSettings;
   const chatMessages = messageBundle.chat;
   const settingsMode = useSettingsModeStore((s) => s.mode);
-  const viewModel = useAgentDefaultsForm(agentSettings, { saveScope: 'browser' });
+  const viewModel = useAgentDefaultsForm(agentSettings);
   const [searchParams, setSearchParams] = useSearchParams();
   const visibleTabs = useMemo(
     () => visibleBrowserSettingsTabs(BROWSER_TABS, settingsMode),

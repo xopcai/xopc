@@ -3,11 +3,13 @@ import { useCallback, useMemo } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { AutosaveStatus } from '@/components/ui/autosave-status';
 import type { GatewayAgentRow } from '@/features/settings/agents-admin-api';
 import type { BuiltinToolUiGroupKey } from '@/features/settings/agents/builtin-tool-disable-groups';
 import { BuiltinToolsDisableUi } from '@/features/settings/agents/builtin-tools-disable-ui';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 import { messages, type AgentsSettingsMessages } from '@/i18n/messages';
+import { useAutosave } from '@/lib/use-autosave';
 import { useLocaleStore } from '@/stores/locale-store';
 
 export function AgentToolsTab(props: {
@@ -17,9 +19,8 @@ export function AgentToolsTab(props: {
   busy: boolean;
   toolEntryDisable: Set<string>;
   setToolEntryDisable: Dispatch<SetStateAction<Set<string>>>;
-  onSaveTools: () => void;
+  onSaveTools: (disabledIds: string[]) => Promise<void>;
   onClearToolsEntry: () => void;
-  hideInlineSave?: boolean;
 }) {
   const {
     a,
@@ -30,7 +31,6 @@ export function AgentToolsTab(props: {
     setToolEntryDisable,
     onSaveTools,
     onClearToolsEntry,
-    hideInlineSave,
   } = props;
 
   const language = useLocaleStore((s) => s.language);
@@ -47,11 +47,23 @@ export function AgentToolsTab(props: {
     [selected.tools.presetDenied],
   );
 
+  const disabledIds = useMemo(
+    () => [...toolEntryDisable].toSorted((x, y) => x.localeCompare(y)),
+    [toolEntryDisable],
+  );
+  const savedDisabledIds = useMemo(
+    () => [...selected.tools.entryDisable].toSorted((x, y) => x.localeCompare(y)),
+    [selected.tools.entryDisable],
+  );
+  const dirty = JSON.stringify(disabledIds) !== JSON.stringify(savedDisabledIds);
+  const autosave = useAutosave({ value: disabledIds, dirty, onSave: onSaveTools, delayMs: 350 });
+
   const onDisableSetChange = useCallback(
     (next: Set<string>) => {
       setToolEntryDisable(next);
+      autosave.saveNow([...next].toSorted((x, y) => x.localeCompare(y)));
     },
-    [setToolEntryDisable],
+    [setToolEntryDisable, autosave],
   );
 
   const groups = a.toolsDisableGroups;
@@ -70,6 +82,7 @@ export function AgentToolsTab(props: {
         icon={Wrench}
         title={a.toolsTitle}
         subtitle={a.toolsHint}
+        trailing={<AutosaveStatus status={autosave.status} error={autosave.error} />}
       />
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         <BuiltinToolsDisableUi
@@ -97,11 +110,6 @@ export function AgentToolsTab(props: {
         />
       </div>
       <div className="mt-4 flex shrink-0 flex-wrap gap-2">
-        {!hideInlineSave ? (
-          <Button type="button" disabled={busy} onClick={() => void onSaveTools()}>
-            {a.toolsSave}
-          </Button>
-        ) : null}
         <Button type="button" variant="secondary" disabled={busy} onClick={() => void onClearToolsEntry()}>
           {a.toolsClearEntry}
         </Button>

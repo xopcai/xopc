@@ -3,12 +3,14 @@ import type { Dispatch, SetStateAction } from 'react';
 import { Link } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
+import { AutosaveStatus } from '@/components/ui/autosave-status';
 import type { GatewayAgentRow, SkillCatalogRow } from '@/features/settings/agents-admin-api';
 import { SettingsListSkeleton } from '@/features/settings/settings-loading-skeleton';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 import { cn } from '@/lib/cn';
 import type { AgentsSettingsMessages } from '@/i18n/messages';
 import { pathForTab } from '@/navigation';
+import { useAutosave } from '@/lib/use-autosave';
 
 export function AgentSkillsTab(props: {
   a: AgentsSettingsMessages;
@@ -20,8 +22,7 @@ export function AgentSkillsTab(props: {
   setSkillsInherit: (v: boolean) => void;
   skillsPick: Set<string>;
   setSkillsPick: Dispatch<SetStateAction<Set<string>>>;
-  onSaveSkills: () => void;
-  hideInlineSave?: boolean;
+  onSaveSkills: (snapshot: { inherit: boolean; skills: string[] }) => Promise<void>;
 }) {
   const {
     a,
@@ -34,8 +35,18 @@ export function AgentSkillsTab(props: {
     skillsPick,
     setSkillsPick,
     onSaveSkills,
-    hideInlineSave,
   } = props;
+
+  const skills = [...skillsPick].toSorted((x, y) => x.localeCompare(y));
+  const savedSkills = [...(selected.skills.entry ?? [])].toSorted((x, y) => x.localeCompare(y));
+  const dirty = skillsInherit !== (selected.skills.entry === undefined) ||
+    (!skillsInherit && JSON.stringify(skills) !== JSON.stringify(savedSkills));
+  const autosave = useAutosave({
+    value: { inherit: skillsInherit, skills },
+    dirty,
+    onSave: onSaveSkills,
+    delayMs: 350,
+  });
 
   /** When inheriting preset policy, checkboxes reflect the effective visible-skill list. */
   function isCheckedInheritMode(id: string): boolean {
@@ -64,10 +75,14 @@ export function AgentSkillsTab(props: {
         icon={BookOpen}
         title={a.skillsTitle}
         subtitle={a.skillsHint}
+        trailing={<AutosaveStatus status={autosave.status} error={autosave.error} />}
       />
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="secondary" disabled={busy} onClick={() => setSkillsInherit(true)}>
+          <Button type="button" variant="secondary" disabled={busy} onClick={() => {
+            setSkillsInherit(true);
+            autosave.saveNow({ inherit: true, skills });
+          }}>
             {a.skillsInherit}
           </Button>
           <Button
@@ -76,7 +91,12 @@ export function AgentSkillsTab(props: {
             disabled={busy}
             onClick={() => {
               setSkillsInherit(false);
-              setSkillsPick(initialPickForCustomize());
+              const next = initialPickForCustomize();
+              setSkillsPick(next);
+              autosave.saveNow({
+                inherit: false,
+                skills: [...next].toSorted((x, y) => x.localeCompare(y)),
+              });
             }}
           >
             {a.skillsCustomize}
@@ -138,6 +158,10 @@ export function AgentSkillsTab(props: {
                           } else {
                             next.add(id);
                           }
+                          autosave.saveNow({
+                            inherit: false,
+                            skills: [...next].toSorted((x, y) => x.localeCompare(y)),
+                          });
                           return next;
                         });
                       }}
@@ -164,13 +188,6 @@ export function AgentSkillsTab(props: {
           </ul>
         </div>
       )}
-      {!hideInlineSave ? (
-        <div className="mt-4 shrink-0">
-          <Button type="button" disabled={busy} onClick={() => void onSaveSkills()}>
-            {a.skillsSave}
-          </Button>
-        </div>
-      ) : null}
     </SettingsFormSection>
   );
 }
