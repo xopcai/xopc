@@ -13,7 +13,7 @@ describe('extractSearchSources', () => {
       completedTool('memory_search', JSON.stringify({
         results: [{ title: 'Memory record', url: 'https://example.com/memory' }],
       })),
-      completedTool('codebase-memory-mcp__search_graph', JSON.stringify({
+      completedTool('grep', JSON.stringify({
         results: [{ title: 'Code node', url: 'https://example.com/code' }],
       })),
       completedTool('search-provider__web_search', JSON.stringify({

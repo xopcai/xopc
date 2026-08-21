@@ -199,16 +199,6 @@ export function spawnGatewayProcess(opts: GatewayProcessOptions): ChildProcess {
                 'bin',
                 process.platform === 'win32' ? 'rg.exe' : 'rg',
               ),
-              XOPC_CBM_BUNDLED_PATH: join(
-                process.resourcesPath,
-                'bin',
-                process.platform === 'win32' ? 'codebase-memory-mcp.exe' : 'codebase-memory-mcp',
-              ),
-              XOPC_CBM_BUNDLED_MANIFEST_PATH: join(
-                process.resourcesPath,
-                'bin',
-                'codebase-memory-mcp.manifest.json',
-              ),
               XOPC_VOICE_RUNTIME_ENTRY: resolvePackagedAppPath(
                 'out',
                 'server',

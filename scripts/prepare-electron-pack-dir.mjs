@@ -1,6 +1,5 @@
 /** Stage the minimal Electron app directory consumed by electron-builder. */
 import { spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -117,32 +116,6 @@ function stageRipgrepBinary(packDirPath, target) {
   cpSync(rgPath, join(destDir, rgName));
 }
 
-function stageCodebaseMemoryBinary(repoRoot, packDirPath, target) {
-  const cbmName = target.platform === 'win32' ? 'codebase-memory-mcp.exe' : 'codebase-memory-mcp';
-  const cbmPath = join(repoRoot, 'node_modules', 'codebase-memory-mcp', 'bin', cbmName);
-  if (!existsSync(cbmPath)) {
-    throw new Error(
-      `[prepare-electron-pack-dir] Missing codebase-memory-mcp binary for ${target.platform}/${target.arch}`,
-    );
-  }
-  const destDir = join(packDirPath, '_pack-resources', 'cbm');
-  mkdirSync(destDir, { recursive: true });
-  cpSync(cbmPath, join(destDir, cbmName));
-  const cbmPackage = JSON.parse(
-    readFileSync(join(repoRoot, 'node_modules', 'codebase-memory-mcp', 'package.json'), 'utf8'),
-  );
-  const binarySha256 = createHash('sha256').update(readFileSync(cbmPath)).digest('hex');
-  writeFileSync(
-    join(destDir, 'codebase-memory-mcp.manifest.json'),
-    `${JSON.stringify({
-      cbmVersion: cbmPackage.version,
-      platform: target.platform === 'win32' ? 'windows' : target.platform,
-      arch: target.arch === 'x64' ? 'amd64' : target.arch,
-      binarySha256,
-    }, null, 2)}\n`,
-  );
-}
-
 function stageVoiceHotkeyHelper(repoRoot, packDirPath, target) {
   const destDir = join(packDirPath, '_pack-resources', 'voice-hotkey');
   mkdirSync(destDir, { recursive: true });
@@ -178,7 +151,6 @@ export function prepareElectronPackDir(
   installRuntimeDeps(packDir, target);
   pruneElectronRuntimeDeps(packDir, target);
   stageRipgrepBinary(packDir, target);
-  stageCodebaseMemoryBinary(repoRoot, packDir, target);
   stageVoiceHotkeyHelper(repoRoot, packDir, target);
   rmSync(join(packDir, 'node_modules', '@vscode', `ripgrep-${target.platform}-${target.arch}`), {
     recursive: true,

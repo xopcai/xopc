@@ -26,7 +26,6 @@ For the full field reference, see [Configuration](../configuration.md). For task
 | `tools` | Web search and other tool-level settings |
 | `messages` / `tts` | Outbound message and text-to-speech settings |
 | `mcp` | Outbound MCP server registry |
-| `codeIntelligence` | Managed local repository indexing for selected agents; see [Code Intelligence](../code-intelligence.md) |
 | `extensions` | Extension enable/disable and extension-specific config |
 
 ## Agent configuration

@@ -27,7 +27,7 @@ const labels: ChatTimelineLabels = {
 };
 
 describe('chat timeline rail model', () => {
-  it('uses semantic search labels for memory, code, and web tools', () => {
+  it('uses semantic search labels for memory, workspace, and web tools', () => {
     const items: SessionTimelineItem[] = [
       {
         id: 'turn', kind: 'turn', role: 'user', title: 'Turn', preview: 'Search',
@@ -38,9 +38,9 @@ describe('chat timeline rail model', () => {
         depth: 1, turn: 1, rowNumber: 2, meta: { toolName: 'memory_search' },
       },
       {
-        id: 'code', kind: 'tool', role: 'assistant', title: 'search_graph',
+        id: 'code', kind: 'tool', role: 'assistant', title: 'grep',
         depth: 1, turn: 1, rowNumber: 3,
-        meta: { toolName: 'codebase-memory-mcp__search_graph' },
+        meta: { toolName: 'grep' },
       },
       {
         id: 'web', kind: 'tool', role: 'assistant', title: 'web_search',

@@ -115,8 +115,6 @@ describe('classifyTool', () => {
     expect(classifyTool('ls')).toBe('listDir');
     expect(classifyTool('read_file')).toBe('readFile');
     expect(classifyTool('fs.read_file')).toBe('readFile');
-    expect(classifyTool('codebase-memory-mcp.get_code_snippet')).toBe('readFile');
-    expect(classifyTool('codebase-memory-mcp__get_code_snippet')).toBe('readFile');
     expect(classifyTool('review.prepare_diff')).toBe('readFile');
     expect(classifyTool('apply_patch')).toBe('editFile');
     expect(classifyTool('write_file')).toBe('writeFile');
@@ -125,8 +123,7 @@ describe('classifyTool', () => {
     expect(classifyTool('web_search')).toBe('webSearch');
     expect(classifyTool('brave_search')).toBe('webSearch');
     expect(classifyTool('memory_search')).toBe('memorySearch');
-    expect(classifyTool('codebase-memory-mcp.search_graph')).toBe('codeSearch');
-    expect(classifyTool('codebase-memory-mcp__query_graph')).toBe('codeSearch');
+    expect(classifyTool('grep')).toBe('codeSearch');
     expect(classifyTool('review.model_judge')).toBe('other');
     expect(classifyTool('mystery_tool')).toBe('other');
   });
