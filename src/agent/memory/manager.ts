@@ -1,7 +1,8 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 
-import { appendMemoryTraceEvent, setKnowledgeSourceItemSynthesisStatus } from '../../storage/sqlite/index.js';
+import { appendMemoryTraceEvent, attachMemoryEvidence, setKnowledgeSourceItemSynthesisStatus } from '../../storage/sqlite/index.js';
 import { createLogger } from '../../utils/logger.js';
+import type { MemoryRuntime, MemorySource } from '../../agent-runtime/memory-runtime.js';
 import type { MemoryProvider, MemoryProviderInitOptions } from './provider.js';
 import { UserUnderstandingService } from './understanding/service.js';
 import type { UnderstandingCandidate } from './understanding/types.js';
@@ -35,6 +36,7 @@ export interface MemoryRoutingOptions {
 export interface MemoryManagerOptions extends MemoryRoutingOptions {
   loadProviders?: () => Promise<MemoryProvider[]>;
   writePolicy?: MemoryWritePolicy;
+  memoryRuntime?: MemoryRuntime;
 }
 
 export interface MemoryWritePolicy {
@@ -52,8 +54,9 @@ export class MemoryManager {
     Omit<MemoryWritePolicy, 'allowExternalWrites'>;
   private pluginProvidersLoaded = false;
   private readonly understanding: UserUnderstandingService;
+  private readonly memoryRuntime?: MemoryRuntime;
   private readonly lastTurnSourceItem = new Map<string, string>();
-  private understandingAgentId: string | undefined;
+  private readonly sessionContexts = new Map<string, MemoryProviderInitOptions>();
 
   constructor(options: MemoryManagerOptions = {}) {
     this.routing = {
@@ -62,6 +65,7 @@ export class MemoryManager {
       replicateTo: options.replicateTo ?? [],
     };
     this.loadProviders = options.loadProviders;
+    this.memoryRuntime = options.memoryRuntime;
     this.writePolicy = {
       allowExternalWrites: options.writePolicy?.allowExternalWrites ?? false,
       allowedProviderIds: options.writePolicy?.allowedProviderIds,
@@ -69,7 +73,20 @@ export class MemoryManager {
     };
     this.understanding = new UserUnderstandingService({
       write: (request) => this.write(request),
-      list: (canonicalKey) => this.list({ canonicalKey }),
+      list: (canonicalKey, scope) => this.list({ canonicalKey, scope }),
+      attachEvidence: (recordId, evidence) => {
+        attachMemoryEvidence({
+          recordId,
+          sourceItemId: evidence.sourceItemId,
+          relation: evidence.relation,
+          sessionKey: evidence.sessionKey,
+          turnId: evidence.turnId,
+          toolCallId: evidence.toolCallId,
+          excerpt: evidence.sourceText,
+          confidence: evidence.confidence,
+          observedAt: evidence.observedAt,
+        });
+      },
     });
   }
 
@@ -138,13 +155,16 @@ export class MemoryManager {
   async captureTurnUnderstanding(
     userContent: string,
     assistantContent: string,
-    options?: { agentId?: string; sessionId?: string; correctionTargetRecordIds?: string[] },
+    options?: { agentId?: string; sessionId?: string; workspaceId?: string; projectId?: string; correctionTargetRecordIds?: string[] },
   ): Promise<import('./understanding/types.js').UnderstandingReviewResult> {
+    const sessionContext = options?.sessionId ? this.sessionContexts.get(options.sessionId) : undefined;
     const review = await this.understanding.reviewTurn({
-      agentId: options?.agentId ?? this.understandingAgentId,
+      agentId: options?.agentId ?? sessionContext?.agentId,
       userContent,
       assistantContent,
       sessionKey: options?.sessionId,
+      workspaceId: options?.workspaceId ?? sessionContext?.workspace ?? sessionContext?.agentWorkspace,
+      projectId: options?.projectId,
       correctionTargetRecordIds: options?.correctionTargetRecordIds,
     });
     if (options?.sessionId && review.sourceItemId) {
@@ -189,6 +209,8 @@ export class MemoryManager {
     context: {
       agentId?: string;
       sessionKey?: string;
+      workspaceId?: string;
+      projectId?: string;
       sourceItemId?: string;
       sourceItemIds?: string[];
       sourceText?: string;
@@ -196,12 +218,14 @@ export class MemoryManager {
       reviewSource?: 'turn' | 'background';
     } = {},
   ): Promise<import('./understanding/types.js').UnderstandingReviewResult> {
+    const sessionContext = context.sessionKey ? this.sessionContexts.get(context.sessionKey) : undefined;
     const sourceItemId = context.sourceItemId ?? (context.sessionKey
       ? this.lastTurnSourceItem.get(context.sessionKey)
       : undefined);
     const result = await this.understanding.applyCandidates(candidates, {
       ...context,
-      agentId: context.agentId ?? this.understandingAgentId,
+      agentId: context.agentId ?? sessionContext?.agentId,
+      workspaceId: context.workspaceId ?? sessionContext?.workspace ?? sessionContext?.agentWorkspace,
       sourceItemId,
     });
     const sourceItemIds = [...new Set([...(sourceItemId ? [sourceItemId] : []), ...(context.sourceItemIds ?? [])])];
@@ -349,8 +373,12 @@ export class MemoryManager {
   }
 
   private canReadRecord(record: MemoryRecord, scope?: MemorySearchRequest['scope']): boolean {
-    void record;
-    void scope;
+    if (record.providerId !== 'local') return true;
+    if (this.memoryRuntime && !this.memoryRuntime.canRead(memorySourceForRecord(record))) return false;
+    if (record.scope.userId && scope?.userId && record.scope.userId !== scope.userId) return false;
+    if (record.scope.sessionKey && record.scope.sessionKey !== scope?.sessionKey) return false;
+    if (record.scope.projectId && record.scope.projectId !== scope?.projectId) return false;
+    if (record.scope.workspaceId && record.scope.workspaceId !== scope?.workspaceId) return false;
     return true;
   }
 
@@ -374,7 +402,7 @@ export class MemoryManager {
   }
 
   async initializeAll(sessionId: string, options?: MemoryProviderInitOptions): Promise<void> {
-    this.understandingAgentId = options?.agentId;
+    if (options) this.sessionContexts.set(sessionId, { ...options });
     await this.loadPluginProvidersOnce();
     for (const p of this.providers) {
       try {
@@ -406,6 +434,7 @@ export class MemoryManager {
 
   async shutdownAll(): Promise<void> {
     this.lastTurnSourceItem.clear();
+    this.sessionContexts.clear();
     for (const p of [...this.providers].reverse()) {
       try {
         await p.shutdown();
@@ -526,6 +555,17 @@ export class MemoryManager {
     }
     if (operation === 'write') {
       const writeRequest = request as MemoryWriteRequest;
+      if (provider.capabilities.local && this.memoryRuntime) {
+        const check = this.memoryRuntime.checkWrite({
+          target: writeRequest.writeTarget ?? writeTargetForRecord(writeRequest),
+          content: writeRequest.content,
+          source: writeRequest.source?.provider ?? 'memory',
+          confidence: writeRequest.confidence,
+          sensitive: writeRequest.sensitivity != null && writeRequest.sensitivity !== 'normal',
+        });
+        if (check.decision === 'deny') return false;
+        if (check.decision === 'confirm' && writeRequest.status !== 'candidate' && !writeRequest.confirmed) return false;
+      }
       if (writeRequest.status === 'candidate' && !provider.capabilities.local) {
         return false;
       }
@@ -564,6 +604,21 @@ export class MemoryManager {
       log.debug({ err, providerId, phase }, 'memory trace append failed');
     }
   }
+}
+
+function memorySourceForRecord(record: MemoryRecord): MemorySource {
+  if (record.tags?.includes('connected-source') || record.source.provider === 'connected-sources') return 'connectedSources';
+  if (record.source.provider === 'agent-profile') return 'agentProfile';
+  if (record.source.provider === 'user-profile') return 'userProfile';
+  if (record.scope.sessionKey) return 'session';
+  if (record.scope.workspaceId || record.kind === 'workspace_fact' || record.kind === 'project_context' || record.kind === 'task_lesson') return 'workspace';
+  return 'understanding';
+}
+
+function writeTargetForRecord(request: MemoryWriteRequest): 'understanding' | 'workspace' {
+  return request.scope?.workspaceId || request.kind === 'workspace_fact' || request.kind === 'project_context' || request.kind === 'task_lesson'
+    ? 'workspace'
+    : 'understanding';
 }
 
 function sanitizeTraceRequest(request: unknown): unknown {

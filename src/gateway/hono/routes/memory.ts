@@ -445,29 +445,47 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
       { name: 'available', ok: provider.isAvailable() },
     ];
     const started = Date.now();
+    const scope = { userId: LOCAL_USER_ID, workspaceId: workspace };
+    let recordId: string | undefined;
     try {
-      const write = await manager.write({
-        kind: 'workspace_fact',
-        content: `Smoke test record for ${providerId}: ${token}`,
-        scope: { userId: LOCAL_USER_ID },
-        tags: ['xopc-smoke-test'],
-      });
+      const write = provider.capabilities.write && provider.write
+        ? await provider.write({
+            kind: 'workspace_fact',
+            content: `Smoke test record for ${providerId}: ${token}`,
+            scope,
+            sourceAgentId: resolveDefaultAgentId(cfg),
+            tags: ['xopc-smoke-test'],
+          })
+        : { success: false, error: 'Provider does not support writes' };
       checks.push({ name: 'write', ok: write.success, message: write.error ?? write.message });
-      const results = await manager.search({ query: token, scope: { userId: LOCAL_USER_ID }, maxResults: 10 });
-      const ownResults = results.filter((result) => result.citation.providerId === providerId);
-      checks.push({ name: 'search', ok: ownResults.length > 0, resultCount: ownResults.length });
-      const recordId = ownResults[0]?.record.id ?? write.record?.id;
+      const results = provider.capabilities.search && provider.search
+        ? await provider.search({ query: token, scope, maxResults: 10 })
+        : [];
+      checks.push({ name: 'search', ok: results.length > 0, resultCount: results.length });
+      recordId = results[0]?.record.id ?? write.record?.id;
       if (recordId) {
-        const read = await manager.read({ id: recordId, scope: { userId: LOCAL_USER_ID } });
+        const read = provider.capabilities.read && provider.read
+          ? await provider.read({ id: recordId, scope })
+          : null;
         checks.push({ name: 'read', ok: Boolean(read), message: read ? undefined : 'Record was not readable' });
       } else {
         checks.push({ name: 'read', ok: false, message: 'No record id available' });
       }
-      manager.recordSignal({ source: 'search_recall', content: `Smoke signal for ${providerId}: ${token}` });
+      await provider.sync?.({
+        type: 'signal',
+        signal: {
+          source: 'search_recall',
+          content: `Smoke signal for ${providerId}: ${token}`,
+          metadata: { workspaceId: workspace, agentId: resolveDefaultAgentId(cfg) },
+        },
+      });
       checks.push({ name: 'sync', ok: true });
     } catch (err) {
       checks.push({ name: 'error', ok: false, message: err instanceof Error ? err.message : String(err) });
     } finally {
+      if (recordId && provider.capabilities.delete && provider.delete) {
+        await provider.delete({ id: recordId, scope }).catch(() => undefined);
+      }
       appendMemoryTraceEvent({
         phase: 'test',
         providerId,

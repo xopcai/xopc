@@ -1,5 +1,3 @@
-import { createHash } from 'node:crypto';
-
 import { createLogger } from '../../../utils/logger.js';
 import {
   appendMemorySignal,
@@ -12,6 +10,8 @@ import {
 import type { DreamingRemConfig } from './config.js';
 import { inferMemorySensitivity } from '../sensitivity.js';
 import { activateRemInsight } from './promotion-lifecycle.js';
+import { memoryVectorSimilarity } from '../../../storage/sqlite/fts.js';
+import { TaskContextRepository } from '../../../tasks/task-context-repository.js';
 
 const log = createLogger('Dreaming:REM');
 
@@ -50,22 +50,30 @@ export async function runRemPatterns(params: {
       signal.recordId && Date.parse(signal.createdAt) >= cutoff
       && (signal.source === 'search_recall' || signal.source === 'context_injection'),
     );
-    const groups = new Map<string, Set<string>>();
+    const groups: Array<{ queries: string[]; recordIds: Set<string>; taskIds: Set<string> }> = [];
     for (const signal of signals) {
       const query = String(signal.metadata.query ?? '').trim().toLocaleLowerCase();
       if (!query || !signal.recordId) continue;
-      const queryKey = createHash('sha256').update(query).digest('hex').slice(0, 24);
-      const group = groups.get(queryKey) ?? new Set<string>();
-      group.add(signal.recordId);
-      groups.set(queryKey, group);
+      let group = groups.find((candidate) =>
+        candidate.queries.some((known) => memoryVectorSimilarity(query, known) >= 0.45));
+      if (!group) {
+        group = { queries: [], recordIds: new Set(), taskIds: new Set() };
+        groups.push(group);
+      }
+      group.queries.push(query);
+      group.recordIds.add(signal.recordId);
+      if (typeof signal.metadata.taskId === 'string') group.taskIds.add(signal.metadata.taskId);
     }
-    const patterns = [...groups.values()]
-      .filter((recordIds) => recordIds.size >= 2)
-      .map((recordIds) => [...recordIds].map((id) => getMemoryRecord(id)).filter((record) => record != null))
-      .filter((records) => records.length >= 2)
-      .map((records) => ({
-        records,
-        strength: Math.min(1, records.length / 4),
+    const patterns = groups
+      .filter((group) => group.recordIds.size >= 2)
+      .map((group) => ({
+        ...group,
+        records: [...group.recordIds].map((id) => getMemoryRecord(id)).filter((record) => record != null),
+      }))
+      .filter((group) => group.records.length >= 2)
+      .map((group) => ({
+        ...group,
+        strength: Math.min(1, group.records.length / 4 + Math.min(0.25, (new Set(group.queries).size - 1) * 0.1)),
       }))
       .filter((pattern) => pattern.strength >= cfg.minPatternStrength)
       .sort((left, right) => right.strength - left.strength)
@@ -93,7 +101,7 @@ export async function runRemPatterns(params: {
           agentId: params.agentId,
           workspaceId: params.workspaceDir,
           memberKeys: pattern.records.map((record) => record.id),
-          representative: pattern.records[0]!.content,
+          summary: `Recurring relationship: ${pattern.records.slice(0, 3).map((record) => record.content).join(' · ')}`,
           distinctPaths: pattern.records.map((record) => record.id),
           strength: pattern.strength,
           observedAt: now.toISOString(),
@@ -105,6 +113,18 @@ export async function runRemPatterns(params: {
           signal: { source: 'dreaming', recordId: record.id, score: pattern.strength, content: record.content, metadata: { phase: 'rem' } },
           providerId: 'local', sourceAgentId: params.agentId, workspaceId: params.workspaceDir,
         });
+        const taskContext = new TaskContextRepository();
+        for (const taskId of pattern.taskIds) {
+          taskContext.add({
+            taskId,
+            targetKind: 'memory',
+            targetId: record.id,
+            role: 'reference',
+            title: 'Recurring memory pattern',
+            metadata: { source: 'dreaming-rem', memberRecordIds: pattern.records.map((item) => item.id) },
+            createdBy: { kind: 'system' },
+          });
+        }
         written += 1;
       }
     }
