@@ -132,6 +132,9 @@ export const MessageBubble = memo(function MessageBubble({
       viewSteps_one: m.chat.viewSteps_one,
       viewSteps_other: m.chat.viewSteps_other,
       searchedWeb: m.chat.stepSearchedWeb,
+      searchedMemory: m.chat.stepSearchedMemory,
+      searchedCode: m.chat.stepSearchedCode,
+      searched: m.chat.stepSearched,
       readFile: m.chat.stepReadFile,
       stepDetails: m.chat.stepDetails,
       runCommand: m.chat.stepRunCommand,
@@ -149,6 +152,7 @@ export const MessageBubble = memo(function MessageBubble({
       rawThinking: m.chat.rawThinking,
       toolRunning: m.chat.toolRunning,
       toolError: m.chat.toolError,
+      memoryActivity: m.chat.memoryActivity,
     }),
     [
       m.chat.thoughts,
@@ -156,6 +160,9 @@ export const MessageBubble = memo(function MessageBubble({
       m.chat.viewSteps_one,
       m.chat.viewSteps_other,
       m.chat.stepSearchedWeb,
+      m.chat.stepSearchedMemory,
+      m.chat.stepSearchedCode,
+      m.chat.stepSearched,
       m.chat.stepReadFile,
       m.chat.stepDetails,
       m.chat.stepRunCommand,
@@ -173,6 +180,7 @@ export const MessageBubble = memo(function MessageBubble({
       m.chat.rawThinking,
       m.chat.toolRunning,
       m.chat.toolError,
+      m.chat.memoryActivity,
     ],
   );
 

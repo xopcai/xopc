@@ -6,9 +6,11 @@ import type { MemoryRecord } from '../types.js';
 function record(overrides: Partial<MemoryRecord> = {}): MemoryRecord {
   return {
     id: 'memory-1',
+    providerId: 'local',
     kind: 'preference',
     status: 'active',
-    scope: { agentId: 'main' },
+    scope: { userId: 'local-owner' },
+    provenance: { sourceAgentId: 'main' },
     content: 'Prefer concise answers.',
     source: { provider: 'local' },
     confidence: 0.95,

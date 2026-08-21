@@ -36,6 +36,11 @@ const CONTEXTUAL_USER_KINDS = new Set<MemoryKind>([
   'task_lesson',
 ]);
 
+export const USER_CONTEXT_MEMORY_KINDS: readonly MemoryKind[] = [
+  ...ALWAYS_PERSONAL_KINDS,
+  ...CONTEXTUAL_USER_KINDS,
+];
+
 export function isUserContextRecord(record: MemoryRecord): boolean {
   if (ALWAYS_PERSONAL_KINDS.has(record.kind)) return true;
   return CONTEXTUAL_USER_KINDS.has(record.kind) && record.tags?.includes('user-understanding') === true;

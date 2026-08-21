@@ -14,6 +14,7 @@ import {
   listNoteRecords,
   getNoteRecord,
   deleteNoteRecord,
+  getMemoryRecord,
 } from '../index.js';
 
 describe('sqlite notes and memory repositories', () => {
@@ -86,6 +87,24 @@ describe('sqlite notes and memory repositories', () => {
 
     expect(hits.map((hit) => hit.record.id)).toEqual(['memory-strong', 'memory-weak']);
     expect(hits[0].score).toBeGreaterThan(hits[1].score);
+  });
+
+  it('keeps storage provider identity separate from source provenance', () => {
+    const written = upsertMemoryRecord({
+      id: 'provider-identity',
+      providerId: 'local',
+      kind: 'preference',
+      sourceAgentId: 'main',
+      content: 'Prefer designs with fewer moving parts.',
+      source: { provider: 'personal-context' },
+    });
+
+    expect(written.providerId).toBe('local');
+    expect(written.source.provider).toBe('personal-context');
+    expect(getMemoryRecord(written.id)).toMatchObject({
+      providerId: 'local',
+      source: { provider: 'personal-context' },
+    });
   });
 
   it('falls back to bounded lexical similarity for Chinese reformulations', () => {

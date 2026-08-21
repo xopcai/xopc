@@ -8,3 +8,4 @@ export * from './project-operating.js';
 export * from './sessions.js';
 export * from './welcome-suggestions.js';
 export * from './home.js';
+export * from './tool-activity.js';

@@ -69,6 +69,8 @@ export interface MemoryCitation {
 
 export interface MemoryRecord {
   id: string;
+  /** Memory provider that owns storage and retrieval for this record. */
+  providerId: string;
   kind: MemoryKind;
   status?: MemoryStatus;
   canonicalKey?: string;

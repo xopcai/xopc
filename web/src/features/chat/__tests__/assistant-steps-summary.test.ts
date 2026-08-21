@@ -12,8 +12,14 @@ import type {
 import type { ThinkingContent, ToolUseContent } from '@/features/chat/messages/messages.types';
 
 const doneZh: StepsClusterDoneLabels = {
-  search_one: '搜索了网页',
-  search_other: '搜索了 {{count}} 次网页',
+  webSearch_one: '搜索了网页',
+  webSearch_other: '搜索了 {{count}} 次网页',
+  memorySearch_one: '查找了记忆',
+  memorySearch_other: '查找了 {{count}} 次记忆',
+  codeSearch_one: '检索了代码库',
+  codeSearch_other: '检索了 {{count}} 次代码库',
+  search_one: '搜索了信息',
+  search_other: '搜索了 {{count}} 次信息',
   readFile_one: '读了 1 个文件',
   readFile_other: '读了 {{count}} 个文件',
   editFile_one: '改了 1 个文件',
@@ -34,7 +40,10 @@ const doneZh: StepsClusterDoneLabels = {
 
 const ingZh: StepsClusterIngLabels = {
   thinking: '正在思考…',
-  search: '正在搜索网页…',
+  webSearch: '正在搜索网页…',
+  memorySearch: '正在查找记忆…',
+  codeSearch: '正在检索代码库…',
+  search: '正在搜索信息…',
   readFile: '正在阅读文件…',
   editFile: '正在修改文件…',
   writeFile: '正在保存文件…',

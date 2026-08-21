@@ -416,6 +416,7 @@ function parseSource(json: string): MemoryRecord['source'] {
 function rowToRecord(row: MemoryRecordRow): MemoryRecord {
   return {
     id: row.record_id,
+    providerId: row.provider_id,
     kind: row.kind as MemoryKind,
     status: row.status as MemoryStatus,
     ...(row.canonical_key ? { canonicalKey: row.canonical_key } : {}),
@@ -581,6 +582,7 @@ export function upsertMemoryRecord(input: UpsertMemoryRecordInput): MemoryRecord
 
   return {
     id,
+    providerId: input.providerId,
     kind: input.kind,
     status,
     ...(input.canonicalKey ? { canonicalKey: input.canonicalKey } : {}),
@@ -773,7 +775,7 @@ export function searchMemoryRecords(options: SearchMemoryRecordsOptions): Memory
         score: memoryLexicalSimilarity(options.query, record.content),
         snippet: record.content,
         citation: {
-          providerId: record.source.provider ?? options.providerId ?? 'local',
+          providerId: record.providerId,
           recordId: record.id,
           path: record.source.path,
           lineStart: record.source.lineStart,

@@ -17,6 +17,7 @@ function record(patch: Partial<MemoryRecord> = {}): MemoryRecord {
   const now = new Date().toISOString();
   return {
     id: 'memory-1',
+    providerId: 'local',
     kind: 'preference',
     status: 'active',
     scope: { userId: 'local-owner' },

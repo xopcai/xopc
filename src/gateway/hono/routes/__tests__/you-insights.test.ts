@@ -6,9 +6,11 @@ import { buildInsightSuggestions, buildPersonalPlaybooks, buildRoutineAutomation
 function record(patch: Partial<MemoryRecord> = {}): MemoryRecord {
   return {
     id: 'memory-1',
+    providerId: 'local',
     kind: 'routine',
     status: 'active',
-    scope: { agentId: 'main' },
+    scope: { userId: 'local-owner' },
+    provenance: { sourceAgentId: 'main' },
     content: 'Every Friday I prepare a concise progress update.',
     source: { provider: 'local' },
     confidence: 0.9,

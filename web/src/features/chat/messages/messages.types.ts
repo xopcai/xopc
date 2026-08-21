@@ -1,3 +1,5 @@
+import type { ToolActivity } from '@xopcai/gateway-contract';
+
 /** Canonical chat message model for the web UI (gateway chat + embedded agent chat). */
 
 export type TextContent = {
@@ -21,6 +23,7 @@ export type ToolUseContent = {
    */
   toolCallId?: string;
   name: string;
+  activity?: ToolActivity;
   input?: unknown;
   status: 'running' | 'done' | 'error';
   /** Tool lifecycle timing from the stream or reconstructed session transcript. */

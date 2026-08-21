@@ -1,3 +1,5 @@
+import type { ToolActivity } from '@xopcai/gateway-contract';
+
 import { buildSendFailedErrorPayload } from '@/features/chat/messages/agent-run-error-parser';
 import type { WireAttachment } from '@/features/chat/composer/composer.types';
 import type { Message, ProgressState } from '@/features/chat/messages/messages.types';
@@ -83,6 +85,7 @@ export type MessagingCallbacks = {
     args: unknown,
     toolCallId: string | undefined,
     startedAt: number,
+    activity: ToolActivity | undefined,
   ) => void;
   onToolEnd: (
     toolName: string,
@@ -90,6 +93,7 @@ export type MessagingCallbacks = {
     result: unknown,
     toolCallId: string | undefined,
     completedAt: number,
+    activity: ToolActivity | undefined,
   ) => void;
   /**
    * Mid-execution structured update for a tool whose `partialResult` carried
@@ -428,7 +432,13 @@ export class MessageSender {
         const toolName = String(payload.toolName || 'unknown');
         const toolCallId = typeof payload.toolCallId === 'string' ? payload.toolCallId : undefined;
         if (toolName === 'clarify') break;
-        cb?.onToolStart(toolName, payload.args, toolCallId, protocolTimestamp(parsed.timestamp));
+        cb?.onToolStart(
+          toolName,
+          payload.args,
+          toolCallId,
+          protocolTimestamp(parsed.timestamp),
+          payload.activity as ToolActivity | undefined,
+        );
         break;
       }
       case 'tool_update': {
@@ -445,6 +455,7 @@ export class MessageSender {
           serializeProtocolPayload(payload.result),
           typeof payload.toolCallId === 'string' ? payload.toolCallId : undefined,
           protocolTimestamp(parsed.timestamp),
+          payload.activity as ToolActivity | undefined,
         );
         break;
       case 'review_start':
