@@ -25,9 +25,9 @@ XOPC 支持两类 MCP 能力：
 ## 工作原理
 
 1. 在 `~/.xopc/xopc.json`（或 `XOPC_CONFIG` 指向的文件）里配置 `mcp.servers`。
-2. 智能体每一轮运行时，XOPC 会为当前会话建立或复用 **MCP 运行时**，连接各服务器并拉取工具列表。
-3. 工具在模型侧的名称格式为 **`服务器ID__工具名`**（中间两个下划线）。例如服务器 id 为 `fetch`、远端工具名为 `browse` → `fetch__browse`。
-4. 模型可以像调用内置工具一样调用这些 MCP 工具；描述文案来自 MCP 服务端（缺失时会用 title 或兜底说明补齐）。
+2. 智能体搜索外部工具时，XOPC 会为当前会话建立或复用 **MCP 运行时**，连接各服务器并读取目录。
+3. 模型始终只看到 `xopc_tool_search`、`xopc_tool_describe`、`xopc_tool_execute` 三个统一入口，MCP 工具定义不会注入模型上下文。
+4. 搜索只返回紧凑引用，describe 按需加载精确 schema，execute 校验 schema 与 revision 后再调用 MCP 服务。
 
 **传输方式**
 
@@ -72,7 +72,7 @@ XOPC 支持两类 MCP 能力：
 | 字段 | 说明 |
 |------|------|
 | `sessionIdleTtlMs` | 会话级 MCP 客户端空闲多久后回收。默认 **10 分钟**（`600000` 毫秒）。设为 **`0`** 表示不因空闲而回收。 |
-| `servers` | 服务器 id → 连接定义。id 即工具名前缀（`id__工具名`）。 |
+| `servers` | 服务器 id → 连接定义。id 作为外部工具目录命名空间。 |
 
 ### stdio 服务器字段
 
@@ -159,7 +159,7 @@ XOPC 支持两类 MCP 能力：
 }
 ```
 
-通过 Agent 的 `extends` 列表应用该方案。要拒绝单个 MCP 工具，在 `tools.mcp.tools` 中写完整注册名，例如 `"fetch__browse": { "mode": "deny" }`。同一策略也可直接写在 Agent 条目中。
+通过 Agent 的 `extends` 列表应用该方案。要拒绝单个 MCP 工具，在 `tools.mcp.tools` 中写稳定策略 id，例如 `"mcp:fetch:browse": { "mode": "deny" }`；策略 id 不是模型可见工具。同一策略也可直接写在 Agent 条目中。
 
 委托子任务（delegate）**不能** 使用 MCP 工具。
 

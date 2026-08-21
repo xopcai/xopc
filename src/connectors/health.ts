@@ -1,7 +1,7 @@
 import { getWorkspacePath } from '../config/workspace-path-helpers.js';
 import {
   listBundleMcpServerCapabilitiesForGateway,
-} from '../agent/mcp/bundle-mcp-materialize.js';
+} from '../agent/mcp/bundle-mcp-gateway.js';
 import type { Config } from '../config/schema.js';
 import { getConnectorInstance } from './instances.js';
 import { materializeConnectorMcpServer } from './materialize.js';

@@ -23,11 +23,11 @@ This page lists tools the xopc agent can call: read and edit files, run commands
 | Delegation & code (optional) | `delegate_task`, `execute_code` |
 | Multi-agent orchestration | `workflow` — fan-out subagents via a deterministic JS script. See [Dynamic Workflows](workflows.md). |
 | Automations (optional) | `automation` — when the runtime exposes the automation service (typical gateway setup) |
-| MCP (optional) | `serverId__toolName` — from configured MCP servers; control access with `tools.mcp.servers` or `tools.mcp.tools` in an Agent/capability plan |
+| External tools | `xopc_tool_search`, `xopc_tool_describe`, `xopc_tool_execute` — federates MCP, Composio, extension, and remote-memory tools without injecting their schemas |
 
-Extensions may add further tools.
+Extensions may add tools to the external catalog, but not to the model-visible tool list.
 
-**MCP tools:** Registered at runtime from `mcp.servers` (and extension `.mcp.json` manifests). Names use `serverId__toolName`. See [MCP](mcp.md).
+**MCP tools:** Cataloged on demand from `mcp.servers` (and extension `.mcp.json` manifests). Agent policy can still deny a server or a stable tool policy id. See [MCP](mcp.md).
 
 **Conditionally enabled:** Some capabilities need explicit settings or agent policy: e.g. `session_search` needs session persistence; `web_extract` can use `XOPC_WEB_EXTRACT_MODEL`; skills write policy is `skills.agentWritePolicy`; skill discovery can be gated with `skills.toolGating` and metadata. For skills CLI (`xopc skills hub …`), see [Skills](skills.md).
 

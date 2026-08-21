@@ -211,8 +211,8 @@ export class MemoryManager {
     return { ...result, ...(sourceItemId ? { sourceItemId } : {}) };
   }
 
-  getAdditionalTools(): AgentTool[] {
-    const out: AgentTool[] = [];
+  getExternalToolEntries(): Array<{ providerId: string; tool: AgentTool }> {
+    const out: Array<{ providerId: string; tool: AgentTool }> = [];
     const seen = new Set<string>();
     for (const p of this.providers) {
       if (p.capabilities.local) {
@@ -222,7 +222,7 @@ export class MemoryManager {
         for (const t of p.getToolSchemas?.() ?? []) {
           if (t.name && !seen.has(t.name)) {
             seen.add(t.name);
-            out.push(t);
+            out.push({ providerId: p.id, tool: t });
           }
         }
       } catch (err) {

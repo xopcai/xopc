@@ -368,9 +368,10 @@ export interface ExtensionService {
 // ============================================================================
 
 export interface ExtensionRegistry {
-  addTool(tool: AgentTool): void;
+  addTool(tool: AgentTool, extensionId: string): void;
   getTools(): Map<string, AgentTool>;
   getTool(name: string): AgentTool | undefined;
+  getToolExtensionId(name: string): string | undefined;
   getAllTools(): AgentTool[];
   getCommand(name: string): ExtensionCommand | undefined;
   addCliRegistration(reg: ExtensionCliRegistration): void;

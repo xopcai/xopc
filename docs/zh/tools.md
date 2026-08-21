@@ -23,11 +23,11 @@
 | 委托与代码（可选） | `delegate_task`, `execute_code` |
 | 多 Agent 编排（可选） | `workflow` — 通过确定性 JS 脚本扇出子 Agent。见 [动态工作流](workflows.md)。 |
 | 自动化（可选） | `automation` — 运行时提供自动化服务（常见为网关） |
-| MCP（可选） | `服务器ID__工具名` — 来自已配置的 MCP 服务；在 Agent/能力方案的 `tools.mcp.servers` 或 `tools.mcp.tools` 中控制访问 |
+| 外部工具 | `xopc_tool_search`、`xopc_tool_describe`、`xopc_tool_execute` — 统一发现和调用 MCP、Composio、扩展与远程记忆工具，不注入其 schema |
 
-扩展也可追加工具。
+扩展可向外部工具目录追加能力，但不会直接追加到模型可见工具列表。
 
-**MCP 工具：** 运行时根据 `mcp.servers`（及扩展 `.mcp.json`）注册，命名格式为 `服务器ID__工具名`。详见 [MCP](mcp.md)。
+**MCP 工具：** 按需从 `mcp.servers`（及扩展 `.mcp.json`）读取目录；Agent 策略仍可按服务器或稳定策略 id 禁用。详见 [MCP](mcp.md)。
 
 **条件注册举例：** `session_search` 依赖会话持久化；`web_extract` 可通过 `XOPC_WEB_EXTRACT_MODEL` 指定抽取模型；技能写入受 `skills.agentWritePolicy` 约束；技能发现可通过 `skills.toolGating` 与元数据门控。Skills Hub CLI：`xopc skills hub pull|update|lock`，见 [Skills 指南](./skills.md)。
 

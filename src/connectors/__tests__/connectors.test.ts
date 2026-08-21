@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import * as bundleMcpMaterialize from '../../agent/mcp/bundle-mcp-materialize.js';
+import * as bundleMcpGateway from '../../agent/mcp/bundle-mcp-gateway.js';
 import type { CredentialResolver } from '../../auth/credentials.js';
 import type { Config } from '../../config/schema.js';
 import { getConnectorDefinition, listConnectorCatalog } from '../catalog.js';
@@ -147,7 +147,7 @@ describe('connector install and instances', () => {
     const filesystem = getConnectorDefinition('filesystem');
     expect(filesystem).toBeDefined();
     const capabilitySpy = vi
-      .spyOn(bundleMcpMaterialize, 'listBundleMcpServerCapabilitiesForGateway')
+      .spyOn(bundleMcpGateway, 'listBundleMcpServerCapabilitiesForGateway')
       .mockResolvedValue({
         serverId: 'filesystem',
         toolCount: 1,

@@ -1,5 +1,4 @@
 export type {
-  BundleMcpToolRuntime,
   McpCatalogTool,
   McpServerCatalog,
   McpToolCatalog,
@@ -16,7 +15,3 @@ export {
   retireSessionMcpRuntime,
   retireSessionMcpRuntimeForSessionKey,
 } from "./bundle-mcp-runtime.js";
-export {
-  createBundleMcpToolRuntime,
-  materializeBundleMcpToolsForRun,
-} from "./bundle-mcp-materialize.js";
