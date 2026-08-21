@@ -4,13 +4,13 @@
  * Covers heartbeat, bind/customBindHost/port, tailscale, auth (mode + token +
  * password + rateLimit + trustedProxy), trustedProxies, allowRealIpFallback,
  * dangerouslyAllowHostHeaderOriginFallback, security, share, siteShare, publicUrl, webchat,
- * corsOrigins, maxSseConnections, and channelConnectDefer{Mode,Ids,SkipIds}.
+ * corsOrigins and channelConnectDefer{Mode,Ids,SkipIds}.
  *
  * Validation policy: each subsection that can reject rejects with a 400 and a
  * specific `message`. The dispatcher converts these into `c.json(...)`.
  *
  * Initial-state branches use the same literal defaults the inline code did
- * (loopback + port 18790 + 1800s heartbeat + 100 SSE conn + empty CORS) so
+ * (loopback + port 18790 + 1800s heartbeat + empty CORS) so
  * a brand-new install gets a working gateway after the first PATCH.
  */
 import type { Config, GatewayBindMode } from '../../../../config/schema.js';
@@ -32,7 +32,6 @@ function ensureGateway(config: Config): NonNullable<Config['gateway']> {
       bind: 'loopback',
       port: 18790,
       heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
-      maxSseConnections: 100,
       corsOrigins: [],
     };
   }
@@ -131,7 +130,6 @@ export function applyGatewayPatch(config: Config, body: any): PatchResult {
         bind: bind as GatewayBindMode,
         port: 18790,
         heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
-        maxSseConnections: 100,
         corsOrigins: [],
       };
     } else {
@@ -169,7 +167,6 @@ export function applyGatewayPatch(config: Config, body: any): PatchResult {
         bind: 'loopback',
         port: Math.floor(body.gateway.port),
         heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
-        maxSseConnections: 100,
         corsOrigins: [],
       };
     } else {
@@ -185,7 +182,6 @@ export function applyGatewayPatch(config: Config, body: any): PatchResult {
         port: 18790,
         auth: { mode: 'token' },
         heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
-        maxSseConnections: 100,
         corsOrigins: [],
       };
     }
@@ -390,27 +386,6 @@ export function applyGatewayPatch(config: Config, body: any): PatchResult {
     gw.corsOrigins = body.gateway.corsOrigins
       .filter((x: unknown): x is string => typeof x === 'string' && x.trim().length > 0)
       .map((x: string) => x.trim());
-  }
-
-  if (body.gateway?.maxSseConnections !== undefined) {
-    if (
-      typeof body.gateway.maxSseConnections !== 'number' ||
-      !Number.isFinite(body.gateway.maxSseConnections) ||
-      body.gateway.maxSseConnections < 1
-    ) {
-      return patchError('gateway.maxSseConnections must be a positive integer');
-    }
-    if (!config.gateway) {
-      config.gateway = {
-        bind: 'loopback',
-        port: 18790,
-        heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
-        maxSseConnections: Math.floor(body.gateway.maxSseConnections),
-        corsOrigins: [],
-      };
-    } else {
-      config.gateway.maxSseConnections = Math.floor(body.gateway.maxSseConnections);
-    }
   }
 
   if (body.gateway?.channelConnectDeferMode !== undefined) {

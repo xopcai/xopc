@@ -48,12 +48,13 @@ import { prewarmModelRegistry } from '../providers/index.js';
 import { ModelCatalogSyncService } from '../providers/model-catalog-sync-service.js';
 import { runBootstrapMigrationsSync } from '../migrations/runner.js';
 import { createLogger, getLogDir, getRuntimeLogStats } from '../utils/logger.js';
+import { subscribeToLogs } from '../utils/logger/log-stream.js';
 import {
   resolveConfigPath,
   resolveAgentDir,
   resolveExtensionsDir,
 } from '../config/paths.js';
-import type { RelayEvent } from './agent-run-relay.js';
+import type { ClarifyStreamEvent } from './clarify-bridge.js';
 import { registerClarifyBridge } from './clarify-runtime.js';
 import { PACKAGE_VERSION } from '../package-version.js';
 import { MobileNotificationService } from '../mobile/notification-service.js';
@@ -90,13 +91,12 @@ import { GatewaySessionsApi } from './service/sessions-api.js';
 import { GatewayMarketplaceService } from './service/marketplace-service.js';
 import { GatewayConfigCoordinator } from './service/config-coordinator.js';
 import { GatewayAgentRunner } from './service/agent-runner.js';
-import { GatewaySseHub } from './service/sse-hub.js';
+import { RealtimeRuntime } from '../realtime/runtime.js';
 import { reconcileDreamingAutomations as reconcileDreamingAutomationRecords } from './dreaming-automation-reconciler.js';
 import type {
   GatewayChannelStartupPhase1Metrics,
   GatewayChannelStartupPhase2Metrics,
   GatewayServiceConfig,
-  ServiceEvent,
 } from './service/types.js';
 import {
   GatewayReadiness,
@@ -127,7 +127,6 @@ export type {
   GatewayChannelStartupPhase1Metrics,
   GatewayChannelStartupPhase2Metrics,
   GatewayServiceConfig,
-  ServiceEvent,
 } from './service/types.js';
 
 const log = createLogger('Gateway:Service');
@@ -161,9 +160,8 @@ export class GatewayService {
   // Authentication
   private auth: ResolvedGatewayAuth;
 
-  private readonly sse = new GatewaySseHub();
-
   readonly endpointTools = new EndpointToolRuntime();
+  readonly realtime = new RealtimeRuntime(this.endpointTools);
 
   getConfig(): Config {
     return this.config;
@@ -206,6 +204,7 @@ export class GatewayService {
   private connectedKnowledgeCoordinator: ConnectedKnowledgeCoordinator | null = null;
   private stopAutomationProductEventBridge: (() => void) | null = null;
   private stopSessionTranscriptAutomationEvents: (() => void) | null = null;
+  private stopRealtimeLogBridge: (() => void) | null = null;
 
   /**
    * Webchat agent invocation surface (`runAgent`, `abortAgentRun`, `steer*`,
@@ -255,7 +254,7 @@ export class GatewayService {
     this.proactiveTemporalWorker = new ProactiveTemporalWorker(this.proactive);
     this.proactiveInboxWorker = new ProactiveInboxWorker({
       deliver: async ({ inboxItem }) => {
-        this.sse.emit('proactive.inbox.created', inboxItem);
+        this.emit('proactive.inbox.created', inboxItem);
         await this.createMobileNotificationService().deliverGatewayEvent('proactive.inbox.created', inboxItem);
       },
     });
@@ -346,13 +345,13 @@ export class GatewayService {
 
     this.projects = new ProjectService(undefined, this.proactive);
     const emitDiscussion = (capture: import('../discussions/index.js').DiscussionCapture) => {
-      this.sse.emit('discussion.updated', capture);
+      this.emit('discussion.updated', capture);
     };
     this.discussions = new DiscussionService(
       this.notesService,
       this.projects,
       (type, payload) => {
-        this.sse.emit(type, payload);
+        this.emit(type, payload);
       },
     );
     this.discussionWorker = new DiscussionOrganizerWorker(
@@ -373,7 +372,7 @@ export class GatewayService {
             riskCount: organization.risks.length,
             openQuestionCount: organization.openQuestions.length,
           };
-          this.sse.emit('discussion.completed', payload);
+          this.emit('discussion.completed', payload);
           publishAutomationProductEvent({
             type: 'discussion.completed',
             source: 'discussions',
@@ -394,7 +393,7 @@ export class GatewayService {
         const transcript = this.discussions.transcript(segment.discussionId);
         void capture.then((detail) => {
           if (!detail || !transcript) return;
-          this.sse.emit('discussion.segment.updated', {
+          this.emit('discussion.segment.updated', {
             discussionId: segment.discussionId,
             noteId: detail.discussion.noteId,
             transcriptRevision: transcript.revision,
@@ -426,7 +425,11 @@ export class GatewayService {
       getAgentService: () => this.ensureAgentService(),
       getChannelManager: () => this.channelManager,
       getConfig: () => this.config,
-      emit: (type, payload) => this.sse.emit(type, payload),
+      emit: (type, payload) => this.emit(type, payload),
+      publishRealtime: (topic, event, data) => {
+        this.realtime.broker.publish(topic, event, data);
+      },
+      completeRealtimeTopic: (topic) => this.realtime.completeTopic(topic),
     });
 
     this.sessions = new GatewaySessionsApi({
@@ -524,8 +527,8 @@ export class GatewayService {
           this.agentRunner.requestClarification({
             sessionKey,
             request,
-            publishSseFor: (_runId) => (e: RelayEvent) => {
-              this._agentService!.turnDispatcher.enqueueWebchatSseEvent(sessionKey, e);
+            publishStreamFor: (_runId) => (event: ClarifyStreamEvent) => {
+              this._agentService!.turnDispatcher.enqueueWebchatStreamEvent(sessionKey, event);
             },
           }),
       },
@@ -625,7 +628,7 @@ export class GatewayService {
             undefined,
             { runId },
           );
-          while (!(await stream.next()).done) { /* streamed through SSE */ }
+          while (!(await stream.next()).done) { /* published through the run topic */ }
         },
       });
     }
@@ -828,6 +831,10 @@ export class GatewayService {
 
   async start(): Promise<void> {
     if (this.running) return;
+
+    this.stopRealtimeLogBridge = subscribeToLogs((entry) => {
+      this.realtime.broker.publish('logs', 'log.entry', entry);
+    });
 
     setPairingBroadcastSink((type, payload) => {
       this.emit(type, payload);
@@ -1189,10 +1196,13 @@ export class GatewayService {
     if (!this.running) return;
 
     setPairingBroadcastSink(null);
+    this.stopRealtimeLogBridge?.();
+    this.stopRealtimeLogBridge = null;
 
     log.debug('Stopping gateway service...');
     this.readiness.markStarting();
     this.endpointTools.close();
+    this.realtime.close();
 
     await this.proactiveWorker.stop();
     await this.discussionWorker.stop();
@@ -1754,17 +1764,8 @@ export class GatewayService {
     );
   }
 
-  // ========== SSE Event System ==========
-
-  subscribe(
-    sessionId: string,
-    listener: (event: ServiceEvent) => Promise<void> | void,
-  ): () => void {
-    return this.sse.subscribe(sessionId, listener);
-  }
-
   emit(type: string, payload: unknown): void {
-    this.sse.emit(type, payload);
+    this.realtime.broker.publish('gateway', type, payload);
     this.createMobileNotificationService().handleGatewayEvent(type, payload);
   }
 
@@ -1777,7 +1778,7 @@ export class GatewayService {
     this.stopSessionTranscriptAutomationEvents?.();
     this.stopAutomationProductEventBridge = onAutomationProductEvent((event) => {
       if (event.type.startsWith('task.')) {
-        this.sse.emit(event.type, event.payload);
+        this.emit(event.type, event.payload);
       }
       const proactiveEvent = mapProductEventToProactive({
         event,
@@ -1812,11 +1813,6 @@ export class GatewayService {
         },
       });
     });
-  }
-
-  /** Replay events since `lastEventId` for SSE reconnection. */
-  getEventsSince(sessionId: string, lastEventId: string): ServiceEvent[] {
-    return this.sse.getEventsSince(sessionId, lastEventId);
   }
 
   /**

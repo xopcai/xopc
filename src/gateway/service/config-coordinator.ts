@@ -57,9 +57,9 @@ export interface GatewayConfigCoordinatorOptions {
   reconcileBrowserExtensionServer: () => Promise<void>;
   /** Sync built-in dreaming automations after memory.dreaming changes. */
   reconcileDreamingAutomations: () => Promise<void>;
-  /** Latest channel status snapshot for the `channels.status` SSE event. */
+  /** Latest channel status snapshot for the `channels.status` event. */
   getChannelsStatus: () => unknown;
-  /** SSE emit (used for `config.reload` + `channels.status`). */
+  /** Realtime emit used for `config.reload` and `channels.status`. */
   emit: (type: string, payload: unknown) => void;
 }
 

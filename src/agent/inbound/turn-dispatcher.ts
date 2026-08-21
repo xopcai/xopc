@@ -4,7 +4,7 @@
  * Wraps the two existing direct-turn runners (one-shot and streaming) so the
  * parent `AgentService` no longer carries a pair of huge `createXxxDeps()`
  * factories. The public surface — `processDirect`, `processDirectStreaming`,
- * `steerWebchatSession`, `enqueueWebchatSseEvent`,
+ * `steerWebchatSession`, `enqueueWebchatStreamEvent`,
  * `notifyWebchatTranscriptAppend` — matches what `AgentService` exposed
  * previously, so callers (gateway, CLI) are unchanged.
  *
@@ -41,7 +41,7 @@ import {
 import {
   runProcessDirectStreaming,
   type ProcessDirectStreamingDeps,
-  type ProcessDirectStreamingSseEvent,
+  type ProcessDirectStreamEvent,
 } from '../service/process-direct-streaming.js';
 import {
   runProcessDirect,
@@ -122,7 +122,7 @@ export class TurnDispatcher {
     });
   }
 
-  /** Streaming direct turn (webchat SSE / CLI streaming). */
+  /** Streaming direct turn (webchat realtime / CLI streaming). */
   async *processDirectStreaming(
     content: string,
     sessionKey: string,
@@ -130,7 +130,7 @@ export class TurnDispatcher {
     attachments?: DirectAttachment[],
     thinking?: string,
     options?: { signal?: AbortSignal; runId?: string },
-  ): AsyncGenerator<ProcessDirectStreamingSseEvent, void, unknown> {
+  ): AsyncGenerator<ProcessDirectStreamEvent, void, unknown> {
     yield* runProcessDirectStreaming(this.buildStreamingDeps(), {
       content,
       sessionKey,
@@ -143,7 +143,7 @@ export class TurnDispatcher {
   }
 
   /** Push an out-of-band event into the live webchat stream for a session. */
-  enqueueWebchatSseEvent(
+  enqueueWebchatStreamEvent(
     sessionKey: string,
     event: { type: string; [key: string]: unknown },
   ): void {
@@ -162,9 +162,9 @@ export class TurnDispatcher {
         content: [{ type: 'text', text: trimmed }],
         timestamp: Date.now(),
       };
-      this.enqueueWebchatSseEvent(sessionKey, { type: 'message_start', message });
-      this.enqueueWebchatSseEvent(sessionKey, { type: 'message_update', message });
-      this.enqueueWebchatSseEvent(sessionKey, { type: 'message_end', message });
+      this.enqueueWebchatStreamEvent(sessionKey, { type: 'message_start', message });
+      this.enqueueWebchatStreamEvent(sessionKey, { type: 'message_update', message });
+      this.enqueueWebchatStreamEvent(sessionKey, { type: 'message_end', message });
     }
     this.cfg.onSessionTranscriptUpdated?.(sessionKey);
   }
@@ -191,9 +191,9 @@ export class TurnDispatcher {
       log: this.log,
       resolveSessionEndpoint: c.resolveSessionEndpoint,
       initDirectStreamingSession: c.initSessionContext,
-      registerWebchatSsePublisher: (sk, publisher) =>
+      registerWebchatStreamPublisher: (sk, publisher) =>
         c.sessionState.registerWebchatPublisher(sk, publisher),
-      unregisterWebchatSsePublisher: (sk) => c.sessionState.unregisterWebchatPublisher(sk),
+      unregisterWebchatStreamPublisher: (sk) => c.sessionState.unregisterWebchatPublisher(sk),
       agentManager: c.agentManager,
       hydrateSessionWorkspaceFromStore: (sk) => c.sessionHydrator.workspace(sk),
       hydrateSessionModelFromStore: (sk) => c.sessionHydrator.model(sk),

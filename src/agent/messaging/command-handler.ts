@@ -27,7 +27,7 @@ import type {
 
 const log = createLogger('CommandHandler');
 
-/** Gateway console direct stream uses SSE tokens; there is no ChannelPlugin outbound for `webchat`. */
+/** Gateway console direct stream uses realtime events; there is no ChannelPlugin outbound for `webchat`. */
 function shouldSkipBusOutboundForChannel(channel: string): boolean {
   return channel === 'webchat';
 }
@@ -125,7 +125,7 @@ export class CommandHandler {
 
   /**
    * Build the unified command context shared by all execute paths.
-   * When `recorder` is set, every reply text is also captured (for SSE / CLI aggregation).
+   * When `recorder` is set, every reply text is also captured (for realtime / CLI aggregation).
    */
   private buildCommandContext(
     context: CommandContext,
@@ -276,7 +276,7 @@ export class CommandHandler {
   }
 
   /**
-   * Run command and return all user-visible text (ctx.reply + result.content) for SSE/CLI.
+   * Run command and return all user-visible text (ctx.reply + result.content) for realtime/CLI.
    * Same bus side effects as {@link executeCommand}.
    */
   async executeCommandAndAggregateReply(

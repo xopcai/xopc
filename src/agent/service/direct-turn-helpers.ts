@@ -1,6 +1,6 @@
 /**
  * Shared building blocks for the two direct-turn entry points (streaming
- * webchat SSE and one-shot CLI). Both flows do the same hydrate → maybe-slash
+ * webchat realtime and one-shot CLI). Both flows do the same hydrate → maybe-slash
  * → run-embedded-turn → after-turn dance; this module captures that core so
  * the entry points only manage their I/O specifics (event sink, voice STT,
  * TTS, transcript persistence).

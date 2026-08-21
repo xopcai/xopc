@@ -51,7 +51,7 @@ xopc channels pairing approve --channel <telegram|feishu|weixin> [--account <id>
 2. 完成频道配置（Telegram Token、微信扫码登录或飞书应用凭证），并将 **`dmPolicy`** 设为 **`pairing`**。
 3. 用户向 bot 发私聊后，待审批项会出现在 Telegram 设置对话框，或微信 / 飞书的 **Advanced** 区域。
 4. 输入 **8 位配对码** 批准，或在确认 user id 对应真实发消息用户后使用 **快速批准**。
-5. Hub 卡片显示待审批角标；新配对或重复 DM 会通过 SSE 自动刷新列表。
+5. Hub 卡片显示待审批角标；新配对或重复 DM 会通过网关实时连接自动刷新列表。
 
 REST 接口（需 gateway bearer token）：
 

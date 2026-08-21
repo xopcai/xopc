@@ -29,10 +29,7 @@ export async function createXopcChannelMcpServer(opts: XopcMcpServeOptions = {})
   const bridge = new XopcChannelBridge(cfg, {
     gatewayUrl: opts.gatewayUrl,
     gatewayCredential: opts.gatewayCredential,
-    claudeChannelMode,
-    verbose: opts.verbose ?? false,
   });
-  bridge.setServer(server);
 
   server.server.setNotificationHandler(ClaudePermissionRequestSchema, async ({ params }) => {
     await bridge.handleClaudePermissionRequest({

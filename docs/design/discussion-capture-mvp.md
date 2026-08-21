@@ -36,7 +36,7 @@ Included:
 - live transcript projection in the recorder and Note detail;
 - final authoritative transcription and automatic Note organization;
 - exact-name and high-confidence model project inference with Undo;
-- durable workers, leases, bounded retries, SSE invalidation, and metrics.
+- durable workers, leases, bounded retries, realtime invalidation, and metrics.
 
 Deferred:
 
@@ -173,7 +173,7 @@ Context supplied by a project page is marked `context` and is not presented as a
 - Original upload rolls back the Note attachment and Markdown reference together when persistence fails.
 - Workers use conditional state updates, leases, three bounded attempts, and stage-aware retry.
 - Provider calls and file IO never run inside SQLite write transactions.
-- SSE payloads contain identifiers and status only; transcript text is fetched from authenticated routes.
+- Realtime payloads contain identifiers and status only; transcript text is fetched from authenticated routes.
 - Proactive completion events contain bounded counts and identifiers, not raw transcript text.
 - The consent acknowledgement is explicit but does not add friction to subsequent recordings.
 - Audio deletion is explicit and does not remove the resulting Note or transcript.

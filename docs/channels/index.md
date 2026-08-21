@@ -51,7 +51,7 @@ You can approve, revoke, and monitor pending requests in the gateway console wit
 2. Configure the channel (Telegram token, Weixin QR login, or Feishu app credentials) and set **`dmPolicy`** to **`pairing`**.
 3. When a user DMs the bot, pending requests appear in the channel settings dialog (Telegram) or **Advanced** section (Weixin / Feishu).
 4. **Approve** with the 8-character code, or use **Quick approve** after verifying the user id matches someone who messaged the bot.
-5. Hub cards show a pending badge; the list refreshes over SSE when new or repeat pairing DMs arrive.
+5. Hub cards show a pending badge; the list refreshes through the gateway realtime connection when new or repeat pairing DMs arrive.
 
 REST endpoints (require gateway bearer token):
 

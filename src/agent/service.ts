@@ -160,7 +160,7 @@ export class AgentService {
   private inboundLoop: InboundLoop;
   /**
    * Direct-turn entry points: `processDirect` (one-shot), `processDirectStreaming`
-   * (SSE generator), webchat steering and SSE injection. Public so the gateway,
+   * (event generator), webchat steering and live event injection. Public so the gateway,
    * TUI, CLI, and automations do not need to thread every call through `AgentService`.
    */
   readonly turnDispatcher: TurnDispatcher;

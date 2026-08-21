@@ -85,7 +85,7 @@ Current implementation anchors for the cutover are:
 - This RFC does not introduce a separate Goal object. Cross-project Portfolio or Initiative objects may be added later.
 - This RFC does not require every WorkflowRun or conversation to create a Task.
 - This RFC does not make Project deletion delete linked files, sessions, or artifacts automatically.
-- This RFC does not preserve the existing Tasks REST or SSE contract.
+- This RFC does not preserve the existing Tasks REST or realtime contract.
 
 ## 5. Product invariants
 
@@ -1127,7 +1127,7 @@ The breaking release removes, rather than deprecates, all old runtime behavior.
 - Delete old task-copy maps and board-lane maps in Web and Mobile.
 - Delete Agent tool manuals that teach the old status/action contract.
 - Delete direct consumers of `latestReceiptRunId` and `activeSessionKey`.
-- Replace old Task SSE event handlers; do not accept both event families.
+- Replace old Task realtime event handlers; do not accept both event families.
 
 ### 15.3 Service replacement
 
@@ -1211,7 +1211,7 @@ Exit criteria:
 
 Deliverables:
 
-- replacement REST/SSE contracts;
+- replacement REST/realtime contracts;
 - Task detail with work definition, properties, context, discussion, runs, receipts, and timeline;
 - explicit Save, Start, Delegate, Run Workflow, Schedule, and Close interactions;
 - Project overview with milestones, health, running work, blockers, context, and updates;
@@ -1304,7 +1304,7 @@ The read model must be rebuildable from canonical tables and events.
 ### Contract and UI tests
 
 - strict request rejection for removed legacy fields;
-- REST and SSE schema tests;
+- REST and realtime schema tests;
 - capture without execution;
 - immediate start;
 - delegate Agent versus human owner display;

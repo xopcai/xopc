@@ -16,7 +16,7 @@ import { mergeMissingUserMessagesFromServer } from '@/features/chat/messages/mer
 import {
   shouldReplaceOptimisticUserRow,
   userMessagesEquivalent,
-} from '@/features/chat/messages/user-message-from-sse';
+} from '@/features/chat/messages/user-message-from-stream';
 import { isUiUserMessage } from '@/features/chat/messages/user-round-index';
 import { defaultSessionMeta } from '@/features/chat/session/chat-session-defaults';
 import { chatRunManager } from '@/features/chat/session/chat-run-manager';
@@ -749,7 +749,7 @@ export function isSessionSliceLive(slice: ChatSessionSlice | undefined): boolean
   return slice.streaming || slice.sending || Boolean(slice.streamingMsg);
 }
 
-/** Imperative snapshot read for SSE callbacks and resume paths. */
+/** Imperative snapshot read for run callbacks and resume paths. */
 export function getChatSessionSnapshot(sessionKey: string): ChatSessionSlice | undefined {
   return useChatSessionStore.getState().getSessionSnapshot(sessionKey);
 }
@@ -759,7 +759,7 @@ export function getSessionMessages(sessionKey: string): Message[] {
   return useChatSessionStore.getState().sessions[normalizeKey(sessionKey)]?.messages ?? [];
 }
 
-/** Sidebar / background run indicator (store slice, HTTP SSE, or pending run id). */
+/** Sidebar / background run indicator (store slice, realtime run, or pending run id). */
 export function isSessionAgentRunActive(sessionKey: string): boolean {
   const key = normalizeKey(sessionKey);
   if (!key) return false;

@@ -65,7 +65,7 @@ export const WorkflowSessionBanner = memo(function WorkflowSessionBanner({
   const handleAbort = () => {
     if (isActive) {
       void cancelWorkflowRun(view.run.id, { ownerAgentId }).catch(() => {
-        /* SSE / polling will reflect terminal state. */
+        /* Realtime / polling will reflect terminal state. */
       });
     }
     onAbortCurrentTurn?.();

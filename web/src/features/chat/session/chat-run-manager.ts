@@ -1,7 +1,7 @@
 import { MessageSender } from '@/features/chat/messages/message-sender';
 
 /**
- * Singleton owner of in-flight webchat POST/resume SSE connections (Phase 2).
+ * Singleton owner of in-flight webchat run subscriptions.
  * Survives route changes; callbacks write to {@link useChatSessionStore}, not hook state.
  */
 class ChatRunManager {

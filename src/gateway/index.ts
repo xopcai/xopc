@@ -4,7 +4,6 @@ export {
   type GatewayChannelStartupPhase1Metrics,
   type GatewayChannelStartupPhase2Metrics,
   type GatewayServiceConfig,
-  type ServiceEvent,
 } from './service.js';
 
 export { acquireGatewayLock, GatewayLockError, type GatewayLockHandle } from './lock.js';

@@ -288,18 +288,12 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     }),
   });
 
-  const sseConfig = {
-    service,
-    maxSseConnections: service.currentConfig.gateway.maxSseConnections,
-  };
-
   registerAuthenticatedRoutes(app, authenticated, {
     service,
     strictRateLimitMiddleware,
     chatRateLimitMiddleware,
     xopcCloudPollRateLimitMiddleware,
     channelRateLimitMiddleware,
-    sseConfig,
   });
 
   const prewarm = prewarmStaticUiCache();

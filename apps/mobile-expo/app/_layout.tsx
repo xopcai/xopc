@@ -16,7 +16,7 @@ import { createPaperTheme, getColors } from '@/theme';
 import { GatewayConnectLandingContext } from '@/features/gateway/gateway-connect-context';
 import { GatewayConnectLandingModal } from '@/features/gateway/GatewayConnectLandingModal';
 import { useGatewayConnectionWatch } from '@/features/gateway/use-gateway-connection-watch';
-import { useGatewaySse } from '@/features/gateway/use-gateway-sse';
+import { useGatewayRealtime } from '@/features/gateway/use-gateway-realtime';
 import { refreshNetworkSnapshotWithDeadline } from '@/features/gateway/network-info';
 import { queryClient } from '@/query/query-client';
 import { useGatewayConfigured } from '@/query/sessions';
@@ -43,7 +43,7 @@ export default function RootLayout() {
   const unauthorized = useGatewayStore((s) => s.unauthorized);
   const [userDismissedConnect, setUserDismissedConnect] = useState(false);
 
-  useGatewaySse();
+  useGatewayRealtime();
   useGatewayConnectionWatch(configured);
   useWorkspaceSyncFlush(configured);
   useMobileNotifications(router);

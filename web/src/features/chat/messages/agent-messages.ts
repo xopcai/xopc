@@ -205,7 +205,7 @@ function usageEquivalent(a: Message['usage'], b: Message['usage']): boolean {
 }
 
 /**
- * After a live SSE turn, gateway reload often returns the same assistant text with a new
+ * After a live realtime turn, gateway reload often returns the same assistant text with a new
  * timestamp. Replacing the whole list remounts virtual rows and makes the last bubble flicker.
  * Keep prior message references when the visible turn is already equivalent.
  */

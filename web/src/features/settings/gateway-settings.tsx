@@ -292,11 +292,6 @@ export function GatewaySettingsPanel() {
     });
   }, []);
 
-  const updateMaxSseConnections = useCallback((maxSseConnections: number) => {
-    dirtyRef.current = true;
-    dispatchForm({ type: 'set-form', updater: (f) => ({ ...f, maxSseConnections }) });
-  }, []);
-
   const updateChannelConnectDeferMode = useCallback(
     (channelConnectDeferMode: GatewaySettingsState['channelConnectDeferMode']) => {
       dirtyRef.current = true;
@@ -790,7 +785,6 @@ export function GatewaySettingsPanel() {
         <GatewayAdvancedFields
           g={g}
           form={form}
-          onMaxSseConnectionsChange={updateMaxSseConnections}
           onDeferModeChange={updateChannelConnectDeferMode}
           onDeferIdsChange={updateChannelConnectDeferIds}
           onSkipIdsChange={updateChannelConnectDeferSkipIds}
@@ -1000,38 +994,18 @@ function TrustedProxyAuthFields({
 function GatewayAdvancedFields({
   g,
   form,
-  onMaxSseConnectionsChange,
   onDeferModeChange,
   onDeferIdsChange,
   onSkipIdsChange,
 }: {
   g: GatewaySettingsMessages;
   form: GatewaySettingsState;
-  onMaxSseConnectionsChange: (value: number) => void;
   onDeferModeChange: (mode: GatewaySettingsState['channelConnectDeferMode']) => void;
   onDeferIdsChange: (ids: string[]) => void;
   onSkipIdsChange: (ids: string[]) => void;
 }) {
   return (
     <div className="space-y-4">
-      <div>
-        <label className="mb-1 block text-sm font-medium text-fg" htmlFor="gateway-max-sse">
-          {g.maxSseConnections}
-        </label>
-        <input
-          id="gateway-max-sse"
-          type="number"
-          min={1}
-          className={cn(inputClassName(), 'max-w-xs font-mono text-xs')}
-          value={form.maxSseConnections}
-          onChange={(e) => {
-            const n = Number(e.target.value);
-            if (Number.isFinite(n)) onMaxSseConnectionsChange(Math.max(1, Math.floor(n)));
-          }}
-        />
-        <p className="mt-1 text-xs text-fg-subtle">{g.maxSseConnectionsHint}</p>
-      </div>
-
       <div className="space-y-2 border-t border-edge pt-4">
         <label className="text-sm font-medium text-fg" htmlFor="gateway-channel-defer-mode">
           {g.channelConnectDeferMode}

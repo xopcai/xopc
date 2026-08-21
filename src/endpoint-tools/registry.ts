@@ -9,8 +9,13 @@ import {
   type EndpointToolDescriptor,
   type ServerEndpointMessage,
 } from '@xopcai/endpoint-tools-protocol';
-import type { WebSocket } from 'ws';
 import { EndpointToolPolicy } from './policy.js';
+
+export interface EndpointTransport {
+  readonly readyState: number;
+  send(data: string): void;
+  close(code?: number, reason?: string): void;
+}
 
 export interface RegisteredEndpointTool {
   descriptor: EndpointToolDescriptor;
@@ -31,7 +36,7 @@ export interface EndpointConnectionSnapshot {
 }
 
 type EndpointConnection = EndpointConnectionSnapshot & {
-  socket: WebSocket;
+  transport: EndpointTransport;
   turnToken: string;
   toolByName: Map<string, RegisteredEndpointTool>;
 };
@@ -68,7 +73,7 @@ export class EndpointRegistry {
   register(
     hello: EndpointHelloPayload,
     connectionId: string,
-    socket: WebSocket,
+    transport: EndpointTransport,
     now = Date.now(),
   ): EndpointRegistration {
     const toolByName = new Map<string, RegisteredEndpointTool>();
@@ -87,7 +92,7 @@ export class EndpointRegistry {
     if (previous && previous.principalId !== hello.principalId) {
       throw new Error('Endpoint instance belongs to another principal');
     }
-    if (previous) previous.socket.close(4001, 'Endpoint connected elsewhere');
+    if (previous) previous.transport.close(4001, 'Endpoint connected elsewhere');
 
     const connection: EndpointConnection = {
       principalId: hello.principalId,
@@ -100,7 +105,7 @@ export class EndpointRegistry {
       availability: hello.availability,
       lastHeartbeatAt: now,
       tools: [],
-      socket,
+      transport,
       turnToken: crypto.randomBytes(32).toString('base64url'),
       toolByName,
     };
@@ -131,6 +136,10 @@ export class EndpointRegistry {
     return connection ? snapshot(connection) : undefined;
   }
 
+  isCurrentConnection(endpointId: string, connectionId: string): boolean {
+    return this.connectionByEndpointId.get(endpointId)?.connectionId === connectionId;
+  }
+
   list(): EndpointConnectionSnapshot[] {
     return [...this.connectionByEndpointId.values()].map(snapshot);
   }
@@ -141,7 +150,7 @@ export class EndpointRegistry {
 
   verifyTurnClaim(endpointId: string, turnToken: string): boolean {
     const connection = this.connectionByEndpointId.get(endpointId);
-    if (!connection || connection.socket.readyState !== 1) return false;
+    if (!connection || connection.transport.readyState !== 1) return false;
     const expected = Buffer.from(connection.turnToken);
     const actual = Buffer.from(turnToken);
     return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
@@ -149,7 +158,7 @@ export class EndpointRegistry {
 
   send(endpointId: string, type: 'tool.invoke' | 'tool.cancel', payload: unknown): void {
     const connection = this.connectionByEndpointId.get(endpointId);
-    if (!connection || connection.socket.readyState !== 1) {
+    if (!connection || connection.transport.readyState !== 1) {
       throw new Error(`Endpoint is offline: ${endpointId}`);
     }
     const message = {
@@ -159,19 +168,19 @@ export class EndpointRegistry {
       sentAt: Date.now(),
       payload,
     } as ServerEndpointMessage;
-    connection.socket.send(JSON.stringify(message));
+    connection.transport.send(JSON.stringify(message));
   }
 
   disconnect(endpointId: string, code = 4003, reason = 'Endpoint disconnected'): boolean {
     const connection = this.connectionByEndpointId.get(endpointId);
     if (!connection) return false;
-    connection.socket.close(code, reason);
+    connection.transport.close(code, reason);
     return true;
   }
 
   closeAll(code = 1001, reason = 'Gateway stopping'): void {
     for (const connection of this.connectionByEndpointId.values()) {
-      connection.socket.close(code, reason);
+      connection.transport.close(code, reason);
     }
     this.connectionByEndpointId.clear();
   }

@@ -18,7 +18,7 @@ import {
   type SessionStore,
 } from '../../session/index.js';
 import type { SessionContext } from '../session/index.js';
-import { applyReasoningVisibilityToSseEvent } from '../streaming/reasoning-visibility-sse.js';
+import { applyReasoningVisibility } from '../streaming/reasoning-visibility.js';
 import type { ReasoningLevel } from '../transcript/thinking-types.js';
 import { formatAgentRunErrorForClient } from '../client-error-format.js';
 import { abortEmbeddedRun } from '../embedded/runs.js';
@@ -58,11 +58,11 @@ export interface ProcessDirectStreamingDeps {
     chatId: string,
     origin: TurnOrigin,
   ) => SessionContext;
-  registerWebchatSsePublisher: (
+  registerWebchatStreamPublisher: (
     sessionKey: string,
     publisher: (event: { type: string; [key: string]: unknown }) => void,
   ) => void;
-  unregisterWebchatSsePublisher: (sessionKey: string) => void;
+  unregisterWebchatStreamPublisher: (sessionKey: string) => void;
   agentManager: AgentInstanceGateway;
   hydrateSessionWorkspaceFromStore: (sessionKey: string) => Promise<void>;
   hydrateSessionModelFromStore: (sessionKey: string) => Promise<void>;
@@ -108,7 +108,7 @@ export interface ProcessDirectStreamingInput {
   runId?: string;
 }
 
-export type ProcessDirectStreamingSseEvent = { type: string; [key: string]: unknown };
+export type ProcessDirectStreamEvent = { type: string; [key: string]: unknown };
 
 function isReviewOutput(value: unknown): value is ReviewOutput {
   return !!value && typeof value === 'object' && !Array.isArray(value)
@@ -230,7 +230,7 @@ function makeAssistantReceiptMessage(text: string, metadata?: Record<string, unk
 }
 
 function pushAssistantReceipt(
-  queue: AsyncQueue<ProcessDirectStreamingSseEvent>,
+  queue: AsyncQueue<ProcessDirectStreamEvent>,
   text: string,
   runId?: string,
   metadata?: Record<string, unknown>,
@@ -244,21 +244,21 @@ function pushAssistantReceipt(
 export async function* runProcessDirectStreaming(
   deps: ProcessDirectStreamingDeps,
   input: ProcessDirectStreamingInput,
-): AsyncGenerator<ProcessDirectStreamingSseEvent, void, unknown> {
+): AsyncGenerator<ProcessDirectStreamEvent, void, unknown> {
   const sessionKey = input.sessionKey ?? 'agent:main:main';
   const { channel, chatId } = await deps.resolveSessionEndpoint(sessionKey);
   const context = deps.initDirectStreamingSession(sessionKey, channel, chatId, input.origin);
 
-  const queue = new AsyncQueue<ProcessDirectStreamingSseEvent>();
+  const queue = new AsyncQueue<ProcessDirectStreamEvent>();
   let reasoningLevel: ReasoningLevel = channel === 'webchat'
     ? resolveConfiguredActivityDetailDefault(deps.getConfig())
     : 'stream';
 
-  const pushVisible = (event: ProcessDirectStreamingSseEvent) => {
+  const pushVisible = (event: ProcessDirectStreamEvent) => {
     // Webchat presentation is client-owned so changing the setting takes effect mid-run.
     const visible = channel === 'webchat'
       ? event
-      : applyReasoningVisibilityToSseEvent(event, reasoningLevel);
+      : applyReasoningVisibility(event, reasoningLevel);
     if (visible !== null) {
       queue.push(visible);
     }
@@ -278,7 +278,7 @@ export async function* runProcessDirectStreaming(
   };
 
   if (channel === 'webchat') {
-    deps.registerWebchatSsePublisher(sessionKey, pushVisible);
+    deps.registerWebchatStreamPublisher(sessionKey, pushVisible);
   }
 
   const signal = input.signal;
@@ -548,7 +548,7 @@ export async function* runProcessDirectStreaming(
     deps.recordTaskReviewStreamHint?.(sessionKey, { skipTaskReview: ranSlashCommand });
   } finally {
     if (channel === 'webchat') {
-      deps.unregisterWebchatSsePublisher(sessionKey);
+      deps.unregisterWebchatStreamPublisher(sessionKey);
     }
     deps.endDirectRequestContext();
   }

@@ -6,7 +6,7 @@ import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import { fetchProviderMetaList } from '@/features/settings/providers-api';
 import { getSkills } from '@/features/skills/skill-list-api';
 import { messages } from '@/i18n/messages';
-import { useGatewaySseStore } from '@/stores/gateway-sse-store';
+import { useGatewayRealtimeStore } from '@/stores/gateway-realtime-store';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -34,7 +34,7 @@ export function useSetupChecklist(): {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const l = m.setupStatus.labels;
-  const sseConnected = useGatewaySseStore((s) => s.connectionState === 'connected');
+  const realtimeConnected = useGatewayRealtimeStore((s) => s.connectionState === 'connected');
 
   const {
     data: configData,
@@ -121,7 +121,7 @@ export function useSetupChecklist(): {
 
     return buildSetupStatusSnapshot({
       hasToken: Boolean(token),
-      sseConnected,
+      realtimeConnected,
       config: configData?.payload?.config,
       skillCount,
       providerMeta: metaTotal > 0 ? { configured: metaConfigured, total: metaTotal } : null,
@@ -146,7 +146,7 @@ export function useSetupChecklist(): {
         readyToChat: m.setupStatus.requiredCompleteMessage,
       },
     });
-  }, [token, ready, sseConnected, configData, skillsData, providerMeta, doctorChecks, logsHealth, browserDiagnostics, l, m.setupStatus.requiredCompleteMessage]);
+  }, [token, ready, realtimeConnected, configData, skillsData, providerMeta, doctorChecks, logsHealth, browserDiagnostics, l, m.setupStatus.requiredCompleteMessage]);
 
   const refresh = async () => {
     await Promise.all([

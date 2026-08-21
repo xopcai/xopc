@@ -3,7 +3,7 @@ import { queryClient } from '../../query/query-client';
 import { invalidateSessionLists } from '../../query/workspace-sync';
 import { useGatewayStore } from '../../stores/gateway-store';
 
-import { getSharedGatewaySseConnection } from './use-gateway-sse';
+import { getSharedGatewayRealtimeClient } from './use-gateway-realtime';
 
 const SYNC_DEBOUNCE_MS = 2_000;
 const MIN_SYNC_INTERVAL_MS = 8_000;
@@ -14,14 +14,14 @@ let lastSyncAt = 0;
 export type GatewaySyncOptions = {
   /** Invalidate sessions/agents REST caches. Default true. */
   invalidateQueries?: boolean;
-  /** Reopen broadcast SSE transport. Default true. */
-  reconnectSse?: boolean;
+  /** Reopen the shared realtime connection. Default true. */
+  reconnectRealtime?: boolean;
   /** Skip debounce (explicit user action such as saving gateway settings). */
   immediate?: boolean;
 };
 
 function runGatewaySync(options: GatewaySyncOptions): void {
-  const { invalidateQueries = true, reconnectSse = true } = options;
+  const { invalidateQueries = true, reconnectRealtime = true } = options;
   lastSyncAt = Date.now();
 
   if (invalidateQueries) {
@@ -31,24 +31,24 @@ function runGatewaySync(options: GatewaySyncOptions): void {
     void queryClient.invalidateQueries({ queryKey: queryKeys.tasks });
     void queryClient.invalidateQueries({ queryKey: ['projects'] });
   }
-  if (reconnectSse) {
-    getSharedGatewaySseConnection()?.reconnect();
+  if (reconnectRealtime) {
+    getSharedGatewayRealtimeClient()?.reconnect();
   }
 }
 
-/** Invalidate REST caches and reopen SSE after the active gateway URL changes or comes back online. */
+/** Invalidate REST caches and reopen realtime after the active gateway URL changes or comes back online. */
 export function syncGatewayAfterConnectivityChange(options: GatewaySyncOptions = {}): void {
-  const { immediate = false, invalidateQueries = true, reconnectSse = true } = options;
+  const { immediate = false, invalidateQueries = true, reconnectRealtime = true } = options;
 
   const execute = () => {
     const now = Date.now();
     if (!immediate && now - lastSyncAt < MIN_SYNC_INTERVAL_MS) {
-      if (reconnectSse && !invalidateQueries) {
-        getSharedGatewaySseConnection()?.reconnect();
+      if (reconnectRealtime && !invalidateQueries) {
+        getSharedGatewayRealtimeClient()?.reconnect();
       }
       return;
     }
-    runGatewaySync({ invalidateQueries, reconnectSse });
+    runGatewaySync({ invalidateQueries, reconnectRealtime });
   };
 
   if (immediate) {

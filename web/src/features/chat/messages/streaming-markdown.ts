@@ -140,7 +140,7 @@ export function prepareStreamingMarkdown(content: string): string {
   return content;
 }
 
-/** Merge adjacent assistant text fragments so Markdown constructs can span SSE/UI chunks. */
+/** Merge adjacent assistant text fragments so Markdown constructs can span realtime/UI chunks. */
 export function mergeConsecutiveTextBlocks(content: MessageContent[]): MessageContent[] {
   const out: MessageContent[] = [];
   for (const block of content) {

@@ -39,7 +39,7 @@ function delay(ms: number, signal?: AbortSignal): Promise<void> {
 }
 
 /**
- * Silently resume agent SSE after transient network loss (exponential backoff).
+ * Silently resume an agent run after transient network loss (exponential backoff).
  * Surfaces UI only after automatic recovery is exhausted.
  */
 export function useAgentStreamRecovery(opts: UseAgentStreamRecoveryOpts) {

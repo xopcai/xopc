@@ -58,7 +58,6 @@ export const BASE_RELOAD_RULES: ReloadRule[] = [
     kind: 'restart',
     description: 'Host-header origin fallback',
   },
-  { prefix: 'gateway.maxSseConnections', kind: 'restart', description: 'SSE connection limit' },
   { prefix: 'gateway.channelConnectDeferMode', kind: 'restart', description: 'Channel connect defer mode' },
   { prefix: 'gateway.channelConnectDeferIds', kind: 'restart', description: 'Explicit channel connect defer list' },
   { prefix: 'gateway.channelConnectDeferSkipIds', kind: 'restart', description: 'Channel connect defer skip list' },

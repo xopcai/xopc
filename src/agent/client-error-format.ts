@@ -148,7 +148,7 @@ export function formatAgentRunErrorForClient(
   return JSON.stringify(payload);
 }
 
-/** Human-readable text for TUI/CLI when SSE carries structured JSON. */
+/** Human-readable text for TUI/CLI when a run event carries structured JSON. */
 export function formatAgentRunErrorForDisplay(content: string): string {
   const trimmed = content.trim();
   if (trimmed.startsWith('Error: ')) return trimmed.slice('Error: '.length);

@@ -503,7 +503,7 @@ export function registerAuthRegistryExtensionsRoutes(authenticated: Hono, deps: 
       
       const models = getAllModels();
       
-      // Emit SSE event to all connected clients
+      // Emit a realtime event to all connected clients.
       service.emit('registry.updated', { modelCount: models.length });
       
       return c.json({

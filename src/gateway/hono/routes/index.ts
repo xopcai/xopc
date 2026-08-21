@@ -13,6 +13,7 @@ import { registerMobileRoutes } from './mobile.js';
 import { registerInteractionStateRoutes } from './interaction-state.js';
 import { registerComposerHistoryRoutes } from './composer-history.js';
 import { registerEndpointToolRoutes } from './endpoint-tools.js';
+import { registerRealtimeRoutes } from './realtime.js';
 import { registerLocalAppsRoutes } from './local-apps.js';
 import { registerWorkDiscoveryRoutes } from './work-discovery.js';
 import { registerTaskRoutes } from './tasks.js';
@@ -44,6 +45,7 @@ export function registerCoreAuthenticatedRoutes(
   registerInteractionStateRoutes(authenticated, deps);
   registerComposerHistoryRoutes(authenticated, deps);
   registerEndpointToolRoutes(authenticated, deps);
+  registerRealtimeRoutes(authenticated, deps);
 }
 
 export function registerAuthenticatedRoutes(app: Hono, authenticated: Hono, deps: AuthenticatedRouteDeps): void {

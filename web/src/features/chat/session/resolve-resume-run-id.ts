@@ -26,7 +26,7 @@ export async function fetchSessionActiveRun(sessionKey: string): Promise<Session
 }
 
 /**
- * Resolve run id for SSE resume: gateway first, sessionStorage fallback.
+ * Resolve run id for realtime resume: gateway first, sessionStorage fallback.
  * Syncs sessionStorage when gateway reports an active run.
  */
 export async function resolveResumeRunId(sessionKey: string): Promise<string | null> {

@@ -13,6 +13,14 @@ import {
   clearEndpointTurnClaim,
   publishEndpointTurnClaim,
 } from '@/features/endpoint-tools/turn-claim';
+import type { RealtimeEventPayload } from '@xopcai/realtime-protocol';
+
+const realtimeState = vi.hoisted(() => ({
+  listener: undefined as undefined | {
+    onEvent: (event: RealtimeEventPayload) => void;
+    onGap?: () => void;
+  },
+}));
 
 vi.mock('@/lib/fetch', () => ({
   apiFetch: vi.fn(),
@@ -24,6 +32,13 @@ vi.mock('@/stores/gateway-store', () => ({
   },
 }));
 
+vi.mock('@/features/gateway/gateway-realtime', () => ({
+  subscribeRealtimeTopic: vi.fn((_topic: string, listener: typeof realtimeState.listener) => {
+    realtimeState.listener = listener;
+    return vi.fn();
+  }),
+}));
+
 import { apiFetch } from '@/lib/fetch';
 
 describe('resolveResumeRunId', () => {
@@ -33,6 +48,7 @@ describe('resolveResumeRunId', () => {
   beforeEach(() => {
     vi.mocked(apiFetch).mockReset();
     storage.clear();
+    realtimeState.listener = undefined;
     vi.stubGlobal('window', {
       location: { origin: 'http://localhost:3000' },
       dispatchEvent: vi.fn(),
@@ -124,11 +140,11 @@ describe('MessageSender abort', () => {
     const sender = new MessageSender();
     const internals = sender as unknown as {
       _abort: AbortController;
-      _sseChatId: string;
+      _chatId: string;
       _trackedRunId?: string;
     };
     internals._abort = new AbortController();
-    internals._sseChatId = sessionKey;
+    internals._chatId = sessionKey;
     internals._trackedRunId = 'run-abort';
     setPendingAgentRun(sessionKey, 'run-abort');
     vi.mocked(window.dispatchEvent).mockClear();
@@ -150,6 +166,7 @@ describe('MessageSender terminal state', () => {
   beforeEach(() => {
     vi.mocked(apiFetch).mockReset();
     storage.clear();
+    realtimeState.listener = undefined;
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callback(0);
       return 1;
@@ -198,27 +215,31 @@ describe('MessageSender terminal state', () => {
             },
           }), { status: 202, headers: { 'Content-Type': 'application/json' } });
         }
-        return new Response(
-          [
-            'event: run_start',
-            'data: {"runId":"run-complete"}',
-            '',
-            'event: run_end',
-            'data: {"payload":{}}',
-            '',
-            '',
-          ].join('\n'),
-          { headers: { 'Content-Type': 'text/event-stream' } },
-        );
+        throw new Error(`Unexpected request: ${String(url)}`);
       });
 
+      let pending: Promise<unknown>;
       if (method === 'send') {
-        await sender.send('hello', sessionKey);
+        pending = sender.send('hello', sessionKey);
       } else {
         setPendingAgentRun(sessionKey, 'run-complete');
         streamingStatesAtNotification.length = 0;
-        await sender.resume('run-complete', sessionKey);
+        pending = sender.resume('run-complete', sessionKey);
       }
+      await vi.waitFor(() => expect(realtimeState.listener).toBeDefined());
+      realtimeState.listener?.onEvent({
+        topic: 'run:run-complete',
+        seq: 1,
+        event: 'run_end',
+        data: {
+          type: 'run_end',
+          runId: 'run-complete',
+          sessionKey,
+          timestamp: Date.now(),
+          payload: { status: 'success' },
+        },
+      });
+      await pending;
 
       expect(streamingStatesAtNotification).toEqual([true, false]);
       expect(sender.isStreamingFor(sessionKey)).toBe(false);
@@ -232,18 +253,12 @@ describe('MessageSender terminal state', () => {
       location: { origin: 'http://localhost:3000' },
       dispatchEvent: vi.fn(),
     });
-    vi.mocked(apiFetch).mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          ok: false,
-          error: { code: 'NOT_FOUND', message: 'Run not found or already expired' },
-        }),
-        { status: 404, headers: { 'Content-Type': 'application/json' } },
-      ),
-    );
     setPendingAgentRun(sessionKey, 'run-expired');
 
-    await expect(sender.resume('run-expired', sessionKey)).resolves.toBe(false);
+    const pending = sender.resume('run-expired', sessionKey);
+    await vi.waitFor(() => expect(realtimeState.listener).toBeDefined());
+    realtimeState.listener?.onGap?.();
+    await expect(pending).resolves.toBe(false);
 
     expect(sender.isStreamingFor(sessionKey)).toBe(false);
     expect(hasPendingAgentRunForChat(sessionKey)).toBe(false);
@@ -281,21 +296,35 @@ describe('MessageSender terminal state', () => {
           },
         }), { status: 202, headers: { 'Content-Type': 'application/json' } });
       }
-      return new Response(
-        [
-          'event: task_plan_updated',
-          'data: {"payload":{"planId":"session:todo","revision":2,"source":"todo","scope":"session","items":[]}}',
-          '',
-          'event: run_end',
-          'data: {"payload":{}}',
-          '',
-          '',
-        ].join('\n'),
-        { headers: { 'Content-Type': 'text/event-stream' } },
-      );
+      throw new Error(`Unexpected request: ${String(url)}`);
     });
 
-    await sender.send('clear todos', sessionKey, undefined, undefined, callbacks);
+    const pending = sender.send('clear todos', sessionKey, undefined, undefined, callbacks);
+    await vi.waitFor(() => expect(realtimeState.listener).toBeDefined());
+    realtimeState.listener?.onEvent({
+      topic: 'run:run-plan',
+      seq: 1,
+      event: 'task_plan_updated',
+      data: {
+        type: 'task_plan_updated',
+        runId: 'run-plan',
+        sessionKey,
+        timestamp: Date.now(),
+        payload: {
+          planId: 'session:todo', revision: 2, source: 'todo', scope: 'session', items: [],
+        },
+      },
+    });
+    realtimeState.listener?.onEvent({
+      topic: 'run:run-plan',
+      seq: 2,
+      event: 'run_end',
+      data: {
+        type: 'run_end', runId: 'run-plan', sessionKey, timestamp: Date.now(),
+        payload: { status: 'success' },
+      },
+    });
+    await pending;
 
     expect(onTaskPlanUpdated).toHaveBeenCalledWith({
       planId: 'session:todo',

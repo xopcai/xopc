@@ -448,7 +448,7 @@ export function useLogsPage(language: StoredLanguage) {
   useEffect(() => {
     if (!autoRefresh || !hasToken) return;
 
-    const connection = new LogStreamConnection(token ?? undefined, {
+    const connection = new LogStreamConnection({
       onConnected: () => {},
       onEntry: (entry) => {
         if (!logMatchesClientFilters(entry, clientFilterRef.current)) return;

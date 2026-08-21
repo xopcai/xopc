@@ -6,7 +6,6 @@ import { apiUrl } from '@/lib/url';
 import {
   DEFAULT_AUTH_RATE_LIMIT,
   DEFAULT_GATEWAY_PORT,
-  DEFAULT_MAX_SSE_CONNECTIONS,
   MAX_CHANNEL_DEFER_LIST_SIZE,
   type GatewayAuthMode,
   type GatewayAuthRateLimitState,
@@ -245,10 +244,6 @@ export function normalizeGatewayFromConfig(config: unknown): GatewaySettingsStat
     allowRealIpFallback: gw.allowRealIpFallback === true,
     dangerouslyAllowHostHeaderOriginFallback: gw.dangerouslyAllowHostHeaderOriginFallback === true,
     securityStrict: security.strict === true,
-    maxSseConnections:
-      typeof gw.maxSseConnections === 'number' && Number.isFinite(gw.maxSseConnections)
-        ? Math.max(1, Math.floor(gw.maxSseConnections))
-        : DEFAULT_MAX_SSE_CONNECTIONS,
     channelConnectDeferMode: normalizeDeferMode(gw.channelConnectDeferMode),
     channelConnectDeferIds: normalizeStringIdList(gw.channelConnectDeferIds),
     channelConnectDeferSkipIds: normalizeStringIdList(gw.channelConnectDeferSkipIds),
@@ -328,7 +323,6 @@ export async function patchGatewaySettings(state: GatewaySettingsState): Promise
         allowRealIpFallback: state.allowRealIpFallback,
         dangerouslyAllowHostHeaderOriginFallback: state.dangerouslyAllowHostHeaderOriginFallback,
         security: { strict: state.securityStrict },
-        maxSseConnections: state.maxSseConnections,
         channelConnectDeferMode: state.channelConnectDeferMode,
         channelConnectDeferIds: state.channelConnectDeferIds,
         channelConnectDeferSkipIds: state.channelConnectDeferSkipIds,

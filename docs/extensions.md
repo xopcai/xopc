@@ -206,7 +206,7 @@ If `ui` is absent, the extension may still be a **backend-only** extension (tool
 Import **`createExtensionClient()`** and use **`await client.whenReady()`** after the host sends the `init` message.
 
 - **theme** — `getTheme()`, `onThemeChange`
-- **agent** — `sendMessage` (JSON mode to the gateway), `onStreamEvent` (relies on **`GET /api/events`** SSE + host forwarding)
+- **agent** — `sendMessage` (JSON mode to the gateway), `onStreamEvent` (uses the host's unified realtime connection)
 - **session** — `listSessions`, `navigateToSession`
 - **config** / **storage** — backed by gateway REST (see below); storage is a JSON KV on disk per extension namespace
 - **ui** — `showNotification`, `navigate`, `resize`, `closePanel`, **`onWidgetResult`** (tool/chat widget iframes receive tool output via the host `widget.data` event)
@@ -235,7 +235,7 @@ Same **`Authorization: Bearer <token>`** as the rest of the console API.
 
 - **First-load permission prompt** — Before mounting an iframe, the shell may show a dialog listing **`ui.permissions`**; approval is stored under **`localStorage`** key **`xopc.extensionUiGrants.v1`** (keyed by extension id + permission-set fingerprint).
 - **iframe `sandbox`** — Typically `allow-scripts allow-forms allow-popups` **without** `allow-same-origin` for stronger isolation (host communication uses `postMessage`, not same-origin cookie access).
-- **Agent stream** — Webchat runs emit **`agent.stream`** on the gateway event bus; clients subscribed to **`GET /api/events`** receive them; the shell forwards matching chunks to iframes that subscribed via **`agent.subscribe`** for that **`sessionKey`**.
+- **Agent stream** — The shell subscribes to `run:<runId>` through the unified realtime connection and forwards matching chunks to iframes that subscribed via **`agent.subscribe`** for that **`sessionKey`**.
 - **Command palette** — **⌘K / Ctrl+K** (or `open-command-palette` on `window`) lists **`contributions.commands`**; commands with **`opensPanel`** navigate to **`/extensions/{extensionId}`**.
 - **Debug** — **Settings → Extensions → Extension debug** lists gateway extensions and the raw **UI grants** JSON.
 

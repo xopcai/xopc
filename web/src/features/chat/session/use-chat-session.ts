@@ -18,9 +18,6 @@ import {
   useChatSessionStore,
 } from '@/features/chat/session/chat-session-store';
 import { hasPendingAgentRunForChat, setPendingAgentRun } from '@/features/chat/messages/message-sender';
-import { updateToolDetails } from '@/features/chat/messages/streaming';
-import { userMessageFromSsePayload } from '@/features/chat/messages/user-message-from-sse';
-import { WORKFLOW_TOOL_NAME } from '@/features/chat/workflow/workflow.utils';
 import type { PendingFollowUp } from '@/features/chat/follow-up/pending-follow-up.types';
 import { SessionManager, type SessionTimelineItem } from '@/features/chat/session/session-manager';
 import { patchSessionAgentConfigView } from '@/features/chat/session/patch-session-agent-config-view';
@@ -342,39 +339,12 @@ export function useChatSession() {
   });
 
   useEffect(() => {
-    const onAgentStream = (e: Event) => {
-      const d = (e as CustomEvent<{ sessionKey?: string; event?: unknown }>).detail;
-      if (!d?.sessionKey) return;
-      const inner = d.event as Record<string, unknown> | undefined;
-      if (!inner || typeof inner.type !== 'string') return;
-
-      const streamSessionKey = d.sessionKey;
-
-      if (inner.type === 'user_message' || inner.type === 'user_transcript') {
-        const userMsg = userMessageFromSsePayload(inner);
-        if (userMsg && shouldApplyStreamUpdate(streamSessionKey)) {
-          useChatSessionStore.getState().appendUserMessageIfMissing(streamSessionKey, userMsg);
-        }
-        return;
-      }
-
-      if (inner.type === 'tool_update') {
-        const toolName = typeof inner.toolName === 'string' ? inner.toolName : '';
-        if (toolName !== WORKFLOW_TOOL_NAME) return;
-        if (!shouldApplyStreamUpdate(streamSessionKey)) return;
-        if (chatRunManager.isStreamingFor(streamSessionKey)) return;
-        const toolCallId = typeof inner.toolCallId === 'string' ? inner.toolCallId : undefined;
-        const details = inner.details;
-        useChatSessionStore.getState().mutateSessionStreaming(streamSessionKey, (msg) => {
-          updateToolDetails(msg.content, toolName, toolCallId, details);
-        });
-        return;
-      }
-
-      if (inner.type !== 'status' || typeof inner.runId !== 'string' || !inner.runId.trim()) {
-        return;
-      }
-      setPendingAgentRun(streamSessionKey, inner.runId);
+    const onRunStarted = (e: Event) => {
+      const detail = (e as CustomEvent<{ sessionKey?: string; runId?: string }>).detail;
+      const streamSessionKey = detail?.sessionKey;
+      const runId = detail?.runId;
+      if (!streamSessionKey || !runId?.trim()) return;
+      setPendingAgentRun(streamSessionKey, runId);
       if (!shouldApplyStreamUpdate(streamSessionKey)) return;
       if (chatRunManager.isStreamingFor(streamSessionKey)) return;
 
@@ -384,8 +354,8 @@ export function useChatSession() {
         void tryResumeAgentRun(streamSessionKey, getSessionMessages(streamSessionKey));
       });
     };
-    window.addEventListener('agent-stream', onAgentStream);
-    return () => window.removeEventListener('agent-stream', onAgentStream);
+    window.addEventListener('run-started', onRunStarted);
+    return () => window.removeEventListener('run-started', onRunStarted);
   }, [tryResumeAgentRun, shouldApplyStreamUpdate]);
 
   useEffect(() => {

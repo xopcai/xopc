@@ -4,7 +4,7 @@ let _debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let _pendingDetail: unknown;
 
 /**
- * Coalesce rapid `config.reload` SSE bursts (e.g. batch agent create) into one UI refresh.
+ * Coalesce rapid `config.reload` realtime bursts (e.g. batch agent create) into one UI refresh.
  */
 export function dispatchConfigReload(detail?: unknown): void {
   _pendingDetail = detail;

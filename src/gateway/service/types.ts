@@ -1,11 +1,5 @@
 import type { GatewayBindMode } from '../../config/schema.js';
 
-export interface ServiceEvent {
-  id: string;
-  type: string;
-  payload: unknown;
-}
-
 /** Phase-1 channel timings (init + optional defer plan + start + inline replay). Emitted as structured logs. */
 export interface GatewayChannelStartupPhase1Metrics {
   deferChannelConnectUntilAfterHttp: boolean;

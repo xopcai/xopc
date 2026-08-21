@@ -257,7 +257,7 @@ import type { ExtensionService } from '@xopcai/xopc/extension-sdk';
 使用 **`createExtensionClient()`**，在宿主下发 **`init`**（含 theme、locale、permissions）后 **`await client.whenReady()`**。
 
 - **theme** — `getTheme`、`onThemeChange`
-- **agent** — `sendMessage`（走网关 JSON 模式的 `/api/agent`）、`onStreamEvent`（依赖 **`GET /api/events`** 的 SSE 与宿主转发）
+- **agent** — `sendMessage`（走网关 JSON API）、`onStreamEvent`（使用宿主统一实时连接）
 - **session** — `listSessions`、`navigateToSession`
 - **config** / **storage** — 对应下文 **Gateway REST**；存储为按扩展命名空间持久化的 JSON KV（进程内带缓存）
 - **ui** — `showNotification`、`navigate`、`resize`、`closePanel`；**聊天挂件**可用 **`onWidgetResult`** 接收宿主下发的工具结果（`widget.data`）
@@ -286,7 +286,7 @@ import type { ExtensionService } from '@xopcai/xopc/extension-sdk';
 
 - **首次权限确认** — 展示 manifest **`ui.permissions`**；用户同意后写入 **`localStorage`** 键 **`xopc.extensionUiGrants.v1`**（按扩展 id + 权限集合指纹）。
 - **iframe `sandbox`** — 一般为 `allow-scripts allow-forms allow-popups`，**不启用 `allow-same-origin`** 以降低与宿主同源混用风险（通信依赖 `postMessage`）。
-- **Agent 流式事件** — 网关在 webchat 场景广播 **`agent.stream`**；控制台 **`/api/events`** SSE 收到后，由宿主转发给已通过 **`agent.subscribe`** 订阅对应 **`sessionKey`** 的 iframe。
+- **Agent 流式事件** — 宿主通过统一实时连接订阅 `run:<runId>`，再转发给已通过 **`agent.subscribe`** 订阅对应 **`sessionKey`** 的 iframe。
 - **命令面板** — **⌘K / Ctrl+K**（或 `window` 上的 `open-command-palette`）列出 **`contributions.commands`**；带 **`opensPanel`** 的命令会导航到 **`/extensions/{extensionId}`**。
 - **调试** — **设置 → Extensions → 扩展调试** 可查看网关返回的扩展列表与 **UI 授权** JSON。
 

@@ -3,7 +3,6 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { AgentRunRelay } from '../../agent-run-relay.js';
 import {
   closeXopcDatabase,
   ensureSessionRecord,
@@ -29,7 +28,7 @@ describe('runGatewayAgent', () => {
     rmSync(stateDir, { recursive: true, force: true });
   });
 
-  it('coalesces thinking bursts before relay sequence assignment', async () => {
+  it('coalesces thinking bursts before realtime publication', async () => {
     const sessionKey = 'agent:main:webchat:default:direct:chat-thinking';
     const broadcastEvents: Array<{ event?: { type?: string } }> = [];
     const deps = {
@@ -58,7 +57,6 @@ describe('runGatewayAgent', () => {
         endInboundTurn: () => {},
       },
       bus: { publishInbound: async () => {} },
-      runRelay: new AgentRunRelay(),
       runAbortControllers: new Map<string, AbortController>(),
       activeWebchatRunBySession: new Map<string, string>(),
       sessionIndex: {
@@ -68,6 +66,10 @@ describe('runGatewayAgent', () => {
       emit: (_type: string, payload: unknown) => {
         broadcastEvents.push(payload as { event?: { type?: string } });
       },
+      publishRealtime: (_topic: string, _event: string, data: unknown) => {
+        broadcastEvents.push({ event: data as { type?: string } });
+      },
+      completeRealtimeTopic: () => {},
     } as unknown as RunGatewayAgentDeps;
 
     const events = [];
@@ -82,7 +84,6 @@ describe('runGatewayAgent', () => {
     const thinkingEvents = events.filter((item) => item.type === 'thinking_delta');
     expect(thinkingEvents).toHaveLength(1);
     expect(thinkingEvents[0]).toMatchObject({ payload: { delta: ' 30-minute plan.' } });
-    expect(events.map((item) => item.seq)).toEqual(events.map((_, index) => index + 1));
     expect(broadcastEvents.filter((item) => item.event?.type === 'thinking_delta')).toHaveLength(1);
   });
 
@@ -112,7 +113,6 @@ describe('runGatewayAgent', () => {
       bus: {
         publishInbound: async () => {},
       },
-      runRelay: new AgentRunRelay(),
       runAbortControllers: new Map<string, AbortController>(),
       activeWebchatRunBySession,
       sessionIndex: {
@@ -120,6 +120,8 @@ describe('runGatewayAgent', () => {
         updateSessionMetadata: async () => {},
       },
       emit: () => {},
+      publishRealtime: () => {},
+      completeRealtimeTopic: () => {},
     } as unknown as RunGatewayAgentDeps;
 
     const events = [];

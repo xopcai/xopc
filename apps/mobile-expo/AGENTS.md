@@ -9,7 +9,7 @@
 - `app/` contains Expo Router routes. Keep files thin and delegate to feature screens.
 - `src/features/` contains domains such as `chat`, `notes`, `inbox`, `gateway`, and `sessions`.
 - `src/components/`, `src/hooks/`, `src/query/`, `src/stores/`, `src/storage/`, `src/theme/`, `src/i18n/`, `src/api/`, and `src/sync/` contain shared UI, data, state, persistence, tokens, messages, clients, and sync logic.
-- `../../packages/gateway-sse-client/` is the workspace SSE parser.
+- `../../packages/realtime-client/` owns the persistent realtime WebSocket client; `../../packages/agent-stream-client/` dispatches agent run events.
 - `plugins/` contains Expo config plugins; prefer plugins over generated `android/` or `ios/` patches.
 
 Use `@/*` for `src/*` imports. This app targets iOS and Android only; do not add browser targets, `.web.*` modules, or Web compatibility branches.
@@ -22,9 +22,9 @@ Use Node.js 22+ and the repository root pnpm version. This app is managed by the
 - `pnpm -C apps/mobile-expo start`: start Expo.
 - `pnpm run android:mobile`, `pnpm run ios:mobile`: run native targets from the root.
 - `pnpm run mobile:lint`: run ESLint.
-- `pnpm run mobile:typecheck`: check the app and SSE package.
+- `pnpm run mobile:typecheck`: check the app and agent stream package.
 - `pnpm run mobile:test`: run Vitest.
-- `pnpm run mobile:test:sse`: test the SSE package.
+- `pnpm run mobile:test:stream`: test the agent stream package.
 
 For persistent MMKV storage, use a development build: `pnpm -C apps/mobile-expo exec expo prebuild`, then `pnpm -C apps/mobile-expo run ios:no-proxy` or Android.
 
@@ -42,7 +42,7 @@ All scrollable lists share this contract: tap opens, swipe left uses `SwipeableR
 
 ## Testing Guidelines
 
-Use Vitest for parsing, cache behavior, sync, route strategy, and other pure logic. Place tests near code in `__tests__/`, for example `notes-local.test.ts`. Run SSE tests when touching `../../packages/gateway-sse-client/`.
+Use Vitest for parsing, cache behavior, sync, route strategy, and other pure logic. Place tests near code in `__tests__/`, for example `notes-local.test.ts`. Run realtime and agent stream tests when touching their workspace packages.
 
 ## Commit & Pull Request Guidelines
 

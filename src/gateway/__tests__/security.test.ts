@@ -84,13 +84,12 @@ describe('Gateway Security Fixes', () => {
       const service = createMockService({ gateway: { auth: { mode: 'password', password: 'correct-password' } } });
       const app = createHonoApp({ service });
 
-      expect((await app.request('/api/events?token=correct-password')).status).toBe(401);
+      expect((await app.request('/api/config?token=correct-password')).status).toBe(401);
     });
   });
 
   describe('query token path policy', () => {
-    it('allows query token only for SSE and agent avatar GET', () => {
-      expect(isQueryTokenAllowedPath('/api/events', 'GET')).toBe(true);
+    it('allows query token only for agent avatar GET', () => {
       expect(isQueryTokenAllowedPath('/api/agents/main/avatar', 'GET')).toBe(true);
       expect(isQueryTokenAllowedPath('/api/notes/n1/media/a1', 'GET')).toBe(false);
       expect(isQueryTokenAllowedPath('/api/agents/main/avatar', 'PUT')).toBe(false);

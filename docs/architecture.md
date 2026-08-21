@@ -5,7 +5,7 @@ runtime wiring in `src/gateway/service.ts`, `src/agent/service.ts`,
 `src/channels/manager.ts`, `src/session/store.ts`, the Hono gateway routes, and
 the package build scripts.
 
-Last verified: 2026-07-09.
+Last verified: 2026-08-21.
 
 ## System Architecture
 
@@ -19,7 +19,7 @@ need to edit the diagram, then export the image again.
 
 At runtime, the gateway process is the main composition root. CLI/TUI and the
 Electron shell can start or talk to it, the Web console and mobile app use its
-HTTP/SSE API, channel extensions publish inbound messages through the in-process
+HTTP and realtime WebSocket API, channel extensions publish inbound messages through the in-process
 bus, and the agent runtime persists all session state through SQLite.
 
 ## Runtime Composition
@@ -27,8 +27,8 @@ bus, and the agent runtime persists all session state through SQLite.
 | Layer | Main code | Responsibility |
 |-------|-----------|----------------|
 | CLI and service bootstrap | `src/cli/`, `src/daemon/`, `electron/` | Starts foreground gateway, installs or controls a background service, runs CLI/TUI turns, and hosts the Electron shell. |
-| HTTP gateway | `src/gateway/server.ts`, `src/gateway/hono/` | Hono server, auth, CORS/CSRF checks, rate limits, durable session-input REST routes, `/api/events` broadcast SSE, run-resume SSE, and static Web console serving. |
-| Gateway composition root | `src/gateway/service.ts` | Owns `MessageBus`, `ChannelManager`, `AgentService`, `SessionIndex`, tasks, automations, notes, projects, workflows, extension loading, Gateway SSE hub, and config hot reload. |
+| HTTP and realtime gateway | `src/gateway/server.ts`, `src/gateway/hono/`, `src/realtime/` | Hono REST server, auth, CORS/CSRF checks, rate limits, durable session-input routes, the authenticated realtime WebSocket, and static Web console serving. |
+| Gateway composition root | `src/gateway/service.ts` | Owns `MessageBus`, `ChannelManager`, `AgentService`, `SessionIndex`, tasks, automations, notes, projects, workflows, extension loading, the realtime broker, and config hot reload. |
 | Agent runtime | `src/agent/service.ts`, `src/agent/embedded/`, `src/agent/orchestration/` | Builds per-session agents, prompts, tools, memory, skills, MCP tools, model selection, streaming events, compaction, and direct/webchat turn dispatch. |
 | Channels | `src/channels/`, `extensions/telegram`, `extensions/weixin`, `extensions/feishu` | Channel plugins receive external messages, normalize routing/session keys, publish inbound bus messages, and send outbound replies. |
 | Extension runtime | `src/extensions/`, `extensions/*` | Loads extension manifests and code by activation plan, then registers hooks, tools, channel plugins, gateway methods, and extension UI assets. |
@@ -44,9 +44,9 @@ bus, and the agent runtime persists all session state through SQLite.
 2. Chat submits `POST /api/sessions/:sessionKey/inputs` with an idempotent client message id and `delivery: next | steer`.
 3. `SessionInputCoordinator` persists and orders the input in SQLite before acknowledging it.
 4. `GatewayAgentRunner` claims one input per session and drives `AgentService.turnDispatcher.processDirectStreaming`.
-5. The embedded pi-agent session runs the model/tools; clients attach to an active run through `/api/agent/resume`.
+5. The embedded pi-agent session runs the model/tools; clients subscribe to `run:<runId>` on `/api/realtime/v1/ws`.
 6. `SessionStore` persists transcript rows and metadata to `~/.xopc/xopc.db`.
-7. Full revisioned `session.input-state` snapshots and agent stream events reach every client through `/api/events`.
+7. Revisioned session events and ordered agent stream events reach clients through realtime topics; REST remains the snapshot source.
 
 ### Channel Message
 
@@ -69,7 +69,7 @@ same `GatewayService`/Hono stack used by the Web console and mobile app.
 `AutomationService`, `HeartbeatService`, and `WorkflowRunService` around the same
 `AgentService` and `SessionStore`. An Task owns the work state; workflows and
 automations are execution capabilities linked to it. Scheduled or event-triggered
-work executes as normal agent turns with transcript persistence and Gateway SSE events.
+work executes as normal agent turns with transcript persistence and realtime events.
 
 ## Agent Runtime
 
@@ -78,7 +78,7 @@ composition root for:
 
 - `AgentManager`: per-session embedded pi-agent instances.
 - `ModelManager`: default model, per-session overrides, typed model roles, and resolved model metadata.
-- `TurnDispatcher`: direct, streaming, webchat steering, clarify, and SSE event injection.
+- `TurnDispatcher`: direct, streaming, webchat steering, clarify, and stream event injection.
 - `AgentOrchestrator`: turn execution, lifecycle events, feedback, persistence, and compaction.
 - `OutboundCoordinator`: final response publishing and channel hooks.
 - `SessionConfigService`, `SessionHydrator`, and `SessionInspector`: per-session model/thinking/workspace config, hydration, compaction, and context reports.
@@ -128,7 +128,7 @@ extension code is loaded before the HTTP server starts listening.
 xopc has two MCP directions:
 
 - Outbound MCP for the agent: `src/agent/mcp/` maintains per-session catalogs and transports; the shared external-tool gateway discovers, describes, and executes MCP tools on demand.
-- Inbound channel MCP: `src/mcp/` exposes a stdio MCP server that talks back to the gateway REST/SSE API through `XopcChannelBridge`, allowing external MCP clients to inspect conversations, read messages, send messages, poll events, and respond to approvals.
+- Inbound channel MCP: `src/mcp/` exposes a stdio MCP server that talks back to the gateway REST/realtime API through `XopcChannelBridge`, allowing external MCP clients to inspect conversations, read messages, send messages, poll events, and respond to approvals.
 
 These are intentionally separate: outbound MCP extends what the agent can call,
 while inbound MCP exposes selected xopc/channel capabilities to external tools.
@@ -149,8 +149,8 @@ agents, automations, browser, channels, connectors/MCP, config, home, tasks, log
 models, notes, projects, shares, skills, update, voice, workflows, workspace, and related
 settings surfaces.
 
-Broadcast events flow through `GatewaySseHub` and `/api/events`. Agent run
-streaming flows through `/api/agent` and `/api/agent/resume`.
+Persistent delivery flows through the broker in `src/realtime/` and
+`/api/realtime/v1/ws`; see [Realtime transport](./realtime.md).
 
 ## Build and Distribution
 

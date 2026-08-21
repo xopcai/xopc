@@ -53,11 +53,11 @@
     <rect x="70" y="150" width="200" height="72" rx="8" class="blue" />
     <text x="170" y="174" text-anchor="middle" class="box-title">Web console SPA</text>
     <text x="170" y="194" text-anchor="middle" class="box-text">React/Vite, hash routes</text>
-    <text x="170" y="211" text-anchor="middle" class="box-text">REST + SSE</text>
+    <text x="170" y="211" text-anchor="middle" class="box-text">REST + realtime WS</text>
 
     <rect x="70" y="240" width="200" height="58" rx="8" class="blue" />
     <text x="170" y="264" text-anchor="middle" class="box-title">Mobile app</text>
-    <text x="170" y="284" text-anchor="middle" class="box-text">Gateway REST/SSE client</text>
+    <text x="170" y="284" text-anchor="middle" class="box-text">Gateway REST/realtime client</text>
 
     <rect x="70" y="320" width="200" height="64" rx="8" class="sky" />
     <text x="170" y="346" text-anchor="middle" class="box-title">CLI / TUI</text>
@@ -92,12 +92,12 @@
     <rect x="380" y="150" width="640" height="78" rx="8" class="sky" />
     <text x="700" y="174" text-anchor="middle" class="box-title">Hono HTTP app</text>
     <text x="700" y="194" text-anchor="middle" class="box-text">auth, CORS/CSRF, body limits, rate limits</text>
-    <text x="700" y="211" text-anchor="middle" class="box-text">static Web UI, REST, /api/events SSE, /api/agent SSE</text>
+    <text x="700" y="211" text-anchor="middle" class="box-text">static Web UI, REST, /api/realtime/v1/ws</text>
 
     <rect x="575" y="265" width="250" height="82" rx="8" class="purple" />
     <text x="700" y="290" text-anchor="middle" class="box-title">GatewayService</text>
     <text x="700" y="310" text-anchor="middle" class="box-text">composition root and lifecycle</text>
-    <text x="700" y="327" text-anchor="middle" class="box-text">config hot reload, readiness, SSE hub</text>
+    <text x="700" y="327" text-anchor="middle" class="box-text">config hot reload, readiness, realtime broker</text>
 
     <rect x="380" y="400" width="210" height="78" rx="8" class="yellow" />
     <text x="485" y="424" text-anchor="middle" class="box-title">MessageBus</text>

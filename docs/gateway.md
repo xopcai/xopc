@@ -411,6 +411,8 @@ Creates a webchat-scoped session (or returns an existing empty one). JSON body (
 | POST | `/api/automation-runs/:runId/cancel` | Cancel automation run |
 | GET | `/health` | Health check |
 | GET | `/api/logs` | Query logs (auth required) |
+| POST | `/api/realtime/tickets` | Create a short-lived, single-use realtime connection ticket (auth required) |
+| WS | `/api/realtime/v1/ws` | Unified realtime topics and endpoint-tool traffic |
 | GET | `/api/providers` | List LLM providers |
 | GET | `/api/models` | List available models |
 | GET | `/api/models-json` | Get models.json config |
@@ -418,7 +420,6 @@ Creates a webchat-scoped session (or returns an existing empty one). JSON body (
 | GET | `/api/image-generation/catalog` | Built-in image generation provider catalog (auth) |
 | GET | `/api/agents/:agentId/image-generation` | Agent image generation model (auth) |
 | POST | `/api/agents/:agentId/image-generation/setup` | Store a credential and enable an image model (auth) |
-| GET | `/api/events` | Server-Sent Events stream (auth); broadcast events including **`agent.stream`** for the web console and Gateway extension iframes |
 | GET | `/api/extensions` | List discovered extensions (includes optional `ui` summary) (auth) |
 | GET | `/api/extensions/:id` | Extension detail and full manifest (auth) |
 | GET | `/api/extensions/:id/assets/*` | Static assets for extension UI (HTML/JS/CSS; strict CSP) (auth) |
@@ -431,7 +432,7 @@ Creates a webchat-scoped session (or returns an existing empty one). JSON body (
 
 `GET` / `PATCH` **`/api/config`** (auth) expose agent defaults including **`imageModel`**, **`imageGenerationModel`**, and their **`imageModelFallbacks`** / **`imageGenerationModelFallbacks`** arrays; `PATCH` accepts the same `{ primary, fallbacks }` object shape as the chat `model` field. See [Image & vision](image-multimodal.md).
 
-**Extension UI:** manifest **`ui`**, **`@xopcai/extension-ui-sdk`**, `/api/events` forwarding, and permissions are documented in [Extensions — Gateway console: Extension UI](extensions.md#gateway-console-extension-ui-iframe).
+**Extension UI:** manifest **`ui`**, **`@xopcai/extension-ui-sdk`**, realtime forwarding, and permissions are documented in [Extensions — Gateway console: Extension UI](extensions.md#gateway-console-extension-ui-iframe).
 
 ---
 
@@ -710,7 +711,7 @@ open http://localhost:18790/
 ```
 
 **Features:**
-- Durable chat inputs plus **SSE** (`POST /api/sessions/:sessionKey/inputs`, `POST /api/agent/resume`, and `GET /api/events`)
+- Durable chat inputs plus the unified realtime connection (`POST /api/sessions/:sessionKey/inputs` and `WS /api/realtime/v1/ws`)
 - Session management
 - Configuration dialog
 - Log viewer

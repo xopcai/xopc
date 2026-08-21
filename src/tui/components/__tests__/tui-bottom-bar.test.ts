@@ -110,7 +110,7 @@ describe('TuiBottomBar', () => {
 
     state.activityStatus = 'streaming';
     state.runStatus.phase = 'streaming';
-    state.runStatus.source = 'agent-resume';
+    state.runStatus.source = 'realtime-run';
     expect(bar.render(120).join('\n')).toContain('Working');
   });
 

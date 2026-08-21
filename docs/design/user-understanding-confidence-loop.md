@@ -382,7 +382,7 @@ CREATE TABLE dreaming_decisions (
 
 1. 接收用户消息时生成唯一 `turnId`；
 2. context plan、inject trace、assistant transcript entry 携带同一个 `turnId`；
-3. SSE final event 和会话 transcript API 返回 `turnId`；
+3. Realtime final event 和会话 transcript API 返回 `turnId`；
 4. 前端反馈直接提交 `turnId`，服务端查询唯一 inject trace；
 5. 找不到唯一 trace 时拒绝写入，不猜测最近一条；
 6. record feedback 必须验证 recordId 确实存在于该 trace 的 selected record ids 中。
@@ -498,7 +498,7 @@ Memory episode 格式：
 
 ### Milestone A：稳定归因与反馈归一化（完成）
 
-- turnId 贯穿 context、agent、transcript、SSE；
+- turnId 贯穿 context、agent、transcript、realtime；
 - 新建 `memory_feedback`；
 - 聊天 feedback 使用 turnId；
 - record-specific feedback 与 remediation；

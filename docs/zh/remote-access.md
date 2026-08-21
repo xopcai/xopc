@@ -244,7 +244,7 @@ server {
 | 要求 | 原因 |
 |---|---|
 | **系统信任的 TLS 证书**（Let's Encrypt / 商业 CA） | 移动端会拒绝自签证书（iOS ATS、Android 默认安全配置）。**v1 不支持自签**。 |
-| `proxy_buffering off`（nginx）/ `flush_interval -1`（Caddy） | SSE 流（`/api/events`、`/api/agent/stream`）必须立即 flush。 |
+| WebSocket upgrade 转发 | `/api/realtime/v1/ws` 需要 HTTP/1.1 upgrade headers。 |
 | Idle 超时足够长（≥ 60s，建议数小时） | 聊天与事件流是长连接。 |
 | **不要** 剥离 `Authorization` 请求头 | Gateway 仍用自己的 Bearer token 鉴权。 |
 | `/health` 与 `/api/tunnel/pair/ping` 必须可达 | 移动端 preflight + UI 上「测试」按钮依赖。 |

@@ -72,7 +72,7 @@ const AssistantStepsHeaderStatusIcon = memo(function AssistantStepsHeaderStatusI
 });
 
 /**
- * Live step-round duration ticks locally so parent re-renders (SSE tokens, etc.) do not
+ * Live step-round duration ticks locally so parent re-renders (stream tokens, etc.) do not
  * restart spinners or thrash the whole steps card every 500ms.
  */
 const StepRoundDurationText = memo(function StepRoundDurationText({
