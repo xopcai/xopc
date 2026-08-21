@@ -1,11 +1,10 @@
-// Tool-name → human-readable label helpers used by the steps drawer/summary.
-
-export function toolNameKey(name: string): string {
-  return name.toLowerCase().replace(/-/g, '_').trim();
-}
+import { resolveToolActivity, type ToolActivity } from '@xopcai/gateway-contract';
 
 export type FriendlyToolTitleLabels = {
   searchedWeb: string;
+  searchedMemory?: string;
+  searchedCode?: string;
+  searched?: string;
   readFile: string;
   runCommand: string;
   updatePlan?: string;
@@ -17,30 +16,54 @@ export type FriendlyToolTitleLabels = {
   unknownTool: string;
 };
 
-export function getFriendlyToolTitle(name: string, labels: FriendlyToolTitleLabels): string {
-  const n = toolNameKey(name);
-  if (n === 'review.prepare_diff' || n === 'review_prepare_diff') return labels.readFile;
-  if (n === 'review.model_judge' || n === 'review_model_judge') return labels.unknownTool.replace('{{name}}', 'review.model_judge');
-  if (n === 'exec_command') return labels.runCommand;
-  if (n === 'update_plan') return labels.updatePlan ?? 'Update plan';
-  if (n === 'list_dir' || n === 'ls') return labels.listDirectory;
-  if (n === 'write_file') return labels.writeFile;
-  if (n === 'apply_patch') return labels.editFile;
-  if (n === 'web_fetch') return labels.fetchUrl;
-  if (n === 'open_url') return labels.openUrl;
-  if (
-    n === 'web_search' ||
-    n === 'brave_search' ||
-    n.includes('search') ||
-    n.endsWith('query_graph') ||
-    n.endsWith('trace_path') ||
-    n.endsWith('get_architecture')
-  ) return labels.searchedWeb;
-  if (
-    n === 'read_file' ||
-    n.includes('read_file') ||
-    n.includes('file_read') ||
-    n.endsWith('get_code_snippet')
-  ) return labels.readFile;
+export type ToolDisplayKind =
+  | 'webSearch'
+  | 'memorySearch'
+  | 'codeSearch'
+  | 'search'
+  | 'readFile'
+  | 'editFile'
+  | 'writeFile'
+  | 'runCommand'
+  | 'listDir'
+  | 'openUrl'
+  | 'fetchUrl'
+  | 'other';
+
+export function classifyToolDisplay(name: string, activity?: ToolActivity): ToolDisplayKind {
+  const semantic = activity ?? resolveToolActivity(name, 'running');
+  if (semantic.category === 'memory' && semantic.action === 'search') return 'memorySearch';
+  if (semantic.category === 'web' && semantic.action === 'search') return 'webSearch';
+  if (semantic.category === 'code' && semantic.action === 'search') return 'codeSearch';
+  if (semantic.category === 'other' && semantic.action === 'search') return 'search';
+  if (semantic.category === 'file' && semantic.action === 'read') return 'readFile';
+  if (semantic.category === 'file' && semantic.action === 'list') return 'listDir';
+  if (semantic.category === 'file' && semantic.action === 'write') return 'writeFile';
+  if (semantic.category === 'file' && semantic.action === 'edit') return 'editFile';
+  if (semantic.category === 'command' && semantic.action === 'execute') return 'runCommand';
+  if (semantic.category === 'navigation' && semantic.action === 'open') return 'openUrl';
+  if (semantic.category === 'web' && semantic.action === 'read') return 'fetchUrl';
+  return 'other';
+}
+
+export function getFriendlyToolTitle(
+  name: string,
+  labels: FriendlyToolTitleLabels,
+  activity?: ToolActivity,
+): string {
+  const semantic = activity ?? resolveToolActivity(name, 'running');
+  if (semantic.category === 'planning') return labels.updatePlan ?? labels.unknownTool.replace('{{name}}', name);
+  const kind = classifyToolDisplay(name, semantic);
+  if (kind === 'webSearch') return labels.searchedWeb;
+  if (kind === 'memorySearch') return labels.searchedMemory ?? labels.searched ?? labels.searchedWeb;
+  if (kind === 'codeSearch') return labels.searchedCode ?? labels.searched ?? labels.searchedWeb;
+  if (kind === 'search') return labels.searched ?? labels.searchedWeb;
+  if (kind === 'readFile') return labels.readFile;
+  if (kind === 'runCommand') return labels.runCommand;
+  if (kind === 'listDir') return labels.listDirectory;
+  if (kind === 'writeFile') return labels.writeFile;
+  if (kind === 'editFile') return labels.editFile;
+  if (kind === 'openUrl') return labels.openUrl;
+  if (kind === 'fetchUrl') return labels.fetchUrl;
   return labels.unknownTool.replace('{{name}}', name.trim() || 'tool');
 }

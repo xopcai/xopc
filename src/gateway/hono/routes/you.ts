@@ -317,7 +317,7 @@ function editableRecord(recordId: string): MemoryRecord | null {
 
 function memoryRecordInput(record: MemoryRecord): Parameters<typeof upsertMemoryRecord>[0] {
   return {
-    providerId: record.source.provider ?? 'local',
+    providerId: record.providerId,
     kind: record.kind,
     userId: record.scope.userId,
     sourceAgentId: record.provenance.sourceAgentId,
@@ -640,7 +640,7 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
         const candidate = renderUserClaim(updated);
         const evidence = listUserClaimEvidence(updated.id);
         const record = upsertMemoryRecord({
-          providerId: 'connected-understanding',
+          providerId: 'local',
           kind: candidate.kind,
           sourceAgentId: updated.agentId,
           content: candidate.content,

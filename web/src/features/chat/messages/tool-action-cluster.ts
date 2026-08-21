@@ -6,7 +6,10 @@
 // trivially testable in both languages.
 
 import type { ThinkingContent, ToolUseContent } from '@/features/chat/messages/messages.types';
-import { toolNameKey } from '@/features/chat/messages/tool-friendly-title';
+import {
+  classifyToolDisplay,
+  type ToolDisplayKind,
+} from '@/features/chat/messages/tool-friendly-title';
 import {
   extractCommandPreview,
   extractPathPreview,
@@ -14,25 +17,21 @@ import {
   extractUrlPreview,
   getKeyDetailLine,
 } from '@/features/chat/messages/tool-input-preview';
-import { isWebSearchToolName } from '@/features/chat/tool-results/web-search-tool-result-parser';
 import type { StoredLanguage } from '@/lib/storage';
 
-export type ActionKind =
-  | 'search'
-  | 'readFile'
-  | 'editFile'
-  | 'writeFile'
-  | 'runCommand'
-  | 'listDir'
-  | 'openUrl'
-  | 'fetchUrl'
-  | 'other';
+export type ActionKind = ToolDisplayKind;
 
 export type ClusterCount = { total: number; running: number };
 
 export type ClusterMap = Map<ActionKind, ClusterCount>;
 
 export type StepsClusterDoneLabels = Record<
+  | 'webSearch_one'
+  | 'webSearch_other'
+  | 'memorySearch_one'
+  | 'memorySearch_other'
+  | 'codeSearch_one'
+  | 'codeSearch_other'
   | 'search_one'
   | 'search_other'
   | 'readFile_one'
@@ -56,6 +55,9 @@ export type StepsClusterDoneLabels = Record<
 
 export type StepsClusterIngLabels = Record<
   | 'thinking'
+  | 'webSearch'
+  | 'memorySearch'
+  | 'codeSearch'
   | 'search'
   | 'readFile'
   | 'editFile'
@@ -85,6 +87,9 @@ const KIND_ORDER: ActionKind[] = [
   'editFile',
   'writeFile',
   'runCommand',
+  'memorySearch',
+  'codeSearch',
+  'webSearch',
   'search',
   'fetchUrl',
   'openUrl',
@@ -92,30 +97,8 @@ const KIND_ORDER: ActionKind[] = [
   'other',
 ];
 
-export function classifyTool(name: string): ActionKind {
-  const n = toolNameKey(name);
-  if (n === 'review.prepare_diff' || n === 'review_prepare_diff') return 'readFile';
-  if (n === 'review.model_judge' || n === 'review_model_judge') return 'other';
-  if (n === 'exec_command') return 'runCommand';
-  if (n === 'list_dir' || n === 'ls') return 'listDir';
-  if (n === 'write_file') return 'writeFile';
-  if (n === 'apply_patch') return 'editFile';
-  if (n === 'web_fetch') return 'fetchUrl';
-  if (n === 'open_url') return 'openUrl';
-  if (
-    isWebSearchToolName(name) ||
-    n.includes('search') ||
-    n.endsWith('query_graph') ||
-    n.endsWith('trace_path') ||
-    n.endsWith('get_architecture')
-  ) return 'search';
-  if (
-    n === 'read_file' ||
-    n.includes('read_file') ||
-    n.includes('file_read') ||
-    n.endsWith('get_code_snippet')
-  ) return 'readFile';
-  return 'other';
+export function classifyTool(name: string, activity?: ToolUseContent['activity']): ActionKind {
+  return classifyToolDisplay(name, activity);
 }
 
 export function clusterToolUses(
@@ -124,7 +107,7 @@ export function clusterToolUses(
   const out: ClusterMap = new Map();
   for (const b of blocks) {
     if (b.type !== 'tool_use') continue;
-    const kind = classifyTool(b.name);
+    const kind = classifyTool(b.name, b.activity);
     const cur = out.get(kind) ?? { total: 0, running: 0 };
     cur.total += 1;
     if (b.status === 'running') cur.running += 1;
@@ -144,6 +127,12 @@ function pluralLabel(
 
 function ingLabel(kind: ActionKind, labels: StepsClusterIngLabels): string {
   switch (kind) {
+    case 'webSearch':
+      return labels.webSearch;
+    case 'memorySearch':
+      return labels.memorySearch;
+    case 'codeSearch':
+      return labels.codeSearch;
     case 'search':
       return labels.search;
     case 'readFile':
@@ -197,7 +186,9 @@ function singleToolDetailLine(
 ): string | null {
   const input = block.input;
   let detail = '';
-  if (kind === 'search') {
+  if (kind === 'memorySearch') {
+    detail = '';
+  } else if (kind === 'webSearch' || kind === 'codeSearch' || kind === 'search') {
     detail = extractSearchQuery(input).trim();
   } else if (kind === 'runCommand') {
     detail = extractCommandPreview(input).trim();
@@ -232,7 +223,7 @@ export function summarizeClustersCompleted(
   const onlyKind = map.size === 1 ? [...map.keys()][0] : null;
   if (onlyKind && map.get(onlyKind)!.total === 1) {
     const firstTool = blocks.find(
-      (b): b is ToolUseContent => b.type === 'tool_use' && classifyTool(b.name) === onlyKind,
+      (b): b is ToolUseContent => b.type === 'tool_use' && classifyTool(b.name, b.activity) === onlyKind,
     );
     if (firstTool) {
       const line = singleToolDetailLine(firstTool, onlyKind, doneLabels, language);

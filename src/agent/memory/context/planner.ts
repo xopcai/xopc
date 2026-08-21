@@ -10,6 +10,7 @@ import {
   hasMemoryReferenceConsent,
   hasUnresolvedMemoryConflict,
 } from '../../../storage/sqlite/index.js';
+import { isUserContextRecord, USER_CONTEXT_MEMORY_KINDS } from '../../../user-context/projection.js';
 import { createLogger } from '../../../utils/logger.js';
 import { readAgentMessageContent } from '../agent-message-access.js';
 import { buildUserContextBlock } from '../context-fence.js';
@@ -33,7 +34,19 @@ const BASELINE_KINDS = [
   'user_profile',
   'personal_logistics',
 ] as const;
+const SELF_SUMMARY_PATTERNS = [
+  /(?:介绍|说说|描述|总结)(?:一下|下)?你?(?:所)?(?:了解|知道|认知)(?:到)?的?我/u,
+  /你眼中的我/u,
+  /(?:关于我你|你(?:对我|关于我))(?:有)?(?:哪些|什么)?(?:了解|认知|知道|记得|印象)/u,
+  /(?:what (?:do|can) you|what you) (?:know|understand|remember) about me/i,
+  /(?:describe|summari[sz]e|introduce) me/i,
+  /(?:how do you see|your impression of) me/i,
+];
 const log = createLogger('UserContextPlanner');
+
+export function isUserSelfSummaryQuery(query: string): boolean {
+  return SELF_SUMMARY_PATTERNS.some((pattern) => pattern.test(query));
+}
 
 function sectionFor(record: MemoryRecord): PlannedUserContextItem['section'] {
   if (record.kind === 'boundary') return 'safety';
@@ -135,28 +148,34 @@ export class UserContextPlanner {
     const maxContextChars = params.allocation?.maxChars ?? DEFAULT_MAX_CONTEXT_CHARS;
     const started = Date.now();
     const scope = { userId: 'local-owner', sessionKey: params.sessionKey };
-    const [taskResults, baselineLists] = await Promise.all([
+    const selfSummary = isUserSelfSummaryQuery(query);
+    const baselineKinds = selfSummary ? USER_CONTEXT_MEMORY_KINDS : BASELINE_KINDS;
+    const [searchedResults, baselineLists] = await Promise.all([
       params.memoryManager.search({
         query,
         scope,
         maxResults,
         minScore: 0.15,
       }).catch(() => []),
-      Promise.all(BASELINE_KINDS.map((kind) => (
+      Promise.all(baselineKinds.map((kind) => (
         params.memoryManager.list({ kind, status: 'active', scope }).catch(() => [])
       ))),
     ]);
+    const taskResults = selfSummary
+      ? searchedResults.filter((result) => isUserContextRecord(result.record))
+      : searchedResults;
     const taskIds = new Set(taskResults.map((result) => result.record.id));
     const baselineResults: MemorySearchResult[] = baselineLists
       .flat()
       .filter((record) => !taskIds.has(record.id))
-      .filter((record) => record.kind === 'boundary' || record.explicitness === 'explicit' || record.importance >= 0.7)
+      .filter((record) => isUserContextRecord(record))
+      .filter((record) => selfSummary || record.kind === 'boundary' || record.explicitness === 'explicit' || record.importance >= 0.7)
       .map((record) => ({
         record,
-        score: record.kind === 'boundary' ? 0.7 : 0.42,
+        score: record.kind === 'boundary' ? 0.7 : selfSummary ? 0.6 : 0.42,
         snippet: record.content,
         citation: {
-          providerId: record.source.provider ?? 'local',
+          providerId: record.providerId,
           recordId: record.id,
           path: record.source.path,
           lineStart: record.source.lineStart,

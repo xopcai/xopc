@@ -11,7 +11,7 @@ vi.mock('../../../storage/sqlite/index.js', () => ({
 }));
 
 import { consumeMemoryReferenceConsent, hasMemoryReferenceConsent, hasUnresolvedMemoryConflict } from '../../../storage/sqlite/index.js';
-import { UserContextPlanner } from '../context/planner.js';
+import { isUserSelfSummaryQuery, UserContextPlanner } from '../context/planner.js';
 import type { MemoryManager } from '../manager.js';
 import type { MemoryRecord, MemorySearchResult } from '../types.js';
 
@@ -19,9 +19,11 @@ function result(overrides: Partial<MemoryRecord>, score = 0.8): MemorySearchResu
   const now = new Date().toISOString();
   const record: MemoryRecord = {
     id: overrides.id ?? 'record-1',
+    providerId: 'local',
     kind: overrides.kind ?? 'preference',
     status: 'active',
-    scope: { agentId: 'main' },
+    scope: { userId: 'local-owner' },
+    provenance: { sourceAgentId: 'main' },
     content: overrides.content ?? 'Prefer concise answers.',
     source: { provider: 'local' },
     confidence: 0.9,
@@ -43,6 +45,21 @@ function result(overrides: Partial<MemoryRecord>, score = 0.8): MemorySearchResu
 }
 
 describe('UserContextPlanner', () => {
+  it.each([
+    '介绍下你认知的我',
+    '说说你眼中的我',
+    '关于我你知道什么？',
+    'What do you know about me?',
+    'Tell me what you know about me.',
+    'Describe me based on what you remember.',
+  ])('recognizes an explicit self-summary request: %s', (query) => {
+    expect(isUserSelfSummaryQuery(query)).toBe(true);
+  });
+
+  it('does not classify an ordinary personalized task as a self-summary', () => {
+    expect(isUserSelfSummaryQuery('按照我的偏好写一份发布计划')).toBe(false);
+  });
+
   it('injects relevant context and filters unsafe records', async () => {
     const searchResults = [
       result({ id: 'preference' }),
@@ -103,6 +120,85 @@ describe('UserContextPlanner', () => {
     expect(plan.items.map((item) => item.recordId)).not.toContain('wrong');
     expect(String(plan.modelMessage.content)).toContain('The user explicitly shared this');
     expect(String(plan.modelMessage.content)).not.toContain('local:');
+  });
+
+  it('recalls inferred user understanding for an explicit self-summary', async () => {
+    const inferred = result({
+      id: 'inferred-profile',
+      kind: 'derived_insight',
+      content: 'Often prefers to understand the mechanism before choosing a solution.',
+      explicitness: 'inferred',
+      importance: 0.55,
+      confidence: 0.65,
+      tags: ['user-understanding'],
+    }).record;
+    const memoryManager = {
+      search: vi.fn().mockResolvedValue([]),
+      list: vi.fn().mockImplementation(({ kind }: { kind?: string }) => (
+        kind === 'derived_insight' ? Promise.resolve([inferred]) : Promise.resolve([])
+      )),
+    } as unknown as MemoryManager;
+
+    const plan = await new UserContextPlanner().plan({
+      memoryManager,
+      agentId: 'main',
+      sessionKey: 'session-1',
+      query: '介绍下你认知的我',
+      userMessage: { role: 'user', content: '介绍下你认知的我' } as AgentMessage,
+    });
+
+    expect(plan.items.map((item) => item.recordId)).toEqual(['inferred-profile']);
+    expect(String(plan.modelMessage.content)).toContain('An inference that may be wrong');
+  });
+
+  it('keeps low-importance inferred understanding out of ordinary tasks', async () => {
+    const inferred = result({
+      id: 'inferred-profile',
+      kind: 'derived_insight',
+      explicitness: 'inferred',
+      importance: 0.55,
+      tags: ['user-understanding'],
+    }).record;
+    const memoryManager = {
+      search: vi.fn().mockResolvedValue([]),
+      list: vi.fn().mockResolvedValue([inferred]),
+    } as unknown as MemoryManager;
+
+    const plan = await new UserContextPlanner().plan({
+      memoryManager,
+      agentId: 'main',
+      sessionKey: 'session-1',
+      query: 'Draft a launch plan.',
+      userMessage: { role: 'user', content: 'Draft a launch plan.' } as AgentMessage,
+    });
+
+    expect(plan.items).toHaveLength(0);
+  });
+
+  it('still requires disclosure consent during a self-summary', async () => {
+    const guarded = result({
+      id: 'guarded-profile',
+      kind: 'user_profile',
+      disclosurePolicy: 'ask_before_reference',
+    }).record;
+    const memoryManager = {
+      search: vi.fn().mockResolvedValue([]),
+      list: vi.fn().mockImplementation(({ kind }: { kind?: string }) => (
+        kind === 'user_profile' ? Promise.resolve([guarded]) : Promise.resolve([])
+      )),
+    } as unknown as MemoryManager;
+
+    const plan = await new UserContextPlanner().plan({
+      memoryManager,
+      agentId: 'main',
+      sessionKey: 'session-1',
+      query: '介绍下你认知的我',
+      userMessage: { role: 'user', content: '介绍下你认知的我' } as AgentMessage,
+    });
+
+    expect(plan.items).toHaveLength(0);
+    expect(plan.rejected).toContainEqual({ recordId: 'guarded-profile', reason: 'requires_consent' });
+    expect(String(plan.modelMessage.content)).not.toContain(guarded.content);
   });
 
   it('does not inject understanding whose periodic review is due', async () => {

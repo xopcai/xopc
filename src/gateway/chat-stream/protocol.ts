@@ -1,3 +1,5 @@
+import type { ToolActivity } from '@xopcai/gateway-contract';
+
 export type ChatStreamStatus = 'success' | 'error' | 'cancelled';
 
 export type PetFeedbackTaskState = 'working' | 'waiting' | 'success' | 'error';
@@ -35,7 +37,7 @@ export type ThinkingDeltaEvent = ChatStreamEnvelope<'thinking_delta', { messageI
 export type ThinkingEndEvent = ChatStreamEnvelope<'thinking_end', { messageId: string }>;
 export type ToolStartEvent = ChatStreamEnvelope<
   'tool_start',
-  { messageId: string; toolCallId: string; toolName: string; args?: unknown }
+  { messageId: string; toolCallId: string; toolName: string; args?: unknown; activity: ToolActivity }
 >;
 export type ToolUpdateEvent = ChatStreamEnvelope<
   'tool_update',
@@ -48,6 +50,7 @@ export type ToolEndEvent = ChatStreamEnvelope<
     toolCallId: string;
     toolName: string;
     status: ChatStreamStatus;
+    activity: ToolActivity;
     result?: { content?: unknown[]; details?: unknown; text?: string };
     errorMessage?: string;
   }

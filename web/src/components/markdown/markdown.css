@@ -60,10 +60,10 @@
 .markdown-body code {
   font-family: var(--font-mono);
   font-size: 0.875em;
-  background: var(--color-surface-hover);
+  background: color-mix(in srgb, var(--color-fg) 8%, transparent);
   padding: 0.15em 0.4em;
   border-radius: var(--radius-sm);
-  color: var(--color-accent-fg);
+  color: var(--color-fg-muted);
 }
 
 .markdown-body pre {

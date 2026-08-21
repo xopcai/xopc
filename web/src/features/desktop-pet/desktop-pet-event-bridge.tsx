@@ -17,6 +17,9 @@ import type { PetSessionUpdate } from "@/types/electron";
 function petNarrativeLabels(t: ReturnType<typeof messages>["desktopPet"]): DesktopPetNarrativeLabels {
   return {
     searchedWeb: t.toolActionSearch,
+    searchedMemory: t.toolActionSearchMemory,
+    searchedCode: t.toolActionSearchCode,
+    searched: t.toolActionSearchGeneric,
     readFile: t.toolActionReadFile,
     runCommand: t.toolActionRunCommand,
     updatePlan: t.toolActionUpdatePlan,

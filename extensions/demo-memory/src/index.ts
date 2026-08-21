@@ -133,6 +133,7 @@ class DemoMemoryProvider implements MemoryProvider {
     const id = `demo-memory-${++this.sequence}`;
     const record: MemoryRecord = {
       id,
+      providerId: this.id,
       kind: request.kind,
       scope: { ...this.scope, ...request.scope },
       provenance: { sourceAgentId: this.sourceAgentId },

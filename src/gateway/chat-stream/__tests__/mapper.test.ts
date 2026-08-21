@@ -317,9 +317,25 @@ describe('ChatStreamMapper', () => {
     const [update] = m.map({ type: 'tool_execution_update', toolCallId: 'tc1', toolName: 'workflow', partialResult: { details: { phase: 'run' } } });
     const [end] = m.map({ type: 'tool_execution_end', toolCallId: 'tc1', toolName: 'workflow', isError: false, result: { content: [{ type: 'text', text: 'done' }], details: { phase: 'done' } } });
 
-    expect(start).toMatchObject({ type: 'tool_start', payload: { toolCallId: 'tc1', toolName: 'workflow', args: { step: 1 } } });
+    expect(start).toMatchObject({
+      type: 'tool_start',
+      payload: {
+        toolCallId: 'tc1',
+        toolName: 'workflow',
+        args: { step: 1 },
+        activity: { category: 'other', action: 'use', status: 'running', source: 'unknown' },
+      },
+    });
     expect(update).toMatchObject({ type: 'tool_update', payload: { toolCallId: 'tc1', details: { phase: 'run' } } });
-    expect(end).toMatchObject({ type: 'tool_end', payload: { toolCallId: 'tc1', status: 'success', result: { text: 'done', details: { phase: 'done' } } } });
+    expect(end).toMatchObject({
+      type: 'tool_end',
+      payload: {
+        toolCallId: 'tc1',
+        status: 'success',
+        activity: { category: 'other', action: 'use', status: 'completed', source: 'unknown' },
+        result: { text: 'done', details: { phase: 'done' } },
+      },
+    });
   });
 
   it('emits command-specific lifecycle events for exec_command', () => {

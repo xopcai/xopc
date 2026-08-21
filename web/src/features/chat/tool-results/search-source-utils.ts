@@ -1,4 +1,5 @@
 import type { ToolUseContent } from '@/features/chat/messages/messages.types';
+import { isWebSearchToolName } from '@/features/chat/tool-results/web-search-tool-result-parser';
 
 export interface SearchSource {
   url: string;
@@ -9,7 +10,7 @@ export interface SearchSource {
 export function extractSearchSources(blocks: ToolUseContent[]): SearchSource[] {
   const sources: SearchSource[] = [];
   for (const block of blocks) {
-    if (!block.name.toLowerCase().includes('search') || block.result == null) continue;
+    if (!isWebSearchToolName(block.name) || block.result == null) continue;
     try {
       const parsed =
         typeof block.result === 'string'

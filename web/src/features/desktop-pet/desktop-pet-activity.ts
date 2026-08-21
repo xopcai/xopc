@@ -1,8 +1,6 @@
-import type { DesktopPetActivity, DesktopPetActivityPhase } from '@/types/electron';
+import { resolveToolActivity, type ToolActivity } from '@xopcai/gateway-contract';
 
-function normalizedToolName(toolName: string | undefined): string {
-  return toolName?.trim().toLowerCase().replace(/[.:/\\]+/g, '_') ?? '';
-}
+import type { DesktopPetActivity, DesktopPetActivityPhase } from '@/types/electron';
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -35,15 +33,17 @@ function origin(value: string | undefined): string | undefined {
   }
 }
 
-export function activityPhaseForTool(toolName: string | undefined): DesktopPetActivityPhase {
-  const name = normalizedToolName(toolName);
-  if (name === 'update_plan' || name.includes('plan')) return 'planning';
-  if (name.includes('browser') || name.includes('playwright') || name.includes('chrome')) return 'browsing';
-  if (name.includes('search') || name.includes('image_query') || name.includes('web_fetch')) return 'researching';
-  if (name.includes('read_file') || name.includes('file_read') || name.includes('list_dir')) return 'reading';
-  if (name.includes('patch') || name.includes('edit_file') || name.includes('write_file')) return 'editing';
-  if (name.includes('exec_command') || name.includes('run_command') || name.includes('shell')) return 'running';
-  if (name.includes('open_url') || name.includes('fetch_url')) return 'browsing';
+export function activityPhaseForTool(
+  toolName: string | undefined,
+  activity?: ToolActivity,
+): DesktopPetActivityPhase {
+  const semantic = activity ?? resolveToolActivity(toolName ?? '', 'running');
+  if (semantic.category === 'planning') return 'planning';
+  if (semantic.category === 'navigation' || semantic.category === 'web' && semantic.action === 'read') return 'browsing';
+  if (semantic.action === 'search') return 'researching';
+  if (semantic.category === 'file' && (semantic.action === 'read' || semantic.action === 'list')) return 'reading';
+  if (semantic.category === 'file' && (semantic.action === 'edit' || semantic.action === 'write')) return 'editing';
+  if (semantic.category === 'command') return 'running';
   return 'preparing';
 }
 
@@ -51,10 +51,11 @@ export function activityPhaseForTool(toolName: string | undefined): DesktopPetAc
 export function activityForTool(
   toolName: string | undefined,
   args: unknown,
+  semantic?: ToolActivity,
 ): DesktopPetActivity {
-  const name = normalizedToolName(toolName);
   const record = asRecord(args);
-  const activity: DesktopPetActivity = { phase: activityPhaseForTool(toolName) };
+  const toolActivity = semantic ?? resolveToolActivity(toolName ?? '', 'running');
+  const activity: DesktopPetActivity = { phase: activityPhaseForTool(toolName, toolActivity) };
 
   if (activity.phase === 'reading' || activity.phase === 'editing') {
     activity.detail = fileName(stringValue(record, 'path', 'filePath', 'file'));
@@ -63,7 +64,7 @@ export function activityForTool(
   }
 
   // `exec_command` and search-style tools deliberately keep detail empty: their args may be sensitive.
-  if (name.includes('exec_command') || name.includes('search') || name.includes('query')) {
+  if (toolActivity.category === 'command' || toolActivity.action === 'search') {
     delete activity.detail;
   }
   return activity;

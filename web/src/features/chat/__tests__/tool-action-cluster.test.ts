@@ -12,8 +12,14 @@ import {
 import type { ThinkingContent, ToolUseContent } from '@/features/chat/messages/messages.types';
 
 const doneZh: StepsClusterDoneLabels = {
-  search_one: '搜索了网页',
-  search_other: '搜索了 {{count}} 次网页',
+  webSearch_one: '搜索了网页',
+  webSearch_other: '搜索了 {{count}} 次网页',
+  memorySearch_one: '查找了记忆',
+  memorySearch_other: '查找了 {{count}} 次记忆',
+  codeSearch_one: '检索了代码库',
+  codeSearch_other: '检索了 {{count}} 次代码库',
+  search_one: '搜索了信息',
+  search_other: '搜索了 {{count}} 次信息',
   readFile_one: '读了 1 个文件',
   readFile_other: '读了 {{count}} 个文件',
   editFile_one: '改了 1 个文件',
@@ -34,7 +40,10 @@ const doneZh: StepsClusterDoneLabels = {
 
 const ingZh: StepsClusterIngLabels = {
   thinking: '正在思考…',
-  search: '正在搜索网页…',
+  webSearch: '正在搜索网页…',
+  memorySearch: '正在查找记忆…',
+  codeSearch: '正在检索代码库…',
+  search: '正在搜索信息…',
   readFile: '正在阅读文件…',
   editFile: '正在修改文件…',
   writeFile: '正在保存文件…',
@@ -53,8 +62,14 @@ const joinZh: StepsClusterJoinLabels = {
 };
 
 const doneEn: StepsClusterDoneLabels = {
-  search_one: 'Searched the web',
-  search_other: 'Searched the web {{count}} times',
+  webSearch_one: 'Searched the web',
+  webSearch_other: 'Searched the web {{count}} times',
+  memorySearch_one: 'Searched memory',
+  memorySearch_other: 'Searched memory {{count}} times',
+  codeSearch_one: 'Searched the codebase',
+  codeSearch_other: 'Searched the codebase {{count}} times',
+  search_one: 'Searched',
+  search_other: 'Searched {{count}} times',
   readFile_one: 'Read 1 file',
   readFile_other: 'Read {{count}} files',
   editFile_one: 'Edited 1 file',
@@ -107,10 +122,11 @@ describe('classifyTool', () => {
     expect(classifyTool('write_file')).toBe('writeFile');
     expect(classifyTool('web_fetch')).toBe('fetchUrl');
     expect(classifyTool('open_url')).toBe('openUrl');
-    expect(classifyTool('web_search')).toBe('search');
-    expect(classifyTool('brave_search')).toBe('search');
-    expect(classifyTool('codebase-memory-mcp.search_graph')).toBe('search');
-    expect(classifyTool('codebase-memory-mcp__query_graph')).toBe('search');
+    expect(classifyTool('web_search')).toBe('webSearch');
+    expect(classifyTool('brave_search')).toBe('webSearch');
+    expect(classifyTool('memory_search')).toBe('memorySearch');
+    expect(classifyTool('codebase-memory-mcp.search_graph')).toBe('codeSearch');
+    expect(classifyTool('codebase-memory-mcp__query_graph')).toBe('codeSearch');
     expect(classifyTool('review.model_judge')).toBe('other');
     expect(classifyTool('mystery_tool')).toBe('other');
   });
@@ -141,6 +157,18 @@ describe('summarizeClustersCompleted', () => {
     expect(s).toContain('搜索了网页');
     expect(s).toContain('我的世界老玩家');
     expect(s).toMatch(/：/);
+  });
+
+  it('describes memory lookup without exposing its raw query (zh)', () => {
+    const s = summarizeClustersCompleted(
+      [tool('1', 'memory_search', { query: '用户背景与偏好' })],
+      doneZh,
+      joinZh,
+      'zh',
+    );
+    expect(s).toBe('查找了记忆');
+    expect(s).not.toContain('网页');
+    expect(s).not.toContain('用户背景与偏好');
   });
 
   it('preserves single-file path for a single read call (en)', () => {

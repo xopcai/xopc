@@ -20,6 +20,9 @@ const stepLabels = {
   viewSteps_one: '',
   viewSteps_other: '',
   searchedWeb: '',
+  searchedMemory: '',
+  searchedCode: '',
+  searched: '',
   readFile: '',
   stepDetails: '',
   runCommand: '',
@@ -37,6 +40,9 @@ const stepLabels = {
   rawThinking: '',
   toolRunning: '',
   toolError: '',
+  memoryActivity: {
+    running: '', found_one: '', found_other: '', empty: '', failed: '', purpose: '', why: '', explanation: '', manage: '', privacy: '',
+  },
 };
 
 describe('streaming assistant Markdown rendering', () => {

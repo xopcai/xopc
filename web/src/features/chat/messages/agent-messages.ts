@@ -1,3 +1,5 @@
+import { resolveToolActivity } from '@xopcai/gateway-contract';
+
 import type {
   Message,
   MessageContent,
@@ -454,6 +456,17 @@ function mergeAssistantContent(m: WireMessage): MessageContent[] {
     }
   }
 
+  for (const block of blocks) {
+    if (block.type !== 'tool_use') continue;
+    const result = block.details === undefined
+      ? block.result
+      : { details: block.details, result: block.result };
+    block.activity = resolveToolActivity(
+      block.name,
+      block.status === 'running' ? 'running' : block.status === 'error' ? 'failed' : 'completed',
+      result,
+    );
+  }
   return blocks;
 }
 
@@ -476,6 +489,11 @@ function applyToolResultToLastAssistant(out: Message[], m: WireMessage): void {
     block.status = isError ? 'error' : 'done';
     block.result = text;
     block.details = m.details;
+    block.activity = resolveToolActivity(
+      block.name,
+      isError ? 'failed' : 'completed',
+      { details: m.details, result: text },
+    );
     block.completedAt = completedAt;
     if (block.startedAt != null && completedAt != null) {
       block.durationMs = Math.max(0, completedAt - block.startedAt);
@@ -490,6 +508,11 @@ function applyToolResultToLastAssistant(out: Message[], m: WireMessage): void {
     running[0].status = isError ? 'error' : 'done';
     running[0].result = text;
     running[0].details = m.details;
+    running[0].activity = resolveToolActivity(
+      running[0].name,
+      isError ? 'failed' : 'completed',
+      { details: m.details, result: text },
+    );
     running[0].completedAt = completedAt;
     if (running[0].startedAt != null && completedAt != null) {
       running[0].durationMs = Math.max(0, completedAt - running[0].startedAt);

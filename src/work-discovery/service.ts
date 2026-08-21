@@ -773,7 +773,7 @@ export class WorkDiscoveryService {
   ): MemoryRecord {
     return upsertMemoryRecord({
       id: record.id,
-      providerId: 'local',
+      providerId: record.providerId,
       kind: record.kind,
       sourceAgentId: record.provenance.sourceAgentId,
       workspaceId: record.scope.workspaceId,

@@ -1,3 +1,5 @@
+import type { ToolActivity } from '@xopcai/gateway-contract';
+
 import { activityForProgress, activityForTool } from './desktop-pet-activity';
 import {
   progressNarrative,
@@ -123,13 +125,18 @@ export function mapAgentStreamEvent(
   }
   if (type === 'tool_start' || type === 'tool_update') {
     const toolName = text(event.toolName) ?? text(payload.toolName) ?? 'tool';
-    const activity = activityForTool(toolName, payload.args);
+    const semanticRecord = record(payload.activity);
+    const semantic = typeof semanticRecord.category === 'string' && typeof semanticRecord.action === 'string'
+      ? semanticRecord as ToolActivity
+      : undefined;
+    const activity = activityForTool(toolName, payload.args, semantic);
     const phase = activity.phase ?? 'running';
     const narrative = toolNarrative(
       labels,
       toolName,
       phase,
       activity.detail,
+      semantic,
     );
     return {
       ...base,

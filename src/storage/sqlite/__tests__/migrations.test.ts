@@ -589,6 +589,58 @@ describe('SQLite migrations', () => {
     expect(tables).toEqual([]);
   });
 
+  it('repairs confirmed user understanding provider ownership at v108', () => {
+    const db = openEmptyDb();
+    ensureXopcDatabaseSchema(db);
+    db.exec(`
+      INSERT INTO memory_records (
+        record_id, provider_id, kind, user_id, source_agent_id, content,
+        source_json, confidence, tags_json, status, sensitivity, evidence_json,
+        explicitness, durability, importance, disclosure_policy, created_at, updated_at
+      ) VALUES (
+        'profile-memory', 'personal-context', 'preference', 'local-owner', 'main',
+        'The user prefers local-first products.',
+        '{"provider":"personal-context"}', 0.9, '["user-understanding"]',
+        'active', 'normal', '[]', 'inferred', 'durable', 0.7, 'referenceable', 1, 1
+      ), (
+        'connected-memory', 'connected-understanding', 'user_profile', 'local-owner', 'main',
+        'The user works on xopc.',
+        '{"provider":"connected-sources"}', 0.9, '["user-understanding"]',
+        'active', 'normal', '[]', 'explicit', 'durable', 0.8, 'referenceable', 1, 1
+      ), (
+        'external-memory', 'external-provider', 'preference', 'local-owner', 'main',
+        'An external provider owns this record.',
+        '{"provider":"external-provider"}', 0.9, '["user-understanding"]',
+        'active', 'normal', '[]', 'explicit', 'durable', 0.8, 'referenceable', 1, 1
+      );
+      INSERT INTO memory_records_fts (
+        content, record_id, provider_id, kind, user_id, source_agent_id, workspace_id
+      ) VALUES (
+        'The user prefers local-first products.', 'profile-memory', 'personal-context',
+        'preference', 'local-owner', 'main', NULL
+      ), (
+        'The user works on xopc.', 'connected-memory', 'connected-understanding',
+        'user_profile', 'local-owner', 'main', NULL
+      ), (
+        'An external provider owns this record.', 'external-memory', 'external-provider',
+        'preference', 'local-owner', 'main', NULL
+      );
+    `);
+    setSchemaVersion(db, 107);
+
+    expect(applyPendingMigrations(db, { targetVersion: 108 })).toBe(108);
+    expect(db.prepare(`SELECT provider_id FROM memory_records WHERE record_id = 'profile-memory'`).get())
+      .toEqual({ provider_id: 'local' });
+    expect(db.prepare(`SELECT provider_id FROM memory_records_fts WHERE record_id = 'profile-memory'`).get())
+      .toEqual({ provider_id: 'local' });
+    expect(db.prepare(`SELECT provider_id FROM memory_records WHERE record_id = 'connected-memory'`).get())
+      .toEqual({ provider_id: 'local' });
+    expect(db.prepare(`SELECT provider_id FROM memory_records WHERE record_id = 'external-memory'`).get())
+      .toEqual({ provider_id: 'external-provider' });
+    expect(db.prepare(`SELECT provider_id FROM memory_records_fts WHERE record_id = 'external-memory'`).get())
+      .toEqual({ provider_id: 'external-provider' });
+  });
+
   it('keeps only the Task work model in the current schema', () => {
     const db = openEmptyDb();
     ensureXopcDatabaseSchema(db);

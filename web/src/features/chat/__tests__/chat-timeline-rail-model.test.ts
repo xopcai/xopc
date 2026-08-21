@@ -13,6 +13,9 @@ const labels: ChatTimelineLabels = {
   toolCount_one: '{{count}} tool',
   toolCount_other: '{{count}} tools',
   searchedWeb: 'Searched web',
+  searchedMemory: 'Searched memory',
+  searchedCode: 'Searched codebase',
+  searched: 'Searched',
   readFile: 'Read file',
   runCommand: 'Ran command',
   listDirectory: 'Listed directory',
@@ -24,6 +27,34 @@ const labels: ChatTimelineLabels = {
 };
 
 describe('chat timeline rail model', () => {
+  it('uses semantic search labels for memory, code, and web tools', () => {
+    const items: SessionTimelineItem[] = [
+      {
+        id: 'turn', kind: 'turn', role: 'user', title: 'Turn', preview: 'Search',
+        depth: 0, turn: 1, displayIndex: 0, rowNumber: 1,
+      },
+      {
+        id: 'memory', kind: 'tool', role: 'assistant', title: 'memory_search',
+        depth: 1, turn: 1, rowNumber: 2, meta: { toolName: 'memory_search' },
+      },
+      {
+        id: 'code', kind: 'tool', role: 'assistant', title: 'search_graph',
+        depth: 1, turn: 1, rowNumber: 3,
+        meta: { toolName: 'codebase-memory-mcp__search_graph' },
+      },
+      {
+        id: 'web', kind: 'tool', role: 'assistant', title: 'web_search',
+        depth: 1, turn: 1, rowNumber: 4, meta: { toolName: 'web_search' },
+      },
+    ];
+
+    expect(buildTimeline(items, labels)[0]?.tools.map((tool) => tool.label)).toEqual([
+      'Searched memory',
+      'Searched codebase',
+      'Searched web',
+    ]);
+  });
+
   it('groups tools and outline events under their user turn', () => {
     const items: SessionTimelineItem[] = [
       {

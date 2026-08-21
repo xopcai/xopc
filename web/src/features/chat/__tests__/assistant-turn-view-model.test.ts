@@ -56,6 +56,25 @@ describe('buildAssistantTurnViewModel', () => {
     expect(view.activity.durationMs).toBe(500);
   });
 
+  it('retains a structured tool failure when transport completion succeeded', () => {
+    const view = buildAssistantTurnViewModel({
+      message: assistantMessage([{
+        type: 'tool_use',
+        id: 'memory-1',
+        name: 'memory_search',
+        status: 'done',
+        activity: {
+          category: 'memory', action: 'search', status: 'failed', source: 'memory', sensitivity: 'personal',
+        },
+      }]),
+      isStreaming: false,
+      reasoningLevel: 'stream',
+    });
+
+    expect(view.lifecycle.state).toBe('partial');
+    expect(view.activity.failedCount).toBe(1);
+  });
+
   it('opens live reasoning and moves the cursor to the answer once text starts', () => {
     const reasoning = buildAssistantTurnViewModel({
       message: assistantMessage([

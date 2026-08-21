@@ -1,3 +1,5 @@
+import { resolveToolActivity, type ToolActivity } from '@xopcai/gateway-contract';
+
 import type { Message, MessageContent, ReviewContent, ToolUseContent } from '@/features/chat/messages/messages.types';
 
 /** Pi / wire format may use `thinking` on blocks; UI streaming uses `text`. */
@@ -271,6 +273,7 @@ export function appendToolStart(
   args: unknown,
   toolCallId: string | undefined,
   startedAt: number,
+  activity?: ToolActivity,
 ): void {
   closeStreamingThinkingIfAny(content);
 
@@ -279,6 +282,7 @@ export function appendToolStart(
     id: crypto.randomUUID(),
     toolCallId,
     name: toolName,
+    activity: activity ?? resolveToolActivity(toolName, 'running'),
     input: args,
     status: 'running',
     startedAt,
@@ -293,6 +297,7 @@ export function completeTool(
   result: unknown,
   toolCallId: string | undefined,
   completedAt: number,
+  activity?: ToolActivity,
 ): void {
   for (let i = content.length - 1; i >= 0; i--) {
     const b = content[i];
@@ -301,6 +306,7 @@ export function completeTool(
     if (!toolCallId && !toolNameMatches(b.name, toolName)) continue;
     b.status = isError ? 'error' : 'done';
     b.result = result;
+    b.activity = activity ?? resolveToolActivity(toolName, isError ? 'failed' : 'completed', result);
     b.completedAt = completedAt;
     if (b.startedAt != null) {
       b.durationMs = Math.max(0, completedAt - b.startedAt);

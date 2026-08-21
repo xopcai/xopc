@@ -1,3 +1,5 @@
+import type { ToolActivity } from '@xopcai/gateway-contract';
+
 import { getFriendlyToolTitle, type FriendlyToolTitleLabels } from '@/features/chat/messages/tool-friendly-title';
 import type { DesktopPetAction, DesktopPetActivityPhase } from '@/types/electron';
 
@@ -40,12 +42,7 @@ function progressText(labels: DesktopPetNarrativeLabels, completed?: number, tot
 
 export function desktopPetActionForPhase(
   phase: DesktopPetActivityPhase,
-  toolName?: string,
 ): DesktopPetAction {
-  const normalizedToolName = toolName?.trim().toLowerCase().replace(/[.:/\\-]+/g, '_') ?? '';
-  if (normalizedToolName.includes('exec_command') || normalizedToolName.includes('run_command') || normalizedToolName.includes('shell')) {
-    return 'execute';
-  }
   if (phase === 'researching' || phase === 'browsing') return 'research';
   if (phase === 'reading') return 'read';
   if (phase === 'editing') return 'create';
@@ -59,11 +56,12 @@ export function toolNarrative(
   toolName: string,
   phase: DesktopPetActivityPhase,
   detail?: string,
+  activity?: ToolActivity,
 ): DesktopPetNarrative {
-  const action = getFriendlyToolTitle(toolName, labels);
+  const action = getFriendlyToolTitle(toolName, labels, activity);
   return {
     action: fill(labels.tipTool, { action, detail: detail ? fill(labels.targetSuffix, { detail }) : '' }),
-    animation: desktopPetActionForPhase(phase, toolName),
+    animation: desktopPetActionForPhase(phase),
     priority: 'normal',
   };
 }

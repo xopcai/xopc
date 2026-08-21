@@ -1,5 +1,6 @@
 import { memo, useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, ChevronDown, Loader2, XCircle } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 import {
   buildStepsRoundCompleteSummary,
@@ -10,6 +11,10 @@ import type {
   ThinkingContent,
   ToolUseContent,
 } from '@/features/chat/messages/messages.types';
+import {
+  buildMemoryActivityView,
+  type MemoryActivityLabels,
+} from '@/features/chat/messages/memory-activity';
 import type { AssistantTurnActivityPresentation } from '@/features/chat/messages/assistant-turn-view-model';
 import { formatParamsJson, getKeyDetailLine } from '@/features/chat/messages/tool-input-preview';
 import { getFriendlyToolTitle } from '@/features/chat/messages/tool-friendly-title';
@@ -119,6 +124,9 @@ export function AssistantStepsBlock({
     viewSteps_one: string;
     viewSteps_other: string;
     searchedWeb: string;
+    searchedMemory: string;
+    searchedCode: string;
+    searched: string;
     readFile: string;
     stepDetails: string;
     runCommand: string;
@@ -136,6 +144,7 @@ export function AssistantStepsBlock({
     rawThinking: string;
     toolRunning: string;
     toolError: string;
+    memoryActivity: MemoryActivityLabels;
   };
   clusterLabels: {
     done: StepsClusterDoneLabels;
@@ -200,6 +209,9 @@ export function AssistantStepsBlock({
     thoughts: stepLabels.thoughts,
     thoughtsStreaming: stepLabels.thoughtsStreaming,
     searchedWeb: stepLabels.searchedWeb,
+    searchedMemory: stepLabels.searchedMemory,
+    searchedCode: stepLabels.searchedCode,
+    searched: stepLabels.searched,
     readFile: stepLabels.readFile,
     stepDetails: stepLabels.stepDetails,
     runCommand: stepLabels.runCommand,
@@ -213,6 +225,7 @@ export function AssistantStepsBlock({
     rawThinking: stepLabels.rawThinking,
     toolRunning: stepLabels.toolRunning,
     toolError: stepLabels.toolError,
+    memoryActivity: stepLabels.memoryActivity,
   };
 
   const headerMain = anyActive ? (
@@ -300,6 +313,9 @@ export function AssistantStepsTimeline({
     thoughts: string;
     thoughtsStreaming: string;
     searchedWeb: string;
+    searchedMemory: string;
+    searchedCode: string;
+    searched: string;
     readFile: string;
     stepDetails: string;
     runCommand: string;
@@ -313,6 +329,7 @@ export function AssistantStepsTimeline({
     rawThinking: string;
     toolRunning: string;
     toolError: string;
+    memoryActivity: MemoryActivityLabels;
   };
   cardLabels: ToolCardLabels;
   className?: string;
@@ -393,6 +410,9 @@ function StepRow({
     thoughts: string;
     thoughtsStreaming: string;
     searchedWeb: string;
+    searchedMemory: string;
+    searchedCode: string;
+    searched: string;
     readFile: string;
     stepDetails: string;
     runCommand: string;
@@ -406,6 +426,7 @@ function StepRow({
     rawThinking: string;
     toolRunning: string;
     toolError: string;
+    memoryActivity: MemoryActivityLabels;
   };
   cardLabels: ToolCardLabels;
   sessionKey?: string | null;
@@ -499,7 +520,7 @@ function StepRow({
   }
 
   const isStreaming = block.status === 'running';
-  const isError = block.status === 'error';
+  const isError = block.status === 'error' || block.activity?.status === 'failed';
   const resultText = toolResultText;
   const liveOutputText = isStreaming && block.details && typeof block.details === 'object'
     && !Array.isArray(block.details) && typeof (block.details as { text?: unknown }).text === 'string'
@@ -515,11 +536,17 @@ function StepRow({
     }
   }
 
-  const kind = classifyTool(block.name);
+  const kind = classifyTool(block.name, block.activity);
   const hasCard = KINDS_WITH_CARD.has(kind);
+  const memoryActivity = kind === 'memorySearch'
+    ? buildMemoryActivityView(block, stepLabels.memoryActivity)
+    : null;
 
-  const title = getFriendlyToolTitle(block.name, {
+  const title = memoryActivity?.title ?? getFriendlyToolTitle(block.name, {
     searchedWeb: stepLabels.searchedWeb,
+    searchedMemory: stepLabels.searchedMemory,
+    searchedCode: stepLabels.searchedCode,
+    searched: stepLabels.searched,
     readFile: stepLabels.readFile,
     runCommand: stepLabels.runCommand,
     listDirectory: stepLabels.listDirectory,
@@ -528,8 +555,8 @@ function StepRow({
     openUrl: stepLabels.openUrl,
     fetchUrl: stepLabels.fetchUrl,
     unknownTool: stepLabels.unknownTool,
-  });
-  const detailLine = getKeyDetailLine(block.input);
+  }, block.activity);
+  const detailLine = memoryActivity ? '' : getKeyDetailLine(block.input);
 
   const paramsJson = block.input !== undefined ? formatParamsJson(block.input) : '';
 
@@ -573,6 +600,27 @@ function StepRow({
           ) : null}
         </div>
         {card}
+        {memoryActivity ? (
+          <div className="space-y-1 text-xs text-fg-muted">
+            <p>{memoryActivity.purpose}</p>
+            <div className="flex flex-wrap gap-x-3 gap-y-1">
+              <Link className="font-medium text-accent-fg hover:underline" to="/you?tab=memory">
+                {stepLabels.memoryActivity.manage}
+              </Link>
+              <Link className="font-medium text-accent-fg hover:underline" to="/you?tab=privacy">
+                {stepLabels.memoryActivity.privacy}
+              </Link>
+            </div>
+            <details>
+              <summary className="cursor-pointer select-none text-fg-subtle hover:text-fg-muted">
+                {stepLabels.memoryActivity.why}
+              </summary>
+              <div className="mt-1.5 rounded-md bg-surface-hover/60 px-2 py-1.5 dark:bg-surface-hover/35">
+                <p>{stepLabels.memoryActivity.explanation}</p>
+              </div>
+            </details>
+          </div>
+        ) : null}
         {isError ? (
           <p className="text-xs leading-relaxed text-red-600 dark:text-red-400">
             {stepLabels.toolFailedImpact}
