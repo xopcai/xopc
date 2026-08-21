@@ -459,7 +459,7 @@ export function SessionsPage() {
         .then((st) => dispatch({ type: 'patch', patch: { stats: st } }))
         .catch(() => {});
     } catch {
-      /* toast optional */
+      // The existing row stays unchanged when the rename fails.
     }
   };
 

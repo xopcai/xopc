@@ -17,7 +17,6 @@ import { useDirectoryPicker } from '@/features/fs/use-directory-picker';
 import { WorkingDirectoryPickerModal } from '@/features/fs/working-directory-picker-modal';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
-import { showToast } from '@/lib/toast';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useWorkspacePanelStore } from '@/stores/workspace-panel-store';
@@ -83,15 +82,6 @@ export const SessionWorkingDirectoryControl = memo(function SessionWorkingDirect
   );
 
   const directoryPicker = useDirectoryPicker({ initialPath: effectivePath, onPicked: applyPath });
-
-  const showWorkspaceLockedReminder = useCallback(() => {
-    showToast({
-      type: 'info',
-      title: wd.lockedTapTitle,
-      message: wd.lockedTapBody,
-      duration: 6500,
-    });
-  }, [wd.lockedTapBody, wd.lockedTapTitle]);
 
   const fullPath = effectivePath.trim();
   const hasPath = Boolean(fullPath);
@@ -168,9 +158,9 @@ export const SessionWorkingDirectoryControl = memo(function SessionWorkingDirect
             'cursor-pointer text-left text-fg-muted hover:bg-surface-hover/70 dark:hover:bg-surface-hover/50',
           )}
           aria-label={`${wd.notSet}. ${wd.selectionOnlyAtNewChat}`}
+          aria-disabled="true"
           onClick={(e) => {
             e.stopPropagation();
-            showWorkspaceLockedReminder();
           }}
         >
           <FolderInput className="size-3.5 shrink-0 text-fg-muted" aria-hidden />

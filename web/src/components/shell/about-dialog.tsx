@@ -13,7 +13,6 @@ import { messages } from '@/i18n/messages';
 import { webBuildInfo } from '@/lib/build-info';
 import { cn } from '@/lib/cn';
 import { fetchJson } from '@/lib/fetch';
-import { showToast } from '@/lib/toast';
 import { showActivity } from '@/stores/activity-store';
 import { apiUrl } from '@/lib/url';
 import { useAsyncResource } from '@/lib/use-async-resource';
@@ -71,6 +70,7 @@ export function AboutDialog({
   const [manualCheckTriggered, setManualCheckTriggered] = useState(false);
   const [npmCheckBusy, setNpmCheckBusy] = useState(false);
   const [npmCheckFailed, setNpmCheckFailed] = useState(false);
+  const [npmUpgradeError, setNpmUpgradeError] = useState<string | null>(null);
 
   const { data: gatewayVersion } = useAsyncResource(
     async () => {
@@ -87,6 +87,7 @@ export function AboutDialog({
         setManualCheckTriggered(false);
         setNpmCheckBusy(false);
         setNpmCheckFailed(false);
+        setNpmUpgradeError(null);
       }
       onOpenChange(nextOpen);
     },
@@ -94,6 +95,7 @@ export function AboutDialog({
   );
 
   const handleNpmUpgrade = useCallback(async () => {
+    setNpmUpgradeError(null);
     const panel = messages(language).updatePanel;
     const r = await runNpmUpdate();
     if (r.ok) {
@@ -114,7 +116,7 @@ export function AboutDialog({
         : r.error === 'busy'
           ? panel.updateErrorBusy
           : panel.updateErrorFailed;
-    showToast({ type: 'error', title, message: r.message });
+    setNpmUpgradeError(`${title}: ${r.message}`);
   }, [runNpmUpdate, language]);
 
   const commit = webBuildInfo.commit;
@@ -225,6 +227,7 @@ export function AboutDialog({
                   checkFailed={npmCheckFailed}
                   npm={npm}
                   npmUpdateRunning={npmUpdateRunning}
+                  upgradeError={npmUpgradeError}
                   onUpgrade={handleNpmUpgrade}
                   d={d}
                   tp={tp}
@@ -347,6 +350,7 @@ function NpmAboutUpdateHint({
   checkFailed,
   npm,
   npmUpdateRunning,
+  upgradeError,
   onUpgrade,
   d,
   tp,
@@ -355,6 +359,7 @@ function NpmAboutUpdateHint({
   checkFailed: boolean;
   npm: NpmUpdateStatus | null;
   npmUpdateRunning: boolean;
+  upgradeError: string | null;
   onUpgrade: () => void;
   d: {
     checkUpdatesChecking: string;
@@ -388,6 +393,14 @@ function NpmAboutUpdateHint({
       <p className="flex items-center gap-2 text-[12px] text-fg-muted">
         <Loader2 className="size-3.5 animate-spin" />
         <span>{tp.updateRunning}</span>
+      </p>
+    );
+  }
+  if (upgradeError) {
+    return (
+      <p className="flex items-start gap-2 text-[12px] text-red-500 dark:text-red-400" role="alert">
+        <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
+        <span>{upgradeError}</span>
       </p>
     );
   }

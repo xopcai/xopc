@@ -3,7 +3,6 @@ import { ExtensionErrorCode, type ThemeInfo } from '@xopcai/extension-ui-sdk';
 import { apiFetch } from '@/lib/fetch';
 import { waitForEndpointTurnClaim } from '@/features/endpoint-tools/turn-claim';
 import { apiUrl } from '@/lib/url';
-import type { ToastDetail } from '@/lib/toast';
 import { showActivity } from '@/stores/activity-store';
 import { useThemeStore } from '@/stores/theme-store';
 
@@ -369,18 +368,12 @@ export function registerBuiltinMethods(router: ExtensionMessageRouter): void {
       raw.type === 'success' || raw.type === 'warning' || raw.type === 'error' || raw.type === 'info'
         ? raw.type
         : 'info';
-    const detail: ToastDetail = {
-      type,
+    showActivity({
+      tone: type,
       title,
       message: typeof raw.message === 'string' ? raw.message : undefined,
-      duration: typeof raw.duration === 'number' ? raw.duration : undefined,
-    };
-    showActivity({
-      tone: detail.type,
-      title: detail.title,
-      message: detail.message,
       source: extensionId,
-      dedupeKey: `extension:${extensionId}:${detail.title}`,
+      dedupeKey: `extension:${extensionId}:${title}`,
     });
   });
 

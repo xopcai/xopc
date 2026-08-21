@@ -6,7 +6,6 @@ import type { UpdateReminderController } from '@/features/updater/use-update-rem
 import { restartGatewayAfterConfigChange } from '@/features/tunnel/gateway-restart';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
-import { showToast } from '@/lib/toast';
 import { showActivity } from '@/stores/activity-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { npmUpdateRestartIsAutomatic } from '@/features/updater/use-update-status';
@@ -26,34 +25,28 @@ export function UpdateReminderBar({
   const { show, dismiss, electronQuitAndInstall, runNpmUpdate, npmUpdateRunning } = reminder;
 
   const [restartBusy, setRestartBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const onRestartGateway = useCallback(async () => {
-    const tp = messages(language).updatePanel;
     setRestartBusy(true);
+    setActionError(null);
     try {
       const j = await restartGatewayAfterConfigChange();
       if (j.ok) {
         window.dispatchEvent(new Event('gateway-restart-initiated'));
         return;
       }
-      showToast({
-        type: 'error',
-        title: tp.updateErrorFailed,
-        message: j.message ?? 'Gateway restart failed',
-      });
+      setActionError(j.message ?? 'Gateway restart failed');
     } catch (e) {
-      showToast({
-        type: 'error',
-        title: tp.updateErrorFailed,
-        message: e instanceof Error ? e.message : String(e),
-      });
+      setActionError(e instanceof Error ? e.message : String(e));
     } finally {
       setRestartBusy(false);
     }
-  }, [language]);
+  }, []);
 
   const onNpmUpdateClick = useCallback(async () => {
     const tp = messages(language).updatePanel;
+    setActionError(null);
     const r = await runNpmUpdate();
     if (r.ok) {
       showActivity({
@@ -73,7 +66,7 @@ export function UpdateReminderBar({
         : r.error === 'busy'
           ? tp.updateErrorBusy
           : tp.updateErrorFailed;
-    showToast({ type: 'error', title, message: r.message });
+    setActionError(`${title}: ${r.message}`);
   }, [runNpmUpdate, language]);
 
   if (show.kind === 'none') {
@@ -211,6 +204,7 @@ export function UpdateReminderBar({
             )}
             {t.restartGateway}
           </button>
+          {actionError ? <span className="w-full text-xs text-danger" role="alert">{actionError}</span> : null}
         </div>
         <button
           type="button"
@@ -276,6 +270,7 @@ export function UpdateReminderBar({
             )}
             {npmUpdateRunning ? t.updateRunning : t.updateNow}
           </button>
+          {actionError ? <span className="w-full text-xs text-danger" role="alert">{actionError}</span> : null}
         </div>
         <button
           type="button"

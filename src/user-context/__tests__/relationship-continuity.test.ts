@@ -14,6 +14,18 @@ describe('relationship continuity', () => {
       subject: '面试怎么样',
       reviewAfter: new Date(24 * 60 * 60 * 1_000).toISOString(),
     });
+    expect(extractExplicitRelationshipFollowUp('帮我下周跟进一下项目发布进度', 0)).toEqual({
+      subject: '项目发布进度',
+      reviewAfter: new Date(7 * 24 * 60 * 60 * 1_000).toISOString(),
+    });
+  });
+
+  it('does not mistake ordinary task wording for a future follow-up request', () => {
+    expect(extractExplicitRelationshipFollowUp(
+      '帮我把目录里的重要内容整理成摘要，并标出值得继续跟进的线索。',
+    )).toBeNull();
+    expect(extractExplicitRelationshipFollowUp('我们需要继续跟进的线索。')).toBeNull();
+    expect(extractExplicitRelationshipFollowUp('跟进的线索。')).toBeNull();
   });
 
   it('prompts only when an approved follow-up is due', () => {

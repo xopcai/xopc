@@ -26,7 +26,6 @@ import {
   updateToolDetails,
 } from '@/features/chat/messages/streaming';
 import { messages } from '@/i18n/messages';
-import { showToast } from '@/lib/toast';
 import { showActivity } from '@/stores/activity-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -47,11 +46,10 @@ function recordBackgroundRunCompleted(chatId: string): void {
 
 function notifyBackgroundRunFailed(chatId: string): void {
   const m = messages(useLocaleStore.getState().language).chat;
-  showToast({
-    type: 'error',
+  showActivity({
+    tone: 'error',
     title: m.backgroundRunFailedTitle,
     message: m.backgroundRunCompletedDescription,
-    duration: 0,
     source: 'chat',
     href: `/chat/${encodeURIComponent(chatId)}`,
     dedupeKey: `chat-run:failed:${chatId}`,

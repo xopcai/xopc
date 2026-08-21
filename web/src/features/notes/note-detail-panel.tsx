@@ -8,7 +8,6 @@ import { AutomationSuggestionCard } from '@/features/automations/automation-sugg
 import { ProductAutomationFeedback } from '@/features/automations/product-automation-feedback';
 import { DiscussionNoteSections } from '@/features/discussions/discussion-note-sections';
 import { messages } from '@/i18n/messages';
-import { showToast } from '@/lib/toast';
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
@@ -164,6 +163,7 @@ function NoteDetailPanelInner({
   const [historyResizing, setHistoryResizing] = useState(false);
   const [catalyzing, setCatalyzing] = useState(false);
   const [openingChat, setOpeningChat] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const titleInitRef = useRef(false);
   const titleComposingRef = useRef(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -298,17 +298,14 @@ function NoteDetailPanelInner({
 
   const handleOpenNoteChat = useCallback(async (forceNew = false) => {
     setOpeningChat(true);
+    setActionError(null);
     try {
       const result = await openNoteChat(noteId, { forceNew });
       await mutate();
       await mutateNoteThreads();
       navigate(`/chat/${encodeURIComponent(result.sessionKey)}`);
     } catch (err) {
-      showToast({
-        type: 'error',
-        title: n.chatOpenFailedTitle,
-        message: err instanceof Error ? err.message : n.chatOpenFailedMessage,
-      });
+      setActionError(`${n.chatOpenFailedTitle}: ${err instanceof Error ? err.message : n.chatOpenFailedMessage}`);
     } finally {
       setOpeningChat(false);
     }
@@ -316,15 +313,12 @@ function NoteDetailPanelInner({
 
   const handleCatalyze = useCallback(async () => {
     setCatalyzing(true);
+    setActionError(null);
     try {
       await catalyzeNote(noteId);
       await mutate();
     } catch (err) {
-      showToast({
-        type: 'error',
-        title: n.catalysisFailed,
-        message: err instanceof Error ? err.message : n.chatOpenFailedMessage,
-      });
+      setActionError(`${n.catalysisFailed}: ${err instanceof Error ? err.message : n.chatOpenFailedMessage}`);
     } finally {
       setCatalyzing(false);
     }
@@ -464,16 +458,13 @@ function NoteDetailPanelInner({
         pendingMarkdownRef.current = null;
         if (markdown === null) return;
         setSaving(true);
+        setActionError(null);
         try {
           await updateNote(noteId, { markdown });
           await mutate();
           onSaved?.();
         } catch (err) {
-          showToast({
-            type: 'error',
-            title: n.saveFailed,
-            message: err instanceof Error ? err.message : n.saveFailedHint,
-          });
+          setActionError(`${n.saveFailed}: ${err instanceof Error ? err.message : n.saveFailedHint}`);
         } finally {
           setSaving(false);
         }
@@ -562,6 +553,7 @@ function NoteDetailPanelInner({
     <div className="flex h-full min-h-0 gap-3 p-4 sm:px-5">
       {/* Editor */}
       <div className="mx-auto flex min-h-0 min-w-0 w-full max-w-[60rem] flex-1 flex-col">
+        {actionError ? <p className="mb-3 shrink-0 rounded-lg border border-danger/25 bg-danger-soft px-3 py-2 text-sm text-danger" role="alert">{actionError}</p> : null}
         <ProductAutomationFeedback
           eventType="note.created"
           source="notes"

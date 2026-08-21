@@ -47,7 +47,6 @@ import {
   type NoteKind,
   type NoteStatus,
 } from './notes-api';
-import { showToast } from '@/lib/toast';
 
 type StatusFilter = 'all' | NoteStatus;
 type KindFilter = 'all' | NoteKind;
@@ -167,6 +166,7 @@ export function NotesWorkbench({
   const [resizingList, setResizingList] = useState(false);
   const [notesListCollapsed, setNotesListCollapsed] = useState(false);
   const [creatingBlankNote, setCreatingBlankNote] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [autoFocusNoteId, setAutoFocusNoteId] = useState<string | null>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const notesListRef = useRef<HTMLElement>(null);
@@ -416,6 +416,7 @@ export function NotesWorkbench({
   const handleCreateBlankNote = useCallback(async () => {
     if (creatingBlankNote) return;
     setCreatingBlankNote(true);
+    setActionError(null);
     try {
       const note = await createNote({
         markdown: '',
@@ -428,11 +429,7 @@ export function NotesWorkbench({
       setAutoFocusNoteId(note.id);
       navigate(notePath(basePath, note.id));
     } catch (err) {
-      showToast({
-        type: 'error',
-        title: n.createBlankFailed,
-        message: err instanceof Error ? err.message : n.createBlankFailedHint,
-      });
+      setActionError(`${n.createBlankFailed}: ${err instanceof Error ? err.message : n.createBlankFailedHint}`);
     } finally {
       setCreatingBlankNote(false);
     }
@@ -446,14 +443,11 @@ export function NotesWorkbench({
       const file = input.files?.[0];
       if (!file) return;
       try {
+        setActionError(null);
         await quickCaptureImage(file, 'web');
         await mutate();
       } catch (err) {
-        showToast({
-          type: 'error',
-          title: n.imageUploadFailed,
-          message: err instanceof Error ? err.message : n.imageUploadFailedHint,
-        });
+        setActionError(`${n.imageUploadFailed}: ${err instanceof Error ? err.message : n.imageUploadFailedHint}`);
       }
     };
     input.click();
@@ -462,14 +456,11 @@ export function NotesWorkbench({
   const handleVoiceCapture = useCallback(
     async (file: File, durationSec: number) => {
       try {
+        setActionError(null);
         await quickCaptureVoice(file, durationSec, 'web');
         await mutate();
       } catch (err) {
-        showToast({
-          type: 'error',
-          title: n.voiceUploadFailed,
-          message: err instanceof Error ? err.message : n.voiceUploadFailedHint,
-        });
+        setActionError(`${n.voiceUploadFailed}: ${err instanceof Error ? err.message : n.voiceUploadFailedHint}`);
       }
     },
     [mutate, n.voiceUploadFailed, n.voiceUploadFailedHint],
@@ -644,6 +635,7 @@ export function NotesWorkbench({
         aria-hidden={notesListCollapsed ? true : undefined}
       >
         <div className="shrink-0 border-b border-edge-subtle p-3">
+          {actionError ? <p className="mb-3 rounded-lg border border-danger/25 bg-danger-soft px-3 py-2 text-xs text-danger" role="alert">{actionError}</p> : null}
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               {showLibrary ? (

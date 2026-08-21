@@ -6,15 +6,8 @@ import {
   SHELL_PREFS_CHANGED_EVENT,
 } from '@/features/electron/desktop-notifications';
 import { isElectron } from '@/lib/electron-env';
-import { TOAST_EVENT } from '@/lib/toast';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
-
-type ExtensionNotificationDetail = {
-  type?: 'info' | 'success' | 'warning' | 'error';
-  title?: string;
-  message?: string;
-};
 
 type AgentStreamDetail = {
   sessionKey?: string;
@@ -22,8 +15,7 @@ type AgentStreamDetail = {
 };
 
 /**
- * Mirrors in-app toasts to OS notifications when the user enabled desktop notifications
- * and the window is in the background. Foreground feedback stays inside the app.
+ * Sends background agent failures to the OS when desktop notifications are enabled.
  */
 export function DesktopNotificationBridge() {
   const language = useLocaleStore((s) => s.language);
@@ -48,21 +40,6 @@ export function DesktopNotificationBridge() {
 
     const copy = messages(language).systemSettings.desktopNotify;
 
-    const onExtensionNotification = (e: Event) => {
-      const d = (e as CustomEvent<ExtensionNotificationDetail>).detail;
-      const title = typeof d?.title === 'string' ? d.title.trim() : '';
-      if (!title) {
-        return;
-      }
-      const body = typeof d?.message === 'string' ? d.message.trim() : undefined;
-      showDesktopNotification({
-        title,
-        body,
-        tag: `xopc-toast-${d?.type ?? 'info'}`,
-        urgent: false,
-      });
-    };
-
     const onAgentStream = (e: Event) => {
       const d = (e as CustomEvent<AgentStreamDetail>).detail;
       const event = d?.event;
@@ -78,10 +55,8 @@ export function DesktopNotificationBridge() {
       });
     };
 
-    window.addEventListener(TOAST_EVENT, onExtensionNotification);
     window.addEventListener('agent-stream-event', onAgentStream);
     return () => {
-      window.removeEventListener(TOAST_EVENT, onExtensionNotification);
       window.removeEventListener('agent-stream-event', onAgentStream);
     };
   }, [language]);
