@@ -52,6 +52,13 @@ import {
   type ConnectorBenefit,
 } from './utils/connector-benefits';
 import {
+  COMPOSIO_CONNECTOR_SOURCE,
+  connectorDiscoverySourceForEntry,
+  DISCOVERY_SOURCE_ALL,
+  DISCOVERY_SOURCE_BUILTIN,
+  STORE_CONNECTOR_SOURCE,
+} from './utils/connector-discovery-source';
+import {
   customServerMatchesQuery,
   filterAndSortConnectors,
   installedConnectorMatchesQuery,
@@ -61,11 +68,6 @@ import {
 type TabId = 'connected' | 'discover';
 type ConnectorSort = 'name' | 'source';
 type DiscoveryTask = 'all' | ConnectorBenefit;
-
-const DISCOVERY_SOURCE_ALL = 'all';
-const DISCOVERY_SOURCE_BUILTIN = 'builtin';
-const COMPOSIO_CONNECTOR_SOURCE = 'composio';
-const STORE_CONNECTOR_SOURCE = 'xopc-store';
 
 type LoadState = {
   catalog: ConnectorDefinition[];
@@ -145,8 +147,8 @@ export function ConnectorsPage() {
   const [discoverSearchQuery, setDiscoverSearchQuery] = useState(
     personalContextIntent ? searchParams.get('connector') ?? '' : '',
   );
-  const [discoverSource, setDiscoverSource] = useState(
-    personalContextIntent ? COMPOSIO_CONNECTOR_SOURCE : DISCOVERY_SOURCE_BUILTIN,
+  const [discoverSource, setDiscoverSource] = useState<string>(
+    connectorDiscoverySourceForEntry(personalContextIntent ? 'personal-context' : 'default'),
   );
   const [connectorSort, setConnectorSort] = useState<ConnectorSort>('name');
   const [selectedTask, setSelectedTask] = useState<DiscoveryTask>(personalContextIntent ? 'understand' : 'all');
@@ -356,7 +358,7 @@ export function ConnectorsPage() {
       const definition = connectorDefinitionsById.get(connectorId);
       if (!definition) return;
       initialTabResolvedRef.current = true;
-      setDiscoverSource(personalContextIntent ? COMPOSIO_CONNECTOR_SOURCE : DISCOVERY_SOURCE_BUILTIN);
+      setDiscoverSource(connectorDiscoverySourceForEntry(personalContextIntent ? 'personal-context' : 'default'));
       setDiscoverSearchQuery('');
       setDetailConnector(definition);
       setTab('discover');

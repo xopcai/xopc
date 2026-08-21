@@ -200,9 +200,6 @@ importers:
       '@xopcai/realtime-protocol':
         specifier: workspace:*
         version: link:packages/realtime-protocol
-      codebase-memory-mcp:
-        specifier: 0.9.0
-        version: 0.9.0
       cross-env:
         specifier: ^10.1.0
         version: 10.1.0
@@ -5892,13 +5889,6 @@ packages:
   clsx@2.1.1:
     resolution: {integrity: sha512-eYm0QWBtUrBWZWG0d386OGAw16Z995PiOVo2B7bjWSbHedGl5e0ZWaq65kOGgUSNesEIDkB9ISbTg/JK9dhCZA==}
     engines: {node: '>=6'}
-
-  codebase-memory-mcp@0.9.0:
-    resolution: {integrity: sha512-Zv1qmX/v2LDOJuc+BKmgx11X7P2GMAZmeFuOKdlXqFxRwi/dUGqismHIPdjv2xjOZpJ6B2g7aD5GOW3+eL+CYA==}
-    engines: {node: '>=18'}
-    cpu: [x64, arm64]
-    os: [linux, darwin, win32]
-    hasBin: true
 
   color-convert@1.9.3:
     resolution: {integrity: sha512-QfAUtd+vFdAtFQcC8CCyYt1fYWxSqAiK2cSD6zDB8N3cpsEBAvRxp9zOGg6G/SHHJYAT88/az/IuDGALsNVbGg==}
@@ -15763,8 +15753,6 @@ snapshots:
   clone@1.0.4: {}
 
   clsx@2.1.1: {}
-
-  codebase-memory-mcp@0.9.0: {}
 
   color-convert@1.9.3:
     dependencies:
