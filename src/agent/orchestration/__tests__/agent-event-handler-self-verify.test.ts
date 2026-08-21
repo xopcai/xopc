@@ -5,15 +5,6 @@ import { AgentEventHandler } from '../agent-event-handler.js';
 
 function createHandler(selfVerifyMiddleware: SelfVerifyMiddleware): AgentEventHandler {
   return new AgentEventHandler({
-    progressManager: {
-      startTask: vi.fn(),
-      endTask: vi.fn(),
-      onTurnStart: vi.fn(),
-      onToolStart: vi.fn(),
-      onToolUpdate: vi.fn(),
-      onToolEnd: vi.fn(),
-      onRequestLimitStatus: vi.fn(),
-    },
     errorTracker: {
       recordFailure: vi.fn(),
       reset: vi.fn(),

@@ -6,6 +6,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChunkedContent } from '@/features/chat/messages/message-content-renderer';
+import { firstNarrationSentence } from '@/features/chat/messages/assistant-text-presentation';
 import type { MessageContent } from '@/features/chat/messages/messages.types';
 
 const emptyLabels = {
@@ -174,6 +175,36 @@ describe('streaming assistant Markdown rendering', () => {
     expect(strong, container.innerHTML).not.toBeNull();
     expect(strong?.textContent).toBe('"你现在的孤独感，有没有别的地方可以安放？"');
     expect(container.textContent).not.toContain('**');
+  });
+
+  it('keeps only the first sentence of process narration', () => {
+    expect(firstNarrationSentence('我先检查项目。然后开始修改。')).toBe('我先检查项目。');
+    expect(firstNarrationSentence('I will inspect the project. Then I will edit it.')).toBe(
+      'I will inspect the project.',
+    );
+
+    render([
+      {
+        type: 'text',
+        text: 'I will inspect the project. Then I will produce a long implementation plan.',
+        presentation: 'narration',
+      },
+    ], false);
+
+    expect(container.textContent).toContain('I will inspect the project.');
+    expect(container.textContent).not.toContain('long implementation plan');
+  });
+
+  it('shows only the first narration segment in a tool-driven turn', () => {
+    render([
+      { type: 'text', text: '我先检查项目。', presentation: 'narration' },
+      { type: 'text', text: 'I will now create a long implementation.', presentation: 'narration' },
+      { type: 'text', text: '最终结果。', presentation: 'answer' },
+    ], false);
+
+    expect(container.textContent).toContain('我先检查项目。');
+    expect(container.textContent).not.toContain('long implementation');
+    expect(container.textContent).toContain('最终结果。');
   });
 
   it('renders punctuation-bound strong text after progressive streaming completes', () => {

@@ -316,7 +316,7 @@ export async function *runGatewayAgent(
         runId,
         sessionKey: streamSessionKey,
         timestamp: Date.now(),
-        payload: { messageId },
+        payload: { messageId, presentation: 'answer' },
       },
     ]);
     yield* emitAndYield(mapper.end('success', 'Message processed'));

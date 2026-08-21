@@ -8,7 +8,6 @@ import type { NotesService } from '../notes/index.js';
 import type { ProjectService } from '../projects/index.js';
 import type { LocalAppService } from '../local-apps/index.js';
 import type { GatewayClarifyRequestFn } from './tools/clarify-tool.js';
-import type { ProgressStage } from './lifecycle/progress.js';
 import type { AgentSourceContextResolver } from './source-context/types.js';
 
 export interface AgentServiceConfig {
@@ -66,8 +65,6 @@ export interface AgentContext {
 
 export interface StreamHandle {
   update: (text: string) => void;
-  updateProgress?: (text: string, stage: ProgressStage, detail?: string) => void;
-  setProgress?: (stage: ProgressStage, detail?: string) => void;
   end: () => Promise<void>;
   abort: () => Promise<void>;
   messageId: () => number | undefined;

@@ -5,6 +5,10 @@ import type { ToolActivity } from '@xopcai/gateway-contract';
 export type TextContent = {
   type: 'text';
   text: string;
+  /** One model message segment within an assistant turn. */
+  segmentId?: string;
+  /** Pending text is intentionally rendered like narration until the segment ends. */
+  presentation?: 'pending' | 'narration' | 'answer';
 };
 
 export type ImageContent = {

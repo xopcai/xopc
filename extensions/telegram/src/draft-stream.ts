@@ -7,7 +7,6 @@
 
 import type { Bot } from 'grammy';
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
-import type { ProgressStage } from '@xopcai/xopc/agent/lifecycle/progress.js';
 import { createFinalizableDraftLifecycle } from './draft-stream-lifecycle.js';
 import {
   isSafeToRetrySendError,
@@ -57,16 +56,6 @@ function resolveSendMessageDraftApi(api: Bot['api']): TelegramSendMessageDraft |
   return sendMessageDraft.bind(api as object);
 }
 
-const STAGE_CONFIG: Record<ProgressStage, { emoji: string; label: string }> = {
-  thinking: { emoji: '🤔', label: 'Thinking' },
-  searching: { emoji: '🔍', label: 'Searching' },
-  reading: { emoji: '📖', label: 'Reading' },
-  writing: { emoji: '✍️', label: 'Writing' },
-  executing: { emoji: '⚙️', label: 'Executing' },
-  analyzing: { emoji: '📊', label: 'Analyzing' },
-  idle: { emoji: '💬', label: 'Ready' },
-};
-
 export type TelegramDraftPreview = {
   text: string;
   parseMode?: 'HTML';
@@ -94,12 +83,10 @@ export interface TelegramDraftStreamOptions {
   warn?: (message: string) => void;
   /** When `renderText` is omitted, controls default text conversion (`HTML` = sanitize only). */
   parseMode?: 'Markdown' | 'HTML' | undefined;
-  enableProgress?: boolean;
 }
 
 export interface TelegramDraftStream {
   update: (text: string) => void;
-  updateWithProgress: (text: string, stage?: ProgressStage, detail?: string) => void;
   flush: () => Promise<void>;
   messageId: () => number | undefined;
   previewMode?: () => 'message' | 'draft';
@@ -110,7 +97,6 @@ export interface TelegramDraftStream {
   materialize?: () => Promise<number | undefined>;
   forceNewMessage: () => void;
   sendMayHaveLanded?: () => boolean;
-  setProgress: (stage: ProgressStage, detail?: string) => void;
 }
 
 function isProbablyPrivateChat(chatId: number | string): boolean {
@@ -455,44 +441,10 @@ export function createTelegramDraftStream(options: TelegramDraftStreamOptions): 
     return undefined;
   };
 
-  let currentProgressStage: ProgressStage | null = null;
-  let currentProgressDetail = '';
-
-  const setProgress = (stage: ProgressStage, detail?: string) => {
-    if (!options.enableProgress) return;
-    currentProgressStage = stage;
-    currentProgressDetail = detail || '';
-  };
-
-  const formatProgressIndicator = (stage: ProgressStage, detail?: string): string => {
-    const config = STAGE_CONFIG[stage] || STAGE_CONFIG.idle;
-    let indicator = `${config.emoji} ${config.label}`;
-    if (detail) {
-      indicator += `\n${detail}`;
-    }
-    return indicator;
-  };
-
-  const updateWithProgress = (text: string, stage?: ProgressStage, detail?: string) => {
-    if (streamState.stopped || streamState.final) {
-      return;
-    }
-    if (stage) {
-      setProgress(stage, detail);
-    }
-    let combinedText = text;
-    if (options.enableProgress && currentProgressStage && currentProgressStage !== 'idle') {
-      const indicator = formatProgressIndicator(currentProgressStage, currentProgressDetail);
-      combinedText = `${indicator}\n\n${text}`;
-    }
-    update(combinedText);
-  };
-
   log.debug({ chatId, maxChars, throttleMs, previewTransport }, 'Draft stream ready');
 
   return {
     update,
-    updateWithProgress,
     flush: loop.flush,
     messageId: () => streamMessageId,
     previewMode: () => previewTransport,
@@ -503,7 +455,6 @@ export function createTelegramDraftStream(options: TelegramDraftStreamOptions): 
     materialize,
     forceNewMessage,
     sendMayHaveLanded: () => messageSendAttempted && typeof streamMessageId !== 'number',
-    setProgress,
   };
 }
 

@@ -130,7 +130,11 @@ export type ReviewEndEvent = ChatStreamEnvelope<
 export type ReviewEvent = ChatStreamEnvelope<'review', { messageId: string; review: unknown }>;
 export type AssistantMessageEndEvent = ChatStreamEnvelope<
   'assistant_message_end',
-  { messageId: string; usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number; cost?: number } }
+  {
+    messageId: string;
+    presentation: 'narration' | 'answer';
+    usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number; cost?: number };
+  }
 >;
 export type ProgressEvent = ChatStreamEnvelope<
   'progress',

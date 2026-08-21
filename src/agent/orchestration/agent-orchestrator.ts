@@ -15,8 +15,6 @@ import { resolveEffectiveThinkingLevel } from '../../session/thinking-resolve.js
 import type { ThinkLevel } from '../transcript/thinking-types.js';
 import type { ModelManager } from '../models/index.js';
 import type { SessionContext } from '../session/session-context.js';
-import type { AgentEventHandler } from './agent-event-handler.js';
-import type { FeedbackCoordinator } from '../feedback/feedback-coordinator.js';
 import type { AgentManager } from '../agent-manager.js';
 import { createLogger } from '../../utils/logger.js';
 import { extractAgentUserPlainText } from '../memory/user-message-text.js';
@@ -43,8 +41,6 @@ export interface AgentOrchestratorConfig {
   agentManager: AgentManager;
   sessionStore: SessionStore;
   modelManager: ModelManager;
-  eventHandler: AgentEventHandler;
-  feedbackCoordinator: FeedbackCoordinator;
   sessionConfigStore: SessionConfigStore;
   /** Per-session hydration (workspace override + model override) before the agent runs. */
   sessionHydrator: SessionHydrator;
@@ -71,7 +67,6 @@ export class AgentOrchestrator {
   private agentManager: AgentManager;
   private sessionStore: SessionStore;
   private modelManager: ModelManager;
-  private feedbackCoordinator: FeedbackCoordinator;
   private sessionConfigStore: SessionConfigStore;
   private sessionHydrator: SessionHydrator;
   private getThinkingDefault: () => ThinkLevel | undefined;
@@ -85,7 +80,6 @@ export class AgentOrchestrator {
     this.agentManager = config.agentManager;
     this.sessionStore = config.sessionStore;
     this.modelManager = config.modelManager;
-    this.feedbackCoordinator = config.feedbackCoordinator;
     this.sessionConfigStore = config.sessionConfigStore;
     this.sessionHydrator = config.sessionHydrator;
     this.getThinkingDefault = config.getThinkingDefault;
@@ -186,8 +180,6 @@ export class AgentOrchestrator {
         modelRef,
       });
 
-      this.feedbackCoordinator.startTask();
-
       const turnResult = await (async () => {
         try {
           return await runEmbeddedTurnForSession({
@@ -218,11 +210,8 @@ export class AgentOrchestrator {
         log.warn({ sessionKey, errorMessage: turnResult.errorMessage }, 'Embedded inbound turn failed');
       }
 
-      this.feedbackCoordinator.endTask();
-
     } catch (error) {
       log.error({ err: error, sessionKey }, 'Error in agent orchestration');
-      this.feedbackCoordinator.endTask();
       throw error;
     }
   }
