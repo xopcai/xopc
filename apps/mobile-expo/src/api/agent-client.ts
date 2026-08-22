@@ -20,7 +20,10 @@ import {
 import { isTransientNetworkError } from '../features/chat/network-errors';
 import { pendingRunStorageKey, storage } from '../storage/mmkv';
 import { waitForMobileEndpointTurnClaim } from '../features/endpoint-tools/turn-claim';
-import { subscribeMobileRealtimeTopic } from '../features/gateway/use-gateway-realtime';
+import {
+  requestMobileRealtimeReconnect,
+  subscribeMobileRealtimeTopic,
+} from '../features/gateway/use-gateway-realtime';
 
 export type MessagingCallbacks = AgentStreamCallbacks;
 
@@ -262,7 +265,10 @@ export class AgentMessageSender {
   ): Promise<void> {
     const capped = capAttachments(attachments);
     const clientMessageId = randomUUID();
-    const origin = await waitForMobileEndpointTurnClaim();
+    const origin = await waitForMobileEndpointTurnClaim(
+      undefined,
+      requestMobileRealtimeReconnect,
+    );
     const res = await apiFetch(`/api/sessions/${encodeURIComponent(sessionKey)}/inputs`, {
       method: 'POST',
       body: JSON.stringify({

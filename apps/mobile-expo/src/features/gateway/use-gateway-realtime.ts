@@ -136,6 +136,10 @@ export function getSharedGatewayRealtimeClient(): RealtimeClient | null {
   return sharedClient;
 }
 
+export function requestMobileRealtimeReconnect(): void {
+  sharedClient?.reconnect();
+}
+
 export function attachMobileRealtimeEndpoint(binding: RealtimeEndpointBinding): () => void {
   endpointBinding = binding;
   sharedClient?.setEndpoint(binding);

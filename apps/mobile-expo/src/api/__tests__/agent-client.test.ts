@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const testState = vi.hoisted(() => ({
   memory: new Map<string, string>(),
   apiFetch: vi.fn(),
+  reconnect: vi.fn(),
   unsubscribe: vi.fn(),
   realtimeListener: undefined as undefined | { onGap?: () => void },
 }));
@@ -16,6 +17,7 @@ vi.mock('../client', () => ({
 }));
 
 vi.mock('../../features/gateway/use-gateway-realtime', () => ({
+  requestMobileRealtimeReconnect: testState.reconnect,
   subscribeMobileRealtimeTopic: vi.fn((_topic: string, listener: { onGap?: () => void }) => {
     testState.realtimeListener = listener;
     return testState.unsubscribe;
@@ -58,6 +60,7 @@ describe('AgentMessageSender local detach', () => {
   beforeEach(() => {
     testState.memory.clear();
     testState.apiFetch.mockReset();
+    testState.reconnect.mockReset();
     testState.unsubscribe.mockReset();
     testState.realtimeListener = undefined;
     publishMobileEndpointTurnClaim('mobile-test', 'test-turn-token');
@@ -106,5 +109,20 @@ describe('AgentMessageSender local detach', () => {
 
     await expect(pending).rejects.toThrow('realtime replay expired');
     expect(testState.memory.get('pending:session-a')).toBeUndefined();
+  });
+
+  it('requests an immediate realtime reconnect while waiting for the endpoint claim', async () => {
+    clearMobileEndpointTurnClaim();
+    testState.apiFetch.mockResolvedValue(new Response(JSON.stringify({
+      payload: { state: { inputs: [] } },
+    }), { status: 202, headers: { 'Content-Type': 'application/json' } }));
+
+    const sender = new AgentMessageSender();
+    const pending = sender.sendMessage('hello', 'session-a');
+
+    expect(testState.reconnect).toHaveBeenCalledOnce();
+    publishMobileEndpointTurnClaim('mobile-test', 'replacement-turn-token');
+
+    await expect(pending).resolves.toBeUndefined();
   });
 });

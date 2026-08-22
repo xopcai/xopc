@@ -2,9 +2,7 @@ import { CheckCircle2, Cloud, Loader2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { apiFetch } from '@/lib/fetch';
 import { isElectron } from '@/lib/electron-env';
-import { apiUrl } from '@/lib/url';
 import { useLocaleStore } from '@/stores/locale-store';
 import {
   cleanupOAuthSession,
@@ -72,8 +70,6 @@ export function OAuthProviderConnect({
           throw new Error(current.error ?? current.message ?? 'OAuth authorization failed');
         }
         if (current.status !== 'completed') continue;
-        const refresh = await apiFetch(apiUrl('/api/models/catalog/refresh'), { method: 'POST' });
-        if (!refresh.ok) throw new Error(`Model catalog refresh failed: ${refresh.status}`);
         await revalidateModelsHubCaches();
         popupRef.current?.close();
         popupRef.current = null;

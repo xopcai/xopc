@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { resolveOAuthLoginMethodPreference } from './oauth-async.js';
+import type { GatewayService } from '../service.js';
+import { refreshModelCatalogAfterOAuth, resolveOAuthLoginMethodPreference } from './oauth-async.js';
 
 describe('resolveOAuthLoginMethodPreference', () => {
   const supportedMethods = ['browser', 'device_code'] as const;
@@ -27,5 +28,37 @@ describe('resolveOAuthLoginMethodPreference', () => {
       supportedMethods,
       requestedMethod: 'manual',
     })).toBeUndefined();
+  });
+});
+
+describe('refreshModelCatalogAfterOAuth', () => {
+  function serviceWith(refreshNow: () => Promise<unknown>) {
+    return {
+      getModelCatalogSync: () => ({ refreshNow }),
+    } as unknown as Pick<GatewayService, 'getModelCatalogSync'>;
+  }
+
+  it('refreshes XOPC Cloud models after credentials are persisted', async () => {
+    const refreshNow = vi.fn(async () => ({ status: 'updated' }));
+
+    await refreshModelCatalogAfterOAuth('xopc-cloud', serviceWith(refreshNow));
+
+    expect(refreshNow).toHaveBeenCalledOnce();
+  });
+
+  it('does not refresh unrelated OAuth providers', async () => {
+    const refreshNow = vi.fn(async () => ({ status: 'updated' }));
+
+    await refreshModelCatalogAfterOAuth('google-gemini-cli', serviceWith(refreshNow));
+
+    expect(refreshNow).not.toHaveBeenCalled();
+  });
+
+  it('keeps a successful OAuth connection when model refresh is temporarily unavailable', async () => {
+    const refreshNow = vi.fn(async () => { throw new Error('rate limited'); });
+
+    await expect(
+      refreshModelCatalogAfterOAuth('xopc-cloud', serviceWith(refreshNow)),
+    ).resolves.toBeUndefined();
   });
 });
