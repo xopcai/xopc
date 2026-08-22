@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { BrandLogo } from '@/components/shell/brand-logo';
 import { Button } from '@/components/ui/button';
 import { SecretInput } from '@/components/ui/secret-input';
+import { Skeleton } from '@/components/ui/skeleton';
 import type { ConfiguredModel } from '@/features/chat/api/registry-api';
 import { fetchConfiguredModelsCached, invalidateConfiguredModelsCache } from '@/features/chat/api/registry-api';
 import { dispatchConfigReload } from '@/features/gateway/dispatch-config-reload';
@@ -36,6 +37,7 @@ type OnboardingState = {
   busy: boolean;
   error: string | null;
   callName: string;
+  profileLoading: boolean;
 };
 
 type OnboardingAction =
@@ -49,6 +51,7 @@ const initialOnboarding: OnboardingState = {
   busy: false,
   error: null,
   callName: '',
+  profileLoading: true,
 };
 
 function onboardingReducer(state: OnboardingState, action: OnboardingAction): OnboardingState {
@@ -69,7 +72,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
   const o = messages(language).onboarding;
 
   const [state, dispatch] = useReducer(onboardingReducer, initialOnboarding);
-  const { step, selectedProvider, apiKey, busy, error, callName } = state;
+  const { step, selectedProvider, apiKey, busy, error, callName, profileLoading } = state;
 
   const stepLabel = useMemo(
     () => o.stepOf.replace('{{current}}', String(stepNumber(step))).replace('{{total}}', '3'),
@@ -118,12 +121,25 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
 
   useEffect(() => {
     let cancelled = false;
-    void fetchUserProfile()
-      .then(({ profile }) => {
-        if (cancelled) return;
-        if (profile.callName) dispatch({ type: 'prefillCallName', value: profile.callName });
-      })
-      .catch(() => {});
+    void (async () => {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          const { profile, suggestedCallName } = await fetchUserProfile();
+          if (cancelled) return;
+          const prefill = profile.callName.trim() || suggestedCallName?.trim();
+          if (prefill) {
+            dispatch({ type: 'prefillCallName', value: prefill });
+          }
+          dispatch({ type: 'patch', patch: { profileLoading: false } });
+          return;
+        } catch {
+          if (attempt < 2) {
+            await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+          }
+        }
+      }
+      if (!cancelled) dispatch({ type: 'patch', patch: { profileLoading: false } });
+    })();
     return () => {
       cancelled = true;
     };
@@ -253,18 +269,21 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
             </div>
             <label className="block text-sm font-medium text-fg">
               {o.profileCallNameLabel}
-              <input
-                value={callName}
-                onChange={(event) => dispatch({ type: 'patch', patch: { callName: event.target.value } })}
-                placeholder={o.profileCallNamePlaceholder}
-                className="mt-1 w-full rounded-xl border border-edge bg-surface-base px-3 py-2.5 text-sm text-fg outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/30"
-              />
+              {profileLoading ? <Skeleton className="mt-1 h-10 w-full rounded-xl" /> : (
+                <input
+                  autoFocus
+                  value={callName}
+                  onChange={(event) => dispatch({ type: 'patch', patch: { callName: event.target.value } })}
+                  placeholder={o.profileCallNamePlaceholder}
+                  className="mt-1 w-full rounded-xl border border-edge bg-surface-base px-3 py-2.5 text-sm text-fg outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/30"
+                />
+              )}
             </label>
             <div className="flex flex-wrap justify-between gap-2">
               <button
                 type="button"
                 className="text-xs font-medium text-fg-muted hover:text-fg hover:underline"
-                disabled={busy}
+                disabled={busy || profileLoading}
                 onClick={() => void continueFromCallName()}
               >
                 {o.skipCallName}
@@ -272,7 +291,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
               <Button
                 type="button"
                 className="bg-accent text-white hover:bg-accent/90"
-                disabled={busy}
+                disabled={busy || profileLoading}
                 onClick={() => void continueFromCallName()}
               >
                 {busy ? o.savingProfile : o.continue}

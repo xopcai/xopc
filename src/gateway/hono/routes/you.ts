@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { userInfo } from 'node:os';
 
 import type { Hono } from 'hono';
 
@@ -77,6 +78,17 @@ function validTimezone(value: string): boolean {
   }
 }
 
+function machineCallName(): string {
+  try {
+    const username = userInfo().username.trim();
+    return ['root', 'admin', 'administrator', 'user'].includes(username.toLocaleLowerCase())
+      ? ''
+      : username.slice(0, 100);
+  } catch {
+    return '';
+  }
+}
+
 export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const write = deps.strictRateLimitMiddleware;
 
@@ -87,7 +99,10 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
     consolidation: { lastRun: listContextConsolidationRuns(1)[0] ?? null },
   }));
 
-  authenticated.get('/api/you/profile', (c) => c.json({ profile: getUserProfile() }));
+  authenticated.get('/api/you/profile', (c) => {
+    const profile = getUserProfile();
+    return c.json({ profile, suggestedCallName: profile.callName || machineCallName() });
+  });
 
   authenticated.patch('/api/you/profile', write, async (c) => {
     const body = await readBody(c);
