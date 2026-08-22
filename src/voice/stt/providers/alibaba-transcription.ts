@@ -1,29 +1,4 @@
-/**
- * Alibaba DashScope Paraformer STT — implements MediaUnderstandingProvider.transcribeAudio.
- *
- * DashScope's async API is a 4-step dance:
- *   1. POST /api/v1/services/audio/asr/transcription with `X-DashScope-Async: enable`
- *      and `input.file_urls = [data:audio/ogg;base64,...]` → returns task_id
- *   2. Poll GET /api/v1/tasks/{task_id} until task_status === 'SUCCEEDED'
- *   3. The success result contains `transcription_url` pointing at a JSON document
- *   4. Fetch that JSON to extract the actual `transcripts[].text`
- *
- * All HTTP calls go through `fetchWithTimeoutGuarded` so the SSRF guard catches
- * malicious config injection. The transcription_url is a public OSS URL
- * (CDN-hosted); we keep `allowPrivateNetwork: false` so a malicious tenant
- * cannot redirect to an internal address.
- *
- * Polling caps at 60s by default (60 * 1s). The runner's `timeoutMs` controls
- * HTTP timeouts on each individual submit/poll/fetch call, not the overall
- * poll loop ceiling.
- */
-
-import {
-  ProviderHttpError,
-  fetchWithTimeoutGuarded,
-  postJsonRequest,
-  waitProviderOperationPollInterval,
-} from '../../../media-shared/http/index.js';
+import { postJsonRequest } from '../../../media-shared/http/index.js';
 import { registerMediaUnderstandingProvider } from '../../../media-understanding/registry.js';
 import type {
   AudioTranscriptionRequest,
@@ -33,224 +8,51 @@ import type {
 import { createLogger } from '../../../utils/logger.js';
 
 const log = createLogger('STT:Alibaba');
+const DEFAULT_MODEL = 'qwen-audio-3.0-asr-flash';
+const DEFAULT_BASE_URL = 'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation';
 
-const DEFAULT_MODEL = 'paraformer-v2';
-const DEFAULT_BASE_URL =
-  'https://dashscope.aliyuncs.com/api/v1/services/audio/asr/transcription';
-const TASKS_BASE_URL = 'https://dashscope.aliyuncs.com/api/v1/tasks';
-const POLL_INTERVAL_MS = 1000;
-const MAX_POLL_MS = 60_000;
-
-interface TaskResponse {
-  status_code?: number;
-  request_id?: string;
-  code?: string;
-  message?: string;
-  output?: {
-    task_id: string;
-    task_status: 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED';
-  };
-}
-
-interface TranscriptionResultEntry {
-  file_url: string;
-  transcription_url: string;
-  subtask_status: string;
-}
-
-interface FetchResponse {
-  status_code?: number;
-  request_id?: string;
-  output?: {
-    task_id: string;
-    task_status: 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED';
-    results?: TranscriptionResultEntry[];
-  };
-  usage?: { duration?: number };
-}
-
-interface TranscriptionDetail {
-  file_url: string;
-  properties: {
-    audio_format: string;
-    channels: number[];
-    original_sampling_rate: number;
-    original_duration_in_milliseconds: number;
-  };
-  transcripts: Array<{
-    channel_id: number;
-    content_duration_in_milliseconds: number;
-    text: string;
-  }>;
-}
-
-async function submitTask(params: {
-  apiKey: string;
-  baseUrl: string;
-  model: string;
-  audioDataUrl: string;
-  language?: string;
-  timeoutMs: number;
-  signal?: AbortSignal;
-}): Promise<string> {
-  const response = await postJsonRequest(params.baseUrl, {
-    timeoutMs: params.timeoutMs,
-    label: 'Alibaba STT submit',
-    headers: {
-      Authorization: `Bearer ${params.apiKey}`,
-      'X-DashScope-Async': 'enable',
-    },
-    body: {
-      model: params.model,
-      input: { file_urls: [params.audioDataUrl] },
-      ...(params.language ? { parameters: { language_hint: params.language } } : {}),
-    },
-    signal: params.signal,
-  });
-  const data = (await response.json()) as TaskResponse;
-  if (data.code) {
-    throw new Error(`Alibaba STT API error: ${data.code} - ${data.message}`);
-  }
-  if (!data.output?.task_id) {
-    log.error({ response: data }, 'Alibaba STT API response missing task_id');
-    throw new Error(`No task_id returned from Alibaba STT API: ${JSON.stringify(data)}`);
-  }
-  log.debug({ taskId: data.output.task_id }, 'Task submitted');
-  return data.output.task_id;
-}
-
-async function pollTask(params: {
-  apiKey: string;
-  taskId: string;
-  timeoutMs: number;
-  signal?: AbortSignal;
-}): Promise<{ text: string }> {
-  const startTime = Date.now();
-  const url = `${TASKS_BASE_URL}/${params.taskId}`;
-  while (Date.now() - startTime < MAX_POLL_MS) {
-    const response = await fetchWithTimeoutGuarded(url, {
-      timeoutMs: params.timeoutMs,
-      label: 'Alibaba STT poll',
-      signal: params.signal,
-      init: {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${params.apiKey}` },
-      },
-    });
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => '');
-      throw new ProviderHttpError({
-        label: 'Alibaba STT poll',
-        status: response.status,
-        detail: errorText.slice(0, 220) || response.statusText,
-      });
-    }
-    const data = (await response.json()) as FetchResponse;
-    const status = data.output?.task_status;
-    if (status === 'SUCCEEDED') {
-      const result = data.output?.results?.[0];
-      if (!result) {
-        throw new Error('Alibaba STT task succeeded but no results found');
-      }
-      const transcription = await fetchTranscription(
-        result.transcription_url,
-        params.timeoutMs,
-        params.signal,
-      );
-      const fullText = transcription.transcripts.map((t) => t.text).join('\n');
-      return { text: fullText };
-    }
-    if (status === 'FAILED') {
-      throw new Error('Alibaba STT task failed');
-    }
-    await waitProviderOperationPollInterval(POLL_INTERVAL_MS, params.signal);
-  }
-  throw new Error(`Alibaba STT task did not complete within ${MAX_POLL_MS}ms`);
-}
-
-async function fetchTranscription(
-  url: string,
-  timeoutMs: number,
-  signal?: AbortSignal,
-): Promise<TranscriptionDetail> {
-  const response = await fetchWithTimeoutGuarded(url, {
-    timeoutMs,
-    label: 'Alibaba STT transcription fetch',
-    signal,
-  });
-  if (!response.ok) {
-    throw new ProviderHttpError({
-      label: 'Alibaba STT transcription fetch',
-      status: response.status,
-      detail: response.statusText,
-    });
-  }
-  return (await response.json()) as TranscriptionDetail;
-}
-
-async function transcribeAudio(req: AudioTranscriptionRequest): Promise<AudioTranscriptionResult> {
-  const startTime = Date.now();
-  const model = req.model ?? DEFAULT_MODEL;
-  const baseUrl = req.baseUrl ?? DEFAULT_BASE_URL;
-
-  // Paraformer accepts `data:` URLs directly so we don't need to upload
-  // the audio first. This avoids the OSS pre-signing dance.
-  const base64Audio = req.buffer.toString('base64');
-  const audioDataUrl = `data:${req.mime ?? 'audio/ogg'};base64,${base64Audio}`;
-
-  log.debug(
-    { model, bufferSize: req.buffer.length, language: req.language, fileName: req.fileName },
-    'Sending to Alibaba Paraformer',
-  );
-
+async function transcribeAudio(request: AudioTranscriptionRequest): Promise<AudioTranscriptionResult> {
+  if (!request.apiKey) throw new Error('Alibaba STT API key is unavailable');
+  const startedAt = Date.now();
+  const model = request.model ?? DEFAULT_MODEL;
+  const audio = `data:${request.mime ?? 'application/octet-stream'};base64,${request.buffer.toString('base64')}`;
+  const messages: Array<Record<string, unknown>> = [];
+  if (request.prompt) messages.push({ role: 'system', content: [{ text: request.prompt }] });
+  messages.push({ role: 'user', content: [{ type: 'input_audio', input_audio: audio }] });
   try {
-    const taskId = await submitTask({
-      apiKey: req.apiKey,
-      baseUrl,
-      model,
-      audioDataUrl,
-      ...(req.language ? { language: req.language } : {}),
-      timeoutMs: req.timeoutMs,
-      signal: req.signal,
+    const response = await postJsonRequest(request.baseUrl ?? DEFAULT_BASE_URL, {
+      timeoutMs: request.timeoutMs,
+      label: 'Alibaba STT',
+      headers: { Authorization: `Bearer ${request.apiKey}` },
+      body: {
+        model,
+        input: { messages },
+        parameters: request.language ? { asr_options: { language: request.language } } : {},
+      },
+      signal: request.signal,
     });
-    const result = await pollTask({
-      apiKey: req.apiKey,
-      taskId,
-      timeoutMs: req.timeoutMs,
-      signal: req.signal,
-    });
-    const durationSeconds = (Date.now() - startTime) / 1000;
-    log.info(
-      { provider: 'alibaba', durationSeconds, textLength: result.text.length },
-      'Transcription completed',
-    );
-    return {
-      text: result.text,
-      model,
-      ...(req.language ? { language: req.language } : {}),
-      durationSeconds,
+    const data = await response.json() as {
+      output?: { choices?: Array<{ message?: { content?: Array<{ text?: unknown }> } }> };
     };
+    const text = data.output?.choices?.flatMap((choice) => choice.message?.content ?? [])
+      .map((part) => part.text).find((value): value is string => typeof value === 'string');
+    if (text === undefined) throw new Error('Alibaba STT returned an invalid response');
+    log.info({ provider: 'alibaba', model, latencyMs: Date.now() - startedAt, textLength: text.length }, 'Transcription completed');
+    return { text, model, ...(request.language ? { language: request.language } : {}) };
   } catch (error) {
-    if (req.signal?.aborted) {
-      throw error;
-    }
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    log.error(
-      { err: error, bufferSize: req.buffer.length, model },
-      `Alibaba transcription failed: ${errorMsg}`,
-    );
-    throw new Error(`Alibaba STT failed: ${errorMsg}`);
+    if (request.signal?.aborted) throw error;
+    const message = error instanceof Error ? error.message : String(error);
+    log.error({ err: error, model, bufferSize: request.buffer.length }, `Alibaba transcription failed: ${message}`);
+    throw new Error(`Alibaba STT failed: ${message}`);
   }
 }
 
 export const alibabaTranscriptionProvider: MediaUnderstandingProvider = {
   id: 'alibaba',
-  aliases: ['dashscope', 'paraformer'],
+  aliases: ['dashscope'],
   capabilities: ['audio'],
   envKey: 'DASHSCOPE_API_KEY',
   defaultModels: { audio: DEFAULT_MODEL },
-  // Higher priority than openai for audio because Paraformer-v2 has better
-  // Chinese accuracy and is the project's typical primary STT.
   autoPriority: { audio: 10 },
   transcribeAudio,
 };

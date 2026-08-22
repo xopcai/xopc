@@ -78,8 +78,8 @@ export const DEFAULT_STT_CONFIG: STTConfig = {
   provider: 'xopc-local',
   providers: {
     'xopc-local': { model: 'sensevoice-small' },
-    alibaba: { model: 'paraformer-v2' },
-    openai: { model: 'whisper-1' },
+    alibaba: { model: 'qwen-audio-3.0-asr-flash' },
+    openai: { model: 'gpt-4o-mini-transcribe' },
   },
   fallback: {
     enabled: false,

@@ -4,6 +4,7 @@ import { ConfigSchema, getAgentDefaultImageGenerationModelConfig, getAgentDefaul
 import { ModelCatalogStore } from '../../../../providers/model-catalog-store.js';
 import {
   defaultXopcCloudImageModel,
+  defaultXopcCloudAudioModels,
   refreshOnboardModelCatalogIfNeeded,
   setPrimaryModel,
 } from '../model.js';
@@ -65,9 +66,22 @@ describe('XOPC Cloud onboard defaults', () => {
         id: 'image-01', name: 'Image', kind: 'image', input: ['text'], output: ['image'],
         operations: ['images.generate'], reasoning: false, contextWindow: 128_000, maxOutputTokens: null,
       },
+      {
+        id: 'stt-fast', name: 'STT', kind: 'stt', input: ['audio'], output: ['text'],
+        operations: ['audio.transcription'], reasoning: false, contextWindow: 0, maxOutputTokens: null,
+      },
+      {
+        id: 'tts-natural', name: 'TTS', kind: 'tts', input: ['text'], output: ['audio'],
+        operations: ['audio.speech'], reasoning: false, contextWindow: 0, maxOutputTokens: null,
+        tts: { maxCharacters: 4096, languages: ['zh'], outputFormats: ['opus'], streaming: true,
+          speed: true, pitch: false, instructions: true, defaultVoice: 'coral' },
+      },
     ]);
 
     expect(defaultXopcCloudImageModel(store)).toBe('xopc-cloud/image-01');
+    expect(defaultXopcCloudAudioModels(store)).toEqual({
+      stt: 'stt-fast', tts: { model: 'tts-natural', voice: 'coral', maxCharacters: 4096 },
+    });
   });
 
   it('adds the image default while preserving other model roles', () => {
@@ -93,5 +107,32 @@ describe('XOPC Cloud onboard defaults', () => {
 
     const updated = setPrimaryModel(config, '/tmp/xopc-main', 'xopc-cloud/chat-model', 'xopc-cloud/image-01');
     expect(getAgentDefaultImageGenerationModelConfig(updated, 'main')?.primary).toBe('openai/gpt-image-2');
+  });
+
+  it('configures cloud STT and TTS without enabling automatic spoken replies', () => {
+    const config = ConfigSchema.parse({});
+    const updated = setPrimaryModel(config, '/tmp/xopc-main', 'xopc-cloud/chat-model', undefined, {
+      stt: 'stt-fast', tts: { model: 'tts-natural', voice: 'coral', maxCharacters: 4096 },
+    });
+    expect(updated.tools.media?.audio).toMatchObject({
+      enabled: true, provider: 'xopc-cloud', models: [{ provider: 'xopc-cloud', model: 'stt-fast' }],
+      providers: { 'xopc-cloud': { model: 'stt-fast' } }, fallback: { enabled: false, order: [] },
+    });
+    expect(updated.messages?.tts).toMatchObject({
+      enabled: true, provider: 'xopc-cloud', trigger: 'off', maxTextLength: 4096,
+      providers: { 'xopc-cloud': { model: 'tts-natural', voice: 'coral' } },
+    });
+  });
+
+  it('preserves explicit STT and TTS settings', () => {
+    const config = ConfigSchema.parse({
+      tools: { media: { audio: { enabled: true, provider: 'xopc-local' } } },
+      messages: { tts: { enabled: true, provider: 'edge', trigger: 'inbound' } },
+    });
+    const updated = setPrimaryModel(config, '/tmp/xopc-main', 'xopc-cloud/chat-model', undefined, {
+      stt: 'stt-fast', tts: { model: 'tts-natural', voice: 'coral', maxCharacters: 4096 },
+    });
+    expect(updated.tools.media?.audio?.provider).toBe('xopc-local');
+    expect(updated.messages?.tts?.provider).toBe('edge');
   });
 });

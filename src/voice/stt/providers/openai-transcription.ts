@@ -1,5 +1,5 @@
 /**
- * OpenAI Whisper STT — implements MediaUnderstandingProvider.transcribeAudio.
+ * OpenAI transcription provider — implements MediaUnderstandingProvider.transcribeAudio.
  *
  * Uses the official `openai` SDK rather than the raw HTTP path because the SDK
  * already handles multipart/form-data encoding (`file` field), streaming
@@ -8,7 +8,7 @@
  * keep parity with the SDK's own fetch (proxy support, retries, etc.); the
  * only egress is api.openai.com which is HTTPS-only and public.
  *
- * Streaming transcription is not implemented (Whisper returns a final text
+ * Streaming transcription is not implemented (the API returns a final text
  * blob). Self-registers with `capabilities: ['audio']` only — the registry's
  * `listProvidersForCapability` filter skips this provider for image/video.
  */
@@ -25,7 +25,7 @@ import { createLogger } from '../../../utils/logger.js';
 
 const log = createLogger('STT:OpenAI');
 
-const DEFAULT_MODEL = 'whisper-1';
+const DEFAULT_MODEL = 'gpt-4o-mini-transcribe';
 
 async function transcribeAudio(req: AudioTranscriptionRequest): Promise<AudioTranscriptionResult> {
   const startTime = Date.now();
@@ -50,7 +50,7 @@ async function transcribeAudio(req: AudioTranscriptionRequest): Promise<AudioTra
 
   log.debug(
     { model, bufferSize: req.buffer.length, language: req.language, fileName: req.fileName },
-    'Sending to OpenAI Whisper',
+    'Sending to OpenAI transcription',
   );
 
   try {

@@ -16,18 +16,18 @@ describe('STTConfigSchema', () => {
       enabled: true,
       provider: 'openai',
       providers: {
-        openai: { apiKey: 'sk-test', model: 'whisper-1' },
+        openai: { apiKey: 'sk-test', model: 'gpt-4o-mini-transcribe' },
       },
     });
 
     expect(parsed.provider).toBe('openai');
-    expect(parsed.providers?.openai?.model).toBe('whisper-1');
+    expect(parsed.providers?.openai?.model).toBe('gpt-4o-mini-transcribe');
   });
 
   it('accepts models[] entries', () => {
     const parsed = STTConfigSchema.parse({
       enabled: true,
-      models: [{ provider: 'openai', model: 'whisper-1', capabilities: ['audio'] }],
+      models: [{ provider: 'openai', model: 'gpt-4o-mini-transcribe', capabilities: ['audio'] }],
     });
 
     expect(parsed.models?.[0]?.provider).toBe('openai');
@@ -38,7 +38,7 @@ describe('STTConfigSchema', () => {
       STTConfigSchema.parse({
         enabled: true,
         provider: 'alibaba',
-        alibaba: { model: 'paraformer-v2' },
+        alibaba: { model: 'qwen-audio-3.0-asr-flash' },
       }),
     ).toThrow();
   });

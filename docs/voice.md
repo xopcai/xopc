@@ -39,8 +39,10 @@ Minimal `~/.xopc/xopc.json` (keys may also come from env — see below):
       "audio": {
         "enabled": true,
         "provider": "alibaba",
-        "alibaba": {
-          "apiKey": "your-dashscope-api-key"
+        "providers": {
+          "alibaba": {
+            "apiKey": "your-dashscope-api-key"
+          }
         }
       }
     }
@@ -50,15 +52,24 @@ Minimal `~/.xopc/xopc.json` (keys may also come from env — see below):
       "enabled": true,
       "provider": "openai",
       "trigger": "inbound",
-      "openai": {
-        "apiKey": "your-openai-api-key"
+      "providers": {
+        "openai": {
+          "apiKey": "your-openai-api-key"
+        }
       }
     }
   }
 }
 ```
 
-**Config note:** In JSON, `trigger` values are `off` | `always` | `inbound` | `tagged`. The legacy value **`auto` is normalized to `inbound`** when the config is loaded.
+In JSON, `trigger` values are `off` | `always` | `inbound` | `tagged`.
+
+When onboarding with `xopc-cloud`, xopc discovers the published media catalog after
+OAuth login. If the user has no explicit voice configuration, it automatically selects
+the first available STT model and the first TTS model with a default voice. TTS is
+configured with `trigger: "off"`, so the service is immediately available through the
+tool without unexpectedly turning every text reply into audio. Existing voice settings
+are never overwritten.
 
 ---
 
@@ -68,30 +79,32 @@ Minimal `~/.xopc/xopc.json` (keys may also come from env — see below):
 > `{ "tools": { "media": { "audio": { ... } } } }` when editing
 > `~/.xopc/xopc.json` directly.
 
-### Alibaba Paraformer (often used for Chinese)
+### Alibaba Qwen Audio 3 ASR
 
 ```json
 {
   "enabled": true,
   "provider": "alibaba",
-  "alibaba": {
-    "apiKey": "your-dashscope-api-key",
-    "model": "paraformer-v2"
+  "providers": {
+    "alibaba": {
+      "apiKey": "your-dashscope-api-key",
+      "model": "qwen-audio-3.0-asr-flash"
+    }
   }
 }
 ```
 
-See DashScope docs for current model IDs (`paraformer-v2`, etc.).
-
-### OpenAI Whisper
+### OpenAI transcription
 
 ```json
 {
   "enabled": true,
   "provider": "openai",
-  "openai": {
-    "apiKey": "your-openai-api-key",
-    "model": "whisper-1"
+  "providers": {
+    "openai": {
+      "apiKey": "your-openai-api-key",
+      "model": "gpt-4o-mini-transcribe"
+    }
   }
 }
 ```
@@ -128,8 +141,6 @@ When the bot requires an @mention in a **supergroup/group**, **voice-only** mess
 | `inbound` | TTS when the user turn had inbound voice (metadata `transcribedVoice`) |
 | `tagged` | TTS only when the assistant text contains `[[tts]]` (directive stripped before send) |
 
-Legacy **`auto`** in config files is treated as **`inbound`**.
-
 > All TTS examples below show the inner shape only. Wrap each block in
 > `{ "messages": { "tts": { ... } } }` when editing `~/.xopc/xopc.json`
 > directly.
@@ -141,16 +152,18 @@ Legacy **`auto`** in config files is treated as **`inbound`**.
   "enabled": true,
   "provider": "openai",
   "trigger": "inbound",
-  "openai": {
-    "apiKey": "your-openai-api-key",
-    "model": "tts-1",
-    "voice": "alloy"
+  "providers": {
+    "openai": {
+      "apiKey": "your-openai-api-key",
+      "model": "gpt-4o-mini-tts",
+      "voice": "alloy"
+    }
   }
 }
 ```
 
 **Voices:** `alloy`, `echo`, `fable`, `onyx`, `nova`, `shimmer`  
-**Models:** `tts-1`, `tts-1-hd`
+**Models:** `gpt-4o-mini-tts`, `tts-1`, `tts-1-hd`
 
 ### Alibaba (DashScope TTS)
 
@@ -159,10 +172,12 @@ Legacy **`auto`** in config files is treated as **`inbound`**.
   "enabled": true,
   "provider": "alibaba",
   "trigger": "inbound",
-  "alibaba": {
-    "apiKey": "your-dashscope-api-key",
-    "model": "qwen-tts",
-    "voice": "Cherry"
+  "providers": {
+    "alibaba": {
+      "apiKey": "your-dashscope-api-key",
+      "model": "qwen-tts",
+      "voice": "Cherry"
+    }
   }
 }
 ```
@@ -173,15 +188,17 @@ Legacy **`auto`** in config files is treated as **`inbound`**.
 {
   "enabled": true,
   "provider": "edge",
-  "edge": {
-    "enabled": true,
-    "voice": "en-US-MichelleNeural",
-    "lang": "en-US"
+  "providers": {
+    "edge": {
+      "enabled": true,
+      "voice": "en-US-MichelleNeural",
+      "lang": "en-US"
+    }
   }
 }
 ```
 
-Set `"edge": { "enabled": false }` to take Edge out of rotation.
+Set `"providers": { "edge": { "enabled": false } }` to take Edge out of rotation.
 
 ### Local CLI TTS (offline, bring-your-own binary)
 
@@ -194,11 +211,13 @@ spawns the binary, captures the produced audio file, and returns its bytes.
   "enabled": true,
   "provider": "tts-local-cli",
   "trigger": "inbound",
-  "tts-local-cli": {
-    "command": "mlx_audio.tts.generate --model mlx-community/Kokoro-82M-bf16 --text \"{{Text}}\" --file_prefix {{OutputBase}}",
-    "cwd": "/Users/me/work",
-    "outputFormat": "wav",
-    "timeoutMs": 90000
+  "providers": {
+    "tts-local-cli": {
+      "command": "mlx_audio.tts.generate --model mlx-community/Kokoro-82M-bf16 --text \"{{Text}}\" --file_prefix {{OutputBase}}",
+      "cwd": "/Users/me/work",
+      "outputFormat": "wav",
+      "timeoutMs": 90000
+    }
   }
 }
 ```
@@ -355,10 +374,10 @@ STT lives at **`tools.media.audio`**; TTS lives at **`messages.tts`**.
 ```typescript
 interface STTConfig {
   enabled: boolean;
-  provider: 'alibaba' | 'openai';
-  alibaba?: { apiKey?: string; model?: string };
-  openai?: { apiKey?: string; model?: string };
-  fallback?: { enabled: boolean; order: ('alibaba' | 'openai')[] };
+  provider: string;
+  models?: Array<{ provider: string; model: string; capabilities: ['audio'] }>;
+  providers?: Record<string, Record<string, unknown>>;
+  fallback?: { enabled: boolean; order: string[] };
   /** Hard timeout per provider call (ms). Default 60s. */
   timeoutMs?: number;
 }
@@ -383,12 +402,7 @@ interface TTSConfig {
     model?: string;
   };
   modelOverrides?: { /* see schema */ };
-  openai?: { apiKey?: string; model?: string; voice?: string };
-  alibaba?: { apiKey?: string; model?: string; voice?: string };
-  edge?: { enabled?: boolean; voice?: string; lang?: string; /* … */ };
-  minimax?: { apiKey?: string; model?: string; voice?: string };
-  /** Per-extension provider config (e.g. tts-local-cli). */
-  [providerId: string]: unknown;
+  providers?: Record<string, Record<string, unknown>>;
 }
 ```
 

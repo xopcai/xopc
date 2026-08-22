@@ -14,3 +14,4 @@
 export { openAiTranscriptionProvider } from './openai-transcription.js';
 export { alibabaTranscriptionProvider } from './alibaba-transcription.js';
 export { localTranscriptionProvider } from './local-transcription.js';
+export { xopcCloudTranscriptionProvider } from './xopc-cloud-transcription.js';

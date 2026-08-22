@@ -7,16 +7,16 @@ import {
 } from '../config-slice.js';
 
 describe('collectSttProviderConfigEntries', () => {
-  it('merges providers map with legacy flat keys', () => {
+  it('reads only entries from the providers map', () => {
     const entries = collectSttProviderConfigEntries({
       provider: 'openai',
       providers: {
-        openai: { model: 'whisper-1' },
+        openai: { model: 'gpt-4o-mini-transcribe' },
       },
       openai: { apiKey: 'sk-test' },
     });
 
-    expect(entries.openai).toEqual({ model: 'whisper-1' });
+    expect(entries.openai).toEqual({ model: 'gpt-4o-mini-transcribe' });
   });
 
   it('ignores reserved top-level keys', () => {
@@ -31,7 +31,7 @@ describe('collectSttProviderConfigEntries', () => {
 });
 
 describe('resolveSttProviderConfigSlice', () => {
-  it('prefers providers map over flat legacy key', () => {
+  it('ignores unsupported flat provider keys', () => {
     const slice = resolveSttProviderConfigSlice('openai', {
       providers: { openai: { model: 'from-map' } },
       openai: { model: 'from-flat' },
@@ -42,7 +42,7 @@ describe('resolveSttProviderConfigSlice', () => {
 
 describe('readSttProviderFields', () => {
   it('merges model entry overrides', () => {
-    const fields = readSttProviderFields({ model: 'whisper-1' }, { model: 'gpt-4o-mini-transcribe' });
+    const fields = readSttProviderFields({ model: 'gpt-4o-transcribe' }, { model: 'gpt-4o-mini-transcribe' });
     expect(fields.model).toBe('gpt-4o-mini-transcribe');
   });
 });

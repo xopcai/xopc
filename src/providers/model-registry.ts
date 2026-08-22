@@ -350,7 +350,7 @@ export class ModelRegistry {
 				provider: source.providerId,
 				baseUrl: source.baseUrl,
 				reasoning: model.reasoning,
-				input: model.input,
+				input: model.input.filter((value): value is 'text' | 'image' => value === 'text' || value === 'image'),
 				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 				contextWindow: model.contextWindow,
 				maxTokens: model.maxOutputTokens ?? 16_384,

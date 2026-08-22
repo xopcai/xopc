@@ -15,6 +15,7 @@
 export { openAiSpeechProvider, OPENAI_TTS_MODELS, OPENAI_TTS_VOICES } from './openai-speech.js';
 export { alibabaSpeechProvider } from './alibaba-speech.js';
 export { edgeSpeechProvider } from './edge-speech.js';
+export { xopcCloudSpeechProvider } from './xopc-cloud-speech.js';
 export {
   minimaxSpeechProvider,
   MINIMAX_TTS_MODELS,

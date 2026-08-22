@@ -2,10 +2,10 @@ export interface CatalogModel {
   id: string;
   name: string;
   availability: 'available' | 'unavailable';
-  kind: 'language' | 'image';
-  input: Array<'text' | 'image'>;
-  output: Array<'text' | 'image'>;
-  operations: Array<'chat.completions' | 'responses' | 'images.generate' | 'images.edit'>;
+  kind: 'language' | 'image' | 'stt' | 'tts';
+  input: Array<'text' | 'image' | 'audio'>;
+  output: Array<'text' | 'image' | 'audio'>;
+  operations: Array<'chat.completions' | 'responses' | 'images.generate' | 'images.edit' | 'audio.transcription' | 'audio.speech'>;
   reasoning: boolean;
   contextWindow: number;
   maxOutputTokens: number | null;
@@ -17,6 +17,26 @@ export interface CatalogModel {
     formats: Array<'png' | 'jpeg' | 'webp'>;
     backgrounds: Array<'transparent' | 'opaque' | 'auto'>;
     maxInputImages: number;
+  };
+  stt?: {
+    inputFormats: string[];
+    maxBytes: number;
+    maxDurationSeconds: number;
+    languages: string[];
+    languageHint: boolean;
+    prompt: boolean;
+    timestamps: Array<'segment' | 'word'>;
+    diarization: boolean;
+  };
+  tts?: {
+    maxCharacters: number;
+    languages: string[];
+    outputFormats: Array<'mp3' | 'opus' | 'aac' | 'flac' | 'wav' | 'pcm'>;
+    streaming: boolean;
+    speed: boolean;
+    pitch: boolean;
+    instructions: boolean;
+    defaultVoice?: string;
   };
 }
 
@@ -107,6 +127,8 @@ export class ModelCatalogStore {
             backgrounds: [...model.imageGeneration.backgrounds],
           },
         } : {}),
+        ...(model.stt ? { stt: { ...model.stt, inputFormats: [...model.stt.inputFormats], languages: [...model.stt.languages], timestamps: [...model.stt.timestamps] } } : {}),
+        ...(model.tts ? { tts: { ...model.tts, languages: [...model.tts.languages], outputFormats: [...model.tts.outputFormats] } } : {}),
       })),
     };
   }
