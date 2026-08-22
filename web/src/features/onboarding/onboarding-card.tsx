@@ -123,6 +123,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
 
   useEffect(() => {
     let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
     void (async () => {
       for (let attempt = 0; attempt < 3; attempt += 1) {
         try {
@@ -136,7 +137,9 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
           return;
         } catch {
           if (attempt < 2) {
-            await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+            await new Promise<void>((resolve) => {
+              retryTimer = setTimeout(resolve, 250 * (attempt + 1));
+            });
           }
         }
       }
@@ -144,6 +147,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
     })();
     return () => {
       cancelled = true;
+      if (retryTimer !== undefined) clearTimeout(retryTimer);
     };
   }, []);
 
