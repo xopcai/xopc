@@ -82,9 +82,14 @@ function removePlayer(): void {
   player = null;
   if (!current) return;
   try {
+    current.pause();
+  } catch {
+    // The native player may already be stopped after an interruption.
+  }
+  try {
     current.remove();
   } catch {
-    // Native player may already be released after an interruption.
+    // The native player may already be released after an interruption.
   }
 }
 
@@ -147,7 +152,7 @@ async function playChunk(index: number, runGeneration: number): Promise<void> {
     removePlayer();
     const nextPlayer = createAudioPlayer({ uri }, { updateInterval: 250 });
     player = nextPlayer;
-    nextPlayer.playbackRate = useReadAloudStore.getState().rate;
+    nextPlayer.setPlaybackRate(useReadAloudStore.getState().rate);
     finishingChunk = false;
     nextPlayer.addListener('playbackStatusUpdate', (status) => {
       if (player !== nextPlayer || runGeneration !== generation || !status.isLoaded) return;
@@ -283,7 +288,7 @@ export const useReadAloudStore = create<ReadAloudState>()((set, get) => ({
     }
     if (player && player.currentTime > 0) {
       claimAudioPlayback(PLAYBACK_OWNER, () => get().pause());
-      player.playbackRate = get().rate;
+      player.setPlaybackRate(get().rate);
       player.play();
       set({ status: 'playing' });
       return;
@@ -308,7 +313,7 @@ export const useReadAloudStore = create<ReadAloudState>()((set, get) => ({
   cycleRate: () => {
     const currentIndex = RATES.indexOf(get().rate as typeof RATES[number]);
     const rate = RATES[(currentIndex + 1) % RATES.length] ?? 1;
-    if (player) player.playbackRate = rate;
+    player?.setPlaybackRate(rate);
     set({ rate });
   },
 }));
