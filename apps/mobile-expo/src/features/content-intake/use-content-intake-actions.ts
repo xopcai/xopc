@@ -6,8 +6,8 @@ import { takeNewChatSessionKey } from '@/features/chat/session-prefetch';
 import { useMessages } from '@/i18n/messages';
 import { openChat } from '@/lib/navigation';
 import { useEffectiveDefaultAgentId } from '@/query/agents';
-import { captureNote } from '@/query/notes';
 import { invalidateNoteLists } from '@/query/workspace-sync';
+import { captureWorkspaceText } from '@/sync/workspace-sync';
 
 import { buildContentIntakeNoteMarkdown } from './content-note-markdown';
 import { setContentChatIntake } from './content-chat-handoff';
@@ -52,10 +52,10 @@ export function useContentIntakeActions(
       setSaving(true);
       onHandled();
       try {
-        const created = await captureNote({ markdown, kind: intent.noteKind, channel: source });
+        const result = await captureWorkspaceText({ text: markdown, channel: source });
         invalidateNoteLists(queryClient);
-        setToast(m.contentIntake.savedToNote);
-        return { status: 'saved', noteId: created.note.id };
+        setToast(result.synced ? m.contentIntake.savedToNote : m.notesPage.savedOffline);
+        return { status: 'saved', noteId: result.noteId };
       } catch (err) {
         setToast(err instanceof Error ? err.message : m.notesPage.actionFailed);
         return { status: 'ignored' };

@@ -10,15 +10,18 @@ import {
   syncMobileNotificationRegistration,
 } from './mobile-notifications';
 
-export function useMobileNotifications(router: ImperativeRouter): void {
+export function useMobileNotifications(router: ImperativeRouter, ready: boolean): void {
   const configured = useGatewayConfigured();
   const enabled = usePreferencesStore((state) => state.notificationsEnabled);
   const activeGatewayId = useGatewayStore((state) => state.activeGatewayId);
 
-  useEffect(() => subscribeToMobileNotifications(router), [router]);
+  useEffect(() => {
+    if (!ready) return;
+    return subscribeToMobileNotifications(router);
+  }, [ready, router]);
 
   useEffect(() => {
-    if (!configured || !enabled) return;
+    if (!ready || !configured || !enabled) return;
     void syncMobileNotificationRegistration();
-  }, [activeGatewayId, configured, enabled]);
+  }, [activeGatewayId, configured, enabled, ready]);
 }

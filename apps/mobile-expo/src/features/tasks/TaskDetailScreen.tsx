@@ -71,6 +71,12 @@ export function TaskDetailScreen() {
     failed: hm.verificationFailed,
     unverified: hm.verificationPending,
   } as const;
+  const activeWait = query.data?.waits.find((wait) => wait.status === 'active');
+  const waitingForUser = activeWait?.kind === 'user_input' || activeWait?.kind === 'approval';
+  const waitingRun = activeWait?.taskRunId
+    ? query.data?.runs.find((run) => run.id === activeWait.taskRunId)
+    : query.data?.runs.find((run) => run.status === 'waiting');
+  const waitingSessionKey = waitingRun?.sessionKey;
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
@@ -89,8 +95,15 @@ export function TaskDetailScreen() {
               {query.data.task.body ? <Text style={[styles.body, { color: colors.text.secondary }]}>{query.data.task.body}</Text> : null}
               {query.data.task.phase !== 'closed' ? (
                 <View style={styles.actions}>
-                  {query.data.waits.length > 0 && query.data.allowedCommands.includes('resolve_wait') ? (
-                    <Button mode="contained" disabled={command.isPending} onPress={() => command.mutate({ type: 'resolve_wait', waitId: query.data!.waits[0]!.id })}>
+                  {waitingForUser && waitingSessionKey ? (
+                    <Button
+                      mode="contained"
+                      onPress={() => router.push(`/chat/${encodeURIComponent(waitingSessionKey)}`)}
+                    >
+                      {hm.taskContinueInChat}
+                    </Button>
+                  ) : activeWait && !waitingForUser && query.data.allowedCommands.includes('resolve_wait') ? (
+                    <Button mode="contained" disabled={command.isPending} onPress={() => command.mutate({ type: 'resolve_wait', waitId: activeWait.id })}>
                       {hm.taskResume}
                     </Button>
                   ) : query.data.allowedCommands.includes('start') && executorAgentId ? (
@@ -118,6 +131,9 @@ export function TaskDetailScreen() {
                     ? hm.taskChangedRetry
                     : hm.taskActionFailed}
                 </Text>
+              ) : null}
+              {waitingForUser && !waitingSessionKey ? (
+                <Text style={[styles.meta, { color: colors.semantic.warning }]}>{activeWait.reason}</Text>
               ) : null}
               {query.data.task.dueAt ? <Text style={[styles.meta, { color: colors.accent.primary }]}>{hm.taskNextCheck}: {new Date(query.data.task.dueAt).toLocaleString()}</Text> : null}
             </View>
@@ -166,10 +182,17 @@ export function TaskDetailScreen() {
               <View style={[styles.card, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}>
                 <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{labels.runs}</Text>
                 {query.data.runs.map((run) => (
-                  <View key={run.id} style={[styles.receipt, { borderColor: colors.border.subtle }]}>
+                  <Pressable
+                    accessibilityRole={run.sessionKey ? 'button' : undefined}
+                    accessibilityLabel={run.sessionKey ? hm.taskContinueInChat : undefined}
+                    disabled={!run.sessionKey}
+                    key={run.id}
+                    onPress={run.sessionKey ? () => router.push(`/chat/${encodeURIComponent(run.sessionKey!)}`) : undefined}
+                    style={[styles.receipt, { borderColor: colors.border.subtle }]}
+                  >
                     <Text style={[styles.body, { color: colors.text.primary }]}>{run.executorKind} · {run.status}</Text>
                     <Text style={[styles.meta, { color: colors.text.tertiary }]}>#{run.attempt} · {new Date(run.startedAt ?? run.queuedAt).toLocaleString()}</Text>
-                  </View>
+                  </Pressable>
                 ))}
               </View>
             ) : null}

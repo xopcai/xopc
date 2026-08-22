@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { apiFetch } from '../../api/client';
-import { captureNote, uploadNoteMedia } from '../notes';
+import { captureNote, quickCaptureNote, uploadNoteMedia } from '../notes';
 
 const platform = vi.hoisted(() => ({ OS: 'ios' }));
 
@@ -104,5 +104,28 @@ describe('captureNote attachments', () => {
     expect(file.name).toBe('receipt.png');
     expect(file.type).toBe('image/png');
     expect(await file.text()).toBe('png-data');
+  });
+});
+
+describe('quickCaptureNote', () => {
+  beforeEach(() => {
+    mockedApiFetch.mockReset();
+    mockedApiFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ note: { id: 'capture-1' } }),
+    } as Response);
+  });
+
+  it('forwards source and idempotency metadata', async () => {
+    await quickCaptureNote('shared text', {
+      channel: 'share',
+      idempotencyKey: 'operation-1',
+    });
+
+    expect(mockedApiFetch).toHaveBeenCalledWith('/api/notes/quick-capture', {
+      method: 'POST',
+      headers: { 'Idempotency-Key': 'operation-1' },
+      body: JSON.stringify({ text: 'shared text', channel: 'share', platform: 'ios' }),
+    });
   });
 });

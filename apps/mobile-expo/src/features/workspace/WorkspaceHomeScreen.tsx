@@ -1,5 +1,4 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Task, TaskRunReceipt } from '@xopcai/gateway-contract';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
@@ -13,7 +12,11 @@ import { ListSkeleton } from '../../components/ListSkeleton';
 import { TOAST_BOTTOM_LIFT_ABOVE_BAR, TOAST_DURATION_SHORT } from '../../constants/toast';
 import { t, useMessages } from '../../i18n/messages';
 import { openNoteDetail } from '../../lib/navigation';
-import { recordUsageEvent } from '../../product/usage-metrics';
+import {
+  mobileAppJsStartedAt,
+  recordPerformanceEvent,
+  recordUsageEvent,
+} from '../../product/usage-metrics';
 import {
   acknowledgeHomeAttention,
   fetchHome,
@@ -108,6 +111,7 @@ export function WorkspaceHomeScreen() {
   } = useWorkspaceNavigation();
   const [searchOpen, setSearchOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
+  const homeReadyRecorded = useRef(false);
 
   useHomeChatPrefetch(configured);
 
@@ -122,6 +126,11 @@ export function WorkspaceHomeScreen() {
   });
 
   const home = homeQuery.data;
+  useEffect(() => {
+    if (homeReadyRecorded.current || !configured || homeQuery.isLoading) return;
+    homeReadyRecorded.current = true;
+    recordPerformanceEvent('home_content_ready', Date.now() - mobileAppJsStartedAt);
+  }, [configured, homeQuery.isLoading]);
   const recentlyOpened = home?.recentlyOpened ?? [];
   const needsRecentNotesFallback = configured && !homeQuery.isLoading && recentlyOpened.length === 0;
   const recentNotesFallbackQuery = useQuery({
@@ -169,8 +178,15 @@ export function WorkspaceHomeScreen() {
       icon: iconForNoteKind(note.kind),
       onPress: () => handleNotePress(note),
     }));
-    return [...workflowItems, ...sessionItems, ...noteItems].slice(0, 3);
-  }, [handleNotePress, handleSessionPress, hm, home?.chats.recent, home?.workflowRuns.active, homeNotes, m.sessions.untitled, router]);
+    const taskItems = (home?.tasks.running ?? []).map((task) => ({
+      id: `task:${task.id}`,
+      title: task.title,
+      meta: `${hm.libraryWork} · ${hm.taskStatusRunning}`,
+      icon: 'progress-clock',
+      onPress: () => router.push(`/tasks/${task.id}`),
+    }));
+    return [...workflowItems, ...taskItems, ...sessionItems, ...noteItems].slice(0, 3);
+  }, [handleNotePress, handleSessionPress, hm, home?.chats.recent, home?.tasks.running, home?.workflowRuns.active, homeNotes, m.sessions.untitled, router]);
 
   const decisionMutation = useMutation({
     mutationFn: ({ id: _id, response, answer }: {
@@ -291,46 +307,32 @@ export function WorkspaceHomeScreen() {
         ) : (
           <>
             <HomeGatewayStatus gateway={home.gateway} />
-            <BriefingCard
-              briefing={home.briefing}
-              primaryDecision={home.decisions[0]}
-              needsAttention={home.decisions.length + home.attention.length > 0}
-              onPrimaryPress={openDecision}
-            />
-            <AttentionSection
-              items={home.attention.slice(0, 3)}
-              pendingId={attentionMutation.isPending ? attentionMutation.variables.item.id : undefined}
-              onOpen={openAttention}
-              onAction={(item, action) => attentionMutation.mutate({ item, action })}
-            />
-            <DecisionSection
-              decisions={home.decisions.slice(0, 3)}
-              pendingDecisionId={decisionMutation.isPending ? decisionMutation.variables.id : undefined}
-              onOpen={openDecision}
-              onRespond={(decision, answer) => {
-                if (decision.response) decisionMutation.mutate({ id: decision.id, response: decision.response, answer });
-              }}
-            />
-            <TaskProgressSection
-              title={hm.sectionTasksRunning}
-              items={home.tasks.running.slice(0, 3)}
-              statusLabel={hm.taskStatusRunning}
-              icon="progress-clock"
-              onOpen={(item) => router.push(`/tasks/${item.id}`)}
-            />
-            <TaskSection
-              items={home.recentTasks.slice(0, 3)}
-              onOpen={() => router.push('/tasks')}
-            />
+            {home.attention[0] ? (
+              <AttentionSection
+                items={[home.attention[0]]}
+                pendingId={attentionMutation.isPending ? attentionMutation.variables.item.id : undefined}
+                onOpen={openAttention}
+                onAction={(item, action) => attentionMutation.mutate({ item, action })}
+              />
+            ) : home.decisions[0] ? (
+              <DecisionSection
+                decisions={[home.decisions[0]]}
+                pendingDecisionId={decisionMutation.isPending ? decisionMutation.variables.id : undefined}
+                onOpen={openDecision}
+                onRespond={(decision, answer) => {
+                  if (decision.response) decisionMutation.mutate({ id: decision.id, response: decision.response, answer });
+                }}
+              />
+            ) : (
+              <BriefingCard briefing={home.briefing} />
+            )}
             <ContinueSection items={continueItems} />
             <LibrarySection
               inboxCount={home.inboxCount}
               onWork={() => router.push('/tasks')}
-              onProjects={() => router.push('/projects')}
               onInbox={() => router.push('/inbox')}
               onNotes={() => router.push('/notes')}
               onSessions={() => router.push('/sessions')}
-              onFiles={() => router.push('/files')}
             />
           </>
         )}
@@ -399,24 +401,18 @@ function HomeGatewayStatus({ gateway }: { gateway: HomeGateway }) {
 
 function BriefingCard({
   briefing,
-  primaryDecision,
-  needsAttention,
-  onPrimaryPress,
 }: {
   briefing: HomeData['briefing'];
-  primaryDecision?: HomeDecision;
-  needsAttention: boolean;
-  onPrimaryPress: (decision: HomeDecision) => void;
 }) {
   const { colors } = useTheme();
   const { homePage: hm } = useMessages();
   return (
     <View style={[styles.briefingCard, { backgroundColor: colors.surface.panel, borderColor: colors.border.subtle }]}>
       <View style={[styles.briefingMark, { backgroundColor: colors.accent.soft }]}>
-        <Icon source={needsAttention ? 'lightning-bolt-outline' : 'check'} size={20} color={colors.accent.primary} />
+        <Icon source={briefing.progress.movingCount > 0 ? 'progress-clock' : 'check'} size={20} color={colors.accent.primary} />
       </View>
       <Text style={[styles.briefingTitle, { color: colors.text.primary }]}>
-        {needsAttention ? hm.briefingNeedsYou : hm.briefingClear}
+        {briefing.progress.movingCount > 0 ? hm.briefingMovingTitle : hm.briefingClear}
       </Text>
       <Text style={[styles.briefingSummary, { color: colors.text.secondary }]}>{briefing.summary}</Text>
       {briefing.progress.movingCount > 0 ? (
@@ -433,19 +429,6 @@ function BriefingCard({
         <Text style={[styles.briefingProgress, { color: colors.text.tertiary }]}>
           {t(hm.briefingNextScheduled, { title: briefing.nextScheduled.name ?? briefing.nextScheduled.id })}
         </Text>
-      ) : null}
-      {primaryDecision && !primaryDecision.response ? (
-        <Pressable
-          style={({ pressed }) => [
-            styles.briefingAction,
-            { backgroundColor: pressed ? colors.accent.primaryHover : colors.accent.primary },
-          ]}
-          onPress={() => onPrimaryPress(primaryDecision)}
-          accessibilityRole="button"
-        >
-          <Text style={[styles.briefingActionText, { color: colors.accent.onPrimary }]}>{hm.reviewNow}</Text>
-          <Icon source="arrow-right" size={18} color={colors.accent.onPrimary} />
-        </Pressable>
       ) : null}
     </View>
   );
@@ -605,95 +588,26 @@ function ContinueSection({ items }: { items: ContinueItem[] }) {
   );
 }
 
-function TaskProgressSection({
-  title,
-  items,
-  statusLabel,
-  icon,
-  onOpen,
-}: {
-  title: string;
-  items: Task[];
-  statusLabel: string;
-  icon: string;
-  onOpen: (task: Task) => void;
-}) {
-  const { colors } = useTheme();
-  if (items.length === 0) return null;
-  return (
-    <Section title={title}>
-      <View style={[styles.groupedList, { backgroundColor: colors.surface.panel }]}>
-        {items.map((item, index) => (
-          <Pressable key={item.id} style={styles.listRow} onPress={() => onOpen(item)} accessibilityRole="button">
-            <Icon source={icon} size={20} color={colors.accent.primary} />
-            <View style={styles.rowCopy}>
-              <Text numberOfLines={2} style={[styles.rowTitle, { color: colors.text.primary }]}>{item.title}</Text>
-              <Text style={[styles.rowSubtitle, { color: colors.text.tertiary }]}>{statusLabel}</Text>
-            </View>
-            <Icon source="chevron-right" size={18} color={colors.text.tertiary} />
-            {index < items.length - 1 ? <View style={[styles.rowDivider, { backgroundColor: colors.border.subtle }]} /> : null}
-          </Pressable>
-        ))}
-      </View>
-    </Section>
-  );
-}
-
-function TaskSection({
-  items,
-  onOpen,
-}: {
-  items: TaskRunReceipt[];
-  onOpen: (receipt: TaskRunReceipt) => void;
-}) {
-  const { colors } = useTheme();
-  const { homePage: hm } = useMessages();
-  if (items.length === 0) return null;
-  return (
-    <Section title={hm.sectionRecentTasks}>
-      <View style={[styles.groupedList, { backgroundColor: colors.surface.panel }]}>
-        {items.map((item, index) => (
-          <Pressable key={item.runId} style={styles.listRow} onPress={() => onOpen(item)} accessibilityRole="button">
-            <Icon source="check-circle-outline" size={20} color={colors.semantic.success} />
-            <View style={styles.rowCopy}>
-              <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text.primary }]}>{item.summary}</Text>
-              <Text numberOfLines={2} style={[styles.rowSubtitle, { color: colors.text.secondary }]}>{item.summary}</Text>
-            </View>
-            <Icon source="chevron-right" size={18} color={colors.text.tertiary} />
-            {index < items.length - 1 ? <View style={[styles.rowDivider, { backgroundColor: colors.border.subtle }]} /> : null}
-          </Pressable>
-        ))}
-      </View>
-    </Section>
-  );
-}
-
 function LibrarySection({
   inboxCount,
   onWork,
-  onProjects,
   onInbox,
   onNotes,
   onSessions,
-  onFiles,
 }: {
   inboxCount: number;
   onWork: () => void;
-  onProjects: () => void;
   onInbox: () => void;
   onNotes: () => void;
   onSessions: () => void;
-  onFiles: () => void;
 }) {
   const { homePage: hm } = useMessages();
   return (
     <Section title={hm.sectionLibrary}>
       <LibraryRow icon="briefcase-outline" label={hm.libraryWork} onPress={onWork} />
-      <LibraryRow icon="folder-multiple-outline" label={hm.libraryProjects} onPress={onProjects} />
       <LibraryRow icon="tray-arrow-down" label={hm.inboxMetric} value={inboxCount > 0 ? String(inboxCount) : undefined} onPress={onInbox} />
       <LibraryRow icon="note-text-outline" label={hm.libraryNotes} onPress={onNotes} />
-      <LibraryRow icon="message-processing-outline" label={hm.librarySessions} onPress={onSessions} />
-      <LibraryRow icon="folder-outline" label={hm.libraryFiles} onPress={onFiles} last />
+      <LibraryRow icon="message-processing-outline" label={hm.librarySessions} onPress={onSessions} last />
     </Section>
   );
 }
@@ -820,8 +734,6 @@ const styles = StyleSheet.create({
   briefingTitle: { ...typography.title },
   briefingSummary: { ...typography.body },
   briefingProgress: { ...typography.caption },
-  briefingAction: { minHeight: 48, borderRadius: radii.xxl, marginTop: spacing.sm, paddingHorizontal: spacing.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
-  briefingActionText: { ...typography.ui, fontWeight: '600' },
   section: { gap: spacing.md },
   sectionBody: { borderRadius: radii.lg, overflow: 'hidden' },
   sectionTitle: { ...typography.heading },

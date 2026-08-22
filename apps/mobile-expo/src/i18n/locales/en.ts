@@ -548,6 +548,8 @@ export const en = {
     clarifyTimeoutNote: 'Please answer within 5 minutes, or the request may time out.',
     messageCopy: 'Copy',
     messageCopyCode: 'Copy code',
+    messageSaveToNote: 'Save as note',
+    messageSavedToNote: 'Saved as note',
     messageEdit: 'Edit',
     messageRetry: 'Retry',
     messageRegenerate: 'Regenerate',
@@ -876,6 +878,7 @@ export const en = {
     retry: 'Try again',
     briefingNeedsYou: 'Your attention',
     briefingClear: 'All clear',
+    briefingMovingTitle: 'Work in progress',
     briefingMoving: '{{count}} items moving in the background',
     briefingLatestWin: 'Latest win · {{title}}',
     briefingNextScheduled: 'Next scheduled · {{title}}',
@@ -904,6 +907,7 @@ export const en = {
     taskRun: 'Start working',
     taskPause: 'Pause',
     taskResume: 'Continue',
+    taskContinueInChat: 'Continue in chat',
     taskCancel: 'End task',
     taskActionFailed: 'The action failed. Please try again.',
     taskChangedRetry: 'This task changed. Review the latest state and try again.',
@@ -1060,6 +1064,7 @@ export const en = {
     aiOrganizeApply: 'Apply',
     aiOrganizeApplying: 'Applying…',
     aiOrganizeApplied: 'Organized {{count}} item(s)',
+    aiOrganizeUndone: 'Organization undone',
     aiOrganizeSuggestions: {
       bookmark: {
         title: 'Process saved links',

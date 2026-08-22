@@ -19,7 +19,13 @@ export function aggregateWorkspaceSearchResults(groups: WorkspaceSearchResult[][
   );
 }
 
-export function pendingDraftSearchResults(entries: Array<{ id: string; kind: string; payload: unknown; createdAt: number }>, query: string): WorkspaceSearchResult[] {
+export function pendingDraftSearchResults(entries: Array<{
+  id: string;
+  kind: string;
+  payload: unknown;
+  createdAt: number;
+  state?: 'pending' | 'syncing' | 'conflict' | 'failed';
+}>, query: string): WorkspaceSearchResult[] {
   const needle = query.trim().toLowerCase();
   if (!needle) return [];
   return entries.flatMap((entry) => {
@@ -27,6 +33,14 @@ export function pendingDraftSearchResults(entries: Array<{ id: string; kind: str
     const payload = entry.payload as { text?: unknown; markdown?: unknown };
     const text = typeof payload.text === 'string' ? payload.text : typeof payload.markdown === 'string' ? payload.markdown : '';
     if (!text.toLowerCase().includes(needle)) return [];
-    return [{ id: `draft:${entry.id}`, type: 'draft' as const, title: text.split('\n')[0] || 'Untitled draft', snippet: text, updatedAt: entry.createdAt, score: 2, state: 'pending_sync' as const }];
+    return [{
+      id: `draft:${entry.id}`,
+      type: 'draft' as const,
+      title: text.split('\n')[0] || 'Untitled draft',
+      snippet: text,
+      updatedAt: entry.createdAt,
+      score: 2,
+      state: entry.state === 'failed' ? 'failed_sync' as const : 'pending_sync' as const,
+    }];
   });
 }
