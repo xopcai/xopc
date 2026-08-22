@@ -4,6 +4,8 @@ export type WireAttachment = {
   mimeType?: string;
   data?: string;
   uri?: string;
+  /** Local source used only by the durable mobile outbox; never sent to the gateway. */
+  localUri?: string;
   name?: string;
   size?: number;
   workspaceRelativePath?: string;
@@ -46,6 +48,7 @@ export function composerAttachmentsToWire(attachments: ComposerAttachment[]): Wi
         size: a.size,
         ...(data ? { data } : {}),
         ...(a.uri ? { uri: a.uri } : {}),
+        ...(a.localUri ? { localUri: a.localUri } : {}),
         ...(a.workspaceRelativePath ? { workspaceRelativePath: a.workspaceRelativePath } : {}),
         ...(a.durationSeconds != null ? { durationSeconds: a.durationSeconds } : {}),
       };

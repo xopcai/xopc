@@ -22,7 +22,9 @@ export function streamRetryDelayMs(attempt: number): number {
   return Math.min(30_000, 1000 * 2 ** Math.min(n - 1, 5));
 }
 
-export const STREAM_RECOVERY_MAX_ATTEMPTS = 8;
+export const STREAM_RECOVERY_FAST_ATTEMPTS = 7;
 export const STREAM_RECOVERY_WAIT_FOR_RUN_MS = 45_000;
+export const STREAM_RECOVERY_PARKED_RETRY_MS = 60_000;
+export const STREAM_ATTACH_TIMEOUT_MS = 15_000;
 /** No run activity while streaming — treat as a stalled connection. */
 export const STREAM_STALL_MS = 25_000;

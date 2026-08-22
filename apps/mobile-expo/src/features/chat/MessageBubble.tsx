@@ -267,6 +267,7 @@ export const MessageBubble = memo(function MessageBubble({
   sessionKey,
   onUserMessageCopy,
   onUserMessageEdit,
+  onUserMessageRetry,
   onAssistantCopy,
   onAssistantRegenerate,
 }: {
@@ -276,6 +277,7 @@ export const MessageBubble = memo(function MessageBubble({
   sessionKey?: string;
   onUserMessageCopy?: (text: string) => void;
   onUserMessageEdit?: (text: string) => void;
+  onUserMessageRetry?: () => void;
   onAssistantCopy?: (text: string) => void;
   onAssistantRegenerate?: () => void;
 }) {
@@ -346,6 +348,7 @@ export const MessageBubble = memo(function MessageBubble({
 
   const showMeta =
     Boolean(message.timestamp) ||
+    Boolean(message.deliveryState) ||
     Boolean(progress?.message) ||
     showProgressDetail ||
     showMetaFallbackThinking;
@@ -365,16 +368,23 @@ export const MessageBubble = memo(function MessageBubble({
   );
 
   const userActions = useMemo((): MessageAction[] => {
-    if (!isUser || !userText.trim()) return [];
+    if (!isUser) return [];
     const actions: MessageAction[] = [];
-    if (onUserMessageEdit) {
+    if (message.deliveryState === 'failed' && onUserMessageRetry) {
+      actions.push({
+        icon: 'refresh',
+        onPress: onUserMessageRetry,
+        accessibilityLabel: m.chat.messageRetry,
+      });
+    }
+    if (userText.trim() && onUserMessageEdit) {
       actions.push({
         icon: 'pencil-outline',
         onPress: () => onUserMessageEdit(userText),
         accessibilityLabel: m.chat.messageEdit,
       });
     }
-    if (onUserMessageCopy) {
+    if (userText.trim() && onUserMessageCopy) {
       actions.push({
         icon: 'content-copy',
         onPress: () => onUserMessageCopy(userText),
@@ -382,7 +392,17 @@ export const MessageBubble = memo(function MessageBubble({
       });
     }
     return actions;
-  }, [isUser, userText, onUserMessageEdit, onUserMessageCopy, m.chat.messageEdit, m.chat.messageCopy]);
+  }, [
+    isUser,
+    userText,
+    message.deliveryState,
+    onUserMessageEdit,
+    onUserMessageCopy,
+    onUserMessageRetry,
+    m.chat.messageEdit,
+    m.chat.messageCopy,
+    m.chat.messageRetry,
+  ]);
 
   const assistantActions = useMemo((): MessageAction[] => {
     if (!isAssistant || isStreaming) return [];
@@ -430,6 +450,17 @@ export const MessageBubble = memo(function MessageBubble({
           {message.timestamp ? (
             <Text variant="labelSmall" style={styles.metaTime}>
               {formatTime(message.timestamp)}
+            </Text>
+          ) : null}
+          {message.deliveryState ? (
+            <Text
+              variant="labelSmall"
+              style={[
+                styles.metaTime,
+                message.deliveryState === 'failed' && { color: colors.semantic.errorBold },
+              ]}
+            >
+              {message.deliveryState === 'failed' ? m.chat.sendFailed : m.chat.waitingToSend}
             </Text>
           ) : null}
           {progress?.message || showProgressDetail || showMetaFallbackThinking ? (

@@ -6,8 +6,8 @@ import {
 } from '../utils/connector-discovery-source';
 
 describe('connectorDiscoverySourceForEntry', () => {
-  it('starts personal-context setup from built-in connectors', () => {
-    expect(connectorDiscoverySourceForEntry('personal-context')).toBe(DISCOVERY_SOURCE_BUILTIN);
+  it('starts understanding setup from built-in connectors', () => {
+    expect(connectorDiscoverySourceForEntry('understanding')).toBe(DISCOVERY_SOURCE_BUILTIN);
   });
 
   it('keeps the default connector entry on built-in connectors', () => {

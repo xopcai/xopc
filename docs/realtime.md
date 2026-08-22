@@ -22,7 +22,7 @@ Bearer tokens are never placed in the WebSocket URL. The server enforces a hello
 | `workflow:<runId>` | Workflow-scoped progress | Policy-defined |
 | `logs` | Live log entries | 500 events |
 
-Every event has a topic-local monotonic sequence. Clients reconnect with their last cursor; the gateway replays newer events. If the cursor predates the replay window, the gateway emits `realtime.gap`, and the client reloads the relevant REST snapshot.
+Every event has a topic-local monotonic sequence. Clients reconnect with their last applied cursor; the gateway replays newer events and suppresses duplicates. Subscription acknowledgements establish a cursor even before the first event arrives. If the cursor predates the replay window, the gateway emits a recoverable `realtime.gap`; chat clients reload the durable session snapshot and then consume the retained suffix. A missing or expired run topic emits a terminal gap and clients reconcile from REST only.
 
 ## Endpoint tools
 
@@ -35,6 +35,12 @@ There is no separate endpoint WebSocket and no transport compatibility branch.
 REST remains the durable command and snapshot boundary: clients create session inputs, mutate resources, query state, and issue realtime tickets over HTTP. The realtime connection carries notifications, ordered run output, logs, and endpoint messages.
 
 Finite request-scoped streams such as update/install progress and AI-assist responses may still use SSE. They are direct responses to one HTTP request, not persistent subscriptions or a second message bus.
+
+## Mobile recovery
+
+Mobile transport recovery is intentionally silent. Route probes, WebSocket reconnects, replay gaps, and run resume never create chat banners. Recovery uses a fast bounded retry phase, then parks until network, foreground, route, or realtime events wake it; a low-frequency foreground retry is the final safety net. When a run no longer exists, the client reconciles the durable session snapshot instead of asking the user to resume it.
+
+Session inputs enter a durable mobile outbox before the first HTTP attempt. The outbox persists the original `clientMessageId`, text, and attachment file references (never attachment base64), retries every session after realtime connectivity returns, and removes an entry only after the gateway acknowledges it or definitively rejects it.
 
 ## Implementation
 

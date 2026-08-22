@@ -73,6 +73,7 @@ export const MessageList = memo(function MessageList({
   onSuggestionSend,
   onUserMessageCopy,
   onUserMessageEdit,
+  onUserMessageRetry,
   onAssistantCopy,
   onAssistantRegenerate,
   loadError,
@@ -95,6 +96,7 @@ export const MessageList = memo(function MessageList({
   onSuggestionSend?: (text: string) => void;
   onUserMessageCopy?: (text: string) => void;
   onUserMessageEdit?: (text: string) => void;
+  onUserMessageRetry?: (message: Message) => void;
   onAssistantCopy?: (text: string) => void;
   onAssistantRegenerate?: (messageIndex: number) => void;
   loadError?: { message: string; retryLabel: string; onRetry: () => void } | null;
@@ -179,6 +181,9 @@ export const MessageList = memo(function MessageList({
             sessionKey={sessionKey}
             onUserMessageCopy={onUserMessageCopy}
             onUserMessageEdit={onUserMessageEdit}
+            onUserMessageRetry={item.deliveryState === 'failed' && onUserMessageRetry
+              ? () => onUserMessageRetry(item)
+              : undefined}
             onAssistantCopy={onAssistantCopy}
             onAssistantRegenerate={
               onAssistantRegenerate && isLastAssistantMessage(messages, index)
@@ -189,7 +194,17 @@ export const MessageList = memo(function MessageList({
         </ChatRenderErrorBoundary>
       );
     },
-    [messages, onUserMessageCopy, onUserMessageEdit, onAssistantCopy, onAssistantRegenerate, streaming, progress, sessionKey],
+    [
+      messages,
+      onUserMessageCopy,
+      onUserMessageEdit,
+      onUserMessageRetry,
+      onAssistantCopy,
+      onAssistantRegenerate,
+      streaming,
+      progress,
+      sessionKey,
+    ],
   );
 
   const keyExtractor = useCallback(

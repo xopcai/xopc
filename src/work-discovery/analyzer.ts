@@ -6,11 +6,11 @@ import type { Config } from '../config/schema.js';
 import { getAgentDefaultModelRef } from '../config/schema.js';
 import { completeWithResolvedCredentials } from '../providers/model-call.js';
 import { resolveModel } from '../providers/index.js';
+import type { UnderstandingSourceItem } from '../user-context/sources/types.js';
 
 import type {
   WorkContextSnapshot,
   WorkDiscoveryCandidate,
-  WorkDiscoveryPersonalContextItem,
   WorkDiscoveryProfileCandidate,
   WorkDiscoveryResult,
   WorkDiscoverySuggestion,
@@ -18,7 +18,7 @@ import type {
 } from './types.js';
 
 const MAX_MODEL_CONTEXT_CHARS = 120_000;
-const MAX_PERSONAL_CONTEXT_CHARS = 100_000;
+const MAX_UNDERSTANDING_SOURCE_CHARS = 100_000;
 const WORK_ANALYSIS_MAX_TOKENS = 6_000;
 
 function extractText(content: unknown): string {
@@ -317,9 +317,9 @@ export async function analyzeWorkContext(input: {
   };
 }
 
-export async function analyzePersonalContext(input: {
+export async function analyzeUnderstandingSources(input: {
   config: Config;
-  items: WorkDiscoveryPersonalContextItem[];
+  items: UnderstandingSourceItem[];
   workContext?: Pick<WorkDiscoveryResult, 'projectSummary' | 'currentState' | 'uncertainties' | 'workThreads'>;
   signal?: AbortSignal;
 }): Promise<{
@@ -329,38 +329,45 @@ export async function analyzePersonalContext(input: {
 }> {
   const modelRef = getAgentDefaultModelRef(input.config);
   if (!modelRef) throw new Error('No default model configured');
-  let remaining = MAX_PERSONAL_CONTEXT_CHARS;
-  const items = input.items.slice(0, 150).flatMap((item, index) => {
+  let remaining = MAX_UNDERSTANDING_SOURCE_CHARS;
+  const items = input.items
+    .filter((item) => item.sensitivity !== 'secret' && item.sensitivity !== 'regulated')
+    .slice(0, 150).flatMap((item) => {
     if (remaining <= 0) return [];
-    const content = item.content.slice(0, remaining);
-    remaining -= content.length;
+    const text = (item.text ?? '').slice(0, remaining);
+    remaining -= text.length;
     return [{
-      ref: `${item.source}:${index + 1}`,
-      source: item.source,
+      ref: item.evidenceRef,
+      source: item.sourceId,
+      type: item.type,
       title: item.title,
       group: item.group,
-      createdAt: item.createdAt,
+      occurredAt: item.occurredAt,
       modifiedAt: item.modifiedAt,
       startsAt: item.startsAt,
       endsAt: item.endsAt,
-      content,
+      ownerAttribution: item.ownerAttribution,
+      sensitivity: item.sensitivity,
+      text,
     }];
   });
-  if (!items.some((item) => item.title.trim() || item.content.trim())) {
+  if (!items.some((item) => item.title.trim() || item.text.trim())) {
     return { modelRef, profileCandidates: [], workThreadCandidates: [] };
   }
   const prompt = [
-    'Analyze the bounded personal work context that the user explicitly chose to connect from Apple Notes, Calendar, and Reminders.',
+    'Analyze bounded context from sources the user explicitly chose to connect.',
     'Return only one JSON object with profileCandidates and workThreads.',
     'profileCandidates contains at most 6 stable, useful work-related facts.',
     'Each item has category (role, focus, technology, workflow, or preference), statement, confidence, and evidence.',
     'workThreads contains at most 3 evidence-backed current, ongoing, or long-term work streams.',
     'Each work thread has topicKey, title, summary, status, horizon, confidence, and evidenceRefs.',
-    'evidenceRefs must contain only the supplied source:index refs. Do not create a thread without direct support.',
+    'evidenceRefs must contain only supplied refs. Do not create a thread without direct support.',
+    'Synthesize across source types. Repeated independent signals are stronger than a single item.',
+    'Treat ownerAttribution other/shared/unknown conservatively: it may describe someone else and must not become a user fact without user-owned corroboration.',
     'Prefer recurring work themes and durable preferences. Do not turn one-off errands or stale notes into user facts.',
     'Do not infer sensitive identity, health, finances, political views, relationships, passwords, credentials, or private contact details.',
     'Evidence must be a short paraphrase and must not quote private note content verbatim.',
-    'Calendar and reminder titles may establish commitments and timing, but must not be treated as stable preferences without repeated evidence.',
+    'Calendar events and tasks may establish commitments and timing, but must not be treated as stable preferences without repeated evidence.',
     'When a work-directory summary is supplied, reconcile it with the personal sources: identify corroboration, conflicts, and whether an apparent focus is current or merely stale.',
     'Do not repeat the directory summary as a personal fact unless at least one supplied personal source supports it.',
     'Use Simplified Chinese when the supplied items are mainly Chinese; otherwise use English.',
@@ -376,7 +383,7 @@ export async function analyzePersonalContext(input: {
   });
   const raw = extractText(response.content);
   const parsed = parseJson(raw);
-  if (!parsed) throw invalidJsonError('Personal context analysis', response, raw);
+  if (!parsed) throw invalidJsonError('Understanding source analysis', response, raw);
   const profileCandidates = Array.isArray(parsed.profileCandidates)
     ? parsed.profileCandidates
       .map(validateProfileCandidate)

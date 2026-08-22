@@ -11,9 +11,33 @@ class FakeSocket implements RealtimeWebSocket {
   onerror: ((event: unknown) => void) | null = null;
   onclose: ((event: { code?: number; reason?: string }) => void) | null = null;
   sent: string[] = [];
+  closeCode?: number;
+  closeReason?: string;
   send(data: string): void { this.sent.push(data); }
-  close(): void { this.readyState = 3; }
+  close(code?: number, reason?: string): void {
+    this.readyState = 3;
+    this.closeCode = code;
+    this.closeReason = reason;
+  }
   open(): void { this.readyState = 1; this.onopen?.({}); }
+}
+
+function serverMessage(kind: string, payload: object): string {
+  return JSON.stringify({
+    protocolVersion: REALTIME_PROTOCOL_VERSION,
+    messageId: crypto.randomUUID(),
+    kind,
+    sentAt: Date.now(),
+    payload,
+  });
+}
+
+function readyPayload() {
+  return {
+    connectionId: crypto.randomUUID(),
+    heartbeatIntervalMs: 15_000,
+    heartbeatTimeoutMs: 45_000,
+  };
 }
 
 describe('RealtimeClient', () => {
@@ -129,6 +153,182 @@ describe('RealtimeClient', () => {
       payload: cancel,
     }) });
     expect(onMessage).toHaveBeenCalledWith(cancel);
+    client.disconnect();
+  });
+
+  it('reconnects from the last acknowledged topic cursor', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const sockets: FakeSocket[] = [];
+    const client = new RealtimeClient({
+      clientId: 'c1',
+      clientKind: 'web',
+      createMessageId: () => crypto.randomUUID(),
+      getWebSocketUrl: () => 'ws://gateway/realtime',
+      issueTicket: async () => 'x'.repeat(32),
+      createWebSocket: () => {
+        const socket = new FakeSocket();
+        sockets.push(socket);
+        return socket;
+      },
+    });
+    client.subscribe('run:r1', 0);
+    client.connect();
+    await vi.waitFor(() => expect(sockets).toHaveLength(1));
+    sockets[0]!.open();
+    sockets[0]!.onmessage?.({ data: serverMessage('realtime.ready', readyPayload()) });
+    sockets[0]!.onmessage?.({ data: serverMessage('realtime.subscribed', { topic: 'run:r1', cursor: 0 }) });
+    sockets[0]!.onmessage?.({
+      data: serverMessage('realtime.event', { topic: 'run:r1', seq: 1, event: 'run.start', data: {} }),
+    });
+    sockets[0]!.onclose?.({ code: 1006, reason: 'network changed' });
+
+    await vi.advanceTimersByTimeAsync(500);
+    expect(sockets).toHaveLength(2);
+    sockets[1]!.open();
+    expect(JSON.parse(sockets[1]!.sent[0]!)).toMatchObject({
+      kind: 'realtime.hello',
+      payload: { subscriptions: [{ topic: 'run:r1', afterSeq: 1 }] },
+    });
+    client.disconnect();
+    vi.useRealTimers();
+  });
+
+  it('closes a half-open socket when server heartbeats stop', async () => {
+    vi.useFakeTimers();
+    const socket = new FakeSocket();
+    const client = new RealtimeClient({
+      clientId: 'c1',
+      clientKind: 'mobile',
+      createMessageId: () => crypto.randomUUID(),
+      getWebSocketUrl: () => 'ws://gateway/realtime',
+      issueTicket: async () => 'x'.repeat(32),
+      createWebSocket: () => socket,
+    });
+    client.connect();
+    await vi.waitFor(() => expect(socket.onopen).not.toBeNull());
+    socket.open();
+    socket.onmessage?.({ data: serverMessage('realtime.ready', readyPayload()) });
+
+    await vi.advanceTimersByTimeAsync(45_000);
+
+    expect(socket.closeCode).toBe(1000);
+    expect(socket.closeReason).toBe('Client reconnecting');
+    client.disconnect();
+    vi.useRealTimers();
+  });
+
+  it('aborts a connection attempt that never receives a ticket', async () => {
+    vi.useFakeTimers();
+    let ticketSignal: AbortSignal | undefined;
+    const client = new RealtimeClient({
+      clientId: 'c1',
+      clientKind: 'web',
+      getWebSocketUrl: () => 'ws://gateway/realtime',
+      issueTicket: async (signal) => {
+        ticketSignal = signal;
+        return new Promise<string>(() => {});
+      },
+      createWebSocket: () => new FakeSocket(),
+      connectionTimeoutMs: 2_000,
+    });
+    client.connect();
+
+    await vi.advanceTimersByTimeAsync(2_000);
+
+    expect(ticketSignal?.aborted).toBe(true);
+    client.disconnect();
+    vi.useRealTimers();
+  });
+
+  it('ignores a ticket that resolves after the connection deadline', async () => {
+    vi.useFakeTimers();
+    let resolveTicket: ((ticket: string) => void) | undefined;
+    const createWebSocket = vi.fn(() => new FakeSocket());
+    const client = new RealtimeClient({
+      clientId: 'c1',
+      clientKind: 'web',
+      getWebSocketUrl: () => 'ws://gateway/realtime',
+      issueTicket: () => new Promise<string>((resolve) => {
+        resolveTicket = resolve;
+      }),
+      createWebSocket,
+      connectionTimeoutMs: 2_000,
+      maxReconnectAttempts: 0,
+    });
+    client.connect();
+
+    await vi.advanceTimersByTimeAsync(2_000);
+    resolveTicket?.('x'.repeat(32));
+    await Promise.resolve();
+
+    expect(createWebSocket).not.toHaveBeenCalled();
+    client.disconnect();
+    vi.useRealTimers();
+  });
+
+  it('waits for gap reconciliation before delivering retained events', async () => {
+    const socket = new FakeSocket();
+    const onEvent = vi.fn();
+    let finishReconciliation: (() => void) | undefined;
+    const client = new RealtimeClient({
+      clientId: 'c1',
+      clientKind: 'web',
+      createMessageId: () => crypto.randomUUID(),
+      getWebSocketUrl: () => 'ws://gateway/realtime',
+      issueTicket: async () => 'x'.repeat(32),
+      createWebSocket: () => socket,
+      onGap: () => new Promise<void>((resolve) => {
+        finishReconciliation = resolve;
+      }),
+      onEvent,
+    });
+    client.subscribe('run:r1', 0);
+    client.connect();
+    await vi.waitFor(() => expect(socket.onopen).not.toBeNull());
+    socket.open();
+    socket.onmessage?.({ data: serverMessage('realtime.ready', readyPayload()) });
+    socket.onmessage?.({
+      data: serverMessage('realtime.gap', {
+        topic: 'run:r1', requestedSeq: 0, earliestSeq: 4, recoverable: true,
+      }),
+    });
+    socket.onmessage?.({
+      data: serverMessage('realtime.event', {
+        topic: 'run:r1', seq: 4, event: 'assistant.delta', data: { delta: 'after gap' },
+      }),
+    });
+
+    expect(onEvent).not.toHaveBeenCalled();
+    finishReconciliation?.();
+    await vi.waitFor(() => expect(onEvent).toHaveBeenCalledOnce());
+    client.disconnect();
+  });
+
+  it('does not deliver a replayed event twice', async () => {
+    const socket = new FakeSocket();
+    const onEvent = vi.fn();
+    const client = new RealtimeClient({
+      clientId: 'c1',
+      clientKind: 'web',
+      createMessageId: () => crypto.randomUUID(),
+      getWebSocketUrl: () => 'ws://gateway/realtime',
+      issueTicket: async () => 'x'.repeat(32),
+      createWebSocket: () => socket,
+      onEvent,
+    });
+    client.subscribe('run:r1', 0);
+    client.connect();
+    await vi.waitFor(() => expect(socket.onopen).not.toBeNull());
+    socket.open();
+    socket.onmessage?.({ data: serverMessage('realtime.ready', readyPayload()) });
+    const event = serverMessage('realtime.event', {
+      topic: 'run:r1', seq: 1, event: 'assistant.delta', data: { delta: 'hello' },
+    });
+    socket.onmessage?.({ data: event });
+    socket.onmessage?.({ data: event });
+
+    expect(onEvent).toHaveBeenCalledOnce();
     client.disconnect();
   });
 });

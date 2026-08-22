@@ -76,6 +76,10 @@ describe('RealtimeRuntime', () => {
 
     await expect(messages.next()).resolves.toMatchObject({ kind: 'realtime.ready' });
     await expect(messages.next()).resolves.toMatchObject({
+      kind: 'realtime.subscribed',
+      payload: { topic: 'run:r1', cursor: 0 },
+    });
+    await expect(messages.next()).resolves.toMatchObject({
       kind: 'realtime.event',
       payload: { topic: 'run:r1', seq: 1, event: 'run.start' },
     });

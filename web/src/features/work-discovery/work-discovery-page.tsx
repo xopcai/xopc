@@ -10,7 +10,7 @@ import { WorkingDirectoryPickerModal } from '@/features/fs/working-directory-pic
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
-import type { ElectronPersonalContextSource } from '@/types/electron';
+import type { ElectronUnderstandingSourceDefinition } from '@/types/electron';
 
 import {
   cancelWorkDiscoveryRun,
@@ -18,7 +18,7 @@ import {
   discoverWorkDiscoveryCandidates,
   fetchWorkDiscoveryOnboarding,
   fetchWorkDiscoveryRun,
-  grantWorkDiscoveryDirectory,
+  grantUnderstandingWorkFolder,
   previewWorkDiscoveryFolder,
   retryWorkDiscoveryRun,
   selectWorkDiscoverySuggestion,
@@ -69,20 +69,27 @@ export function WorkDiscoveryPage({
   const [batchRuns, setBatchRuns] = useState<WorkDiscoveryRun[]>([]);
   const [batchRunning, setBatchRunning] = useState(false);
   const [batchPosition, setBatchPosition] = useState({ current: 0, total: 0 });
-  const [selectedPersonalSources, setSelectedPersonalSources] = useState<Set<ElectronPersonalContextSource>>(
-    () => new Set(),
-  );
+  const [localSources, setLocalSources] = useState<ElectronUnderstandingSourceDefinition[]>([]);
+  const [selectedSourceIds, setSelectedSourceIds] = useState<Set<string>>(() => new Set());
   const stopBatchRef = useRef(false);
-  const isDarwin = window.electronAPI?.platform === 'darwin';
 
-  const togglePersonalSource = (source: ElectronPersonalContextSource) => {
-    setSelectedPersonalSources((current) => {
+  const toggleSource = (sourceId: string) => {
+    setSelectedSourceIds((current) => {
       const next = new Set(current);
-      if (next.has(source)) next.delete(source);
-      else next.add(source);
+      if (next.has(sourceId)) next.delete(sourceId);
+      else next.add(sourceId);
       return next;
     });
   };
+
+  useEffect(() => {
+    let cancelled = false;
+    void window.electronAPI?.understandingSources?.catalog().then((sources) => {
+      if (cancelled) return;
+      setLocalSources(sources);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   const applyRun = useCallback((next: WorkDiscoveryRun) => {
     useUnderstandingActivityStore.getState().updateDirectoryRun(next);
@@ -150,18 +157,18 @@ export function WorkDiscoveryPage({
     setBatchPosition({ current: 1, total: selected.length });
     setBatchRunning(true);
     stopBatchRef.current = false;
-    let personalContextStarted = false;
+    let sourceCollectionStarted = false;
     try {
       const results = await runWorkDiscoveryBatch(selected, {
-        grantDirectory: grantWorkDiscoveryDirectory,
+        grantDirectory: grantUnderstandingWorkFolder,
         startRun: startWorkDiscoveryRun,
         fetchRun: fetchWorkDiscoveryRun,
         shouldStop: () => stopBatchRef.current,
         onRun: (next, index, total) => {
           trackBatchRun(next, index, total);
-          if (!personalContextStarted) {
-            personalContextStarted = true;
-            void useUnderstandingActivityStore.getState().scanPersonalContext(next.id, [...selectedPersonalSources]);
+          if (!sourceCollectionStarted) {
+            sourceCollectionStarted = true;
+            void useUnderstandingActivityStore.getState().collectSources(next.id, [...selectedSourceIds]);
           }
         },
         onError: (cause, candidate, index) => {
@@ -278,10 +285,10 @@ export function WorkDiscoveryPage({
     setBatchRuns([]);
     setBatchPosition({ current: 0, total: 0 });
     try {
-      await grantWorkDiscoveryDirectory(preview.canonicalRootPath);
+      await grantUnderstandingWorkFolder(preview.canonicalRootPath);
       const next = await startWorkDiscoveryRun(preview.canonicalRootPath);
       applyRun(next);
-      void useUnderstandingActivityStore.getState().scanPersonalContext(next.id, [...selectedPersonalSources]);
+      void useUnderstandingActivityStore.getState().collectSources(next.id, [...selectedSourceIds]);
     } catch (cause) {
       setError(errorText(cause));
       setPageState('consent');
@@ -447,20 +454,16 @@ export function WorkDiscoveryPage({
               <p className="mx-auto mt-3 max-w-[34rem] text-[0.95rem] leading-7 text-fg-muted">{copy.subtitle}</p>
             </div>
             <div className="mx-auto mt-9 w-full max-w-md">
-              {isDarwin ? (
+              {localSources.length ? (
                 <div className="mb-5 rounded-xl border border-edge bg-surface-panel p-3 text-left">
-                  <p className="text-sm font-medium text-fg">{copy.personalSourcesTitle}</p>
-                  <p className="mt-1 text-xs leading-5 text-fg-muted">{copy.personalSourcesSubtitle}</p>
-                  <div className="mt-3 grid grid-cols-3 gap-2">
-                    {([
-                      ['apple_notes', copy.sourceAppleNotes],
-                      ['calendar', copy.sourceCalendar],
-                      ['reminders', copy.sourceReminders],
-                    ] as const).map(([source, label]) => {
-                      const selected = selectedPersonalSources.has(source);
+                  <p className="text-sm font-medium text-fg">{copy.localSourcesTitle}</p>
+                  <p className="mt-1 text-xs leading-5 text-fg-muted">{copy.localSourcesSubtitle}</p>
+                  <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {localSources.map((source) => {
+                      const selected = selectedSourceIds.has(source.id);
                       return (
                         <button
-                          key={source}
+                          key={source.id}
                           type="button"
                           className={cn(
                             'flex min-h-16 flex-col items-center justify-center gap-1 rounded-lg border px-2 py-2 text-xs font-medium transition-colors',
@@ -469,7 +472,7 @@ export function WorkDiscoveryPage({
                               : 'border-edge bg-surface-base text-fg-muted hover:bg-surface-hover hover:text-fg',
                           )}
                           aria-pressed={selected}
-                          onClick={() => togglePersonalSource(source)}
+                          onClick={() => toggleSource(source.id)}
                         >
                           <span className={cn(
                             'flex size-4 items-center justify-center rounded-full border',
@@ -477,7 +480,7 @@ export function WorkDiscoveryPage({
                           )}>
                             {selected ? <Check className="size-3" aria-hidden /> : null}
                           </span>
-                          {label}
+                          {source.displayName}
                         </button>
                       );
                     })}
@@ -510,7 +513,7 @@ export function WorkDiscoveryPage({
               <button
                 type="button"
                 className="mt-4 text-sm font-medium text-accent-fg hover:underline"
-                onClick={() => navigate('/connectors?personalContext=1&returnTo=%2Fonboarding%2Fworkspace')}
+                onClick={() => navigate('/connectors?understanding=1&returnTo=%2Fonboarding%2Fworkspace')}
               >
                 {copy.connectCloudSource}
               </button>

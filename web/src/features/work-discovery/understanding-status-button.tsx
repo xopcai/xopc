@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { Brain, CalendarDays, Check, FileText, Loader2, ListChecks, X } from 'lucide-react';
+import { Brain, Check, FileText, Loader2, X } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
@@ -60,11 +60,11 @@ export function UnderstandingStatusButton({
     );
   }
   const running = state.status === 'running';
-  const sourceRows = window.electronAPI?.platform === 'darwin' ? [
-    { key: 'apple_notes' as const, label: 'Apple Notes', icon: FileText },
-    { key: 'calendar' as const, label: zh ? '日历' : 'Calendar', icon: CalendarDays },
-    { key: 'reminders' as const, label: zh ? '提醒事项' : 'Reminders', icon: ListChecks },
-  ] : [];
+  const sourceRows = Object.keys(state.sources).map((sourceId) => ({
+    key: sourceId,
+    label: sourceId.split('-').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' '),
+    icon: FileText,
+  }));
   return (
     <Dialog.Root modal={false} open={state.drawerOpen} onOpenChange={state.setDrawerOpen}>
       <Dialog.Trigger asChild>

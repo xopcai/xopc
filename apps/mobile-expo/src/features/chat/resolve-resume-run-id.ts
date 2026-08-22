@@ -1,5 +1,6 @@
 import { fetchSessionActiveRun } from '../../query/sessions';
 import {
+  clearPendingAgentRun,
   readPendingAgentRunId,
   setPendingAgentRun,
 } from '../gateway/pending-agent-run';
@@ -14,6 +15,8 @@ export async function resolveResumeRunId(sessionKey: string): Promise<string | n
       setPendingAgentRun(key, remote.runId);
       return remote.runId;
     }
+    clearPendingAgentRun(key);
+    return null;
   } catch {
     /* gateway may be reconnecting; fall back to local pending run */
   }

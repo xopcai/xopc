@@ -108,10 +108,11 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
     const body = await readBody(c);
     if (!body) return c.json({ error: 'Invalid JSON' }, 400);
     const patch: Parameters<typeof updateUserProfile>[0] = {};
-    for (const field of ['callName', 'pronouns', 'timezone', 'locale'] as const) {
+    for (const field of ['callName', 'role', 'primaryGoal', 'pronouns', 'timezone', 'locale'] as const) {
       if (body[field] === undefined) continue;
-      if (typeof body[field] !== 'string' || body[field].length > 100) {
-        return c.json({ error: `${field} must be a string of at most 100 characters` }, 400);
+      const max = field === 'primaryGoal' ? 500 : field === 'role' ? 300 : 100;
+      if (typeof body[field] !== 'string' || body[field].length > max) {
+        return c.json({ error: `${field} must be a string of at most ${max} characters` }, 400);
       }
       patch[field] = body[field].trim();
     }

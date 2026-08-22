@@ -501,28 +501,24 @@ export interface ElectronSystemSettingsAPI {
   }): Promise<UninstallAppResult>;
 }
 
-export type ElectronPersonalContextSource = 'apple_notes' | 'calendar' | 'reminders';
-
-export interface ElectronPersonalContextItem {
-  id: string;
-  source: ElectronPersonalContextSource;
-  title: string;
-  group?: string;
-  createdAt?: number;
-  modifiedAt?: number;
-  startsAt?: number;
-  endsAt?: number;
-  content?: string;
+export type ElectronUnderstandingSourceCategory = 'files' | 'recent_documents' | 'calendar' | 'tasks' | 'notes' | 'mail' | 'messages' | 'code_activity';
+export interface ElectronUnderstandingSourceDefinition {
+  id: string; category: ElectronUnderstandingSourceCategory; platform: 'darwin' | 'win32' | 'linux' | 'all';
+  displayName: string; description: string; availability: 'available' | 'unavailable';
+  permission: 'not_requested' | 'granted' | 'denied' | 'unavailable'; defaultAccessMode: 'once' | 'continuous';
+  supportedAccessModes: Array<'once' | 'continuous'>; recommended: boolean; sensitive: boolean;
 }
-
-export interface ElectronPersonalContextSourceResult {
-  source: ElectronPersonalContextSource;
-  status: 'completed' | 'denied' | 'failed';
-  items: ElectronPersonalContextItem[];
+export interface ElectronUnderstandingSourceItem {
+  id: string; sourceId: string; type: 'document' | 'calendar_event' | 'task' | 'note' | 'mail' | 'message' | 'code_activity';
+  title: string; text?: string; group?: string; occurredAt?: number; modifiedAt?: number; startsAt?: number; endsAt?: number;
+  ownerAttribution: 'user' | 'other' | 'shared' | 'unknown'; sensitivity: 'normal' | 'personal' | 'secret' | 'regulated'; evidenceRef: string;
 }
-
-export interface ElectronPersonalContextAPI {
-  scan(sources: ElectronPersonalContextSource[]): Promise<ElectronPersonalContextSourceResult[]>;
+export interface ElectronUnderstandingSourceCollectionResult {
+  sourceId: string; status: 'completed' | 'denied' | 'failed'; items: ElectronUnderstandingSourceItem[]; error?: string;
+}
+export interface ElectronUnderstandingSourcesAPI {
+  catalog(): Promise<ElectronUnderstandingSourceDefinition[]>;
+  collect(sourceIds: string[]): Promise<ElectronUnderstandingSourceCollectionResult[]>;
 }
 
 export interface ElectronAPI {
@@ -531,7 +527,7 @@ export interface ElectronAPI {
   file: ElectronFileAPI;
   search: ElectronSearchAPI;
   agent: ElectronAgentAPI;
-  personalContext?: ElectronPersonalContextAPI;
+  understandingSources?: ElectronUnderstandingSourcesAPI;
   startup?: ElectronStartupAPI;
   gateway?: ElectronGatewayShellAPI;
   platform: "darwin" | "win32" | "linux";

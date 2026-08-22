@@ -29,12 +29,13 @@ export interface RealtimeClientOptions {
   clientKind: RealtimeClientKind;
   createMessageId?: () => string;
   getWebSocketUrl: () => string;
-  issueTicket: () => Promise<string>;
+  issueTicket: (signal?: AbortSignal) => Promise<string>;
   createWebSocket: (url: string) => RealtimeWebSocket;
   maxReconnectAttempts?: number;
+  connectionTimeoutMs?: number;
   onStateChange?: (state: RealtimeConnectionState, error?: string) => void;
   onEvent?: (event: RealtimeEventPayload) => void;
-  onGap?: (gap: { topic: string; requestedSeq: number; earliestSeq: number }) => void;
+  onGap?: (gap: { topic: string; requestedSeq: number; earliestSeq: number; recoverable: boolean }) => void | Promise<void>;
   onEndpointMessage?: (message: ServerEndpointMessage) => void;
 }
 
@@ -61,10 +62,13 @@ export class RealtimeClient {
   private socket?: RealtimeWebSocket;
   private reconnectTimer?: ReturnType<typeof setTimeout>;
   private heartbeatTimer?: ReturnType<typeof setInterval>;
+  private connectionTimer?: ReturnType<typeof setTimeout>;
+  private ticketAbort?: AbortController;
   private generation = 0;
   private reconnectAttempts = 0;
   private shouldReconnect = false;
   private ready = false;
+  private lastServerMessageAt = 0;
   private endpointBinding?: RealtimeEndpointBinding;
 
   constructor(private readonly options: RealtimeClientOptions) {}
@@ -100,9 +104,9 @@ export class RealtimeClient {
 
   subscribe(topic: string, afterSeq?: number): void {
     this.desiredSubscriptions.set(topic, afterSeq);
+    if (afterSeq !== undefined) this.cursors.set(topic, afterSeq);
     if (this.ready) {
-      this.sendSubscriptions([{ topic, afterSeq: afterSeq ?? this.cursors.get(topic) }]);
-      this.desiredSubscriptions.set(topic, undefined);
+      this.sendSubscriptions([{ topic, afterSeq: this.cursors.get(topic) ?? afterSeq }]);
     }
   }
 
@@ -131,22 +135,49 @@ export class RealtimeClient {
 
   private async open(reconnecting: boolean): Promise<void> {
     const generation = ++this.generation;
+    const timeoutMs = this.options.connectionTimeoutMs ?? 15_000;
+    const ticketAbort = new AbortController();
+    this.ticketAbort?.abort();
+    this.ticketAbort = ticketAbort;
+    let socket: RealtimeWebSocket | undefined;
+    let closed = false;
+    let messageQueue: Promise<void> | undefined;
+    const failAttempt = (error: string) => {
+      if (closed || generation !== this.generation) return;
+      closed = true;
+      this.clearConnectionTimer();
+      ticketAbort.abort();
+      if (this.ticketAbort === ticketAbort) this.ticketAbort = undefined;
+      this.ready = false;
+      this.endpointBinding?.onDisconnected?.();
+      this.clearHeartbeat();
+      if (this.socket === socket) this.socket = undefined;
+      if (socket) {
+        socket.onopen = null;
+        socket.onmessage = null;
+        socket.onerror = null;
+        socket.onclose = null;
+        socket.close(4000, error.slice(0, 120));
+      }
+      if (this.shouldReconnect) this.scheduleReconnect(error);
+      else this.options.onStateChange?.('disconnected');
+    };
+    this.connectionTimer = setTimeout(() => failAttempt('Realtime connection timed out'), timeoutMs);
     this.options.onStateChange?.(reconnecting ? 'reconnecting' : 'connecting');
     try {
       const [ticket, endpoint] = await Promise.all([
-        this.options.issueTicket(),
+        this.options.issueTicket(ticketAbort.signal),
         this.endpointBinding?.createHello(),
       ]);
-      if (!this.shouldReconnect || generation !== this.generation) return;
-      const socket = this.options.createWebSocket(this.options.getWebSocketUrl());
+      if (closed || !this.shouldReconnect || generation !== this.generation) return;
+      socket = this.options.createWebSocket(this.options.getWebSocketUrl());
       this.socket = socket;
       socket.onopen = () => {
         if (generation !== this.generation) return;
         const subscriptions: RealtimeSubscription[] = [...this.desiredSubscriptions].map(([topic, afterSeq]) => ({
           topic,
-          afterSeq: afterSeq ?? this.cursors.get(topic),
+          afterSeq: this.cursors.get(topic) ?? afterSeq,
         }));
-        for (const topic of this.desiredSubscriptions.keys()) this.desiredSubscriptions.set(topic, undefined);
         this.send(this.clientMessage('realtime.hello', {
           ticket,
           clientId: this.options.clientId,
@@ -157,47 +188,75 @@ export class RealtimeClient {
       };
       socket.onmessage = (event) => {
         if (generation !== this.generation) return;
-        try {
-          this.handleServerMessage(frameText(event.data));
-        } catch (error) {
-          this.fail(error instanceof Error ? error.message : 'Invalid realtime server message');
+        const process = () => {
+          if (closed || generation !== this.generation) return;
+          return this.handleServerMessage(frameText(event.data));
+        };
+        if (!messageQueue) {
+          try {
+            const pending = process();
+            if (!pending) return;
+            const current = pending
+              .catch((error) => failAttempt(error instanceof Error ? error.message : 'Invalid realtime server message'))
+              .then(() => undefined);
+            messageQueue = current;
+            void current.finally(() => {
+              if (messageQueue === current) messageQueue = undefined;
+            });
+          } catch (error) {
+            failAttempt(error instanceof Error ? error.message : 'Invalid realtime server message');
+          }
+          return;
         }
+        const current = messageQueue
+          .then(process)
+          .catch((error) => failAttempt(error instanceof Error ? error.message : 'Invalid realtime server message'))
+          .then(() => undefined);
+        messageQueue = current;
+        void current.finally(() => {
+          if (messageQueue === current) messageQueue = undefined;
+        });
       };
       socket.onerror = () => {
-        if (generation === this.generation) this.options.onStateChange?.('reconnecting');
+        failAttempt('Realtime WebSocket failed');
       };
       socket.onclose = (event) => {
-        if (generation !== this.generation) return;
-        this.ready = false;
-        this.endpointBinding?.onDisconnected?.();
-        this.socket = undefined;
-        this.clearHeartbeat();
-        if (this.shouldReconnect) this.scheduleReconnect(event.reason || `WebSocket closed (${event.code ?? 0})`);
-        else this.options.onStateChange?.('disconnected');
+        failAttempt(event.reason || `WebSocket closed (${event.code ?? 0})`);
       };
     } catch (error) {
-      if (generation !== this.generation) return;
-      this.scheduleReconnect(error instanceof Error ? error.message : 'Realtime connection failed');
+      failAttempt(error instanceof Error ? error.message : 'Realtime connection failed');
     }
   }
 
-  private handleServerMessage(text: string): void {
+  private handleServerMessage(text: string): void | Promise<void> {
     const message = parseServerRealtimeMessage(JSON.parse(text));
+    this.lastServerMessageAt = Date.now();
     if (message.kind === 'realtime.ready') {
       this.ready = true;
       this.reconnectAttempts = 0;
+      this.clearConnectionTimer();
+      this.ticketAbort = undefined;
       this.options.onStateChange?.('connected');
       if (message.payload.endpoint) this.endpointBinding?.onReady(message.payload.endpoint);
       this.clearHeartbeat();
       this.heartbeatTimer = setInterval(() => {
-        if (this.ready) this.send(this.clientMessage('realtime.ping', {}));
+        if (!this.ready) return;
+        if (Date.now() - this.lastServerMessageAt >= message.payload.heartbeatTimeoutMs) {
+          this.reconnect();
+          return;
+        }
+        this.send(this.clientMessage('realtime.ping', {}));
       }, message.payload.heartbeatIntervalMs);
     } else if (message.kind === 'realtime.event') {
-      this.cursors.set(message.payload.topic, message.payload.seq);
+      const cursor = this.cursors.get(message.payload.topic);
+      if (cursor !== undefined && message.payload.seq <= cursor) return;
       this.options.onEvent?.(message.payload);
+      this.cursors.set(message.payload.topic, message.payload.seq);
+    } else if (message.kind === 'realtime.subscribed') {
+      this.cursors.set(message.payload.topic, message.payload.cursor);
     } else if (message.kind === 'realtime.gap') {
       this.cursors.set(message.payload.topic, message.payload.earliestSeq - 1);
-      this.options.onGap?.(message.payload);
+      return this.options.onGap?.(message.payload);
     } else if (message.kind === 'realtime.error') {
       this.options.onStateChange?.('error', message.payload.message);
     } else if (message.kind === 'endpoint.message') {
@@ -240,16 +299,13 @@ export class RealtimeClient {
       return;
     }
     this.options.onStateChange?.('reconnecting', error);
-    const delay = Math.min(30_000, 1_000 * 2 ** Math.min(this.reconnectAttempts - 1, 5));
+    const cap = Math.min(30_000, 1_000 * 2 ** Math.min(this.reconnectAttempts - 1, 5));
+    const delay = Math.round(cap * (0.5 + Math.random() * 0.5));
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = undefined;
       void this.open(true);
     }, delay);
-  }
-
-  private fail(message: string): void {
-    this.options.onStateChange?.('error', message);
-    this.socket?.close(4400, 'Invalid server message');
   }
 
   private clearHeartbeat(): void {
@@ -260,6 +316,14 @@ export class RealtimeClient {
   private clearTimers(): void {
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = undefined;
+    this.clearConnectionTimer();
+    this.ticketAbort?.abort();
+    this.ticketAbort = undefined;
     this.clearHeartbeat();
+  }
+
+  private clearConnectionTimer(): void {
+    if (this.connectionTimer) clearTimeout(this.connectionTimer);
+    this.connectionTimer = undefined;
   }
 }
