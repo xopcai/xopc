@@ -8,16 +8,23 @@ export type UsageEventName =
   | 'capture_started'
   | 'capture_completed'
   | 'ask_ai_started'
-  | 'notification_opened';
+  | 'notification_opened'
+  | 'read_aloud_started'
+  | 'read_aloud_completed'
+  | 'read_aloud_stopped'
+  | 'read_aloud_failed';
 
 export type PerformanceEventName =
   | 'app_shell_rendered'
   | 'home_content_ready';
 
+export type InteractionPerformanceEventName = 'read_aloud_first_audio';
+export type TimedEventName = PerformanceEventName | InteractionPerformanceEventName;
+
 export const mobileAppJsStartedAt = Date.now();
 
 export type UsageEvent = {
-  name: UsageEventName | PerformanceEventName;
+  name: UsageEventName | TimedEventName;
   at: number;
   durationMs?: number;
 };
@@ -60,15 +67,25 @@ export function recordPerformanceEvent(
   storage.set(KEYS.usageEvents, JSON.stringify(events));
 }
 
-export function readPerformanceSummary(): Partial<Record<PerformanceEventName, {
+export function recordInteractionPerformanceEvent(
+  name: InteractionPerformanceEventName,
+  durationMs: number,
+  at = Date.now(),
+): void {
+  if (!Number.isFinite(durationMs) || durationMs < 0) return;
+  const events = [...readEvents(), { name, at, durationMs: Math.round(durationMs) }].slice(-MAX_EVENTS);
+  storage.set(KEYS.usageEvents, JSON.stringify(events));
+}
+
+export function readPerformanceSummary(): Partial<Record<TimedEventName, {
   count: number;
   latestMs: number;
   averageMs: number;
 }>> {
-  const durations = new Map<PerformanceEventName, number[]>();
+  const durations = new Map<TimedEventName, number[]>();
   for (const event of readEvents()) {
     if (event.durationMs === undefined) continue;
-    const name = event.name as PerformanceEventName;
+    const name = event.name as TimedEventName;
     durations.set(name, [...(durations.get(name) ?? []), event.durationMs]);
   }
   return Object.fromEntries([...durations].map(([name, values]) => [name, {
@@ -78,8 +95,8 @@ export function readPerformanceSummary(): Partial<Record<PerformanceEventName, {
   }]));
 }
 
-export function readUsageSummary(): Partial<Record<UsageEventName | PerformanceEventName, number>> {
-  return readEvents().reduce<Partial<Record<UsageEventName | PerformanceEventName, number>>>((summary, event) => {
+export function readUsageSummary(): Partial<Record<UsageEventName | TimedEventName, number>> {
+  return readEvents().reduce<Partial<Record<UsageEventName | TimedEventName, number>>>((summary, event) => {
     summary[event.name] = (summary[event.name] ?? 0) + 1;
     return summary;
   }, {});

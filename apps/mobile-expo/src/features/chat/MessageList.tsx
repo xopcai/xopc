@@ -178,6 +178,7 @@ export const MessageList = memo(function MessageList({
         >
           <MessageBubble
             message={item}
+            messageIndex={index}
             isStreaming={isStreamRow}
             progress={isStreamRow ? progress : null}
             sessionKey={sessionKey}
