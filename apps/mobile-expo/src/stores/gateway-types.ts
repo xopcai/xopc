@@ -1,3 +1,5 @@
+import { randomUUID } from 'expo-crypto';
+
 export type GatewayProfile = {
   id: string;
   name: string;
@@ -78,10 +80,7 @@ export function gatewayProfileNameFromUrl(baseUrl: string): string {
 }
 
 export function createGatewayProfileId(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-  return `gw_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+  return randomUUID();
 }
 
 export function buildGatewayProfile(input: GatewayProfileInput, id?: string): GatewayProfile {

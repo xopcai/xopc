@@ -7,6 +7,7 @@ import {
   type TaskCreateResponse,
   type TaskListResponse,
 } from '@xopcai/gateway-contract';
+import { randomUUID } from 'expo-crypto';
 
 import { apiFetch } from '../api/client';
 
@@ -61,7 +62,7 @@ export async function commandTask(
   const response = await apiFetch(`/api/tasks/${encodeURIComponent(id)}/commands`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ idempotencyKey: crypto.randomUUID(), expectedVersion, command }),
+    body: JSON.stringify({ idempotencyKey: randomUUID(), expectedVersion, command }),
   });
   if (!response.ok) throw await taskError(response, `Failed to update task: ${response.status}`);
   const body = await response.json() as { task?: TaskDetail['task'] };

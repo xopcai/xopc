@@ -12,6 +12,7 @@ import {
 } from '@xopcai/endpoint-tools-protocol';
 import type { RealtimeEndpointBinding } from '@xopcai/realtime-client';
 import Constants from 'expo-constants';
+import { randomUUID } from 'expo-crypto';
 import * as Device from 'expo-device';
 import { Alert, AppState, Platform } from 'react-native';
 import { sha256 } from '@noble/hashes/sha256';
@@ -205,13 +206,13 @@ export class MobileEndpointToolHost {
           const unsigned: EndpointHelloPayload = {
             principalId: identity.principalId,
             endpointId,
-            connectionInstanceId: crypto.randomUUID(),
+            connectionInstanceId: randomUUID(),
             displayName,
             kind: 'mobile',
             platform: Platform.OS,
             appVersion: Constants.expoConfig?.version ?? '1',
             availability: availability(),
-            nonce: crypto.randomUUID(),
+            nonce: randomUUID(),
             signedAt: Date.now(),
             signature: 'pending',
             tools: [...MOBILE_ENDPOINT_TOOLS],
@@ -404,7 +405,7 @@ export class MobileEndpointToolHost {
     if (!this.channel || this.channel.readyState !== 1) return;
     this.channel.send(JSON.stringify({
       protocolVersion: ENDPOINT_PROTOCOL_VERSION,
-      messageId: crypto.randomUUID(),
+      messageId: randomUUID(),
       type,
       sentAt: Date.now(),
       payload,
@@ -419,7 +420,7 @@ export class MobileEndpointToolHost {
     if (channel.readyState !== 1) return;
     channel.send(JSON.stringify({
       protocolVersion: ENDPOINT_PROTOCOL_VERSION,
-      messageId: crypto.randomUUID(),
+      messageId: randomUUID(),
       type,
       sentAt: Date.now(),
       payload,
