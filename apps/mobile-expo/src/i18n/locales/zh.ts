@@ -546,6 +546,8 @@ export const zh: MessageBundle = {
     clarifyTimeoutNote: '请在 5 分钟内回答，否则本次请求可能会超时。',
     messageCopy: '复制',
     messageCopyCode: '复制代码',
+    messageSaveToNote: '保存为笔记',
+    messageSavedToNote: '已保存为笔记',
     messageEdit: '编辑',
     messageRetry: '重试',
     messageRegenerate: '重新生成',
@@ -876,6 +878,7 @@ export const zh: MessageBundle = {
     retry: '重试',
     briefingNeedsYou: '需要你处理',
     briefingClear: '一切正常',
+    briefingMovingTitle: '正在推进',
     briefingMoving: '{{count}} 件事项正在后台推进',
     briefingLatestWin: '最近完成 · {{title}}',
     briefingNextScheduled: '下一项定时工作 · {{title}}',
@@ -904,6 +907,7 @@ export const zh: MessageBundle = {
     taskRun: '开始推进',
     taskPause: '暂时暂停',
     taskResume: '继续推进',
+    taskContinueInChat: '回到对话继续',
     taskCancel: '结束事项',
     taskActionFailed: '操作失败，请重试。',
     taskChangedRetry: '任务状态已变化，请确认最新状态后重试。',
@@ -1060,6 +1064,7 @@ export const zh: MessageBundle = {
     aiOrganizeApply: '应用',
     aiOrganizeApplying: '应用中…',
     aiOrganizeApplied: '已整理 {{count}} 条',
+    aiOrganizeUndone: '已撤销整理',
     aiOrganizeSuggestions: {
       bookmark: {
         title: '处理链接收集',

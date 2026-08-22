@@ -153,11 +153,22 @@ export async function fetchNotes(query?: NotesListQuery): Promise<NotesListResul
   return { items, total: parsed.data.total, limit, offset, hasMore };
 }
 
-export async function quickCaptureNote(markdown: string): Promise<CaptureNoteResult> {
+export type QuickCaptureNoteOptions = {
+  channel?: NonNullable<CaptureNoteInput['channel']>;
+  idempotencyKey?: string;
+};
+
+export async function quickCaptureNote(
+  markdown: string,
+  options: QuickCaptureNoteOptions = {},
+): Promise<CaptureNoteResult> {
   const platform = Platform.OS === 'ios' ? 'ios' : 'android';
   const res = await apiFetch('/api/notes/quick-capture', {
     method: 'POST',
-    body: JSON.stringify({ text: markdown, channel: 'app', platform }),
+    headers: options.idempotencyKey
+      ? { 'Idempotency-Key': options.idempotencyKey }
+      : undefined,
+    body: JSON.stringify({ text: markdown, channel: options.channel ?? 'app', platform }),
   });
   if (!res.ok) throw await readError(res);
   return readCreatedNote(res);

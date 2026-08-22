@@ -93,6 +93,7 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
     handleUserMessageEdit,
     handleUserMessageRetry,
     handleAssistantCopy,
+    handleAssistantSaveToNote,
     handleAssistantRegenerate,
     handleGatewaySelect,
     handleGatewayManageSettings,
@@ -213,6 +214,7 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
             onUserMessageEdit={handleUserMessageEdit}
             onUserMessageRetry={handleUserMessageRetry}
             onAssistantCopy={handleAssistantCopy}
+            onAssistantSaveToNote={handleAssistantSaveToNote}
             onAssistantRegenerate={handleAssistantRegenerate}
             networkUnreachableTip={null}
           />

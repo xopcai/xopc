@@ -59,10 +59,12 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
   },
   action: {
+    minWidth: 44,
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 4,
-    paddingVertical: 2,
   },
   actionPressed: {
     opacity: 0.55,

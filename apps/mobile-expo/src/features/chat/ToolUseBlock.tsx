@@ -221,7 +221,7 @@ export const ToolUseBlock = memo(function ToolUseBlock({
               {detailLine}
             </Text>
           ) : null}
-          {productDelivery ? <ProductDeliveryCard delivery={productDelivery} /> : null}
+          {productDelivery ? <ProductDeliveryCard delivery={productDelivery} sessionKey={sessionKey} /> : null}
           {isError && resultText ? (
             <Text
               variant="bodySmall"
@@ -339,7 +339,7 @@ export const ToolUseBlock = memo(function ToolUseBlock({
           />
         ) : null}
       </Pressable>
-      {productDelivery ? <ProductDeliveryCard delivery={productDelivery} /> : null}
+      {productDelivery ? <ProductDeliveryCard delivery={productDelivery} sessionKey={sessionKey} /> : null}
       {expanded && resultText ? (
         <View style={styles.resultContainer}>
           <Text

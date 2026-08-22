@@ -27,6 +27,7 @@ import { getColors } from '../../theme';
 
 import { consumeContentChatIntake } from '../content-intake/content-chat-handoff';
 import { setAppClipboardStringAsync } from '../clipboard-intake/write-app-clipboard';
+import { captureWorkspaceText } from '../../sync/workspace-sync';
 import { buildUserResendPayload, findPrecedingUserMessage } from './composer-send-helpers';
 import type { ComposerAttachment, WireAttachment } from './composer.types';
 import type { Message } from './messages.types';
@@ -51,6 +52,7 @@ export type UseChatPageOptions = {
 export function useChatPage(options: UseChatPageOptions = {}) {
   const { embedded = false, onBack } = options;
   const { k: rawKey, msg: rawMsg } = useLocalSearchParams<{ k?: string; msg?: string }>();
+  const savingAssistantNoteRef = useRef(false);
   const urlSessionKey = typeof rawKey === 'string' ? rawKey : Array.isArray(rawKey) ? rawKey[0] : '';
   const urlPrefillMessage = typeof rawMsg === 'string' ? rawMsg : Array.isArray(rawMsg) ? rawMsg[0] : '';
   const router = useRouter();
@@ -403,6 +405,24 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     [m.chat.messageCopied, m.chat.messageCopyFailed, chatSession],
   );
 
+  const handleAssistantSaveToNote = useCallback(
+    (text: string) => {
+      if (savingAssistantNoteRef.current || !text.trim()) return;
+      savingAssistantNoteRef.current = true;
+      void captureWorkspaceText({ text, channel: 'app' })
+        .then((result) => chatSession.setSnackMsg(
+          result.synced ? m.chat.messageSavedToNote : m.notesPage.savedOffline,
+        ))
+        .catch((error) => chatSession.setSnackMsg(
+          error instanceof Error ? error.message : m.notesPage.actionFailed,
+        ))
+        .finally(() => {
+          savingAssistantNoteRef.current = false;
+        });
+    },
+    [chatSession, m.chat.messageSavedToNote, m.notesPage.actionFailed, m.notesPage.savedOffline],
+  );
+
   const handleAssistantRegenerate = useCallback(
     (assistantIndex: number) => {
       if (!sessionKey || chatSession.streaming || chatSession.awaitingSessionRefresh || Boolean(chatSession.clarifyPrompt)) return;
@@ -525,6 +545,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     handleUserMessageEdit,
     handleUserMessageRetry,
     handleAssistantCopy,
+    handleAssistantSaveToNote,
     handleAssistantRegenerate,
     handleGatewaySelect,
     handleGatewayManageSettings,
