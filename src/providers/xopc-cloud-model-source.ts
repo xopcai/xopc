@@ -139,6 +139,7 @@ function parseImageGenerationCapabilities(value: unknown) {
   return {
     maxCount: Number.isSafeInteger(raw.maxCount) && Number(raw.maxCount) > 0 ? Number(raw.maxCount) : 1,
     sizes: strings<string>(raw.sizes),
+    aspectRatios: strings<string>(raw.aspectRatios),
     qualities: strings(raw.qualities, ['low', 'medium', 'high', 'auto'] as const),
     formats: strings(raw.formats, ['png', 'jpeg', 'webp'] as const),
     backgrounds: strings(raw.backgrounds, ['transparent', 'opaque', 'auto'] as const),

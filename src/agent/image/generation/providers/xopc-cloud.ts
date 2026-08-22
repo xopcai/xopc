@@ -41,7 +41,11 @@ export function buildXopcCloudImageGenerationProvider(): ImageGenerationProvider
     async generateImage(request) {
       const executor = executors.get(request.model);
       if (!executor) throw new Error(`Image model is not available from XOPC Model Service: ${request.model}`);
-      return executor.generateImage(request);
+      const geometry = modelCapabilities[request.model]?.geometry;
+      const size = request.size
+        ?? (request.aspectRatio && geometry?.aspectRatios?.includes(request.aspectRatio) ? request.aspectRatio : undefined)
+        ?? (request.resolution && geometry?.resolutions?.includes(request.resolution) ? request.resolution : undefined);
+      return executor.generateImage({ ...request, ...(size ? { size } : {}) });
     },
   };
 }
@@ -52,13 +56,15 @@ function toProviderCapabilities(model: CatalogModel): ImageGenerationProviderCap
     generate: {
       maxCount: image?.maxCount ?? 1,
       supportsSize: Boolean(image?.sizes.length),
+      supportsAspectRatio: Boolean(image?.aspectRatios?.length),
     },
     edit: {
       enabled: model.operations.includes('images.edit'),
       maxInputImages: image?.maxInputImages ?? 0,
       supportsSize: Boolean(image?.sizes.length),
+      supportsAspectRatio: Boolean(image?.aspectRatios?.length),
     },
-    geometry: { sizes: image?.sizes ?? [] },
+    geometry: { sizes: image?.sizes ?? [], aspectRatios: image?.aspectRatios ?? [] },
     output: {
       qualities: image?.qualities ?? [],
       formats: image?.formats ?? [],
