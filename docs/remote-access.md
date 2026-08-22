@@ -226,17 +226,63 @@ server {
   ssl_certificate     /etc/letsencrypt/live/gateway.example.com/fullchain.pem;
   ssl_certificate_key /etc/letsencrypt/live/gateway.example.com/privkey.pem;
 
-  location / {
+  # Keep this exact location even when the same server already has a broader
+  # `location /api/`; nginx would otherwise select that block first.
+  location = /api/realtime/v1/ws {
     proxy_pass         http://127.0.0.1:18790;
     proxy_http_version 1.1;
     proxy_set_header   Host $host;
     proxy_set_header   X-Forwarded-Proto https;
     proxy_set_header   Upgrade $http_upgrade;
     proxy_set_header   Connection "upgrade";
+    proxy_buffering    off;
     proxy_read_timeout 3600s;             # long-lived WebSocket
+    proxy_send_timeout 3600s;
+  }
+
+  location / {
+    proxy_pass         http://127.0.0.1:18790;
+    proxy_http_version 1.1;
+    proxy_set_header   Host $host;
+    proxy_set_header   X-Forwarded-Proto https;
+    proxy_buffering    off;               # streamed HTTP responses
+    proxy_read_timeout 3600s;
   }
 }
 ```
+
+If traffic passes through more than one reverse proxy, **every hop** must preserve the HTTP/1.1 WebSocket upgrade. For an HTTPS upstream, also send the upstream hostname as SNI and keep its certificate renewed:
+
+```nginx
+location = /api/realtime/v1/ws {
+  proxy_pass https://upstream-gateway.example.com;
+  proxy_http_version 1.1;
+  proxy_set_header Host upstream-gateway.example.com;
+  proxy_set_header Upgrade $http_upgrade;
+  proxy_set_header Connection "upgrade";
+  proxy_ssl_server_name on;
+  proxy_ssl_name upstream-gateway.example.com;
+  proxy_read_timeout 3600s;
+  proxy_send_timeout 3600s;
+}
+```
+
+Do not rely on upgrade headers in only `location /` when the server also defines `location /api/`: nginx chooses the more specific `/api/` block for `/api/realtime/v1/ws`. Add the exact WebSocket location above or repeat the upgrade directives in the selected block.
+
+### Verify the realtime WebSocket
+
+Test the public edge, not only the loopback gateway:
+
+```bash
+curl --http1.1 -i --max-time 5 \
+  https://gateway.example.com/api/realtime/v1/ws \
+  -H 'Connection: Upgrade' \
+  -H 'Upgrade: websocket' \
+  -H 'Sec-WebSocket-Version: 13' \
+  -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ=='
+```
+
+The first response line must be `HTTP/1.1 101 Switching Protocols`. A later timeout or `Realtime hello timeout` is expected for this probe because curl does not send xopc's `realtime.hello` frame. A `200`, `401`, `404`, or `502` response means the request did not complete a WebSocket upgrade; inspect every proxy hop and any more-specific nginx location.
 
 ### Requirements
 
@@ -256,6 +302,7 @@ server {
 | Browser console shows CORS / 403 errors | Make sure your TCP connection comes from loopback (proxy on same host) **or** add the proxy IP to `gateway.trustedProxies`. |
 | SSE streams stall after a few seconds | Disable proxy buffering. nginx: `proxy_buffering off`. Caddy: `flush_interval -1`. |
 | Mobile pairs but disconnects after a minute | Increase proxy idle timeout. |
+| Mobile reports `Endpoint connection is not ready` | Confirm `/api/realtime/v1/ws` returns `101`, every proxy hop forwards upgrade headers, and the running gateway version exposes `/api/realtime/tickets` plus `/api/endpoint-tools/principals`. Restart the gateway after updating it. |
 | The QR works locally but not over cellular | Public DNS / firewall — the URL must resolve and be reachable from outside your network. |
 
 ---
