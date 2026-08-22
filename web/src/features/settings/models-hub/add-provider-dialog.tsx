@@ -13,9 +13,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 
 import { Button } from '@/components/ui/button';
 import { SecretInput } from '@/components/ui/secret-input';
-import { apiFetch } from '@/lib/fetch';
 import { SETTINGS_SHELL_CONTENT_Z, SETTINGS_SHELL_OVERLAY_Z } from '@/lib/settings-shell-dialog-layer';
-import { apiUrl } from '@/lib/url';
 import {
   cancelOAuth,
   cleanupOAuthSession,
@@ -398,17 +396,7 @@ function ConfigureBuiltinStep({
             setDeviceCode(status.deviceCode ?? null);
           } else if (status.status === 'completed') {
             window.clearInterval(intervalId);
-            try {
-              if (providerId === 'xopc-cloud') {
-                const refresh = await apiFetch(apiUrl('/api/models/catalog/refresh'), { method: 'POST' });
-                if (!refresh.ok) throw new Error(`Model catalog refresh failed: ${refresh.status}`);
-                await revalidateModelsHubCaches();
-              }
-            } catch (cause) {
-              setOAuthStatus('error');
-              setOAuthMessage(cause instanceof Error ? cause.message : providerLabels.revokeFailed);
-              return;
-            }
+            if (providerId === 'xopc-cloud') await revalidateModelsHubCaches();
             setOAuthStatus('success');
             setOAuthMessage(status.message ?? providerLabels.saved);
             window.setTimeout(onSaved, 600);

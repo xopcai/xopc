@@ -22,6 +22,22 @@ import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('OAuthAsync');
 
+export async function refreshModelCatalogAfterOAuth(
+  provider: string,
+  service: Pick<GatewayService, 'getModelCatalogSync'>,
+): Promise<void> {
+  if (provider !== 'xopc-cloud') return;
+  try {
+    await service.getModelCatalogSync().refreshNow();
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    log.warn(
+      { err, provider, errorMessage },
+      `OAuth completed, but the model catalog could not be refreshed: ${errorMessage}`,
+    );
+  }
+}
+
 /** User-facing message when undici/fetch fails (often DNS, firewall, or wrong machine for localhost callback). */
 function formatOAuthAsyncError(err: unknown): string {
 	const base = err instanceof Error ? err.message : 'OAuth login failed';
@@ -320,7 +336,7 @@ export function createOAuthAsyncHandler(service: GatewayService) {
 async function runOAuthFlow(
   session: OAuthSession,
   oauthProvider: OAuthProviderInterface,
-  _service: GatewayService
+  service: GatewayService
 ): Promise<void> {
   const abortController = new AbortController();
   session.abortController = abortController;
@@ -418,6 +434,11 @@ async function runOAuthFlow(
 
     const resolver = new CredentialResolver();
     await resolver.saveOAuthCredentials(session.provider, credentials);
+
+    session.message = session.provider === 'xopc-cloud'
+      ? 'OAuth login successful. Syncing available models...'
+      : 'OAuth login successful';
+    await refreshModelCatalogAfterOAuth(session.provider, service);
 
     session.status = 'completed';
     session.credentials = credentials;
