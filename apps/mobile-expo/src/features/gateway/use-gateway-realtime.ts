@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { randomUUID } from 'expo-crypto';
 
 import {
   RealtimeClient,
@@ -37,6 +38,7 @@ function createClient(clientId: string): RealtimeClient {
   return new RealtimeClient({
     clientId,
     clientKind: 'mobile',
+    createMessageId: randomUUID,
     getWebSocketUrl: websocketUrl,
     issueTicket: async () => {
       const { apiUrl, token } = useGatewayStore.getState();

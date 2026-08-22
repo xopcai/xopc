@@ -1,3 +1,5 @@
+import { randomUUID } from 'expo-crypto';
+
 import { KEYS, storage } from '../../storage/mmkv';
 
 let currentEndpointId: string | undefined;
@@ -9,7 +11,7 @@ export function getMobileEndpointId(principalId: string): string {
     currentEndpointId = stored;
     return stored;
   }
-  currentEndpointId = `${principalId}:${crypto.randomUUID()}`;
+  currentEndpointId = `${principalId}:${randomUUID()}`;
   storage.set(KEYS.endpointId, currentEndpointId);
   return currentEndpointId;
 }

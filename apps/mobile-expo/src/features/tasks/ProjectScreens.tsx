@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { randomUUID } from 'expo-crypto';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
@@ -82,7 +83,7 @@ export function CreateTaskScreen() {
   const [completionCriteria, setCompletionCriteria] = useState('');
   const [projectId, setProjectId] = useState(firstParam(params.projectId));
   const [selectedAgentId, setSelectedAgentId] = useState('');
-  const [requestId, setRequestId] = useState(() => crypto.randomUUID());
+  const [requestId, setRequestId] = useState(() => randomUUID());
   const [dependsOnTaskIds, setDependsOnTaskIds] = useState<string[]>([]);
   const projectTasks = useQuery({
     queryKey: queryKeys.projectOperatingView(projectId),
@@ -122,27 +123,27 @@ export function CreateTaskScreen() {
       <ScrollView contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + spacing.xl }]}>
         <>
           <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{labels.titleLabel}</Text>
-          <TextInput value={title} onChangeText={(value) => { setTitle(value); setRequestId(crypto.randomUUID()); }} placeholder={labels.titlePlaceholder} placeholderTextColor={colors.text.tertiary} style={[styles.input, { color: colors.text.primary, borderColor: colors.border.default }]} />
+          <TextInput value={title} onChangeText={(value) => { setTitle(value); setRequestId(randomUUID()); }} placeholder={labels.titlePlaceholder} placeholderTextColor={colors.text.tertiary} style={[styles.input, { color: colors.text.primary, borderColor: colors.border.default }]} />
           <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{labels.taskLabel}</Text>
-          <TextInput multiline value={body} onChangeText={(value) => { setBody(value); setRequestId(crypto.randomUUID()); }} placeholder={labels.taskPlaceholder} placeholderTextColor={colors.text.tertiary} style={[styles.input, styles.intentInput, { color: colors.text.primary, borderColor: colors.border.default }]} />
+          <TextInput multiline value={body} onChangeText={(value) => { setBody(value); setRequestId(randomUUID()); }} placeholder={labels.taskPlaceholder} placeholderTextColor={colors.text.tertiary} style={[styles.input, styles.intentInput, { color: colors.text.primary, borderColor: colors.border.default }]} />
           <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{labels.completionCriteria}</Text>
-          <TextInput multiline value={completionCriteria} onChangeText={(value) => { setCompletionCriteria(value); setRequestId(crypto.randomUUID()); }} placeholder={labels.completionCriteriaPlaceholder} placeholderTextColor={colors.text.tertiary} style={[styles.input, styles.criteriaInput, { color: colors.text.primary, borderColor: colors.border.default }]} />
+          <TextInput multiline value={completionCriteria} onChangeText={(value) => { setCompletionCriteria(value); setRequestId(randomUUID()); }} placeholder={labels.completionCriteriaPlaceholder} placeholderTextColor={colors.text.tertiary} style={[styles.input, styles.criteriaInput, { color: colors.text.primary, borderColor: colors.border.default }]} />
           <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{labels.projectLabel}</Text>
-          <Pressable accessibilityRole="radio" accessibilityState={{ checked: !projectId }} onPress={() => { setProjectId(''); setDependsOnTaskIds([]); setRequestId(crypto.randomUUID()); }} style={[styles.projectChoice, { borderColor: !projectId ? colors.accent.primary : colors.border.default, backgroundColor: colors.surface.panel }]}><Text style={{ color: colors.text.primary }}>{labels.letXopcChoose}</Text>{!projectId ? <Text style={{ color: colors.accent.primary }}>{labels.selected}</Text> : null}</Pressable>
+          <Pressable accessibilityRole="radio" accessibilityState={{ checked: !projectId }} onPress={() => { setProjectId(''); setDependsOnTaskIds([]); setRequestId(randomUUID()); }} style={[styles.projectChoice, { borderColor: !projectId ? colors.accent.primary : colors.border.default, backgroundColor: colors.surface.panel }]}><Text style={{ color: colors.text.primary }}>{labels.letXopcChoose}</Text>{!projectId ? <Text style={{ color: colors.accent.primary }}>{labels.selected}</Text> : null}</Pressable>
           {projects.isLoading ? <ListSkeleton count={2} /> : projects.isError ? (
             <View style={styles.inlineState}>
               <Text style={{ color: colors.semantic.error }}>{labels.projectsLoadFailed}</Text>
               <Button onPress={() => void projects.refetch()}>{labels.retry}</Button>
             </View>
-          ) : (projects.data ?? []).map((project) => <Pressable accessibilityRole="radio" accessibilityState={{ checked: project.id === projectId }} key={project.id} onPress={() => { setProjectId(project.id); setDependsOnTaskIds([]); setRequestId(crypto.randomUUID()); }} style={[styles.projectChoice, { borderColor: project.id === projectId ? colors.accent.primary : colors.border.default, backgroundColor: colors.surface.panel }]}><Text style={{ color: colors.text.primary }}>{project.name}</Text>{project.id === projectId ? <Text style={{ color: colors.accent.primary }}>{labels.selected}</Text> : null}</Pressable>)}
+          ) : (projects.data ?? []).map((project) => <Pressable accessibilityRole="radio" accessibilityState={{ checked: project.id === projectId }} key={project.id} onPress={() => { setProjectId(project.id); setDependsOnTaskIds([]); setRequestId(randomUUID()); }} style={[styles.projectChoice, { borderColor: project.id === projectId ? colors.accent.primary : colors.border.default, backgroundColor: colors.surface.panel }]}><Text style={{ color: colors.text.primary }}>{project.name}</Text>{project.id === projectId ? <Text style={{ color: colors.accent.primary }}>{labels.selected}</Text> : null}</Pressable>)}
           <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{labels.agentLabel}</Text>
-          <Pressable accessibilityRole="radio" accessibilityState={{ checked: !selectedAgentId }} onPress={() => { setSelectedAgentId(''); setRequestId(crypto.randomUUID()); }} style={[styles.projectChoice, { borderColor: !selectedAgentId ? colors.accent.primary : colors.border.default, backgroundColor: colors.surface.panel }]}><Text style={{ color: colors.text.primary }}>{labels.automaticAgent}</Text>{!selectedAgentId ? <Text style={{ color: colors.accent.primary }}>{labels.selected}</Text> : null}</Pressable>
+          <Pressable accessibilityRole="radio" accessibilityState={{ checked: !selectedAgentId }} onPress={() => { setSelectedAgentId(''); setRequestId(randomUUID()); }} style={[styles.projectChoice, { borderColor: !selectedAgentId ? colors.accent.primary : colors.border.default, backgroundColor: colors.surface.panel }]}><Text style={{ color: colors.text.primary }}>{labels.automaticAgent}</Text>{!selectedAgentId ? <Text style={{ color: colors.accent.primary }}>{labels.selected}</Text> : null}</Pressable>
           {agents.isLoading ? <ListSkeleton count={2} /> : agents.isError ? (
             <View style={styles.inlineState}>
               <Text style={{ color: colors.semantic.error }}>{labels.agentUnavailable}</Text>
               <Button onPress={() => void agents.refetch()}>{labels.retry}</Button>
             </View>
-          ) : (agents.data?.items ?? []).map((agent) => <Pressable accessibilityRole="radio" accessibilityState={{ checked: agent.id === selectedAgentId }} key={agent.id} onPress={() => { setSelectedAgentId(agent.id); setRequestId(crypto.randomUUID()); }} style={[styles.projectChoice, { borderColor: agent.id === selectedAgentId ? colors.accent.primary : colors.border.default, backgroundColor: colors.surface.panel }]}><Text style={{ color: colors.text.primary }}>{agent.name ?? agent.id}</Text>{agent.id === selectedAgentId ? <Text style={{ color: colors.accent.primary }}>{labels.selected}</Text> : null}</Pressable>)}
+          ) : (agents.data?.items ?? []).map((agent) => <Pressable accessibilityRole="radio" accessibilityState={{ checked: agent.id === selectedAgentId }} key={agent.id} onPress={() => { setSelectedAgentId(agent.id); setRequestId(randomUUID()); }} style={[styles.projectChoice, { borderColor: agent.id === selectedAgentId ? colors.accent.primary : colors.border.default, backgroundColor: colors.surface.panel }]}><Text style={{ color: colors.text.primary }}>{agent.name ?? agent.id}</Text>{agent.id === selectedAgentId ? <Text style={{ color: colors.accent.primary }}>{labels.selected}</Text> : null}</Pressable>)}
           {projectId ? (
             <>
               <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{labels.dependencies}</Text>
@@ -159,7 +160,7 @@ export function CreateTaskScreen() {
                     accessibilityRole="checkbox"
                     accessibilityState={{ checked: selected }}
                     key={task.id}
-                    onPress={() => { setDependsOnTaskIds((current) => selected ? current.filter((id) => id !== task.id) : [...current, task.id]); setRequestId(crypto.randomUUID()); }}
+                    onPress={() => { setDependsOnTaskIds((current) => selected ? current.filter((id) => id !== task.id) : [...current, task.id]); setRequestId(randomUUID()); }}
                     style={[styles.projectChoice, { borderColor: selected ? colors.accent.primary : colors.border.default, backgroundColor: colors.surface.panel }]}
                   >
                     <Text numberOfLines={2} style={[styles.dependencyTitle, { color: colors.text.primary }]}>{task.title}</Text>

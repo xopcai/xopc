@@ -46,6 +46,7 @@ describe('RealtimeClient', () => {
     const client = new RealtimeClient({
       clientId: 'c1',
       clientKind: 'web',
+      createMessageId: () => '00000000-0000-4000-8000-000000000001',
       getWebSocketUrl: () => 'ws://gateway/realtime',
       issueTicket: async () => 'x'.repeat(32),
       createWebSocket: () => socket,
@@ -56,6 +57,7 @@ describe('RealtimeClient', () => {
     await vi.waitFor(() => expect(socket.onopen).not.toBeNull());
     socket.open();
     expect(JSON.parse(socket.sent[0]!)).toMatchObject({
+      messageId: '00000000-0000-4000-8000-000000000001',
       kind: 'realtime.hello',
       payload: { subscriptions: [{ topic: 'run:r1', afterSeq: 0 }] },
     });
