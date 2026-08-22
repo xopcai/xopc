@@ -162,6 +162,7 @@ export class RealtimeRuntime {
             topic: item.topic,
             requestedSeq: item.afterSeq,
             earliestSeq: 1,
+            recoverable: false,
           }));
           continue;
         }
@@ -170,6 +171,10 @@ export class RealtimeRuntime {
           writer.enqueue(event);
         });
         subscriptions.set(item.topic, handle);
+        writer.enqueue(serverMessage('realtime.subscribed', {
+          topic: item.topic,
+          cursor: handle.cursor,
+        }), 'critical');
         for (const message of handle.initial) {
           writer.enqueue(message);
         }

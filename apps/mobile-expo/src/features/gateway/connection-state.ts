@@ -58,7 +58,6 @@ export function copyForConnectionState(
   state: ConnectionState,
   m: {
     initializing: string;
-    detecting: string;
     okLan: string;
     okTunnel: string;
     okDirect: string;
@@ -92,7 +91,7 @@ export function copyForConnectionState(
         actionLabel: m.openSettings,
       };
     case 'initializing':
-      return { short: m.initializing, long: m.detecting };
+      return { short: m.initializing, long: m.initializing };
     case 'ok-lan':
       return {
         short: m.okLan,

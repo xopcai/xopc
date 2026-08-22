@@ -14,6 +14,7 @@ import {
   recordContextRun,
 } from '../storage/sqlite/index.js';
 import type { CollaborationRule, PersonalizationItem, UserContextScope, UserUnderstanding } from './domain.js';
+import { listUserFocuses } from './sources/repository.js';
 
 const DEFAULT_MAX_CONTEXT_CHARS = 6_000;
 const DEFAULT_MAX_RESULTS = 12;
@@ -137,6 +138,8 @@ export class UserContextPlanner {
     const profile = getUserProfile();
     const profileLines = [
       profile.callName ? `Preferred name: ${profile.callName}` : '',
+      profile.role ? `Primary role: ${profile.role}` : '',
+      profile.primaryGoal ? `Primary goal for xopc: ${profile.primaryGoal}` : '',
       profile.pronouns ? `Pronouns: ${profile.pronouns}` : '',
       profile.timezone ? `Timezone: ${profile.timezone}` : '',
       profile.locale ? `Language/locale: ${profile.locale}` : '',
@@ -146,6 +149,11 @@ export class UserContextPlanner {
       traceItems.push({ objectType: 'profile', objectId: 'profile', decision: 'selected', reason: 'User-provided profile', content, sourceLabel: 'You provided this directly', rank: 0, score: 1, injectedChars: content.length });
       usedChars += content.length;
     }
+
+    const activeFocusLines = listUserFocuses(['active']).slice(0, 5).map((focus) => (
+      `- ${focus.title}: ${focus.summary} (${focus.horizon})`
+    ));
+    if (activeFocusLines.length) usedChars += activeFocusLines.join('\n').length;
 
     const rules = listCollaborationRules().filter((rule) => ruleMatches(rule, { ...scopeInput, channel: params.channel }));
     const selectedRules: CollaborationRule[] = [];
@@ -208,6 +216,7 @@ export class UserContextPlanner {
 
     const sections = [
       profileLines.length ? `<user-profile>\n${profileLines.join('\n')}\n</user-profile>` : '',
+      activeFocusLines.length ? `<active-focuses>\n${activeFocusLines.join('\n')}\n</active-focuses>` : '',
       selectedRules.length ? `<collaboration-contract>\n${selectedRules.map((rule) => `- ${rule.statement}`).join('\n')}\n</collaboration-contract>` : '',
       items.length ? buildUserContextBlock(items.map((item) => `- ${item.content}\n  Evidence: ${traceItems.find((trace) => trace.objectId === item.recordId)?.sourceLabel}`).join('\n')) : '',
     ].filter(Boolean);

@@ -1,4 +1,10 @@
-import type { ToolActivity } from '@xopcai/gateway-contract';
+import {
+  SESSION_INPUT_REQUEST_TIMEOUT_MS,
+  SESSION_INPUT_RETRY_DELAYS_MS,
+  sessionInputFingerprint,
+  shouldRetrySessionInputStatus,
+  type ToolActivity,
+} from '@xopcai/gateway-contract';
 
 import { buildSendFailedErrorPayload } from '@/features/chat/messages/agent-run-error-parser';
 import type { WireAttachment } from '@/features/chat/composer/composer.types';
@@ -11,17 +17,67 @@ import { waitForEndpointTurnClaim } from '@/features/endpoint-tools/turn-claim';
 import { formatApiHttpError } from '@/lib/http-error-message';
 import { apiUrl } from '@/lib/url';
 import { subscribeRealtimeTopic } from '@/features/gateway/gateway-realtime';
+import {
+  claimSubmissionId,
+  completeSubmission,
+} from '@/features/chat/messages/session-input-outbox';
+
+async function retryDelay(ms: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+  if (ms === 0) return;
+  await new Promise<void>((resolve, reject) => {
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new DOMException('Aborted', 'AbortError'));
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+async function postSessionInput(url: string, body: string, signal: AbortSignal): Promise<Response> {
+  let lastError: unknown;
+  for (const delayMs of SESSION_INPUT_RETRY_DELAYS_MS) {
+    await retryDelay(delayMs, signal);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), SESSION_INPUT_REQUEST_TIMEOUT_MS);
+    const abort = () => controller.abort();
+    signal.addEventListener('abort', abort, { once: true });
+    try {
+      const response = await apiFetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+        signal: controller.signal,
+      });
+      if (!shouldRetrySessionInputStatus(response.status)) return response;
+      lastError = new Error(`Session input temporarily unavailable (${response.status})`);
+    } catch (error) {
+      if (signal.aborted) throw error;
+      lastError = error;
+    } finally {
+      clearTimeout(timeout);
+      signal.removeEventListener('abort', abort);
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error('Session input request failed');
+}
 
 export function pendingAgentRunStorageKey(chatId: string): string {
   return `xopc:pendingRun:${chatId}`;
 }
+
+type PendingAgentRun = { runId?: unknown; lastSeq?: unknown };
 
 /** True when sessionStorage still holds a runId for a webchat session (in-flight or resumable). */
 export function hasPendingAgentRunForChat(chatId: string): boolean {
   try {
     const raw = globalThis.sessionStorage?.getItem(pendingAgentRunStorageKey(chatId));
     if (!raw) return false;
-    const pr = JSON.parse(raw) as { runId?: unknown };
+    const pr = JSON.parse(raw) as PendingAgentRun;
     return typeof pr.runId === 'string' && pr.runId.trim().length > 0;
   } catch {
     return false;
@@ -33,8 +89,40 @@ export function setPendingAgentRun(chatId: string, runId: string): void {
   const id = runId.trim();
   if (!id) return;
   try {
-    sessionStorage.setItem(pendingAgentRunStorageKey(chatId), JSON.stringify({ runId: id }));
+    const key = pendingAgentRunStorageKey(chatId);
+    const previous = JSON.parse(sessionStorage.getItem(key) ?? '{}') as PendingAgentRun;
+    const lastSeq = previous.runId === id && typeof previous.lastSeq === 'number'
+      ? previous.lastSeq
+      : 0;
+    sessionStorage.setItem(key, JSON.stringify({ runId: id, lastSeq }));
     dispatchPendingAgentRunChanged(chatId);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function readPendingAgentRunCursor(chatId: string, runId: string): number {
+  try {
+    const raw = sessionStorage.getItem(pendingAgentRunStorageKey(chatId));
+    if (!raw) return 0;
+    const pending = JSON.parse(raw) as PendingAgentRun;
+    return pending.runId === runId && typeof pending.lastSeq === 'number' ? pending.lastSeq : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function advancePendingAgentRunCursor(chatId: string, runId: string, seq: number): void {
+  if (!Number.isInteger(seq) || seq < 1) return;
+  try {
+    const key = pendingAgentRunStorageKey(chatId);
+    const raw = sessionStorage.getItem(key);
+    if (!raw) return;
+    const pending = JSON.parse(raw) as PendingAgentRun;
+    if (pending.runId !== runId) return;
+    const current = typeof pending.lastSeq === 'number' ? pending.lastSeq : 0;
+    if (seq <= current) return;
+    sessionStorage.setItem(key, JSON.stringify({ runId, lastSeq: seq }));
   } catch {
     /* ignore */
   }
@@ -79,6 +167,7 @@ export type TaskPlanState = {
 
 export type MessagingCallbacks = {
   onStreamStart: (turnId: string) => void;
+  onReplayGap?: () => void | Promise<void>;
   onToken: (delta: string, messageId?: string) => void;
   onAssistantMessageEnd?: (
     messageId: string,
@@ -187,21 +276,21 @@ export class MessageSender {
         ? attachments.slice(0, MAX_CHAT_ATTACHMENTS)
         : attachments;
 
-    const clientMessageId = crypto.randomUUID();
     const origin = await waitForEndpointTurnClaim(this._abort.signal);
-    const res = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(chatId)}/inputs`), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-          clientMessageId,
-          delivery: 'next',
-          content,
-          attachments: capped,
-          thinking: thinkingLevel,
-          origin,
+    const fingerprint = sessionInputFingerprint({ content, attachments: capped, thinking: thinkingLevel });
+    const clientMessageId = claimSubmissionId(chatId, fingerprint);
+    const res = await postSessionInput(
+      apiUrl(`/api/sessions/${encodeURIComponent(chatId)}/inputs`),
+      JSON.stringify({
+        clientMessageId,
+        delivery: 'next',
+        content,
+        attachments: capped,
+        thinking: thinkingLevel,
+        origin,
       }),
-      signal: this._abort.signal,
-    });
+      this._abort.signal,
+    );
 
     if (!res.ok) {
       const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
@@ -211,6 +300,7 @@ export class MessageSender {
     const json = await res.json() as {
       payload?: { state?: { activeRunId?: string; activeInputId?: string; inputs?: Array<{ id: string; clientMessageId: string }> } };
     };
+    completeSubmission(chatId, clientMessageId);
     const state = json.payload?.state;
     const ownInput = state?.inputs?.find((input) => input.clientMessageId === clientMessageId);
     if (state?.activeRunId && ownInput?.id === state.activeInputId) {
@@ -270,16 +360,21 @@ export class MessageSender {
         this._streamCleanup = undefined;
         resolve(value);
       };
+      const afterSeq = readPendingAgentRunCursor(chatId, runId);
       this._streamCleanup = subscribeRealtimeTopic(`run:${runId}`, {
         onEvent: (message) => {
           const event = message.data && typeof message.data === 'object'
             ? { ...(message.data as Record<string, unknown>), seq: message.seq }
             : { type: message.event, seq: message.seq, payload: message.data };
           this._dispatchStreamEvent(message.event, event, terminal.wrapped);
+          advancePendingAgentRunCursor(chatId, runId, message.seq);
           if (message.event === 'run_end' || message.event === 'error') finish(true);
         },
-        onGap: () => finish(false),
-      }, 0);
+        onGap: (gap) => {
+          if (gap.recoverable) return terminal.wrapped?.onReplayGap?.();
+          finish(false);
+        },
+      }, afterSeq);
       this._abort?.signal.addEventListener('abort', () => finish(false), { once: true });
     });
     this._abort = undefined;

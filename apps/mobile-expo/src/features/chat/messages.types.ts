@@ -83,6 +83,7 @@ export type MessageAttachment = {
   preview?: string;
   extractedText?: string;
   uri?: string;
+  localUri?: string;
   workspaceRelativePath?: string;
   durationSeconds?: number;
 };
@@ -99,6 +100,8 @@ export interface Message {
     cost?: number;
   };
   timestamp?: number;
+  /** Local delivery state; server transcript messages never carry this field. */
+  deliveryState?: 'queued' | 'failed';
 }
 
 export interface ProgressState {

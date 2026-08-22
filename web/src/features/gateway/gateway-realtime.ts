@@ -13,10 +13,11 @@ import { setRealtimeConnectionState } from '@/stores/gateway-realtime-store';
 
 type TopicListener = {
   onEvent: (event: RealtimeEventPayload) => void;
-  onGap?: () => void;
+  onGap?: (gap: { topic: string; requestedSeq: number; earliestSeq: number; recoverable: boolean }) => void | Promise<void>;
 };
 
 const listeners = new Map<string, Set<TopicListener>>();
+const topicCursors = new Map<string, number | undefined>();
 let activeClient: RealtimeClient | undefined;
 let endpointBinding: RealtimeEndpointBinding | undefined;
 
@@ -42,7 +43,7 @@ export function startGatewayRealtime(token?: string): () => void {
     clientId: id,
     clientKind: kind,
     getWebSocketUrl: websocketUrl,
-    issueTicket: async () => {
+    issueTicket: async (signal) => {
       const response = await fetch(apiUrl('/api/realtime/tickets'), {
         method: 'POST',
         headers: {
@@ -50,6 +51,7 @@ export function startGatewayRealtime(token?: string): () => void {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({ clientId: id, clientKind: kind }),
+        signal,
       });
       const body = await response.json().catch(() => null) as { payload?: { ticket?: string }; error?: { message?: string } } | null;
       if (!response.ok || !body?.payload?.ticket) {
@@ -68,9 +70,9 @@ export function startGatewayRealtime(token?: string): () => void {
       }
       for (const listener of listeners.get(event.topic) ?? []) listener.onEvent(event);
     },
-    onGap: (gap) => {
+    onGap: async (gap) => {
       window.dispatchEvent(new CustomEvent('realtime-gap', { detail: gap }));
-      for (const listener of listeners.get(gap.topic) ?? []) listener.onGap?.();
+      await Promise.all([...listeners.get(gap.topic) ?? []].map((listener) => listener.onGap?.(gap)));
     },
   });
   activeClient?.disconnect();
@@ -78,7 +80,7 @@ export function startGatewayRealtime(token?: string): () => void {
   if (endpointBinding) client.setEndpoint(endpointBinding);
   client.subscribe('gateway');
   client.subscribe('sessions');
-  for (const topic of listeners.keys()) client.subscribe(topic, topic.startsWith('run:') ? 0 : undefined);
+  for (const topic of listeners.keys()) client.subscribe(topic, topicCursors.get(topic));
   setRealtimeConnectionState({ connectionState: 'connecting', error: null });
   client.connect();
   return () => {
@@ -117,12 +119,16 @@ export function subscribeRealtimeTopic(topic: string, listener: TopicListener, a
   const wasEmpty = topicListeners.size === 0;
   topicListeners.add(listener);
   listeners.set(topic, topicListeners);
-  if (wasEmpty) activeClient?.subscribe(topic, afterSeq);
+  if (wasEmpty) {
+    topicCursors.set(topic, afterSeq);
+    activeClient?.subscribe(topic, afterSeq);
+  }
   return () => {
     const current = listeners.get(topic);
     current?.delete(listener);
     if (!current || current.size === 0) {
       listeners.delete(topic);
+      topicCursors.delete(topic);
       activeClient?.unsubscribe(topic);
     }
   };

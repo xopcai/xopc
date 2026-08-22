@@ -35,6 +35,10 @@ import { getConnectorLearningPlan } from '../../../connectors/learning-recipes.j
 import { recordConnectorHealthUsage } from '../../../connectors/usage.js';
 import type { ConnectorDefinition, ConnectorInstallInput } from '../../../connectors/types.js';
 import {
+  listUnderstandingSourceGrants,
+  revokeUnderstandingSourceGrant,
+} from '../../../user-context/sources/repository.js';
+import {
   decideConnectorApproval,
   getConnectorAccount,
   getConnectorSyncPolicy,
@@ -182,6 +186,8 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     const connectionId = account.currentConnectionId;
     if (connectionId && !policy.scanEnabled) {
       service.setConnectorLearningPaused(connectionId, true);
+      const grant = listUnderstandingSourceGrants().find((item) => item.sourceKey === `connector-account:${account.id}`);
+      if (grant) revokeUnderstandingSourceGrant(grant.id);
     } else if (connectionId && previous?.scanEnabled === false) {
       const resumed = service.setConnectorLearningPaused(connectionId, false);
       if (resumed === 0) {
@@ -248,7 +254,12 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
   authenticated.delete('/api/connectors/composio/connections/:id', strictRateLimitMiddleware, async (c) => {
     try {
       const connectionId = c.req.param('id');
+      const connection = listConnectorConnections().find((item) => item.id === connectionId);
       await revokeComposioConnection(connectionId);
+      if (connection?.accountId) {
+        const grant = listUnderstandingSourceGrants().find((item) => item.sourceKey === `connector-account:${connection.accountId}`);
+        if (grant) revokeUnderstandingSourceGrant(grant.id);
+      }
       return c.json({ ok: true, payload: { revoked: true } });
     } catch (error) {
       return c.json({ ok: false, error: errorMessage(error) }, 400);

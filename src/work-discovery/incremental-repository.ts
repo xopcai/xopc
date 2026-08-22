@@ -1,43 +1,25 @@
-import { randomUUID } from 'node:crypto';
-
-import { requireXopcDatabase } from '../storage/sqlite/connection.js';
-import { runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
+import {
+  createUnderstandingSourceRun,
+  listUnderstandingSourceGrants,
+  listUnderstandingSourceRuns,
+  updateUnderstandingSourceRun,
+} from '../user-context/sources/repository.js';
 
 import type { WorkDiscoveryPreview, WorkDiscoverySourceRefresh } from './types.js';
 import { workDiscoveryFingerprintsEqual } from './incremental.js';
+import { getWorkDiscoveryRun } from './repository.js';
 
-interface RefreshRow {
-  refresh_id: string;
-  source_id: string;
-  discovery_run_id: string | null;
-  changed: number;
-  previous_fingerprint_json: string | null;
-  current_fingerprint_json: string;
-  status: string;
-  checked_at: number;
-}
-
-function parseFingerprint(value: string | null): WorkDiscoveryPreview['fingerprint'] | undefined {
-  if (!value) return undefined;
-  try {
-    return JSON.parse(value) as WorkDiscoveryPreview['fingerprint'];
-  } catch {
-    return undefined;
-  }
-}
-
-function fromRow(row: RefreshRow): WorkDiscoverySourceRefresh {
+function refreshFromRun(run: ReturnType<typeof createUnderstandingSourceRun>): WorkDiscoverySourceRefresh {
+  const previousFingerprint = run.metadata.previousFingerprint as WorkDiscoveryPreview['fingerprint'] | undefined;
   return {
-    id: row.refresh_id,
-    sourceId: row.source_id,
-    changed: row.changed === 1,
-    ...(parseFingerprint(row.previous_fingerprint_json)
-      ? { previousFingerprint: parseFingerprint(row.previous_fingerprint_json) }
-      : {}),
-    currentFingerprint: parseFingerprint(row.current_fingerprint_json)!,
-    status: row.status as WorkDiscoverySourceRefresh['status'],
-    ...(row.discovery_run_id ? { discoveryRunId: row.discovery_run_id } : {}),
-    checkedAt: row.checked_at,
+    id: run.id,
+    sourceId: run.grantId,
+    changed: run.metadata.changed === true,
+    ...(previousFingerprint ? { previousFingerprint } : {}),
+    currentFingerprint: run.metadata.currentFingerprint as WorkDiscoveryPreview['fingerprint'],
+    status: run.status === 'running' ? 'queued' : run.status as WorkDiscoverySourceRefresh['status'],
+    ...(typeof run.metadata.discoveryRunId === 'string' ? { discoveryRunId: run.metadata.discoveryRunId } : {}),
+    checkedAt: run.startedAt,
   };
 }
 
@@ -50,59 +32,50 @@ export function recordWorkDiscoverySourceRefresh(input: {
   discoveryRunId?: string;
   checkedAt?: number;
 }): WorkDiscoverySourceRefresh {
-  const id = randomUUID();
-  runSqliteWriteTransaction((db) => {
-    db.prepare(
-      `INSERT INTO work_discovery_source_refreshes (
-        refresh_id, source_id, discovery_run_id, changed, previous_fingerprint_json,
-        current_fingerprint_json, status, checked_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).run(
-      id,
-      input.sourceId,
-      input.discoveryRunId ?? null,
-      input.changed ? 1 : 0,
-      input.previousFingerprint ? JSON.stringify(input.previousFingerprint) : null,
-      JSON.stringify(input.currentFingerprint),
-      input.status ?? 'checked',
-      input.checkedAt ?? Date.now(),
-    );
-  });
-  const { db } = requireXopcDatabase();
-  return fromRow(db.prepare('SELECT * FROM work_discovery_source_refreshes WHERE refresh_id = ?')
-    .get(id) as unknown as RefreshRow);
+  const status = input.status === 'queued'
+    ? 'running'
+    : input.status === 'failed'
+      ? 'failed'
+      : 'completed';
+  return refreshFromRun(createUnderstandingSourceRun({
+    grantId: input.sourceId,
+    kind: 'fingerprint',
+    status,
+    metadata: {
+      changed: input.changed,
+      ...(input.previousFingerprint ? { previousFingerprint: input.previousFingerprint } : {}),
+      currentFingerprint: input.currentFingerprint,
+      ...(input.discoveryRunId ? { discoveryRunId: input.discoveryRunId } : {}),
+    },
+    ...(input.checkedAt != null ? { nowMs: input.checkedAt } : {}),
+  }));
 }
 
 export function listWorkDiscoverySourceRefreshes(sourceId: string, limit = 20): WorkDiscoverySourceRefresh[] {
-  const { db } = requireXopcDatabase();
-  const rows = db.prepare(
-    'SELECT * FROM work_discovery_source_refreshes WHERE source_id = ? ORDER BY checked_at DESC LIMIT ?',
-  ).all(sourceId, Math.max(1, Math.min(100, limit))) as unknown as RefreshRow[];
-  return rows.map(fromRow);
+  return listUnderstandingSourceRuns(sourceId, limit)
+    .filter((run) => run.kind === 'fingerprint')
+    .map(refreshFromRun);
 }
 
 export function findActiveWorkDiscoverySourceRefresh(
   sourceId: string,
   fingerprint: WorkDiscoveryPreview['fingerprint'],
 ): WorkDiscoverySourceRefresh | null {
-  const { db } = requireXopcDatabase();
-  const rows = db.prepare(
-    `SELECT refresh.* FROM work_discovery_source_refreshes refresh
-     JOIN work_discovery_runs run ON run.id = refresh.discovery_run_id
-     WHERE refresh.source_id = ? AND refresh.status = 'queued'
-       AND run.status IN ('queued', 'probing', 'analyzing')
-     ORDER BY refresh.checked_at DESC`,
-  ).all(sourceId) as unknown as RefreshRow[];
-  return rows.map(fromRow).find((refresh) =>
-    workDiscoveryFingerprintsEqual(refresh.currentFingerprint, fingerprint)) ?? null;
+  return listWorkDiscoverySourceRefreshes(sourceId, 100).find((refresh) => {
+    if (refresh.status !== 'queued' || !refresh.discoveryRunId) return false;
+    const run = getWorkDiscoveryRun(refresh.discoveryRunId);
+    return Boolean(run && ['queued', 'probing', 'analyzing'].includes(run.status)
+      && workDiscoveryFingerprintsEqual(refresh.currentFingerprint, fingerprint));
+  }) ?? null;
 }
 
 export function updateWorkDiscoverySourceRefreshForRun(
   runId: string,
   status: 'completed' | 'failed',
 ): void {
-  runSqliteWriteTransaction((db) => {
-    db.prepare('UPDATE work_discovery_source_refreshes SET status = ? WHERE discovery_run_id = ?')
-      .run(status, runId);
-  });
+  for (const source of listUnderstandingSourceGrants()) {
+    const refresh = listUnderstandingSourceRuns(source.id, 100)
+      .find((item) => item.kind === 'fingerprint' && item.metadata.discoveryRunId === runId);
+    if (refresh) updateUnderstandingSourceRun(refresh.id, { status, completed: true });
+  }
 }

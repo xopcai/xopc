@@ -137,6 +137,16 @@ describe('SQLite migrations', () => {
     try {
       ensureXopcDatabaseSchema(db);
       expect(readSchemaVersion(db)).toBe(XOPC_DB_SCHEMA_VERSION);
+      for (const name of ['understanding_source_grants', 'understanding_source_runs', 'user_focuses']) {
+        expect(db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`).get(name))
+          .toEqual({ name });
+      }
+      for (const name of ['work_discovery_sources', 'work_discovery_source_refreshes']) {
+        expect(db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`).get(name))
+          .toBeUndefined();
+      }
+      const profileColumns = db.prepare('PRAGMA table_info(user_profiles)').all() as Array<{ name: string }>;
+      expect(profileColumns.map((column) => column.name)).toEqual(expect.arrayContaining(['role', 'primary_goal']));
       expect(db.prepare(
         `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'discussion_captures'`,
       ).get()).toEqual({ name: 'discussion_captures' });

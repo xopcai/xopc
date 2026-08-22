@@ -223,7 +223,7 @@ describe('work discovery repository', () => {
     })).toBeNull();
   });
 
-  it('activates only understanding candidates produced by personal context', () => {
+  it('activates only understanding candidates produced by connected sources', () => {
     const notesRecord = createUnderstanding({
       kind: 'routine', canonicalKey: 'work-discovery:workflow:notes', scope: { type: 'global' },
       status: 'candidate',
@@ -232,7 +232,7 @@ describe('work discovery repository', () => {
       sensitivity: 'normal', disclosurePolicy: 'referenceable', confidence: 0.8,
       statement: 'The user regularly plans product work in notes.', createdBy: 'runtime', changeReason: 'test',
     });
-    const notesEvidence = createContextEvidence({ sourceType: 'runtime', sourceRef: 'personal-context:onboarding:notes', trustLevel: 'trusted', observedAt: 1 });
+    const notesEvidence = createContextEvidence({ sourceType: 'runtime', sourceRef: 'understanding-source:onboarding:notes', trustLevel: 'trusted', observedAt: 1 });
     linkUnderstandingEvidence(notesRecord.versionId, notesEvidence.id, 'supports', 0.8);
     const unrelatedRecord = createUnderstanding({
       kind: 'derived_insight', canonicalKey: 'work-discovery:other', scope: { type: 'global' },
@@ -250,7 +250,7 @@ describe('work discovery repository', () => {
       emit: () => {},
     });
 
-    const decisions = service.updatePersonalContextProfile({ decisions: [
+    const decisions = service.updateUnderstandingSourceProfile({ decisions: [
       { understandingId: notesRecord.id, status: 'accepted' },
       { understandingId: unrelatedRecord.id, status: 'accepted' },
     ] });

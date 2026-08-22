@@ -38,6 +38,8 @@ type OnboardingState = {
   busy: boolean;
   error: string | null;
   callName: string;
+  role: string;
+  primaryGoal: string;
   profileLoading: boolean;
 };
 
@@ -52,6 +54,8 @@ const initialOnboarding: OnboardingState = {
   busy: false,
   error: null,
   callName: '',
+  role: '',
+  primaryGoal: '',
   profileLoading: true,
 };
 
@@ -74,7 +78,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
   const o = messages(language).onboarding;
 
   const [state, dispatch] = useReducer(onboardingReducer, initialOnboarding);
-  const { step, selectedProvider, apiKey, busy, error, callName, profileLoading } = state;
+  const { step, selectedProvider, apiKey, busy, error, callName, role, primaryGoal, profileLoading } = state;
 
   const stepLabel = useMemo(
     () => o.stepOf.replace('{{current}}', String(stepNumber(step))).replace('{{total}}', '3'),
@@ -133,6 +137,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
           if (prefill) {
             dispatch({ type: 'prefillCallName', value: prefill });
           }
+          dispatch({ type: 'patch', patch: { role: profile.role, primaryGoal: profile.primaryGoal } });
           dispatch({ type: 'patch', patch: { profileLoading: false } });
           return;
         } catch {
@@ -153,14 +158,12 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
 
   const continueFromCallName = async () => {
     const normalizedCallName = callName.trim();
-    if (!normalizedCallName) {
-      dispatch({ type: 'patch', patch: { step: 'provider', error: null } });
-      return;
-    }
     dispatch({ type: 'patch', patch: { busy: true, error: null } });
     try {
       await updateUserProfile({
         callName: normalizedCallName,
+        role: role.trim(),
+        primaryGoal: primaryGoal.trim(),
         timezone: detectBrowserTimezone(),
       });
       dispatch({ type: 'patch', patch: { step: 'provider' } });
@@ -187,10 +190,12 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
 
     await updateUserProfile({
       ...(callName.trim() ? { callName: callName.trim() } : {}),
+      role: role.trim(),
+      primaryGoal: primaryGoal.trim(),
       timezone: detectBrowserTimezone(),
     });
     await onComplete();
-  }, [callName, onComplete]);
+  }, [callName, onComplete, primaryGoal, role]);
 
   const onContinueApiKey = async () => {
     if (!selectedProvider || !apiKey.trim()) return;
@@ -293,6 +298,27 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
                   className="mt-1 w-full rounded-xl border border-edge bg-surface-base px-3 py-2.5 text-sm text-fg outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/30"
                 />
               )}
+            </label>
+            <label className="block text-sm font-medium text-fg">
+              {o.profileRoleLabel}
+              <input
+                value={role}
+                onChange={(event) => dispatch({ type: 'patch', patch: { role: event.target.value } })}
+                placeholder={o.profileRolePlaceholder}
+                maxLength={300}
+                className="mt-1 w-full rounded-xl border border-edge bg-surface-base px-3 py-2.5 text-sm text-fg outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/30"
+              />
+            </label>
+            <label className="block text-sm font-medium text-fg">
+              {o.profileGoalLabel}
+              <textarea
+                value={primaryGoal}
+                onChange={(event) => dispatch({ type: 'patch', patch: { primaryGoal: event.target.value } })}
+                placeholder={o.profileGoalPlaceholder}
+                maxLength={500}
+                rows={3}
+                className="mt-1 w-full resize-none rounded-xl border border-edge bg-surface-base px-3 py-2.5 text-sm text-fg outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/30"
+              />
             </label>
             <div className="flex flex-wrap justify-between gap-2">
               <button

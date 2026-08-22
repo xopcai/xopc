@@ -79,7 +79,7 @@ export const en = {
     connectionCurrentLan: 'LAN',
     connectionCurrentTunnel: 'Public tunnel (FRP)',
     connectionCurrentDirect: 'Direct',
-    connectionDetecting: 'Finding fastest…',
+    connectionDetecting: 'Checking connection…',
     connectionUnconfigured: 'Not configured',
     connectionActiveUrl: 'In use',
     lanAddress: 'LAN address',
@@ -114,7 +114,6 @@ export const en = {
     // ── Connection state machine ────────────────────────
     state: {
       initializing: 'Connecting…',
-      detecting: 'Finding the fastest route…',
       okLan: 'LAN',
       okTunnel: 'Cloud',
       okDirect: 'Direct',
@@ -135,8 +134,6 @@ export const en = {
       retry: 'Retry',
       reconnect: 'Re-pair',
       openSettings: 'Open settings',
-      autoSwitchedToCloud: 'Switched to the cloud route',
-      autoSwitchedToLan: 'Back on LAN',
     },
 
     // ── Diagnostics ─────────────────────────────────────
@@ -152,7 +149,7 @@ export const en = {
     routeOverride: {
       title: 'Connection route',
       auto: 'Auto (recommended)',
-      autoSubtitle: 'Pick the fastest route automatically',
+      autoSubtitle: 'Choose an available route automatically',
       lan: 'Force LAN',
       lanSubtitle: 'Always use the local-network address',
       lanUnavailable: 'No LAN address configured',
@@ -161,26 +158,11 @@ export const en = {
       tunnelUnavailable: 'No tunnel address configured',
       testNow: 'Test connection now',
       pinnedBadge: 'Pinned',
-      appliedAuto: 'Auto routing — testing the fastest path',
-      appliedAutoOkLan: 'Auto · LAN wins ({{latency}} ms)',
-      appliedAutoOkTunnel: 'Auto · Cloud wins ({{latency}} ms)',
-      appliedAutoFail: 'Auto · could not reach gateway',
+      appliedAuto: 'Automatic connection enabled',
       appliedLan: 'Pinned to LAN',
       appliedTunnel: 'Pinned to Cloud',
     },
 
-    // ── Offline-device guidance ─────────────────────────
-    offlineDeviceHelp: {
-      title: 'Wake your gateway computer',
-      subtitle: 'The app reached the cloud relay but your computer didn\'t answer.',
-      cause1: 'Mac asleep — press a key or open the lid',
-      cause2: 'Computer is off — power it on',
-      cause3: 'Computer left the network — reconnect Wi-Fi or Ethernet',
-      cause4: 'Gateway app stopped — open it from the menu bar / dock',
-      retry: 'Test again',
-      docs: 'Open help docs',
-      dismiss: 'Got it',
-    },
   },
 
   // ── Gateway connect landing (first-run modal) ────────────
@@ -362,12 +344,10 @@ export const en = {
     searchResults: '{{count}} search results',
     showMoreResults: 'Show more',
     showLessResults: 'Show less',
-    resumeBanner: 'Connection lost. The reply may still be running.',
-    resumeButton: 'Resume',
-    streamReconnecting: 'Network unstable — reconnecting automatically…',
-    streamRecoveryFailed: 'Could not reconnect automatically. Please try again.',
     dismiss: 'Dismiss',
     failedToRename: 'Failed to rename',
+    waitingToSend: 'Waiting to send',
+    sendFailed: 'Send failed',
     welcomeTitle: 'How can I help today?',
     welcomeSubtitle: 'Tap a starter to fill the composer, then edit before sending.',
     welcomeSpotlight: {

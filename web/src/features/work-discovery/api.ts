@@ -155,56 +155,29 @@ export type WorkDiscoveryDirectorySource = {
   updatedAt: number;
 };
 
-export async function fetchWorkDiscoveryDirectorySources(): Promise<WorkDiscoveryDirectorySource[]> {
-  const response = await fetchJson<{ sources: WorkDiscoveryDirectorySource[] }>(apiUrl('/api/work-discovery/sources/directories'));
-  return response.sources;
-}
-
-export async function grantWorkDiscoveryDirectory(rootPath: string): Promise<WorkDiscoveryDirectorySource> {
-  const response = await fetchJson<{ source: WorkDiscoveryDirectorySource }>(apiUrl('/api/work-discovery/sources/directories'), {
+export async function grantUnderstandingWorkFolder(rootPath: string): Promise<WorkDiscoveryDirectorySource> {
+  const response = await fetchJson<{ source: WorkDiscoveryDirectorySource }>(apiUrl('/api/understanding/sources/work-folders'), {
     method: 'POST',
     body: JSON.stringify({ rootPath }),
   });
   return response.source;
 }
 
-export async function revokeWorkDiscoveryDirectory(sourceId: string): Promise<void> {
-  await fetchJson(apiUrl(`/api/work-discovery/sources/directories/${encodeURIComponent(sourceId)}`), { method: 'DELETE' });
-}
-
-export async function rescanWorkDiscoveryDirectory(sourceId: string): Promise<WorkDiscoveryRun> {
-  const response = await fetchJson<{ run: WorkDiscoveryRun }>(apiUrl(
-    `/api/work-discovery/sources/directories/${encodeURIComponent(sourceId)}/runs`,
-  ), {
-    method: 'POST',
-    body: JSON.stringify({ idempotencyKey: crypto.randomUUID() }),
-  });
-  return response.run;
-}
-
-export async function refreshWorkDiscoveryDirectoryIfChanged(sourceId: string): Promise<{
-  changed: boolean;
-  run?: WorkDiscoveryRun;
-}> {
-  return fetchJson(apiUrl(
-    `/api/work-discovery/sources/directories/${encodeURIComponent(sourceId)}/refresh-if-changed`,
-  ), {
-    method: 'POST',
-    body: JSON.stringify({ idempotencyKey: crypto.randomUUID() }),
-  });
-}
-
-export async function importPersonalContextForWorkDiscovery(items: Array<{
+export async function importUnderstandingSources(items: Array<{
   id: string;
-  source: 'apple_notes' | 'calendar' | 'reminders';
+  sourceId: string;
+  type: 'document' | 'calendar_event' | 'task' | 'note' | 'mail' | 'message' | 'code_activity';
   title: string;
   group?: string;
-  createdAt?: number;
+  occurredAt?: number;
   modifiedAt?: number;
   startsAt?: number;
   endsAt?: number;
-  content?: string;
-}>, runId?: string): Promise<{
+  text?: string;
+  ownerAttribution: 'user' | 'other' | 'shared' | 'unknown';
+  sensitivity: 'normal' | 'personal' | 'secret' | 'regulated';
+  evidenceRef: string;
+}>, workDiscoveryRunId?: string): Promise<{
   profileCandidates: WorkDiscoveryProfileCandidate[];
   workThreads: WorkUnderstandingThread[];
 }> {
@@ -212,15 +185,15 @@ export async function importPersonalContextForWorkDiscovery(items: Array<{
     profileCandidates: WorkDiscoveryProfileCandidate[];
     workThreads: WorkUnderstandingThread[];
   }>(
-    apiUrl('/api/work-discovery/personal-context/import'),
-    { method: 'POST', body: JSON.stringify({ items, ...(runId ? { runId } : {}) }) },
+    apiUrl('/api/understanding/bootstrap'),
+    { method: 'POST', body: JSON.stringify({ items, ...(workDiscoveryRunId ? { workDiscoveryRunId } : {}) }) },
   );
 }
 
-export async function updatePersonalContextWorkDiscoveryProfile(
+export async function reviewUnderstandingSourceProfile(
   decisions: Array<{ understandingId: string; status: 'accepted' | 'rejected' }>,
 ): Promise<void> {
-  await fetchJson(apiUrl('/api/work-discovery/personal-context/profile'), {
+  await fetchJson(apiUrl('/api/understanding/review'), {
     method: 'POST',
     body: JSON.stringify({ decisions }),
   });

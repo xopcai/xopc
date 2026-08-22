@@ -4,6 +4,7 @@ import { useGatewayStore } from '../../stores/gateway-store';
 
 import { syncGatewayAfterConnectivityChange } from './gateway-connection-sync';
 import { subscribeNetworkChange } from './network-info';
+import { getSharedGatewayRealtimeClient } from './use-gateway-realtime';
 import {
   runProbeRound,
   subscribeProbeTask,
@@ -46,7 +47,16 @@ export function useGatewayConnectionWatch(enabled: boolean): void {
       }
       if (snap.key === lastSeenNetKey) return;
       lastSeenNetKey = snap.key;
-      void runProbeRound('network-change', { force: true });
+      if (!snap.online) {
+        getSharedGatewayRealtimeClient()?.disconnect();
+        return;
+      }
+      const urlBeforeProbe = useGatewayStore.getState().activeBaseUrl;
+      void runProbeRound('network-change', { force: true }).then(() => {
+        if (useGatewayStore.getState().activeBaseUrl === urlBeforeProbe) {
+          syncGatewayAfterConnectivityChange({ immediate: true });
+        }
+      });
     });
 
     return () => {

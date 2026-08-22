@@ -122,11 +122,11 @@ export function ConnectorsPage() {
   const hasToken = Boolean(token);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const personalContextIntent = searchParams.get('personalContext') === '1';
-  const personalContextReturnPath = safeReturnPath(searchParams.get('returnTo'));
+  const understandingIntent = searchParams.get('understanding') === '1';
+  const understandingReturnPath = safeReturnPath(searchParams.get('returnTo'));
   const requestedTab = searchParams.get('tab');
   const [tab, setTab] = useState<TabId>(
-    !personalContextIntent && requestedTab === 'connected' ? 'connected' : 'discover',
+    !understandingIntent && requestedTab === 'connected' ? 'connected' : 'discover',
   );
   const initialTabResolvedRef = useRef(false);
   const [state, setState] = useState<LoadState>({
@@ -145,13 +145,13 @@ export function ConnectorsPage() {
   const [peopleSearchQuery, setPeopleSearchQuery] = useState('');
   const [peopleSearching, setPeopleSearching] = useState(false);
   const [discoverSearchQuery, setDiscoverSearchQuery] = useState(
-    personalContextIntent ? searchParams.get('connector') ?? '' : '',
+    understandingIntent ? searchParams.get('connector') ?? '' : '',
   );
   const [discoverSource, setDiscoverSource] = useState<string>(
-    connectorDiscoverySourceForEntry(personalContextIntent ? 'personal-context' : 'default'),
+    connectorDiscoverySourceForEntry(understandingIntent ? 'understanding' : 'default'),
   );
   const [connectorSort, setConnectorSort] = useState<ConnectorSort>('name');
-  const [selectedTask, setSelectedTask] = useState<DiscoveryTask>(personalContextIntent ? 'understand' : 'all');
+  const [selectedTask, setSelectedTask] = useState<DiscoveryTask>(understandingIntent ? 'understand' : 'all');
   const [installDraft, setInstallDraft] = useState<InstallDraft | null>(null);
   const [detailConnector, setDetailConnector] = useState<ConnectorDefinition | null>(null);
   const [detailInstanceId, setDetailInstanceId] = useState<string | null>(null);
@@ -233,9 +233,9 @@ export function ConnectorsPage() {
 
   useEffect(() => {
     if (initialTabResolvedRef.current || state.loading || (hasToken && !mcpSettings)) return;
-    setTab(personalContextIntent ? 'discover' : installedCount > 0 ? 'connected' : 'discover');
+    setTab(understandingIntent ? 'discover' : installedCount > 0 ? 'connected' : 'discover');
     initialTabResolvedRef.current = true;
-  }, [hasToken, installedCount, mcpSettings, personalContextIntent, state.loading]);
+  }, [hasToken, installedCount, mcpSettings, understandingIntent, state.loading]);
 
   const selectTab = useCallback((nextTab: TabId) => {
     initialTabResolvedRef.current = true;
@@ -358,7 +358,7 @@ export function ConnectorsPage() {
       const definition = connectorDefinitionsById.get(connectorId);
       if (!definition) return;
       initialTabResolvedRef.current = true;
-      setDiscoverSource(connectorDiscoverySourceForEntry(personalContextIntent ? 'personal-context' : 'default'));
+      setDiscoverSource(connectorDiscoverySourceForEntry(understandingIntent ? 'understanding' : 'default'));
       setDiscoverSearchQuery('');
       setDetailConnector(definition);
       setTab('discover');
@@ -369,7 +369,7 @@ export function ConnectorsPage() {
     nextParams.delete('instance');
     nextParams.set('tab', instance ? 'connected' : 'discover');
     setSearchParams(nextParams, { replace: true });
-  }, [connectorDefinitionsById, personalContextIntent, searchParams, setSearchParams, state.instances, state.loading]);
+  }, [connectorDefinitionsById, understandingIntent, searchParams, setSearchParams, state.instances, state.loading]);
 
   const openStoreInstall = useCallback(async (packageName: string) => {
     setStorePlanLoading(true);
@@ -488,14 +488,14 @@ export function ConnectorsPage() {
         : state.registryCatalog
   ), [builtinCatalog, discoverSource, state.registryCatalog]);
   const discoveryCatalog = useMemo(() => {
-    const sourceCatalog = personalContextIntent
+    const sourceCatalog = understandingIntent
       ? discoverySourceCatalog.filter((connector) => connector.understanding?.mode === 'activity')
       : discoverySourceCatalog;
     const filtered = selectedTask === 'all'
       ? sourceCatalog
       : sourceCatalog.filter((connector) => connectorBenefitsFor(connector).includes(selectedTask));
     return filterAndSortConnectors(filtered, discoverSearchQuery, connectorSort);
-  }, [connectorSort, discoverSearchQuery, discoverySourceCatalog, personalContextIntent, selectedTask]);
+  }, [connectorSort, discoverSearchQuery, discoverySourceCatalog, understandingIntent, selectedTask]);
   const availableTasks = useMemo(() => CONNECTOR_BENEFIT_ORDER.filter((benefit) => (
     discoverySourceCatalog.some((connector) => connectorBenefitsFor(connector).includes(benefit))
   )), [discoverySourceCatalog]);
@@ -527,19 +527,19 @@ export function ConnectorsPage() {
           <p className="rounded-xl border border-edge bg-surface-panel px-4 py-3 text-sm text-fg-muted">{cs.tokenHint}</p>
         ) : null}
 
-        {personalContextIntent ? (
+        {understandingIntent ? (
           <div className="flex flex-col gap-3 rounded-xl border border-accent/25 bg-accent-soft px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-sm font-semibold text-fg">{cs.personalContextTitle}</p>
-              <p className="mt-1 text-xs leading-5 text-fg-muted">{cs.personalContextHint}</p>
+              <p className="text-sm font-semibold text-fg">{cs.understandingSetupTitle}</p>
+              <p className="mt-1 text-xs leading-5 text-fg-muted">{cs.understandingSetupHint}</p>
             </div>
             <Button
               type="button"
               variant="secondary"
               className="shrink-0"
-              onClick={() => navigate(personalContextReturnPath)}
+              onClick={() => navigate(understandingReturnPath)}
             >
-              {cs.personalContextDone}
+              {cs.understandingSetupDone}
             </Button>
           </div>
         ) : null}
@@ -671,7 +671,7 @@ export function ConnectorsPage() {
 
           {tab === 'discover' && hasToken ? (
             <div className="flex flex-col gap-5">
-              {!personalContextIntent ? <div className="flex flex-wrap gap-2" role="group" aria-label={cs.taskFilterAria}>
+              {!understandingIntent ? <div className="flex flex-wrap gap-2" role="group" aria-label={cs.taskFilterAria}>
                 {(['all', ...availableTasks] as DiscoveryTask[]).map((task) => (
                   <button
                     key={task}
@@ -699,9 +699,9 @@ export function ConnectorsPage() {
                 />
                 <div className={cn(
                   'grid min-w-0 grid-cols-1 gap-2 lg:ml-auto',
-                  personalContextIntent ? 'lg:w-52' : 'sm:grid-cols-2 lg:w-[26rem]',
+                  understandingIntent ? 'lg:w-52' : 'sm:grid-cols-2 lg:w-[26rem]',
                 )}>
-                  {!personalContextIntent ? <PopoverSelect
+                  {!understandingIntent ? <PopoverSelect
                       value={discoverSource}
                       options={sourceOptions}
                       placeholder={cs.discoverSourceAll}

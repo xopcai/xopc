@@ -1142,9 +1142,9 @@
   "connectorsSettings": {
     "title": "连接器",
     "subtitle": "管理现有连接，或发现能为 Agent 提供上下文和操作能力的新连接器。",
-    "personalContextTitle": "连接一个用于理解你的来源",
-    "personalContextHint": "这里只展示具备只读活动学习方案的来源。连接后，可在连接详情中开启学习；生成的理解可随时审阅或删除。",
-    "personalContextDone": "完成",
+    "understandingSetupTitle": "连接一个用于理解你的来源",
+    "understandingSetupHint": "这里只展示具备只读学习方案的来源。连接后可选择持续访问策略；来源可以随时审阅或撤销。",
+    "understandingSetupDone": "完成",
     "tokenHint": "请先在「设置 → 网关」保存访问令牌，再配置连接器。",
     "tabConnected": "我的连接",
     "tabDiscover": "发现连接器",

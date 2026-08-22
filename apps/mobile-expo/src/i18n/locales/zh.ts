@@ -80,7 +80,7 @@ export const zh: MessageBundle = {
     connectionCurrentLan: '局域网',
     connectionCurrentTunnel: '公网隧道（FRP）',
     connectionCurrentDirect: '直连',
-    connectionDetecting: '加速中…',
+    connectionDetecting: '检测连接…',
     connectionUnconfigured: '未配置',
     connectionActiveUrl: '正在使用',
     lanAddress: '局域网地址',
@@ -114,7 +114,6 @@ export const zh: MessageBundle = {
     // ── Connection state machine ────────────────────────
     state: {
       initializing: '正在连接…',
-      detecting: '正在挑选最快路径…',
       okLan: '局域网',
       okTunnel: '云端',
       okDirect: '直连',
@@ -135,8 +134,6 @@ export const zh: MessageBundle = {
       retry: '重试',
       reconnect: '重新配对',
       openSettings: '打开设置',
-      autoSwitchedToCloud: '已切换到云端路由',
-      autoSwitchedToLan: '已切回局域网',
     },
 
     // ── Diagnostics ─────────────────────────────────────
@@ -152,7 +149,7 @@ export const zh: MessageBundle = {
     routeOverride: {
       title: '连接方式',
       auto: '自动（推荐）',
-      autoSubtitle: '自动选择最快路径',
+      autoSubtitle: '自动选择可用连接',
       lan: '强制局域网',
       lanSubtitle: '始终使用局域网地址',
       lanUnavailable: '未配置局域网地址',
@@ -161,26 +158,11 @@ export const zh: MessageBundle = {
       tunnelUnavailable: '未配置隧道地址',
       testNow: '立即测试连接',
       pinnedBadge: '已锁定',
-      appliedAuto: '已恢复自动选路，正在测试最快路径',
-      appliedAutoOkLan: '自动 · 选中局域网（{{latency}} ms）',
-      appliedAutoOkTunnel: '自动 · 选中云端（{{latency}} ms）',
-      appliedAutoFail: '自动 · 无法连接到网关',
+      appliedAuto: '已启用自动连接',
       appliedLan: '已锁定到局域网',
       appliedTunnel: '已锁定到云端',
     },
 
-    // ── 网关电脑离线引导 ────────────────────────────────
-    offlineDeviceHelp: {
-      title: '唤醒你的网关电脑',
-      subtitle: '应用已连上云端中转，但你的电脑没有响应。',
-      cause1: 'Mac 处于睡眠——按任意键或打开屏幕',
-      cause2: '电脑已关机——开机即可',
-      cause3: '电脑离开了网络——请重新连接 Wi‑Fi 或网线',
-      cause4: '网关应用已停止——从菜单栏/Dock 重新打开',
-      retry: '重新测试',
-      docs: '打开帮助文档',
-      dismiss: '我知道了',
-    },
   },
 
   // ── 网关连接引导（首次弹层）──────────────────────────────
@@ -360,12 +342,10 @@ export const zh: MessageBundle = {
     searchResults: '{{count}} 条搜索结果',
     showMoreResults: '查看更多',
     showLessResults: '收起',
-    resumeBanner: '连接已中断，回复可能仍在进行。',
-    resumeButton: '恢复',
-    streamReconnecting: '网络不稳定，正在自动恢复连接…',
-    streamRecoveryFailed: '无法自动恢复连接，请稍后重试。',
     dismiss: '关闭',
     failedToRename: '重命名失败',
+    waitingToSend: '等待发送',
+    sendFailed: '发送失败',
     welcomeTitle: '今天想做点什么？',
     welcomeSubtitle: '点击建议填入输入框，可编辑后再发送。',
     welcomeSpotlight: {

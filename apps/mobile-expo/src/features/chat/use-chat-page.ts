@@ -18,7 +18,6 @@ import { useGatewayHealth } from '../gateway/use-gateway-health';
 import { useGatewayConnectLanding } from '../gateway/gateway-connect-context';
 import { syncAfterGatewaySettingsSave } from '../gateway/gateway-connection-sync';
 import { useRouteOverrideToast } from '../gateway/use-route-override-toast';
-import { useRouteSwitchToast } from '../gateway/use-route-switch-toast';
 import { useKeyboardVisible } from '../../hooks/use-keyboard-visible';
 import { useMessages, t } from '../../i18n/messages';
 import { fetchChatAgents, readPlaceholderAgents, resolveEffectiveDefaultAgentId } from '../../query/agents';
@@ -58,7 +57,6 @@ export function useChatPage(options: UseChatPageOptions = {}) {
   useDismissOnHardwareBack(router, { enabled: !embedded });
   const queryClient = useQueryClient();
   const { gatewayOnline } = useGatewayHealth();
-  const routeSwitchToast = useRouteSwitchToast();
   const routeOverrideToast = useRouteOverrideToast();
   const gatewayProfiles = useGatewayStore((s) => s.profiles);
   const activeGatewayId = useGatewayStore((s) => s.activeGatewayId);
@@ -126,7 +124,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     if (!embedded || !overlaySessionKey || overlaySessionKey === prevOverlayKeyRef.current) return;
     prevOverlayKeyRef.current = overlaySessionKey;
     activeSessionKeyRef.current = overlaySessionKey;
-    chatSession.streamRecoveryRef.current.cancelRecovery();
+    chatSession.cancelRecovery();
     chatSession.clearAllState();
   }, [embedded, overlaySessionKey, chatSession]);
 
@@ -217,6 +215,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
 
   const composerDisabled =
     Boolean(chatSession.clarifyPrompt) ||
+    chatSession.inputQueued ||
     (!sessionKey && Boolean(bootstrap.bootstrapError));
 
   const pendingSendRef = useRef<{ text: string; attachments?: WireAttachment[] } | null>(null);
@@ -291,7 +290,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
 
   const handleNewChat = useCallback(() => {
     chatSession.activeSessionKeyRef.current = '';
-    chatSession.streamRecoveryRef.current.cancelRecovery();
+    chatSession.cancelRecovery();
     chatSession.clearAllState();
 
     const agentId = resolveEffectiveDefaultAgentId(agentsQuery.data, localDefaultAgentId);
@@ -362,7 +361,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
 
   const prepareAskAiFromHome = useCallback(() => {
     pendingSendRef.current = null;
-    chatSession.streamRecoveryRef.current.cancelRecovery();
+    chatSession.cancelRecovery();
     chatSession.clearAllState();
   }, [chatSession]);
 
@@ -388,6 +387,12 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     },
     [m.chat.messageReadyToEdit, chatSession],
   );
+
+  const handleUserMessageRetry = useCallback((message: Message) => {
+    const payload = buildUserResendPayload(message);
+    if (!payload) return;
+    void chatSession.send(payload.text, payload.attachments);
+  }, [chatSession]);
 
   const handleAssistantCopy = useCallback(
     (text: string) => {
@@ -497,7 +502,6 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     gatewayProfiles,
     activeGatewayId,
     gatewayOnline,
-    routeSwitchToast,
     routeOverrideToast,
 
     // Picker sheets
@@ -519,6 +523,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     handleComposerSend,
     handleUserMessageCopy,
     handleUserMessageEdit,
+    handleUserMessageRetry,
     handleAssistantCopy,
     handleAssistantRegenerate,
     handleGatewaySelect,

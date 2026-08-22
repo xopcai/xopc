@@ -28,6 +28,7 @@ export type ReviewPayload = AgentStreamReviewPayload;
 
 export type AgentStreamCallbacks = {
   onStreamStart: () => void;
+  onReplayGap?: () => void | Promise<void>;
   onUserTranscript?: (payload: AgentStreamUserTranscriptPayload) => void;
   onToken: (delta: string) => void;
   onThinking: (content: string, isDelta: boolean) => void;
