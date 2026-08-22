@@ -1,12 +1,14 @@
 import { Brain, Cable, CircleUserRound, ExternalLink, Handshake, Moon, Pencil, Plus, ShieldCheck, Trash2 } from 'lucide-react';
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
+import { AutosaveStatus } from '@/components/ui/autosave-status';
 import { Button } from '@/components/ui/button';
 import { PageTabs } from '@/components/ui/page-tabs';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useAutosave } from '@/lib/use-autosave';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 import { fetchConnectorInstances, type ConnectorInstance } from '@/features/connectors/connectors-api';
@@ -33,7 +35,7 @@ const copy = {
   en: {
     title: 'About You', subtitle: 'What xopc knows, why it knows it, and how it should work with you.',
     profile: 'Profile', understanding: 'Understanding', collaboration: 'Working agreement', sources: 'Sources', dreaming: 'Background review', privacy: 'Privacy',
-    profileHint: 'Facts you provide directly. These are available across conversations.', save: 'Save', saving: 'Saving…',
+    profileHint: 'Facts you provide directly. These are available across conversations.', done: 'Done', required: 'This field cannot be empty.',
     callName: 'What should xopc call you?', callNamePlaceholder: 'For example: Alex, Joyce, or Dr. Chen',
     role: 'Your role', rolePlaceholder: 'For example: product designer, founder, or engineer',
     primaryGoal: 'What are you mainly trying to achieve?', primaryGoalPlaceholder: 'The outcome you want xopc to optimize for',
@@ -50,12 +52,12 @@ const copy = {
     focuses: 'Current focuses', focusHint: 'Candidate focuses never activate until you confirm them.', activate: 'Activate', pause: 'Pause', complete: 'Complete', noFocuses: 'No focus candidates yet.',
     dreamingHint: 'A deterministic daily review checks expiry, contradictory evidence, and corroborated candidates. It never auto-activates an inference.', mode: 'Background review', on: 'On — propose for review', off: 'Off', reviewTime: 'Daily review time', evidenceThreshold: 'Supporting evidence required', scanLimit: 'Maximum items per run', lastRun: 'Last review', neverRun: 'Not run yet', runCompleted: 'Completed', runFailed: 'Failed', runRunning: 'Running', runItems: 'items',
     privacyHint: 'Choose how generic memory providers handle sensitive content. Structured user understanding applies stricter rules of its own.', sensitivePolicy: 'Sensitive memory writes', policyDeny: 'Do not store', policyConfirm: 'Ask before storing', policyAllow: 'Store when relevant', privacyWarning: 'Secret and regulated content is never stored as structured user understanding, regardless of this setting.',
-    error: 'Could not load your context.', retry: 'Try again', updated: 'Saved',
+    error: 'Could not load your context.', retry: 'Try again',
   },
   zh: {
     title: '关于你', subtitle: '清楚查看 xopc 知道什么、为什么知道，以及应该如何与你协作。',
     profile: '个人资料', understanding: '对你的理解', collaboration: '协作约定', sources: '数据来源', dreaming: '后台复核', privacy: '隐私',
-    profileHint: '由你直接提供的事实，会在不同对话中使用。', save: '保存', saving: '保存中…',
+    profileHint: '由你直接提供的事实，会在不同对话中使用。', done: '完成', required: '此项不能为空。',
     callName: '希望 xopc 如何称呼你？', callNamePlaceholder: '例如：Mic、Joyce、张老师',
     role: '你的角色', rolePlaceholder: '例如：产品设计师、创业者、工程师',
     primaryGoal: '你目前最想达成什么？', primaryGoalPlaceholder: '希望 xopc 优先帮助你实现的结果',
@@ -72,7 +74,7 @@ const copy = {
     focuses: '当前关注', focusHint: '候选关注不会自动生效，只有你确认后才会启用。', activate: '启用', pause: '暂停', complete: '完成', noFocuses: '还没有候选关注。',
     dreamingHint: '每天进行一次确定性复核，检查过期、矛盾证据和得到佐证的候选理解；推断内容不会自动生效。', mode: '后台复核', on: '开启并生成待审核项', off: '关闭', reviewTime: '每日复核时间', evidenceThreshold: '所需支持证据数', scanLimit: '每次最多检查', lastRun: '最近一次复核', neverRun: '尚未运行', runCompleted: '已完成', runFailed: '失败', runRunning: '运行中', runItems: '项',
     privacyHint: '选择通用记忆服务如何处理敏感内容；结构化用户理解有独立且更严格的规则。', sensitivePolicy: '敏感记忆写入', policyDeny: '不保存', policyConfirm: '保存前询问', policyAllow: '相关时允许保存', privacyWarning: '无论这里如何设置，秘密和受监管内容都不会保存为结构化用户理解。',
-    error: '无法加载用户上下文。', retry: '重试', updated: '已保存',
+    error: '无法加载用户上下文。', retry: '重试',
   },
 } as const;
 
@@ -95,6 +97,38 @@ function Card({ children }: { children: React.ReactNode }) {
 
 function Empty({ children }: { children: React.ReactNode }) {
   return <div className="rounded-2xl border border-dashed border-edge px-5 py-10 text-center text-sm text-fg-muted">{children}</div>;
+}
+
+function draftSignature(value: unknown): string {
+  return JSON.stringify(value);
+}
+
+function useSyncedDraft<T>(source: T): [T, React.Dispatch<React.SetStateAction<T>>] {
+  const [draft, setDraft] = useState(source);
+  const baselineSignatureRef = useRef(draftSignature(source));
+  const sourceSignature = draftSignature(source);
+
+  useEffect(() => {
+    if (sourceSignature === baselineSignatureRef.current) return;
+    const previousBaseline = baselineSignatureRef.current;
+    baselineSignatureRef.current = sourceSignature;
+    setDraft((current) => draftSignature(current) === previousBaseline ? source : current);
+  }, [source, sourceSignature]);
+
+  return [draft, setDraft];
+}
+
+type UserProfileDraft = Pick<UserProfile, 'callName' | 'role' | 'primaryGoal' | 'pronouns' | 'timezone' | 'locale'>;
+
+function toUserProfileDraft(profile: UserProfile): UserProfileDraft {
+  return {
+    callName: profile.callName,
+    role: profile.role,
+    primaryGoal: profile.primaryGoal,
+    pronouns: profile.pronouns,
+    timezone: profile.timezone,
+    locale: profile.locale,
+  };
 }
 
 export function UserContextPage() {
@@ -130,8 +164,8 @@ export function UserContextPage() {
           { id: 'privacy', label: t.privacy, icon: ShieldCheck },
         ]}
       />
-      {tab === 'profile' ? <ProfilePanel profile={data.profile} language={language} t={t} onChanged={() => mutate()} /> : null}
-      {tab === 'understanding' ? <UnderstandingPanel items={data.understandings} language={language} t={t} onChanged={() => mutate()} /> : null}
+      {tab === 'profile' ? <ProfilePanel profile={data.profile} language={language} t={t} onChanged={(profile) => mutate((current) => current ? { ...current, profile } : current, { revalidate: false })} /> : null}
+      {tab === 'understanding' ? <UnderstandingPanel items={data.understandings} language={language} t={t} onChanged={(understanding) => understanding ? mutate((current) => current ? { ...current, understandings: current.understandings.map((item) => item.id === understanding.id ? understanding : item) } : current, { revalidate: false }) : mutate()} /> : null}
       {tab === 'collaboration' ? <RulesPanel rules={data.rules} language={language} t={t} onChanged={() => mutate()} /> : null}
       {tab === 'sources' ? <SourcesPanel t={t} /> : null}
       {tab === 'dreaming' ? <DreamingPanel lastRun={data.consolidation?.lastRun ?? null} t={t} /> : null}
@@ -144,57 +178,89 @@ function ProfilePanel({ profile, language, t, onChanged }: {
   profile: UserProfile;
   language: 'en' | 'zh';
   t: typeof copy.en | typeof copy.zh;
-  onChanged: () => Promise<unknown>;
+  onChanged: (profile: UserProfile) => Promise<unknown>;
 }) {
-  const [draft, setDraft] = useState(profile);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  useEffect(() => setDraft(profile), [profile]);
+  const sourceDraft = useMemo(() => toUserProfileDraft(profile), [profile]);
+  const [draft, setDraft] = useSyncedDraft(sourceDraft);
+  const autosave = useAutosave({
+    value: draft,
+    dirty: draftSignature(draft) !== draftSignature(sourceDraft),
+    delayMs: 500,
+    onSave: async (snapshot) => {
+      const result = await updateUserProfile({ ...snapshot, accessibility: profile.accessibility });
+      await onChanged(result.profile);
+    },
+  });
   const field = (key: 'callName' | 'role' | 'pronouns' | 'timezone' | 'locale', label: string, placeholder?: string) => (
-    <label className="space-y-1.5 text-sm"><span className="font-medium text-fg">{label}</span><input className={inputClass} placeholder={placeholder} value={draft[key]} onChange={(event) => setDraft({ ...draft, [key]: event.target.value })} /></label>
+    <label className="space-y-1.5 text-sm"><span className="font-medium text-fg">{label}</span><input className={inputClass} placeholder={placeholder} value={draft[key]} onChange={(event) => setDraft((current) => ({ ...current, [key]: event.target.value }))} /></label>
   );
   return <Card>
-    <p className="mb-5 text-sm leading-6 text-fg-muted">{t.profileHint}</p>
-    <div className="grid gap-4 sm:grid-cols-2">
-      {field('callName', t.callName, t.callNamePlaceholder)}
-      {field('role', t.role, t.rolePlaceholder)}
-      <label className="space-y-1.5 text-sm sm:col-span-2"><span className="font-medium text-fg">{t.primaryGoal}</span><textarea className={inputClass} rows={3} placeholder={t.primaryGoalPlaceholder} value={draft.primaryGoal} onChange={(event) => setDraft({ ...draft, primaryGoal: event.target.value })} /></label>
-      {language === 'en' ? field('pronouns', t.pronouns, t.pronounsPlaceholder) : null}
-      <label className="space-y-1.5 text-sm"><span className="font-medium text-fg">{t.timezone}</span><div className="flex gap-2"><input className={`${inputClass} min-w-0 flex-1`} value={draft.timezone} onChange={(event) => setDraft({ ...draft, timezone: event.target.value })} /><Button className="shrink-0 whitespace-nowrap" onClick={() => setDraft({ ...draft, timezone: detectBrowserTimezone() })}>{t.detect}</Button></div></label>
-      {field('locale', t.locale)}
+    <div onBlurCapture={autosave.onBlurCapture}>
+      <p className="mb-5 text-sm leading-6 text-fg-muted">{t.profileHint}</p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        {field('callName', t.callName, t.callNamePlaceholder)}
+        {field('role', t.role, t.rolePlaceholder)}
+        <label className="space-y-1.5 text-sm sm:col-span-2"><span className="font-medium text-fg">{t.primaryGoal}</span><textarea className={inputClass} rows={3} placeholder={t.primaryGoalPlaceholder} value={draft.primaryGoal} onChange={(event) => setDraft((current) => ({ ...current, primaryGoal: event.target.value }))} /></label>
+        {language === 'en' ? field('pronouns', t.pronouns, t.pronounsPlaceholder) : null}
+        <label className="space-y-1.5 text-sm"><span className="font-medium text-fg">{t.timezone}</span><div className="flex gap-2"><input className={`${inputClass} min-w-0 flex-1`} value={draft.timezone} onChange={(event) => setDraft((current) => ({ ...current, timezone: event.target.value }))} /><Button className="shrink-0 whitespace-nowrap" onClick={() => setDraft((current) => ({ ...current, timezone: detectBrowserTimezone() }))}>{t.detect}</Button></div></label>
+        {field('locale', t.locale)}
+      </div>
+      <div className="mt-5 flex justify-end"><AutosaveStatus status={autosave.status} error={autosave.error} /></div>
     </div>
-    <div className="mt-5 flex items-center gap-3"><Button variant="primary" disabled={saving} onClick={async () => { setSaving(true); setSaved(false); try { await updateUserProfile({ callName: draft.callName, role: draft.role, primaryGoal: draft.primaryGoal, pronouns: draft.pronouns, timezone: draft.timezone, locale: draft.locale, accessibility: draft.accessibility }); await onChanged(); setSaved(true); } finally { setSaving(false); } }}>{saving ? t.saving : t.save}</Button>{saved ? <span className="text-sm text-fg-muted">{t.updated}</span> : null}</div>
   </Card>;
 }
 
-function UnderstandingPanel({ items, language, t, onChanged }: { items: UserUnderstanding[]; language: 'en' | 'zh'; t: typeof copy.en | typeof copy.zh; onChanged: () => Promise<unknown> }) {
+function UnderstandingPanel({ items, language, t, onChanged }: { items: UserUnderstanding[]; language: 'en' | 'zh'; t: typeof copy.en | typeof copy.zh; onChanged: (understanding?: UserUnderstanding) => Promise<unknown> }) {
   const [adding, setAdding] = useState(false);
   const [statement, setStatement] = useState('');
   const [kind, setKind] = useState<UnderstandingKind>('preference');
-  const [editing, setEditing] = useState<string | null>(null);
-  const [editText, setEditText] = useState('');
-  const [deleting, setDeleting] = useState<string | null>(null);
   const active = useMemo(() => items.filter((item) => item.status === 'active'), [items]);
   const review = useMemo(() => items.filter((item) => ['candidate', 'needs_review', 'stale'].includes(item.status)), [items]);
   const submit = async (event: FormEvent) => { event.preventDefault(); if (!statement.trim()) return; await createUnderstanding({ statement, kind }); setStatement(''); setAdding(false); await onChanged(); };
-  const renderItem = (item: UserUnderstanding) => <Card key={item.id}>
-    <div className="flex items-start justify-between gap-3"><div className="min-w-0 flex-1">
-      <div className="mb-2 flex flex-wrap items-center gap-2"><span className="rounded-full bg-surface-muted px-2 py-0.5 text-[11px] font-medium text-fg-muted">{kindLabels[item.kind][language]}</span><span className="text-xs text-fg-subtle">{item.explicitness === 'explicit' ? t.sourceExplicit : item.explicitness === 'observed' ? t.sourceObserved : t.sourceInferred}</span></div>
-      {editing === item.id ? <textarea className={inputClass} value={editText} onChange={(event) => setEditText(event.target.value)} rows={3} /> : <p className="text-sm leading-6 text-fg">{item.statement}</p>}
-    </div></div>
-    <div className="mt-4 flex flex-wrap gap-2">
-      {editing === item.id ? <><Button variant="primary" onClick={async () => { await updateUnderstanding(item.id, { statement: editText }); setEditing(null); await onChanged(); }}>{t.save}</Button><Button onClick={() => setEditing(null)}>{t.cancel}</Button></> : <Button variant="ghost" onClick={() => { setEditing(item.id); setEditText(item.statement); }}><Pencil className="size-3.5" />{t.edit}</Button>}
-      {item.status !== 'active' ? <><Button variant="primary" onClick={async () => { await updateUnderstanding(item.id, { status: 'active' }); await onChanged(); }}>{t.confirm}</Button><Button onClick={async () => { await updateUnderstanding(item.id, { status: 'rejected' }); await onChanged(); }}>{t.reject}</Button></> : null}
-      <Button variant="ghost" className="text-danger" onClick={async () => { if (deleting !== item.id) { setDeleting(item.id); return; } await deleteUnderstanding(item.id); setDeleting(null); await onChanged(); }}><Trash2 className="size-3.5" />{deleting === item.id ? t.confirmDelete : t.delete}</Button>
-    </div>
-  </Card>;
   return <div className="space-y-5">
     <div className="flex items-start justify-between gap-4"><p className="max-w-2xl text-sm leading-6 text-fg-muted">{t.understoodHint}</p><Button variant="primary" onClick={() => setAdding(true)}><Plus className="size-4" />{t.addUnderstanding}</Button></div>
     <FocusPanel t={t} />
     {adding ? <Card><form className="space-y-3" onSubmit={submit}><textarea autoFocus className={inputClass} rows={3} placeholder={t.statement} value={statement} onChange={(event) => setStatement(event.target.value)} /><Select value={kind} onChange={(event) => setKind(event.target.value as UnderstandingKind)}>{Object.entries(kindLabels).map(([value, label]) => <SelectOption key={value} value={value}>{label[language]}</SelectOption>)}</Select><div className="flex gap-2"><Button type="submit" variant="primary">{t.add}</Button><Button onClick={() => setAdding(false)}>{t.cancel}</Button></div></form></Card> : null}
-    {review.length ? <section className="space-y-3"><h2 className="text-sm font-semibold text-fg">{t.review} · {review.length}</h2>{review.map(renderItem)}</section> : null}
-    <section className="space-y-3"><h2 className="text-sm font-semibold text-fg">{t.active} · {active.length}</h2>{active.length ? active.map(renderItem) : <Empty>{t.emptyUnderstanding}</Empty>}</section>
+    {review.length ? <section className="space-y-3"><h2 className="text-sm font-semibold text-fg">{t.review} · {review.length}</h2>{review.map((item) => <UnderstandingItemCard key={item.id} item={item} language={language} t={t} onChanged={onChanged} />)}</section> : null}
+    <section className="space-y-3"><h2 className="text-sm font-semibold text-fg">{t.active} · {active.length}</h2>{active.length ? active.map((item) => <UnderstandingItemCard key={item.id} item={item} language={language} t={t} onChanged={onChanged} />) : <Empty>{t.emptyUnderstanding}</Empty>}</section>
   </div>;
+}
+
+function UnderstandingItemCard({ item, language, t, onChanged }: {
+  item: UserUnderstanding;
+  language: 'en' | 'zh';
+  t: typeof copy.en | typeof copy.zh;
+  onChanged: (understanding?: UserUnderstanding) => Promise<unknown>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [draft, setDraft] = useSyncedDraft(item.statement);
+  const autosave = useAutosave({
+    value: draft,
+    dirty: draft !== item.statement,
+    enabled: editing,
+    delayMs: 500,
+    validate: (statement) => statement.trim() ? null : t.required,
+    onSave: async (statement) => {
+      const result = await updateUnderstanding(item.id, { statement });
+      await onChanged(result.understanding);
+    },
+  });
+
+  return <Card>
+    <div onBlurCapture={autosave.onBlurCapture}>
+      <div className="flex items-start justify-between gap-3"><div className="min-w-0 flex-1">
+        <div className="mb-2 flex flex-wrap items-center gap-2"><span className="rounded-full bg-surface-muted px-2 py-0.5 text-[11px] font-medium text-fg-muted">{kindLabels[item.kind][language]}</span><span className="text-xs text-fg-subtle">{item.explicitness === 'explicit' ? t.sourceExplicit : item.explicitness === 'observed' ? t.sourceObserved : t.sourceInferred}</span></div>
+        {editing ? <textarea autoFocus className={inputClass} value={draft} onChange={(event) => setDraft(event.target.value)} rows={3} /> : <p className="text-sm leading-6 text-fg">{draft}</p>}
+      </div></div>
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        {editing ? <Button variant="ghost" onClick={() => { autosave.flush(); setEditing(false); }}>{t.done}</Button> : <Button variant="ghost" onClick={() => setEditing(true)}><Pencil className="size-3.5" />{t.edit}</Button>}
+        {item.status !== 'active' ? <><Button variant="primary" onClick={async () => { const result = await updateUnderstanding(item.id, { status: 'active' }); await onChanged(result.understanding); }}>{t.confirm}</Button><Button onClick={async () => { const result = await updateUnderstanding(item.id, { status: 'rejected' }); await onChanged(result.understanding); }}>{t.reject}</Button></> : null}
+        <Button variant="ghost" className="text-danger" onClick={async () => { if (!deleting) { setDeleting(true); return; } await deleteUnderstanding(item.id); setDeleting(false); await onChanged(); }}><Trash2 className="size-3.5" />{deleting ? t.confirmDelete : t.delete}</Button>
+        {editing || autosave.status !== 'idle' ? <AutosaveStatus className="ml-auto" status={autosave.status} error={autosave.error} /> : null}
+      </div>
+    </div>
+  </Card>;
 }
 
 function FocusPanel({ t }: { t: typeof copy.en | typeof copy.zh }) {
@@ -253,41 +319,47 @@ function SourcesPanel({ t }: { t: typeof copy.en | typeof copy.zh }) {
 
 function DreamingPanel({ lastRun, t }: { lastRun: ContextConsolidationRun | null; t: typeof copy.en | typeof copy.zh }) {
   const { data, error, isLoading, mutate } = useSWR<UserContextSettings>('you-context-settings', fetchUserContextSettings);
-  const [draft, setDraft] = useState<UserContextSettings['dreaming'] | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  useEffect(() => { if (data) setDraft(data.dreaming); }, [data]);
+  const sourceDraft = data?.dreaming ?? null;
+  const [draft, setDraft] = useSyncedDraft<UserContextSettings['dreaming'] | null>(sourceDraft);
+  const autosave = useAutosave<UserContextSettings['dreaming']>({
+    value: draft,
+    dirty: Boolean(draft && sourceDraft && draftSignature(draft) !== draftSignature(sourceDraft)),
+    delayMs: 500,
+    onSave: async (snapshot) => {
+      await updateUserContextSettings({ dreaming: snapshot });
+      await mutate();
+    },
+  });
   if (error) return <Empty>{t.error} <button className="text-accent hover:underline" onClick={() => void mutate()}>{t.retry}</button></Empty>;
   if (isLoading || !draft) return <Skeleton className="h-72 rounded-2xl" />;
   const runStatus = lastRun?.status === 'completed' ? t.runCompleted : lastRun?.status === 'failed' ? t.runFailed : t.runRunning;
-  const save = async () => {
-    setSaving(true); setSaved(false);
-    try { await updateUserContextSettings({ dreaming: draft }); await mutate(); setSaved(true); } finally { setSaving(false); }
-  };
   return <div className="space-y-5">
     <p className="max-w-2xl text-sm leading-6 text-fg-muted">{t.dreamingHint}</p>
-    <Card><div className="grid gap-4 sm:grid-cols-2">
-      <label className="space-y-1.5 text-sm"><span className="font-medium text-fg">{t.mode}</span><Select value={draft.mode} onChange={(event) => setDraft({ ...draft, mode: event.target.value as 'off' | 'review' })}><SelectOption value="review">{t.on}</SelectOption><SelectOption value="off">{t.off}</SelectOption></Select></label>
-      <label className="space-y-1.5 text-sm"><span className="font-medium text-fg">{t.reviewTime}</span><input type="time" className={inputClass} value={draft.schedule.time} onChange={(event) => setDraft({ ...draft, schedule: { time: event.target.value } })} /></label>
-      <label className="space-y-1.5 text-sm sm:col-span-2"><span className="font-medium text-fg">{t.timezone}</span><div className="flex gap-2"><input className={`${inputClass} min-w-0 flex-1`} value={draft.timezone ?? ''} placeholder={detectBrowserTimezone()} onChange={(event) => setDraft({ ...draft, timezone: event.target.value || undefined })} /><Button className="shrink-0 whitespace-nowrap" onClick={() => setDraft({ ...draft, timezone: detectBrowserTimezone() })}>{t.detect}</Button></div></label>
-      <label className="space-y-1.5 text-sm"><span className="font-medium text-fg">{t.evidenceThreshold}</span><input type="number" min={2} max={10} className={inputClass} value={draft.minEvidenceSources} onChange={(event) => setDraft({ ...draft, minEvidenceSources: Number(event.target.value) })} /></label>
-      <label className="space-y-1.5 text-sm"><span className="font-medium text-fg">{t.scanLimit}</span><input type="number" min={1} max={2000} className={inputClass} value={draft.limit} onChange={(event) => setDraft({ ...draft, limit: Number(event.target.value) })} /></label>
-    </div><div className="mt-5 flex items-center gap-3"><Button variant="primary" disabled={saving} onClick={() => void save()}>{saving ? t.saving : t.save}</Button>{saved ? <span className="text-sm text-fg-muted">{t.updated}</span> : null}</div></Card>
+    <Card><div onBlurCapture={autosave.onBlurCapture}><div className="grid gap-4 sm:grid-cols-2">
+      <label className="space-y-1.5 text-sm"><span className="font-medium text-fg">{t.mode}</span><Select value={draft.mode} onChange={(event) => setDraft((current) => current ? { ...current, mode: event.target.value as 'off' | 'review' } : current)}><SelectOption value="review">{t.on}</SelectOption><SelectOption value="off">{t.off}</SelectOption></Select></label>
+      <label className="space-y-1.5 text-sm"><span className="font-medium text-fg">{t.reviewTime}</span><input type="time" className={inputClass} value={draft.schedule.time} onChange={(event) => setDraft((current) => current ? { ...current, schedule: { time: event.target.value } } : current)} /></label>
+      <label className="space-y-1.5 text-sm sm:col-span-2"><span className="font-medium text-fg">{t.timezone}</span><div className="flex gap-2"><input className={`${inputClass} min-w-0 flex-1`} value={draft.timezone ?? ''} placeholder={detectBrowserTimezone()} onChange={(event) => setDraft((current) => current ? { ...current, timezone: event.target.value || undefined } : current)} /><Button className="shrink-0 whitespace-nowrap" onClick={() => setDraft((current) => current ? { ...current, timezone: detectBrowserTimezone() } : current)}>{t.detect}</Button></div></label>
+      <label className="space-y-1.5 text-sm"><span className="font-medium text-fg">{t.evidenceThreshold}</span><input type="number" min={2} max={10} className={inputClass} value={draft.minEvidenceSources} onChange={(event) => setDraft((current) => current ? { ...current, minEvidenceSources: Number(event.target.value) } : current)} /></label>
+      <label className="space-y-1.5 text-sm"><span className="font-medium text-fg">{t.scanLimit}</span><input type="number" min={1} max={2000} className={inputClass} value={draft.limit} onChange={(event) => setDraft((current) => current ? { ...current, limit: Number(event.target.value) } : current)} /></label>
+    </div><div className="mt-5 flex justify-end"><AutosaveStatus status={autosave.status} error={autosave.error} /></div></div></Card>
     <Card><p className="text-sm font-medium text-fg">{t.lastRun}</p>{lastRun ? <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-fg-muted"><span>{runStatus}</span><span>·</span><time>{new Date(lastRun.startedAt).toLocaleString()}</time>{typeof lastRun.metrics.scanned === 'number' ? <><span>·</span><span>{String(lastRun.metrics.scanned)} {t.runItems}</span></> : null}</div> : <p className="mt-2 text-sm text-fg-muted">{t.neverRun}</p>}</Card>
   </div>;
 }
 
 function PrivacyPanel({ t }: { t: typeof copy.en | typeof copy.zh }) {
   const { data, error, isLoading, mutate } = useSWR<UserContextSettings>('you-context-settings', fetchUserContextSettings);
-  const [policy, setPolicy] = useState<UserContextSettings['privacy']['sensitiveWritePolicy'] | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  useEffect(() => { if (data) setPolicy(data.privacy.sensitiveWritePolicy); }, [data]);
+  const sourcePolicy = data?.privacy.sensitiveWritePolicy ?? null;
+  const [policy, setPolicy] = useSyncedDraft<UserContextSettings['privacy']['sensitiveWritePolicy'] | null>(sourcePolicy);
+  const autosave = useAutosave<UserContextSettings['privacy']['sensitiveWritePolicy']>({
+    value: policy,
+    dirty: Boolean(policy && sourcePolicy && policy !== sourcePolicy),
+    delayMs: 350,
+    onSave: async (sensitiveWritePolicy) => {
+      await updateUserContextSettings({ privacy: { sensitiveWritePolicy } });
+      await mutate();
+    },
+  });
   if (error) return <Empty>{t.error} <button className="text-accent hover:underline" onClick={() => void mutate()}>{t.retry}</button></Empty>;
   if (isLoading || !policy) return <Skeleton className="h-56 rounded-2xl" />;
-  const save = async () => {
-    setSaving(true); setSaved(false);
-    try { await updateUserContextSettings({ privacy: { sensitiveWritePolicy: policy } }); await mutate(); setSaved(true); } finally { setSaving(false); }
-  };
-  return <div className="space-y-5"><p className="max-w-2xl text-sm leading-6 text-fg-muted">{t.privacyHint}</p><Card><label className="block max-w-xl space-y-1.5 text-sm"><span className="font-medium text-fg">{t.sensitivePolicy}</span><Select value={policy} onChange={(event) => setPolicy(event.target.value as typeof policy)}><SelectOption value="deny">{t.policyDeny}</SelectOption><SelectOption value="confirm">{t.policyConfirm}</SelectOption><SelectOption value="allow">{t.policyAllow}</SelectOption></Select></label><p className="mt-3 max-w-2xl text-xs leading-5 text-fg-subtle">{t.privacyWarning}</p><div className="mt-5 flex items-center gap-3"><Button variant="primary" disabled={saving} onClick={() => void save()}>{saving ? t.saving : t.save}</Button>{saved ? <span className="text-sm text-fg-muted">{t.updated}</span> : null}</div></Card></div>;
+  return <div className="space-y-5"><p className="max-w-2xl text-sm leading-6 text-fg-muted">{t.privacyHint}</p><Card><div onBlurCapture={autosave.onBlurCapture}><label className="block max-w-xl space-y-1.5 text-sm"><span className="font-medium text-fg">{t.sensitivePolicy}</span><Select value={policy} onChange={(event) => setPolicy(event.target.value as typeof policy)}><SelectOption value="deny">{t.policyDeny}</SelectOption><SelectOption value="confirm">{t.policyConfirm}</SelectOption><SelectOption value="allow">{t.policyAllow}</SelectOption></Select></label><p className="mt-3 max-w-2xl text-xs leading-5 text-fg-subtle">{t.privacyWarning}</p><div className="mt-5 flex justify-end"><AutosaveStatus status={autosave.status} error={autosave.error} /></div></div></Card></div>;
 }

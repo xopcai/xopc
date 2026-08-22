@@ -90,7 +90,11 @@ INSERT INTO work_understanding_evidence_v117 (
   source_ref, observation, content_hash, observed_at, collected_at, sensitivity
 )
 SELECT
-  evidence_id, investigation_id, NULL, project_id, source_type,
+  evidence_id, investigation_id, NULL, project_id,
+  CASE source_type
+    WHEN 'personal_context' THEN 'understanding_source'
+    ELSE source_type
+  END,
   source_ref, observation, content_hash, observed_at, collected_at, sensitivity
 FROM work_understanding_evidence;
 

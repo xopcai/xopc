@@ -213,6 +213,104 @@ describe('SQLite migrations', () => {
     }
   });
 
+  it('upgrades v116 personal-context evidence to the unified source type', () => {
+    const db = openEmptyDb();
+    ensureSchemaMetaTable(db);
+    db.exec(`
+      PRAGMA foreign_keys = ON;
+      CREATE TABLE user_profiles (
+        principal_id TEXT PRIMARY KEY,
+        call_name TEXT NOT NULL DEFAULT '',
+        pronouns TEXT NOT NULL DEFAULT '',
+        timezone TEXT NOT NULL DEFAULT '',
+        locale TEXT NOT NULL DEFAULT '',
+        accessibility_json TEXT NOT NULL DEFAULT '{}',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE TABLE projects (project_id TEXT PRIMARY KEY);
+      CREATE TABLE work_discovery_runs (id TEXT PRIMARY KEY);
+      CREATE TABLE work_discovery_sources (
+        source_id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL CHECK (kind = 'directory'),
+        root_path TEXT,
+        display_name TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'revoked')),
+        scope_json TEXT NOT NULL DEFAULT '{}',
+        fingerprint_json TEXT,
+        last_scanned_at INTEGER,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        UNIQUE(kind, root_path)
+      );
+      CREATE TABLE work_discovery_source_refreshes (
+        refresh_id TEXT PRIMARY KEY,
+        source_id TEXT NOT NULL REFERENCES work_discovery_sources(source_id) ON DELETE CASCADE,
+        discovery_run_id TEXT REFERENCES work_discovery_runs(id) ON DELETE SET NULL,
+        changed INTEGER NOT NULL CHECK (changed IN (0, 1)),
+        previous_fingerprint_json TEXT,
+        current_fingerprint_json TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('checked', 'queued', 'completed', 'failed')),
+        checked_at INTEGER NOT NULL
+      );
+      CREATE TABLE work_understanding_investigations (
+        investigation_id TEXT PRIMARY KEY,
+        discovery_run_id TEXT NOT NULL UNIQUE REFERENCES work_discovery_runs(id) ON DELETE CASCADE,
+        status TEXT NOT NULL,
+        plan_json TEXT NOT NULL DEFAULT '{}',
+        budget_json TEXT NOT NULL,
+        tool_call_count INTEGER NOT NULL DEFAULT 0,
+        content_chars_read INTEGER NOT NULL DEFAULT 0,
+        error_message TEXT,
+        started_at INTEGER NOT NULL,
+        completed_at INTEGER
+      );
+      CREATE TABLE work_understanding_evidence (
+        evidence_id TEXT PRIMARY KEY,
+        investigation_id TEXT NOT NULL REFERENCES work_understanding_investigations(investigation_id) ON DELETE CASCADE,
+        source_grant_id TEXT REFERENCES work_discovery_sources(source_id) ON DELETE SET NULL,
+        project_id TEXT REFERENCES projects(project_id) ON DELETE SET NULL,
+        source_type TEXT NOT NULL CHECK (source_type IN (
+          'file', 'git', 'project_metadata', 'personal_context', 'session', 'user_statement'
+        )),
+        source_ref TEXT NOT NULL,
+        observation TEXT NOT NULL,
+        content_hash TEXT,
+        observed_at INTEGER,
+        collected_at INTEGER NOT NULL,
+        sensitivity TEXT NOT NULL DEFAULT 'normal' CHECK (sensitivity IN ('normal', 'restricted'))
+      );
+      INSERT INTO work_discovery_runs VALUES ('run-1');
+      INSERT INTO work_discovery_sources (
+        source_id, kind, root_path, display_name, created_at, updated_at
+      ) VALUES ('source-1', 'directory', '/workspace', 'Workspace', 1, 1);
+      INSERT INTO work_understanding_investigations (
+        investigation_id, discovery_run_id, status, budget_json, started_at
+      ) VALUES ('investigation-1', 'run-1', 'completed', '{}', 1);
+      INSERT INTO work_understanding_evidence (
+        evidence_id, investigation_id, source_grant_id, source_type,
+        source_ref, observation, collected_at
+      ) VALUES (
+        'evidence-1', 'investigation-1', 'source-1', 'personal_context',
+        'notes:1', 'The user is focused on migration safety.', 1
+      );
+    `);
+    setSchemaVersion(db, 116);
+
+    expect(applyPendingMigrations(db, { targetVersion: 117 })).toBe(117);
+    expect(db.prepare(`
+      SELECT evidence_id, source_grant_id, source_type, source_ref, observation
+      FROM work_understanding_evidence
+    `).get()).toEqual({
+      evidence_id: 'evidence-1',
+      source_grant_id: null,
+      source_type: 'understanding_source',
+      source_ref: 'notes:1',
+      observation: 'The user is focused on migration safety.',
+    });
+    expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+  });
+
   it('upgrades v64 knowledge item identity without losing dependent evidence', () => {
     const db = openEmptyDb();
     ensureSchemaMetaTable(db);
