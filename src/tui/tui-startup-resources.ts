@@ -10,7 +10,6 @@ import {
   resolveAgentProfileDir,
   resolveBundledSkillsDir,
   resolveStateDir,
-  resolveUserProfilePath,
 } from '../config/paths.js';
 import { listConnectorInstances } from '../connectors/instances.js';
 import type { Config } from '../config/schema.js';
@@ -31,7 +30,7 @@ export function collectTuiStartupResources(
   const workspaceDir = profile.resolvedWorkspacePath || getWorkspacePath(config);
 
   const context = uniqueSorted(
-    resolveBootstrapFilesSync({ profileDir, userProfilePath: resolveUserProfilePath(), sessionKey })
+    resolveBootstrapFilesSync({ profileDir, sessionKey })
       .filter((file) => !file.missing)
       .map((file) => file.name || basename(file.path)),
   );

@@ -29,7 +29,7 @@ import { resolveProviderApiKeySync } from '../auth/sync-provider-auth.js';
 import { resolveModel, getDefaultModelSync, getApiKeySync } from '../providers/index.js';
 import { createExtensionAwareStreamFn } from '../providers/extension-stream-bridge.js';
 import { CredentialResolver } from '../auth/credentials.js';
-import { resolveBundledSkillsDir, resolveStateDir, resolveUserProfilePath } from '../config/paths.js';
+import { resolveBundledSkillsDir, resolveStateDir } from '../config/paths.js';
 import { extractTextContent } from './context/workspace.js';
 import { buildExecutionScopeContextForPrompt } from './context/execution-scope.js';
 import { clearBootstrapSnapshot, resolveBootstrapContextSync } from './bootstrap/bootstrap-files.js';
@@ -316,7 +316,6 @@ export class AgentManager implements AgentInstanceGateway {
   private isUserContextEnabledForSession(sessionKey: string): boolean {
     return Boolean(
       this.config.config?.userContext.enabled
-      && this.config.config.userContext.memory.mode !== 'off'
       && getSessionConfig(sessionKey)?.userContextMode !== 'off',
     );
   }
@@ -708,7 +707,6 @@ export class AgentManager implements AgentInstanceGateway {
     const contextInjection = 'always';
     const { contextFiles } = resolveBootstrapContextSync({
       profileDir,
-      userProfilePath: resolveUserProfilePath(),
       config: cfg,
       sessionKey,
       excludeHeartbeat: excludeHeartbeat ?? !heartbeatEnabled,

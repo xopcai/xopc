@@ -156,13 +156,13 @@ export function registerWorkDiscoveryRoutes(authenticated: Hono, deps: Authentic
     const decisions = rawDecisions.flatMap((value) => {
       if (!value || typeof value !== 'object') return [];
       const item = value as Record<string, unknown>;
-      const memoryRecordId = typeof item.memoryRecordId === 'string' ? item.memoryRecordId.trim() : '';
+      const understandingId = typeof item.understandingId === 'string' ? item.understandingId.trim() : '';
       const status: 'accepted' | 'edited' | 'rejected' | undefined = item.status === 'accepted' || item.status === 'edited' || item.status === 'rejected'
         ? item.status
         : undefined;
-      if (!memoryRecordId || !status) return [];
+      if (!understandingId || !status) return [];
       return [{
-        memoryRecordId,
+        understandingId,
         status,
         ...(typeof item.statement === 'string' ? { statement: item.statement } : {}),
       }];

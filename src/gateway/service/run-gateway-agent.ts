@@ -111,7 +111,6 @@ export async function *runGatewayAgent(
     updateInteractionStateFromMessage({ sessionKey: webchatSessionKey, message });
     recordExplicitRelationshipFollowUp({
       sessionKey: webchatSessionKey,
-      sourceAgentId: parsedSession.agentId,
       message,
     });
     const executionContext = resolveExecutionContext({

@@ -1,0 +1,95 @@
+import { USER_CONTEXT_PRINCIPAL_ID } from '../../user-context/domain.js';
+import { getSqliteDatabase } from './transaction.js';
+
+export type UserUnderstandingQualityMetrics = {
+  windowDays: number;
+  since: string;
+  records: {
+    total: number;
+    candidate: number;
+    active: number;
+    rejected: number;
+    needsReview: number;
+    stale: number;
+    archived: number;
+    agingCandidates: number;
+    explicit: number;
+    inferred: number;
+    averageConfidence: number | null;
+  };
+  decisions: { total: number; acceptanceRate: number | null };
+  recall: {
+    total: number;
+    helpful: number;
+    notHelpful: number;
+    mixed: number;
+    irrelevant: number;
+    helpfulRate: number | null;
+  };
+};
+
+function rate(numerator: number, denominator: number): number | null {
+  return denominator > 0 ? Math.round((numerator / denominator) * 10_000) / 10_000 : null;
+}
+
+export function summarizeUserUnderstandingQuality(options: {
+  windowDays?: number;
+  agingCandidateDays?: number;
+  nowMs?: number;
+} = {}): UserUnderstandingQualityMetrics {
+  const nowMs = options.nowMs ?? Date.now();
+  const windowDays = Math.max(1, Math.min(365, Math.floor(options.windowDays ?? 30)));
+  const sinceMs = nowMs - windowDays * 86_400_000;
+  const agingDays = Math.max(1, Math.min(windowDays, Math.floor(options.agingCandidateDays ?? 7)));
+  const agingCutoff = nowMs - agingDays * 86_400_000;
+  const db = getSqliteDatabase();
+  const rows = db.prepare(`SELECT status, explicitness, confidence, created_at, updated_at
+    FROM user_understandings WHERE principal_id = ?`).all(USER_CONTEXT_PRINCIPAL_ID) as Array<{
+      status: string; explicitness: string; confidence: number; created_at: number; updated_at: number;
+    }>;
+  const records: UserUnderstandingQualityMetrics['records'] = {
+    total: rows.length, candidate: 0, active: 0, rejected: 0, needsReview: 0,
+    stale: 0, archived: 0, agingCandidates: 0, explicit: 0, inferred: 0,
+    averageConfidence: rows.length
+      ? Math.round((rows.reduce((sum, row) => sum + row.confidence, 0) / rows.length) * 10_000) / 10_000
+      : null,
+  };
+  for (const row of rows) {
+    if (row.status === 'candidate') records.candidate += 1;
+    if (row.status === 'active') records.active += 1;
+    if (row.status === 'rejected') records.rejected += 1;
+    if (row.status === 'needs_review') records.needsReview += 1;
+    if (row.status === 'stale') records.stale += 1;
+    if (row.status === 'archived') records.archived += 1;
+    if (row.status === 'candidate' && row.created_at <= agingCutoff) records.agingCandidates += 1;
+    if (row.explicitness === 'explicit') records.explicit += 1;
+    if (row.explicitness === 'inferred') records.inferred += 1;
+  }
+  const recentDecisions = rows.filter((row) =>
+    (row.status === 'active' || row.status === 'rejected') && row.updated_at >= sinceMs);
+  const accepted = recentDecisions.filter((row) => row.status === 'active').length;
+  const feedback = db.prepare(`SELECT DISTINCT f.feedback_id, f.rating
+    FROM context_feedback f
+    JOIN context_runs r ON r.context_run_id = f.context_run_id
+    WHERE f.created_at >= ? AND EXISTS (
+      SELECT 1 FROM context_run_items i
+      WHERE i.context_run_id = r.context_run_id
+        AND i.object_type = 'understanding' AND i.decision = 'selected'
+    )`).all(sinceMs) as Array<{ feedback_id: string; rating: string }>;
+  const recall: UserUnderstandingQualityMetrics['recall'] = {
+    total: feedback.length,
+    helpful: feedback.filter((row) => row.rating === 'helpful').length,
+    notHelpful: feedback.filter((row) => ['wrong', 'stale', 'sensitive'].includes(row.rating)).length,
+    mixed: 0,
+    irrelevant: feedback.filter((row) => row.rating === 'irrelevant').length,
+    helpfulRate: null,
+  };
+  recall.helpfulRate = rate(recall.helpful, recall.total);
+  return {
+    windowDays,
+    since: new Date(sinceMs).toISOString(),
+    records,
+    decisions: { total: recentDecisions.length, acceptanceRate: rate(accepted, recentDecisions.length) },
+    recall,
+  };
+}

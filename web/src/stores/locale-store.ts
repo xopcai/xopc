@@ -38,9 +38,9 @@ function syncGatewayLanguage(language: StoredLanguage): void {
       method: 'POST',
       body: JSON.stringify({ language }),
     }),
-    fetchJson(apiUrl('/api/you/preferences'), {
+    fetchJson(apiUrl('/api/you/profile'), {
       method: 'PATCH',
-      body: JSON.stringify({ responseLanguage: language === 'zh' ? 'zh-CN' : 'en' }),
+      body: JSON.stringify({ locale: language === 'zh' ? 'zh-CN' : 'en' }),
     }),
   ];
   void Promise.allSettled(requests);

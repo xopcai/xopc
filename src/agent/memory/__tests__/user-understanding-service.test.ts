@@ -1,170 +1,93 @@
-import { describe, expect, it, vi } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
-  extractExplicitUnderstandingCandidates,
-  UserUnderstandingService,
+  closeXopcDatabase, createUnderstanding, getUnderstanding, listUnderstandings,
+  openXopcDatabase, resetXopcDatabaseSingletonForTest,
+} from '../../../storage/sqlite/index.js';
+import {
+  extractExplicitUnderstandingCandidates, UserUnderstandingService,
 } from '../understanding/service.js';
 
+const BASE_CANDIDATE = {
+  confidence: 0.9,
+  importance: 0.8,
+  explicitness: 'explicit' as const,
+  durability: 'durable' as const,
+  sensitivity: 'normal' as const,
+  disclosurePolicy: 'referenceable' as const,
+};
+
 describe('UserUnderstandingService', () => {
-  it('extracts an explicit preference with policy metadata', () => {
+  let stateDir: string;
+
+  beforeEach(() => {
+    stateDir = mkdtempSync(join(tmpdir(), 'xopc-understanding-service-'));
+    resetXopcDatabaseSingletonForTest();
+    openXopcDatabase({ path: join(stateDir, 'xopc.db') });
+  });
+
+  afterEach(() => {
+    closeXopcDatabase();
+    resetXopcDatabaseSingletonForTest();
+    rmSync(stateDir, { recursive: true, force: true });
+  });
+
+  it('extracts explicit intent and ignores ordinary turns', () => {
     const candidates = extractExplicitUnderstandingCandidates(
       'Please remember that I prefer pnpm over npm for this repo.',
     );
-
-    expect(candidates).toHaveLength(1);
     expect(candidates[0]).toMatchObject({
-      kind: 'preference',
-      content: 'I prefer pnpm over npm for this repo.',
-      explicitness: 'explicit',
-      durability: 'durable',
-      sensitivity: 'normal',
+      kind: 'preference', content: 'I prefer pnpm over npm for this repo.', explicitness: 'explicit',
     });
-    expect(candidates[0]?.canonicalKey).toMatch(/^preference:/);
-  });
-
-  it('ignores ordinary turns without explicit memory intent', () => {
     expect(extractExplicitUnderstandingCandidates('Can you explain the gateway routes?')).toEqual([]);
   });
 
-  it('creates a review candidate linked to the single corrected record', async () => {
-    const write = vi.fn().mockResolvedValue({ success: true, record: { id: 'replacement' } });
-    const service = new UserUnderstandingService({ write, list: vi.fn().mockResolvedValue([]) });
-
-    await service.applyCandidates(extractExplicitUnderstandingCandidates(
-      '你记错了我的偏好，我更喜欢详细解释。',
-    ), {
-      agentId: 'research',
-      sessionKey: 'session-1',
-      supersedesRecordIds: ['old-preference'],
-    });
-
-    expect(write).toHaveBeenCalledWith(expect.objectContaining({
-      content: '我更喜欢详细解释。',
-      status: 'candidate',
-      supersedesRecordId: 'old-preference',
-      scope: { userId: 'local-owner' },
-      tags: expect.arrayContaining(['explicit-user-correction']),
-    }));
+  it('stores explicit understanding and deduplicates by canonical key and scope', async () => {
+    const service = new UserUnderstandingService();
+    const candidate = { ...BASE_CANDIDATE, kind: 'preference' as const, content: 'Prefer concise answers.', canonicalKey: 'preference:concise' };
+    expect(await service.applyCandidates([candidate], {})).toMatchObject({ created: 1, deduplicated: 0 });
+    expect(await service.applyCandidates([candidate], {})).toMatchObject({ created: 0, deduplicated: 1 });
+    expect(listUnderstandings()).toHaveLength(1);
   });
 
-  it('deduplicates by canonical key before writing', async () => {
-    const write = vi.fn();
-    const list = vi.fn().mockResolvedValue([{
-      id: 'existing',
-      kind: 'preference',
-      scope: { agentId: 'main' },
-      content: 'Prefer concise answers.',
-      source: {},
-      explicitness: 'explicit',
-      durability: 'durable',
-      importance: 0.8,
-      disclosurePolicy: 'referenceable',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }]);
-    const service = new UserUnderstandingService({ write, list });
-    const result = await service.applyCandidates([{
-      kind: 'preference',
-      content: 'Prefer concise answers.',
-      canonicalKey: 'preference:concise',
-      confidence: 0.9,
-      importance: 0.8,
-      explicitness: 'explicit',
-      durability: 'durable',
-      sensitivity: 'normal',
-      disclosurePolicy: 'referenceable',
-    }], {});
-
-    expect(result).toMatchObject({ proposed: 1, created: 0, deduplicated: 1, rejected: 0 });
-    expect(write).not.toHaveBeenCalled();
-  });
-
-  it('scopes durable user beliefs globally and workspace facts locally', async () => {
-    const write = vi.fn().mockResolvedValue({ success: true, record: { id: 'created' } });
-    const service = new UserUnderstandingService({ write, list: vi.fn().mockResolvedValue([]) });
-    const base = {
-      confidence: 0.9,
-      importance: 0.8,
-      explicitness: 'explicit' as const,
-      durability: 'durable' as const,
-      sensitivity: 'normal' as const,
-      disclosurePolicy: 'referenceable' as const,
-    };
+  it('scopes project facts to the workspace while keeping preferences global', async () => {
+    const service = new UserUnderstandingService();
     await service.applyCandidates([
-      { ...base, kind: 'preference', content: 'Prefer concise answers.' },
-      { ...base, kind: 'workspace_fact', content: 'This workspace uses pnpm.' },
-    ], { sessionKey: 'session-a', workspaceId: '/workspace/a' });
-
-    expect(write.mock.calls[0]?.[0].scope).toEqual({ userId: 'local-owner' });
-    expect(write.mock.calls[1]?.[0].scope).toEqual({ userId: 'local-owner', workspaceId: '/workspace/a' });
-    expect(write.mock.calls[0]?.[0].evidence[0].sessionKey).toBe('session-a');
+      { ...BASE_CANDIDATE, kind: 'preference', content: 'Prefer concise answers.' },
+      { ...BASE_CANDIDATE, kind: 'project_context', content: 'This workspace uses pnpm.' },
+    ], { workspaceId: '/workspace/a' });
+    const items = listUnderstandings();
+    expect(items.find((item) => item.kind === 'preference')?.scope).toEqual({ type: 'global' });
+    expect(items.find((item) => item.kind === 'project_context')?.scope).toEqual({ type: 'workspace', id: '/workspace/a' });
   });
 
-  it('rejects secret candidates before provider writes', async () => {
-    const write = vi.fn();
-    const service = new UserUnderstandingService({ write, list: vi.fn().mockResolvedValue([]) });
-    const result = await service.applyCandidates([{
-      kind: 'user_note',
-      content: 'API key is abcdefgh.',
-      confidence: 0.9,
-      importance: 0.9,
-      explicitness: 'explicit',
-      durability: 'durable',
-      sensitivity: 'secret',
-      disclosurePolicy: 'ask_before_reference',
-    }], {});
-
-    expect(result.rejected).toBe(1);
-    expect(write).not.toHaveBeenCalled();
-  });
-
-  it('reclassifies model-mislabeled secret content before provider writes', async () => {
-    const write = vi.fn();
-    const service = new UserUnderstandingService({ write, list: vi.fn().mockResolvedValue([]) });
-    const result = await service.applyCandidates([{
-      kind: 'user_note',
-      content: 'My API key is sk-abcdefghijk.',
-      confidence: 0.9,
-      importance: 0.9,
-      explicitness: 'inferred',
-      durability: 'durable',
-      sensitivity: 'normal',
-      disclosurePolicy: 'silent',
-    }], {});
-
-    expect(result.rejected).toBe(1);
-    expect(write).not.toHaveBeenCalled();
-  });
-
-  it('rejects regulated candidates and redacts secrets from accepted evidence', async () => {
-    const write = vi.fn().mockResolvedValue({ success: true });
-    const service = new UserUnderstandingService({ write, list: vi.fn().mockResolvedValue([]) });
-    const result = await service.applyCandidates([{
-      kind: 'personal_logistics',
-      content: 'My bank account is 12345678.',
-      confidence: 0.9,
-      importance: 0.8,
-      explicitness: 'inferred',
-      durability: 'durable',
-      sensitivity: 'normal',
-      disclosurePolicy: 'ask_before_reference',
-    }, {
-      kind: 'preference',
-      content: 'Prefer concise status updates.',
-      confidence: 0.9,
-      importance: 0.8,
-      explicitness: 'inferred',
-      durability: 'durable',
-      sensitivity: 'normal',
-      disclosurePolicy: 'referenceable',
-    }], {
-      sourceText: 'Prefer concise status updates. token=should-not-be-stored',
+  it('archives the corrected understanding and links its replacement', async () => {
+    const old = createUnderstanding({
+      kind: 'preference', canonicalKey: 'preference:old', status: 'active', scope: { type: 'global' },
+      explicitness: 'explicit', durability: 'durable', sensitivity: 'normal', disclosurePolicy: 'referenceable',
+      confidence: 1, statement: 'Prefer short answers.', createdBy: 'user', changeReason: 'test',
     });
+    const service = new UserUnderstandingService();
+    const result = await service.applyCandidates(extractExplicitUnderstandingCandidates(
+      '你记错了我的偏好，我更喜欢详细解释。',
+    ), { supersedesRecordIds: [old.id] });
+    expect(result.created).toBe(1);
+    expect(getUnderstanding(old.id)?.status).toBe('archived');
+    expect(getUnderstanding(result.createdRecords[0]!.id)?.supersedesId).toBe(old.id);
+  });
 
-    expect(result).toMatchObject({ proposed: 2, created: 1, rejected: 1 });
-    expect(write).toHaveBeenCalledTimes(1);
-    expect(write.mock.calls[0]?.[0].tags).toContain('user-understanding');
-    expect(write.mock.calls[0]?.[0].evidence[0].sourceText).toContain('token=[REDACTED]');
-    expect(write.mock.calls[0]?.[0].evidence[0].sourceText).not.toContain('should-not-be-stored');
+  it('rejects content that is declared or inferred to be sensitive', async () => {
+    const service = new UserUnderstandingService();
+    const result = await service.applyCandidates([
+      { ...BASE_CANDIDATE, kind: 'current_state', content: 'My API key is sk-abcdefghijk.' },
+      { ...BASE_CANDIDATE, kind: 'current_state', content: 'My bank account is 12345678.' },
+      { ...BASE_CANDIDATE, kind: 'preference', content: 'Prefer concise status updates.' },
+    ], {});
+    expect(result).toMatchObject({ proposed: 3, created: 1, rejected: 2 });
+    expect(listUnderstandings()).toHaveLength(1);
   });
 });

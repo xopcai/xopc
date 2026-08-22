@@ -26,7 +26,7 @@ export function buildMemorySection(params: {
 
   const toolLines: string[] = [];
   if (params.availableTools.has('memory_search')) {
-    toolLines.push('1. Run `memory_search` to search structured user-understanding records');
+    toolLines.push('1. Run `memory_search` to search workspace and connected-source memory records');
   }
   if (params.availableTools.has('session_search')) {
     toolLines.push(
@@ -43,7 +43,7 @@ export function buildMemorySection(params: {
     '',
     citationInstruction,
     '',
-    'User understanding is compiled from structured records and injected above when relevant.',
+    'Relevant user understanding is selected separately and injected above.',
     '',
     'Before answering anything about prior work, decisions, dates, people, preferences, or todos:',
     ...toolLines,
@@ -51,11 +51,11 @@ export function buildMemorySection(params: {
     '### Memory Sources',
     '',
     '- **Session history:** use `session_search` when available for other chats and prior turns.',
-    '- **Structured memory:** cite only record ids returned by `memory_search` / `memory_get`.',
+    '- **Workspace memory:** cite only record ids returned by `memory_search` / `memory_get`.',
     '',
     '### Writing to Memory',
     '',
-    '- **Declarative vs procedural:** facts and preferences belong to structured memory; reusable task playbooks belong to skills.',
+    '- **Declarative vs procedural:** user preferences belong to structured user understanding; reusable task procedures belong to skills.',
     '- Explicit "remember this" statements are captured as durable structured understanding after the turn.',
     '- Do not invent, cite, or promise memory record ids that were not returned by a memory tool.',
     '- **Text > Brain**',

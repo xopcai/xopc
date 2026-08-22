@@ -13,8 +13,7 @@ import { OnboardingProviderGrid } from '@/features/onboarding/onboarding-provide
 import { OAuthProviderConnect } from '@/features/settings/models-hub/oauth-provider-connect';
 import { buildProviderConfigFromPresetProviderId } from '@/features/settings/models/models-settings-lib';
 import { fetchModelsJson, saveModelsJson } from '@/features/settings/models-json-api';
-import { detectBrowserTimezone } from '@/features/settings/agents/agent-profile-markdown';
-import { fetchUserProfile, updateUserProfile } from '@/features/user-context/user-context-api';
+import { detectBrowserTimezone, fetchUserProfile, updateUserProfile } from '@/features/user-context/user-context-api';
 import { fetchGlobalDefaults, updateGlobalDefaultModels } from '@/features/settings/global-defaults-api';
 import { PROVIDER_ENRICHMENT } from '@/features/settings/provider-enrichment';
 import { patchProviderApiKeys } from '@/features/settings/providers-api';
@@ -120,10 +119,9 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
   useEffect(() => {
     let cancelled = false;
     void fetchUserProfile()
-      .then(({ profile, profileSetup }) => {
+      .then(({ profile }) => {
         if (cancelled) return;
-        const value = profile.callName || profileSetup.callNameSuggestion?.value;
-        if (value) dispatch({ type: 'prefillCallName', value });
+        if (profile.callName) dispatch({ type: 'prefillCallName', value: profile.callName });
       })
       .catch(() => {});
     return () => {

@@ -20,7 +20,7 @@ export type WorkDiscoverySuggestion = {
 
 export type WorkDiscoveryProfileCandidate = {
   id: string;
-  memoryRecordId?: string;
+  understandingId?: string;
   category: 'role' | 'focus' | 'technology' | 'workflow' | 'preference';
   statement: string;
   confidence: 'high' | 'medium' | 'low';
@@ -218,7 +218,7 @@ export async function importPersonalContextForWorkDiscovery(items: Array<{
 }
 
 export async function updatePersonalContextWorkDiscoveryProfile(
-  decisions: Array<{ memoryRecordId: string; status: 'accepted' | 'rejected' }>,
+  decisions: Array<{ understandingId: string; status: 'accepted' | 'rejected' }>,
 ): Promise<void> {
   await fetchJson(apiUrl('/api/work-discovery/personal-context/profile'), {
     method: 'POST',

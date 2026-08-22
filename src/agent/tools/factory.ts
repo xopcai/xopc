@@ -315,9 +315,7 @@ export class AgentToolsFactory {
     const core: AgentTool<any, any>[] = [
       createSessionStatusTool(),
       createDreamingTool({
-        getWorkspace: () => workspace,
         getConfig: () => this.deps.getConfig?.(),
-        getAgentId: () => options?.agentId,
       }),
       createToolManualTool(),
       createClarifyTool({

@@ -16,7 +16,7 @@ Template resolution at runtime: `XOPC_TEMPLATE_PATH` (if set), else a walk to `d
 
 ## System prompt load order
 
-These files are read from the agent profile root and assembled into the agent system prompt **in this order**. The global user profile is read separately from **`user/PROFILE.md`** before the agent profile.
+These files are read from the agent profile root and assembled into the agent system prompt **in this order**. They define the agent only; user context is selected separately from SQLite for each turn.
 
 1. **SOUL.md**
 2. **IDENTITY.md**

@@ -28,7 +28,11 @@ import {
 import { mergeSttConfigPatch, mergeTtsConfigPatch } from '../../lib/safe-voice-config.js';
 import { assertGatewayRuntimeConfig } from '../../../runtime-config.js';
 import { resolveGatewayAuth, assertGatewayAuthConfigured } from '../../../auth.js';
-import { ContextCompactionPolicySchema } from '../../../../user-context/config.js';
+import {
+  ContextCompactionPolicySchema,
+  UserContextDreamingSchema,
+  UserContextPrivacySchema,
+} from '../../../../user-context/config.js';
 import { type PatchResult, PATCH_OK, patchError } from './result.js';
 
 export async function applyMiscPatch(config: Config, body: any): Promise<PatchResult> {
@@ -54,6 +58,20 @@ export async function applyMiscPatch(config: Config, body: any): Promise<PatchRe
       return patchError('userContext must be an object');
     }
     const userContextPatch = body.userContext as Record<string, unknown>;
+    if (userContextPatch.dreaming !== undefined) {
+      const parsed = UserContextDreamingSchema.safeParse(userContextPatch.dreaming);
+      if (!parsed.success) {
+        return patchError(parsed.error.issues.map((issue) => issue.message).join('; '));
+      }
+      config.userContext = { ...config.userContext, dreaming: parsed.data };
+    }
+    if (userContextPatch.privacy !== undefined) {
+      const parsed = UserContextPrivacySchema.safeParse(userContextPatch.privacy);
+      if (!parsed.success) {
+        return patchError(parsed.error.issues.map((issue) => issue.message).join('; '));
+      }
+      config.userContext = { ...config.userContext, privacy: parsed.data };
+    }
     if (userContextPatch.memory !== undefined) {
       if (typeof userContextPatch.memory !== 'object'
         || userContextPatch.memory === null

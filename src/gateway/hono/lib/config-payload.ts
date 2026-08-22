@@ -24,7 +24,11 @@ import { CredentialResolver } from '../../../auth/credentials.js';
 import { loadModelsJson, getModelsJsonPath } from '../../../config/models-json.js';
 import { getAllProviders, isProviderConfigured } from '../../../providers/index.js';
 import { getProviderRegistry } from '../../../providers/plugin-registry.js';
-import { ContextCompactionPolicySchema } from '../../../user-context/config.js';
+import {
+  ContextCompactionPolicySchema,
+  UserContextDreamingSchema,
+  UserContextPrivacySchema,
+} from '../../../user-context/config.js';
 import type { GatewayService } from '../../service.js';
 import { safeToolsWebForGet } from '../../config-tools-web.js';
 import { buildSafeProvidersConfigForWeb } from './safe-providers-config.js';
@@ -304,6 +308,8 @@ export async function buildSafeWebConfigPayload(service: GatewayService, options
     session: resolveSessionConfigForWeb(config),
     userContext: {
       preferences: config.userContext?.preferences ?? { responseLanguage: 'auto' },
+      dreaming: UserContextDreamingSchema.parse(config.userContext?.dreaming),
+      privacy: UserContextPrivacySchema.parse(config.userContext?.privacy),
       memory: {
         retention: {
           compaction: ContextCompactionPolicySchema.parse(

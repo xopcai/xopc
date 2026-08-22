@@ -5,7 +5,6 @@ import { registerAgentStreamRoutes } from './agent-stream.js';
 import { registerDiscussionRoutes } from './discussions.js';
 import { registerSessionsRoutes } from './sessions.js';
 import { registerStatusRoutes } from './status.js';
-import { registerMemoryRoutes } from './memory.js';
 import { registerProjectsRoutes } from './projects.js';
 import { registerProjectSkillRoutes } from './project-skills.js';
 import { registerSearchRoutes } from './search.js';
@@ -31,7 +30,6 @@ export function registerCoreAuthenticatedRoutes(
   registerStatusRoutes(authenticated, deps);
   registerAgentStreamRoutes(authenticated, deps);
   registerSessionsRoutes(authenticated, deps);
-  registerMemoryRoutes(authenticated, deps);
   registerActivityRoutes(authenticated, deps);
   registerDiscussionRoutes(authenticated, deps);
   registerProjectsRoutes(authenticated, deps);

@@ -9,6 +9,9 @@ import { MemoryManager } from '../manager.js';
 import { BuiltinMemoryProvider } from '../builtin-provider.js';
 import {
   closeXopcDatabase,
+  getUnderstanding,
+  listUnderstandingEvidence,
+  listUnderstandings,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../../storage/sqlite/index.js';
@@ -89,13 +92,11 @@ describe('MemoryManager', () => {
         { sessionId: 'session-2' },
       );
 
-      const listed = await mgr.list({ scope: { workspaceId: stateDir, sessionKey: 'session-2' } });
-      const candidate = listed.find((record) => record.content.includes('pnpm'));
-      expect(candidate?.status).toBe('candidate');
-      expect(candidate?.tags).toContain('user-understanding');
-      expect(candidate?.explicitness).toBe('explicit');
-      expect(candidate?.canonicalKey).toMatch(/^boundary:/);
-      expect(candidate?.evidence?.[0]?.sessionKey).toBe('session-2');
+      const understanding = listUnderstandings().find((record) => record.statement.includes('pnpm'));
+      expect(understanding?.status).toBe('active');
+      expect(understanding?.explicitness).toBe('explicit');
+      expect(understanding?.canonicalKey).toMatch(/^boundary:/);
+      expect(listUnderstandingEvidence(understanding!.id)[0]?.sourceRef).toContain('session:session-2:');
 
       const recalled = await mgr.search({
         query: 'package-lock',
@@ -129,12 +130,9 @@ describe('MemoryManager', () => {
         disclosurePolicy: 'referenceable',
       }], { sessionKey: 'session-background', reviewSource: 'background' });
 
-      const record = await mgr.read({
-        id: result.createdRecords[0]!.id,
-        scope: { userId: 'local-owner', workspaceId: stateDir },
-      });
-      expect(record?.record.scope).toMatchObject({ workspaceId: stateDir });
-      expect(record?.record.provenance.sourceAgentId).toBe('research');
+      const record = getUnderstanding(result.createdRecords[0]!.id);
+      expect(record?.scope).toEqual({ type: 'workspace', id: stateDir });
+      expect(record?.status).toBe('candidate');
     } finally {
       closeXopcDatabase();
       resetXopcDatabaseSingletonForTest();

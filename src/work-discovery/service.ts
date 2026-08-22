@@ -1,7 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
 
-import type { MemoryRecord } from '../agent/memory/types.js';
-import { nextMemoryReviewAt } from '../agent/memory/lifecycle.js';
 import type { Config } from '../config/schema.js';
 import { getAgentDefaultModelRef } from '../config/schema.js';
 import { ActivityService } from '../activity/service.js';
@@ -10,11 +8,19 @@ import { buildSessionKey } from '../routing/session-key.js';
 import { getDefaultAgentId } from '../routing/resolve-route.js';
 import type { SessionIndex } from '../session/manager.js';
 import {
-  getMemoryRecord,
+  createContextEvidence,
+  createUnderstanding,
+  getUnderstanding,
+  linkUnderstandingEvidence,
+  listUnderstandingEvidence,
+  listUnderstandings,
+  rejectUnderstanding,
+  reviseUnderstanding,
+  setUnderstandingStatus,
   upsertKnowledgeSourceItems,
-  upsertMemoryRecord,
   type SessionMetadataSeed,
 } from '../storage/sqlite/index.js';
+import type { UnderstandingKind, UserContextScope, UserUnderstanding } from '../user-context/domain.js';
 import { createLogger } from '../utils/logger.js';
 
 import { analyzePersonalContext, analyzeWorkContext, workDiscoveryResultMarkdown } from './analyzer.js';
@@ -59,12 +65,75 @@ import type {
   WorkDiscoveryPersonalContextItem,
   WorkDiscoveryPersonalContextSource,
   WorkDiscoveryOnboardingState,
+  WorkDiscoveryProfileCandidate,
   WorkDiscoveryRecognitionDecision,
   WorkDiscoveryRun,
   WorkDiscoverySource,
 } from './types.js';
 
 const log = createLogger('WorkDiscovery');
+
+function understandingKind(category: WorkDiscoveryProfileCandidate['category']): UnderstandingKind {
+  if (category === 'preference') return 'preference';
+  if (category === 'workflow') return 'routine';
+  if (category === 'focus') return 'current_state';
+  return 'project_context';
+}
+
+function understandingKey(candidate: WorkDiscoveryProfileCandidate): string {
+  const normalized = candidate.statement.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  return `work-discovery:${candidate.category}:${createHash('sha256').update(normalized).digest('hex').slice(0, 20)}`;
+}
+
+function sameScope(left: UserContextScope, right: UserContextScope): boolean {
+  return left.type === right.type && left.id === right.id;
+}
+
+function persistUnderstandingCandidate(
+  candidate: WorkDiscoveryProfileCandidate,
+  scope: UserContextScope,
+  sourceRef: string,
+): UserUnderstanding {
+  const canonicalKey = understandingKey(candidate);
+  const existing = listUnderstandings().find((item) => item.canonicalKey === canonicalKey && sameScope(item.scope, scope));
+  if (existing) return existing;
+  const evidence = createContextEvidence({
+    sourceType: 'runtime', sourceRef: `${sourceRef}:${candidate.id}`,
+    redactedExcerpt: candidate.evidence.join(' · ').slice(0, 600), trustLevel: 'trusted', observedAt: Date.now(),
+  });
+  const understanding = createUnderstanding({
+    kind: understandingKind(candidate.category), canonicalKey, status: 'candidate', scope,
+    explicitness: 'inferred',
+    durability: candidate.category === 'focus' ? 'ephemeral' : candidate.category === 'workflow' ? 'recurring' : 'durable',
+    sensitivity: 'normal', disclosurePolicy: 'referenceable',
+    confidence: candidate.confidence === 'high' ? 0.9 : candidate.confidence === 'medium' ? 0.72 : 0.58,
+    statement: candidate.statement, createdBy: 'runtime', changeReason: 'work discovery inference',
+  });
+  linkUnderstandingEvidence(understanding.versionId, evidence.id, 'supports', understanding.confidence);
+  return understanding;
+}
+
+function decideUnderstanding(input: {
+  understandingId: string;
+  status: 'accepted' | 'edited' | 'rejected';
+  statement?: string;
+}, expectedSourcePrefix: string): UserUnderstanding | undefined {
+  const current = getUnderstanding(input.understandingId);
+  const owned = current && listUnderstandingEvidence(current.id)
+    .some((evidence) => evidence.sourceRef.startsWith(expectedSourcePrefix));
+  if (!current || !owned || current.status === 'archived') return undefined;
+  if (input.status === 'rejected') return rejectUnderstanding(current.id, 'Rejected from work discovery review');
+  const statement = input.status === 'edited' ? input.statement?.trim().slice(0, 500) : undefined;
+  if (input.status === 'edited' && !statement) return undefined;
+  const revised = statement
+    ? reviseUnderstanding(current.id, statement, {
+        explicitness: 'explicit',
+        confidence: 1,
+        changeReason: 'Edited during work discovery review',
+      })
+    : current;
+  return setUnderstandingStatus(revised.id, 'active', { explicitness: 'explicit', confidence: 1 });
+}
 
 export interface WorkDiscoveryServiceOptions {
   projects: ProjectService;
@@ -316,24 +385,13 @@ export class WorkDiscoveryService {
     const safeWorkThreadCandidates = analysis.workThreadCandidates.filter((candidate) =>
       !hasLongVerbatimOverlap(candidate.title, rawContents)
       && !hasLongVerbatimOverlap(candidate.summary, rawContents));
-    const agentId = getDefaultAgentId(this.options.getConfig());
     const profileCandidates = safeProfileCandidates.map((candidate) => {
-      const record = upsertMemoryRecord({
-        providerId: 'local',
-        kind: candidate.category === 'preference' ? 'preference' : candidate.category === 'workflow' ? 'routine' : 'derived_insight',
-        sourceAgentId: agentId,
-        content: candidate.statement,
-        source: { provider: 'personal-context', path: 'personal-context://onboarding' },
-        confidence: candidate.confidence === 'high' ? 0.9 : candidate.confidence === 'medium' ? 0.72 : 0.58,
-        tags: ['user-understanding', 'personal-context', `work-discovery:${candidate.category}`],
-        status: 'candidate',
-        sensitivity: 'normal',
-        explicitness: 'inferred',
-        durability: candidate.category === 'focus' ? 'ephemeral' : candidate.category === 'workflow' ? 'recurring' : 'durable',
-        importance: candidate.category === 'focus' ? 0.75 : 0.65,
-        disclosurePolicy: 'referenceable',
-      });
-      return { ...candidate, status: 'pending' as const, memoryRecordId: record.id };
+      const understanding = persistUnderstandingCandidate(candidate, { type: 'global' }, 'personal-context:onboarding');
+      return {
+        ...candidate,
+        status: understanding.status === 'rejected' ? 'rejected' as const : 'pending' as const,
+        understandingId: understanding.id,
+      };
     });
     const investigation = linkedRun ? getWorkUnderstandingInvestigationForRun(linkedRun.id) : null;
     const contextEvidence = investigation
@@ -380,20 +438,11 @@ export class WorkDiscoveryService {
   }
 
   updatePersonalContextProfile(input: {
-    decisions: Array<{ memoryRecordId: string; status: 'accepted' | 'edited' | 'rejected'; statement?: string }>;
+    decisions: Array<{ understandingId: string; status: 'accepted' | 'edited' | 'rejected'; statement?: string }>;
   }) {
     return input.decisions.flatMap((decision) => {
-      const record = getMemoryRecord(decision.memoryRecordId);
-      if (!record || record.source.provider !== 'personal-context') return [];
-      const statement = decision.status === 'edited' ? decision.statement?.trim().slice(0, 500) : undefined;
-      if (decision.status === 'edited' && !statement) return [];
-      const updated = this.preserveMemoryRecord(record, {
-        providerId: 'local',
-        status: decision.status === 'rejected' ? 'rejected' : 'active',
-        ...(statement ? { content: statement, explicitness: 'explicit', confidence: 1 } : {}),
-        ...(decision.status !== 'rejected' ? { reviewAfter: nextMemoryReviewAt(record) } : {}),
-      });
-      return [{ memoryRecordId: updated.id, status: decision.status, statement: updated.content }];
+      const updated = decideUnderstanding(decision, 'personal-context:');
+      return updated ? [{ understandingId: updated.id, status: decision.status, statement: updated.statement }] : [];
     });
   }
 
@@ -706,35 +755,12 @@ export class WorkDiscoveryService {
   private persistProfileCandidates(run: WorkDiscoveryRun, result: NonNullable<WorkDiscoveryRun['result']>) {
     if (!result.profileCandidates?.length) return result;
     const profileCandidates = result.profileCandidates.map((candidate) => {
-      const kind = candidate.category === 'preference'
-        ? 'preference'
-        : candidate.category === 'workflow'
-          ? 'routine'
-          : 'derived_insight';
-      const confidence = candidate.confidence === 'high' ? 0.9 : candidate.confidence === 'medium' ? 0.72 : 0.58;
-      const durability = candidate.category === 'focus'
-        ? 'ephemeral'
-        : candidate.category === 'workflow'
-          ? 'recurring'
-          : 'durable';
-      const record = upsertMemoryRecord({
-        providerId: 'local',
-        kind,
-        sourceAgentId: run.agentId,
-        sessionKey: run.sessionKey,
-        projectId: run.projectId,
-        content: candidate.statement,
-        source: { provider: 'work-discovery', path: `work-discovery://${run.id}` },
-        confidence,
-        tags: ['user-understanding', 'work-discovery', `work-discovery:${candidate.category}`],
-        status: 'candidate',
-        sensitivity: 'normal',
-        explicitness: 'inferred',
-        durability,
-        importance: candidate.category === 'focus' ? 0.75 : 0.65,
-        disclosurePolicy: 'referenceable',
-      });
-      return { ...candidate, memoryRecordId: record.id };
+      const understanding = persistUnderstandingCandidate(
+        candidate,
+        { type: 'project', id: run.projectId },
+        `work-discovery:${run.id}`,
+      );
+      return { ...candidate, understandingId: understanding.id };
     });
     return { ...result, profileCandidates };
   }
@@ -748,57 +774,19 @@ export class WorkDiscoveryService {
     const decisions = new Map(input.decisions.map((decision) => [decision.id, decision]));
     const profileCandidates = run.result.profileCandidates.map((candidate) => {
       const decision = decisions.get(candidate.id);
-      if (!decision || !candidate.memoryRecordId) return candidate;
-      const record = getMemoryRecord(candidate.memoryRecordId);
-      if (!record) return candidate;
-      const statement = decision.status === 'edited' ? decision.statement?.trim().slice(0, 500) : undefined;
-      if (decision.status === 'edited' && !statement) return candidate;
-      this.preserveMemoryRecord(record, {
-        status: decision.status === 'rejected' ? 'rejected' : 'active',
-        ...(statement ? { content: statement, explicitness: 'explicit', confidence: 1 } : {}),
-        ...(decision.status !== 'rejected' ? { reviewAfter: nextMemoryReviewAt(record) } : {}),
-      });
+      if (!decision || !candidate.understandingId) return candidate;
+      const updated = decideUnderstanding(
+        { understandingId: candidate.understandingId, ...decision },
+        `work-discovery:${run.id}:`,
+      );
+      if (!updated) return candidate;
       return {
         ...candidate,
-        ...(statement ? { statement } : {}),
+        statement: updated.statement,
         status: decision.status,
       };
     });
     return updateWorkDiscoveryRun(run.id, { result: { ...run.result, profileCandidates } });
-  }
-
-  private preserveMemoryRecord(
-    record: MemoryRecord,
-    patch: Partial<Parameters<typeof upsertMemoryRecord>[0]>,
-  ): MemoryRecord {
-    return upsertMemoryRecord({
-      id: record.id,
-      providerId: record.providerId,
-      kind: record.kind,
-      sourceAgentId: record.provenance.sourceAgentId,
-      workspaceId: record.scope.workspaceId,
-      sessionKey: record.scope.sessionKey,
-      projectId: record.scope.projectId,
-      content: record.content,
-      source: record.source,
-      confidence: record.confidence,
-      tags: record.tags,
-      status: record.status,
-      sensitivity: record.sensitivity,
-      canonicalKey: record.canonicalKey,
-      explicitness: record.explicitness,
-      durability: record.durability,
-      importance: record.importance,
-      disclosurePolicy: record.disclosurePolicy,
-      evidence: record.evidence,
-      reviewAfter: record.reviewAfter,
-      expiresAt: record.expiresAt,
-      validFrom: record.validFrom,
-      validTo: record.validTo,
-      supersedesRecordId: record.supersedesRecordId,
-      conflictGroupId: record.conflictGroupId,
-      ...patch,
-    });
   }
 
   cancelRun(id: string): WorkDiscoveryRun | null {

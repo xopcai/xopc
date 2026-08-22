@@ -43,9 +43,8 @@ export interface RunBackgroundReviewParams {
 }
 
 const ALLOWED_UNDERSTANDING_KINDS = new Set<UnderstandingCandidate['kind']>([
-  'preference', 'boundary', 'relationship', 'project_context', 'commitment', 'routine',
-  'personal_logistics', 'open_question', 'milestone', 'current_state', 'task_lesson',
-  'tool_preference', 'long_term_goal', 'derived_insight',
+  'preference', 'boundary', 'relationship', 'project_context', 'routine',
+  'current_state', 'task_lesson', 'long_term_goal', 'derived_insight',
 ]);
 const ALLOWED_SENSITIVITIES = new Set<UnderstandingCandidate['sensitivity']>([
   'normal', 'personal', 'secret', 'regulated',
@@ -98,9 +97,6 @@ export function parseUnderstandingCandidates(raw: string): UnderstandingCandidat
         durability,
         sensitivity,
         disclosurePolicy,
-        tags: Array.isArray(item.tags)
-          ? item.tags.filter((tag): tag is string => typeof tag === 'string').slice(0, 8)
-          : ['background-review'],
       });
     }
     return output;

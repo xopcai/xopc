@@ -6,12 +6,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   closeXopcDatabase,
+  createUnderstanding,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
   upsertConnectorConnection,
   upsertConnectorSyncPolicy,
   upsertKnowledgeSourceItems,
-  upsertMemoryRecord,
 } from '../../storage/sqlite/index.js';
 import { ContextProviderRegistry } from '../execution/context.js';
 import { ProactiveEventService } from '../service.js';
@@ -145,24 +145,24 @@ describe('proactive context resolver', () => {
     });
     if (!created.ok) throw new Error('Expected task');
     const taskId = created.model.task.id;
-    for (const [id, disclosurePolicy] of [
-      ['memory-referenceable', 'referenceable'],
-      ['memory-guarded', 'ask_before_reference'],
-    ] as const) {
-      upsertMemoryRecord({
-        id,
-        providerId: 'local',
+    const understandings = [
+      ['referenceable', 'referenceable', 'Prefer concise risk summaries.'],
+      ['guarded', 'ask_before_reference', 'Do not reveal this.'],
+    ] as const;
+    for (const [id, disclosurePolicy, statement] of understandings) {
+      createUnderstanding({
         kind: 'preference',
-        sourceAgentId: 'main',
-        workspaceId: '/workspace',
-        content: id === 'memory-referenceable' ? 'Prefer concise risk summaries.' : 'Do not reveal this.',
-        source: { provider: 'test' },
+        canonicalKey: `preference:${id}`,
         status: 'active',
+        scope: { type: 'workspace', id: '/workspace' },
         sensitivity: 'normal',
         explicitness: 'explicit',
         durability: 'durable',
-        importance: 0.8,
         disclosurePolicy,
+        confidence: 0.9,
+        statement,
+        createdBy: 'user',
+        changeReason: 'test',
       });
     }
     const events = new ProactiveEventService(() => []);
@@ -190,17 +190,14 @@ describe('proactive context resolver', () => {
         title: 'Ship the proactive foundation',
       })],
     });
-    expect(resolved.content.user_understanding).toMatchObject({
-      records: [expect.objectContaining({
-        evidenceId: 'memory:memory-referenceable',
-        content: 'Prefer concise risk summaries.',
-      })],
-    });
+    const record = (resolved.content.user_understanding as { records: Array<{ evidenceId: string; content: string }> }).records[0]!;
+    expect(record).toMatchObject({ content: 'Prefer concise risk summaries.' });
+    expect(record.evidenceId).toMatch(/^understanding:/);
     expect(JSON.stringify(resolved.content)).not.toContain('Do not reveal this.');
     expect(resolved.evidenceIds).toEqual(expect.arrayContaining([
       event.id,
       `task:${taskId}`,
-      'memory:memory-referenceable',
+      record.evidenceId,
     ]));
   });
 });

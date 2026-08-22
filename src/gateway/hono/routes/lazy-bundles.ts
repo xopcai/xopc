@@ -127,7 +127,7 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
   },
   {
     id: 'agents',
-    match: (path) => startsWithAny(path, ['/api/agents', '/api/user-profile', '/api/voice/models']),
+    match: (path) => startsWithAny(path, ['/api/agents', '/api/voice/models']),
     load: async () => {
       const { registerAgentsRoutes } = await import('./agents.js');
       return { register: registerAgentsRoutes };

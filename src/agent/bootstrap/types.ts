@@ -1,6 +1,6 @@
 import type { AgentProfileMarkdownFilename } from '../context/workspace.js';
 
-export type BootstrapFileName = AgentProfileMarkdownFilename | 'PROFILE.md';
+export type BootstrapFileName = AgentProfileMarkdownFilename;
 
 export type WorkspaceBootstrapFile = {
   name: BootstrapFileName;

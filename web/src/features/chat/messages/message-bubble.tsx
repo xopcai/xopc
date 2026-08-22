@@ -282,7 +282,6 @@ export const MessageBubble = memo(function MessageBubble({
   const [responseFeedbackLoaded, setResponseFeedbackLoaded] = useState(false);
   const [responseFeedbackBusy, setResponseFeedbackBusy] = useState(false);
   const [responseFeedbackError, setResponseFeedbackError] = useState(false);
-  const [responseFeedbackRemediated, setResponseFeedbackRemediated] = useState(false);
   const [responseFeedbackPromptOpen, setResponseFeedbackPromptOpen] = useState(false);
   const [responseFeedbackReason, setResponseFeedbackReason] = useState<ResponseFeedbackReason | null>(null);
   const [responsePersonalContext, setResponsePersonalContext] = useState<ResponsePersonalContext[]>([]);
@@ -367,27 +366,17 @@ export const MessageBubble = memo(function MessageBubble({
     setResponseFeedbackBusy(true);
     setResponseFeedbackLoaded(true);
     setResponseFeedbackError(false);
-    void fetchJson<{
-      trace: {
-        feedback: Array<{ level: string; rating: string; source: string }>;
-        remediation?: { needsReviewRecordIds: string[] };
-      };
-      personalContext: ResponsePersonalContext[];
-    }>(apiUrl(`/api/you/feedback/${encodeURIComponent(message.turnId)}`), {
-      method: 'PUT',
+    void fetchJson<{ ok: true }>(apiUrl(`/api/you/turns/${encodeURIComponent(message.turnId)}/feedback`), {
+      method: 'POST',
       body: JSON.stringify({
-        rating,
-        reasonCode: reason,
+        rating: rating === 'helpful' ? 'helpful' : 'irrelevant',
+        reason,
       }),
     })
-      .then((result) => {
+      .then(() => {
         setResponseFeedback(rating);
         setResponseFeedbackReason(reason ?? null);
-        setResponsePersonalContext(result.personalContext ?? []);
         setResponseFeedbackPromptOpen(false);
-        if (result.trace.remediation?.needsReviewRecordIds.length) {
-          setResponseFeedbackRemediated(true);
-        }
       })
       .catch(() => setResponseFeedbackError(true))
       .finally(() => setResponseFeedbackBusy(false));
@@ -401,16 +390,13 @@ export const MessageBubble = memo(function MessageBubble({
   const loadResponseFeedback = useCallback(() => {
     if (!message.turnId || responseFeedbackLoaded || responseFeedbackBusy) return;
     setResponseFeedbackBusy(true);
-    void fetchJson<{
-      trace: { feedback: Array<{ level: string; rating: string; source: string }> };
-      personalContext: ResponsePersonalContext[];
-    }>(apiUrl(`/api/you/feedback/${encodeURIComponent(message.turnId)}`))
+    void fetchJson<{ personalization: { items: Array<{ objectType: string; objectId: string; decision: string; content: string; sourceLabel: string }> } }>(
+      apiUrl(`/api/you/turns/${encodeURIComponent(message.turnId)}/personalization`),
+    )
       .then((result) => {
-        setResponsePersonalContext(result.personalContext ?? []);
-        const rating = result.trace.feedback.find((item) => item.level === 'response' && item.source === 'user')?.rating;
-        if (rating === 'helpful' || rating === 'not_helpful') {
-          setResponseFeedback(rating);
-        }
+        setResponsePersonalContext(result.personalization.items
+          .filter((item) => item.objectType === 'understanding' && item.decision === 'selected')
+          .map((item) => ({ id: item.objectId, statement: item.content, origin: 'inferred' as const, sourceName: item.sourceLabel })));
       })
       .catch(() => undefined)
       .finally(() => {
@@ -743,9 +729,6 @@ export const MessageBubble = memo(function MessageBubble({
                 </button>
                 {responseFeedbackError ? (
                   <span className="text-xs text-danger" role="status">{m.chat.messageFeedbackUnavailable}</span>
-                ) : null}
-                {responseFeedbackRemediated ? (
-                  <span className="text-xs text-fg-muted" role="status">{m.chat.messageUnderstandingReviewQueued}</span>
                 ) : null}
               </>
             ) : null}

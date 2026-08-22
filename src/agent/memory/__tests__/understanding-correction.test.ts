@@ -6,13 +6,12 @@ import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  appendMemoryTraceEvent,
   closeXopcDatabase,
-  getMemoryRecord,
-  listMemoryTraceEvents,
+  createUnderstanding,
+  getSqliteDatabase,
+  getUnderstanding,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
-  upsertMemoryRecord,
 } from '../../../storage/sqlite/index.js';
 import { UserContextCoordinator } from '../user-context-coordinator.js';
 import type { MemoryManager } from '../manager.js';
@@ -68,22 +67,19 @@ describe('understanding correction attribution', () => {
 
   it('marks the previous context trace before planning the correction turn', async () => {
     const sessionKey = 'agent:main:webchat:correction';
-    upsertMemoryRecord({
-      id: 'preference-1',
-      providerId: 'local',
+    const previous = createUnderstanding({
       kind: 'preference',
-      sourceAgentId: 'main',
-      content: 'Prefer concise answers.',
-      tags: ['user-understanding'],
       status: 'active',
+      canonicalKey: 'preference:concise',
+      scope: { type: 'global' },
+      explicitness: 'explicit',
+      durability: 'durable',
+      sensitivity: 'normal',
+      disclosurePolicy: 'referenceable',
       confidence: 0.9,
-    });
-    const previousTraceId = appendMemoryTraceEvent({
-      phase: 'inject',
-      turnId: 'previous-turn',
-      providerId: 'user-understanding',
-      sessionKey,
-      selectedRecordIds: ['preference-1'],
+      statement: 'Prefer concise answers.',
+      createdBy: 'user',
+      changeReason: 'test setup',
     });
     const captureTurnUnderstanding = vi.fn().mockResolvedValue(undefined);
     const memoryManager = {
@@ -112,17 +108,11 @@ describe('understanding correction attribution', () => {
       content: [{ type: 'text', text: '你记错了我的偏好，我需要详细回答。' }],
     } as AgentMessage, sessionKey, 'correction-turn');
 
-    const previous = listMemoryTraceEvents({ sessionKey, limit: 10 })
-      .find((trace) => trace.traceId === previousTraceId);
-    expect(previous?.feedback).toEqual(expect.arrayContaining([expect.objectContaining({
-      rating: 'incorrect',
-      source: 'system',
-      reasonCode: 'detected_explicit_user_correction',
-    })]));
-    expect(getMemoryRecord('preference-1')).toMatchObject({
-      status: 'needs_review',
-      confidence: 0.7,
-    });
+    const feedback = getSqliteDatabase().prepare(
+      'SELECT rating, reason FROM context_feedback WHERE turn_id = ?',
+    ).get('previous-turn') as { rating: string; reason: string } | undefined;
+    expect(feedback).toEqual({ rating: 'wrong', reason: 'detected_explicit_user_correction' });
+    expect(getUnderstanding(previous.id)?.status).toBe('needs_review');
 
     await coordinator.afterTurn(sessionKey, '你记错了我的偏好，我需要详细回答。');
     expect(captureTurnUnderstanding).toHaveBeenCalledWith(
@@ -131,9 +121,10 @@ describe('understanding correction attribution', () => {
       {
         agentId: 'main',
         sessionId: sessionKey,
+        turnId: 'correction-turn',
         workspaceId: '/workspace/project',
         projectId: 'project-1',
-        correctionTargetRecordIds: ['preference-1'],
+        correctionTargetRecordIds: [previous.id],
       },
     );
   });

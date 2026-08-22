@@ -29,20 +29,49 @@ export {
   type XopcDatabase,
 } from './connection.js';
 export { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
-export { getMemoryReadiness } from './memory-readiness-repository.js';
 export {
-  finishDreamingRun,
-  getDreamingRun,
-  listDreamingDecisions,
-  listDreamingRuns,
-  recordDreamingDecision,
-  startDreamingRun,
-  type DreamingActiveMode,
-  type DreamingDecision,
-  type DreamingMode,
-  type DreamingPhase,
-  type DreamingRun,
-} from './dreaming-repository.js';
+  finishContextConsolidationRun,
+  getContextConsolidationRun,
+  listContextConsolidationDecisions,
+  listContextConsolidationRuns,
+  recordContextConsolidationDecision,
+  startContextConsolidationRun,
+  type ContextConsolidationDecision,
+  type ContextConsolidationRun,
+} from './context-consolidation-repository.js';
+export {
+  summarizeUserUnderstandingQuality,
+  type UserUnderstandingQualityMetrics,
+} from './user-context-quality-repository.js';
+export {
+  createCollaborationRule,
+  createContextEvidence,
+  createUnderstanding,
+  consumeContextConsent,
+  deleteCollaborationRule,
+  deleteUnderstanding,
+  decideContextConsent,
+  ensureContextConsent,
+  getCollaborationRule,
+  getTurnPersonalization,
+  getUnderstanding,
+  getUserProfile,
+  hasContextConsent,
+  isUnderstandingSuppressed,
+  listCollaborationRules,
+  listUnderstandingEvidence,
+  listUnderstandings,
+  linkUnderstandingEvidence,
+  recordContextFeedback,
+  recordContextRun,
+  rejectUnderstanding,
+  reviseCollaborationRule,
+  reviseUnderstanding,
+  setCollaborationRuleStatus,
+  setUnderstandingStatus,
+  updateUserProfile,
+  type CreateUnderstandingInput,
+} from './user-context-repository.js';
 export {
   cancelQueuedSessionInput,
   claimNextSessionInput,
@@ -63,22 +92,6 @@ export {
   isHomeAttentionAcknowledged,
   type HomeAttentionSubjectKind,
 } from './home-attention-repository.js';
-export {
-  getUserClaim,
-  linkUserClaimMemoryRecord,
-  listUserClaimEvidence,
-  listUserClaimStatsBySource,
-  listUserClaims,
-  listUserPeopleGraphRows,
-  removeUserClaimEvidenceForSource,
-  reinforceUserClaim,
-  resolveUserEntity,
-  setUserClaimDecision,
-  type UserClaim,
-  type UserClaimClass,
-  type UserClaimState,
-  type UserEntity,
-} from './user-claims-repository.js';
 export {
   claimNextConnectorLearningJob,
   enqueueConnectorLearningJob,
@@ -208,19 +221,15 @@ export {
   setMemoryProviderState,
   setMemoryTurnFeedback,
   summarizeMemoryRecallFeedback,
-  summarizeUserUnderstandingQuality,
-  USER_UNDERSTANDING_REMEDIATION_POLICY,
   upsertMemoryRecord,
   type AppendMemorySignalInput,
   type AppendMemoryTraceEventInput,
   type ListMemoryRecordsOptions,
   type MemoryRecallFeedbackSummary,
-  type MemoryFeedbackRemediationResult,
   type MemorySignalRowPayload,
   type MemoryFeedback,
   type MemoryFeedbackRating,
   type MemoryTraceEventPayload,
-  type UserUnderstandingQualityMetrics,
   type SearchMemoryRecordsOptions,
   type SetMemoryTurnFeedbackInput,
   type UpsertMemoryRecordInput,
@@ -306,17 +315,3 @@ export {
   getUserTrustPolicy,
   setUserTrustPolicy,
 } from './user-trust-repository.js';
-export {
-  consumeMemoryReferenceConsent,
-  decideMemoryReferenceConsent,
-  ensureMemoryReferenceConsentRequest,
-  hasMemoryReferenceConsent,
-  listMemoryReferenceConsents,
-  revokeMemoryReferenceConsent,
-  type MemoryReferenceConsent,
-  type MemoryReferenceGrantScope,
-} from './memory-reference-consent-repository.js';
-export {
-  getUserProfilePromptState,
-  setUserProfilePromptState,
-} from './user-profile-setup-repository.js';

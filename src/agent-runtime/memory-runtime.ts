@@ -2,12 +2,10 @@ import type { UserContextConfig } from '../user-context/config.js';
 
 export type MemorySource =
   | 'session'
-  | 'userProfile'
   | 'agentProfile'
   | 'understanding'
-  | 'workspace'
-  | 'connectedSources';
-export type MemoryWriteTarget = 'userProfile' | 'agentProfile' | 'understanding' | 'workspace';
+  | 'workspace';
+export type MemoryWriteTarget = 'agentProfile' | 'understanding' | 'workspace';
 export type MemoryWriteDecision = 'allow' | 'confirm' | 'deny';
 
 export interface MemoryCandidate {

@@ -5,8 +5,6 @@ export type MemoryContextOrigin = 'told_by_user' | 'observed' | 'inferred' | 'co
 const INTERNAL_MEMORY_PROVIDERS = new Set([
   'local',
   'builtin',
-  'user-understanding',
-  'dreaming',
   'workflow-run',
 ]);
 

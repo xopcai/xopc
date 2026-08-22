@@ -26,7 +26,7 @@ export function createMemorySearchTool(options: MemoryToolOptions): AgentTool {
     name: 'memory_search',
     label: '🔍 Memory Search',
     description:
-      'Search structured user-understanding records before answering questions about prior work, decisions, dates, people, preferences, or todos; returns ranked snippets with stable record ids.',
+      'Search workspace and connected-source memory records for prior work, decisions, dates, people, or todos; returns ranked snippets with stable record ids.',
     parameters: MemorySearchSchema,
 
     async execute(

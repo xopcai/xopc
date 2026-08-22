@@ -1,11 +1,16 @@
-import type { MemoryRecord } from '../agent/memory/types.js';
-import { listMemoryRecords, upsertMemoryRecord } from '../storage/sqlite/index.js';
+import { createHash } from 'node:crypto';
 
-export const RELATIONSHIP_FOLLOW_UP_TAG = 'relationship:follow-up';
+import {
+  createContextEvidence,
+  createUnderstanding,
+  linkUnderstandingEvidence,
+  listUnderstandings,
+} from '../storage/sqlite/index.js';
+import type { UserUnderstanding } from './domain.js';
 
 export interface RelationshipFollowUpRequest {
   subject: string;
-  reviewAfter?: string;
+  validFrom?: number;
 }
 
 const CHINESE_FOLLOW_UP_PATTERN = /^(?:请|记得|麻烦|帮我)?\s*(?:明天|下周|之后|到时候)?\s*(?:提醒我|问问我|跟进一下|跟进)(?:关于)?[：:，,\s]*(.+)$/;
@@ -18,69 +23,49 @@ function normalizeFollowUpSubject(value: string | undefined): string | null {
   return subject;
 }
 
+function hash(value: string): string {
+  return createHash('sha256').update(value).digest('hex').slice(0, 20);
+}
+
 export function extractExplicitRelationshipFollowUp(
   message: string,
   nowMs = Date.now(),
 ): RelationshipFollowUpRequest | null {
   const text = message.trim();
-  const match = text.match(CHINESE_FOLLOW_UP_PATTERN)
-    ?? text.match(ENGLISH_FOLLOW_UP_PATTERN);
+  const match = text.match(CHINESE_FOLLOW_UP_PATTERN) ?? text.match(ENGLISH_FOLLOW_UP_PATTERN);
   const subject = normalizeFollowUpSubject(match?.[1]);
   if (!subject) return null;
   const delayMs = /明天|tomorrow/i.test(text)
-    ? 24 * 60 * 60 * 1_000
-    : /下周|next week/i.test(text)
-      ? 7 * 24 * 60 * 60 * 1_000
-      : 0;
-  return {
-    subject,
-    ...(delayMs ? { reviewAfter: new Date(nowMs + delayMs).toISOString() } : {}),
-  };
+    ? 86_400_000
+    : /下周|next week/i.test(text) ? 7 * 86_400_000 : 0;
+  return { subject, ...(delayMs ? { validFrom: nowMs + delayMs } : {}) };
 }
 
 export function recordExplicitRelationshipFollowUp(input: {
   sessionKey: string;
-  sourceAgentId: string;
   message: string;
   nowMs?: number;
-}): MemoryRecord | null {
+}): UserUnderstanding | null {
   const request = extractExplicitRelationshipFollowUp(input.message, input.nowMs);
   if (!request) return null;
-  const existing = listMemoryRecords({ kind: 'commitment', status: 'active', limit: 200 })
-    .find((record) => record.tags?.includes(RELATIONSHIP_FOLLOW_UP_TAG)
-      && record.content === request.subject);
+  const canonicalKey = `relationship-follow-up:${hash(request.subject.toLocaleLowerCase())}`;
+  const existing = listUnderstandings().find((item) =>
+    item.canonicalKey === canonicalKey && item.scope.type === 'global'
+    && item.status !== 'rejected' && item.status !== 'archived');
   if (existing) return existing;
-  return upsertMemoryRecord({
-    providerId: 'builtin',
-    kind: 'commitment',
-    sourceAgentId: input.sourceAgentId,
-    sessionKey: input.sessionKey,
-    content: request.subject,
-    source: { provider: 'builtin' },
-    tags: [RELATIONSHIP_FOLLOW_UP_TAG],
-    status: 'active',
-    explicitness: 'explicit',
-    durability: 'recurring',
-    importance: 0.8,
-    disclosurePolicy: 'referenceable',
-    ...(request.reviewAfter ? { reviewAfter: request.reviewAfter } : {}),
-    nowMs: input.nowMs,
+  const understanding = createUnderstanding({
+    kind: 'relationship', canonicalKey, status: 'active', scope: { type: 'global' },
+    explicitness: 'explicit', durability: 'recurring', sensitivity: 'normal',
+    disclosurePolicy: 'referenceable', confidence: 1, statement: request.subject,
+    ...(request.validFrom ? { validFrom: request.validFrom } : {}),
+    createdBy: 'user', changeReason: 'Explicit follow-up request',
   });
-}
-
-export function buildRelationshipContinuityPrompt(
-  records: MemoryRecord[],
-  nowMs = Date.now(),
-): string {
-  const due = records
-    .filter((record) => record.status === 'active')
-    .filter((record) => record.tags?.includes(RELATIONSHIP_FOLLOW_UP_TAG))
-    .filter((record) => !record.reviewAfter || Date.parse(record.reviewAfter) <= nowMs)
-    .slice(0, 3);
-  if (!due.length) return '';
-  return [
-    '## Relationship continuity',
-    'The user explicitly asked for these follow-ups. Check in naturally when relevant; do not pretend to know an task.',
-    ...due.map((record) => `- ${record.content}`),
-  ].join('\n');
+  const evidence = createContextEvidence({
+    sourceType: 'conversation',
+    sourceRef: `session:${input.sessionKey}:follow-up:${hash(input.message)}`,
+    redactedExcerpt: input.message.slice(0, 600), trustLevel: 'owner',
+    observedAt: input.nowMs ?? Date.now(),
+  });
+  linkUnderstandingEvidence(understanding.versionId, evidence.id, 'supports', 1);
+  return understanding;
 }

@@ -1161,7 +1161,7 @@ export const ConfigSchema = z.object({
       writeStrategy: 'local-first',
       allowExternalWrites: false,
     },
-    dreaming: { mode: 'off' },
+    dreaming: { mode: 'review', schedule: { time: '03:00' }, minEvidenceSources: 2, limit: 500 },
   },
   agents: {
     default: 'main',

@@ -29,8 +29,6 @@ Default: `~/.xopc/`
 | `logs/` | Application logs (overridable via `XOPC_LOG_DIR`). |
 | `bin/`, `tools/` | Managed CLI shim and tool runtimes. |
 | `models.json` | Optional custom model registry data. |
-| `user/PROFILE.md` | Shared user profile loaded by every agent. |
-| `user/dreaming/` | Operational Dreaming event logs; not a memory source. |
 
 ## External compatibility roots
 
@@ -42,7 +40,7 @@ Resolved by `resolveAgentHomeDir(config, agentId)`. Typical layout:
 
 | Path | Purpose |
 |------|---------|
-| `profile/` | Agent profile Markdown for the system prompt stack: `SOUL.md`, `IDENTITY.md`, `TOOLS.md`, `AGENTS.md`, `HEARTBEAT.md`, plus optional `agent-avatar.*` for the gateway console. Global user profile lives in `user/PROFILE.md`. |
+| `profile/` | Agent profile Markdown for the system prompt stack: `SOUL.md`, `IDENTITY.md`, `TOOLS.md`, `AGENTS.md`, `HEARTBEAT.md`, plus optional `agent-avatar.*`. User context lives in `xopc.db`. |
 | `sessions/` | Legacy directory (optional); may remain from older installs. New installs store transcripts in `xopc.db` only. |
 | `inbound/` | Persisted inbound attachments (non-image binaries); transcript paths use `inbound/...` relative to agent home. |
 | `tts/` | Cached outbound TTS audio per session. |

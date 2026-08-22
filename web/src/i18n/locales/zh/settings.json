@@ -57,29 +57,6 @@
       "failed": "失败"
     }
   },
-  "userProfileSettings": {
-    "title": "关于你",
-    "subtitle": "帮助助手理解该如何与你协作；这些内容随时可以修改或删除。",
-    "sectionTitle": "关于我",
-    "sectionSubtitle": "记录稳定偏好、边界和沟通方式，让助手更懂你。",
-    "loading": "加载中…",
-    "loadError": "无法加载个人资料。",
-    "save": "保存",
-    "saving": "保存中…",
-    "saved": "已保存",
-    "saveError": "保存失败。",
-    "callName": "姓名或称呼",
-    "callNamePlaceholder": "希望助手如何称呼你？",
-    "pronouns": "称谓",
-    "pronounsPlaceholder": "选择或输入称谓",
-    "timezone": "时区",
-    "timezoneCustom": "自定义时区",
-    "timezoneDetect": "检测",
-    "notes": "备注",
-    "notesPlaceholder": "沟通方式、稳定偏好、边界、近期重点，或任何希望助手理解的事情。",
-    "custom": "自定义…",
-    "note": "这些信息会在不同对话中共享；长期记忆仍可单独查看、修正和删除。"
-  },
   "capabilityPresetsSettings": {
   "title": "能力方案",
   "manageAgents": "管理智能体",

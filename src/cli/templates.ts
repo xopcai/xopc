@@ -104,7 +104,7 @@ This folder is home. Treat it that way.
 
 ## Session Startup
 
-Use runtime-provided startup context first. Bootstrap files (global user profile, SOUL, MEMORY, etc.) are injected by xopc on /new and /reset.
+Use runtime-provided startup context first. Agent profile files such as SOUL.md are injected by xopc on /new and /reset; relevant user context is selected from SQLite per turn.
 
 Do not manually reread startup files unless the user asks or the provided context is incomplete.
 

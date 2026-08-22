@@ -6,7 +6,6 @@ import {
   maybeSetProvisionalSessionTitle,
 } from '../session/session-title.js';
 import type { ChannelManager } from '../channels/manager.js';
-import { existsSync, readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 
 import {
@@ -90,7 +89,7 @@ import {
 import {
   extractProfileAgentId,
 } from '../config/agent-profile.js';
-import { resolveUserProfilePath } from '../config/paths.js';
+import { getUserProfile } from '../storage/sqlite/user-context-repository.js';
 import { getProjectForSession } from '../projects/workspace.js';
 import {
   persistInboundAttachments,
@@ -787,10 +786,6 @@ export class AgentService {
     return Promise.resolve();
   }
 
-  async reconcileDreamingNow(): Promise<void> {
-    return Promise.resolve();
-  }
-
   /**
    * Persist agent messages with the same sanitizer + transcript hygiene as AgentOrchestrator.
    * Uses persistence hygiene so `thinking` blocks remain on disk for the web UI (LLM load path still drops them).
@@ -979,19 +974,14 @@ export class AgentService {
 
    /**
    * Best-effort timezone resolution for webchat envelope timestamps.
-   * Reads the global user profile and extracts a `Timezone:` line.
+   * Reads the structured global user profile.
    */
   resolveUserTimezoneForSession(sessionKey: string): string | undefined {
     void sessionKey;
     try {
       const cfg = this.effectiveAppConfig();
       if (!cfg) return undefined;
-      const userPath = resolveUserProfilePath();
-      if (!existsSync(userPath)) return undefined;
-      const raw = readFileSync(userPath, 'utf-8');
-      const match = raw.match(/Timezone:\s*(.+)/i);
-      const tz = match?.[1]?.trim();
-      return tz || undefined;
+      return getUserProfile().timezone || undefined;
     } catch {
       return undefined;
     }
