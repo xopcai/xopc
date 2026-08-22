@@ -1,6 +1,6 @@
 import type { EndpointTurnClaim } from '@xopcai/endpoint-tools-protocol';
 
-const WAIT_TIMEOUT_MS = 10_000;
+const WAIT_TIMEOUT_MS = 30_000;
 
 let activeClaim: EndpointTurnClaim | undefined;
 const waiters = new Set<(claim: EndpointTurnClaim) => void>();
@@ -16,7 +16,10 @@ export function clearMobileEndpointTurnClaim(token?: string): void {
   activeClaim = undefined;
 }
 
-export function waitForMobileEndpointTurnClaim(signal?: AbortSignal): Promise<EndpointTurnClaim> {
+export function waitForMobileEndpointTurnClaim(
+  signal?: AbortSignal,
+  onWaiting?: () => void,
+): Promise<EndpointTurnClaim> {
   if (activeClaim) return Promise.resolve(activeClaim);
   if (signal?.aborted) return Promise.reject(signal.reason);
 
@@ -40,5 +43,6 @@ export function waitForMobileEndpointTurnClaim(signal?: AbortSignal): Promise<En
     };
     waiters.add(onClaim);
     signal?.addEventListener('abort', onAbort, { once: true });
+    onWaiting?.();
   });
 }
