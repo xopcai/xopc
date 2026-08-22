@@ -58,6 +58,13 @@ describe('structured user context routes', () => {
     });
   });
 
+  it('offers a local call-name suggestion without persisting it', async () => {
+    const response = await app.request('/api/you/profile');
+    const body = await response.json() as { profile: { callName: string }; suggestedCallName: string };
+    expect(body.profile.callName).toBe('');
+    expect(typeof body.suggestedCallName).toBe('string');
+  });
+
   it('rejects invalid domain values and exposes no Markdown profile endpoint', async () => {
     const invalid = await app.request('/api/you/understandings', {
       method: 'POST', headers: { 'content-type': 'application/json' },
