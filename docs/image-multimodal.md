@@ -18,6 +18,10 @@ the `xopc-cloud` provider automatically; they use the existing OAuth grant and d
 not require a second API key. Configure the selection in **Settings → Capabilities
 → Image**; credentials are stored outside `xopc.json`.
 
+When first-time onboarding selects XOPC Model Service, xopc automatically configures
+the first available image-generation model from the platform catalog. Existing explicit
+image-generation settings are preserved.
+
 ---
 
 ## Behaviour

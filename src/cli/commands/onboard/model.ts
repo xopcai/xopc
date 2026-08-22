@@ -42,6 +42,7 @@ import {
   sortModelsForPicker,
   sortProvidersForPicker,
 } from '../../../providers/presentation.js';
+import { getModelCatalogStore, type ModelCatalogStore } from '../../../providers/model-catalog-store.js';
 import { XopcCloudModelSource } from '../../../providers/xopc-cloud-model-source.js';
 import { getOAuthProvider } from '../../utils/oauth-providers.js';
 import { runCliOAuthLogin } from '../../utils/oauth-login.js';
@@ -51,7 +52,22 @@ import { colors } from '../../utils/colors.js';
 type ModelChoice = { value: string; name: string; description?: string };
 type CustomApiKind = 'openai-completions' | 'openai-responses' | 'anthropic-messages';
 
-function setPrimaryModel(config: Config, workspacePath: string, modelRef: string): Config {
+export function defaultXopcCloudImageModel(
+  catalogStore: ModelCatalogStore = getModelCatalogStore(),
+): string | undefined {
+  const model = catalogStore.getSource('xopc-cloud')?.models.find((entry) =>
+    entry.availability === 'available'
+    && entry.kind === 'image'
+    && entry.operations.includes('images.generate'));
+  return model ? `xopc-cloud/${model.id}` : undefined;
+}
+
+export function setPrimaryModel(
+  config: Config,
+  workspacePath: string,
+  modelRef: string,
+  defaultImageGenerationModel?: string,
+): Config {
   const id = config.agents.default ?? config.agents.list[0]?.id ?? 'main';
   const index = config.agents.list.findIndex((entry) => entry.id === id);
   let nextConfig = config;
@@ -64,10 +80,16 @@ function setPrimaryModel(config: Config, workspacePath: string, modelRef: string
     };
     nextConfig = { ...config, agents: { ...config.agents, list: nextList } };
   }
+  const presetId = nextConfig.agents.defaultPreset ?? 'default';
+  const currentModels = nextConfig.agents.capabilityPresets[presetId]?.models;
   const prep = prepareUpdateGlobalDefaults(nextConfig, {
     models: {
+      ...currentModels,
       defaultRole: 'deep',
-      roles: { deep: { model: modelRef } },
+      roles: { ...currentModels?.roles, deep: { model: modelRef } },
+      ...(!currentModels?.imageGenerationModel && defaultImageGenerationModel
+        ? { imageGenerationModel: { primary: defaultImageGenerationModel } }
+        : {}),
     },
   });
   if (prep.ok === false) {
@@ -567,5 +589,7 @@ export async function setupModel(existingConfig: Config | null, ctx: CLIContext)
   });
 
   console.log('\n✅ Model configured:', model);
-  return setPrimaryModel(config, ctx.workspacePath, model);
+  const imageModel = provider === 'xopc-cloud' ? defaultXopcCloudImageModel() : undefined;
+  if (imageModel) console.log('✅ Image generation configured:', imageModel);
+  return setPrimaryModel(config, ctx.workspacePath, model, imageModel);
 }
