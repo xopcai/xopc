@@ -1,0 +1,314 @@
+import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
+import { create } from 'zustand';
+
+import { KEYS, storage } from '../../storage/mmkv';
+import {
+  recordInteractionPerformanceEvent,
+  recordUsageEvent,
+} from '../../product/usage-metrics';
+import { claimAudioPlayback, releaseAudioPlayback } from './audio-playback-coordinator';
+import { generateSpeechChunk } from './read-aloud-api';
+import { ReadAloudCache } from './read-aloud-cache';
+import { splitSpeakableText } from './read-aloud-text';
+
+const PLAYBACK_OWNER = 'assistant-read-aloud';
+const RATES = [0.75, 1, 1.25, 1.5, 2] as const;
+
+export type ReadAloudStatus = 'idle' | 'preparing' | 'playing' | 'paused' | 'error';
+export type ReadAloudError = 'empty' | 'generation' | null;
+
+export type ReadAloudInput = {
+  source: {
+    id: string;
+    sessionKey?: string;
+    title: string;
+  };
+  text: string;
+  language: 'en-US' | 'zh-CN';
+};
+
+type ReadAloudState = {
+  source: ReadAloudInput['source'] | null;
+  status: ReadAloudStatus;
+  error: ReadAloudError;
+  consentRequired: boolean;
+  currentChunkIndex: number;
+  chunkCount: number;
+  currentTime: number;
+  duration: number;
+  rate: number;
+  requestStart: (input: ReadAloudInput) => void;
+  acceptConsent: () => void;
+  declineConsent: () => void;
+  pause: () => void;
+  resume: () => void;
+  stop: () => void;
+  retry: () => void;
+  cycleRate: () => void;
+};
+
+const initialPlaybackState = {
+  source: null,
+  status: 'idle' as const,
+  error: null,
+  consentRequired: false,
+  currentChunkIndex: 0,
+  chunkCount: 0,
+  currentTime: 0,
+  duration: 0,
+};
+
+let activeInput: ReadAloudInput | null = null;
+let lastInput: ReadAloudInput | null = null;
+let pendingInput: ReadAloudInput | null = null;
+let chunks: string[] = [];
+let chunkFiles: Array<string | undefined> = [];
+let chunkDurations: number[] = [];
+const chunkRequests = new Map<number, Promise<string>>();
+let requestController: AbortController | null = null;
+let player: AudioPlayer | null = null;
+let cache: ReadAloudCache | null = null;
+let generation = 0;
+let finishingChunk = false;
+let playbackRequestedAt = 0;
+let playbackCompleted = false;
+
+function completedDuration(index: number): number {
+  return chunkDurations.slice(0, index).reduce((total, value) => total + (value || 0), 0);
+}
+
+function removePlayer(): void {
+  const current = player;
+  player = null;
+  if (!current) return;
+  try {
+    current.remove();
+  } catch {
+    // Native player may already be released after an interruption.
+  }
+}
+
+function resetPlayback(): void {
+  generation += 1;
+  requestController?.abort();
+  requestController = null;
+  removePlayer();
+  cache?.remove();
+  cache = null;
+  chunks = [];
+  chunkFiles = [];
+  chunkDurations = [];
+  chunkRequests.clear();
+  activeInput = null;
+  finishingChunk = false;
+  playbackRequestedAt = 0;
+  playbackCompleted = false;
+  releaseAudioPlayback(PLAYBACK_OWNER);
+}
+
+async function ensureChunk(index: number, runGeneration: number): Promise<string> {
+  const existing = chunkFiles[index];
+  if (existing) return existing;
+  const inFlight = chunkRequests.get(index);
+  if (inFlight) return inFlight;
+  const input = activeInput;
+  const text = chunks[index];
+  if (!input || !text || !cache) throw new Error('Speech chunk is unavailable');
+
+  const promise = generateSpeechChunk({
+    text,
+    language: input.language,
+    signal: requestController?.signal,
+  }).then((result) => {
+    if (runGeneration !== generation || !cache) throw new Error('Stale speech request');
+    const uri = cache.write(index, result.bytes, result.mimeType);
+    chunkFiles[index] = uri;
+    return uri;
+  });
+  chunkRequests.set(index, promise);
+  try {
+    return await promise;
+  } finally {
+    chunkRequests.delete(index);
+  }
+}
+
+async function playChunk(index: number, runGeneration: number): Promise<void> {
+  useReadAloudStore.setState({ status: 'preparing', error: null, currentChunkIndex: index });
+  try {
+    const uri = await ensureChunk(index, runGeneration);
+    if (runGeneration !== generation) return;
+    await setAudioModeAsync({
+      allowsRecording: false,
+      playsInSilentMode: true,
+      interruptionMode: 'doNotMix',
+      shouldPlayInBackground: false,
+    });
+    removePlayer();
+    const nextPlayer = createAudioPlayer({ uri }, { updateInterval: 250 });
+    player = nextPlayer;
+    nextPlayer.playbackRate = useReadAloudStore.getState().rate;
+    finishingChunk = false;
+    nextPlayer.addListener('playbackStatusUpdate', (status) => {
+      if (player !== nextPlayer || runGeneration !== generation || !status.isLoaded) return;
+      const duration = Number.isFinite(status.duration) ? status.duration : 0;
+      if (duration > 0) chunkDurations[index] = duration;
+      useReadAloudStore.setState({
+        currentTime: completedDuration(index) + (status.currentTime || 0),
+        duration: chunkDurations.reduce((total, value) => total + (value || 0), 0),
+        ...(status.playing ? { status: 'playing' as const } : {}),
+      });
+      if (!status.didJustFinish || finishingChunk) return;
+      finishingChunk = true;
+      const nextIndex = index + 1;
+      if (nextIndex < chunks.length) {
+        void playChunk(nextIndex, runGeneration);
+      } else {
+        removePlayer();
+        playbackCompleted = true;
+        recordUsageEvent('read_aloud_completed');
+        useReadAloudStore.setState({ status: 'paused', currentChunkIndex: 0, currentTime: 0 });
+      }
+    });
+    claimAudioPlayback(PLAYBACK_OWNER, () => useReadAloudStore.getState().pause());
+    nextPlayer.play();
+    useReadAloudStore.setState({ status: 'playing' });
+    if (index === 0 && playbackRequestedAt > 0) {
+      recordInteractionPerformanceEvent('read_aloud_first_audio', Date.now() - playbackRequestedAt);
+      playbackRequestedAt = 0;
+    }
+    if (index + 1 < chunks.length) void ensureChunk(index + 1, runGeneration).catch(() => undefined);
+  } catch {
+    if (runGeneration !== generation) return;
+    removePlayer();
+    releaseAudioPlayback(PLAYBACK_OWNER);
+    playbackRequestedAt = 0;
+    recordUsageEvent('read_aloud_failed');
+    useReadAloudStore.setState({ status: 'error', error: 'generation' });
+  }
+}
+
+function startPlayback(input: ReadAloudInput): void {
+  const previousStatus = useReadAloudStore.getState().status;
+  if (activeInput && !playbackCompleted && previousStatus !== 'error') {
+    recordUsageEvent('read_aloud_stopped');
+  }
+  resetPlayback();
+  const nextChunks = splitSpeakableText(input.text);
+  if (nextChunks.length === 0) {
+    useReadAloudStore.setState({ status: 'error', error: 'empty' });
+    return;
+  }
+  activeInput = input;
+  lastInput = input;
+  chunks = nextChunks;
+  chunkFiles = Array.from({ length: chunks.length });
+  chunkDurations = Array.from({ length: chunks.length }, () => 0);
+  requestController = new AbortController();
+  try {
+    cache = new ReadAloudCache(`${Date.now()}-${generation}`);
+  } catch {
+    resetPlayback();
+    recordUsageEvent('read_aloud_failed');
+    useReadAloudStore.setState({
+      source: input.source,
+      status: 'error',
+      error: 'generation',
+      chunkCount: nextChunks.length,
+    });
+    return;
+  }
+  playbackRequestedAt = Date.now();
+  recordUsageEvent('read_aloud_started');
+  const runGeneration = generation;
+  useReadAloudStore.setState({
+    source: input.source,
+    status: 'preparing',
+    error: null,
+    consentRequired: false,
+    currentChunkIndex: 0,
+    chunkCount: chunks.length,
+    currentTime: 0,
+    duration: 0,
+  });
+  void playChunk(0, runGeneration);
+}
+
+export const useReadAloudStore = create<ReadAloudState>()((set, get) => ({
+  ...initialPlaybackState,
+  rate: 1,
+
+  requestStart: (input) => {
+    const state = get();
+    const sameSource = state.source?.id === input.source.id && activeInput?.text === input.text;
+    if (sameSource && state.status === 'playing') return get().pause();
+    if (sameSource && state.status === 'paused') return get().resume();
+    if (sameSource && state.status === 'preparing') return get().stop();
+    if (storage.getString(KEYS.readAloudConsent) !== 'accepted') {
+      pendingInput = input;
+      set({ consentRequired: true });
+      return;
+    }
+    startPlayback(input);
+  },
+
+  acceptConsent: () => {
+    storage.set(KEYS.readAloudConsent, 'accepted');
+    const input = pendingInput;
+    pendingInput = null;
+    set({ consentRequired: false });
+    if (input) startPlayback(input);
+  },
+
+  declineConsent: () => {
+    pendingInput = null;
+    set({ consentRequired: false });
+  },
+
+  pause: () => {
+    if (!activeInput) return;
+    if (get().status === 'preparing') {
+      return get().stop();
+    }
+    player?.pause();
+    set({ status: 'paused' });
+  },
+
+  resume: () => {
+    if (!activeInput) return;
+    if (playbackCompleted) {
+      playbackCompleted = false;
+      playbackRequestedAt = Date.now();
+      recordUsageEvent('read_aloud_started');
+    }
+    if (player && player.currentTime > 0) {
+      claimAudioPlayback(PLAYBACK_OWNER, () => get().pause());
+      player.playbackRate = get().rate;
+      player.play();
+      set({ status: 'playing' });
+      return;
+    }
+    requestController = new AbortController();
+    void playChunk(get().currentChunkIndex, generation);
+  },
+
+  stop: () => {
+    if (activeInput && !playbackCompleted && get().status !== 'error') {
+      recordUsageEvent('read_aloud_stopped');
+    }
+    resetPlayback();
+    lastInput = null;
+    set({ ...initialPlaybackState, rate: get().rate });
+  },
+
+  retry: () => {
+    if (lastInput) startPlayback(lastInput);
+  },
+
+  cycleRate: () => {
+    const currentIndex = RATES.indexOf(get().rate as typeof RATES[number]);
+    const rate = RATES[(currentIndex + 1) % RATES.length] ?? 1;
+    if (player) player.playbackRate = rate;
+    set({ rate });
+  },
+}));

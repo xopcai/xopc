@@ -33,6 +33,9 @@ import { useMessages } from '../../i18n/messages';
 import { colors as tokenColors, typography, useTheme } from '../../theme';
 import { extractUserMessageText } from './composer-send-helpers';
 import { chatColors, chatLayout } from './styles';
+import { usePreferencesStore } from '../../stores/preferences-store';
+import { buildSpeakableText, detectSpeechLanguage } from '../voice/read-aloud-text';
+import { useReadAloudStore } from '../voice/read-aloud-store';
 
 function formatTime(ts: number): string {
   const d = new Date(ts);
@@ -262,6 +265,7 @@ function renderAssistantContent(
 
 export const MessageBubble = memo(function MessageBubble({
   message,
+  messageIndex,
   isStreaming = false,
   progress,
   sessionKey,
@@ -273,6 +277,7 @@ export const MessageBubble = memo(function MessageBubble({
   onAssistantRegenerate,
 }: {
   message: Message;
+  messageIndex: number;
   isStreaming?: boolean;
   progress?: ProgressState | null;
   sessionKey?: string;
@@ -284,6 +289,7 @@ export const MessageBubble = memo(function MessageBubble({
   onAssistantRegenerate?: () => void;
 }) {
   const m = useMessages();
+  const language = usePreferencesStore((state) => state.language);
   const { colors, isDark } = useTheme();
   const isUser = message.role === 'user' || message.role === 'user-with-attachments';
   const isAssistant = message.role === 'assistant';
@@ -368,6 +374,16 @@ export const MessageBubble = memo(function MessageBubble({
     () => (assistantPlainText ? extractMarkdownCodeBlocks(assistantPlainText) : ''),
     [assistantPlainText],
   );
+  const hasAssistantAudio = isAssistant && contentBlocks.some((block) => block.type === 'audio');
+  const speakableText = useMemo(
+    () => (assistantPlainText ? buildSpeakableText(assistantPlainText) : ''),
+    [assistantPlainText],
+  );
+  const readAloudSourceId = `${sessionKey ?? 'chat'}:${message.id ?? message.timestamp ?? messageIndex}`;
+  const readAloudStatus = useReadAloudStore((state) => (
+    state.source?.id === readAloudSourceId ? state.status : 'idle'
+  ));
+  const requestReadAloud = useReadAloudStore((state) => state.requestStart);
 
   const userActions = useMemo((): MessageAction[] => {
     if (!isUser) return [];
@@ -417,6 +433,32 @@ export const MessageBubble = memo(function MessageBubble({
         accessibilityLabel: m.chat.messageCopy,
       });
     }
+    if (speakableText && !hasAssistantAudio) {
+      const label = readAloudStatus === 'preparing'
+        ? m.chat.messageReadAloudPreparing
+        : readAloudStatus === 'playing'
+          ? m.chat.messageReadAloudPause
+          : readAloudStatus === 'paused'
+            ? m.chat.messageReadAloudResume
+            : readAloudStatus === 'error'
+              ? m.chat.messageReadAloudRetry
+              : m.chat.messageReadAloud;
+      actions.push({
+        icon: readAloudStatus === 'preparing'
+          ? 'loading'
+          : readAloudStatus === 'playing'
+            ? 'pause'
+            : readAloudStatus === 'error'
+              ? 'refresh'
+              : 'volume-high',
+        onPress: () => requestReadAloud({
+          source: { id: readAloudSourceId, sessionKey, title: m.chat.messageReadAloudTitle },
+          text: speakableText,
+          language: detectSpeechLanguage(speakableText, language),
+        }),
+        accessibilityLabel: label,
+      });
+    }
     if (assistantPlainText && onAssistantSaveToNote) {
       actions.push({
         icon: 'note-plus-outline',
@@ -444,12 +486,25 @@ export const MessageBubble = memo(function MessageBubble({
     isStreaming,
     assistantPlainText,
     assistantCodeText,
+    speakableText,
+    hasAssistantAudio,
+    readAloudStatus,
+    readAloudSourceId,
+    requestReadAloud,
+    sessionKey,
+    language,
     onAssistantCopy,
     onAssistantSaveToNote,
     onAssistantRegenerate,
     m.chat.messageCopy,
     m.chat.messageCopyCode,
     m.chat.messageSaveToNote,
+    m.chat.messageReadAloud,
+    m.chat.messageReadAloudPause,
+    m.chat.messageReadAloudPreparing,
+    m.chat.messageReadAloudResume,
+    m.chat.messageReadAloudRetry,
+    m.chat.messageReadAloudTitle,
     m.chat.messageRegenerate,
   ]);
 

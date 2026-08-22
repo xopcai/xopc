@@ -10,6 +10,8 @@ import {
 import type { AudioRecorder, RecordingOptions } from 'expo-audio';
 import { Platform } from 'react-native';
 
+import { pauseActiveAudioPlayback } from '../voice/audio-playback-coordinator';
+
 export type ExpoRecording = AudioRecorder;
 
 /** expo-audio only emits recordingStatusUpdate on finish/error — poll for live metering. */
@@ -76,6 +78,7 @@ export async function requestMicPermission(): Promise<boolean> {
 export async function beginRecording(
   onStatus: (metering: number | undefined, durationMillis: number) => void,
 ): Promise<ExpoRecording> {
+  pauseActiveAudioPlayback();
   await setAudioModeAsync({
     allowsRecording: true,
     playsInSilentMode: true,
