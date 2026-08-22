@@ -3,16 +3,18 @@ import { describe, expect, it } from 'vitest';
 import { inferDefaultLanguageFromEnvironment, uiLanguageFromLocaleTag } from '../locale-default';
 
 describe('locale-default', () => {
-  it('uiLanguageFromLocaleTag treats en variants as English', () => {
+  it('uiLanguageFromLocaleTag treats Chinese variants as Chinese', () => {
+    expect(uiLanguageFromLocaleTag('zh')).toBe('zh');
+    expect(uiLanguageFromLocaleTag('zh-CN')).toBe('zh');
+    expect(uiLanguageFromLocaleTag('zh_Hant')).toBe('zh');
+  });
+
+  it('uiLanguageFromLocaleTag uses English for English and unsupported locales', () => {
     expect(uiLanguageFromLocaleTag('en')).toBe('en');
     expect(uiLanguageFromLocaleTag('en-US')).toBe('en');
     expect(uiLanguageFromLocaleTag('en_GB')).toBe('en');
-  });
-
-  it('uiLanguageFromLocaleTag treats non-English as Chinese UI', () => {
-    expect(uiLanguageFromLocaleTag('zh-CN')).toBe('zh');
-    expect(uiLanguageFromLocaleTag('ja')).toBe('zh');
-    expect(uiLanguageFromLocaleTag('fr')).toBe('zh');
+    expect(uiLanguageFromLocaleTag('ja')).toBe('en');
+    expect(uiLanguageFromLocaleTag('fr')).toBe('en');
   });
 
   it('uiLanguageFromLocaleTag empty → en', () => {

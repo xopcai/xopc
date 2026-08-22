@@ -10,6 +10,7 @@ import type { ConfiguredModel } from '@/features/chat/api/registry-api';
 import { fetchConfiguredModelsCached, invalidateConfiguredModelsCache } from '@/features/chat/api/registry-api';
 import { dispatchConfigReload } from '@/features/gateway/dispatch-config-reload';
 import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
+import { OnboardingLanguageSwitch } from '@/features/onboarding/onboarding-language-switch';
 import { OnboardingProviderGrid } from '@/features/onboarding/onboarding-provider-grid';
 import { OAuthProviderConnect } from '@/features/settings/models-hub/oauth-provider-connect';
 import { buildProviderConfigFromPresetProviderId } from '@/features/settings/models/models-settings-lib';
@@ -69,6 +70,7 @@ const stepNumber = (step: OnboardingStep): number => STEP_ORDER.indexOf(step) + 
 
 export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: OnboardingCardProps) {
   const language = useLocaleStore((s) => s.language);
+  const setLanguage = useLocaleStore((s) => s.setLanguage);
   const o = messages(language).onboarding;
 
   const [state, dispatch] = useReducer(onboardingReducer, initialOnboarding);
@@ -243,17 +245,26 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
 
   return (
     <div className="relative w-full max-w-xl rounded-2xl border border-edge bg-surface-panel p-6 shadow-elevated">
-      {canDismiss ? (
-        <button
-          type="button"
-          aria-label={o.skipSetup}
-          className="absolute right-3 top-3 inline-flex size-8 items-center justify-center rounded-lg text-fg-muted transition hover:bg-surface-muted hover:text-fg focus:outline-none focus:ring-2 focus:ring-accent/30"
-          onClick={onDismiss}
-        >
-          <X className="size-4" />
-        </button>
-      ) : null}
-      <div className="text-center">
+      <div className="-mr-3 -mt-3 flex min-h-11 items-start justify-end gap-1">
+        <OnboardingLanguageSwitch
+          value={language}
+          onChange={(nextLanguage) => {
+            dispatch({ type: 'patch', patch: { error: null } });
+            setLanguage(nextLanguage);
+          }}
+        />
+        {canDismiss ? (
+          <button
+            type="button"
+            aria-label={o.skipSetup}
+            className="inline-flex size-11 items-center justify-center rounded-xl text-fg-muted transition hover:bg-surface-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            onClick={onDismiss}
+          >
+            <X className="size-4" aria-hidden />
+          </button>
+        ) : null}
+      </div>
+      <div className="mt-1 text-center">
         <BrandLogo className="mx-auto size-11" />
         <h2 className="mt-3 text-lg font-semibold tracking-tight text-fg">{o.title}</h2>
         <p className="mt-1 text-sm text-fg-muted">{o.subtitle}</p>
