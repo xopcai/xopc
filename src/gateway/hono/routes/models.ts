@@ -11,6 +11,7 @@ import type { Config } from '../../../config/schema.js';
 import {
   getImageGenerationProvider,
   reloadImageGenerationProviders,
+  resolveImageGenerationCredentialMode,
 } from '../../../agent/image/generation/provider-registry.js';
 import { testApiKeyResolution } from '../../../config/resolve-config-value.js';
 import {
@@ -440,7 +441,7 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
       if (!provider) {
         return c.json({ ok: false, error: { message: `Unknown image provider: ${providerId}` } }, 404);
       }
-      if (provider.credentialMode !== 'api-key') {
+      if (resolveImageGenerationCredentialMode(provider) !== 'api-key') {
         return c.json({ ok: false, error: { message: 'This provider does not use an API key' } }, 400);
       }
       const body = await c.req.json().catch(() => null) as Record<string, unknown> | null;
@@ -576,7 +577,7 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
 
       const resolver = new CredentialResolver();
       const imageProvider = getImageGenerationProvider(prepared.providerId)!;
-      const usesApiKey = imageProvider.credentialMode === 'api-key';
+      const usesApiKey = resolveImageGenerationCredentialMode(imageProvider) === 'api-key';
       const previousKey = usesApiKey
         ? await resolver.revealGatewayStoredApiKey(prepared.providerId)
         : undefined;

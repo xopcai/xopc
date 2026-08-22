@@ -74,6 +74,13 @@ export function getImageGenerationProvider(providerId: string): ImageGenerationP
   return providersById.get(providerId);
 }
 
+/** Resolve the auth mode consistently for provider objects and catalog summaries. */
+export function resolveImageGenerationCredentialMode(
+  provider: Pick<ImageGenerationProvider, 'credentialMode'>,
+): NonNullable<ImageGenerationProvider['credentialMode']> {
+  return provider.credentialMode ?? 'api-key';
+}
+
 export function listImageGenerationProviders(): ImageGenerationProvider[] {
   ensureCustomProvidersLoaded();
   return [...providers];
@@ -85,7 +92,7 @@ export function listImageGenerationProvidersSummary(): ImageGenerationProviderSu
     id: provider.id,
     label: provider.label,
     source: provider.source ?? 'builtin',
-    credentialMode: provider.credentialMode ?? 'api-key',
+    credentialMode: resolveImageGenerationCredentialMode(provider),
     ...(provider.documentationUrl ? { documentationUrl: provider.documentationUrl } : {}),
     ...(provider.apiKeyUrl ? { apiKeyUrl: provider.apiKeyUrl } : {}),
     defaultModel: provider.defaultModel,
