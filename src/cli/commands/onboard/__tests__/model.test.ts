@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { refreshOnboardModelCatalogIfNeeded } from '../model.js';
+import { ConfigSchema, getAgentDefaultImageGenerationModelConfig, getAgentDefaultModelRef } from '../../../../config/schema.js';
+import { ModelCatalogStore } from '../../../../providers/model-catalog-store.js';
+import {
+  defaultXopcCloudImageModel,
+  refreshOnboardModelCatalogIfNeeded,
+  setPrimaryModel,
+} from '../model.js';
 
 describe('refreshOnboardModelCatalogIfNeeded', () => {
   it('loads the XOPC Cloud catalog when the local catalog is empty', async () => {
@@ -41,5 +47,51 @@ describe('refreshOnboardModelCatalogIfNeeded', () => {
       refreshOnboardModelCatalogIfNeeded('xopc-cloud', false, { refresh }),
     ).rejects.toThrow('credentials are unavailable after OAuth login');
     log.mockRestore();
+  });
+});
+
+describe('XOPC Cloud onboard defaults', () => {
+  it('uses the first available published image-generation model without prompting', () => {
+    const store = new ModelCatalogStore();
+    store.replaceSourceModels('xopc-cloud', {
+      providerId: 'xopc-cloud', baseUrl: 'https://router.xopc.ai/v1',
+      api: 'openai-completions', etag: '1', recommendedModel: 'chat-model', lastSuccessAt: Date.now(),
+    }, [
+      {
+        id: 'chat-model', name: 'Chat', kind: 'language', input: ['text'], output: ['text'],
+        operations: ['chat.completions'], reasoning: false, contextWindow: 128_000, maxOutputTokens: 8_192,
+      },
+      {
+        id: 'image-01', name: 'Image', kind: 'image', input: ['text'], output: ['image'],
+        operations: ['images.generate'], reasoning: false, contextWindow: 128_000, maxOutputTokens: null,
+      },
+    ]);
+
+    expect(defaultXopcCloudImageModel(store)).toBe('xopc-cloud/image-01');
+  });
+
+  it('adds the image default while preserving other model roles', () => {
+    const config = ConfigSchema.parse({});
+    const updated = setPrimaryModel(
+      config,
+      '/tmp/xopc-main',
+      'xopc-cloud/chat-model',
+      'xopc-cloud/image-01',
+    );
+
+    expect(getAgentDefaultModelRef(updated)).toBe('xopc-cloud/chat-model');
+    expect(getAgentDefaultImageGenerationModelConfig(updated, 'main')).toEqual({
+      primary: 'xopc-cloud/image-01',
+    });
+  });
+
+  it('does not replace an existing explicit image-generation model', () => {
+    const config = ConfigSchema.parse({});
+    config.agents.capabilityPresets.default!.models!.imageGenerationModel = {
+      primary: 'openai/gpt-image-2',
+    };
+
+    const updated = setPrimaryModel(config, '/tmp/xopc-main', 'xopc-cloud/chat-model', 'xopc-cloud/image-01');
+    expect(getAgentDefaultImageGenerationModelConfig(updated, 'main')?.primary).toBe('openai/gpt-image-2');
   });
 });
