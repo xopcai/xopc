@@ -48,8 +48,8 @@ function defaultStt(): SttSettings {
   return {
     enabled: true,
     provider: 'xopc-local',
-    alibaba: { model: 'paraformer-v2' },
-    openai: { model: 'whisper-1' },
+    alibaba: { model: 'qwen-audio-3.0-asr-flash' },
+    openai: { model: 'gpt-4o-mini-transcribe' },
     providers: { 'xopc-local': { model: 'sensevoice-small' } },
     fallback: { enabled: false, order: ['xopc-local'] },
   };

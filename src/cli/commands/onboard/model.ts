@@ -62,11 +62,24 @@ export function defaultXopcCloudImageModel(
   return model ? `xopc-cloud/${model.id}` : undefined;
 }
 
+export function defaultXopcCloudAudioModels(
+  catalogStore: ModelCatalogStore = getModelCatalogStore(),
+): { stt?: string; tts?: { model: string; voice: string; maxCharacters: number } } {
+  const models = catalogStore.getSource('xopc-cloud')?.models.filter((entry) => entry.availability === 'available') ?? [];
+  const stt = models.find((entry) => entry.kind === 'stt');
+  const tts = models.find((entry) => entry.kind === 'tts' && entry.tts?.defaultVoice);
+  return {
+    ...(stt ? { stt: stt.id } : {}),
+    ...(tts?.tts?.defaultVoice ? { tts: { model: tts.id, voice: tts.tts.defaultVoice, maxCharacters: tts.tts.maxCharacters } } : {}),
+  };
+}
+
 export function setPrimaryModel(
   config: Config,
   workspacePath: string,
   modelRef: string,
   defaultImageGenerationModel?: string,
+  defaultAudioModels?: { stt?: string; tts?: { model: string; voice: string; maxCharacters: number } },
 ): Config {
   const id = config.agents.default ?? config.agents.list[0]?.id ?? 'main';
   const index = config.agents.list.findIndex((entry) => entry.id === id);
@@ -95,7 +108,43 @@ export function setPrimaryModel(
   if (prep.ok === false) {
     throw new Error(prep.error);
   }
-  return prep.data.nextConfig;
+  let configured = prep.data.nextConfig;
+  if (defaultAudioModels?.stt && !configured.tools.media?.audio) {
+    configured = {
+      ...configured,
+      tools: {
+        ...configured.tools,
+        media: {
+          ...configured.tools.media,
+          audio: {
+            enabled: true,
+            provider: 'xopc-cloud',
+            models: [{ provider: 'xopc-cloud', model: defaultAudioModels.stt, capabilities: ['audio'] }],
+            providers: { 'xopc-cloud': { model: defaultAudioModels.stt } },
+            fallback: { enabled: false, order: [] },
+          },
+        },
+      },
+    };
+  }
+  if (defaultAudioModels?.tts && !configured.messages?.tts) {
+    configured = {
+      ...configured,
+      messages: {
+        ...configured.messages,
+        tts: {
+          enabled: true,
+          provider: 'xopc-cloud',
+          trigger: 'off',
+          fallback: { enabled: false, order: [] },
+          maxTextLength: defaultAudioModels.tts.maxCharacters,
+          timeoutMs: 60_000,
+          providers: { 'xopc-cloud': { model: defaultAudioModels.tts.model, voice: defaultAudioModels.tts.voice } },
+        },
+      },
+    };
+  }
+  return configured;
 }
 
 function formatRecommended(provider: string): string | undefined {
@@ -590,6 +639,9 @@ export async function setupModel(existingConfig: Config | null, ctx: CLIContext)
 
   console.log('\n✅ Model configured:', model);
   const imageModel = provider === 'xopc-cloud' ? defaultXopcCloudImageModel() : undefined;
+  const audioModels = provider === 'xopc-cloud' ? defaultXopcCloudAudioModels() : undefined;
   if (imageModel) console.log('✅ Image generation configured:', imageModel);
-  return setPrimaryModel(config, ctx.workspacePath, model, imageModel);
+  if (audioModels?.stt) console.log('✅ Speech recognition configured:', audioModels.stt);
+  if (audioModels?.tts) console.log('✅ Speech synthesis configured:', audioModels.tts.model);
+  return setPrimaryModel(config, ctx.workspacePath, model, imageModel, audioModels);
 }

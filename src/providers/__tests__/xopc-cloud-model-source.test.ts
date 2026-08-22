@@ -41,6 +41,18 @@ describe('XopcCloudModelSource', () => {
             },
           },
           { id: 'model-a' },
+          {
+            id: 'stt-a', xopc: { kind: 'stt', capabilities: {
+              inputFormats: ['wav', 'opus'], maxBytes: 1000, maxDurationSeconds: 60,
+              languages: ['zh'], languageHint: true, prompt: true, timestamps: ['segment'], diarization: false,
+            } },
+          },
+          {
+            id: 'tts-a', xopc: { kind: 'tts', defaultVoice: 'coral', capabilities: {
+              maxCharacters: 1000, languages: ['zh'], outputFormats: ['mp3', 'opus'],
+              streaming: true, speed: true, pitch: false, instructions: true,
+            } },
+          },
           { id: 'model-a' },
           { id: '' },
         ],
@@ -56,8 +68,8 @@ describe('XopcCloudModelSource', () => {
 
     await expect(source.refresh()).resolves.toEqual({
       status: 'updated',
-      modelCount: 2,
-      models: ['model-b', 'model-a'],
+      modelCount: 4,
+      models: ['model-b', 'model-a', 'stt-a', 'tts-a'],
     });
     expect(store.getSource('xopc-cloud')).toMatchObject({
       providerId: 'xopc-cloud',
@@ -75,6 +87,14 @@ describe('XopcCloudModelSource', () => {
           output: ['text'], operations: ['chat.completions', 'responses'],
           reasoning: false, maxOutputTokens: null,
         },
+        expect.objectContaining({
+          id: 'stt-a', kind: 'stt', input: ['audio'], output: ['text'], operations: ['audio.transcription'],
+          stt: expect.objectContaining({ inputFormats: ['wav', 'opus'], maxDurationSeconds: 60 }),
+        }),
+        expect.objectContaining({
+          id: 'tts-a', kind: 'tts', input: ['text'], output: ['audio'], operations: ['audio.speech'],
+          tts: expect.objectContaining({ defaultVoice: 'coral', outputFormats: ['mp3', 'opus'] }),
+        }),
       ],
     });
     expect(refreshModels).toHaveBeenCalledOnce();

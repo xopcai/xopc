@@ -65,7 +65,7 @@ export interface TTSModelOverrideConfig {
 export interface TTSConfig {
   enabled: boolean;
   provider: TTSProvider;
-  /** Trigger mode: auto = reply with voice when user sends voice */
+  /** Trigger mode for automatic voice replies. */
   trigger: TTSAutoMode;
   /** Fallback configuration */
   fallback?: {

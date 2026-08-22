@@ -11,10 +11,7 @@ function options(values: readonly string[], names?: Record<string, string>): Voi
 }
 
 const alibabaSttModels = [
-  { id: 'paraformer-v2', name: 'Paraformer v2 (Recommended)' },
-  { id: 'paraformer-v1', name: 'Paraformer v1' },
-  { id: 'paraformer-8k-v1', name: 'Paraformer 8k v1 (Phone)' },
-  { id: 'paraformer-mtl-v1', name: 'Paraformer MTL v1 (Multilingual)' },
+  { id: 'qwen-audio-3.0-asr-flash', name: 'Qwen Audio 3.0 ASR Flash' },
 ];
 
 const localSttModels = [
@@ -76,15 +73,27 @@ export const builtinVoiceProviderMetadata: VoiceProviderMetadata[] = [
     diagnostics: { requiresApiKey: false, configPath: 'tools.media.audio.providers.xopc-local' },
   },
   {
+    id: 'xopc-cloud',
+    capability: 'stt',
+    displayName: 'XOPC Cloud',
+    description: 'OAuth-based speech recognition using models published by XOPC Cloud.',
+    models: [],
+    fields: [
+      { key: 'model', label: 'Public model ID', type: 'string' },
+      { key: 'language', label: 'Language hint', type: 'string', placeholder: 'zh' },
+    ],
+    diagnostics: { requiresApiKey: false, configPath: 'tools.media.audio.providers.xopc-cloud' },
+  },
+  {
     id: 'alibaba',
     capability: 'stt',
     displayName: 'Alibaba DashScope',
-    description: 'DashScope Paraformer speech-to-text, strong Chinese recognition.',
-    aliases: ['dashscope', 'paraformer'],
+    description: 'DashScope Qwen Audio speech-to-text for Chinese and multilingual recognition.',
+    aliases: ['dashscope'],
     models: alibabaSttModels,
     fields: [
       { key: 'apiKey', label: 'API Key', type: 'password', secret: true, placeholder: 'sk-...', description: 'DASHSCOPE_API_KEY' },
-      { key: 'model', label: 'Model', type: 'select', options: alibabaSttModels, defaultValue: 'paraformer-v2' },
+      { key: 'model', label: 'Model', type: 'select', options: alibabaSttModels, defaultValue: 'qwen-audio-3.0-asr-flash' },
       { key: 'language', label: 'Language hint', type: 'string', placeholder: 'zh' },
     ],
     diagnostics: { requiresApiKey: true, envKeys: ['DASHSCOPE_API_KEY'], configPath: 'tools.media.audio.providers.alibaba' },
@@ -92,17 +101,30 @@ export const builtinVoiceProviderMetadata: VoiceProviderMetadata[] = [
   {
     id: 'openai',
     capability: 'stt',
-    displayName: 'OpenAI Whisper',
-    description: 'OpenAI Whisper transcription endpoint.',
-    models: [{ id: 'whisper-1', name: 'Whisper-1' }],
+    displayName: 'OpenAI',
+    description: 'OpenAI transcription endpoint.',
+    models: [{ id: 'gpt-4o-mini-transcribe', name: 'GPT-4o Mini Transcribe' }, { id: 'gpt-4o-transcribe', name: 'GPT-4o Transcribe' }],
     fields: [
       { key: 'apiKey', label: 'API Key', type: 'password', secret: true, placeholder: 'sk-...', description: 'OPENAI_API_KEY' },
-      { key: 'model', label: 'Model', type: 'select', options: [{ id: 'whisper-1', name: 'Whisper-1' }], defaultValue: 'whisper-1' },
+      { key: 'model', label: 'Model', type: 'select', options: [{ id: 'gpt-4o-mini-transcribe', name: 'GPT-4o Mini Transcribe' }, { id: 'gpt-4o-transcribe', name: 'GPT-4o Transcribe' }], defaultValue: 'gpt-4o-mini-transcribe' },
       { key: 'baseUrl', label: 'Base URL', type: 'string', placeholder: 'https://api.openai.com/v1' },
       { key: 'language', label: 'Language hint', type: 'string', placeholder: 'en' },
       { key: 'prompt', label: 'Prompt', type: 'textarea' },
     ],
     diagnostics: { requiresApiKey: true, envKeys: ['OPENAI_API_KEY'], configPath: 'tools.media.audio.providers.openai' },
+  },
+  {
+    id: 'xopc-cloud',
+    capability: 'tts',
+    displayName: 'XOPC Cloud',
+    description: 'OAuth-based speech synthesis using models and voices published by XOPC Cloud.',
+    models: [],
+    voices: [],
+    fields: [
+      { key: 'model', label: 'Public model ID', type: 'string' },
+      { key: 'voice', label: 'Voice ID', type: 'string' },
+    ],
+    diagnostics: { requiresApiKey: false, configPath: 'messages.tts.providers.xopc-cloud' },
   },
   {
     id: 'openai',

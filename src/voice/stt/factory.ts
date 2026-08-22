@@ -16,11 +16,7 @@ import {
   listMediaUnderstandingProviders,
 } from '../../media-understanding/registry.js';
 import type { AudioProviderResolvedConfig } from '../../media-understanding/audio-transcription-runner.js';
-import {
-  STT_LEGACY_ENV_KEYS,
-  readSttProviderFields,
-  resolveSttProviderConfigSlice,
-} from './config-slice.js';
+import { readSttProviderFields, resolveSttProviderConfigSlice } from './config-slice.js';
 import type { MediaUnderstandingModelEntry, STTConfig } from './types.js';
 
 const log = createLogger('STT:Factory');
@@ -31,9 +27,7 @@ function resolveApiKey(
   envKey?: string,
 ): string | undefined {
   return (
-    fields.apiKey ??
-    (envKey ? process.env[envKey] : undefined) ??
-    process.env[STT_LEGACY_ENV_KEYS[providerId] ?? '']
+    fields.apiKey ?? (envKey ? process.env[envKey] : undefined)
   );
 }
 
