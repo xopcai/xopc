@@ -12,7 +12,10 @@ xopc 支持在对话中**接收图片**、通过 **`image` 工具**做**图像�
 | 图片生成模型 | `agents.list[].models.imageGenerationModel` | 为每个 Agent 选择一个内置 Provider/模型。 |
 | 媒体大小限制 | 运行时 / gateway 限制 | 上传和工具载荷上限取决于具体路由或工具。 |
 
-内置目录包含 OpenAI、Google、阿里云百炼、MiniMax 和 fal。通过 **设置 → 能力 → 图片** 一次完成配置；凭据不会写入 `xopc.json`。
+目录包含 OpenAI、Google、阿里云百炼、MiniMax 和 fal。连接 XOPC Model Service
+OAuth 后，平台发布的图片模型会自动作为 `xopc-cloud` Provider 出现，复用现有
+OAuth 授权，无需再配置 API Key。通过 **设置 → 能力 → 图片** 完成模型选择；
+凭据不会写入 `xopc.json`。
 
 ---
 

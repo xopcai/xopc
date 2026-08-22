@@ -440,7 +440,7 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
       if (!provider) {
         return c.json({ ok: false, error: { message: `Unknown image provider: ${providerId}` } }, 404);
       }
-      if (provider.credentialMode === 'none') {
+      if (provider.credentialMode !== 'api-key') {
         return c.json({ ok: false, error: { message: 'This provider does not use an API key' } }, 400);
       }
       const body = await c.req.json().catch(() => null) as Record<string, unknown> | null;
@@ -575,15 +575,20 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
       }
 
       const resolver = new CredentialResolver();
-      const previousKey = await resolver.revealGatewayStoredApiKey(prepared.providerId);
-      const suppliedKey = typeof body.apiKey === 'string' ? body.apiKey.trim() : '';
-      const effectiveKey = suppliedKey || await resolver.resolveApiKey(prepared.providerId);
       const imageProvider = getImageGenerationProvider(prepared.providerId)!;
-      if (imageProvider.credentialMode !== 'none' && !effectiveKey) {
+      const usesApiKey = imageProvider.credentialMode === 'api-key';
+      const previousKey = usesApiKey
+        ? await resolver.revealGatewayStoredApiKey(prepared.providerId)
+        : undefined;
+      const suppliedKey = typeof body.apiKey === 'string' ? body.apiKey.trim() : '';
+      const effectiveKey = usesApiKey
+        ? suppliedKey || await resolver.resolveApiKey(prepared.providerId)
+        : undefined;
+      if (usesApiKey && !effectiveKey) {
         return c.json({ ok: false, error: { message: 'API key is required' } }, 400);
       }
 
-      const verification = suppliedKey
+      const verification = usesApiKey && suppliedKey
         ? await verifyImageGenerationCredential({
             providerId: prepared.providerId,
             apiKey: suppliedKey,
@@ -594,12 +599,12 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
         return c.json({ ok: false, error: { message: verification.message ?? 'Credential verification failed' } }, 400);
       }
 
-      if (suppliedKey) {
+      if (usesApiKey && suppliedKey) {
         await resolver.saveApiKey(prepared.providerId, suppliedKey, { profileName: 'default' });
       }
       const saved = await service.saveConfig(prepared.config);
       if (!saved.saved) {
-        if (suppliedKey) {
+        if (usesApiKey && suppliedKey) {
           if (previousKey) {
             await resolver.saveApiKey(prepared.providerId, previousKey, { profileName: 'default' });
           } else {
