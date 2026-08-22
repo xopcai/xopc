@@ -1,7 +1,7 @@
 {
   "you": {
-    "title": "You, as xopc knows you",
-    "subtitle": "What xopc has gradually come to understand through the time and work you have shared.",
+    "title": "About you",
+    "subtitle": "Through each conversation and project, I gradually learn what matters to you and how we can work better together.",
     "howItWorks": "How it works",
     "relearn": "Learn about me again",
     "close": "Close",
@@ -18,13 +18,13 @@
     "openPrivacyControls": "Permissions & privacy",
     "tabs": {
       "overview": "Overview",
-      "memory": "How I know you",
+      "memory": "What I understand about you",
       "collaboration": "How we work",
       "sources": "Sources",
       "dreaming": "Dreaming",
       "privacy": "Permissions & privacy"
     },
-    "memoryTitle": "This is how I know you today",
+    "memoryTitle": "How I understand you today",
     "memoryHint": "These understandings come from the things we have done and discussed together. They may be incomplete and can change as you do—if something does not feel like you, just tell me.",
     "memoryUseHint": "I use these understandings when relevant to adapt how I communicate, recognize what matters, and respect your boundaries. You can change or withdraw them at any time.",
     "memorySectionCount": "{{count}} understandings",

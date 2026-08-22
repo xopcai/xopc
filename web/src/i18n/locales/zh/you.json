@@ -1,7 +1,7 @@
 {
   "you": {
-    "title": "xopc 眼中的你",
-    "subtitle": "这些是 xopc 在一次次陪伴与协作中，慢慢认识到的你。",
+    "title": "关于你",
+    "subtitle": "在一次次交流与协作中，我会慢慢了解什么对你重要、怎样与你配合得更好。",
     "howItWorks": "工作原理",
     "relearn": "重新理解我",
     "close": "关闭",
@@ -18,13 +18,13 @@
     "openPrivacyControls": "权限与隐私",
     "tabs": {
       "overview": "概览",
-      "memory": "我眼中的你",
+      "memory": "我对你的了解",
       "collaboration": "如何与你协作",
       "sources": "信息来源",
       "dreaming": "后台整理",
       "privacy": "权限与隐私"
     },
-    "memoryTitle": "这是我现在认识的你",
+    "memoryTitle": "我现在这样认识你",
     "memoryHint": "这些理解来自我们一起做过的事、聊过的话。它们可能还不完整，也会随着你而改变；如果哪里不像你，随时告诉我。",
     "memoryUseHint": "这些理解会在相关的时候帮助我调整沟通方式、判断重点并尊重你的边界。你始终可以修改或收回。",
     "memorySectionCount": "{{count}} 条理解",
