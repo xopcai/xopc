@@ -87,6 +87,11 @@ function removePlayer(): void {
     // The native player may already be stopped after an interruption.
   }
   try {
+    current.clearLockScreenControls();
+  } catch {
+    // Lock screen controls may already belong to another player.
+  }
+  try {
     current.remove();
   } catch {
     // The native player may already be released after an interruption.
@@ -143,25 +148,40 @@ async function playChunk(index: number, runGeneration: number): Promise<void> {
   try {
     const uri = await ensureChunk(index, runGeneration);
     if (runGeneration !== generation) return;
+    const source = activeInput?.source;
+    if (!source) throw new Error('Speech source is unavailable');
     await setAudioModeAsync({
       allowsRecording: false,
       playsInSilentMode: true,
       interruptionMode: 'doNotMix',
-      shouldPlayInBackground: false,
+      shouldPlayInBackground: true,
     });
     removePlayer();
-    const nextPlayer = createAudioPlayer({ uri }, { updateInterval: 250 });
+    const nextPlayer = createAudioPlayer({ uri }, {
+      updateInterval: 250,
+      keepAudioSessionActive: true,
+    });
     player = nextPlayer;
     nextPlayer.setPlaybackRate(useReadAloudStore.getState().rate);
+    nextPlayer.setActiveForLockScreen(true, {
+      title: source.title,
+      artist: 'xopc',
+    });
     finishingChunk = false;
+    let hasStartedPlayback = false;
     nextPlayer.addListener('playbackStatusUpdate', (status) => {
       if (player !== nextPlayer || runGeneration !== generation || !status.isLoaded) return;
       const duration = Number.isFinite(status.duration) ? status.duration : 0;
       if (duration > 0) chunkDurations[index] = duration;
+      if (status.playing) hasStartedPlayback = true;
       useReadAloudStore.setState({
         currentTime: completedDuration(index) + (status.currentTime || 0),
         duration: chunkDurations.reduce((total, value) => total + (value || 0), 0),
-        ...(status.playing ? { status: 'playing' as const } : {}),
+        ...(status.playing
+          ? { status: 'playing' as const }
+          : hasStartedPlayback && !status.didJustFinish
+            ? { status: 'paused' as const }
+            : {}),
       });
       if (!status.didJustFinish || finishingChunk) return;
       finishingChunk = true;
@@ -183,8 +203,9 @@ async function playChunk(index: number, runGeneration: number): Promise<void> {
       playbackRequestedAt = 0;
     }
     if (index + 1 < chunks.length) void ensureChunk(index + 1, runGeneration).catch(() => undefined);
-  } catch {
+  } catch (error) {
     if (runGeneration !== generation) return;
+    console.warn('[ReadAloud] Playback failed', error);
     removePlayer();
     releaseAudioPlayback(PLAYBACK_OWNER);
     playbackRequestedAt = 0;

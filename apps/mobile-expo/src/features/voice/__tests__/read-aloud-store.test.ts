@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => ({
     remove: ReturnType<typeof vi.fn>;
     addListener: ReturnType<typeof vi.fn>;
     setPlaybackRate: ReturnType<typeof vi.fn>;
+    setActiveForLockScreen: ReturnType<typeof vi.fn>;
+    clearLockScreenControls: ReturnType<typeof vi.fn>;
   }>,
 }));
 
@@ -25,6 +27,8 @@ vi.mock('expo-audio', () => ({
       remove: vi.fn(),
       addListener: vi.fn(),
       setPlaybackRate: vi.fn(),
+      setActiveForLockScreen: vi.fn(),
+      clearLockScreenControls: vi.fn(),
     };
     mocks.players.push(player);
     return player;
@@ -94,6 +98,10 @@ describe('read aloud store', () => {
       language: 'en-US',
     }));
     expect(mocks.players[0]?.setPlaybackRate).toHaveBeenCalledWith(1);
+    expect(mocks.players[0]?.setActiveForLockScreen).toHaveBeenCalledWith(true, {
+      title: input.source.title,
+      artist: 'xopc',
+    });
   });
 
   it('uses the native playback-rate method when changing speed', async () => {
@@ -115,8 +123,29 @@ describe('read aloud store', () => {
     useReadAloudStore.getState().stop();
 
     expect(activePlayer?.pause).toHaveBeenCalledOnce();
+    expect(activePlayer?.clearLockScreenControls).toHaveBeenCalledOnce();
     expect(activePlayer?.remove).toHaveBeenCalledOnce();
     expect(useReadAloudStore.getState().status).toBe('idle');
+  });
+
+  it('reflects lock-screen pause and resume events in the global player', async () => {
+    mocks.memory.set('voice.readAloudConsent', 'accepted');
+    useReadAloudStore.getState().requestStart(input);
+
+    await vi.waitFor(() => expect(useReadAloudStore.getState().status).toBe('playing'));
+    const listener = mocks.players[0]?.addListener.mock.calls[0]?.[1] as ((status: {
+      currentTime: number;
+      didJustFinish: boolean;
+      duration: number;
+      isLoaded: boolean;
+      playing: boolean;
+    }) => void) | undefined;
+    listener?.({ currentTime: 1, didJustFinish: false, duration: 10, isLoaded: true, playing: true });
+    listener?.({ currentTime: 1, didJustFinish: false, duration: 10, isLoaded: true, playing: false });
+    expect(useReadAloudStore.getState().status).toBe('paused');
+
+    listener?.({ currentTime: 1, didJustFinish: false, duration: 10, isLoaded: true, playing: true });
+    expect(useReadAloudStore.getState().status).toBe('playing');
   });
 
   it('cancels preparation when the active message is tapped again', async () => {

@@ -87,7 +87,8 @@
       [
         "expo-audio",
         {
-          "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone for voice input."
+          "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone for voice input.",
+          "enableBackgroundPlayback": true
         }
       ],
       [
