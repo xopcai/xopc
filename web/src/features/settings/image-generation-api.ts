@@ -30,7 +30,7 @@ export type ImageProvider = {
   id: string;
   label: string;
   source: 'builtin' | 'custom';
-  credentialMode: 'api-key' | 'none';
+  credentialMode: 'api-key' | 'oauth' | 'none';
   documentationUrl?: string;
   apiKeyUrl?: string;
   defaultModel: string;

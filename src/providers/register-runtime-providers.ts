@@ -32,13 +32,14 @@ function registerRuntimeProvider(
     baseUrl: source.baseUrl,
     api: source.api,
     oauth,
-    models: source.models.filter((model) => model.availability === 'available').map((model) => ({
+    models: source.models.filter((model) =>
+      model.availability === 'available' && model.kind === 'language').map((model) => ({
       id: model.id,
       name: model.name,
-      reasoning: false,
-      input: ['text'],
+      reasoning: model.reasoning,
+      input: model.input,
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-      contextWindow: 128_000,
+      contextWindow: model.contextWindow,
       maxTokens: model.maxOutputTokens ?? 16_384,
     })),
   });

@@ -233,7 +233,7 @@ export function ImageModelsSettingsPanel() {
     agentId
       && selectedProvider
       && modelId
-      && (selectedProvider.credentialMode === 'none' || selectedProvider.configured || apiKey.trim()),
+      && (selectedProvider.credentialMode !== 'api-key' || selectedProvider.configured || apiKey.trim()),
   );
 
   if (!hasToken) return <p className="text-sm text-fg-muted">{text.connect}</p>;
@@ -363,8 +363,8 @@ export function ImageModelsSettingsPanel() {
                   </span>
                 </span>
                 <span className={`mt-2 flex items-center gap-1.5 text-xs ${provider.configured ? 'text-emerald-600 dark:text-emerald-400' : 'text-fg-muted'}`}>
-                  {provider.configured || provider.credentialMode === 'none' ? <CheckCircle2 className="size-3.5" /> : <KeyRound className="size-3.5" />}
-                  {provider.configured || provider.credentialMode === 'none' ? text.configured : text.needsKey}
+                  {provider.configured || provider.credentialMode !== 'api-key' ? <CheckCircle2 className="size-3.5" /> : <KeyRound className="size-3.5" />}
+                  {provider.configured || provider.credentialMode !== 'api-key' ? text.configured : text.needsKey}
                 </span>
               </button>
             );
@@ -409,7 +409,7 @@ export function ImageModelsSettingsPanel() {
             </div>
           ) : null}
 
-          {selectedProvider.credentialMode !== 'none' ? <div className="mt-4">
+          {selectedProvider.credentialMode === 'api-key' ? <div className="mt-4">
             <div className="flex items-center justify-between gap-3">
               <label htmlFor="image-generation-api-key" className="text-xs font-medium text-fg-muted">
                 {text.apiKey}

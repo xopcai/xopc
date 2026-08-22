@@ -71,7 +71,7 @@ export interface OpenAiImagesProviderOptions {
   isConfigured: (ctx: ImageGenerationProviderConfiguredContext) => boolean;
 
   /** Resolve API key for one request. May return null when using OAuth/header auth. */
-  resolveApiKey: (req: ImageGenerationRequest) => string | null | undefined;
+  resolveApiKey: (req: ImageGenerationRequest) => string | null | undefined | Promise<string | null | undefined>;
 
   /** Resolve endpoint info per-request (region, baseUrl override, Azure deployment, …). */
   resolveEndpoint: (req: ImageGenerationRequest) => OpenAiImagesEndpointResolution;
@@ -99,7 +99,7 @@ export function createOpenAiImagesProvider(
     capabilities: options.capabilities,
     isConfigured: options.isConfigured,
     async generateImage(req): Promise<ImageGenerationResult> {
-      const apiKey = options.resolveApiKey(req) ?? null;
+      const apiKey = await options.resolveApiKey(req) ?? null;
       const endpoint = options.resolveEndpoint(req);
       const httpDefaults = resolveProviderHttpRequestConfig({
         providerId: options.id,
