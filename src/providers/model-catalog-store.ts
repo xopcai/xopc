@@ -2,7 +2,21 @@ export interface CatalogModel {
   id: string;
   name: string;
   availability: 'available' | 'unavailable';
+  kind: 'language' | 'image';
+  input: Array<'text' | 'image'>;
+  output: Array<'text' | 'image'>;
+  operations: Array<'chat.completions' | 'responses' | 'images.generate' | 'images.edit'>;
+  reasoning: boolean;
+  contextWindow: number;
   maxOutputTokens: number | null;
+  imageGeneration?: {
+    maxCount: number;
+    sizes: string[];
+    qualities: Array<'low' | 'medium' | 'high' | 'auto'>;
+    formats: Array<'png' | 'jpeg' | 'webp'>;
+    backgrounds: Array<'transparent' | 'opaque' | 'auto'>;
+    maxInputImages: number;
+  };
 }
 
 export interface CatalogSource {
@@ -75,7 +89,24 @@ export class ModelCatalogStore {
   }
 
   private cloneSource(source: CatalogSource): CatalogSource {
-    return { ...source, models: source.models.map((model) => ({ ...model })) };
+    return {
+      ...source,
+      models: source.models.map((model) => ({
+        ...model,
+        input: [...model.input],
+        output: [...model.output],
+        operations: [...model.operations],
+        ...(model.imageGeneration ? {
+          imageGeneration: {
+            ...model.imageGeneration,
+            sizes: [...model.imageGeneration.sizes],
+            qualities: [...model.imageGeneration.qualities],
+            formats: [...model.imageGeneration.formats],
+            backgrounds: [...model.imageGeneration.backgrounds],
+          },
+        } : {}),
+      })),
+    };
   }
 }
 

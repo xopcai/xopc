@@ -25,7 +25,25 @@ describe('XopcCloudModelSource', () => {
       expect(new Headers(init?.headers).get('authorization')).toBe('Bearer oauth-access');
       return Response.json({
         object: 'list',
-        data: [{ id: 'model-b' }, { id: 'model-a' }, { id: 'model-a' }, { id: '' }],
+        data: [
+          {
+            id: 'model-b',
+            xopc: {
+              kind: 'image',
+              operations: ['images.generate'],
+              capabilities: {
+                input: ['text'], output: ['image'], reasoning: false,
+                imageGeneration: {
+                  maxCount: 2, sizes: ['1024x1024'], qualities: ['high'],
+                  formats: ['png'], backgrounds: [], maxInputImages: 0,
+                },
+              },
+            },
+          },
+          { id: 'model-a' },
+          { id: 'model-a' },
+          { id: '' },
+        ],
       }, { headers: { 'x-xopc-model-catalog-version': 'catalog-2' } });
     });
     const source = new XopcCloudModelSource({
@@ -46,8 +64,17 @@ describe('XopcCloudModelSource', () => {
       baseUrl: 'https://router.test/v1',
       etag: 'catalog-2',
       models: [
-        { id: 'model-b', availability: 'available' },
-        { id: 'model-a', availability: 'available' },
+        {
+          id: 'model-b', availability: 'available', kind: 'image', input: ['text'],
+          output: ['image'], operations: ['images.generate'], reasoning: false,
+          maxOutputTokens: null,
+          imageGeneration: expect.objectContaining({ maxCount: 2, sizes: ['1024x1024'] }),
+        },
+        {
+          id: 'model-a', availability: 'available', kind: 'language', input: ['text'],
+          output: ['text'], operations: ['chat.completions', 'responses'],
+          reasoning: false, maxOutputTokens: null,
+        },
       ],
     });
     expect(refreshModels).toHaveBeenCalledOnce();
@@ -78,7 +105,11 @@ describe('XopcCloudModelSource', () => {
       etag: 'catalog-1',
       recommendedModel: 'stable-model',
       lastSuccessAt: 1,
-    }, [{ id: 'stable-model', name: 'Stable Model', maxOutputTokens: null }]);
+    }, [{
+      id: 'stable-model', name: 'Stable Model', input: ['text'], reasoning: false,
+      kind: 'language', output: ['text'], operations: ['chat.completions'],
+      contextWindow: 128_000, maxOutputTokens: null,
+    }]);
     const refreshModels = vi.fn();
     const source = new XopcCloudModelSource({
       fetchImpl: async () => Response.json({ object: 'list' }),

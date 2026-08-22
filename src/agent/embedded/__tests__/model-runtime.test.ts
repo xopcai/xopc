@@ -94,12 +94,19 @@ describe('embedded model runtime', () => {
       etag: 'catalog-1',
       recommendedModel: 'deepseek-v4-flash',
       lastSuccessAt: Date.now(),
-    }, [{ id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash', maxOutputTokens: 8192 }]);
+    }, [{
+      id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash', kind: 'language',
+      input: ['text', 'image'], output: ['text'], operations: ['chat.completions'],
+      reasoning: true, contextWindow: 128_000, maxOutputTokens: 8192,
+    }]);
 
     try {
       const runtime = await createEmbeddedModelRuntime('xopc-cloud');
 
-      expect(runtime.getModel('xopc-cloud', 'deepseek-v4-flash')).toBeDefined();
+      expect(runtime.getModel('xopc-cloud', 'deepseek-v4-flash')).toMatchObject({
+        input: ['text', 'image'],
+        reasoning: true,
+      });
       expect(runtime.getProvider('xopc-cloud')?.auth.apiKey).toBeUndefined();
       expect(runtime.getProvider('xopc-cloud')?.auth.oauth).toBeDefined();
       await expect(runtime.getAuth('xopc-cloud')).resolves.toMatchObject({

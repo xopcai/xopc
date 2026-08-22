@@ -36,6 +36,12 @@ describe('ModelCatalogStore', () => {
         id: 'model-a',
         name: 'Model A',
         availability: 'available',
+        kind: 'language',
+        input: ['text'],
+        output: ['text'],
+        operations: ['chat.completions'],
+        reasoning: false,
+        contextWindow: 128_000,
         maxOutputTokens: 8192,
       }],
     });
@@ -59,8 +65,8 @@ describe('ModelCatalogStore', () => {
       recommendedModel: null,
       lastSuccessAt: 123,
       models: [
-        { id: 'active', name: 'Active', availability: 'available', maxOutputTokens: 8192 },
-        { id: 'removed', name: 'Removed', availability: 'unavailable', maxOutputTokens: 8192 },
+        { id: 'active', name: 'Active', availability: 'available', kind: 'language', input: ['text'], output: ['text'], operations: ['chat.completions'], reasoning: false, contextWindow: 128_000, maxOutputTokens: 8192 },
+        { id: 'removed', name: 'Removed', availability: 'unavailable', kind: 'language', input: ['text'], output: ['text'], operations: ['chat.completions'], reasoning: false, contextWindow: 128_000, maxOutputTokens: 8192 },
       ],
     });
 
@@ -82,6 +88,12 @@ describe('ModelCatalogStore', () => {
         id: 'openai/gpt-5.4',
         name: 'GPT-5.4',
         availability: 'available',
+        kind: 'language',
+        input: ['text', 'image'],
+        output: ['text'],
+        operations: ['chat.completions'],
+        reasoning: true,
+        contextWindow: 200_000,
         maxOutputTokens: 8192,
       }],
     });
@@ -104,16 +116,16 @@ describe('ModelCatalogStore', () => {
       lastSuccessAt: 123,
     };
     store.replaceSourceModels('cloud', source, [
-      { id: 'old', name: 'Old', maxOutputTokens: 8192 },
+      { id: 'old', name: 'Old', kind: 'language', input: ['text'], output: ['text'], operations: ['chat.completions'], reasoning: false, contextWindow: 128_000, maxOutputTokens: 8192 },
     ]);
     const diff = store.replaceSourceModels('cloud', source, [
-      { id: 'new', name: 'New', maxOutputTokens: 8192 },
+      { id: 'new', name: 'New', kind: 'language', input: ['text'], output: ['text'], operations: ['chat.completions'], reasoning: false, contextWindow: 128_000, maxOutputTokens: 8192 },
     ]);
 
     expect(diff).toEqual({ addedCount: 1, unavailableCount: 1 });
     expect(store.getSource('cloud')?.models).toEqual([
-      { id: 'new', name: 'New', availability: 'available', maxOutputTokens: 8192 },
-      { id: 'old', name: 'Old', availability: 'unavailable', maxOutputTokens: 8192 },
+      { id: 'new', name: 'New', availability: 'available', kind: 'language', input: ['text'], output: ['text'], operations: ['chat.completions'], reasoning: false, contextWindow: 128_000, maxOutputTokens: 8192 },
+      { id: 'old', name: 'Old', availability: 'unavailable', kind: 'language', input: ['text'], output: ['text'], operations: ['chat.completions'], reasoning: false, contextWindow: 128_000, maxOutputTokens: 8192 },
     ]);
   });
 });

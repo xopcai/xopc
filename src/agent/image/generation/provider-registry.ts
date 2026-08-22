@@ -8,19 +8,24 @@ import { buildFalImageGenerationProvider } from './providers/fal.js';
 import { buildGoogleImageGenerationProvider } from './providers/google.js';
 import { buildMinimaxImageGenerationProvider } from './providers/minimax.js';
 import { buildOpenAIImageGenerationProvider } from './providers/openai.js';
+import { buildXopcCloudImageGenerationProvider } from './providers/xopc-cloud.js';
 import type { ImageGenerationProvider, ImageGenerationProviderSummary } from './types.js';
 
 const log = createLogger('ImageGenerationRegistry');
 
-const builtInProviders: ImageGenerationProvider[] = [
-  buildOpenAIImageGenerationProvider(),
-  buildDashScopeImageGenerationProvider(),
-  buildMinimaxImageGenerationProvider(),
-  buildGoogleImageGenerationProvider(),
-  buildFalImageGenerationProvider(),
-];
+function buildBuiltInProviders(): ImageGenerationProvider[] {
+  const cloud = buildXopcCloudImageGenerationProvider();
+  return [
+    ...(cloud ? [cloud] : []),
+    buildOpenAIImageGenerationProvider(),
+    buildDashScopeImageGenerationProvider(),
+    buildMinimaxImageGenerationProvider(),
+    buildGoogleImageGenerationProvider(),
+    buildFalImageGenerationProvider(),
+  ];
+}
 
-let providers: ImageGenerationProvider[] = [...builtInProviders];
+let providers: ImageGenerationProvider[] = buildBuiltInProviders();
 let providersById = new Map(providers.map((provider) => [provider.id, provider]));
 let customProvidersLoaded = false;
 
@@ -29,6 +34,7 @@ function ensureCustomProvidersLoaded(): void {
 }
 
 export function reloadImageGenerationProviders(config?: ModelsJsonConfig): void {
+  const builtInProviders = buildBuiltInProviders();
   let resolved = config;
   if (!resolved) {
     const loaded = loadModelsJson();

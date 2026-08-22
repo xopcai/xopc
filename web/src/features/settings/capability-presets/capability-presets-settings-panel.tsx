@@ -1330,7 +1330,7 @@ function ModelAdvancedPolicyEditor(props: {
   });
   const imageGenerationModels = useMemo<ConfiguredModel[]>(
     () => (imageProviders ?? [])
-      .filter((provider) => provider.configured || provider.credentialMode === 'none')
+      .filter((provider) => provider.configured || provider.credentialMode !== 'api-key')
       .flatMap((provider) =>
         provider.models.map((model) => ({
           id: `${provider.id}/${model}`,

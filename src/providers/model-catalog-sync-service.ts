@@ -145,6 +145,12 @@ export class ModelCatalogSyncService {
         }, models.map((model) => ({
           id: model.id,
           name: model.name ?? model.id,
+          kind: 'language',
+          input: ['text'],
+          output: ['text'],
+          operations: provider.api === 'openai-responses' ? ['responses'] : ['chat.completions'],
+          reasoning: false,
+          contextWindow: 128_000,
           maxOutputTokens: null,
         })));
         return providerId;

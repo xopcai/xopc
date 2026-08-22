@@ -12,7 +12,11 @@ xopc can **receive images** in chat, run **vision / image understanding** with t
 | Image generation model | `agents.list[].models.imageGenerationModel` | Selects one built-in provider/model for each agent. |
 | Media size limits | Runtime/gateway limits | Maximum upload and tool payload sizes depend on the route/tool in use. |
 
-The built-in catalog contains OpenAI, Google, Alibaba Model Studio, MiniMax, and fal. Configure it in **Settings → Capabilities → Image**; credentials are stored outside `xopc.json`.
+The catalog contains OpenAI, Google, Alibaba Model Studio, MiniMax, and fal. When
+XOPC Model Service OAuth is connected, its published image models also appear as
+the `xopc-cloud` provider automatically; they use the existing OAuth grant and do
+not require a second API key. Configure the selection in **Settings → Capabilities
+→ Image**; credentials are stored outside `xopc.json`.
 
 ---
 
