@@ -56,6 +56,7 @@ xopc gateway
 - 反向代理终止 TLS，并转发到本机回环地址上的网关。
 - Gateway 仍然使用自己的 Bearer token 鉴权。
 - 移动端需要系统信任的 TLS 证书；app 路径不支持自签证书。
+- 每一层反代都必须转发 `/api/realtime/v1/ws` 的 WebSocket Upgrade；请使用[远程访问](./remote-access.md#reverse-proxy)中的 nginx 模板和验证命令。
 
 ## 构建移动端 App
 

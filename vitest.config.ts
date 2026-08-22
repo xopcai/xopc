@@ -12,7 +12,7 @@ export default defineConfig({
     },
   },
   test: {
-    // Exclude UI tests that require jsdom/browser environment
-    exclude: ['**/node_modules/**', '**/dist/**'],
+    // Mobile tests use their own Expo-aware Vitest config.
+    exclude: ['**/node_modules/**', '**/dist/**', 'apps/mobile-expo/**'],
   },
 });

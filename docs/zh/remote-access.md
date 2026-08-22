@@ -226,18 +226,63 @@ server {
   ssl_certificate     /etc/letsencrypt/live/gateway.example.com/fullchain.pem;
   ssl_certificate_key /etc/letsencrypt/live/gateway.example.com/privkey.pem;
 
-  location / {
+  # 即使已有更宽泛的 `location /api/`，也要保留这个精确匹配；
+  # 否则 nginx 会优先选择 /api/ 配置块。
+  location = /api/realtime/v1/ws {
     proxy_pass         http://127.0.0.1:18790;
     proxy_http_version 1.1;
     proxy_set_header   Host $host;
     proxy_set_header   X-Forwarded-Proto https;
     proxy_set_header   Upgrade $http_upgrade;
     proxy_set_header   Connection "upgrade";
-    proxy_buffering    off;               # SSE：禁用响应缓冲
-    proxy_read_timeout 3600s;             # 长连接 SSE / WS
+    proxy_buffering    off;
+    proxy_read_timeout 3600s;             # WebSocket 长连接
+    proxy_send_timeout 3600s;
+  }
+
+  location / {
+    proxy_pass         http://127.0.0.1:18790;
+    proxy_http_version 1.1;
+    proxy_set_header   Host $host;
+    proxy_set_header   X-Forwarded-Proto https;
+    proxy_buffering    off;               # 流式 HTTP 响应
+    proxy_read_timeout 3600s;
   }
 }
 ```
+
+如果流量经过多层反向代理，**每一层**都必须保留 HTTP/1.1 WebSocket Upgrade。上游使用 HTTPS 时，还要发送正确的 SNI，并确保上游证书持续有效：
+
+```nginx
+location = /api/realtime/v1/ws {
+  proxy_pass https://upstream-gateway.example.com;
+  proxy_http_version 1.1;
+  proxy_set_header Host upstream-gateway.example.com;
+  proxy_set_header Upgrade $http_upgrade;
+  proxy_set_header Connection "upgrade";
+  proxy_ssl_server_name on;
+  proxy_ssl_name upstream-gateway.example.com;
+  proxy_read_timeout 3600s;
+  proxy_send_timeout 3600s;
+}
+```
+
+如果同一 `server` 中还定义了 `location /api/`，不能只依赖 `location /` 里的 Upgrade 请求头：nginx 会为 `/api/realtime/v1/ws` 选择更具体的 `/api/`。应添加上面的精确匹配，或在最终命中的配置块中重复 Upgrade 指令。
+
+### 验证实时 WebSocket
+
+应测试公网入口，而不只是本机 Gateway：
+
+```bash
+curl --http1.1 -i --max-time 5 \
+  https://gateway.example.com/api/realtime/v1/ws \
+  -H 'Connection: Upgrade' \
+  -H 'Upgrade: websocket' \
+  -H 'Sec-WebSocket-Version: 13' \
+  -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ=='
+```
+
+第一行必须是 `HTTP/1.1 101 Switching Protocols`。之后出现超时或 `Realtime hello timeout` 属于该探测命令的预期行为，因为 curl 没有发送 xopc 的 `realtime.hello` 帧。如果返回 `200`、`401`、`404` 或 `502`，说明 WebSocket Upgrade 没有走完整条链路；需要逐层检查反代和更具体的 nginx location。
 
 ### 部署要求
 
@@ -257,6 +302,7 @@ server {
 | 浏览器控制台报 CORS / 403 | 确认 TCP 连接来自 loopback（反代在同一台机器）**或** 把反代 IP 加入 `gateway.trustedProxies`。 |
 | SSE 流几秒后中断 | 关闭反代响应缓冲。nginx：`proxy_buffering off`；Caddy：`flush_interval -1`。 |
 | 配对成功但一分钟后断开 | 调大反代 idle 超时。 |
+| 移动端提示 `Endpoint connection is not ready` | 确认 `/api/realtime/v1/ws` 返回 `101`，每层反代都转发 Upgrade，并且正在运行的 Gateway 提供 `/api/realtime/tickets` 和 `/api/endpoint-tools/principals`；升级后要重启 Gateway。 |
 | QR 在本地能用、蜂窝网络不行 | 公网 DNS / 防火墙问题 — URL 必须能从外网解析并连接。 |
 
 ---
