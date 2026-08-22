@@ -56,6 +56,7 @@ Use this when you already have your own HTTPS domain, such as `https://gateway.e
 - The reverse proxy terminates TLS and forwards to the loopback gateway.
 - The gateway still authenticates clients with its Bearer token.
 - Mobile clients require a system-trusted TLS certificate; self-signed certificates are not supported for the app path.
+- The proxy must forward the `/api/realtime/v1/ws` WebSocket upgrade on every hop. Use the nginx template and verification command in [Remote access](./remote-access.md#reverse-proxy).
 
 ## Building the mobile app
 
