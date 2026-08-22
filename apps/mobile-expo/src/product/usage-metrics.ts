@@ -10,12 +10,20 @@ export type UsageEventName =
   | 'ask_ai_started'
   | 'notification_opened';
 
+export type PerformanceEventName =
+  | 'app_shell_rendered'
+  | 'home_content_ready';
+
+export const mobileAppJsStartedAt = Date.now();
+
 export type UsageEvent = {
-  name: UsageEventName;
+  name: UsageEventName | PerformanceEventName;
   at: number;
+  durationMs?: number;
 };
 
 const MAX_EVENTS = 200;
+const recordedStartupMetrics = new Set<PerformanceEventName>();
 
 function readEvents(): UsageEvent[] {
   const raw = storage.getString(KEYS.usageEvents);
@@ -27,7 +35,9 @@ function readEvents(): UsageEvent[] {
       item
       && typeof item === 'object'
       && typeof (item as UsageEvent).name === 'string'
-      && typeof (item as UsageEvent).at === 'number',
+      && typeof (item as UsageEvent).at === 'number'
+      && ((item as UsageEvent).durationMs === undefined
+        || typeof (item as UsageEvent).durationMs === 'number'),
     ));
   } catch {
     return [];
@@ -39,13 +49,43 @@ export function recordUsageEvent(name: UsageEventName, at = Date.now()): void {
   storage.set(KEYS.usageEvents, JSON.stringify(events));
 }
 
-export function readUsageSummary(): Partial<Record<UsageEventName, number>> {
-  return readEvents().reduce<Partial<Record<UsageEventName, number>>>((summary, event) => {
+export function recordPerformanceEvent(
+  name: PerformanceEventName,
+  durationMs: number,
+  at = Date.now(),
+): void {
+  if (recordedStartupMetrics.has(name) || !Number.isFinite(durationMs) || durationMs < 0) return;
+  recordedStartupMetrics.add(name);
+  const events = [...readEvents(), { name, at, durationMs: Math.round(durationMs) }].slice(-MAX_EVENTS);
+  storage.set(KEYS.usageEvents, JSON.stringify(events));
+}
+
+export function readPerformanceSummary(): Partial<Record<PerformanceEventName, {
+  count: number;
+  latestMs: number;
+  averageMs: number;
+}>> {
+  const durations = new Map<PerformanceEventName, number[]>();
+  for (const event of readEvents()) {
+    if (event.durationMs === undefined) continue;
+    const name = event.name as PerformanceEventName;
+    durations.set(name, [...(durations.get(name) ?? []), event.durationMs]);
+  }
+  return Object.fromEntries([...durations].map(([name, values]) => [name, {
+    count: values.length,
+    latestMs: values.at(-1) ?? 0,
+    averageMs: Math.round(values.reduce((total, value) => total + value, 0) / values.length),
+  }]));
+}
+
+export function readUsageSummary(): Partial<Record<UsageEventName | PerformanceEventName, number>> {
+  return readEvents().reduce<Partial<Record<UsageEventName | PerformanceEventName, number>>>((summary, event) => {
     summary[event.name] = (summary[event.name] ?? 0) + 1;
     return summary;
   }, {});
 }
 
 export function clearUsageEvents(): void {
+  recordedStartupMetrics.clear();
   storage.delete(KEYS.usageEvents);
 }

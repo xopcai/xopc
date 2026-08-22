@@ -2,7 +2,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import * as Linking from 'expo-linking';
 import { type Href, Stack, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { StatusBar } from 'react-native';
+import { InteractionManager, StatusBar } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { PaperProvider } from 'react-native-paper';
@@ -31,6 +31,7 @@ import {
 import { useNoteTagsStore } from '@/stores/note-tags-store';
 import { mobileRouteFromProductDeepLink } from '@/features/chat/product-delivery';
 import { useMobileEndpointTools } from '@/features/endpoint-tools/use-mobile-endpoint-tools';
+import { mobileAppJsStartedAt, recordPerformanceEvent } from '@/product/usage-metrics';
 
 export default function RootLayout() {
   const router = useRouter();
@@ -43,13 +44,14 @@ export default function RootLayout() {
   const configured = useGatewayConfigured();
   const unauthorized = useGatewayStore((s) => s.unauthorized);
   const [userDismissedConnect, setUserDismissedConnect] = useState(false);
+  const [secondaryServicesReady, setSecondaryServicesReady] = useState(false);
 
   useGatewayRealtime();
   useSessionInputOutboxFlush();
   useGatewayConnectionWatch(configured);
   useWorkspaceSyncFlush(configured);
-  useMobileNotifications(router);
-  useMobileEndpointTools();
+  useMobileNotifications(router, secondaryServicesReady);
+  useMobileEndpointTools(secondaryServicesReady);
 
   const isDark = resolvedTheme === 'dark';
   const paperTheme = useMemo(() => createPaperTheme(isDark), [isDark]);
@@ -61,6 +63,12 @@ export default function RootLayout() {
     [isDark],
   );
   const rootBackgroundColor = getColors(isDark).surface.base;
+
+  useEffect(() => {
+    recordPerformanceEvent('app_shell_rendered', Date.now() - mobileAppJsStartedAt);
+    const task = InteractionManager.runAfterInteractions(() => setSecondaryServicesReady(true));
+    return () => task.cancel();
+  }, []);
 
   useEffect(() => {
     // Eagerly refresh the network snapshot before/while we hydrate so the

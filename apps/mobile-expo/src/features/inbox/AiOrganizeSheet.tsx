@@ -66,6 +66,9 @@ export function AiOrganizeSheet({
               </View>
               <Pressable
                 disabled={busy || Boolean(applyingId)}
+                accessibilityRole="button"
+                accessibilityLabel={`${busy ? im.aiOrganizeApplying : im.aiOrganizeApply}: ${title}`}
+                accessibilityState={{ disabled: busy || Boolean(applyingId), busy }}
                 style={({ pressed }) => [
                   styles.applyButton,
                   { backgroundColor: colors.accent.selectionBg, opacity: busy || applyingId ? 0.55 : pressed ? 0.72 : 1 },
@@ -131,7 +134,7 @@ const styles = StyleSheet.create({
     ...typography.caption,
   },
   applyButton: {
-    minHeight: 36,
+    minHeight: 44,
     borderRadius: radii.md,
     paddingHorizontal: spacing.md,
     alignItems: 'center',

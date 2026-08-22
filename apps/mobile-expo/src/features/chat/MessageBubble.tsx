@@ -269,6 +269,7 @@ export const MessageBubble = memo(function MessageBubble({
   onUserMessageEdit,
   onUserMessageRetry,
   onAssistantCopy,
+  onAssistantSaveToNote,
   onAssistantRegenerate,
 }: {
   message: Message;
@@ -279,6 +280,7 @@ export const MessageBubble = memo(function MessageBubble({
   onUserMessageEdit?: (text: string) => void;
   onUserMessageRetry?: () => void;
   onAssistantCopy?: (text: string) => void;
+  onAssistantSaveToNote?: (text: string) => void;
   onAssistantRegenerate?: () => void;
 }) {
   const m = useMessages();
@@ -415,6 +417,13 @@ export const MessageBubble = memo(function MessageBubble({
         accessibilityLabel: m.chat.messageCopy,
       });
     }
+    if (assistantPlainText && onAssistantSaveToNote) {
+      actions.push({
+        icon: 'note-plus-outline',
+        onPress: () => onAssistantSaveToNote(assistantPlainText),
+        accessibilityLabel: m.chat.messageSaveToNote,
+      });
+    }
     if (assistantCodeText && onAssistantCopy) {
       actions.push({
         icon: 'file-code-outline',
@@ -436,9 +445,11 @@ export const MessageBubble = memo(function MessageBubble({
     assistantPlainText,
     assistantCodeText,
     onAssistantCopy,
+    onAssistantSaveToNote,
     onAssistantRegenerate,
     m.chat.messageCopy,
     m.chat.messageCopyCode,
+    m.chat.messageSaveToNote,
     m.chat.messageRegenerate,
   ]);
 

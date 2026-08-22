@@ -75,6 +75,7 @@ export const MessageList = memo(function MessageList({
   onUserMessageEdit,
   onUserMessageRetry,
   onAssistantCopy,
+  onAssistantSaveToNote,
   onAssistantRegenerate,
   loadError,
   networkUnreachableTip,
@@ -98,6 +99,7 @@ export const MessageList = memo(function MessageList({
   onUserMessageEdit?: (text: string) => void;
   onUserMessageRetry?: (message: Message) => void;
   onAssistantCopy?: (text: string) => void;
+  onAssistantSaveToNote?: (text: string) => void;
   onAssistantRegenerate?: (messageIndex: number) => void;
   loadError?: { message: string; retryLabel: string; onRetry: () => void } | null;
   networkUnreachableTip?: { message: string; onPress: () => void } | null;
@@ -185,6 +187,7 @@ export const MessageList = memo(function MessageList({
               ? () => onUserMessageRetry(item)
               : undefined}
             onAssistantCopy={onAssistantCopy}
+            onAssistantSaveToNote={onAssistantSaveToNote}
             onAssistantRegenerate={
               onAssistantRegenerate && isLastAssistantMessage(messages, index)
                 ? () => onAssistantRegenerate(index)
@@ -200,6 +203,7 @@ export const MessageList = memo(function MessageList({
       onUserMessageEdit,
       onUserMessageRetry,
       onAssistantCopy,
+      onAssistantSaveToNote,
       onAssistantRegenerate,
       streaming,
       progress,

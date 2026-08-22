@@ -21,6 +21,8 @@ vi.mock('../../query/notes', () => ({
 import {
   clearWorkspaceSyncDeadLetters,
   clearWorkspaceSyncQueue,
+  captureWorkspaceText,
+  flushPendingWorkspaceOperations,
   getWorkspaceSyncStatus,
   queueWorkspaceCapture,
   subscribeWorkspaceSyncStatus,
@@ -38,7 +40,7 @@ describe('workspace sync status', () => {
     const onStatusChange = vi.fn();
     const unsubscribe = subscribeWorkspaceSyncStatus(onStatusChange);
 
-    queueWorkspaceCapture('Remember this');
+    queueWorkspaceCapture({ text: 'Remember this', channel: 'app' });
 
     expect(getWorkspaceSyncStatus()).toEqual({ pendingCount: 1, failedCount: 0 });
     expect(listSyncJournalEntries()).toEqual([expect.objectContaining({
@@ -53,11 +55,49 @@ describe('workspace sync status', () => {
 
     expect(getWorkspaceSyncStatus()).toBe(initialStatus);
 
-    queueWorkspaceCapture('Cache this snapshot');
+    queueWorkspaceCapture({ text: 'Cache this snapshot', channel: 'app' });
 
     const queuedStatus = getWorkspaceSyncStatus();
     expect(queuedStatus).toEqual({ pendingCount: 1, failedCount: 0 });
     expect(queuedStatus).not.toBe(initialStatus);
     expect(getWorkspaceSyncStatus()).toBe(queuedStatus);
+  });
+
+  it('uses the queue id as the server idempotency key and clears the journal after sync', async () => {
+    const { quickCaptureNote } = await import('../../query/notes');
+    vi.mocked(quickCaptureNote).mockResolvedValue({ note: { id: 'note-1' } });
+
+    const operationId = queueWorkspaceCapture({ text: 'Durable thought', channel: 'share' });
+    expect(await flushPendingWorkspaceOperations()).toBe(1);
+
+    expect(quickCaptureNote).toHaveBeenCalledWith('Durable thought', {
+      channel: 'share',
+      idempotencyKey: operationId,
+    });
+    expect(getWorkspaceSyncStatus()).toEqual({ pendingCount: 0, failedCount: 0 });
+    expect(listSyncJournalEntries()).toEqual([]);
+  });
+
+  it('returns the synced note id to the initiating capture flow', async () => {
+    const { quickCaptureNote } = await import('../../query/notes');
+    vi.mocked(quickCaptureNote).mockResolvedValue({ note: { id: 'note-from-share' } });
+
+    await expect(captureWorkspaceText({ text: 'Open after saving', channel: 'share' }))
+      .resolves.toMatchObject({ synced: true, noteId: 'note-from-share' });
+  });
+
+  it('keeps failed captures durable and records the sync error', async () => {
+    const { quickCaptureNote } = await import('../../query/notes');
+    vi.mocked(quickCaptureNote).mockRejectedValue(new Error('gateway offline'));
+
+    await expect(captureWorkspaceText({ text: 'Keep me', channel: 'clipboard' }))
+      .resolves.toMatchObject({ synced: false });
+
+    expect(getWorkspaceSyncStatus()).toEqual({ pendingCount: 1, failedCount: 0 });
+    expect(listSyncJournalEntries()).toEqual([expect.objectContaining({
+      state: 'pending',
+      retryCount: 1,
+      error: 'gateway offline',
+    })]);
   });
 });

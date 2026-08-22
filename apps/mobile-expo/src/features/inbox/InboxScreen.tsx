@@ -23,23 +23,25 @@ import { useMessages, t } from '../../i18n/messages';
 import { recordUsageEvent } from '../../product/usage-metrics';
 import { AttachmentFileError, pickAttachmentFromSource, type AttachmentPickSource } from '../chat/attachment-file-io';
 import type { ComposerAttachment } from '../chat/composer.types';
-import { deleteNote, fetchNotes, captureNote, updateNote, type NoteIndexEntry } from '../../query/notes';
+import { deleteNote, fetchNotes, updateNote, type NoteIndexEntry } from '../../query/notes';
 import { queryKeys } from '../../query/keys';
 import { decideAgentJudgment, fetchAgentJudgments, transitionAgentJudgment, type AgentJudgment } from '../../query/judgments';
 import { useGatewayConfigured } from '../../query/sessions';
 import { usePreferencesStore } from '../../stores/preferences-store';
 import { invalidateHomeFeed } from '../../query/workspace-sync';
+import { captureWorkspaceText } from '../../sync/workspace-sync';
 import { NOTE_KIND_ICONS } from '../notes/note-list-display';
 import { radii, spacing, typography, useTheme, FLOATING_BOTTOM_OFFSET, floatingBottomPadding } from '../../theme';
 import {
   captureNoteWithComposerAttachment,
   captureNoteWithVoice,
 } from '../notes/capture-note-media';
-import { parseCaptureIntent } from '../notes/capture-parser';
 import { QuickCaptureComposer } from '../notes/QuickCaptureComposer';
 import {
-  buildInboxOrganizePatch,
+  applyInboxOrganizeSuggestion,
   buildInboxOrganizeSuggestions,
+  restoreInboxOrganizeSnapshot,
+  type InboxOrganizeSnapshot,
   type InboxOrganizeSuggestion,
 } from './ai-organize';
 import { AiOrganizeSheet } from './AiOrganizeSheet';
@@ -50,6 +52,11 @@ type CapturePayload =
   | { type: 'text'; text: string }
   | { type: 'attachment'; attachment: ComposerAttachment }
   | { type: 'voice'; uri: string; durationMillis: number; mimeType: string };
+
+type OrganizeUndo = {
+  items: InboxOrganizeSnapshot;
+  toastMessage: string;
+};
 
 const PAGE_SIZE = 20;
 const INBOX_ITEM_HEIGHT = 78;
@@ -72,6 +79,7 @@ export function InboxScreen() {
   const [showBatchDelete, setShowBatchDelete] = useState(false);
   const [organizeOpen, setOrganizeOpen] = useState(false);
   const [applyingSuggestionId, setApplyingSuggestionId] = useState<string>();
+  const [organizeUndo, setOrganizeUndo] = useState<OrganizeUndo>();
   const {
     selectionMode,
     selectedIds,
@@ -138,18 +146,20 @@ export function InboxScreen() {
   const captureMutation = useMutation({
     mutationFn: async (payload: CapturePayload) => {
       if (payload.type === 'text') {
-        const intent = parseCaptureIntent(payload.text);
-        return captureNote({ text: payload.text, kind: intent.kind });
+        return captureWorkspaceText({ text: payload.text, channel: 'app' });
       }
       if (payload.type === 'attachment') {
         return captureNoteWithComposerAttachment(payload.attachment, captureText);
       }
       return captureNoteWithVoice(payload);
     },
-    onSuccess: async () => {
+    onSuccess: async (result, payload) => {
       recordUsageEvent('capture_completed');
       setCaptureText('');
       await invalidateInbox();
+      if (payload.type === 'text' && 'synced' in result && !result.synced) {
+        setSnackMsg(pm.savedOffline);
+      }
     },
     onError: (err) => {
       setSnackMsg(err instanceof Error ? err.message : pm.actionFailed);
@@ -195,20 +205,36 @@ export function InboxScreen() {
     if (applyingSuggestionId) return;
     setApplyingSuggestionId(suggestion.id);
     try {
-      await Promise.all(suggestion.itemIds.map((id) => {
-        const item = itemsById.get(id);
-        if (!item) return Promise.resolve();
-        return updateNote(id, buildInboxOrganizePatch(item, suggestion.id));
-      }));
+      const snapshots = await applyInboxOrganizeSuggestion({ suggestion, itemsById, update: updateNote });
       await invalidateInbox();
       setOrganizeOpen(false);
-      setSnackMsg(t(im.aiOrganizeApplied, { count: suggestion.count }));
+      const toastMessage = t(im.aiOrganizeApplied, { count: snapshots.length });
+      setOrganizeUndo({ items: snapshots, toastMessage });
+      setSnackMsg(toastMessage);
     } catch (err) {
+      await invalidateInbox();
       setSnackMsg(err instanceof Error ? err.message : pm.actionFailed);
     } finally {
       setApplyingSuggestionId(undefined);
     }
   }, [applyingSuggestionId, im.aiOrganizeApplied, invalidateInbox, itemsById, pm.actionFailed]);
+
+  const undoOrganize = useCallback(async () => {
+    if (!organizeUndo || applyingSuggestionId) return;
+    setApplyingSuggestionId('undo');
+    try {
+      await restoreInboxOrganizeSnapshot(organizeUndo.items, updateNote);
+      await invalidateInbox();
+      setOrganizeUndo(undefined);
+      setSnackMsg(im.aiOrganizeUndone);
+    } catch (error) {
+      const toastMessage = error instanceof Error ? error.message : pm.actionFailed;
+      setOrganizeUndo((current) => current ? { ...current, toastMessage } : current);
+      setSnackMsg(toastMessage);
+    } finally {
+      setApplyingSuggestionId(undefined);
+    }
+  }, [applyingSuggestionId, im.aiOrganizeUndone, invalidateInbox, organizeUndo, pm.actionFailed]);
 
   const handleCapture = useCallback(() => {
     const text = captureText.trim();
@@ -397,6 +423,11 @@ export function InboxScreen() {
       ) : (
         <FlatList
           data={items}
+          getItemLayout={(_data, index) => ({
+            index,
+            length: INBOX_ITEM_HEIGHT,
+            offset: INBOX_ITEM_HEIGHT * index,
+          })}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           onEndReached={onEndReached}
@@ -482,9 +513,18 @@ export function InboxScreen() {
 
       <AppToast
         visible={!!snackMsg}
-        onDismiss={() => setSnackMsg('')}
-        duration={pendingUndoId && snackMsg === pm.deleted ? LIST_DELETE_UNDO_MS : TOAST_DURATION_SHORT}
-        action={pendingUndoId && snackMsg === pm.deleted ? { label: li.undo, onPress: () => undoDelete() } : undefined}
+        onDismiss={() => {
+          setSnackMsg('');
+          setOrganizeUndo(undefined);
+        }}
+        duration={pendingUndoId && snackMsg === pm.deleted || organizeUndo?.toastMessage === snackMsg
+          ? LIST_DELETE_UNDO_MS
+          : TOAST_DURATION_SHORT}
+        action={pendingUndoId && snackMsg === pm.deleted
+          ? { label: li.undo, onPress: () => undoDelete() }
+          : organizeUndo?.toastMessage === snackMsg
+            ? { label: li.undo, onPress: () => void undoOrganize() }
+            : undefined}
         bottomLift={TOAST_BOTTOM_LIFT_ABOVE_BAR}
       >
         {snackMsg}

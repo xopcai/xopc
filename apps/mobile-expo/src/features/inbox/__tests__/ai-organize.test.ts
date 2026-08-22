@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { NoteIndexEntry } from '../../../query/notes';
 import {
+  applyInboxOrganizeSuggestion,
   buildInboxOrganizePatch,
   buildInboxOrganizeSuggestions,
+  restoreInboxOrganizeSnapshot,
 } from '../ai-organize';
 
 function note(overrides: Partial<NoteIndexEntry>): NoteIndexEntry {
@@ -41,5 +43,36 @@ describe('buildInboxOrganizeSuggestions', () => {
     expect(buildInboxOrganizePatch(note({ kind: 'voice', tags: ['voice'] }), 'voice')).toEqual({
       tags: ['voice'],
     });
+  });
+
+  it('rolls back earlier changes when a later update fails', async () => {
+    const items = [
+      note({ id: 'link-1', kind: 'bookmark', tags: ['read'] }),
+      note({ id: 'link-2', kind: 'bookmark' }),
+    ];
+    const update = vi.fn()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('update failed'))
+      .mockResolvedValueOnce(undefined);
+
+    await expect(applyInboxOrganizeSuggestion({
+      suggestion: { id: 'bookmark', itemIds: ['link-1', 'link-2'], count: 2 },
+      itemsById: new Map(items.map((item) => [item.id, item])),
+      update,
+    })).rejects.toThrow('update failed');
+
+    expect(update).toHaveBeenLastCalledWith('link-1', { status: 'inbox', tags: ['read'] });
+  });
+
+  it('restores the complete snapshot for undo', async () => {
+    const update = vi.fn().mockResolvedValue(undefined);
+
+    await restoreInboxOrganizeSnapshot([
+      { id: 'link-1', status: 'inbox', tags: undefined },
+      { id: 'voice-1', status: 'processed', tags: ['voice'] },
+    ], update);
+
+    expect(update).toHaveBeenCalledWith('link-1', { status: 'inbox', tags: [] });
+    expect(update).toHaveBeenCalledWith('voice-1', { status: 'processed', tags: ['voice'] });
   });
 });

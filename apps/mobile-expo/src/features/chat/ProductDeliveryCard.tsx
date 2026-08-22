@@ -3,12 +3,14 @@ import type {
   ProductReferenceKind,
 } from '@xopcai/gateway-contract';
 import { type Href, useRouter } from 'expo-router';
-import { memo } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { memo, useState } from 'react';
+import { Pressable, Share, StyleSheet, View } from 'react-native';
 import { Icon, Text } from 'react-native-paper';
 
 import { radii, spacing, useTheme } from '../../theme';
 import { usePreferencesStore } from '../../stores/preferences-store';
+import type { ShareAutoRequest } from '../../api/share';
+import { ShareSheet } from '../share/ShareSheet';
 import { dispatchMobileComposerFill } from './mobile-composer-fill';
 import {
   MOBILE_NATIVE_PRODUCT_KINDS,
@@ -52,19 +54,33 @@ const OPERATION_LABELS = {
 
 export const ProductDeliveryCard = memo(function ProductDeliveryCard({
   delivery,
+  sessionKey,
 }: {
   delivery: ProductDeliveryEnvelope;
+  sessionKey?: string | null;
 }) {
   const reference = delivery.primary;
   const router = useRouter();
   const language = usePreferencesStore((state) => state.language);
   const { colors } = useTheme();
+  const [shareRequest, setShareRequest] = useState<ShareAutoRequest | null>(null);
   if (!reference) return null;
 
   const hasNativeDestination = MOBILE_NATIVE_PRODUCT_KINDS.has(reference.kind);
   const destination = mobileProductRoute(reference);
   const canOpen = reference.capabilities.includes('open') && destination !== null;
   const canContinue = reference.capabilities.includes('continue_in_chat');
+  const canShare = reference.capabilities.includes('share');
+  const fileShareRequest: ShareAutoRequest | null = (
+    reference.kind === 'file' && canShare
+      ? {
+          path: reference.id,
+          sessionKey: sessionKey || undefined,
+          title: reference.title,
+          description: reference.summary,
+        }
+      : null
+  );
   const statusText = [
     OPERATION_LABELS[delivery.operation][language],
     reference.status,
@@ -79,9 +95,20 @@ export const ProductDeliveryCard = memo(function ProductDeliveryCard({
       : `Continue working on ${KIND_LABELS[reference.kind].en.toLowerCase()} "${reference.title}" (ID: ${reference.id}): `;
     dispatchMobileComposerFill(text);
   };
+  const share = () => {
+    if (fileShareRequest) {
+      setShareRequest(fileShareRequest);
+      return;
+    }
+    void Share.share({
+      title: reference.title,
+      message: [reference.title, reference.summary].filter(Boolean).join('\n\n'),
+    }).catch(() => undefined);
+  };
 
   return (
-    <View
+    <>
+      <View
       style={[
         styles.container,
         {
@@ -130,13 +157,26 @@ export const ProductDeliveryCard = memo(function ProductDeliveryCard({
         </View>
         {canOpen ? <Icon source="chevron-right" size={18} color={colors.text.tertiary} /> : null}
       </Pressable>
-      {canOpen || canContinue ? (
+      {canOpen || canContinue || canShare ? (
         <View style={[styles.actions, { borderTopColor: colors.border.subtle }]}>
+          {canShare ? (
+            <Pressable
+              style={styles.action}
+              onPress={share}
+              accessibilityRole="button"
+              accessibilityLabel={language === 'zh' ? '分享结果' : 'Share result'}
+            >
+              <Text variant="labelMedium" style={{ color: colors.accent.primary }}>
+                {language === 'zh' ? '分享' : 'Share'}
+              </Text>
+            </Pressable>
+          ) : null}
           {canContinue ? (
             <Pressable
               style={styles.action}
               onPress={continueInChat}
               accessibilityRole="button"
+              accessibilityLabel={language === 'zh' ? '在对话中继续处理结果' : 'Continue working on result in chat'}
             >
               <Text variant="labelMedium" style={{ color: colors.accent.primary }}>
                 {language === 'zh' ? '在对话中继续' : 'Continue in chat'}
@@ -144,7 +184,12 @@ export const ProductDeliveryCard = memo(function ProductDeliveryCard({
             </Pressable>
           ) : null}
           {canOpen ? (
-            <Pressable style={styles.action} onPress={open} accessibilityRole="button">
+            <Pressable
+              style={styles.action}
+              onPress={open}
+              accessibilityRole="button"
+              accessibilityLabel={language === 'zh' ? '打开结果' : 'Open result'}
+            >
               <Text variant="labelMedium" style={{ color: colors.accent.primary }}>
                 {language === 'zh' ? '打开' : 'Open'}
               </Text>
@@ -152,7 +197,13 @@ export const ProductDeliveryCard = memo(function ProductDeliveryCard({
           ) : null}
         </View>
       ) : null}
-    </View>
+      </View>
+      <ShareSheet
+        visible={Boolean(shareRequest)}
+        request={shareRequest}
+        onClose={() => setShareRequest(null)}
+      />
+    </>
   );
 });
 
@@ -209,13 +260,14 @@ const styles = StyleSheet.create({
     minHeight: 40,
     borderTopWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'flex-end',
     alignItems: 'center',
     paddingHorizontal: spacing.sm,
     gap: spacing.xs,
   },
   action: {
-    minHeight: 36,
+    minHeight: 44,
     justifyContent: 'center',
     paddingHorizontal: spacing.sm,
   },

@@ -13,6 +13,10 @@ export type InboxOrganizeSuggestion = {
   count: number;
 };
 
+export type InboxOrganizeSnapshot = Array<Pick<NoteIndexEntry, 'id' | 'status' | 'tags'>>;
+
+type UpdateNote = (id: string, patch: InboxOrganizePatch) => Promise<unknown>;
+
 function withTag(item: NoteIndexEntry, tag: string): string[] {
   const tags = item.tags ?? [];
   return tags.includes(tag) ? tags : [...tags, tag];
@@ -48,4 +52,42 @@ export function buildInboxOrganizePatch(
     case 'media':
       return { tags: withTag(item, 'media') };
   }
+}
+
+export async function applyInboxOrganizeSuggestion(input: {
+  suggestion: InboxOrganizeSuggestion;
+  itemsById: Map<string, NoteIndexEntry>;
+  update: UpdateNote;
+}): Promise<InboxOrganizeSnapshot> {
+  const snapshots = input.suggestion.itemIds.flatMap((id) => {
+    const item = input.itemsById.get(id);
+    return item ? [{ id: item.id, status: item.status, tags: item.tags ? [...item.tags] : undefined }] : [];
+  });
+  const applied: InboxOrganizeSnapshot = [];
+
+  try {
+    for (const snapshot of snapshots) {
+      const item = input.itemsById.get(snapshot.id);
+      if (!item) continue;
+      await input.update(snapshot.id, buildInboxOrganizePatch(item, input.suggestion.id));
+      applied.push(snapshot);
+    }
+    return snapshots;
+  } catch (error) {
+    await Promise.allSettled(applied.map((snapshot) => input.update(snapshot.id, {
+      status: snapshot.status,
+      tags: snapshot.tags ?? [],
+    })));
+    throw error;
+  }
+}
+
+export async function restoreInboxOrganizeSnapshot(
+  snapshot: InboxOrganizeSnapshot,
+  update: UpdateNote,
+): Promise<void> {
+  await Promise.all(snapshot.map((item) => update(item.id, {
+    status: item.status,
+    tags: item.tags ?? [],
+  })));
 }
