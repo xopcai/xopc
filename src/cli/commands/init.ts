@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from 'fs/promises';
 import { existsSync, readFileSync } from 'fs';
-import { dirname, join } from 'path';
+import { join } from 'path';
 import { createLogger } from '../../utils/logger.js';
 import {
   resolveStateDir,
