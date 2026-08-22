@@ -14,6 +14,7 @@ vi.mock('../../storage/mmkv', () => ({
 import {
   clearUsageEvents,
   readPerformanceSummary,
+  recordInteractionPerformanceEvent,
   readUsageSummary,
   recordPerformanceEvent,
   recordUsageEvent,
@@ -57,6 +58,16 @@ describe('usage metrics', () => {
 
     expect(readPerformanceSummary()).toEqual({
       home_content_ready: { averageMs: 200, count: 1, latestMs: 200 },
+    });
+  });
+
+  it('records every interaction duration for performance distributions', () => {
+    clearUsageEvents();
+    recordInteractionPerformanceEvent('read_aloud_first_audio', 100.4, 10);
+    recordInteractionPerformanceEvent('read_aloud_first_audio', 201.4, 20);
+
+    expect(readPerformanceSummary()).toEqual({
+      read_aloud_first_audio: { averageMs: 151, count: 2, latestMs: 201 },
     });
   });
 });

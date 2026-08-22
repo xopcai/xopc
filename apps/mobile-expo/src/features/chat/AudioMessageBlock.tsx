@@ -1,6 +1,6 @@
 import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import type { AudioPlayer } from 'expo-audio';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Icon, Text } from 'react-native-paper';
 
@@ -9,6 +9,7 @@ import { useGatewayStore } from '../../stores/gateway-store';
 import { useTheme } from '../../theme';
 import type { AudioContent } from './messages.types';
 import { audioNameFromPath, resolveAudioPlaybackUrl } from './audio-url';
+import { claimAudioPlayback, releaseAudioPlayback } from '../voice/audio-playback-coordinator';
 
 function formatDuration(ms: number): string {
   if (!Number.isFinite(ms) || ms <= 0) return '0:00';
@@ -31,6 +32,7 @@ export const AudioMessageBlock = memo(function AudioMessageBlock({
   const { colors } = useTheme();
   const m = useMessages();
   const token = useGatewayStore((s) => s.token);
+  const playbackOwnerId = useId();
   const playerRef = useRef<AudioPlayer | null>(null);
   const [loading, setLoading] = useState(false);
   const [playing, setPlaying] = useState(false);
@@ -43,6 +45,7 @@ export const AudioMessageBlock = memo(function AudioMessageBlock({
   const title = audio.name?.trim() || audioNameFromPath(audio.workspaceRelativePath ?? audio.uri, 'voice.mp3');
 
   const unload = useCallback(() => {
+    releaseAudioPlayback(playbackOwnerId);
     const player = playerRef.current;
     playerRef.current = null;
     if (!player) return;
@@ -51,7 +54,7 @@ export const AudioMessageBlock = memo(function AudioMessageBlock({
     } catch {
       // Ignore unload races when the component unmounts or source changes.
     }
-  }, []);
+  }, [playbackOwnerId]);
 
   useEffect(() => {
     return () => {
@@ -91,12 +94,13 @@ export const AudioMessageBlock = memo(function AudioMessageBlock({
       setDurationMillis(Math.round((status.duration ?? 0) * 1000) || durationMillis);
       if (status.didJustFinish) {
         setPlaying(false);
+        releaseAudioPlayback(playbackOwnerId);
         void player.seekTo(0).catch(() => {});
       }
     });
     playerRef.current = player;
     return player;
-  }, [durationMillis, m.chat.audioMissingSource, token, uri]);
+  }, [durationMillis, m.chat.audioMissingSource, playbackOwnerId, token, uri]);
 
   const toggle = useCallback(async () => {
     if (loading) return;
@@ -106,16 +110,19 @@ export const AudioMessageBlock = memo(function AudioMessageBlock({
       const player = await ensurePlayer();
       if (player.playing) {
         player.pause();
+        releaseAudioPlayback(playbackOwnerId);
       } else {
+        claimAudioPlayback(playbackOwnerId, () => player.pause());
         player.play();
       }
     } catch {
+      releaseAudioPlayback(playbackOwnerId);
       setError(m.chat.audioPlaybackFailed);
       setPlaying(false);
     } finally {
       setLoading(false);
     }
-  }, [ensurePlayer, loading, m.chat.audioPlaybackFailed]);
+  }, [ensurePlayer, loading, m.chat.audioPlaybackFailed, playbackOwnerId]);
 
   const progress = durationMillis > 0 ? Math.min(1, Math.max(0, positionMillis / durationMillis)) : 0;
   const border = colors.border.default;
