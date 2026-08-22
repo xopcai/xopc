@@ -1,6 +1,6 @@
 /**
  * Default UI language from OS / browser locale.
- * Rule: English (`en`, `en-*`) → `en`; any other primary locale → `zh`.
+ * Rule: Chinese (`zh`, `zh-*`) → `zh`; unsupported locales → `en`.
  */
 
 export type UiLanguage = 'en' | 'zh';
@@ -9,8 +9,7 @@ export type UiLanguage = 'en' | 'zh';
 export function uiLanguageFromLocaleTag(locale: string | undefined | null): UiLanguage {
   const t = (locale ?? '').trim().toLowerCase().replace(/_/g, '-');
   if (!t) return 'en';
-  if (t === 'en' || t.startsWith('en-')) return 'en';
-  return 'zh';
+  return t === 'zh' || t.startsWith('zh-') ? 'zh' : 'en';
 }
 
 /** Browser or Electron renderer: use primary `navigator.language`. */
