@@ -5,6 +5,7 @@ import {
   mapSizeToMinimaxAspectRatio,
   resolveMinimaxBaseUrl,
 } from '../providers/minimax.js';
+import { resolveImageGenerationCredentialMode } from '../provider-registry.js';
 
 describe('MiniMax image provider', () => {
   it('uses the configured region', () => {
@@ -25,7 +26,10 @@ describe('MiniMax image provider', () => {
   });
 
   it('exposes one provider id', () => {
-    expect(buildMinimaxImageGenerationProvider().id).toBe('minimax');
+    const provider = buildMinimaxImageGenerationProvider();
+    expect(provider.id).toBe('minimax');
+    expect(provider.credentialMode).toBeUndefined();
+    expect(resolveImageGenerationCredentialMode(provider)).toBe('api-key');
   });
 
   it('maps dimensions to the closest supported ratio', () => {
