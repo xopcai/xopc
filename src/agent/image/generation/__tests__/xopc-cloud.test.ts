@@ -37,6 +37,7 @@ describe('XOPC Cloud image generation provider', () => {
       imageGeneration: {
         maxCount: 2,
         sizes: ['1024x1024'],
+        aspectRatios: [],
         qualities: ['high'],
         formats: ['png'],
         backgrounds: [],

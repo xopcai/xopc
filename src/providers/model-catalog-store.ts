@@ -12,6 +12,7 @@ export interface CatalogModel {
   imageGeneration?: {
     maxCount: number;
     sizes: string[];
+    aspectRatios?: string[];
     qualities: Array<'low' | 'medium' | 'high' | 'auto'>;
     formats: Array<'png' | 'jpeg' | 'webp'>;
     backgrounds: Array<'transparent' | 'opaque' | 'auto'>;
@@ -100,6 +101,7 @@ export class ModelCatalogStore {
           imageGeneration: {
             ...model.imageGeneration,
             sizes: [...model.imageGeneration.sizes],
+            aspectRatios: [...(model.imageGeneration.aspectRatios ?? [])],
             qualities: [...model.imageGeneration.qualities],
             formats: [...model.imageGeneration.formats],
             backgrounds: [...model.imageGeneration.backgrounds],
