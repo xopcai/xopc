@@ -82,12 +82,21 @@ describe('openXopcDatabase', () => {
         'context_snapshots',
         'relationship_settings',
         'interaction_states',
+        'user_profiles',
+        'user_understandings',
+        'collaboration_rules',
+        'context_runs',
+        'context_run_items',
+        'context_consolidation_runs',
+        'context_consolidation_decisions',
       ]),
     );
     expect(tables).not.toContain('work_understanding_threads');
     expect(tables).not.toContain('focus_watches');
     expect(tables).not.toContain('compaction_checkpoints');
     expect(tables).not.toContain('checkpoint_entries');
+    expect(tables).not.toContain('dreaming_runs');
+    expect(tables).not.toContain('dreaming_decisions');
   });
 
   it('sets restrictive permissions on database files', () => {

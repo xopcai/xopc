@@ -46,11 +46,10 @@ export const UserMemoryConfigSchema = z
   .object({
     mode: UserMemoryModeSchema.default('off'),
     sources: z
-      .array(z.enum(['session', 'userProfile', 'agentProfile', 'understanding', 'workspace', 'connectedSources']))
+      .array(z.enum(['session', 'agentProfile', 'understanding', 'workspace']))
       .default(['session']),
     writePolicy: z
       .object({
-        userProfile: z.enum(['deny', 'confirm', 'allow']).optional(),
         agentProfile: z.enum(['deny', 'confirm', 'allow']).optional(),
         understanding: z.enum(['deny', 'confirm', 'allow']).optional(),
         workspace: z.enum(['deny', 'confirm', 'allow']).optional(),
@@ -113,43 +112,7 @@ export const UserContextProviderRoutingSchema = z
     allowExternalWrites: false,
   });
 
-const DreamingIntervalHoursSchema = z.union([
-  z.literal(1), z.literal(2), z.literal(3), z.literal(4),
-  z.literal(6), z.literal(8), z.literal(12), z.literal(24),
-]);
 const DreamingTimeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Expected time in HH:mm format');
-
-export const DreamingScheduleSchema = z.discriminatedUnion('kind', [
-  z.object({
-    kind: z.literal('interval'),
-    everyHours: DreamingIntervalHoursSchema,
-    minute: z.number().int().min(0).max(59),
-  }).strict(),
-  z.object({
-    kind: z.literal('daily'),
-    time: DreamingTimeSchema,
-  }).strict(),
-  z.object({
-    kind: z.literal('weekly'),
-    weekday: z.number().int().min(0).max(6),
-    time: DreamingTimeSchema,
-  }).strict(),
-]);
-
-const DreamingEditablePhaseSchema = z.object({
-  enabled: z.boolean(),
-  schedule: DreamingScheduleSchema,
-}).strict();
-
-export const DreamingSettingsSchema = z.object({
-  mode: z.enum(['off', 'observe', 'review', 'automatic']),
-  timezone: z.string().min(1).refine(isValidTimeZone, 'Invalid IANA timezone'),
-  phases: z.object({
-    light: DreamingEditablePhaseSchema,
-    deep: DreamingEditablePhaseSchema,
-    rem: DreamingEditablePhaseSchema,
-  }).strict(),
-}).strict();
 
 function isValidTimeZone(value: string): boolean {
   try {
@@ -160,42 +123,16 @@ function isValidTimeZone(value: string): boolean {
   }
 }
 
-const DreamingPhaseSchema = z
-  .object({
-    enabled: z.boolean().optional(),
-    schedule: DreamingScheduleSchema.optional(),
-  })
-  .strict();
-
 export const UserContextDreamingSchema = z
   .object({
-    mode: z.enum(['off', 'observe', 'review', 'automatic']).default('off'),
+    mode: z.enum(['off', 'review']).default('review'),
     timezone: z.string().min(1).refine(isValidTimeZone, 'Invalid IANA timezone').optional(),
-    phases: z
-      .object({
-        light: DreamingPhaseSchema.extend({
-          lookbackDays: z.number().int().positive().optional(),
-          limit: z.number().int().nonnegative().optional(),
-        }).strict().optional(),
-        deep: DreamingPhaseSchema.extend({
-          minScore: z.number().min(0).max(1).optional(),
-          minRecallCount: z.number().int().positive().optional(),
-          minUniqueQueries: z.number().int().positive().optional(),
-          limit: z.number().int().nonnegative().optional(),
-          recencyHalfLifeDays: z.number().positive().optional(),
-          maxAgeDays: z.number().positive().optional(),
-        }).strict().optional(),
-        rem: DreamingPhaseSchema.extend({
-          lookbackDays: z.number().int().positive().optional(),
-          limit: z.number().int().nonnegative().optional(),
-          minPatternStrength: z.number().min(0).max(1).optional(),
-        }).strict().optional(),
-      })
-      .strict()
-      .optional(),
+    schedule: z.object({ time: DreamingTimeSchema.default('03:00') }).strict().default({ time: '03:00' }),
+    minEvidenceSources: z.number().int().min(2).max(10).default(2),
+    limit: z.number().int().positive().max(2_000).default(500),
   })
   .strict()
-  .default({ mode: 'off' });
+  .default({ mode: 'review', schedule: { time: '03:00' }, minEvidenceSources: 2, limit: 500 });
 
 export const UserContextConfigSchema = z
   .object({
@@ -230,9 +167,8 @@ export const UserContextConfigSchema = z
       writeStrategy: 'local-first',
       allowExternalWrites: false,
     },
-    dreaming: { mode: 'off' },
+    dreaming: { mode: 'review', schedule: { time: '03:00' }, minEvidenceSources: 2, limit: 500 },
   });
 
 export type UserContextConfig = z.infer<typeof UserContextConfigSchema>;
-export type DreamingSchedule = z.infer<typeof DreamingScheduleSchema>;
-export type DreamingSettings = z.infer<typeof DreamingSettingsSchema>;
+export type UserContextDreaming = z.infer<typeof UserContextDreamingSchema>;

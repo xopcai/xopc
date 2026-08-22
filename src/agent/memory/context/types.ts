@@ -6,6 +6,7 @@ export type UserContextRejectionReason =
   | 'sensitive'
   | 'requires_consent'
   | 'needs_review'
+  | 'scope_mismatch'
   | 'disabled'
   | 'conflict'
   | 'low_score'
@@ -13,6 +14,8 @@ export type UserContextRejectionReason =
 
 export interface PlannedUserContextItem {
   recordId: string;
+  objectType: 'profile' | 'rule' | 'understanding';
+  versionId?: string;
   content: string;
   score: number;
   section: 'task' | 'interaction' | 'safety';

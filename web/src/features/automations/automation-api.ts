@@ -204,11 +204,6 @@ export interface AutomationRepairDraft {
 }
 
 export const automationApi = {
-  completeInsightDraft: (insightId: string) =>
-    fetchJson<{ ok: true }>(apiUrl(`/api/you/insights/${encodeURIComponent(insightId)}`), {
-      method: 'PATCH',
-      body: JSON.stringify({ action: 'complete' }),
-    }),
   list: (input?: { projectId?: string }) => {
     const params = new URLSearchParams();
     if (input?.projectId) params.set('projectId', input.projectId);

@@ -1,9 +1,8 @@
-import { loadProfileBootstrapFiles, loadUserProfileBootstrapFile } from './load-bootstrap-files.js';
+import { loadProfileBootstrapFiles } from './load-bootstrap-files.js';
 import type { WorkspaceBootstrapFile } from './types.js';
 
 type BootstrapSnapshot = {
   profileDir: string;
-  userProfilePath?: string;
   files: WorkspaceBootstrapFile[];
 };
 
@@ -39,25 +38,19 @@ export function markBootstrapContextInjected(sessionKey: string): void {
 
 export async function getOrLoadBootstrapFiles(params: {
   profileDir: string;
-  userProfilePath?: string;
   sessionKey: string;
 }): Promise<WorkspaceBootstrapFile[]> {
   const existing = cache.get(params.sessionKey);
-  const files = [
-    ...loadUserProfileBootstrapFile(params.userProfilePath),
-    ...loadProfileBootstrapFiles(params.profileDir),
-  ];
+  const files = loadProfileBootstrapFiles(params.profileDir);
   if (
     existing &&
     existing.profileDir === params.profileDir &&
-    existing.userProfilePath === params.userProfilePath &&
     bootstrapFilesEqual(existing.files, files)
   ) {
     return existing.files;
   }
   cache.set(params.sessionKey, {
     profileDir: params.profileDir,
-    userProfilePath: params.userProfilePath,
     files,
   });
   return files;

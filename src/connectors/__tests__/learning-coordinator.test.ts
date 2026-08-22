@@ -81,7 +81,6 @@ describe('connector learning coordinator', () => {
 
   it('automatically bootstraps an eligible connection and schedules the next incremental run', async () => {
     const config = ConfigSchema.parse({});
-    config.userContext.memory.sources = [...config.userContext.memory.sources, 'connectedSources'];
     const coordinator = startConnectorLearningCoordinator({
       getConfig: () => config,
       resolveAgentId: () => 'main',
@@ -119,7 +118,6 @@ describe('connector learning coordinator', () => {
 
   it('honors per-connection scan enablement and interval', async () => {
     const config = ConfigSchema.parse({});
-    config.userContext.memory.sources = [...config.userContext.memory.sources, 'connectedSources'];
     expect(upsertConnectorSyncPolicy({
       accountId: 'account:gmail-work',
       proactiveEnabled: true,
@@ -170,7 +168,6 @@ describe('connector learning coordinator', () => {
       '400 {"error":{"message":"Could not find connected account(s)","slug":"ToolRouterV2_InvalidConnectedAccountIds"}}',
     ));
     const config = ConfigSchema.parse({});
-    config.userContext.memory.sources = [...config.userContext.memory.sources, 'connectedSources'];
     const coordinator = startConnectorLearningCoordinator({
       getConfig: () => config,
       resolveAgentId: () => 'main',

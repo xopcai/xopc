@@ -9,7 +9,6 @@ import {
   resolveConfigPath,
   resolveAgentHomeDir,
   resolveAgentProfileDir,
-  resolveUserProfilePath,
   WORKSPACE_FILES,
 } from '../../config/paths.js';
 import { loadConfig, saveConfig } from '../../config/loader.js';
@@ -131,7 +130,7 @@ Be careful with external actions (emails, tweets, anything public). Be bold with
 
 ## Continuity
 
-Each session, you wake up fresh. These files _are_ your memory. Read them. Update them.
+These files define your identity and operating principles. Durable user context is provided separately by xopc.
 
 _This file is yours to evolve. As you learn who you are, update it._
 `;
@@ -163,28 +162,6 @@ _This file is yours to evolve. As you learn who you are, update it._
 `;
     await writeFile(identityPath, identityContent, 'utf-8');
     log.info({ path: identityPath }, 'Created IDENTITY.md');
-  }
-
-  // Global user profile (shared by all agents)
-  const userPath = resolveUserProfilePath();
-  if (!existsSync(userPath)) {
-    await mkdir(dirname(userPath), { recursive: true });
-    const userContent = `# PROFILE.md - About You
-
-_Shared by all agents. Update this as your preferences and context change._
-
-- **Name:**
-- **What to call them:**
-- **Pronouns:**
-- **Timezone:**
-- **Notes:**
-
-## Context
-
-_(What do they care about? What projects are they working on? Build this over time.)_
-`;
-    await writeFile(userPath, userContent, 'utf-8');
-    log.info({ path: userPath }, 'Created global user PROFILE.md');
   }
 
   // AGENTS.md - Behavior guidelines

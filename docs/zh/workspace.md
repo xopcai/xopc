@@ -34,7 +34,6 @@ xopc 在单一 **状态目录**（“Agent OS” 根）下保存本机状态；�
 | `bin/` | 托管的 CLI 包装（如 `xopc`）。 |
 | `tools/` | 内置工具运行时（例如 `tools/node/current/` 下的 Node/npm）。 |
 | `models.json` | 模型注册表缓存。 |
-| `user/` | 所有 Agent 共享的 `PROFILE.md` 与 Dreaming 运维事件日志；持久用户理解位于 `xopc.db`。 |
 
 ## 按 Agent：`agents/<agentId>/`
 
@@ -63,7 +62,7 @@ CLI **未**加载到配置文件时，优先 **`XOPC_WORKSPACE`**（主智能体
 | `TOOLS.md` | 环境相关的工具提示（主机、设备等）。 |
 | `AGENTS.md` | 安全与协作规范。 |
 | `HEARTBEAT.md` | 心跳 / 主动巡检配置（空或仅注释则跳过相关调用）。 |
-记忆不属于 Agent profile。所有 Agent 统一读取和写入 `user/` 下的共享用户上下文，并由顶层 `userContext` 控制。
+记忆不属于 Agent profile。共享用户上下文以结构化数据保存在 `xopc.db`，并由顶层 `userContext` 控制。
 
 根目录下的其他 Markdown（例如 `CONTEXT.md`、`SKILLS.md`）为可选，**默认不会**写入系统提示；需自行通过工具读取或自定义流程使用。
 
@@ -78,7 +77,7 @@ CLI **未**加载到配置文件时，优先 **`XOPC_WORKSPACE`**（主智能体
 
 ### 结构化用户理解
 
-用户理解与 Dreaming 状态统一保存在结构化 SQLite 记忆库中。所有 Agent 通过上下文编译器消费同一套用户所有记录；工作区 Markdown 只是普通文档，不参与运行时记忆。
+用户资料、可审核理解、协作约定、证据、逐轮选择、授权与反馈统一保存在 SQLite 中。每轮只选择经过作用域、敏感性、授权和预算过滤的相关子集；工作区 Markdown 不参与用户记忆。
 
 ## 运行时到底用哪个「工作空间」？
 

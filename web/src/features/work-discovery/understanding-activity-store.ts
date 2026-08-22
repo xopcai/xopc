@@ -27,7 +27,7 @@ type UnderstandingActivityState = {
   finish: () => void;
   updateDirectoryRun: (run: WorkDiscoveryRun) => void;
   scanPersonalContext: (runId: string, selectedSources: ElectronPersonalContextSource[]) => Promise<void>;
-  reviewMemory: (memoryRecordId: string, accepted: boolean) => Promise<void>;
+  reviewMemory: (understandingId: string, accepted: boolean) => Promise<void>;
 };
 
 const initialSources = { apple_notes: 'idle', calendar: 'idle', reminders: 'idle' } as const;
@@ -163,14 +163,14 @@ export const useUnderstandingActivityStore = create<UnderstandingActivityState>(
       }));
     }
   },
-  reviewMemory: async (memoryRecordId, accepted) => {
+  reviewMemory: async (understandingId, accepted) => {
     try {
       await updatePersonalContextWorkDiscoveryProfile([{
-        memoryRecordId,
+        understandingId,
         status: accepted ? 'accepted' : 'rejected',
       }]);
       set((state) => {
-        const memories = state.memories.map((memory) => memory.memoryRecordId === memoryRecordId
+        const memories = state.memories.map((memory) => memory.understandingId === understandingId
           ? { ...memory, status: accepted ? 'accepted' as const : 'rejected' as const }
           : memory);
         return {

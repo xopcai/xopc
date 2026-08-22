@@ -60,8 +60,6 @@ function mergeAccountSourceData(
     .run(targetId, sourceId);
   db.prepare('UPDATE knowledge_source_changes SET source_instance_id = ? WHERE source_instance_id = ?')
     .run(targetId, sourceId);
-  db.prepare('UPDATE user_claim_evidence SET source_instance_id = ? WHERE source_instance_id = ?')
-    .run(targetId, sourceId);
   db.prepare(`
     DELETE FROM knowledge_collection_state AS source
     WHERE source.source_instance_id = ?

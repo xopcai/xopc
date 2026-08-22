@@ -13,7 +13,7 @@ describe('memory_search recall signals', () => {
     if (root) await rm(root, { recursive: true, force: true });
   });
 
-  it('records unified recall evidence independently of Dreaming mode', async () => {
+  it('records unified recall evidence', async () => {
     root = await mkdtemp(join(tmpdir(), 'xopc-memory-tool-'));
     const recordSignal = vi.fn();
     const manager = {
@@ -46,7 +46,6 @@ describe('memory_search recall signals', () => {
     const tool = createMemorySearchTool({
       workspaceDir: root,
       getMemoryManager: () => manager,
-      shouldRecordDreamingRecalls: () => false,
     });
 
     await tool.execute('call-1', { query: 'response style' });

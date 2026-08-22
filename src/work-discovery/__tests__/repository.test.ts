@@ -9,11 +9,13 @@ import { ProjectService } from '../../projects/project-service.js';
 import type { SessionIndex } from '../../session/manager.js';
 import {
   closeXopcDatabase,
-  getMemoryRecord,
+  createContextEvidence,
+  createUnderstanding,
+  getUnderstanding,
+  linkUnderstandingEvidence,
   openXopcDatabase,
   requireXopcDatabase,
   resetXopcDatabaseSingletonForTest,
-  upsertMemoryRecord,
 } from '../../storage/sqlite/index.js';
 import {
   findActiveWorkDiscoverySourceRefresh,
@@ -90,18 +92,16 @@ describe('work discovery repository', () => {
   });
 
   it('activates only accepted work-discovery profile candidates', () => {
-    const record = upsertMemoryRecord({
-      providerId: 'local',
-      kind: 'derived_insight',
-      sourceAgentId: 'main',
-      content: 'The user works mainly with TypeScript.',
-      source: { provider: 'work-discovery', path: 'work-discovery://run-2' },
+    const record = createUnderstanding({
+      kind: 'project_context', canonicalKey: 'work-discovery:technology:test', scope: { type: 'project', id: 'project-1' },
       status: 'candidate',
       explicitness: 'inferred',
       durability: 'durable',
-      importance: 0.7,
-      disclosurePolicy: 'referenceable',
+      sensitivity: 'normal', disclosurePolicy: 'referenceable', confidence: 0.9,
+      statement: 'The user works mainly with TypeScript.', createdBy: 'runtime', changeReason: 'test',
     });
+    const evidence = createContextEvidence({ sourceType: 'runtime', sourceRef: 'work-discovery:run-2:candidate-1', trustLevel: 'trusted', observedAt: 1 });
+    linkUnderstandingEvidence(record.versionId, evidence.id, 'supports', 0.9);
     createWorkDiscoveryRun({
       id: 'run-2',
       idempotencyKey: 'key-2',
@@ -121,9 +121,9 @@ describe('work discovery repository', () => {
         suggestions: [],
         profileCandidates: [{
           id: 'candidate-1',
-          memoryRecordId: record.id,
+          understandingId: record.id,
           category: 'technology',
-          statement: record.content,
+          statement: record.statement,
           confidence: 'high',
           evidence: ['package.json'],
           status: 'pending',
@@ -148,10 +148,9 @@ describe('work discovery repository', () => {
       status: 'edited',
       statement: 'I primarily build TypeScript products.',
     });
-    expect(getMemoryRecord(record.id)).toMatchObject({
+    expect(getUnderstanding(record.id)).toMatchObject({
       status: 'active',
-      content: 'I primarily build TypeScript products.',
-      explicitness: 'explicit',
+      statement: 'I primarily build TypeScript products.',
     });
   });
 
@@ -224,28 +223,26 @@ describe('work discovery repository', () => {
     })).toBeNull();
   });
 
-  it('activates only memory candidates produced by personal context', () => {
-    const notesRecord = upsertMemoryRecord({
-      providerId: 'local',
-      kind: 'derived_insight',
-      sourceAgentId: 'main',
-      content: 'The user regularly plans product work in notes.',
-      source: { provider: 'personal-context', path: 'personal-context://onboarding' },
+  it('activates only understanding candidates produced by personal context', () => {
+    const notesRecord = createUnderstanding({
+      kind: 'routine', canonicalKey: 'work-discovery:workflow:notes', scope: { type: 'global' },
       status: 'candidate',
       explicitness: 'inferred',
       durability: 'recurring',
-      importance: 0.7,
-      disclosurePolicy: 'referenceable',
+      sensitivity: 'normal', disclosurePolicy: 'referenceable', confidence: 0.8,
+      statement: 'The user regularly plans product work in notes.', createdBy: 'runtime', changeReason: 'test',
     });
-    const unrelatedRecord = upsertMemoryRecord({
-      providerId: 'local',
-      kind: 'derived_insight',
-      sourceAgentId: 'main',
-      content: 'Unrelated candidate.',
-      source: { provider: 'work-discovery', path: 'work-discovery://run' },
+    const notesEvidence = createContextEvidence({ sourceType: 'runtime', sourceRef: 'personal-context:onboarding:notes', trustLevel: 'trusted', observedAt: 1 });
+    linkUnderstandingEvidence(notesRecord.versionId, notesEvidence.id, 'supports', 0.8);
+    const unrelatedRecord = createUnderstanding({
+      kind: 'derived_insight', canonicalKey: 'work-discovery:other', scope: { type: 'global' },
       status: 'candidate',
-      disclosurePolicy: 'referenceable',
+      explicitness: 'inferred', durability: 'durable', sensitivity: 'normal',
+      disclosurePolicy: 'referenceable', confidence: 0.8,
+      statement: 'Unrelated candidate.', createdBy: 'runtime', changeReason: 'test',
     });
+    const otherEvidence = createContextEvidence({ sourceType: 'runtime', sourceRef: 'work-discovery:run:other', trustLevel: 'trusted', observedAt: 1 });
+    linkUnderstandingEvidence(unrelatedRecord.versionId, otherEvidence.id, 'supports', 0.8);
     const service = new WorkDiscoveryService({
       projects: new ProjectService(),
       sessions: {} as SessionIndex,
@@ -254,12 +251,12 @@ describe('work discovery repository', () => {
     });
 
     const decisions = service.updatePersonalContextProfile({ decisions: [
-      { memoryRecordId: notesRecord.id, status: 'accepted' },
-      { memoryRecordId: unrelatedRecord.id, status: 'accepted' },
+      { understandingId: notesRecord.id, status: 'accepted' },
+      { understandingId: unrelatedRecord.id, status: 'accepted' },
     ] });
 
     expect(decisions).toHaveLength(1);
-    expect(getMemoryRecord(notesRecord.id)?.status).toBe('active');
-    expect(getMemoryRecord(unrelatedRecord.id)?.status).toBe('candidate');
+    expect(getUnderstanding(notesRecord.id)?.status).toBe('active');
+    expect(getUnderstanding(unrelatedRecord.id)?.status).toBe('candidate');
   });
 });

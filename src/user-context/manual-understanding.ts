@@ -1,73 +1,46 @@
-import { nextMemoryReviewAt } from '../agent/memory/lifecycle.js';
-import type { MemoryKind, MemoryRecord } from '../agent/memory/types.js';
-import { listMemoryRecords, upsertMemoryRecord } from '../storage/sqlite/index.js';
-import { USER_CONFIRMED_MEMORY_TAG } from './actionableInsights.js';
-import { isUserContextRecord } from './projection.js';
+import { createHash } from 'node:crypto';
 
-export type ManualUnderstandingScope =
-  | { type: 'global' }
-  | { type: 'session'; sessionKey: string };
+import { createUnderstanding, listUnderstandings } from '../storage/sqlite/index.js';
+import type { UnderstandingKind, UserContextScope, UserUnderstanding } from './domain.js';
 
-const STATUSES: MemoryRecord['status'][] = [
-  'candidate',
-  'active',
-  'needs_review',
-  'stale',
-  'archived',
-  'rejected',
-];
-
-function sameScope(record: MemoryRecord, scope: ManualUnderstandingScope): boolean {
-  if (scope.type === 'session') return record.scope.sessionKey === scope.sessionKey;
-  return !record.scope.sessionKey && !record.scope.projectId && !record.scope.workspaceId;
+function canonicalKey(kind: UnderstandingKind, statement: string): string {
+  const normalized = statement.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  return `${kind}:${createHash('sha256').update(normalized).digest('hex').slice(0, 20)}`;
 }
 
-function findDuplicate(content: string, scope: ManualUnderstandingScope): MemoryRecord | undefined {
-  const normalized = content.toLocaleLowerCase();
-  for (const status of STATUSES) {
-    let offset = 0;
-    while (true) {
-      const page = listMemoryRecords({ status, limit: 500, offset });
-      const duplicate = page.find((record) => (
-        isUserContextRecord(record)
-        && sameScope(record, scope)
-        && record.content.trim().toLocaleLowerCase() === normalized
-      ));
-      if (duplicate) return duplicate;
-      if (page.length < 500) break;
-      offset += page.length;
-    }
-  }
-  return undefined;
+function sameScope(left: UserContextScope, right: UserContextScope): boolean {
+  return left.type === right.type && left.id === right.id;
 }
 
 export function createManualUnderstanding(input: {
-  agentId: string;
   content: string;
-  kind: MemoryKind;
-  scope: ManualUnderstandingScope;
-  sensitivity: NonNullable<MemoryRecord['sensitivity']>;
-  durability: MemoryRecord['durability'];
-  disclosurePolicy: MemoryRecord['disclosurePolicy'];
-}): { record: MemoryRecord; created: boolean } {
-  const duplicate = findDuplicate(input.content, input.scope);
-  if (duplicate) return { record: duplicate, created: false };
-  const record = upsertMemoryRecord({
-    providerId: 'local',
+  kind: UnderstandingKind;
+  scope: UserContextScope;
+  sensitivity: UserUnderstanding['sensitivity'];
+  durability: UserUnderstanding['durability'];
+  disclosurePolicy: UserUnderstanding['disclosurePolicy'];
+}): { understanding: UserUnderstanding; created: boolean } {
+  const statement = input.content.trim();
+  const key = canonicalKey(input.kind, statement);
+  const duplicate = listUnderstandings().find((item) =>
+    item.canonicalKey === key
+    && item.status !== 'archived'
+    && item.status !== 'rejected'
+    && sameScope(item.scope, input.scope));
+  if (duplicate) return { understanding: duplicate, created: false };
+  const understanding = createUnderstanding({
     kind: input.kind,
-    sourceAgentId: input.agentId,
-    ...(input.scope.type === 'session' ? { sessionKey: input.scope.sessionKey } : {}),
-    content: input.content,
-    source: { provider: 'local', path: 'you://manual' },
-    confidence: 1,
-    tags: ['user-understanding', 'explicit-user-memory', USER_CONFIRMED_MEMORY_TAG],
+    canonicalKey: key,
     status: 'active',
-    sensitivity: input.sensitivity,
+    scope: input.scope,
     explicitness: 'explicit',
     durability: input.durability,
-    importance: 0.8,
+    sensitivity: input.sensitivity,
     disclosurePolicy: input.disclosurePolicy,
-    reviewAfter: nextMemoryReviewAt({ durability: input.durability, explicitness: 'explicit' }),
+    confidence: 1,
+    statement,
+    createdBy: 'user',
+    changeReason: 'Created with /remember',
   });
-  return { record, created: true };
+  return { understanding, created: true };
 }

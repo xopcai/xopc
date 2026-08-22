@@ -34,7 +34,6 @@ These are shared across agents unless noted.
 | `bin/` | Managed CLI shim (e.g. `xopc`). |
 | `tools/` | Bundled tool runtimes (e.g. `tools/node/current/` for Node/npm used by tools). |
 | `models.json` | Cached model registry data. |
-| `user/` | Shared `PROFILE.md` and operational Dreaming event logs; durable understanding lives in `xopc.db`. |
 
 ## Per-agent tree: `agents/<agentId>/`
 
@@ -54,7 +53,7 @@ When the CLI runs **without** a loaded config file, **`XOPC_WORKSPACE`** wins if
 
 ### Profile Markdown (agent persona)
 
-These files are injected into the system prompt as **Project Context** (OpenClaw-aligned bootstrap). Location: **`agents/<agentId>/profile/`** (same filenames). Runtime also injects the global user profile from **`user/PROFILE.md`** when present. Agents should not manually reread startup context at session start unless the user asks or context is incomplete.
+These files are injected into the system prompt as **Project Context**. Location: **`agents/<agentId>/profile/`**. They describe the agent, never the user.
 
 | File | Role |
 |------|------|
@@ -63,7 +62,7 @@ These files are injected into the system prompt as **Project Context** (OpenClaw
 | `TOOLS.md` | Environment-specific tool hints (hosts, devices, …). |
 | `AGENTS.md` | Session Startup, Red Lines, and collaboration guidelines. |
 | `HEARTBEAT.md` | Heartbeat / proactive check configuration (dynamic Project Context when enabled). |
-Memory is not part of an agent profile. Every agent reads and writes the shared user context under `user/`, controlled by top-level `userContext`.
+Memory is not part of an agent profile. Shared user context is structured data in `xopc.db`, controlled by top-level `userContext`.
 
 Other root Markdown files (for example `CONTEXT.md` or `SKILLS.md`) are optional and are **not** loaded into the default system prompt unless you wire them in yourself (e.g. read via tools or custom workflow).
 
@@ -78,7 +77,7 @@ Per-session overrides (SQLite `session_config`), **inbound** blobs (`inbound/`),
 
 ### Structured user understanding
 
-User understanding and Dreaming state live in the structured SQLite memory store. Every agent consumes the same user-owned records through the context compiler; workspace Markdown files are ordinary documents and are never treated as runtime memory.
+The user profile, reviewable understanding, collaboration rules, evidence, per-turn selection, consent, and feedback live in SQLite. Every turn selects a bounded, policy-filtered subset. Workspace Markdown files are ordinary documents and are never treated as user memory.
 
 ## Which path is “the” workspace at runtime?
 

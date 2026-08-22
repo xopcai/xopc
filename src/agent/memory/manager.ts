@@ -1,6 +1,6 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 
-import { appendMemoryTraceEvent, attachMemoryEvidence, setKnowledgeSourceItemSynthesisStatus } from '../../storage/sqlite/index.js';
+import { appendMemoryTraceEvent, setKnowledgeSourceItemSynthesisStatus } from '../../storage/sqlite/index.js';
 import { createLogger } from '../../utils/logger.js';
 import type { MemoryRuntime, MemorySource } from '../../agent-runtime/memory-runtime.js';
 import type { MemoryProvider, MemoryProviderInitOptions } from './provider.js';
@@ -71,23 +71,7 @@ export class MemoryManager {
       allowedProviderIds: options.writePolicy?.allowedProviderIds,
       autoWriteKinds: options.writePolicy?.autoWriteKinds,
     };
-    this.understanding = new UserUnderstandingService({
-      write: (request) => this.write(request),
-      list: (canonicalKey, scope) => this.list({ canonicalKey, scope }),
-      attachEvidence: (recordId, evidence) => {
-        attachMemoryEvidence({
-          recordId,
-          sourceItemId: evidence.sourceItemId,
-          relation: evidence.relation,
-          sessionKey: evidence.sessionKey,
-          turnId: evidence.turnId,
-          toolCallId: evidence.toolCallId,
-          excerpt: evidence.sourceText,
-          confidence: evidence.confidence,
-          observedAt: evidence.observedAt,
-        });
-      },
-    });
+    this.understanding = new UserUnderstandingService();
   }
 
   addProvider(provider: MemoryProvider): void {
@@ -155,14 +139,14 @@ export class MemoryManager {
   async captureTurnUnderstanding(
     userContent: string,
     assistantContent: string,
-    options?: { agentId?: string; sessionId?: string; workspaceId?: string; projectId?: string; correctionTargetRecordIds?: string[] },
+    options?: { agentId?: string; sessionId?: string; turnId?: string; workspaceId?: string; projectId?: string; correctionTargetRecordIds?: string[] },
   ): Promise<import('./understanding/types.js').UnderstandingReviewResult> {
     const sessionContext = options?.sessionId ? this.sessionContexts.get(options.sessionId) : undefined;
     const review = await this.understanding.reviewTurn({
-      agentId: options?.agentId ?? sessionContext?.agentId,
       userContent,
       assistantContent,
       sessionKey: options?.sessionId,
+      turnId: options?.turnId,
       workspaceId: options?.workspaceId ?? sessionContext?.workspace ?? sessionContext?.agentWorkspace,
       projectId: options?.projectId,
       correctionTargetRecordIds: options?.correctionTargetRecordIds,
@@ -224,7 +208,6 @@ export class MemoryManager {
       : undefined);
     const result = await this.understanding.applyCandidates(candidates, {
       ...context,
-      agentId: context.agentId ?? sessionContext?.agentId,
       workspaceId: context.workspaceId ?? sessionContext?.workspace ?? sessionContext?.agentWorkspace,
       sourceItemId,
     });
@@ -607,9 +590,7 @@ export class MemoryManager {
 }
 
 function memorySourceForRecord(record: MemoryRecord): MemorySource {
-  if (record.tags?.includes('connected-source') || record.source.provider === 'connected-sources') return 'connectedSources';
   if (record.source.provider === 'agent-profile') return 'agentProfile';
-  if (record.source.provider === 'user-profile') return 'userProfile';
   if (record.scope.sessionKey) return 'session';
   if (record.scope.workspaceId || record.kind === 'workspace_fact' || record.kind === 'project_context' || record.kind === 'task_lesson') return 'workspace';
   return 'understanding';

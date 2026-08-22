@@ -1,9 +1,4 @@
-/**
- * Bidirectional parser for agent/user profile Markdown (IDENTITY.md, PROFILE.md, SOUL.md).
- *
- * Converts structured form fields ↔ Markdown so the settings UI can use friendly
- * inputs while keeping the on-disk format compatible with the agent runtime.
- */
+/** Structured editors for agent-owned IDENTITY.md and SOUL.md files. */
 
 // ---------------------------------------------------------------------------
 // IDENTITY.md
@@ -89,117 +84,6 @@ export function serializeIdentityMarkdown(fields: IdentityFields): string {
     `- **Avatar:** ${fields.avatar}`,
     '',
   ];
-  return lines.join('\n');
-}
-
-// ---------------------------------------------------------------------------
-// PROFILE.md (global human/user profile)
-// ---------------------------------------------------------------------------
-
-export interface UserFields {
-  callName: string;
-  pronouns: string;
-  timezone: string;
-  notes: string;
-}
-
-const USER_DEFAULTS: UserFields = {
-  callName: '',
-  pronouns: '',
-  timezone: '',
-  notes: '',
-};
-
-/**
- * Parse PROFILE.md content into structured fields.
- *
- * Handles the template format:
- *   - **Name:** value
- *   - **What to call them:** value
- *   - **Pronouns:** value
- *   - **Timezone:** value
- *   - **Notes:** value
- *
- * Also captures the Context section as free-text notes.
- */
-export function parseUserMarkdown(content: string): UserFields {
-  const fields = { ...USER_DEFAULTS };
-  if (!content.trim()) {
-    return fields;
-  }
-
-  const fieldMap: Record<string, keyof UserFields> = {
-    name: 'callName',
-    'what to call them': 'callName',
-    pronouns: 'pronouns',
-    timezone: 'timezone',
-    notes: 'notes',
-  };
-
-  const lines = content.split('\n');
-  let contextStartIndex = -1;
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-
-    // Detect the ## Context section
-    if (/^##\s+Context/i.test(line)) {
-      contextStartIndex = i + 1;
-      continue;
-    }
-
-    const match = line.match(/^[-*]\s+\*\*(.+?):\*\*\s*(.*)/i);
-    if (!match) {
-      continue;
-    }
-    const label = match[1].toLowerCase().trim();
-    const fieldKey = fieldMap[label];
-    if (!fieldKey) {
-      continue;
-    }
-    let value = match[2].trim();
-    // Strip template placeholders like _(optional)_
-    if (/^_\(.*\)_$/.test(value)) {
-      value = '';
-    }
-    fields[fieldKey] = value;
-  }
-
-  // Capture context section content as extra notes
-  if (contextStartIndex > 0) {
-    const contextLines = lines.slice(contextStartIndex);
-    const contextText = contextLines
-      .join('\n')
-      .replace(/^_\(.*?\)_\s*/gm, '') // strip template placeholders
-      .replace(/^---\s*$/gm, '') // strip trailing horizontal rules
-      .replace(/The more you know.*$/s, '') // strip template footer
-      .trim();
-
-    if (contextText && !fields.notes) {
-      fields.notes = contextText;
-    }
-  }
-
-  return fields;
-}
-
-/**
- * Serialize structured user fields back to PROFILE.md Markdown.
- */
-export function serializeUserMarkdown(fields: UserFields): string {
-  const lines = [
-    '# PROFILE.md - About You',
-    '',
-    `- **Name:** ${fields.callName}`,
-    `- **Pronouns:** ${fields.pronouns}`,
-    `- **Timezone:** ${fields.timezone}`,
-    '',
-  ];
-
-  if (fields.notes.trim()) {
-    lines.push('## Context', '', fields.notes.trim(), '');
-  }
-
   return lines.join('\n');
 }
 
@@ -374,58 +258,6 @@ function countDistinctTemplatePhraseHits(text: string, templateId: SoulTemplateI
   }
   return hits.size;
 }
-
-// ---------------------------------------------------------------------------
-// Timezone helpers
-// ---------------------------------------------------------------------------
-
-/** Common timezone options for the dropdown. */
-export const TIMEZONE_OPTIONS = [
-  { value: '', labelEn: 'Not set', labelZh: '未设置' },
-  { value: 'Asia/Shanghai', labelEn: 'Asia/Shanghai (CST, UTC+8)', labelZh: '亚洲/上海 (北京时间, UTC+8)' },
-  { value: 'Asia/Tokyo', labelEn: 'Asia/Tokyo (JST, UTC+9)', labelZh: '亚洲/东京 (日本时间, UTC+9)' },
-  { value: 'Asia/Seoul', labelEn: 'Asia/Seoul (KST, UTC+9)', labelZh: '亚洲/首尔 (韩国时间, UTC+9)' },
-  { value: 'Asia/Singapore', labelEn: 'Asia/Singapore (SGT, UTC+8)', labelZh: '亚洲/新加坡 (UTC+8)' },
-  { value: 'Asia/Hong_Kong', labelEn: 'Asia/Hong Kong (HKT, UTC+8)', labelZh: '亚洲/香港 (UTC+8)' },
-  { value: 'Asia/Taipei', labelEn: 'Asia/Taipei (CST, UTC+8)', labelZh: '亚洲/台北 (UTC+8)' },
-  { value: 'Asia/Kolkata', labelEn: 'Asia/Kolkata (IST, UTC+5:30)', labelZh: '亚洲/加尔各答 (印度时间, UTC+5:30)' },
-  { value: 'Asia/Dubai', labelEn: 'Asia/Dubai (GST, UTC+4)', labelZh: '亚洲/迪拜 (UTC+4)' },
-  { value: 'Europe/London', labelEn: 'Europe/London (GMT/BST)', labelZh: '欧洲/伦敦 (格林尼治时间)' },
-  { value: 'Europe/Paris', labelEn: 'Europe/Paris (CET, UTC+1)', labelZh: '欧洲/巴黎 (中欧时间, UTC+1)' },
-  { value: 'Europe/Berlin', labelEn: 'Europe/Berlin (CET, UTC+1)', labelZh: '欧洲/柏林 (中欧时间, UTC+1)' },
-  { value: 'Europe/Moscow', labelEn: 'Europe/Moscow (MSK, UTC+3)', labelZh: '欧洲/莫斯科 (UTC+3)' },
-  { value: 'America/New_York', labelEn: 'America/New York (EST, UTC-5)', labelZh: '美国/纽约 (东部时间, UTC-5)' },
-  { value: 'America/Chicago', labelEn: 'America/Chicago (CST, UTC-6)', labelZh: '美国/芝加哥 (中部时间, UTC-6)' },
-  { value: 'America/Denver', labelEn: 'America/Denver (MST, UTC-7)', labelZh: '美国/丹佛 (山地时间, UTC-7)' },
-  { value: 'America/Los_Angeles', labelEn: 'America/Los Angeles (PST, UTC-8)', labelZh: '美国/洛杉矶 (太平洋时间, UTC-8)' },
-  { value: 'America/Sao_Paulo', labelEn: 'America/São Paulo (BRT, UTC-3)', labelZh: '美洲/圣保罗 (巴西时间, UTC-3)' },
-  { value: 'Australia/Sydney', labelEn: 'Australia/Sydney (AEST, UTC+10)', labelZh: '澳大利亚/悉尼 (UTC+10)' },
-  { value: 'Pacific/Auckland', labelEn: 'Pacific/Auckland (NZST, UTC+12)', labelZh: '太平洋/奥克兰 (新西兰时间, UTC+12)' },
-] as const;
-
-/**
- * Try to detect the user's timezone from the browser.
- */
-export function detectBrowserTimezone(): string {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone;
-  } catch {
-    return '';
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Vibe presets
-// ---------------------------------------------------------------------------
-
-export const PRONOUNS_PRESETS = [
-  { value: '先生', labelEn: 'Mr.', labelZh: '先生' },
-  { value: '女士', labelEn: 'Ms.', labelZh: '女士' },
-  { value: '同学', labelEn: 'Colleague', labelZh: '同学' },
-  { value: '老师', labelEn: 'Teacher', labelZh: '老师' },
-  { value: '老板', labelEn: 'Boss', labelZh: '老板' },
-  { value: '朋友', labelEn: 'Friend', labelZh: '朋友' },
-] as const;
 
 // ---------------------------------------------------------------------------
 // Creature presets

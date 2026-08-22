@@ -3,7 +3,7 @@ export {
   buildUserContextBlock,
   sanitizeUserContextFenceEscapes,
 } from './context-fence.js';
-export { UserContextPlanner } from './context/planner.js';
+export { UserContextPlanner } from '../../user-context/planner.js';
 export type { UserContextPlan } from './context/types.js';
 export { createMemoryManagerFromConfig } from './create-memory-manager.js';
 export {

@@ -198,12 +198,6 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
       if (!account || account.principalId !== 'local-owner' || !account.currentConnectionId) {
         return c.json({ ok: false, error: 'Connector account has no usable authorization.' }, 409);
       }
-      const config = service.currentConfig as Config;
-      if (!config.userContext.memory.sources.includes('connectedSources')) {
-        config.userContext.memory.sources = [...config.userContext.memory.sources, 'connectedSources'];
-        const saved = await service.saveConfig(config);
-        if (!saved.saved) return c.json({ ok: false, error: saved.error }, 500);
-      }
       const job = service.requestConnectorLearning(account.currentConnectionId, { reason: 'manual' });
       if (!job) return c.json({ ok: false, error: 'The account is not active or does not support learning.' }, 409);
       return c.json({ ok: true, payload: { job } }, 202);

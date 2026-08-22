@@ -1,6 +1,6 @@
 import type { Config } from '../../config/schema.js';
 
-/** When false, structured user understanding and external memory providers are off. */
+/** Whether generic workspace and provider-backed memory is available. */
 export function isMemorySubsystemEnabled(config: Config | undefined): boolean {
   if (!config) return true;
   return config.userContext.enabled && config.userContext.memory.mode !== 'off';

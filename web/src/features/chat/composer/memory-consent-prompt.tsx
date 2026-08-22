@@ -135,7 +135,7 @@ export function MemoryCaptureReceipt({ sessionKey, language }: { sessionKey: str
   const undo = async () => {
     setBusy(true);
     try {
-      await fetchJson(apiUrl(`/api/you/understanding/${encodeURIComponent(record.id)}`), { method: 'DELETE' });
+      await fetchJson(apiUrl(`/api/you/understandings/${encodeURIComponent(record.id)}`), { method: 'DELETE' });
       setRecord(null);
     } finally {
       setBusy(false);

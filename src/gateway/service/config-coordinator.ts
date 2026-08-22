@@ -55,7 +55,7 @@ export interface GatewayConfigCoordinatorOptions {
   getExtensionLoader: () => ExtensionLoader | null;
   /** Re-evaluate browser-extension server attachment after agent defaults change. */
   reconcileBrowserExtensionServer: () => Promise<void>;
-  /** Sync built-in dreaming automations after memory.dreaming changes. */
+  /** Sync the built-in consolidation automation after userContext.dreaming changes. */
   reconcileDreamingAutomations: () => Promise<void>;
   /** Latest channel status snapshot for the `channels.status` event. */
   getChannelsStatus: () => unknown;
@@ -419,7 +419,7 @@ export class GatewayConfigCoordinator {
     }
     this.opts.getAgentService().applyAgentDefaultsFromConfig(reloaded);
     await this.opts.reconcileBrowserExtensionServer();
-    // Keep built-in dreaming automations aligned with memory.dreaming.
+    // Keep the built-in consolidation automation aligned with userContext.dreaming.
     await this.opts.reconcileDreamingAutomations().catch((err) => {
       const em = err instanceof Error ? err.message : String(err);
       log.warn({ err, errorMessage: em }, `Dreaming automation refresh after save failed: ${em}`);

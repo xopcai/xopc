@@ -226,7 +226,7 @@ export interface WorkDiscoveryResult {
 
 export interface WorkDiscoveryProfileCandidate {
   id: string;
-  memoryRecordId?: string;
+  understandingId?: string;
   category: 'role' | 'focus' | 'technology' | 'workflow' | 'preference';
   statement: string;
   confidence: 'high' | 'medium' | 'low';

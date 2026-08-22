@@ -6,17 +6,12 @@
 
 import type { Config } from '../../config/schema.js';
 import {
-  buildRelationshipPrompt,
-  getRelationshipSettings,
   getInteractionState,
+  getUserProfile,
   getUserTrustPolicy,
   isXopcDatabaseOpen,
-  listMemoryRecords,
 } from '../../storage/sqlite/index.js';
-import { buildPersonalPlaybookPrompt } from '../../user-context/personal-playbook.js';
 import { buildInteractionStatePrompt } from '../../user-context/interaction-state.js';
-import { buildRelationshipContinuityPrompt } from '../../user-context/relationship-continuity.js';
-import { parseSessionKey } from '../../routing/session-key.js';
 import { DEFAULT_USER_TRUST_LEVEL } from '../../user-context/trust-policy.js';
 import type { EmbeddedContextFile } from '../bootstrap/types.js';
 import type { SkillManager } from '../skills/skill-manager.js';
@@ -73,26 +68,12 @@ export class SystemPromptBuilder {
     const actionTrustLevel = isXopcDatabaseOpen()
       ? getUserTrustPolicy().defaultActionLevel
       : DEFAULT_USER_TRUST_LEVEL;
-    const relationshipPrompt = isXopcDatabaseOpen()
-      ? buildRelationshipPrompt(getRelationshipSettings())
-      : '';
     const interactionState = isXopcDatabaseOpen() && options.sessionKey
       ? getInteractionState(options.sessionKey)
       : undefined;
-    const session = parseSessionKey(options.sessionKey);
-    const activeMemories = isXopcDatabaseOpen()
-      ? listMemoryRecords({ status: 'active', limit: 500 })
-      : [];
-    const playbookPrompt = isXopcDatabaseOpen()
-      ? buildPersonalPlaybookPrompt(activeMemories, {
-          ...(session ? { channel: session.source } : {}),
-          ...(interactionState ? { supportNeed: interactionState.supportNeed } : {}),
-        })
-      : '';
-    const continuityPrompt = buildRelationshipContinuityPrompt(activeMemories);
     const interactionPrompt = interactionState ? buildInteractionStatePrompt(interactionState) : '';
     const heartbeatEnabled = this.config.gateway?.heartbeat?.includeSystemPromptSection ?? false;
-    const userTimezone = this.extractTimezone(contextFiles);
+    const userTimezone = isXopcDatabaseOpen() ? getUserProfile().timezone || undefined : undefined;
 
     const ttsMerged = mergeTtsConfigFromAppConfig(this.config.messages?.tts);
     const reg = options.registeredToolNames ?? [];
@@ -116,10 +97,7 @@ export class SystemPromptBuilder {
       ttsSystemHint,
       extraSystemPrompt: [
         options.extraSystemPrompt,
-        relationshipPrompt,
-        playbookPrompt,
         interactionPrompt,
-        continuityPrompt,
       ].filter(Boolean).join('\n\n'),
       activeProjectContext: options.activeProjectContext,
       modelRef: options.modelRef,
@@ -186,20 +164,6 @@ export class SystemPromptBuilder {
     return this.build(contextFiles, options);
   }
 
-  private extractTimezone(contextFiles: EmbeddedContextFile[]): string | undefined {
-    const userContext = contextFiles.find((file) =>
-      file.path.replace(/\\/g, '/').toLowerCase().endsWith('/user/profile.md'),
-    );
-    if (userContext?.content) {
-      const match = userContext.content.match(/Timezone:\s*(.+)/i);
-      if (match) {
-        return match[1].trim();
-      }
-    }
-
-    return undefined;
-  }
-
   getSkillPrompt(): string {
     return this.skillManager.getPrompt();
   }
@@ -219,7 +183,7 @@ export class SystemPromptBuilder {
       workspaceDir: ws,
       sessionKey: options?.sessionKey,
       toolNames: options?.registeredToolNames,
-      userTimezone: this.extractTimezone(contextFiles),
+      userTimezone: isXopcDatabaseOpen() ? getUserProfile().timezone || undefined : undefined,
       externalMemoryInstructions: options?.externalMemoryInstructions,
       heartbeatEnabled: this.config.gateway?.heartbeat?.includeSystemPromptSection ?? false,
     });

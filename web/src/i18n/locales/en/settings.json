@@ -57,29 +57,6 @@
       "failed": "Failed"
     }
   },
-  "userProfileSettings": {
-    "title": "About you",
-    "subtitle": "Help your assistant understand how to work with you. You can change or remove this context anytime.",
-    "sectionTitle": "About you",
-    "sectionSubtitle": "Keep stable preferences, boundaries, and communication context here.",
-    "loading": "Loading…",
-    "loadError": "Could not load user profile.",
-    "save": "Save",
-    "saving": "Saving…",
-    "saved": "Saved",
-    "saveError": "Save failed.",
-    "callName": "Name or nickname",
-    "callNamePlaceholder": "What should your assistant call you?",
-    "pronouns": "Pronouns",
-    "pronounsPlaceholder": "Select or enter pronouns",
-    "timezone": "Timezone",
-    "timezoneCustom": "Custom timezone",
-    "timezoneDetect": "Detect",
-    "notes": "Notes",
-    "notesPlaceholder": "Communication style, stable preferences, boundaries, ongoing priorities, or anything your assistant should understand.",
-    "custom": "Custom…",
-    "note": "This context is shared across your conversations. Durable memories remain separately reviewable and removable."
-  },
   "capabilityPresetsSettings": {
   "title": "Capability plans",
   "manageAgents": "Manage agents",
