@@ -5,12 +5,12 @@ const mocks = vi.hoisted(() => ({
   memory: new Map<string, string>(),
   players: [] as Array<{
     currentTime: number;
-    playbackRate: number;
     playing: boolean;
     play: ReturnType<typeof vi.fn>;
     pause: ReturnType<typeof vi.fn>;
     remove: ReturnType<typeof vi.fn>;
     addListener: ReturnType<typeof vi.fn>;
+    setPlaybackRate: ReturnType<typeof vi.fn>;
   }>,
 }));
 
@@ -19,12 +19,12 @@ vi.mock('expo-audio', () => ({
   createAudioPlayer: vi.fn(() => {
     const player = {
       currentTime: 0,
-      playbackRate: 1,
       playing: false,
       play: vi.fn(),
       pause: vi.fn(),
       remove: vi.fn(),
       addListener: vi.fn(),
+      setPlaybackRate: vi.fn(),
     };
     mocks.players.push(player);
     return player;
@@ -93,6 +93,30 @@ describe('read aloud store', () => {
       text: input.text,
       language: 'en-US',
     }));
+    expect(mocks.players[0]?.setPlaybackRate).toHaveBeenCalledWith(1);
+  });
+
+  it('uses the native playback-rate method when changing speed', async () => {
+    mocks.memory.set('voice.readAloudConsent', 'accepted');
+    useReadAloudStore.getState().requestStart(input);
+
+    await vi.waitFor(() => expect(useReadAloudStore.getState().status).toBe('playing'));
+    useReadAloudStore.getState().cycleRate();
+
+    expect(mocks.players[0]?.setPlaybackRate).toHaveBeenLastCalledWith(1.25);
+  });
+
+  it('pauses native playback before releasing it when stopped', async () => {
+    mocks.memory.set('voice.readAloudConsent', 'accepted');
+    useReadAloudStore.getState().requestStart(input);
+
+    await vi.waitFor(() => expect(useReadAloudStore.getState().status).toBe('playing'));
+    const activePlayer = mocks.players[0];
+    useReadAloudStore.getState().stop();
+
+    expect(activePlayer?.pause).toHaveBeenCalledOnce();
+    expect(activePlayer?.remove).toHaveBeenCalledOnce();
+    expect(useReadAloudStore.getState().status).toBe('idle');
   });
 
   it('cancels preparation when the active message is tapped again', async () => {
