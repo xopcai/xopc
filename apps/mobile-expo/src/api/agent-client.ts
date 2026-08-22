@@ -3,6 +3,7 @@ import {
   type AgentStreamCallbacks,
   type AgentStreamDispatchOptions,
 } from '@xopcai/agent-stream-client';
+import { randomUUID } from 'expo-crypto';
 
 import {
   apiFetch,
@@ -260,7 +261,7 @@ export class AgentMessageSender {
     attachments?: WireAttachment[],
   ): Promise<void> {
     const capped = capAttachments(attachments);
-    const clientMessageId = crypto.randomUUID();
+    const clientMessageId = randomUUID();
     const origin = await waitForMobileEndpointTurnClaim();
     const res = await apiFetch(`/api/sessions/${encodeURIComponent(sessionKey)}/inputs`, {
       method: 'POST',

@@ -27,6 +27,7 @@ export interface RealtimeWebSocket {
 export interface RealtimeClientOptions {
   clientId: string;
   clientKind: RealtimeClientKind;
+  createMessageId?: () => string;
   getWebSocketUrl: () => string;
   issueTicket: () => Promise<string>;
   createWebSocket: (url: string) => RealtimeWebSocket;
@@ -42,19 +43,6 @@ export interface RealtimeEndpointBinding {
   onReady: (endpoint: { endpointId: string; turnToken: string }) => void;
   onMessage: (message: ServerEndpointMessage) => void;
   onDisconnected?: () => void;
-}
-
-function clientMessage<T extends ClientRealtimeMessage['kind']>(
-  kind: T,
-  payload: Extract<ClientRealtimeMessage, { kind: T }>['payload'],
-): Extract<ClientRealtimeMessage, { kind: T }> {
-  return {
-    protocolVersion: REALTIME_PROTOCOL_VERSION,
-    messageId: crypto.randomUUID(),
-    kind,
-    sentAt: Date.now(),
-    payload,
-  } as Extract<ClientRealtimeMessage, { kind: T }>;
 }
 
 function frameText(data: unknown): string {
@@ -120,12 +108,12 @@ export class RealtimeClient {
 
   unsubscribe(topic: string): void {
     this.desiredSubscriptions.delete(topic);
-    if (this.ready) this.send(clientMessage('realtime.unsubscribe', { topics: [topic] }));
+    if (this.ready) this.send(this.clientMessage('realtime.unsubscribe', { topics: [topic] }));
   }
 
   sendEndpointMessage(message: ClientEndpointMessage): void {
     if (!this.ready) throw new Error('Realtime connection is not ready');
-    this.send(clientMessage('endpoint.message', message));
+    this.send(this.clientMessage('endpoint.message', message));
   }
 
   setEndpoint(binding: RealtimeEndpointBinding): void {
@@ -159,7 +147,7 @@ export class RealtimeClient {
           afterSeq: afterSeq ?? this.cursors.get(topic),
         }));
         for (const topic of this.desiredSubscriptions.keys()) this.desiredSubscriptions.set(topic, undefined);
-        this.send(clientMessage('realtime.hello', {
+        this.send(this.clientMessage('realtime.hello', {
           ticket,
           clientId: this.options.clientId,
           clientKind: this.options.clientKind,
@@ -202,7 +190,7 @@ export class RealtimeClient {
       if (message.payload.endpoint) this.endpointBinding?.onReady(message.payload.endpoint);
       this.clearHeartbeat();
       this.heartbeatTimer = setInterval(() => {
-        if (this.ready) this.send(clientMessage('realtime.ping', {}));
+        if (this.ready) this.send(this.clientMessage('realtime.ping', {}));
       }, message.payload.heartbeatIntervalMs);
     } else if (message.kind === 'realtime.event') {
       this.cursors.set(message.payload.topic, message.payload.seq);
@@ -219,7 +207,22 @@ export class RealtimeClient {
   }
 
   private sendSubscriptions(subscriptions: RealtimeSubscription[]): void {
-    this.send(clientMessage('realtime.subscribe', { subscriptions }));
+    this.send(this.clientMessage('realtime.subscribe', { subscriptions }));
+  }
+
+  private clientMessage<T extends ClientRealtimeMessage['kind']>(
+    kind: T,
+    payload: Extract<ClientRealtimeMessage, { kind: T }>['payload'],
+  ): Extract<ClientRealtimeMessage, { kind: T }> {
+    const messageId = this.options.createMessageId?.() ?? globalThis.crypto?.randomUUID?.();
+    if (!messageId) throw new Error('RealtimeClient requires createMessageId when crypto.randomUUID is unavailable');
+    return {
+      protocolVersion: REALTIME_PROTOCOL_VERSION,
+      messageId,
+      kind,
+      sentAt: Date.now(),
+      payload,
+    } as Extract<ClientRealtimeMessage, { kind: T }>;
   }
 
   private send(message: ClientRealtimeMessage): void {

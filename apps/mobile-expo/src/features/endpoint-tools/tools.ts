@@ -4,6 +4,7 @@ import {
   type EndpointToolDescriptor,
 } from '@xopcai/endpoint-tools-protocol';
 import * as Clipboard from 'expo-clipboard';
+import { randomUUID } from 'expo-crypto';
 import * as Device from 'expo-device';
 import * as DocumentPicker from 'expo-document-picker';
 import { Directory, File, Paths } from 'expo-file-system';
@@ -215,7 +216,7 @@ export async function executeMobileEndpointTool(
       throw new TypeError('Invalid file share arguments');
     }
     if (!(await Sharing.isAvailableAsync())) throw new Error('System sharing is unavailable');
-    const directory = new Directory(Paths.cache, 'endpoint-tools', crypto.randomUUID());
+    const directory = new Directory(Paths.cache, 'endpoint-tools', randomUUID());
     directory.create({ intermediates: true });
     const file = new File(directory, suggestedName);
     try {

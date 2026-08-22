@@ -1,5 +1,6 @@
 import { p256 } from '@noble/curves/p256';
 import { sha256 } from '@noble/hashes/sha256';
+import { getRandomValues, randomUUID } from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 
 const IDENTITY_KEY = 'xopc.endpoint-tools.mobile.identity';
@@ -66,8 +67,10 @@ export function getOrCreateMobileEndpointIdentity(): MobileEndpointIdentity {
     return { principalId: value.principalId, privateKey, publicKey: publicKeyFromPrivate(privateKey) };
   }
 
-  const privateKey = p256.utils.randomPrivateKey();
-  const principalId = crypto.randomUUID();
+  const seedLength = p256.lengths.seed;
+  if (seedLength === undefined) throw new Error('P-256 seed length is unavailable');
+  const privateKey = p256.utils.randomSecretKey(getRandomValues(new Uint8Array(seedLength)));
+  const principalId = randomUUID();
   SecureStore.setItem(
     IDENTITY_KEY,
     JSON.stringify({ principalId, privateKey: encodeBase64Url(privateKey) }),
