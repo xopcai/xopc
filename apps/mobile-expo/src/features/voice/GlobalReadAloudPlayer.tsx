@@ -1,6 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useEffect } from 'react';
-import { AppState, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { Button, Dialog, Icon, Portal, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -42,13 +41,6 @@ export function GlobalReadAloudPlayer() {
     : error === 'generation'
       ? m.messageReadAloudFailed
       : null;
-
-  useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextState) => {
-      if (nextState !== 'active') useReadAloudStore.getState().pause();
-    });
-    return () => subscription.remove();
-  }, []);
 
   return (
     <Portal>
