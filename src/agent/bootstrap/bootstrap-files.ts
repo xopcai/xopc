@@ -11,7 +11,7 @@ import {
   resolveBootstrapTotalMaxChars,
 } from './bootstrap-context.js';
 import { filterBootstrapFilesForSession } from './filter-bootstrap-files.js';
-import { loadProfileBootstrapFiles, loadUserProfileBootstrapFile } from './load-bootstrap-files.js';
+import { loadProfileBootstrapFiles } from './load-bootstrap-files.js';
 import type { EmbeddedContextFile, WorkspaceBootstrapFile } from './types.js';
 
 export { clearAllBootstrapSnapshots, clearBootstrapSnapshot } from './bootstrap-cache.js';
@@ -28,21 +28,16 @@ function filterHeartbeatBootstrapFile(
 
 export function resolveBootstrapFilesSync(params: {
   profileDir: string;
-  userProfilePath?: string;
   sessionKey?: string;
   excludeHeartbeat?: boolean;
 }): WorkspaceBootstrapFile[] {
-  const rawFiles = [
-    ...loadUserProfileBootstrapFile(params.userProfilePath),
-    ...loadProfileBootstrapFiles(params.profileDir),
-  ];
+  const rawFiles = loadProfileBootstrapFiles(params.profileDir);
   const filtered = filterBootstrapFilesForSession(rawFiles, params.sessionKey);
   return filterHeartbeatBootstrapFile(filtered, params.excludeHeartbeat ?? false);
 }
 
 export async function resolveBootstrapFilesForRun(params: {
   profileDir: string;
-  userProfilePath?: string;
   sessionKey?: string;
   excludeHeartbeat?: boolean;
   warn?: (message: string) => void;
@@ -51,20 +46,15 @@ export async function resolveBootstrapFilesForRun(params: {
   const rawFiles = sessionKey
     ? await getOrLoadBootstrapFiles({
         profileDir: params.profileDir,
-        userProfilePath: params.userProfilePath,
         sessionKey,
       })
-    : [
-        ...loadUserProfileBootstrapFile(params.userProfilePath),
-        ...loadProfileBootstrapFiles(params.profileDir),
-      ];
+    : loadProfileBootstrapFiles(params.profileDir);
   const filtered = filterBootstrapFilesForSession(rawFiles, sessionKey);
   return filterHeartbeatBootstrapFile(filtered, params.excludeHeartbeat ?? false);
 }
 
 export function resolveBootstrapContextSync(params: {
   profileDir: string;
-  userProfilePath?: string;
   config?: Config;
   sessionKey?: string;
   excludeHeartbeat?: boolean;
@@ -97,7 +87,6 @@ export function resolveBootstrapContextSync(params: {
 
 export async function resolveBootstrapContextForRun(params: {
   profileDir: string;
-  userProfilePath?: string;
   config?: Config;
   sessionKey?: string;
   excludeHeartbeat?: boolean;

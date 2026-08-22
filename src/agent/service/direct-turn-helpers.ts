@@ -26,7 +26,7 @@ import { runEmbeddedTurnForSession } from '../embedded/run-for-session.js';
 import type { EmbeddedStreamEvent } from '../embedded/types.js';
 import { resolveImageHandlingStrategy } from '../image/vision-detection.js';
 import { buildTaskExecutionDirective } from '../../tasks/task-context-assembler.js';
-import { prependAgentContext } from '../memory/context/planner.js';
+import { prependAgentContext } from '../../user-context/planner.js';
 
 export interface HydratePerTurnStateDeps {
   hydrateSessionWorkspaceFromStore: (sessionKey: string) => Promise<void>;

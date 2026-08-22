@@ -29,8 +29,6 @@
 | `logs/` | 应用日志（可用 `XOPC_LOG_DIR` 覆盖）。 |
 | `bin/`、`tools/` | CLI 包装与工具运行时。 |
 | `models.json` | 可选的自定义模型注册数据。 |
-| `user/PROFILE.md` | 所有 Agent 共享的用户资料。 |
-| `user/dreaming/` | Dreaming 运维事件日志；不作为记忆来源。 |
 
 ## 智能体主目录：`agents/<agentId>/`
 
@@ -38,7 +36,7 @@
 
 | 路径 | 用途 |
 |------|------|
-| `profile/` | 智能体自身的系统提示用 profile Markdown：`SOUL.md`、`IDENTITY.md`、`TOOLS.md`、`AGENTS.md`、`HEARTBEAT.md`，以及网关可选 `agent-avatar.*`。全局个人资料位于 `user/PROFILE.md`。 |
+| `profile/` | 智能体自身的系统提示用 profile Markdown：`SOUL.md`、`IDENTITY.md`、`TOOLS.md`、`AGENTS.md`、`HEARTBEAT.md`，以及网关可选 `agent-avatar.*`。用户上下文位于 `xopc.db`。 |
 | `sessions/` | 遗留目录（可选）；旧版安装可能仍存在。新安装仅将 transcript 写入 `xopc.db`。 |
 | `inbound/` | 入站附件（非图片二进制）落盘；transcript 中相对路径为相对 agent home 的 `inbound/...`。 |
 | `tts/` | 按会话缓存的出站 TTS 音频。 |

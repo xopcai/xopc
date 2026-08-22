@@ -1,7 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-import { USER_PROFILE_FILENAME } from '../../config/paths.js';
 import { stripFrontMatter } from '../context/workspace.js';
 import {
   DEFAULT_AGENTS_FILENAME,
@@ -30,17 +29,6 @@ function readProfileFile(filePath: string): string | null {
   } catch {
     return null;
   }
-}
-
-export function loadUserProfileBootstrapFile(userProfilePath: string | undefined): WorkspaceBootstrapFile[] {
-  if (!userProfilePath) {
-    return [];
-  }
-  const filePath = resolve(userProfilePath);
-  const content = readProfileFile(filePath);
-  return content !== null
-    ? [{ name: USER_PROFILE_FILENAME, path: filePath, content, missing: false }]
-    : [];
 }
 
 /**

@@ -5,7 +5,7 @@ import { extractUserMessagePlainText } from '@/features/chat/messages/user-messa
 import { stripStartupContextForDisplay } from '@/features/chat/messages/wire-text-scrub';
 
 const samplePrelude = `[Startup context loaded by runtime]
-Bootstrap files like the global user profile and SOUL.md are already provided separately when eligible.
+Agent bootstrap files and selected structured user context are already provided separately when eligible.
 Runtime-provided context is available for this new session.
 Do not claim you manually read files unless the user asks.`;
 

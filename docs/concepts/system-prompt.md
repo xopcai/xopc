@@ -47,8 +47,7 @@ After transcript compaction, xopc may append a context row with excerpts from AG
 
 | Location | In prompt? | Access |
 |----------|------------|--------|
-| `user/PROFILE.md` | Yes | Shared user profile |
-| Structured memory records | Relevant subset only | Context compiler, `memory_search`, `memory_get` |
+| Structured User Context | Relevant subset only | Per-turn planner with scope, sensitivity, consent, and budget checks |
 | Session history | No | `session_search` when available |
 
 ## Related

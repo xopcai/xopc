@@ -54,8 +54,6 @@ export const WORKSPACE_FILES = {
   HEARTBEAT: 'HEARTBEAT.md',
 } as const;
 
-export const USER_PROFILE_FILENAME = 'PROFILE.md';
-
 // ============================================
 // Path Resolution Functions
 // ============================================
@@ -79,16 +77,6 @@ export function resolveCredentialsDir(): string {
  */
 export function resolveAuthProfilesPath(): string {
   return join(resolveCredentialsDir(), FILENAMES.CREDENTIALS_PROFILES);
-}
-
-/** Global user profile root (`~/.xopc/user/`). */
-export function resolveUserDir(): string {
-  return join(resolveStateDir(), 'user');
-}
-
-/** Global human/user profile Markdown (`~/.xopc/user/PROFILE.md`). */
-export function resolveUserProfilePath(): string {
-  return join(resolveUserDir(), USER_PROFILE_FILENAME);
 }
 
 /**

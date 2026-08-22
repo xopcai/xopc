@@ -1,4 +1,4 @@
-import { listMemoryRecords } from '../../storage/sqlite/memory-records-repository.js';
+import { listUnderstandings } from '../../storage/sqlite/user-context-repository.js';
 import { getConnectorSyncPolicyForConnection } from '../../storage/sqlite/connector-sync-policy-repository.js';
 import { getKnowledgeSourceItem } from '../../storage/sqlite/knowledge-repository.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
@@ -175,36 +175,32 @@ export class UserUnderstandingContextProvider implements ContextProvider {
   async collect(input: ContextInput): Promise<ResolvedContext> {
     const scope = eventRows(input.eventIds).at(-1);
     if (!scope) return emptyContext();
-    const records = listMemoryRecords({
-      workspaceId: scope.workspace_id,
-      ...(scope.project_id ? { visibleToProjectId: scope.project_id } : { unscopedProjectOnly: true }),
-      status: 'active',
-      limit: 20,
-    }).filter((record) => {
+    const records = listUnderstandings(['active']).filter((record) => {
       const now = Date.now();
+      const scopeMatches = record.scope.type === 'global'
+        || (record.scope.type === 'workspace' && record.scope.id === scope.workspace_id)
+        || (record.scope.type === 'project' && record.scope.id === scope.project_id);
       return record.disclosurePolicy === 'referenceable'
         && record.sensitivity !== 'secret'
         && record.sensitivity !== 'regulated'
-        && !record.tags?.includes('playbook:disabled')
-        && (!record.validFrom || Date.parse(record.validFrom) <= now)
-        && (!record.validTo || Date.parse(record.validTo) >= now)
-        && (!record.expiresAt || Date.parse(record.expiresAt) >= now)
-        && (!record.reviewAfter || Date.parse(record.reviewAfter) >= now)
+        && scopeMatches
+        && (!record.validFrom || record.validFrom <= now)
+        && (!record.validTo || record.validTo >= now)
+        && (!record.expiresAt || record.expiresAt >= now)
         && !record.conflictGroupId
-        && (record.explicitness === 'explicit' || record.importance >= 0.7);
-    });
+        && (record.explicitness === 'explicit' || record.confidence >= 0.7);
+    }).slice(0, 20);
     return {
       content: {
         records: records.map((record) => ({
-          evidenceId: `memory:${record.id}`,
+          evidenceId: `understanding:${record.id}`,
           kind: record.kind,
-          content: boundedText(record.content, 1_000),
+          content: boundedText(record.statement, 1_000),
           confidence: record.confidence,
-          importance: record.importance,
           updatedAt: record.updatedAt,
         })),
       },
-      evidenceIds: records.map((record) => `memory:${record.id}`),
+      evidenceIds: records.map((record) => `understanding:${record.id}`),
     };
   }
 }

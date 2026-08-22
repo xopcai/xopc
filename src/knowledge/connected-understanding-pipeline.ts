@@ -1,20 +1,14 @@
 import type { UnderstandingCandidate, UnderstandingReviewResult } from '../agent/memory/understanding/types.js';
 import type { MemoryManager } from '../agent/memory/manager.js';
 import {
-  linkUserClaimMemoryRecord,
   listKnowledgeSourceItems,
-  reinforceUserClaim,
-  resolveUserEntity,
-  type UserClaim,
-  type UserClaimClass,
 } from '../storage/sqlite/index.js';
 import type { KnowledgeSourceItem } from './types.js';
 
 export type ClaimObservation = {
-  class: UserClaimClass;
+  class: 'relationship' | 'project' | 'routine';
   key: string;
   value: Record<string, unknown>;
-  subject?: Parameters<typeof resolveUserEntity>[0];
   items: KnowledgeSourceItem[];
   windowDays: number;
 };
@@ -52,7 +46,6 @@ function person(value: unknown): { name?: string; email?: string; username?: str
 function relationshipObservations(items: KnowledgeSourceItem[]): ClaimObservation[] {
   const grouped = new Map<string, {
     label: string;
-    handles: Parameters<typeof resolveUserEntity>[0]['handles'];
     events: Map<string, KnowledgeSourceItem>;
   }>();
   for (const item of recent(items, 90)) {
@@ -68,19 +61,9 @@ function relationshipObservations(items: KnowledgeSourceItem[]): ClaimObservatio
       const strongIdentity = (signal.email ?? signal.username)?.toLowerCase();
       if (strongIdentity && owners.has(strongIdentity)) continue;
       const label = signal.name ?? signal.email ?? signal.username!;
-      const handles = [
-        ...(signal.email ? [{ type: 'email' as const, value: signal.email, sourceScope: 'global', verified: true }] : []),
-        ...(signal.username ? [{
-          type: 'provider_user' as const, value: signal.username,
-          sourceScope: String(item.metadata.toolkit ?? item.sourceInstanceId), verified: true,
-        }] : []),
-        ...(signal.name ? [{
-          type: 'display_name' as const, value: signal.name, sourceScope: item.sourceInstanceId, verified: false,
-        }] : []),
-      ];
       const identityKey = signal.email?.toLowerCase()
         ?? `${String(item.metadata.toolkit ?? item.sourceInstanceId)}:${signal.username?.toLowerCase() ?? signal.name?.toLowerCase()}`;
-      const entry = grouped.get(identityKey) ?? { label, handles, events: new Map() };
+      const entry = grouped.get(identityKey) ?? { label, events: new Map() };
       const eventKey = logicalEventKey(item)!;
       if (!entry.events.has(eventKey)) entry.events.set(eventKey, item);
       grouped.set(identityKey, entry);
@@ -91,9 +74,8 @@ function relationshipObservations(items: KnowledgeSourceItem[]): ClaimObservatio
     .slice(0, 8)
     .map((entry) => ({
       class: 'relationship',
-      key: 'person',
+      key: `person:${entry.label.toLocaleLowerCase()}`,
       value: { label: entry.label },
-      subject: { type: 'person', canonicalLabel: entry.label, handles: entry.handles },
       items: [...entry.events.values()],
       windowDays: 90,
     }));
@@ -143,13 +125,8 @@ function projectObservations(items: KnowledgeSourceItem[]): ClaimObservation[] {
       const { label: subject, events } = entry;
       return {
         class: 'project' as const,
-        key: 'project',
+        key: `project:${subject.toLocaleLowerCase()}`,
         value: { label: subject },
-        subject: {
-          type: 'project' as const,
-          canonicalLabel: subject,
-          handles: [{ type: 'provider_user' as const, value: subject, sourceScope: 'project', verified: true }],
-        },
         items: [...events.values()],
         windowDays: 60,
       };
@@ -167,30 +144,40 @@ export function deriveConnectedClaimObservations(items: KnowledgeSourceItem[]): 
   return [...relationshipObservations(active), ...routineObservations(active), ...projectObservations(active)];
 }
 
-export function renderUserClaim(claim: UserClaim): UnderstandingCandidate {
-  const label = typeof claim.value.label === 'string' ? claim.value.label : '';
-  if (claim.class === 'relationship') {
+function confidenceFor(observation: ClaimObservation): number {
+  const days = new Set(observation.items.map((item) => item.occurredAt?.slice(0, 10)).filter(Boolean)).size;
+  return Math.min(0.92, 0.48 + Math.min(observation.items.length, 8) * 0.035 + Math.min(days, 5) * 0.045);
+}
+
+function isDurableObservation(observation: ClaimObservation): boolean {
+  const days = new Set(observation.items.map((item) => item.occurredAt?.slice(0, 10)).filter(Boolean)).size;
+  return observation.items.length >= 3 && days >= (observation.class === 'routine' ? 3 : 2);
+}
+
+export function renderConnectedObservation(observation: ClaimObservation): UnderstandingCandidate {
+  const label = typeof observation.value.label === 'string' ? observation.value.label : '';
+  const confidence = confidenceFor(observation);
+  if (observation.class === 'relationship') {
     return {
-      kind: 'relationship', content: `Frequently collaborates with ${label}.`, canonicalKey: `claim:${claim.id}`,
-      confidence: claim.confidence, importance: 0.65, explicitness: 'inferred', durability: 'recurring',
-      sensitivity: 'personal', disclosurePolicy: 'ask_before_reference', tags: ['connected-source', 'structured-claim'],
+      kind: 'relationship', content: `Frequently collaborates with ${label}.`, canonicalKey: `connected:${observation.key}`,
+      confidence, importance: 0.65, explicitness: 'inferred', durability: 'recurring',
+      sensitivity: 'personal', disclosurePolicy: 'ask_before_reference',
     };
   }
-  if (claim.class === 'project') {
+  if (observation.class === 'project') {
     return {
-      kind: 'project_context', content: `Recently contributed repeatedly to ${label}.`, canonicalKey: `claim:${claim.id}`,
-      confidence: claim.confidence, importance: 0.72, explicitness: 'inferred', durability: 'recurring',
-      sensitivity: 'personal', disclosurePolicy: 'referenceable', tags: ['connected-source', 'structured-claim'],
+      kind: 'project_context', content: `Recently contributed repeatedly to ${label}.`, canonicalKey: `connected:${observation.key}`,
+      confidence, importance: 0.72, explicitness: 'inferred', durability: 'recurring',
+      sensitivity: 'personal', disclosurePolicy: 'referenceable',
     };
   }
-  const weekday = Number(claim.value.weekday);
-  const hour = Number(claim.value.hour);
+  const weekday = Number(observation.value.weekday);
+  const hour = Number(observation.value.hour);
   const weekdayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][weekday] ?? 'Unknown';
   return {
     kind: 'routine', content: `Often has calendar activity on ${weekdayName} around ${String(hour).padStart(2, '0')}:00 UTC.`,
-    canonicalKey: `claim:${claim.id}`, confidence: claim.confidence, importance: 0.58,
+    canonicalKey: `connected:${observation.key}`, confidence, importance: 0.58,
     explicitness: 'inferred', durability: 'recurring', sensitivity: 'personal', disclosurePolicy: 'referenceable',
-    tags: ['connected-source', 'structured-claim'],
   };
 }
 
@@ -198,42 +185,24 @@ export class ConnectedUnderstandingPipeline {
   constructor(private readonly memoryManager: MemoryManager) {}
 
   async process(sourceInstanceId: string, connectorId: string, agentId: string): Promise<UnderstandingReviewResult> {
+    void agentId;
     const items = listKnowledgeSourceItems({ sourceInstanceId, includeDeleted: false, limit: 500 });
     const observations = deriveConnectedClaimObservations(items);
     const totals: UnderstandingReviewResult = {
       proposed: observations.length, created: 0, deduplicated: 0, rejected: 0, createdRecords: [],
     };
     for (const observation of observations) {
-      const subject = observation.subject ? resolveUserEntity(observation.subject) : undefined;
-      const claim = reinforceUserClaim({
-        agentId,
-        class: observation.class,
-        key: subject ? `${observation.key}:${subject.id}` : observation.key,
-        subjectEntityId: subject?.id,
-        value: observation.value,
-        evidence: observation.items.map((item) => ({
-          logicalEventKey: logicalEventKey(item)!,
-          sourceItemId: item.id,
-          sourceInstanceId: item.sourceInstanceId,
-          relation: 'supports',
-          observedAt: item.occurredAt!,
-        })),
-      });
-      if (claim.state !== 'active') continue;
-      const result = await this.memoryManager.applyUnderstandingCandidates([renderUserClaim(claim)], {
-        agentId,
+      if (!isDurableObservation(observation)) continue;
+      const result = await this.memoryManager.applyUnderstandingCandidates([renderConnectedObservation(observation)], {
         sourceItemIds: observation.items.map((item) => item.id).slice(0, 20),
         sourceText: JSON.stringify({
-          claimId: claim.id,
-          independentEvidenceCount: claim.independentEvidenceCount,
-          activeDays: claim.activeDayCount,
+          independentEvidenceCount: observation.items.length,
+          activeDays: new Set(observation.items.map((item) => item.occurredAt?.slice(0, 10))).size,
           windowDays: observation.windowDays,
         }),
         source: { provider: connectorId, sourceInstanceId },
         reviewSource: 'background',
       });
-      const memoryRecordId = result.createdRecords[0]?.id;
-      if (memoryRecordId) linkUserClaimMemoryRecord(claim.id, memoryRecordId);
       totals.created += result.created;
       totals.deduplicated += result.deduplicated;
       totals.rejected += result.rejected;

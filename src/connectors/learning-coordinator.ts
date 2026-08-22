@@ -52,9 +52,7 @@ export type ConnectorLearningCoordinator = {
 
 function learningEnabled(config: Config): boolean {
   return config.userContext.enabled
-    && config.userContext.understanding.enabled
-    && config.userContext.memory.mode !== 'off'
-    && config.userContext.memory.sources.includes('connectedSources');
+    && config.userContext.understanding.enabled;
 }
 
 export function startConnectorLearningCoordinator(options: {

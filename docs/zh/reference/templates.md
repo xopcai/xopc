@@ -16,7 +16,7 @@ xopc 使用 **profile Markdown** 模板定义智能体行为与知识。执行 `
 
 ## 系统提示加载顺序
 
-以下文件从智能体 profile 根读取，并按此顺序写入智能体系统提示。全局个人资料会从 **`user/PROFILE.md`** 单独读取，并排在智能体 profile 前。
+以下文件从智能体 profile 根读取，并按此顺序写入智能体系统提示。它们只描述智能体；用户上下文会在每轮从 SQLite 单独筛选。
 
 1. **SOUL.md**
 2. **IDENTITY.md**

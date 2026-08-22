@@ -9,8 +9,6 @@ function metrics(
   return {
     windowDays: 30,
     since: new Date(0).toISOString(),
-    attempts: { total: 0, turn: 0, background: 0 },
-    candidates: { proposed: 0, created: 0, deduplicated: 0, rejectedByPolicy: 0 },
     records: {
       total: 0,
       candidate: 0,

@@ -1,4 +1,3 @@
-import { resolveDefaultAgentId } from '../../agent/agent-scope.js';
 import { createManualUnderstanding } from '../../user-context/manual-understanding.js';
 import { commandRegistry } from '../registry.js';
 import type { CommandContext, CommandDefinition } from '../types.js';
@@ -25,10 +24,9 @@ const rememberCommand: CommandDefinition = {
       return { content: 'Usage: /remember [--session] <what xopc should know> (max 5000 characters)', success: false };
     }
     const result = createManualUnderstanding({
-      agentId: resolveDefaultAgentId(ctx.config),
       content,
       kind: 'derived_insight',
-      scope: sessionOnly ? { type: 'session', sessionKey: ctx.sessionKey } : { type: 'global' },
+      scope: sessionOnly ? { type: 'session', id: ctx.sessionKey } : { type: 'global' },
       sensitivity: 'normal',
       durability: sessionOnly ? 'ephemeral' : 'durable',
       disclosurePolicy: 'referenceable',
@@ -62,7 +60,7 @@ const learningCommand: CommandDefinition = {
     if (action !== 'status') {
       await store.update(ctx.sessionKey, { userContextMode: action === 'off' ? 'off' : 'enabled' });
     }
-    const globallyEnabled = ctx.config.userContext.enabled && ctx.config.userContext.memory.mode !== 'off';
+    const globallyEnabled = ctx.config.userContext.enabled;
     const enabled = globallyEnabled && (await store.get(ctx.sessionKey))?.userContextMode !== 'off';
     return {
       content: enabled

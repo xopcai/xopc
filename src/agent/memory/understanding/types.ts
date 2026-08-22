@@ -1,22 +1,15 @@
-import type {
-  MemoryDisclosurePolicy,
-  MemoryDurability,
-  MemoryExplicitness,
-  MemoryKind,
-  MemorySensitivity,
-} from '../types.js';
+import type { UnderstandingKind, UserUnderstanding } from '../../../user-context/domain.js';
 
 export interface UnderstandingCandidate {
-  kind: MemoryKind;
+  kind: UnderstandingKind;
   content: string;
   canonicalKey?: string;
   confidence: number;
   importance: number;
-  explicitness: MemoryExplicitness;
-  durability: MemoryDurability;
-  sensitivity: MemorySensitivity;
-  disclosurePolicy: MemoryDisclosurePolicy;
-  tags?: string[];
+  explicitness: UserUnderstanding['explicitness'];
+  durability: UserUnderstanding['durability'];
+  sensitivity: UserUnderstanding['sensitivity'];
+  disclosurePolicy: UserUnderstanding['disclosurePolicy'];
   validFrom?: string;
   validTo?: string;
 }
@@ -27,5 +20,5 @@ export interface UnderstandingReviewResult {
   created: number;
   deduplicated: number;
   rejected: number;
-  createdRecords: Array<{ id: string; content: string; kind: MemoryKind }>;
+  createdRecords: Array<{ id: string; content: string; kind: UnderstandingKind }>;
 }

@@ -1,10 +1,14 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
 import type { Config } from '../../config/schema.js';
-import { setMemoryTurnFeedback } from '../../storage/sqlite/index.js';
+import { parseSessionKey } from '../../routing/session-key.js';
+import {
+  getTurnPersonalization,
+  recordContextFeedback,
+  setUnderstandingStatus,
+} from '../../storage/sqlite/index.js';
 import { createLogger } from '../../utils/logger.js';
-import { ContextCompiler } from '../../user-context/context-compiler.js';
-import { UserContextPlanner } from './context/planner.js';
+import { UserContextPlanner } from '../../user-context/planner.js';
 import type { UserContextPlan } from './context/types.js';
 import type { MemoryManager } from './manager.js';
 import {
@@ -31,7 +35,6 @@ export class UserContextCoordinator {
   private readonly lastTurnId = new Map<string, string>();
   private readonly correctionTargets = new Map<string, string[]>();
   private readonly planner = new UserContextPlanner();
-  private readonly contextCompiler = new ContextCompiler();
 
   constructor(private readonly options: UserContextCoordinatorOptions) {}
 
@@ -67,28 +70,24 @@ export class UserContextCoordinator {
     let excludedRecordIds: string[] | undefined;
     if (previousTurnId && isExplicitUnderstandingCorrection(userQuery)) {
       try {
-        const trace = setMemoryTurnFeedback({
-          turnId: previousTurnId,
-          rating: 'incorrect',
-          source: 'system',
-          reasonCode: 'detected_explicit_user_correction',
-        });
-        if (trace?.selectedRecordIds.length) {
-          this.correctionTargets.set(sessionKey, trace.selectedRecordIds);
-          excludedRecordIds = trace.selectedRecordIds;
-          if (trace.selectedRecordIds.length === 1) {
-            setMemoryTurnFeedback({
+        const personalization = getTurnPersonalization(previousTurnId);
+        const selectedIds = personalization?.items
+          .filter((item) => item.objectType === 'understanding' && item.decision === 'selected')
+          .map((item) => item.objectId) ?? [];
+        if (personalization && selectedIds.length) {
+          for (const recordId of selectedIds) {
+            recordContextFeedback({
               turnId: previousTurnId,
-              rating: 'incorrect',
-              source: 'system',
-              reasonCode: 'detected_explicit_user_correction',
-              records: [{
-                recordId: trace.selectedRecordIds[0]!,
-                rating: 'incorrect',
-                reasonCode: 'detected_explicit_user_correction',
-              }],
+              runId: personalization.runId,
+              objectType: 'understanding',
+              objectId: recordId,
+              rating: 'wrong',
+              reason: 'detected_explicit_user_correction',
             });
+            setUnderstandingStatus(recordId, 'needs_review');
           }
+          this.correctionTargets.set(sessionKey, selectedIds);
+          excludedRecordIds = selectedIds;
         }
       } catch (err) {
         log.debug({ err, sessionKey }, 'Understanding correction feedback was not persisted');
@@ -97,25 +96,17 @@ export class UserContextCoordinator {
     const turn = (this.userTurn.get(sessionKey) ?? 0) + 1;
     this.userTurn.set(sessionKey, turn);
     if (!shouldPlanUserContextThisTurn(config, turn)) return empty();
-    const plan = await this.planner.plan({
-      memoryManager: this.options.getMemoryManagerForSession(sessionKey),
-      agentId: this.options.getAgentIdForSession(sessionKey),
+    const plan = this.planner.plan({
       sessionKey,
+      channel: parseSessionKey(sessionKey)?.source,
       workspaceId: this.options.getWorkspaceIdForSession?.(sessionKey) ?? '',
+      projectId: this.options.getProjectIdForSession?.(sessionKey),
       turnId,
       query,
       userMessage,
       excludedRecordIds,
       allocation: taskContext.allocation,
-      taskId: taskContext.taskId,
     });
-    if (plan.traceId) {
-      try {
-        this.contextCompiler.capture({ sessionKey, query, plan });
-      } catch (err) {
-        log.debug({ err, sessionKey, traceId: plan.traceId }, 'Context snapshot was not persisted');
-      }
-    }
     return plan;
   }
 
@@ -132,6 +123,7 @@ export class UserContextCoordinator {
         {
           agentId: this.options.getAgentIdForSession(sessionKey),
           sessionId: sessionKey,
+          turnId: this.lastTurnId.get(sessionKey),
           workspaceId: this.options.getWorkspaceIdForSession?.(sessionKey),
           projectId: this.options.getProjectIdForSession?.(sessionKey),
           correctionTargetRecordIds,

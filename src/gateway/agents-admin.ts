@@ -3,7 +3,7 @@
  */
 
 import { cp, mkdir, readdir, readFile, realpath, stat, unlink, writeFile } from 'node:fs/promises';
-import { dirname, join, resolve as pathResolve } from 'node:path';
+import { join, resolve as pathResolve } from 'node:path';
 
 import {
   listAgentEntries,
@@ -33,7 +33,7 @@ import {
   removeAgentDirsFromDisk,
 } from '../commands/agents.config.js';
 import type { AgentModelsConfig, Config } from '../config/schema.js';
-import { resolveUserProfilePath, WORKSPACE_FILES } from '../config/paths.js';
+import { WORKSPACE_FILES } from '../config/paths.js';
 import { resolveEffectiveAgentProfile } from '../config/agent-profile.js';
 import type { AgentTypedModel } from '../config/schema.js';
 import { resolveEffectiveTypedModels } from '../config/agent-typed-models.js';
@@ -697,25 +697,6 @@ export async function writeAgentProfileFile(
   }
   await writeFile(abs, content, 'utf-8');
   return { ok: true, data: { agentId: id, path: abs } };
-}
-
-export async function readUserProfileFile(): Promise<AgentAdminResult<{ content: string; path: string }>> {
-  const path = resolveUserProfilePath();
-  try {
-    const content = await readFile(path, 'utf-8');
-    return { ok: true, data: { content, path } };
-  } catch {
-    return { ok: true, data: { content: '', path } };
-  }
-}
-
-export async function writeUserProfileFile(
-  content: string,
-): Promise<AgentAdminResult<{ path: string }>> {
-  const path = resolveUserProfilePath();
-  await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, content, 'utf-8');
-  return { ok: true, data: { path } };
 }
 
 // ---------------------------------------------------------------------------

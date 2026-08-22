@@ -29,11 +29,9 @@ import {
   setPendingTranscriptUserMessage,
 } from '../inbound/attachment-pipeline.js';
 import {
-  DREAMING_SWEEP_TOKEN,
-  DREAMING_LIGHT_SWEEP_TOKEN,
-  DREAMING_REM_SWEEP_TOKEN,
-} from '../memory/dreaming/constants.js';
-import { runDreamingPhase } from '../memory/dreaming/runner.js';
+  runContextConsolidation,
+  USER_CONTEXT_CONSOLIDATION_TOKEN,
+} from '../../user-context/consolidation.js';
 
 const log = createLogger('AgentOrchestrator');
 
@@ -100,8 +98,7 @@ export class AgentOrchestrator {
 
     await this.sessionHydrator.workspace(sessionKey);
 
-    // Dreaming: short-circuit scheduled maintenance tokens into local runs.
-    // This avoids spending LLM tokens for scheduled memory consolidation.
+    // Run deterministic user-context maintenance without spending LLM tokens.
     if (
       typeof msg.content === 'string' &&
       (
@@ -112,22 +109,13 @@ export class AgentOrchestrator {
         context.channel === 'automation'
       )
     ) {
-      const content = msg.content;
-      const isDreamingSweep =
-        content.includes(DREAMING_SWEEP_TOKEN) ||
-        content.includes(DREAMING_LIGHT_SWEEP_TOKEN) ||
-        content.includes(DREAMING_REM_SWEEP_TOKEN);
-
-      if (isDreamingSweep) {
+      if (msg.content.includes(USER_CONTEXT_CONSOLIDATION_TOKEN)) {
         const cfg = this.getConfig?.();
         if (!cfg) {
-          log.warn({ sessionKey }, 'Dreaming sweep skipped: config unavailable');
+          log.warn({ sessionKey }, 'User context review skipped: config unavailable');
           return;
         }
-        const phase = content.includes(DREAMING_LIGHT_SWEEP_TOKEN)
-          ? 'light'
-          : content.includes(DREAMING_REM_SWEEP_TOKEN) ? 'rem' : 'deep';
-        await runDreamingPhase({ config: cfg, phase, triggerKind: 'schedule' });
+        await runContextConsolidation({ config: cfg, triggerKind: 'schedule' });
         return;
       }
     }

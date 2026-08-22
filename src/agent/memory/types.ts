@@ -143,7 +143,7 @@ export interface MemoryWriteRequest {
   scope?: Partial<MemoryScope>;
   /** Agent that produced this record. This is request data, never provider state. */
   sourceAgentId?: string;
-  writeTarget?: 'userProfile' | 'agentProfile' | 'understanding' | 'workspace';
+  writeTarget?: 'agentProfile' | 'understanding' | 'workspace';
   confirmed?: boolean;
   tags?: string[];
   source?: MemoryRecord['source'];
@@ -217,7 +217,7 @@ export type MemorySyncEvent =
     };
 
 export interface MemorySignal {
-  source: 'search_recall' | 'context_injection' | 'session_summary' | 'explicit_remember' | 'background_review' | 'dreaming';
+  source: 'search_recall' | 'context_injection' | 'session_summary' | 'explicit_remember' | 'background_review';
   recordId?: string;
   score?: number;
   content?: string;

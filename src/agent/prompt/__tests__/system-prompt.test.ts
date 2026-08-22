@@ -216,7 +216,7 @@ describe('buildSystemPrompt memory gating', () => {
       toolNames: ['memory_search', 'memory_get', 'session_search'],
     });
     expect(prompt).toContain('## Memory Recall');
-    expect(prompt).toContain('structured memory');
+    expect(prompt).toContain('structured user understanding');
     expect(prompt).toContain('cite only record ids returned by `memory_search` / `memory_get`');
     expect(prompt).not.toContain('memory/YYYY-MM-DD.md');
     expect(prompt).not.toContain('memory/*.md');

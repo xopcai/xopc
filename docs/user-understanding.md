@@ -1,136 +1,72 @@
-# User understanding
+# Structured User Context
 
-xopc implements user understanding as a native runtime capability. It is not an external memory plugin and it is not a larger prompt. The capability turns conversation and connected-source evidence into governed understanding records, then selects a small, relevant subset for each model turn.
+xopc stores its understanding of the user as structured SQLite data. Markdown remains the right format for agent identity and project instructions, but it is not a user database.
 
-## Runtime flow
+## Domain model
+
+The model deliberately separates three concepts:
+
+| Concept | Meaning | Authority |
+|---|---|---|
+| Profile | Direct facts such as preferred name, pronouns, timezone, and locale | User-authored only |
+| Understanding | Reviewable beliefs learned from explicit statements, observations, or inference | Candidate or active lifecycle |
+| Collaboration rule | Explicit instructions for how xopc should communicate and execute | User-authored only; outranks inferred understanding |
+
+Supporting tables store immutable understanding versions, evidence links, suppressions, consent, per-turn context runs, selected and rejected items, and feedback. `user_profiles`, `user_understandings`, and `collaboration_rules` are the current projections.
+
+The optional Dreaming job is a deterministic daily review over these same tables. In its default `review` mode it marks expired items stale and sends sufficiently corroborated candidates, contradictory evidence, or due active items to `needs_review`. It never auto-activates inferred understanding. Runs and decisions are stored in `context_consolidation_runs` and `context_consolidation_decisions`; `off` disables the schedule.
+
+## Turn lifecycle
+
+For every enabled user turn:
+
+1. Read the structured profile, active collaboration rules, and understanding candidates.
+2. Apply status, scope, validity, sensitivity, conflict, consent, relevance, count, and character-budget filters.
+3. Persist every selection or rejection in `context_runs` and `context_run_items`.
+4. Inject only the selected subset into the model message.
+5. After the answer, capture explicit “remember” statements and durable review candidates with linked evidence.
+6. Attribute user feedback and explicit corrections to the exact prior turn and understanding version.
+
+Secret and regulated candidates are never persisted as understanding. Rejected understanding creates a suppression so the same canonical statement is not repeatedly relearned.
+
+## API
+
+The gateway exposes one non-legacy resource model:
 
 ```text
-conversation ─────────────► UserUnderstandingService ──► governed user understanding
+GET    /api/you
+GET    /api/you/profile
+PATCH  /api/you/profile
 
-connected source ──► knowledge_source_items ──► ConnectedKnowledgePipeline ──► source facts + daily notes
-                              │                            │                            │
-                              ├── change ledger            └── memory_evidence ◄───────┘
-                              └── cursor + sync run audit
+POST   /api/you/understandings
+PATCH  /api/you/understandings/:id
+DELETE /api/you/understandings/:id
+GET    /api/you/understandings/:id/evidence
 
-user turn ──► UserContextPlanner ──► <user-context> ──► model turn
-                    │
-                    └── memory_trace_events + feedback
+POST   /api/you/rules
+PATCH  /api/you/rules/:id
+DELETE /api/you/rules/:id
+
+GET    /api/you/turns/:turnId/personalization
+POST   /api/you/turns/:turnId/feedback
+PATCH  /api/you/consents/:id
 ```
 
-The write path and read path are deliberately separate:
+There is no Markdown profile endpoint, import projection, playbook compatibility layer, `user_claims` staging model, or generic `/api/you/memories` surface.
 
-- `UserUnderstandingService` extracts explicit instructions immediately and accepts typed candidates from background synthesis.
-- Candidates are deduplicated by `canonicalKey`, stored as `candidate`, and linked to redacted source evidence. Secret and regulated candidates are rejected before provider writes, including when a reviewer model mislabeled the sensitivity.
-- `UserContextPlanner` performs retrieval, policy filtering, reranking, sectioning, and character budgeting. It rejects expired, not-yet-valid, secret, regulated, and consent-gated records.
-- Selected context is fenced as system-owned `<user-context>` data. It is never treated as a user instruction.
+## Product surface
 
-## Data model
+`/you` has six focused tabs:
 
-SQLite schema version 29 adds:
+- **Profile** — direct facts with a simple structured editor.
+- **Understanding** — active and needs-review items, with provenance language, confirm, correct, reject, and delete actions.
+- **Working agreement** — explicit collaboration rules that can be enabled or disabled.
+- **Sources** — installed-source status with a direct path to connector permissions and management.
+- **Background review** — Dreaming on/off, daily time, timezone, evidence threshold, scan limit, and latest consolidation status.
+- **Privacy** — the sensitive-write policy for generic memory providers, alongside the stricter invariant that secret and regulated content never enters structured user understanding.
 
-- governance fields on `memory_records`: canonical key, explicitness, durability, importance, disclosure policy, validity interval, supersession, and conflict group;
-- `knowledge_source_items`: normalized, content-addressed evidence from conversations and adapters;
-- `knowledge_sync_runs` and `knowledge_source_state`: observable incremental ingestion with persistent cursors;
-- `memory_evidence`: normalized provenance links;
-- `memory_relations`: typed record-to-record relationships.
+Chat answers can show which understanding influenced the turn. Feedback is recorded against the normalized context run instead of a free-form trace blob.
 
-SQLite schema version 37 adds the connected-knowledge delivery layer:
+## SQLite rationale
 
-- `knowledge_source_changes`: an ordered added/modified/deleted ledger so downstream consumers do not need to rescan source payloads;
-- `knowledge_consumer_watermarks`: independent monotonic checkpoints for future indexes and synthesis consumers;
-- explicit `user_understanding` versus `connected_knowledge` pipeline routing, plus synthesis attempts, leases, worker ownership, and bounded errors on `knowledge_source_items`;
-- idempotent `(record, source item, relation)` evidence links.
-
-SQLite schema versions 104–106 finalize the online learning loop:
-
-- stable `turnId` linkage and normalized response/record feedback;
-- auditable Dreaming runs and per-record decisions;
-- reproducible Dreaming execution through algorithm versions and immutable config snapshots.
-
-The normalized SQLite tables are the only runtime source of truth for understanding and recall. Runtime memory never reads, writes, scans, or projects Markdown. See [Unified memory and user-understanding architecture](./memory-architecture.md).
-
-## Background synthesis
-
-Background review has no storage mutation tool. Its pass produces strict JSON candidates. The runtime parses and validates those candidates, marks them as inferred, and sends them through the same understanding policy and evidence path as deterministic extraction.
-
-This separation prevents a reviewer model from bypassing sensitivity checks, deduplication, provenance, or candidate approval.
-
-Background review is configured once in top-level `userContext`. It is enabled by default for `confirmWrite` and `auto` memory modes, runs every 10 user turns, and is disabled for `off` and `readOnly`:
-
-```json
-{
-  "userContext": {
-    "memory": {
-      "mode": "confirmWrite",
-      "sources": ["session", "understanding"]
-    },
-    "understanding": {
-      "enabled": true,
-      "adaptiveCadence": true,
-      "reviewIntervalTurns": 10,
-      "maxHistoryMessages": 80,
-      "maxDurationMs": 120000
-    }
-  }
-}
-```
-
-Set `understanding.enabled` to `false` when model cost or data policy requires deterministic explicit extraction only.
-
-With `adaptiveCadence` enabled, the configured interval is the fastest allowed cadence. xopc doubles the interval when the candidate inbox is backlogged, at least 10 review decisions have a low acceptance rate, or at least 10 recall ratings show low helpfulness. It never increases review frequency above the configured interval.
-
-Quality is available from `GET /api/you/quality?windowDays=30`. Automatic Dreaming readiness is available from `GET /api/you/readiness` and the About You page.
-
-## Response feedback attribution
-
-Completed assistant responses expose helpful / needs-improvement controls. Every model turn has a stable `turnId` carried by context planning, traces, transcript rows, realtime events, and the web message. The gateway resolves feedback by that exact id and updates it idempotently; it never guesses from timestamps.
-
-- `GET /api/you/feedback/:turnId` resolves existing response-level and record-level feedback.
-- `PUT /api/you/feedback/:turnId` records or replaces feedback for the exact turn.
-
-Explicit corrections such as “你记错了我的偏好” or “I never said that about me” conservatively mark the previous selected-understanding trace as not helpful before planning the correction turn. Generic task feedback such as “the command failed” does not affect understanding quality. Correction traces store only a fixed reason code, not the user's correction text.
-
-### Remediation lifecycle
-
-Feedback remediation is deliberately conservative:
-
-1. One ordinary negative rating is retained as a quality signal but does not mutate an understanding record.
-2. An active `user-understanding` record moves to `needs_review` after at least two independent `not_helpful` inject traces and only while negative ratings outnumber helpful ratings. A conservatively detected explicit user correction is authoritative and pauses the selected old understanding immediately.
-3. The transition reduces confidence by `0.2`, sets `reviewAfter`, immediately removes the record from normal active-only retrieval, and emits an auditable `remediation` trace. Replaying or replacing the same trace feedback is idempotent.
-4. A concrete correction such as “你记错了我的偏好，我更喜欢详细解释” creates a new `candidate` linked with `supersedesRecordId`. A pure denial creates no replacement content.
-5. The old record remains `needs_review` until the replacement is explicitly approved. Activating the replacement archives the old record and closes its validity interval.
-
-`PUT /api/you/feedback/:turnId` includes a `remediation` result when feedback evaluation runs. The chat UI acknowledges when related understanding has been paused and queued for review.
-
-## Connected sources
-
-Implement `KnowledgeSourceAdapter.pull()` for a source and register it with `KnowledgeIngestionService`. Pulls are incremental and idempotent by `(sourceInstanceId, externalId)` plus `contentHash`. Cursors persist in SQLite by default, and every run records counts, warnings, failure state, and timing.
-
-Gmail, Google Drive, Notion, and Slack Composio read actions use the same ingestion path. Results are normalized into bounded source items before synthesis; the runtime never writes the connector's raw response directly into memory. `ConnectedKnowledgePipeline` claims pending work with expiring leases, retries failed items, ignores secret and regulated content, and produces:
-
-- one stable `workspace_fact` per external item;
-- a bounded `daily_note` per source and day;
-- normalized evidence links back to every contributing source item;
-- archived records when an upstream item is deleted.
-
-The gateway coordinator drains pending synthesis after startup and every minute. Manual connector memory-sync requests also process their own source immediately, so the existing endpoint remains synchronous from the caller's perspective. The About You source cards show indexed item count and latest sync status.
-
-The gateway exposes read-only operational views:
-
-- `GET /api/knowledge/source-items`
-- `GET /api/knowledge/source-changes?afterSequence=...`
-- `GET /api/knowledge/sync-runs`
-- `/api/you/memories`, `/api/you/traces`, and turn feedback endpoints
-
-## Dreaming and automatic-write readiness
-
-Dreaming is managed from the Dreaming tab under About You. `off`, `observe`, `review`, and `automatic` are the only modes. Every phase writes a structured run and decision ledger in SQLite. The effective mode is capped by the global memory policy and by the automatic-write readiness gate. A requested automatic mode is downgraded to review until recent feedback and Dreaming reliability meet the published thresholds. REM insights always remain reviewable because they create new inferred beliefs.
-
-## Safety defaults
-
-- New understanding is a candidate until approved by an existing review workflow.
-- Explicit statements receive higher confidence than inferred statements.
-- Secrets and regulated data never enter model context.
-- `ask_before_reference` records are excluded until a consent flow is present.
-- Context is bounded to 6,000 characters and ranked by retrieval score, confidence, importance, explicitness, and freshness.
-- Every context plan emits a trace with selected record IDs and rejection reasons.
+SQLite is appropriate because this is local, transactional, relational state rather than a document-editing problem. It provides atomic revisions, foreign-key integrity, indexed filtering, FTS, inspectable evidence lineage, and a single backup unit without adding a server process. The model can evolve through migrations while the UI and runtime share the same source of truth.
