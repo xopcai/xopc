@@ -8,12 +8,12 @@ describe('resolveSTTProviderConfig', () => {
     const resolved = resolveSTTProviderConfig('openai', {
       enabled: true,
       provider: 'openai',
-      providers: { openai: { apiKey: 'sk-test', model: 'whisper-1' } },
+      providers: { openai: { apiKey: 'sk-test', model: 'gpt-4o-mini-transcribe' } },
     });
     expect(resolved).toEqual({
       id: 'openai',
       apiKey: 'sk-test',
-      model: 'whisper-1',
+      model: 'gpt-4o-mini-transcribe',
     });
   });
 
@@ -23,7 +23,7 @@ describe('resolveSTTProviderConfig', () => {
       {
         enabled: true,
         provider: 'openai',
-        providers: { openai: { apiKey: 'sk-test', model: 'whisper-1' } },
+        providers: { openai: { apiKey: 'sk-test', model: 'gpt-4o-mini-transcribe' } },
       },
       { provider: 'openai', model: 'gpt-4o-mini-transcribe' },
     );
@@ -38,8 +38,8 @@ describe('resolveSTTProviderChain', () => {
       provider: 'alibaba',
       fallback: { enabled: true, order: ['alibaba', 'openai'] },
       models: [
-        { provider: 'openai', model: 'whisper-1', capabilities: ['audio'] },
-        { provider: 'alibaba', model: 'paraformer-v2', capabilities: ['audio'] },
+        { provider: 'openai', model: 'gpt-4o-mini-transcribe', capabilities: ['audio'] },
+        { provider: 'alibaba', model: 'qwen-audio-3.0-asr-flash', capabilities: ['audio'] },
       ],
       providers: {
         openai: { apiKey: 'sk-openai' },
@@ -48,10 +48,10 @@ describe('resolveSTTProviderChain', () => {
     });
 
     expect(chain.map((entry) => entry.id)).toEqual(['openai', 'alibaba']);
-    expect(chain[0]?.model).toBe('whisper-1');
+    expect(chain[0]?.model).toBe('gpt-4o-mini-transcribe');
   });
 
-  it('uses legacy primary + fallback when models[] is empty', () => {
+  it('uses the configured primary and fallback when models[] is empty', () => {
     const config = {
       enabled: true,
       provider: 'alibaba',

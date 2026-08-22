@@ -56,7 +56,22 @@ export class XopcCloudModelSource {
             operations?: unknown;
             reasoning?: unknown;
             imageGeneration?: unknown;
+            inputFormats?: unknown;
+            maxBytes?: unknown;
+            maxDurationSeconds?: unknown;
+            languages?: unknown;
+            languageHint?: unknown;
+            prompt?: unknown;
+            timestamps?: unknown;
+            diarization?: unknown;
+            maxCharacters?: unknown;
+            outputFormats?: unknown;
+            streaming?: unknown;
+            speed?: unknown;
+            pitch?: unknown;
+            instructions?: unknown;
           };
+          defaultVoice?: unknown;
         };
       }>;
       error?: { message?: unknown; code?: unknown };
@@ -80,29 +95,36 @@ export class XopcCloudModelSource {
         typeof model.id === 'string' && model.id.length > 0)
       .map((model) => {
         const declaredInput = model.xopc?.capabilities?.input;
-        const parsedInput: Array<'text' | 'image'> = Array.isArray(declaredInput)
-          ? declaredInput.filter((value): value is 'text' | 'image' =>
-              value === 'text' || value === 'image')
+        const parsedInput: Array<'text' | 'image' | 'audio'> = Array.isArray(declaredInput)
+          ? declaredInput.filter((value): value is 'text' | 'image' | 'audio' =>
+              value === 'text' || value === 'image' || value === 'audio')
           : [];
-        const input: Array<'text' | 'image'> = parsedInput.includes('text')
-          ? [...new Set(parsedInput)]
-          : ['text', ...new Set(parsedInput)];
+        const kind = model.xopc?.kind === 'image' || model.xopc?.kind === 'stt' || model.xopc?.kind === 'tts'
+          ? model.xopc.kind
+          : 'language';
+        const input: Array<'text' | 'image' | 'audio'> = kind === 'stt' ? ['audio']
+          : kind === 'tts' ? ['text']
+            : kind === 'language' && !parsedInput.includes('text') ? ['text', ...new Set(parsedInput)] : [...new Set(parsedInput)];
         const maxOutputTokens = model.xopc?.maxOutputTokens;
         const declaredOutput = model.xopc?.capabilities?.output;
-        const output = Array.isArray(declaredOutput)
-          ? declaredOutput.filter((value): value is 'text' | 'image' => value === 'text' || value === 'image')
+        const output = kind === 'stt' ? ['text' as const] : kind === 'tts' ? ['audio' as const] : Array.isArray(declaredOutput)
+          ? declaredOutput.filter((value): value is 'text' | 'image' | 'audio' => value === 'text' || value === 'image' || value === 'audio')
           : ['text' as const];
         const declaredOperations = model.xopc?.operations ?? model.xopc?.capabilities?.operations;
-        const operations = Array.isArray(declaredOperations)
-          ? declaredOperations.filter((value): value is 'chat.completions' | 'responses' | 'images.generate' | 'images.edit' =>
+        const operations = kind === 'stt' ? ['audio.transcription' as const]
+          : kind === 'tts' ? ['audio.speech' as const] : Array.isArray(declaredOperations)
+          ? declaredOperations.filter((value): value is 'chat.completions' | 'responses' | 'images.generate' | 'images.edit' | 'audio.transcription' | 'audio.speech' =>
               value === 'chat.completions' || value === 'responses'
-              || value === 'images.generate' || value === 'images.edit')
+              || value === 'images.generate' || value === 'images.edit'
+              || value === 'audio.transcription' || value === 'audio.speech')
           : ['chat.completions' as const, 'responses' as const];
         const generation = parseImageGenerationCapabilities(model.xopc?.capabilities?.imageGeneration);
+        const stt = kind === 'stt' ? parseSttCapabilities(model.xopc?.capabilities) : undefined;
+        const tts = kind === 'tts' ? parseTtsCapabilities(model.xopc?.capabilities, model.xopc?.defaultVoice) : undefined;
         return [model.id, {
           id: model.id,
           name: model.id,
-          kind: model.xopc?.kind === 'image' ? 'image' as const : 'language' as const,
+          kind,
           input,
           output,
           operations,
@@ -112,6 +134,8 @@ export class XopcCloudModelSource {
             ? maxOutputTokens
             : null,
           ...(generation ? { imageGeneration: generation } : {}),
+          ...(stt ? { stt } : {}),
+          ...(tts ? { tts } : {}),
         }] as const;
       })).values()];
     this.catalogStore.replaceSourceModels('xopc-cloud', {
@@ -126,6 +150,39 @@ export class XopcCloudModelSource {
     reloadImageGenerationProviders();
     return { status: 'updated', modelCount: models.length, models: models.map((model) => model.id) };
   }
+}
+
+function parseSttCapabilities(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const raw = value as Record<string, unknown>;
+  return {
+    inputFormats: strings(raw.inputFormats), maxBytes: positiveInteger(raw.maxBytes),
+    maxDurationSeconds: positiveInteger(raw.maxDurationSeconds), languages: strings(raw.languages),
+    languageHint: raw.languageHint === true, prompt: raw.prompt === true,
+    timestamps: strings(raw.timestamps).filter((item): item is 'segment' | 'word' => item === 'segment' || item === 'word'),
+    diarization: raw.diarization === true,
+  };
+}
+
+function parseTtsCapabilities(value: unknown, defaultVoice: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const raw = value as Record<string, unknown>;
+  return {
+    maxCharacters: positiveInteger(raw.maxCharacters), languages: strings(raw.languages),
+    outputFormats: strings(raw.outputFormats).filter((item): item is 'mp3' | 'opus' | 'aac' | 'flac' | 'wav' | 'pcm' =>
+      ['mp3', 'opus', 'aac', 'flac', 'wav', 'pcm'].includes(item)),
+    streaming: raw.streaming === true, speed: raw.speed === true, pitch: raw.pitch === true,
+    instructions: raw.instructions === true,
+    ...(typeof defaultVoice === 'string' && defaultVoice ? { defaultVoice } : {}),
+  };
+}
+
+function strings(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
+function positiveInteger(value: unknown): number {
+  return Number.isSafeInteger(value) && Number(value) > 0 ? Number(value) : 0;
 }
 
 function parseImageGenerationCapabilities(value: unknown) {

@@ -134,9 +134,11 @@ Or create manually:
       "audio": {
         "enabled": true,
         "provider": "alibaba",
-        "alibaba": {
-          "apiKey": "${DASHSCOPE_API_KEY}",
-          "model": "paraformer-v2"
+        "providers": {
+          "alibaba": {
+            "apiKey": "${DASHSCOPE_API_KEY}",
+            "model": "qwen-audio-3.0-asr-flash"
+          }
         }
       }
     }
@@ -146,10 +148,12 @@ Or create manually:
       "enabled": true,
       "provider": "openai",
       "trigger": "inbound",
-      "openai": {
-        "apiKey": "${OPENAI_API_KEY}",
-        "model": "tts-1",
-        "voice": "alloy"
+      "providers": {
+        "openai": {
+          "apiKey": "${OPENAI_API_KEY}",
+          "model": "gpt-4o-mini-tts",
+          "voice": "alloy"
+        }
       }
     }
   },
@@ -482,38 +486,37 @@ Each provider entry: `type`, optional `apiKey`, optional `url` (SearXNG base URL
 ### tools.media.audio (STT)
 
 Speech-to-Text configuration for inbound voice messages. Lives under
-**`tools.media.audio`** (the gateway REST surface still exposes it as `stt`
-for backwards-friendly form payloads).
+**`tools.media.audio`** (the gateway REST surface exposes it as `stt`).
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `enabled` | boolean | `false` | Enable STT |
-| `provider` | string | `alibaba` | Primary provider: `alibaba`, `openai` |
-| `alibaba` | object | - | Alibaba DashScope config |
-| `openai` | object | - | OpenAI Whisper config |
+| `enabled` | boolean | `true` | Enable STT |
+| `provider` | string | `xopc-local` | Primary provider: `xopc-local`, `xopc-cloud`, `alibaba`, `openai` |
+| `providers` | object | - | Provider settings keyed by provider id |
+| `models` | array | - | Ordered audio model chain |
 | `fallback` | object | - | Fallback configuration |
 | `timeoutMs` | number | `60000` | Hard per-call HTTP timeout (ms) |
 
-#### tools.media.audio.alibaba
+#### tools.media.audio.providers.alibaba
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `apiKey` | string | - | DashScope API key (env: `DASHSCOPE_API_KEY`) |
-| `model` | string | `paraformer-v2` | Model id |
+| `model` | string | `qwen-audio-3.0-asr-flash` | Model id |
 
-#### tools.media.audio.openai
+#### tools.media.audio.providers.openai
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `apiKey` | string | - | OpenAI API key (env: `OPENAI_API_KEY`) |
-| `model` | string | `whisper-1` | Whisper model id |
+| `model` | string | `gpt-4o-mini-transcribe` | Transcription model id |
 
 #### tools.media.audio.fallback
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `enabled` | boolean | `true` | Enable fallback |
-| `order` | array | `["alibaba", "openai"]` | Fallback order |
+| `enabled` | boolean | `false` | Enable fallback |
+| `order` | array | `["xopc-local"]` | Fallback order |
 
 On failure, the runtime tries each provider in order and records structured **attempts** (provider, task, latency, reason) for diagnostics. All HTTP calls go through the shared `media-shared/http` chassis with **SSRF guard** (`fetchWithTimeoutGuarded`).
 
@@ -525,9 +528,11 @@ On failure, the runtime tries each provider in order and records structured **at
       "audio": {
         "enabled": true,
         "provider": "alibaba",
-        "alibaba": {
-          "apiKey": "${DASHSCOPE_API_KEY}",
-          "model": "paraformer-v2"
+        "providers": {
+          "alibaba": {
+            "apiKey": "${DASHSCOPE_API_KEY}",
+            "model": "qwen-audio-3.0-asr-flash"
+          }
         },
         "fallback": {
           "enabled": true,
@@ -549,21 +554,17 @@ surface still exposes it as `tts`).
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `enabled` | boolean | `false` | Enable TTS (and registration of `text_to_speech` when true) |
-| `provider` | string | `openai` | Primary provider: `openai`, `alibaba`, `edge`, `minimax`, `tts-local-cli`, or any extension-registered SpeechProviderPlugin id |
-| `trigger` | string | `always` | `off`, `always`, `inbound`, `tagged` |
+| `enabled` | boolean | `true` | Enable TTS (and registration of `text_to_speech` when true) |
+| `provider` | string | `edge` | Primary provider: `xopc-cloud`, `openai`, `alibaba`, `edge`, `minimax`, `tts-local-cli`, or any extension-registered SpeechProviderPlugin id |
+| `trigger` | string | `inbound` | `off`, `always`, `inbound`, `tagged` |
 | `maxTextLength` | number | `512` | Max characters sent to TTS providers. Conservative default chosen to fit every built-in provider (Alibaba qwen-tts caps at 512). Raise per-provider if your primary supports longer input. |
 | `timeoutMs` | number | `60000` | Per-request HTTP timeout (ms). Range `1000`–`180000`. MiniMax internally bumps to ≥150s for its async polling flow. |
 | `fallback` | object | - | Provider fallback order |
 | `summarization` | object | - | LLM summarization before TTS when text exceeds threshold |
 | `modelOverrides` | object | - | Allow `[[tts:...]]` directives from the model |
-| `openai` | object | - | OpenAI TTS config |
-| `alibaba` | object | - | Alibaba DashScope TTS config |
-| `edge` | object | - | Microsoft Edge TTS (no API key) |
-| `minimax` | object | - | MiniMax T2A async TTS config |
-| `tts-local-cli` | object | - | Local CLI provider (bundled extension) |
+| `providers` | object | - | Provider settings keyed by provider id |
 
-#### messages.tts.openai
+#### messages.tts.providers.openai
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -572,7 +573,7 @@ surface still exposes it as `tts`).
 | `model` | string | `tts-1` | Model: `tts-1`, `tts-1-hd`, `gpt-4o-mini-tts` |
 | `voice` | string | `alloy` | Voice: `alloy`, `echo`, `fable`, `onyx`, `nova`, `shimmer`, `coral`, `verse`, … |
 
-#### messages.tts.alibaba
+#### messages.tts.providers.alibaba
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -580,7 +581,7 @@ surface still exposes it as `tts`).
 | `model` | string | `qwen-tts` | TTS model id |
 | `voice` | string | `longxiaochun` | Voice id (`Cherry`, `Ethan`, `longxiaochun`, `longxiaobai`, …) |
 
-#### messages.tts.edge
+#### messages.tts.providers.edge
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -590,7 +591,7 @@ surface still exposes it as `tts`).
 | `outputFormat` | string | `audio-24khz-48kbitrate-mono-mp3` | Edge output format string |
 | `proxy` | string | - | Optional HTTP(S) proxy for Edge |
 
-#### messages.tts.minimax
+#### messages.tts.providers.minimax
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -600,7 +601,7 @@ surface still exposes it as `tts`).
 | `voice` | string | `male-qn-qingse` | Voice id |
 | `groupId` | string | - | Forward-compat slot for enterprise tier |
 
-#### messages.tts.tts-local-cli
+#### messages.tts.providers.tts-local-cli
 
 Provided by the bundled **`tts-local-cli`** extension (see
 `extensions/tts-local-cli/xopc.extension.json` for the authoritative JSON

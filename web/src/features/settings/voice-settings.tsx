@@ -95,10 +95,12 @@ function makeAudioUrl(base64: string, mimeType: string): string {
 }
 
 const STT_ALIBABA_FALLBACK = [
-  { id: 'paraformer-v2', name: 'Paraformer v2' },
-  { id: 'paraformer-v1', name: 'Paraformer v1' },
+  { id: 'qwen-audio-3.0-asr-flash', name: 'Qwen Audio 3.0 ASR Flash' },
 ];
-const STT_OPENAI_FALLBACK = [{ id: 'whisper-1', name: 'Whisper-1' }];
+const STT_OPENAI_FALLBACK = [
+  { id: 'gpt-4o-mini-transcribe', name: 'GPT-4o Mini Transcribe' },
+  { id: 'gpt-4o-transcribe', name: 'GPT-4o Transcribe' },
+];
 const STT_GROQ_MODELS_FALLBACK = [
   { id: 'whisper-large-v3-turbo', name: 'Whisper Large v3 Turbo' },
   { id: 'whisper-large-v3', name: 'Whisper Large v3' },

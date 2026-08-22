@@ -1,9 +1,8 @@
 /**
  * STT (Speech-to-Text) Module
  *
- * v2.0: providers implement MediaUnderstandingProvider; orchestration goes
- * through the media-understanding runner. The legacy `transcribe()` /
- * `isSTTAvailable()` API surface is preserved for channel adapters.
+ * Providers implement MediaUnderstandingProvider; orchestration goes through
+ * the media-understanding runner. Channel adapters use the public helpers below.
  */
 
 import './providers/index.js'; // side-effect: register built-in STT providers

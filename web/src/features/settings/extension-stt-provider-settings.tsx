@@ -71,13 +71,13 @@ function savedSliceFromVoiceSettings(
   if (providerId === 'alibaba') {
     return {
       apiKey: voiceSettings.stt.alibaba?.apiKey ?? '',
-      model: voiceSettings.stt.alibaba?.model ?? 'paraformer-v2',
+      model: voiceSettings.stt.alibaba?.model ?? 'qwen-audio-3.0-asr-flash',
     };
   }
   if (providerId === 'openai') {
     return {
       apiKey: voiceSettings.stt.openai?.apiKey ?? '',
-      model: voiceSettings.stt.openai?.model ?? 'whisper-1',
+      model: voiceSettings.stt.openai?.model ?? 'gpt-4o-mini-transcribe',
     };
   }
   const slice = voiceSettings.stt.providers?.[providerId];

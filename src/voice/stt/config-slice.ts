@@ -6,12 +6,6 @@
 
 import type { STTConfig } from './types.js';
 
-/** Built-in env fallbacks when config slice has no apiKey. */
-export const STT_LEGACY_ENV_KEYS: Record<string, string> = {
-  openai: 'OPENAI_API_KEY',
-  alibaba: 'DASHSCOPE_API_KEY',
-};
-
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
