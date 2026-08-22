@@ -101,12 +101,10 @@ export function createAgentStreamMessagingCallbacks(opts: {
 
   const store = () => useChatSessionStore.getState();
 
-  const reloadSessionSnapshot = () => {
-    void sessionMgrRef.current
+  const reloadSessionSnapshot = () => sessionMgrRef.current
       .loadSession(chatId, 0)
       .then((data) => applyLoadedSessionSnapshot(chatId, data))
       .catch(() => {});
-  };
 
   // Reviewer tokens can arrive much faster than a user can read them. Batch
   // them so the review card reads like a normal response instead of repainting
@@ -148,6 +146,7 @@ export function createAgentStreamMessagingCallbacks(opts: {
   };
 
   return {
+    onReplayGap: reloadSessionSnapshot,
     onUserMessage: (message) => {
       if (!shouldApplyStreamUpdate(chatId)) return;
       store().appendUserMessageIfMissing(chatId, message);

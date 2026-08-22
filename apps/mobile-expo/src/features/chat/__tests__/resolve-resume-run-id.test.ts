@@ -5,24 +5,28 @@ vi.mock('../../../query/sessions', () => ({
 }));
 
 vi.mock('../../gateway/pending-agent-run', () => ({
+  clearPendingAgentRun: vi.fn(),
   readPendingAgentRunId: vi.fn(),
   setPendingAgentRun: vi.fn(),
 }));
 
 import { fetchSessionActiveRun } from '../../../query/sessions';
 import {
+  clearPendingAgentRun,
   readPendingAgentRunId,
   setPendingAgentRun,
 } from '../../gateway/pending-agent-run';
 import { resolveResumeRunId } from '../resolve-resume-run-id';
 
 const mockedFetchSessionActiveRun = vi.mocked(fetchSessionActiveRun);
+const mockedClearPendingAgentRun = vi.mocked(clearPendingAgentRun);
 const mockedReadPendingAgentRunId = vi.mocked(readPendingAgentRunId);
 const mockedSetPendingAgentRun = vi.mocked(setPendingAgentRun);
 
 describe('resolveResumeRunId', () => {
   beforeEach(() => {
     mockedFetchSessionActiveRun.mockReset();
+    mockedClearPendingAgentRun.mockReset();
     mockedReadPendingAgentRunId.mockReset();
     mockedSetPendingAgentRun.mockReset();
   });
@@ -37,13 +41,13 @@ describe('resolveResumeRunId', () => {
     expect(mockedReadPendingAgentRunId).not.toHaveBeenCalled();
   });
 
-  it('falls back to local pending run when the gateway has no active run', async () => {
+  it('clears stale local state when the gateway confirms there is no active run', async () => {
     mockedFetchSessionActiveRun.mockResolvedValueOnce({ active: false });
-    mockedReadPendingAgentRunId.mockReturnValueOnce('run-local');
 
-    await expect(resolveResumeRunId('session-a')).resolves.toBe('run-local');
+    await expect(resolveResumeRunId('session-a')).resolves.toBeNull();
 
-    expect(mockedReadPendingAgentRunId).toHaveBeenCalledWith('session-a');
+    expect(mockedClearPendingAgentRun).toHaveBeenCalledWith('session-a');
+    expect(mockedReadPendingAgentRunId).not.toHaveBeenCalled();
   });
 
   it('falls back to local pending run when the gateway request fails', async () => {

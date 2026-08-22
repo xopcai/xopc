@@ -18,7 +18,7 @@ import type { RealtimeEventPayload } from '@xopcai/realtime-protocol';
 const realtimeState = vi.hoisted(() => ({
   listener: undefined as undefined | {
     onEvent: (event: RealtimeEventPayload) => void;
-    onGap?: () => void;
+    onGap?: (gap: { topic: string; requestedSeq: number; earliestSeq: number; recoverable: boolean }) => void;
   },
 }));
 
@@ -257,7 +257,9 @@ describe('MessageSender terminal state', () => {
 
     const pending = sender.resume('run-expired', sessionKey);
     await vi.waitFor(() => expect(realtimeState.listener).toBeDefined());
-    realtimeState.listener?.onGap?.();
+    realtimeState.listener?.onGap?.({
+      topic: 'run:run-expired', requestedSeq: 0, earliestSeq: 1, recoverable: false,
+    });
     await expect(pending).resolves.toBe(false);
 
     expect(sender.isStreamingFor(sessionKey)).toBe(false);

@@ -10,7 +10,7 @@ import type { AuthenticatedRouteDeps } from './deps.js';
 
 const services = new WeakMap<AuthenticatedRouteDeps['service'], WorkDiscoveryService>();
 
-function workDiscoveryService(deps: AuthenticatedRouteDeps): WorkDiscoveryService {
+export function getWorkDiscoveryService(deps: AuthenticatedRouteDeps): WorkDiscoveryService {
   const existing = services.get(deps.service);
   if (existing) return existing;
   const service = new WorkDiscoveryService({
@@ -30,7 +30,7 @@ function stringField(body: unknown, field: string): string {
 }
 
 export function registerWorkDiscoveryRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
-  const service = workDiscoveryService(deps);
+  const service = getWorkDiscoveryService(deps);
   const limited = deps.strictRateLimitMiddleware;
 
   authenticated.get('/api/onboarding/work-discovery', (c) => c.json({
@@ -80,95 +80,6 @@ export function registerWorkDiscoveryRoutes(authenticated: Hono, deps: Authentic
     } catch (error) {
       return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 500);
     }
-  });
-
-  authenticated.get('/api/work-discovery/sources/directories', (c) => c.json({
-    ok: true,
-    sources: service.listDirectorySources(),
-  }));
-
-  authenticated.post('/api/work-discovery/sources/directories', limited, async (c) => {
-    const body = await c.req.json().catch(() => null);
-    const rootPath = stringField(body, 'rootPath');
-    if (!rootPath) return c.json({ ok: false, error: 'Missing rootPath' }, 400);
-    try {
-      const source = await service.grantDirectorySource(rootPath);
-      return c.json({ ok: true, source }, 201);
-    } catch (error) {
-      return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400);
-    }
-  });
-
-  authenticated.delete('/api/work-discovery/sources/directories/:sourceId', limited, (c) => {
-    const source = service.revokeDirectorySource(c.req.param('sourceId'));
-    return source ? c.json({ ok: true, source }) : c.json({ ok: false, error: 'Source not found' }, 404);
-  });
-
-  authenticated.post('/api/work-discovery/sources/directories/:sourceId/runs', limited, async (c) => {
-    const body = await c.req.json().catch(() => null);
-    const idempotencyKey = stringField(body, 'idempotencyKey');
-    if (!idempotencyKey) return c.json({ ok: false, error: 'Missing idempotencyKey' }, 400);
-    try {
-      const run = await service.rescanDirectorySource({ id: c.req.param('sourceId'), idempotencyKey });
-      return c.json({ ok: true, run }, 202);
-    } catch (error) {
-      return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400);
-    }
-  });
-
-  authenticated.post('/api/work-discovery/sources/directories/check', limited, async (c) => {
-    return c.json({ ok: true, checks: await service.checkDirectorySources() });
-  });
-
-  authenticated.post('/api/work-discovery/sources/directories/:sourceId/refresh-if-changed', limited, async (c) => {
-    const body = await c.req.json().catch(() => null);
-    const idempotencyKey = stringField(body, 'idempotencyKey');
-    if (!idempotencyKey) return c.json({ ok: false, error: 'Missing idempotencyKey' }, 400);
-    try {
-      const result = await service.refreshDirectorySourceIfChanged({ id: c.req.param('sourceId'), idempotencyKey });
-      return c.json({ ok: true, ...result }, result.changed ? 202 : 200);
-    } catch (error) {
-      return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400);
-    }
-  });
-
-  authenticated.post('/api/work-discovery/personal-context/import', limited, async (c) => {
-    if (!service.isEnabled()) return c.json({ ok: false, error: 'Work discovery is disabled' }, 404);
-    const body = await c.req.json().catch(() => null);
-    const items = body && typeof body === 'object' && Array.isArray((body as Record<string, unknown>).items)
-      ? (body as { items: unknown[] }).items.slice(0, 150)
-      : [];
-    const runId = stringField(body, 'runId');
-    if (!items.length) return c.json({ ok: false, error: 'No personal context was provided' }, 400);
-    try {
-      const result = await service.importPersonalContext(items, c.req.raw.signal, runId || undefined);
-      return c.json({ ok: true, ...result }, 201);
-    } catch (error) {
-      return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400);
-    }
-  });
-
-  authenticated.post('/api/work-discovery/personal-context/profile', limited, async (c) => {
-    const body = await c.req.json().catch(() => null);
-    const rawDecisions = body && typeof body === 'object' && Array.isArray((body as Record<string, unknown>).decisions)
-      ? (body as { decisions: unknown[] }).decisions
-      : [];
-    const decisions = rawDecisions.flatMap((value) => {
-      if (!value || typeof value !== 'object') return [];
-      const item = value as Record<string, unknown>;
-      const understandingId = typeof item.understandingId === 'string' ? item.understandingId.trim() : '';
-      const status: 'accepted' | 'edited' | 'rejected' | undefined = item.status === 'accepted' || item.status === 'edited' || item.status === 'rejected'
-        ? item.status
-        : undefined;
-      if (!understandingId || !status) return [];
-      return [{
-        understandingId,
-        status,
-        ...(typeof item.statement === 'string' ? { statement: item.statement } : {}),
-      }];
-    }).slice(0, 10);
-    if (!decisions.length) return c.json({ ok: false, error: 'At least one valid decision is required' }, 400);
-    return c.json({ ok: true, decisions: service.updatePersonalContextProfile({ decisions }) });
   });
 
   authenticated.post('/api/work-discovery/quick-runs', limited, async (c) => {

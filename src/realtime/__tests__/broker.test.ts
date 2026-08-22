@@ -72,4 +72,16 @@ describe('RealtimeBroker', () => {
 
     expect(sub.initial).toMatchObject([{ kind: 'realtime.event', payload: { seq: 1 } }]);
   });
+
+  it('reports a gap when a cursor belongs to an earlier gateway process', () => {
+    const broker = new RealtimeBroker();
+
+    const sub = broker.subscribe('gateway', 42, vi.fn());
+
+    expect(sub.cursor).toBe(0);
+    expect(sub.initial).toMatchObject([{
+      kind: 'realtime.gap',
+      payload: { requestedSeq: 42, earliestSeq: 1 },
+    }]);
+  });
 });

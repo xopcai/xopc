@@ -1,11 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { RealtimeEventPayload } from '@xopcai/realtime-protocol';
 
 const testState = vi.hoisted(() => ({
   memory: new Map<string, string>(),
   apiFetch: vi.fn(),
   reconnect: vi.fn(),
   unsubscribe: vi.fn(),
-  realtimeListener: undefined as undefined | { onGap?: () => void },
+  realtimeAfterSeq: undefined as number | undefined,
+  realtimeListener: undefined as undefined | {
+    onEvent?: (event: RealtimeEventPayload) => void;
+    onGap?: (gap: { topic: string; requestedSeq: number; earliestSeq: number; recoverable: boolean }) => void;
+  },
 }));
 
 vi.mock('../client', () => ({
@@ -18,8 +23,12 @@ vi.mock('../client', () => ({
 
 vi.mock('../../features/gateway/use-gateway-realtime', () => ({
   requestMobileRealtimeReconnect: testState.reconnect,
-  subscribeMobileRealtimeTopic: vi.fn((_topic: string, listener: { onGap?: () => void }) => {
+  subscribeMobileRealtimeTopic: vi.fn((_topic: string, listener: {
+    onEvent?: (event: RealtimeEventPayload) => void;
+    onGap?: (gap: { topic: string; requestedSeq: number; earliestSeq: number; recoverable: boolean }) => void;
+  }, afterSeq?: number) => {
     testState.realtimeListener = listener;
+    testState.realtimeAfterSeq = afterSeq;
     return testState.unsubscribe;
   }),
 }));
@@ -62,11 +71,13 @@ describe('AgentMessageSender local detach', () => {
     testState.apiFetch.mockReset();
     testState.reconnect.mockReset();
     testState.unsubscribe.mockReset();
+    testState.realtimeAfterSeq = undefined;
     testState.realtimeListener = undefined;
     publishMobileEndpointTurnClaim('mobile-test', 'test-turn-token');
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     clearMobileEndpointTurnClaim();
   });
 
@@ -87,7 +98,7 @@ describe('AgentMessageSender local detach', () => {
     const pending = sender.sendMessage('hello', 'session-a');
 
     await vi.waitFor(() => {
-      expect(testState.memory.get('pending:session-a')).toBe(JSON.stringify({ runId: 'run-123' }));
+      expect(testState.memory.get('pending:session-a')).toBe(JSON.stringify({ runId: 'run-123', lastSeq: 0 }));
     });
 
     sender.detachLocalStream();
@@ -97,7 +108,7 @@ describe('AgentMessageSender local detach', () => {
       '/api/agent/abort',
       expect.anything(),
     );
-    expect(testState.memory.get('pending:session-a')).toBe(JSON.stringify({ runId: 'run-123' }));
+    expect(testState.memory.get('pending:session-a')).toBe(JSON.stringify({ runId: 'run-123', lastSeq: 0 }));
   });
 
   it('clears an expired run after a replay gap', async () => {
@@ -105,7 +116,9 @@ describe('AgentMessageSender local detach', () => {
     const pending = sender.resume('run-expired', 'session-a');
 
     await vi.waitFor(() => expect(testState.realtimeListener).toBeDefined());
-    testState.realtimeListener?.onGap?.();
+    testState.realtimeListener?.onGap?.({
+      topic: 'run:run-expired', requestedSeq: 0, earliestSeq: 1, recoverable: false,
+    });
 
     await expect(pending).rejects.toThrow('realtime replay expired');
     expect(testState.memory.get('pending:session-a')).toBeUndefined();
@@ -120,9 +133,89 @@ describe('AgentMessageSender local detach', () => {
     const sender = new AgentMessageSender();
     const pending = sender.sendMessage('hello', 'session-a');
 
-    expect(testState.reconnect).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(testState.reconnect).toHaveBeenCalledOnce());
     publishMobileEndpointTurnClaim('mobile-test', 'replacement-turn-token');
 
     await expect(pending).resolves.toBeUndefined();
+  });
+
+  it('times out a stalled run attachment and preserves it for recovery', async () => {
+    vi.useFakeTimers();
+    const sender = new AgentMessageSender();
+    const pending = sender.resume('run-stalled', 'session-a');
+    const rejected = expect(pending).rejects.toThrow('stream attach timed out');
+
+    await vi.advanceTimersByTimeAsync(15_000);
+
+    await rejected;
+    expect(testState.reconnect).toHaveBeenCalledOnce();
+    expect(testState.memory.get('pending:session-a')).toBe(JSON.stringify({ runId: 'run-stalled', lastSeq: 0 }));
+  });
+
+  it('retries an ambiguous submission with the same client message id', async () => {
+    vi.useFakeTimers();
+    testState.apiFetch
+      .mockRejectedValueOnce(new Error('Network request failed'))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        payload: { state: { inputs: [] } },
+      }), { status: 202, headers: { 'Content-Type': 'application/json' } }));
+    const sender = new AgentMessageSender();
+    const pending = sender.sendMessage('hello', 'session-a');
+
+    await vi.advanceTimersByTimeAsync(500);
+    await pending;
+
+    const first = JSON.parse(String(testState.apiFetch.mock.calls[0]?.[1]?.body)) as { clientMessageId: string };
+    const second = JSON.parse(String(testState.apiFetch.mock.calls[1]?.[1]?.body)) as { clientMessageId: string };
+    expect(second.clientMessageId).toBe(first.clientMessageId);
+    expect(testState.memory.has('session-input-outbox:session-a')).toBe(false);
+  });
+
+  it('keeps an ambiguous input across sender instances and reuses its id', async () => {
+    vi.useFakeTimers();
+    testState.apiFetch.mockRejectedValue(new Error('Network request failed'));
+    const firstSender = new AgentMessageSender();
+    const firstAttempt = firstSender.sendMessage('durable', 'session-a');
+    const firstRejected = expect(firstAttempt).rejects.toThrow('Network request failed');
+    await vi.advanceTimersByTimeAsync(2_000);
+    await firstRejected;
+
+    const stored = JSON.parse(testState.memory.get('session-input-outbox:session-a')!) as {
+      clientMessageId: string;
+      content: string;
+    };
+    expect(stored.content).toBe('durable');
+
+    testState.apiFetch.mockReset();
+    testState.apiFetch.mockResolvedValue(new Response(JSON.stringify({
+      payload: { state: { inputs: [] } },
+    }), { status: 202, headers: { 'Content-Type': 'application/json' } }));
+    const secondSender = new AgentMessageSender();
+    await secondSender.retryPendingMessage('session-a');
+
+    const retried = JSON.parse(String(testState.apiFetch.mock.calls[0]?.[1]?.body)) as {
+      clientMessageId: string;
+    };
+    expect(retried.clientMessageId).toBe(stored.clientMessageId);
+    expect(testState.memory.has('session-input-outbox:session-a')).toBe(false);
+  });
+
+  it('resumes from the last applied run sequence', async () => {
+    const sender = new AgentMessageSender();
+    const first = sender.resume('run-cursor', 'session-a');
+    await vi.waitFor(() => expect(testState.realtimeListener).toBeDefined());
+    testState.realtimeListener?.onEvent?.({
+      topic: 'run:run-cursor',
+      seq: 7,
+      event: 'assistant_delta',
+      data: { type: 'assistant_delta', payload: { delta: 'hello' } },
+    });
+    sender.detachLocalStream();
+    await first;
+
+    const second = sender.resume('run-cursor', 'session-a');
+    await vi.waitFor(() => expect(testState.realtimeAfterSeq).toBe(7));
+    sender.detachLocalStream();
+    await second;
   });
 });

@@ -25,6 +25,7 @@ type TopicState = {
 
 export interface RealtimeSubscriptionHandle {
   initial: RealtimeDelivery[];
+  cursor: number;
   unsubscribe: () => void;
 }
 
@@ -81,8 +82,11 @@ export class RealtimeBroker {
     const state = this.ensureTopic(topic);
     state.listeners.add(listener);
     const initial = afterSeq === undefined ? [] : this.replayFrom(topic, state, afterSeq);
+    const gap = initial[0]?.kind === 'realtime.gap' ? initial[0] : undefined;
+    const currentSeq = state.nextSeq - 1;
     return {
       initial,
+      cursor: gap ? gap.payload.earliestSeq - 1 : afterSeq === undefined ? currentSeq : Math.min(afterSeq, currentSeq),
       unsubscribe: () => {
         state.listeners.delete(listener);
       },
@@ -103,6 +107,20 @@ export class RealtimeBroker {
 
   private replayFrom(topic: string, state: TopicState, afterSeq: number): RealtimeDelivery[] {
     const currentSeq = state.nextSeq - 1;
+    if (afterSeq > currentSeq) {
+      return [{
+        protocolVersion: REALTIME_PROTOCOL_VERSION,
+        messageId: crypto.randomUUID(),
+        kind: 'realtime.gap',
+        sentAt: Date.now(),
+        payload: {
+          topic,
+          requestedSeq: afterSeq,
+          earliestSeq: state.events[0]?.payload.seq ?? 1,
+          recoverable: false,
+        },
+      }];
+    }
     if (currentSeq <= afterSeq) return [];
     const earliestSeq = state.events[0]?.payload.seq;
     if (earliestSeq === undefined || afterSeq + 1 < earliestSeq) {
@@ -115,6 +133,7 @@ export class RealtimeBroker {
           topic,
           requestedSeq: afterSeq,
           earliestSeq: earliestSeq ?? currentSeq + 1,
+          recoverable: earliestSeq !== undefined,
         },
       };
       return [gap, ...state.events];

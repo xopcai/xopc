@@ -68,20 +68,6 @@ export interface WorkDiscoverySourceRefresh {
   checkedAt: number;
 }
 
-export type WorkDiscoveryPersonalContextSource = 'apple_notes' | 'calendar' | 'reminders';
-
-export interface WorkDiscoveryPersonalContextItem {
-  id: string;
-  source: WorkDiscoveryPersonalContextSource;
-  title: string;
-  group?: string;
-  content: string;
-  createdAt?: number;
-  modifiedAt?: number;
-  startsAt?: number;
-  endsAt?: number;
-}
-
 export type WorkUnderstandingInvestigationStatus =
   | 'planning'
   | 'investigating'
@@ -94,7 +80,7 @@ export type WorkUnderstandingEvidenceSourceType =
   | 'file'
   | 'git'
   | 'project_metadata'
-  | 'personal_context'
+  | 'understanding_source'
   | 'session'
   | 'user_statement';
 

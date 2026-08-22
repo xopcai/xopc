@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   isTransientNetworkError,
   streamRetryDelayMs,
-  STREAM_RECOVERY_MAX_ATTEMPTS,
+  STREAM_RECOVERY_FAST_ATTEMPTS,
 } from '../network-errors';
 
 describe('isTransientNetworkError', () => {
@@ -30,8 +30,8 @@ describe('streamRetryDelayMs', () => {
   });
 });
 
-describe('STREAM_RECOVERY_MAX_ATTEMPTS', () => {
-  it('allows several silent retries before surfacing UI', () => {
-    expect(STREAM_RECOVERY_MAX_ATTEMPTS).toBeGreaterThanOrEqual(5);
+describe('STREAM_RECOVERY_FAST_ATTEMPTS', () => {
+  it('uses several fast attempts before parking silently', () => {
+    expect(STREAM_RECOVERY_FAST_ATTEMPTS).toBeGreaterThanOrEqual(5);
   });
 });

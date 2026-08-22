@@ -3,7 +3,10 @@ import {
   type AgentStreamCallbacks,
   type AgentStreamDispatchOptions,
 } from '@xopcai/agent-stream-client';
-import { randomUUID } from 'expo-crypto';
+import {
+  SESSION_INPUT_RETRY_DELAYS_MS,
+  shouldRetrySessionInputStatus,
+} from '@xopcai/gateway-contract';
 
 import {
   apiFetch,
@@ -13,19 +16,54 @@ import { readUriAsBase64 } from '../features/chat/attachment-file-io';
 import { capAttachments } from '../features/chat/chat-limits';
 import type { WireAttachment } from '../features/chat/composer.types';
 import {
+  advancePendingAgentRunCursor,
   clearPendingAgentRun,
+  readPendingAgentRunCursor,
   readPendingAgentRunId,
   setPendingAgentRun,
 } from '../features/gateway/pending-agent-run';
-import { isTransientNetworkError } from '../features/chat/network-errors';
+import {
+  isTransientNetworkError,
+  STREAM_ATTACH_TIMEOUT_MS,
+} from '../features/chat/network-errors';
 import { pendingRunStorageKey, storage } from '../storage/mmkv';
 import { waitForMobileEndpointTurnClaim } from '../features/endpoint-tools/turn-claim';
 import {
   requestMobileRealtimeReconnect,
   subscribeMobileRealtimeTopic,
 } from '../features/gateway/use-gateway-realtime';
+import {
+  completeSessionInput,
+  enqueueSessionInput,
+  markSessionInputAttempt,
+  readPendingSessionInput,
+  type PendingSessionInput,
+} from '../features/gateway/session-input-outbox';
+
+async function postSessionInput(path: string, body: string): Promise<Response> {
+  let lastError: unknown;
+  for (const delayMs of SESSION_INPUT_RETRY_DELAYS_MS) {
+    if (delayMs > 0) await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+    try {
+      const response = await apiFetch(path, { method: 'POST', body });
+      if (!shouldRetrySessionInputStatus(response.status)) return response;
+      lastError = new Error(`Session input temporarily unavailable (${response.status})`);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error('Session input request failed');
+}
 
 export type MessagingCallbacks = AgentStreamCallbacks;
+
+async function materializeAttachments(attachments: WireAttachment[]): Promise<WireAttachment[]> {
+  return Promise.all(attachments.map(async ({ localUri, ...attachment }) => {
+    if (!localUri || attachment.uri || attachment.workspaceRelativePath) return attachment;
+    const { content, size } = await readUriAsBase64(localUri, attachment.name);
+    return { ...attachment, data: content, size };
+  }));
+}
 
 export type VoiceMessagePayload = {
   uri: string;
@@ -264,31 +302,67 @@ export class AgentMessageSender {
     attachments?: WireAttachment[],
   ): Promise<void> {
     const capped = capAttachments(attachments);
-    const clientMessageId = randomUUID();
+    const entry = enqueueSessionInput(sessionKey, message, capped ?? []);
+    await this._submitPendingInput(entry, callbacks);
+  }
+
+  async retryPendingMessage(sessionKey: string, callbacks?: MessagingCallbacks): Promise<boolean> {
+    const entry = readPendingSessionInput(sessionKey);
+    if (!entry) return false;
+    await this._submitPendingInput(entry, callbacks, true);
+    return true;
+  }
+
+  async flushPendingMessage(sessionKey: string): Promise<boolean> {
+    const entry = readPendingSessionInput(sessionKey);
+    if (!entry) return false;
+    await this._submitPendingInput(entry, undefined, false);
+    return true;
+  }
+
+  private async _submitPendingInput(
+    queuedEntry: PendingSessionInput,
+    callbacks?: MessagingCallbacks,
+    attachRun = true,
+  ): Promise<void> {
+    const entry = markSessionInputAttempt(queuedEntry);
+    let attachments: WireAttachment[];
+    try {
+      attachments = await materializeAttachments(entry.attachments);
+    } catch (error) {
+      completeSessionInput(entry.sessionKey, entry.clientMessageId);
+      throw error;
+    }
     const origin = await waitForMobileEndpointTurnClaim(
       undefined,
       requestMobileRealtimeReconnect,
     );
-    const res = await apiFetch(`/api/sessions/${encodeURIComponent(sessionKey)}/inputs`, {
-      method: 'POST',
-      body: JSON.stringify({
-        clientMessageId, delivery: 'next', content: message,
+    const res = await postSessionInput(
+      `/api/sessions/${encodeURIComponent(entry.sessionKey)}/inputs`,
+      JSON.stringify({
+        clientMessageId: entry.clientMessageId,
+        delivery: 'next',
+        content: entry.content,
         origin,
-        ...(capped?.length ? { attachments: capped } : {}),
+        ...(attachments.length ? { attachments } : {}),
       }),
-    });
+    );
     if (!res.ok) {
       const body = await res.json().catch(() => null) as { error?: { message?: string } } | null;
+      completeSessionInput(entry.sessionKey, entry.clientMessageId);
       throw new Error(formatApiHttpError(res.status, res.statusText, body?.error?.message));
     }
-    const json = await res.json() as { payload?: { state?: {
+    completeSessionInput(entry.sessionKey, entry.clientMessageId);
+    const json = await res.json().catch(() => {
+      throw new Error('Network response was invalid');
+    }) as { payload?: { state?: {
       activeRunId?: string; activeInputId?: string;
       inputs?: Array<{ id: string; clientMessageId: string }>;
     } } };
     const state = json.payload?.state;
-    const own = state?.inputs?.find((input) => input.clientMessageId === clientMessageId);
-    if (state?.activeRunId && own?.id === state.activeInputId) {
-      return this.resume(state.activeRunId, sessionKey, callbacks);
+    const own = state?.inputs?.find((input) => input.clientMessageId === entry.clientMessageId);
+    if (attachRun && state?.activeRunId && own?.id === state.activeInputId) {
+      return this.resume(state.activeRunId, entry.sessionKey, callbacks);
     }
   }
 
@@ -307,6 +381,7 @@ export class AgentMessageSender {
       type: 'voice',
       mimeType,
       data: content,
+      localUri: payload.uri,
       name,
       size,
       ...(durationSeconds != null ? { durationSeconds } : {}),
@@ -331,24 +406,36 @@ export class AgentMessageSender {
     try {
       await new Promise<void>((resolve, reject) => {
         let settled = false;
+        const attachDeadline: { timer?: ReturnType<typeof setTimeout> } = {};
         const finish = (error?: Error) => {
           if (settled) return;
           settled = true;
+          if (attachDeadline.timer) clearTimeout(attachDeadline.timer);
           this._streamCleanup?.();
           this._streamCleanup = undefined;
           if (error) reject(error);
           else resolve();
         };
+        attachDeadline.timer = setTimeout(() => {
+          requestMobileRealtimeReconnect();
+          finish(new Error('Realtime stream attach timed out'));
+        }, STREAM_ATTACH_TIMEOUT_MS);
+        const afterSeq = readPendingAgentRunCursor(sessionKey, runId);
         this._streamCleanup = subscribeMobileRealtimeTopic(`run:${runId}`, {
           onEvent: (message) => {
+            if (attachDeadline.timer) clearTimeout(attachDeadline.timer);
             const event = message.data && typeof message.data === 'object'
               ? { ...(message.data as Record<string, unknown>), seq: message.seq }
               : { type: message.event, seq: message.seq, payload: message.data };
             dispatchAgentStreamEvent(message.event, JSON.stringify(event), terminal.wrapped, opts);
+            advancePendingAgentRunCursor(sessionKey, runId, message.seq);
             if (message.event === 'run_end' || message.event === 'error') finish();
           },
-          onGap: () => finish(new Error('Run not found or realtime replay expired')),
-        }, 0);
+          onGap: (gap) => {
+            if (gap.recoverable) return terminal.wrapped?.onReplayGap?.();
+            finish(new Error('Run not found or realtime replay expired'));
+          },
+        }, afterSeq);
         abortController.signal.addEventListener('abort', () => finish(), { once: true });
       });
     } catch (e) {

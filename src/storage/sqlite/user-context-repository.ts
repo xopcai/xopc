@@ -106,6 +106,8 @@ function ruleFromRow(row: RuleRow): CollaborationRule {
 export function getUserProfile(principalId = USER_CONTEXT_PRINCIPAL_ID): UserProfile {
   const row = getSqliteDatabase().prepare('SELECT * FROM user_profiles WHERE principal_id = ?').get(principalId) as {
     call_name: string;
+    role: string;
+    primary_goal: string;
     pronouns: string;
     timezone: string;
     locale: string;
@@ -114,10 +116,12 @@ export function getUserProfile(principalId = USER_CONTEXT_PRINCIPAL_ID): UserPro
     updated_at: number;
   } | undefined;
   if (!row) {
-    return { callName: '', pronouns: '', timezone: '', locale: '', accessibility: {}, createdAt: 0, updatedAt: 0 };
+    return { callName: '', role: '', primaryGoal: '', pronouns: '', timezone: '', locale: '', accessibility: {}, createdAt: 0, updatedAt: 0 };
   }
   return {
     callName: row.call_name,
+    role: row.role,
+    primaryGoal: row.primary_goal,
     pronouns: row.pronouns,
     timezone: row.timezone,
     locale: row.locale,
@@ -128,7 +132,7 @@ export function getUserProfile(principalId = USER_CONTEXT_PRINCIPAL_ID): UserPro
 }
 
 export function updateUserProfile(
-  patch: Partial<Pick<UserProfile, 'callName' | 'pronouns' | 'timezone' | 'locale' | 'accessibility'>>,
+  patch: Partial<Pick<UserProfile, 'callName' | 'role' | 'primaryGoal' | 'pronouns' | 'timezone' | 'locale' | 'accessibility'>>,
   principalId = USER_CONTEXT_PRINCIPAL_ID,
 ): UserProfile {
   const current = getUserProfile(principalId);
@@ -137,10 +141,12 @@ export function updateUserProfile(
   runSqliteWriteTransaction((db) => {
     db.prepare(`
       INSERT INTO user_profiles (
-        principal_id, call_name, pronouns, timezone, locale, accessibility_json, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        principal_id, call_name, role, primary_goal, pronouns, timezone, locale, accessibility_json, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(principal_id) DO UPDATE SET
         call_name = excluded.call_name,
+        role = excluded.role,
+        primary_goal = excluded.primary_goal,
         pronouns = excluded.pronouns,
         timezone = excluded.timezone,
         locale = excluded.locale,
@@ -149,6 +155,8 @@ export function updateUserProfile(
     `).run(
       principalId,
       next.callName,
+      next.role,
+      next.primaryGoal,
       next.pronouns,
       next.timezone,
       next.locale,

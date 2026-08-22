@@ -71,10 +71,15 @@ export const serverRealtimeMessageSchema = z.discriminatedUnion('kind', [
     }).optional(),
   })),
   envelope('realtime.event', realtimeEventPayloadSchema),
+  envelope('realtime.subscribed', z.strictObject({
+    topic: realtimeTopicSchema,
+    cursor: z.number().int().nonnegative(),
+  })),
   envelope('realtime.gap', z.strictObject({
     topic: realtimeTopicSchema,
     requestedSeq: z.number().int().nonnegative(),
     earliestSeq: sequenceSchema,
+    recoverable: z.boolean(),
   })),
   envelope('realtime.pong', z.strictObject({})),
   envelope('realtime.error', z.strictObject({

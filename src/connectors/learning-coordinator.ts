@@ -18,6 +18,15 @@ import {
 } from '../storage/sqlite/index.js';
 import { ConnectedUnderstandingPipeline } from '../knowledge/index.js';
 import { createLogger } from '../utils/logger.js';
+import {
+  createUnderstandingSourceRun,
+  listUnderstandingSourceRuns,
+  upsertUnderstandingSourceGrant,
+  upsertUserFocus,
+  updateUnderstandingSourceGrantCheckpoint,
+  updateUnderstandingSourceRun,
+} from '../user-context/sources/repository.js';
+import type { UnderstandingSourceCategory, UnderstandingSourceRun } from '../user-context/sources/types.js';
 import { getConnectorDefinition } from './catalog.js';
 import { ComposioSessionsAdapter } from './composio-sessions.js';
 import { connectorIdentityKey, normalizeConnectorIdentity } from './connector-identity.js';
@@ -35,6 +44,40 @@ function learningFailureCode(error: unknown): string {
     || message.includes('missing its provider identity')
     ? CONNECTED_ACCOUNT_UNAVAILABLE
     : CONNECTED_SOURCE_SYNC_FAILED;
+}
+
+function connectorSourceCategory(toolkit: string): UnderstandingSourceCategory {
+  if (toolkit === 'gmail') return 'mail';
+  if (toolkit === 'googlecalendar') return 'calendar';
+  if (toolkit === 'github' || toolkit === 'linear') return 'code_activity';
+  if (toolkit === 'slack') return 'messages';
+  return 'files';
+}
+
+function ensureUnderstandingSourceRun(
+  job: ConnectorLearningJob,
+  toolkit: string,
+  displayName: string,
+): UnderstandingSourceRun {
+  const grant = upsertUnderstandingSourceGrant({
+    sourceKey: `connector-account:${job.accountId}`,
+    adapterId: `connector:${job.connectorId}`,
+    category: connectorSourceCategory(toolkit),
+    platform: 'all',
+    displayName,
+    accessMode: 'continuous',
+    retentionPolicy: 'bounded_raw',
+    processingPolicy: 'remote_allowed',
+    config: { connectorId: job.connectorId, accountId: job.accountId, readOnly: true },
+  });
+  return listUnderstandingSourceRuns(grant.id, 100)
+    .find((run) => run.metadata.connectorLearningJobId === job.id)
+    ?? createUnderstandingSourceRun({
+      grantId: grant.id,
+      kind: job.mode,
+      status: 'queued',
+      metadata: { connectorLearningJobId: job.id, connectorId: job.connectorId },
+    });
 }
 
 export type ConnectorLearningCoordinator = {
@@ -112,6 +155,7 @@ export function startConnectorLearningCoordinator(options: {
           : `incremental:${connection.accountId}:${request.reason ?? 'manual'}:${bucket}`),
       nextRunAt: request.nextRunAt,
     });
+    ensureUnderstandingSourceRun(job, definition.runtime.toolkit, definition.displayName);
     publish(job);
     queueMicrotask(() => void runNow());
     return job;
@@ -138,6 +182,8 @@ export function startConnectorLearningCoordinator(options: {
     }
     const plan = getConnectorLearningPlan(definition.runtime.toolkit);
     if (!plan) throw new Error(`Connector learning has no plan for ${definition.runtime.toolkit}.`);
+    const sourceRun = ensureUnderstandingSourceRun(job, plan.toolkit, definition.displayName);
+    updateUnderstandingSourceRun(sourceRun.id, { status: 'running' });
     let connection = listConnectorConnections().find((candidate) => candidate.id === job.connectionId);
     if (!connection) throw new Error('Connector account no longer exists.');
     const installation = getConnectorInstallation(`${job.connectorId}-local-owner`);
@@ -206,12 +252,39 @@ export function startConnectorLearningCoordinator(options: {
     publish(updateConnectorLearningJob(job.id, { phase: 'deriving' }));
     const understanding = await new ConnectedUnderstandingPipeline(options.getMemoryManager())
       .process(job.sourceInstanceId, job.connectorId, job.agentId);
+    for (const record of understanding.createdRecords.filter((item) => item.kind === 'project_context')) {
+      upsertUserFocus({
+        canonicalKey: `connector-focus:${job.accountId}:${record.id}`,
+        title: record.content.slice(0, 120),
+        summary: record.content,
+        horizon: 'ongoing',
+        status: 'candidate',
+        confidence: 0.72,
+        evidenceRefs: [`connector-account:${job.accountId}`],
+        sourceRunId: sourceRun.id,
+      });
+    }
     const completed = updateConnectorLearningJob(job.id, {
       status: 'completed',
       phase: 'completed',
       candidatesCreated: understanding.created,
       nextRunAt: null,
       finished: true,
+    });
+    updateUnderstandingSourceRun(sourceRun.id, {
+      status: 'completed',
+      itemsSeen,
+      cursorAfter: new Date().toISOString(),
+      completed: true,
+      metadata: {
+        ...sourceRun.metadata,
+        itemsIndexed,
+        candidatesCreated: understanding.created,
+      },
+    });
+    updateUnderstandingSourceGrantCheckpoint(sourceRun.grantId, {
+      checkpoint: { cursor: new Date().toISOString(), connectorLearningJobId: job.id },
+      lastCollectedAt: Date.now(),
     });
     publish(completed);
     pruneBoundedKnowledgeSourceItems(
@@ -252,6 +325,13 @@ export function startConnectorLearningCoordinator(options: {
             finished: true,
           });
           publish(failed);
+          const definition = getConnectorDefinition(job.connectorId);
+          if (definition?.runtime.type === 'composio' && definition.runtime.role === 'toolkit') {
+            const sourceRun = ensureUnderstandingSourceRun(job, definition.runtime.toolkit, definition.displayName);
+            updateUnderstandingSourceRun(sourceRun.id, {
+              status: 'failed', errorMessage, completed: true,
+            });
+          }
           log.warn({ err, jobId: job.id, connectorId: job.connectorId }, `Connector learning failed: ${errorMessage}`);
         }
       }

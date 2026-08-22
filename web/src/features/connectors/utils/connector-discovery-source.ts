@@ -3,7 +3,7 @@ export const DISCOVERY_SOURCE_BUILTIN = 'builtin';
 export const COMPOSIO_CONNECTOR_SOURCE = 'composio';
 export const STORE_CONNECTOR_SOURCE = 'xopc-store';
 
-export type ConnectorDiscoveryEntry = 'default' | 'personal-context';
+export type ConnectorDiscoveryEntry = 'default' | 'understanding';
 
 /**
  * Start from the local catalog so Composio credentials can be collected by the

@@ -5,12 +5,6 @@ import type { AgentMessageSender } from '../../api/agent-client';
 import { subscribeGatewayEvent } from '../gateway/gateway-event-bus';
 import { hasPendingAgentRunForSession, setPendingAgentRun } from '../gateway/pending-agent-run';
 
-export type AgentStreamResumeOptions = {
-  background?: boolean;
-};
-
-export type TryAgentStreamResume = (opts?: AgentStreamResumeOptions) => void | Promise<void>;
-
 /**
  * Listen for session run lifecycle events (Task continuations, scheduled webchat runs)
  * and trigger resume when the active chat is idle.
@@ -19,13 +13,13 @@ export function useAgentStreamResume(opts: {
   sessionKey: string;
   senderRef: RefObject<AgentMessageSender>;
   activeSessionKeyRef: RefObject<string>;
-  tryResume: TryAgentStreamResume;
+  wakeRecovery: () => void;
   streaming: boolean;
 }): void {
-  const { sessionKey, senderRef, activeSessionKeyRef, tryResume, streaming } = opts;
-  const tryResumeRef = useRef(tryResume);
+  const { sessionKey, senderRef, activeSessionKeyRef, wakeRecovery, streaming } = opts;
+  const wakeRecoveryRef = useRef(wakeRecovery);
   const streamingRef = useRef(streaming);
-  tryResumeRef.current = tryResume;
+  wakeRecoveryRef.current = wakeRecovery;
   streamingRef.current = streaming;
 
   useEffect(() => {
@@ -42,7 +36,7 @@ export function useAgentStreamResume(opts: {
       queueMicrotask(() => {
         if (activeSessionKeyRef.current !== event.sessionKey) return;
         if (senderRef.current.isStreamingFor(event.sessionKey)) return;
-        void tryResumeRef.current({ background: true });
+        wakeRecoveryRef.current();
       });
     });
   }, [activeSessionKeyRef, senderRef]);
@@ -58,7 +52,7 @@ export function useAgentStreamResume(opts: {
       if (activeSessionKeyRef.current !== sessionKey) return;
       if (senderRef.current.isStreamingFor(sessionKey)) return;
       if (!hasPendingAgentRunForSession(sessionKey)) return;
-      void tryResumeRef.current({ background: true });
+      wakeRecoveryRef.current();
     });
   }, [streaming, sessionKey, activeSessionKeyRef, senderRef]);
 }

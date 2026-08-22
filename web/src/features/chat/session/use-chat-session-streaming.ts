@@ -208,6 +208,7 @@ export function useChatSessionStreaming(deps: {
         if (!resumed) {
           clearChatRunPresence(chatId);
           clearFailedResumeState();
+          await loadSessionById(chatId, 0).catch(() => undefined);
         }
       } catch (err) {
         if ((err as Error).name !== 'AbortError') {
@@ -224,6 +225,7 @@ export function useChatSessionStreaming(deps: {
       sessionMgrRef,
       applyLoadedSessionSnapshot,
       finalizeMessage,
+      loadSessionById,
     ],
   );
 

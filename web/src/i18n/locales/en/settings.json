@@ -1142,9 +1142,9 @@
   "connectorsSettings": {
     "title": "Connectors",
     "subtitle": "Manage current connections or discover new sources and actions for your agents.",
-    "personalContextTitle": "Connect a source for user understanding",
-    "personalContextHint": "These sources have a read-only activity learning plan. Connect one, then enable learning from its connection details. You can review or remove derived understanding at any time.",
-    "personalContextDone": "Done",
+    "understandingSetupTitle": "Connect a source for user understanding",
+    "understandingSetupHint": "These sources have a read-only learning plan. Connect one, then choose its ongoing access policy. You can review or revoke the source at any time.",
+    "understandingSetupDone": "Done",
     "tokenHint": "Save a gateway token under Settings → Gateway before configuring connectors.",
     "tabConnected": "My connections",
     "tabDiscover": "Discover",

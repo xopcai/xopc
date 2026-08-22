@@ -16,9 +16,9 @@ import { Banner, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppToast } from '../../components/AppToast';
-import { GlobalConnectionStatusBar } from '../gateway/GlobalConnectionStatusBar';
+import { ConnectionInterventionBanner } from '../gateway/ConnectionInterventionBanner';
 import { RouteOverrideToastView } from '../gateway/RouteOverrideToastView';
-import { TOAST_BOTTOM_LIFT_ABOVE_BAR, TOAST_DURATION_DEFAULT, TOAST_DURATION_STATUS } from '../../constants/toast';
+import { TOAST_BOTTOM_LIFT_ABOVE_BAR, TOAST_DURATION_DEFAULT } from '../../constants/toast';
 import { t } from '../../i18n/messages';
 import { queryKeys } from '../../query/keys';
 import { FLOATING_BOTTOM_OFFSET, floatingBottomPadding } from '../../theme';
@@ -27,7 +27,6 @@ import { AgentPickerSheet } from './AgentPickerSheet';
 import { ChatComposer } from './ChatComposer';
 import { ChatHeader } from './ChatHeader';
 import { ChatOverlayDismissHandle } from './ChatOverlayDismissHandle';
-import { ChatStreamNotice } from './ChatStreamNotice';
 import { ClarifyPrompt } from './ClarifyPrompt';
 import { GatewayPickerSheet } from './GatewayPickerSheet';
 import { MessageList } from './MessageList';
@@ -54,7 +53,6 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
   const {
     sessionKey,
     urlSessionKey,
-    isDark,
     colors,
     keyboardVisible,
     m,
@@ -77,7 +75,6 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
     gatewayProfiles,
     activeGatewayId,
     gatewayOnline,
-    routeSwitchToast,
     routeOverrideToast,
     agentSheetVisible,
     setAgentSheetVisible,
@@ -94,6 +91,7 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
     handleComposerSend,
     handleUserMessageCopy,
     handleUserMessageEdit,
+    handleUserMessageRetry,
     handleAssistantCopy,
     handleAssistantRegenerate,
     handleGatewaySelect,
@@ -143,7 +141,7 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
         />
       </AnimatedView>
 
-      <GlobalConnectionStatusBar
+      <ConnectionInterventionBanner
         onOpenSettings={handleGatewayManageSettings}
         onReconnect={openReconnectLanding}
       />
@@ -165,16 +163,6 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
             <Text variant="bodySmall" style={{ opacity: 0.65 }}>{m.common.loading}</Text>
           </View>
         ) : null}
-
-        <ChatStreamNotice
-          isDark={isDark}
-          reconnecting={chat.streamReconnecting}
-          reconnectingLabel={m.chat.streamReconnecting}
-          resumeVisible={!chat.streaming && chat.resumePromptVisible && !chat.streamReconnecting}
-          resumeLabel={m.chat.resumeBanner}
-          resumeActionLabel={m.chat.resumeButton}
-          onResume={() => { void chat.resume({ background: true }); }}
-        />
 
         <View style={styles.listFill}>
           <MessageList
@@ -223,6 +211,7 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
             onSuggestionSend={handleStarterPrefill}
             onUserMessageCopy={handleUserMessageCopy}
             onUserMessageEdit={handleUserMessageEdit}
+            onUserMessageRetry={handleUserMessageRetry}
             onAssistantCopy={handleAssistantCopy}
             onAssistantRegenerate={handleAssistantRegenerate}
             networkUnreachableTip={null}
@@ -281,16 +270,6 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
         bottomLift={TOAST_BOTTOM_LIFT_ABOVE_BAR}
       >
         {chat.snackMsg}
-      </AppToast>
-
-      <AppToast
-        key={routeSwitchToast?.key ?? 'none'}
-        visible={Boolean(routeSwitchToast)}
-        onDismiss={() => { /* hook auto-clears */ }}
-        duration={TOAST_DURATION_STATUS}
-        bottomLift={TOAST_BOTTOM_LIFT_ABOVE_BAR}
-      >
-        {routeSwitchToast?.message ?? ''}
       </AppToast>
 
       <RouteOverrideToastView

@@ -4,6 +4,8 @@ import { fetchGatewayConfigSwrResponse, revalidateGatewayConfig } from '@/featur
 
 export type UserProfile = {
   callName: string;
+  role: string;
+  primaryGoal: string;
   pronouns: string;
   timezone: string;
   locale: string;
@@ -80,6 +82,31 @@ export type UserContextSettings = {
   privacy: { sensitiveWritePolicy: 'deny' | 'confirm' | 'allow' };
 };
 
+export type UnderstandingSourceGrant = {
+  id: string;
+  sourceKey: string;
+  adapterId: string;
+  category: string;
+  platform: 'darwin' | 'win32' | 'linux' | 'all';
+  displayName: string;
+  status: 'active' | 'revoked';
+  accessMode: 'once' | 'continuous';
+  retentionPolicy: 'metadata_only' | 'derived_only' | 'bounded_raw';
+  processingPolicy: 'local_only' | 'remote_allowed';
+  lastCollectedAt?: number;
+  updatedAt: number;
+};
+
+export type UserFocus = {
+  id: string;
+  title: string;
+  summary: string;
+  horizon: 'current' | 'ongoing' | 'long_term';
+  status: 'candidate' | 'active' | 'paused' | 'completed' | 'rejected';
+  confidence: number;
+  updatedAt: number;
+};
+
 export function detectBrowserTimezone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 }
@@ -119,7 +146,7 @@ export async function fetchUserProfile(): Promise<{ profile: UserProfile; sugges
   return fetchJson(apiUrl('/api/you/profile'));
 }
 
-export function updateUserProfile(patch: Partial<Pick<UserProfile, 'callName' | 'pronouns' | 'timezone' | 'locale' | 'accessibility'>>): Promise<{ profile: UserProfile }> {
+export function updateUserProfile(patch: Partial<Pick<UserProfile, 'callName' | 'role' | 'primaryGoal' | 'pronouns' | 'timezone' | 'locale' | 'accessibility'>>): Promise<{ profile: UserProfile }> {
   return fetchJson(apiUrl('/api/you/profile'), {
     method: 'PATCH',
     body: JSON.stringify(patch),
@@ -160,4 +187,29 @@ export function updateCollaborationRule(id: string, patch: { statement?: string;
 
 export function deleteCollaborationRule(id: string): Promise<{ ok: true }> {
   return fetchJson(apiUrl(`/api/you/rules/${encodeURIComponent(id)}`), { method: 'DELETE' });
+}
+
+export async function fetchUnderstandingSourceGrants(): Promise<UnderstandingSourceGrant[]> {
+  const response = await fetchJson<{ grants: UnderstandingSourceGrant[] }>(apiUrl('/api/understanding/sources/grants'));
+  return response.grants;
+}
+
+export function revokeUnderstandingSourceGrant(grantId: string): Promise<{ grant: UnderstandingSourceGrant }> {
+  return fetchJson(apiUrl(`/api/understanding/sources/grants/${encodeURIComponent(grantId)}?deleteDerived=true`), { method: 'DELETE' });
+}
+
+export function refreshUnderstandingSourceGrant(grantId: string): Promise<unknown> {
+  return fetchJson(apiUrl(`/api/understanding/sources/grants/${encodeURIComponent(grantId)}/refresh`), { method: 'POST' });
+}
+
+export async function fetchUserFocuses(): Promise<UserFocus[]> {
+  const response = await fetchJson<{ focuses: UserFocus[] }>(apiUrl('/api/understanding/focuses'));
+  return response.focuses;
+}
+
+export function updateUserFocusStatus(focusId: string, status: UserFocus['status']): Promise<{ focus: UserFocus }> {
+  return fetchJson(apiUrl(`/api/understanding/focuses/${encodeURIComponent(focusId)}`), {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  });
 }

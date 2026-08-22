@@ -2,6 +2,8 @@ export const USER_CONTEXT_PRINCIPAL_ID = 'local-owner';
 
 export type UserProfile = {
   callName: string;
+  role: string;
+  primaryGoal: string;
   pronouns: string;
   timezone: string;
   locale: string;

@@ -34,7 +34,7 @@ import {
   type GatewayProcessOptions,
 } from './gateway-process.js';
 import { registerAgentIpc } from './ipc/agent-ipc.js';
-import { registerPersonalContextIpc } from './ipc/personal-context-ipc.js';
+import { registerUnderstandingSourcesIpc } from './ipc/understanding-sources-ipc.js';
 import { registerFileIpc } from './ipc/file-ipc.js';
 import { registerSearchIpc } from './ipc/search-ipc.js';
 import {
@@ -939,7 +939,7 @@ app.whenReady().then(async () => {
   registerFileIpc(ipcMain, { allowedRoots: fileIpcRoots });
   registerSearchIpc(ipcMain, { allowedRoots: fileIpcRoots });
   registerAgentIpc(ipcMain);
-  registerPersonalContextIpc(ipcMain);
+  registerUnderstandingSourcesIpc(ipcMain);
   registerSystemSettingsIpc(ipcMain, {
     onLanguageChanged: (language) => {
       refreshElectronMenus(language);

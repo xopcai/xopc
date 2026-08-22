@@ -13,12 +13,16 @@ import { fetchConnectorInstances, type ConnectorInstance } from '@/features/conn
 import {
   createCollaborationRule, createUnderstanding, deleteCollaborationRule,
   deleteUnderstanding, detectBrowserTimezone, fetchUserContext, fetchUserContextSettings,
+  fetchUnderstandingSourceGrants, fetchUserFocuses,
+  refreshUnderstandingSourceGrant,
+  revokeUnderstandingSourceGrant,
   updateCollaborationRule, updateUnderstanding, updateUserProfile,
+  updateUserFocusStatus,
   updateUserContextSettings,
   type ContextConsolidationRun,
   type CollaborationRule, type UnderstandingKind, type UserContextResponse,
   type UserContextSettings,
-  type UserProfile, type UserUnderstanding,
+  type UnderstandingSourceGrant, type UserFocus, type UserProfile, type UserUnderstanding,
 } from './user-context-api';
 
 type Tab = 'profile' | 'understanding' | 'collaboration' | 'sources' | 'dreaming' | 'privacy';
@@ -31,6 +35,8 @@ const copy = {
     profile: 'Profile', understanding: 'Understanding', collaboration: 'Working agreement', sources: 'Sources', dreaming: 'Background review', privacy: 'Privacy',
     profileHint: 'Facts you provide directly. These are available across conversations.', save: 'Save', saving: 'Saving…',
     callName: 'What should xopc call you?', callNamePlaceholder: 'For example: Alex, Joyce, or Dr. Chen',
+    role: 'Your role', rolePlaceholder: 'For example: product designer, founder, or engineer',
+    primaryGoal: 'What are you mainly trying to achieve?', primaryGoalPlaceholder: 'The outcome you want xopc to optimize for',
     pronouns: 'Pronouns (optional)', pronounsPlaceholder: 'For example: she/her, he/him, they/them',
     timezone: 'Timezone', locale: 'Language / locale', detect: 'Use this device',
     understoodHint: 'Reviewable beliefs learned from your conversations and work. Inferences stay pending until confirmed.',
@@ -40,7 +46,8 @@ const copy = {
     addRule: 'Add rule', ruleStatement: 'How should xopc work with you?', category: 'Category', disable: 'Disable', enable: 'Enable',
     emptyUnderstanding: 'Nothing here yet. Tell xopc something explicitly, or confirm a suggestion after it learns one.',
     emptyRules: 'No working agreements yet.', sourceExplicit: 'You said this directly', sourceInferred: 'Inferred — may be wrong', sourceObserved: 'Observed across prior work',
-    sourcesHint: 'Connected sources can provide evidence for reviewable understanding. Connection permissions are managed separately.', manageSources: 'Manage connectors', noSources: 'No connectors are installed.', connected: 'Connected', unavailable: 'Needs attention',
+    sourcesHint: 'Review every granted source, its access mode, retention, and last collection. Revoking stops future learning.', manageSources: 'Connect another source', noSources: 'No sources are authorized.', connected: 'Connected', unavailable: 'Needs attention', revoke: 'Revoke & remove derived', refresh: 'Refresh', once: 'One-time', continuous: 'Continuous', localOnly: 'Local only', derivedOnly: 'Derived understanding only',
+    focuses: 'Current focuses', focusHint: 'Candidate focuses never activate until you confirm them.', activate: 'Activate', pause: 'Pause', complete: 'Complete', noFocuses: 'No focus candidates yet.',
     dreamingHint: 'A deterministic daily review checks expiry, contradictory evidence, and corroborated candidates. It never auto-activates an inference.', mode: 'Background review', on: 'On — propose for review', off: 'Off', reviewTime: 'Daily review time', evidenceThreshold: 'Supporting evidence required', scanLimit: 'Maximum items per run', lastRun: 'Last review', neverRun: 'Not run yet', runCompleted: 'Completed', runFailed: 'Failed', runRunning: 'Running', runItems: 'items',
     privacyHint: 'Choose how generic memory providers handle sensitive content. Structured user understanding applies stricter rules of its own.', sensitivePolicy: 'Sensitive memory writes', policyDeny: 'Do not store', policyConfirm: 'Ask before storing', policyAllow: 'Store when relevant', privacyWarning: 'Secret and regulated content is never stored as structured user understanding, regardless of this setting.',
     error: 'Could not load your context.', retry: 'Try again', updated: 'Saved',
@@ -50,6 +57,8 @@ const copy = {
     profile: '个人资料', understanding: '对你的理解', collaboration: '协作约定', sources: '数据来源', dreaming: '后台复核', privacy: '隐私',
     profileHint: '由你直接提供的事实，会在不同对话中使用。', save: '保存', saving: '保存中…',
     callName: '希望 xopc 如何称呼你？', callNamePlaceholder: '例如：Mic、Joyce、张老师',
+    role: '你的角色', rolePlaceholder: '例如：产品设计师、创业者、工程师',
+    primaryGoal: '你目前最想达成什么？', primaryGoalPlaceholder: '希望 xopc 优先帮助你实现的结果',
     pronouns: '代词（可选）', pronounsPlaceholder: '例如：she/her、he/him、they/them',
     timezone: '时区', locale: '语言 / 地区', detect: '使用本机时区',
     understoodHint: '从对话和工作中形成、可复核的理解。推断内容在你确认前保持待审核。',
@@ -59,7 +68,8 @@ const copy = {
     addRule: '添加约定', ruleStatement: '希望 xopc 如何与你协作？', category: '类别', disable: '停用', enable: '启用',
     emptyUnderstanding: '还没有内容。你可以直接告诉 xopc，或在它学到建议后进行确认。', emptyRules: '还没有协作约定。',
     sourceExplicit: '由你直接告知', sourceInferred: '推断内容，可能有误', sourceObserved: '从过往工作中观察到',
-    sourcesHint: '已连接的数据来源可以为待审核的理解提供证据，具体访问权限在连接器页面管理。', manageSources: '管理连接器', noSources: '尚未安装连接器。', connected: '已连接', unavailable: '需要处理',
+    sourcesHint: '查看每项授权的访问方式、保留策略和最近采集时间；撤销后将停止后续学习。', manageSources: '连接其他来源', noSources: '尚未授权任何来源。', connected: '已连接', unavailable: '需要处理', revoke: '撤销并删除派生理解', refresh: '立即更新', once: '仅一次', continuous: '持续更新', localOnly: '仅本地处理', derivedOnly: '仅保留派生理解',
+    focuses: '当前关注', focusHint: '候选关注不会自动生效，只有你确认后才会启用。', activate: '启用', pause: '暂停', complete: '完成', noFocuses: '还没有候选关注。',
     dreamingHint: '每天进行一次确定性复核，检查过期、矛盾证据和得到佐证的候选理解；推断内容不会自动生效。', mode: '后台复核', on: '开启并生成待审核项', off: '关闭', reviewTime: '每日复核时间', evidenceThreshold: '所需支持证据数', scanLimit: '每次最多检查', lastRun: '最近一次复核', neverRun: '尚未运行', runCompleted: '已完成', runFailed: '失败', runRunning: '运行中', runItems: '项',
     privacyHint: '选择通用记忆服务如何处理敏感内容；结构化用户理解有独立且更严格的规则。', sensitivePolicy: '敏感记忆写入', policyDeny: '不保存', policyConfirm: '保存前询问', policyAllow: '相关时允许保存', privacyWarning: '无论这里如何设置，秘密和受监管内容都不会保存为结构化用户理解。',
     error: '无法加载用户上下文。', retry: '重试', updated: '已保存',
@@ -140,18 +150,20 @@ function ProfilePanel({ profile, language, t, onChanged }: {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   useEffect(() => setDraft(profile), [profile]);
-  const field = (key: 'callName' | 'pronouns' | 'timezone' | 'locale', label: string, placeholder?: string) => (
+  const field = (key: 'callName' | 'role' | 'pronouns' | 'timezone' | 'locale', label: string, placeholder?: string) => (
     <label className="space-y-1.5 text-sm"><span className="font-medium text-fg">{label}</span><input className={inputClass} placeholder={placeholder} value={draft[key]} onChange={(event) => setDraft({ ...draft, [key]: event.target.value })} /></label>
   );
   return <Card>
     <p className="mb-5 text-sm leading-6 text-fg-muted">{t.profileHint}</p>
     <div className="grid gap-4 sm:grid-cols-2">
       {field('callName', t.callName, t.callNamePlaceholder)}
+      {field('role', t.role, t.rolePlaceholder)}
+      <label className="space-y-1.5 text-sm sm:col-span-2"><span className="font-medium text-fg">{t.primaryGoal}</span><textarea className={inputClass} rows={3} placeholder={t.primaryGoalPlaceholder} value={draft.primaryGoal} onChange={(event) => setDraft({ ...draft, primaryGoal: event.target.value })} /></label>
       {language === 'en' ? field('pronouns', t.pronouns, t.pronounsPlaceholder) : null}
       <label className="space-y-1.5 text-sm"><span className="font-medium text-fg">{t.timezone}</span><div className="flex gap-2"><input className={`${inputClass} min-w-0 flex-1`} value={draft.timezone} onChange={(event) => setDraft({ ...draft, timezone: event.target.value })} /><Button className="shrink-0 whitespace-nowrap" onClick={() => setDraft({ ...draft, timezone: detectBrowserTimezone() })}>{t.detect}</Button></div></label>
       {field('locale', t.locale)}
     </div>
-    <div className="mt-5 flex items-center gap-3"><Button variant="primary" disabled={saving} onClick={async () => { setSaving(true); setSaved(false); try { await updateUserProfile({ callName: draft.callName, pronouns: draft.pronouns, timezone: draft.timezone, locale: draft.locale, accessibility: draft.accessibility }); await onChanged(); setSaved(true); } finally { setSaving(false); } }}>{saving ? t.saving : t.save}</Button>{saved ? <span className="text-sm text-fg-muted">{t.updated}</span> : null}</div>
+    <div className="mt-5 flex items-center gap-3"><Button variant="primary" disabled={saving} onClick={async () => { setSaving(true); setSaved(false); try { await updateUserProfile({ callName: draft.callName, role: draft.role, primaryGoal: draft.primaryGoal, pronouns: draft.pronouns, timezone: draft.timezone, locale: draft.locale, accessibility: draft.accessibility }); await onChanged(); setSaved(true); } finally { setSaving(false); } }}>{saving ? t.saving : t.save}</Button>{saved ? <span className="text-sm text-fg-muted">{t.updated}</span> : null}</div>
   </Card>;
 }
 
@@ -178,10 +190,29 @@ function UnderstandingPanel({ items, language, t, onChanged }: { items: UserUnde
   </Card>;
   return <div className="space-y-5">
     <div className="flex items-start justify-between gap-4"><p className="max-w-2xl text-sm leading-6 text-fg-muted">{t.understoodHint}</p><Button variant="primary" onClick={() => setAdding(true)}><Plus className="size-4" />{t.addUnderstanding}</Button></div>
+    <FocusPanel t={t} />
     {adding ? <Card><form className="space-y-3" onSubmit={submit}><textarea autoFocus className={inputClass} rows={3} placeholder={t.statement} value={statement} onChange={(event) => setStatement(event.target.value)} /><Select value={kind} onChange={(event) => setKind(event.target.value as UnderstandingKind)}>{Object.entries(kindLabels).map(([value, label]) => <SelectOption key={value} value={value}>{label[language]}</SelectOption>)}</Select><div className="flex gap-2"><Button type="submit" variant="primary">{t.add}</Button><Button onClick={() => setAdding(false)}>{t.cancel}</Button></div></form></Card> : null}
     {review.length ? <section className="space-y-3"><h2 className="text-sm font-semibold text-fg">{t.review} · {review.length}</h2>{review.map(renderItem)}</section> : null}
     <section className="space-y-3"><h2 className="text-sm font-semibold text-fg">{t.active} · {active.length}</h2>{active.length ? active.map(renderItem) : <Empty>{t.emptyUnderstanding}</Empty>}</section>
   </div>;
+}
+
+function FocusPanel({ t }: { t: typeof copy.en | typeof copy.zh }) {
+  const { data, error, isLoading, mutate } = useSWR<UserFocus[]>('you-focuses', fetchUserFocuses);
+  if (isLoading) return <Skeleton className="h-40 rounded-2xl" />;
+  if (error) return <Empty>{t.error}</Empty>;
+  const focuses = (data ?? []).filter((focus) => focus.status !== 'rejected');
+  return <section className="space-y-3">
+    <div><h2 className="text-sm font-semibold text-fg">{t.focuses}</h2><p className="mt-1 text-xs leading-5 text-fg-muted">{t.focusHint}</p></div>
+    {focuses.length ? focuses.map((focus) => <Card key={focus.id}>
+      <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-medium text-fg">{focus.title}</p><span className="rounded-full bg-surface-muted px-2 py-0.5 text-[11px] text-fg-muted">{focus.status}</span></div><p className="mt-2 text-sm leading-6 text-fg-muted">{focus.summary}</p></div><span className="text-xs tabular-nums text-fg-subtle">{Math.round(focus.confidence * 100)}%</span></div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {focus.status !== 'active' ? <Button variant="primary" onClick={async () => { await updateUserFocusStatus(focus.id, 'active'); await mutate(); }}>{t.activate}</Button> : <Button onClick={async () => { await updateUserFocusStatus(focus.id, 'paused'); await mutate(); }}>{t.pause}</Button>}
+        <Button variant="ghost" onClick={async () => { await updateUserFocusStatus(focus.id, 'completed'); await mutate(); }}>{t.complete}</Button>
+        {focus.status === 'candidate' ? <Button variant="ghost" className="text-danger" onClick={async () => { await updateUserFocusStatus(focus.id, 'rejected'); await mutate(); }}>{t.reject}</Button> : null}
+      </div>
+    </Card>) : <Empty>{t.noFocuses}</Empty>}
+  </section>;
 }
 
 function RulesPanel({ rules, language, t, onChanged }: { rules: CollaborationRule[]; language: 'en' | 'zh'; t: typeof copy.en | typeof copy.zh; onChanged: () => Promise<unknown> }) {
@@ -197,17 +228,26 @@ function RulesPanel({ rules, language, t, onChanged }: { rules: CollaborationRul
   </div>;
 }
 
+type SourcesPanelData = { grants: UnderstandingSourceGrant[]; connectors: ConnectorInstance[] };
+
+async function fetchSourcesPanelData(): Promise<SourcesPanelData> {
+  const [grants, connectors] = await Promise.all([fetchUnderstandingSourceGrants(), fetchConnectorInstances()]);
+  return { grants, connectors };
+}
+
 function SourcesPanel({ t }: { t: typeof copy.en | typeof copy.zh }) {
-  const { data, error, isLoading, mutate } = useSWR<ConnectorInstance[]>('you-connected-sources', fetchConnectorInstances);
+  const { data, error, isLoading, mutate } = useSWR<SourcesPanelData>('you-understanding-sources', fetchSourcesPanelData);
   if (isLoading) return <Skeleton className="h-64 rounded-2xl" />;
   if (error) return <Empty>{t.error} <button className="text-accent hover:underline" onClick={() => void mutate()}>{t.retry}</button></Empty>;
-  const instances = data ?? [];
+  const grants = data?.grants ?? [];
+  const instances = data?.connectors ?? [];
   return <div className="space-y-5">
-    <div className="flex items-start justify-between gap-4"><p className="max-w-2xl text-sm leading-6 text-fg-muted">{t.sourcesHint}</p><Button asChild variant="primary"><Link to="/connectors?returnTo=%2Fyou%3Ftab%3Dsources">{t.manageSources}<ExternalLink className="size-4" /></Link></Button></div>
+    <div className="flex items-start justify-between gap-4"><p className="max-w-2xl text-sm leading-6 text-fg-muted">{t.sourcesHint}</p><Button asChild variant="primary"><Link to="/connectors?understanding=1&returnTo=%2Fyou%3Ftab%3Dsources">{t.manageSources}<ExternalLink className="size-4" /></Link></Button></div>
+    {grants.length ? <div className="grid gap-3 sm:grid-cols-2">{grants.map((grant) => <Card key={grant.id}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-medium text-fg">{grant.displayName}</p><p className="mt-1 text-xs text-fg-subtle">{grant.accessMode === 'continuous' ? t.continuous : t.once} · {grant.processingPolicy === 'local_only' ? t.localOnly : grant.retentionPolicy === 'derived_only' ? t.derivedOnly : grant.retentionPolicy}</p>{grant.lastCollectedAt ? <p className="mt-1 text-xs text-fg-subtle">{new Date(grant.lastCollectedAt).toLocaleString()}</p> : null}</div><div className="flex shrink-0 flex-col items-end gap-1">{grant.accessMode === 'continuous' ? <Button variant="ghost" onClick={async () => { await refreshUnderstandingSourceGrant(grant.id); await mutate(); }}>{t.refresh}</Button> : null}<Button variant="ghost" className="text-danger" onClick={async () => { await revokeUnderstandingSourceGrant(grant.id); await mutate(); }}>{t.revoke}</Button></div></div></Card>)}</div> : <Empty>{t.noSources}</Empty>}
     {instances.length ? <div className="grid gap-3 sm:grid-cols-2">{instances.map((instance) => {
       const ready = instance.enabled && (instance.status === 'connected' || instance.connectionStatus === 'connected' || instance.authStatus === 'connected');
       return <Card key={instance.instanceId}><div className="flex items-center justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-medium text-fg">{instance.displayName}</p><p className="mt-1 truncate text-xs text-fg-subtle">{instance.connectorId}</p></div><span className={`shrink-0 rounded-full px-2 py-1 text-xs ${ready ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning'}`}>{ready ? t.connected : t.unavailable}</span></div></Card>;
-    })}</div> : <Empty>{t.noSources}</Empty>}
+    })}</div> : null}
   </div>;
 }
 
