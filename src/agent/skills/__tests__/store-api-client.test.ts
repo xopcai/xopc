@@ -9,6 +9,7 @@ import {
   skillIdForMarketplaceInstall,
   verifyStoreArtifactSha256,
 } from '../marketplace/adapters/store/store-api-client.js';
+import { storeMarketplaceAdapter } from '../marketplace/adapters/store/adapter.js';
 
 describe('store-api-client (XOPC Store HTTP)', () => {
   const storeBase = 'https://store.xopc.ai';
@@ -65,6 +66,52 @@ describe('store-api-client (XOPC Store HTTP)', () => {
 
     it('returns undefined for invalid ids', () => {
       expect(skillIdForMarketplaceInstall('bad id')).toBeUndefined();
+    });
+  });
+
+  describe('localized categories', () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it('requests the UI locale and preserves the package category', async () => {
+      const fetchMock = vi.fn(async (input: string | URL | Request) => {
+        const url = String(input);
+        if (url.includes('/categories?')) {
+          return new Response(JSON.stringify({
+            items: [{ id: 'office-documents', label: '专业办公文档与 PDF' }],
+          }), { status: 200, headers: { 'content-type': 'application/json' } });
+        }
+        return new Response(JSON.stringify({
+          items: [{
+            id: 'document-authoring',
+            name: 'document-authoring',
+            type: 'skill',
+            category: 'office-documents',
+            description: 'Create documents',
+            downloads: 0,
+            author: { username: 'xopc', avatarUrl: null },
+            latestVersion: '0.5.0',
+            updatedAt: '1',
+          }],
+          meta: { page: 1, pageSize: 20, total: 1, totalPages: 1 },
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
+      });
+      vi.stubGlobal('fetch', fetchMock);
+      const config = ConfigSchema.parse({});
+
+      await expect(storeMarketplaceAdapter.listCategories(config, { locale: 'zh' })).resolves.toEqual([
+        { id: 'office-documents', label: '专业办公文档与 PDF' },
+      ]);
+      const packages = await storeMarketplaceAdapter.listPackages(config, { page: 1 });
+      expect(packages.items[0]).toMatchObject({
+        category: 'office-documents',
+        categories: ['office-documents'],
+      });
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://store.xopc.ai/api/v1/packages/categories?type=skill&locale=zh',
+        expect.anything(),
+      );
     });
   });
 
