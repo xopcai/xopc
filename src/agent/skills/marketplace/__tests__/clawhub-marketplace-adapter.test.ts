@@ -9,7 +9,7 @@ describe('clawHubMarketplaceAdapter', () => {
     vi.unstubAllGlobals();
   });
 
-  it('uses the install reference instead of the opaque search result id', async () => {
+  it('uses the slug accepted by detail and download APIs instead of federated ids', async () => {
     vi.stubEnv('CLAWHUB_REGISTRY', 'https://claw.test');
     vi.stubEnv('XOPC_CLAWHUB_CACHE_MS', '0');
     vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request) => {
@@ -35,7 +35,7 @@ describe('clawHubMarketplaceAdapter', () => {
 
     expect(response.items).toEqual([
       expect.objectContaining({
-        id: 'heygen-com/hyperframes',
+        id: 'hyperframes',
         name: 'Hyperframes',
       }),
     ]);

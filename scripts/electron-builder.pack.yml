@@ -107,6 +107,19 @@ mac:
     NSAppleEventsUsageDescription: 'xopc uses Apple Events only when you choose to analyze Apple Notes, Calendar, and Reminders for work understanding.'
   notarize: true
 
+dmg:
+  background: dmg-background.png
+  iconSize: 96
+  iconTextSize: 13
+  contents:
+    - x: 160
+      y: 240
+      type: file
+    - x: 380
+      y: 240
+      type: link
+      path: /Applications
+
 win:
   icon: icon.ico
   target:
