@@ -402,6 +402,8 @@ interface PackageListItem {
   categories?: string[];
   stars?: number;
   sourceLabel?: string;
+  /** Provider search relevance. Internal only; stripped before returning API rows. */
+  searchScore?: number;
 }
 
 function convertListItemToPackageItem(item: ClawHubSkillListItem): PackageListItem {
@@ -447,7 +449,28 @@ function convertSearchResultToPackageItem(
     categories: item.native?.skill?.categories ?? enrichment?.metadata?.os ?? [],
     stars: item.native?.skill?.stats?.stars ?? item.metrics?.bookmarks ?? enrichment?.stats.stars ?? 0,
     sourceLabel: item.source === 'skills-sh' ? 'skills.sh' : 'ClawHub',
+    searchScore: typeof item.score === 'number' && Number.isFinite(item.score) ? item.score : undefined,
   };
+}
+
+function sortClawHubSearchRows(rows: PackageListItem[], sort?: string): PackageListItem[] {
+  return [...rows].sort((a, b) => {
+    const aScore = a.searchScore;
+    const bScore = b.searchScore;
+    if (aScore !== undefined || bScore !== undefined) {
+      const relevanceDiff = (bScore ?? Number.NEGATIVE_INFINITY)
+        - (aScore ?? Number.NEGATIVE_INFINITY);
+      if (relevanceDiff !== 0) return relevanceDiff;
+    }
+    if (sort === 'downloads') return b.downloads - a.downloads;
+    if (sort === 'newest') return Number(b.updatedAt) - Number(a.updatedAt);
+    return 0;
+  });
+}
+
+function publicPackageItem(row: PackageListItem): Omit<PackageListItem, 'searchScore'> {
+  const { searchScore: _searchScore, ...item } = row;
+  return item;
 }
 
 function mapSortParam(sort?: string): ClawHubListSort | undefined {
@@ -496,14 +519,10 @@ export const clawHubMarketplaceAdapter: SkillsMarketplaceAdapter = {
       let rows = searchResponse.value.results
         .filter((r) => !r.source || r.source === 'clawhub')
         .map((r) => convertSearchResultToPackageItem(r, enrichmentBySlug.get(r.slug)));
-      if (params.sort === 'downloads') {
-        rows = [...rows].sort((a, b) => b.downloads - a.downloads);
-      } else if (params.sort === 'newest') {
-        rows = [...rows].sort((a, b) => Number(b.updatedAt) - Number(a.updatedAt));
-      }
+      rows = sortClawHubSearchRows(rows, params.sort);
       const total = rows.length;
       const start = (page - 1) * pageSize;
-      const items = rows.slice(start, start + pageSize);
+      const items = rows.slice(start, start + pageSize).map(publicPackageItem);
       const totalPages = Math.max(1, Math.ceil(total / pageSize));
       return { items, meta: { page, pageSize, total, totalPages }, provider: 'clawhub' };
     }
