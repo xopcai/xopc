@@ -7,6 +7,8 @@ import type { SpeechProviderConfig, SpeechProviderPlugin, SpeechSynthesisResult 
 interface XopcCloudSpeechConfig extends Record<string, unknown> {
   model?: string;
   voice?: string;
+  speed?: number;
+  instructions?: string;
   baseUrl: string;
 }
 
@@ -17,6 +19,14 @@ function availableModels() {
 
 function readConfig(config: SpeechProviderConfig): XopcCloudSpeechConfig {
   return config as XopcCloudSpeechConfig;
+}
+
+function readSpeed(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0.25 || value > 4) {
+    throw new Error('XOPC Cloud TTS speed must be between 0.25 and 4');
+  }
+  return value;
 }
 
 function extension(contentType: string | null, fallback: string): string {
@@ -35,6 +45,10 @@ export const xopcCloudSpeechProvider: SpeechProviderPlugin = {
     return {
       model,
       voice: typeof slice.voice === 'string' ? slice.voice : catalogModel?.tts?.defaultVoice,
+      speed: readSpeed(slice.speed),
+      instructions: typeof slice.instructions === 'string' && slice.instructions.trim()
+        ? slice.instructions.trim()
+        : undefined,
       baseUrl: typeof slice.baseUrl === 'string' ? slice.baseUrl : getModelCatalogStore().getSource('xopc-cloud')?.baseUrl ?? resolveXopcModelRouterUrl(),
     } satisfies XopcCloudSpeechConfig;
   },
@@ -62,13 +76,24 @@ export const xopcCloudSpeechProvider: SpeechProviderPlugin = {
     if (!model || !voice) throw new Error('XOPC Cloud TTS model or voice is unavailable');
     const catalogModel = availableModels().find((entry) => entry.id === model);
     if (!catalogModel) throw new Error(`XOPC Cloud TTS model is unavailable: ${model}`);
+    const speed = readSpeed(request.providerOverrides?.speed ?? config.speed);
+    const instructions = typeof request.providerOverrides?.instructions === 'string'
+      ? request.providerOverrides.instructions.trim()
+      : config.instructions;
     const outputFormat = request.target === 'voice-note' && catalogModel.tts?.outputFormats.includes('opus')
       ? 'opus' : catalogModel.tts?.outputFormats.includes('mp3') ? 'mp3' : catalogModel.tts?.outputFormats[0] ?? 'wav';
     const token = await getProviderAuthService().resolveApiKey('xopc-cloud');
     if (!token) throw new Error('XOPC Cloud authorization is unavailable');
     const response = await fetch(`${config.baseUrl.replace(/\/+$/, '')}/audio/speech`, {
       method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ model, input: request.text, voice, response_format: outputFormat }),
+      body: JSON.stringify({
+        model,
+        input: request.text,
+        voice,
+        response_format: outputFormat,
+        ...(speed !== undefined && catalogModel.tts?.speed ? { speed } : {}),
+        ...(instructions && catalogModel.tts?.instructions ? { instructions } : {}),
+      }),
       signal: AbortSignal.timeout(request.timeoutMs), redirect: 'error',
     });
     if (!response.ok) {
