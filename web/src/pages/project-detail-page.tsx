@@ -15,6 +15,7 @@ import { automationApi, type Automation } from '@/features/automations/automatio
 import { inferMimeTypeFromFileName } from '@/features/chat/attachments/attachment-utils-core';
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import { commandTask, createTask, fetchTask } from '@/features/tasks/home-api';
+import { taskDetailModalHref } from '@/features/tasks/task-detail-route';
 import { FileTree } from '@/features/file-tree/file-tree';
 import type { FileTreeAction, TreeEntry } from '@/features/file-tree/file-tree-types';
 import { DirectoryPickerPathField } from '@/features/fs/directory-picker-path-field';
@@ -1536,8 +1537,7 @@ export function ProjectDetailPage() {
                 {overviewTasks.length ? overviewTasks.map((item) => (
                   <Link
                     key={item.id}
-                    to={withReturnTo(`/tasks/${encodeURIComponent(item.id)}`, projectTabHref('overview'))}
-                    onClick={onProjectTabLinkClick('overview')}
+                    to={taskDetailModalHref(projectTabHref('overview'), item.id)}
                     className="block px-4 py-3 hover:bg-surface-hover"
                   >
                     <div className="flex min-w-0 items-center justify-between gap-3">

@@ -22,6 +22,7 @@ import { GatewayRealtimeBridge } from '@/features/gateway/gateway-realtime-bridg
 import { WorkspacePreviewPane } from '@/features/workspace/workspace-preview-pane';
 import { GlobalReadAloudPlayer } from '@/features/voice/global-read-aloud-player';
 import { GlobalVoiceInputShortcutHost } from '@/features/voice/global-voice-input-shortcut-host';
+import { closeTaskDetailModalHref, TASK_DETAIL_MODAL_PARAM } from '@/features/tasks/task-detail-route';
 import { OnboardingDialog } from '@/components/shell/onboarding-dialog';
 import { TopBannerStack } from '@/components/shell/top-banner-stack';
 import { UnderstandingStatusButton } from '@/features/work-discovery/understanding-status-button';
@@ -31,13 +32,16 @@ import {
 } from '@/features/work-discovery/work-discovery-navigation';
 import { cn } from '@/lib/cn';
 import { isElectronDarwin } from '@/lib/electron-window-chrome';
-import { loadWorkDiscoveryOverlay } from '@/lib/route-preload';
+import { loadTaskDetailPage, loadWorkDiscoveryOverlay } from '@/lib/route-preload';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
 
 const WorkDiscoveryOverlay = lazy(() =>
   loadWorkDiscoveryOverlay().then((module) => ({ default: module.WorkDiscoveryOverlay })),
+);
+const TaskDetailModal = lazy(() =>
+  loadTaskDetailPage().then((module) => ({ default: module.TaskDetailModal })),
 );
 
 /** Align with `ui` `navigate-to-chat` custom event from session manager. */
@@ -83,6 +87,10 @@ export function AppShell() {
   const updateReminder = useUpdateReminder();
   const previewPath = useWorkspacePreviewStore((s) => s.path);
   const showWorkDiscoveryOverlay = pathname === '/you' && isWorkDiscoveryOverlaySearch(search);
+  const taskModalId = pathname.startsWith('/tasks/')
+    ? null
+    : new URLSearchParams(search).get(TASK_DETAIL_MODAL_PARAM);
+  const taskModalBackgroundPath = closeTaskDetailModalHref(pathname, search);
   const [workDiscoveryOverlayMounted, setWorkDiscoveryOverlayMounted] = useState(showWorkDiscoveryOverlay);
 
   useEffect(() => {
@@ -102,6 +110,9 @@ export function AppShell() {
       document.querySelector<HTMLElement>('[data-work-discovery-trigger]')?.focus({ preventScroll: true });
     });
   }, [closeWorkDiscoveryOverlay, showWorkDiscoveryOverlay]);
+  const closeTaskDetailModal = useCallback(() => {
+    navigate(taskModalBackgroundPath, { replace: true });
+  }, [navigate, taskModalBackgroundPath]);
 
   if (!token) {
     return (
@@ -169,6 +180,11 @@ export function AppShell() {
       <GlobalReadAloudPlayer />
       <TokenDialog />
       <OnboardingDialog />
+      {taskModalId ? (
+        <Suspense fallback={null}>
+          <TaskDetailModal taskId={taskModalId} backgroundPath={taskModalBackgroundPath} onClose={closeTaskDetailModal} />
+        </Suspense>
+      ) : null}
       {workDiscoveryOverlayMounted ? (
         <Suspense fallback={null}>
           <WorkDiscoveryOverlay
