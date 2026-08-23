@@ -98,8 +98,9 @@ const STT_ALIBABA_FALLBACK = [
   { id: 'qwen-audio-3.0-asr-flash', name: 'Qwen Audio 3.0 ASR Flash' },
 ];
 const STT_OPENAI_FALLBACK = [
-  { id: 'gpt-4o-mini-transcribe', name: 'GPT-4o Mini Transcribe' },
+  { id: 'gpt-transcribe', name: 'GPT Transcribe' },
   { id: 'gpt-4o-transcribe', name: 'GPT-4o Transcribe' },
+  { id: 'gpt-4o-mini-transcribe', name: 'GPT-4o Mini Transcribe' },
 ];
 const STT_GROQ_MODELS_FALLBACK = [
   { id: 'whisper-large-v3-turbo', name: 'Whisper Large v3 Turbo' },

@@ -103,10 +103,10 @@ export const builtinVoiceProviderMetadata: VoiceProviderMetadata[] = [
     capability: 'stt',
     displayName: 'OpenAI',
     description: 'OpenAI transcription endpoint.',
-    models: [{ id: 'gpt-4o-mini-transcribe', name: 'GPT-4o Mini Transcribe' }, { id: 'gpt-4o-transcribe', name: 'GPT-4o Transcribe' }],
+    models: [{ id: 'gpt-transcribe', name: 'GPT Transcribe' }, { id: 'gpt-4o-transcribe', name: 'GPT-4o Transcribe' }, { id: 'gpt-4o-mini-transcribe', name: 'GPT-4o Mini Transcribe' }],
     fields: [
       { key: 'apiKey', label: 'API Key', type: 'password', secret: true, placeholder: 'sk-...', description: 'OPENAI_API_KEY' },
-      { key: 'model', label: 'Model', type: 'select', options: [{ id: 'gpt-4o-mini-transcribe', name: 'GPT-4o Mini Transcribe' }, { id: 'gpt-4o-transcribe', name: 'GPT-4o Transcribe' }], defaultValue: 'gpt-4o-mini-transcribe' },
+      { key: 'model', label: 'Model', type: 'select', options: [{ id: 'gpt-transcribe', name: 'GPT Transcribe' }, { id: 'gpt-4o-transcribe', name: 'GPT-4o Transcribe' }, { id: 'gpt-4o-mini-transcribe', name: 'GPT-4o Mini Transcribe' }], defaultValue: 'gpt-transcribe' },
       { key: 'baseUrl', label: 'Base URL', type: 'string', placeholder: 'https://api.openai.com/v1' },
       { key: 'language', label: 'Language hint', type: 'string', placeholder: 'en' },
       { key: 'prompt', label: 'Prompt', type: 'textarea' },

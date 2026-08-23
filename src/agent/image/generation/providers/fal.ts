@@ -37,17 +37,15 @@ import type {
 const log = createLogger('ImageGen:Fal');
 
 const DEFAULT_FAL_QUEUE_BASE_URL = 'https://queue.fal.run';
-export const FAL_DEFAULT_IMAGE_MODEL = 'fal-ai/flux/schnell';
+export const FAL_DEFAULT_IMAGE_MODEL = 'fal-ai/flux-2';
 const DEFAULT_TIMEOUT_MS = 600_000; // queue + inference (10 min)
 const DEFAULT_POLL_INTERVAL_MS = 1500;
 const MAX_POLL_INTERVAL_MS = 5000;
 
 export const FAL_IMAGE_MODELS: readonly string[] = [
   FAL_DEFAULT_IMAGE_MODEL,
-  'fal-ai/flux/dev',
-  'fal-ai/flux-pro/v1.1',
-  'fal-ai/flux-pro/v1.1-ultra',
-  'fal-ai/nano-banana',
+  'fal-ai/flux-2-pro',
+  'fal-ai/nano-banana-2',
 ];
 
 const FAL_CAPABILITIES: ImageGenerationProviderCapabilities = {

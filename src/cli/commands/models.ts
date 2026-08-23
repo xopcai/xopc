@@ -24,7 +24,6 @@ import { runCliOAuthLogin } from '../utils/oauth-login.js';
 
 const IMAGE_GENERATION_IDS = new Set([
   'gpt-image-2',
-  'gpt-image-1.5',
   'wan2.6-t2i',
   'wan2.7-image-pro',
   'wan2.7-image',
