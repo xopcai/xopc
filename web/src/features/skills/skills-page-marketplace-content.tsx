@@ -186,10 +186,49 @@ export function SkillsPageMarketplaceContent(p: Props) {
                       'transition-colors hover:bg-surface-hover',
                     )}
                   >
+                    <div className="flex items-start justify-between gap-2">
+                      <button
+                        type="button"
+                        className={cn(
+                          'min-w-0 flex-1 rounded-lg text-left outline-none',
+                          interaction.focusRingPanel,
+                        )}
+                        onClick={() =>
+                          void openMarketplaceDetail(packageName, row.name, row.providerId ?? undefined)
+                        }
+                      >
+                        <h3
+                          id={`mp-skill-title-${row.id}`}
+                          className="truncate text-[15px] font-semibold leading-snug tracking-tight text-fg"
+                        >
+                          {row.name}
+                        </h3>
+                      </button>
+                      {!installed ? (
+                        <Button
+                          type="button"
+                          variant="primary"
+                          className="h-8 shrink-0 whitespace-nowrap px-2.5 text-xs font-medium"
+                          disabled={mpLoading || installingMarketName === packageName}
+                          onClick={() =>
+                            void onMarketInstall(packageName, {
+                              providerOverride: row.providerId ?? null,
+                            })
+                          }
+                        >
+                          {installingMarketName === packageName ? sk.uploading : sk.marketplaceInstall}
+                        </Button>
+                      ) : (
+                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
+                          <CheckCircle2 className="size-3" aria-hidden />
+                          {sk.marketplaceInstalled}
+                        </span>
+                      )}
+                    </div>
                     <button
                       type="button"
                       className={cn(
-                        'flex min-h-0 w-full flex-1 cursor-pointer flex-col rounded-lg text-left outline-none',
+                        'mt-2 flex min-h-0 w-full flex-1 cursor-pointer flex-col rounded-lg text-left outline-none',
                         interaction.focusRingPanel,
                       )}
                       aria-labelledby={`mp-skill-title-${row.id}`}
@@ -199,20 +238,6 @@ export function SkillsPageMarketplaceContent(p: Props) {
                     >
                       <div className="flex items-start gap-3">
                         <div className="flex min-w-0 flex-1 flex-col gap-2">
-                          <div className="flex items-start justify-between gap-2">
-                            <h3
-                              id={`mp-skill-title-${row.id}`}
-                              className="min-w-0 flex-1 truncate text-[15px] font-semibold leading-snug tracking-tight text-fg"
-                            >
-                              {row.name}
-                            </h3>
-                            {installed ? (
-                              <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
-                                <CheckCircle2 className="size-3" aria-hidden />
-                                {sk.marketplaceInstalled}
-                              </span>
-                            ) : null}
-                          </div>
                           <p
                             className="line-clamp-2 text-sm leading-relaxed text-fg-muted"
                             title={row.description ? row.description : undefined}
@@ -258,25 +283,11 @@ export function SkillsPageMarketplaceContent(p: Props) {
                         </div>
                       </div>
                     </button>
-                    <div
-                      role="group"
-                      className="mt-3 flex items-center justify-end gap-1 border-t border-edge-subtle pt-3"
-                    >
-                      {!installed ? (
-                        <Button
-                          type="button"
-                          variant="primary"
-                          className="h-8 shrink-0 whitespace-nowrap px-2.5 text-xs font-medium"
-                          disabled={mpLoading || installingMarketName === packageName}
-                          onClick={() =>
-                            void onMarketInstall(packageName, {
-                              providerOverride: row.providerId ?? null,
-                            })
-                          }
-                        >
-                          {installingMarketName === packageName ? sk.uploading : sk.marketplaceInstall}
-                        </Button>
-                      ) : (
+                    {installed ? (
+                      <div
+                        role="group"
+                        className="mt-3 flex items-center justify-end gap-1 border-t border-edge-subtle pt-3"
+                      >
                         <Button
                           type="button"
                           variant="secondary"
@@ -294,8 +305,8 @@ export function SkillsPageMarketplaceContent(p: Props) {
                             ? sk.previewUseInChatBusy
                             : sk.previewUseInChat}
                         </Button>
-                      )}
-                    </div>
+                      </div>
+                    ) : null}
                   </article>
                 );
               })}

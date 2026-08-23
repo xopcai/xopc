@@ -78,7 +78,12 @@ describe('searchSkillMarketplaces', () => {
 
     const config = ConfigSchema.parse(undefined);
     config.gateway.skillsStoreBaseUrl = 'https://store.test';
-    const response = await searchSkillMarketplaces({ config, query: 'react', limit: 10 });
+    const response = await searchSkillMarketplaces({
+      config,
+      query: 'react',
+      sources: ['store', 'clawhub', 'skills-sh'],
+      limit: 10,
+    });
 
     expect(response.sources).toEqual([
       { source: 'store', ok: true, count: 1 },
@@ -110,11 +115,51 @@ describe('searchSkillMarketplaces', () => {
     ]));
   });
 
+  it('searches SkillHub and returns an installable slug', async () => {
+    vi.stubEnv('XOPC_SKILLHUB_CACHE_MS', '0');
+    vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.startsWith('https://lightmake.site/api/v1/search')) {
+        return new Response(JSON.stringify({
+          results: [{
+            slug: 'react',
+            displayName: 'React',
+            description: 'React engineering',
+            downloads: 8000,
+            owner_name: 'ivangdavila',
+            source: 'clawhub',
+          }],
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      return new Response('not found', { status: 404 });
+    }));
+
+    const response = await searchSkillMarketplaces({
+      config: ConfigSchema.parse(undefined),
+      query: 'react',
+      sources: ['skillhub'],
+      limit: 10,
+    });
+
+    expect(response.sources).toEqual([{ source: 'skillhub', ok: true, count: 1 }]);
+    expect(response.results).toEqual([
+      expect.objectContaining({
+        provider: 'skillhub',
+        source: 'skillhub',
+        canonicalUrl: 'https://skillhub.cn/skills/react',
+        install: expect.objectContaining({ kind: 'skillhub', reference: 'react' }),
+      }),
+    ]);
+  });
+
   it('downloads an owner-scoped ClawHub reference without collapsing it to a slug', async () => {
     vi.stubEnv('CLAWHUB_REGISTRY', 'https://claw.test');
     const fetchMock = vi.fn(async () => new Response(new Uint8Array([80, 75, 3, 4]), {
       status: 200,
-      headers: { 'content-type': 'application/zip' },
+      headers: {
+        'content-type': 'application/zip',
+        'content-disposition': 'attachment; filename="hyperframes-2.3.4.zip"',
+      },
     }));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -130,5 +175,6 @@ describe('searchSkillMarketplaces', () => {
       { redirect: 'follow' },
     );
     expect(result.skillId).toBe('hyperframes');
+    expect(result.version).toBe('2.3.4');
   });
 });

@@ -14,8 +14,13 @@ const SkillsMarketplaceSearchSchema = Type.Object({
     description: 'Capability or task to search for, using concise English keywords when possible',
   }),
   sources: Type.Optional(Type.Array(
-    Type.Union([Type.Literal('store'), Type.Literal('clawhub'), Type.Literal('skills-sh')]),
-    { minItems: 1, maxItems: 3, uniqueItems: true },
+    Type.Union([
+      Type.Literal('store'),
+      Type.Literal('skillhub'),
+      Type.Literal('clawhub'),
+      Type.Literal('skills-sh'),
+    ]),
+    { minItems: 1, maxItems: 4, uniqueItems: true },
   )),
   limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 20, default: 10 })),
 });
@@ -44,7 +49,7 @@ export function createSkillsMarketplaceSearchTool(
     name: 'skills_marketplace_search',
     label: '🔎 Find skills',
     description:
-      'Search the XOPC Store, native ClawHub catalog, and skills.sh results federated by ClawHub. ' +
+      'Search the XOPC Store, SkillHub, native ClawHub catalog, and skills.sh results federated by ClawHub. ' +
       'Returns normalized provenance, install references, adoption metrics, partial-source errors, and a heuristic value score. Read-only; never installs a skill.',
     parameters: SkillsMarketplaceSearchSchema,
     mutatesWorkspace: false,

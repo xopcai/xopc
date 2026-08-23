@@ -6,13 +6,13 @@ import {
   type ClawHubSearchResultItem,
 } from './adapters/clawhub/adapter.js';
 
-export const SKILL_MARKETPLACE_SEARCH_SOURCES = ['store', 'clawhub', 'skills-sh'] as const;
+export const SKILL_MARKETPLACE_SEARCH_SOURCES = ['store', 'skillhub', 'clawhub', 'skills-sh'] as const;
 
 export type SkillsMarketplaceSearchSource = (typeof SKILL_MARKETPLACE_SEARCH_SOURCES)[number];
 
 export interface SkillsMarketplaceSearchResult {
   id: string;
-  provider: 'store' | 'clawhub';
+  provider: 'store' | 'skillhub' | 'clawhub';
   source: SkillsMarketplaceSearchSource;
   name: string;
   description: string;
@@ -165,6 +165,36 @@ function fromClawHub(item: ClawHubSearchResultItem): SkillsMarketplaceSearchResu
   return result;
 }
 
+function absoluteSkillHubUrl(slug: string): string | null {
+  const normalized = slug.trim();
+  return normalized ? `https://skillhub.cn/skills/${encodeURIComponent(normalized)}` : null;
+}
+
+function fromMarketplacePackage(
+  provider: 'store' | 'skillhub',
+  item: Awaited<ReturnType<typeof listMarketplacePackages>>['items'][number],
+): SkillsMarketplaceSearchResult {
+  return {
+    id: item.id,
+    provider,
+    source: provider,
+    name: item.name,
+    description: item.description,
+    author: item.author.username,
+    downloads: boundedNumber(item.downloads),
+    stars: boundedNumber(item.stars),
+    updatedAt: normalizeDate(item.updatedAt),
+    canonicalUrl: provider === 'skillhub' ? absoluteSkillHubUrl(item.id) : null,
+    install: {
+      kind: provider,
+      reference: provider === 'store' ? item.name : item.id,
+      sourceUrl: null,
+    },
+    security: { status: 'unknown', scanners: [] },
+    valueScore: 0,
+  };
+}
+
 function dedupeAndRank(query: string, rows: SkillsMarketplaceSearchResult[]): SkillsMarketplaceSearchResult[] {
   const unique = new Map<string, SkillsMarketplaceSearchResult>();
   for (const row of rows) {
@@ -201,26 +231,27 @@ export async function searchSkillMarketplaces(params: {
           pageSize: fetchLimit,
           sort: 'downloads',
         }, 'store');
-        for (const item of response.items) {
-          rows.push({
-            id: item.id,
-            provider: 'store',
-            source: 'store',
-            name: item.name,
-            description: item.description,
-            author: item.author.username,
-            downloads: boundedNumber(item.downloads),
-            stars: boundedNumber(item.stars),
-            updatedAt: normalizeDate(item.updatedAt),
-            canonicalUrl: null,
-            install: { kind: 'store', reference: item.name, sourceUrl: null },
-            security: { status: 'unknown', scanners: [] },
-            valueScore: 0,
-          });
-        }
+        for (const item of response.items) rows.push(fromMarketplacePackage('store', item));
         statuses.push({ source: 'store', ok: true, count: response.items.length });
       } catch (error) {
         statuses.push({ source: 'store', ok: false, count: 0, error: String(error) });
+      }
+    })());
+  }
+
+  if (requested.has('skillhub')) {
+    jobs.push((async () => {
+      try {
+        const response = await listMarketplacePackages(params.config, {
+          q: params.query,
+          page: 1,
+          pageSize: fetchLimit,
+          sort: 'downloads',
+        }, 'skillhub');
+        for (const item of response.items) rows.push(fromMarketplacePackage('skillhub', item));
+        statuses.push({ source: 'skillhub', ok: true, count: response.items.length });
+      } catch (error) {
+        statuses.push({ source: 'skillhub', ok: false, count: 0, error: String(error) });
       }
     })());
   }

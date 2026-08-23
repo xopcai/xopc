@@ -259,6 +259,14 @@ async function getClawHubSkillFileText(slug: string, filePath: string, version?:
   return text.length > MAX_CLAWHUB_FILE_BYTES ? text.slice(0, MAX_CLAWHUB_FILE_BYTES) : text;
 }
 
+function versionFromDownloadDisposition(value: string | null, slug: string): string | undefined {
+  const filename = value?.match(/filename="?([^";]+)"?/i)?.[1]?.trim();
+  const prefix = `${slug}-`;
+  if (!filename?.startsWith(prefix) || !filename.toLowerCase().endsWith('.zip')) return undefined;
+  const resolved = filename.slice(prefix.length, -4).trim();
+  return resolved || undefined;
+}
+
 async function downloadClawHubSkillZip(
   reference: string,
   version?: string,
@@ -290,7 +298,10 @@ async function downloadClawHubSkillZip(
       `ClawHub download [${slug}] exceeds size limit (${arrayBuf.byteLength} > ${MAX_SKILL_ZIP_BYTES})`,
     );
   }
-  return { buffer: Buffer.from(arrayBuf), version: version?.trim() || 'latest', slug };
+  const resolvedVersion = version?.trim()
+    || versionFromDownloadDisposition(res.headers.get('content-disposition'), slug)
+    || 'latest';
+  return { buffer: Buffer.from(arrayBuf), version: resolvedVersion, slug };
 }
 
 function pickClawHubDocFilePath(files: ClawHubVersionFile[]): string | null {
@@ -414,10 +425,10 @@ function convertSearchResultToPackageItem(
   enrichment?: ClawHubSkillListItem,
 ): PackageListItem {
   return {
-    // Federated search ids (for example `clawhub:<opaque-id>`) identify the
-    // search row, but cannot be passed to ClawHub's download endpoint. Keep the
-    // installable owner/slug reference as the package id consumed by the UI.
-    id: item.install?.reference ?? item.slug,
+    // ClawHub detail and browse APIs use the globally unique slug. Federated
+    // result ids are opaque, while owner/slug install references are rejected
+    // by the detail endpoint and cannot be matched to an installed skill id.
+    id: item.slug,
     name: item.displayName || item.slug,
     type: 'skill',
     description: item.summary || '',

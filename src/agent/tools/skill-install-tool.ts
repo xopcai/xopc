@@ -26,7 +26,7 @@ export interface SkillInstallToolResult {
 }
 
 export interface MarketplaceSkillInstallToolOptions {
-  provider: 'store' | 'clawhub';
+  provider: 'store' | 'skillhub' | 'clawhub';
   name: string;
   version?: string;
   target?: SkillInstallTarget;
@@ -37,7 +37,7 @@ export interface MarketplaceSkillInstallToolOptions {
 export interface MarketplaceSkillInstallToolResult {
   skillId: string;
   path: string;
-  provider: 'store' | 'clawhub';
+  provider: 'store' | 'skillhub' | 'clawhub';
   name: string;
   version?: string;
   target?: SkillInstallTarget;
@@ -56,7 +56,11 @@ const SkillInstallSchema = Type.Object({
     description:
       'Explicit source install: Git URL, GitHub repository URL, https .zip/.tar.gz URL, file:// URL, or local archive/path.',
   })),
-  provider: Type.Optional(Type.Union([Type.Literal('store'), Type.Literal('clawhub')], {
+  provider: Type.Optional(Type.Union([
+    Type.Literal('store'),
+    Type.Literal('skillhub'),
+    Type.Literal('clawhub'),
+  ], {
     description: 'Marketplace provider. Use with name; copy it from skills_marketplace_search.',
   })),
   name: Type.Optional(Type.String({
@@ -95,7 +99,7 @@ export function createSkillInstallTool(deps: SkillInstallToolDeps): AgentTool {
     name: 'skill_install',
     label: 'Install skill',
     description:
-      'Install an xopc skill from a Store/ClawHub marketplace result or an explicit source. ' +
+      'Install an xopc skill from a Store/SkillHub/ClawHub marketplace result or an explicit source. ' +
       'Use only when the user clearly asks to install or update a skill; never treat search or a pasted URL as installation consent.',
     parameters: SkillInstallSchema,
     async execute(_toolCallId: string, params: any): Promise<AgentToolResult<{}>> {
@@ -105,9 +109,9 @@ export function createSkillInstallTool(deps: SkillInstallToolDeps): AgentTool {
       const sessionKey = deps.getSessionKey?.();
 
       if (provider || name) {
-        if (provider !== 'store' && provider !== 'clawhub') {
+        if (provider !== 'store' && provider !== 'skillhub' && provider !== 'clawhub') {
           return {
-            content: [{ type: 'text', text: 'Marketplace installs require provider: store or clawhub.' }],
+            content: [{ type: 'text', text: 'Marketplace installs require provider: store, skillhub, or clawhub.' }],
             details: { errorCode: 'missing_provider' },
           };
         }
