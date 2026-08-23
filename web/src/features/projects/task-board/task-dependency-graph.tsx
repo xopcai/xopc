@@ -17,8 +17,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
+import { taskDetailModalHref } from '@/features/tasks/task-detail-route';
 import { cn } from '@/lib/cn';
-import { withReturnTo } from '@/lib/navigation-return';
 
 import { blockedChainTaskIds, layoutTaskGraph, relatedTaskIds } from './task-dependency-graph-model';
 
@@ -192,7 +192,7 @@ export function TaskDependencyGraph({ tasks, dependencyEdges, returnTo, copy }: 
                   </ul>
                 </div>
               ) : null}
-              <Link to={withReturnTo(`/tasks/${encodeURIComponent(selectedTask.id)}`, returnTo)} className="mt-4 inline-flex items-center gap-1.5 text-xs font-medium text-accent-fg hover:underline">
+              <Link to={taskDetailModalHref(returnTo, selectedTask.id)} className="mt-4 inline-flex items-center gap-1.5 text-xs font-medium text-accent-fg hover:underline">
                 <ExternalLink className="size-3.5" aria-hidden />
                 {copy.openTask}
               </Link>
