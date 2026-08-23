@@ -279,7 +279,7 @@ export function createSessionMcpRuntime(params: {
         for (const [serverName, rawServer] of Object.entries(loaded.mcpServers)) {
           failIfDisposed();
           const resolvedServer = await resolveConnectorSecretReferences(rawServer);
-          const resolved = resolveMcpTransport(serverName, resolvedServer);
+          const resolved = await resolveMcpTransport(serverName, resolvedServer, params.cfg);
           if (!resolved) {
             continue;
           }

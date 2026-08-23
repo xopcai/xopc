@@ -93,6 +93,8 @@ import {
   isXopcDatabaseOpen,
   setSessionTaskPlan,
 } from '../../storage/sqlite/index.js';
+import { resolveStateDir } from '../../config/paths-state.js';
+import { buildRuntimeEnvironment } from '../../runtime-tools/environment.js';
 
 const log = createLogger('AgentToolsFactory');
 
@@ -174,6 +176,16 @@ export class AgentToolsFactory {
   } | null = null;
 
   constructor(private deps: ToolFactoryDeps) {}
+
+  private prepareRuntimeEnv = async (baseEnv: Record<string, string>): Promise<Record<string, string>> => {
+    const config = this.deps.getConfig?.();
+    if (!config) return baseEnv;
+    return (await buildRuntimeEnvironment({
+      stateDir: resolveStateDir(),
+      config: config.runtimeTools,
+      baseEnv,
+    })).env;
+  };
 
   private browserReadinessKey(): string {
     const cfg = this.deps.getConfig?.();
@@ -377,11 +389,13 @@ export class AgentToolsFactory {
       find,
       createExecCommandTool(workspace, {
         getSkillPassthroughEnvVarNames: this.deps.getSkillPassthroughEnvVarNames,
+        prepareEnv: this.prepareRuntimeEnv,
       }),
       createManagedJobTool(
         workspace,
         () => this.deps.getCurrentContext()?.sessionKey,
         this.deps.getSkillPassthroughEnvVarNames,
+        this.prepareRuntimeEnv,
       ),
       createWebSearchTool(() => this.deps.getConfig?.()),
       createWebFetchTool(() => this.deps.getConfig?.()),

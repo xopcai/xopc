@@ -33,6 +33,7 @@ export const ROOT_HELP_COMMANDS: RootHelpCommand[] = [
   { name: 'session', description: 'Session management commands' },
   { name: 'project', description: 'Manage long-running projects' },
   { name: 'doctor [options]', description: 'Check xopc installation health and diagnose common issues' },
+  { name: 'runtime', description: 'Manage Node.js and Python tool runtimes used by agents' },
   { name: 'update [options]', description: 'Check for and install xopc updates' },
   { name: 'logs', description: 'Manage and query logs' },
   { name: 'config [options]', description: 'View and edit configuration' },

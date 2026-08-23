@@ -9,6 +9,7 @@
     "channels": "Channels",
     "devices": "Devices & tools",
     "gateway": "Gateway",
+    "runtimes": "Tool runtimes",
     "heartbeat": "Heartbeat",
     "tunnel": "Remote access",
     "remote-access": "Remote access",
@@ -22,6 +23,47 @@
   },
   "settingsPage": {
     "comingSoon": "Settings · {{title}} (coming soon)."
+  },
+  "runtimeToolsSettings": {
+    "title": "Tool runtimes",
+    "subtitle": "Manage the isolated Node.js and Python environments used by agents, MCP servers, and skills.",
+    "loadError": "Could not load runtime status.",
+    "refresh": "Refresh",
+    "save": "Save policy",
+    "saving": "Saving…",
+    "prune": "Clean up",
+    "pruning": "Cleaning…",
+    "enabled": "Managed runtimes",
+    "enabledHint": "Keep agent tooling independent from shell profiles and machine-wide packages.",
+    "version": "Requested version",
+    "offlineBundle": "Offline bundle directory",
+    "offlineBundlePlaceholder": "Absolute path; leave empty for network downloads",
+    "proxy": "Download proxy",
+    "downloadSource": "Download source",
+    "gatewayBaseUrl": "Runtime gateway URL",
+    "downloadSources": {
+      "auto": "xopc.ai, then direct",
+      "websiteOnly": "xopc.ai only",
+      "directOnly": "Official upstream only"
+    },
+    "sourcePolicy": "Runtime source",
+    "provisionPolicy": "Provisioning",
+    "install": "Install",
+    "repair": "Repair",
+    "working": "Working…",
+    "unknown": "Status unavailable",
+    "runtimeNames": { "node": "Node.js", "python": "Python", "uv": "uv" },
+    "preferences": {
+      "managedFirst": "Managed first",
+      "systemFirst": "System first",
+      "managedOnly": "Managed only",
+      "systemOnly": "System only"
+    },
+    "provisions": {
+      "eager": "During setup",
+      "onDemand": "When first used",
+      "disabled": "Never install automatically"
+    }
   },
   "endpointToolsSettings": {
     "title": "Devices & tools",

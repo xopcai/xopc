@@ -5,28 +5,29 @@
  *
  */
 
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
+import { createHash } from 'node:crypto';
 import { promisify } from 'util';
 import { accessSync, constants, existsSync } from 'fs';
+import { access, mkdir, writeFile } from 'fs/promises';
 import { delimiter, join } from 'path';
+import type { RuntimeToolsConfig } from '../../config/schema.js';
+import { prepareSafeToolEnv } from '../sandbox/sanitize-env-vars.js';
+import { buildRuntimeEnvironment } from '../../runtime-tools/environment.js';
+import { ManagedRuntimeManager } from '../../runtime-tools/manager.js';
 import { createLogger } from '../../utils/logger.js';
 import type { SkillEntry, SkillInstallResult, SkillInstallSpec } from './types.js';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 const log = createLogger('SkillInstaller');
 
-export interface InstallerPreferences {
-  preferBrew: boolean;
-  nodeManager: 'pnpm' | 'npm' | 'yarn' | 'bun';
-}
-
 export interface InstallContext {
-  workspaceDir: string;
+  stateDir: string;
+  runtimeConfig: RuntimeToolsConfig;
   skillEntry: SkillEntry;
   installSpec: SkillInstallSpec;
   timeoutMs: number;
-  preferences: InstallerPreferences;
 }
 
 /**
@@ -78,58 +79,68 @@ export function resolveBrewExecutable(): string | undefined {
 /**
  * Build install command for Node.js packages
  */
-function buildNodeInstallCommand(packageName: string, manager: InstallerPreferences['nodeManager']): string[] {
-  switch (manager) {
-    case 'pnpm':
-      return ['pnpm', 'add', '-g', '--ignore-scripts', packageName];
-    case 'yarn':
-      return ['yarn', 'global', 'add', '--ignore-scripts', packageName];
-    case 'bun':
-      return ['bun', 'add', '-g', '--ignore-scripts', packageName];
-    default:
-      return ['npm', 'install', '-g', '--ignore-scripts', packageName];
-  }
+function buildNodeInstallCommand(
+  packageName: string,
+  environmentDir: string,
+): string[] {
+  return ['npm', 'install', '--prefix', environmentDir, '--ignore-scripts', '--', packageName];
+}
+
+function invalidInstallTarget(value: string | undefined): boolean {
+  return !value || value.startsWith('-') || value.includes('\0');
 }
 
 /**
  * Build install command from spec
  */
-function buildInstallCommand(spec: SkillInstallSpec, prefs: InstallerPreferences): {
+function buildInstallCommand(spec: SkillInstallSpec, environmentDir: string): {
   argv: string[] | null;
   error?: string;
 } {
   switch (spec.kind) {
     case 'brew': {
-      if (!spec.formula) {
+      if (invalidInstallTarget(spec.formula)) {
         return { argv: null, error: 'Missing brew formula' };
       }
-      return { argv: ['brew', 'install', spec.formula] };
+      return { argv: ['brew', 'install', '--formula', spec.formula!] };
     }
     
     case 'pnpm':
     case 'npm':
     case 'yarn':
     case 'bun': {
-      if (!spec.package) {
+      if (invalidInstallTarget(spec.package)) {
         return { argv: null, error: 'Missing package name' };
       }
       return {
-        argv: buildNodeInstallCommand(spec.package, prefs.nodeManager),
+        argv: buildNodeInstallCommand(spec.package!, environmentDir),
       };
     }
     
     case 'go': {
-      if (!spec.module) {
+      if (invalidInstallTarget(spec.module)) {
         return { argv: null, error: 'Missing go module' };
       }
-      return { argv: ['go', 'install', spec.module] };
+      return { argv: ['go', 'install', spec.module!] };
     }
     
     case 'uv': {
-      if (!spec.package) {
+      if (invalidInstallTarget(spec.package)) {
         return { argv: null, error: 'Missing uv package' };
       }
-      return { argv: ['uv', 'tool', 'install', spec.package] };
+      return {
+        argv: [
+          'uv',
+          'tool',
+          'install',
+          '--tool-dir',
+          join(environmentDir, 'tools'),
+          '--bin-dir',
+          join(environmentDir, 'bin'),
+          '--',
+          spec.package!,
+        ],
+      };
     }
     
     case 'download': {
@@ -152,9 +163,10 @@ async function runCommandWithTimeout(
   env?: NodeJS.ProcessEnv
 ): Promise<{ code: number | null; stdout: string; stderr: string }> {
   const [cmd, ...args] = argv;
+  if (!cmd) return { code: null, stdout: '', stderr: 'Missing executable' };
   
   try {
-    const { stdout, stderr } = await execAsync(`${cmd} ${args.join(' ')}`, {
+    const { stdout, stderr } = await execFileAsync(cmd, args, {
       timeout: timeoutMs,
       env,
       maxBuffer: 10 * 1024 * 1024, // 10MB
@@ -181,99 +193,6 @@ async function runCommandWithTimeout(
       stderr: err instanceof Error ? err.message : String(err),
     };
   }
-}
-
-/**
- * Ensure uv is installed
- */
-async function ensureUvInstalled(timeoutMs: number): Promise<SkillInstallResult | undefined> {
-  if (hasBinary('uv')) {
-    return undefined;
-  }
-  
-  // Try to install via brew
-  const brewExe = resolveBrewExecutable();
-  if (!brewExe) {
-    return {
-      ok: false,
-      message: 'uv not installed — install manually: https://docs.astral.sh/uv/getting-started/installation/',
-      stdout: '',
-      stderr: '',
-      code: null,
-    };
-  }
-  
-  const result = await runCommandWithTimeout([brewExe, 'install', 'uv'], timeoutMs);
-  if (result.code === 0) {
-    return undefined;
-  }
-  
-  return {
-    ok: false,
-    message: 'Failed to install uv (brew)',
-    stdout: result.stdout,
-    stderr: result.stderr,
-    code: result.code,
-  };
-}
-
-/**
- * Ensure Go is installed
- */
-async function ensureGoInstalled(timeoutMs: number): Promise<SkillInstallResult | undefined> {
-  if (hasBinary('go')) {
-    return undefined;
-  }
-  
-  const brewExe = resolveBrewExecutable();
-  if (brewExe) {
-    const result = await runCommandWithTimeout([brewExe, 'install', 'go'], timeoutMs);
-    if (result.code === 0) {
-      return undefined;
-    }
-    
-    return {
-      ok: false,
-      message: 'Failed to install go (brew)',
-      stdout: result.stdout,
-      stderr: result.stderr,
-      code: result.code,
-    };
-  }
-  
-  // Try apt-get on Linux
-  if (hasBinary('apt-get')) {
-    const isRoot = process.getuid?.() === 0;
-    const aptCmd = isRoot 
-      ? ['apt-get', 'install', '-y', 'golang-go']
-      : ['sudo', 'apt-get', 'install', '-y', 'golang-go'];
-    
-    // Update package index first
-    if (!isRoot) {
-      await runCommandWithTimeout(['sudo', 'apt-get', 'update', '-qq'], Math.min(timeoutMs, 30000));
-    }
-    
-    const result = await runCommandWithTimeout(aptCmd, timeoutMs);
-    if (result.code === 0) {
-      return undefined;
-    }
-    
-    return {
-      ok: false,
-      message: 'go not installed — automatic install via apt failed. Install manually: https://go.dev/doc/install',
-      stdout: result.stdout,
-      stderr: result.stderr,
-      code: result.code,
-    };
-  }
-  
-  return {
-    ok: false,
-    message: 'go not installed — install manually: https://go.dev/doc/install',
-    stdout: '',
-    stderr: '',
-    code: null,
-  };
 }
 
 /**
@@ -327,7 +246,7 @@ export function findInstallSpec(entry: SkillEntry, installId: string): SkillInst
  * Install a skill dependency
  */
 export async function installSkill(ctx: InstallContext): Promise<SkillInstallResult> {
-  const { installSpec, timeoutMs, preferences } = ctx;
+  const { installSpec, timeoutMs } = ctx;
   
   log.info({ skill: ctx.skillEntry.skill.name, kind: installSpec.kind }, 'Installing skill dependency');
   
@@ -338,23 +257,41 @@ export async function installSkill(ctx: InstallContext): Promise<SkillInstallRes
     });
   }
   
-  // Check and install prerequisites
-  if (installSpec.kind === 'uv') {
-    const uvFailure = await ensureUvInstalled(timeoutMs);
-    if (uvFailure) {
-      return uvFailure;
-    }
-  }
-  
   if (installSpec.kind === 'go') {
-    const goFailure = await ensureGoInstalled(timeoutMs);
-    if (goFailure) {
-      return goFailure;
+    if (!hasBinary('go')) {
+      return createInstallFailure({
+        message: 'go not installed — install it explicitly from https://go.dev/doc/install',
+      });
     }
   }
   
-  // Build install command
-  const command = buildInstallCommand(installSpec, preferences);
+  const environmentId = createHash('sha256')
+    .update(JSON.stringify({
+      skill: ctx.skillEntry.skill.name,
+      path: ctx.skillEntry.skill.filePath,
+      installSpec,
+    }))
+    .digest('hex')
+    .slice(0, 24);
+  const environmentDir = join(
+    ctx.stateDir,
+    'tools',
+    'environments',
+    'skills',
+    environmentId,
+  );
+  await mkdir(environmentDir, { recursive: true });
+  if (['npm', 'pnpm', 'yarn', 'bun'].includes(installSpec.kind)) {
+    await writeFile(
+      join(environmentDir, 'package.json'),
+      `${JSON.stringify({ private: true, name: `xopc-skill-${environmentId}` }, null, 2)}\n`,
+      { flag: 'wx' },
+    ).catch((error: NodeJS.ErrnoException) => {
+      if (error.code !== 'EEXIST') throw error;
+    });
+  }
+
+  const command = buildInstallCommand(installSpec, environmentDir);
   if (command.error) {
     return createInstallFailure({
       message: command.error,
@@ -369,6 +306,33 @@ export async function installSkill(ctx: InstallContext): Promise<SkillInstallRes
   
   // Resolve brew executable
   let argv = [...command.argv];
+  const runtimeManager = new ManagedRuntimeManager({
+    stateDir: ctx.stateDir,
+    config: ctx.runtimeConfig,
+  });
+  if (installSpec.kind === 'uv') {
+    const uv = await runtimeManager.resolve({ runtime: 'uv', allowProvision: true });
+    argv[0] = uv.executable;
+  } else if (['npm', 'pnpm', 'yarn', 'bun'].includes(installSpec.kind)) {
+    const node = await runtimeManager.resolve({ runtime: 'node', allowProvision: true });
+    if (node.installDir) {
+      const npmCli = process.platform === 'win32'
+        ? join(node.installDir, 'node_modules', 'npm', 'bin', 'npm-cli.js')
+        : join(node.installDir, 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js');
+      try {
+        await access(npmCli);
+      } catch {
+        return createInstallFailure({ message: 'Managed Node.js does not include npm-cli.js' });
+      }
+      argv.splice(0, 1, node.executable, npmCli);
+    } else if (process.platform === 'win32') {
+      return createInstallFailure({
+        message: 'Isolated package installation on Windows requires managed Node.js',
+      });
+    } else {
+      argv[0] = node.executables.npm ?? 'npm';
+    }
+  }
   if (installSpec.kind === 'brew') {
     const brewExe = resolveBrewExecutable();
     if (!brewExe) {
@@ -383,21 +347,14 @@ export async function installSkill(ctx: InstallContext): Promise<SkillInstallRes
     argv[0] = brewExe;
   }
   
-  // Set up environment for go installations
-  let env: NodeJS.ProcessEnv | undefined;
+  let env: NodeJS.ProcessEnv = (await buildRuntimeEnvironment({
+    stateDir: ctx.stateDir,
+    config: ctx.runtimeConfig,
+    baseEnv: prepareSafeToolEnv(process.env),
+    extraBinDirs: [join(environmentDir, 'bin'), join(environmentDir, 'node_modules', '.bin')],
+  })).env;
   if (installSpec.kind === 'go') {
-    const brewExe = resolveBrewExecutable();
-    if (brewExe) {
-      try {
-        const { stdout } = await execAsync(`${brewExe} --prefix`);
-        const prefix = stdout.trim();
-        if (prefix) {
-          env = { ...process.env, GOBIN: join(prefix, 'bin') };
-        }
-      } catch {
-        // Use default GOBIN
-      }
-    }
+    env = { ...env, GOBIN: join(environmentDir, 'bin') };
   }
   
   // Execute install command
@@ -419,14 +376,4 @@ export async function installSkill(ctx: InstallContext): Promise<SkillInstallRes
     stderr: result.stderr,
     code: result.code,
   });
-}
-
-/**
- * Get default installer preferences from config
- */
-export function getDefaultInstallerPreferences(): InstallerPreferences {
-  return {
-    preferBrew: true,
-    nodeManager: 'pnpm', // Default to pnpm as per project guidelines
-  };
 }

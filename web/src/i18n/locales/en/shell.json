@@ -32,6 +32,7 @@
     "settingsCapabilities": "Models & services",
     "settingsChannels": "Channels",
     "settingsGateway": "Gateway",
+    "settingsRuntimes": "Tool runtimes",
     "settingsDevices": "Devices & tools",
     "settingsHeartbeat": "Heartbeat",
     "settingsTunnel": "Remote access",

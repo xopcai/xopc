@@ -58,4 +58,23 @@ describe('exec_command tool', () => {
       await rm(workspace, { recursive: true, force: true });
     }
   });
+
+  it('uses the prepared runtime environment', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'xopc-exec-'));
+    try {
+      const tool = createExecCommandTool(workspace, {
+        prepareEnv: async (env) => ({ ...env, XOPC_RUNTIME_TEST: 'managed' }),
+      });
+      const node = JSON.stringify(process.execPath);
+      const result = await tool.execute('tc3', {
+        cmd: `${node} -e "process.stdout.write(process.env.XOPC_RUNTIME_TEST ?? '')"`,
+        timeoutMs: 10_000,
+      });
+
+      expect(result.details.exitCode).toBe(0);
+      expect(result.details.stdout).toBe('managed');
+    } finally {
+      await rm(workspace, { recursive: true, force: true });
+    }
+  });
 });
