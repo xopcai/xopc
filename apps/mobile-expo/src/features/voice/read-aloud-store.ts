@@ -1,8 +1,5 @@
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
-import { Asset } from 'expo-asset';
 import { create } from 'zustand';
-
-import appIcon from '../../../assets/icon.png';
 
 import { KEYS, storage } from '../../storage/mmkv';
 import {
@@ -21,7 +18,6 @@ import type { ReadAloudLiveActivityStatus } from './read-aloud-live-activity.typ
 import { splitSpeakableText } from './read-aloud-text';
 
 const PLAYBACK_OWNER = 'assistant-read-aloud';
-const READ_ALOUD_ARTWORK_URL = Asset.fromModule(appIcon as number).uri;
 const RATES = [0.75, 1, 1.25, 1.5, 2] as const;
 
 export type ReadAloudStatus = 'idle' | 'preparing' | 'playing' | 'paused' | 'error';
@@ -80,6 +76,7 @@ let player: AudioPlayer | null = null;
 let playerSetup: Promise<AudioPlayer> | null = null;
 let playerChunkIndex = 0;
 let playerChunkHasStarted = false;
+let playerHasSystemMediaControls = false;
 let cache: ReadAloudCache | null = null;
 let generation = 0;
 let finishingChunk = false;
@@ -115,6 +112,7 @@ function removePlayer(): void {
   playerSetup = null;
   playerChunkIndex = 0;
   playerChunkHasStarted = false;
+  playerHasSystemMediaControls = false;
   if (!current) return;
   try {
     current.pause();
@@ -135,8 +133,6 @@ function removePlayer(): void {
 
 function ensurePlayer(runGeneration: number): Promise<AudioPlayer> {
   if (player) return playerSetup ?? Promise.resolve(player);
-  const source = activeInput?.source;
-  if (!source) return Promise.reject(new Error('Speech source is unavailable'));
 
   const audioMode = setAudioModeAsync({
     allowsRecording: false,
@@ -152,16 +148,6 @@ function ensurePlayer(runGeneration: number): Promise<AudioPlayer> {
     });
     player = nextPlayer;
     nextPlayer.setPlaybackRate(useReadAloudStore.getState().rate);
-    nextPlayer.setActiveForLockScreen(true, {
-      title: source.title,
-      artist: 'xopc AI',
-      albumTitle: 'AI read aloud',
-      artworkUrl: READ_ALOUD_ARTWORK_URL,
-    }, {
-      isLiveStream: true,
-      showSeekBackward: false,
-      showSeekForward: false,
-    });
     claimAudioPlayback(PLAYBACK_OWNER, () => useReadAloudStore.getState().pause());
     nextPlayer.addListener('playbackStatusUpdate', (status) => {
       if (player !== nextPlayer || runGeneration !== generation || !status.isLoaded) return;
@@ -211,6 +197,22 @@ function ensurePlayer(runGeneration: number): Promise<AudioPlayer> {
     if (playerSetup === setup) playerSetup = null;
   }).catch(() => undefined);
   return setup;
+}
+
+function activateSystemMediaControls(nextPlayer: AudioPlayer): void {
+  if (playerHasSystemMediaControls) return;
+  const source = activeInput?.source;
+  if (!source) return;
+  try {
+    nextPlayer.setActiveForLockScreen(true, {
+      title: source.title,
+      artist: 'xopc AI',
+      albumTitle: 'AI read aloud',
+    });
+    playerHasSystemMediaControls = true;
+  } catch (error) {
+    console.warn('[ReadAloud] System media controls unavailable', error);
+  }
 }
 
 function resetPlayback(): void {
@@ -279,6 +281,7 @@ async function playChunk(index: number, runGeneration: number): Promise<void> {
     playerChunkHasStarted = false;
     nextPlayer.replace({ uri });
     nextPlayer.setPlaybackRate(useReadAloudStore.getState().rate);
+    activateSystemMediaControls(nextPlayer);
     finishingChunk = false;
     nextPlayer.play();
     useReadAloudStore.setState({ status: 'playing' });
