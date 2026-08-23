@@ -9,6 +9,7 @@
     "channels": "消息通道",
     "devices": "设备与工具",
     "gateway": "网关",
+    "runtimes": "工具运行时",
     "heartbeat": "心跳",
     "tunnel": "远程访问",
     "remote-access": "远程访问",
@@ -22,6 +23,47 @@
   },
   "settingsPage": {
     "comingSoon": "设置 · {{title}}（即将推出）。"
+  },
+  "runtimeToolsSettings": {
+    "title": "工具运行时",
+    "subtitle": "管理智能体、MCP 服务和技能使用的隔离 Node.js 与 Python 环境。",
+    "loadError": "无法加载运行时状态。",
+    "refresh": "刷新",
+    "save": "保存策略",
+    "saving": "保存中…",
+    "prune": "清理旧版本",
+    "pruning": "清理中…",
+    "enabled": "受管运行时",
+    "enabledHint": "智能体工具不依赖 Shell profile 或机器全局安装。",
+    "version": "目标版本",
+    "offlineBundle": "离线包目录",
+    "offlineBundlePlaceholder": "填写绝对路径；留空则联网下载",
+    "proxy": "下载代理",
+    "downloadSource": "下载来源",
+    "gatewayBaseUrl": "运行时网关地址",
+    "downloadSources": {
+      "auto": "优先 xopc.ai，失败后直连",
+      "websiteOnly": "仅使用 xopc.ai",
+      "directOnly": "仅使用官方上游"
+    },
+    "sourcePolicy": "运行时来源",
+    "provisionPolicy": "初始化时机",
+    "install": "安装",
+    "repair": "修复",
+    "working": "处理中…",
+    "unknown": "状态不可用",
+    "runtimeNames": { "node": "Node.js", "python": "Python", "uv": "uv" },
+    "preferences": {
+      "managedFirst": "受管环境优先",
+      "systemFirst": "系统环境优先",
+      "managedOnly": "仅受管环境",
+      "systemOnly": "仅系统环境"
+    },
+    "provisions": {
+      "eager": "安装/初始化时",
+      "onDemand": "首次使用时",
+      "disabled": "禁止自动安装"
+    }
   },
   "endpointToolsSettings": {
     "title": "设备与工具",

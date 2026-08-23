@@ -4,7 +4,11 @@ import {
 } from "@modelcontextprotocol/sdk/client/sse.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { FetchLike, Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
+import { getDefaultEnvironment } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { fetch as undiciFetch } from "undici";
+import type { Config } from "../../config/schema.js";
+import { resolveStateDir } from "../../config/paths-state.js";
+import { buildRuntimeEnvironment, resolveRuntimeCommand } from "../../runtime-tools/environment.js";
 import { createLogger } from "../../utils/logger.js";
 const log = createLogger("Mcp:Transport");
 import { normalizeOptionalString } from "../../utils/string-coerce.js";
@@ -74,25 +78,43 @@ function buildSseEventSourceFetch(headers: Record<string, string>): SseEventSour
   };
 }
 
-export function resolveMcpTransport(
+export async function resolveMcpTransport(
   serverName: string,
   rawServer: unknown,
-): ResolvedMcpTransport | null {
+  config?: Config,
+): Promise<ResolvedMcpTransport | null> {
   const resolved = resolveMcpTransportConfig(serverName, rawServer);
   if (!resolved) {
     return null;
   }
   if (resolved.kind === "stdio") {
+    const command = config
+      ? await resolveRuntimeCommand({
+          command: resolved.command,
+          stateDir: resolveStateDir(),
+          config: config.runtimeTools,
+          allowProvision: true,
+        })
+      : resolved.command;
+    const env = config
+      ? (await buildRuntimeEnvironment({
+          stateDir: resolveStateDir(),
+          config: config.runtimeTools,
+          baseEnv: { ...getDefaultEnvironment(), ...resolved.env },
+        })).env
+      : resolved.env;
     const transport = new XopcStdioClientTransport({
-      command: resolved.command,
+      command,
       args: resolved.args,
-      env: resolved.env,
+      env,
       cwd: resolved.cwd,
       stderr: "pipe",
     });
     return {
       transport,
-      description: resolved.description,
+      description: command === resolved.command
+        ? resolved.description
+        : `${command}${resolved.args?.length ? ` ${resolved.args.join(' ')}` : ''}`,
       transportType: "stdio",
       connectionTimeoutMs: resolved.connectionTimeoutMs,
       requestTimeoutMs: resolved.requestTimeoutMs,
