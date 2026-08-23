@@ -11,34 +11,49 @@ const log = createLogger('STT:Alibaba');
 const DEFAULT_MODEL = 'qwen-audio-3.0-asr-flash';
 const DEFAULT_BASE_URL = 'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation';
 
+function audioFormat(request: AudioTranscriptionRequest): string {
+  const extension = request.fileName.split('.').pop()?.toLowerCase();
+  if (extension === 'mpeg' || extension === 'mpga') return 'mp3';
+  if (extension === 'm4a') return 'mp4';
+  return extension || 'wav';
+}
+
 async function transcribeAudio(request: AudioTranscriptionRequest): Promise<AudioTranscriptionResult> {
   if (!request.apiKey) throw new Error('Alibaba STT API key is unavailable');
   const startedAt = Date.now();
   const model = request.model ?? DEFAULT_MODEL;
   const audio = `data:${request.mime ?? 'application/octet-stream'};base64,${request.buffer.toString('base64')}`;
   const messages: Array<Record<string, unknown>> = [];
-  if (request.prompt) messages.push({ role: 'system', content: [{ text: request.prompt }] });
-  messages.push({ role: 'user', content: [{ type: 'input_audio', input_audio: audio }] });
+  if (request.prompt) messages.push({ role: 'user', content: [{ type: 'input_text', text: request.prompt }] });
+  messages.push({ role: 'user', content: [{ type: 'input_audio', input_audio: { data: audio } }] });
   try {
     const response = await postJsonRequest(request.baseUrl ?? DEFAULT_BASE_URL, {
       timeoutMs: request.timeoutMs,
       label: 'Alibaba STT',
-      headers: { Authorization: `Bearer ${request.apiKey}` },
+      headers: { Authorization: `Bearer ${request.apiKey}`, 'X-DashScope-SSE': 'disable' },
       body: {
         model,
         input: { messages },
-        parameters: request.language ? { asr_options: { language: request.language } } : {},
+        parameters: {
+          format: audioFormat(request),
+          ...(request.language && request.language !== 'auto' ? { language_hints: [request.language] } : {}),
+        },
       },
       signal: request.signal,
     });
     const data = await response.json() as {
-      output?: { choices?: Array<{ message?: { content?: Array<{ text?: unknown }> } }> };
+      output?: { text?: unknown };
+      usage?: { duration?: unknown };
     };
-    const text = data.output?.choices?.flatMap((choice) => choice.message?.content ?? [])
-      .map((part) => part.text).find((value): value is string => typeof value === 'string');
-    if (text === undefined) throw new Error('Alibaba STT returned an invalid response');
+    const text = data.output?.text;
+    if (typeof text !== 'string') throw new Error('Alibaba STT returned an invalid response');
     log.info({ provider: 'alibaba', model, latencyMs: Date.now() - startedAt, textLength: text.length }, 'Transcription completed');
-    return { text, model, ...(request.language ? { language: request.language } : {}) };
+    const durationSeconds = Number(data.usage?.duration);
+    return {
+      text, model,
+      ...(request.language ? { language: request.language } : {}),
+      ...(Number.isFinite(durationSeconds) && durationSeconds >= 0 ? { durationSeconds } : {}),
+    };
   } catch (error) {
     if (request.signal?.aborted) throw error;
     const message = error instanceof Error ? error.message : String(error);
