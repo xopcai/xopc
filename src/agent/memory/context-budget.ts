@@ -164,10 +164,9 @@ export function pruneToolResultsToFit(input: ContextBudgetInput): {
     const textLength = getToolResultTextLength(message);
     const reducibleChars = Math.max(0, textLength - minKeepChars);
     if (reducibleChars === 0) return message;
-    const charsToRemove = Math.min(reducibleChars, overflowChars);
-    overflowChars -= charsToRemove;
+    overflowChars -= reducibleChars;
     prunedToolResults += 1;
-    return truncateToolResultMessage(message, textLength - charsToRemove, { minKeepChars });
+    return truncateToolResultMessage(message, minKeepChars, { minKeepChars });
   });
 
   return {

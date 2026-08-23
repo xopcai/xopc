@@ -297,6 +297,7 @@
       "description": "每张卡片都是 xopc 负责推进的任务，所在列由真实执行状态决定。",
       "empty": "这里还没有任务",
       "acceptanceCriteria": "{{count}} 条验收标准",
+      "blockedBy": "等待 {{count}} 个前置任务",
       "actionFailed": "任务已发生变化或无法更新，看板已恢复。",
       "create": "新建任务",
       "createTitle": "创建任务",
@@ -336,9 +337,25 @@
         "failed": "验收未通过",
         "unverified": "尚未验收"
       },
+      "views": {
+        "board": "看板",
+        "graph": "依赖图"
+      },
+      "graph": {
+        "showCompleted": "显示已完成",
+        "hideCompleted": "隐藏已完成",
+        "blockedChains": "只看阻塞链",
+        "allTasks": "查看全部",
+        "locateTask": "定位任务",
+        "openTask": "打开任务详情",
+        "empty": "当前筛选下没有可展示的任务",
+        "hint": "从左到右查看前置任务如何解锁后续任务；点击节点聚焦整条依赖链。",
+        "blockedBy": "仍在等待 {{count}} 个前置任务"
+      },
       "lanes": {
         "ready": "待推进",
         "moving": "推进中",
+        "waiting": "等待中",
         "needs_user": "需要你",
         "done": "已完成"
       }

@@ -49,10 +49,12 @@ export interface UnderstandingSourceGrant {
 export interface UnderstandingSourceItem {
   id: string;
   sourceId: string;
-  type: 'document' | 'calendar_event' | 'task' | 'note' | 'mail' | 'message' | 'code_activity';
+  type: 'document' | 'calendar_event' | 'task' | 'note' | 'mail' | 'message' | 'code_activity' | 'bookmark';
   title: string;
   text?: string;
   group?: string;
+  /** Sanitized locator. It must not contain credentials, query parameters, or fragments. */
+  resourceUri?: string;
   occurredAt?: number;
   modifiedAt?: number;
   startsAt?: number;
@@ -66,6 +68,7 @@ export interface UnderstandingSourceCollectionResult {
   sourceId: string;
   status: 'completed' | 'denied' | 'failed';
   items: UnderstandingSourceItem[];
+  checkpoint?: { fingerprint: string; collectedAt: number };
   error?: string;
 }
 
@@ -97,4 +100,3 @@ export interface UserFocus {
   createdAt: number;
   updatedAt: number;
 }
-

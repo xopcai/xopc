@@ -114,10 +114,64 @@ export function SkillsPageCatalogContent(p: Props) {
                   : 'bg-amber-50/30 hover:bg-amber-50/50 dark:bg-amber-950/20',
               )}
             >
+              <div className="flex items-start gap-2">
+                <button
+                  type="button"
+                  className={cn(
+                    'min-w-0 flex-1 cursor-pointer rounded-lg text-left outline-none',
+                    interaction.focusRingPanel,
+                  )}
+                  aria-labelledby={`catalog-skill-title-${row.directoryId}`}
+                  onClick={() => void openSkillDetail(row)}
+                >
+                  <h3
+                    id={`catalog-skill-title-${row.directoryId}`}
+                    className="truncate text-[15px] font-semibold leading-8 tracking-tight text-fg"
+                  >
+                    {row.name}
+                  </h3>
+                </button>
+                <span
+                  className={cn(
+                    'hidden shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium xl:inline-flex',
+                    enabled
+                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                      : 'border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200',
+                  )}
+                >
+                  {enabled ? (
+                    <CheckCircle2 className="size-3" aria-hidden />
+                  ) : (
+                    <CircleAlert className="size-3" aria-hidden />
+                  )}
+                  {enabled ? sk.statusEnabled : sk.statusDisabled}
+                </span>
+                {!enabled ? (
+                  <Button
+                    type="button"
+                    variant="primary"
+                    className="h-8 shrink-0 whitespace-nowrap px-2.5 text-xs font-medium"
+                    disabled={togglingSkillName === row.name}
+                    onClick={() => void onSkillToggle(row.name, true)}
+                  >
+                    {togglingSkillName === row.name ? sk.uploading : sk.detailModalEnable}
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="h-8 shrink-0 whitespace-nowrap px-2.5 text-xs font-medium"
+                    disabled={usingSkillInChatName === row.name || togglingSkillName === row.name}
+                    onClick={() => void onUseSkillInChat({ name: row.name, source: 'catalog' })}
+                  >
+                    {usingSkillInChatName === row.name ? sk.previewUseInChatBusy : sk.previewUseInChat}
+                  </Button>
+                )}
+              </div>
               <button
                 type="button"
                 className={cn(
-                  'flex min-h-0 w-full flex-1 cursor-pointer flex-col rounded-lg text-left outline-none',
+                  'mt-2 flex min-h-0 w-full flex-1 cursor-pointer flex-col rounded-lg text-left outline-none',
                   interaction.focusRingPanel,
                 )}
                 aria-labelledby={`catalog-skill-title-${row.directoryId}`}
@@ -125,29 +179,6 @@ export function SkillsPageCatalogContent(p: Props) {
               >
                 <div className="flex items-start gap-3">
                   <div className="flex min-w-0 flex-1 flex-col gap-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <h3
-                        id={`catalog-skill-title-${row.directoryId}`}
-                        className="min-w-0 flex-1 truncate text-[15px] font-semibold leading-snug tracking-tight text-fg"
-                      >
-                        {row.name}
-                      </h3>
-                      <span
-                        className={cn(
-                          'inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium',
-                          enabled
-                            ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-                            : 'border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200',
-                        )}
-                      >
-                        {enabled ? (
-                          <CheckCircle2 className="size-3" aria-hidden />
-                        ) : (
-                          <CircleAlert className="size-3" aria-hidden />
-                        )}
-                        {enabled ? sk.statusEnabled : sk.statusDisabled}
-                      </span>
-                    </div>
                     <p
                       className="line-clamp-2 text-sm leading-relaxed text-fg-muted"
                       title={row.description ? row.description : undefined}
@@ -179,32 +210,6 @@ export function SkillsPageCatalogContent(p: Props) {
                   </div>
                 </div>
               </button>
-              <div
-                role="group"
-                className="mt-3 flex items-center justify-end gap-1 border-t border-edge-subtle pt-3"
-              >
-                {!enabled ? (
-                  <Button
-                    type="button"
-                    variant="primary"
-                    className="h-8 shrink-0 whitespace-nowrap px-2.5 text-xs font-medium"
-                    disabled={togglingSkillName === row.name}
-                    onClick={() => void onSkillToggle(row.name, true)}
-                  >
-                    {togglingSkillName === row.name ? sk.uploading : sk.detailModalEnable}
-                  </Button>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="h-8 shrink-0 whitespace-nowrap px-2.5 text-xs font-medium"
-                    disabled={usingSkillInChatName === row.name || togglingSkillName === row.name}
-                    onClick={() => void onUseSkillInChat({ name: row.name, source: 'catalog' })}
-                  >
-                    {usingSkillInChatName === row.name ? sk.previewUseInChatBusy : sk.previewUseInChat}
-                  </Button>
-                )}
-              </div>
             </article>
             );
           })}

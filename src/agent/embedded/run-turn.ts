@@ -254,7 +254,10 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
         },
         'Sending messages to AI',
       );
-      return streamFnWithXopcExtensions(streamModel, effectiveContext, options);
+      return streamFnWithXopcExtensions(streamModel, effectiveContext, {
+        ...options,
+        ...(params.cacheRetention ? { cacheRetention: params.cacheRetention } : {}),
+      });
     };
     session.agent.streamFunction = loggingStreamFn;
 
