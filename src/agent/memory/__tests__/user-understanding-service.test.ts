@@ -9,7 +9,7 @@ import {
   openXopcDatabase, resetXopcDatabaseSingletonForTest,
 } from '../../../storage/sqlite/index.js';
 import {
-  extractExplicitUnderstandingCandidates, UserUnderstandingService,
+  extractExplicitUnderstandingCandidates, extractHighSignalUnderstandingCandidates, UserUnderstandingService,
 } from '../understanding/service.js';
 
 const BASE_CANDIDATE = {
@@ -46,12 +46,47 @@ describe('UserUnderstandingService', () => {
     expect(extractExplicitUnderstandingCandidates('Can you explain the gateway routes?')).toEqual([]);
   });
 
+  it('keeps recurring high-signal preferences as candidates until the user confirms them', async () => {
+    expect(extractExplicitUnderstandingCandidates('以后请直接执行，不用每次先问我。')).toEqual([]);
+    const candidates = extractHighSignalUnderstandingCandidates('以后请直接执行，不用每次先问我。');
+    expect(candidates[0]).toMatchObject({ kind: 'boundary', explicitness: 'observed' });
+
+    const result = await new UserUnderstandingService().reviewTurn({
+      userContent: '以后请直接执行，不用每次先问我。',
+      assistantContent: '好的。',
+      sessionKey: 'webchat:test',
+    });
+    expect(result.createdRecords[0]).toMatchObject({ status: 'candidate' });
+    expect(getUnderstanding(result.createdRecords[0]!.id)?.status).toBe('candidate');
+  });
+
+  it('does not infer a durable preference from an ordinary one-off request', () => {
+    expect(extractHighSignalUnderstandingCandidates('Please explain this route concisely.')).toEqual([]);
+    expect(extractHighSignalUnderstandingCandidates('帮我直接修改这个文件。')).toEqual([]);
+  });
+
   it('stores explicit understanding and deduplicates by canonical key and scope', async () => {
     const service = new UserUnderstandingService();
     const candidate = { ...BASE_CANDIDATE, kind: 'preference' as const, content: 'Prefer concise answers.', canonicalKey: 'preference:concise' };
     expect(await service.applyCandidates([candidate], {})).toMatchObject({ created: 1, deduplicated: 0 });
     expect(await service.applyCandidates([candidate], {})).toMatchObject({ created: 0, deduplicated: 1 });
     expect(listUnderstandings()).toHaveLength(1);
+  });
+
+  it('deduplicates small wording variations without merging opposite preferences', async () => {
+    const service = new UserUnderstandingService();
+    const first = await service.applyCandidates([
+      { ...BASE_CANDIDATE, kind: 'preference', content: 'Prefer concise answers.' },
+    ], {});
+    expect(await service.applyCandidates([
+      { ...BASE_CANDIDATE, kind: 'preference', content: 'I prefer concise answers.' },
+    ], {})).toMatchObject({ created: 0, deduplicated: 1 });
+    const opposite = await service.applyCandidates([
+      { ...BASE_CANDIDATE, kind: 'preference', content: 'I do not prefer concise answers.' },
+    ], {});
+    expect(opposite).toMatchObject({ created: 1, deduplicated: 0 });
+    expect(getUnderstanding(first.createdRecords[0]!.id)?.status).toBe('archived');
+    expect(getUnderstanding(opposite.createdRecords[0]!.id)?.supersedesId).toBe(first.createdRecords[0]!.id);
   });
 
   it('scopes project facts to the workspace while keeping preferences global', async () => {

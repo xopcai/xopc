@@ -1,5 +1,3 @@
-import { createHash } from 'node:crypto';
-
 import {
   createContextEvidence,
   createUnderstanding,
@@ -9,6 +7,11 @@ import {
   setUnderstandingStatus,
 } from '../../../storage/sqlite/index.js';
 import type { UnderstandingKind, UserContextScope } from '../../../user-context/domain.js';
+import {
+  canonicalUnderstandingKey,
+  findContradictoryUnderstanding,
+  findDuplicateUnderstanding,
+} from '../../../user-context/understanding.js';
 import { inferMemorySensitivity, redactSensitiveMemoryText } from '../sensitivity.js';
 import { extractExplicitUnderstandingCorrectionContent } from './correction.js';
 import type { UnderstandingCandidate, UnderstandingReviewResult } from './types.js';
@@ -18,8 +21,15 @@ const EXPLICIT_PATTERNS = [
   /\b(?:please\s+)?remember(?:\s+that)?\s+(.+)/i,
   /\bkeep\s+in\s+mind(?:\s+that)?\s+(.+)/i,
   /(?:请)?记住[：:\s]*(.+)/,
-  /以后(?:都)?(?:请)?[：:\s]*(.+)/,
+];
+const HIGH_SIGNAL_PATTERNS = [
+  /(?:从现在起|今后|以后)(?:都)?(?:请)?[：:\s]*(.+)/,
   /下次(?:请)?[：:\s]*(.+)/,
+  /(?:默认|每次|每回)(?:都)?(?:请)?[：:\s]*(.+)/,
+  /((?:我|本人)(?:一直|通常|一般|更)?(?:喜欢|偏好|习惯|希望|不希望|不喜欢).+)/,
+  /\b(?:from now on|going forward|next time|by default|whenever)\b[,:\s]*(.+)/i,
+  /(\bi\s+(?:always|usually|generally)\s+(?:prefer|like|want|need|avoid)\b.+)/i,
+  /(\bi\s+(?:prefer|like|want|need)\s+.+\s+(?:every time|by default|going forward)\b.*)/i,
 ];
 const SENSITIVITY_RANK = { normal: 0, personal: 1, secret: 2, regulated: 3 } as const;
 
@@ -36,18 +46,13 @@ function normalizeContent(raw: string): string {
 }
 
 function inferKind(content: string): UnderstandingKind {
-  if (/\b(don't|do not|never|avoid)\b/i.test(content) || /不要|别再|禁止|底线/.test(content)) return 'boundary';
+  if (/\b(don't|do not|never|avoid)\b/i.test(content) || /不要|不用|无需|别再|禁止|底线/.test(content)) return 'boundary';
   if (/\b(prefer|preference|like)\b/i.test(content) || /喜欢|偏好|习惯/.test(content)) return 'preference';
   if (/\b(project|repo|codebase|workspace)\b/i.test(content) || /项目|仓库|代码库/.test(content)) return 'project_context';
   if (/\b(goal|plan|deadline)\b/i.test(content) || /目标|计划|截止/.test(content)) return 'long_term_goal';
   if (/\b(next time|lesson|failed|error)\b/i.test(content) || /教训|失败|错误/.test(content)) return 'task_lesson';
   if (/习惯|每周|每天|usually|routine/i.test(content)) return 'routine';
   return 'current_state';
-}
-
-function canonicalKey(kind: UnderstandingKind, content: string): string {
-  const normalized = content.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
-  return `${kind}:${createHash('sha256').update(normalized).digest('hex').slice(0, 20)}`;
 }
 
 export function extractExplicitUnderstandingCandidates(userContent: string): UnderstandingCandidate[] {
@@ -62,12 +67,33 @@ export function extractExplicitUnderstandingCandidates(userContent: string): Und
   return [{
     kind,
     content,
-    canonicalKey: canonicalKey(kind, content),
+    canonicalKey: canonicalUnderstandingKey(kind, content),
     confidence: correction ? 0.98 : 0.95,
     importance: kind === 'boundary' ? 0.9 : 0.8,
     explicitness: 'explicit',
     durability: 'durable',
     sensitivity: inferMemorySensitivity(content),
+    disclosurePolicy: kind === 'boundary' ? 'silent' : 'referenceable',
+  }];
+}
+
+export function extractHighSignalUnderstandingCandidates(userContent: string): UnderstandingCandidate[] {
+  if (extractExplicitUnderstandingCorrectionContent(userContent)) return [];
+  const matched = userContent.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+    .flatMap((line) => HIGH_SIGNAL_PATTERNS.map((pattern) => pattern.exec(line)?.[1] ?? ''))
+    .map(normalizeContent)
+    .find((content) => content.length >= 6);
+  if (!matched) return [];
+  const kind = inferKind(matched);
+  return [{
+    kind,
+    content: matched,
+    canonicalKey: canonicalUnderstandingKey(kind, matched),
+    confidence: 0.85,
+    importance: kind === 'boundary' ? 0.9 : 0.75,
+    explicitness: 'observed',
+    durability: 'durable',
+    sensitivity: inferMemorySensitivity(matched),
     disclosurePolicy: kind === 'boundary' ? 'silent' : 'referenceable',
   }];
 }
@@ -85,10 +111,6 @@ function scopeForCandidate(candidate: UnderstandingCandidate, context: {
   return { type: 'global' };
 }
 
-function sameScope(left: UserContextScope, right: UserContextScope): boolean {
-  return left.type === right.type && left.id === right.id;
-}
-
 export class UserUnderstandingService {
   async reviewTurn(params: {
     userContent: string;
@@ -100,7 +122,10 @@ export class UserUnderstandingService {
     correctionTargetRecordIds?: string[];
   }): Promise<UnderstandingReviewResult> {
     void params.assistantContent;
-    const candidates = extractExplicitUnderstandingCandidates(params.userContent);
+    const explicitCandidates = extractExplicitUnderstandingCandidates(params.userContent);
+    const candidates = explicitCandidates.length > 0
+      ? explicitCandidates
+      : extractHighSignalUnderstandingCandidates(params.userContent);
     if (candidates.length === 0) {
       return { proposed: 0, created: 0, deduplicated: 0, rejected: 0, createdRecords: [] };
     }
@@ -160,23 +185,31 @@ export class UserUnderstandingService {
       const content = normalizeContent(candidate.content);
       const sensitivity = effectiveSensitivity(candidate.sensitivity, content);
       const scope = scopeForCandidate(candidate, context);
-      const key = candidate.canonicalKey ?? canonicalKey(candidate.kind, content);
+      const key = candidate.canonicalKey ?? canonicalUnderstandingKey(candidate.kind, content);
       if (content.length < 4 || candidate.confidence < 0.55 || sensitivity === 'secret'
         || sensitivity === 'regulated' || isUnderstandingSuppressed(key, scope)) {
         rejected += 1;
         continue;
       }
-      const duplicate = listUnderstandings().find((item) =>
-        item.canonicalKey === key
-        && item.status !== 'rejected'
-        && item.status !== 'archived'
-        && sameScope(item.scope, scope));
+      const duplicate = findDuplicateUnderstanding(listUnderstandings(), {
+        kind: candidate.kind,
+        statement: content,
+        canonicalKey: key,
+        scope,
+      });
       if (duplicate) {
         for (const evidenceId of evidenceIds) linkUnderstandingEvidence(duplicate.versionId, evidenceId, 'supports', candidate.confidence);
         deduplicated += 1;
         continue;
       }
       const isExplicit = candidate.explicitness === 'explicit';
+      const supersededId = correctionTarget ?? (isExplicit
+        ? findContradictoryUnderstanding(listUnderstandings(), {
+            kind: candidate.kind,
+            statement: content,
+            scope,
+          })?.id
+        : undefined);
       const record = createUnderstanding({
         kind: candidate.kind,
         canonicalKey: key,
@@ -192,12 +225,12 @@ export class UserUnderstandingService {
         changeReason: context.reviewSource === 'background' ? 'background synthesis' : 'explicit user statement',
         ...(candidate.validFrom ? { validFrom: Date.parse(candidate.validFrom) } : {}),
         ...(candidate.validTo ? { validTo: Date.parse(candidate.validTo) } : {}),
-        ...(correctionTarget ? { supersedesId: correctionTarget } : {}),
+        ...(supersededId ? { supersedesId: supersededId } : {}),
       });
       for (const evidenceId of evidenceIds) linkUnderstandingEvidence(record.versionId, evidenceId, 'supports', candidate.confidence);
-      if (correctionTarget && isExplicit) setUnderstandingStatus(correctionTarget, 'archived');
+      if (supersededId && isExplicit) setUnderstandingStatus(supersededId, 'archived');
       created += 1;
-      createdRecords.push({ id: record.id, content: record.statement, kind: record.kind });
+      createdRecords.push({ id: record.id, content: record.statement, kind: record.kind, status: record.status });
     }
     return { proposed: candidates.length, created, deduplicated, rejected, createdRecords };
   }

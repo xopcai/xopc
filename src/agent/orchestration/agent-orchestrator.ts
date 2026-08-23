@@ -188,7 +188,13 @@ export class AgentOrchestrator {
         }
       })();
 
-      await this.agentManager.afterAgentTurn(sessionKey, userPlainForMemory);
+      const understandingReview = await this.agentManager.afterAgentTurn(sessionKey, userPlainForMemory);
+      if (understandingReview?.createdRecords.length) {
+        const captured = understandingReview.createdRecords.filter((record) => record.status === 'active');
+        const candidates = understandingReview.createdRecords.filter((record) => record.status === 'candidate');
+        if (captured.length) this.onEmbeddedStreamEvent?.(sessionKey, { type: 'memory_captured', runId: turnId, records: captured });
+        if (candidates.length) this.onEmbeddedStreamEvent?.(sessionKey, { type: 'memory_candidate', runId: turnId, records: candidates });
+      }
       this.agentManager.scheduleBackgroundReviewAfterUserTurn(sessionKey);
 
       if (turnResult.ok) {

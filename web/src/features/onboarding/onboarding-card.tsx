@@ -1,4 +1,4 @@
-import { ExternalLink, X } from 'lucide-react';
+import { Check, ChevronRight, ExternalLink, ListChecks, MessageSquareText, Rocket, ShieldCheck, Sparkles, X, type LucideIcon } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useReducer } from 'react';
 import { Link } from 'react-router-dom';
 
@@ -12,10 +12,18 @@ import { dispatchConfigReload } from '@/features/gateway/dispatch-config-reload'
 import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
 import { OnboardingLanguageSwitch } from '@/features/onboarding/onboarding-language-switch';
 import { OnboardingProviderGrid } from '@/features/onboarding/onboarding-provider-grid';
+import { cn } from '@/lib/cn';
 import { OAuthProviderConnect } from '@/features/settings/models-hub/oauth-provider-connect';
 import { buildProviderConfigFromPresetProviderId } from '@/features/settings/models/models-settings-lib';
 import { fetchModelsJson, saveModelsJson } from '@/features/settings/models-json-api';
-import { detectBrowserTimezone, fetchUserProfile, updateUserProfile } from '@/features/user-context/user-context-api';
+import {
+  createCollaborationRule,
+  detectBrowserTimezone,
+  fetchUserContext,
+  fetchUserProfile,
+  updateCollaborationRule,
+  updateUserProfile,
+} from '@/features/user-context/user-context-api';
 import { fetchGlobalDefaults, updateGlobalDefaultModels } from '@/features/settings/global-defaults-api';
 import { PROVIDER_ENRICHMENT } from '@/features/settings/provider-enrichment';
 import { patchProviderApiKeys } from '@/features/settings/providers-api';
@@ -29,7 +37,9 @@ interface OnboardingCardProps {
   canDismiss?: boolean;
 }
 
-type OnboardingStep = 'callName' | 'provider' | 'apiKey';
+type OnboardingStep = 'callName' | 'collaboration' | 'provider' | 'apiKey';
+type ExecutionMode = 'act' | 'plan' | 'confirm';
+type OutputMode = 'concise' | 'balanced' | 'detailed';
 
 type OnboardingState = {
   step: OnboardingStep;
@@ -40,6 +50,8 @@ type OnboardingState = {
   callName: string;
   role: string;
   primaryGoal: string;
+  executionMode: ExecutionMode;
+  outputMode: OutputMode;
   profileLoading: boolean;
 };
 
@@ -56,6 +68,8 @@ const initialOnboarding: OnboardingState = {
   callName: '',
   role: '',
   primaryGoal: '',
+  executionMode: 'act',
+  outputMode: 'balanced',
   profileLoading: true,
 };
 
@@ -68,9 +82,59 @@ function onboardingReducer(state: OnboardingState, action: OnboardingAction): On
   }
 }
 
-const STEP_ORDER: OnboardingStep[] = ['callName', 'provider', 'apiKey'];
+const STEP_ORDER: OnboardingStep[] = ['callName', 'collaboration', 'provider', 'apiKey'];
 
 const stepNumber = (step: OnboardingStep): number => STEP_ORDER.indexOf(step) + 1;
+
+function ChoiceGroup({ label, value, options, onChange }: {
+  label: string;
+  value: string;
+  options: Array<{ value: string; title: string; hint: string; icon: LucideIcon }>;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <fieldset>
+      <legend className="mb-2.5 text-xs font-semibold uppercase tracking-[0.12em] text-fg-muted">{label}</legend>
+      <div className="grid gap-2.5 sm:grid-cols-3" role="radiogroup" aria-label={label}>
+        {options.map((option) => {
+          const selected = option.value === value;
+          const Icon = option.icon;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              className={cn(
+                'group relative min-h-28 rounded-2xl border p-3.5 text-left transition-[transform,border-color,background-color,box-shadow] duration-300 ease-[cubic-bezier(.2,.8,.2,1)]',
+                'hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent motion-reduce:transform-none motion-reduce:transition-none',
+                selected
+                  ? 'border-accent/60 bg-accent-soft/75 shadow-surface'
+                  : 'border-edge bg-surface-base/60 hover:border-edge-strong hover:bg-surface-panel',
+              )}
+              onClick={() => onChange(option.value)}
+            >
+              <span className={cn(
+                'mb-3 flex size-8 items-center justify-center rounded-xl transition-colors',
+                selected ? 'bg-accent text-white' : 'bg-surface-muted text-fg-muted group-hover:text-fg',
+              )}>
+                <Icon className="size-4" aria-hidden />
+              </span>
+              <span className="block pr-5 text-sm font-semibold text-fg">{option.title}</span>
+              <span className="mt-1 block text-xs leading-4.5 text-fg-muted">{option.hint}</span>
+              <span className={cn(
+                'absolute right-3 top-3 flex size-5 items-center justify-center rounded-full border transition-all',
+                selected ? 'scale-100 border-accent bg-accent text-white' : 'scale-90 border-edge-strong bg-transparent text-transparent',
+              )}>
+                <Check className="size-3" strokeWidth={2.5} aria-hidden />
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
 
 export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: OnboardingCardProps) {
   const language = useLocaleStore((s) => s.language);
@@ -78,10 +142,13 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
   const o = messages(language).onboarding;
 
   const [state, dispatch] = useReducer(onboardingReducer, initialOnboarding);
-  const { step, selectedProvider, apiKey, busy, error, callName, role, primaryGoal, profileLoading } = state;
+  const {
+    step, selectedProvider, apiKey, busy, error, callName, role, primaryGoal,
+    executionMode, outputMode, profileLoading,
+  } = state;
 
   const stepLabel = useMemo(
-    () => o.stepOf.replace('{{current}}', String(stepNumber(step))).replace('{{total}}', '3'),
+    () => o.stepOf.replace('{{current}}', String(stepNumber(step))).replace('{{total}}', String(STEP_ORDER.length)),
     [o.stepOf, step],
   );
 
@@ -166,12 +233,71 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
         primaryGoal: primaryGoal.trim(),
         timezone: detectBrowserTimezone(),
       });
-      dispatch({ type: 'patch', patch: { step: 'provider' } });
+      dispatch({ type: 'patch', patch: { step: 'collaboration' } });
     } catch (cause) {
       dispatch({
         type: 'patch',
         patch: { error: cause instanceof Error ? cause.message : String(cause) },
       });
+    } finally {
+      dispatch({ type: 'patch', patch: { busy: false } });
+    }
+  };
+
+  const saveCollaborationDefaults = async () => {
+    const statements = language === 'zh'
+      ? {
+          execution: executionMode === 'act'
+            ? '任务明确时直接推进并汇报结果；外部、不可逆或高风险操作前再确认。'
+            : executionMode === 'plan'
+              ? '任务明确时先给出简洁方案，再开始执行。'
+              : '执行重要动作前先向我确认。',
+          output: outputMode === 'concise'
+            ? '默认先给结论，只保留完成当前任务所需的必要信息。'
+            : outputMode === 'balanced'
+              ? '默认给出结论、核心理由和有用的下一步信息。'
+              : '默认提供完整背景、关键权衡和验证过程。',
+        }
+      : {
+          execution: executionMode === 'act'
+            ? 'When the task is clear, move it forward and report the result; pause before external, irreversible, or high-risk actions.'
+            : executionMode === 'plan'
+              ? 'When the task is clear, show a concise approach before taking action.'
+              : 'Ask me before taking meaningful action.',
+          output: outputMode === 'concise'
+            ? 'Lead with the outcome and include only the details needed for the current task.'
+            : outputMode === 'balanced'
+              ? 'Default to the outcome, core reasoning, and the next useful detail.'
+              : 'Default to complete context, key tradeoffs, and verification.',
+        };
+
+    dispatch({ type: 'patch', patch: { busy: true, error: null } });
+    try {
+      const current = await fetchUserContext();
+      const saveRule = async (
+        onboardingKey: 'execution_mode' | 'output_mode',
+        statement: string,
+        category: 'execution' | 'communication',
+      ) => {
+        const existing = current.rules.find((rule) => rule.conditions.onboardingKey === onboardingKey);
+        if (existing) {
+          await updateCollaborationRule(existing.id, { statement, status: 'active' });
+          return;
+        }
+        await createCollaborationRule({
+          statement,
+          category,
+          priority: 20,
+          conditions: { onboardingKey },
+        });
+      };
+      await Promise.all([
+        saveRule('execution_mode', statements.execution, 'execution'),
+        saveRule('output_mode', statements.output, 'communication'),
+      ]);
+      dispatch({ type: 'patch', patch: { step: 'provider' } });
+    } catch (cause) {
+      dispatch({ type: 'patch', patch: { error: cause instanceof Error ? cause.message : String(cause) } });
     } finally {
       dispatch({ type: 'patch', patch: { busy: false } });
     }
@@ -253,8 +379,9 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
   };
 
   return (
-    <div className="relative w-full max-w-xl rounded-2xl border border-edge bg-surface-panel p-6 shadow-elevated">
-      <div className="-mr-3 -mt-3 flex min-h-11 items-start justify-end gap-1">
+    <div className="xopc-onboarding-card relative flex h-[min(42rem,calc(100dvh-2rem))] w-full max-w-2xl flex-col overflow-hidden rounded-[1.75rem] border border-white/60 bg-surface-panel/95 p-6 shadow-float backdrop-blur-2xl dark:border-white/10 sm:p-8">
+      <div className="xopc-onboarding-aurora pointer-events-none absolute inset-x-0 -top-48 h-80" aria-hidden />
+      <div className="relative z-10 flex min-h-11 items-start justify-end gap-1">
         <OnboardingLanguageSwitch
           value={language}
           onChange={(nextLanguage) => {
@@ -273,16 +400,30 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
           </button>
         ) : null}
       </div>
-      <div className="mt-1 text-center">
-        <BrandLogo className="mx-auto size-11" />
-        <h2 className="mt-3 text-lg font-semibold tracking-tight text-fg">{o.title}</h2>
-        <p className="mt-1 text-sm text-fg-muted">{o.subtitle}</p>
-        <p className="mt-2 text-xs font-medium uppercase tracking-wide text-fg-muted">{stepLabel}</p>
+      <div className="relative z-10 mt-1 text-center">
+        <div className="xopc-onboarding-logo mx-auto flex size-12 items-center justify-center rounded-2xl border border-white/70 bg-white/80 shadow-surface dark:border-white/10 dark:bg-white/5">
+          <BrandLogo className="size-8" />
+        </div>
+        <h2 className="mt-3 text-xl font-semibold tracking-[-0.025em] text-fg">{o.title}</h2>
+        <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-fg-muted">{o.subtitle}</p>
+        <div className="mx-auto mt-4 flex max-w-48 items-center gap-1.5" aria-label={stepLabel}>
+          {STEP_ORDER.map((item, index) => (
+            <span
+              key={item}
+              className={cn(
+                'h-1.5 flex-1 rounded-full transition-[background-color,transform] duration-500 motion-reduce:transition-none',
+                index < stepNumber(step) ? 'scale-y-110 bg-accent' : 'bg-edge-strong/70',
+              )}
+              aria-hidden
+            />
+          ))}
+        </div>
+        <p className="mt-2 text-[11px] font-medium uppercase tracking-[0.14em] text-fg-subtle">{stepLabel}</p>
       </div>
 
-      <div className="mt-6">
+      <div className="relative z-10 mt-6 min-h-0 flex-1 overflow-y-auto px-1 [scrollbar-gutter:stable]">
         {step === 'callName' ? (
-          <div className="flex flex-col gap-4">
+          <div className="xopc-onboarding-stage mx-auto flex max-w-lg flex-col gap-4 pb-2">
             <div>
               <h3 className="text-base font-medium text-fg">{o.step0Title}</h3>
               <p className="mt-1 text-sm text-fg-muted">{o.step0Subtitle}</p>
@@ -342,8 +483,55 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
           </div>
         ) : null}
 
+        {step === 'collaboration' ? (
+          <div className="xopc-onboarding-stage mx-auto flex max-w-xl flex-col gap-5 pb-2">
+            <div className="text-center">
+              <div className="mx-auto flex size-10 items-center justify-center rounded-2xl bg-accent-soft text-accent-fg">
+                <Sparkles className="size-5" aria-hidden />
+              </div>
+              <h3 className="mt-3 text-lg font-semibold tracking-tight text-fg">{o.collaborationTitle}</h3>
+              <p className="mt-1 text-sm text-fg-muted">{o.collaborationSubtitle}</p>
+            </div>
+
+            <ChoiceGroup
+              label={o.executionLabel}
+              value={executionMode}
+              onChange={(value) => dispatch({ type: 'patch', patch: { executionMode: value as ExecutionMode } })}
+              options={[
+                { value: 'act', title: o.executionAct, hint: o.executionActHint, icon: Rocket },
+                { value: 'plan', title: o.executionPlan, hint: o.executionPlanHint, icon: ListChecks },
+                { value: 'confirm', title: o.executionConfirm, hint: o.executionConfirmHint, icon: ShieldCheck },
+              ]}
+            />
+            <ChoiceGroup
+              label={o.outputLabel}
+              value={outputMode}
+              onChange={(value) => dispatch({ type: 'patch', patch: { outputMode: value as OutputMode } })}
+              options={[
+                { value: 'concise', title: o.outputConcise, hint: o.outputConciseHint, icon: MessageSquareText },
+                { value: 'balanced', title: o.outputBalanced, hint: o.outputBalancedHint, icon: Sparkles },
+                { value: 'detailed', title: o.outputDetailed, hint: o.outputDetailedHint, icon: ListChecks },
+              ]}
+            />
+            {error ? <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
+            <div className="flex items-center justify-between gap-3 pt-1">
+              <Button type="button" variant="secondary" disabled={busy} onClick={() => dispatch({ type: 'patch', patch: { step: 'callName', error: null } })}>
+                {o.back}
+              </Button>
+              <Button
+                type="button"
+                className="min-w-32 bg-accent text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-accent-hover motion-reduce:transform-none"
+                disabled={busy}
+                onClick={() => void saveCollaborationDefaults()}
+              >
+                {busy ? o.savingCollaboration : <>{o.continue}<ChevronRight className="ml-1 size-4" aria-hidden /></>}
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
         {step === 'provider' ? (
-          <div className="flex flex-col gap-4">
+          <div className="xopc-onboarding-stage mx-auto flex max-w-xl flex-col gap-4 pb-2">
             <div>
               <h3 className="text-base font-medium text-fg">{o.step1Title}</h3>
               {callName.trim() ? (
@@ -380,7 +568,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
         ) : null}
 
         {step === 'apiKey' ? (
-          <div className="flex flex-col gap-4">
+          <div className="xopc-onboarding-stage mx-auto flex max-w-xl flex-col gap-4 pb-2">
             <div>
               <h3 className="text-base font-medium text-fg">
                 {selectedProvider === 'xopc-cloud'
@@ -446,7 +634,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
             ) : null}
             {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
             <div className="flex flex-wrap justify-between gap-2">
-              <Button type="button" variant="secondary" disabled={busy} onClick={() => dispatch({ type: 'patch', patch: { step: 'provider' } })}>
+              <Button type="button" variant="secondary" disabled={busy} onClick={() => dispatch({ type: 'patch', patch: { step: 'provider', error: null } })}>
                 {o.back}
               </Button>
               {selectedProvider !== 'xopc-cloud' ? (

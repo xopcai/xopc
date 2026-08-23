@@ -26,7 +26,7 @@ import { buildComposerDraftSeed } from '@/features/chat/session/composer-handoff
 import { ChatTimelinePanel } from '@/features/chat/timeline/chat-timeline-panel';
 import { ChatTimelineRail } from '@/features/chat/timeline/chat-timeline-rail';
 import { ClarifyPrompt } from '@/features/chat/composer/clarify-prompt';
-import { MemoryCaptureReceipt, MemoryConsentPrompt } from '@/features/chat/composer/memory-consent-prompt';
+import { MemoryCandidatePrompt, MemoryCaptureReceipt, MemoryConsentPrompt } from '@/features/chat/composer/memory-consent-prompt';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -1001,6 +1001,7 @@ export function ChatPage() {
               )}
             >
               {chatSessionKey ? <MemoryCaptureReceipt sessionKey={chatSessionKey} language={language} /> : null}
+              {chatSessionKey ? <MemoryCandidatePrompt sessionKey={chatSessionKey} language={language} /> : null}
               {chatSessionKey ? <MemoryConsentPrompt sessionKey={chatSessionKey} language={language} /> : null}
               <ClarifyPrompt
                 prompt={clarify.clarifyPrompt}

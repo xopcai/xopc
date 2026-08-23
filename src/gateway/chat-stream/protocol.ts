@@ -159,6 +159,10 @@ export type MemoryCapturedEvent = ChatStreamEnvelope<
   'memory_captured',
   { records: Array<{ id: string; content: string; kind: string }> }
 >;
+export type MemoryCandidateEvent = ChatStreamEnvelope<
+  'memory_candidate',
+  { records: Array<{ id: string; content: string; kind: string }> }
+>;
 export type RunEndEvent = ChatStreamEnvelope<'run_end', { status: ChatStreamStatus; summary?: string; petFeedback: PetFeedback }>;
 export type StreamErrorEvent = ChatStreamEnvelope<'error', { code: string; message: string; recoverable?: boolean; petFeedback: PetFeedback }>;
 
@@ -191,5 +195,6 @@ export type ChatStreamEvent =
   | ClarifyRequestEvent
   | MemoryConsentRequiredEvent
   | MemoryCapturedEvent
+  | MemoryCandidateEvent
   | RunEndEvent
   | StreamErrorEvent;

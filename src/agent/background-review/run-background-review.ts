@@ -5,6 +5,7 @@ import type { Config } from '../../config/schema.js';
 import { resolveProviderApiKeySync } from '../../auth/sync-provider-auth.js';
 import { getApiKeySync } from '../../providers/index.js';
 import { isDurableUnderstandingCandidate } from '../../user-context/understandingQuality.js';
+import { UNDERSTANDING_KINDS } from '../../user-context/domain.js';
 import { createExtensionAwareStreamFn } from '../../providers/extension-stream-bridge.js';
 import { createLogger } from '../../utils/logger.js';
 import { getSessionMetadata } from '../../storage/sqlite/index.js';
@@ -42,10 +43,7 @@ export interface RunBackgroundReviewParams {
   getConfig: () => Config | undefined;
 }
 
-const ALLOWED_UNDERSTANDING_KINDS = new Set<UnderstandingCandidate['kind']>([
-  'preference', 'boundary', 'relationship', 'project_context', 'routine',
-  'current_state', 'task_lesson', 'long_term_goal', 'derived_insight',
-]);
+const ALLOWED_UNDERSTANDING_KINDS = new Set<UnderstandingCandidate['kind']>(UNDERSTANDING_KINDS);
 const ALLOWED_SENSITIVITIES = new Set<UnderstandingCandidate['sensitivity']>([
   'normal', 'personal', 'secret', 'regulated',
 ]);

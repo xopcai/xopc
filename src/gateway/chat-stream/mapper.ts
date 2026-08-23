@@ -147,8 +147,9 @@ export class ChatStreamMapper {
           }),
         ];
       case 'memory_captured':
+      case 'memory_candidate':
         return [
-          this.make('memory_captured', {
+          this.make(event.type, {
             records: Array.isArray(event.records)
               ? event.records.flatMap((raw) => {
                   if (!raw || typeof raw !== 'object') return [];
