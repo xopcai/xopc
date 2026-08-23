@@ -128,13 +128,6 @@ export interface SkillSourceDescriptor {
 
 export type SkillOrigin = SkillSourceDescriptor;
 
-export interface SkillsInstallConfig {
-  /** Prefer brew for package installation */
-  preferBrew?: boolean;
-  /** Node package manager preference */
-  nodeManager?: 'pnpm' | 'npm' | 'yarn' | 'bun';
-}
-
 export interface SkillsLimitsConfig {
   /** Max number of immediate child directories to consider */
   maxCandidatesPerRoot?: number;
@@ -153,8 +146,6 @@ export interface SkillsConfig {
   allowBundled?: string[];
   /** Load configuration */
   load?: SkillsLoadConfig;
-  /** Install configuration */
-  install?: SkillsInstallConfig;
   /** Limits configuration */
   limits?: SkillsLimitsConfig;
   /** Per-skill configuration */

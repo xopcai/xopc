@@ -165,6 +165,7 @@ export function createManagedJobTool(
   workspace: string,
   getSessionKey: () => string | undefined,
   getSkillPassthroughEnvVarNames?: () => string[],
+  prepareEnv?: (baseEnv: Record<string, string>, cwd: string) => Promise<Record<string, string>>,
 ): AgentTool {
   return {
     name: 'managed_job',
@@ -197,8 +198,11 @@ export function createManagedJobTool(
       const rawMax = Number(input.maxRuntimeMs ?? DEFAULT_MAX_RUNTIME_MS);
       const requestedMax = Number.isFinite(rawMax) ? rawMax : DEFAULT_MAX_RUNTIME_MS;
       const maxRuntimeMs = Math.min(MAX_RUNTIME_MS, Math.max(1_000, requestedMax));
+      const runtimeEnv = prepareEnv
+        ? await prepareEnv(policy.sanitizedEnv, policy.effectiveCwd)
+        : policy.sanitizedEnv;
       return result(registry().start(owner, command, policy.effectiveCwd, {
-        ...policy.sanitizedEnv,
+        ...runtimeEnv,
         COLUMNS: '200',
       }, maxRuntimeMs));
     },

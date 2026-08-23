@@ -10,7 +10,6 @@ import {
   installSkill,
   findInstallSpec,
   hasBinary,
-  getDefaultInstallerPreferences,
   createSkillConfigManager,
   isSkillEnabled,
   scanSkillDirectory,
@@ -19,6 +18,7 @@ import {
   type Skill,
 } from '../../agent/skills/index.js';
 import { resolveStateDir, resolveBundledSkillsDir, resolveSkillsLockPath } from '../../config/paths.js';
+import { loadConfig } from '../../config/loader.js';
 import { loadSkillsLock } from '../../agent/skills/hub-lock.js';
 import { pullSkillFromSource, updateSkillFromLock } from '../../agent/skills/hub-pull.js';
 import { ProjectTrustStore } from '../../project-trust/trust-store.js';
@@ -188,14 +188,12 @@ function createSkillsCommand(ctx: CLIContext): Command {
       console.log(`Installing dependency for "${skillName}"...`);
       
       const timeoutMs = parseInt(options.timeout, 10);
-      const preferences = getDefaultInstallerPreferences();
-
       const result = await installSkill({
-        workspaceDir,
+        stateDir: resolveStateDir(),
+        runtimeConfig: loadConfig(ctx.configPath).runtimeTools,
         skillEntry: entry,
         installSpec,
         timeoutMs,
-        preferences,
       });
 
       if (result.ok) {

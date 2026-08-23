@@ -10,6 +10,8 @@ import { setupChannels as runChannelOnboard, getChannelConfigurators } from './o
 import { resolveGatewayLocalClientHost } from '../../config/gateway-bind.js';
 import { initWorkspace } from '../utils/init-workspace.js';
 import { ConfigSchema } from '../../config/schema.js';
+import { resolveStateDir } from '../../config/paths-state.js';
+import { provisionEagerRuntimes } from '../../runtime-tools/bootstrap.js';
 
 function isInteractive(): boolean {
   return process.stdin.isTTY && process.stdout.isTTY;
@@ -46,6 +48,7 @@ function createOnboardCommand(ctx: CLIContext): Command {
     .option('--channels', 'Configure messaging channels')
     .option('--gateway', 'Configure gateway WebUI')
     .option('--all', 'Configure everything (default)')
+    .option('--skip-runtimes', 'Skip eager Node.js/Python runtime initialization')
     .action(async (options) => {
       try {
         await runOnboard(options, ctx);
@@ -68,6 +71,7 @@ type OnboardOptions = {
   channels?: boolean;
   gateway?: boolean;
   all?: boolean;
+  skipRuntimes?: boolean;
 };
 
 async function runOnboard(
@@ -123,6 +127,18 @@ async function runOnboard(
 
   // Save config once at the end
   await saveConfig(config as Config, configPath);
+
+  if (!options.skipRuntimes) {
+    console.log('\n🧰 Initializing agent tool runtimes:');
+    const runtimes = await provisionEagerRuntimes({
+      stateDir: resolveStateDir(),
+      config: config.runtimeTools,
+    });
+    for (const result of runtimes) {
+      if (result.ok) console.log(`   ✅ ${result.runtime} ${result.resolved?.version}`);
+      else console.warn(`   ⚠️  ${result.runtime}: ${result.error}`);
+    }
+  }
 
   console.log('\n' + '═'.repeat(50));
   console.log('\n🎉 Setup Complete!\n');

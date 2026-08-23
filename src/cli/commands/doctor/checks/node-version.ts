@@ -10,7 +10,7 @@ export async function checkNodeVersion(_ctx: DoctorContext): Promise<CheckResult
   if (major === 0) {
     return {
       id: 'node-version',
-      label: 'Node.js',
+      label: 'Host Node.js',
       status: 'warn',
       message: 'Could not parse Node.js version.',
       hints: [`process.version=${process.version}`],
@@ -19,7 +19,7 @@ export async function checkNodeVersion(_ctx: DoctorContext): Promise<CheckResult
   if (major < 22) {
     return {
       id: 'node-version',
-      label: 'Node.js',
+      label: 'Host Node.js',
       status: 'fail',
       message: `Node ${major} is below the required minimum (22).`,
       hints: ['Install Node.js 22+ from https://nodejs.org/'],
@@ -27,7 +27,7 @@ export async function checkNodeVersion(_ctx: DoctorContext): Promise<CheckResult
   }
   return {
     id: 'node-version',
-    label: 'Node.js',
+    label: 'Host Node.js',
     status: 'pass',
     message: `Node.js ${process.version} meets the project requirement (>= 22).`,
     hints: [],

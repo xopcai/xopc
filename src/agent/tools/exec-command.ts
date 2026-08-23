@@ -61,6 +61,7 @@ export interface ExecCommandUpdateDetails {
 export interface CreateExecCommandToolOptions {
   /** Env var names allowed through prepareSafeToolEnv even if they match secret heuristics. */
   getSkillPassthroughEnvVarNames?: () => string[];
+  prepareEnv?: (baseEnv: Record<string, string>, cwd: string) => Promise<Record<string, string>>;
 }
 
 type ExecCommandParams = {
@@ -210,6 +211,9 @@ export function createExecCommandTool(
       const timeoutMs = Math.min(clampTimeoutMs(params.timeoutMs), policy.timeoutMs);
       const maxOutputChars = clampMaxOutputChars(params.maxOutputChars);
       const startTime = Date.now();
+      const runtimeEnv = options?.prepareEnv
+        ? await options.prepareEnv(policy.sanitizedEnv, policy.effectiveCwd)
+        : policy.sanitizedEnv;
       let stdout = '';
       let stderr = '';
       let aggregatedOutput = '';
@@ -221,7 +225,7 @@ export function createExecCommandTool(
           shell: true,
           cwd: policy.effectiveCwd,
           env: {
-            ...policy.sanitizedEnv,
+            ...runtimeEnv,
             COLUMNS: '200',
           },
         });
