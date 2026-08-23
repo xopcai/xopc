@@ -316,7 +316,11 @@ describe('dispatchAgentStreamEvent', () => {
     const cb = callbacks();
     dispatchAgentStreamEvent('run_end', JSON.stringify(envelope('run_end', 'run-1', { status: 'success' })), cb);
     dispatchAgentStreamEvent('error', JSON.stringify(envelope('error', 'run-2', { code: 'X', message: 'boom' })), cb);
-    expect(cb.onResult).toHaveBeenCalled();
+    expect(cb.onResult).toHaveBeenCalledWith({
+      runId: 'run-1',
+      sessionKey: 'chat_a',
+      status: 'success',
+    });
     expect(cb.onError).toHaveBeenCalledWith('boom');
   });
 });
