@@ -24,11 +24,6 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { useAutosave } from '@/lib/use-autosave';
 
-const GROQ_MODELS = [
-  { id: 'whisper-large-v3-turbo', name: 'Whisper Large v3 Turbo' },
-  { id: 'whisper-large-v3', name: 'Whisper Large v3' },
-] as const;
-
 type ExtensionDetailResponse = {
   manifest?: {
     mediaUnderstandingProviders?: string[];
@@ -66,24 +61,13 @@ type SttCredSlice = { apiKey: string; model: string };
 function savedSliceFromVoiceSettings(
   voiceSettings: VoiceSettingsState | undefined,
   providerId: string | undefined,
+  defaultModel: string,
 ): SttCredSlice {
-  if (!voiceSettings || !providerId) return { apiKey: '', model: GROQ_MODELS[0].id };
-  if (providerId === 'alibaba') {
-    return {
-      apiKey: voiceSettings.stt.alibaba?.apiKey ?? '',
-      model: voiceSettings.stt.alibaba?.model ?? 'qwen-audio-3.0-asr-flash',
-    };
-  }
-  if (providerId === 'openai') {
-    return {
-      apiKey: voiceSettings.stt.openai?.apiKey ?? '',
-      model: voiceSettings.stt.openai?.model ?? 'gpt-4o-mini-transcribe',
-    };
-  }
+  if (!voiceSettings || !providerId) return { apiKey: '', model: defaultModel };
   const slice = voiceSettings.stt.providers?.[providerId];
   return {
     apiKey: typeof slice?.apiKey === 'string' ? slice.apiKey : '',
-    model: typeof slice?.model === 'string' ? slice.model : GROQ_MODELS[0].id,
+    model: typeof slice?.model === 'string' ? slice.model : defaultModel,
   };
 }
 
@@ -116,14 +100,19 @@ function ExtensionSttProviderSettingsBody({
     { revalidateOnFocus: false },
   );
 
-  const configured = useMemo(
-    () => sttProviders?.providers.some((p) => p.id === providerId && p.configured) ?? false,
+  const providerMetadata = useMemo(
+    () => sttProviders?.providers.find((provider) => provider.id === providerId),
     [providerId, sttProviders],
   );
+  const configured = providerMetadata?.configured ?? false;
+  const modelOptions = providerMetadata?.models ?? [];
+  const defaultModel = modelOptions[0]?.id
+    ?? providerMetadata?.fields.find((field) => field.key === 'model')?.defaultValue
+    ?? '';
 
   const savedSlice = useMemo(
-    () => savedSliceFromVoiceSettings(voiceSettings, providerId),
-    [providerId, voiceSettings],
+    () => savedSliceFromVoiceSettings(voiceSettings, providerId, defaultModel),
+    [defaultModel, providerId, voiceSettings],
   );
 
   const dirtyRef = useRef(false);
@@ -140,25 +129,15 @@ function ExtensionSttProviderSettingsBody({
   const handleSave = useCallback(async (snapshot: SttCredSlice) => {
       const next: VoiceSettingsState = structuredClone(voiceSettings);
       next.stt.enabled = true;
-      if (providerId === 'alibaba') {
-        next.stt.provider = 'alibaba';
-        next.stt.alibaba = { ...next.stt.alibaba, apiKey: snapshot.apiKey, model: snapshot.model };
-      } else if (providerId === 'openai') {
-        next.stt.provider = 'openai';
-        next.stt.openai = { ...next.stt.openai, apiKey: snapshot.apiKey, model: snapshot.model };
-      } else {
-        next.stt.providers = {
-          ...(next.stt.providers ?? {}),
-          [providerId]: {
-            ...(next.stt.providers?.[providerId] ?? {}),
-            apiKey: snapshot.apiKey,
-            model: snapshot.model,
-          },
-        };
-        if (!next.stt.provider || next.stt.provider === 'alibaba' || next.stt.provider === 'openai') {
-          next.stt.provider = providerId;
-        }
-      }
+      next.stt.provider = providerId;
+      next.stt.providers = {
+        ...(next.stt.providers ?? {}),
+        [providerId]: {
+          ...(next.stt.providers?.[providerId] ?? {}),
+          apiKey: snapshot.apiKey,
+          model: snapshot.model,
+        },
+      };
       await patchVoiceSettings(next);
       await mutateVoice(next, false);
       dirtyRef.current = JSON.stringify(draftRef.current) !== JSON.stringify(snapshot);
@@ -167,7 +146,11 @@ function ExtensionSttProviderSettingsBody({
 
   const autosave = useAutosave({ value: credDraft, dirty, onSave: handleSave });
 
-  const modelOptions = providerId === 'groq' ? GROQ_MODELS : [{ id: credDraft.model, name: credDraft.model }];
+  const displayedModelOptions = modelOptions.length > 0
+    ? modelOptions
+    : credDraft.model
+      ? [{ id: credDraft.model, name: credDraft.model }]
+      : [];
 
   return (
     <div className="flex flex-col gap-4 rounded-xl bg-surface-base p-4" onBlurCapture={autosave.onBlurCapture}>
@@ -218,7 +201,7 @@ function ExtensionSttProviderSettingsBody({
         </div>
         <div className={cn('flex flex-col gap-1.5', selectFieldMaxWidthClass)}>
           <FieldLabel>{v.stt.model}</FieldLabel>
-          {providerId === 'groq' ? (
+          {displayedModelOptions.length > 0 ? (
             <Select
               className={selectClassName()}
               value={credDraft.model}
@@ -231,7 +214,7 @@ function ExtensionSttProviderSettingsBody({
                 autosave.saveNow({ ...credDraft, model: e.target.value });
               }}
             >
-              {modelOptions.map((entry) => (
+              {displayedModelOptions.map((entry) => (
                 <SelectOption key={entry.id} value={entry.id}>
                   {entry.name}
                 </SelectOption>

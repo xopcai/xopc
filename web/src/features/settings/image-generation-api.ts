@@ -33,12 +33,20 @@ export type ImageProvider = {
   credentialMode: 'api-key' | 'oauth' | 'none';
   documentationUrl?: string;
   apiKeyUrl?: string;
+  configFields: Array<{
+    key: 'baseUrl' | 'region';
+    label: string;
+    type: 'url' | 'select';
+    required?: boolean;
+    placeholder?: string;
+    options?: Array<{ value: string; label: string }>;
+  }>;
+  config: Record<string, string>;
   defaultModel: string;
   models: string[];
   capabilities: ImageModelCapabilities;
   modelCapabilities?: Record<string, ImageModelCapabilities>;
   configured: boolean;
-  requiresRegion: boolean;
 };
 
 export type CustomImageModel = {

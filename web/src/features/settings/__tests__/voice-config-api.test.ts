@@ -78,4 +78,30 @@ describe('voice-config-api', () => {
     expect(payload.tts).not.toHaveProperty('minimax');
     expect(payload.tts).not.toHaveProperty('edge');
   });
+
+  it('keeps every STT provider in the unified providers map', async () => {
+    fetchJson.mockResolvedValue({ ok: true });
+    const state = normalizeVoiceSettings({
+      stt: {
+        enabled: true,
+        provider: 'xopc-cloud',
+        providers: {
+          'xopc-cloud': { model: 'cloud-stt', language: 'zh' },
+          alibaba: { apiKey: 'secret', model: 'qwen-audio-3.0-asr-flash' },
+        },
+      },
+    });
+
+    expect(state.stt.providers?.['xopc-cloud']).toEqual({ model: 'cloud-stt', language: 'zh' });
+    await patchVoiceSettings(state);
+
+    const init = fetchJson.mock.calls[0]?.[1] as RequestInit;
+    const payload = JSON.parse(String(init.body)) as { stt: Record<string, unknown> };
+    expect(payload.stt.providers).toMatchObject({
+      'xopc-cloud': { model: 'cloud-stt', language: 'zh' },
+      alibaba: { apiKey: 'secret', model: 'qwen-audio-3.0-asr-flash' },
+    });
+    expect(payload.stt).not.toHaveProperty('openai');
+    expect(payload.stt).not.toHaveProperty('alibaba');
+  });
 });

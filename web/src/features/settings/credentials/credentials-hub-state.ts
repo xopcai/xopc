@@ -116,9 +116,6 @@ function voiceProviderKey(voice: VoiceSettingsState, kind: 'stt' | 'tts'): strin
   if (kind === 'stt') {
     if (!voice.stt.enabled) return undefined;
     const p = voice.stt.provider;
-    if (p === 'alibaba') return voice.stt.alibaba?.apiKey ?? voice.stt.providers?.alibaba?.apiKey as string | undefined;
-    if (p === 'openai') return voice.stt.openai?.apiKey ?? voice.stt.providers?.openai?.apiKey as string | undefined;
-    if (p === 'groq') return voice.stt.providers?.groq?.apiKey as string | undefined;
     const slice = voice.stt.providers?.[p];
     return typeof slice?.apiKey === 'string' ? slice.apiKey : undefined;
   }

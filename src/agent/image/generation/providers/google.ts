@@ -274,6 +274,14 @@ export function buildGoogleImageGenerationProvider(): ImageGenerationProvider {
   return {
     id: 'google',
     label: 'Google Gemini',
+    documentationUrl: 'https://ai.google.dev/gemini-api/docs/image-generation',
+    apiKeyUrl: 'https://aistudio.google.com/app/apikey',
+    configFields: [{
+      key: 'baseUrl',
+      label: 'Base URL',
+      type: 'url',
+      placeholder: 'https://generativelanguage.googleapis.com',
+    }],
     defaultModel: GOOGLE_DEFAULT_IMAGE_MODEL,
     models: [...GOOGLE_IMAGE_MODELS],
     capabilities: GOOGLE_CAPABILITIES,

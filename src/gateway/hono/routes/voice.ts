@@ -534,7 +534,7 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
     const startedAt = Date.now();
     try {
       const result = await transcribe(input.audioBuffer, sttConfig, {
-        language: input.language || (sttConfig.provider === 'alibaba' ? 'zh' : undefined),
+        language: input.language,
         mime: input.mimeType,
         fileName: input.fileName,
         signal: c.req.raw.signal,

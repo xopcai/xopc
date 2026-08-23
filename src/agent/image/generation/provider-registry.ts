@@ -95,6 +95,7 @@ export function listImageGenerationProvidersSummary(): ImageGenerationProviderSu
     credentialMode: resolveImageGenerationCredentialMode(provider),
     ...(provider.documentationUrl ? { documentationUrl: provider.documentationUrl } : {}),
     ...(provider.apiKeyUrl ? { apiKeyUrl: provider.apiKeyUrl } : {}),
+    configFields: structuredClone(provider.configFields ?? []),
     defaultModel: provider.defaultModel,
     models: [...provider.models],
     capabilities: provider.capabilities,

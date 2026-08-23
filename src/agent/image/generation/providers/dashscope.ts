@@ -277,6 +277,18 @@ export function buildDashScopeImageGenerationProvider(): ImageGenerationProvider
   return {
     id: 'dashscope',
     label: 'Alibaba Model Studio',
+    documentationUrl: 'https://www.alibabacloud.com/help/en/model-studio/wan-image-generation-and-editing-api-reference',
+    apiKeyUrl: 'https://dashscope.console.aliyun.com/apiKey',
+    configFields: [
+      {
+        key: 'region',
+        label: 'Service region',
+        type: 'select',
+        required: true,
+        options: [{ value: 'cn', label: 'China' }, { value: 'intl', label: 'International' }],
+      },
+      { key: 'baseUrl', label: 'Base URL', type: 'url', placeholder: 'https://…' },
+    ],
     defaultModel: DASHSCOPE_DEFAULT_IMAGE_MODEL,
     models: [...DASHSCOPE_IMAGE_MODELS],
     capabilities: DASHSCOPE_CAPABILITIES,
