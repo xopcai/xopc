@@ -92,10 +92,12 @@ function ChoiceGroup({ label, value, options, onChange }: {
   options: Array<{ value: string; title: string; hint: string; icon: LucideIcon }>;
   onChange: (value: string) => void;
 }) {
+  const selectedHint = options.find((option) => option.value === value)?.hint;
+
   return (
     <fieldset>
-      <legend className="mb-2.5 text-xs font-semibold uppercase tracking-[0.12em] text-fg-muted">{label}</legend>
-      <div className="grid gap-2.5 sm:grid-cols-3" role="radiogroup" aria-label={label}>
+      <legend className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-fg-muted">{label}</legend>
+      <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label={label}>
         {options.map((option) => {
           const selected = option.value === value;
           const Icon = option.icon;
@@ -106,7 +108,7 @@ function ChoiceGroup({ label, value, options, onChange }: {
               role="radio"
               aria-checked={selected}
               className={cn(
-                'group relative min-h-28 rounded-2xl border p-3.5 text-left transition-[transform,border-color,background-color,box-shadow] duration-300 ease-[cubic-bezier(.2,.8,.2,1)]',
+                'group relative flex min-h-18 items-center gap-2.5 rounded-xl border p-3 text-left transition-[transform,border-color,background-color,box-shadow] duration-300 ease-[cubic-bezier(.2,.8,.2,1)]',
                 'hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent motion-reduce:transform-none motion-reduce:transition-none',
                 selected
                   ? 'border-accent/60 bg-accent-soft/75 shadow-surface'
@@ -115,15 +117,14 @@ function ChoiceGroup({ label, value, options, onChange }: {
               onClick={() => onChange(option.value)}
             >
               <span className={cn(
-                'mb-3 flex size-8 items-center justify-center rounded-xl transition-colors',
+                'flex size-8 shrink-0 items-center justify-center rounded-lg transition-colors',
                 selected ? 'bg-accent text-white' : 'bg-surface-muted text-fg-muted group-hover:text-fg',
               )}>
                 <Icon className="size-4" aria-hidden />
               </span>
               <span className="block pr-5 text-sm font-semibold text-fg">{option.title}</span>
-              <span className="mt-1 block text-xs leading-4.5 text-fg-muted">{option.hint}</span>
               <span className={cn(
-                'absolute right-3 top-3 flex size-5 items-center justify-center rounded-full border transition-all',
+                'absolute right-2.5 top-2.5 flex size-5 items-center justify-center rounded-full border transition-all',
                 selected ? 'scale-100 border-accent bg-accent text-white' : 'scale-90 border-edge-strong bg-transparent text-transparent',
               )}>
                 <Check className="size-3" strokeWidth={2.5} aria-hidden />
@@ -132,6 +133,7 @@ function ChoiceGroup({ label, value, options, onChange }: {
           );
         })}
       </div>
+      <p className="mt-2 min-h-5 text-xs leading-5 text-fg-muted">{selectedHint}</p>
     </fieldset>
   );
 }
@@ -379,77 +381,82 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
   };
 
   return (
-    <div className="xopc-onboarding-card relative flex h-[min(42rem,calc(100dvh-2rem))] w-full max-w-2xl flex-col overflow-hidden rounded-[1.75rem] border border-white/60 bg-surface-panel/95 p-6 shadow-float backdrop-blur-2xl dark:border-white/10 sm:p-8">
+    <div className="xopc-onboarding-card relative flex h-full w-full flex-col overflow-hidden rounded-[1.75rem] border border-white/60 bg-surface-panel/95 p-5 shadow-float backdrop-blur-2xl dark:border-white/10 sm:p-6">
       <div className="xopc-onboarding-aurora pointer-events-none absolute inset-x-0 -top-48 h-80" aria-hidden />
-      <div className="relative z-10 flex min-h-11 items-start justify-end gap-1">
-        <OnboardingLanguageSwitch
-          value={language}
-          onChange={(nextLanguage) => {
-            dispatch({ type: 'patch', patch: { error: null } });
-            setLanguage(nextLanguage);
-          }}
-        />
-        {canDismiss ? (
-          <button
-            type="button"
-            aria-label={o.skipSetup}
-            className="inline-flex size-11 items-center justify-center rounded-xl text-fg-muted transition hover:bg-surface-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-            onClick={onDismiss}
-          >
-            <X className="size-4" aria-hidden />
-          </button>
-        ) : null}
-      </div>
-      <div className="relative z-10 mt-1 text-center">
-        <div className="xopc-onboarding-logo mx-auto flex size-12 items-center justify-center rounded-2xl border border-white/70 bg-white/80 shadow-surface dark:border-white/10 dark:bg-white/5">
-          <BrandLogo className="size-8" />
+      <header className="relative z-10 grid min-h-14 grid-cols-[1fr_auto_1fr] items-center gap-3 border-b border-edge-subtle pb-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="xopc-onboarding-logo flex size-10 shrink-0 items-center justify-center rounded-xl border border-white/70 bg-white/80 shadow-surface dark:border-white/10 dark:bg-white/5">
+            <BrandLogo className="size-7" />
+          </div>
+          <h2 className="hidden truncate text-sm font-semibold tracking-[-0.015em] text-fg sm:block">{o.title}</h2>
         </div>
-        <h2 className="mt-3 text-xl font-semibold tracking-[-0.025em] text-fg">{o.title}</h2>
-        <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-fg-muted">{o.subtitle}</p>
-        <div className="mx-auto mt-4 flex max-w-48 items-center gap-1.5" aria-label={stepLabel}>
-          {STEP_ORDER.map((item, index) => (
-            <span
-              key={item}
-              className={cn(
-                'h-1.5 flex-1 rounded-full transition-[background-color,transform] duration-500 motion-reduce:transition-none',
-                index < stepNumber(step) ? 'scale-y-110 bg-accent' : 'bg-edge-strong/70',
-              )}
-              aria-hidden
-            />
-          ))}
+        <div className="w-28 sm:w-56" aria-label={stepLabel}>
+          <div className="flex items-center gap-1.5">
+            {STEP_ORDER.map((item, index) => (
+              <span
+                key={item}
+                className={cn(
+                  'h-1.5 flex-1 rounded-full transition-[background-color,transform] duration-500 motion-reduce:transition-none',
+                  index < stepNumber(step) ? 'scale-y-110 bg-accent' : 'bg-edge-strong/70',
+                )}
+                aria-hidden
+              />
+            ))}
+          </div>
+          <p className="mt-1.5 text-center text-[10px] font-medium uppercase tracking-[0.12em] text-fg-subtle">{stepLabel}</p>
         </div>
-        <p className="mt-2 text-[11px] font-medium uppercase tracking-[0.14em] text-fg-subtle">{stepLabel}</p>
-      </div>
+        <div className="flex items-center justify-end gap-1">
+          <OnboardingLanguageSwitch
+            value={language}
+            onChange={(nextLanguage) => {
+              dispatch({ type: 'patch', patch: { error: null } });
+              setLanguage(nextLanguage);
+            }}
+          />
+          {canDismiss ? (
+            <button
+              type="button"
+              aria-label={o.skipSetup}
+              className="inline-flex size-10 items-center justify-center rounded-xl text-fg-muted transition hover:bg-surface-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              onClick={onDismiss}
+            >
+              <X className="size-4" aria-hidden />
+            </button>
+          ) : null}
+        </div>
+      </header>
 
-      <div className="relative z-10 mt-6 min-h-0 flex-1 overflow-y-auto px-1 [scrollbar-gutter:stable]">
+      <div className="xopc-onboarding-content relative z-10 min-h-0 flex-1 overflow-hidden pt-5">
         {step === 'callName' ? (
-          <div className="xopc-onboarding-stage mx-auto flex max-w-lg flex-col gap-4 pb-2">
+          <div className="xopc-onboarding-stage mx-auto flex h-full max-w-2xl flex-col gap-4">
             <div>
-              <h3 className="text-base font-medium text-fg">{o.step0Title}</h3>
+              <h3 className="text-lg font-semibold tracking-tight text-fg">{o.step0Title}</h3>
               <p className="mt-1 text-sm text-fg-muted">{o.step0Subtitle}</p>
             </div>
-            <label className="block text-sm font-medium text-fg">
-              {o.profileCallNameLabel}
-              {profileLoading ? <Skeleton className="mt-1 h-10 w-full rounded-xl" /> : (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block text-sm font-medium text-fg">
+                {o.profileCallNameLabel}
+                {profileLoading ? <Skeleton className="mt-1 h-10 w-full rounded-xl" /> : (
+                  <input
+                    autoFocus
+                    value={callName}
+                    onChange={(event) => dispatch({ type: 'patch', patch: { callName: event.target.value } })}
+                    placeholder={o.profileCallNamePlaceholder}
+                    className="mt-1 w-full rounded-xl border border-edge bg-surface-base px-3 py-2.5 text-sm text-fg outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/30"
+                  />
+                )}
+              </label>
+              <label className="block text-sm font-medium text-fg">
+                {o.profileRoleLabel}
                 <input
-                  autoFocus
-                  value={callName}
-                  onChange={(event) => dispatch({ type: 'patch', patch: { callName: event.target.value } })}
-                  placeholder={o.profileCallNamePlaceholder}
+                  value={role}
+                  onChange={(event) => dispatch({ type: 'patch', patch: { role: event.target.value } })}
+                  placeholder={o.profileRolePlaceholder}
+                  maxLength={300}
                   className="mt-1 w-full rounded-xl border border-edge bg-surface-base px-3 py-2.5 text-sm text-fg outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/30"
                 />
-              )}
-            </label>
-            <label className="block text-sm font-medium text-fg">
-              {o.profileRoleLabel}
-              <input
-                value={role}
-                onChange={(event) => dispatch({ type: 'patch', patch: { role: event.target.value } })}
-                placeholder={o.profileRolePlaceholder}
-                maxLength={300}
-                className="mt-1 w-full rounded-xl border border-edge bg-surface-base px-3 py-2.5 text-sm text-fg outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/30"
-              />
-            </label>
+              </label>
+            </div>
             <label className="block text-sm font-medium text-fg">
               {o.profileGoalLabel}
               <textarea
@@ -457,11 +464,14 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
                 onChange={(event) => dispatch({ type: 'patch', patch: { primaryGoal: event.target.value } })}
                 placeholder={o.profileGoalPlaceholder}
                 maxLength={500}
-                rows={3}
+                rows={2}
                 className="mt-1 w-full resize-none rounded-xl border border-edge bg-surface-base px-3 py-2.5 text-sm text-fg outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/30"
               />
             </label>
-            <div className="flex flex-wrap justify-between gap-2">
+            <div className="min-h-5">
+              {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
+            </div>
+            <div className="mt-auto flex flex-wrap justify-between gap-2 border-t border-edge-subtle pt-4">
               <button
                 type="button"
                 className="text-xs font-medium text-fg-muted hover:text-fg hover:underline"
@@ -479,17 +489,13 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
                 {busy ? o.savingProfile : o.continue}
               </Button>
             </div>
-            {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
           </div>
         ) : null}
 
         {step === 'collaboration' ? (
-          <div className="xopc-onboarding-stage mx-auto flex max-w-xl flex-col gap-5 pb-2">
-            <div className="text-center">
-              <div className="mx-auto flex size-10 items-center justify-center rounded-2xl bg-accent-soft text-accent-fg">
-                <Sparkles className="size-5" aria-hidden />
-              </div>
-              <h3 className="mt-3 text-lg font-semibold tracking-tight text-fg">{o.collaborationTitle}</h3>
+          <div className="xopc-onboarding-stage mx-auto flex h-full max-w-3xl flex-col gap-3">
+            <div>
+              <h3 className="text-lg font-semibold tracking-tight text-fg">{o.collaborationTitle}</h3>
               <p className="mt-1 text-sm text-fg-muted">{o.collaborationSubtitle}</p>
             </div>
 
@@ -513,8 +519,10 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
                 { value: 'detailed', title: o.outputDetailed, hint: o.outputDetailedHint, icon: ListChecks },
               ]}
             />
-            {error ? <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
-            <div className="flex items-center justify-between gap-3 pt-1">
+            <div className="min-h-5">
+              {error ? <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
+            </div>
+            <div className="mt-auto flex items-center justify-between gap-3 border-t border-edge-subtle pt-4">
               <Button type="button" variant="secondary" disabled={busy} onClick={() => dispatch({ type: 'patch', patch: { step: 'callName', error: null } })}>
                 {o.back}
               </Button>
@@ -531,9 +539,9 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
         ) : null}
 
         {step === 'provider' ? (
-          <div className="xopc-onboarding-stage mx-auto flex max-w-xl flex-col gap-4 pb-2">
+          <div className="xopc-onboarding-stage mx-auto flex h-full max-w-4xl flex-col gap-4">
             <div>
-              <h3 className="text-base font-medium text-fg">{o.step1Title}</h3>
+              <h3 className="text-lg font-semibold tracking-tight text-fg">{o.step1Title}</h3>
               {callName.trim() ? (
                 <p className="mt-1 text-sm text-fg-muted">
                   {language === 'zh' ? `好的 ${callName}，${o.step1Subtitle}` : `Great, ${callName}! ${o.step1Subtitle}`}
@@ -550,27 +558,32 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
                 });
               }}
             />
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-              <Link to="/settings/capabilities/models" className="text-xs font-medium text-accent-fg hover:underline">
-                {language === 'zh' ? '配置其他模型…' : 'Configure other models…'}
-              </Link>
-              {canDismiss ? (
-                <button
-                  type="button"
-                  className="text-xs font-medium text-fg-muted hover:text-fg hover:underline"
-                  onClick={onDismiss}
-                >
-                  {o.skipSetup}
-                </button>
-              ) : null}
+            <div className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-edge-subtle pt-4">
+              <Button type="button" variant="secondary" onClick={() => dispatch({ type: 'patch', patch: { step: 'collaboration', error: null } })}>
+                {o.back}
+              </Button>
+              <div className="flex flex-wrap items-center justify-end gap-4">
+                <Link to="/settings/capabilities/models" className="text-xs font-medium text-accent-fg hover:underline">
+                  {language === 'zh' ? '配置其他模型…' : 'Configure other models…'}
+                </Link>
+                {canDismiss ? (
+                  <button
+                    type="button"
+                    className="text-xs font-medium text-fg-muted hover:text-fg hover:underline"
+                    onClick={onDismiss}
+                  >
+                    {o.skipSetup}
+                  </button>
+                ) : null}
+              </div>
             </div>
           </div>
         ) : null}
 
         {step === 'apiKey' ? (
-          <div className="xopc-onboarding-stage mx-auto flex max-w-xl flex-col gap-4 pb-2">
+          <div className="xopc-onboarding-stage mx-auto flex h-full max-w-2xl flex-col gap-4">
             <div>
-              <h3 className="text-base font-medium text-fg">
+              <h3 className="text-lg font-semibold tracking-tight text-fg">
                 {selectedProvider === 'xopc-cloud'
                   ? (language === 'zh' ? '连接 XOPC Cloud' : 'Connect XOPC Cloud')
                   : `${o.step2Title}${selectedProvider ? ` (${selectedProvider})` : ''}`}
@@ -632,8 +645,10 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
                 {language === 'zh' ? '正在应用推荐模型…' : 'Applying the recommended model…'}
               </p>
             ) : null}
-            {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
-            <div className="flex flex-wrap justify-between gap-2">
+            <div className="min-h-5">
+              {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
+            </div>
+            <div className="mt-auto flex flex-wrap justify-between gap-2 border-t border-edge-subtle pt-4">
               <Button type="button" variant="secondary" disabled={busy} onClick={() => dispatch({ type: 'patch', patch: { step: 'provider', error: null } })}>
                 {o.back}
               </Button>

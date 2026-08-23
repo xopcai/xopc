@@ -9,7 +9,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
@@ -25,6 +25,11 @@ import {
   startAsyncOAuthLogin,
   submitOAuthCode,
 } from '@/features/settings/oauth-api';
+import {
+  closeOAuthAuthorizationWindow,
+  openOAuthAuthorizationUrl,
+  reserveOAuthAuthorizationWindow,
+} from '@/features/settings/oauth-authorization-window';
 import {
   deleteProviderApiKey,
   isMaskedKey,
@@ -195,6 +200,8 @@ function ManageBuiltinProvider({
   const [instructions, setInstructions] = useState<string | null>(null);
   const [deviceCode, setDeviceCode] = useState<string | null>(null);
   const [codeInput, setCodeInput] = useState('');
+  const oauthPopupRef = useRef<Window | null>(null);
+  const openedAuthUrlRef = useRef<string | null>(null);
   const oauthLoading = oauthStatus === 'waiting' || oauthStatus === 'waiting_code';
 
   const apiKeyLinks = useMemo(
@@ -235,8 +242,14 @@ function ManageBuiltinProvider({
             setAuthUrl(status.authUrl ?? null);
             setInstructions(status.instructions ?? null);
             setDeviceCode(status.deviceCode ?? null);
+            if (status.authUrl && status.authUrl !== openedAuthUrlRef.current) {
+              openedAuthUrlRef.current = status.authUrl;
+              void openOAuthAuthorizationUrl(status.authUrl, oauthPopupRef.current).catch(() => {});
+            }
           } else if (status.status === 'completed') {
             window.clearInterval(intervalId);
+            closeOAuthAuthorizationWindow(oauthPopupRef.current);
+            oauthPopupRef.current = null;
             setOAuthStatus('success');
             setOAuthMessage(status.message ?? providerLabels.saved);
             window.setTimeout(() => {
@@ -245,6 +258,8 @@ function ManageBuiltinProvider({
             }, 600);
           } else if (status.status === 'failed' || status.status === 'cancelled') {
             window.clearInterval(intervalId);
+            closeOAuthAuthorizationWindow(oauthPopupRef.current);
+            oauthPopupRef.current = null;
             setOAuthStatus('error');
             setOAuthMessage(status.error ?? status.message ?? providerLabels.revokeFailed);
           }
@@ -264,6 +279,11 @@ function ManageBuiltinProvider({
     };
   }, [oauthSessionId]);
 
+  useEffect(() => () => {
+    closeOAuthAuthorizationWindow(oauthPopupRef.current);
+    oauthPopupRef.current = null;
+  }, []);
+
   const handleRemove = async () => {
     try {
       await deleteProviderApiKey(providerId);
@@ -275,6 +295,9 @@ function ManageBuiltinProvider({
   };
 
   const startOAuth = async () => {
+    closeOAuthAuthorizationWindow(oauthPopupRef.current);
+    oauthPopupRef.current = reserveOAuthAuthorizationWindow();
+    openedAuthUrlRef.current = null;
     setOAuthStatus('waiting');
     setOAuthMessage(providerLabels.oauthStarting);
     setAuthUrl(null);
@@ -285,6 +308,8 @@ function ManageBuiltinProvider({
       const result = await startAsyncOAuthLogin(providerId);
       setOAuthSessionId(result.sessionId);
     } catch (e) {
+      closeOAuthAuthorizationWindow(oauthPopupRef.current);
+      oauthPopupRef.current = null;
       setOAuthStatus('error');
       setOAuthMessage(e instanceof Error ? e.message : providerLabels.revokeFailed);
     }
@@ -297,6 +322,9 @@ function ManageBuiltinProvider({
     } catch {
       // Best effort cancellation.
     }
+    closeOAuthAuthorizationWindow(oauthPopupRef.current);
+    oauthPopupRef.current = null;
+    openedAuthUrlRef.current = null;
     setOAuthStatus('idle');
     setOAuthMessage(null);
     setOAuthSessionId(null);

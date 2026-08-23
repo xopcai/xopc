@@ -131,21 +131,6 @@ export function SkillsPageCatalogContent(p: Props) {
                     {row.name}
                   </h3>
                 </button>
-                <span
-                  className={cn(
-                    'hidden shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium xl:inline-flex',
-                    enabled
-                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-                      : 'border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200',
-                  )}
-                >
-                  {enabled ? (
-                    <CheckCircle2 className="size-3" aria-hidden />
-                  ) : (
-                    <CircleAlert className="size-3" aria-hidden />
-                  )}
-                  {enabled ? sk.statusEnabled : sk.statusDisabled}
-                </span>
                 {!enabled ? (
                   <Button
                     type="button"
@@ -188,6 +173,21 @@ export function SkillsPageCatalogContent(p: Props) {
                     <div className="flex flex-wrap gap-1.5 text-[11px] text-fg-subtle">
                       <span className="rounded-md bg-surface-hover/60 px-2 py-0.5 dark:bg-surface-active/50">
                         {sourceLabel(row)}
+                      </span>
+                      <span
+                        className={cn(
+                          'inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 font-medium',
+                          enabled
+                            ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                            : 'border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200',
+                        )}
+                      >
+                        {enabled ? (
+                          <CheckCircle2 className="size-3" aria-hidden />
+                        ) : (
+                          <CircleAlert className="size-3" aria-hidden />
+                        )}
+                        {enabled ? sk.statusEnabled : sk.statusDisabled}
                       </span>
                       {row.managed ? (
                         <span className="rounded-md bg-surface-hover/60 px-2 py-0.5 dark:bg-surface-active/50">

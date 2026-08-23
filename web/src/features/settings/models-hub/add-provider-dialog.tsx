@@ -22,6 +22,11 @@ import {
   submitOAuthCode,
 } from '@/features/settings/oauth-api';
 import {
+  closeOAuthAuthorizationWindow,
+  openOAuthAuthorizationUrl,
+  reserveOAuthAuthorizationWindow,
+} from '@/features/settings/oauth-authorization-window';
+import {
   patchProviderApiKeys,
   type ProviderRowModel,
 } from '@/features/settings/providers-api';
@@ -380,6 +385,8 @@ function ConfigureBuiltinStep({
   const [instructions, setInstructions] = useState<string | null>(null);
   const [deviceCode, setDeviceCode] = useState<string | null>(null);
   const [codeInput, setCodeInput] = useState('');
+  const oauthPopupRef = useRef<Window | null>(null);
+  const openedAuthUrlRef = useRef<string | null>(null);
   const oauthLoading = oauthStatus === 'waiting' || oauthStatus === 'waiting_code';
 
   useEffect(() => {
@@ -394,14 +401,22 @@ function ConfigureBuiltinStep({
             setAuthUrl(status.authUrl ?? null);
             setInstructions(status.instructions ?? null);
             setDeviceCode(status.deviceCode ?? null);
+            if (status.authUrl && status.authUrl !== openedAuthUrlRef.current) {
+              openedAuthUrlRef.current = status.authUrl;
+              void openOAuthAuthorizationUrl(status.authUrl, oauthPopupRef.current).catch(() => {});
+            }
           } else if (status.status === 'completed') {
             window.clearInterval(intervalId);
+            closeOAuthAuthorizationWindow(oauthPopupRef.current);
+            oauthPopupRef.current = null;
             if (providerId === 'xopc-cloud') await revalidateModelsHubCaches();
             setOAuthStatus('success');
             setOAuthMessage(status.message ?? providerLabels.saved);
             window.setTimeout(onSaved, 600);
           } else if (status.status === 'failed' || status.status === 'cancelled') {
             window.clearInterval(intervalId);
+            closeOAuthAuthorizationWindow(oauthPopupRef.current);
+            oauthPopupRef.current = null;
             setOAuthStatus('error');
             setOAuthMessage(status.error ?? status.message ?? providerLabels.revokeFailed);
           }
@@ -421,7 +436,15 @@ function ConfigureBuiltinStep({
     };
   }, [oauthSessionId]);
 
+  useEffect(() => () => {
+    closeOAuthAuthorizationWindow(oauthPopupRef.current);
+    oauthPopupRef.current = null;
+  }, []);
+
   const startOAuth = async () => {
+    closeOAuthAuthorizationWindow(oauthPopupRef.current);
+    oauthPopupRef.current = reserveOAuthAuthorizationWindow();
+    openedAuthUrlRef.current = null;
     setOAuthStatus('waiting');
     setOAuthMessage(providerLabels.oauthStarting);
     setAuthUrl(null);
@@ -432,6 +455,8 @@ function ConfigureBuiltinStep({
       const result = await startAsyncOAuthLogin(providerId);
       setOAuthSessionId(result.sessionId);
     } catch (e) {
+      closeOAuthAuthorizationWindow(oauthPopupRef.current);
+      oauthPopupRef.current = null;
       setOAuthStatus('error');
       setOAuthMessage(e instanceof Error ? e.message : providerLabels.revokeFailed);
     }
@@ -444,6 +469,9 @@ function ConfigureBuiltinStep({
     } catch {
       // Best effort cancellation.
     }
+    closeOAuthAuthorizationWindow(oauthPopupRef.current);
+    oauthPopupRef.current = null;
+    openedAuthUrlRef.current = null;
     setOAuthStatus('idle');
     setOAuthMessage(null);
     setOAuthSessionId(null);

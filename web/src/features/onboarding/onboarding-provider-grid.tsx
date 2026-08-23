@@ -30,7 +30,7 @@ export function OnboardingProviderGrid({
   const providers = resolveOnboardingProviders(data, isElectron());
 
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+    <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
       {providers.map((p, index) => {
         const subtitle = providerSubtitle(p);
         const recommended = index === 0;
@@ -40,7 +40,7 @@ export function OnboardingProviderGrid({
             type="button"
             onClick={() => onSelect(p.id)}
             className={cn(
-              'relative flex min-h-32 flex-col items-center gap-1.5 rounded-xl border border-edge p-4 text-center transition-colors',
+              'relative flex min-h-24 flex-col items-center justify-center gap-1.5 rounded-xl border border-edge p-3 text-center transition-colors',
               'hover:border-accent hover:bg-accent-soft',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
               recommended && 'border-accent/50 bg-accent-soft/30',

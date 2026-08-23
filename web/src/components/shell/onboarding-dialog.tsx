@@ -43,8 +43,8 @@ export function OnboardingDialog() {
         <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[55] bg-scrim backdrop-blur-md" />
         <Dialog.Content
           className={cn(
-            'xopc-dialog-content fixed left-1/2 top-1/2 z-[56] h-[min(44rem,calc(100dvh-1rem))] w-[min(100%-1rem,42rem)] -translate-x-1/2 -translate-y-1/2 overflow-hidden',
-            'rounded-[2rem] p-1 outline-none sm:p-2',
+            'xopc-dialog-content fixed left-1/2 top-1/2 z-[56] h-[min(46rem,calc(100dvh-1rem))] w-[min(100%-1rem,56rem)] -translate-x-1/2 -translate-y-1/2 overflow-hidden',
+            'rounded-[2rem] p-1 outline-none',
           )}
           onPointerDownOutside={(e) => e.preventDefault()}
           onOpenAutoFocus={(e) => e.preventDefault()}
