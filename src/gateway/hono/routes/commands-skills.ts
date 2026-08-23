@@ -221,8 +221,11 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
 
   authenticated.get('/api/skills/marketplace/categories', async (c) => {
     const provider = parseMarketplaceProviderQuery(c.req.query('provider'));
+    const locale = c.req.query('locale')
+      ?? c.req.header('X-XOPC-Locale')
+      ?? c.req.header('Accept-Language')?.split(',')[0];
     try {
-      const payload = await service.marketplace.fetchSkillsCategories(provider);
+      const payload = await service.marketplace.fetchSkillsCategories(provider, locale);
       return c.json({ ok: true, payload });
     } catch (err) {
       return c.json(

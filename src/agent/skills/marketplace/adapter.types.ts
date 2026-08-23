@@ -14,7 +14,7 @@ export interface SkillsMarketplaceAdapter {
   readonly id: string;
 
   /** Filter chips for the current provider (may be empty). */
-  listCategories(config: Config): Promise<MarketplaceCategoryOption[]>;
+  listCategories(config: Config, options?: { locale?: string }): Promise<MarketplaceCategoryOption[]>;
 
   listPackages(config: Config, params: SkillsStoreListParams): Promise<UnifiedMarketplaceListResponse>;
 

@@ -93,9 +93,11 @@ function appendMarketplaceProvider(sp: URLSearchParams, provider?: string) {
 
 export async function getMarketplaceCategories(opts?: {
   provider?: string;
+  locale?: string;
 }): Promise<{ items: MarketplaceCategoryItem[] }> {
   const sp = new URLSearchParams();
   appendMarketplaceProvider(sp, opts?.provider);
+  if (opts?.locale?.trim()) sp.set('locale', opts.locale.trim());
   const qs = sp.toString();
   const res = await apiFetch(apiUrl(`/api/skills/marketplace/categories${qs ? `?${qs}` : ''}`), {
     cache: 'no-store',
