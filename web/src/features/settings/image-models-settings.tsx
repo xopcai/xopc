@@ -51,11 +51,7 @@ const copy = {
     savedKey: 'A credential is saved. Use the eye button to view it, or type a new key to replace it.',
     revealFailed: 'Unable to load the saved API key.',
     keyNotRevealable: 'This credential comes from an environment variable or another non-revealable source.',
-    region: 'Service region',
-    cn: 'China',
-    intl: 'International',
-    advanced: 'Custom endpoint',
-    baseUrl: 'Base URL (optional)',
+    advanced: 'Provider settings',
     enable: 'Enable image generation',
     enabling: 'Verifying and enabling…',
     enabled: 'Image generation is ready.',
@@ -87,11 +83,7 @@ const copy = {
     savedKey: '凭据已保存。点击眼睛可查看，直接输入新密钥可替换。',
     revealFailed: '无法读取已保存的 API Key。',
     keyNotRevealable: '当前凭据来自环境变量或其他不可查看的来源。',
-    region: '服务地域',
-    cn: '中国站',
-    intl: '国际站',
-    advanced: '自定义服务地址',
-    baseUrl: 'Base URL（可选）',
+    advanced: '服务商设置',
     enable: '启用图片生成',
     enabling: '正在验证并启用…',
     enabled: '图片生成已可用。',
@@ -130,10 +122,46 @@ function modelIdFromRef(model: string | undefined): string | undefined {
   return slash > 0 ? model!.slice(slash + 1) : undefined;
 }
 
-function providerEnrichmentId(providerId: string, region: 'cn' | 'intl'): string {
-  if (providerId === 'minimax') return region === 'cn' ? 'minimax-cn' : 'minimax';
-  if (providerId === 'dashscope') return region === 'cn' ? 'dashscope-cn' : 'dashscope-intl';
-  return providerId;
+function initialProviderConfig(provider: ImageProvider): Record<string, string> {
+  return Object.fromEntries(provider.configFields.map((field) => [
+    field.key,
+    provider.config[field.key] ?? (field.required ? field.options?.[0]?.value ?? '' : ''),
+  ]));
+}
+
+function ImageProviderConfigField({
+  field,
+  value,
+  onChange,
+}: {
+  field: ImageProvider['configFields'][number];
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block text-xs font-medium text-fg-muted">
+      {field.label}
+      {field.type === 'select' ? (
+        <PopoverSelect
+          value={value}
+          options={(field.options ?? []).map((option) => ({ value: option.value, label: option.label }))}
+          placeholder={field.placeholder ?? field.label}
+          allowEmpty={!field.required}
+          onChange={onChange}
+          triggerClassName="mt-1.5"
+        />
+      ) : (
+        <input
+          type="url"
+          value={value}
+          required={field.required}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={field.placeholder}
+          className="mt-1.5 h-10 w-full rounded-lg border border-edge bg-surface-panel px-3 text-sm text-fg outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
+        />
+      )}
+    </label>
+  );
 }
 
 function ImageSettingsSkeleton() {
@@ -157,8 +185,7 @@ export function ImageModelsSettingsPanel() {
   const [providerId, setProviderId] = useState('');
   const [modelId, setModelId] = useState('');
   const [apiKey, setApiKey] = useState('');
-  const [region, setRegion] = useState<'cn' | 'intl'>(language === 'zh' ? 'cn' : 'intl');
-  const [baseUrl, setBaseUrl] = useState('');
+  const [providerConfig, setProviderConfig] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
   const [saved, setSaved] = useState(false);
@@ -206,6 +233,7 @@ export function ImageModelsSettingsPanel() {
         : selected.defaultModel,
     );
     setApiKey(selected.configured ? MASKED_API_KEY : '');
+    setProviderConfig(initialProviderConfig(selected));
   }, [agentConfig, providers]);
 
   useEffect(() => {
@@ -215,7 +243,7 @@ export function ImageModelsSettingsPanel() {
   const selectedProvider = providers?.find((provider) => provider.id === providerId);
   const apiKeyUrl = selectedProvider
     ? selectedProvider.apiKeyUrl
-      ?? getOrderedApiKeyLinks(providerEnrichmentId(selectedProvider.id, region), language)[0]?.href
+      ?? getOrderedApiKeyLinks(selectedProvider.id, language)[0]?.href
     : undefined;
   const agentOptions = useMemo(
     () => (agents?.agents ?? []).map((agent) => ({
@@ -233,7 +261,8 @@ export function ImageModelsSettingsPanel() {
     agentId
       && selectedProvider
       && modelId
-      && (selectedProvider.credentialMode !== 'api-key' || selectedProvider.configured || apiKey.trim()),
+      && (selectedProvider.credentialMode !== 'api-key' || selectedProvider.configured || apiKey.trim())
+      && selectedProvider.configFields.every((field) => !field.required || providerConfig[field.key]?.trim()),
   );
 
   if (!hasToken) return <p className="text-sm text-fg-muted">{text.connect}</p>;
@@ -246,7 +275,7 @@ export function ImageModelsSettingsPanel() {
     setProviderId(provider.id);
     setModelId(provider.defaultModel);
     setApiKey(provider.configured ? MASKED_API_KEY : '');
-    setBaseUrl('');
+    setProviderConfig(initialProviderConfig(provider));
     setError(undefined);
   };
 
@@ -272,6 +301,7 @@ export function ImageModelsSettingsPanel() {
       setProviderId(next.id);
       setModelId(next.defaultModel);
       setApiKey(next.configured ? MASKED_API_KEY : '');
+      setProviderConfig(initialProviderConfig(next));
       setEditingCustomProvider(nextCustom?.find((provider) => provider.providerId === nextProviderId));
     }
   };
@@ -290,8 +320,9 @@ export function ImageModelsSettingsPanel() {
             providerId: selectedProvider.id,
             modelId,
             ...(apiKey.trim() && !isMaskedSecret(apiKey) ? { apiKey: apiKey.trim() } : {}),
-            ...(selectedProvider.requiresRegion ? { region } : {}),
-            ...(baseUrl.trim() ? { baseUrl: baseUrl.trim() } : {}),
+            providerConfig: Object.fromEntries(
+              Object.entries(providerConfig).filter(([, value]) => value.trim()),
+            ),
           }),
         },
       );
@@ -386,19 +417,14 @@ export function ImageModelsSettingsPanel() {
                 triggerClassName="mt-1.5"
               />
             </label>
-            {selectedProvider.requiresRegion ? (
-              <label className="block text-xs font-medium text-fg-muted">
-                {text.region}
-                <PopoverSelect
-                  value={region}
-                  options={[{ value: 'cn', label: text.cn }, { value: 'intl', label: text.intl }]}
-                  placeholder={text.region}
-                  allowEmpty={false}
-                  onChange={(value) => setRegion(value as 'cn' | 'intl')}
-                  triggerClassName="mt-1.5"
-                />
-              </label>
-            ) : null}
+            {selectedProvider.configFields.filter((field) => field.required).map((field) => (
+              <ImageProviderConfigField
+                key={field.key}
+                field={field}
+                value={providerConfig[field.key] ?? ''}
+                onChange={(value) => setProviderConfig((current) => ({ ...current, [field.key]: value }))}
+              />
+            ))}
           </div>
 
           {selectedProvider.source === 'custom' ? (
@@ -444,20 +470,21 @@ export function ImageModelsSettingsPanel() {
             </span>
           </div> : null}
 
-          <details className="mt-4 rounded-lg border border-edge bg-surface-subtle px-3 py-2.5">
+          {selectedProvider.configFields.some((field) => !field.required) ? <details className="mt-4 rounded-lg border border-edge bg-surface-subtle px-3 py-2.5">
             <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-medium text-fg-muted">
               <SlidersHorizontal className="size-4" />{text.advanced}
             </summary>
-            <label className="mt-3 block text-xs font-medium text-fg-muted">
-              {text.baseUrl}
-              <input
-                value={baseUrl}
-                onChange={(event) => setBaseUrl(event.target.value)}
-                placeholder="https://…"
-                className="mt-1.5 h-10 w-full rounded-lg border border-edge bg-surface-panel px-3 text-sm text-fg outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
-              />
-            </label>
-          </details>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              {selectedProvider.configFields.filter((field) => !field.required).map((field) => (
+                <ImageProviderConfigField
+                  key={field.key}
+                  field={field}
+                  value={providerConfig[field.key] ?? ''}
+                  onChange={(value) => setProviderConfig((current) => ({ ...current, [field.key]: value }))}
+                />
+              ))}
+            </div>
+          </details> : null}
 
           {saved ? <p className="mt-4 rounded-lg bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300" role="status">{text.enabled}</p> : null}
           {error ? <p className="mt-4 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-600 dark:text-red-400">{error}</p> : null}

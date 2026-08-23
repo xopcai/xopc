@@ -88,37 +88,47 @@ function buildAzureEndpoint(azure: AzureSettings): OpenAiImagesEndpointResolutio
 }
 
 export function buildOpenAIImageGenerationProvider(): ImageGenerationProvider {
-  return createOpenAiImagesProvider({
-    id: 'openai',
-    label: 'OpenAI',
-    defaultModel: OPENAI_DEFAULT_IMAGE_MODEL,
-    models: [...OPENAI_IMAGE_MODELS],
-    capabilities: OPENAI_CAPABILITIES,
-    isConfigured: (ctx) =>
-      isProviderApiKeyConfigured({
-        providerId: 'openai',
-        cfg: ctx.cfg,
-        agentId: ctx.agentId,
-      }),
-    resolveApiKey: (req) => {
-      const auth = resolveAuthProfileForProvider({
-        providerId: 'openai',
-        cfg: req.cfg,
-        agentId: req.agentId,
-        store: req.authStore,
-      });
-      return auth.apiKey ?? null;
-    },
-    resolveEndpoint: (req) => {
-      // 1. Azure routing: explicit `cfg.providers.openai.azure.*` or
-      //    AZURE_OPENAI_* env wins over the public api.openai.com endpoint.
-      const azure = resolveAzureSettings(req);
-      if (azure) return buildAzureEndpoint(azure);
-      // 2. OAuth (Codex / future) — same wire format as api-key, the access
-      //    token is used as a Bearer token. The default factory branch
-      //    (kind: 'bearer') already handles this.
-      return { baseUrl: resolveOpenAiBaseUrl(req) };
-    },
-    defaultTimeoutMs: 120_000,
-  });
+  return {
+    ...createOpenAiImagesProvider({
+      id: 'openai',
+      label: 'OpenAI',
+      defaultModel: OPENAI_DEFAULT_IMAGE_MODEL,
+      models: [...OPENAI_IMAGE_MODELS],
+      capabilities: OPENAI_CAPABILITIES,
+      isConfigured: (ctx) =>
+        isProviderApiKeyConfigured({
+          providerId: 'openai',
+          cfg: ctx.cfg,
+          agentId: ctx.agentId,
+        }),
+      resolveApiKey: (req) => {
+        const auth = resolveAuthProfileForProvider({
+          providerId: 'openai',
+          cfg: req.cfg,
+          agentId: req.agentId,
+          store: req.authStore,
+        });
+        return auth.apiKey ?? null;
+      },
+      resolveEndpoint: (req) => {
+        // 1. Azure routing: explicit `cfg.providers.openai.azure.*` or
+        //    AZURE_OPENAI_* env wins over the public api.openai.com endpoint.
+        const azure = resolveAzureSettings(req);
+        if (azure) return buildAzureEndpoint(azure);
+        // 2. OAuth (Codex / future) — same wire format as api-key, the access
+        //    token is used as a Bearer token. The default factory branch
+        //    (kind: 'bearer') already handles this.
+        return { baseUrl: resolveOpenAiBaseUrl(req) };
+      },
+      defaultTimeoutMs: 120_000,
+    }),
+    documentationUrl: 'https://platform.openai.com/docs/guides/image-generation',
+    apiKeyUrl: 'https://platform.openai.com/api-keys',
+    configFields: [{
+      key: 'baseUrl',
+      label: 'Base URL',
+      type: 'url',
+      placeholder: 'https://api.openai.com/v1',
+    }],
+  };
 }

@@ -567,8 +567,9 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
         {
           providerId: body.providerId,
           ...(typeof body.modelId === 'string' ? { modelId: body.modelId } : {}),
-          ...(body.region === 'cn' || body.region === 'intl' ? { region: body.region } : {}),
-          ...(typeof body.baseUrl === 'string' ? { baseUrl: body.baseUrl } : {}),
+          ...(body.providerConfig && typeof body.providerConfig === 'object' && !Array.isArray(body.providerConfig)
+            ? { providerConfig: body.providerConfig as Record<string, unknown> }
+            : {}),
         },
       );
       if (prepared.ok === false) {
@@ -593,7 +594,9 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
         ? await verifyImageGenerationCredential({
             providerId: prepared.providerId,
             apiKey: suppliedKey,
-            baseUrl: typeof body.baseUrl === 'string' ? body.baseUrl : undefined,
+            baseUrl: typeof (body.providerConfig as Record<string, unknown> | undefined)?.baseUrl === 'string'
+              ? (body.providerConfig as Record<string, string>).baseUrl
+              : undefined,
           })
         : { verified: false, supported: false };
       if (verification.supported && !verification.verified) {

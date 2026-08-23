@@ -66,8 +66,6 @@ export interface SttSettings {
   enabled: boolean;
   /** Built-in id or any extension-registered MediaUnderstandingProvider id. */
   provider: string;
-  alibaba?: { apiKey?: string; model?: string };
-  openai?: { apiKey?: string; model?: string };
   providers?: Record<string, Record<string, unknown>>;
   fallback?: { enabled: boolean; order: string[] };
 }

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ConfigSchema } from '../../config/schema.js';
 import {
+  getImageGenerationCatalog,
   getAgentImageGenerationConfig,
   prepareImageGenerationSetup,
   verifyImageGenerationCredential,
@@ -99,7 +100,31 @@ describe('image generation setup', () => {
     const result = prepareImageGenerationSetup(createConfig(), 'main', {
       providerId: 'dashscope',
     });
-    expect(result).toEqual({ ok: false, error: 'dashscope requires region "cn" or "intl"' });
+    expect(result).toEqual({ ok: false, error: 'dashscope requires region' });
+  });
+
+  it('validates and stores provider-declared config fields', () => {
+    const result = prepareImageGenerationSetup(createConfig(), 'main', {
+      providerId: 'dashscope',
+      providerConfig: { region: 'intl' },
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.config.providers?.dashscope).toEqual({ region: 'intl' });
+
+    const provider = getImageGenerationCatalog(result.config).find((entry) => entry.id === 'dashscope');
+    expect(provider?.config).toEqual({ region: 'intl' });
+    expect(provider?.configFields.find((field) => field.key === 'region')).toMatchObject({
+      required: true,
+      type: 'select',
+    });
+  });
+
+  it('rejects fields not declared by the selected provider', () => {
+    expect(prepareImageGenerationSetup(createConfig(), 'main', {
+      providerId: 'google',
+      providerConfig: { region: 'cn' },
+    })).toEqual({ ok: false, error: 'Unknown google config field: region' });
   });
 
   it('preserves provider connection settings when selecting an image model', () => {
@@ -114,7 +139,7 @@ describe('image generation setup', () => {
 
     const result = prepareImageGenerationSetup(config, 'main', {
       providerId: 'openai',
-      baseUrl: 'https://new.example.com/v1',
+      providerConfig: { baseUrl: 'https://new.example.com/v1' },
     });
 
     expect(result.ok).toBe(true);
