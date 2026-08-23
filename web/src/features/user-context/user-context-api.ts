@@ -59,6 +59,14 @@ export type UserContextResponse = {
   understandings: UserUnderstanding[];
   rules: CollaborationRule[];
   consolidation: { lastRun: ContextConsolidationRun | null };
+  quality: UserUnderstandingQuality;
+};
+
+export type UserUnderstandingQuality = {
+  windowDays: number;
+  records: { total: number; candidate: number; active: number; needsReview: number; agingCandidates: number };
+  decisions: { total: number; acceptanceRate: number | null };
+  recall: { total: number; helpfulRate: number | null };
 };
 
 export type ContextConsolidationRun = {
@@ -171,7 +179,13 @@ export function deleteUnderstanding(id: string): Promise<{ ok: true }> {
   return fetchJson(apiUrl(`/api/you/understandings/${encodeURIComponent(id)}`), { method: 'DELETE' });
 }
 
-export function createCollaborationRule(input: { statement: string; category: CollaborationRule['category']; priority?: number; scope?: UserContextScope }): Promise<{ rule: CollaborationRule }> {
+export function createCollaborationRule(input: {
+  statement: string;
+  category: CollaborationRule['category'];
+  priority?: number;
+  scope?: UserContextScope;
+  conditions?: Record<string, unknown>;
+}): Promise<{ rule: CollaborationRule }> {
   return fetchJson(apiUrl('/api/you/rules'), {
     method: 'POST',
     body: JSON.stringify({ ...input, scope: input.scope ?? { type: 'global' } }),

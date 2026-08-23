@@ -25,6 +25,7 @@ import {
   type CollaborationRule, type UnderstandingKind, type UserContextResponse,
   type UserContextSettings,
   type UnderstandingSourceGrant, type UserFocus, type UserProfile, type UserUnderstanding,
+  type UserUnderstandingQuality,
 } from './user-context-api';
 
 type Tab = 'profile' | 'understanding' | 'collaboration' | 'sources' | 'dreaming' | 'privacy';
@@ -47,6 +48,7 @@ const copy = {
     rulesHint: 'Explicit instructions for how xopc should collaborate with you. Rules outrank inferred understanding.',
     addRule: 'Add rule', ruleStatement: 'How should xopc work with you?', category: 'Category', disable: 'Disable', enable: 'Enable',
     emptyUnderstanding: 'Nothing here yet. Tell xopc something explicitly, or confirm a suggestion after it learns one.',
+    qualityTitle: 'Learning quality', qualityActive: 'Confirmed', qualityPending: 'Pending review', qualityAcceptance: '30-day acceptance', qualityRecall: 'Helpful recall', qualityNoData: 'Not enough feedback yet',
     emptyRules: 'No working agreements yet.', sourceExplicit: 'You said this directly', sourceInferred: 'Inferred — may be wrong', sourceObserved: 'Observed across prior work',
     sourcesHint: 'Review every granted source, its access mode, retention, and last collection. Revoking stops future learning.', manageSources: 'Connect another source', noSources: 'No sources are authorized.', connected: 'Connected', unavailable: 'Needs attention', revoke: 'Revoke & remove derived', refresh: 'Refresh', once: 'One-time', continuous: 'Continuous', localOnly: 'Local only', derivedOnly: 'Derived understanding only',
     focuses: 'Current focuses', focusHint: 'Candidate focuses never activate until you confirm them.', activate: 'Activate', pause: 'Pause', complete: 'Complete', noFocuses: 'No focus candidates yet.',
@@ -69,6 +71,7 @@ const copy = {
     rulesHint: '你明确设定的协作方式。协作约定的优先级高于推断出的理解。',
     addRule: '添加约定', ruleStatement: '希望 xopc 如何与你协作？', category: '类别', disable: '停用', enable: '启用',
     emptyUnderstanding: '还没有内容。你可以直接告诉 xopc，或在它学到建议后进行确认。', emptyRules: '还没有协作约定。',
+    qualityTitle: '学习质量', qualityActive: '已确认', qualityPending: '待审核', qualityAcceptance: '30 天采纳率', qualityRecall: '有效召回', qualityNoData: '反馈数据还不足',
     sourceExplicit: '由你直接告知', sourceInferred: '推断内容，可能有误', sourceObserved: '从过往工作中观察到',
     sourcesHint: '查看每项授权的访问方式、保留策略和最近采集时间；撤销后将停止后续学习。', manageSources: '连接其他来源', noSources: '尚未授权任何来源。', connected: '已连接', unavailable: '需要处理', revoke: '撤销并删除派生理解', refresh: '立即更新', once: '仅一次', continuous: '持续更新', localOnly: '仅本地处理', derivedOnly: '仅保留派生理解',
     focuses: '当前关注', focusHint: '候选关注不会自动生效，只有你确认后才会启用。', activate: '启用', pause: '暂停', complete: '完成', noFocuses: '还没有候选关注。',
@@ -165,7 +168,7 @@ export function UserContextPage() {
         ]}
       />
       {tab === 'profile' ? <ProfilePanel profile={data.profile} language={language} t={t} onChanged={(profile) => mutate((current) => current ? { ...current, profile } : current, { revalidate: false })} /> : null}
-      {tab === 'understanding' ? <UnderstandingPanel items={data.understandings} language={language} t={t} onChanged={(understanding) => understanding ? mutate((current) => current ? { ...current, understandings: current.understandings.map((item) => item.id === understanding.id ? understanding : item) } : current, { revalidate: false }) : mutate()} /> : null}
+      {tab === 'understanding' ? <UnderstandingPanel items={data.understandings} quality={data.quality} language={language} t={t} onChanged={(understanding) => understanding ? mutate((current) => current ? { ...current, understandings: current.understandings.map((item) => item.id === understanding.id ? understanding : item) } : current, { revalidate: true }) : mutate()} /> : null}
       {tab === 'collaboration' ? <RulesPanel rules={data.rules} language={language} t={t} onChanged={() => mutate()} /> : null}
       {tab === 'sources' ? <SourcesPanel t={t} /> : null}
       {tab === 'dreaming' ? <DreamingPanel lastRun={data.consolidation?.lastRun ?? null} t={t} /> : null}
@@ -210,7 +213,7 @@ function ProfilePanel({ profile, language, t, onChanged }: {
   </Card>;
 }
 
-function UnderstandingPanel({ items, language, t, onChanged }: { items: UserUnderstanding[]; language: 'en' | 'zh'; t: typeof copy.en | typeof copy.zh; onChanged: (understanding?: UserUnderstanding) => Promise<unknown> }) {
+function UnderstandingPanel({ items, quality, language, t, onChanged }: { items: UserUnderstanding[]; quality: UserUnderstandingQuality; language: 'en' | 'zh'; t: typeof copy.en | typeof copy.zh; onChanged: (understanding?: UserUnderstanding) => Promise<unknown> }) {
   const [adding, setAdding] = useState(false);
   const [statement, setStatement] = useState('');
   const [kind, setKind] = useState<UnderstandingKind>('preference');
@@ -219,11 +222,31 @@ function UnderstandingPanel({ items, language, t, onChanged }: { items: UserUnde
   const submit = async (event: FormEvent) => { event.preventDefault(); if (!statement.trim()) return; await createUnderstanding({ statement, kind }); setStatement(''); setAdding(false); await onChanged(); };
   return <div className="space-y-5">
     <div className="flex items-start justify-between gap-4"><p className="max-w-2xl text-sm leading-6 text-fg-muted">{t.understoodHint}</p><Button variant="primary" onClick={() => setAdding(true)}><Plus className="size-4" />{t.addUnderstanding}</Button></div>
+    <UnderstandingQualitySummary quality={quality} t={t} />
     <FocusPanel t={t} />
     {adding ? <Card><form className="space-y-3" onSubmit={submit}><textarea autoFocus className={inputClass} rows={3} placeholder={t.statement} value={statement} onChange={(event) => setStatement(event.target.value)} /><Select value={kind} onChange={(event) => setKind(event.target.value as UnderstandingKind)}>{Object.entries(kindLabels).map(([value, label]) => <SelectOption key={value} value={value}>{label[language]}</SelectOption>)}</Select><div className="flex gap-2"><Button type="submit" variant="primary">{t.add}</Button><Button onClick={() => setAdding(false)}>{t.cancel}</Button></div></form></Card> : null}
     {review.length ? <section className="space-y-3"><h2 className="text-sm font-semibold text-fg">{t.review} · {review.length}</h2>{review.map((item) => <UnderstandingItemCard key={item.id} item={item} language={language} t={t} onChanged={onChanged} />)}</section> : null}
     <section className="space-y-3"><h2 className="text-sm font-semibold text-fg">{t.active} · {active.length}</h2>{active.length ? active.map((item) => <UnderstandingItemCard key={item.id} item={item} language={language} t={t} onChanged={onChanged} />) : <Empty>{t.emptyUnderstanding}</Empty>}</section>
   </div>;
+}
+
+function UnderstandingQualitySummary({ quality, t }: {
+  quality: UserUnderstandingQuality;
+  t: typeof copy.en | typeof copy.zh;
+}) {
+  const rate = (value: number | null) => value == null ? t.qualityNoData : `${Math.round(value * 100)}%`;
+  const values = [
+    [t.qualityActive, String(quality.records.active)],
+    [t.qualityPending, String(quality.records.candidate + quality.records.needsReview)],
+    [t.qualityAcceptance, rate(quality.decisions.acceptanceRate)],
+    [t.qualityRecall, rate(quality.recall.helpfulRate)],
+  ];
+  return <Card>
+    <h2 className="text-sm font-semibold text-fg">{t.qualityTitle}</h2>
+    <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      {values.map(([label, value]) => <div key={label} className="rounded-xl bg-surface-muted px-3 py-2.5"><p className="text-[11px] text-fg-subtle">{label}</p><p className="mt-1 text-sm font-semibold text-fg">{value}</p></div>)}
+    </div>
+  </Card>;
 }
 
 function UnderstandingItemCard({ item, language, t, onChanged }: {

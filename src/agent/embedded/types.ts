@@ -38,6 +38,7 @@ export type EmbeddedStreamEvent =
       requests: Array<{ id: string; recordId: string; statement: string; purpose: string }>;
     }
   | { type: 'memory_captured'; runId?: string; records: Array<{ id: string; content: string; kind: string }> }
+  | { type: 'memory_candidate'; runId?: string; records: Array<{ id: string; content: string; kind: string }> }
   | { type: 'error'; runId?: string; content: string }
   | {
       type: 'compaction';

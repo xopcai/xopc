@@ -167,7 +167,7 @@ export class UserContextPlanner {
       traceItems.push({ objectType: 'rule', objectId: rule.id, versionId: rule.revisionId, decision: 'selected', reason: 'Active collaboration rule', content: rule.statement, sourceLabel: 'Your collaboration rule', rank: index + 1, score: 1, injectedChars: rule.statement.length });
     }
 
-    const ranked = listUnderstandings(['active', 'candidate', 'needs_review', 'stale'])
+    const ranked = listUnderstandings(['active'])
       .filter((item) => !excluded.has(item.id))
       .map((item) => ({ item, score: relevance(query, item) }))
       .sort((left, right) => right.score - left.score)

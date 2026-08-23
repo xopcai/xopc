@@ -486,6 +486,19 @@ html.dark {
   }
 }
 
+.xopc-memory-candidate {
+  animation: xopc-memory-candidate-enter 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes xopc-memory-candidate-enter {
+  from { opacity: 0; transform: translateY(8px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xopc-memory-candidate { animation: none; }
+}
+
 /* Settings full-page left rail: own `--settings-rail-px` (narrower min/max than app sidebar). */
 @media (min-width: 768px) {
   .settings-page-rail {
@@ -539,6 +552,65 @@ html.dark {
   to {
     opacity: 1;
     transform: translateY(0) translateZ(0);
+  }
+}
+
+/* First-run onboarding: restrained spatial motion with a soft, glassy light field. */
+.xopc-onboarding-card {
+  isolation: isolate;
+}
+
+.xopc-onboarding-aurora {
+  background:
+    radial-gradient(circle at 34% 55%, rgb(58 107 255 / 0.19), transparent 38%),
+    radial-gradient(circle at 68% 42%, rgb(46 216 255 / 0.14), transparent 34%);
+  filter: blur(22px);
+  animation: xopc-onboarding-aurora 8s ease-in-out infinite alternate;
+}
+
+.xopc-onboarding-logo {
+  animation: xopc-onboarding-logo-in 650ms cubic-bezier(.18, .9, .28, 1.2) both;
+}
+
+.xopc-onboarding-stage {
+  animation: xopc-onboarding-stage-in 420ms cubic-bezier(.2, .8, .2, 1) both;
+  transform-origin: 50% 20%;
+}
+
+@keyframes xopc-onboarding-stage-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0) scale(0.985);
+    filter: blur(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes xopc-onboarding-logo-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0) scale(0.82);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes xopc-onboarding-aurora {
+  from { transform: translate3d(-2%, 0, 0) scale(0.98); opacity: 0.72; }
+  to { transform: translate3d(2%, 5%, 0) scale(1.04); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xopc-onboarding-stage,
+  .xopc-onboarding-logo,
+  .xopc-onboarding-aurora {
+    animation: none;
   }
 }
 

@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { userInfo } from 'node:os';
 
 import type { Hono } from 'hono';
@@ -9,18 +8,15 @@ import {
   getTurnPersonalization, getUnderstanding, getUserProfile,
   listCollaborationRules, listContextConsolidationRuns, listUnderstandingEvidence, listUnderstandings,
   recordContextFeedback, rejectUnderstanding, reviseCollaborationRule,
-  reviseUnderstanding, setCollaborationRuleStatus, setUnderstandingStatus,
+  reviseUnderstanding, setCollaborationRuleStatus, setUnderstandingStatus, summarizeUserUnderstandingQuality,
   updateUserProfile,
 } from '../../../storage/sqlite/index.js';
-import type {
-  CollaborationRule, UnderstandingKind, UnderstandingStatus, UserContextScope,
-} from '../../../user-context/domain.js';
+import { UNDERSTANDING_KINDS, type CollaborationRule, type UnderstandingKind,
+  type UnderstandingStatus, type UserContextScope } from '../../../user-context/domain.js';
+import { canonicalUnderstandingKey, findDuplicateUnderstanding } from '../../../user-context/understanding.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
-const UNDERSTANDING_KINDS = new Set<UnderstandingKind>([
-  'preference', 'boundary', 'relationship', 'routine', 'current_state',
-  'long_term_goal', 'project_context', 'task_lesson', 'derived_insight',
-]);
+const UNDERSTANDING_KIND_SET = new Set<UnderstandingKind>(UNDERSTANDING_KINDS);
 const UNDERSTANDING_STATUSES = new Set<UnderstandingStatus>([
   'candidate', 'active', 'needs_review', 'stale', 'archived', 'rejected',
 ]);
@@ -59,15 +55,6 @@ function scopeFrom(value: unknown): UserContextScope | undefined {
   return id ? { type, id } : undefined;
 }
 
-function canonicalKey(kind: UnderstandingKind, statement: string): string {
-  const normalized = statement.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
-  return `${kind}:${createHash('sha256').update(normalized).digest('hex').slice(0, 20)}`;
-}
-
-function sameScope(left: UserContextScope, right: UserContextScope): boolean {
-  return left.type === right.type && left.id === right.id;
-}
-
 function validTimezone(value: string): boolean {
   if (!value) return true;
   try {
@@ -97,6 +84,7 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
     understandings: listUnderstandings(),
     rules: listCollaborationRules(),
     consolidation: { lastRun: listContextConsolidationRuns(1)[0] ?? null },
+    quality: summarizeUserUnderstandingQuality(),
   }));
 
   authenticated.get('/api/you/profile', (c) => {
@@ -133,13 +121,14 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
     const statement = nonEmptyString(body?.statement);
     const kind = body?.kind;
     const scope = scopeFrom(body?.scope ?? { type: 'global' });
-    if (!statement || !UNDERSTANDING_KINDS.has(kind as UnderstandingKind) || !scope) {
+    if (!statement || !UNDERSTANDING_KIND_SET.has(kind as UnderstandingKind) || !scope) {
       return c.json({ error: 'Valid statement, kind, and scope are required' }, 400);
     }
     const typedKind = kind as UnderstandingKind;
-    const key = canonicalKey(typedKind, statement);
-    if (listUnderstandings().some((item) => item.canonicalKey === key && sameScope(item.scope, scope)
-      && item.status !== 'archived' && item.status !== 'rejected')) {
+    const key = canonicalUnderstandingKey(typedKind, statement);
+    if (findDuplicateUnderstanding(listUnderstandings(), {
+      kind: typedKind, statement, canonicalKey: key, scope,
+    })) {
       return c.json({ error: 'This understanding already exists' }, 409);
     }
     const understanding = createUnderstanding({
@@ -166,10 +155,14 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
     if (body.statement !== undefined) {
       const statement = nonEmptyString(body.statement);
       if (!statement) return c.json({ error: 'statement must be 1-2000 characters' }, 400);
-      const key = canonicalKey(understanding.kind, statement);
-      if (listUnderstandings().some((item) => item.id !== id && item.canonicalKey === key
-        && sameScope(item.scope, understanding.scope)
-        && item.status !== 'archived' && item.status !== 'rejected')) {
+      const key = canonicalUnderstandingKey(understanding.kind, statement);
+      if (findDuplicateUnderstanding(listUnderstandings(), {
+        kind: understanding.kind,
+        statement,
+        canonicalKey: key,
+        scope: understanding.scope,
+        excludeId: id,
+      })) {
         return c.json({ error: 'This understanding already exists' }, 409);
       }
       understanding = reviseUnderstanding(id, statement, {

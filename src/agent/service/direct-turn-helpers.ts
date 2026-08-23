@@ -192,7 +192,10 @@ export async function runDirectAgentTurn(
 
   const understandingReview = await deps.agentManager.afterAgentTurn(input.sessionKey, userPlain);
   if (understandingReview?.createdRecords.length) {
-    input.onEvent?.({ type: 'memory_captured', runId: turnId, records: understandingReview.createdRecords });
+    const captured = understandingReview.createdRecords.filter((record) => record.status === 'active');
+    const candidates = understandingReview.createdRecords.filter((record) => record.status === 'candidate');
+    if (captured.length) input.onEvent?.({ type: 'memory_captured', runId: turnId, records: captured });
+    if (candidates.length) input.onEvent?.({ type: 'memory_candidate', runId: turnId, records: candidates });
   }
   deps.agentManager.scheduleBackgroundReviewAfterUserTurn(input.sessionKey);
 
