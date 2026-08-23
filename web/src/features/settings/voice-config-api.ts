@@ -73,13 +73,12 @@ function defaultTts(): TtsSettings {
     trigger: 'inbound',
     maxTextLength: 512,
     timeoutMs: 60000,
-    alibaba: { model: 'qwen-tts', voice: 'Cherry' },
-    openai: { model: 'tts-1', voice: 'alloy' },
-    edge: { voice: 'zh-CN-XiaoxiaoNeural', lang: 'zh-CN' },
-    minimax: { model: 'speech-2.8-hd', voice: 'male-qn-qingse' },
-    'tts-local-cli': {
-      command: '',
-      outputFormat: 'wav',
+    providers: {
+      alibaba: { model: 'qwen-tts', voice: 'Cherry' },
+      openai: { model: 'tts-1', voice: 'alloy' },
+      edge: { voice: 'zh-CN-XiaoxiaoNeural', lang: 'zh-CN' },
+      minimax: { model: 'speech-2.8-hd', voice: 'male-qn-qingse' },
+      'tts-local-cli': { command: '', outputFormat: 'wav' },
     },
   };
 }
@@ -158,15 +157,17 @@ function mergeTts(raw: unknown): TtsSettings {
     raw.trigger === 'tagged'
       ? raw.trigger
       : 'inbound';
-  const localCliDefaults = d['tts-local-cli'] ?? {};
-  const providers = isRecord(raw.providers)
-    ? Object.fromEntries(
-        Object.entries(raw.providers).map(([key, value]) => [
-          key,
-          isRecord(value) ? { ...value } : {},
-        ]),
-      )
-    : undefined;
+  const providers = {
+    ...(d.providers ?? {}),
+    ...(isRecord(raw.providers)
+      ? Object.fromEntries(
+          Object.entries(raw.providers).map(([key, value]) => [
+            key,
+            isRecord(value) ? { ...value } : {},
+          ]),
+        )
+      : {}),
+  };
 
   return {
     enabled: Boolean(raw.enabled),
@@ -178,12 +179,7 @@ function mergeTts(raw: unknown): TtsSettings {
         : d.maxTextLength,
     timeoutMs:
       typeof raw.timeoutMs === 'number' && Number.isFinite(raw.timeoutMs) ? raw.timeoutMs : d.timeoutMs,
-    ...(providers ? { providers } : {}),
-    alibaba: readProviderSlice(raw, 'alibaba', d.alibaba ?? {}),
-    openai: readProviderSlice(raw, 'openai', d.openai ?? {}),
-    edge: readProviderSlice(raw, 'edge', d.edge ?? {}),
-    minimax: readProviderSlice(raw, 'minimax', d.minimax ?? {}),
-    'tts-local-cli': readProviderSlice(raw, 'tts-local-cli', localCliDefaults),
+    providers,
   };
 }
 
@@ -203,17 +199,7 @@ function toSttPayload(stt: SttSettings): Record<string, unknown> {
 }
 
 function toTtsPayload(tts: TtsSettings): Record<string, unknown> {
-  const { alibaba, openai, edge, minimax, 'tts-local-cli': localCli, providers, ...rest } = tts;
-  const providerMap: Record<string, Record<string, unknown>> = { ...(providers ?? {}) };
-  if (alibaba) providerMap.alibaba = { ...(providerMap.alibaba ?? {}), ...alibaba };
-  if (openai) providerMap.openai = { ...(providerMap.openai ?? {}), ...openai };
-  if (edge) providerMap.edge = { ...(providerMap.edge ?? {}), ...edge };
-  if (minimax) providerMap.minimax = { ...(providerMap.minimax ?? {}), ...minimax };
-  if (localCli) providerMap['tts-local-cli'] = { ...(providerMap['tts-local-cli'] ?? {}), ...localCli };
-  return {
-    ...rest,
-    ...(Object.keys(providerMap).length > 0 ? { providers: providerMap } : {}),
-  };
+  return { ...tts };
 }
 
 export function normalizeVoiceSettings(config: unknown): VoiceSettingsState {

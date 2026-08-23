@@ -50,4 +50,32 @@ describe('voice-config-api', () => {
       body: JSON.stringify({ language: 'en' }),
     });
   });
+
+  it('keeps every TTS provider in the unified providers map', async () => {
+    fetchJson.mockResolvedValue({ ok: true });
+    const state = normalizeVoiceSettings({
+      tts: {
+        enabled: true,
+        provider: 'xopc-cloud',
+        providers: {
+          'xopc-cloud': { model: 'cloud-tts', voice: 'voice-a' },
+          openai: { model: 'gpt-4o-mini-tts', voice: 'coral' },
+        },
+      },
+    });
+
+    expect(state.tts.providers?.['xopc-cloud']).toEqual({ model: 'cloud-tts', voice: 'voice-a' });
+    await patchVoiceSettings(state);
+
+    const init = fetchJson.mock.calls[0]?.[1] as RequestInit;
+    const payload = JSON.parse(String(init.body)) as { tts: Record<string, unknown> };
+    expect(payload.tts.providers).toMatchObject({
+      'xopc-cloud': { model: 'cloud-tts', voice: 'voice-a' },
+      openai: { model: 'gpt-4o-mini-tts', voice: 'coral' },
+    });
+    expect(payload.tts).not.toHaveProperty('openai');
+    expect(payload.tts).not.toHaveProperty('alibaba');
+    expect(payload.tts).not.toHaveProperty('minimax');
+    expect(payload.tts).not.toHaveProperty('edge');
+  });
 });

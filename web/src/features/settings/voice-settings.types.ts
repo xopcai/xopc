@@ -72,25 +72,6 @@ export interface SttSettings {
   fallback?: { enabled: boolean; order: string[] };
 }
 
-/** Built-in TTS provider ids; extensions add more via the SpeechProviderRegistry. */
-export type BuiltinTtsProvider = 'openai' | 'alibaba' | 'edge' | 'minimax' | 'tts-local-cli';
-
-/** Local CLI provider config (matches `extensions/tts-local-cli/xopc.extension.json`). */
-export interface TtsLocalCliSettings {
-  /** Shell command template, e.g. `mlx_audio.tts.generate --text "{{Text}}" --file_prefix {{OutputBase}}`. */
-  command?: string;
-  /** Extra args appended after the parsed command. */
-  args?: string[];
-  /** Optional working directory for the spawned process. */
-  cwd?: string;
-  /** Output extension produced by the CLI (`mp3` | `opus` | `wav`). Defaults to `wav`. */
-  outputFormat?: 'mp3' | 'opus' | 'wav';
-  /** Per-call timeout override in ms (defaults to TTS root `timeoutMs`, hard-kill at 120000). */
-  timeoutMs?: number;
-  /** Extra env vars merged into the spawned process env. */
-  env?: Record<string, string>;
-}
-
 export interface TtsSettings {
   enabled: boolean;
   /** Built-in id or any extension-registered SpeechProviderPlugin id. */
@@ -99,11 +80,6 @@ export interface TtsSettings {
   maxTextLength?: number;
   timeoutMs?: number;
   providers?: Record<string, Record<string, unknown>>;
-  alibaba?: { apiKey?: string; model?: string; voice?: string };
-  openai?: { apiKey?: string; baseUrl?: string; model?: string; voice?: string };
-  edge?: { voice?: string; lang?: string };
-  minimax?: { apiKey?: string; baseUrl?: string; model?: string; voice?: string; groupId?: string };
-  'tts-local-cli'?: TtsLocalCliSettings;
 }
 
 export interface VoiceSettingsState {
