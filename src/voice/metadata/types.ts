@@ -18,6 +18,9 @@ export interface VoiceConfigFieldMetadata {
   description?: string;
   options?: VoiceOptionMetadata[];
   defaultValue?: string | number | boolean;
+  min?: number;
+  max?: number;
+  step?: number;
 }
 
 export interface VoiceProviderDiagnosticMetadata {

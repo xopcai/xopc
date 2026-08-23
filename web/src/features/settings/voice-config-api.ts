@@ -23,6 +23,14 @@ export interface TtsTestInput {
   providerConfig?: Record<string, unknown>;
 }
 
+export async function fetchTtsVoices(provider: string, model: string): Promise<VoiceModelsPayload['ttsVoices'][string]> {
+  const params = new URLSearchParams({ provider, model });
+  const res = await fetchJson<{ ok?: boolean; payload?: { voices?: VoiceModelsPayload['ttsVoices'][string] } }>(
+    apiUrl(`/api/voice/tts-voices?${params.toString()}`),
+  );
+  return res.payload?.voices ?? [];
+}
+
 export interface LocalVoiceModelStatus {
   id: string;
   name: string;

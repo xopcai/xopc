@@ -5,6 +5,12 @@ export interface VoiceModel {
   id: string;
   name: string;
   description?: string;
+  tts?: {
+    speed: boolean;
+    instructions: boolean;
+    outputFormats: string[];
+    defaultVoice?: string;
+  };
 }
 
 export interface VoiceModelsConfig {
@@ -38,7 +44,18 @@ export function getVoiceModelsConfig(): VoiceModelsConfig {
     .map((model) => ({ id: model.id, name: model.name }));
   config.tts['xopc-cloud'] = cloudModels
     .filter((model) => model.availability === 'available' && model.kind === 'tts')
-    .map((model) => ({ id: model.id, name: model.name }));
+    .map((model) => ({
+      id: model.id,
+      name: model.name,
+      ...(model.tts ? {
+        tts: {
+          speed: model.tts.speed,
+          instructions: model.tts.instructions,
+          outputFormats: [...model.tts.outputFormats],
+          ...(model.tts.defaultVoice ? { defaultVoice: model.tts.defaultVoice } : {}),
+        },
+      } : {}),
+    }));
   return config;
 }
 

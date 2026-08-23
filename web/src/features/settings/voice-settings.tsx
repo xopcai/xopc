@@ -11,6 +11,7 @@ import {
   fetchVoiceModels,
   fetchVoiceProviders,
   fetchVoiceSttProviders,
+  fetchTtsVoices,
   fetchLocalVoiceStatus,
   installLocalVoiceModel,
   normalizeVoiceSettings,
@@ -1155,6 +1156,7 @@ function TtsSection({
   const ttsVoicesMinimax = models?.ttsVoices?.minimax?.length
     ? models.ttsVoices.minimax
     : TTS_MINIMAX_VOICES_FALLBACK;
+  const ttsXopcCloud = models?.tts?.['xopc-cloud'] ?? [];
 
   const [testText, setTestText] = useState(v.tts.test.sampleText);
   const [testState, setTestState] = useState<
@@ -1189,6 +1191,10 @@ function TtsSection({
 
   const activeProvider = providerOptions.find((entry) => entry.id === tts.provider);
   const providerSlice = tts.providers?.[tts.provider];
+  const xopcCloudModel = tts.provider === 'xopc-cloud'
+    ? (typeof providerSlice?.model === 'string' ? providerSlice.model : ttsXopcCloud[0]?.id)
+    : undefined;
+  const activeXopcCloudModel = ttsXopcCloud.find((model) => model.id === xopcCloudModel);
   const schemaProviderSlice: Record<string, unknown> = {
     ...(tts.provider === 'openai' ? (tts.openai ?? {}) : {}),
     ...(tts.provider === 'alibaba' ? (tts.alibaba ?? {}) : {}),
@@ -1198,7 +1204,9 @@ function TtsSection({
     ...(providerSlice ?? {}),
   };
   const additionalFields = (activeProvider?.fields ?? []).filter(
-    (field) => !['apiKey', 'model', 'voice'].includes(field.key),
+    (field) => !['apiKey', 'model', 'voice'].includes(field.key)
+      && (field.key !== 'speed' || activeXopcCloudModel?.tts?.speed !== false)
+      && (field.key !== 'instructions' || activeXopcCloudModel?.tts?.instructions !== false),
   );
   const providerNeedsKey = Boolean(activeProvider?.diagnostics.requiresApiKey);
   const providerReady = Boolean(activeProvider?.configured) || !providerNeedsKey;
@@ -1214,8 +1222,10 @@ function TtsSection({
       : tts.provider === 'alibaba'
         ? tts.alibaba?.model
         : tts.provider === 'minimax'
-          ? tts.minimax?.model
-          : undefined;
+        ? tts.minimax?.model
+          : tts.provider === 'xopc-cloud'
+            ? xopcCloudModel
+            : undefined;
   const currentVoice =
     tts.provider === 'openai'
       ? tts.openai?.voice
@@ -1225,7 +1235,38 @@ function TtsSection({
           ? tts.minimax?.voice
           : tts.provider === 'edge'
             ? tts.edge?.voice
-            : undefined;
+            : tts.provider === 'xopc-cloud' && typeof providerSlice?.voice === 'string'
+              ? providerSlice.voice
+              : undefined;
+
+  const { data: xopcCloudVoices = [], isLoading: xopcCloudVoicesLoading } = useSWR(
+    tts.provider === 'xopc-cloud' && xopcCloudModel
+      ? `voice:tts:xopc-cloud:${xopcCloudModel}`
+      : null,
+    () => fetchTtsVoices('xopc-cloud', xopcCloudModel ?? ''),
+    { revalidateOnFocus: false },
+  );
+
+  useEffect(() => {
+    if (tts.provider !== 'xopc-cloud' || !xopcCloudModel) return;
+    const configuredModel = typeof providerSlice?.model === 'string' ? providerSlice.model : undefined;
+    const configuredVoice = typeof providerSlice?.voice === 'string' ? providerSlice.voice : undefined;
+    const defaultVoice = activeXopcCloudModel?.tts?.defaultVoice;
+    const selectedVoice = configuredVoice && xopcCloudVoices.some((voice) => voice.id === configuredVoice)
+      ? configuredVoice
+      : xopcCloudVoices.find((voice) => voice.id === defaultVoice)?.id ?? xopcCloudVoices[0]?.id;
+    if (configuredModel === xopcCloudModel && (!selectedVoice || configuredVoice === selectedVoice)) return;
+    updateTts({
+      providers: {
+        ...(tts.providers ?? {}),
+        'xopc-cloud': {
+          ...(tts.providers?.['xopc-cloud'] ?? {}),
+          model: xopcCloudModel,
+          ...(selectedVoice ? { voice: selectedVoice } : {}),
+        },
+      },
+    });
+  }, [activeXopcCloudModel?.tts?.defaultVoice, providerSlice?.model, providerSlice?.voice, tts.provider, tts.providers, updateTts, xopcCloudModel, xopcCloudVoices]);
 
   useEffect(() => () => stopTestAudio(), [stopTestAudio]);
 
@@ -1481,6 +1522,36 @@ function TtsSection({
                       <SelectOption key={m.id} value={m.id}>
                         {m.name}
                       </SelectOption>
+                    ))}
+                  </Select>
+                </div>
+              </div>
+            ) : null}
+
+            {tts.provider === 'xopc-cloud' ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
+                  <FieldLabel>{v.stt.model}</FieldLabel>
+                  <Select
+                    className={selectClassName()}
+                    value={xopcCloudModel ?? ''}
+                    onChange={(e) => updateProviderSlice({ model: e.target.value, voice: undefined })}
+                  >
+                    {ttsXopcCloud.map((model) => (
+                      <SelectOption key={model.id} value={model.id}>{model.name}</SelectOption>
+                    ))}
+                  </Select>
+                </div>
+                <div className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
+                  <FieldLabel>{v.tts.voice}</FieldLabel>
+                  <Select
+                    className={selectClassName()}
+                    value={currentVoice ?? ''}
+                    disabled={xopcCloudVoicesLoading || xopcCloudVoices.length === 0}
+                    onChange={(e) => updateProviderSlice({ voice: e.target.value })}
+                  >
+                    {xopcCloudVoices.map((voice) => (
+                      <SelectOption key={voice.id} value={voice.id}>{voice.name}</SelectOption>
                     ))}
                   </Select>
                 </div>
@@ -1813,6 +1884,9 @@ function SchemaConfigField({
           value={fieldValue}
           required={field.required}
           placeholder={field.placeholder}
+          min={field.min}
+          max={field.max}
+          step={field.step}
           onChange={(event) => onChange(parseSchemaFieldValue(field, event.target.value))}
         />
       )}

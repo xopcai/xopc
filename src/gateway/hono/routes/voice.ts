@@ -19,6 +19,7 @@ import { completeWithResolvedCredentials } from '../../../providers/model-call.j
 import { isSTTAvailable, mergeSttConfigFromAppConfig, transcribe } from '../../../voice/stt/index.js';
 import { isTTSAvailable, mergeTtsConfigFromAppConfig, speak } from '../../../voice/tts/index.js';
 import { listTtsProvidersForApi } from '../../../voice/tts/list-providers.js';
+import { resolveSpeechProvider } from '../../../voice/tts/factory.js';
 import { listSttProvidersForApi } from '../../../voice/stt/list-providers.js';
 import { resolveSttProviderConfigSlice } from '../../../voice/stt/config-slice.js';
 import { resolveTtsProviderConfigSlice } from '../../../voice/tts/config-slice.js';
@@ -204,6 +205,38 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
     const config = service.currentConfig as Config;
     const payload = listTtsProvidersForApi(config);
     return c.json({ ok: true, payload });
+  });
+
+  authenticated.get('/api/voice/tts-voices', async (c) => {
+    const provider = c.req.query('provider')?.trim() ?? '';
+    const model = c.req.query('model')?.trim() ?? '';
+    if (!provider || !model || provider.length > 100 || model.length > 200) {
+      return c.json({ ok: false, error: { message: 'provider and model are required' } }, 400);
+    }
+
+    const config = service.currentConfig as Config;
+    const baseConfig = mergeTtsConfigFromAppConfig(config.messages?.tts);
+    const resolved = resolveSpeechProvider(provider, {
+      ...baseConfig,
+      provider,
+      providers: {
+        ...(baseConfig.providers ?? {}),
+        [provider]: { ...(baseConfig.providers?.[provider] ?? {}), model },
+      },
+    });
+    if (!resolved?.plugin.listVoices) {
+      return c.json({ ok: true, payload: { voices: [] } });
+    }
+    try {
+      const voices = await resolved.plugin.listVoices({
+        cfg: config,
+        providerConfig: resolved.providerConfig,
+      });
+      return c.json({ ok: true, payload: { voices } });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return c.json({ ok: false, error: { message: `Voice discovery failed: ${message}` } }, 502);
+    }
   });
 
   /**
