@@ -62,6 +62,28 @@ describe('skill_install', () => {
     expect(textPayload(result)).toContain('Installed skill "demo".');
   });
 
+  it('accepts SkillHub marketplace installs', async () => {
+    const installSkillFromMarketplace = vi.fn(async (opts: MarketplaceSkillInstallToolOptions) => ({
+      skillId: 'react',
+      path: '/workspace/.xopc/skills/react',
+      provider: opts.provider,
+      name: opts.name,
+      target: opts.target,
+    }));
+    const tool = createSkillInstallTool({ installSkillFromMarketplace });
+
+    const result = await tool.execute('call-skillhub', {
+      provider: 'skillhub',
+      name: 'react',
+    });
+
+    expect(installSkillFromMarketplace).toHaveBeenCalledWith(expect.objectContaining({
+      provider: 'skillhub',
+      name: 'react',
+    }));
+    expect(textPayload(result)).toContain('from skillhub.');
+  });
+
   it('uses workspace only when explicitly requested', async () => {
     const installSkillFromMarketplace = vi.fn(async (opts: MarketplaceSkillInstallToolOptions) => ({
       skillId: 'demo',
