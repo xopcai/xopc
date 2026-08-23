@@ -54,19 +54,6 @@ function sttEnvHint(provider: string): string {
   }
 }
 
-function ttsEnvHint(provider: string): string {
-  switch (provider) {
-    case 'alibaba':
-      return '(DASHSCOPE_API_KEY)';
-    case 'openai':
-      return '(OPENAI_API_KEY)';
-    case 'minimax':
-      return '(MINIMAX_API_KEY)';
-    default:
-      return '';
-  }
-}
-
 function inputClassName(): string {
   return cn(
     'w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg',
@@ -107,53 +94,6 @@ const STT_GROQ_MODELS_FALLBACK = [
   { id: 'whisper-large-v3-turbo', name: 'Whisper Large v3 Turbo' },
   { id: 'whisper-large-v3', name: 'Whisper Large v3' },
 ];
-const TTS_OPENAI_MODELS_FALLBACK = [
-  { id: 'tts-1', name: 'TTS-1' },
-  { id: 'tts-1-hd', name: 'TTS-1 HD' },
-];
-const TTS_OPENAI_VOICES_FALLBACK = [
-  { id: 'alloy', name: 'Alloy' },
-  { id: 'echo', name: 'Echo' },
-];
-const TTS_ALIBABA_MODELS_FALLBACK = [
-  { id: 'qwen-tts', name: 'Qwen TTS' },
-  { id: 'qwen3-tts-flash', name: 'Qwen3 TTS Flash' },
-];
-const TTS_ALIBABA_VOICES_FALLBACK = [
-  { id: 'Cherry', name: 'Cherry' },
-  { id: 'longxiaochun', name: 'Long Xiao Chun' },
-];
-const TTS_EDGE_VOICES_FALLBACK = [
-  { id: 'en-US-MichelleNeural', name: 'Michelle (US English)' },
-  { id: 'zh-CN-XiaoxiaoNeural', name: 'Xiaoxiao (Chinese)' },
-];
-const TTS_MINIMAX_MODELS_FALLBACK = [
-  { id: 'speech-2.8-hd', name: 'Speech 2.8 HD (Recommended)' },
-  { id: 'speech-2.8-turbo', name: 'Speech 2.8 Turbo (Fast)' },
-];
-const TTS_MINIMAX_VOICES_FALLBACK = [
-  { id: 'male-qn-qingse', name: 'Male Qingse (青涩男声)' },
-  { id: 'female-shaonv', name: 'Female Shaonv (少女音)' },
-];
-
-const TTS_LOCAL_CLI_PRESETS = [
-  {
-    id: 'piper',
-    command: 'piper --model /path/to/voice.onnx --output_file "{{OutputPath}}"',
-    outputFormat: 'wav' as const,
-  },
-  {
-    id: 'sherpa-onnx',
-    command: 'sherpa-onnx-offline-tts --text "{{Text}}" --output-filename "{{OutputPath}}"',
-    outputFormat: 'wav' as const,
-  },
-  {
-    id: 'mlx-audio',
-    command: 'python -m mlx_audio.tts.generate --text "{{Text}}" --file_prefix "{{OutputBase}}"',
-    outputFormat: 'wav' as const,
-  },
-];
-
 function sttProviderLabel(id: string, v: VoiceSettingsMessages): string {
   switch (id) {
     case 'xopc-local':
@@ -500,83 +440,6 @@ export function VoiceSettingsPanel() {
     });
   }, []);
 
-  const updateTtsAlibaba = useCallback((patch: Partial<NonNullable<VoiceSettingsState['tts']['alibaba']>>) => {
-    dirtyRef.current = true;
-    dispatchForm({
-      type: 'update',
-      updater: (f) =>
-        f
-          ? {
-              ...f,
-              tts: { ...f.tts, alibaba: { ...f.tts.alibaba, ...patch } },
-            }
-          : null,
-    });
-  }, []);
-
-  const updateTtsOpenai = useCallback((patch: Partial<NonNullable<VoiceSettingsState['tts']['openai']>>) => {
-    dirtyRef.current = true;
-    dispatchForm({
-      type: 'update',
-      updater: (f) =>
-        f
-          ? {
-              ...f,
-              tts: { ...f.tts, openai: { ...f.tts.openai, ...patch } },
-            }
-          : null,
-    });
-  }, []);
-
-  const updateTtsEdge = useCallback((patch: Partial<NonNullable<VoiceSettingsState['tts']['edge']>>) => {
-    dirtyRef.current = true;
-    dispatchForm({
-      type: 'update',
-      updater: (f) =>
-        f
-          ? {
-              ...f,
-              voice:
-                patch.voice !== undefined || patch.lang !== undefined
-                  ? { ...f.voice, languageMode: 'manual' }
-                  : f.voice,
-              tts: { ...f.tts, edge: { ...f.tts.edge, ...patch } },
-            }
-          : null,
-    });
-  }, []);
-
-  const updateTtsMinimax = useCallback(
-    (patch: Partial<NonNullable<VoiceSettingsState['tts']['minimax']>>) => {
-      dirtyRef.current = true;
-      dispatchForm({
-        type: 'update',
-        updater: (f) => (f ? { ...f, tts: { ...f.tts, minimax: { ...f.tts.minimax, ...patch } } } : null),
-      });
-    },
-    [],
-  );
-
-  const updateTtsLocalCli = useCallback(
-    (patch: Partial<NonNullable<VoiceSettingsState['tts']['tts-local-cli']>>) => {
-      dirtyRef.current = true;
-      dispatchForm({
-        type: 'update',
-        updater: (f) =>
-          f
-            ? {
-                ...f,
-                tts: {
-                  ...f.tts,
-                  'tts-local-cli': { ...f.tts['tts-local-cli'], ...patch },
-                },
-              }
-            : null,
-      });
-    },
-    [],
-  );
-
   const save = useCallback(async (snapshot: VoiceSettingsState) => {
     try {
       await patchVoiceSettings(snapshot);
@@ -662,11 +525,6 @@ export function VoiceSettingsPanel() {
           models={models}
           ttsProviders={ttsProviders}
           updateTts={updateTts}
-          updateTtsAlibaba={updateTtsAlibaba}
-          updateTtsOpenai={updateTtsOpenai}
-          updateTtsEdge={updateTtsEdge}
-          updateTtsMinimax={updateTtsMinimax}
-          updateTtsLocalCli={updateTtsLocalCli}
         />
       </div>
 
@@ -720,16 +578,8 @@ function VoiceOverview({
   stt: VoiceSettingsState['stt'];
   tts: VoiceSettingsState['tts'];
 }) {
-  const replyVoice =
-    tts.provider === 'openai'
-      ? tts.openai?.voice
-      : tts.provider === 'alibaba'
-        ? tts.alibaba?.voice
-        : tts.provider === 'minimax'
-          ? tts.minimax?.voice
-          : tts.provider === 'edge'
-            ? tts.edge?.voice
-            : undefined;
+  const configuredVoice = tts.providers?.[tts.provider]?.voice;
+  const replyVoice = typeof configuredVoice === 'string' ? configuredVoice : undefined;
   return (
     <section className="rounded-2xl bg-surface-base px-4 py-5 sm:px-5">
       <div className="mb-4">
@@ -1129,11 +979,6 @@ function TtsSection({
   models,
   ttsProviders,
   updateTts,
-  updateTtsAlibaba,
-  updateTtsOpenai,
-  updateTtsEdge,
-  updateTtsMinimax,
-  updateTtsLocalCli,
 }: {
   v: VoiceSettingsMessages;
   apiKeyLabels: VoiceApiKeyFieldLabels;
@@ -1141,23 +986,7 @@ function TtsSection({
   models: VoiceModelsPayload | null;
   ttsProviders: TtsProviderListEntry[];
   updateTts: (p: Partial<VoiceSettingsState['tts']>) => void;
-  updateTtsAlibaba: (p: Partial<NonNullable<VoiceSettingsState['tts']['alibaba']>>) => void;
-  updateTtsOpenai: (p: Partial<NonNullable<VoiceSettingsState['tts']['openai']>>) => void;
-  updateTtsEdge: (p: Partial<NonNullable<VoiceSettingsState['tts']['edge']>>) => void;
-  updateTtsMinimax: (p: Partial<NonNullable<VoiceSettingsState['tts']['minimax']>>) => void;
-  updateTtsLocalCli: (p: Partial<NonNullable<VoiceSettingsState['tts']['tts-local-cli']>>) => void;
 }) {
-  const ttsOpenai = models?.tts?.openai?.length ? models.tts.openai : TTS_OPENAI_MODELS_FALLBACK;
-  const ttsVoicesOpenai = models?.ttsVoices?.openai?.length ? models.ttsVoices.openai : TTS_OPENAI_VOICES_FALLBACK;
-  const ttsAlibaba = models?.tts?.alibaba?.length ? models.tts.alibaba : TTS_ALIBABA_MODELS_FALLBACK;
-  const ttsVoicesAlibaba = models?.ttsVoices?.alibaba?.length ? models.ttsVoices.alibaba : TTS_ALIBABA_VOICES_FALLBACK;
-  const ttsVoicesEdge = models?.ttsVoices?.edge?.length ? models.ttsVoices.edge : TTS_EDGE_VOICES_FALLBACK;
-  const ttsMinimax = models?.tts?.minimax?.length ? models.tts.minimax : TTS_MINIMAX_MODELS_FALLBACK;
-  const ttsVoicesMinimax = models?.ttsVoices?.minimax?.length
-    ? models.ttsVoices.minimax
-    : TTS_MINIMAX_VOICES_FALLBACK;
-  const ttsXopcCloud = models?.tts?.['xopc-cloud'] ?? [];
-
   const [testText, setTestText] = useState(v.tts.test.sampleText);
   const [testState, setTestState] = useState<
     | { status: 'idle' }
@@ -1190,23 +1019,33 @@ function TtsSection({
   }, [ttsProviders]);
 
   const activeProvider = providerOptions.find((entry) => entry.id === tts.provider);
-  const providerSlice = tts.providers?.[tts.provider];
-  const xopcCloudModel = tts.provider === 'xopc-cloud'
-    ? (typeof providerSlice?.model === 'string' ? providerSlice.model : ttsXopcCloud[0]?.id)
-    : undefined;
-  const activeXopcCloudModel = ttsXopcCloud.find((model) => model.id === xopcCloudModel);
-  const schemaProviderSlice: Record<string, unknown> = {
-    ...(tts.provider === 'openai' ? (tts.openai ?? {}) : {}),
-    ...(tts.provider === 'alibaba' ? (tts.alibaba ?? {}) : {}),
-    ...(tts.provider === 'edge' ? (tts.edge ?? {}) : {}),
-    ...(tts.provider === 'minimax' ? (tts.minimax ?? {}) : {}),
-    ...(tts.provider === 'tts-local-cli' ? (tts['tts-local-cli'] ?? {}) : {}),
-    ...(providerSlice ?? {}),
-  };
-  const additionalFields = (activeProvider?.fields ?? []).filter(
-    (field) => !['apiKey', 'model', 'voice'].includes(field.key)
-      && (field.key !== 'speed' || activeXopcCloudModel?.tts?.speed !== false)
-      && (field.key !== 'instructions' || activeXopcCloudModel?.tts?.instructions !== false),
+  const providerSlice = tts.providers?.[tts.provider] ?? {};
+  const providerModels = models?.tts?.[tts.provider]?.length
+    ? models.tts[tts.provider]
+    : activeProvider?.models ?? [];
+  const modelField = activeProvider?.fields.find((field) => field.key === 'model');
+  const voiceField = activeProvider?.fields.find((field) => field.key === 'voice');
+  const configuredModel = typeof providerSlice.model === 'string' ? providerSlice.model : undefined;
+  const currentModel = configuredModel
+    ?? (typeof modelField?.defaultValue === 'string' ? modelField.defaultValue : providerModels[0]?.id);
+  const activeModel = providerModels.find((model) => model.id === currentModel);
+  const staticVoices = models?.ttsVoices?.[tts.provider]?.length
+    ? models.ttsVoices[tts.provider]
+    : activeProvider?.voices ?? [];
+
+  const { data: discoveredVoices = [], isLoading: voicesLoading } = useSWR(
+    currentModel ? `voice:tts:${tts.provider}:${currentModel}` : null,
+    () => fetchTtsVoices(tts.provider, currentModel ?? ''),
+    { revalidateOnFocus: false },
+  );
+  const providerVoices = discoveredVoices.length > 0 ? discoveredVoices : staticVoices;
+  const configuredVoice = typeof providerSlice.voice === 'string' ? providerSlice.voice : undefined;
+  const currentVoice = configuredVoice
+    ?? providerVoices.find((voice) => voice.id === activeModel?.tts?.defaultVoice)?.id
+    ?? (typeof voiceField?.defaultValue === 'string' ? voiceField.defaultValue : providerVoices[0]?.id);
+  const visibleFields = (activeProvider?.fields ?? []).filter(
+    (field) => (field.key !== 'speed' || activeModel?.tts?.speed !== false)
+      && (field.key !== 'instructions' || activeModel?.tts?.instructions !== false),
   );
   const providerNeedsKey = Boolean(activeProvider?.diagnostics.requiresApiKey);
   const providerReady = Boolean(activeProvider?.configured) || !providerNeedsKey;
@@ -1216,57 +1055,24 @@ function TtsSection({
       ? 'ready'
       : 'action';
 
-  const currentModel =
-    tts.provider === 'openai'
-      ? tts.openai?.model
-      : tts.provider === 'alibaba'
-        ? tts.alibaba?.model
-        : tts.provider === 'minimax'
-        ? tts.minimax?.model
-          : tts.provider === 'xopc-cloud'
-            ? xopcCloudModel
-            : undefined;
-  const currentVoice =
-    tts.provider === 'openai'
-      ? tts.openai?.voice
-      : tts.provider === 'alibaba'
-        ? tts.alibaba?.voice
-        : tts.provider === 'minimax'
-          ? tts.minimax?.voice
-          : tts.provider === 'edge'
-            ? tts.edge?.voice
-            : tts.provider === 'xopc-cloud' && typeof providerSlice?.voice === 'string'
-              ? providerSlice.voice
-              : undefined;
-
-  const { data: xopcCloudVoices = [], isLoading: xopcCloudVoicesLoading } = useSWR(
-    tts.provider === 'xopc-cloud' && xopcCloudModel
-      ? `voice:tts:xopc-cloud:${xopcCloudModel}`
-      : null,
-    () => fetchTtsVoices('xopc-cloud', xopcCloudModel ?? ''),
-    { revalidateOnFocus: false },
+  const updateProviderSlice = useCallback(
+    (patch: Record<string, unknown>) => {
+      updateTts({
+        providers: {
+          ...(tts.providers ?? {}),
+          [tts.provider]: { ...(tts.providers?.[tts.provider] ?? {}), ...patch },
+        },
+      });
+    },
+    [tts.provider, tts.providers, updateTts],
   );
 
   useEffect(() => {
-    if (tts.provider !== 'xopc-cloud' || !xopcCloudModel) return;
-    const configuredModel = typeof providerSlice?.model === 'string' ? providerSlice.model : undefined;
-    const configuredVoice = typeof providerSlice?.voice === 'string' ? providerSlice.voice : undefined;
-    const defaultVoice = activeXopcCloudModel?.tts?.defaultVoice;
-    const selectedVoice = configuredVoice && xopcCloudVoices.some((voice) => voice.id === configuredVoice)
-      ? configuredVoice
-      : xopcCloudVoices.find((voice) => voice.id === defaultVoice)?.id ?? xopcCloudVoices[0]?.id;
-    if (configuredModel === xopcCloudModel && (!selectedVoice || configuredVoice === selectedVoice)) return;
-    updateTts({
-      providers: {
-        ...(tts.providers ?? {}),
-        'xopc-cloud': {
-          ...(tts.providers?.['xopc-cloud'] ?? {}),
-          model: xopcCloudModel,
-          ...(selectedVoice ? { voice: selectedVoice } : {}),
-        },
-      },
-    });
-  }, [activeXopcCloudModel?.tts?.defaultVoice, providerSlice?.model, providerSlice?.voice, tts.provider, tts.providers, updateTts, xopcCloudModel, xopcCloudVoices]);
+    const next: Record<string, unknown> = {};
+    if (modelField && currentModel && configuredModel !== currentModel) next.model = currentModel;
+    if (voiceField && currentVoice && configuredVoice !== currentVoice) next.voice = currentVoice;
+    if (Object.keys(next).length > 0) updateProviderSlice(next);
+  }, [configuredModel, configuredVoice, currentModel, currentVoice, modelField, updateProviderSlice, voiceField]);
 
   useEffect(() => () => stopTestAudio(), [stopTestAudio]);
 
@@ -1290,7 +1096,7 @@ function TtsSection({
       const result = await testTtsVoice({
         text,
         provider: tts.provider,
-        providerConfig: schemaProviderSlice,
+        providerConfig: providerSlice,
         ...(currentModel ? { model: currentModel } : {}),
         ...(currentVoice ? { voice: currentVoice } : {}),
       });
@@ -1312,37 +1118,7 @@ function TtsSection({
       stopTestAudio();
       setTestState({ status: 'error', message: err instanceof Error ? err.message : String(err) });
     }
-  }, [currentModel, currentVoice, schemaProviderSlice, stopTestAudio, testText, tts.provider, v.tts.test.emptyText, v.tts.test.playFailed]);
-
-  const updateProviderSlice = useCallback(
-    (patch: Record<string, unknown>) => {
-      updateTts({
-        providers: {
-          ...(tts.providers ?? {}),
-          [tts.provider]: {
-            ...(tts.providers?.[tts.provider] ?? {}),
-            ...patch,
-          },
-        },
-      });
-    },
-    [tts.provider, tts.providers, updateTts],
-  );
-
-  const updateSchemaField = useCallback(
-    (field: VoiceConfigFieldMetadata, next: unknown) => {
-      const patch = { [field.key]: next };
-      updateProviderSlice(patch);
-      if (tts.provider === 'openai' && field.key === 'baseUrl') {
-        updateTtsOpenai(patch);
-      } else if (tts.provider === 'minimax' && (field.key === 'baseUrl' || field.key === 'groupId')) {
-        updateTtsMinimax(patch);
-      } else if (tts.provider === 'edge' && field.key === 'lang') {
-        updateTtsEdge(patch);
-      }
-    },
-    [tts.provider, updateProviderSlice, updateTtsEdge, updateTtsMinimax, updateTtsOpenai],
-  );
+  }, [currentModel, currentVoice, providerSlice, stopTestAudio, testText, tts.provider, v.tts.test.emptyText, v.tts.test.playFailed]);
 
   return (
     <section className="rounded-2xl bg-surface-base px-4 py-5 sm:px-5">
@@ -1434,257 +1210,70 @@ function TtsSection({
                 {v.tts.advanced.title}
                 <span className="ml-2 text-xs font-normal text-fg-muted">{v.tts.advanced.description}</span>
               </summary>
-              <div className="mt-3 space-y-3">
-            {tts.provider === 'openai' ||
-            tts.provider === 'alibaba' ||
-            tts.provider === 'minimax' ? (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
-                  <FieldLabel>{v.stt.apiKey}</FieldLabel>
-                  <VoiceApiKeyField
-                    kind="tts"
-                    providerId={tts.provider}
-                    fieldId={`voice-tts-${tts.provider}-api-key`}
-                    value={
-                      tts.provider === 'openai'
-                        ? (tts.openai?.apiKey ?? '')
-                        : tts.provider === 'alibaba'
-                          ? (tts.alibaba?.apiKey ?? '')
-                          : (tts.minimax?.apiKey ?? '')
+              <div className="mt-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {visibleFields.map((field) => {
+                    if (field.key === 'apiKey') {
+                      return (
+                        <div key={field.key} className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
+                          <FieldLabel>{field.label}</FieldLabel>
+                          <VoiceApiKeyField
+                            kind="tts"
+                            providerId={tts.provider}
+                            fieldId={`voice-tts-${tts.provider}-api-key`}
+                            value={typeof providerSlice.apiKey === 'string' ? providerSlice.apiKey : ''}
+                            onChange={(next) => updateProviderSlice({ apiKey: next })}
+                            labels={apiKeyLabels}
+                            placeholder={field.placeholder}
+                          />
+                          {field.description ? <p className="text-xs text-fg-subtle">{field.description}</p> : null}
+                        </div>
+                      );
                     }
-                    onChange={(next) => {
-                      if (tts.provider === 'openai') updateTtsOpenai({ apiKey: next });
-                      else if (tts.provider === 'alibaba') updateTtsAlibaba({ apiKey: next });
-                      else updateTtsMinimax({ apiKey: next });
-                    }}
-                    labels={apiKeyLabels}
-                    placeholder={tts.provider === 'minimax' ? 'eyJ...' : 'sk-...'}
-                  />
-                  <p className="text-xs text-fg-subtle">
-                    {v.stt.apiKeyDesc}
-                    {ttsEnvHint(tts.provider) ? ` ${ttsEnvHint(tts.provider)}` : ''}
-                  </p>
-                </div>
-
-                <div className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
-                  <FieldLabel>{v.stt.model}</FieldLabel>
-                  <Select
-                    className={selectClassName()}
-                    value={
-                      tts.provider === 'openai'
-                        ? (tts.openai?.model ?? '')
-                        : tts.provider === 'alibaba'
-                          ? (tts.alibaba?.model ?? '')
-                          : (tts.minimax?.model ?? '')
+                    if (field.key === 'model' && providerModels.length > 0) {
+                      return (
+                        <div key={field.key} className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
+                          <FieldLabel>{field.label}</FieldLabel>
+                          <Select
+                            className={selectClassName()}
+                            value={currentModel ?? ''}
+                            onChange={(event) => updateProviderSlice({ model: event.target.value, voice: undefined })}
+                          >
+                            {providerModels.map((model) => (
+                              <SelectOption key={model.id} value={model.id}>{model.name}</SelectOption>
+                            ))}
+                          </Select>
+                        </div>
+                      );
                     }
-                    onChange={(e) => {
-                      if (tts.provider === 'openai') updateTtsOpenai({ model: e.target.value });
-                      else if (tts.provider === 'alibaba') updateTtsAlibaba({ model: e.target.value });
-                      else updateTtsMinimax({ model: e.target.value });
-                    }}
-                  >
-                    {(tts.provider === 'openai'
-                      ? ttsOpenai
-                      : tts.provider === 'alibaba'
-                        ? ttsAlibaba
-                        : ttsMinimax
-                    ).map((m) => (
-                      <SelectOption key={m.id} value={m.id}>
-                        {m.name}
-                      </SelectOption>
-                    ))}
-                  </Select>
-                </div>
-
-                <div className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
-                  <FieldLabel>{v.tts.voice}</FieldLabel>
-                  <Select
-                    className={selectClassName()}
-                    value={
-                      tts.provider === 'openai'
-                        ? (tts.openai?.voice ?? '')
-                        : tts.provider === 'alibaba'
-                          ? (tts.alibaba?.voice ?? '')
-                          : (tts.minimax?.voice ?? '')
+                    if (field.key === 'voice' && providerVoices.length > 0) {
+                      return (
+                        <div key={field.key} className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
+                          <FieldLabel>{field.label}</FieldLabel>
+                          <Select
+                            className={selectClassName()}
+                            value={currentVoice ?? ''}
+                            disabled={voicesLoading && providerVoices.length === 0}
+                            onChange={(event) => updateProviderSlice({ voice: event.target.value })}
+                          >
+                            {providerVoices.map((voice) => (
+                              <SelectOption key={voice.id} value={voice.id}>{voice.name}</SelectOption>
+                            ))}
+                          </Select>
+                        </div>
+                      );
                     }
-                    onChange={(e) => {
-                      if (tts.provider === 'openai') updateTtsOpenai({ voice: e.target.value });
-                      else if (tts.provider === 'alibaba') updateTtsAlibaba({ voice: e.target.value });
-                      else updateTtsMinimax({ voice: e.target.value });
-                    }}
-                  >
-                    {(tts.provider === 'openai'
-                      ? ttsVoicesOpenai
-                      : tts.provider === 'alibaba'
-                        ? ttsVoicesAlibaba
-                        : ttsVoicesMinimax
-                    ).map((m) => (
-                      <SelectOption key={m.id} value={m.id}>
-                        {m.name}
-                      </SelectOption>
-                    ))}
-                  </Select>
+                    return (
+                      <SchemaConfigField
+                        key={field.key}
+                        field={field}
+                        value={readSchemaFieldValue(providerSlice, field)}
+                        onChange={(next) => updateProviderSlice({ [field.key]: next })}
+                        className={field.type === 'textarea' ? 'sm:col-span-2' : credentialFieldWidthClass}
+                      />
+                    );
+                  })}
                 </div>
-              </div>
-            ) : null}
-
-            {tts.provider === 'xopc-cloud' ? (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
-                  <FieldLabel>{v.stt.model}</FieldLabel>
-                  <Select
-                    className={selectClassName()}
-                    value={xopcCloudModel ?? ''}
-                    onChange={(e) => updateProviderSlice({ model: e.target.value, voice: undefined })}
-                  >
-                    {ttsXopcCloud.map((model) => (
-                      <SelectOption key={model.id} value={model.id}>{model.name}</SelectOption>
-                    ))}
-                  </Select>
-                </div>
-                <div className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
-                  <FieldLabel>{v.tts.voice}</FieldLabel>
-                  <Select
-                    className={selectClassName()}
-                    value={currentVoice ?? ''}
-                    disabled={xopcCloudVoicesLoading || xopcCloudVoices.length === 0}
-                    onChange={(e) => updateProviderSlice({ voice: e.target.value })}
-                  >
-                    {xopcCloudVoices.map((voice) => (
-                      <SelectOption key={voice.id} value={voice.id}>{voice.name}</SelectOption>
-                    ))}
-                  </Select>
-                </div>
-              </div>
-            ) : null}
-
-            {tts.provider === 'edge' ? (
-              <div className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
-                <FieldLabel>{v.tts.voice}</FieldLabel>
-                <Select
-                  className={selectClassName()}
-                  value={tts.edge?.voice ?? ''}
-                  onChange={(e) => updateTtsEdge({ voice: e.target.value })}
-                >
-                  {ttsVoicesEdge.map((m) => (
-                    <SelectOption key={m.id} value={m.id}>
-                      {m.name}
-                    </SelectOption>
-                  ))}
-                </Select>
-                <p className="text-xs text-fg-subtle">{v.tts.edgeHint}</p>
-              </div>
-            ) : null}
-
-            {tts.provider === 'tts-local-cli' ? (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="flex flex-col gap-1.5 sm:col-span-2">
-                  <FieldLabel>{v.tts.localCli.preset}</FieldLabel>
-                  <Select
-                    className={selectClassName()}
-                    value=""
-                    onChange={(e) => {
-                      const preset = TTS_LOCAL_CLI_PRESETS.find((item) => item.id === e.target.value);
-                      if (!preset) return;
-                      updateTtsLocalCli({ command: preset.command, outputFormat: preset.outputFormat });
-                    }}
-                  >
-                    <SelectOption value="">{v.tts.localCli.presetPlaceholder}</SelectOption>
-                    {TTS_LOCAL_CLI_PRESETS.map((preset) => (
-                      <SelectOption key={preset.id} value={preset.id}>
-                        {preset.id}
-                      </SelectOption>
-                    ))}
-                  </Select>
-                  <p className="text-xs text-fg-subtle">{v.tts.localCli.presetDesc}</p>
-                </div>
-                <div className="flex flex-col gap-1.5 sm:col-span-2">
-                  <FieldLabel>{v.tts.localCli.command}</FieldLabel>
-                  <input
-                    className={cn(inputClassName(), 'font-mono text-xs')}
-                    type="text"
-                    autoComplete="off"
-                    spellCheck={false}
-                    value={tts['tts-local-cli']?.command ?? ''}
-                    onChange={(e) => updateTtsLocalCli({ command: e.target.value })}
-                    placeholder={v.tts.localCli.commandPlaceholder}
-                  />
-                  <p className="text-xs text-fg-subtle">{v.tts.localCli.commandDesc}</p>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <FieldLabel>{v.tts.localCli.cwd}</FieldLabel>
-                  <input
-                    className={cn(inputClassName(), 'font-mono text-xs')}
-                    type="text"
-                    autoComplete="off"
-                    spellCheck={false}
-                    value={tts['tts-local-cli']?.cwd ?? ''}
-                    onChange={(e) => updateTtsLocalCli({ cwd: e.target.value })}
-                    placeholder="/path/to/cwd"
-                  />
-                  <p className="text-xs text-fg-subtle">{v.tts.localCli.cwdDesc}</p>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <FieldLabel>{v.tts.localCli.outputFormat}</FieldLabel>
-                  <Select
-                    className={selectClassName()}
-                    value={tts['tts-local-cli']?.outputFormat ?? 'wav'}
-                    onChange={(e) =>
-                      updateTtsLocalCli({
-                        outputFormat: e.target.value as 'mp3' | 'opus' | 'wav',
-                      })
-                    }
-                  >
-                    <SelectOption value="wav">wav</SelectOption>
-                    <SelectOption value="mp3">mp3</SelectOption>
-                    <SelectOption value="opus">opus</SelectOption>
-                  </Select>
-                  <p className="text-xs text-fg-subtle">{v.tts.localCli.outputFormatDesc}</p>
-                </div>
-                <div className="flex flex-col gap-1.5 sm:col-span-2">
-                  <FieldLabel>{v.tts.localCli.timeoutMs}</FieldLabel>
-                  <input
-                    className={inputClassName()}
-                    type="number"
-                    min={0}
-                    step={1000}
-                    value={
-                      typeof tts['tts-local-cli']?.timeoutMs === 'number'
-                        ? String(tts['tts-local-cli'].timeoutMs)
-                        : ''
-                    }
-                    onChange={(e) => {
-                      const raw = e.target.value.trim();
-                      if (raw === '') {
-                        updateTtsLocalCli({ timeoutMs: undefined });
-                        return;
-                      }
-                      const num = Number(raw);
-                      if (Number.isFinite(num) && num >= 0) {
-                        updateTtsLocalCli({ timeoutMs: num });
-                      }
-                    }}
-                    placeholder="30000"
-                  />
-                  <p className="text-xs text-fg-subtle">{v.tts.localCli.timeoutMsDesc}</p>
-                </div>
-                <p className="text-xs text-fg-subtle sm:col-span-2">{v.tts.localCli.hint}</p>
-              </div>
-            ) : null}
-
-            {additionalFields.length > 0 ? (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {additionalFields.map((field) => (
-                  <SchemaConfigField
-                    key={field.key}
-                    field={field}
-                    value={readSchemaFieldValue(schemaProviderSlice, field)}
-                    onChange={(next) => updateSchemaField(field, next)}
-                    className={field.type === 'textarea' ? 'sm:col-span-2' : credentialFieldWidthClass}
-                  />
-                ))}
-              </div>
-            ) : null}
               </div>
             </details>
 
