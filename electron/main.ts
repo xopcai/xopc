@@ -944,6 +944,14 @@ app.whenReady().then(async () => {
     onLanguageChanged: (language) => {
       refreshElectronMenus(language);
     },
+    isMainWindowFocused: () => Boolean(
+      mainWindow
+      && !mainWindow.isDestroyed()
+      && mainWindow.isVisible()
+      && !mainWindow.isMinimized()
+      && mainWindow.isFocused(),
+    ),
+    navigateMainWindow,
   });
   initDesktopPetWindow({
     resolveUrl: resolveDesktopPetUrl,

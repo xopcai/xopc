@@ -90,6 +90,7 @@ describe('runGatewayAgent', () => {
   it('does not replace or clear an existing active webchat run when this run fails', async () => {
     const sessionKey = 'agent:main:webchat:default:direct:chat-test';
     const activeWebchatRunBySession = new Map<string, string>([[sessionKey, 'existing-run']]);
+    const emitted: Array<{ type: string; payload: unknown }> = [];
 
     const deps = {
       config: {},
@@ -119,7 +120,7 @@ describe('runGatewayAgent', () => {
         getSessionMetadata: async () => ({ sessionId: 'session-test' }),
         updateSessionMetadata: async () => {},
       },
-      emit: () => {},
+      emit: (type: string, payload: unknown) => emitted.push({ type, payload }),
       publishRealtime: () => {},
       completeRealtimeTopic: () => {},
     } as unknown as RunGatewayAgentDeps;
@@ -137,6 +138,62 @@ describe('runGatewayAgent', () => {
 
     expect(events.some((event) => event.type === 'error')).toBe(true);
     expect(activeWebchatRunBySession.get(sessionKey)).toBe('existing-run');
+    expect(emitted.filter((event) => event.type === 'agent.run.ended')).toEqual([{
+      type: 'agent.run.ended',
+      payload: expect.objectContaining({ sessionKey, status: 'error' }),
+    }]);
+  });
+
+  it('emits one global terminal event with safe session metadata', async () => {
+    const sessionKey = 'agent:main:webchat:default:direct:chat-test';
+    const emitted: Array<{ type: string; payload: unknown }> = [];
+    const deps = {
+      config: {},
+      agentService: {
+        resolveUserTimezoneForSession: () => 'UTC',
+        prepareInboundAttachments: async () => undefined,
+        beginInboundTurn: () => {},
+        turnDispatcher: { processDirectStreaming: async function* () {} },
+        getLastAssistantPlainText: () => '',
+        takeTaskReviewStreamHint: () => undefined,
+        outboundCoordinator: { emitSessionTurnComplete: async () => {} },
+        endInboundTurn: () => {},
+      },
+      bus: { publishInbound: async () => {} },
+      runAbortControllers: new Map<string, AbortController>(),
+      activeWebchatRunBySession: new Map<string, string>(),
+      sessionIndex: {
+        getSessionMetadata: async () => ({ sessionId: 's1', name: 'Finish notifications' }),
+      },
+      emit: (type: string, payload: unknown) => emitted.push({ type, payload }),
+      publishRealtime: () => {},
+      completeRealtimeTopic: () => {},
+    } as unknown as RunGatewayAgentDeps;
+
+    for await (const _event of runGatewayAgent(
+      deps,
+      'hello',
+      'webchat',
+      sessionKey,
+      { type: 'system', source: 'internal' },
+      undefined,
+      undefined,
+      { runId: 'run-terminal' },
+    )) {
+      // Drain the run.
+    }
+
+    expect(emitted.filter((event) => event.type === 'agent.run.ended')).toEqual([{
+      type: 'agent.run.ended',
+      payload: expect.objectContaining({
+        schemaVersion: 1,
+        runId: 'run-terminal',
+        sessionKey,
+        status: 'success',
+        sessionTitle: 'Finish notifications',
+        route: `/chat/${encodeURIComponent(sessionKey)}`,
+      }),
+    }]);
   });
 
 });

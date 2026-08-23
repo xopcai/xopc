@@ -20,7 +20,11 @@ import { TaskRunCoordinator } from '../../tasks/task-run-coordinator.js';
 import {
   updateInteractionStateFromMessage,
 } from '../../storage/sqlite/index.js';
-import type { TaskRunReceipt } from '@xopcai/gateway-contract';
+import type {
+  AgentRunEndedEvent,
+  AgentStreamRunStatus,
+  TaskRunReceipt,
+} from '@xopcai/gateway-contract';
 
 import { formatAgentRunErrorForClient } from '../../agent/client-error-format.js';
 
@@ -84,6 +88,7 @@ export async function *runGatewayAgent(
   let taskRun: TaskRunCoordinator | undefined;
   let taskRunStatus: TaskRunReceipt['status'] = 'failed';
   let taskRunSummary = 'Agent run ended unexpectedly';
+  let terminalStatus: AgentStreamRunStatus = 'error';
 
   let webchatSessionKey: string | undefined;
   let webchatSessionId: string | undefined;
@@ -161,9 +166,9 @@ export async function *runGatewayAgent(
     }
   };
 
-  yield* emitAndYield(mapper.start());
-
   try {
+    yield* emitAndYield(mapper.start());
+
     if (channel === 'webchat' && webchatSessionKey) {
       const sessionKey = webchatSessionKey;
       updateAsyncLogContext({
@@ -213,17 +218,10 @@ export async function *runGatewayAgent(
         const endStatus = mergedSignal.aborted ? 'cancelled' : 'success';
         const endSummary = mergedSignal.aborted ? 'Interrupted' : 'Message processed successfully';
         taskRunStatus = mergedSignal.aborted ? 'cancelled' : 'succeeded';
+        terminalStatus = endStatus;
         taskRunSummary = endSummary;
         yield* emitAndYield(mapper.end(endStatus, endSummary));
         completeRealtimeTopic(`run:${runId}`);
-        try {
-          const metaAfter = await sessionIndex.getSessionMetadata(sessionKey);
-          if (metaAfter?.name) {
-            emit('session.updated', { key: sessionKey, name: metaAfter.name });
-          }
-        } catch {
-          /* ignore */
-        }
         return {
           status: mergedSignal.aborted ? 'aborted' : 'ok',
           summary: mergedSignal.aborted ? 'Interrupted' : 'Message processed successfully',
@@ -243,6 +241,7 @@ export async function *runGatewayAgent(
         );
         streamError = em;
         taskRunStatus = 'failed';
+        terminalStatus = 'error';
         taskRunSummary = em;
         const errorContent = formatAgentRunErrorForClient(streamError);
         yield* emitAndYield(mapper.error(errorContent));
@@ -352,6 +351,23 @@ export async function *runGatewayAgent(
         const errorMessage = err instanceof Error ? err.message : String(err);
         log.warn({ err, runId }, `Task run finalization failed: ${errorMessage}`);
       }
+    }
+    if (webchatSessionKey) {
+      const metaAfter = await sessionIndex.getSessionMetadata(webchatSessionKey).catch(() => undefined);
+      if (metaAfter?.name) {
+        emit('session.updated', { key: webchatSessionKey, name: metaAfter.name });
+      }
+      const endedEvent: AgentRunEndedEvent = {
+        schemaVersion: 1,
+        runId,
+        sessionKey: webchatSessionKey,
+        status: terminalStatus,
+        completedAtMs: Date.now(),
+        route: `/chat/${encodeURIComponent(webchatSessionKey)}`,
+        source: 'webchat',
+        ...(metaAfter?.name?.trim() ? { sessionTitle: metaAfter.name.trim().slice(0, 100) } : {}),
+      };
+      emit('agent.run.ended', endedEvent);
     }
   }
 }

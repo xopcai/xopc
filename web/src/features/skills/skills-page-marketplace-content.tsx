@@ -329,30 +329,32 @@ export function SkillsPageMarketplaceContent(p: Props) {
                   total: mpPayload.meta.total,
                 })}
               </p>
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="h-9 gap-1 px-2"
-                  disabled={mpLoading || marketPage <= 1}
-                  aria-label={sk.marketplacePagePrev}
-                  onClick={() => setMarketPage((pg) => Math.max(1, pg - 1))}
-                >
-                  <ChevronLeft className="size-4" strokeWidth={1.75} aria-hidden />
-                  <span className="sr-only sm:not-sr-only">{sk.marketplacePagePrev}</span>
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="h-9 gap-1 px-2"
-                  disabled={mpLoading || marketPage >= mpPayload.meta.totalPages}
-                  aria-label={sk.marketplacePageNext}
-                  onClick={() => setMarketPage((pg) => Math.min(mpPayload.meta.totalPages, pg + 1))}
-                >
-                  <span className="sr-only sm:not-sr-only">{sk.marketplacePageNext}</span>
-                  <ChevronRight className="size-4" strokeWidth={1.75} aria-hidden />
-                </Button>
-              </div>
+              {mpPayload.meta.totalPages > 1 ? (
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="h-9 gap-1 px-2"
+                    disabled={mpLoading || marketPage <= 1}
+                    aria-label={sk.marketplacePagePrev}
+                    onClick={() => setMarketPage((pg) => Math.max(1, pg - 1))}
+                  >
+                    <ChevronLeft className="size-4" strokeWidth={1.75} aria-hidden />
+                    <span className="sr-only sm:not-sr-only">{sk.marketplacePagePrev}</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="h-9 gap-1 px-2"
+                    disabled={mpLoading || marketPage >= mpPayload.meta.totalPages}
+                    aria-label={sk.marketplacePageNext}
+                    onClick={() => setMarketPage((pg) => Math.min(mpPayload.meta.totalPages, pg + 1))}
+                  >
+                    <span className="sr-only sm:not-sr-only">{sk.marketplacePageNext}</span>
+                    <ChevronRight className="size-4" strokeWidth={1.75} aria-hidden />
+                  </Button>
+                </div>
+              ) : null}
             </div>
           ) : null}
         </div>
