@@ -16,10 +16,12 @@ import { checkVersionUpdate } from './checks/version-check.js';
 import { checkChannelPlugins } from './checks/channel-plugins.js';
 import { checkMigrations } from './checks/migrations.js';
 import { checkImageProviders } from './checks/image-providers.js';
+import { checkToolRuntimes } from './checks/tool-runtimes.js';
 
 const DOCTOR_CHECKS: DoctorCheck[] = [
   checkVersionUpdate,
   checkNodeVersion,
+  checkToolRuntimes,
   checkMigrations,
   checkConfigHealth,
   checkStateIntegrity,

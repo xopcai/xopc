@@ -342,6 +342,78 @@ export const ToolsConfigSchema = z.object({
   },
 });
 
+const RuntimePreferenceSchema = z.enum([
+  'managed-only',
+  'managed-first',
+  'system-first',
+  'system-only',
+]);
+
+const RuntimeProvisionSchema = z.enum(['eager', 'on-demand', 'disabled']);
+
+const LanguageRuntimeSchema = z.object({
+  enabled: z.boolean().default(true),
+  version: z.string().min(1).optional(),
+  preference: RuntimePreferenceSchema.default('managed-first'),
+  provision: RuntimeProvisionSchema.default('on-demand'),
+});
+
+const DEFAULT_RUNTIME_TOOLS_CONFIG = {
+  enabled: true,
+  node: {
+    enabled: true,
+    preference: 'managed-first' as const,
+    provision: 'eager' as const,
+  },
+  python: {
+    enabled: true,
+    preference: 'managed-first' as const,
+    provision: 'on-demand' as const,
+  },
+  uv: { enabled: true },
+  download: {
+    source: 'auto' as const,
+    gatewayBaseUrl: 'https://xopc.ai/api/runtime/v1',
+    timeoutMs: 600_000,
+  },
+  retention: { keepVersions: 2 },
+};
+
+export const RuntimeToolsConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+  node: LanguageRuntimeSchema.default({
+    enabled: true,
+    preference: 'managed-first',
+    provision: 'eager',
+  }),
+  python: LanguageRuntimeSchema.default({
+    enabled: true,
+    preference: 'managed-first',
+    provision: 'on-demand',
+  }),
+  uv: z.object({
+    enabled: z.boolean().default(true),
+    version: z.string().min(1).optional(),
+  }).default({ enabled: true }),
+  download: z.object({
+    bundleDir: z.string().min(1).optional(),
+    proxy: z.string().url().optional(),
+    source: z.enum(['auto', 'website-only', 'direct-only']).default('auto'),
+    gatewayBaseUrl: z.string().url().default('https://xopc.ai/api/runtime/v1'),
+    timeoutMs: z.number().int().min(10_000).max(1_800_000).default(600_000),
+  }).strict().default({
+    source: 'auto',
+    gatewayBaseUrl: 'https://xopc.ai/api/runtime/v1',
+    timeoutMs: 600_000,
+  }),
+  retention: z.object({
+    keepVersions: z.number().int().min(1).max(5).default(2),
+    maxCacheBytes: z.number().int().positive().optional(),
+  }).default({ keepVersions: 2 }),
+}).default(DEFAULT_RUNTIME_TOOLS_CONFIG);
+
+export type RuntimeToolsConfig = z.infer<typeof RuntimeToolsConfigSchema>;
+
 // ============================================
 // Gateway Configuration
 // ============================================
@@ -1124,6 +1196,7 @@ export const ConfigSchema = z.object({
   tunnel: TunnelConfigSchema.optional(),
   workspace: WorkspaceConfigSchema,
   tools: ToolsConfigSchema,
+  runtimeTools: RuntimeToolsConfigSchema,
   mcp: McpConfigSchema,
   connectors: ConnectorsConfigSchema,
   experimental: ExperimentalConfigSchema,
@@ -1252,6 +1325,7 @@ export const ConfigSchema = z.object({
       },
     },
   },
+  runtimeTools: DEFAULT_RUNTIME_TOOLS_CONFIG,
   experimental: {
     workDiscoveryOnboarding: true,
   },

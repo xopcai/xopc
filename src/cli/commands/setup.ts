@@ -2,6 +2,15 @@ import { Command } from 'commander';
 import { existsSync } from 'fs';
 import { register, formatExamples, type CLIContext } from '../registry.js';
 import { initWorkspace } from '../utils/init-workspace.js';
+import { resolveStateDir } from '../../config/paths-state.js';
+import { provisionEagerRuntimes } from '../../runtime-tools/bootstrap.js';
+
+function printRuntimeBootstrap(results: Awaited<ReturnType<typeof provisionEagerRuntimes>>): void {
+  for (const result of results) {
+    if (result.ok) console.log(`   ✅ ${result.runtime} ${result.resolved?.version}`);
+    else console.warn(`   ⚠️  ${result.runtime}: ${result.error}`);
+  }
+}
 
 function createSetupCommand(ctx: CLIContext): Command {
   const cmd = new Command('setup')
@@ -15,6 +24,7 @@ function createSetupCommand(ctx: CLIContext): Command {
       ])
     )
     .option('--workspace <path>', 'Workspace directory path', ctx.workspacePath)
+    .option('--skip-runtimes', 'Skip eager Node.js/Python runtime initialization')
     .action(async (options) => {
       const workspacePath = options.workspace || ctx.workspacePath;
       const configPath = ctx.configPath;
@@ -31,6 +41,14 @@ function createSetupCommand(ctx: CLIContext): Command {
       console.log(`   Workspace: ${workspaceExists ? '✅ setup' : '❌ not found'}`);
 
       const result = await initWorkspace({ configPath, workspacePath });
+
+      if (!options.skipRuntimes) {
+        console.log('\n🧰 Initializing agent tool runtimes:');
+        printRuntimeBootstrap(await provisionEagerRuntimes({
+          stateDir: resolveStateDir(),
+          config: result.config.runtimeTools,
+        }));
+      }
 
       if (result.configCreated) {
         console.log('\n📝 Created config file.');
