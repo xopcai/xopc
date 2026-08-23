@@ -391,13 +391,13 @@ export async function analyzeUnderstandingSources(input: {
   const raw = extractText(response.content);
   const parsed = parseJson(raw);
   if (!parsed) throw invalidJsonError('Understanding source analysis', response, raw);
+  const allowedRefs = new Set(items.map((item) => item.ref));
   const profileCandidates = Array.isArray(parsed.profileCandidates)
     ? parsed.profileCandidates
       .map((value) => validateProfileCandidate(value, allowedRefs))
       .filter((value): value is WorkDiscoveryProfileCandidate => Boolean(value))
       .slice(0, 6)
     : [];
-  const allowedRefs = new Set(items.map((item) => item.ref));
   const workThreadCandidates = Array.isArray(parsed.workThreads)
     ? parsed.workThreads
       .map((value) => validateWorkThreadCandidate(value, allowedRefs))
