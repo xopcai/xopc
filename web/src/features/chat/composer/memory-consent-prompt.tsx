@@ -214,7 +214,7 @@ export function MemoryCandidatePrompt({ sessionKey, language }: { sessionKey: st
       setBusy(false);
     }
   };
-  const useOnce = async () => {
+  const handleUseOnce = async () => {
     setBusy(true);
     setError(false);
     try {
@@ -254,7 +254,7 @@ export function MemoryCandidatePrompt({ sessionKey, language }: { sessionKey: st
           ) : <p className="mt-2 text-sm leading-5 text-fg">{record.content}</p>}
           {error ? <p role="alert" className="mt-2 text-xs text-danger">{t.memoryCandidateError}</p> : null}
           <div className="mt-2.5 flex flex-wrap justify-end gap-1.5">
-            <Button type="button" variant="ghost" className="h-8 px-2.5" disabled={busy} onClick={() => void useOnce()}>{t.memoryCandidateOnce}</Button>
+            <Button type="button" variant="ghost" className="h-8 px-2.5" disabled={busy} onClick={() => void handleUseOnce()}>{t.memoryCandidateOnce}</Button>
             {editing ? (
               <>
                 <Button type="button" variant="ghost" className="h-8 px-2.5" disabled={busy} onClick={() => setEditing(false)}>{t.memoryCandidateCancel}</Button>
