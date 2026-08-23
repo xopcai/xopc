@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   memory: new Map<string, string>(),
   playerSources: [] as unknown[],
   playerOptions: [] as unknown[],
+  mediaControlsError: null as Error | null,
   players: [] as Array<{
     currentTime: number;
     playing: boolean;
@@ -36,16 +37,14 @@ vi.mock('expo-audio', () => ({
       replace: vi.fn(),
       addListener: vi.fn(),
       setPlaybackRate: vi.fn(),
-      setActiveForLockScreen: vi.fn(),
+      setActiveForLockScreen: vi.fn(() => {
+        if (mocks.mediaControlsError) throw mocks.mediaControlsError;
+      }),
       clearLockScreenControls: vi.fn(),
     };
     mocks.players.push(player);
     return player;
   }),
-}));
-
-vi.mock('expo-asset', () => ({
-  Asset: { fromModule: () => ({ uri: 'file:///xopc-icon.png' }) },
 }));
 
 vi.mock('../../../storage/mmkv', () => ({
@@ -88,6 +87,7 @@ describe('read aloud store', () => {
     mocks.players.length = 0;
     mocks.playerSources.length = 0;
     mocks.playerOptions.length = 0;
+    mocks.mediaControlsError = null;
     mocks.generateSpeechChunk.mockReset();
     mocks.startLiveActivity.mockReset();
     mocks.updateLiveActivity.mockReset();
@@ -125,11 +125,6 @@ describe('read aloud store', () => {
       title: input.source.title,
       artist: 'xopc AI',
       albumTitle: 'AI read aloud',
-      artworkUrl: 'file:///xopc-icon.png',
-    }, {
-      isLiveStream: true,
-      showSeekBackward: false,
-      showSeekForward: false,
     });
     expect(mocks.players[0]?.replace).toHaveBeenCalledWith({ uri: 'file:///speech-0.mp3' });
     expect(mocks.startLiveActivity).toHaveBeenCalledWith(expect.objectContaining({
@@ -139,7 +134,19 @@ describe('read aloud store', () => {
     }));
   });
 
-  it('activates the media session before speech generation completes', () => {
+  it('keeps core playback working when system media controls are unavailable', async () => {
+    mocks.memory.set('voice.readAloudConsent', 'accepted');
+    mocks.mediaControlsError = new Error('Native media controls failed');
+
+    useReadAloudStore.getState().requestStart(input);
+
+    await vi.waitFor(() => expect(useReadAloudStore.getState().status).toBe('playing'));
+    expect(mocks.generateSpeechChunk).toHaveBeenCalledOnce();
+    expect(mocks.players[0]?.replace).toHaveBeenCalledWith({ uri: 'file:///speech-0.mp3' });
+    expect(mocks.players[0]?.play).toHaveBeenCalledOnce();
+  });
+
+  it('waits for playable audio before activating system media controls', () => {
     mocks.memory.set('voice.readAloudConsent', 'accepted');
     mocks.generateSpeechChunk.mockImplementation(() => new Promise(() => {}));
 
@@ -152,7 +159,7 @@ describe('read aloud store', () => {
       updateInterval: 250,
       keepAudioSessionActive: true,
     }]);
-    expect(mocks.players[0]?.setActiveForLockScreen).toHaveBeenCalledOnce();
+    expect(mocks.players[0]?.setActiveForLockScreen).not.toHaveBeenCalled();
     expect(mocks.players[0]?.replace).not.toHaveBeenCalled();
   });
 
