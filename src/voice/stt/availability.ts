@@ -1,11 +1,16 @@
 import type { STTConfig } from './types.js';
+import { getVoiceProviderMetadata } from '../metadata/index.js';
 
 function providerHasConfig(config: STTConfig, providerId: string): boolean {
   const provider = config.providers?.[providerId];
   if (provider && Object.keys(provider).length > 0) return true;
-  return [...(config.models ?? []), ...(config.sharedModels ?? [])].some(
+  if ([...(config.models ?? []), ...(config.sharedModels ?? [])].some(
     (entry) => entry.provider === providerId && entry.capabilities?.includes('audio'),
-  );
+  )) return true;
+
+  // OAuth-backed and local providers can be runtime-ready without storing a
+  // credential or model in tools.media.audio.providers.
+  return getVoiceProviderMetadata('stt', providerId)?.diagnostics.requiresApiKey === false;
 }
 
 /**
