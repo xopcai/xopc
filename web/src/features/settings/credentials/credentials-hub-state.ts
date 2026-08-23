@@ -124,10 +124,8 @@ function voiceProviderKey(voice: VoiceSettingsState, kind: 'stt' | 'tts'): strin
   }
   if (!voice.tts.enabled) return undefined;
   const p = voice.tts.provider;
-  if (p === 'openai') return voice.tts.openai?.apiKey;
-  if (p === 'alibaba') return voice.tts.alibaba?.apiKey;
-  if (p === 'minimax') return voice.tts.minimax?.apiKey;
-  return undefined;
+  const key = voice.tts.providers?.[p]?.apiKey;
+  return typeof key === 'string' ? key : undefined;
 }
 
 function voiceDomain(
