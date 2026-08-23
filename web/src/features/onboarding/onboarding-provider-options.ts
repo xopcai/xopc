@@ -39,5 +39,6 @@ export function resolveOnboardingProviders(
     : source;
   return providers
     .slice()
-    .sort((a, b) => (FEATURED_ORDER.get(a.id) ?? 999) - (FEATURED_ORDER.get(b.id) ?? 999));
+    .sort((a, b) => (FEATURED_ORDER.get(a.id) ?? 999) - (FEATURED_ORDER.get(b.id) ?? 999))
+    .slice(0, 5);
 }
