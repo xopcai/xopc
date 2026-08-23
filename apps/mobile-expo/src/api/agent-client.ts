@@ -128,7 +128,7 @@ export async function submitClarifyResponse(
 function wrapTerminalCallbacks(cb?: MessagingCallbacks): {
   wrapped: MessagingCallbacks | undefined;
   sawTerminal: boolean;
-  onMissingTerminal: () => void;
+  onMissingTerminal: (payload: Parameters<MessagingCallbacks['onResult']>[0]) => void;
 } {
   if (!cb) {
     return { wrapped: undefined, sawTerminal: false, onMissingTerminal: () => {} };
@@ -166,10 +166,10 @@ function wrapTerminalCallbacks(cb?: MessagingCallbacks): {
       onProgress: guarded(cb.onProgress),
       onTtsAudio: cb.onTtsAudio,
       onClarifyRequest: guarded(cb.onClarifyRequest),
-      onResult: () => {
+      onResult: (payload) => {
         if (sawTerminal) return;
         markTerminal();
-        cb.onResult();
+        cb.onResult(payload);
       },
       onError: (msg: string) => {
         if (sawTerminal) return;
@@ -177,10 +177,10 @@ function wrapTerminalCallbacks(cb?: MessagingCallbacks): {
         cb.onError(msg);
       },
     },
-    onMissingTerminal: () => {
+    onMissingTerminal: (payload) => {
       if (sawTerminal) return;
       markTerminal();
-      cb.onResult();
+      cb.onResult(payload);
     },
   };
 }
