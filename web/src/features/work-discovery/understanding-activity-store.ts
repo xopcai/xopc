@@ -104,6 +104,9 @@ export const useUnderstandingActivityStore = create<UnderstandingActivityState>(
       const results = await collect(selectedSources);
       const sources = sourceMap(results, selectedSources);
       const itemCounts = Object.fromEntries(results.map((result) => [result.sourceId, result.items.length]));
+      // Collection and model analysis are separate phases. Preserve successful scans if the
+      // downstream analysis request fails so the UI does not misreport every source as failed.
+      set({ sources, itemCounts });
       const items = results.flatMap((result) => result.status === 'completed' ? result.items : []);
       const sourceCheckpoints = Object.fromEntries(results.flatMap((result) => result.checkpoint
         ? [[result.sourceId, result.checkpoint] as const] : []));
