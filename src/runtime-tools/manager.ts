@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { access, mkdir, realpath, rename, rm } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 import { createLogger } from '../utils/logger.js';
