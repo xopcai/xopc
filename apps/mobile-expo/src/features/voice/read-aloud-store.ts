@@ -1,5 +1,8 @@
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
+import { Asset } from 'expo-asset';
 import { create } from 'zustand';
+
+import appIcon from '../../../assets/icon.png';
 
 import { KEYS, storage } from '../../storage/mmkv';
 import {
@@ -9,9 +12,16 @@ import {
 import { claimAudioPlayback, releaseAudioPlayback } from './audio-playback-coordinator';
 import { generateSpeechChunk } from './read-aloud-api';
 import { ReadAloudCache } from './read-aloud-cache';
+import {
+  endReadAloudLiveActivity,
+  startReadAloudLiveActivity,
+  updateReadAloudLiveActivity,
+} from './read-aloud-live-activity';
+import type { ReadAloudLiveActivityStatus } from './read-aloud-live-activity.types';
 import { splitSpeakableText } from './read-aloud-text';
 
 const PLAYBACK_OWNER = 'assistant-read-aloud';
+const READ_ALOUD_ARTWORK_URL = Asset.fromModule(appIcon as number).uri;
 const RATES = [0.75, 1, 1.25, 1.5, 2] as const;
 
 export type ReadAloudStatus = 'idle' | 'preparing' | 'playing' | 'paused' | 'error';
@@ -76,6 +86,25 @@ let finishingChunk = false;
 let playbackRequestedAt = 0;
 let playbackCompleted = false;
 
+function liveActivitySnapshot(status: ReadAloudLiveActivityStatus) {
+  const input = activeInput;
+  if (!input) return null;
+  const state = useReadAloudStore.getState();
+  return {
+    sessionKey: input.source.sessionKey,
+    title: input.source.title,
+    status,
+    currentChunkIndex: state.currentChunkIndex,
+    chunkCount: state.chunkCount,
+    rate: state.rate,
+  };
+}
+
+function syncLiveActivity(status: ReadAloudLiveActivityStatus): void {
+  const snapshot = liveActivitySnapshot(status);
+  if (snapshot) updateReadAloudLiveActivity(snapshot);
+}
+
 function completedDuration(index: number): number {
   return chunkDurations.slice(0, index).reduce((total, value) => total + (value || 0), 0);
 }
@@ -125,7 +154,13 @@ function ensurePlayer(runGeneration: number): Promise<AudioPlayer> {
     nextPlayer.setPlaybackRate(useReadAloudStore.getState().rate);
     nextPlayer.setActiveForLockScreen(true, {
       title: source.title,
-      artist: 'xopc',
+      artist: 'xopc AI',
+      albumTitle: 'AI read aloud',
+      artworkUrl: READ_ALOUD_ARTWORK_URL,
+    }, {
+      isLiveStream: true,
+      showSeekBackward: false,
+      showSeekForward: false,
     });
     claimAudioPlayback(PLAYBACK_OWNER, () => useReadAloudStore.getState().pause());
     nextPlayer.addListener('playbackStatusUpdate', (status) => {
@@ -134,15 +169,18 @@ function ensurePlayer(runGeneration: number): Promise<AudioPlayer> {
       const duration = Number.isFinite(status.duration) ? status.duration : 0;
       if (duration > 0) chunkDurations[index] = duration;
       if (status.playing) playerChunkHasStarted = true;
+      const previousStatus = useReadAloudStore.getState().status;
+      const nextStatus = status.playing
+        ? 'playing' as const
+        : playerChunkHasStarted && !status.didJustFinish
+          ? 'paused' as const
+          : null;
       useReadAloudStore.setState({
         currentTime: completedDuration(index) + (status.currentTime || 0),
         duration: chunkDurations.reduce((total, value) => total + (value || 0), 0),
-        ...(status.playing
-          ? { status: 'playing' as const }
-          : playerChunkHasStarted && !status.didJustFinish
-            ? { status: 'paused' as const }
-            : {}),
+        ...(nextStatus ? { status: nextStatus } : {}),
       });
+      if (nextStatus && nextStatus !== previousStatus) syncLiveActivity(nextStatus);
       if (!status.didJustFinish || finishingChunk || !playerChunkHasStarted) return;
       finishingChunk = true;
       const nextIndex = index + 1;
@@ -150,6 +188,7 @@ function ensurePlayer(runGeneration: number): Promise<AudioPlayer> {
         void playChunk(nextIndex, runGeneration);
       } else {
         removePlayer();
+        endReadAloudLiveActivity();
         playbackCompleted = true;
         recordUsageEvent('read_aloud_completed');
         useReadAloudStore.setState({ status: 'paused', currentChunkIndex: 0, currentTime: 0 });
@@ -190,6 +229,7 @@ function resetPlayback(): void {
   playbackRequestedAt = 0;
   playbackCompleted = false;
   releaseAudioPlayback(PLAYBACK_OWNER);
+  endReadAloudLiveActivity();
 }
 
 async function ensureChunk(index: number, runGeneration: number): Promise<string> {
@@ -226,6 +266,7 @@ async function playChunk(index: number, runGeneration: number): Promise<void> {
     currentChunkIndex: index,
     currentTime: completedDuration(index),
   });
+  syncLiveActivity('preparing');
   try {
     const playerPromise = ensurePlayer(runGeneration);
     const [nextPlayer, uri] = await Promise.all([
@@ -241,6 +282,7 @@ async function playChunk(index: number, runGeneration: number): Promise<void> {
     finishingChunk = false;
     nextPlayer.play();
     useReadAloudStore.setState({ status: 'playing' });
+    syncLiveActivity('playing');
     if (index === 0 && playbackRequestedAt > 0) {
       recordInteractionPerformanceEvent('read_aloud_first_audio', Date.now() - playbackRequestedAt);
       playbackRequestedAt = 0;
@@ -250,6 +292,7 @@ async function playChunk(index: number, runGeneration: number): Promise<void> {
     if (runGeneration !== generation) return;
     console.warn('[ReadAloud] Playback failed', error);
     removePlayer();
+    endReadAloudLiveActivity();
     releaseAudioPlayback(PLAYBACK_OWNER);
     playbackRequestedAt = 0;
     recordUsageEvent('read_aloud_failed');
@@ -300,6 +343,8 @@ function startPlayback(input: ReadAloudInput): void {
     currentTime: 0,
     duration: 0,
   });
+  const snapshot = liveActivitySnapshot('preparing');
+  if (snapshot) startReadAloudLiveActivity(snapshot);
   void playChunk(0, runGeneration);
 }
 
@@ -341,6 +386,7 @@ export const useReadAloudStore = create<ReadAloudState>()((set, get) => ({
     }
     player?.pause();
     set({ status: 'paused' });
+    syncLiveActivity('paused');
   },
 
   resume: () => {
@@ -349,12 +395,15 @@ export const useReadAloudStore = create<ReadAloudState>()((set, get) => ({
       playbackCompleted = false;
       playbackRequestedAt = Date.now();
       recordUsageEvent('read_aloud_started');
+      const snapshot = liveActivitySnapshot('preparing');
+      if (snapshot) startReadAloudLiveActivity(snapshot);
     }
     if (player && player.currentTime > 0) {
       claimAudioPlayback(PLAYBACK_OWNER, () => get().pause());
       player.setPlaybackRate(get().rate);
       player.play();
       set({ status: 'playing' });
+      syncLiveActivity('playing');
       return;
     }
     requestController = new AbortController();
@@ -379,5 +428,9 @@ export const useReadAloudStore = create<ReadAloudState>()((set, get) => ({
     const rate = RATES[(currentIndex + 1) % RATES.length] ?? 1;
     player?.setPlaybackRate(rate);
     set({ rate });
+    const status = get().status;
+    if (status === 'preparing' || status === 'playing' || status === 'paused') {
+      syncLiveActivity(status);
+    }
   },
 }));

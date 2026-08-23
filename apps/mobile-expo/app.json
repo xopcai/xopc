@@ -122,7 +122,8 @@
             }
           ]
         }
-      ]
+      ],
+      "./plugins/with-ios-widget-version"
     ],
     "extra": {
       "router": {},
