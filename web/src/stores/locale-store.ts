@@ -16,6 +16,16 @@ type LocaleState = {
   setLanguage: (lang: StoredLanguage) => void;
 };
 
+type GatewayLanguageSyncTarget = {
+  token: string;
+  language: StoredLanguage;
+};
+
+let activeGatewayLanguageSync: GatewayLanguageSyncTarget | undefined;
+let pendingGatewayLanguageSync: GatewayLanguageSyncTarget | undefined;
+let lastSuccessfulGatewayLanguageSync: GatewayLanguageSyncTarget | undefined;
+let gatewayLanguageSyncDrain: Promise<void> | undefined;
+
 function isStoredLanguage(value: unknown): value is StoredLanguage {
   return value === 'en' || value === 'zh';
 }
@@ -31,19 +41,76 @@ function syncElectronLanguage(language: StoredLanguage): void {
   });
 }
 
+function isSameGatewayLanguageSync(
+  left: GatewayLanguageSyncTarget | undefined,
+  right: GatewayLanguageSyncTarget,
+): boolean {
+  return left?.token === right.token && left.language === right.language;
+}
+
+async function drainGatewayLanguageSync(): Promise<void> {
+  while (pendingGatewayLanguageSync) {
+    const target = pendingGatewayLanguageSync;
+    pendingGatewayLanguageSync = undefined;
+    activeGatewayLanguageSync = target;
+
+    const results = await Promise.allSettled([
+      fetchJson(apiUrl('/api/voice/language'), {
+        method: 'POST',
+        body: JSON.stringify({ language: target.language }),
+      }),
+      fetchJson(apiUrl('/api/you/profile'), {
+        method: 'PATCH',
+        body: JSON.stringify({ locale: target.language === 'zh' ? 'zh-CN' : 'en' }),
+      }),
+    ]);
+
+    if (results.every((result) => result.status === 'fulfilled')) {
+      lastSuccessfulGatewayLanguageSync = target;
+    }
+    activeGatewayLanguageSync = undefined;
+  }
+}
+
+function startGatewayLanguageSyncDrain(): void {
+  if (gatewayLanguageSyncDrain) return;
+  gatewayLanguageSyncDrain = drainGatewayLanguageSync().finally(() => {
+    gatewayLanguageSyncDrain = undefined;
+    if (pendingGatewayLanguageSync) startGatewayLanguageSyncDrain();
+  });
+}
+
 function syncGatewayLanguage(language: StoredLanguage): void {
-  if (!useGatewayStore.getState().token) return;
-  const requests = [
-    fetchJson(apiUrl('/api/voice/language'), {
-      method: 'POST',
-      body: JSON.stringify({ language }),
-    }),
-    fetchJson(apiUrl('/api/you/profile'), {
-      method: 'PATCH',
-      body: JSON.stringify({ locale: language === 'zh' ? 'zh-CN' : 'en' }),
-    }),
-  ];
-  void Promise.allSettled(requests);
+  const token = useGatewayStore.getState().token;
+  if (!token) return;
+
+  const target = { token, language };
+  if (isSameGatewayLanguageSync(activeGatewayLanguageSync, target)) {
+    // The latest signal matches the request already on the wire, so an older
+    // queued language can be discarded without issuing another request.
+    pendingGatewayLanguageSync = undefined;
+    return;
+  }
+  if (
+    isSameGatewayLanguageSync(pendingGatewayLanguageSync, target) ||
+    (!activeGatewayLanguageSync && isSameGatewayLanguageSync(lastSuccessfulGatewayLanguageSync, target))
+  ) {
+    return;
+  }
+
+  // React StrictMode mounts effects twice in development, and Electron may echo
+  // the same locale through onChanged. Coalesce those signals so this background
+  // preference sync does not consume the shared strict mutation-rate budget.
+  pendingGatewayLanguageSync = target;
+  startGatewayLanguageSyncDrain();
+}
+
+/** Test-only — reset successful sync memory between cases. */
+export function __resetGatewayLanguageSyncForTests(): void {
+  activeGatewayLanguageSync = undefined;
+  pendingGatewayLanguageSync = undefined;
+  lastSuccessfulGatewayLanguageSync = undefined;
+  gatewayLanguageSyncDrain = undefined;
 }
 
 export const useLocaleStore = create<LocaleState>((set) => ({

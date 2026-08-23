@@ -1,4 +1,4 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { CallToolResult, ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import type { JsonSchemaType } from "@modelcontextprotocol/sdk/validation/types.js";
 import type { Config } from "../../config/schema.js";
 
@@ -17,6 +17,7 @@ export type McpCatalogTool = {
   title?: string;
   description?: string;
   inputSchema: JsonSchemaType;
+  annotations?: ToolAnnotations;
   fallbackDescription: string;
 };
 
