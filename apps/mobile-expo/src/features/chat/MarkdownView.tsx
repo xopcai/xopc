@@ -50,7 +50,7 @@ function createMarkdownStyle(themeColors: ColorScheme, isDark: boolean) {
       fontWeight: '600' as const,
     },
     code: {
-      color: themeColors.accent.primary,
+      color: themeColors.text.secondary,
       backgroundColor: codeBackground,
     },
     codeBlock: {
@@ -96,7 +96,6 @@ function createMarkdownStyle(themeColors: ColorScheme, isDark: boolean) {
 type MarkdownStyle = ReturnType<typeof createMarkdownStyle>;
 
 function createJsMarkdownStyles(themeColors: ColorScheme, isDark: boolean) {
-  const codeColor = themeColors.accent.primary;
   const codeBackground = isDark ? themeColors.surface.active : themeColors.surface.input;
 
   return StyleSheet.create({
@@ -137,7 +136,7 @@ function createJsMarkdownStyles(themeColors: ColorScheme, isDark: boolean) {
     },
     code_inline: {
       ...typography.label,
-      color: codeColor,
+      color: themeColors.text.secondary,
       backgroundColor: codeBackground,
       borderWidth: 0,
       paddingHorizontal: 4,
