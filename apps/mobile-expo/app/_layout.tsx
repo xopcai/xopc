@@ -34,6 +34,7 @@ import { useMobileEndpointTools } from '@/features/endpoint-tools/use-mobile-end
 import { mobileAppJsStartedAt, recordPerformanceEvent } from '@/product/usage-metrics';
 import { GlobalReadAloudPlayer } from '@/features/voice/GlobalReadAloudPlayer';
 import { clearStaleReadAloudCache } from '@/features/voice/read-aloud-cache';
+import { clearStaleReadAloudLiveActivities } from '@/features/voice/read-aloud-live-activity';
 
 export default function RootLayout() {
   const router = useRouter();
@@ -68,6 +69,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     clearStaleReadAloudCache();
+    clearStaleReadAloudLiveActivities();
     recordPerformanceEvent('app_shell_rendered', Date.now() - mobileAppJsStartedAt);
     const task = InteractionManager.runAfterInteractions(() => setSecondaryServicesReady(true));
     return () => task.cancel();
