@@ -162,6 +162,8 @@ interface PackageListItem {
   categories?: string[];
   stars?: number;
   sourceLabel?: string;
+  /** Provider search relevance. Internal only; stripped before returning API rows. */
+  searchScore?: number;
 }
 
 // ─── Registry HTTP helpers ───────────────────────────────────────────────────
@@ -487,7 +489,28 @@ function lightmakeHitToPackageItem(hit: LightmakeSearchHit): PackageListItem {
     categories: cat ? [cat] : [],
     stars: typeof hit.stars === 'number' ? hit.stars : undefined,
     sourceLabel: sourceLabelFromSkillSource(hit.source) ?? 'Lightmake',
+    searchScore: typeof hit.score === 'number' && Number.isFinite(hit.score) ? hit.score : undefined,
   };
+}
+
+function sortSkillHubSearchRows(rows: PackageListItem[], sort?: string): PackageListItem[] {
+  return [...rows].sort((a, b) => {
+    const aScore = a.searchScore;
+    const bScore = b.searchScore;
+    if (aScore !== undefined || bScore !== undefined) {
+      const relevanceDiff = (bScore ?? Number.NEGATIVE_INFINITY)
+        - (aScore ?? Number.NEGATIVE_INFINITY);
+      if (relevanceDiff !== 0) return relevanceDiff;
+    }
+    if (sort === 'downloads') return b.downloads - a.downloads;
+    if (sort === 'newest') return Number(b.updatedAt) - Number(a.updatedAt);
+    return 0;
+  });
+}
+
+function publicPackageItem(row: PackageListItem): Omit<PackageListItem, 'searchScore'> {
+  const { searchScore: _searchScore, ...item } = row;
+  return item;
 }
 
 async function searchSkillHubLightmake(urls: EcosystemUrls, query: string, limit: number, timeoutMs = 4000): Promise<PackageListItem[]> {
@@ -772,11 +795,10 @@ export const skillHubMarketplaceAdapter: SkillsMarketplaceAdapter = {
         }
       }
       rows = filterByCategory(rows, params.category);
-      if (params.sort === 'downloads') rows = [...rows].sort((a, b) => b.downloads - a.downloads);
-      else if (params.sort === 'newest') rows = [...rows].sort((a, b) => Number(b.updatedAt) - Number(a.updatedAt));
+      rows = sortSkillHubSearchRows(rows, params.sort);
       const total = rows.length;
       const start = (page - 1) * pageSize;
-      const items = rows.slice(start, start + pageSize);
+      const items = rows.slice(start, start + pageSize).map(publicPackageItem);
       const totalPages = Math.max(1, Math.ceil(total / pageSize));
       return { items, meta: { page, pageSize, total, totalPages }, provider: 'skillhub' };
     }

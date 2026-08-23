@@ -98,4 +98,54 @@ describe('skillHubMarketplaceAdapter', () => {
       downloads: 100,
     });
   });
+
+  it('keeps search relevance ahead of download count', async () => {
+    vi.stubEnv('XOPC_SKILLHUB_CACHE_MS', '0');
+    vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (!url.startsWith('https://lightmake.site/api/v1/search')) {
+        throw new Error(`Unexpected fetch: ${url}`);
+      }
+      return jsonResponse({
+        results: [
+          {
+            slug: 'ziwei-fortune',
+            displayName: 'Ziwei Fortune',
+            description: 'Relevant result',
+            downloads: 100,
+            score: 0.09,
+          },
+          {
+            slug: 'ziweidoushu',
+            displayName: '紫薇斗数',
+            description: 'Relevant community result',
+            downloads: 50,
+            score: 0.08,
+            source: 'community',
+          },
+          {
+            slug: 'popular-but-unrelated',
+            displayName: 'Popular unrelated skill',
+            description: 'Low relevance',
+            downloads: 1_000_000,
+            score: 0.01,
+          },
+        ],
+      });
+    }));
+
+    const payload = await skillHubMarketplaceAdapter.listPackages(ConfigSchema.parse({}), {
+      q: 'ziwe',
+      page: 1,
+      pageSize: 40,
+      sort: 'downloads',
+    });
+
+    expect(payload.items.map((item) => item.id)).toEqual([
+      'ziwei-fortune',
+      'ziweidoushu',
+      'popular-but-unrelated',
+    ]);
+    expect(payload.items.every((item) => !('searchScore' in item))).toBe(true);
+  });
 });
