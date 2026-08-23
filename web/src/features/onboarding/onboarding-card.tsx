@@ -381,9 +381,9 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
   };
 
   return (
-    <div className="xopc-onboarding-card relative flex h-full w-full flex-col overflow-hidden rounded-[1.75rem] border border-white/60 bg-surface-panel/95 p-5 shadow-float backdrop-blur-2xl dark:border-white/10 sm:p-6">
+    <div className="xopc-onboarding-card relative flex h-full w-full flex-col overflow-hidden rounded-[1.75rem] border border-white/60 bg-surface-panel/95 p-5 shadow-float backdrop-blur-2xl dark:border-white/10">
       <div className="xopc-onboarding-aurora pointer-events-none absolute inset-x-0 -top-48 h-80" aria-hidden />
-      <header className="relative z-10 grid min-h-14 grid-cols-[1fr_auto_1fr] items-center gap-3 border-b border-edge-subtle pb-4">
+      <header className="relative z-10 grid min-h-13 grid-cols-[1fr_auto_1fr] items-center gap-3 border-b border-edge-subtle pb-3">
         <div className="flex min-w-0 items-center gap-3">
           <div className="xopc-onboarding-logo flex size-10 shrink-0 items-center justify-center rounded-xl border border-white/70 bg-white/80 shadow-surface dark:border-white/10 dark:bg-white/5">
             <BrandLogo className="size-7" />
@@ -426,7 +426,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
         </div>
       </header>
 
-      <div className="xopc-onboarding-content relative z-10 min-h-0 flex-1 overflow-hidden pt-5">
+      <div className="xopc-onboarding-content relative z-10 min-h-0 flex-1 overflow-hidden pt-4">
         {step === 'callName' ? (
           <div className="xopc-onboarding-stage mx-auto flex h-full max-w-2xl flex-col gap-4">
             <div>

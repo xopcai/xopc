@@ -33,6 +33,7 @@ import {
 } from './api';
 import { runWorkDiscoveryBatch } from './run-work-discovery-batch';
 import { useUnderstandingActivityStore } from './understanding-activity-store';
+import { defaultSelectedLocalSourceIds } from './work-discovery-source-defaults';
 
 type PageState = 'loading' | 'intro' | 'candidates' | 'consent' | 'running' | 'recognition' | 'recommendation' | 'error';
 
@@ -87,6 +88,7 @@ export function WorkDiscoveryPage({
     void window.electronAPI?.understandingSources?.catalog().then((sources) => {
       if (cancelled) return;
       setLocalSources(sources);
+      setSelectedSourceIds(defaultSelectedLocalSourceIds(sources));
     });
     return () => { cancelled = true; };
   }, []);
