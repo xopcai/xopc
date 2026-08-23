@@ -22,4 +22,25 @@ describe('resolveOnboardingProviders', () => {
       'google',
     ]);
   });
+
+  it('keeps the first-run provider choice bounded to one compact row', () => {
+    const manyProviders: ProviderMeta[] = [
+      'deepseek',
+      'openai',
+      'anthropic',
+      'google',
+      'minimax',
+      'kimi-coding',
+    ].map((id) => ({
+      id,
+      name: id,
+      category: 'common',
+      supportsOAuth: false,
+      supportsApiKey: true,
+      configured: false,
+      onboardingFeatured: true,
+    }));
+
+    expect(resolveOnboardingProviders(manyProviders, false)).toHaveLength(5);
+  });
 });
