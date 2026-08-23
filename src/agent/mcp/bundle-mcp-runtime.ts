@@ -350,6 +350,7 @@ export function createSessionMcpRuntime(params: {
                 description:
                   normalizeOptionalString(tool.description) ?? normalizeOptionalString(tool.title),
                 inputSchema: tool.inputSchema,
+                annotations: tool.annotations,
                 fallbackDescription: `Provided by bundle MCP server "${serverName}" (${resolved.description}).`,
               });
             }

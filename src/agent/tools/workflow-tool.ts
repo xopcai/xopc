@@ -9,7 +9,7 @@ import {
   type ProductDeliveryEnvelope,
 } from '@xopcai/gateway-contract';
 
-import { extractProfileAgentId } from '../../config/agent-profile.js';
+import { extractProfileAgentId, resolveEffectiveAgentProfileForSession } from '../../config/agent-profile.js';
 import { createLogger } from '../../utils/logger.js';
 import type { WorkflowCatalog } from '../workflow/catalog.js';
 import type {
@@ -36,6 +36,9 @@ const WorkflowToolSchema = Type.Object({
       description: 'Optional goal or task description for this workflow run (defaults to user intent in chat).',
     }),
   ),
+  intent: Type.Optional(
+    Type.String({ description: 'Optional short intent used to select a suggested workflow.' }),
+  ),
   taskRunId: Type.Optional(
     Type.String({
       description: 'Optional TaskRun id. When set, the workflow executes and finalizes that run.',
@@ -47,6 +50,7 @@ export type WorkflowToolInput = {
   name?: string;
   args?: unknown;
   goal?: string;
+  intent?: string;
   taskRunId?: string;
 };
 
@@ -91,7 +95,7 @@ export function createWorkflowTool(deps: WorkflowToolDeps): AgentTool {
 
       let definitionId: string;
       try {
-        definitionId = resolveDefinitionId(params, deps.catalog);
+        definitionId = resolveDefinitionId(params, deps.catalog, deps.getConfig(), deps.getCurrentSessionKey?.());
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
         return {
@@ -195,11 +199,29 @@ export function createWorkflowTool(deps: WorkflowToolDeps): AgentTool {
   } as unknown as AgentTool;
 }
 
-function resolveDefinitionId(params: WorkflowToolInput, catalog: WorkflowCatalog): string {
+function resolveDefinitionId(
+  params: WorkflowToolInput,
+  catalog: WorkflowCatalog,
+  config: import('../../config/schema.js').Config | undefined,
+  sessionKey: string | undefined,
+): string {
   const name = params.name?.trim();
   if (name) {
     catalog.load(name);
     return name;
   }
-  throw new Error('`name` is required. Create workflows in the visual workflow studio.');
+  const configuredDefault = config
+    ? (() => {
+        const policy = resolveEffectiveAgentProfileForSession(config, sessionKey).manifest.workflows;
+        const intent = params.intent?.trim().toLowerCase();
+        return (intent
+          ? policy.suggested?.find((entry) => entry.intent.toLowerCase() === intent)?.workflow
+          : undefined) ?? policy.default;
+      })()
+    : undefined;
+  if (configuredDefault) {
+    catalog.load(configuredDefault);
+    return configuredDefault;
+  }
+  throw new Error('`name` is required because this agent has no default workflow.');
 }

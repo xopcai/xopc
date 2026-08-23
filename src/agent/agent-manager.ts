@@ -83,6 +83,9 @@ import type { UserContextPlan } from './memory/context/types.js';
 import { WorkspaceRuntimeRegistry, type WorkspaceRuntime } from './workspace-runtime/registry.js';
 import { BackgroundReviewCoordinator } from './background-review/coordinator.js';
 import { maybeRequestChannelExecApproval } from '../channels/exec-approval-runtime.js';
+import { checkBoundary } from '../agent-runtime/boundary-guard.js';
+import { mcpToolPolicyId, resolveMcpToolPolicy } from './mcp/bundle-mcp-policy.js';
+import { parseExternalToolRef } from './external-tools/refs.js';
 import { SkillFilesystemWatcher } from './skills/filesystem-watcher.js';
 import { resolveWorkspaceSkillsDir, resolveWorkspaceSkillsLockPath } from './skills/workspace-skills-dir.js';
 import { ProjectTrustStore, hasTrustRequiringProjectResources } from '../project-trust/trust-store.js';
@@ -1279,6 +1282,7 @@ export class AgentManager implements AgentInstanceGateway {
 
     const thinkingLevel =
       (profile.thinkingDefault as ThinkingLevel | undefined) ?? this.config.thinkingLevel ?? 'medium';
+    const toolCalls = new Map<string, number>();
 
     agent = new Agent({
       initialState: {
@@ -1306,8 +1310,45 @@ export class AgentManager implements AgentInstanceGateway {
       toolExecution: 'parallel',
       streamFn: createExtensionAwareStreamFn(),
       getApiKey: (provider: string) => this.resolveApiKeyWithCache(provider),
+      shouldStopAfterTurn: ({ newMessages, toolResults }) => {
+        const maxTurns = profile.manifest.runtime?.maxTurns;
+        const maxFailures = profile.manifest.runtime?.maxToolFailuresPerTurn;
+        const shouldStop = Boolean(
+          (maxTurns && newMessages.filter((message) => message.role === 'assistant').length >= maxTurns)
+          || (maxFailures && toolResults.filter((result) => result.isError).length >= maxFailures),
+        );
+        toolCalls.clear();
+        return shouldStop;
+      },
       beforeToolCall: async ({ toolCall, args }) => {
         const toolName = toolCall.name;
+        const policy = this.resolveToolPolicy(profile, toolName, args);
+        if (policy?.limits?.maxCallsPerTurn) {
+          const count = (toolCalls.get(policy.id) ?? 0) + 1;
+          toolCalls.set(policy.id, count);
+          if (count > policy.limits.maxCallsPerTurn) {
+            return { block: true, terminate: true, reason: `${policy.id} exceeded its per-turn call limit.` };
+          }
+        }
+
+        const detail = JSON.stringify(args ?? {});
+        const boundary = checkBoundary({ manifest: profile.manifest, action: policy?.id ?? toolName, detail });
+        if (boundary.decision === 'deny') {
+          return { block: true, terminate: true, reason: `Blocked by boundary rule: ${boundary.matchedRule}` };
+        }
+        if (boundary.decision === 'escalate') {
+          return { block: true, terminate: true, reason: `Escalation required by boundary rule: ${boundary.matchedRule}` };
+        }
+        if (policy?.mode === 'confirm' || boundary.decision === 'confirm') {
+          const approved = await this.requestToolConfirmation(
+            sessionKey,
+            policy?.id ?? toolName,
+            detail,
+          );
+          if (!approved) {
+            return { block: true, terminate: true, reason: `User did not approve ${policy?.id ?? toolName}.` };
+          }
+        }
 
         if (toolName === 'exec_command') {
           const ctx = this.config.getCurrentContext();
@@ -1356,7 +1397,43 @@ export class AgentManager implements AgentInstanceGateway {
         return undefined;
       },
     });
+    agent.subscribe((event) => {
+      if (event.type === 'agent_start') toolCalls.clear();
+    });
     return { agent, registeredToolNames };
+  }
+
+  private resolveToolPolicy(
+    profile: EffectiveAgentProfile,
+    toolName: string,
+    args: unknown,
+  ): ({ id: string } & NonNullable<EffectiveAgentProfile['manifest']['tools']['builtin'][string]>) | undefined {
+    if (toolName !== 'xopc_tool_execute') {
+      const policy = profile.manifest.tools.builtin[toolName];
+      return policy ? { id: toolName, ...policy } : undefined;
+    }
+    const toolRef = typeof (args as { toolRef?: unknown })?.toolRef === 'string'
+      ? (args as { toolRef: string }).toolRef
+      : '';
+    const parsed = parseExternalToolRef(toolRef, 'mcp');
+    if (!parsed) return undefined;
+    const id = mcpToolPolicyId(parsed.namespace, parsed.toolName);
+    const policy = resolveMcpToolPolicy(
+      { serverId: parsed.namespace, policyToolId: id },
+      profile.manifest.tools.mcp,
+    );
+    return policy ? { id, ...policy } : undefined;
+  }
+
+  private async requestToolConfirmation(sessionKey: string, toolName: string, detail: string): Promise<boolean> {
+    const request = this.config.gatewayClarify?.requestClarification;
+    if (!request) return false;
+    const answer = await request(sessionKey, {
+      question: `Allow ${toolName} to run once?\n${detail.slice(0, 500)}`,
+      choices: ['Allow once', 'Deny'],
+      default: 'Deny',
+    }).catch(() => 'Deny');
+    return answer === 'Allow once';
   }
 
   private refreshActiveProjectContextIfChanged(instance: AgentInstance): void {
