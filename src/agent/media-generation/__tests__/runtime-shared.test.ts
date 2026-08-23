@@ -56,7 +56,7 @@ describe('resolveCapabilityModelCandidates', () => {
   it('deduplicates by case-insensitive provider + exact model', () => {
     const modelConfig: AgentModelConfig = {
       primary: 'OpenAI/gpt-image-2',
-      fallbacks: ['openai/gpt-image-2', 'openai/gpt-image-1.5'],
+      fallbacks: ['openai/gpt-image-2', 'openai/custom-image'],
     };
     const candidates = resolveCapabilityModelCandidates({
       cfg: emptyCfg,
@@ -65,7 +65,7 @@ describe('resolveCapabilityModelCandidates', () => {
     });
     expect(candidates).toEqual([
       { provider: 'openai', model: 'gpt-image-2' },
-      { provider: 'openai', model: 'gpt-image-1.5' },
+      { provider: 'openai', model: 'custom-image' },
     ]);
   });
 

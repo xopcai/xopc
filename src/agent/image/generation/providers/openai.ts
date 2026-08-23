@@ -25,7 +25,7 @@ import type {
 const OPENAI_DEFAULT_BASE_URL = 'https://api.openai.com/v1';
 
 /** Image models exposed by the OpenAI Images API. */
-export const OPENAI_IMAGE_MODELS: readonly string[] = ['gpt-image-2', 'gpt-image-1.5'];
+export const OPENAI_IMAGE_MODELS: readonly string[] = ['gpt-image-2'];
 export const OPENAI_DEFAULT_IMAGE_MODEL = OPENAI_IMAGE_MODELS[0]!;
 
 const OPENAI_CAPABILITIES: ImageGenerationProviderCapabilities = {
