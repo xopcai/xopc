@@ -123,6 +123,8 @@ export const builtinVoiceProviderMetadata: VoiceProviderMetadata[] = [
     fields: [
       { key: 'model', label: 'Public model ID', type: 'string' },
       { key: 'voice', label: 'Voice ID', type: 'string' },
+      { key: 'speed', label: 'Speed', type: 'number', defaultValue: 1, min: 0.25, max: 4, step: 0.05, description: 'Speech speed from 0.25× to 4×.' },
+      { key: 'instructions', label: 'Speaking instructions', type: 'textarea', placeholder: 'Speak warmly and clearly.' },
     ],
     diagnostics: { requiresApiKey: false, configPath: 'messages.tts.providers.xopc-cloud' },
   },

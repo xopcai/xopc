@@ -13,6 +13,12 @@ export interface VoiceModel {
   id: string;
   name: string;
   description?: string;
+  tts?: {
+    speed: boolean;
+    instructions: boolean;
+    outputFormats: string[];
+    defaultVoice?: string;
+  };
 }
 
 export interface VoiceModelsPayload {
@@ -33,6 +39,9 @@ export interface VoiceConfigFieldMetadata {
   description?: string;
   options?: VoiceModel[];
   defaultValue?: string | number | boolean;
+  min?: number;
+  max?: number;
+  step?: number;
 }
 
 export interface VoiceProviderDiagnosticMetadata {
