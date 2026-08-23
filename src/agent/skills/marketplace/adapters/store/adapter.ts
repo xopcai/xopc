@@ -2,6 +2,7 @@ import { buildSkillMarkdownPreviewFromRaw } from '../../../skill-markdown-previe
 import {
   downloadSkillZipBuffer,
   fetchMarketplacePackageDetail,
+  listSkillCategories,
   listSkillPackages,
   resolveSkillZipDownloadUrl,
   resolveSkillsStoreBaseUrl,
@@ -15,15 +16,18 @@ import { registerMarketplaceAdapter } from '../../registry.js';
 export const storeMarketplaceAdapter: SkillsMarketplaceAdapter = {
   id: 'store',
 
-  async listCategories(_config) {
-    return [];
+  async listCategories(config, options) {
+    return listSkillCategories(resolveSkillsStoreBaseUrl(config), options?.locale);
   },
 
   async listPackages(config, params) {
     const base = resolveSkillsStoreBaseUrl(config);
     const response = await listSkillPackages(base, params);
     return {
-      items: response.items,
+      items: response.items.map((item) => ({
+        ...item,
+        categories: item.category ? [item.category] : [],
+      })),
       meta: response.meta,
       provider: 'store',
     };

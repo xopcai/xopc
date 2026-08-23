@@ -45,6 +45,8 @@ export interface SkillsStorePackageListItem {
   author: { username: string; avatarUrl: string | null };
   latestVersion?: string;
   updatedAt: string;
+  /** Stable primary category id from XOPC Store. */
+  category?: string | null;
   /** Taxonomy / tags from the marketplace (adapter-specific). */
   categories?: string[];
   tags?: string[];
@@ -174,6 +176,19 @@ export async function listSkillPackages(
 
   const url = `${base}/api/v1/packages?${sp.toString()}`;
   return fetchJson<SkillsStoreListResponse>(url);
+}
+
+export async function listSkillCategories(
+  storeBaseUrl: string,
+  locale?: string,
+): Promise<MarketplaceCategoryOption[]> {
+  const base = normalizeBaseUrl(storeBaseUrl);
+  const sp = new URLSearchParams({ type: 'skill' });
+  if (locale?.trim()) sp.set('locale', locale.trim());
+  const response = await fetchJson<{ items: MarketplaceCategoryOption[] }>(
+    `${base}/api/v1/packages/categories?${sp.toString()}`,
+  );
+  return response.items;
 }
 
 /** Public connector catalog exposed by xopc-store. */

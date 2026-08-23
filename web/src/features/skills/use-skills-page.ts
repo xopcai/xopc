@@ -399,8 +399,8 @@ export function useSkillsPage() {
   ]);
 
   const mpCategoriesResource = useAsyncResource(
-    () => getMarketplaceCategories({ provider: marketBrowseProvider! }).then((r) => r.items),
-    [hasToken, mainTab, marketBrowseProvider],
+    () => getMarketplaceCategories({ provider: marketBrowseProvider!, locale: language }).then((r) => r.items),
+    [hasToken, mainTab, marketBrowseProvider, language],
     {
       enabled: hasToken && mainTab === 'marketplace' && Boolean(marketBrowseProvider),
       initial: [] as MarketplaceCategoryItem[],

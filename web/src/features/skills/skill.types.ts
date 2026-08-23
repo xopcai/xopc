@@ -167,6 +167,7 @@ export interface MarketplacePackageItem {
   author: { username: string; avatarUrl: string | null };
   latestVersion?: string;
   updatedAt: string;
+  category?: string | null;
   categories?: string[];
   tags?: string[];
   stars?: number;
