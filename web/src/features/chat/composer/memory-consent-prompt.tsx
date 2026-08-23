@@ -1,4 +1,4 @@
-import { Brain, Check, ShieldCheck } from 'lucide-react';
+import { Brain, Check, PencilLine, ShieldCheck } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,16 @@ type MemoryConsentEvent = CustomEvent<{
   sessionKey?: string;
   requests?: Array<Record<string, unknown>>;
 }>;
+
+type MemoryCandidate = { id: string; content: string };
+
+function normalizeCandidates(raw: Array<Record<string, unknown>> | undefined): MemoryCandidate[] {
+  return (raw ?? []).flatMap((record) => {
+    const id = typeof record.id === 'string' ? record.id : '';
+    const content = typeof record.content === 'string' ? record.content.trim() : '';
+    return id && content ? [{ id, content }] : [];
+  });
+}
 
 function normalizeRequests(raw: Array<Record<string, unknown>> | undefined): MemoryConsentRequest[] {
   return (raw ?? []).flatMap((request) => {
@@ -151,5 +161,114 @@ export function MemoryCaptureReceipt({ sessionKey, language }: { sessionKey: str
       </div>
       <Button type="button" variant="ghost" className="h-8 shrink-0 px-2.5" disabled={busy} onClick={() => void undo()}>{t.memoryCapturedUndo}</Button>
     </div>
+  );
+}
+
+export function MemoryCandidatePrompt({ sessionKey, language }: { sessionKey: string; language: 'en' | 'zh' }) {
+  const t = messages(language).chat;
+  const [records, setRecords] = useState<MemoryCandidate[]>([]);
+  const [draft, setDraft] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(false);
+  const record = records[0];
+
+  useEffect(() => {
+    const onCandidate = (event: Event) => {
+      const detail = (event as CustomEvent<{ sessionKey?: string; records?: Array<Record<string, unknown>> }>).detail;
+      if (detail?.sessionKey !== sessionKey) return;
+      const incoming = normalizeCandidates(detail.records);
+      if (!incoming.length) return;
+      setRecords((current) => {
+        const byId = new Map([...current, ...incoming].map((item) => [item.id, item]));
+        return [...byId.values()];
+      });
+      setError(false);
+    };
+    window.addEventListener('memory-candidate', onCandidate);
+    return () => window.removeEventListener('memory-candidate', onCandidate);
+  }, [sessionKey]);
+
+  useEffect(() => {
+    setDraft(record?.content ?? '');
+    setEditing(false);
+    setError(false);
+  }, [record?.id, record?.content]);
+
+  useEffect(() => setRecords([]), [sessionKey]);
+  if (!record) return null;
+
+  const removeCurrent = () => setRecords((current) => current.filter((item) => item.id !== record.id));
+  const save = async (statement?: string) => {
+    setBusy(true);
+    setError(false);
+    try {
+      await fetchJson(apiUrl(`/api/you/understandings/${encodeURIComponent(record.id)}`), {
+        method: 'PATCH',
+        body: JSON.stringify({ ...(statement ? { statement } : {}), status: 'active' }),
+      });
+      removeCurrent();
+    } catch {
+      setError(true);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const useOnce = async () => {
+    setBusy(true);
+    setError(false);
+    try {
+      await fetchJson(apiUrl(`/api/you/understandings/${encodeURIComponent(record.id)}`), { method: 'DELETE' });
+      removeCurrent();
+    } catch {
+      setError(true);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section
+      aria-label={t.memoryCandidateAria}
+      className="xopc-memory-candidate mx-auto mb-2 w-full max-w-[var(--max-width-chat)] overflow-hidden rounded-2xl border border-accent/20 bg-surface-panel px-3.5 py-3 shadow-sm"
+    >
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent" aria-hidden>
+          <Brain className="size-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-fg">{t.memoryCandidateTitle}</h2>
+            {records.length > 1 ? <span className="rounded-full bg-surface-muted px-1.5 text-[11px] text-fg-subtle">{records.length}</span> : null}
+          </div>
+          <p className="mt-0.5 text-xs text-fg-muted">{t.memoryCandidateHint}</p>
+          {editing ? (
+            <textarea
+              autoFocus
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              className="mt-2 min-h-20 w-full resize-none rounded-xl border border-edge bg-surface-muted px-3 py-2 text-sm leading-5 text-fg outline-none transition focus:border-accent/60 focus:ring-2 focus:ring-accent/10"
+              maxLength={600}
+              aria-label={t.memoryCandidateEditAria}
+            />
+          ) : <p className="mt-2 text-sm leading-5 text-fg">{record.content}</p>}
+          {error ? <p role="alert" className="mt-2 text-xs text-danger">{t.memoryCandidateError}</p> : null}
+          <div className="mt-2.5 flex flex-wrap justify-end gap-1.5">
+            <Button type="button" variant="ghost" className="h-8 px-2.5" disabled={busy} onClick={() => void useOnce()}>{t.memoryCandidateOnce}</Button>
+            {editing ? (
+              <>
+                <Button type="button" variant="ghost" className="h-8 px-2.5" disabled={busy} onClick={() => setEditing(false)}>{t.memoryCandidateCancel}</Button>
+                <Button type="button" variant="primary" className="h-8 px-3" disabled={busy || draft.trim().length === 0} onClick={() => void save(draft.trim())}>{t.memoryCandidateSaveEdit}</Button>
+              </>
+            ) : (
+              <>
+                <Button type="button" variant="secondary" className="h-8 gap-1.5 px-2.5" disabled={busy} onClick={() => setEditing(true)}><PencilLine className="size-3.5" aria-hidden />{t.memoryCandidateEdit}</Button>
+                <Button type="button" variant="primary" className="h-8 px-3" disabled={busy} onClick={() => void save()}>{t.memoryCandidateSave}</Button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }

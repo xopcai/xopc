@@ -17,16 +17,19 @@ export type UserContextScope = {
   id?: string;
 };
 
-export type UnderstandingKind =
-  | 'preference'
-  | 'boundary'
-  | 'relationship'
-  | 'routine'
-  | 'current_state'
-  | 'long_term_goal'
-  | 'project_context'
-  | 'task_lesson'
-  | 'derived_insight';
+export const UNDERSTANDING_KINDS = [
+  'preference',
+  'boundary',
+  'relationship',
+  'routine',
+  'current_state',
+  'long_term_goal',
+  'project_context',
+  'task_lesson',
+  'derived_insight',
+] as const;
+
+export type UnderstandingKind = typeof UNDERSTANDING_KINDS[number];
 
 export type UnderstandingStatus =
   | 'candidate'

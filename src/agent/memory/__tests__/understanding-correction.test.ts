@@ -128,4 +128,32 @@ describe('understanding correction attribution', () => {
       },
     );
   });
+
+  it('does not expose or learn owner context in group sessions', async () => {
+    const captureTurnUnderstanding = vi.fn();
+    const syncProvidersForTurn = vi.fn().mockResolvedValue(undefined);
+    const memoryManager = {
+      captureTurnUnderstanding,
+      syncProvidersForTurn,
+      queuePrefetchAll: vi.fn(),
+    } as unknown as MemoryManager;
+    const coordinator = new UserContextCoordinator({
+      getConfig: () => undefined,
+      isEnabledForSession: () => true,
+      getAgentIdForSession: () => 'main',
+      getWorkspaceIdForSession: () => '/workspace/project',
+      getMemoryManagerForSession: () => memoryManager,
+      getLastAssistantContent: () => 'assistant reply',
+    });
+    const sessionKey = 'agent:main:telegram:group:-100123456';
+    const userMessage = { role: 'user', content: [{ type: 'text', text: '以后都叫我老板' }] } as AgentMessage;
+
+    const plan = await coordinator.prepare(userMessage, sessionKey, 'group-turn');
+    expect(plan.modelMessage).toBe(userMessage);
+    expect(plan.items).toEqual([]);
+    await coordinator.afterTurn(sessionKey, '以后都叫我老板');
+
+    expect(captureTurnUnderstanding).not.toHaveBeenCalled();
+    expect(syncProvidersForTurn).not.toHaveBeenCalled();
+  });
 });

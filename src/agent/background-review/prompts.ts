@@ -8,7 +8,7 @@ Focus on:
 Return JSON only, with this shape:
 {"candidates":[{"kind":"preference","content":"...","confidence":0.8,"importance":0.7,"durability":"durable","sensitivity":"normal","disclosurePolicy":"referenceable","tags":["background-review"]}]}
 
-Allowed kinds: preference, boundary, relationship, project_context, commitment, routine, personal_logistics, open_question, milestone, current_state, task_lesson, tool_preference, long_term_goal, derived_insight.
+Allowed kinds: preference, boundary, relationship, routine, current_state, long_term_goal, project_context, task_lesson, derived_insight.
 Only include facts supported by the conversation and likely to matter in a future session. A temporary mood or one-off reaction is current context, not durable identity; omit it unless the user describes a recurring pattern that will matter later. Never include passwords, tokens, credentials, or speculative diagnoses. Use {"candidates":[]} when nothing qualifies.
 
 Do not turn a request about the current task into user understanding. Exclude requested outputs, follow-up instructions, project-note edits, investigations, and other one-off work. Every candidate must be a complete standalone statement about the user or an enduring pattern; never return a clause fragment beginning with a connector such as "and", "also", "并且", "以及", or "的事项". Use long_term_goal only when the user states an enduring personal goal, not when they ask the assistant to create, update, investigate, summarize, or track something.`;

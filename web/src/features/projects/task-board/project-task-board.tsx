@@ -96,14 +96,14 @@ function TaskCard({ task, returnTo, copy, busy, onAction, onDragStart }: {
         onDragStart(task.id);
       }}
       onDragEnd={() => onDragStart('')}
-      className="rounded-lg border border-edge-subtle bg-surface-panel transition-colors hover:border-edge hover:bg-surface-hover"
+      className="min-w-0 overflow-hidden rounded-lg border border-edge-subtle bg-surface-panel transition-colors hover:border-edge hover:bg-surface-hover"
     >
       <Link
         to={withReturnTo(`/tasks/${encodeURIComponent(task.id)}`, returnTo)}
-        className="block p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
+        className="block min-w-0 p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
       >
         <div className="flex items-start justify-between gap-2">
-          <h3 className="text-sm font-medium leading-5 text-fg">{task.title}</h3>
+          <h3 className="min-w-0 break-words text-sm font-medium leading-5 text-fg">{task.title}</h3>
           {task.priority === 'critical' || task.priority === 'high' ? (
             <span className={cn(
               'shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium',
@@ -254,53 +254,55 @@ export function ProjectTaskBoard({ tasks, returnTo, copy, onAction, onCreate, ac
           {copy.create}
         </Button>
       </div>
-      <div className="grid min-w-[64rem] grid-cols-4 gap-3">
-        {PROJECT_TASK_LANES.map((lane) => {
-          const Icon = LANE_ICONS[lane];
-          const items = grouped[lane];
-          return (
-            <section
-              key={lane}
-              onDragOver={(event) => {
-                const task = tasks.find((item) => item.id === draggedId);
-                if (task && taskActionForLane(task, lane)) event.preventDefault();
-              }}
-              onDrop={(event) => {
-                event.preventDefault();
-                const task = tasks.find((item) => item.id === draggedId);
-                const action = task ? taskActionForLane(task, lane) : undefined;
-                setDraggedId(null);
-                if (task && action) performAction(task, action);
-              }}
-              className="min-w-0 rounded-xl bg-surface-muted/60 p-2.5"
-            >
-              <header className="mb-2.5 flex items-center justify-between gap-2 px-1">
-                <div className={cn('flex items-center gap-2', LANE_TONES[lane])}>
-                  <Icon className="size-4" aria-hidden />
-                  <h3 className="text-sm font-semibold">{copy.lanes[lane]}</h3>
+      <div className="w-full min-w-0 overflow-x-auto overscroll-x-contain pb-2 [scrollbar-width:thin]">
+        <div className="grid min-w-[82rem] grid-cols-4 gap-3">
+          {PROJECT_TASK_LANES.map((lane) => {
+            const Icon = LANE_ICONS[lane];
+            const items = grouped[lane];
+            return (
+              <section
+                key={lane}
+                onDragOver={(event) => {
+                  const task = tasks.find((item) => item.id === draggedId);
+                  if (task && taskActionForLane(task, lane)) event.preventDefault();
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  const task = tasks.find((item) => item.id === draggedId);
+                  const action = task ? taskActionForLane(task, lane) : undefined;
+                  setDraggedId(null);
+                  if (task && action) performAction(task, action);
+                }}
+                className="min-w-0 overflow-hidden rounded-xl bg-surface-muted/60 p-2.5"
+              >
+                <header className="mb-2.5 flex items-center justify-between gap-2 px-1">
+                  <div className={cn('flex items-center gap-2', LANE_TONES[lane])}>
+                    <Icon className="size-4" aria-hidden />
+                    <h3 className="text-sm font-semibold">{copy.lanes[lane]}</h3>
+                  </div>
+                  <span className="rounded-full bg-surface-panel px-2 py-0.5 text-xs text-fg-subtle">{items.length}</span>
+                </header>
+                <div className="grid gap-2">
+                  {items.length ? items.map((task) => (
+                    <TaskCard
+                      key={task.id}
+                      task={task}
+                      returnTo={returnTo}
+                      copy={copy}
+                      busy={actionBusyId === task.id}
+                      onAction={performAction}
+                      onDragStart={setDraggedId}
+                    />
+                  )) : (
+                    <p className="rounded-lg border border-dashed border-edge px-3 py-5 text-center text-xs text-fg-subtle">
+                      {copy.empty}
+                    </p>
+                  )}
                 </div>
-                <span className="rounded-full bg-surface-panel px-2 py-0.5 text-xs text-fg-subtle">{items.length}</span>
-              </header>
-              <div className="grid gap-2">
-                {items.length ? items.map((task) => (
-                  <TaskCard
-                    key={task.id}
-                    task={task}
-                    returnTo={returnTo}
-                    copy={copy}
-                    busy={actionBusyId === task.id}
-                    onAction={performAction}
-                    onDragStart={setDraggedId}
-                  />
-                )) : (
-                  <p className="rounded-lg border border-dashed border-edge px-3 py-5 text-center text-xs text-fg-subtle">
-                    {copy.empty}
-                  </p>
-                )}
-              </div>
-            </section>
-          );
-        })}
+              </section>
+            );
+          })}
+        </div>
       </div>
 
       <Dialog.Root open={createOpen} onOpenChange={(open) => { if (!creating) setCreateOpen(open); }}>

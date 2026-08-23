@@ -647,6 +647,17 @@ export class MessageSender {
         }
         break;
       }
+      case 'memory_candidate': {
+        const records = Array.isArray(payload.records)
+          ? payload.records.filter((record): record is Record<string, unknown> => Boolean(record) && typeof record === 'object')
+          : [];
+        if (records.length > 0 && this._chatId) {
+          window.dispatchEvent(new CustomEvent('memory-candidate', {
+            detail: { sessionKey: this._chatId, records },
+          }));
+        }
+        break;
+      }
       case 'workflow_run_started': {
         const workflowRun = payload.workflowRun as Record<string, unknown> | undefined;
         if (workflowRun?.ok === true) {
