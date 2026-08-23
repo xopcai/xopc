@@ -107,7 +107,7 @@ function TaskCard({ task, returnTo, copy, busy, onAction, onDragStart }: {
         onDragStart(task.id);
       }}
       onDragEnd={() => onDragStart('')}
-      className="min-w-0 overflow-hidden rounded-lg border border-edge-subtle bg-surface-panel transition-colors hover:border-edge hover:bg-surface-hover"
+      className="min-h-max min-w-0 shrink-0 overflow-hidden rounded-lg border border-edge-subtle bg-surface-panel transition-colors hover:border-edge hover:bg-surface-hover"
     >
       <Link
         to={taskDetailModalHref(returnTo, task.id)}
@@ -260,8 +260,8 @@ export function ProjectTaskBoard({ tasks, dependencyEdges, returnTo, copy, onAct
   useImperativeHandle(ref, () => ({ openCreate }));
 
   return (
-    <section id="project-panel-board" role="tabpanel" aria-labelledby="project-primary-tab-board" className="min-h-full">
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+    <section id="project-panel-board" role="tabpanel" aria-labelledby="project-primary-tab-board" className="flex h-full min-h-0 flex-col overflow-hidden">
+      <div className="mb-4 flex shrink-0 flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-base font-semibold text-fg">{copy.title}</h2>
           <p className="mt-1 text-sm leading-6 text-fg-muted">{copy.description}</p>
@@ -277,8 +277,8 @@ export function ProjectTaskBoard({ tasks, dependencyEdges, returnTo, copy, onAct
           </button>
         </div>
       </div>
-      {viewMode === 'board' ? <div className="w-full min-w-0 overflow-x-auto overscroll-x-contain pb-2 [scrollbar-width:thin]">
-        <div className="grid min-w-[103rem] grid-cols-5 gap-3">
+      {viewMode === 'board' ? <div className="min-h-0 w-full min-w-0 flex-1 overflow-x-auto overflow-y-hidden overscroll-x-contain pb-2 [scrollbar-width:thin]">
+        <div className="grid h-full min-h-0 min-w-[103rem] grid-cols-5 gap-3">
           {PROJECT_TASK_LANES.map((lane) => {
             const Icon = LANE_ICONS[lane];
             const items = grouped[lane];
@@ -296,43 +296,47 @@ export function ProjectTaskBoard({ tasks, dependencyEdges, returnTo, copy, onAct
                   setDraggedId(null);
                   if (task && action) performAction(task, action);
                 }}
-                className="min-w-0 overflow-hidden rounded-xl bg-surface-muted/60 p-2.5"
+                className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl bg-surface-muted/60 p-2.5"
               >
-                <header className="mb-2.5 flex items-center justify-between gap-2 px-1">
+                <header className="mb-2.5 flex shrink-0 items-center justify-between gap-2 px-1">
                   <div className={cn('flex items-center gap-2', LANE_TONES[lane])}>
                     <Icon className="size-4" aria-hidden />
                     <h3 className="text-sm font-semibold">{copy.lanes[lane]}</h3>
                   </div>
                   <span className="rounded-full bg-surface-panel px-2 py-0.5 text-xs text-fg-subtle">{items.length}</span>
                 </header>
-                <div className="grid gap-2">
-                  {items.length ? items.map((task) => (
-                    <TaskCard
-                      key={task.id}
-                      task={task}
-                      returnTo={returnTo}
-                      copy={copy}
-                      busy={actionBusyId === task.id}
-                      onAction={performAction}
-                      onDragStart={setDraggedId}
-                    />
-                  )) : (
-                    <p className="rounded-lg border border-dashed border-edge px-3 py-5 text-center text-xs text-fg-subtle">
-                      {copy.empty}
-                    </p>
-                  )}
+                <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain pr-1 [scrollbar-gutter:stable] [scrollbar-width:thin]">
+                  <div className="flex flex-col gap-2">
+                    {items.length ? items.map((task) => (
+                      <TaskCard
+                        key={task.id}
+                        task={task}
+                        returnTo={returnTo}
+                        copy={copy}
+                        busy={actionBusyId === task.id}
+                        onAction={performAction}
+                        onDragStart={setDraggedId}
+                      />
+                    )) : (
+                      <p className="rounded-lg border border-dashed border-edge px-3 py-5 text-center text-xs text-fg-subtle">
+                        {copy.empty}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </section>
             );
           })}
         </div>
       </div> : (
-        <TaskDependencyGraph
-          tasks={tasks}
-          dependencyEdges={dependencyEdges}
-          returnTo={returnTo}
-          copy={{ ...copy.graph, lanes: copy.lanes }}
-        />
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          <TaskDependencyGraph
+            tasks={tasks}
+            dependencyEdges={dependencyEdges}
+            returnTo={returnTo}
+            copy={{ ...copy.graph, lanes: copy.lanes }}
+          />
+        </div>
       )}
 
       <Dialog.Root open={createOpen} onOpenChange={(open) => { if (!creating) setCreateOpen(open); }}>
