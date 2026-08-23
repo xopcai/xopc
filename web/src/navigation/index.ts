@@ -14,6 +14,7 @@ const TAB_TO_SETTINGS_SECTION: Record<
   | 'settingsCapabilityPresets'
   | 'settingsChannels'
   | 'settingsGateway'
+  | 'settingsRuntimes'
   | 'settingsDevices'
   | 'settingsHeartbeat'
   | 'settingsTunnel'
@@ -31,6 +32,7 @@ const TAB_TO_SETTINGS_SECTION: Record<
   settingsCapabilityPresets: 'capability-presets',
   settingsChannels: 'channels',
   settingsGateway: 'gateway',
+  settingsRuntimes: 'runtimes',
   settingsDevices: 'devices',
   settingsHeartbeat: 'heartbeat',
   settingsTunnel: 'remote-access',
@@ -91,7 +93,7 @@ export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
   },
   {
     id: 'connection',
-    tabs: ['settingsDevices', 'settingsGateway', 'settingsTunnel', 'settingsShares'],
+    tabs: ['settingsDevices', 'settingsGateway', 'settingsRuntimes', 'settingsTunnel', 'settingsShares'],
   },
   {
     id: 'automation',

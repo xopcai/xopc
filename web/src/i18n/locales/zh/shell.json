@@ -32,6 +32,7 @@
     "settingsCapabilities": "模型与服务",
     "settingsChannels": "消息通道",
     "settingsGateway": "网关",
+    "settingsRuntimes": "工具运行时",
     "settingsDevices": "设备与工具",
     "settingsHeartbeat": "心跳",
     "settingsTunnel": "远程访问",

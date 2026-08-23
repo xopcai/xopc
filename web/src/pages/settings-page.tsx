@@ -7,6 +7,7 @@ import {
   loadAppearanceSettingsPanel,
   loadDesktopPetSettingsPanel,
   loadGatewaySettingsPanel,
+  loadRuntimeToolsSettingsPanel,
   loadEndpointToolsManagementSettings,
   loadHeartbeatSettingsPanel,
   loadKeyboardShortcutsSettingsPanel,
@@ -28,6 +29,7 @@ const SECTIONS: SettingsSectionId[] = [
   'desktop-app',
   'capability-presets',
   'gateway',
+  'runtimes',
   'devices',
   'heartbeat',
   'remote-access',
@@ -48,6 +50,9 @@ const AppManagementSettingsPanel = lazy(() =>
 );
 const GatewaySettingsPanel = lazy(() =>
   loadGatewaySettingsPanel().then((m) => ({ default: m.GatewaySettingsPanel })),
+);
+const RuntimeToolsSettingsPanel = lazy(() =>
+  loadRuntimeToolsSettingsPanel().then((m) => ({ default: m.RuntimeToolsSettingsPanel })),
 );
 const HeartbeatSettingsPanel = lazy(() =>
   loadHeartbeatSettingsPanel().then((m) => ({ default: m.HeartbeatSettingsPanel })),
@@ -122,6 +127,10 @@ export function SettingsPage() {
 
   if (id === 'gateway') {
     return renderLazySection(GatewaySettingsPanel);
+  }
+
+  if (id === 'runtimes') {
+    return renderLazySection(RuntimeToolsSettingsPanel);
   }
 
   if (id === 'devices') {

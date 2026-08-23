@@ -24,6 +24,14 @@ function startsWithAny(path: string, prefixes: readonly string[]): boolean {
 
 export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBundle[] = [
   {
+    id: 'runtime-tools',
+    match: (path) => startsWithAny(path, ['/api/runtime-tools']),
+    load: async () => {
+      const { registerRuntimeToolsRoutes } = await import('./runtime-tools.js');
+      return { register: registerRuntimeToolsRoutes };
+    },
+  },
+  {
     id: 'media',
     match: (path) => startsWithAny(path, ['/api/media']),
     load: async () => {

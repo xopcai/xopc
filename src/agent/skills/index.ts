@@ -431,8 +431,6 @@ export {
   installSkill, 
   findInstallSpec,
   hasBinary,
-  getDefaultInstallerPreferences,
-  type InstallerPreferences,
   type InstallContext,
 } from './installer.js';
 
