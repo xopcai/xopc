@@ -56,9 +56,12 @@ function defaultStt(): SttSettings {
   return {
     enabled: true,
     provider: 'xopc-local',
-    alibaba: { model: 'qwen-audio-3.0-asr-flash' },
-    openai: { model: 'gpt-4o-mini-transcribe' },
-    providers: { 'xopc-local': { model: 'sensevoice-small' } },
+    providers: {
+      'xopc-local': { model: 'sensevoice-small' },
+      alibaba: { model: 'qwen-audio-3.0-asr-flash' },
+      openai: { model: 'gpt-4o-mini-transcribe' },
+      groq: { model: 'whisper-large-v3-turbo' },
+    },
     fallback: { enabled: false, order: ['xopc-local'] },
   };
 }
@@ -91,25 +94,10 @@ function normalizeSttProvider(v: unknown): string {
   return typeof v === 'string' && v.trim().length > 0 ? v.trim() : 'xopc-local';
 }
 
-function readProviderSlice<T extends object>(
-  raw: Record<string, unknown>,
-  id: string,
-  defaults: T,
-): T {
-  const providers = isRecord(raw.providers) ? raw.providers : undefined;
-  const fromProviders = providers && isRecord(providers[id]) ? providers[id] : undefined;
-  return {
-    ...defaults,
-    ...(fromProviders ?? {}),
-  };
-}
-
 function mergeStt(raw: unknown): SttSettings {
   const d = defaultStt();
   if (!isRecord(raw)) return d;
   const provider = normalizeSttProvider(raw.provider);
-  const alibaba = readProviderSlice(raw, 'alibaba', d.alibaba ?? {}) as SttSettings['alibaba'];
-  const openai = readProviderSlice(raw, 'openai', d.openai ?? {}) as SttSettings['openai'];
   const baseFallback = d.fallback ?? { enabled: false, order: ['xopc-local'] };
   let fallback = baseFallback;
   if (isRecord(raw.fallback)) {
@@ -122,21 +110,22 @@ function mergeStt(raw: unknown): SttSettings {
     };
   }
 
-  const providers = isRecord(raw.providers)
-    ? Object.fromEntries(
-        Object.entries(raw.providers).map(([key, value]) => [
-          key,
-          isRecord(value) ? { ...value } : {},
-        ]),
-      )
-    : undefined;
+  const providers = {
+    ...(d.providers ?? {}),
+    ...(isRecord(raw.providers)
+      ? Object.fromEntries(
+          Object.entries(raw.providers).map(([key, value]) => [
+            key,
+            isRecord(value) ? { ...value } : {},
+          ]),
+        )
+      : {}),
+  };
 
   return {
     enabled: Boolean(raw.enabled),
     provider,
-    alibaba,
-    openai,
-    ...(providers ? { providers } : {}),
+    providers,
     fallback,
   };
 }
@@ -184,18 +173,7 @@ function mergeTts(raw: unknown): TtsSettings {
 }
 
 function toSttPayload(stt: SttSettings): Record<string, unknown> {
-  const { alibaba, openai, providers, ...rest } = stt;
-  const providerMap: Record<string, Record<string, unknown>> = { ...(providers ?? {}) };
-  if (alibaba) {
-    providerMap.alibaba = { ...(providerMap.alibaba ?? {}), ...alibaba };
-  }
-  if (openai) {
-    providerMap.openai = { ...(providerMap.openai ?? {}), ...openai };
-  }
-  return {
-    ...rest,
-    ...(Object.keys(providerMap).length > 0 ? { providers: providerMap } : {}),
-  };
+  return { ...stt };
 }
 
 function toTtsPayload(tts: TtsSettings): Record<string, unknown> {

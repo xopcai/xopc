@@ -197,6 +197,18 @@ export function buildMinimaxImageGenerationProvider(): ImageGenerationProvider {
   return {
     id: 'minimax',
     label: 'MiniMax',
+    documentationUrl: 'https://platform.minimaxi.com/document/Image%20Generation',
+    apiKeyUrl: 'https://platform.minimaxi.com/user-center/basic-information/interface-key',
+    configFields: [
+      {
+        key: 'region',
+        label: 'Service region',
+        type: 'select',
+        required: true,
+        options: [{ value: 'cn', label: 'China' }, { value: 'intl', label: 'International' }],
+      },
+      { key: 'baseUrl', label: 'Base URL', type: 'url', placeholder: 'https://…' },
+    ],
     defaultModel: MINIMAX_DEFAULT_IMAGE_MODEL,
     models: [...MINIMAX_IMAGE_MODELS],
     capabilities: MINIMAX_CAPABILITIES,

@@ -10,13 +10,12 @@ import { fetchWithTimeoutGuarded } from '../media-shared/http/index.js';
 export type ImageGenerationSetupInput = {
   providerId: string;
   modelId?: string;
-  region?: 'cn' | 'intl';
-  baseUrl?: string;
+  providerConfig?: Record<string, unknown>;
 };
 
 export type ImageGenerationCatalogItem = ReturnType<typeof listImageGenerationProvidersSummary>[number] & {
   configured: boolean;
-  requiresRegion: boolean;
+  config: Record<string, string>;
 };
 
 export function getImageGenerationCatalog(config: Config): ImageGenerationCatalogItem[] {
@@ -25,9 +24,40 @@ export function getImageGenerationCatalog(config: Config): ImageGenerationCatalo
     return {
       ...summary,
       configured: provider.isConfigured({ cfg: config }),
-      requiresRegion: summary.id === 'dashscope' || summary.id === 'minimax',
+      config: Object.fromEntries(
+        summary.configFields.flatMap((field) => {
+          const value = config.providers?.[summary.id]?.[field.key];
+          return typeof value === 'string' ? [[field.key, value]] : [];
+        }),
+      ),
     };
   });
+}
+
+function parseProviderConfig(
+  provider: NonNullable<ReturnType<typeof getImageGenerationProvider>>,
+  input: Record<string, unknown> | undefined,
+): { ok: true; value: ProviderAuthConfig } | { ok: false; error: string } {
+  const source = input ?? {};
+  const allowedKeys = new Set(provider.configFields?.map((field) => field.key) ?? []);
+  const unknownKey = Object.keys(source).find((key) => !allowedKeys.has(key as 'baseUrl' | 'region'));
+  if (unknownKey) return { ok: false, error: `Unknown ${provider.id} config field: ${unknownKey}` };
+
+  const value: ProviderAuthConfig = {};
+  for (const field of provider.configFields ?? []) {
+    const raw = source[field.key];
+    const resolved = typeof raw === 'string' ? raw.trim() : '';
+    if (!resolved) {
+      if (field.required) return { ok: false, error: `${provider.id} requires ${field.key}` };
+      continue;
+    }
+    if (field.type === 'select' && !field.options?.some((option) => option.value === resolved)) {
+      return { ok: false, error: `Invalid ${provider.id} ${field.key}: ${resolved}` };
+    }
+    if (field.key === 'region') value.region = resolved as 'cn' | 'intl';
+    else value.baseUrl = resolved;
+  }
+  return { ok: true, value };
 }
 
 export function getAgentImageGenerationConfig(config: Config, agentIdRaw: string) {
@@ -59,9 +89,9 @@ export function prepareImageGenerationSetup(
   if (!provider.models.includes(modelId)) {
     return { ok: false, error: `Unknown ${providerId} image model: ${modelId}` };
   }
-  const requiresRegion = providerId === 'dashscope' || providerId === 'minimax';
-  if (requiresRegion && input.region !== 'cn' && input.region !== 'intl') {
-    return { ok: false, error: `${providerId} requires region "cn" or "intl"` };
+  const parsedProviderConfig = parseProviderConfig(provider, input.providerConfig);
+  if (parsedProviderConfig.ok === false) {
+    return { ok: false, error: parsedProviderConfig.error };
   }
 
   const next = structuredClone(config);
@@ -70,13 +100,12 @@ export function prepareImageGenerationSetup(
   );
   if (index < 0) return { ok: false, error: `Agent not found: ${agentId}` };
 
-  const connection: ProviderAuthConfig = {
-    ...(input.region ? { region: input.region } : {}),
-    ...(input.baseUrl?.trim() ? { baseUrl: input.baseUrl.trim() } : {}),
-  };
   next.providers = {
     ...(next.providers ?? {}),
-    [providerId]: { ...(next.providers?.[providerId] ?? {}), ...connection },
+    [providerId]: {
+      ...(next.providers?.[providerId] ?? {}),
+      ...parsedProviderConfig.value,
+    },
   };
   const entry = next.agents.list[index]!;
   const models = entry.models ?? {

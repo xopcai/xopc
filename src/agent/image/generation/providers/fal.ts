@@ -386,6 +386,14 @@ export function buildFalImageGenerationProvider(): ImageGenerationProvider {
   return {
     id: 'fal',
     label: 'Fal.ai',
+    documentationUrl: 'https://docs.fal.ai/',
+    apiKeyUrl: 'https://fal.ai/dashboard/keys',
+    configFields: [{
+      key: 'baseUrl',
+      label: 'Base URL',
+      type: 'url',
+      placeholder: 'https://queue.fal.run',
+    }],
     defaultModel: FAL_DEFAULT_IMAGE_MODEL,
     models: [...FAL_IMAGE_MODELS],
     capabilities: FAL_CAPABILITIES,

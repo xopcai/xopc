@@ -60,6 +60,15 @@ export interface ImageGenerationProviderConfiguredContext {
   agentDir?: string;
 }
 
+export interface ImageGenerationProviderConfigField {
+  key: 'baseUrl' | 'region';
+  label: string;
+  type: 'url' | 'select';
+  required?: boolean;
+  placeholder?: string;
+  options?: Array<{ value: string; label: string }>;
+}
+
 export interface ImageGenerationProvider {
   id: string;
   label: string;
@@ -67,6 +76,7 @@ export interface ImageGenerationProvider {
   credentialMode?: 'api-key' | 'oauth' | 'none';
   documentationUrl?: string;
   apiKeyUrl?: string;
+  configFields?: ImageGenerationProviderConfigField[];
   defaultModel: string;
   models: string[];
   capabilities: ImageGenerationProviderCapabilities;
@@ -83,6 +93,7 @@ export interface ImageGenerationProviderSummary {
   credentialMode: 'api-key' | 'oauth' | 'none';
   documentationUrl?: string;
   apiKeyUrl?: string;
+  configFields: ImageGenerationProviderConfigField[];
   defaultModel: string;
   models: string[];
   capabilities: ImageGenerationProviderCapabilities;

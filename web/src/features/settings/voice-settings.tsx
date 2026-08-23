@@ -41,19 +41,6 @@ import { Select, SelectOption } from '@/components/ui/popover-select';
 
 const credentialFieldWidthClass = selectFieldMaxWidthClass;
 
-function sttEnvHint(provider: string): string {
-  switch (provider) {
-    case 'alibaba':
-      return '(DASHSCOPE_API_KEY)';
-    case 'openai':
-      return '(OPENAI_API_KEY)';
-    case 'groq':
-      return '(GROQ_API_KEY)';
-    default:
-      return '';
-  }
-}
-
 function inputClassName(): string {
   return cn(
     'w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg',
@@ -82,18 +69,6 @@ function makeAudioUrl(base64: string, mimeType: string): string {
   return URL.createObjectURL(new Blob([bytes], { type: mimeType }));
 }
 
-const STT_ALIBABA_FALLBACK = [
-  { id: 'qwen-audio-3.0-asr-flash', name: 'Qwen Audio 3.0 ASR Flash' },
-];
-const STT_OPENAI_FALLBACK = [
-  { id: 'gpt-transcribe', name: 'GPT Transcribe' },
-  { id: 'gpt-4o-transcribe', name: 'GPT-4o Transcribe' },
-  { id: 'gpt-4o-mini-transcribe', name: 'GPT-4o Mini Transcribe' },
-];
-const STT_GROQ_MODELS_FALLBACK = [
-  { id: 'whisper-large-v3-turbo', name: 'Whisper Large v3 Turbo' },
-  { id: 'whisper-large-v3', name: 'Whisper Large v3' },
-];
 function sttProviderLabel(id: string, v: VoiceSettingsMessages): string {
   switch (id) {
     case 'xopc-local':
@@ -345,34 +320,6 @@ export function VoiceSettingsPanel() {
     });
   }, []);
 
-  const updateSttAlibaba = useCallback((patch: Partial<NonNullable<VoiceSettingsState['stt']['alibaba']>>) => {
-    dirtyRef.current = true;
-    dispatchForm({
-      type: 'update',
-      updater: (f) =>
-        f
-          ? {
-              ...f,
-              stt: { ...f.stt, alibaba: { ...f.stt.alibaba, ...patch } },
-            }
-          : null,
-    });
-  }, []);
-
-  const updateSttOpenai = useCallback((patch: Partial<NonNullable<VoiceSettingsState['stt']['openai']>>) => {
-    dirtyRef.current = true;
-    dispatchForm({
-      type: 'update',
-      updater: (f) =>
-        f
-          ? {
-              ...f,
-              stt: { ...f.stt, openai: { ...f.stt.openai, ...patch } },
-            }
-          : null,
-    });
-  }, []);
-
   const updateSttFallback = useCallback((patch: Partial<NonNullable<VoiceSettingsState['stt']['fallback']>>) => {
     dirtyRef.current = true;
     dispatchForm({
@@ -512,8 +459,6 @@ export function VoiceSettingsPanel() {
           sttProviders={sttProviders}
           refinement={refinement}
           updateStt={updateStt}
-          updateSttAlibaba={updateSttAlibaba}
-          updateSttOpenai={updateSttOpenai}
           updateSttFallback={updateSttFallback}
           updateRefinement={updateVoiceRefinement}
         />
@@ -612,8 +557,6 @@ function SttSection({
   sttProviders,
   refinement,
   updateStt,
-  updateSttAlibaba,
-  updateSttOpenai,
   updateSttFallback,
   updateRefinement,
 }: {
@@ -624,15 +567,9 @@ function SttSection({
   sttProviders: SttProviderListEntry[];
   refinement: VoiceSettingsState['voice']['input']['refinement'];
   updateStt: (p: Partial<VoiceSettingsState['stt']>) => void;
-  updateSttAlibaba: (p: Partial<NonNullable<VoiceSettingsState['stt']['alibaba']>>) => void;
-  updateSttOpenai: (p: Partial<NonNullable<VoiceSettingsState['stt']['openai']>>) => void;
   updateSttFallback: (p: Partial<NonNullable<VoiceSettingsState['stt']['fallback']>>) => void;
   updateRefinement: (p: Partial<VoiceSettingsState['voice']['input']['refinement']>) => void;
 }) {
-  const alibabaModels = models?.stt?.alibaba?.length ? models.stt.alibaba : STT_ALIBABA_FALLBACK;
-  const openaiModels = models?.stt?.openai?.length ? models.stt.openai : STT_OPENAI_FALLBACK;
-  const xopcCloudModels = models?.stt?.['xopc-cloud'] ?? [];
-
   const providerOptions = useMemo(() => {
     const seen = new Set<string>();
     const options: SttProviderListEntry[] = [];
@@ -645,21 +582,16 @@ function SttSection({
   }, [sttProviders]);
 
   const activeProvider = providerOptions.find((entry) => entry.id === stt.provider);
-  const extensionProviderSlice = stt.providers?.[stt.provider];
-  const extensionApiKey =
-    typeof extensionProviderSlice?.apiKey === 'string' ? extensionProviderSlice.apiKey : '';
-  const extensionModel =
-    typeof extensionProviderSlice?.model === 'string' ? extensionProviderSlice.model : '';
-  const schemaProviderSlice: Record<string, unknown> = {
-    ...(stt.provider === 'alibaba' ? (stt.alibaba ?? {}) : {}),
-    ...(stt.provider === 'openai' ? (stt.openai ?? {}) : {}),
-    ...(extensionProviderSlice ?? {}),
-  };
-  const additionalFields = (activeProvider?.fields ?? []).filter(
-    (field) => field.key !== 'apiKey' && field.key !== 'model',
-  );
+  const providerSlice = stt.providers?.[stt.provider] ?? {};
+  const providerModels = models?.stt?.[stt.provider]?.length
+    ? models.stt[stt.provider]
+    : activeProvider?.models ?? [];
+  const modelField = activeProvider?.fields.find((field) => field.key === 'model');
+  const configuredModel = typeof providerSlice.model === 'string' ? providerSlice.model : undefined;
+  const currentModel = configuredModel
+    ?? (typeof modelField?.defaultValue === 'string' ? modelField.defaultValue : providerModels[0]?.id);
 
-  const updateExtensionProvider = useCallback(
+  const updateProviderSlice = useCallback(
     (patch: Record<string, unknown>) => {
       updateStt({
         providers: {
@@ -675,11 +607,10 @@ function SttSection({
   );
 
   useEffect(() => {
-    const defaultModel = xopcCloudModels[0]?.id;
-    if (stt.provider === 'xopc-cloud' && !extensionModel && defaultModel) {
-      updateExtensionProvider({ model: defaultModel });
+    if (modelField && currentModel && configuredModel !== currentModel) {
+      updateProviderSlice({ model: currentModel });
     }
-  }, [extensionModel, stt.provider, updateExtensionProvider, xopcCloudModels]);
+  }, [configuredModel, currentModel, modelField, updateProviderSlice]);
 
   return (
     <section className="rounded-2xl bg-surface-base px-4 py-5 sm:px-5">
@@ -708,7 +639,7 @@ function SttSection({
                 <Select
                   className={selectClassName()}
                   value={stt.provider}
-                  onChange={(e) => updateStt({ provider: e.target.value })}
+                  onChange={(event) => updateStt({ provider: event.target.value })}
                 >
                   {providerOptions.map((entry) => (
                     <SelectOption key={entry.id} value={entry.id}>
@@ -719,121 +650,17 @@ function SttSection({
                 </Select>
               </div>
 
-              <div className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
-                <FieldLabel>{v.stt.model}</FieldLabel>
-                {stt.provider === 'xopc-cloud' && xopcCloudModels.length > 0 ? (
-                  <Select
-                    className={selectClassName()}
-                    value={extensionModel || xopcCloudModels[0].id}
-                    onChange={(e) => updateExtensionProvider({ model: e.target.value })}
-                  >
-                    {xopcCloudModels.map((m) => (
-                      <SelectOption key={m.id} value={m.id}>
-                        {m.name}
-                      </SelectOption>
-                    ))}
-                  </Select>
-                ) : stt.provider === 'xopc-local' ? (
-                  <Select
-                    className={selectClassName()}
-                    value={extensionModel || 'sensevoice-small'}
-                    onChange={(e) => updateExtensionProvider({ model: e.target.value })}
-                  >
-                    {(models?.stt?.['xopc-local'] ?? []).map((m) => (
-                      <SelectOption key={m.id} value={m.id}>
-                        {m.name}
-                      </SelectOption>
-                    ))}
-                  </Select>
-                ) : stt.provider === 'alibaba' ? (
-                  <Select
-                    className={selectClassName()}
-                    value={stt.alibaba?.model ?? ''}
-                    onChange={(e) => updateSttAlibaba({ model: e.target.value })}
-                  >
-                    {alibabaModels.map((m) => (
-                      <SelectOption key={m.id} value={m.id}>
-                        {m.name}
-                      </SelectOption>
-                    ))}
-                  </Select>
-                ) : stt.provider === 'openai' ? (
-                  <Select
-                    className={selectClassName()}
-                    value={stt.openai?.model ?? ''}
-                    onChange={(e) => updateSttOpenai({ model: e.target.value })}
-                  >
-                    {openaiModels.map((m) => (
-                      <SelectOption key={m.id} value={m.id}>
-                        {m.name}
-                      </SelectOption>
-                    ))}
-                  </Select>
-                ) : stt.provider === 'groq' ? (
-                  <Select
-                    className={selectClassName()}
-                    value={extensionModel || STT_GROQ_MODELS_FALLBACK[0].id}
-                    onChange={(e) => updateExtensionProvider({ model: e.target.value })}
-                  >
-                    {STT_GROQ_MODELS_FALLBACK.map((m) => (
-                      <SelectOption key={m.id} value={m.id}>
-                        {m.name}
-                      </SelectOption>
-                    ))}
-                  </Select>
-                ) : (
-                  <input
-                    className={inputClassName()}
-                    value={extensionModel}
-                    onChange={(e) => updateExtensionProvider({ model: e.target.value })}
-                    placeholder={stt.provider}
-                  />
-                )}
-              </div>
-
-              {activeProvider?.diagnostics.requiresApiKey !== false ? (
-                <div className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
-                  <FieldLabel>{v.stt.apiKey}</FieldLabel>
-                  <VoiceApiKeyField
-                    kind="stt"
-                    providerId={stt.provider}
-                    fieldId={`voice-stt-${stt.provider}-api-key`}
-                    value={
-                      stt.provider === 'alibaba'
-                        ? (stt.alibaba?.apiKey ?? '')
-                        : stt.provider === 'openai'
-                          ? (stt.openai?.apiKey ?? '')
-                          : extensionApiKey
-                    }
-                    onChange={(next) => {
-                      if (stt.provider === 'alibaba') updateSttAlibaba({ apiKey: next });
-                      else if (stt.provider === 'openai') updateSttOpenai({ apiKey: next });
-                      else updateExtensionProvider({ apiKey: next });
-                    }}
-                    labels={apiKeyLabels}
-                    placeholder={stt.provider === 'groq' ? 'gsk_...' : 'sk-...'}
-                  />
-                  <p className="text-xs text-fg-subtle">
-                    {v.stt.apiKeyDesc}
-                    {sttEnvHint(stt.provider) ? ` ${sttEnvHint(stt.provider)}` : ''}
-                  </p>
-                </div>
-              ) : null}
+              <VoiceProviderConfigFields
+                kind="stt"
+                providerId={stt.provider}
+                fields={activeProvider?.fields ?? []}
+                providerSlice={providerSlice}
+                models={providerModels}
+                currentModel={currentModel}
+                apiKeyLabels={apiKeyLabels}
+                onPatch={updateProviderSlice}
+              />
             </div>
-
-            {additionalFields.length > 0 ? (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {additionalFields.map((field) => (
-                  <SchemaConfigField
-                    key={field.key}
-                    field={field}
-                    value={readSchemaFieldValue(schemaProviderSlice, field)}
-                    onChange={(next) => updateExtensionProvider({ [field.key]: next })}
-                    className={field.type === 'textarea' ? 'sm:col-span-2' : credentialFieldWidthClass}
-                  />
-                ))}
-              </div>
-            ) : null}
 
             {stt.provider === 'xopc-local' ? <LocalVoiceModelsPanel v={v} /> : null}
 
@@ -1033,7 +860,7 @@ function TtsSection({
     ? models.ttsVoices[tts.provider]
     : activeProvider?.voices ?? [];
 
-  const { data: discoveredVoices = [], isLoading: voicesLoading } = useSWR(
+  const { data: discoveredVoices = [] } = useSWR(
     currentModel ? `voice:tts:${tts.provider}:${currentModel}` : null,
     () => fetchTtsVoices(tts.provider, currentModel ?? ''),
     { revalidateOnFocus: false },
@@ -1212,67 +1039,19 @@ function TtsSection({
               </summary>
               <div className="mt-3">
                 <div className="grid gap-3 sm:grid-cols-2">
-                  {visibleFields.map((field) => {
-                    if (field.key === 'apiKey') {
-                      return (
-                        <div key={field.key} className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
-                          <FieldLabel>{field.label}</FieldLabel>
-                          <VoiceApiKeyField
-                            kind="tts"
-                            providerId={tts.provider}
-                            fieldId={`voice-tts-${tts.provider}-api-key`}
-                            value={typeof providerSlice.apiKey === 'string' ? providerSlice.apiKey : ''}
-                            onChange={(next) => updateProviderSlice({ apiKey: next })}
-                            labels={apiKeyLabels}
-                            placeholder={field.placeholder}
-                          />
-                          {field.description ? <p className="text-xs text-fg-subtle">{field.description}</p> : null}
-                        </div>
-                      );
-                    }
-                    if (field.key === 'model' && providerModels.length > 0) {
-                      return (
-                        <div key={field.key} className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
-                          <FieldLabel>{field.label}</FieldLabel>
-                          <Select
-                            className={selectClassName()}
-                            value={currentModel ?? ''}
-                            onChange={(event) => updateProviderSlice({ model: event.target.value, voice: undefined })}
-                          >
-                            {providerModels.map((model) => (
-                              <SelectOption key={model.id} value={model.id}>{model.name}</SelectOption>
-                            ))}
-                          </Select>
-                        </div>
-                      );
-                    }
-                    if (field.key === 'voice' && providerVoices.length > 0) {
-                      return (
-                        <div key={field.key} className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
-                          <FieldLabel>{field.label}</FieldLabel>
-                          <Select
-                            className={selectClassName()}
-                            value={currentVoice ?? ''}
-                            disabled={voicesLoading && providerVoices.length === 0}
-                            onChange={(event) => updateProviderSlice({ voice: event.target.value })}
-                          >
-                            {providerVoices.map((voice) => (
-                              <SelectOption key={voice.id} value={voice.id}>{voice.name}</SelectOption>
-                            ))}
-                          </Select>
-                        </div>
-                      );
-                    }
-                    return (
-                      <SchemaConfigField
-                        key={field.key}
-                        field={field}
-                        value={readSchemaFieldValue(providerSlice, field)}
-                        onChange={(next) => updateProviderSlice({ [field.key]: next })}
-                        className={field.type === 'textarea' ? 'sm:col-span-2' : credentialFieldWidthClass}
-                      />
-                    );
-                  })}
+                  <VoiceProviderConfigFields
+                    kind="tts"
+                    providerId={tts.provider}
+                    fields={visibleFields}
+                    providerSlice={providerSlice}
+                    models={providerModels}
+                    voices={providerVoices}
+                    currentModel={currentModel}
+                    currentVoice={currentVoice}
+                    apiKeyLabels={apiKeyLabels}
+                    onPatch={updateProviderSlice}
+                    resetVoiceOnModelChange
+                  />
                 </div>
               </div>
             </details>
@@ -1332,6 +1111,96 @@ function TtsSection({
       </div>
     </section>
   );
+}
+
+function VoiceProviderConfigFields({
+  kind,
+  providerId,
+  fields,
+  providerSlice,
+  models,
+  voices = [],
+  currentModel,
+  currentVoice,
+  apiKeyLabels,
+  onPatch,
+  resetVoiceOnModelChange = false,
+}: {
+  kind: 'stt' | 'tts';
+  providerId: string;
+  fields: VoiceConfigFieldMetadata[];
+  providerSlice: Record<string, unknown>;
+  models: VoiceModelsPayload['stt'][string];
+  voices?: VoiceModelsPayload['ttsVoices'][string];
+  currentModel?: string;
+  currentVoice?: string;
+  apiKeyLabels: VoiceApiKeyFieldLabels;
+  onPatch: (patch: Record<string, unknown>) => void;
+  resetVoiceOnModelChange?: boolean;
+}) {
+  return fields.map((field) => {
+    if (field.key === 'apiKey') {
+      return (
+        <div key={field.key} className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
+          <FieldLabel>{field.label}</FieldLabel>
+          <VoiceApiKeyField
+            kind={kind}
+            providerId={providerId}
+            fieldId={`voice-${kind}-${providerId}-api-key`}
+            value={typeof providerSlice.apiKey === 'string' ? providerSlice.apiKey : ''}
+            onChange={(apiKey) => onPatch({ apiKey })}
+            labels={apiKeyLabels}
+            placeholder={field.placeholder}
+          />
+          {field.description ? <p className="text-xs text-fg-subtle">{field.description}</p> : null}
+        </div>
+      );
+    }
+    if (field.key === 'model' && models.length > 0) {
+      return (
+        <div key={field.key} className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
+          <FieldLabel>{field.label}</FieldLabel>
+          <Select
+            className={selectClassName()}
+            value={currentModel ?? ''}
+            onChange={(event) => onPatch({
+              model: event.target.value,
+              ...(resetVoiceOnModelChange ? { voice: undefined } : {}),
+            })}
+          >
+            {models.map((model) => (
+              <SelectOption key={model.id} value={model.id}>{model.name}</SelectOption>
+            ))}
+          </Select>
+        </div>
+      );
+    }
+    if (field.key === 'voice' && voices.length > 0) {
+      return (
+        <div key={field.key} className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
+          <FieldLabel>{field.label}</FieldLabel>
+          <Select
+            className={selectClassName()}
+            value={currentVoice ?? ''}
+            onChange={(event) => onPatch({ voice: event.target.value })}
+          >
+            {voices.map((voice) => (
+              <SelectOption key={voice.id} value={voice.id}>{voice.name}</SelectOption>
+            ))}
+          </Select>
+        </div>
+      );
+    }
+    return (
+      <SchemaConfigField
+        key={field.key}
+        field={field}
+        value={readSchemaFieldValue(providerSlice, field)}
+        onChange={(next) => onPatch({ [field.key]: next })}
+        className={field.type === 'textarea' ? 'sm:col-span-2' : credentialFieldWidthClass}
+      />
+    );
+  });
 }
 
 function ProminentVoiceToggle({
