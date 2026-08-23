@@ -780,6 +780,7 @@ function SttSection({
 }) {
   const alibabaModels = models?.stt?.alibaba?.length ? models.stt.alibaba : STT_ALIBABA_FALLBACK;
   const openaiModels = models?.stt?.openai?.length ? models.stt.openai : STT_OPENAI_FALLBACK;
+  const xopcCloudModels = models?.stt?.['xopc-cloud'] ?? [];
 
   const providerOptions = useMemo(() => {
     const seen = new Set<string>();
@@ -822,6 +823,13 @@ function SttSection({
     [stt.provider, stt.providers, updateStt],
   );
 
+  useEffect(() => {
+    const defaultModel = xopcCloudModels[0]?.id;
+    if (stt.provider === 'xopc-cloud' && !extensionModel && defaultModel) {
+      updateExtensionProvider({ model: defaultModel });
+    }
+  }, [extensionModel, stt.provider, updateExtensionProvider, xopcCloudModels]);
+
   return (
     <section className="rounded-2xl bg-surface-base px-4 py-5 sm:px-5">
       <div className="mb-4">
@@ -862,7 +870,19 @@ function SttSection({
 
               <div className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
                 <FieldLabel>{v.stt.model}</FieldLabel>
-                {stt.provider === 'xopc-local' ? (
+                {stt.provider === 'xopc-cloud' && xopcCloudModels.length > 0 ? (
+                  <Select
+                    className={selectClassName()}
+                    value={extensionModel || xopcCloudModels[0].id}
+                    onChange={(e) => updateExtensionProvider({ model: e.target.value })}
+                  >
+                    {xopcCloudModels.map((m) => (
+                      <SelectOption key={m.id} value={m.id}>
+                        {m.name}
+                      </SelectOption>
+                    ))}
+                  </Select>
+                ) : stt.provider === 'xopc-local' ? (
                   <Select
                     className={selectClassName()}
                     value={extensionModel || 'sensevoice-small'}

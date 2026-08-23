@@ -1,4 +1,5 @@
 import { listVoiceProviderMetadata } from '../voice/metadata/index.js';
+import { getModelCatalogStore } from '../providers/model-catalog-store.js';
 
 export interface VoiceModel {
   id: string;
@@ -30,6 +31,14 @@ export function getVoiceModelsConfig(): VoiceModelsConfig {
     config.tts[metadata.id] = toVoiceModels(metadata.models);
     config.ttsVoices[metadata.id] = toVoiceModels(metadata.voices);
   }
+
+  const cloudModels = getModelCatalogStore().getSource('xopc-cloud')?.models ?? [];
+  config.stt['xopc-cloud'] = cloudModels
+    .filter((model) => model.availability === 'available' && model.kind === 'stt')
+    .map((model) => ({ id: model.id, name: model.name }));
+  config.tts['xopc-cloud'] = cloudModels
+    .filter((model) => model.availability === 'available' && model.kind === 'tts')
+    .map((model) => ({ id: model.id, name: model.name }));
   return config;
 }
 
