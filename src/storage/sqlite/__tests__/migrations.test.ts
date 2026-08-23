@@ -752,6 +752,7 @@ describe('SQLite migrations', () => {
   it('backfills normalized evidence attribution before dropping legacy JSON', () => {
     const db = openEmptyDb();
     db.exec(`
+      PRAGMA foreign_keys = ON;
       CREATE TABLE memory_records (
         record_id TEXT PRIMARY KEY,
         evidence_json TEXT NOT NULL DEFAULT '[]',
@@ -766,7 +767,9 @@ describe('SQLite migrations', () => {
         excerpt TEXT,
         confidence REAL,
         observed_at INTEGER,
-        created_at INTEGER NOT NULL
+        created_at INTEGER NOT NULL,
+        FOREIGN KEY(record_id) REFERENCES memory_records(record_id) ON DELETE CASCADE,
+        FOREIGN KEY(source_item_id) REFERENCES knowledge_source_items(item_id) ON DELETE SET NULL
       );
     `);
     db.prepare(`INSERT INTO knowledge_source_items (item_id) VALUES (?)`).run('source-1');
@@ -779,6 +782,12 @@ describe('SQLite migrations', () => {
         turnId: 'turn-1',
         toolCallId: 'tool-1',
         observedAt: '2026-08-21T10:00:00.000Z',
+      }, {
+        sourceItemId: 'deleted-source',
+        relation: 'contradicts',
+        sourceText: 'Evidence retained after its source item was deleted.',
+        sessionKey: 'session-2',
+        observedAt: '2026-08-22T10:00:00.000Z',
       }]),
       1,
     );
@@ -800,6 +809,17 @@ describe('SQLite migrations', () => {
         tool_call_id: 'tool-1',
         observed_at: Date.parse('2026-08-21T10:00:00.000Z'),
       });
+    expect(db.prepare(`
+      SELECT source_item_id, relation, excerpt, session_key, observed_at
+      FROM memory_evidence WHERE relation = 'contradicts'
+    `).get()).toEqual({
+      source_item_id: null,
+      relation: 'contradicts',
+      excerpt: 'Evidence retained after its source item was deleted.',
+      session_key: 'session-2',
+      observed_at: Date.parse('2026-08-22T10:00:00.000Z'),
+    });
+    expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
     const columns = db.prepare(`PRAGMA table_info(memory_records)`).all() as Array<{ name: string }>;
     expect(columns.map((column) => column.name)).not.toContain('evidence_json');
   });

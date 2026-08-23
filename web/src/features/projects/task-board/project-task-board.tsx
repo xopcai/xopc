@@ -9,10 +9,10 @@ import { Select, SelectOption } from '@/components/ui/popover-select';
 import { ComposerAttachmentChips } from '@/features/chat/composer/composer-attachment-chips';
 import { useComposerAttachments } from '@/features/chat/composer/use-composer-attachments';
 import { DependencyPicker } from '@/features/tasks/dependency-picker';
+import { taskDetailModalHref } from '@/features/tasks/task-detail-route';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { formatMediumDateTime } from '@/lib/date-formatters';
-import { withReturnTo } from '@/lib/navigation-return';
 import { useLocaleStore } from '@/stores/locale-store';
 
 import {
@@ -110,7 +110,7 @@ function TaskCard({ task, returnTo, copy, busy, onAction, onDragStart }: {
       className="min-w-0 overflow-hidden rounded-lg border border-edge-subtle bg-surface-panel transition-colors hover:border-edge hover:bg-surface-hover"
     >
       <Link
-        to={withReturnTo(`/tasks/${encodeURIComponent(task.id)}`, returnTo)}
+        to={taskDetailModalHref(returnTo, task.id)}
         className="block min-w-0 p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
       >
         <div className="flex items-start justify-between gap-2">

@@ -10,7 +10,7 @@ import {
   X,
 } from 'lucide-react';
 import { type FormEvent, useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -30,6 +30,7 @@ import {
   type HomeResponse,
 } from '@/features/tasks/home-api';
 import { taskCopy } from '@/features/tasks/task-copy';
+import { modalizeTaskDetailHref, taskDetailModalHref } from '@/features/tasks/task-detail-route';
 import { messages } from '@/i18n/messages';
 import { formatMediumDateTime } from '@/lib/date-formatters';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -50,10 +51,10 @@ function CountBadge({ children }: { children: string }) {
   return <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[11px] font-medium text-fg-muted">{children}</span>;
 }
 
-function TaskCard({ task, statusLabel }: { task: Task; statusLabel: string }) {
+function TaskCard({ task, statusLabel, backgroundPath }: { task: Task; statusLabel: string; backgroundPath: string }) {
   return (
     <Link
-      to={`/tasks/${encodeURIComponent(task.id)}`}
+      to={taskDetailModalHref(backgroundPath, task.id)}
       className="group flex items-start justify-between gap-3 rounded-xl border border-edge-subtle bg-surface-panel p-4 transition-colors hover:bg-surface-hover/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
       <div className="min-w-0">
@@ -116,6 +117,7 @@ function ChatCard({ chat, statusLabel }: { chat: HomeChat; statusLabel: string }
 
 function DecisionCard({
   item,
+  href,
   kindLabel,
   reasonLabel,
   approveLabel,
@@ -124,6 +126,7 @@ function DecisionCard({
   onRespond,
 }: {
   item: HomeDecision;
+  href: string;
   kindLabel: string;
   reasonLabel: string;
   approveLabel: string;
@@ -133,7 +136,7 @@ function DecisionCard({
 }) {
   return (
     <article className="rounded-xl border border-warning/35 bg-warning-soft/25 p-3.5 transition-colors hover:bg-warning-soft/40">
-      <Link to={item.href} className="group block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+      <Link to={href} className="group block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="truncate text-sm font-semibold text-fg">{item.title}</h3>
@@ -202,6 +205,7 @@ function AgentJudgmentCard({
 
 function AttentionCard({
   item,
+  href,
   statusLabel,
   retryLabel,
   viewLabel,
@@ -212,6 +216,7 @@ function AttentionCard({
   onAcknowledge,
 }: {
   item: HomeAttention;
+  href: string;
   statusLabel: string;
   retryLabel: string;
   viewLabel: string;
@@ -223,7 +228,7 @@ function AttentionCard({
 }) {
   return (
     <article className="rounded-xl border border-danger/25 bg-danger-soft/35 p-3.5">
-      <Link to={item.href} className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+      <Link to={href} className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
         <div className="flex items-start justify-between gap-3">
           <h3 className="min-w-0 truncate text-sm font-semibold text-fg">{item.title}</h3>
           <span className="shrink-0 rounded-full bg-surface-panel/80 px-2 py-0.5 text-[11px] font-medium text-danger">
@@ -247,6 +252,8 @@ export function HomePage() {
   const t = msg.projectsPage;
   const copy = taskCopy(language);
   const navigate = useNavigate();
+  const location = useLocation();
+  const backgroundPath = `${location.pathname}${location.search}`;
   const setPageHeader = usePageHeaderStore((state) => state.setPageHeader);
   const clearPageHeader = usePageHeaderStore((state) => state.clearPageHeader);
   const [home, setHome] = useState<HomeResponse | null>(null);
@@ -332,13 +339,13 @@ export function HomePage() {
       setCreateOpen(false);
       setTask('');
       setCreateRequestId(crypto.randomUUID());
-      navigate(`/tasks/${encodeURIComponent(started.task.id)}`);
+      navigate(taskDetailModalHref(backgroundPath, started.task.id));
     } catch (error) {
       setCreateError(error instanceof Error ? error.message : String(error));
     } finally {
       setCreating(false);
     }
-  }, [createRequestId, creating, language, navigate, task]);
+  }, [backgroundPath, createRequestId, creating, language, navigate, task]);
 
   const headerEnd = useMemo(() => (
     <Button type="button" variant="primary" className="h-9 rounded-lg" onClick={() => setCreateOpen(true)}>
@@ -536,12 +543,13 @@ export function HomePage() {
                       <AttentionCard
                         key={item.id}
                         item={item}
+                        href={modalizeTaskDetailHref(backgroundPath, item.href)}
                         statusLabel={item.reason === 'run_timeout' ? t.home.attentionTimeout : t.home.attentionFailed}
                         retryLabel={t.home.attentionRetry}
                         viewLabel={t.home.attentionView}
                         acknowledgeLabel={t.home.attentionAcknowledge}
                         busy={busyAttentionId === item.id}
-                        onView={() => navigate(item.href)}
+                        onView={() => navigate(modalizeTaskDetailHref(backgroundPath, item.href))}
                         onRetry={() => void performAttentionAction(item, retryWorkAttention)}
                         onAcknowledge={() => void performAttentionAction(item, acknowledgeWorkAttention)}
                       />
@@ -569,6 +577,7 @@ export function HomePage() {
                       <DecisionCard
                         key={item.id}
                         item={item}
+                        href={modalizeTaskDetailHref(backgroundPath, item.href)}
                         kindLabel={t.home.decisionKinds[item.kind]}
                         reasonLabel={t.home.decisionReasons[item.reason]}
                         approveLabel={t.home.approve}
@@ -589,7 +598,7 @@ export function HomePage() {
               <section className="rounded-2xl bg-surface-base p-5 shadow-surface">
                 <div className="flex items-center gap-2"><Sparkles className="size-4 text-accent" aria-hidden /><h2 className="text-base font-semibold text-fg">{copy.running}</h2><CountBadge>{home.tasks.running.length.toLocaleString()}</CountBadge></div>
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  {home.tasks.running.map((item) => <TaskCard key={item.id} task={item} statusLabel={copy.taskStatuses.running} />)}
+                  {home.tasks.running.map((item) => <TaskCard key={item.id} task={item} statusLabel={copy.taskStatuses.running} backgroundPath={backgroundPath} />)}
                   {home.tasks.running.length === 0 ? (
                     <p className="py-6 text-center text-sm text-fg-muted">{copy.emptyRunning}</p>
                   ) : null}

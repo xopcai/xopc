@@ -6,8 +6,8 @@ import useSWR from 'swr';
 
 import { fetchTask } from '@/features/tasks/home-api';
 import { taskCopy } from '@/features/tasks/task-copy';
+import { taskDetailModalHref } from '@/features/tasks/task-detail-route';
 import { cn } from '@/lib/cn';
-import { withDetailReturnTo } from '@/lib/navigation-return';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -95,7 +95,7 @@ export const TaskSessionBanner = memo(function TaskSessionBanner({
           {detail ? <p className="mt-1 line-clamp-2 text-xs leading-5 text-fg-muted">{detail}</p> : null}
         </div>
         <Link
-          to={withDetailReturnTo(`/tasks/${encodeURIComponent(task.id)}`, `${location.pathname}${location.search}`)}
+          to={taskDetailModalHref(`${location.pathname}${location.search}`, task.id)}
           className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-accent hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           {needsUser ? copy.taskProgress.decide : copy.taskProgress.open}
