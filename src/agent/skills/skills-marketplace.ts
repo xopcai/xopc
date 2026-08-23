@@ -48,8 +48,9 @@ function marketplaceAdapter(config: Config, provider?: string) {
 export async function listMarketplaceCategories(
   config: Config,
   provider?: string,
+  locale?: string,
 ): Promise<{ items: MarketplaceCategoryOption[] }> {
-  const items = await marketplaceAdapter(config, provider).listCategories(config);
+  const items = await marketplaceAdapter(config, provider).listCategories(config, { locale });
   return { items };
 }
 

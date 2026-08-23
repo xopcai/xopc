@@ -72,6 +72,7 @@ export function SkillsPageMarketplaceContent(p: Props) {
     { id: '', label: sk.marketplaceCategoryAll },
     ...mpCategories.map((c) => ({ id: c.id, label: c.label, title: c.label })),
   ];
+  const categoryLabels = new Map(mpCategories.map((category) => [category.id, category.label]));
 
   return (
     <>
@@ -178,6 +179,8 @@ export function SkillsPageMarketplaceContent(p: Props) {
                 const provider = row.providerId ?? marketBrowseProvider;
                 const packageName = marketplacePackageRequestName(row, provider);
                 const installed = isSkillInstalledByName(packageName);
+                const categoryId = row.category ?? row.categories?.[0];
+                const categoryLabel = categoryId ? categoryLabels.get(categoryId) ?? categoryId : null;
                 return (
                   <article
                     key={row.id}
@@ -244,6 +247,11 @@ export function SkillsPageMarketplaceContent(p: Props) {
                           >
                             {row.description || '—'}
                           </p>
+                          {categoryLabel ? (
+                            <span className="w-fit max-w-full truncate rounded-full bg-surface-subtle px-2 py-0.5 text-[10px] font-medium text-fg-muted">
+                              {categoryLabel}
+                            </span>
+                          ) : null}
                           <div className="mt-auto min-h-[2.625rem] space-y-1 text-[11px] leading-snug text-fg-muted">
                             <p
                               className="line-clamp-1"

@@ -235,9 +235,10 @@ export class GatewayMarketplaceService {
 
   async fetchSkillsCategories(
     provider?: string,
+    locale?: string,
   ): Promise<{ items: MarketplaceCategoryOption[] }> {
     const { listMarketplaceCategories } = await import('../../agent/skills/skills-marketplace.js');
-    return listMarketplaceCategories(this.opts.getConfig(), provider);
+    return listMarketplaceCategories(this.opts.getConfig(), provider, locale);
   }
 
   async fetchSkillsPackageDetail(
