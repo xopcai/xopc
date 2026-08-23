@@ -13,7 +13,8 @@ vi.mock('../../providers/model-call.js', () => ({
 }));
 
 import { completeWithResolvedCredentials } from '../../providers/model-call.js';
-import { analyzeWorkContext } from '../analyzer.js';
+import { analyzeUnderstandingSources, analyzeWorkContext } from '../analyzer.js';
+import type { UnderstandingSourceItem } from '../../user-context/sources/types.js';
 import type { WorkContextSnapshot } from '../types.js';
 
 const snapshot: WorkContextSnapshot = {
@@ -83,5 +84,35 @@ describe('work discovery analyzer', () => {
 
     await expect(analyzeWorkContext({ config: {} as never, snapshot }))
       .rejects.toThrow('Analysis response was truncated before completing valid JSON (outputChars=30)');
+  });
+
+  it('validates understanding profile candidates against initialized evidence refs', async () => {
+    vi.mocked(completeWithResolvedCredentials).mockResolvedValue({
+      content: [{ type: 'text', text: JSON.stringify({
+        profileCandidates: [{
+          category: 'workflow',
+          statement: 'Reviews recent project notes regularly.',
+          confidence: 'high',
+          evidence: ['A recent project note was found.'],
+          evidenceRefs: ['local-recent-files://item-1'],
+        }],
+        workThreads: [],
+      }) }],
+      stopReason: 'stop',
+    } as never);
+    const item: UnderstandingSourceItem = {
+      id: 'item-1',
+      sourceId: 'local-recent-files',
+      type: 'document',
+      title: 'Project notes',
+      ownerAttribution: 'user',
+      sensitivity: 'personal',
+      evidenceRef: 'local-recent-files://item-1',
+    };
+
+    const analysis = await analyzeUnderstandingSources({ config: {} as never, items: [item] });
+
+    expect(analysis.profileCandidates).toHaveLength(1);
+    expect(analysis.profileCandidates[0]?.evidenceRefs).toEqual(['local-recent-files://item-1']);
   });
 });
