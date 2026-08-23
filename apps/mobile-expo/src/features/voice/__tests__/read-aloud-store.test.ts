@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   generateSpeechChunk: vi.fn(),
+  startLiveActivity: vi.fn(),
+  updateLiveActivity: vi.fn(),
+  endLiveActivity: vi.fn(),
   memory: new Map<string, string>(),
   playerSources: [] as unknown[],
   playerOptions: [] as unknown[],
@@ -41,6 +44,10 @@ vi.mock('expo-audio', () => ({
   }),
 }));
 
+vi.mock('expo-asset', () => ({
+  Asset: { fromModule: () => ({ uri: 'file:///xopc-icon.png' }) },
+}));
+
 vi.mock('../../../storage/mmkv', () => ({
   KEYS: { readAloudConsent: 'voice.readAloudConsent' },
   storage: {
@@ -50,6 +57,11 @@ vi.mock('../../../storage/mmkv', () => ({
 }));
 
 vi.mock('../read-aloud-api', () => ({ generateSpeechChunk: mocks.generateSpeechChunk }));
+vi.mock('../read-aloud-live-activity', () => ({
+  startReadAloudLiveActivity: mocks.startLiveActivity,
+  updateReadAloudLiveActivity: mocks.updateLiveActivity,
+  endReadAloudLiveActivity: mocks.endLiveActivity,
+}));
 vi.mock('../../../product/usage-metrics', () => ({
   recordInteractionPerformanceEvent: vi.fn(),
   recordUsageEvent: vi.fn(),
@@ -77,6 +89,9 @@ describe('read aloud store', () => {
     mocks.playerSources.length = 0;
     mocks.playerOptions.length = 0;
     mocks.generateSpeechChunk.mockReset();
+    mocks.startLiveActivity.mockReset();
+    mocks.updateLiveActivity.mockReset();
+    mocks.endLiveActivity.mockReset();
     mocks.generateSpeechChunk.mockResolvedValue({
       bytes: new Uint8Array([1]),
       mimeType: 'audio/mpeg',
@@ -108,9 +123,20 @@ describe('read aloud store', () => {
     expect(mocks.players[0]?.setPlaybackRate).toHaveBeenCalledWith(1);
     expect(mocks.players[0]?.setActiveForLockScreen).toHaveBeenCalledWith(true, {
       title: input.source.title,
-      artist: 'xopc',
+      artist: 'xopc AI',
+      albumTitle: 'AI read aloud',
+      artworkUrl: 'file:///xopc-icon.png',
+    }, {
+      isLiveStream: true,
+      showSeekBackward: false,
+      showSeekForward: false,
     });
     expect(mocks.players[0]?.replace).toHaveBeenCalledWith({ uri: 'file:///speech-0.mp3' });
+    expect(mocks.startLiveActivity).toHaveBeenCalledWith(expect.objectContaining({
+      sessionKey: input.source.sessionKey,
+      status: 'preparing',
+      title: input.source.title,
+    }));
   });
 
   it('activates the media session before speech generation completes', () => {
@@ -203,6 +229,30 @@ describe('read aloud store', () => {
     await Promise.resolve();
     expect(activePlayer?.replace).toHaveBeenCalledTimes(2);
     expect(useReadAloudStore.getState().currentChunkIndex).toBe(1);
+  });
+
+  it('starts a new Live Activity when replaying a completed response', async () => {
+    mocks.memory.set('voice.readAloudConsent', 'accepted');
+    useReadAloudStore.getState().requestStart(input);
+
+    await vi.waitFor(() => expect(useReadAloudStore.getState().status).toBe('playing'));
+    const listener = mocks.players[0]?.addListener.mock.calls[0]?.[1] as ((status: {
+      currentTime: number;
+      didJustFinish: boolean;
+      duration: number;
+      isLoaded: boolean;
+      playing: boolean;
+    }) => void) | undefined;
+    listener?.({ currentTime: 10, didJustFinish: false, duration: 10, isLoaded: true, playing: true });
+    listener?.({ currentTime: 10, didJustFinish: true, duration: 10, isLoaded: true, playing: false });
+    expect(mocks.endLiveActivity).toHaveBeenCalled();
+
+    mocks.startLiveActivity.mockClear();
+    useReadAloudStore.getState().resume();
+
+    expect(mocks.startLiveActivity).toHaveBeenCalledWith(expect.objectContaining({
+      status: 'preparing',
+    }));
   });
 
   it('cancels preparation when the active message is tapped again', async () => {
