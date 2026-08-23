@@ -1,5 +1,11 @@
 import type { AgentMessage, AgentToolResult, ThinkingLevel } from '@earendil-works/pi-agent-core';
-import type { AssistantMessageEvent, Model, Api, ImageContent } from '@earendil-works/pi-ai';
+import type {
+  AssistantMessageEvent,
+  Model,
+  Api,
+  CacheRetention,
+  ImageContent,
+} from '@earendil-works/pi-ai';
 
 import type { SessionStore } from '../../session/store.js';
 
@@ -58,6 +64,7 @@ export type RunXopcEmbeddedTurnParams = {
   tools: import('@earendil-works/pi-agent-core').AgentTool[];
   systemPrompt: string;
   thinkingLevel?: ThinkingLevel;
+  cacheRetention?: CacheRetention;
   workspaceDir: string;
   sessionStore: SessionStore;
   timeoutMs: number;

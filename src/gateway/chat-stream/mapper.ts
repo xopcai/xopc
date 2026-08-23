@@ -541,11 +541,24 @@ function extractUsage(message: AgentMessage): AssistantMessageEndEventPayload['u
   const usage = (message as { usage?: unknown }).usage;
   if (!usage || typeof usage !== 'object') return undefined;
   const rec = usage as Record<string, unknown>;
+  const cost = asRecord(rec.cost);
   return {
-    inputTokens: typeof rec.inputTokens === 'number' ? rec.inputTokens : undefined,
-    outputTokens: typeof rec.outputTokens === 'number' ? rec.outputTokens : undefined,
+    inputTokens: typeof rec.input === 'number'
+      ? rec.input
+      : typeof rec.inputTokens === 'number' ? rec.inputTokens : undefined,
+    outputTokens: typeof rec.output === 'number'
+      ? rec.output
+      : typeof rec.outputTokens === 'number' ? rec.outputTokens : undefined,
+    cacheReadTokens: typeof rec.cacheRead === 'number'
+      ? rec.cacheRead
+      : typeof rec.cacheReadTokens === 'number' ? rec.cacheReadTokens : undefined,
+    cacheWriteTokens: typeof rec.cacheWrite === 'number'
+      ? rec.cacheWrite
+      : typeof rec.cacheWriteTokens === 'number' ? rec.cacheWriteTokens : undefined,
     totalTokens: typeof rec.totalTokens === 'number' ? rec.totalTokens : undefined,
-    cost: typeof rec.cost === 'number' ? rec.cost : undefined,
+    cost: typeof rec.cost === 'number'
+      ? rec.cost
+      : typeof cost?.total === 'number' ? cost.total : undefined,
   };
 }
 

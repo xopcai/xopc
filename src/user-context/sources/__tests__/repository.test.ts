@@ -68,6 +68,10 @@ describe('understanding source repository', () => {
     });
     expect(listUserFocuses(['active'])).toEqual([]);
     expect(setUserFocusStatus(focus.id, 'active', 11)).toMatchObject({ status: 'active', updatedAt: 11 });
+    expect(upsertUserFocus({
+      canonicalKey: 'focus:launch', title: 'Launch update', summary: 'Updated evidence',
+      horizon: 'ongoing', status: 'candidate', confidence: 0.9, evidenceRefs: ['source://2'], nowMs: 12,
+    })).toMatchObject({ status: 'active', title: 'Launch update', updatedAt: 12 });
     expect(listUserFocuses(['active'])).toHaveLength(1);
   });
 });

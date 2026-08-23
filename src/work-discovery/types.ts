@@ -217,6 +217,7 @@ export interface WorkDiscoveryProfileCandidate {
   statement: string;
   confidence: 'high' | 'medium' | 'low';
   evidence: string[];
+  evidenceRefs?: string[];
   status: 'pending' | 'accepted' | 'edited' | 'rejected';
 }
 

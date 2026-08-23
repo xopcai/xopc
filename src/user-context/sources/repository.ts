@@ -192,7 +192,13 @@ export function upsertUserFocus(input: Omit<UserFocus, 'id' | 'createdAt' | 'upd
       evidence_refs_json, source_run_id, created_at, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(canonical_key) DO UPDATE SET title = excluded.title, summary = excluded.summary,
-      horizon = excluded.horizon, status = excluded.status, confidence = excluded.confidence,
+      horizon = excluded.horizon,
+      status = CASE
+        WHEN user_focuses.status IN ('active', 'paused', 'completed', 'rejected') AND excluded.status = 'candidate'
+          THEN user_focuses.status
+        ELSE excluded.status
+      END,
+      confidence = excluded.confidence,
       project_id = excluded.project_id, evidence_refs_json = excluded.evidence_refs_json,
       source_run_id = excluded.source_run_id, updated_at = excluded.updated_at
   `).run(id, input.canonicalKey, input.title, input.summary, input.horizon, input.status, input.confidence,

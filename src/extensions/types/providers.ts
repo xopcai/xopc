@@ -141,6 +141,8 @@ export interface ProviderStreamChunk {
   usage?: {
     input: number;
     output: number;
+    cacheRead?: number;
+    cacheWrite?: number;
     total?: number;
   };
   /** Error message */
@@ -171,6 +173,8 @@ export interface ProviderResponse {
   usage?: {
     input: number;
     output: number;
+    cacheRead?: number;
+    cacheWrite?: number;
     total: number;
   };
   /** Finish reason */

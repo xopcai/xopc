@@ -8,6 +8,18 @@ const COMMON: UnderstandingSourceDefinition[] = [
     supportedAccessModes: ['once', 'continuous'], recommended: true, sensitive: false,
   },
   {
+    id: 'local-recent-files', category: 'recent_documents', platform: 'all', displayName: 'Recent files',
+    description: 'Read-only metadata for recent documents on Desktop, Documents, and Downloads.',
+    availability: 'available', permission: 'not_requested', defaultAccessMode: 'once',
+    supportedAccessModes: ['once'], recommended: true, sensitive: true,
+  },
+  {
+    id: 'chromium-bookmarks', category: 'recent_documents', platform: 'all', displayName: 'Recent bookmarks',
+    description: 'Titles, folders, and sanitized domains for recently added Chromium bookmarks.',
+    availability: 'available', permission: 'not_requested', defaultAccessMode: 'once',
+    supportedAccessModes: ['once'], recommended: true, sensitive: true,
+  },
+  {
     id: 'connector-github', category: 'code_activity', platform: 'all', displayName: 'GitHub',
     description: 'Repositories, pull requests, issues, and recent code activity from an account you connect.',
     availability: 'available', permission: 'not_requested', defaultAccessMode: 'continuous',

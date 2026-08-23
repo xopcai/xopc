@@ -161,8 +161,12 @@ describe('SessionCompactor', () => {
     expect(completeWithResolvedCredentials).toHaveBeenCalledTimes(2);
     expect(vi.mocked(completeWithResolvedCredentials).mock.calls[1]?.[1]).toEqual(
       expect.objectContaining({
+        systemPrompt: expect.stringContaining('durable continuation summary'),
         messages: [expect.objectContaining({ content: expect.stringContaining('Quality failures:') })],
       }),
+    );
+    expect(vi.mocked(completeWithResolvedCredentials).mock.calls[0]?.[2]).toEqual(
+      expect.objectContaining({ sessionId: 'xopc-compaction-v3' }),
     );
   });
 

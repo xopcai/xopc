@@ -20,6 +20,7 @@ import {
   type SessionMetadataSeed,
 } from '../storage/sqlite/index.js';
 import type { UnderstandingKind, UserContextScope, UserUnderstanding } from '../user-context/domain.js';
+import { clusterActivityTopics } from '../user-context/sources/activity-clustering.js';
 import {
   createUnderstandingSourceRun,
   getUnderstandingSourceRun,
@@ -31,6 +32,7 @@ import {
   updateUnderstandingSourceGrantCheckpoint,
 } from '../user-context/sources/repository.js';
 import type { UnderstandingSourceCategory, UnderstandingSourceItem } from '../user-context/sources/types.js';
+import { isLocalUnderstandingSourceId } from '../user-context/sources/local-source-contract.js';
 import { createLogger } from '../utils/logger.js';
 
 import { analyzeUnderstandingSources, analyzeWorkContext, workDiscoveryResultMarkdown } from './analyzer.js';
@@ -80,11 +82,6 @@ import type {
 } from './types.js';
 
 const log = createLogger('WorkDiscovery');
-const LOCAL_BOOTSTRAP_SOURCE_IDS = new Set([
-  'apple-notes', 'apple-calendar', 'apple-reminders',
-  'windows-recent-documents', 'linux-recent-documents',
-]);
-
 function understandingKind(category: WorkDiscoveryProfileCandidate['category']): UnderstandingKind {
   if (category === 'preference') return 'preference';
   if (category === 'workflow') return 'routine';
@@ -315,10 +312,15 @@ export class WorkDiscoveryService {
     return revokeWorkDiscoveryDirectorySource(id);
   }
 
-  async importUnderstandingSources(rawItems: unknown[], signal?: AbortSignal, runId?: string) {
+  async importUnderstandingSources(
+    rawItems: unknown[],
+    signal?: AbortSignal,
+    runId?: string,
+    rawCheckpoints?: Record<string, unknown>,
+  ) {
     let remaining = 300_000;
     const itemTypes = new Set<UnderstandingSourceItem['type']>([
-      'document', 'calendar_event', 'task', 'note', 'mail', 'message', 'code_activity',
+      'document', 'calendar_event', 'task', 'note', 'mail', 'message', 'code_activity', 'bookmark',
     ]);
     const ownerAttributions = new Set<UnderstandingSourceItem['ownerAttribution']>(['user', 'other', 'shared', 'unknown']);
     const sensitivities = new Set<UnderstandingSourceItem['sensitivity']>(['normal', 'personal', 'secret', 'regulated']);
@@ -337,7 +339,7 @@ export class WorkDiscoveryService {
       const sensitivity = typeof raw.sensitivity === 'string'
         && sensitivities.has(raw.sensitivity as UnderstandingSourceItem['sensitivity'])
         ? raw.sensitivity as UnderstandingSourceItem['sensitivity'] : 'personal';
-      if (!id || !LOCAL_BOOTSTRAP_SOURCE_IDS.has(sourceId) || !title || !type
+      if (!id || !isLocalUnderstandingSourceId(sourceId) || !title || !type
         || !evidenceRef.startsWith(`${sourceId}://`)
         || sensitivity === 'secret' || sensitivity === 'regulated') return [];
       const text = typeof raw.text === 'string' ? raw.text.trim().slice(0, Math.min(12_000, remaining)) : '';
@@ -346,10 +348,22 @@ export class WorkDiscoveryService {
         const candidate = raw[key];
         return typeof candidate === 'number' && Number.isFinite(candidate) ? candidate : undefined;
       };
+      const resourceUri = (() => {
+        if (typeof raw.resourceUri !== 'string') return undefined;
+        try {
+          const url = new URL(raw.resourceUri.trim());
+          if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password
+            || url.search || url.hash || (url.pathname && url.pathname !== '/')) return undefined;
+          return url.origin.slice(0, 1_000);
+        } catch {
+          return undefined;
+        }
+      })();
       return [{
         id, sourceId, type, title, ownerAttribution, sensitivity, evidenceRef,
         ...(text ? { text } : {}),
         ...(typeof raw.group === 'string' && raw.group.trim() ? { group: raw.group.trim().slice(0, 200) } : {}),
+        ...(resourceUri ? { resourceUri } : {}),
         ...(timestamp('occurredAt') != null ? { occurredAt: timestamp('occurredAt') } : {}),
         ...(timestamp('modifiedAt') != null ? { modifiedAt: timestamp('modifiedAt') } : {}),
         ...(timestamp('startsAt') != null ? { startsAt: timestamp('startsAt') } : {}),
@@ -358,7 +372,21 @@ export class WorkDiscoveryService {
     }).slice(0, 150);
     if (!items.length) throw new Error('No readable understanding source items were provided');
 
+    const checkpoints = new Map<string, { fingerprint: string; collectedAt: number }>();
+    for (const [sourceId, value] of Object.entries(rawCheckpoints ?? {})) {
+      if (!isLocalUnderstandingSourceId(sourceId) || !value || typeof value !== 'object') continue;
+      const raw = value as Record<string, unknown>;
+      if (typeof raw.fingerprint !== 'string' || !/^[a-f0-9]{64}$/i.test(raw.fingerprint)
+        || typeof raw.collectedAt !== 'number' || !Number.isFinite(raw.collectedAt) || raw.collectedAt <= 0) continue;
+      checkpoints.set(sourceId, {
+        fingerprint: raw.fingerprint.toLowerCase(),
+        collectedAt: Math.min(raw.collectedAt, Date.now()),
+      });
+    }
+
     const sourceRuns = new Map<string, string>();
+    const sourceGrants = new Map<string, ReturnType<typeof upsertUnderstandingSourceGrant>>();
+    const changedSourceIds = new Set<string>();
     for (const sourceId of new Set(items.map((item) => item.sourceId))) {
       const sourceItems = items.filter((item) => item.sourceId === sourceId);
       const category: UnderstandingSourceCategory = sourceItems.some((item) => item.type === 'calendar_event') ? 'calendar'
@@ -382,15 +410,46 @@ export class WorkDiscoveryService {
         processingPolicy: 'remote_allowed',
         config: { readOnly: true },
       });
-      const sourceRun = createUnderstandingSourceRun({ grantId: grant.id, kind: 'bootstrap' });
+      sourceGrants.set(sourceId, grant);
+      const checkpoint = checkpoints.get(sourceId);
+      const previousFingerprint = typeof grant.checkpoint.fingerprint === 'string' ? grant.checkpoint.fingerprint : undefined;
+      const unchanged = Boolean(checkpoint && previousFingerprint === checkpoint.fingerprint);
+      const kind = !previousFingerprint ? 'bootstrap' : unchanged ? 'fingerprint' : 'incremental';
+      const sourceRun = createUnderstandingSourceRun({
+        grantId: grant.id,
+        kind,
+        ...(previousFingerprint ? { cursorBefore: previousFingerprint } : {}),
+        metadata: { sourceId, unchanged },
+      });
       sourceRuns.set(sourceId, sourceRun.id);
+      if (unchanged) {
+        updateUnderstandingSourceRun(sourceRun.id, {
+          status: 'completed',
+          cursorAfter: checkpoint!.fingerprint,
+          itemsSeen: sourceItems.length,
+          completed: true,
+        });
+        updateUnderstandingSourceGrantCheckpoint(grant.id, {
+          checkpoint: { ...grant.checkpoint, ...checkpoint, lastRunId: sourceRun.id },
+          lastCollectedAt: checkpoint!.collectedAt,
+        });
+        continue;
+      }
+      changedSourceIds.add(sourceId);
     }
+
+    if (!changedSourceIds.size) {
+      log.info({ runId, itemCount: items.length }, 'Understanding sources unchanged; analysis skipped');
+      return { profileCandidates: [], workThreads: [], focuses: [] };
+    }
+    // Reuse every bounded item when any source changed so cross-source clusters remain coherent.
+    const analysisItems = items;
 
     const linkedRun = runId ? getWorkDiscoveryRun(runId) : null;
     let analysis: Awaited<ReturnType<typeof analyzeUnderstandingSources>>;
     try {
       analysis = await analyzeUnderstandingSources({
-        config: this.options.getConfig(), items,
+        config: this.options.getConfig(), items: analysisItems,
         ...(linkedRun?.result ? { workContext: {
           projectSummary: linkedRun.result.projectSummary,
           currentState: linkedRun.result.currentState,
@@ -400,20 +459,27 @@ export class WorkDiscoveryService {
         signal,
       });
       for (const [sourceId, sourceRunId] of sourceRuns) {
+        if (!changedSourceIds.has(sourceId)) continue;
         updateUnderstandingSourceRun(sourceRunId, {
           status: 'completed',
-          itemsSeen: items.filter((item) => item.sourceId === sourceId).length,
+          cursorAfter: checkpoints.get(sourceId)?.fingerprint,
+          itemsSeen: analysisItems.filter((item) => item.sourceId === sourceId).length,
           completed: true,
           metadata: { sourceId },
         });
         const sourceRun = getUnderstandingSourceRun(sourceRunId);
-        if (sourceRun) updateUnderstandingSourceGrantCheckpoint(sourceRun.grantId, {
-          checkpoint: { lastBootstrapRunId: sourceRunId },
-          lastCollectedAt: Date.now(),
-        });
+        if (sourceRun) {
+          const grant = sourceGrants.get(sourceId);
+          const checkpoint = checkpoints.get(sourceId);
+          updateUnderstandingSourceGrantCheckpoint(sourceRun.grantId, {
+            checkpoint: { ...(grant?.checkpoint ?? {}), ...(checkpoint ?? {}), lastRunId: sourceRunId },
+            lastCollectedAt: checkpoint?.collectedAt ?? Date.now(),
+          });
+        }
       }
     } catch (error) {
-      for (const sourceRunId of sourceRuns.values()) {
+      for (const [sourceId, sourceRunId] of sourceRuns) {
+        if (!changedSourceIds.has(sourceId)) continue;
         updateUnderstandingSourceRun(sourceRunId, {
           status: signal?.aborted ? 'canceled' : 'failed',
           errorMessage: error instanceof Error ? error.message : String(error),
@@ -422,7 +488,8 @@ export class WorkDiscoveryService {
       }
       throw error;
     }
-    const rawContents = items.flatMap((item) => item.text ? [item.text] : []);
+    const rawContents = analysisItems.flatMap((item) => item.text ? [item.text] : []);
+    const activityTopics = clusterActivityTopics(analysisItems);
     const safeProfileCandidates = analysis.profileCandidates
       .filter((candidate) => !hasLongVerbatimOverlap(candidate.statement, rawContents));
     const safeWorkThreadCandidates = analysis.workThreadCandidates.filter((candidate) =>
@@ -430,7 +497,10 @@ export class WorkDiscoveryService {
       && !hasLongVerbatimOverlap(candidate.summary, rawContents));
     const profileCandidates = safeProfileCandidates.map((candidate) => {
       const understanding = persistUnderstandingCandidate(candidate, { type: 'global' }, 'understanding-source:onboarding');
-      for (const sourceRunId of sourceRuns.values()) {
+      const evidenceSourceIds = new Set((candidate.evidenceRefs ?? []).map((ref) => ref.split('://', 1)[0]).filter(Boolean));
+      for (const sourceId of evidenceSourceIds) {
+        const sourceRunId = sourceRuns.get(sourceId);
+        if (!sourceRunId) continue;
         const sourceRun = getUnderstandingSourceRun(sourceRunId);
         if (!sourceRun) continue;
         const evidence = createContextEvidence({
@@ -485,7 +555,20 @@ export class WorkDiscoveryService {
         evidence: contextEvidence,
       })
       : [];
-    const focuses = safeWorkThreadCandidates.map((candidate) => upsertUserFocus({
+    const activityEvidence = new Set(activityTopics.flatMap((topic) => topic.evidenceRefs));
+    const activityFocuses = activityTopics.map((topic) => upsertUserFocus({
+      canonicalKey: topic.canonicalKey,
+      title: topic.title,
+      summary: topic.summary,
+      horizon: topic.horizon,
+      status: 'candidate',
+      confidence: topic.confidence,
+      evidenceRefs: topic.evidenceRefs,
+      sourceRunId: sourceRuns.get(topic.sourceIds[0] ?? ''),
+    }));
+    const modelFocuses = safeWorkThreadCandidates
+      .filter((candidate) => !candidate.evidenceRefs.some((ref) => activityEvidence.has(ref)))
+      .map((candidate) => upsertUserFocus({
       canonicalKey: `source-focus:${candidate.topicKey}`,
       title: candidate.title,
       summary: candidate.summary,
@@ -493,8 +576,9 @@ export class WorkDiscoveryService {
       status: 'candidate',
       confidence: candidate.confidence === 'high' ? 0.9 : candidate.confidence === 'medium' ? 0.72 : 0.55,
       evidenceRefs: candidate.evidenceRefs,
-      sourceRunId: sourceRuns.get(items[0]!.sourceId),
+      sourceRunId: sourceRuns.get(candidate.evidenceRefs[0]?.split('://', 1)[0] ?? ''),
     }));
+    const focuses = [...activityFocuses, ...modelFocuses];
     log.info({ runId, itemCount: items.length, candidateCount: profileCandidates.length, focusCount: focuses.length }, 'Understanding sources analyzed');
     return {
       profileCandidates,

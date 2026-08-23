@@ -212,6 +212,17 @@ describe('agent manifest resolver', () => {
 });
 
 describe('agent manifest validator', () => {
+  it('accepts only supported prompt cache retention policies', () => {
+    expect(AgentManifestSchema.safeParse({
+      ...baseAgent,
+      runtime: { promptCacheRetention: 'long' },
+    }).success).toBe(true);
+    expect(AgentManifestSchema.safeParse({
+      ...baseAgent,
+      runtime: { promptCacheRetention: 'forever' },
+    }).success).toBe(false);
+  });
+
   it('rejects agent-owned memory configuration', () => {
     const parsed = AgentManifestSchema.safeParse({
       ...baseAgent,
