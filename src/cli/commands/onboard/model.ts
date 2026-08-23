@@ -62,6 +62,17 @@ export function defaultXopcCloudImageModel(
   return model ? `xopc-cloud/${model.id}` : undefined;
 }
 
+export function defaultXopcCloudVisionModel(
+  catalogStore: ModelCatalogStore = getModelCatalogStore(),
+): string | undefined {
+  const model = catalogStore.getSource('xopc-cloud')?.models.find((entry) =>
+    entry.availability === 'available'
+    && entry.kind === 'language'
+    && entry.input.includes('image')
+    && (entry.operations.includes('chat.completions') || entry.operations.includes('responses')));
+  return model ? `xopc-cloud/${model.id}` : undefined;
+}
+
 export function defaultXopcCloudAudioModels(
   catalogStore: ModelCatalogStore = getModelCatalogStore(),
 ): { stt?: string; tts?: { model: string; voice: string; maxCharacters: number } } {
@@ -80,6 +91,7 @@ export function setPrimaryModel(
   modelRef: string,
   defaultImageGenerationModel?: string,
   defaultAudioModels?: { stt?: string; tts?: { model: string; voice: string; maxCharacters: number } },
+  defaultVisionModel?: string,
 ): Config {
   const id = config.agents.default ?? config.agents.list[0]?.id ?? 'main';
   const index = config.agents.list.findIndex((entry) => entry.id === id);
@@ -100,6 +112,9 @@ export function setPrimaryModel(
       ...currentModels,
       defaultRole: 'deep',
       roles: { ...currentModels?.roles, deep: { model: modelRef } },
+      ...(!currentModels?.imageModel && defaultVisionModel
+        ? { imageModel: { primary: defaultVisionModel } }
+        : {}),
       ...(!currentModels?.imageGenerationModel && defaultImageGenerationModel
         ? { imageGenerationModel: { primary: defaultImageGenerationModel } }
         : {}),
@@ -639,9 +654,11 @@ export async function setupModel(existingConfig: Config | null, ctx: CLIContext)
 
   console.log('\n✅ Model configured:', model);
   const imageModel = provider === 'xopc-cloud' ? defaultXopcCloudImageModel() : undefined;
+  const visionModel = provider === 'xopc-cloud' ? defaultXopcCloudVisionModel() : undefined;
   const audioModels = provider === 'xopc-cloud' ? defaultXopcCloudAudioModels() : undefined;
+  if (visionModel) console.log('✅ Image understanding configured:', visionModel);
   if (imageModel) console.log('✅ Image generation configured:', imageModel);
   if (audioModels?.stt) console.log('✅ Speech recognition configured:', audioModels.stt);
   if (audioModels?.tts) console.log('✅ Speech synthesis configured:', audioModels.tts.model);
-  return setPrimaryModel(config, ctx.workspacePath, model, imageModel, audioModels);
+  return setPrimaryModel(config, ctx.workspacePath, model, imageModel, audioModels, visionModel);
 }
