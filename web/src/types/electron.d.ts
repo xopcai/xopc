@@ -493,6 +493,15 @@ export interface ElectronSystemSettingsAPI {
     title: string;
     body: string;
   }): Promise<{ ok: true } | { ok: false; error: string }>;
+  showAgentRunNotification(input: {
+    id: string;
+    title: string;
+    body: string;
+    route: string;
+  }): Promise<
+    { ok: true; outcome: 'shown' | 'suppressed-focused' }
+    | { ok: false; error: string }
+  >;
   requestScreen(): Promise<PermissionRequestResult>;
   getUninstallInfo(): Promise<UninstallInfo>;
   clearUserData(): Promise<ClearUserDataResult>;

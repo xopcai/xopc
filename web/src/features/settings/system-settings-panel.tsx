@@ -6,10 +6,8 @@ import { uiPatchReducer } from '@/lib/settings-form-draft';
 import { SettingsFormSection } from '@/features/settings/settings-form-section';
 import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
 import { settingsFormSectionClassName } from '@/features/settings/settings-form-section.utils';
-import {
-  dispatchShellPrefsChanged,
-  enableDesktopNotificationsWithTest,
-} from '@/features/electron/desktop-notifications';
+import { enableDesktopNotificationsWithTest } from '@/features/electron/desktop-notifications';
+import { BrowserNotificationSettings } from '@/features/notifications/browser-notification-settings';
 import { isElectron } from '@/lib/electron-env';
 import type { StoredLanguage } from '@/lib/storage';
 import { messages } from '@/i18n/messages';
@@ -311,15 +309,7 @@ export function SystemSettingsPanel() {
   }, [api, load]);
 
   if (!isElectron() || !api) {
-    return (
-      <SettingsPageFrame gap="gap-3">
-        <SettingsPageHeader title={t.title} />
-        <div className={settingsFormSectionClassName()}>
-          <p className="text-sm font-medium text-fg">{t.desktopOnlyTitle}</p>
-          <p className="mt-1 text-sm text-fg-muted">{t.desktopOnlyBody}</p>
-        </div>
-      </SettingsPageFrame>
-    );
+    return <BrowserNotificationSettings />;
   }
 
   const patchBehavior = async (patch: {
@@ -331,9 +321,6 @@ export function SystemSettingsPanel() {
     try {
       const { behavior: next } = await api.setBehavior(patch);
       dispatch({ type: 'patch', patch: { behavior: next } });
-      if (patch.notifyEnabled !== undefined || patch.notifySoundEnabled !== undefined) {
-        dispatchShellPrefsChanged();
-      }
     } catch (e) {
       dispatch({ type: 'patch', patch: { loadError: e instanceof Error ? e.message : String(e) } });
     }

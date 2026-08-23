@@ -7,6 +7,7 @@ import {
 } from '@/features/chat/session/chat-session-store';
 import type { SessionManager } from '@/features/chat/session/session-manager';
 import {
+  clearChatRunPresence,
   markChatRunCompleted,
   markChatRunFailed,
   markChatRunRunning,
@@ -26,35 +27,7 @@ import {
   updateToolDetails,
 } from '@/features/chat/messages/streaming';
 import { messages } from '@/i18n/messages';
-import { showActivity } from '@/stores/activity-store';
 import { useLocaleStore } from '@/stores/locale-store';
-
-function recordBackgroundRunCompleted(chatId: string): void {
-  const m = messages(useLocaleStore.getState().language).chat;
-  const title = m.backgroundRunCompletedTitle;
-  const message = m.backgroundRunCompletedDescription;
-  const href = `/chat/${encodeURIComponent(chatId)}`;
-  showActivity({
-    tone: 'success',
-    title,
-    message,
-    source: 'chat',
-    href,
-    dedupeKey: `chat-run:completed:${chatId}`,
-  });
-}
-
-function notifyBackgroundRunFailed(chatId: string): void {
-  const m = messages(useLocaleStore.getState().language).chat;
-  showActivity({
-    tone: 'error',
-    title: m.backgroundRunFailedTitle,
-    message: m.backgroundRunCompletedDescription,
-    source: 'chat',
-    href: `/chat/${encodeURIComponent(chatId)}`,
-    dedupeKey: `chat-run:failed:${chatId}`,
-  });
-}
 
 export type AgentStreamFqCallbacks = {
   dismissClarifyForSession: (chatId: string) => void;
@@ -290,16 +263,18 @@ export function createAgentStreamMessagingCallbacks(opts: {
       }
     },
     onClarifyRequest: fq.makeOnClarifyRequest(chatId),
-    onResult: () => {
+    onResult: ({ status }) => {
       flushReviewDeltas();
       const visible = shouldApplyStreamUpdate(chatId);
-      if (chatRunManager.userAborted) {
+      if (chatRunManager.userAborted || status === 'cancelled') {
         chatRunManager.userAborted = false;
+        clearChatRunPresence(chatId);
+        if (visible) finalizeMessage();
+        else onBackgroundTerminal();
         return;
       }
       markChatRunCompleted(chatId, !visible);
       if (!visible) {
-        recordBackgroundRunCompleted(chatId);
         onBackgroundTerminal();
         return;
       }
@@ -310,7 +285,6 @@ export function createAgentStreamMessagingCallbacks(opts: {
       const visible = shouldApplyStreamUpdate(chatId);
       markChatRunFailed(chatId, !visible);
       if (!visible) {
-        notifyBackgroundRunFailed(chatId);
         onBackgroundTerminal();
         return;
       }

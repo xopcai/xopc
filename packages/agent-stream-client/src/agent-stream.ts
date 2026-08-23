@@ -8,6 +8,7 @@ import type {
   AgentStreamPatchAppliedPayload,
   AgentStreamProgressState,
   AgentStreamReviewPayload,
+  AgentStreamRunEndPayload,
   AgentStreamTtsAudioPayload,
   AgentStreamTurnDiffPayload,
   AgentStreamTurnPlanUpdatedPayload,
@@ -47,7 +48,7 @@ export type AgentStreamCallbacks = {
   onTtsAudio?: (payload: AgentStreamTtsAudioPayload) => void;
   onClarifyRequest?: (payload: AgentStreamClarifyRequestPayload) => void;
   onPetFeedback?: (feedback: PetFeedback) => void;
-  onResult: () => void;
+  onResult: (payload: AgentStreamRunEndPayload) => void;
   onError: (msg: string) => void;
 };
 
@@ -60,6 +61,7 @@ export type AgentStreamDispatchOptions = {
 type ParsedEvent = {
   type?: unknown;
   runId?: unknown;
+  sessionKey?: unknown;
   payload?: unknown;
   timestamp?: unknown;
 };
@@ -340,7 +342,18 @@ export function dispatchAgentStreamEvent(
       break;
     }
     case 'run_end':
-      cb?.onResult();
+      if (
+        typeof parsed.runId === 'string'
+        && typeof parsed.sessionKey === 'string'
+        && (p.status === 'success' || p.status === 'error' || p.status === 'cancelled')
+      ) {
+        cb?.onResult({
+          runId: parsed.runId,
+          sessionKey: parsed.sessionKey,
+          status: p.status,
+          ...(typeof p.summary === 'string' && p.summary ? { summary: p.summary } : {}),
+        });
+      }
       break;
     case 'error':
       cb?.onError(String(p.message || 'Send failed'));

@@ -96,3 +96,24 @@ export type AgentStreamClarifyRequestPayload = {
   default?: string;
   petFeedback?: PetFeedback;
 };
+
+export type AgentStreamRunStatus = 'success' | 'error' | 'cancelled';
+
+export type AgentStreamRunEndPayload = {
+  runId: string;
+  sessionKey: string;
+  status: AgentStreamRunStatus;
+  summary?: string;
+};
+
+/** Global gateway event emitted once after a webchat run reaches a terminal state. */
+export type AgentRunEndedEvent = {
+  schemaVersion: 1;
+  runId: string;
+  sessionKey: string;
+  status: AgentStreamRunStatus;
+  completedAtMs: number;
+  route: string;
+  source: 'webchat';
+  sessionTitle?: string;
+};

@@ -8,7 +8,6 @@ import { SidebarColumn } from '@/components/shell/sidebar-column';
 import { WorkspaceColumn } from '@/components/shell/workspace-column';
 import { TokenDialog } from '@/components/shell/token-dialog';
 import { WindowsTitlebar } from '@/components/shell/windows-titlebar';
-import { DesktopNotificationBridge } from '@/features/electron/desktop-notification-bridge';
 import { ElectronGatewayExitBanner } from '@/features/electron/electron-gateway-exit-banner';
 import { EndpointToolBridge } from '@/features/endpoint-tools/endpoint-tool-bridge';
 import { ElectronMenuListener } from '@/features/electron/electron-menu-listener';
@@ -19,6 +18,7 @@ import { GlobalCommandPaletteHost } from '@/features/search/global-command-palet
 import { GlobalQuickCaptureHost } from '@/features/notes/global-quick-capture';
 import { GlobalDiscussionCaptureHost } from '@/features/discussions/global-discussion-capture';
 import { GatewayRealtimeBridge } from '@/features/gateway/gateway-realtime-bridge';
+import { AgentRunNotificationCoordinator } from '@/features/notifications/agent-run-notification-coordinator';
 import { WorkspacePreviewPane } from '@/features/workspace/workspace-preview-pane';
 import { GlobalReadAloudPlayer } from '@/features/voice/global-read-aloud-player';
 import { GlobalVoiceInputShortcutHost } from '@/features/voice/global-voice-input-shortcut-host';
@@ -143,6 +143,7 @@ export function AppShell() {
       <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-surface-base">
         <EndpointToolBridge />
         <GatewayRealtimeBridge />
+        <AgentRunNotificationCoordinator />
         <ElectronMenuListener />
         <WindowsTitlebar />
         <UnderstandingStatusButton floating />
@@ -169,7 +170,7 @@ export function AppShell() {
         {language === 'zh' ? '跳到主要内容' : 'Skip to main content'}
       </a>
       <GatewayRealtimeBridge />
-      <DesktopNotificationBridge />
+      <AgentRunNotificationCoordinator />
       <ElectronMenuListener />
       <NavigateToChatListener />
       <ExtensionNavigateListener />

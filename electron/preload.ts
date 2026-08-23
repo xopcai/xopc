@@ -445,6 +445,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.invoke("system-settings:request-notifications"),
     showEndpointNotification: (input: { title: string; body: string }) =>
       ipcRenderer.invoke("system-settings:show-endpoint-notification", input),
+    showAgentRunNotification: (input: { id: string; title: string; body: string; route: string }) =>
+      ipcRenderer.invoke("system-settings:show-agent-run-notification", input),
     requestScreen: () => ipcRenderer.invoke("system-settings:request-screen"),
     getUninstallInfo: () =>
       ipcRenderer.invoke("system-settings:get-uninstall-info"),
