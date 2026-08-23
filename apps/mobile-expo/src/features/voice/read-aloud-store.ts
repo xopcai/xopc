@@ -67,6 +67,9 @@ let chunkDurations: number[] = [];
 const chunkRequests = new Map<number, Promise<string>>();
 let requestController: AbortController | null = null;
 let player: AudioPlayer | null = null;
+let playerSetup: Promise<AudioPlayer> | null = null;
+let playerChunkIndex = 0;
+let playerChunkHasStarted = false;
 let cache: ReadAloudCache | null = null;
 let generation = 0;
 let finishingChunk = false;
@@ -80,6 +83,9 @@ function completedDuration(index: number): number {
 function removePlayer(): void {
   const current = player;
   player = null;
+  playerSetup = null;
+  playerChunkIndex = 0;
+  playerChunkHasStarted = false;
   if (!current) return;
   try {
     current.pause();
@@ -96,6 +102,76 @@ function removePlayer(): void {
   } catch {
     // The native player may already be released after an interruption.
   }
+}
+
+function ensurePlayer(runGeneration: number): Promise<AudioPlayer> {
+  if (player) return playerSetup ?? Promise.resolve(player);
+  const source = activeInput?.source;
+  if (!source) return Promise.reject(new Error('Speech source is unavailable'));
+
+  const audioMode = setAudioModeAsync({
+    allowsRecording: false,
+    playsInSilentMode: true,
+    interruptionMode: 'doNotMix',
+    shouldPlayInBackground: true,
+  });
+  let nextPlayer: AudioPlayer;
+  try {
+    nextPlayer = createAudioPlayer(null, {
+      updateInterval: 250,
+      keepAudioSessionActive: true,
+    });
+    player = nextPlayer;
+    nextPlayer.setPlaybackRate(useReadAloudStore.getState().rate);
+    nextPlayer.setActiveForLockScreen(true, {
+      title: source.title,
+      artist: 'xopc',
+    });
+    claimAudioPlayback(PLAYBACK_OWNER, () => useReadAloudStore.getState().pause());
+    nextPlayer.addListener('playbackStatusUpdate', (status) => {
+      if (player !== nextPlayer || runGeneration !== generation || !status.isLoaded) return;
+      const index = playerChunkIndex;
+      const duration = Number.isFinite(status.duration) ? status.duration : 0;
+      if (duration > 0) chunkDurations[index] = duration;
+      if (status.playing) playerChunkHasStarted = true;
+      useReadAloudStore.setState({
+        currentTime: completedDuration(index) + (status.currentTime || 0),
+        duration: chunkDurations.reduce((total, value) => total + (value || 0), 0),
+        ...(status.playing
+          ? { status: 'playing' as const }
+          : playerChunkHasStarted && !status.didJustFinish
+            ? { status: 'paused' as const }
+            : {}),
+      });
+      if (!status.didJustFinish || finishingChunk || !playerChunkHasStarted) return;
+      finishingChunk = true;
+      const nextIndex = index + 1;
+      if (nextIndex < chunks.length) {
+        void playChunk(nextIndex, runGeneration);
+      } else {
+        removePlayer();
+        playbackCompleted = true;
+        recordUsageEvent('read_aloud_completed');
+        useReadAloudStore.setState({ status: 'paused', currentChunkIndex: 0, currentTime: 0 });
+      }
+    });
+  } catch (error) {
+    void audioMode.catch(() => undefined);
+    removePlayer();
+    return Promise.reject(error);
+  }
+
+  const setup = audioMode.then(() => {
+    if (runGeneration !== generation || player !== nextPlayer) {
+      throw new Error('Stale speech player');
+    }
+    return nextPlayer;
+  });
+  playerSetup = setup;
+  void setup.finally(() => {
+    if (playerSetup === setup) playerSetup = null;
+  }).catch(() => undefined);
+  return setup;
 }
 
 function resetPlayback(): void {
@@ -144,58 +220,25 @@ async function ensureChunk(index: number, runGeneration: number): Promise<string
 }
 
 async function playChunk(index: number, runGeneration: number): Promise<void> {
-  useReadAloudStore.setState({ status: 'preparing', error: null, currentChunkIndex: index });
+  useReadAloudStore.setState({
+    status: 'preparing',
+    error: null,
+    currentChunkIndex: index,
+    currentTime: completedDuration(index),
+  });
   try {
-    const uri = await ensureChunk(index, runGeneration);
+    const playerPromise = ensurePlayer(runGeneration);
+    const [nextPlayer, uri] = await Promise.all([
+      playerPromise,
+      ensureChunk(index, runGeneration),
+    ]);
     if (runGeneration !== generation) return;
-    const source = activeInput?.source;
-    if (!source) throw new Error('Speech source is unavailable');
-    await setAudioModeAsync({
-      allowsRecording: false,
-      playsInSilentMode: true,
-      interruptionMode: 'doNotMix',
-      shouldPlayInBackground: true,
-    });
-    removePlayer();
-    const nextPlayer = createAudioPlayer({ uri }, {
-      updateInterval: 250,
-      keepAudioSessionActive: true,
-    });
-    player = nextPlayer;
+    if (player !== nextPlayer) throw new Error('Speech player is unavailable');
+    playerChunkIndex = index;
+    playerChunkHasStarted = false;
+    nextPlayer.replace({ uri });
     nextPlayer.setPlaybackRate(useReadAloudStore.getState().rate);
-    nextPlayer.setActiveForLockScreen(true, {
-      title: source.title,
-      artist: 'xopc',
-    });
     finishingChunk = false;
-    let hasStartedPlayback = false;
-    nextPlayer.addListener('playbackStatusUpdate', (status) => {
-      if (player !== nextPlayer || runGeneration !== generation || !status.isLoaded) return;
-      const duration = Number.isFinite(status.duration) ? status.duration : 0;
-      if (duration > 0) chunkDurations[index] = duration;
-      if (status.playing) hasStartedPlayback = true;
-      useReadAloudStore.setState({
-        currentTime: completedDuration(index) + (status.currentTime || 0),
-        duration: chunkDurations.reduce((total, value) => total + (value || 0), 0),
-        ...(status.playing
-          ? { status: 'playing' as const }
-          : hasStartedPlayback && !status.didJustFinish
-            ? { status: 'paused' as const }
-            : {}),
-      });
-      if (!status.didJustFinish || finishingChunk) return;
-      finishingChunk = true;
-      const nextIndex = index + 1;
-      if (nextIndex < chunks.length) {
-        void playChunk(nextIndex, runGeneration);
-      } else {
-        removePlayer();
-        playbackCompleted = true;
-        recordUsageEvent('read_aloud_completed');
-        useReadAloudStore.setState({ status: 'paused', currentChunkIndex: 0, currentTime: 0 });
-      }
-    });
-    claimAudioPlayback(PLAYBACK_OWNER, () => useReadAloudStore.getState().pause());
     nextPlayer.play();
     useReadAloudStore.setState({ status: 'playing' });
     if (index === 0 && playbackRequestedAt > 0) {

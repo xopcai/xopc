@@ -3,12 +3,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   generateSpeechChunk: vi.fn(),
   memory: new Map<string, string>(),
+  playerSources: [] as unknown[],
+  playerOptions: [] as unknown[],
   players: [] as Array<{
     currentTime: number;
     playing: boolean;
     play: ReturnType<typeof vi.fn>;
     pause: ReturnType<typeof vi.fn>;
     remove: ReturnType<typeof vi.fn>;
+    replace: ReturnType<typeof vi.fn>;
     addListener: ReturnType<typeof vi.fn>;
     setPlaybackRate: ReturnType<typeof vi.fn>;
     setActiveForLockScreen: ReturnType<typeof vi.fn>;
@@ -18,13 +21,16 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('expo-audio', () => ({
   setAudioModeAsync: vi.fn().mockResolvedValue(undefined),
-  createAudioPlayer: vi.fn(() => {
+  createAudioPlayer: vi.fn((source: unknown, options: unknown) => {
+    mocks.playerSources.push(source);
+    mocks.playerOptions.push(options);
     const player = {
       currentTime: 0,
       playing: false,
       play: vi.fn(),
       pause: vi.fn(),
       remove: vi.fn(),
+      replace: vi.fn(),
       addListener: vi.fn(),
       setPlaybackRate: vi.fn(),
       setActiveForLockScreen: vi.fn(),
@@ -68,6 +74,8 @@ describe('read aloud store', () => {
     useReadAloudStore.getState().stop();
     mocks.memory.clear();
     mocks.players.length = 0;
+    mocks.playerSources.length = 0;
+    mocks.playerOptions.length = 0;
     mocks.generateSpeechChunk.mockReset();
     mocks.generateSpeechChunk.mockResolvedValue({
       bytes: new Uint8Array([1]),
@@ -102,6 +110,24 @@ describe('read aloud store', () => {
       title: input.source.title,
       artist: 'xopc',
     });
+    expect(mocks.players[0]?.replace).toHaveBeenCalledWith({ uri: 'file:///speech-0.mp3' });
+  });
+
+  it('activates the media session before speech generation completes', () => {
+    mocks.memory.set('voice.readAloudConsent', 'accepted');
+    mocks.generateSpeechChunk.mockImplementation(() => new Promise(() => {}));
+
+    useReadAloudStore.getState().requestStart(input);
+
+    expect(useReadAloudStore.getState().status).toBe('preparing');
+    expect(mocks.players).toHaveLength(1);
+    expect(mocks.playerSources).toEqual([null]);
+    expect(mocks.playerOptions).toEqual([{
+      updateInterval: 250,
+      keepAudioSessionActive: true,
+    }]);
+    expect(mocks.players[0]?.setActiveForLockScreen).toHaveBeenCalledOnce();
+    expect(mocks.players[0]?.replace).not.toHaveBeenCalled();
   });
 
   it('uses the native playback-rate method when changing speed', async () => {
@@ -146,6 +172,37 @@ describe('read aloud store', () => {
 
     listener?.({ currentTime: 1, didJustFinish: false, duration: 10, isLoaded: true, playing: true });
     expect(useReadAloudStore.getState().status).toBe('playing');
+  });
+
+  it('reuses one media session across speech chunks', async () => {
+    mocks.memory.set('voice.readAloudConsent', 'accepted');
+    useReadAloudStore.getState().requestStart({
+      ...input,
+      text: 'A'.repeat(421),
+    });
+
+    await vi.waitFor(() => expect(useReadAloudStore.getState().status).toBe('playing'));
+    const activePlayer = mocks.players[0];
+    const listener = activePlayer?.addListener.mock.calls[0]?.[1] as ((status: {
+      currentTime: number;
+      didJustFinish: boolean;
+      duration: number;
+      isLoaded: boolean;
+      playing: boolean;
+    }) => void) | undefined;
+    listener?.({ currentTime: 10, didJustFinish: false, duration: 10, isLoaded: true, playing: true });
+    listener?.({ currentTime: 10, didJustFinish: true, duration: 10, isLoaded: true, playing: false });
+
+    await vi.waitFor(() => expect(activePlayer?.replace).toHaveBeenCalledTimes(2));
+    expect(mocks.players).toHaveLength(1);
+    expect(activePlayer?.setActiveForLockScreen).toHaveBeenCalledOnce();
+    expect(activePlayer?.remove).not.toHaveBeenCalled();
+    expect(useReadAloudStore.getState().currentChunkIndex).toBe(1);
+
+    listener?.({ currentTime: 10, didJustFinish: true, duration: 10, isLoaded: true, playing: false });
+    await Promise.resolve();
+    expect(activePlayer?.replace).toHaveBeenCalledTimes(2);
+    expect(useReadAloudStore.getState().currentChunkIndex).toBe(1);
   });
 
   it('cancels preparation when the active message is tapped again', async () => {
