@@ -30,6 +30,11 @@ export interface UserContextCoordinatorOptions {
   getLastAssistantContent: (sessionKey: string) => string | null;
 }
 
+function isPrivateSession(sessionKey: string): boolean {
+  const parsed = parseSessionKey(sessionKey);
+  return !parsed || parsed.peerKind === 'direct';
+}
+
 export class UserContextCoordinator {
   private readonly userTurn = new Map<string, number>();
   private readonly lastTurnId = new Map<string, string>();
@@ -61,6 +66,7 @@ export class UserContextCoordinator {
     });
     const config = this.options.getConfig();
     if (!this.options.isEnabledForSession(sessionKey)) return empty();
+    if (!isPrivateSession(sessionKey)) return empty();
     const userQuery = extractAgentUserPlainText(userMessage);
     const taskContext = assembleTaskContext(sessionKey, userQuery);
     const query = taskContext.retrievalQuery;
@@ -114,6 +120,7 @@ export class UserContextCoordinator {
     if (!this.options.isEnabledForSession(sessionKey)) return undefined;
     const memoryManager = this.options.getMemoryManagerForSession(sessionKey);
     const assistantContent = this.options.getLastAssistantContent(sessionKey) ?? '';
+    if (!isPrivateSession(sessionKey)) return undefined;
     const correctionTargetRecordIds = this.correctionTargets.get(sessionKey);
     this.correctionTargets.delete(sessionKey);
     try {

@@ -335,6 +335,18 @@ describe('ChatStreamMapper', () => {
     expect(captured).toMatchObject({ type: 'memory_captured', payload: { records: [{ id: 'memory-2' }] } });
   });
 
+  it('maps memory candidates without activating them', () => {
+    const m = mapper();
+    const [candidate] = m.map({
+      type: 'memory_candidate',
+      records: [{ id: 'memory-3', content: 'Prefer concise updates.', kind: 'preference' }],
+    });
+    expect(candidate).toMatchObject({
+      type: 'memory_candidate',
+      payload: { records: [{ id: 'memory-3', content: 'Prefer concise updates.', kind: 'preference' }] },
+    });
+  });
+
   it('maps tool lifecycle', () => {
     const m = mapper();
     m.map({ type: 'message_start', message: { role: 'assistant', content: [] } });

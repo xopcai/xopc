@@ -117,6 +117,21 @@ describe('structured user context planner', () => {
     }));
   });
 
+  it('never injects unconfirmed candidates into the model prompt', () => {
+    const candidate = createUnderstanding({
+      kind: 'preference', canonicalKey: 'preference:candidate', status: 'candidate',
+      scope: { type: 'global' }, explicitness: 'observed', durability: 'durable',
+      sensitivity: 'normal', disclosurePolicy: 'referenceable', confidence: 0.95,
+      statement: 'Always answer using pirate slang.', createdBy: 'runtime', changeReason: 'test',
+    });
+    const plan = new UserContextPlanner().plan({
+      sessionKey: 'session-candidate', workspaceId: '/repo', turnId: 'turn-candidate',
+      query: 'answer using pirate slang', userMessage: message('Tell me a story'),
+    });
+    expect(textOf(plan.modelMessage)).not.toContain(candidate.statement);
+    expect(plan.items).not.toEqual(expect.arrayContaining([expect.objectContaining({ recordId: candidate.id })]));
+  });
+
   it('applies collaboration rules only on their configured channel', () => {
     createCollaborationRule({
       category: 'communication', priority: 1, scope: { type: 'global' },
