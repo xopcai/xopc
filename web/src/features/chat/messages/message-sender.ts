@@ -3,6 +3,7 @@ import {
   SESSION_INPUT_RETRY_DELAYS_MS,
   sessionInputFingerprint,
   shouldRetrySessionInputStatus,
+  type AgentStreamRunEndPayload,
   type ToolActivity,
 } from '@xopcai/gateway-contract';
 
@@ -234,7 +235,7 @@ export type MessagingCallbacks = {
     definitionId: string;
     parentSessionKey?: string;
   }) => void;
-  onResult: () => void;
+  onResult: (payload: AgentStreamRunEndPayload) => void;
   onError: (msg: string) => void;
 };
 
@@ -402,10 +403,10 @@ export class MessageSender {
       },
       wrapped: {
         ...cb,
-        onResult: () => {
+        onResult: (payload) => {
           if (sawTerminal) return;
           markTerminal();
-          cb.onResult();
+          cb.onResult(payload);
         },
         onError: (msg: string) => {
           if (sawTerminal) return;
@@ -416,7 +417,7 @@ export class MessageSender {
       onMissingTerminal: () => {
         if (sawTerminal) return;
         markTerminal();
-        cb.onResult();
+        cb.onError('Agent run ended without a terminal event');
       },
     };
   }
@@ -674,7 +675,18 @@ export class MessageSender {
         break;
       }
       case 'run_end':
-        cb?.onResult();
+        if (
+          typeof parsed.runId === 'string'
+          && typeof parsed.sessionKey === 'string'
+          && (payload.status === 'success' || payload.status === 'error' || payload.status === 'cancelled')
+        ) {
+          cb?.onResult({
+            runId: parsed.runId,
+            sessionKey: parsed.sessionKey,
+            status: payload.status,
+            ...(typeof payload.summary === 'string' && payload.summary ? { summary: payload.summary } : {}),
+          });
+        }
         break;
       case 'error':
         cb?.onError(String(payload.message || JSON.stringify(buildSendFailedErrorPayload())));

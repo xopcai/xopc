@@ -33,6 +33,7 @@ type ElectronShellPreferences = {
 };
 
 type EndpointNotificationInput = { title: string; body: string };
+type AgentRunNotificationInput = EndpointNotificationInput & { id: string; route: string };
 
 const defaultPrefs: ElectronShellPreferences = {
   keepAwakePreferred: false,
@@ -44,6 +45,7 @@ let prefs: ElectronShellPreferences = { ...defaultPrefs };
 let prefsPath: string | null = null;
 let powerBlockerId: number | null = null;
 let loaded = false;
+const activeAgentRunNotifications = new Set<Notification>();
 
 function resolvePrefsPath(): string {
   if (prefsPath) {
@@ -153,6 +155,24 @@ function parseEndpointNotificationInput(input: unknown): EndpointNotificationInp
     return undefined;
   }
   return { title, body };
+}
+
+function parseAgentRunNotificationInput(input: unknown): AgentRunNotificationInput | undefined {
+  if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).length !== 4) {
+    return undefined;
+  }
+  const { id, title, body, route } = input as Record<string, unknown>;
+  const text = parseEndpointNotificationInput({ title, body });
+  if (
+    !text
+    || typeof id !== 'string'
+    || !id.trim()
+    || id.length > 160
+    || typeof route !== 'string'
+    || !route.startsWith('/chat/')
+    || route.length > 1_000
+  ) return undefined;
+  return { id, route, ...text };
 }
 
 function mapMediaStatusWhenAvailable(type: 'microphone' | 'screen' | 'camera'): TccTriState {
@@ -542,7 +562,11 @@ function getBehaviorState(): SystemSettingsBehavior {
 
 export function registerSystemSettingsIpc(
   ipcMain: IpcMain,
-  options?: { onLanguageChanged?: (language: ElectronUiLanguage) => void },
+  options?: {
+    onLanguageChanged?: (language: ElectronUiLanguage) => void;
+    isMainWindowFocused?: () => boolean;
+    navigateMainWindow?: (route: string) => void;
+  },
 ): void {
   ipcMain.handle('system-settings:get-behavior', (event): SystemSettingsBehavior => {
     assertTrustedRenderer(event);
@@ -661,6 +685,38 @@ export function registerSystemSettingsIpc(
       try {
         new Notification({ ...notificationInput, silent: !prefs.notifySoundEnabled }).show();
         return { ok: true };
+      } catch {
+        return { ok: false, error: 'NOTIFICATION_FAILED' };
+      }
+    },
+  );
+
+  ipcMain.handle(
+    'system-settings:show-agent-run-notification',
+    (event, input: unknown): { ok: true; outcome: 'shown' | 'suppressed-focused' } | { ok: false; error: string } => {
+      assertTrustedRenderer(event);
+      const notificationInput = parseAgentRunNotificationInput(input);
+      if (!notificationInput) return { ok: false, error: 'INVALID_ARGUMENTS' };
+      if (!prefs.notifyEnabled) return { ok: false, error: 'NOTIFICATIONS_DISABLED' };
+      if (options?.isMainWindowFocused?.()) return { ok: true, outcome: 'suppressed-focused' };
+      if (!Notification.isSupported()) return { ok: false, error: 'NOTIFICATIONS_UNSUPPORTED' };
+      if (!isShellNotificationGranted()) return { ok: false, error: 'PERMISSION_DENIED' };
+      try {
+        const notification = new Notification({
+          title: notificationInput.title,
+          body: notificationInput.body,
+          silent: !prefs.notifySoundEnabled,
+        });
+        activeAgentRunNotifications.add(notification);
+        const release = () => activeAgentRunNotifications.delete(notification);
+        notification.once('close', release);
+        notification.once('failed', release);
+        notification.once('click', () => {
+          release();
+          options?.navigateMainWindow?.(notificationInput.route);
+        });
+        notification.show();
+        return { ok: true, outcome: 'shown' };
       } catch {
         return { ok: false, error: 'NOTIFICATION_FAILED' };
       }
