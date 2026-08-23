@@ -129,7 +129,15 @@ export function registerUnderstandingSourceRoutes(authenticated: Hono, deps: Aut
       ? (body as { items: unknown[] }).items.slice(0, 150) : [];
     if (!items.length) return c.json({ ok: false, error: 'No understanding source items were provided' }, 400);
     try {
-      const result = await service.importUnderstandingSources(items, c.req.raw.signal, stringField(body, 'workDiscoveryRunId') || undefined);
+      const checkpoints = body && typeof body === 'object' && (body as Record<string, unknown>).sourceCheckpoints
+        && typeof (body as Record<string, unknown>).sourceCheckpoints === 'object'
+        ? (body as { sourceCheckpoints: Record<string, unknown> }).sourceCheckpoints : undefined;
+      const result = await service.importUnderstandingSources(
+        items,
+        c.req.raw.signal,
+        stringField(body, 'workDiscoveryRunId') || undefined,
+        checkpoints,
+      );
       return c.json({ ok: true, ...result }, 201);
     } catch (error) {
       return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400);

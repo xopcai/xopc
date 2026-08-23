@@ -3,6 +3,10 @@ import type { StreamFn } from '@earendil-works/pi-agent-core';
 
 import { EXTENSION_PROVIDER_BASE_URL } from '../../providers/index.js';
 import { createExtensionAwareStreamFn } from '../../providers/extension-stream-bridge.js';
+import {
+  preparePromptCacheContext,
+  withPromptCachePayloadTransform,
+} from '../../providers/prompt-cache-payload.js';
 
 /**
  * pi-coding-agent's default {@link createAgentSession} streamFn always routes through
@@ -18,8 +22,12 @@ export function wrapStreamFnForXopcExtensions(originalStreamFn: StreamFn): Strea
 
   return ((model: Model<Api>, context: Context, options?: SimpleStreamOptions) => {
     if (model.baseUrl === EXTENSION_PROVIDER_BASE_URL) {
-      return extensionStreamFn(model, context, options);
+      return extensionStreamFn(model, preparePromptCacheContext(model, context), options);
     }
-    return originalStreamFn(model, context, options);
+    return originalStreamFn(
+      model,
+      preparePromptCacheContext(model, context),
+      withPromptCachePayloadTransform(model, context, options),
+    );
   }) as StreamFn;
 }

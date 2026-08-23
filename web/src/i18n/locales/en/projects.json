@@ -297,6 +297,7 @@
       "description": "Every card is a task xopc is responsible for advancing. Columns reflect its real execution state.",
       "empty": "No tasks here",
       "acceptanceCriteria": "{{count}} acceptance criteria",
+      "blockedBy": "Waiting for {{count}} dependencies",
       "actionFailed": "The task changed or could not be updated. The board has been restored.",
       "create": "New task",
       "createTitle": "Create a task",
@@ -336,9 +337,25 @@
         "failed": "Verification failed",
         "unverified": "Not verified"
       },
+      "views": {
+        "board": "Board",
+        "graph": "Dependencies"
+      },
+      "graph": {
+        "showCompleted": "Show completed",
+        "hideCompleted": "Hide completed",
+        "blockedChains": "Blocked chains only",
+        "allTasks": "View all",
+        "locateTask": "Locate task",
+        "openTask": "Open task details",
+        "empty": "No tasks match the current filters",
+        "hint": "Read left to right to see how dependencies unlock later work. Select a node to focus its chain.",
+        "blockedBy": "Still waiting for {{count}} dependencies"
+      },
       "lanes": {
         "ready": "Ready",
         "moving": "In progress",
+        "waiting": "Waiting",
         "needs_user": "Needs you",
         "done": "Done"
       }

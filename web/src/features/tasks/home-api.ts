@@ -43,6 +43,18 @@ export async function commandTask(
   return fetchTask(taskId);
 }
 
+export async function updateTaskDependencies(
+  taskId: string,
+  dependsOnTaskIds: string[],
+  expectedVersion: number,
+): Promise<TaskDetail> {
+  await fetchJson(apiUrl(`/api/tasks/${encodeURIComponent(taskId)}/dependencies`), {
+    method: 'PUT',
+    body: JSON.stringify({ dependsOnTaskIds, expectedVersion }),
+  });
+  return fetchTask(taskId);
+}
+
 export async function submitTaskFeedback(
   runId: string,
   rating: 'helpful' | 'not_helpful',

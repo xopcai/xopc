@@ -172,6 +172,7 @@ export type MessagingCallbacks = {
   onAssistantMessageEnd?: (
     messageId: string,
     presentation: 'narration' | 'answer',
+    usage?: Message['usage'],
   ) => void;
   onThinking: (content: string, isDelta: boolean) => void;
   onThinkingEnd: () => void;
@@ -495,6 +496,7 @@ export class MessageSender {
           cb?.onAssistantMessageEnd?.(
             payload.messageId,
             payload.presentation,
+            payload.usage as Message['usage'] | undefined,
           );
         }
         break;

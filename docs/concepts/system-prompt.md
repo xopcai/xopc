@@ -43,6 +43,12 @@ Agents must not claim they manually read files when startup context was injected
 
 After transcript compaction, xopc may append a context row with excerpts from AGENTS.md sections **Session Startup** and **Red Lines** according to runtime compaction policy.
 
+## Prompt caching
+
+xopc keeps stable instructions and project context ahead of a cache boundary, with heartbeat, channel, interaction, and active-project state after it. Provider adapters turn that boundary into separate cache blocks for Anthropic and Bedrock; implicit-prefix-cache providers receive the same ordering without the internal marker. OpenAI prompt cache routing uses a hash of the stable prompt and ordered tool schemas rather than the conversation id, so equivalent agents can reuse the same prefix while session identity remains independent.
+
+Set `agents.list[].runtime.promptCacheRetention` (or the same field in a capability preset) to `none`, `short`, or `long`. Long retention can increase cache-write cost and provider-side state retention, so use it only when the stable prefix is reused across longer idle intervals.
+
 ## Shared user context
 
 | Location | In prompt? | Access |

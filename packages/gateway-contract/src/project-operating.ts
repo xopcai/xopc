@@ -20,7 +20,12 @@ const ProjectSummarySchema = z.object({
   updatedAt: z.number(),
 });
 
-export const ProjectTaskLaneSchema = z.enum(['ready', 'moving', 'needs_user', 'done']);
+export const ProjectTaskLaneSchema = z.enum(['ready', 'moving', 'waiting', 'needs_user', 'done']);
+
+export const ProjectTaskDependencyEdgeSchema = z.object({
+  dependencyTaskId: z.string(),
+  dependentTaskId: z.string(),
+});
 
 export const ProjectTaskCardSchema = z.object({
   id: z.string(),
@@ -43,6 +48,7 @@ export const ProjectTaskCardSchema = z.object({
 export const ProjectOperatingViewSchema = z.object({
   project: ProjectSummarySchema,
   tasks: z.array(ProjectTaskCardSchema),
+  dependencyEdges: z.array(ProjectTaskDependencyEdgeSchema),
   blockers: z.array(z.object({
     id: z.string(),
     kind: z.string(),
@@ -69,3 +75,4 @@ export const ProjectOperatingViewSchema = z.object({
 export type ProjectOperatingView = z.infer<typeof ProjectOperatingViewSchema>;
 export type ProjectTaskLane = z.infer<typeof ProjectTaskLaneSchema>;
 export type ProjectTaskCard = z.infer<typeof ProjectTaskCardSchema>;
+export type ProjectTaskDependencyEdge = z.infer<typeof ProjectTaskDependencyEdgeSchema>;

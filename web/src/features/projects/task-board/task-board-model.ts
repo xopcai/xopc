@@ -2,7 +2,7 @@ import type { ProjectTaskCard, ProjectTaskLane } from '@xopcai/gateway-contract'
 
 export type TaskBoardAction = 'run' | 'resume' | 'pause' | 'verify';
 
-export const PROJECT_TASK_LANES: ProjectTaskLane[] = ['ready', 'moving', 'needs_user', 'done'];
+export const PROJECT_TASK_LANES: ProjectTaskLane[] = ['ready', 'moving', 'waiting', 'needs_user', 'done'];
 
 export function groupProjectTasks(
   tasks: ProjectTaskCard[],
@@ -10,6 +10,7 @@ export function groupProjectTasks(
   return {
     ready: tasks.filter((task) => task.lane === 'ready'),
     moving: tasks.filter((task) => task.lane === 'moving'),
+    waiting: tasks.filter((task) => task.lane === 'waiting'),
     needs_user: tasks.filter((task) => task.lane === 'needs_user'),
     done: tasks.filter((task) => task.lane === 'done'),
   };

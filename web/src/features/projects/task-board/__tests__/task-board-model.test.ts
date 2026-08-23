@@ -10,7 +10,7 @@ function card(id: string, lane: ProjectTaskCard['lane']): ProjectTaskCard {
     lane,
     phase: lane === 'done' ? 'closed' : lane === 'ready' ? 'ready' : 'active',
     ...(lane === 'done' ? { resolution: 'done' as const } : {}),
-    operationalState: lane === 'moving' ? 'running' : lane === 'needs_user' ? 'waiting' : 'idle',
+    operationalState: lane === 'moving' ? 'running' : lane === 'waiting' || lane === 'needs_user' ? 'waiting' : 'idle',
     priority: 'normal',
     blockedBy: [],
     acceptanceCriteriaCount: 0,
@@ -25,10 +25,11 @@ describe('project task board model', () => {
     const grouped = groupProjectTasks([
       card('one', 'ready'),
       card('two', 'moving'),
-      card('three', 'needs_user'),
-      card('four', 'done'),
+      card('three', 'waiting'),
+      card('four', 'needs_user'),
+      card('five', 'done'),
     ]);
-    expect(Object.values(grouped).flat().map((item) => item.id)).toEqual(['one', 'two', 'three', 'four']);
+    expect(Object.values(grouped).flat().map((item) => item.id)).toEqual(['one', 'two', 'three', 'four', 'five']);
   });
 
   it('turns lane changes into domain commands instead of status writes', () => {

@@ -44,16 +44,15 @@ function providerCredentialRevision(providerId: string): string {
 
 export function buildEmbeddedRunnerFingerprint(input: EmbeddedRunnerFingerprintInput): string {
   const tools = [...input.toolNames].sort().join('\0');
-  const promptMarker = `${input.systemPrompt.length}:${input.systemPrompt.slice(0, 128)}`;
-  return [
+  return createHash('sha256').update([
     input.sessionId,
     input.workspaceDir,
     input.modelRef,
     tools,
-    promptMarker,
+    input.systemPrompt,
     input.thinkingLevel,
     input.credentialRevision,
-  ].join('');
+  ].join('\0')).digest('base64url');
 }
 
 type PooledRunner = {

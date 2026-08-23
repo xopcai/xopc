@@ -39,7 +39,7 @@ describe('wrapStreamFnForXopcExtensions', () => {
     setProviderRegistry(new ProviderPluginRegistry());
   });
 
-  it('delegates non-extension models to the original streamFn untouched', () => {
+  it('delegates builtin models with the prompt-cache adapter', async () => {
     const original = vi.fn(() => ({}) as never);
     const wrapped = wrapStreamFnForXopcExtensions(original as never);
     const model = makeBuiltinModel();
@@ -47,7 +47,13 @@ describe('wrapStreamFnForXopcExtensions', () => {
     wrapped(model, FAKE_CONTEXT, undefined);
 
     expect(original).toHaveBeenCalledTimes(1);
-    expect(original).toHaveBeenCalledWith(model, FAKE_CONTEXT, undefined);
+    const [calledModel, calledContext, calledOptions] = original.mock.calls[0]!;
+    expect(calledModel).toBe(model);
+    expect(calledContext).toEqual(FAKE_CONTEXT);
+    expect(calledOptions).toEqual({ onPayload: expect.any(Function) });
+    await expect(calledOptions.onPayload({}, model)).resolves.toEqual({
+      prompt_cache_key: expect.stringMatching(/^xopc-/),
+    });
   });
 
   it('routes extension models through the plugin registry, bypassing the original streamFn', () => {

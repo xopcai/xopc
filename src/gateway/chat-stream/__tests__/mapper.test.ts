@@ -158,6 +158,41 @@ describe('ChatStreamMapper', () => {
     });
   });
 
+  it('exposes provider cache usage on the terminal assistant event', () => {
+    const m = mapper();
+    m.map({ type: 'message_start', message: { role: 'assistant', content: [] } });
+
+    const events = m.map({
+      type: 'message_end',
+      message: {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'done' }],
+        usage: {
+          input: 120,
+          output: 30,
+          cacheRead: 80,
+          cacheWrite: 10,
+          totalTokens: 240,
+          cost: { input: 0.1, output: 0.2, cacheRead: 0.01, cacheWrite: 0.02, total: 0.33 },
+        },
+      },
+    });
+
+    expect(events.at(-1)).toMatchObject({
+      type: 'assistant_message_end',
+      payload: {
+        usage: {
+          inputTokens: 120,
+          outputTokens: 30,
+          cacheReadTokens: 80,
+          cacheWriteTokens: 10,
+          totalTokens: 240,
+          cost: 0.33,
+        },
+      },
+    });
+  });
+
   it('uses text_delta as the only live text source when the message snapshot is ahead', () => {
     const m = mapper();
     m.map({ type: 'message_start', message: { role: 'assistant', content: [] } });

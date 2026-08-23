@@ -46,7 +46,7 @@ import {
   type ProjectWithDetails,
 } from '@/features/projects/api';
 import { ProjectSkillsPanel } from '@/features/projects/project-skills-panel';
-import { ProjectTaskBoard, type CreateProjectTaskInput } from '@/features/projects/task-board/project-task-board';
+import { ProjectTaskBoard, type CreateProjectTaskInput, type ProjectTaskBoardHandle } from '@/features/projects/task-board/project-task-board';
 import type { TaskBoardAction } from '@/features/projects/task-board/task-board-model';
 import { fetchGatewayAgents, type GatewayAgentRow } from '@/features/settings/agents-admin-api';
 import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
@@ -689,6 +689,8 @@ export function ProjectDetailPage() {
   const [startingChat, setStartingChat] = useState(false);
   const [creatingBlocker, setCreatingBlocker] = useState(false);
   const [taskActionBusyId, setTaskActionBusyId] = useState<string | null>(null);
+  const taskBoardRef = useRef<ProjectTaskBoardHandle>(null);
+  const taskCreatePendingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [blockerDraft, setBlockerDraft] = useState({ title: '', reason: '' });
   const [draft, setDraft] = useState<ProjectSettingsDraft>({
@@ -719,6 +721,21 @@ export function ProjectDetailPage() {
     if (!projectId) return;
     navigate(projectTabHref(nextTab));
   }, [navigate, projectId, projectTabHref]);
+
+  const openTaskCreate = useCallback(() => {
+    if (tab === 'tasks' && taskBoardRef.current) {
+      taskBoardRef.current.openCreate();
+      return;
+    }
+    taskCreatePendingRef.current = true;
+    navigateProjectTab('tasks');
+  }, [navigateProjectTab, tab]);
+
+  useEffect(() => {
+    if (tab !== 'tasks' || !taskCreatePendingRef.current) return;
+    taskCreatePendingRef.current = false;
+    taskBoardRef.current?.openCreate();
+  }, [tab]);
 
   const replaceProjectHistoryTab = useCallback((nextTab: TabId) => {
     if (!projectId) return;
@@ -1065,13 +1082,17 @@ export function ProjectDetailPage() {
   const headerEnd = useMemo(
     () => project ? (
       <>
+        <Button variant="secondary" className="h-9 rounded-lg" onClick={openTaskCreate}>
+          <Plus className="size-4" aria-hidden />
+          {pm.board.create}
+        </Button>
         <Button variant="primary" className="h-9 rounded-lg" onClick={() => void startChat()} disabled={startingChat}>
           <MessageSquarePlus className="size-4" aria-hidden />
           {pm.common.newChat}
         </Button>
       </>
     ) : null,
-    [pm.common.newChat, project, startChat, startingChat],
+    [openTaskCreate, pm.board.create, pm.common.newChat, project, startChat, startingChat],
   );
 
   useLayoutEffect(() => {
@@ -1665,7 +1686,9 @@ export function ProjectDetailPage() {
 
       {tab === 'tasks' ? (
         <ProjectTaskBoard
+          ref={taskBoardRef}
           tasks={operatingView?.tasks ?? []}
+          dependencyEdges={operatingView?.dependencyEdges ?? []}
           returnTo={projectTabHref('tasks')}
           copy={pm.board}
           onAction={performProjectTaskAction}

@@ -166,9 +166,10 @@ export async function grantUnderstandingWorkFolder(rootPath: string): Promise<Wo
 export async function importUnderstandingSources(items: Array<{
   id: string;
   sourceId: string;
-  type: 'document' | 'calendar_event' | 'task' | 'note' | 'mail' | 'message' | 'code_activity';
+  type: 'document' | 'calendar_event' | 'task' | 'note' | 'mail' | 'message' | 'code_activity' | 'bookmark';
   title: string;
   group?: string;
+  resourceUri?: string;
   occurredAt?: number;
   modifiedAt?: number;
   startsAt?: number;
@@ -177,16 +178,18 @@ export async function importUnderstandingSources(items: Array<{
   ownerAttribution: 'user' | 'other' | 'shared' | 'unknown';
   sensitivity: 'normal' | 'personal' | 'secret' | 'regulated';
   evidenceRef: string;
-}>, workDiscoveryRunId?: string): Promise<{
+}>, workDiscoveryRunId?: string, sourceCheckpoints?: Record<string, { fingerprint: string; collectedAt: number }>): Promise<{
   profileCandidates: WorkDiscoveryProfileCandidate[];
   workThreads: WorkUnderstandingThread[];
+  focuses: import('../user-context/user-context-api').UserFocus[];
 }> {
   return fetchJson<{
     profileCandidates: WorkDiscoveryProfileCandidate[];
     workThreads: WorkUnderstandingThread[];
+    focuses: import('../user-context/user-context-api').UserFocus[];
   }>(
     apiUrl('/api/understanding/bootstrap'),
-    { method: 'POST', body: JSON.stringify({ items, ...(workDiscoveryRunId ? { workDiscoveryRunId } : {}) }) },
+    { method: 'POST', body: JSON.stringify({ items, ...(workDiscoveryRunId ? { workDiscoveryRunId } : {}), sourceCheckpoints }) },
   );
 }
 

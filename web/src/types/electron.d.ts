@@ -509,12 +509,13 @@ export interface ElectronUnderstandingSourceDefinition {
   supportedAccessModes: Array<'once' | 'continuous'>; recommended: boolean; sensitive: boolean;
 }
 export interface ElectronUnderstandingSourceItem {
-  id: string; sourceId: string; type: 'document' | 'calendar_event' | 'task' | 'note' | 'mail' | 'message' | 'code_activity';
-  title: string; text?: string; group?: string; occurredAt?: number; modifiedAt?: number; startsAt?: number; endsAt?: number;
+  id: string; sourceId: string; type: 'document' | 'calendar_event' | 'task' | 'note' | 'mail' | 'message' | 'code_activity' | 'bookmark';
+  title: string; text?: string; group?: string; resourceUri?: string; occurredAt?: number; modifiedAt?: number; startsAt?: number; endsAt?: number;
   ownerAttribution: 'user' | 'other' | 'shared' | 'unknown'; sensitivity: 'normal' | 'personal' | 'secret' | 'regulated'; evidenceRef: string;
 }
 export interface ElectronUnderstandingSourceCollectionResult {
-  sourceId: string; status: 'completed' | 'denied' | 'failed'; items: ElectronUnderstandingSourceItem[]; error?: string;
+  sourceId: string; status: 'completed' | 'denied' | 'failed'; items: ElectronUnderstandingSourceItem[];
+  checkpoint?: { fingerprint: string; collectedAt: number }; error?: string;
 }
 export interface ElectronUnderstandingSourcesAPI {
   catalog(): Promise<ElectronUnderstandingSourceDefinition[]>;

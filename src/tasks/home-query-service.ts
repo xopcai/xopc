@@ -179,7 +179,7 @@ export function decisionFromTask(
   projectName?: string,
 ): HomeDecision | null {
   const item = model.attention[0];
-  if (!item || !['input_required', 'approval_required', 'dependency_blocked'].includes(item.kind)) return null;
+  if (!item || !['input_required', 'approval_required'].includes(item.kind)) return null;
   const task = model.task;
   return {
     id: `task:${task.id}`,

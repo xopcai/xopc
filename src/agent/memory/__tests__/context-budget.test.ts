@@ -14,6 +14,11 @@ function toolResult(text: string): AgentMessage {
   } as AgentMessage;
 }
 
+function toolResultText(message: AgentMessage): string {
+  const content = (message as { content?: Array<{ type: string; text?: string }> }).content ?? [];
+  return content.map((block) => block.text ?? '').join('');
+}
+
 describe('context budget', () => {
   it('includes system prompt, current user input, and tool schemas in preflight pressure', () => {
     const messages = [{ role: 'user', content: 'x'.repeat(2_400), timestamp: 1 }] as AgentMessage[];
@@ -46,5 +51,32 @@ describe('context budget', () => {
     expect(JSON.stringify(result.messages[0])).toContain('truncated');
     expect(JSON.stringify(original)).not.toContain('truncated');
     expect(result.evaluation.estimatedTokens).toBeLessThanOrEqual(result.evaluation.hardLimitTokens);
+  });
+
+  it('freezes a pruned tool result at one stable size as pressure increases', () => {
+    const oldResult = toolResult('a'.repeat(12_000));
+    const recentResult = {
+      ...toolResult('b'.repeat(12_000)),
+      toolCallId: 'call-2',
+    } as AgentMessage;
+    const lowerPressure = pruneToolResultsToFit({
+      messages: [oldResult, recentResult],
+      contextWindow: 5_000,
+      reserveTokens: 1_024,
+      canCompact: false,
+      minToolResultKeepChars: 500,
+    });
+    const higherPressure = pruneToolResultsToFit({
+      messages: [oldResult, recentResult],
+      contextWindow: 3_000,
+      reserveTokens: 1_024,
+      canCompact: false,
+      minToolResultKeepChars: 500,
+    });
+
+    expect(toolResultText(lowerPressure.messages[0]!))
+      .toBe(toolResultText(higherPressure.messages[0]!));
+    expect(lowerPressure.prunedToolResults).toBe(1);
+    expect(higherPressure.prunedToolResults).toBe(2);
   });
 });

@@ -1,13 +1,14 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import type { TaskPriority, ProjectTaskCard, ProjectTaskLane } from '@xopcai/gateway-contract';
-import { CalendarClock, Check, CheckCircle2, ChevronDown, CircleDot, Link2, ListChecks, Paperclip, Plus, Search, UserRound, X } from 'lucide-react';
-import { type FormEvent, useState } from 'react';
+import type { TaskPriority, ProjectTaskCard, ProjectTaskDependencyEdge, ProjectTaskLane } from '@xopcai/gateway-contract';
+import { CalendarClock, CheckCircle2, CircleDot, GitBranch, Hourglass, LayoutGrid, ListChecks, Paperclip, UserRound } from 'lucide-react';
+import { type FormEvent, type Ref, useImperativeHandle, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { ComposerAttachmentChips } from '@/features/chat/composer/composer-attachment-chips';
 import { useComposerAttachments } from '@/features/chat/composer/use-composer-attachments';
+import { DependencyPicker } from '@/features/tasks/dependency-picker';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { formatMediumDateTime } from '@/lib/date-formatters';
@@ -21,12 +22,14 @@ import {
   PROJECT_TASK_LANES,
   type TaskBoardAction,
 } from './task-board-model';
+import { TaskDependencyGraph, type TaskDependencyGraphCopy } from './task-dependency-graph';
 
 type BoardCopy = {
   title: string;
   description: string;
   empty: string;
   acceptanceCriteria: string;
+  blockedBy: string;
   actionFailed: string;
   create: string;
   createTitle: string;
@@ -53,6 +56,8 @@ type BoardCopy = {
   actions: Record<'run' | 'resume' | 'pause' | 'verify', string>;
   verification: Record<'passed' | 'failed' | 'unverified', string>;
   lanes: Record<ProjectTaskLane, string>;
+  views: { board: string; graph: string };
+  graph: Omit<TaskDependencyGraphCopy, 'lanes'>;
 };
 
 export type CreateProjectTaskInput = {
@@ -64,9 +69,14 @@ export type CreateProjectTaskInput = {
   attachments: Array<{ name?: string; uri?: string; mimeType?: string; size?: number; data?: string }>;
 };
 
+export type ProjectTaskBoardHandle = {
+  openCreate: () => void;
+};
+
 const LANE_ICONS = {
   ready: CircleDot,
   moving: ListChecks,
+  waiting: Hourglass,
   needs_user: UserRound,
   done: CheckCircle2,
 } satisfies Record<ProjectTaskLane, typeof CircleDot>;
@@ -74,6 +84,7 @@ const LANE_ICONS = {
 const LANE_TONES: Record<ProjectTaskLane, string> = {
   ready: 'text-fg-muted',
   moving: 'text-accent-fg',
+  waiting: 'text-violet-700 dark:text-violet-300',
   needs_user: 'text-amber-700 dark:text-amber-300',
   done: 'text-emerald-700 dark:text-emerald-300',
 };
@@ -119,6 +130,17 @@ function TaskCard({ task, returnTo, copy, busy, onAction, onDragStart }: {
           <p className="mt-2 line-clamp-3 text-xs leading-5 text-fg-muted">
             {task.attention[0].summary}
           </p>
+        ) : null}
+        {task.lane === 'waiting' && task.blockedBy.length > 0 ? (
+          <div className="mt-2 rounded-md bg-violet-500/8 px-2.5 py-2 text-xs text-violet-700 dark:text-violet-300">
+            <span className="inline-flex items-center gap-1.5 font-medium">
+              <Hourglass className="size-3.5" aria-hidden />
+              {copy.blockedBy.replace('{{count}}', String(task.blockedBy.length))}
+            </span>
+            <p className="mt-1 line-clamp-2 leading-5 text-fg-muted">
+              {task.blockedBy.map((dependency) => dependency.title).join('、')}
+            </p>
+          </div>
         ) : null}
         <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-fg-subtle">
           {task.latestVerification ? (
@@ -166,33 +188,30 @@ function TaskCard({ task, returnTo, copy, busy, onAction, onDragStart }: {
   );
 }
 
-export function ProjectTaskBoard({ tasks, returnTo, copy, onAction, onCreate, actionBusyId }: {
+export function ProjectTaskBoard({ tasks, dependencyEdges, returnTo, copy, onAction, onCreate, actionBusyId, ref }: {
   tasks: ProjectTaskCard[];
+  dependencyEdges: ProjectTaskDependencyEdge[];
   returnTo: string;
   copy: BoardCopy;
   onAction: (task: ProjectTaskCard, action: TaskBoardAction) => Promise<void>;
   onCreate: (input: CreateProjectTaskInput) => Promise<void>;
   actionBusyId?: string | null;
+  ref?: Ref<ProjectTaskBoardHandle>;
 }) {
   const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'board' | 'graph'>('board');
   const [createOpen, setCreateOpen] = useState(false);
   const [createRequestId, setCreateRequestId] = useState(() => crypto.randomUUID());
   const [objective, setObjective] = useState('');
   const [priority, setPriority] = useState<TaskPriority>('normal');
   const [dueDate, setDueDate] = useState('');
   const [dependsOnTaskIds, setDependsOnTaskIds] = useState<string[]>([]);
-  const [dependencyPickerOpen, setDependencyPickerOpen] = useState(false);
-  const [dependencyQuery, setDependencyQuery] = useState('');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const language = useLocaleStore((state) => state.language);
   const attachmentState = useComposerAttachments({ chat: messages(language).chat });
   const grouped = groupProjectTasks(tasks);
   const dependencyCandidates = tasks.filter((task) => task.phase !== 'closed');
-  const normalizedDependencyQuery = dependencyQuery.trim().toLocaleLowerCase();
-  const matchingDependencyCandidates = dependencyCandidates
-    .filter((task) => !normalizedDependencyQuery || task.title.toLocaleLowerCase().includes(normalizedDependencyQuery))
-    .slice(0, 8);
   const performAction = (task: ProjectTaskCard, action: TaskBoardAction) => {
     void onAction(task, action);
   };
@@ -217,8 +236,6 @@ export function ProjectTaskBoard({ tasks, returnTo, copy, onAction, onCreate, ac
       setPriority('normal');
       setDueDate('');
       setDependsOnTaskIds([]);
-      setDependencyPickerOpen(false);
-      setDependencyQuery('');
       attachmentState.clearAttachments();
       setCreateRequestId(crypto.randomUUID());
       setCreateOpen(false);
@@ -235,27 +252,33 @@ export function ProjectTaskBoard({ tasks, returnTo, copy, onAction, onCreate, ac
     setPriority('normal');
     setDueDate('');
     setDependsOnTaskIds([]);
-    setDependencyPickerOpen(false);
-    setDependencyQuery('');
     attachmentState.clearAttachments();
     setCreateError(null);
     setCreateOpen(true);
   };
 
+  useImperativeHandle(ref, () => ({ openCreate }));
+
   return (
     <section id="project-panel-board" role="tabpanel" aria-labelledby="project-primary-tab-board" className="min-h-full">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <h2 className="text-base font-semibold text-fg">{copy.title}</h2>
           <p className="mt-1 text-sm leading-6 text-fg-muted">{copy.description}</p>
         </div>
-        <Button type="button" variant="primary" className="h-9 rounded-lg" onClick={openCreate}>
-          <Plus className="size-4" aria-hidden />
-          {copy.create}
-        </Button>
+        <div className="flex shrink-0 rounded-lg border border-edge bg-surface-panel p-0.5">
+          <button type="button" aria-pressed={viewMode === 'board'} onClick={() => setViewMode('board')} className={cn('inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium', viewMode === 'board' ? 'bg-surface-hover text-fg' : 'text-fg-muted hover:text-fg')}>
+            <LayoutGrid className="size-3.5" aria-hidden />
+            {copy.views.board}
+          </button>
+          <button type="button" aria-pressed={viewMode === 'graph'} onClick={() => setViewMode('graph')} className={cn('inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium', viewMode === 'graph' ? 'bg-surface-hover text-fg' : 'text-fg-muted hover:text-fg')}>
+            <GitBranch className="size-3.5" aria-hidden />
+            {copy.views.graph}
+          </button>
+        </div>
       </div>
-      <div className="w-full min-w-0 overflow-x-auto overscroll-x-contain pb-2 [scrollbar-width:thin]">
-        <div className="grid min-w-[82rem] grid-cols-4 gap-3">
+      {viewMode === 'board' ? <div className="w-full min-w-0 overflow-x-auto overscroll-x-contain pb-2 [scrollbar-width:thin]">
+        <div className="grid min-w-[103rem] grid-cols-5 gap-3">
           {PROJECT_TASK_LANES.map((lane) => {
             const Icon = LANE_ICONS[lane];
             const items = grouped[lane];
@@ -303,7 +326,14 @@ export function ProjectTaskBoard({ tasks, returnTo, copy, onAction, onCreate, ac
             );
           })}
         </div>
-      </div>
+      </div> : (
+        <TaskDependencyGraph
+          tasks={tasks}
+          dependencyEdges={dependencyEdges}
+          returnTo={returnTo}
+          copy={{ ...copy.graph, lanes: copy.lanes }}
+        />
+      )}
 
       <Dialog.Root open={createOpen} onOpenChange={(open) => { if (!creating) setCreateOpen(open); }}>
         <Dialog.Portal>
@@ -402,89 +432,20 @@ export function ProjectTaskBoard({ tasks, returnTo, copy, onAction, onCreate, ac
                     {copy.dependencies} <span className="font-normal text-fg-subtle">{copy.optional}</span>
                   </legend>
                   <p className="text-xs leading-5 text-fg-subtle">{copy.dependenciesDescription}</p>
-                  {dependsOnTaskIds.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {dependsOnTaskIds.map((taskId) => {
-                        const task = dependencyCandidates.find((candidate) => candidate.id === taskId);
-                        if (!task) return null;
-                        return (
-                          <span key={task.id} className="inline-flex max-w-full items-center gap-1.5 rounded-lg bg-accent-soft px-2.5 py-1.5 text-xs text-accent-fg">
-                            <span className="truncate">{task.title}</span>
-                            <button
-                              type="button"
-                              className="shrink-0 rounded text-accent-fg/70 hover:text-accent-fg"
-                              aria-label={copy.removeDependency.replace('{{task}}', task.title)}
-                              disabled={creating}
-                              onClick={() => setDependsOnTaskIds((current) => current.filter((id) => id !== task.id))}
-                            >
-                              <X className="size-3.5" aria-hidden />
-                            </button>
-                          </span>
-                        );
-                      })}
-                    </div>
-                  ) : null}
-                  {dependencyCandidates.length > 0 ? (
-                    <>
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        className="w-fit rounded-lg"
-                        disabled={creating}
-                        aria-expanded={dependencyPickerOpen}
-                        onClick={() => setDependencyPickerOpen((open) => !open)}
-                      >
-                        <Link2 className="size-4" aria-hidden />
-                        {dependsOnTaskIds.length > 0
-                          ? copy.linkedDependencies.replace('{{count}}', String(dependsOnTaskIds.length))
-                          : copy.linkDependencies}
-                        <ChevronDown className={cn('size-3.5 transition-transform', dependencyPickerOpen && 'rotate-180')} aria-hidden />
-                      </Button>
-                      {dependencyPickerOpen ? (
-                        <div className="grid gap-2 rounded-lg border border-edge bg-surface-base p-2">
-                          <label className="relative block">
-                            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-fg-subtle" aria-hidden />
-                            <input
-                              value={dependencyQuery}
-                              onChange={(event) => setDependencyQuery(event.target.value)}
-                              placeholder={copy.dependencySearchPlaceholder}
-                              className="h-9 w-full rounded-md border border-edge bg-surface-panel pl-8 pr-3 text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-accent"
-                              autoFocus
-                            />
-                          </label>
-                          {matchingDependencyCandidates.length > 0 ? (
-                            <div className="grid max-h-44 gap-1 overflow-y-auto">
-                              {matchingDependencyCandidates.map((task) => {
-                                const selected = dependsOnTaskIds.includes(task.id);
-                                return (
-                                  <button
-                                    key={task.id}
-                                    type="button"
-                                    aria-pressed={selected}
-                                    disabled={creating}
-                                    onClick={() => setDependsOnTaskIds((current) => selected
-                                      ? current.filter((id) => id !== task.id)
-                                      : [...current, task.id])}
-                                    className={cn(
-                                      'flex items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-colors',
-                                      selected ? 'bg-accent-soft text-accent-fg' : 'text-fg hover:bg-surface-hover',
-                                    )}
-                                  >
-                                    <span className={cn('flex size-4 shrink-0 items-center justify-center rounded border', selected ? 'border-accent bg-accent text-white' : 'border-edge')}>
-                                      {selected ? <Check className="size-3" aria-hidden /> : null}
-                                    </span>
-                                    <span className="min-w-0 flex-1 truncate">{task.title}</span>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          ) : (
-                            <p className="px-2 py-3 text-center text-sm text-fg-subtle">{copy.noDependencyMatches}</p>
-                          )}
-                        </div>
-                      ) : null}
-                    </>
-                  ) : <p className="text-sm text-fg-subtle">{copy.noDependencyCandidates}</p>}
+                  <DependencyPicker
+                    candidates={dependencyCandidates}
+                    selectedIds={dependsOnTaskIds}
+                    disabled={creating}
+                    onChange={setDependsOnTaskIds}
+                    labels={{
+                      link: copy.linkDependencies,
+                      linked: copy.linkedDependencies,
+                      searchPlaceholder: copy.dependencySearchPlaceholder,
+                      noMatches: copy.noDependencyMatches,
+                      noCandidates: copy.noDependencyCandidates,
+                      remove: copy.removeDependency,
+                    }}
+                  />
                 </fieldset>
                 {createError ? <p className="text-sm text-red-600 dark:text-red-400">{createError}</p> : null}
               </div>
