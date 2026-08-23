@@ -1,9 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { ConfigSchema, getAgentDefaultImageGenerationModelConfig, getAgentDefaultModelRef } from '../../../../config/schema.js';
+import {
+  ConfigSchema,
+  getAgentDefaultImageGenerationModelConfig,
+  getAgentDefaultImageModelConfig,
+  getAgentDefaultModelRef,
+} from '../../../../config/schema.js';
 import { ModelCatalogStore } from '../../../../providers/model-catalog-store.js';
 import {
   defaultXopcCloudImageModel,
+  defaultXopcCloudVisionModel,
   defaultXopcCloudAudioModels,
   refreshOnboardModelCatalogIfNeeded,
   setPrimaryModel,
@@ -63,6 +69,10 @@ describe('XOPC Cloud onboard defaults', () => {
         operations: ['chat.completions'], reasoning: false, contextWindow: 128_000, maxOutputTokens: 8_192,
       },
       {
+        id: 'vision-model', name: 'Vision', kind: 'language', input: ['text', 'image'], output: ['text'],
+        operations: ['responses'], reasoning: false, contextWindow: 128_000, maxOutputTokens: 8_192,
+      },
+      {
         id: 'image-01', name: 'Image', kind: 'image', input: ['text'], output: ['image'],
         operations: ['images.generate'], reasoning: false, contextWindow: 128_000, maxOutputTokens: null,
       },
@@ -79,6 +89,7 @@ describe('XOPC Cloud onboard defaults', () => {
     ]);
 
     expect(defaultXopcCloudImageModel(store)).toBe('xopc-cloud/image-01');
+    expect(defaultXopcCloudVisionModel(store)).toBe('xopc-cloud/vision-model');
     expect(defaultXopcCloudAudioModels(store)).toEqual({
       stt: 'stt-fast', tts: { model: 'tts-natural', voice: 'coral', maxCharacters: 4096 },
     });
@@ -97,6 +108,40 @@ describe('XOPC Cloud onboard defaults', () => {
     expect(getAgentDefaultImageGenerationModelConfig(updated, 'main')).toEqual({
       primary: 'xopc-cloud/image-01',
     });
+  });
+
+  it('adds the vision default without replacing an explicit image-generation model', () => {
+    const config = ConfigSchema.parse({});
+    config.agents.capabilityPresets.default!.models!.imageGenerationModel = {
+      primary: 'openai/gpt-image-2',
+    };
+
+    const updated = setPrimaryModel(
+      config,
+      '/tmp/xopc-main',
+      'xopc-cloud/chat-model',
+      'xopc-cloud/image-01',
+      undefined,
+      'xopc-cloud/vision-model',
+    );
+
+    expect(getAgentDefaultImageModelConfig(updated)).toEqual({ primary: 'xopc-cloud/vision-model' });
+    expect(getAgentDefaultImageGenerationModelConfig(updated, 'main')?.primary).toBe('openai/gpt-image-2');
+  });
+
+  it('does not replace an existing explicit vision model', () => {
+    const config = ConfigSchema.parse({});
+    config.agents.capabilityPresets.default!.models!.imageModel = { primary: 'openai/gpt-4.1' };
+
+    const updated = setPrimaryModel(
+      config,
+      '/tmp/xopc-main',
+      'xopc-cloud/chat-model',
+      undefined,
+      undefined,
+      'xopc-cloud/vision-model',
+    );
+    expect(getAgentDefaultImageModelConfig(updated)?.primary).toBe('openai/gpt-4.1');
   });
 
   it('does not replace an existing explicit image-generation model', () => {
