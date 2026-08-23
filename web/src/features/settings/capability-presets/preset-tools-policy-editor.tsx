@@ -1,7 +1,6 @@
 import { useCallback, useMemo } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { Select, SelectOption } from '@/components/ui/popover-select';
 import type { CapabilityPresetToolPolicy } from '@/features/settings/capability-presets/capability-presets-api';
 import {
   BUILTIN_TOOL_UI_GROUPS,
@@ -29,11 +28,6 @@ type PresetToolPolicyEditorLabels = {
   modeAllow: string;
   modeConfirm: string;
   modeDeny: string;
-  scopeLabel: string;
-  scopeInherit: string;
-  scopeReadonly: string;
-  scopeWorkspace: string;
-  scopeUnrestricted: string;
   maxCallsLabel: string;
   timeoutLabel: string;
 };
@@ -278,27 +272,7 @@ export function PresetToolsPolicyEditor(props: {
                       </div>
                     </div>
                     {policy ? (
-                      <div className="mt-3 grid gap-2 border-t border-edge-subtle pt-3 sm:grid-cols-3 dark:border-edge">
-                        <label className="flex flex-col gap-1 text-xs text-fg-muted">
-                          {labels.scopeLabel}
-                          <Select
-                            value={policy.scope ?? ''}
-                            disabled={disabled}
-                            onChange={(event) => updateToolPolicy(toolId, (current) => {
-                              const scope = event.target.value as CapabilityPresetToolPolicy['scope'] | '';
-                              if (!scope) {
-                                const { scope: _scope, ...rest } = current;
-                                return rest;
-                              }
-                              return { ...current, scope };
-                            })}
-                          >
-                            <SelectOption value="">{labels.scopeInherit}</SelectOption>
-                            <SelectOption value="readonly">{labels.scopeReadonly}</SelectOption>
-                            <SelectOption value="workspace">{labels.scopeWorkspace}</SelectOption>
-                            <SelectOption value="unrestricted">{labels.scopeUnrestricted}</SelectOption>
-                          </Select>
-                        </label>
+                      <div className="mt-3 grid gap-2 border-t border-edge-subtle pt-3 sm:grid-cols-2 dark:border-edge">
                         <PolicyNumberInput
                           label={labels.maxCallsLabel}
                           value={policy.limits?.maxCallsPerTurn}

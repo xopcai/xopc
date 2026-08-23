@@ -14,6 +14,7 @@ export type McpGatewayToolEntry = {
   name: string;
   shortName: string;
   description: string;
+  readOnly: boolean;
 };
 
 export type McpGatewayResourceEntry = {
@@ -46,6 +47,7 @@ function mapTools(tools: McpCatalogTool[], serverId: string): McpGatewayToolEntr
     name: mcpToolPolicyId(tool.safeServerName, tool.toolName),
     shortName: tool.toolName,
     description: tool.description || tool.title || tool.fallbackDescription,
+    readOnly: tool.annotations?.readOnlyHint === true,
   }));
 }
 

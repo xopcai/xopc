@@ -114,6 +114,21 @@ export class WorkflowRunService {
   }
 
   async startWorkflowRun(params: StartWorkflowRunServiceParams): Promise<WorkflowRunServiceResult> {
+    const config = this.options.service.currentConfig;
+    const workflowPolicy = config.agents?.list
+      ? resolveEffectiveAgentProfileForSession(
+          config,
+          params.parentSessionKey ?? `agent:${params.agentId}`,
+        ).manifest.workflows
+      : undefined;
+    if (workflowPolicy?.allowed && !workflowPolicy.allowed.includes(params.definitionId)) {
+      return {
+        ok: false,
+        code: 'policy_denied',
+        message: `Workflow "${params.definitionId}" is not allowed for this agent`,
+        httpStatus: 409,
+      };
+    }
     const definition = await this.loadDefinition(params.definitionId);
     if (!definition) {
       return {

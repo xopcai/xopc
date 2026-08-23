@@ -68,8 +68,8 @@ describe('external tool providers', () => {
         resources: [],
         prompts: [],
         tools: [{
-          serverName: 'demo',
-          safeServerName: 'demo',
+          serverName: 'demo server',
+          safeServerName: 'demo-server',
           toolName: 'lookup',
           description: 'Look up a demo record.',
           inputSchema: {
@@ -84,26 +84,73 @@ describe('external tool providers', () => {
     } as unknown as SessionMcpRuntime;
     const provider = new McpToolProvider({
       workspace: '/tmp/workspace',
-      getConfig: () => ({ mcp: { servers: { demo: { command: 'demo' } } } }) as Config,
+      getConfig: () => ({ mcp: { servers: { 'demo server': { command: 'demo' } } } }) as Config,
       getSessionKey: () => undefined,
       getRuntime: vi.fn(async () => runtime),
     });
 
     const hits = await provider.search('lookup');
     expect(hits).toEqual([expect.objectContaining({
-      toolRef: 'mcp:demo:lookup',
+      toolRef: 'mcp:demo-server:lookup',
       source: 'mcp',
     })]);
-    await expect(provider.describe('mcp:demo:lookup')).resolves.toMatchObject({
+    await expect(provider.describe('mcp:demo-server:lookup')).resolves.toMatchObject({
       inputSchema: { type: 'object' },
     });
     await expect(provider.execute(
-      'mcp:demo:lookup',
+      'mcp:demo-server:lookup',
       { id: '42' },
       undefined,
       { toolCallId: 'call-mcp' },
     )).resolves.toMatchObject({ content: [{ text: 'mcp-ok' }] });
-    expect(callTool).toHaveBeenCalledWith('demo', 'lookup', { id: '42' }, undefined);
+    expect(callTool).toHaveBeenCalledWith('demo server', 'lookup', { id: '42' }, undefined);
+  });
+
+  it('enforces MCP read-only scope and execution timeout policies', async () => {
+    const callTool = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'ok' }] }));
+    const runtime = {
+      markUsed: vi.fn(),
+      getCatalog: vi.fn(async () => ({
+        version: 1,
+        generatedAt: 1,
+        servers: {},
+        resources: [],
+        prompts: [],
+        tools: [
+          { serverName: 'demo', safeServerName: 'demo', toolName: 'read', annotations: { readOnlyHint: true }, inputSchema: { type: 'object' }, fallbackDescription: 'read' },
+          { serverName: 'demo', safeServerName: 'demo', toolName: 'write', annotations: { readOnlyHint: false }, inputSchema: { type: 'object' }, fallbackDescription: 'write' },
+        ],
+      })),
+      callTool,
+    } as unknown as SessionMcpRuntime;
+    const config = {
+      agents: {
+        default: 'main',
+        defaultPreset: 'default',
+        capabilityPresets: {
+          default: { id: 'default', name: 'Default', version: 1, models: { defaultRole: 'deep', roles: { deep: { model: 'openai/gpt-4.1' } } } },
+        },
+        list: [{
+          id: 'main', enabled: true,
+          identity: { name: 'Main', role: 'Agent', language: 'en', tone: 'direct' },
+          responsibilities: { primary: ['Help'] },
+          workspace: { root: '/tmp/main' },
+          tools: { builtin: {}, mcp: { servers: { demo: { mode: 'allow', scope: 'readonly', limits: { timeoutMs: 1_000 } } } } },
+          skills: { mode: 'all' }, workflows: {},
+          boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
+        }],
+      },
+    } as Config;
+    const provider = new McpToolProvider({
+      workspace: '/tmp/workspace',
+      getConfig: () => config,
+      getSessionKey: () => 'agent:main:webchat:default:direct:test',
+      getRuntime: vi.fn(async () => runtime),
+    });
+
+    expect((await provider.search('')).map((tool) => tool.title)).toEqual(['read']);
+    await provider.execute('mcp:demo:read', {}, undefined, { toolCallId: 'call' });
+    expect(callTool.mock.calls[0]?.[3]).toBeInstanceOf(AbortSignal);
   });
 
   it('catalogs dynamic memory provider tools instead of injecting them', async () => {

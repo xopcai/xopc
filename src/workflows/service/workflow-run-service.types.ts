@@ -36,6 +36,7 @@ export type WorkflowRunServiceErrorCode =
   | 'definition_not_found'
   | 'run_not_found'
   | 'invalid_input'
+  | 'policy_denied'
   | 'connector_preflight_failed'
   | 'invalid_state';
 

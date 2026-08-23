@@ -4,7 +4,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { resolveEffectiveAgentProfileForSession } from '../../config/agent-profile.js';
 import type { Config } from '../../config/schema.js';
 import type { ExtensionHookRunner } from '../../extensions/index.js';
-import { isMcpCatalogToolDenied, mcpToolPolicyId } from '../mcp/bundle-mcp-policy.js';
+import { isMcpCatalogToolDenied, mcpToolPolicyId, resolveMcpToolPolicy } from '../mcp/bundle-mcp-policy.js';
 import { getOrCreateSessionMcpRuntime } from '../mcp/bundle-mcp-runtime.js';
 import type { McpCatalogTool, SessionMcpRuntime } from '../mcp/bundle-mcp-types.js';
 import { externalToolRef, parseExternalToolRef } from './refs.js';
@@ -77,9 +77,9 @@ export class McpToolProvider implements ExternalToolProvider {
     return this.withRuntime(async (runtime) => {
       const catalog = await runtime.getCatalog();
       return catalog.tools.filter((tool) => this.isAllowed(tool)).map((tool) => ({
-        toolRef: externalToolRef(this.source, tool.serverName, tool.toolName),
+        toolRef: externalToolRef(this.source, tool.safeServerName, tool.toolName),
         source: this.source,
-        namespace: tool.serverName,
+        namespace: tool.safeServerName,
         title: tool.title || tool.toolName,
         summary: tool.description || tool.fallbackDescription,
       }));
@@ -130,7 +130,7 @@ export class McpToolProvider implements ExternalToolProvider {
         tool.serverName,
         tool.toolName,
         executionArgs,
-        context.signal,
+        this.executionSignal(tool, context.signal),
       );
       return toAgentToolResult({ serverName: tool.serverName, toolName: tool.toolName, result });
     });
@@ -141,7 +141,7 @@ export class McpToolProvider implements ExternalToolProvider {
     if (!parsed) return undefined;
     const catalog = await runtime.getCatalog();
     const tool = catalog.tools.find((candidate) => (
-      candidate.serverName === parsed.namespace && candidate.toolName === parsed.toolName
+      candidate.safeServerName === parsed.namespace && candidate.toolName === parsed.toolName
     ));
     return tool && this.isAllowed(tool) ? tool : undefined;
   }
@@ -153,11 +153,31 @@ export class McpToolProvider implements ExternalToolProvider {
       ? resolveEffectiveAgentProfileForSession(cfg, sessionKey)
       : undefined;
     const policyName = policyToolId(tool);
-    return !profile?.tools.denied.has(policyName)
+    const policy = resolveMcpToolPolicy(
+      { serverId: tool.safeServerName, policyToolId: policyName },
+      profile?.manifest.tools.mcp,
+    );
+    return !(policy?.scope === 'readonly' && tool.annotations?.readOnlyHint !== true)
+      && !profile?.tools.denied.has(policyName)
       && !isMcpCatalogToolDenied(
         { serverId: tool.safeServerName, policyToolId: policyName },
         profile?.manifest.tools.mcp,
       );
+  }
+
+  private executionSignal(tool: McpCatalogTool, signal: AbortSignal | undefined): AbortSignal | undefined {
+    const cfg = this.deps.getConfig();
+    const sessionKey = this.deps.getSessionKey();
+    const profile = cfg && sessionKey
+      ? resolveEffectiveAgentProfileForSession(cfg, sessionKey)
+      : undefined;
+    const timeoutMs = resolveMcpToolPolicy(
+      { serverId: tool.safeServerName, policyToolId: policyToolId(tool) },
+      profile?.manifest.tools.mcp,
+    )?.limits?.timeoutMs;
+    if (!timeoutMs) return signal;
+    const timeoutSignal = AbortSignal.timeout(timeoutMs);
+    return signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
   }
 
   private async withRuntime<T>(run: (runtime: SessionMcpRuntime) => Promise<T>): Promise<T> {

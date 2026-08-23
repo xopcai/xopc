@@ -34,7 +34,11 @@ export type CapabilityPresetPolicyFields = {
     allow?: string[];
     deny?: string[];
   };
-  workflows?: Record<string, unknown>;
+  workflows?: {
+    default?: string;
+    allowed?: string[];
+    suggested?: Array<{ intent: string; workflow: string }>;
+  };
   boundaries?: {
     requiresConfirmation?: string[];
     forbidden?: string[];
@@ -50,6 +54,8 @@ export type CapabilityPresetRow = CapabilityPresetPolicyFields & {
   description?: string;
   version: number;
   usage: Array<{ agentId: string; agentName?: string; direct?: boolean }>;
+  inherited: CapabilityPresetPolicyFields;
+  inheritedSources: Record<string, string>;
 };
 
 export type CapabilityPresetsPayload = {
@@ -57,6 +63,8 @@ export type CapabilityPresetsPayload = {
   presets: CapabilityPresetRow[];
   agents: Array<{ id: string; name?: string; extends: string[] }>;
   builtinToolIds: string[];
+  mcpServerIds: string[];
+  workflows: Array<{ id: string; title: string; description: string }>;
 };
 
 export type CapabilityPresetUpdateBody = {
@@ -81,11 +89,35 @@ export async function fetchCapabilityPresets(): Promise<CapabilityPresetsPayload
     !Array.isArray(res.payload?.presets) ||
     typeof res.payload.defaultPresetId !== 'string' ||
     !Array.isArray(res.payload.agents) ||
-    !Array.isArray(res.payload.builtinToolIds)
+    !Array.isArray(res.payload.builtinToolIds) ||
+    !Array.isArray(res.payload.mcpServerIds) ||
+    !Array.isArray(res.payload.workflows)
   ) {
     throw new Error('Invalid /api/capability-presets response');
   }
   return res.payload;
+}
+
+export async function fetchCapabilityPresetMcpTools(
+  serverIds: string[],
+): Promise<Array<{ id: string; serverId: string; name: string; description: string; readOnly: boolean }>> {
+  const groups = await Promise.all(serverIds.map(async (serverId) => {
+    try {
+      const res = await fetchJson<{ ok?: boolean; payload?: { tools?: Array<{ name: string; shortName: string; description: string; readOnly: boolean }> } }>(
+        apiUrl(`/api/mcp/servers/${encodeURIComponent(serverId)}/tools`),
+      );
+      return (res.payload?.tools ?? []).map((tool) => ({
+        id: tool.name,
+        serverId,
+        name: tool.shortName,
+        description: tool.description,
+        readOnly: tool.readOnly,
+      }));
+    } catch {
+      return [];
+    }
+  }));
+  return groups.flat().sort((left, right) => left.id.localeCompare(right.id));
 }
 
 export async function createCapabilityPreset(body: {
@@ -109,7 +141,9 @@ export async function createCapabilityPreset(body: {
     typeof presets.defaultPresetId !== 'string' ||
     !Array.isArray(presets.presets) ||
     !Array.isArray(presets.agents) ||
-    !Array.isArray(presets.builtinToolIds)
+    !Array.isArray(presets.builtinToolIds) ||
+    !Array.isArray(presets.mcpServerIds) ||
+    !Array.isArray(presets.workflows)
   ) {
     throw new Error('Invalid create capability preset response');
   }
@@ -131,7 +165,9 @@ export async function updateCapabilityPreset(
     !Array.isArray(res.payload?.presets) ||
     typeof res.payload.defaultPresetId !== 'string' ||
     !Array.isArray(res.payload.agents) ||
-    !Array.isArray(res.payload.builtinToolIds)
+    !Array.isArray(res.payload.builtinToolIds) ||
+    !Array.isArray(res.payload.mcpServerIds) ||
+    !Array.isArray(res.payload.workflows)
   ) {
     throw new Error('Invalid update capability preset response');
   }
@@ -161,7 +197,9 @@ export async function deleteCapabilityPreset(id: string): Promise<CapabilityPres
     !Array.isArray(res.payload?.presets) ||
     typeof res.payload.defaultPresetId !== 'string' ||
     !Array.isArray(res.payload.agents) ||
-    !Array.isArray(res.payload.builtinToolIds)
+    !Array.isArray(res.payload.builtinToolIds) ||
+    !Array.isArray(res.payload.mcpServerIds) ||
+    !Array.isArray(res.payload.workflows)
   ) {
     throw new Error('Invalid delete capability preset response');
   }

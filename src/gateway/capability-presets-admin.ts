@@ -4,7 +4,9 @@ import {
   type CapabilityPreset,
 } from '../agent-manifest/schema.js';
 import { linearizePresetIds } from '../agent-manifest/preset-chain.js';
-import { resolveEffectiveAgentManifest } from '../agent-manifest/resolver.js';
+import { resolveCapabilityPresetLayer, resolveEffectiveAgentManifest } from '../agent-manifest/resolver.js';
+import { createWorkflowCatalog } from '../agent/workflow/catalog.js';
+import { normalizeConfiguredMcpServers } from '../config/mcp-config-normalize.js';
 import type { Config } from '../config/schema.js';
 import { GATEWAY_BUILTIN_TOOL_IDS } from './agent-builtin-tools.js';
 
@@ -20,6 +22,8 @@ export type CapabilityPresetAgentUsage = {
 
 export type CapabilityPresetRow = CapabilityPreset & {
   usage: CapabilityPresetAgentUsage[];
+  inherited: ReturnType<typeof resolveCapabilityPresetLayer>['patch'];
+  inheritedSources: Record<string, string>;
 };
 
 export type CapabilityPresetsListResponse = {
@@ -27,6 +31,8 @@ export type CapabilityPresetsListResponse = {
   presets: CapabilityPresetRow[];
   agents: Array<{ id: string; name?: string; extends: string[] }>;
   builtinToolIds: string[];
+  mcpServerIds: string[];
+  workflows: Array<{ id: string; title: string; description: string }>;
 };
 
 export type CapabilityPresetPreviewDiff = {
@@ -202,7 +208,19 @@ function nextConfigWithPresets(
 
 export function listCapabilityPresets(cfg: Config): CapabilityPresetsListResponse {
   const presets = Object.values(presetMap(cfg))
-    .map((preset) => ({ ...preset, usage: agentUsage(cfg, preset.id) }))
+    .map((preset) => {
+      const inherited = resolveCapabilityPresetLayer({
+        presetIds: preset.extends,
+        presets: cfg.agents.capabilityPresets,
+        defaultPresetId: preset.id === cfg.agents.defaultPreset ? '__none__' : cfg.agents.defaultPreset,
+      });
+      return {
+        ...preset,
+        usage: agentUsage(cfg, preset.id),
+        inherited: inherited.patch,
+        inheritedSources: inherited.sources,
+      };
+    })
     .sort((a, b) => a.id.localeCompare(b.id));
   const agents = cfg.agents.list
     .map((agent) => ({
@@ -211,7 +229,19 @@ export function listCapabilityPresets(cfg: Config): CapabilityPresetsListRespons
       extends: [...(agent.extends ?? [])],
     }))
     .sort((a, b) => a.id.localeCompare(b.id));
-  return { defaultPresetId: cfg.agents.defaultPreset, presets, agents, builtinToolIds: [...GATEWAY_BUILTIN_TOOL_IDS] };
+  const workflows = createWorkflowCatalog().list().map((entry) => ({
+    id: entry.name,
+    title: entry.title,
+    description: entry.description,
+  }));
+  return {
+    defaultPresetId: cfg.agents.defaultPreset,
+    presets,
+    agents,
+    builtinToolIds: [...GATEWAY_BUILTIN_TOOL_IDS],
+    mcpServerIds: Object.keys(normalizeConfiguredMcpServers(cfg.mcp?.servers)).sort(),
+    workflows,
+  };
 }
 
 export function prepareCreateCapabilityPreset(

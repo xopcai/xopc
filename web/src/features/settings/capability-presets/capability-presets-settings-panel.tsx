@@ -35,6 +35,7 @@ import {
   createCapabilityPreset,
   deleteCapabilityPreset,
   fetchCapabilityPresets,
+  fetchCapabilityPresetMcpTools,
   previewCapabilityPresetUpdate,
   updateCapabilityPreset,
   type CapabilityPresetRow,
@@ -43,11 +44,7 @@ import {
   type CapabilityPresetUpdateBody,
 } from '@/features/settings/capability-presets/capability-presets-api';
 import { PresetModelsEditor } from '@/features/settings/capability-presets/preset-models-editor';
-import {
-  PresetAdvancedPolicyEditor,
-  type PresetAdvancedFieldKey,
-  type PresetAdvancedJsonFields,
-} from '@/features/settings/capability-presets/preset-advanced-policy-editor';
+import { PresetAdvancedPolicyEditor } from '@/features/settings/capability-presets/preset-advanced-policy-editor';
 import {
   PresetSkillsPolicyEditor,
   type PresetSkillMode,
@@ -87,6 +84,14 @@ type ModelAdvancedDraft = {
   maxCostTier: '' | 'low' | 'medium' | 'high';
 };
 
+type AdvancedPolicyDraft = {
+  mcp?: NonNullable<NonNullable<CapabilityPresetPolicyFields['tools']>['mcp']>;
+  workflows?: CapabilityPresetPolicyFields['workflows'];
+  boundaries?: CapabilityPresetPolicyFields['boundaries'];
+  runtime?: CapabilityPresetPolicyFields['runtime'];
+  locks?: CapabilityPresetPolicyFields['locks'];
+};
+
 type Draft = {
   id: string;
   name: string;
@@ -97,7 +102,7 @@ type Draft = {
   skillMode: PresetSkillMode;
   skillPick: Set<string>;
   extendsIds: string[];
-  jsonFields: PresetAdvancedJsonFields;
+  advancedPolicy: AdvancedPolicyDraft;
 };
 
 const TABS: Array<{ id: PresetTab; icon: typeof Copy }> = [
@@ -168,21 +173,13 @@ function modelAdvancedFromPreset(preset: CapabilityPresetRow | null): ModelAdvan
   };
 }
 
-function jsonText(value: unknown): string {
-  return value === undefined ? '' : JSON.stringify(value, null, 2);
-}
-
-function emptyAdvancedJson(): PresetAdvancedJsonFields {
-  return { mcp: '', workflows: '', boundaries: '', runtime: '', locks: '' };
-}
-
-function advancedJsonFromPreset(preset: CapabilityPresetRow | null): PresetAdvancedJsonFields {
+function advancedPolicyFromPreset(preset: CapabilityPresetRow | null): AdvancedPolicyDraft {
   return {
-    mcp: jsonText(preset?.tools?.mcp),
-    workflows: jsonText(preset?.workflows),
-    boundaries: jsonText(preset?.boundaries),
-    runtime: jsonText(preset?.runtime),
-    locks: jsonText(preset?.locks),
+    mcp: structuredClone(preset?.tools?.mcp),
+    workflows: structuredClone(preset?.workflows),
+    boundaries: structuredClone(preset?.boundaries),
+    runtime: structuredClone(preset?.runtime),
+    locks: structuredClone(preset?.locks),
   };
 }
 
@@ -197,7 +194,29 @@ function draftFromPreset(preset: CapabilityPresetRow | null): Draft {
     skillMode: preset?.skills?.mode ?? 'inherit',
     skillPick: skillPickFromPreset(preset),
     extendsIds: [...(preset?.extends ?? [])],
-    jsonFields: advancedJsonFromPreset(preset),
+    advancedPolicy: advancedPolicyFromPreset(preset),
+  };
+}
+
+function draftWithPolicy(draft: Draft, policy: CapabilityPresetPolicyFields): Draft {
+  const preset = {
+    id: draft.id,
+    name: draft.name,
+    version: 1,
+    usage: [],
+    inherited: {},
+    inheritedSources: {},
+    ...policy,
+  } satisfies CapabilityPresetRow;
+  return {
+    ...draft,
+    modelRows: typedRowsFromPreset(preset),
+    modelAdvanced: modelAdvancedFromPreset(preset),
+    toolPolicies: toolPoliciesFromPreset(preset),
+    skillMode: preset.skills?.mode ?? 'inherit',
+    skillPick: skillPickFromPreset(preset),
+    extendsIds: [...(preset.extends ?? [])],
+    advancedPolicy: advancedPolicyFromPreset(preset),
   };
 }
 
@@ -239,22 +258,9 @@ function modelsPatchFromDraft(draft: Draft, selected: CapabilityPresetRow | null
   return Object.keys(models).length > 0 ? models : null;
 }
 
-function parseOptionalJson<T>(text: string): T | undefined {
-  return text.trim() ? JSON.parse(text) as T : undefined;
-}
-
-function normalizedJsonText(text: string): string {
-  if (!text.trim()) return '';
-  try {
-    return JSON.stringify(JSON.parse(text));
-  } catch {
-    return `!invalid:${text}`;
-  }
-}
-
 function toolsPatchFromDraft(draft: Draft) {
   const builtin = Object.fromEntries(Object.entries(draft.toolPolicies).toSorted(([a], [b]) => a.localeCompare(b)));
-  const mcp = parseOptionalJson<NonNullable<CapabilityPresetRow['tools']>['mcp']>(draft.jsonFields.mcp);
+  const mcp = draft.advancedPolicy.mcp;
   return Object.keys(builtin).length > 0 || mcp ? { builtin, ...(mcp ? { mcp } : {}) } : null;
 }
 
@@ -278,14 +284,14 @@ function comparableDraft(draft: Draft, selected: CapabilityPresetRow | null) {
     models: modelsPatchFromDraft(draft, selected),
     tools: {
       builtin: sortedToolPolicies(draft.toolPolicies),
-      mcp: normalizedJsonText(draft.jsonFields.mcp),
+      mcp: draft.advancedPolicy.mcp,
     },
     skills: skillsPatchFromDraft(draft),
     extends: [...draft.extendsIds].toSorted(),
-    workflows: normalizedJsonText(draft.jsonFields.workflows),
-    boundaries: normalizedJsonText(draft.jsonFields.boundaries),
-    runtime: normalizedJsonText(draft.jsonFields.runtime),
-    locks: normalizedJsonText(draft.jsonFields.locks),
+    workflows: draft.advancedPolicy.workflows,
+    boundaries: draft.advancedPolicy.boundaries,
+    runtime: draft.advancedPolicy.runtime,
+    locks: draft.advancedPolicy.locks,
   };
 }
 
@@ -298,14 +304,14 @@ function comparablePreset(preset: CapabilityPresetRow | null) {
     models: preset.models ?? null,
     tools: {
       builtin: sortedToolPolicies(preset.tools?.builtin),
-      mcp: normalizedJsonText(jsonText(preset.tools?.mcp)),
+      mcp: preset.tools?.mcp,
     },
     skills: preset.skills ?? null,
     extends: [...(preset.extends ?? [])].toSorted(),
-    workflows: normalizedJsonText(jsonText(preset.workflows)),
-    boundaries: normalizedJsonText(jsonText(preset.boundaries)),
-    runtime: normalizedJsonText(jsonText(preset.runtime)),
-    locks: normalizedJsonText(jsonText(preset.locks)),
+    workflows: preset.workflows,
+    boundaries: preset.boundaries,
+    runtime: preset.runtime,
+    locks: preset.locks,
   };
 }
 
@@ -328,7 +334,7 @@ function emptyDraftPolicyFields() {
   return {
     modelAdvanced: emptyModelAdvancedDraft(),
     extendsIds: [] as string[],
-    jsonFields: emptyAdvancedJson(),
+    advancedPolicy: {},
   };
 }
 
@@ -341,10 +347,10 @@ function policyPayloadFromDraft(
     models: modelsPatchFromDraft(draft, selected) ?? undefined,
     tools: toolsPatchFromDraft(draft) ?? undefined,
     skills: skillsPatchFromDraft(draft) ?? undefined,
-    workflows: parseOptionalJson<CapabilityPresetRow['workflows']>(draft.jsonFields.workflows),
-    boundaries: parseOptionalJson<CapabilityPresetRow['boundaries']>(draft.jsonFields.boundaries),
-    runtime: parseOptionalJson<CapabilityPresetRow['runtime']>(draft.jsonFields.runtime),
-    locks: parseOptionalJson<CapabilityPresetRow['locks']>(draft.jsonFields.locks),
+    workflows: draft.advancedPolicy.workflows,
+    boundaries: draft.advancedPolicy.boundaries,
+    runtime: draft.advancedPolicy.runtime,
+    locks: draft.advancedPolicy.locks,
   };
 }
 
@@ -442,6 +448,12 @@ export function CapabilityPresetsSettingsPanel() {
     fetchSkillsCatalog,
     { revalidateOnFocus: false },
   );
+  const mcpServerIds = data?.mcpServerIds ?? [];
+  const { data: mcpTools = [] } = useSWR(
+    hasToken && mcpServerIds.length ? ['capability-preset-mcp-tools', ...mcpServerIds] : null,
+    () => fetchCapabilityPresetMcpTools(mcpServerIds),
+    { revalidateOnFocus: false },
+  );
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedId, setSelectedId] = useState('');
   const [activeTab, setActiveTab] = useState<PresetTab>('overview');
@@ -491,23 +503,19 @@ export function CapabilityPresetsSettingsPanel() {
   ].filter(Boolean);
   const previewBody = useMemo<CapabilityPresetUpdateBody | null>(() => {
     if (!selected || isNew) return null;
-    try {
-      const policy = policyPayloadFromDraft(draft, selected);
-      return {
-        name: draft.name.trim(),
-        description: draft.description.trim() || null,
-        extends: policy.extends ?? null,
-        models: policy.models ?? null,
-        tools: policy.tools ?? null,
-        skills: policy.skills ?? null,
-        workflows: policy.workflows ?? null,
-        boundaries: policy.boundaries ?? null,
-        runtime: policy.runtime ?? null,
-        locks: policy.locks ?? null,
-      };
-    } catch {
-      return null;
-    }
+    const policy = policyPayloadFromDraft(draft, selected);
+    return {
+      name: draft.name.trim(),
+      description: draft.description.trim() || null,
+      extends: policy.extends ?? null,
+      models: policy.models ?? null,
+      tools: policy.tools ?? null,
+      skills: policy.skills ?? null,
+      workflows: policy.workflows ?? null,
+      boundaries: policy.boundaries ?? null,
+      runtime: policy.runtime ?? null,
+      locks: policy.locks ?? null,
+    };
   }, [draft, isNew, selected]);
   const previewKey =
     activeTab === 'impact' && selected && previewBody
@@ -631,17 +639,6 @@ export function CapabilityPresetsSettingsPanel() {
       if (limits.some((value) => !Number.isInteger(value) || value <= 0)) {
         setLocalError(cp.advancedPositiveIntegerError);
         setActiveTab('tools');
-        return;
-      }
-    }
-    for (const field of Object.keys(draft.jsonFields) as PresetAdvancedFieldKey[]) {
-      try {
-        parseOptionalJson(draft.jsonFields[field]);
-      } catch {
-        setLocalError(
-          cp.advancedJsonError.replace('{{field}}', cp.advancedFieldLabels[field]),
-        );
-        setActiveTab('advanced');
         return;
       }
     }
@@ -1046,11 +1043,6 @@ export function CapabilityPresetsSettingsPanel() {
                     modeAllow: cp.toolModes.allow,
                     modeConfirm: cp.toolModes.confirm,
                     modeDeny: cp.toolModes.deny,
-                    scopeLabel: cp.toolScopeLabel,
-                    scopeInherit: cp.toolScopeInherit,
-                    scopeReadonly: cp.toolScopeReadonly,
-                    scopeWorkspace: cp.toolScopeWorkspace,
-                    scopeUnrestricted: cp.toolScopeUnrestricted,
                     maxCallsLabel: cp.toolMaxCallsLabel,
                     timeoutLabel: cp.toolTimeoutLabel,
                   }}
@@ -1106,23 +1098,59 @@ export function CapabilityPresetsSettingsPanel() {
                   presetOptions={presets.filter(
                     (preset) => preset.id !== selected?.id && preset.id !== defaultPresetId,
                   )}
-                  jsonFields={draft.jsonFields}
-                  onJsonFieldsChange={(jsonFields) => setDraft((prev) => ({ ...prev, jsonFields }))}
+                  inherited={JSON.stringify(draft.extendsIds) === JSON.stringify(selected?.extends ?? []) ? selected?.inherited : undefined}
+                  inheritedSources={JSON.stringify(draft.extendsIds) === JSON.stringify(selected?.extends ?? []) ? selected?.inheritedSources : undefined}
+                  mcpServerIds={data?.mcpServerIds ?? []}
+                  mcpTools={mcpTools}
+                  workflows={data?.workflows ?? []}
+                  policy={draft.advancedPolicy}
+                  onPolicyChange={(advancedPolicy) => setDraft((prev) => ({ ...prev, advancedPolicy }))}
+                  rawPolicy={policyPayloadFromDraft(draft, selected)}
+                  onRawPolicyChange={(policy) => setDraft((prev) => draftWithPolicy(prev, policy))}
                   disabled={busy}
                   labels={{
                     inheritanceTitle: cp.advancedInheritanceTitle,
                     inheritanceHint: cp.advancedInheritanceHint,
                     inheritanceEmpty: cp.advancedInheritanceEmpty,
-                    inheritanceApplied: cp.advancedInheritanceApplied,
                     inheritanceAvailable: cp.advancedInheritanceAvailable,
                     inheritanceAdd: cp.advancedInheritanceAdd,
                     inheritanceRemove: cp.advancedInheritanceRemove,
                     inheritanceMoveUp: cp.advancedInheritanceMoveUp,
                     inheritanceMoveDown: cp.advancedInheritanceMoveDown,
-                    jsonTitle: cp.advancedJsonTitle,
-                    jsonHint: cp.advancedJsonHint,
-                    fieldLabels: cp.advancedFieldLabels,
-                    fieldHints: cp.advancedFieldHints,
+                    compose: cp.advancedCompose,
+                    inherit: cp.advancedInherit,
+                    cancel: cp.cancel,
+                    mcpTitle: cp.advancedMcpTitle,
+                    mcpHint: cp.advancedMcpHint,
+                    noMcp: cp.advancedNoMcp,
+                    workflowsTitle: cp.advancedWorkflowsTitle,
+                    workflowsHint: cp.advancedWorkflowsHint,
+                    defaultWorkflow: cp.advancedDefaultWorkflow,
+                    allowedWorkflows: cp.advancedAllowedWorkflows,
+                    runtimeTitle: cp.advancedRuntimeTitle,
+                    runtimeHint: cp.advancedRuntimeHint,
+                    timeoutMinutes: cp.advancedTimeoutMinutes,
+                    maxTurns: cp.advancedMaxTurns,
+                    maxFailures: cp.advancedMaxFailures,
+                    maxCalls: cp.toolMaxCallsLabel,
+                    boundariesTitle: cp.advancedBoundariesTitle,
+                    boundariesHint: cp.advancedBoundariesHint,
+                    confirmRules: cp.advancedConfirmRules,
+                    forbiddenRules: cp.advancedForbiddenRules,
+                    escalationRules: cp.advancedEscalationRules,
+                    onePerLine: cp.advancedOnePerLine,
+                    governanceTitle: cp.advancedGovernanceTitle,
+                    governanceHint: cp.advancedGovernanceHint,
+                    locksLabel: cp.advancedLocksLabel,
+                    rawTitle: cp.advancedRawTitle,
+                    rawHint: cp.advancedRawHint,
+                    rawOpen: cp.advancedRawOpen,
+                    rawApply: cp.advancedRawApply,
+                    rawInvalid: cp.advancedRawInvalid,
+                    modeAllow: cp.toolModes.allow,
+                    modeConfirm: cp.toolModes.confirm,
+                    modeDeny: cp.toolModes.deny,
+                    readonlyOnly: cp.toolScopeReadonly,
                   }}
                 />
               </SettingsFormSection>
@@ -1149,10 +1177,6 @@ export function CapabilityPresetsSettingsPanel() {
                     ) : impactPreviewError ? (
                       <p className="rounded-lg bg-surface-panel/60 px-3 py-2 text-sm text-red-600 shadow-surface dark:text-red-400">
                         {cp.effectiveChangePreviewError}
-                      </p>
-                    ) : !previewBody ? (
-                      <p className="rounded-lg bg-surface-panel/60 px-3 py-2 text-sm text-fg-muted shadow-surface">
-                        {cp.effectiveChangePreviewInvalid}
                       </p>
                     ) : impactPreview?.agents.length ? (
                       <div className="grid gap-3">
