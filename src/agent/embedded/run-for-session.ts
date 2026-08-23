@@ -13,6 +13,7 @@ import { createLogger } from '../../utils/logger.js';
 import { resolveModel } from '../../providers/index.js';
 import { evaluateContextBudget } from '../memory/context-budget.js';
 import { resolveCompactionPolicy } from '../memory/compaction-policy.js';
+import { resolveEffectiveAgentProfileForSession } from '../../config/agent-profile.js';
 
 const log = createLogger('EmbeddedTurnForSession');
 
@@ -93,6 +94,9 @@ export async function runEmbeddedTurnForSession(
   const thinkingLevel = (params.thinkingOverride as ThinkingLevel | undefined) ?? agent.state.thinkingLevel;
   const workspaceDir = agentManager.getResolvedWorkspaceForSession(sessionKey);
   const config = params.getConfig?.();
+  const cacheRetention = config
+    ? resolveEffectiveAgentProfileForSession(config, sessionKey).manifest.runtime?.promptCacheRetention
+    : undefined;
   const configuredTurnTimeoutMs = resolveAgentTurnTimeoutMs(config, sessionKey);
   const turnTimeoutMs = params.deadlineAtMs === undefined
     ? configuredTurnTimeoutMs
@@ -183,6 +187,7 @@ export async function runEmbeddedTurnForSession(
             tools,
             systemPrompt,
             thinkingLevel,
+            cacheRetention,
             workspaceDir,
             sessionStore,
             timeoutMs: turnTimeoutMs,

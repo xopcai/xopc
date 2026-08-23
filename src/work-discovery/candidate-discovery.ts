@@ -198,7 +198,7 @@ function resolveXdgPath(value: string, homeDirectory: string): string | null {
   return isAbsolute(expanded) ? resolve(expanded) : null;
 }
 
-async function personalWorkRoots(
+export async function resolvePersonalWorkRoots(
   homeDirectory: string,
   platform: NodeJS.Platform,
   environment: NodeJS.ProcessEnv,
@@ -270,7 +270,7 @@ export async function discoverWorkCandidates(
   }));
   const [commonInputs, personalInputs] = await Promise.all([
     commonRootInputs(homeDirectory, options.signal),
-    personalWorkRoots(homeDirectory, options.platform ?? process.platform, options.environment ?? process.env)
+    resolvePersonalWorkRoots(homeDirectory, options.platform ?? process.platform, options.environment ?? process.env)
       .then((roots) => personalRootInputs(roots, nowMs, options.signal)),
   ]);
   const uniqueInputs = new Map<string, CandidateInput>();

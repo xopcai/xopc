@@ -132,7 +132,14 @@ export type AssistantMessageEndEvent = ChatStreamEnvelope<
   {
     messageId: string;
     presentation: 'narration' | 'answer';
-    usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number; cost?: number };
+    usage?: {
+      inputTokens?: number;
+      outputTokens?: number;
+      cacheReadTokens?: number;
+      cacheWriteTokens?: number;
+      totalTokens?: number;
+      cost?: number;
+    };
   }
 >;
 export type ProgressEvent = ChatStreamEnvelope<

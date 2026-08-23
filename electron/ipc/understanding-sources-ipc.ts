@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
@@ -10,30 +11,36 @@ import type {
   UnderstandingSourceDefinition,
   UnderstandingSourceItem,
 } from '../../src/user-context/sources/types.js';
+import {
+  isLocalUnderstandingSourceId,
+  type LocalUnderstandingSourceId,
+} from '../../src/user-context/sources/local-source-contract.js';
+import { collectRecentFileItems } from '../understanding-sources/recent-files.js';
+import { collectChromiumBookmarkItems } from '../understanding-sources/chromium-bookmarks.js';
 import { assertTrustedRenderer } from './trusted-renderer.js';
 
 const SOURCE_LIMIT = 50;
 const ITEM_CHARS = 12_000;
 const TOTAL_CHARS = 300_000;
-const SOURCE_IDS = [
-  'apple-notes', 'apple-calendar', 'apple-reminders',
-  'windows-recent-documents', 'linux-recent-documents',
-] as const;
-type LocalSourceId = typeof SOURCE_IDS[number];
+type LocalSourceId = LocalUnderstandingSourceId;
 
 function localCatalog(platform = process.platform): UnderstandingSourceDefinition[] {
-  if (platform === 'darwin') return [
+  const common = [
+    definition('local-recent-files', 'recent_documents', 'Recent files', 'all', true, true),
+    definition('chromium-bookmarks', 'recent_documents', 'Recent bookmarks', 'all', true, true),
+  ];
+  if (platform === 'darwin') return [...common,
     definition('apple-notes', 'notes', 'Apple Notes', 'darwin', true, false),
     definition('apple-calendar', 'calendar', 'Apple Calendar', 'darwin', true, true),
     definition('apple-reminders', 'tasks', 'Apple Reminders', 'darwin', true, true),
   ];
-  if (platform === 'win32') return [
+  if (platform === 'win32') return [...common,
     definition('windows-recent-documents', 'recent_documents', 'Recent documents', 'win32', false, true),
   ];
-  if (platform === 'linux') return [
+  if (platform === 'linux') return [...common,
     definition('linux-recent-documents', 'recent_documents', 'Recent documents', 'linux', false, true),
   ];
-  return [];
+  return common;
 }
 
 function definition(
@@ -188,10 +195,18 @@ async function collectLinuxRecent(): Promise<UnderstandingSourceItem[]> {
 
 async function collectSource(sourceId: LocalSourceId): Promise<UnderstandingSourceCollectionResult> {
   try {
-    const items = sourceId.startsWith('apple-')
-      ? await collectApple(sourceId)
-      : sourceId === 'windows-recent-documents' ? await collectWindowsRecent() : await collectLinuxRecent();
-    return { sourceId, status: 'completed', items };
+    let items: UnderstandingSourceItem[];
+    if (sourceId === 'local-recent-files') items = await collectRecentFileItems();
+    else if (sourceId === 'chromium-bookmarks') items = await collectChromiumBookmarkItems();
+    else if (sourceId.startsWith('apple-')) items = await collectApple(sourceId);
+    else if (sourceId === 'windows-recent-documents') items = await collectWindowsRecent();
+    else items = await collectLinuxRecent();
+    return {
+      sourceId,
+      status: 'completed',
+      items,
+      checkpoint: { fingerprint: fingerprintUnderstandingItems(items), collectedAt: Date.now() },
+    };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const lower = message.toLowerCase();
@@ -200,11 +215,25 @@ async function collectSource(sourceId: LocalSourceId): Promise<UnderstandingSour
   }
 }
 
+export function fingerprintUnderstandingItems(items: UnderstandingSourceItem[]): string {
+  const stable = items.map((item) => ({
+    id: item.id,
+    title: item.title,
+    group: item.group ?? '',
+    resourceUri: item.resourceUri ?? '',
+    occurredAt: item.occurredAt ?? 0,
+    modifiedAt: item.modifiedAt ?? 0,
+    startsAt: item.startsAt ?? 0,
+    endsAt: item.endsAt ?? 0,
+  })).sort((left, right) => left.id.localeCompare(right.id));
+  return createHash('sha256').update(JSON.stringify(stable)).digest('hex');
+}
+
 export function normalizeUnderstandingSourceIds(value: unknown, platform = process.platform): LocalSourceId[] {
   if (!Array.isArray(value)) return [];
   const available = new Set(localCatalog(platform).map((source) => source.id));
   return [...new Set(value.filter((source): source is LocalSourceId => (
-    typeof source === 'string' && (SOURCE_IDS as readonly string[]).includes(source) && available.has(source)
+    typeof source === 'string' && isLocalUnderstandingSourceId(source) && available.has(source)
   )))];
 }
 

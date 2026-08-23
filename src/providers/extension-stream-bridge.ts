@@ -11,6 +11,7 @@ import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { ProviderStreamParams } from '../extensions/types/providers.js';
 import { getProviderRegistry } from './plugin-registry.js';
 import { EXTENSION_PROVIDER_BASE_URL } from './index.js';
+import { stripPromptCacheBoundary } from '../agent/prompt/cache-boundary.js';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('ExtensionStreamBridge');
@@ -88,7 +89,9 @@ export function createExtensionAwareStreamFn(): StreamFn {
 
 		const params: ProviderStreamParams = {
 			model: model.id,
-			systemPrompt: context.systemPrompt,
+			systemPrompt: context.systemPrompt
+				? stripPromptCacheBoundary(context.systemPrompt)
+				: undefined,
 			messages: context.messages as unknown as ProviderStreamParams['messages'],
 			tools: context.tools as unknown as ProviderStreamParams['tools'],
 			temperature: options?.temperature,
@@ -188,15 +191,19 @@ export function createExtensionAwareStreamFn(): StreamFn {
 								partial.usage = {
 									input: chunk.usage.input,
 									output: chunk.usage.output,
-									cacheRead: 0,
-									cacheWrite: 0,
-									totalTokens: chunk.usage.total ?? chunk.usage.input + chunk.usage.output,
+									cacheRead: chunk.usage.cacheRead ?? 0,
+									cacheWrite: chunk.usage.cacheWrite ?? 0,
+									totalTokens: chunk.usage.total
+										?? chunk.usage.input + chunk.usage.output
+										+ (chunk.usage.cacheRead ?? 0) + (chunk.usage.cacheWrite ?? 0),
 									cost: {
 										input: inputCost,
 										output: outputCost,
-										cacheRead: 0,
-										cacheWrite: 0,
-										total: inputCost + outputCost,
+										cacheRead: ((chunk.usage.cacheRead ?? 0) / 1_000_000) * (model.cost?.cacheRead ?? 0),
+										cacheWrite: ((chunk.usage.cacheWrite ?? 0) / 1_000_000) * (model.cost?.cacheWrite ?? 0),
+										total: inputCost + outputCost
+											+ ((chunk.usage.cacheRead ?? 0) / 1_000_000) * (model.cost?.cacheRead ?? 0)
+											+ ((chunk.usage.cacheWrite ?? 0) / 1_000_000) * (model.cost?.cacheWrite ?? 0),
 									},
 								};
 							}

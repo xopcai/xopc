@@ -171,10 +171,11 @@ export function createAgentStreamMessagingCallbacks(opts: {
         store().setSessionFlags(chatId, { streaming: true });
       }
     },
-    onAssistantMessageEnd: (messageId, presentation) => {
+    onAssistantMessageEnd: (messageId, presentation, usage) => {
       beforeAssistantDelta();
       store().mutateSessionStreaming(chatId, (msg) => {
         finishTextSegment(msg.content, messageId, presentation);
+        if (usage) msg.usage = usage;
       });
     },
     onThinking: (c, isDelta) => {

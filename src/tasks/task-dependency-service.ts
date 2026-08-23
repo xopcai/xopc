@@ -1,4 +1,4 @@
-import type { TaskDependencySummary } from '@xopcai/gateway-contract';
+import type { ProjectTaskDependencyEdge, TaskDependencySummary } from '@xopcai/gateway-contract';
 
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 
@@ -41,6 +41,24 @@ export class TaskDependencyService {
   listBlocking(taskId: string): TaskDependencySummary[] {
     return this.listDependencies(taskId).filter((dependency) =>
       dependency.phase !== 'closed' || dependency.resolution !== 'done');
+  }
+
+  listProjectEdges(projectId: string): ProjectTaskDependencyEdge[] {
+    return getSqliteDatabase().prepare(
+      `SELECT edge.depends_on_task_id AS dependency_task_id,
+              edge.task_id AS dependent_task_id
+       FROM task_dependencies edge
+       JOIN tasks dependency ON dependency.task_id = edge.depends_on_task_id
+       JOIN tasks dependent ON dependent.task_id = edge.task_id
+       WHERE dependency.project_id = ? AND dependent.project_id = ?
+       ORDER BY edge.created_at ASC, edge.depends_on_task_id ASC, edge.task_id ASC`,
+    ).all(projectId, projectId).map((row) => {
+      const edge = row as { dependency_task_id: string; dependent_task_id: string };
+      return {
+        dependencyTaskId: edge.dependency_task_id,
+        dependentTaskId: edge.dependent_task_id,
+      };
+    });
   }
 
   listReadyDependents(taskId: string): TaskAggregate[] {

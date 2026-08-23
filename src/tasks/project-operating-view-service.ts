@@ -7,10 +7,15 @@ import { TaskReadModelProjector } from './task-read-model-projector.js';
 import { TaskRepository } from './task-repository.js';
 import { TaskRunRepository } from './task-run-repository.js';
 
-function lane(card: Pick<ProjectTaskCard, 'phase' | 'operationalState'>): ProjectTaskCard['lane'] {
+export function projectTaskLane(
+  card: Pick<ProjectTaskCard, 'phase' | 'operationalState' | 'attention'>,
+): ProjectTaskCard['lane'] {
   if (card.phase === 'closed') return 'done';
-  if (card.operationalState === 'waiting' || card.operationalState === 'blocked') return 'needs_user';
+  if (card.attention.some((item) => item.kind === 'input_required' || item.kind === 'approval_required')) {
+    return 'needs_user';
+  }
   if (['queued', 'running', 'verifying'].includes(card.operationalState)) return 'moving';
+  if (card.operationalState === 'waiting' || card.operationalState === 'blocked') return 'waiting';
   return 'ready';
 }
 
@@ -46,7 +51,7 @@ export class ProjectOperatingViewService {
         ...(receipt ? { latestVerification: receipt.verification.status } : {}),
         updatedAt: task.updatedAt,
       };
-      return { ...base, lane: lane(base) };
+      return { ...base, lane: projectTaskLane(base) };
     });
     const recentReceipts = projectTasks
       .flatMap((task) => this.#runs.listReceipts(task.id, 10))
@@ -56,6 +61,7 @@ export class ProjectOperatingViewService {
     return {
       project,
       tasks: cards.sort((a, b) => b.updatedAt - a.updatedAt),
+      dependencyEdges: this.#dependencies.listProjectEdges(project.id),
       blockers: cards.flatMap((card) => card.attention.map((item) => ({
         id: item.sourceId ?? `${card.id}:${item.kind}`,
         kind: item.kind,

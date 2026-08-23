@@ -123,7 +123,7 @@ function validateSuggestion(value: unknown, allowedPaths: Set<string>): WorkDisc
   };
 }
 
-function validateProfileCandidate(value: unknown): WorkDiscoveryProfileCandidate | null {
+function validateProfileCandidate(value: unknown, allowedRefs?: Set<string>): WorkDiscoveryProfileCandidate | null {
   if (!value || typeof value !== 'object') return null;
   const item = value as Record<string, unknown>;
   const category = item.category === 'role'
@@ -137,12 +137,17 @@ function validateProfileCandidate(value: unknown): WorkDiscoveryProfileCandidate
   const statement = item.statement.trim().slice(0, 500);
   if (statement.length < 4) return null;
   const confidence = item.confidence === 'high' || item.confidence === 'low' ? item.confidence : 'medium';
+  const evidenceRefs = allowedRefs
+    ? strings(item.evidenceRefs, 12).filter((ref) => allowedRefs.has(ref))
+    : undefined;
+  if (allowedRefs && !evidenceRefs?.length) return null;
   return {
     id: randomUUID(),
     category,
     statement,
     confidence,
     evidence: strings(item.evidence, 4).map((entry) => entry.slice(0, 300)),
+    ...(evidenceRefs?.length ? { evidenceRefs } : {}),
     status: 'pending',
   };
 }
@@ -290,7 +295,7 @@ export async function analyzeWorkContext(input: {
   const primarySuggestion = [...suggestions].sort((a, b) => suggestionScore(b) - suggestionScore(a))[0];
   const profileCandidates = input.candidateContext?.length && Array.isArray(parsed.profileCandidates)
     ? parsed.profileCandidates
-      .map(validateProfileCandidate)
+      .map((value) => validateProfileCandidate(value))
       .filter((value): value is WorkDiscoveryProfileCandidate => Boolean(value))
       .slice(0, 6)
     : [];
@@ -348,6 +353,7 @@ export async function analyzeUnderstandingSources(input: {
       endsAt: item.endsAt,
       ownerAttribution: item.ownerAttribution,
       sensitivity: item.sensitivity,
+      resourceUri: item.resourceUri,
       text,
     }];
   });
@@ -358,7 +364,8 @@ export async function analyzeUnderstandingSources(input: {
     'Analyze bounded context from sources the user explicitly chose to connect.',
     'Return only one JSON object with profileCandidates and workThreads.',
     'profileCandidates contains at most 6 stable, useful work-related facts.',
-    'Each item has category (role, focus, technology, workflow, or preference), statement, confidence, and evidence.',
+    'Each item has category (role, focus, technology, workflow, or preference), statement, confidence, evidence, and evidenceRefs.',
+    'profileCandidates evidenceRefs must contain only supplied refs. Do not create a candidate without direct support.',
     'workThreads contains at most 3 evidence-backed current, ongoing, or long-term work streams.',
     'Each work thread has topicKey, title, summary, status, horizon, confidence, and evidenceRefs.',
     'evidenceRefs must contain only supplied refs. Do not create a thread without direct support.',
@@ -386,7 +393,7 @@ export async function analyzeUnderstandingSources(input: {
   if (!parsed) throw invalidJsonError('Understanding source analysis', response, raw);
   const profileCandidates = Array.isArray(parsed.profileCandidates)
     ? parsed.profileCandidates
-      .map(validateProfileCandidate)
+      .map((value) => validateProfileCandidate(value, allowedRefs))
       .filter((value): value is WorkDiscoveryProfileCandidate => Boolean(value))
       .slice(0, 6)
     : [];
