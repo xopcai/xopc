@@ -6,15 +6,15 @@ on:
       - "mobile-expo-v*"
   workflow_dispatch:
     inputs:
-      target:
-        description: Android artifact to build
+      profile:
+        description: Android release profile to build
         required: true
         default: both
         type: choice
         options:
           - both
-          - apk
-          - aab
+          - preview
+          - production
 
 concurrency:
   group: mobile-android-release-${{ github.ref }}
@@ -28,6 +28,25 @@ env:
   XOPC_ANDROID_USE_MAVEN_MIRRORS: "0"
 
 jobs:
+  prepare:
+    name: Prepare build matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.value }}
+    steps:
+      - name: Resolve release profiles
+        id: matrix
+        env:
+          REQUESTED_PROFILE: ${{ inputs.profile }}
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "push" || "${REQUESTED_PROFILE:-both}" == "both" ]]; then
+            echo 'value={"include":[{"profile":"preview","target":"apk"},{"profile":"production","target":"both"}]}' >> "$GITHUB_OUTPUT"
+          elif [[ "$REQUESTED_PROFILE" == "preview" ]]; then
+            echo 'value={"include":[{"profile":"preview","target":"apk"}]}' >> "$GITHUB_OUTPUT"
+          else
+            echo 'value={"include":[{"profile":"production","target":"both"}]}' >> "$GITHUB_OUTPUT"
+          fi
+
   quality:
     name: Lint, typecheck & tests
     runs-on: ubuntu-latest
@@ -60,23 +79,15 @@ jobs:
         run: pnpm run mobile:test:stream
 
   build:
-    name: Build signed Android artifacts
-    needs: quality
+    name: Build signed Android (${{ matrix.profile }})
+    needs:
+      - prepare
+      - quality
     runs-on: ubuntu-latest
-    outputs:
-      target: ${{ steps.target.outputs.value }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
     steps:
-      - name: Resolve build target
-        id: target
-        env:
-          REQUESTED_TARGET: ${{ inputs.target }}
-        run: |
-          if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
-            echo "value=both" >> "$GITHUB_OUTPUT"
-          else
-            echo "value=${REQUESTED_TARGET:-both}" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Checkout
         uses: actions/checkout@v6
 
@@ -106,28 +117,28 @@ jobs:
 
       - name: Restore Android signing keystore
         env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_BASE64: ${{ matrix.profile == 'production' && secrets.ANDROID_PRODUCTION_KEYSTORE_BASE64 || secrets.ANDROID_PREVIEW_KEYSTORE_BASE64 }}
         run: |
           if [[ -z "$ANDROID_KEYSTORE_BASE64" ]]; then
-            echo "Missing GitHub secret: ANDROID_KEYSTORE_BASE64" >&2
+            echo "Missing Android keystore secret for profile: ${{ matrix.profile }}" >&2
             exit 1
           fi
-          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/xopc-upload.jks"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/xopc-${{ matrix.profile }}.jks"
 
       - name: Build Android locally
         env:
-          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/xopc-upload.jks
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/xopc-${{ matrix.profile }}.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ matrix.profile == 'production' && secrets.ANDROID_PRODUCTION_KEYSTORE_PASSWORD || secrets.ANDROID_PREVIEW_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ matrix.profile == 'production' && secrets.ANDROID_PRODUCTION_KEY_ALIAS || secrets.ANDROID_PREVIEW_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ matrix.profile == 'production' && secrets.ANDROID_PRODUCTION_KEY_PASSWORD || secrets.ANDROID_PREVIEW_KEY_PASSWORD }}
           ANDROID_GRADLE_JVM_ARGS: -Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8
           ANDROID_GRADLE_MAX_WORKERS: "2"
-        run: bash scripts/apps/mobile-expo/build-android-release.sh "${{ steps.target.outputs.value }}"
+        run: bash scripts/apps/mobile-expo/build-android-release.sh "${{ matrix.target }}"
 
       - name: Upload Android artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: xopc-android-release
+          name: xopc-android-${{ matrix.profile }}
           path: apps/mobile-expo/dist/android/*
           if-no-files-found: error
           retention-days: 30
@@ -141,7 +152,7 @@ jobs:
       - name: Download Android artifacts
         uses: actions/download-artifact@v8
         with:
-          name: xopc-android-release
+          name: xopc-android-production
           path: release-assets
 
       - name: Create GitHub Release
