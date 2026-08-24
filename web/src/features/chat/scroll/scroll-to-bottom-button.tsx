@@ -9,9 +9,11 @@ import { useLocaleStore } from '@/stores/locale-store';
 export const ScrollToBottomButton = memo(function ScrollToBottomButton({
   visible,
   onClick,
+  contained = false,
 }: {
   visible: boolean;
   onClick: () => void;
+  contained?: boolean;
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -22,9 +24,11 @@ export const ScrollToBottomButton = memo(function ScrollToBottomButton({
     <button
       type="button"
       className={cn(
-        // Fixed above composer (not in layout flow). `12rem` + safe area — better clearance on narrow viewports.
-        'fixed bottom-[calc(11rem+env(safe-area-inset-bottom,0px))] right-6 z-20 flex size-11 items-center justify-center rounded-full border border-edge bg-surface-panel text-fg-subtle shadow-float',
-        'hover:bg-surface-hover hover:text-fg dark:border-edge dark:shadow-none md:right-10',
+        'z-20 flex items-center justify-center rounded-full border border-edge bg-surface-panel text-fg-subtle shadow-float',
+        contained
+          ? 'absolute bottom-4 right-4 size-9'
+          : 'fixed bottom-[calc(11rem+env(safe-area-inset-bottom,0px))] right-6 size-11 md:right-10',
+        'hover:bg-surface-hover hover:text-fg dark:border-edge dark:shadow-none',
         interaction.transition,
         interaction.press,
         interaction.focusRingPanel,
@@ -33,7 +37,7 @@ export const ScrollToBottomButton = memo(function ScrollToBottomButton({
       title={m.chat.scrollToBottom}
       aria-label={m.chat.scrollToBottom}
     >
-      <ChevronDown className="size-6" aria-hidden />
+      <ChevronDown className={contained ? 'size-5' : 'size-6'} aria-hidden />
     </button>
   );
 });

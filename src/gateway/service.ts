@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { listAgentEntries, normalizeAgentId, resolveDefaultAgentId } from '../agent/agent-scope.js';
 import { AgentService } from '../agent/service.js';
+import { getEmbeddedExecutionSession } from '../agent/embedded/execution-context.js';
 import { ensureStarterAgentsInitialized } from '../agent/starter-agents.js';
 import { ChannelManager } from '../channels/manager.js';
 import {
@@ -29,6 +30,7 @@ import type { ManifestRegistryEntry } from '../extensions/manifest-registry.js';
 import type { ResolvedExtensionConfig } from '../extensions/types/index.js';
 import { HeartbeatService, heartbeatRunnerConfigFromConfig } from './heartbeat/index.js';
 import { SessionIndex } from '../session/index.js';
+import { EphemeralSideChatManager, SideChatRunService } from './side-chat/index.js';
 import { onSessionTranscriptUpdate } from '../session/transcript-events.js';
 import type { Config } from '../config/schema.js';
 import { getAgentDefaultModelRef } from '../config/schema.js';
@@ -212,6 +214,10 @@ export class GatewayService {
    * `activeWebchatRunBySession` + `runAbortControllers` maps.
    */
   readonly agentRunner: GatewayAgentRunner;
+
+  /** Process-local, non-persistent side conversations forked from durable sessions. */
+  readonly sideChats: EphemeralSideChatManager;
+  readonly sideChatRuns: SideChatRunService;
 
   /**
    * Session CRUD / search / compaction / tag-archive-pin / stats — the gateway
@@ -432,6 +438,23 @@ export class GatewayService {
       completeRealtimeTopic: (topic) => this.realtime.completeTopic(topic),
     });
 
+    let sideChatRuns: SideChatRunService | undefined;
+    this.sideChats = new EphemeralSideChatManager({
+      getParentMetadata: (sessionKey) => this.sessionIndex.getSessionMetadata(sessionKey),
+      loadParentMessages: (sessionKey) => this.sessionIndex.getStore().load(sessionKey),
+      getDefaultModelRef: (sessionKey) => this.ensureAgentService().getModelForSession(sessionKey),
+      getWorkspacePath: (metadata) => metadata.cwd || this.currentWorkspacePath,
+      onBeforeDispose: (sideChatId, clientInstanceId) =>
+        sideChatRuns?.abort(sideChatId, clientInstanceId).then(() => undefined),
+    });
+    this.sideChatRuns = sideChatRuns = new SideChatRunService({
+      manager: this.sideChats,
+      getAgentService: () => this.ensureAgentService(),
+      agentRunner: this.agentRunner,
+      publishRealtime: (topic, event, data) => this.realtime.broker.publish(topic, event, data),
+      completeRealtimeTopic: (topic) => this.realtime.completeTopic(topic),
+    });
+
     this.sessions = new GatewaySessionsApi({
       sessionIndex: this.sessionIndex,
       getAgentService: () => this.ensureAgentService(),
@@ -523,14 +546,16 @@ export class GatewayService {
         return null;
       },
       gatewayClarify: {
-        requestClarification: (sessionKey, request) =>
-          this.agentRunner.requestClarification({
-            sessionKey,
+        requestClarification: (sessionKey, request) => {
+          const executionSessionKey = getEmbeddedExecutionSession() ?? sessionKey;
+          return this.agentRunner.requestClarification({
+            sessionKey: executionSessionKey,
             request,
             publishStreamFor: (_runId) => (event: ClarifyStreamEvent) => {
-              this._agentService!.turnDispatcher.enqueueWebchatStreamEvent(sessionKey, event);
+              this._agentService!.turnDispatcher.enqueueWebchatStreamEvent(executionSessionKey, event);
             },
-          }),
+          });
+        },
       },
     });
 
@@ -1202,6 +1227,7 @@ export class GatewayService {
     log.debug('Stopping gateway service...');
     this.readiness.markStarting();
     this.endpointTools.close();
+    await this.sideChats.disposeAll();
     this.realtime.close();
 
     await this.proactiveWorker.stop();

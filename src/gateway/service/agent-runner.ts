@@ -57,6 +57,7 @@ export class GatewayAgentRunner {
   private readonly clarifyBridge = new ClarifyBridge();
   /** Maps webchat session key → active `runId` for `clarify` tool routing. */
   private readonly activeWebchatRunBySession = new Map<string, string>();
+  private readonly externalStreamBySession = new Map<string, (event: ClarifyStreamEvent) => void>();
   readonly inputs: SessionInputCoordinator;
 
   constructor(opts: GatewayAgentRunnerOptions) {
@@ -118,6 +119,26 @@ export class GatewayAgentRunner {
   /** Called from `GatewayService.stop()` so the bridge gets cleaned up. */
   disposeClarifyBridge(): void {
     this.clarifyBridge.dispose();
+  }
+
+  registerExternalWebchatRun(
+    sessionKey: string,
+    runId: string,
+    publish: (event: ClarifyStreamEvent) => void,
+  ): void {
+    this.activeWebchatRunBySession.set(sessionKey, runId);
+    this.externalStreamBySession.set(sessionKey, publish);
+  }
+
+  unregisterExternalWebchatRun(sessionKey: string, runId: string): void {
+    if (this.activeWebchatRunBySession.get(sessionKey) === runId) {
+      this.activeWebchatRunBySession.delete(sessionKey);
+      this.externalStreamBySession.delete(sessionKey);
+    }
+  }
+
+  cancelClarificationForRun(runId: string): void {
+    this.clarifyBridge.cancelForRun(runId);
   }
 
   // ── runAgent (webchat HTTP POST) ──────────────────────────────────────
@@ -280,7 +301,8 @@ export class GatewayAgentRunner {
   }): Promise<string> {
     const { sessionKey, request, publishStreamFor } = opts;
     const runId = this.activeWebchatRunBySession.get(sessionKey);
-    const publishStream = runId ? publishStreamFor(runId) : undefined;
+    const publishStream = this.externalStreamBySession.get(sessionKey)
+      ?? (runId ? publishStreamFor(runId) : undefined);
     const metadata = await this.opts.sessionIndex.getSessionMetadata(sessionKey).catch(() => null);
     const routing = metadata?.routing;
     const deliver =

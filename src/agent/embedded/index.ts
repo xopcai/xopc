@@ -10,6 +10,12 @@ export {
 export { repairAssistantUsageInSessionManager } from './session-manager-init.js';
 export { openSqliteHydratingSessionManager } from './sqlite-hydrating-session-manager.js';
 export {
+  createSqliteTranscriptRuntime,
+  InMemoryTranscriptRuntime,
+  type EmbeddedTranscriptRuntime,
+} from './transcript-runtime.js';
+export { getEmbeddedExecutionSession, runWithEmbeddedExecutionSession } from './execution-context.js';
+export {
   acquireEmbeddedSessionRunner,
   buildEmbeddedRunnerFingerprint,
   evictAllEmbeddedSessionRunners,
@@ -18,7 +24,6 @@ export {
   getEmbeddedSessionRunnerStats,
   isEmbeddedSessionRunnerEnabled,
   resetEmbeddedSessionRunnerForTest,
-  resolveEmbeddedTranscriptInputs,
 } from './session-runner.js';
 export {
   DEFAULT_MAX_LIVE_TOOL_RESULT_CHARS,

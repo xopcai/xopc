@@ -15,10 +15,8 @@ import {
 import { runAgentTurnWithTimeout, resolveAgentTurnTimeoutMs } from '../orchestration/run-agent-turn-with-timeout.js';
 import { detectToolLoops, type RecentToolCall } from '../orchestration/loop-guard.js';
 import { tryApplySessionTranscriptHygiene } from '../transcript/transcript-hygiene.js';
-import {
-  acquireEmbeddedSessionRunner,
-  resolveEmbeddedTranscriptInputs,
-} from './session-runner.js';
+import { acquireEmbeddedSessionRunner } from './session-runner.js';
+import { createSqliteTranscriptRuntime } from './transcript-runtime.js';
 import { wrapStreamFnForXopcExtensions } from './xopc-stream-bridge.js';
 import { pruneToolResultsToFit } from '../memory/context-budget.js';
 import { isContextOverflowError } from '../orchestration/context-overflow.js';
@@ -112,7 +110,7 @@ async function maybeRecoverContextOverflow(params: {
   agent: Agent;
   model: Model<Api>;
   sessionKey: string;
-  sessionStore: RunXopcEmbeddedTurnParams['sessionStore'];
+  transcriptRuntime: NonNullable<RunXopcEmbeddedTurnParams['transcriptRuntime']>;
   onEvent?: RunXopcEmbeddedTurnParams['onEvent'];
 }): Promise<boolean> {
   const errorMessage = getAssistantTurnErrorMessage(params.agent);
@@ -125,8 +123,7 @@ async function maybeRecoverContextOverflow(params: {
   );
   params.onEvent?.({ type: 'compaction', status: 'started' });
 
-  const result = await params.sessionStore.compact(
-    params.sessionKey,
+  const result = await params.transcriptRuntime.compact(
     messages,
     params.model,
     'Preserve the current pending user request verbatim and retain every fact needed to answer it.',
@@ -136,7 +133,7 @@ async function maybeRecoverContextOverflow(params: {
     throw new Error(`Context overflow recovery could not find a safe compaction range: ${errorMessage}`);
   }
 
-  params.agent.state.messages = await params.sessionStore.load(params.sessionKey);
+  params.agent.state.messages = await params.transcriptRuntime.loadMessages();
   params.onEvent?.({
     type: 'compaction',
     status: 'completed',
@@ -165,21 +162,29 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
 
   const timeoutMs = params.timeoutMs || resolveAgentTurnTimeoutMs();
   const resolvedModel = requireEmbeddedModel(model, params.modelRef);
-  const transcript = await resolveEmbeddedTranscriptInputs(sessionStore, sessionKey);
+  const transcriptRuntime = params.transcriptRuntime ?? (
+    sessionStore
+      ? await createSqliteTranscriptRuntime({ sessionKey, sessionStore })
+      : undefined
+  );
+  if (!transcriptRuntime) {
+    throw new Error('Embedded run requires a transcript runtime');
+  }
 
   let runner: Awaited<ReturnType<typeof acquireEmbeddedSessionRunner>> | undefined;
   let unsubscribe: (() => void) | undefined;
 
   try {
     runner = await acquireEmbeddedSessionRunner({
-      sessionKey,
-      sessionId: transcript.sessionId,
+      runtimeId: transcriptRuntime.runtimeId,
+      sessionId: transcriptRuntime.sessionId,
       workspaceDir,
       model: resolvedModel,
       modelRef: params.modelRef,
       tools,
       systemPrompt,
       thinkingLevel: thinkingLevel ?? 'medium',
+      transcriptRuntime,
     });
 
     const { session, reused } = runner;
@@ -269,7 +274,7 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
 
     const handle = {
       sessionKey,
-      sessionId: transcript.sessionId,
+      sessionId: transcriptRuntime.sessionId,
       runId,
       session,
       abort: async () => {
@@ -306,7 +311,7 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
             agent: session.agent,
             model: resolvedModel,
             sessionKey,
-            sessionStore,
+            transcriptRuntime,
             onEvent,
           });
         },
