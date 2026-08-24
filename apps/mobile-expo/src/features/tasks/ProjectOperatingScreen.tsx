@@ -61,7 +61,7 @@ export function ProjectOperatingScreen() {
   }
 
   const data = view.data;
-  const focusTask = grouped.needsUser[0] ?? grouped.moving[0] ?? grouped.other.find((task) => task.lane === 'ready');
+  const focusTask = grouped.needsUser[0] ?? grouped.moving[0] ?? grouped.other.find((task) => task.phase === 'ready');
   const healthColor = data.digest.health === 'attention'
     ? colors.semantic.warning
     : data.digest.health === 'healthy'
@@ -133,13 +133,21 @@ export function ProjectOperatingScreen() {
 function ProjectTaskRow({ task, onPress }: { task: ProjectTaskCard; onPress: () => void }) {
   const { colors } = useTheme();
   const labels = useMessages().tasksPage;
-  const laneLabel = {
+  const needsUser = task.attention.some((item) => item.kind === 'input_required' || item.kind === 'approval_required');
+  const phaseLabel = {
+    backlog: labels.projectBacklog,
     ready: labels.projectReady,
-    moving: labels.projectMoving,
-    waiting: labels.projectWaiting,
-    needs_user: labels.projectNeedsYou,
-    done: labels.projectDone,
-  }[task.lane];
+    active: labels.projectActive,
+    review: labels.projectReview,
+    closed: labels.projectDone,
+  }[task.phase];
+  const stateLabel = needsUser
+    ? labels.projectNeedsYou
+    : task.operationalState === 'waiting' || task.operationalState === 'blocked'
+      ? labels.projectWaiting
+      : task.operationalState === 'queued' || task.operationalState === 'running' || task.operationalState === 'verifying'
+        ? labels.projectMoving
+        : undefined;
   return (
     <Pressable
       accessibilityRole="button"
@@ -148,7 +156,9 @@ function ProjectTaskRow({ task, onPress }: { task: ProjectTaskCard; onPress: () 
     >
       <View style={styles.taskBody}>
         <Text style={[styles.taskTitle, { color: colors.text.primary }]} numberOfLines={2}>{task.title}</Text>
-        <Text style={[styles.meta, { color: task.lane === 'needs_user' ? colors.semantic.warning : colors.text.tertiary }]}>{laneLabel}</Text>
+        <Text style={[styles.meta, { color: needsUser ? colors.semantic.warning : colors.text.tertiary }]}>
+          {stateLabel ? `${phaseLabel} · ${stateLabel}` : phaseLabel}
+        </Text>
         {task.attention[0] ? <Text style={[styles.body, { color: colors.text.secondary }]} numberOfLines={2}>{task.attention[0].summary}</Text> : null}
       </View>
       <Icon source="chevron-right" size={20} color={colors.text.tertiary} />

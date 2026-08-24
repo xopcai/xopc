@@ -14,7 +14,6 @@ import { resolveConfigPath, resolveStateDir } from '../src/config/paths.js';
 import type { Config, GatewayBindMode } from '../src/config/schema.js';
 import { ConfigSchema } from '../src/config/schema.js';
 import { DEFAULT_GATEWAY_PORT } from '../src/daemon/constants.js';
-import { ensureGatewayCorsOriginsForNetworkBind } from '../src/gateway/ensure-network-cors.js';
 
 export type ElectronUserPaths = {
   stateDir: string;
@@ -63,15 +62,13 @@ export async function ensureGatewayConfigForElectron(paths: ElectronUserPaths): 
   const configuredPort = initResult.config.gateway?.port;
   const resolvedPort = configuredPort ?? DEFAULT_GATEWAY_PORT;
 
-  let finalConfig = ConfigSchema.parse({
+  const finalConfig = ConfigSchema.parse({
     ...initResult.config,
     gateway: {
       ...initResult.config.gateway,
       port: resolvedPort,
     },
   });
-  finalConfig = ensureGatewayCorsOriginsForNetworkBind(finalConfig, resolvedPort);
-
   if (JSON.stringify(finalConfig) !== JSON.stringify(initResult.config)) {
     writeFileSync(paths.configPath, `${JSON.stringify(finalConfig, null, 2)}\n`, 'utf8');
   }

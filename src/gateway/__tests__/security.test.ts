@@ -210,6 +210,26 @@ describe('Gateway Security Fixes', () => {
       expect(res.headers.get('Access-Control-Allow-Origin')).toBe('https://myapp.com');
     });
 
+    it('hot reloads additional origins without changing the active listen host', async () => {
+      const service = createMockService({
+        gateway: { bind: 'lan', corsOrigins: [] },
+      });
+      const app = createHonoApp({ service, listenHost: '192.168.1.10' });
+
+      service.currentConfig.gateway.corsOrigins = ['https://console.example.com'];
+      service.currentConfig.gateway.bind = 'loopback';
+
+      const custom = await app.request('/health', {
+        headers: { Origin: 'https://console.example.com' },
+      });
+      expect(custom.headers.get('Access-Control-Allow-Origin')).toBe('https://console.example.com');
+
+      const activeGateway = await app.request('/health', {
+        headers: { Origin: 'http://192.168.1.10:18790' },
+      });
+      expect(activeGateway.headers.get('Access-Control-Allow-Origin')).toBe('http://192.168.1.10:18790');
+    });
+
     it('uses effective listen port for default loopback CORS when CLI overrides port', async () => {
       const service = createMockService(
         { gateway: { bind: 'lan', port: 18790, corsOrigins: [] } },

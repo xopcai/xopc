@@ -10,6 +10,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useCallback, useMemo, useReducer, useRef, type ReactNode } from 'react';
+import useSWR from 'swr';
 
 import { uiPatchReducer } from '@/lib/settings-form-draft';
 import { useSearchParams } from 'react-router-dom';
@@ -21,6 +22,7 @@ import { SecretInput } from '@/components/ui/secret-input';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import {
   gatewaySettingsRequireRestart,
+  fetchGatewayCorsOriginCandidates,
   normalizeGatewayFromConfig,
   patchGatewaySettings,
   revealGatewayAuthSecret,
@@ -208,6 +210,11 @@ export function GatewaySettingsPanel() {
   const appliedBaselineInitializedRef = useRef(false);
 
   const { data, error: swrError, isLoading, mutate } = useGatewayConfigSwr(hasToken);
+  const corsCandidates = useSWR(
+    hasToken && form ? ['gateway-cors-origin-candidates', form.port] : null,
+    ([, port]) => fetchGatewayCorsOriginCandidates(port),
+    { revalidateOnFocus: false },
+  );
 
   const parsed = useMemo(
     () =>
@@ -555,7 +562,12 @@ export function GatewaySettingsPanel() {
         </div>
 
         <SettingsAdvancedGate>
-          <CorsOriginsField g={g} origins={form.corsOrigins} onChange={updateCorsOrigins} />
+          <CorsOriginsField
+            g={g}
+            origins={form.corsOrigins}
+            candidates={corsCandidates.data ?? []}
+            onChange={updateCorsOrigins}
+          />
         </SettingsAdvancedGate>
       </GatewayTabPanel>
 
@@ -1120,13 +1132,16 @@ function GatewayStringListField({
 function CorsOriginsField({
   g,
   origins,
+  candidates,
   onChange,
 }: {
   g: GatewaySettingsMessages;
   origins: string[];
+  candidates: Array<{ url: string; interfaceName: string }>;
   onChange: (origins: string[]) => void;
 }) {
   const hasWildcard = origins.includes('*');
+  const detected = candidates.filter((candidate) => !origins.includes(candidate.url));
 
   return (
     <GatewayStringListField
@@ -1138,6 +1153,29 @@ function CorsOriginsField({
       maxItems={128}
       onChange={onChange}
     >
+      {detected.length > 0 ? (
+        <div className="rounded-lg border border-edge bg-surface-muted px-3 py-2">
+          <p className="text-xs font-medium text-fg">{g.corsDetectedOrigins}</p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {detected.map((candidate) => (
+              <span
+                key={candidate.url}
+                className="rounded-md border border-edge bg-surface-panel px-2 py-0.5 font-mono text-xs text-fg"
+              >
+                {candidate.url} · {candidate.interfaceName}
+              </span>
+            ))}
+          </div>
+          <Button
+            type="button"
+            variant="secondary"
+            className="mt-2 text-xs"
+            onClick={() => onChange([...origins, ...detected.map((candidate) => candidate.url)])}
+          >
+            {g.corsAddDetectedOrigins}
+          </Button>
+        </div>
+      ) : null}
       {hasWildcard ? (
         <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
           {g.corsOriginsWildcardWarning}

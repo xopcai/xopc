@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildMobileConnectQrPayload, enumerateLanGatewayCandidates, resolveLanGatewayUrl } from '../tunnel-qr.js';
+import { enumerateLanGatewayCandidates } from '../../gateway/host.js';
+import { buildMobileConnectQrPayload, resolveLanGatewayUrl } from '../tunnel-qr.js';
 
 describe('tunnel-qr', () => {
   it('returns null lanUrl for loopback gateway host', () => {

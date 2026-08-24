@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Project } from '../../../query/projects';
 import {
+  formatProjectRelativeTime,
   groupProjectTasks,
   projectPortfolioTotals,
   sortProjectPortfolio,
@@ -21,16 +22,21 @@ function project(id: string, health: Project['operating']['health'], needsUser: 
   };
 }
 
-function task(id: string, lane: ProjectTaskCard['lane']): ProjectTaskCard {
+function task(
+  id: string,
+  phase: ProjectTaskCard['phase'],
+  operationalState: ProjectTaskCard['operationalState'] = 'idle',
+  attention: ProjectTaskCard['attention'] = [],
+): ProjectTaskCard {
   return {
     id,
     title: id,
-    lane,
-    phase: lane === 'done' ? 'closed' : 'active',
-    operationalState: lane === 'moving' ? 'running' : 'idle',
+    phase,
+    ...(phase === 'closed' ? { resolution: 'done' as const } : {}),
+    operationalState,
     priority: 'normal',
     acceptanceCriteriaCount: 0,
-    attention: [],
+    attention,
     blockedBy: [],
     allowedCommands: [],
     updatedAt: 1,
@@ -51,12 +57,21 @@ describe('project mobile presentation', () => {
   it('separates user work and moving work from the remaining task list', () => {
     const result = groupProjectTasks([
       task('ready', 'ready'),
-      task('moving', 'moving'),
-      task('user', 'needs_user'),
-      task('done', 'done'),
+      task('moving', 'active', 'running'),
+      task('user', 'active', 'waiting', [{ kind: 'input_required', summary: 'Choose' }]),
+      task('done', 'closed'),
     ]);
     expect(result.needsUser.map((item) => item.id)).toEqual(['user']);
     expect(result.moving.map((item) => item.id)).toEqual(['moving']);
     expect(result.other.map((item) => item.id)).toEqual(['ready', 'done']);
+  });
+
+  it('falls back without throwing when the runtime rejects the locale', () => {
+    const now = Date.UTC(2026, 7, 25, 12);
+    expect(formatProjectRelativeTime(now - 5 * 60_000, 'not_a_locale', now)).toBe('5m');
+  });
+
+  it('does not pass invalid timestamps into Intl during render', () => {
+    expect(formatProjectRelativeTime(Number.NaN, 'zh-CN')).toBe('');
   });
 });

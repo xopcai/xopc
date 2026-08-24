@@ -403,7 +403,7 @@ HTTP API gateway configuration.
 | `tailscale` | object | `{ mode: off }` | `serve` / `funnel` / `off` — see [network.md](./network.md) |
 | `tls` | object | - | Native HTTPS (optional) |
 | `auth` | object | - | Authentication config |
-| `corsOrigins` | string[] | `[]` | Browser origin allowlist |
+| `corsOrigins` | string[] | `[]` | Additional browser origins |
 
 #### gateway.auth
 
@@ -433,12 +433,14 @@ Notes:
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `gateway.corsOrigins` | string[] | `[]` | Browser origin allowlist (exact origins, e.g. `http://localhost:5173`) |
+| `gateway.corsOrigins` | string[] | `[]` | Additional browser origins (exact origins, e.g. `http://localhost:5173`) |
 
 Security behavior:
 - Browser requests with an `Origin` header are rejected when origin checks fail.
 - Non-browser requests without `Origin` are validated by the auth middleware instead.
-- Setting `corsOrigins` to `"*"` is allowed but flagged by startup security audit logs.
+- Gateway-owned loopback, development, and detected LAN origins are added automatically.
+- Changes to `corsOrigins` apply immediately; bind and port changes still require a restart.
+- `"*"` is rejected on network-accessible binds and warned about on loopback binds.
 
 #### Channel connect defer
 

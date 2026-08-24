@@ -6,7 +6,7 @@ import {
   resolveGatewayEffectiveHost,
 } from '../config/gateway-bind.js';
 import { normalizePublicUrlOrNull } from '../config/public-url.js';
-import { enumerateLanGatewayCandidates } from './tunnel-qr.js';
+import { enumerateLanGatewayCandidates } from '../gateway/host.js';
 import { buildMobileConnectUrlOrder } from './pair-url.js';
 
 export type MobilePairCandidateKind = 'lan' | 'tunnel' | 'reverse-proxy';

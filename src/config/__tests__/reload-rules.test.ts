@@ -29,6 +29,11 @@ describe('matchReloadRule', () => {
     expect(matchReloadRule('gateway.allowRealIpFallback')?.kind).toBe('restart');
   });
 
+  it('hot reloads cors origins', () => {
+    expect(matchReloadRule('gateway.corsOrigins')?.kind).toBe('hot');
+    expect(matchReloadRule('gateway.corsOrigins.0')?.kind).toBe('hot');
+  });
+
   it('requires restart for share policy', () => {
     expect(matchReloadRule('gateway.share')?.kind).toBe('restart');
     expect(matchReloadRule('gateway.share.maxTtlMs')?.kind).toBe('restart');

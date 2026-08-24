@@ -5,6 +5,7 @@ import { isAuthRateLimitGloballyDisabled, isGatewayStrictSecurityEnabled } from 
 import {
   isAllInterfacesHost,
   isLoopbackHost,
+  resolveGatewayCorsOrigins,
 } from './host.js';
 import { resolveGatewayListenPlan } from './listen.js';
 import { assertTailscaleExposureCompatible } from './tailscale-lifecycle.js';
@@ -20,12 +21,6 @@ export type GatewayRuntimeConfig = {
   rateLimitEnabled: boolean;
   tlsEnabled: boolean;
 };
-
-function normalizeCorsOrigins(cfg: Config): string[] {
-  return (cfg.gateway?.corsOrigins ?? [])
-    .map((value) => value.trim())
-    .filter(Boolean);
-}
 
 function hasSharedSecret(auth: ResolvedGatewayAuth): boolean {
   if (auth.mode === 'trusted-proxy') {
@@ -56,7 +51,11 @@ export function assertGatewayRuntimeConfig(params: {
   });
   const { bindMode, bindHost, customBindHost } = plan;
   const loopback = isLoopbackHost(bindHost);
-  const corsOrigins = normalizeCorsOrigins(params.cfg);
+  const corsOrigins = resolveGatewayCorsOrigins({
+    configuredOrigins: params.cfg.gateway?.corsOrigins,
+    port: params.port,
+    bindHost,
+  });
   const dangerouslyAllowHostHeaderOriginFallback =
     params.cfg.gateway?.dangerouslyAllowHostHeaderOriginFallback === true;
 
@@ -103,9 +102,6 @@ export function assertGatewayRuntimeConfig(params: {
         );
       }
     }
-
-    // Empty corsOrigins is allowed: resolveGatewayCorsOrigins applies loopback defaults
-    // (localhost + 127.0.0.1 on the gateway port). LAN browser access still needs explicit origins.
 
     if (corsOrigins.some((origin) => origin === '*')) {
       throw new Error(

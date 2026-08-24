@@ -24,7 +24,6 @@ import {
   retryHomeAttention,
   type HomeAction,
   type HomeFocusItem,
-  type HomeGateway,
   type HomeWorkflowRun,
 } from '../../query/home';
 import { queryKeys } from '../../query/keys';
@@ -358,7 +357,9 @@ export function WorkspaceHomeScreen() {
           />
         ) : (
           <>
-            <HomeGatewayStatus gateway={home.gateway} onPress={() => router.push('/settings/gateway')} />
+            {!home.gateway.ready ? (
+              <HomeGatewayStatus onPress={() => router.push('/settings/gateway')} />
+            ) : null}
             <HomeFocusCard
               item={primaryFocus ?? home.focusItems[0]}
               remainingCount={Math.max(0, home.focusItems.length - 1)}
@@ -431,22 +432,22 @@ function HomeLoadError({ onRetry, retrying }: { onRetry: () => void; retrying: b
   );
 }
 
-function HomeGatewayStatus({ gateway, onPress }: { gateway: HomeGateway; onPress: () => void }) {
+function HomeGatewayStatus({ onPress }: { onPress: () => void }) {
   const { colors } = useTheme();
   const { homePage: hm } = useMessages();
   return (
     <Pressable
-      style={[styles.statusBanner, !gateway.ready && { backgroundColor: colors.surface.grouped }]}
+      style={[styles.statusBanner, { backgroundColor: colors.surface.grouped }]}
       onPress={onPress}
       accessibilityRole="button"
     >
       <Icon
-        source={gateway.ready ? 'check-circle-outline' : 'progress-clock'}
+        source="progress-clock"
         size={16}
-        color={gateway.ready ? colors.semantic.success : colors.semantic.warning}
+        color={colors.semantic.warning}
       />
       <Text style={[styles.statusText, { color: colors.text.secondary }]}>
-        {gateway.ready ? hm.gatewayReadyStatus : hm.gatewayStartingStatus}
+        {hm.gatewayStartingStatus}
       </Text>
       <Icon source="chevron-right" size={16} color={colors.text.tertiary} />
     </Pressable>

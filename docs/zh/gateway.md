@@ -605,7 +605,9 @@ Content-Type: application/json
 
 ### 浏览器来源校验（CSRF 防护）
 
-- 带 `Origin` 的浏览器请求会按 `gateway.corsOrigins` 校验来源。
+- 带 `Origin` 的浏览器请求会按网关自身来源与 `gateway.corsOrigins` 的合并结果校验。
+- 网关自身的回环、开发环境和检测到的局域网来源会自动加入。
+- 额外 `gateway.corsOrigins` 修改后立即生效。
 - 支持同 host 回退与本地回环回退（用于受控本地开发场景）。
 - 不带 `Origin` 的请求（CLI/服务间）跳过来源校验，改由认证层验证。
 
@@ -648,7 +650,7 @@ Content-Type: application/json
 | `auth.token` | token 模式下自动生成 | token 凭证 |
 | `auth.password` | 未设置 | password 凭证 |
 | `auth.rateLimit.*` | 见上方示例默认值 | 认证失败限流配置 |
-| `corsOrigins` | `[]` | 允许的浏览器来源 |
+| `corsOrigins` | `[]` | 额外浏览器来源 |
 | `channelConnectDeferMode` | 未写视为 `auto` | `auto` / `off` / `explicit`，见 [配置 — 频道连接延后](configuration.md#频道连接延后) |
 | `channelConnectDeferIds` | - | `explicit` 模式下的延后通道 id 列表 |
 | `channelConnectDeferSkipIds` | - | 从自动或显式延后集合中剔除的 id |

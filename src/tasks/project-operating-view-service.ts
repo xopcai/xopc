@@ -11,18 +11,6 @@ import { TaskReadModelProjector } from './task-read-model-projector.js';
 import { TaskRepository } from './task-repository.js';
 import { TaskRunRepository } from './task-run-repository.js';
 
-export function projectTaskLane(
-  card: Pick<ProjectTaskCard, 'phase' | 'operationalState' | 'attention'>,
-): ProjectTaskCard['lane'] {
-  if (card.phase === 'closed') return 'done';
-  if (card.attention.some((item) => item.kind === 'input_required' || item.kind === 'approval_required')) {
-    return 'needs_user';
-  }
-  if (['queued', 'running', 'verifying'].includes(card.operationalState)) return 'moving';
-  if (card.operationalState === 'waiting' || card.operationalState === 'blocked') return 'waiting';
-  return 'ready';
-}
-
 export function summarizeProjectOperatingView(view: ProjectOperatingView): ProjectOperatingSummary {
   const counts = {
     ready: 0,
@@ -32,8 +20,14 @@ export function summarizeProjectOperatingView(view: ProjectOperatingView): Proje
     done: 0,
   };
   for (const task of view.tasks) {
-    if (task.lane === 'needs_user') counts.needsUser += 1;
-    else counts[task.lane] += 1;
+    if (task.attention.some((item) => item.kind === 'input_required' || item.kind === 'approval_required')) {
+      counts.needsUser += 1;
+      continue;
+    }
+    if (task.phase === 'closed') counts.done += 1;
+    else if (['queued', 'running', 'verifying'].includes(task.operationalState)) counts.moving += 1;
+    else if (task.operationalState === 'waiting' || task.operationalState === 'blocked') counts.waiting += 1;
+    else counts.ready += 1;
   }
   return {
     ...view.digest,
@@ -74,7 +68,7 @@ export class ProjectOperatingViewService {
         ...(receipt ? { latestVerification: receipt.verification.status } : {}),
         updatedAt: task.updatedAt,
       };
-      return { ...base, lane: projectTaskLane(base) };
+      return base;
     });
     const recentResults = projectTasks
       .flatMap((task) => this.#runs.listReceipts(task.id, 10).map((receipt) => ({
@@ -84,7 +78,11 @@ export class ProjectOperatingViewService {
       })))
       .sort((a, b) => b.receipt.finalizedAt - a.receipt.finalizedAt)
       .slice(0, 10);
-    const attentionCount = cards.filter((card) => card.lane === 'needs_user').length;
+    const needsUser = (card: ProjectTaskCard) => card.attention.some(
+      (item) => item.kind === 'input_required' || item.kind === 'approval_required',
+    );
+    const moving = (card: ProjectTaskCard) => ['queued', 'running', 'verifying'].includes(card.operationalState);
+    const attentionCount = cards.filter(needsUser).length;
     return {
       project,
       tasks: cards.sort((a, b) => b.updatedAt - a.updatedAt),
@@ -104,10 +102,11 @@ export class ProjectOperatingViewService {
         health: cards.length === 0 ? 'empty' : attentionCount > 0 ? 'attention' : 'healthy',
         summary: cards.length === 0
           ? 'No tasks yet'
-          : `${cards.filter((card) => card.lane === 'moving').length} moving, ${attentionCount} need attention`,
-        recommendedAction: cards.find((card) => card.lane === 'needs_user')?.attention[0]?.summary
-          ?? cards.find((card) => card.lane === 'moving')?.title
-          ?? cards.find((card) => card.lane === 'ready')?.title,
+          : `${cards.filter(moving).length} moving, ${attentionCount} need attention`,
+        recommendedAction: cards.find(needsUser)?.attention[0]?.summary
+          ?? cards.find(moving)?.title
+          ?? cards.find((card) => card.phase === 'ready')?.title
+          ?? cards.find((card) => card.phase === 'backlog')?.title,
       },
       monitoring: this.#monitoring.get(project.id),
     };

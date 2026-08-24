@@ -299,12 +299,13 @@ export async function applyMiscPatch(config: Config, body: any): Promise<PatchRe
 export function validateGatewayAfterPatch(config: Config, body: any): PatchResult {
   if (body.gateway === undefined) return PATCH_OK;
   try {
+    const port = config.gateway?.port ?? 18790;
     const auth = resolveGatewayAuth({ authConfig: config.gateway?.auth });
     assertGatewayAuthConfigured(auth);
     assertGatewayRuntimeConfig({
       cfg: config,
       auth,
-      port: config.gateway?.port ?? 18790,
+      port,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
