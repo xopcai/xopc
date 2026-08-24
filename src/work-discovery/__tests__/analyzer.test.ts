@@ -115,4 +115,43 @@ describe('work discovery analyzer', () => {
     expect(analysis.profileCandidates).toHaveLength(1);
     expect(analysis.profileCandidates[0]?.evidenceRefs).toEqual(['local-recent-files://item-1']);
   });
+
+  it('keeps every valid understanding and work stream instead of applying fixed item caps', async () => {
+    const evidenceRef = 'local-recent-files://item-1';
+    vi.mocked(completeWithResolvedCredentials).mockResolvedValue({
+      content: [{ type: 'text', text: JSON.stringify({
+        profileCandidates: Array.from({ length: 7 }, (_, index) => ({
+          category: 'focus',
+          statement: `Supported user focus ${index + 1}`,
+          confidence: 'high',
+          evidence: [`Evidence ${index + 1}`],
+          evidenceRefs: [evidenceRef],
+        })),
+        workThreads: Array.from({ length: 4 }, (_, index) => ({
+          topicKey: `stream-${index + 1}`,
+          title: `Work stream ${index + 1}`,
+          summary: `Evidence-backed work stream ${index + 1}`,
+          horizon: 'ongoing',
+          status: 'active',
+          confidence: 'high',
+          evidenceRefs: [evidenceRef],
+        })),
+      }) }],
+      stopReason: 'stop',
+    } as never);
+    const sourceItem: UnderstandingSourceItem = {
+      id: 'item-1',
+      sourceId: 'local-recent-files',
+      type: 'document',
+      title: 'Project notes',
+      ownerAttribution: 'user',
+      sensitivity: 'personal',
+      evidenceRef,
+    };
+
+    const analysis = await analyzeUnderstandingSources({ config: {} as never, items: [sourceItem] });
+
+    expect(analysis.profileCandidates).toHaveLength(7);
+    expect(analysis.workThreadCandidates).toHaveLength(4);
+  });
 });

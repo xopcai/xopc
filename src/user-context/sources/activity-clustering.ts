@@ -125,5 +125,5 @@ export function clusterActivityTopics(items: UnderstandingSourceItem[], now = Da
       evidenceRefs,
       sourceIds,
     }];
-  }).sort((left, right) => right.confidence - left.confidence).slice(0, 5);
+  }).sort((left, right) => right.confidence - left.confidence);
 }

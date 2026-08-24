@@ -221,3 +221,7 @@ export function setUserFocusStatus(id: string, status: UserFocus['status'], nowM
   const row = getSqliteDatabase().prepare('SELECT * FROM user_focuses WHERE focus_id = ?').get(id) as FocusRow | undefined;
   return row ? focusFromRow(row) : null;
 }
+
+export function deleteUserFocus(id: string): boolean {
+  return Number(getSqliteDatabase().prepare('DELETE FROM user_focuses WHERE focus_id = ?').run(id).changes) > 0;
+}

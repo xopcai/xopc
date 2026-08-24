@@ -40,4 +40,21 @@ describe('clusterActivityTopics', () => {
 
     expect(topics).toEqual([]);
   });
+
+  it('returns every supported topic instead of truncating the ranked list', () => {
+    const topics = clusterActivityTopics(Array.from({ length: 6 }, (_, topicIndex) => [
+      item({
+        id: `${topicIndex}-a`,
+        title: `Unique${topicIndex} Alpha${topicIndex}`,
+        evidenceRef: `local-recent-files://${topicIndex}-a`,
+      }),
+      item({
+        id: `${topicIndex}-b`,
+        title: `Unique${topicIndex} Alpha${topicIndex}`,
+        evidenceRef: `local-recent-files://${topicIndex}-b`,
+      }),
+    ]).flat(), now);
+
+    expect(topics).toHaveLength(6);
+  });
 });
