@@ -18,6 +18,10 @@ function injectPodMirror(contents) {
 }
 
 function withIosCocoaPodsMirror(config) {
+  if (process.env.XOPC_IOS_USE_COCOAPODS_MIRROR === '0') {
+    return config;
+  }
+
   return withPodfile(config, (config) => {
     config.modResults.contents = injectPodMirror(config.modResults.contents);
     return config;
