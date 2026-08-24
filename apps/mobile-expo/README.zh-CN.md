@@ -225,13 +225,21 @@ Android release 构建必须提供正式 keystore。Gradle 签名配置由
 不得提交 keystore 或密码。
 
 GitHub tag `mobile-expo-v*` 会触发 `.github/workflows/mobile-expo-release.yml`，
-在 GitHub Ubuntu runner 上直接构建签名 APK/AAB，不使用 EAS Build。工作流需要以下
-GitHub Actions Secrets：
+在 GitHub Ubuntu runner 上直接构建 preview APK 及 production APK/AAB，不使用 EAS
+Build。手动运行时可以选择 `preview`、`production` 或 `both`。工作流需要以下 GitHub
+Actions Secrets：
 
-- `ANDROID_KEYSTORE_BASE64`
-- `ANDROID_KEYSTORE_PASSWORD`
-- `ANDROID_KEY_ALIAS`
-- `ANDROID_KEY_PASSWORD`
+- `ANDROID_PREVIEW_KEYSTORE_BASE64`
+- `ANDROID_PREVIEW_KEYSTORE_PASSWORD`
+- `ANDROID_PREVIEW_KEY_ALIAS`
+- `ANDROID_PREVIEW_KEY_PASSWORD`
+- `ANDROID_PRODUCTION_KEYSTORE_BASE64`
+- `ANDROID_PRODUCTION_KEYSTORE_PASSWORD`
+- `ANDROID_PRODUCTION_KEY_ALIAS`
+- `ANDROID_PRODUCTION_KEY_PASSWORD`
+
+工作流产物分别为 `xopc-android-preview`（APK）和 `xopc-android-production`
+（APK + AAB）。标签触发的 GitHub Release 使用 production APK。
 
 请优先复用之前 EAS 构建使用的 Android keystore；更换 keystore 后，已有安装无法覆盖升级，
 Google Play 也不会接受使用错误 upload key 签名的更新。
