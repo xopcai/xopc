@@ -1,7 +1,7 @@
 import type { TaskCommand, TaskPatchRequest, TaskPhase, TaskPriority } from '@xopcai/gateway-contract';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { ArrowLeft, Check, Circle, CircleCheck, CircleX, ExternalLink, FolderKanban, MessageSquare, MoreHorizontal, Pencil, Play, Pause, X } from 'lucide-react';
+import { ArrowLeft, Circle, CircleCheck, CircleX, ExternalLink, FolderKanban, MessageSquare, MoreHorizontal, Play, Pause, X } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 
@@ -112,8 +112,6 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
   const [busy, setBusy] = useState(false);
   const [dependencyCandidates, setDependencyCandidates] = useState<DependencyCandidate[]>([]);
   const [projectName, setProjectName] = useState<string | null>(null);
-  const [editingDependencies, setEditingDependencies] = useState(false);
-  const [dependencyDraft, setDependencyDraft] = useState<string[]>([]);
   const [agents, setAgents] = useState<ChatAgentOption[]>([]);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
@@ -122,6 +120,9 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
   const [chatPanelPercent, setChatPanelPercent] = useState(readTaskChatPanelPercent);
   const [resizingPanels, setResizingPanels] = useState(false);
   const splitPaneRef = useRef<HTMLDivElement>(null);
+  const skipTitleSaveRef = useRef(false);
+  const skipDescriptionSaveRef = useRef(false);
+  const initialDescriptionDraftRef = useRef('');
   const projectNameProjectIdRef = useRef<string | null>(null);
   const dependencySignature = detail?.dependencies
     .map((dependency) => `${dependency.id}:${dependency.title}`)
@@ -219,6 +220,35 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
     }
   };
 
+  const saveTitleOnBlur = async () => {
+    if (!detail) return;
+    if (skipTitleSaveRef.current) {
+      skipTitleSaveRef.current = false;
+      return;
+    }
+    const title = titleDraft.trim();
+    if (!title || title === detail.task.title) {
+      setTitleDraft(detail.task.title);
+      setEditingTitle(false);
+      return;
+    }
+    if (await savePatch({ title })) setEditingTitle(false);
+  };
+
+  const saveDescriptionOnBlur = async () => {
+    if (!detail) return;
+    if (skipDescriptionSaveRef.current) {
+      skipDescriptionSaveRef.current = false;
+      return;
+    }
+    const body = descriptionDraft.trim();
+    if (descriptionDraft === initialDescriptionDraftRef.current || body === (detail.task.body ?? '').trim()) {
+      setEditingDescription(false);
+      return;
+    }
+    if (await savePatch({ body: body || null })) setEditingDescription(false);
+  };
+
   const changePhase = async (phase: TaskPhase) => {
     if (!detail || phase === detail.task.phase) return;
     if (detail.task.phase === 'closed') {
@@ -288,13 +318,12 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
     window.addEventListener('pointercancel', onDone);
   }, [chatPanelPercent, commitChatPanelPercent]);
 
-  const saveDependencies = async () => {
+  const saveDependencies = async (dependsOnTaskIds: string[]) => {
     if (!detail) return;
     setBusy(true);
     setError(null);
     try {
-      setDetail(await updateTaskDependencies(taskId, dependencyDraft, detail.task.version));
-      setEditingDependencies(false);
+      setDetail(await updateTaskDependencies(taskId, dependsOnTaskIds, detail.task.version));
     } catch {
       setError(copy.dependencyUpdateFailed);
     } finally {
@@ -368,7 +397,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
       className={`${presentation === 'modal' ? 'flex h-full min-h-0 flex-col lg:flex-row' : 'flex min-h-[calc(100dvh-8rem)] flex-col overflow-hidden lg:flex-row'} ${resizingPanels ? 'lg:cursor-col-resize lg:select-none' : ''}`}
       style={{ '--task-chat-panel-width': `${chatPanelPercent}%` } as CSSProperties}
     >
-      <section className="min-w-0 flex-1 overflow-y-auto p-5 sm:p-6">
+      <section className="task-detail-scroll min-w-0 flex-1 overflow-y-auto overscroll-contain p-5 sm:p-6">
       <header className="pb-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
@@ -377,14 +406,28 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
               <span>/</span><span>{copy.taskLabel}</span>
             </div>
             {editingTitle ? (
-              <form className="mt-3 flex max-w-3xl gap-2" onSubmit={(event) => { event.preventDefault(); void savePatch({ title: titleDraft }).then((ok) => { if (ok) setEditingTitle(false); }); }}>
-                <input autoFocus value={titleDraft} onChange={(event) => setTitleDraft(event.target.value)} className="min-w-0 flex-1 rounded-lg bg-surface-hover px-3 py-2 text-xl font-semibold text-fg outline-none ring-2 ring-accent/30 focus:ring-accent/60" />
-                <Button type="submit" variant="primary" disabled={busy || !titleDraft.trim()}><Check className="size-4" />{copy.saveTaskField}</Button>
-                <Button type="button" variant="ghost" disabled={busy} onClick={() => setEditingTitle(false)}>{copy.cancelTaskField}</Button>
-              </form>
+              <input
+                autoFocus
+                data-task-inline-editor
+                value={titleDraft}
+                onChange={(event) => setTitleDraft(event.target.value)}
+                onBlur={() => void saveTitleOnBlur()}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') event.currentTarget.blur();
+                  if (event.key === 'Escape') {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    skipTitleSaveRef.current = true;
+                    setTitleDraft(detail.task.title);
+                    setEditingTitle(false);
+                    queueMicrotask(() => { skipTitleSaveRef.current = false; });
+                  }
+                }}
+                className="mt-3 w-full max-w-3xl rounded-lg bg-surface-hover px-3 py-2 text-2xl font-semibold leading-8 text-fg outline-none ring-2 ring-accent/30 focus:ring-accent/60"
+              />
             ) : (
-              <button type="button" className="group mt-3 flex max-w-3xl items-start gap-2 text-left" onClick={() => { setTitleDraft(detail.task.title); setEditingTitle(true); }}>
-                <h1 className="text-2xl font-semibold leading-8 text-fg">{detail.task.title}</h1><Pencil className="mt-1.5 size-3.5 shrink-0 text-fg-subtle opacity-0 transition-opacity group-hover:opacity-100" aria-hidden />
+              <button type="button" className="mt-3 block max-w-3xl rounded-lg text-left outline-none hover:bg-surface-hover focus-visible:bg-surface-hover" onClick={() => { setTitleDraft(detail.task.title); setEditingTitle(true); }}>
+                <h1 className="px-1 text-2xl font-semibold leading-8 text-fg">{detail.task.title}</h1>
               </button>
             )}
           </div>
@@ -395,8 +438,32 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
       <div className="mt-5 flex flex-col gap-5">
         <main className="order-2 min-w-0 space-y-5">
           <section className="rounded-xl bg-surface-panel p-5">
-            <div className="flex items-center justify-between gap-3"><h2 className="font-medium text-fg">{copy.taskDescription}</h2>{!editingDescription ? <Button type="button" variant="ghost" className="h-8 px-2 text-xs" onClick={() => { setDescriptionDraft(detail.task.body ?? detail.task.contract?.objective ?? ''); setEditingDescription(true); }}><Pencil className="size-3.5" />{copy.editTaskField}</Button> : null}</div>
-            {editingDescription ? <div className="mt-3"><textarea autoFocus rows={6} value={descriptionDraft} onChange={(event) => setDescriptionDraft(event.target.value)} className="w-full resize-y rounded-lg bg-surface-hover px-3 py-2 text-sm leading-6 text-fg outline-none ring-2 ring-accent/20 focus:ring-accent/50" /><div className="mt-2 flex justify-end gap-2"><Button type="button" variant="ghost" disabled={busy} onClick={() => setEditingDescription(false)}>{copy.cancelTaskField}</Button><Button type="button" variant="primary" disabled={busy} onClick={() => void savePatch({ body: descriptionDraft.trim() || null }).then((ok) => { if (ok) setEditingDescription(false); })}>{copy.saveTaskField}</Button></div></div> : <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-fg-muted">{objective && objective !== detail.task.title ? objective : copy.noTaskDescription}</p>}
+            <h2 className="font-medium text-fg">{copy.taskDescription}</h2>
+            {editingDescription ? (
+              <textarea
+                autoFocus
+                data-task-inline-editor
+                rows={6}
+                value={descriptionDraft}
+                onChange={(event) => setDescriptionDraft(event.target.value)}
+                onBlur={() => void saveDescriptionOnBlur()}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    skipDescriptionSaveRef.current = true;
+                    setDescriptionDraft(detail.task.body ?? detail.task.contract?.objective ?? '');
+                    setEditingDescription(false);
+                    queueMicrotask(() => { skipDescriptionSaveRef.current = false; });
+                  }
+                }}
+                className="mt-3 w-full resize-y rounded-lg bg-surface-hover px-3 py-2 text-sm leading-6 text-fg outline-none ring-2 ring-accent/20 focus:ring-accent/50"
+              />
+            ) : (
+              <button type="button" className="mt-2 block w-full rounded-lg px-1 py-1 text-left outline-none hover:bg-surface-hover focus-visible:bg-surface-hover" onClick={() => { const draft = detail.task.body ?? detail.task.contract?.objective ?? ''; initialDescriptionDraftRef.current = draft; setDescriptionDraft(draft); setEditingDescription(true); }}>
+                <span className="whitespace-pre-wrap text-sm leading-6 text-fg-muted">{objective && objective !== detail.task.title ? objective : copy.noTaskDescription}</span>
+              </button>
+            )}
           </section>
 
           {detail.attention.length > 0 ? <section className="rounded-xl bg-warning/10 p-5"><h3 className="font-medium text-fg">{needsUserAttention ? copy.needsAttention : copy.waitingStatus}</h3><ul className="mt-3 space-y-2 text-sm text-fg-muted">{detail.attention.map((item, index) => <li key={`${item.kind}-${index}`}>{item.summary}</li>)}</ul></section> : null}
@@ -430,8 +497,14 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
           </section>
 
           <section className="rounded-xl bg-surface-panel p-4">
-            <div className="flex items-center justify-between gap-2"><h2 className="font-medium text-fg">{copy.taskRelations}</h2>{!editingDependencies ? <Button type="button" variant="ghost" className="h-8 px-2 text-xs" onClick={() => { setDependencyDraft(detail.dependencies.map((task) => task.id)); setEditingDependencies(true); }}><Pencil className="size-3.5" />{copy.editDependencies}</Button> : null}</div>
-            {editingDependencies ? <div className="mt-4 grid gap-3"><DependencyPicker borderless candidates={dependencyCandidates} selectedIds={dependencyDraft} disabled={busy} onChange={setDependencyDraft} labels={{ link: copy.linkDependencies, linked: copy.linkedDependencies, searchPlaceholder: copy.dependencySearchPlaceholder, noMatches: copy.noDependencyMatches, noCandidates: copy.noDependencyCandidates, remove: copy.removeDependency }} /><div className="flex justify-end gap-2"><Button type="button" variant="ghost" disabled={busy} onClick={() => setEditingDependencies(false)}>{copy.cancelDependencyEdit}</Button><Button type="button" variant="primary" disabled={busy} onClick={() => void saveDependencies()}>{copy.saveDependencies}</Button></div></div> : <div className="mt-4 space-y-4"><div><p className="mb-2 text-xs text-fg-muted">{copy.dependencies}</p>{detail.dependencies.length > 0 ? <div className="space-y-1.5">{detail.dependencies.map((task) => <Link key={task.id} to={taskHref(task.id)} className="block rounded-lg bg-surface-hover p-2.5 text-sm text-accent hover:underline">{task.title}</Link>)}</div> : <p className="text-sm text-fg-subtle">{copy.noDependencies}</p>}</div><div><p className="mb-2 text-xs text-fg-muted">{copy.dependents}</p>{detail.dependents.length > 0 ? <div className="space-y-1.5">{detail.dependents.map((task) => <Link key={task.id} to={taskHref(task.id)} className="block rounded-lg bg-surface-hover p-2.5 text-sm text-accent hover:underline">{task.title}</Link>)}</div> : <p className="text-sm text-fg-subtle">{copy.noDependents}</p>}</div></div>}
+            <h2 className="font-medium text-fg">{copy.taskRelations}</h2>
+            <div className="mt-4 space-y-4">
+              <div>
+                <p className="mb-2 text-xs text-fg-muted">{copy.dependencies}</p>
+                <DependencyPicker borderless candidates={dependencyCandidates} selectedIds={detail.dependencies.map((task) => task.id)} disabled={busy} onChange={(dependsOnTaskIds) => void saveDependencies(dependsOnTaskIds)} labels={{ link: copy.linkDependencies, linked: copy.linkedDependencies, searchPlaceholder: copy.dependencySearchPlaceholder, noMatches: copy.noDependencyMatches, noCandidates: copy.noDependencyCandidates, remove: copy.removeDependency }} />
+              </div>
+              <div><p className="mb-2 text-xs text-fg-muted">{copy.dependents}</p>{detail.dependents.length > 0 ? <div className="space-y-1.5">{detail.dependents.map((task) => <Link key={task.id} to={taskHref(task.id)} className="block rounded-lg bg-surface-hover p-2.5 text-sm text-accent hover:underline">{task.title}</Link>)}</div> : <p className="text-sm text-fg-subtle">{copy.noDependents}</p>}</div>
+            </div>
           </section>
         </aside>
       </div>
@@ -490,7 +563,13 @@ export function TaskDetailModal({ taskId, backgroundPath, onClose }: {
     <Dialog.Root open onOpenChange={(open) => { if (!open) onClose(); }}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-[80] bg-black/45 backdrop-blur-[1px]" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-[90] flex h-[min(54rem,calc(100dvh-2rem))] w-[min(76rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl bg-surface-base shadow-float focus:outline-none">
+        <Dialog.Content
+          className="fixed left-1/2 top-1/2 z-[90] flex h-[min(54rem,calc(100dvh-2rem))] w-[min(76rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl bg-surface-base shadow-float focus:outline-none"
+          onEscapeKeyDown={(event) => {
+            const target = event.target;
+            if (target instanceof HTMLElement && target.closest('[data-task-inline-editor]')) event.preventDefault();
+          }}
+        >
           <header className="flex shrink-0 items-center justify-between gap-3 bg-surface-panel px-5 py-3.5">
             <Dialog.Title className="font-medium text-fg">{language === 'zh' ? '任务详情' : 'Task details'}</Dialog.Title>
             <Dialog.Description className="sr-only">{language === 'zh' ? '查看并操作任务详情' : 'View and manage task details'}</Dialog.Description>
