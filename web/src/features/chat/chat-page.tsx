@@ -82,7 +82,10 @@ function welcomeExplorationDaySeed(date = new Date()): string {
   return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
 }
 
-export function ChatPage() {
+export function ChatPage({ embedded = false, sessionKey }: {
+  embedded?: boolean;
+  sessionKey?: string;
+} = {}) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const token = useGatewayStore((s) => s.token);
@@ -108,7 +111,7 @@ export function ChatPage() {
   const [sourceNoteSaveError, setSourceNoteSaveError] = useState<string | null>(null);
   const [showWelcomeSkeleton, setShowWelcomeSkeleton] = useState(false);
 
-  const { auth, session, messages: msgSlice, timeline, stream, followUp, clarify, agents } = useChatSession();
+  const { auth, session, messages: msgSlice, timeline, stream, followUp, clarify, agents } = useChatSession({ fixedSessionKey: sessionKey });
 
   const skillQuery = searchParams.get('skill')?.trim() ?? '';
   const slashQuery = searchParams.get('slash')?.trim() ?? '';
@@ -828,17 +831,17 @@ export function ChatPage() {
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-surface-panel">
       <ChatRealtimeStatus />
 
-      <ChatPageHeaderRegistration
+      {!embedded ? <ChatPageHeaderRegistration
         chatHeadline={chatHeadline}
         chatAgents={agents.chatAgents?.items ?? []}
         showChatAgentSelector={agents.showChatAgentSelector}
         chatAgentId={agents.displayAgentId}
         onChatAgentChange={agents.onChatAgentChange}
         chatAgentDisabled={isSessionTransitioning}
-      />
+      /> : null}
 
-      <div className="relative mx-auto flex min-h-0 w-full max-w-[calc(var(--max-width-chat)+8rem)] flex-1 flex-col">
-        {scopedProject ? (
+      <div className={cn('relative mx-auto flex min-h-0 w-full flex-1 flex-col', embedded ? 'max-w-none' : 'max-w-[calc(var(--max-width-chat)+8rem)]')}>
+        {!embedded && scopedProject ? (
           <ChatProjectScopeBar
             project={scopedProject}
             workspace={session.effectiveWorkspacePath}
@@ -884,8 +887,8 @@ export function ChatPage() {
             </div>
           </div>
         ) : null}
-        <div className="relative flex min-h-0 min-w-0 flex-1 px-3 sm:px-5 xl:px-6">
-          <ChatTimelinePanel
+        <div className={cn('relative flex min-h-0 min-w-0 flex-1', embedded ? 'px-3' : 'px-3 sm:px-5 xl:px-6')}>
+          {!embedded ? <ChatTimelinePanel
             items={timeline.items}
             activeMessageIndex={activeMessageIndex + timelineDisplayOffset}
             labels={timelineLabels}
@@ -893,16 +896,16 @@ export function ChatPage() {
             closeLabel={m.chat.timelineClose}
             currentLabel={m.chat.timelineCurrent}
             onSelectMessage={handleTimelineSelect}
-          />
-          <div className="absolute inset-y-0 right-0 hidden xl:block">
+          /> : null}
+          {!embedded ? <div className="absolute inset-y-0 right-0 hidden xl:block">
             <ChatTimelineRail
               items={timeline.items}
               activeMessageIndex={activeMessageIndex + timelineDisplayOffset}
               labels={timelineLabels}
               onSelectMessage={handleTimelineSelect}
             />
-          </div>
-          <div className="mx-auto flex min-h-0 min-w-0 flex-1 flex-col xl:max-w-[58rem]">
+          </div> : null}
+          <div className={cn('mx-auto flex min-h-0 min-w-0 flex-1 flex-col', !embedded && 'xl:max-w-[58rem]')}>
             <div
               ref={scrollRef}
               className={cn(
@@ -941,7 +944,7 @@ export function ChatPage() {
                       <AgentRunErrorBanner errorText={stream.error} />
                     </div>
                   ) : null}
-                  {taskId ? <TaskSessionBanner taskId={taskId} /> : null}
+                  {!embedded && taskId ? <TaskSessionBanner taskId={taskId} /> : null}
                   {workflowRunLinks.length > 0 ? (
                     <div className="mb-6 flex flex-col gap-3">
                       {workflowRunLinks.map((link) => (
@@ -956,7 +959,7 @@ export function ChatPage() {
                       onAbortCurrentTurn={stream.abort}
                     />
                   ) : null}
-                  {chatSessionKey ? (
+                  {!embedded && chatSessionKey ? (
                     <ProductAutomationFeedback
                       eventType="session.transcript.updated"
                       source="sessions"
@@ -1065,7 +1068,7 @@ export function ChatPage() {
                 onPendingFollowUpSteer={(id) => void followUp.steerPendingFollowUp(id)}
                 steeringFollowUpId={followUp.steeringFollowUpId}
                 sessionModel={session.sessionModel}
-                showModelSelector
+                showModelSelector={!embedded}
                 onModelChange={session.onSessionModelChange}
                 modelDisabled={
                   isSessionTransitioning || stream.streaming

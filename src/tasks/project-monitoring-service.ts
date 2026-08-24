@@ -22,6 +22,7 @@ type PolicyRow = {
 };
 
 const DEFAULT_SCENARIOS = ['project_delivery_risk', 'blocked_work'];
+const SUPPORTED_ACTIONS = new Set(['create_project_task']);
 
 function validHour(value: number): boolean {
   return Number.isInteger(value) && value >= 0 && value <= 23;
@@ -47,11 +48,55 @@ export function decideProactiveDisposition(
   if (policy.mode === 'observe' || input.confidence < policy.confidenceThreshold || input.valueScore < 0.5) {
     return 'record_silently';
   }
-  if (input.requiresApproval || input.risk !== 'low') return 'request_approval';
-  if (policy.mode === 'auto_low_risk' && input.actionId && policy.allowedActions.includes(input.actionId)) {
-    return 'auto_execute';
+  if (input.actionId) {
+    if (input.requiresApproval || input.risk !== 'low' || policy.mode === 'ask_before_action') return 'request_approval';
+    if (policy.mode === 'auto_low_risk' && policy.allowedActions.includes(input.actionId)) return 'auto_execute';
+    return 'show_in_work';
   }
+  if (input.requiresApproval) return 'request_approval';
   return 'show_in_work';
+}
+
+export function proactiveDispositionReason(
+  policy: ProjectMonitoringPolicy,
+  input: { confidence: number; valueScore: number; risk: 'low' | 'medium' | 'high'; actionId?: string; requiresApproval?: boolean },
+  disposition: ProactiveDisposition,
+): string {
+  if (policy.mode === 'observe') return 'Project monitoring is observe-only';
+  if (input.confidence < policy.confidenceThreshold) return `Confidence ${input.confidence} is below threshold ${policy.confidenceThreshold}`;
+  if (input.valueScore < 0.5) return `Value score ${input.valueScore} is below 0.5`;
+  if (disposition === 'request_approval') return input.risk === 'low' ? 'Project policy requires approval before acting' : `${input.risk} risk requires approval`;
+  if (disposition === 'auto_execute') return `Low-risk action ${input.actionId} is explicitly allowed`;
+  if (input.actionId && !policy.allowedActions.includes(input.actionId)) return `Action ${input.actionId} is not in the project allowlist`;
+  return 'Insight passed the project confidence and value gates';
+}
+
+function hourInTimezone(now: Date, timezone: string): number {
+  const hour = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    hour: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(now).find((part) => part.type === 'hour')?.value;
+  return Number(hour);
+}
+
+export function isInQuietHours(quietHours: QuietHours | undefined, now = new Date()): boolean {
+  if (!quietHours || quietHours.startHour === quietHours.endHour) return false;
+  const hour = hourInTimezone(now, quietHours.timezone);
+  return quietHours.startHour < quietHours.endHour
+    ? hour >= quietHours.startHour && hour < quietHours.endHour
+    : hour >= quietHours.startHour || hour < quietHours.endHour;
+}
+
+export function nextQuietHoursEnd(quietHours: QuietHours | undefined, now = new Date()): Date | undefined {
+  if (!isInQuietHours(quietHours, now)) return undefined;
+  const minute = new Date(now);
+  minute.setUTCSeconds(0, 0);
+  for (let offset = 1; offset <= 48 * 60; offset += 1) {
+    const candidate = new Date(minute.getTime() + offset * 60_000);
+    if (!isInQuietHours(quietHours, candidate)) return candidate;
+  }
+  return undefined;
 }
 
 export class ProjectMonitoringService {
@@ -96,6 +141,7 @@ export class ProjectMonitoringService {
     )) {
       throw new Error('Quiet hours need a timezone and integer hours from 0 through 23');
     }
+    if (input.quietHours) hourInTimezone(new Date(), input.quietHours.timezone);
     const threshold = input.confidenceThreshold ?? 0.75;
     if (!Number.isFinite(threshold) || threshold < 0 || threshold > 1) {
       throw new Error('confidenceThreshold must be between 0 and 1');
@@ -103,6 +149,7 @@ export class ProjectMonitoringService {
     const allowedActions = [...new Set(input.allowedActions ?? [])]
       .map((action) => action.trim())
       .filter(Boolean);
+    if (allowedActions.some((action) => !SUPPORTED_ACTIONS.has(action))) throw new Error('Unknown proactive action');
     const scenarios = [...new Set(input.scenarios ?? DEFAULT_SCENARIOS)];
     const availableScenarios = new Set(this.#scenarios.list().map((scenario) => scenario.key));
     if (scenarios.some((scenario) => !availableScenarios.has(scenario))) throw new Error('Unknown proactive scenario');

@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Popover from '@radix-ui/react-popover';
-import type { ProjectOperatingView, ProjectTaskCard, TaskCommand } from '@xopcai/gateway-contract';
+import type { ProjectMonitoringUpdate, ProjectOperatingView, ProjectTaskCard, TaskCommand, TaskPhase } from '@xopcai/gateway-contract';
 import { AlertCircle, Archive, ArrowLeft, Check, ChevronDown, Clock, Columns3, Copy, File, Folder, FolderPlus, History, LayoutDashboard, MessageSquarePlus, Pause, Pin, PinOff, Play, Plus, RotateCcw, Save, Search, Settings, Sparkles, Trash2, X, Zap, type LucideIcon } from 'lucide-react';
 import { type CSSProperties, type FormEvent, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -14,7 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { automationApi, type Automation } from '@/features/automations/automation-api';
 import { inferMimeTypeFromFileName } from '@/features/chat/attachments/attachment-utils-core';
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
-import { commandTask, createTask, fetchTask } from '@/features/tasks/home-api';
+import { commandTask, createTask, fetchTask, updateTaskBoardPosition, updateTaskDependencies } from '@/features/tasks/home-api';
 import { taskDetailModalHref } from '@/features/tasks/task-detail-route';
 import { FileTree } from '@/features/file-tree/file-tree';
 import type { FileTreeAction, TreeEntry } from '@/features/file-tree/file-tree-types';
@@ -30,6 +30,7 @@ import {
   fetchProjectFiles,
   fetchProject,
   fetchProjectOperatingView,
+  updateProjectMonitoring,
   fetchProjects,
   fetchProjectSessions,
   saveProjectDigest,
@@ -834,7 +835,11 @@ export function ProjectDetailPage() {
     setError(null);
     try {
       const detail = await fetchTask(task.id);
-      const command: TaskCommand = action === 'ready'
+      const command: TaskCommand = action.startsWith('move_')
+        ? { type: 'move', phase: action.slice('move_'.length) as 'backlog' | 'ready' | 'active' | 'review' }
+        : action.startsWith('reopen_')
+          ? { type: 'reopen', phase: action.slice('reopen_'.length) as 'backlog' | 'ready' | 'active' | 'review' }
+        : action === 'ready'
         ? { type: 'mark_ready' }
         : action === 'run'
           ? { type: 'start', executor: { kind: 'agent', agentId: detail.task.delegateAgentId ?? 'main' } }
@@ -850,8 +855,11 @@ export function ProjectDetailPage() {
       if (command.type === 'resolve_wait' && !command.waitId) throw new Error('No active wait to resolve');
       await commandTask(task.id, command, detail.task.version);
       await refreshOperatingView();
+      return true;
     } catch (err) {
+      await refreshOperatingView().catch(() => undefined);
       setError(err instanceof Error ? err.message : pm.board.actionFailed);
+      return false;
     } finally {
       setTaskActionBusyId(null);
     }
@@ -897,6 +905,82 @@ export function ProjectDetailPage() {
     });
     await refreshOperatingView();
   }, [language, projectId, refreshOperatingView]);
+
+  const reorderProjectTask = useCallback(async (taskId: string, beforeTaskId: string | null): Promise<boolean> => {
+    setTaskActionBusyId(taskId);
+    setError(null);
+    try {
+      const detail = await fetchTask(taskId);
+      await updateTaskBoardPosition(taskId, beforeTaskId, detail.task.version);
+      await refreshOperatingView();
+      return true;
+    } catch (err) {
+      await refreshOperatingView().catch(() => undefined);
+      setError(err instanceof Error ? err.message : pm.board.actionFailed);
+      return false;
+    } finally {
+      setTaskActionBusyId(null);
+    }
+  }, [pm.board.actionFailed, refreshOperatingView]);
+
+  const undoProjectTaskMove = useCallback(async (
+    taskId: string,
+    phase: TaskPhase,
+    beforeTaskId: string | null,
+  ): Promise<boolean> => {
+    setTaskActionBusyId(taskId);
+    setError(null);
+    try {
+      let detail = await fetchTask(taskId);
+      if (detail.task.phase !== phase) {
+        const command: TaskCommand = detail.task.phase === 'closed'
+          ? { type: 'reopen', phase: phase === 'closed' ? 'ready' : phase }
+          : phase === 'closed'
+            ? { type: 'close', resolution: 'done' }
+            : { type: 'move', phase };
+        detail = await commandTask(taskId, command, detail.task.version);
+      }
+      await updateTaskBoardPosition(taskId, beforeTaskId, detail.task.version);
+      await refreshOperatingView();
+      return true;
+    } catch (err) {
+      await refreshOperatingView().catch(() => undefined);
+      setError(err instanceof Error ? err.message : pm.board.actionFailed);
+      return false;
+    } finally {
+      setTaskActionBusyId(null);
+    }
+  }, [pm.board.actionFailed, refreshOperatingView]);
+
+  const updateProjectTaskDependencies = useCallback(async (
+    taskId: string,
+    dependencyTaskIds: string[],
+  ) => {
+    setTaskActionBusyId(taskId);
+    setError(null);
+    try {
+      const detail = await fetchTask(taskId);
+      await updateTaskDependencies(taskId, dependencyTaskIds, detail.task.version);
+      await refreshOperatingView();
+    } catch (err) {
+      await refreshOperatingView().catch(() => undefined);
+      setError(err instanceof Error ? err.message : pm.board.actionFailed);
+    } finally {
+      setTaskActionBusyId(null);
+    }
+  }, [pm.board.actionFailed, refreshOperatingView]);
+
+  const updateMonitoring = useCallback(async (update: ProjectMonitoringUpdate) => {
+    if (!projectId) return;
+    setError(null);
+    try {
+      await updateProjectMonitoring(projectId, update);
+      await refreshOperatingView();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : pm.board.actionFailed);
+      throw err;
+    }
+  }, [pm.board.actionFailed, projectId, refreshOperatingView]);
 
   const refreshProjectAutomations = useCallback(async () => {
     if (!project) return;
@@ -1698,9 +1782,14 @@ export function ProjectDetailPage() {
           ref={taskBoardRef}
           tasks={operatingView?.tasks ?? []}
           dependencyEdges={operatingView?.dependencyEdges ?? []}
+          monitoring={operatingView?.monitoring ?? { projectId: projectId ?? '', mode: 'observe', allowedActions: [], confidenceThreshold: 0.75, scenarios: [], configured: false }}
           returnTo={projectTabHref('tasks')}
           copy={pm.board}
           onAction={performProjectTaskAction}
+          onReorder={reorderProjectTask}
+          onUndoMove={undoProjectTaskMove}
+          onDependenciesChange={updateProjectTaskDependencies}
+          onMonitoringChange={updateMonitoring}
           onCreate={createProjectTask}
           actionBusyId={taskActionBusyId}
         />
