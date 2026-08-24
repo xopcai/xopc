@@ -65,6 +65,27 @@ describe('proactive execution worker', () => {
     expect(events.listBatches()[0]?.status).toBe('processed');
   });
 
+  it('accepts only the bounded project task action schema', async () => {
+    const eventId = publishAndReady('work-1:blocked:action');
+    const executor: ProactiveAgentExecutor = { execute: async () => ({ text: JSON.stringify({
+      title: 'Create a follow-up task', summary: 'The blocker needs tracked follow-up.',
+      whyNow: 'The task just became blocked.', impact: 'Delivery may slip.',
+      recommendation: 'Create a scoped follow-up task.', workDone: 'Inspected the blocking event.',
+      decision: { question: 'Create the task?', options: [
+        { id: 'approve', label: 'Approve', consequence: 'Creates a backlog task' },
+        { id: 'reject', label: 'Reject', consequence: 'Creates nothing' },
+      ] },
+      proposedAction: { id: 'create_project_task', risk: 'low', rationale: 'Internal and reversible', input: {
+        title: 'Resolve blocker', objective: 'Resolve the blocker using the cited evidence.',
+      } },
+      urgency: 'high', confidence: 0.9, evidenceIds: [eventId],
+    }) }) };
+
+    await new ProactiveWorker(executor).tick();
+
+    expect(listInsights()[0]?.proposedAction).toMatchObject({ id: 'create_project_task', input: { title: 'Resolve blocker' } });
+  });
+
   it('persists the snapshot-safe context instead of model-visible external content', async () => {
     const eventId = publishAndReady('work-1:blocked:snapshot');
     const contexts = new ContextProviderRegistry([{

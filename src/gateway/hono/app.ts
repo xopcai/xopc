@@ -21,6 +21,7 @@ import {
   createChatRateLimitMiddleware,
   createChannelRateLimitMiddleware,
   createStrictRateLimitMiddleware,
+  createTaskRateLimitMiddleware,
   createXopcCloudPollRateLimitMiddleware,
 } from './middleware/strict-rate-limit.js';
 import { logContextMiddleware } from './middleware/log-context.js';
@@ -278,6 +279,12 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       allowRealIpFallback: service.currentConfig.gateway?.allowRealIpFallback === true,
     }),
   });
+  const taskRateLimitMiddleware = createTaskRateLimitMiddleware({
+    getTrustedProxyContext: () => ({
+      trustedProxies: service.currentConfig.gateway?.trustedProxies,
+      allowRealIpFallback: service.currentConfig.gateway?.allowRealIpFallback === true,
+    }),
+  });
   const channelRateLimitMiddleware = createChannelRateLimitMiddleware({
     getTrustedProxyContext: () => ({
       trustedProxies: service.currentConfig.gateway?.trustedProxies,
@@ -295,6 +302,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     service,
     strictRateLimitMiddleware,
     chatRateLimitMiddleware,
+    taskRateLimitMiddleware,
     xopcCloudPollRateLimitMiddleware,
     channelRateLimitMiddleware,
   });

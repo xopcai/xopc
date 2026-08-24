@@ -188,6 +188,19 @@ function AgentJudgmentCard({
           <div key={label} className="rounded-lg bg-surface-panel/80 p-3"><p className="text-[11px] font-medium text-fg-subtle">{label}</p><p className="mt-1 text-xs leading-5 text-fg">{value}</p></div>
         ))}
       </div>
+      {judgment.dispositionReason ? (
+        <div className="mt-3 rounded-lg border border-edge-subtle bg-surface-panel/70 p-3 text-xs leading-5">
+          <p className="font-medium text-fg-subtle">{labels.policyReason}</p>
+          <p className="mt-1 text-fg-muted">{judgment.dispositionReason}</p>
+          {judgment.proposedActionTitle ? (
+            <p className="mt-2 text-fg">
+              <span className="font-medium">{labels.proposedAction}：</span>{judgment.proposedActionTitle}
+              {judgment.actionStatus ? ` · ${labels.actionStates[judgment.actionStatus]}` : ''}
+            </p>
+          ) : null}
+          {judgment.actionError ? <p className="mt-1 text-danger">{judgment.actionError}</p> : null}
+        </div>
+      ) : null}
       {judgment.decision ? <div className="mt-4"><p className="text-sm font-medium text-fg">{judgment.decision.question}</p><div className="mt-2 flex flex-wrap gap-2">{judgment.decision.options.map((option) => (
         <Button key={option.id} type="button" variant="secondary" className="h-auto min-h-9 flex-col items-start px-3 py-2 text-left" disabled={busy} title={option.consequence} onClick={() => onDecide(option.id)}><span>{option.label}</span><span className="text-[10px] font-normal text-fg-muted">{option.consequence}</span></Button>
       ))}</div></div> : null}

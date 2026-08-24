@@ -26,6 +26,24 @@ function parseDecision(value: unknown): InsightCandidate['decision'] {
   return { question: boundedText(row.question, 'decision question', 400), options };
 }
 
+function parseProposedAction(value: unknown): InsightCandidate['proposedAction'] {
+  if (value == null) return undefined;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Insight proposedAction is invalid');
+  const row = value as Record<string, unknown>;
+  if (row.id !== 'create_project_task' || row.risk !== 'low') throw new Error('Insight proposedAction is not supported');
+  if (!row.input || typeof row.input !== 'object' || Array.isArray(row.input)) throw new Error('Insight proposedAction input is invalid');
+  const input = row.input as Record<string, unknown>;
+  return {
+    id: 'create_project_task',
+    risk: 'low',
+    rationale: boundedText(row.rationale, 'proposedAction rationale', 600),
+    input: {
+      title: boundedText(input.title, 'proposedAction title', 160),
+      objective: boundedText(input.objective, 'proposedAction objective', 1200),
+    },
+  };
+}
+
 export function parseInsightCandidate(raw: string, allowedEvidenceIds: Set<string>): InsightCandidate {
   let value: unknown;
   try { value = JSON.parse(stripCodeFences(raw)); } catch { throw new Error('Model output is not valid JSON'); }
@@ -37,12 +55,20 @@ export function parseInsightCandidate(raw: string, allowedEvidenceIds: Set<strin
   const evidenceIds = [...new Set(row.evidenceIds.map(String))];
   if (evidenceIds.some((id) => !allowedEvidenceIds.has(id))) throw new Error('Insight cites unknown evidence');
   const decision = parseDecision(row.decision);
+  const proposedAction = parseProposedAction(row.proposedAction);
+  if (proposedAction && (!decision
+    || decision.options.length !== 2
+    || decision.options[0]?.id !== 'approve'
+    || decision.options[1]?.id !== 'reject')) {
+    throw new Error('Insight proposedAction requires approve and reject decision options');
+  }
   return {
     title: boundedText(row.title, 'title', 160), summary: boundedText(row.summary, 'summary', 1200),
     whyNow: boundedText(row.whyNow, 'whyNow', 800), impact: boundedText(row.impact, 'impact', 800),
     recommendation: boundedText(row.recommendation, 'recommendation', 800),
     workDone: boundedText(row.workDone, 'workDone', 800),
     ...(decision ? { decision } : {}),
+    ...(proposedAction ? { proposedAction } : {}),
     urgency: String(row.urgency) as InsightCandidate['urgency'], confidence: row.confidence, evidenceIds,
   };
 }

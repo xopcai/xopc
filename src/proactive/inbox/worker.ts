@@ -1,4 +1,5 @@
 import { createLogger } from '../../utils/logger.js';
+import { executePendingProactiveActions } from '../actions/service.js';
 
 import { claimDelivery, finishDelivery, projectInsightsToInbox, recoverExpiredDeliveries, wakeSnoozedItems } from './repository.js';
 import type { InboxDeliveryAdapter } from './types.js';
@@ -27,7 +28,7 @@ export class ProactiveInboxWorker {
     if (this.running) return;
     this.running = true;
     try {
-      projectInsightsToInbox(); wakeSnoozedItems(); recoverExpiredDeliveries();
+      projectInsightsToInbox(); executePendingProactiveActions(); wakeSnoozedItems(); recoverExpiredDeliveries();
       const claim = claimDelivery();
       if (!claim) return;
       try {

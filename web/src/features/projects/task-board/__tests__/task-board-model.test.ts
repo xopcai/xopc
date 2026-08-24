@@ -32,14 +32,17 @@ describe('project task board model', () => {
   });
 
   it('turns phase changes into matching domain commands', () => {
-    const backlog: ProjectTaskCard = { ...card('backlog', 'backlog'), allowedCommands: ['mark_ready', 'close'] };
-    const ready: ProjectTaskCard = { ...card('ready', 'ready'), allowedCommands: ['start', 'close'] };
-    const active: ProjectTaskCard = { ...card('active', 'active'), allowedCommands: ['add_wait', 'request_review', 'close'] };
+    const backlog: ProjectTaskCard = { ...card('backlog', 'backlog'), allowedCommands: ['move', 'mark_ready', 'close'] };
+    const ready: ProjectTaskCard = { ...card('ready', 'ready'), allowedCommands: ['move', 'start', 'close'] };
+    const active: ProjectTaskCard = { ...card('active', 'active'), allowedCommands: ['move', 'request_review', 'close'] };
     const review: ProjectTaskCard = { ...card('review', 'review'), allowedCommands: ['close'] };
-    expect(taskActionForPhase(backlog, 'ready')).toBe('ready');
-    expect(taskActionForPhase(ready, 'active')).toBe('run');
-    expect(taskActionForPhase(active, 'review')).toBe('review');
+    const closed: ProjectTaskCard = { ...card('closed', 'closed'), allowedCommands: ['reopen'] };
+    expect(taskActionForPhase(backlog, 'ready')).toBe('move_ready');
+    expect(taskActionForPhase(ready, 'active')).toBe('move_active');
+    expect(taskActionForPhase(active, 'review')).toBe('move_review');
     expect(taskActionForPhase(review, 'closed')).toBe('complete');
+    expect(taskActionForPhase(closed, 'backlog')).toBe('reopen_backlog');
+    expect(taskActionForPhase(closed, 'review')).toBe('reopen_review');
     expect(taskActionForPhase(active, 'closed')).toBeUndefined();
   });
 });

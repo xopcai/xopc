@@ -112,11 +112,12 @@ export class TaskReadModelProjector {
   ): string[] {
     if (task.phase === 'closed') return ['reopen'];
     const commands = ['revise_contract', 'delegate', 'close'];
+    if (!activeRunStatus && !hasWaits) commands.unshift('move');
     if (hasWaits) commands.unshift('resolve_wait');
     else if (activeRunStatus === 'running' || activeRunStatus === 'verifying') commands.unshift('add_wait');
     if (task.phase === 'backlog') commands.unshift('mark_ready');
     if (!activeRunStatus && !hasWaits && task.phase !== 'backlog') commands.unshift('start');
-    if (task.phase === 'active') commands.push('request_review');
+    if (task.phase === 'active' && !activeRunStatus) commands.push('request_review');
     return commands;
   }
 }

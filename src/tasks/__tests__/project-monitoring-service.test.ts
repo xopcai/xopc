@@ -12,6 +12,8 @@ import {
 } from '../../storage/sqlite/index.js';
 import {
   decideProactiveDisposition,
+  isInQuietHours,
+  nextQuietHoursEnd,
   ProjectMonitoringService,
 } from '../project-monitoring-service.js';
 
@@ -69,5 +71,14 @@ describe('ProjectMonitoringService', () => {
     expect(decideProactiveDisposition(policy, {
       confidence: 0.5, valueScore: 0.8, risk: 'low', actionId: 'send_reminder',
     })).toBe('record_silently');
+  });
+
+  it('rejects unsupported action grants and evaluates overnight quiet hours', () => {
+    expect(() => service.configure({ projectId, mode: 'auto_low_risk', allowedActions: ['send_reminder'] }))
+      .toThrow('Unknown proactive action');
+    const quietHours = { startHour: 22, endHour: 8, timezone: 'UTC' };
+    const now = new Date('2026-08-13T23:30:00.000Z');
+    expect(isInQuietHours(quietHours, now)).toBe(true);
+    expect(nextQuietHoursEnd(quietHours, now)?.toISOString()).toBe('2026-08-14T08:00:00.000Z');
   });
 });

@@ -61,6 +61,7 @@ export const TaskSchema = z.object({
   source: z.string(),
   locale: z.enum(['en', 'zh']).optional(),
   latestContractVersion: z.number().int().positive(),
+  boardRank: z.number().finite(),
   version: z.number().int().positive(),
   contract: TaskContractSchema.optional(),
   createdAt: z.number().int().nonnegative(),
@@ -248,6 +249,7 @@ const TaskWaitInputSchema = z.object({
 });
 
 export const TaskCommandSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('move'), phase: z.enum(['backlog', 'ready', 'active', 'review']) }),
   z.object({ type: z.literal('mark_ready') }),
   z.object({
     type: z.literal('start'),
@@ -256,7 +258,7 @@ export const TaskCommandSchema = z.discriminatedUnion('type', [
   }),
   z.object({ type: z.literal('request_review') }),
   z.object({ type: z.literal('close'), resolution: TaskResolutionSchema }),
-  z.object({ type: z.literal('reopen'), phase: z.enum(['ready', 'active']) }),
+  z.object({ type: z.literal('reopen'), phase: z.enum(['backlog', 'ready', 'active', 'review']) }),
   z.object({ type: z.literal('add_wait'), wait: TaskWaitInputSchema }),
   z.object({ type: z.literal('resolve_wait'), waitId: z.string(), resolution: z.unknown().optional() }),
   z.object({ type: z.literal('delegate'), agentId: z.string().optional() }),
@@ -272,6 +274,11 @@ export const TaskCommandRequestSchema = z.object({
 export const TaskDependencyUpdateRequestSchema = z.object({
   dependsOnTaskIds: z.array(z.string().trim().min(1)),
   expectedVersion: z.number().int().positive(),
+}).strict();
+
+export const TaskBoardPositionRequestSchema = z.object({
+  expectedVersion: z.number().int().positive(),
+  beforeTaskId: z.string().trim().min(1).nullable().optional(),
 }).strict();
 
 export const TaskListResponseSchema = z.object({
@@ -330,6 +337,7 @@ export type TaskPatchRequest = z.infer<typeof TaskPatchRequestSchema>;
 export type TaskCommand = z.infer<typeof TaskCommandSchema>;
 export type TaskCommandRequest = z.infer<typeof TaskCommandRequestSchema>;
 export type TaskDependencyUpdateRequest = z.infer<typeof TaskDependencyUpdateRequestSchema>;
+export type TaskBoardPositionRequest = z.infer<typeof TaskBoardPositionRequestSchema>;
 export type TaskListResponse = z.infer<typeof TaskListResponseSchema>;
 export type TaskCreateResponse = z.infer<typeof TaskCreateResponseSchema>;
 export type TaskDetailResponse = z.infer<typeof TaskDetailResponseSchema>;
