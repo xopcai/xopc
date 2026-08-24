@@ -280,6 +280,26 @@ while retaining the `xopc-ios-production` artifact for 30 days. It requires thes
 - `APP_STORE_CONNECT_API_KEY`
 - `APP_STORE_CONNECT_API_ISSUER`
 - `APP_STORE_CONNECT_PRIVATE_KEY_BASE64`
+- `IOS_DISTRIBUTION_CERTIFICATE_BASE64`
+- `IOS_DISTRIBUTION_CERTIFICATE_PASSWORD`
+- `IOS_PROVISIONING_PROFILE_MAIN_BASE64`
+- `IOS_PROVISIONING_PROFILE_SHARE_BASE64`
+- `IOS_PROVISIONING_PROFILE_WIDGET_BASE64`
+
+When signing assets are first configured or renewed, use EAS to generate production credentials
+for the main app, Share Extension, and Widget Extension, download them locally, then sync them to
+GitHub Secrets in one command:
+
+```bash
+pnpm -C apps/mobile-expo exec eas credentials -p ios
+pnpm run mobile:configure:ios:github
+```
+
+Choose `production`, sign in to Apple, configure App Store credentials for every target under
+`Build Credentials`, then use
+`credentials.json: Upload/Download credentials between EAS servers and your local json` to
+download them. The sync script validates each profile's bundle ID and never prints certificate
+contents or passwords.
 
 Low-level local iOS build example:
 
@@ -291,7 +311,8 @@ pnpm -C apps/mobile-expo run submit:ios:direct
 `build:ios` synchronizes the marketing version from `app.json` and uses the current timestamp as
 the iOS build number by default; pass `IOS_BUILD_NUMBER=123` when you need a fixed value.
 
-To let Xcode fetch signing assets automatically, reuse the App Store Connect API key environment variables from the direct submit script:
+If the Apple team grants the API key access to Cloud-managed Distribution Certificates, Xcode can
+also fetch signing assets automatically:
 
 ```bash
 APP_STORE_CONNECT_API_KEY="KEY_ID" \
