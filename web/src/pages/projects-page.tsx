@@ -10,11 +10,13 @@ import {
   Plus,
   RotateCcw,
   Search,
+  X,
 } from 'lucide-react';
 import { type FormEvent, useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useDirectoryPicker } from '@/features/fs/use-directory-picker';
 import { WorkingDirectoryPickerModal } from '@/features/fs/working-directory-picker-modal';
@@ -147,6 +149,7 @@ export function ProjectsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
   const [filter, setFilter] = useState<ProjectFilter>('active');
   const [busyProjectId, setBusyProjectId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -264,6 +267,10 @@ export function ProjectsPage() {
     { id: 'archived', label: t.statuses.archived },
     { id: 'all', label: t.all },
   ];
+  const selectedFilterLabel = filters.find((item) => item.id === filter)?.label ?? t.all;
+  const resultCountLabel = management.resultCount
+    .replace('{{status}}', selectedFilterLabel)
+    .replace('{{count}}', String(visibleProjects.length));
 
   return (
     <main className="flex w-full flex-1 flex-col gap-5 px-3 py-6 sm:px-5 xl:px-6">
@@ -344,18 +351,59 @@ export function ProjectsPage() {
         />
       ) : null}
 
-      <section className="flex flex-col gap-3 rounded-xl border border-edge-subtle bg-surface-base p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap gap-1" aria-label={management.filterLabel}>
-          {filters.map((item) => (
-            <button key={item.id} type="button" className={cn('rounded-lg px-3 py-1.5 text-xs font-medium transition-colors', filter === item.id ? 'bg-accent-soft text-accent-fg' : 'text-fg-muted hover:bg-surface-hover hover:text-fg')} onClick={() => setFilter(item.id)}>
-              {item.label}
-            </button>
-          ))}
+      <section className="flex min-h-10 flex-wrap items-center justify-between gap-3" aria-label={management.filterLabel}>
+        <p className="text-sm font-medium text-fg-muted" aria-live="polite">{resultCountLabel}</p>
+        <div className={cn('ml-auto flex min-w-0 items-center justify-end gap-2', searchOpen && 'w-full sm:w-auto')}>
+          {searchOpen ? (
+            <div className="relative min-w-0 flex-1 sm:w-64 sm:flex-none">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-subtle" aria-hidden />
+              <input
+                autoFocus
+                className="h-9 w-full rounded-lg border border-edge bg-surface-panel pl-9 pr-9 text-sm text-fg outline-none placeholder:text-fg-muted focus:border-accent"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder={t.searchPlaceholder}
+                aria-label={t.searchPlaceholder}
+              />
+              <button
+                type="button"
+                className="absolute right-1.5 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-md text-fg-subtle transition-colors hover:bg-surface-hover hover:text-fg"
+                onClick={() => {
+                  setSearch('');
+                  setSearchOpen(false);
+                }}
+                aria-label={management.clearSearch}
+                title={management.clearSearch}
+              >
+                <X className="size-3.5" aria-hidden />
+              </button>
+            </div>
+          ) : (
+            <Button
+              type="button"
+              variant="ghost"
+              className="size-9 shrink-0 p-0"
+              onClick={() => setSearchOpen(true)}
+              aria-label={t.searchPlaceholder}
+              title={t.searchPlaceholder}
+            >
+              <Search className="size-4" aria-hidden />
+            </Button>
+          )}
+          <Select
+            className="w-28 sm:w-32"
+            triggerClassName="h-9 border-edge bg-surface-panel px-2.5 text-xs font-medium"
+            contentClassName="min-w-36"
+            align="end"
+            value={filter}
+            aria-label={management.filterLabel}
+            onChange={(event) => setFilter(event.target.value as ProjectFilter)}
+          >
+            {filters.map((item) => (
+              <SelectOption key={item.id} value={item.id}>{item.label}</SelectOption>
+            ))}
+          </Select>
         </div>
-        <label className="relative block min-w-0 sm:w-64">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-subtle" aria-hidden />
-          <input className="h-9 w-full rounded-lg border border-edge bg-surface-panel pl-9 pr-3 text-sm text-fg outline-none placeholder:text-fg-muted focus:border-accent" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t.searchPlaceholder} aria-label={t.searchPlaceholder} />
-        </label>
       </section>
 
       {error ? (
