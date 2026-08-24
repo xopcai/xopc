@@ -33,6 +33,11 @@ import { ContextMiddleware, SelfVerifyMiddleware } from './middleware/index.js';
 import { TurnDiffTracker } from './coding/index.js';
 import { LifecycleManager } from './lifecycle/index.js';
 import { resolveCompactionPolicy } from './memory/compaction-policy.js';
+import { runXopcEmbeddedTurn } from './embedded/run-turn.js';
+import type { EmbeddedStreamEvent, RunXopcEmbeddedTurnResult } from './embedded/types.js';
+import type { EmbeddedTranscriptRuntime } from './embedded/transcript-runtime.js';
+import { runWithEmbeddedExecutionSession } from './embedded/execution-context.js';
+import { resolveAgentTurnTimeoutMs } from './orchestration/run-agent-turn-with-timeout.js';
 
 import {
   MessageRouter,
@@ -99,6 +104,7 @@ import {
 import { applyConfigOverrides } from '../config/runtime-overrides.js';
 import { analyzeResponseLanguage } from '../i18n/language-consistency.js';
 import { resolveResponseLanguageForSession } from './prompt/response-language.js';
+import { resolveModel } from '../providers/index.js';
 
 export type { AgentServiceConfig, AgentContext, StreamHandle } from './service.types.js';
 
@@ -712,6 +718,40 @@ export class AgentService {
 
   getModelForSession(sessionKey: string): string {
     return this.modelManager.getModelForSession(sessionKey);
+  }
+
+  /** Run a full tool-capable turn against a caller-owned, non-persistent transcript. */
+  async runEphemeralTurn(params: {
+    executionSessionKey: string;
+    parentSessionKey: string;
+    runId: string;
+    content: string;
+    modelRef: string;
+    thinkingLevel?: ThinkingLevel;
+    transcriptRuntime: EmbeddedTranscriptRuntime;
+    abortSignal?: AbortSignal;
+    onEvent?: (event: EmbeddedStreamEvent) => void;
+  }): Promise<RunXopcEmbeddedTurnResult> {
+    const agent = this.agentManager.getOrCreateAgent(params.parentSessionKey);
+    const workspaceDir = this.agentManager.getResolvedWorkspaceForSession(params.parentSessionKey);
+    const model = resolveModel(params.modelRef);
+    return runWithEmbeddedExecutionSession(params.executionSessionKey, () =>
+      runXopcEmbeddedTurn({
+        sessionKey: params.executionSessionKey,
+        runId: params.runId,
+        userMessage: { role: 'user', content: params.content, timestamp: Date.now() },
+        model,
+        modelRef: params.modelRef,
+        tools: agent.state.tools,
+        systemPrompt: agent.state.systemPrompt ?? '',
+        thinkingLevel: params.thinkingLevel ?? agent.state.thinkingLevel,
+        workspaceDir,
+        transcriptRuntime: params.transcriptRuntime,
+        timeoutMs: resolveAgentTurnTimeoutMs(this.effectiveAppConfig(), params.parentSessionKey),
+        abortSignal: params.abortSignal,
+        onEvent: params.onEvent,
+      }),
+    );
   }
 
   async switchModelForSession(sessionKey: string, modelId: string): Promise<boolean> {

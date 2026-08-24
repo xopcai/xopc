@@ -32,6 +32,8 @@ export const MessageList = memo(function MessageList({
   deleteRoundDisabled,
   onSaveAssistantToSourceNote,
   onExtractAssistantTask,
+  onEditUserMessage,
+  responseFeedbackEnabled,
 }: {
   messages: Message[];
   authToken?: string;
@@ -53,6 +55,8 @@ export const MessageList = memo(function MessageList({
   deleteRoundDisabled?: boolean;
   onSaveAssistantToSourceNote?: (content: string) => Promise<void> | void;
   onExtractAssistantTask?: (content: string) => Promise<void> | void;
+  onEditUserMessage?: (text: string) => void;
+  responseFeedbackEnabled?: boolean;
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -123,6 +127,8 @@ export const MessageList = memo(function MessageList({
               // Do not unmount action footers from every prior assistant message
               // when a new reply starts; only the live row has no actions.
               suppressAssistantActions={isStreamRow}
+              onEditUserMessage={onEditUserMessage}
+              responseFeedbackEnabled={responseFeedbackEnabled}
             />
           </div>
         );

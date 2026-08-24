@@ -1,6 +1,6 @@
 import { FolderOpen, Plus } from 'lucide-react';
 import { memo, useLayoutEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { getShellChromeRuntime, resolveShellChromeLayout } from '@/components/shell/chrome-layout';
@@ -14,6 +14,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { useSidebarStore } from '@/stores/sidebar-store';
 import { useWorkspacePanelStore } from '@/stores/workspace-panel-store';
 import { useMediaQuery } from '@/lib/use-media-query';
+import { useSideChatStore } from '@/stores/side-chat-store';
 
 const MAX_MD = '(max-width: 767px)';
 
@@ -38,10 +39,13 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
   chatAgentDisabled,
 }: ChatPageHeaderRegistrationProps) {
   const language = useLocaleStore((s) => s.language);
+  const { sessionKey } = useParams();
+  const parentSessionKey = sessionKey && sessionKey !== 'new' ? decodeURIComponent(sessionKey) : null;
   const m = messages(language);
   const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
   const workspacePanelOpen = useWorkspacePanelStore((s) => s.open);
   const toggleWorkspacePanel = useWorkspacePanelStore((s) => s.toggleOpen);
+  const setSideChatOpen = useSideChatStore((s) => s.setOpen);
   const mobileNavOpen = useAppShellStore((s) => s.mobileNavOpen);
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
@@ -124,7 +128,10 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
             title={m.workspace.openFiles}
             aria-label={m.workspace.openFiles}
             aria-pressed={workspacePanelOpen}
-            onClick={toggleWorkspacePanel}
+            onClick={() => {
+              if (!workspacePanelOpen && parentSessionKey) setSideChatOpen(parentSessionKey, false);
+              toggleWorkspacePanel();
+            }}
           >
             <FolderOpen className="size-4" />
           </button>
@@ -145,7 +152,9 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
     m.sidebar.newTask,
     m.workspace.openFiles,
     workspacePanelOpen,
+    parentSessionKey,
     toggleWorkspacePanel,
+    setSideChatOpen,
     setPageHeader,
   ]);
 

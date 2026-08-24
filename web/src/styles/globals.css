@@ -532,6 +532,19 @@ html.dark {
   transition: none !important;
 }
 
+@media (min-width: 768px) {
+  .app-side-chat-expanded-width {
+    transform: translateZ(0);
+    width: var(--side-chat-panel-px, 32.5rem);
+    max-width: min(var(--side-chat-panel-px, 32.5rem), 58vw);
+    transition: width 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+}
+
+.app-side-chat-expanded-width.side-chat-panel-resizing {
+  transition: none !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .app-workspace-panel-expanded-width {
     transition: none;

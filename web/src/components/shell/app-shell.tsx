@@ -6,6 +6,8 @@ import { GatewayConnectLanding } from '@/components/shell/gateway-connect-landin
 import { PrimaryAppHeader } from '@/components/shell/primary-app-header';
 import { SidebarColumn } from '@/components/shell/sidebar-column';
 import { WorkspaceColumn } from '@/components/shell/workspace-column';
+import { SideChatColumn } from '@/features/side-chat/side-chat-column';
+import { SideChatSelectionLauncher } from '@/features/side-chat/side-chat-selection-launcher';
 import { TokenDialog } from '@/components/shell/token-dialog';
 import { WindowsTitlebar } from '@/components/shell/windows-titlebar';
 import { ElectronGatewayExitBanner } from '@/features/electron/electron-gateway-exit-banner';
@@ -36,6 +38,7 @@ import { loadTaskDetailPage, loadWorkDiscoveryOverlay } from '@/lib/route-preloa
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
+import { useSideChatStore } from '@/stores/side-chat-store';
 
 const WorkDiscoveryOverlay = lazy(() =>
   loadWorkDiscoveryOverlay().then((module) => ({ default: module.WorkDiscoveryOverlay })),
@@ -86,6 +89,13 @@ export function AppShell() {
   const language = useLocaleStore((s) => s.language);
   const updateReminder = useUpdateReminder();
   const previewPath = useWorkspacePreviewStore((s) => s.path);
+  const chatPathSessionKey = pathname.startsWith('/chat/') ? pathname.slice('/chat/'.length) : '';
+  const parentSessionKey = chatPathSessionKey && chatPathSessionKey !== 'new'
+    ? decodeURIComponent(chatPathSessionKey)
+    : null;
+  const sideChatOpen = useSideChatStore((s) => (
+    parentSessionKey ? s.panes[parentSessionKey]?.open === true : false
+  ));
   const showWorkDiscoveryOverlay = pathname === '/you' && isWorkDiscoveryOverlaySearch(search);
   const taskModalId = pathname.startsWith('/tasks/')
     ? null
@@ -179,6 +189,7 @@ export function AppShell() {
       <GlobalDiscussionCaptureHost />
       <GlobalVoiceInputShortcutHost />
       <GlobalReadAloudPlayer />
+      <SideChatSelectionLauncher />
       <TokenDialog />
       <OnboardingDialog />
       {taskModalId ? (
@@ -229,7 +240,11 @@ export function AppShell() {
                   )}
                 </main>
               </div>
-              {!isSettingsRoute ? <WorkspaceColumn /> : null}
+              {!isSettingsRoute ? (
+                sideChatOpen && parentSessionKey
+                  ? <SideChatColumn parentSessionKey={parentSessionKey} />
+                  : <WorkspaceColumn />
+              ) : null}
             </div>
           </div>
         </div>
