@@ -11,6 +11,7 @@ import {
 } from '../../../storage/sqlite/index.js';
 import {
   createUnderstandingSourceRun,
+  deleteUserFocus,
   listUnderstandingSourceGrants,
   listUnderstandingSourceRuns,
   listUserFocuses,
@@ -73,5 +74,8 @@ describe('understanding source repository', () => {
       horizon: 'ongoing', status: 'candidate', confidence: 0.9, evidenceRefs: ['source://2'], nowMs: 12,
     })).toMatchObject({ status: 'active', title: 'Launch update', updatedAt: 12 });
     expect(listUserFocuses(['active'])).toHaveLength(1);
+    expect(deleteUserFocus(focus.id)).toBe(true);
+    expect(deleteUserFocus(focus.id)).toBe(false);
+    expect(listUserFocuses()).toEqual([]);
   });
 });

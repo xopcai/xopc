@@ -227,3 +227,7 @@ export function updateUserFocusStatus(focusId: string, status: UserFocus['status
     body: JSON.stringify({ status }),
   });
 }
+
+export function deleteUserFocus(focusId: string): Promise<{ ok: true }> {
+  return fetchJson(apiUrl(`/api/understanding/focuses/${encodeURIComponent(focusId)}`), { method: 'DELETE' });
+}

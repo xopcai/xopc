@@ -1,4 +1,5 @@
-import { Brain, Cable, CircleUserRound, ExternalLink, Handshake, Moon, Pencil, Plus, ShieldCheck, Trash2 } from 'lucide-react';
+import * as Dialog from '@radix-ui/react-dialog';
+import { Brain, Cable, ChevronRight, CircleUserRound, Database, ExternalLink, Handshake, Loader2, Moon, Pencil, Plus, ShieldCheck, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
@@ -11,10 +12,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useAutosave } from '@/lib/use-autosave';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
-import { fetchConnectorInstances, type ConnectorInstance } from '@/features/connectors/connectors-api';
+import { ConnectorLogo } from '@/features/connectors/components/connector-logo';
+import { fetchConnectorCatalog, fetchConnectorInstances, type ConnectorDefinition, type ConnectorInstance } from '@/features/connectors/connectors-api';
 import {
   createCollaborationRule, createUnderstanding, deleteCollaborationRule,
-  deleteUnderstanding, detectBrowserTimezone, fetchUserContext, fetchUserContextSettings,
+  deleteUnderstanding, deleteUserFocus, detectBrowserTimezone, fetchUserContext, fetchUserContextSettings,
   fetchUnderstandingSourceGrants, fetchUserFocuses,
   refreshUnderstandingSourceGrant,
   revokeUnderstandingSourceGrant,
@@ -50,8 +52,8 @@ const copy = {
     emptyUnderstanding: 'Nothing here yet. Tell xopc something explicitly, or confirm a suggestion after it learns one.',
     qualityTitle: 'Learning quality', qualityActive: 'Confirmed', qualityPending: 'Pending review', qualityAcceptance: '30-day acceptance', qualityRecall: 'Helpful recall', qualityNoData: 'Not enough feedback yet',
     emptyRules: 'No working agreements yet.', sourceExplicit: 'You said this directly', sourceInferred: 'Inferred — may be wrong', sourceObserved: 'Observed across prior work',
-    sourcesHint: 'Review every granted source, its access mode, retention, and last collection. Revoking stops future learning.', manageSources: 'Connect another source', noSources: 'No sources are authorized.', connected: 'Connected', unavailable: 'Needs attention', revoke: 'Revoke & remove derived', refresh: 'Refresh', once: 'One-time', continuous: 'Continuous', localOnly: 'Local only', derivedOnly: 'Derived understanding only',
-    focuses: 'Current focuses', focusHint: 'Candidate focuses never activate until you confirm them.', activate: 'Activate', pause: 'Pause', complete: 'Complete', noFocuses: 'No focus candidates yet.',
+    sourcesHint: 'Review every granted source, its access mode, retention, and last collection. Revoking stops future learning.', manageSources: 'Connect another source', authorizedSources: 'Authorized sources', connectorsTitle: 'Connectors', openConnector: 'Open connector', noSources: 'No sources are authorized.', noConnectors: 'No connectors are installed.', connected: 'Connected', unavailable: 'Needs attention', revoke: 'Revoke source', revokeHint: 'Revoke this source and remove its derived understanding', confirmRevoke: 'Confirm revoke', revoking: 'Revoking…', revokeDone: 'Source revoked and derived understanding removed.', refresh: 'Update', refreshing: 'Updating…', refreshStarted: 'Update started.', actionFailed: 'Action failed', once: 'One-time', continuous: 'Continuous', localOnly: 'Local only', derivedOnly: 'Derived understanding only',
+    focuses: 'Current focuses', focusHint: 'Candidate focuses never activate until you confirm them.', activate: 'Activate', pause: 'Pause', complete: 'Complete', noFocuses: 'No focus candidates yet.', focusCandidate: 'Suggested', focusActive: 'Active', focusPaused: 'Paused', focusCompleted: 'Completed', confidence: 'Confidence', confidenceHigh: 'High', confidenceMedium: 'Medium', confidenceLow: 'Low',
     dreamingHint: 'A deterministic daily review checks expiry, contradictory evidence, and corroborated candidates. It never auto-activates an inference.', mode: 'Background review', on: 'On — propose for review', off: 'Off', reviewTime: 'Daily review time', evidenceThreshold: 'Supporting evidence required', scanLimit: 'Maximum items per run', lastRun: 'Last review', neverRun: 'Not run yet', runCompleted: 'Completed', runFailed: 'Failed', runRunning: 'Running', runItems: 'items',
     privacyHint: 'Choose how generic memory providers handle sensitive content. Structured user understanding applies stricter rules of its own.', sensitivePolicy: 'Sensitive memory writes', policyDeny: 'Do not store', policyConfirm: 'Ask before storing', policyAllow: 'Store when relevant', privacyWarning: 'Secret and regulated content is never stored as structured user understanding, regardless of this setting.',
     error: 'Could not load your context.', retry: 'Try again',
@@ -73,8 +75,8 @@ const copy = {
     emptyUnderstanding: '还没有内容。你可以直接告诉 xopc，或在它学到建议后进行确认。', emptyRules: '还没有协作约定。',
     qualityTitle: '学习质量', qualityActive: '已确认', qualityPending: '待审核', qualityAcceptance: '30 天采纳率', qualityRecall: '有效召回', qualityNoData: '反馈数据还不足',
     sourceExplicit: '由你直接告知', sourceInferred: '推断内容，可能有误', sourceObserved: '从过往工作中观察到',
-    sourcesHint: '查看每项授权的访问方式、保留策略和最近采集时间；撤销后将停止后续学习。', manageSources: '连接其他来源', noSources: '尚未授权任何来源。', connected: '已连接', unavailable: '需要处理', revoke: '撤销并删除派生理解', refresh: '立即更新', once: '仅一次', continuous: '持续更新', localOnly: '仅本地处理', derivedOnly: '仅保留派生理解',
-    focuses: '当前关注', focusHint: '候选关注不会自动生效，只有你确认后才会启用。', activate: '启用', pause: '暂停', complete: '完成', noFocuses: '还没有候选关注。',
+    sourcesHint: '查看每项授权的访问方式、保留策略和最近采集时间；撤销后将停止后续学习。', manageSources: '连接其他来源', authorizedSources: '已授权数据来源', connectorsTitle: '连接器', openConnector: '打开连接器', noSources: '尚未授权任何来源。', noConnectors: '尚未安装连接器。', connected: '已连接', unavailable: '需要处理', revoke: '撤销来源', revokeHint: '撤销此来源并删除由它产生的理解', confirmRevoke: '确认撤销', revoking: '正在撤销…', revokeDone: '已撤销来源并删除派生理解。', refresh: '更新', refreshing: '正在更新…', refreshStarted: '更新任务已开始。', actionFailed: '操作失败', once: '仅一次', continuous: '持续更新', localOnly: '仅本地处理', derivedOnly: '仅保留派生理解',
+    focuses: '当前关注', focusHint: '候选关注不会自动生效，只有你确认后才会启用。', activate: '启用', pause: '暂停', complete: '完成', noFocuses: '还没有候选关注。', focusCandidate: '待确认', focusActive: '进行中', focusPaused: '已暂停', focusCompleted: '已完成', confidence: '置信度', confidenceHigh: '高', confidenceMedium: '中', confidenceLow: '低',
     dreamingHint: '每天进行一次确定性复核，检查过期、矛盾证据和得到佐证的候选理解；推断内容不会自动生效。', mode: '后台复核', on: '开启并生成待审核项', off: '关闭', reviewTime: '每日复核时间', evidenceThreshold: '所需支持证据数', scanLimit: '每次最多检查', lastRun: '最近一次复核', neverRun: '尚未运行', runCompleted: '已完成', runFailed: '失败', runRunning: '运行中', runItems: '项',
     privacyHint: '选择通用记忆服务如何处理敏感内容；结构化用户理解有独立且更严格的规则。', sensitivePolicy: '敏感记忆写入', policyDeny: '不保存', policyConfirm: '保存前询问', policyAllow: '相关时允许保存', privacyWarning: '无论这里如何设置，秘密和受监管内容都不会保存为结构化用户理解。',
     error: '无法加载用户上下文。', retry: '重试',
@@ -100,6 +102,37 @@ function Card({ children }: { children: React.ReactNode }) {
 
 function Empty({ children }: { children: React.ReactNode }) {
   return <div className="rounded-2xl border border-dashed border-edge px-5 py-10 text-center text-sm text-fg-muted">{children}</div>;
+}
+
+function AddItemDialog({ open, onOpenChange, title, description, submitLabel, cancelLabel, submitDisabled, onSubmit, children }: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
+  description: string;
+  submitLabel: string;
+  cancelLabel: string;
+  submitDisabled?: boolean;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
+  children: React.ReactNode;
+}) {
+  return <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog.Portal>
+      <Dialog.Overlay className="fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
+      <Dialog.Content className="fixed left-1/2 top-1/2 z-[90] h-[min(30rem,calc(100vh-2rem))] w-[min(36rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-popover outline-none">
+        <form className="flex h-full min-h-0 flex-col" onSubmit={onSubmit}>
+          <header className="flex shrink-0 items-start justify-between gap-3 border-b border-edge px-5 py-4">
+            <div className="min-w-0"><Dialog.Title className="text-base font-semibold text-fg">{title}</Dialog.Title><Dialog.Description className="mt-1 text-xs leading-5 text-fg-muted">{description}</Dialog.Description></div>
+            <Dialog.Close asChild><Button type="button" variant="ghost" className="size-8 shrink-0 p-0" aria-label={cancelLabel}><X className="size-4" /></Button></Dialog.Close>
+          </header>
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">{children}</div>
+          <footer className="flex shrink-0 justify-end gap-2 border-t border-edge px-5 py-3">
+            <Dialog.Close asChild><Button type="button">{cancelLabel}</Button></Dialog.Close>
+            <Button type="submit" variant="primary" disabled={submitDisabled}>{submitLabel}</Button>
+          </footer>
+        </form>
+      </Dialog.Content>
+    </Dialog.Portal>
+  </Dialog.Root>;
 }
 
 function draftSignature(value: unknown): string {
@@ -222,11 +255,14 @@ function UnderstandingPanel({ items, quality, language, t, onChanged }: { items:
   const submit = async (event: FormEvent) => { event.preventDefault(); if (!statement.trim()) return; await createUnderstanding({ statement, kind }); setStatement(''); setAdding(false); await onChanged(); };
   return <div className="space-y-5">
     <div className="flex items-start justify-between gap-4"><p className="max-w-2xl text-sm leading-6 text-fg-muted">{t.understoodHint}</p><Button variant="primary" onClick={() => setAdding(true)}><Plus className="size-4" />{t.addUnderstanding}</Button></div>
+    <AddItemDialog open={adding} onOpenChange={setAdding} title={t.addUnderstanding} description={t.understoodHint} submitLabel={t.add} cancelLabel={t.cancel} submitDisabled={!statement.trim()} onSubmit={submit}>
+      <label className="block space-y-1.5 text-sm"><span className="font-medium text-fg">{t.statement}</span><textarea autoFocus className={inputClass} rows={4} placeholder={t.statement} value={statement} onChange={(event) => setStatement(event.target.value)} /></label>
+      <label className="block space-y-1.5 text-sm"><span className="font-medium text-fg">{t.kind}</span><Select value={kind} onChange={(event) => setKind(event.target.value as UnderstandingKind)}>{Object.entries(kindLabels).map(([value, label]) => <SelectOption key={value} value={value}>{label[language]}</SelectOption>)}</Select></label>
+    </AddItemDialog>
     <UnderstandingQualitySummary quality={quality} t={t} />
     <FocusPanel t={t} />
-    {adding ? <Card><form className="space-y-3" onSubmit={submit}><textarea autoFocus className={inputClass} rows={3} placeholder={t.statement} value={statement} onChange={(event) => setStatement(event.target.value)} /><Select value={kind} onChange={(event) => setKind(event.target.value as UnderstandingKind)}>{Object.entries(kindLabels).map(([value, label]) => <SelectOption key={value} value={value}>{label[language]}</SelectOption>)}</Select><div className="flex gap-2"><Button type="submit" variant="primary">{t.add}</Button><Button onClick={() => setAdding(false)}>{t.cancel}</Button></div></form></Card> : null}
-    {review.length ? <section className="space-y-3"><h2 className="text-sm font-semibold text-fg">{t.review} · {review.length}</h2>{review.map((item) => <UnderstandingItemCard key={item.id} item={item} language={language} t={t} onChanged={onChanged} />)}</section> : null}
-    <section className="space-y-3"><h2 className="text-sm font-semibold text-fg">{t.active} · {active.length}</h2>{active.length ? active.map((item) => <UnderstandingItemCard key={item.id} item={item} language={language} t={t} onChanged={onChanged} />) : <Empty>{t.emptyUnderstanding}</Empty>}</section>
+    {review.length ? <section className="space-y-2"><h2 className="text-sm font-semibold text-fg">{t.review} · {review.length}</h2><div className="divide-y divide-edge overflow-hidden rounded-2xl border border-edge bg-surface-panel">{review.map((item) => <UnderstandingItemCard key={item.id} item={item} language={language} t={t} onChanged={onChanged} />)}</div></section> : null}
+    <section className="space-y-2"><h2 className="text-sm font-semibold text-fg">{t.active} · {active.length}</h2>{active.length ? <div className="divide-y divide-edge overflow-hidden rounded-2xl border border-edge bg-surface-panel">{active.map((item) => <UnderstandingItemCard key={item.id} item={item} language={language} t={t} onChanged={onChanged} />)}</div> : <Empty>{t.emptyUnderstanding}</Empty>}</section>
   </div>;
 }
 
@@ -241,12 +277,10 @@ function UnderstandingQualitySummary({ quality, t }: {
     [t.qualityAcceptance, rate(quality.decisions.acceptanceRate)],
     [t.qualityRecall, rate(quality.recall.helpfulRate)],
   ];
-  return <Card>
-    <h2 className="text-sm font-semibold text-fg">{t.qualityTitle}</h2>
-    <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-      {values.map(([label, value]) => <div key={label} className="rounded-xl bg-surface-muted px-3 py-2.5"><p className="text-[11px] text-fg-subtle">{label}</p><p className="mt-1 text-sm font-semibold text-fg">{value}</p></div>)}
-    </div>
-  </Card>;
+  return <section className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl bg-surface-muted px-3 py-2.5">
+    <h2 className="text-xs font-medium text-fg-muted">{t.qualityTitle}</h2>
+    {values.map(([label, value]) => <div key={label} className="flex items-baseline gap-1.5 text-xs"><span className="text-fg-subtle">{label}</span><span className="font-semibold text-fg">{value}</span></div>)}
+  </section>;
 }
 
 function UnderstandingItemCard({ item, language, t, onChanged }: {
@@ -270,37 +304,41 @@ function UnderstandingItemCard({ item, language, t, onChanged }: {
     },
   });
 
-  return <Card>
+  return <article className="px-4 py-3 sm:px-5">
     <div onBlurCapture={autosave.onBlurCapture}>
-      <div className="flex items-start justify-between gap-3"><div className="min-w-0 flex-1">
-        <div className="mb-2 flex flex-wrap items-center gap-2"><span className="rounded-full bg-surface-muted px-2 py-0.5 text-[11px] font-medium text-fg-muted">{kindLabels[item.kind][language]}</span><span className="text-xs text-fg-subtle">{item.explicitness === 'explicit' ? t.sourceExplicit : item.explicitness === 'observed' ? t.sourceObserved : t.sourceInferred}</span></div>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-4"><div className="min-w-0 flex-1">
         {editing ? <textarea autoFocus className={inputClass} value={draft} onChange={(event) => setDraft(event.target.value)} rows={3} /> : <p className="text-sm leading-6 text-fg">{draft}</p>}
-      </div></div>
-      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-fg-subtle"><span>{kindLabels[item.kind][language]}</span><span>·</span><span>{item.explicitness === 'explicit' ? t.sourceExplicit : item.explicitness === 'observed' ? t.sourceObserved : t.sourceInferred}</span></div>
+      </div>
+      <div className="flex shrink-0 flex-wrap items-center gap-1 sm:justify-end">
         {editing ? <Button variant="ghost" onClick={() => { autosave.flush(); setEditing(false); }}>{t.done}</Button> : <Button variant="ghost" onClick={() => setEditing(true)}><Pencil className="size-3.5" />{t.edit}</Button>}
         {item.status !== 'active' ? <><Button variant="primary" onClick={async () => { const result = await updateUnderstanding(item.id, { status: 'active' }); await onChanged(result.understanding); }}>{t.confirm}</Button><Button onClick={async () => { const result = await updateUnderstanding(item.id, { status: 'rejected' }); await onChanged(result.understanding); }}>{t.reject}</Button></> : null}
         <Button variant="ghost" className="text-danger" onClick={async () => { if (!deleting) { setDeleting(true); return; } await deleteUnderstanding(item.id); setDeleting(false); await onChanged(); }}><Trash2 className="size-3.5" />{deleting ? t.confirmDelete : t.delete}</Button>
-        {editing || autosave.status !== 'idle' ? <AutosaveStatus className="ml-auto" status={autosave.status} error={autosave.error} /> : null}
-      </div>
+      </div></div>
+      {editing || autosave.status !== 'idle' ? <AutosaveStatus className="mt-2" status={autosave.status} error={autosave.error} /> : null}
     </div>
-  </Card>;
+  </article>;
 }
 
 function FocusPanel({ t }: { t: typeof copy.en | typeof copy.zh }) {
   const { data, error, isLoading, mutate } = useSWR<UserFocus[]>('you-focuses', fetchUserFocuses);
+  const [deleting, setDeleting] = useState<string | null>(null);
   if (isLoading) return <Skeleton className="h-40 rounded-2xl" />;
   if (error) return <Empty>{t.error}</Empty>;
   const focuses = (data ?? []).filter((focus) => focus.status !== 'rejected');
-  return <section className="space-y-3">
-    <div><h2 className="text-sm font-semibold text-fg">{t.focuses}</h2><p className="mt-1 text-xs leading-5 text-fg-muted">{t.focusHint}</p></div>
-    {focuses.length ? focuses.map((focus) => <Card key={focus.id}>
-      <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-medium text-fg">{focus.title}</p><span className="rounded-full bg-surface-muted px-2 py-0.5 text-[11px] text-fg-muted">{focus.status}</span></div><p className="mt-2 text-sm leading-6 text-fg-muted">{focus.summary}</p></div><span className="text-xs tabular-nums text-fg-subtle">{Math.round(focus.confidence * 100)}%</span></div>
-      <div className="mt-4 flex flex-wrap gap-2">
+  const statusLabel = (status: UserFocus['status']) => status === 'candidate' ? t.focusCandidate : status === 'active' ? t.focusActive : status === 'paused' ? t.focusPaused : t.focusCompleted;
+  const confidenceLabel = (confidence: number) => confidence >= 0.85 ? t.confidenceHigh : confidence >= 0.65 ? t.confidenceMedium : t.confidenceLow;
+  return <section className="space-y-2">
+    <div><h2 className="text-sm font-semibold text-fg">{t.focuses} · {focuses.length}</h2><p className="mt-1 text-xs leading-5 text-fg-muted">{t.focusHint}</p></div>
+    {focuses.length ? <div className="divide-y divide-edge overflow-hidden rounded-2xl border border-edge bg-surface-panel">{focuses.map((focus) => <article key={focus.id} className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:px-5">
+      <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-medium text-fg">{focus.title}</p><span className="rounded-full bg-surface-muted px-2 py-0.5 text-[11px] text-fg-muted">{statusLabel(focus.status)}</span><span className="text-[11px] text-fg-subtle">{t.confidence} · {confidenceLabel(focus.confidence)}</span></div><p className="mt-1 text-sm leading-5 text-fg-muted">{focus.summary}</p></div>
+      <div className="flex shrink-0 flex-wrap gap-1 sm:justify-end">
         {focus.status !== 'active' ? <Button variant="primary" onClick={async () => { await updateUserFocusStatus(focus.id, 'active'); await mutate(); }}>{t.activate}</Button> : <Button onClick={async () => { await updateUserFocusStatus(focus.id, 'paused'); await mutate(); }}>{t.pause}</Button>}
         <Button variant="ghost" onClick={async () => { await updateUserFocusStatus(focus.id, 'completed'); await mutate(); }}>{t.complete}</Button>
         {focus.status === 'candidate' ? <Button variant="ghost" className="text-danger" onClick={async () => { await updateUserFocusStatus(focus.id, 'rejected'); await mutate(); }}>{t.reject}</Button> : null}
+        <Button variant="ghost" className="text-danger" onClick={async () => { if (deleting !== focus.id) { setDeleting(focus.id); return; } await deleteUserFocus(focus.id); setDeleting(null); await mutate(); }}><Trash2 className="size-3.5" />{deleting === focus.id ? t.confirmDelete : t.delete}</Button>
       </div>
-    </Card>) : <Empty>{t.noFocuses}</Empty>}
+    </article>)}</div> : <Empty>{t.noFocuses}</Empty>}
   </section>;
 }
 
@@ -309,34 +347,108 @@ function RulesPanel({ rules, language, t, onChanged }: { rules: CollaborationRul
   const [statement, setStatement] = useState('');
   const [category, setCategory] = useState<CollaborationRule['category']>('communication');
   const [deleting, setDeleting] = useState<string | null>(null);
+  const visibleRules = rules.filter((rule) => rule.status !== 'archived');
   const submit = async (event: FormEvent) => { event.preventDefault(); if (!statement.trim()) return; await createCollaborationRule({ statement, category }); setStatement(''); setAdding(false); await onChanged(); };
   return <div className="space-y-5">
     <div className="flex items-start justify-between gap-4"><p className="max-w-2xl text-sm leading-6 text-fg-muted">{t.rulesHint}</p><Button variant="primary" onClick={() => setAdding(true)}><Plus className="size-4" />{t.addRule}</Button></div>
-    {adding ? <Card><form className="space-y-3" onSubmit={submit}><textarea autoFocus className={inputClass} rows={3} placeholder={t.ruleStatement} value={statement} onChange={(event) => setStatement(event.target.value)} /><Select value={category} onChange={(event) => setCategory(event.target.value as CollaborationRule['category'])}>{Object.entries(ruleLabels).map(([value, label]) => <SelectOption key={value} value={value}>{label[language]}</SelectOption>)}</Select><div className="flex gap-2"><Button type="submit" variant="primary">{t.add}</Button><Button onClick={() => setAdding(false)}>{t.cancel}</Button></div></form></Card> : null}
-    {rules.length ? rules.filter((rule) => rule.status !== 'archived').map((rule) => <Card key={rule.id}><div className="flex items-start justify-between gap-4"><div><span className="rounded-full bg-surface-muted px-2 py-0.5 text-[11px] font-medium text-fg-muted">{ruleLabels[rule.category][language]}</span><p className={`mt-3 text-sm leading-6 ${rule.status === 'disabled' ? 'text-fg-subtle line-through' : 'text-fg'}`}>{rule.statement}</p></div><span className="text-xs tabular-nums text-fg-subtle">P{rule.priority}</span></div><div className="mt-4 flex gap-2"><Button variant="ghost" onClick={async () => { await updateCollaborationRule(rule.id, { status: rule.status === 'active' ? 'disabled' : 'active' }); await onChanged(); }}>{rule.status === 'active' ? t.disable : t.enable}</Button><Button variant="ghost" className="text-danger" onClick={async () => { if (deleting !== rule.id) { setDeleting(rule.id); return; } await deleteCollaborationRule(rule.id); setDeleting(null); await onChanged(); }}><Trash2 className="size-3.5" />{deleting === rule.id ? t.confirmDelete : t.delete}</Button></div></Card>) : <Empty>{t.emptyRules}</Empty>}
+    <AddItemDialog open={adding} onOpenChange={setAdding} title={t.addRule} description={t.rulesHint} submitLabel={t.add} cancelLabel={t.cancel} submitDisabled={!statement.trim()} onSubmit={submit}>
+      <label className="block space-y-1.5 text-sm"><span className="font-medium text-fg">{t.ruleStatement}</span><textarea autoFocus className={inputClass} rows={4} placeholder={t.ruleStatement} value={statement} onChange={(event) => setStatement(event.target.value)} /></label>
+      <label className="block space-y-1.5 text-sm"><span className="font-medium text-fg">{t.category}</span><Select value={category} onChange={(event) => setCategory(event.target.value as CollaborationRule['category'])}>{Object.entries(ruleLabels).map(([value, label]) => <SelectOption key={value} value={value}>{label[language]}</SelectOption>)}</Select></label>
+    </AddItemDialog>
+    <section className="space-y-2">
+      <h2 className="text-sm font-semibold text-fg">{t.collaboration} · {visibleRules.length}</h2>
+      {visibleRules.length ? <div className="divide-y divide-edge overflow-hidden rounded-2xl border border-edge bg-surface-panel">{visibleRules.map((rule) => <article key={rule.id} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-start sm:gap-4 sm:px-5">
+        <div className="min-w-0 flex-1"><p className={`text-sm leading-6 ${rule.status === 'disabled' ? 'text-fg-subtle line-through' : 'text-fg'}`}>{rule.statement}</p><div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-fg-subtle"><span>{ruleLabels[rule.category][language]}</span><span>·</span><span>P{rule.priority}</span>{rule.status === 'disabled' ? <><span>·</span><span>{t.disable}</span></> : null}</div></div>
+        <div className="flex shrink-0 flex-wrap items-center gap-1 sm:justify-end"><Button variant="ghost" onClick={async () => { await updateCollaborationRule(rule.id, { status: rule.status === 'active' ? 'disabled' : 'active' }); await onChanged(); }}>{rule.status === 'active' ? t.disable : t.enable}</Button><Button variant="ghost" className="text-danger" onClick={async () => { if (deleting !== rule.id) { setDeleting(rule.id); return; } await deleteCollaborationRule(rule.id); setDeleting(null); await onChanged(); }}><Trash2 className="size-3.5" />{deleting === rule.id ? t.confirmDelete : t.delete}</Button></div>
+      </article>)}</div> : <Empty>{t.emptyRules}</Empty>}
+    </section>
   </div>;
 }
 
-type SourcesPanelData = { grants: UnderstandingSourceGrant[]; connectors: ConnectorInstance[] };
+type SourcesPanelData = { grants: UnderstandingSourceGrant[]; connectors: ConnectorInstance[]; catalog: ConnectorDefinition[] };
 
 async function fetchSourcesPanelData(): Promise<SourcesPanelData> {
-  const [grants, connectors] = await Promise.all([fetchUnderstandingSourceGrants(), fetchConnectorInstances()]);
-  return { grants, connectors };
+  const [grants, connectors, catalog] = await Promise.all([fetchUnderstandingSourceGrants(), fetchConnectorInstances(), fetchConnectorCatalog()]);
+  return { grants, connectors, catalog };
 }
 
 function SourcesPanel({ t }: { t: typeof copy.en | typeof copy.zh }) {
   const { data, error, isLoading, mutate } = useSWR<SourcesPanelData>('you-understanding-sources', fetchSourcesPanelData);
+  const [runningAction, setRunningAction] = useState<{ grantId: string; kind: 'refresh' | 'revoke' } | null>(null);
+  const [confirmingRevoke, setConfirmingRevoke] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
   if (isLoading) return <Skeleton className="h-64 rounded-2xl" />;
   if (error) return <Empty>{t.error} <button className="text-accent hover:underline" onClick={() => void mutate()}>{t.retry}</button></Empty>;
   const grants = data?.grants ?? [];
   const instances = data?.connectors ?? [];
+  const definitions = new Map((data?.catalog ?? []).map((definition) => [definition.id, definition]));
+  const definitionForGrant = (grant: UnderstandingSourceGrant) => {
+    const normalizedName = grant.displayName.trim().toLocaleLowerCase();
+    const matchingInstance = instances.find((instance) => instance.displayName.trim().toLocaleLowerCase() === normalizedName);
+    if (matchingInstance) return definitions.get(matchingInstance.connectorId);
+    return [...definitions.values()].find((definition) => (
+      definition.displayName.trim().toLocaleLowerCase() === normalizedName
+      || grant.sourceKey.toLocaleLowerCase().includes(definition.id.toLocaleLowerCase())
+    ));
+  };
+  const actionError = (actionError: unknown) => `${t.actionFailed}: ${actionError instanceof Error ? actionError.message : String(actionError)}`;
+  const refreshGrant = async (grant: UnderstandingSourceGrant) => {
+    setFeedback(null);
+    setConfirmingRevoke(null);
+    setRunningAction({ grantId: grant.id, kind: 'refresh' });
+    try {
+      await refreshUnderstandingSourceGrant(grant.id);
+      await mutate().catch(() => undefined);
+      setFeedback({ tone: 'success', message: `${grant.displayName}: ${t.refreshStarted}` });
+    } catch (refreshError) {
+      setFeedback({ tone: 'error', message: actionError(refreshError) });
+    } finally {
+      setRunningAction(null);
+    }
+  };
+  const revokeGrant = async (grant: UnderstandingSourceGrant) => {
+    if (confirmingRevoke !== grant.id) {
+      setConfirmingRevoke(grant.id);
+      setFeedback(null);
+      return;
+    }
+    setRunningAction({ grantId: grant.id, kind: 'revoke' });
+    try {
+      await revokeUnderstandingSourceGrant(grant.id);
+      await mutate().catch(() => undefined);
+      setConfirmingRevoke(null);
+      setFeedback({ tone: 'success', message: `${grant.displayName}: ${t.revokeDone}` });
+    } catch (revokeError) {
+      setFeedback({ tone: 'error', message: actionError(revokeError) });
+    } finally {
+      setRunningAction(null);
+    }
+  };
   return <div className="space-y-5">
     <div className="flex items-start justify-between gap-4"><p className="max-w-2xl text-sm leading-6 text-fg-muted">{t.sourcesHint}</p><Button asChild variant="primary"><Link to="/connectors?understanding=1&returnTo=%2Fyou%3Ftab%3Dsources">{t.manageSources}<ExternalLink className="size-4" /></Link></Button></div>
-    {grants.length ? <div className="grid gap-3 sm:grid-cols-2">{grants.map((grant) => <Card key={grant.id}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-medium text-fg">{grant.displayName}</p><p className="mt-1 text-xs text-fg-subtle">{grant.accessMode === 'continuous' ? t.continuous : t.once} · {grant.processingPolicy === 'local_only' ? t.localOnly : grant.retentionPolicy === 'derived_only' ? t.derivedOnly : grant.retentionPolicy}</p>{grant.lastCollectedAt ? <p className="mt-1 text-xs text-fg-subtle">{new Date(grant.lastCollectedAt).toLocaleString()}</p> : null}</div><div className="flex shrink-0 flex-col items-end gap-1">{grant.accessMode === 'continuous' ? <Button variant="ghost" onClick={async () => { await refreshUnderstandingSourceGrant(grant.id); await mutate(); }}>{t.refresh}</Button> : null}<Button variant="ghost" className="text-danger" onClick={async () => { await revokeUnderstandingSourceGrant(grant.id); await mutate(); }}>{t.revoke}</Button></div></div></Card>)}</div> : <Empty>{t.noSources}</Empty>}
-    {instances.length ? <div className="grid gap-3 sm:grid-cols-2">{instances.map((instance) => {
-      const ready = instance.enabled && (instance.status === 'connected' || instance.connectionStatus === 'connected' || instance.authStatus === 'connected');
-      return <Card key={instance.instanceId}><div className="flex items-center justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-medium text-fg">{instance.displayName}</p><p className="mt-1 truncate text-xs text-fg-subtle">{instance.connectorId}</p></div><span className={`shrink-0 rounded-full px-2 py-1 text-xs ${ready ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning'}`}>{ready ? t.connected : t.unavailable}</span></div></Card>;
-    })}</div> : null}
+    {feedback ? <p role="status" aria-live="polite" className={`rounded-xl px-3 py-2 text-sm ${feedback.tone === 'success' ? 'bg-success-soft text-success' : 'bg-danger/10 text-danger'}`}>{feedback.message}</p> : null}
+    <section className="space-y-2"><h2 className="text-sm font-semibold text-fg">{t.authorizedSources} · {grants.length}</h2>
+      {grants.length ? <div className="grid gap-3 sm:grid-cols-2">{grants.map((grant) => {
+        const definition = definitionForGrant(grant);
+        return <article key={grant.id} className="flex min-h-28 items-start gap-3 rounded-2xl border border-edge bg-surface-panel p-4">
+          {definition ? <ConnectorLogo connector={definition} size="sm" /> : <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-edge bg-surface-base"><Database className="size-4 text-fg-muted" /></span>}
+          <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-fg">{grant.displayName}</p><p className="mt-1 text-xs leading-5 text-fg-subtle">{grant.accessMode === 'continuous' ? t.continuous : t.once} · {grant.processingPolicy === 'local_only' ? t.localOnly : grant.retentionPolicy === 'derived_only' ? t.derivedOnly : grant.retentionPolicy}</p>{grant.lastCollectedAt ? <p className="mt-1 text-xs text-fg-subtle">{new Date(grant.lastCollectedAt).toLocaleString()}</p> : null}</div>
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">{grant.accessMode === 'continuous' ? <Button variant="ghost" disabled={runningAction !== null} aria-busy={runningAction?.grantId === grant.id && runningAction.kind === 'refresh'} onClick={() => void refreshGrant(grant)}>{runningAction?.grantId === grant.id && runningAction.kind === 'refresh' ? <><Loader2 className="size-4 animate-spin" />{t.refreshing}</> : t.refresh}</Button> : null}<Button variant="ghost" className="text-danger" title={t.revokeHint} aria-label={`${t.revoke}: ${grant.displayName}`} disabled={runningAction !== null} aria-busy={runningAction?.grantId === grant.id && runningAction.kind === 'revoke'} onClick={() => void revokeGrant(grant)}>{runningAction?.grantId === grant.id && runningAction.kind === 'revoke' ? <><Loader2 className="size-4 animate-spin" />{t.revoking}</> : confirmingRevoke === grant.id ? t.confirmRevoke : t.revoke}</Button></div>
+        </article>;
+      })}</div> : <Empty>{t.noSources}</Empty>}
+    </section>
+    <section className="space-y-2"><h2 className="text-sm font-semibold text-fg">{t.connectorsTitle} · {instances.length}</h2>
+      {instances.length ? <div className="grid gap-3 sm:grid-cols-2">{instances.map((instance) => {
+        const ready = instance.enabled && (instance.status === 'connected' || instance.connectionStatus === 'connected' || instance.authStatus === 'connected');
+        const definition = definitions.get(instance.connectorId);
+        return <Link key={instance.instanceId} to={`/connectors?tab=connected&instance=${encodeURIComponent(instance.instanceId)}`} aria-label={`${t.openConnector}: ${instance.displayName}`} className="group flex min-h-24 items-center gap-3 rounded-2xl border border-edge bg-surface-panel p-4 transition-colors hover:border-edge-strong hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">
+          <ConnectorLogo connector={definition ?? { displayName: instance.displayName }} />
+          <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-fg">{instance.displayName}</p><p className="mt-1 truncate text-xs text-fg-subtle">{instance.connectorId}</p></div>
+          <span className={`shrink-0 rounded-full px-2 py-1 text-xs ${ready ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning'}`}>{ready ? t.connected : t.unavailable}</span>
+          <ChevronRight className="size-4 shrink-0 text-fg-subtle transition-transform group-hover:translate-x-0.5" />
+        </Link>;
+      })}</div> : <Empty>{t.noConnectors}</Empty>}
+    </section>
   </div>;
 }
 
