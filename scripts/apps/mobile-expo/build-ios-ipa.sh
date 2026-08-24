@@ -22,6 +22,9 @@ CLEAN_PREBUILD="${CLEAN_PREBUILD:-1}"
 ALLOW_PROVISIONING_UPDATES="${ALLOW_PROVISIONING_UPDATES:-1}"
 API_KEY="${APP_STORE_CONNECT_API_KEY:-}"
 API_ISSUER="${APP_STORE_CONNECT_API_ISSUER:-}"
+IOS_PROVISIONING_PROFILE_MAIN="${IOS_PROVISIONING_PROFILE_MAIN:-}"
+IOS_PROVISIONING_PROFILE_SHARE="${IOS_PROVISIONING_PROFILE_SHARE:-}"
+IOS_PROVISIONING_PROFILE_WIDGET="${IOS_PROVISIONING_PROFILE_WIDGET:-}"
 
 usage() {
   cat <<EOF
@@ -55,6 +58,9 @@ Optional build variables:
   EXPORT_METHOD                    default: app-store-connect
   SIGNING_STYLE                    default: automatic
   ARCHIVE_SIGNING                  default: unsigned; automatic|distribution|unsigned
+  IOS_PROVISIONING_PROFILE_MAIN    main app profile UUID/name for manual export
+  IOS_PROVISIONING_PROFILE_SHARE   ShareIntake profile UUID/name for manual export
+  IOS_PROVISIONING_PROFILE_WIDGET  widget profile UUID/name for manual export
   EXPORT_OPTIONS_PLIST             default: generated under dist/ios/
   PREBUILD=auto|1|0                default: 1; regenerate the native project
   CLEAN_PREBUILD=0                 preserve the native project during prebuild
@@ -133,6 +139,26 @@ EOF
     cat >> "$EXPORT_OPTIONS_PLIST" <<EOF
   <key>teamID</key>
   <string>$DEVELOPMENT_TEAM</string>
+EOF
+  fi
+
+  if [[ "$SIGNING_STYLE" == "manual" ]]; then
+    if [[ -z "$IOS_PROVISIONING_PROFILE_MAIN" || -z "$IOS_PROVISIONING_PROFILE_SHARE" || -z "$IOS_PROVISIONING_PROFILE_WIDGET" ]]; then
+      echo "Error: all IOS_PROVISIONING_PROFILE_* values are required for manual signing" >&2
+      exit 1
+    fi
+    cat >> "$EXPORT_OPTIONS_PLIST" <<EOF
+  <key>signingCertificate</key>
+  <string>Apple Distribution</string>
+  <key>provisioningProfiles</key>
+  <dict>
+    <key>ai.xopc.xopc</key>
+    <string>$IOS_PROVISIONING_PROFILE_MAIN</string>
+    <key>ai.xopc.xopc.ShareIntake</key>
+    <string>$IOS_PROVISIONING_PROFILE_SHARE</string>
+    <key>ai.xopc.xopc.ExpoWidgetsTarget</key>
+    <string>$IOS_PROVISIONING_PROFILE_WIDGET</string>
+  </dict>
 EOF
   fi
 

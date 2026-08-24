@@ -103,12 +103,68 @@ jobs:
           chmod 600 "$KEY_PATH"
           echo "path=$KEY_PATH" >> "$GITHUB_OUTPUT"
 
+      - name: Install iOS distribution signing assets
+        id: ios_signing
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_PASSWORD }}
+          PROFILE_MAIN_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_MAIN_BASE64 }}
+          PROFILE_SHARE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_SHARE_BASE64 }}
+          PROFILE_WIDGET_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_WIDGET_BASE64 }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          for value in CERTIFICATE_BASE64 CERTIFICATE_PASSWORD PROFILE_MAIN_BASE64 PROFILE_SHARE_BASE64 PROFILE_WIDGET_BASE64 APPLE_TEAM_ID; do
+            if [[ -z "${!value}" ]]; then
+              echo "Missing GitHub secret value: $value" >&2
+              exit 1
+            fi
+          done
+
+          KEYCHAIN_PATH="$RUNNER_TEMP/xopc-ios-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 24)"
+          CERTIFICATE_PATH="$RUNNER_TEMP/xopc-distribution.p12"
+          printf '%s' "$CERTIFICATE_BASE64" | base64 -D > "$CERTIFICATE_PATH"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERTIFICATE_PATH" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep 'Apple Distribution'
+
+          PROFILE_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "$PROFILE_DIR"
+          install_profile() {
+            local label="$1"
+            local encoded="$2"
+            local bundle_id="$3"
+            local profile_path="$RUNNER_TEMP/${label}.mobileprovision"
+            local plist_path="$RUNNER_TEMP/${label}.plist"
+            printf '%s' "$encoded" | base64 -D > "$profile_path"
+            security cms -D -i "$profile_path" > "$plist_path"
+            local uuid
+            local application_identifier
+            uuid="$(plutil -extract UUID raw -o - "$plist_path")"
+            application_identifier="$(plutil -extract Entitlements.application-identifier raw -o - "$plist_path")"
+            test "$application_identifier" = "$APPLE_TEAM_ID.$bundle_id"
+            cp "$profile_path" "$PROFILE_DIR/$uuid.mobileprovision"
+            echo "${label}_uuid=$uuid" >> "$GITHUB_OUTPUT"
+          }
+          install_profile main "$PROFILE_MAIN_BASE64" ai.xopc.xopc
+          install_profile share "$PROFILE_SHARE_BASE64" ai.xopc.xopc.ShareIntake
+          install_profile widget "$PROFILE_WIDGET_BASE64" ai.xopc.xopc.ExpoWidgetsTarget
+
       - name: Build signed production IPA
         env:
           APP_STORE_CONNECT_API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
           APP_STORE_CONNECT_API_ISSUER: ${{ secrets.APP_STORE_CONNECT_API_ISSUER }}
           APP_STORE_CONNECT_PRIVATE_KEY_PATH: ${{ steps.app_store_key.outputs.path }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          SIGNING_STYLE: manual
+          ALLOW_PROVISIONING_UPDATES: "0"
+          IOS_PROVISIONING_PROFILE_MAIN: ${{ steps.ios_signing.outputs.main_uuid }}
+          IOS_PROVISIONING_PROFILE_SHARE: ${{ steps.ios_signing.outputs.share_uuid }}
+          IOS_PROVISIONING_PROFILE_WIDGET: ${{ steps.ios_signing.outputs.widget_uuid }}
           SKIP_QUALITY: "1"
           UPLOAD_TO_TESTFLIGHT: "0"
         run: pnpm run mobile:release:ios:testflight

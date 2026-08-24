@@ -53,6 +53,7 @@
     "mobile:test": "pnpm -C apps/mobile-expo test",
     "mobile:test:stream": "pnpm --filter @xopcai/agent-stream-client test",
     "mobile:release:patch": "bash scripts/apps/mobile-expo/release-patch.sh",
+    "mobile:configure:ios:github": "bash scripts/apps/mobile-expo/configure-ios-github-secrets.sh",
     "mobile:release:ios:testflight": "bash scripts/apps/mobile-expo/release-ios-testflight.sh",
     "dev": "tsx src/cli/bin.ts",
     "dev:init": "sh -c 'mkdir -p \"$HOME/.xopc-dev\" && XOPC_STATE_DIR=\"$HOME/.xopc-dev\" XOPC_CONFIG_PATH=\"$HOME/.xopc-dev/xopc.json\" XOPC_CONFIG=\"$HOME/.xopc-dev/xopc.json\" XOPC_LOG_DIR=\"$HOME/.xopc-dev/logs\" XOPC_LOG_LEVEL=info tsx src/cli/bin.ts init \"$@\"' --",

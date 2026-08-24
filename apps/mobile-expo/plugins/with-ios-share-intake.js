@@ -206,6 +206,34 @@ function ensureShareExtensionTarget(project, appBundleIdentifier, version = '1.0
   return targetUuid;
 }
 
+function ensureEasAppExtensionConfig(config, appBundleIdentifier) {
+  const extension = {
+    targetName: TARGET_NAME,
+    bundleIdentifier: `${appBundleIdentifier}.${TARGET_NAME}`,
+  };
+  const iosBuildConfig = config.extra?.eas?.build?.experimental?.ios ?? {};
+  const appExtensions = iosBuildConfig.appExtensions ?? [];
+  const withoutShareIntake = appExtensions.filter((entry) => entry.targetName !== TARGET_NAME);
+
+  config.extra = {
+    ...config.extra,
+    eas: {
+      ...config.extra?.eas,
+      build: {
+        ...config.extra?.eas?.build,
+        experimental: {
+          ...config.extra?.eas?.build?.experimental,
+          ios: {
+            ...iosBuildConfig,
+            appExtensions: [...withoutShareIntake, extension],
+          },
+        },
+      },
+    },
+  };
+  return config;
+}
+
 function withIosShareIntake(config) {
   const appBundleIdentifier = config.ios?.bundleIdentifier;
   const version = config.version ?? '1.0';
@@ -213,6 +241,8 @@ function withIosShareIntake(config) {
   if (!appBundleIdentifier) {
     throw new Error('with-ios-share-intake requires expo.ios.bundleIdentifier');
   }
+
+  config = ensureEasAppExtensionConfig(config, appBundleIdentifier);
 
   config = withDangerousMod(config, ['ios', (config) => {
     ensureShareExtensionFiles(config.modRequest.platformProjectRoot, `${appBundleIdentifier}.${TARGET_NAME}`);
@@ -229,4 +259,5 @@ module.exports = withIosShareIntake;
 module.exports.TARGET_NAME = TARGET_NAME;
 module.exports.buildShareExtensionInfoPlist = buildShareExtensionInfoPlist;
 module.exports.buildShareViewControllerSwift = buildShareViewControllerSwift;
+module.exports.ensureEasAppExtensionConfig = ensureEasAppExtensionConfig;
 module.exports.ensureShareExtensionTarget = ensureShareExtensionTarget;
