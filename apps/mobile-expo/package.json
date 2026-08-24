@@ -29,6 +29,7 @@
     "build:ios:preview": "eas build --platform ios --profile preview",
     "build:ios:eas": "eas build --platform ios --profile production",
     "build:ios": "bash ../../scripts/apps/mobile-expo/build-ios-ipa.sh",
+    "release:ios:testflight": "bash ../../scripts/apps/mobile-expo/release-ios-testflight.sh",
     "submit:ios": "eas submit --platform ios --profile production --latest",
     "submit:ios:direct": "bash ../../scripts/apps/mobile-expo/upload-ios-ipa.sh"
   },

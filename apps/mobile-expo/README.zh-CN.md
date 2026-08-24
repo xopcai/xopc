@@ -256,14 +256,40 @@ EAS profile：
 | `pnpm -C apps/mobile-expo run submit:ios` | 提交最新生产 iOS build |
 | `pnpm -C apps/mobile-expo run submit:ios:direct` | 直接上传本地 `dist/xopc.ipa`，也可传 IPA URL 或本地路径 |
 
-本地 iOS 构建示例：
+### iOS 一键发布到 TestFlight
+
+本机已配置 App Store Connect API Key 时，执行：
+
+```bash
+APPLE_TEAM_ID="TEAMID1234" pnpm run mobile:release:ios:testflight
+```
+
+该命令依次运行移动端质量检查、重新生成 iOS 工程、构建并验证 production IPA，最后上传
+TestFlight。API 私钥默认从
+`~/.appstoreconnect/private_keys/AuthKey_<APP_STORE_CONNECT_API_KEY>.p8` 读取。只构建不上传：
+
+```bash
+UPLOAD_TO_TESTFLIGHT=0 APPLE_TEAM_ID="TEAMID1234" pnpm run mobile:release:ios:testflight
+```
+
+GitHub Actions 中的 `Mobile iOS TestFlight` 支持手动一键构建/上传。推送
+`mobile-expo-v*` 标签时会自动构建 production IPA 并上传 TestFlight，同时保存
+`xopc-ios-production` Artifact 30 天。需要以下 Secrets：
+
+- `APPLE_TEAM_ID`
+- `APP_STORE_CONNECT_API_KEY`
+- `APP_STORE_CONNECT_API_ISSUER`
+- `APP_STORE_CONNECT_PRIVATE_KEY_BASE64`
+
+底层本地 iOS 构建示例：
 
 ```bash
 DEVELOPMENT_TEAM="TEAMID1234" pnpm -C apps/mobile-expo run build:ios
 pnpm -C apps/mobile-expo run submit:ios:direct
 ```
 
-`build:ios` 默认用当前时间生成 iOS build number；需要固定值时可传 `IOS_BUILD_NUMBER=123`。
+`build:ios` 默认从 `app.json` 同步营销版本，并用当前时间生成唯一 iOS build number；需要
+固定值时可传 `IOS_BUILD_NUMBER=123`。
 
 如需让 Xcode 自动拉取签名配置，可复用提交脚本的 App Store Connect API Key 环境变量：
 

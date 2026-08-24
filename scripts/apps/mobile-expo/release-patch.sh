@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Patch release: sync → lint → typecheck → test → bump patch versions → commit → tag → atomic push.
-# Pushing the tag triggers the local GitHub runner Android build and GitHub Release.
+# Pushing the tag triggers Android artifacts, a GitHub Release, and the iOS TestFlight workflow.
 # Requires a clean git working tree on a branch. Uses remote GIT_REMOTE (default: origin).
 set -euo pipefail
 
@@ -98,4 +98,4 @@ if [[ "$REMOTE_HEAD_SHA" != "$RELEASE_SHA" ]]; then
 fi
 
 echo "Released ${TAG} (${RELEASE_SHA}) to ${REMOTE}/${BRANCH}"
-echo "GitHub Actions will build signed Android artifacts locally and publish a GitHub Release."
+echo "GitHub Actions will publish Android artifacts and upload the iOS build to TestFlight."
