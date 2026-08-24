@@ -30,6 +30,8 @@ type HomeDecision = HomeResponse['decisions'][number];
 type HomeAttention = HomeResponse['attention'][number];
 type HomeBriefingWin = HomeResponse['briefing']['wins'][number];
 type HomeAutomation = HomeResponse['upcomingAutomations'][number];
+type HomeFocusItem = HomeResponse['focusItems'][number];
+type HomeAction = NonNullable<HomeFocusItem['primaryAction']>;
 
 type HomeWorkflowRun = {
   id: string;
@@ -237,6 +239,219 @@ export function buildHomeBriefing(input: {
   };
 }
 
+function homeActionCopy(locale?: string) {
+  const isChinese = locale?.toLowerCase().startsWith('zh') ?? false;
+  return isChinese
+    ? {
+        approve: '允许并继续',
+        deny: '拒绝',
+        review: '查看并处理',
+        retry: '重试',
+        acknowledge: '暂时忽略',
+        viewProgress: '查看进度',
+        viewResult: '查看结果',
+        viewSchedule: '查看计划',
+        runningTask: '任务正在推进',
+        runningWorkflow: '工作流正在推进',
+        scheduled: '下一项定时工作',
+        organizeInbox: '整理收件箱',
+        organizeInboxSummary: '把刚捕获的内容整理成笔记、任务或后续行动。',
+        openInbox: '去整理',
+        startSomething: '今天想推进什么？',
+        startSomethingSummary: '把想要的结果交给我，我会从这里开始。',
+        askAi: '交给 Agent',
+      }
+    : {
+        approve: 'Allow and continue',
+        deny: 'Deny',
+        review: 'Review',
+        retry: 'Retry',
+        acknowledge: 'Dismiss',
+        viewProgress: 'View progress',
+        viewResult: 'View result',
+        viewSchedule: 'View schedule',
+        runningTask: 'Task in progress',
+        runningWorkflow: 'Workflow in progress',
+        scheduled: 'Next scheduled work',
+        organizeInbox: 'Organize your inbox',
+        organizeInboxSummary: 'Turn recent captures into notes, tasks, or next actions.',
+        openInbox: 'Organize',
+        startSomething: 'What would you like to move forward?',
+        startSomethingSummary: 'Hand me the outcome you want and I’ll take it from here.',
+        askAi: 'Ask an agent',
+      };
+}
+
+export function buildHomeFocusItems(input: {
+  locale?: string;
+  decisions: HomeDecision[];
+  attention: HomeAttention[];
+  activeWorkflowRuns: HomeWorkflowRun[];
+  runningTasks: HomeResponse['tasks']['running'];
+  wins: HomeBriefingWin[];
+  nextScheduled?: HomeAutomation;
+  inboxCount: number;
+  nowMs: number;
+}): HomeFocusItem[] {
+  const copy = homeActionCopy(input.locale);
+  const decisions = input.decisions.map((decision): HomeFocusItem => {
+    const openAction = decision.kind === 'agent_judgment' && decision.judgment
+      ? { type: 'open' as const, label: copy.review, target: 'inbox_judgment' as const, targetId: decision.judgment.inboxItemId }
+      : decision.kind === 'task'
+        ? { type: 'open' as const, label: copy.review, target: 'task' as const, targetId: decision.id.replace(/^task:/, '') }
+        : { type: 'open' as const, label: copy.review, target: 'work' as const };
+    const connectorActions = decision.response?.kind === 'connector_approval'
+      ? {
+          primaryAction: {
+            type: 'connector_decision' as const,
+            label: copy.approve,
+            approvalId: decision.response.approvalId,
+            decision: 'approve' as const,
+          },
+          secondaryActions: [{
+            type: 'connector_decision' as const,
+            label: copy.deny,
+            approvalId: decision.response.approvalId,
+            decision: 'deny' as const,
+          }],
+        }
+      : { primaryAction: openAction, secondaryActions: [] };
+    return {
+      id: decision.id,
+      kind: 'decision',
+      priority: decision.urgency === 'now' ? 100 : 90,
+      title: decision.title,
+      summary: decision.detail || copy.review,
+      statusLabel: copy.review,
+      updatedAt: decision.updatedAt,
+      pinnable: false,
+      openAction,
+      ...connectorActions,
+    };
+  });
+  const failures = input.attention.map((item): HomeFocusItem => ({
+    id: item.id,
+    kind: 'failure',
+    priority: 80,
+    title: item.title,
+    summary: item.detail,
+    updatedAt: item.updatedAt,
+    pinnable: false,
+    openAction: item.kind === 'workflow_run'
+      ? item.sessionKey
+        ? { type: 'open', label: copy.review, target: 'session', sessionKey: item.sessionKey }
+        : { type: 'open', label: copy.review, target: 'workflow_run', targetId: item.runId }
+      : { type: 'open', label: copy.review, target: 'automation', targetId: item.runId },
+    primaryAction: {
+      type: 'retry_run',
+      label: copy.retry,
+      subjectKind: item.kind,
+      runId: item.runId,
+    },
+    secondaryActions: [{
+      type: 'acknowledge_run',
+      label: copy.acknowledge,
+      subjectKind: item.kind,
+      runId: item.runId,
+    }],
+  }));
+  const workflows = input.activeWorkflowRuns.map((run): HomeFocusItem => {
+    const openAction: HomeAction = run.sessionKey
+      ? { type: 'open', label: copy.viewProgress, target: 'session', sessionKey: run.sessionKey }
+      : { type: 'open', label: copy.viewProgress, target: 'workflow_run', targetId: run.id };
+    return {
+      id: `workflow:${run.id}`,
+      kind: 'running',
+      priority: 60,
+      title: run.title,
+      summary: copy.runningWorkflow,
+      statusLabel: run.metrics.agentCount > 0
+        ? `${run.metrics.doneAgentCount}/${run.metrics.agentCount}`
+        : undefined,
+      updatedAt: run.startedAtMs ?? run.createdAtMs,
+      pinnable: true,
+      openAction,
+      primaryAction: openAction,
+      secondaryActions: [],
+    };
+  });
+  const tasks = input.runningTasks.map((task): HomeFocusItem => {
+    const openAction: HomeAction = { type: 'open', label: copy.viewProgress, target: 'task', targetId: task.id };
+    return {
+      id: `task:${task.id}`,
+      kind: 'running',
+      priority: 55,
+      title: task.title,
+      summary: copy.runningTask,
+      updatedAt: task.updatedAt,
+      pinnable: true,
+      openAction,
+      primaryAction: openAction,
+      secondaryActions: [],
+    };
+  });
+  const results = input.wins.map((win): HomeFocusItem => {
+    const openAction: HomeAction = win.kind === 'workflow_run'
+      ? { type: 'open', label: copy.viewResult, target: 'workflow_run', targetId: win.id.replace(/^workflow:/, '') }
+      : win.kind === 'automation_run'
+        ? { type: 'open', label: copy.viewResult, target: 'automation', targetId: win.id.replace(/^automation:/, '') }
+        : { type: 'open', label: copy.viewResult, target: 'task', targetId: win.id.replace(/^task:/, '') };
+    return {
+      id: win.id,
+      kind: 'result',
+      priority: 40,
+      title: win.title,
+      summary: copy.viewResult,
+      updatedAt: win.completedAt,
+      pinnable: true,
+      openAction,
+      primaryAction: openAction,
+      secondaryActions: [],
+    };
+  });
+  const scheduled: HomeFocusItem[] = input.nextScheduled ? [{
+    id: `automation:${input.nextScheduled.id}:scheduled`,
+    kind: 'scheduled',
+    priority: 30,
+    title: input.nextScheduled.name || input.nextScheduled.id,
+    summary: copy.scheduled,
+    statusLabel: new Date(input.nextScheduled.nextRunAt).toLocaleString(input.locale),
+    updatedAt: Date.parse(input.nextScheduled.nextRunAt),
+    pinnable: true,
+    openAction: { type: 'open', label: copy.viewSchedule, target: 'automation', targetId: input.nextScheduled.id },
+    primaryAction: { type: 'open', label: copy.viewSchedule, target: 'automation', targetId: input.nextScheduled.id },
+    secondaryActions: [],
+  }] : [];
+  const items = [...decisions, ...failures, ...workflows, ...tasks, ...results, ...scheduled]
+    .sort((left, right) => right.priority - left.priority || right.updatedAt - left.updatedAt);
+  if (items.length > 0) return items;
+  if (input.inboxCount > 0) {
+    return [{
+      id: 'suggestion:organize-inbox',
+      kind: 'suggestion',
+      priority: 10,
+      title: `${copy.organizeInbox} · ${input.inboxCount}`,
+      summary: copy.organizeInboxSummary,
+      updatedAt: input.nowMs,
+      pinnable: false,
+      openAction: { type: 'open', label: copy.openInbox, target: 'inbox' },
+      primaryAction: { type: 'open', label: copy.openInbox, target: 'inbox' },
+      secondaryActions: [],
+    }];
+  }
+  return [{
+    id: 'suggestion:ask-agent',
+    kind: 'suggestion',
+    priority: 10,
+    title: copy.startSomething,
+    summary: copy.startSomethingSummary,
+    updatedAt: input.nowMs,
+    pinnable: false,
+    primaryAction: { type: 'ask_ai', label: copy.askAi },
+    secondaryActions: [],
+  }];
+}
+
 export class HomeQueryService {
   readonly #runs = new TaskRunRepository();
   readonly #tasks = new TaskRepository();
@@ -399,6 +614,10 @@ export class HomeQueryService {
         completedAt: run.endedAtMs ?? run.createdAtMs,
       })),
     ].sort((left, right) => right.completedAt - left.completedAt);
+    const runningTasks = tasks.filter((task) => {
+      const state = this.#projector.project(task).operationalState;
+      return state === 'queued' || state === 'running' || state === 'verifying';
+    }).slice(0, 20);
     const briefing = buildHomeBriefing({
       locale,
       decisions,
@@ -409,8 +628,20 @@ export class HomeQueryService {
       nextScheduled: upcomingAutomations[0],
       nowMs,
     });
+    const focusItems = buildHomeFocusItems({
+      locale,
+      decisions,
+      attention,
+      activeWorkflowRuns,
+      runningTasks,
+      wins,
+      nextScheduled: upcomingAutomations[0],
+      inboxCount: inbox.total,
+      nowMs,
+    });
 
     return {
+      focusItems,
       recentlyOpened: recentlyOpened.items.filter((note) => note.lastOpenedAt),
       inboxCount: inbox.total,
       pendingTasks: pendingTasks.items,
@@ -438,10 +669,7 @@ export class HomeQueryService {
       },
       upcomingAutomations,
       tasks: {
-        running: tasks.filter((task) => {
-          const state = this.#projector.project(task).operationalState;
-          return state === 'queued' || state === 'running' || state === 'verifying';
-        }).slice(0, 20),
+        running: runningTasks,
       },
       recentTasks: tasks.flatMap((task) => this.#runs.listReceipts(task.id, 3))
         .sort((a, b) => b.finalizedAt - a.finalizedAt).slice(0, 8),

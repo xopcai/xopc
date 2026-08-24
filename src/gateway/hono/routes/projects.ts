@@ -21,6 +21,8 @@ import {
 import {
   TaskApplicationService,
   defineTaskContract,
+  ProjectOperatingViewService,
+  summarizeProjectOperatingView,
   TaskReadModelProjector,
   TaskRepository,
 } from '../../../tasks/index.js';
@@ -408,6 +410,7 @@ function projectDigestMemoryRecordId(projectId: string): string {
 export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service } = deps;
   const activity = new ActivityService();
+  const operatingViews = new ProjectOperatingViewService(service.projects);
 
   authenticated.post('/api/projects', async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
@@ -468,7 +471,17 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
       limit: parseLimit(c.req.query('limit')),
       offset: c.req.query('offset') ? Math.max(0, Number.parseInt(c.req.query('offset')!, 10) || 0) : undefined,
     });
-    return c.json({ ok: true, ...result, items: result.items.map((project) => enrichProjectWorkspace(service, project)) });
+    const includeOperating = c.req.query('includeOperating') === 'true';
+    return c.json({
+      ok: true,
+      ...result,
+      items: result.items.map((project) => {
+        const enriched = enrichProjectWorkspace(service, project);
+        if (!includeOperating) return enriched;
+        const view = operatingViews.get(project.id);
+        return { ...enriched, operating: view ? summarizeProjectOperatingView(view) : undefined };
+      }),
+    });
   });
 
   authenticated.get('/api/projects/suggestions', async (c) => {

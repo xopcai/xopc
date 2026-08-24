@@ -78,6 +78,14 @@ export const HomeWorkflowRunSchema = z.object({
   createdAtMs: z.number(),
   startedAtMs: z.number().optional(),
   completedAtMs: z.number().optional(),
+  metrics: z.object({
+    agentCount: z.number(),
+    doneAgentCount: z.number(),
+    errorAgentCount: z.number(),
+    skippedAgentCount: z.number(),
+    artifactCount: z.number(),
+    durationMs: z.number().optional(),
+  }),
 });
 
 export const HomeChatSchema = z.object({
@@ -95,7 +103,54 @@ export const HomeBriefingWinSchema = z.object({
   completedAt: z.number(),
 });
 
+export const HomeActionSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('open'),
+    label: z.string(),
+    target: z.enum(['work', 'task', 'workflow_run', 'automation', 'session', 'inbox', 'inbox_judgment']),
+    targetId: z.string().optional(),
+    sessionKey: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal('connector_decision'),
+    label: z.string(),
+    approvalId: z.string(),
+    decision: z.enum(['approve', 'deny']),
+  }),
+  z.object({
+    type: z.literal('retry_run'),
+    label: z.string(),
+    subjectKind: z.enum(['automation_run', 'workflow_run']),
+    runId: z.string(),
+  }),
+  z.object({
+    type: z.literal('acknowledge_run'),
+    label: z.string(),
+    subjectKind: z.enum(['automation_run', 'workflow_run']),
+    runId: z.string(),
+  }),
+  z.object({
+    type: z.literal('ask_ai'),
+    label: z.string(),
+  }),
+]);
+
+export const HomeFocusItemSchema = z.object({
+  id: z.string(),
+  kind: z.enum(['decision', 'failure', 'running', 'result', 'scheduled', 'suggestion']),
+  priority: z.number(),
+  title: z.string(),
+  summary: z.string(),
+  statusLabel: z.string().optional(),
+  updatedAt: z.number(),
+  pinnable: z.boolean().default(true),
+  openAction: HomeActionSchema.optional(),
+  primaryAction: HomeActionSchema.optional(),
+  secondaryActions: z.array(HomeActionSchema).max(2).default([]),
+});
+
 export const HomeResponseSchema = z.object({
+  focusItems: z.array(HomeFocusItemSchema).min(1),
   briefing: z.object({
     generatedAt: z.number(),
     summary: z.string(),
@@ -161,6 +216,8 @@ export type HomeAutomation = z.infer<typeof HomeAutomationSchema>;
 export type HomeWorkflowRun = z.infer<typeof HomeWorkflowRunSchema>;
 export type HomeChat = z.infer<typeof HomeChatSchema>;
 export type HomeBriefingWin = z.infer<typeof HomeBriefingWinSchema>;
+export type HomeAction = z.infer<typeof HomeActionSchema>;
+export type HomeFocusItem = z.infer<typeof HomeFocusItemSchema>;
 export type HomeResponse = z.infer<typeof HomeResponseSchema>;
 export type TaskValueMetrics = z.infer<typeof TaskValueMetricsSchema>;
 

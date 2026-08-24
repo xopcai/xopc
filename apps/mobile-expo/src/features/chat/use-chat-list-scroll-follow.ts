@@ -159,13 +159,6 @@ export function useChatListScrollFollow({
 
     if (initialLoad) {
       pin();
-      if (followTailRafRef.current != null) {
-        cancelAnimationFrame(followTailRafRef.current);
-      }
-      followTailRafRef.current = requestAnimationFrame(() => {
-        followTailRafRef.current = null;
-        scrollToEnd(false);
-      });
       return;
     }
 

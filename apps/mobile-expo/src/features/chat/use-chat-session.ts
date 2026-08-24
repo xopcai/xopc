@@ -42,6 +42,7 @@ import {
   completePatchApplied,
   completeTool,
   ensureAssistantMessage,
+  finishTextSegment,
   finalizeRunningTools,
   finalizeStreamingThinking,
   startThinkingSegment,
@@ -392,16 +393,22 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
           return [{ ...head, content }];
         });
       },
-      onToken: (delta) => {
+      onToken: (delta, messageId) => {
         if (!isCurrentSession()) return;
         touchStreamActivity();
         updateStreamingMessage((message) => {
-          appendTextDelta(message.content, delta);
+          appendTextDelta(message.content, delta, messageId);
         });
         if (!streamingRef.current) {
           setStreaming(true);
           streamingRef.current = true;
         }
+      },
+      onAssistantMessageEnd: (messageId, presentation, usage) => {
+        if (!isCurrentSession() || !streamingMsgRef.current) return;
+        finishTextSegment(streamingMsgRef.current.content, messageId, presentation);
+        if (usage) streamingMsgRef.current.usage = usage;
+        flushStreamingMessage();
       },
       onThinking: (text, isDelta) => {
         if (!isCurrentSession()) return;

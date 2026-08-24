@@ -1,4 +1,8 @@
-import { ProjectOperatingViewSchema, type ProjectOperatingView } from '@xopcai/gateway-contract';
+import {
+  ProjectOperatingSummarySchema,
+  ProjectOperatingViewSchema,
+  type ProjectOperatingView,
+} from '@xopcai/gateway-contract';
 import { z } from 'zod';
 
 import { apiFetch } from '../api/client';
@@ -10,6 +14,7 @@ const ProjectSchema = z.object({
   status: z.string().optional(),
   defaultAgentId: z.string().optional(),
   updatedAt: z.number().optional(),
+  operating: ProjectOperatingSummarySchema,
 });
 
 export type Project = z.infer<typeof ProjectSchema>;
@@ -20,7 +25,7 @@ async function readError(response: Response): Promise<Error> {
 }
 
 export async function fetchProjects(): Promise<Project[]> {
-  const response = await apiFetch('/api/projects?limit=100&sortBy=updatedAt&sortOrder=desc');
+  const response = await apiFetch('/api/projects?limit=100&sortBy=updatedAt&sortOrder=desc&includeOperating=true');
   if (!response.ok) throw await readError(response);
   return z.object({ ok: z.literal(true), items: z.array(ProjectSchema) }).parse(await response.json()).items;
 }

@@ -9,6 +9,8 @@ export default function AutomationLayout() {
     <Stack screenOptions={{ headerShown: false, ...themedScreenOptions }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="form" />
+      <Stack.Screen name="[id]" />
+      <Stack.Screen name="runs/[runId]" />
     </Stack>
   );
 }

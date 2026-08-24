@@ -80,6 +80,7 @@ function resolveSessionAgentAvatar(session: SessionListItem): string | undefined
 type SessionCardProps = {
   session: SessionListItem;
   onPress: () => void;
+  onPressIn?: () => void;
   onLongPress?: () => void;
   onSwipeAction?: (action: SwipeAction) => void;
   selectionMode?: boolean;
@@ -91,6 +92,7 @@ type SessionCardProps = {
 export const SessionCard = memo(function SessionCard({
   session,
   onPress,
+  onPressIn,
   onLongPress,
   onSwipeAction,
   selectionMode = false,
@@ -129,6 +131,7 @@ export const SessionCard = memo(function SessionCard({
   const cardContent = (
     <Pressable
       onPress={handlePress}
+      onPressIn={onPressIn}
       onLongPress={handleLongPress}
       delayLongPress={LIST_DELAY_LONG_PRESS}
       android_ripple={{ color: colors.surface.hover }}

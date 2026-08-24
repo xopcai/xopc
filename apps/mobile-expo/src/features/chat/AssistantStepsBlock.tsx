@@ -73,15 +73,15 @@ const StepRoundDurationText = memo(function StepRoundDurationText({
 export const AssistantStepsBlock = memo(function AssistantStepsBlock({
   blocks,
   isMessageStreaming,
-  finalAnswerStarted,
+  expandedByDefault,
   sessionKey,
 }: {
   /** Consecutive thinking + tool_use content blocks. */
   blocks: Array<ThinkingContent | ToolUseContent>;
   /** Whether the parent message is still streaming. */
   isMessageStreaming: boolean;
-  /** True once assistant text content appears after these step blocks. */
-  finalAnswerStarted: boolean;
+  /** Mirrors WebUI's resolved activity-detail expansion rule. */
+  expandedByDefault: boolean;
   sessionKey?: string | null;
 }) {
   const m = useMessages();
@@ -95,25 +95,23 @@ export const AssistantStepsBlock = memo(function AssistantStepsBlock({
   const stepCount = visibleBlocks.length;
   const anyActive = isAnyBlockActive(visibleBlocks);
 
-  const stepsDrawerOpen = isMessageStreaming && !finalAnswerStarted;
+  const stepsDrawerOpen = expandedByDefault;
 
   const roundStartRef = useRef<number | null>(null);
   const prevStepsDrawerOpenRef = useRef(false);
   const [frozenDurationMs, setFrozenDurationMs] = useState<number | null>(null);
-  const [expanded, setExpanded] = useState(stepsDrawerOpen);
+  const [userExpanded, setUserExpanded] = useState<boolean | null>(null);
+  const expanded = userExpanded ?? stepsDrawerOpen;
 
   if (anyActive && roundStartRef.current === null) {
     roundStartRef.current = Date.now();
   }
 
   useEffect(() => {
-    if (stepsDrawerOpen) {
-      setExpanded(true);
-    } else if (prevStepsDrawerOpenRef.current) {
+    if (!stepsDrawerOpen && prevStepsDrawerOpenRef.current) {
       if (roundStartRef.current !== null) {
         setFrozenDurationMs(Date.now() - roundStartRef.current);
       }
-      setExpanded(false);
     }
     prevStepsDrawerOpenRef.current = stepsDrawerOpen;
   }, [stepsDrawerOpen]);
@@ -203,7 +201,7 @@ export const AssistantStepsBlock = memo(function AssistantStepsBlock({
     >
       <Pressable
         style={styles.header}
-        onPress={() => setExpanded((v) => !v)}
+        onPress={() => setUserExpanded((current) => !(current ?? stepsDrawerOpen))}
         accessibilityRole="button"
         accessibilityLabel={headerMain}
         accessibilityState={{ expanded }}
