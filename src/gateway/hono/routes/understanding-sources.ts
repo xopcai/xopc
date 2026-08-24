@@ -10,6 +10,7 @@ import { listUnderstandingSourceDefinitions } from '../../../user-context/source
 import {
   listUnderstandingSourceGrants,
   getUnderstandingSourceGrant,
+  deleteUserFocus,
   listUserFocuses,
   revokeUnderstandingSourceGrant,
   setUserFocusStatus,
@@ -161,4 +162,10 @@ export function registerUnderstandingSourceRoutes(authenticated: Hono, deps: Aut
     const focus = setUserFocusStatus(c.req.param('focusId'), requested as UserFocus['status']);
     return focus ? c.json({ ok: true, focus }) : c.json({ ok: false, error: 'Focus not found' }, 404);
   });
+
+  authenticated.delete('/api/understanding/focuses/:focusId', limited, (c) => (
+    deleteUserFocus(c.req.param('focusId'))
+      ? c.json({ ok: true })
+      : c.json({ ok: false, error: 'Focus not found' }, 404)
+  ));
 }
