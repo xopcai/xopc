@@ -36,9 +36,16 @@ vi.mock('../session-runner.js', () => ({
       release: vi.fn(),
     };
   }),
-  resolveEmbeddedTranscriptInputs: vi.fn().mockResolvedValue({
+}));
+
+vi.mock('../transcript-runtime.js', () => ({
+  createSqliteTranscriptRuntime: vi.fn().mockResolvedValue({
+    runtimeId: 'agent:main:test',
     sessionId: 'session-1',
-    sessionKey: 'agent:main:test',
+    persistent: true,
+    openSessionManager: vi.fn(),
+    loadMessages: vi.fn().mockResolvedValue([]),
+    compact: vi.fn(),
   }),
 }));
 

@@ -14,7 +14,7 @@ import type { Model, Api } from '@earendil-works/pi-ai';
 import { createLogger } from '../../utils/logger.js';
 import { guardSessionManager, type GuardedPiTranscriptManager } from './session-tool-result-guard.js';
 import { transformUserMessageForPersistence } from '../inbound/attachment-pipeline.js';
-import { openSqliteHydratingSessionManager } from './sqlite-hydrating-session-manager.js';
+import type { EmbeddedTranscriptRuntime } from './transcript-runtime.js';
 import {
   createEmbeddedModelRuntime,
   resolveEmbeddedProviderApiKeySync,
@@ -56,7 +56,7 @@ export function buildEmbeddedRunnerFingerprint(input: EmbeddedRunnerFingerprintI
 }
 
 type PooledRunner = {
-  sessionKey: string;
+  runtimeId: string;
   fingerprint: string;
   session: AgentSession;
   piSm: GuardedPiTranscriptManager;
@@ -67,7 +67,7 @@ type PooledRunner = {
 };
 
 export type AcquireEmbeddedSessionRunnerParams = {
-  sessionKey: string;
+  runtimeId: string;
   sessionId: string;
   workspaceDir: string;
   model: Model<Api>;
@@ -75,6 +75,7 @@ export type AcquireEmbeddedSessionRunnerParams = {
   tools: AgentTool[];
   systemPrompt: string;
   thinkingLevel: ThinkingLevel;
+  transcriptRuntime: EmbeddedTranscriptRuntime;
 };
 
 export type AcquiredEmbeddedSessionRunner = {
@@ -124,9 +125,7 @@ export interface EmbeddedSessionRunnerPoolOptions {
 }
 
 /**
- * Owns the per-session pool of pi `AgentSession` runners. The class is the supported,
- * injectable owner; {@link defaultEmbeddedSessionRunnerPool} keeps the historic
- * module-level free functions working until every caller is migrated to DI.
+ * Owns the per-runtime pool of pi `AgentSession` runners.
  */
 export class EmbeddedSessionRunnerPool {
   private readonly pool = new Map<string, PooledRunner>();
@@ -157,17 +156,17 @@ export class EmbeddedSessionRunnerPool {
     this.stats = { acquires: 0, reuses: 0, creates: 0, evictions: 0 };
   }
 
-  evict(sessionKey: string, reason = 'explicit'): void {
-    const entry = this.pool.get(sessionKey);
+  evict(runtimeId: string, reason = 'explicit'): void {
+    const entry = this.pool.get(runtimeId);
     if (!entry) {
       return;
     }
-    this.disposePooledRunner(sessionKey, entry, reason);
+    this.disposePooledRunner(runtimeId, entry, reason);
   }
 
   evictAll(reason = 'dispose_all'): void {
-    for (const sessionKey of [...this.pool.keys()]) {
-      this.evict(sessionKey, reason);
+    for (const runtimeId of [...this.pool.keys()]) {
+      this.evict(runtimeId, reason);
     }
   }
 
@@ -185,7 +184,7 @@ export class EmbeddedSessionRunnerPool {
     });
 
     const reuseEnabled = this.isEnabledFn();
-    const existing = this.pool.get(params.sessionKey);
+    const existing = this.pool.get(params.runtimeId);
 
     let entry: PooledRunner;
     let reused = false;
@@ -198,15 +197,15 @@ export class EmbeddedSessionRunnerPool {
       this.stats.reuses += 1;
       applySystemPromptOverrideToSession(entry.session, params.systemPrompt);
       entry.session.agent.streamFunction = entry.baseStreamFn;
-      log.debug({ sessionKey: params.sessionKey }, 'Reusing pooled embedded session runner');
+      log.debug({ runtimeId: params.runtimeId }, 'Reusing pooled embedded session runner');
     } else {
       if (existing) {
-        this.disposePooledRunner(params.sessionKey, existing, 'fingerprint_mismatch');
+        this.disposePooledRunner(params.runtimeId, existing, 'fingerprint_mismatch');
       }
       entry = await this.createPooledRunner(params);
-      this.pool.set(params.sessionKey, entry);
+      this.pool.set(params.runtimeId, entry);
       this.stats.creates += 1;
-      log.debug({ sessionKey: params.sessionKey }, 'Created embedded session runner');
+      log.debug({ runtimeId: params.runtimeId }, 'Created embedded session runner');
     }
 
     return {
@@ -215,11 +214,11 @@ export class EmbeddedSessionRunnerPool {
       reused,
       release: () => {
         if (!this.isEnabledFn()) {
-          this.disposePooledRunner(params.sessionKey, entry, 'runner_disabled');
+          this.disposePooledRunner(params.runtimeId, entry, 'runner_disabled');
           return;
         }
         entry.lastUsedAt = Date.now();
-        this.scheduleIdleEviction(params.sessionKey, entry);
+        this.scheduleIdleEviction(params.runtimeId, entry);
       },
     };
   }
@@ -231,46 +230,43 @@ export class EmbeddedSessionRunnerPool {
     }
   }
 
-  private scheduleIdleEviction(sessionKey: string, entry: PooledRunner): void {
+  private scheduleIdleEviction(runtimeId: string, entry: PooledRunner): void {
     this.clearIdleTimer(entry);
     const ttlMs = this.getIdleTtlMsFn();
     entry.idleTimer = setTimeout(() => {
-      const current = this.pool.get(sessionKey);
+      const current = this.pool.get(runtimeId);
       if (current === entry) {
-        this.disposePooledRunner(sessionKey, entry, 'idle_ttl');
+        this.disposePooledRunner(runtimeId, entry, 'idle_ttl');
       }
     }, ttlMs);
     entry.idleTimer.unref?.();
   }
 
-  private disposePooledRunner(sessionKey: string, entry: PooledRunner, reason: string): void {
+  private disposePooledRunner(runtimeId: string, entry: PooledRunner, reason: string): void {
     this.clearIdleTimer(entry);
-    this.pool.delete(sessionKey);
+    this.pool.delete(runtimeId);
     this.stats.evictions += 1;
     try {
       entry.piSm.flushPendingToolResults?.();
     } catch {
       /* ignore */
     }
-    log.debug({ sessionKey, reason }, 'Embedded session runner evicted');
+    log.debug({ runtimeId, reason }, 'Embedded session runner evicted');
   }
 
   private async createPooledRunner(params: AcquireEmbeddedSessionRunnerParams): Promise<PooledRunner> {
-    const { sessionKey, sessionId, workspaceDir, model, thinkingLevel, tools, systemPrompt } = params;
+    const { runtimeId, sessionId, workspaceDir, model, thinkingLevel, tools, systemPrompt } = params;
 
     const settingsManager = createEmbeddedSettingsManager(workspaceDir);
 
     const piSm = guardSessionManager(
-      openSqliteHydratingSessionManager({
-        sessionKey,
-        sessionId,
-        cwd: workspaceDir,
-      }),
+      params.transcriptRuntime.openSessionManager(workspaceDir),
       {
-        sessionKey,
+        sessionKey: params.transcriptRuntime.persistent ? runtimeId : undefined,
         contextWindowTokens: model.contextWindow ?? 128_000,
-        transformMessageForPersistence: (message) =>
-          transformUserMessageForPersistence(sessionKey, message),
+        transformMessageForPersistence: params.transcriptRuntime.persistent
+          ? (message) => transformUserMessageForPersistence(runtimeId, message)
+          : undefined,
       },
     );
 
@@ -315,7 +311,7 @@ export class EmbeddedSessionRunnerPool {
     });
 
     return {
-      sessionKey,
+      runtimeId,
       fingerprint,
       session,
       piSm,
@@ -337,8 +333,8 @@ export function resetEmbeddedSessionRunnerForTest(): void {
   defaultEmbeddedSessionRunnerPool.resetForTest();
 }
 
-export function evictEmbeddedSessionRunner(sessionKey: string, reason = 'explicit'): void {
-  defaultEmbeddedSessionRunnerPool.evict(sessionKey, reason);
+export function evictEmbeddedSessionRunner(runtimeId: string, reason = 'explicit'): void {
+  defaultEmbeddedSessionRunnerPool.evict(runtimeId, reason);
 }
 
 export function evictAllEmbeddedSessionRunners(reason = 'dispose_all'): void {
@@ -349,15 +345,4 @@ export function acquireEmbeddedSessionRunner(
   params: AcquireEmbeddedSessionRunnerParams,
 ): Promise<AcquiredEmbeddedSessionRunner> {
   return defaultEmbeddedSessionRunnerPool.acquire(params);
-}
-
-/** Resolve session identity used by embedded runner acquire and turn execution. */
-export async function resolveEmbeddedTranscriptInputs(
-  sessionStore: import('../../session/store.js').SessionStore,
-  sessionKey: string,
-): Promise<{
-  sessionId: string;
-  sessionKey: string;
-}> {
-  return sessionStore.resolveTranscriptPath(sessionKey);
 }

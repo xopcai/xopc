@@ -89,6 +89,8 @@ export const MessageBubble = memo(function MessageBubble({
   readonly = false,
   density = 'normal',
   suppressAssistantActions = false,
+  onEditUserMessage,
+  responseFeedbackEnabled = true,
 }: {
   message: Message;
   authToken?: string;
@@ -115,6 +117,8 @@ export const MessageBubble = memo(function MessageBubble({
   density?: 'normal' | 'compact';
   /** Hide assistant footer actions while the session is receiving live run updates. */
   suppressAssistantActions?: boolean;
+  onEditUserMessage?: (text: string) => void;
+  responseFeedbackEnabled?: boolean;
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -631,7 +635,7 @@ export const MessageBubble = memo(function MessageBubble({
               <button
                 type="button"
                 className={cn(userMessageFooterAction, 'size-8 px-0')}
-                onClick={() => dispatchFillChatComposer(userCopyText)}
+                onClick={() => (onEditUserMessage ?? dispatchFillChatComposer)(userCopyText)}
                 disabled={!userCopyText}
                 title={m.chat.userMessageEdit}
                 aria-label={m.chat.userMessageEdit}
@@ -697,7 +701,7 @@ export const MessageBubble = memo(function MessageBubble({
                 retry: m.chat.messageReadAloudRetry,
               }}
             />
-            {sessionKey && message.timestamp ? (
+            {responseFeedbackEnabled && sessionKey && message.timestamp ? (
               <>
                 <button
                   type="button"
