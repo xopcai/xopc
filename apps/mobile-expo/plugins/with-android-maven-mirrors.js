@@ -23,6 +23,9 @@ function injectMirrors(contents) {
 /** Prefer Aliyun mirrors before google()/mavenCentral() for reliable dependency downloads. */
 function withAndroidMavenMirrors(config) {
   return withProjectBuildGradle(config, (config) => {
+    if (process.env.XOPC_ANDROID_USE_MAVEN_MIRRORS === '0') {
+      return config;
+    }
     config.modResults.contents = injectMirrors(config.modResults.contents);
     return config;
   });
