@@ -24,12 +24,12 @@ describe('mobile task create input', () => {
     const payload = agents();
     expect(resolveTaskAgentId({
       agents: payload,
-      project: { id: 'p', name: 'P', defaultAgentId: 'project' },
+      project: { defaultAgentId: 'project' },
       selectedAgentId: 'selected',
     })).toBe('selected');
     expect(resolveTaskAgentId({
       agents: payload,
-      project: { id: 'p', name: 'P', defaultAgentId: 'project' },
+      project: { defaultAgentId: 'project' },
     })).toBe('project');
     expect(resolveTaskAgentId({ agents: payload })).toBe('default');
   });

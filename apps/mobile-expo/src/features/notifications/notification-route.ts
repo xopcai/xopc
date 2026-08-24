@@ -5,7 +5,7 @@ export function resolveNotificationRoute(data: unknown): string | null {
   const route = payload.route;
   if (typeof route !== 'string' || !route.startsWith('/')) return null;
   if (route === '/automation' && typeof payload.runId === 'string' && payload.runId.trim()) {
-    return `/automation?run=${encodeURIComponent(payload.runId.trim())}`;
+    return `/automation/runs/${encodeURIComponent(payload.runId.trim())}`;
   }
   if (
     route === '/' ||

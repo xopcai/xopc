@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -13,17 +12,19 @@ import {
 import { Button, Text, TextInput } from 'react-native-paper';
 
 import { AppToast } from '../../components/AppToast';
+import { ListSkeleton } from '../../components/ListSkeleton';
 import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { TOAST_DURATION_DEFAULT } from '../../constants/toast';
 import { useMessages } from '../../i18n/messages';
 import {
-  createCronJob,
-  cronJobMessage,
-  deleteCronJob,
-  fetchCronJob,
-  isEditableCronJob,
-  updateCronJob,
-} from '../../query/cron';
+  automationCronExpression,
+  automationInstruction,
+  createScheduledAgentAutomation,
+  fetchAutomation,
+  isMobileEditableAutomation,
+  removeAutomation,
+  updateScheduledAgentAutomation,
+} from '../../query/automations';
 import { queryKeys } from '../../query/keys';
 import { useGatewayConfigured } from '../../query/sessions';
 import { useTheme } from '../../theme';
@@ -36,7 +37,7 @@ import {
   type ScheduleState,
 } from './cron-schedule';
 
-export function CronJobFormScreen() {
+export function AutomationFormScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -46,7 +47,7 @@ export function CronJobFormScreen() {
   const configured = useGatewayConfigured();
   const { colors } = useTheme();
   const m = useMessages();
-  const pm = m.cronForm;
+  const pm = m.automationForm;
 
   const [name, setName] = useState('');
   const [message, setMessage] = useState('');
@@ -54,22 +55,19 @@ export function CronJobFormScreen() {
   const [snackbarMessage, setSnackbarMessage] = useState('');
 
   const jobQuery = useQuery({
-    queryKey: queryKeys.cronJob(jobId ?? ''),
-    queryFn: () => fetchCronJob(jobId!),
+    queryKey: queryKeys.automation(jobId ?? ''),
+    queryFn: () => fetchAutomation(jobId!),
     enabled: configured && isEdit,
   });
 
   useEffect(() => {
     const job = jobQuery.data;
     if (!job || !isEdit) return;
-    if (!isEditableCronJob(job)) {
-      setSnackbarMessage(pm.notEditable);
-      return;
-    }
-    setName(job.name?.trim() ?? '');
-    setMessage(cronJobMessage(job));
-    setSchedule(parseCronSchedule(job.schedule));
-  }, [isEdit, jobQuery.data, pm.notEditable]);
+    if (!isMobileEditableAutomation(job)) return;
+    setName(job.name.trim());
+    setMessage(automationInstruction(job));
+    setSchedule(parseCronSchedule(automationCronExpression(job)));
+  }, [isEdit, jobQuery.data]);
 
   const canSubmit = name.trim().length > 0 && message.trim().length > 0;
 
@@ -77,22 +75,22 @@ export function CronJobFormScreen() {
     mutationFn: async () => {
       const scheduleExpr = buildCronSchedule(schedule);
       if (isEdit && jobId) {
-        await updateCronJob(jobId, {
+        await updateScheduledAgentAutomation(jobId, {
           name: name.trim(),
-          schedule: scheduleExpr,
-          message: message.trim(),
+          cronExpression: scheduleExpr,
+          instruction: message.trim(),
         });
         return jobId;
       }
-      const created = await createCronJob({
+      const created = await createScheduledAgentAutomation({
         name: name.trim(),
-        schedule: scheduleExpr,
-        message: message.trim(),
+        cronExpression: scheduleExpr,
+        instruction: message.trim(),
       });
       return created.id;
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.cronJobs });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.automations });
       router.back();
     },
     onError: (error) => {
@@ -101,9 +99,9 @@ export function CronJobFormScreen() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: () => deleteCronJob(jobId!),
+    mutationFn: () => removeAutomation(jobId!),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.cronJobs });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.automations });
       router.back();
     },
     onError: (error) => {
@@ -124,15 +122,13 @@ export function CronJobFormScreen() {
 
   const screenBg = colors.surface.base;
   const textSecondary = colors.text.secondary;
-  const notEditable = isEdit && jobQuery.data && !isEditableCronJob(jobQuery.data);
-
   const title = isEdit ? pm.editTitle : pm.createTitle;
 
   if (isEdit && jobQuery.isLoading) {
     return (
-      <View style={[styles.screen, styles.center, { backgroundColor: screenBg }]}>
+      <View style={[styles.screen, { backgroundColor: screenBg }]}>
         <NativeScreenHeader title={title} onBack={() => router.back()} />
-        <ActivityIndicator size="large" />
+        <View style={styles.loading}><ListSkeleton count={4} /></View>
       </View>
     );
   }
@@ -145,6 +141,18 @@ export function CronJobFormScreen() {
         <Button mode="outlined" onPress={() => void jobQuery.refetch()}>
           {m.common.retry}
         </Button>
+      </View>
+    );
+  }
+
+  if (isEdit && jobQuery.data && !isMobileEditableAutomation(jobQuery.data)) {
+    return (
+      <View style={[styles.screen, { backgroundColor: screenBg }]}>
+        <NativeScreenHeader title={title} onBack={() => router.back()} />
+        <View style={styles.center}>
+          <Text style={{ color: textSecondary }}>{pm.notEditable}</Text>
+          <Button mode="contained" onPress={() => router.replace(`/automation/${jobId}`)}>{pm.viewDetails}</Button>
+        </View>
       </View>
     );
   }
@@ -166,7 +174,6 @@ export function CronJobFormScreen() {
             value={name}
             onChangeText={setName}
             maxLength={80}
-            editable={!notEditable}
           />
 
           <TextInput
@@ -177,23 +184,18 @@ export function CronJobFormScreen() {
             multiline
             numberOfLines={5}
             style={styles.messageInput}
-            editable={!notEditable}
           />
 
           <CronSchedulePicker value={schedule} onChange={setSchedule} />
 
-          {notEditable ? (
-            <Text style={[styles.warning, { color: colors.semantic.error }]}>{pm.notEditable}</Text>
-          ) : (
-            <Button
-              mode="contained"
-              onPress={() => saveMutation.mutate()}
-              loading={saveMutation.isPending}
-              disabled={!canSubmit || saveMutation.isPending || deleteMutation.isPending}
-            >
-              {isEdit ? pm.save : pm.create}
-            </Button>
-          )}
+          <Button
+            mode="contained"
+            onPress={() => saveMutation.mutate()}
+            loading={saveMutation.isPending}
+            disabled={!canSubmit || saveMutation.isPending || deleteMutation.isPending}
+          >
+            {isEdit ? pm.save : pm.create}
+          </Button>
 
           {isEdit ? (
             <Button
@@ -219,9 +221,9 @@ export function CronJobFormScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   flex: { flex: 1 },
-  center: { justifyContent: 'center', alignItems: 'center', padding: 32 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32, gap: 12 },
+  loading: { padding: 20 },
   form: { paddingHorizontal: 20, paddingTop: 12, gap: 16, paddingBottom: 40 },
   hint: { fontSize: 13, lineHeight: 18 },
   messageInput: { minHeight: 120 },
-  warning: { fontSize: 13, lineHeight: 18 },
 });

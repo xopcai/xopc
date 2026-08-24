@@ -242,6 +242,22 @@ describe('project association routes', () => {
     expect(unpinBody.project.pinnedAt).toBeUndefined();
   });
 
+  it('includes an operating summary when requested by the mobile portfolio', async () => {
+    const projects = new ProjectService();
+    const project = projects.create({ name: 'Mobile Portfolio Project' });
+    const app = registerProjectRouteApp({ projects });
+
+    const response = await app.request('/api/projects?includeOperating=true');
+    expect(response.status).toBe(200);
+    const body = await response.json() as {
+      items: Array<{ id: string; operating?: { health: string; counts: Record<string, number> } }>;
+    };
+    expect(body.items.find((item) => item.id === project.id)?.operating).toEqual(expect.objectContaining({
+      health: 'empty',
+      counts: { ready: 0, moving: 0, waiting: 0, needsUser: 0, done: 0 },
+    }));
+  });
+
   it('manages milestones and appends project updates through project routes', async () => {
     const projects = new ProjectService();
     const project = projects.create({ name: 'Operating Route Project' });

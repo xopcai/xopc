@@ -19,6 +19,7 @@ export const KEYS = {
   notificationsEnabled: 'prefs.notificationsEnabled',
   noteTags: 'prefs.noteTags',
   usageEvents: 'product.usageEvents',
+  homePinnedFocusId: 'home.pinnedFocusId',
   readAloudConsent: 'voice.readAloudConsent',
 } as const;
 

@@ -7,7 +7,7 @@
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef } from 'react';
 import { queryKeys } from '../../query/keys';
-import { fetchSessionMessagePage, emptySessionMessagePage, useGatewayConfigured } from '../../query/sessions';
+import { fetchSessionMessagePage, useGatewayConfigured } from '../../query/sessions';
 import { useGatewayStore } from '../../stores/gateway-store';
 import {
   readCachedSessionHistoryHead,
@@ -17,6 +17,7 @@ import {
   appendOlderSessionHistoryPage,
   mergeLatestSessionHistoryPage,
 } from './session-message-parser';
+import { loadSessionHistoryHead } from './session-history-prefetch';
 
 export function useSessionHistory(sessionKey: string) {
   const queryClient = useQueryClient();
@@ -30,13 +31,7 @@ export function useSessionHistory(sessionKey: string) {
 
   const sessionHistoryQuery = useInfiniteQuery({
     queryKey: queryKeys.sessionHistory(sessionKey, activeGatewayId),
-    queryFn: async ({ pageParam }) => {
-      const page = await fetchSessionMessagePage(sessionKey, {
-        limit: 50,
-        before: pageParam,
-      });
-      return page ?? emptySessionMessagePage(sessionKey);
-    },
+    queryFn: ({ pageParam }) => loadSessionHistoryHead(sessionKey, pageParam),
     placeholderData: cachedSessionHistoryHead
       ? { pages: [cachedSessionHistoryHead], pageParams: [undefined] }
       : undefined,

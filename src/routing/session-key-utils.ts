@@ -44,14 +44,6 @@ export function parseAgentSessionKey(
   return { agentId: agentId.toLowerCase(), rest };
 }
 
-export function isCronRunSessionKey(sessionKey: string | undefined | null): boolean {
-  const parsed = parseAgentSessionKey(sessionKey);
-  if (!parsed) {
-    return false;
-  }
-  return /^cron:[^:]+:run:[^:]+$/.test(parsed.rest);
-}
-
 export function isCronSessionKey(sessionKey: string | undefined | null): boolean {
   const parsed = parseAgentSessionKey(sessionKey);
   if (!parsed) {

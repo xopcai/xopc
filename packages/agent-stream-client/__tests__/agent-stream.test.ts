@@ -19,6 +19,7 @@ function callbacks(overrides: Partial<Parameters<typeof dispatchAgentStreamEvent
   return {
     onStreamStart: vi.fn(),
     onToken: vi.fn(),
+    onAssistantMessageEnd: vi.fn(),
     onThinking: vi.fn(),
     onThinkingEnd: vi.fn(),
     onToolStart: vi.fn(),
@@ -81,7 +82,7 @@ describe('dispatchAgentStreamEvent', () => {
     dispatchAgentStreamEvent('assistant_delta', JSON.stringify(envelope('assistant_delta', 'run-1', { messageId: 'm1', delta: 'hi' })), cb);
     dispatchAgentStreamEvent('thinking_delta', JSON.stringify(envelope('thinking_delta', 'run-1', { messageId: 'm1', delta: 'plan' })), cb);
     dispatchAgentStreamEvent('thinking_end', JSON.stringify(envelope('thinking_end', 'run-1', { messageId: 'm1' })), cb);
-    expect(cb.onToken).toHaveBeenCalledWith('hi');
+    expect(cb.onToken).toHaveBeenCalledWith('hi', 'm1');
     expect(cb.onThinking).toHaveBeenCalledWith('plan', true);
     expect(cb.onThinkingEnd).toHaveBeenCalled();
   });
@@ -129,7 +130,18 @@ describe('dispatchAgentStreamEvent', () => {
   it('uses payload type when the event name is generic message', () => {
     const cb = callbacks();
     dispatchAgentStreamEvent('message', JSON.stringify(envelope('assistant_delta', 'run-1', { messageId: 'm1', delta: 'x' })), cb);
-    expect(cb.onToken).toHaveBeenCalledWith('x');
+    expect(cb.onToken).toHaveBeenCalledWith('x', 'm1');
+  });
+
+  it('preserves assistant segment presentation and usage', () => {
+    const cb = callbacks();
+    dispatchAgentStreamEvent('assistant_message_end', JSON.stringify(envelope('assistant_message_end', 'run-1', {
+      messageId: 'm1',
+      presentation: 'narration',
+      usage: { totalTokens: 42 },
+    })), cb);
+    expect(cb.onAssistantMessageEnd).toHaveBeenCalledWith('m1', 'narration', { totalTokens: 42 });
+    expect(cb.onThinkingEnd).not.toHaveBeenCalled();
   });
 
   it('dispatches tool lifecycle with toolCallId', () => {
