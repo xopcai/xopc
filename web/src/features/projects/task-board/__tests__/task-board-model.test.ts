@@ -1,16 +1,15 @@
 import type { ProjectTaskCard } from '@xopcai/gateway-contract';
 import { describe, expect, it } from 'vitest';
 
-import { groupProjectTasks, taskActionForLane } from '../task-board-model';
+import { groupProjectTasks, taskActionForPhase } from '../task-board-model';
 
-function card(id: string, lane: ProjectTaskCard['lane']): ProjectTaskCard {
+function card(id: string, phase: ProjectTaskCard['phase']): ProjectTaskCard {
   return {
     id,
     title: id,
-    lane,
-    phase: lane === 'done' ? 'closed' : lane === 'ready' ? 'ready' : 'active',
-    ...(lane === 'done' ? { resolution: 'done' as const } : {}),
-    operationalState: lane === 'moving' ? 'running' : lane === 'waiting' || lane === 'needs_user' ? 'waiting' : 'idle',
+    phase,
+    ...(phase === 'closed' ? { resolution: 'done' as const } : {}),
+    operationalState: phase === 'active' ? 'running' : 'idle',
     priority: 'normal',
     blockedBy: [],
     acceptanceCriteriaCount: 0,
@@ -21,23 +20,26 @@ function card(id: string, lane: ProjectTaskCard['lane']): ProjectTaskCard {
 }
 
 describe('project task board model', () => {
-  it('groups every task into exactly one lane', () => {
+  it('groups every task into exactly one durable phase', () => {
     const grouped = groupProjectTasks([
+      card('zero', 'backlog'),
       card('one', 'ready'),
-      card('two', 'moving'),
-      card('three', 'waiting'),
-      card('four', 'needs_user'),
-      card('five', 'done'),
+      card('two', 'active'),
+      card('three', 'review'),
+      card('four', 'closed'),
     ]);
-    expect(Object.values(grouped).flat().map((item) => item.id)).toEqual(['one', 'two', 'three', 'four', 'five']);
+    expect(Object.values(grouped).flat().map((item) => item.id)).toEqual(['zero', 'one', 'two', 'three', 'four']);
   });
 
-  it('turns lane changes into domain commands instead of status writes', () => {
-    const pending: ProjectTaskCard = { ...card('pending', 'ready'), allowedCommands: ['start', 'close'] };
-    const running: ProjectTaskCard = { ...card('running', 'moving'), allowedCommands: ['add_wait', 'request_review', 'close'] };
-    expect(taskActionForLane(pending, 'moving')).toBe('run');
-    expect(taskActionForLane(running, 'ready')).toBe('pause');
-    expect(taskActionForLane(running, 'done')).toBe('verify');
-    expect(taskActionForLane(running, 'needs_user')).toBeUndefined();
+  it('turns phase changes into matching domain commands', () => {
+    const backlog: ProjectTaskCard = { ...card('backlog', 'backlog'), allowedCommands: ['mark_ready', 'close'] };
+    const ready: ProjectTaskCard = { ...card('ready', 'ready'), allowedCommands: ['start', 'close'] };
+    const active: ProjectTaskCard = { ...card('active', 'active'), allowedCommands: ['add_wait', 'request_review', 'close'] };
+    const review: ProjectTaskCard = { ...card('review', 'review'), allowedCommands: ['close'] };
+    expect(taskActionForPhase(backlog, 'ready')).toBe('ready');
+    expect(taskActionForPhase(ready, 'active')).toBe('run');
+    expect(taskActionForPhase(active, 'review')).toBe('review');
+    expect(taskActionForPhase(review, 'closed')).toBe('complete');
+    expect(taskActionForPhase(active, 'closed')).toBeUndefined();
   });
 });

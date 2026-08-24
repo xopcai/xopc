@@ -5,7 +5,7 @@ import { blockedChainTaskIds, layoutTaskGraph, relatedTaskIds } from '../task-de
 
 function task(id: string, blockedBy: ProjectTaskCard['blockedBy'] = []): ProjectTaskCard {
   return {
-    id, title: id, lane: blockedBy.length ? 'waiting' : 'ready', phase: 'ready', operationalState: blockedBy.length ? 'blocked' : 'idle',
+    id, title: id, phase: 'ready', operationalState: blockedBy.length ? 'blocked' : 'idle',
     priority: 'normal', acceptanceCriteriaCount: 0, attention: [], blockedBy, allowedCommands: [], updatedAt: 1,
   };
 }
@@ -30,8 +30,8 @@ describe('task dependency graph model', () => {
   it('does not treat completed tasks with historical dependencies as blocked', () => {
     const completed = {
       ...task('c', [{ id: 'b', title: 'b', phase: 'ready', operationalState: 'idle' }]),
-      lane: 'done' as const,
       phase: 'closed' as const,
+      operationalState: 'idle' as const,
       resolution: 'done' as const,
     };
     expect([...blockedChainTaskIds([task('a'), task('b'), completed], edges)]).toEqual([]);

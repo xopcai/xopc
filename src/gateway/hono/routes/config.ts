@@ -1,6 +1,7 @@
 import type { Context, Hono } from 'hono';
 
 import type { Config } from '../../../config/schema.js';
+import { enumerateLanGatewayCandidates } from '../../host.js';
 import { buildSafeWebConfigPayload } from '../lib/config-payload.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import {
@@ -41,6 +42,17 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
   authenticated.get('/api/config', async (c) => {
     const safeConfig = await buildSafeWebConfigPayload(service, { locale: localeFromRequest(c) });
     return c.json({ ok: true, payload: { config: safeConfig } });
+  });
+
+  authenticated.get('/api/gateway/cors-origin-candidates', (c) => {
+    const requestedPort = Number(c.req.query('port'));
+    const port = Number.isInteger(requestedPort) && requestedPort >= 1 && requestedPort <= 65535
+      ? requestedPort
+      : service.currentConfig.gateway?.port ?? 18790;
+    return c.json({
+      ok: true,
+      payload: { candidates: enumerateLanGatewayCandidates(port) },
+    });
   });
 
   // PATCH /api/config — section patchers run sequentially against the live

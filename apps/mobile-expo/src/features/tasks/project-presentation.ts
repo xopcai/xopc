@@ -32,19 +32,39 @@ export function groupProjectTasks(tasks: ProjectTaskCard[]): {
   moving: ProjectTaskCard[];
   other: ProjectTaskCard[];
 } {
+  const needsUser = (task: ProjectTaskCard) => task.attention.some(
+    (item) => item.kind === 'input_required' || item.kind === 'approval_required',
+  );
+  const moving = (task: ProjectTaskCard) => ['queued', 'running', 'verifying'].includes(task.operationalState);
   return {
-    needsUser: tasks.filter((task) => task.lane === 'needs_user'),
-    moving: tasks.filter((task) => task.lane === 'moving'),
-    other: tasks.filter((task) => task.lane !== 'needs_user' && task.lane !== 'moving'),
+    needsUser: tasks.filter(needsUser),
+    moving: tasks.filter((task) => !needsUser(task) && moving(task)),
+    other: tasks.filter((task) => !needsUser(task) && !moving(task)),
   };
 }
 
 export function formatProjectRelativeTime(timestamp: number, locale: string, now = Date.now()): string {
+  if (!Number.isFinite(timestamp) || !Number.isFinite(now)) return '';
+
   const deltaMs = timestamp - now;
-  const formatter = new Intl.RelativeTimeFormat(locale, { numeric: 'auto', style: 'short' });
   const minutes = Math.round(deltaMs / 60_000);
-  if (Math.abs(minutes) < 60) return formatter.format(minutes, 'minute');
   const hours = Math.round(deltaMs / 3_600_000);
-  if (Math.abs(hours) < 24) return formatter.format(hours, 'hour');
-  return formatter.format(Math.round(deltaMs / 86_400_000), 'day');
+  const days = Math.round(deltaMs / 86_400_000);
+  const [value, unit, fallbackSuffix] = Math.abs(minutes) < 60
+    ? [minutes, 'minute', 'm'] as const
+    : Math.abs(hours) < 24
+      ? [hours, 'hour', 'h'] as const
+      : [days, 'day', 'd'] as const;
+
+  const intl = typeof Intl === 'object' ? Intl : undefined;
+  const RelativeTimeFormat = intl?.RelativeTimeFormat;
+  if (typeof RelativeTimeFormat === 'function') {
+    try {
+      return new RelativeTimeFormat(locale, { numeric: 'auto', style: 'short' }).format(value, unit);
+    } catch {
+      // Some Hermes/system Intl builds reject otherwise valid locales. Keep the project list renderable.
+    }
+  }
+
+  return `${Math.abs(value)}${fallbackSuffix}`;
 }

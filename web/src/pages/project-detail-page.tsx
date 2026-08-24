@@ -834,13 +834,19 @@ export function ProjectDetailPage() {
     setError(null);
     try {
       const detail = await fetchTask(task.id);
-      const command: TaskCommand = action === 'run'
-        ? { type: 'start', executor: { kind: 'agent', agentId: detail.task.delegateAgentId ?? 'main' } }
-        : action === 'pause'
-          ? { type: 'add_wait', wait: { kind: 'paused', reason: 'Paused by user', condition: {} } }
-          : action === 'verify'
-            ? { type: 'request_review' }
-            : { type: 'resolve_wait', waitId: detail.waits[0]?.id ?? '' };
+      const command: TaskCommand = action === 'ready'
+        ? { type: 'mark_ready' }
+        : action === 'run'
+          ? { type: 'start', executor: { kind: 'agent', agentId: detail.task.delegateAgentId ?? 'main' } }
+          : action === 'pause'
+            ? { type: 'add_wait', wait: { kind: 'paused', reason: 'Paused by user', condition: {} } }
+            : action === 'review'
+              ? { type: 'request_review' }
+              : action === 'complete'
+                ? { type: 'close', resolution: 'done' }
+                : action === 'reopen'
+                  ? { type: 'reopen', phase: 'ready' }
+                  : { type: 'resolve_wait', waitId: detail.waits[0]?.id ?? '' };
       if (command.type === 'resolve_wait' && !command.waitId) throw new Error('No active wait to resolve');
       await commandTask(task.id, command, detail.task.version);
       await refreshOperatingView();
@@ -1415,7 +1421,7 @@ export function ProjectDetailPage() {
     href?: string;
     updatedAt?: number;
   }> = operatingView?.blockers ?? [];
-  const overviewTasks = operatingView?.tasks.filter((task) => task.lane !== 'done') ?? [];
+  const overviewTasks = operatingView?.tasks.filter((task) => task.phase !== 'closed') ?? [];
   const statusLabel = (status: string) => pm.statuses[status as keyof typeof pm.statuses] ?? status;
   const messageCount = (count: number) => interpolate(pm.common.messages, { count });
   const sessionSearchNeedle = sessionSearchQuery.trim().toLowerCase();

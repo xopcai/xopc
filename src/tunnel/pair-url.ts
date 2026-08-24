@@ -2,7 +2,7 @@ import net from 'node:net';
 
 import { isNetworkAccessibleBindHost, resolveGatewayEffectiveHost } from '../config/gateway-bind.js';
 import type { Config } from '../config/schema.js';
-import { enumerateLanGatewayCandidates } from './tunnel-qr.js';
+import { enumerateLanGatewayCandidates } from '../gateway/host.js';
 
 export type MobilePairUrlValidationCode = 'INVALID_URL' | 'LOOPBACK_NOT_REACHABLE';
 
