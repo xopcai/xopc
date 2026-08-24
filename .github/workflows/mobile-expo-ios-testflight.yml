@@ -1,0 +1,141 @@
+name: Mobile iOS TestFlight
+
+on:
+  push:
+    tags:
+      - "mobile-expo-v*"
+  workflow_dispatch:
+    inputs:
+      upload:
+        description: Upload the signed IPA to TestFlight
+        required: true
+        default: true
+        type: boolean
+
+concurrency:
+  group: mobile-ios-testflight-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  EXPO_NO_TELEMETRY: "1"
+  XOPC_IOS_USE_COCOAPODS_MIRROR: "0"
+
+jobs:
+  quality:
+    name: Lint, typecheck & tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint mobile app
+        run: pnpm run mobile:lint
+
+      - name: Typecheck mobile app
+        run: pnpm run mobile:typecheck
+
+      - name: Test mobile app
+        run: pnpm run mobile:test
+
+      - name: Test agent stream client
+        run: pnpm run mobile:test:stream
+
+  build:
+    name: Build and upload signed iOS IPA
+    needs: quality
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Cache CocoaPods downloads
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/Library/Caches/CocoaPods
+            ~/.cocoapods/repos
+          key: ios-pods-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'apps/mobile-expo/app.json') }}
+          restore-keys: |
+            ios-pods-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Restore App Store Connect API key
+        id: app_store_key
+        env:
+          API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
+          PRIVATE_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY_BASE64 }}
+        run: |
+          if [[ -z "$API_KEY" || -z "$PRIVATE_KEY_BASE64" ]]; then
+            echo "Missing App Store Connect API key secrets" >&2
+            exit 1
+          fi
+          KEY_DIR="$HOME/.appstoreconnect/private_keys"
+          KEY_PATH="$KEY_DIR/AuthKey_${API_KEY}.p8"
+          mkdir -p "$KEY_DIR"
+          printf '%s' "$PRIVATE_KEY_BASE64" | base64 -D > "$KEY_PATH"
+          chmod 600 "$KEY_PATH"
+          echo "path=$KEY_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Build signed production IPA
+        env:
+          APP_STORE_CONNECT_API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
+          APP_STORE_CONNECT_API_ISSUER: ${{ secrets.APP_STORE_CONNECT_API_ISSUER }}
+          APP_STORE_CONNECT_PRIVATE_KEY_PATH: ${{ steps.app_store_key.outputs.path }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          SKIP_QUALITY: "1"
+          UPLOAD_TO_TESTFLIGHT: "0"
+        run: pnpm run mobile:release:ios:testflight
+
+      - name: Verify IPA metadata and signature
+        run: |
+          IPA="apps/mobile-expo/dist/xopc.ipa"
+          test -s "$IPA"
+          unzip -tq "$IPA"
+          APP_PATH="$(find apps/mobile-expo/dist/ios/export -maxdepth 2 -type d -name '*.app' -print -quit)"
+          test -n "$APP_PATH"
+          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")" = "ai.xopc.xopc"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Info.plist")" = "$(node -e "process.stdout.write(require('./apps/mobile-expo/app.json').expo.version)")"
+
+      - name: Upload signed IPA artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: xopc-ios-production
+          path: apps/mobile-expo/dist/xopc.ipa
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload IPA to TestFlight
+        if: github.event_name == 'push' || inputs.upload
+        env:
+          APP_STORE_CONNECT_API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
+          APP_STORE_CONNECT_API_ISSUER: ${{ secrets.APP_STORE_CONNECT_API_ISSUER }}
+          APP_STORE_CONNECT_PRIVATE_KEY_PATH: ${{ steps.app_store_key.outputs.path }}
+        run: pnpm -C apps/mobile-expo run submit:ios:direct
