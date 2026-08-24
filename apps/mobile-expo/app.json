@@ -43,11 +43,13 @@
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.CAMERA"
       ],
+      "versionCode": 2,
       "package": "ai.xopc.xopc"
     },
     "plugins": [
       "./plugins/with-android-maven-mirrors",
       "./plugins/with-android-proguard-rules",
+      "./plugins/with-android-release-signing",
       "./plugins/with-android-share-intake",
       "./plugins/with-ios-cocoapods-mirror",
       "./plugins/with-ios-share-intake",

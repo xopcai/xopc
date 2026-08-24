@@ -20,12 +20,20 @@ if (typeof current !== 'string' || !/^\d+\.\d+\.\d+$/.test(current)) {
 const parts = current.split('.').map((n) => Number.parseInt(n, 10));
 const next = `${parts[0]}.${parts[1]}.${parts[2] + 1}`;
 
+const currentAndroidVersionCode = appJson.expo?.android?.versionCode;
+if (!Number.isSafeInteger(currentAndroidVersionCode) || currentAndroidVersionCode < 1) {
+  throw new Error(
+    `Invalid expo.android.versionCode: ${JSON.stringify(currentAndroidVersionCode)}`,
+  );
+}
+
 if (process.argv.includes('--print-next')) {
   process.stdout.write(next);
   process.exit(0);
 }
 
 appJson.expo.version = next;
+appJson.expo.android.versionCode = currentAndroidVersionCode + 1;
 writeFileSync(appJsonPath, `${JSON.stringify(appJson, null, 2)}\n`);
 
 const appPkg = JSON.parse(readFileSync(appPkgPath, 'utf8'));

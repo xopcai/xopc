@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Patch release: sync → lint → typecheck → test → bump patch versions → commit → tag → atomic push.
-# Pushing the tag triggers .github/workflows/mobile-expo-release.yml (EAS build + GitHub Release).
+# Pushing the tag triggers the local GitHub runner Android build and GitHub Release.
 # Requires a clean git working tree on a branch. Uses remote GIT_REMOTE (default: origin).
 set -euo pipefail
 
@@ -69,7 +69,7 @@ fi
 run_release_step "pnpm run mobile:lint" pnpm run mobile:lint
 run_release_step "pnpm run mobile:typecheck" pnpm run mobile:typecheck
 run_release_step "pnpm run mobile:test" pnpm run mobile:test
-run_release_step "pnpm run mobile:test:sse" pnpm run mobile:test:sse
+run_release_step "pnpm run mobile:test:stream" pnpm run mobile:test:stream
 
 NEXT_VER="$(node "$ROOT/scripts/apps/mobile-expo/bump-patch-version.mjs")"
 TAG="mobile-expo-v${NEXT_VER}"
@@ -98,4 +98,4 @@ if [[ "$REMOTE_HEAD_SHA" != "$RELEASE_SHA" ]]; then
 fi
 
 echo "Released ${TAG} (${RELEASE_SHA}) to ${REMOTE}/${BRANCH}"
-echo "GitHub Actions will build the mobile Expo artifact and publish a GitHub Release."
+echo "GitHub Actions will build signed Android artifacts locally and publish a GitHub Release."

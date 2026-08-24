@@ -208,9 +208,33 @@ Release 构建使用 `expo-build-properties` 控制安装体积：
 构建本地 release APK：
 
 ```bash
-pnpm -C apps/mobile-expo exec expo prebuild --clean
-pnpm -C apps/mobile-expo run android:release
+ANDROID_KEYSTORE_PATH="/secure/path/xopc-upload.jks" \
+ANDROID_KEYSTORE_PASSWORD="..." \
+ANDROID_KEY_ALIAS="..." \
+ANDROID_KEY_PASSWORD="..." \
+pnpm -C apps/mobile-expo run build:android:local
 ```
+
+该命令在本机执行 Expo prebuild 和 Gradle，输出：
+
+- `dist/android/xopc-android.apk`：直接安装或附加到 GitHub Release。
+- `dist/android/xopc-android.aab`：上传 Google Play。
+
+Android release 构建必须提供正式 keystore。Gradle 签名配置由
+`plugins/with-android-release-signing.js` 在 prebuild 时注入；凭据只通过环境变量传入，
+不得提交 keystore 或密码。
+
+GitHub tag `mobile-expo-v*` 会触发 `.github/workflows/mobile-expo-release.yml`，
+在 GitHub Ubuntu runner 上直接构建签名 APK/AAB，不使用 EAS Build。工作流需要以下
+GitHub Actions Secrets：
+
+- `ANDROID_KEYSTORE_BASE64`
+- `ANDROID_KEYSTORE_PASSWORD`
+- `ANDROID_KEY_ALIAS`
+- `ANDROID_KEY_PASSWORD`
+
+请优先复用之前 EAS 构建使用的 Android keystore；更换 keystore 后，已有安装无法覆盖升级，
+Google Play 也不会接受使用错误 upload key 签名的更新。
 
 EAS profile：
 
