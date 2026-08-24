@@ -11,6 +11,7 @@ export * from './project-operating-view-service.js';
 export * from './project-monitoring-service.js';
 export * from './task-value-metrics-service.js';
 export * from './task-application-service.js';
+export * from './task-change-events.js';
 export * from './task-context-repository.js';
 export * from './task-dependency-service.js';
 export * from './task-read-model-projector.js';

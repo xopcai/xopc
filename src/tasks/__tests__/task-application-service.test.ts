@@ -310,11 +310,17 @@ describe('TaskApplicationService', () => {
       idempotencyKey: 'outbox-task', title: 'Publish event', priority: 'normal', contract,
       dependencies: [], context: [], authorityGrants: [], activation: { mode: 'capture', phase: 'backlog' },
     });
-    const events: Array<{ type: string }> = [];
+    const events: Array<{ type: string; payload: Record<string, unknown> }> = [];
     const dispatcher = new TaskOutboxDispatcher((event) => events.push(event));
-    expect(dispatcher.drain()).toBe(1);
+    expect(dispatcher.drain()).toBe(2);
     expect(dispatcher.drain()).toBe(0);
-    expect(events.map((event) => event.type)).toEqual(['task.created.v2']);
+    expect(events.map((event) => event.type).sort()).toEqual(['task.changed.v2', 'task.created.v2']);
+    expect(events.find((event) => event.type === 'task.changed.v2')?.payload).toMatchObject({
+      taskId: expect.any(String),
+      version: 1,
+      source: 'user',
+      changedFields: expect.arrayContaining(['title', 'phase', 'contract']),
+    });
   });
 
   it('records feedback against TaskRun rather than a generic execution receipt', () => {

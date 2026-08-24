@@ -1320,6 +1320,44 @@ html.dark .chat-messages::-webkit-scrollbar-thumb:hover {
 }
 
 /* Animation classes for Radix Dialog */
+@keyframes task-detail-live-update {
+  from {
+    background-color: color-mix(in srgb, var(--color-accent) 14%, transparent);
+  }
+}
+
+.task-detail-live-update {
+  animation: task-detail-live-update 1.2s ease-out;
+}
+
+.task-detail-modal-content {
+  left: 50%;
+  width: min(76rem, calc(100vw - 2rem));
+  transition:
+    left 200ms cubic-bezier(0.22, 1, 0.36, 1),
+    width 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (min-width: 768px) {
+  .task-detail-modal-content[data-workspace-panel-open="true"] {
+    left: calc(50% - var(--task-detail-workspace-offset, 0px));
+    width: min(
+      76rem,
+      calc(100vw - var(--task-detail-workspace-width, 0px) - 2rem)
+    );
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .task-detail-live-update {
+    animation: none;
+  }
+
+  .task-detail-modal-content {
+    transition: none;
+  }
+}
+
 .xopc-dialog-overlay[data-state="open"] {
   animation: xopc-dialog-overlay-in 0.2s ease-out both;
 }

@@ -221,7 +221,7 @@ export function AppShell() {
               <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                 {!isSettingsRoute && !previewPath ? <PrimaryAppHeader /> : null}
                 <main id="app-main-content" className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                  {previewPath != null ? (
+                  {previewPath != null && !taskModalId ? (
                     <WorkspacePreviewPane />
                   ) : (
                     <div
@@ -241,9 +241,9 @@ export function AppShell() {
                 </main>
               </div>
               {!isSettingsRoute ? (
-                sideChatOpen && parentSessionKey
+                sideChatOpen && parentSessionKey && !taskModalId
                   ? <SideChatColumn parentSessionKey={parentSessionKey} />
-                  : <WorkspaceColumn />
+                  : <WorkspaceColumn elevated={Boolean(taskModalId)} />
               ) : null}
             </div>
           </div>

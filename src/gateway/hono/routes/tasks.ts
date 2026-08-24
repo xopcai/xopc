@@ -5,14 +5,17 @@ import {
   TaskCommandRequestSchema,
   TaskContextInputSchema,
   TaskCreateRequestSchema,
+  type TaskChangedField,
   TaskDependencyUpdateRequestSchema,
   TaskPatchRequestSchema,
   TaskPhaseSchema,
 } from '@xopcai/gateway-contract';
 
+import { runSqliteWriteTransaction } from '../../../storage/sqlite/transaction.js';
 import { ProjectMonitoringService } from '../../../tasks/project-monitoring-service.js';
 import { TaskApplicationService } from '../../../tasks/task-application-service.js';
 import { TaskContextRepository } from '../../../tasks/task-context-repository.js';
+import { enqueueTaskChangedEvent } from '../../../tasks/task-change-events.js';
 import {
   TaskDependencyError,
   TaskDependencyService,
@@ -60,6 +63,7 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
       const created = application.create(parsed.data);
       if (created.ok === false) return c.json({ ok: false, code: created.reason, error: created.reason }, 409);
       if (created.runId) deps.service.dispatchTaskRuns();
+      else deps.service.dispatchTaskEvents();
       return c.json({
         ok: true,
         task: created.model.task,
@@ -97,8 +101,22 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
   authenticated.patch('/api/tasks/:id', taskRateLimit, async (c) => {
     const parsed = TaskPatchRequestSchema.safeParse(await c.req.json().catch(() => ({})));
     if (!parsed.success) return c.json({ ok: false, error: 'Invalid task patch' }, 400);
-    const updated = tasks.update(c.req.param('id'), parsed.data);
+    const updated = runSqliteWriteTransaction((db) => {
+      const task = tasks.update(c.req.param('id'), parsed.data);
+      if (!task) return undefined;
+      const changedFields = Object.keys(parsed.data)
+        .filter((field): field is TaskChangedField => field !== 'expectedVersion');
+      enqueueTaskChangedEvent(db, {
+        taskId: task.id,
+        projectId: task.projectId,
+        version: task.version,
+        changedFields,
+        actor: { kind: 'user' },
+      });
+      return task;
+    });
     if (!updated) return c.json({ ok: false, error: 'Task changed or was not found' }, 409);
+    deps.service.dispatchTaskEvents();
     return c.json({ ok: true, task: updated });
   });
 
@@ -106,7 +124,18 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
     const parsed = TaskDependencyUpdateRequestSchema.safeParse(await c.req.json().catch(() => ({})));
     if (!parsed.success) return c.json({ ok: false, error: 'Invalid task dependencies' }, 400);
     try {
-      const task = dependencies.replace({ taskId: c.req.param('id'), ...parsed.data });
+      const task = runSqliteWriteTransaction((db) => {
+        const changed = dependencies.replace({ taskId: c.req.param('id'), ...parsed.data });
+        enqueueTaskChangedEvent(db, {
+          taskId: changed.id,
+          projectId: changed.projectId,
+          version: changed.version,
+          changedFields: ['dependencies'],
+          actor: { kind: 'user' },
+        });
+        return changed;
+      });
+      deps.service.dispatchTaskEvents();
       return c.json({
         ok: true,
         task,
@@ -128,10 +157,21 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
     const parsed = TaskBoardPositionRequestSchema.safeParse(await c.req.json().catch(() => ({})));
     if (!parsed.success) return c.json({ ok: false, error: 'Invalid task board position' }, 400);
     try {
-      const task = tasks.reorder({ taskId: c.req.param('id'), ...parsed.data });
-      return task
-        ? c.json({ ok: true, task })
-        : c.json({ ok: false, error: 'Task changed or was not found' }, 409);
+      const task = runSqliteWriteTransaction((db) => {
+        const reordered = tasks.reorder({ taskId: c.req.param('id'), ...parsed.data });
+        if (!reordered) return undefined;
+        enqueueTaskChangedEvent(db, {
+          taskId: reordered.id,
+          projectId: reordered.projectId,
+          version: reordered.version,
+          changedFields: ['boardRank'],
+          actor: { kind: 'user' },
+        });
+        return reordered;
+      });
+      if (!task) return c.json({ ok: false, error: 'Task changed or was not found' }, 409);
+      deps.service.dispatchTaskEvents();
+      return c.json({ ok: true, task });
     } catch (error) {
       return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400);
     }
@@ -156,6 +196,7 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
       }, 409);
     }
     if (result.runId || parsed.data.command?.type === 'resolve_wait') deps.service.dispatchTaskRuns();
+    else deps.service.dispatchTaskEvents();
     if (parsed.data.command?.type === 'close' && parsed.data.command.resolution === 'done') {
       signals.dependencyClosed(c.req.param('id'));
     }
@@ -167,14 +208,37 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
     if (!task) return c.json({ ok: false, error: 'Task not found' }, 404);
     const parsed = TaskContextInputSchema.safeParse(await c.req.json().catch(() => ({})));
     if (!parsed.success) return c.json({ ok: false, error: 'Invalid task context edge' }, 400);
-    return c.json({
-      ok: true,
-      edge: context.add({ taskId: task.id, ...parsed.data, createdBy: { kind: 'user' } }),
-    }, 201);
+    const edge = runSqliteWriteTransaction((db) => {
+      const created = context.add({ taskId: task.id, ...parsed.data, createdBy: { kind: 'user' } });
+      enqueueTaskChangedEvent(db, {
+        taskId: task.id,
+        projectId: task.projectId,
+        version: task.version,
+        changedFields: ['context'],
+        actor: { kind: 'user' },
+      });
+      return created;
+    });
+    deps.service.dispatchTaskEvents();
+    return c.json({ ok: true, edge }, 201);
   });
 
   authenticated.delete('/api/tasks/:id/context/:edgeId', taskRateLimit, (c) => {
-    const removed = context.remove(c.req.param('id'), c.req.param('edgeId'));
+    const task = tasks.get(c.req.param('id'));
+    const removed = task ? runSqliteWriteTransaction((db) => {
+      const didRemove = context.remove(task.id, c.req.param('edgeId'));
+      if (didRemove) {
+        enqueueTaskChangedEvent(db, {
+          taskId: task.id,
+          projectId: task.projectId,
+          version: task.version,
+          changedFields: ['context'],
+          actor: { kind: 'user' },
+        });
+      }
+      return didRemove;
+    }) : false;
+    if (removed) deps.service.dispatchTaskEvents();
     return removed
       ? c.json({ ok: true })
       : c.json({ ok: false, error: 'Task context edge not found' }, 404);
@@ -220,6 +284,7 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
       },
     });
     if (result.ok === false) return c.json({ ok: false, error: result.reason }, 409);
+    deps.service.dispatchTaskEvents();
     return c.json({ ok: true, run: runs.get(run.id), receipt: runs.getReceipt(run.id) });
   });
 

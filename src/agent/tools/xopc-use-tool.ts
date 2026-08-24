@@ -29,8 +29,10 @@ import {
 } from '../../projects/index.js';
 import type { LocalAppService } from '../../local-apps/index.js';
 import { getSessionMetadata } from '../../storage/sqlite/index.js';
+import { runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
 import {
   defineTaskContract,
+  enqueueTaskChangedEvent,
   TaskApplicationService,
   TaskContextRepository,
   TaskReadModelProjector,
@@ -79,6 +81,7 @@ export interface XopcUseToolDeps {
   getNotesService?: () => NotesService | undefined;
   getProjectService?: () => ProjectService | undefined;
   getLocalAppService?: () => LocalAppService | undefined;
+  dispatchTaskEvents?: () => void;
   dispatchTaskRuns?: () => void;
 }
 
@@ -919,6 +922,7 @@ async function handleTask(
     const created = new TaskApplicationService().create(input, { kind: 'agent', id: agentId });
     if (created.ok === false) return { ok: false, error: created.reason, ...created };
     if (created.runId) deps.dispatchTaskRuns?.();
+    else deps.dispatchTaskEvents?.();
     return { ok: true, task: created.model.task, operationalState: created.model.operationalState,
       createMode, ...(created.runId ? { runId: created.runId } : {}) };
   }
@@ -943,11 +947,22 @@ async function handleTask(
       };
     }
     try {
-      const task = dependencies.replace({
-        taskId: id,
-        dependsOnTaskIds,
-        expectedVersion,
+      const task = runSqliteWriteTransaction((db) => {
+        const changed = dependencies.replace({
+          taskId: id,
+          dependsOnTaskIds,
+          expectedVersion,
+        });
+        enqueueTaskChangedEvent(db, {
+          taskId: changed.id,
+          projectId: changed.projectId,
+          version: changed.version,
+          changedFields: ['dependencies'],
+          actor: { kind: 'agent', id: deps.getCurrentAgentId?.() },
+        });
+        return changed;
       });
+      deps.dispatchTaskEvents?.();
       return {
         ok: true,
         task,
@@ -980,7 +995,20 @@ async function handleTask(
       createdBy: { kind: 'agent' as const, id: deps.getCurrentAgentId?.() },
     };
     if (dryRun) return { ok: true, dryRun: true, action: 'add_task_context', input };
-    return { ok: true, edge: context.add(input), context: context.list(id) };
+    const task = tasks.require(id);
+    const edge = runSqliteWriteTransaction((db) => {
+      const created = context.add(input);
+      enqueueTaskChangedEvent(db, {
+        taskId: task.id,
+        projectId: task.projectId,
+        version: task.version,
+        changedFields: ['context'],
+        actor: input.createdBy,
+      });
+      return created;
+    });
+    deps.dispatchTaskEvents?.();
+    return { ok: true, edge, context: context.list(id) };
   }
 
   if (command === 'remove_context') {
@@ -989,7 +1017,22 @@ async function handleTask(
     if (!id) return { ok: false, error: 'taskId is required' };
     if (!edgeId) return { ok: false, error: 'edgeId is required' };
     if (dryRun) return { ok: true, dryRun: true, action: 'remove_task_context', taskId: id, edgeId };
-    const removed = context.remove(id, edgeId);
+    const task = tasks.get(id);
+    const actor = { kind: 'agent' as const, id: deps.getCurrentAgentId?.() };
+    const removed = task ? runSqliteWriteTransaction((db) => {
+      const didRemove = context.remove(id, edgeId);
+      if (didRemove) {
+        enqueueTaskChangedEvent(db, {
+          taskId: task.id,
+          projectId: task.projectId,
+          version: task.version,
+          changedFields: ['context'],
+          actor,
+        });
+      }
+      return didRemove;
+    }) : false;
+    if (removed) deps.dispatchTaskEvents?.();
     return removed
       ? { ok: true, taskId: id, edgeId, context: context.list(id) }
       : { ok: false, error: `Task context edge not found: ${edgeId}` };
@@ -1038,6 +1081,7 @@ async function handleTask(
       };
     }
     if (result.runId) deps.dispatchTaskRuns?.();
+    else deps.dispatchTaskEvents?.();
     return {
       ok: true,
       task: result.model.task,
@@ -1120,6 +1164,7 @@ async function handleTaskRun(
       },
     });
     if (result.ok === false) return { ok: false, error: result.reason, ...result };
+    deps.dispatchTaskEvents?.();
     return { ok: true, run: runs.get(runId), receipt: runs.getReceipt(runId), model: result.model };
   }
 

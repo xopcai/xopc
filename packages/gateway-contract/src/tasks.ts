@@ -18,6 +18,35 @@ export {
 } from './task-lifecycle.js';
 
 export const TaskPrioritySchema = z.enum(['low', 'normal', 'high', 'critical']);
+export const TaskChangedFieldSchema = z.enum([
+  'title',
+  'body',
+  'phase',
+  'resolution',
+  'priority',
+  'dueAt',
+  'projectId',
+  'milestoneId',
+  'parentTaskId',
+  'ownerId',
+  'delegateAgentId',
+  'boardRank',
+  'contract',
+  'dependencies',
+  'context',
+  'runs',
+  'receipts',
+  'attention',
+]);
+export const TaskChangedEventSchema = z.object({
+  taskId: z.string().min(1),
+  projectId: z.string().min(1).optional(),
+  version: z.number().int().positive(),
+  changedFields: z.array(TaskChangedFieldSchema).min(1),
+  source: z.enum(['user', 'agent', 'runtime']),
+  actorId: z.string().min(1).optional(),
+  occurredAt: z.number().int().nonnegative(),
+});
 export const TaskAcceptancePolicySchema = z.enum([
   'verified_auto',
   'verified_then_review',
@@ -334,6 +363,8 @@ export type TaskContractInput = z.infer<typeof TaskContractInputSchema>;
 export type TaskContextInput = z.infer<typeof TaskContextInputSchema>;
 export type TaskCreateRequest = z.infer<typeof TaskCreateRequestSchema>;
 export type TaskPatchRequest = z.infer<typeof TaskPatchRequestSchema>;
+export type TaskChangedField = z.infer<typeof TaskChangedFieldSchema>;
+export type TaskChangedEvent = z.infer<typeof TaskChangedEventSchema>;
 export type TaskCommand = z.infer<typeof TaskCommandSchema>;
 export type TaskCommandRequest = z.infer<typeof TaskCommandRequestSchema>;
 export type TaskDependencyUpdateRequest = z.infer<typeof TaskDependencyUpdateRequestSchema>;

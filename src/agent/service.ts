@@ -292,6 +292,7 @@ export class AgentService {
       getNotesService: config.getNotesService,
       getProjectService: config.getProjectService,
       getLocalAppService: config.getLocalAppService,
+      dispatchTaskEvents: config.dispatchTaskEvents,
       dispatchTaskRuns: config.dispatchTaskRuns,
       getWorkflowRunService: config.getWorkflowRunService,
       onSkillsUpdated: config.onSkillsUpdated,
