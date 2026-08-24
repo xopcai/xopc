@@ -8,6 +8,7 @@ import type {
 } from '@earendil-works/pi-ai';
 
 import type { SessionStore } from '../../session/store.js';
+import type { EmbeddedTranscriptRuntime } from './transcript-runtime.js';
 
 export type EmbeddedStreamEvent =
   | { type: 'agent_start'; runId?: string }
@@ -66,7 +67,8 @@ export type RunXopcEmbeddedTurnParams = {
   thinkingLevel?: ThinkingLevel;
   cacheRetention?: CacheRetention;
   workspaceDir: string;
-  sessionStore: SessionStore;
+  sessionStore?: SessionStore;
+  transcriptRuntime?: EmbeddedTranscriptRuntime;
   timeoutMs: number;
   abortSignal?: AbortSignal;
   onEvent?: (event: EmbeddedStreamEvent) => void;
