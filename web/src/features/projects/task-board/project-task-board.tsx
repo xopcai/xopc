@@ -5,6 +5,7 @@ import { type FormEvent, type Ref, useEffect, useImperativeHandle, useState } fr
 import { Link } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { ComposerAttachmentChips } from '@/features/chat/composer/composer-attachment-chips';
 import { useComposerAttachments } from '@/features/chat/composer/use-composer-attachments';
@@ -466,12 +467,12 @@ export function ProjectTaskBoard({ tasks, dependencyEdges, monitoring, returnTo,
                   </label>
                   <label className="grid gap-2 text-sm">
                     <span className="font-medium text-fg-muted">{copy.dueDate} <span className="font-normal text-fg-subtle">{copy.optional}</span></span>
-                    <input
-                      type="date"
-                      className="min-h-10 rounded-md border border-edge bg-surface-base px-3 text-sm text-fg outline-none focus:border-accent"
+                    <DatePicker
+                      className="min-h-10 bg-surface-base"
                       value={dueDate}
-                      onChange={(event) => setDueDate(event.target.value)}
+                      onChange={setDueDate}
                       disabled={creating}
+                      ariaLabel={copy.dueDate}
                     />
                   </label>
                 </div>

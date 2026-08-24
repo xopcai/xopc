@@ -21,8 +21,50 @@ const WorkflowRunSummarySchema = z.object({
   completedAtMs: z.number().optional(),
   metrics: WorkflowMetricsSchema,
 });
+const WorkflowSeveritySchema = z.enum(['low', 'medium', 'high', 'critical']);
+const WorkflowResultSectionSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('text'),
+    title: z.string(),
+    content: z.string(),
+  }),
+  z.object({
+    kind: z.literal('findings'),
+    title: z.string(),
+    items: z.array(z.object({
+      title: z.string(),
+      severity: WorkflowSeveritySchema.optional(),
+      file: z.string().optional(),
+      line: z.number().optional(),
+      detail: z.string().optional(),
+      recommendation: z.string().optional(),
+    })),
+  }),
+  z.object({
+    kind: z.literal('risks'),
+    title: z.string(),
+    items: z.array(z.object({
+      title: z.string(),
+      severity: WorkflowSeveritySchema.optional(),
+      likelihood: z.enum(['low', 'medium', 'high']).optional(),
+      impact: z.string().optional(),
+      mitigation: z.string().optional(),
+    })),
+  }),
+  z.object({
+    kind: z.literal('questions'),
+    title: z.string(),
+    items: z.array(z.string()),
+  }),
+]);
+const WorkflowResultSchema = z.object({
+  title: z.string().optional(),
+  summary: z.string(),
+  sections: z.array(WorkflowResultSectionSchema).optional(),
+});
 const WorkflowRunSchema = WorkflowRunSummarySchema.extend({
   goal: z.string(),
+  result: WorkflowResultSchema.optional(),
   error: z.object({ message: z.string() }).passthrough().optional(),
 });
 const WorkflowRunViewSchema = z.object({
@@ -62,6 +104,7 @@ const WorkflowRunViewSchema = z.object({
 });
 
 export type WorkflowRunSummary = z.infer<typeof WorkflowRunSummarySchema> & { ownerAgentId?: string };
+export type WorkflowResult = z.infer<typeof WorkflowResultSchema>;
 export type WorkflowRunView = z.infer<typeof WorkflowRunViewSchema>;
 
 async function workflowError(response: Response): Promise<Error> {

@@ -27,7 +27,11 @@ import { appendTranscriptToDraft } from '@/features/chat/composer/append-transcr
 import { ComposerVoiceInputBar } from '@/features/chat/composer/composer-voice-input-bar';
 import { ComposerContextNotice } from '@/features/chat/composer/composer-context-notice';
 import { useComposerVoiceInput } from '@/features/chat/composer/use-composer-voice-input';
+import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import { ReviewLauncherDialog } from '@/features/chat/review/review-launcher-dialog';
+import { inferMimeTypeFromFileName } from '@/features/chat/attachments/attachment-utils-core';
+import { fetchWorkspaceFileBlob } from '@/features/workspace/workspace-api';
+import { hasWorkspaceFileDrag, readWorkspaceFileDrag } from '@/features/workspace/workspace-file-drag';
 import {
   takePendingVoiceInputToggle,
   queuePendingVoiceInputToggle,
@@ -420,8 +424,9 @@ export const ChatComposer = memo(function ChatComposer({
         att.isDragging && 'ring-2 ring-accent ring-inset',
       )}
       onDragOver={(e) => {
-        if (e.dataTransfer?.types.includes('Files')) {
+        if (e.dataTransfer?.types.includes('Files') || hasWorkspaceFileDrag(e.dataTransfer)) {
           e.preventDefault();
+          e.dataTransfer.dropEffect = 'copy';
           att.setIsDragging(true);
         }
       }}
@@ -432,7 +437,28 @@ export const ChatComposer = memo(function ChatComposer({
         e.preventDefault();
         att.setIsDragging(false);
         const files = e.dataTransfer?.files;
-        if (files?.length) await att.processFiles(Array.from(files));
+        if (files?.length) {
+          await att.processFiles(Array.from(files));
+          return;
+        }
+        const workspaceFile = readWorkspaceFileDrag(e.dataTransfer);
+        if (!workspaceFile) return;
+        try {
+          const blob = await fetchWorkspaceFileBlob(workspaceFile.path, {
+            sessionKey: workspaceFile.sessionKey,
+            agentId: workspaceFile.agentId,
+            projectId: workspaceFile.projectId,
+          });
+          const inferredMime = inferMimeTypeFromFileName(workspaceFile.name);
+          const mimeType = blob.type && blob.type !== 'application/octet-stream'
+            ? blob.type
+            : inferredMime;
+          await att.processFiles([
+            new File([blob], workspaceFile.name, { type: mimeType }),
+          ]);
+        } catch {
+          showComposerNotification('error', m.chat.attachmentLoadFailed, { name: workspaceFile.name });
+        }
       }}
     >
       {att.isDragging ? (
