@@ -38,19 +38,21 @@ import { clampWorkspacePanelWidthPx, useWorkspacePanelStore } from '@/stores/wor
 import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
 
 /** Right-hand workspace file browser (project files only). Preview uses `WorkspacePreviewDialog`. */
-export const WorkspaceColumn = memo(function WorkspaceColumn() {
+export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false }: { elevated?: boolean }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const { pathname } = useLocation();
   const { sessionKey: sessionKeyParam } = useParams();
-  const chatSessionKey =
+  const routeChatSessionKey =
     pathname.startsWith('/chat') && sessionKeyParam
       ? decodeURIComponent(sessionKeyParam)
       : null;
   const open = useWorkspacePanelStore((s) => s.open);
   const setOpen = useWorkspacePanelStore((s) => s.setOpen);
+  const sessionKeyOverride = useWorkspacePanelStore((s) => s.sessionKeyOverride);
   const widthPx = useWorkspacePanelStore((s) => s.widthPx);
   const setWidthPx = useWorkspacePanelStore((s) => s.setWidthPx);
+  const chatSessionKey = sessionKeyOverride ?? routeChatSessionKey;
   const [widthResizing, setWidthResizing] = useState(false);
   const [fileSearchOpen, setFileSearchOpen] = useState(false);
   const [fileSearchQuery, setFileSearchQuery] = useState('');
@@ -289,7 +291,7 @@ export const WorkspaceColumn = memo(function WorkspaceColumn() {
       {open ? (
         <button
           type="button"
-          className="fixed inset-0 z-40 bg-scrim md:hidden"
+          className={cn('fixed inset-0 bg-scrim md:hidden', elevated ? 'z-[109]' : 'z-40')}
           aria-label={m.closeMenu}
           onClick={() => setOpen(false)}
         />
@@ -301,12 +303,13 @@ export const WorkspaceColumn = memo(function WorkspaceColumn() {
         aria-hidden={!open}
         className={cn(
           'flex min-h-0 flex-col overflow-hidden bg-surface-base',
-          'max-md:fixed max-md:right-0 max-md:top-0 max-md:z-50 max-md:h-[100dvh] max-md:shadow-popover',
+          'max-md:fixed max-md:right-0 max-md:top-0 max-md:h-[100dvh] max-md:shadow-popover',
           'max-md:transition-transform max-md:duration-200 max-md:ease-out',
           'motion-reduce:max-md:transition-none',
           'max-md:w-[min(20rem,92vw)]',
           open ? 'max-md:translate-x-0' : 'max-md:pointer-events-none max-md:translate-x-full',
           'md:relative md:h-full md:translate-x-0',
+          elevated && open ? 'pointer-events-auto z-[110]' : 'max-md:z-50',
           'motion-reduce:md:transition-none',
           !open &&
             'md:pointer-events-none md:w-0 md:min-w-0 md:max-w-0 md:overflow-hidden',

@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Popover from '@radix-ui/react-popover';
-import type { ProjectMonitoringUpdate, ProjectOperatingView, ProjectTaskCard, TaskCommand, TaskPhase } from '@xopcai/gateway-contract';
+import { TaskChangedEventSchema, type ProjectMonitoringUpdate, type ProjectOperatingView, type ProjectTaskCard, type TaskCommand, type TaskPhase } from '@xopcai/gateway-contract';
 import { AlertCircle, Archive, ArrowLeft, Check, ChevronDown, Clock, Columns3, Copy, File, Folder, FolderPlus, History, LayoutDashboard, MessageSquarePlus, Pause, Pin, PinOff, Play, Plus, RotateCcw, Save, Search, Settings, Sparkles, Trash2, X, Zap, type LucideIcon } from 'lucide-react';
 import { type CSSProperties, type FormEvent, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -813,17 +813,17 @@ export function ProjectDetailPage() {
   }, [projectId]);
 
   useEffect(() => {
+    let refreshTimer: number | undefined;
     const refreshForTask = (event: Event) => {
-      const detail = (event as CustomEvent<{ projectId?: string }>).detail;
-      if (detail?.projectId === projectId) void refreshOperatingView();
+      const parsed = TaskChangedEventSchema.safeParse((event as CustomEvent<unknown>).detail);
+      if (!parsed.success || parsed.data.projectId !== projectId) return;
+      window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => void refreshOperatingView(), 120);
     };
-    window.addEventListener('task-created-v2', refreshForTask);
-    window.addEventListener('task-commanded-v2', refreshForTask);
-    window.addEventListener('task-phase-changed-v2', refreshForTask);
+    window.addEventListener('task-changed-v2', refreshForTask);
     return () => {
-      window.removeEventListener('task-created-v2', refreshForTask);
-      window.removeEventListener('task-commanded-v2', refreshForTask);
-      window.removeEventListener('task-phase-changed-v2', refreshForTask);
+      window.clearTimeout(refreshTimer);
+      window.removeEventListener('task-changed-v2', refreshForTask);
     };
   }, [projectId, refreshOperatingView]);
 

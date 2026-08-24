@@ -126,6 +126,8 @@ export interface ToolFactoryDeps {
   getNotesService?: () => NotesService | undefined;
   getProjectService?: () => ProjectService | undefined;
   getLocalAppService?: () => LocalAppService | undefined;
+  /** Gateway: publishes durable Task change notifications. */
+  dispatchTaskEvents?: () => void;
   /** Gateway: queues Task execution for xopc_use task start/resume/verify actions. */
   dispatchTaskRuns?: () => void;
   /** Gateway: starts persisted workflow runs (dedicated chat session per run). */
@@ -469,6 +471,7 @@ export class AgentToolsFactory {
         || this.deps.getProjectService
         || this.deps.getNotesService
         || this.deps.getLocalAppService
+        || this.deps.dispatchTaskEvents
         || this.deps.dispatchTaskRuns
         ? [
             createXopcUseTool({
@@ -479,6 +482,7 @@ export class AgentToolsFactory {
               getNotesService: this.deps.getNotesService,
               getProjectService: this.deps.getProjectService,
               getLocalAppService: this.deps.getLocalAppService,
+              dispatchTaskEvents: this.deps.dispatchTaskEvents,
               dispatchTaskRuns: this.deps.dispatchTaskRuns,
             }),
           ]
