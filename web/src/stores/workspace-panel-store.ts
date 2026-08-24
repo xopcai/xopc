@@ -54,6 +54,8 @@ type WorkspacePanelState = {
   open: boolean;
   setOpen: (open: boolean) => void;
   toggleOpen: () => void;
+  sessionKeyOverride: string | null;
+  openForSession: (sessionKey: string) => void;
   widthPx: number;
   setWidthPx: (px: number) => void;
 };
@@ -61,11 +63,17 @@ type WorkspacePanelState = {
 export const useWorkspacePanelStore = create<WorkspacePanelState>((set, get) => ({
   open: readOpen(),
   setOpen: (open) => {
-    set({ open });
+    set(open ? { open } : { open, sessionKeyOverride: null });
     queueMicrotask(() => writeOpen(open));
   },
   toggleOpen: () => {
     get().setOpen(!get().open);
+  },
+  sessionKeyOverride: null,
+  openForSession: (sessionKey) => {
+    const normalizedSessionKey = sessionKey.trim();
+    set({ open: true, sessionKeyOverride: normalizedSessionKey || null });
+    queueMicrotask(() => writeOpen(true));
   },
   widthPx: readWidthPx(),
   setWidthPx: (px) => {

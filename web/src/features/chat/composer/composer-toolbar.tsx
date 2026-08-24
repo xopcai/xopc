@@ -12,6 +12,7 @@ import type { VoiceReadiness } from '@/features/chat/composer/voice-transcribe-a
 import { interpolate } from '@/features/chat/composer/composer.types';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
+import { APP_PORTALED_POPOVER_Z } from '@/lib/settings-shell-dialog-layer';
 import type { MessageBundle } from '@/i18n/messages';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { shortcutDisplayKeys } from '@/stores/quick-capture-shortcut-store';
@@ -146,7 +147,8 @@ export const ComposerToolbar = memo(function ComposerToolbar({
         <Popover.Portal>
           <Popover.Content
             className={cn(
-              'z-50 min-w-[12rem] rounded-xl border border-edge bg-surface-panel p-1.5 shadow-popover dark:border-edge',
+              APP_PORTALED_POPOVER_Z,
+              'min-w-[12rem] rounded-xl border border-edge bg-surface-panel p-1.5 shadow-popover dark:border-edge',
             )}
             side="top"
             align="start"
