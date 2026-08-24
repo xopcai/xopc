@@ -208,9 +208,33 @@ Release builds use `expo-build-properties` to reduce install size:
 Build a local release APK:
 
 ```bash
-pnpm -C apps/mobile-expo exec expo prebuild --clean
-pnpm -C apps/mobile-expo run android:release
+ANDROID_KEYSTORE_PATH="/secure/path/xopc-upload.jks" \
+ANDROID_KEYSTORE_PASSWORD="..." \
+ANDROID_KEY_ALIAS="..." \
+ANDROID_KEY_PASSWORD="..." \
+pnpm -C apps/mobile-expo run build:android:local
 ```
+
+This command runs Expo prebuild and Gradle locally and produces:
+
+- `dist/android/xopc-android.apk` for direct installation or a GitHub Release.
+- `dist/android/xopc-android.aab` for Google Play.
+
+Android release builds require the production keystore. The prebuild step injects the Gradle
+configuration through `plugins/with-android-release-signing.js`; credentials are supplied only
+through environment variables and must not be committed.
+
+Tags matching `mobile-expo-v*` trigger `.github/workflows/mobile-expo-release.yml`. The workflow
+builds the signed APK/AAB directly on a GitHub Ubuntu runner without EAS Build. It requires these
+GitHub Actions secrets:
+
+- `ANDROID_KEYSTORE_BASE64`
+- `ANDROID_KEYSTORE_PASSWORD`
+- `ANDROID_KEY_ALIAS`
+- `ANDROID_KEY_PASSWORD`
+
+Reuse the Android keystore from previous EAS builds. Changing it prevents upgrades over existing
+installs, and Google Play rejects updates signed with the wrong upload key.
 
 EAS profiles:
 
