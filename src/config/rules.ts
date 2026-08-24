@@ -46,7 +46,7 @@ export const BASE_RELOAD_RULES: ReloadRule[] = [
   { prefix: 'gateway.tls', kind: 'restart', description: 'Gateway native TLS' },
   { prefix: 'gateway.auth', kind: 'restart', description: 'Authentication settings' },
   { prefix: 'gateway.security', kind: 'restart', description: 'Gateway security policy' },
-  { prefix: 'gateway.corsOrigins', kind: 'restart', description: 'CORS settings' },
+  { prefix: 'gateway.corsOrigins', kind: 'hot', description: 'CORS allowlist' },
   { prefix: 'gateway.trustedProxies', kind: 'restart', description: 'Trusted reverse proxy CIDRs' },
   {
     prefix: 'gateway.allowRealIpFallback',

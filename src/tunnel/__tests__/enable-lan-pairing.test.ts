@@ -16,18 +16,19 @@ function baseConfig(overrides: Partial<Config['gateway']> = {}): Config {
 }
 
 describe('applyLanPairingGatewayPatch', () => {
-  it('switches loopback gateway to lan bind with cors origins', () => {
+  it('switches loopback gateway to lan bind without persisting derived origins', () => {
     const config = baseConfig();
     const result = applyLanPairingGatewayPatch(config);
     expect(result).toEqual({ ok: true, changed: true });
     expect(config.gateway?.bind).toBe('lan');
-    expect(config.gateway?.corsOrigins?.length).toBeGreaterThan(0);
+    expect(config.gateway?.corsOrigins).toEqual([]);
   });
 
   it('is idempotent when already on lan bind', () => {
-    const config = baseConfig({ bind: 'lan', corsOrigins: ['http://127.0.0.1:28790'] });
+    const config = baseConfig({ bind: 'lan', corsOrigins: [] });
     const result = applyLanPairingGatewayPatch(config);
     expect(result).toEqual({ ok: true, changed: false });
+    expect(config.gateway?.corsOrigins).toEqual([]);
   });
 
   it('rejects when password auth is missing on network bind', () => {
@@ -39,5 +40,7 @@ describe('applyLanPairingGatewayPatch', () => {
     if (!result.ok) {
       expect(result.message).toMatch(/password/i);
     }
+    expect(config.gateway?.bind).toBe('loopback');
+    expect(config.gateway?.corsOrigins).toEqual([]);
   });
 });

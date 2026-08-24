@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import type { TaskPriority, ProjectTaskCard, ProjectTaskDependencyEdge, ProjectTaskLane } from '@xopcai/gateway-contract';
+import type { TaskPriority, ProjectTaskCard, ProjectTaskDependencyEdge, TaskPhase } from '@xopcai/gateway-contract';
 import { CalendarClock, CheckCircle2, CircleDot, GitBranch, Hourglass, LayoutGrid, ListChecks, Paperclip, UserRound } from 'lucide-react';
 import { type FormEvent, type Ref, useImperativeHandle, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -17,9 +17,10 @@ import { useLocaleStore } from '@/stores/locale-store';
 
 import {
   groupProjectTasks,
-  taskActionForLane,
+  canDragTask,
+  taskActionForPhase,
   primaryTaskAction,
-  PROJECT_TASK_LANES,
+  PROJECT_TASK_PHASES,
   type TaskBoardAction,
 } from './task-board-model';
 import { TaskDependencyGraph, type TaskDependencyGraphCopy } from './task-dependency-graph';
@@ -53,11 +54,12 @@ type BoardCopy = {
   cancel: string;
   creating: string;
   createFailed: string;
-  actions: Record<'run' | 'resume' | 'pause' | 'verify', string>;
+  actions: Record<TaskBoardAction, string>;
   verification: Record<'passed' | 'failed' | 'unverified', string>;
-  lanes: Record<ProjectTaskLane, string>;
+  phases: Record<TaskPhase, string>;
+  operationalStates: Record<ProjectTaskCard['operationalState'], string>;
   views: { board: string; graph: string };
-  graph: Omit<TaskDependencyGraphCopy, 'lanes'>;
+  graph: Omit<TaskDependencyGraphCopy, 'phases'>;
 };
 
 export type CreateProjectTaskInput = {
@@ -74,19 +76,19 @@ export type ProjectTaskBoardHandle = {
 };
 
 const LANE_ICONS = {
+  backlog: CircleDot,
   ready: CircleDot,
-  moving: ListChecks,
-  waiting: Hourglass,
-  needs_user: UserRound,
-  done: CheckCircle2,
-} satisfies Record<ProjectTaskLane, typeof CircleDot>;
+  active: ListChecks,
+  review: UserRound,
+  closed: CheckCircle2,
+} satisfies Record<TaskPhase, typeof CircleDot>;
 
-const LANE_TONES: Record<ProjectTaskLane, string> = {
+const LANE_TONES: Record<TaskPhase, string> = {
+  backlog: 'text-fg-muted',
   ready: 'text-fg-muted',
-  moving: 'text-accent-fg',
-  waiting: 'text-violet-700 dark:text-violet-300',
-  needs_user: 'text-amber-700 dark:text-amber-300',
-  done: 'text-emerald-700 dark:text-emerald-300',
+  active: 'text-accent-fg',
+  review: 'text-amber-700 dark:text-amber-300',
+  closed: 'text-emerald-700 dark:text-emerald-300',
 };
 
 function TaskCard({ task, returnTo, copy, busy, onAction, onDragStart }: {
@@ -100,7 +102,7 @@ function TaskCard({ task, returnTo, copy, busy, onAction, onDragStart }: {
   const primaryAction = primaryTaskAction(task);
   return (
     <article
-      draggable={Boolean(primaryAction)}
+      draggable={canDragTask(task)}
       onDragStart={(event) => {
         event.dataTransfer.effectAllowed = 'move';
         event.dataTransfer.setData('text/plain', task.id);
@@ -131,7 +133,7 @@ function TaskCard({ task, returnTo, copy, busy, onAction, onDragStart }: {
             {task.attention[0].summary}
           </p>
         ) : null}
-        {task.lane === 'waiting' && task.blockedBy.length > 0 ? (
+        {task.operationalState === 'blocked' && task.blockedBy.length > 0 ? (
           <div className="mt-2 rounded-md bg-violet-500/8 px-2.5 py-2 text-xs text-violet-700 dark:text-violet-300">
             <span className="inline-flex items-center gap-1.5 font-medium">
               <Hourglass className="size-3.5" aria-hidden />
@@ -143,6 +145,9 @@ function TaskCard({ task, returnTo, copy, busy, onAction, onDragStart }: {
           </div>
         ) : null}
         <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-fg-subtle">
+          {task.operationalState !== 'idle' ? (
+            <span className="font-medium text-accent-fg">{copy.operationalStates[task.operationalState]}</span>
+          ) : null}
           {task.latestVerification ? (
             <span className={cn(
               'font-medium',
@@ -177,9 +182,9 @@ function TaskCard({ task, returnTo, copy, busy, onAction, onDragStart }: {
           <button type="button" disabled={busy} onClick={() => onAction(task, primaryAction)} className="text-xs font-medium text-accent-fg hover:underline disabled:cursor-wait disabled:opacity-50">
             {copy.actions[primaryAction]}
           </button>
-          {primaryAction !== 'verify' && task.allowedCommands.includes('request_review') ? (
-            <button type="button" disabled={busy} onClick={() => onAction(task, 'verify')} className="text-xs font-medium text-fg-muted hover:text-fg hover:underline disabled:cursor-wait disabled:opacity-50">
-              {copy.actions.verify}
+          {primaryAction !== 'review' && task.allowedCommands.includes('request_review') ? (
+            <button type="button" disabled={busy} onClick={() => onAction(task, 'review')} className="text-xs font-medium text-fg-muted hover:text-fg hover:underline disabled:cursor-wait disabled:opacity-50">
+              {copy.actions.review}
             </button>
           ) : null}
         </div>
@@ -279,29 +284,29 @@ export function ProjectTaskBoard({ tasks, dependencyEdges, returnTo, copy, onAct
       </div>
       {viewMode === 'board' ? <div className="min-h-0 w-full min-w-0 flex-1 overflow-x-auto overflow-y-hidden overscroll-x-contain pb-2 [scrollbar-width:thin]">
         <div className="grid h-full min-h-0 min-w-[103rem] grid-cols-5 gap-3">
-          {PROJECT_TASK_LANES.map((lane) => {
-            const Icon = LANE_ICONS[lane];
-            const items = grouped[lane];
+          {PROJECT_TASK_PHASES.map((phase) => {
+            const Icon = LANE_ICONS[phase];
+            const items = grouped[phase];
             return (
               <section
-                key={lane}
+                key={phase}
                 onDragOver={(event) => {
                   const task = tasks.find((item) => item.id === draggedId);
-                  if (task && taskActionForLane(task, lane)) event.preventDefault();
+                  if (task && taskActionForPhase(task, phase)) event.preventDefault();
                 }}
                 onDrop={(event) => {
                   event.preventDefault();
                   const task = tasks.find((item) => item.id === draggedId);
-                  const action = task ? taskActionForLane(task, lane) : undefined;
+                  const action = task ? taskActionForPhase(task, phase) : undefined;
                   setDraggedId(null);
                   if (task && action) performAction(task, action);
                 }}
                 className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl bg-surface-muted/60 p-2.5"
               >
                 <header className="mb-2.5 flex shrink-0 items-center justify-between gap-2 px-1">
-                  <div className={cn('flex items-center gap-2', LANE_TONES[lane])}>
+                  <div className={cn('flex items-center gap-2', LANE_TONES[phase])}>
                     <Icon className="size-4" aria-hidden />
-                    <h3 className="text-sm font-semibold">{copy.lanes[lane]}</h3>
+                    <h3 className="text-sm font-semibold">{copy.phases[phase]}</h3>
                   </div>
                   <span className="rounded-full bg-surface-panel px-2 py-0.5 text-xs text-fg-subtle">{items.length}</span>
                 </header>
@@ -334,7 +339,7 @@ export function ProjectTaskBoard({ tasks, dependencyEdges, returnTo, copy, onAct
             tasks={tasks}
             dependencyEdges={dependencyEdges}
             returnTo={returnTo}
-            copy={{ ...copy.graph, lanes: copy.lanes }}
+            copy={{ ...copy.graph, phases: copy.phases }}
           />
         </div>
       )}
