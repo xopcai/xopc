@@ -25,6 +25,7 @@ permissions:
 
 env:
   EXPO_NO_TELEMETRY: "1"
+  XOPC_ANDROID_USE_MAVEN_MIRRORS: "0"
 
 jobs:
   quality:
