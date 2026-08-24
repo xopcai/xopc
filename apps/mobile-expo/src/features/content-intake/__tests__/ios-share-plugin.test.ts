@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { TARGET_NAME, buildShareExtensionInfoPlist, buildShareViewControllerSwift } = require('../../../../plugins/with-ios-share-intake') as {
+const { TARGET_NAME, buildShareExtensionInfoPlist, buildShareViewControllerSwift, ensureEasAppExtensionConfig } = require('../../../../plugins/with-ios-share-intake') as {
   TARGET_NAME: string;
   buildShareExtensionInfoPlist: (bundleIdentifier: string) => string;
   buildShareViewControllerSwift: () => string;
+  ensureEasAppExtensionConfig: (config: Record<string, unknown>, bundleIdentifier: string) => Record<string, unknown>;
 };
 
 describe('with-ios-share-intake', () => {
@@ -28,5 +29,29 @@ describe('with-ios-share-intake', () => {
     expect(source).toContain('UTType.url.identifier');
     expect(source).toContain('Selector(("openURL:"))');
     expect(source).not.toContain('UIApplication.openURL');
+  });
+
+  it('declares the extension so EAS can manage its signing credentials', () => {
+    const config = ensureEasAppExtensionConfig({ extra: { eas: { projectId: 'project-id' } } }, 'ai.xopc.xopc');
+
+    expect(config).toMatchObject({
+      extra: {
+        eas: {
+          projectId: 'project-id',
+          build: {
+            experimental: {
+              ios: {
+                appExtensions: [
+                  {
+                    targetName: 'ShareIntake',
+                    bundleIdentifier: 'ai.xopc.xopc.ShareIntake',
+                  },
+                ],
+              },
+            },
+          },
+        },
+      },
+    });
   });
 });
